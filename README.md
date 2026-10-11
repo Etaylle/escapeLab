@@ -14,7 +14,9 @@ Kettenreaktion (3 Spieler, Wissen auf drei Rollen verteilt).
 Stationen in Reihenfolge finden und lösen → wenn alle gelöst sind, öffnet sich der **Notausgang**
 und das ganze Team muss ihn gemeinsam erreichen, bevor die Zeit abläuft → Endbildschirm mit
 Statistiken und persönlicher Bestzeit. **Hilfsmittel:** Klick auf die Welt setzt einen **Ping**
-für alle (farbige Ringe, Pfeil wenn außerhalb des Bildes), `M` blendet die **Minikarte** ein.
+für alle (farbige Ringe, Pfeil wenn außerhalb des Bildes), `M` blendet die **Minikarte** ein,
+`C` öffnet den **Schnellchat** (acht feste Sätze, Tasten `1`–`8`, erscheinen als Sprechblase
+über der Figur) — damit funktioniert das Spiel auch ohne Voice-Chat.
 
 **Tragen:** Manche Stationen bleiben tot, bis ein Gegenstand bei ihnen eingesetzt wurde — die
 Ersatzsicherung liegt im Archiv und muss quer durchs Labor in den Reaktor. `E` ist dabei eine
