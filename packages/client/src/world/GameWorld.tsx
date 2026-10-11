@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import type { ClientMessage, PlayerPosition, PlayerView } from '@escapelab/core';
+import type { ClientMessage, DronePosition, PlayerPosition, PlayerView } from '@escapelab/core';
+import { drawDroneBody, drawDroneCone } from './hazards.js';
 import {
   drawDoor,
   drawPlate,
@@ -35,6 +36,7 @@ export interface MapPing {
 interface Props {
   view: PlayerView;
   positionsRef: React.MutableRefObject<Record<string, PlayerPosition>>;
+  dronesRef: React.MutableRefObject<Record<string, DronePosition>>;
   pingsRef: React.MutableRefObject<MapPing[]>;
   inputLocked: boolean;
   send: (msg: ClientMessage) => void;
@@ -140,7 +142,14 @@ function isHorizontalDoor(map: WorldMap, x: number, y: number): boolean {
   return barrier(x - 1, y) && barrier(x + 1, y);
 }
 
-export function GameWorld({ view, positionsRef, pingsRef, inputLocked, send }: Props) {
+export function GameWorld({
+  view,
+  positionsRef,
+  dronesRef,
+  pingsRef,
+  inputLocked,
+  send,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -457,6 +466,14 @@ export function GameWorld({ view, positionsRef, pingsRef, inputLocked, send }: P
         ctx.restore();
       }
 
+      // drone cones go under the avatars so figures stay readable inside them
+      for (const drone of Object.values(dronesRef.current)) {
+        ctx.save();
+        ctx.translate(drone.x, drone.y);
+        drawDroneCone(ctx, drone, pulse);
+        ctx.restore();
+      }
+
       // avatars: remote first, local on top
       const colorOf = new Map(
         viewRef.current.players.map((p) => [p.id, p.color]),
@@ -490,6 +507,13 @@ export function GameWorld({ view, positionsRef, pingsRef, inputLocked, send }: P
         connected: true,
       });
       ctx.restore();
+
+      for (const drone of Object.values(dronesRef.current)) {
+        ctx.save();
+        ctx.translate(drone.x, drone.y);
+        drawDroneBody(ctx, drone, pulse);
+        ctx.restore();
+      }
 
       renderLighting(map, s, w, h);
       renderPings(s, w, h, dpr);
@@ -595,6 +619,12 @@ export function GameWorld({ view, positionsRef, pingsRef, inputLocked, send }: P
         ctx.fillStyle = map.exit.open ? '#4ade80' : '#2c3947';
         ctx.fillRect(ox + map.exit.x * cell, oy + map.exit.y * cell, cell, cell);
       }
+      for (const drone of Object.values(dronesRef.current)) {
+        ctx.fillStyle = drone.alerted ? '#f87171' : '#fbbf24';
+        ctx.beginPath();
+        ctx.arc(ox + drone.x * cell, oy + drone.y * cell, cell * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
       const colorOf = new Map(
         viewRef.current.players.map((p) => [p.id, p.color]),
       );
@@ -679,6 +709,25 @@ export function GameWorld({ view, positionsRef, pingsRef, inputLocked, send }: P
       }
       if (map.exit !== null && map.exit.open) {
         punch(map.exit.x + 0.5, map.exit.y + 0.5, 2.6, 0.9);
+      }
+      // Drone cones light their own path, which is what makes them readable.
+      for (const drone of Object.values(dronesRef.current)) {
+        const [sx, sy] = worldToScreen(s, w, h, drone.x, drone.y);
+        const half = (drone.halfAngleDeg * Math.PI) / 180;
+        const r = drone.range * s;
+        octx.save();
+        octx.beginPath();
+        octx.moveTo(sx, sy);
+        octx.arc(sx, sy, r, drone.facing - half, drone.facing + half);
+        octx.closePath();
+        octx.clip();
+        const g = octx.createRadialGradient(sx, sy, 0, sx, sy, r);
+        g.addColorStop(0, 'rgba(0,0,0,0.9)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        octx.fillStyle = g;
+        octx.fillRect(sx - r, sy - r, r * 2, r * 2);
+        octx.restore();
+        punch(drone.x, drone.y, 1.1, 0.75);
       }
 
       ctx.setTransform(1, 0, 0, 1, 0, 0);

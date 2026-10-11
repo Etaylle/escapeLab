@@ -1,4 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto';
+import { DronePatrol } from './drones.js';
 import {
   applyAction,
   armedStation,
@@ -45,6 +46,8 @@ const EXIT_RADIUS = 0.7;
 const POSITIONS_INTERVAL_MS = 66;
 /** Minimum gap between two pings from the same player. */
 const PING_COOLDOWN_MS = 700;
+/** Patrol simulation step. */
+const DRONE_TICK_MS = 80;
 
 /**
  * One game room: owns the authoritative GameState, player sessions
@@ -59,6 +62,9 @@ export class Room {
   private readonly listeners = new Map<string, Listener>();
   private readonly positions = new Map<string, PlayerPosition>();
   private readonly lastPingAt = new Map<string, number>();
+  private drones: DronePatrol | null = null;
+  private droneTimer: NodeJS.Timeout | null = null;
+  private lastDroneTick = 0;
   private timer: NodeJS.Timeout | null = null;
   private positionsTimer: NodeJS.Timeout | null = null;
   private positionsDirty = false;
@@ -95,7 +101,11 @@ export class Room {
     this.emptySince = null;
     listener({ kind: 'view', view: viewFor(this.state, playerId) });
     if (this.positions.size > 0) {
-      listener({ kind: 'positions', players: Object.fromEntries(this.positions) });
+      listener({
+        kind: 'positions',
+        players: Object.fromEntries(this.positions),
+        drones: this.drones?.snapshot(Date.now()) ?? {},
+      });
     }
   }
 
@@ -305,14 +315,56 @@ export class Room {
   private broadcastPositions(): void {
     this.positionsDirty = false;
     const players = Object.fromEntries(this.positions);
+    const drones = this.drones?.snapshot(Date.now()) ?? {};
     for (const listener of this.listeners.values()) {
-      listener({ kind: 'positions', players });
+      listener({ kind: 'positions', players, drones });
     }
+  }
+
+  /** Fixed-rate patrol simulation; only runs while a mission with drones is live. */
+  private reconcileDroneTimer(): void {
+    const map = this.state.mission.map;
+    const live = this.state.phase === 'playing' && map !== undefined && map.drones.length > 0;
+    if (live && this.droneTimer === null && map !== undefined) {
+      this.drones = new DronePatrol(map);
+      this.lastDroneTick = Date.now();
+      this.droneTimer = setInterval(() => this.tickDrones(), DRONE_TICK_MS);
+    } else if (!live && this.droneTimer !== null) {
+      clearInterval(this.droneTimer);
+      this.droneTimer = null;
+      this.drones = null;
+    }
+  }
+
+  private tickDrones(): void {
+    const patrol = this.drones;
+    if (patrol === null) {
+      return;
+    }
+    const now = Date.now();
+    const dt = Math.min(0.25, (now - this.lastDroneTick) / 1000);
+    this.lastDroneTick = now;
+    patrol.step(dt);
+    const spotted = patrol.detect(this.state, this.positionSnapshot(), now);
+    for (const event of spotted) {
+      this.dispatch({ type: 'drone-spotted', at: now, penaltySec: event.penaltySec });
+    }
+    this.positionsDirty = true;
+    this.schedulePositionsBroadcast();
+  }
+
+  private positionSnapshot(): Map<string, { x: number; y: number }> {
+    const out = new Map<string, { x: number; y: number }>();
+    for (const [id, pos] of this.positions) {
+      out.set(id, { x: pos.x, y: pos.y });
+    }
+    return out;
   }
 
   private dispatch(action: Action): void {
     this.state = applyAction(this.state, action);
     this.reconcileTimer();
+    this.reconcileDroneTimer();
     this.broadcast();
   }
 
@@ -348,6 +400,11 @@ export class Room {
     if (this.positionsTimer !== null) {
       clearTimeout(this.positionsTimer);
       this.positionsTimer = null;
+    }
+    if (this.droneTimer !== null) {
+      clearInterval(this.droneTimer);
+      this.droneTimer = null;
+      this.drones = null;
     }
   }
 }

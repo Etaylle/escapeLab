@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
-import type { ClientMessage, PlayerPosition, PlayerView, ServerMessage } from '@escapelab/core';
+import type {
+  ClientMessage,
+  DronePosition,
+  PlayerPosition,
+  PlayerView,
+  ServerMessage,
+} from '@escapelab/core';
 
 interface Credentials {
   code: string;
@@ -18,6 +24,8 @@ export interface Connection {
    * React re-render — the canvas render loop reads this ref directly.
    */
   positions: MutableRefObject<Record<string, PlayerPosition>>;
+  /** Live drone patrols, same no-re-render contract as `positions`. */
+  drones: MutableRefObject<Record<string, DronePosition>>;
   /** Map pings, newest last; the render loop drains expired ones itself. */
   pings: MutableRefObject<{ playerId: string; x: number; y: number; at: number }[]>;
   send: (msg: ClientMessage) => void;
@@ -53,6 +61,7 @@ export function useGameConnection(): Connection {
   const socketRef = useRef<WebSocket | null>(null);
   const resumingRef = useRef(false);
   const positionsRef = useRef<Record<string, PlayerPosition>>({});
+  const dronesRef = useRef<Record<string, DronePosition>>({});
   const pingsRef = useRef<{ playerId: string; x: number; y: number; at: number }[]>([]);
 
   useEffect(() => {
@@ -105,6 +114,7 @@ export function useGameConnection(): Connection {
           break;
         case 'positions':
           positionsRef.current = msg.players;
+          dronesRef.current = msg.drones;
           break;
         case 'ping':
           pingsRef.current.push({
@@ -141,6 +151,7 @@ export function useGameConnection(): Connection {
     roomCode,
     error,
     positions: positionsRef,
+    drones: dronesRef,
     pings: pingsRef,
     send: (msg) => {
       setError(null);

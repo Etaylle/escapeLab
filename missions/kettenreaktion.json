@@ -62,7 +62,31 @@
       { "text": "RESONATOR", "x": 11, "y": 11 },
       { "text": "KERN", "x": 3, "y": 9 }
     ],
-    "exit": { "x": 1, "y": 6 }
+    "exit": { "x": 1, "y": 6 },
+    "drones": [
+      {
+        "id": "flurwache-west",
+        "waypoints": [
+          { "x": 3, "y": 7 },
+          { "x": 11, "y": 7 }
+        ],
+        "speed": 1.6,
+        "range": 4.5,
+        "halfAngleDeg": 26,
+        "penaltySec": 15
+      },
+      {
+        "id": "flurwache-ost",
+        "waypoints": [
+          { "x": 18, "y": 6 },
+          { "x": 12, "y": 6 }
+        ],
+        "speed": 1.9,
+        "range": 4.5,
+        "halfAngleDeg": 26,
+        "penaltySec": 15
+      }
+    ]
   },
   "roles": [
     {

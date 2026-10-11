@@ -28,6 +28,7 @@ export type Action =
   | { type: 'commit-switches'; playerId: string; at: number }
   | { type: 'press-simon'; playerId: string; buttonIndex: number; at: number }
   | { type: 'set-pressed-plates'; plates: string[] }
+  | { type: 'drone-spotted'; at: number; penaltySec: number }
   | { type: 'interact'; playerId: string; at: number }
   | { type: 'escaped'; at: number }
   | { type: 'time-expired'; at: number }
@@ -82,6 +83,10 @@ export function applyAction(state: GameState, action: Action): GameState {
     case 'set-pressed-plates':
       return state.phase === 'playing'
         ? { ...state, pressedPlates: [...action.plates].sort() }
+        : state;
+    case 'drone-spotted':
+      return state.phase === 'playing'
+        ? applyPenalty(state, action.penaltySec, action.at)
         : state;
     case 'interact':
       return handleInteract(state, action);

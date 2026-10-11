@@ -22,5 +22,6 @@ export {
   type ServerMessage,
   type MissionInfo,
   type PlayerPosition,
+  type DronePosition,
 } from './protocol.js';
 export { SIMON_COLORS, type SimonColor } from './puzzles/simon.js';

@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import WebSocket from 'ws';
 import {
   parseMission,
+  type DronePosition,
   type PlayerPosition,
   type PlayerView,
   type ServerMessage,
@@ -64,6 +65,7 @@ class TestClient {
   readonly raw: string[] = [];
   view: PlayerView | null = null;
   positions: Record<string, PlayerPosition> = {};
+  drones: Record<string, DronePosition> = {};
   playerId: string | null = null;
   /** client-authoritative avatar position (tile units) */
   self: { x: number; y: number } | null = null;
@@ -78,6 +80,7 @@ class TestClient {
       }
       if (msg.kind === 'positions') {
         this.positions = msg.players;
+        this.drones = msg.drones;
       }
       this.queue.push(msg);
       this.waiter?.();
@@ -424,6 +427,9 @@ await anna.expectView('stands on the map, no puzzle active', (v) =>
   v.phase === 'playing' && v.map !== null && v.puzzle === null);
 await ben.until('map ready', (v) => v.map !== null);
 
+await anna.untilPositions('drone patrols are streamed', () => Object.keys(anna.drones).length > 0);
+console.log('✓ drone patrols are streamed to the clients');
+
 // Map pings fan out to the whole crew and are rate limited per player.
 anna.send({ kind: 'ping', x: 9, y: 6 });
 anna.send({ kind: 'ping', x: 3, y: 3 }); // swallowed by the cooldown
@@ -487,7 +493,8 @@ await walkTo(clients.anleitung, [17, 11]);
 const annaWon = await clients.anleitung.expectView('won the mission', (v) => v.phase === 'won');
 await clients.steuerpult.expectView('won the mission', (v) => v.phase === 'won');
 assert(/erwachen die Systeme/.test(annaWon.storyText), 'win story is shown');
-assert(annaWon.penaltySeq === 2, 'exactly the two deliberate penalties were counted');
+// At least the wrong cut and the wrong key; patrolling drones may add more.
+assert(annaWon.penaltySeq >= 2, 'both deliberate penalties were counted');
 
 anna.close();
 clients.steuerpult.close();

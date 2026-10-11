@@ -88,6 +88,7 @@ export function App() {
           <GameScreen
             view={conn.view}
             positionsRef={conn.positions}
+            dronesRef={conn.drones}
             pingsRef={conn.pings}
             send={conn.send}
           />

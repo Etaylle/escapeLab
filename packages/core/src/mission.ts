@@ -141,6 +141,22 @@ export const mapDefSchema = z.object({
    * an exit the mission is won with the last puzzle.
    */
   exit: z.object({ x: coord, y: coord }).optional(),
+  /** Security drones patrolling their waypoint loop; their cone costs time. */
+  drones: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        waypoints: z.array(z.object({ x: coord, y: coord })).min(2),
+        /** tiles per second */
+        speed: z.number().positive().max(6).default(1.5),
+        /** how far the cone reaches, in tiles */
+        range: z.number().positive().max(12).default(4.5),
+        /** half opening angle of the cone, in degrees */
+        halfAngleDeg: z.number().positive().max(90).default(30),
+        penaltySec: z.number().int().positive().default(15),
+      }),
+    )
+    .default([]),
 });
 
 const pairKey = ([a, b]: [string, string]): string => [a, b].sort().join('\u0000');
@@ -303,6 +319,34 @@ function validateMap(
   }
   if (map.exit !== undefined) {
     requireFloor('exit', map.exit.x, map.exit.y);
+  }
+  const droneIds = new Set(map.drones.map((d) => d.id));
+  if (droneIds.size !== map.drones.length) {
+    ctx.addIssue({ code: 'custom', message: 'map: drone ids must be unique' });
+  }
+  for (const drone of map.drones) {
+    for (const [i, point] of drone.waypoints.entries()) {
+      requireFloor(`waypoint ${i} of drone "${drone.id}"`, point.x, point.y);
+    }
+    // Drones fly straight between waypoints, so those lines must stay indoors.
+    for (const [i, from] of drone.waypoints.entries()) {
+      const to = drone.waypoints[(i + 1) % drone.waypoints.length];
+      if (to === undefined) {
+        continue;
+      }
+      const steps = Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) * 4);
+      for (let s = 1; s < steps; s++) {
+        const x = Math.floor(from.x + 0.5 + ((to.x - from.x) * s) / steps);
+        const y = Math.floor(from.y + 0.5 + ((to.y - from.y) * s) / steps);
+        if (!floor(x, y)) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `map: drone "${drone.id}" would fly through a wall at ${x},${y}`,
+          });
+          break;
+        }
+      }
+    }
   }
   for (const door of map.doors) {
     requireFloor(`door "${door.id}"`, door.x, door.y);

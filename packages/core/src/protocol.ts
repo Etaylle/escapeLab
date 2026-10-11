@@ -69,10 +69,24 @@ export interface PlayerPosition {
   moving: boolean;
 }
 
+export interface DronePosition {
+  x: number;
+  y: number;
+  facing: number;
+  range: number;
+  halfAngleDeg: number;
+  /** true for a moment after it caught someone */
+  alerted: boolean;
+}
+
 export type ServerMessage =
   | { kind: 'joined'; code: string; playerId: string; token: string }
   | { kind: 'view'; view: PlayerView }
-  | { kind: 'positions'; players: Record<string, PlayerPosition> }
+  | {
+      kind: 'positions';
+      players: Record<string, PlayerPosition>;
+      drones: Record<string, DronePosition>;
+    }
   | { kind: 'ping'; playerId: string; x: number; y: number }
   | { kind: 'error'; message: string };
 

@@ -1,0 +1,190 @@
+import { describe, expect, it } from 'vitest';
+import { applyAction, initialState, parseMission } from '@escapelab/core';
+import type { Action, GameState, Mission } from '@escapelab/core';
+import { DronePatrol } from '../src/drones.js';
+
+/**
+ * Fixture: two chambers divided by a pillar wall at column 4. One drone
+ * sweeps the middle row of the left chamber, facing right.
+ *
+ *   012345678
+ * 0 #########
+ * 1 #...#...#
+ * 2 #...#...#   drone patrols (1,2) <-> (3,2)
+ * 3 #...#...#
+ * 4 #########
+ */
+const mission: Mission = parseMission({
+  id: 'dronetest',
+  title: 'Drohnen-Test',
+  story: { intro: 'i', win: 'w', lose: 'l' },
+  timeLimitSec: 300,
+  roles: [
+    { id: 'anleitung', name: 'Anleitung', description: '' },
+    { id: 'steuerpult', name: 'Steuerpult', description: '' },
+  ],
+  puzzles: [
+    {
+      type: 'button-sync',
+      id: 'only',
+      title: 'Einziges',
+      prompt: '',
+      buttons: [{ roleId: 'steuerpult', label: 'A' }],
+    },
+  ],
+  map: {
+    tiles: ['#########', '#...#...#', '#...#...#', '#...#...#', '#########'],
+    spawns: { anleitung: { x: 1, y: 1 }, steuerpult: { x: 7, y: 1 } },
+    stations: [{ puzzleId: 'only', x: 2, y: 1 }],
+    drones: [
+      {
+        id: 'wache',
+        waypoints: [
+          { x: 1, y: 2 },
+          { x: 3, y: 2 },
+        ],
+        speed: 1,
+        range: 6,
+        halfAngleDeg: 30,
+        penaltySec: 15,
+      },
+    ],
+  },
+});
+
+const T0 = 1_000_000;
+
+function run(actions: Action[], from: GameState): GameState {
+  return actions.reduce(applyAction, from);
+}
+
+function playing(): GameState {
+  return run(
+    [
+      { type: 'player-join', playerId: 'p1', name: 'Anna' },
+      { type: 'player-join', playerId: 'p2', name: 'Ben' },
+      { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
+      { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
+      { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 },
+    ],
+    initialState(mission),
+  );
+}
+
+function at(x: number, y: number): Map<string, { x: number; y: number }> {
+  return new Map([['p1', { x, y }]]);
+}
+
+function patrol(): DronePatrol {
+  const map = mission.map;
+  if (map === undefined) {
+    throw new Error('fixture needs a map');
+  }
+  return new DronePatrol(map);
+}
+
+describe('DronePatrol', () => {
+  it('starts on its first waypoint and moves towards the next', () => {
+    const drones = patrol();
+    const start = drones.snapshot(T0)['wache'];
+    expect(start).toEqual(
+      expect.objectContaining({ x: 1.5, y: 2.5, range: 6, alerted: false }),
+    );
+    drones.step(1); // one second at speed 1 tile/s
+    const moved = drones.snapshot(T0)['wache'];
+    expect(moved?.x).toBeCloseTo(2.5, 2);
+    expect(moved?.y).toBeCloseTo(2.5, 2);
+  });
+
+  it('turns around at the end of its loop', () => {
+    const drones = patrol();
+    drones.step(2.1); // reach (3,2) …
+    drones.step(0.1); // … switch target back to (1,2)
+    drones.step(1);
+    const pos = drones.snapshot(T0)['wache'];
+    expect(pos?.x).toBeLessThan(3.5);
+  });
+
+  it('spots a player straight ahead inside the cone', () => {
+    const drones = patrol();
+    const events = drones.detect(playing(), at(3.5, 2.5), T0);
+    expect(events).toEqual([{ droneId: 'wache', penaltySec: 15 }]);
+  });
+
+  it('ignores a player outside the cone angle', () => {
+    const drones = patrol();
+    expect(drones.detect(playing(), at(1.5, 1.5), T0)).toEqual([]);
+  });
+
+  it('ignores a player behind a wall even when inside the cone', () => {
+    const drones = patrol();
+    // (6.5,2.5) is dead ahead and in range, but the pillar at column 4 blocks it.
+    expect(drones.detect(playing(), at(6.5, 2.5), T0)).toEqual([]);
+  });
+
+  it('ignores a player beyond its range', () => {
+    const map = mission.map;
+    if (map === undefined) {
+      throw new Error('fixture needs a map');
+    }
+    const shortSighted = new DronePatrol({
+      ...map,
+      drones: map.drones.map((d) => ({ ...d, range: 1.5 })),
+    });
+    expect(shortSighted.detect(playing(), at(3.5, 2.5), T0)).toEqual([]);
+  });
+
+  it('only triggers once per cooldown window', () => {
+    const drones = patrol();
+    const state = playing();
+    expect(drones.detect(state, at(3.5, 2.5), T0)).toHaveLength(1);
+    expect(drones.detect(state, at(3.5, 2.5), T0 + 1000)).toHaveLength(0);
+    expect(drones.detect(state, at(3.5, 2.5), T0 + 6000)).toHaveLength(1);
+  });
+
+  it('reports itself alerted for a while after a sighting', () => {
+    const drones = patrol();
+    drones.detect(playing(), at(3.5, 2.5), T0);
+    expect(drones.snapshot(T0 + 1000)['wache']?.alerted).toBe(true);
+    expect(drones.snapshot(T0 + 6000)['wache']?.alerted).toBe(false);
+  });
+
+  it('cannot spot anyone while the crew works at a station', () => {
+    const drones = patrol();
+    const busy = applyAction(playing(), { type: 'interact', playerId: 'p1', at: T0 + 10 });
+    expect(busy.puzzleState).not.toBeNull();
+    expect(drones.detect(busy, at(3.5, 2.5), T0)).toEqual([]);
+  });
+
+  it('ignores disconnected players', () => {
+    const drones = patrol();
+    const gone = applyAction(playing(), { type: 'player-disconnected', playerId: 'p1' });
+    expect(drones.detect(gone, at(3.5, 2.5), T0)).toEqual([]);
+  });
+});
+
+describe('drone map validation', () => {
+  it('rejects a patrol route that crosses a wall', () => {
+    const map = mission.map;
+    if (map === undefined) {
+      throw new Error('fixture needs a map');
+    }
+    expect(() =>
+      parseMission({
+        ...JSON.parse(JSON.stringify(mission)),
+        map: {
+          ...JSON.parse(JSON.stringify(map)),
+          drones: [
+            {
+              id: 'wanddurchflieger',
+              waypoints: [
+                { x: 1, y: 2 },
+                { x: 7, y: 2 },
+              ],
+            },
+          ],
+        },
+      }),
+    ).toThrow(/through a wall/);
+  });
+});
