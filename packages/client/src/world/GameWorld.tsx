@@ -23,6 +23,7 @@ import {
   makeFloorTile,
   makeWallTile,
 } from './art.js';
+import { markerTargets, placeMarker } from './markers.js';
 import {
   countdownBeep,
   doorSlide,
@@ -1107,22 +1108,16 @@ export function GameWorld({
       }
       // Anything you need to walk to gets an arrow at the screen edge while
       // it is out of sight — in the dark that is the only way to find it.
-      const edgeMarker = (wx: number, wy: number, color: string, label: string): void => {
-        const [px, py] = worldToScreen(s, w, h, wx, wy);
-        // Every target of an arrow punches its own hole in the darkness, so
-        // once it is on screen it speaks for itself — drawing the arrow anyway
-        // would stamp it on top of the thing it points at.
-        if (px >= 0 && px <= w && py >= 0 && py <= h) {
-          return;
+      for (const target of markerTargets(map, viewRef.current.you.id)) {
+        const [px, py] = worldToScreen(s, w, h, target.x, target.y);
+        const at = placeMarker(px, py, w, h, safeTopCss, dpr);
+        if (at === null) {
+          continue;
         }
-        const margin = 34 * dpr;
-        const top = Math.max(margin, (safeTopCss + 16) * dpr);
-        const cx = Math.min(w - margin, Math.max(margin, px));
-        const cy = Math.min(h - margin, Math.max(top, py));
         ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(Math.atan2(py - h / 2, px - w / 2));
-        ctx.fillStyle = color;
+        ctx.translate(at.x, at.y);
+        ctx.rotate(at.angle);
+        ctx.fillStyle = target.color;
         ctx.beginPath();
         ctx.moveTo(13 * dpr, 0);
         ctx.lineTo(-8 * dpr, 9 * dpr);
@@ -1130,38 +1125,11 @@ export function GameWorld({
         ctx.closePath();
         ctx.fill();
         ctx.restore();
-        if (label !== '') {
-          const tiles = Math.round(Math.hypot(wx - sim.self.x, wy - sim.self.y));
-          ctx.fillStyle = color;
-          ctx.font = `700 ${11 * dpr}px ui-monospace, Menlo, monospace`;
-          ctx.textAlign = 'center';
-          // Caption below the arrow, except near the bottom where that would
-          // push it off the frame.
-          ctx.fillText(`${label} ${tiles}m`, cx, py > h / 2 ? cy - 20 * dpr : cy + 26 * dpr);
-        }
-      };
-
-      for (const panel of map.sabotage?.panels ?? []) {
-        edgeMarker(panel.x + 0.5, panel.y + 0.5, panel.occupied ? '#2dd4bf' : '#f87171', 'VENTIL');
-      }
-      if (map.sabotage === null) {
-        const carried = map.items.find(
-          (item) => item.carriedBy === viewRef.current.you.id && !item.delivered,
-        );
-        if (carried !== undefined) {
-          edgeMarker(carried.deliverTo.x + 0.5, carried.deliverTo.y + 0.5, '#60a5fa', 'ABGABE');
-        } else if (map.exit !== null && map.exit.open) {
-          edgeMarker(map.exit.x + 0.5, map.exit.y + 0.5, '#4ade80', 'AUSGANG');
-        } else {
-          const goal = armedStationOf(map);
-          const loose = map.items.find((item) => !item.delivered && item.carriedBy === null);
-          if (loose !== undefined) {
-            edgeMarker(loose.x, loose.y, '#60a5fa', 'TEIL');
-          }
-          if (goal !== null) {
-            edgeMarker(goal.x + 0.5, goal.y + 0.5, '#2dd4bf', 'STATION');
-          }
-        }
+        const tiles = Math.round(Math.hypot(target.x - sim.self.x, target.y - sim.self.y));
+        ctx.fillStyle = target.color;
+        ctx.font = `700 ${11 * dpr}px ui-monospace, Menlo, monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillText(`${target.label} ${tiles}m`, at.x, at.captionY);
       }
       const action =
         viewRef.current.puzzle === null
