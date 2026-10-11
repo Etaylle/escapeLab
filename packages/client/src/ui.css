@@ -1171,3 +1171,8 @@ button.link:hover {
   margin-right: 8px;
   vertical-align: baseline;
 }
+
+.stat-best {
+  border-color: var(--accent);
+  box-shadow: 0 0 14px var(--accent-glow);
+}

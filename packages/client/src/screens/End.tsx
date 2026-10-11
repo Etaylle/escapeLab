@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ClientMessage, PlayerView } from '@escapelab/core';
 import { play } from '../sounds.js';
 
@@ -15,6 +15,27 @@ function fmt(ms: number): string {
   return `${min}:${String(sec).padStart(2, '0')}`;
 }
 
+/**
+ * Personal best per mission, kept in localStorage. Returns the previous best
+ * (null when there was none) and whether this run beat it.
+ */
+function recordBest(missionId: string, usedMs: number): { prev: number | null; isNew: boolean } {
+  const key = `escapelab-best-${missionId}`;
+  try {
+    const raw = localStorage.getItem(key);
+    const prev = raw === null ? null : Number(raw);
+    const valid = prev !== null && Number.isFinite(prev) ? prev : null;
+    if (valid === null || usedMs < valid) {
+      localStorage.setItem(key, String(usedMs));
+      return { prev: valid, isNew: true };
+    }
+    return { prev: valid, isNew: false };
+  } catch {
+    // Storage blocked (private window): the run just has no saved best.
+    return { prev: null, isNew: false };
+  }
+}
+
 export function EndScreen({ view, send, leaveRoom }: Props) {
   const won = view.phase === 'won';
   useEffect(() => {
@@ -25,6 +46,13 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
   const haveStats = startedAt !== null && finishedAt !== null;
   const usedMs = haveStats ? finishedAt - startedAt : 0;
   const remainingMs = haveStats && deadlineAt !== null ? Math.max(0, deadlineAt - finishedAt) : 0;
+
+  // Recorded once per finished run; the view carries a stable finish timestamp.
+  const bestRef = useRef<{ prev: number | null; isNew: boolean } | null>(null);
+  if (bestRef.current === null && won && haveStats) {
+    bestRef.current = recordBest(view.missionId, usedMs);
+  }
+  const best = bestRef.current;
 
   return (
     <div className={`card end ${won ? 'end-won' : 'end-lost'}`}>
@@ -48,6 +76,16 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
             <span className="stat-value">{view.penaltySeq}</span>
             <span className="stat-label">{view.penaltySeq === 1 ? 'Alarm' : 'Alarme'}</span>
           </div>
+          {best !== null && (
+            <div className={`stat ${best.isNew ? 'stat-best' : ''}`}>
+              <span className="stat-value">
+                {fmt(best.isNew ? usedMs : (best.prev ?? usedMs))}
+              </span>
+              <span className="stat-label">
+                {best.isNew ? '🏆 neue Bestzeit' : 'Bestzeit'}
+              </span>
+            </div>
+          )}
         </div>
       )}
 
