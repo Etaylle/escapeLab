@@ -34,6 +34,7 @@ export type Action =
   | { type: 'sabotage-start'; at: number }
   | { type: 'sabotage-cleared'; at: number }
   | { type: 'sabotage-expired'; at: number }
+  | { type: 'set-paused'; paused: boolean; at: number }
   | { type: 'interact'; playerId: string; at: number }
   | { type: 'escaped'; at: number }
   | { type: 'time-expired'; at: number }
@@ -101,6 +102,8 @@ export function applyAction(state: GameState, action: Action): GameState {
       return state.sabotage === null ? state : { ...state, sabotage: null };
     case 'sabotage-expired':
       return expireSabotage(state, action);
+    case 'set-paused':
+      return setPaused(state, action);
     case 'drone-spotted':
       return state.phase === 'playing'
         ? applyPenalty(state, action.penaltySec, action.at)
@@ -110,7 +113,7 @@ export function applyAction(state: GameState, action: Action): GameState {
     case 'escaped':
       return handleEscaped(state, action);
     case 'time-expired':
-      return state.phase === 'playing'
+      return state.phase === 'playing' && state.paused === null
         ? { ...state, phase: 'lost', finishedAt: action.at, puzzleState: null }
         : state;
     case 'back-to-lobby':
@@ -257,6 +260,7 @@ function startMission(
     pressedPlates: [],
     occupiedPanels: [],
     sabotage: null,
+    paused: null,
     startedAt: action.at,
     deadlineAt: action.at + state.mission.timeLimitSec * 1000,
     finishedAt: null,
@@ -273,6 +277,9 @@ function requirePlaying(
   playerId: string,
   at: number,
 ): { player: Player; def: PuzzleDef; puzzleState: PuzzleState } | 'lost' {
+  if (state.paused !== null) {
+    fail('Die Mission ist pausiert — es fehlt jemand aus der Crew.');
+  }
   if (state.phase !== 'playing' || state.puzzleState === null) {
     fail('Gerade läuft kein Rätsel.');
   }
@@ -354,6 +361,29 @@ function startSabotage(state: GameState, action: { at: number }): GameState {
     ...state,
     puzzleState: null,
     sabotage: { endsAt: action.at + sabotage.durationSec * 1000 },
+  };
+}
+
+/**
+ * Freezing and thawing the run. Everything with a deadline is shifted by the
+ * time spent paused, so a dropped connection never costs the crew the clock.
+ */
+function setPaused(state: GameState, action: { paused: boolean; at: number }): GameState {
+  if (state.phase !== 'playing') {
+    return state;
+  }
+  if (action.paused) {
+    return state.paused === null ? { ...state, paused: { since: action.at } } : state;
+  }
+  if (state.paused === null) {
+    return state;
+  }
+  const frozen = Math.max(0, action.at - state.paused.since);
+  return {
+    ...state,
+    paused: null,
+    deadlineAt: state.deadlineAt === null ? null : state.deadlineAt + frozen,
+    sabotage: state.sabotage === null ? null : { endsAt: state.sabotage.endsAt + frozen },
   };
 }
 
@@ -530,6 +560,9 @@ function handleInteract(state: GameState, action: { playerId: string; at: number
   if (state.deadlineAt !== null && action.at >= state.deadlineAt) {
     return lostNow(state, action.at);
   }
+  if (state.paused !== null) {
+    fail('Die Mission ist pausiert — es fehlt jemand aus der Crew.');
+  }
   if (state.sabotage !== null) {
     fail('Erst den Notfall beheben — an die Panele!');
   }
@@ -557,6 +590,7 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     pressedPlates: [],
     occupiedPanels: [],
     sabotage: null,
+    paused: null,
     startedAt: null,
     deadlineAt: null,
     finishedAt: null,

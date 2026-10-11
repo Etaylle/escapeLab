@@ -636,13 +636,28 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, send }: Pr
         </div>
       )}
 
+      {view.pausedFor !== null && (
+        <div className="overlay pause" role="status">
+          <span className="kicker">MISSION PAUSIERT</span>
+          <h1>⏸ Verbindung verloren</h1>
+          <p>
+            {view.pausedFor.length > 0
+              ? `Warten auf ${view.pausedFor.join(', ')} — Uhr, Patrouillen und Notfälle stehen still.`
+              : 'Warten auf die Crew — Uhr, Patrouillen und Notfälle stehen still.'}
+          </p>
+          <p className="muted">
+            Wer getrennt wurde, lädt einfach die Seite neu und ist wieder dabei.
+          </p>
+        </div>
+      )}
+
       {map !== null && (
         <GameWorld
           view={view}
           positionsRef={positionsRef}
           dronesRef={dronesRef}
           pingsRef={pingsRef}
-          inputLocked={puzzle !== null}
+          inputLocked={puzzle !== null || view.pausedFor !== null}
           send={send}
         />
       )}

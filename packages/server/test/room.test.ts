@@ -87,6 +87,45 @@ describe('Room', () => {
     room.dispose();
   });
 
+  it('pauses the run while someone is disconnected and gives the time back', () => {
+    const room = new Room('TEST', mission);
+    const { anna, ben } = fullLobby(room);
+    room.act(anna.playerId, { kind: 'start-mission' });
+    const deadline = lastView(anna.messages).deadlineAt ?? 0;
+
+    // Anna is standing right at the first station when Ben drops out.
+    moveTo(room, anna.playerId, 2, 1);
+    room.detach(ben.playerId);
+    const paused = lastView(anna.messages);
+    expect(paused.pausedFor).toEqual(['Ben']);
+    // Nothing can be done while the crew is short-handed.
+    expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/pausiert/);
+
+    // The clock does not run during the pause …
+    vi.advanceTimersByTime(30_000);
+    expect(lastView(anna.messages).phase).toBe('playing');
+
+    const benAgain = collector();
+    room.resume(ben.playerId, ben.token);
+    room.attach(ben.playerId, benAgain.listen);
+    const resumed = lastView(anna.messages);
+    expect(resumed.pausedFor).toBeNull();
+    // … so the deadline moved out by exactly the frozen time.
+    expect(resumed.deadlineAt).toBe(deadline + 30_000);
+    room.dispose();
+  });
+
+  it('does not expire the mission timer while paused', () => {
+    const room = new Room('TEST', mission);
+    const { anna, ben } = fullLobby(room);
+    room.act(anna.playerId, { kind: 'start-mission' });
+    room.detach(ben.playerId);
+
+    vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 60_000);
+    expect(lastView(anna.messages).phase).toBe('playing');
+    room.dispose();
+  });
+
   it('rejects an interact from too far away', () => {
     const room = new Room('TEST', mission);
     const { anna, ben } = fullLobby(room);

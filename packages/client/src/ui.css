@@ -1320,3 +1320,17 @@ button.link:hover {
 .maze-btn--down { grid-area: down; }
 .maze-btn--left { grid-area: left; }
 .maze-btn--right { grid-area: right; }
+
+.overlay.pause {
+  background: rgba(7, 11, 15, 0.9);
+  backdrop-filter: blur(3px);
+}
+
+.overlay.pause h1 {
+  color: var(--warn);
+}
+
+.overlay.pause p {
+  max-width: 420px;
+  line-height: 1.5;
+}

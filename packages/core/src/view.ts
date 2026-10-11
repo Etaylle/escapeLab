@@ -33,6 +33,8 @@ export interface PlayerView {
   /** solved puzzles so far (== index of the current one); independent of station activation */
   currentPuzzleIndex: number;
   puzzleCount: number;
+  /** set while the run is frozen because a crew member is missing */
+  pausedFor: string[] | null;
   /** increments on every penalty; clients key alarm effects off it */
   penaltySeq: number;
   lastPenaltySec: number | null;
@@ -355,6 +357,10 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     timeLimitSec: state.mission.timeLimitSec,
     currentPuzzleIndex: state.currentPuzzleIndex,
     puzzleCount: state.mission.puzzles.length,
+    pausedFor:
+      state.paused === null
+        ? null
+        : state.players.filter((p) => !p.connected).map((p) => p.name),
     penaltySeq: state.penaltySeq,
     lastPenaltySec: state.lastPenaltySec,
     puzzle: puzzleViewFor(state, you.roleId),

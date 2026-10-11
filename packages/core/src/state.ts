@@ -58,6 +58,11 @@ export interface GameState {
   occupiedPanels: string[];
   /** running emergency that interrupts everything until it is cleared */
   sabotage: { endsAt: number } | null;
+  /**
+   * Set while someone is disconnected: the clock, patrols and emergencies
+   * all stand still, because the crew cannot finish a mission short-handed.
+   */
+  paused: { since: number } | null;
   /** epoch ms; set when the mission starts */
   startedAt: number | null;
   /** epoch ms; shrinks when penalties strike */
@@ -80,6 +85,7 @@ export function initialState(mission: Mission): GameState {
     pressedPlates: [],
     occupiedPanels: [],
     sabotage: null,
+    paused: null,
     startedAt: null,
     deadlineAt: null,
     finishedAt: null,

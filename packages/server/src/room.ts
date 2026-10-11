@@ -100,6 +100,7 @@ export class Room {
       throw new Error('Wiederverbinden fehlgeschlagen — Raum neu beitreten.');
     }
     this.dispatch({ type: 'player-connected', playerId });
+    this.reconcilePause();
     this.reconcilePlates();
     this.checkEscape();
   }
@@ -127,13 +128,29 @@ export class Room {
       this.emptySince = Date.now();
     }
     this.dispatch({ type: 'player-disconnected', playerId });
+    this.reconcilePause();
     this.reconcilePlates();
     this.checkEscape();
   }
 
+  /** A mission needs its whole crew; freeze everything while someone is away. */
+  private reconcilePause(): void {
+    if (this.state.phase !== 'playing') {
+      return;
+    }
+    const missing = this.state.players.some((p) => !p.connected);
+    if (missing !== (this.state.paused !== null)) {
+      this.dispatch({ type: 'set-paused', paused: missing, at: Date.now() });
+    }
+  }
+
   /** Client-authoritative avatar position; feeds plates and the position fan-out. */
   updatePosition(playerId: string, pos: PlayerPosition): void {
-    if (this.state.phase !== 'playing' || this.state.mission.map === undefined) {
+    if (
+      this.state.phase !== 'playing' ||
+      this.state.paused !== null ||
+      this.state.mission.map === undefined
+    ) {
       return;
     }
     this.positions.set(playerId, pos);
@@ -225,8 +242,8 @@ export class Room {
 
   private requireNearStation(playerId: string): void {
     const map = this.state.mission.map;
-    if (map === undefined) {
-      return; // reducer rejects with a clear message
+    if (map === undefined || this.state.paused !== null) {
+      return; // reducer rejects with a clearer message
     }
     const station = armedStation(map, this.state);
     const pos = this.positions.get(playerId);
@@ -340,7 +357,7 @@ export class Room {
       clearTimeout(this.sabotageTimer);
       this.sabotageTimer = null;
     }
-    if (this.state.phase !== 'playing' || sabotage === undefined) {
+    if (this.state.phase !== 'playing' || this.state.paused !== null || sabotage === undefined) {
       return;
     }
     if (this.state.sabotage !== null) {
@@ -416,7 +433,11 @@ export class Room {
   /** Fixed-rate patrol simulation; only runs while a mission with drones is live. */
   private reconcileDroneTimer(): void {
     const map = this.state.mission.map;
-    const live = this.state.phase === 'playing' && map !== undefined && map.drones.length > 0;
+    const live =
+      this.state.phase === 'playing' &&
+      this.state.paused === null &&
+      map !== undefined &&
+      map.drones.length > 0;
     if (live && this.droneTimer === null && map !== undefined) {
       this.drones = new DronePatrol(map);
       this.lastDroneTick = Date.now();
@@ -470,7 +491,11 @@ export class Room {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    if (this.state.phase === 'playing' && this.state.deadlineAt !== null) {
+    if (
+      this.state.phase === 'playing' &&
+      this.state.paused === null &&
+      this.state.deadlineAt !== null
+    ) {
       const delay = Math.max(0, this.state.deadlineAt - Date.now());
       this.timer = setTimeout(() => {
         this.timer = null;
