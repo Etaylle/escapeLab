@@ -309,7 +309,8 @@ function mapViewFor(state: GameState, playerId: string): MapView | null {
     return null;
   }
   const you = state.players.find((p) => p.id === playerId);
-  const spawn = you?.roleId !== null && you !== undefined ? map.spawns[you.roleId] : undefined;
+  const spawn =
+    you !== undefined && you.roleId !== null ? map.spawns[you.roleId] : undefined;
   return {
     width: map.tiles[0]?.length ?? 0,
     height: map.tiles.length,
@@ -371,6 +372,75 @@ function mapViewFor(state: GameState, playerId: string): MapView | null {
               occupied: state.occupiedPanels.includes(p.id),
             })),
           },
+  };
+}
+
+/**
+ * What an audience sees: the whole lab at once and every role's private
+ * panel side by side. Spectators cannot act, so revealing everything is the
+ * point — watching the two halves fail to line up is the fun part.
+ */
+export interface SpectatorView {
+  phase: Phase;
+  missionTitle: string;
+  difficulty: Difficulty;
+  storyText: string;
+  deadlineAt: number | null;
+  startedAt: number | null;
+  finishedAt: number | null;
+  timeLimitSec: number;
+  currentPuzzleIndex: number;
+  puzzleCount: number;
+  penaltySeq: number;
+  pausedFor: string[] | null;
+  events: RunEvent[];
+  grade: Grade | null;
+  players: {
+    id: string;
+    name: string;
+    roleName: string | null;
+    color: string;
+    connected: boolean;
+  }[];
+  map: MapView | null;
+  /** one entry per role, each puzzle exactly as that role sees it */
+  panels: { roleId: string; roleName: string; puzzle: PuzzleView | null }[];
+}
+
+export function viewForSpectator(state: GameState): SpectatorView {
+  const roleName = (roleId: string | null): string | null =>
+    state.mission.roles.find((r) => r.id === roleId)?.name ?? null;
+  return {
+    phase: state.phase,
+    missionTitle: state.mission.title,
+    difficulty: state.difficulty,
+    storyText: storyText(state),
+    deadlineAt: state.deadlineAt,
+    startedAt: state.startedAt,
+    finishedAt: state.finishedAt,
+    timeLimitSec: state.mission.timeLimitSec,
+    currentPuzzleIndex: state.currentPuzzleIndex,
+    puzzleCount: state.mission.puzzles.length,
+    penaltySeq: state.penaltySeq,
+    pausedFor:
+      state.paused === null
+        ? null
+        : state.players.filter((p) => !p.connected).map((p) => p.name),
+    events: [...state.events],
+    grade: gradeFor(state),
+    players: state.players.map((p) => ({
+      id: p.id,
+      name: p.name,
+      roleName: roleName(p.roleId),
+      color: p.color,
+      connected: p.connected,
+    })),
+    map: mapViewFor(state, state.players[0]?.id ?? ''),
+    panels: state.mission.roles.map((role) => ({
+      roleId: role.id,
+      roleName: role.name,
+      puzzle: puzzleViewFor(state, role.id),
+    })),
   };
 }
 

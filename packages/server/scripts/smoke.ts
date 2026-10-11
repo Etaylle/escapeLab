@@ -14,6 +14,7 @@ import {
   type PlayerPosition,
   type PlayerView,
   type ServerMessage,
+  type SpectatorView,
 } from '@escapelab/core';
 
 const PORT = 3102;
@@ -69,6 +70,7 @@ class TestClient {
   private waiter: (() => void) | null = null;
   readonly raw: string[] = [];
   view: PlayerView | null = null;
+  spectatorView: SpectatorView | null = null;
   positions: Record<string, PlayerPosition> = {};
   drones: Record<string, DronePosition> = {};
   playerId: string | null = null;
@@ -82,6 +84,9 @@ class TestClient {
       const msg = JSON.parse(String(data)) as ServerMessage;
       if (msg.kind === 'view') {
         this.view = msg.view;
+      }
+      if (msg.kind === 'spectator-view') {
+        this.spectatorView = msg.view;
       }
       if (msg.kind === 'positions') {
         this.positions = msg.players;
@@ -124,6 +129,24 @@ class TestClient {
       if (found !== undefined && match(found)) {
         this.queue.splice(0, idx + 1);
         return found;
+      }
+      if (Date.now() > deadline) {
+        fail(`${this.label}: timeout waiting for "${desc}"`);
+      }
+      await this.tick();
+    }
+  }
+
+  /** Wait until the latest spectator view satisfies the predicate. */
+  async untilSpectator(
+    desc: string,
+    pred: (view: SpectatorView) => boolean,
+  ): Promise<SpectatorView> {
+    const deadline = Date.now() + 5000;
+    for (;;) {
+      if (this.spectatorView !== null && pred(this.spectatorView)) {
+        console.log(`✓ ${this.label}: ${desc}`);
+        return this.spectatorView;
       }
       if (Date.now() > deadline) {
         fail(`${this.label}: timeout waiting for "${desc}"`);
@@ -452,6 +475,24 @@ assert(
   'a second ping within the cooldown is dropped',
 );
 
+// An audience connection sees the whole lab and both private panels.
+const zoe = new TestClient('zoe');
+await zoe.open();
+zoe.send({ kind: 'spectate', code: annaJoined.code });
+const watched = await zoe.expect(
+  'spectator view',
+  (m): m is Extract<ServerMessage, { kind: 'spectator-view' }> => m.kind === 'spectator-view',
+);
+assert(watched.view.panels.length === 2, 'spectator gets one panel per role');
+assert(
+  watched.view.players.length === 2 && watched.view.map !== null,
+  'spectator sees the crew and the map',
+);
+assert(
+  watched.view.panels.every((p) => p.puzzle === null),
+  'spectator sees no panel while the crew is still walking',
+);
+
 // Quick chat reaches the whole crew with the phrase intact.
 anna.send({ kind: 'chat', phrase: 'drohne' });
 const said = await ben.expect(
@@ -499,6 +540,14 @@ for (const step of BLACKOUT_WALKTHROUGH) {
   client.send({ kind: 'interact' });
   await client.until('puzzle active', (v) => v.puzzle !== null);
   if (solved === 0) {
+    const live = await zoe.untilSpectator('sees both sides of the running puzzle', (v) =>
+      v.panels.every((p) => p.puzzle?.kind === 'wiring'));
+    const cutter = live.panels.find((p) => p.puzzle?.kind === 'wiring' && p.puzzle.wires !== null);
+    const manual = live.panels.find((p) => p.puzzle?.info !== null);
+    assert(
+      cutter !== undefined && manual !== undefined && cutter.roleId !== manual.roleId,
+      'spectator sees the wires and the handbook at the same time',
+    );
     await solveWiring(clients);
   } else if (solved === 1) {
     clients.steuerpult = await solveKeypad(clients, benJoined);

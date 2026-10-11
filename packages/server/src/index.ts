@@ -27,6 +27,8 @@ setInterval(() => manager.sweep(), 60_000).unref();
 interface Session {
   room: Room;
   playerId: string;
+  /** set for audience connections, which detach instead of leaving the game */
+  detachSpectator?: () => void;
 }
 
 const httpServer = createServer((req, res) => {
@@ -65,6 +67,11 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
       send(socket, { kind: 'joined', code: room.code, playerId, token });
       room.attach(playerId, (m) => send(socket, m));
       return { room, playerId };
+    }
+    case 'spectate': {
+      const room = manager.get(msg.code);
+      const detachSpectator = room.attachSpectator((m) => send(socket, m));
+      return { room, playerId: '', detachSpectator };
     }
     case 'resume': {
       const room = manager.get(msg.code);
@@ -155,7 +162,14 @@ wss.on('connection', (socket) => {
   });
 
   socket.on('close', () => {
-    session?.room.detach(session.playerId);
+    if (session === null) {
+      return;
+    }
+    if (session.detachSpectator !== undefined) {
+      session.detachSpectator();
+    } else {
+      session.room.detach(session.playerId);
+    }
   });
 });
 

@@ -6,6 +6,7 @@ import type {
   PlayerPosition,
   PlayerView,
   ServerMessage,
+  SpectatorView,
 } from '@escapelab/core';
 
 interface Credentials {
@@ -18,6 +19,8 @@ export interface Connection {
   /** socket status; the game itself lives in `view` */
   status: 'connecting' | 'open' | 'closed';
   view: PlayerView | null;
+  /** set instead of `view` when this connection is watching, not playing */
+  spectatorView: SpectatorView | null;
   roomCode: string | null;
   error: string | null;
   /**
@@ -59,6 +62,7 @@ function wsUrl(): string {
 export function useGameConnection(): Connection {
   const [status, setStatus] = useState<Connection['status']>('connecting');
   const [view, setView] = useState<PlayerView | null>(null);
+  const [spectatorView, setSpectatorView] = useState<SpectatorView | null>(null);
   const [roomCode, setRoomCode] = useState<string | null>(loadCredentials()?.code ?? null);
   const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -116,6 +120,10 @@ export function useGameConnection(): Connection {
         case 'view':
           setView(msg.view);
           break;
+        case 'spectator-view':
+          setSpectatorView(msg.view);
+          setRoomCode(msg.code);
+          break;
         case 'positions':
           positionsRef.current = msg.players;
           dronesRef.current = msg.drones;
@@ -159,6 +167,7 @@ export function useGameConnection(): Connection {
   return {
     status,
     view,
+    spectatorView,
     roomCode,
     error,
     positions: positionsRef,

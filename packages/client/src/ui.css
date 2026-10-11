@@ -1526,3 +1526,86 @@ button.link:hover {
 .report-penalty .report-text { color: #fecaca; }
 .report-puzzle .report-text { color: var(--accent); }
 .report-finish .report-text { font-weight: 700; }
+
+/* ── spectator view ─────────────────────────────────────────────────────── */
+
+.spectate {
+  width: 100%;
+  max-width: 1200px;
+}
+
+.spectate-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.spectate-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.world-canvas--wide {
+  height: min(54vh, 520px);
+}
+
+.banner-result {
+  margin-top: 12px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  font-family: var(--mono);
+  letter-spacing: 1px;
+}
+
+.banner-result.won {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.spectate-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.spectate-panels .panel {
+  margin-top: 0;
+}
+
+/* Audience panels are a window, not a control surface. */
+.read-only {
+  pointer-events: none;
+  opacity: 0.95;
+}
+
+.spectate-foot {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.ticker {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.join-watch-note {
+  margin: 12px 0 4px;
+  font-size: 13px;
+  line-height: 1.45;
+}

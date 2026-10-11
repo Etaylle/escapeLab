@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { CHAT_PHRASE_IDS, type ChatPhrase } from './chat.js';
 import { DIFFICULTIES } from './difficulty.js';
-import type { PlayerView } from './view.js';
+import type { PlayerView, SpectatorView } from './view.js';
 
 /**
  * WebSocket protocol, shared by server and client. Every inbound message is
@@ -19,6 +19,7 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
     code: z.string().min(1).max(10),
     name: z.string().min(1).max(40),
   }),
+  z.object({ kind: z.literal('spectate'), code: z.string().min(1).max(10) }),
   z.object({
     kind: z.literal('resume'),
     code: z.string().min(1).max(10),
@@ -91,6 +92,7 @@ export interface DronePosition {
 export type ServerMessage =
   | { kind: 'joined'; code: string; playerId: string; token: string }
   | { kind: 'view'; view: PlayerView }
+  | { kind: 'spectator-view'; view: SpectatorView; code: string }
   | {
       kind: 'positions';
       players: Record<string, PlayerPosition>;

@@ -28,6 +28,8 @@ export {
 } from './actions.js';
 export {
   viewFor,
+  viewForSpectator,
+  type SpectatorView,
   type PlayerView,
   type PuzzleView,
   type MapView,

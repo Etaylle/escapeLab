@@ -73,6 +73,15 @@ pnpm lint         # eslint, zero warnings
 pnpm --filter @escapelab/server smoke   # Ende-zu-Ende über echte WebSockets
 ```
 
+**Zuschauen:** Wer den Raumcode eingibt und auf *Zuschauen* klickt, sieht das ganze Labor ohne
+Dunkelheit, beide Figuren, die Drohnenkegel — **und die privaten Panele aller Rollen
+nebeneinander**. Genau das macht das Zusehen unterhaltsam: Das Publikum sieht beide Hälften und
+merkt vor den Spielenden, wo die Ansage schiefgeht. Zuschauer können nichts auslösen.
+
+**Nach der Runde:** Der Endbildschirm zeigt ein Einsatzprotokoll (wann welche Station fiel, jeder
+Alarm mit Grund und Kosten, Notfälle, eingesetzte Teile) sowie einen Rang von S bis C aus Alarmen
+und Restzeit — plus die persönliche Bestzeit.
+
 ## Für den Demo Day (ein Prozess, eine URL)
 
 ```sh

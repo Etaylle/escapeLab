@@ -1,0 +1,162 @@
+import { useEffect, useState } from 'react';
+import type { PlayerPosition, DronePosition, SpectatorView } from '@escapelab/core';
+import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
+import { PuzzlePanel } from './PuzzlePanel.js';
+
+interface Props {
+  view: SpectatorView;
+  positionsRef: React.MutableRefObject<Record<string, PlayerPosition>>;
+  dronesRef: React.MutableRefObject<Record<string, DronePosition>>;
+  pingsRef: React.MutableRefObject<MapPing[]>;
+  chatsRef: React.MutableRefObject<ChatLine[]>;
+  leaveRoom: () => void;
+}
+
+function remaining(deadlineAt: number, now: number): string {
+  const total = Math.max(0, Math.ceil((deadlineAt - now) / 1000));
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/** Audience view: the whole lab revealed, plus every role's private panel. */
+export function SpectateScreen({
+  view,
+  positionsRef,
+  dronesRef,
+  pingsRef,
+  chatsRef,
+  leaveRoom,
+}: Props) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(timer);
+  }, []);
+
+  const noop = (): void => undefined;
+  const lastEvents = view.events.slice(-4).reverse();
+
+  return (
+    <div className="spectate">
+      <div className="spectate-head">
+        <div>
+          <span className="kicker">ZUSCHAUERMODUS · {view.difficulty}</span>
+          <h1>{view.missionTitle}</h1>
+        </div>
+        <div className="spectate-stats">
+          {view.deadlineAt !== null && view.phase === 'playing' && (
+            <span className="countdown">{remaining(view.deadlineAt, now)}</span>
+          )}
+          <span className="pill">
+            {view.currentPuzzleIndex}/{view.puzzleCount} Stationen · {view.penaltySeq} Alarme
+          </span>
+        </div>
+      </div>
+
+      {view.phase !== 'playing' && (
+        <div className={`banner-result ${view.phase === 'won' ? 'won' : ''}`}>
+          {view.phase === 'lobby' && 'Die Crew ist noch in der Lobby …'}
+          {view.phase === 'won' && `✔ Geschafft${view.grade === null ? '' : ` — Rang ${view.grade.rank}`}`}
+          {view.phase === 'lost' && '✖ Gescheitert'}
+        </div>
+      )}
+
+      {view.pausedFor !== null && (
+        <div className="banner-result">⏸ Pausiert — warten auf {view.pausedFor.join(', ')}</div>
+      )}
+
+      {view.map !== null && (
+        <GameWorld
+          view={spectatorAsPlayerView(view)}
+          positionsRef={positionsRef}
+          dronesRef={dronesRef}
+          pingsRef={pingsRef}
+          chatsRef={chatsRef}
+          spectator
+          inputLocked
+          send={noop}
+        />
+      )}
+
+      <div className="spectate-panels">
+        {view.panels.map((panel) => (
+          <section key={panel.roleId} className="panel">
+            <div className="panel-label">// {panel.roleName}</div>
+            {panel.puzzle === null ? (
+              <p className="muted">Unterwegs — gerade keine Station offen.</p>
+            ) : (
+              <>
+                {panel.puzzle.info !== null && (
+                  <div className="info-box">📖 {panel.puzzle.info}</div>
+                )}
+                <div className="read-only">
+                  <PuzzlePanel puzzle={panel.puzzle} send={noop} />
+                </div>
+              </>
+            )}
+          </section>
+        ))}
+      </div>
+
+      <div className="spectate-foot">
+        <ul className="players inline">
+          {view.players.map((p) => (
+            <li key={p.id} className={p.connected ? '' : 'offline'}>
+              <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
+              {p.name} · {p.roleName ?? '—'}
+            </li>
+          ))}
+        </ul>
+        <ul className="ticker">
+          {lastEvents.map((event, i) => (
+            <li key={`${event.at}-${i}`}>
+              {event.label}
+              {event.seconds !== null ? ` (−${event.seconds}s)` : ''}
+            </li>
+          ))}
+        </ul>
+        <button className="link" onClick={leaveRoom}>
+          Zuschauen beenden
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * GameWorld renders from a player's view; an audience has no player, so we
+ * hand it a stand-in whose fields it actually reads in spectator mode.
+ */
+function spectatorAsPlayerView(view: SpectatorView): Parameters<typeof GameWorld>[0]['view'] {
+  return {
+    phase: view.phase,
+    missionId: '',
+    missionTitle: view.missionTitle,
+    difficulty: view.difficulty,
+    storyText: view.storyText,
+    you: { id: '', name: '', roleId: null, color: '#2dd4bf', isHost: false },
+    players: view.players.map((p) => ({
+      id: p.id,
+      name: p.name,
+      roleId: null,
+      roleName: p.roleName,
+      color: p.color,
+      connected: p.connected,
+      isHost: false,
+    })),
+    palette: [],
+    roles: [],
+    deadlineAt: view.deadlineAt,
+    startedAt: view.startedAt,
+    finishedAt: view.finishedAt,
+    timeLimitSec: view.timeLimitSec,
+    currentPuzzleIndex: view.currentPuzzleIndex,
+    puzzleCount: view.puzzleCount,
+    pausedFor: view.pausedFor,
+    events: view.events,
+    grade: view.grade,
+    penaltySeq: view.penaltySeq,
+    lastPenaltySec: null,
+    puzzle: null,
+    map: view.map,
+  };
+}

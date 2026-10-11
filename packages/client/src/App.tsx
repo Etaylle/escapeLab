@@ -5,6 +5,7 @@ import { JoinScreen } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
 import { GameScreen } from './screens/Game.js';
 import { EndScreen } from './screens/End.js';
+import { SpectateScreen } from './screens/Spectate.js';
 
 function RoomCode({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
@@ -68,6 +69,18 @@ export function App() {
   );
 
   function renderScreen() {
+    if (conn.spectatorView !== null) {
+      return (
+        <SpectateScreen
+          view={conn.spectatorView}
+          positionsRef={conn.positions}
+          dronesRef={conn.drones}
+          pingsRef={conn.pings}
+          chatsRef={conn.chats}
+          leaveRoom={conn.leaveRoom}
+        />
+      );
+    }
     if (conn.view === null) {
       return (
         <JoinScreen send={conn.send} connected={conn.status === 'open'} missions={missions} />

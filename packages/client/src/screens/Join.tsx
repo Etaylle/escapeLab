@@ -89,6 +89,17 @@ export function JoinScreen({ send, connected, missions }: Props) {
               Beitreten
             </button>
           </div>
+          <p className="muted join-watch-note">
+            Nur zuschauen? Dann braucht es keinen Namen — ihr seht die ganze Karte und beide
+            Panele gleichzeitig.
+          </p>
+          <button
+            className="link"
+            disabled={!connected || code.trim().length === 0}
+            onClick={() => send({ kind: 'spectate', code: code.trim() })}
+          >
+            👁 Zuschauen
+          </button>
         </section>
       </div>
     </div>

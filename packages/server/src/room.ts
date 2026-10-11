@@ -6,6 +6,7 @@ import {
   inEscapePhase,
   initialState,
   viewFor,
+  viewForSpectator,
   type Action,
   type ChatPhrase,
   type ClientMessage,
@@ -75,6 +76,7 @@ export class Room {
   private state: GameState;
   private readonly tokens = new Map<string, string>();
   private readonly listeners = new Map<string, Listener>();
+  private readonly spectators = new Set<Listener>();
   private readonly positions = new Map<string, PlayerPosition>();
   private readonly lastPingAt = new Map<string, number>();
   private readonly lastChatAt = new Map<string, number>();
@@ -125,6 +127,23 @@ export class Room {
         drones: this.drones?.snapshot(Date.now()) ?? {},
       });
     }
+  }
+
+  /**
+   * Audience connection: read-only, gets the revealing view plus the same
+   * live position, ping and chat stream the players get.
+   */
+  attachSpectator(listener: Listener): () => void {
+    this.spectators.add(listener);
+    listener({ kind: 'spectator-view', view: viewForSpectator(this.state), code: this.code });
+    if (this.positions.size > 0) {
+      listener({
+        kind: 'positions',
+        players: Object.fromEntries(this.positions),
+        drones: this.drones?.snapshot(Date.now()) ?? {},
+      });
+    }
+    return () => this.spectators.delete(listener);
   }
 
   /** Connection lost: keep the player (they may resume), notify the others. */
@@ -240,7 +259,7 @@ export class Room {
       return;
     }
     this.lastPingAt.set(playerId, now);
-    for (const listener of this.listeners.values()) {
+    for (const listener of this.audience) {
       listener({ kind: 'ping', playerId, x, y });
     }
   }
@@ -252,7 +271,7 @@ export class Room {
       return;
     }
     this.lastChatAt.set(playerId, now);
-    for (const listener of this.listeners.values()) {
+    for (const listener of this.audience) {
       listener({ kind: 'chat', playerId, phrase });
     }
   }
@@ -514,7 +533,7 @@ export class Room {
     this.positionsDirty = false;
     const players = Object.fromEntries(this.positions);
     const drones = this.drones?.snapshot(Date.now()) ?? {};
-    for (const listener of this.listeners.values()) {
+    for (const listener of this.audience) {
       listener({ kind: 'positions', players, drones });
     }
   }
@@ -597,6 +616,17 @@ export class Room {
     for (const [playerId, listener] of this.listeners) {
       listener({ kind: 'view', view: viewFor(this.state, playerId) });
     }
+    if (this.spectators.size > 0) {
+      const view = viewForSpectator(this.state);
+      for (const listener of this.spectators) {
+        listener({ kind: 'spectator-view', view, code: this.code });
+      }
+    }
+  }
+
+  /** Everyone attached to this room, players and audience alike. */
+  private get audience(): Listener[] {
+    return [...this.listeners.values(), ...this.spectators];
   }
 
   dispose(): void {

@@ -63,6 +63,8 @@ interface Props {
   pingsRef: React.MutableRefObject<MapPing[]>;
   chatsRef: React.MutableRefObject<ChatLine[]>;
   inputLocked: boolean;
+  /** audience view: whole map revealed, no controls, no own avatar */
+  spectator: boolean;
   send: (msg: ClientMessage) => void;
 }
 
@@ -211,6 +213,7 @@ export function GameWorld({
   pingsRef,
   chatsRef,
   inputLocked,
+  spectator,
   send,
 }: Props) {
   const [wheelOpen, setWheelOpen] = useState(false);
@@ -328,20 +331,23 @@ export function GameWorld({
         y: Math.round(wy * 100) / 100,
       });
     };
-    canvas.addEventListener('pointerdown', onPointerDown);
     const onKeyUp = (e: KeyboardEvent): void => {
       sim.keys.delete(e.key.toLowerCase());
     };
     const onBlur = (): void => {
       sim.keys.clear();
     };
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    window.addEventListener('blur', onBlur);
+    // An audience connection watches only: no controls, no position stream.
+    if (!spectator) {
+      window.addEventListener('keydown', onKeyDown);
+      window.addEventListener('keyup', onKeyUp);
+      window.addEventListener('blur', onBlur);
+      canvas.addEventListener('pointerdown', onPointerDown);
+    }
 
     const lastSent = { x: NaN, y: NaN, facing: NaN, moving: false };
     const posTimer = setInterval(() => {
-      if (!sim.adopted) {
+      if (!sim.adopted || spectator) {
         return;
       }
       const { x, y, facing, moving } = sim.self;
@@ -366,8 +372,13 @@ export function GameWorld({
     let prev = performance.now();
 
     function step(dt: number, map: WorldMap): void {
-      const youId = viewRef.current.you.id;
-      if (!sim.adopted) {
+      // Spectators own no avatar, so every streamed position is "someone else".
+      const youId = spectator ? '' : viewRef.current.you.id;
+      if (spectator) {
+        sim.adopted = true;
+        sim.cam.x = map.width / 2;
+        sim.cam.y = map.height / 2;
+      } else if (!sim.adopted) {
         const seeded = positionsRef.current[youId];
         if (seeded !== undefined) {
           sim.self.x = seeded.x;
@@ -478,10 +489,12 @@ export function GameWorld({
       }
       sim.flash = Math.max(0, sim.flash - dt / 0.9);
 
-      // camera
-      const ck = 1 - Math.exp(-dt * 6);
-      sim.cam.x += (sim.self.x - sim.cam.x) * ck;
-      sim.cam.y += (sim.self.y - sim.cam.y) * ck;
+      // camera: follow your avatar, or sit still over the whole lab
+      if (!spectator) {
+        const ck = 1 - Math.exp(-dt * 6);
+        sim.cam.x += (sim.self.x - sim.cam.x) * ck;
+        sim.cam.y += (sim.self.y - sim.cam.y) * ck;
+      }
       sim.time += dt;
     }
 
@@ -504,7 +517,9 @@ export function GameWorld({
       }
       const w = canvas.width;
       const h = canvas.height;
-      const s = Math.max(40, Math.min(72, h / 9.5));
+      const s = spectator
+        ? Math.max(14, Math.min(w / (map.width + 1), h / (map.height + 1)))
+        : Math.max(40, Math.min(72, h / 9.5));
 
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = '#04070a';
@@ -602,19 +617,21 @@ export function GameWorld({
         });
         ctx.restore();
       }
-      const you = metaOf.get(viewRef.current.you.id);
-      ctx.save();
-      ctx.translate(sim.self.x, sim.self.y + 0.3);
-      drawScientist(ctx, {
-        color: colorOf.get(viewRef.current.you.id) ?? FALLBACK_COLOR,
-        name: you?.name ?? 'DU',
-        facing: sim.self.facing,
-        moving: sim.self.moving,
-        walkPhase: sim.walkPhase,
-        isYou: true,
-        connected: true,
-      });
-      ctx.restore();
+      if (!spectator) {
+        const you = metaOf.get(viewRef.current.you.id);
+        ctx.save();
+        ctx.translate(sim.self.x, sim.self.y + 0.3);
+        drawScientist(ctx, {
+          color: colorOf.get(viewRef.current.you.id) ?? FALLBACK_COLOR,
+          name: you?.name ?? 'DU',
+          facing: sim.self.facing,
+          moving: sim.self.moving,
+          walkPhase: sim.walkPhase,
+          isYou: true,
+          connected: true,
+        });
+        ctx.restore();
+      }
 
       for (const drone of Object.values(dronesRef.current)) {
         ctx.save();
@@ -641,9 +658,11 @@ export function GameWorld({
         ctx.restore();
       }
 
-      renderLighting(map, s, w, h);
+      if (!spectator) {
+        renderLighting(map, s, w, h);
+        renderMinimap(map, w, h, dpr);
+      }
       renderPings(s, w, h, dpr);
-      renderMinimap(map, w, h, dpr);
       renderScreenText(map, s, w, h, dpr);
     }
 
@@ -1050,7 +1069,8 @@ export function GameWorld({
 
   return (
     <div className="world-wrap">
-      <canvas ref={canvasRef} className="world-canvas" />
+      <canvas ref={canvasRef} className={`world-canvas ${spectator ? 'world-canvas--wide' : ''}`} />
+      {!spectator && (
       <div className="world-controls">
         <div className="world-dpad" role="group" aria-label="Steuerkreuz">
           {(
@@ -1087,6 +1107,7 @@ export function GameWorld({
           💬 [C]
         </button>
       </div>
+      )}
 
       {wheelOpen && (
         <div className="chat-wheel" role="menu">
@@ -1105,9 +1126,11 @@ export function GameWorld({
           ))}
         </div>
       )}
-      <p className="world-hint muted">
-        Laufen: WASD/Pfeile · E = aktivieren/aufnehmen · Q = ablegen · Klick = Ping · M = Karte
-      </p>
+      {!spectator && (
+        <p className="world-hint muted">
+          Laufen: WASD/Pfeile · E = aktivieren/aufnehmen · Q = ablegen · Klick = Ping · M = Karte
+        </p>
+      )}
     </div>
   );
 }
