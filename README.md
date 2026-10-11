@@ -41,6 +41,12 @@ der Notfälle. **Verbindungsabbruch:** Fehlt jemand aus der Crew, pausiert die M
 pulsiert der Timer rot und die Ränder glühen, und die **letzten zehn Sekunden werden mit
 ansteigenden Piepsern heruntergezählt** — der Schlusston kommt, wenn die Energie weg ist.
 
+**Orientierung:** Unter der Welt sitzt ein HUD mit Auftrag und Fortschritt, deiner
+Rollenbeschreibung, dem Live-Status der ganzen Crew (hält die Platte, trägt etwas, an der
+Station, getrennt) und einem Funkprotokoll der letzten Ereignisse und Zurufe. Alles, wohin man
+laufen muss, bekommt am Bildschirmrand einen **Richtungspfeil mit Entfernung**, solange es
+außer Sicht ist. Der Ton lässt sich oben rechts abschalten.
+
 **Gefahren unterwegs:** **Wachdrohnen** patrouillieren feste Routen und leuchten einen sichtbaren
 Sichtkegel aus — wer hineinläuft, verliert Zeit (Sichtlinie zählt, an einer Station ist man
 sicher). Dazu schlagen **Notfälle** zu: Mitten im Lauf fällt die Kühlung aus, das offene Rätsel
