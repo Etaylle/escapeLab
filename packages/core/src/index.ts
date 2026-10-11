@@ -17,6 +17,7 @@ export {
   type ItemState,
   type Player,
   type Phase,
+  type RunEvent,
 } from './state.js';
 export {
   applyAction,
@@ -25,7 +26,13 @@ export {
   GameError,
   type Action,
 } from './actions.js';
-export { viewFor, type PlayerView, type PuzzleView, type MapView } from './view.js';
+export {
+  viewFor,
+  type PlayerView,
+  type PuzzleView,
+  type MapView,
+  type Grade,
+} from './view.js';
 export { doorOpen, platePressed, armedStation } from './map.js';
 export { type MapDef } from './mission.js';
 export {

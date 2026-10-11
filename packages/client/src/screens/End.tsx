@@ -8,6 +8,15 @@ interface Props {
   leaveRoom: () => void;
 }
 
+const EVENT_ICON: Record<string, string> = {
+  puzzle: '✔',
+  penalty: '🚨',
+  sabotage: '⚠',
+  item: '📦',
+  escape: '🚪',
+  finish: '🏁',
+};
+
 function fmt(ms: number): string {
   const totalSec = Math.max(0, Math.round(ms / 1000));
   const min = Math.floor(totalSec / 60);
@@ -87,6 +96,33 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
             </div>
           )}
         </div>
+      )}
+
+      {best !== null && best.isNew && <div className="record-banner">🏆 Neue Bestzeit!</div>}
+
+      {view.grade !== null && (
+        <div className={`grade grade-${view.grade.rank.toLowerCase()}`}>
+          <span className="grade-rank">{view.grade.rank}</span>
+          <span className="grade-label">{view.grade.label}</span>
+        </div>
+      )}
+
+      {view.events.length > 0 && startedAt !== null && (
+        <>
+          <h2>Einsatzprotokoll</h2>
+          <ol className="report">
+            {view.events.map((event, i) => (
+              <li key={`${event.at}-${i}`} className={`report-${event.kind}`}>
+                <span className="report-time">{fmt(event.at - startedAt)}</span>
+                <span className="report-icon">{EVENT_ICON[event.kind]}</span>
+                <span className="report-text">{event.label}</span>
+                {event.seconds !== null && (
+                  <span className="report-cost">−{event.seconds}s</span>
+                )}
+              </li>
+            ))}
+          </ol>
+        </>
       )}
 
       <div className="actions">

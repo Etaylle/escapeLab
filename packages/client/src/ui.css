@@ -1436,3 +1436,93 @@ button.link:hover {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ── run report & grade ─────────────────────────────────────────────────── */
+
+.record-banner {
+  margin-top: 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: rgba(45, 212, 191, 0.12);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.grade {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 14px 18px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--bg-2);
+}
+
+.grade-rank {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  flex: none;
+  border-radius: 14px;
+  font-family: var(--mono);
+  font-size: 32px;
+  font-weight: 800;
+  color: #06120f;
+}
+
+.grade-s .grade-rank { background: linear-gradient(160deg, #5eead4, #14b8a6); }
+.grade-a .grade-rank { background: linear-gradient(160deg, #86efac, #22c55e); }
+.grade-b .grade-rank { background: linear-gradient(160deg, #fde68a, #f59e0b); }
+.grade-c .grade-rank { background: linear-gradient(160deg, #fca5a5, #ef4444); }
+
+.grade-s { border-color: var(--accent); box-shadow: 0 0 20px var(--accent-glow); }
+
+.grade-label {
+  line-height: 1.45;
+}
+
+.report {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.report li {
+  display: grid;
+  grid-template-columns: 52px 20px 1fr auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.report li:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.report-time {
+  font-family: var(--mono);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.report-cost {
+  font-family: var(--mono);
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.report-penalty .report-text { color: #fecaca; }
+.report-puzzle .report-text { color: var(--accent); }
+.report-finish .report-text { font-weight: 700; }

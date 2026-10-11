@@ -1,5 +1,5 @@
 import type { Difficulty } from './difficulty.js';
-import { CREW_COLORS, type GameState, type Phase } from './state.js';
+import { CREW_COLORS, type GameState, type Phase, type RunEvent } from './state.js';
 import type { PuzzleDef } from './mission.js';
 import type { PuzzleState } from './state.js';
 import { doorOpen, platePressed } from './map.js';
@@ -37,6 +37,10 @@ export interface PlayerView {
   puzzleCount: number;
   /** set while the run is frozen because a crew member is missing */
   pausedFor: string[] | null;
+  /** the run report, filled in as the mission goes on */
+  events: RunEvent[];
+  /** only once the mission is over */
+  grade: Grade | null;
   /** increments on every penalty; clients key alarm effects off it */
   penaltySeq: number;
   lastPenaltySec: number | null;
@@ -151,6 +155,36 @@ export type PuzzleView = PuzzleViewCommon &
         lastWrongIndex: number | null;
       }
   );
+
+export interface Grade {
+  /** S, A, B or C — only awarded for a mission that was actually finished */
+  rank: 'S' | 'A' | 'B' | 'C';
+  label: string;
+}
+
+/**
+ * How well the crew did: a clean run with time to spare is the top rank,
+ * every alarm and every lost second pushes it down.
+ */
+function gradeFor(state: GameState): Grade | null {
+  if (state.phase !== 'won' || state.startedAt === null || state.finishedAt === null) {
+    return null;
+  }
+  const budget = state.mission.timeLimitSec * 1000;
+  const used = state.finishedAt - state.startedAt;
+  const spare = Math.max(0, 1 - used / budget);
+  const alarms = state.penaltySeq;
+  if (alarms === 0 && spare >= 0.3) {
+    return { rank: 'S', label: 'Makellos — kein einziger Alarm, massig Zeit übrig' };
+  }
+  if (alarms <= 1 && spare >= 0.15) {
+    return { rank: 'A', label: 'Starke Leistung — fast ohne Zwischenfälle' };
+  }
+  if (alarms <= 3) {
+    return { rank: 'B', label: 'Solide — es hat gewackelt, aber ihr seid raus' };
+  }
+  return { rank: 'C', label: 'Knapp vorbei an der Katastrophe' };
+}
 
 function storyText(state: GameState): string {
   switch (state.phase) {
@@ -390,6 +424,8 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
       state.paused === null
         ? null
         : state.players.filter((p) => !p.connected).map((p) => p.name),
+    events: [...state.events],
+    grade: gradeFor(state),
     penaltySeq: state.penaltySeq,
     lastPenaltySec: state.lastPenaltySec,
     puzzle: puzzleViewFor(state, you.roleId),

@@ -4,6 +4,7 @@ import {
   type ItemState,
   type Player,
   type PuzzleState,
+  type RunEvent,
 } from './state.js';
 import type { Difficulty } from './difficulty.js';
 import type { Mission, PuzzleDef } from './mission.js';
@@ -109,7 +110,9 @@ export function applyAction(state: GameState, action: Action): GameState {
     case 'sabotage-start':
       return startSabotage(state, action);
     case 'sabotage-cleared':
-      return state.sabotage === null ? state : { ...state, sabotage: null };
+      return state.sabotage === null
+        ? state
+        : logEvent({ ...state, sabotage: null }, 'sabotage', 'Notfall behoben', action.at);
     case 'sabotage-expired':
       return expireSabotage(state, action);
     case 'set-paused':
@@ -122,7 +125,7 @@ export function applyAction(state: GameState, action: Action): GameState {
       return deliverItem(state, action);
     case 'drone-spotted':
       return state.phase === 'playing'
-        ? applyPenalty(state, action.penaltySec, action.at)
+        ? applyPenalty(state, action.penaltySec, action.at, 'Von einer Drohne erfasst')
         : state;
     case 'interact':
       return handleInteract(state, action);
@@ -130,7 +133,7 @@ export function applyAction(state: GameState, action: Action): GameState {
       return handleEscaped(state, action);
     case 'time-expired':
       return state.phase === 'playing' && state.paused === null
-        ? { ...state, phase: 'lost', finishedAt: action.at, puzzleState: null }
+        ? lostNow(state, action.at)
         : state;
     case 'back-to-lobby':
       return backToLobby(state, action);
@@ -286,6 +289,7 @@ function startMission(
         { x: item.x + 0.5, y: item.y + 0.5, carriedBy: null, delivered: false },
       ]),
     ),
+    events: [],
     startedAt: action.at,
     deadlineAt: action.at + state.mission.timeLimitSec * 1000,
     finishedAt: null,
@@ -328,19 +332,31 @@ export function inEscapePhase(state: GameState): boolean {
 }
 
 function advance(state: GameState, at: number): GameState {
+  const solvedTitle = state.mission.puzzles[state.currentPuzzleIndex]?.title ?? 'Station';
+  const logged = logEvent(state, 'puzzle', `${solvedTitle} gelöst`, at);
   const nextIndex = state.currentPuzzleIndex + 1;
   if (nextIndex >= state.mission.puzzles.length) {
     if (state.mission.map?.exit !== undefined) {
       // All systems online — but the lab is only beaten once everyone is out.
-      return { ...state, currentPuzzleIndex: nextIndex, puzzleState: null };
+      return logEvent(
+        { ...logged, currentPuzzleIndex: nextIndex, puzzleState: null },
+        'escape',
+        'Notausgang entriegelt',
+        at,
+      );
     }
-    return { ...state, phase: 'won', puzzleState: null, finishedAt: at };
+    return logEvent(
+      { ...logged, phase: 'won', puzzleState: null, finishedAt: at },
+      'finish',
+      'Alle Systeme online',
+      at,
+    );
   }
   return {
-    ...state,
+    ...logged,
     currentPuzzleIndex: nextIndex,
     // With a map the next puzzle waits at its station; without one it starts right away.
-    puzzleState: state.mission.map === undefined ? initPuzzleState(state, nextIndex) : null,
+    puzzleState: state.mission.map === undefined ? initPuzzleState(logged, nextIndex) : null,
   };
 }
 
@@ -352,25 +368,47 @@ function handleEscaped(state: GameState, action: { at: number }): GameState {
   if (state.deadlineAt !== null && action.at >= state.deadlineAt) {
     return lostNow(state, action.at);
   }
-  return { ...state, phase: 'won', puzzleState: null, finishedAt: action.at };
+  return logEvent(
+    { ...state, phase: 'won', puzzleState: null, finishedAt: action.at },
+    'finish',
+    'Alle draußen',
+    action.at,
+  );
+}
+
+/** Append a line to the run report. */
+function logEvent(
+  state: GameState,
+  kind: RunEvent['kind'],
+  label: string,
+  at: number,
+  seconds: number | null = null,
+): GameState {
+  return { ...state, events: [...state.events, { at, kind, label, seconds }] };
 }
 
 /** Shrink the deadline; losing immediately if the penalty eats the rest. */
-function applyPenalty(state: GameState, sec: number, at: number): GameState {
+function applyPenalty(state: GameState, sec: number, at: number, reason: string): GameState {
   const deadlineAt = (state.deadlineAt ?? at) - sec * 1000;
-  const punished: GameState = {
-    ...state,
-    deadlineAt,
-    penaltySeq: state.penaltySeq + 1,
-    lastPenaltySec: sec,
-  };
+  const punished = logEvent(
+    { ...state, deadlineAt, penaltySeq: state.penaltySeq + 1, lastPenaltySec: sec },
+    'penalty',
+    reason,
+    at,
+    sec,
+  );
   return at >= deadlineAt
-    ? { ...punished, phase: 'lost', puzzleState: null, finishedAt: at }
+    ? lostNow(punished, at)
     : punished;
 }
 
 function lostNow(state: GameState, at: number): GameState {
-  return { ...state, phase: 'lost', puzzleState: null, finishedAt: at };
+  return logEvent(
+    { ...state, phase: 'lost', puzzleState: null, finishedAt: at },
+    'finish',
+    'Zeit abgelaufen',
+    at,
+  );
 }
 
 /**
@@ -382,11 +420,16 @@ function startSabotage(state: GameState, action: { at: number }): GameState {
   if (state.phase !== 'playing' || sabotage === undefined || state.sabotage !== null) {
     return state;
   }
-  return {
-    ...state,
-    puzzleState: null,
-    sabotage: { endsAt: action.at + sabotage.durationSec * 1000 },
-  };
+  return logEvent(
+    {
+      ...state,
+      puzzleState: null,
+      sabotage: { endsAt: action.at + sabotage.durationSec * 1000 },
+    },
+    'sabotage',
+    `Notfall: ${sabotage.label}`,
+    action.at,
+  );
 }
 
 /**
@@ -417,7 +460,12 @@ function expireSabotage(state: GameState, action: { at: number }): GameState {
   if (state.sabotage === null || sabotage === undefined) {
     return state;
   }
-  return applyPenalty({ ...state, sabotage: null }, sabotage.penaltySec, action.at);
+  return applyPenalty(
+    { ...state, sabotage: null },
+    sabotage.penaltySec,
+    action.at,
+    'Notfall nicht rechtzeitig behoben',
+  );
 }
 
 function handlePress(state: GameState, action: { playerId: string; at: number }): GameState {
@@ -455,7 +503,7 @@ function handleCutWire(
   const result = cutWire(def, puzzleState, action.wireId);
   const next = { ...state, puzzleState: result.state };
   if (result.penalty) {
-    return applyPenalty(next, def.penaltySec, action.at);
+    return applyPenalty(next, def.penaltySec, action.at, 'Falsches Kabel getrennt');
   }
   return result.solved ? advance(next, action.at) : next;
 }
@@ -478,7 +526,7 @@ function handlePressKey(
   const result = pressKey(def, puzzleState, action.keyIndex);
   const next = { ...state, puzzleState: result.state };
   if (result.penalty) {
-    return applyPenalty(next, def.penaltySec, action.at);
+    return applyPenalty(next, def.penaltySec, action.at, 'Falsche Taste am Code');
   }
   return result.solved ? advance(next, action.at) : next;
 }
@@ -519,7 +567,7 @@ function handleCommitSwitches(
   const result = commitSwitches(puzzleState);
   const next = { ...state, puzzleState: result.state };
   if (result.penalty) {
-    return applyPenalty(next, def.penaltySec, action.at);
+    return applyPenalty(next, def.penaltySec, action.at, 'Falsche Schalterkombination');
   }
   return result.solved ? advance(next, action.at) : next;
 }
@@ -542,7 +590,7 @@ function handlePressSimon(
   const result = pressSimon(puzzleState, action.buttonIndex);
   const next = { ...state, puzzleState: result.state };
   if (result.penalty) {
-    return applyPenalty(next, def.penaltySec, action.at);
+    return applyPenalty(next, def.penaltySec, action.at, 'Falscher Steuerimpuls');
   }
   return result.solved ? advance(next, action.at) : next;
 }
@@ -565,7 +613,7 @@ function handleMoveMaze(
   const result = moveMaze(puzzleState, action.dir);
   const next = { ...state, puzzleState: result.state };
   if (result.penalty) {
-    return applyPenalty(next, def.penaltySec, action.at);
+    return applyPenalty(next, def.penaltySec, action.at, 'Gegen eine Wand gelaufen');
   }
   return result.solved ? advance(next, action.at) : next;
 }
@@ -629,7 +677,7 @@ function dropItem(
 
 function deliverItem(
   state: GameState,
-  action: { playerId: string; itemId: string },
+  action: { playerId: string; itemId: string; at: number },
 ): GameState {
   const { item } = requireCarryable(state, action.playerId, action.itemId);
   if (item.carriedBy !== action.playerId) {
@@ -639,18 +687,23 @@ function deliverItem(
   if (def === undefined) {
     fail('Dieses Objekt gibt es hier nicht.');
   }
-  return {
-    ...state,
-    items: {
-      ...state.items,
-      [action.itemId]: {
-        carriedBy: null,
-        delivered: true,
-        x: def.deliverTo.x + 0.5,
-        y: def.deliverTo.y + 0.5,
+  return logEvent(
+    {
+      ...state,
+      items: {
+        ...state.items,
+        [action.itemId]: {
+          carriedBy: null,
+          delivered: true,
+          x: def.deliverTo.x + 0.5,
+          y: def.deliverTo.y + 0.5,
+        },
       },
     },
-  };
+    'item',
+    `${def.label} eingesetzt`,
+    action.at,
+  );
 }
 
 /** Items a station still waits for before it can be switched on. */
@@ -712,6 +765,7 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     sabotage: null,
     paused: null,
     items: {},
+    events: [],
     startedAt: null,
     deadlineAt: null,
     finishedAt: null,

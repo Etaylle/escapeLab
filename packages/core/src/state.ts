@@ -9,6 +9,16 @@ import type { MazeState } from './puzzles/maze.js';
 
 export type Phase = 'lobby' | 'playing' | 'won' | 'lost';
 
+/** One line of the run report, recorded as the mission unfolds. */
+export interface RunEvent {
+  /** epoch ms, turned into mm:ss against startedAt for display */
+  at: number;
+  kind: 'puzzle' | 'penalty' | 'sabotage' | 'item' | 'escape' | 'finish';
+  label: string;
+  /** seconds lost, for penalty lines */
+  seconds: number | null;
+}
+
 export interface ItemState {
   /** tile-space position while lying on the floor */
   x: number;
@@ -77,6 +87,8 @@ export interface GameState {
   paused: { since: number } | null;
   /** Where every carryable object currently is, by item id. */
   items: Record<string, ItemState>;
+  /** Everything worth retelling afterwards, oldest first. */
+  events: RunEvent[];
   /** epoch ms; set when the mission starts */
   startedAt: number | null;
   /** epoch ms; shrinks when penalties strike */
@@ -102,6 +114,7 @@ export function initialState(mission: Mission): GameState {
     sabotage: null,
     paused: null,
     items: {},
+    events: [],
     startedAt: null,
     deadlineAt: null,
     finishedAt: null,
