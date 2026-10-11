@@ -63,15 +63,15 @@ describe('Room', () => {
     // Station 1 sits in the Kontrolle room; only steuerpult has a button.
     moveTo(room, ben.playerId, 2, 1);
     room.act(ben.playerId, { kind: 'interact' });
-    room.act(ben.playerId, { kind: 'press-button' });
+    room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
     expect(lastView(ben.messages).currentPuzzleIndex).toBe(1);
     // Solving it opened the puzzle door for good.
     expect(lastView(ben.messages).map?.doors.find((d) => d.id === 'lehrtuer')?.open).toBe(true);
 
     moveTo(room, anna.playerId, 12, 1);
     room.act(anna.playerId, { kind: 'interact' });
-    room.act(anna.playerId, { kind: 'press-button' });
-    room.act(ben.playerId, { kind: 'press-button' });
+    room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
+    room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
     expect(lastView(anna.messages).currentPuzzleIndex).toBe(2);
 
     // Anna holds the plate so the gate to the last station stays open.
@@ -79,8 +79,8 @@ describe('Room', () => {
     expect(lastView(ben.messages).map?.doors.find((d) => d.id === 'halteschott')?.open).toBe(true);
     moveTo(room, ben.playerId, 16, 4);
     room.act(ben.playerId, { kind: 'interact' });
-    room.act(anna.playerId, { kind: 'press-button' });
-    room.act(ben.playerId, { kind: 'press-button' });
+    room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
+    room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
 
     // All puzzles done: still playing, but the hatch is open.
     const afterPuzzles = lastView(anna.messages);
@@ -169,7 +169,7 @@ describe('Room', () => {
     // Station one first, so the gated station becomes current.
     moveTo(room, ben.playerId, 2, 1);
     room.act(ben.playerId, { kind: 'interact' });
-    room.act(ben.playerId, { kind: 'press-button' });
+    room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
 
     // Standing at the gated station without the fuse gets a clear refusal.
     moveTo(room, ben.playerId, 12, 1);
@@ -261,6 +261,23 @@ describe('Room', () => {
     expect(view.puzzle?.hints.shown).toEqual(['Nur eine Rolle hat hier einen Knopf.']);
     expect(view.hintsUsed).toBe(1);
     expect(view.deadlineAt).toBe(deadline - hinted.hintCostSec * 1000);
+    room.dispose();
+  });
+
+  it('passes a puzzle input on to the open puzzle, which turns down what it does not take', () => {
+    const room = new Room('TEST', mission);
+    const { anna, ben } = fullLobby(room);
+    ready(room, ben);
+    room.act(anna.playerId, { kind: 'start-mission' });
+    moveTo(room, ben.playerId, 2, 1);
+    room.act(ben.playerId, { kind: 'interact' });
+
+    expect(() =>
+      room.act(ben.playerId, { kind: 'puzzle-input', input: { wireId: 'w1' } }),
+    ).toThrow(/Ungültige Eingabe/);
+    expect(lastView(ben.messages).currentPuzzleIndex).toBe(0);
+    room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
+    expect(lastView(ben.messages).currentPuzzleIndex).toBe(1);
     room.dispose();
   });
 

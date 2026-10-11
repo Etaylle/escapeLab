@@ -73,7 +73,7 @@ function atGatedStation(): GameState {
   return run(
     [
       { type: 'interact', playerId: 'p2', at: T0 + 100 },
-      { type: 'press-button', playerId: 'p2', at: T0 + 200 },
+      { type: 'puzzle-input', playerId: 'p2', at: T0 + 200, input: { press: true } },
     ],
     playing(),
   );

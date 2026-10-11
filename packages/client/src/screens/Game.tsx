@@ -14,6 +14,8 @@ import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
 import { MissionHud } from './MissionHud.js';
 import { InfoPanel } from './InfoPanel.js';
+import { Manual } from './Manual.js';
+import { EdgeworkChip } from './EdgeworkChip.js';
 
 interface Props {
   view: PlayerView;
@@ -146,6 +148,16 @@ function HintStrip({
         </button>
       )}
     </section>
+  );
+}
+
+/** Whose station this is, and the edgework within reach for roles that read it out. */
+function StationHead({ role, edgework }: { role: string; edgework: PlayerView['edgework'] }) {
+  return (
+    <div className="panel-head">
+      <div className="panel-label">// STATION: {role}</div>
+      {edgework !== null && <EdgeworkChip edgework={edgework} />}
+    </div>
   );
 }
 
@@ -372,18 +384,20 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
         (map !== null ? (
           <div className="puzzle-modal" role="dialog" aria-modal="true">
             <div className="panel">
-              <div className="panel-label">// STATION: {myRole}</div>
+              <StationHead role={myRole} edgework={view.edgework} />
               <p className="story">{puzzle.prompt}</p>
               {puzzle.info !== null && <div className="info-box">📖 {puzzle.info}</div>}
-              <PuzzlePanel puzzle={puzzle} send={send} />
+              {puzzle.manual !== null && <Manual sections={puzzle.manual} />}
+              <PuzzlePanel puzzle={puzzle} send={send} deadlineAt={view.deadlineAt} />
               <HintStrip hints={puzzle.hints} send={send} />
             </div>
           </div>
         ) : (
           <div className="panel">
-            <div className="panel-label">// STATION: {myRole}</div>
+            <StationHead role={myRole} edgework={view.edgework} />
             {puzzle.info !== null && <div className="info-box">📖 {puzzle.info}</div>}
-            <PuzzlePanel puzzle={puzzle} send={send} />
+            {puzzle.manual !== null && <Manual sections={puzzle.manual} />}
+            <PuzzlePanel puzzle={puzzle} send={send} deadlineAt={view.deadlineAt} />
           </div>
         ))}
 

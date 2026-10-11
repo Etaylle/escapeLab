@@ -2,17 +2,22 @@
  * End-to-end smoke test: boots the real server in-process, then drives two
  * real WebSocket clients through the full Blackout mission on its tile map —
  * streaming client-authoritative positions along BFS paths (plates, doors),
- * activating each station, solving every puzzle type (with one deliberate
- * wrong cut and one wrong key), and surviving a mid-game reconnect.
+ * activating each station, solving every station with its module's solver
+ * on the two clients' views (plus one deliberate wrong cut and one wrong
+ * key), and surviving a mid-game reconnect. No answer is written down here.
  * Run with: pnpm --filter @escapelab/server smoke
  */
 import { readFileSync } from 'node:fs';
 import WebSocket from 'ws';
 import {
+  moduleFor,
   parseMission,
   type DronePosition,
+  type Edgework,
   type PlayerPosition,
   type PlayerView,
+  type PuzzleInput,
+  type PuzzleView,
   type ServerMessage,
   type SpectatorView,
 } from '@escapelab/core';
@@ -70,6 +75,8 @@ class TestClient {
   private waiter: (() => void) | null = null;
   readonly raw: string[] = [];
   view: PlayerView | null = null;
+  /** view messages received so far; every dispatch on the server sends one to everyone */
+  viewCount = 0;
   spectatorView: SpectatorView | null = null;
   positions: Record<string, PlayerPosition> = {};
   drones: Record<string, DronePosition> = {};
@@ -84,6 +91,7 @@ class TestClient {
       const msg = JSON.parse(String(data)) as ServerMessage;
       if (msg.kind === 'view') {
         this.view = msg.view;
+        this.viewCount += 1;
       }
       if (msg.kind === 'spectator-view') {
         this.spectatorView = msg.view;
@@ -325,12 +333,87 @@ if (
 // Narrowed re-bindings: closures below keep the precise puzzle types.
 const WIRING = wiringDef;
 const KEYPAD = keypadDef;
-const pairMatches = (w: { left: string; right: string }, [a, b]: readonly [string, string]) =>
-  (w.left === a && w.right === b) || (w.left === b && w.right === a);
 
 interface Clients {
   anleitung: TestClient;
   steuerpult: TestClient;
+}
+
+type Move = { roleId: string; input: PuzzleInput };
+
+function clientFor(clients: Clients, roleId: string): TestClient {
+  return roleId === 'anleitung' || roleId === 'steuerpult'
+    ? clients[roleId]
+    : fail(`no client plays the role "${roleId}"`);
+}
+
+async function waitFor(desc: string, cond: () => boolean): Promise<void> {
+  const deadline = Date.now() + 5000;
+  while (!cond()) {
+    if (Date.now() > deadline) {
+      fail(`timeout waiting for "${desc}"`);
+    }
+    await sleep(10);
+  }
+}
+
+/**
+ * What the station's module would have the crew do next, worked out from
+ * nothing but the two clients' views — and the edgework, if a role sees it.
+ */
+function nextMoves(clients: Clients, index: number): Move[] {
+  const def = mission.puzzles[index] ?? fail(`blackout has no station ${index + 1}`);
+  const views: Record<string, PuzzleView> = {};
+  let edgework: Edgework | null = null;
+  for (const [roleId, client] of Object.entries(clients)) {
+    const view = client.view ?? fail(`${client.label}: no view yet`);
+    views[roleId] = view.puzzle ?? fail(`${client.label}: station ${index + 1} is not open`);
+    edgework ??= view.edgework;
+  }
+  return moduleFor(def.type).solve(def, views, edgework);
+}
+
+/**
+ * Send moves and wait for their effect everywhere: every accepted move is one
+ * broadcast to each client, and each acting client's station has changed or
+ * closed.
+ */
+async function play(clients: Clients, moves: Move[], index: number): Promise<void> {
+  const crew = Object.values(clients);
+  const counts = crew.map((client) => client.viewCount);
+  const acting = moves.map((move) => clientFor(clients, move.roleId));
+  const before = acting.map((client) => JSON.stringify(client.view?.puzzle));
+  for (const [i, move] of moves.entries()) {
+    acting[i]?.send({ kind: 'puzzle-input', input: move.input });
+  }
+  await waitFor(`station ${index + 1} to take ${JSON.stringify(moves)}`, () =>
+    crew.every((client, i) => client.viewCount >= (counts[i] ?? 0) + moves.length) &&
+    acting.every(
+      (client, i) =>
+        client.view?.currentPuzzleIndex !== index ||
+        JSON.stringify(client.view.puzzle) !== before[i],
+    ),
+  );
+}
+
+/** Feed the solver the two clients' views until the station is done. */
+async function solveStation(clients: Clients, index: number): Promise<void> {
+  const crew = Object.values(clients);
+  await waitFor(`both clients at station ${index + 1}`, () =>
+    crew.every((client) => client.view?.puzzle?.index === index),
+  );
+  for (let round = 0; round < 100; round++) {
+    if (crew.every((client) => (client.view?.currentPuzzleIndex ?? 0) > index)) {
+      console.log(`✓ the solver cleared station ${index + 1} from the views alone`);
+      return;
+    }
+    const moves = nextMoves(clients, index);
+    if (moves.length === 0) {
+      fail(`the solver has no move for station ${index + 1}`);
+    }
+    await play(clients, moves, index);
+  }
+  fail(`station ${index + 1} is still open after 100 rounds`);
 }
 
 async function solveWiring(clients: Clients): Promise<void> {
@@ -346,20 +429,23 @@ async function solveWiring(clients: Clients): Promise<void> {
     'manual role has the handbook text');
   assert(!clients.steuerpult.raw.some((r) => r.includes('§4')),
     'handbook text never reached the cutter');
+  assert(annaW.puzzle.manual !== null && benW.puzzle.manual === null,
+    'only the manual role gets the printed rules');
 
+  // The deliberate mistake: any wire but the one the solver would cut.
+  const [right] = nextMoves(clients, 0);
+  const rightId = right !== undefined && 'wireId' in right.input ? right.input.wireId : null;
   const wires = benW.puzzle.kind === 'wiring' && benW.puzzle.wires !== null ? benW.puzzle.wires : [];
-  const decoy = wires.find((w) => !WIRING.pairsToCut.some((t) => pairMatches(w, t)));
+  const wrong = wires.find((w) => w.id !== rightId) ?? fail('no wire left to cut wrongly');
   const deadlineBefore = benW.deadlineAt ?? 0;
-  clients.steuerpult.send({ kind: 'cut-wire', wireId: decoy?.id ?? '' });
+  clients.steuerpult.send({ kind: 'puzzle-input', input: { wireId: wrong.id } });
   const afterPenalty = await clients.steuerpult.expectView('sees the alarm after a wrong cut',
     (v) => v.penaltySeq === 1);
   assert((afterPenalty.deadlineAt ?? 0) === deadlineBefore - WIRING.penaltySec * 1000,
     `wrong cut cost ${WIRING.penaltySec}s of deadline`);
+  await clients.anleitung.until('the alarm', (v) => v.penaltySeq === 1);
 
-  for (const target of WIRING.pairsToCut) {
-    const wire = wires.find((w) => pairMatches(w, target));
-    clients.steuerpult.send({ kind: 'cut-wire', wireId: wire?.id ?? '' });
-  }
+  await solveStation(clients, 0);
 }
 
 /** Keypad incl. the mid-game reconnect; returns the replacement steuerpult client. */
@@ -386,50 +472,41 @@ async function solveKeypad(clients: Clients, benJoined: { code: string; playerId
 
   const grid = benK.puzzle?.kind === 'keypad' && benK.puzzle.grid !== null ? benK.puzzle.grid : [];
   assert(grid.length === KEYPAD.gridSymbols.length, 'keypad grid arrived after resume');
-  const wrongIdx = grid.findIndex((k) => k.symbol !== KEYPAD.code[0]);
-  ben2.send({ kind: 'press-key', keyIndex: wrongIdx });
+  const crew: Clients = { ...clients, steuerpult: ben2 };
+  await clients.anleitung.until('the crew back together', (v) =>
+    v.pausedFor === null && v.puzzle?.kind === 'keypad');
+  const [right] = nextMoves(crew, 1);
+  const rightIdx = right !== undefined && 'keyIndex' in right.input ? right.input.keyIndex : null;
+  const wrongIdx = grid.findIndex((_, i) => i !== rightIdx);
+  ben2.send({ kind: 'puzzle-input', input: { keyIndex: wrongIdx } });
   await ben2.expectView('sees the keypad alarm', (v) => v.penaltySeq === 2);
-  for (const symbol of KEYPAD.code) {
-    ben2.send({ kind: 'press-key', keyIndex: grid.findIndex((k) => k.symbol === symbol) });
-  }
+  await clients.anleitung.until('the keypad alarm', (v) => v.penaltySeq === 2);
+  await solveStation(crew, 1);
   return ben2;
 }
 
 async function solveSwitches(clients: Clients): Promise<void> {
   const annaSw = await clients.anleitung.expectView('sees the switch targets', (v) =>
     v.puzzle?.kind === 'switches' && v.puzzle.target !== null);
-  const benSw = await clients.steuerpult.expectView('sees the switch panel', (v) =>
+  await clients.steuerpult.expectView('sees the switch panel', (v) =>
     v.puzzle?.kind === 'switches' && v.puzzle.switches !== null);
   const target = annaSw.puzzle?.kind === 'switches' ? (annaSw.puzzle.target ?? []) : [];
-  const bank = benSw.puzzle?.kind === 'switches' ? (benSw.puzzle.switches ?? []) : [];
   assert(!clients.steuerpult.raw.some((r) => r.includes(JSON.stringify(target))),
     'switch targets never reached the panel client');
-  bank.forEach((sw, i) => {
-    if (target.includes(sw.symbol)) {
-      clients.steuerpult.send({ kind: 'toggle-switch', switchIndex: i });
-    }
-  });
-  clients.steuerpult.send({ kind: 'commit-switches' });
+  await solveStation(clients, 2);
 }
 
 async function solveSimon(clients: Clients): Promise<void> {
-  const annaSi = await clients.anleitung.expectView('sees the simon legend', (v) =>
+  await clients.anleitung.expectView('sees the simon legend', (v) =>
     v.puzzle?.kind === 'simon' && v.puzzle.legend !== null);
-  const benSi = await clients.steuerpult.expectView('sees the simon display', (v) =>
+  await clients.steuerpult.expectView('sees the simon display', (v) =>
     v.puzzle?.kind === 'simon' && v.puzzle.sequence !== null);
-  const legend = annaSi.puzzle?.kind === 'simon' ? (annaSi.puzzle.legend ?? []) : [];
-  const sequence = benSi.puzzle?.kind === 'simon' ? (benSi.puzzle.sequence ?? []) : [];
-  const buttons = benSi.puzzle?.kind === 'simon' ? (benSi.puzzle.buttons ?? []) : [];
-  for (const color of sequence) {
-    const symbol = legend.find((l) => l.color === color)?.symbol;
-    clients.steuerpult.send({ kind: 'press-simon', buttonIndex: buttons.findIndex((b) => b === symbol) });
-  }
+  await solveStation(clients, 3);
 }
 
 async function solveSync(clients: Clients): Promise<void> {
   await clients.anleitung.expectView('sees the sync finale', (v) => v.puzzle?.kind === 'button-sync');
-  clients.anleitung.send({ kind: 'press-button' });
-  clients.steuerpult.send({ kind: 'press-button' });
+  await solveStation(clients, 4);
 }
 
 // --- run ---------------------------------------------------------------------

@@ -1,7 +1,8 @@
 import type { Difficulty } from './difficulty.js';
+import type { Edgework } from './edgework.js';
 import { CREW_COLORS, type GameState, type Phase, type RunEvent } from './state.js';
-import type { PuzzleDef } from './mission.js';
-import type { PuzzleState } from './state.js';
+import { moduleFor, type PuzzleDef, type PuzzleView } from './puzzles/index.js';
+import type { ViewContext } from './puzzles/module.js';
 import { doorOpen, platePressed } from './map.js';
 
 /**
@@ -54,6 +55,8 @@ export interface PlayerView {
   lastPenaltySec: number | null;
   /** hints bought from mission control this run; they weigh on the grade */
   hintsUsed: number;
+  /** the lab's serial, lamps and cells — only for roles that see them */
+  edgework: Edgework | null;
   puzzle: PuzzleView | null;
   /** tile map while a mapped mission is running; null otherwise */
   map: MapView | null;
@@ -96,86 +99,6 @@ export interface MapView {
     panels: { id: string; x: number; y: number; occupied: boolean }[];
   } | null;
 }
-
-interface PuzzleViewCommon {
-  index: number;
-  total: number;
-  title: string;
-  prompt: string;
-  /** private text for this player's role, if the puzzle defines one */
-  info: string | null;
-  /** mission-control hints — the same for every role and the audience */
-  hints: {
-    /** revealed so far for this puzzle */
-    shown: string[];
-    /** how many more this puzzle has */
-    left: number;
-    /** epoch ms when the next may be requested; null once none are left */
-    readyAt: number | null;
-    /** seconds the next one costs, already scaled to the difficulty */
-    costSec: number;
-  };
-}
-
-export type PuzzleView = PuzzleViewCommon &
-  (
-    | {
-        kind: 'button-sync';
-        buttonLabel: string | null;
-        youPressed: boolean;
-        pressedCount: number;
-        requiredCount: number;
-        attempts: number;
-        lastResult: 'missed-window' | null;
-      }
-    | {
-        kind: 'wiring';
-        /** wire layout — only the cutter role gets it, everyone else sees null */
-        wires: { id: string; color: string; left: string; right: string; cut: boolean }[] | null;
-        cutsDone: number;
-        cutsNeeded: number;
-        lastWrongWireId: string | null;
-      }
-    | {
-        kind: 'keypad';
-        /** keypad layout — only the input role gets it */
-        grid: { symbol: string; done: boolean }[] | null;
-        progress: number;
-        codeLength: number;
-        lastWrongIndex: number | null;
-      }
-    | {
-        kind: 'switches';
-        /** switch bank — only the panel role gets it */
-        switches: { symbol: string; on: boolean }[] | null;
-        /** symbols that must be ON — only the target role gets it */
-        target: string[] | null;
-        targetCount: number;
-        lastResult: 'wrong' | null;
-      }
-    | {
-        kind: 'maze';
-        size: number;
-        /** your marker — only the navigator sees it */
-        pos: { x: number; y: number } | null;
-        goal: { x: number; y: number };
-        /** per-cell open-side bitmasks — only the guide sees them */
-        cells: number[] | null;
-        lastResult: 'wall' | null;
-      }
-    | {
-        kind: 'simon';
-        /** flashing color sequence — only the display role gets it */
-        sequence: string[] | null;
-        /** symbol buttons in panel order — only the display role gets them */
-        buttons: string[] | null;
-        /** color→symbol legend — only the legend role gets it */
-        legend: { color: string; symbol: string }[] | null;
-        progress: number;
-        seqLength: number;
-        lastWrongIndex: number | null;
-      }
-  );
 
 export interface Grade {
   /** S, A, B or C — only awarded for a mission that was actually finished */
@@ -220,92 +143,15 @@ function storyText(state: GameState): string {
   }
 }
 
-function buildPuzzleView(
-  def: PuzzleDef,
-  puzzleState: PuzzleState,
-  common: PuzzleViewCommon,
-  roleId: string | null,
-): PuzzleView | null {
-  if (def.type === 'button-sync' && puzzleState.type === 'button-sync') {
-    const button = def.buttons.find((b) => b.roleId === roleId);
-    return {
-      ...common,
-      kind: 'button-sync',
-      buttonLabel: button?.label ?? null,
-      youPressed: roleId !== null && puzzleState.pressed[roleId] !== undefined,
-      pressedCount: Object.keys(puzzleState.pressed).length,
-      requiredCount: def.buttons.length,
-      attempts: puzzleState.attempts,
-      lastResult: puzzleState.lastResult,
-    };
-  }
-  if (def.type === 'wiring' && puzzleState.type === 'wiring') {
-    const isCutter = roleId === def.cutterRoleId;
-    return {
-      ...common,
-      kind: 'wiring',
-      wires: isCutter ? puzzleState.wires : null,
-      cutsDone: puzzleState.cutsDone,
-      cutsNeeded: def.pairsToCut.length,
-      lastWrongWireId: isCutter ? puzzleState.lastWrongWireId : null,
-    };
-  }
-  if (def.type === 'keypad' && puzzleState.type === 'keypad') {
-    const isInput = roleId === def.inputRoleId;
-    const done = new Set(def.code.slice(0, puzzleState.progress));
-    return {
-      ...common,
-      kind: 'keypad',
-      grid: isInput
-        ? puzzleState.grid.map((symbol) => ({ symbol, done: done.has(symbol) }))
-        : null,
-      progress: puzzleState.progress,
-      codeLength: def.code.length,
-      lastWrongIndex: isInput ? puzzleState.lastWrongIndex : null,
-    };
-  }
-  if (def.type === 'switches' && puzzleState.type === 'switches') {
-    const isPanel = roleId === def.panelRoleId;
-    return {
-      ...common,
-      kind: 'switches',
-      switches: isPanel
-        ? puzzleState.order.map((symbol, i) => ({ symbol, on: puzzleState.on[i] === true }))
-        : null,
-      target: roleId === def.targetRoleId ? puzzleState.target : null,
-      targetCount: def.onCount,
-      lastResult: isPanel ? puzzleState.lastResult : null,
-    };
-  }
-  if (def.type === 'maze' && puzzleState.type === 'maze') {
-    const isNavigator = roleId === def.navigatorRoleId;
-    return {
-      ...common,
-      kind: 'maze',
-      size: puzzleState.size,
-      pos: isNavigator ? { ...puzzleState.pos } : null,
-      goal: { ...puzzleState.goal },
-      cells: roleId === def.guideRoleId ? [...puzzleState.cells] : null,
-      lastResult: isNavigator ? puzzleState.lastResult : null,
-    };
-  }
-  if (def.type === 'simon' && puzzleState.type === 'simon') {
-    const isDisplay = roleId === def.displayRoleId;
-    return {
-      ...common,
-      kind: 'simon',
-      sequence: isDisplay ? [...puzzleState.sequence] : null,
-      buttons: isDisplay ? [...puzzleState.buttonOrder] : null,
-      legend:
-        roleId === def.legendRoleId
-          ? Object.entries(puzzleState.mapping).map(([color, symbol]) => ({ color, symbol }))
-          : null,
-      progress: puzzleState.progress,
-      seqLength: puzzleState.sequence.length,
-      lastWrongIndex: isDisplay ? puzzleState.lastWrongIndex : null,
-    };
-  }
-  return null;
+/** Only the edgework-reading roles get it, the audience on exactly their panels. */
+function edgeworkFor(state: GameState, roleId: string | null): Edgework | null {
+  const seesIt = state.mission.roles.some((r) => r.id === roleId && r.seesEdgework);
+  return seesIt ? state.edgework : null;
+}
+
+/** The role that holds the printed rules; button-sync has none. */
+function manualRoleOf(def: PuzzleDef): string | null {
+  return 'manualRoleId' in def ? def.manualRoleId : null;
 }
 
 function puzzleViewFor(state: GameState, roleId: string | null): PuzzleView | null {
@@ -316,13 +162,20 @@ function puzzleViewFor(state: GameState, roleId: string | null): PuzzleView | nu
   if (def === undefined) {
     return null;
   }
+  if (state.edgework === null) {
+    throw new Error('puzzle view: this run has no edgework — was start-mission skipped?');
+  }
+  const puzzleModule = moduleFor(def.type);
+  const ctx: ViewContext = { edgework: state.edgework, alarms: state.penaltySeq };
   const hintsLeft = def.hints.length - state.hintsRevealed;
-  const common: PuzzleViewCommon = {
+  return {
+    ...puzzleModule.view(def, state.puzzleState, roleId, ctx),
     index: state.currentPuzzleIndex,
     total: state.mission.puzzles.length,
     title: def.title,
     prompt: def.prompt,
     info: def.infos.find((i) => i.roleId === roleId)?.text ?? null,
+    manual: roleId !== null && roleId === manualRoleOf(def) ? puzzleModule.manual(def) : null,
     hints: {
       shown: def.hints.slice(0, state.hintsRevealed),
       left: hintsLeft,
@@ -330,7 +183,6 @@ function puzzleViewFor(state: GameState, roleId: string | null): PuzzleView | nu
       costSec: state.mission.hintCostSec,
     },
   };
-  return buildPuzzleView(def, state.puzzleState, common, roleId);
 }
 
 function mapViewFor(state: GameState, playerId: string): MapView | null {
@@ -434,8 +286,13 @@ export interface SpectatorView {
     connected: boolean;
   }[];
   map: MapView | null;
-  /** one entry per role, each puzzle exactly as that role sees it */
-  panels: { roleId: string; roleName: string; puzzle: PuzzleView | null }[];
+  /** one entry per role, puzzle and edgework exactly as that role sees them */
+  panels: {
+    roleId: string;
+    roleName: string;
+    puzzle: PuzzleView | null;
+    edgework: Edgework | null;
+  }[];
 }
 
 export function viewForSpectator(state: GameState): SpectatorView {
@@ -472,6 +329,7 @@ export function viewForSpectator(state: GameState): SpectatorView {
       roleId: role.id,
       roleName: role.name,
       puzzle: puzzleViewFor(state, role.id),
+      edgework: edgeworkFor(state, role.id),
     })),
   };
 }
@@ -533,6 +391,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     penaltySeq: state.penaltySeq,
     lastPenaltySec: state.lastPenaltySec,
     hintsUsed: state.hintsUsed,
+    edgework: edgeworkFor(state, you.roleId),
     puzzle: puzzleViewFor(state, you.roleId),
     map: mapViewFor(state, playerId),
   };

@@ -1,4 +1,5 @@
-import type { Mission, PuzzleDef } from './mission.js';
+import type { Mission } from './mission.js';
+import type { PuzzleDef } from './puzzles/index.js';
 
 /**
  * Difficulty is applied by scaling a mission into a new mission, so every
@@ -64,9 +65,7 @@ export function difficultyInfos(): { id: Difficulty; label: string; description:
 const atLeast = (value: number, min = 1): number => Math.max(min, Math.round(value));
 
 function scalePuzzle(puzzle: PuzzleDef, factor: number): PuzzleDef {
-  return 'penaltySec' in puzzle
-    ? { ...puzzle, penaltySec: atLeast(puzzle.penaltySec * factor, 5) }
-    : puzzle;
+  return { ...puzzle, penaltySec: atLeast(puzzle.penaltySec * factor, 5) };
 }
 
 /** Returns a copy of `mission` with every difficulty-dependent number scaled. */

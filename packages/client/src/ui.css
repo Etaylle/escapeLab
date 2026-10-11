@@ -644,6 +644,15 @@ button.link:hover {
   font-family: var(--mono);
 }
 
+/* Station label with the edgework beside it, or under it where it is narrow. */
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+}
+
 .info-box {
   background: var(--panel-2);
   border-left: 3px solid var(--accent);
@@ -2287,9 +2296,12 @@ button.link:hover {
 
 .hud-right {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   margin-left: auto;
+  min-width: 0;
 }
 
 .hud-radio {
@@ -2410,4 +2422,183 @@ button.link:hover {
     grid-template-columns: 1fr;
     gap: 2px;
   }
+}
+
+/* ── printed manual ─────────────────────────────────────────────────────── */
+
+.manual {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-2);
+  border-left: 3px solid var(--warn);
+  border-radius: 8px;
+  background: var(--panel-2);
+  line-height: 1.55;
+  overflow-wrap: break-word;
+}
+
+.manual .kicker {
+  color: var(--warn);
+}
+
+.manual-section > * {
+  margin: 0;
+}
+
+.manual-section > * + * {
+  margin-top: 8px;
+}
+
+.manual-section h3 {
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.manual-section p {
+  font-size: 15px;
+}
+
+.manual-rules {
+  padding-left: 1.7em;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 15px;
+}
+
+.manual-rules li::marker {
+  font-family: var(--mono);
+  color: var(--warn);
+}
+
+/* Wide tables scroll inside their box; the station never scrolls sideways. */
+.manual-table {
+  overflow-x: auto;
+}
+
+.manual-table table {
+  border-collapse: collapse;
+  min-width: 100%;
+  font-size: 14px;
+}
+
+.manual-table th,
+.manual-table td {
+  padding: 6px 10px;
+  border: 1px solid var(--line-2);
+  text-align: left;
+  vertical-align: top;
+}
+
+.manual-table th {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--bg-2);
+}
+
+/* Columns shrink before they wrap, so six of them still sit side by side on a phone. */
+.manual-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.manual-column {
+  flex: 1 1 34px;
+  max-width: 52px;
+  list-style: none;
+  margin: 0;
+  padding: 3px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--bg-2);
+}
+
+.manual-column li {
+  height: 38px;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+}
+
+/* ── edgework chip ──────────────────────────────────────────────────────── */
+
+/* Never squeezed: on a narrow strip it takes a line of its own instead. */
+.edgework {
+  flex: none;
+  max-width: 100%;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 5px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--bg-2);
+  font-family: var(--mono);
+}
+
+.edgework-part {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.edgework-label {
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+
+.edgework-serial {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.edgework-lamps {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.edgework-lamp {
+  color: var(--muted);
+}
+
+.edgework-lamp-lit {
+  color: var(--warn);
+  text-shadow: 0 0 6px rgba(251, 191, 36, 0.55);
+}
+
+.edgework-cells {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+}
+
+.edgework-cell {
+  width: 7px;
+  height: 13px;
+  border: 1px solid var(--line-2);
+  border-radius: 2px;
+}
+
+.edgework-cell.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.edgework-count {
+  margin-left: 3px;
 }

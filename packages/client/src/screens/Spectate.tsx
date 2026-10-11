@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import type { PlayerPosition, DronePosition, SpectatorView } from '@escapelab/core';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
+import { Manual } from './Manual.js';
+import { EdgeworkChip } from './EdgeworkChip.js';
 
 interface Props {
   view: SpectatorView;
@@ -91,7 +93,10 @@ export function SpectateScreen({
         <div className="spectate-panels">
           {view.panels.map((panel) => (
             <section key={panel.roleId} className="panel">
-              <div className="panel-label">// {panel.roleName}</div>
+              <div className="panel-head">
+                <div className="panel-label">// {panel.roleName}</div>
+                {panel.edgework !== null && <EdgeworkChip edgework={panel.edgework} />}
+              </div>
               {panel.puzzle === null ? (
                 <p className="muted">Unterwegs — gerade keine Station offen.</p>
               ) : (
@@ -99,8 +104,9 @@ export function SpectateScreen({
                   {panel.puzzle.info !== null && (
                     <div className="info-box">📖 {panel.puzzle.info}</div>
                   )}
+                  {panel.puzzle.manual !== null && <Manual sections={panel.puzzle.manual} />}
                   <div className="read-only">
-                    <PuzzlePanel puzzle={panel.puzzle} send={noop} />
+                    <PuzzlePanel puzzle={panel.puzzle} send={noop} deadlineAt={view.deadlineAt} />
                   </div>
                 </>
               )}
@@ -179,6 +185,7 @@ function spectatorAsPlayerView(view: SpectatorView): Parameters<typeof GameWorld
     penaltySeq: view.penaltySeq,
     lastPenaltySec: null,
     hintsUsed: view.hintsUsed,
+    edgework: null,
     puzzle: null,
     map: view.map,
   };

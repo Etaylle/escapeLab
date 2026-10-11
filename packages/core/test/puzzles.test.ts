@@ -57,10 +57,10 @@ describe('wiring puzzle', () => {
       const wire = cutterWires(state).find((w) => pairMatches(w, target));
       expect(wire).toBeDefined();
       state = applyAction(state, {
-        type: 'cut-wire',
+        type: 'puzzle-input',
         playerId: 'p2',
-        wireId: wire?.id ?? '',
         at: T0 + 1000,
+        input: { wireId: wire?.id ?? '' },
       });
     }
     expect(state.currentPuzzleIndex).toBe(1);
@@ -78,10 +78,10 @@ describe('wiring puzzle', () => {
     );
     const before = state.deadlineAt ?? 0;
     const after = applyAction(state, {
-      type: 'cut-wire',
+      type: 'puzzle-input',
       playerId: 'p2',
-      wireId: decoy?.id ?? '',
       at: T0 + 1000,
+      input: { wireId: decoy?.id ?? '' },
     });
     expect(after.deadlineAt).toBe(before - def.penaltySec * 1000);
     expect(after.penaltySeq).toBe(1);
@@ -99,10 +99,10 @@ describe('wiring puzzle', () => {
     const second = def.pairsToCut[1];
     const wire = cutterWires(state).find((w) => second !== undefined && pairMatches(w, second));
     const after = applyAction(state, {
-      type: 'cut-wire',
+      type: 'puzzle-input',
       playerId: 'p2',
-      wireId: wire?.id ?? '',
       at: T0 + 1000,
+      input: { wireId: wire?.id ?? '' },
     });
     expect(after.penaltySeq).toBe(1);
   });
@@ -118,10 +118,10 @@ describe('wiring puzzle', () => {
     );
     const nearDeadline = (state.deadlineAt ?? 0) - def.penaltySec * 1000 + 1000;
     const after = applyAction(state, {
-      type: 'cut-wire',
+      type: 'puzzle-input',
       playerId: 'p2',
-      wireId: decoy?.id ?? '',
       at: nearDeadline,
+      input: { wireId: decoy?.id ?? '' },
     });
     expect(after.phase).toBe('lost');
   });
@@ -129,12 +129,32 @@ describe('wiring puzzle', () => {
   it('rejects cuts from the wrong role and hides the layout from it', () => {
     const state = started();
     expect(() =>
-      applyAction(state, { type: 'cut-wire', playerId: 'p1', wireId: 'w0', at: T0 + 1 }),
+      applyAction(state, {
+        type: 'puzzle-input',
+        playerId: 'p1',
+        at: T0 + 1,
+        input: { wireId: 'w0' },
+      }),
     ).toThrow(/Schaltschrank/);
     const annaPuzzle = viewFor(state, 'p1').puzzle;
     expect(annaPuzzle?.kind).toBe('wiring');
     if (annaPuzzle?.kind === 'wiring') {
       expect(annaPuzzle.wires).toBeNull();
+    }
+  });
+
+  it('prints the rules for the manual role only, leaving the cut order to the mission text', () => {
+    const state = started();
+    const def = mission.puzzles[0];
+    if (def?.type !== 'wiring') {
+      throw new Error('expected wiring first');
+    }
+    const printed = JSON.stringify(viewFor(state, 'p1').puzzle?.manual);
+    expect(printed).toContain(`−${def.penaltySec} s`);
+    expect(viewFor(state, 'p2').puzzle?.manual).toBeNull();
+    // Where the mission splits the cut order between roles, the manual must not undo that.
+    for (const symbol of def.pairsToCut.flat()) {
+      expect(printed).not.toContain(symbol);
     }
   });
 });
@@ -150,10 +170,10 @@ describe('keypad puzzle', () => {
     for (const target of def.pairsToCut) {
       const wire = cutterWires(state).find((w) => pairMatches(w, target));
       state = applyAction(state, {
-        type: 'cut-wire',
+        type: 'puzzle-input',
         playerId: 'p2',
-        wireId: wire?.id ?? '',
         at: T0 + 1000,
+        input: { wireId: wire?.id ?? '' },
       });
     }
     return state;
@@ -176,10 +196,10 @@ describe('keypad puzzle', () => {
     for (const symbol of def.code) {
       const idx = inputGrid(state).findIndex((k) => k.symbol === symbol);
       state = applyAction(state, {
-        type: 'press-key',
+        type: 'puzzle-input',
         playerId: 'p2',
-        keyIndex: idx,
         at: T0 + 2000,
+        input: { keyIndex: idx },
       });
     }
     expect(state.currentPuzzleIndex).toBe(2);
@@ -198,8 +218,8 @@ describe('keypad puzzle', () => {
     const before = state.deadlineAt ?? 0;
     state = run(
       [
-        { type: 'press-key', playerId: 'p2', keyIndex: okIdx, at: T0 + 2000 },
-        { type: 'press-key', playerId: 'p2', keyIndex: wrongIdx, at: T0 + 3000 },
+        { type: 'puzzle-input', playerId: 'p2', at: T0 + 2000, input: { keyIndex: okIdx } },
+        { type: 'puzzle-input', playerId: 'p2', at: T0 + 3000, input: { keyIndex: wrongIdx } },
       ],
       state,
     );

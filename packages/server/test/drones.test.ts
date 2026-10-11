@@ -208,7 +208,7 @@ describe('sleeping drones', () => {
     const awake = run(
       [
         { type: 'interact', playerId: 'p2', at: T0 + 10 },
-        { type: 'press-button', playerId: 'p2', at: T0 + 20 },
+        { type: 'puzzle-input', playerId: 'p2', at: T0 + 20, input: { press: true } },
       ],
       asleep,
     );

@@ -25,7 +25,8 @@ const mission: Mission = parseMission({
       id: 'code',
       title: 'Code',
       prompt: '',
-      inputRoleId: 'steuerpult',
+      operatorRoleId: 'steuerpult',
+      manualRoleId: 'anleitung',
       gridSymbols: ['a', 'b', 'c', 'd'],
       code: ['a', 'b'],
       penaltySec: 20,
@@ -83,7 +84,7 @@ describe('run report', () => {
     state = run(
       [
         { type: 'interact', playerId: 'p2', at: T0 + 1000 },
-        { type: 'press-button', playerId: 'p2', at: T0 + 2000 },
+        { type: 'puzzle-input', playerId: 'p2', at: T0 + 2000, input: { press: true } },
       ],
       state,
     );
@@ -125,7 +126,7 @@ describe('run report', () => {
     state = run(
       [
         { type: 'interact', playerId: 'p2', at: T0 + 7000 },
-        { type: 'press-button', playerId: 'p2', at: T0 + 8000 },
+        { type: 'puzzle-input', playerId: 'p2', at: T0 + 8000, input: { press: true } },
         { type: 'interact', playerId: 'p2', at: T0 + 9000 },
       ],
       state,
@@ -136,10 +137,10 @@ describe('run report', () => {
     })();
     for (const symbol of ['a', 'b']) {
       state = applyAction(state, {
-        type: 'press-key',
+        type: 'puzzle-input',
         playerId: 'p2',
-        keyIndex: grid.findIndex((k) => k.symbol === symbol),
         at: T0 + 10_000,
+        input: { keyIndex: grid.findIndex((k) => k.symbol === symbol) },
       });
     }
     expect(kinds(state.events).slice(-2)).toEqual(['puzzle', 'escape']);

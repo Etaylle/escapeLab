@@ -1,144 +1,19 @@
 import { z } from 'zod';
+import { moduleFor, puzzleDefSchema, type PuzzleDef } from './puzzles/index.js';
 
 /**
  * Mission format: a mission is pure data (JSON), validated by these schemas.
- * The platform promise is that new missions require no code changes.
+ * The platform promise is that new missions require no code changes. The
+ * puzzle shapes come from the modules in ./puzzles/.
  */
 
 export const roleDefSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string(),
+  /** this role reads the lab's edgework (serial, lamps, cells) to the crew */
+  seesEdgework: z.boolean().default(false),
 });
-
-const symbolPairSchema = z.tuple([z.string().min(1), z.string().min(1)]);
-
-/**
- * button-sync puzzle: every role listed in `buttons` must press its button.
- * With `windowMs` set, all presses must happen within that window of each
- * other, otherwise they expire and the team must retry.
- */
-export const buttonSyncPuzzleSchema = z.object({
-  type: z.literal('button-sync'),
-  id: z.string().min(1),
-  title: z.string().min(1),
-  prompt: z.string(),
-  buttons: z.array(z.object({ roleId: z.string(), label: z.string() })).min(1),
-  infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
-  hints: z.array(z.string().min(1)).max(3).default([]),
-  onSolved: z.string().min(1).optional(),
-  windowMs: z.number().int().positive().optional(),
-});
-
-/**
- * wiring puzzle: the cutter role sees wires whose ends carry symbols
- * (layout shuffled per game). `pairsToCut` must be cut in order; decoys and
- * out-of-order cuts trigger an alarm (time penalty), the wire stays intact.
- */
-export const wiringPuzzleSchema = z.object({
-  type: z.literal('wiring'),
-  id: z.string().min(1),
-  title: z.string().min(1),
-  prompt: z.string(),
-  cutterRoleId: z.string().min(1),
-  pairsToCut: z.array(symbolPairSchema).min(1),
-  decoyPairs: z.array(symbolPairSchema).min(1),
-  penaltySec: z.number().int().positive().default(30),
-  infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
-  hints: z.array(z.string().min(1)).max(3).default([]),
-  onSolved: z.string().min(1).optional(),
-});
-
-/**
- * keypad puzzle: the input role sees `gridSymbols` as a shuffled keypad and
- * must press the symbols of `code` in order. A wrong press resets progress
- * and costs time.
- */
-export const keypadPuzzleSchema = z.object({
-  type: z.literal('keypad'),
-  id: z.string().min(1),
-  title: z.string().min(1),
-  prompt: z.string(),
-  inputRoleId: z.string().min(1),
-  gridSymbols: z.array(z.string().min(1)).min(4),
-  code: z.array(z.string().min(1)).min(2),
-  penaltySec: z.number().int().positive().default(20),
-  infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
-  hints: z.array(z.string().min(1)).max(3).default([]),
-  onSolved: z.string().min(1).optional(),
-});
-
-/**
- * switches puzzle: the panel role sees a bank of toggle switches (shuffled
- * per game); the target role sees which symbols must be ON (chosen per
- * game). Toggling is free, committing a wrong configuration costs time.
- */
-export const switchesPuzzleSchema = z.object({
-  type: z.literal('switches'),
-  id: z.string().min(1),
-  title: z.string().min(1),
-  prompt: z.string(),
-  panelRoleId: z.string().min(1),
-  targetRoleId: z.string().min(1),
-  symbols: z.array(z.string().min(1)).min(4).max(10),
-  onCount: z.number().int().positive(),
-  penaltySec: z.number().int().positive().default(20),
-  infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
-  hints: z.array(z.string().min(1)).max(3).default([]),
-  onSolved: z.string().min(1).optional(),
-});
-
-/**
- * simon puzzle: the display role watches a flashing color sequence and owns
- * the symbol buttons; the legend role holds the color→symbol mapping
- * (generated per game). Wrong press resets progress and costs time.
- */
-export const simonPuzzleSchema = z.object({
-  type: z.literal('simon'),
-  id: z.string().min(1),
-  title: z.string().min(1),
-  prompt: z.string(),
-  displayRoleId: z.string().min(1),
-  legendRoleId: z.string().min(1),
-  buttonSymbols: z.array(z.string().min(1)).length(4),
-  sequenceLength: z.number().int().min(3).max(8).default(5),
-  penaltySec: z.number().int().positive().default(20),
-  infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
-  hints: z.array(z.string().min(1)).max(3).default([]),
-  onSolved: z.string().min(1).optional(),
-});
-
-/**
- * maze puzzle: the navigator role sees its marker and the goal but no walls,
- * the guide role sees the walls but not the marker. Bumping a wall costs time.
- */
-export const mazePuzzleSchema = z.object({
-  type: z.literal('maze'),
-  id: z.string().min(1),
-  title: z.string().min(1),
-  prompt: z.string(),
-  navigatorRoleId: z.string().min(1),
-  guideRoleId: z.string().min(1),
-  size: z.number().int().min(4).max(8).default(6),
-  penaltySec: z.number().int().positive().default(15),
-  infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
-  hints: z.array(z.string().min(1)).max(3).default([]),
-  onSolved: z.string().min(1).optional(),
-});
-
-/**
- * Every puzzle type also carries up to three progressive `hints` (nudge →
- * specific → near-answer) the crew can buy from mission control, and an
- * optional `onSolved` radio line.
- */
-export const puzzleDefSchema = z.discriminatedUnion('type', [
-  buttonSyncPuzzleSchema,
-  wiringPuzzleSchema,
-  keypadPuzzleSchema,
-  switchesPuzzleSchema,
-  simonPuzzleSchema,
-  mazePuzzleSchema,
-]);
 
 const coord = z.number().int().nonnegative();
 
@@ -227,69 +102,21 @@ export const mapDefSchema = z.object({
     .default([]),
 });
 
-const pairKey = ([a, b]: [string, string]): string => [a, b].sort().join('\u0000');
-
+/**
+ * Role references of one puzzle. Per-type rules beyond these (unique symbols
+ * and the like) live in each module's def schema.
+ */
 function validatePuzzle(puzzle: PuzzleDef, roleIds: Set<string>, ctx: z.RefinementCtx): void {
   const refs: string[] = puzzle.infos.map((i) => i.roleId);
   if (puzzle.type === 'button-sync') {
     refs.push(...puzzle.buttons.map((b) => b.roleId));
   }
-  if (puzzle.type === 'wiring') {
-    refs.push(puzzle.cutterRoleId);
-    const targets = new Set(puzzle.pairsToCut.map(pairKey));
-    if (targets.size !== puzzle.pairsToCut.length) {
-      ctx.addIssue({ code: 'custom', message: `puzzle "${puzzle.id}": duplicate target pair` });
-    }
-    if (puzzle.decoyPairs.some((d) => targets.has(pairKey(d)))) {
+  if ('operatorRoleId' in puzzle) {
+    refs.push(puzzle.operatorRoleId, puzzle.manualRoleId);
+    if (puzzle.operatorRoleId === puzzle.manualRoleId) {
       ctx.addIssue({
         code: 'custom',
-        message: `puzzle "${puzzle.id}": a decoy pair duplicates a target pair`,
-      });
-    }
-  }
-  if (puzzle.type === 'keypad') {
-    refs.push(puzzle.inputRoleId);
-    const grid = new Set(puzzle.gridSymbols);
-    if (grid.size !== puzzle.gridSymbols.length) {
-      ctx.addIssue({ code: 'custom', message: `puzzle "${puzzle.id}": grid symbols not unique` });
-    }
-    if (new Set(puzzle.code).size !== puzzle.code.length) {
-      ctx.addIssue({ code: 'custom', message: `puzzle "${puzzle.id}": code symbols not unique` });
-    }
-    if (puzzle.code.some((s) => !grid.has(s))) {
-      ctx.addIssue({ code: 'custom', message: `puzzle "${puzzle.id}": code symbol not on grid` });
-    }
-  }
-  if (puzzle.type === 'switches') {
-    refs.push(puzzle.panelRoleId, puzzle.targetRoleId);
-    if (new Set(puzzle.symbols).size !== puzzle.symbols.length) {
-      ctx.addIssue({ code: 'custom', message: `puzzle "${puzzle.id}": symbols not unique` });
-    }
-    if (puzzle.onCount >= puzzle.symbols.length) {
-      ctx.addIssue({
-        code: 'custom',
-        message: `puzzle "${puzzle.id}": onCount must be below the number of switches`,
-      });
-    }
-  }
-  if (puzzle.type === 'maze') {
-    refs.push(puzzle.navigatorRoleId, puzzle.guideRoleId);
-    if (puzzle.navigatorRoleId === puzzle.guideRoleId) {
-      ctx.addIssue({
-        code: 'custom',
-        message: `puzzle "${puzzle.id}": navigator and guide role must differ`,
-      });
-    }
-  }
-  if (puzzle.type === 'simon') {
-    refs.push(puzzle.displayRoleId, puzzle.legendRoleId);
-    if (new Set(puzzle.buttonSymbols).size !== puzzle.buttonSymbols.length) {
-      ctx.addIssue({ code: 'custom', message: `puzzle "${puzzle.id}": button symbols not unique` });
-    }
-    if (puzzle.displayRoleId === puzzle.legendRoleId) {
-      ctx.addIssue({
-        code: 'custom',
-        message: `puzzle "${puzzle.id}": display and legend role must differ`,
+        message: `puzzle "${puzzle.id}": operatorRoleId and manualRoleId must be different roles`,
       });
     }
   }
@@ -300,6 +127,25 @@ function validatePuzzle(puzzle: PuzzleDef, roleIds: Set<string>, ctx: z.Refineme
         message: `puzzle "${puzzle.id}" references unknown role "${roleId}"`,
       });
     }
+  }
+}
+
+/** A puzzle whose rules read the edgework is unsolvable when nobody can see it. */
+function validateEdgework(
+  mission: { roles: RoleDef[]; puzzles: PuzzleDef[] },
+  ctx: z.RefinementCtx,
+): void {
+  if (mission.roles.some((r) => r.seesEdgework)) {
+    return;
+  }
+  const readers = mission.puzzles.filter((p) => moduleFor(p.type).usesEdgework).map((p) => p.id);
+  if (readers.length > 0) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        `puzzles ${readers.map((id) => `"${id}"`).join(', ')} read the edgework, but no role ` +
+        'sees it — set "seesEdgework": true on the role that should read it out',
+    });
   }
 }
 
@@ -340,6 +186,7 @@ export const missionSchema = z
     for (const puzzle of mission.puzzles) {
       validatePuzzle(puzzle, roleIds, ctx);
     }
+    validateEdgework(mission, ctx);
     if (mission.map !== undefined) {
       validateMap(mission, ctx);
     }
@@ -489,13 +336,6 @@ function validateMap(
 }
 
 export type RoleDef = z.infer<typeof roleDefSchema>;
-export type ButtonSyncPuzzleDef = z.infer<typeof buttonSyncPuzzleSchema>;
-export type WiringPuzzleDef = z.infer<typeof wiringPuzzleSchema>;
-export type KeypadPuzzleDef = z.infer<typeof keypadPuzzleSchema>;
-export type SwitchesPuzzleDef = z.infer<typeof switchesPuzzleSchema>;
-export type SimonPuzzleDef = z.infer<typeof simonPuzzleSchema>;
-export type MazePuzzleDef = z.infer<typeof mazePuzzleSchema>;
-export type PuzzleDef = z.infer<typeof puzzleDefSchema>;
 export type MapDef = z.infer<typeof mapDefSchema>;
 export type Mission = z.infer<typeof missionSchema>;
 

@@ -90,7 +90,7 @@ describe('Room emergencies', () => {
       void puzzle;
       moveTo(room, ben.playerId, x, 1);
       room.act(ben.playerId, { kind: 'interact' });
-      room.act(ben.playerId, { kind: 'press-button' });
+      room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
     }
     return { room, anna, ben };
   }
@@ -144,7 +144,7 @@ describe('Room emergencies', () => {
     const { room, anna, ben } = midMission();
     moveTo(room, ben.playerId, 6, 1);
     room.act(ben.playerId, { kind: 'interact' });
-    room.act(ben.playerId, { kind: 'press-button' });
+    room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
     expect(lastView(anna.messages).map?.exit?.open).toBe(true);
     vi.advanceTimersByTime(300_000);
     expect(lastView(anna.messages).map?.sabotage).toBeNull();

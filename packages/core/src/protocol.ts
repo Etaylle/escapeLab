@@ -34,13 +34,8 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('switch-mission'), missionId: z.string().min(1) }),
   z.object({ kind: z.literal('select-difficulty'), difficulty: z.enum(DIFFICULTIES) }),
   z.object({ kind: z.literal('start-mission') }),
-  z.object({ kind: z.literal('press-button') }),
-  z.object({ kind: z.literal('cut-wire'), wireId: z.string().min(1) }),
-  z.object({ kind: z.literal('press-key'), keyIndex: z.number().int().nonnegative() }),
-  z.object({ kind: z.literal('toggle-switch'), switchIndex: z.number().int().nonnegative() }),
-  z.object({ kind: z.literal('commit-switches') }),
-  z.object({ kind: z.literal('press-simon'), buttonIndex: z.number().int().nonnegative() }),
-  z.object({ kind: z.literal('move-maze'), dir: z.number().int().min(0).max(3) }),
+  /** a move at the open puzzle; its module's input schema checks `input` */
+  z.object({ kind: z.literal('puzzle-input'), input: z.unknown() }),
   z.object({ kind: z.literal('request-hint') }),
   z.object({
     kind: z.literal('pos'),

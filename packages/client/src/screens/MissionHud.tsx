@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { chatText, type PlayerPosition, type PlayerView, type RunEvent } from '@escapelab/core';
 import { fromMissionControl } from '../radio.js';
 import type { ChatLine } from '../world/GameWorld.js';
+import { EdgeworkChip } from './EdgeworkChip.js';
 
 interface Props {
   view: PlayerView;
@@ -63,9 +64,9 @@ function chatArrival(line: ChatLine): number {
 }
 
 /**
- * The permanent strip under the world. Deliberately thin: only the crew and
- * the latest radio line, because everything else either sits on the world
- * itself or belongs in the info panel.
+ * The permanent strip under the world. Deliberately thin: only the crew, the
+ * edgework for roles that read it out, and the latest radio line, because
+ * everything else either sits on the world itself or belongs in the info panel.
  */
 export function MissionHud({ view, positionsRef, chatsRef, onOpenInfo }: Props) {
   const [tick, setTick] = useState(0);
@@ -104,6 +105,7 @@ export function MissionHud({ view, positionsRef, chatsRef, onOpenInfo }: Props) 
       </ul>
 
       <div className="hud-right">
+        {view.edgework !== null && <EdgeworkChip edgework={view.edgework} />}
         {radio !== null && <span className="hud-radio">📻 {radio}</span>}
         <button className="hud-info" onClick={onOpenInfo}>
           ℹ Info [I]

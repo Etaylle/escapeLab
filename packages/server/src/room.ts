@@ -29,13 +29,7 @@ export type GameMessage = Extract<
       | 'select-color'
       | 'set-ready'
       | 'start-mission'
-      | 'press-button'
-      | 'cut-wire'
-      | 'press-key'
-      | 'toggle-switch'
-      | 'commit-switches'
-      | 'press-simon'
-      | 'move-maze'
+      | 'puzzle-input'
       | 'request-hint'
       | 'interact'
       | 'drop-item'
@@ -213,36 +207,8 @@ export class Room {
         });
         this.seedPositions();
         break;
-      case 'press-button':
-        this.dispatch({ type: 'press-button', playerId, at: Date.now() });
-        break;
-      case 'cut-wire':
-        this.dispatch({ type: 'cut-wire', playerId, wireId: msg.wireId, at: Date.now() });
-        break;
-      case 'press-key':
-        this.dispatch({ type: 'press-key', playerId, keyIndex: msg.keyIndex, at: Date.now() });
-        break;
-      case 'toggle-switch':
-        this.dispatch({
-          type: 'toggle-switch',
-          playerId,
-          switchIndex: msg.switchIndex,
-          at: Date.now(),
-        });
-        break;
-      case 'commit-switches':
-        this.dispatch({ type: 'commit-switches', playerId, at: Date.now() });
-        break;
-      case 'press-simon':
-        this.dispatch({
-          type: 'press-simon',
-          playerId,
-          buttonIndex: msg.buttonIndex,
-          at: Date.now(),
-        });
-        break;
-      case 'move-maze':
-        this.dispatch({ type: 'move-maze', playerId, dir: msg.dir, at: Date.now() });
+      case 'puzzle-input':
+        this.dispatch({ type: 'puzzle-input', playerId, at: Date.now(), input: msg.input });
         break;
       case 'request-hint':
         this.dispatch({ type: 'request-hint', playerId, at: Date.now() });

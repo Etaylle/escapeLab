@@ -106,7 +106,7 @@ function open(state: GameState, at: number): GameState {
 
 /** Every station here is solved by a single press from the Steuerpult. */
 function solve(state: GameState, at: number): GameState {
-  return applyAction(state, { type: 'press-button', playerId: 'p2', at });
+  return applyAction(state, { type: 'puzzle-input', playerId: 'p2', at, input: { press: true } });
 }
 
 function askForHint(state: GameState, at: number): GameState {

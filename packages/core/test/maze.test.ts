@@ -18,8 +18,8 @@ const mission: Mission = parseMission({
       id: 'netz',
       title: 'Netz',
       prompt: '',
-      navigatorRoleId: 'navigator',
-      guideRoleId: 'lotse',
+      operatorRoleId: 'navigator',
+      manualRoleId: 'lotse',
       size: 6,
       penaltySec: 12,
     },
@@ -44,6 +44,11 @@ function started(seed = 7): GameState {
     ],
     initialState(mission),
   );
+}
+
+/** One step of the marker; `dir` indexes MAZE_DIRS. */
+function move(playerId: string, dir: number, at: number): Action {
+  return { type: 'puzzle-input', playerId, at, input: { dir } };
 }
 
 function mazeState(state: GameState) {
@@ -115,7 +120,7 @@ describe('maze puzzle', () => {
     let state = started();
     const dir = openDirs(state)[0] ?? 0;
     const before = mazeState(state).pos;
-    state = applyAction(state, { type: 'move-maze', playerId: 'p1', dir, at: T0 + 1000 });
+    state = applyAction(state, move('p1', dir, T0 + 1000));
     expect(mazeState(state).pos).not.toEqual(before);
     expect(state.penaltySeq).toBe(0);
 
@@ -127,12 +132,7 @@ describe('maze puzzle', () => {
       if (next === undefined) {
         break;
       }
-      state = applyAction(state, {
-        type: 'move-maze',
-        playerId: 'p1',
-        dir: next,
-        at: T0 + 2000 + guard,
-      });
+      state = applyAction(state, move('p1', next, T0 + 2000 + guard));
     }
     expect(state.phase).toBe('won');
   });
@@ -145,12 +145,7 @@ describe('maze puzzle', () => {
       throw new Error('expected at least one wall next to the start');
     }
     const before = state.deadlineAt ?? 0;
-    const bumped = applyAction(state, {
-      type: 'move-maze',
-      playerId: 'p1',
-      dir: blocked,
-      at: T0 + 1000,
-    });
+    const bumped = applyAction(state, move('p1', blocked, T0 + 1000));
     expect(mazeState(bumped).pos).toEqual(mazeState(state).pos);
     expect(mazeState(bumped).lastResult).toBe('wall');
     expect(bumped.deadlineAt).toBe(before - 12_000);
@@ -159,7 +154,7 @@ describe('maze puzzle', () => {
 
   it('only the navigator may move the marker', () => {
     expect(() =>
-      applyAction(started(), { type: 'move-maze', playerId: 'p2', dir: 0, at: T0 + 1000 }),
+      applyAction(started(), move('p2', 0, T0 + 1000)),
     ).toThrow(/Navigationspult/);
   });
 
@@ -170,11 +165,11 @@ describe('maze puzzle', () => {
         puzzles: [
           {
             ...JSON.parse(JSON.stringify(mission.puzzles[0])),
-            guideRoleId: 'navigator',
+            manualRoleId: 'navigator',
           },
         ],
       }),
-    ).toThrow(/navigator and guide role must differ/);
+    ).toThrow(/operatorRoleId and manualRoleId must be different roles/);
   });
 });
 

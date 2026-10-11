@@ -127,13 +127,7 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
     case 'select-color':
     case 'set-ready':
     case 'start-mission':
-    case 'press-button':
-    case 'cut-wire':
-    case 'press-key':
-    case 'toggle-switch':
-    case 'commit-switches':
-    case 'press-simon':
-    case 'move-maze':
+    case 'puzzle-input':
     case 'request-hint':
     case 'interact':
     case 'drop-item':

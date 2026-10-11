@@ -3,18 +3,15 @@ import {
   type GameState,
   type ItemState,
   type Player,
-  type PuzzleState,
   type RunEvent,
 } from './state.js';
 import type { Difficulty } from './difficulty.js';
-import type { Mission, PuzzleDef } from './mission.js';
+import { generateEdgework } from './edgework.js';
+import { fail } from './errors.js';
+import type { Mission } from './mission.js';
 import { mulberry32 } from './rng.js';
-import { initButtonSync, pressButton } from './puzzles/buttonSync.js';
-import { cutWire, initWiring } from './puzzles/wiring.js';
-import { initKeypad, pressKey } from './puzzles/keypad.js';
-import { commitSwitches, initSwitches, toggleSwitch } from './puzzles/switches.js';
-import { initSimon, pressSimon } from './puzzles/simon.js';
-import { initMaze, moveMaze } from './puzzles/maze.js';
+import { moduleFor, type PuzzleDef, type PuzzleState } from './puzzles/index.js';
+import type { PuzzleContext } from './puzzles/module.js';
 import { armedStation } from './map.js';
 
 /**
@@ -31,13 +28,8 @@ export type Action =
   | { type: 'set-ready'; playerId: string; ready: boolean }
   | { type: 'switch-mission'; playerId: string; mission: Mission; difficulty: Difficulty }
   | { type: 'start-mission'; playerId: string; at: number; seed: number }
-  | { type: 'press-button'; playerId: string; at: number }
-  | { type: 'cut-wire'; playerId: string; wireId: string; at: number }
-  | { type: 'press-key'; playerId: string; keyIndex: number; at: number }
-  | { type: 'toggle-switch'; playerId: string; switchIndex: number; at: number }
-  | { type: 'commit-switches'; playerId: string; at: number }
-  | { type: 'press-simon'; playerId: string; buttonIndex: number; at: number }
-  | { type: 'move-maze'; playerId: string; dir: number; at: number }
+  /** a move at the open puzzle; `input` is checked against that puzzle's module */
+  | { type: 'puzzle-input'; playerId: string; at: number; input: unknown }
   | { type: 'request-hint'; playerId: string; at: number }
   | { type: 'set-occupancy'; plates: string[]; panels: string[] }
   | { type: 'drone-spotted'; at: number; penaltySec: number }
@@ -53,13 +45,6 @@ export type Action =
   | { type: 'time-expired'; at: number }
   | { type: 'back-to-lobby'; playerId: string }
   | { type: 'rematch'; playerId: string; at: number; seed: number };
-
-/** Rejected action: the message is shown to the acting player. */
-export class GameError extends Error {}
-
-function fail(message: string): never {
-  throw new GameError(message);
-}
 
 function findPlayer(state: GameState, playerId: string): Player {
   const player = state.players.find((p) => p.id === playerId);
@@ -90,20 +75,8 @@ export function applyAction(state: GameState, action: Action): GameState {
       return switchMission(state, action);
     case 'start-mission':
       return startMission(state, action);
-    case 'press-button':
-      return handlePress(state, action);
-    case 'cut-wire':
-      return handleCutWire(state, action);
-    case 'press-key':
-      return handlePressKey(state, action);
-    case 'toggle-switch':
-      return handleToggleSwitch(state, action);
-    case 'commit-switches':
-      return handleCommitSwitches(state, action);
-    case 'press-simon':
-      return handlePressSimon(state, action);
-    case 'move-maze':
-      return handleMoveMaze(state, action);
+    case 'puzzle-input':
+      return handlePuzzleInput(state, action);
     case 'request-hint':
       return requestHint(state, action);
     case 'set-occupancy':
@@ -261,37 +234,40 @@ function selectRole(
   return { ...state, players };
 }
 
-function initPuzzleState(state: GameState, index: number): PuzzleState {
+/** What a module may know when it sets up or takes a move at `at`. */
+function puzzleContext(state: GameState, at: number): PuzzleContext {
+  if (state.edgework === null) {
+    throw new Error('puzzle context: this run has no edgework — was start-mission skipped?');
+  }
+  return {
+    edgework: state.edgework,
+    alarms: state.penaltySeq,
+    remainingSec: Math.max(0, Math.ceil(((state.deadlineAt ?? at) - at) / 1000)),
+    at,
+  };
+}
+
+function initPuzzleState(state: GameState, index: number, at: number): PuzzleState {
   const def = state.mission.puzzles[index];
   if (def === undefined) {
     throw new Error(`mission "${state.mission.id}" has no puzzle at index ${index}`);
   }
   // Distinct deterministic stream per puzzle.
   const rng = mulberry32(((state.seed ?? 0) + index * 7919) >>> 0);
-  switch (def.type) {
-    case 'button-sync':
-      return initButtonSync();
-    case 'wiring':
-      return initWiring(def, rng);
-    case 'keypad':
-      return initKeypad(def, rng);
-    case 'switches':
-      return initSwitches(def, rng);
-    case 'simon':
-      return initSimon(def, rng);
-    case 'maze':
-      return initMaze(def, rng);
-  }
+  return moduleFor(def.type).init(def, rng, puzzleContext(state, at));
 }
 
 /** Put a puzzle on the consoles; mission control holds its hints back for a while. */
 function openPuzzle(state: GameState, index: number, at: number): GameState {
   return {
     ...state,
-    puzzleState: initPuzzleState(state, index),
+    puzzleState: initPuzzleState(state, index, at),
     hintReadyAt: at + state.mission.hintDelaySec * 1000,
   };
 }
+
+/** Edgework rolls on its own stream, so the puzzle streams stay what they are for a seed. */
+const EDGEWORK_STREAM = 0x45444745;
 
 function startMission(
   state: GameState,
@@ -320,6 +296,7 @@ function startMission(
     currentPuzzleIndex: 0,
     puzzleState: null,
     seed: action.seed,
+    edgework: generateEdgework(mulberry32((action.seed ^ EDGEWORK_STREAM) >>> 0)),
     pressedPlates: [],
     occupiedPanels: [],
     sabotage: null,
@@ -535,152 +512,34 @@ function expireSabotage(state: GameState, action: { at: number }): GameState {
   );
 }
 
-function handlePress(state: GameState, action: { playerId: string; at: number }): GameState {
-  const ctx = requirePlaying(state, action.playerId, action.at);
-  if (ctx === 'lost') {
-    return lostNow(state, action.at);
-  }
-  const { player, def, puzzleState } = ctx;
-  if (def.type !== 'button-sync' || puzzleState.type !== 'button-sync') {
-    fail('Dieses Rätsel hat keinen solchen Knopf.');
-  }
-  if (player.roleId === null || !def.buttons.some((b) => b.roleId === player.roleId)) {
-    fail('Deine Rolle hat bei diesem Rätsel keinen Knopf.');
-  }
-  const result = pressButton(def, puzzleState, player.roleId, action.at);
-  const next = { ...state, puzzleState: result.state };
-  return result.solved ? advance(next, action.at) : next;
-}
-
-function handleCutWire(
+/** One move at the open puzzle, interpreted by that puzzle's module. */
+function handlePuzzleInput(
   state: GameState,
-  action: { playerId: string; wireId: string; at: number },
+  action: { playerId: string; at: number; input: unknown },
 ): GameState {
-  const ctx = requirePlaying(state, action.playerId, action.at);
-  if (ctx === 'lost') {
+  const playing = requirePlaying(state, action.playerId, action.at);
+  if (playing === 'lost') {
     return lostNow(state, action.at);
   }
-  const { player, def, puzzleState } = ctx;
-  if (def.type !== 'wiring' || puzzleState.type !== 'wiring') {
-    fail('Hier gibt es keine Kabel zu trennen.');
+  const { player, def, puzzleState } = playing;
+  const puzzleModule = moduleFor(def.type);
+  const input = puzzleModule.inputSchema.safeParse(action.input);
+  if (!input.success) {
+    fail('Ungültige Eingabe.');
   }
-  if (player.roleId !== def.cutterRoleId) {
-    fail('Nur die Rolle am Schaltschrank kann Kabel trennen.');
+  if (player.roleId === null) {
+    fail('Ohne Rolle kannst du hier nichts tun.');
   }
-  const result = cutWire(def, puzzleState, action.wireId);
+  const result = puzzleModule.apply(
+    def,
+    puzzleState,
+    input.data,
+    player.roleId,
+    puzzleContext(state, action.at),
+  );
   const next = { ...state, puzzleState: result.state };
-  if (result.penalty) {
-    return applyPenalty(next, def.penaltySec, action.at, 'Falsches Kabel getrennt');
-  }
-  return result.solved ? advance(next, action.at) : next;
-}
-
-function handlePressKey(
-  state: GameState,
-  action: { playerId: string; keyIndex: number; at: number },
-): GameState {
-  const ctx = requirePlaying(state, action.playerId, action.at);
-  if (ctx === 'lost') {
-    return lostNow(state, action.at);
-  }
-  const { player, def, puzzleState } = ctx;
-  if (def.type !== 'keypad' || puzzleState.type !== 'keypad') {
-    fail('Hier gibt es kein Tastenfeld.');
-  }
-  if (player.roleId !== def.inputRoleId) {
-    fail('Nur die Rolle am Tastenfeld kann Codes eingeben.');
-  }
-  const result = pressKey(def, puzzleState, action.keyIndex);
-  const next = { ...state, puzzleState: result.state };
-  if (result.penalty) {
-    return applyPenalty(next, def.penaltySec, action.at, 'Falsche Taste am Code');
-  }
-  return result.solved ? advance(next, action.at) : next;
-}
-
-function handleToggleSwitch(
-  state: GameState,
-  action: { playerId: string; switchIndex: number; at: number },
-): GameState {
-  const ctx = requirePlaying(state, action.playerId, action.at);
-  if (ctx === 'lost') {
-    return lostNow(state, action.at);
-  }
-  const { player, def, puzzleState } = ctx;
-  if (def.type !== 'switches' || puzzleState.type !== 'switches') {
-    fail('Hier gibt es keine Schalter.');
-  }
-  if (player.roleId !== def.panelRoleId) {
-    fail('Nur die Rolle an der Schalterbank kann schalten.');
-  }
-  return { ...state, puzzleState: toggleSwitch(puzzleState, action.switchIndex) };
-}
-
-function handleCommitSwitches(
-  state: GameState,
-  action: { playerId: string; at: number },
-): GameState {
-  const ctx = requirePlaying(state, action.playerId, action.at);
-  if (ctx === 'lost') {
-    return lostNow(state, action.at);
-  }
-  const { player, def, puzzleState } = ctx;
-  if (def.type !== 'switches' || puzzleState.type !== 'switches') {
-    fail('Hier gibt es keine Schalter.');
-  }
-  if (player.roleId !== def.panelRoleId) {
-    fail('Nur die Rolle an der Schalterbank kann prüfen.');
-  }
-  const result = commitSwitches(puzzleState);
-  const next = { ...state, puzzleState: result.state };
-  if (result.penalty) {
-    return applyPenalty(next, def.penaltySec, action.at, 'Falsche Schalterkombination');
-  }
-  return result.solved ? advance(next, action.at) : next;
-}
-
-function handlePressSimon(
-  state: GameState,
-  action: { playerId: string; buttonIndex: number; at: number },
-): GameState {
-  const ctx = requirePlaying(state, action.playerId, action.at);
-  if (ctx === 'lost') {
-    return lostNow(state, action.at);
-  }
-  const { player, def, puzzleState } = ctx;
-  if (def.type !== 'simon' || puzzleState.type !== 'simon') {
-    fail('Hier gibt es kein Frequenz-Panel.');
-  }
-  if (player.roleId !== def.displayRoleId) {
-    fail('Nur die Rolle am Frequenz-Panel kann Tasten drücken.');
-  }
-  const result = pressSimon(puzzleState, action.buttonIndex);
-  const next = { ...state, puzzleState: result.state };
-  if (result.penalty) {
-    return applyPenalty(next, def.penaltySec, action.at, 'Falscher Steuerimpuls');
-  }
-  return result.solved ? advance(next, action.at) : next;
-}
-
-function handleMoveMaze(
-  state: GameState,
-  action: { playerId: string; dir: number; at: number },
-): GameState {
-  const ctx = requirePlaying(state, action.playerId, action.at);
-  if (ctx === 'lost') {
-    return lostNow(state, action.at);
-  }
-  const { player, def, puzzleState } = ctx;
-  if (def.type !== 'maze' || puzzleState.type !== 'maze') {
-    fail('Hier gibt es kein Labyrinth.');
-  }
-  if (player.roleId !== def.navigatorRoleId) {
-    fail('Nur die Rolle am Navigationspult kann den Marker bewegen.');
-  }
-  const result = moveMaze(puzzleState, action.dir);
-  const next = { ...state, puzzleState: result.state };
-  if (result.penalty) {
-    return applyPenalty(next, def.penaltySec, action.at, 'Gegen eine Wand gelaufen');
+  if (result.penalty !== null) {
+    return applyPenalty(next, def.penaltySec, action.at, result.penalty);
   }
   return result.solved ? advance(next, action.at) : next;
 }
@@ -879,6 +738,7 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     currentPuzzleIndex: 0,
     puzzleState: null,
     seed: null,
+    edgework: null,
     pressedPlates: [],
     occupiedPanels: [],
     sabotage: null,

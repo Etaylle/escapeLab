@@ -1,11 +1,23 @@
-import type { MazePuzzleDef } from '../mission.js';
+import { z } from 'zod';
+import { fail } from '../errors.js';
 import type { Rng } from '../rng.js';
+import { commonDefShape, type PuzzleModule } from './module.js';
 
 /**
- * Invisible maze: the navigator sees their own marker and the goal but no
- * walls, the guide sees the walls but not the marker. Only talking to each
- * other gets the marker out.
+ * Invisible maze: the operator (navigator) sees their own marker and the
+ * goal but no walls, the manual role (guide) sees the walls but not the
+ * marker. Only talking to each other gets the marker out. Bumping a wall
+ * costs time.
  */
+const defSchema = z.object({
+  type: z.literal('maze'),
+  ...commonDefShape,
+  operatorRoleId: z.string().min(1),
+  manualRoleId: z.string().min(1),
+  size: z.number().int().min(4).max(8).default(6),
+  penaltySec: z.number().int().positive().default(15),
+});
+export type MazeDef = z.infer<typeof defSchema>;
 
 /** Movement directions, with the bit each one sets in a cell's open-sides mask. */
 export const MAZE_DIRS = [
@@ -24,6 +36,20 @@ export interface MazeState {
   cells: number[];
   pos: { x: number; y: number };
   goal: { x: number; y: number };
+  lastResult: 'wall' | null;
+}
+
+const inputSchema = z.strictObject({ dir: z.number().int().min(0).max(3) });
+export type MazeInput = z.infer<typeof inputSchema>;
+
+export interface MazeView {
+  kind: 'maze';
+  size: number;
+  /** your marker — only the navigator sees it */
+  pos: { x: number; y: number } | null;
+  goal: { x: number; y: number };
+  /** per-cell open-side bitmasks — only the guide sees them */
+  cells: number[] | null;
   lastResult: 'wall' | null;
 }
 
@@ -68,67 +94,143 @@ function carve(size: number, rng: Rng): number[] {
   return cells;
 }
 
-/** Breadth-first search from `from`, returning the cell that is hardest to reach. */
+/**
+ * Breadth-first search over the open sides from `from`: the cells in visiting
+ * order, the distance to each and the direction of the first step on a
+ * shortest way there.
+ */
+function explore(
+  size: number,
+  cells: number[],
+  from: { x: number; y: number },
+): { order: number[]; dist: number[]; firstDir: number[] } {
+  const start = idx(size, from.x, from.y);
+  const dist = new Array<number>(size * size).fill(-1);
+  const firstDir = new Array<number>(size * size).fill(-1);
+  dist[start] = 0;
+  const order = [start];
+  for (let head = 0; head < order.length; head++) {
+    const here = order[head] ?? start;
+    const x = here % size;
+    const y = Math.floor(here / size);
+    for (const [i, dir] of MAZE_DIRS.entries()) {
+      const nx = x + dir.dx;
+      const ny = y + dir.dy;
+      if (((cells[here] ?? 0) & dir.bit) === 0 || !inside(size, nx, ny)) {
+        continue;
+      }
+      const there = idx(size, nx, ny);
+      if (dist[there] === -1) {
+        dist[there] = (dist[here] ?? 0) + 1;
+        firstDir[there] = here === start ? i : (firstDir[here] ?? -1);
+        order.push(there);
+      }
+    }
+  }
+  return { order, dist, firstDir };
+}
+
+/** The cell that is hardest to reach from `from`; on a tie, the one visited first. */
 function farthestFrom(
   size: number,
   cells: number[],
   from: { x: number; y: number },
 ): { x: number; y: number } {
-  const dist = new Array<number>(size * size).fill(-1);
-  dist[idx(size, from.x, from.y)] = 0;
-  const queue = [from];
-  let best = from;
-  for (let head = 0; head < queue.length; head++) {
-    const cell = queue[head];
-    if (cell === undefined) {
-      break;
-    }
-    const here = idx(size, cell.x, cell.y);
-    if ((dist[here] ?? 0) > (dist[idx(size, best.x, best.y)] ?? 0)) {
+  const { order, dist } = explore(size, cells, from);
+  let best = idx(size, from.x, from.y);
+  for (const cell of order) {
+    if ((dist[cell] ?? 0) > (dist[best] ?? 0)) {
       best = cell;
     }
-    for (const dir of MAZE_DIRS) {
-      if (((cells[here] ?? 0) & dir.bit) === 0) {
-        continue;
-      }
-      const nx = cell.x + dir.dx;
-      const ny = cell.y + dir.dy;
-      if (inside(size, nx, ny) && dist[idx(size, nx, ny)] === -1) {
-        dist[idx(size, nx, ny)] = (dist[here] ?? 0) + 1;
-        queue.push({ x: nx, y: ny });
-      }
+  }
+  return { x: best % size, y: Math.floor(best / size) };
+}
+
+export const mazeModule: PuzzleModule<MazeDef, MazeState, MazeInput, MazeView> = {
+  type: 'maze',
+  usesEdgework: false,
+  defSchema,
+  inputSchema,
+
+  init(def, rng) {
+    const size = def.size;
+    const cells = carve(size, rng);
+    const pos = { x: Math.floor(rng() * size), y: Math.floor(rng() * size) };
+    const goal = farthestFrom(size, cells, pos);
+    return { type: 'maze', size, cells, pos, goal, lastResult: null };
+  },
+
+  apply(def, state, input, roleId) {
+    if (roleId !== def.operatorRoleId) {
+      fail('Nur die Rolle am Navigationspult kann den Marker bewegen.');
     }
-  }
-  return best;
-}
+    const dir = MAZE_DIRS[input.dir];
+    if (dir === undefined) {
+      return { state, solved: false, penalty: null };
+    }
+    const here = idx(state.size, state.pos.x, state.pos.y);
+    if (((state.cells[here] ?? 0) & dir.bit) === 0) {
+      return {
+        state: { ...state, lastResult: 'wall' },
+        solved: false,
+        penalty: 'Gegen eine Wand gelaufen',
+      };
+    }
+    const pos = { x: state.pos.x + dir.dx, y: state.pos.y + dir.dy };
+    return {
+      state: { ...state, pos, lastResult: null },
+      solved: pos.x === state.goal.x && pos.y === state.goal.y,
+      penalty: null,
+    };
+  },
 
-export function initMaze(def: MazePuzzleDef, rng: Rng): MazeState {
-  const size = def.size;
-  const cells = carve(size, rng);
-  const pos = { x: Math.floor(rng() * size), y: Math.floor(rng() * size) };
-  return { type: 'maze', size, cells, pos, goal: farthestFrom(size, cells, pos), lastResult: null };
-}
+  view(def, state, roleId) {
+    const isNavigator = roleId === def.operatorRoleId;
+    return {
+      kind: 'maze',
+      size: state.size,
+      pos: isNavigator ? { ...state.pos } : null,
+      goal: { ...state.goal },
+      cells: roleId === def.manualRoleId ? [...state.cells] : null,
+      lastResult: isNavigator ? state.lastResult : null,
+    };
+  },
 
-export interface MazeResult {
-  state: MazeState;
-  solved: boolean;
-  /** true when the marker ran into a wall — it stays put and time is lost */
-  penalty: boolean;
-}
+  manual(def) {
+    const lastColumn = 'ABCDEFGH'.charAt(def.size - 1);
+    return [
+      {
+        heading: 'Leitungsnetz',
+        blocks: [
+          {
+            kind: 'p',
+            text:
+              `Raster aus ${def.size} × ${def.size} Zellen: Spalten A–${lastColumn}, ` +
+              `Zeilen 1–${def.size}. Der Marker muss ins Ziel.`,
+          },
+          {
+            kind: 'rules',
+            items: [
+              'Die Wände zeigt nur der Schaltplan, den Marker nur das Navigationspult. ' +
+                'Das Ziel sehen beide.',
+              'Zellen als Spalte und Zeile ansagen, z. B. „C4".',
+              'Ein Schritt geht nach oben, unten, links oder rechts.',
+              `Gegen eine Wand: Alarm, −${def.penaltySec} s. Der Marker bleibt stehen.`,
+            ],
+          },
+        ],
+      },
+    ];
+  },
 
-export function moveMaze(state: MazeState, dirIndex: number): MazeResult {
-  const dir = MAZE_DIRS[dirIndex];
-  if (dir === undefined) {
-    return { state, solved: false, penalty: false };
-  }
-  const here = idx(state.size, state.pos.x, state.pos.y);
-  if (((state.cells[here] ?? 0) & dir.bit) === 0) {
-    return { state: { ...state, lastResult: 'wall' }, solved: false, penalty: true };
-  }
-  const pos = { x: state.pos.x + dir.dx, y: state.pos.y + dir.dy };
-  return {
-    state: { ...state, pos, lastResult: null },
-    solved: pos.x === state.goal.x && pos.y === state.goal.y,
-    penalty: false,
-  };
-}
+  solve(def, views) {
+    const navigator = views[def.operatorRoleId];
+    const cells = views[def.manualRoleId]?.cells;
+    if (navigator?.pos == null || cells == null) {
+      throw new Error(`maze "${def.id}": solving needs the navigator and the guide views`);
+    }
+    const { firstDir } = explore(navigator.size, cells, navigator.pos);
+    const dir = firstDir[idx(navigator.size, navigator.goal.x, navigator.goal.y)] ?? -1;
+    return dir < 0 ? [] : [{ roleId: def.operatorRoleId, input: { dir } }];
+  },
+};

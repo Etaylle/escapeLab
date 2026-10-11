@@ -100,7 +100,7 @@ describe('Room with a sleeping drone', () => {
     // The first solve wakes it up exactly where its patrol starts …
     moveTo(room, ben.playerId, 2, 1);
     room.act(ben.playerId, { kind: 'interact' });
-    room.act(ben.playerId, { kind: 'press-button' });
+    room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
     const audience = collector();
     room.attachSpectator(audience.listen);
     expect(lastPositions(audience.messages).drones['wache']).toMatchObject({ x: 1.5, y: 2.5 });

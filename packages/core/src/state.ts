@@ -1,11 +1,7 @@
 import type { Difficulty } from './difficulty.js';
+import type { Edgework } from './edgework.js';
 import type { Mission } from './mission.js';
-import type { ButtonSyncState } from './puzzles/buttonSync.js';
-import type { WiringState } from './puzzles/wiring.js';
-import type { KeypadState } from './puzzles/keypad.js';
-import type { SwitchesState } from './puzzles/switches.js';
-import type { SimonState } from './puzzles/simon.js';
-import type { MazeState } from './puzzles/maze.js';
+import type { PuzzleState } from './puzzles/index.js';
 
 export type Phase = 'lobby' | 'playing' | 'won' | 'lost';
 
@@ -53,14 +49,6 @@ export interface Player {
   isHost: boolean;
 }
 
-export type PuzzleState =
-  | ButtonSyncState
-  | WiringState
-  | KeypadState
-  | SwitchesState
-  | SimonState
-  | MazeState;
-
 export interface GameState {
   phase: Phase;
   /** already scaled to `difficulty` — downstream code just reads the numbers */
@@ -72,6 +60,8 @@ export interface GameState {
   puzzleState: PuzzleState | null;
   /** PRNG seed for this run; set by start-mission */
   seed: number | null;
+  /** serial, lamps and cells of this run; rolled from the seed by start-mission */
+  edgework: Edgework | null;
   /**
    * Plates and sabotage panels currently manned. Movement is
    * client-authoritative and lives outside this state machine; the server
@@ -117,6 +107,7 @@ export function initialState(mission: Mission): GameState {
     currentPuzzleIndex: 0,
     puzzleState: null,
     seed: null,
+    edgework: null,
     pressedPlates: [],
     occupiedPanels: [],
     sabotage: null,

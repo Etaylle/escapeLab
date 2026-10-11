@@ -56,6 +56,11 @@ function run(actions: Action[], from: GameState): GameState {
   return actions.reduce(applyAction, from);
 }
 
+/** Both stations here are button-syncs. */
+function press(playerId: string, at: number): Action {
+  return { type: 'puzzle-input', playerId, at, input: { press: true } };
+}
+
 function started(): GameState {
   return run(
     [
@@ -116,7 +121,7 @@ describe('mapped missions', () => {
       applyAction(state, { type: 'interact', playerId: 'p2', at: T0 + 1100 }),
     ).toThrow(/läuft schon/);
 
-    state = applyAction(state, { type: 'press-button', playerId: 'p2', at: T0 + 2000 });
+    state = applyAction(state, press('p2', T0 + 2000));
     expect(state.currentPuzzleIndex).toBe(1);
     expect(state.puzzleState).toBeNull();
     expect(viewFor(state, 'p2').map?.stations[1]?.status).toBe('armed');
@@ -124,8 +129,8 @@ describe('mapped missions', () => {
     state = applyAction(state, { type: 'interact', playerId: 'p1', at: T0 + 3000 });
     state = run(
       [
-        { type: 'press-button', playerId: 'p1', at: T0 + 4000 },
-        { type: 'press-button', playerId: 'p2', at: T0 + 4500 },
+        press('p1', T0 + 4000),
+        press('p2', T0 + 4500),
       ],
       state,
     );
@@ -157,7 +162,7 @@ describe('mapped missions', () => {
     state = run(
       [
         { type: 'interact', playerId: 'p2', at: T0 + 1000 },
-        { type: 'press-button', playerId: 'p2', at: T0 + 2000 },
+        press('p2', T0 + 2000),
       ],
       state,
     );
@@ -188,10 +193,10 @@ describe('mapped missions', () => {
     state = run(
       [
         { type: 'interact', playerId: 'p2', at: T0 + 1000 },
-        { type: 'press-button', playerId: 'p2', at: T0 + 2000 },
+        press('p2', T0 + 2000),
         { type: 'interact', playerId: 'p1', at: T0 + 3000 },
-        { type: 'press-button', playerId: 'p1', at: T0 + 4000 },
-        { type: 'press-button', playerId: 'p2', at: T0 + 4500 },
+        press('p1', T0 + 4000),
+        press('p2', T0 + 4500),
       ],
       state,
     );

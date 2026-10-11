@@ -40,6 +40,11 @@ function started(at = T0): GameState {
   return run([{ type: 'start-mission', playerId: 'p1', at, seed: 42 }], readyLobby());
 }
 
+/** Every station of the tutorial is a button-sync: one input, a press. */
+function press(playerId: string, at: number): Action {
+  return { type: 'puzzle-input', playerId, at, input: { press: true } };
+}
+
 describe('lobby', () => {
   it('makes the first player host', () => {
     const state = readyLobby();
@@ -229,13 +234,13 @@ describe('playing a full mission', () => {
   it('wins after solving all three puzzles', () => {
     let state = started();
     // Puzzle 1: only steuerpult has a button.
-    state = applyAction(state, { type: 'press-button', playerId: 'p2', at: T0 + 1000 });
+    state = applyAction(state, press('p2', T0 + 1000));
     expect(state.currentPuzzleIndex).toBe(1);
     // Puzzle 2: both press, any order, no window.
     state = run(
       [
-        { type: 'press-button', playerId: 'p1', at: T0 + 5000 },
-        { type: 'press-button', playerId: 'p2', at: T0 + 60_000 },
+        press('p1', T0 + 5000),
+        press('p2', T0 + 60_000),
       ],
       state,
     );
@@ -243,8 +248,8 @@ describe('playing a full mission', () => {
     // Puzzle 3: both within 3 seconds.
     state = run(
       [
-        { type: 'press-button', playerId: 'p1', at: T0 + 70_000 },
-        { type: 'press-button', playerId: 'p2', at: T0 + 72_000 },
+        press('p1', T0 + 70_000),
+        press('p2', T0 + 72_000),
       ],
       state,
     );
@@ -255,12 +260,12 @@ describe('playing a full mission', () => {
     let state = started();
     state = run(
       [
-        { type: 'press-button', playerId: 'p2', at: T0 + 1000 },
-        { type: 'press-button', playerId: 'p1', at: T0 + 2000 },
-        { type: 'press-button', playerId: 'p2', at: T0 + 3000 },
+        press('p2', T0 + 1000),
+        press('p1', T0 + 2000),
+        press('p2', T0 + 3000),
         // Window puzzle: first press at +10s, partner misses the 3s window.
-        { type: 'press-button', playerId: 'p1', at: T0 + 10_000 },
-        { type: 'press-button', playerId: 'p2', at: T0 + 20_000 },
+        press('p1', T0 + 10_000),
+        press('p2', T0 + 20_000),
       ],
       state,
     );
@@ -271,24 +276,26 @@ describe('playing a full mission', () => {
     expect(state.puzzleState.attempts).toBe(1);
     expect(state.puzzleState.lastResult).toBe('missed-window');
     // The late press is still valid as the start of the next attempt.
-    state = applyAction(state, { type: 'press-button', playerId: 'p1', at: T0 + 21_000 });
+    state = applyAction(state, press('p1', T0 + 21_000));
     expect(state.phase).toBe('won');
   });
 
   it('rejects a press from a role without a button', () => {
-    expect(() =>
-      applyAction(started(), { type: 'press-button', playerId: 'p1', at: T0 + 1000 }),
-    ).toThrow(/keinen Knopf/);
+    expect(() => applyAction(started(), press('p1', T0 + 1000))).toThrow(/keinen Knopf/);
+  });
+
+  it('rejects an input the open puzzle does not take', () => {
+    for (const input of [{ wireId: 'w0' }, { press: true, extra: 1 }, undefined, 'press']) {
+      expect(() =>
+        applyAction(started(), { type: 'puzzle-input', playerId: 'p2', at: T0 + 1000, input }),
+      ).toThrow(/Ungültige Eingabe/);
+    }
   });
 
   it('loses when time expires, also on a late press', () => {
     const afterDeadline = T0 + mission.timeLimitSec * 1000;
     expect(applyAction(started(), { type: 'time-expired', at: afterDeadline }).phase).toBe('lost');
-    const late = applyAction(started(), {
-      type: 'press-button',
-      playerId: 'p2',
-      at: afterDeadline,
-    });
+    const late = applyAction(started(), press('p2', afterDeadline));
     expect(late.phase).toBe('lost');
   });
 
@@ -307,6 +314,8 @@ describe('asymmetric information in views', () => {
     const ben = viewFor(state, 'p2');
     expect(anna.puzzle?.info).toMatch(/Freigabe erteilt/);
     expect(ben.puzzle?.info).toBeNull();
+    // A button-sync station has no manual role, so nobody gets the printed rules.
+    expect([anna.puzzle?.manual, ben.puzzle?.manual]).toEqual([null, null]);
     if (anna.puzzle?.kind !== 'button-sync' || ben.puzzle?.kind !== 'button-sync') {
       throw new Error('expected button-sync puzzle views');
     }
