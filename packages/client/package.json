@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "build": "vite build",
     "test": "exit 0",
     "typecheck": "tsc --noEmit"
   },

@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { networkInterfaces } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
@@ -9,6 +10,7 @@ import {
 } from '@escapelab/core';
 import { MissionCatalog } from './missions.js';
 import { RoomManager } from './roomManager.js';
+import { StaticSite } from './static.js';
 import type { Room } from './room.js';
 
 const PORT = Number(process.env['PORT'] ?? 3001);
@@ -16,6 +18,7 @@ const MISSIONS_DIR =
   process.env['MISSIONS_DIR'] ?? fileURLToPath(new URL('../../../missions', import.meta.url));
 
 const catalog = new MissionCatalog(MISSIONS_DIR);
+const site = new StaticSite(fileURLToPath(new URL('../../client/dist', import.meta.url)));
 const manager = new RoomManager();
 setInterval(() => manager.sweep(), 60_000).unref();
 
@@ -34,6 +37,9 @@ const httpServer = createServer((req, res) => {
   if (req.url === '/missions') {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify(catalog.infos()));
+    return;
+  }
+  if (site.serve(req, res)) {
     return;
   }
   res.writeHead(404);
@@ -131,7 +137,22 @@ wss.on('connection', (socket) => {
   });
 });
 
+/** Every LAN address the game is reachable on — handy when people join on their phones. */
+function lanUrls(port: number): string[] {
+  return Object.values(networkInterfaces())
+    .flat()
+    .filter((net) => net !== undefined && net.family === 'IPv4' && !net.internal)
+    .map((net) => `http://${net?.address ?? ''}:${port}`);
+}
+
 httpServer.listen(PORT, () => {
   const ids = catalog.all.map((m) => m.id).join(', ');
   console.log(`[escapelab] server on http://localhost:${PORT} (ws: /ws, missions: ${ids})`);
+  if (site.available) {
+    for (const url of lanUrls(PORT)) {
+      console.log(`[escapelab] im Netzwerk erreichbar: ${url}`);
+    }
+  } else {
+    console.log('[escapelab] kein Client-Build gefunden — im Dev-Modus läuft Vite auf 5173');
+  }
 });

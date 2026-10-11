@@ -55,10 +55,23 @@ Dann <http://localhost:5173> in zwei Browser-Tabs/Fenstern öffnen, Raum erstell
 Code im zweiten Tab eingeben, Rollen wählen, starten.
 
 ```sh
-pnpm test         # vitest (core: Spiellogik, server: Räume/Reconnect/Timer)
+pnpm test         # vitest (core: Spiellogik, server: Räume/Reconnect/Timer/Drohnen)
 pnpm typecheck    # tsc --noEmit, strikt (noUncheckedIndexedAccess etc.)
 pnpm lint         # eslint, zero warnings
+pnpm --filter @escapelab/server smoke   # Ende-zu-Ende über echte WebSockets
 ```
+
+## Für den Demo Day (ein Prozess, eine URL)
+
+```sh
+pnpm build        # Client-Bundle nach packages/client/dist
+pnpm start        # Server liefert Spiel + API + WebSocket auf einem Port
+```
+
+Beim Start schreibt der Server alle Netzwerk-Adressen in die Konsole
+(`http://10.0.0.184:3001`) — unter dieser Adresse können Mitspielende im selben WLAN direkt
+mit Laptop oder Handy beitreten, ohne irgendetwas zu installieren. Port über `PORT=8080`
+änderbar.
 
 ## Architektur in einem Satz
 
