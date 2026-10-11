@@ -200,6 +200,42 @@ describe('Room', () => {
     room.dispose();
   });
 
+  it('starts the next run by itself once the whole crew confirms', () => {
+    const room = new Room('TEST', mission);
+    const { anna, ben } = fullLobby(room);
+    ready(room, ben);
+    room.act(anna.playerId, { kind: 'start-mission' });
+    vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 1);
+    expect(lastView(anna.messages).phase).toBe('lost');
+    // Finishing cleared the confirmations from the first start.
+    expect(lastView(anna.messages).players.every((p) => !p.ready)).toBe(true);
+
+    room.act(ben.playerId, { kind: 'set-ready', ready: true });
+    expect(lastView(anna.messages).phase).toBe('lost');
+    room.act(anna.playerId, { kind: 'set-ready', ready: true });
+
+    const restarted = lastView(anna.messages);
+    expect(restarted.phase).toBe('playing');
+    expect(restarted.currentPuzzleIndex).toBe(0);
+    expect(restarted.events).toEqual([]);
+    expect(restarted.players.map((p) => p.roleName)).toEqual(['Anleitung', 'Steuerpult']);
+    room.dispose();
+  });
+
+  it('does not restart while someone is still disconnected', () => {
+    const room = new Room('TEST', mission);
+    const { anna, ben } = fullLobby(room);
+    ready(room, ben);
+    room.act(anna.playerId, { kind: 'start-mission' });
+    vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 1);
+
+    room.act(ben.playerId, { kind: 'set-ready', ready: true });
+    room.detach(ben.playerId);
+    room.act(anna.playerId, { kind: 'set-ready', ready: true });
+    expect(lastView(anna.messages).phase).toBe('lost');
+    room.dispose();
+  });
+
   it('rejects an interact from too far away', () => {
     const room = new Room('TEST', mission);
     const { anna, ben } = fullLobby(room);

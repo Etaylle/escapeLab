@@ -47,7 +47,9 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
   }
   const record = recordRef.current;
   const history: MissionRecord | null = record?.after ?? null;
-  const waiting = view.players.filter((p) => !p.isHost && !p.ready);
+  const crew = view.players.filter((p) => p.connected);
+  const waiting = crew.filter((p) => !p.ready);
+  const confirmed = crew.length - waiting.length;
 
   return (
     <div className={`card end ${won ? 'end-won' : 'end-lost'}`}>
@@ -124,35 +126,21 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
       )}
 
       <div className="actions">
-        {view.you.isHost ? (
-          <>
-            <button
-              className="primary"
-              disabled={waiting.length > 0}
-              onClick={() => send({ kind: 'rematch' })}
-            >
-              {waiting.length > 0
-                ? `Warten auf ${waiting.map((p) => p.name).join(', ')} …`
-                : '↻ Nochmal, gleiche Besetzung'}
-            </button>
-            <button onClick={() => send({ kind: 'back-to-lobby' })}>
-              Zur Lobby (Mission oder Rollen ändern)
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              className={view.you.ready ? '' : 'primary'}
-              onClick={() => send({ kind: 'set-ready', ready: !view.you.ready })}
-            >
-              {view.you.ready ? '✓ Bereit für nochmal' : 'Nochmal? Bereit melden'}
-            </button>
-            <p className="muted">
-              {view.you.ready
-                ? 'Der Host startet den nächsten Lauf.'
-                : 'Melde dich bereit, dann kann der Host direkt neu starten.'}
-            </p>
-          </>
+        <button
+          className={view.you.ready ? '' : 'primary'}
+          onClick={() => send({ kind: 'set-ready', ready: !view.you.ready })}
+        >
+          {view.you.ready ? '✓ Bereit für nochmal' : '↻ Nochmal — ich bin dabei'}
+        </button>
+        <p className="muted">
+          {confirmed}/{crew.length} bereit
+          {waiting.length > 0 ? ` — fehlen noch: ${waiting.map((p) => p.name).join(', ')}` : ''}
+          . Sobald alle zugestimmt haben, startet derselbe Einsatz von selbst.
+        </p>
+        {view.you.isHost && (
+          <button onClick={() => send({ kind: 'back-to-lobby' })}>
+            Zur Lobby (Mission, Rollen oder Schwierigkeit ändern)
+          </button>
         )}
         <button className="link" onClick={leaveRoom}>
           Raum verlassen

@@ -201,6 +201,7 @@ export class Room {
         break;
       case 'set-ready':
         this.dispatch({ type: 'set-ready', playerId, ready: msg.ready });
+        this.checkRematch();
         break;
       case 'start-mission':
         this.dispatch({
@@ -534,6 +535,35 @@ export class Room {
       },
       Math.max(500, nextAt - sinceStart),
     );
+  }
+
+  /**
+   * After a run, the next one starts by itself as soon as the whole crew has
+   * said yes — nobody has to be the one who presses go.
+   */
+  private checkRematch(): void {
+    if (this.state.phase !== 'won' && this.state.phase !== 'lost') {
+      return;
+    }
+    const crew = this.state.players;
+    const host = crew.find((p) => p.isHost);
+    // Everyone has to be back AND willing: a mission short-handed is a
+    // mission nobody can finish.
+    if (host === undefined || crew.length === 0) {
+      return;
+    }
+    if (!crew.every((p) => p.connected && p.ready)) {
+      return;
+    }
+    this.positions.clear();
+    this.dispatch({
+      type: 'rematch',
+      playerId: host.id,
+      at: Date.now(),
+      seed: randomInt(2 ** 31),
+    });
+    this.seedPositions();
+    this.reconcilePause();
   }
 
   /** Won once every connected player stands in the exit zone. */

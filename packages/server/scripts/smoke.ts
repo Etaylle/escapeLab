@@ -601,10 +601,8 @@ for (const step of BLACKOUT_WALKTHROUGH) {
 // --- escape finale: everyone to the hatch before the clock runs out --------
 await clients.anleitung.expectView('exit hatch is open', (v) => v.map?.exit?.open === true);
 await walkTo(clients.steuerpult, [17, 11]);
-assert(
-  clients.anleitung.view?.phase === 'playing',
-  'one player at the hatch is not enough to escape',
-);
+const halfwayOut = clients.anleitung.view?.phase;
+assert(halfwayOut === 'playing', 'one player at the hatch is not enough to escape');
 await walkTo(clients.anleitung, [17, 11]);
 
 const annaWon = await clients.anleitung.expectView('won the mission', (v) => v.phase === 'won');
@@ -613,14 +611,17 @@ assert(/erwachen die Systeme/.test(annaWon.storyText), 'win story is shown');
 // At least the wrong cut and the wrong key; patrolling drones may add more.
 assert(annaWon.penaltySeq >= 2, 'both deliberate penalties were counted');
 
-// A rematch starts a fresh run from the end screen, same crew and roles.
-clients.anleitung.send({ kind: 'rematch' });
-const tooSoon = await clients.anleitung.expect('not-ready error', isError);
-assert(/Noch nicht bereit/.test(tooSoon.message), 'a rematch waits for the crew to confirm');
+// The next run starts by itself once the whole crew confirms on the end screen.
+assert(
+  (clients.anleitung.view?.players ?? []).every((p) => !p.ready),
+  'finishing the run cleared the old confirmations',
+);
 clients.steuerpult.send({ kind: 'set-ready', ready: true });
-await clients.anleitung.until('crew confirmed', (v) =>
+await clients.anleitung.until('one confirmation in', (v) =>
   v.players.some((p) => p.name === 'Ben' && p.ready));
-clients.anleitung.send({ kind: 'rematch' });
+const afterOneYes = clients.anleitung.view?.phase;
+assert(afterOneYes === 'won', 'one confirmation alone does not restart the mission');
+clients.anleitung.send({ kind: 'set-ready', ready: true });
 const replay = await clients.anleitung.expectView('is playing again', (v) => v.phase === 'playing');
 assert(
   replay.currentPuzzleIndex === 0 && replay.events.length === 0 && replay.penaltySeq === 0,
