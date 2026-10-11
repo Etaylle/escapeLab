@@ -9,7 +9,13 @@ Layouts/Codes sind pro Partie zufällig (seeded, deterministisch replaybar), Feh
 Countdown-Zeit. **Missionen:** Blackout im Labor (2 Spieler, 5 Rätsel), Tutorial (2 Spieler),
 Kettenreaktion (3 Spieler, Wissen auf drei Rollen verteilt).
 
-**Spielwelt:** Blackout und Kettenreaktion spielen in einer gerenderten Top-Down-Laborwelt
+**Ablauf einer Partie:** Lobby (Figur + Farbe wählen, Rolle wählen) → Briefing-Countdown →
+Stationen in Reihenfolge finden und lösen → wenn alle gelöst sind, öffnet sich der **Notausgang**
+und das ganze Team muss ihn gemeinsam erreichen, bevor die Zeit abläuft → Endbildschirm mit
+Statistiken und persönlicher Bestzeit. **Hilfsmittel:** Klick auf die Welt setzt einen **Ping**
+für alle (farbige Ringe, Pfeil wenn außerhalb des Bildes), `M` blendet die **Minikarte** ein.
+
+**Spielwelt:** Alle Missionen spielen in einer gerenderten Top-Down-Laborwelt
 (Canvas, Among-Us-Stil): flüssige Bewegung per WASD/Pfeiltasten, Kamera folgt, das Labor liegt
 im Dunkeln und jede Figur trägt ein Licht. Bewegung ist client-autoritativ (lokale Simulation +
 Positions-Streaming); der Server bleibt Autorität über Rätsel, Türen, Druckplatten (öffnen nur,
@@ -17,6 +23,11 @@ solange jemand draufsteht), Interaktionsdistanz und Timer. Rätsel sind leuchten
 öffnen per `E` als Modal über der Welt. Missionen ohne `map`-Block (Tutorial) laufen im direkten
 Rätsel-Flow. Welt-Code: `packages/client/src/world/` (GameWorld = Simulation/Rendering,
 art = prozedurale Grafik, audio = prozedurale Sounds).
+
+**Neue Missionen** sind reine JSON-Dateien in `missions/`. `packages/core/test/missionMaps.test.ts`
+prüft jede davon automatisch: gleiche Zeilenlängen, alles auf Bodenfeldern, eine Station pro
+Rätsel — und per Flutfüllung mit den echten Tür-Regeln, dass die Stationen in Reihenfolge
+erreichbar sind und am Ende **alle** den Notausgang erreichen können.
 
 ## Struktur
 
