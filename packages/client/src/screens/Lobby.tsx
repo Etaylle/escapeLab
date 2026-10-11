@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { difficultyInfos, type ClientMessage, type MissionInfo, type PlayerView } from '@escapelab/core';
 import { CrewPreview } from './CrewPreview.js';
+import { MapThumb } from './MapThumb.js';
 
 interface Props {
   view: PlayerView;
@@ -13,168 +15,192 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
   const seatsLeft = view.roles.length - view.players.length;
   const currentLevel = difficultyInfos().find((l) => l.id === view.difficulty);
   const waiting = view.players.filter((p) => !p.isHost && !p.ready);
+  const info = missions.find((m) => m.id === view.missionId);
+  // Role descriptions are long; showing all of them at once is what made the
+  // lobby scroll. One detail line is enough — it follows the pointer and
+  // falls back to the role you picked.
+  const [peek, setPeek] = useState<string | null>(null);
+  const shownRole = view.roles.find((r) => r.id === (peek ?? view.you.roleId)) ?? view.roles[0];
 
   return (
     <div className="card lobby">
-      <div className="lobby-head">
-        <div>
-          <span className="kicker">MISSION</span>
-          <h1>{view.missionTitle}</h1>
-        </div>
-        <span className="pill">
-          ⏱ {Math.round(view.timeLimitSec / 60)} min · 👥 {view.roles.length} Rollen
-        </span>
-      </div>
-      <p className="story">{view.storyText}</p>
-
-      {view.you.isHost ? (
-        <div className="host-controls">
-          {missions.length > 1 && (
-            <label>
-              Mission wechseln
-              <select
-                value={view.missionId}
-                onChange={(e) => send({ kind: 'switch-mission', missionId: e.target.value })}
-              >
-                {missions.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.title} ({m.roles.length} Rollen)
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <div className="difficulty">
-            <span className="difficulty-caption">Schwierigkeit</span>
-            <div className="difficulty-row">
-              {difficultyInfos().map((level) => (
-                <button
-                  key={level.id}
-                  className={`difficulty-btn ${
-                    view.difficulty === level.id ? 'difficulty-btn-on' : ''
-                  }`}
-                  title={level.description}
-                  onClick={() => send({ kind: 'select-difficulty', difficulty: level.id })}
-                >
-                  {level.label}
-                </button>
-              ))}
+      <div className="lobby-cols">
+        <section className="lobby-brief">
+          <div className="lobby-head">
+            <div>
+              <span className="kicker">MISSION</span>
+              <h1>{view.missionTitle}</h1>
+              <span className="pill lobby-facts">
+                ⏱ {Math.round(view.timeLimitSec / 60)} min · 👥 {view.roles.length} Rollen
+                {info !== undefined && ` · 🧩 ${info.puzzleCount} Stationen`}
+              </span>
             </div>
-            <p className="muted difficulty-desc">
-              {difficultyInfos().find((l) => l.id === view.difficulty)?.description}
-            </p>
-          </div>
-        </div>
-      ) : (
-        <p className="muted">
-          Schwierigkeit: <strong>{currentLevel?.label ?? view.difficulty}</strong> — der Host
-          stellt sie ein.
-        </p>
-      )}
-
-      <h2>Deine Figur</h2>
-      <div className="crew-picker">
-        <CrewPreview color={view.you.color} name={view.you.name} />
-        <div className="swatches">
-          {view.palette.map((entry) => {
-            const mine = entry.color === view.you.color;
-            const taken = entry.takenByName !== null && !mine;
-            return (
-              <button
-                key={entry.color}
-                className={`swatch ${mine ? 'swatch-mine' : ''}`}
-                style={{ background: entry.color }}
-                disabled={taken}
-                title={entry.takenByName ?? 'frei'}
-                aria-label={`Farbe ${entry.color}${taken ? ' (belegt)' : ''}`}
-                onClick={() => send({ kind: 'select-color', color: entry.color })}
-              >
-                {taken ? '×' : mine ? '✓' : ''}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <h2>Rollen — klick dir deine</h2>
-      <div className="roles">
-        {view.roles.map((role) => {
-          const mine = view.you.roleId === role.id;
-          const taken = role.takenByName !== null && !mine;
-          return (
-            <button
-              key={role.id}
-              className={`role ${mine ? 'role-mine' : ''}`}
-              disabled={taken}
-              onClick={() => send({ kind: 'select-role', roleId: role.id })}
-            >
-              <span className="role-name">{role.name}</span>
-              <span className="role-desc">{role.description}</span>
-              <span className="role-taken">
-                {role.takenByName !== null ? `👤 ${role.takenByName}` : 'frei — klicken zum Wählen'}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      <h2>Im Raum</h2>
-      <ul className="players">
-        {view.players.map((p) => (
-          <li key={p.id} className={p.connected ? '' : 'offline'}>
-            <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
-            {p.isHost ? '★ ' : ''}
-            {p.name}
-            {p.roleName !== null ? ` — ${p.roleName}` : ' — wählt noch …'}
-            {p.connected ? '' : ' (getrennt)'}
-            {!p.isHost && (
-              <span className={`ready-tag ${p.ready ? 'ready-tag-on' : ''}`}>
-                {p.ready ? '✓ bereit' : 'noch nicht bereit'}
-              </span>
+            {info !== undefined && info.tiles.length > 0 && (
+              <MapThumb tiles={info.tiles} height={96} />
             )}
-          </li>
-        ))}
-        {seatsLeft > 0 && (
-          <li className="muted">
-            … noch {seatsLeft} {seatsLeft === 1 ? 'Platz' : 'Plätze'} frei — Code oben teilen
-          </li>
-        )}
-      </ul>
+          </div>
+          <p className="story">{view.storyText}</p>
 
-      <div className="actions">
-        {view.you.isHost ? (
-          <button
-            className="primary"
-            disabled={!allRolesTaken || waiting.length > 0}
-            onClick={() => send({ kind: 'start-mission' })}
-          >
-            {!allRolesTaken
-              ? 'Warten, bis alle Rollen besetzt sind …'
-              : waiting.length > 0
-                ? `Warten auf ${waiting.map((p) => p.name).join(', ')} …`
-                : '▶ Mission starten'}
-          </button>
-        ) : (
-          <>
-            <button
-              className={view.you.ready ? '' : 'primary'}
-              disabled={view.you.roleId === null}
-              onClick={() => send({ kind: 'set-ready', ready: !view.you.ready })}
-            >
-              {view.you.ready ? '✓ Bereit — doch nicht?' : 'Ich bin bereit'}
-            </button>
+          {view.you.isHost ? (
+            <div className="host-controls">
+              {missions.length > 1 && (
+                <label>
+                  Mission wechseln
+                  <select
+                    value={view.missionId}
+                    onChange={(e) => send({ kind: 'switch-mission', missionId: e.target.value })}
+                  >
+                    {missions.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.title} ({m.roles.length} Rollen)
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <div className="difficulty">
+                <span className="difficulty-caption">Schwierigkeit</span>
+                <div className="difficulty-row">
+                  {difficultyInfos().map((level) => (
+                    <button
+                      key={level.id}
+                      className={`difficulty-btn ${
+                        view.difficulty === level.id ? 'difficulty-btn-on' : ''
+                      }`}
+                      title={level.description}
+                      onClick={() => send({ kind: 'select-difficulty', difficulty: level.id })}
+                    >
+                      {level.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="muted difficulty-desc">
+                  {difficultyInfos().find((l) => l.id === view.difficulty)?.description}
+                </p>
+              </div>
+            </div>
+          ) : (
             <p className="muted">
-              {view.you.roleId === null
-                ? 'Wähl zuerst eine Rolle.'
-                : view.you.ready
-                  ? 'Der Host startet, sobald alle bereit sind.'
-                  : 'Lies deine Rollenbeschreibung in Ruhe — dann melde dich bereit.'}
+              Schwierigkeit: <strong>{currentLevel?.label ?? view.difficulty}</strong> — der Host
+              stellt sie ein.
             </p>
-          </>
-        )}
-        <button className="link" onClick={leaveRoom}>
-          Raum verlassen
-        </button>
+          )}
+        </section>
+
+        <section className="lobby-crew">
+          <h2>Deine Figur</h2>
+          <div className="crew-picker">
+            <CrewPreview color={view.you.color} name={view.you.name} />
+            <div className="swatches">
+              {view.palette.map((entry) => {
+                const mine = entry.color === view.you.color;
+                const taken = entry.takenByName !== null && !mine;
+                return (
+                  <button
+                    key={entry.color}
+                    className={`swatch ${mine ? 'swatch-mine' : ''}`}
+                    style={{ background: entry.color }}
+                    disabled={taken}
+                    title={entry.takenByName ?? 'frei'}
+                    aria-label={`Farbe ${entry.color}${taken ? ' (belegt)' : ''}`}
+                    onClick={() => send({ kind: 'select-color', color: entry.color })}
+                  >
+                    {taken ? '×' : mine ? '✓' : ''}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <h2>Rollen — klick dir deine</h2>
+          <div className="roles">
+            {view.roles.map((role) => {
+              const mine = view.you.roleId === role.id;
+              const taken = role.takenByName !== null && !mine;
+              return (
+                <button
+                  key={role.id}
+                  className={`role ${mine ? 'role-mine' : ''}`}
+                  disabled={taken}
+                  onMouseEnter={() => setPeek(role.id)}
+                  onMouseLeave={() => setPeek(null)}
+                  onFocus={() => setPeek(role.id)}
+                  onBlur={() => setPeek(null)}
+                  onClick={() => send({ kind: 'select-role', roleId: role.id })}
+                >
+                  <span className="role-name">{role.name}</span>
+                  <span className="role-taken">
+                    {role.takenByName !== null ? `👤 ${role.takenByName}` : 'frei'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {shownRole !== undefined && (
+            <p className="role-detail">
+              <strong>{shownRole.name}</strong> — {shownRole.description}
+            </p>
+          )}
+
+          <h2>Im Raum</h2>
+          <ul className="players">
+            {view.players.map((p) => (
+              <li key={p.id} className={p.connected ? '' : 'offline'}>
+                <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
+                {p.isHost ? '★ ' : ''}
+                {p.name}
+                {p.roleName !== null ? ` — ${p.roleName}` : ' — wählt noch …'}
+                {p.connected ? '' : ' (getrennt)'}
+                {!p.isHost && (
+                  <span className={`ready-tag ${p.ready ? 'ready-tag-on' : ''}`}>
+                    {p.ready ? '✓ bereit' : 'noch nicht bereit'}
+                  </span>
+                )}
+              </li>
+            ))}
+            {seatsLeft > 0 && (
+              <li className="muted">
+                … noch {seatsLeft} {seatsLeft === 1 ? 'Platz' : 'Plätze'} frei — Code oben teilen
+              </li>
+            )}
+          </ul>
+
+          <div className="actions">
+            {view.you.isHost ? (
+              <button
+                className="primary"
+                disabled={!allRolesTaken || waiting.length > 0}
+                onClick={() => send({ kind: 'start-mission' })}
+              >
+                {!allRolesTaken
+                  ? 'Warten, bis alle Rollen besetzt sind …'
+                  : waiting.length > 0
+                    ? `Warten auf ${waiting.map((p) => p.name).join(', ')} …`
+                    : '▶ Mission starten'}
+              </button>
+            ) : (
+              <>
+                <button
+                  className={view.you.ready ? '' : 'primary'}
+                  disabled={view.you.roleId === null}
+                  onClick={() => send({ kind: 'set-ready', ready: !view.you.ready })}
+                >
+                  {view.you.ready ? '✓ Bereit — doch nicht?' : 'Ich bin bereit'}
+                </button>
+                <p className="muted">
+                  {view.you.roleId === null
+                    ? 'Wähl zuerst eine Rolle.'
+                    : view.you.ready
+                      ? 'Der Host startet, sobald alle bereit sind.'
+                      : 'Lies deine Rollenbeschreibung in Ruhe — dann melde dich bereit.'}
+                </p>
+              </>
+            )}
+            <button className="link" onClick={leaveRoom}>
+              Raum verlassen
+            </button>
+          </div>
+        </section>
       </div>
     </div>
   );

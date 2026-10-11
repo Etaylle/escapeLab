@@ -309,6 +309,8 @@ export function GameWorld({
     }
     const floorTex = makeFloorTile();
     const wallTex = makeWallTile();
+    // Same condition the stylesheet uses to show the on-screen pad.
+    const touchPad = window.matchMedia('(pointer: coarse)');
 
     const sim: Sim = {
       adopted: false,
@@ -586,16 +588,24 @@ export function GameWorld({
       return [w / 2 + (x - sim.draw.x) * s, h / 2 + (y - sim.draw.y) * s];
     }
 
-    /** Keep the view inside the map; centre it when the map is the smaller one. */
-    function clampCamera(map: WorldMap, s: number, w: number, h: number): void {
+    /**
+     * Keep the view inside the map; centre it when the map is the smaller one.
+     * `biasY` pushes the camera down in device pixels, which lifts the
+     * character that much higher in the frame — on a phone the on-screen pad
+     * would otherwise sit right on top of them.
+     */
+    function clampCamera(map: WorldMap, s: number, w: number, h: number, biasY: number): void {
       const halfW = w / 2 / s;
       const halfH = h / 2 / s;
+      const bias = biasY / s;
       sim.draw.x =
         map.width <= halfW * 2 ? map.width / 2 : Math.min(map.width - halfW, Math.max(halfW, sim.cam.x));
+      // The lower bound travels with the bias, so the lift still works down at
+      // the bottom wall — at the cost of a strip of void below the lab.
       sim.draw.y =
         map.height <= halfH * 2
-          ? map.height / 2
-          : Math.min(map.height - halfH, Math.max(halfH, sim.cam.y));
+          ? map.height / 2 + bias
+          : Math.min(map.height - halfH + bias, Math.max(halfH, sim.cam.y + bias));
     }
 
     function render(map: WorldMap): void {
@@ -620,7 +630,7 @@ export function GameWorld({
         : // Cover the canvas, but stop before the lab turns into giant tiles
           // on very wide windows.
           Math.min(170, Math.max(cover, Math.min(88, h / 10.5)));
-      clampCamera(map, s, w, h);
+      clampCamera(map, s, w, h, touchPad.matches && !spectator ? 60 * dpr : 0);
       sim.scale = s;
 
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -874,13 +884,16 @@ export function GameWorld({
       if (ctx == null || !sim.minimap) {
         return;
       }
-      // ~150 css px wide, whatever the map's proportions are.
-      const cell = Math.max(3, Math.round((150 * dpr) / map.width));
+      // Scales with the window, but never so small it stops being readable
+      // or so large it eats a phone screen.
+      const targetCss = Math.min(190, Math.max(110, (w / dpr) * 0.16));
+      const cell = Math.max(3, Math.round((targetCss * dpr) / map.width));
       const mw = map.width * cell;
       const mh = map.height * cell;
-      // Bottom left: the clock and the objective own the top of the stage.
-      const ox = 14 * dpr;
-      const oy = h - mh - 14 * dpr;
+      // Top right, clear of the clock above it and of the edge markers and
+      // room signage along the bottom.
+      const ox = w - mw - 14 * dpr;
+      const oy = 84 * dpr;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = 0.86;
       ctx.fillStyle = '#070b0f';
@@ -1073,10 +1086,13 @@ export function GameWorld({
       // it is out of sight — in the dark that is the only way to find it.
       const edgeMarker = (wx: number, wy: number, color: string, label: string): void => {
         const [px, py] = worldToScreen(s, w, h, wx, wy);
-        const margin = 34 * dpr;
-        if (px >= margin && px <= w - margin && py >= margin && py <= h - margin) {
+        // Every target of an arrow punches its own hole in the darkness, so
+        // once it is on screen it speaks for itself — drawing the arrow anyway
+        // would stamp it on top of the thing it points at.
+        if (px >= 0 && px <= w && py >= 0 && py <= h) {
           return;
         }
+        const margin = 34 * dpr;
         const cx = Math.min(w - margin, Math.max(margin, px));
         const cy = Math.min(h - margin, Math.max(margin, py));
         ctx.save();
@@ -1095,7 +1111,9 @@ export function GameWorld({
           ctx.fillStyle = color;
           ctx.font = `700 ${11 * dpr}px ui-monospace, Menlo, monospace`;
           ctx.textAlign = 'center';
-          ctx.fillText(`${label} ${tiles}m`, cx, cy + 26 * dpr);
+          // Caption below the arrow, except near the bottom where that would
+          // push it off the frame.
+          ctx.fillText(`${label} ${tiles}m`, cx, py > h / 2 ? cy - 20 * dpr : cy + 26 * dpr);
         }
       };
 

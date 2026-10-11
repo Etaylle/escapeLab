@@ -127,7 +127,7 @@ body {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 32px 16px 48px;
+  padding: 22px 16px 26px;
   overflow-y: auto;
 }
 
@@ -191,7 +191,7 @@ body {
   background: linear-gradient(180deg, var(--panel) 0%, var(--bg-2) 100%);
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 30px;
+  padding: 26px;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
 }
 
@@ -202,7 +202,7 @@ h1 {
 }
 
 h2 {
-  margin: 26px 0 10px;
+  margin: 20px 0 8px;
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 2px;
@@ -379,11 +379,47 @@ button.link:hover {
 
 /* --- lobby ------------------------------------------------------------------ */
 
+/*
+ * The lobby is the one screen everyone stares at while waiting, so it gets
+ * the window instead of a 680px column: briefing on the left, the crew you
+ * are assembling on the right. Below 920px the two stack.
+ */
+.card.lobby {
+  max-width: 1120px;
+}
+
+.lobby-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 10px 34px;
+  align-items: start;
+}
+
+.lobby-cols > section {
+  min-width: 0;
+}
+
+/* The column headings already have the gap above them. */
+.lobby-crew > h2:first-child {
+  margin-top: 0;
+}
+
+@media (max-width: 920px) {
+  .lobby-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .lobby-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 14px;
+}
+
+.lobby-facts {
+  display: inline-block;
+  margin-top: 6px;
 }
 
 .mission-switch {
@@ -397,11 +433,26 @@ button.link:hover {
 
 .role {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   text-align: left;
-  padding: 14px;
+  padding: 10px 14px;
   border-radius: 10px;
+}
+
+.role-detail {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+  /* Reserve the space so hovering from one role to another cannot make the
+     rest of the column jump. */
+  min-height: 42px;
+}
+
+.role-detail strong {
+  color: var(--text);
 }
 
 .role-mine {
@@ -414,13 +465,8 @@ button.link:hover {
   letter-spacing: 0.5px;
 }
 
-.role-desc {
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.45;
-}
-
 .role-taken {
+  flex: none;
   font-size: 13px;
   color: var(--accent);
   font-family: var(--mono);
@@ -450,7 +496,7 @@ button.link:hover {
 }
 
 .actions {
-  margin-top: 26px;
+  margin-top: 20px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1595,6 +1641,102 @@ button.link:hover {
   max-width: 1200px;
 }
 
+/* On a projector the audience view owns the window, like the player's does. */
+.content--stage .spectate {
+  max-width: none;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.content--stage .spectate-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 12px;
+}
+
+.content--stage .spectate-world {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+.content--stage .spectate-world .world-wrap {
+  flex: 1;
+  min-height: 0;
+  margin-top: 0;
+}
+
+.content--stage .spectate-world .world-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.content--stage .spectate-panels {
+  width: min(380px, 34vw);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+.content--stage .spectate-head,
+.content--stage .spectate-foot {
+  flex: none;
+}
+
+@media (max-width: 900px) {
+  .content--stage .spectate-body {
+    flex-direction: column;
+  }
+
+  .content--stage .spectate-panels {
+    width: auto;
+    flex-direction: row;
+    flex: none;
+    max-height: 38%;
+  }
+}
+
+/*
+ * Match log. The panel column has room left over once the role panels are
+ * placed, and a running feed is what an audience actually reads between
+ * moves — so the ticker lives here instead of as one line in the footer.
+ */
+.spectate-log .ticker {
+  flex-direction: column;
+  gap: 7px;
+  line-height: 1.45;
+}
+
+.spectate-log .ticker li {
+  display: flex;
+  gap: 9px;
+  color: var(--text);
+}
+
+.ticker-time {
+  flex: none;
+  color: var(--muted);
+}
+
+.spectate-log .ticker li.ticker-penalty {
+  color: var(--danger);
+}
+
+.spectate-log .ticker li.ticker-puzzle {
+  color: var(--accent);
+}
+
+.spectate-log .ticker li.ticker-sabotage {
+  color: var(--warn);
+}
+
 .spectate-head {
   display: flex;
   justify-content: space-between;
@@ -1841,6 +1983,9 @@ button.link:hover {
   border-radius: 6px;
   border: 1px solid var(--line);
   background: #070b0f;
+  /* The inline height/width come from the map's aspect ratio; on a narrow
+     column the width has to give way. */
+  max-width: 100%;
 }
 
 .map-thumb-bg {
@@ -2017,6 +2162,8 @@ button.link:hover {
   max-width: 620px;
   width: 100%;
   cursor: auto;
+  /* A reading panel, not a banner: the overlay centres, this does not. */
+  text-align: left;
 }
 
 .info-head {

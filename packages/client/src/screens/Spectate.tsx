@@ -17,6 +17,12 @@ function remaining(deadlineAt: number, now: number): string {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
+/** Run time of an event as mm:ss, the way a match log reads. */
+function elapsed(startedAt: number | null, at: number): string {
+  const total = startedAt === null ? 0 : Math.max(0, Math.floor((at - startedAt) / 1000));
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
 /** Audience view: the whole lab revealed, plus every role's private panel. */
 export function SpectateScreen({
   view,
@@ -33,7 +39,7 @@ export function SpectateScreen({
   }, []);
 
   const noop = (): void => undefined;
-  const lastEvents = view.events.slice(-4).reverse();
+  const feed = view.events.slice(-14).reverse();
 
   return (
     <div className="spectate">
@@ -64,38 +70,59 @@ export function SpectateScreen({
         <div className="banner-result">⏸ Pausiert — warten auf {view.pausedFor.join(', ')}</div>
       )}
 
-      {view.map !== null && (
-        <GameWorld
-          view={spectatorAsPlayerView(view)}
-          positionsRef={positionsRef}
-          dronesRef={dronesRef}
-          pingsRef={pingsRef}
-          chatsRef={chatsRef}
-          spectator
-          inputLocked
-          onToggleInfo={noop}
-          send={noop}
-        />
-      )}
+      <div className="spectate-body">
+        <div className="spectate-world">
+          {view.map !== null && (
+            <GameWorld
+              view={spectatorAsPlayerView(view)}
+              positionsRef={positionsRef}
+              dronesRef={dronesRef}
+              pingsRef={pingsRef}
+              chatsRef={chatsRef}
+              spectator
+              inputLocked
+              onToggleInfo={noop}
+              send={noop}
+            />
+          )}
+        </div>
 
-      <div className="spectate-panels">
-        {view.panels.map((panel) => (
-          <section key={panel.roleId} className="panel">
-            <div className="panel-label">// {panel.roleName}</div>
-            {panel.puzzle === null ? (
-              <p className="muted">Unterwegs — gerade keine Station offen.</p>
+        <div className="spectate-panels">
+          {view.panels.map((panel) => (
+            <section key={panel.roleId} className="panel">
+              <div className="panel-label">// {panel.roleName}</div>
+              {panel.puzzle === null ? (
+                <p className="muted">Unterwegs — gerade keine Station offen.</p>
+              ) : (
+                <>
+                  {panel.puzzle.info !== null && (
+                    <div className="info-box">📖 {panel.puzzle.info}</div>
+                  )}
+                  <div className="read-only">
+                    <PuzzlePanel puzzle={panel.puzzle} send={noop} />
+                  </div>
+                </>
+              )}
+            </section>
+          ))}
+
+          <section className="panel spectate-log">
+            <div className="panel-label">// Einsatzprotokoll</div>
+            {feed.length === 0 ? (
+              <p className="muted">Noch nichts passiert.</p>
             ) : (
-              <>
-                {panel.puzzle.info !== null && (
-                  <div className="info-box">📖 {panel.puzzle.info}</div>
-                )}
-                <div className="read-only">
-                  <PuzzlePanel puzzle={panel.puzzle} send={noop} />
-                </div>
-              </>
+              <ul className="ticker">
+                {feed.map((event, i) => (
+                  <li key={`${event.at}-${i}`} className={`ticker-${event.kind}`}>
+                    <span className="ticker-time">{elapsed(view.startedAt, event.at)}</span>
+                    {event.label}
+                    {event.seconds !== null ? ` (−${event.seconds}s)` : ''}
+                  </li>
+                ))}
+              </ul>
             )}
           </section>
-        ))}
+        </div>
       </div>
 
       <div className="spectate-foot">
@@ -104,14 +131,6 @@ export function SpectateScreen({
             <li key={p.id} className={p.connected ? '' : 'offline'}>
               <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
               {p.name} · {p.roleName ?? '—'}
-            </li>
-          ))}
-        </ul>
-        <ul className="ticker">
-          {lastEvents.map((event, i) => (
-            <li key={`${event.at}-${i}`}>
-              {event.label}
-              {event.seconds !== null ? ` (−${event.seconds}s)` : ''}
             </li>
           ))}
         </ul>

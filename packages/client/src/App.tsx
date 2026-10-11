@@ -38,9 +38,11 @@ export function App() {
   const conn = useGameConnection();
   const [sound, setSound] = useState(() => !isMuted());
   const [missions, setMissions] = useState<MissionInfo[]>([]);
-  // A running mission takes over the whole window; the audience view keeps
-  // its document layout, because its two role panels need room to scroll.
-  const immersive = conn.view?.phase === 'playing' && conn.view.map !== null;
+  // A running mission takes over the whole window, for players and for the
+  // audience alike — the latter matters on a projector.
+  const immersive =
+    (conn.view?.phase === 'playing' && conn.view.map !== null) ||
+    (conn.spectatorView !== null && conn.spectatorView.map !== null);
 
   useEffect(() => {
     fetch('/missions')
