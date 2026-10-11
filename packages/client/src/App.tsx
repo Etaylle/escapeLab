@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { Activity, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { isMuted, setMuted } from './world/audio.js';
 import { difficultyInfos, type Difficulty, type MissionInfo } from '@escapelab/core';
 import { useGameConnection } from './ws.js';
+import { HandbookScreen } from './screens/Handbook.js';
 import { JoinScreen } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
 import { GameScreen } from './screens/Game.js';
@@ -47,6 +48,10 @@ export function App() {
   const conn = useGameConnection();
   const [sound, setSound] = useState(() => !isMuted());
   const [missions, setMissions] = useState<MissionInfo[]>([]);
+  // The handbook is a page of its own off the join screen: the mission whose
+  // booklet is open, or null.
+  const [handbook, setHandbook] = useState<string | null>(null);
+  const contentRef = useRef<HTMLElement>(null);
   // A running mission takes over the whole window, for players and for the
   // audience alike — the latter matters on a projector.
   const immersive =
@@ -63,6 +68,11 @@ export function App() {
       .then((list: MissionInfo[]) => setMissions(list))
       .catch(() => setMissions([]));
   }, []);
+
+  // Join screen and booklet share one scrolling area; each opens at its top.
+  useLayoutEffect(() => {
+    contentRef.current?.scrollTo(0, 0);
+  }, [handbook]);
 
   return (
     <div className="app">
@@ -102,7 +112,9 @@ export function App() {
         </div>
       )}
 
-      <main className={`content ${immersive ? 'content--stage' : ''}`}>{renderScreen()}</main>
+      <main ref={contentRef} className={`content ${immersive ? 'content--stage' : ''}`}>
+        {renderScreen()}
+      </main>
     </div>
   );
 
@@ -120,13 +132,28 @@ export function App() {
       );
     }
     if (conn.view === null) {
+      // The join screen stays mounted behind the booklet, so a typed name and
+      // the picked mission are still there on the way back.
       return (
-        <JoinScreen
-          send={conn.send}
-          connected={conn.status === 'open'}
-          missions={missions}
-          rooms={conn.rooms}
-        />
+        <>
+          <Activity mode={handbook === null ? 'visible' : 'hidden'}>
+            <JoinScreen
+              send={conn.send}
+              connected={conn.status === 'open'}
+              missions={missions}
+              rooms={conn.rooms}
+              openHandbook={setHandbook}
+            />
+          </Activity>
+          {handbook !== null && (
+            <HandbookScreen
+              missions={missions}
+              missionId={handbook}
+              selectMission={setHandbook}
+              back={() => setHandbook(null)}
+            />
+          )}
+        </>
       );
     }
     switch (conn.view.phase) {

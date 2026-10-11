@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CHAT_PHRASE_IDS, type ChatPhrase } from './chat.js';
 import { DIFFICULTIES, type Difficulty } from './difficulty.js';
+import type { ManualSection } from './puzzles/module.js';
 import type { Phase } from './state.js';
 import type { PlayerView, SpectatorView } from './view.js';
 
@@ -84,6 +85,30 @@ export interface MissionInfo {
   puzzleCount: number;
   /** tile rows of the map, for the preview thumbnail; empty without a map */
   tiles: string[];
+}
+
+/**
+ * A mission's printed Handbuch, served via GET /missions/:id/manual. The
+ * same for every run and every difficulty, so it can be handed out on paper.
+ */
+export interface MissionManual {
+  missionTitle: string;
+  /** seconds a hint costs at difficulty `normal` */
+  hintCostSec: number;
+  /** one per puzzle, in mission order */
+  stations: MissionManualStation[];
+}
+
+export interface MissionManualStation {
+  /** position in the mission from 0, like `currentPuzzleIndex` */
+  index: number;
+  title: string;
+  /** null where every role at the station presses a button and nobody reads (button-sync) */
+  manualRoleName: string | null;
+  /** several names, comma-separated, where every listed role operates (button-sync) */
+  operatorRoleName: string;
+  usesEdgework: boolean;
+  manual: ManualSection[];
 }
 
 export type ClientMessage = z.infer<typeof clientMessageSchema>;

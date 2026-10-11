@@ -57,6 +57,8 @@ export {
   type ClientMessage,
   type ServerMessage,
   type MissionInfo,
+  type MissionManual,
+  type MissionManualStation,
   type RoomSummary,
   type PlayerPosition,
   type DronePosition,

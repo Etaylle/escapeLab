@@ -9,6 +9,7 @@ import {
   type ClientMessage,
   type ServerMessage,
 } from '@escapelab/core';
+import { apiResponse } from './api.js';
 import { MissionCatalog } from './missions.js';
 import { RoomManager } from './roomManager.js';
 import { StaticSite } from './static.js';
@@ -32,14 +33,10 @@ interface Session {
 }
 
 const httpServer = createServer((req, res) => {
-  if (req.url === '/health') {
-    res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, missions: catalog.all.map((m) => m.id) }));
-    return;
-  }
-  if (req.url === '/missions') {
-    res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify(catalog.infos()));
+  const api = apiResponse(catalog, req.url ?? '/');
+  if (api !== null) {
+    res.writeHead(api.status, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(api.body));
     return;
   }
   if (site.serve(req, res)) {

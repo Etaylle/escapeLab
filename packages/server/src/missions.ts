@@ -1,6 +1,14 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseMission, type Mission, type MissionInfo } from '@escapelab/core';
+import {
+  moduleFor,
+  parseMission,
+  type Mission,
+  type MissionInfo,
+  type MissionManual,
+  type MissionManualStation,
+  type PuzzleDef,
+} from '@escapelab/core';
 
 /** All missions from a directory, sorted for the picker. Fails fast on bad files. */
 export class MissionCatalog {
@@ -51,4 +59,45 @@ export class MissionCatalog {
       tiles: m.map?.tiles ?? [],
     }));
   }
+
+  /** Every station's printed rules in mission order; null for an unknown id. */
+  manual(id: string): MissionManual | null {
+    const mission = this.byId.get(id);
+    if (mission === undefined) {
+      return null;
+    }
+    const roleName = (roleId: string): string =>
+      mission.roles.find((r) => r.id === roleId)?.name ?? roleId;
+    return {
+      missionTitle: mission.title,
+      hintCostSec: mission.hintCostSec,
+      stations: mission.puzzles.map((def, index) => {
+        const puzzleModule = moduleFor(def.type);
+        return {
+          index,
+          title: def.title,
+          ...stationRoles(def, roleName),
+          usesEdgework: puzzleModule.usesEdgework,
+          manual: puzzleModule.manual(def),
+        };
+      }),
+    };
+  }
+}
+
+/** Who works a station and who reads its rules; at a button-sync every listed role presses. */
+function stationRoles(
+  def: PuzzleDef,
+  roleName: (roleId: string) => string,
+): Pick<MissionManualStation, 'operatorRoleName' | 'manualRoleName'> {
+  if (def.type === 'button-sync') {
+    return {
+      operatorRoleName: def.buttons.map((b) => roleName(b.roleId)).join(', '),
+      manualRoleName: null,
+    };
+  }
+  return {
+    operatorRoleName: roleName(def.operatorRoleId),
+    manualRoleName: roleName(def.manualRoleId),
+  };
 }

@@ -7,6 +7,7 @@ interface Props {
   connected: boolean;
   missions: MissionInfo[];
   rooms: RoomSummary[];
+  openHandbook: (missionId: string) => void;
 }
 
 const REFRESH_MS = 2500;
@@ -58,7 +59,7 @@ function RoomRow({
   );
 }
 
-export function JoinScreen({ send, connected, missions, rooms }: Props) {
+export function JoinScreen({ send, connected, missions, rooms, openHandbook }: Props) {
   const [name, setName] = useState('');
   // An invite link carries the room in ?room=, so the code field is already
   // filled and all that is left to do is type a name.
@@ -147,19 +148,29 @@ export function JoinScreen({ send, connected, missions, rooms }: Props) {
           ) : (
             <p className="muted">Lade Missionen …</p>
           )}
-          <button
-            className="primary"
-            disabled={!connected || !nameOk}
-            onClick={() =>
-              send(
-                selected === null
-                  ? { kind: 'create-room', name: name.trim() }
-                  : { kind: 'create-room', name: name.trim(), missionId: selected },
-              )
-            }
-          >
-            Runde eröffnen
-          </button>
+          <div className="join-create-actions">
+            <button
+              className="primary"
+              disabled={!connected || !nameOk}
+              onClick={() =>
+                send(
+                  selected === null
+                    ? { kind: 'create-room', name: name.trim() }
+                    : { kind: 'create-room', name: name.trim(), missionId: selected },
+                )
+              }
+            >
+              Runde eröffnen
+            </button>
+            {selected !== null && (
+              <button
+                title="Die Regeln dieser Mission lesen und ausdrucken"
+                onClick={() => openHandbook(selected)}
+              >
+                📖 Handbuch
+              </button>
+            )}
+          </div>
         </section>
 
         <section className="join-join">

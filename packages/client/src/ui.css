@@ -2602,3 +2602,260 @@ button.link:hover {
 .edgework-count {
   margin-left: 3px;
 }
+
+/* ── handbook: the printable booklet ────────────────────────────────────── */
+
+.join-create-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* A reading column: wider than the other cards, with roomier lines. */
+.card.handbook {
+  max-width: 860px;
+  line-height: 1.65;
+}
+
+.handbook-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-top: 8px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.handbook-bar label {
+  flex: 0 1 420px;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+
+.handbook-bar select {
+  flex: 1;
+  min-width: 0;
+}
+
+.handbook-print {
+  margin-left: auto;
+}
+
+.handbook-cover {
+  padding-top: 26px;
+}
+
+.handbook-cover h1 {
+  margin: 6px 0 0;
+  font-size: 34px;
+  line-height: 1.2;
+}
+
+.handbook-edgework {
+  margin: 16px 0 0;
+}
+
+.handbook-chapter {
+  margin-top: 34px;
+  padding-top: 26px;
+  border-top: 1px solid var(--line);
+}
+
+.handbook-chapter h2 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 1px;
+  color: var(--text);
+}
+
+.handbook-crew {
+  margin: 4px 0 14px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* The booklet names itself once, on its cover. */
+.handbook .manual .kicker {
+  display: none;
+}
+
+.handbook .manual {
+  line-height: 1.65;
+}
+
+.handbook .manual-section p,
+.handbook .manual-rules {
+  font-size: 16px;
+}
+
+.handbook .manual-column {
+  max-width: 64px;
+}
+
+.handbook .manual-column li {
+  height: 46px;
+  font-size: 28px;
+}
+
+@media (max-width: 560px) {
+  .card.handbook {
+    padding: 20px 16px;
+  }
+
+  .handbook-cover h1 {
+    font-size: 27px;
+  }
+}
+
+/*
+ * On paper only the booklet remains, black on white, every chapter on a
+ * page of its own. The app's shell is one window high and scrolls inside;
+ * left as it is, it would clip the print to the first screenful.
+ */
+@media print {
+  @page {
+    margin: 16mm;
+  }
+
+  :root {
+    color-scheme: light;
+    --text: #000;
+    --muted: #333;
+    --accent: #000;
+    --warn: #000;
+    --line: #000;
+    --line-2: #000;
+    --panel: #fff;
+    --panel-2: #fff;
+    --bg: #fff;
+    --bg-2: #fff;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .app {
+    background: none;
+  }
+
+  .app,
+  .content {
+    display: block;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .scanlines,
+  .topbar,
+  .banner,
+  .handbook-back,
+  .handbook-bar {
+    display: none;
+  }
+
+  .card.handbook {
+    max-width: none;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    font-size: 11pt;
+  }
+
+  .handbook-cover {
+    padding-top: 24mm;
+  }
+
+  .handbook-cover h1 {
+    font-size: 26pt;
+  }
+
+  /* On screen the row rule is background showing through a gap; paper drops backgrounds. */
+  .handbook .info-facts {
+    gap: 0;
+    background: none;
+  }
+
+  .handbook .info-facts > div + div {
+    border-top: 1px solid var(--line);
+  }
+
+  .handbook-chapter {
+    break-before: page;
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
+
+  .handbook-chapter h2 {
+    font-size: 15pt;
+  }
+
+  .handbook-crew {
+    font-size: 9pt;
+  }
+
+  .handbook-chapter h2,
+  .handbook .manual-section h3 {
+    break-after: avoid;
+  }
+
+  /* Plain blocks fragment across pages more reliably than flex boxes. */
+  .handbook .manual,
+  .handbook .manual-rules {
+    display: block;
+  }
+
+  .handbook .manual {
+    padding: 0;
+    border: none;
+    background: none;
+  }
+
+  .handbook .manual-section + .manual-section {
+    margin-top: 14pt;
+  }
+
+  .handbook .manual-section p,
+  .handbook .manual-rules {
+    font-size: 11pt;
+  }
+
+  .handbook .manual-rules li + li {
+    margin-top: 4pt;
+  }
+
+  .handbook .manual-table {
+    overflow: visible;
+  }
+
+  .handbook .manual-table table {
+    font-size: 10pt;
+  }
+
+  .handbook .manual-table tr,
+  .handbook .manual-rules li,
+  .handbook .manual-columns {
+    break-inside: avoid;
+  }
+
+  .handbook .manual-column {
+    flex: 0 0 auto;
+    min-width: 40pt;
+    max-width: none;
+  }
+
+  /* The operator describes these glyphs; on paper they must be told apart at a glance. */
+  .handbook .manual-column li {
+    height: 30pt;
+    font-size: 20pt;
+  }
+}
