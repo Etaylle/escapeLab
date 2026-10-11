@@ -90,6 +90,10 @@ interface Sim {
   walkPhase: number;
   stepAcc: number;
   cam: { x: number; y: number };
+  /** `cam` clamped to the map bounds; everything on screen uses this one */
+  draw: { x: number; y: number };
+  /** device pixels per tile, as the last frame drew it */
+  scale: number;
   flash: number;
   lastPenaltySeq: number;
   time: number;
@@ -194,7 +198,7 @@ function coachTip(map: WorldMap, youId: string, carrying: boolean): { id: string
   if (map.plates.some((plate) => plate.pressed)) {
     return {
       id: 'plate',
-      text: 'Solange jemand auf der Platte steht, bleibt die TÃ¼r offen — nicht runtergehen!',
+      text: 'Solange jemand auf der Platte steht, bleibt die Tür offen — nicht runtergehen!',
     };
   }
   void youId;
@@ -311,6 +315,8 @@ export function GameWorld({
       walkPhase: 0,
       stepAcc: 0,
       cam: { x: 0, y: 0 },
+      draw: { x: 0, y: 0 },
+      scale: 48,
       flash: 0,
       lastPenaltySeq: viewRef.current.penaltySeq,
       time: 0,
@@ -380,12 +386,12 @@ export function GameWorld({
         return;
       }
       const rect = canvas.getBoundingClientRect();
-      const s = Math.max(40, Math.min(72, canvas.height / 9.5));
+      const s = sim.scale;
       const dpr = canvas.height / rect.height;
       const px = (e.clientX - rect.left) * dpr;
       const py = (e.clientY - rect.top) * dpr;
-      const wx = sim.cam.x + (px - canvas.width / 2) / s;
-      const wy = sim.cam.y + (py - canvas.height / 2) / s;
+      const wx = sim.draw.x + (px - canvas.width / 2) / s;
+      const wy = sim.draw.y + (py - canvas.height / 2) / s;
       sendRef.current({
         kind: 'ping',
         x: Math.round(wx * 100) / 100,
@@ -574,7 +580,19 @@ export function GameWorld({
     }
 
     function worldToScreen(s: number, w: number, h: number, x: number, y: number): [number, number] {
-      return [w / 2 + (x - sim.cam.x) * s, h / 2 + (y - sim.cam.y) * s];
+      return [w / 2 + (x - sim.draw.x) * s, h / 2 + (y - sim.draw.y) * s];
+    }
+
+    /** Keep the view inside the map; centre it when the map is the smaller one. */
+    function clampCamera(map: WorldMap, s: number, w: number, h: number): void {
+      const halfW = w / 2 / s;
+      const halfH = h / 2 / s;
+      sim.draw.x =
+        map.width <= halfW * 2 ? map.width / 2 : Math.min(map.width - halfW, Math.max(halfW, sim.cam.x));
+      sim.draw.y =
+        map.height <= halfH * 2
+          ? map.height / 2
+          : Math.min(map.height - halfH, Math.max(halfH, sim.cam.y));
     }
 
     function render(map: WorldMap): void {
@@ -592,19 +610,23 @@ export function GameWorld({
       }
       const w = canvas.width;
       const h = canvas.height;
+      // Zoom so the lab always covers the canvas: no black bars beside it.
+      const cover = Math.max(w / map.width, h / map.height);
       const s = spectator
-        ? Math.max(14, Math.min(w / (map.width + 1), h / (map.height + 1)))
-        : Math.max(40, Math.min(72, h / 9.5));
+        ? Math.max(14, Math.min(w / (map.width + 0.5), h / (map.height + 0.5)))
+        : Math.max(cover, Math.min(88, h / 10.5));
+      clampCamera(map, s, w, h);
+      sim.scale = s;
 
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = '#04070a';
       ctx.fillRect(0, 0, w, h);
-      ctx.setTransform(s, 0, 0, s, w / 2 - sim.cam.x * s, h / 2 - sim.cam.y * s);
+      ctx.setTransform(s, 0, 0, s, w / 2 - sim.draw.x * s, h / 2 - sim.draw.y * s);
 
-      const x0 = Math.max(0, Math.floor(sim.cam.x - w / 2 / s) - 1);
-      const x1 = Math.min(map.width - 1, Math.ceil(sim.cam.x + w / 2 / s) + 1);
-      const y0 = Math.max(0, Math.floor(sim.cam.y - h / 2 / s) - 1);
-      const y1 = Math.min(map.height - 1, Math.ceil(sim.cam.y + h / 2 / s) + 1);
+      const x0 = Math.max(0, Math.floor(sim.draw.x - w / 2 / s) - 1);
+      const x1 = Math.min(map.width - 1, Math.ceil(sim.draw.x + w / 2 / s) + 1);
+      const y0 = Math.max(0, Math.floor(sim.draw.y - h / 2 / s) - 1);
+      const y1 = Math.min(map.height - 1, Math.ceil(sim.draw.y + h / 2 / s) + 1);
       for (let ty = y0; ty <= y1; ty++) {
         const row = map.tiles[ty] ?? '';
         for (let tx = x0; tx <= x1; tx++) {
@@ -847,7 +869,8 @@ export function GameWorld({
       if (ctx == null || !sim.minimap) {
         return;
       }
-      const cell = Math.max(3, Math.round((3.4 * dpr * 72) / Math.max(map.width, 20)));
+      // ~150 css px wide, whatever the map's proportions are.
+      const cell = Math.max(3, Math.round((150 * dpr) / map.width));
       const mw = map.width * cell;
       const mh = map.height * cell;
       const ox = w - mw - 14 * dpr;
@@ -1204,7 +1227,7 @@ export function GameWorld({
       )}
       {!spectator && (
         <p className="world-hint muted">
-          WASD/Pfeile laufen Â· E aktivieren Â· Q ablegen Â· Klick Ping Â· M Karte Â·{' '}
+          WASD/Pfeile laufen · E aktivieren · Q ablegen · Klick Ping · M Karte ·{' '}
           <button className="link" onClick={() => setHelpOpen(true)}>
             H = alle Tasten
           </button>

@@ -8,6 +8,7 @@ import type {
 import { play } from '../sounds.js';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
+import { MissionHud } from './MissionHud.js';
 
 interface Props {
   view: PlayerView;
@@ -255,14 +256,18 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
           </div>
         ))}
 
-      <ul className="players inline">
-        {view.players.map((p) => (
-          <li key={p.id} className={p.connected ? '' : 'offline'}>
-            {p.name} · {p.roleName ?? '—'}
-            {p.connected ? '' : ' ⚠ getrennt'}
-          </li>
-        ))}
-      </ul>
+      {map !== null ? (
+        <MissionHud view={view} positionsRef={positionsRef} chatsRef={chatsRef} />
+      ) : (
+        <ul className="players inline">
+          {view.players.map((p) => (
+            <li key={p.id} className={p.connected ? '' : 'offline'}>
+              {p.name} · {p.roleName ?? '—'}
+              {p.connected ? '' : ' ⚠ getrennt'}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
