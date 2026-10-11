@@ -53,6 +53,8 @@ export interface MapView {
   plates: { id: string; x: number; y: number; label: string; pressed: boolean }[];
   stations: { x: number; y: number; title: string; status: 'done' | 'armed' | 'locked' }[];
   labels: { text: string; x: number; y: number }[];
+  /** escape hatch; open once every puzzle is solved */
+  exit: { x: number; y: number; open: boolean } | null;
 }
 
 interface PuzzleViewCommon {
@@ -251,6 +253,14 @@ function mapViewFor(state: GameState, playerId: string): MapView | null {
       };
     }),
     labels: map.labels.map((l) => ({ text: l.text, x: l.x, y: l.y })),
+    exit:
+      map.exit === undefined
+        ? null
+        : {
+            x: map.exit.x,
+            y: map.exit.y,
+            open: state.currentPuzzleIndex >= state.mission.puzzles.length,
+          },
   };
 }
 

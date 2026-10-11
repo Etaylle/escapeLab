@@ -83,6 +83,35 @@ function armedStationOf(map: WorldMap): { x: number; y: number; title: string } 
   return station === undefined ? null : { x: station.x, y: station.y, title: station.title };
 }
 
+/** Escape hatch: dim grey while locked, pulsing green once it opens. */
+function drawExit(ctx: CanvasRenderingContext2D, open: boolean, pulse: number): void {
+  ctx.save();
+  const glow = open ? 0.35 + 0.3 * pulse : 0;
+  if (open) {
+    ctx.fillStyle = `rgba(74,222,128,${0.12 + 0.1 * pulse})`;
+    ctx.beginPath();
+    ctx.arc(0, 0, 0.75, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = open ? '#14532d' : '#111a22';
+  ctx.strokeStyle = open ? `rgba(74,222,128,${Math.min(1, 0.7 + glow)})` : '#2a3947';
+  ctx.lineWidth = 0.05;
+  ctx.beginPath();
+  ctx.roundRect(-0.38, -0.38, 0.76, 0.76, 0.1);
+  ctx.fill();
+  ctx.stroke();
+  // hazard stripes
+  ctx.strokeStyle = open ? 'rgba(74,222,128,0.8)' : 'rgba(125,143,158,0.35)';
+  ctx.lineWidth = 0.07;
+  for (const offset of [-0.18, 0, 0.18]) {
+    ctx.beginPath();
+    ctx.moveTo(-0.26, offset + 0.09);
+    ctx.lineTo(0.26, offset - 0.09);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 /** A door bar is horizontal when its left/right neighbors are barriers. */
 function isHorizontalDoor(map: WorldMap, x: number, y: number): boolean {
   const doorCells = new Set(map.doors.map((d) => `${d.x},${d.y}`));
@@ -377,6 +406,12 @@ export function GameWorld({ view, positionsRef, inputLocked, send }: Props) {
         drawStation(ctx, { status: station.status, pulse, title: station.title });
         ctx.restore();
       }
+      if (map.exit !== null) {
+        ctx.save();
+        ctx.translate(map.exit.x + 0.5, map.exit.y + 0.5);
+        drawExit(ctx, map.exit.open, pulse);
+        ctx.restore();
+      }
 
       // avatars: remote first, local on top
       const colorOf = new Map(
@@ -422,7 +457,11 @@ export function GameWorld({ view, positionsRef, inputLocked, send }: Props) {
       }
       octx.setTransform(1, 0, 0, 1, 0, 0);
       octx.globalCompositeOperation = 'source-over';
-      const base = 0.92 + 0.02 * Math.sin(sim.time * 1.7);
+      const deadlineAt = viewRef.current.deadlineAt;
+      const lowTime = deadlineAt !== null && deadlineAt - Date.now() < 60_000;
+      // The lab dims further during the final minute.
+      const base =
+        (lowTime ? 0.945 : 0.92) + 0.02 * Math.sin(sim.time * (lowTime ? 3.2 : 1.7));
       octx.clearRect(0, 0, w, h);
       octx.fillStyle = `rgba(3,5,9,${base})`;
       octx.fillRect(0, 0, w, h);
@@ -439,7 +478,25 @@ export function GameWorld({ view, positionsRef, inputLocked, send }: Props) {
         octx.fillRect(sx - r, sy - r, r * 2, r * 2);
       };
 
-      punch(sim.self.x, sim.self.y, 4.6, 1);
+      // Your lamp: a close radial glow plus a flashlight cone in facing direction.
+      punch(sim.self.x, sim.self.y, 3.2, 1);
+      {
+        const [sx, sy] = worldToScreen(s, w, h, sim.self.x, sim.self.y);
+        const coneR = 7.5 * s;
+        octx.save();
+        octx.beginPath();
+        octx.moveTo(sx, sy);
+        octx.arc(sx, sy, coneR, sim.self.facing - 0.5, sim.self.facing + 0.5);
+        octx.closePath();
+        octx.clip();
+        const g = octx.createRadialGradient(sx, sy, 0, sx, sy, coneR);
+        g.addColorStop(0, 'rgba(0,0,0,0.95)');
+        g.addColorStop(0.6, 'rgba(0,0,0,0.6)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        octx.fillStyle = g;
+        octx.fillRect(sx - coneR, sy - coneR, coneR * 2, coneR * 2);
+        octx.restore();
+      }
       for (const other of sim.others.values()) {
         punch(other.rx, other.ry, 2.8, 0.9);
       }
@@ -454,6 +511,9 @@ export function GameWorld({ view, positionsRef, inputLocked, send }: Props) {
         if (plate.pressed) {
           punch(plate.x + 0.5, plate.y + 0.5, 1.0, 0.5);
         }
+      }
+      if (map.exit !== null && map.exit.open) {
+        punch(map.exit.x + 0.5, map.exit.y + 0.5, 2.6, 0.9);
       }
 
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -475,6 +535,12 @@ export function GameWorld({ view, positionsRef, inputLocked, send }: Props) {
         const [sx, sy] = worldToScreen(s, w, h, label.x + 0.5, label.y + 0.5);
         ctx.fillStyle = 'rgba(125,143,158,0.5)';
         ctx.fillText(label.text, sx, sy);
+      }
+      if (map.exit !== null && map.exit.open) {
+        const [ex, ey] = worldToScreen(s, w, h, map.exit.x + 0.5, map.exit.y - 0.45);
+        ctx.font = `700 ${12 * dpr}px ui-monospace, Menlo, monospace`;
+        ctx.fillStyle = '#4ade80';
+        ctx.fillText('NOTAUSGANG → ALLE HIERHER!', ex, ey);
       }
       const station = armedStationOf(map);
       if (station !== null && viewRef.current.puzzle === null) {

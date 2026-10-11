@@ -28,6 +28,7 @@ export type Action =
   | { type: 'press-simon'; playerId: string; buttonIndex: number; at: number }
   | { type: 'set-pressed-plates'; plates: string[] }
   | { type: 'interact'; playerId: string; at: number }
+  | { type: 'escaped'; at: number }
   | { type: 'time-expired'; at: number }
   | { type: 'back-to-lobby'; playerId: string };
 
@@ -81,6 +82,8 @@ export function applyAction(state: GameState, action: Action): GameState {
         : state;
     case 'interact':
       return handleInteract(state, action);
+    case 'escaped':
+      return handleEscaped(state, action);
     case 'time-expired':
       return state.phase === 'playing'
         ? { ...state, phase: 'lost', finishedAt: action.at, puzzleState: null }
@@ -231,9 +234,22 @@ function requirePlaying(
   return { player: findPlayer(state, playerId), def, puzzleState: state.puzzleState };
 }
 
+/** True once every puzzle is solved and the crew still has to reach the exit. */
+export function inEscapePhase(state: GameState): boolean {
+  return (
+    state.phase === 'playing' &&
+    state.currentPuzzleIndex >= state.mission.puzzles.length &&
+    state.mission.map?.exit !== undefined
+  );
+}
+
 function advance(state: GameState, at: number): GameState {
   const nextIndex = state.currentPuzzleIndex + 1;
   if (nextIndex >= state.mission.puzzles.length) {
+    if (state.mission.map?.exit !== undefined) {
+      // All systems online — but the lab is only beaten once everyone is out.
+      return { ...state, currentPuzzleIndex: nextIndex, puzzleState: null };
+    }
     return { ...state, phase: 'won', puzzleState: null, finishedAt: at };
   }
   return {
@@ -242,6 +258,17 @@ function advance(state: GameState, at: number): GameState {
     // With a map the next puzzle waits at its station; without one it starts right away.
     puzzleState: state.mission.map === undefined ? initPuzzleState(state, nextIndex) : null,
   };
+}
+
+/** Dispatched by the server once every connected player stands in the exit zone. */
+function handleEscaped(state: GameState, action: { at: number }): GameState {
+  if (!inEscapePhase(state)) {
+    fail('Der Notausgang ist noch verriegelt.');
+  }
+  if (state.deadlineAt !== null && action.at >= state.deadlineAt) {
+    return lostNow(state, action.at);
+  }
+  return { ...state, phase: 'won', puzzleState: null, finishedAt: action.at };
 }
 
 /** Shrink the deadline; losing immediately if the penalty eats the rest. */

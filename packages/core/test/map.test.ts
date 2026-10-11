@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, initialState, parseMission, viewFor } from '../src/index.js';
+import { applyAction, inEscapePhase, initialState, parseMission, viewFor } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
 
 /**
@@ -160,6 +160,48 @@ describe('mapped missions', () => {
       state,
     );
     expect(viewFor(state, 'p1').map?.doors[0]?.open).toBe(true);
+  });
+
+  it('runs the escape phase: exit opens after the last puzzle, escaped wins', () => {
+    const withExit = parseMission({
+      ...JSON.parse(JSON.stringify(fixture)),
+      id: 'exittest',
+      map: { ...JSON.parse(JSON.stringify(fixture.map)), exit: { x: 1, y: 2 } },
+    });
+    let state = run(
+      [
+        { type: 'player-join', playerId: 'p1', name: 'Anna' },
+        { type: 'player-join', playerId: 'p2', name: 'Ben' },
+        { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
+        { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
+        { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 },
+      ],
+      initialState(withExit),
+    );
+    // Escaping before the puzzles are done is rejected.
+    expect(() => applyAction(state, { type: 'escaped', at: T0 + 1 })).toThrow(/verriegelt/);
+    expect(viewFor(state, 'p1').map?.exit).toEqual({ x: 1, y: 2, open: false });
+
+    state = run(
+      [
+        { type: 'interact', playerId: 'p2', at: T0 + 1000 },
+        { type: 'press-button', playerId: 'p2', at: T0 + 2000 },
+        { type: 'interact', playerId: 'p1', at: T0 + 3000 },
+        { type: 'press-button', playerId: 'p1', at: T0 + 4000 },
+        { type: 'press-button', playerId: 'p2', at: T0 + 4500 },
+      ],
+      state,
+    );
+    expect(state.phase).toBe('playing');
+    expect(inEscapePhase(state)).toBe(true);
+    expect(viewFor(state, 'p1').map?.exit?.open).toBe(true);
+    expect(viewFor(state, 'p1').map?.stations.every((s) => s.status === 'done')).toBe(true);
+
+    const won = applyAction(state, { type: 'escaped', at: T0 + 9000 });
+    expect(won.phase).toBe('won');
+    expect(won.finishedAt).toBe(T0 + 9000);
+    // A too-late escape is a loss.
+    expect(applyAction(state, { type: 'escaped', at: T0 + 300_000 }).phase).toBe('lost');
   });
 
   it('keeps the old auto-chain flow for missions without a map', () => {

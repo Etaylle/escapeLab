@@ -230,9 +230,17 @@ async function walkTo(client: TestClient, to: [number, number]): Promise<void> {
   const self = await client.ensureSelf();
   const deadline = Date.now() + 15_000;
   for (;;) {
+    if (client.view !== null && client.view.phase !== 'playing') {
+      // The mission ended mid-walk (e.g. the last player reached the hatch).
+      console.log(`✓ ${client.label}: mission ended while walking to ${to.join(',')}`);
+      return;
+    }
     const map = client.view?.map;
     if (map == null) {
-      fail(`${client.label}: no map view while trying to walk`);
+      fail(
+        `${client.label}: no map view while trying to walk ` +
+          `(phase=${client.view?.phase ?? 'none'}, puzzle=${client.view?.puzzle?.kind ?? '-'})`,
+      );
     }
     const fromTile: [number, number] = [Math.floor(self.x), Math.floor(self.y)];
     if (fromTile[0] === to[0] && fromTile[1] === to[1]) {
@@ -444,6 +452,15 @@ for (const step of BLACKOUT_WALKTHROUGH) {
       v.currentPuzzleIndex === solved && v.puzzle === null);
   }
 }
+
+// --- escape finale: everyone to the hatch before the clock runs out --------
+await clients.anleitung.expectView('exit hatch is open', (v) => v.map?.exit?.open === true);
+await walkTo(clients.steuerpult, [17, 11]);
+assert(
+  clients.anleitung.view?.phase === 'playing',
+  'one player at the hatch is not enough to escape',
+);
+await walkTo(clients.anleitung, [17, 11]);
 
 const annaWon = await clients.anleitung.expectView('won the mission', (v) => v.phase === 'won');
 await clients.steuerpult.expectView('won the mission', (v) => v.phase === 'won');

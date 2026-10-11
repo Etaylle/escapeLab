@@ -135,6 +135,12 @@ export const mapDefSchema = z.object({
     .default([]),
   stations: z.array(z.object({ puzzleId: z.string().min(1), x: coord, y: coord })).min(1),
   labels: z.array(z.object({ text: z.string().min(1), x: coord, y: coord })).default([]),
+  /**
+   * Escape hatch: once every puzzle is solved it opens, and ALL connected
+   * players must gather there (while the clock still runs) to win. Without
+   * an exit the mission is won with the last puzzle.
+   */
+  exit: z.object({ x: coord, y: coord }).optional(),
 });
 
 const pairKey = ([a, b]: [string, string]): string => [a, b].sort().join('\u0000');
@@ -294,6 +300,9 @@ function validateMap(
   const doorIds = new Set(map.doors.map((d) => d.id));
   if (doorIds.size !== map.doors.length) {
     ctx.addIssue({ code: 'custom', message: 'map: door ids must be unique' });
+  }
+  if (map.exit !== undefined) {
+    requireFloor('exit', map.exit.x, map.exit.y);
   }
   for (const door of map.doors) {
     requireFloor(`door "${door.id}"`, door.x, door.y);

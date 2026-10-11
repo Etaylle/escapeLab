@@ -5,7 +5,7 @@
   "listOrder": 10,
   "story": {
     "intro": "23:47 Uhr. Ein Knall, dann Dunkelheit — nur die Notbeleuchtung glimmt rot. Die Notversorgung hält acht Minuten. Einer von euch steht am Schaltschrank, der andere hat das Notfall-Handbuch gefunden. Ihr seht NICHT dasselbe. Redet — oder das Labor bleibt dunkel.",
-    "win": "Mit einem tiefen Brummen erwachen die Systeme. Licht flutet das Labor, die Zentrifugen laufen wieder an. Ihr habt es geschafft — gemeinsam.",
+    "win": "Mit einem tiefen Brummen erwachen die Systeme, Licht flutet das Labor — und hinter euch fällt die Luke des Notausgangs ins Schloss. Draußen, zu zweit, mit laufenden Zentrifugen im Rücken. Ihr habt es geschafft.",
     "lose": "Ein letztes Flackern, dann ist es still. Die Notversorgung ist erschöpft, die Proben sind verloren. Das Labor bleibt dunkel … bis zum nächsten Versuch."
   },
   "timeLimitSec": 540,
@@ -55,7 +55,8 @@
       { "text": "MASCHINENRAUM", "x": 3, "y": 8 },
       { "text": "LABOR", "x": 9, "y": 8 },
       { "text": "REAKTOR", "x": 15, "y": 8 }
-    ]
+    ],
+    "exit": { "x": 17, "y": 11 }
   },
   "roles": [
     {

@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 import {
   applyAction,
   armedStation,
+  inEscapePhase,
   initialState,
   viewFor,
   type Action,
@@ -37,6 +38,8 @@ const PLATE_PRESS_RADIUS = 0.55;
 const PLATE_RELEASE_RADIUS = 0.75;
 /** How close to the armed station an interact is accepted. */
 const INTERACT_RADIUS = 1.6;
+/** Everyone must stand on the exit hatch itself (below one tile) to escape. */
+const EXIT_RADIUS = 0.7;
 /** Positions fan out at most this often. */
 const POSITIONS_INTERVAL_MS = 66;
 
@@ -79,6 +82,7 @@ export class Room {
     }
     this.dispatch({ type: 'player-connected', playerId });
     this.reconcilePlates();
+    this.checkEscape();
   }
 
   /** Register the live connection for a player; push the current view and positions. */
@@ -101,6 +105,7 @@ export class Room {
     }
     this.dispatch({ type: 'player-disconnected', playerId });
     this.reconcilePlates();
+    this.checkEscape();
   }
 
   /** Client-authoritative avatar position; feeds plates and the position fan-out. */
@@ -111,6 +116,7 @@ export class Room {
     this.positions.set(playerId, pos);
     this.positionsDirty = true;
     this.reconcilePlates();
+    this.checkEscape();
     this.schedulePositionsBroadcast();
   }
 
@@ -237,6 +243,27 @@ export class Room {
     const current = [...this.state.pressedPlates].sort();
     if (next.length !== current.length || next.some((id, i) => id !== current[i])) {
       this.dispatch({ type: 'set-pressed-plates', plates: next });
+    }
+  }
+
+  /** Won once every connected player stands in the exit zone. */
+  private checkEscape(): void {
+    const exit = this.state.mission.map?.exit;
+    if (exit === undefined || !inEscapePhase(this.state)) {
+      return;
+    }
+    const connected = this.state.players.filter((p) => p.connected);
+    const everyoneOut =
+      connected.length > 0 &&
+      connected.every((player) => {
+        const pos = this.positions.get(player.id);
+        return (
+          pos !== undefined &&
+          Math.hypot(pos.x - (exit.x + 0.5), pos.y - (exit.y + 0.5)) <= EXIT_RADIUS
+        );
+      });
+    if (everyoneOut) {
+      this.dispatch({ type: 'escaped', at: Date.now() });
     }
   }
 

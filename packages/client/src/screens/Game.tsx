@@ -440,7 +440,13 @@ export function GameScreen({ view, positionsRef, send }: Props) {
   }
   const myRole = view.players.find((p) => p.id === view.you.id)?.roleName ?? '—';
   const armedTitle = map?.stations.find((s) => s.status === 'armed')?.title ?? null;
-  const title = puzzle !== null ? puzzle.title : (armedTitle ?? 'Alle Stationen erledigt');
+  const escaping = map?.exit?.open === true;
+  const title =
+    puzzle !== null
+      ? puzzle.title
+      : escaping
+        ? '🏃 NOTAUSGANG — alle raus, JETZT!'
+        : (armedTitle ?? 'Alle Stationen erledigt');
 
   return (
     <div className={`game ${shaking ? 'shake' : ''}`}>
@@ -467,7 +473,7 @@ export function GameScreen({ view, positionsRef, send }: Props) {
               />
             ))}
           </div>
-          <h1>{puzzle === null ? `Nächste Station: ${title}` : title}</h1>
+          <h1>{puzzle === null && !escaping ? `Nächste Station: ${title}` : title}</h1>
         </div>
         {view.deadlineAt !== null && <Countdown deadlineAt={view.deadlineAt} />}
       </div>

@@ -5,7 +5,7 @@
   "listOrder": 30,
   "story": {
     "intro": "Der Versuchsreaktor im Keller läuft heiß. Das Wissen, ihn zu stoppen, ist auf drei Stationen verteilt: das Handbuch, die Diagnose-Konsole und das Steuerpult. Neun Minuten. Drei Stimmen. Ein Fehler zu viel — und ihr lernt, was »Kettenreaktion« wörtlich heißt.",
-    "win": "Die Kurve auf der Diagnose-Konsole flacht ab, das Dröhnen verebbt. Der Reaktor schnurrt wieder wie ein Kater. Drei Stationen, eine Mannschaft — Lehrbuchleistung.",
+    "win": "Die Kurve flacht ab, das Dröhnen verebbt — und ihr steht zu dritt am Notausgang, als die Schleuse hinter euch zufährt. Drei Stationen, eine Mannschaft, alle draußen. Lehrbuchleistung.",
     "lose": "Die Anzeigen springen auf Rot, dann auf Schwarz. Evakuierungssirenen. Immerhin: Simulationsende. Beim nächsten Mal redet ihr schneller — und präziser."
   },
   "timeLimitSec": 600,
@@ -61,7 +61,8 @@
       { "text": "PUMPENRAUM", "x": 17, "y": 9 },
       { "text": "RESONATOR", "x": 11, "y": 11 },
       { "text": "KERN", "x": 3, "y": 9 }
-    ]
+    ],
+    "exit": { "x": 1, "y": 6 }
   },
   "roles": [
     {
