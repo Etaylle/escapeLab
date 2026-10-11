@@ -1,0 +1,253 @@
+{
+  "id": "doppelschicht",
+  "title": "Doppelschicht",
+  "subtitle": "Für vier: zwei Flügel ohne Verbindung. Ihr seht euch nie — bis die Schleuse aufgeht.",
+  "listOrder": 40,
+  "story": {
+    "intro": "Das Nordlabor ist in zwei Flügel geteilt, und die Schleuse dazwischen ist verriegelt. Zwei von euch stehen im Westflügel, zwei im Ostflügel — ihr könnt euch nicht sehen und nicht helfen, nur funken. Jede einzelne Station braucht Wissen aus beiden Flügeln. Zwölf Minuten.",
+    "win": "Die Schleuse fährt auf, zum ersten Mal steht ihr euch gegenüber — und spaziert gemeinsam hinaus. Vier Köpfe, zwei Flügel, eine Schicht.",
+    "lose": "Die Schleuse bleibt zu. Zwei Flügel, vier Leute, und am Ende doch zu wenig geredet."
+  },
+  "timeLimitSec": 720,
+  "map": {
+    "tiles": [
+      "#######################",
+      "#.......#     #.......#",
+      "#.......#     #.......#",
+      "#.......#     #.......#",
+      "#...#...#     #...#...#",
+      "#.......#     #.......#",
+      "#.......#######.......#",
+      "#.....................#",
+      "#.......#######.......#",
+      "#.......#     #.......#",
+      "#...#...#     #...#...#",
+      "#.......#     #.......#",
+      "#######################"
+    ],
+    "spawns": {
+      "leitstand": { "x": 2, "y": 2 },
+      "archiv": { "x": 2, "y": 10 },
+      "technik": { "x": 20, "y": 2 },
+      "labor": { "x": 20, "y": 10 }
+    },
+    "doors": [
+      { "id": "schleuse-west", "x": 8, "y": 7, "opensBy": { "kind": "puzzle", "puzzleId": "notaus" } },
+      { "id": "schleuse-ost", "x": 14, "y": 7, "opensBy": { "kind": "puzzle", "puzzleId": "notaus" } }
+    ],
+    "plates": [],
+    "stations": [
+      { "puzzleId": "notstrom", "x": 18, "y": 2 },
+      { "puzzleId": "kuehlung", "x": 2, "y": 5 },
+      { "puzzleId": "leitungsnetz", "x": 16, "y": 9 },
+      { "puzzleId": "zugangscode", "x": 6, "y": 10 },
+      { "puzzleId": "resonanz", "x": 20, "y": 6 },
+      { "puzzleId": "notaus", "x": 2, "y": 7 }
+    ],
+    "labels": [
+      { "text": "WESTFLÜGEL", "x": 4, "y": 1 },
+      { "text": "OSTFLÜGEL", "x": 18, "y": 1 },
+      { "text": "SCHLEUSE", "x": 11, "y": 7 }
+    ],
+    "exit": { "x": 11, "y": 7 },
+    "items": [
+      {
+        "id": "speicherkern",
+        "label": "SPEICHERKERN",
+        "x": 21,
+        "y": 1,
+        "deliverTo": { "x": 16, "y": 6 },
+        "requiredFor": "resonanz"
+      }
+    ],
+    "sabotage": {
+      "label": "DRUCKVERLUST IN BEIDEN FLÜGELN",
+      "hint": "Je ein Notventil pro Flügel — ihr könnt euch nicht aushelfen, also sofort losrennen!",
+      "firstAfterSec": 120,
+      "everySec": 170,
+      "durationSec": 50,
+      "penaltySec": 60,
+      "panels": [
+        { "id": "ventil-west", "x": 1, "y": 1 },
+        { "id": "ventil-ost", "x": 21, "y": 11 }
+      ]
+    },
+    "drones": [
+      {
+        "id": "wache-west",
+        "waypoints": [
+          { "x": 6, "y": 2 },
+          { "x": 6, "y": 11 }
+        ],
+        "speed": 1.4,
+        "range": 4,
+        "halfAngleDeg": 28,
+        "penaltySec": 15
+      },
+      {
+        "id": "wache-ost",
+        "waypoints": [
+          { "x": 16, "y": 11 },
+          { "x": 16, "y": 2 }
+        ],
+        "speed": 1.4,
+        "range": 4,
+        "halfAngleDeg": 28,
+        "penaltySec": 15
+      }
+    ]
+  },
+  "roles": [
+    {
+      "id": "leitstand",
+      "name": "Leitstand (West)",
+      "description": "Westflügel. Du hast die Schaltpläne und die Sollwerte — aber die Anlagen stehen drüben im Osten."
+    },
+    {
+      "id": "archiv",
+      "name": "Archiv (West)",
+      "description": "Westflügel. Dir gehören die alten Handbücher und das Tastenfeld der Freigabe."
+    },
+    {
+      "id": "technik",
+      "name": "Technik (Ost)",
+      "description": "Ostflügel. Kabel, Frequenzpult, Werkzeug — du schraubst, was der Westen dir ansagt."
+    },
+    {
+      "id": "labor",
+      "name": "Labor (Ost)",
+      "description": "Ostflügel. Messwerte, Leitungsnetz, Proben — du siehst Zahlen, die sonst keiner hat."
+    }
+  ],
+  "puzzles": [
+    {
+      "type": "wiring",
+      "id": "notstrom",
+      "title": "Notstrom-Brücken",
+      "prompt": "Im Ostflügel hängen fünf Brückenkabel. Welche fallen müssen, steht nur in den Handbüchern im Westen.",
+      "cutterRoleId": "technik",
+      "pairsToCut": [["⚡", "♆"], ["☢", "Ϟ"]],
+      "decoyPairs": [["⚡", "Ϟ"], ["♆", "Ѭ"], ["☢", "Ѭ"]],
+      "penaltySec": 30,
+      "infos": [
+        {
+          "roleId": "archiv",
+          "text": "Handbuch §1 — NORDLABOR: Zuerst Hochspannung (⚡) zu Dreizack (♆), danach Strahlung (☢) zu Blitz-Haken (Ϟ). Alles andere steht unter Spannung: 30 Sekunden Strafe. Du siehst die Kabel nicht — lass dir jedes Zeichen beschreiben."
+        },
+        {
+          "roleId": "technik",
+          "text": "Fünf Kabel, zehn eingravierte Zeichen. Funk das Archiv an und beschreibe, was du siehst."
+        }
+      ]
+    },
+    {
+      "type": "switches",
+      "id": "kuehlung",
+      "title": "Kühlkreislauf",
+      "prompt": "Die Ventilbank steht im Westflügel — welche Ventile offen sein müssen, misst nur das Labor im Osten.",
+      "panelRoleId": "leitstand",
+      "targetRoleId": "labor",
+      "symbols": ["⌁", "✦", "◉", "⨳", "⌬", "♁", "☍"],
+      "onCount": 4,
+      "penaltySec": 20,
+      "infos": [
+        {
+          "roleId": "labor",
+          "text": "Deine Messkonsole zeigt, welche Ventile OFFEN sein müssen. Diktier sie Zeichen für Zeichen nach Westen."
+        },
+        {
+          "roleId": "leitstand",
+          "text": "Schalten ist gefahrlos, PRÜFEN mit falscher Kombination kostet 20 Sekunden. Wiederhole jede Ansage, bevor du kippst."
+        }
+      ]
+    },
+    {
+      "type": "maze",
+      "id": "leitungsnetz",
+      "title": "Leitungsnetz",
+      "prompt": "Ein Steuerimpuls muss durch das Netz geschleust werden. Der Impuls liegt im Osten, der Schaltplan im Westen.",
+      "navigatorRoleId": "labor",
+      "guideRoleId": "leitstand",
+      "size": 6,
+      "penaltySec": 12,
+      "infos": [
+        {
+          "roleId": "leitstand",
+          "text": "Dein Schaltplan zeigt alle Wände, aber nicht den Impuls. Lass dir die Zelle ansagen (A–F, 1–6) und gib die nächste Richtung durch."
+        },
+        {
+          "roleId": "labor",
+          "text": "Du siehst den Impuls und das Ziel, aber keine Wand. Sag laut, wo du stehst — gegen eine Wand zu laufen kostet 12 Sekunden."
+        }
+      ]
+    },
+    {
+      "type": "keypad",
+      "id": "zugangscode",
+      "title": "Freigabecode",
+      "prompt": "Das Tastenfeld steht im Westflügel. Der Code ist auf zwei Konsolen im Osten verteilt.",
+      "inputRoleId": "archiv",
+      "gridSymbols": ["꩜", "ψ", "Ѭ", "⍾", "☖", "Ω", "Ж", "҂", "₪"],
+      "code": ["Ω", "☖", "҂", "Ж"],
+      "penaltySec": 20,
+      "infos": [
+        {
+          "roleId": "technik",
+          "text": "Dein Teil des Codes, Zeichen 1 und 2: 1) Ω (Hufeisen), 2) ☖ (Haus mit Sockel)."
+        },
+        {
+          "roleId": "labor",
+          "text": "Dein Teil des Codes, Zeichen 3 und 4: 3) ҂ (durchgestrichenes Kreuz), 4) Ж (Käfer mit sechs Beinen)."
+        },
+        {
+          "roleId": "archiv",
+          "text": "Neun Tasten, vier davon zählen. Hol dir beide Hälften aus dem Osten, bevor du tippst — ein Fehler setzt alles zurück."
+        }
+      ]
+    },
+    {
+      "type": "simon",
+      "id": "resonanz",
+      "title": "Resonanz-Dämpfung",
+      "prompt": "Das Frequenzpult im Osten blinkt. Die Übersetzungslegende liegt im Archiv im Westen.",
+      "displayRoleId": "technik",
+      "legendRoleId": "archiv",
+      "buttonSymbols": ["♪", "≋", "Ψ", "Ø"],
+      "sequenceLength": 6,
+      "penaltySec": 20,
+      "infos": [
+        {
+          "roleId": "archiv",
+          "text": "Deine Legende übersetzt Farben in Impulse. Die Technik liest dir die Blinkfolge vor — antworte Symbol für Symbol."
+        },
+        {
+          "roleId": "technik",
+          "text": "Erst den Speicherkern einsetzen, sonst bleibt das Pult dunkel. Dann abspielen, Farben ansagen, nach Ansage tippen."
+        },
+        {
+          "roleId": "labor",
+          "text": "Messhinweis: Die Folge hat SECHS Impulse. Zähl laut mit — bei Impuls vier verzählen sich alle."
+        }
+      ]
+    },
+    {
+      "type": "button-sync",
+      "id": "notaus",
+      "title": "Not-Aus beider Flügel",
+      "prompt": "Vier Freigabeschalter, zwei Flügel, drei Sekunden. Erst danach entriegelt die Schleuse.",
+      "buttons": [
+        { "roleId": "leitstand", "label": "FREIGABE WEST-1" },
+        { "roleId": "archiv", "label": "FREIGABE WEST-2" },
+        { "roleId": "technik", "label": "FREIGABE OST-1" },
+        { "roleId": "labor", "label": "FREIGABE OST-2" }
+      ],
+      "infos": [
+        {
+          "roleId": "leitstand",
+          "text": "Handbuch §9: Alle vier Freigaben innerhalb von 3 Sekunden. Du zählst für beide Flügel ein — laut und deutlich: drei, zwei, eins, JETZT."
+        }
+      ],
+      "windowMs": 3000
+    }
+  ]
+}

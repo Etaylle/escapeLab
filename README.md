@@ -7,8 +7,10 @@ Kooperatives Browser-Escape-Spiel: Jede Rolle sieht ein anderes Panel, gelöst w
 (`switches`), Frequenz-Abgleich mit Farblegende (`simon`), unsichtbares Labyrinth (`maze`),
 Synchron-Knöpfe (`button-sync`).
 Layouts/Codes sind pro Partie zufällig (seeded, deterministisch replaybar), Fehler kosten
-Countdown-Zeit. **Missionen:** Blackout im Labor (2 Spieler, 5 Rätsel), Tutorial (2 Spieler),
-Kettenreaktion (3 Spieler, Wissen auf drei Rollen verteilt).
+Countdown-Zeit. **Missionen:** Tutorial (2 Spieler), Blackout im Labor (2 Spieler, 5 Rätsel),
+Kettenreaktion (3 Spieler, Wissen auf drei Rollen verteilt) und Doppelschicht (4 Spieler in
+**zwei getrennten Flügeln**, die sich bis zum Finale nie erreichen können — jedes einzelne Rätsel
+braucht Wissen aus beiden Hälften, und erst der Not-Aus entriegelt die Schleuse in der Mitte).
 
 **Beitreten:** Auf der Startseite steht eine Liste aller **offenen Runden** mit Mission,
 Schwierigkeit, wer schon wartet und wie viele Plätze frei sind — ein Klick auf *Beitreten*
