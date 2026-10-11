@@ -3,9 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { applyAction, GameError, initialState, parseMission, viewFor } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
 
-const mission: Mission = parseMission(
-  JSON.parse(readFileSync(new URL('../../../missions/systemcheck.json', import.meta.url), 'utf8')),
-);
+// Lobby and puzzle-chain tests run without the tile map (with one, puzzles wait
+// for station activation); the mapped flow is covered in map.test.ts.
+const mission: Mission = parseMission({
+  ...JSON.parse(
+    readFileSync(new URL('../../../missions/systemcheck.json', import.meta.url), 'utf8'),
+  ),
+  map: undefined,
+});
 
 const T0 = 1_000_000;
 
@@ -127,11 +132,12 @@ describe('playing a full mission', () => {
   });
 
   it('loses when time expires, also on a late press', () => {
-    expect(applyAction(started(), { type: 'time-expired', at: T0 + 300_000 }).phase).toBe('lost');
+    const afterDeadline = T0 + mission.timeLimitSec * 1000;
+    expect(applyAction(started(), { type: 'time-expired', at: afterDeadline }).phase).toBe('lost');
     const late = applyAction(started(), {
       type: 'press-button',
       playerId: 'p2',
-      at: T0 + 300_000,
+      at: afterDeadline,
     });
     expect(late.phase).toBe('lost');
   });

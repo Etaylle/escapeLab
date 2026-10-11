@@ -277,9 +277,10 @@ describe('mission switching & stats', () => {
     expect(tutorial.roles).toHaveLength(2);
     expect(kettenreaktion.roles).toHaveLength(3);
     expect(kettenreaktion.puzzles.some((p) => p.type === 'simon')).toBe(true);
-    // The shipped files carry valid tile maps; the tutorial stays map-free.
-    expect(parseMission(blackoutRaw).map).toBeDefined();
-    expect(kettenreaktion.map).toBeDefined();
-    expect(tutorial.map).toBeUndefined();
+    // Every shipped mission carries a valid tile map with an escape hatch.
+    for (const mission of [parseMission(blackoutRaw), kettenreaktion, tutorial]) {
+      expect(mission.map).toBeDefined();
+      expect(mission.map?.exit).toBeDefined();
+    }
   });
 });

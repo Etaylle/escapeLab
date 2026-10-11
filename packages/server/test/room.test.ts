@@ -41,19 +41,69 @@ describe('Room', () => {
     return { anna, ben };
   }
 
-  it('runs a full game: lobby, start, presses, win', () => {
+  /** Teleport an avatar; the room derives plates and interact range from this. */
+  function moveTo(room: Room, playerId: string, x: number, y: number): void {
+    room.updatePosition(playerId, { x: x + 0.5, y: y + 0.5, facing: 0, moving: false });
+  }
+
+  it('runs a full mapped game: walk, activate, solve, hold a plate, escape', () => {
     const room = new Room('TEST', mission);
     const { anna, ben } = fullLobby(room);
-
     room.act(anna.playerId, { kind: 'start-mission' });
-    room.act(ben.playerId, { kind: 'press-button' }); // puzzle 1
-    room.act(anna.playerId, { kind: 'press-button' }); // puzzle 2 ...
+
+    // Station 1 sits in the Kontrolle room; only steuerpult has a button.
+    moveTo(room, ben.playerId, 2, 1);
+    room.act(ben.playerId, { kind: 'interact' });
     room.act(ben.playerId, { kind: 'press-button' });
-    room.act(anna.playerId, { kind: 'press-button' }); // puzzle 3 (within window: same tick)
+    expect(lastView(ben.messages).currentPuzzleIndex).toBe(1);
+    // Solving it opened the puzzle door for good.
+    expect(lastView(ben.messages).map?.doors.find((d) => d.id === 'lehrtuer')?.open).toBe(true);
+
+    moveTo(room, anna.playerId, 12, 1);
+    room.act(anna.playerId, { kind: 'interact' });
+    room.act(anna.playerId, { kind: 'press-button' });
+    room.act(ben.playerId, { kind: 'press-button' });
+    expect(lastView(anna.messages).currentPuzzleIndex).toBe(2);
+
+    // Anna holds the plate so the gate to the last station stays open.
+    moveTo(room, anna.playerId, 8, 5);
+    expect(lastView(ben.messages).map?.doors.find((d) => d.id === 'halteschott')?.open).toBe(true);
+    moveTo(room, ben.playerId, 16, 4);
+    room.act(ben.playerId, { kind: 'interact' });
+    room.act(anna.playerId, { kind: 'press-button' });
     room.act(ben.playerId, { kind: 'press-button' });
 
+    // All puzzles done: still playing, but the hatch is open.
+    const afterPuzzles = lastView(anna.messages);
+    expect(afterPuzzles.phase).toBe('playing');
+    expect(afterPuzzles.map?.exit?.open).toBe(true);
+
+    // One player at the hatch is not enough.
+    moveTo(room, ben.playerId, 10, 1);
+    expect(lastView(ben.messages).phase).toBe('playing');
+    moveTo(room, anna.playerId, 10, 1);
     expect(lastView(anna.messages).phase).toBe('won');
     expect(lastView(ben.messages).phase).toBe('won');
+    room.dispose();
+  });
+
+  it('rejects an interact from too far away', () => {
+    const room = new Room('TEST', mission);
+    const { anna, ben } = fullLobby(room);
+    room.act(anna.playerId, { kind: 'start-mission' });
+    // Ben spawns three rooms away from the first station.
+    expect(() => room.act(ben.playerId, { kind: 'interact' })).toThrow(/Zu weit weg/);
+    room.dispose();
+  });
+
+  it('releases a plate when its holder disconnects', () => {
+    const room = new Room('TEST', mission);
+    const { anna, ben } = fullLobby(room);
+    room.act(anna.playerId, { kind: 'start-mission' });
+    moveTo(room, anna.playerId, 8, 5);
+    expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(true);
+    room.detach(anna.playerId);
+    expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(false);
     room.dispose();
   });
 
@@ -98,6 +148,8 @@ describe('Room', () => {
     const room = new Room('TEST', mission);
     const { anna, ben } = fullLobby(room);
     room.act(anna.playerId, { kind: 'start-mission' });
+    room.updatePosition(ben.playerId, { x: 2.5, y: 1.5, facing: 0, moving: false });
+    room.act(ben.playerId, { kind: 'interact' });
     expect(JSON.stringify(ben.messages)).not.toContain('Freigabe erteilt');
     expect(JSON.stringify(anna.messages)).toContain('Freigabe erteilt');
     room.dispose();

@@ -1,14 +1,45 @@
 {
   "id": "systemcheck",
   "title": "Tutorial: Systemcheck",
-  "subtitle": "Fünf Minuten zum Warmwerden: lernt Ansagen, Bestätigen und synchrones Drücken.",
+  "subtitle": "Zum Warmwerden: Laufen, Stationen aktivieren, Türen halten — alle Grundlagen in sechs Minuten.",
   "listOrder": 20,
   "story": {
-    "intro": "Das Labor fährt nach einem Stromausfall wieder hoch. Zwei Stationen, eine Aufgabe: Bringt das System online, bevor die Notversorgung ausfällt. Ihr seht nicht dasselbe — redet miteinander!",
-    "win": "Alle Systeme online. Das Labor summt wieder — gute Teamarbeit!",
-    "lose": "Die Notversorgung ist ausgefallen. Das Labor bleibt dunkel … versucht es noch einmal."
+    "intro": "Übungslauf im Schulungslabor. Laufen mit WASD oder den Pfeiltasten, an einer leuchtenden Station drückt ihr E. Klick auf die Karte setzt einen Ping für alle, M zeigt die Minikarte. Ihr startet in getrennten Räumen und seht nie dasselbe — redet miteinander!",
+    "win": "Alle Systeme online, beide draußen. Das war der Übungslauf — jetzt seid ihr bereit für den echten Blackout.",
+    "lose": "Die Notversorgung ist ausgefallen. Halb so wild, es war nur die Übung … noch mal von vorn."
   },
-  "timeLimitSec": 300,
+  "timeLimitSec": 360,
+  "map": {
+    "tiles": [
+      "###################",
+      "#.....#.......#...#",
+      "#.................#",
+      "#.....#.......#...#",
+      "#.....#.......#...#",
+      "#.....#.......#...#",
+      "###################"
+    ],
+    "spawns": {
+      "steuerpult": { "x": 3, "y": 4 },
+      "anleitung": { "x": 10, "y": 4 }
+    },
+    "doors": [
+      { "id": "lehrtuer", "x": 6, "y": 2, "opensBy": { "kind": "puzzle", "puzzleId": "init" } },
+      { "id": "halteschott", "x": 14, "y": 2, "opensBy": { "kind": "plate", "plateId": "halteplatte" } }
+    ],
+    "plates": [{ "id": "halteplatte", "x": 8, "y": 5, "label": "HALTEN" }],
+    "stations": [
+      { "puzzleId": "init", "x": 2, "y": 1 },
+      { "puzzleId": "doppelbestaetigung", "x": 12, "y": 1 },
+      { "puzzleId": "synchronkalibrierung", "x": 16, "y": 4 }
+    ],
+    "labels": [
+      { "text": "KONTROLLE", "x": 3, "y": 3 },
+      { "text": "LEITSTAND", "x": 10, "y": 3 },
+      { "text": "SPULEN", "x": 16, "y": 5 }
+    ],
+    "exit": { "x": 10, "y": 1 }
+  },
   "roles": [
     {
       "id": "anleitung",
@@ -47,7 +78,7 @@
       "infos": [
         {
           "roleId": "anleitung",
-          "text": "Handbuch §2: Reihenfolge egal — aber es müssen beide bestätigen."
+          "text": "Handbuch §2: Reihenfolge egal — aber es müssen beide bestätigen. Danach steht die letzte Station hinter dem Halteschott: Einer muss auf der Bodenplatte HALTEN stehen bleiben, damit das Schott für den anderen offen bleibt."
         }
       ]
     },
