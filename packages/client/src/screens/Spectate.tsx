@@ -177,6 +177,7 @@ function spectatorAsPlayerView(view: SpectatorView): Parameters<typeof GameWorld
     grade: view.grade,
     penaltySeq: view.penaltySeq,
     lastPenaltySec: null,
+    hintsUsed: view.hintsUsed,
     puzzle: null,
     map: view.map,
   };

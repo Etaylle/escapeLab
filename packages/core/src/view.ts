@@ -52,6 +52,8 @@ export interface PlayerView {
   /** increments on every penalty; clients key alarm effects off it */
   penaltySeq: number;
   lastPenaltySec: number | null;
+  /** hints bought from mission control this run; they weigh on the grade */
+  hintsUsed: number;
   puzzle: PuzzleView | null;
   /** tile map while a mapped mission is running; null otherwise */
   map: MapView | null;
@@ -102,6 +104,17 @@ interface PuzzleViewCommon {
   prompt: string;
   /** private text for this player's role, if the puzzle defines one */
   info: string | null;
+  /** mission-control hints — the same for every role and the audience */
+  hints: {
+    /** revealed so far for this puzzle */
+    shown: string[];
+    /** how many more this puzzle has */
+    left: number;
+    /** epoch ms when the next may be requested; null once none are left */
+    readyAt: number | null;
+    /** seconds the next one costs, already scaled to the difficulty */
+    costSec: number;
+  };
 }
 
 export type PuzzleView = PuzzleViewCommon &
@@ -172,7 +185,8 @@ export interface Grade {
 
 /**
  * How well the crew did: a clean run with time to spare is the top rank,
- * every alarm and every lost second pushes it down.
+ * every alarm and every lost second pushes it down. Hints count too, but
+ * more gently: they only stand between the crew and the top two ranks.
  */
 function gradeFor(state: GameState): Grade | null {
   if (state.phase !== 'won' || state.startedAt === null || state.finishedAt === null) {
@@ -182,10 +196,11 @@ function gradeFor(state: GameState): Grade | null {
   const used = state.finishedAt - state.startedAt;
   const spare = Math.max(0, 1 - used / budget);
   const alarms = state.penaltySeq;
-  if (alarms === 0 && spare >= 0.3) {
+  const hints = state.hintsUsed;
+  if (alarms === 0 && hints === 0 && spare >= 0.3) {
     return { rank: 'S', label: 'Makellos — kein einziger Alarm, massig Zeit übrig' };
   }
-  if (alarms <= 1 && spare >= 0.15) {
+  if (alarms <= 1 && hints <= 1 && spare >= 0.15) {
     return { rank: 'A', label: 'Starke Leistung — fast ohne Zwischenfälle' };
   }
   if (alarms <= 3) {
@@ -301,12 +316,19 @@ function puzzleViewFor(state: GameState, roleId: string | null): PuzzleView | nu
   if (def === undefined) {
     return null;
   }
+  const hintsLeft = def.hints.length - state.hintsRevealed;
   const common: PuzzleViewCommon = {
     index: state.currentPuzzleIndex,
     total: state.mission.puzzles.length,
     title: def.title,
     prompt: def.prompt,
     info: def.infos.find((i) => i.roleId === roleId)?.text ?? null,
+    hints: {
+      shown: def.hints.slice(0, state.hintsRevealed),
+      left: hintsLeft,
+      readyAt: hintsLeft > 0 ? state.hintReadyAt : null,
+      costSec: state.mission.hintCostSec,
+    },
   };
   return buildPuzzleView(def, state.puzzleState, common, roleId);
 }
@@ -400,6 +422,7 @@ export interface SpectatorView {
   currentPuzzleIndex: number;
   puzzleCount: number;
   penaltySeq: number;
+  hintsUsed: number;
   pausedFor: string[] | null;
   events: RunEvent[];
   grade: Grade | null;
@@ -430,6 +453,7 @@ export function viewForSpectator(state: GameState): SpectatorView {
     currentPuzzleIndex: state.currentPuzzleIndex,
     puzzleCount: state.mission.puzzles.length,
     penaltySeq: state.penaltySeq,
+    hintsUsed: state.hintsUsed,
     pausedFor:
       state.paused === null
         ? null
@@ -508,6 +532,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     grade: gradeFor(state),
     penaltySeq: state.penaltySeq,
     lastPenaltySec: state.lastPenaltySec,
+    hintsUsed: state.hintsUsed,
     puzzle: puzzleViewFor(state, you.roleId),
     map: mapViewFor(state, playerId),
   };

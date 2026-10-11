@@ -236,6 +236,34 @@ describe('Room', () => {
     room.dispose();
   });
 
+  it('passes a hint request to the reducer on the server clock', () => {
+    const hinted = parseMission({
+      ...JSON.parse(JSON.stringify(mission)),
+      id: 'hinttest',
+      puzzles: mission.puzzles.map((puzzle) => ({
+        ...puzzle,
+        hints: ['Nur eine Rolle hat hier einen Knopf.'],
+      })),
+    });
+    const room = new Room('TEST', hinted);
+    const { anna, ben } = fullLobby(room);
+    ready(room, ben);
+    room.act(anna.playerId, { kind: 'start-mission' });
+    const deadline = lastView(anna.messages).deadlineAt ?? 0;
+
+    moveTo(room, ben.playerId, 2, 1);
+    room.act(ben.playerId, { kind: 'interact' });
+    expect(() => room.act(anna.playerId, { kind: 'request-hint' })).toThrow(/Moment/);
+    vi.advanceTimersByTime(hinted.hintDelaySec * 1000);
+    room.act(anna.playerId, { kind: 'request-hint' });
+
+    const view = lastView(ben.messages);
+    expect(view.puzzle?.hints.shown).toEqual(['Nur eine Rolle hat hier einen Knopf.']);
+    expect(view.hintsUsed).toBe(1);
+    expect(view.deadlineAt).toBe(deadline - hinted.hintCostSec * 1000);
+    room.dispose();
+  });
+
   it('rejects an interact from too far away', () => {
     const room = new Room('TEST', mission);
     const { anna, ben } = fullLobby(room);

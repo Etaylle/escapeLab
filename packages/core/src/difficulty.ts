@@ -79,6 +79,7 @@ export function scaleMission(mission: Mission, difficulty: Difficulty): Mission 
   return {
     ...mission,
     timeLimitSec: atLeast(mission.timeLimitSec * s.time, 60),
+    hintCostSec: atLeast(mission.hintCostSec * s.penalty, 5),
     puzzles: mission.puzzles.map((puzzle) => scalePuzzle(puzzle, s.penalty)),
     ...(map === undefined
       ? {}

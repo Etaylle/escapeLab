@@ -60,6 +60,16 @@ describe('difficulty scaling', () => {
     );
   });
 
+  it('scales the hint price like a penalty, never below five seconds', () => {
+    const priced = (hintCostSec: number): Mission =>
+      parseMission({ ...JSON.parse(JSON.stringify(blackout)), hintCostSec });
+    expect(scaleMission(priced(20), 'entspannt').hintCostSec).toBeLessThan(20);
+    expect(scaleMission(priced(20), 'hart').hintCostSec).toBeGreaterThan(20);
+    expect(scaleMission(priced(5), 'entspannt').hintCostSec).toBe(5);
+    // The wait before a hint is no penalty and stays as it is.
+    expect(scaleMission(priced(20), 'hart').hintDelaySec).toBe(priced(20).hintDelaySec);
+  });
+
   it('keeps scaled missions valid and solvable by the schema', () => {
     for (const level of DIFFICULTIES) {
       const scaled = scaleMission(blackout, level);

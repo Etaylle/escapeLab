@@ -52,13 +52,37 @@ const mission: Mission = parseMission({
   },
 });
 
+/** The same lab with a second station; the drone sleeps until the first one is done. */
+const sleeper: Mission = parseMission({
+  ...JSON.parse(JSON.stringify(mission)),
+  id: 'sleepertest',
+  puzzles: [
+    ...JSON.parse(JSON.stringify(mission.puzzles)),
+    {
+      type: 'button-sync',
+      id: 'second',
+      title: 'Zweites',
+      prompt: '',
+      buttons: [{ roleId: 'steuerpult', label: 'B' }],
+    },
+  ],
+  map: {
+    ...JSON.parse(JSON.stringify(mission.map)),
+    stations: [
+      { puzzleId: 'only', x: 2, y: 1 },
+      { puzzleId: 'second', x: 6, y: 1 },
+    ],
+    drones: mission.map?.drones.map((d) => ({ ...d, activeAfterSolved: 1 })),
+  },
+});
+
 const T0 = 1_000_000;
 
 function run(actions: Action[], from: GameState): GameState {
   return actions.reduce(applyAction, from);
 }
 
-function playing(): GameState {
+function playing(fixture: Mission = mission): GameState {
   return run(
     [
       { type: 'player-join', playerId: 'p1', name: 'Anna' },
@@ -68,7 +92,7 @@ function playing(): GameState {
       { type: 'set-ready', playerId: 'p2', ready: true },
       { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 },
     ],
-    initialState(mission),
+    initialState(fixture),
   );
 }
 
@@ -76,8 +100,8 @@ function at(x: number, y: number): Map<string, { x: number; y: number }> {
   return new Map([['p1', { x, y }]]);
 }
 
-function patrol(): DronePatrol {
-  const map = mission.map;
+function patrol(fixture: Mission = mission): DronePatrol {
+  const map = fixture.map;
   if (map === undefined) {
     throw new Error('fixture needs a map');
   }
@@ -87,22 +111,24 @@ function patrol(): DronePatrol {
 describe('DronePatrol', () => {
   it('starts on its first waypoint and moves towards the next', () => {
     const drones = patrol();
-    const start = drones.snapshot(T0)['wache'];
+    const state = playing();
+    const start = drones.snapshot(state, T0)['wache'];
     expect(start).toEqual(
       expect.objectContaining({ x: 1.5, y: 2.5, range: 6, alerted: false }),
     );
-    drones.step(1); // one second at speed 1 tile/s
-    const moved = drones.snapshot(T0)['wache'];
+    drones.step(state, 1); // one second at speed 1 tile/s
+    const moved = drones.snapshot(state, T0)['wache'];
     expect(moved?.x).toBeCloseTo(2.5, 2);
     expect(moved?.y).toBeCloseTo(2.5, 2);
   });
 
   it('turns around at the end of its loop', () => {
     const drones = patrol();
-    drones.step(2.1); // reach (3,2) …
-    drones.step(0.1); // … switch target back to (1,2)
-    drones.step(1);
-    const pos = drones.snapshot(T0)['wache'];
+    const state = playing();
+    drones.step(state, 2.1); // reach (3,2) …
+    drones.step(state, 0.1); // … switch target back to (1,2)
+    drones.step(state, 1);
+    const pos = drones.snapshot(state, T0)['wache'];
     expect(pos?.x).toBeLessThan(3.5);
   });
 
@@ -145,9 +171,10 @@ describe('DronePatrol', () => {
 
   it('reports itself alerted for a while after a sighting', () => {
     const drones = patrol();
-    drones.detect(playing(), at(3.5, 2.5), T0);
-    expect(drones.snapshot(T0 + 1000)['wache']?.alerted).toBe(true);
-    expect(drones.snapshot(T0 + 6000)['wache']?.alerted).toBe(false);
+    const state = playing();
+    drones.detect(state, at(3.5, 2.5), T0);
+    expect(drones.snapshot(state, T0 + 1000)['wache']?.alerted).toBe(true);
+    expect(drones.snapshot(state, T0 + 6000)['wache']?.alerted).toBe(false);
   });
 
   it('cannot spot anyone while the crew works at a station', () => {
@@ -161,6 +188,37 @@ describe('DronePatrol', () => {
     const drones = patrol();
     const gone = applyAction(playing(), { type: 'player-disconnected', playerId: 'p1' });
     expect(drones.detect(gone, at(3.5, 2.5), T0)).toEqual([]);
+  });
+});
+
+describe('sleeping drones', () => {
+  it('stay invisible and blind until the crew has solved enough puzzles', () => {
+    const drones = patrol(sleeper);
+    const state = playing(sleeper);
+    drones.step(state, 1);
+    expect(drones.snapshot(state, T0)).toEqual({});
+    // Dead ahead of where it would look, yet nothing happens.
+    expect(drones.detect(state, at(3.5, 2.5), T0)).toEqual([]);
+  });
+
+  it('wake on their first waypoint and patrol from there', () => {
+    const drones = patrol(sleeper);
+    const asleep = playing(sleeper);
+    drones.step(asleep, 3);
+    const awake = run(
+      [
+        { type: 'interact', playerId: 'p2', at: T0 + 10 },
+        { type: 'press-button', playerId: 'p2', at: T0 + 20 },
+      ],
+      asleep,
+    );
+    expect(awake.currentPuzzleIndex).toBe(1);
+    expect(drones.snapshot(awake, T0)['wache']).toEqual(
+      expect.objectContaining({ x: 1.5, y: 2.5 }),
+    );
+    drones.step(awake, 1);
+    expect(drones.snapshot(awake, T0)['wache']?.x).toBeCloseTo(2.5, 2);
+    expect(drones.detect(awake, at(3.5, 2.5), T0)).toHaveLength(1);
   });
 });
 

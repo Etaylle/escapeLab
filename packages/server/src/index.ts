@@ -134,6 +134,7 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
     case 'commit-switches':
     case 'press-simon':
     case 'move-maze':
+    case 'request-hint':
     case 'interact':
     case 'drop-item':
     case 'rematch':

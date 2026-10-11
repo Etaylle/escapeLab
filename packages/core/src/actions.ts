@@ -38,6 +38,7 @@ export type Action =
   | { type: 'commit-switches'; playerId: string; at: number }
   | { type: 'press-simon'; playerId: string; buttonIndex: number; at: number }
   | { type: 'move-maze'; playerId: string; dir: number; at: number }
+  | { type: 'request-hint'; playerId: string; at: number }
   | { type: 'set-occupancy'; plates: string[]; panels: string[] }
   | { type: 'drone-spotted'; at: number; penaltySec: number }
   | { type: 'sabotage-start'; at: number }
@@ -103,6 +104,8 @@ export function applyAction(state: GameState, action: Action): GameState {
       return handlePressSimon(state, action);
     case 'move-maze':
       return handleMoveMaze(state, action);
+    case 'request-hint':
+      return requestHint(state, action);
     case 'set-occupancy':
       return state.phase === 'playing'
         ? {
@@ -281,6 +284,15 @@ function initPuzzleState(state: GameState, index: number): PuzzleState {
   }
 }
 
+/** Put a puzzle on the consoles; mission control holds its hints back for a while. */
+function openPuzzle(state: GameState, index: number, at: number): GameState {
+  return {
+    ...state,
+    puzzleState: initPuzzleState(state, index),
+    hintReadyAt: at + state.mission.hintDelaySec * 1000,
+  };
+}
+
 function startMission(
   state: GameState,
   action: { playerId: string; at: number; seed: number },
@@ -306,6 +318,7 @@ function startMission(
     ...state,
     phase: 'playing',
     currentPuzzleIndex: 0,
+    puzzleState: null,
     seed: action.seed,
     pressedPlates: [],
     occupiedPanels: [],
@@ -323,9 +336,13 @@ function startMission(
     finishedAt: null,
     penaltySeq: 0,
     lastPenaltySec: null,
+    hintsUsed: 0,
+    hintsRevealed: 0,
+    hintReadyAt: null,
   };
   // With a map, puzzles wait for station activation; without one they chain directly.
-  return { ...started, puzzleState: map === undefined ? initPuzzleState(started, 0) : null };
+  const opened = map === undefined ? openPuzzle(started, 0, action.at) : started;
+  return logRadio(opened, state.mission.radio.start, action.at);
 }
 
 /** Common guards for in-game actions; returns the acting player's current puzzle. */
@@ -360,18 +377,25 @@ export function inEscapePhase(state: GameState): boolean {
 }
 
 function advance(state: GameState, at: number): GameState {
-  const solvedTitle = state.mission.puzzles[state.currentPuzzleIndex]?.title ?? 'Station';
-  const logged = logEvent(state, 'puzzle', `${solvedTitle} gelöst`, at);
+  const solved = state.mission.puzzles[state.currentPuzzleIndex];
+  const reported = logEvent(
+    { ...state, hintsRevealed: 0, hintReadyAt: null },
+    'puzzle',
+    `${solved?.title ?? 'Station'} gelöst`,
+    at,
+  );
+  const logged = logRadio(reported, solved?.onSolved, at);
   const nextIndex = state.currentPuzzleIndex + 1;
   if (nextIndex >= state.mission.puzzles.length) {
     if (state.mission.map?.exit !== undefined) {
       // All systems online — but the lab is only beaten once everyone is out.
-      return logEvent(
+      const unlocked = logEvent(
         { ...logged, currentPuzzleIndex: nextIndex, puzzleState: null },
         'escape',
         'Notausgang entriegelt',
         at,
       );
+      return logRadio(unlocked, state.mission.radio.escape, at);
     }
     return logEvent(
       {
@@ -386,12 +410,9 @@ function advance(state: GameState, at: number): GameState {
       at,
     );
   }
-  return {
-    ...logged,
-    currentPuzzleIndex: nextIndex,
-    // With a map the next puzzle waits at its station; without one it starts right away.
-    puzzleState: state.mission.map === undefined ? initPuzzleState(logged, nextIndex) : null,
-  };
+  const next: GameState = { ...logged, currentPuzzleIndex: nextIndex, puzzleState: null };
+  // With a map the next puzzle waits at its station; without one it starts right away.
+  return state.mission.map === undefined ? openPuzzle(next, nextIndex, at) : next;
 }
 
 /** Dispatched by the server once every connected player stands in the exit zone. */
@@ -425,6 +446,11 @@ function logEvent(
   seconds: number | null = null,
 ): GameState {
   return { ...state, events: [...state.events, { at, kind, label, seconds }] };
+}
+
+/** Mission control speaks up, if the mission scripted a line for this moment. */
+function logRadio(state: GameState, text: string | undefined, at: number): GameState {
+  return text === undefined ? state : logEvent(state, 'radio', text, at);
 }
 
 /** Shrink the deadline; losing immediately if the penalty eats the rest. */
@@ -492,6 +518,7 @@ function setPaused(state: GameState, action: { paused: boolean; at: number }): G
     paused: null,
     deadlineAt: state.deadlineAt === null ? null : state.deadlineAt + frozen,
     sabotage: state.sabotage === null ? null : { endsAt: state.sabotage.endsAt + frozen },
+    hintReadyAt: state.hintReadyAt === null ? null : state.hintReadyAt + frozen,
   };
 }
 
@@ -658,6 +685,41 @@ function handleMoveMaze(
   return result.solved ? advance(next, action.at) : next;
 }
 
+/**
+ * Mission control talks a stuck crew through the open puzzle, one hint at a
+ * time. A hint costs time like a penalty but is no alarm, so it leaves the
+ * alarm counter alone; the next one only comes after another wait.
+ */
+function requestHint(state: GameState, action: { playerId: string; at: number }): GameState {
+  const ctx = requirePlaying(state, action.playerId, action.at);
+  if (ctx === 'lost') {
+    return lostNow(state, action.at);
+  }
+  const hint = ctx.def.hints[state.hintsRevealed];
+  if (hint === undefined) {
+    fail('Keine weiteren Hinweise für diese Station.');
+  }
+  if (state.hintReadyAt === null || action.at < state.hintReadyAt) {
+    fail('Die Leitstelle braucht noch einen Moment.');
+  }
+  const { hintCostSec, hintDelaySec } = state.mission;
+  const deadlineAt = (state.deadlineAt ?? action.at) - hintCostSec * 1000;
+  const helped = logEvent(
+    {
+      ...state,
+      deadlineAt,
+      hintsUsed: state.hintsUsed + 1,
+      hintsRevealed: state.hintsRevealed + 1,
+      hintReadyAt: action.at + hintDelaySec * 1000,
+    },
+    'hint',
+    hint,
+    action.at,
+    hintCostSec,
+  );
+  return action.at >= deadlineAt ? lostNow(helped, action.at) : helped;
+}
+
 /** Guards shared by all three item actions; proximity is the server's job. */
 function requireCarryable(
   state: GameState,
@@ -786,7 +848,7 @@ function handleInteract(state: GameState, action: { playerId: string; at: number
   if (missing.length > 0) {
     fail(`Der Station fehlt noch: ${missing.join(', ')}. Bringt es her!`);
   }
-  return { ...state, puzzleState: initPuzzleState(state, state.currentPuzzleIndex) };
+  return openPuzzle(state, state.currentPuzzleIndex, action.at);
 }
 
 
@@ -828,5 +890,8 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     finishedAt: null,
     penaltySeq: 0,
     lastPenaltySec: null,
+    hintsUsed: 0,
+    hintsRevealed: 0,
+    hintReadyAt: null,
   };
 }

@@ -25,6 +25,8 @@ export const buttonSyncPuzzleSchema = z.object({
   prompt: z.string(),
   buttons: z.array(z.object({ roleId: z.string(), label: z.string() })).min(1),
   infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
+  hints: z.array(z.string().min(1)).max(3).default([]),
+  onSolved: z.string().min(1).optional(),
   windowMs: z.number().int().positive().optional(),
 });
 
@@ -43,6 +45,8 @@ export const wiringPuzzleSchema = z.object({
   decoyPairs: z.array(symbolPairSchema).min(1),
   penaltySec: z.number().int().positive().default(30),
   infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
+  hints: z.array(z.string().min(1)).max(3).default([]),
+  onSolved: z.string().min(1).optional(),
 });
 
 /**
@@ -60,6 +64,8 @@ export const keypadPuzzleSchema = z.object({
   code: z.array(z.string().min(1)).min(2),
   penaltySec: z.number().int().positive().default(20),
   infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
+  hints: z.array(z.string().min(1)).max(3).default([]),
+  onSolved: z.string().min(1).optional(),
 });
 
 /**
@@ -78,6 +84,8 @@ export const switchesPuzzleSchema = z.object({
   onCount: z.number().int().positive(),
   penaltySec: z.number().int().positive().default(20),
   infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
+  hints: z.array(z.string().min(1)).max(3).default([]),
+  onSolved: z.string().min(1).optional(),
 });
 
 /**
@@ -96,6 +104,8 @@ export const simonPuzzleSchema = z.object({
   sequenceLength: z.number().int().min(3).max(8).default(5),
   penaltySec: z.number().int().positive().default(20),
   infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
+  hints: z.array(z.string().min(1)).max(3).default([]),
+  onSolved: z.string().min(1).optional(),
 });
 
 /**
@@ -112,8 +122,15 @@ export const mazePuzzleSchema = z.object({
   size: z.number().int().min(4).max(8).default(6),
   penaltySec: z.number().int().positive().default(15),
   infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
+  hints: z.array(z.string().min(1)).max(3).default([]),
+  onSolved: z.string().min(1).optional(),
 });
 
+/**
+ * Every puzzle type also carries up to three progressive `hints` (nudge →
+ * specific → near-answer) the crew can buy from mission control, and an
+ * optional `onSolved` radio line.
+ */
 export const puzzleDefSchema = z.discriminatedUnion('type', [
   buttonSyncPuzzleSchema,
   wiringPuzzleSchema,
@@ -203,6 +220,8 @@ export const mapDefSchema = z.object({
         /** half opening angle of the cone, in degrees */
         halfAngleDeg: z.number().positive().max(90).default(30),
         penaltySec: z.number().int().positive().default(15),
+        /** puzzles the crew must have solved before it starts patrolling */
+        activeAfterSolved: z.number().int().nonnegative().default(0),
       }),
     )
     .default([]),
@@ -298,6 +317,17 @@ export const missionSchema = z
       lose: z.string(),
     }),
     timeLimitSec: z.number().int().positive(),
+    /** seconds every hint from mission control takes off the clock */
+    hintCostSec: z.number().int().positive().default(20),
+    /** seconds at an open puzzle before mission control offers the first or next hint */
+    hintDelaySec: z.number().int().positive().default(45),
+    /** mission control's lines for the start of the run and the unlocked exit */
+    radio: z
+      .object({
+        start: z.string().min(1).optional(),
+        escape: z.string().min(1).optional(),
+      })
+      .default({}),
     roles: z.array(roleDefSchema).min(2),
     puzzles: z.array(puzzleDefSchema).min(1),
     map: mapDefSchema.optional(),
@@ -412,6 +442,12 @@ function validateMap(
     ctx.addIssue({ code: 'custom', message: 'map: drone ids must be unique' });
   }
   for (const drone of map.drones) {
+    if (drone.activeAfterSolved >= mission.puzzles.length) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `map: drone "${drone.id}": activeAfterSolved must be below the number of puzzles`,
+      });
+    }
     for (const [i, point] of drone.waypoints.entries()) {
       requireFloor(`waypoint ${i} of drone "${drone.id}"`, point.x, point.y);
     }

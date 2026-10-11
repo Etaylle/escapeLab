@@ -25,7 +25,9 @@ export interface SpottedEvent {
  * Drone patrols: deterministic waypoint loops, cone-of-vision detection with
  * line of sight, and a cooldown so one sighting costs time exactly once.
  * Players working at a station (a puzzle is open) are not spotted — the
- * console counts as cover, which keeps the penalty fair.
+ * console counts as cover, which keeps the penalty fair. A drone with
+ * `activeAfterSolved` sleeps at its first waypoint until the crew has solved
+ * that many puzzles: until then it neither moves, nor sees, nor shows up.
  */
 export class DronePatrol {
   private readonly runtime = new Map<string, DroneRuntime>();
@@ -55,9 +57,9 @@ export class DronePatrol {
     }
   }
 
-  /** Advance every drone by `dt` seconds along its waypoint loop. */
-  step(dt: number): void {
-    for (const drone of this.map.drones) {
+  /** Advance every awake drone by `dt` seconds along its waypoint loop. */
+  step(state: GameState, dt: number): void {
+    for (const drone of this.awake(state)) {
       const self = this.runtime.get(drone.id);
       const target = drone.waypoints[self?.target ?? 0];
       if (self === undefined || target === undefined) {
@@ -90,7 +92,7 @@ export class DronePatrol {
       return []; // everyone is heads-down at a console
     }
     const events: SpottedEvent[] = [];
-    for (const drone of this.map.drones) {
+    for (const drone of this.awake(state)) {
       const self = this.runtime.get(drone.id);
       if (self === undefined || now < self.quietUntil) {
         continue;
@@ -127,10 +129,10 @@ export class DronePatrol {
     return events;
   }
 
-  /** Wire-format snapshot for the clients. */
-  snapshot(now: number): Record<string, DronePosition> {
+  /** Wire-format snapshot for the clients; sleeping drones are left out. */
+  snapshot(state: GameState, now: number): Record<string, DronePosition> {
     const out: Record<string, DronePosition> = {};
-    for (const drone of this.map.drones) {
+    for (const drone of this.awake(state)) {
       const self = this.runtime.get(drone.id);
       if (self === undefined) {
         continue;
@@ -145,6 +147,10 @@ export class DronePatrol {
       };
     }
     return out;
+  }
+
+  private awake(state: GameState): MapDef['drones'] {
+    return this.map.drones.filter((drone) => drone.activeAfterSolved <= state.currentPuzzleIndex);
   }
 
   private hasLineOfSight(

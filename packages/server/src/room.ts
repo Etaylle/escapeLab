@@ -36,6 +36,7 @@ export type GameMessage = Extract<
       | 'commit-switches'
       | 'press-simon'
       | 'move-maze'
+      | 'request-hint'
       | 'interact'
       | 'drop-item'
       | 'back-to-lobby'
@@ -127,7 +128,7 @@ export class Room {
       listener({
         kind: 'positions',
         players: Object.fromEntries(this.positions),
-        drones: this.drones?.snapshot(Date.now()) ?? {},
+        drones: this.drones?.snapshot(this.state, Date.now()) ?? {},
       });
     }
   }
@@ -143,7 +144,7 @@ export class Room {
       listener({
         kind: 'positions',
         players: Object.fromEntries(this.positions),
-        drones: this.drones?.snapshot(Date.now()) ?? {},
+        drones: this.drones?.snapshot(this.state, Date.now()) ?? {},
       });
     }
     return () => this.spectators.delete(listener);
@@ -242,6 +243,9 @@ export class Room {
         break;
       case 'move-maze':
         this.dispatch({ type: 'move-maze', playerId, dir: msg.dir, at: Date.now() });
+        break;
+      case 'request-hint':
+        this.dispatch({ type: 'request-hint', playerId, at: Date.now() });
         break;
       case 'interact':
         this.resolveInteract(playerId);
@@ -603,7 +607,7 @@ export class Room {
   private broadcastPositions(): void {
     this.positionsDirty = false;
     const players = Object.fromEntries(this.positions);
-    const drones = this.drones?.snapshot(Date.now()) ?? {};
+    const drones = this.drones?.snapshot(this.state, Date.now()) ?? {};
     for (const listener of this.audience) {
       listener({ kind: 'positions', players, drones });
     }
@@ -636,7 +640,7 @@ export class Room {
     const now = Date.now();
     const dt = Math.min(0.25, (now - this.lastDroneTick) / 1000);
     this.lastDroneTick = now;
-    patrol.step(dt);
+    patrol.step(this.state, dt);
     const spotted = patrol.detect(this.state, this.positionSnapshot(), now);
     for (const event of spotted) {
       this.dispatch({ type: 'drone-spotted', at: now, penaltySec: event.penaltySec });

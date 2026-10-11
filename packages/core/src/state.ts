@@ -13,9 +13,9 @@ export type Phase = 'lobby' | 'playing' | 'won' | 'lost';
 export interface RunEvent {
   /** epoch ms, turned into mm:ss against startedAt for display */
   at: number;
-  kind: 'puzzle' | 'penalty' | 'sabotage' | 'item' | 'escape' | 'finish';
+  kind: 'puzzle' | 'penalty' | 'sabotage' | 'item' | 'escape' | 'finish' | 'hint' | 'radio';
   label: string;
-  /** seconds lost, for penalty lines */
+  /** seconds lost, for penalty and hint lines */
   seconds: number | null;
 }
 
@@ -100,6 +100,12 @@ export interface GameState {
   /** increments on every penalty — lets clients retrigger alarm effects */
   penaltySeq: number;
   lastPenaltySec: number | null;
+  /** hints bought over the whole run; they weigh on the grade */
+  hintsUsed: number;
+  /** hints revealed for the current puzzle; back to 0 whenever the crew moves on */
+  hintsRevealed: number;
+  /** epoch ms; earliest moment the next hint may be requested */
+  hintReadyAt: number | null;
 }
 
 export function initialState(mission: Mission): GameState {
@@ -122,5 +128,8 @@ export function initialState(mission: Mission): GameState {
     finishedAt: null,
     penaltySeq: 0,
     lastPenaltySec: null,
+    hintsUsed: 0,
+    hintsRevealed: 0,
+    hintReadyAt: null,
   };
 }
