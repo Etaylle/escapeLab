@@ -1176,3 +1176,72 @@ button.link:hover {
   border-color: var(--accent);
   box-shadow: 0 0 14px var(--accent-glow);
 }
+
+/* ── sabotage emergency ─────────────────────────────────────────────────── */
+
+.sabotage {
+  margin-top: 12px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--danger);
+  background: linear-gradient(180deg, #5b1b1b, #3a1414);
+  box-shadow: 0 0 26px rgba(248, 113, 113, 0.35);
+  animation: sabotage-throb 1.1s infinite;
+}
+
+@keyframes sabotage-throb {
+  50% {
+    box-shadow: 0 0 38px rgba(248, 113, 113, 0.6);
+  }
+}
+
+.sabotage-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.sabotage-label {
+  font-family: var(--mono);
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #fecaca;
+}
+
+.sabotage-clock {
+  font-family: var(--mono);
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+.sabotage-hint {
+  margin: 6px 0 10px;
+  color: #fecaca;
+  line-height: 1.45;
+}
+
+.sabotage-panels {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.panel-pip {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--danger);
+  color: #fecaca;
+}
+
+.panel-pip-on {
+  border-color: var(--accent);
+  color: #042f2a;
+  background: var(--accent);
+}

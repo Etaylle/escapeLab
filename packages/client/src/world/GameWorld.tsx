@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { ClientMessage, DronePosition, PlayerPosition, PlayerView } from '@escapelab/core';
-import { drawDroneBody, drawDroneCone } from './hazards.js';
+import { drawDroneBody, drawDroneCone, drawSabotagePanel } from './hazards.js';
 import {
   drawDoor,
   drawPlate,
@@ -68,6 +68,7 @@ interface Sim {
   /** pings already sounded, so the blip fires once per ping */
   seenPings: WeakSet<MapPing>;
   minimap: boolean;
+  sabotageWasOn: boolean;
 }
 
 const MOVE_KEYS: Record<string, [number, number]> = {
@@ -193,6 +194,7 @@ export function GameWorld({
       time: 0,
       seenPings: new WeakSet<MapPing>(),
       minimap: true,
+      sabotageWasOn: false,
     };
     simRef.current = sim;
     startAmbience();
@@ -380,6 +382,17 @@ export function GameWorld({
         }
       }
 
+      // emergency siren on the rising edge of a sabotage
+      const sabotageOn = map.sabotage !== null;
+      if (sabotageOn !== sim.sabotageWasOn) {
+        sim.sabotageWasOn = sabotageOn;
+        if (sabotageOn) {
+          powerDrain();
+        } else {
+          stationChirp();
+        }
+      }
+
       // penalty feedback
       if (viewRef.current.penaltySeq > sim.lastPenaltySeq) {
         sim.lastPenaltySeq = viewRef.current.penaltySeq;
@@ -463,6 +476,12 @@ export function GameWorld({
         ctx.save();
         ctx.translate(map.exit.x + 0.5, map.exit.y + 0.5);
         drawExit(ctx, map.exit.open, pulse);
+        ctx.restore();
+      }
+      for (const panel of map.sabotage?.panels ?? []) {
+        ctx.save();
+        ctx.translate(panel.x + 0.5, panel.y + 0.5);
+        drawSabotagePanel(ctx, panel.occupied, pulse);
         ctx.restore();
       }
 
@@ -710,6 +729,9 @@ export function GameWorld({
       if (map.exit !== null && map.exit.open) {
         punch(map.exit.x + 0.5, map.exit.y + 0.5, 2.6, 0.9);
       }
+      for (const panel of map.sabotage?.panels ?? []) {
+        punch(panel.x + 0.5, panel.y + 0.5, 2.4, 0.9);
+      }
       // Drone cones light their own path, which is what makes them readable.
       for (const drone of Object.values(dronesRef.current)) {
         const [sx, sy] = worldToScreen(s, w, h, drone.x, drone.y);
@@ -755,6 +777,29 @@ export function GameWorld({
         ctx.font = `700 ${12 * dpr}px ui-monospace, Menlo, monospace`;
         ctx.fillStyle = '#4ade80';
         ctx.fillText('NOTAUSGANG → ALLE HIERHER!', ex, ey);
+      }
+      // Arrows at the screen edge pointing to off-screen emergency panels.
+      for (const panel of map.sabotage?.panels ?? []) {
+        const [px, py] = worldToScreen(s, w, h, panel.x + 0.5, panel.y + 0.5);
+        const margin = 30 * dpr;
+        const off = px < margin || px > w - margin || py < margin || py > h - margin;
+        if (!off) {
+          continue;
+        }
+        ctx.save();
+        ctx.translate(
+          Math.min(w - margin, Math.max(margin, px)),
+          Math.min(h - margin, Math.max(margin, py)),
+        );
+        ctx.rotate(Math.atan2(py - h / 2, px - w / 2));
+        ctx.fillStyle = panel.occupied ? '#2dd4bf' : '#f87171';
+        ctx.beginPath();
+        ctx.moveTo(13 * dpr, 0);
+        ctx.lineTo(-8 * dpr, 9 * dpr);
+        ctx.lineTo(-8 * dpr, -9 * dpr);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
       }
       const station = armedStationOf(map);
       if (station !== null && viewRef.current.puzzle === null) {

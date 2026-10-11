@@ -141,6 +141,22 @@ export const mapDefSchema = z.object({
    * an exit the mission is won with the last puzzle.
    */
   exit: z.object({ x: coord, y: coord }).optional(),
+  /**
+   * Recurring emergency: every panel must be manned at the same time, by a
+   * different player each, before the timer runs out. Interrupts whatever
+   * the crew was doing.
+   */
+  sabotage: z
+    .object({
+      label: z.string().min(1),
+      hint: z.string().default(''),
+      firstAfterSec: z.number().int().positive().default(90),
+      everySec: z.number().int().positive().default(150),
+      durationSec: z.number().int().positive().default(45),
+      penaltySec: z.number().int().positive().default(60),
+      panels: z.array(z.object({ id: z.string().min(1), x: coord, y: coord })).min(2),
+    })
+    .optional(),
   /** Security drones patrolling their waypoint loop; their cone costs time. */
   drones: z
     .array(
@@ -319,6 +335,21 @@ function validateMap(
   }
   if (map.exit !== undefined) {
     requireFloor('exit', map.exit.x, map.exit.y);
+  }
+  if (map.sabotage !== undefined) {
+    const panelIds = new Set(map.sabotage.panels.map((p) => p.id));
+    if (panelIds.size !== map.sabotage.panels.length) {
+      ctx.addIssue({ code: 'custom', message: 'map: sabotage panel ids must be unique' });
+    }
+    if (map.sabotage.panels.length > mission.roles.length) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'map: more sabotage panels than roles — nobody could clear it',
+      });
+    }
+    for (const panel of map.sabotage.panels) {
+      requireFloor(`sabotage panel "${panel.id}"`, panel.x, panel.y);
+    }
   }
   const droneIds = new Set(map.drones.map((d) => d.id));
   if (droneIds.size !== map.drones.length) {

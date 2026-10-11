@@ -63,6 +63,19 @@
       { "text": "KERN", "x": 3, "y": 9 }
     ],
     "exit": { "x": 1, "y": 6 },
+    "sabotage": {
+      "label": "DRUCKABFALL IM KÜHLKREIS",
+      "hint": "Alle drei Notventile im Hauptflur gleichzeitig besetzen — teilt euch sofort auf!",
+      "firstAfterSec": 110,
+      "everySec": 160,
+      "durationSec": 50,
+      "penaltySec": 60,
+      "panels": [
+        { "id": "ventil-west", "x": 2, "y": 7 },
+        { "id": "ventil-mitte", "x": 10, "y": 6 },
+        { "id": "ventil-ost", "x": 18, "y": 7 }
+      ]
+    },
     "drones": [
       {
         "id": "flurwache-west",

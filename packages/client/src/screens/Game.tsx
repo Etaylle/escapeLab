@@ -42,6 +42,35 @@ function useNow(intervalMs: number): number {
   return now;
 }
 
+/** Full-width emergency banner: what broke, where to go, how long you have. */
+function SabotageAlert({ sabotage }: { sabotage: NonNullable<PlayerView['map']>['sabotage'] }) {
+  const now = useNow(200);
+  if (sabotage === null) {
+    return null;
+  }
+  const left = Math.max(0, Math.ceil((sabotage.endsAt - now) / 1000));
+  const manned = sabotage.panels.filter((p) => p.occupied).length;
+  return (
+    <div className="sabotage" role="alert">
+      <div className="sabotage-head">
+        <span className="sabotage-label">🚨 {sabotage.label}</span>
+        <span className="sabotage-clock">{left}s</span>
+      </div>
+      <p className="sabotage-hint">{sabotage.hint}</p>
+      <div className="sabotage-panels">
+        {sabotage.panels.map((panel) => (
+          <span key={panel.id} className={`panel-pip ${panel.occupied ? 'panel-pip-on' : ''}`}>
+            {panel.occupied ? '✓' : '○'}
+          </span>
+        ))}
+        <span className="muted">
+          {manned}/{sabotage.panels.length} besetzt
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function Countdown({ deadlineAt }: { deadlineAt: number }) {
   const now = useNow(250);
   const critical = deadlineAt - now < 60_000;
@@ -487,6 +516,8 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, send }: Pr
       </div>
 
       {puzzle !== null && map === null && <p className="story">{puzzle.prompt}</p>}
+
+      {map !== null && <SabotageAlert sabotage={map.sabotage} />}
 
       {alarmVisible && view.lastPenaltySec !== null && (
         <div key={view.penaltySeq} className="alarm">

@@ -31,6 +31,46 @@ export function drawDroneCone(
   ctx.restore();
 }
 
+/**
+ * Emergency valve panel, drawn at the tile centre: a wheel that glows red
+ * while unmanned and locks in teal once someone is standing on it.
+ */
+export function drawSabotagePanel(
+  ctx: CanvasRenderingContext2D,
+  occupied: boolean,
+  pulse: number,
+): void {
+  const accent = occupied ? '#2dd4bf' : '#f87171';
+  ctx.save();
+  ctx.fillStyle = occupied
+    ? `rgba(45,212,191,${0.14 + 0.08 * pulse})`
+    : `rgba(248,113,113,${0.16 + 0.16 * pulse})`;
+  ctx.beginPath();
+  ctx.arc(0, 0, 0.85, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#131d26';
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 0.06;
+  ctx.beginPath();
+  ctx.arc(0, 0, 0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // valve spokes, turning slowly while the emergency runs
+  ctx.rotate(pulse * Math.PI);
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 0.05;
+  for (let i = 0; i < 4; i++) {
+    ctx.rotate(Math.PI / 2);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0.26, 0);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 /** The drone itself: dark chassis, a glowing lens and a blinking beacon. */
 export function drawDroneBody(
   ctx: CanvasRenderingContext2D,

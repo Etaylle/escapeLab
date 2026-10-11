@@ -58,6 +58,13 @@ export interface MapView {
   labels: { text: string; x: number; y: number }[];
   /** escape hatch; open once every puzzle is solved */
   exit: { x: number; y: number; open: boolean } | null;
+  /** emergency panels; `active` only while an emergency is running */
+  sabotage: {
+    label: string;
+    hint: string;
+    endsAt: number;
+    panels: { id: string; x: number; y: number; occupied: boolean }[];
+  } | null;
 }
 
 interface PuzzleViewCommon {
@@ -263,6 +270,20 @@ function mapViewFor(state: GameState, playerId: string): MapView | null {
             x: map.exit.x,
             y: map.exit.y,
             open: state.currentPuzzleIndex >= state.mission.puzzles.length,
+          },
+    sabotage:
+      map.sabotage === undefined || state.sabotage === null
+        ? null
+        : {
+            label: map.sabotage.label,
+            hint: map.sabotage.hint,
+            endsAt: state.sabotage.endsAt,
+            panels: map.sabotage.panels.map((p) => ({
+              id: p.id,
+              x: p.x,
+              y: p.y,
+              occupied: state.occupiedPanels.includes(p.id),
+            })),
           },
   };
 }

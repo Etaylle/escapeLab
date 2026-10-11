@@ -57,6 +57,18 @@
       { "text": "REAKTOR", "x": 15, "y": 8 }
     ],
     "exit": { "x": 17, "y": 11 },
+    "sabotage": {
+      "label": "KÜHLKREISLAUF BRICHT ZUSAMMEN",
+      "hint": "Beide Notventile im Flur gleichzeitig besetzen — eines ganz links, eines ganz rechts!",
+      "firstAfterSec": 100,
+      "everySec": 150,
+      "durationSec": 45,
+      "penaltySec": 60,
+      "panels": [
+        { "id": "ventil-west", "x": 2, "y": 5 },
+        { "id": "ventil-ost", "x": 16, "y": 5 }
+      ]
+    },
     "drones": [
       {
         "id": "flurwache",

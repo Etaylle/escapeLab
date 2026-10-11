@@ -87,11 +87,11 @@ describe('mapped missions', () => {
   it('opens plate doors exactly while the plate is held', () => {
     let state = started();
     expect(viewFor(state, 'p1').map?.doors[0]?.open).toBe(false);
-    state = applyAction(state, { type: 'set-pressed-plates', plates: ['p1'] });
+    state = applyAction(state, { type: 'set-occupancy', plates: ['p1'], panels: [] });
     const view = viewFor(state, 'p1');
     expect(view.map?.doors[0]?.open).toBe(true);
     expect(view.map?.plates[0]?.pressed).toBe(true);
-    state = applyAction(state, { type: 'set-pressed-plates', plates: [] });
+    state = applyAction(state, { type: 'set-occupancy', plates: [], panels: [] });
     expect(viewFor(state, 'p1').map?.doors[0]?.open).toBe(false);
   });
 
@@ -101,7 +101,7 @@ describe('mapped missions', () => {
       initialState(fixture),
     );
     expect(
-      applyAction(lobby, { type: 'set-pressed-plates', plates: ['p1'] }).pressedPlates,
+      applyAction(lobby, { type: 'set-occupancy', plates: ['p1'], panels: [] }).pressedPlates,
     ).toEqual([]);
   });
 

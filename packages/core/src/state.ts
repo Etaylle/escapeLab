@@ -42,11 +42,15 @@ export interface GameState {
   /** PRNG seed for this run; set by start-mission */
   seed: number | null;
   /**
-   * Plates currently held down. Movement is client-authoritative and lives
-   * outside this state machine; the server translates live positions into
-   * set-pressed-plates actions, which keeps door logic deterministic.
+   * Plates and sabotage panels currently manned. Movement is
+   * client-authoritative and lives outside this state machine; the server
+   * translates live positions into set-occupancy actions, which keeps door
+   * and sabotage logic deterministic.
    */
   pressedPlates: string[];
+  occupiedPanels: string[];
+  /** running emergency that interrupts everything until it is cleared */
+  sabotage: { endsAt: number } | null;
   /** epoch ms; set when the mission starts */
   startedAt: number | null;
   /** epoch ms; shrinks when penalties strike */
@@ -67,6 +71,8 @@ export function initialState(mission: Mission): GameState {
     puzzleState: null,
     seed: null,
     pressedPlates: [],
+    occupiedPanels: [],
+    sabotage: null,
     startedAt: null,
     deadlineAt: null,
     finishedAt: null,

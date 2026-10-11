@@ -27,8 +27,11 @@ export type Action =
   | { type: 'toggle-switch'; playerId: string; switchIndex: number; at: number }
   | { type: 'commit-switches'; playerId: string; at: number }
   | { type: 'press-simon'; playerId: string; buttonIndex: number; at: number }
-  | { type: 'set-pressed-plates'; plates: string[] }
+  | { type: 'set-occupancy'; plates: string[]; panels: string[] }
   | { type: 'drone-spotted'; at: number; penaltySec: number }
+  | { type: 'sabotage-start'; at: number }
+  | { type: 'sabotage-cleared'; at: number }
+  | { type: 'sabotage-expired'; at: number }
   | { type: 'interact'; playerId: string; at: number }
   | { type: 'escaped'; at: number }
   | { type: 'time-expired'; at: number }
@@ -80,10 +83,20 @@ export function applyAction(state: GameState, action: Action): GameState {
       return handleCommitSwitches(state, action);
     case 'press-simon':
       return handlePressSimon(state, action);
-    case 'set-pressed-plates':
+    case 'set-occupancy':
       return state.phase === 'playing'
-        ? { ...state, pressedPlates: [...action.plates].sort() }
+        ? {
+            ...state,
+            pressedPlates: [...action.plates].sort(),
+            occupiedPanels: [...action.panels].sort(),
+          }
         : state;
+    case 'sabotage-start':
+      return startSabotage(state, action);
+    case 'sabotage-cleared':
+      return state.sabotage === null ? state : { ...state, sabotage: null };
+    case 'sabotage-expired':
+      return expireSabotage(state, action);
     case 'drone-spotted':
       return state.phase === 'playing'
         ? applyPenalty(state, action.penaltySec, action.at)
@@ -236,6 +249,8 @@ function startMission(
     currentPuzzleIndex: 0,
     seed: action.seed,
     pressedPlates: [],
+    occupiedPanels: [],
+    sabotage: null,
     startedAt: action.at,
     deadlineAt: action.at + state.mission.timeLimitSec * 1000,
     finishedAt: null,
@@ -318,6 +333,30 @@ function applyPenalty(state: GameState, sec: number, at: number): GameState {
 
 function lostNow(state: GameState, at: number): GameState {
   return { ...state, phase: 'lost', puzzleState: null, finishedAt: at };
+}
+
+/**
+ * An emergency interrupts whatever the crew was doing: the open puzzle is
+ * dropped (its station stays armed and can be restarted afterwards).
+ */
+function startSabotage(state: GameState, action: { at: number }): GameState {
+  const sabotage = state.mission.map?.sabotage;
+  if (state.phase !== 'playing' || sabotage === undefined || state.sabotage !== null) {
+    return state;
+  }
+  return {
+    ...state,
+    puzzleState: null,
+    sabotage: { endsAt: action.at + sabotage.durationSec * 1000 },
+  };
+}
+
+function expireSabotage(state: GameState, action: { at: number }): GameState {
+  const sabotage = state.mission.map?.sabotage;
+  if (state.sabotage === null || sabotage === undefined) {
+    return state;
+  }
+  return applyPenalty({ ...state, sabotage: null }, sabotage.penaltySec, action.at);
 }
 
 function handlePress(state: GameState, action: { playerId: string; at: number }): GameState {
@@ -462,6 +501,9 @@ function handleInteract(state: GameState, action: { playerId: string; at: number
   if (state.deadlineAt !== null && action.at >= state.deadlineAt) {
     return lostNow(state, action.at);
   }
+  if (state.sabotage !== null) {
+    fail('Erst den Notfall beheben — an die Panele!');
+  }
   if (state.puzzleState !== null) {
     fail('Die Station läuft schon — löst erst das aktuelle Rätsel.');
   }
@@ -484,6 +526,8 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     puzzleState: null,
     seed: null,
     pressedPlates: [],
+    occupiedPanels: [],
+    sabotage: null,
     startedAt: null,
     deadlineAt: null,
     finishedAt: null,

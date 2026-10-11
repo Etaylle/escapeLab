@@ -48,6 +48,13 @@ const POSITIONS_INTERVAL_MS = 66;
 const PING_COOLDOWN_MS = 700;
 /** Patrol simulation step. */
 const DRONE_TICK_MS = 80;
+/** How close you must stand to man an emergency panel. */
+const PANEL_RADIUS = 0.8;
+/**
+ * Emergencies only start once this many stations are done: before that the
+ * crew may still be locked in its separate starting rooms.
+ */
+const SABOTAGE_AFTER_PUZZLES = 2;
 
 /**
  * One game room: owns the authoritative GameState, player sessions
@@ -65,6 +72,7 @@ export class Room {
   private drones: DronePatrol | null = null;
   private droneTimer: NodeJS.Timeout | null = null;
   private lastDroneTick = 0;
+  private sabotageTimer: NodeJS.Timeout | null = null;
   private timer: NodeJS.Timeout | null = null;
   private positionsTimer: NodeJS.Timeout | null = null;
   private positionsDirty = false;
@@ -247,35 +255,115 @@ export class Room {
     this.schedulePositionsBroadcast();
   }
 
-  /** Translate live positions into plate state; dispatch only on change. */
+  /** Everyone standing close enough to a spot, by player id. */
+  private occupantsOf(x: number, y: number, radius: number): string[] {
+    return this.state.players
+      .filter((player) => {
+        if (!player.connected) {
+          return false;
+        }
+        const pos = this.positions.get(player.id);
+        return pos !== undefined && Math.hypot(pos.x - (x + 0.5), pos.y - (y + 0.5)) <= radius;
+      })
+      .map((player) => player.id);
+  }
+
+  /**
+   * Translate live positions into plate and panel state; dispatch only on
+   * change. Sabotage panels need a *different* player each, so they are
+   * assigned greedily.
+   */
   private reconcilePlates(): void {
     const map = this.state.mission.map;
     if (this.state.phase !== 'playing' || map === undefined) {
       return;
     }
     const held = new Set(this.state.pressedPlates);
-    const next: string[] = [];
-    for (const plate of map.plates) {
-      const radius = held.has(plate.id) ? PLATE_RELEASE_RADIUS : PLATE_PRESS_RADIUS;
-      const pressed = this.state.players.some((player) => {
-        if (!player.connected) {
-          return false;
-        }
-        const pos = this.positions.get(player.id);
-        return (
-          pos !== undefined &&
-          Math.hypot(pos.x - (plate.x + 0.5), pos.y - (plate.y + 0.5)) <= radius
-        );
-      });
-      if (pressed) {
-        next.push(plate.id);
+    const plates = map.plates
+      .filter(
+        (plate) =>
+          this.occupantsOf(
+            plate.x,
+            plate.y,
+            held.has(plate.id) ? PLATE_RELEASE_RADIUS : PLATE_PRESS_RADIUS,
+          ).length > 0,
+      )
+      .map((plate) => plate.id)
+      .sort();
+
+    const claimed = new Set<string>();
+    const panels: string[] = [];
+    for (const panel of map.sabotage?.panels ?? []) {
+      const free = this.occupantsOf(panel.x, panel.y, PANEL_RADIUS).find(
+        (id) => !claimed.has(id),
+      );
+      if (free !== undefined) {
+        claimed.add(free);
+        panels.push(panel.id);
       }
     }
-    next.sort();
-    const current = [...this.state.pressedPlates].sort();
-    if (next.length !== current.length || next.some((id, i) => id !== current[i])) {
-      this.dispatch({ type: 'set-pressed-plates', plates: next });
+    panels.sort();
+
+    const sameList = (a: string[], b: string[]): boolean =>
+      a.length === b.length && a.every((id, i) => id === b[i]);
+    if (
+      !sameList(plates, [...this.state.pressedPlates].sort()) ||
+      !sameList(panels, [...this.state.occupiedPanels].sort())
+    ) {
+      this.dispatch({ type: 'set-occupancy', plates, panels });
     }
+    this.checkSabotageCleared();
+  }
+
+  /** All panels manned at once ends the emergency. */
+  private checkSabotageCleared(): void {
+    const sabotage = this.state.mission.map?.sabotage;
+    if (this.state.sabotage === null || sabotage === undefined) {
+      return;
+    }
+    if (this.state.occupiedPanels.length >= sabotage.panels.length) {
+      this.dispatch({ type: 'sabotage-cleared', at: Date.now() });
+    }
+  }
+
+  /**
+   * Keep the emergency schedule in sync with the game state: arm the next
+   * emergency while the crew is still solving, and the expiry while one runs.
+   */
+  private reconcileSabotage(): void {
+    const sabotage = this.state.mission.map?.sabotage;
+    if (this.sabotageTimer !== null) {
+      clearTimeout(this.sabotageTimer);
+      this.sabotageTimer = null;
+    }
+    if (this.state.phase !== 'playing' || sabotage === undefined) {
+      return;
+    }
+    if (this.state.sabotage !== null) {
+      const delay = Math.max(0, this.state.sabotage.endsAt - Date.now());
+      this.sabotageTimer = setTimeout(() => {
+        this.sabotageTimer = null;
+        this.dispatch({ type: 'sabotage-expired', at: Date.now() });
+      }, delay);
+      return;
+    }
+    // Not before the crew is out of its starting rooms (two stations done),
+    // and not once they are already running for the hatch.
+    const solved = this.state.currentPuzzleIndex;
+    if (solved < SABOTAGE_AFTER_PUZZLES || solved >= this.state.mission.puzzles.length) {
+      return;
+    }
+    const sinceStart = Date.now() - (this.state.startedAt ?? Date.now());
+    const first = sabotage.firstAfterSec * 1000;
+    const every = sabotage.everySec * 1000;
+    const nextAt = sinceStart < first ? first : Math.ceil((sinceStart - first) / every) * every + first;
+    this.sabotageTimer = setTimeout(
+      () => {
+        this.sabotageTimer = null;
+        this.dispatch({ type: 'sabotage-start', at: Date.now() });
+      },
+      Math.max(500, nextAt - sinceStart),
+    );
   }
 
   /** Won once every connected player stands in the exit zone. */
@@ -365,6 +453,7 @@ export class Room {
     this.state = applyAction(this.state, action);
     this.reconcileTimer();
     this.reconcileDroneTimer();
+    this.reconcileSabotage();
     this.broadcast();
   }
 
@@ -405,6 +494,10 @@ export class Room {
       clearInterval(this.droneTimer);
       this.droneTimer = null;
       this.drones = null;
+    }
+    if (this.sabotageTimer !== null) {
+      clearTimeout(this.sabotageTimer);
+      this.sabotageTimer = null;
     }
   }
 }
