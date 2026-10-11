@@ -2,6 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
 
+/** The host's start now requires everyone else to have confirmed. */
+function ready(room: Room, ...players: { playerId: string }[]): void {
+  for (const player of players) {
+    room.act(player.playerId, { kind: 'set-ready', ready: true });
+  }
+}
+
+
 /** Corridor with three stations and an emergency valve at each end. */
 const mission: Mission = parseMission({
   id: 'sabotageroom',
@@ -73,6 +81,7 @@ describe('Room emergencies', () => {
     room.attach(ben.playerId, ben.listen);
     room.act(anna.playerId, { kind: 'select-role', roleId: 'anleitung' });
     room.act(ben.playerId, { kind: 'select-role', roleId: 'steuerpult' });
+    ready(room, ben);
     room.act(anna.playerId, { kind: 'start-mission' });
     for (const [puzzle, x] of [
       ['first', 2],

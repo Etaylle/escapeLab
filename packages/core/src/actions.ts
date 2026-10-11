@@ -28,6 +28,7 @@ export type Action =
   | { type: 'player-disconnected'; playerId: string }
   | { type: 'select-role'; playerId: string; roleId: string }
   | { type: 'select-color'; playerId: string; color: string }
+  | { type: 'set-ready'; playerId: string; ready: boolean }
   | { type: 'switch-mission'; playerId: string; mission: Mission; difficulty: Difficulty }
   | { type: 'start-mission'; playerId: string; at: number; seed: number }
   | { type: 'press-button'; playerId: string; at: number }
@@ -81,6 +82,8 @@ export function applyAction(state: GameState, action: Action): GameState {
       return selectRole(state, action);
     case 'select-color':
       return selectColor(state, action);
+    case 'set-ready':
+      return setReady(state, action);
     case 'switch-mission':
       return switchMission(state, action);
     case 'start-mission':
@@ -157,8 +160,8 @@ function switchMission(
   const sameMission = state.mission.id === action.mission.id;
   // Role ids may differ between missions, so a real switch resets the picks.
   const players = sameMission
-    ? state.players
-    : state.players.map((p) => ({ ...p, roleId: null }));
+    ? unready(state.players)
+    : unready(state.players).map((p) => ({ ...p, roleId: null }));
   return { ...state, mission: action.mission, difficulty: action.difficulty, players };
 }
 
@@ -182,10 +185,27 @@ function playerJoin(
     name,
     roleId: null,
     color: CREW_COLORS.find((c) => !taken.has(c)) ?? CREW_COLORS[0],
+    ready: false,
     connected: true,
     isHost: state.players.length === 0,
   };
-  return { ...state, players: [...state.players, player] };
+  return { ...state, players: [...unready(state.players), player] };
+}
+
+function setReady(state: GameState, action: { playerId: string; ready: boolean }): GameState {
+  if (state.phase !== 'lobby') {
+    fail('Bereitmelden geht nur in der Lobby.');
+  }
+  findPlayer(state, action.playerId);
+  const players = state.players.map((p) =>
+    p.id === action.playerId ? { ...p, ready: action.ready } : p,
+  );
+  return { ...state, players };
+}
+
+/** Any change to the setup un-readies everyone — nobody starts by surprise. */
+function unready(players: Player[]): Player[] {
+  return players.map((p) => (p.ready ? { ...p, ready: false } : p));
 }
 
 function selectColor(
@@ -229,7 +249,7 @@ function selectRole(
   if (takenBy !== undefined && takenBy.id !== action.playerId) {
     fail(`Die Rolle ist schon von ${takenBy.name} besetzt.`);
   }
-  const players = state.players.map((p) =>
+  const players = unready(state.players).map((p) =>
     p.id === action.playerId ? { ...p, roleId: action.roleId } : p,
   );
   return { ...state, players };
@@ -272,6 +292,11 @@ function startMission(
   const missing = state.mission.roles.filter((r) => !assigned.has(r.id));
   if (missing.length > 0) {
     fail(`Noch unbesetzte Rollen: ${missing.map((r) => r.name).join(', ')}.`);
+  }
+  // The host starts by pressing start; everyone else confirms beforehand.
+  const waiting = state.players.filter((p) => !p.isHost && !p.ready);
+  if (waiting.length > 0) {
+    fail(`Noch nicht bereit: ${waiting.map((p) => p.name).join(', ')}.`);
   }
   const map = state.mission.map;
   const started: GameState = {
@@ -757,6 +782,7 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
   return {
     ...state,
     phase: 'lobby',
+    players: unready(state.players),
     currentPuzzleIndex: 0,
     puzzleState: null,
     seed: null,

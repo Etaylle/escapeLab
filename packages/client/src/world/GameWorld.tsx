@@ -169,6 +169,34 @@ function contextAction(
   return null;
 }
 
+
+/**
+ * The one sentence a newcomer needs right now. Each tip is shown once per
+ * session, so a second run is not cluttered with things you already know.
+ */
+function coachTip(map: WorldMap, youId: string, carrying: boolean): { id: string; text: string } | null {
+  if (map.sabotage !== null) {
+    return { id: 'sabotage', text: 'Notfall! Jede Person an ein eigenes Ventil — sofort losrennen.' };
+  }
+  if (carrying) {
+    return {
+      id: 'carry',
+      text: 'Du trägst etwas: Bring es zur markierten Fläche und drücke E. Mit Q legst du es ab.',
+    };
+  }
+  if (map.exit !== null && map.exit.open) {
+    return { id: 'exit', text: 'Der Notausgang ist offen — ihr müsst alle gemeinsam dort ankommen.' };
+  }
+  if (map.plates.some((plate) => plate.pressed)) {
+    return {
+      id: 'plate',
+      text: 'Solange jemand auf der Platte steht, bleibt die TÃ¼r offen — nicht runtergehen!',
+    };
+  }
+  void youId;
+  return null;
+}
+
 /** Escape hatch: dim grey while locked, pulsing green once it opens. */
 function drawExit(ctx: CanvasRenderingContext2D, open: boolean, pulse: number): void {
   ctx.save();
@@ -217,6 +245,9 @@ export function GameWorld({
   send,
 }: Props) {
   const [wheelOpen, setWheelOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [tip, setTip] = useState<{ id: string; text: string } | null>(null);
+  const seenTips = useRef(new Set<string>());
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -231,6 +262,27 @@ export function GameWorld({
       simRef.current?.keys.clear();
     }
   }, [inputLocked]);
+
+  // Coach marks react to the view, not to the render loop.
+  useEffect(() => {
+    if (spectator || view.map === null) {
+      setTip(null);
+      return undefined;
+    }
+    const carrying = view.map.items.some(
+      (item) => item.carriedBy === view.you.id && !item.delivered,
+    );
+    const next = coachTip(view.map, view.you.id, carrying);
+    if (next === null || seenTips.current.has(next.id)) {
+      setTip(null);
+      return undefined;
+    }
+    seenTips.current.add(next.id);
+    setTip(next);
+    const timer = setTimeout(() => setTip(null), 6500);
+    return () => clearTimeout(timer);
+  }, [view, spectator]);
+
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -301,8 +353,12 @@ export function GameWorld({
       } else if (key === 'c' && !e.repeat) {
         e.preventDefault();
         setWheelOpen((open) => !open);
+      } else if ((key === 'h' || key === '?') && !e.repeat) {
+        e.preventDefault();
+        setHelpOpen((open) => !open);
       } else if (key === 'escape') {
         setWheelOpen(false);
+        setHelpOpen(false);
       } else if (/^[1-8]$/.test(key)) {
         const phrase = CHAT_PHRASE_IDS[Number(key) - 1];
         if (phrase !== undefined) {
@@ -1070,6 +1126,7 @@ export function GameWorld({
   return (
     <div className="world-wrap">
       <canvas ref={canvasRef} className={`world-canvas ${spectator ? 'world-canvas--wide' : ''}`} />
+      {tip !== null && <div className="coach">{tip.text}</div>}
       {!spectator && (
       <div className="world-controls">
         <div className="world-dpad" role="group" aria-label="Steuerkreuz">
@@ -1128,8 +1185,44 @@ export function GameWorld({
       )}
       {!spectator && (
         <p className="world-hint muted">
-          Laufen: WASD/Pfeile · E = aktivieren/aufnehmen · Q = ablegen · Klick = Ping · M = Karte
+          WASD/Pfeile laufen Â· E aktivieren Â· Q ablegen Â· Klick Ping Â· M Karte Â·{' '}
+          <button className="link" onClick={() => setHelpOpen(true)}>
+            H = alle Tasten
+          </button>
         </p>
+      )}
+
+      {helpOpen && !spectator && (
+        <div className="overlay help" onClick={() => setHelpOpen(false)} role="dialog">
+          <div className="card help-card">
+            <h2>Steuerung</h2>
+            <dl className="keylist">
+              {(
+                [
+                  ['W A S D / Pfeile', 'Laufen'],
+                  ['E', 'Station aktivieren, Objekt aufnehmen oder einsetzen'],
+                  ['Q', 'Getragenes Objekt ablegen (für Übergaben)'],
+                  ['Klick auf die Welt', 'Ping für alle setzen'],
+                  ['C, dann 1–8', 'Schnellchat'],
+                  ['M', 'Minikarte ein-/ausblenden'],
+                  ['H oder ?', 'Diese Übersicht'],
+                ] as const
+              ).map(([keys, what]) => (
+                <div key={keys} className="keyrow">
+                  <dt>{keys}</dt>
+                  <dd>{what}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="muted">
+              Im Dunkeln siehst du nur deinen Lichtkegel. Die leuchtende Station ist euer
+              nächstes Ziel — und niemand von euch sieht genug, um sie allein zu lösen.
+            </p>
+            <button className="primary" onClick={() => setHelpOpen(false)}>
+              Weiterspielen
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

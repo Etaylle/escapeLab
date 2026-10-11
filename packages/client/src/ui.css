@@ -1672,3 +1672,86 @@ button.link:hover {
     align-items: stretch;
   }
 }
+
+.ready-tag {
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ready-tag-on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── controls overlay ───────────────────────────────────────────────────── */
+
+.overlay.help {
+  background: rgba(4, 7, 10, 0.85);
+  backdrop-filter: blur(3px);
+  cursor: pointer;
+}
+
+.help-card {
+  max-width: 520px;
+  cursor: auto;
+}
+
+.keylist {
+  margin: 10px 0 16px;
+}
+
+.keyrow {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.keyrow dt {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.keyrow dd {
+  margin: 0;
+  font-size: 14px;
+}
+
+@media (max-width: 520px) {
+  .keyrow {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+/* ── first-time coach marks ─────────────────────────────────────────────── */
+
+.coach {
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  z-index: 4;
+  max-width: min(520px, calc(100% - 28px));
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--accent-dark);
+  background: rgba(7, 11, 15, 0.94);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  animation: fadein 0.25s;
+}
+
+.coach strong {
+  color: var(--accent);
+}

@@ -15,13 +15,21 @@ export interface PlayerView {
   missionTitle: string;
   difficulty: Difficulty;
   storyText: string;
-  you: { id: string; name: string; roleId: string | null; color: string; isHost: boolean };
+  you: {
+    id: string;
+    name: string;
+    roleId: string | null;
+    color: string;
+    ready: boolean;
+    isHost: boolean;
+  };
   players: {
     id: string;
     name: string;
     roleId: string | null;
     roleName: string | null;
     color: string;
+    ready: boolean;
     connected: boolean;
     isHost: boolean;
   }[];
@@ -463,6 +471,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
       name: you.name,
       roleId: you.roleId,
       color: you.color,
+      ready: you.ready,
       isHost: you.isHost,
     },
     players: state.players.map((p) => ({
@@ -471,6 +480,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
       roleId: p.roleId,
       roleName: roleName(p.roleId),
       color: p.color,
+      ready: p.ready,
       connected: p.connected,
       isHost: p.isHost,
     })),

@@ -67,6 +67,7 @@ function playing(): GameState {
       { type: 'player-join', playerId: 'p2', name: 'Ben' },
       { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
       { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
+      { type: 'set-ready', playerId: 'p2', ready: true },
       { type: 'start-mission', playerId: 'p1', at: T0, seed: 3 },
     ],
     initialState(mission),
@@ -163,6 +164,7 @@ describe('run report', () => {
       [
         { type: 'time-expired', at: T0 + 600_000 },
         { type: 'back-to-lobby', playerId: 'p1' },
+        { type: 'set-ready', playerId: 'p2', ready: true },
         { type: 'start-mission', playerId: 'p1', at: T0 + 700_000, seed: 4 },
       ],
       playing(),

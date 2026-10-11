@@ -32,6 +32,7 @@ function readyLobby(): GameState {
     { type: 'player-join', playerId: 'p2', name: 'Ben' },
     { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
     { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
+    { type: 'set-ready', playerId: 'p2', ready: true },
   ]);
 }
 
@@ -100,6 +101,68 @@ describe('lobby', () => {
     ).toThrow(/gibt es nicht/);
     expect(() =>
       applyAction(started(), { type: 'select-color', playerId: 'p2', color: CREW_COLORS[5] }),
+    ).toThrow(/nur in der Lobby/);
+  });
+
+  it('refuses to start before everyone but the host has confirmed', () => {
+    const lobby = run([
+      { type: 'player-join', playerId: 'p1', name: 'Anna' },
+      { type: 'player-join', playerId: 'p2', name: 'Ben' },
+      { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
+      { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
+    ]);
+    expect(() =>
+      applyAction(lobby, { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 }),
+    ).toThrow(/Noch nicht bereit: Ben/);
+
+    const confirmed = applyAction(lobby, { type: 'set-ready', playerId: 'p2', ready: true });
+    expect(viewFor(confirmed, 'p1').players[1]?.ready).toBe(true);
+    expect(
+      applyAction(confirmed, { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 }).phase,
+    ).toBe('playing');
+  });
+
+  it('clears confirmations whenever the setup changes', () => {
+    // A three-role variant, so there is a free role to switch to.
+    const roomy = parseMission({
+      ...JSON.parse(JSON.stringify(mission)),
+      id: 'three',
+      roles: [
+        ...JSON.parse(JSON.stringify(mission.roles)),
+        { id: 'dritte', name: 'Dritte', description: '' },
+      ],
+    });
+    const confirmed = run(
+      [
+        { type: 'player-join', playerId: 'p1', name: 'Anna' },
+        { type: 'player-join', playerId: 'p2', name: 'Ben' },
+        { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
+        { type: 'set-ready', playerId: 'p2', ready: true },
+      ],
+      initialState(roomy),
+    );
+    expect(confirmed.players[1]?.ready).toBe(true);
+
+    // Someone switching role un-readies the crew …
+    const reRoled = applyAction(confirmed, {
+      type: 'select-role',
+      playerId: 'p2',
+      roleId: 'dritte',
+    });
+    expect(reRoled.players.every((p) => !p.ready)).toBe(true);
+
+    // … and so does a third player walking in.
+    const joined = applyAction(confirmed, {
+      type: 'player-join',
+      playerId: 'p3',
+      name: 'Cleo',
+    });
+    expect(joined.players.every((p) => !p.ready)).toBe(true);
+  });
+
+  it('rejects confirming outside the lobby', () => {
+    expect(() =>
+      applyAction(started(), { type: 'set-ready', playerId: 'p2', ready: false }),
     ).toThrow(/nur in der Lobby/);
   });
 

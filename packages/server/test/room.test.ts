@@ -4,6 +4,14 @@ import { parseMission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { RoomManager } from '../src/roomManager.js';
 
+/** The host's start now requires everyone else to have confirmed. */
+function ready(room: Room, ...players: { playerId: string }[]): void {
+  for (const player of players) {
+    room.act(player.playerId, { kind: 'set-ready', ready: true });
+  }
+}
+
+
 const mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/systemcheck.json', import.meta.url), 'utf8')),
 );
@@ -49,6 +57,7 @@ describe('Room', () => {
   it('runs a full mapped game: walk, activate, solve, hold a plate, escape', () => {
     const room = new Room('TEST', mission);
     const { anna, ben } = fullLobby(room);
+    ready(room, ben);
     room.act(anna.playerId, { kind: 'start-mission' });
 
     // Station 1 sits in the Kontrolle room; only steuerpult has a button.
@@ -90,6 +99,7 @@ describe('Room', () => {
   it('pauses the run while someone is disconnected and gives the time back', () => {
     const room = new Room('TEST', mission);
     const { anna, ben } = fullLobby(room);
+    ready(room, ben);
     room.act(anna.playerId, { kind: 'start-mission' });
     const deadline = lastView(anna.messages).deadlineAt ?? 0;
 
@@ -118,6 +128,7 @@ describe('Room', () => {
   it('does not expire the mission timer while paused', () => {
     const room = new Room('TEST', mission);
     const { anna, ben } = fullLobby(room);
+    ready(room, ben);
     room.act(anna.playerId, { kind: 'start-mission' });
     room.detach(ben.playerId);
 
@@ -152,6 +163,7 @@ describe('Room', () => {
     room.attach(ben.playerId, ben.listen);
     room.act(anna.playerId, { kind: 'select-role', roleId: 'anleitung' });
     room.act(ben.playerId, { kind: 'select-role', roleId: 'steuerpult' });
+    ready(room, ben);
     room.act(anna.playerId, { kind: 'start-mission' });
 
     // Station one first, so the gated station becomes current.
@@ -191,6 +203,7 @@ describe('Room', () => {
   it('rejects an interact from too far away', () => {
     const room = new Room('TEST', mission);
     const { anna, ben } = fullLobby(room);
+    ready(room, ben);
     room.act(anna.playerId, { kind: 'start-mission' });
     // Ben spawns three rooms away from the first station.
     expect(() => room.act(ben.playerId, { kind: 'interact' })).toThrow(/Zu weit weg/);
@@ -200,6 +213,7 @@ describe('Room', () => {
   it('releases a plate when its holder disconnects', () => {
     const room = new Room('TEST', mission);
     const { anna, ben } = fullLobby(room);
+    ready(room, ben);
     room.act(anna.playerId, { kind: 'start-mission' });
     moveTo(room, anna.playerId, 8, 5);
     expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(true);
@@ -210,7 +224,8 @@ describe('Room', () => {
 
   it('broadcasts a loss when the mission timer expires', () => {
     const room = new Room('TEST', mission);
-    const { anna } = fullLobby(room);
+    const { anna, ben } = fullLobby(room);
+    ready(room, ben);
     room.act(anna.playerId, { kind: 'start-mission' });
 
     vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 1);
@@ -248,6 +263,7 @@ describe('Room', () => {
   it('keeps private info out of the other player\'s serialized views', () => {
     const room = new Room('TEST', mission);
     const { anna, ben } = fullLobby(room);
+    ready(room, ben);
     room.act(anna.playerId, { kind: 'start-mission' });
     room.updatePosition(ben.playerId, { x: 2.5, y: 1.5, facing: 0, moving: false });
     room.act(ben.playerId, { kind: 'interact' });

@@ -47,6 +47,8 @@ export interface Player {
   roleId: string | null;
   /** '#rrggbb' from CREW_COLORS */
   color: string;
+  /** cleared whenever the setup changes, so nobody is dragged in unprepared */
+  ready: boolean;
   connected: boolean;
   isHost: boolean;
 }

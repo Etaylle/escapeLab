@@ -17,7 +17,9 @@ Schwierigkeit, wer schon wartet und wie viele Plätze frei sind — ein Klick au
 genügt, niemand muss einen Code weitergeben. Laufende Runden erscheinen ebenfalls, dort führt
 der Knopf zum Zuschauen. Ein Code-Feld bleibt für direkte Verabredungen.
 
-**Ablauf einer Partie:** Lobby (Figur + Farbe wählen, Rolle wählen) → Briefing-Countdown →
+**Ablauf einer Partie:** Lobby (Figur + Farbe wählen, Rolle wählen, **bereitmelden** — der Host
+kann erst starten, wenn alle bestätigt haben, und jede Änderung an Rollen oder Besetzung setzt
+die Bestätigungen zurück) → Briefing-Countdown →
 Stationen in Reihenfolge finden und lösen → wenn alle gelöst sind, öffnet sich der **Notausgang**
 und das ganze Team muss ihn gemeinsam erreichen, bevor die Zeit abläuft → Endbildschirm mit
 Statistiken und persönlicher Bestzeit. **Hilfsmittel:** Klick auf die Welt setzt einen **Ping**

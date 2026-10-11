@@ -12,6 +12,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
   const allRolesTaken = view.roles.every((r) => r.takenByName !== null);
   const seatsLeft = view.roles.length - view.players.length;
   const currentLevel = difficultyInfos().find((l) => l.id === view.difficulty);
+  const waiting = view.players.filter((p) => !p.isHost && !p.ready);
 
   return (
     <div className="card lobby">
@@ -126,6 +127,11 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
             {p.name}
             {p.roleName !== null ? ` — ${p.roleName}` : ' — wählt noch …'}
             {p.connected ? '' : ' (getrennt)'}
+            {!p.isHost && (
+              <span className={`ready-tag ${p.ready ? 'ready-tag-on' : ''}`}>
+                {p.ready ? '✓ bereit' : 'noch nicht bereit'}
+              </span>
+            )}
           </li>
         ))}
         {seatsLeft > 0 && (
@@ -139,13 +145,32 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
         {view.you.isHost ? (
           <button
             className="primary"
-            disabled={!allRolesTaken}
+            disabled={!allRolesTaken || waiting.length > 0}
             onClick={() => send({ kind: 'start-mission' })}
           >
-            {allRolesTaken ? '▶ Mission starten' : 'Warten, bis alle Rollen besetzt sind …'}
+            {!allRolesTaken
+              ? 'Warten, bis alle Rollen besetzt sind …'
+              : waiting.length > 0
+                ? `Warten auf ${waiting.map((p) => p.name).join(', ')} …`
+                : '▶ Mission starten'}
           </button>
         ) : (
-          <p className="muted">Der Host startet die Mission, sobald alle bereit sind.</p>
+          <>
+            <button
+              className={view.you.ready ? '' : 'primary'}
+              disabled={view.you.roleId === null}
+              onClick={() => send({ kind: 'set-ready', ready: !view.you.ready })}
+            >
+              {view.you.ready ? '✓ Bereit — doch nicht?' : 'Ich bin bereit'}
+            </button>
+            <p className="muted">
+              {view.you.roleId === null
+                ? 'Wähl zuerst eine Rolle.'
+                : view.you.ready
+                  ? 'Der Host startet, sobald alle bereit sind.'
+                  : 'Lies deine Rollenbeschreibung in Ruhe — dann melde dich bereit.'}
+            </p>
+          </>
         )}
         <button className="link" onClick={leaveRoom}>
           Raum verlassen

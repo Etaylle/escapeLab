@@ -39,6 +39,7 @@ function started(seed = 7): GameState {
       { type: 'player-join', playerId: 'p2', name: 'Ben' },
       { type: 'select-role', playerId: 'p1', roleId: 'navigator' },
       { type: 'select-role', playerId: 'p2', roleId: 'lotse' },
+      { type: 'set-ready', playerId: 'p2', ready: true },
       { type: 'start-mission', playerId: 'p1', at: T0, seed },
     ],
     initialState(mission),

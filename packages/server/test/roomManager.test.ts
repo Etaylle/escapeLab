@@ -4,6 +4,14 @@ import { parseMission, type Mission } from '@escapelab/core';
 import { RoomManager } from '../src/roomManager.js';
 import type { Room } from '../src/room.js';
 
+/** The host's start now requires everyone else to have confirmed. */
+function ready(room: Room, ...players: { playerId: string }[]): void {
+  for (const player of players) {
+    room.act(player.playerId, { kind: 'set-ready', ready: true });
+  }
+}
+
+
 const tutorial: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/systemcheck.json', import.meta.url), 'utf8')),
 );
@@ -60,6 +68,7 @@ describe('lobby browser', () => {
     const ben = seat(room, 'Ben');
     room.act(anna.playerId, { kind: 'select-role', roleId: 'anleitung' });
     room.act(ben.playerId, { kind: 'select-role', roleId: 'steuerpult' });
+    ready(room, ben);
     room.act(anna.playerId, { kind: 'start-mission' });
 
     const listed = manager.list()[0];
@@ -75,6 +84,7 @@ describe('lobby browser', () => {
     const ben = seat(running, 'Ben');
     running.act(anna.playerId, { kind: 'select-role', roleId: 'anleitung' });
     running.act(ben.playerId, { kind: 'select-role', roleId: 'steuerpult' });
+    ready(running, ben);
     running.act(anna.playerId, { kind: 'start-mission' });
 
     const open = manager.create(blackout);

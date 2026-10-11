@@ -214,6 +214,8 @@ class TestClient {
   }
 }
 
+const isError = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'error' }> =>
+  m.kind === 'error';
 const isJoined = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'joined' }> =>
   m.kind === 'joined';
 
@@ -471,6 +473,14 @@ ben.playerId = benJoined.playerId;
 anna.send({ kind: 'select-role', roleId: 'anleitung' });
 ben.send({ kind: 'select-role', roleId: 'steuerpult' });
 await anna.expectView('sees both roles taken', (v) => v.roles.every((r) => r.takenByName !== null));
+
+// The host cannot start until everyone else has confirmed.
+anna.send({ kind: 'start-mission' });
+const tooEarly = await anna.expect('not-ready error', isError);
+assert(/Noch nicht bereit: Ben/.test(tooEarly.message), 'starting before Ben confirms is refused');
+ben.send({ kind: 'set-ready', ready: true });
+await anna.expectView('sees Ben confirm', (v) =>
+  v.players.some((p) => p.name === 'Ben' && p.ready));
 
 anna.send({ kind: 'start-mission' });
 const clients: Clients = { anleitung: anna, steuerpult: ben };
