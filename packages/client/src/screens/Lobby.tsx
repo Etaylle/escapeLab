@@ -1,4 +1,4 @@
-import type { ClientMessage, MissionInfo, PlayerView } from '@escapelab/core';
+import { difficultyInfos, type ClientMessage, type MissionInfo, type PlayerView } from '@escapelab/core';
 import { CrewPreview } from './CrewPreview.js';
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
 export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
   const allRolesTaken = view.roles.every((r) => r.takenByName !== null);
   const seatsLeft = view.roles.length - view.players.length;
+  const currentLevel = difficultyInfos().find((l) => l.id === view.difficulty);
 
   return (
     <div className="card lobby">
@@ -25,22 +26,49 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
       </div>
       <p className="story">{view.storyText}</p>
 
-      {view.you.isHost && missions.length > 1 && (
-        <div className="mission-switch">
-          <label>
-            Mission wechseln
-            <select
-              value={view.missionId}
-              onChange={(e) => send({ kind: 'switch-mission', missionId: e.target.value })}
-            >
-              {missions.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.title} ({m.roles.length} Rollen)
-                </option>
+      {view.you.isHost ? (
+        <div className="host-controls">
+          {missions.length > 1 && (
+            <label>
+              Mission wechseln
+              <select
+                value={view.missionId}
+                onChange={(e) => send({ kind: 'switch-mission', missionId: e.target.value })}
+              >
+                {missions.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.title} ({m.roles.length} Rollen)
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <div className="difficulty">
+            <span className="difficulty-caption">Schwierigkeit</span>
+            <div className="difficulty-row">
+              {difficultyInfos().map((level) => (
+                <button
+                  key={level.id}
+                  className={`difficulty-btn ${
+                    view.difficulty === level.id ? 'difficulty-btn-on' : ''
+                  }`}
+                  title={level.description}
+                  onClick={() => send({ kind: 'select-difficulty', difficulty: level.id })}
+                >
+                  {level.label}
+                </button>
               ))}
-            </select>
-          </label>
+            </div>
+            <p className="muted difficulty-desc">
+              {difficultyInfos().find((l) => l.id === view.difficulty)?.description}
+            </p>
+          </div>
         </div>
+      ) : (
+        <p className="muted">
+          Schwierigkeit: <strong>{currentLevel?.label ?? view.difficulty}</strong> — der Host
+          stellt sie ein.
+        </p>
       )}
 
       <h2>Deine Figur</h2>

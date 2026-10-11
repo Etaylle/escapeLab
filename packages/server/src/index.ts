@@ -5,6 +5,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import {
   GameError,
   parseClientMessage,
+  scaleMission,
   type ClientMessage,
   type ServerMessage,
 } from '@escapelab/core';
@@ -74,7 +75,22 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
     }
     case 'switch-mission': {
       const s = requireSession(session);
-      s.room.switchMission(s.playerId, catalog.get(msg.missionId));
+      const difficulty = s.room.difficulty;
+      s.room.switchMission(
+        s.playerId,
+        scaleMission(catalog.get(msg.missionId), difficulty),
+        difficulty,
+      );
+      return s;
+    }
+    case 'select-difficulty': {
+      const s = requireSession(session);
+      // Rescale from the pristine mission, never from an already scaled one.
+      s.room.switchMission(
+        s.playerId,
+        scaleMission(catalog.get(s.room.missionId), msg.difficulty),
+        msg.difficulty,
+      );
       return s;
     }
     case 'ping': {

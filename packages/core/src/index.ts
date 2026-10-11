@@ -25,3 +25,9 @@ export {
   type DronePosition,
 } from './protocol.js';
 export { SIMON_COLORS, type SimonColor } from './puzzles/simon.js';
+export {
+  scaleMission,
+  difficultyInfos,
+  DIFFICULTIES,
+  type Difficulty,
+} from './difficulty.js';

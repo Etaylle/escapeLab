@@ -1,3 +1,4 @@
+import type { Difficulty } from './difficulty.js';
 import { CREW_COLORS, type GameState, type Phase } from './state.js';
 import type { PuzzleDef } from './mission.js';
 import type { PuzzleState } from './state.js';
@@ -12,6 +13,7 @@ export interface PlayerView {
   phase: Phase;
   missionId: string;
   missionTitle: string;
+  difficulty: Difficulty;
   storyText: string;
   you: { id: string; name: string; roleId: string | null; color: string; isHost: boolean };
   players: {
@@ -324,6 +326,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     phase: state.phase,
     missionId: state.mission.id,
     missionTitle: state.mission.title,
+    difficulty: state.difficulty,
     storyText: storyText(state),
     you: {
       id: you.id,

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DIFFICULTIES } from './difficulty.js';
 import type { PlayerView } from './view.js';
 
 /**
@@ -26,6 +27,7 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('select-role'), roleId: z.string().min(1) }),
   z.object({ kind: z.literal('select-color'), color: z.string().regex(/^#[0-9a-f]{6}$/i) }),
   z.object({ kind: z.literal('switch-mission'), missionId: z.string().min(1) }),
+  z.object({ kind: z.literal('select-difficulty'), difficulty: z.enum(DIFFICULTIES) }),
   z.object({ kind: z.literal('start-mission') }),
   z.object({ kind: z.literal('press-button') }),
   z.object({ kind: z.literal('cut-wire'), wireId: z.string().min(1) }),

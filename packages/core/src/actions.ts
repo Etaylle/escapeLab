@@ -1,4 +1,5 @@
 import { CREW_COLORS, type GameState, type Player, type PuzzleState } from './state.js';
+import type { Difficulty } from './difficulty.js';
 import type { Mission, PuzzleDef } from './mission.js';
 import { mulberry32 } from './rng.js';
 import { initButtonSync, pressButton } from './puzzles/buttonSync.js';
@@ -20,7 +21,7 @@ export type Action =
   | { type: 'player-disconnected'; playerId: string }
   | { type: 'select-role'; playerId: string; roleId: string }
   | { type: 'select-color'; playerId: string; color: string }
-  | { type: 'switch-mission'; playerId: string; mission: Mission }
+  | { type: 'switch-mission'; playerId: string; mission: Mission; difficulty: Difficulty }
   | { type: 'start-mission'; playerId: string; at: number; seed: number }
   | { type: 'press-button'; playerId: string; at: number }
   | { type: 'cut-wire'; playerId: string; wireId: string; at: number }
@@ -123,7 +124,7 @@ export function applyAction(state: GameState, action: Action): GameState {
 
 function switchMission(
   state: GameState,
-  action: { playerId: string; mission: Mission },
+  action: { playerId: string; mission: Mission; difficulty: Difficulty },
 ): GameState {
   if (state.phase !== 'lobby') {
     fail('Die Mission kann nur in der Lobby gewechselt werden.');
@@ -135,9 +136,12 @@ function switchMission(
         `(max. ${action.mission.roles.length}).`,
     );
   }
-  // Role ids may differ between missions — everyone picks again.
-  const players = state.players.map((p) => ({ ...p, roleId: null }));
-  return { ...state, mission: action.mission, players };
+  const sameMission = state.mission.id === action.mission.id;
+  // Role ids may differ between missions, so a real switch resets the picks.
+  const players = sameMission
+    ? state.players
+    : state.players.map((p) => ({ ...p, roleId: null }));
+  return { ...state, mission: action.mission, difficulty: action.difficulty, players };
 }
 
 function playerJoin(

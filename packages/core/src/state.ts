@@ -1,3 +1,4 @@
+import type { Difficulty } from './difficulty.js';
 import type { Mission } from './mission.js';
 import type { ButtonSyncState } from './puzzles/buttonSync.js';
 import type { WiringState } from './puzzles/wiring.js';
@@ -41,7 +42,9 @@ export type PuzzleState =
 
 export interface GameState {
   phase: Phase;
+  /** already scaled to `difficulty` — downstream code just reads the numbers */
   mission: Mission;
+  difficulty: Difficulty;
   players: Player[];
   /** index into mission.puzzles; only meaningful while playing */
   currentPuzzleIndex: number;
@@ -78,6 +81,7 @@ export function initialState(mission: Mission): GameState {
   return {
     phase: 'lobby',
     mission,
+    difficulty: 'normal',
     players: [],
     currentPuzzleIndex: 0,
     puzzleState: null,

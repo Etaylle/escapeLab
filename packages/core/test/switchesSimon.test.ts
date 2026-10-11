@@ -241,11 +241,11 @@ describe('mission switching & stats', () => {
       ],
       initialState(blackout),
     );
-    state = applyAction(state, { type: 'switch-mission', playerId: 'p1', mission: tutorial });
+    state = applyAction(state, { type: 'switch-mission', playerId: 'p1', mission: tutorial, difficulty: 'normal' });
     expect(state.mission.id).toBe('systemcheck');
     expect(state.players.map((p) => p.roleId)).toEqual([null, null]);
     expect(() =>
-      applyAction(state, { type: 'switch-mission', playerId: 'p2', mission: blackout }),
+      applyAction(state, { type: 'switch-mission', playerId: 'p2', mission: blackout, difficulty: 'normal' }),
     ).toThrow(/Host/);
   });
 
@@ -259,7 +259,7 @@ describe('mission switching & stats', () => {
       initialState(kettenreaktion),
     );
     expect(() =>
-      applyAction(three, { type: 'switch-mission', playerId: 'p1', mission: blackout }),
+      applyAction(three, { type: 'switch-mission', playerId: 'p1', mission: blackout, difficulty: 'normal' }),
     ).toThrow(/zu viele Spieler/);
   });
 

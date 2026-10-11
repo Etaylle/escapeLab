@@ -8,6 +8,7 @@ import {
   viewFor,
   type Action,
   type ClientMessage,
+  type Difficulty,
   type GameState,
   type Mission,
   type PlayerPosition,
@@ -235,9 +236,18 @@ export class Room {
     }
   }
 
-  /** Host switches the lobby to a different mission (validated by the reducer). */
-  switchMission(playerId: string, mission: Mission): void {
-    this.dispatch({ type: 'switch-mission', playerId, mission });
+  /** Mission currently selected in this room, so callers can rescale it. */
+  get missionId(): string {
+    return this.state.mission.id;
+  }
+
+  get difficulty(): Difficulty {
+    return this.state.difficulty;
+  }
+
+  /** Host switches mission or difficulty (validated by the reducer). */
+  switchMission(playerId: string, mission: Mission, difficulty: Difficulty): void {
+    this.dispatch({ type: 'switch-mission', playerId, mission, difficulty });
   }
 
   private requireNearStation(playerId: string): void {

@@ -1334,3 +1334,49 @@ button.link:hover {
   max-width: 420px;
   line-height: 1.5;
 }
+
+/* ── host controls (lobby) ──────────────────────────────────────────────── */
+
+.host-controls {
+  margin-top: 16px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-2);
+}
+
+.host-controls label {
+  margin-top: 0;
+}
+
+.difficulty-caption {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.difficulty-row {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+
+.difficulty-btn {
+  flex: 1 1 110px;
+  font-weight: 600;
+}
+
+.difficulty-btn-on {
+  border-color: var(--accent);
+  background: var(--accent-dark);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.difficulty-desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
