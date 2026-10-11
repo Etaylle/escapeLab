@@ -1,4 +1,5 @@
 import type { ClientMessage, MissionInfo, PlayerView } from '@escapelab/core';
+import { CrewPreview } from './CrewPreview.js';
 
 interface Props {
   view: PlayerView;
@@ -42,6 +43,30 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
         </div>
       )}
 
+      <h2>Deine Figur</h2>
+      <div className="crew-picker">
+        <CrewPreview color={view.you.color} name={view.you.name} />
+        <div className="swatches">
+          {view.palette.map((entry) => {
+            const mine = entry.color === view.you.color;
+            const taken = entry.takenByName !== null && !mine;
+            return (
+              <button
+                key={entry.color}
+                className={`swatch ${mine ? 'swatch-mine' : ''}`}
+                style={{ background: entry.color }}
+                disabled={taken}
+                title={entry.takenByName ?? 'frei'}
+                aria-label={`Farbe ${entry.color}${taken ? ' (belegt)' : ''}`}
+                onClick={() => send({ kind: 'select-color', color: entry.color })}
+              >
+                {taken ? '×' : mine ? '✓' : ''}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <h2>Rollen — klick dir deine</h2>
       <div className="roles">
         {view.roles.map((role) => {
@@ -68,6 +93,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
       <ul className="players">
         {view.players.map((p) => (
           <li key={p.id} className={p.connected ? '' : 'offline'}>
+            <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
             {p.isHost ? '★ ' : ''}
             {p.name}
             {p.roleName !== null ? ` — ${p.roleName}` : ' — wählt noch …'}

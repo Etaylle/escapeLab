@@ -87,6 +87,7 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
       return s;
     }
     case 'select-role':
+    case 'select-color':
     case 'start-mission':
     case 'press-button':
     case 'cut-wire':

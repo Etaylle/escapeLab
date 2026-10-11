@@ -7,11 +7,25 @@ import type { SimonState } from './puzzles/simon.js';
 
 export type Phase = 'lobby' | 'playing' | 'won' | 'lost';
 
+/** Crew colors, unique per room; the first free one is handed out on join. */
+export const CREW_COLORS = [
+  '#2dd4bf',
+  '#f472b6',
+  '#fbbf24',
+  '#60a5fa',
+  '#a78bfa',
+  '#4ade80',
+  '#fb923c',
+  '#f87171',
+] as const;
+
 export interface Player {
   id: string;
   name: string;
   /** null until the player picks a role in the lobby */
   roleId: string | null;
+  /** '#rrggbb' from CREW_COLORS */
+  color: string;
   connected: boolean;
   isHost: boolean;
 }

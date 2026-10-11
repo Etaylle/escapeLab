@@ -10,7 +10,7 @@ export {
   type SwitchesPuzzleDef,
   type SimonPuzzleDef,
 } from './mission.js';
-export { initialState, type GameState, type Player, type Phase } from './state.js';
+export { initialState, CREW_COLORS, type GameState, type Player, type Phase } from './state.js';
 export { applyAction, inEscapePhase, GameError, type Action } from './actions.js';
 export { viewFor, type PlayerView, type PuzzleView, type MapView } from './view.js';
 export { doorOpen, platePressed, armedStation } from './map.js';

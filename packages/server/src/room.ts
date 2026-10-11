@@ -21,6 +21,7 @@ export type GameMessage = Extract<
   {
     kind:
       | 'select-role'
+      | 'select-color'
       | 'start-mission'
       | 'press-button'
       | 'cut-wire'
@@ -128,6 +129,9 @@ export class Room {
     switch (msg.kind) {
       case 'select-role':
         this.dispatch({ type: 'select-role', playerId, roleId: msg.roleId });
+        break;
+      case 'select-color':
+        this.dispatch({ type: 'select-color', playerId, color: msg.color });
         break;
       case 'start-mission':
         this.dispatch({

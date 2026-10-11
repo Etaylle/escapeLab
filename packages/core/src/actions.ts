@@ -1,4 +1,4 @@
-import type { GameState, Player, PuzzleState } from './state.js';
+import { CREW_COLORS, type GameState, type Player, type PuzzleState } from './state.js';
 import type { Mission, PuzzleDef } from './mission.js';
 import { mulberry32 } from './rng.js';
 import { initButtonSync, pressButton } from './puzzles/buttonSync.js';
@@ -18,6 +18,7 @@ export type Action =
   | { type: 'player-connected'; playerId: string }
   | { type: 'player-disconnected'; playerId: string }
   | { type: 'select-role'; playerId: string; roleId: string }
+  | { type: 'select-color'; playerId: string; color: string }
   | { type: 'switch-mission'; playerId: string; mission: Mission }
   | { type: 'start-mission'; playerId: string; at: number; seed: number }
   | { type: 'press-button'; playerId: string; at: number }
@@ -60,6 +61,8 @@ export function applyAction(state: GameState, action: Action): GameState {
       return setConnected(state, action.playerId, false);
     case 'select-role':
       return selectRole(state, action);
+    case 'select-color':
+      return selectColor(state, action);
     case 'switch-mission':
       return switchMission(state, action);
     case 'start-mission':
@@ -126,14 +129,37 @@ function playerJoin(
   if (name.length === 0) {
     fail('Bitte einen Namen eingeben.');
   }
+  const taken = new Set(state.players.map((p) => p.color));
   const player: Player = {
     id: action.playerId,
     name,
     roleId: null,
+    color: CREW_COLORS.find((c) => !taken.has(c)) ?? CREW_COLORS[0],
     connected: true,
     isHost: state.players.length === 0,
   };
   return { ...state, players: [...state.players, player] };
+}
+
+function selectColor(
+  state: GameState,
+  action: { playerId: string; color: string },
+): GameState {
+  if (state.phase !== 'lobby') {
+    fail('Die Farbe lässt sich nur in der Lobby ändern.');
+  }
+  findPlayer(state, action.playerId);
+  if (!CREW_COLORS.some((c) => c === action.color)) {
+    fail('Diese Farbe gibt es nicht.');
+  }
+  const takenBy = state.players.find((p) => p.color === action.color);
+  if (takenBy !== undefined && takenBy.id !== action.playerId) {
+    fail(`Die Farbe trägt schon ${takenBy.name}.`);
+  }
+  const players = state.players.map((p) =>
+    p.id === action.playerId ? { ...p, color: action.color } : p,
+  );
+  return { ...state, players };
 }
 
 function setConnected(state: GameState, playerId: string, connected: boolean): GameState {

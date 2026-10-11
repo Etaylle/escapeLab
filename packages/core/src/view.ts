@@ -1,4 +1,4 @@
-import type { GameState, Phase } from './state.js';
+import { CREW_COLORS, type GameState, type Phase } from './state.js';
 import type { PuzzleDef } from './mission.js';
 import type { PuzzleState } from './state.js';
 import { doorOpen, platePressed } from './map.js';
@@ -13,15 +13,18 @@ export interface PlayerView {
   missionId: string;
   missionTitle: string;
   storyText: string;
-  you: { id: string; name: string; roleId: string | null; isHost: boolean };
+  you: { id: string; name: string; roleId: string | null; color: string; isHost: boolean };
   players: {
     id: string;
     name: string;
     roleId: string | null;
     roleName: string | null;
+    color: string;
     connected: boolean;
     isHost: boolean;
   }[];
+  /** crew colors and who holds them, for the lobby picker */
+  palette: { color: string; takenByName: string | null }[];
   roles: { id: string; name: string; description: string; takenByName: string | null }[];
   deadlineAt: number | null;
   startedAt: number | null;
@@ -277,14 +280,25 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     missionId: state.mission.id,
     missionTitle: state.mission.title,
     storyText: storyText(state),
-    you: { id: you.id, name: you.name, roleId: you.roleId, isHost: you.isHost },
+    you: {
+      id: you.id,
+      name: you.name,
+      roleId: you.roleId,
+      color: you.color,
+      isHost: you.isHost,
+    },
     players: state.players.map((p) => ({
       id: p.id,
       name: p.name,
       roleId: p.roleId,
       roleName: roleName(p.roleId),
+      color: p.color,
       connected: p.connected,
       isHost: p.isHost,
+    })),
+    palette: CREW_COLORS.map((color) => ({
+      color,
+      takenByName: state.players.find((p) => p.color === color)?.name ?? null,
     })),
     roles: state.mission.roles.map((r) => ({
       id: r.id,

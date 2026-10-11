@@ -18,7 +18,7 @@ import {
   stopAmbience,
 } from './audio.js';
 
-const PLAYER_COLORS = ['#2dd4bf', '#f472b6', '#fbbf24', '#60a5fa'];
+const FALLBACK_COLOR = '#2dd4bf';
 const SPEED = 4.2; // tiles per second
 const RADIUS = 0.28; // collision half-size
 const INTERACT_RADIUS = 1.5; // prompt + client-side gate (server allows 1.6)
@@ -459,7 +459,7 @@ export function GameWorld({ view, positionsRef, pingsRef, inputLocked, send }: P
 
       // avatars: remote first, local on top
       const colorOf = new Map(
-        viewRef.current.players.map((p, i) => [p.id, PLAYER_COLORS[i % 4] ?? '#2dd4bf']),
+        viewRef.current.players.map((p) => [p.id, p.color]),
       );
       const metaOf = new Map(viewRef.current.players.map((p) => [p.id, p]));
       for (const [id, other] of sim.others) {
@@ -467,7 +467,7 @@ export function GameWorld({ view, positionsRef, pingsRef, inputLocked, send }: P
         ctx.save();
         ctx.translate(other.rx, other.ry + 0.3);
         drawScientist(ctx, {
-          color: colorOf.get(id) ?? '#2dd4bf',
+          color: colorOf.get(id) ?? FALLBACK_COLOR,
           name: meta?.name ?? '???',
           facing: other.facing,
           moving: other.moving,
@@ -481,7 +481,7 @@ export function GameWorld({ view, positionsRef, pingsRef, inputLocked, send }: P
       ctx.save();
       ctx.translate(sim.self.x, sim.self.y + 0.3);
       drawScientist(ctx, {
-        color: colorOf.get(viewRef.current.you.id) ?? '#2dd4bf',
+        color: colorOf.get(viewRef.current.you.id) ?? FALLBACK_COLOR,
         name: you?.name ?? 'DU',
         facing: sim.self.facing,
         moving: sim.self.moving,
@@ -508,7 +508,7 @@ export function GameWorld({ view, positionsRef, pingsRef, inputLocked, send }: P
         pingsRef.current = live;
       }
       const colorOf = new Map(
-        viewRef.current.players.map((p, i) => [p.id, PLAYER_COLORS[i % 4] ?? '#2dd4bf']),
+        viewRef.current.players.map((p) => [p.id, p.color]),
       );
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       for (const ping of live) {
@@ -517,7 +517,7 @@ export function GameWorld({ view, positionsRef, pingsRef, inputLocked, send }: P
           pingBlip();
         }
         const age = (now - ping.at) / PING_LIFETIME_MS;
-        const color = colorOf.get(ping.playerId) ?? '#2dd4bf';
+        const color = colorOf.get(ping.playerId) ?? FALLBACK_COLOR;
         const [px, py] = worldToScreen(s, w, h, ping.x, ping.y);
         ctx.strokeStyle = color;
         ctx.globalAlpha = 1 - age;
@@ -596,7 +596,7 @@ export function GameWorld({ view, positionsRef, pingsRef, inputLocked, send }: P
         ctx.fillRect(ox + map.exit.x * cell, oy + map.exit.y * cell, cell, cell);
       }
       const colorOf = new Map(
-        viewRef.current.players.map((p, i) => [p.id, PLAYER_COLORS[i % 4] ?? '#2dd4bf']),
+        viewRef.current.players.map((p) => [p.id, p.color]),
       );
       const dot = (x: number, y: number, color: string, ring: boolean): void => {
         ctx.fillStyle = color;
@@ -610,9 +610,9 @@ export function GameWorld({ view, positionsRef, pingsRef, inputLocked, send }: P
         }
       };
       for (const [id, other] of sim.others) {
-        dot(other.rx, other.ry, colorOf.get(id) ?? '#f472b6', false);
+        dot(other.rx, other.ry, colorOf.get(id) ?? FALLBACK_COLOR, false);
       }
-      dot(sim.self.x, sim.self.y, colorOf.get(viewRef.current.you.id) ?? '#2dd4bf', true);
+      dot(sim.self.x, sim.self.y, colorOf.get(viewRef.current.you.id) ?? FALLBACK_COLOR, true);
       ctx.globalAlpha = 1;
     }
 

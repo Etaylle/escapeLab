@@ -1,6 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { applyAction, GameError, initialState, parseMission, viewFor } from '../src/index.js';
+import {
+  applyAction,
+  CREW_COLORS,
+  GameError,
+  initialState,
+  parseMission,
+  viewFor,
+} from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
 
 // Lobby and puzzle-chain tests run without the tile map (with one, puzzles wait
@@ -66,6 +73,34 @@ describe('lobby', () => {
     expect(() =>
       applyAction(started(), { type: 'player-join', playerId: 'p3', name: 'Cleo' }),
     ).toThrow(/Lobby/);
+  });
+
+  it('hands out distinct crew colors and lets players swap to free ones', () => {
+    const state = readyLobby();
+    const [anna, ben] = state.players;
+    expect(anna?.color).not.toBe(ben?.color);
+    expect(viewFor(state, 'p1').palette.filter((p) => p.takenByName !== null)).toHaveLength(2);
+
+    const recolored = applyAction(state, {
+      type: 'select-color',
+      playerId: 'p2',
+      color: CREW_COLORS[4],
+    });
+    expect(recolored.players[1]?.color).toBe(CREW_COLORS[4]);
+  });
+
+  it('rejects a taken color, an unknown color and recoloring mid-mission', () => {
+    const state = readyLobby();
+    const annaColor = state.players[0]?.color ?? '';
+    expect(() =>
+      applyAction(state, { type: 'select-color', playerId: 'p2', color: annaColor }),
+    ).toThrow(/trägt schon/);
+    expect(() =>
+      applyAction(state, { type: 'select-color', playerId: 'p2', color: '#123456' }),
+    ).toThrow(/gibt es nicht/);
+    expect(() =>
+      applyAction(started(), { type: 'select-color', playerId: 'p2', color: CREW_COLORS[5] }),
+    ).toThrow(/nur in der Lobby/);
   });
 
   it('rejects blank player names', () => {

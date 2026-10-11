@@ -1112,3 +1112,62 @@ button.link:hover {
   overflow-y: auto;
   box-shadow: 0 0 0 1px var(--accent-dark), 0 30px 80px rgba(0, 0, 0, 0.7);
 }
+
+/* ── crew picker (lobby) ────────────────────────────────────────────────── */
+
+.crew-picker {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 18px;
+}
+
+.crew-preview {
+  width: 116px;
+  height: 116px;
+  flex: none;
+}
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(4, 38px);
+  gap: 8px;
+}
+
+.swatch {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  color: rgba(4, 7, 10, 0.75);
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.swatch:hover:not(:disabled) {
+  transform: scale(1.08);
+  box-shadow: 0 0 10px currentColor;
+}
+
+.swatch-mine {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+}
+
+.swatch:disabled {
+  opacity: 0.3;
+}
+
+.crew-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: baseline;
+}
