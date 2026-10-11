@@ -95,6 +95,7 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
     case 'toggle-switch':
     case 'commit-switches':
     case 'press-simon':
+    case 'move-maze':
     case 'interact':
     case 'back-to-lobby': {
       const s = requireSession(session);

@@ -6,6 +6,7 @@ import { cutWire, initWiring } from './puzzles/wiring.js';
 import { initKeypad, pressKey } from './puzzles/keypad.js';
 import { commitSwitches, initSwitches, toggleSwitch } from './puzzles/switches.js';
 import { initSimon, pressSimon } from './puzzles/simon.js';
+import { initMaze, moveMaze } from './puzzles/maze.js';
 import { armedStation } from './map.js';
 
 /**
@@ -27,6 +28,7 @@ export type Action =
   | { type: 'toggle-switch'; playerId: string; switchIndex: number; at: number }
   | { type: 'commit-switches'; playerId: string; at: number }
   | { type: 'press-simon'; playerId: string; buttonIndex: number; at: number }
+  | { type: 'move-maze'; playerId: string; dir: number; at: number }
   | { type: 'set-occupancy'; plates: string[]; panels: string[] }
   | { type: 'drone-spotted'; at: number; penaltySec: number }
   | { type: 'sabotage-start'; at: number }
@@ -83,6 +85,8 @@ export function applyAction(state: GameState, action: Action): GameState {
       return handleCommitSwitches(state, action);
     case 'press-simon':
       return handlePressSimon(state, action);
+    case 'move-maze':
+      return handleMoveMaze(state, action);
     case 'set-occupancy':
       return state.phase === 'playing'
         ? {
@@ -224,6 +228,8 @@ function initPuzzleState(state: GameState, index: number): PuzzleState {
       return initSwitches(def, rng);
     case 'simon':
       return initSimon(def, rng);
+    case 'maze':
+      return initMaze(def, rng);
   }
 }
 
@@ -479,6 +485,29 @@ function handlePressSimon(
     fail('Nur die Rolle am Frequenz-Panel kann Tasten drücken.');
   }
   const result = pressSimon(puzzleState, action.buttonIndex);
+  const next = { ...state, puzzleState: result.state };
+  if (result.penalty) {
+    return applyPenalty(next, def.penaltySec, action.at);
+  }
+  return result.solved ? advance(next, action.at) : next;
+}
+
+function handleMoveMaze(
+  state: GameState,
+  action: { playerId: string; dir: number; at: number },
+): GameState {
+  const ctx = requirePlaying(state, action.playerId, action.at);
+  if (ctx === 'lost') {
+    return lostNow(state, action.at);
+  }
+  const { player, def, puzzleState } = ctx;
+  if (def.type !== 'maze' || puzzleState.type !== 'maze') {
+    fail('Hier gibt es kein Labyrinth.');
+  }
+  if (player.roleId !== def.navigatorRoleId) {
+    fail('Nur die Rolle am Navigationspult kann den Marker bewegen.');
+  }
+  const result = moveMaze(puzzleState, action.dir);
   const next = { ...state, puzzleState: result.state };
   if (result.penalty) {
     return applyPenalty(next, def.penaltySec, action.at);

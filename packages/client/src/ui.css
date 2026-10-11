@@ -1245,3 +1245,78 @@ button.link:hover {
   color: #042f2a;
   background: var(--accent);
 }
+
+/* ── maze puzzle ────────────────────────────────────────────────────────── */
+
+.maze {
+  width: 100%;
+  max-width: 340px;
+  margin: 12px auto;
+  display: block;
+  background: #0b1117;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.maze-frame {
+  fill: none;
+  stroke: var(--line-2);
+  stroke-width: 2;
+}
+
+.maze-label text {
+  fill: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.maze-wall line {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+
+.maze-goal rect {
+  fill: none;
+  stroke: var(--warn);
+  stroke-width: 2.5;
+  stroke-dasharray: 4 3;
+}
+
+.maze-marker {
+  fill: var(--accent);
+  filter: drop-shadow(0 0 5px var(--accent-glow));
+  transition: cx 0.12s ease, cy 0.12s ease;
+}
+
+.maze-marker-bump {
+  fill: var(--danger);
+  animation: maze-bump 0.4s 2;
+}
+
+@keyframes maze-bump {
+  50% {
+    r: 11;
+  }
+}
+
+.maze-pad {
+  display: grid;
+  grid-template-areas: '. up .' 'left . right' '. down .';
+  grid-template-columns: repeat(3, 48px);
+  grid-template-rows: repeat(3, 48px);
+  gap: 6px;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.maze-btn {
+  font-size: 20px;
+  border-radius: 10px;
+}
+
+.maze-btn--up { grid-area: up; }
+.maze-btn--down { grid-area: down; }
+.maze-btn--left { grid-area: left; }
+.maze-btn--right { grid-area: right; }

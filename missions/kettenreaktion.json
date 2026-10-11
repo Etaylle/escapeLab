@@ -51,6 +51,7 @@
       { "puzzleId": "kuehlkreislauf", "x": 17, "y": 11 },
       { "puzzleId": "freigabecode", "x": 11, "y": 2 },
       { "puzzleId": "resonanz", "x": 8, "y": 9 },
+      { "puzzleId": "leitungsnetz", "x": 4, "y": 6 },
       { "puzzleId": "abschaltung", "x": 3, "y": 10 }
     ],
     "labels": [
@@ -214,6 +215,30 @@
         {
           "roleId": "steuerpult",
           "text": "Abspielen, Farben ansagen, Symbole nach Ansage tippen. Ein Fehler setzt die Folge zurück (−20 s)."
+        }
+      ]
+    },
+    {
+      "type": "maze",
+      "id": "leitungsnetz",
+      "title": "Leitungsnetz",
+      "prompt": "Der Steuerimpuls muss per Hand durch das Leitungsnetz geschleust werden. Das Netz ist auf keiner Konsole vollständig sichtbar.",
+      "navigatorRoleId": "steuerpult",
+      "guideRoleId": "diagnose",
+      "size": 6,
+      "penaltySec": 12,
+      "infos": [
+        {
+          "roleId": "diagnose",
+          "text": "Dein Schaltplan zeigt alle Wände, aber nicht den Impuls. Lass dir die Zelle ansagen (Spalte A–F, Zeile 1–6) und sage die nächste Richtung an."
+        },
+        {
+          "roleId": "steuerpult",
+          "text": "Du siehst den Impuls und das Ziel, aber keine einzige Wand. Sag laut, wo du stehst, und folge den Ansagen der Diagnose. Gegen eine Wand zu laufen kostet 12 Sekunden."
+        },
+        {
+          "roleId": "anleitung",
+          "text": "Handbuch §7: Du kannst hier nichts sehen — halte die Nerven ruhig und zähl die Fehlversuche mit."
         }
       ]
     },

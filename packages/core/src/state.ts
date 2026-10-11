@@ -4,6 +4,7 @@ import type { WiringState } from './puzzles/wiring.js';
 import type { KeypadState } from './puzzles/keypad.js';
 import type { SwitchesState } from './puzzles/switches.js';
 import type { SimonState } from './puzzles/simon.js';
+import type { MazeState } from './puzzles/maze.js';
 
 export type Phase = 'lobby' | 'playing' | 'won' | 'lost';
 
@@ -30,7 +31,13 @@ export interface Player {
   isHost: boolean;
 }
 
-export type PuzzleState = ButtonSyncState | WiringState | KeypadState | SwitchesState | SimonState;
+export type PuzzleState =
+  | ButtonSyncState
+  | WiringState
+  | KeypadState
+  | SwitchesState
+  | SimonState
+  | MazeState;
 
 export interface GameState {
   phase: Phase;

@@ -113,6 +113,16 @@ export type PuzzleView = PuzzleViewCommon &
         lastResult: 'wrong' | null;
       }
     | {
+        kind: 'maze';
+        size: number;
+        /** your marker — only the navigator sees it */
+        pos: { x: number; y: number } | null;
+        goal: { x: number; y: number };
+        /** per-cell open-side bitmasks — only the guide sees them */
+        cells: number[] | null;
+        lastResult: 'wall' | null;
+      }
+    | {
         kind: 'simon';
         /** flashing color sequence — only the display role gets it */
         sequence: string[] | null;
@@ -192,6 +202,18 @@ function buildPuzzleView(
       target: roleId === def.targetRoleId ? puzzleState.target : null,
       targetCount: def.onCount,
       lastResult: isPanel ? puzzleState.lastResult : null,
+    };
+  }
+  if (def.type === 'maze' && puzzleState.type === 'maze') {
+    const isNavigator = roleId === def.navigatorRoleId;
+    return {
+      ...common,
+      kind: 'maze',
+      size: puzzleState.size,
+      pos: isNavigator ? { ...puzzleState.pos } : null,
+      goal: { ...puzzleState.goal },
+      cells: roleId === def.guideRoleId ? [...puzzleState.cells] : null,
+      lastResult: isNavigator ? puzzleState.lastResult : null,
     };
   }
   if (def.type === 'simon' && puzzleState.type === 'simon') {

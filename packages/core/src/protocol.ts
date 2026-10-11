@@ -33,6 +33,7 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('toggle-switch'), switchIndex: z.number().int().nonnegative() }),
   z.object({ kind: z.literal('commit-switches') }),
   z.object({ kind: z.literal('press-simon'), buttonIndex: z.number().int().nonnegative() }),
+  z.object({ kind: z.literal('move-maze'), dir: z.number().int().min(0).max(3) }),
   z.object({
     kind: z.literal('pos'),
     x: z.number().finite().min(-10).max(500),

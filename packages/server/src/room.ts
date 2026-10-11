@@ -30,6 +30,7 @@ export type GameMessage = Extract<
       | 'toggle-switch'
       | 'commit-switches'
       | 'press-simon'
+      | 'move-maze'
       | 'interact'
       | 'back-to-lobby';
   }
@@ -187,6 +188,9 @@ export class Room {
           buttonIndex: msg.buttonIndex,
           at: Date.now(),
         });
+        break;
+      case 'move-maze':
+        this.dispatch({ type: 'move-maze', playerId, dir: msg.dir, at: Date.now() });
         break;
       case 'interact':
         this.requireNearStation(playerId);

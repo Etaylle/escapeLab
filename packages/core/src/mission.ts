@@ -98,12 +98,29 @@ export const simonPuzzleSchema = z.object({
   infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
 });
 
+/**
+ * maze puzzle: the navigator role sees its marker and the goal but no walls,
+ * the guide role sees the walls but not the marker. Bumping a wall costs time.
+ */
+export const mazePuzzleSchema = z.object({
+  type: z.literal('maze'),
+  id: z.string().min(1),
+  title: z.string().min(1),
+  prompt: z.string(),
+  navigatorRoleId: z.string().min(1),
+  guideRoleId: z.string().min(1),
+  size: z.number().int().min(4).max(8).default(6),
+  penaltySec: z.number().int().positive().default(15),
+  infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
+});
+
 export const puzzleDefSchema = z.discriminatedUnion('type', [
   buttonSyncPuzzleSchema,
   wiringPuzzleSchema,
   keypadPuzzleSchema,
   switchesPuzzleSchema,
   simonPuzzleSchema,
+  mazePuzzleSchema,
 ]);
 
 const coord = z.number().int().nonnegative();
@@ -217,6 +234,15 @@ function validatePuzzle(puzzle: PuzzleDef, roleIds: Set<string>, ctx: z.Refineme
       ctx.addIssue({
         code: 'custom',
         message: `puzzle "${puzzle.id}": onCount must be below the number of switches`,
+      });
+    }
+  }
+  if (puzzle.type === 'maze') {
+    refs.push(puzzle.navigatorRoleId, puzzle.guideRoleId);
+    if (puzzle.navigatorRoleId === puzzle.guideRoleId) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `puzzle "${puzzle.id}": navigator and guide role must differ`,
       });
     }
   }
@@ -402,6 +428,7 @@ export type WiringPuzzleDef = z.infer<typeof wiringPuzzleSchema>;
 export type KeypadPuzzleDef = z.infer<typeof keypadPuzzleSchema>;
 export type SwitchesPuzzleDef = z.infer<typeof switchesPuzzleSchema>;
 export type SimonPuzzleDef = z.infer<typeof simonPuzzleSchema>;
+export type MazePuzzleDef = z.infer<typeof mazePuzzleSchema>;
 export type PuzzleDef = z.infer<typeof puzzleDefSchema>;
 export type MapDef = z.infer<typeof mapDefSchema>;
 export type Mission = z.infer<typeof missionSchema>;
