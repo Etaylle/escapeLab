@@ -24,9 +24,11 @@ import {
   makeWallTile,
 } from './art.js';
 import {
+  countdownBeep,
   doorSlide,
   footstep,
   pingBlip,
+  setTension,
   powerDrain,
   startAmbience,
   stationChirp,
@@ -95,6 +97,8 @@ interface Sim {
   seenPings: WeakSet<MapPing>;
   minimap: boolean;
   sabotageWasOn: boolean;
+  /** last whole second announced by the countdown, so each tick fires once */
+  lastBeepAt: number;
 }
 
 const MOVE_KEYS: Record<string, [number, number]> = {
@@ -313,6 +317,7 @@ export function GameWorld({
       seenPings: new WeakSet<MapPing>(),
       minimap: true,
       sabotageWasOn: false,
+      lastBeepAt: Number.POSITIVE_INFINITY,
     };
     simRef.current = sim;
     startAmbience();
@@ -523,6 +528,20 @@ export function GameWorld({
             doorSlide();
           }
           anim.t += (target - anim.t) * (1 - Math.exp(-dt * 7));
+        }
+      }
+
+      // The lab gets louder as the clock runs out, and counts the last ten
+      // seconds out loud.
+      const deadline = viewRef.current.deadlineAt;
+      if (deadline !== null && !spectator) {
+        const left = (deadline - Date.now()) / 1000;
+        const budget = Math.max(1, viewRef.current.timeLimitSec);
+        setTension(Math.min(1, Math.max(0, 1 - left / (budget * 0.5))));
+        const whole = Math.ceil(left);
+        if (whole <= 10 && whole >= 0 && whole < sim.lastBeepAt) {
+          sim.lastBeepAt = whole;
+          countdownBeep(whole);
         }
       }
 

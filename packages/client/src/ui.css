@@ -1755,3 +1755,57 @@ button.link:hover {
 .coach strong {
   color: var(--accent);
 }
+
+/* The last ten seconds: bigger, redder, faster. */
+.countdown.final {
+  color: #fff;
+  background: var(--danger);
+  border-color: var(--danger);
+  text-shadow: none;
+  font-size: 36px;
+  animation: final-pulse 0.5s infinite;
+}
+
+@keyframes final-pulse {
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 26px rgba(248, 113, 113, 0.75);
+  }
+}
+
+/* ── map thumbnails ─────────────────────────────────────────────────────── */
+
+.map-thumb {
+  flex: none;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #070b0f;
+}
+
+.map-thumb-bg {
+  fill: #070b0f;
+}
+
+.map-thumb-floor {
+  fill: #2a3f52;
+}
+
+.mission-selected .map-thumb-floor {
+  fill: var(--accent-dark);
+}
+
+.mission {
+  position: relative;
+}
+
+.mission .map-thumb {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+.mission-title,
+.mission-sub,
+.mission-meta {
+  padding-right: 92px;
+}

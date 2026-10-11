@@ -12,8 +12,8 @@ Kettenreaktion (3 Spieler, Wissen auf drei Rollen verteilt) und Doppelschicht (4
 **zwei getrennten Flügeln**, die sich bis zum Finale nie erreichen können — jedes einzelne Rätsel
 braucht Wissen aus beiden Hälften, und erst der Not-Aus entriegelt die Schleuse in der Mitte).
 
-**Beitreten:** Auf der Startseite steht eine Liste aller **offenen Runden** mit Mission,
-Schwierigkeit, wer schon wartet und wie viele Plätze frei sind — ein Klick auf *Beitreten*
+**Beitreten:** Auf der Startseite steht eine Liste aller **offenen Runden** mit Kartenvorschau,
+Mission, Schwierigkeit, wer schon wartet und wie viele Plätze frei sind — ein Klick auf *Beitreten*
 genügt, niemand muss einen Code weitergeben. Laufende Runden erscheinen ebenfalls, dort führt
 der Knopf zum Zuschauen. Ein Code-Feld bleibt für direkte Verabredungen.
 
@@ -36,6 +36,10 @@ legt das Getragene ab, sodass Übergaben möglich sind.
 skaliert Zeitbudget, alle Zeitstrafen, Drohnentempo und -reichweite sowie Häufigkeit und Dauer
 der Notfälle. **Verbindungsabbruch:** Fehlt jemand aus der Crew, pausiert die Mission komplett
 (Uhr, Patrouillen, Notfälle) und läuft nach der Rückkehr ohne Zeitverlust weiter.
+
+**Endspurt:** In der letzten Hälfte der Zeit zieht das Ambiente hörbar an, unter einer Minute
+pulsiert der Timer rot und die Ränder glühen, und die **letzten zehn Sekunden werden mit
+ansteigenden Piepsern heruntergezählt** — der Schlusston kommt, wenn die Energie weg ist.
 
 **Gefahren unterwegs:** **Wachdrohnen** patrouillieren feste Routen und leuchten einen sichtbaren
 Sichtkegel aus — wer hineinläuft, verliert Zeit (Sichtlinie zählt, an einer Station ist man

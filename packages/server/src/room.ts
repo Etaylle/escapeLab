@@ -287,6 +287,7 @@ export class Room {
     const open = this.state.phase === 'lobby';
     return {
       code: this.code,
+      missionId: this.state.mission.id,
       missionTitle: this.state.mission.title,
       difficulty: this.state.difficulty,
       phase: this.state.phase,

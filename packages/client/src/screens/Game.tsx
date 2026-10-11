@@ -64,13 +64,10 @@ function SabotageAlert({ sabotage }: { sabotage: NonNullable<PlayerView['map']>[
 }
 
 function Countdown({ deadlineAt }: { deadlineAt: number }) {
-  const now = useNow(250);
-  const critical = deadlineAt - now < 60_000;
-  return (
-    <div className={`countdown ${critical ? 'critical' : ''}`}>
-      {formatRemaining(deadlineAt, now)}
-    </div>
-  );
+  const now = useNow(200);
+  const left = deadlineAt - now;
+  const stage = left < 10_000 ? 'final' : left < 60_000 ? 'critical' : '';
+  return <div className={`countdown ${stage}`}>{formatRemaining(deadlineAt, now)}</div>;
 }
 
 /** Red edge glow while the clock runs out. */

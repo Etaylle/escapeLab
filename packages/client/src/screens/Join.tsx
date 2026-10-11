@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ClientMessage, MissionInfo, RoomSummary } from '@escapelab/core';
+import { MapThumb } from './MapThumb.js';
 
 interface Props {
   send: (msg: ClientMessage) => void;
@@ -13,11 +14,13 @@ const REFRESH_MS = 2500;
 /** One open or running room in the browser. */
 function RoomRow({
   room,
+  tiles,
   canJoin,
   onJoin,
   onWatch,
 }: {
   room: RoomSummary;
+  tiles: string[];
   canJoin: boolean;
   onJoin: () => void;
   onWatch: () => void;
@@ -25,6 +28,7 @@ function RoomRow({
   const running = room.phase !== 'lobby';
   return (
     <li className={`room ${running ? 'room-running' : ''}`}>
+      <MapThumb tiles={tiles} height={48} />
       <div className="room-main">
         <span className="room-title">{room.missionTitle}</span>
         <span className="room-meta">
@@ -103,6 +107,7 @@ export function JoinScreen({ send, connected, missions, rooms }: Props) {
             <RoomRow
               key={room.code}
               room={room}
+              tiles={missions.find((m) => m.id === room.missionId)?.tiles ?? []}
               canJoin={connected && nameOk}
               onJoin={() => send({ kind: 'join-room', code: room.code, name: name.trim() })}
               onWatch={() => send({ kind: 'spectate', code: room.code })}
@@ -125,6 +130,7 @@ export function JoinScreen({ send, connected, missions, rooms }: Props) {
                   className={`mission ${selected === m.id ? 'mission-selected' : ''}`}
                   onClick={() => setMissionId(m.id)}
                 >
+                  <MapThumb tiles={m.tiles} height={44} />
                   <span className="mission-title">{m.title}</span>
                   <span className="mission-sub">{m.subtitle}</span>
                   <span className="mission-meta">

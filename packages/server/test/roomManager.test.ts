@@ -38,6 +38,7 @@ describe('lobby browser', () => {
     expect(listed).toHaveLength(1);
     expect(listed[0]).toMatchObject({
       code: open.code,
+      missionId: tutorial.id,
       missionTitle: tutorial.title,
       difficulty: 'normal',
       phase: 'lobby',

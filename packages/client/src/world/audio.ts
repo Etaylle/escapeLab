@@ -89,6 +89,8 @@ let engineUnavailable = false;
 let noise: AudioBuffer | null = null;
 let ambience: Ambience | null = null;
 let distantTimer: ReturnType<typeof setTimeout> | undefined;
+/** Current tension level, so repeated calls do not re-ramp the same value. */
+let tension = 0;
 let unlockArmed = false;
 
 /**
@@ -115,9 +117,59 @@ export function stopAmbience(): void {
     distantTimer = undefined;
     const current = ambience;
     ambience = null;
+    tension = 0;
     if (current !== null && engine !== null) releaseAmbience(engine.ctx, current);
   } catch {
     // Deliberately silent: the clank scheduler is already cancelled at this point.
+  }
+}
+
+/**
+ * How tense the lab sounds, 0 (calm) to 1 (clock nearly out). Ramps the
+ * ambience up so the last minute is audibly heavier than the first. Safe to
+ * call often; only a real change is ramped.
+ */
+export function setTension(level: number): void {
+  try {
+    const amb = ambience;
+    if (amb === null || engine === null) return;
+    const clamped = Math.min(1, Math.max(0, level));
+    if (Math.abs(clamped - tension) < 0.02) return;
+    tension = clamped;
+    const { ctx } = engine;
+    amb.fade.gain.cancelScheduledValues(ctx.currentTime);
+    amb.fade.gain.setTargetAtTime(1 + clamped * 2.2, ctx.currentTime, 0.4);
+  } catch {
+    // Deliberately silent: tension is flavour, never required.
+  }
+}
+
+/**
+ * One tick of the final countdown. `secondsLeft` 1-10 rises in pitch as the
+ * clock runs out; 0 is the dull thud of the power going.
+ */
+export function countdownBeep(secondsLeft: number): void {
+  try {
+    const audio = runningEngine();
+    if (audio === null) return;
+    const { ctx } = audio;
+    const t = ctx.currentTime + LOOKAHEAD;
+    const out = outlet(ctx, audio.master, CHIRP_LEVEL);
+    const last = secondsLeft <= 0;
+    const base = last ? 180 : 620 + (10 - Math.min(10, secondsLeft)) * 55;
+    const beep = tone(ctx, out, {
+      type: last ? 'sawtooth' : 'square',
+      at: t,
+      from: base,
+      to: last ? 90 : base,
+      peak: last ? 0.9 : 0.6,
+      attack: 0.005,
+      hold: last ? 0.25 : 0.05,
+      decay: last ? 0.5 : 0.09,
+    });
+    onAllEnded([beep], () => out.disconnect());
+  } catch {
+    // Deliberately silent: the countdown is on screen as well.
   }
 }
 

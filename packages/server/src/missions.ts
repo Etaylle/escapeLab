@@ -48,6 +48,7 @@ export class MissionCatalog {
       roles: m.roles.map((r) => r.name),
       timeLimitSec: m.timeLimitSec,
       puzzleCount: m.puzzles.length,
+      tiles: m.map?.tiles ?? [],
     }));
   }
 }

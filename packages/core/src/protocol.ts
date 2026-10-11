@@ -66,6 +66,7 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
 /** One row in the lobby browser. */
 export interface RoomSummary {
   code: string;
+  missionId: string;
   missionTitle: string;
   difficulty: Difficulty;
   phase: Phase;
@@ -84,6 +85,8 @@ export interface MissionInfo {
   roles: string[];
   timeLimitSec: number;
   puzzleCount: number;
+  /** tile rows of the map, for the preview thumbnail; empty without a map */
+  tiles: string[];
 }
 
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
