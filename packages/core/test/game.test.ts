@@ -160,10 +160,62 @@ describe('lobby', () => {
     expect(joined.players.every((p) => !p.ready)).toBe(true);
   });
 
-  it('rejects confirming outside the lobby', () => {
+  it('rejects confirming during a running mission, but allows it afterwards', () => {
+    const running = started();
     expect(() =>
-      applyAction(started(), { type: 'set-ready', playerId: 'p2', ready: false }),
-    ).toThrow(/nur in der Lobby/);
+      applyAction(running, { type: 'set-ready', playerId: 'p2', ready: false }),
+    ).toThrow(/zwischen den Läufen/);
+
+    const finished = applyAction(running, { type: 'time-expired', at: T0 + 400_000 });
+    expect(
+      applyAction(finished, { type: 'set-ready', playerId: 'p2', ready: true }).players[1]?.ready,
+    ).toBe(true);
+  });
+
+  it('runs a rematch straight from the end screen, keeping the roles', () => {
+    const finished = applyAction(started(), { type: 'time-expired', at: T0 + 400_000 });
+    expect(() =>
+      applyAction(finished, { type: 'rematch', playerId: 'p2', at: T0 + 500_000, seed: 2 }),
+    ).toThrow(/Host/);
+
+    // Finishing cleared the confirmations, so the crew confirms again.
+    const confirmed = applyAction(finished, {
+      type: 'set-ready',
+      playerId: 'p2',
+      ready: true,
+    });
+    const again = applyAction(confirmed, {
+      type: 'rematch',
+      playerId: 'p1',
+      at: T0 + 500_000,
+      seed: 2,
+    });
+    expect(again.phase).toBe('playing');
+    expect(again.players.map((p) => p.roleId)).toEqual(['anleitung', 'steuerpult']);
+    expect(again.currentPuzzleIndex).toBe(0);
+    expect(again.events).toEqual([]);
+    expect(again.deadlineAt).toBe(T0 + 500_000 + mission.timeLimitSec * 1000);
+  });
+
+  it('refuses a rematch while still playing or before everyone confirms', () => {
+    expect(() =>
+      applyAction(started(), { type: 'rematch', playerId: 'p1', at: T0 + 1, seed: 2 }),
+    ).toThrow(/erst nach Missionsende/);
+
+    const notReady = run(
+      [
+        { type: 'player-join', playerId: 'p1', name: 'Anna' },
+        { type: 'player-join', playerId: 'p2', name: 'Ben' },
+        { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
+        { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
+        { type: 'set-ready', playerId: 'p2', ready: true },
+        { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 },
+        { type: 'time-expired', at: T0 + 400_000 },
+      ],
+    );
+    expect(() =>
+      applyAction(notReady, { type: 'rematch', playerId: 'p1', at: T0 + 500_000, seed: 2 }),
+    ).toThrow(/Noch nicht bereit: Ben/);
   });
 
   it('rejects blank player names', () => {

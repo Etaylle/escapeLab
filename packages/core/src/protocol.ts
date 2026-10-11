@@ -61,6 +61,7 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
     phrase: z.enum(CHAT_PHRASE_IDS as [ChatPhrase, ...ChatPhrase[]]),
   }),
   z.object({ kind: z.literal('back-to-lobby') }),
+  z.object({ kind: z.literal('rematch') }),
 ]);
 
 /** One row in the lobby browser. */

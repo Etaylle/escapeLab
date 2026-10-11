@@ -136,6 +136,7 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
     case 'move-maze':
     case 'interact':
     case 'drop-item':
+    case 'rematch':
     case 'back-to-lobby': {
       const s = requireSession(session);
       s.room.act(s.playerId, msg);

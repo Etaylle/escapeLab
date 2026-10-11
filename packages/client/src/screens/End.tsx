@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { ClientMessage, PlayerView } from '@escapelab/core';
 import { play } from '../sounds.js';
+import { recordRun, type MissionRecord } from '../stats.js';
 
 interface Props {
   view: PlayerView;
@@ -24,27 +25,6 @@ function fmt(ms: number): string {
   return `${min}:${String(sec).padStart(2, '0')}`;
 }
 
-/**
- * Personal best per mission, kept in localStorage. Returns the previous best
- * (null when there was none) and whether this run beat it.
- */
-function recordBest(missionId: string, usedMs: number): { prev: number | null; isNew: boolean } {
-  const key = `escapelab-best-${missionId}`;
-  try {
-    const raw = localStorage.getItem(key);
-    const prev = raw === null ? null : Number(raw);
-    const valid = prev !== null && Number.isFinite(prev) ? prev : null;
-    if (valid === null || usedMs < valid) {
-      localStorage.setItem(key, String(usedMs));
-      return { prev: valid, isNew: true };
-    }
-    return { prev: valid, isNew: false };
-  } catch {
-    // Storage blocked (private window): the run just has no saved best.
-    return { prev: null, isNew: false };
-  }
-}
-
 export function EndScreen({ view, send, leaveRoom }: Props) {
   const won = view.phase === 'won';
   useEffect(() => {
@@ -56,12 +36,18 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
   const usedMs = haveStats ? finishedAt - startedAt : 0;
   const remainingMs = haveStats && deadlineAt !== null ? Math.max(0, deadlineAt - finishedAt) : 0;
 
-  // Recorded once per finished run; the view carries a stable finish timestamp.
-  const bestRef = useRef<{ prev: number | null; isNew: boolean } | null>(null);
-  if (bestRef.current === null && won && haveStats) {
-    bestRef.current = recordBest(view.missionId, usedMs);
+  // Folded into this browser's history exactly once per finished run.
+  const recordRef = useRef<ReturnType<typeof recordRun> | null>(null);
+  if (recordRef.current === null && haveStats) {
+    recordRef.current = recordRun(view.missionId, {
+      won,
+      usedMs,
+      rank: view.grade?.rank ?? null,
+    });
   }
-  const best = bestRef.current;
+  const record = recordRef.current;
+  const history: MissionRecord | null = record?.after ?? null;
+  const waiting = view.players.filter((p) => !p.isHost && !p.ready);
 
   return (
     <div className={`card end ${won ? 'end-won' : 'end-lost'}`}>
@@ -85,20 +71,24 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
             <span className="stat-value">{view.penaltySeq}</span>
             <span className="stat-label">{view.penaltySeq === 1 ? 'Alarm' : 'Alarme'}</span>
           </div>
-          {best !== null && (
-            <div className={`stat ${best.isNew ? 'stat-best' : ''}`}>
-              <span className="stat-value">
-                {fmt(best.isNew ? usedMs : (best.prev ?? usedMs))}
-              </span>
+          {history !== null && history.bestMs !== null && (
+            <div className={`stat ${record?.newBestTime === true ? 'stat-best' : ''}`}>
+              <span className="stat-value">{fmt(history.bestMs)}</span>
               <span className="stat-label">
-                {best.isNew ? '🏆 neue Bestzeit' : 'Bestzeit'}
+                {record?.newBestTime === true ? '🏆 neue Bestzeit' : 'Bestzeit'}
               </span>
             </div>
           )}
         </div>
       )}
 
-      {best !== null && best.isNew && <div className="record-banner">🏆 Neue Bestzeit!</div>}
+      {record !== null && (record.newBestTime || record.newBestRank) && (
+        <div className="record-banner">
+          🏆 {record.newBestTime ? 'Neue Bestzeit!' : ''}
+          {record.newBestTime && record.newBestRank ? ' · ' : ''}
+          {record.newBestRank ? `Bester Rang bisher: ${record.after.bestRank}` : ''}
+        </div>
+      )}
 
       {view.grade !== null && (
         <div className={`grade grade-${view.grade.rank.toLowerCase()}`}>
@@ -125,13 +115,44 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
         </>
       )}
 
+      {history !== null && history.runs > 1 && (
+        <p className="muted history">
+          Auf diesem Gerät: {history.runs} Läufe, {history.wins} geschafft
+          {history.bestMs !== null ? ` · Bestzeit ${fmt(history.bestMs)}` : ''}
+          {history.bestRank !== null ? ` · bester Rang ${history.bestRank}` : ''}
+        </p>
+      )}
+
       <div className="actions">
         {view.you.isHost ? (
-          <button className="primary" onClick={() => send({ kind: 'back-to-lobby' })}>
-            ↻ Zurück zur Lobby
-          </button>
+          <>
+            <button
+              className="primary"
+              disabled={waiting.length > 0}
+              onClick={() => send({ kind: 'rematch' })}
+            >
+              {waiting.length > 0
+                ? `Warten auf ${waiting.map((p) => p.name).join(', ')} …`
+                : '↻ Nochmal, gleiche Besetzung'}
+            </button>
+            <button onClick={() => send({ kind: 'back-to-lobby' })}>
+              Zur Lobby (Mission oder Rollen ändern)
+            </button>
+          </>
         ) : (
-          <p className="muted">Der Host kann euch zurück in die Lobby bringen.</p>
+          <>
+            <button
+              className={view.you.ready ? '' : 'primary'}
+              onClick={() => send({ kind: 'set-ready', ready: !view.you.ready })}
+            >
+              {view.you.ready ? '✓ Bereit für nochmal' : 'Nochmal? Bereit melden'}
+            </button>
+            <p className="muted">
+              {view.you.ready
+                ? 'Der Host startet den nächsten Lauf.'
+                : 'Melde dich bereit, dann kann der Host direkt neu starten.'}
+            </p>
+          </>
         )}
         <button className="link" onClick={leaveRoom}>
           Raum verlassen

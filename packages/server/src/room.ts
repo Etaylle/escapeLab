@@ -38,7 +38,8 @@ export type GameMessage = Extract<
       | 'move-maze'
       | 'interact'
       | 'drop-item'
-      | 'back-to-lobby';
+      | 'back-to-lobby'
+      | 'rematch';
   }
 >;
 
@@ -250,6 +251,16 @@ export class Room {
       case 'back-to-lobby':
         this.positions.clear();
         this.dispatch({ type: 'back-to-lobby', playerId });
+        break;
+      case 'rematch':
+        this.positions.clear();
+        this.dispatch({
+          type: 'rematch',
+          playerId,
+          at: Date.now(),
+          seed: randomInt(2 ** 31),
+        });
+        this.seedPositions();
         break;
     }
   }

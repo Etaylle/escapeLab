@@ -50,7 +50,8 @@ export type Action =
   | { type: 'interact'; playerId: string; at: number }
   | { type: 'escaped'; at: number }
   | { type: 'time-expired'; at: number }
-  | { type: 'back-to-lobby'; playerId: string };
+  | { type: 'back-to-lobby'; playerId: string }
+  | { type: 'rematch'; playerId: string; at: number; seed: number };
 
 /** Rejected action: the message is shown to the acting player. */
 export class GameError extends Error {}
@@ -140,6 +141,8 @@ export function applyAction(state: GameState, action: Action): GameState {
         : state;
     case 'back-to-lobby':
       return backToLobby(state, action);
+    case 'rematch':
+      return rematch(state, action);
   }
 }
 
@@ -193,8 +196,8 @@ function playerJoin(
 }
 
 function setReady(state: GameState, action: { playerId: string; ready: boolean }): GameState {
-  if (state.phase !== 'lobby') {
-    fail('Bereitmelden geht nur in der Lobby.');
+  if (state.phase === 'playing') {
+    fail('Bereitmelden geht nur zwischen den Läufen.');
   }
   findPlayer(state, action.playerId);
   const players = state.players.map((p) =>
@@ -371,7 +374,13 @@ function advance(state: GameState, at: number): GameState {
       );
     }
     return logEvent(
-      { ...logged, phase: 'won', puzzleState: null, finishedAt: at },
+      {
+        ...logged,
+        phase: 'won',
+        players: unready(logged.players),
+        puzzleState: null,
+        finishedAt: at,
+      },
       'finish',
       'Alle Systeme online',
       at,
@@ -394,7 +403,13 @@ function handleEscaped(state: GameState, action: { at: number }): GameState {
     return lostNow(state, action.at);
   }
   return logEvent(
-    { ...state, phase: 'won', puzzleState: null, finishedAt: action.at },
+    {
+      ...state,
+      phase: 'won',
+      players: unready(state.players),
+      puzzleState: null,
+      finishedAt: action.at,
+    },
     'finish',
     'Alle draußen',
     action.at,
@@ -429,7 +444,7 @@ function applyPenalty(state: GameState, sec: number, at: number, reason: string)
 
 function lostNow(state: GameState, at: number): GameState {
   return logEvent(
-    { ...state, phase: 'lost', puzzleState: null, finishedAt: at },
+    { ...state, phase: 'lost', players: unready(state.players), puzzleState: null, finishedAt: at },
     'finish',
     'Zeit abgelaufen',
     at,
@@ -772,6 +787,22 @@ function handleInteract(state: GameState, action: { playerId: string; at: number
     fail(`Der Station fehlt noch: ${missing.join(', ')}. Bringt es her!`);
   }
   return { ...state, puzzleState: initPuzzleState(state, state.currentPuzzleIndex) };
+}
+
+
+/**
+ * Straight into another run of the same mission with the same roles: the
+ * crew confirms on the end screen, the host presses once. Same guards as a
+ * normal start, just without the detour through the lobby.
+ */
+function rematch(
+  state: GameState,
+  action: { playerId: string; at: number; seed: number },
+): GameState {
+  if (state.phase !== 'won' && state.phase !== 'lost') {
+    fail('Ein neuer Lauf geht erst nach Missionsende.');
+  }
+  return startMission({ ...state, phase: 'lobby' }, action);
 }
 
 function backToLobby(state: GameState, action: { playerId: string }): GameState {
