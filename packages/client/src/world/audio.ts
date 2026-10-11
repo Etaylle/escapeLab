@@ -48,6 +48,7 @@ interface Ambience {
 }
 
 const MASTER_LEVEL = 1;
+const MUTE_STORAGE_KEY = 'escapelab-muted';
 const AMBIENCE_LEVEL = 0.025;
 const FOOTSTEP_LEVEL = 0.02;
 const DOOR_LEVEL = 0.04;
@@ -91,6 +92,7 @@ let ambience: Ambience | null = null;
 let distantTimer: ReturnType<typeof setTimeout> | undefined;
 /** Current tension level, so repeated calls do not re-ramp the same value. */
 let tension = 0;
+let muted = readStoredMute();
 let unlockArmed = false;
 
 /**
@@ -121,6 +123,40 @@ export function stopAmbience(): void {
     if (current !== null && engine !== null) releaseAmbience(engine.ctx, current);
   } catch {
     // Deliberately silent: the clank scheduler is already cancelled at this point.
+  }
+}
+
+
+function readStoredMute(): boolean {
+  try {
+    return localStorage.getItem(MUTE_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Whether sound is currently off, remembered across visits. */
+export function isMuted(): boolean {
+  return muted;
+}
+
+/**
+ * Silences or restores everything at the single master gain the whole module
+ * already routes through. Works before any sound has been created.
+ */
+export function setMuted(next: boolean): void {
+  muted = next;
+  try {
+    localStorage.setItem(MUTE_STORAGE_KEY, next ? '1' : '0');
+  } catch {
+    // Storage blocked: the choice just does not survive a reload.
+  }
+  try {
+    if (engine !== null) {
+      engine.master.gain.setTargetAtTime(next ? 0 : MASTER_LEVEL, engine.ctx.currentTime, 0.05);
+    }
+  } catch {
+    // Deliberately silent: muting must never break the game.
   }
 }
 
@@ -365,7 +401,7 @@ function createEngine(): Engine | null {
     if (Ctor === undefined) return null;
     const ctx = new Ctor();
     ctx.onstatechange = syncUnlockListeners;
-    return { ctx, master: outlet(ctx, ctx.destination, MASTER_LEVEL) };
+    return { ctx, master: outlet(ctx, ctx.destination, muted ? 0 : MASTER_LEVEL) };
   } catch {
     return null;
   }

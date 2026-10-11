@@ -1057,21 +1057,20 @@ export function GameWorld({
         ctx.fillStyle = '#4ade80';
         ctx.fillText('NOTAUSGANG → ALLE HIERHER!', ex, ey);
       }
-      // Arrows at the screen edge pointing to off-screen emergency panels.
-      for (const panel of map.sabotage?.panels ?? []) {
-        const [px, py] = worldToScreen(s, w, h, panel.x + 0.5, panel.y + 0.5);
-        const margin = 30 * dpr;
-        const off = px < margin || px > w - margin || py < margin || py > h - margin;
-        if (!off) {
-          continue;
+      // Anything you need to walk to gets an arrow at the screen edge while
+      // it is out of sight — in the dark that is the only way to find it.
+      const edgeMarker = (wx: number, wy: number, color: string, label: string): void => {
+        const [px, py] = worldToScreen(s, w, h, wx, wy);
+        const margin = 34 * dpr;
+        if (px >= margin && px <= w - margin && py >= margin && py <= h - margin) {
+          return;
         }
+        const cx = Math.min(w - margin, Math.max(margin, px));
+        const cy = Math.min(h - margin, Math.max(margin, py));
         ctx.save();
-        ctx.translate(
-          Math.min(w - margin, Math.max(margin, px)),
-          Math.min(h - margin, Math.max(margin, py)),
-        );
+        ctx.translate(cx, cy);
         ctx.rotate(Math.atan2(py - h / 2, px - w / 2));
-        ctx.fillStyle = panel.occupied ? '#2dd4bf' : '#f87171';
+        ctx.fillStyle = color;
         ctx.beginPath();
         ctx.moveTo(13 * dpr, 0);
         ctx.lineTo(-8 * dpr, 9 * dpr);
@@ -1079,6 +1078,36 @@ export function GameWorld({
         ctx.closePath();
         ctx.fill();
         ctx.restore();
+        if (label !== '') {
+          const tiles = Math.round(Math.hypot(wx - sim.self.x, wy - sim.self.y));
+          ctx.fillStyle = color;
+          ctx.font = `700 ${11 * dpr}px ui-monospace, Menlo, monospace`;
+          ctx.textAlign = 'center';
+          ctx.fillText(`${label} ${tiles}m`, cx, cy + 26 * dpr);
+        }
+      };
+
+      for (const panel of map.sabotage?.panels ?? []) {
+        edgeMarker(panel.x + 0.5, panel.y + 0.5, panel.occupied ? '#2dd4bf' : '#f87171', 'VENTIL');
+      }
+      if (map.sabotage === null) {
+        const carried = map.items.find(
+          (item) => item.carriedBy === viewRef.current.you.id && !item.delivered,
+        );
+        if (carried !== undefined) {
+          edgeMarker(carried.deliverTo.x + 0.5, carried.deliverTo.y + 0.5, '#60a5fa', 'ABGABE');
+        } else if (map.exit !== null && map.exit.open) {
+          edgeMarker(map.exit.x + 0.5, map.exit.y + 0.5, '#4ade80', 'AUSGANG');
+        } else {
+          const goal = armedStationOf(map);
+          const loose = map.items.find((item) => !item.delivered && item.carriedBy === null);
+          if (loose !== undefined) {
+            edgeMarker(loose.x, loose.y, '#60a5fa', 'TEIL');
+          }
+          if (goal !== null) {
+            edgeMarker(goal.x + 0.5, goal.y + 0.5, '#2dd4bf', 'STATION');
+          }
+        }
       }
       const action =
         viewRef.current.puzzle === null

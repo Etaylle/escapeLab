@@ -1909,3 +1909,17 @@ button.link:hover {
 .hud-log li:first-child {
   color: var(--text);
 }
+
+.sound-toggle {
+  margin-left: auto;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 15px;
+  line-height: 1;
+  background: var(--panel-2);
+}
+
+/* The connection badge no longer needs to claim the free space. */
+.topbar .conn {
+  margin-left: 12px;
+}

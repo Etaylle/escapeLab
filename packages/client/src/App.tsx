@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { isMuted, setMuted } from './world/audio.js';
 import type { MissionInfo } from '@escapelab/core';
 import { useGameConnection } from './ws.js';
 import { JoinScreen } from './screens/Join.js';
@@ -35,6 +36,7 @@ function RoomCode({ code }: { code: string }) {
 
 export function App() {
   const conn = useGameConnection();
+  const [sound, setSound] = useState(() => !isMuted());
   const [missions, setMissions] = useState<MissionInfo[]>([]);
 
   useEffect(() => {
@@ -50,6 +52,17 @@ export function App() {
       <header className="topbar">
         <span className="logo">⬢ ESCAPELAB</span>
         {conn.roomCode !== null && <RoomCode code={conn.roomCode} />}
+        <button
+          className="sound-toggle"
+          title={sound ? 'Ton ausschalten' : 'Ton einschalten'}
+          aria-pressed={sound}
+          onClick={() => {
+            setMuted(sound);
+            setSound(!sound);
+          }}
+        >
+          {sound ? '🔊' : '🔇'}
+        </button>
         <span className={`conn conn-${conn.status}`}>
           {conn.status === 'open' ? '● VERBUNDEN' : '○ VERBINDE …'}
         </span>
