@@ -38,6 +38,9 @@ export function App() {
   const conn = useGameConnection();
   const [sound, setSound] = useState(() => !isMuted());
   const [missions, setMissions] = useState<MissionInfo[]>([]);
+  // A running mission takes over the whole window; the audience view keeps
+  // its document layout, because its two role panels need room to scroll.
+  const immersive = conn.view?.phase === 'playing' && conn.view.map !== null;
 
   useEffect(() => {
     fetch('/missions')
@@ -77,7 +80,7 @@ export function App() {
         </div>
       )}
 
-      <main className="content">{renderScreen()}</main>
+      <main className={`content ${immersive ? 'content--stage' : ''}`}>{renderScreen()}</main>
     </div>
   );
 

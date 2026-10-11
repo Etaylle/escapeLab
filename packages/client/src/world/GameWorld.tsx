@@ -617,7 +617,9 @@ export function GameWorld({
       const cover = Math.max(w / map.width, h / map.height);
       const s = spectator
         ? Math.max(14, Math.min(w / (map.width + 0.5), h / (map.height + 0.5)))
-        : Math.max(cover, Math.min(88, h / 10.5));
+        : // Cover the canvas, but stop before the lab turns into giant tiles
+          // on very wide windows.
+          Math.min(170, Math.max(cover, Math.min(88, h / 10.5)));
       clampCamera(map, s, w, h);
       sim.scale = s;
 
