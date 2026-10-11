@@ -488,9 +488,6 @@ await anna.expectView('stands on the map, no puzzle active', (v) =>
   v.phase === 'playing' && v.map !== null && v.puzzle === null);
 await ben.until('map ready', (v) => v.map !== null);
 
-await anna.untilPositions('drone patrols are streamed', () => Object.keys(anna.drones).length > 0);
-console.log('✓ drone patrols are streamed to the clients');
-
 // Map pings fan out to the whole crew and are rate limited per player.
 anna.send({ kind: 'ping', x: 9, y: 6 });
 anna.send({ kind: 'ping', x: 3, y: 3 }); // swallowed by the cooldown
@@ -536,6 +533,10 @@ assert(
   said.playerId === annaJoined.playerId && said.phrase === 'drohne',
   'quick chat is broadcast with its sender and phrase',
 );
+
+/** Ids of the drones in the client's latest positions message, sorted and comma-joined. */
+const streamedDrones = (client: TestClient): string =>
+  Object.keys(client.drones).sort().join(',');
 
 let solved = 0;
 for (const step of BLACKOUT_WALKTHROUGH) {
@@ -596,6 +597,22 @@ for (const step of BLACKOUT_WALKTHROUGH) {
     await clients.anleitung.expectView(`puzzle ${solved} solved, back on the map`, (v) =>
       v.currentPuzzleIndex === solved && v.puzzle === null);
   }
+  // Security wakes up in stages: the Flur drone after station 2, the Labor drone after 3.
+  if (solved === 1) {
+    // Any positions message arriving after the view above was sent after the solve.
+    const stale = clients.anleitung.positions;
+    await clients.anleitung.untilPositions('a fresh positions message', (p) => p !== stale);
+    assert(streamedDrones(clients.anleitung) === '',
+      'no drone patrols before the second station');
+  } else if (solved === 2) {
+    await clients.anleitung.untilPositions('only the Flur drone patrols', () =>
+      streamedDrones(clients.anleitung) === 'flurwache');
+    console.log('✓ only the Flur drone patrols after the second station');
+  } else if (solved === 3) {
+    await clients.anleitung.untilPositions('both drones patrol', () =>
+      streamedDrones(clients.anleitung) === 'flurwache,laborwache');
+    console.log('✓ both drones patrol after the third station');
+  }
 }
 
 // --- escape finale: everyone to the hatch before the clock runs out --------
@@ -623,8 +640,12 @@ const afterOneYes = clients.anleitung.view?.phase;
 assert(afterOneYes === 'won', 'one confirmation alone does not restart the mission');
 clients.anleitung.send({ kind: 'set-ready', ready: true });
 const replay = await clients.anleitung.expectView('is playing again', (v) => v.phase === 'playing');
+// The fresh report holds nothing but mission control's opener.
 assert(
-  replay.currentPuzzleIndex === 0 && replay.events.length === 0 && replay.penaltySeq === 0,
+  replay.currentPuzzleIndex === 0 &&
+    replay.penaltySeq === 0 &&
+    replay.events.length === 1 &&
+    replay.events[0]?.label === mission.radio.start,
   'the rematch starts from a clean slate',
 );
 assert(

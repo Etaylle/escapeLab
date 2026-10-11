@@ -9,6 +9,10 @@
     "lose": "Ein letztes Flackern, dann ist es still. Die Notversorgung ist erschöpft, die Proben sind verloren. Das Labor bleibt dunkel … bis zum nächsten Versuch."
   },
   "timeLimitSec": 540,
+  "radio": {
+    "start": "Leitstelle. Erst Notstrom: Kasten im Maschinenraum, Südwest. Anleitung sitzt bis dahin im Archiv, neben der Ersatzsicherung. Funk offen.",
+    "escape": "Licht ist wieder da, Applaus später. Notausgang offen, Südostecke hinter dem Reaktor. Die Uhr läuft, bis die ganze Crew draußen ist."
+  },
   "map": {
     "tiles": [
       "###################",
@@ -89,7 +93,8 @@
         "speed": 1.7,
         "range": 4.5,
         "halfAngleDeg": 26,
-        "penaltySec": 15
+        "penaltySec": 15,
+        "activeAfterSolved": 2
       },
       {
         "id": "laborwache",
@@ -100,7 +105,8 @@
         "speed": 1.3,
         "range": 4,
         "halfAngleDeg": 30,
-        "penaltySec": 15
+        "penaltySec": 15,
+        "activeAfterSolved": 3
       }
     ]
   },
@@ -135,7 +141,13 @@
           "roleId": "steuerpult",
           "text": "Die Kabelenden tragen eingravierte Zeichen. Beschreibe sie der Anleitung — und schneide erst, wenn ihr euch sicher seid."
         }
-      ]
+      ],
+      "hints": [
+        "Steuerpult, lies alle fünf Kabel vor, jedes mit beiden Enden. Jedes Zeichen hängt an zwei Kabeln, ein Ende allein reicht nicht.",
+        "Die Reihenfolge zählt. Anleitung, frag zuerst nach dem Kabel zwischen ⚡ und ☢. Welches Ende links oder rechts sitzt, ist egal.",
+        "Erst ⚡–☢ trennen, Hochspannung zu Strahlung. Dann ♆–Ϟ, Dreizack zu Blitz-Haken. Die anderen drei Kabel bleiben dran."
+      ],
+      "onSolved": "Notstrom steht, Archiv entriegelt. Anleitung, im Flur auf die Platte, die hält den Maschinenraum offen. Dann zum Terminal, Flurmitte."
     },
     {
       "type": "keypad",
@@ -155,7 +167,13 @@
           "roleId": "steuerpult",
           "text": "Neun Tasten, kryptische Zeichen. Die Anleitung kennt den Code — beschreibe, was du siehst, und tippe erst bei Ansage."
         }
-      ]
+      ],
+      "hints": [
+        "Eine Taste pro Ansage. Ein falscher Druck setzt die ganze Eingabe zurück, dann geht es wieder beim ersten Zeichen los.",
+        "Anleitung, lies die Beschreibung aus dem Handbuch vor, nicht nur das Zeichen. Steuerpult, beschreib die Taste, die du meinst, und warte auf das Okay.",
+        "Der Code: ☖ Haus mit Sockel, ꩜ Spirale, Ж Käfer mit sechs Beinen, ₪ Tor mit Gittern. Genau in dieser Reihenfolge, eins nach dem anderen."
+      ],
+      "onSolved": "Schott offen, aber die Sicherheit ist wieder wach: Drohne im Flur. Serverraum, Nordost. Einer hält die Platte am Ostende, einer geht rein."
     },
     {
       "type": "switches",
@@ -176,7 +194,13 @@
           "roleId": "steuerpult",
           "text": "Kippschalter umlegen ist gefahrlos — aber PRÜFEN mit falscher Kombination löst den Alarm aus (−20 s). Lies die Zeichen vor und stell nach Ansage."
         }
-      ]
+      ],
+      "hints": [
+        "Anleitung, dein Display zeigt drei Zeichen. Genau diese Schalter müssen nach OBEN, alle anderen nach unten. Sag sie dem Steuerpult einzeln an.",
+        "Die Reihenfolge am Pult sagt nichts, es zählen nur die Zeichen. Einigt euch auf ein Wort pro Zeichen, dann wird nicht geraten.",
+        "Vor dem Prüfen: Steuerpult liest jeden Schalter vor, der OBEN steht. Genau drei, und jeder davon muss auf dem Display der Anleitung stehen."
+      ],
+      "onSolved": "Netz stabil, Labortür offen, südlich vom Flur. Die zweite Drohne pendelt jetzt im Labor. Station an der Südwand, geht hinter ihr vorbei."
     },
     {
       "type": "simon",
@@ -197,7 +221,13 @@
           "roleId": "steuerpult",
           "text": "Spiel die Blinkfolge ab und sag die Farben an. Die Anleitung übersetzt sie in Symbole — tippe sie in exakt dieser Reihenfolge. Ein Fehler setzt alles zurück (−20 s)."
         }
-      ]
+      ],
+      "hints": [
+        "Steuerpult, spiel die Folge zweimal ab, bevor gedrückt wird. Fünf Farben, und nie kommt dieselbe zweimal direkt hintereinander.",
+        "Ein Fehldruck setzt die ganze Folge zurück. Dann neu abspielen und wieder bei der ersten Farbe anfangen, nicht dort, wo ihr aufgehört habt.",
+        "Eine Farbe nach der anderen: Steuerpult sagt sie an, Anleitung nennt das Symbol aus der Legende, Steuerpult wiederholt es und drückt erst dann."
+      ],
+      "onSolved": "Frequenz sitzt, Reaktor im Südosten bereit. Ohne die Ersatzsicherung aus dem Archiv, ganz im Nordwesten, bleibt er tot. Bringt sie hin."
     },
     {
       "type": "button-sync",
@@ -213,6 +243,10 @@
           "roleId": "anleitung",
           "text": "Handbuch §8 — NEUSTART: Ohne eingesetzte Ersatzsicherung bleibt die Station tot. Dann: Beide Zündschalter müssen innerhalb von 2 Sekunden gedrückt werden. Zählt gemeinsam ein: drei — zwei — eins — JETZT."
         }
+      ],
+      "hints": [
+        "Ein Zündschalter allein reicht nicht. Kommt der zweite Druck mehr als zwei Sekunden später, verfällt der erste. Kein Alarm, nur ein neuer Anlauf.",
+        "Beide an eure Zündschalter, dann zählt einer laut ein: drei, zwei, eins, JETZT. Gedrückt wird auf JETZT, von beiden, nicht schon auf eins."
       ],
       "windowMs": 2000
     }
