@@ -18,6 +18,8 @@ export interface Connection {
    * React re-render — the canvas render loop reads this ref directly.
    */
   positions: MutableRefObject<Record<string, PlayerPosition>>;
+  /** Map pings, newest last; the render loop drains expired ones itself. */
+  pings: MutableRefObject<{ playerId: string; x: number; y: number; at: number }[]>;
   send: (msg: ClientMessage) => void;
   dismissError: () => void;
   leaveRoom: () => void;
@@ -51,6 +53,7 @@ export function useGameConnection(): Connection {
   const socketRef = useRef<WebSocket | null>(null);
   const resumingRef = useRef(false);
   const positionsRef = useRef<Record<string, PlayerPosition>>({});
+  const pingsRef = useRef<{ playerId: string; x: number; y: number; at: number }[]>([]);
 
   useEffect(() => {
     let disposed = false;
@@ -103,6 +106,14 @@ export function useGameConnection(): Connection {
         case 'positions':
           positionsRef.current = msg.players;
           break;
+        case 'ping':
+          pingsRef.current.push({
+            playerId: msg.playerId,
+            x: msg.x,
+            y: msg.y,
+            at: performance.now(),
+          });
+          break;
         case 'error':
           if (resumingRef.current) {
             // Stored session is dead (room swept / token invalid): back to join.
@@ -130,6 +141,7 @@ export function useGameConnection(): Connection {
     roomCode,
     error,
     positions: positionsRef,
+    pings: pingsRef,
     send: (msg) => {
       setError(null);
       socketRef.current?.send(JSON.stringify(msg));

@@ -8,17 +8,34 @@ import {
   makeFloorTile,
   makeWallTile,
 } from './art.js';
-import { doorSlide, footstep, powerDrain, startAmbience, stationChirp, stopAmbience } from './audio.js';
+import {
+  doorSlide,
+  footstep,
+  pingBlip,
+  powerDrain,
+  startAmbience,
+  stationChirp,
+  stopAmbience,
+} from './audio.js';
 
 const PLAYER_COLORS = ['#2dd4bf', '#f472b6', '#fbbf24', '#60a5fa'];
 const SPEED = 4.2; // tiles per second
 const RADIUS = 0.28; // collision half-size
 const INTERACT_RADIUS = 1.5; // prompt + client-side gate (server allows 1.6)
 const POS_SEND_MS = 80;
+const PING_LIFETIME_MS = 3200;
+
+export interface MapPing {
+  playerId: string;
+  x: number;
+  y: number;
+  at: number;
+}
 
 interface Props {
   view: PlayerView;
   positionsRef: React.MutableRefObject<Record<string, PlayerPosition>>;
+  pingsRef: React.MutableRefObject<MapPing[]>;
   inputLocked: boolean;
   send: (msg: ClientMessage) => void;
 }
@@ -46,6 +63,9 @@ interface Sim {
   flash: number;
   lastPenaltySeq: number;
   time: number;
+  /** pings already sounded, so the blip fires once per ping */
+  seenPings: WeakSet<MapPing>;
+  minimap: boolean;
 }
 
 const MOVE_KEYS: Record<string, [number, number]> = {
@@ -120,7 +140,7 @@ function isHorizontalDoor(map: WorldMap, x: number, y: number): boolean {
   return barrier(x - 1, y) && barrier(x + 1, y);
 }
 
-export function GameWorld({ view, positionsRef, inputLocked, send }: Props) {
+export function GameWorld({ view, positionsRef, pingsRef, inputLocked, send }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -162,6 +182,8 @@ export function GameWorld({ view, positionsRef, inputLocked, send }: Props) {
       flash: 0,
       lastPenaltySeq: viewRef.current.penaltySeq,
       time: 0,
+      seenPings: new WeakSet<MapPing>(),
+      minimap: true,
     };
     simRef.current = sim;
     startAmbience();
@@ -195,8 +217,30 @@ export function GameWorld({ view, positionsRef, inputLocked, send }: Props) {
       } else if ((key === 'e' || key === 'enter' || key === ' ') && !e.repeat) {
         e.preventDefault();
         tryInteract();
+      } else if (key === 'm' && !e.repeat) {
+        sim.minimap = !sim.minimap;
       }
     };
+
+    /** Click anywhere in the world to ping that spot for the whole crew. */
+    const onPointerDown = (e: PointerEvent): void => {
+      if (canvas == null || viewRef.current.map === null) {
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      const s = Math.max(40, Math.min(72, canvas.height / 9.5));
+      const dpr = canvas.height / rect.height;
+      const px = (e.clientX - rect.left) * dpr;
+      const py = (e.clientY - rect.top) * dpr;
+      const wx = sim.cam.x + (px - canvas.width / 2) / s;
+      const wy = sim.cam.y + (py - canvas.height / 2) / s;
+      sendRef.current({
+        kind: 'ping',
+        x: Math.round(wx * 100) / 100,
+        y: Math.round(wy * 100) / 100,
+      });
+    };
+    canvas.addEventListener('pointerdown', onPointerDown);
     const onKeyUp = (e: KeyboardEvent): void => {
       sim.keys.delete(e.key.toLowerCase());
     };
@@ -448,7 +492,128 @@ export function GameWorld({ view, positionsRef, inputLocked, send }: Props) {
       ctx.restore();
 
       renderLighting(map, s, w, h);
+      renderPings(s, w, h, dpr);
+      renderMinimap(map, w, h, dpr);
       renderScreenText(map, s, w, h, dpr);
+    }
+
+    /** Expanding rings for recent pings, plus an edge arrow for off-screen ones. */
+    function renderPings(s: number, w: number, h: number, dpr: number): void {
+      if (ctx == null) {
+        return;
+      }
+      const now = performance.now();
+      const live = pingsRef.current.filter((p) => now - p.at < PING_LIFETIME_MS);
+      if (live.length !== pingsRef.current.length) {
+        pingsRef.current = live;
+      }
+      const colorOf = new Map(
+        viewRef.current.players.map((p, i) => [p.id, PLAYER_COLORS[i % 4] ?? '#2dd4bf']),
+      );
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      for (const ping of live) {
+        if (!sim.seenPings.has(ping)) {
+          sim.seenPings.add(ping);
+          pingBlip();
+        }
+        const age = (now - ping.at) / PING_LIFETIME_MS;
+        const color = colorOf.get(ping.playerId) ?? '#2dd4bf';
+        const [px, py] = worldToScreen(s, w, h, ping.x, ping.y);
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = 1 - age;
+        for (const phase of [0, 0.33, 0.66]) {
+          const t = (age * 2.2 + phase) % 1;
+          ctx.lineWidth = 2.5 * dpr * (1 - t);
+          ctx.beginPath();
+          ctx.arc(px, py, (0.25 + t * 1.3) * s, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        const margin = 26 * dpr;
+        if (px < margin || px > w - margin || py < margin || py > h - margin) {
+          const cx = Math.min(w - margin, Math.max(margin, px));
+          const cy = Math.min(h - margin, Math.max(margin, py));
+          const angle = Math.atan2(py - h / 2, px - w / 2);
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.rotate(angle);
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.moveTo(10 * dpr, 0);
+          ctx.lineTo(-7 * dpr, 7 * dpr);
+          ctx.lineTo(-7 * dpr, -7 * dpr);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    /** Corner minimap: layout, doors, objective, exit and everyone's dot. */
+    function renderMinimap(map: WorldMap, w: number, h: number, dpr: number): void {
+      if (ctx == null || !sim.minimap) {
+        return;
+      }
+      const cell = Math.max(3, Math.round((3.4 * dpr * 72) / Math.max(map.width, 20)));
+      const mw = map.width * cell;
+      const mh = map.height * cell;
+      const ox = w - mw - 14 * dpr;
+      const oy = 14 * dpr;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = 0.86;
+      ctx.fillStyle = '#070b0f';
+      ctx.strokeStyle = '#24323f';
+      ctx.lineWidth = dpr;
+      ctx.beginPath();
+      ctx.roundRect(ox - 5 * dpr, oy - 5 * dpr, mw + 10 * dpr, mh + 10 * dpr, 6 * dpr);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#18242f';
+      for (let ty = 0; ty < map.height; ty++) {
+        const row = map.tiles[ty] ?? '';
+        for (let tx = 0; tx < map.width; tx++) {
+          if (row.charAt(tx) === '.') {
+            ctx.fillRect(ox + tx * cell, oy + ty * cell, cell, cell);
+          }
+        }
+      }
+      for (const door of map.doors) {
+        ctx.fillStyle = door.open ? '#1f3b32' : '#fbbf24';
+        ctx.fillRect(ox + door.x * cell, oy + door.y * cell, cell, cell);
+      }
+      for (const plate of map.plates) {
+        ctx.fillStyle = plate.pressed ? '#2dd4bf' : '#39465a';
+        ctx.fillRect(ox + plate.x * cell + cell / 4, oy + plate.y * cell + cell / 4, cell / 2, cell / 2);
+      }
+      for (const station of map.stations) {
+        ctx.fillStyle =
+          station.status === 'armed' ? '#2dd4bf' : station.status === 'done' ? '#1f6b60' : '#2c3947';
+        ctx.fillRect(ox + station.x * cell, oy + station.y * cell, cell, cell);
+      }
+      if (map.exit !== null) {
+        ctx.fillStyle = map.exit.open ? '#4ade80' : '#2c3947';
+        ctx.fillRect(ox + map.exit.x * cell, oy + map.exit.y * cell, cell, cell);
+      }
+      const colorOf = new Map(
+        viewRef.current.players.map((p, i) => [p.id, PLAYER_COLORS[i % 4] ?? '#2dd4bf']),
+      );
+      const dot = (x: number, y: number, color: string, ring: boolean): void => {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(ox + x * cell, oy + y * cell, cell * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+        if (ring) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = dpr;
+          ctx.stroke();
+        }
+      };
+      for (const [id, other] of sim.others) {
+        dot(other.rx, other.ry, colorOf.get(id) ?? '#f472b6', false);
+      }
+      dot(sim.self.x, sim.self.y, colorOf.get(viewRef.current.you.id) ?? '#2dd4bf', true);
+      ctx.globalAlpha = 1;
     }
 
     function renderLighting(map: WorldMap, s: number, w: number, h: number): void {
@@ -578,6 +743,7 @@ export function GameWorld({ view, positionsRef, inputLocked, send }: Props) {
     return () => {
       cancelAnimationFrame(raf);
       clearInterval(posTimer);
+      canvas.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
@@ -649,7 +815,7 @@ export function GameWorld({ view, positionsRef, inputLocked, send }: Props) {
         </button>
       </div>
       <p className="world-hint muted">
-        Laufen: WASD/Pfeile · Aktivieren: E an der leuchtenden Station · Redet miteinander!
+        Laufen: WASD/Pfeile · Aktivieren: E · Klick = Ping für alle · M = Minikarte
       </p>
     </div>
   );

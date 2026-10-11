@@ -84,7 +84,14 @@ export function App() {
           />
         );
       case 'playing':
-        return <GameScreen view={conn.view} positionsRef={conn.positions} send={conn.send} />;
+        return (
+          <GameScreen
+            view={conn.view}
+            positionsRef={conn.positions}
+            pingsRef={conn.pings}
+            send={conn.send}
+          />
+        );
       case 'won':
       case 'lost':
         return <EndScreen view={conn.view} send={conn.send} leaveRoom={conn.leaveRoom} />;

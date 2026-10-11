@@ -124,6 +124,11 @@ class TestClient {
     }
   }
 
+  /** True when a message matching the predicate is still queued. */
+  hasQueued(match: (msg: ServerMessage) => boolean): boolean {
+    return this.queue.some(match);
+  }
+
   /** Wait until the LATEST view satisfies the predicate (state-based). */
   async until(desc: string, pred: (view: PlayerView) => boolean): Promise<PlayerView> {
     const deadline = Date.now() + 5000;
@@ -418,6 +423,23 @@ const clients: Clients = { anleitung: anna, steuerpult: ben };
 await anna.expectView('stands on the map, no puzzle active', (v) =>
   v.phase === 'playing' && v.map !== null && v.puzzle === null);
 await ben.until('map ready', (v) => v.map !== null);
+
+// Map pings fan out to the whole crew and are rate limited per player.
+anna.send({ kind: 'ping', x: 9, y: 6 });
+anna.send({ kind: 'ping', x: 3, y: 3 }); // swallowed by the cooldown
+const pinged = await ben.expect(
+  'ping arrives',
+  (m): m is Extract<ServerMessage, { kind: 'ping' }> => m.kind === 'ping',
+);
+assert(
+  pinged.playerId === annaJoined.playerId && pinged.x === 9 && pinged.y === 6,
+  'ping is broadcast to the other player with its origin',
+);
+await sleep(200);
+assert(
+  !ben.hasQueued((m) => m.kind === 'ping'),
+  'a second ping within the cooldown is dropped',
+);
 
 let solved = 0;
 for (const step of BLACKOUT_WALKTHROUGH) {

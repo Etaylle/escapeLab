@@ -233,6 +233,33 @@ export function stationChirp(): void {
 }
 
 /**
+ * Short bright blip marking a map ping, pitched above the station chirp so the two
+ * never get confused.
+ */
+export function pingBlip(): void {
+  try {
+    const audio = runningEngine();
+    if (audio === null) return;
+    const { ctx } = audio;
+    const t = ctx.currentTime + LOOKAHEAD;
+    const out = outlet(ctx, audio.master, CHIRP_LEVEL);
+    const blip = tone(ctx, out, {
+      type: 'sine',
+      at: t,
+      from: 1560,
+      to: 1960,
+      peak: 0.8,
+      attack: 0.005,
+      hold: 0.03,
+      decay: 0.12,
+    });
+    onAllEnded([blip], () => out.disconnect());
+  } catch {
+    // Deliberately silent: pings are shown on the map as well.
+  }
+}
+
+/**
  * Deep red-alert swell for penalties (~0.8 s): detuned saws sagging in pitch behind a closing
  * lowpass, so it reads as power draining away rather than as a klaxon.
  */

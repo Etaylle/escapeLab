@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ClientMessage, PlayerPosition, PlayerView, PuzzleView } from '@escapelab/core';
 import { play, simonTone } from '../sounds.js';
-import { GameWorld } from '../world/GameWorld.js';
+import { GameWorld, type MapPing } from '../world/GameWorld.js';
 
 interface Props {
   view: PlayerView;
   positionsRef: React.MutableRefObject<Record<string, PlayerPosition>>;
+  pingsRef: React.MutableRefObject<MapPing[]>;
   send: (msg: ClientMessage) => void;
 }
 
@@ -431,7 +432,7 @@ function PuzzlePanel({ puzzle, send }: { puzzle: PuzzleView; send: Send }) {
 
 // --- screen ------------------------------------------------------------------
 
-export function GameScreen({ view, positionsRef, send }: Props) {
+export function GameScreen({ view, positionsRef, pingsRef, send }: Props) {
   const { shaking, alarmVisible, stamp } = useFeedback(view);
   const puzzle = view.puzzle;
   const map = view.map;
@@ -490,6 +491,7 @@ export function GameScreen({ view, positionsRef, send }: Props) {
         <GameWorld
           view={view}
           positionsRef={positionsRef}
+          pingsRef={pingsRef}
           inputLocked={puzzle !== null}
           send={send}
         />

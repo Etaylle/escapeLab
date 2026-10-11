@@ -71,6 +71,11 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
       s.room.switchMission(s.playerId, catalog.get(msg.missionId));
       return s;
     }
+    case 'ping': {
+      const s = requireSession(session);
+      s.room.ping(s.playerId, msg.x, msg.y);
+      return s;
+    }
     case 'pos': {
       const s = requireSession(session);
       s.room.updatePosition(s.playerId, {

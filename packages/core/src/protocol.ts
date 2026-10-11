@@ -40,6 +40,11 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
     facing: z.number().finite(),
     moving: z.boolean(),
   }),
+  z.object({
+    kind: z.literal('ping'),
+    x: z.number().finite().min(-10).max(500),
+    y: z.number().finite().min(-10).max(500),
+  }),
   z.object({ kind: z.literal('interact') }),
   z.object({ kind: z.literal('back-to-lobby') }),
 ]);
@@ -67,6 +72,7 @@ export type ServerMessage =
   | { kind: 'joined'; code: string; playerId: string; token: string }
   | { kind: 'view'; view: PlayerView }
   | { kind: 'positions'; players: Record<string, PlayerPosition> }
+  | { kind: 'ping'; playerId: string; x: number; y: number }
   | { kind: 'error'; message: string };
 
 export function parseClientMessage(raw: string): ClientMessage {

@@ -42,6 +42,8 @@ const INTERACT_RADIUS = 1.6;
 const EXIT_RADIUS = 0.7;
 /** Positions fan out at most this often. */
 const POSITIONS_INTERVAL_MS = 66;
+/** Minimum gap between two pings from the same player. */
+const PING_COOLDOWN_MS = 700;
 
 /**
  * One game room: owns the authoritative GameState, player sessions
@@ -55,6 +57,7 @@ export class Room {
   private readonly tokens = new Map<string, string>();
   private readonly listeners = new Map<string, Listener>();
   private readonly positions = new Map<string, PlayerPosition>();
+  private readonly lastPingAt = new Map<string, number>();
   private timer: NodeJS.Timeout | null = null;
   private positionsTimer: NodeJS.Timeout | null = null;
   private positionsDirty = false;
@@ -171,6 +174,21 @@ export class Room {
         this.positions.clear();
         this.dispatch({ type: 'back-to-lobby', playerId });
         break;
+    }
+  }
+
+  /** Map ping: fan out to everyone, rate-limited per player. */
+  ping(playerId: string, x: number, y: number): void {
+    if (this.state.phase !== 'playing' || this.state.mission.map === undefined) {
+      return;
+    }
+    const now = Date.now();
+    if (now - (this.lastPingAt.get(playerId) ?? 0) < PING_COOLDOWN_MS) {
+      return;
+    }
+    this.lastPingAt.set(playerId, now);
+    for (const listener of this.listeners.values()) {
+      listener({ kind: 'ping', playerId, x, y });
     }
   }
 
