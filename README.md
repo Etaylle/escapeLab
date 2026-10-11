@@ -10,6 +10,11 @@ Layouts/Codes sind pro Partie zufällig (seeded, deterministisch replaybar), Feh
 Countdown-Zeit. **Missionen:** Blackout im Labor (2 Spieler, 5 Rätsel), Tutorial (2 Spieler),
 Kettenreaktion (3 Spieler, Wissen auf drei Rollen verteilt).
 
+**Beitreten:** Auf der Startseite steht eine Liste aller **offenen Runden** mit Mission,
+Schwierigkeit, wer schon wartet und wie viele Plätze frei sind — ein Klick auf *Beitreten*
+genügt, niemand muss einen Code weitergeben. Laufende Runden erscheinen ebenfalls, dort führt
+der Knopf zum Zuschauen. Ein Code-Feld bleibt für direkte Verabredungen.
+
 **Ablauf einer Partie:** Lobby (Figur + Farbe wählen, Rolle wählen) → Briefing-Countdown →
 Stationen in Reihenfolge finden und lösen → wenn alle gelöst sind, öffnet sich der **Notausgang**
 und das ganze Team muss ihn gemeinsam erreichen, bevor die Zeit abläuft → Endbildschirm mit

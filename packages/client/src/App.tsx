@@ -83,7 +83,12 @@ export function App() {
     }
     if (conn.view === null) {
       return (
-        <JoinScreen send={conn.send} connected={conn.status === 'open'} missions={missions} />
+        <JoinScreen
+          send={conn.send}
+          connected={conn.status === 'open'}
+          missions={missions}
+          rooms={conn.rooms}
+        />
       );
     }
     switch (conn.view.phase) {

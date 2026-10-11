@@ -434,6 +434,14 @@ async function solveSync(clients: Clients): Promise<void> {
 
 const anna = new TestClient('anna');
 await anna.open();
+// Nothing is running yet, so the lobby browser starts out empty.
+anna.send({ kind: 'list-rooms' });
+const empty = await anna.expect(
+  'room list',
+  (m): m is Extract<ServerMessage, { kind: 'rooms' }> => m.kind === 'rooms',
+);
+assert(empty.rooms.length === 0, 'lobby browser is empty before any room exists');
+
 anna.send({ kind: 'create-room', name: 'Anna', missionId: 'blackout' });
 const annaJoined = await anna.expect('joined', isJoined);
 anna.playerId = annaJoined.playerId;
@@ -441,7 +449,22 @@ await anna.expectView('sees the lobby', (v) => v.phase === 'lobby');
 
 const ben = new TestClient('ben');
 await ben.open();
-ben.send({ kind: 'join-room', code: annaJoined.code, name: 'Ben' });
+// Ben finds the room in the browser instead of being told the code.
+ben.send({ kind: 'list-rooms' });
+const listed = await ben.expect(
+  'room list',
+  (m): m is Extract<ServerMessage, { kind: 'rooms' }> => m.kind === 'rooms',
+);
+const openRoom = listed.rooms[0];
+assert(
+  openRoom !== undefined && openRoom.code === annaJoined.code && openRoom.free === 1,
+  'lobby browser shows the open room with a free seat',
+);
+assert(
+  openRoom.players.length === 1 && openRoom.players[0]?.name === 'Anna',
+  'lobby browser shows who is already waiting',
+);
+ben.send({ kind: 'join-room', code: openRoom.code, name: 'Ben' });
 const benJoined = await ben.expect('joined', isJoined);
 ben.playerId = benJoined.playerId;
 

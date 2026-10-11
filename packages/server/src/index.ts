@@ -68,6 +68,9 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
       room.attach(playerId, (m) => send(socket, m));
       return { room, playerId };
     }
+    case 'list-rooms':
+      send(socket, { kind: 'rooms', rooms: manager.list() });
+      return session;
     case 'spectate': {
       const room = manager.get(msg.code);
       const detachSpectator = room.attachSpectator((m) => send(socket, m));

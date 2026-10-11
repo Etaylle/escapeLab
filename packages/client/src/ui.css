@@ -1609,3 +1609,66 @@ button.link:hover {
   font-size: 13px;
   line-height: 1.45;
 }
+
+/* ── lobby browser ──────────────────────────────────────────────────────── */
+
+.rooms {
+  list-style: none;
+  margin: 10px 0 6px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.room {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--bg-2);
+}
+
+.room-running {
+  opacity: 0.8;
+  border-style: dashed;
+}
+
+.room-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.room-title {
+  font-weight: 700;
+}
+
+.room-meta {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.room-crew {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.room-crew .offline {
+  color: var(--warn);
+}
+
+@media (max-width: 560px) {
+  .room {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

@@ -1,25 +1,84 @@
-import { useState } from 'react';
-import type { ClientMessage, MissionInfo } from '@escapelab/core';
+import { useEffect, useState } from 'react';
+import type { ClientMessage, MissionInfo, RoomSummary } from '@escapelab/core';
 
 interface Props {
   send: (msg: ClientMessage) => void;
   connected: boolean;
   missions: MissionInfo[];
+  rooms: RoomSummary[];
 }
 
-export function JoinScreen({ send, connected, missions }: Props) {
+const REFRESH_MS = 2500;
+
+/** One open or running room in the browser. */
+function RoomRow({
+  room,
+  canJoin,
+  onJoin,
+  onWatch,
+}: {
+  room: RoomSummary;
+  canJoin: boolean;
+  onJoin: () => void;
+  onWatch: () => void;
+}) {
+  const running = room.phase !== 'lobby';
+  return (
+    <li className={`room ${running ? 'room-running' : ''}`}>
+      <div className="room-main">
+        <span className="room-title">{room.missionTitle}</span>
+        <span className="room-meta">
+          {running ? '▶ läuft gerade' : `${room.free} von ${room.capacity} Plätzen frei`} ·{' '}
+          {room.difficulty} · Code {room.code}
+        </span>
+        <span className="room-crew">
+          {room.players.map((p) => (
+            <span key={p.name} className={p.connected ? '' : 'offline'}>
+              <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
+              {p.name}
+            </span>
+          ))}
+          {room.players.length === 0 && <span className="muted">noch niemand da</span>}
+        </span>
+      </div>
+      {running || room.free === 0 ? (
+        <button onClick={onWatch} disabled={!running}>
+          👁 Zuschauen
+        </button>
+      ) : (
+        <button className="primary" onClick={onJoin} disabled={!canJoin}>
+          Beitreten
+        </button>
+      )}
+    </li>
+  );
+}
+
+export function JoinScreen({ send, connected, missions, rooms }: Props) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [missionId, setMissionId] = useState<string | null>(null);
   const nameOk = name.trim().length > 0;
   const selected = missionId ?? missions[0]?.id ?? null;
 
+  // Keep the room browser fresh while nobody has joined anything yet.
+  useEffect(() => {
+    if (!connected) {
+      return undefined;
+    }
+    send({ kind: 'list-rooms' });
+    const timer = setInterval(() => send({ kind: 'list-rooms' }), REFRESH_MS);
+    return () => clearInterval(timer);
+    // `send` is stable for the lifetime of the connection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected]);
+
   return (
     <div className="card join">
       <h1>⬢ EscapeLab</h1>
       <p className="muted">
         Kooperatives Escape-Spiel für den Browser: Jede Rolle sieht ein anderes Panel — lösen
-        könnt ihr nur gemeinsam, per Stimme. Gerät pro Person, Rücken an Rücken, los.
+        könnt ihr es nur gemeinsam, per Stimme. Gerät pro Person, Rücken an Rücken, los.
       </p>
 
       <label>
@@ -33,9 +92,31 @@ export function JoinScreen({ send, connected, missions }: Props) {
         />
       </label>
 
+      <h2>Offene Runden</h2>
+      {rooms.length === 0 ? (
+        <p className="muted">
+          Gerade läuft nichts — eröffne unten die erste Runde, dann taucht sie hier für alle auf.
+        </p>
+      ) : (
+        <ul className="rooms">
+          {rooms.map((room) => (
+            <RoomRow
+              key={room.code}
+              room={room}
+              canJoin={connected && nameOk}
+              onJoin={() => send({ kind: 'join-room', code: room.code, name: name.trim() })}
+              onWatch={() => send({ kind: 'spectate', code: room.code })}
+            />
+          ))}
+        </ul>
+      )}
+      {rooms.length > 0 && !nameOk && (
+        <p className="muted">Trag oben deinen Namen ein, dann kannst du beitreten.</p>
+      )}
+
       <div className="join-grid">
         <section className="join-create">
-          <h2>Neue Mission</h2>
+          <h2>Neue Runde eröffnen</h2>
           {missions.length > 0 ? (
             <div className="mission-list">
               {missions.map((m) => (
@@ -67,13 +148,13 @@ export function JoinScreen({ send, connected, missions }: Props) {
               )
             }
           >
-            Raum erstellen
+            Runde eröffnen
           </button>
         </section>
 
         <section className="join-join">
-          <h2>Oder beitreten</h2>
-          <p className="muted">Jemand hat schon einen Raum? Code eingeben:</p>
+          <h2>Mit Code</h2>
+          <p className="muted">Wenn ihr euch direkt verabredet habt:</p>
           <div className="join-with-code">
             <input
               value={code}
@@ -89,16 +170,12 @@ export function JoinScreen({ send, connected, missions }: Props) {
               Beitreten
             </button>
           </div>
-          <p className="muted join-watch-note">
-            Nur zuschauen? Dann braucht es keinen Namen — ihr seht die ganze Karte und beide
-            Panele gleichzeitig.
-          </p>
           <button
             className="link"
             disabled={!connected || code.trim().length === 0}
             onClick={() => send({ kind: 'spectate', code: code.trim() })}
           >
-            👁 Zuschauen
+            👁 Mit Code zuschauen
           </button>
         </section>
       </div>

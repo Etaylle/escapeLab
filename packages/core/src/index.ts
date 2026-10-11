@@ -43,6 +43,7 @@ export {
   type ClientMessage,
   type ServerMessage,
   type MissionInfo,
+  type RoomSummary,
   type PlayerPosition,
   type DronePosition,
 } from './protocol.js';

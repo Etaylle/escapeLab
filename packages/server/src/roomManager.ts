@@ -1,4 +1,4 @@
-import type { Mission } from '@escapelab/core';
+import type { Mission, RoomSummary } from '@escapelab/core';
 import { Room } from './room.js';
 
 /** Room codes avoid ambiguous characters (0/O, 1/I/L). */
@@ -22,6 +22,20 @@ export class RoomManager {
       throw new Error(`Raum "${code.toUpperCase()}" existiert nicht (mehr).`);
     }
     return room;
+  }
+
+  /**
+   * Rooms worth showing in the lobby browser: ones somebody is actually
+   * sitting in, open lobbies first, then the runs you could watch.
+   */
+  list(): RoomSummary[] {
+    return [...this.rooms.values()]
+      .filter((room) => room.occupied)
+      .map((room) => room.summary())
+      .sort((a, b) => {
+        const openness = Number(b.free > 0) - Number(a.free > 0);
+        return openness !== 0 ? openness : a.code.localeCompare(b.code);
+      });
   }
 
   /** Drop rooms that have been empty for a while; call periodically. */

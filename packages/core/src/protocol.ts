@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CHAT_PHRASE_IDS, type ChatPhrase } from './chat.js';
-import { DIFFICULTIES } from './difficulty.js';
+import { DIFFICULTIES, type Difficulty } from './difficulty.js';
+import type { Phase } from './state.js';
 import type { PlayerView, SpectatorView } from './view.js';
 
 /**
@@ -20,6 +21,7 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
     name: z.string().min(1).max(40),
   }),
   z.object({ kind: z.literal('spectate'), code: z.string().min(1).max(10) }),
+  z.object({ kind: z.literal('list-rooms') }),
   z.object({
     kind: z.literal('resume'),
     code: z.string().min(1).max(10),
@@ -60,6 +62,19 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('back-to-lobby') }),
 ]);
 
+/** One row in the lobby browser. */
+export interface RoomSummary {
+  code: string;
+  missionTitle: string;
+  difficulty: Difficulty;
+  phase: Phase;
+  players: { name: string; color: string; connected: boolean }[];
+  /** how many roles this mission has */
+  capacity: number;
+  /** seats still open; always 0 once the mission is running */
+  free: number;
+}
+
 /** What the mission picker needs to know, served via GET /missions. */
 export interface MissionInfo {
   id: string;
@@ -93,6 +108,7 @@ export type ServerMessage =
   | { kind: 'joined'; code: string; playerId: string; token: string }
   | { kind: 'view'; view: PlayerView }
   | { kind: 'spectator-view'; view: SpectatorView; code: string }
+  | { kind: 'rooms'; rooms: RoomSummary[] }
   | {
       kind: 'positions';
       players: Record<string, PlayerPosition>;

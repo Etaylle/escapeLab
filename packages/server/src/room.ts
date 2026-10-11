@@ -14,6 +14,7 @@ import {
   type GameState,
   type Mission,
   type PlayerPosition,
+  type RoomSummary,
   type ServerMessage,
 } from '@escapelab/core';
 
@@ -274,6 +275,30 @@ export class Room {
     for (const listener of this.audience) {
       listener({ kind: 'chat', playerId, phrase });
     }
+  }
+
+  /** One row for the lobby browser. */
+  summary(): RoomSummary {
+    const capacity = this.state.mission.roles.length;
+    const open = this.state.phase === 'lobby';
+    return {
+      code: this.code,
+      missionTitle: this.state.mission.title,
+      difficulty: this.state.difficulty,
+      phase: this.state.phase,
+      players: this.state.players.map((p) => ({
+        name: p.name,
+        color: p.color,
+        connected: p.connected,
+      })),
+      capacity,
+      free: open ? Math.max(0, capacity - this.state.players.length) : 0,
+    };
+  }
+
+  /** True while at least one player is actually connected to this room. */
+  get occupied(): boolean {
+    return this.listeners.size > 0;
   }
 
   /** Mission currently selected in this room, so callers can rescale it. */

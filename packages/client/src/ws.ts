@@ -5,6 +5,7 @@ import type {
   DronePosition,
   PlayerPosition,
   PlayerView,
+  RoomSummary,
   ServerMessage,
   SpectatorView,
 } from '@escapelab/core';
@@ -21,6 +22,8 @@ export interface Connection {
   view: PlayerView | null;
   /** set instead of `view` when this connection is watching, not playing */
   spectatorView: SpectatorView | null;
+  /** open and running rooms, refreshed while sitting on the join screen */
+  rooms: RoomSummary[];
   roomCode: string | null;
   error: string | null;
   /**
@@ -63,6 +66,7 @@ export function useGameConnection(): Connection {
   const [status, setStatus] = useState<Connection['status']>('connecting');
   const [view, setView] = useState<PlayerView | null>(null);
   const [spectatorView, setSpectatorView] = useState<SpectatorView | null>(null);
+  const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [roomCode, setRoomCode] = useState<string | null>(loadCredentials()?.code ?? null);
   const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -124,6 +128,9 @@ export function useGameConnection(): Connection {
           setSpectatorView(msg.view);
           setRoomCode(msg.code);
           break;
+        case 'rooms':
+          setRooms(msg.rooms);
+          break;
         case 'positions':
           positionsRef.current = msg.players;
           dronesRef.current = msg.drones;
@@ -168,6 +175,7 @@ export function useGameConnection(): Connection {
     status,
     view,
     spectatorView,
+    rooms,
     roomCode,
     error,
     positions: positionsRef,
