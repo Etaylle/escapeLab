@@ -1,0 +1,167 @@
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import { applyAction, GameError, initialState, parseMission, viewFor } from '../src/index.js';
+import type { Action, GameState, Mission } from '../src/index.js';
+
+const mission: Mission = parseMission(
+  JSON.parse(readFileSync(new URL('../../../missions/systemcheck.json', import.meta.url), 'utf8')),
+);
+
+const T0 = 1_000_000;
+
+function run(actions: Action[], from?: GameState): GameState {
+  return actions.reduce(applyAction, from ?? initialState(mission));
+}
+
+/** Lobby with both roles assigned, ready to start. anna=anleitung (host), ben=steuerpult. */
+function readyLobby(): GameState {
+  return run([
+    { type: 'player-join', playerId: 'p1', name: 'Anna' },
+    { type: 'player-join', playerId: 'p2', name: 'Ben' },
+    { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
+    { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
+  ]);
+}
+
+function started(at = T0): GameState {
+  return run([{ type: 'start-mission', playerId: 'p1', at, seed: 42 }], readyLobby());
+}
+
+describe('lobby', () => {
+  it('makes the first player host', () => {
+    const state = readyLobby();
+    expect(state.players.map((p) => p.isHost)).toEqual([true, false]);
+  });
+
+  it('rejects taking an occupied role', () => {
+    const state = readyLobby();
+    expect(() =>
+      applyAction(state, { type: 'select-role', playerId: 'p2', roleId: 'anleitung' }),
+    ).toThrow(GameError);
+  });
+
+  it('rejects starting with unassigned roles', () => {
+    const state = run([
+      { type: 'player-join', playerId: 'p1', name: 'Anna' },
+      { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
+    ]);
+    expect(() =>
+      applyAction(state, { type: 'start-mission', playerId: 'p1', at: T0, seed: 42 }),
+    ).toThrow(/Steuerpult/);
+  });
+
+  it('rejects start by non-host and join into a full or running game', () => {
+    const lobby = readyLobby();
+    expect(() =>
+      applyAction(lobby, { type: 'start-mission', playerId: 'p2', at: T0, seed: 42 }),
+    ).toThrow(/Host/);
+    expect(() =>
+      applyAction(lobby, { type: 'player-join', playerId: 'p3', name: 'Cleo' }),
+    ).toThrow(/voll/);
+    expect(() =>
+      applyAction(started(), { type: 'player-join', playerId: 'p3', name: 'Cleo' }),
+    ).toThrow(/Lobby/);
+  });
+
+  it('rejects blank player names', () => {
+    expect(() =>
+      applyAction(initialState(mission), { type: 'player-join', playerId: 'p1', name: '   ' }),
+    ).toThrow(/Namen/);
+  });
+});
+
+describe('playing a full mission', () => {
+  it('wins after solving all three puzzles', () => {
+    let state = started();
+    // Puzzle 1: only steuerpult has a button.
+    state = applyAction(state, { type: 'press-button', playerId: 'p2', at: T0 + 1000 });
+    expect(state.currentPuzzleIndex).toBe(1);
+    // Puzzle 2: both press, any order, no window.
+    state = run(
+      [
+        { type: 'press-button', playerId: 'p1', at: T0 + 5000 },
+        { type: 'press-button', playerId: 'p2', at: T0 + 60_000 },
+      ],
+      state,
+    );
+    expect(state.currentPuzzleIndex).toBe(2);
+    // Puzzle 3: both within 3 seconds.
+    state = run(
+      [
+        { type: 'press-button', playerId: 'p1', at: T0 + 70_000 },
+        { type: 'press-button', playerId: 'p2', at: T0 + 72_000 },
+      ],
+      state,
+    );
+    expect(state.phase).toBe('won');
+  });
+
+  it('expires a press outside the sync window and counts the attempt', () => {
+    let state = started();
+    state = run(
+      [
+        { type: 'press-button', playerId: 'p2', at: T0 + 1000 },
+        { type: 'press-button', playerId: 'p1', at: T0 + 2000 },
+        { type: 'press-button', playerId: 'p2', at: T0 + 3000 },
+        // Window puzzle: first press at +10s, partner misses the 3s window.
+        { type: 'press-button', playerId: 'p1', at: T0 + 10_000 },
+        { type: 'press-button', playerId: 'p2', at: T0 + 20_000 },
+      ],
+      state,
+    );
+    expect(state.phase).toBe('playing');
+    if (state.puzzleState?.type !== 'button-sync') {
+      throw new Error('expected button-sync puzzle state');
+    }
+    expect(state.puzzleState.attempts).toBe(1);
+    expect(state.puzzleState.lastResult).toBe('missed-window');
+    // The late press is still valid as the start of the next attempt.
+    state = applyAction(state, { type: 'press-button', playerId: 'p1', at: T0 + 21_000 });
+    expect(state.phase).toBe('won');
+  });
+
+  it('rejects a press from a role without a button', () => {
+    expect(() =>
+      applyAction(started(), { type: 'press-button', playerId: 'p1', at: T0 + 1000 }),
+    ).toThrow(/keinen Knopf/);
+  });
+
+  it('loses when time expires, also on a late press', () => {
+    expect(applyAction(started(), { type: 'time-expired', at: T0 + 300_000 }).phase).toBe('lost');
+    const late = applyAction(started(), {
+      type: 'press-button',
+      playerId: 'p2',
+      at: T0 + 300_000,
+    });
+    expect(late.phase).toBe('lost');
+  });
+
+  it('lets the host return to the lobby with roles intact', () => {
+    let state = applyAction(started(), { type: 'time-expired', at: T0 + 300_000 });
+    state = applyAction(state, { type: 'back-to-lobby', playerId: 'p1' });
+    expect(state.phase).toBe('lobby');
+    expect(state.players.map((p) => p.roleId)).toEqual(['anleitung', 'steuerpult']);
+  });
+});
+
+describe('asymmetric information in views', () => {
+  it('shows the manual text only to the Anleitung role', () => {
+    const state = started();
+    const anna = viewFor(state, 'p1');
+    const ben = viewFor(state, 'p2');
+    expect(anna.puzzle?.info).toMatch(/Freigabe erteilt/);
+    expect(ben.puzzle?.info).toBeNull();
+    if (anna.puzzle?.kind !== 'button-sync' || ben.puzzle?.kind !== 'button-sync') {
+      throw new Error('expected button-sync puzzle views');
+    }
+    expect(anna.puzzle.buttonLabel).toBeNull();
+    expect(ben.puzzle.buttonLabel).toBe('INIT');
+    expect(JSON.stringify(ben)).not.toContain('Freigabe erteilt');
+  });
+
+  it('tracks connection status in views', () => {
+    const state = applyAction(started(), { type: 'player-disconnected', playerId: 'p2' });
+    const anna = viewFor(state, 'p1');
+    expect(anna.players.find((p) => p.id === 'p2')?.connected).toBe(false);
+  });
+});

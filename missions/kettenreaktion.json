@@ -1,0 +1,201 @@
+{
+  "id": "kettenreaktion",
+  "title": "Kettenreaktion",
+  "subtitle": "Für Dreierteams: Handbuch, Diagnose und Steuerpult — keiner weiß genug, alle reden durcheinander.",
+  "listOrder": 30,
+  "story": {
+    "intro": "Der Versuchsreaktor im Keller läuft heiß. Das Wissen, ihn zu stoppen, ist auf drei Stationen verteilt: das Handbuch, die Diagnose-Konsole und das Steuerpult. Neun Minuten. Drei Stimmen. Ein Fehler zu viel — und ihr lernt, was »Kettenreaktion« wörtlich heißt.",
+    "win": "Die Kurve auf der Diagnose-Konsole flacht ab, das Dröhnen verebbt. Der Reaktor schnurrt wieder wie ein Kater. Drei Stationen, eine Mannschaft — Lehrbuchleistung.",
+    "lose": "Die Anzeigen springen auf Rot, dann auf Schwarz. Evakuierungssirenen. Immerhin: Simulationsende. Beim nächsten Mal redet ihr schneller — und präziser."
+  },
+  "timeLimitSec": 600,
+  "map": {
+    "tiles": [
+      "#####################",
+      "#.....#.......#.....#",
+      "#.....#.......#.....#",
+      "#.....#.......#.....#",
+      "####.####.#.####.####",
+      "####.####.#.####.####",
+      "#...................#",
+      "#...................#",
+      "###########.#####.###",
+      "#.....#..#....#.....#",
+      "#.#...........#.#.#.#",
+      "#.....#..#....#.....#",
+      "#####################"
+    ],
+    "spawns": {
+      "anleitung": { "x": 2, "y": 2 },
+      "diagnose": { "x": 18, "y": 2 },
+      "steuerpult": { "x": 8, "y": 2 }
+    },
+    "doors": [
+      { "id": "archivtuer", "x": 4, "y": 4, "opensBy": { "kind": "puzzle", "puzzleId": "lastverteilung" } },
+      { "id": "schleuse1", "x": 9, "y": 4, "opensBy": { "kind": "plate", "plateId": "archivplatte" } },
+      { "id": "schleuse2", "x": 9, "y": 5, "opensBy": { "kind": "plate", "plateId": "messplatte" } },
+      { "id": "leitstandtuer", "x": 11, "y": 4, "opensBy": { "kind": "puzzle", "puzzleId": "kuehlkreislauf" } },
+      { "id": "messlabortuer", "x": 16, "y": 4, "opensBy": { "kind": "plate", "plateId": "flurplatte" } },
+      { "id": "resonatortuer", "x": 11, "y": 8, "opensBy": { "kind": "puzzle", "puzzleId": "freigabecode" } },
+      { "id": "kammertuer", "x": 9, "y": 10, "opensBy": { "kind": "plate", "plateId": "resonatorplatte" } },
+      { "id": "kerntuer", "x": 6, "y": 10, "opensBy": { "kind": "puzzle", "puzzleId": "resonanz" } }
+    ],
+    "plates": [
+      { "id": "archivplatte", "x": 5, "y": 2, "label": "HALTEN" },
+      { "id": "messplatte", "x": 15, "y": 2, "label": "HALTEN" },
+      { "id": "flurplatte", "x": 13, "y": 7, "label": "HALTEN" },
+      { "id": "resonatorplatte", "x": 13, "y": 9, "label": "HALTEN" }
+    ],
+    "stations": [
+      { "puzzleId": "lastverteilung", "x": 7, "y": 6 },
+      { "puzzleId": "kuehlkreislauf", "x": 17, "y": 11 },
+      { "puzzleId": "freigabecode", "x": 11, "y": 2 },
+      { "puzzleId": "resonanz", "x": 8, "y": 9 },
+      { "puzzleId": "abschaltung", "x": 3, "y": 10 }
+    ],
+    "labels": [
+      { "text": "ARCHIV", "x": 3, "y": 1 },
+      { "text": "LEITSTAND", "x": 10, "y": 1 },
+      { "text": "MESSLABOR", "x": 17, "y": 1 },
+      { "text": "FLUR", "x": 14, "y": 6 },
+      { "text": "PUMPENRAUM", "x": 17, "y": 9 },
+      { "text": "RESONATOR", "x": 11, "y": 11 },
+      { "text": "KERN", "x": 3, "y": 9 }
+    ]
+  },
+  "roles": [
+    {
+      "id": "anleitung",
+      "name": "Anleitung",
+      "description": "Du hast das Handbuch — aber nur die HÄLFTE der Seiten ist lesbar. Ohne die Diagnose bist du aufgeschmissen."
+    },
+    {
+      "id": "diagnose",
+      "name": "Diagnose",
+      "description": "Deine Konsole zeigt Live-Messwerte und Sollzustände, die sonst niemand sieht. Anfassen kannst du nichts."
+    },
+    {
+      "id": "steuerpult",
+      "name": "Steuerpult",
+      "description": "Kabel, Schalter, Tasten — alles deins. Blind. Du bist die Hände eines Teams mit geteiltem Gehirn."
+    }
+  ],
+  "puzzles": [
+    {
+      "type": "wiring",
+      "id": "lastverteilung",
+      "title": "Lastverteilung",
+      "prompt": "Sechs Brückenkabel verteilen die Reaktorlast. Zwei müssen fallen — und das Wissen darüber ist auf zwei Stationen verteilt.",
+      "cutterRoleId": "steuerpult",
+      "pairsToCut": [["⚡", "♅"], ["Ϟ", "◬"]],
+      "decoyPairs": [["⚡", "Ϟ"], ["♅", "Ж"], ["◬", "Ж"], ["⚡", "◬"]],
+      "penaltySec": 30,
+      "infos": [
+        {
+          "roleId": "anleitung",
+          "text": "Handbuch §2 (lesbarer Teil): »Die ERSTE Brücke verbindet Hochspannung (⚡) mit dem Planetenzeichen (♅). Die zweite Brücke steht auf der …« — der Rest der Seite ist verbrannt. Die Diagnose muss ihn haben."
+        },
+        {
+          "roleId": "diagnose",
+          "text": "Diagnose-Log, Eintrag 7: ZWEITE zu trennende Brücke = Blitz-Haken (Ϟ) zu Dreieck mit Punkt (◬). Reihenfolge beachten — erst wenn Brücke 1 weg ist!"
+        },
+        {
+          "roleId": "steuerpult",
+          "text": "Sechs Kabel, zwölf Zeichen. Lies vor, was du siehst — Handbuch kennt den ersten Schnitt, Diagnose den zweiten."
+        }
+      ]
+    },
+    {
+      "type": "switches",
+      "id": "kuehlkreislauf",
+      "title": "Kühlkreislauf",
+      "prompt": "Sieben Ventilschalter regeln die Kühlung. Nur die Diagnose-Konsole zeigt, welche Ventile offen sein müssen.",
+      "panelRoleId": "steuerpult",
+      "targetRoleId": "diagnose",
+      "symbols": ["⌁", "✦", "◉", "⨳", "⌬", "♁", "☍"],
+      "onCount": 4,
+      "penaltySec": 20,
+      "infos": [
+        {
+          "roleId": "anleitung",
+          "text": "Handbuch §3: Die Sollwerte des Kühlkreislaufs stehen NUR auf der Diagnose-Konsole. Deine Aufgabe: den Überblick behalten und die Prüfung erst freigeben, wenn beide sicher sind."
+        },
+        {
+          "roleId": "diagnose",
+          "text": "Dein Display zeigt die Ventile, die OFFEN (Schalter OBEN) sein müssen. Diktiere sie dem Steuerpult — Zeichen für Zeichen."
+        },
+        {
+          "roleId": "steuerpult",
+          "text": "Schalten ist gefahrlos, PRÜFEN mit falscher Kombination kostet 20 Sekunden. Wiederhole jede Ansage, bevor du kippst."
+        }
+      ]
+    },
+    {
+      "type": "keypad",
+      "id": "freigabecode",
+      "title": "Freigabecode",
+      "prompt": "Der Not-Aus verlangt einen fünfstelligen Symbolcode. Das Handbuch kennt den Anfang — das Ende steht im Diagnose-Log.",
+      "inputRoleId": "steuerpult",
+      "gridSymbols": ["҈", "₪", "Ѭ", "꩜", "⍟", "☍", "Ψ", "Ж", "⌘"],
+      "code": ["⍟", "Ж", "꩜", "҈", "⌘"],
+      "penaltySec": 20,
+      "infos": [
+        {
+          "roleId": "anleitung",
+          "text": "Handbuch §5, Zeichen 1–3: 1) ⍟ (Stern im Kreis), 2) Ж (Käfer mit sechs Beinen), 3) ꩜ (Spirale). Zeichen 4 und 5: siehe Diagnose-Protokoll."
+        },
+        {
+          "roleId": "diagnose",
+          "text": "Diagnose-Protokoll, Zeichen 4–5 des Freigabecodes: 4) ҈ (Kreis mit Punktkranz), 5) ⌘ (Knoten mit vier Schlaufen)."
+        },
+        {
+          "roleId": "steuerpult",
+          "text": "Fünf Zeichen, zwei Quellen. Ein Fehltipp setzt alles zurück (−20 s) — lass dir beide Hälften ansagen, bevor du anfängst."
+        }
+      ]
+    },
+    {
+      "type": "simon",
+      "id": "resonanz",
+      "title": "Resonanz-Dämpfung",
+      "prompt": "Der Reaktor pulst seine Resonanzfrequenz als Lichtfolge. Sie muss invertiert zurückgespielt werden — übersetzt über die Legende des Handbuchs.",
+      "displayRoleId": "steuerpult",
+      "legendRoleId": "anleitung",
+      "buttonSymbols": ["♪", "≋", "Ψ", "Ø"],
+      "sequenceLength": 6,
+      "penaltySec": 20,
+      "infos": [
+        {
+          "roleId": "anleitung",
+          "text": "Handbuch §6: Deine Legende übersetzt Farben in Dämpfungsimpulse. Das Steuerpult liest dir die Blinkfolge vor — antworte mit den Symbolen, eines nach dem anderen."
+        },
+        {
+          "roleId": "diagnose",
+          "text": "Messhinweis: Die Folge hat SECHS Impulse. Zähl laut mit — bei Impuls 4 verzählen sich alle."
+        },
+        {
+          "roleId": "steuerpult",
+          "text": "Abspielen, Farben ansagen, Symbole nach Ansage tippen. Ein Fehler setzt die Folge zurück (−20 s)."
+        }
+      ]
+    },
+    {
+      "type": "button-sync",
+      "id": "abschaltung",
+      "title": "Synchron-Abschaltung",
+      "prompt": "Drei Freigabeschalter, drei Stationen, ein Zeitfenster: 2,5 Sekunden. Der Reaktor akzeptiert nur ein einstimmiges Team.",
+      "buttons": [
+        { "roleId": "anleitung", "label": "FREIGABE A" },
+        { "roleId": "diagnose", "label": "FREIGABE B" },
+        { "roleId": "steuerpult", "label": "FREIGABE C" }
+      ],
+      "infos": [
+        {
+          "roleId": "anleitung",
+          "text": "Handbuch §8: Alle drei Freigaben innerhalb von 2,5 Sekunden. Du zählst ein — laut: drei, zwei, eins, JETZT."
+        }
+      ],
+      "windowMs": 2500
+    }
+  ]
+}

@@ -1,0 +1,335 @@
+import { z } from 'zod';
+
+/**
+ * Mission format: a mission is pure data (JSON), validated by these schemas.
+ * The platform promise is that new missions require no code changes.
+ */
+
+export const roleDefSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string(),
+});
+
+const symbolPairSchema = z.tuple([z.string().min(1), z.string().min(1)]);
+
+/**
+ * button-sync puzzle: every role listed in `buttons` must press its button.
+ * With `windowMs` set, all presses must happen within that window of each
+ * other, otherwise they expire and the team must retry.
+ */
+export const buttonSyncPuzzleSchema = z.object({
+  type: z.literal('button-sync'),
+  id: z.string().min(1),
+  title: z.string().min(1),
+  prompt: z.string(),
+  buttons: z.array(z.object({ roleId: z.string(), label: z.string() })).min(1),
+  infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
+  windowMs: z.number().int().positive().optional(),
+});
+
+/**
+ * wiring puzzle: the cutter role sees wires whose ends carry symbols
+ * (layout shuffled per game). `pairsToCut` must be cut in order; decoys and
+ * out-of-order cuts trigger an alarm (time penalty), the wire stays intact.
+ */
+export const wiringPuzzleSchema = z.object({
+  type: z.literal('wiring'),
+  id: z.string().min(1),
+  title: z.string().min(1),
+  prompt: z.string(),
+  cutterRoleId: z.string().min(1),
+  pairsToCut: z.array(symbolPairSchema).min(1),
+  decoyPairs: z.array(symbolPairSchema).min(1),
+  penaltySec: z.number().int().positive().default(30),
+  infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
+});
+
+/**
+ * keypad puzzle: the input role sees `gridSymbols` as a shuffled keypad and
+ * must press the symbols of `code` in order. A wrong press resets progress
+ * and costs time.
+ */
+export const keypadPuzzleSchema = z.object({
+  type: z.literal('keypad'),
+  id: z.string().min(1),
+  title: z.string().min(1),
+  prompt: z.string(),
+  inputRoleId: z.string().min(1),
+  gridSymbols: z.array(z.string().min(1)).min(4),
+  code: z.array(z.string().min(1)).min(2),
+  penaltySec: z.number().int().positive().default(20),
+  infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
+});
+
+/**
+ * switches puzzle: the panel role sees a bank of toggle switches (shuffled
+ * per game); the target role sees which symbols must be ON (chosen per
+ * game). Toggling is free, committing a wrong configuration costs time.
+ */
+export const switchesPuzzleSchema = z.object({
+  type: z.literal('switches'),
+  id: z.string().min(1),
+  title: z.string().min(1),
+  prompt: z.string(),
+  panelRoleId: z.string().min(1),
+  targetRoleId: z.string().min(1),
+  symbols: z.array(z.string().min(1)).min(4).max(10),
+  onCount: z.number().int().positive(),
+  penaltySec: z.number().int().positive().default(20),
+  infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
+});
+
+/**
+ * simon puzzle: the display role watches a flashing color sequence and owns
+ * the symbol buttons; the legend role holds the color→symbol mapping
+ * (generated per game). Wrong press resets progress and costs time.
+ */
+export const simonPuzzleSchema = z.object({
+  type: z.literal('simon'),
+  id: z.string().min(1),
+  title: z.string().min(1),
+  prompt: z.string(),
+  displayRoleId: z.string().min(1),
+  legendRoleId: z.string().min(1),
+  buttonSymbols: z.array(z.string().min(1)).length(4),
+  sequenceLength: z.number().int().min(3).max(8).default(5),
+  penaltySec: z.number().int().positive().default(20),
+  infos: z.array(z.object({ roleId: z.string(), text: z.string() })).default([]),
+});
+
+export const puzzleDefSchema = z.discriminatedUnion('type', [
+  buttonSyncPuzzleSchema,
+  wiringPuzzleSchema,
+  keypadPuzzleSchema,
+  switchesPuzzleSchema,
+  simonPuzzleSchema,
+]);
+
+const coord = z.number().int().nonnegative();
+
+/**
+ * Optional top-down tile map: players walk a grid, puzzle stations must be
+ * activated in mission order, plate doors stay open only while someone
+ * stands on the plate, puzzle doors open permanently once solved.
+ * Tiles: '#' wall, '.' floor, ' ' void.
+ */
+export const mapDefSchema = z.object({
+  tiles: z.array(z.string().min(1)).min(3),
+  spawns: z.record(z.string(), z.object({ x: coord, y: coord })),
+  doors: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        x: coord,
+        y: coord,
+        opensBy: z.discriminatedUnion('kind', [
+          z.object({ kind: z.literal('plate'), plateId: z.string().min(1) }),
+          z.object({ kind: z.literal('puzzle'), puzzleId: z.string().min(1) }),
+        ]),
+      }),
+    )
+    .default([]),
+  plates: z
+    .array(z.object({ id: z.string().min(1), x: coord, y: coord, label: z.string().default('') }))
+    .default([]),
+  stations: z.array(z.object({ puzzleId: z.string().min(1), x: coord, y: coord })).min(1),
+  labels: z.array(z.object({ text: z.string().min(1), x: coord, y: coord })).default([]),
+});
+
+const pairKey = ([a, b]: [string, string]): string => [a, b].sort().join('\u0000');
+
+function validatePuzzle(puzzle: PuzzleDef, roleIds: Set<string>, ctx: z.RefinementCtx): void {
+  const refs: string[] = puzzle.infos.map((i) => i.roleId);
+  if (puzzle.type === 'button-sync') {
+    refs.push(...puzzle.buttons.map((b) => b.roleId));
+  }
+  if (puzzle.type === 'wiring') {
+    refs.push(puzzle.cutterRoleId);
+    const targets = new Set(puzzle.pairsToCut.map(pairKey));
+    if (targets.size !== puzzle.pairsToCut.length) {
+      ctx.addIssue({ code: 'custom', message: `puzzle "${puzzle.id}": duplicate target pair` });
+    }
+    if (puzzle.decoyPairs.some((d) => targets.has(pairKey(d)))) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `puzzle "${puzzle.id}": a decoy pair duplicates a target pair`,
+      });
+    }
+  }
+  if (puzzle.type === 'keypad') {
+    refs.push(puzzle.inputRoleId);
+    const grid = new Set(puzzle.gridSymbols);
+    if (grid.size !== puzzle.gridSymbols.length) {
+      ctx.addIssue({ code: 'custom', message: `puzzle "${puzzle.id}": grid symbols not unique` });
+    }
+    if (new Set(puzzle.code).size !== puzzle.code.length) {
+      ctx.addIssue({ code: 'custom', message: `puzzle "${puzzle.id}": code symbols not unique` });
+    }
+    if (puzzle.code.some((s) => !grid.has(s))) {
+      ctx.addIssue({ code: 'custom', message: `puzzle "${puzzle.id}": code symbol not on grid` });
+    }
+  }
+  if (puzzle.type === 'switches') {
+    refs.push(puzzle.panelRoleId, puzzle.targetRoleId);
+    if (new Set(puzzle.symbols).size !== puzzle.symbols.length) {
+      ctx.addIssue({ code: 'custom', message: `puzzle "${puzzle.id}": symbols not unique` });
+    }
+    if (puzzle.onCount >= puzzle.symbols.length) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `puzzle "${puzzle.id}": onCount must be below the number of switches`,
+      });
+    }
+  }
+  if (puzzle.type === 'simon') {
+    refs.push(puzzle.displayRoleId, puzzle.legendRoleId);
+    if (new Set(puzzle.buttonSymbols).size !== puzzle.buttonSymbols.length) {
+      ctx.addIssue({ code: 'custom', message: `puzzle "${puzzle.id}": button symbols not unique` });
+    }
+    if (puzzle.displayRoleId === puzzle.legendRoleId) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `puzzle "${puzzle.id}": display and legend role must differ`,
+      });
+    }
+  }
+  for (const roleId of refs) {
+    if (!roleIds.has(roleId)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `puzzle "${puzzle.id}" references unknown role "${roleId}"`,
+      });
+    }
+  }
+}
+
+export const missionSchema = z
+  .object({
+    id: z.string().min(1),
+    title: z.string().min(1),
+    /** one-line teaser for the mission picker */
+    subtitle: z.string().default(''),
+    /** sort key in the mission picker, ascending */
+    listOrder: z.number().int().default(50),
+    story: z.object({
+      intro: z.string(),
+      win: z.string(),
+      lose: z.string(),
+    }),
+    timeLimitSec: z.number().int().positive(),
+    roles: z.array(roleDefSchema).min(2),
+    puzzles: z.array(puzzleDefSchema).min(1),
+    map: mapDefSchema.optional(),
+  })
+  .superRefine((mission, ctx) => {
+    const roleIds = new Set(mission.roles.map((r) => r.id));
+    if (roleIds.size !== mission.roles.length) {
+      ctx.addIssue({ code: 'custom', message: 'role ids must be unique' });
+    }
+    for (const puzzle of mission.puzzles) {
+      validatePuzzle(puzzle, roleIds, ctx);
+    }
+    if (mission.map !== undefined) {
+      validateMap(mission, ctx);
+    }
+  });
+
+function validateMap(
+  mission: { map?: z.infer<typeof mapDefSchema> | undefined; roles: RoleDef[]; puzzles: { id: string }[] },
+  ctx: z.RefinementCtx,
+): void {
+  const map = mission.map;
+  if (map === undefined) {
+    return;
+  }
+  const width = map.tiles[0]?.length ?? 0;
+  if (map.tiles.some((row) => row.length !== width)) {
+    ctx.addIssue({ code: 'custom', message: 'map: all tile rows must have the same length' });
+    return;
+  }
+  const floor = (x: number, y: number): boolean => map.tiles[y]?.charAt(x) === '.';
+  const requireFloor = (what: string, x: number, y: number): void => {
+    if (!floor(x, y)) {
+      ctx.addIssue({ code: 'custom', message: `map: ${what} at ${x},${y} is not on a floor tile` });
+    }
+  };
+
+  for (const role of mission.roles) {
+    const spawn = map.spawns[role.id];
+    if (spawn === undefined) {
+      ctx.addIssue({ code: 'custom', message: `map: missing spawn for role "${role.id}"` });
+    } else {
+      requireFloor(`spawn of "${role.id}"`, spawn.x, spawn.y);
+    }
+  }
+
+  const puzzleIds = new Set(mission.puzzles.map((p) => p.id));
+  const stationIds = map.stations.map((s) => s.puzzleId);
+  if (new Set(stationIds).size !== stationIds.length) {
+    ctx.addIssue({ code: 'custom', message: 'map: duplicate station for a puzzle' });
+  }
+  for (const id of puzzleIds) {
+    if (!stationIds.includes(id)) {
+      ctx.addIssue({ code: 'custom', message: `map: no station for puzzle "${id}"` });
+    }
+  }
+  for (const station of map.stations) {
+    if (!puzzleIds.has(station.puzzleId)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `map: station references unknown puzzle "${station.puzzleId}"`,
+      });
+    }
+    requireFloor(`station "${station.puzzleId}"`, station.x, station.y);
+  }
+
+  const plateIds = new Set(map.plates.map((p) => p.id));
+  if (plateIds.size !== map.plates.length) {
+    ctx.addIssue({ code: 'custom', message: 'map: plate ids must be unique' });
+  }
+  for (const plate of map.plates) {
+    requireFloor(`plate "${plate.id}"`, plate.x, plate.y);
+  }
+  const doorIds = new Set(map.doors.map((d) => d.id));
+  if (doorIds.size !== map.doors.length) {
+    ctx.addIssue({ code: 'custom', message: 'map: door ids must be unique' });
+  }
+  for (const door of map.doors) {
+    requireFloor(`door "${door.id}"`, door.x, door.y);
+    if (door.opensBy.kind === 'plate' && !plateIds.has(door.opensBy.plateId)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `map: door "${door.id}" references unknown plate "${door.opensBy.plateId}"`,
+      });
+    }
+    if (door.opensBy.kind === 'puzzle' && !puzzleIds.has(door.opensBy.puzzleId)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `map: door "${door.id}" references unknown puzzle "${door.opensBy.puzzleId}"`,
+      });
+    }
+  }
+}
+
+export type RoleDef = z.infer<typeof roleDefSchema>;
+export type ButtonSyncPuzzleDef = z.infer<typeof buttonSyncPuzzleSchema>;
+export type WiringPuzzleDef = z.infer<typeof wiringPuzzleSchema>;
+export type KeypadPuzzleDef = z.infer<typeof keypadPuzzleSchema>;
+export type SwitchesPuzzleDef = z.infer<typeof switchesPuzzleSchema>;
+export type SimonPuzzleDef = z.infer<typeof simonPuzzleSchema>;
+export type PuzzleDef = z.infer<typeof puzzleDefSchema>;
+export type MapDef = z.infer<typeof mapDefSchema>;
+export type Mission = z.infer<typeof missionSchema>;
+
+/** Parse and validate a mission from unknown JSON data. Throws with details on invalid input. */
+export function parseMission(data: unknown): Mission {
+  const result = missionSchema.safeParse(data);
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+      .join('; ');
+    throw new Error(`Invalid mission file: ${issues}`);
+  }
+  return result.data;
+}

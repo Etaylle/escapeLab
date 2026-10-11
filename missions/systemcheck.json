@@ -1,0 +1,72 @@
+{
+  "id": "systemcheck",
+  "title": "Tutorial: Systemcheck",
+  "subtitle": "Fünf Minuten zum Warmwerden: lernt Ansagen, Bestätigen und synchrones Drücken.",
+  "listOrder": 20,
+  "story": {
+    "intro": "Das Labor fährt nach einem Stromausfall wieder hoch. Zwei Stationen, eine Aufgabe: Bringt das System online, bevor die Notversorgung ausfällt. Ihr seht nicht dasselbe — redet miteinander!",
+    "win": "Alle Systeme online. Das Labor summt wieder — gute Teamarbeit!",
+    "lose": "Die Notversorgung ist ausgefallen. Das Labor bleibt dunkel … versucht es noch einmal."
+  },
+  "timeLimitSec": 300,
+  "roles": [
+    {
+      "id": "anleitung",
+      "name": "Anleitung",
+      "description": "Du hast das Handbuch. Nur du weißt, was wann zu tun ist — aber du kannst nichts drücken."
+    },
+    {
+      "id": "steuerpult",
+      "name": "Steuerpult",
+      "description": "Du sitzt an den Knöpfen. Ohne Ansagen der Anleitung drückst du besser nichts."
+    }
+  ],
+  "puzzles": [
+    {
+      "type": "button-sync",
+      "id": "init",
+      "title": "Initialisierung",
+      "prompt": "Das Hauptsystem muss hochgefahren werden.",
+      "buttons": [{ "roleId": "steuerpult", "label": "INIT" }],
+      "infos": [
+        {
+          "roleId": "anleitung",
+          "text": "Handbuch §1: Das Steuerpult darf INIT erst drücken, wenn du laut und deutlich »Freigabe erteilt« gesagt hast. Sag es jetzt."
+        }
+      ]
+    },
+    {
+      "type": "button-sync",
+      "id": "doppelbestaetigung",
+      "title": "Doppelbestätigung",
+      "prompt": "Der Reaktorstart braucht zwei unabhängige Bestätigungen.",
+      "buttons": [
+        { "roleId": "anleitung", "label": "BESTÄTIGEN (Handbuch)" },
+        { "roleId": "steuerpult", "label": "BESTÄTIGEN (Pult)" }
+      ],
+      "infos": [
+        {
+          "roleId": "anleitung",
+          "text": "Handbuch §2: Reihenfolge egal — aber es müssen beide bestätigen."
+        }
+      ]
+    },
+    {
+      "type": "button-sync",
+      "id": "synchronkalibrierung",
+      "title": "Synchronkalibrierung",
+      "prompt": "Die Feldspulen müssen synchron kalibriert werden.",
+      "buttons": [
+        { "roleId": "anleitung", "label": "SPULE A" },
+        { "roleId": "steuerpult", "label": "SPULE B" }
+      ],
+      "infos": [
+        {
+          "roleId": "anleitung",
+          "text": "Handbuch §3, WARNUNG: Beide Spulen müssen innerhalb von 3 Sekunden ausgelöst werden, sonst bricht die Kalibrierung ab. Zählt gemeinsam runter!"
+        }
+      ],
+      "windowMs": 3000
+    }
+  ]
+}

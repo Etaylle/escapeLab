@@ -1,0 +1,173 @@
+{
+  "id": "blackout",
+  "title": "Blackout im Labor",
+  "subtitle": "Der Klassiker für zwei: Handbuch gegen Schaltschrank, acht Minuten gegen die Dunkelheit.",
+  "listOrder": 10,
+  "story": {
+    "intro": "23:47 Uhr. Ein Knall, dann Dunkelheit — nur die Notbeleuchtung glimmt rot. Die Notversorgung hält acht Minuten. Einer von euch steht am Schaltschrank, der andere hat das Notfall-Handbuch gefunden. Ihr seht NICHT dasselbe. Redet — oder das Labor bleibt dunkel.",
+    "win": "Mit einem tiefen Brummen erwachen die Systeme. Licht flutet das Labor, die Zentrifugen laufen wieder an. Ihr habt es geschafft — gemeinsam.",
+    "lose": "Ein letztes Flackern, dann ist es still. Die Notversorgung ist erschöpft, die Proben sind verloren. Das Labor bleibt dunkel … bis zum nächsten Versuch."
+  },
+  "timeLimitSec": 540,
+  "map": {
+    "tiles": [
+      "###################",
+      "#.....#...........#",
+      "#.#.#.#.#.#.#.#...#",
+      "#.....#...........#",
+      "###.#######.#######",
+      "#........#........#",
+      "#.................#",
+      "####.#####.########",
+      "#.....#.....#.....#",
+      "#.....#...........#",
+      "#.#.#.#.....#.###.#",
+      "#.....#.....#.....#",
+      "###################"
+    ],
+    "spawns": {
+      "anleitung": { "x": 3, "y": 2 },
+      "steuerpult": { "x": 3, "y": 10 }
+    },
+    "doors": [
+      { "id": "archivtuer", "x": 3, "y": 4, "opensBy": { "kind": "puzzle", "puzzleId": "notstrom" } },
+      { "id": "maschinentuer", "x": 4, "y": 7, "opensBy": { "kind": "plate", "plateId": "flurplatte" } },
+      { "id": "flurschott", "x": 9, "y": 6, "opensBy": { "kind": "puzzle", "puzzleId": "zugangscode" } },
+      { "id": "servertuer", "x": 11, "y": 4, "opensBy": { "kind": "plate", "plateId": "serverplatte" } },
+      { "id": "labortuer", "x": 10, "y": 7, "opensBy": { "kind": "puzzle", "puzzleId": "subsysteme" } },
+      { "id": "reaktortuer", "x": 12, "y": 9, "opensBy": { "kind": "puzzle", "puzzleId": "frequenz" } }
+    ],
+    "plates": [
+      { "id": "flurplatte", "x": 7, "y": 6, "label": "HALTEN" },
+      { "id": "serverplatte", "x": 16, "y": 6, "label": "HALTEN" }
+    ],
+    "stations": [
+      { "puzzleId": "notstrom", "x": 1, "y": 9 },
+      { "puzzleId": "zugangscode", "x": 8, "y": 5 },
+      { "puzzleId": "subsysteme", "x": 16, "y": 2 },
+      { "puzzleId": "frequenz", "x": 9, "y": 11 },
+      { "puzzleId": "reaktorstart", "x": 15, "y": 9 }
+    ],
+    "labels": [
+      { "text": "ARCHIV", "x": 3, "y": 1 },
+      { "text": "SERVERRAUM", "x": 12, "y": 1 },
+      { "text": "FLUR", "x": 13, "y": 5 },
+      { "text": "MASCHINENRAUM", "x": 3, "y": 8 },
+      { "text": "LABOR", "x": 9, "y": 8 },
+      { "text": "REAKTOR", "x": 15, "y": 8 }
+    ]
+  },
+  "roles": [
+    {
+      "id": "anleitung",
+      "name": "Anleitung",
+      "description": "Du hast das Notfall-Handbuch. Nur du kennst die richtigen Schritte — aber du siehst weder Kabel noch Tasten."
+    },
+    {
+      "id": "steuerpult",
+      "name": "Steuerpult",
+      "description": "Du stehst am Schaltschrank: Kabel, Tasten, Schalter. Du siehst alles — aber ohne Handbuch ist jeder Griff russisches Roulette."
+    }
+  ],
+  "puzzles": [
+    {
+      "type": "wiring",
+      "id": "notstrom",
+      "title": "Notstrom-Brücken",
+      "prompt": "Im Sicherungskasten hängen fünf Überbrückungskabel. Zwei davon blockieren den Notstromkreis — sie müssen weg, in der richtigen Reihenfolge. Die falschen stehen unter Spannung.",
+      "cutterRoleId": "steuerpult",
+      "pairsToCut": [["⚡", "☢"], ["♆", "Ϟ"]],
+      "decoyPairs": [["⚡", "♆"], ["☢", "Ѭ"], ["Ϟ", "Ѭ"]],
+      "penaltySec": 30,
+      "infos": [
+        {
+          "roleId": "anleitung",
+          "text": "Handbuch §4 — NOTSTROM: Trenne ZUERST das Kabel zwischen Hochspannungszeichen (⚡) und Strahlungszeichen (☢). DANACH das Kabel zwischen Dreizack (♆) und Blitz-Haken (Ϟ). WARNUNG: Jedes andere Kabel löst den Alarm aus und kostet 30 Sekunden. Frag nach, was auf den Kabeln steht!"
+        },
+        {
+          "roleId": "steuerpult",
+          "text": "Die Kabelenden tragen eingravierte Zeichen. Beschreibe sie der Anleitung — und schneide erst, wenn ihr euch sicher seid."
+        }
+      ]
+    },
+    {
+      "type": "keypad",
+      "id": "zugangscode",
+      "title": "Zugangscode",
+      "prompt": "Das Bedienfeld des Hauptservers verlangt einen Symbolcode. Vier Zeichen, richtige Reihenfolge. Ein Fehler setzt die Eingabe zurück.",
+      "inputRoleId": "steuerpult",
+      "gridSymbols": ["꩜", "ψ", "Ѭ", "⍾", "☖", "Ω", "Ж", "҂", "₪"],
+      "code": ["☖", "꩜", "Ж", "₪"],
+      "penaltySec": 20,
+      "infos": [
+        {
+          "roleId": "anleitung",
+          "text": "Handbuch §5 — ZUGANGSCODE, exakt in dieser Reihenfolge: 1) ☖ (Haus mit Sockel), 2) ꩜ (Spirale), 3) Ж (Käfer mit sechs Beinen), 4) ₪ (Tor mit Gittern). Beschreib die Zeichen genau — ein Fehltipp kostet 20 Sekunden und setzt alles zurück."
+        },
+        {
+          "roleId": "steuerpult",
+          "text": "Neun Tasten, kryptische Zeichen. Die Anleitung kennt den Code — beschreibe, was du siehst, und tippe erst bei Ansage."
+        }
+      ]
+    },
+    {
+      "type": "switches",
+      "id": "subsysteme",
+      "title": "Subsysteme hochfahren",
+      "prompt": "Sechs Kippschalter steuern die Subsysteme des Labors. Nur die richtige Kombination bringt das Netz stabil hoch — eine falsche Prüfung wirft die Sicherung.",
+      "panelRoleId": "steuerpult",
+      "targetRoleId": "anleitung",
+      "symbols": ["⌁", "✦", "◉", "⨳", "⌬", "♁"],
+      "onCount": 3,
+      "penaltySec": 20,
+      "infos": [
+        {
+          "roleId": "anleitung",
+          "text": "Handbuch §6 — SUBSYSTEME: Dein Display zeigt, welche Systeme ans Netz müssen. Genau diese Schalter nach OBEN, alle anderen nach UNTEN. Erst wenn alles gesetzt ist: prüfen lassen."
+        },
+        {
+          "roleId": "steuerpult",
+          "text": "Kippschalter umlegen ist gefahrlos — aber PRÜFEN mit falscher Kombination löst den Alarm aus (−20 s). Lies die Zeichen vor und stell nach Ansage."
+        }
+      ]
+    },
+    {
+      "type": "simon",
+      "id": "frequenz",
+      "title": "Frequenz-Abgleich",
+      "prompt": "Der Hauptgenerator sendet seine Taktfolge als Lichtsignal. Sie muss in Steuerimpulse übersetzt und exakt zurückgespielt werden.",
+      "displayRoleId": "steuerpult",
+      "legendRoleId": "anleitung",
+      "buttonSymbols": ["♪", "≋", "Ψ", "Ø"],
+      "sequenceLength": 5,
+      "penaltySec": 20,
+      "infos": [
+        {
+          "roleId": "anleitung",
+          "text": "Handbuch §7 — FREQUENZ: Deine Legende zeigt, welches Symbol zu welcher Farbe gehört. Das Steuerpult sieht die Blinkfolge. Übersetzt sie gemeinsam, Farbe für Farbe — dann eintippen."
+        },
+        {
+          "roleId": "steuerpult",
+          "text": "Spiel die Blinkfolge ab und sag die Farben an. Die Anleitung übersetzt sie in Symbole — tippe sie in exakt dieser Reihenfolge. Ein Fehler setzt alles zurück (−20 s)."
+        }
+      ]
+    },
+    {
+      "type": "button-sync",
+      "id": "reaktorstart",
+      "title": "Reaktor-Neustart",
+      "prompt": "Letzter Schritt: Die beiden Zündschalter des Reaktors sitzen an getrennten Stationen — und sie akzeptieren nur einen synchronen Impuls.",
+      "buttons": [
+        { "roleId": "anleitung", "label": "ZÜNDUNG A" },
+        { "roleId": "steuerpult", "label": "ZÜNDUNG B" }
+      ],
+      "infos": [
+        {
+          "roleId": "anleitung",
+          "text": "Handbuch §8 — NEUSTART: Beide Zündschalter müssen innerhalb von 2 Sekunden gedrückt werden. Zählt gemeinsam ein: drei — zwei — eins — JETZT."
+        }
+      ],
+      "windowMs": 2000
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+import type { Mission } from './mission.js';
+import type { ButtonSyncState } from './puzzles/buttonSync.js';
+import type { WiringState } from './puzzles/wiring.js';
+import type { KeypadState } from './puzzles/keypad.js';
+import type { SwitchesState } from './puzzles/switches.js';
+import type { SimonState } from './puzzles/simon.js';
+
+export type Phase = 'lobby' | 'playing' | 'won' | 'lost';
+
+export interface Player {
+  id: string;
+  name: string;
+  /** null until the player picks a role in the lobby */
+  roleId: string | null;
+  connected: boolean;
+  isHost: boolean;
+}
+
+export type PuzzleState = ButtonSyncState | WiringState | KeypadState | SwitchesState | SimonState;
+
+export interface GameState {
+  phase: Phase;
+  mission: Mission;
+  players: Player[];
+  /** index into mission.puzzles; only meaningful while playing */
+  currentPuzzleIndex: number;
+  puzzleState: PuzzleState | null;
+  /** PRNG seed for this run; set by start-mission */
+  seed: number | null;
+  /**
+   * Plates currently held down. Movement is client-authoritative and lives
+   * outside this state machine; the server translates live positions into
+   * set-pressed-plates actions, which keeps door logic deterministic.
+   */
+  pressedPlates: string[];
+  /** epoch ms; set when the mission starts */
+  startedAt: number | null;
+  /** epoch ms; shrinks when penalties strike */
+  deadlineAt: number | null;
+  /** epoch ms; set when the mission ends (won or lost) */
+  finishedAt: number | null;
+  /** increments on every penalty — lets clients retrigger alarm effects */
+  penaltySeq: number;
+  lastPenaltySec: number | null;
+}
+
+export function initialState(mission: Mission): GameState {
+  return {
+    phase: 'lobby',
+    mission,
+    players: [],
+    currentPuzzleIndex: 0,
+    puzzleState: null,
+    seed: null,
+    pressedPlates: [],
+    startedAt: null,
+    deadlineAt: null,
+    finishedAt: null,
+    penaltySeq: 0,
+    lastPenaltySec: null,
+  };
+}
