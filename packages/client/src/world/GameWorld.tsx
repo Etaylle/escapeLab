@@ -259,6 +259,7 @@ export function GameWorld({
   const [tip, setTip] = useState<{ id: string; text: string } | null>(null);
   const seenTips = useRef(new Set<string>());
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const controlsRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef(view);
   viewRef.current = view;
   const lockedRef = useRef(inputLocked);
@@ -311,6 +312,25 @@ export function GameWorld({
     const wallTex = makeWallTile();
     // Same condition the stylesheet uses to show the on-screen pad.
     const touchPad = window.matchMedia('(pointer: coarse)');
+
+    // The objective bar and the control cluster are HTML overlays lying on the
+    // canvas, and both change height with their contents. Anything the canvas
+    // draws near those edges has to keep clear, so we track them instead of
+    // assuming a height.
+    const stageTop = canvas.closest('.stage')?.querySelector('.stage-top') ?? null;
+    const controls = controlsRef.current;
+    let safeTopCss = 0;
+    let safeBottomCss = 0;
+    const height = (el: Element | null): number => (el instanceof HTMLElement ? el.offsetHeight : 0);
+    const overlayObserver = new ResizeObserver(() => {
+      safeTopCss = height(stageTop);
+      safeBottomCss = height(controls);
+    });
+    for (const el of [stageTop, controls]) {
+      if (el !== null) {
+        overlayObserver.observe(el);
+      }
+    }
 
     const sim: Sim = {
       adopted: false,
@@ -887,13 +907,16 @@ export function GameWorld({
       // Scales with the window, but never so small it stops being readable
       // or so large it eats a phone screen.
       const targetCss = Math.min(190, Math.max(110, (w / dpr) * 0.16));
-      const cell = Math.max(3, Math.round((targetCss * dpr) / map.width));
-      const mw = map.width * cell;
-      const mh = map.height * cell;
       // Top right, clear of the clock above it and of the edge markers and
       // room signage along the bottom.
-      const ox = w - mw - 14 * dpr;
       const oy = 84 * dpr;
+      // A short window has less room below the clock than beside it, and both
+      // the minimap and the control cluster hug the right edge.
+      const roomBelow = (h - oy - (safeBottomCss + 14) * dpr) / map.height;
+      const cell = Math.max(3, Math.min(Math.round((targetCss * dpr) / map.width), Math.floor(roomBelow)));
+      const mw = map.width * cell;
+      const mh = map.height * cell;
+      const ox = w - mw - 14 * dpr;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = 0.86;
       ctx.fillStyle = '#070b0f';
@@ -1093,8 +1116,9 @@ export function GameWorld({
           return;
         }
         const margin = 34 * dpr;
+        const top = Math.max(margin, (safeTopCss + 16) * dpr);
         const cx = Math.min(w - margin, Math.max(margin, px));
-        const cy = Math.min(h - margin, Math.max(margin, py));
+        const cy = Math.min(h - margin, Math.max(top, py));
         ctx.save();
         ctx.translate(cx, cy);
         ctx.rotate(Math.atan2(py - h / 2, px - w / 2));
@@ -1185,6 +1209,7 @@ export function GameWorld({
     return () => {
       cancelAnimationFrame(raf);
       clearInterval(posTimer);
+      overlayObserver.disconnect();
       canvas.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
@@ -1229,7 +1254,7 @@ export function GameWorld({
       <canvas ref={canvasRef} className={`world-canvas ${spectator ? 'world-canvas--wide' : ''}`} />
       {tip !== null && <div className="coach">{tip.text}</div>}
       {!spectator && (
-      <div className="world-controls">
+      <div className="world-controls" ref={controlsRef}>
         <div className="world-dpad" role="group" aria-label="Steuerkreuz">
           {(
             [

@@ -60,7 +60,11 @@ function RoomRow({
 
 export function JoinScreen({ send, connected, missions, rooms }: Props) {
   const [name, setName] = useState('');
-  const [code, setCode] = useState('');
+  // An invite link carries the room in ?room=, so the code field is already
+  // filled and all that is left to do is type a name.
+  const [code, setCode] = useState(
+    () => new URLSearchParams(window.location.search).get('room')?.toUpperCase() ?? '',
+  );
   const [missionId, setMissionId] = useState<string | null>(null);
   const nameOk = name.trim().length > 0;
   const selected = missionId ?? missions[0]?.id ?? null;

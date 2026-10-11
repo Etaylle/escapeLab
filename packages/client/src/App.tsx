@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react';
 import { isMuted, setMuted } from './world/audio.js';
-import type { MissionInfo } from '@escapelab/core';
+import { difficultyInfos, type Difficulty, type MissionInfo } from '@escapelab/core';
 import { useGameConnection } from './ws.js';
 import { JoinScreen } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
 import { GameScreen } from './screens/Game.js';
 import { EndScreen } from './screens/End.js';
 import { SpectateScreen } from './screens/Spectate.js';
+
+function difficultyLabel(id: Difficulty): string {
+  return difficultyInfos().find((level) => level.id === id)?.label ?? id;
+}
 
 function RoomCode({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
@@ -18,18 +22,21 @@ function RoomCode({ code }: { code: string }) {
     return () => clearTimeout(timer);
   }, [copied]);
 
+  // The code stays readable for saying out loud; the button hands over a link
+  // that drops the other person straight into this room.
+  const invite = `${window.location.origin}${window.location.pathname}?room=${code}`;
   return (
     <button
       className="room-code"
-      title="Raumcode kopieren"
+      title={`Einladungslink kopieren: ${invite}`}
       onClick={() => {
         navigator.clipboard
-          ?.writeText(code)
+          ?.writeText(invite)
           .then(() => setCopied(true))
           .catch(() => undefined);
       }}
     >
-      Raum: <strong>{code}</strong> {copied ? '✓ kopiert' : '⧉'}
+      Raum: <strong>{code}</strong> {copied ? '✓ Link kopiert' : '⧉ Link'}
     </button>
   );
 }
@@ -43,6 +50,10 @@ export function App() {
   const immersive =
     (conn.view?.phase === 'playing' && conn.view.map !== null) ||
     (conn.spectatorView !== null && conn.spectatorView.map !== null);
+  // Which mission is running, for the header. The lobby already has it as its
+  // headline, so naming it twice there would be noise.
+  const running =
+    conn.spectatorView ?? (conn.view !== null && conn.view.phase !== 'lobby' ? conn.view : null);
 
   useEffect(() => {
     fetch('/missions')
@@ -57,6 +68,12 @@ export function App() {
       <header className="topbar">
         <span className="logo">⬢ ESCAPELAB</span>
         {conn.roomCode !== null && <RoomCode code={conn.roomCode} />}
+        {running !== null && (
+          <span className="topbar-mission">
+            {running.missionTitle}
+            <span className="muted"> · {difficultyLabel(running.difficulty)}</span>
+          </span>
+        )}
         <button
           className="sound-toggle"
           title={sound ? 'Ton ausschalten' : 'Ton einschalten'}

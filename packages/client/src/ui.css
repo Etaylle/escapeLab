@@ -98,8 +98,24 @@ body {
   letter-spacing: 3px;
 }
 
-.conn {
+/* Which mission is on screen — the objective bar names the current puzzle,
+   not the mission, so during play this is the only place it appears. */
+.topbar-mission {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--text);
+}
+
+/* Settings and status sit at the far end, the session info at the near one. */
+.sound-toggle {
   margin-left: auto;
+}
+
+.conn {
   font-size: 12px;
   letter-spacing: 1px;
   color: var(--muted);
