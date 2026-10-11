@@ -878,8 +878,9 @@ export function GameWorld({
       const cell = Math.max(3, Math.round((150 * dpr) / map.width));
       const mw = map.width * cell;
       const mh = map.height * cell;
-      const ox = w - mw - 14 * dpr;
-      const oy = 14 * dpr;
+      // Bottom left: the clock and the objective own the top of the stage.
+      const ox = 14 * dpr;
+      const oy = h - mh - 14 * dpr;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = 0.86;
       ctx.fillStyle = '#070b0f';
@@ -1053,8 +1054,14 @@ export function GameWorld({
       ctx.font = `600 ${11 * dpr}px ui-monospace, Menlo, monospace`;
       for (const label of map.labels) {
         const [sx, sy] = worldToScreen(s, w, h, label.x + 0.5, label.y + 0.5);
+        // Room names are signage, not world objects: keep them readable by
+        // nudging them inside the frame instead of letting them be cut off.
+        const half = ctx.measureText(label.text).width / 2 + 10 * dpr;
+        if (sy < -20 || sy > h + 20) {
+          continue;
+        }
         ctx.fillStyle = 'rgba(125,143,158,0.5)';
-        ctx.fillText(label.text, sx, sy);
+        ctx.fillText(label.text, Math.min(w - half, Math.max(half, sx)), sy);
       }
       if (map.exit !== null && map.exit.open) {
         const [ex, ey] = worldToScreen(s, w, h, map.exit.x + 0.5, map.exit.y - 0.45);

@@ -1082,7 +1082,7 @@ button.link:hover {
 .world-controls {
   position: absolute;
   right: 14px;
-  bottom: 44px;
+  bottom: 16px;
   display: flex;
   align-items: flex-end;
   gap: 12px;
@@ -1130,13 +1130,23 @@ button.link:hover {
   margin: 0;
 }
 
-@media (hover: hover) and (pointer: fine) {
+/*
+ * On anything with a keyboard the on-screen pad is pure noise: WASD, E and C
+ * do the same job. Touch devices keep it.
+ */
+@media (pointer: fine) {
+  .world-dpad,
+  .world-interact {
+    display: none;
+  }
+
+  /* The chat wheel keeps a visible handle: it is the least guessable key. */
   .world-controls {
-    opacity: 0.35;
+    opacity: 0.55;
   }
 
   .world-controls:hover {
-    opacity: 0.9;
+    opacity: 1;
   }
 }
 
@@ -1865,242 +1875,6 @@ button.link:hover {
   margin-top: 14px;
   font-family: var(--mono);
   font-size: 13px;
-}
-
-/* ── controls overlay ───────────────────────────────────────────────────── */
-
-.overlay.help {
-  background: rgba(4, 7, 10, 0.85);
-  backdrop-filter: blur(3px);
-  cursor: pointer;
-}
-
-.help-card {
-  max-width: 520px;
-  cursor: auto;
-}
-
-.keylist {
-  margin: 10px 0 16px;
-}
-
-.keyrow {
-  display: grid;
-  grid-template-columns: 180px 1fr;
-  gap: 10px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.keyrow dt {
-  font-family: var(--mono);
-  font-size: 13px;
-  color: var(--accent);
-}
-
-.keyrow dd {
-  margin: 0;
-  font-size: 14px;
-}
-
-@media (max-width: 520px) {
-  .keyrow {
-    grid-template-columns: 1fr;
-    gap: 2px;
-  }
-}
-
-/* ── first-time coach marks ─────────────────────────────────────────────── */
-
-.coach {
-  position: absolute;
-  left: 50%;
-  top: 14px;
-  transform: translateX(-50%);
-  z-index: 4;
-  max-width: min(520px, calc(100% - 28px));
-  padding: 10px 16px;
-  border-radius: 10px;
-  border: 1px solid var(--accent-dark);
-  background: rgba(7, 11, 15, 0.94);
-  color: var(--text);
-  font-size: 14px;
-  line-height: 1.45;
-  text-align: center;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  animation: fadein 0.25s;
-}
-
-.coach strong {
-  color: var(--accent);
-}
-
-/* The last ten seconds: bigger, redder, faster. */
-.countdown.final {
-  color: #fff;
-  background: var(--danger);
-  border-color: var(--danger);
-  text-shadow: none;
-  font-size: 36px;
-  animation: final-pulse 0.5s infinite;
-}
-
-@keyframes final-pulse {
-  50% {
-    transform: scale(1.08);
-    box-shadow: 0 0 26px rgba(248, 113, 113, 0.75);
-  }
-}
-
-/* ── map thumbnails ─────────────────────────────────────────────────────── */
-
-.map-thumb {
-  flex: none;
-  border-radius: 6px;
-  border: 1px solid var(--line);
-  background: #070b0f;
-}
-
-.map-thumb-bg {
-  fill: #070b0f;
-}
-
-.map-thumb-floor {
-  fill: #2a3f52;
-}
-
-.mission-selected .map-thumb-floor {
-  fill: var(--accent-dark);
-}
-
-.mission {
-  position: relative;
-}
-
-.mission .map-thumb {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-}
-
-.mission-title,
-.mission-sub,
-.mission-meta {
-  padding-right: 92px;
-}
-
-.history {
-  margin-top: 14px;
-  font-family: var(--mono);
-  font-size: 13px;
-}
-
-/* ── mission HUD under the world ────────────────────────────────────────── */
-
-.hud {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 1px;
-  margin-top: 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--line);
-  overflow: hidden;
-}
-
-.hud-col {
-  background: linear-gradient(180deg, var(--panel) 0%, var(--bg-2) 100%);
-  padding: 12px 14px;
-  min-width: 0;
-}
-
-.hud-col h3 {
-  margin: 0 0 6px;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--muted);
-  font-weight: 600;
-}
-
-.hud-col p {
-  margin: 0 0 4px;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.hud-objective {
-  font-weight: 700;
-  color: var(--accent);
-  font-size: 15px !important;
-}
-
-.hud-role {
-  font-size: 12.5px !important;
-}
-
-.hud-crew,
-.hud-log {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-}
-
-.hud-crew li {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-}
-
-.hud-name {
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.hud-status {
-  margin-left: auto;
-  font-family: var(--mono);
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.hud-status-ok { color: var(--accent); }
-.hud-status-warn { color: var(--warn); }
-.hud-status-idle { color: var(--muted); }
-
-.hud-log li {
-  font-family: var(--mono);
-  font-size: 11.5px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.hud-log li:first-child {
-  color: var(--text);
-}
-
-.sound-toggle {
-  margin-left: auto;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 15px;
-  line-height: 1;
-  background: var(--panel-2);
-}
-
-/* The connection badge no longer needs to claim the free space. */
-.topbar .conn {
-  margin-left: 12px;
 }
 
 /* ── stage: the world with its own overlay bar ──────────────────────────── */
