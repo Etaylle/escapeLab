@@ -94,9 +94,11 @@ merkt vor den Spielenden, wo die Ansage schiefgeht. Zuschauer können nichts aus
 **Nach der Runde:** Der Endbildschirm zeigt ein Einsatzprotokoll (wann welche Station fiel, jeder
 Alarm mit Grund und Kosten, Notfälle, eingesetzte Teile) sowie einen Rang von S bis C aus Alarmen
 und Restzeit. Dazu führt dieses Gerät eine kleine Historie je Mission (Läufe, geschaffte Läufe,
-Bestzeit, bester Rang). **Nochmal:** Die Crew meldet sich direkt auf dem Endbildschirm bereit,
-der Host startet mit einem Klick denselben Einsatz neu — ohne Umweg über die Lobby. Über die
-Lobby geht es weiterhin, wenn Mission, Rollen oder Schwierigkeit sich ändern sollen.
+Bestzeit, bester Rang). **Nochmal:** Alle bestätigen gleichberechtigt auf dem Endbildschirm, und sobald das letzte Ja
+da ist, startet derselbe Einsatz von selbst — ohne Umweg über die Lobby und ohne dass jemand
+der Startknopf-Mensch sein muss. Fehlt jemand (Verbindung weg), wartet der Neustart auf die
+Rückkehr. Über die Lobby geht es weiterhin, wenn Mission, Rollen oder Schwierigkeit sich
+ändern sollen.
 
 ## Für den Demo Day (ein Prozess, eine URL)
 
