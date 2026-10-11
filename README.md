@@ -41,11 +41,13 @@ der Notfälle. **Verbindungsabbruch:** Fehlt jemand aus der Crew, pausiert die M
 pulsiert der Timer rot und die Ränder glühen, und die **letzten zehn Sekunden werden mit
 ansteigenden Piepsern heruntergezählt** — der Schlusston kommt, wenn die Energie weg ist.
 
-**Orientierung:** Unter der Welt sitzt ein HUD mit Auftrag und Fortschritt, deiner
-Rollenbeschreibung, dem Live-Status der ganzen Crew (hält die Platte, trägt etwas, an der
-Station, getrennt) und einem Funkprotokoll der letzten Ereignisse und Zurufe. Alles, wohin man
-laufen muss, bekommt am Bildschirmrand einen **Richtungspfeil mit Entfernung**, solange es
-außer Sicht ist. Der Ton lässt sich oben rechts abschalten.
+**Oberfläche:** Dauerhaft sichtbar ist nur, was sich ändert — Ziel und Fortschritt liegen als
+Einblendung auf der Welt, die Uhr daneben, darunter eine schmale Leiste mit der Crew und dem
+Live-Status jedes Mitglieds (hält die Platte, trägt etwas, an der Station, getrennt) sowie der
+letzten Funkzeile. Alles zum Nachschlagen — Briefing, eigene Rolle, Tastenliste — steckt im
+**Info-Panel** (Taste `I`, alternativ `H`). Alles, wohin man laufen muss, bekommt am
+Bildschirmrand einen **Richtungspfeil mit Entfernung**, solange es außer Sicht ist. Der Ton
+lässt sich oben rechts abschalten.
 
 **Gefahren unterwegs:** **Wachdrohnen** patrouillieren feste Routen und leuchten einen sichtbaren
 Sichtkegel aus — wer hineinläuft, verliert Zeit (Sichtlinie zählt, an einer Station ist man
