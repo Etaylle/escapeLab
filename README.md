@@ -4,7 +4,8 @@ Kooperatives Browser-Escape-Spiel: Jede Rolle sieht ein anderes Panel, gelöst w
 — per Stimme. Missionen sind reine Daten (`missions/*.json`) — neue Missionen brauchen keinen Code.
 
 **Rätseltypen:** Kabel trennen (`wiring`), Symbol-Keypad (`keypad`), Schalterbank mit Prüf-Commit
-(`switches`), Frequenz-Abgleich mit Farblegende (`simon`), Synchron-Knöpfe (`button-sync`).
+(`switches`), Frequenz-Abgleich mit Farblegende (`simon`), unsichtbares Labyrinth (`maze`),
+Synchron-Knöpfe (`button-sync`).
 Layouts/Codes sind pro Partie zufällig (seeded, deterministisch replaybar), Fehler kosten
 Countdown-Zeit. **Missionen:** Blackout im Labor (2 Spieler, 5 Rätsel), Tutorial (2 Spieler),
 Kettenreaktion (3 Spieler, Wissen auf drei Rollen verteilt).
@@ -14,6 +15,12 @@ Stationen in Reihenfolge finden und lösen → wenn alle gelöst sind, öffnet s
 und das ganze Team muss ihn gemeinsam erreichen, bevor die Zeit abläuft → Endbildschirm mit
 Statistiken und persönlicher Bestzeit. **Hilfsmittel:** Klick auf die Welt setzt einen **Ping**
 für alle (farbige Ringe, Pfeil wenn außerhalb des Bildes), `M` blendet die **Minikarte** ein.
+
+**Gefahren unterwegs:** **Wachdrohnen** patrouillieren feste Routen und leuchten einen sichtbaren
+Sichtkegel aus — wer hineinläuft, verliert Zeit (Sichtlinie zählt, an einer Station ist man
+sicher). Dazu schlagen **Notfälle** zu: Mitten im Lauf fällt die Kühlung aus, das offene Rätsel
+bricht ab, und alle Notventile müssen gleichzeitig besetzt werden — je ein Spieler pro Ventil, an
+entgegengesetzten Enden der Karte.
 
 **Spielwelt:** Alle Missionen spielen in einer gerenderten Top-Down-Laborwelt
 (Canvas, Among-Us-Stil): flüssige Bewegung per WASD/Pfeiltasten, Kamera folgt, das Labor liegt
