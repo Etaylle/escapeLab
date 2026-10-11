@@ -39,6 +39,11 @@ const BLACKOUT_WALKTHROUGH: ({ role: Role; goTo: [number, number] } | { role: Ro
   { role: 'anleitung', goTo: [12, 5] }, // leaves while serverplatte is still held
   { role: 'steuerpult', goTo: [9, 10] },
   { role: 'steuerpult', do: 'interact' }, // frequenz
+  // The last station stays dead until the spare fuse arrives from the archive.
+  { role: 'anleitung', goTo: [1, 1] },
+  { role: 'anleitung', do: 'interact' }, // pick up the fuse
+  { role: 'anleitung', goTo: [16, 9] },
+  { role: 'anleitung', do: 'interact' }, // deliver it
   { role: 'steuerpult', goTo: [14, 9] },
   { role: 'steuerpult', do: 'interact' }, // reaktorstart
 ];
@@ -454,8 +459,27 @@ for (const step of BLACKOUT_WALKTHROUGH) {
     await walkTo(client, step.goTo);
     continue;
   }
-  const station = client.view?.map?.stations.find((s) => s.status === 'armed');
   const self = await client.ensureSelf();
+  const item = client.view?.map?.items.find((i) => !i.delivered);
+  const atItem =
+    item !== undefined &&
+    (item.carriedBy === client.playerId
+      ? Math.hypot(self.x - (item.deliverTo.x + 0.5), self.y - (item.deliverTo.y + 0.5)) <= 0.95
+      : Math.hypot(self.x - item.x, self.y - item.y) <= 0.95);
+
+  if (atItem && item !== undefined) {
+    // Context action: this press either picks the fuse up or installs it.
+    const carrying = item.carriedBy === client.playerId;
+    client.send({ kind: 'interact' });
+    await client.until('item handled', (v) => {
+      const live = v.map?.items.find((i) => i.id === item.id);
+      return carrying ? live?.delivered === true : live?.carriedBy === client.playerId;
+    });
+    console.log(`✓ ${step.role}: ${carrying ? 'delivered' : 'picked up'} ${item.label}`);
+    continue;
+  }
+
+  const station = client.view?.map?.stations.find((s) => s.status === 'armed');
   assert(
     station !== undefined &&
       Math.hypot(self.x - (station.x + 0.5), self.y - (station.y + 0.5)) <= 1.6,

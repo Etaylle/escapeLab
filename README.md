@@ -16,6 +16,11 @@ und das ganze Team muss ihn gemeinsam erreichen, bevor die Zeit abläuft → End
 Statistiken und persönlicher Bestzeit. **Hilfsmittel:** Klick auf die Welt setzt einen **Ping**
 für alle (farbige Ringe, Pfeil wenn außerhalb des Bildes), `M` blendet die **Minikarte** ein.
 
+**Tragen:** Manche Stationen bleiben tot, bis ein Gegenstand bei ihnen eingesetzt wurde — die
+Ersatzsicherung liegt im Archiv und muss quer durchs Labor in den Reaktor. `E` ist dabei eine
+einzige Kontexttaste (einsetzen → aufnehmen → Station aktivieren, in dieser Reihenfolge), `Q`
+legt das Getragene ab, sodass Übergaben möglich sind.
+
 **Schwierigkeit:** Der Host wählt in der Lobby zwischen *Entspannt*, *Normal* und *Hart* — das
 skaliert Zeitbudget, alle Zeitstrafen, Drohnentempo und -reichweite sowie Häufigkeit und Dauer
 der Notfälle. **Verbindungsabbruch:** Fehlt jemand aus der Crew, pausiert die Mission komplett

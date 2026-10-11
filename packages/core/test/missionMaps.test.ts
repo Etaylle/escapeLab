@@ -156,6 +156,34 @@ describe.each(missions.map((m) => [m.id, m] as const))('mission %s', (_id, missi
     }
   });
 
+  it('lets someone fetch and deliver every carryable before it is needed', () => {
+    for (const item of map.items) {
+      // State of the world while the station waiting for this item is current.
+      const neededBy = item.requiredFor;
+      const solved = new Set<string>();
+      for (const puzzle of mission.puzzles) {
+        if (puzzle.id === neededBy) {
+          break;
+        }
+        solved.add(puzzle.id);
+      }
+      const reach = reachability(mission, solved);
+      const pickup = reach.some((tiles) => tiles.has(key(item.x, item.y)));
+      const dropOff = reach.some((tiles) =>
+        tiles.has(key(item.deliverTo.x, item.deliverTo.y)),
+      );
+      expect(pickup, `nobody can reach item "${item.id}"`).toBe(true);
+      expect(dropOff, `nobody can reach the drop-off of "${item.id}"`).toBe(true);
+      // And the same player has to be able to do both, since it is carried.
+      const carrier = reach.some(
+        (tiles) =>
+          tiles.has(key(item.x, item.y)) &&
+          tiles.has(key(item.deliverTo.x, item.deliverTo.y)),
+      );
+      expect(carrier, `no single player can carry "${item.id}" all the way`).toBe(true);
+    }
+  });
+
   it('keeps the exit clear of plates so nobody is counted out by accident', () => {
     const exit = map.exit;
     if (exit === undefined) {

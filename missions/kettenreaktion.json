@@ -64,6 +64,16 @@
       { "text": "KERN", "x": 3, "y": 9 }
     ],
     "exit": { "x": 1, "y": 6 },
+    "items": [
+      {
+        "id": "kuehlmitteltank",
+        "label": "KÜHLMITTEL",
+        "x": 18,
+        "y": 9,
+        "deliverTo": { "x": 2, "y": 11 },
+        "requiredFor": "abschaltung"
+      }
+    ],
     "sabotage": {
       "label": "DRUCKABFALL IM KÜHLKREIS",
       "hint": "Alle drei Notventile im Hauptflur gleichzeitig besetzen — teilt euch sofort auf!",
@@ -255,7 +265,7 @@
       "infos": [
         {
           "roleId": "anleitung",
-          "text": "Handbuch §8: Alle drei Freigaben innerhalb von 2,5 Sekunden. Du zählst ein — laut: drei, zwei, eins, JETZT."
+          "text": "Handbuch §8: Zuerst muss der Kühlmitteltank aus dem Pumpenraum in den Kern gebracht werden — ohne ihn reagiert die Station nicht. Danach: Alle drei Freigaben innerhalb von 2,5 Sekunden. Du zählst ein — laut: drei, zwei, eins, JETZT."
         }
       ],
       "windowMs": 2500

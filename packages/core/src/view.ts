@@ -62,6 +62,18 @@ export interface MapView {
   labels: { text: string; x: number; y: number }[];
   /** escape hatch; open once every puzzle is solved */
   exit: { x: number; y: number; open: boolean } | null;
+  /** carryable objects and where they have to go */
+  items: {
+    id: string;
+    label: string;
+    x: number;
+    y: number;
+    carriedBy: string | null;
+    delivered: boolean;
+    deliverTo: { x: number; y: number };
+    /** title of the station waiting for it, if any */
+    requiredForTitle: string | null;
+  }[];
   /** emergency panels; `active` only while an emergency is running */
   sabotage: {
     label: string;
@@ -297,6 +309,20 @@ function mapViewFor(state: GameState, playerId: string): MapView | null {
             y: map.exit.y,
             open: state.currentPuzzleIndex >= state.mission.puzzles.length,
           },
+    items: map.items.map((def) => {
+      const live = state.items[def.id];
+      return {
+        id: def.id,
+        label: def.label,
+        x: live?.x ?? def.x + 0.5,
+        y: live?.y ?? def.y + 0.5,
+        carriedBy: live?.carriedBy ?? null,
+        delivered: live?.delivered ?? false,
+        deliverTo: { ...def.deliverTo },
+        requiredForTitle:
+          state.mission.puzzles.find((p) => p.id === def.requiredFor)?.title ?? null,
+      };
+    }),
     sabotage:
       map.sabotage === undefined || state.sabotage === null
         ? null

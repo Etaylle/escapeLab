@@ -33,6 +33,7 @@ export type GameMessage = Extract<
       | 'press-simon'
       | 'move-maze'
       | 'interact'
+      | 'drop-item'
       | 'back-to-lobby';
   }
 >;
@@ -52,6 +53,8 @@ const PING_COOLDOWN_MS = 700;
 const DRONE_TICK_MS = 80;
 /** How close you must stand to man an emergency panel. */
 const PANEL_RADIUS = 0.8;
+/** Reach for picking up and dropping off carryable objects. */
+const ITEM_RADIUS = 0.95;
 /**
  * Emergencies only start once this many stations are done: before that the
  * crew may still be locked in its separate starting rooms.
@@ -211,8 +214,10 @@ export class Room {
         this.dispatch({ type: 'move-maze', playerId, dir: msg.dir, at: Date.now() });
         break;
       case 'interact':
-        this.requireNearStation(playerId);
-        this.dispatch({ type: 'interact', playerId, at: Date.now() });
+        this.resolveInteract(playerId);
+        break;
+      case 'drop-item':
+        this.dropCarried(playerId);
         break;
       case 'back-to-lobby':
         this.positions.clear();
@@ -248,6 +253,64 @@ export class Room {
   /** Host switches mission or difficulty (validated by the reducer). */
   switchMission(playerId: string, mission: Mission, difficulty: Difficulty): void {
     this.dispatch({ type: 'switch-mission', playerId, mission, difficulty });
+  }
+
+  /**
+   * One key does the obvious thing: deliver what you carry, otherwise pick up
+   * what lies at your feet, otherwise switch on the station in front of you.
+   */
+  private resolveInteract(playerId: string): void {
+    const map = this.state.mission.map;
+    const pos = this.positions.get(playerId);
+    if (map === undefined || pos === undefined) {
+      this.requireNearStation(playerId);
+      this.dispatch({ type: 'interact', playerId, at: Date.now() });
+      return;
+    }
+    const near = (x: number, y: number): boolean =>
+      Math.hypot(pos.x - x, pos.y - y) <= ITEM_RADIUS;
+
+    const carried = map.items.find((def) => this.state.items[def.id]?.carriedBy === playerId);
+    if (carried !== undefined) {
+      if (!near(carried.deliverTo.x + 0.5, carried.deliverTo.y + 0.5)) {
+        throw new Error(
+          `Du trägst ${carried.label} — bring es zum markierten Platz (oder lege es mit Q ab).`,
+        );
+      }
+      this.dispatch({ type: 'deliver-item', playerId, itemId: carried.id, at: Date.now() });
+      return;
+    }
+
+    const loose = map.items.find((def) => {
+      const live = this.state.items[def.id];
+      return live !== undefined && !live.delivered && live.carriedBy === null && near(live.x, live.y);
+    });
+    if (loose !== undefined) {
+      this.dispatch({ type: 'pick-item', playerId, itemId: loose.id, at: Date.now() });
+      return;
+    }
+
+    this.requireNearStation(playerId);
+    this.dispatch({ type: 'interact', playerId, at: Date.now() });
+  }
+
+  /** Put down whatever this player is carrying, right where they stand. */
+  private dropCarried(playerId: string): void {
+    const pos = this.positions.get(playerId);
+    const carried = Object.entries(this.state.items).find(
+      ([, live]) => live.carriedBy === playerId,
+    );
+    if (carried === undefined || pos === undefined) {
+      return;
+    }
+    this.dispatch({
+      type: 'drop-item',
+      playerId,
+      itemId: carried[0],
+      x: pos.x,
+      y: pos.y,
+      at: Date.now(),
+    });
   }
 
   private requireNearStation(playerId: string): void {

@@ -31,6 +31,59 @@ export function drawDroneCone(
   ctx.restore();
 }
 
+/** A carryable crate. Anchor: its own centre, scaled to tile units. */
+export function drawCarryable(ctx: CanvasRenderingContext2D, pulse: number, carried: boolean): void {
+  const s = carried ? 0.3 : 0.36;
+  ctx.save();
+  if (!carried) {
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.beginPath();
+    ctx.ellipse(0, s * 0.8, s * 0.9, s * 0.35, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(96,165,250,${0.1 + 0.08 * pulse})`;
+    ctx.beginPath();
+    ctx.arc(0, 0, 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#243447';
+  ctx.strokeStyle = '#60a5fa';
+  ctx.lineWidth = 0.05;
+  ctx.beginPath();
+  ctx.roundRect(-s, -s, s * 2, s * 2, 0.07);
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = `rgba(96,165,250,${0.6 + 0.3 * pulse})`;
+  ctx.lineWidth = 0.055;
+  ctx.beginPath();
+  ctx.moveTo(-s, 0);
+  ctx.lineTo(s, 0);
+  ctx.moveTo(0, -s);
+  ctx.lineTo(0, s);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** The marked spot a carryable has to end up on. */
+export function drawDropZone(
+  ctx: CanvasRenderingContext2D,
+  filled: boolean,
+  pulse: number,
+): void {
+  const accent = filled ? '#4ade80' : '#60a5fa';
+  ctx.save();
+  ctx.strokeStyle = `rgba(${filled ? '74,222,128' : '96,165,250'},${0.5 + 0.35 * pulse})`;
+  ctx.lineWidth = 0.07;
+  ctx.setLineDash([0.14, 0.1]);
+  ctx.beginPath();
+  ctx.roundRect(-0.42, -0.42, 0.84, 0.84, 0.08);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = accent;
+  ctx.globalAlpha = filled ? 0.25 : 0.12 + 0.08 * pulse;
+  ctx.fill();
+  ctx.restore();
+}
+
 /**
  * Emergency valve panel, drawn at the tile centre: a wheel that glows red
  * while unmanned and locks in teal once someone is standing on it.

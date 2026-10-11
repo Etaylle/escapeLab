@@ -1,4 +1,10 @@
-import { CREW_COLORS, type GameState, type Player, type PuzzleState } from './state.js';
+import {
+  CREW_COLORS,
+  type GameState,
+  type ItemState,
+  type Player,
+  type PuzzleState,
+} from './state.js';
 import type { Difficulty } from './difficulty.js';
 import type { Mission, PuzzleDef } from './mission.js';
 import { mulberry32 } from './rng.js';
@@ -36,6 +42,9 @@ export type Action =
   | { type: 'sabotage-cleared'; at: number }
   | { type: 'sabotage-expired'; at: number }
   | { type: 'set-paused'; paused: boolean; at: number }
+  | { type: 'pick-item'; playerId: string; itemId: string; at: number }
+  | { type: 'drop-item'; playerId: string; itemId: string; x: number; y: number; at: number }
+  | { type: 'deliver-item'; playerId: string; itemId: string; at: number }
   | { type: 'interact'; playerId: string; at: number }
   | { type: 'escaped'; at: number }
   | { type: 'time-expired'; at: number }
@@ -105,6 +114,12 @@ export function applyAction(state: GameState, action: Action): GameState {
       return expireSabotage(state, action);
     case 'set-paused':
       return setPaused(state, action);
+    case 'pick-item':
+      return pickItem(state, action);
+    case 'drop-item':
+      return dropItem(state, action);
+    case 'deliver-item':
+      return deliverItem(state, action);
     case 'drone-spotted':
       return state.phase === 'playing'
         ? applyPenalty(state, action.penaltySec, action.at)
@@ -265,6 +280,12 @@ function startMission(
     occupiedPanels: [],
     sabotage: null,
     paused: null,
+    items: Object.fromEntries(
+      (map?.items ?? []).map((item) => [
+        item.id,
+        { x: item.x + 0.5, y: item.y + 0.5, carriedBy: null, delivered: false },
+      ]),
+    ),
     startedAt: action.at,
     deadlineAt: action.at + state.mission.timeLimitSec * 1000,
     finishedAt: null,
@@ -549,6 +570,96 @@ function handleMoveMaze(
   return result.solved ? advance(next, action.at) : next;
 }
 
+/** Guards shared by all three item actions; proximity is the server's job. */
+function requireCarryable(
+  state: GameState,
+  playerId: string,
+  itemId: string,
+): { item: ItemState } {
+  if (state.phase !== 'playing') {
+    fail('Dafür muss die Mission laufen.');
+  }
+  if (state.paused !== null) {
+    fail('Die Mission ist pausiert — es fehlt jemand aus der Crew.');
+  }
+  findPlayer(state, playerId);
+  const item = state.items[itemId];
+  if (item === undefined) {
+    fail('Dieses Objekt gibt es hier nicht.');
+  }
+  if (item.delivered) {
+    fail('Das ist bereits abgeliefert.');
+  }
+  return { item };
+}
+
+function pickItem(
+  state: GameState,
+  action: { playerId: string; itemId: string },
+): GameState {
+  const { item } = requireCarryable(state, action.playerId, action.itemId);
+  if (item.carriedBy !== null) {
+    fail(item.carriedBy === action.playerId ? 'Du trägst es schon.' : 'Das trägt jemand anderes.');
+  }
+  if (Object.values(state.items).some((i) => i.carriedBy === action.playerId)) {
+    fail('Du hast schon die Hände voll — erst ablegen.');
+  }
+  return {
+    ...state,
+    items: { ...state.items, [action.itemId]: { ...item, carriedBy: action.playerId } },
+  };
+}
+
+function dropItem(
+  state: GameState,
+  action: { playerId: string; itemId: string; x: number; y: number },
+): GameState {
+  const { item } = requireCarryable(state, action.playerId, action.itemId);
+  if (item.carriedBy !== action.playerId) {
+    fail('Das trägst du gar nicht.');
+  }
+  return {
+    ...state,
+    items: {
+      ...state.items,
+      [action.itemId]: { ...item, carriedBy: null, x: action.x, y: action.y },
+    },
+  };
+}
+
+function deliverItem(
+  state: GameState,
+  action: { playerId: string; itemId: string },
+): GameState {
+  const { item } = requireCarryable(state, action.playerId, action.itemId);
+  if (item.carriedBy !== action.playerId) {
+    fail('Das trägst du gar nicht.');
+  }
+  const def = state.mission.map?.items.find((i) => i.id === action.itemId);
+  if (def === undefined) {
+    fail('Dieses Objekt gibt es hier nicht.');
+  }
+  return {
+    ...state,
+    items: {
+      ...state.items,
+      [action.itemId]: {
+        carriedBy: null,
+        delivered: true,
+        x: def.deliverTo.x + 0.5,
+        y: def.deliverTo.y + 0.5,
+      },
+    },
+  };
+}
+
+/** Items a station still waits for before it can be switched on. */
+export function missingItemsFor(state: GameState, puzzleId: string): string[] {
+  return (state.mission.map?.items ?? [])
+    .filter((def) => def.requiredFor === puzzleId && state.items[def.id]?.delivered !== true)
+    .map((def) => def.label);
+}
+
 /**
  * Spatial proximity to the station is validated by the server (it owns the
  * live positions); the reducer enforces everything else.
@@ -574,8 +685,13 @@ function handleInteract(state: GameState, action: { playerId: string; at: number
     fail('Die Station läuft schon — löst erst das aktuelle Rätsel.');
   }
   findPlayer(state, action.playerId);
-  if (armedStation(map, state) === null) {
+  const current = state.mission.puzzles[state.currentPuzzleIndex];
+  if (armedStation(map, state) === null || current === undefined) {
     fail('Hier gibt es nichts zu aktivieren.');
+  }
+  const missing = missingItemsFor(state, current.id);
+  if (missing.length > 0) {
+    fail(`Der Station fehlt noch: ${missing.join(', ')}. Bringt es her!`);
   }
   return { ...state, puzzleState: initPuzzleState(state, state.currentPuzzleIndex) };
 }
@@ -595,6 +711,7 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     occupiedPanels: [],
     sabotage: null,
     paused: null,
+    items: {},
     startedAt: null,
     deadlineAt: null,
     finishedAt: null,

@@ -9,6 +9,15 @@ import type { MazeState } from './puzzles/maze.js';
 
 export type Phase = 'lobby' | 'playing' | 'won' | 'lost';
 
+export interface ItemState {
+  /** tile-space position while lying on the floor */
+  x: number;
+  y: number;
+  /** player id while someone is carrying it */
+  carriedBy: string | null;
+  delivered: boolean;
+}
+
 /** Crew colors, unique per room; the first free one is handed out on join. */
 export const CREW_COLORS = [
   '#2dd4bf',
@@ -66,6 +75,8 @@ export interface GameState {
    * all stand still, because the crew cannot finish a mission short-handed.
    */
   paused: { since: number } | null;
+  /** Where every carryable object currently is, by item id. */
+  items: Record<string, ItemState>;
   /** epoch ms; set when the mission starts */
   startedAt: number | null;
   /** epoch ms; shrinks when penalties strike */
@@ -90,6 +101,7 @@ export function initialState(mission: Mission): GameState {
     occupiedPanels: [],
     sabotage: null,
     paused: null,
+    items: {},
     startedAt: null,
     deadlineAt: null,
     finishedAt: null,

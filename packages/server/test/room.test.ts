@@ -126,6 +126,68 @@ describe('Room', () => {
     room.dispose();
   });
 
+  it('resolves one key into pick up, deliver or activate by what is at hand', () => {
+    // A tiny mission whose second station waits for a carried fuse.
+    const withItem = parseMission({
+      ...JSON.parse(JSON.stringify(mission)),
+      id: 'carrytest',
+      map: {
+        ...JSON.parse(JSON.stringify(mission.map)),
+        items: [
+          {
+            id: 'sicherung',
+            label: 'SICHERUNG',
+            x: 1,
+            y: 1,
+            deliverTo: { x: 12, y: 1 },
+            requiredFor: 'doppelbestaetigung',
+          },
+        ],
+      },
+    });
+    const room = new Room('TEST', withItem);
+    const anna = { ...room.join('Anna'), ...collector() };
+    const ben = { ...room.join('Ben'), ...collector() };
+    room.attach(anna.playerId, anna.listen);
+    room.attach(ben.playerId, ben.listen);
+    room.act(anna.playerId, { kind: 'select-role', roleId: 'anleitung' });
+    room.act(ben.playerId, { kind: 'select-role', roleId: 'steuerpult' });
+    room.act(anna.playerId, { kind: 'start-mission' });
+
+    // Station one first, so the gated station becomes current.
+    moveTo(room, ben.playerId, 2, 1);
+    room.act(ben.playerId, { kind: 'interact' });
+    room.act(ben.playerId, { kind: 'press-button' });
+
+    // Standing at the gated station without the fuse gets a clear refusal.
+    moveTo(room, ben.playerId, 12, 1);
+    expect(() => room.act(ben.playerId, { kind: 'interact' })).toThrow(/fehlt noch: SICHERUNG/);
+
+    // Out of reach of the fuse, the same key does nothing useful.
+    moveTo(room, anna.playerId, 5, 1);
+    expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/Zu weit weg/);
+
+    // At the fuse it picks it up; carrying it elsewhere refuses politely.
+    moveTo(room, anna.playerId, 1, 1);
+    room.act(anna.playerId, { kind: 'interact' });
+    expect(lastView(anna.messages).map?.items[0]?.carriedBy).toBe(anna.playerId);
+    moveTo(room, anna.playerId, 6, 1);
+    expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/markierten Platz/);
+
+    // Q drops it right where she stands, and it can be picked up again.
+    room.act(anna.playerId, { kind: 'drop-item' });
+    expect(lastView(anna.messages).map?.items[0]).toMatchObject({ carriedBy: null, x: 6.5 });
+    room.act(anna.playerId, { kind: 'interact' });
+
+    // On the slot the same key installs it and the station comes alive.
+    moveTo(room, anna.playerId, 12, 1);
+    room.act(anna.playerId, { kind: 'interact' });
+    expect(lastView(anna.messages).map?.items[0]?.delivered).toBe(true);
+    room.act(ben.playerId, { kind: 'interact' });
+    expect(lastView(ben.messages).puzzle).not.toBeNull();
+    room.dispose();
+  });
+
   it('rejects an interact from too far away', () => {
     const room = new Room('TEST', mission);
     const { anna, ben } = fullLobby(room);

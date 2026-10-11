@@ -50,6 +50,7 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
     y: z.number().finite().min(-10).max(500),
   }),
   z.object({ kind: z.literal('interact') }),
+  z.object({ kind: z.literal('drop-item') }),
   z.object({ kind: z.literal('back-to-lobby') }),
 ]);
 

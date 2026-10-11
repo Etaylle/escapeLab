@@ -57,6 +57,16 @@
       { "text": "REAKTOR", "x": 15, "y": 8 }
     ],
     "exit": { "x": 17, "y": 11 },
+    "items": [
+      {
+        "id": "ersatzsicherung",
+        "label": "SICHERUNG",
+        "x": 1,
+        "y": 1,
+        "deliverTo": { "x": 16, "y": 9 },
+        "requiredFor": "reaktorstart"
+      }
+    ],
     "sabotage": {
       "label": "KÜHLKREISLAUF BRICHT ZUSAMMEN",
       "hint": "Beide Notventile im Flur gleichzeitig besetzen — eines ganz links, eines ganz rechts!",
@@ -119,7 +129,7 @@
       "infos": [
         {
           "roleId": "anleitung",
-          "text": "Handbuch §4 — NOTSTROM: Trenne ZUERST das Kabel zwischen Hochspannungszeichen (⚡) und Strahlungszeichen (☢). DANACH das Kabel zwischen Dreizack (♆) und Blitz-Haken (Ϟ). WARNUNG: Jedes andere Kabel löst den Alarm aus und kostet 30 Sekunden. Frag nach, was auf den Kabeln steht!"
+          "text": "Handbuch §4 — NOTSTROM: Trenne ZUERST das Kabel zwischen Hochspannungszeichen (⚡) und Strahlungszeichen (☢). DANACH das Kabel zwischen Dreizack (♆) und Blitz-Haken (Ϟ). WARNUNG: Jedes andere Kabel löst den Alarm aus und kostet 30 Sekunden. Frag nach, was auf den Kabeln steht! — Randnotiz: Die Ersatzsicherung liegt im Archiv und muss irgendwann in den Reaktor."
         },
         {
           "roleId": "steuerpult",
@@ -201,7 +211,7 @@
       "infos": [
         {
           "roleId": "anleitung",
-          "text": "Handbuch §8 — NEUSTART: Beide Zündschalter müssen innerhalb von 2 Sekunden gedrückt werden. Zählt gemeinsam ein: drei — zwei — eins — JETZT."
+          "text": "Handbuch §8 — NEUSTART: Ohne eingesetzte Ersatzsicherung bleibt die Station tot. Dann: Beide Zündschalter müssen innerhalb von 2 Sekunden gedrückt werden. Zählt gemeinsam ein: drei — zwei — eins — JETZT."
         }
       ],
       "windowMs": 2000

@@ -174,6 +174,22 @@ export const mapDefSchema = z.object({
       panels: z.array(z.object({ id: z.string().min(1), x: coord, y: coord })).min(2),
     })
     .optional(),
+  /**
+   * Objects that have to be carried across the lab by hand. A station whose
+   * puzzle is named in `requiredFor` stays inert until its item arrives.
+   */
+  items: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        label: z.string().min(1),
+        x: coord,
+        y: coord,
+        deliverTo: z.object({ x: coord, y: coord }),
+        requiredFor: z.string().min(1).optional(),
+      }),
+    )
+    .default([]),
   /** Security drones patrolling their waypoint loop; their cone costs time. */
   drones: z
     .array(
@@ -375,6 +391,20 @@ function validateMap(
     }
     for (const panel of map.sabotage.panels) {
       requireFloor(`sabotage panel "${panel.id}"`, panel.x, panel.y);
+    }
+  }
+  const itemIds = new Set(map.items.map((i) => i.id));
+  if (itemIds.size !== map.items.length) {
+    ctx.addIssue({ code: 'custom', message: 'map: item ids must be unique' });
+  }
+  for (const item of map.items) {
+    requireFloor(`item "${item.id}"`, item.x, item.y);
+    requireFloor(`drop-off of item "${item.id}"`, item.deliverTo.x, item.deliverTo.y);
+    if (item.requiredFor !== undefined && !puzzleIds.has(item.requiredFor)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `map: item "${item.id}" is required for unknown puzzle "${item.requiredFor}"`,
+      });
     }
   }
   const droneIds = new Set(map.drones.map((d) => d.id));

@@ -1,6 +1,12 @@
 import { useEffect, useRef } from 'react';
 import type { ClientMessage, DronePosition, PlayerPosition, PlayerView } from '@escapelab/core';
-import { drawDroneBody, drawDroneCone, drawSabotagePanel } from './hazards.js';
+import {
+  drawCarryable,
+  drawDropZone,
+  drawDroneBody,
+  drawDroneCone,
+  drawSabotagePanel,
+} from './hazards.js';
 import {
   drawDoor,
   drawPlate,
@@ -23,6 +29,7 @@ const FALLBACK_COLOR = '#2dd4bf';
 const SPEED = 4.2; // tiles per second
 const RADIUS = 0.28; // collision half-size
 const INTERACT_RADIUS = 1.5; // prompt + client-side gate (server allows 1.6)
+const ITEM_RADIUS = 0.9; // pick-up and drop-off reach (server allows 0.95)
 const POS_SEND_MS = 80;
 const PING_LIFETIME_MS = 3200;
 
@@ -104,6 +111,43 @@ function blocked(map: WorldMap, closedDoors: Set<string>, x: number, y: number):
 function armedStationOf(map: WorldMap): { x: number; y: number; title: string } | null {
   const station = map.stations.find((s) => s.status === 'armed');
   return station === undefined ? null : { x: station.x, y: station.y, title: station.title };
+}
+
+/**
+ * What pressing E would do where the player stands — the same priority the
+ * server applies, so the prompt never promises something it cannot do.
+ */
+function contextAction(
+  map: WorldMap,
+  self: { x: number; y: number },
+  youId: string,
+): { label: string; x: number; y: number } | null {
+  const near = (x: number, y: number, r = ITEM_RADIUS): boolean =>
+    Math.hypot(self.x - x, self.y - y) <= r;
+
+  const mine = map.items.find((item) => item.carriedBy === youId && !item.delivered);
+  if (mine !== undefined) {
+    return near(mine.deliverTo.x + 0.5, mine.deliverTo.y + 0.5)
+      ? {
+          label: `[E] ${mine.label} einsetzen`,
+          x: mine.deliverTo.x + 0.5,
+          y: mine.deliverTo.y - 0.45,
+        }
+      : null;
+  }
+
+  const loose = map.items.find(
+    (item) => !item.delivered && item.carriedBy === null && near(item.x, item.y),
+  );
+  if (loose !== undefined) {
+    return { label: `[E] ${loose.label} aufnehmen`, x: loose.x, y: loose.y - 0.95 };
+  }
+
+  const station = armedStationOf(map);
+  if (station !== null && near(station.x + 0.5, station.y + 0.5, INTERACT_RADIUS)) {
+    return { label: `[E] ${station.title}`, x: station.x + 0.5, y: station.y - 0.55 };
+  }
+  return null;
 }
 
 /** Escape hatch: dim grey while locked, pulsing green once it opens. */
@@ -199,20 +243,17 @@ export function GameWorld({
     simRef.current = sim;
     startAmbience();
 
+    /** Fires the one context action; the server decides what it means here. */
     function tryInteract(): void {
       const map = viewRef.current.map;
       if (map === null || lockedRef.current || viewRef.current.puzzle !== null) {
         return;
       }
-      const station = armedStationOf(map);
-      if (station === null) {
+      if (contextAction(map, sim.self, viewRef.current.you.id) === null) {
         return;
       }
-      const dist = Math.hypot(sim.self.x - (station.x + 0.5), sim.self.y - (station.y + 0.5));
-      if (dist <= INTERACT_RADIUS) {
-        stationChirp();
-        sendRef.current({ kind: 'interact' });
-      }
+      stationChirp();
+      sendRef.current({ kind: 'interact' });
     }
 
     const onKeyDown = (e: KeyboardEvent): void => {
@@ -228,6 +269,11 @@ export function GameWorld({
       } else if ((key === 'e' || key === 'enter' || key === ' ') && !e.repeat) {
         e.preventDefault();
         tryInteract();
+      } else if (key === 'q' && !e.repeat) {
+        e.preventDefault();
+        if (!lockedRef.current) {
+          sendRef.current({ kind: 'drop-item' });
+        }
       } else if (key === 'm' && !e.repeat) {
         sim.minimap = !sim.minimap;
       }
@@ -484,6 +530,18 @@ export function GameWorld({
         drawSabotagePanel(ctx, panel.occupied, pulse);
         ctx.restore();
       }
+      for (const item of map.items) {
+        ctx.save();
+        ctx.translate(item.deliverTo.x + 0.5, item.deliverTo.y + 0.5);
+        drawDropZone(ctx, item.delivered, pulse);
+        ctx.restore();
+        if (!item.delivered && item.carriedBy === null) {
+          ctx.save();
+          ctx.translate(item.x, item.y);
+          drawCarryable(ctx, pulse, false);
+          ctx.restore();
+        }
+      }
 
       // drone cones go under the avatars so figures stay readable inside them
       for (const drone of Object.values(dronesRef.current)) {
@@ -531,6 +589,24 @@ export function GameWorld({
         ctx.save();
         ctx.translate(drone.x, drone.y);
         drawDroneBody(ctx, drone, pulse);
+        ctx.restore();
+      }
+
+      // carried objects ride above their carrier's head
+      for (const item of map.items) {
+        if (item.delivered || item.carriedBy === null) {
+          continue;
+        }
+        const carrier =
+          item.carriedBy === viewRef.current.you.id
+            ? { x: sim.self.x, y: sim.self.y }
+            : sim.others.get(item.carriedBy);
+        if (carrier === undefined) {
+          continue;
+        }
+        ctx.save();
+        ctx.translate('rx' in carrier ? carrier.rx : carrier.x, ('ry' in carrier ? carrier.ry : carrier.y) - 0.75);
+        drawCarryable(ctx, pulse, true);
         ctx.restore();
       }
 
@@ -732,6 +808,12 @@ export function GameWorld({
       for (const panel of map.sabotage?.panels ?? []) {
         punch(panel.x + 0.5, panel.y + 0.5, 2.4, 0.9);
       }
+      for (const item of map.items) {
+        if (!item.delivered && item.carriedBy === null) {
+          punch(item.x, item.y, 1.6, 0.7);
+        }
+        punch(item.deliverTo.x + 0.5, item.deliverTo.y + 0.5, 1.4, 0.6);
+      }
       // Drone cones light their own path, which is what makes them readable.
       for (const drone of Object.values(dronesRef.current)) {
         const [sx, sy] = worldToScreen(s, w, h, drone.x, drone.y);
@@ -801,24 +883,32 @@ export function GameWorld({
         ctx.fill();
         ctx.restore();
       }
-      const station = armedStationOf(map);
-      if (station !== null && viewRef.current.puzzle === null) {
-        const dist = Math.hypot(sim.self.x - (station.x + 0.5), sim.self.y - (station.y + 0.5));
-        if (dist <= INTERACT_RADIUS) {
-          const [sx, sy] = worldToScreen(s, w, h, station.x + 0.5, station.y - 0.55);
-          const text = `[E] ${station.title}`;
-          ctx.font = `700 ${12 * dpr}px ui-monospace, Menlo, monospace`;
-          const tw = ctx.measureText(text).width + 16 * dpr;
-          ctx.fillStyle = 'rgba(7,11,15,0.88)';
-          ctx.strokeStyle = '#2dd4bf';
-          ctx.lineWidth = dpr;
-          ctx.beginPath();
-          ctx.roundRect(sx - tw / 2, sy - 11 * dpr, tw, 20 * dpr, 5 * dpr);
-          ctx.fill();
-          ctx.stroke();
-          ctx.fillStyle = '#2dd4bf';
-          ctx.fillText(text, sx, sy + 4 * dpr);
-        }
+      const action =
+        viewRef.current.puzzle === null
+          ? contextAction(map, sim.self, viewRef.current.you.id)
+          : null;
+      if (action !== null) {
+        const [sx, sy] = worldToScreen(s, w, h, action.x, action.y);
+        ctx.font = `700 ${12 * dpr}px ui-monospace, Menlo, monospace`;
+        const tw = ctx.measureText(action.label).width + 16 * dpr;
+        ctx.fillStyle = 'rgba(7,11,15,0.88)';
+        ctx.strokeStyle = '#2dd4bf';
+        ctx.lineWidth = dpr;
+        ctx.beginPath();
+        ctx.roundRect(sx - tw / 2, sy - 11 * dpr, tw, 20 * dpr, 5 * dpr);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#2dd4bf';
+        ctx.fillText(action.label, sx, sy + 4 * dpr);
+      }
+      // A standing reminder while hands are full.
+      const carrying = map.items.find(
+        (item) => item.carriedBy === viewRef.current.you.id && !item.delivered,
+      );
+      if (carrying !== undefined) {
+        ctx.font = `700 ${12 * dpr}px ui-monospace, Menlo, monospace`;
+        ctx.fillStyle = '#60a5fa';
+        ctx.fillText(`📦 ${carrying.label} — [Q] ablegen`, w / 2, h - 16 * dpr);
       }
     }
 
@@ -909,7 +999,7 @@ export function GameWorld({
         </button>
       </div>
       <p className="world-hint muted">
-        Laufen: WASD/Pfeile · Aktivieren: E · Klick = Ping für alle · M = Minikarte
+        Laufen: WASD/Pfeile · E = aktivieren/aufnehmen · Q = ablegen · Klick = Ping · M = Karte
       </p>
     </div>
   );
