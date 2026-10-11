@@ -81,6 +81,7 @@ export function SpectateScreen({
               chatsRef={chatsRef}
               spectator
               inputLocked
+              holdTips={false}
               onToggleInfo={noop}
               send={noop}
             />

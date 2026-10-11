@@ -56,6 +56,13 @@ async function clickText(page, text) {
   await button.click();
 }
 
+/** Hold a key long enough for the world's render loop to walk on it. */
+async function hold(page, key, ms) {
+  await page.keyboard.down(key);
+  await sleep(ms);
+  await page.keyboard.up(key);
+}
+
 async function run() {
   mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch();
@@ -132,6 +139,73 @@ async function run() {
   await sleep(1200);
   await watcher.screenshot({ path: join(OUT, 'spectate.png') });
   await overflow(watcher, 'spectate @ 1440x820');
+
+  // --- hints: the guest walks to the first station and asks for help ----
+  // The host's info panel may still be open; close it the way a player would.
+  const closeInfo = host.locator('.info-card button', { hasText: 'Schließen' });
+  if (await closeInfo.isVisible()) {
+    await closeInfo.click();
+  }
+  // The guest spawns at (3,10) between two pillars, so up first, then left
+  // along row 9 to the station at (1,9). Retries nudge the same way: walls
+  // stop the avatar inside the station's reach.
+  const modal = guest.locator('.puzzle-modal');
+  for (let attempt = 0; attempt < 4 && !(await modal.isVisible()); attempt++) {
+    await hold(guest, 'w', attempt === 0 ? 400 : 250);
+    await hold(guest, 'a', attempt === 0 ? 900 : 500);
+    await sleep(250);
+    await guest.keyboard.press('e');
+    await modal.waitFor({ state: 'visible', timeout: 2500 }).catch(() => undefined);
+  }
+  if (!(await modal.isVisible())) {
+    throw new Error('guest never reached the first station: no .puzzle-modal after 4 tries');
+  }
+
+  const strip = guest.locator('.hint-strip');
+  const hintButton = guest.locator('.hint-request');
+  await strip.scrollIntoViewIfNeeded();
+  const sideways = await guest.evaluate(() => {
+    const panel = document.querySelector('.puzzle-modal .panel');
+    return panel === null ? 0 : panel.scrollWidth - panel.clientWidth;
+  });
+  await guest.screenshot({ path: join(OUT, 'hint-waiting.png') });
+  console.log(
+    `hint-waiting.png   guest: "${(await hintButton.innerText()).trim()}", ` +
+      `panel ${sideways > 0 ? `!! +${sideways}px sideways` : 'fits sideways'}`,
+  );
+
+  // Mission control holds hints back for 45 s after a station opens.
+  const readyBy = Date.now() + 55_000;
+  let label = (await hintButton.innerText()).trim();
+  while (!label.startsWith('Hinweis anfordern') && Date.now() < readyBy) {
+    await sleep(1000);
+    if (!(await modal.isVisible())) {
+      throw new Error('the station closed while waiting for a hint (an emergency drops it)');
+    }
+    label = (await hintButton.innerText()).trim();
+  }
+  if (!label.startsWith('Hinweis anfordern')) {
+    throw new Error(`hint button still reads "${label}" after 55 s`);
+  }
+  await strip.scrollIntoViewIfNeeded();
+  await guest.screenshot({ path: join(OUT, 'hint-ready.png') });
+  console.log(`hint-ready.png     guest: "${label}"`);
+
+  await hintButton.click();
+  await guest.locator('.hint-list li').first().waitFor({ timeout: 5000 });
+  await sleep(600);
+  await strip.scrollIntoViewIfNeeded();
+  await guest.screenshot({ path: join(OUT, 'hint-revealed.png') });
+  const guestHints = await guest.locator('.hint-list li').count();
+  const next = (await hintButton.count()) > 0 ? (await hintButton.innerText()).trim() : 'none';
+  console.log(`hint-revealed.png  guest: ${guestHints} hint(s), next button "${next}"`);
+  await host.screenshot({ path: join(OUT, 'radio-banner.png') });
+  const hostBanner = (await host.locator('.radio-banner').count()) > 0 ? 'up' : '!! missing';
+  const hostHints = await host.locator('.hint-list li').count();
+  console.log(
+    `radio-banner.png   host: banner ${hostBanner} (under the open station), ` +
+      `${hostHints} hint(s) in its strip`,
+  );
 
   await browser.close();
   console.log('screenshots in', OUT);

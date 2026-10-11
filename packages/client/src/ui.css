@@ -125,6 +125,25 @@ body {
   color: var(--accent);
 }
 
+/* A phone-wide header keeps the code and the status dot; the labels around
+   them would only wrap the bar into a third row. */
+@media (max-width: 560px) {
+  .topbar {
+    gap: 10px;
+    padding: 10px 14px;
+  }
+
+  .topbar-mission,
+  .room-code-prefix,
+  .conn-text {
+    display: none;
+  }
+
+  .room-code {
+    white-space: nowrap;
+  }
+}
+
 .banner.error {
   background: #581b1b;
   border-bottom: 1px solid var(--danger);
@@ -1236,6 +1255,65 @@ button.link:hover {
   box-shadow: 0 0 0 1px var(--accent-dark), 0 30px 80px rgba(0, 0, 0, 0.7);
 }
 
+/* Mission control's hints at a station. Before the first hint, kicker and
+   button share a row where there is room; hints then sit between the two as
+   a full-width list. */
+.hint-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-2);
+  border-left: 3px solid #60a5fa;
+  border-radius: 8px;
+  background: var(--bg-2);
+}
+
+.hint-strip .kicker {
+  color: #93c5fd;
+}
+
+.hint-list {
+  flex: 1 0 100%;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.hint-list li {
+  display: flex;
+  gap: 8px;
+}
+
+.hint-list li:last-child {
+  animation: fadein 0.5s;
+}
+
+.hint-request {
+  margin-left: auto;
+  min-height: 44px;
+  font-family: var(--mono);
+  font-size: 14px;
+}
+
+.hint-request:not(:disabled) {
+  border-color: #60a5fa;
+  color: #bfdbfe;
+}
+
+@media (max-width: 560px) {
+  .hint-request {
+    width: 100%;
+  }
+}
+
 /* ── crew picker (lobby) ────────────────────────────────────────────────── */
 
 .crew-picker {
@@ -1649,6 +1727,9 @@ button.link:hover {
 .report-penalty .report-text { color: #fecaca; }
 .report-puzzle .report-text { color: var(--accent); }
 .report-finish .report-text { font-weight: 700; }
+.report-hint .report-text { color: #bfdbfe; }
+.report-hint .report-cost { color: #60a5fa; }
+.report-radio .report-text { color: #5ab4ac; }
 
 /* ── spectator view ─────────────────────────────────────────────────────── */
 
@@ -1751,6 +1832,14 @@ button.link:hover {
 
 .spectate-log .ticker li.ticker-sabotage {
   color: var(--warn);
+}
+
+.spectate-log .ticker li.ticker-hint {
+  color: #60a5fa;
+}
+
+.spectate-log .ticker li.ticker-radio {
+  color: #5ab4ac;
 }
 
 .spectate-head {
@@ -2051,16 +2140,20 @@ button.link:hover {
   right: 0;
   z-index: 3;
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
+  gap: 10px 14px;
   padding: 12px 14px;
   pointer-events: none;
   background: linear-gradient(180deg, rgba(4, 7, 10, 0.92), rgba(4, 7, 10, 0));
   border-radius: 14px 14px 0 0;
 }
 
+/* A zero basis keeps the clock on the first row however long the title gets;
+   only the radio line wraps below. */
 .stage-goal {
+  flex: 1 1 0;
   min-width: 0;
 }
 
@@ -2085,6 +2178,56 @@ button.link:hover {
 
 .stage-top .countdown.final {
   font-size: 28px;
+}
+
+/*
+ * Mission control on the air: a row of the objective bar rather than an
+ * overlay of its own, so the edge arrows and the minimap — which keep clear
+ * of the bar's measured height — keep clear of it too. Solid, because the
+ * bar's gradient has faded out by this depth. Its 7 s match BANNER_MS.
+ */
+.radio-banner {
+  flex: 0 0 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--accent-dark);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  background: #0b1519;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  animation: on-air 7s ease forwards;
+}
+
+.radio-banner-from {
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--accent);
+}
+
+@keyframes on-air {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  5% {
+    opacity: 1;
+    transform: none;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .radio-banner {
+    font-size: 13px;
+  }
 }
 
 /* ── crew strip under the world ─────────────────────────────────────────── */

@@ -36,7 +36,9 @@ function RoomCode({ code }: { code: string }) {
           .catch(() => undefined);
       }}
     >
-      Raum: <strong>{code}</strong> {copied ? '✓ Link kopiert' : '⧉ Link'}
+      <span className="room-code-prefix">Raum: </span>
+      <strong>{code}</strong>
+      <span className="room-code-action"> {copied ? '✓ Link kopiert' : '⧉ Link'}</span>
     </button>
   );
 }
@@ -86,7 +88,8 @@ export function App() {
           {sound ? '🔊' : '🔇'}
         </button>
         <span className={`conn conn-${conn.status}`}>
-          {conn.status === 'open' ? '● VERBUNDEN' : '○ VERBINDE …'}
+          {conn.status === 'open' ? '●' : '○'}
+          <span className="conn-text">{conn.status === 'open' ? ' VERBUNDEN' : ' VERBINDE …'}</span>
         </span>
       </header>
 

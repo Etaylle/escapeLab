@@ -348,6 +348,49 @@ export function pingBlip(): void {
 }
 
 /**
+ * Mission control keying the radio, ~0.25 s: a crackle of static, then a falling two-tone call,
+ * all squeezed into a handset's narrow band so it reads as a voice channel, not as a station.
+ */
+export function radioChirp(): void {
+  try {
+    const audio = runningEngine();
+    if (audio === null) return;
+    const { ctx } = audio;
+    const t = ctx.currentTime + LOOKAHEAD;
+    const out = outlet(ctx, audio.master, CHIRP_LEVEL);
+    const handset = biquad(ctx, 'bandpass', 1500, 0.8);
+    handset.connect(out);
+    const crackle = noiseBurst(ctx, t, 0.06);
+    const crackleLevel = gain(ctx, 0);
+    applyEnvelope(crackleLevel.gain, t, { peak: 0.6, attack: 0.002, hold: 0.02, decay: 0.035 });
+    chain(crackle, crackleLevel, handset);
+    const high = tone(ctx, handset, {
+      type: 'square',
+      at: t + 0.07,
+      from: 1480,
+      to: 1480,
+      peak: 0.5,
+      attack: 0.004,
+      hold: 0.04,
+      decay: 0.03,
+    });
+    const low = tone(ctx, handset, {
+      type: 'square',
+      at: t + 0.15,
+      from: 1110,
+      to: 1110,
+      peak: 0.5,
+      attack: 0.004,
+      hold: 0.05,
+      decay: 0.04,
+    });
+    onAllEnded([crackle, high, low], () => out.disconnect());
+  } catch {
+    // Deliberately silent: the line is on screen as well.
+  }
+}
+
+/**
  * Deep red-alert swell for penalties (~0.8 s): detuned saws sagging in pitch behind a closing
  * lowpass, so it reads as power draining away rather than as a klaxon.
  */

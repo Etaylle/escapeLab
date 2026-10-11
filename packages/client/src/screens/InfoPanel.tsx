@@ -92,6 +92,10 @@ export function InfoPanel({ view, onClose }: Props) {
                 <dd>{view.difficulty}</dd>
               </div>
             </dl>
+            <p className="muted">
+              Hat die Leitstelle Hinweise für eine Station, gibt es sie dort nach kurzer Wartezeit
+              auf Anfrage. Jeder kostet Zeit — und schon einer kostet den Rang S.
+            </p>
           </div>
         )}
 

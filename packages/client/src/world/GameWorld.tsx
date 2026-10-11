@@ -68,6 +68,8 @@ interface Props {
   inputLocked: boolean;
   /** audience view: whole map revealed, no controls, no own avatar */
   spectator: boolean;
+  /** first-time tips wait while the objective bar carries a radio line, so the two never stack */
+  holdTips: boolean;
   /** opens the info panel, which owns the briefing and the key list */
   onToggleInfo: () => void;
   send: (msg: ClientMessage) => void;
@@ -253,6 +255,7 @@ export function GameWorld({
   chatsRef,
   inputLocked,
   spectator,
+  holdTips,
   onToggleInfo,
   send,
 }: Props) {
@@ -279,7 +282,7 @@ export function GameWorld({
 
   // Coach marks react to the view, not to the render loop.
   useEffect(() => {
-    if (spectator || view.map === null) {
+    if (spectator || view.map === null || holdTips) {
       setTip(null);
       return undefined;
     }
@@ -295,7 +298,7 @@ export function GameWorld({
     setTip(next);
     const timer = setTimeout(() => setTip(null), 6500);
     return () => clearTimeout(timer);
-  }, [view, spectator]);
+  }, [view, spectator, holdTips]);
 
 
   useEffect(() => {
@@ -908,9 +911,10 @@ export function GameWorld({
       // Scales with the window, but never so small it stops being readable
       // or so large it eats a phone screen.
       const targetCss = Math.min(190, Math.max(110, (w / dpr) * 0.16));
-      // Top right, clear of the clock above it and of the edge markers and
-      // room signage along the bottom.
-      const oy = 84 * dpr;
+      // Top right, below the objective bar — the clock, and a radio line
+      // while one is up — and clear of the edge markers and room signage
+      // along the bottom.
+      const oy = Math.max(84, safeTopCss) * dpr;
       // A short window has less room below the clock than beside it, and both
       // the minimap and the control cluster hug the right edge.
       const roomBelow = (h - oy - (safeBottomCss + 14) * dpr) / map.height;

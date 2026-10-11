@@ -4,8 +4,12 @@ import type {
   DronePosition,
   PlayerPosition,
   PlayerView,
+  PuzzleView,
+  RunEvent,
 } from '@escapelab/core';
+import { BANNER_MS, radioNews } from '../radio.js';
 import { play } from '../sounds.js';
+import { radioChirp } from '../world/audio.js';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
 import { MissionHud } from './MissionHud.js';
@@ -81,12 +85,15 @@ function CriticalVignette({ deadlineAt }: { deadlineAt: number }) {
   return <div className="vignette" aria-hidden="true" />;
 }
 
+/** How long the launch briefing covers the screen. */
+const BRIEFING_MS = 3600;
+
 /** Mission briefing shown for the first seconds after launch. */
 function Briefing({ view }: { view: PlayerView }) {
   const now = useNow(200);
   const startedAt = view.startedAt ?? now;
   const msIn = now - startedAt;
-  if (msIn > 3600) {
+  if (msIn > BRIEFING_MS) {
     return null;
   }
   const count = msIn < 1200 ? 3 : msIn < 2400 ? 2 : 1;
@@ -97,6 +104,48 @@ function Briefing({ view }: { view: PlayerView }) {
       <p>Du bist: <strong>{view.players.find((p) => p.id === view.you.id)?.roleName}</strong></p>
       <div className="briefing-count">{count}</div>
     </div>
+  );
+}
+
+/**
+ * Mission control's side of a station, the same for every role: the hints
+ * given so far and the button for the next one, which unlocks after a wait.
+ */
+function HintStrip({
+  hints,
+  send,
+}: {
+  hints: PuzzleView['hints'];
+  send: (msg: ClientMessage) => void;
+}) {
+  const now = useNow(1000);
+  if (hints.shown.length === 0 && hints.left === 0) {
+    return null;
+  }
+  const waitSec = hints.readyAt === null ? 0 : Math.ceil((hints.readyAt - now) / 1000);
+  return (
+    <section className="hint-strip" aria-label="Hinweise der Leitstelle">
+      <span className="kicker">LEITSTELLE</span>
+      {hints.shown.length > 0 && (
+        <ol className="hint-list">
+          {hints.shown.map((text, i) => (
+            <li key={i}>
+              <span aria-hidden="true">📻</span>
+              <span>{text}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {hints.left > 0 && (
+        <button
+          className="hint-request"
+          disabled={waitSec > 0}
+          onClick={() => send({ kind: 'request-hint' })}
+        >
+          {waitSec > 0 ? `Hinweis in ${waitSec} s` : `Hinweis anfordern · −${hints.costSec} s`}
+        </button>
+      )}
+    </section>
   );
 }
 
@@ -151,11 +200,52 @@ function useFeedback(view: PlayerView): { shaking: boolean; alarmVisible: boolea
   return { shaking, alarmVisible, stamp };
 }
 
+/**
+ * The mission-control line on the air right now, if any. A fresh batch of
+ * lines replaces whatever was still waiting — it is the newer news — and is
+ * read out one line at a time, each with a chirp. Nothing goes on the air
+ * while the briefing still covers the screen.
+ */
+function useRadioBanner(view: PlayerView): RunEvent | null {
+  const seen = useRef(0);
+  const [queue, setQueue] = useState<RunEvent[]>([]);
+  const [onAir, setOnAir] = useState<RunEvent | null>(null);
+
+  useEffect(() => {
+    const news = radioNews(view.events, seen.current, Date.now());
+    seen.current = view.events.length;
+    if (news.length > 0) {
+      setQueue(news);
+    }
+  }, [view.events]);
+
+  const next = queue[0] ?? null;
+  const briefingEnds = (view.startedAt ?? 0) + BRIEFING_MS;
+  useEffect(() => {
+    if (next === null) {
+      setOnAir(null);
+      return undefined;
+    }
+    const wait = Math.max(0, briefingEnds - Date.now());
+    const on = setTimeout(() => {
+      radioChirp();
+      setOnAir(next);
+    }, wait);
+    const off = setTimeout(() => setQueue((lines) => lines.slice(1)), wait + BANNER_MS);
+    return () => {
+      clearTimeout(on);
+      clearTimeout(off);
+    };
+  }, [next, briefingEnds]);
+
+  return onAir;
+}
 
 // --- screen ------------------------------------------------------------------
 
 export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, send }: Props) {
   const { shaking, alarmVisible, stamp } = useFeedback(view);
+  const radioLine = useRadioBanner(view);
   const [infoOpen, setInfoOpen] = useState(false);
   const puzzle = view.puzzle;
   const map = view.map;
@@ -253,6 +343,15 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
               {missingLabel !== null && <span className="stage-sub">{missingLabel}</span>}
             </div>
             {view.deadlineAt !== null && <Countdown deadlineAt={view.deadlineAt} />}
+            {radioLine !== null && (
+              <div
+                key={`${radioLine.at}-${radioLine.label}`}
+                className="radio-banner"
+                role="status"
+              >
+                <span className="radio-banner-from">📻 LEITSTELLE</span> — {radioLine.label}
+              </div>
+            )}
           </div>
           <GameWorld
             view={view}
@@ -261,6 +360,7 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
             pingsRef={pingsRef}
             chatsRef={chatsRef}
             spectator={false}
+            holdTips={radioLine !== null}
             inputLocked={puzzle !== null || view.pausedFor !== null}
             onToggleInfo={() => setInfoOpen((open) => !open)}
             send={send}
@@ -276,6 +376,7 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
               <p className="story">{puzzle.prompt}</p>
               {puzzle.info !== null && <div className="info-box">📖 {puzzle.info}</div>}
               <PuzzlePanel puzzle={puzzle} send={send} />
+              <HintStrip hints={puzzle.hints} send={send} />
             </div>
           </div>
         ) : (

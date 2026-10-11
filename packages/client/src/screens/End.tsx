@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { ClientMessage, PlayerView } from '@escapelab/core';
+import type { ClientMessage, PlayerView, RunEvent } from '@escapelab/core';
 import { play } from '../sounds.js';
 import { recordRun, type MissionRecord } from '../stats.js';
 
@@ -9,13 +9,15 @@ interface Props {
   leaveRoom: () => void;
 }
 
-const EVENT_ICON: Record<string, string> = {
+const EVENT_ICON: Record<RunEvent['kind'], string> = {
   puzzle: '✔',
   penalty: '🚨',
   sabotage: '⚠',
   item: '📦',
   escape: '🚪',
   finish: '🏁',
+  hint: '💡',
+  radio: '📻',
 };
 
 function fmt(ms: number): string {
@@ -72,6 +74,10 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
           <div className="stat">
             <span className="stat-value">{view.penaltySeq}</span>
             <span className="stat-label">{view.penaltySeq === 1 ? 'Alarm' : 'Alarme'}</span>
+          </div>
+          <div className="stat">
+            <span className="stat-value">{view.hintsUsed}</span>
+            <span className="stat-label">{view.hintsUsed === 1 ? 'Hinweis' : 'Hinweise'}</span>
           </div>
           {history !== null && history.bestMs !== null && (
             <div className={`stat ${record?.newBestTime === true ? 'stat-best' : ''}`}>
