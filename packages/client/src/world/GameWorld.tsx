@@ -1,5 +1,13 @@
-import { useEffect, useRef } from 'react';
-import type { ClientMessage, DronePosition, PlayerPosition, PlayerView } from '@escapelab/core';
+import { useEffect, useRef, useState } from 'react';
+import {
+  chatText,
+  CHAT_PHRASE_IDS,
+  type ChatPhrase,
+  type ClientMessage,
+  type DronePosition,
+  type PlayerPosition,
+  type PlayerView,
+} from '@escapelab/core';
 import {
   drawCarryable,
   drawDropZone,
@@ -33,10 +41,18 @@ const ITEM_RADIUS = 0.9; // pick-up and drop-off reach (server allows 0.95)
 const POS_SEND_MS = 80;
 const PING_LIFETIME_MS = 3200;
 
+const CHAT_LIFETIME_MS = 4200;
+
 export interface MapPing {
   playerId: string;
   x: number;
   y: number;
+  at: number;
+}
+
+export interface ChatLine {
+  playerId: string;
+  phrase: ChatPhrase;
   at: number;
 }
 
@@ -45,6 +61,7 @@ interface Props {
   positionsRef: React.MutableRefObject<Record<string, PlayerPosition>>;
   dronesRef: React.MutableRefObject<Record<string, DronePosition>>;
   pingsRef: React.MutableRefObject<MapPing[]>;
+  chatsRef: React.MutableRefObject<ChatLine[]>;
   inputLocked: boolean;
   send: (msg: ClientMessage) => void;
 }
@@ -192,9 +209,11 @@ export function GameWorld({
   positionsRef,
   dronesRef,
   pingsRef,
+  chatsRef,
   inputLocked,
   send,
 }: Props) {
+  const [wheelOpen, setWheelOpen] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -276,6 +295,18 @@ export function GameWorld({
         }
       } else if (key === 'm' && !e.repeat) {
         sim.minimap = !sim.minimap;
+      } else if (key === 'c' && !e.repeat) {
+        e.preventDefault();
+        setWheelOpen((open) => !open);
+      } else if (key === 'escape') {
+        setWheelOpen(false);
+      } else if (/^[1-8]$/.test(key)) {
+        const phrase = CHAT_PHRASE_IDS[Number(key) - 1];
+        if (phrase !== undefined) {
+          e.preventDefault();
+          sendRef.current({ kind: 'chat', phrase });
+          setWheelOpen(false);
+        }
       }
     };
 
@@ -668,6 +699,55 @@ export function GameWorld({
       ctx.globalAlpha = 1;
     }
 
+    /** Speech bubbles above whoever just said something. */
+    function renderChatBubbles(s: number, w: number, h: number, dpr: number): void {
+      if (ctx == null) {
+        return;
+      }
+      const now = performance.now();
+      const live = chatsRef.current.filter((c) => now - c.at < CHAT_LIFETIME_MS);
+      if (live.length !== chatsRef.current.length) {
+        chatsRef.current = live;
+      }
+      // Only the newest line per speaker, so spam cannot stack up.
+      const newest = new Map<string, ChatLine>();
+      for (const line of live) {
+        newest.set(line.playerId, line);
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.textAlign = 'center';
+      for (const [playerId, line] of newest) {
+        const at =
+          playerId === viewRef.current.you.id
+            ? { x: sim.self.x, y: sim.self.y }
+            : sim.others.get(playerId);
+        if (at === undefined) {
+          continue;
+        }
+        const wx = 'rx' in at ? at.rx : at.x;
+        const wy = ('ry' in at ? at.ry : at.y) - 1.15;
+        const [sx, sy] = worldToScreen(s, w, h, wx, wy);
+        const text = chatText(line.phrase);
+        ctx.font = `600 ${12 * dpr}px system-ui, sans-serif`;
+        const tw = ctx.measureText(text).width + 18 * dpr;
+        const age = (now - line.at) / CHAT_LIFETIME_MS;
+        ctx.globalAlpha = age > 0.8 ? (1 - age) / 0.2 : 1;
+        ctx.fillStyle = 'rgba(232,240,247,0.95)';
+        ctx.beginPath();
+        ctx.roundRect(sx - tw / 2, sy - 12 * dpr, tw, 22 * dpr, 7 * dpr);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(sx - 5 * dpr, sy + 9 * dpr);
+        ctx.lineTo(sx + 5 * dpr, sy + 9 * dpr);
+        ctx.lineTo(sx, sy + 16 * dpr);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#0a0f14';
+        ctx.fillText(text, sx, sy + 4 * dpr);
+        ctx.globalAlpha = 1;
+      }
+    }
+
     /** Corner minimap: layout, doors, objective, exit and everyone's dot. */
     function renderMinimap(map: WorldMap, w: number, h: number, dpr: number): void {
       if (ctx == null || !sim.minimap) {
@@ -901,6 +981,8 @@ export function GameWorld({
         ctx.fillStyle = '#2dd4bf';
         ctx.fillText(action.label, sx, sy + 4 * dpr);
       }
+      renderChatBubbles(s, w, h, dpr);
+
       // A standing reminder while hands are full.
       const carrying = map.items.find(
         (item) => item.carriedBy === viewRef.current.you.id && !item.delivered,
@@ -997,7 +1079,32 @@ export function GameWorld({
         <button className="world-interact" onClick={touchInteract}>
           ⚡ [E]
         </button>
+        <button
+          className="world-chat-toggle"
+          onClick={() => setWheelOpen((open) => !open)}
+          aria-expanded={wheelOpen}
+        >
+          💬 [C]
+        </button>
       </div>
+
+      {wheelOpen && (
+        <div className="chat-wheel" role="menu">
+          {CHAT_PHRASE_IDS.map((phrase, i) => (
+            <button
+              key={phrase}
+              role="menuitem"
+              onClick={() => {
+                send({ kind: 'chat', phrase });
+                setWheelOpen(false);
+              }}
+            >
+              <span className="chat-key">{i + 1}</span>
+              {chatText(phrase)}
+            </button>
+          ))}
+        </div>
+      )}
       <p className="world-hint muted">
         Laufen: WASD/Pfeile · E = aktivieren/aufnehmen · Q = ablegen · Klick = Ping · M = Karte
       </p>

@@ -7,6 +7,7 @@ import {
   initialState,
   viewFor,
   type Action,
+  type ChatPhrase,
   type ClientMessage,
   type Difficulty,
   type GameState,
@@ -49,6 +50,8 @@ const EXIT_RADIUS = 0.7;
 const POSITIONS_INTERVAL_MS = 66;
 /** Minimum gap between two pings from the same player. */
 const PING_COOLDOWN_MS = 700;
+/** Same idea for quick chat, a little slower so it stays readable. */
+const CHAT_COOLDOWN_MS = 1200;
 /** Patrol simulation step. */
 const DRONE_TICK_MS = 80;
 /** How close you must stand to man an emergency panel. */
@@ -74,6 +77,7 @@ export class Room {
   private readonly listeners = new Map<string, Listener>();
   private readonly positions = new Map<string, PlayerPosition>();
   private readonly lastPingAt = new Map<string, number>();
+  private readonly lastChatAt = new Map<string, number>();
   private drones: DronePatrol | null = null;
   private droneTimer: NodeJS.Timeout | null = null;
   private lastDroneTick = 0;
@@ -238,6 +242,18 @@ export class Room {
     this.lastPingAt.set(playerId, now);
     for (const listener of this.listeners.values()) {
       listener({ kind: 'ping', playerId, x, y });
+    }
+  }
+
+  /** Quick-chat phrase: fan out to everyone, rate-limited per player. */
+  chat(playerId: string, phrase: ChatPhrase): void {
+    const now = Date.now();
+    if (now - (this.lastChatAt.get(playerId) ?? 0) < CHAT_COOLDOWN_MS) {
+      return;
+    }
+    this.lastChatAt.set(playerId, now);
+    for (const listener of this.listeners.values()) {
+      listener({ kind: 'chat', playerId, phrase });
     }
   }
 

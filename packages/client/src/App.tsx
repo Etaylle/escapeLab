@@ -90,6 +90,7 @@ export function App() {
             positionsRef={conn.positions}
             dronesRef={conn.drones}
             pingsRef={conn.pings}
+            chatsRef={conn.chats}
             send={conn.send}
           />
         );

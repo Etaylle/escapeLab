@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import type {
+  ChatPhrase,
   ClientMessage,
   DronePosition,
   PlayerPosition,
@@ -28,6 +29,8 @@ export interface Connection {
   drones: MutableRefObject<Record<string, DronePosition>>;
   /** Map pings, newest last; the render loop drains expired ones itself. */
   pings: MutableRefObject<{ playerId: string; x: number; y: number; at: number }[]>;
+  /** Quick-chat lines, newest last; drained by the render loop like pings. */
+  chats: MutableRefObject<{ playerId: string; phrase: ChatPhrase; at: number }[]>;
   send: (msg: ClientMessage) => void;
   dismissError: () => void;
   leaveRoom: () => void;
@@ -63,6 +66,7 @@ export function useGameConnection(): Connection {
   const positionsRef = useRef<Record<string, PlayerPosition>>({});
   const dronesRef = useRef<Record<string, DronePosition>>({});
   const pingsRef = useRef<{ playerId: string; x: number; y: number; at: number }[]>([]);
+  const chatsRef = useRef<{ playerId: string; phrase: ChatPhrase; at: number }[]>([]);
 
   useEffect(() => {
     let disposed = false;
@@ -124,6 +128,13 @@ export function useGameConnection(): Connection {
             at: performance.now(),
           });
           break;
+        case 'chat':
+          chatsRef.current.push({
+            playerId: msg.playerId,
+            phrase: msg.phrase,
+            at: performance.now(),
+          });
+          break;
         case 'error':
           if (resumingRef.current) {
             // Stored session is dead (room swept / token invalid): back to join.
@@ -153,6 +164,7 @@ export function useGameConnection(): Connection {
     positions: positionsRef,
     drones: dronesRef,
     pings: pingsRef,
+    chats: chatsRef,
     send: (msg) => {
       setError(null);
       socketRef.current?.send(JSON.stringify(msg));

@@ -7,13 +7,14 @@ import type {
   PuzzleView,
 } from '@escapelab/core';
 import { play, simonTone } from '../sounds.js';
-import { GameWorld, type MapPing } from '../world/GameWorld.js';
+import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
 
 interface Props {
   view: PlayerView;
   positionsRef: React.MutableRefObject<Record<string, PlayerPosition>>;
   dronesRef: React.MutableRefObject<Record<string, DronePosition>>;
   pingsRef: React.MutableRefObject<MapPing[]>;
+  chatsRef: React.MutableRefObject<ChatLine[]>;
   send: (msg: ClientMessage) => void;
 }
 
@@ -579,7 +580,7 @@ function PuzzlePanel({ puzzle, send }: { puzzle: PuzzleView; send: Send }) {
 
 // --- screen ------------------------------------------------------------------
 
-export function GameScreen({ view, positionsRef, dronesRef, pingsRef, send }: Props) {
+export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, send }: Props) {
   const { shaking, alarmVisible, stamp } = useFeedback(view);
   const puzzle = view.puzzle;
   const map = view.map;
@@ -657,6 +658,7 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, send }: Pr
           positionsRef={positionsRef}
           dronesRef={dronesRef}
           pingsRef={pingsRef}
+          chatsRef={chatsRef}
           inputLocked={puzzle !== null || view.pausedFor !== null}
           send={send}
         />

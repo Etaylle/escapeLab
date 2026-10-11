@@ -452,6 +452,17 @@ assert(
   'a second ping within the cooldown is dropped',
 );
 
+// Quick chat reaches the whole crew with the phrase intact.
+anna.send({ kind: 'chat', phrase: 'drohne' });
+const said = await ben.expect(
+  'chat arrives',
+  (m): m is Extract<ServerMessage, { kind: 'chat' }> => m.kind === 'chat',
+);
+assert(
+  said.playerId === annaJoined.playerId && said.phrase === 'drohne',
+  'quick chat is broadcast with its sender and phrase',
+);
+
 let solved = 0;
 for (const step of BLACKOUT_WALKTHROUGH) {
   const client = clients[step.role];

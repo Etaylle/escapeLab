@@ -98,6 +98,11 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
       s.room.ping(s.playerId, msg.x, msg.y);
       return s;
     }
+    case 'chat': {
+      const s = requireSession(session);
+      s.room.chat(s.playerId, msg.phrase);
+      return s;
+    }
     case 'pos': {
       const s = requireSession(session);
       s.room.updatePosition(s.playerId, {

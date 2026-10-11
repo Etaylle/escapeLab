@@ -1380,3 +1380,59 @@ button.link:hover {
   font-size: 13px;
   line-height: 1.45;
 }
+
+/* ── quick chat ─────────────────────────────────────────────────────────── */
+
+.world-chat-toggle {
+  min-height: 52px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-family: var(--mono);
+  font-weight: 700;
+  background: rgba(26, 38, 48, 0.8);
+}
+
+.chat-wheel {
+  position: absolute;
+  right: 14px;
+  bottom: 104px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  padding: 10px;
+  background: rgba(7, 11, 15, 0.95);
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  z-index: 5;
+}
+
+.chat-wheel button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.chat-key {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+@media (max-width: 560px) {
+  .chat-wheel {
+    left: 14px;
+    right: 14px;
+    grid-template-columns: 1fr 1fr;
+  }
+}

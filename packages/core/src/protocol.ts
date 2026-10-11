@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CHAT_PHRASE_IDS, type ChatPhrase } from './chat.js';
 import { DIFFICULTIES } from './difficulty.js';
 import type { PlayerView } from './view.js';
 
@@ -51,6 +52,10 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('interact') }),
   z.object({ kind: z.literal('drop-item') }),
+  z.object({
+    kind: z.literal('chat'),
+    phrase: z.enum(CHAT_PHRASE_IDS as [ChatPhrase, ...ChatPhrase[]]),
+  }),
   z.object({ kind: z.literal('back-to-lobby') }),
 ]);
 
@@ -92,6 +97,7 @@ export type ServerMessage =
       drones: Record<string, DronePosition>;
     }
   | { kind: 'ping'; playerId: string; x: number; y: number }
+  | { kind: 'chat'; playerId: string; phrase: ChatPhrase }
   | { kind: 'error'; message: string };
 
 export function parseClientMessage(raw: string): ClientMessage {
