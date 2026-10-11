@@ -67,6 +67,8 @@ interface Props {
   inputLocked: boolean;
   /** audience view: whole map revealed, no controls, no own avatar */
   spectator: boolean;
+  /** opens the info panel, which owns the briefing and the key list */
+  onToggleInfo: () => void;
   send: (msg: ClientMessage) => void;
 }
 
@@ -250,10 +252,10 @@ export function GameWorld({
   chatsRef,
   inputLocked,
   spectator,
+  onToggleInfo,
   send,
 }: Props) {
   const [wheelOpen, setWheelOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
   const [tip, setTip] = useState<{ id: string; text: string } | null>(null);
   const seenTips = useRef(new Set<string>());
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -263,6 +265,8 @@ export function GameWorld({
   lockedRef.current = inputLocked;
   const sendRef = useRef(send);
   sendRef.current = send;
+  const infoRef = useRef(onToggleInfo);
+  infoRef.current = onToggleInfo;
   const simRef = useRef<Sim | null>(null);
 
   useEffect(() => {
@@ -364,12 +368,11 @@ export function GameWorld({
       } else if (key === 'c' && !e.repeat) {
         e.preventDefault();
         setWheelOpen((open) => !open);
-      } else if ((key === 'h' || key === '?') && !e.repeat) {
+      } else if ((key === 'i' || key === 'h' || key === '?') && !e.repeat) {
         e.preventDefault();
-        setHelpOpen((open) => !open);
+        infoRef.current();
       } else if (key === 'escape') {
         setWheelOpen(false);
-        setHelpOpen(false);
       } else if (/^[1-8]$/.test(key)) {
         const phrase = CHAT_PHRASE_IDS[Number(key) - 1];
         if (phrase !== undefined) {
@@ -1252,47 +1255,6 @@ export function GameWorld({
               {chatText(phrase)}
             </button>
           ))}
-        </div>
-      )}
-      {!spectator && (
-        <p className="world-hint muted">
-          WASD/Pfeile laufen · E aktivieren · Q ablegen · Klick Ping · M Karte ·{' '}
-          <button className="link" onClick={() => setHelpOpen(true)}>
-            H = alle Tasten
-          </button>
-        </p>
-      )}
-
-      {helpOpen && !spectator && (
-        <div className="overlay help" onClick={() => setHelpOpen(false)} role="dialog">
-          <div className="card help-card">
-            <h2>Steuerung</h2>
-            <dl className="keylist">
-              {(
-                [
-                  ['W A S D / Pfeile', 'Laufen'],
-                  ['E', 'Station aktivieren, Objekt aufnehmen oder einsetzen'],
-                  ['Q', 'Getragenes Objekt ablegen (für Übergaben)'],
-                  ['Klick auf die Welt', 'Ping für alle setzen'],
-                  ['C, dann 1–8', 'Schnellchat'],
-                  ['M', 'Minikarte ein-/ausblenden'],
-                  ['H oder ?', 'Diese Übersicht'],
-                ] as const
-              ).map(([keys, what]) => (
-                <div key={keys} className="keyrow">
-                  <dt>{keys}</dt>
-                  <dd>{what}</dd>
-                </div>
-              ))}
-            </dl>
-            <p className="muted">
-              Im Dunkeln siehst du nur deinen Lichtkegel. Die leuchtende Station ist euer
-              nächstes Ziel — und niemand von euch sieht genug, um sie allein zu lösen.
-            </p>
-            <button className="primary" onClick={() => setHelpOpen(false)}>
-              Weiterspielen
-            </button>
-          </div>
         </div>
       )}
     </div>

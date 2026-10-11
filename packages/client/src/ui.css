@@ -1736,6 +1736,134 @@ button.link:hover {
 .coach {
   position: absolute;
   left: 50%;
+  top: 92px;
+  transform: translateX(-50%);
+  z-index: 4;
+  max-width: min(520px, calc(100% - 28px));
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--accent-dark);
+  background: rgba(7, 11, 15, 0.94);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  animation: fadein 0.25s;
+}
+
+.coach strong {
+  color: var(--accent);
+}
+
+/* The last ten seconds: bigger, redder, faster. */
+.countdown.final {
+  color: #fff;
+  background: var(--danger);
+  border-color: var(--danger);
+  text-shadow: none;
+  font-size: 36px;
+  animation: final-pulse 0.5s infinite;
+}
+
+@keyframes final-pulse {
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 26px rgba(248, 113, 113, 0.75);
+  }
+}
+
+/* ── map thumbnails ─────────────────────────────────────────────────────── */
+
+.map-thumb {
+  flex: none;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #070b0f;
+}
+
+.map-thumb-bg {
+  fill: #070b0f;
+}
+
+.map-thumb-floor {
+  fill: #2a3f52;
+}
+
+.mission-selected .map-thumb-floor {
+  fill: var(--accent-dark);
+}
+
+.mission {
+  position: relative;
+}
+
+.mission .map-thumb {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+.mission-title,
+.mission-sub,
+.mission-meta {
+  padding-right: 92px;
+}
+
+.history {
+  margin-top: 14px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+/* ── controls overlay ───────────────────────────────────────────────────── */
+
+.overlay.help {
+  background: rgba(4, 7, 10, 0.85);
+  backdrop-filter: blur(3px);
+  cursor: pointer;
+}
+
+.help-card {
+  max-width: 520px;
+  cursor: auto;
+}
+
+.keylist {
+  margin: 10px 0 16px;
+}
+
+.keyrow {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.keyrow dt {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.keyrow dd {
+  margin: 0;
+  font-size: 14px;
+}
+
+@media (max-width: 520px) {
+  .keyrow {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+/* ── first-time coach marks ─────────────────────────────────────────────── */
+
+.coach {
+  position: absolute;
+  left: 50%;
   top: 14px;
   transform: translateX(-50%);
   z-index: 4;
@@ -1922,4 +2050,233 @@ button.link:hover {
 /* The connection badge no longer needs to claim the free space. */
 .topbar .conn {
   margin-left: 12px;
+}
+
+/* ── stage: the world with its own overlay bar ──────────────────────────── */
+
+.stage {
+  position: relative;
+}
+
+.stage-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(4, 7, 10, 0.92), rgba(4, 7, 10, 0));
+  border-radius: 14px 14px 0 0;
+}
+
+.stage-goal {
+  min-width: 0;
+}
+
+.stage-goal h1 {
+  margin: 4px 0 0;
+  font-size: 20px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+}
+
+.stage-sub {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--warn);
+}
+
+.stage-top .countdown {
+  padding: 4px 12px;
+  font-size: 24px;
+}
+
+.stage-top .countdown.final {
+  font-size: 28px;
+}
+
+/* ── crew strip under the world ─────────────────────────────────────────── */
+
+.hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-2);
+}
+
+.hud-crew {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.hud-crew li {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 13px;
+}
+
+.hud-me .hud-name {
+  color: var(--accent);
+}
+
+.hud-name {
+  font-weight: 600;
+}
+
+.hud-role-tag {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.hud-status {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.hud-status-ok { color: var(--accent); }
+.hud-status-warn { color: var(--warn); }
+.hud-status-idle { color: var(--muted); }
+
+.hud-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.hud-radio {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-info {
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+/* ── info panel ─────────────────────────────────────────────────────────── */
+
+.overlay.info {
+  background: rgba(4, 7, 10, 0.86);
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+}
+
+.info-card {
+  max-width: 620px;
+  width: 100%;
+  cursor: auto;
+}
+
+.info-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.info-head h2 {
+  margin: 2px 0 0;
+  font-size: 22px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+  font-family: inherit;
+}
+
+.info-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 16px 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.info-tab {
+  border: none;
+  background: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 8px 12px;
+  color: var(--muted);
+}
+
+.info-tab:hover:not(:disabled) {
+  box-shadow: none;
+  color: var(--text);
+}
+
+.info-tab-on {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.info-body > *:first-child {
+  margin-top: 0;
+}
+
+.info-role {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+
+.info-facts {
+  margin: 14px 0 0;
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.info-facts > div {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--bg-2);
+}
+
+.info-facts dt {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.info-facts dd {
+  margin: 0;
+  font-size: 14px;
+}
+
+@media (max-width: 560px) {
+  .info-facts > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
 }

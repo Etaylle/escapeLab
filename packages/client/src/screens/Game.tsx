@@ -9,6 +9,7 @@ import { play } from '../sounds.js';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
 import { MissionHud } from './MissionHud.js';
+import { InfoPanel } from './InfoPanel.js';
 
 interface Props {
   view: PlayerView;
@@ -155,6 +156,7 @@ function useFeedback(view: PlayerView): { shaking: boolean; alarmVisible: boolea
 
 export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, send }: Props) {
   const { shaking, alarmVisible, stamp } = useFeedback(view);
+  const [infoOpen, setInfoOpen] = useState(false);
   const puzzle = view.puzzle;
   const map = view.map;
   if (puzzle === null && map === null) {
@@ -163,6 +165,9 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
   const myRole = view.players.find((p) => p.id === view.you.id)?.roleName ?? '—';
   const armedTitle = map?.stations.find((s) => s.status === 'armed')?.title ?? null;
   const escaping = map?.exit?.open === true;
+  const missing = map?.items.filter((i) => !i.delivered).map((i) => i.label) ?? [];
+  const missingLabel =
+    escaping || missing.length === 0 ? null : `${missing.join(', ')} fehlt noch`;
   const title =
     puzzle !== null
       ? puzzle.title
@@ -180,25 +185,27 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
         </div>
       )}
 
-      <div className="game-header">
-        <div>
-          <div
-            className="led-strip"
-            aria-label={`Rätsel ${view.currentPuzzleIndex + 1} von ${view.puzzleCount}`}
-          >
-            {Array.from({ length: view.puzzleCount }, (_, i) => (
-              <span
-                key={i}
-                className={`led ${i < view.currentPuzzleIndex ? 'led-done' : ''} ${
-                  i === view.currentPuzzleIndex ? 'led-active' : ''
-                }`}
-              />
-            ))}
+      {map === null && (
+        <div className="game-header">
+          <div>
+            <div
+              className="led-strip"
+              aria-label={`Rätsel ${view.currentPuzzleIndex + 1} von ${view.puzzleCount}`}
+            >
+              {Array.from({ length: view.puzzleCount }, (_, i) => (
+                <span
+                  key={i}
+                  className={`led ${i < view.currentPuzzleIndex ? 'led-done' : ''} ${
+                    i === view.currentPuzzleIndex ? 'led-active' : ''
+                  }`}
+                />
+              ))}
+            </div>
+            <h1>{title}</h1>
           </div>
-          <h1>{puzzle === null && !escaping ? `Nächste Station: ${title}` : title}</h1>
+          {view.deadlineAt !== null && <Countdown deadlineAt={view.deadlineAt} />}
         </div>
-        {view.deadlineAt !== null && <Countdown deadlineAt={view.deadlineAt} />}
-      </div>
+      )}
 
       {puzzle !== null && map === null && <p className="story">{puzzle.prompt}</p>}
 
@@ -226,16 +233,39 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
       )}
 
       {map !== null && (
-        <GameWorld
-          view={view}
-          positionsRef={positionsRef}
-          dronesRef={dronesRef}
-          pingsRef={pingsRef}
-          chatsRef={chatsRef}
-          spectator={false}
-          inputLocked={puzzle !== null || view.pausedFor !== null}
-          send={send}
-        />
+        <div className="stage">
+          <div className="stage-top">
+            <div className="stage-goal">
+              <div
+                className="led-strip"
+                aria-label={`Station ${view.currentPuzzleIndex + 1} von ${view.puzzleCount}`}
+              >
+                {Array.from({ length: view.puzzleCount }, (_, i) => (
+                  <span
+                    key={i}
+                    className={`led ${i < view.currentPuzzleIndex ? 'led-done' : ''} ${
+                      i === view.currentPuzzleIndex ? 'led-active' : ''
+                    }`}
+                  />
+                ))}
+              </div>
+              <h1>{title}</h1>
+              {missingLabel !== null && <span className="stage-sub">{missingLabel}</span>}
+            </div>
+            {view.deadlineAt !== null && <Countdown deadlineAt={view.deadlineAt} />}
+          </div>
+          <GameWorld
+            view={view}
+            positionsRef={positionsRef}
+            dronesRef={dronesRef}
+            pingsRef={pingsRef}
+            chatsRef={chatsRef}
+            spectator={false}
+            inputLocked={puzzle !== null || view.pausedFor !== null}
+            onToggleInfo={() => setInfoOpen((open) => !open)}
+            send={send}
+          />
+        </div>
       )}
 
       {puzzle !== null &&
@@ -257,7 +287,12 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
         ))}
 
       {map !== null ? (
-        <MissionHud view={view} positionsRef={positionsRef} chatsRef={chatsRef} />
+        <MissionHud
+          view={view}
+          positionsRef={positionsRef}
+          chatsRef={chatsRef}
+          onOpenInfo={() => setInfoOpen(true)}
+        />
       ) : (
         <ul className="players inline">
           {view.players.map((p) => (
@@ -268,6 +303,8 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
           ))}
         </ul>
       )}
+
+      {infoOpen && <InfoPanel view={view} onClose={() => setInfoOpen(false)} />}
     </div>
   );
 }
