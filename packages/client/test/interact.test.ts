@@ -112,16 +112,17 @@ describe('contextAction — what E does where the player stands', () => {
     expect(contextAction(map, at, YOU, [], SHUT)?.kind).toBe('pick');
   });
 
-  it('with full hands delivers at the drop-off and works an open station, switching none on', () => {
+  it('with full hands delivers at the drop-off and works the station, shut or open', () => {
     const carried = part({ carriedBy: YOU, deliverTo: { x: 2, y: 6 } });
     const map = mapWith({ stations: [station], manuals: [book], items: [carried] });
     expect(contextAction(map, { x: 2.5, y: 6.5 }, YOU, AT_BOOK, OPEN)?.kind).toBe('deliver');
     expect(contextAction(map, { x: 2.5, y: 4.4 }, YOU, AT_BOOK, OPEN)?.kind).toBe('read');
-    expect(contextAction(map, { x: 5.5, y: 6.4 }, YOU, [], OPEN)).toMatchObject({
-      kind: 'operate',
-      label: '[E] Bedienen',
-    });
-    expect(contextAction(map, { x: 5.5, y: 6.4 }, YOU, [], SHUT)).toBeNull();
+    for (const open of [SHUT, OPEN]) {
+      expect(contextAction(map, { x: 5.5, y: 6.4 }, YOU, [], open)).toMatchObject({
+        kind: 'operate',
+        label: '[E] Bedienen',
+      });
+    }
   });
 
   it('lets a second player with the part in hand work the station the first one opened', () => {

@@ -39,12 +39,12 @@ function sourceAction(map: MapView, manual: Manual, source: Source, mine?: Item)
  * What pressing E would do where the player stands. A carried part goes in
  * first at its drop-off; otherwise the nearest of a loose part, the armed
  * station and a manual object the server already counts this player at — so
- * the prompt names what E does, and never promises what it cannot do. An open
- * station (`stationOpen`) only shows its panel, whatever the hands hold, but
- * switching one on goes through the server, which first takes what is
- * carried or picks up what lies at the player's feet: then the station is not
- * offered. A key goes into its cabinet by unlocking it. A locked cabinet only
- * speaks up when nothing else is in reach.
+ * the prompt names what E does, and never promises what it cannot do. Full
+ * hands work a station like empty ones, open (`stationOpen`) or shut; only
+ * with free hands does a loose part at the player's feet come before
+ * switching a station on, because the server picks it up first. A key goes
+ * into its cabinet by unlocking it. A locked cabinet only speaks up when
+ * nothing else is in reach.
  */
 export function contextAction(
   map: MapView,
@@ -72,7 +72,7 @@ export function contextAction(
     (item) => !item.delivered && item.carriedBy === null && dist(item.x, item.y) <= ITEM_RADIUS,
   );
   const station =
-    stationOpen || (mine === undefined && loose === undefined)
+    stationOpen || mine !== undefined || loose === undefined
       ? map.stations.find((s) => s.status === 'armed')
       : undefined;
   const candidates: { action: ContextAction; d: number }[] = map.manuals.flatMap((manual) => {

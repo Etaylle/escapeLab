@@ -274,25 +274,29 @@ describe('Room', () => {
     });
     const { room, anna, ben } = startedRoom(withItem);
 
-    // Station one first, so the gated station becomes current.
-    moveTo(room, ben.playerId, 12, 2);
-    moveTo(room, anna.playerId, 11, 1);
-    room.act(ben.playerId, { kind: 'interact' });
-    room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
-    room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
-
-    // Standing at the gated station without the fuse gets a clear refusal.
-    moveTo(room, ben.playerId, 2, 3);
-    expect(() => room.act(ben.playerId, { kind: 'interact' })).toThrow(/fehlt noch: SICHERUNG/);
-
-    // Out of reach of the fuse, the same key does nothing useful.
+    // Out of reach of the fuse, the key does nothing useful.
     moveTo(room, anna.playerId, 5, 1);
     expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/Zu weit weg/);
 
-    // At the fuse it picks it up; carrying it elsewhere refuses politely.
+    // At the fuse it picks it up — and full hands switch station one on like empty ones.
     moveTo(room, anna.playerId, 1, 1);
     room.act(anna.playerId, { kind: 'interact' });
     expect(lastView(anna.messages).map?.items[0]?.carriedBy).toBe(anna.playerId);
+    moveTo(room, ben.playerId, 12, 2);
+    moveTo(room, anna.playerId, 11, 1);
+    room.act(anna.playerId, { kind: 'interact' });
+    expect(lastView(anna.messages).puzzle).not.toBeNull();
+    expect(lastView(anna.messages).map?.items[0]?.carriedBy).toBe(anna.playerId);
+    room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
+    room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
+
+    // The gated station asks for the fuse, from empty hands and from full ones alike.
+    moveTo(room, ben.playerId, 2, 3);
+    expect(() => room.act(ben.playerId, { kind: 'interact' })).toThrow(/fehlt noch: SICHERUNG/);
+    moveTo(room, anna.playerId, 2, 3);
+    expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/fehlt noch: SICHERUNG/);
+
+    // Carrying it anywhere else refuses politely.
     moveTo(room, anna.playerId, 6, 1);
     expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/markierten Platz/);
 

@@ -412,6 +412,15 @@ describe('what the crew still has to bring', () => {
     expect(info(view)).toContain('<dt>Noch zu bringen</dt><dd>SICHERUNG, SCHLÜSSEL</dd>');
   });
 
+  it('tells a part a later station needs apart from what this one lacks', () => {
+    const later = { ...fuse, requiredForTitle: 'Reaktor-Neustart' };
+    expect(game(lying([later]))).toContain('<span class="stage-sub">SICHERUNG mitnehmen</span>');
+    const both = lying([later, { ...key, deliverTo: { x: 5, y: 1 } }]);
+    expect(game(both)).toContain(
+      '<span class="stage-sub">SCHLÜSSEL fehlt noch · SICHERUNG mitnehmen</span>',
+    );
+  });
+
   it('says nothing is missing while only an unfound key is left', () => {
     const view = lying([{ ...fuse, delivered: true }, key]);
     expect(game(view)).not.toContain('stage-sub');

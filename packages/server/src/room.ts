@@ -315,9 +315,9 @@ export class Room {
   }
 
   /**
-   * One key does the obvious thing: deliver what you carry (a key unlocks
-   * its cabinet), otherwise pick up what lies at your feet, otherwise switch
-   * on the station in front of you.
+   * One key does the obvious thing: deliver what you carry where it belongs
+   * (a key unlocks its cabinet), otherwise pick up what lies at your feet,
+   * otherwise switch on the station in front of you — full hands or not.
    */
   private resolveInteract(playerId: string): void {
     const map = this.state.mission.map;
@@ -331,36 +331,46 @@ export class Room {
       Math.hypot(pos.x - x, pos.y - y) <= ITEM_RADIUS;
 
     const carried = map.items.find((def) => this.state.items[def.id]?.carriedBy === playerId);
-    if (carried !== undefined) {
-      this.handOver(playerId, carried, near);
+    if (carried !== undefined && this.handOver(playerId, carried, near)) {
       return;
     }
 
-    const loose = map.items.find((def) => {
-      const live = this.state.items[def.id];
-      return live !== undefined && !live.delivered && live.carriedBy === null && near(live.x, live.y);
-    });
+    const loose =
+      carried !== undefined
+        ? undefined
+        : map.items.find((def) => {
+            const live = this.state.items[def.id];
+            return (
+              live !== undefined && !live.delivered && live.carriedBy === null && near(live.x, live.y)
+            );
+          });
     if (loose !== undefined) {
       this.dispatch({ type: 'pick-item', playerId, itemId: loose.id, at: Date.now() });
       return;
     }
 
+    if (carried !== undefined && !this.stationInReach(playerId)) {
+      throw new Error(
+        `Du trägst ${carried.label} — bring es zum markierten Platz (oder lege es mit Q ab).`,
+      );
+    }
     this.requireNearStation(playerId);
     this.dispatch({ type: 'interact', playerId, at: Date.now() });
   }
 
-  /** What is carried goes where it belongs: an item to its drop-off, a key into its cabinet. */
+  /**
+   * What is carried goes where it belongs — an item to its drop-off, a key
+   * into its cabinet — once that is in reach; elsewhere the hands stay full.
+   */
   private handOver(
     playerId: string,
     item: MapDef['items'][number],
     near: (x: number, y: number) => boolean,
-  ): void {
+  ): boolean {
     const cabinet = this.state.mission.map.manuals.find((m) => m.needsKey === item.id);
     const goal = cabinet === undefined ? item.deliverTo : this.state.places[cabinet.id];
     if (goal === undefined || !near(goal.x + 0.5, goal.y + 0.5)) {
-      throw new Error(
-        `Du trägst ${item.label} — bring es zum markierten Platz (oder lege es mit Q ab).`,
-      );
+      return false;
     }
     const at = Date.now();
     this.dispatch(
@@ -368,6 +378,7 @@ export class Room {
         ? { type: 'deliver-item', playerId, itemId: item.id, at }
         : { type: 'open-source', playerId, manualId: cabinet.id, at },
     );
+    return true;
   }
 
   /** Put down whatever this player is carrying, right where they stand. */
@@ -398,10 +409,20 @@ export class Room {
     if (station === null || pos === undefined) {
       throw new Error('Hier gibt es nichts zu aktivieren — geht zur leuchtenden Station.');
     }
-    const dist = Math.hypot(pos.x - (station.x + 0.5), pos.y - (station.y + 0.5));
-    if (dist > INTERACT_RADIUS) {
+    if (!this.stationInReach(playerId)) {
       throw new Error('Zu weit weg — stell dich direkt an die leuchtende Station.');
     }
+  }
+
+  /** Whether the armed station lies within this player's reach. */
+  private stationInReach(playerId: string): boolean {
+    const station = armedStation(this.state.mission.map, this.state);
+    const pos = this.positions.get(playerId);
+    return (
+      station !== null &&
+      pos !== undefined &&
+      Math.hypot(pos.x - (station.x + 0.5), pos.y - (station.y + 0.5)) <= INTERACT_RADIUS
+    );
   }
 
   /** Place every avatar on the spawn it drew when a mission starts. */

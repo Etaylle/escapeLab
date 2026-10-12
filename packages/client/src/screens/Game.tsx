@@ -398,9 +398,15 @@ export function GameScreen({
   const relay = map.sabotage?.relay;
   const armedTitle = map.stations.find((s) => s.status === 'armed')?.title ?? null;
   const escaping = map.exit?.open === true;
-  const missing = toBring(map).map((i) => i.label);
-  const missingLabel =
-    escaping || missing.length === 0 ? null : `${missing.join(', ')} fehlt noch`;
+  // What the station in front of the crew lacks, and what a later one will — hands are free to carry it now.
+  const parts = toBring(map);
+  const forNow = parts.filter((i) => i.requiredForTitle === null || i.requiredForTitle === armedTitle);
+  const forLater = parts.filter((i) => !forNow.includes(i));
+  const errands = [
+    forNow.length === 0 ? null : `${forNow.map((i) => i.label).join(', ')} fehlt noch`,
+    forLater.length === 0 ? null : `${forLater.map((i) => i.label).join(', ')} mitnehmen`,
+  ].filter((line): line is string => line !== null);
+  const missingLabel = escaping || errands.length === 0 ? null : errands.join(' · ');
   const title =
     view.puzzle !== null
       ? view.puzzle.title
