@@ -12,10 +12,12 @@ const keypad: MissionManualStation = {
     {
       heading: 'Tastenfeld',
       blocks: [
+        { kind: 'figure', of: 'keypad', caption: 'Abb. 1 — Tastenfeld' },
         { kind: 'p', text: 'Vier Tasten.' },
         { kind: 'rules', items: ['Erst A.', 'Dann B.'] },
         { kind: 'table', head: ['Farbe', 'Taste'], rows: [['rot', '2'], ['blau', '4']] },
         { kind: 'columns', columns: [['Ω', 'Ж'], ['☖']] },
+        { kind: 'example', title: 'Beispiel', lines: ['Gesehen: Ω, Ж.', 'Gedrückt: Ж, Ω.'] },
       ],
     },
   ],
@@ -59,6 +61,11 @@ describe('Handbook', () => {
     expect(html).toContain('<tr><td>blau</td><td>4</td></tr>');
     expect(html).toContain('aria-label="Spalte 2"><li>☖</li></ol>');
     expect(html).toContain('<p>Alle zugleich.</p>');
+    expect(html).toMatch(/<figure class="manual-figure"><svg class="figure" [^>]*role="img"/);
+    expect(html).toContain('<figcaption>Abb. 1 — Tastenfeld</figcaption>');
+    expect(html).toContain(
+      '<ol class="manual-example-lines"><li>Gesehen: Ω, Ж.</li><li>Gedrückt: Ж, Ω.</li></ol>',
+    );
   });
 
   it('skips the edgework note when no station reads it; nothing to read lies nowhere', () => {

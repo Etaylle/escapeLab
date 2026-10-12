@@ -1,9 +1,11 @@
 import type { ManualBlock, ManualSection } from '@escapelab/core';
+import { Figure } from './Figure.js';
 
 /**
  * A puzzle's printed rules as the module wrote them: headings, numbered rule
- * lists, tables and symbol columns. Narrow enough for a phone held sideways
- * in one hand; wide tables scroll inside their own box.
+ * lists, tables, symbol columns, a drawing of the device and a worked
+ * example. Narrow enough for a phone held sideways in one hand; wide tables
+ * scroll inside their own box.
  */
 export function Manual({ sections }: { sections: ManualSection[] }) {
   return (
@@ -71,6 +73,7 @@ export function Block({ block, start }: { block: ManualBlock; start?: number }) 
           ))}
         </div>
       );
+    // The lines run in order, so they stay a list; ui.css sets them without numbers.
     case 'example':
       return (
         <aside className="manual-example">
@@ -84,7 +87,8 @@ export function Block({ block, start }: { block: ManualBlock; start?: number }) 
       );
     case 'figure':
       return (
-        <figure className="manual-figure" data-of={block.of}>
+        <figure className="manual-figure">
+          <Figure of={block.of} />
           <figcaption>{block.caption}</figcaption>
         </figure>
       );

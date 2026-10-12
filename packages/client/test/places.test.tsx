@@ -190,6 +190,20 @@ describe('reading a book', () => {
   it('keeps the margin clean beside a station that is not open', () => {
     expect(leaf(bound({ notes: ['Nur hier.'], notesLeft: 1 }), 0)).not.toContain('class="margin"');
   });
+
+  it('prints the manual’s line at the foot of every page, the contents too', () => {
+    const foot =
+      '<footer class="page-foot" aria-hidden="true">ESCAPELAB · HANDBUCH · REV. 3</footer>';
+    const contents = leaf(bound(), 1);
+    expect(contents).toContain('<span class="contents-kicker">Inhalt</span>');
+    expect(contents).toContain(`<span class="page-folio">1</span>${foot}`);
+    const spread = leaf(bound(), 0, true);
+    expect(spread.split(foot)).toHaveLength(3);
+    // The blank leaf after the last page is no page of the book.
+    const last = leaf(bound(), 2, true);
+    expect(last).toContain('page-blank');
+    expect(last.split(foot)).toHaveLength(2);
+  });
 });
 
 describe('reading a wall chart', () => {

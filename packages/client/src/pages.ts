@@ -63,6 +63,10 @@ const BODY: Face = { advance: 0.52, line: 1.42 };
 const TITLE: Face = { advance: 0.76, line: 1.56 };
 const HEADING: Face = { advance: 0.62, line: 1.02 };
 const CELL: Face = { advance: 0.47, line: 1.1 };
+/** A drawing's caption: the body face at 0.8 em. */
+const CAPTION: Face = { advance: 0.42, line: 1.14 };
+/** An example box's title: mono caps at 0.7 em, spaced 0.16 em apart. */
+const LABEL: Face = { advance: 0.54, line: 1 };
 
 /** The rule under a station's title, with the space it keeps. */
 const TITLE_RULE = 0.45;
@@ -77,11 +81,19 @@ const GLYPH_ROW = 2.3;
 const COLUMNS_PAD = 0.6;
 /** The reader's plan is drawn this tall. */
 const READER = 13;
-/** An example box's padding, sideways in all and top and bottom together. */
-const EXAMPLE_SIDES = 1.6;
-const EXAMPLE_ENDS = 1.4;
-/** A device drawing is set this tall, its caption below. */
-const FIGURE = 7;
+/**
+ * An example box's padding sideways in all (0.7 a side), and top and bottom
+ * together with the space under its title (0.4 + 0.5 + 0.15); its rule is an
+ * outline and takes no room. Its lines stand EXAMPLE_GAP apart.
+ */
+const EXAMPLE_SIDES = 1.4;
+const EXAMPLE_ENDS = 1.05;
+const EXAMPLE_GAP = 0.2;
+/**
+ * A device drawing spans the column and stands 7 em tall (Figure.tsx draws
+ * 376 × 140 units on its 18.8 em); its caption follows 0.2 em below.
+ */
+const FIGURE = 7.2;
 /** A station's last lines may run this far into the foot of its page rather than open one. */
 const OVERRUN = 1.5;
 
@@ -142,6 +154,18 @@ function rulesHeight(items: readonly string[], width: number): number {
   return sum(lines) + RULE_GAP * Math.max(0, items.length - 1);
 }
 
+/** An example box: its title, then its lines one under another, without numbers. */
+function exampleHeight(title: string, lines: readonly string[], width: number): number {
+  const inner = width - EXAMPLE_SIDES;
+  const text = lines.map((line) => textHeight(line, inner, BODY));
+  return (
+    EXAMPLE_ENDS +
+    textHeight(title, inner, LABEL) +
+    sum(text) +
+    EXAMPLE_GAP * Math.max(0, lines.length - 1)
+  );
+}
+
 function heightOf(fragment: Fragment, width: number): number {
   switch (fragment.kind) {
     case 'title':
@@ -157,13 +181,9 @@ function heightOf(fragment: Fragment, width: number): number {
     case 'columns':
       return Math.max(0, ...fragment.columns.map((c) => c.length)) * GLYPH_ROW + COLUMNS_PAD;
     case 'example':
-      return (
-        textHeight(fragment.title, width - EXAMPLE_SIDES, HEADING) +
-        rulesHeight(fragment.lines, width - EXAMPLE_SIDES) +
-        EXAMPLE_ENDS
-      );
+      return exampleHeight(fragment.title, fragment.lines, width);
     case 'figure':
-      return FIGURE + textHeight(fragment.caption, width, BODY);
+      return FIGURE + textHeight(fragment.caption, width, CAPTION);
     case 'reader':
       return READER;
   }

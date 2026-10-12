@@ -93,6 +93,9 @@ interface BookContext {
 /** Which way a page faces: left or right in a spread, or alone. */
 type Side = 'left' | 'right' | 'single';
 
+/** The line a printed manual carries at the foot of every page. */
+const FOOTER = 'ESCAPELAB · HANDBUCH · REV. 3';
+
 function Contents({ book }: { book: BookContext }) {
   return (
     <nav className="contents" aria-label="Inhalt">
@@ -138,9 +141,9 @@ function FragmentView({ fragment, puzzle }: { fragment: Fragment; puzzle: Puzzle
 
 /**
  * A sheet of paper: the text, the outer margin, the page number in the
- * bottom outer corner. A station's first page carries the ribbon while the
- * station is up and a stamp once it is done; the pages after it name the
- * station at the top.
+ * bottom outer corner and the manual's line centred under the text. A
+ * station's first page carries the ribbon while the station is up and a
+ * stamp once it is done; the pages after it name the station at the top.
  */
 function Sheet({
   number,
@@ -169,6 +172,9 @@ function Sheet({
         <div className="page-text">{children}</div>
         <div className="page-margin">{margin}</div>
         <span className="page-folio">{number}</span>
+        <footer className="page-foot" aria-hidden="true">
+          {FOOTER}
+        </footer>
         {opener && progress === 'now' && <span className="page-ribbon" title="Lesezeichen" />}
         {opener && progress === 'done' && (
           <span className="page-stamp" aria-hidden="true">

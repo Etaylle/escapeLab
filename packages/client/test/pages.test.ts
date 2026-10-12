@@ -12,6 +12,7 @@ import {
   type BookSection,
   type Fragment,
 } from '../src/pages.js';
+import { FIGURE_VIEW } from '../src/screens/Figure.js';
 
 /** A small page, so a few blocks already need several of them. */
 const SMALL = { width: 20, height: 12 };
@@ -135,6 +136,49 @@ describe('paginate', () => {
     expect(kinds[drawn + 1]).toEqual(['example']);
   });
 
+  it('sets a station printed as a manual within its pages, the drawing under its heading', () => {
+    const drawing: ManualBlock = {
+      kind: 'figure',
+      of: 'wiring',
+      caption: 'Abb. 1 — Sicherungskasten',
+    };
+    const worked: ManualBlock = {
+      kind: 'example',
+      title: 'Beispiel',
+      lines: [
+        'Gesehen: rot, blau, blau.',
+        'Liste 3 Kabel, Regel 4: erstes Kabel ist nicht blau — Regel 5 gilt.',
+        'Getrennt: das letzte Kabel, Nr. 3.',
+      ],
+    };
+    const device: ManualBlock = {
+      kind: 'p',
+      text: 'Ein Sicherungskasten mit 3 bis 6 Kabeln. '.repeat(3),
+    };
+    const penalty: ManualBlock = { kind: 'p', text: 'Fehlgriff: Alarm, −20 s.' };
+    for (let count = 2; count <= 30; count += 4) {
+      const manual: ManualSection[] = [
+        { heading: 'Notstrom-Brücken', blocks: [drawing, device] },
+        {
+          heading: `${count} Kabel`,
+          blocks: [{ kind: 'rules', items: items(count) }, worked, penalty],
+        },
+      ];
+      const pages = paginate([{ title: '§1 — Notstrom', manual, reader: false }]);
+      expect(pages[1]?.fragments.slice(0, 3)).toEqual([
+        { kind: 'title', text: '§1 — Notstrom' },
+        { kind: 'heading', text: 'Notstrom-Brücken' },
+        drawing,
+      ]);
+      expect(fragmentsOf(pages, 'example')).toEqual([worked]);
+      expect(pages.at(-1)?.fragments.at(-1)).toEqual(penalty);
+      pages.slice(1).forEach((page, i) => {
+        const room = i === pages.length - 2 ? BOOK_PAGE.height + 1.5 : BOOK_PAGE.height;
+        expect(filled(page)).toBeLessThanOrEqual(room);
+      });
+    }
+  });
+
   it('never ends a page on a heading: it moves on with what it heads', () => {
     // Room is left for the heading, not for the heading and a first rule.
     const text = 'Ein Absatz, der fast die ganze Seite füllt. '.repeat(2);
@@ -202,6 +246,56 @@ describe('paginate', () => {
         expect(page.fragments.length).toBeGreaterThan(0);
       });
     });
+  });
+});
+
+/**
+ * The heights ui.css gives a drawing and an example box on a book's page, in
+ * em of its body text (section „worked examples, device drawings and the
+ * page foot"), against what the pager counts: never less, so no page runs
+ * over, and no more than a hair.
+ */
+describe('drawings and example boxes as ui.css sets them', () => {
+  /** The body face: 1.42 em a line (`.page-in`). */
+  const BODY_LINE = 1.42;
+
+  function alone(fragment: Fragment): number {
+    return filled({ section: 0, first: false, fragments: [fragment] });
+  }
+
+  function close(counted: number, css: number): void {
+    expect(counted).toBeGreaterThanOrEqual(css);
+    expect(counted - css).toBeLessThan(0.01);
+  }
+
+  it('counts a drawing 7 em tall across the column, its caption 0.2 em under it', () => {
+    // Figure.tsx draws 376 × 140 units, spanning the 18.8 em column.
+    const drawn = (BOOK_PAGE.width * FIGURE_VIEW.height) / FIGURE_VIEW.width;
+    expect(drawn).toBeCloseTo(7, 9);
+    // The caption: 0.8 em of the body face, its margin 0.25 of its own em.
+    const caption = 0.8 * BODY_LINE;
+    const gap = 0.25 * 0.8;
+    const short = alone({ kind: 'figure', of: 'wiring', caption: 'Abb. 1 — Sicherungskasten' });
+    close(short, drawn + gap + caption);
+    const wrapped = `Abb. 1 — ${'Kasten '.repeat(9)}`;
+    close(alone({ kind: 'figure', of: 'wiring', caption: wrapped }), drawn + gap + 2 * caption);
+  });
+
+  it('counts an example box as its padding, its title, its lines and nothing for its rule', () => {
+    // Padding 0.4 em above, 0.5 below; the title 0.7 em mono, the lines 0.15 em under it
+    // and 0.2 em apart; the rule is an outline and takes no room.
+    const title = 0.7 * BODY_LINE;
+    const box = (lines: number, rows: number): number =>
+      0.4 + title + 0.15 + rows * BODY_LINE + 0.2 * (lines - 1) + 0.5;
+    const example = (...lines: string[]): Fragment => ({
+      kind: 'example',
+      title: 'Beispiel',
+      lines,
+    });
+    close(alone(example('Gesehen: rot.', 'Getrennt: Nr. 2.')), box(2, 2));
+    // The padding takes 0.7 em a side: 17.4 em of the body face hold 33 characters a line.
+    close(alone(example('x'.repeat(33))), box(1, 1));
+    close(alone(example('x'.repeat(34))), box(1, 2));
   });
 });
 
