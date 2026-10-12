@@ -86,17 +86,62 @@ describe('the switch bank', () => {
 });
 
 describe('the signal chain', () => {
-  it('reads the sequence out at the sending console, offers twelve keys at the other', () => {
-    const sending = seen('signal');
-    const sequence = sending.kind === 'signal' ? (sending.sequence ?? []) : [];
+  type SignalSeen = Extract<PuzzleView, { kind: 'signal' }>;
+
+  /** Stage 1 at console `seat` — console a sends it — with what `change` says happened since. */
+  function at(seat: ConsoleId, change: Partial<SignalSeen> = {}): SignalSeen {
+    const view = seen('signal', true, {}, seat);
+    if (view.kind !== 'signal') {
+      throw new Error(`expected the signal chain, got ${view.kind}`);
+    }
+    return { ...view, ...change };
+  }
+
+  /** What the panel prints under each sign, in the order it shows them. */
+  const words = (html: string): string[] =>
+    [...html.matchAll(/<span class="signal-word">([^<]*)<\/span>/g)].map((m) => m[1] ?? '');
+
+  const lit = (html: string): number => html.match(/signal-lamp--lit/g)?.length ?? 0;
+
+  it('shows the sending console the sequence in words, a lamp under each sign, no key', () => {
+    const sending = at('a');
+    const sequence = sending.sequence ?? [];
     expect(sequence).toHaveLength(4);
-    const sender = panel(sending);
-    expect(sender).toContain('Stufe 1 von 4 — dieses Pult sendet');
-    expect(sender).toContain(`Ansage: ${sequence.map(tokenLabel).join(', ')}`);
-    expect(sender).not.toContain('<button');
-    const receiver = panel(seen('signal', true, {}, 'b'));
-    expect(receiver).toContain('Stufe 1 von 4 — dieses Pult gibt ein');
-    expect(receiver.match(/<button data-token="[a-z]+-[a-z]+">/g)).toHaveLength(12);
+    const html = panel(sending);
+    expect(html).toContain('Stufe 1 von 4 — dieses Pult sendet');
+    expect(words(html)).toEqual(sequence.map(tokenLabel));
+    expect(html.match(/class="signal-lamp/g)).toHaveLength(4);
+    expect(lit(html)).toBe(0);
+    expect(html).not.toContain('<button');
+  });
+
+  it('gives the receiving console its twelve signs as keys, and no sequence', () => {
+    const receiving = at('b');
+    const html = panel(receiving);
+    expect(html).toContain('Stufe 1 von 4 — dieses Pult gibt ein');
+    const key = /<button class="signal-key" data-token="([a-z]+-[a-z]+)">/g;
+    expect([...html.matchAll(key)].map((m) => m[1])).toEqual(receiving.grid);
+    expect(words(html)).toEqual((receiving.grid ?? []).map(tokenLabel));
+    expect(html).not.toContain('signal-strip');
+  });
+
+  it('lights a lamp for every sign pressed, at both consoles', () => {
+    expect(lit(panel(at('a', { done: 2 })))).toBe(2);
+    expect(lit(panel(at('b', { done: 3 })))).toBe(3);
+  });
+
+  it('says a wrong sign starts the stage again, and shakes the keys', () => {
+    const message = '⚠ Falsches Zeichen — Stufe von vorn.';
+    const wrong = panel(at('b', { lastResult: 'wrong' }));
+    expect(wrong).toContain(`<p class="warn" role="status">${message}</p>`);
+    expect(wrong).toContain('class="signal-grid signal-grid--wrong"');
+    expect(panel(at('a', { lastResult: 'wrong' }))).toContain(message);
+    const right = panel(at('b'));
+    expect(right).not.toContain('Falsches Zeichen');
+    expect(right).not.toContain('signal-grid--wrong');
+  });
+
+  it('tells a console nobody stands at that it is not connected', () => {
     expect(panel(seen('signal', false))).toContain('Dieses Pult ist nicht angeschlossen.');
   });
 });

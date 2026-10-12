@@ -17,7 +17,8 @@ const load = (id: string): Mission =>
   );
 
 /**
- * The tutorial: a press for the whole crew in the Leitstand (12,1), the wiring
+ * The tutorial: a press for the whole crew in the Leitstand (12,1), the
+ * Signalprobe at its two consoles there, a (8,5) and b (13,5), the wiring
  * box in the Kontrolle (2,4) behind a door held by the plate (7,2), whose
  * rules lie in the locker (7,1) beside the plate, and the finale in the
  * Spulen (16,4). Its spawns are (8,1) beside the locker and (12,4) beside the
@@ -86,6 +87,35 @@ describe('Room', () => {
     room.updatePosition(playerId, { x, y, facing: 0, moving: false });
   }
 
+  type Player = { playerId: string; messages: ServerMessage[] };
+
+  /**
+   * Station 2, the Signalprobe: Anna walks up to console a, Ben to console b,
+   * Anna switches it on, and every stage is pressed at the console that
+   * receives it, worked out from the two views alone.
+   */
+  function sendSignals(room: Room, anna: Player, ben: Player): void {
+    const signal = mission.puzzles[1];
+    moveTo(room, anna.playerId, 8, 4);
+    moveTo(room, ben.playerId, 13, 4);
+    room.act(anna.playerId, { kind: 'interact' });
+    while (lastView(anna.messages).currentPuzzleIndex === 1) {
+      const operator = lastView(anna.messages).puzzle;
+      const partner = lastView(ben.messages).puzzle;
+      if (signal?.type !== 'signal' || operator === null || partner === null) {
+        throw new Error('expected the open Signalprobe');
+      }
+      const views = { operator, partner, reader: operator };
+      const moves = moduleFor(signal.type).solve(signal, views, null);
+      if (moves.length === 0) {
+        throw new Error('the Signalprobe is open, but its views show nothing to press');
+      }
+      for (const { by, input } of moves) {
+        room.act((by === 'partner' ? ben : anna).playerId, { kind: 'puzzle-input', input });
+      }
+    }
+  }
+
   it('runs a full game: all at the press, the box read at the locker, out by the hatch', () => {
     const { room, anna, ben } = startedRoom();
     // Ben walked past the sign on his first step; Anna stands at the locker, still shut.
@@ -103,7 +133,11 @@ describe('Room', () => {
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
     expect(lastView(ben.messages).currentPuzzleIndex).toBe(1);
 
-    // Station 2 is wiring: Anna holds the Kontrolle door and searches the locker beside it, Ben
+    // Station 2 is the Signalprobe, worked from its two consoles in the Leitstand.
+    sendSignals(room, anna, ben);
+    expect(lastView(ben.messages).currentPuzzleIndex).toBe(2);
+
+    // Station 3 is wiring: Anna holds the Kontrolle door and searches the locker beside it, Ben
     // works the box.
     moveTo(room, anna.playerId, 7, 2);
     expect(lastView(ben.messages).map?.doors.find((d) => d.id === 'kontrolltuer')?.open).toBe(true);
@@ -111,7 +145,7 @@ describe('Room', () => {
     expect(lastView(anna.messages).presence.manualId).toBe('spind-leitstand');
     moveTo(room, ben.playerId, 2, 3);
     room.act(ben.playerId, { kind: 'interact' });
-    const wiring = mission.puzzles[1];
+    const wiring = mission.puzzles[2];
     const annaView = lastView(anna.messages);
     const benView = lastView(ben.messages);
     if (wiring === undefined || annaView.puzzle === null || benView.puzzle === null) {
@@ -121,7 +155,7 @@ describe('Room', () => {
     for (const { input } of moduleFor(wiring.type).solve(wiring, views, benView.edgework)) {
       room.act(ben.playerId, { kind: 'puzzle-input', input });
     }
-    expect(lastView(anna.messages).currentPuzzleIndex).toBe(2);
+    expect(lastView(anna.messages).currentPuzzleIndex).toBe(3);
     // Solving it opened the Spulen for good.
     expect(lastView(ben.messages).map?.doors.find((d) => d.id === 'halteschott')?.open).toBe(true);
 
@@ -290,6 +324,8 @@ describe('Room', () => {
     expect(lastView(anna.messages).map?.items[0]?.carriedBy).toBe(anna.playerId);
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
+    // Full hands press signs as well as empty ones.
+    sendSignals(room, anna, ben);
 
     // The gated station asks for the fuse, from empty hands and from full ones alike.
     moveTo(room, ben.playerId, 2, 3);
@@ -460,6 +496,7 @@ describe('Room', () => {
     room.act(ben.playerId, { kind: 'interact' });
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
+    sendSignals(room, anna, ben);
     moveTo(room, anna.playerId, 7, 2);
     room.act(anna.playerId, { kind: 'open-source', manualId: 'spind-leitstand' });
     moveTo(room, ben.playerId, 2, 3);

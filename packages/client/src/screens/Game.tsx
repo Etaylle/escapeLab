@@ -3,6 +3,7 @@ import type {
   ClientMessage,
   DronePosition,
   ManualHere,
+  MapView,
   PlayerPosition,
   PlayerView,
   PuzzleView,
@@ -12,6 +13,7 @@ import { bannerFrom, noticeMs, radioNews, withNews, type Notice } from '../radio
 import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { play } from '../sounds.js';
 import { radioChirp } from '../world/audio.js';
+import { consoleName } from '../world/consoles.js';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
 import { toBring } from '../world/markers.js';
 import { startRoom } from '../world/rooms.js';
@@ -350,6 +352,20 @@ function useOpened(view: PlayerView): {
   };
 }
 
+/**
+ * The station frame's label: the open station by paragraph and title, and
+ * where it has two consoles the one this player works — „§2 — Signalkette ·
+ * Pult B". The view calls a station with one console console a as well, so
+ * whether there are two is the map's to tell.
+ */
+export function stationLabel(puzzle: PuzzleView, map: MapView): string {
+  const label = `§${puzzle.index + 1} — ${puzzle.title}`;
+  const twoConsoles = map.stations.some((s) => s.status === 'armed' && s.console !== undefined);
+  return twoConsoles && puzzle.console !== null
+    ? `${label} · ${consoleName(puzzle.console)}`
+    : label;
+}
+
 /** Escape closes whatever lies on top. */
 function useEscape(onEscape: () => void): void {
   const handler = useRef(onEscape);
@@ -516,7 +532,7 @@ export function GameScreen({
       {open.station !== null && (
         <WorldModal
           kind="station"
-          label={`§${open.station.index + 1} — ${open.station.title}`}
+          label={stationLabel(open.station, map)}
           edgework={view.edgework}
           onClose={closeModal}
         >

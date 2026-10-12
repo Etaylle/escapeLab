@@ -26,6 +26,7 @@ import {
   makeFloorTile,
   makeWallTile,
 } from './art.js';
+import { spotTitle } from './consoles.js';
 import { contextAction } from './interact.js';
 import { markerTargets, placeMarkers } from './markers.js';
 import { worldNews } from './news.js';
@@ -786,10 +787,16 @@ export function GameWorld({
         ctx.restore();
       }
       const pulse = (Math.sin(sim.time * 4) + 1) / 2;
+      // Every spot: a station with two consoles stands twice, both lit while it is armed.
       for (const station of map.stations) {
         ctx.save();
         ctx.translate(station.x + 0.5, station.y + 0.5);
-        drawStation(ctx, { status: station.status, pulse, title: station.title });
+        drawStation(ctx, {
+          status: station.status,
+          pulse,
+          title: spotTitle(station),
+          console: station.console ?? null,
+        });
         ctx.restore();
       }
       for (const manual of map.manuals) {
@@ -1295,7 +1302,7 @@ export function GameWorld({
       // it is out of sight — in the dark that is the only way to find it.
       ctx.font = `700 ${11 * dpr}px ui-monospace, Menlo, monospace`;
       ctx.textAlign = 'center';
-      const marks = markerTargets(map, viewRef.current.you.id).map((target) => {
+      const marks = markerTargets(map, viewRef.current.you.id, sim.self).map((target) => {
         const [px, py] = worldToScreen(s, w, h, target.x, target.y);
         const tiles = Math.round(Math.hypot(target.x - sim.self.x, target.y - sim.self.y));
         const caption = `${target.label} ${tiles}m`;

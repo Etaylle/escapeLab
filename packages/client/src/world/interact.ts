@@ -38,8 +38,9 @@ function sourceAction(map: MapView, manual: Manual, source: Source, mine?: Item)
 /**
  * What pressing E would do where the player stands. A carried part goes in
  * first at its drop-off; otherwise the nearest of a loose part, the armed
- * station and a manual object the server already counts this player at — so
- * the prompt names what E does, and never promises what it cannot do. Full
+ * station and a manual object the server already counts this player at —
+ * so the prompt names what E does, and never promises what it cannot do. A
+ * station with two consoles is armed at both, and E works the nearer. Full
  * hands work a station like empty ones, open (`stationOpen`) or shut; only
  * with free hands does a loose part at the player's feet come before
  * switching a station on, because the server picks it up first. A key goes
@@ -71,10 +72,10 @@ export function contextAction(
   const loose = map.items.find(
     (item) => !item.delivered && item.carriedBy === null && dist(item.x, item.y) <= ITEM_RADIUS,
   );
-  const station =
+  const stations =
     stationOpen || mine !== undefined || loose === undefined
-      ? map.stations.find((s) => s.status === 'armed')
-      : undefined;
+      ? map.stations.filter((s) => s.status === 'armed')
+      : [];
   const candidates: { action: ContextAction; d: number }[] = map.manuals.flatMap((manual) => {
     const source = sourcesHere.find((here) => here.id === manual.id);
     return source === undefined
@@ -93,7 +94,7 @@ export function contextAction(
       d: dist(loose.x, loose.y),
     });
   }
-  if (station !== undefined) {
+  for (const station of stations) {
     candidates.push({
       action: { kind: 'operate', label: '[E] Bedienen', x: station.x + 0.5, y: station.y - 0.55 },
       d: dist(station.x + 0.5, station.y + 0.5),

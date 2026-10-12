@@ -226,6 +226,14 @@ const on = (x: number, y: number): PlayerPosition => ({
 
 const nowhere = { stationId: null, manualId: null };
 
+/** The Signalkette, armed at both its consoles: a at (8,5), b at (13,5). */
+const kette: MapView = mapWith({
+  stations: [
+    { puzzleId: 'kette', x: 8, y: 5, title: 'Signalkette', status: 'armed', console: 'a' },
+    { puzzleId: 'kette', x: 13, y: 5, title: 'Signalkette', status: 'armed', console: 'b' },
+  ],
+});
+
 describe('presence tags', () => {
   const texts = (tags: { text: string }[]): string[] => tags.map((tag) => tag.text);
 
@@ -245,6 +253,18 @@ describe('presence tags', () => {
     ]);
     expect(texts(crewTags(lab, carla, nowhere, on(5, 8)))).toEqual(['hält Platte']);
     expect(texts(crewTags(lab, carla, nowhere, on(9, 8)))).toEqual([]);
+  });
+
+  it('name the console at a station with two where the presence tells it, and only there', () => {
+    const atB = { stationId: 'kette', console: 'b', manualId: null } as const;
+    expect(texts(crewTags(kette, carla, atB, on(13, 6)))).toEqual(['am Pult B']);
+    // Guessed from where someone stands, it names no console.
+    const guessed = presenceNear(kette, on(13, 6));
+    expect(guessed).toEqual({ stationId: 'kette', manualId: null });
+    expect(texts(crewTags(kette, carla, guessed, on(13, 6)))).toEqual(['am Pult']);
+    // A station with one console is console a to the view, and stays „am Pult".
+    const atCode = { stationId: 'code', console: 'a', manualId: null } as const;
+    expect(texts(crewTags(lab, carla, atCode, on(8, 3)))).toEqual(['am Pult']);
   });
 
   it('say nothing but that a disconnected player is gone', () => {
@@ -288,6 +308,27 @@ describe('the crew strip', () => {
     expect(entries[1]).toContain('presence-carry">trägt Ersatzsicherung<');
     expect(entries[2]).toContain('presence-away">getrennt<');
     expect(entries[3]).toContain('<span class="hud-idle">unterwegs</span>');
+  });
+
+  it('names your own console at a station with two, the others’ only „am Pult"', () => {
+    const view = annaSees([anna, ben], {
+      phase: 'playing',
+      presence: { stationId: 'kette', console: 'b', manualId: null, signSeen: false },
+      map: kette,
+    });
+    const html = renderToStaticMarkup(
+      <MissionHud
+        view={view}
+        positionsRef={{ current: { p1: on(13, 6), p2: on(8, 6) } }}
+        chatsRef={{ current: [] }}
+        onOpenInfo={noop}
+        notesOpen={false}
+        onToggleNotes={noop}
+      />,
+    );
+    const entries = html.match(/<li.*?<\/li>/g) ?? [];
+    expect(entries[0]).toContain('presence-pult">am Pult B<');
+    expect(entries[1]).toContain('presence-pult">am Pult<');
   });
 });
 
