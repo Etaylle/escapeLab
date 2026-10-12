@@ -61,7 +61,7 @@ export interface MorseState {
   type: 'morse';
   /** the word the lamp spells, one of the frequency table's */
   word: string;
-  /** dial position, 0 (3.505 MHz) … 15 (3.580 MHz) */
+  /** dial position, 0 (3.505 MHz) … 15 (3.580 MHz); never starts on the answer */
   dial: number;
 }
 
@@ -82,14 +82,16 @@ export interface MorseView {
   /** dial position, 0 … steps − 1 */
   dial: number;
   steps: number;
-  /** the dial's reading as the frequency table prints it, e.g. "3.545 MHz" */
+  /** the dial's reading as the frequency table prints it, e.g. "3,545 MHz" */
   frequency: string;
 }
 
 const dialKhz = (dial: number): number => BASE_KHZ + STEP_KHZ * dial;
+const stepOf = (khz: number): number => (khz - BASE_KHZ) / STEP_KHZ;
 
+/** "3,545 MHz": German notation, the same on the dial and in the printed table. */
 function megahertz(khz: number): string {
-  return `${Math.floor(khz / 1000)}.${String(khz % 1000).padStart(3, '0')} MHz`;
+  return `${Math.floor(khz / 1000)},${String(khz % 1000).padStart(3, '0')} MHz`;
 }
 
 function encode(word: string): string {
@@ -142,8 +144,11 @@ export const morseModule: PuzzleModule<MorseDef, MorseState, MorseInput, MorseVi
   inputSchema,
 
   init(_def, rng) {
-    const { word } = WORDS[Math.floor(rng() * WORDS.length)] ?? WORDS[0];
-    return { type: 'morse', word, dial: 0 };
+    const { word, khz } = WORDS[Math.floor(rng() * WORDS.length)] ?? WORDS[0];
+    // One of the fifteen other steps, so every run needs tuning and a read-out.
+    const offset = Math.floor(rng() * (DIAL_STEPS - 1));
+    const dial = offset < stepOf(khz) ? offset : offset + 1;
+    return { type: 'morse', word, dial };
   },
 
   apply(def, state, input, roleId) {
@@ -224,7 +229,7 @@ export const morseModule: PuzzleModule<MorseDef, MorseState, MorseInput, MorseVi
     if (entry === undefined) {
       throw new Error(`morse "${def.id}": the lamp spells "${word}", which no table row has`);
     }
-    const turns = (entry.khz - dialKhz(panel.dial)) / STEP_KHZ;
+    const turns = stepOf(entry.khz) - panel.dial;
     const tune: -1 | 1 = turns < 0 ? -1 : 1;
     return [
       ...Array.from({ length: Math.abs(turns) }, () => ({

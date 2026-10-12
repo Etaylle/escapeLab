@@ -13,7 +13,7 @@ function view(pattern: string | null, dial: number): MorseView {
     pattern,
     dial,
     steps: 16,
-    frequency: '3.545 MHz',
+    frequency: '3,545 MHz',
     index: 0,
     total: 1,
     title: 'Funkfeuer',
@@ -60,7 +60,7 @@ describe('MorsePanel', () => {
   it('gives the operator lamp, dial and SENDEN, with ◀ off at the bottom of the band', () => {
     const html = render(view('-.. .-', 0));
     expect(html).toContain('aria-label="Signallampe"');
-    expect(html).toContain('3.545 MHz');
+    expect(html).toContain('3,545 MHz');
     expect(html).toContain('SENDEN');
     expect(button(html, 'Frequenz runter')).toContain('disabled');
     expect(button(html, 'Frequenz hoch')).not.toContain('disabled');
@@ -75,7 +75,7 @@ describe('MorsePanel', () => {
 
   it('shows everyone else the dial reading but no lamp and no controls', () => {
     const html = render(view(null, 8));
-    expect(html).toContain('Regler: 3.545 MHz');
+    expect(html).toContain('Regler: 3,545 MHz');
     expect(html).not.toContain('Signallampe"');
     expect(html).not.toContain('<button');
   });

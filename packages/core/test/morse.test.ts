@@ -71,7 +71,7 @@ const INTERNATIONAL = new Map(
 );
 
 /** Every reading the dial can show, bottom to top. */
-const DIAL = Array.from({ length: 16 }, (_, i) => `3.${505 + 5 * i} MHz`);
+const DIAL = Array.from({ length: 16 }, (_, i) => `3,${505 + 5 * i} MHz`);
 
 type Table = Extract<ManualBlock, { kind: 'table' }>;
 const blocks = morseModule.manual(def).flatMap((section) => section.blocks);
@@ -134,9 +134,13 @@ const send = (playerId: string, input: unknown): Action => ({
 });
 
 describe('morse puzzle', () => {
-  it(`is solved from the role views alone, without an alarm, for ${SEEDS} seeds`, () => {
+  it(`starts off the answer and is solved from the views, alarm-free, for ${SEEDS} seeds`, () => {
     for (let seed = 0; seed < SEEDS; seed++) {
-      expect(playInstance(def, ['funker', 'archiv'], seed)).toBeGreaterThan(0);
+      const start = fresh(seed);
+      const reading = panelOf(start, 'funker').frequency;
+      expect(reading, `seed ${seed}`).not.toBe(printedFrequency(start.word));
+      // At least one turn of the dial before the send.
+      expect(playInstance(def, ['funker', 'archiv'], seed)).toBeGreaterThan(1);
     }
   });
 
@@ -159,11 +163,13 @@ describe('morse puzzle', () => {
     }
   });
 
-  it('seeds every word of the table, and the same word for the same seed', () => {
-    const seeded = new Set(Array.from({ length: SEEDS }, (_, seed) => fresh(seed).word));
-    expect([...seeded].sort()).toEqual(frequencies.rows.map(([word]) => word).sort());
+  it('seeds every word and every dial start, the same ones for the same seed', () => {
+    const runs = Array.from({ length: SEEDS }, (_, seed) => fresh(seed));
+    const words = [...new Set(runs.map((run) => run.word))].sort();
+    expect(words).toEqual(frequencies.rows.map(([word]) => word).sort());
+    const starts = [...new Set(runs.map((run) => run.dial))].sort((a, b) => a - b);
+    expect(starts).toEqual([...DIAL.keys()]);
     expect(fresh(11)).toEqual(fresh(11));
-    expect(fresh(11).dial).toBe(0);
   });
 
   it('shows the lamp to the operator only and the word to nobody', () => {
@@ -221,7 +227,7 @@ describe('morse puzzle', () => {
   });
 
   it('turns the dial a step at a time, free of charge, and stops at both ends', () => {
-    let state = fresh(5);
+    let state: MorseState = { ...fresh(5), dial: 0 };
     expect(press(state, { tune: -1 })).toEqual({ state, solved: false, penalty: null });
     const readings = [panelOf(state, 'funker').frequency];
     for (let i = 0; i < 20; i++) {
@@ -233,7 +239,7 @@ describe('morse puzzle', () => {
     }
     expect(state.dial).toBe(15);
     expect(readings.slice(0, 16)).toEqual(DIAL);
-    expect(new Set(readings.slice(15))).toEqual(new Set(['3.580 MHz']));
+    expect(new Set(readings.slice(15))).toEqual(new Set(['3,580 MHz']));
     expect(press(state, { tune: -1 }).state.dial).toBe(14);
   });
 
@@ -275,10 +281,10 @@ describe('morse puzzle', () => {
   it('is won through the reducer after a wrong frequency has cost its penalty', () => {
     let state = started();
     const answer = DIAL.indexOf(printedFrequency(morseState(state).word));
+    // Off the dial, the tuning loop below would never end.
+    expect(answer).toBeGreaterThanOrEqual(0);
     const deadline = state.deadlineAt ?? 0;
-    if (answer === 0) {
-      state = applyAction(state, send('p1', { tune: 1 }));
-    }
+    // The dial never starts on the answer, so sending at once is wrong.
     state = applyAction(state, send('p1', { transmit: true }));
     expect(state.phase).toBe('playing');
     expect(state.penaltySeq).toBe(1);
