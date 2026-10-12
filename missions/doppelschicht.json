@@ -4,11 +4,11 @@
   "subtitle": "Für vier: zwei Flügel ohne Verbindung. Ihr seht euch nie — bis die Schleuse aufgeht.",
   "listOrder": 40,
   "story": {
-    "intro": "Das Nordlabor ist in zwei Flügel geteilt, und die Schleuse dazwischen ist verriegelt. Zwei von euch stehen im Westflügel, zwei im Ostflügel — ihr könnt euch nicht sehen und nicht helfen, nur funken. Jede einzelne Station braucht Wissen aus beiden Flügeln. Zwölf Minuten.",
+    "intro": "Das Nordlabor ist in zwei Flügel geteilt, und die Schleuse dazwischen ist verriegelt. Zwei von euch stehen im Westflügel, zwei im Ostflügel — ihr könnt euch nicht sehen und nicht helfen, nur funken. Jede einzelne Station braucht Wissen aus beiden Flügeln. Fünfzehn Minuten.",
     "win": "Die Schleuse fährt auf, zum ersten Mal steht ihr euch gegenüber — und spaziert gemeinsam hinaus. Vier Köpfe, zwei Flügel, eine Schicht.",
     "lose": "Die Schleuse bleibt zu. Zwei Flügel, vier Leute, und am Ende doch zu wenig geredet."
   },
-  "timeLimitSec": 720,
+  "timeLimitSec": 900,
   "radio": {
     "start": "Erst Notstrom: Brückenkasten im Ostflügel, unter dem Schild. Labor schneidet, Archiv hat die Listen, Leitstand die Laborkennung.",
     "escape": "Schleuse offen, zum ersten Mal seht ihr euch. Ausgang in der Schleusenmitte. Die Uhr läuft, bis alle vier dort stehen."
