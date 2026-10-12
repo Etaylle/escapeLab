@@ -73,6 +73,8 @@ async function clickText(page, text) {
  * Listens in on one player's socket: the newest view the server sent it and
  * where its avatar last reported itself. The walks below steer by these, so
  * they depend neither on the map's layout nor on how fast the page renders.
+ * On the audience's socket it keeps the spectator view, which places every
+ * source before the crew has come across it.
  */
 function eavesdrop(page) {
   const seen = { view: null, pos: null };
@@ -82,7 +84,7 @@ function eavesdrop(page) {
     }
     socket.on('framereceived', ({ payload }) => {
       const msg = JSON.parse(String(payload));
-      if (msg.kind === 'view') {
+      if (msg.kind === 'view' || msg.kind === 'spectator-view') {
         seen.view = msg.view;
       }
     });
@@ -188,6 +190,15 @@ async function walkNear(page, seen, target) {
   return false;
 }
 
+/** Polls `check` until it holds or `ms` have passed; whether it held in the end. */
+async function until(check, ms) {
+  const end = Date.now() + ms;
+  while (!check() && Date.now() < end) {
+    await sleep(100);
+  }
+  return check();
+}
+
 /** Presses E until `locator` shows: the server takes a moment to count the avatar as there. */
 async function interactUntil(page, locator) {
   for (let i = 0; i < 3 && !(await locator.isVisible()); i++) {
@@ -258,6 +269,70 @@ async function captureSign(page) {
   console.log(
     `sign.png           guest: note ${note ? 'up' : '!! missing'}, ` +
       `chip in the HUD ${chip ? 'shown' : '!! missing'}`,
+  );
+}
+
+/**
+ * locker.png: the guest stands before the nearest locker it can walk to,
+ * „Durchsuchen" on offer, then searches it — the find has to reach the HUD
+ * line. Lockers lie undiscovered at first, so where they are comes from the
+ * audience's view.
+ */
+async function captureLocker(page, seen, audience) {
+  const everything = audience.view?.map ?? seen.view.map;
+  const lockers = everything.manuals.filter((m) => m.kind === 'locker' && !m.opened);
+  const from = tileOf(seen);
+  const options = lockers
+    .map((locker) => ({ locker, path: from === null ? null : route(seen.view.map, from, locker) }))
+    .filter((option) => option.path !== null)
+    .sort((a, b) => a.path.length - b.path.length);
+  const locker = options[0]?.locker;
+  if (locker === undefined || !(await walkNear(page, seen, locker))) {
+    const where = lockers.map((l) => `${l.x},${l.y}`).join(' · ');
+    console.log(
+      lockers.length === 0
+        ? 'locker.png         skipped: no closed locker on this map'
+        : `locker.png         skipped: no locker in the guest's reach (${where})`,
+    );
+    return;
+  }
+  const here = await until(() => seen.view.sourcesHere.some((s) => s.id === locker.id), 3000);
+  await sleep(400); // the prompt is drawn from the next frame on
+  await page.screenshot({ path: join(OUT, 'locker.png') });
+  await page.keyboard.press('e');
+  const searched = await until(
+    () => seen.view.map.manuals.some((m) => m.id === locker.id && m.opened),
+    3000,
+  );
+  const hud = page.locator('.hud-radio');
+  const line = searched && (await hud.count()) > 0 ? (await hud.innerText()).trim() : '';
+  console.log(
+    `locker.png         guest: "${locker.label}" at ${locker.x},${locker.y}, ` +
+      `${here ? 'counted at it' : '!! not counted at it'}; E: ` +
+      (searched ? `searched, HUD line "${line}"` : '!! still shut'),
+  );
+}
+
+/**
+ * lit-room.png: the first room a solved station lit, with the guest walked
+ * inside where a way leads there. This walkthrough solves no station itself,
+ * so while litRooms is empty it only says so.
+ */
+async function captureLitRoom(page, seen) {
+  const map = seen.view?.map;
+  const room = map?.litRooms[0];
+  if (map == null || room === undefined) {
+    console.log('lit-room.png       skipped: litRooms is empty — no station solved in this run');
+    return;
+  }
+  await page.keyboard.press('Escape');
+  const label = map.labels.find((l) => l.text === room);
+  const inside = label !== undefined && (await walkNear(page, seen, label));
+  await sleep(1200); // past the lights coming up
+  await page.screenshot({ path: join(OUT, 'lit-room.png') });
+  console.log(
+    `lit-room.png       guest: ${map.litRooms.join(', ')} lit, ` +
+      (inside ? `guest inside ${room}` : `!! guest outside ${room}, no way in`),
   );
 }
 
@@ -345,6 +420,7 @@ async function run() {
 
   const watcherCtx = await browser.newContext({ viewport: SIZES[0] });
   const watcher = await watcherCtx.newPage();
+  const watcherSeen = eavesdrop(watcher);
   await watcher.goto(BASE);
   await watcher.getByLabel('Raumcode').fill(code);
   await clickText(watcher, 'Mit Code zuschauen');
@@ -352,6 +428,8 @@ async function run() {
   await sleep(1200);
   await watcher.screenshot({ path: join(OUT, 'spectate.png') });
   await overflow(watcher, 'spectate @ 1440x820');
+
+  await captureLocker(guest, guestSeen, watcherSeen);
 
   // --- reading, the sign, hints: the guest reads, then works the first station ---
   // The host's info panel may still be open; close it the way a player would.
@@ -431,6 +509,7 @@ async function run() {
     `radio-banner.png   host: banner ${hostBanner}, ` +
       (hostPanel ? '!! station panel shown away from the station' : 'no station panel away'),
   );
+  await captureLitRoom(guest, guestSeen);
 
   await browser.close();
   console.log('screenshots in', OUT);

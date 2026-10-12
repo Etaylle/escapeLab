@@ -53,6 +53,7 @@ const AMBIENCE_LEVEL = 0.025;
 const FOOTSTEP_LEVEL = 0.02;
 const DOOR_LEVEL = 0.04;
 const CHIRP_LEVEL = 0.03;
+const FIND_LEVEL = 0.035;
 const DRAIN_LEVEL = 0.05;
 
 /** Exponential ramps cannot reach zero; this is -80 dB. */
@@ -348,6 +349,95 @@ export function pingBlip(): void {
 }
 
 /**
+ * Soft rising two-note chime, ~0.45 s, for a source the crew has just come across: rounder
+ * and lower than the ping, so a find never sounds like somebody calling.
+ */
+export function discoveryBlip(): void {
+  try {
+    const audio = runningEngine();
+    if (audio === null) return;
+    const { ctx } = audio;
+    const t = ctx.currentTime + LOOKAHEAD;
+    const out = outlet(ctx, audio.master, CHIRP_LEVEL);
+    const low = tone(ctx, out, {
+      type: 'sine',
+      at: t,
+      from: 784,
+      to: 784,
+      peak: 0.6,
+      attack: 0.012,
+      hold: 0.03,
+      decay: 0.2,
+    });
+    const high = tone(ctx, out, {
+      type: 'sine',
+      at: t + 0.1,
+      from: 1175,
+      to: 1175,
+      peak: 0.55,
+      attack: 0.012,
+      hold: 0.04,
+      decay: 0.3,
+    });
+    onAllEnded([low, high], () => out.disconnect());
+  } catch {
+    // Deliberately silent: the caption shows the find as well.
+  }
+}
+
+/** A locker door swung open, ~1 s: the latch, then the thin clang of its sheet metal. */
+export function lockerOpen(): void {
+  try {
+    const audio = runningEngine();
+    if (audio === null) return;
+    const { ctx } = audio;
+    const t = ctx.currentTime + LOOKAHEAD;
+    const out = outlet(ctx, audio.master, FIND_LEVEL);
+    const latch = tick(ctx, out, t, 2600, 0.8);
+    onAllEnded([latch], () => out.disconnect());
+    strike(ctx, audio.master, t + 0.06, 420, FIND_LEVEL * 0.8);
+  } catch {
+    // Deliberately silent: the locker opens on screen as well.
+  }
+}
+
+/**
+ * A padlock coming off, ~0.45 s: the key turning, the shackle springing with a bright tick,
+ * then the drawer rolling out on its runners.
+ */
+export function cabinetUnlock(): void {
+  try {
+    const audio = runningEngine();
+    if (audio === null) return;
+    const { ctx } = audio;
+    const t = ctx.currentTime + LOOKAHEAD;
+    const out = outlet(ctx, audio.master, FIND_LEVEL);
+    const turn = tick(ctx, out, t, 3400, 0.6);
+    const spring = tick(ctx, out, t + 0.11, 5200, 0.9);
+    const ring = tone(ctx, out, {
+      type: 'sine',
+      at: t + 0.11,
+      from: 6100,
+      to: 6000,
+      peak: 0.12,
+      attack: 0.001,
+      hold: 0,
+      decay: 0.05,
+    });
+    const runners = noiseBurst(ctx, t + 0.2, 0.22);
+    const band = biquad(ctx, 'bandpass', 900, 1.2);
+    band.frequency.setValueAtTime(900, t + 0.2);
+    band.frequency.exponentialRampToValueAtTime(450, t + 0.42);
+    const roll = gain(ctx, 0);
+    applyEnvelope(roll.gain, t + 0.2, { peak: 0.5, attack: 0.03, hold: 0.1, decay: 0.09 });
+    chain(runners, band, roll, out);
+    onAllEnded([turn, spring, ring, runners], () => out.disconnect());
+  } catch {
+    // Deliberately silent: the cabinet opens on screen as well.
+  }
+}
+
+/**
  * Mission control keying the radio, ~0.25 s: a crackle of static, then a falling two-tone call,
  * all squeezed into a handset's narrow band so it reads as a voice channel, not as a station.
  */
@@ -613,6 +703,21 @@ function strike(ctx: AudioContext, dest: AudioNode, at: number, base: number, le
   chain(impact, biquad(ctx, 'bandpass', base * 6, 1.2), impactLevel, out);
   sources.push(impact);
   onAllEnded(sources, () => out.disconnect());
+}
+
+/** A dry mechanical tick, ~30 ms: a sliver of noise through a narrow band. */
+function tick(
+  ctx: AudioContext,
+  dest: AudioNode,
+  at: number,
+  frequency: number,
+  peak: number,
+): AudioBufferSourceNode {
+  const burst = noiseBurst(ctx, at, 0.03);
+  const level = gain(ctx, 0);
+  applyEnvelope(level.gain, at, { peak, attack: 0.001, hold: 0, decay: 0.025 });
+  chain(burst, biquad(ctx, 'bandpass', frequency, 3), level, dest);
+  return burst;
 }
 
 /** Strained metal: a tone chopped into irregular stick-slip friction pulses. */
