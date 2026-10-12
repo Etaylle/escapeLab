@@ -156,19 +156,6 @@
       "prompt": "Das Bedienfeld des Hauptservers verlangt einen Symbolcode. Vier Zeichen, richtige Reihenfolge. Ein Fehler setzt die Eingabe zurück.",
       "operatorRoleId": "steuerpult",
       "manualRoleId": "anleitung",
-      "gridSymbols": ["꩜", "ψ", "Ѭ", "⍾", "☖", "Ω", "Ж", "҂", "₪"],
-      "code": ["☖", "꩜", "Ж", "₪"],
-      "penaltySec": 20,
-      "infos": [
-        {
-          "roleId": "anleitung",
-          "text": "Handbuch §5 — ZUGANGSCODE, exakt in dieser Reihenfolge: 1) ☖ (Haus mit Sockel), 2) ꩜ (Spirale), 3) Ж (Käfer mit sechs Beinen), 4) ₪ (Tor mit Gittern). Beschreib die Zeichen genau — ein Fehltipp kostet 20 Sekunden und setzt alles zurück."
-        },
-        {
-          "roleId": "steuerpult",
-          "text": "Neun Tasten, kryptische Zeichen. Die Anleitung kennt den Code — beschreibe, was du siehst, und tippe erst bei Ansage."
-        }
-      ],
       "hints": [
         "Eine Taste pro Ansage. Ein falscher Druck setzt die ganze Eingabe zurück, dann geht es wieder beim ersten Zeichen los.",
         "Anleitung, lies die Beschreibung aus dem Handbuch vor, nicht nur das Zeichen. Steuerpult, beschreib die Taste, die du meinst, und warte auf das Okay.",

@@ -4,54 +4,62 @@ import { shuffle } from '../rng.js';
 import { commonDefShape, type PuzzleModule } from './module.js';
 
 /**
- * keypad puzzle: the operator sees `gridSymbols` as a shuffled keypad and
- * must press the symbols of `code` in order. A wrong press resets progress
- * and costs time.
+ * Symbol keypad: four glyphs on a 2×2 keypad, all from one column of a fixed
+ * table that only the manual prints. The operator describes the glyphs; the
+ * manual role finds the one column that holds all four and reads their order
+ * from top to bottom. A correct press lights its key for good; a wrong press
+ * costs time but keeps the lit keys.
  */
-const defSchema = z
-  .object({
-    type: z.literal('keypad'),
-    ...commonDefShape,
-    operatorRoleId: z.string().min(1),
-    manualRoleId: z.string().min(1),
-    gridSymbols: z.array(z.string().min(1)).min(4),
-    code: z.array(z.string().min(1)).min(2),
-    penaltySec: z.number().int().positive().default(20),
-  })
-  .superRefine((def, ctx) => {
-    const grid = new Set(def.gridSymbols);
-    if (grid.size !== def.gridSymbols.length) {
-      ctx.addIssue({ code: 'custom', message: `puzzle "${def.id}": grid symbols not unique` });
-    }
-    if (new Set(def.code).size !== def.code.length) {
-      ctx.addIssue({ code: 'custom', message: `puzzle "${def.id}": code symbols not unique` });
-    }
-    if (def.code.some((s) => !grid.has(s))) {
-      ctx.addIssue({ code: 'custom', message: `puzzle "${def.id}": code symbol not on grid` });
-    }
-  });
+
+/**
+ * The printed table: six columns of seven glyphs, 27 different ones. A glyph
+ * may stand in two columns, but no four glyphs of one column stand together
+ * in another, so the four keys always point at exactly one column. Every
+ * glyph is a single code point that the default fonts of macOS, iOS, Windows
+ * and Android carry, and no two are easy to mix up when described.
+ */
+export const KEYPAD_COLUMNS: readonly (readonly string[])[] = [
+  ['Ѳ', 'ƛ', 'Ψ', '☆', '∞', 'Ѣ', 'Ӭ'],
+  ['Ӭ', '¶', 'ƛ', 'Ю', '☆', 'Ж', 'ә'],
+  ['♪', 'Ѧ', 'Ͼ', 'Ψ', '¤', '⌘', '¶'],
+  ['⌘', 'Я', 'ә', 'Ω', 'Ͼ', 'Ұ', 'æ'],
+  ['∂', 'Ω', 'Ҋ', 'Ѣ', '¿', 'Ӄ', '₪'],
+  ['¿', 'Ж', '₪', 'Ƨ', 'Ѧ', 'Ҋ', 'ξ'],
+];
+
+const KEY_COUNT = 4;
+
+const defSchema = z.object({
+  type: z.literal('keypad'),
+  ...commonDefShape,
+  operatorRoleId: z.string().min(1),
+  manualRoleId: z.string().min(1),
+  penaltySec: z.number().int().positive().default(20),
+});
 export type KeypadDef = z.infer<typeof defSchema>;
 
 export interface KeypadState {
   type: 'keypad';
-  /** keypad layout, shuffled per game */
-  grid: string[];
-  /** how many code symbols were entered correctly so far */
-  progress: number;
-  lastWrongIndex: number | null;
+  /** the column the keys come from, an index into KEYPAD_COLUMNS */
+  column: number;
+  /** the four keys in grid order: top left, top right, bottom left, bottom right */
+  keys: { glyph: string; lit: boolean }[];
+  /** the keys' glyphs in their column's top-to-bottom order — the order to press them in */
+  order: string[];
 }
 
-const inputSchema = z.strictObject({ keyIndex: z.number().int().nonnegative() });
+const inputSchema = z.strictObject({ keyIndex: z.number().int().min(0).max(KEY_COUNT - 1) });
 export type KeypadInput = z.infer<typeof inputSchema>;
 
 export interface KeypadView {
   kind: 'keypad';
-  /** keypad layout — only the operator gets it */
-  grid: { symbol: string; done: boolean }[] | null;
-  progress: number;
-  codeLength: number;
-  lastWrongIndex: number | null;
+  /** the keys in grid order — only the operator sees them */
+  keys: { glyph: string; lit: boolean }[] | null;
+  /** how many keys are lit — everyone sees how far the code is */
+  litCount: number;
 }
+
+const litCountOf = (keys: { lit: boolean }[]): number => keys.filter((key) => key.lit).length;
 
 export const keypadModule: PuzzleModule<KeypadDef, KeypadState, KeypadInput, KeypadView> = {
   type: 'keypad',
@@ -59,45 +67,42 @@ export const keypadModule: PuzzleModule<KeypadDef, KeypadState, KeypadInput, Key
   defSchema,
   inputSchema,
 
-  init: (def, rng) => ({
-    type: 'keypad',
-    grid: shuffle(def.gridSymbols, rng),
-    progress: 0,
-    lastWrongIndex: null,
-  }),
-
-  apply(def, state, input, roleId) {
-    if (roleId !== def.operatorRoleId) {
-      fail('Nur die Rolle am Tastenfeld kann Codes eingeben.');
+  init(def, rng) {
+    const column = Math.floor(rng() * KEYPAD_COLUMNS.length);
+    const glyphs = KEYPAD_COLUMNS[column];
+    if (glyphs === undefined) {
+      throw new Error(`keypad "${def.id}": rolled column ${column} of ${KEYPAD_COLUMNS.length}`);
     }
-    const symbol = state.grid[input.keyIndex];
-    if (symbol === undefined) {
-      return { state, solved: false, penalty: null };
-    }
-    if (symbol !== def.code[state.progress]) {
-      return {
-        state: { ...state, progress: 0, lastWrongIndex: input.keyIndex },
-        solved: false,
-        penalty: 'Falsche Taste am Code',
-      };
-    }
-    const progress = state.progress + 1;
+    const dealt = shuffle(glyphs, rng).slice(0, KEY_COUNT);
     return {
-      state: { ...state, progress, lastWrongIndex: null },
-      solved: progress >= def.code.length,
-      penalty: null,
+      type: 'keypad',
+      column,
+      keys: dealt.map((glyph) => ({ glyph, lit: false })),
+      order: glyphs.filter((glyph) => dealt.includes(glyph)),
     };
   },
 
+  apply(def, state, input, roleId) {
+    if (roleId !== def.operatorRoleId) {
+      fail('Nur die Rolle am Tastenfeld kann Tasten drücken.');
+    }
+    const key = state.keys[input.keyIndex];
+    if (key === undefined || key.lit) {
+      return { state, solved: false, penalty: null };
+    }
+    const lit = litCountOf(state.keys);
+    if (key.glyph !== state.order[lit]) {
+      return { state, solved: false, penalty: 'Falsche Taste am Tastenfeld' };
+    }
+    const keys = state.keys.map((k, i) => (i === input.keyIndex ? { ...k, lit: true } : k));
+    return { state: { ...state, keys }, solved: lit + 1 === state.order.length, penalty: null };
+  },
+
   view(def, state, roleId) {
-    const isInput = roleId === def.operatorRoleId;
-    const done = new Set(def.code.slice(0, state.progress));
     return {
       kind: 'keypad',
-      grid: isInput ? state.grid.map((symbol) => ({ symbol, done: done.has(symbol) })) : null,
-      progress: state.progress,
-      codeLength: def.code.length,
-      lastWrongIndex: isInput ? state.lastWrongIndex : null,
+      keys: roleId === def.operatorRoleId ? state.keys.map((key) => ({ ...key })) : null,
+      litCount: litCountOf(state.keys),
     };
   },
 
@@ -109,29 +114,30 @@ export const keypadModule: PuzzleModule<KeypadDef, KeypadState, KeypadInput, Key
           {
             kind: 'p',
             text:
-              `${def.gridSymbols.length} Tasten mit je einem Zeichen. Der Code hat ` +
-              `${def.code.length} Zeichen in fester Reihenfolge.`,
+              'Vier Tasten mit je einem Zeichen, sichtbar nur am Tastenfeld. Genau eine Spalte ' +
+              'der Tabelle enthält alle vier Zeichen. Die Tasten in der Reihenfolge drücken, in ' +
+              'der ihre Zeichen in dieser Spalte stehen, von oben nach unten. Falsche Taste: ' +
+              `Alarm, −${def.penaltySec} s. Bereits leuchtende Tasten bleiben an.`,
           },
-          {
-            kind: 'rules',
-            items: [
-              'Den Code führen die Unterlagen der Crew.',
-              'Zeichen genau beschreiben, erst nach Ansage tippen.',
-              `Falsches Zeichen: Alarm, −${def.penaltySec} s. Die Eingabe beginnt von vorn.`,
-            ],
-          },
+          { kind: 'columns', columns: KEYPAD_COLUMNS.map((column) => [...column]) },
         ],
       },
     ];
   },
 
-  /** The code is the mission's own text (the infos), so it comes from the def. */
+  /** The manual role's printed table is this module's own, so the solver reads that. */
   solve(def, views) {
-    const panel = views[def.operatorRoleId];
-    if (panel?.grid == null) {
-      throw new Error(`keypad "${def.id}": solving needs the operator's view of the keypad`);
+    const keys = views[def.operatorRoleId]?.keys;
+    if (keys == null || views[def.manualRoleId] === undefined) {
+      throw new Error(`keypad "${def.id}": solving needs the operator's keys and the manual role`);
     }
-    const keyIndex = panel.grid.findIndex((key) => key.symbol === def.code[panel.progress]);
+    const glyphs = keys.map((key) => key.glyph);
+    const column = KEYPAD_COLUMNS.find((c) => glyphs.every((glyph) => c.includes(glyph)));
+    if (column === undefined) {
+      throw new Error(`keypad "${def.id}": no column holds all of ${glyphs.join(' ')}`);
+    }
+    const next = column.find((glyph) => keys.some((key) => key.glyph === glyph && !key.lit));
+    const keyIndex = keys.findIndex((key) => key.glyph === next);
     return keyIndex < 0 ? [] : [{ roleId: def.operatorRoleId, input: { keyIndex } }];
   },
 };

@@ -1,0 +1,28 @@
+/* --- keypad: four big symbol keys in a 2×2 grid; a correct press lights its key for good --- */
+
+.keypad-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  max-width: 300px;
+  margin: 4px auto 0;
+}
+
+.keypad-key {
+  aspect-ratio: 1;
+  padding: 0;
+  border-radius: 14px;
+  background: #0b1117;
+  font-size: 56px;
+  line-height: 1;
+}
+
+/* Lit keys are disabled, but must read as lit, not as greyed out. */
+.keypad-key--lit:disabled {
+  opacity: 1;
+  cursor: default;
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(45, 212, 191, 0.08);
+  box-shadow: 0 0 14px var(--accent-glow);
+}
