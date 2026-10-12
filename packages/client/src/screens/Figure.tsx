@@ -471,8 +471,8 @@ interface Drawing {
   draw: () => ReactNode;
 }
 
-/** Every module the core knows, and the Signalkette, has its drawing. */
-const DRAWINGS: Record<PuzzleDef['type'] | 'signal', Drawing> = {
+/** Every module the core knows has its drawing. */
+const DRAWINGS: Record<PuzzleDef['type'], Drawing> = {
   wiring: {
     label: 'Sicherungskasten: 4 Kabel übereinander, oben eine Kontrolllampe, ein Kabel durchtrennt',
     draw: Wiring,

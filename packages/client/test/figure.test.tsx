@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { MODULES } from '@escapelab/core';
 import { Figure } from '../src/screens/Figure.js';
 
-/** What each drawing says it shows, in German: every module the core knows, and the Signalkette. */
+/** What each drawing says it shows, in German: every module the core knows. */
 const SAYS: Record<string, RegExp> = {
   wiring: /^Sicherungskasten: 4 Kabel/,
   keypad: /^Tastenfeld: 4 quadratische Tasten/,
@@ -24,9 +24,9 @@ function drawing(of: string): { html: string; label: string } {
 }
 
 describe('Figure', () => {
-  it('has a drawing for every module the core knows, and for the Signalkette', () => {
-    const types = [...MODULES.map((module) => module.type), 'signal'];
-    expect(Object.keys(SAYS).sort()).toEqual(types.sort());
+  it('has a drawing for every module the core knows', () => {
+    const types = MODULES.map((module) => module.type);
+    expect(Object.keys(SAYS).sort()).toEqual([...types].sort());
   });
 
   it.each(Object.entries(SAYS))(
