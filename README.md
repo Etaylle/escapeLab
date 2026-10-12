@@ -8,7 +8,7 @@ neue Missionen brauchen keinen Code.
 (`switches`), Frequenz-Abgleich mit Farblegende (`simon`), unsichtbares Labyrinth (`maze`),
 Synchron-Knöpfe (`button-sync`).
 Layouts/Codes sind pro Partie zufällig (seeded, deterministisch replaybar), Fehler kosten
-Countdown-Zeit. **Missionen:** Tutorial (2 Spieler), Blackout im Labor (2 Spieler, 5 Rätsel),
+Countdown-Zeit. **Missionen:** Tutorial (2 Spieler), Blackout im Labor (2–3 Spieler, 5 Rätsel),
 Kettenreaktion (3 Spieler, Wissen auf drei Rollen verteilt) und Doppelschicht (4 Spieler in
 **zwei getrennten Flügeln**, die sich bis zum Finale nie erreichen können — jedes einzelne Rätsel
 braucht Wissen aus beiden Hälften, und erst der Not-Aus entriegelt die Schleuse in der Mitte).
@@ -30,9 +30,11 @@ für alle (farbige Ringe, Pfeil wenn außerhalb des Bildes), `M` blendet die **M
 über der Figur) — damit funktioniert das Spiel auch ohne Voice-Chat.
 
 **Tragen:** Manche Stationen bleiben tot, bis ein Gegenstand bei ihnen eingesetzt wurde — die
-Ersatzsicherung liegt im Archiv und muss quer durchs Labor in den Reaktor. `E` ist dabei eine
-einzige Kontexttaste (einsetzen → aufnehmen → dann, was näher liegt: Station bedienen oder
-lesen), `Q` legt das Getragene ab, sodass Übergaben möglich sind.
+Ersatzsicherung liegt im Archiv und muss quer durchs Labor in den Reaktor —, und manche Regeln
+liegen in einem abgeschlossenen Schrank, dessen Schlüssel erst geholt werden muss (Blackout: vom
+Serverraum zum Aktenschrank im Labor). `E` ist dabei eine einzige Kontexttaste (einsetzen →
+aufnehmen → dann, was näher liegt: Station bedienen oder lesen), `Q` legt das Getragene ab,
+sodass Übergaben möglich sind.
 
 **Orte statt Rollen:** Das Pult einer offenen Station sieht und bedient nur, wer davorsteht
 (`E` *Bedienen*, `Esc` tritt zurück — die Station behält ihren Zustand). Die Regeln liegen

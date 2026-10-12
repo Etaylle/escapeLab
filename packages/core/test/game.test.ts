@@ -12,7 +12,7 @@ import {
 import type { Action, GameState, Mission } from '../src/index.js';
 import { standing } from './lab.js';
 
-// The tutorial: a whole-crew press, a wiring station read at the book, a whole-crew finale.
+// The tutorial: a whole-crew press, a wiring station read at a locker, a whole-crew finale.
 const mission: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/systemcheck.json', import.meta.url), 'utf8')),
 );
@@ -51,14 +51,20 @@ function bothAtStation(state: GameState, at: number): GameState {
   return applyAction(here, { type: 'interact', playerId: 'p2', at });
 }
 
-/** Station 2 switched on: Ben at the wiring box, Anna at the book, Ben past the sign. */
+/** Station 2 switched on: Ben at the wiring box, Anna at the searched locker, Ben past the sign. */
 function wiringOpen(state: GameState, at: number): GameState {
   const here = standing(state, {
     stations: { doppelbestaetigung: ['p2'] },
-    manuals: { 'buch-leitstand': ['p1'] },
+    manuals: { 'spind-leitstand': ['p1'] },
     signSeen: ['p2'],
   });
-  return applyAction(here, { type: 'interact', playerId: 'p2', at });
+  const searched = applyAction(here, {
+    type: 'open-source',
+    playerId: 'p1',
+    manualId: 'spind-leitstand',
+    at,
+  });
+  return applyAction(searched, { type: 'interact', playerId: 'p2', at });
 }
 
 /** Station 2 is wiring: the cut its rules name, worked out from the two views alone. */
@@ -345,7 +351,7 @@ describe('playing a full mission', () => {
 });
 
 describe('asymmetric information in views', () => {
-  it('gives the wires to the box, the rules to the book, the edgework to who read the sign', () => {
+  it('gives the wires to the box, the rules to the locker, the edgework to the sign reader', () => {
     const first = run(
       [press('p1', T0 + 1000), press('p2', T0 + 1000)],
       bothAtStation(started(), T0 + 500),

@@ -19,8 +19,9 @@ const load = (id: string): Mission =>
 /**
  * The tutorial: a press for the whole crew in the Leitstand (12,1), the wiring
  * box in the Kontrolle (2,4) behind a door held by the plate (7,2), whose
- * book (7,1) is read from the plate, and the finale in the Spulen (16,4).
- * Its spawns are (8,1) beside the book and (12,4) beside the sign (13,3).
+ * rules lie in the locker (7,1) beside the plate, and the finale in the
+ * Spulen (16,4). Its spawns are (8,1) beside the locker and (12,4) beside the
+ * sign (13,3).
  */
 const mission = load('systemcheck');
 
@@ -85,11 +86,14 @@ describe('Room', () => {
     room.updatePosition(playerId, { x, y, facing: 0, moving: false });
   }
 
-  it('runs a full game: everyone at the press, the box read at the book, out by the hatch', () => {
+  it('runs a full game: all at the press, the box read at the locker, out by the hatch', () => {
     const { room, anna, ben } = startedRoom();
-    // Ben walked past the sign on his first step; Anna stands at the book.
+    // Ben walked past the sign on his first step; Anna stands at the locker, still shut.
     expect(lastView(ben.messages).presence.signSeen).toBe(true);
-    expect(lastView(anna.messages).presence).toMatchObject({ manualId: 'buch-leitstand' });
+    expect(lastView(anna.messages).sourcesHere).toEqual([
+      { id: 'spind-leitstand', kind: 'locker', label: 'SPIND', opened: false, needsKey: null },
+    ]);
+    expect(lastView(anna.messages).presence.manualId).toBeNull();
 
     // Station 1 sits in the Leitstand: the whole crew walks there and presses.
     moveTo(room, ben.playerId, 12, 2);
@@ -99,9 +103,12 @@ describe('Room', () => {
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
     expect(lastView(ben.messages).currentPuzzleIndex).toBe(1);
 
-    // Station 2 is wiring: Anna holds the Kontrolle door and reads beside it, Ben works the box.
+    // Station 2 is wiring: Anna holds the Kontrolle door and searches the locker beside it, Ben
+    // works the box.
     moveTo(room, anna.playerId, 7, 2);
     expect(lastView(ben.messages).map?.doors.find((d) => d.id === 'kontrolltuer')?.open).toBe(true);
+    room.act(anna.playerId, { kind: 'open-source', manualId: 'spind-leitstand' });
+    expect(lastView(anna.messages).presence.manualId).toBe('spind-leitstand');
     moveTo(room, ben.playerId, 2, 3);
     room.act(ben.playerId, { kind: 'interact' });
     const wiring = mission.puzzles[1];
@@ -336,8 +343,8 @@ describe('Room', () => {
     room.dispose();
   });
 
-  it('passes a request for a note at the book to the reducer on the server clock', () => {
-    // The book beside Anna's spawn covers the first station too, with a note for it.
+  it('passes a request for a note at the locker to the reducer on the server clock', () => {
+    // The locker beside Anna's spawn covers the first station too, with a note for it.
     const hinted = parseMission({
       ...JSON.parse(JSON.stringify(mission)),
       id: 'hinttest',
@@ -356,6 +363,7 @@ describe('Room', () => {
     const { room, anna, ben } = startedRoom(hinted);
     const deadline = lastView(anna.messages).deadlineAt ?? 0;
 
+    room.act(anna.playerId, { kind: 'open-source', manualId: 'spind-leitstand' });
     moveTo(room, ben.playerId, 12, 2);
     room.act(ben.playerId, { kind: 'interact' });
     expect(() => room.act(ben.playerId, { kind: 'request-hint' })).toThrow(/bei den Regeln/);
@@ -448,13 +456,14 @@ describe('Room', () => {
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
     moveTo(room, anna.playerId, 7, 2);
+    room.act(anna.playerId, { kind: 'open-source', manualId: 'spind-leitstand' });
     moveTo(room, ben.playerId, 2, 3);
     room.act(ben.playerId, { kind: 'interact' });
     const benView = lastView(ben.messages);
     const wires = benView.puzzle?.kind === 'wiring' ? benView.puzzle.wires : null;
     expect(wires).not.toBeNull();
     expect(JSON.stringify(anna.messages)).not.toContain(JSON.stringify(wires));
-    // The three-wire list of the book never reached Ben, who stands at the box.
+    // The three-wire list in the locker never reached Ben, who stands at the box.
     expect(JSON.stringify(anna.messages)).toContain('Mehr als ein schwarzes Kabel');
     expect(JSON.stringify(ben.messages)).not.toContain('Mehr als ein schwarzes Kabel');
     room.dispose();

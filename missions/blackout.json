@@ -1,17 +1,17 @@
 {
   "id": "blackout",
   "title": "Blackout im Labor",
-  "subtitle": "Der Klassiker für zwei: Handbuch gegen Schaltschrank, acht Minuten gegen die Dunkelheit.",
+  "subtitle": "Der Klassiker: verstreute Regeln, verschlossene Türen, ein Labor im Dunkeln.",
   "listOrder": 10,
-  "players": { "min": 2, "max": 2 },
+  "players": { "min": 2, "max": 3 },
   "story": {
-    "intro": "23:47 Uhr. Ein Knall, dann Dunkelheit — nur die Notbeleuchtung glimmt rot. Die Notversorgung hält acht Minuten. Einer von euch steht am Schaltschrank, der andere hat das Notfall-Handbuch gefunden. Ihr seht NICHT dasselbe. Redet — oder das Labor bleibt dunkel.",
-    "win": "Mit einem tiefen Brummen erwachen die Systeme, Licht flutet das Labor — und hinter euch fällt die Luke des Notausgangs ins Schloss. Draußen, zu zweit, mit laufenden Zentrifugen im Rücken. Ihr habt es geschafft.",
+    "intro": "23:47 Uhr. Ein Knall, dann Dunkelheit — nur die Notbeleuchtung glimmt rot. Ihr seid quer durchs Labor verstreut, die Regeln auch: Handbuch, Klemmbrett, Spind, Aktenschrank. Wer am Pult steht, sieht keine Regeln. Redet — oder das Labor bleibt dunkel.",
+    "win": "Mit einem tiefen Brummen erwachen die Systeme, Licht flutet das Labor — und hinter euch fällt die Luke des Notausgangs ins Schloss. Alle draußen, die Zentrifugen laufen wieder. Ihr habt es geschafft.",
     "lose": "Ein letztes Flackern, dann ist es still. Die Notversorgung ist erschöpft, die Proben sind verloren. Das Labor bleibt dunkel … bis zum nächsten Versuch."
   },
   "timeLimitSec": 540,
   "radio": {
-    "start": "Notstrom zuerst: Kasten im Maschinenraum, Regeln im Archiv.",
+    "start": "Notstrom zuerst: Kasten im Maschinenraum, Handbuch im Archiv.",
     "escape": "Licht ist da. Notausgang offen, Südostecke."
   },
   "map": {
@@ -32,10 +32,10 @@
     ],
     "spawns": [
       { "x": 3, "y": 2 },
-      { "x": 3, "y": 10 }
+      { "x": 3, "y": 10 },
+      { "x": 6, "y": 5 }
     ],
     "doors": [
-      { "id": "archivtuer", "x": 3, "y": 4, "opensBy": { "kind": "puzzle", "puzzleId": "notstrom" } },
       { "id": "maschinentuer", "x": 4, "y": 7, "opensBy": { "kind": "plate", "plateId": "flurplatte" } },
       { "id": "flurschott", "x": 9, "y": 6, "opensBy": { "kind": "puzzle", "puzzleId": "zugangscode" } },
       { "id": "servertuer", "x": 11, "y": 4, "opensBy": { "kind": "plate", "plateId": "serverplatte" } },
@@ -51,7 +51,7 @@
       { "puzzleId": "notstrom", "x": 1, "y": 9 },
       { "puzzleId": "zugangscode", "x": 8, "y": 5 },
       { "puzzleId": "subsysteme", "x": 13, "y": 5 },
-      { "puzzleId": "frequenz", "x": 9, "y": 11 },
+      { "puzzleId": "frequenz", "x": 11, "y": 11 },
       { "puzzleId": "reaktorstart", "x": 15, "y": 9 }
     ],
     "manuals": [
@@ -59,15 +59,30 @@
         "id": "buch-archiv",
         "kind": "book",
         "label": "HANDBUCH",
-        "puzzleIds": ["notstrom", "zugangscode"],
-        "spots": [{ "x": 2, "y": 1 }]
+        "puzzleIds": ["notstrom"],
+        "spots": [{ "x": 2, "y": 1 }, { "x": 1, "y": 2 }]
       },
       {
-        "id": "terminal-server",
-        "kind": "terminal",
-        "label": "TERMINAL",
-        "puzzleIds": ["subsysteme", "frequenz"],
-        "spots": [{ "x": 17, "y": 2 }]
+        "id": "klemmbrett",
+        "kind": "clipboard",
+        "label": "KLEMMBRETT",
+        "puzzleIds": ["zugangscode"],
+        "spots": [{ "x": 5, "y": 11 }, { "x": 1, "y": 5 }]
+      },
+      {
+        "id": "spind",
+        "kind": "locker",
+        "label": "SPIND",
+        "puzzleIds": ["subsysteme"],
+        "spots": [{ "x": 17, "y": 6 }, { "x": 17, "y": 2 }]
+      },
+      {
+        "id": "aktenschrank",
+        "kind": "cabinet",
+        "label": "AKTENSCHRANK",
+        "puzzleIds": ["frequenz"],
+        "spots": [{ "x": 7, "y": 8 }, { "x": 8, "y": 8 }, { "x": 7, "y": 10 }],
+        "needsKey": "schluessel"
       }
     ],
     "edgeworkSign": { "x": 4, "y": 3 },
@@ -75,6 +90,7 @@
       { "text": "ARCHIV", "x": 4, "y": 1 },
       { "text": "SERVERRAUM", "x": 12, "y": 1 },
       { "text": "FLUR", "x": 5, "y": 5 },
+      { "text": "FLUR", "x": 15, "y": 5 },
       { "text": "MASCHINENRAUM", "x": 3, "y": 8 },
       { "text": "LABOR", "x": 9, "y": 8 },
       { "text": "REAKTOR", "x": 15, "y": 8 }
@@ -88,7 +104,8 @@
         "y": 1,
         "deliverTo": { "x": 16, "y": 9 },
         "requiredFor": "reaktorstart"
-      }
+      },
+      { "id": "schluessel", "label": "SCHLÜSSEL", "x": 7, "y": 3 }
     ],
     "sabotage": {
       "mode": "relay",
@@ -139,7 +156,8 @@
       "hints": [
         "Farben von oben ansagen, nur die Liste zur Kabelzahl prüfen; die erste zutreffende Regel gilt."
       ],
-      "onSolved": "Archiv offen. Flurplatte öffnet den Maschinenraum."
+      "lights": ["MASCHINENRAUM"],
+      "onSolved": "Notstrom steht. Tastenfeld im Flur, Tabelle am Klemmbrett."
     },
     {
       "type": "keypad",
@@ -148,6 +166,7 @@
       "hints": [
         "Alle vier Zeichen beschreiben; die eine Spalte mit allen vier gibt die Reihenfolge, von oben."
       ],
+      "lights": ["FLUR"],
       "onSolved": "Schott offen. Drohne wach – Kameraplatte vor dem Serverraum."
     },
     {
@@ -157,7 +176,8 @@
       "hints": [
         "Schalter von links ansagen: LED, Markierung, Stern. Erst alle sechs stellen, dann einmal PRÜFEN."
       ],
-      "onSolved": "Labortür offen. Zweite Drohne im Labor."
+      "lights": ["SERVERRAUM"],
+      "onSolved": "Labortür offen, Drohne drin. Aktenschrank braucht den Schlüssel."
     },
     {
       "type": "simon",
@@ -167,15 +187,14 @@
       "hints": [
         "Tabelle nach Vokal in der Laborkennung, Zeile nach Alarmstand; jede Stufe ganz übersetzen."
       ],
+      "lights": ["LABOR"],
       "onSolved": "Reaktor offen. Ohne Ersatzsicherung bleibt er tot."
     },
     {
       "type": "button-sync",
       "id": "reaktorstart",
       "title": "Reaktor-Neustart",
-      "hints": [
-        "Beide an den Reaktor, laut einzählen und auf JETZT gleichzeitig drücken."
-      ],
+      "lights": ["REAKTOR"],
       "windowMs": 2000
     }
   ]
