@@ -486,13 +486,13 @@ async function solveKeypad(clients: Clients, benJoined: { code: string; playerId
 }
 
 async function solveSwitches(clients: Clients): Promise<void> {
-  const annaSw = await clients.anleitung.expectView('sees the switch targets', (v) =>
-    v.puzzle?.kind === 'switches' && v.puzzle.target !== null);
-  await clients.steuerpult.expectView('sees the switch panel', (v) =>
+  await clients.anleitung.expectView('sees the switch rules but not the bank', (v) =>
+    v.puzzle?.kind === 'switches' && v.puzzle.switches === null && v.puzzle.manual !== null);
+  const benSw = await clients.steuerpult.expectView('sees the switch bank', (v) =>
     v.puzzle?.kind === 'switches' && v.puzzle.switches !== null);
-  const target = annaSw.puzzle?.kind === 'switches' ? (annaSw.puzzle.target ?? []) : [];
-  assert(!clients.steuerpult.raw.some((r) => r.includes(JSON.stringify(target))),
-    'switch targets never reached the panel client');
+  const bank = benSw.puzzle?.kind === 'switches' ? (benSw.puzzle.switches ?? []) : [];
+  assert(!clients.anleitung.raw.some((r) => r.includes(JSON.stringify(bank))),
+    'the switch bank never reached the manual client');
   await solveStation(clients, 2);
 }
 

@@ -1,0 +1,136 @@
+/* --- switches: six toggles in a row, features drawn above each lever and named below ------ */
+
+.switches-intro {
+  margin: 0 0 12px;
+}
+
+.switches-bank {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.switches-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px 2px;
+  border-radius: 10px;
+  background: #0b1117;
+  font-family: var(--mono);
+}
+
+.switches-num {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.switches-led {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #1c262f;
+  border: 1px solid var(--line-2);
+}
+
+.switches-led.on {
+  background: #fde68a;
+  border-color: #fde68a;
+  box-shadow: 0 0 10px rgba(253, 230, 138, 0.8);
+}
+
+.switches-bands {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  width: 28px;
+  height: 14px;
+}
+
+.switches-bands:empty {
+  border: 1px dashed var(--line-2);
+  border-radius: 3px;
+}
+
+.switches-band {
+  flex: 1;
+  border-radius: 2px;
+}
+
+.switches-band.red {
+  background: #ef4444;
+}
+
+.switches-band.blue {
+  background: #3b82f6;
+}
+
+.switches-star {
+  height: 18px;
+  font-size: 16px;
+  line-height: 18px;
+}
+
+.switches-lever {
+  position: relative;
+  width: 22px;
+  height: 46px;
+  border-radius: 11px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+}
+
+.switches-knob {
+  position: absolute;
+  left: 2px;
+  bottom: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: bottom 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.switches-up .switches-lever {
+  border-color: var(--accent-dark);
+}
+
+.switches-up .switches-knob {
+  bottom: 25px;
+  background: var(--accent);
+  box-shadow: 0 0 9px var(--accent-glow);
+}
+
+.switches-pos {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+
+.switches-up .switches-pos {
+  color: var(--accent);
+}
+
+.switches-words {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 10px;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.switches-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 14px;
+  font-family: var(--mono);
+  font-size: 13px;
+}

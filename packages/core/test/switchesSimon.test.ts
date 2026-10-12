@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { applyAction, GameError, initialState, parseMission, viewFor } from '../src/index.js';
-import type { Action, GameState, Mission, PlayerView } from '../src/index.js';
+import { applyAction, initialState, moduleFor, parseMission, viewFor } from '../src/index.js';
+import type { Action, GameState, Mission } from '../src/index.js';
 
 const blackoutRaw: unknown = JSON.parse(
   readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8'),
@@ -41,14 +41,6 @@ function started(seed = 42): GameState {
 const pairMatches = (w: { left: string; right: string }, [a, b]: readonly [string, string]) =>
   (w.left === a && w.right === b) || (w.left === b && w.right === a);
 
-/** PRÜFEN on the switch bank. */
-const commit = (playerId: string, at: number): Action => ({
-  type: 'puzzle-input',
-  playerId,
-  at,
-  input: { commit: true },
-});
-
 /** Solve puzzles 0 (wiring) and 1 (keypad) to arrive at the switches. */
 function atSwitches(seed = 42): GameState {
   let state = started(seed);
@@ -86,98 +78,27 @@ function atSwitches(seed = 42): GameState {
   return state;
 }
 
-function switchesViews(state: GameState): { anna: PlayerView; ben: PlayerView } {
-  return { anna: viewFor(state, 'p1'), ben: viewFor(state, 'p2') };
-}
-
-describe('switches puzzle', () => {
-  it('shows the panel only to the panel role and the target only to the target role', () => {
-    const { anna, ben } = switchesViews(atSwitches());
-    if (anna.puzzle?.kind !== 'switches' || ben.puzzle?.kind !== 'switches') {
-      throw new Error('expected switches views');
-    }
-    expect(anna.puzzle.switches).toBeNull();
-    expect(anna.puzzle.target).toHaveLength(3);
-    expect(ben.puzzle.switches).toHaveLength(6);
-    expect(ben.puzzle.target).toBeNull();
-    const targets = anna.puzzle.target ?? [];
-    expect(JSON.stringify(ben.puzzle)).not.toContain(JSON.stringify(targets));
-  });
-
-  it('toggling is free, committing the right pattern solves', () => {
-    let state = atSwitches();
-    const target = (() => {
-      const v = viewFor(state, 'p1').puzzle;
-      return v?.kind === 'switches' ? (v.target ?? []) : [];
-    })();
-    const panel = (() => {
-      const v = viewFor(state, 'p2').puzzle;
-      return v?.kind === 'switches' ? (v.switches ?? []) : [];
-    })();
-    for (const [i, sw] of panel.entries()) {
-      if (target.includes(sw.symbol)) {
-        state = applyAction(state, {
-          type: 'puzzle-input',
-          playerId: 'p2',
-          at: T0 + 3000,
-          input: { switchIndex: i },
-        });
-      }
-    }
-    expect(state.penaltySeq).toBe(0);
-    state = applyAction(state, commit('p2', T0 + 4000));
-    expect(state.currentPuzzleIndex).toBe(3);
-    expect(state.penaltySeq).toBe(0);
-  });
-
-  it('committing a wrong pattern costs time and keeps the puzzle running', () => {
-    const state = atSwitches();
-    const before = state.deadlineAt ?? 0;
-    const after = applyAction(state, commit('p2', T0 + 3000));
-    expect(after.phase).toBe('playing');
-    expect(after.currentPuzzleIndex).toBe(2);
-    expect(after.deadlineAt).toBe(before - 20_000);
-    expect(after.penaltySeq).toBe(1);
-  });
-
-  it('only the panel role may toggle or commit', () => {
-    const state = atSwitches();
-    expect(() =>
-      applyAction(state, {
-        type: 'puzzle-input',
-        playerId: 'p1',
-        at: T0 + 1,
-        input: { switchIndex: 0 },
-      }),
-    ).toThrow(GameError);
-    expect(() =>
-      applyAction(state, commit('p1', T0 + 1)),
-    ).toThrow(GameError);
-  });
-});
-
 describe('simon puzzle', () => {
+  /** The switch bank's rules read the edgework, so its solver plays it from the two views. */
   function atSimon(seed = 42): GameState {
     let state = atSwitches(seed);
-    const target = (() => {
-      const v = viewFor(state, 'p1').puzzle;
-      return v?.kind === 'switches' ? (v.target ?? []) : [];
-    })();
-    const panel = (() => {
-      const v = viewFor(state, 'p2').puzzle;
-      return v?.kind === 'switches' ? (v.switches ?? []) : [];
-    })();
-    for (const [i, sw] of panel.entries()) {
-      if (target.includes(sw.symbol)) {
-        state = applyAction(state, {
-          type: 'puzzle-input',
-          playerId: 'p2',
-          at: T0 + 5000,
-          input: { switchIndex: i },
-        });
+    const def = blackout.puzzles[2];
+    if (def?.type !== 'switches') {
+      throw new Error('unexpected blackout puzzle order');
+    }
+    for (let round = 1; state.currentPuzzleIndex === 2 && round <= 10; round++) {
+      const anna = viewFor(state, 'p1');
+      const ben = viewFor(state, 'p2');
+      if (anna.puzzle === null || ben.puzzle === null) {
+        throw new Error('expected the switch bank to be open');
+      }
+      const views = { anleitung: anna.puzzle, steuerpult: ben.puzzle };
+      for (const { roleId, input } of moduleFor(def.type).solve(def, views, state.edgework)) {
+        const playerId = roleId === 'anleitung' ? 'p1' : 'p2';
+        state = applyAction(state, { type: 'puzzle-input', playerId, at: T0 + 5000, input });
       }
     }
-    return applyAction(state, commit('p2', T0 + 6000));
+    return state;
   }
 
   it('splits sequence+buttons and legend across the two roles', () => {

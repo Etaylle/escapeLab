@@ -1,75 +1,123 @@
 import { z } from 'zod';
+import { indicatorLit, serialLastDigitIsOdd, type Edgework } from '../edgework.js';
 import { fail } from '../errors.js';
-import { shuffle } from '../rng.js';
+import type { Rng } from '../rng.js';
 import { commonDefShape, type PuzzleModule } from './module.js';
 
 /**
- * switches puzzle: the operator sees a bank of toggle switches (shuffled per
- * game); the manual role sees which symbols must be ON (chosen per game).
- * Toggling is free, committing a wrong configuration costs time.
+ * Switch bank (Keep Talking's complicated wires as toggles): the operator
+ * sees six switches, each with an LED, a colour marking and maybe a star.
+ * The manual maps every combination of those features to a letter; some
+ * letters ask the edgework. All switches start down, toggling is free, and
+ * PRÜFEN with any switch in the wrong position costs time.
  */
-const defSchema = z
-  .object({
-    type: z.literal('switches'),
-    ...commonDefShape,
-    operatorRoleId: z.string().min(1),
-    manualRoleId: z.string().min(1),
-    symbols: z.array(z.string().min(1)).min(4).max(10),
-    onCount: z.number().int().positive(),
-    penaltySec: z.number().int().positive().default(20),
-  })
-  .superRefine((def, ctx) => {
-    if (new Set(def.symbols).size !== def.symbols.length) {
-      ctx.addIssue({ code: 'custom', message: `puzzle "${def.id}": symbols not unique` });
-    }
-    if (def.onCount >= def.symbols.length) {
-      ctx.addIssue({
-        code: 'custom',
-        message: `puzzle "${def.id}": onCount must be below the number of switches`,
-      });
-    }
-  });
+const defSchema = z.object({
+  type: z.literal('switches'),
+  ...commonDefShape,
+  operatorRoleId: z.string().min(1),
+  manualRoleId: z.string().min(1),
+  penaltySec: z.number().int().positive().default(20),
+});
 export type SwitchesDef = z.infer<typeof defSchema>;
+
+const SWITCH_COUNT = 6;
+
+/** One switch of the bank: its features, rolled per run, and its lever. */
+export interface Switch {
+  led: boolean;
+  red: boolean;
+  blue: boolean;
+  star: boolean;
+  up: boolean;
+}
 
 export interface SwitchesState {
   type: 'switches';
-  /** switch symbols in panel order (shuffled per game) */
-  order: string[];
-  on: boolean[];
-  /** symbols that must be ON (chosen per game) */
-  target: string[];
-  lastResult: 'wrong' | null;
+  /** left to right */
+  switches: Switch[];
+  /** PRÜFEN presses that failed so far */
+  attempts: number;
 }
 
 const inputSchema = z.union([
-  z.strictObject({ switchIndex: z.number().int().nonnegative() }),
-  z.strictObject({ commit: z.literal(true) }),
+  z.strictObject({ switchIndex: z.number().int().min(0).max(SWITCH_COUNT - 1) }),
+  z.strictObject({ check: z.literal(true) }),
 ]);
 export type SwitchesInput = z.infer<typeof inputSchema>;
 
 export interface SwitchesView {
   kind: 'switches';
-  /** switch bank — only the operator gets it */
-  switches: { symbol: string; on: boolean }[] | null;
-  /** symbols that must be ON — only the manual role gets it */
-  target: string[] | null;
-  targetCount: number;
-  lastResult: 'wrong' | null;
+  /** the bank, left to right — only the operator gets it */
+  switches: Switch[] | null;
+  attempts: number;
 }
 
-function toggle(state: SwitchesState, index: number): SwitchesState {
-  if (index < 0 || index >= state.on.length) {
-    return state;
+type Letter = 'U' | 'N' | 'G' | 'Z' | 'L';
+type Marking = 'keine' | 'rot' | 'blau' | 'beides';
+type Row = readonly [led: boolean, marking: Marking, star: boolean, letter: Letter];
+
+/** Whether a switch with this letter has to end up, in this run's lab. */
+const MUST_BE_UP: Record<Letter, (edgework: Edgework) => boolean> = {
+  U: () => true,
+  N: () => false,
+  G: (edgework) => !serialLastDigitIsOdd(edgework),
+  Z: (edgework) => edgework.cells >= 2,
+  L: (edgework) => indicatorLit(edgework, 'SIG'),
+};
+
+/** The printed table, row for row: every combination of the features exactly once. */
+const TABLE: readonly Row[] = [
+  [false, 'keine', false, 'N'],
+  [false, 'keine', true, 'U'],
+  [false, 'rot', false, 'U'],
+  [false, 'rot', true, 'G'],
+  [false, 'blau', false, 'Z'],
+  [false, 'blau', true, 'N'],
+  [false, 'beides', false, 'L'],
+  [false, 'beides', true, 'Z'],
+  [true, 'keine', false, 'G'],
+  [true, 'keine', true, 'L'],
+  [true, 'rot', false, 'Z'],
+  [true, 'rot', true, 'U'],
+  [true, 'blau', false, 'L'],
+  [true, 'blau', true, 'G'],
+  [true, 'beides', false, 'N'],
+  [true, 'beides', true, 'U'],
+];
+
+function markingOf(sw: Switch): Marking {
+  if (sw.red && sw.blue) {
+    return 'beides';
   }
-  const on = state.on.map((v, i) => (i === index ? !v : v));
-  return { ...state, on, lastResult: null };
+  if (sw.red) {
+    return 'rot';
+  }
+  return sw.blue ? 'blau' : 'keine';
 }
 
-function isCorrect(state: SwitchesState): boolean {
-  const onSymbols = state.order.filter((_, i) => state.on[i] === true).sort();
-  return (
-    onSymbols.length === state.target.length && onSymbols.every((s, i) => s === state.target[i])
-  );
+function mustBeUp(sw: Switch, edgework: Edgework): boolean {
+  const marking = markingOf(sw);
+  const row = TABLE.find(([led, m, star]) => led === sw.led && m === marking && star === sw.star);
+  if (row === undefined) {
+    throw new Error(`switches: the table has no row for ${JSON.stringify(sw)}`);
+  }
+  return MUST_BE_UP[row[3]](edgework);
+}
+
+/** A switch in the down position with the features of a random row out of `rows`. */
+function rollSwitch(rows: readonly Row[], rng: Rng): Switch {
+  const row = rows[Math.floor(rng() * rows.length)];
+  if (row === undefined) {
+    throw new Error('switches: no table row to roll a switch from');
+  }
+  const [led, marking, star] = row;
+  return {
+    led,
+    red: marking === 'rot' || marking === 'beides',
+    blue: marking === 'blau' || marking === 'beides',
+    star,
+    up: false,
+  };
 }
 
 export const switchesModule: PuzzleModule<
@@ -79,86 +127,118 @@ export const switchesModule: PuzzleModule<
   SwitchesView
 > = {
   type: 'switches',
-  usesEdgework: false,
+  usesEdgework: true,
   defSchema,
   inputSchema,
 
-  init(def, rng) {
-    const order = shuffle(def.symbols, rng);
-    const target = shuffle(def.symbols, rng).slice(0, def.onCount).sort();
-    return { type: 'switches', order, on: order.map(() => false), target, lastResult: null };
+  init(_def, rng, { edgework }) {
+    const switches = Array.from({ length: SWITCH_COUNT }, () => rollSwitch(TABLE, rng));
+    // All down or all up could be guessed without the manual. The table has
+    // U and N rows, so a switch with the other outcome always exists.
+    const ups = switches.filter((sw) => mustBeUp(sw, edgework)).length;
+    if (ups === 0 || ups === SWITCH_COUNT) {
+      const other = TABLE.filter(([, , , letter]) => MUST_BE_UP[letter](edgework) === (ups === 0));
+      switches[Math.floor(rng() * SWITCH_COUNT)] = rollSwitch(other, rng);
+    }
+    return { type: 'switches', switches, attempts: 0 };
   },
 
-  apply(def, state, input, roleId) {
-    const commit = 'commit' in input;
+  apply(def, state, input, roleId, { edgework }) {
+    const check = 'check' in input;
     if (roleId !== def.operatorRoleId) {
       fail(
-        commit
+        check
           ? 'Nur die Rolle an der Schalterbank kann prüfen.'
           : 'Nur die Rolle an der Schalterbank kann schalten.',
       );
     }
-    if (!commit) {
-      return { state: toggle(state, input.switchIndex), solved: false, penalty: null };
+    if (!check) {
+      const switches = state.switches.map((sw, i) =>
+        i === input.switchIndex ? { ...sw, up: !sw.up } : sw,
+      );
+      return { state: { ...state, switches }, solved: false, penalty: null };
     }
-    return isCorrect(state)
-      ? { state: { ...state, lastResult: null }, solved: true, penalty: null }
-      : {
-          state: { ...state, lastResult: 'wrong' },
-          solved: false,
-          penalty: 'Falsche Schalterkombination',
-        };
+    if (state.switches.every((sw) => sw.up === mustBeUp(sw, edgework))) {
+      return { state, solved: true, penalty: null };
+    }
+    return {
+      state: { ...state, attempts: state.attempts + 1 },
+      solved: false,
+      penalty: 'Falsche Schalterstellung',
+    };
   },
 
   view(def, state, roleId) {
-    const isPanel = roleId === def.operatorRoleId;
     return {
       kind: 'switches',
-      switches: isPanel
-        ? state.order.map((symbol, i) => ({ symbol, on: state.on[i] === true }))
-        : null,
-      target: roleId === def.manualRoleId ? state.target : null,
-      targetCount: def.onCount,
-      lastResult: isPanel ? state.lastResult : null,
+      switches: roleId === def.operatorRoleId ? state.switches.map((sw) => ({ ...sw })) : null,
+      attempts: state.attempts,
     };
   },
 
   manual(def) {
     return [
       {
-        heading: 'Schalterbank',
+        heading: 'Subsysteme',
         blocks: [
           {
             kind: 'p',
             text:
-              `${def.symbols.length} Kippschalter mit je einem Zeichen. Genau ${def.onCount} ` +
-              'gehören nach OBEN, alle anderen nach UNTEN.',
+              'Sechs Kippschalter, von links nach rechts 1 bis 6, stehen anfangs alle UNTEN. ' +
+              'Jeder hat drei Merkmale: LED (an oder aus), Markierung (rot, blau, beides oder ' +
+              'keine), Stern (ja oder nein). Die Tabelle gibt zu jeder Kombination einen ' +
+              'Buchstaben.',
+          },
+          {
+            kind: 'table',
+            head: ['LED', 'Markierung', 'Stern', 'Buchstabe'],
+            rows: TABLE.map(([led, marking, star, letter]) => [
+              led ? 'an' : 'aus',
+              marking,
+              star ? 'ja' : 'nein',
+              letter,
+            ]),
           },
           {
             kind: 'rules',
             items: [
-              'Welche nach oben gehören, zeigt die Sollwertanzeige. ' +
-                'Sie wechselt mit jedem Einsatz.',
-              'Umlegen ist gefahrlos.',
-              `PRÜFEN mit falscher Stellung: Alarm, −${def.penaltySec} s.`,
+              'U: umlegen.',
+              'N: nicht umlegen.',
+              'G: umlegen, wenn die Laborkennung auf eine gerade Ziffer endet (0, 2, 4, 6, 8).',
+              'Z: umlegen, wenn mindestens zwei Notstromzellen vorhanden sind.',
+              'L: umlegen, wenn die Kontrollleuchte SIG vorhanden ist und leuchtet.',
+              'Sonst: nicht umlegen.',
             ],
+          },
+          {
+            kind: 'p',
+            text:
+              'Endstellung: umlegen = OBEN, nicht umlegen = UNTEN. Erst alle sechs Schalter ' +
+              'ansagen und stellen, dann einmal PRÜFEN. Umlegen ist gefahrlos. PRÜFEN mit ' +
+              `falscher Stellung: Alarm, −${def.penaltySec} s; die Schalter bleiben, wie sie ` +
+              'stehen.',
           },
         ],
       },
     ];
   },
 
-  solve(def, views) {
-    const panel = views[def.operatorRoleId]?.switches;
-    const target = views[def.manualRoleId]?.target;
-    if (panel == null || target == null) {
-      throw new Error(`switches "${def.id}": solving needs the panel and the target views`);
+  solve(def, views, edgework) {
+    if (edgework === null) {
+      throw new Error(
+        `switches "${def.id}": the rules read the edgework, but no role sees it — ` +
+          'give the operator role "seesEdgework": true',
+      );
     }
-    const switchIndex = panel.findIndex((sw) => sw.on !== target.includes(sw.symbol));
+    const bank = views[def.operatorRoleId]?.switches;
+    if (bank == null) {
+      throw new Error(`switches "${def.id}": solving needs the operator's view of the bank`);
+    }
+    const switchIndex = bank.findIndex((sw) => sw.up !== mustBeUp(sw, edgework));
     return [
       {
         roleId: def.operatorRoleId,
-        input: switchIndex < 0 ? { commit: true } : { switchIndex },
+        input: switchIndex < 0 ? { check: true } : { switchIndex },
       },
     ];
   },

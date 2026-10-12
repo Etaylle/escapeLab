@@ -126,7 +126,8 @@
     {
       "id": "steuerpult",
       "name": "Steuerpult",
-      "description": "Kabel, Schalter, Tasten — alles deins. Blind. Du bist die Hände eines Teams mit geteiltem Gehirn."
+      "description": "Kabel, Schalter, Tasten — alles deins. Blind. Du bist die Hände eines Teams mit geteiltem Gehirn.",
+      "seesEdgework": true
     }
   ],
   "puzzles": [
@@ -161,24 +162,7 @@
       "title": "Kühlkreislauf",
       "prompt": "Sieben Ventilschalter regeln die Kühlung. Nur die Diagnose-Konsole zeigt, welche Ventile offen sein müssen.",
       "operatorRoleId": "steuerpult",
-      "manualRoleId": "diagnose",
-      "symbols": ["⌁", "✦", "◉", "⨳", "⌬", "♁", "☍"],
-      "onCount": 4,
-      "penaltySec": 20,
-      "infos": [
-        {
-          "roleId": "anleitung",
-          "text": "Handbuch §3: Die Sollwerte des Kühlkreislaufs stehen NUR auf der Diagnose-Konsole. Deine Aufgabe: den Überblick behalten und die Prüfung erst freigeben, wenn beide sicher sind."
-        },
-        {
-          "roleId": "diagnose",
-          "text": "Dein Display zeigt die Ventile, die OFFEN (Schalter OBEN) sein müssen. Diktiere sie dem Steuerpult — Zeichen für Zeichen."
-        },
-        {
-          "roleId": "steuerpult",
-          "text": "Schalten ist gefahrlos, PRÜFEN mit falscher Kombination kostet 20 Sekunden. Wiederhole jede Ansage, bevor du kippst."
-        }
-      ]
+      "manualRoleId": "diagnose"
     },
     {
       "type": "keypad",
