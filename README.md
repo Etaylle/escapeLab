@@ -5,29 +5,30 @@ steht — gelöst wird nur gemeinsam, per Stimme. Missionen sind reine Daten (`m
 neue Missionen brauchen keinen Code.
 
 **Rätseltypen:** Kabel trennen (`wiring`), Symbol-Keypad (`keypad`), Schalterbank mit Prüf-Commit
-(`switches`), Frequenz-Abgleich mit Farblegende (`simon`), unsichtbares Labyrinth (`maze`),
-Synchron-Knöpfe (`button-sync`).
+(`switches`), Speicherbank (`memory`), Frequenz-Abgleich mit Farblegende (`simon`), Morsefunk
+(`morse`), der Knopf (`button`), unsichtbares Labyrinth (`maze`), Synchron-Knöpfe (`button-sync`).
 Layouts/Codes sind pro Partie zufällig (seeded, deterministisch replaybar), Fehler kosten
 Countdown-Zeit. **Missionen:** Tutorial (2 Spieler), Blackout im Labor (2–3 Spieler, 5 Rätsel),
-Kettenreaktion (3 Spieler, Wissen auf drei Rollen verteilt) und Doppelschicht (4 Spieler in
-**zwei getrennten Flügeln**, die sich bis zum Finale nie erreichen können — jedes einzelne Rätsel
-braucht Wissen aus beiden Hälften, und erst der Not-Aus entriegelt die Schleuse in der Mitte).
+Kettenreaktion (3 Spieler, jeder startet in einem anderen verschlossenen Raum und kommt nur mit
+Hilfe heraus) und Doppelschicht (4 Spieler in **zwei getrennten Flügeln** — die Regeln jeder
+Station liegen im anderen Flügel, und erst der Druckausgleich öffnet die Schleuse dazwischen).
 
 **Beitreten:** Auf der Startseite steht eine Liste aller **offenen Runden** mit Kartenvorschau,
 Mission, Schwierigkeit, wer schon wartet und wie viele Plätze frei sind — ein Klick auf *Beitreten*
 genügt, niemand muss einen Code weitergeben. Laufende Runden erscheinen ebenfalls, dort führt
 der Knopf zum Zuschauen. Ein Code-Feld bleibt für direkte Verabredungen.
 
-**Ablauf einer Partie:** Lobby (Figur + Farbe wählen, **bereitmelden** — der Host kann erst
-starten, wenn so viele da sind, wie die Mission braucht, und alle bestätigt haben; jede Änderung
-an Mission oder Besetzung setzt die Bestätigungen zurück; die Startplätze werden beim Start
-verlost) → Briefing-Countdown →
+**Ablauf einer Partie:** Lobby (Farbe wählen, **bereitmelden** — der Host kann erst starten,
+wenn so viele da sind, wie die Mission braucht, und alle bestätigt haben; jede Änderung an
+Mission oder Besetzung setzt die Bestätigungen zurück; die Startplätze werden beim Start
+verlost) → Briefing-Countdown mit dem eigenen Startraum →
 Stationen in Reihenfolge finden und lösen → wenn alle gelöst sind, öffnet sich der **Notausgang**
 und das ganze Team muss ihn gemeinsam erreichen, bevor die Zeit abläuft → Endbildschirm mit
 Statistiken und persönlicher Bestzeit. **Hilfsmittel:** Klick auf die Welt setzt einen **Ping**
 für alle (farbige Ringe, Pfeil wenn außerhalb des Bildes), `M` blendet die **Minikarte** ein,
-`C` öffnet den **Schnellchat** (acht feste Sätze, Tasten `1`–`8`, erscheinen als Sprechblase
-über der Figur) — damit funktioniert das Spiel auch ohne Voice-Chat.
+`N` den eigenen **Notizblock** (bleibt für den Raum gespeichert), `C` öffnet den **Schnellchat**
+(acht feste Sätze, Tasten `1`–`8`, erscheinen als Sprechblase über der Figur) — damit
+funktioniert das Spiel auch ohne Voice-Chat.
 
 **Tragen:** Manche Stationen bleiben tot, bis ein Gegenstand bei ihnen eingesetzt wurde — die
 Ersatzsicherung liegt im Archiv und muss quer durchs Labor in den Reaktor —, und manche Regeln
@@ -38,9 +39,12 @@ sodass Übergaben möglich sind.
 
 **Orte statt Rollen:** Das Pult einer offenen Station sieht und bedient nur, wer davorsteht
 (`E` *Bedienen*, `Esc` tritt zurück — die Station behält ihren Zustand). Die Regeln liegen
-anderswo im Labor an einem Buch, Terminal oder einer Wandtafel (`E` *Lesen*; beim Labyrinth
-zeigt das Terminal auch den Wandplan). Die Laborkennung hängt als Schild im Labor: Wer daran
-vorbeikommt, hat sie ab dann in der Leiste.
+anderswo — Buch, Terminal, Tafel, Klemmbrett, Spind, Aktenschrank —, manche je Runde woanders.
+Auf der Karte erscheint eine Quelle erst, wenn jemand nahe kommt; Spinde werden durchsucht,
+Schränke mit ihrem Schlüssel aufgeschlossen. Gelesen wird Seite für Seite (`E` *Lesen*; beim
+Labyrinth samt Wandplan), am Rand steht auf Wunsch eine **Notiz der letzten Crew** (kostet Zeit).
+Die Laborkennung hängt als Schild im Labor: Wer daran vorbeikommt, hat sie ab dann in der Leiste
+und übernimmt sie per Knopf in den Notizblock.
 
 **Schwierigkeit:** Der Host wählt in der Lobby zwischen *Entspannt*, *Normal* und *Hart* — das
 skaliert Zeitbudget, alle Zeitstrafen, Drohnentempo und -reichweite sowie Häufigkeit und Dauer
@@ -104,14 +108,15 @@ pnpm --filter @escapelab/server smoke   # Ende-zu-Ende über echte WebSockets
 ```
 
 **Zuschauen:** Wer den Raumcode eingibt und auf *Zuschauen* klickt, sieht das ganze Labor ohne
-Dunkelheit, beide Figuren, die Drohnenkegel — **und die offene Station von allen Seiten**: Pult,
+Dunkelheit, alle Figuren, die Drohnenkegel — **und die offene Station von allen Seiten**: Pult,
 Regeln und Wandplan zugleich, dazu für jede Figur, ob sie am Pult steht, liest oder die Kennung
 gesehen hat. Genau das macht das Zusehen unterhaltsam: Das Publikum sieht beide Hälften und
 merkt vor den Spielenden, wo die Ansage schiefgeht. Zuschauer können nichts auslösen.
 
-**Nach der Runde:** Der Endbildschirm zeigt ein Einsatzprotokoll (wann welche Station fiel, jeder
-Alarm mit Grund und Kosten, Notfälle, eingesetzte Teile) sowie einen Rang von S bis C aus Alarmen
-und Restzeit. Dazu führt dieses Gerät eine kleine Historie je Mission (Läufe, geschaffte Läufe,
+**Nach der Runde:** Der Endbildschirm zeigt einen Rang von S bis C aus Alarmen und Restzeit, die
+**Beiträge** jedes Crewmitglieds (bedient, gelesen, gefunden, geliefert, Alarme, Notizen) und ein
+Einsatzprotokoll (wann welche Station fiel, jeder Alarm mit Grund und Kosten, Notfälle, eingesetzte
+Teile). Dazu führt dieses Gerät eine kleine Historie je Mission (Läufe, geschaffte Läufe,
 Bestzeit, bester Rang). **Nochmal:** Alle bestätigen gleichberechtigt auf dem Endbildschirm, und sobald das letzte Ja
 da ist, startet derselbe Einsatz von selbst — ohne Umweg über die Lobby und ohne dass jemand
 der Startknopf-Mensch sein muss. Fehlt jemand (Verbindung weg), wartet der Neustart auf die

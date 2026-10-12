@@ -5,7 +5,7 @@
   "listOrder": 20,
   "players": { "min": 2, "max": 2 },
   "story": {
-    "intro": "Übungslauf im Schulungslabor. Laufen mit WASD oder den Pfeiltasten, E an einer leuchtenden Station oder am Spind. Ein Pult zeigt nur, wer davorsteht; die Regeln liegen im Spind. Klick auf die Karte setzt einen Ping, M zeigt die Minikarte. Redet miteinander!",
+    "intro": "Übungslauf im Schulungslabor. Laufen mit WASD oder den Pfeiltasten, E an einer leuchtenden Station oder am Spind. Ein Pult sieht nur, wer davorsteht; die Regeln liegen im Spind. Klick auf die Karte setzt einen Ping, M zeigt die Minikarte. Redet miteinander!",
     "win": "Alle Systeme online, beide draußen. Das war der Übungslauf — jetzt seid ihr bereit für den echten Blackout.",
     "lose": "Die Notversorgung ist ausgefallen. Halb so wild, es war nur die Übung … noch mal von vorn."
   },
