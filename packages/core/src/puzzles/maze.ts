@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Rng } from '../rng.js';
 import { commonDefShape, type PuzzleModule } from './module.js';
+import { deviceFigure, penaltyLine, workedExample } from './printed.js';
 
 /**
  * Invisible maze: the operator (navigator) at the station sees the marker
@@ -25,6 +26,13 @@ export const MAZE_DIRS = [
 ] as const;
 
 const OPPOSITE = [2, 3, 0, 1] as const;
+
+/** The worked example: one step, on cells that every grid from 4 × 4 up has. */
+const EXAMPLE: readonly string[] = [
+  'Gesehen am Navigationspult: Marker auf B2, Ziel auf D4.',
+  'Schaltplan: von B2 nach rechts eine Wand, nach unten frei.',
+  'Ein Schritt nach unten: Marker auf B3.',
+];
 
 export interface MazeState {
   type: 'maze';
@@ -196,22 +204,26 @@ export const mazeModule: PuzzleModule<MazeDef, MazeState, MazeInput, MazeView> =
       {
         heading: 'Leitungsnetz',
         blocks: [
+          deviceFigure('maze', 'Navigationspult mit Raster'),
           {
             kind: 'p',
             text:
-              `Raster aus ${def.size} × ${def.size} Zellen: Spalten A–${lastColumn}, ` +
-              `Zeilen 1–${def.size}. Der Marker muss ins Ziel.`,
+              `Ein Raster aus ${def.size} × ${def.size} Zellen, Spalten A bis ${lastColumn} ` +
+              `von links, Zeilen 1 bis ${def.size} von oben; eine Zelle heißt nach Spalte und ` +
+              'Zeile, etwa C4. Das Navigationspult zeigt den Marker und das Ziel, der ' +
+              'Schaltplan die Wände und das Ziel. Der Marker muss ins Ziel, Schritt für ' +
+              'Schritt nach oben, unten, links oder rechts.',
           },
           {
             kind: 'rules',
             items: [
-              'Die Wände zeigt nur der Schaltplan, den Marker nur das Navigationspult. ' +
-                'Das Ziel sehen beide.',
-              'Zellen als Spalte und Zeile ansagen, z. B. „C4".',
-              'Ein Schritt geht nach oben, unten, links oder rechts.',
-              `Gegen eine Wand: Alarm, −${def.penaltySec} s. Der Marker bleibt stehen.`,
+              'Wenn zwischen Marker und Nachbarzelle keine Wand steht, rückt der Marker mit ' +
+                'einem Schritt dorthin.',
+              'Andernfalls bleibt der Marker stehen; der Schritt ist ein Fehlgriff.',
             ],
           },
+          workedExample(EXAMPLE),
+          penaltyLine(def.penaltySec),
         ],
       },
     ];

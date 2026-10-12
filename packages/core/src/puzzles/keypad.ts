@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { shuffle } from '../rng.js';
 import { commonDefShape, type PuzzleModule } from './module.js';
+import { deviceFigure, penaltyLine, workedExample } from './printed.js';
 
 /**
  * Symbol keypad: four glyphs on a 2×2 keypad, all from one column of a fixed
@@ -27,6 +28,16 @@ export const KEYPAD_COLUMNS: readonly (readonly string[])[] = [
 ];
 
 const KEY_COUNT = 4;
+
+/**
+ * The worked example: four keys from the third column, in grid order, and
+ * the order that column gives them. No other column holds all four.
+ */
+const EXAMPLE: readonly string[] = [
+  'Gesehen, oben links bis unten rechts: ¶, Ψ, ♪, ⌘.',
+  'Nur die dritte Spalte enthält alle vier.',
+  'Gedrückt, wie sie dort von oben stehen: ♪, Ψ, ⌘, ¶.',
+];
 
 const defSchema = z.strictObject({
   type: z.literal('keypad'),
@@ -106,15 +117,17 @@ export const keypadModule: PuzzleModule<KeypadDef, KeypadState, KeypadInput, Key
       {
         heading: 'Tastenfeld',
         blocks: [
+          deviceFigure('keypad', 'Tastenfeld mit Zeichen'),
           {
             kind: 'p',
             text:
-              'Vier Tasten mit je einem Zeichen, sichtbar nur am Tastenfeld. Genau eine Spalte ' +
-              'der Tabelle enthält alle vier Zeichen. Die Tasten in der Reihenfolge drücken, in ' +
-              'der ihre Zeichen in dieser Spalte stehen, von oben nach unten. Falsche Taste: ' +
-              `Alarm, −${def.penaltySec} s. Bereits leuchtende Tasten bleiben an.`,
+              'Vier Tasten tragen je ein Zeichen. Genau eine Spalte enthält alle vier. Die ' +
+              'Tasten werden in der Reihenfolge gedrückt, in der ihre Zeichen in dieser Spalte ' +
+              'stehen, von oben.',
           },
           { kind: 'columns', columns: KEYPAD_COLUMNS.map((column) => [...column]) },
+          workedExample(EXAMPLE),
+          penaltyLine(def.penaltySec, 'Leuchtende Tasten bleiben an.'),
         ],
       },
     ];

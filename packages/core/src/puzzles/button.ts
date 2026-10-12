@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { indicatorLit, type Edgework } from '../edgework.js';
 import type { Rng } from '../rng.js';
 import { commonDefShape, type ApplyResult, type PuzzleModule } from './module.js';
+import { deviceFigure, penaltyLine, workedExample } from './printed.js';
 
 /**
  * button puzzle (Keep Talking's button): the operator sees one big button
@@ -19,7 +20,7 @@ export type ButtonDef = z.infer<typeof defSchema>;
 
 const COLOURS = ['rot', 'blau', 'gelb', 'weiß'] as const;
 const LABELS = ['ABBRUCH', 'HALTEN', 'DRÜCKEN', 'START'] as const;
-/** Red is the strip no release rule names: it falls under „Sonst". */
+/** Red is the strip no release rule names: it falls under „Andernfalls". */
 const STRIPS = ['blau', 'weiß', 'gelb', 'rot'] as const;
 export type ButtonColour = (typeof COLOURS)[number];
 export type ButtonLabel = (typeof LABELS)[number];
@@ -59,7 +60,10 @@ export interface ButtonView {
 type Move = 'press' | 'hold';
 type Face = Pick<ButtonState, 'colour' | 'label'>;
 
-const MOVE_WORDS: Record<Move, string> = { press: 'kurz drücken', hold: 'halten' };
+const MOVE_WORDS: Record<Move, string> = {
+  press: 'drücke den Knopf kurz',
+  hold: 'halte den Knopf',
+};
 
 /** One line of the first list. Its printed condition sits next to its test. */
 interface MoveRule {
@@ -68,31 +72,31 @@ interface MoveRule {
   move: Move;
 }
 
-/** The first list in printed order: the first rule that applies decides, „Sonst" holds. */
+/** The first list in printed order: the first rule that applies decides, „Andernfalls" holds. */
 const MOVE_RULES: MoveRule[] = [
   {
-    when: 'Blauer Knopf mit Aufschrift ABBRUCH',
+    when: 'der Knopf blau ist und die Aufschrift ABBRUCH trägt',
     test: (face) => face.colour === 'blau' && face.label === 'ABBRUCH',
     move: 'hold',
   },
   {
-    when: 'Mehr als eine Notstromzelle und Aufschrift DRÜCKEN',
+    when: 'mehr als 1 Notstromzelle eingesetzt ist und der Knopf die Aufschrift DRÜCKEN trägt',
     test: (face, edgework) => edgework.cells > 1 && face.label === 'DRÜCKEN',
     move: 'press',
   },
   {
-    when: 'Weißer Knopf und Kontrollleuchte CAR leuchtet',
+    when: 'der Knopf weiß ist und die Kontrollleuchte CAR leuchtet',
     test: (face, edgework) => face.colour === 'weiß' && indicatorLit(edgework, 'CAR'),
     move: 'hold',
   },
   {
-    when: 'Mehr als zwei Notstromzellen und Kontrollleuchte FRQ leuchtet',
+    when: 'mehr als 2 Notstromzellen eingesetzt sind und die Kontrollleuchte FRQ leuchtet',
     test: (_face, edgework) => edgework.cells > 2 && indicatorLit(edgework, 'FRQ'),
     move: 'press',
   },
-  { when: 'Gelber Knopf', test: (face) => face.colour === 'gelb', move: 'hold' },
+  { when: 'der Knopf gelb ist', test: (face) => face.colour === 'gelb', move: 'hold' },
   {
-    when: 'Roter Knopf mit Aufschrift HALTEN',
+    when: 'der Knopf rot ist und die Aufschrift HALTEN trägt',
     test: (face) => face.colour === 'rot' && face.label === 'HALTEN',
     move: 'press',
   },
@@ -111,17 +115,24 @@ interface ReleaseRule {
 }
 
 const RELEASE_RULES: ReleaseRule[] = [
-  { when: 'Blauer Streifen', strip: 'blau', digit: 4 },
-  { when: 'Weißer Streifen', strip: 'weiß', digit: 1 },
-  { when: 'Gelber Streifen', strip: 'gelb', digit: 5 },
+  { when: 'der Streifen blau leuchtet', strip: 'blau', digit: 4 },
+  { when: 'der Streifen weiß leuchtet', strip: 'weiß', digit: 1 },
+  { when: 'der Streifen gelb leuchtet', strip: 'gelb', digit: 5 },
 ];
 const RELEASE_OTHERWISE = 1;
 
 const releaseDigit = (strip: StripColour): number =>
   RELEASE_RULES.find((rule) => rule.strip === strip)?.digit ?? RELEASE_OTHERWISE;
 
-const releaseText = (when: string, digit: number): string =>
-  `${when}: loslassen, wenn die Missionsuhr eine ${digit} zeigt.`;
+const releaseWords = (digit: number): string =>
+  `lass den Knopf los, sobald die Missionsuhr eine ${digit} zeigt`;
+
+/** A button held under rule 5, its strip blue, let go on a second that shows a 4. */
+const EXAMPLE: readonly string[] = [
+  'Gesehen: gelber Knopf, Aufschrift START; 1 Notstromzelle eingesetzt.',
+  '„Der Knopf“, Regel 5 trifft als erste zu: halten. Der Streifen leuchtet blau.',
+  '„Loslassen“, Regel 1: losgelassen bei 03:41, die Uhr zeigt eine 4.',
+];
 
 /** The mission clock as every screen shows it: mm:ss, minutes padded to two digits. */
 function clockText(remainingSec: number): string {
@@ -241,39 +252,41 @@ export const buttonModule: PuzzleModule<ButtonDef, ButtonState, ButtonInput, But
       {
         heading: 'Der Knopf',
         blocks: [
+          deviceFigure('button', 'Knopf mit Leuchtstreifen'),
           {
             kind: 'p',
             text:
-              'Ein Knopf mit Farbe und Aufschrift. Regeln von oben prüfen; die erste ' +
-              'zutreffende gilt.',
+              'Ein Knopf mit Farbe und Aufschrift; daneben ein Streifen, der nur leuchtet, ' +
+              'solange der Knopf gehalten wird. Kurz drücken heißt drücken und sofort ' +
+              'loslassen, halten heißt gedrückt lassen. Die erste zutreffende Regel entscheidet.',
           },
           {
             kind: 'rules',
             items: [
-              ...MOVE_RULES.map((rule) => `${rule.when}: ${MOVE_WORDS[rule.move]}.`),
-              `Sonst: ${MOVE_WORDS[MOVE_OTHERWISE]}.`,
+              ...MOVE_RULES.map((rule) => `Wenn ${rule.when}, ${MOVE_WORDS[rule.move]}.`),
+              `Andernfalls ${MOVE_WORDS[MOVE_OTHERWISE]}.`,
             ],
           },
+        ],
+      },
+      {
+        heading: 'Loslassen',
+        blocks: [
           {
             kind: 'p',
             text:
-              'Kurz drücken: drücken und sofort loslassen. Halten: gedrückt lassen — neben ' +
-              'dem Knopf leuchtet ein Streifen. Seine Farbe bestimmt den Moment zum Loslassen:',
+              'Ein gehaltener Knopf wird nach der Farbe des Streifens losgelassen. Die Ziffer ' +
+              'darf an jeder Stelle der Missionsuhr (mm:ss) stehen.',
           },
           {
             kind: 'rules',
             items: [
-              ...RELEASE_RULES.map((rule) => releaseText(rule.when, rule.digit)),
-              releaseText('Sonst', RELEASE_OTHERWISE),
+              ...RELEASE_RULES.map((rule) => `Wenn ${rule.when}, ${releaseWords(rule.digit)}.`),
+              `Andernfalls ${releaseWords(RELEASE_OTHERWISE)}.`,
             ],
           },
-          {
-            kind: 'p',
-            text:
-              'Die Ziffer darf an jeder Stelle der Missionsuhr (mm:ss) stehen. Falsch ' +
-              `gedrückt, gehalten oder losgelassen: Alarm, −${def.penaltySec} s. ` +
-              'Der Knopf springt zurück.',
-          },
+          workedExample(EXAMPLE),
+          penaltyLine(def.penaltySec, 'Der Knopf springt zurück.'),
         ],
       },
     ];

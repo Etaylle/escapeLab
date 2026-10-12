@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, parseMission, viewFor, viewForSpectator } from '../src/index.js';
-import { MAZE_DIRS } from '../src/puzzles/maze.js';
-import type { Action, GameState, Mission } from '../src/index.js';
+import {
+  applyAction,
+  generateEdgework,
+  parseMission,
+  viewFor,
+  viewForSpectator,
+} from '../src/index.js';
+import { MAZE_DIRS, mazeModule, type MazeDef, type MazeState } from '../src/puzzles/maze.js';
+import type { Action, GameState, Mission, PuzzleContext } from '../src/index.js';
+import { mulberry32 } from '../src/rng.js';
 import { labMission, openLab, started as startedLab, T0 } from './lab.js';
 
 const mission: Mission = labMission(
@@ -133,6 +140,70 @@ describe('maze puzzle', () => {
     const raw = JSON.parse(JSON.stringify(mission));
     raw.map.manuals = [];
     expect(() => parseMission(raw)).toThrow(/no manual object covers puzzle "netz"/);
+  });
+});
+
+describe('the printed maze rules', () => {
+  const COLUMNS = 'ABCDEFGH';
+  /** The printed directions, as indices into MAZE_DIRS. */
+  const DIRECTIONS: Record<string, number> = { oben: 0, rechts: 1, unten: 2, links: 3 };
+  const cellOf = (name = ''): { x: number; y: number } => ({
+    x: COLUMNS.indexOf(name.charAt(0)),
+    y: Number(name.slice(1)) - 1,
+  });
+  const ctx: PuzzleContext = {
+    edgework: generateEdgework(mulberry32(1)),
+    alarms: 0,
+    remainingSec: 600,
+    at: T0,
+    crew: ['op', 'rd'],
+  };
+  const defOf = (size: number): MazeDef =>
+    mazeModule.defSchema.parse({ type: 'maze', id: 'netz', title: 'Netz', size, penaltySec: 12 });
+  const blocksOf = (size: number) =>
+    mazeModule.manual(defOf(size)).flatMap((section) => section.blocks);
+
+  it.each([4, 6, 8])('name the columns and rows of a grid of %i, and the penalty', (size) => {
+    const blocks = blocksOf(size);
+    const grid =
+      `${size} × ${size} Zellen, Spalten A bis ${COLUMNS.charAt(size - 1)} von links, ` +
+      `Zeilen 1 bis ${size} von oben`;
+    expect(blocks[1]).toMatchObject({ kind: 'p', text: expect.stringContaining(grid) });
+    expect(blocks.at(-1)).toEqual({ kind: 'p', text: 'Fehlgriff: Alarm, −12 s.' });
+  });
+
+  it.each([4, 6, 8])('print an example that the walls and the marker bear out, size %i', (size) => {
+    const example = blocksOf(size).find((block) => block.kind === 'example');
+    const lines = example?.kind === 'example' ? example.lines : [];
+    const [seen, plan, step] = [
+      /^Gesehen am Navigationspult: Marker auf ([A-H]\d), Ziel auf ([A-H]\d)\.$/,
+      /^Schaltplan: von ([A-H]\d) nach (\S+) eine Wand, nach (\S+) frei\.$/,
+      /^Ein Schritt nach (\S+): Marker auf ([A-H]\d)\.$/,
+    ].map((pattern, i) => pattern.exec(lines[i] ?? ''));
+    const wall = DIRECTIONS[plan?.[2] ?? ''];
+    const open = DIRECTIONS[plan?.[3] ?? ''];
+    if (!seen || !plan || !step || wall === undefined || open === undefined) {
+      throw new Error(`unreadable example: ${JSON.stringify(lines)}`);
+    }
+    expect([plan[1], DIRECTIONS[step[1] ?? '']]).toEqual([seen[1], open]);
+    // A grid whose one opening is the one the plan names, between the marker and its neighbour.
+    const pos = cellOf(seen[1]);
+    const goal = cellOf(seen[2]);
+    const there = { x: pos.x + (MAZE_DIRS[open]?.dx ?? 0), y: pos.y + (MAZE_DIRS[open]?.dy ?? 0) };
+    for (const cell of [pos, goal, there]) {
+      expect(cell.x >= 0 && cell.y >= 0 && cell.x < size && cell.y < size, JSON.stringify(cell))
+        .toBe(true);
+    }
+    const cells = new Array<number>(size * size).fill(0);
+    cells[pos.y * size + pos.x] = MAZE_DIRS[open]?.bit ?? 0;
+    cells[there.y * size + there.x] = MAZE_DIRS[(open + 2) % 4]?.bit ?? 0;
+    const state: MazeState = { type: 'maze', size, cells, pos, goal, lastResult: null };
+    const bumped = mazeModule.apply(defOf(size), state, { dir: wall }, 'op', ctx);
+    expect(bumped.penalty).toBe('Gegen eine Wand gelaufen');
+    expect(bumped.state.pos).toEqual(pos);
+    const moved = mazeModule.apply(defOf(size), state, { dir: open }, 'op', ctx);
+    expect(moved).toMatchObject({ solved: false, penalty: null });
+    expect(moved.state.pos).toEqual(cellOf(step[2]));
   });
 });
 

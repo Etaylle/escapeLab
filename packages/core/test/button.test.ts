@@ -370,30 +370,85 @@ describe('button: inputs, views and solver', () => {
 });
 
 describe('button: manual', () => {
-  it('prints both rule lists, each ending in „Sonst"', () => {
-    const sections = buttonModule.manual(def);
-    expect(sections.map((section) => section.heading)).toEqual(['Der Knopf']);
-    const lists = sections.flatMap((section) =>
-      section.blocks.flatMap((block) => (block.kind === 'rules' ? [block.items] : [])),
-    );
+  const sections = buttonModule.manual(def);
+  const lists = sections.flatMap((section) =>
+    section.blocks.flatMap((block) => (block.kind === 'rules' ? [block.items] : [])),
+  );
+
+  it('prints both rule lists, each under its heading and ending in „Andernfalls"', () => {
+    expect(sections.map((section) => section.heading)).toEqual(['Der Knopf', 'Loslassen']);
     expect(lists).toEqual([
       [
-        'Blauer Knopf mit Aufschrift ABBRUCH: halten.',
-        'Mehr als eine Notstromzelle und Aufschrift DRÜCKEN: kurz drücken.',
-        'Weißer Knopf und Kontrollleuchte CAR leuchtet: halten.',
-        'Mehr als zwei Notstromzellen und Kontrollleuchte FRQ leuchtet: kurz drücken.',
-        'Gelber Knopf: halten.',
-        'Roter Knopf mit Aufschrift HALTEN: kurz drücken.',
-        'Sonst: halten.',
+        'Wenn der Knopf blau ist und die Aufschrift ABBRUCH trägt, halte den Knopf.',
+        'Wenn mehr als 1 Notstromzelle eingesetzt ist und der Knopf die Aufschrift DRÜCKEN ' +
+          'trägt, drücke den Knopf kurz.',
+        'Wenn der Knopf weiß ist und die Kontrollleuchte CAR leuchtet, halte den Knopf.',
+        'Wenn mehr als 2 Notstromzellen eingesetzt sind und die Kontrollleuchte FRQ leuchtet, ' +
+          'drücke den Knopf kurz.',
+        'Wenn der Knopf gelb ist, halte den Knopf.',
+        'Wenn der Knopf rot ist und die Aufschrift HALTEN trägt, drücke den Knopf kurz.',
+        'Andernfalls halte den Knopf.',
       ],
       [
-        'Blauer Streifen: loslassen, wenn die Missionsuhr eine 4 zeigt.',
-        'Weißer Streifen: loslassen, wenn die Missionsuhr eine 1 zeigt.',
-        'Gelber Streifen: loslassen, wenn die Missionsuhr eine 5 zeigt.',
-        'Sonst: loslassen, wenn die Missionsuhr eine 1 zeigt.',
+        'Wenn der Streifen blau leuchtet, lass den Knopf los, sobald die Missionsuhr eine 4 zeigt.',
+        'Wenn der Streifen weiß leuchtet, lass den Knopf los, sobald die Missionsuhr eine 1 zeigt.',
+        'Wenn der Streifen gelb leuchtet, lass den Knopf los, sobald die Missionsuhr eine 5 zeigt.',
+        'Andernfalls lass den Knopf los, sobald die Missionsuhr eine 1 zeigt.',
       ],
     ]);
-    expect(JSON.stringify(sections)).toContain('Alarm, −25 s.');
+    expect(sections.flatMap((section) => section.blocks).at(-1)).toEqual({
+      kind: 'p',
+      text: 'Fehlgriff: Alarm, −25 s. Der Knopf springt zurück.',
+    });
+  });
+
+  /** The example's lines as the patterns they follow: the button, the hold, the release. */
+  const EXAMPLE_LINES = [
+    /^Gesehen: (\S+) Knopf, Aufschrift (\S+); (\d) Notstromzellen? eingesetzt\.$/,
+    /^„Der Knopf“, Regel (\d) trifft als erste zu: (\S+)\. Der Streifen leuchtet (\S+)\.$/,
+    new RegExp('^„Loslassen“, Regel (\\d): losgelassen bei (\\d\\d):(\\d\\d), die Uhr zeigt ' +
+      'eine (\\d)\\.$'),
+  ];
+  const COLOURS: Record<string, ButtonColour> = {
+    blauer: 'blau',
+    gelber: 'gelb',
+    roter: 'rot',
+    weißer: 'weiß',
+  };
+  const LABELS: ButtonLabel[] = ['ABBRUCH', 'HALTEN', 'DRÜCKEN', 'START'];
+  /** CAR and FRQ, each lit or dark. */
+  const LAMPS: [boolean, boolean][] = [[false, false], [false, true], [true, false], [true, true]];
+
+  it('prints an example that both lists, the strip and the clock bear out', () => {
+    const example = sections
+      .flatMap((section) => section.blocks)
+      .find((block) => block.kind === 'example');
+    const lines = example?.kind === 'example' ? example.lines : [];
+    const [face, held, letGo] = EXAMPLE_LINES.map((pattern, i) => pattern.exec(lines[i] ?? ''));
+    const colour = COLOURS[face?.[1] ?? ''];
+    const label = LABELS.find((l) => l === face?.[2]);
+    const strip = Object.keys(RELEASE_DIGIT).find((s): s is StripColour => s === held?.[3]);
+    if (!face || !held || !letGo || colour === undefined || !label || !strip) {
+      throw new Error(`unreadable example: ${JSON.stringify(lines)}`);
+    }
+    expect(held[2]).toBe('halten');
+    // Only the cells are stated, so the lamps may be anything.
+    for (const [car, frq] of LAMPS) {
+      const edgework = lab(Number(face[3]), [['CAR', car], ['FRQ', frq]]);
+      expect(byTheManual(colour, label, edgework)).toEqual({ rule: Number(held[1]), move: 'hold' });
+      const holding = apply(button(colour, label, strip), 'hold', edgework);
+      expect(holding.penalty).toBeNull();
+      expect(viewsOf(holding.state, edgework).operator.strip).toBe(strip);
+      const sec = Number(letGo[2]) * 60 + Number(letGo[3]);
+      expect(apply(holding.state, 'release', edgework, sec)).toMatchObject({ solved: true });
+    }
+    // The release line named is the strip's, and the clock showed its digit.
+    expect(lists[1]?.[Number(letGo[1]) - 1]).toBe(
+      `Wenn der Streifen ${strip} leuchtet, lass den Knopf los, sobald die Missionsuhr eine ` +
+        `${RELEASE_DIGIT[strip]} zeigt.`,
+    );
+    expect(Number(letGo[4])).toBe(RELEASE_DIGIT[strip]);
+    expect(`${letGo[2]}:${letGo[3]}`).toContain(letGo[4]);
   });
 });
 

@@ -284,15 +284,38 @@ function playWithSlips(seed: number, legend: SimonDef['legend']): boolean {
 }
 
 describe('simon manual', () => {
-  it('prints the stage rule and both translation tables', () => {
+  it('prints the stages, the choice of table and both translation tables', () => {
     const [section, ...more] = simonModule.manual(defOf({ sequenceLength: 6, penaltySec: 25 }));
     expect(more).toEqual([]);
     expect(section?.heading).toBe('Frequenz-Abgleich');
-    expect(section?.blocks[0]).toMatchObject({
+    const blocks = section?.blocks ?? [];
+    expect(blocks.map((block) => block.kind)).toEqual([
+      'figure',
+      'p',
+      'rules',
+      'table',
+      'table',
+      'example',
+      'p',
+    ]);
+    expect(blocks[1]).toMatchObject({
       kind: 'p',
-      text: expect.stringMatching(/bis 6\..*Vokal.*−25 s/),
+      text: expect.stringMatching(/bis Stufe 6\..*Alarmstand am Panel die Zeile/),
     });
-    expect(section?.blocks.slice(1)).toEqual([
+    expect(blocks[2]).toEqual({
+      kind: 'rules',
+      items: [
+        'Wenn die Laborkennung ein A, E oder U enthält, gilt die Tabelle „Mit Vokal“.',
+        'Andernfalls gilt die Tabelle „Ohne Vokal“.',
+      ],
+    });
+    expect(blocks.at(-1)).toEqual({
+      kind: 'p',
+      text:
+        'Fehlgriff: Alarm, −25 s. Die Stufe beginnt von vorn, mit der Zeile für den neuen ' +
+        'Alarmstand.',
+    });
+    expect(blocks.slice(3, 5)).toEqual([
       {
         kind: 'table',
         head: ['Mit Vokal', 'rot', 'blau', 'grün', 'gelb'],
@@ -314,26 +337,83 @@ describe('simon manual', () => {
     ]);
   });
 
-  it('prints one sentence and one table of two rows for the einfach legend', () => {
+  it('prints one table of two rows and nothing of the Kennung for the einfach legend', () => {
     const def = defOf({ legend: 'einfach', sequenceLength: 4, penaltySec: 25 });
     const [section, ...more] = simonModule.manual(def);
     expect(more).toEqual([]);
     expect(section?.heading).toBe('Frequenz-Abgleich');
-    const [rule, ...tables] = section?.blocks ?? [];
-    const text = rule?.kind === 'p' ? rule.text : '';
-    expect(text).toMatch(/Spalte.*Zeile nach den Alarmen.*−25 s/);
-    expect(text).not.toMatch(/Vokal|Kennung/);
-    expect(text.split(/(?<=\.) /)).toEqual([text]);
-    expect(tables).toEqual([
-      {
-        kind: 'table',
-        head: ['Blinkt', 'rot', 'blau', 'grün', 'gelb'],
-        rows: [
-          ['0 Alarme', 'blau', 'rot', 'gelb', 'grün'],
-          ['1 oder mehr Alarme', 'grün', 'gelb', 'rot', 'blau'],
-        ],
-      },
-    ]);
+    const blocks = section?.blocks ?? [];
+    expect(blocks.map((block) => block.kind)).toEqual(['figure', 'p', 'table', 'example', 'p']);
+    expect(JSON.stringify(blocks)).not.toMatch(/Vokal|Kennung/);
+    expect(blocks[1]).toMatchObject({
+      kind: 'p',
+      text: expect.stringMatching(/bis Stufe 4\..*Alarmstand am Panel die Zeile/),
+    });
+    expect(blocks.at(-1)).toMatchObject({
+      text: expect.stringMatching(/^Fehlgriff: Alarm, −25 s\./),
+    });
+    expect(blocks[2]).toEqual({
+      kind: 'table',
+      head: ['Blinkt', 'rot', 'blau', 'grün', 'gelb'],
+      rows: [
+        ['0 Alarme', 'blau', 'rot', 'gelb', 'grün'],
+        ['1 oder mehr Alarme', 'grün', 'gelb', 'rot', 'blau'],
+      ],
+    });
+  });
+
+  /** The lab and alarm count an example may state; a legend that ignores the Kennung, any lab. */
+  const STATED: Record<string, { labs: Edgework[]; alarms: number }> = {
+    'Kennung ohne A, E und U; 1 Alarm am Panel.': { labs: [WITHOUT_VOWEL], alarms: 1 },
+    '0 Alarme am Panel.': { labs: [WITH_VOWEL, WITHOUT_VOWEL], alarms: 0 },
+  };
+
+  it.each(LEGENDS)('prints an example that the page and the panel bear out: %s', (legend) => {
+    const def = defOf({ legend });
+    const example = simonModule
+      .manual(def)
+      .flatMap((section) => section.blocks)
+      .find((block) => block.kind === 'example');
+    const [seen = '', read = '', pressed = ''] = example?.kind === 'example' ? example.lines : [];
+    const flashed = /^Gesehen: Stufe 2 blinkt (\S+), dann (\S+?)[.;] (.+)$/.exec(seen);
+    const answered = /^Gedrückt: (\S+), dann (\S+)\.$/.exec(pressed);
+    const stated = STATED[flashed?.[3] ?? ''];
+    const colour = (name = ''): SimonColor => {
+      const found = SIMON_COLORS.find((c) => PRINTED[c] === name);
+      if (found === undefined) {
+        throw new Error(`"${name}" is no printed colour`);
+      }
+      return found;
+    };
+    if (flashed === null || answered === null || stated === undefined) {
+      throw new Error(`unreadable example: ${JSON.stringify([seen, read, pressed])}`);
+    }
+    const flashes = [colour(flashed[1]), colour(flashed[2])];
+    const presses = [colour(answered[1]), colour(answered[2])];
+    for (const edgework of stated.labs) {
+      // Line 2 names the table the Kennung picks, if the page prints two, and the alarm row.
+      const tables = printedTables(def);
+      const label = serialHasVowel(edgework) ? 'Mit Vokal' : 'Ohne Vokal';
+      const table = tables.length === 1 ? tables[0] : tables.find((t) => t.head[0] === label);
+      const row = table?.rows[Math.min(stated.alarms, table.rows.length - 1)]?.[0];
+      const named = tables.length === 1 ? `Zeile „${row}“` : `Tabelle „${label}“, Zeile „${row}“`;
+      expect(read.startsWith(`${named}: `), read).toBe(true);
+      for (const [i, flash] of flashes.entries()) {
+        const answer = presses[i] ?? flash;
+        expect(pressFromPage(def, flash, edgework, stated.alarms)).toBe(answer);
+        expect(read).toContain(`${PRINTED[flash]} ergibt ${PRINTED[answer]}`);
+      }
+      // Stage 2 with these flashes takes the two presses and moves on to stage 3.
+      const sequence: SimonColor[] = [...flashes, 'gelb', 'rot', 'blau'];
+      let state: SimonState = { type: 'simon', sequence, stage: 2, progress: 0, lastWrong: false };
+      const lab = ctx(edgework, stated.alarms);
+      for (const color of presses) {
+        const result = simonModule.apply(def, state, press(color), 'op', lab);
+        expect(result.penalty).toBeNull();
+        state = result.state;
+      }
+      expect(state).toMatchObject({ stage: 3, progress: 0 });
+    }
   });
 
   it.each(LEGENDS)('prints permutations only, none of them the identity: %s', (legend) => {

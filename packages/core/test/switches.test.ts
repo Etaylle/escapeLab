@@ -140,7 +140,7 @@ function rowSaysUp(position: string, lab: Edgework): boolean {
     hoch: true,
     runter: false,
     'hoch, wenn die Kennung gerade endet (0, 2, 4, 6, 8)': Number(lab.serial.slice(-1)) % 2 === 0,
-    'hoch, wenn mindestens zwei Zellen': lab.cells >= 2,
+    'hoch, wenn mindestens 2 Zellen': lab.cells >= 2,
     'hoch, wenn SIG leuchtet': lab.indicators.some((i) => i.id === 'SIG' && i.lit),
   };
   const up = rules[position];
@@ -181,7 +181,7 @@ describe('switches: the printed rules', () => {
       'hoch',
       'runter',
       KENNUNG,
-      'hoch, wenn mindestens zwei Zellen',
+      'hoch, wenn mindestens 2 Zellen',
       'hoch, wenn SIG leuchtet',
     ];
     for (const position of all) {
@@ -216,13 +216,67 @@ describe('switches: the printed rules', () => {
     }
   });
 
-  it.each(FEATURES)('need no legend: intro, table, a line on PRÜFEN, with %i features', (n) => {
+  it.each(FEATURES)('need no legend: the paragraph names the columns, with %i features', (n) => {
     const blocks = switchesModule.manual(defOf(n)).flatMap((section) => section.blocks);
-    expect(blocks.map((block) => block.kind)).toEqual(['p', 'table', 'p']);
-    const [intro, , check] = blocks.map((block) => (block.kind === 'p' ? block.text : ''));
-    expect(intro).toContain(`ansagen: ${n === 3 ? 'LED, Markierung, Stern.' : 'LED, Markierung.'}`);
-    expect(intro?.split(/(?<=\.) /).length).toBeLessThanOrEqual(2);
-    expect(check).toMatch(/PRÜFEN.*−12 s\.$/);
+    expect(blocks.map((block) => block.kind)).toEqual(['figure', 'p', 'table', 'example', 'p']);
+    const [intro = '', penalty = ''] = blocks.flatMap((block) =>
+      block.kind === 'p' ? [block.text] : [],
+    );
+    const named = ['LED', 'Markierung', 'Stern', 'Stellung'].filter((word) => intro.includes(word));
+    expect(named).toEqual(printedTable(defOf(n)).head);
+    expect(intro).toContain('PRÜFEN');
+    expect(intro.split(/(?<=\.) /).length).toBeLessThanOrEqual(3);
+    expect(penalty).toBe('Fehlgriff: Alarm, −12 s. Die Schalter bleiben, wie sie stehen.');
+  });
+
+  /** The sign values an example may state, as the labs they leave: the rest stays free. */
+  const STATED: Record<string, Edgework[]> = {
+    '3 Notstromzellen eingesetzt.': ['2', '7'].flatMap((digit) =>
+      (['lit', 'dark', 'absent'] as const).map((sig) => lab(digit, 3, sig)),
+    ),
+    'Kennung endet auf 7.': [0, 1, 2, 4].flatMap((cells) =>
+      (['lit', 'dark', 'absent'] as const).map((sig) => lab('7', cells, sig)),
+    ),
+  };
+
+  it.each(FEATURES)('print an example that the table and PRÜFEN bear out, %i features', (n) => {
+    const bankDef = defOf(n);
+    const example = switchesModule
+      .manual(bankDef)
+      .flatMap((section) => section.blocks)
+      .find((block) => block.kind === 'example');
+    const [seen = '', row = '', set = ''] = example?.kind === 'example' ? example.lines : [];
+    const sw = new RegExp(
+      '^Gesehen: Schalter (\\d) mit LED (an|aus), Markierung (\\S+?)' +
+        '(?:, (ohne|mit) Stern)?\\. (.+)$',
+    ).exec(seen);
+    const cells = /^Zeile (an|aus), ([a-z]+)(?:, (ja|nein))?: (.+)\.$/.exec(row);
+    const end = /Schalter (\d) (hoch|bleibt unten)\./.exec(set);
+    const labs = STATED[sw?.[5] ?? ''];
+    if (sw === null || cells === null || end === null || labs === undefined) {
+      throw new Error(`unreadable example: ${JSON.stringify([seen, row, set])}`);
+    }
+    // The row is the switch's own; the table prints the stated position in it.
+    const star = sw[4] === undefined ? [] : [sw[4] === 'mit' ? 'ja' : 'nein'];
+    const features = [sw[2] ?? '', sw[3] ?? '', ...star];
+    expect([cells[1], cells[2], ...(cells[3] === undefined ? [] : [cells[3]])]).toEqual(features);
+    expect(printedTable(bankDef).rows).toContainEqual([...features, cells[4]]);
+    // With the other five down on a runter row, PRÜFEN takes the stated end and only that.
+    const alwaysDown = printedTable(bankDef).rows.find((r) => positionOf(r) === 'runter') ?? [];
+    const at = Number(sw[1]) - 1;
+    expect(end[1]).toBe(sw[1]);
+    const up = end[2] === 'hoch';
+    const bank = (testUp: boolean): SwitchesState => ({
+      type: 'switches',
+      switches: Array.from({ length: 6 }, (_, i) =>
+        switchFromRow(i === at ? [...features, ''] : alwaysDown, i === at && testUp),
+      ),
+      attempts: 0,
+    });
+    for (const edgework of labs) {
+      expect(press(bankDef, bank(up), { check: true }, edgework).solved).toBe(true);
+      expect(press(bankDef, bank(!up), { check: true }, edgework).penalty).not.toBeNull();
+    }
   });
 });
 

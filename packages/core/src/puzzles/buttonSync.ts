@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { commonDefShape, type PuzzleModule } from './module.js';
+import { deviceFigure, workedExample } from './printed.js';
 
 /**
  * button-sync puzzle: every connected player must press, standing at the
@@ -73,8 +74,44 @@ function press(
   };
 }
 
-/** "2,5" for 2500 ms — German decimal comma. */
-const seconds = (ms: number): string => String(ms / 1000).replace('.', ',');
+/** "2,5 Sekunden" for 2500 ms, "1 Sekunde" for 1000 — German decimal comma. */
+const duration = (ms: number): string =>
+  `${String(ms / 1000).replace('.', ',')} Sekunde${ms === 1000 ? '' : 'n'}`;
+
+/**
+ * The rules and the worked example, by the def's window: without one, every
+ * press counts whenever it comes; with one, a late press lets the first expire.
+ */
+function printedRules(windowMs: number | undefined): { rules: string[]; example: string[] } {
+  if (windowMs === undefined) {
+    return {
+      rules: [
+        'Wenn jedes Crewmitglied einmal gedrückt hat, schließt die Schaltung; Reihenfolge ' +
+          'und Abstand zählen nicht.',
+      ],
+      example: [
+        'Crew aus 3 Personen.',
+        'Gedrückt: die erste sofort, die zweite 10 Sekunden später, die dritte nach 1 Minute.',
+        'Alle 3 haben gedrückt: Die Schaltung schließt.',
+      ],
+    };
+  }
+  return {
+    rules: [
+      `Wenn alle Crewmitglieder innerhalb von ${duration(windowMs)} gedrückt haben, ` +
+        'schließt die Schaltung.',
+      `Andernfalls verfallen die Drücke, die älter als ${duration(windowMs)} sind; sie ` +
+        'zählen nicht mehr.',
+    ],
+    example: [
+      'Crew aus 2 Personen.',
+      `Die zweite drückt ${duration(windowMs + 1000)} nach der ersten: Der erste Druck ist ` +
+        'verfallen.',
+      `Die erste drückt erneut, ${duration(windowMs / 2)} später: Beide liegen innerhalb ` +
+        `von ${duration(windowMs)}, die Schaltung schließt.`,
+    ],
+  };
+}
 
 export const buttonSyncModule: PuzzleModule<
   ButtonSyncDef,
@@ -106,20 +143,22 @@ export const buttonSyncModule: PuzzleModule<
   },
 
   manual(def) {
-    const rules =
-      def.windowMs === undefined
-        ? ['Reihenfolge und Abstand sind egal. Jeder muss gedrückt haben.']
-        : [
-            `Alle innerhalb von ${seconds(def.windowMs)} Sekunden drücken.`,
-            'Zu langsam: Die Drücke verfallen, der Versuch beginnt von vorn.',
-            'Gemeinsam einzählen: drei — zwei — eins — JETZT.',
-          ];
+    const { rules, example } = printedRules(def.windowMs);
     return [
       {
         heading: 'Synchronschaltung',
         blocks: [
-          { kind: 'p', text: 'Die ganze Crew an die Station, jeder drückt einmal.' },
+          deviceFigure('button-sync', 'Pult mit Synchrontaste'),
+          {
+            kind: 'p',
+            text:
+              'Eine Taste für die ganze Crew: Jedes Crewmitglied steht dabei am Pult und ' +
+              'drückt sie einmal.',
+          },
           { kind: 'rules', items: rules },
+          workedExample(example),
+          // Nothing here raises an alarm — a missed window only costs the attempt.
+          { kind: 'p', text: 'Fehlgriff: kein Alarm, keine Zeitstrafe.' },
         ],
       },
     ];

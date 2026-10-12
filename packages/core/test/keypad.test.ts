@@ -191,7 +191,49 @@ describe('keypad puzzle', () => {
     expect(viewOf(state, 'p1').manual).toBeNull();
     const blocks = printed.flatMap((section) => section.blocks);
     expect(blocks).toContainEqual({ kind: 'columns', columns: KEYPAD_COLUMNS });
-    expect(JSON.stringify(blocks)).toContain('−15 s');
+    expect(blocks.at(-1)).toEqual({
+      kind: 'p',
+      text: 'Fehlgriff: Alarm, −15 s. Leuchtende Tasten bleiben an.',
+    });
+  });
+
+  it('prints an example that the table and the solver bear out', () => {
+    const example = keypadModule
+      .manual(def)
+      .flatMap((section) => section.blocks)
+      .find((block) => block.kind === 'example');
+    const [seen = '', found = '', pressed = ''] = example?.kind === 'example' ? example.lines : [];
+    const glyphs = /^Gesehen, oben links bis unten rechts: (.+)\.$/.exec(seen)?.[1]?.split(', ');
+    const nth = /^Nur die (\S+) Spalte enthält alle vier\.$/.exec(found)?.[1] ?? '';
+    const column = ['erste', 'zweite', 'dritte', 'vierte', 'fünfte', 'sechste'].indexOf(nth);
+    const order = /^Gedrückt, wie sie dort von oben stehen: (.+)\.$/
+      .exec(pressed)?.[1]
+      ?.split(', ');
+    if (glyphs?.length !== 4 || column < 0 || order === undefined) {
+      throw new Error(`unreadable example: ${JSON.stringify([seen, found, pressed])}`);
+    }
+    // The column named holds all four, and no other does.
+    const holders = KEYPAD_COLUMNS.flatMap((c, i) =>
+      glyphs.every((glyph) => c.includes(glyph)) ? [i] : [],
+    );
+    expect(holders).toEqual([column]);
+    // Dealt from that column the way `init` deals, the solver presses them in the stated order.
+    let state: KeypadState = {
+      type: 'keypad',
+      column,
+      keys: glyphs.map((glyph) => ({ glyph, lit: false })),
+      order: (KEYPAD_COLUMNS[column] ?? []).filter((glyph) => glyphs.includes(glyph)),
+    };
+    const presses: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const views = { operator: viewAs(state, AT_STATION), reader: viewAs(state, AT_BOOK) };
+      const keyIndex = keypadModule.solve(def, views, null)[0]?.input.keyIndex ?? -1;
+      presses.push(state.keys[keyIndex]?.glyph ?? '?');
+      const result = keypadModule.apply(def, state, { keyIndex }, 'op', ctx);
+      expect(result).toMatchObject({ solved: i === 3, penalty: null });
+      state = result.state;
+    }
+    expect(presses).toEqual(order);
   });
 
   it('lights each key pressed in column order and opens on the fourth', () => {

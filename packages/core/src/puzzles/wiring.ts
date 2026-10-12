@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { indicatorLit, serialLastDigitIsOdd, type Edgework } from '../edgework.js';
-import { commonDefShape, type ManualSection, type PuzzleModule } from './module.js';
+import {
+  commonDefShape,
+  type ManualBlock,
+  type ManualSection,
+  type PuzzleModule,
+} from './module.js';
+import { deviceFigure, penaltyLine, workedExample } from './printed.js';
 
 /**
  * Emergency-power bridges, after Keep Talking's wires: the operator sees three
@@ -80,134 +86,183 @@ const lastPosition = (colors: readonly WireColor[]): number => colors.length - 1
  * The printed lists, one per wire count. The first rule that applies decides,
  * every list ends in a catch-all, and a rule that names a colour's wire only
  * applies when such a wire exists — so every colouring has exactly one answer.
+ * Each list carries the worked example a manual prints when the def's fewest
+ * wires are that list's count.
  */
-const RULE_LISTS: readonly { wireCount: number; rules: readonly Rule[] }[] = [
+const RULE_LISTS: readonly {
+  wireCount: number;
+  rules: readonly Rule[];
+  example: readonly string[];
+}[] = [
   {
     wireCount: 3,
     rules: [
       {
-        text: 'Mehr als ein schwarzes Kabel: das erste schwarze Kabel.',
+        text: 'Wenn mehr als ein schwarzes Kabel vorhanden ist, trenne das erste schwarze Kabel.',
         applies: (c) => count(c, 'schwarz') > 1,
         cut: (c) => c.indexOf('schwarz'),
       },
       {
-        text: 'Letztes Kabel gelb: das erste Kabel.',
+        text: 'Wenn das letzte Kabel gelb ist, trenne das erste Kabel.',
         applies: (c) => c[lastPosition(c)] === 'gelb',
         cut: () => 0,
       },
       {
-        text: 'Genau ein rotes Kabel: das zweite Kabel.',
+        text: 'Wenn genau ein rotes Kabel vorhanden ist, trenne das zweite Kabel.',
         applies: (c) => count(c, 'rot') === 1,
         cut: () => 1,
       },
       {
-        text: 'Erstes Kabel blau: das letzte blaue Kabel.',
+        text: 'Wenn das erste Kabel blau ist, trenne das letzte blaue Kabel.',
         applies: (c) => c[0] === 'blau',
         cut: (c) => c.lastIndexOf('blau'),
       },
-      { text: 'Sonst: das letzte Kabel.', applies: () => true, cut: lastPosition },
+      { text: 'Andernfalls trenne das letzte Kabel.', applies: () => true, cut: lastPosition },
+    ],
+    example: [
+      'Gesehen: rot, schwarz, gelb.',
+      'Liste 3 Kabel: Regel 2 trifft als erste zu (letztes Kabel gelb).',
+      'Getrennt: das erste Kabel, Nr. 1.',
     ],
   },
   {
     wireCount: 4,
     rules: [
       {
-        text: 'Laborkennung endet ungerade und kein gelbes Kabel: das zweite Kabel.',
+        text:
+          'Wenn die Laborkennung ungerade endet und kein gelbes Kabel vorhanden ist, ' +
+          'trenne das zweite Kabel.',
         applies: (c, e) => serialLastDigitIsOdd(e) && count(c, 'gelb') === 0,
         cut: () => 1,
       },
       {
-        text: 'Mehr als ein weißes Kabel: das erste weiße Kabel.',
+        text: 'Wenn mehr als ein weißes Kabel vorhanden ist, trenne das erste weiße Kabel.',
         applies: (c) => count(c, 'weiß') > 1,
         cut: (c) => c.indexOf('weiß'),
       },
       {
-        text: 'Genau ein rotes Kabel: das letzte Kabel.',
+        text: 'Wenn genau ein rotes Kabel vorhanden ist, trenne das letzte Kabel.',
         applies: (c) => count(c, 'rot') === 1,
         cut: lastPosition,
       },
       {
-        text: 'Kein schwarzes Kabel: das erste Kabel.',
+        text: 'Wenn kein schwarzes Kabel vorhanden ist, trenne das erste Kabel.',
         applies: (c) => count(c, 'schwarz') === 0,
         cut: () => 0,
       },
-      { text: 'Sonst: das dritte Kabel.', applies: () => true, cut: () => 2 },
+      { text: 'Andernfalls trenne das dritte Kabel.', applies: () => true, cut: () => 2 },
+    ],
+    example: [
+      'Gesehen: rot, weiß, blau, schwarz. Kennung endet auf 4.',
+      'Liste 4 Kabel: Regel 3 trifft als erste zu (genau ein rotes Kabel).',
+      'Getrennt: das letzte Kabel, Nr. 4.',
     ],
   },
   {
     wireCount: 5,
     rules: [
       {
-        text: 'Kontrollleuchte FRQ leuchtet und genau ein blaues Kabel: das letzte Kabel.',
+        text:
+          'Wenn die Kontrollleuchte FRQ leuchtet und genau ein blaues Kabel vorhanden ist, ' +
+          'trenne das letzte Kabel.',
         applies: (c, e) => indicatorLit(e, 'FRQ') && count(c, 'blau') === 1,
         cut: lastPosition,
       },
       {
-        text: 'Letztes Kabel rot: das dritte Kabel.',
+        text: 'Wenn das letzte Kabel rot ist, trenne das dritte Kabel.',
         applies: (c) => c[lastPosition(c)] === 'rot',
         cut: () => 2,
       },
       {
-        text: 'Kein gelbes Kabel: das erste Kabel.',
+        text: 'Wenn kein gelbes Kabel vorhanden ist, trenne das erste Kabel.',
         applies: (c) => count(c, 'gelb') === 0,
         cut: () => 0,
       },
       {
-        text: 'Mehr als ein weißes Kabel: das letzte weiße Kabel.',
+        text: 'Wenn mehr als ein weißes Kabel vorhanden ist, trenne das letzte weiße Kabel.',
         applies: (c) => count(c, 'weiß') > 1,
         cut: (c) => c.lastIndexOf('weiß'),
       },
       {
-        text: 'Genau ein schwarzes Kabel: das vierte Kabel.',
+        text: 'Wenn genau ein schwarzes Kabel vorhanden ist, trenne das vierte Kabel.',
         applies: (c) => count(c, 'schwarz') === 1,
         cut: () => 3,
       },
-      { text: 'Sonst: das zweite Kabel.', applies: () => true, cut: () => 1 },
+      { text: 'Andernfalls trenne das zweite Kabel.', applies: () => true, cut: () => 1 },
+    ],
+    example: [
+      'Gesehen: blau, gelb, weiß, schwarz, rot. FRQ leuchtet nicht.',
+      'Liste 5 Kabel: Regel 2 trifft als erste zu (letztes Kabel rot).',
+      'Getrennt: das dritte Kabel, Nr. 3.',
     ],
   },
   {
     wireCount: 6,
     rules: [
       {
-        text: 'Mindestens zwei Notstromzellen und kein weißes Kabel: das zweite Kabel.',
+        text:
+          'Wenn mindestens 2 Notstromzellen eingesetzt sind und kein weißes Kabel vorhanden ' +
+          'ist, trenne das zweite Kabel.',
         applies: (c, e) => e.cells >= 2 && count(c, 'weiß') === 0,
         cut: () => 1,
       },
       {
-        text: 'Mehr als ein gelbes Kabel: das letzte gelbe Kabel.',
+        text: 'Wenn mehr als ein gelbes Kabel vorhanden ist, trenne das letzte gelbe Kabel.',
         applies: (c) => count(c, 'gelb') > 1,
         cut: (c) => c.lastIndexOf('gelb'),
       },
       {
-        text: 'Genau ein schwarzes Kabel: das schwarze Kabel.',
+        text: 'Wenn genau ein schwarzes Kabel vorhanden ist, trenne das schwarze Kabel.',
         applies: (c) => count(c, 'schwarz') === 1,
         cut: (c) => c.indexOf('schwarz'),
       },
       {
-        text: 'Erstes Kabel blau: das vierte Kabel.',
+        text: 'Wenn das erste Kabel blau ist, trenne das vierte Kabel.',
         applies: (c) => c[0] === 'blau',
         cut: () => 3,
       },
       {
-        text: 'Genau ein rotes Kabel: das dritte Kabel.',
+        text: 'Wenn genau ein rotes Kabel vorhanden ist, trenne das dritte Kabel.',
         applies: (c) => count(c, 'rot') === 1,
         cut: () => 2,
       },
-      { text: 'Sonst: das erste Kabel.', applies: () => true, cut: () => 0 },
+      { text: 'Andernfalls trenne das erste Kabel.', applies: () => true, cut: () => 0 },
+    ],
+    example: [
+      'Gesehen: gelb, rot, gelb, blau, rot, gelb. 1 Notstromzelle eingesetzt.',
+      'Liste 6 Kabel: Regel 2 trifft als erste zu (3 gelbe Kabel).',
+      'Getrennt: das letzte gelbe Kabel, Nr. 6.',
     ],
   },
 ];
 
-/** Zero-based position of the one wire the printed rules say to cut. */
-function wireToCut(colors: readonly WireColor[], edgework: Edgework): number {
-  const list = RULE_LISTS.find((l) => l.wireCount === colors.length);
-  const at = list?.rules.find((rule) => rule.applies(colors, edgework))?.cut(colors) ?? -1;
-  if (at < 0 || at >= colors.length) {
+/**
+ * What the printed rules decide for these wires in this lab: the rule that
+ * applies first, numbered from 1 as its list prints it, and the zero-based
+ * position of the one wire it says to cut.
+ */
+export function decide(
+  colors: readonly WireColor[],
+  edgework: Edgework,
+): { rule: number; wire: number } {
+  const rules = RULE_LISTS.find((l) => l.wireCount === colors.length)?.rules ?? [];
+  const index = rules.findIndex((rule) => rule.applies(colors, edgework));
+  const wire = rules[index]?.cut(colors) ?? -1;
+  if (wire < 0 || wire >= colors.length) {
     throw new Error(
       `wiring: the rules decide nothing for ${colors.length} wires (${colors.join(', ')})`,
     );
   }
-  return at;
+  return { rule: index + 1, wire };
+}
+
+/** The example the manual prints: the one for the fewest wires the def draws. */
+function exampleFor(def: WiringDef): ManualBlock {
+  const lines = RULE_LISTS.find((l) => l.wireCount === def.wires.min)?.example;
+  if (lines === undefined) {
+    throw new Error(`wiring "${def.id}": no worked example for ${def.wires.min} wires`);
+  }
+  return workedExample(lines);
 }
 
 export const wiringModule: PuzzleModule<WiringDef, WiringState, WiringInput, WiringView> = {
@@ -235,7 +290,7 @@ export const wiringModule: PuzzleModule<WiringDef, WiringState, WiringInput, Wir
       return { state, solved: false, penalty: null };
     }
     const at = state.wires.indexOf(wire);
-    const solved = at === wireToCut(state.wires.map((w) => w.color), ctx.edgework);
+    const solved = at === decide(state.wires.map((w) => w.color), ctx.edgework).wire;
     return {
       state: { ...state, wires: state.wires.map((w, i) => (i === at ? { ...w, cut: true } : w)) },
       solved,
@@ -253,24 +308,29 @@ export const wiringModule: PuzzleModule<WiringDef, WiringState, WiringInput, Wir
   },
 
   manual(def) {
+    const closing = [exampleFor(def), penaltyLine(def.penaltySec, 'Das Kabel bleibt getrennt.')];
     return [
       {
         heading: 'Notstrom-Brücken',
         blocks: [
+          deviceFigure('wiring', 'Sicherungskasten mit Kabeln'),
           {
             kind: 'p',
             text:
-              'Zuerst alle Kabel von oben nach unten ansagen, jedes mit Farbe. Gezählt wird ' +
-              'von oben; getrennte Kabel zählen mit. Es gilt nur die Liste zur Kabelzahl: ' +
-              'Regeln der Reihe nach prüfen, die erste zutreffende entscheidet. ' +
-              `Falsches Kabel: Alarm, −${def.penaltySec} s.`,
+              'Ein Sicherungskasten mit 3 bis 6 Kabeln, von oben nach unten gezählt; getrennte ' +
+              'Kabel zählen mit. Genau ein Kabel ist zu trennen. Es gilt die Liste zur ' +
+              'Kabelzahl; die erste zutreffende Regel entscheidet.',
           },
         ],
       },
       ...RULE_LISTS.map(
-        (list): ManualSection => ({
+        (list, i): ManualSection => ({
           heading: `${list.wireCount} Kabel`,
-          blocks: [{ kind: 'rules', items: list.rules.map((rule) => rule.text) }],
+          blocks: [
+            { kind: 'rules', items: list.rules.map((rule) => rule.text) },
+            // The example and the penalty close the manual, under the last list.
+            ...(i === RULE_LISTS.length - 1 ? closing : []),
+          ],
         }),
       ),
     ];
@@ -286,7 +346,7 @@ export const wiringModule: PuzzleModule<WiringDef, WiringState, WiringInput, Wir
         `wiring "${def.id}": the rules read the edgework, but nobody has read the sign yet`,
       );
     }
-    const wire = wires[wireToCut(wires.map((w) => w.color), edgework)];
+    const wire = wires[decide(wires.map((w) => w.color), edgework).wire];
     return wire === undefined || wire.cut ? [] : [{ by: 'operator', input: { wireId: wire.id } }];
   },
 };

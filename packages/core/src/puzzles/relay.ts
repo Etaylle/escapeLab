@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { fail } from '../errors.js';
 import { mulberry32, shuffle, type Rng } from '../rng.js';
 import { commonDefShape, type EmergencyModule } from './module.js';
+import { deviceFigure, workedExample } from './printed.js';
 
 /**
  * Notfall-Relais, a Spaceteam-style emergency. Every player gets a console
@@ -290,6 +291,13 @@ export function shiftRelay(state: RelayState, ms: number): RelayState {
   };
 }
 
+/** The worked example: Anna holds an instruction for a dial at Ben's console, Ben sets it. */
+const EXAMPLE: readonly string[] = [
+  'Annas Pult zeigt: Pult Ben, „Kryo-Puffer auf 3“.',
+  'Der Kryo-Puffer sitzt an Bens Pult: Für Anna gilt Regel 2, für Ben Regel 1.',
+  'Ben stellt den Kryo-Puffer auf 3; die Anweisung zählt, Annas Pult zeigt die nächste.',
+];
+
 /** An instruction the way its holder reads it out. */
 function spoken(
   def: RelayDef,
@@ -382,34 +390,41 @@ export const relayModule: EmergencyModule<RelayDef, RelayState, RelayInput, Rela
       {
         heading: 'Notfall-Relais',
         blocks: [
+          deviceFigure('relay', 'Pult mit Bedienelementen'),
           {
             kind: 'p',
             text:
-              'Jedes Pult hat vier Bedienelemente. Jede Station erhält laufend eine Anweisung — ' +
-              'immer für ein Element an einem anderen Pult. ' +
+              'Jedes Pult hat 4 Bedienelemente und zeigt stets eine Anweisung: Pult, Element ' +
+              'und Wert, immer für ein Element an einem anderen Pult. ' +
               `${def.required} ausgeführte Anweisungen beheben den Notfall.`,
           },
           {
             kind: 'rules',
             items: [
-              'Anweisung sofort laut vorlesen: Pult, Element, Wert.',
-              'Die eigene Anweisung nie selbst ausführen. Schalten darf nur, wer das Element ' +
-                'am eigenen Pult hat.',
-              'Ausgeführt: laut zurückrufen, z. B. „Kryo-Puffer steht auf 3".',
-              `Eine Anweisung gilt ${def.windowSec} Sekunden. Danach verfällt sie, die nächste ` +
-                'folgt sofort.',
-              `Notfallzeit abgelaufen, zu wenig ausgeführt: Alarm, −${def.penaltySec} s.`,
-              'Sonst: nichts schalten, was niemand angesagt hat.',
+              'Wenn eine Anweisung ein Element dieses Pults nennt, stelle es wie angewiesen.',
+              'Wenn eine Anweisung ein Element eines anderen Pults nennt, wird sie dort ' +
+                'ausgeführt, nicht hier.',
+              `Wenn eine Anweisung ${def.windowSec} Sekunden lang nicht ausgeführt ist, ` +
+                'verfällt sie; die nächste folgt sofort.',
+              'Andernfalls bleibt jedes Element, wie es steht.',
             ],
           },
           {
             kind: 'table',
-            head: ['Element', 'Ansage', 'Handgriff'],
+            head: ['Element', 'Anweisung', 'Handgriff'],
             rows: [
-              ['Schalter', '„… AN" oder „… AUS"', 'umlegen'],
-              ['Drehregler', '„… auf 1" bis „… auf 5"', 'auf die Stufe stellen'],
-              ['Taster', '„… drücken"', 'einmal drücken'],
+              ['Schalter', '„… AN“ oder „… AUS“', 'umlegen'],
+              ['Drehregler', '„… auf 1“ bis „… auf 5“', 'auf die Stufe stellen'],
+              ['Taster', '„… drücken“', 'einmal drücken'],
             ],
+          },
+          workedExample(EXAMPLE),
+          // The emergency charges its expiry, never a move: no „Fehlgriff" to print.
+          {
+            kind: 'p',
+            text:
+              `Notfallzeit abgelaufen, bevor ${def.required} Anweisungen ausgeführt sind: ` +
+              `Alarm, −${def.penaltySec} s.`,
           },
         ],
       },

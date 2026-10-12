@@ -3,6 +3,7 @@ import { applyAction, GameError, parseMission, viewFor, viewForSpectator } from 
 import type { Action, Edgework, GameState, Mission, PuzzleContext, Viewer } from '../src/index.js';
 import { mulberry32 } from '../src/rng.js';
 import {
+  decide,
   WIRE_COLORS,
   wiringModule,
   type WireColor,
@@ -115,51 +116,54 @@ function printedRules(wireCount: number): string[] {
  */
 const CASES = [
   { list: 3, rule: 1, wires: 'rot schwarz schwarz', lab: QUIET, cut: 2,
-    text: 'Mehr als ein schwarzes Kabel: das erste schwarze Kabel.' },
+    text: 'Wenn mehr als ein schwarzes Kabel vorhanden ist, trenne das erste schwarze Kabel.' },
   { list: 3, rule: 2, wires: 'blau schwarz gelb', lab: QUIET, cut: 1,
-    text: 'Letztes Kabel gelb: das erste Kabel.' },
+    text: 'Wenn das letzte Kabel gelb ist, trenne das erste Kabel.' },
   { list: 3, rule: 3, wires: 'rot weiß blau', lab: QUIET, cut: 2,
-    text: 'Genau ein rotes Kabel: das zweite Kabel.' },
+    text: 'Wenn genau ein rotes Kabel vorhanden ist, trenne das zweite Kabel.' },
   { list: 3, rule: 4, wires: 'blau weiß blau', lab: QUIET, cut: 3,
-    text: 'Erstes Kabel blau: das letzte blaue Kabel.' },
+    text: 'Wenn das erste Kabel blau ist, trenne das letzte blaue Kabel.' },
   { list: 3, rule: 4, wires: 'blau weiß weiß', lab: QUIET, cut: 1,
-    text: 'Erstes Kabel blau: das letzte blaue Kabel.' },
+    text: 'Wenn das erste Kabel blau ist, trenne das letzte blaue Kabel.' },
   { list: 3, rule: 5, wires: 'rot rot blau', lab: QUIET, cut: 3,
-    text: 'Sonst: das letzte Kabel.' },
+    text: 'Andernfalls trenne das letzte Kabel.' },
   { list: 4, rule: 1, wires: 'rot weiß blau schwarz', lab: ODD, cut: 2,
-    text: 'Laborkennung endet ungerade und kein gelbes Kabel: das zweite Kabel.' },
+    text: 'Wenn die Laborkennung ungerade endet und kein gelbes Kabel vorhanden ist, ' +
+      'trenne das zweite Kabel.' },
   { list: 4, rule: 2, wires: 'weiß gelb weiß rot', lab: ODD, cut: 1,
-    text: 'Mehr als ein weißes Kabel: das erste weiße Kabel.' },
+    text: 'Wenn mehr als ein weißes Kabel vorhanden ist, trenne das erste weiße Kabel.' },
   { list: 4, rule: 3, wires: 'rot weiß blau schwarz', lab: QUIET, cut: 4,
-    text: 'Genau ein rotes Kabel: das letzte Kabel.' },
+    text: 'Wenn genau ein rotes Kabel vorhanden ist, trenne das letzte Kabel.' },
   { list: 4, rule: 4, wires: 'gelb blau blau gelb', lab: ODD, cut: 1,
-    text: 'Kein schwarzes Kabel: das erste Kabel.' },
+    text: 'Wenn kein schwarzes Kabel vorhanden ist, trenne das erste Kabel.' },
   { list: 4, rule: 5, wires: 'gelb schwarz rot rot', lab: QUIET, cut: 3,
-    text: 'Sonst: das dritte Kabel.' },
+    text: 'Andernfalls trenne das dritte Kabel.' },
   { list: 5, rule: 1, wires: 'blau gelb weiß schwarz rot', lab: FRQ_LIT, cut: 5,
-    text: 'Kontrollleuchte FRQ leuchtet und genau ein blaues Kabel: das letzte Kabel.' },
+    text: 'Wenn die Kontrollleuchte FRQ leuchtet und genau ein blaues Kabel vorhanden ist, ' +
+      'trenne das letzte Kabel.' },
   { list: 5, rule: 2, wires: 'blau gelb weiß schwarz rot', lab: QUIET, cut: 3,
-    text: 'Letztes Kabel rot: das dritte Kabel.' },
+    text: 'Wenn das letzte Kabel rot ist, trenne das dritte Kabel.' },
   { list: 5, rule: 3, wires: 'blau blau weiß schwarz weiß', lab: FRQ_LIT, cut: 1,
-    text: 'Kein gelbes Kabel: das erste Kabel.' },
+    text: 'Wenn kein gelbes Kabel vorhanden ist, trenne das erste Kabel.' },
   { list: 5, rule: 4, wires: 'weiß gelb weiß gelb weiß', lab: QUIET, cut: 5,
-    text: 'Mehr als ein weißes Kabel: das letzte weiße Kabel.' },
+    text: 'Wenn mehr als ein weißes Kabel vorhanden ist, trenne das letzte weiße Kabel.' },
   { list: 5, rule: 5, wires: 'gelb schwarz rot blau gelb', lab: QUIET, cut: 4,
-    text: 'Genau ein schwarzes Kabel: das vierte Kabel.' },
+    text: 'Wenn genau ein schwarzes Kabel vorhanden ist, trenne das vierte Kabel.' },
   { list: 5, rule: 6, wires: 'gelb gelb rot schwarz schwarz', lab: QUIET, cut: 2,
-    text: 'Sonst: das zweite Kabel.' },
+    text: 'Andernfalls trenne das zweite Kabel.' },
   { list: 6, rule: 1, wires: 'gelb rot gelb blau rot gelb', lab: TWO_CELLS, cut: 2,
-    text: 'Mindestens zwei Notstromzellen und kein weißes Kabel: das zweite Kabel.' },
+    text: 'Wenn mindestens 2 Notstromzellen eingesetzt sind und kein weißes Kabel vorhanden ' +
+      'ist, trenne das zweite Kabel.' },
   { list: 6, rule: 2, wires: 'gelb rot gelb blau rot gelb', lab: QUIET, cut: 6,
-    text: 'Mehr als ein gelbes Kabel: das letzte gelbe Kabel.' },
+    text: 'Wenn mehr als ein gelbes Kabel vorhanden ist, trenne das letzte gelbe Kabel.' },
   { list: 6, rule: 3, wires: 'weiß rot blau rot schwarz blau', lab: TWO_CELLS, cut: 5,
-    text: 'Genau ein schwarzes Kabel: das schwarze Kabel.' },
+    text: 'Wenn genau ein schwarzes Kabel vorhanden ist, trenne das schwarze Kabel.' },
   { list: 6, rule: 4, wires: 'blau weiß rot rot gelb blau', lab: TWO_CELLS, cut: 4,
-    text: 'Erstes Kabel blau: das vierte Kabel.' },
+    text: 'Wenn das erste Kabel blau ist, trenne das vierte Kabel.' },
   { list: 6, rule: 5, wires: 'weiß rot blau blau gelb weiß', lab: TWO_CELLS, cut: 3,
-    text: 'Genau ein rotes Kabel: das dritte Kabel.' },
+    text: 'Wenn genau ein rotes Kabel vorhanden ist, trenne das dritte Kabel.' },
   { list: 6, rule: 6, wires: 'rot rot weiß schwarz schwarz gelb', lab: TWO_CELLS, cut: 1,
-    text: 'Sonst: das erste Kabel.' },
+    text: 'Andernfalls trenne das erste Kabel.' },
 ];
 
 describe('wiring rules', () => {
@@ -168,6 +172,8 @@ describe('wiring rules', () => {
     ({ list, rule, wires, lab, cut, text }) => {
       expect(printedRules(list)[rule - 1]).toBe(text);
       const state = stateOf(colorsOf(wires));
+      // The rule this case was worked out under is the one that decides.
+      expect(decide(colorsOf(wires), lab)).toEqual({ rule, wire: cut - 1 });
       const wireId = `w${cut - 1}`;
       expect(solveFor(state, lab)).toEqual([{ by: 'operator', input: { wireId } }]);
       expect(wiringModule.apply(def, state, { wireId }, 'op', ctx(lab))).toMatchObject({
@@ -189,8 +195,8 @@ describe('wiring rules', () => {
       const rules = printedRules(wireCount);
       expect(rules.length).toBeGreaterThanOrEqual(4);
       expect(rules.length).toBeLessThanOrEqual(6);
-      expect(rules.at(-1)).toMatch(/^Sonst: /);
-      expect(rules.slice(0, -1).every((r) => !r.startsWith('Sonst'))).toBe(true);
+      expect(rules.at(-1)).toMatch(/^Andernfalls trenne das \S+ Kabel\.$/);
+      expect(rules.slice(0, -1).filter((r) => !/^Wenn .+, trenne das .+\.$/.test(r))).toEqual([]);
     }
   });
 
@@ -225,6 +231,56 @@ describe('wiring rules', () => {
     // The 4-, 5- and 6-wire lists read the lab: some colourings change answer with it.
     for (const wireCount of [4, 5, 6]) {
       expect(labDependent.get(wireCount) ?? 0, `${wireCount} Kabel`).toBeGreaterThan(0);
+    }
+  });
+});
+
+/** The worked example a def's manual prints, line by line. */
+function printedExample(wiring: WiringDef): string[] {
+  const block = wiringModule
+    .manual(wiring)
+    .flatMap((section) => section.blocks)
+    .find((b) => b.kind === 'example');
+  if (block?.kind !== 'example') {
+    throw new Error('the manual prints no example');
+  }
+  return block.lines;
+}
+
+/**
+ * The sign values an example may state, as what each sets in a lab; the
+ * other values stay free. An example that states none holds in every lab.
+ */
+const STATED: Record<string, (lab: Edgework) => Edgework> = {
+  '': (lab) => lab,
+  'Kennung endet auf 4.': (lab) => ({ ...lab, serial: 'K7G3B-4' }),
+  'FRQ leuchtet nicht.': (lab) => ({
+    ...lab,
+    indicators: lab.indicators.map((i) => (i.id === 'FRQ' ? { ...i, lit: false } : i)),
+  }),
+  '1 Notstromzelle eingesetzt.': (lab) => ({ ...lab, cells: 1 }),
+};
+
+describe('the printed example', () => {
+  it.each([3, 4, 5, 6])('for a box of %i wires or more is worked by the rules', (fewest) => {
+    const variant = wiringModule.defSchema.parse({ ...rawDef, wires: { min: fewest, max: 6 } });
+    const [seen = '', applied = '', done = ''] = printedExample(variant);
+    const wires = /^Gesehen: ([a-zß, ]+)\.(?: (.+))?$/.exec(seen);
+    const rule = /^Liste (\d) Kabel: Regel (\d) trifft als erste zu \(.+\)\.$/.exec(applied);
+    const cut = /^Getrennt: (das [a-zß ]+ Kabel), Nr\. (\d)\.$/.exec(done);
+    const stated = STATED[wires?.[2] ?? ''];
+    if (wires === null || rule === null || cut === null || stated === undefined) {
+      throw new Error(`unreadable example: ${JSON.stringify([seen, applied, done])}`);
+    }
+    const colors = colorsOf((wires[1] ?? '').replaceAll(', ', ' '));
+    const [ruleNo, wireNo] = [Number(rule[2]), Number(cut[2])];
+    // The box the def draws fewest wires for, its list, and the cut that rule names.
+    expect([colors.length, Number(rule[1])]).toEqual([fewest, fewest]);
+    expect(printedRules(fewest)[ruleNo - 1]).toMatch(new RegExp(`, trenne ${cut[1]}\\.$`));
+    for (const lab of LABS.map(stated)) {
+      expect(decide(colors, lab), JSON.stringify(lab)).toEqual({ rule: ruleNo, wire: wireNo - 1 });
+      const wireId = `w${wireNo - 1}`;
+      expect(solveFor(stateOf(colors), lab)).toEqual([{ by: 'operator', input: { wireId } }]);
     }
   });
 });
@@ -337,7 +393,7 @@ describe('wiring module', () => {
     expect(() => solveFor(state, null)).toThrow(/nobody has read the sign/);
   });
 
-  it('prints an intro and one list per wire count, with the penalty of the def', () => {
+  it('prints the box, one list per wire count, and closes on the penalty of the def', () => {
     const manual = wiringModule.manual(def);
     expect(manual.map((s) => s.heading)).toEqual([
       'Notstrom-Brücken',
@@ -346,9 +402,11 @@ describe('wiring module', () => {
       '5 Kabel',
       '6 Kabel',
     ]);
-    const intro = JSON.stringify(manual[0]);
-    expect(intro).toContain('von oben');
-    expect(intro).toContain('−25 s');
+    expect(JSON.stringify(manual[0])).toContain('von oben nach unten gezählt');
+    expect(manual.flatMap((s) => s.blocks).at(-1)).toEqual({
+      kind: 'p',
+      text: 'Fehlgriff: Alarm, −25 s. Das Kabel bleibt getrennt.',
+    });
   });
 
   it('is solved from the views alone, without an alarm, for 300 seeds', () => {
