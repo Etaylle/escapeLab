@@ -194,10 +194,16 @@ function playerJoin(
   if (name.length === 0) {
     fail('Bitte einen Namen eingeben.');
   }
+  // Two Annas would make a relay drill's "PULT ANNA" ambiguous.
+  const names = new Set(state.players.map((p) => p.name.toLowerCase()));
+  let unique = name;
+  for (let n = 2; names.has(unique.toLowerCase()); n++) {
+    unique = `${name} ${n}`;
+  }
   const taken = new Set(state.players.map((p) => p.color));
   const player: Player = {
     id: action.playerId,
-    name,
+    name: unique,
     color: CREW_COLORS.find((c) => !taken.has(c)) ?? CREW_COLORS[0],
     ready: false,
     connected: true,
