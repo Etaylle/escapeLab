@@ -4,11 +4,15 @@
   "subtitle": "Zum Warmwerden: Laufen, Stationen aktivieren, Türen halten — alle Grundlagen in sechs Minuten.",
   "listOrder": 20,
   "story": {
-    "intro": "Übungslauf im Schulungslabor. Laufen mit WASD oder den Pfeiltasten, an einer leuchtenden Station drückt ihr E. Klick auf die Karte setzt einen Ping für alle, M zeigt die Minikarte. Ihr startet in getrennten Räumen und seht nie dasselbe — redet miteinander!",
+    "intro": "Übungslauf im Schulungslabor. Laufen mit WASD oder den Pfeiltasten, an einer leuchtenden Station drückt ihr E. Klick auf die Karte setzt einen Ping für alle, M zeigt die Minikarte. Ein Pult zeigt nur, wer davorsteht — redet miteinander!",
     "win": "Alle Systeme online, beide draußen. Das war der Übungslauf — jetzt seid ihr bereit für den echten Blackout.",
     "lose": "Die Notversorgung ist ausgefallen. Halb so wild, es war nur die Übung … noch mal von vorn."
   },
   "timeLimitSec": 360,
+  "radio": {
+    "start": "Beide zur Initialisierung, dort E drücken.",
+    "escape": "Notausgang offen. Beide hin."
+  },
   "map": {
     "tiles": [
       "###################",
@@ -20,28 +24,32 @@
       "###################"
     ],
     "spawns": {
-      "steuerpult": { "x": 3, "y": 4 },
-      "anleitung": { "x": 10, "y": 4 }
+      "steuerpult": { "x": 12, "y": 4 },
+      "anleitung": { "x": 8, "y": 1 }
     },
     "doors": [
+      { "id": "kontrolltuer", "x": 6, "y": 2, "opensBy": { "kind": "plate", "plateId": "halteplatte" } },
       { "id": "halteschott", "x": 14, "y": 2, "opensBy": { "kind": "puzzle", "puzzleId": "doppelbestaetigung" } }
     ],
+    "plates": [
+      { "id": "halteplatte", "x": 7, "y": 2, "label": "HALTEN" }
+    ],
     "stations": [
-      { "puzzleId": "init", "x": 2, "y": 1 },
-      { "puzzleId": "doppelbestaetigung", "x": 12, "y": 1 },
+      { "puzzleId": "init", "x": 12, "y": 1 },
+      { "puzzleId": "doppelbestaetigung", "x": 2, "y": 4 },
       { "puzzleId": "synchronkalibrierung", "x": 16, "y": 4 }
     ],
     "manuals": [
       {
         "id": "buch-leitstand",
         "kind": "book",
-        "x": 11,
-        "y": 5,
+        "x": 7,
+        "y": 1,
         "label": "HANDBUCH",
         "puzzleIds": ["doppelbestaetigung"]
       }
     ],
-    "edgeworkSign": { "x": 4, "y": 5 },
+    "edgeworkSign": { "x": 13, "y": 3 },
     "labels": [
       { "text": "KONTROLLE", "x": 3, "y": 3 },
       { "text": "LEITSTAND", "x": 10, "y": 3 },
@@ -53,19 +61,23 @@
     {
       "id": "anleitung",
       "name": "Anleitung",
-      "description": "Du hast das Handbuch. Nur du weißt, was wann zu tun ist — aber du kannst nichts drücken."
+      "description": "Du startest im Leitstand, am Handbuch neben der Halteplatte."
     },
     {
       "id": "steuerpult",
       "name": "Steuerpult",
-      "description": "Du sitzt an den Knöpfen. Ohne Ansagen der Anleitung drückst du besser nichts."
+      "description": "Du startest im Leitstand, am Kennungsschild."
     }
   ],
   "puzzles": [
     {
       "type": "button-sync",
       "id": "init",
-      "title": "Initialisierung"
+      "title": "Initialisierung",
+      "hints": [
+        "Beide an die Station stellen; einer drückt E, dann drückt jeder einmal."
+      ],
+      "onSolved": "Weiter in der Kontrolle – Platte hält die Tür."
     },
     {
       "type": "wiring",
@@ -73,16 +85,17 @@
       "title": "Kabelprüfung",
       "wires": { "min": 3, "max": 3 },
       "hints": [
-        "Steuerpult, lies die drei Farben von oben nach unten vor. Anleitung, nimm die Liste für 3 Kabel und geh sie von oben durch.",
-        "Die erste Regel, die zutrifft, gilt, alle danach nicht mehr. Kabel 1 ist das oberste. Getrennt wird erst, wenn ihr euch einig seid.",
-        "Bei drei Kabeln fragt keine Regel nach dem Pult. Bei mehr Kabeln schon: Dann liest das Steuerpult Laborkennung, Kontrollleuchten oder Zellen vor."
+        "Einer liest auf der Platte die Liste für 3 Kabel, der andere sagt die Farben von oben an."
       ],
-      "onSolved": "Genau so läuft es ab jetzt: einer sieht, einer hat die Regel. Letzte Station hinter dem Halteschott: Einer hält die Platte, einer geht."
+      "onSolved": "Spulen offen. Platte halten, dann beide nach Osten."
     },
     {
       "type": "button-sync",
       "id": "synchronkalibrierung",
       "title": "Synchronkalibrierung",
+      "hints": [
+        "Laut einzählen: drei, zwei, eins, jetzt. Beide drücken auf jetzt."
+      ],
       "windowMs": 3000
     }
   ]

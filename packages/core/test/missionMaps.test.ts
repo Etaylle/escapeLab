@@ -75,6 +75,23 @@ describe.each(missions.map((m) => [m.id, m] as const))('mission %s', (_id, missi
     }
   });
 
+  it('keeps every station out of reach of its rules, so nobody reads and works it alone', () => {
+    // The server counts a player at a spot up to 2 tiles from its centre (once
+    // there), so centres more than twice that apart share no standing spot.
+    for (const manual of map.manuals) {
+      for (const puzzleId of manual.puzzleIds) {
+        const station = map.stations.find((s) => s.puzzleId === puzzleId);
+        if (station === undefined) {
+          throw new Error(`mission "${mission.id}" has no station for "${puzzleId}"`);
+        }
+        expect(
+          Math.hypot(station.x - manual.x, station.y - manual.y),
+          `"${manual.id}" lies within reach of the station of "${puzzleId}"`,
+        ).toBeGreaterThan(4);
+      }
+    }
+  });
+
   it('keeps the exit clear of plates so nobody is counted out by accident', () => {
     const exit = map.exit;
     if (exit === undefined) {

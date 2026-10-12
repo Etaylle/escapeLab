@@ -1,11 +1,12 @@
 /**
  * End-to-end smoke test: boots the real server in-process, then drives two
  * real WebSocket clients through the full Blackout mission on its tile map —
- * streaming client-authoritative positions along BFS paths (plates, doors),
- * sending one client to each station and the other to the book that covers
- * it, solving every station with its module's solver on the operator's and
- * the reader's views (plus one deliberate wrong cut and one wrong key), and
- * surviving a mid-game reconnect. No answer is written down here.
+ * streaming client-authoritative positions along BFS paths (plates, doors,
+ * the camera plate that freezes the Flur drone), sending one client to each
+ * station and the other to the book or terminal that covers it, solving every
+ * station with its module's solver on the operator's and the reader's views
+ * (plus one deliberate wrong cut and one wrong key), and surviving a mid-game
+ * reconnect. No answer is written down here.
  * Run with: pnpm --filter @escapelab/server smoke
  */
 import { readFileSync } from 'node:fs';
@@ -38,36 +39,37 @@ type Role = 'anleitung' | 'steuerpult';
 
 /**
  * Scripted completion of the Blackout map (validated against the layout).
- * The Anleitung starts beside the Archiv book (stations 1 and 3), the
- * Steuerpult beside the sign and the Maschinenraum book (stations 2 and 4).
+ * The Anleitung starts at the Archiv book (stations 1 and 2) beside the sign,
+ * the Steuerpult at the fuse box; the terminal in the Serverraum holds the
+ * rules of stations 3 and 4. A walk with `frozen` crosses the Flur while the
+ * other client stands on the camera plate that holds that drone still.
  */
-const BLACKOUT_WALKTHROUGH: ({ role: Role; goTo: [number, number] } | { role: Role; do: 'interact' })[] = [
+const BLACKOUT_WALKTHROUGH: (
+  | { role: Role; goTo: [number, number]; frozen?: string }
+  | { role: Role; do: 'interact' }
+)[] = [
   { role: 'steuerpult', goTo: [2, 9] },
   { role: 'steuerpult', do: 'interact' }, // notstrom: Steuerpult at the box, Anleitung reads
-  { role: 'steuerpult', goTo: [3, 11] }, // to the Maschinenraum book
-  { role: 'anleitung', goTo: [7, 5] },
+  { role: 'anleitung', goTo: [7, 6] }, // out of the Archiv, holds flurplatte
+  { role: 'steuerpult', goTo: [3, 2] }, // out of the Maschinenraum, past the sign, to the book
+  { role: 'anleitung', goTo: [7, 5] }, // off the plate, at the keypad
   { role: 'anleitung', do: 'interact' }, // zugangscode: Anleitung at the keys, Steuerpult reads
-  { role: 'anleitung', goTo: [7, 6] }, // holds flurplatte
-  { role: 'steuerpult', goTo: [5, 5] }, // out of the Maschinenraum while the plate holds
-  { role: 'anleitung', goTo: [16, 6] }, // holds serverplatte
-  { role: 'steuerpult', goTo: [16, 3] }, // into the Serverraum
-  { role: 'anleitung', goTo: [3, 3] }, // to the Archiv book; the Serverraum closes behind
+  { role: 'anleitung', goTo: [11, 5] }, // onto the camera plate in front of the Serverraum
+  { role: 'steuerpult', goTo: [16, 6], frozen: 'flurwache' }, // across the Flur, holds serverplatte
+  { role: 'anleitung', goTo: [17, 2] }, // through the open door to the terminal
+  { role: 'steuerpult', goTo: [13, 6] }, // to the switch bank; the Serverraum closes behind
   { role: 'steuerpult', do: 'interact' }, // subsysteme: Steuerpult at the bank, Anleitung reads
-  { role: 'anleitung', goTo: [16, 6] }, // holds serverplatte to let the Steuerpult out
-  { role: 'steuerpult', goTo: [6, 6] },
-  { role: 'anleitung', goTo: [7, 6] }, // holds flurplatte
-  { role: 'steuerpult', goTo: [3, 11] }, // back to the Maschinenraum book
-  { role: 'anleitung', goTo: [9, 10] },
-  { role: 'anleitung', do: 'interact' }, // frequenz: Anleitung at the panel, Steuerpult reads
-  { role: 'anleitung', goTo: [7, 6] }, // holds flurplatte so the Steuerpult gets out
-  { role: 'steuerpult', goTo: [5, 5] },
+  { role: 'steuerpult', goTo: [9, 10] },
+  { role: 'steuerpult', do: 'interact' }, // frequenz: Steuerpult at the panel, Anleitung reads
+  { role: 'steuerpult', goTo: [16, 6] }, // holds serverplatte to let the Anleitung out
+  { role: 'anleitung', goTo: [11, 5] }, // out, and onto the camera plate again
   // The last station stays dead until the spare fuse arrives from the archive.
-  { role: 'anleitung', goTo: [1, 1] },
-  { role: 'anleitung', do: 'interact' }, // pick up the fuse
-  { role: 'anleitung', goTo: [16, 9] },
-  { role: 'anleitung', do: 'interact' }, // deliver it, and stay at the reactor
-  { role: 'steuerpult', goTo: [14, 9] },
-  { role: 'steuerpult', do: 'interact' }, // reaktorstart: both at the reactor
+  { role: 'steuerpult', goTo: [1, 1], frozen: 'flurwache' },
+  { role: 'steuerpult', do: 'interact' }, // pick up the fuse
+  { role: 'steuerpult', goTo: [16, 9] },
+  { role: 'steuerpult', do: 'interact' }, // deliver it, and stay at the reactor
+  { role: 'anleitung', goTo: [14, 9] },
+  { role: 'anleitung', do: 'interact' }, // reaktorstart: both at the reactor
 ];
 
 /** Who works and who reads stations 1–4; the whole crew stands at the fifth. */
@@ -75,7 +77,7 @@ const AT_STATION: { operator: Role; reader: Role }[] = [
   { operator: 'steuerpult', reader: 'anleitung' },
   { operator: 'anleitung', reader: 'steuerpult' },
   { operator: 'steuerpult', reader: 'anleitung' },
-  { operator: 'anleitung', reader: 'steuerpult' },
+  { operator: 'steuerpult', reader: 'anleitung' },
 ];
 
 /** What only the station shows, and a line only its printed rules hold, for stations 1–4. */
@@ -100,12 +102,15 @@ function assert(cond: boolean, message: string): asserts cond {
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** WebSocket client tracking the latest view, positions and its own avatar. */
+/**
+ * WebSocket client tracking the latest view, positions and its own avatar.
+ * `raw` logs every message received; a client resuming a dropped one keeps
+ * writing to the same log.
+ */
 class TestClient {
   private readonly socket: WebSocket;
   private readonly queue: ServerMessage[] = [];
   private waiter: (() => void) | null = null;
-  readonly raw: string[] = [];
   view: PlayerView | null = null;
   /** view messages received so far; every dispatch on the server sends one to everyone */
   viewCount = 0;
@@ -116,7 +121,10 @@ class TestClient {
   /** client-authoritative avatar position (tile units) */
   self: { x: number; y: number } | null = null;
 
-  constructor(readonly label: string) {
+  constructor(
+    readonly label: string,
+    readonly raw: string[] = [],
+  ) {
     this.socket = new WebSocket(`ws://localhost:${PORT}/ws`);
     this.socket.on('message', (data) => {
       this.raw.push(String(data));
@@ -348,6 +356,25 @@ async function walkTo(client: TestClient, to: [number, number]): Promise<void> {
   console.log(`✓ ${client.label}: walked to ${to.join(',')}`);
 }
 
+/**
+ * Walk while the other client holds the camera plate: the drone it freezes
+ * stands still in this client's positions stream before and after the walk,
+ * and nobody was spotted on the way.
+ */
+async function crossFrozen(
+  client: TestClient,
+  to: [number, number],
+  droneId: string,
+): Promise<void> {
+  const frozen = (): boolean => client.drones[droneId]?.frozen === true;
+  await client.untilPositions(`${droneId} frozen`, frozen);
+  console.log(`✓ ${client.label}: ${droneId} stands frozen while the camera plate is held`);
+  const alarms = client.view?.penaltySeq;
+  await walkTo(client, to);
+  assert(frozen() && client.view?.penaltySeq === alarms,
+    `${client.label} crossed the Flur unseen while ${droneId} stood still`);
+}
+
 // --- puzzle solvers ----------------------------------------------------------
 
 const wiringDef = mission.puzzles[0];
@@ -506,8 +533,8 @@ async function solveWiring(clients: Clients): Promise<void> {
     'the operator gets the wire layout');
   assert(annaW.puzzle.manual !== null && benW.puzzle.manual === null,
     'only the reader gets the printed rules');
-  assert(benW.edgework !== null && annaW.edgework === null,
-    'the edgework went to the Steuerpult, who passed the sign, and not to the Anleitung');
+  assert(annaW.edgework !== null && benW.edgework === null,
+    'the edgework went to the Anleitung, who started at the sign, and not to the Steuerpult');
 
   // The deliberate mistake: any wire but the one the solver would cut.
   const [right] = nextMoves(clients, 0);
@@ -532,21 +559,22 @@ async function solveWiring(clients: Clients): Promise<void> {
 
 /** Keypad incl. the mid-game reconnect; returns the replacement steuerpult client. */
 async function solveKeypad(clients: Clients, benJoined: { code: string; playerId: string; token: string }): Promise<TestClient> {
-  await clients.steuerpult.expectView('reads the keypad table', (v) =>
-    v.puzzle?.kind === 'keypad' && v.puzzle.manual !== null);
+  await clients.steuerpult.expectView('reads the keypad table, Laborkennung picked up', (v) =>
+    v.puzzle?.kind === 'keypad' && v.puzzle.manual !== null && v.edgework !== null);
   const benSelf = clients.steuerpult.self;
   clients.steuerpult.close();
   await clients.anleitung.expectView('sees Ben disconnected', (v) =>
     v.players.some((p) => p.name === 'Ben' && !p.connected));
 
-  const ben2 = new TestClient('ben2');
+  const ben2 = new TestClient('ben2', clients.steuerpult.raw);
   await ben2.open();
   ben2.send({ kind: 'resume', code: benJoined.code, playerId: benJoined.playerId,
     token: benJoined.token });
   await ben2.expect('re-joined', isJoined);
   ben2.playerId = benJoined.playerId;
   const benK = await ben2.expectView('resumed at the book, the table in hand', (v) =>
-    v.puzzle?.kind === 'keypad' && v.map !== null && v.presence.manualId === 'buch-maschinenraum');
+    v.puzzle?.kind === 'keypad' && v.map !== null && v.presence.manualId === 'buch-archiv');
+  assert(benK.edgework !== null, 'the Laborkennung survived the reconnect');
   const seeded = await ben2.ensureSelf();
   assert(
     benSelf !== null && Math.hypot(seeded.x - benSelf.x, seeded.y - benSelf.y) < 0.05,
@@ -585,9 +613,9 @@ async function solveSwitches(clients: Clients): Promise<void> {
 }
 
 async function solveSimon(clients: Clients): Promise<void> {
-  await clients.steuerpult.expectView('reads the tables without the flashes', (v) =>
+  await clients.anleitung.expectView('reads the tables without the flashes', (v) =>
     v.puzzle?.kind === 'simon' && v.puzzle.flashes === null && v.puzzle.manual !== null);
-  await clients.anleitung.expectView('stands at the flashing panel', (v) =>
+  await clients.steuerpult.expectView('stands at the flashing panel', (v) =>
     v.puzzle?.kind === 'simon' && v.puzzle.flashes !== null);
   await solveStation(clients, 3);
 }
@@ -600,17 +628,26 @@ async function solveSync(clients: Clients): Promise<void> {
   await solveStation(clients, 4);
 }
 
-/** Over the whole run: no station's instance reached its reader, no rules reached its operator. */
-function assertKeptApart(clients: Clients, benBefore: TestClient): void {
-  const streams: Record<Role, string> = {
-    anleitung: clients.anleitung.raw.join('\n'),
-    steuerpult: [...benBefore.raw, ...clients.steuerpult.raw].join('\n'),
-  };
+/** How far each role's message log ran when a station opened, and when it was solved. */
+interface OpenWindow {
+  from: Record<Role, number>;
+  to: Record<Role, number>;
+}
+
+/**
+ * While each of stations 1–4 was open, its instance never reached its reader
+ * and its rules never reached its operator. Outside that window a player may
+ * well have read them: one book covers two stations, worked by turns.
+ */
+function assertKeptApart(clients: Clients, windows: OpenWindow[]): void {
   for (const [i, { instance, rules }] of SECRETS.entries()) {
     const sides = AT_STATION[i] ?? fail(`no crew for station ${i + 1}`);
-    assert(!streams[sides.reader].includes(instance),
+    const open = windows[i] ?? fail(`station ${i + 1} was never opened`);
+    const received = (role: Role): string =>
+      clients[role].raw.slice(open.from[role], open.to[role]).join('\n');
+    assert(!received(sides.reader).includes(instance),
       `station ${i + 1}: the instance never reached the reader`);
-    assert(!streams[sides.operator].includes(rules),
+    assert(!received(sides.operator).includes(rules),
       `station ${i + 1}: the printed rules never reached the operator`);
   }
 }
@@ -667,12 +704,14 @@ await anna.expectView('sees Ben confirm', (v) =>
 
 anna.send({ kind: 'start-mission' });
 const clients: Clients = { anleitung: anna, steuerpult: ben };
-await anna.expectView('stands on the map beside the Archiv book, no puzzle active', (v) =>
+await anna.expectView('stands at the Archiv book with the Laborkennung, no puzzle on', (v) =>
   v.phase === 'playing' && v.map !== null && v.puzzle === null &&
-  v.presence.manualId === 'buch-archiv' && v.manualsHere.length === 1);
-await ben.expectView('starts beside the sign and keeps the Laborkennung', (v) =>
-  v.map !== null && v.presence.signSeen && v.edgework !== null);
-assert(anna.view?.edgework === null, 'the Anleitung has not seen the sign');
+  v.presence.manualId === 'buch-archiv' && v.manualsHere.length === 1 &&
+  v.presence.signSeen && v.edgework !== null);
+await ben.expectView('starts at the fuse box in the Maschinenraum', (v) =>
+  v.map !== null && v.presence.manualId === null);
+assert(ben.view?.edgework === null && ben.view.presence.signSeen === false,
+  'the Steuerpult has not seen the sign');
 
 // Map pings fan out to the whole crew and are rate limited per player.
 anna.send({ kind: 'ping', x: 9, y: 6 });
@@ -725,11 +764,19 @@ assert(
 const streamedDrones = (client: TestClient): string =>
   Object.keys(client.drones).sort().join(',');
 
+const logSizes = (): Record<Role, number> => ({
+  anleitung: clients.anleitung.raw.length,
+  steuerpult: clients.steuerpult.raw.length,
+});
+const openWindows: OpenWindow[] = [];
+
 let solved = 0;
 for (const step of BLACKOUT_WALKTHROUGH) {
   const client = clients[step.role];
   if ('goTo' in step) {
-    await walkTo(client, step.goTo);
+    await (step.frozen === undefined
+      ? walkTo(client, step.goTo)
+      : crossFrozen(client, step.goTo, step.frozen));
     continue;
   }
   const self = await client.ensureSelf();
@@ -758,6 +805,7 @@ for (const step of BLACKOUT_WALKTHROUGH) {
       Math.hypot(self.x - (station.x + 0.5), self.y - (station.y + 0.5)) <= 1.6,
     `${step.role} stands within interact range of station ${solved + 1}`,
   );
+  const opened = logSizes();
   client.send({ kind: 'interact' });
   await client.until('puzzle active', (v) => v.puzzle !== null);
   if (solved === 0) {
@@ -777,6 +825,7 @@ for (const step of BLACKOUT_WALKTHROUGH) {
   } else {
     await solveSync(clients);
   }
+  openWindows.push({ from: opened, to: logSizes() });
   solved += 1;
   if (solved < mission.puzzles.length) {
     await clients.anleitung.expectView(`puzzle ${solved} solved, back on the map`, (v) =>
@@ -812,7 +861,7 @@ await clients.steuerpult.expectView('won the mission', (v) => v.phase === 'won')
 assert(/erwachen die Systeme/.test(annaWon.storyText), 'win story is shown');
 // At least the wrong cut and the wrong key; patrolling drones may add more.
 assert(annaWon.penaltySeq >= 2, 'both deliberate penalties were counted');
-assertKeptApart(clients, ben);
+assertKeptApart(clients, openWindows);
 
 // The next run starts by itself once the whole crew confirms on the end screen.
 assert(
@@ -842,6 +891,7 @@ assert(
 anna.close();
 clients.steuerpult.close();
 console.log(
-  '\nSmoke test passed: Blackout with streamed movement, plates, books, reconnect, penalties. 🎉',
+  '\nSmoke test passed: Blackout with streamed movement, plates, books, the camera plate, ' +
+    'reconnect, penalties. 🎉',
 );
 process.exit(0);
