@@ -21,13 +21,14 @@ export function Manual({ sections }: { sections: ManualSection[] }) {
   );
 }
 
-function Block({ block }: { block: ManualBlock }) {
+/** One printed block; a rules list continued from another page numbers on from `start`. */
+export function Block({ block, start }: { block: ManualBlock; start?: number }) {
   switch (block.kind) {
     case 'p':
       return <p>{block.text}</p>;
     case 'rules':
       return (
-        <ol className="manual-rules">
+        <ol className="manual-rules" start={start}>
           {block.items.map((item, i) => (
             <li key={i}>{item}</li>
           ))}

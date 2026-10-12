@@ -9,6 +9,8 @@ interface Props {
   view: PlayerView;
   positionsRef: React.MutableRefObject<Record<string, PlayerPosition>>;
   chatsRef: React.MutableRefObject<ChatLine[]>;
+  notesOpen: boolean;
+  onToggleNotes: () => void;
   onOpenInfo: () => void;
 }
 
@@ -45,7 +47,14 @@ function chatArrival(line: ChatLine): number {
  * edgework once you have read the sign, and the latest radio line, because
  * everything else either sits on the world itself or belongs in the info panel.
  */
-export function MissionHud({ view, positionsRef, chatsRef, onOpenInfo }: Props) {
+export function MissionHud({
+  view,
+  positionsRef,
+  chatsRef,
+  notesOpen,
+  onToggleNotes,
+  onOpenInfo,
+}: Props) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => setTick((t) => t + 1), STATUS_SAMPLE_MS);
@@ -87,6 +96,9 @@ export function MissionHud({ view, positionsRef, chatsRef, onOpenInfo }: Props) 
       <div className="hud-right">
         {view.edgework !== null && <EdgeworkChip edgework={view.edgework} />}
         {radio !== null && <span className="hud-radio">📻 {radio}</span>}
+        <button className="hud-info hud-notes" aria-pressed={notesOpen} onClick={onToggleNotes}>
+          ✎ Notizen [N]
+        </button>
         <button className="hud-info" onClick={onOpenInfo}>
           ℹ Info [I]
         </button>

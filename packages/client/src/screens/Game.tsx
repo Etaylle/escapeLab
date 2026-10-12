@@ -8,6 +8,7 @@ import type {
   PuzzleView,
   RunEvent,
 } from '@escapelab/core';
+import { useKeys, useNow } from '../hooks.js';
 import { BANNER_MS, radioNews } from '../radio.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { play } from '../sounds.js';
@@ -18,11 +19,14 @@ import { PuzzlePanel } from './PuzzlePanel.js';
 import { MissionHud } from './MissionHud.js';
 import { InfoPanel } from './InfoPanel.js';
 import { Manual } from './Manual.js';
+import { Notepad, useNotes } from './Notepad.js';
 import { ReadingOverlay } from './Reading.js';
 import { WorldModal } from './WorldModal.js';
 
 interface Props {
   view: PlayerView;
+  /** the room this run plays in; the notepad is kept under it */
+  roomCode: string | null;
   positionsRef: React.MutableRefObject<Record<string, PlayerPosition>>;
   dronesRef: React.MutableRefObject<Record<string, DronePosition>>;
   pingsRef: React.MutableRefObject<MapPing[]>;
@@ -35,15 +39,6 @@ function formatRemaining(deadlineAt: number, now: number): string {
   const min = Math.floor(totalSec / 60);
   const sec = totalSec % 60;
   return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-}
-
-function useNow(intervalMs: number): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(timer);
-  }, [intervalMs]);
-  return now;
 }
 
 /** Full-width emergency banner: what broke, where to go, how long you have. */
@@ -341,17 +336,31 @@ function useEscape(onEscape: () => void): void {
 
 // --- screen ------------------------------------------------------------------
 
-export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, send }: Props) {
+export function GameScreen({
+  view,
+  roomCode,
+  positionsRef,
+  dronesRef,
+  pingsRef,
+  chatsRef,
+  send,
+}: Props) {
   const { shaking, alarmVisible, stamp } = useFeedback(view);
   const radioLine = useRadioBanner(view);
   const signNote = useSignNote(view);
   const modal = useWorldModal(view);
   const [infoOpen, setInfoOpen] = useState(false);
+  const notes = useNotes(roomCode, view.you.id);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const toggleNotes = (): void => setNotesOpen((open) => !open);
+  useKeys(['n'], toggleNotes);
   useEscape(() => {
     if (infoOpen) {
       setInfoOpen(false);
-    } else {
+    } else if (modal.station !== null || modal.reading !== null) {
       modal.close();
+    } else {
+      setNotesOpen(false);
     }
   });
   const map = view.map;
@@ -461,6 +470,9 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
           onOperate={modal.operate}
           send={send}
         />
+        {notesOpen && (
+          <Notepad notes={notes} edgework={view.edgework} onClose={() => setNotesOpen(false)} />
+        )}
       </div>
 
       {modal.station !== null && (
@@ -475,10 +487,12 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
       )}
       {modal.reading !== null && (
         <ReadingOverlay
+          key={modal.reading.id}
           manual={modal.reading}
           puzzle={view.puzzle}
           current={view.currentPuzzleIndex}
           edgework={view.edgework}
+          onAskNote={() => send({ kind: 'request-hint' })}
           onClose={modal.close}
         />
       )}
@@ -487,6 +501,8 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
         view={view}
         positionsRef={positionsRef}
         chatsRef={chatsRef}
+        notesOpen={notesOpen}
+        onToggleNotes={toggleNotes}
         onOpenInfo={() => setInfoOpen(true)}
       />
 

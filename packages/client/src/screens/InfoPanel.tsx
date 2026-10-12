@@ -11,10 +11,12 @@ type Tab = 'auftrag' | 'karte' | 'steuerung';
 const CONTROLS: readonly (readonly [string, string])[] = [
   ['W A S D / Pfeile', 'Laufen'],
   ['E', 'Bedienen, lesen, durchsuchen, aufschließen, aufnehmen oder einsetzen'],
-  ['Esc', 'Pult oder Lesen verlassen'],
+  ['Esc', 'Pult, Lesen oder Notizblock verlassen'],
+  ['← → beim Lesen', 'Blättern'],
   ['Q', 'Getragenes Objekt ablegen — so sind Übergaben möglich'],
   ['Klick auf die Welt', 'Ping für alle setzen'],
   ['C, dann 1–8', 'Schnellchat'],
+  ['N', 'Notizblock — bleibt für diesen Raum gespeichert'],
   ['M', 'Minikarte ein- und ausblenden'],
   ['I oder H', 'Dieses Info-Fenster'],
 ];
@@ -132,8 +134,9 @@ export function InfoPanel({ view, onClose }: Props) {
               </div>
             </dl>
             <p className="muted">
-              Wo die Regeln der offenen Station liegen, gibt es nach kurzer Wartezeit Notizen der
-              letzten Crew auf Anfrage. Jede kostet Zeit — und schon eine kostet den Rang S.
+              Neben den Regeln der offenen Station hat die letzte Crew Notizen hinterlassen: Wer
+              dort liest, kann sie nach kurzer Wartezeit erbitten. Jede kostet Zeit — und schon
+              eine kostet den Rang S.
             </p>
           </div>
         )}

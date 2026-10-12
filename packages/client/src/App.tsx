@@ -170,6 +170,7 @@ export function App() {
         return (
           <GameScreen
             view={conn.view}
+            roomCode={conn.roomCode}
             positionsRef={conn.positions}
             dronesRef={conn.drones}
             pingsRef={conn.pings}
