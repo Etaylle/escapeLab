@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, inEscapePhase, initialState, parseMission, viewFor } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
+import { standing } from './lab.js';
 
 /**
  * Fixture: two rooms split by a wall at x=4 with a door at (4,2) that opens
- * only while the plate 'p1' is held. Movement itself is client-authoritative
- * and not part of the reducer — plates arrive as set-pressed-plates actions
- * (the server derives them from live positions), stations are activated via
- * interact (the server checks proximity before dispatching).
+ * only while the plate 'p1' is held; both stations stand in the west room,
+ * where the crew starts. Movement itself is client-authoritative and not
+ * part of the reducer — plates arrive as set-occupancy actions and presence
+ * as set-presence (the server derives both from live positions), stations
+ * are activated via interact (the server checks proximity before
+ * dispatching).
  */
 const fixture: Mission = parseMission({
   id: 'maptest',
@@ -19,23 +22,8 @@ const fixture: Mission = parseMission({
     { id: 'steuerpult', name: 'Steuerpult', description: '' },
   ],
   puzzles: [
-    {
-      type: 'button-sync',
-      id: 'first',
-      title: 'Erstes',
-      prompt: '',
-      buttons: [{ roleId: 'steuerpult', label: 'A' }],
-    },
-    {
-      type: 'button-sync',
-      id: 'second',
-      title: 'Zweites',
-      prompt: '',
-      buttons: [
-        { roleId: 'anleitung', label: 'B1' },
-        { roleId: 'steuerpult', label: 'B2' },
-      ],
-    },
+    { type: 'button-sync', id: 'first', title: 'Erstes' },
+    { type: 'button-sync', id: 'second', title: 'Zweites' },
   ],
   map: {
     tiles: ['#########', '#...#...#', '#.......#', '#...#...#', '#...#...#', '#########'],
@@ -43,8 +31,8 @@ const fixture: Mission = parseMission({
     doors: [{ id: 'd1', x: 4, y: 2, opensBy: { kind: 'plate', plateId: 'p1' } }],
     plates: [{ id: 'p1', x: 2, y: 3, label: 'HALTEN' }],
     stations: [
-      { puzzleId: 'first', x: 6, y: 3 },
-      { puzzleId: 'second', x: 7, y: 4 },
+      { puzzleId: 'first', x: 1, y: 4 },
+      { puzzleId: 'second', x: 3, y: 4 },
     ],
     labels: [{ text: 'LINKS', x: 1, y: 1 }],
   },
@@ -56,12 +44,19 @@ function run(actions: Action[], from: GameState): GameState {
   return actions.reduce(applyAction, from);
 }
 
-/** Both stations here are button-syncs. */
-function press(playerId: string, at: number): Action {
-  return { type: 'puzzle-input', playerId, at, input: { press: true } };
+/** Both stations are button-syncs: one input, a press, from everyone standing there. */
+function bothPress(state: GameState, at: number): GameState {
+  const def = state.mission.puzzles[state.currentPuzzleIndex];
+  return run(
+    [
+      { type: 'puzzle-input', playerId: 'p1', at, input: { press: true } },
+      { type: 'puzzle-input', playerId: 'p2', at, input: { press: true } },
+    ],
+    standing(state, { stations: { [def?.id ?? '']: ['p1', 'p2'] } }),
+  );
 }
 
-function started(): GameState {
+function started(mission: Mission = fixture): GameState {
   return run(
     [
       { type: 'player-join', playerId: 'p1', name: 'Anna' },
@@ -71,7 +66,7 @@ function started(): GameState {
       { type: 'set-ready', playerId: 'p2', ready: true },
       { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 },
     ],
-    initialState(fixture),
+    initialState(mission),
   );
 }
 
@@ -85,9 +80,11 @@ describe('mapped missions', () => {
     expect(anna.map?.yourSpawn).toEqual({ x: 1, y: 1 });
     expect(viewFor(state, 'p2').map?.yourSpawn).toEqual({ x: 3, y: 1 });
     expect(anna.map?.stations).toEqual([
-      { x: 6, y: 3, title: 'Erstes', status: 'armed' },
-      { x: 7, y: 4, title: 'Zweites', status: 'locked' },
+      { puzzleId: 'first', x: 1, y: 4, title: 'Erstes', status: 'armed' },
+      { puzzleId: 'second', x: 3, y: 4, title: 'Zweites', status: 'locked' },
     ]);
+    expect(anna.map?.manuals).toEqual([]);
+    expect(anna.map?.edgeworkSign).toBeNull();
   });
 
   it('opens plate doors exactly while the plate is held', () => {
@@ -121,19 +118,13 @@ describe('mapped missions', () => {
       applyAction(state, { type: 'interact', playerId: 'p2', at: T0 + 1100 }),
     ).toThrow(/läuft schon/);
 
-    state = applyAction(state, press('p2', T0 + 2000));
+    state = bothPress(state, T0 + 2000);
     expect(state.currentPuzzleIndex).toBe(1);
     expect(state.puzzleState).toBeNull();
     expect(viewFor(state, 'p2').map?.stations[1]?.status).toBe('armed');
 
     state = applyAction(state, { type: 'interact', playerId: 'p1', at: T0 + 3000 });
-    state = run(
-      [
-        press('p1', T0 + 4000),
-        press('p2', T0 + 4500),
-      ],
-      state,
-    );
+    state = bothPress(state, T0 + 4000);
     expect(state.phase).toBe('won');
   });
 
@@ -147,24 +138,11 @@ describe('mapped missions', () => {
         plates: [],
       },
     });
-    let state = run(
-      [
-        { type: 'player-join', playerId: 'p1', name: 'Anna' },
-        { type: 'player-join', playerId: 'p2', name: 'Ben' },
-        { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
-        { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
-        { type: 'set-ready', playerId: 'p2', ready: true },
-        { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 },
-      ],
-      initialState(withPuzzleDoor),
-    );
+    let state = started(withPuzzleDoor);
     expect(viewFor(state, 'p1').map?.doors[0]?.open).toBe(false);
-    state = run(
-      [
-        { type: 'interact', playerId: 'p2', at: T0 + 1000 },
-        press('p2', T0 + 2000),
-      ],
-      state,
+    state = bothPress(
+      applyAction(state, { type: 'interact', playerId: 'p2', at: T0 + 1000 }),
+      T0 + 2000,
     );
     expect(viewFor(state, 'p1').map?.doors[0]?.open).toBe(true);
   });
@@ -175,30 +153,18 @@ describe('mapped missions', () => {
       id: 'exittest',
       map: { ...JSON.parse(JSON.stringify(fixture.map)), exit: { x: 1, y: 2 } },
     });
-    let state = run(
-      [
-        { type: 'player-join', playerId: 'p1', name: 'Anna' },
-        { type: 'player-join', playerId: 'p2', name: 'Ben' },
-        { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
-        { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
-        { type: 'set-ready', playerId: 'p2', ready: true },
-        { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 },
-      ],
-      initialState(withExit),
-    );
+    let state = started(withExit);
     // Escaping before the puzzles are done is rejected.
     expect(() => applyAction(state, { type: 'escaped', at: T0 + 1 })).toThrow(/verriegelt/);
     expect(viewFor(state, 'p1').map?.exit).toEqual({ x: 1, y: 2, open: false });
 
-    state = run(
-      [
-        { type: 'interact', playerId: 'p2', at: T0 + 1000 },
-        press('p2', T0 + 2000),
-        { type: 'interact', playerId: 'p1', at: T0 + 3000 },
-        press('p1', T0 + 4000),
-        press('p2', T0 + 4500),
-      ],
-      state,
+    state = bothPress(
+      applyAction(state, { type: 'interact', playerId: 'p2', at: T0 + 1000 }),
+      T0 + 2000,
+    );
+    state = bothPress(
+      applyAction(state, { type: 'interact', playerId: 'p1', at: T0 + 3000 }),
+      T0 + 4500,
     );
     expect(state.phase).toBe('playing');
     expect(inEscapePhase(state)).toBe(true);
@@ -212,27 +178,9 @@ describe('mapped missions', () => {
     expect(applyAction(state, { type: 'escaped', at: T0 + 300_000 }).phase).toBe('lost');
   });
 
-  it('keeps the old auto-chain flow for missions without a map', () => {
-    const noMap = parseMission({
-      ...JSON.parse(JSON.stringify(fixture)),
-      id: 'nomap',
-      map: undefined,
-    });
-    const state = run(
-      [
-        { type: 'player-join', playerId: 'p1', name: 'Anna' },
-        { type: 'player-join', playerId: 'p2', name: 'Ben' },
-        { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
-        { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
-        { type: 'set-ready', playerId: 'p2', ready: true },
-        { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 },
-      ],
-      initialState(noMap),
-    );
-    expect(state.puzzleState).not.toBeNull();
-    expect(viewFor(state, 'p1').map).toBeNull();
+  it('takes no mission without a map: there would be nowhere to stand', () => {
     expect(() =>
-      applyAction(state, { type: 'interact', playerId: 'p1', at: T0 + 1000 }),
-    ).toThrow(/keine Karte/);
+      parseMission({ ...JSON.parse(JSON.stringify(fixture)), id: 'nomap', map: undefined }),
+    ).toThrow(/map/);
   });
 });

@@ -1,19 +1,16 @@
 import { z } from 'zod';
-import { fail } from '../errors.js';
 import type { Rng } from '../rng.js';
 import { commonDefShape, type PuzzleModule } from './module.js';
 
 /**
- * Invisible maze: the operator (navigator) sees their own marker and the
- * goal but no walls, the manual role (guide) sees the walls but not the
- * marker. Only talking to each other gets the marker out. Bumping a wall
- * costs time.
+ * Invisible maze: the operator (navigator) at the station sees the marker
+ * and the goal but no walls, the reader (guide) at the wiring plan sees the
+ * walls but not the marker. Only talking to each other gets the marker out.
+ * Bumping a wall costs time.
  */
-const defSchema = z.object({
+const defSchema = z.strictObject({
   type: z.literal('maze'),
   ...commonDefShape,
-  operatorRoleId: z.string().min(1),
-  manualRoleId: z.string().min(1),
   size: z.number().int().min(4).max(8).default(6),
   penaltySec: z.number().int().positive().default(15),
 });
@@ -45,10 +42,10 @@ export type MazeInput = z.infer<typeof inputSchema>;
 export interface MazeView {
   kind: 'maze';
   size: number;
-  /** your marker — only the navigator sees it */
+  /** the marker — only operators see it */
   pos: { x: number; y: number } | null;
   goal: { x: number; y: number };
-  /** per-cell open-side bitmasks — only the guide sees them */
+  /** per-cell open-side bitmasks — only readers see them */
   cells: number[] | null;
   lastResult: 'wall' | null;
 }
@@ -149,6 +146,7 @@ function farthestFrom(
 export const mazeModule: PuzzleModule<MazeDef, MazeState, MazeInput, MazeView> = {
   type: 'maze',
   usesEdgework: false,
+  wholeCrew: false,
   defSchema,
   inputSchema,
 
@@ -160,10 +158,7 @@ export const mazeModule: PuzzleModule<MazeDef, MazeState, MazeInput, MazeView> =
     return { type: 'maze', size, cells, pos, goal, lastResult: null };
   },
 
-  apply(def, state, input, roleId) {
-    if (roleId !== def.operatorRoleId) {
-      fail('Nur die Rolle am Navigationspult kann den Marker bewegen.');
-    }
+  apply(_def, state, input) {
     const dir = MAZE_DIRS[input.dir];
     if (dir === undefined) {
       return { state, solved: false, penalty: null };
@@ -184,15 +179,14 @@ export const mazeModule: PuzzleModule<MazeDef, MazeState, MazeInput, MazeView> =
     };
   },
 
-  view(def, state, roleId) {
-    const isNavigator = roleId === def.operatorRoleId;
+  view(_def, state, viewer) {
     return {
       kind: 'maze',
       size: state.size,
-      pos: isNavigator ? { ...state.pos } : null,
+      pos: viewer.operating ? { ...state.pos } : null,
       goal: { ...state.goal },
-      cells: roleId === def.manualRoleId ? [...state.cells] : null,
-      lastResult: isNavigator ? state.lastResult : null,
+      cells: viewer.reading ? [...state.cells] : null,
+      lastResult: viewer.operating ? state.lastResult : null,
     };
   },
 
@@ -223,14 +217,12 @@ export const mazeModule: PuzzleModule<MazeDef, MazeState, MazeInput, MazeView> =
     ];
   },
 
-  solve(def, views) {
-    const navigator = views[def.operatorRoleId];
-    const cells = views[def.manualRoleId]?.cells;
-    if (navigator?.pos == null || cells == null) {
+  solve(def, { operator, reader }) {
+    if (operator.pos === null || reader.cells === null) {
       throw new Error(`maze "${def.id}": solving needs the navigator and the guide views`);
     }
-    const { firstDir } = explore(navigator.size, cells, navigator.pos);
-    const dir = firstDir[idx(navigator.size, navigator.goal.x, navigator.goal.y)] ?? -1;
-    return dir < 0 ? [] : [{ roleId: def.operatorRoleId, input: { dir } }];
+    const { firstDir } = explore(operator.size, reader.cells, operator.pos);
+    const dir = firstDir[idx(operator.size, operator.goal.x, operator.goal.y)] ?? -1;
+    return dir < 0 ? [] : [{ by: 'operator', input: { dir } }];
   },
 };

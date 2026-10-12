@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { serialHasVowel, type Edgework } from '../edgework.js';
-import { fail } from '../errors.js';
 import { commonDefShape, type ManualBlock, type PuzzleModule } from './module.js';
 
 export const SIMON_COLORS = ['rot', 'blau', 'gruen', 'gelb'] as const;
@@ -14,11 +13,9 @@ export type SimonColor = (typeof SIMON_COLORS)[number];
  * changes from run to run and after every alarm. A wrong press costs time
  * and restarts the current stage's input; the stage itself is kept.
  */
-const defSchema = z.object({
+const defSchema = z.strictObject({
   type: z.literal('simon'),
   ...commonDefShape,
-  operatorRoleId: z.string().min(1),
-  manualRoleId: z.string().min(1),
   sequenceLength: z.number().int().min(3).max(8).default(5),
   penaltySec: z.number().int().positive().default(20),
 });
@@ -41,9 +38,9 @@ export type SimonInput = z.infer<typeof inputSchema>;
 
 export interface SimonView {
   kind: 'simon';
-  /** what the current stage flashes, in order — only the operator sees it */
+  /** what the current stage flashes, in order — only operators see it */
   flashes: SimonColor[] | null;
-  /** the color buttons in panel order — only the operator has them */
+  /** the color buttons in panel order — only operators have them */
   buttons: SimonColor[] | null;
   /** 1-based: stage k flashes the first k colors */
   stage: number;
@@ -51,7 +48,7 @@ export interface SimonView {
   /** correct presses so far in the current stage */
   progress: number;
   lastWrong: boolean;
-  /** alarms so far in this run; they pick the table row, so every role sees them */
+  /** alarms so far in this run; they pick the table row, so everyone sees them */
   alarms: number;
 }
 
@@ -112,6 +109,7 @@ function tableBlock(label: string, table: TranslationTable): ManualBlock {
 export const simonModule: PuzzleModule<SimonDef, SimonState, SimonInput, SimonView> = {
   type: 'simon',
   usesEdgework: true,
+  wholeCrew: false,
   defSchema,
   inputSchema,
 
@@ -127,10 +125,7 @@ export const simonModule: PuzzleModule<SimonDef, SimonState, SimonInput, SimonVi
     return { type: 'simon', sequence, stage: 1, progress: 0, lastWrong: false };
   },
 
-  apply(def, state, input, roleId, ctx) {
-    if (roleId !== def.operatorRoleId) {
-      fail('Nur die Rolle am Frequenz-Panel kann Tasten drücken.');
-    }
+  apply(_def, state, input, _playerId, ctx) {
     const flashed = state.sequence[state.progress];
     if (flashed === undefined || state.progress >= state.stage) {
       return { state, solved: false, penalty: null };
@@ -156,12 +151,11 @@ export const simonModule: PuzzleModule<SimonDef, SimonState, SimonInput, SimonVi
     return { state: { ...state, progress, lastWrong: false }, solved: true, penalty: null };
   },
 
-  view(def, state, roleId, ctx) {
-    const isOperator = roleId === def.operatorRoleId;
+  view(_def, state, viewer, ctx) {
     return {
       kind: 'simon',
-      flashes: isOperator ? state.sequence.slice(0, state.stage) : null,
-      buttons: isOperator ? [...SIMON_COLORS] : null,
+      flashes: viewer.operating ? state.sequence.slice(0, state.stage) : null,
+      buttons: viewer.operating ? [...SIMON_COLORS] : null,
       stage: state.stage,
       stages: state.sequence.length,
       progress: state.progress,
@@ -193,14 +187,14 @@ export const simonModule: PuzzleModule<SimonDef, SimonState, SimonInput, SimonVi
     ];
   },
 
-  solve(def, views, edgework) {
+  solve(def, { operator }, edgework) {
     if (edgework === null) {
       throw new Error(
-        `simon "${def.id}": the translation reads the Laborkennung, but no role sees the edgework`,
+        `simon "${def.id}": the translation reads the Laborkennung, ` +
+          'but nobody has read the sign yet',
       );
     }
-    const operator = views[def.operatorRoleId];
-    if (operator?.flashes == null) {
+    if (operator.flashes === null) {
       throw new Error(`simon "${def.id}": solving needs the operator's view`);
     }
     const flashed = operator.flashes[operator.progress];
@@ -208,6 +202,6 @@ export const simonModule: PuzzleModule<SimonDef, SimonState, SimonInput, SimonVi
       return [];
     }
     const color = pressFor(flashed, edgework, operator.alarms);
-    return [{ roleId: def.operatorRoleId, input: { kind: 'press', color } }];
+    return [{ by: 'operator', input: { kind: 'press', color } }];
   },
 };

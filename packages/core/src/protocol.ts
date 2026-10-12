@@ -83,7 +83,7 @@ export interface MissionInfo {
   roles: string[];
   timeLimitSec: number;
   puzzleCount: number;
-  /** tile rows of the map, for the preview thumbnail; empty without a map */
+  /** tile rows of the map, for the preview thumbnail */
   tiles: string[];
 }
 
@@ -103,10 +103,8 @@ export interface MissionManualStation {
   /** position in the mission from 0, like `currentPuzzleIndex` */
   index: number;
   title: string;
-  /** null where every role at the station presses a button and nobody reads (button-sync) */
-  manualRoleName: string | null;
-  /** several names, comma-separated, where every listed role operates (button-sync) */
-  operatorRoleName: string;
+  /** labels of the manual objects in the lab that print these rules; none where nobody reads */
+  readAt: string[];
   usesEdgework: boolean;
   manual: ManualSection[];
 }
@@ -128,6 +126,8 @@ export interface DronePosition {
   halfAngleDeg: number;
   /** true for a moment after it caught someone */
   alerted: boolean;
+  /** held still by its plate: it neither moves nor sees */
+  frozen: boolean;
 }
 
 export type ServerMessage =

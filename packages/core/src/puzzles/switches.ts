@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { indicatorLit, serialLastDigitIsOdd, type Edgework } from '../edgework.js';
-import { fail } from '../errors.js';
 import type { Rng } from '../rng.js';
 import { commonDefShape, type PuzzleModule } from './module.js';
 
@@ -11,11 +10,9 @@ import { commonDefShape, type PuzzleModule } from './module.js';
  * letters ask the edgework. All switches start down, toggling is free, and
  * PRÜFEN with any switch in the wrong position costs time.
  */
-const defSchema = z.object({
+const defSchema = z.strictObject({
   type: z.literal('switches'),
   ...commonDefShape,
-  operatorRoleId: z.string().min(1),
-  manualRoleId: z.string().min(1),
   penaltySec: z.number().int().positive().default(20),
 });
 export type SwitchesDef = z.infer<typeof defSchema>;
@@ -47,7 +44,7 @@ export type SwitchesInput = z.infer<typeof inputSchema>;
 
 export interface SwitchesView {
   kind: 'switches';
-  /** the bank, left to right — only the operator gets it */
+  /** the bank, left to right — only operators get it */
   switches: Switch[] | null;
   attempts: number;
 }
@@ -128,6 +125,7 @@ export const switchesModule: PuzzleModule<
 > = {
   type: 'switches',
   usesEdgework: true,
+  wholeCrew: false,
   defSchema,
   inputSchema,
 
@@ -143,16 +141,8 @@ export const switchesModule: PuzzleModule<
     return { type: 'switches', switches, attempts: 0 };
   },
 
-  apply(def, state, input, roleId, { edgework }) {
-    const check = 'check' in input;
-    if (roleId !== def.operatorRoleId) {
-      fail(
-        check
-          ? 'Nur die Rolle an der Schalterbank kann prüfen.'
-          : 'Nur die Rolle an der Schalterbank kann schalten.',
-      );
-    }
-    if (!check) {
+  apply(_def, state, input, _playerId, { edgework }) {
+    if (!('check' in input)) {
       const switches = state.switches.map((sw, i) =>
         i === input.switchIndex ? { ...sw, up: !sw.up } : sw,
       );
@@ -168,10 +158,10 @@ export const switchesModule: PuzzleModule<
     };
   },
 
-  view(def, state, roleId) {
+  view(_def, state, viewer) {
     return {
       kind: 'switches',
-      switches: roleId === def.operatorRoleId ? state.switches.map((sw) => ({ ...sw })) : null,
+      switches: viewer.operating ? state.switches.map((sw) => ({ ...sw })) : null,
       attempts: state.attempts,
     };
   },
@@ -223,23 +213,17 @@ export const switchesModule: PuzzleModule<
     ];
   },
 
-  solve(def, views, edgework) {
+  solve(def, { operator }, edgework) {
     if (edgework === null) {
       throw new Error(
-        `switches "${def.id}": the rules read the edgework, but no role sees it — ` +
-          'give the operator role "seesEdgework": true',
+        `switches "${def.id}": the rules read the edgework, but nobody has read the sign yet`,
       );
     }
-    const bank = views[def.operatorRoleId]?.switches;
-    if (bank == null) {
+    const bank = operator.switches;
+    if (bank === null) {
       throw new Error(`switches "${def.id}": solving needs the operator's view of the bank`);
     }
     const switchIndex = bank.findIndex((sw) => sw.up !== mustBeUp(sw, edgework));
-    return [
-      {
-        roleId: def.operatorRoleId,
-        input: switchIndex < 0 ? { check: true } : { switchIndex },
-      },
-    ];
+    return [{ by: 'operator', input: switchIndex < 0 ? { check: true } : { switchIndex } }];
   },
 };

@@ -10,15 +10,12 @@ import {
   viewFor,
 } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
+import { standing } from './lab.js';
 
-// Lobby and puzzle-chain tests run without the tile map (with one, puzzles wait
-// for station activation); the mapped flow is covered in map.test.ts.
-const mission: Mission = parseMission({
-  ...JSON.parse(
-    readFileSync(new URL('../../../missions/systemcheck.json', import.meta.url), 'utf8'),
-  ),
-  map: undefined,
-});
+// The tutorial: a whole-crew press, a wiring station read at the book, a whole-crew finale.
+const mission: Mission = parseMission(
+  JSON.parse(readFileSync(new URL('../../../missions/systemcheck.json', import.meta.url), 'utf8')),
+);
 
 const T0 = 1_000_000;
 
@@ -46,19 +43,38 @@ function press(playerId: string, at: number): Action {
   return { type: 'puzzle-input', playerId, at, input: { press: true } };
 }
 
+/** The current station switched on with the whole crew standing at it. */
+function bothAtStation(state: GameState, at: number): GameState {
+  const def = state.mission.puzzles[state.currentPuzzleIndex];
+  if (def === undefined) {
+    throw new Error('no station left');
+  }
+  const here = standing(state, { stations: { [def.id]: ['p1', 'p2'] } });
+  return applyAction(here, { type: 'interact', playerId: 'p2', at });
+}
+
+/** Station 2 switched on: Ben at the wiring box, Anna at the book, Ben past the sign. */
+function wiringOpen(state: GameState, at: number): GameState {
+  const here = standing(state, {
+    stations: { doppelbestaetigung: ['p2'] },
+    manuals: { 'buch-leitstand': ['p1'] },
+    signSeen: ['p2'],
+  });
+  return applyAction(here, { type: 'interact', playerId: 'p2', at });
+}
+
 /** Station 2 is wiring: the cut its rules name, worked out from the two views alone. */
 function cutRightWire(state: GameState, at: number): GameState {
   const def = state.mission.puzzles[state.currentPuzzleIndex];
-  const anna = viewFor(state, 'p1');
   const ben = viewFor(state, 'p2');
+  const anna = viewFor(state, 'p1');
   if (def?.type !== 'wiring' || anna.puzzle === null || ben.puzzle === null) {
     throw new Error('expected the open wiring station');
   }
-  const views = { anleitung: anna.puzzle, steuerpult: ben.puzzle };
+  const views = { operator: ben.puzzle, reader: anna.puzzle };
   let next = state;
-  for (const { roleId, input } of moduleFor(def.type).solve(def, views, ben.edgework)) {
-    const playerId = roleId === 'anleitung' ? 'p1' : 'p2';
-    next = applyAction(next, { type: 'puzzle-input', playerId, at, input });
+  for (const { input } of moduleFor(def.type).solve(def, views, ben.edgework)) {
+    next = applyAction(next, { type: 'puzzle-input', playerId: 'p2', at, input });
   }
   return next;
 }
@@ -154,6 +170,10 @@ describe('lobby', () => {
         ...JSON.parse(JSON.stringify(mission.roles)),
         { id: 'dritte', name: 'Dritte', description: '' },
       ],
+      map: {
+        ...JSON.parse(JSON.stringify(mission.map)),
+        spawns: { ...mission.map.spawns, dritte: { x: 2, y: 4 } },
+      },
     });
     const confirmed = run(
       [
@@ -249,37 +269,39 @@ describe('lobby', () => {
 });
 
 describe('playing a full mission', () => {
-  it('wins after solving all three puzzles', () => {
-    let state = started();
-    // Puzzle 1: only steuerpult has a button.
-    state = applyAction(state, press('p2', T0 + 1000));
+  it('opens the hatch after all three puzzles and wins once everyone is out', () => {
+    let state = bothAtStation(started(), T0 + 500);
+    // Puzzle 1: everyone at the station presses.
+    state = run([press('p1', T0 + 1000), press('p2', T0 + 1200)], state);
     expect(state.currentPuzzleIndex).toBe(1);
-    // Puzzle 2: one right wire, cut by steuerpult.
-    state = cutRightWire(state, T0 + 5000);
+    // Puzzle 2: one right wire, cut at the box while the book is read.
+    state = cutRightWire(wiringOpen(state, T0 + 4000), T0 + 5000);
     expect(state.currentPuzzleIndex).toBe(2);
     // Puzzle 3: both within 3 seconds.
     state = run(
-      [
-        press('p1', T0 + 70_000),
-        press('p2', T0 + 72_000),
-      ],
-      state,
+      [press('p1', T0 + 70_000), press('p2', T0 + 72_000)],
+      bothAtStation(state, T0 + 60_000),
     );
-    expect(state.phase).toBe('won');
+    expect(state.phase).toBe('playing');
+    expect(state.currentPuzzleIndex).toBe(3);
+    expect(applyAction(state, { type: 'escaped', at: T0 + 80_000 }).phase).toBe('won');
   });
 
   it('expires a press outside the sync window and counts the attempt', () => {
-    let state = applyAction(started(), press('p2', T0 + 1000));
-    state = cutRightWire(state, T0 + 2000);
+    let state = run(
+      [press('p1', T0 + 1000), press('p2', T0 + 1000)],
+      bothAtStation(started(), T0 + 500),
+    );
+    state = cutRightWire(wiringOpen(state, T0 + 1500), T0 + 2000);
     state = run(
       [
         // Window puzzle: first press at +10s, partner misses the 3s window.
         press('p1', T0 + 10_000),
         press('p2', T0 + 20_000),
       ],
-      state,
+      bothAtStation(state, T0 + 9000),
     );
-    expect(state.phase).toBe('playing');
+    expect(state.currentPuzzleIndex).toBe(2);
     if (state.puzzleState?.type !== 'button-sync') {
       throw new Error('expected button-sync puzzle state');
     }
@@ -287,17 +309,31 @@ describe('playing a full mission', () => {
     expect(state.puzzleState.lastResult).toBe('missed-window');
     // The late press is still valid as the start of the next attempt.
     state = applyAction(state, press('p1', T0 + 21_000));
-    expect(state.phase).toBe('won');
+    expect(state.currentPuzzleIndex).toBe(3);
   });
 
-  it('rejects a press from a role without a button', () => {
-    expect(() => applyAction(started(), press('p1', T0 + 1000))).toThrow(/keinen Knopf/);
+  it('needs every player to press: one press alone solves nothing', () => {
+    const state = applyAction(bothAtStation(started(), T0 + 500), press('p2', T0 + 1000));
+    expect(state.currentPuzzleIndex).toBe(0);
+    expect(viewFor(state, 'p2').puzzle).toMatchObject({ youPressed: true, pressedCount: 1 });
+    expect(viewFor(state, 'p1').puzzle).toMatchObject({ youPressed: false, requiredCount: 2 });
+  });
+
+  it('rejects a press from a player away from the station', () => {
+    const open = applyAction(
+      standing(started(), { stations: { init: ['p2'] } }),
+      { type: 'interact', playerId: 'p2', at: T0 + 500 },
+    );
+    expect(() => applyAction(open, press('p1', T0 + 1000))).toThrow(
+      'Dafür musst du am Pult stehen.',
+    );
   });
 
   it('rejects an input the open puzzle does not take', () => {
+    const open = bothAtStation(started(), T0 + 500);
     for (const input of [{ wireId: 'w0' }, { press: true, extra: 1 }, undefined, 'press']) {
       expect(() =>
-        applyAction(started(), { type: 'puzzle-input', playerId: 'p2', at: T0 + 1000, input }),
+        applyAction(open, { type: 'puzzle-input', playerId: 'p2', at: T0 + 1000, input }),
       ).toThrow(/Ungültige Eingabe/);
     }
   });
@@ -305,7 +341,7 @@ describe('playing a full mission', () => {
   it('loses when time expires, also on a late press', () => {
     const afterDeadline = T0 + mission.timeLimitSec * 1000;
     expect(applyAction(started(), { type: 'time-expired', at: afterDeadline }).phase).toBe('lost');
-    const late = applyAction(started(), press('p2', afterDeadline));
+    const late = applyAction(bothAtStation(started(), T0 + 500), press('p2', afterDeadline));
     expect(late.phase).toBe('lost');
   });
 
@@ -318,20 +354,26 @@ describe('playing a full mission', () => {
 });
 
 describe('asymmetric information in views', () => {
-  it('shows the manual text only to the Anleitung role', () => {
-    const state = started();
-    const anna = viewFor(state, 'p1');
+  it('gives the wires to the box, the rules to the book, the edgework to who read the sign', () => {
+    const first = run(
+      [press('p1', T0 + 1000), press('p2', T0 + 1000)],
+      bothAtStation(started(), T0 + 500),
+    );
+    const state = wiringOpen(first, T0 + 2000);
+    const def = mission.puzzles[1];
     const ben = viewFor(state, 'p2');
-    expect(anna.puzzle?.info).toMatch(/Freigabe erteilt/);
-    expect(ben.puzzle?.info).toBeNull();
-    // A button-sync station has no manual role, so nobody gets the printed rules.
-    expect([anna.puzzle?.manual, ben.puzzle?.manual]).toEqual([null, null]);
-    if (anna.puzzle?.kind !== 'button-sync' || ben.puzzle?.kind !== 'button-sync') {
-      throw new Error('expected button-sync puzzle views');
+    const anna = viewFor(state, 'p1');
+    if (def === undefined || ben.puzzle?.kind !== 'wiring' || anna.puzzle?.kind !== 'wiring') {
+      throw new Error('expected the wiring station');
     }
-    expect(anna.puzzle.buttonLabel).toBeNull();
-    expect(ben.puzzle.buttonLabel).toBe('INIT');
-    expect(JSON.stringify(ben)).not.toContain('Freigabe erteilt');
+    expect(ben.puzzle.wires).not.toBeNull();
+    expect(ben.puzzle.manual).toBeNull();
+    expect(anna.puzzle.wires).toBeNull();
+    expect(anna.puzzle.manual).toEqual(moduleFor(def.type).manual(def));
+    expect(ben.edgework).toEqual(state.edgework);
+    expect(anna.edgework).toBeNull();
+    expect(JSON.stringify(anna)).not.toContain(JSON.stringify(ben.puzzle.wires));
+    expect(JSON.stringify(anna)).not.toContain(state.edgework?.serial ?? '?');
   });
 
   it('tracks connection status in views', () => {

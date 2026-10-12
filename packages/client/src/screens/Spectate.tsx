@@ -26,7 +26,7 @@ function elapsed(startedAt: number | null, at: number): string {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
-/** Audience view: the whole lab revealed, plus every role's private panel. */
+/** Audience view: the whole lab revealed, plus the open station from every side. */
 export function SpectateScreen({
   view,
   positionsRef,
@@ -92,31 +92,33 @@ export function SpectateScreen({
         </div>
 
         <div className="spectate-panels">
-          {view.panels.map((panel) => (
-            <section key={panel.roleId} className="panel">
-              <div className="panel-head">
-                <div className="panel-label">// {panel.roleName}</div>
-                {panel.edgework !== null && <EdgeworkChip edgework={panel.edgework} />}
-              </div>
-              {panel.emergency !== undefined ? (
+          <section className="panel">
+            <div className="panel-head">
+              <div className="panel-label">// {view.puzzle?.title ?? 'Station'}</div>
+              {view.edgework !== null && <EdgeworkChip edgework={view.edgework} />}
+            </div>
+            {view.puzzle === null ? (
+              <p className="muted">Unterwegs — gerade keine Station offen.</p>
+            ) : (
+              <>
+                {view.puzzle.manual !== null && <Manual sections={view.puzzle.manual} />}
                 <div className="read-only">
-                  <RelayConsole relay={panel.emergency} send={noop} />
+                  <PuzzlePanel puzzle={view.puzzle} send={noop} deadlineAt={view.deadlineAt} />
                 </div>
-              ) : panel.puzzle === null ? (
-                <p className="muted">Unterwegs — gerade keine Station offen.</p>
-              ) : (
-                <>
-                  {panel.puzzle.info !== null && (
-                    <div className="info-box">📖 {panel.puzzle.info}</div>
-                  )}
-                  {panel.puzzle.manual !== null && <Manual sections={panel.puzzle.manual} />}
+              </>
+            )}
+          </section>
+          {view.panels.map(
+            (panel) =>
+              panel.emergency !== undefined && (
+                <section key={panel.roleId} className="panel">
+                  <div className="panel-label">// {panel.roleName}</div>
                   <div className="read-only">
-                    <PuzzlePanel puzzle={panel.puzzle} send={noop} deadlineAt={view.deadlineAt} />
+                    <RelayConsole relay={panel.emergency} send={noop} />
                   </div>
-                </>
-              )}
-            </section>
-          ))}
+                </section>
+              ),
+          )}
 
           <section className="panel spectate-log">
             <div className="panel-label">// Einsatzprotokoll</div>
@@ -191,6 +193,8 @@ function spectatorAsPlayerView(view: SpectatorView): Parameters<typeof GameWorld
     lastPenaltySec: null,
     hintsUsed: view.hintsUsed,
     edgework: null,
+    presence: { stationId: null, manualId: null, signSeen: false },
+    manualsHere: [],
     puzzle: null,
     map: view.map,
   };

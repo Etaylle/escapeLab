@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, initialState, parseMission, viewFor } from '../src/index.js';
 import type { Action, GameState, Mission, RunEvent } from '../src/index.js';
+import { standing } from './lab.js';
 
-/** Two one-press stations behind a drone, plus an emergency and a carryable. */
+/** A whole-crew station and a keypad, plus an emergency and a carryable. */
 const mission: Mission = parseMission({
   id: 'reporttest',
   title: 'Protokoll-Test',
@@ -13,22 +14,8 @@ const mission: Mission = parseMission({
     { id: 'steuerpult', name: 'Steuerpult', description: '' },
   ],
   puzzles: [
-    {
-      type: 'button-sync',
-      id: 'first',
-      title: 'Erstes',
-      prompt: '',
-      buttons: [{ roleId: 'steuerpult', label: 'A' }],
-    },
-    {
-      type: 'keypad',
-      id: 'code',
-      title: 'Code',
-      prompt: '',
-      operatorRoleId: 'steuerpult',
-      manualRoleId: 'anleitung',
-      penaltySec: 20,
-    },
+    { type: 'button-sync', id: 'first', title: 'Erstes' },
+    { type: 'keypad', id: 'code', title: 'Code', penaltySec: 20 },
   ],
   map: {
     tiles: ['#########', '#.......#', '#########'],
@@ -37,6 +24,7 @@ const mission: Mission = parseMission({
       { puzzleId: 'first', x: 3, y: 1 },
       { puzzleId: 'code', x: 5, y: 1 },
     ],
+    manuals: [{ id: 'buch', kind: 'book', x: 6, y: 1, label: 'HANDBUCH', puzzleIds: ['code'] }],
     exit: { x: 7, y: 1 },
     items: [
       { id: 'teil', label: 'TEIL', x: 1, y: 1, deliverTo: { x: 2, y: 1 }, requiredFor: 'code' },
@@ -75,17 +63,23 @@ function playing(): GameState {
 
 const kinds = (events: RunEvent[]): string[] => events.map((e) => e.kind);
 
+/** The whole crew at the first station, switched on and pressed. */
+function firstSolved(state: GameState, at: number): GameState {
+  return run(
+    [
+      { type: 'interact', playerId: 'p2', at: at - 1000 },
+      { type: 'puzzle-input', playerId: 'p1', at, input: { press: true } },
+      { type: 'puzzle-input', playerId: 'p2', at, input: { press: true } },
+    ],
+    standing(state, { stations: { first: ['p1', 'p2'] } }),
+  );
+}
+
 describe('run report', () => {
   it('starts empty and records a solved station with its title', () => {
     let state = playing();
     expect(state.events).toEqual([]);
-    state = run(
-      [
-        { type: 'interact', playerId: 'p2', at: T0 + 1000 },
-        { type: 'puzzle-input', playerId: 'p2', at: T0 + 2000, input: { press: true } },
-      ],
-      state,
-    );
+    state = firstSolved(state, T0 + 2000);
     expect(state.events).toEqual([
       { at: T0 + 2000, kind: 'puzzle', label: 'Erstes gelöst', seconds: null },
     ]);
@@ -121,14 +115,12 @@ describe('run report', () => {
     expect(state.events[2]?.label).toBe('TEIL eingesetzt');
 
     // Solve both stations: the last one unlocks the exit rather than winning.
-    state = run(
-      [
-        { type: 'interact', playerId: 'p2', at: T0 + 7000 },
-        { type: 'puzzle-input', playerId: 'p2', at: T0 + 8000, input: { press: true } },
-        { type: 'interact', playerId: 'p2', at: T0 + 9000 },
-      ],
-      state,
-    );
+    state = firstSolved(state, T0 + 8000);
+    state = applyAction(standing(state, { stations: { code: ['p2'] } }), {
+      type: 'interact',
+      playerId: 'p2',
+      at: T0 + 9000,
+    });
     const keypad = state.puzzleState;
     if (keypad?.type !== 'keypad') {
       throw new Error('expected the keypad station');

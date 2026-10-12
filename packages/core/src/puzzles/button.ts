@@ -1,21 +1,18 @@
 import { z } from 'zod';
 import { indicatorLit, type Edgework } from '../edgework.js';
-import { fail } from '../errors.js';
 import type { Rng } from '../rng.js';
 import { commonDefShape, type ApplyResult, type PuzzleModule } from './module.js';
 
 /**
  * button puzzle (Keep Talking's button): the operator sees one big button
- * with a colour and a label, the manual role holds two rule lists. The first,
+ * with a colour and a label, the manual holds two rule lists. The first,
  * read against the edgework, says whether the button is pressed briefly or
  * held. While it is held a coloured strip lights beside it, and the second
  * list names the digit the mission clock must show when it is let go.
  */
-const defSchema = z.object({
+const defSchema = z.strictObject({
   type: z.literal('button'),
   ...commonDefShape,
-  operatorRoleId: z.string().min(1),
-  manualRoleId: z.string().min(1),
   penaltySec: z.number().int().positive().default(20),
 });
 export type ButtonDef = z.infer<typeof defSchema>;
@@ -48,12 +45,12 @@ export type ButtonInput = z.infer<typeof inputSchema>;
 
 export interface ButtonView {
   kind: 'button';
-  /** colour and label of the button — only the operator sees them */
+  /** colour and label of the button — only operators see them */
   colour: ButtonColour | null;
   label: ButtonLabel | null;
-  /** whether the button is held down right now; no secret, every role gets it */
+  /** whether the button is held down right now; no secret, everyone gets it */
   holding: boolean;
-  /** the lit strip — only the operator, and only while the button is held */
+  /** the lit strip — only operators, and only while the button is held */
   strip: StripColour | null;
   lastResult: ButtonState['lastResult'];
 }
@@ -204,6 +201,7 @@ function release(state: ButtonState, remainingSec: number): ApplyResult<ButtonSt
 export const buttonModule: PuzzleModule<ButtonDef, ButtonState, ButtonInput, ButtonView> = {
   type: 'button',
   usesEdgework: true,
+  wholeCrew: false,
   defSchema,
   inputSchema,
 
@@ -216,10 +214,7 @@ export const buttonModule: PuzzleModule<ButtonDef, ButtonState, ButtonInput, But
     lastResult: null,
   }),
 
-  apply(def, state, input, roleId, ctx) {
-    if (roleId !== def.operatorRoleId) {
-      fail('Nur die Rolle am Knopf kann ihn bedienen.');
-    }
+  apply(_def, state, input, _playerId, ctx) {
     switch (input.kind) {
       case 'press':
         return press(state, moveFor(state, ctx.edgework));
@@ -230,15 +225,14 @@ export const buttonModule: PuzzleModule<ButtonDef, ButtonState, ButtonInput, But
     }
   },
 
-  view(def, state, roleId) {
-    const isOperator = roleId === def.operatorRoleId;
+  view(_def, state, viewer) {
     return {
       kind: 'button',
-      colour: isOperator ? state.colour : null,
-      label: isOperator ? state.label : null,
+      colour: viewer.operating ? state.colour : null,
+      label: viewer.operating ? state.label : null,
       holding: state.holding,
-      strip: isOperator && state.holding ? state.strip : null,
-      lastResult: isOperator ? state.lastResult : null,
+      strip: viewer.operating && state.holding ? state.strip : null,
+      lastResult: viewer.operating ? state.lastResult : null,
     };
   },
 
@@ -292,23 +286,21 @@ export const buttonModule: PuzzleModule<ButtonDef, ButtonState, ButtonInput, But
    * allows for the strip, and otherwise returns nothing: without a clock the
    * crew waits for good.
    */
-  solve(def, views, edgework, aid) {
+  solve(def, { operator }, edgework, aid) {
     if (edgework === null) {
       throw new Error(
-        `button "${def.id}": the rules read the edgework, but no role sees it — ` +
-          'give the operator\'s role "seesEdgework": true',
+        `button "${def.id}": the rules read the edgework, but nobody has read the sign yet`,
       );
     }
-    const panel = views[def.operatorRoleId];
-    if (panel?.colour == null || panel.label == null) {
+    if (operator.colour === null || operator.label === null) {
       throw new Error(`button "${def.id}": solving needs the operator's view of the button`);
     }
-    if (panel.holding) {
-      return timeToLetGo(panel.strip, aid?.remainingSec ?? null)
-        ? [{ roleId: def.operatorRoleId, input: { kind: 'release' } }]
+    if (operator.holding) {
+      return timeToLetGo(operator.strip, aid?.remainingSec ?? null)
+        ? [{ by: 'operator', input: { kind: 'release' } }]
         : [];
     }
-    const kind = moveFor({ colour: panel.colour, label: panel.label }, edgework);
-    return [{ roleId: def.operatorRoleId, input: { kind } }];
+    const kind = moveFor({ colour: operator.colour, label: operator.label }, edgework);
+    return [{ by: 'operator', input: { kind } }];
   },
 };

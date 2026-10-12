@@ -6,8 +6,6 @@ import {
   type Mission,
   type MissionInfo,
   type MissionManual,
-  type MissionManualStation,
-  type PuzzleDef,
 } from '@escapelab/core';
 
 /** All missions from a directory, sorted for the picker. Fails fast on bad files. */
@@ -56,7 +54,7 @@ export class MissionCatalog {
       roles: m.roles.map((r) => r.name),
       timeLimitSec: m.timeLimitSec,
       puzzleCount: m.puzzles.length,
-      tiles: m.map?.tiles ?? [],
+      tiles: m.map.tiles,
     }));
   }
 
@@ -66,8 +64,6 @@ export class MissionCatalog {
     if (mission === undefined) {
       return null;
     }
-    const roleName = (roleId: string): string =>
-      mission.roles.find((r) => r.id === roleId)?.name ?? roleId;
     return {
       missionTitle: mission.title,
       hintCostSec: mission.hintCostSec,
@@ -76,32 +72,15 @@ export class MissionCatalog {
         return {
           index,
           title: def.title,
-          ...stationRoles(def, roleName),
+          readAt: [
+            ...new Set(
+              mission.map.manuals.filter((m) => m.puzzleIds.includes(def.id)).map((m) => m.label),
+            ),
+          ],
           usesEdgework: puzzleModule.usesEdgework,
           manual: puzzleModule.manual(def),
         };
       }),
     };
   }
-}
-
-/** Who works a station and who reads its rules; at a button-sync every listed role presses. */
-function stationRoles(
-  def: PuzzleDef,
-  roleName: (roleId: string) => string,
-): Pick<MissionManualStation, 'operatorRoleName' | 'manualRoleName'> {
-  if (def.type === 'button-sync') {
-    return {
-      operatorRoleName: def.buttons.map((b) => roleName(b.roleId)).join(', '),
-      manualRoleName: null,
-    };
-  }
-  if (!('operatorRoleId' in def)) {
-    // An emergency module never stands at a station; mission validation rejects that.
-    throw new Error(`"${def.type}" is not a station module`);
-  }
-  return {
-    operatorRoleName: roleName(def.operatorRoleId),
-    manualRoleName: roleName(def.manualRoleId),
-  };
 }

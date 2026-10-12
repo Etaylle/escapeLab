@@ -13,20 +13,8 @@ const mission: Mission = parseMission({
     { id: 'steuerpult', name: 'Steuerpult', description: '' },
   ],
   puzzles: [
-    {
-      type: 'button-sync',
-      id: 'first',
-      title: 'Erstes',
-      prompt: '',
-      buttons: [{ roleId: 'steuerpult', label: 'A' }],
-    },
-    {
-      type: 'button-sync',
-      id: 'second',
-      title: 'Zweites',
-      prompt: '',
-      buttons: [{ roleId: 'steuerpult', label: 'B' }],
-    },
+    { type: 'button-sync', id: 'first', title: 'Erstes' },
+    { type: 'button-sync', id: 'second', title: 'Zweites' },
   ],
   map: {
     tiles: ['#########', '#.......#', '#.......#', '#########'],

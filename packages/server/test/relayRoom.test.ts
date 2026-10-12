@@ -4,7 +4,11 @@ import type { Action, GameState, MapDef, Mission, ServerMessage } from '@escapel
 import { DronePatrol } from '../src/drones.js';
 import { Room } from '../src/room.js';
 
-/** Corridor with three stations; its emergencies run in relay mode — no valves anywhere. */
+/**
+ * Corridor with three stations along its top row; its emergencies run in
+ * relay mode — no valves anywhere. The bottom row is out of every station's
+ * reach.
+ */
 const mission: Mission = parseMission({
   id: 'relayroom',
   title: 'Relais-Raum',
@@ -14,15 +18,9 @@ const mission: Mission = parseMission({
     { id: 'anleitung', name: 'Anleitung', description: '' },
     { id: 'steuerpult', name: 'Steuerpult', description: '' },
   ],
-  puzzles: ['first', 'second', 'third'].map((id, i) => ({
-    type: 'button-sync',
-    id,
-    title: id,
-    prompt: '',
-    buttons: [{ roleId: 'steuerpult', label: `B${i}` }],
-  })),
+  puzzles: ['first', 'second', 'third'].map((id) => ({ type: 'button-sync', id, title: id })),
   map: {
-    tiles: ['#########', '#.......#', '#.......#', '#########'],
+    tiles: ['#########', '#.......#', '#.......#', '#.......#', '#########'],
     spawns: { anleitung: { x: 3, y: 1 }, steuerpult: { x: 5, y: 1 } },
     stations: [
       { puzzleId: 'first', x: 2, y: 1 },
@@ -113,7 +111,9 @@ describe('Room relay emergencies', () => {
     room.act(anna.playerId, { kind: 'start-mission' });
     for (const x of [2, 4]) {
       moveTo(room, ben.playerId, x, 1);
+      moveTo(room, anna.playerId, x, 2);
       room.act(ben.playerId, { kind: 'interact' });
+      room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
       room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
     }
     return { room, anna, ben };
@@ -134,11 +134,13 @@ describe('Room relay emergencies', () => {
   it('is not cleared by anyone standing anywhere, nor does walking send views', () => {
     const { room, anna, ben } = midMission();
     vi.advanceTimersByTime(61_000);
+    moveTo(room, anna.playerId, 1, 3);
+    moveTo(room, ben.playerId, 7, 3);
     const views = (): number => anna.messages.filter((m) => m.kind === 'view').length;
     const before = views();
     for (const x of [1, 4, 7]) {
-      moveTo(room, anna.playerId, x, 2);
-      moveTo(room, ben.playerId, 8 - x, 2);
+      moveTo(room, anna.playerId, x, 3);
+      moveTo(room, ben.playerId, 8 - x, 3);
     }
     expect(running(anna)).toBe(true);
     expect(views()).toBe(before);
@@ -201,18 +203,10 @@ describe('drones during a relay emergency', () => {
       { id: 'anleitung', name: 'Anleitung', description: '' },
       { id: 'steuerpult', name: 'Steuerpult', description: '' },
     ],
-    puzzles: [
-      {
-        type: 'button-sync',
-        id: 'only',
-        title: 'Einziges',
-        prompt: '',
-        buttons: [{ roleId: 'steuerpult', label: 'A' }],
-      },
-    ],
+    puzzles: [{ type: 'button-sync', id: 'only', title: 'Einziges' }],
     map: {
       tiles: ['#########', '#...#...#', '#...#...#', '#...#...#', '#########'],
-      spawns: { anleitung: { x: 1, y: 1 }, steuerpult: { x: 7, y: 1 } },
+      spawns: { anleitung: { x: 1, y: 1 }, steuerpult: { x: 3, y: 1 } },
       stations: [{ puzzleId: 'only', x: 2, y: 1 }],
       drones: [
         {

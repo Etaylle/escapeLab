@@ -1,4 +1,12 @@
-import { doorOpen, type DronePosition, type GameState, type MapDef } from '@escapelab/core';
+import {
+  doorOpen,
+  operatorsOf,
+  platePressed,
+  readersOf,
+  type DronePosition,
+  type GameState,
+  type MapDef,
+} from '@escapelab/core';
 
 /** Runtime state of one patrolling drone; lives outside the pure game state. */
 interface DroneRuntime {
@@ -21,13 +29,27 @@ export interface SpottedEvent {
   penaltySec: number;
 }
 
+const frozen = (state: GameState, drone: MapDef['drones'][number]): boolean =>
+  drone.frozenByPlate !== undefined && platePressed(state, drone.frozenByPlate);
+
+/** The players at the open puzzle's station or at a manual object covering it. */
+function headsDown(state: GameState): Set<string> {
+  const open = state.mission.puzzles[state.currentPuzzleIndex];
+  if (state.puzzleState === null || open === undefined) {
+    return new Set();
+  }
+  return new Set([...operatorsOf(state, open.id), ...readersOf(state, open.id)]);
+}
+
 /**
  * Drone patrols: deterministic waypoint loops, cone-of-vision detection with
  * line of sight, and a cooldown so one sighting costs time exactly once.
- * Players working at a station (a puzzle is open) are not spotted — the
- * console counts as cover, which keeps the penalty fair. A drone with
- * `activeAfterSolved` sleeps at its first waypoint until the crew has solved
- * that many puzzles: until then it neither moves, nor sees, nor shows up.
+ * Players heads-down at the open puzzle — working its station or reading its
+ * rules — are not spotted: the console counts as cover, which keeps the
+ * penalty fair. A drone with `activeAfterSolved` sleeps at its first waypoint
+ * until the crew has solved that many puzzles: until then it neither moves,
+ * nor sees, nor shows up. One with `frozenByPlate` stands still and sees
+ * nothing while somebody holds that plate.
  */
 export class DronePatrol {
   private readonly runtime = new Map<string, DroneRuntime>();
@@ -57,9 +79,9 @@ export class DronePatrol {
     }
   }
 
-  /** Advance every awake drone by `dt` seconds along its waypoint loop. */
+  /** Advance every awake drone that is not frozen by `dt` seconds along its waypoint loop. */
   step(state: GameState, dt: number): void {
-    for (const drone of this.awake(state)) {
+    for (const drone of this.watching(state)) {
       const self = this.runtime.get(drone.id);
       const target = drone.waypoints[self?.target ?? 0];
       if (self === undefined || target === undefined) {
@@ -88,18 +110,19 @@ export class DronePatrol {
     playerPositions: Map<string, { x: number; y: number }>,
     now: number,
   ): SpottedEvent[] {
-    if (state.puzzleState !== null || state.sabotage?.emergency !== undefined) {
-      return []; // everyone is heads-down at a console — a station's or the relay emergency's
+    if (state.sabotage?.emergency !== undefined) {
+      return []; // everyone is heads-down at the relay emergency's consoles
     }
+    const covered = headsDown(state);
     const events: SpottedEvent[] = [];
-    for (const drone of this.awake(state)) {
+    for (const drone of this.watching(state)) {
       const self = this.runtime.get(drone.id);
       if (self === undefined || now < self.quietUntil) {
         continue;
       }
       const halfAngle = (drone.halfAngleDeg * Math.PI) / 180;
       const caught = state.players.some((player) => {
-        if (!player.connected) {
+        if (!player.connected || covered.has(player.id)) {
           return false;
         }
         const pos = playerPositions.get(player.id);
@@ -144,6 +167,7 @@ export class DronePatrol {
         range: drone.range,
         halfAngleDeg: drone.halfAngleDeg,
         alerted: now < self.quietUntil,
+        frozen: frozen(state, drone),
       };
     }
     return out;
@@ -151,6 +175,11 @@ export class DronePatrol {
 
   private awake(state: GameState): MapDef['drones'] {
     return this.map.drones.filter((drone) => drone.activeAfterSolved <= state.currentPuzzleIndex);
+  }
+
+  /** Awake and not held still by its plate: these move and see. */
+  private watching(state: GameState): MapDef['drones'] {
+    return this.awake(state).filter((drone) => !frozen(state, drone));
   }
 
   private hasLineOfSight(

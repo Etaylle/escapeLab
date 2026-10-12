@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  applyAction,
-  GameError,
-  generateEdgework,
-  initialState,
-  parseMission,
-  viewFor,
-} from '../src/index.js';
+import { applyAction, GameError, generateEdgework, parseMission, viewFor } from '../src/index.js';
 import type { Action, Edgework, GameState, PuzzleContext } from '../src/index.js';
 import { switchesModule } from '../src/puzzles/switches.js';
 import type {
@@ -17,57 +10,29 @@ import type {
   SwitchesView,
 } from '../src/puzzles/switches.js';
 import { mulberry32 } from '../src/rng.js';
+import {
+  AT_BOOK,
+  AT_STATION,
+  labMission,
+  openLab,
+  started as startedLab,
+  T0,
+} from './lab.js';
 import { playInstance } from './solveModule.js';
 
 const SEEDS = 300;
-const T0 = 1_000_000;
 
-const raw = {
-  id: 'schaltertest',
-  title: 'Schalter-Test',
-  story: { intro: 'i', win: 'w', lose: 'l' },
-  timeLimitSec: 600,
-  roles: [
-    { id: 'pult', name: 'Pult', description: '', seesEdgework: true },
-    { id: 'handbuch', name: 'Handbuch', description: '' },
-    { id: 'zaungast', name: 'Zaungast', description: '' },
-  ],
-  puzzles: [
-    {
-      type: 'switches',
-      id: 'bank',
-      title: 'Bank',
-      prompt: '',
-      operatorRoleId: 'pult',
-      manualRoleId: 'handbuch',
-      penaltySec: 12,
-    },
-  ],
-};
-const mission = parseMission(raw);
+const rawDef = { type: 'switches', id: 'bank', title: 'Bank', penaltySec: 12 };
+const mission = labMission([rawDef], 'schaltertest', ['pult', 'handbuch', 'zaungast']);
 const parsedDef = mission.puzzles[0];
 if (parsedDef?.type !== 'switches') {
   throw new Error('expected the switch bank as the only puzzle');
 }
 const def: SwitchesDef = parsedDef;
 
-/** Player id → role id, everyone in the test mission. */
-const CREW = [
-  ['p1', 'pult'],
-  ['p2', 'handbuch'],
-  ['p3', 'zaungast'],
-] as const;
-const ROLE_IDS = CREW.map(([, roleId]) => roleId);
-
+/** p1 at the bank, p2 at the book, p3 somewhere else; only p1 has read the sign. */
 function started(seed = 7): GameState {
-  const actions: Action[] = [
-    ...CREW.map(([playerId]): Action => ({ type: 'player-join', playerId, name: playerId })),
-    ...CREW.map(([playerId, roleId]): Action => ({ type: 'select-role', playerId, roleId })),
-    { type: 'set-ready', playerId: 'p2', ready: true },
-    { type: 'set-ready', playerId: 'p3', ready: true },
-    { type: 'start-mission', playerId: 'p1', at: T0, seed },
-  ];
-  return actions.reduce(applyAction, initialState(mission));
+  return openLab(startedLab(mission, seed), { signSeen: ['p1'] });
 }
 
 const send = (playerId: string, input: unknown, at = T0 + 1000): Action => ({
@@ -97,13 +62,10 @@ function bankOf(state: GameState): Switch[] {
 function solveThroughReducer(from: GameState): GameState {
   let state = from;
   for (let round = 1; state.phase === 'playing' && round <= 10; round++) {
-    const views = Object.fromEntries(
-      CREW.map(([playerId, roleId]) => [roleId, switchesView(state, playerId)]),
-    );
+    const views = { operator: switchesView(state, 'p1'), reader: switchesView(state, 'p2') };
     const edgework = viewFor(state, 'p1').edgework;
-    for (const { roleId, input } of switchesModule.solve(def, views, edgework)) {
-      const playerId = CREW.find(([, role]) => role === roleId)?.[0] ?? '';
-      state = applyAction(state, send(playerId, input, T0 + round * 1000));
+    for (const { input } of switchesModule.solve(def, views, edgework)) {
+      state = applyAction(state, send('p1', input, T0 + round * 1000));
     }
   }
   return state;
@@ -114,18 +76,23 @@ const ctx = (edgework: Edgework): PuzzleContext => ({
   alarms: 0,
   remainingSec: 600,
   at: T0,
+  crew: ['op', 'rd'],
 });
 
 function press(state: SwitchesState, input: SwitchesInput, edgework: Edgework) {
-  return switchesModule.apply(def, state, input, 'pult', ctx(edgework));
+  return switchesModule.apply(def, state, input, 'op', ctx(edgework));
 }
 
 /** The bank as the solver would leave it: every switch where the rules want it. */
 function settled(from: SwitchesState, edgework: Edgework): SwitchesState {
   let state = from;
   for (let guard = 0; guard <= 6; guard++) {
-    const view = switchesModule.view(def, state, 'pult', { edgework, alarms: 0 });
-    const [move] = switchesModule.solve(def, { pult: view }, edgework);
+    const viewCtx = { edgework, alarms: 0, crew: ['op', 'rd'] };
+    const views = {
+      operator: switchesModule.view(def, state, AT_STATION, viewCtx),
+      reader: switchesModule.view(def, state, AT_BOOK, viewCtx),
+    };
+    const [move] = switchesModule.solve(def, views, edgework);
     if (move === undefined || 'check' in move.input) {
       return state;
     }
@@ -253,10 +220,10 @@ describe('switches: the rules as PRÜFEN enforces them', () => {
 });
 
 describe('switches: a run', () => {
-  it(`is solved from the role views alone, without an alarm, for ${SEEDS} seeds`, () => {
+  it(`is solved from the station's and the book's view, alarm-free, for ${SEEDS} seeds`, () => {
     for (let seed = 0; seed < SEEDS; seed++) {
       // At least one switch goes up and at least one stays down: 1–5 toggles, then PRÜFEN.
-      const moves = playInstance(def, [...ROLE_IDS], seed);
+      const moves = playInstance(def, seed);
       expect(moves, `seed ${seed}`).toBeGreaterThanOrEqual(2);
       expect(moves, `seed ${seed}`).toBeLessThanOrEqual(6);
     }
@@ -293,7 +260,7 @@ describe('switches: a run', () => {
     expect(bankOf(started(7))).not.toEqual(bankOf(started(8)));
   });
 
-  it('shows the bank and the edgework to the operator only, the manual to its role only', () => {
+  it('shows the bank at the station, the rules at the book, the edgework to its reader', () => {
     const state = started();
     const operator = viewFor(state, 'p1');
     const manual = viewFor(state, 'p2');
@@ -334,11 +301,13 @@ describe('switches: a run', () => {
     expect(won.penaltySeq).toBe(1);
   });
 
-  it('lets only the operator toggle or check', () => {
+  it('lets only a player at the bank toggle or check', () => {
     const state = started();
     for (const playerId of ['p2', 'p3']) {
       expect(() => applyAction(state, send(playerId, { switchIndex: 0 }))).toThrow(GameError);
-      expect(() => applyAction(state, send(playerId, { check: true }))).toThrow(/prüfen/);
+      expect(() => applyAction(state, send(playerId, { check: true }))).toThrow(
+        'Dafür musst du am Pult stehen.',
+      );
     }
   });
 
@@ -361,26 +330,29 @@ describe('switches: a run', () => {
 });
 
 describe('switches: the mission format', () => {
-  it('needs only the common fields', () => {
+  it('needs only the common fields, and knows no roles any more', () => {
     expect(
+      switchesModule.defSchema.parse({ type: 'switches', id: 'bank', title: 'Bank' }),
+    ).toMatchObject({ penaltySec: 20, hints: [] });
+    expect(() =>
       switchesModule.defSchema.parse({
         type: 'switches',
         id: 'bank',
         title: 'Bank',
-        prompt: '',
         operatorRoleId: 'pult',
-        manualRoleId: 'handbuch',
       }),
-    ).toMatchObject({ penaltySec: 20, infos: [], hints: [] });
+    ).toThrow(/operatorRoleId/);
   });
 
-  it('refuses a mission where nobody can read the edgework out', () => {
-    const blind = { ...raw, roles: raw.roles.map((role) => ({ ...role, seesEdgework: false })) };
-    expect(() => parseMission(blind)).toThrow(/"bank" read the edgework, but no role sees it/);
+  it('refuses a map where nobody could read the edgework', () => {
+    const blind = JSON.parse(JSON.stringify(mission));
+    delete blind.map.edgeworkSign;
+    expect(() => parseMission(blind)).toThrow(/"bank" read the edgework, but there is no edgeworkSign/);
   });
 
   it('cannot be solved without the edgework', () => {
-    const view = switchesView(started(), 'p1');
-    expect(() => switchesModule.solve(def, { pult: view }, null)).toThrow(/seesEdgework/);
+    const state = started();
+    const views = { operator: switchesView(state, 'p1'), reader: switchesView(state, 'p2') };
+    expect(() => switchesModule.solve(def, views, null)).toThrow(/nobody has read the sign/);
   });
 });

@@ -19,9 +19,9 @@ const EDGEWORK_NOTE =
   'Laborkennung, Kontrollleuchten und Notstromzellen wechseln mit jedem Einsatz und stehen ' +
   'deshalb nicht in diesem Handbuch. Die Laborkennung besteht aus fünf Zeichen, einem ' +
   'Bindestrich und einer Ziffer, etwa K7G3A-2. Die drei Kontrollleuchten tragen Kürzel wie FRQ ' +
-  'oder SIG und sind an oder aus. Notstromzellen sind null bis vier eingesetzt. Genau eine Rolle ' +
-  'sieht alle drei Angaben auf ihrem Pult und liest sie vor, sobald eine Regel danach fragt — ' +
-  'die Rollenbeschreibung sagt, wer das ist.';
+  'oder SIG und sind an oder aus. Notstromzellen sind null bis vier eingesetzt. Alle drei ' +
+  'Angaben stehen auf einem Schild im Labor; wer es gelesen hat, sagt sie an, sobald eine ' +
+  'Regel danach fragt.';
 
 async function fetchManual(missionId: string): Promise<MissionManual> {
   const res = await fetch(`/missions/${encodeURIComponent(missionId)}/manual`);
@@ -96,11 +96,7 @@ export function HandbookScreen({ missions, missionId, selectMission, back }: Pro
 
 /** The booklet itself: a title page, then one chapter per station. */
 export function Handbook({ manual }: { manual: MissionManual }) {
-  const holders = [
-    ...new Set(
-      manual.stations.flatMap((s) => (s.manualRoleName === null ? [] : [s.manualRoleName])),
-    ),
-  ];
+  const places = [...new Set(manual.stations.flatMap((s) => s.readAt))];
   return (
     <article className="handbook-book">
       <header className="handbook-cover">
@@ -108,8 +104,8 @@ export function Handbook({ manual }: { manual: MissionManual }) {
         <h1>{manual.missionTitle}</h1>
         <dl className="info-facts">
           <div>
-            <dt>Ausgegeben an</dt>
-            <dd>{holders.length > 0 ? holders.join(', ') : 'alle Rollen'}</dd>
+            <dt>Liegt aus</dt>
+            <dd>{places.length > 0 ? places.join(', ') : 'nirgends'}</dd>
           </div>
           <div>
             <dt>Hinweise</dt>
@@ -129,9 +125,9 @@ export function Handbook({ manual }: { manual: MissionManual }) {
 
 function Chapter({ station }: { station: MissionManualStation }) {
   const crew =
-    station.manualRoleName === null
-      ? `Bedient von: ${station.operatorRoleName}`
-      : `Bedient von: ${station.operatorRoleName} · Handbuch bei: ${station.manualRoleName}`;
+    station.readAt.length === 0
+      ? 'Die ganze Crew an die Station'
+      : `Nachzulesen: ${station.readAt.join(', ')}`;
   return (
     <section className="handbook-chapter">
       <h2>{`§${station.index + 1} — ${station.title}`}</h2>

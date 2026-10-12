@@ -9,11 +9,13 @@ import {
   viewForSpectator,
 } from '../src/index.js';
 import type { Action, GameState, Mission, RunEvent } from '../src/index.js';
+import { standing } from './lab.js';
 
 /**
- * Three one-press stations and an exit hatch, with mission control on the
- * radio: two hints for the first station, one for the second, none for the
- * third. Hint price and delay are left at their defaults.
+ * Three stations where the whole crew presses, and an exit hatch, with
+ * mission control on the radio: two hints for the first station, one for
+ * the second, none for the third. Hint price and delay are left at their
+ * defaults.
  */
 const mission: Mission = parseMission({
   id: 'hinttest',
@@ -30,25 +32,19 @@ const mission: Mission = parseMission({
       type: 'button-sync',
       id: 'first',
       title: 'Erstes',
-      prompt: '',
-      buttons: [{ roleId: 'steuerpult', label: 'A' }],
-      hints: ['Nur eine Rolle hat einen Knopf.', 'Das Steuerpult drückt A.'],
+      hints: ['Alle an die Station.', 'Jeder drückt einmal.'],
       onSolved: 'Erstes System läuft wieder.',
     },
     {
       type: 'button-sync',
       id: 'second',
       title: 'Zweites',
-      prompt: '',
-      buttons: [{ roleId: 'steuerpult', label: 'B' }],
-      hints: ['Wieder das Steuerpult.'],
+      hints: ['Wieder alle zusammen.'],
     },
     {
       type: 'button-sync',
       id: 'third',
       title: 'Drittes',
-      prompt: '',
-      buttons: [{ roleId: 'steuerpult', label: 'C' }],
     },
   ],
   map: {
@@ -63,11 +59,11 @@ const mission: Mission = parseMission({
   },
 });
 
-/** The same puzzles without a map: each one opens the moment the previous is solved. */
-const chained: Mission = parseMission({
+/** The same lab without a hatch: the last station wins the mission. */
+const noHatch: Mission = parseMission({
   ...JSON.parse(JSON.stringify(mission)),
-  id: 'hintchain',
-  map: undefined,
+  id: 'hintnohatch',
+  map: { ...JSON.parse(JSON.stringify(mission.map)), exit: undefined },
 });
 
 /** The same mission with nothing scripted for the radio. */
@@ -99,14 +95,24 @@ function playing(fixture: Mission = mission): GameState {
   );
 }
 
-/** Switch on the armed station. */
+/** Switch on the armed station with both players standing at it. */
 function open(state: GameState, at: number): GameState {
-  return applyAction(state, { type: 'interact', playerId: 'p2', at });
+  const def = state.mission.puzzles[state.currentPuzzleIndex];
+  const here = standing(state, { stations: { [def?.id ?? '']: ['p1', 'p2'] } });
+  return applyAction(here, { type: 'interact', playerId: 'p2', at });
 }
 
-/** Every station here is solved by a single press from the Steuerpult. */
+/** Every station here is solved by a press from each player. */
 function solve(state: GameState, at: number): GameState {
-  return applyAction(state, { type: 'puzzle-input', playerId: 'p2', at, input: { press: true } });
+  return run(
+    ['p1', 'p2'].map((playerId): Action => ({
+      type: 'puzzle-input',
+      playerId,
+      at,
+      input: { press: true },
+    })),
+    state,
+  );
 }
 
 function askForHint(state: GameState, at: number): GameState {
@@ -123,7 +129,7 @@ describe('hints on request', () => {
     expect(() => askForHint(state, T0 + 100_000 + DELAY_MS - 1)).toThrow(/noch einen Moment/);
     const helped = askForHint(state, T0 + 100_000 + DELAY_MS);
     expect(helped.hintsRevealed).toBe(1);
-    expect(viewFor(helped, 'p1').puzzle?.hints.shown).toEqual(['Nur eine Rolle hat einen Knopf.']);
+    expect(viewFor(helped, 'p1').puzzle?.hints.shown).toEqual(['Alle an die Station.']);
   });
 
   it('costs exactly the hint price without sounding the alarm', () => {
@@ -137,7 +143,7 @@ describe('hints on request', () => {
     expect(helped.events.at(-1)).toEqual({
       at,
       kind: 'hint',
-      label: 'Nur eine Rolle hat einen Knopf.',
+      label: 'Alle an die Station.',
       seconds: mission.hintCostSec,
     });
   });
@@ -147,7 +153,7 @@ describe('hints on request', () => {
     expect(() => askForHint(state, T0 + 2 * DELAY_MS - 1)).toThrow(/noch einen Moment/);
     state = askForHint(state, T0 + 2 * DELAY_MS);
     expect(viewFor(state, 'p1').puzzle?.hints).toEqual({
-      shown: ['Nur eine Rolle hat einen Knopf.', 'Das Steuerpult drückt A.'],
+      shown: ['Alle an die Station.', 'Jeder drückt einmal.'],
       left: 0,
       readyAt: null,
       costSec: mission.hintCostSec,
@@ -169,21 +175,12 @@ describe('hints on request', () => {
 
     state = askForHint(state, T0 + 110_000 + DELAY_MS);
     expect(state.hintsUsed).toBe(3);
-    expect(viewFor(state, 'p1').puzzle?.hints.shown).toEqual(['Wieder das Steuerpult.']);
+    expect(viewFor(state, 'p1').puzzle?.hints.shown).toEqual(['Wieder alle zusammen.']);
 
     // The third station has no hints at all.
     state = open(solve(state, T0 + 200_000), T0 + 210_000);
     expect(viewFor(state, 'p1').puzzle?.hints).toMatchObject({ shown: [], left: 0, readyAt: null });
     expect(() => askForHint(state, T0 + 210_000 + DELAY_MS)).toThrow(/Keine weiteren Hinweise/);
-  });
-
-  it('restarts the wait with every puzzle when they chain without a map', () => {
-    let state = playing(chained);
-    expect(() => askForHint(state, T0 + DELAY_MS - 1)).toThrow(/noch einen Moment/);
-    state = solve(askForHint(state, T0 + DELAY_MS), T0 + 60_000);
-    expect(state.currentPuzzleIndex).toBe(1);
-    expect(state.hintsRevealed).toBe(0);
-    expect(state.hintReadyAt).toBe(T0 + 60_000 + DELAY_MS);
   });
 
   it('adds the time spent paused to the wait', () => {
@@ -234,24 +231,24 @@ describe('mission control on the radio', () => {
   });
 
   it('keeps the escape line to itself when there is no hatch to open', () => {
-    const state = solve(solve(solve(playing(chained), T0 + 1000), T0 + 2000), T0 + 3000);
+    let state = playing(noHatch);
+    for (const at of [T0 + 1000, T0 + 3000, T0 + 5000]) {
+      state = solve(open(state, at), at + 1000);
+    }
     expect(state.phase).toBe('won');
     expect(kinds(state.events)).toEqual(['radio', 'puzzle', 'radio', 'puzzle', 'puzzle', 'finish']);
   });
 });
 
 describe('hint views', () => {
-  it('shows both roles and the audience the very same hints', () => {
+  it('shows both players and the audience the very same hints', () => {
     const state = askForHint(open(playing(), T0), T0 + DELAY_MS);
     const anna = viewFor(state, 'p1');
     const ben = viewFor(state, 'p2');
     const audience = viewForSpectator(state);
-    expect(anna.puzzle?.hints.shown).toEqual(['Nur eine Rolle hat einen Knopf.']);
+    expect(anna.puzzle?.hints.shown).toEqual(['Alle an die Station.']);
     expect(ben.puzzle?.hints).toEqual(anna.puzzle?.hints);
-    expect(audience.panels.map((p) => p.puzzle?.hints)).toEqual([
-      anna.puzzle?.hints,
-      anna.puzzle?.hints,
-    ]);
+    expect(audience.puzzle?.hints).toEqual(anna.puzzle?.hints);
     expect([anna.hintsUsed, ben.hintsUsed, audience.hintsUsed]).toEqual([1, 1, 1]);
   });
 

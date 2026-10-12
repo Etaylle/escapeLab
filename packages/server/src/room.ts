@@ -41,6 +41,9 @@ export type GameMessage = Extract<
 /** A plate holds while someone is this close (in tiles); releases a bit wider. */
 const PLATE_PRESS_RADIUS = 0.55;
 const PLATE_RELEASE_RADIUS = 0.75;
+/** A player is at a station, a manual object or the sign this close (in tiles); leaves wider. */
+const PRESENCE_ENTER_RADIUS = 1.6;
+const PRESENCE_LEAVE_RADIUS = 2.0;
 /** How close to the armed station an interact is accepted. */
 const INTERACT_RADIUS = 1.6;
 /** Everyone must stand on the exit hatch itself (below one tile) to escape. */
@@ -69,7 +72,7 @@ const RELAY_TICK_MS = 1000;
  * One game room: owns the authoritative GameState, player sessions
  * (reconnect tokens), the mission timer and the live avatar positions.
  * Movement is client-authoritative; the room turns positions into plate
- * state and validates interaction distance. Transport-agnostic.
+ * state and presence and validates interaction distance. Transport-agnostic.
  */
 export class Room {
   readonly code: string;
@@ -113,6 +116,7 @@ export class Room {
     this.dispatch({ type: 'player-connected', playerId });
     this.reconcilePause();
     this.reconcilePlates();
+    this.reconcilePresence();
     this.checkEscape();
   }
 
@@ -158,6 +162,7 @@ export class Room {
     this.dispatch({ type: 'player-disconnected', playerId });
     this.reconcilePause();
     this.reconcilePlates();
+    this.reconcilePresence();
     this.checkEscape();
   }
 
@@ -172,18 +177,15 @@ export class Room {
     }
   }
 
-  /** Client-authoritative avatar position; feeds plates and the position fan-out. */
+  /** Client-authoritative avatar position; feeds plates, presence and the position fan-out. */
   updatePosition(playerId: string, pos: PlayerPosition): void {
-    if (
-      this.state.phase !== 'playing' ||
-      this.state.paused !== null ||
-      this.state.mission.map === undefined
-    ) {
+    if (this.state.phase !== 'playing' || this.state.paused !== null) {
       return;
     }
     this.positions.set(playerId, pos);
     this.positionsDirty = true;
     this.reconcilePlates();
+    this.reconcilePresence();
     this.checkEscape();
     this.schedulePositionsBroadcast();
   }
@@ -241,7 +243,7 @@ export class Room {
 
   /** Map ping: fan out to everyone, rate-limited per player. */
   ping(playerId: string, x: number, y: number): void {
-    if (this.state.phase !== 'playing' || this.state.mission.map === undefined) {
+    if (this.state.phase !== 'playing') {
       return;
     }
     const now = Date.now();
@@ -312,7 +314,7 @@ export class Room {
   private resolveInteract(playerId: string): void {
     const map = this.state.mission.map;
     const pos = this.positions.get(playerId);
-    if (map === undefined || pos === undefined) {
+    if (pos === undefined) {
       this.requireNearStation(playerId);
       this.dispatch({ type: 'interact', playerId, at: Date.now() });
       return;
@@ -364,11 +366,10 @@ export class Room {
   }
 
   private requireNearStation(playerId: string): void {
-    const map = this.state.mission.map;
-    if (map === undefined || this.state.paused !== null) {
+    if (this.state.paused !== null) {
       return; // reducer rejects with a clearer message
     }
-    const station = armedStation(map, this.state);
+    const station = armedStation(this.state.mission.map, this.state);
     const pos = this.positions.get(playerId);
     if (station === null || pos === undefined) {
       throw new Error('Hier gibt es nichts zu aktivieren — geht zur leuchtenden Station.');
@@ -379,10 +380,10 @@ export class Room {
     }
   }
 
-  /** Place every avatar at its role spawn when a mapped mission starts. */
+  /** Place every avatar at its role spawn when a mission starts. */
   private seedPositions(): void {
     const map = this.state.mission.map;
-    if (this.state.phase !== 'playing' || map === undefined) {
+    if (this.state.phase !== 'playing') {
       return;
     }
     this.positions.clear();
@@ -396,6 +397,7 @@ export class Room {
       });
     }
     this.positionsDirty = true;
+    this.reconcilePresence();
     this.schedulePositionsBroadcast();
   }
 
@@ -419,7 +421,7 @@ export class Room {
    */
   private reconcilePlates(): void {
     const map = this.state.mission.map;
-    if (this.state.phase !== 'playing' || map === undefined) {
+    if (this.state.phase !== 'playing') {
       return;
     }
     const held = new Set(this.state.pressedPlates);
@@ -459,9 +461,65 @@ export class Room {
     this.checkSabotageCleared();
   }
 
+  /** Connected players in presence range of a spot; whoever was there already may stand wider. */
+  private presentAt(x: number, y: number, was: readonly string[]): string[] {
+    return this.state.players
+      .filter((player) => {
+        const pos = this.positions.get(player.id);
+        const radius = was.includes(player.id) ? PRESENCE_LEAVE_RADIUS : PRESENCE_ENTER_RADIUS;
+        return (
+          player.connected &&
+          pos !== undefined &&
+          Math.hypot(pos.x - (x + 0.5), pos.y - (y + 0.5)) <= radius
+        );
+      })
+      .map((player) => player.id)
+      .sort();
+  }
+
+  /**
+   * Translate live positions into who stands at which station and manual
+   * object, and who has walked up to the sign; dispatch only on change.
+   */
+  private reconcilePresence(): void {
+    const map = this.state.mission.map;
+    if (this.state.phase !== 'playing') {
+      return;
+    }
+    const { presence } = this.state;
+    const atEach = (
+      spots: readonly { id: string; x: number; y: number }[],
+      was: Record<string, string[]>,
+    ): Record<string, string[]> =>
+      Object.fromEntries(
+        spots
+          .map((spot) => [spot.id, this.presentAt(spot.x, spot.y, was[spot.id] ?? [])] as const)
+          .filter(([, players]) => players.length > 0),
+      );
+    const stations = atEach(
+      map.stations.map((s) => ({ id: s.puzzleId, x: s.x, y: s.y })),
+      presence.stations,
+    );
+    const manuals = atEach(map.manuals, presence.manuals);
+    const sign = map.edgeworkSign;
+    const signSeen =
+      sign === undefined
+        ? presence.signSeen
+        : [...new Set([...presence.signSeen, ...this.presentAt(sign.x, sign.y, [])])].sort();
+    const same = (a: Record<string, string[]>, b: Record<string, string[]>): boolean =>
+      JSON.stringify(a) === JSON.stringify(b);
+    if (
+      !same(stations, presence.stations) ||
+      !same(manuals, presence.manuals) ||
+      signSeen.length !== presence.signSeen.length
+    ) {
+      this.dispatch({ type: 'set-presence', stations, manuals, signSeen });
+    }
+  }
+
   /** All panels manned at once ends the emergency. */
   private checkSabotageCleared(): void {
-    const sabotage = this.state.mission.map?.sabotage;
+    const sabotage = this.state.mission.map.sabotage;
     // A relay emergency has no panels: only its instructions clear it.
     if (this.state.sabotage === null || sabotage === undefined || sabotage.mode !== 'valves') {
       return;
@@ -476,7 +534,7 @@ export class Room {
    * emergency while the crew is still solving, and the expiry while one runs.
    */
   private reconcileSabotage(): void {
-    const sabotage = this.state.mission.map?.sabotage;
+    const sabotage = this.state.mission.map.sabotage;
     if (this.sabotageTimer !== null) {
       clearTimeout(this.sabotageTimer);
       this.sabotageTimer = null;
@@ -562,7 +620,7 @@ export class Room {
 
   /** Won once every connected player stands in the exit zone. */
   private checkEscape(): void {
-    const exit = this.state.mission.map?.exit;
+    const exit = this.state.mission.map.exit;
     if (exit === undefined || !inEscapePhase(this.state)) {
       return;
     }
@@ -607,11 +665,8 @@ export class Room {
   private reconcileDroneTimer(): void {
     const map = this.state.mission.map;
     const live =
-      this.state.phase === 'playing' &&
-      this.state.paused === null &&
-      map !== undefined &&
-      map.drones.length > 0;
-    if (live && this.droneTimer === null && map !== undefined) {
+      this.state.phase === 'playing' && this.state.paused === null && map.drones.length > 0;
+    if (live && this.droneTimer === null) {
       this.drones = new DronePatrol(map);
       this.lastDroneTick = Date.now();
       this.droneTimer = setInterval(() => this.tickDrones(), DRONE_TICK_MS);

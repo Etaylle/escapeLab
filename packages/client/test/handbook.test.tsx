@@ -6,8 +6,7 @@ import { Handbook, HandbookScreen } from '../src/screens/Handbook.js';
 const keypad: MissionManualStation = {
   index: 0,
   title: 'Zugangscode',
-  operatorRoleName: 'Steuerpult',
-  manualRoleName: 'Anleitung',
+  readAt: ['HANDBUCH'],
   usesEdgework: true,
   manual: [
     {
@@ -25,8 +24,7 @@ const keypad: MissionManualStation = {
 const sync: MissionManualStation = {
   index: 1,
   title: 'Reaktor-Neustart',
-  operatorRoleName: 'Anleitung, Steuerpult',
-  manualRoleName: null,
+  readAt: [],
   usesEdgework: false,
   manual: [{ heading: 'Synchronschaltung', blocks: [{ kind: 'p', text: 'Alle zugleich.' }] }],
 };
@@ -38,11 +36,11 @@ const manual: MissionManual = {
 };
 
 describe('Handbook', () => {
-  it('opens with a title page naming the mission, the holder and the edgework', () => {
+  it('opens with a title page naming the mission, where it lies and the edgework', () => {
     const html = renderToStaticMarkup(<Handbook manual={manual} />);
     expect(html).toContain('NOTFALL-HANDBUCH');
     expect(html).toContain('<h1>Blackout im Labor</h1>');
-    expect(html).toContain('<dt>Ausgegeben an</dt><dd>Anleitung</dd>');
+    expect(html).toContain('<dt>Liegt aus</dt><dd>HANDBUCH</dd>');
     expect(html).toContain('je 20 s Missionszeit');
     expect(html).toContain('Laborkennung, Kontrollleuchten und Notstromzellen wechseln');
   });
@@ -51,9 +49,9 @@ describe('Handbook', () => {
     const html = renderToStaticMarkup(<Handbook manual={manual} />);
     expect(html.match(/<section class="handbook-chapter">/g)).toHaveLength(2);
     expect(html).toContain('<h2>§1 — Zugangscode</h2>');
-    expect(html).toContain('Bedient von: Steuerpult · Handbuch bei: Anleitung');
+    expect(html).toContain('Nachzulesen: HANDBUCH');
     expect(html).toContain('<h2>§2 — Reaktor-Neustart</h2>');
-    expect(html).toContain('<p class="handbook-crew">Bedient von: Anleitung, Steuerpult</p>');
+    expect(html).toContain('<p class="handbook-crew">Die ganze Crew an die Station</p>');
     expect(html).toContain('<h3>Tastenfeld</h3>');
     expect(html).toContain('<p>Vier Tasten.</p>');
     expect(html).toContain('<ol class="manual-rules"><li>Erst A.</li><li>Dann B.</li></ol>');
@@ -63,28 +61,28 @@ describe('Handbook', () => {
     expect(html).toContain('<p>Alle zugleich.</p>');
   });
 
-  it('skips the edgework note when no station reads it; no reader means all roles', () => {
+  it('skips the edgework note when no station reads it; nothing to read lies nowhere', () => {
     const html = renderToStaticMarkup(
       <Handbook manual={{ ...manual, stations: [{ ...sync, index: 0 }] }} />,
     );
     expect(html).not.toContain('Laborkennung');
-    expect(html).toContain('<dd>alle Rollen</dd>');
+    expect(html).toContain('<dd>nirgends</dd>');
   });
 
-  it('lists each reader once, in chapter order', () => {
+  it('lists each place once, in chapter order', () => {
     const html = renderToStaticMarkup(
       <Handbook
         manual={{
           ...manual,
           stations: [
             keypad,
-            { ...keypad, index: 1, manualRoleName: 'Diagnose' },
+            { ...keypad, index: 1, readAt: ['TERMINAL', 'HANDBUCH'] },
             { ...keypad, index: 2 },
           ],
         }}
       />,
     );
-    expect(html).toContain('<dd>Anleitung, Diagnose</dd>');
+    expect(html).toContain('<dd>HANDBUCH, TERMINAL</dd>');
   });
 });
 

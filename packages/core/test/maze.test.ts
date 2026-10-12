@@ -1,49 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, initialState, parseMission, viewFor } from '../src/index.js';
+import { applyAction, parseMission, viewFor, viewForSpectator } from '../src/index.js';
 import { MAZE_DIRS } from '../src/puzzles/maze.js';
 import type { Action, GameState, Mission } from '../src/index.js';
+import { labMission, openLab, started as startedLab, T0 } from './lab.js';
 
-const mission: Mission = parseMission({
-  id: 'mazetest',
-  title: 'Labyrinth-Test',
-  story: { intro: 'i', win: 'w', lose: 'l' },
-  timeLimitSec: 600,
-  roles: [
-    { id: 'navigator', name: 'Navigator', description: '' },
-    { id: 'lotse', name: 'Lotse', description: '' },
-  ],
-  puzzles: [
-    {
-      type: 'maze',
-      id: 'netz',
-      title: 'Netz',
-      prompt: '',
-      operatorRoleId: 'navigator',
-      manualRoleId: 'lotse',
-      size: 6,
-      penaltySec: 12,
-    },
-  ],
-});
+const mission: Mission = labMission(
+  [{ type: 'maze', id: 'netz', title: 'Netz', size: 6, penaltySec: 12 }],
+  'mazetest',
+);
 
-const T0 = 1_000_000;
-
-function run(actions: Action[], from: GameState): GameState {
-  return actions.reduce(applyAction, from);
-}
-
+/** Anna (p1) at the navigation desk, Ben (p2) at the wiring plan. */
 function started(seed = 7): GameState {
-  return run(
-    [
-      { type: 'player-join', playerId: 'p1', name: 'Anna' },
-      { type: 'player-join', playerId: 'p2', name: 'Ben' },
-      { type: 'select-role', playerId: 'p1', roleId: 'navigator' },
-      { type: 'select-role', playerId: 'p2', roleId: 'lotse' },
-      { type: 'set-ready', playerId: 'p2', ready: true },
-      { type: 'start-mission', playerId: 'p1', at: T0, seed },
-    ],
-    initialState(mission),
-  );
+  return openLab(startedLab(mission, seed));
 }
 
 /** One step of the marker; `dir` indexes MAZE_DIRS. */
@@ -68,7 +36,7 @@ function openDirs(state: GameState): number[] {
 }
 
 describe('maze puzzle', () => {
-  it('splits marker and walls between the two roles', () => {
+  it('splits marker and walls between the station and the plan', () => {
     const state = started();
     const nav = viewFor(state, 'p1').puzzle;
     const guide = viewFor(state, 'p2').puzzle;
@@ -82,6 +50,9 @@ describe('maze puzzle', () => {
     // Both need the goal to talk about it.
     expect(nav.goal).toEqual(guide.goal);
     expect(JSON.stringify(nav)).not.toContain('"cells":[');
+    expect(JSON.stringify(viewFor(state, 'p2'))).not.toContain('"pos":{');
+    // The audience sees both halves at once.
+    expect(viewForSpectator(state).puzzle).toMatchObject({ pos: nav.pos, cells: guide.cells });
   });
 
   it('generates the same maze for the same seed and a different one otherwise', () => {
@@ -152,24 +123,16 @@ describe('maze puzzle', () => {
     expect(viewFor(bumped, 'p2').puzzle).toMatchObject({ lastResult: null });
   });
 
-  it('only the navigator may move the marker', () => {
+  it('only a player at the navigation desk may move the marker', () => {
     expect(() =>
       applyAction(started(), move('p2', 0, T0 + 1000)),
-    ).toThrow(/Navigationspult/);
+    ).toThrow('Dafür musst du am Pult stehen.');
   });
 
-  it('rejects a maze whose two roles are the same', () => {
-    expect(() =>
-      parseMission({
-        ...JSON.parse(JSON.stringify(mission)),
-        puzzles: [
-          {
-            ...JSON.parse(JSON.stringify(mission.puzzles[0])),
-            manualRoleId: 'navigator',
-          },
-        ],
-      }),
-    ).toThrow(/operatorRoleId and manualRoleId must be different roles/);
+  it('needs a manual object somewhere that holds the plan', () => {
+    const raw = JSON.parse(JSON.stringify(mission));
+    raw.map.manuals = [];
+    expect(() => parseMission(raw)).toThrow(/no manual object covers puzzle "netz"/);
   });
 });
 

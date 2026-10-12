@@ -13,6 +13,8 @@ function mapWith(parts: Partial<MapView>): MapView {
     doors: [],
     plates: [],
     stations: [],
+    manuals: [],
+    edgeworkSign: null,
     labels: [],
     exit: null,
     items: [],
@@ -22,7 +24,7 @@ function mapWith(parts: Partial<MapView>): MapView {
 }
 
 function station(x: number, y: number, status: MapView['stations'][number]['status']) {
-  return { x, y, title: 'Notstrom', status };
+  return { puzzleId: 'notstrom', x, y, title: 'Notstrom', status };
 }
 
 function item(parts: Partial<MapView['items'][number]>): MapView['items'][number] {

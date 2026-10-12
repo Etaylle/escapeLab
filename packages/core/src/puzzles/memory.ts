@@ -1,7 +1,12 @@
 import { z } from 'zod';
-import { fail } from '../errors.js';
 import { mulberry32, shuffle, type Rng } from '../rng.js';
-import { commonDefShape, type ManualBlock, type PuzzleModule, type SolveAid } from './module.js';
+import {
+  commonDefShape,
+  type ManualBlock,
+  type Perspectives,
+  type PuzzleModule,
+  type SolveAid,
+} from './module.js';
 
 /**
  * Memory bank: five stages, each a display digit 1–4 over four buttons
@@ -11,11 +16,9 @@ import { commonDefShape, type ManualBlock, type PuzzleModule, type SolveAid } fr
  * earlier stage, so the crew has to note every press itself. A wrong press
  * costs time and drops the bank back to stage 1, every stage laid out afresh.
  */
-const defSchema = z.object({
+const defSchema = z.strictObject({
   type: z.literal('memory'),
   ...commonDefShape,
-  operatorRoleId: z.string().min(1),
-  manualRoleId: z.string().min(1),
   penaltySec: z.number().int().positive().default(15),
 });
 export type MemoryDef = z.infer<typeof defSchema>;
@@ -49,9 +52,9 @@ export interface MemoryView {
   kind: 'memory';
   /** 1–5, for everyone at the puzzle */
   stage: number;
-  /** the display digit — only the operator gets it */
+  /** the display digit — only operators get it */
   display: number | null;
-  /** the button labels in position order — only the operator gets them */
+  /** the button labels in position order — only operators get them */
   labels: number[] | null;
 }
 
@@ -129,13 +132,13 @@ function targetPosition(
 function notesFrom(
   def: MemoryDef,
   transcript: SolveAid<MemoryInput, MemoryView>['transcript'],
-  views: Record<string, MemoryView>,
+  views: Perspectives<MemoryView>,
 ): MemoryPress[] {
   let notes: MemoryPress[] = [];
   for (const [i, { input, before }] of transcript.entries()) {
-    const label = before[def.operatorRoleId]?.labels?.[input.position];
-    const after = (transcript[i + 1]?.before ?? views)[def.operatorRoleId];
-    if (label === undefined || after === undefined) {
+    const label = before.operator.labels?.[input.position];
+    const after = (transcript[i + 1]?.before ?? views).operator;
+    if (label === undefined) {
       throw new Error(
         `memory "${def.id}": transcript entry ${i + 1} lacks the operator's view of the bank`,
       );
@@ -175,15 +178,13 @@ function drawStage(rng: Rng): Pick<MemoryState, 'display' | 'labels' | 'seed'> {
 export const memoryModule: PuzzleModule<MemoryDef, MemoryState, MemoryInput, MemoryView> = {
   type: 'memory',
   usesEdgework: false,
+  wholeCrew: false,
   defSchema,
   inputSchema,
 
   init: (_def, rng) => ({ type: 'memory', stage: 1, history: [], ...drawStage(rng) }),
 
-  apply(def, state, input, roleId) {
-    if (roleId !== def.operatorRoleId) {
-      fail('Nur die Rolle an der Speicherbank kann Tasten drücken.');
-    }
+  apply(_def, state, input) {
     const label = state.labels[input.position];
     if (label === undefined) {
       return { state, solved: false, penalty: null };
@@ -208,13 +209,12 @@ export const memoryModule: PuzzleModule<MemoryDef, MemoryState, MemoryInput, Mem
     };
   },
 
-  view(def, state, roleId) {
-    const isOperator = roleId === def.operatorRoleId;
+  view(_def, state, viewer) {
     return {
       kind: 'memory',
       stage: state.stage,
-      display: isOperator ? state.display : null,
-      labels: isOperator ? [...state.labels] : null,
+      display: viewer.operating ? state.display : null,
+      labels: viewer.operating ? [...state.labels] : null,
     };
   },
 
@@ -268,8 +268,8 @@ export const memoryModule: PuzzleModule<MemoryDef, MemoryState, MemoryInput, Mem
    * transcript does not cover throws.
    */
   solve(def, views, _edgework, aid) {
-    const bank = views[def.operatorRoleId];
-    if (bank?.display == null || bank.labels === null) {
+    const bank = views.operator;
+    if (bank.display === null || bank.labels === null) {
       throw new Error(`memory "${def.id}": solving needs the operator's view of the bank`);
     }
     const notes = notesFrom(def, aid?.transcript ?? [], views);
@@ -280,6 +280,6 @@ export const memoryModule: PuzzleModule<MemoryDef, MemoryState, MemoryInput, Mem
       );
     }
     const position = targetPosition(bank.stage, bank.display, bank.labels, notes);
-    return [{ roleId: def.operatorRoleId, input: { position } }];
+    return [{ by: 'operator', input: { position } }];
   },
 };

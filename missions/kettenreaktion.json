@@ -41,14 +41,13 @@
       { "id": "leitstandtuer", "x": 11, "y": 4, "opensBy": { "kind": "puzzle", "puzzleId": "kuehlkreislauf" } },
       { "id": "messlabortuer", "x": 16, "y": 4, "opensBy": { "kind": "plate", "plateId": "flurplatte" } },
       { "id": "resonatortuer", "x": 11, "y": 8, "opensBy": { "kind": "puzzle", "puzzleId": "freigabecode" } },
-      { "id": "kammertuer", "x": 9, "y": 10, "opensBy": { "kind": "plate", "plateId": "resonatorplatte" } },
+      { "id": "kammertuer", "x": 9, "y": 10, "opensBy": { "kind": "puzzle", "puzzleId": "freigabecode" } },
       { "id": "kerntuer", "x": 6, "y": 10, "opensBy": { "kind": "puzzle", "puzzleId": "resonanz" } }
     ],
     "plates": [
       { "id": "archivplatte", "x": 5, "y": 2, "label": "HALTEN" },
       { "id": "messplatte", "x": 15, "y": 2, "label": "HALTEN" },
-      { "id": "flurplatte", "x": 13, "y": 7, "label": "HALTEN" },
-      { "id": "resonatorplatte", "x": 13, "y": 9, "label": "HALTEN" }
+      { "id": "flurplatte", "x": 13, "y": 7, "label": "HALTEN" }
     ],
     "stations": [
       { "puzzleId": "lastverteilung", "x": 7, "y": 6 },
@@ -58,6 +57,25 @@
       { "puzzleId": "leitungsnetz", "x": 4, "y": 6 },
       { "puzzleId": "abschaltung", "x": 3, "y": 10 }
     ],
+    "manuals": [
+      {
+        "id": "buch-archiv",
+        "kind": "book",
+        "x": 1,
+        "y": 3,
+        "label": "HANDBUCH",
+        "puzzleIds": ["lastverteilung", "kuehlkreislauf"]
+      },
+      {
+        "id": "buch-messlabor",
+        "kind": "book",
+        "x": 19,
+        "y": 3,
+        "label": "HANDBUCH",
+        "puzzleIds": ["freigabecode", "resonanz", "leitungsnetz"]
+      }
+    ],
+    "edgeworkSign": { "x": 7, "y": 3 },
     "labels": [
       { "text": "ARCHIV", "x": 3, "y": 1 },
       { "text": "LEITSTAND", "x": 10, "y": 1 },
@@ -130,8 +148,7 @@
     {
       "id": "steuerpult",
       "name": "Steuerpult",
-      "description": "Start im Leitstand. Kabel, Lichtfolge, Impuls: Du hast die Hände dran. Nur du siehst Laborkennung, Kontrollleuchten und Notstromzellen.",
-      "seesEdgework": true
+      "description": "Start im Leitstand. Kabel, Lichtfolge, Impuls: Du hast die Hände dran. Nur du siehst Laborkennung, Kontrollleuchten und Notstromzellen."
     }
   ],
   "puzzles": [
@@ -139,25 +156,8 @@
       "type": "wiring",
       "id": "lastverteilung",
       "title": "Lastverteilung",
-      "prompt": "Im Lastverteiler hängen vier bis sechs farbige Brückenkabel, von oben gezählt. Genau eines muss getrennt werden — jedes andere schlägt Alarm.",
-      "operatorRoleId": "steuerpult",
-      "manualRoleId": "anleitung",
       "wires": { "min": 4, "max": 6 },
       "penaltySec": 30,
-      "infos": [
-        {
-          "roleId": "anleitung",
-          "text": "Handbuch §1 liegt aufgeschlagen auf dem Archivtisch."
-        },
-        {
-          "roleId": "steuerpult",
-          "text": "Kabel, Laborkennung, Leuchten und Zellen siehst nur du. Erst alle Farben ansagen, dann schneiden — getrennt bleibt getrennt."
-        },
-        {
-          "roleId": "diagnose",
-          "text": "Du sitzt im Messlabor fest, bis jemand im Flur die HALTEN-Platte hält. Hör mit und zähl die Kabel mit."
-        }
-      ],
       "hints": [
         "Zählt die Kabel und nehmt NUR die Liste für diese Zahl. Steuerpult, lies alle Farben von oben vor, bevor jemand schneidet.",
         "Schon die erste Regel eurer Liste fragt Laborkennung, Kontrollleuchten oder Notstromzellen ab. Die sieht nur das Steuerpult: Anleitung fragt, Steuerpult liest vor.",
@@ -169,23 +169,6 @@
       "type": "switches",
       "id": "kuehlkreislauf",
       "title": "Kühlkreislauf",
-      "prompt": "Sechs Ventilschalter regeln den Kühlkreislauf, alle stehen unten. Jeder hat eine LED, manche Farbmarkierungen, manche einen Stern. Erst alle stellen, dann einmal PRÜFEN.",
-      "operatorRoleId": "diagnose",
-      "manualRoleId": "anleitung",
-      "infos": [
-        {
-          "roleId": "anleitung",
-          "text": "Handbuch §2 liegt offen; Laborkennung, Leuchten und Zellen liest dir das Steuerpult vor."
-        },
-        {
-          "roleId": "diagnose",
-          "text": "Die Schalterbank gehört dir, die Laborkennung siehst du nicht. Sag jeden Schalter an: LED, Markierung, Stern."
-        },
-        {
-          "roleId": "steuerpult",
-          "text": "Hier schaltest du nichts. Aber Laborkennung, Kontrollleuchten und Notstromzellen siehst nur du — halte sie bereit."
-        }
-      ],
       "hints": [
         "Diagnose, sag alle sechs Schalter von links an: LED an oder aus, Markierung, Stern. Anleitung nennt zu jedem den Buchstaben, erst dann wird gestellt.",
         "Für G, Z und L braucht die Anleitung Angaben vom Steuerpult: letzte Ziffer der Laborkennung, Zahl der Notstromzellen, ob SIG da ist und leuchtet.",
@@ -197,52 +180,18 @@
       "type": "memory",
       "id": "freigabecode",
       "title": "Freigabecode",
-      "prompt": "Der Not-Aus verlangt seinen Freigabecode in fünf Stufen: ein Display mit einer Ziffer, darunter vier Zifferntasten. Frühere Stufen zeigt die Bank nie wieder — das Steuerpult führt Protokoll.",
-      "operatorRoleId": "anleitung",
-      "manualRoleId": "diagnose",
-      "infos": [
-        {
-          "roleId": "diagnose",
-          "text": "Handbuch §3 liegt offen; die früheren Stufen stehen im Protokoll des Steuerpults."
-        },
-        {
-          "roleId": "anleitung",
-          "text": "Display und Tasten hast nur du. Jede Stufe ansagen: erst das Display, dann die Tasten von links. Nach dem Druck laut bestätigen."
-        },
-        {
-          "roleId": "steuerpult",
-          "text": "Du drückst nichts, du führst Protokoll: nach jedem Druck Stufe, Position von links, Beschriftung. Geht ein Druck daneben, alles streichen."
-        }
-      ],
       "hints": [
         "Protokoll ist Pflicht: Steuerpult schreibt nach jedem Druck Stufe, Position von links und Beschriftung auf. Die Bank zeigt frühere Stufen nie wieder.",
         "Ein Fehldruck wirft auf Stufe 1 zurück und belegt alle Stufen neu. Dann das Protokoll streichen und mit Stufe 1 frisch anfangen.",
         "Position und Beschriftung nicht verwechseln. „Dieselbe Beschriftung“: die Ziffer im neuen Tastenbild suchen. „Dieselbe Position“: derselbe Platz von links."
       ],
-      "onSolved": "Freigabe erteilt, Resonator offen, südlich der Flurmitte. Drinnen hält einer die HALTEN-Platte, einer geht durch die Westtür zur Station."
+      "onSolved": "Freigabe erteilt, Resonator offen, südlich der Flurmitte. Durch die Westtür zur Station."
     },
     {
       "type": "simon",
       "id": "resonanz",
       "title": "Resonanz-Dämpfung",
-      "prompt": "Der Reaktor pulst seine Resonanz als Lichtfolge, jede Stufe eine Farbe länger, bis sechs. Jede Farbe muss übersetzt zurückgetippt werden.",
-      "operatorRoleId": "steuerpult",
-      "manualRoleId": "diagnose",
       "sequenceLength": 6,
-      "infos": [
-        {
-          "roleId": "diagnose",
-          "text": "Handbuch §4 liegt offen; die Laborkennung liest dir das Steuerpult vor."
-        },
-        {
-          "roleId": "steuerpult",
-          "text": "Lichtfolge, Farbtasten und Laborkennung hast nur du. NOCHMAL ABSPIELEN kostet nichts."
-        },
-        {
-          "roleId": "anleitung",
-          "text": "Hier drückst du nichts. Behalte den Alarmstand am Panel im Blick und meld dich, sobald er springt."
-        }
-      ],
       "hints": [
         "Jede Stufe beginnt wieder bei der ersten Farbe. Steuerpult sagt die ganze Folge an, Diagnose übersetzt Farbe für Farbe, erst dann wird getippt.",
         "Steuerpult, sag zuerst, ob die Laborkennung A, E oder U enthält. Das wählt die Tabelle, und die gilt für die ganze Station.",
@@ -254,61 +203,24 @@
       "type": "maze",
       "id": "leitungsnetz",
       "title": "Leitungsnetz",
-      "prompt": "Der Steuerimpuls muss von Hand durchs Leitungsnetz: sechs mal sechs Zellen, Spalten A bis F, Zeilen 1 bis 6. Kein Pult zeigt das ganze Netz.",
-      "operatorRoleId": "steuerpult",
-      "manualRoleId": "diagnose",
       "size": 6,
       "penaltySec": 12,
-      "infos": [
-        {
-          "roleId": "diagnose",
-          "text": "Handbuch §5 liegt offen, dein Schaltplan zeigt jede Wand — aber nicht den Marker."
-        },
-        {
-          "roleId": "steuerpult",
-          "text": "Du siehst den Marker und das Ziel, aber keine einzige Wand. Sag nach jedem Schritt laut, wo du stehst."
-        },
-        {
-          "roleId": "anleitung",
-          "text": "Du siehst nur das Ziel. Wiederhol jede gemeldete Zelle laut — Hörfehler fallen beim Wiederholen auf."
-        }
-      ],
       "hints": [
         "Steuerpult, sag nach jedem Schritt die Zelle an: Spalte, dann Zeile, etwa „C4“. Diagnose sucht den Weg auf dem Plan vom Ziel aus rückwärts.",
         "Oben ist Zeile 1, links Spalte A. Sagt oben, unten, links, rechts, keine Himmelsrichtungen. Ein Schritt pro Ansage, dann die neue Zelle melden.",
         "Anleitung, wiederhol jede gemeldete Zelle und führ den Weg mit. Nach einer Wand steht der Marker noch auf derselben Zelle: neu ansagen, neu planen."
       ],
-      "onSolved": "Impuls durch. Letzte Station im Kern, Südwest, nur mit Kühlmittel. Weg durch die Kammer, einer hält im Resonator die HALTEN-Platte."
+      "onSolved": "Impuls durch. Letzte Station im Kern, Südwest, nur mit Kühlmittel. Weg durch die Kammer."
     },
     {
       "type": "button-sync",
       "id": "abschaltung",
       "title": "Synchron-Abschaltung",
-      "prompt": "Drei Freigabeschalter, drei Leute, ein Zeitfenster: zweieinhalb Sekunden. Der Reaktor nimmt nur eine einstimmige Abschaltung an.",
-      "buttons": [
-        { "roleId": "anleitung", "label": "FREIGABE A" },
-        { "roleId": "diagnose", "label": "FREIGABE B" },
-        { "roleId": "steuerpult", "label": "FREIGABE C" }
-      ],
-      "infos": [
-        {
-          "roleId": "anleitung",
-          "text": "Dein Schalter: FREIGABE A. Und du zählst ein: drei, zwei, eins, JETZT."
-        },
-        {
-          "roleId": "diagnose",
-          "text": "Dein Schalter: FREIGABE B. Gedrückt wird auf JETZT, nicht schon auf eins."
-        },
-        {
-          "roleId": "steuerpult",
-          "text": "Dein Schalter: FREIGABE C. Gedrückt wird auf JETZT, nicht hinterher."
-        }
-      ],
       "hints": [
         "Ein Druck gilt nur zweieinhalb Sekunden. Kommt der letzte später, verfallen die frühen. Kein Alarm, nur ein neuer Anlauf.",
         "Anleitung zählt laut ein: drei, zwei, eins, JETZT. Alle drei drücken auf JETZT, keiner schon auf eins."
       ],
-      "onSolved": "Abschaltung bestätigt, die Kurve fällt. Aus dem Kern kommt ihr nur durch die Kammer: einer hält im Resonator die Platte.",
+      "onSolved": "Abschaltung bestätigt, die Kurve fällt.",
       "windowMs": 2500
     }
   ]

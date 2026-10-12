@@ -1,5 +1,6 @@
 import {
   CREW_COLORS,
+  NOBODY_PRESENT,
   type GameState,
   type ItemState,
   type Player,
@@ -20,7 +21,7 @@ import {
   type RelayDef,
   type RelayState,
 } from './puzzles/relay.js';
-import { armedStation } from './map.js';
+import { armedStation, operatorsOf } from './map.js';
 
 /**
  * All game actions. `at` is the authoritative server time (epoch ms) and
@@ -40,6 +41,13 @@ export type Action =
   | { type: 'puzzle-input'; playerId: string; at: number; input: unknown }
   | { type: 'request-hint'; playerId: string; at: number }
   | { type: 'set-occupancy'; plates: string[]; panels: string[] }
+  /** who stands at which station and manual object, and who has seen the sign (stays seen) */
+  | {
+      type: 'set-presence';
+      stations: Record<string, string[]>;
+      manuals: Record<string, string[]>;
+      signSeen: string[];
+    }
   | { type: 'drone-spotted'; at: number; penaltySec: number }
   | { type: 'sabotage-start'; at: number }
   | { type: 'sabotage-cleared'; at: number }
@@ -97,6 +105,8 @@ export function applyAction(state: GameState, action: Action): GameState {
             occupiedPanels: [...action.panels].sort(),
           }
         : state;
+    case 'set-presence':
+      return state.phase === 'playing' ? setPresence(state, action) : state;
     case 'sabotage-start':
       return startSabotage(state, action);
     case 'sabotage-cleared':
@@ -255,6 +265,32 @@ function puzzleContext(state: GameState, at: number): PuzzleContext {
     alarms: state.penaltySeq,
     remainingSec: Math.max(0, Math.ceil(((state.deadlineAt ?? at) - at) / 1000)),
     at,
+    crew: state.players.filter((p) => p.connected).map((p) => p.id),
+  };
+}
+
+/**
+ * Who stands where, as the server sees it. Lists are kept sorted and empty
+ * ones dropped, so equal presence compares equal; whoever has seen the sign
+ * keeps it.
+ */
+function setPresence(
+  state: GameState,
+  action: Extract<Action, { type: 'set-presence' }>,
+): GameState {
+  const tidy = (byId: Record<string, string[]>): Record<string, string[]> =>
+    Object.fromEntries(
+      Object.entries(byId)
+        .filter(([, players]) => players.length > 0)
+        .map(([id, players]) => [id, [...new Set(players)].sort()]),
+    );
+  return {
+    ...state,
+    presence: {
+      stations: tidy(action.stations),
+      manuals: tidy(action.manuals),
+      signSeen: [...new Set([...state.presence.signSeen, ...action.signSeen])].sort(),
+    },
   };
 }
 
@@ -300,7 +336,6 @@ function startMission(
   if (waiting.length > 0) {
     fail(`Noch nicht bereit: ${waiting.map((p) => p.name).join(', ')}.`);
   }
-  const map = state.mission.map;
   const started: GameState = {
     ...state,
     phase: 'playing',
@@ -310,10 +345,11 @@ function startMission(
     edgework: generateEdgework(mulberry32((action.seed ^ EDGEWORK_STREAM) >>> 0)),
     pressedPlates: [],
     occupiedPanels: [],
+    presence: NOBODY_PRESENT,
     sabotage: null,
     paused: null,
     items: Object.fromEntries(
-      (map?.items ?? []).map((item) => [
+      state.mission.map.items.map((item) => [
         item.id,
         { x: item.x + 0.5, y: item.y + 0.5, carriedBy: null, delivered: false },
       ]),
@@ -328,9 +364,7 @@ function startMission(
     hintsRevealed: 0,
     hintReadyAt: null,
   };
-  // With a map, puzzles wait for station activation; without one they chain directly.
-  const opened = map === undefined ? openPuzzle(started, 0, action.at) : started;
-  return logRadio(opened, state.mission.radio.start, action.at);
+  return logRadio(started, state.mission.radio.start, action.at);
 }
 
 /** Common guards for in-game actions; returns the acting player's current puzzle. */
@@ -360,7 +394,7 @@ export function inEscapePhase(state: GameState): boolean {
   return (
     state.phase === 'playing' &&
     state.currentPuzzleIndex >= state.mission.puzzles.length &&
-    state.mission.map?.exit !== undefined
+    state.mission.map.exit !== undefined
   );
 }
 
@@ -375,7 +409,7 @@ function advance(state: GameState, at: number): GameState {
   const logged = logRadio(reported, solved?.onSolved, at);
   const nextIndex = state.currentPuzzleIndex + 1;
   if (nextIndex >= state.mission.puzzles.length) {
-    if (state.mission.map?.exit !== undefined) {
+    if (state.mission.map.exit !== undefined) {
       // All systems online — but the lab is only beaten once everyone is out.
       const unlocked = logEvent(
         { ...logged, currentPuzzleIndex: nextIndex, puzzleState: null },
@@ -398,9 +432,8 @@ function advance(state: GameState, at: number): GameState {
       at,
     );
   }
-  const next: GameState = { ...logged, currentPuzzleIndex: nextIndex, puzzleState: null };
-  // With a map the next puzzle waits at its station; without one it starts right away.
-  return state.mission.map === undefined ? openPuzzle(next, nextIndex, at) : next;
+  // The next puzzle waits at its station.
+  return { ...logged, currentPuzzleIndex: nextIndex, puzzleState: null };
 }
 
 /** Dispatched by the server once every connected player stands in the exit zone. */
@@ -470,7 +503,7 @@ function lostNow(state: GameState, at: number): GameState {
  * dropped (its station stays armed and can be restarted afterwards).
  */
 function startSabotage(state: GameState, action: { at: number }): GameState {
-  const sabotage = state.mission.map?.sabotage;
+  const sabotage = state.mission.map.sabotage;
   if (state.phase !== 'playing' || sabotage === undefined || state.sabotage !== null) {
     return state;
   }
@@ -499,7 +532,7 @@ function clearSabotage(state: GameState, at: number): GameState {
 
 /** The relay emergency's def; rebuilt from the mission whenever needed, never stored. */
 function emergencyDef(state: GameState): RelayDef {
-  const sabotage = state.mission.map?.sabotage;
+  const sabotage = state.mission.map.sabotage;
   if (sabotage === undefined) {
     throw new Error(`mission "${state.mission.id}" has no sabotage to run a relay emergency`);
   }
@@ -603,7 +636,7 @@ function setPaused(state: GameState, action: { paused: boolean; at: number }): G
 }
 
 function expireSabotage(state: GameState, action: { at: number }): GameState {
-  const sabotage = state.mission.map?.sabotage;
+  const sabotage = state.mission.map.sabotage;
   if (state.sabotage === null || sabotage === undefined) {
     return state;
   }
@@ -629,19 +662,19 @@ function handlePuzzleInput(
     return lostNow(state, action.at);
   }
   const { player, def, puzzleState } = playing;
+  if (!operatorsOf(state, def.id).includes(player.id)) {
+    fail('Dafür musst du am Pult stehen.');
+  }
   const puzzleModule = moduleFor(def.type);
   const input = puzzleModule.inputSchema.safeParse(action.input);
   if (!input.success) {
     fail('Ungültige Eingabe.');
   }
-  if (player.roleId === null) {
-    fail('Ohne Rolle kannst du hier nichts tun.');
-  }
   const result = puzzleModule.apply(
     def,
     puzzleState,
     input.data,
-    player.roleId,
+    player.id,
     puzzleContext(state, action.at),
   );
   const next = { ...state, puzzleState: result.state };
@@ -751,7 +784,7 @@ function deliverItem(
   if (item.carriedBy !== action.playerId) {
     fail('Das trägst du gar nicht.');
   }
-  const def = state.mission.map?.items.find((i) => i.id === action.itemId);
+  const def = state.mission.map.items.find((i) => i.id === action.itemId);
   if (def === undefined) {
     fail('Dieses Objekt gibt es hier nicht.');
   }
@@ -776,7 +809,7 @@ function deliverItem(
 
 /** Items a station still waits for before it can be switched on. */
 export function missingItemsFor(state: GameState, puzzleId: string): string[] {
-  return (state.mission.map?.items ?? [])
+  return state.mission.map.items
     .filter((def) => def.requiredFor === puzzleId && state.items[def.id]?.delivered !== true)
     .map((def) => def.label);
 }
@@ -788,10 +821,6 @@ export function missingItemsFor(state: GameState, puzzleId: string): string[] {
 function handleInteract(state: GameState, action: { playerId: string; at: number }): GameState {
   if (state.phase !== 'playing') {
     fail('Interagieren geht nur während der Mission.');
-  }
-  const map = state.mission.map;
-  if (map === undefined) {
-    fail('Diese Mission hat keine Karte.');
   }
   if (state.deadlineAt !== null && action.at >= state.deadlineAt) {
     return lostNow(state, action.at);
@@ -807,7 +836,7 @@ function handleInteract(state: GameState, action: { playerId: string; at: number
   }
   findPlayer(state, action.playerId);
   const current = state.mission.puzzles[state.currentPuzzleIndex];
-  if (armedStation(map, state) === null || current === undefined) {
+  if (armedStation(state.mission.map, state) === null || current === undefined) {
     fail('Hier gibt es nichts zu aktivieren.');
   }
   const missing = missingItemsFor(state, current.id);
@@ -848,6 +877,7 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     edgework: null,
     pressedPlates: [],
     occupiedPanels: [],
+    presence: NOBODY_PRESENT,
     sabotage: null,
     paused: null,
     items: {},

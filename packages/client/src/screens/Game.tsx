@@ -351,8 +351,6 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
         </div>
       )}
 
-      {puzzle !== null && map === null && <p className="story">{puzzle.prompt}</p>}
-
       {map !== null && relay === undefined && <SabotageAlert sabotage={map.sabotage} />}
       {map !== null && map.sabotage !== null && relay !== undefined && (
         <RelayAlert sabotage={map.sabotage} relay={relay} send={send} />
@@ -430,8 +428,6 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
           <div className="puzzle-modal" role="dialog" aria-modal="true">
             <div className="panel">
               <StationHead role={myRole} edgework={view.edgework} />
-              <p className="story">{puzzle.prompt}</p>
-              {puzzle.info !== null && <div className="info-box">📖 {puzzle.info}</div>}
               {puzzle.manual !== null && <Manual sections={puzzle.manual} />}
               <PuzzlePanel puzzle={puzzle} send={send} deadlineAt={view.deadlineAt} />
               <HintStrip hints={puzzle.hints} send={send} />
@@ -440,7 +436,6 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
         ) : (
           <div className="panel">
             <StationHead role={myRole} edgework={view.edgework} />
-            {puzzle.info !== null && <div className="info-box">📖 {puzzle.info}</div>}
             {puzzle.manual !== null && <Manual sections={puzzle.manual} />}
             <PuzzlePanel puzzle={puzzle} send={send} deadlineAt={view.deadlineAt} />
           </div>

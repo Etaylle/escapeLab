@@ -16,55 +16,20 @@ import {
 import type { Action, Edgework, GameState, Mission } from '../src/index.js';
 import { wiringModule } from '../src/puzzles/wiring.js';
 import { mulberry32 } from '../src/rng.js';
+import { labMission, standing, started, T0 } from './lab.js';
 
-const T0 = 1_000_000;
-
-const raw = {
-  id: 'edgetest',
-  title: 'Kennungs-Test',
-  story: { intro: 'i', win: 'w', lose: 'l' },
-  timeLimitSec: 600,
-  roles: [
-    { id: 'anleitung', name: 'Anleitung', description: '' },
-    { id: 'steuerpult', name: 'Steuerpult', description: '', seesEdgework: true },
-  ],
-  puzzles: [
-    {
-      type: 'wiring',
-      id: 'kabel',
-      title: 'Kabel',
-      prompt: '',
-      operatorRoleId: 'steuerpult',
-      manualRoleId: 'anleitung',
-    },
-    {
-      type: 'keypad',
-      id: 'code',
-      title: 'Code',
-      prompt: '',
-      operatorRoleId: 'steuerpult',
-      manualRoleId: 'anleitung',
-    },
-  ],
-};
-const mission: Mission = parseMission(raw);
+const mission: Mission = labMission([
+  { type: 'wiring', id: 'kabel', title: 'Kabel' },
+  { type: 'keypad', id: 'code', title: 'Code' },
+]);
 
 function run(actions: Action[], from: GameState): GameState {
   return actions.reduce(applyAction, from);
 }
 
+/** Anna (p1) has walked past the sign, Ben (p2) has not. */
 function playing(seed = 7): GameState {
-  return run(
-    [
-      { type: 'player-join', playerId: 'p1', name: 'Anna' },
-      { type: 'player-join', playerId: 'p2', name: 'Ben' },
-      { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
-      { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
-      { type: 'set-ready', playerId: 'p2', ready: true },
-      { type: 'start-mission', playerId: 'p1', at: T0, seed },
-    ],
-    initialState(mission),
-  );
+  return standing(started(mission, seed), { signSeen: ['p1'] });
 }
 
 const rolled = (count: number): Edgework[] =>
@@ -149,24 +114,33 @@ describe('edgework in a run', () => {
     expect(applyAction(lost, { type: 'back-to-lobby', playerId: 'p1' }).edgework).toBeNull();
   });
 
-  it('reaches only the roles that see it, and the audience on exactly their panels', () => {
+  it('reaches only the players who have read the sign, and the audience always', () => {
     const state = playing();
     const serial = state.edgework?.serial ?? '';
-    expect(viewFor(state, 'p2').edgework).toEqual(state.edgework);
-    expect(viewFor(state, 'p1').edgework).toBeNull();
-    expect(JSON.stringify(viewFor(state, 'p1'))).not.toContain(serial);
-    expect(viewForSpectator(state).panels.map((p) => [p.roleId, p.edgework])).toEqual([
-      ['anleitung', null],
-      ['steuerpult', state.edgework],
-    ]);
+    expect(viewFor(state, 'p1').edgework).toEqual(state.edgework);
+    expect(viewFor(state, 'p2').edgework).toBeNull();
+    expect(JSON.stringify(viewFor(state, 'p2'))).not.toContain(serial);
+    expect(viewForSpectator(state).edgework).toEqual(state.edgework);
   });
 
-  it('hands a module the edgework, the alarms so far and the seconds left', () => {
+  it('stays with whoever read it, wherever they walk afterwards', () => {
+    const later = standing(playing(), { manuals: { buch: ['p1'] } });
+    expect(later.presence.signSeen).toEqual(['p1']);
+    expect(viewFor(later, 'p1').edgework).toEqual(later.edgework);
+    expect(viewFor(later, 'p1').presence.signSeen).toBe(true);
+  });
+
+  it('hands a module the edgework, the alarms so far, the seconds left and the crew', () => {
     const apply = vi.spyOn(wiringModule, 'apply');
-    const state = applyAction(playing(), { type: 'drone-spotted', at: T0 + 1000, penaltySec: 15 });
+    const open = applyAction(standing(playing(), { stations: { kabel: ['p1'] } }), {
+      type: 'interact',
+      playerId: 'p1',
+      at: T0 + 500,
+    });
+    const state = applyAction(open, { type: 'drone-spotted', at: T0 + 1000, penaltySec: 15 });
     applyAction(state, {
       type: 'puzzle-input',
-      playerId: 'p2',
+      playerId: 'p1',
       at: T0 + 10_500,
       input: { wireId: 'w9' },
     });
@@ -177,23 +151,35 @@ describe('edgework in a run', () => {
       // 600 s minus the 15 s alarm minus 10.5 s played, rounded up like the clock shows it
       remainingSec: 575,
       at: T0 + 10_500,
+      crew: ['p1', 'p2'],
     });
+    expect(apply.mock.calls[0]?.[3]).toBe('p1');
     apply.mockRestore();
   });
 });
 
 describe('edgework in the mission format', () => {
-  it('nobody sees it unless the role says so', () => {
-    expect(mission.roles.map((r) => r.seesEdgework)).toEqual([false, true]);
+  it('needs the sign on the map as soon as a rule reads it', () => {
+    const raw = JSON.parse(JSON.stringify(mission));
+    delete raw.map.edgeworkSign;
+    expect(() => parseMission(raw)).toThrow(
+      /puzzles "kabel" read the edgework, but there is no edgeworkSign/,
+    );
+    const withoutReader = {
+      ...raw,
+      puzzles: raw.puzzles.filter((p: { type: string }) => p.type !== 'wiring'),
+      map: {
+        ...raw.map,
+        stations: raw.map.stations.filter((s: { puzzleId: string }) => s.puzzleId !== 'kabel'),
+        manuals: [{ ...raw.map.manuals[0], puzzleIds: ['code'] }],
+      },
+    };
+    expect(() => parseMission(withoutReader)).not.toThrow();
   });
 
-  it('rejects a puzzle that reads it when no role sees it', () => {
-    const blind = {
-      ...raw,
-      roles: raw.roles.map((role) => ({ ...role, seesEdgework: false })),
-    };
-    expect(() => parseMission(blind)).toThrow(/"kabel" read the edgework, but no role sees it/);
-    const withoutReader = { ...blind, puzzles: raw.puzzles.filter((p) => p.type !== 'wiring') };
-    expect(() => parseMission(withoutReader)).not.toThrow();
+  it('puts the sign on a floor tile', () => {
+    const raw = JSON.parse(JSON.stringify(mission));
+    raw.map.edgeworkSign = { x: 0, y: 0 };
+    expect(() => parseMission(raw)).toThrow(/edgework sign at 0,0 is not on a floor tile/);
   });
 });

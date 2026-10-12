@@ -11,7 +11,7 @@
   "timeLimitSec": 900,
   "radio": {
     "start": "Erst Notstrom: Brückenkasten im Ostflügel, unter dem Schild. Labor schneidet, Archiv hat die Listen, Leitstand die Laborkennung.",
-    "escape": "Schleuse offen, zum ersten Mal seht ihr euch. Ausgang in der Schleusenmitte. Die Uhr läuft, bis alle vier dort stehen."
+    "escape": "Not-Aus bestätigt. Ausgang in der Schleusenmitte. Die Uhr läuft, bis alle vier dort stehen."
   },
   "map": {
     "tiles": [
@@ -36,8 +36,8 @@
       "labor": { "x": 20, "y": 10 }
     },
     "doors": [
-      { "id": "schleuse-west", "x": 8, "y": 7, "opensBy": { "kind": "puzzle", "puzzleId": "notaus" } },
-      { "id": "schleuse-ost", "x": 14, "y": 7, "opensBy": { "kind": "puzzle", "puzzleId": "notaus" } }
+      { "id": "schleuse-west", "x": 8, "y": 7, "opensBy": { "kind": "puzzle", "puzzleId": "druckausgleich" } },
+      { "id": "schleuse-ost", "x": 14, "y": 7, "opensBy": { "kind": "puzzle", "puzzleId": "druckausgleich" } }
     ],
     "plates": [],
     "stations": [
@@ -49,6 +49,41 @@
       { "puzzleId": "druckausgleich", "x": 4, "y": 2 },
       { "puzzleId": "notaus", "x": 2, "y": 7 }
     ],
+    "manuals": [
+      {
+        "id": "buch-leitstand",
+        "kind": "book",
+        "x": 1,
+        "y": 3,
+        "label": "HANDBUCH",
+        "puzzleIds": ["leitungsnetz"]
+      },
+      {
+        "id": "buch-archiv",
+        "kind": "book",
+        "x": 1,
+        "y": 11,
+        "label": "HANDBUCH",
+        "puzzleIds": ["notstrom", "funkfeuer"]
+      },
+      {
+        "id": "buch-technik",
+        "kind": "book",
+        "x": 21,
+        "y": 3,
+        "label": "HANDBUCH",
+        "puzzleIds": ["zugangscode", "druckausgleich"]
+      },
+      {
+        "id": "buch-labor",
+        "kind": "book",
+        "x": 21,
+        "y": 9,
+        "label": "HANDBUCH",
+        "puzzleIds": ["kuehlung"]
+      }
+    ],
+    "edgeworkSign": { "x": 3, "y": 1 },
     "labels": [
       { "text": "WESTFLÜGEL", "x": 4, "y": 1 },
       { "text": "OSTFLÜGEL", "x": 18, "y": 1 },
@@ -106,8 +141,7 @@
     {
       "id": "leitstand",
       "name": "Leitstand (West)",
-      "description": "Westflügel. Nur du siehst Laborkennung, Kontrollleuchten und Notstromzellen und sagst sie an, wenn eine Regel fragt. Dazu Kühlbank und Netzplan.",
-      "seesEdgework": true
+      "description": "Westflügel. Nur du siehst Laborkennung, Kontrollleuchten und Notstromzellen und sagst sie an, wenn eine Regel fragt. Dazu Kühlbank und Netzplan."
     },
     {
       "id": "archiv",
@@ -130,21 +164,8 @@
       "type": "wiring",
       "id": "notstrom",
       "title": "Notstrom-Brücken",
-      "prompt": "Im Brückenkasten im Ostflügel hängen vier bis sechs farbige Kabel, genau eines muss fallen. Labor sieht sie, Archiv hat die Listen, Leitstand liest Laborkennung, Leuchten und Zellen vor.",
-      "operatorRoleId": "labor",
-      "manualRoleId": "archiv",
       "wires": { "min": 4, "max": 6 },
       "penaltySec": 30,
-      "infos": [
-        {
-          "roleId": "archiv",
-          "text": "Handbuch §1 liegt aufgeschlagen vor dir. Die Kabel sieht nur das Labor."
-        },
-        {
-          "roleId": "leitstand",
-          "text": "Laborkennung, Kontrollleuchten und Notstromzellen siehst nur du, oben an deiner Station. Das Archiv fragt gleich danach."
-        }
-      ],
       "hints": [
         "Labor, zähl die Kabel und lies alle Farben von oben vor, bevor jemand schneidet. Archiv, nimm nur die Liste für genau diese Zahl.",
         "Archiv, prüf die Regeln der Liste von oben, die erste zutreffende gilt. Fragt eine nach Laborkennung, Leuchte oder Zellen, sagt der Leitstand an.",
@@ -156,15 +177,6 @@
       "type": "keypad",
       "id": "zugangscode",
       "title": "Freigabecode",
-      "prompt": "Das Tastenfeld der Freigabe im Westflügel: vier Tasten, jede mit einem fremden Zeichen. Archiv beschreibt sie, Technik findet im Handbuch die Reihenfolge.",
-      "operatorRoleId": "archiv",
-      "manualRoleId": "technik",
-      "infos": [
-        {
-          "roleId": "technik",
-          "text": "Handbuch §2 liegt aufgeschlagen vor dir. Die Tasten sieht nur das Archiv."
-        }
-      ],
       "hints": [
         "Archiv, beschreib alle vier Zeichen, bevor du drückst. Technik, such die eine Spalte, in der alle vier stehen. Es passt immer genau eine.",
         "Steht ein Zeichen in zwei Spalten, entscheiden die anderen drei. Technik, prüf jede Spalte gegen alle vier Beschreibungen, nicht nur gegen eine.",
@@ -176,15 +188,6 @@
       "type": "switches",
       "id": "kuehlung",
       "title": "Kühlkreislauf",
-      "prompt": "Sechs Kippschalter an der Kühlbank im Westflügel, jeder mit LED, Farbmarkierung und vielleicht einem Stern. Leitstand schaltet und liest vor, auch die Laborkennung. Labor hat die Tabelle.",
-      "operatorRoleId": "leitstand",
-      "manualRoleId": "labor",
-      "infos": [
-        {
-          "roleId": "labor",
-          "text": "Handbuch §3 liegt aufgeschlagen vor dir. Die Schalter sieht nur der Leitstand."
-        }
-      ],
       "hints": [
         "Leitstand, sag alle sechs Schalter von links an: LED, Markierung, Stern. Labor, such für jeden die Zeile und notier den Buchstaben.",
         "Für G, Z und L braucht Labor drei Angaben vom Leitstand: letzte Ziffer der Laborkennung, Zahl der Notstromzellen, Kontrollleuchte SIG.",
@@ -196,15 +199,6 @@
       "type": "morse",
       "id": "funkfeuer",
       "title": "Funkfeuer",
-      "prompt": "Am Funkpult im Ostflügel morst eine Signallampe ein Wort in Schleife, daneben Frequenzregler und SENDEN. Technik liest die Lampe, Archiv hat Morsetafel und Frequenzen.",
-      "operatorRoleId": "technik",
-      "manualRoleId": "archiv",
-      "infos": [
-        {
-          "roleId": "archiv",
-          "text": "Handbuch §4 liegt aufgeschlagen vor dir. Die Lampe sieht nur die Technik."
-        }
-      ],
       "hints": [
         "Technik, wart die lange Pause ab, dann sag jeden Buchstaben als kurz und lang an. Archiv, schlag jeden einzeln in der Morsetafel nach.",
         "Drei Buchstaben reichen, dann steht das Wort in der Frequenztabelle fest. Passt keines, ab der nächsten langen Pause neu ansagen.",
@@ -216,21 +210,8 @@
       "type": "maze",
       "id": "leitungsnetz",
       "title": "Leitungsnetz",
-      "prompt": "Der Speicherkern speist einen Steuerimpuls ein, der durch ein Netz aus sechs mal sechs Zellen muss. Labor sieht Impuls und Ziel, aber keine Wand. Den Schaltplan hat der Leitstand.",
-      "operatorRoleId": "labor",
-      "manualRoleId": "leitstand",
       "size": 6,
       "penaltySec": 12,
-      "infos": [
-        {
-          "roleId": "leitstand",
-          "text": "Handbuch §5 und dein Schaltplan: alle Wände, aber kein Impuls. Den sieht nur das Labor."
-        },
-        {
-          "roleId": "labor",
-          "text": "Impuls und Ziel siehst du, die Wände nicht. Jeder Lauf gegen eine Wand kostet Zeit."
-        }
-      ],
       "hints": [
         "Labor, sag zuerst deine Zelle an, Spalte und Zeile, etwa C4. Leitstand, such sie im Plan und leg den Weg zum Ziel fest, bevor es losgeht.",
         "Ein Schritt pro Ansage: Leitstand sagt oben, unten, links oder rechts, Labor geht und meldet die neue Zelle. So fällt ein Fehler sofort auf.",
@@ -242,47 +223,17 @@
       "type": "button",
       "id": "druckausgleich",
       "title": "Druckausgleich",
-      "prompt": "Im Westflügel ein großer Knopf mit Farbe und Aufschrift, daneben die Missionsuhr. Archiv bedient ihn, Technik hat die Regeln, Leitstand liest Zellen und Leuchten vor.",
-      "operatorRoleId": "archiv",
-      "manualRoleId": "technik",
-      "infos": [
-        {
-          "roleId": "technik",
-          "text": "Handbuch §6 liegt aufgeschlagen vor dir. Den Knopf sieht nur das Archiv."
-        },
-        {
-          "roleId": "leitstand",
-          "text": "Laborkennung, Kontrollleuchten und Notstromzellen siehst nur du. Technik fragt gleich danach."
-        },
-        {
-          "roleId": "archiv",
-          "text": "Die Missionsuhr läuft im Knopffeld mit. Wer hält, behält sie im Blick."
-        }
-      ],
       "hints": [
         "Archiv, sag Farbe und Aufschrift an. Technik, prüf die Regeln von oben. Fragt eine nach Zellen oder Leuchten, sagt der Leitstand an.",
         "Halten heißt gedrückt lassen. Archiv, sag sofort die Farbe des Streifens an, Technik liest dazu die Ziffer aus der zweiten Liste.",
         "Archiv, loslassen, sobald die Ziffer irgendwo auf der Missionsuhr im Knopffeld steht, egal ob bei Minuten oder Sekunden."
       ],
-      "onSolved": "Druck ausgeglichen. Letzte Station: Not-Aus an der Westwand, Höhe Schleuse. Alle vier an die Freigaben, Leitstand zählt ein."
+      "onSolved": "Druck ausgeglichen, Schleuse offen. Letzte Station: Not-Aus an der Westwand, Höhe Schleuse. Alle vier an die Freigaben, Leitstand zählt ein."
     },
     {
       "type": "button-sync",
       "id": "notaus",
       "title": "Not-Aus beider Flügel",
-      "prompt": "Vier Freigabeschalter, zwei Flügel, drei Sekunden. Erst danach entriegelt die Schleuse.",
-      "buttons": [
-        { "roleId": "leitstand", "label": "FREIGABE WEST-1" },
-        { "roleId": "archiv", "label": "FREIGABE WEST-2" },
-        { "roleId": "technik", "label": "FREIGABE OST-1" },
-        { "roleId": "labor", "label": "FREIGABE OST-2" }
-      ],
-      "infos": [
-        {
-          "roleId": "leitstand",
-          "text": "Du zählst für beide Flügel ein, laut und gleichmäßig: drei, zwei, eins, JETZT."
-        }
-      ],
       "hints": [
         "Alle vier Freigaben müssen innerhalb von drei Sekunden gedrückt sein. Ein zu früher Druck verfällt, kein Alarm, nur ein neuer Anlauf.",
         "Leitstand zählt für beide Flügel ein: drei, zwei, eins, JETZT. Gedrückt wird auf JETZT, von allen vier, nicht schon auf eins."

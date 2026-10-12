@@ -1,12 +1,11 @@
 import { z } from 'zod';
-import { fail } from '../errors.js';
 import { shuffle } from '../rng.js';
 import { commonDefShape, type PuzzleModule } from './module.js';
 
 /**
  * Symbol keypad: four glyphs on a 2×2 keypad, all from one column of a fixed
  * table that only the manual prints. The operator describes the glyphs; the
- * manual role finds the one column that holds all four and reads their order
+ * reader finds the one column that holds all four and reads their order
  * from top to bottom. A correct press lights its key for good; a wrong press
  * costs time but keeps the lit keys.
  */
@@ -29,11 +28,9 @@ export const KEYPAD_COLUMNS: readonly (readonly string[])[] = [
 
 const KEY_COUNT = 4;
 
-const defSchema = z.object({
+const defSchema = z.strictObject({
   type: z.literal('keypad'),
   ...commonDefShape,
-  operatorRoleId: z.string().min(1),
-  manualRoleId: z.string().min(1),
   penaltySec: z.number().int().positive().default(20),
 });
 export type KeypadDef = z.infer<typeof defSchema>;
@@ -53,7 +50,7 @@ export type KeypadInput = z.infer<typeof inputSchema>;
 
 export interface KeypadView {
   kind: 'keypad';
-  /** the keys in grid order — only the operator sees them */
+  /** the keys in grid order — only operators see them */
   keys: { glyph: string; lit: boolean }[] | null;
   /** how many keys are lit — everyone sees how far the code is */
   litCount: number;
@@ -64,6 +61,7 @@ const litCountOf = (keys: { lit: boolean }[]): number => keys.filter((key) => ke
 export const keypadModule: PuzzleModule<KeypadDef, KeypadState, KeypadInput, KeypadView> = {
   type: 'keypad',
   usesEdgework: false,
+  wholeCrew: false,
   defSchema,
   inputSchema,
 
@@ -82,10 +80,7 @@ export const keypadModule: PuzzleModule<KeypadDef, KeypadState, KeypadInput, Key
     };
   },
 
-  apply(def, state, input, roleId) {
-    if (roleId !== def.operatorRoleId) {
-      fail('Nur die Rolle am Tastenfeld kann Tasten drücken.');
-    }
+  apply(_def, state, input) {
     const key = state.keys[input.keyIndex];
     if (key === undefined || key.lit) {
       return { state, solved: false, penalty: null };
@@ -98,10 +93,10 @@ export const keypadModule: PuzzleModule<KeypadDef, KeypadState, KeypadInput, Key
     return { state: { ...state, keys }, solved: lit + 1 === state.order.length, penalty: null };
   },
 
-  view(def, state, roleId) {
+  view(_def, state, viewer) {
     return {
       kind: 'keypad',
-      keys: roleId === def.operatorRoleId ? state.keys.map((key) => ({ ...key })) : null,
+      keys: viewer.operating ? state.keys.map((key) => ({ ...key })) : null,
       litCount: litCountOf(state.keys),
     };
   },
@@ -125,11 +120,11 @@ export const keypadModule: PuzzleModule<KeypadDef, KeypadState, KeypadInput, Key
     ];
   },
 
-  /** The manual role's printed table is this module's own, so the solver reads that. */
-  solve(def, views) {
-    const keys = views[def.operatorRoleId]?.keys;
-    if (keys == null || views[def.manualRoleId] === undefined) {
-      throw new Error(`keypad "${def.id}": solving needs the operator's keys and the manual role`);
+  /** The reader's printed table is this module's own, so the solver reads that. */
+  solve(def, { operator }) {
+    const keys = operator.keys;
+    if (keys === null) {
+      throw new Error(`keypad "${def.id}": solving needs the operator's view of the keys`);
     }
     const glyphs = keys.map((key) => key.glyph);
     const column = KEYPAD_COLUMNS.find((c) => glyphs.every((glyph) => c.includes(glyph)));
@@ -138,6 +133,6 @@ export const keypadModule: PuzzleModule<KeypadDef, KeypadState, KeypadInput, Key
     }
     const next = column.find((glyph) => keys.some((key) => key.glyph === glyph && !key.lit));
     const keyIndex = keys.findIndex((key) => key.glyph === next);
-    return keyIndex < 0 ? [] : [{ roleId: def.operatorRoleId, input: { keyIndex } }];
+    return keyIndex < 0 ? [] : [{ by: 'operator', input: { keyIndex } }];
   },
 };

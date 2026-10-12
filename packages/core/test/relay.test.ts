@@ -25,7 +25,6 @@ import {
   type RelayDef,
   type RelayState,
 } from '../src/puzzles/relay.js';
-import { playInstance } from './solveModule.js';
 
 const SEEDS = 200;
 const T0 = 1_000_000;
@@ -55,15 +54,7 @@ function relayMission(roleCount: number, sabotage: Record<string, unknown> = {})
     story: { intro: 'i', win: 'w', lose: 'l' },
     timeLimitSec: 900,
     roles,
-    puzzles: [
-      {
-        type: 'button-sync',
-        id: 'first',
-        title: 'Erstes',
-        prompt: '',
-        buttons: [{ roleId: 'r0', label: 'A' }],
-      },
-    ],
+    puzzles: [{ type: 'button-sync', id: 'first', title: 'Erstes' }],
     map: {
       tiles: ['##########', '#........#', '#........#', '##########'],
       spawns: Object.fromEntries(roles.map((role, i) => [role.id, { x: 1 + i, y: 1 }])),
@@ -87,10 +78,16 @@ function defOf(mission: Mission): RelayDef {
 // --- the module on its own ---------------------------------------------------------
 
 const edgework = generateEdgework(mulberry32(99));
-const ctx = (at: number): PuzzleContext => ({ edgework, alarms: 0, remainingSec: 600, at });
+const ctx = (at: number): PuzzleContext => ({
+  edgework,
+  alarms: 0,
+  remainingSec: 600,
+  at,
+  crew: [],
+});
 
 function viewsOf(def: RelayDef, state: RelayState): Record<string, RelayView> {
-  const viewCtx = { edgework, alarms: 0 };
+  const viewCtx = { edgework, alarms: 0, crew: [] };
   return Object.fromEntries(
     def.roles.map((role) => [role.id, relayModule.view(def, state, role.id, viewCtx)]),
   );
@@ -129,13 +126,6 @@ describe.each([2, 3, 4, RELAY_MAX_ROLES])('relay emergency for %i roles', (roleC
       const { state, moves } = drill(def, seed);
       expect(moves, `seed ${seed}`).toBe(def.required);
       expect(state.missed, `seed ${seed}`).toBe(0);
-    }
-  });
-
-  it('plays through the shared harness like every other module', () => {
-    const roleIds = def.roles.map((role) => role.id);
-    for (let seed = 0; seed < SEEDS; seed++) {
-      expect(playInstance(def, roleIds, seed)).toBe(def.required);
     }
   });
 
@@ -534,7 +524,6 @@ describe('relay missions', () => {
             type: 'relay',
             id: 'notfall',
             title: 'Notfall',
-            prompt: '',
             roles: [
               { id: 'a', name: 'A' },
               { id: 'b', name: 'B' },
@@ -543,6 +532,11 @@ describe('relay missions', () => {
             durationSec: 30,
           },
         ],
+        map: {
+          tiles: ['#####', '#...#', '#####'],
+          spawns: { a: { x: 1, y: 1 }, b: { x: 3, y: 1 } },
+          stations: [{ puzzleId: 'notfall', x: 2, y: 1 }],
+        },
       }),
     ).toThrow(/relay is an emergency, not a station/);
   });

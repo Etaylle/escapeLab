@@ -20,13 +20,7 @@ const mission: Mission = parseMission({
     { id: 'anleitung', name: 'Anleitung', description: '' },
     { id: 'steuerpult', name: 'Steuerpult', description: '' },
   ],
-  puzzles: ['first', 'second'].map((id, i) => ({
-    type: 'button-sync',
-    id,
-    title: id,
-    prompt: '',
-    buttons: [{ roleId: 'steuerpult', label: `B${i}` }],
-  })),
+  puzzles: ['first', 'second'].map((id) => ({ type: 'button-sync', id, title: id })),
   map: {
     tiles: ['#########', '#.......#', '#.......#', '#########'],
     spawns: { anleitung: { x: 1, y: 1 }, steuerpult: { x: 7, y: 1 } },
@@ -99,8 +93,11 @@ describe('Room with a sleeping drone', () => {
 
     // The first solve wakes it up exactly where its patrol starts …
     moveTo(room, ben.playerId, 2, 1);
+    moveTo(room, anna.playerId, 2, 2);
     room.act(ben.playerId, { kind: 'interact' });
+    room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
+    moveTo(room, anna.playerId, 3, 2);
     const audience = collector();
     room.attachSpectator(audience.listen);
     expect(lastPositions(audience.messages).drones['wache']).toMatchObject({ x: 1.5, y: 2.5 });

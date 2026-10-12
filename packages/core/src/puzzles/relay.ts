@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { fail } from '../errors.js';
 import { mulberry32, shuffle, type Rng } from '../rng.js';
-import { commonDefShape, type PuzzleModule } from './module.js';
+import { commonDefShape, type EmergencyModule } from './module.js';
 
 /**
  * Notfall-Relais, a Spaceteam-style emergency. Every role gets a console of
@@ -52,7 +52,7 @@ const REQUIRED_PER_ROLE = 3;
 const KINDS = ['switch', 'dial', 'button'] as const;
 type RelayKind = (typeof KINDS)[number];
 
-const defSchema = z.object({
+const defSchema = z.strictObject({
   type: z.literal('relay'),
   ...commonDefShape,
   /** every role of the mission: a console each, and an instruction for somebody else's */
@@ -161,8 +161,6 @@ export function relayDefFor(
     type: 'relay',
     id: 'notfall-relais',
     title: sabotage.label,
-    prompt: sabotage.hint,
-    infos: [],
     hints: [],
     roles: roles.map((role) => ({ id: role.id, name: role.name })),
     windowSec: sabotage.windowSec,
@@ -309,7 +307,7 @@ function spoken(
   };
 }
 
-export const relayModule: PuzzleModule<RelayDef, RelayState, RelayInput, RelayView> = {
+export const relayModule: EmergencyModule<RelayDef, RelayState, RelayInput, RelayView> = {
   type: 'relay',
   usesEdgework: false,
   defSchema,

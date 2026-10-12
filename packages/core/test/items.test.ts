@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, initialState, missingItemsFor, parseMission, viewFor } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
+import { standing } from './lab.js';
 
 /** A corridor with a crate at one end and its slot at the other. */
 const mission: Mission = parseMission({
@@ -13,20 +14,8 @@ const mission: Mission = parseMission({
     { id: 'steuerpult', name: 'Steuerpult', description: '' },
   ],
   puzzles: [
-    {
-      type: 'button-sync',
-      id: 'first',
-      title: 'Erstes',
-      prompt: '',
-      buttons: [{ roleId: 'steuerpult', label: 'A' }],
-    },
-    {
-      type: 'button-sync',
-      id: 'second',
-      title: 'Zweites',
-      prompt: '',
-      buttons: [{ roleId: 'steuerpult', label: 'B' }],
-    },
+    { type: 'button-sync', id: 'first', title: 'Erstes' },
+    { type: 'button-sync', id: 'second', title: 'Zweites' },
   ],
   map: {
     tiles: ['#########', '#.......#', '#########'],
@@ -73,9 +62,10 @@ function atGatedStation(): GameState {
   return run(
     [
       { type: 'interact', playerId: 'p2', at: T0 + 100 },
+      { type: 'puzzle-input', playerId: 'p1', at: T0 + 200, input: { press: true } },
       { type: 'puzzle-input', playerId: 'p2', at: T0 + 200, input: { press: true } },
     ],
-    playing(),
+    standing(playing(), { stations: { first: ['p1', 'p2'] } }),
   );
 }
 

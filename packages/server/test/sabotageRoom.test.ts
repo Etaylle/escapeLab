@@ -20,13 +20,7 @@ const mission: Mission = parseMission({
     { id: 'anleitung', name: 'Anleitung', description: '' },
     { id: 'steuerpult', name: 'Steuerpult', description: '' },
   ],
-  puzzles: ['first', 'second', 'third'].map((id, i) => ({
-    type: 'button-sync',
-    id,
-    title: id,
-    prompt: '',
-    buttons: [{ roleId: 'steuerpult', label: `B${i}` }],
-  })),
+  puzzles: ['first', 'second', 'third'].map((id) => ({ type: 'button-sync', id, title: id })),
   map: {
     tiles: ['#########', '#.......#', '#.......#', '#########'],
     spawns: { anleitung: { x: 3, y: 1 }, steuerpult: { x: 5, y: 1 } },
@@ -72,6 +66,15 @@ describe('Room emergencies', () => {
     room.updatePosition(playerId, { x: x + 0.5, y: y + 0.5, facing: 0, moving: false });
   }
 
+  /** Both at the station, switched on, both press. */
+  function solveAt(room: Room, x: number, anna: { playerId: string }, ben: { playerId: string }) {
+    moveTo(room, ben.playerId, x, 1);
+    moveTo(room, anna.playerId, x, 2);
+    room.act(ben.playerId, { kind: 'interact' });
+    room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
+    room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
+  }
+
   /** Lobby, mission start, and the two station solves that arm emergencies. */
   function midMission() {
     const room = new Room('TEST', mission);
@@ -83,14 +86,8 @@ describe('Room emergencies', () => {
     room.act(ben.playerId, { kind: 'select-role', roleId: 'steuerpult' });
     ready(room, ben);
     room.act(anna.playerId, { kind: 'start-mission' });
-    for (const [puzzle, x] of [
-      ['first', 2],
-      ['second', 4],
-    ] as const) {
-      void puzzle;
-      moveTo(room, ben.playerId, x, 1);
-      room.act(ben.playerId, { kind: 'interact' });
-      room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
+    for (const x of [2, 4]) {
+      solveAt(room, x, anna, ben);
     }
     return { room, anna, ben };
   }
@@ -142,9 +139,7 @@ describe('Room emergencies', () => {
 
   it('stops scheduling emergencies once the crew runs for the hatch', () => {
     const { room, anna, ben } = midMission();
-    moveTo(room, ben.playerId, 6, 1);
-    room.act(ben.playerId, { kind: 'interact' });
-    room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
+    solveAt(room, 6, anna, ben);
     expect(lastView(anna.messages).map?.exit?.open).toBe(true);
     vi.advanceTimersByTime(300_000);
     expect(lastView(anna.messages).map?.sabotage).toBeNull();

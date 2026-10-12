@@ -23,19 +23,12 @@ const mission: Mission = parseMission({
     { id: 'anleitung', name: 'Anleitung', description: '' },
     { id: 'steuerpult', name: 'Steuerpult', description: '' },
   ],
-  puzzles: [
-    {
-      type: 'button-sync',
-      id: 'only',
-      title: 'Einziges',
-      prompt: '',
-      buttons: [{ roleId: 'steuerpult', label: 'A' }],
-    },
-  ],
+  puzzles: [{ type: 'button-sync', id: 'only', title: 'Einziges' }],
   map: {
     tiles: ['#########', '#...#...#', '#...#...#', '#...#...#', '#########'],
-    spawns: { anleitung: { x: 1, y: 1 }, steuerpult: { x: 7, y: 1 } },
+    spawns: { anleitung: { x: 1, y: 1 }, steuerpult: { x: 3, y: 1 } },
     stations: [{ puzzleId: 'only', x: 2, y: 1 }],
+    plates: [{ id: 'kamera', x: 3, y: 3, label: 'KAMERA HALTEN' }],
     drones: [
       {
         id: 'wache',
@@ -47,6 +40,7 @@ const mission: Mission = parseMission({
         range: 6,
         halfAngleDeg: 30,
         penaltySec: 15,
+        frozenByPlate: 'kamera',
       },
     ],
   },
@@ -58,19 +52,13 @@ const sleeper: Mission = parseMission({
   id: 'sleepertest',
   puzzles: [
     ...JSON.parse(JSON.stringify(mission.puzzles)),
-    {
-      type: 'button-sync',
-      id: 'second',
-      title: 'Zweites',
-      prompt: '',
-      buttons: [{ roleId: 'steuerpult', label: 'B' }],
-    },
+    { type: 'button-sync', id: 'second', title: 'Zweites' },
   ],
   map: {
     ...JSON.parse(JSON.stringify(mission.map)),
     stations: [
       { puzzleId: 'only', x: 2, y: 1 },
-      { puzzleId: 'second', x: 6, y: 1 },
+      { puzzleId: 'second', x: 2, y: 3 },
     ],
     drones: mission.map?.drones.map((d) => ({ ...d, activeAfterSolved: 1 })),
   },
@@ -100,6 +88,11 @@ function at(x: number, y: number): Map<string, { x: number; y: number }> {
   return new Map([['p1', { x, y }]]);
 }
 
+/** Who stands at which station, the way the room reports it. */
+function standing(state: GameState, stations: Record<string, string[]>): GameState {
+  return applyAction(state, { type: 'set-presence', stations, manuals: {}, signSeen: [] });
+}
+
 function patrol(fixture: Mission = mission): DronePatrol {
   const map = fixture.map;
   if (map === undefined) {
@@ -114,7 +107,7 @@ describe('DronePatrol', () => {
     const state = playing();
     const start = drones.snapshot(state, T0)['wache'];
     expect(start).toEqual(
-      expect.objectContaining({ x: 1.5, y: 2.5, range: 6, alerted: false }),
+      expect.objectContaining({ x: 1.5, y: 2.5, range: 6, alerted: false, frozen: false }),
     );
     drones.step(state, 1); // one second at speed 1 tile/s
     const moved = drones.snapshot(state, T0)['wache'];
@@ -177,11 +170,30 @@ describe('DronePatrol', () => {
     expect(drones.snapshot(state, T0 + 6000)['wache']?.alerted).toBe(false);
   });
 
-  it('cannot spot anyone while the crew works at a station', () => {
+  it('cannot spot a player heads-down at the open station, but anyone else', () => {
     const drones = patrol();
-    const busy = applyAction(playing(), { type: 'interact', playerId: 'p1', at: T0 + 10 });
+    const busy = applyAction(standing(playing(), { only: ['p1'] }), {
+      type: 'interact',
+      playerId: 'p1',
+      at: T0 + 10,
+    });
     expect(busy.puzzleState).not.toBeNull();
     expect(drones.detect(busy, at(3.5, 2.5), T0)).toEqual([]);
+    const elsewhere = standing(busy, { only: ['p2'] });
+    expect(drones.detect(elsewhere, at(3.5, 2.5), T0)).toHaveLength(1);
+  });
+
+  it('stands still, sees nothing and says so while its plate is held', () => {
+    const drones = patrol();
+    const held = applyAction(playing(), { type: 'set-occupancy', plates: ['kamera'], panels: [] });
+    drones.step(held, 1);
+    expect(drones.snapshot(held, T0)['wache']).toMatchObject({ x: 1.5, y: 2.5, frozen: true });
+    expect(drones.detect(held, at(3.5, 2.5), T0)).toEqual([]);
+    const released = applyAction(held, { type: 'set-occupancy', plates: [], panels: [] });
+    expect(drones.snapshot(released, T0)['wache']?.frozen).toBe(false);
+    expect(drones.detect(released, at(3.5, 2.5), T0)).toHaveLength(1);
+    drones.step(released, 1);
+    expect(drones.snapshot(released, T0)['wache']?.x).toBeCloseTo(2.5, 2);
   });
 
   it('ignores disconnected players', () => {
@@ -208,9 +220,10 @@ describe('sleeping drones', () => {
     const awake = run(
       [
         { type: 'interact', playerId: 'p2', at: T0 + 10 },
+        { type: 'puzzle-input', playerId: 'p1', at: T0 + 20, input: { press: true } },
         { type: 'puzzle-input', playerId: 'p2', at: T0 + 20, input: { press: true } },
       ],
-      asleep,
+      standing(asleep, { only: ['p1', 'p2'] }),
     );
     expect(awake.currentPuzzleIndex).toBe(1);
     expect(drones.snapshot(awake, T0)['wache']).toEqual(

@@ -2,10 +2,10 @@ import { shuffle, type Rng } from './rng.js';
 
 /**
  * Edgework: the lab's serial, control lamps and emergency cells, rolled once
- * per run. Only roles with `seesEdgework` get it, and manual rules may read
- * it — so the answer to a station changes from run to run while the printed
- * rules stay the same. Player-facing names: „Laborkennung",
- * „Kontrollleuchten", „Notstromzellen".
+ * per run. Only players who have walked up to the sign get it, and manual
+ * rules may read it — so the answer to a station changes from run to run
+ * while the printed rules stay the same. Player-facing names:
+ * „Laborkennung", „Kontrollleuchten", „Notstromzellen".
  */
 
 export const INDICATOR_IDS = ['FRQ', 'SIG', 'CAR', 'NSA', 'BOB', 'IND'] as const;

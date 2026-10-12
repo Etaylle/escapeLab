@@ -24,15 +24,24 @@
       "anleitung": { "x": 10, "y": 4 }
     },
     "doors": [
-      { "id": "lehrtuer", "x": 6, "y": 2, "opensBy": { "kind": "puzzle", "puzzleId": "init" } },
-      { "id": "halteschott", "x": 14, "y": 2, "opensBy": { "kind": "plate", "plateId": "halteplatte" } }
+      { "id": "halteschott", "x": 14, "y": 2, "opensBy": { "kind": "puzzle", "puzzleId": "doppelbestaetigung" } }
     ],
-    "plates": [{ "id": "halteplatte", "x": 8, "y": 5, "label": "HALTEN" }],
     "stations": [
       { "puzzleId": "init", "x": 2, "y": 1 },
       { "puzzleId": "doppelbestaetigung", "x": 12, "y": 1 },
       { "puzzleId": "synchronkalibrierung", "x": 16, "y": 4 }
     ],
+    "manuals": [
+      {
+        "id": "buch-leitstand",
+        "kind": "book",
+        "x": 11,
+        "y": 5,
+        "label": "HANDBUCH",
+        "puzzleIds": ["doppelbestaetigung"]
+      }
+    ],
+    "edgeworkSign": { "x": 4, "y": 5 },
     "labels": [
       { "text": "KONTROLLE", "x": 3, "y": 3 },
       { "text": "LEITSTAND", "x": 10, "y": 3 },
@@ -49,42 +58,20 @@
     {
       "id": "steuerpult",
       "name": "Steuerpult",
-      "description": "Du sitzt an den Knöpfen. Ohne Ansagen der Anleitung drückst du besser nichts.",
-      "seesEdgework": true
+      "description": "Du sitzt an den Knöpfen. Ohne Ansagen der Anleitung drückst du besser nichts."
     }
   ],
   "puzzles": [
     {
       "type": "button-sync",
       "id": "init",
-      "title": "Initialisierung",
-      "prompt": "Das Hauptsystem muss hochgefahren werden.",
-      "buttons": [{ "roleId": "steuerpult", "label": "INIT" }],
-      "infos": [
-        {
-          "roleId": "anleitung",
-          "text": "Handbuch §1: Das Steuerpult darf INIT erst drücken, wenn du laut und deutlich »Freigabe erteilt« gesagt hast. Sag es jetzt."
-        }
-      ]
+      "title": "Initialisierung"
     },
     {
       "type": "wiring",
       "id": "doppelbestaetigung",
       "title": "Kabelprüfung",
-      "prompt": "Übungskasten mit drei Kabeln, eines muss getrennt werden. Welches, sagt nur das Handbuch: Steuerpult, lies die Farben vor. Die Anleitung hat die Regel.",
-      "operatorRoleId": "steuerpult",
-      "manualRoleId": "anleitung",
       "wires": { "min": 3, "max": 3 },
-      "infos": [
-        {
-          "roleId": "anleitung",
-          "text": "Handbuch §2 liegt vor dir. Die Kabel siehst du nicht, nur die Regeln — frag nach, bis du sicher bist."
-        },
-        {
-          "roleId": "steuerpult",
-          "text": "Oben am Pult: Laborkennung, Kontrollleuchten, Notstromzellen. Hier braucht ihr nichts davon, an späteren Stationen schon."
-        }
-      ],
       "hints": [
         "Steuerpult, lies die drei Farben von oben nach unten vor. Anleitung, nimm die Liste für 3 Kabel und geh sie von oben durch.",
         "Die erste Regel, die zutrifft, gilt, alle danach nicht mehr. Kabel 1 ist das oberste. Getrennt wird erst, wenn ihr euch einig seid.",
@@ -96,17 +83,6 @@
       "type": "button-sync",
       "id": "synchronkalibrierung",
       "title": "Synchronkalibrierung",
-      "prompt": "Die Feldspulen müssen synchron kalibriert werden.",
-      "buttons": [
-        { "roleId": "anleitung", "label": "SPULE A" },
-        { "roleId": "steuerpult", "label": "SPULE B" }
-      ],
-      "infos": [
-        {
-          "roleId": "anleitung",
-          "text": "Handbuch §3, WARNUNG: Beide Spulen müssen innerhalb von 3 Sekunden ausgelöst werden, sonst bricht die Kalibrierung ab. Zählt gemeinsam runter!"
-        }
-      ],
       "windowMs": 3000
     }
   ]

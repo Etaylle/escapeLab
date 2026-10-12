@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { fail } from '../errors.js';
-import { commonDefShape, type ManualBlock, type PuzzleModule } from './module.js';
+import { commonDefShape, type ManualBlock, type Move, type PuzzleModule } from './module.js';
 
 /**
  * morse puzzle („Funkfeuer"): the operator's lamp blinks one word in Morse
@@ -9,11 +8,9 @@ import { commonDefShape, type ManualBlock, type PuzzleModule } from './module.js
  * three letters is enough to know the word. Sending on any other frequency
  * costs time.
  */
-const defSchema = z.object({
+const defSchema = z.strictObject({
   type: z.literal('morse'),
   ...commonDefShape,
-  operatorRoleId: z.string().min(1),
-  manualRoleId: z.string().min(1),
   penaltySec: z.number().int().positive().default(20),
 });
 export type MorseDef = z.infer<typeof defSchema>;
@@ -75,7 +72,7 @@ export interface MorseView {
   kind: 'morse';
   /**
    * the lamp's word in Morse — `.` short, `-` long, one space between
-   * letters — which repeats after a long pause. Only the operator gets it;
+   * letters — which repeats after a long pause. Only operators get it;
    * the word itself goes to nobody.
    */
   pattern: string | null;
@@ -140,6 +137,7 @@ function alphabetTable(): ManualBlock {
 export const morseModule: PuzzleModule<MorseDef, MorseState, MorseInput, MorseView> = {
   type: 'morse',
   usesEdgework: false,
+  wholeCrew: false,
   defSchema,
   inputSchema,
 
@@ -151,16 +149,8 @@ export const morseModule: PuzzleModule<MorseDef, MorseState, MorseInput, MorseVi
     return { type: 'morse', word, dial };
   },
 
-  apply(def, state, input, roleId) {
-    const transmit = 'transmit' in input;
-    if (roleId !== def.operatorRoleId) {
-      fail(
-        transmit
-          ? 'Nur die Rolle am Funkpult kann senden.'
-          : 'Nur die Rolle am Funkpult kann die Frequenz einstellen.',
-      );
-    }
-    if (!transmit) {
+  apply(_def, state, input) {
+    if (!('transmit' in input)) {
       const dial = Math.min(DIAL_STEPS - 1, Math.max(0, state.dial + input.tune));
       return { state: { ...state, dial }, solved: false, penalty: null };
     }
@@ -169,10 +159,10 @@ export const morseModule: PuzzleModule<MorseDef, MorseState, MorseInput, MorseVi
       : { state, solved: false, penalty: 'Falsche Frequenz gesendet' };
   },
 
-  view(def, state, roleId) {
+  view(_def, state, viewer) {
     return {
       kind: 'morse',
-      pattern: roleId === def.operatorRoleId ? encode(state.word) : null,
+      pattern: viewer.operating ? encode(state.word) : null,
       dial: state.dial,
       steps: DIAL_STEPS,
       frequency: megahertz(dialKhz(state.dial)),
@@ -219,24 +209,20 @@ export const morseModule: PuzzleModule<MorseDef, MorseState, MorseInput, MorseVi
   },
 
   /** Decodes the operator's lamp with the printed tables, then tunes and sends. */
-  solve(def, views) {
-    const panel = views[def.operatorRoleId];
-    if (panel?.pattern == null) {
+  solve(def, { operator }) {
+    if (operator.pattern === null) {
       throw new Error(`morse "${def.id}": solving needs the operator's view of the lamp`);
     }
-    const word = decode(panel.pattern);
+    const word = decode(operator.pattern);
     const entry = WORDS.find((e) => e.word === word);
     if (entry === undefined) {
       throw new Error(`morse "${def.id}": the lamp spells "${word}", which no table row has`);
     }
-    const turns = stepOf(entry.khz) - panel.dial;
-    const tune: -1 | 1 = turns < 0 ? -1 : 1;
+    const turns = stepOf(entry.khz) - operator.dial;
+    const tune: Move<MorseInput> = { by: 'operator', input: { tune: turns < 0 ? -1 : 1 } };
     return [
-      ...Array.from({ length: Math.abs(turns) }, () => ({
-        roleId: def.operatorRoleId,
-        input: { tune },
-      })),
-      { roleId: def.operatorRoleId, input: { transmit: true } },
+      ...Array.from({ length: Math.abs(turns) }, () => tune),
+      { by: 'operator', input: { transmit: true } },
     ];
   },
 };

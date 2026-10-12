@@ -52,6 +52,25 @@
       { "puzzleId": "frequenz", "x": 9, "y": 11 },
       { "puzzleId": "reaktorstart", "x": 15, "y": 9 }
     ],
+    "manuals": [
+      {
+        "id": "buch-archiv",
+        "kind": "book",
+        "x": 2,
+        "y": 3,
+        "label": "HANDBUCH",
+        "puzzleIds": ["notstrom", "subsysteme"]
+      },
+      {
+        "id": "buch-maschinenraum",
+        "kind": "book",
+        "x": 2,
+        "y": 11,
+        "label": "HANDBUCH",
+        "puzzleIds": ["zugangscode", "frequenz"]
+      }
+    ],
+    "edgeworkSign": { "x": 4, "y": 9 },
     "labels": [
       { "text": "ARCHIV", "x": 3, "y": 1 },
       { "text": "SERVERRAUM", "x": 12, "y": 1 },
@@ -118,8 +137,7 @@
     {
       "id": "steuerpult",
       "name": "Steuerpult",
-      "description": "Du stehst am Schaltschrank, nur du siehst die Laborkennung. Ohne Handbuch ist jeder Griff russisches Roulette. An zwei Stationen hältst du die Tabellen.",
-      "seesEdgework": true
+      "description": "Du stehst am Schaltschrank, nur du siehst die Laborkennung. Ohne Handbuch ist jeder Griff russisches Roulette. An zwei Stationen hältst du die Tabellen."
     }
   ],
   "puzzles": [
@@ -127,21 +145,8 @@
       "type": "wiring",
       "id": "notstrom",
       "title": "Notstrom-Brücken",
-      "prompt": "Im Sicherungskasten hängen drei bis fünf farbige Überbrückungskabel. Genau eines blockiert den Notstrom und muss getrennt werden. Die anderen stehen unter Spannung.",
-      "operatorRoleId": "steuerpult",
-      "manualRoleId": "anleitung",
       "wires": { "min": 3, "max": 5 },
       "penaltySec": 30,
-      "infos": [
-        {
-          "roleId": "anleitung",
-          "text": "Handbuch §1 liegt aufgeschlagen vor dir, eine Liste pro Kabelzahl. Randnotiz: Die Ersatzsicherung hier im Archiv muss später in den Reaktor."
-        },
-        {
-          "roleId": "steuerpult",
-          "text": "Kabel, Laborkennung und Kontrollleuchten siehst nur du. Das Handbuch kann nach allem davon fragen."
-        }
-      ],
       "hints": [
         "Zählt die Kabel und nehmt NUR die Liste für diese Zahl. Steuerpult, lies alle Farben von oben vor, bevor jemand schneidet.",
         "Anleitung, prüf die Regeln der Liste von oben nach unten. Die erste, die zutrifft, entscheidet, auch wenn eine spätere ebenfalls passen würde.",
@@ -153,19 +158,6 @@
       "type": "keypad",
       "id": "zugangscode",
       "title": "Zugangscode",
-      "prompt": "Das Terminal am Flurschott verlangt einen Zugangscode: vier Tasten mit fremden Zeichen, ohne jede Nummer. Ein Fehlgriff löst Alarm aus.",
-      "operatorRoleId": "anleitung",
-      "manualRoleId": "steuerpult",
-      "infos": [
-        {
-          "roleId": "anleitung",
-          "text": "Diesmal stehst du am Gerät. Die Zeichentabelle hat das Steuerpult, deine Tasten sieht es nicht."
-        },
-        {
-          "roleId": "steuerpult",
-          "text": "Handbuch §2 hängt als Aushang an deinem Pult: sechs Spalten Zeichen. Die Tasten sieht nur die Anleitung."
-        }
-      ],
       "hints": [
         "Anleitung, beschreib alle vier Zeichen, bevor gedrückt wird. Steuerpult, such die eine Spalte, in der alle vier stehen. Es passt immer nur eine.",
         "Ein Zeichen kann in zwei Spalten stehen. Prüft jede Spalte gegen alle vier Tasten. Gedrückt wird in der Reihenfolge der Spalte, von oben nach unten.",
@@ -177,19 +169,6 @@
       "type": "switches",
       "id": "subsysteme",
       "title": "Subsysteme hochfahren",
-      "prompt": "Sechs Kippschalter fahren die Subsysteme hoch: jeder mit LED, manche mit Farbmarkierung oder Stern. Umlegen ist gefahrlos, eine falsche Prüfung wirft die Sicherung.",
-      "operatorRoleId": "steuerpult",
-      "manualRoleId": "anleitung",
-      "infos": [
-        {
-          "roleId": "anleitung",
-          "text": "Handbuch §3 liegt aufgeschlagen: eine Merkmalstabelle, darunter, was jeder Buchstabe verlangt."
-        },
-        {
-          "roleId": "steuerpult",
-          "text": "Alle sechs Schalter stehen unten. Laborkennung, Kontrollleuchten und Notstromzellen hast nur du im Blick."
-        }
-      ],
       "hints": [
         "Steuerpult, sag alle sechs Schalter von links an: LED an oder aus, Markierung, Stern. Anleitung, schreib zu jedem den Buchstaben aus der Tabelle mit.",
         "G, Z und L brauchen Werte vom Pult: letzte Ziffer der Laborkennung, Zahl der Notstromzellen, Kontrollleuchte SIG. Steuerpult, lies alles vor, bevor ihr stellt.",
@@ -201,20 +180,7 @@
       "type": "simon",
       "id": "frequenz",
       "title": "Frequenz-Abgleich",
-      "prompt": "Der Generator blinkt seine Taktfolge in Stufen, jede Stufe eine Farbe länger. Jede Stufe muss übersetzt zurückgetippt werden, Farbe für Farbe.",
-      "operatorRoleId": "anleitung",
-      "manualRoleId": "steuerpult",
       "sequenceLength": 5,
-      "infos": [
-        {
-          "roleId": "anleitung",
-          "text": "Diesmal stehst du am Panel: Blinkfolge, Farbtasten, Alarmzähler. Die Tabellen hat das Steuerpult."
-        },
-        {
-          "roleId": "steuerpult",
-          "text": "Handbuch §4 klebt an deinem Pult: zwei Übersetzungstabellen. Die Blinkfolge sieht nur die Anleitung."
-        }
-      ],
       "hints": [
         "Erst die Tabelle: Steuerpult, steht in der Laborkennung ein A, E oder U, gilt „Mit Vokal“, sonst „Ohne Vokal“. Die Zeile wählt der Alarmstand.",
         "Anleitung, sag jede Stufe ganz an, von der ersten Farbe an. Steuerpult, übersetz Farbe für Farbe. Getippt wird die Übersetzung, nicht das Blinken.",
@@ -226,17 +192,6 @@
       "type": "button-sync",
       "id": "reaktorstart",
       "title": "Reaktor-Neustart",
-      "prompt": "Letzter Schritt: zwei Zündschalter an getrennten Pulten. Der Reaktor nimmt nur einen gemeinsamen Impuls, beide Drücke innerhalb von zwei Sekunden.",
-      "buttons": [
-        { "roleId": "anleitung", "label": "ZÜNDUNG A" },
-        { "roleId": "steuerpult", "label": "ZÜNDUNG B" }
-      ],
-      "infos": [
-        {
-          "roleId": "anleitung",
-          "text": "Handbuch §5, Neustart: Du zählst ein, laut und deutlich — drei, zwei, eins, JETZT."
-        }
-      ],
       "hints": [
         "Ein Zündschalter allein reicht nicht. Kommt der zweite Druck mehr als zwei Sekunden später, verfällt der erste. Kein Alarm, nur ein neuer Anlauf.",
         "Beide an eure Zündschalter, dann zählt einer laut ein: drei, zwei, eins, JETZT. Gedrückt wird auf JETZT, von beiden, nicht schon auf eins.",

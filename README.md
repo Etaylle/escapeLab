@@ -73,7 +73,7 @@ erreichbar sind und am Ende **alle** den Notausgang erreichen können.
 
 | Paket | Zweck |
 | --- | --- |
-| `packages/core` | Spiellogik als pure State-Machine (`applyAction`), Missionsformat (zod), per-Rolle gefilterte Views, WebSocket-Protokoll. Keine I/O — vollständig deterministisch und testbar. |
+| `packages/core` | Spiellogik als pure State-Machine (`applyAction`), Missionsformat (zod), nach Standort gefilterte Views, WebSocket-Protokoll. Keine I/O — vollständig deterministisch und testbar. |
 | `packages/server` | Autoritativer Node-Server: Räume, Reconnect-Tokens, Missionstimer, WebSocket (`ws`). Clients schicken Intents; der Server validiert und broadcastet gefilterte Views. |
 | `packages/client` | React + Vite UI: Join → Lobby → Spiel → Ende, Auto-Reconnect mit Session-Token. |
 
@@ -124,8 +124,8 @@ mit Laptop oder Handy beitreten, ohne irgendetwas zu installieren. Port über `P
 
 `core` kennt weder Netzwerk noch Uhr (Zeit kommt als `at` in Aktionen) — der Server ist eine
 dünne Schicht, die Aktionen mit Zeitstempeln versieht, und der Client rendert nur die View,
-die der Server für seine Rolle gefiltert hat (private Infos anderer Rollen verlassen den
-Server nie).
+die der Server nach seinem Standort gefiltert hat (was nur an einer Station oder an einem
+Handbuch zu sehen ist, geht nur an die Spielenden, die dort stehen).
 
 ## Nächste Schritte (geplant)
 

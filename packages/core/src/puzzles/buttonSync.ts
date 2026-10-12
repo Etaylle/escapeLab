@@ -1,17 +1,15 @@
 import { z } from 'zod';
-import { fail } from '../errors.js';
 import { commonDefShape, type PuzzleModule } from './module.js';
 
 /**
- * button-sync puzzle: every role listed in `buttons` must press its button.
- * With `windowMs` set, all presses must happen within that window of each
- * other, otherwise they expire and the team must retry. Every listed role is
- * an operator; there is no manual role.
+ * button-sync puzzle: every connected player must press, standing at the
+ * station. With `windowMs` set, all presses must happen within that window
+ * of each other, otherwise they expire and the crew must retry. Nobody
+ * reads anything here, so the whole crew works the panel.
  */
-const defSchema = z.object({
+const defSchema = z.strictObject({
   type: z.literal('button-sync'),
   ...commonDefShape,
-  buttons: z.array(z.object({ roleId: z.string(), label: z.string() })).min(1),
   windowMs: z.number().int().positive().optional(),
   /** carried like on every module, but no rule here charges it: a missed window costs an attempt */
   penaltySec: z.number().int().positive().default(20),
@@ -21,7 +19,7 @@ export type ButtonSyncDef = z.infer<typeof defSchema>;
 /** Runtime state of a button-sync puzzle. Timestamps are epoch ms taken from actions. */
 export interface ButtonSyncState {
   type: 'button-sync';
-  /** roleId -> epoch ms of the (still valid) press */
+  /** playerId -> epoch ms of the (still valid) press */
   pressed: Record<string, number>;
   attempts: number;
   lastResult: 'missed-window' | null;
@@ -32,37 +30,38 @@ export type ButtonSyncInput = z.infer<typeof inputSchema>;
 
 export interface ButtonSyncView {
   kind: 'button-sync';
-  buttonLabel: string | null;
   youPressed: boolean;
   pressedCount: number;
+  /** every connected player has to press */
   requiredCount: number;
   attempts: number;
   lastResult: 'missed-window' | null;
 }
 
 /**
- * Apply a press by `roleId` at time `at`. With a window configured, presses
- * older than `windowMs` relative to `at` expire; expiring a press counts as a
- * failed attempt and is surfaced via `lastResult`.
+ * Apply a press by `playerId` at time `at`. With a window configured,
+ * presses older than `windowMs` relative to `at` expire; expiring a press
+ * counts as a failed attempt and is surfaced via `lastResult`.
  */
 function press(
   def: ButtonSyncDef,
   state: ButtonSyncState,
-  roleId: string,
+  playerId: string,
   at: number,
+  crew: readonly string[],
 ): { state: ButtonSyncState; solved: boolean } {
   const pressed: Record<string, number> = {};
   let expired = false;
-  for (const [role, time] of Object.entries(state.pressed)) {
+  for (const [player, time] of Object.entries(state.pressed)) {
     if (def.windowMs !== undefined && at - time > def.windowMs) {
       expired = true;
     } else {
-      pressed[role] = time;
+      pressed[player] = time;
     }
   }
-  pressed[roleId] = at;
+  pressed[playerId] = at;
 
-  const solved = def.buttons.every((b) => pressed[b.roleId] !== undefined);
+  const solved = crew.every((member) => pressed[member] !== undefined);
   return {
     state: {
       type: 'button-sync',
@@ -85,38 +84,33 @@ export const buttonSyncModule: PuzzleModule<
 > = {
   type: 'button-sync',
   usesEdgework: false,
+  wholeCrew: true,
   defSchema,
   inputSchema,
 
   init: () => ({ type: 'button-sync', pressed: {}, attempts: 0, lastResult: null }),
 
-  apply(def, state, _input, roleId, ctx) {
-    if (!def.buttons.some((b) => b.roleId === roleId)) {
-      fail('Deine Rolle hat bei diesem Rätsel keinen Knopf.');
-    }
-    return { ...press(def, state, roleId, ctx.at), penalty: null };
+  apply(def, state, _input, playerId, ctx) {
+    return { ...press(def, state, playerId, ctx.at, ctx.crew), penalty: null };
   },
 
-  view(def, state, roleId) {
-    const button = def.buttons.find((b) => b.roleId === roleId);
+  view(_def, state, viewer, ctx) {
     return {
       kind: 'button-sync',
-      buttonLabel: button?.label ?? null,
-      youPressed: roleId !== null && state.pressed[roleId] !== undefined,
+      youPressed: viewer.playerId !== null && state.pressed[viewer.playerId] !== undefined,
       pressedCount: Object.keys(state.pressed).length,
-      requiredCount: def.buttons.length,
+      requiredCount: ctx.crew.length,
       attempts: state.attempts,
       lastResult: state.lastResult,
     };
   },
 
   manual(def) {
-    const labels = def.buttons.map((b) => b.label).join(', ');
     const rules =
       def.windowMs === undefined
-        ? ['Reihenfolge und Abstand sind egal. Jeder Knopf muss gedrückt sein.']
+        ? ['Reihenfolge und Abstand sind egal. Jeder muss gedrückt haben.']
         : [
-            `Alle Knöpfe innerhalb von ${seconds(def.windowMs)} Sekunden drücken.`,
+            `Alle innerhalb von ${seconds(def.windowMs)} Sekunden drücken.`,
             'Zu langsam: Die Drücke verfallen, der Versuch beginnt von vorn.',
             'Gemeinsam einzählen: drei — zwei — eins — JETZT.',
           ];
@@ -124,22 +118,12 @@ export const buttonSyncModule: PuzzleModule<
       {
         heading: 'Synchronschaltung',
         blocks: [
-          {
-            kind: 'p',
-            text:
-              def.buttons.length === 1
-                ? `Ein Knopf: ${labels}.`
-                : `${def.buttons.length} Knöpfe an getrennten Stationen: ${labels}.`,
-          },
+          { kind: 'p', text: 'Die ganze Crew an die Station, jeder drückt einmal.' },
           { kind: 'rules', items: rules },
         ],
       },
     ];
   },
 
-  solve(_def, views) {
-    return Object.entries(views)
-      .filter(([, view]) => view.buttonLabel !== null && !view.youPressed)
-      .map(([roleId]) => ({ roleId, input: { press: true } }));
-  },
+  solve: () => [{ by: 'everyone', input: { press: true } }],
 };

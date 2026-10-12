@@ -3,7 +3,6 @@ import {
   applyAction,
   GameError,
   generateEdgework,
-  initialState,
   parseMission,
   serialHasVowel,
   viewFor,
@@ -14,16 +13,23 @@ import type {
   GameState,
   ManualBlock,
   Mission,
+  Perspectives,
   PuzzleContext,
 } from '../src/index.js';
 import { SIMON_COLORS, simonModule } from '../src/puzzles/simon.js';
 import type { SimonColor, SimonDef, SimonState, SimonView } from '../src/puzzles/simon.js';
 import { mulberry32 } from '../src/rng.js';
+import {
+  AT_BOOK,
+  AT_STATION,
+  labMission,
+  openLab,
+  started as startedLab,
+  T0,
+} from './lab.js';
 
-const T0 = 1_000_000;
 const SEEDS = 300;
-const OPERATOR = 'pult';
-const MANUAL = 'handbuch';
+const CREW = ['op', 'rd'];
 
 /** The colors as the printed page names them. */
 const PRINTED: Record<SimonColor, string> = {
@@ -41,9 +47,6 @@ function defOf(fields: Partial<SimonDef> = {}): SimonDef {
     type: 'simon',
     id: 'frequenz',
     title: 'Frequenz',
-    prompt: '',
-    operatorRoleId: OPERATOR,
-    manualRoleId: MANUAL,
     ...fields,
   });
 }
@@ -53,12 +56,13 @@ const ctx = (edgework: Edgework, alarms: number): PuzzleContext => ({
   alarms,
   remainingSec: 600,
   at: T0,
+  crew: CREW,
 });
 
 const press = (color: SimonColor) => ({ kind: 'press', color }) as const;
 
 function operatorView(def: SimonDef, state: SimonState, edgework: Edgework, alarms: number) {
-  return simonModule.view(def, state, OPERATOR, { edgework, alarms });
+  return simonModule.view(def, state, AT_STATION, { edgework, alarms, crew: CREW });
 }
 
 type TableBlock = Extract<ManualBlock, { kind: 'table' }>;
@@ -102,7 +106,7 @@ describe('simon stages', () => {
       previous = view.flashes ?? [];
       for (const [i, flashed] of previous.entries()) {
         const color = pressFromPage(def, flashed, WITH_VOWEL, 0);
-        const result = simonModule.apply(def, state, press(color), OPERATOR, ctx(WITH_VOWEL, 0));
+        const result = simonModule.apply(def, state, press(color), 'op', ctx(WITH_VOWEL, 0));
         expect(result.penalty).toBeNull();
         expect(result.solved).toBe(stage === 4 && i === stage - 1);
         state = result.state;
@@ -130,18 +134,18 @@ describe('simon stages', () => {
     const state: SimonState = { type: 'simon', sequence, stage: 3, progress: 1, lastWrong: false };
     const right = pressFromPage(def, 'rot', WITHOUT_VOWEL, 0);
     const wrong = SIMON_COLORS.find((c) => c !== right) ?? 'rot';
-    const slip = simonModule.apply(def, state, press(wrong), OPERATOR, ctx(WITHOUT_VOWEL, 0));
+    const slip = simonModule.apply(def, state, press(wrong), 'op', ctx(WITHOUT_VOWEL, 0));
     expect(slip.penalty).not.toBeNull();
     expect(slip.solved).toBe(false);
     expect(slip.state).toMatchObject({ stage: 3, progress: 0, lastWrong: true });
-    const afterAlarm = { edgework: WITHOUT_VOWEL, alarms: 1 };
-    for (const roleId of [OPERATOR, MANUAL]) {
-      const view = simonModule.view(def, slip.state, roleId, afterAlarm);
+    const afterAlarm = { edgework: WITHOUT_VOWEL, alarms: 1, crew: CREW };
+    for (const viewer of [AT_STATION, AT_BOOK]) {
+      const view = simonModule.view(def, slip.state, viewer, afterAlarm);
       expect(view).toMatchObject({ stage: 3, progress: 0, lastWrong: true, alarms: 1 });
     }
     // The alarm moved the crew to the next row; the stage starts over from its first color.
     const again = pressFromPage(def, 'gelb', WITHOUT_VOWEL, 1);
-    const next = simonModule.apply(def, slip.state, press(again), OPERATOR, ctx(WITHOUT_VOWEL, 1));
+    const next = simonModule.apply(def, slip.state, press(again), 'op', ctx(WITHOUT_VOWEL, 1));
     expect(next.penalty).toBeNull();
     expect(next.state).toMatchObject({ stage: 3, progress: 1, lastWrong: false });
   });
@@ -157,7 +161,7 @@ describe('simon translation', () => {
           const atStageOne = { ...state, sequence: [flashed, ...state.sequence.slice(1)] };
           const accepted = SIMON_COLORS.filter(
             (color) =>
-              simonModule.apply(def, atStageOne, press(color), OPERATOR, ctx(edgework, alarms))
+              simonModule.apply(def, atStageOne, press(color), 'op', ctx(edgework, alarms))
                 .penalty === null,
           );
           expect(accepted).toEqual([pressFromPage(def, flashed, edgework, alarms)]);
@@ -179,7 +183,7 @@ describe('simon translation', () => {
     }
   });
 
-  it('is solved from the role views for both tables and every row, over 300 seeds', () => {
+  it("is solved from the station's view for both tables and every row, over 300 seeds", () => {
     for (let seed = 0; seed < SEEDS; seed++) {
       expect(playWithSlips(seed)).toBe(true);
     }
@@ -188,8 +192,10 @@ describe('simon translation', () => {
   it('needs the edgework to solve', () => {
     const def = defOf();
     const state = simonModule.init(def, mulberry32(3), ctx(WITH_VOWEL, 0));
-    const views = { [OPERATOR]: operatorView(def, state, WITH_VOWEL, 0) };
-    expect(() => simonModule.solve(def, views, null)).toThrow(/Laborkennung/);
+    const operator = operatorView(def, state, WITH_VOWEL, 0);
+    expect(() => simonModule.solve(def, { operator, reader: operator }, null)).toThrow(
+      /Laborkennung/,
+    );
   });
 });
 
@@ -208,9 +214,9 @@ function playWithSlips(seed: number): boolean {
   let state = simonModule.init(def, rng, ctx(edgework, alarms));
   for (let moves = 0; moves < 200; moves++) {
     const operator = operatorView(def, state, edgework, alarms);
-    const views: Record<string, SimonView> = {
-      [OPERATOR]: operator,
-      [MANUAL]: simonModule.view(def, state, MANUAL, { edgework, alarms }),
+    const views: Perspectives<SimonView> = {
+      operator,
+      reader: simonModule.view(def, state, AT_BOOK, { edgework, alarms, crew: CREW }),
     };
     const [move, ...more] = simonModule.solve(def, views, edgework);
     const flashed = operator.flashes?.[operator.progress];
@@ -219,7 +225,7 @@ function playWithSlips(seed: number): boolean {
     }
     expect(move.input.color).toBe(pressFromPage(def, flashed, edgework, alarms));
     const slips = SIMON_COLORS.filter((c) => c !== move.input.color).map((color) =>
-      simonModule.apply(def, state, press(color), OPERATOR, ctx(edgework, alarms)),
+      simonModule.apply(def, state, press(color), 'op', ctx(edgework, alarms)),
     );
     for (const slip of slips) {
       expect(slip.penalty).not.toBeNull();
@@ -233,7 +239,8 @@ function playWithSlips(seed: number): boolean {
       continue;
     }
     const input = simonModule.inputSchema.parse(move.input);
-    const result = simonModule.apply(def, state, input, move.roleId, ctx(edgework, alarms));
+    expect(move.by).toBe('operator');
+    const result = simonModule.apply(def, state, input, 'op', ctx(edgework, alarms));
     expect(result.penalty).toBeNull();
     if (result.solved) {
       return true;
@@ -286,39 +293,14 @@ describe('simon manual', () => {
   });
 });
 
-const mission: Mission = parseMission({
-  id: 'simontest',
-  title: 'Frequenz-Test',
-  story: { intro: 'i', win: 'w', lose: 'l' },
-  timeLimitSec: 600,
-  roles: [
-    { id: OPERATOR, name: 'Pult', description: '', seesEdgework: true },
-    { id: MANUAL, name: 'Handbuch', description: '' },
-  ],
-  puzzles: [
-    {
-      type: 'simon',
-      id: 'frequenz',
-      title: 'Frequenz',
-      prompt: '',
-      operatorRoleId: OPERATOR,
-      manualRoleId: MANUAL,
-      sequenceLength: 4,
-      penaltySec: 12,
-    },
-  ],
-});
+const mission: Mission = labMission(
+  [{ type: 'simon', id: 'frequenz', title: 'Frequenz', sequenceLength: 4, penaltySec: 12 }],
+  'simontest',
+);
 
+/** Anna (p1) at the panel, Ben (p2) at the book; both have read the sign. */
 function started(seed = 11): GameState {
-  const actions: Action[] = [
-    { type: 'player-join', playerId: 'p1', name: 'Anna' },
-    { type: 'player-join', playerId: 'p2', name: 'Ben' },
-    { type: 'select-role', playerId: 'p1', roleId: OPERATOR },
-    { type: 'select-role', playerId: 'p2', roleId: MANUAL },
-    { type: 'set-ready', playerId: 'p2', ready: true },
-    { type: 'start-mission', playerId: 'p1', at: T0, seed },
-  ];
-  return actions.reduce(applyAction, initialState(mission));
+  return openLab(startedLab(mission, seed));
 }
 
 function pressAction(playerId: string, input: unknown, at: number): Action {
@@ -356,7 +338,7 @@ function clearStage(state: GameState, at: number): GameState {
 }
 
 describe('simon in a run', () => {
-  it('shows the flashes to the operator only, over the wire', () => {
+  it('shows the flashes at the panel only, over the wire', () => {
     const state = clearStage(clearStage(started(), T0 + 1000), T0 + 2000);
     const operator = simonView(state, 'p1');
     const manual = simonView(state, 'p2');
@@ -400,13 +382,13 @@ describe('simon in a run', () => {
     expect(state.penaltySeq).toBe(0);
   });
 
-  it('only the operator may press', () => {
+  it('only a player at the panel may press', () => {
     expect(() =>
       applyAction(started(), pressAction('p2', press('rot'), T0 + 1000)),
     ).toThrow(GameError);
     expect(() =>
       applyAction(started(), pressAction('p2', press('rot'), T0 + 1000)),
-    ).toThrow(/Frequenz-Panel/);
+    ).toThrow('Dafür musst du am Pult stehen.');
   });
 
   it('takes nothing but one press of one of the four colors', () => {
@@ -423,10 +405,9 @@ describe('simon in a run', () => {
     }
   });
 
-  it('cannot run in a mission where nobody sees the edgework', () => {
-    const raw = JSON.parse(JSON.stringify(mission)) as { roles: object[] };
-    expect(() =>
-      parseMission({ ...raw, roles: raw.roles.map((role) => ({ ...role, seesEdgework: false })) }),
-    ).toThrow(/read the edgework/);
+  it('cannot run on a map without the edgework sign', () => {
+    const raw = JSON.parse(JSON.stringify(mission));
+    delete raw.map.edgeworkSign;
+    expect(() => parseMission(raw)).toThrow(/read the edgework/);
   });
 });

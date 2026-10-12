@@ -103,9 +103,6 @@ export function InfoPanel({ view, onClose }: Props) {
           <div className="info-body">
             <h3 className="info-role">{role?.name ?? '—'}</h3>
             <p className="story">{role?.description ?? ''}</p>
-            {view.puzzle?.info !== null && view.puzzle !== null && (
-              <div className="info-box">📖 {view.puzzle.info}</div>
-            )}
             <p className="muted">
               Niemand sieht genug, um eine Station allein zu lösen — sag laut, was du siehst.
             </p>

@@ -1,4 +1,11 @@
-export { parseMission, missionSchema, type Mission, type RoleDef } from './mission.js';
+export {
+  parseMission,
+  missionSchema,
+  MANUAL_KINDS,
+  type ManualKind,
+  type Mission,
+  type RoleDef,
+} from './mission.js';
 export {
   initialState,
   CREW_COLORS,
@@ -6,6 +13,7 @@ export {
   type ItemState,
   type Player,
   type Phase,
+  type Presence,
   type RunEvent,
 } from './state.js';
 export { applyAction, inEscapePhase, missingItemsFor, type Action } from './actions.js';
@@ -15,6 +23,8 @@ export {
   viewForSpectator,
   type SpectatorView,
   type PlayerView,
+  type PlayerPresence,
+  type ManualHere,
   type MapView,
   type Grade,
 } from './view.js';
@@ -30,13 +40,17 @@ export {
 } from './puzzles/index.js';
 export type {
   ApplyResult,
+  EmergencyModule,
   ManualBlock,
   ManualSection,
+  Move,
+  Perspectives,
   PuzzleContext,
   PuzzleDefCommon,
   PuzzleModule,
   PuzzleViewCommon,
   SolveAid,
+  Viewer,
   ViewContext,
 } from './puzzles/module.js';
 export {
@@ -50,7 +64,7 @@ export {
   type Edgework,
   type IndicatorId,
 } from './edgework.js';
-export { doorOpen, platePressed, armedStation } from './map.js';
+export { doorOpen, platePressed, armedStation, operatorsOf, readersOf } from './map.js';
 export { type MapDef } from './mission.js';
 export {
   parseClientMessage,

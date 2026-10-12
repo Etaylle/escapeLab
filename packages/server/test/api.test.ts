@@ -15,7 +15,7 @@ function manualOf(catalog: MissionCatalog, id: string): MissionManual {
   return res?.body as MissionManual;
 }
 
-/** Role ids that differ from the role names, so the test can tell which one is served. */
+/** A maze read at two places and a whole-crew press nobody reads for. */
 const probe = {
   id: 'probe',
   title: 'Probe',
@@ -26,25 +26,21 @@ const probe = {
     { id: 'buch', name: 'Anleitung', description: '' },
   ],
   puzzles: [
-    {
-      type: 'maze',
-      id: 'netz',
-      title: 'Leitungsnetz',
-      prompt: '',
-      operatorRoleId: 'pult',
-      manualRoleId: 'buch',
-    },
-    {
-      type: 'button-sync',
-      id: 'start',
-      title: 'Start',
-      prompt: '',
-      buttons: [
-        { roleId: 'buch', label: 'A' },
-        { roleId: 'pult', label: 'B' },
-      ],
-    },
+    { type: 'maze', id: 'netz', title: 'Leitungsnetz' },
+    { type: 'button-sync', id: 'start', title: 'Start' },
   ],
+  map: {
+    tiles: ['#######', '#.....#', '#######'],
+    spawns: { pult: { x: 1, y: 1 }, buch: { x: 2, y: 1 } },
+    stations: [
+      { puzzleId: 'netz', x: 3, y: 1 },
+      { puzzleId: 'start', x: 4, y: 1 },
+    ],
+    manuals: [
+      { id: 'plan', kind: 'terminal', x: 5, y: 1, label: 'SCHALTPLAN', puzzleIds: ['netz'] },
+      { id: 'tafel', kind: 'chart', x: 1, y: 1, label: 'WANDTAFEL', puzzleIds: ['netz'] },
+    ],
+  },
 };
 
 describe('GET /missions/:id/manual', () => {
@@ -64,19 +60,14 @@ describe('GET /missions/:id/manual', () => {
     }
   });
 
-  it('names the roles at each station, and nobody as reader where every role presses', () => {
+  it('names where in the lab each station\'s rules lie, and nowhere where everyone presses', () => {
     const dir = mkdtempSync(join(tmpdir(), 'escapelab-manual-'));
     try {
       writeFileSync(join(dir, 'probe.json'), JSON.stringify(probe));
       const manual = manualOf(new MissionCatalog(dir), 'probe');
-      expect(
-        manual.stations.map(({ operatorRoleName, manualRoleName }) => ({
-          operatorRoleName,
-          manualRoleName,
-        })),
-      ).toEqual([
-        { operatorRoleName: 'Steuerpult', manualRoleName: 'Anleitung' },
-        { operatorRoleName: 'Anleitung, Steuerpult', manualRoleName: null },
+      expect(manual.stations.map(({ readAt }) => readAt)).toEqual([
+        ['SCHALTPLAN', 'WANDTAFEL'],
+        [],
       ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });

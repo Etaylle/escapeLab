@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { indicatorLit, serialLastDigitIsOdd, type Edgework } from '../edgework.js';
-import { fail } from '../errors.js';
 import { commonDefShape, type ManualSection, type PuzzleModule } from './module.js';
 
 /**
@@ -20,11 +19,9 @@ const MAX_WIRES = 6;
 const wireCountSchema = z.number().int().min(MIN_WIRES).max(MAX_WIRES);
 
 const defSchema = z
-  .object({
+  .strictObject({
     type: z.literal('wiring'),
     ...commonDefShape,
-    operatorRoleId: z.string().min(1),
-    manualRoleId: z.string().min(1),
     /** how many wires a run may draw, both ends included */
     wires: z
       .object({ min: wireCountSchema, max: wireCountSchema })
@@ -61,7 +58,7 @@ export type WiringInput = z.infer<typeof inputSchema>;
 
 export interface WiringView {
   kind: 'wiring';
-  /** top to bottom — only the operator sees the wires, everyone else gets null */
+  /** top to bottom — only operators see the wires, everyone else gets null */
   wires: Wire[] | null;
   wireCount: number;
   cutsDone: number;
@@ -216,6 +213,7 @@ function wireToCut(colors: readonly WireColor[], edgework: Edgework): number {
 export const wiringModule: PuzzleModule<WiringDef, WiringState, WiringInput, WiringView> = {
   type: 'wiring',
   usesEdgework: true,
+  wholeCrew: false,
   defSchema,
   inputSchema,
 
@@ -230,10 +228,7 @@ export const wiringModule: PuzzleModule<WiringDef, WiringState, WiringInput, Wir
     return { type: 'wiring', wires };
   },
 
-  apply(def, state, input, roleId, ctx) {
-    if (roleId !== def.operatorRoleId) {
-      fail('Nur die Rolle am Schaltschrank kann Kabel trennen.');
-    }
+  apply(_def, state, input, _playerId, ctx) {
     const wire = state.wires.find((w) => w.id === input.wireId);
     if (wire === undefined || wire.cut) {
       // A stale click — that wire is already cut, or was never on this panel.
@@ -248,10 +243,10 @@ export const wiringModule: PuzzleModule<WiringDef, WiringState, WiringInput, Wir
     };
   },
 
-  view(def, state, roleId) {
+  view(_def, state, viewer) {
     return {
       kind: 'wiring',
-      wires: roleId === def.operatorRoleId ? state.wires.map((w) => ({ ...w })) : null,
+      wires: viewer.operating ? state.wires.map((w) => ({ ...w })) : null,
       wireCount: state.wires.length,
       cutsDone: state.wires.filter((w) => w.cut).length,
     };
@@ -281,20 +276,17 @@ export const wiringModule: PuzzleModule<WiringDef, WiringState, WiringInput, Wir
     ];
   },
 
-  solve(def, views, edgework) {
-    const wires = views[def.operatorRoleId]?.wires;
-    if (wires == null) {
+  solve(def, { operator }, edgework) {
+    const wires = operator.wires;
+    if (wires === null) {
       throw new Error(`wiring "${def.id}": solving needs the operator's view of the wires`);
     }
     if (edgework === null) {
       throw new Error(
-        `wiring "${def.id}": the rules read the edgework, but no role sees it — ` +
-          'set "seesEdgework": true on the operator role',
+        `wiring "${def.id}": the rules read the edgework, but nobody has read the sign yet`,
       );
     }
     const wire = wires[wireToCut(wires.map((w) => w.color), edgework)];
-    return wire === undefined || wire.cut
-      ? []
-      : [{ roleId: def.operatorRoleId, input: { wireId: wire.id } }];
+    return wire === undefined || wire.cut ? [] : [{ by: 'operator', input: { wireId: wire.id } }];
   },
 };

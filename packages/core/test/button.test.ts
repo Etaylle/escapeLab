@@ -4,7 +4,6 @@ import {
   GameError,
   generateEdgework,
   indicatorLit,
-  initialState,
   parseMission,
   viewFor,
 } from '../src/index.js';
@@ -14,6 +13,7 @@ import type {
   GameState,
   IndicatorId,
   Mission,
+  Perspectives,
   PlayerView,
   PuzzleContext,
 } from '../src/index.js';
@@ -27,34 +27,24 @@ import type {
   StripColour,
 } from '../src/puzzles/button.js';
 import { mulberry32 } from '../src/rng.js';
+import {
+  AT_BOOK,
+  AT_STATION,
+  AUDIENCE,
+  ELSEWHERE,
+  labMission,
+  openLab,
+  started as startedLab,
+  T0,
+} from './lab.js';
 
 const SEEDS = 300;
-const T0 = 1_000_000;
-const OPERATOR = 'steuerpult';
-const MANUAL = 'anleitung';
+const CREW = ['op', 'rd'];
 
-const raw = {
-  id: 'knopftest',
-  title: 'Knopf-Test',
-  story: { intro: 'i', win: 'w', lose: 'l' },
-  timeLimitSec: 600,
-  roles: [
-    { id: OPERATOR, name: 'Steuerpult', description: '', seesEdgework: true },
-    { id: MANUAL, name: 'Anleitung', description: '' },
-  ],
-  puzzles: [
-    {
-      type: 'button',
-      id: 'knopf',
-      title: 'Knopf',
-      prompt: '',
-      operatorRoleId: OPERATOR,
-      manualRoleId: MANUAL,
-      penaltySec: 25,
-    },
-  ],
-};
-const mission: Mission = parseMission(raw);
+const mission: Mission = labMission(
+  [{ type: 'button', id: 'knopf', title: 'Knopf', penaltySec: 25 }],
+  'knopftest',
+);
 const def = (() => {
   const puzzle = mission.puzzles[0];
   if (puzzle?.type !== 'button') {
@@ -109,17 +99,19 @@ const ctx = (edgework: Edgework, remainingSec = 600): PuzzleContext => ({
   alarms: 0,
   remainingSec,
   at: T0,
+  crew: CREW,
 });
 
 function apply(state: ButtonState, kind: ButtonInput['kind'], lab: Edgework, remainingSec = 600) {
   const input = buttonModule.inputSchema.parse({ kind });
-  return buttonModule.apply(def, state, input, OPERATOR, ctx(lab, remainingSec));
+  return buttonModule.apply(def, state, input, 'op', ctx(lab, remainingSec));
 }
 
-function viewsOf(state: ButtonState, edgework: Edgework): Record<string, ButtonView> {
+/** The button seen from the station and from the book. */
+function viewsOf(state: ButtonState, edgework: Edgework): Perspectives<ButtonView> {
   return {
-    [OPERATOR]: buttonModule.view(def, state, OPERATOR, { edgework, alarms: 0 }),
-    [MANUAL]: buttonModule.view(def, state, MANUAL, { edgework, alarms: 0 }),
+    operator: buttonModule.view(def, state, AT_STATION, { edgework, alarms: 0, crew: CREW }),
+    reader: buttonModule.view(def, state, AT_BOOK, { edgework, alarms: 0, crew: CREW }),
   };
 }
 
@@ -131,8 +123,8 @@ function rolled(seed: number): { edgework: Edgework; state: ButtonState } {
 
 /** The operator's view, which the solver and the oracle read. */
 function operatorView(state: ButtonState, edgework: Edgework) {
-  const panel = viewsOf(state, edgework)[OPERATOR];
-  if (panel?.colour == null || panel.label == null) {
+  const panel = viewsOf(state, edgework).operator;
+  if (panel.colour === null || panel.label === null) {
     throw new Error('expected the operator to see the button');
   }
   return { ...panel, colour: panel.colour, label: panel.label };
@@ -167,7 +159,7 @@ describe('button: every instance', () => {
       const expected = byTheManual(panel.colour, panel.label, edgework);
       decidedBy.add(expected.rule);
       const moves = buttonModule.solve(def, viewsOf(state, edgework), edgework);
-      expect(moves, `seed ${seed}`).toEqual([{ roleId: OPERATOR, input: { kind: expected.move } }]);
+      expect(moves, `seed ${seed}`).toEqual([{ by: 'operator', input: { kind: expected.move } }]);
 
       const first = apply(state, expected.move, edgework);
       expect(first.penalty, `seed ${seed}`).toBeNull();
@@ -250,7 +242,7 @@ describe('button: the first list', () => {
   ])('%s', (_case, colour, label, edgework, move) => {
     const state = button(colour, label);
     expect(buttonModule.solve(def, viewsOf(state, edgework), edgework)).toEqual([
-      { roleId: OPERATOR, input: { kind: move } },
+      { by: 'operator', input: { kind: move } },
     ]);
     expect(apply(state, move, edgework).penalty).toBeNull();
     expect(apply(state, move === 'press' ? 'hold' : 'press', edgework).penalty).not.toBeNull();
@@ -301,7 +293,7 @@ describe('button: letting go', () => {
 });
 
 describe('button: the solver on the clock', () => {
-  const letGo = [{ roleId: OPERATOR, input: { kind: 'release' } }];
+  const letGo = [{ by: 'operator', input: { kind: 'release' } }];
   /** The aid of a caller that keeps no transcript, reading `remainingSec` off its clock. */
   const clockAt = (remainingSec: number | null) => ({ transcript: [], remainingSec });
 
@@ -330,7 +322,7 @@ describe('button: the solver on the clock', () => {
     ] as const) {
       for (const sec of [null, 600, 124, 1]) {
         expect(buttonModule.solve(def, viewsOf(state, edgework), edgework, clockAt(sec))).toEqual([
-          { roleId: OPERATOR, input: { kind } },
+          { by: 'operator', input: { kind } },
         ]);
       }
     }
@@ -338,13 +330,6 @@ describe('button: the solver on the clock', () => {
 });
 
 describe('button: inputs, views and solver', () => {
-  it('lets only the operator work the button', () => {
-    const work = () =>
-      buttonModule.apply(def, button('rot', 'HALTEN'), { kind: 'press' }, MANUAL, ctx(lab(0)));
-    expect(work).toThrow(GameError);
-    expect(work).toThrow(/Rolle am Knopf/);
-  });
-
   it('accepts the three moves and nothing else', () => {
     const ok = (input: unknown) => buttonModule.inputSchema.safeParse(input).success;
     expect(['press', 'hold', 'release'].map((kind) => ok({ kind }))).toEqual([true, true, true]);
@@ -353,31 +338,34 @@ describe('button: inputs, views and solver', () => {
     expect(ok({})).toBe(false);
   });
 
-  it('shows the button to the operator alone, and the strip only while it is held', () => {
+  it('shows the button at the station alone, and the strip only while it is held', () => {
     const edgework = lab(0);
     const idle = button('gelb', 'START', 'weiß');
     const hidden = { colour: null, label: null, strip: null, lastResult: null };
-    const ctxView = { edgework, alarms: 0 };
+    const ctxView = { edgework, alarms: 0, crew: CREW };
     expect(viewsOf(idle, edgework)).toEqual({
-      [OPERATOR]: { kind: 'button', holding: false, ...hidden, colour: 'gelb', label: 'START' },
-      [MANUAL]: { kind: 'button', holding: false, ...hidden },
+      operator: { kind: 'button', holding: false, ...hidden, colour: 'gelb', label: 'START' },
+      reader: { kind: 'button', holding: false, ...hidden },
     });
     const held = viewsOf(apply(idle, 'hold', edgework).state, edgework);
-    expect(held[OPERATOR]).toMatchObject({ holding: true, strip: 'weiß' });
-    expect(held[MANUAL]).toEqual({ kind: 'button', holding: true, ...hidden });
-    expect(buttonModule.view(def, idle, null, ctxView)).toMatchObject(hidden);
+    expect(held.operator).toMatchObject({ holding: true, strip: 'weiß' });
+    expect(held.reader).toEqual({ kind: 'button', holding: true, ...hidden });
+    expect(buttonModule.view(def, idle, ELSEWHERE, ctxView)).toMatchObject(hidden);
+    expect(buttonModule.view(def, idle, AUDIENCE, ctxView)).toMatchObject({ colour: 'gelb' });
     const wrong = viewsOf(apply(idle, 'press', edgework).state, edgework);
-    expect(wrong[OPERATOR]).toMatchObject({ holding: false, strip: null, lastResult: 'early' });
-    expect(wrong[MANUAL]).toMatchObject({ lastResult: null });
+    expect(wrong.operator).toMatchObject({ holding: false, strip: null, lastResult: 'early' });
+    expect(wrong.reader).toMatchObject({ lastResult: null });
   });
 
-  it('refuses to solve without the edgework or without the operator\'s view', () => {
+  it('refuses to solve without the edgework or without the view at the station', () => {
     const state = button('rot', 'HALTEN');
-    expect(() => buttonModule.solve(def, viewsOf(state, lab(0)), null)).toThrow(/no role sees it/);
-    const guideOnly = {
-      [MANUAL]: buttonModule.view(def, state, MANUAL, { edgework: lab(0), alarms: 0 }),
-    };
-    expect(() => buttonModule.solve(def, guideOnly, lab(0))).toThrow(/operator's view/);
+    expect(() => buttonModule.solve(def, viewsOf(state, lab(0)), null)).toThrow(
+      /nobody has read the sign/,
+    );
+    const { reader } = viewsOf(state, lab(0));
+    expect(() => buttonModule.solve(def, { operator: reader, reader }, lab(0))).toThrow(
+      /operator's view/,
+    );
   });
 });
 
@@ -410,16 +398,9 @@ describe('button: manual', () => {
 });
 
 describe('button: in a run', () => {
+  /** Anna (p1) at the button, Ben (p2) at the book. */
   function started(seed: number): GameState {
-    const actions: Action[] = [
-      { type: 'player-join', playerId: 'p1', name: 'Anna' },
-      { type: 'player-join', playerId: 'p2', name: 'Ben' },
-      { type: 'select-role', playerId: 'p1', roleId: OPERATOR },
-      { type: 'select-role', playerId: 'p2', roleId: MANUAL },
-      { type: 'set-ready', playerId: 'p2', ready: true },
-      { type: 'start-mission', playerId: 'p1', at: T0, seed },
-    ];
-    return actions.reduce(applyAction, initialState(mission));
+    return openLab(startedLab(mission, seed));
   }
 
   const move = (kind: ButtonInput['kind'], at: number): Action => ({
@@ -433,16 +414,16 @@ describe('button: in a run', () => {
   const momentShowing = (state: GameState, sec: number): number =>
     (state.deadlineAt ?? 0) - sec * 1000 + 300;
 
-  /** Both consoles' button views and the edgework, as they arrive over the wire. */
+  /** The button views at the station and at the book, and the edgework, over the wire. */
   function onTheWire(state: GameState) {
     const wire = (playerId: string) =>
       JSON.parse(JSON.stringify(viewFor(state, playerId))) as PlayerView;
     const operator = wire('p1');
     const guide = wire('p2');
     if (operator.puzzle?.kind !== 'button' || guide.puzzle?.kind !== 'button') {
-      throw new Error('expected the button on both consoles');
+      throw new Error('expected the button in both views');
     }
-    const views: Record<string, ButtonView> = { [OPERATOR]: operator.puzzle, [MANUAL]: guide.puzzle };
+    const views: Perspectives<ButtonView> = { operator: operator.puzzle, reader: guide.puzzle };
     return { views, edgework: operator.edgework, strip: operator.puzzle.strip };
   }
 
@@ -486,13 +467,13 @@ describe('button: in a run', () => {
       kind: 'penalty',
       label: 'Knopf zur falschen Zeit losgelassen',
     });
-    expect(onTheWire(late).views[OPERATOR]).toMatchObject({
+    expect(onTheWire(late).views.operator).toMatchObject({
       holding: false,
       lastResult: 'wrong-time',
     });
   });
 
-  it('never sends the button or the strip to the manual role', () => {
+  it('never sends the button or the strip to the reader', () => {
     const held = heldRun();
     expect(onTheWire(held).strip).not.toBeNull();
     for (const snapshot of [started(0), held]) {
@@ -500,8 +481,21 @@ describe('button: in a run', () => {
     }
   });
 
-  it('cannot be in a mission where nobody sees the edgework', () => {
-    const blind = { ...raw, roles: raw.roles.map((role) => ({ ...role, seesEdgework: false })) };
-    expect(() => parseMission(blind)).toThrow(/"knopf" read the edgework, but no role sees it/);
+  it('takes the button only from a player standing at it', () => {
+    const press: Action = {
+      type: 'puzzle-input',
+      playerId: 'p2',
+      at: T0 + 2000,
+      input: { kind: 'press' },
+    };
+    const away = () => applyAction(started(0), press);
+    expect(away).toThrow(GameError);
+    expect(away).toThrow('Dafür musst du am Pult stehen.');
+  });
+
+  it('cannot be on a map without the edgework sign', () => {
+    const blind = JSON.parse(JSON.stringify(mission));
+    delete blind.map.edgeworkSign;
+    expect(() => parseMission(blind)).toThrow(/"knopf" read the edgework, but there is no edgeworkSign/);
   });
 });

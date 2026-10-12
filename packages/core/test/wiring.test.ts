@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  applyAction,
-  GameError,
-  initialState,
-  parseMission,
-  viewFor,
-  viewForSpectator,
-} from '../src/index.js';
-import type { Action, Edgework, GameState, Mission, PuzzleContext } from '../src/index.js';
+import { applyAction, GameError, parseMission, viewFor, viewForSpectator } from '../src/index.js';
+import type { Action, Edgework, GameState, Mission, PuzzleContext, Viewer } from '../src/index.js';
 import { mulberry32 } from '../src/rng.js';
 import {
   WIRE_COLORS,
@@ -17,32 +10,22 @@ import {
   type WiringState,
   type WiringView,
 } from '../src/puzzles/wiring.js';
+import {
+  AT_BOOK,
+  AT_STATION,
+  AUDIENCE,
+  ELSEWHERE,
+  labMission,
+  openLab,
+  started,
+  T0,
+} from './lab.js';
 import { playInstance } from './solveModule.js';
 
-const T0 = 1_000_000;
-
-const rawDef = {
-  type: 'wiring',
-  id: 'bruecken',
-  title: 'Brücken',
-  prompt: '',
-  operatorRoleId: 'pult',
-  manualRoleId: 'handbuch',
-  penaltySec: 25,
-};
+const rawDef = { type: 'wiring', id: 'bruecken', title: 'Brücken', penaltySec: 25 };
 const def: WiringDef = wiringModule.defSchema.parse(rawDef);
 
-const mission: Mission = parseMission({
-  id: 'kabeltest',
-  title: 'Kabel-Test',
-  story: { intro: 'i', win: 'w', lose: 'l' },
-  timeLimitSec: 600,
-  roles: [
-    { id: 'pult', name: 'Pult', description: '', seesEdgework: true },
-    { id: 'handbuch', name: 'Handbuch', description: '' },
-  ],
-  puzzles: [rawDef],
-});
+const mission: Mission = labMission([rawDef], 'kabeltest');
 
 /** A lab where none of the conditions the rules name holds: serial even, FRQ dark, one cell. */
 const QUIET: Edgework = {
@@ -79,6 +62,7 @@ const ctx = (edgework: Edgework): PuzzleContext => ({
   alarms: 0,
   remainingSec: 600,
   at: T0,
+  crew: ['op', 'rd'],
 });
 
 function colorsOf(spoken: string): WireColor[] {
@@ -95,8 +79,13 @@ function stateOf(colors: WireColor[]): WiringState {
   return { type: 'wiring', wires: colors.map((color, i) => ({ id: `w${i}`, color, cut: false })) };
 }
 
-function viewOf(state: WiringState, roleId: string): WiringView {
-  return wiringModule.view(def, state, roleId, { edgework: QUIET, alarms: 0 });
+function viewOf(state: WiringState, viewer: Viewer = AT_STATION): WiringView {
+  return wiringModule.view(def, state, viewer, { edgework: QUIET, alarms: 0, crew: ['op', 'rd'] });
+}
+
+/** The crew's next move, from the views at the station and at the book. */
+function solveFor(state: WiringState, lab: Edgework | null) {
+  return wiringModule.solve(def, { operator: viewOf(state), reader: viewOf(state, AT_BOOK) }, lab);
 }
 
 function* allColourings(wireCount: number): Generator<WireColor[]> {
@@ -180,10 +169,8 @@ describe('wiring rules', () => {
       expect(printedRules(list)[rule - 1]).toBe(text);
       const state = stateOf(colorsOf(wires));
       const wireId = `w${cut - 1}`;
-      expect(wiringModule.solve(def, { pult: viewOf(state, 'pult') }, lab)).toEqual([
-        { roleId: 'pult', input: { wireId } },
-      ]);
-      expect(wiringModule.apply(def, state, { wireId }, 'pult', ctx(lab))).toMatchObject({
+      expect(solveFor(state, lab)).toEqual([{ by: 'operator', input: { wireId } }]);
+      expect(wiringModule.apply(def, state, { wireId }, 'op', ctx(lab))).toMatchObject({
         solved: true,
         penalty: null,
       });
@@ -213,14 +200,13 @@ describe('wiring rules', () => {
     for (const wireCount of [3, 4, 5, 6]) {
       for (const colors of allColourings(wireCount)) {
         const state = stateOf(colors);
-        const view = viewOf(state, 'pult');
         const rightPerLab = new Set<string>();
         for (const lab of LABS) {
           const verdicts = state.wires.map((wire) =>
-            wiringModule.apply(def, state, { wireId: wire.id }, 'pult', ctx(lab)),
+            wiringModule.apply(def, state, { wireId: wire.id }, 'op', ctx(lab)),
           );
           const right = state.wires.filter((_, i) => verdicts[i]?.solved === true);
-          const [move] = wiringModule.solve(def, { pult: view }, lab);
+          const [move] = solveFor(state, lab);
           if (
             right.length !== 1 ||
             verdicts.some((v) => v.solved === (v.penalty !== null)) ||
@@ -273,7 +259,7 @@ describe('wiring module', () => {
   it('rejects a wire range outside three to six or upside down', () => {
     expect(def.wires).toEqual({ min: 3, max: 6 });
     const parse = (wires: unknown) => () =>
-      parseMission({ ...mission, puzzles: [{ ...rawDef, wires }] });
+      parseMission({ ...JSON.parse(JSON.stringify(mission)), puzzles: [{ ...rawDef, wires }] });
     expect(parse({ min: 4, max: 4 })).not.toThrow();
     expect(parse({ min: 2, max: 4 })).toThrow(/puzzles\.0\.wires\.min/);
     expect(parse({ min: 3, max: 7 })).toThrow(/puzzles\.0\.wires\.max/);
@@ -284,11 +270,11 @@ describe('wiring module', () => {
 
   it('leaves a wrong wire cut, keeps the station open and counts the cut', () => {
     const state = stateOf(colorsOf('rot rot blau'));
-    const result = wiringModule.apply(def, state, { wireId: 'w0' }, 'pult', ctx(QUIET));
+    const result = wiringModule.apply(def, state, { wireId: 'w0' }, 'op', ctx(QUIET));
     expect(result.solved).toBe(false);
     expect(result.penalty).toBe('Falsches Kabel getrennt');
-    expect(viewOf(result.state, 'pult').wires?.map((w) => w.cut)).toEqual([true, false, false]);
-    expect(viewOf(result.state, 'handbuch')).toMatchObject({ cutsDone: 1, wireCount: 3 });
+    expect(viewOf(result.state).wires?.map((w) => w.cut)).toEqual([true, false, false]);
+    expect(viewOf(result.state, AT_BOOK)).toMatchObject({ cutsDone: 1, wireCount: 3 });
   });
 
   it('ignores a click on a wire that is already cut or not on the panel', () => {
@@ -296,11 +282,11 @@ describe('wiring module', () => {
       def,
       stateOf(colorsOf('rot rot blau')),
       { wireId: 'w0' },
-      'pult',
+      'op',
       ctx(QUIET),
     ).state;
     for (const wireId of ['w0', 'w9']) {
-      expect(wiringModule.apply(def, state, { wireId }, 'pult', ctx(QUIET))).toEqual({
+      expect(wiringModule.apply(def, state, { wireId }, 'op', ctx(QUIET))).toEqual({
         state,
         solved: false,
         penalty: null,
@@ -312,16 +298,16 @@ describe('wiring module', () => {
     // "rot rot blau": the 3-wire catch-all names the last wire.
     let state = stateOf(colorsOf('rot rot blau'));
     for (const wireId of ['w0', 'w1']) {
-      state = wiringModule.apply(def, state, { wireId }, 'pult', ctx(QUIET)).state;
+      state = wiringModule.apply(def, state, { wireId }, 'op', ctx(QUIET)).state;
     }
-    const [move] = wiringModule.solve(def, { pult: viewOf(state, 'pult') }, QUIET);
+    const [move] = solveFor(state, QUIET);
     expect(move?.input).toEqual({ wireId: 'w2' });
-    expect(wiringModule.apply(def, state, { wireId: 'w2' }, 'pult', ctx(QUIET)).solved).toBe(true);
+    expect(wiringModule.apply(def, state, { wireId: 'w2' }, 'op', ctx(QUIET)).solved).toBe(true);
   });
 
-  it('shows the wires in order to the operator only, and the counts to everyone', () => {
+  it('shows the wires in order at the station only, and the counts to everyone', () => {
     const state = stateOf(colorsOf('gelb weiß schwarz'));
-    expect(viewOf(state, 'pult')).toEqual({
+    expect(viewOf(state)).toEqual({
       kind: 'wiring',
       wires: [
         { id: 'w0', color: 'gelb', cut: false },
@@ -331,24 +317,24 @@ describe('wiring module', () => {
       wireCount: 3,
       cutsDone: 0,
     });
-    for (const roleId of ['handbuch', null]) {
-      expect(wiringModule.view(def, state, roleId, { edgework: QUIET, alarms: 0 })).toEqual({
+    for (const viewer of [AT_BOOK, ELSEWHERE]) {
+      expect(viewOf(state, viewer)).toEqual({
         kind: 'wiring',
         wires: null,
         wireCount: 3,
         cutsDone: 0,
       });
     }
+    expect(viewOf(state, AUDIENCE).wires).toHaveLength(3);
   });
 
-  it('cannot solve without the operator view or without the edgework', () => {
+  it('cannot solve without the view at the station or without the edgework', () => {
     const state = stateOf(colorsOf('rot rot blau'));
-    expect(() => wiringModule.solve(def, { handbuch: viewOf(state, 'handbuch') }, QUIET)).toThrow(
+    const fromBook = viewOf(state, AT_BOOK);
+    expect(() => wiringModule.solve(def, { operator: fromBook, reader: fromBook }, QUIET)).toThrow(
       /operator's view/,
     );
-    expect(() => wiringModule.solve(def, { pult: viewOf(state, 'pult') }, null)).toThrow(
-      /"seesEdgework": true/,
-    );
+    expect(() => solveFor(state, null)).toThrow(/nobody has read the sign/);
   });
 
   it('prints an intro and one list per wire count, with the penalty of the def', () => {
@@ -367,22 +353,15 @@ describe('wiring module', () => {
 
   it('is solved from the views alone, without an alarm, for 300 seeds', () => {
     for (let seed = 0; seed < 300; seed++) {
-      expect(playInstance(def, ['pult', 'handbuch'], seed)).toBe(1);
+      expect(playInstance(def, seed)).toBe(1);
     }
   });
 });
 
 describe('wiring in a run', () => {
-  function started(seed = 7): GameState {
-    const actions: Action[] = [
-      { type: 'player-join', playerId: 'p1', name: 'Anna' },
-      { type: 'player-join', playerId: 'p2', name: 'Ben' },
-      { type: 'select-role', playerId: 'p1', roleId: 'pult' },
-      { type: 'select-role', playerId: 'p2', roleId: 'handbuch' },
-      { type: 'set-ready', playerId: 'p2', ready: true },
-      { type: 'start-mission', playerId: 'p1', at: T0, seed },
-    ];
-    return actions.reduce(applyAction, initialState(mission));
+  /** Anna (p1) at the box, Ben (p2) at the book; only Anna has read the sign. */
+  function opened(seed = 7): GameState {
+    return openLab(started(mission, seed), { signSeen: ['p1'] });
   }
 
   const cut = (playerId: string, wireId: string, at: number): Action => ({
@@ -399,13 +378,17 @@ describe('wiring in a run', () => {
       throw new Error('expected the operator view of the wires');
     }
     const { wires } = view.puzzle;
-    const [move] = wiringModule.solve(def, { pult: view.puzzle }, view.edgework);
+    const reader = viewFor(state, 'p2').puzzle;
+    if (reader?.kind !== 'wiring') {
+      throw new Error('expected the view at the book');
+    }
+    const [move] = wiringModule.solve(def, { operator: view.puzzle, reader }, view.edgework);
     const right = move?.input.wireId ?? '';
     return { wires, right, wrong: wires.filter((w) => w.id !== right) };
   }
 
   it('charges a wrong cut once and leaves that wire cut', () => {
-    const state = started();
+    const state = opened();
     const wrong = bench(state).wrong[0]?.id ?? '';
     const after = applyAction(state, cut('p1', wrong, T0 + 1000));
     expect(after.deadlineAt).toBe((state.deadlineAt ?? 0) - 25_000);
@@ -421,7 +404,7 @@ describe('wiring in a run', () => {
   });
 
   it('wins on the right wire, also after every wrong one is gone', () => {
-    let state = started();
+    let state = opened();
     const { right, wrong } = bench(state);
     for (const [i, wire] of wrong.entries()) {
       state = applyAction(state, cut('p1', wire.id, T0 + 1000 * (i + 1)));
@@ -433,21 +416,21 @@ describe('wiring in a run', () => {
   });
 
   it('loses when a wrong cut eats the remaining time', () => {
-    const state = started();
+    const state = opened();
     const nearDeadline = (state.deadlineAt ?? 0) - 25_000 + 1000;
     const after = applyAction(state, cut('p1', bench(state).wrong[0]?.id ?? '', nearDeadline));
     expect(after.phase).toBe('lost');
   });
 
-  it('only the operator may cut', () => {
-    const state = started();
+  it('only a player at the box may cut', () => {
+    const state = opened();
     const attempt = () => applyAction(state, cut('p2', bench(state).right, T0 + 1000));
     expect(attempt).toThrow(GameError);
-    expect(attempt).toThrow(/Schaltschrank/);
+    expect(attempt).toThrow('Dafür musst du am Pult stehen.');
   });
 
-  it('gives the wires and the edgework to the operator and the rules to the manual role', () => {
-    const state = started();
+  it('gives the wires to the box, the rules to the book, the edgework to who read the sign', () => {
+    const state = opened();
     const operator = viewFor(state, 'p1');
     const manual = viewFor(state, 'p2');
     const { wires } = bench(state);
@@ -460,10 +443,9 @@ describe('wiring in a run', () => {
     expect(leaked).not.toContain(JSON.stringify(wires));
     expect(leaked).not.toContain('"cut":');
     expect(leaked).not.toContain('"w0"');
-    const panels = viewForSpectator(state).panels.map((p) => [p.roleId, p.puzzle]);
-    expect(panels).toEqual([
-      ['pult', operator.puzzle],
-      ['handbuch', manual.puzzle],
-    ]);
+    expect(viewForSpectator(state).puzzle).toMatchObject({
+      wires,
+      manual: wiringModule.manual(def),
+    });
   });
 });

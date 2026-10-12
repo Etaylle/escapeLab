@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  applyAction,
-  GameError,
-  generateEdgework,
-  initialState,
-  parseMission,
-  viewFor,
-} from '../src/index.js';
+import { applyAction, GameError, generateEdgework, viewFor } from '../src/index.js';
 import type { Action, GameState, ManualBlock, Mission, PuzzleContext } from '../src/index.js';
 import {
   morseModule,
@@ -15,32 +8,15 @@ import {
   type MorseState,
 } from '../src/puzzles/morse.js';
 import { mulberry32 } from '../src/rng.js';
+import { AT_STATION, labMission, openLab, started as startedLab, T0 } from './lab.js';
 import { playInstance } from './solveModule.js';
 
 const SEEDS = 200;
-const T0 = 1_000_000;
 
-const mission: Mission = parseMission({
-  id: 'morsetest',
-  title: 'Funk-Test',
-  story: { intro: 'i', win: 'w', lose: 'l' },
-  timeLimitSec: 600,
-  roles: [
-    { id: 'funker', name: 'Funker', description: '' },
-    { id: 'archiv', name: 'Archiv', description: '' },
-  ],
-  puzzles: [
-    {
-      type: 'morse',
-      id: 'bake',
-      title: 'Funkfeuer',
-      prompt: '',
-      operatorRoleId: 'funker',
-      manualRoleId: 'archiv',
-      penaltySec: 25,
-    },
-  ],
-});
+const mission: Mission = labMission(
+  [{ type: 'morse', id: 'bake', title: 'Funkfeuer', penaltySec: 25 }],
+  'morsetest',
+);
 
 function morseDef(): MorseDef {
   const def = mission.puzzles[0];
@@ -52,13 +28,15 @@ function morseDef(): MorseDef {
 
 const def = morseDef();
 const edgework = generateEdgework(mulberry32(1));
-const ctx: PuzzleContext = { edgework, alarms: 0, remainingSec: 600, at: T0 };
+const crew = ['op', 'rd'];
+const ctx: PuzzleContext = { edgework, alarms: 0, remainingSec: 600, at: T0, crew };
 
 const fresh = (seed: number): MorseState => morseModule.init(def, mulberry32(seed), ctx);
-const panelOf = (state: MorseState, roleId: string) =>
-  morseModule.view(def, state, roleId, { edgework, alarms: 0 });
-const press = (state: MorseState, input: MorseInput, roleId = 'funker') =>
-  morseModule.apply(def, state, input, roleId, ctx);
+/** The radio desk as the player standing at it sees it. */
+const panelOf = (state: MorseState) =>
+  morseModule.view(def, state, AT_STATION, { edgework, alarms: 0, crew });
+const press = (state: MorseState, input: MorseInput) =>
+  morseModule.apply(def, state, input, 'op', ctx);
 
 /** International Morse code as code → letter, written down independently of the module. */
 const INTERNATIONAL = new Map(
@@ -107,16 +85,9 @@ function printedFrequency(word: string): string {
   return frequency;
 }
 
+/** Anna (p1) at the radio desk, Ben (p2) at the book with the tables. */
 function started(seed = 3): GameState {
-  const actions: Action[] = [
-    { type: 'player-join', playerId: 'p1', name: 'Anna' },
-    { type: 'player-join', playerId: 'p2', name: 'Ben' },
-    { type: 'select-role', playerId: 'p1', roleId: 'funker' },
-    { type: 'select-role', playerId: 'p2', roleId: 'archiv' },
-    { type: 'set-ready', playerId: 'p2', ready: true },
-    { type: 'start-mission', playerId: 'p1', at: T0, seed },
-  ];
-  return actions.reduce(applyAction, initialState(mission));
+  return openLab(startedLab(mission, seed));
 }
 
 function morseState(state: GameState): MorseState {
@@ -137,10 +108,10 @@ describe('morse puzzle', () => {
   it(`starts off the answer and is solved from the views, alarm-free, for ${SEEDS} seeds`, () => {
     for (let seed = 0; seed < SEEDS; seed++) {
       const start = fresh(seed);
-      const reading = panelOf(start, 'funker').frequency;
+      const reading = panelOf(start).frequency;
       expect(reading, `seed ${seed}`).not.toBe(printedFrequency(start.word));
       // At least one turn of the dial before the send.
-      expect(playInstance(def, ['funker', 'archiv'], seed)).toBeGreaterThan(1);
+      expect(playInstance(def, seed)).toBeGreaterThan(1);
     }
   });
 
@@ -151,7 +122,7 @@ describe('morse puzzle', () => {
       let accepted = 0;
       for (let dial = 0; dial < DIAL.length; dial++) {
         const tuned = { ...state, dial };
-        const right = panelOf(tuned, 'funker').frequency === answer;
+        const right = panelOf(tuned).frequency === answer;
         expect(press(tuned, { transmit: true })).toEqual({
           state: tuned,
           solved: right,
@@ -172,7 +143,7 @@ describe('morse puzzle', () => {
     expect(fresh(11)).toEqual(fresh(11));
   });
 
-  it('shows the lamp to the operator only and the word to nobody', () => {
+  it('shows the lamp at the desk only and the word to nobody', () => {
     const state = started();
     const { word } = morseState(state);
     const operator = viewFor(state, 'p1');
@@ -195,7 +166,7 @@ describe('morse puzzle', () => {
   it('blinks the word in international Morse code', () => {
     for (let seed = 0; seed < SEEDS; seed++) {
       const state = fresh(seed);
-      const pattern = panelOf(state, 'funker').pattern ?? '';
+      const pattern = panelOf(state).pattern ?? '';
       const spelled = pattern.split(' ').map((code) => INTERNATIONAL.get(code) ?? '?');
       expect(spelled.join('')).toBe(state.word);
     }
@@ -204,7 +175,7 @@ describe('morse puzzle', () => {
   it('leads from the lamp to one table row with the printed manual, after three letters', () => {
     const letterOf = new Map([...printedCodes()].map(([letter, code]) => [code, letter]));
     for (let seed = 0; seed < SEEDS; seed++) {
-      const pattern = panelOf(fresh(seed), 'funker').pattern ?? '';
+      const pattern = panelOf(fresh(seed)).pattern ?? '';
       const codes = pattern.split(' ').slice(0, 3);
       const start = codes.map((code) => letterOf.get(code) ?? '?').join('');
       const rows = frequencies.rows.filter(([word]) => word?.startsWith(start) === true);
@@ -229,25 +200,18 @@ describe('morse puzzle', () => {
   it('turns the dial a step at a time, free of charge, and stops at both ends', () => {
     let state: MorseState = { ...fresh(5), dial: 0 };
     expect(press(state, { tune: -1 })).toEqual({ state, solved: false, penalty: null });
-    const readings = [panelOf(state, 'funker').frequency];
+    const readings = [panelOf(state).frequency];
     for (let i = 0; i < 20; i++) {
       const result = press(state, { tune: 1 });
       expect(result.solved).toBe(false);
       expect(result.penalty).toBeNull();
       state = result.state;
-      readings.push(panelOf(state, 'funker').frequency);
+      readings.push(panelOf(state).frequency);
     }
     expect(state.dial).toBe(15);
     expect(readings.slice(0, 16)).toEqual(DIAL);
     expect(new Set(readings.slice(15))).toEqual(new Set(['3,580 MHz']));
     expect(press(state, { tune: -1 }).state.dial).toBe(14);
-  });
-
-  it('takes inputs from the operator only', () => {
-    const state = fresh(1);
-    expect(() => press(state, { tune: 1 }, 'archiv')).toThrow(GameError);
-    expect(() => press(state, { tune: 1 }, 'archiv')).toThrow(/Funkpult kann die Frequenz/);
-    expect(() => press(state, { transmit: true }, 'archiv')).toThrow(/Funkpult kann senden/);
   });
 
   it('accepts its two inputs and nothing else', () => {
@@ -299,8 +263,10 @@ describe('morse puzzle', () => {
     expect(state.penaltySeq).toBe(1);
   });
 
-  it('turns away input from the wrong role or for another station', () => {
-    expect(() => applyAction(started(), send('p2', { transmit: true }))).toThrow(/Funkpult/);
+  it('turns away input from away from the desk or meant for another station', () => {
+    const away = () => applyAction(started(), send('p2', { transmit: true }));
+    expect(away).toThrow(GameError);
+    expect(away).toThrow('Dafür musst du am Pult stehen.');
     expect(() => applyAction(started(), send('p1', { dir: 1 }))).toThrow(/Ungültige Eingabe/);
   });
 });

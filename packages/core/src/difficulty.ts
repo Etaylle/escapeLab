@@ -80,29 +80,25 @@ export function scaleMission(mission: Mission, difficulty: Difficulty): Mission 
     timeLimitSec: atLeast(mission.timeLimitSec * s.time, 60),
     hintCostSec: atLeast(mission.hintCostSec * s.penalty, 5),
     puzzles: mission.puzzles.map((puzzle) => scalePuzzle(puzzle, s.penalty)),
-    ...(map === undefined
-      ? {}
-      : {
-          map: {
-            ...map,
-            drones: map.drones.map((drone) => ({
-              ...drone,
-              speed: Math.round(drone.speed * s.droneSpeed * 100) / 100,
-              range: Math.round(drone.range * s.droneRange * 100) / 100,
-              penaltySec: atLeast(drone.penaltySec * s.penalty, 5),
-            })),
-            ...(map.sabotage === undefined
-              ? {}
-              : {
-                  sabotage: {
-                    ...map.sabotage,
-                    firstAfterSec: atLeast(map.sabotage.firstAfterSec * s.sabotageGap, 30),
-                    everySec: atLeast(map.sabotage.everySec * s.sabotageGap, 45),
-                    durationSec: atLeast(map.sabotage.durationSec * s.sabotageDuration, 20),
-                    penaltySec: atLeast(map.sabotage.penaltySec * s.penalty, 10),
-                  },
-                }),
-          },
-        }),
+    map: {
+      ...map,
+      drones: map.drones.map((drone) => ({
+        ...drone,
+        speed: Math.round(drone.speed * s.droneSpeed * 100) / 100,
+        range: Math.round(drone.range * s.droneRange * 100) / 100,
+        penaltySec: atLeast(drone.penaltySec * s.penalty, 5),
+      })),
+      ...(map.sabotage === undefined
+        ? {}
+        : {
+            sabotage: {
+              ...map.sabotage,
+              firstAfterSec: atLeast(map.sabotage.firstAfterSec * s.sabotageGap, 30),
+              everySec: atLeast(map.sabotage.everySec * s.sabotageGap, 45),
+              durationSec: atLeast(map.sabotage.durationSec * s.sabotageDuration, 20),
+              penaltySec: atLeast(map.sabotage.penaltySec * s.penalty, 10),
+            },
+          }),
+    },
   };
 }

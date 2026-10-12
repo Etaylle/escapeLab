@@ -16,6 +16,22 @@ export interface RunEvent {
   seconds: number | null;
 }
 
+/**
+ * Who stands where, translated from live positions by the server like the
+ * plates. It decides who works the open station, who reads its rules and
+ * who knows the edgework.
+ */
+export interface Presence {
+  /** players at each station, by puzzle id */
+  stations: Record<string, string[]>;
+  /** players at each manual object, by its id */
+  manuals: Record<string, string[]>;
+  /** players who have walked up to the edgework sign; kept for the rest of the run */
+  signSeen: string[];
+}
+
+export const NOBODY_PRESENT: Presence = { stations: {}, manuals: {}, signSeen: [] };
+
 export interface ItemState {
   /** tile-space position while lying on the floor */
   x: number;
@@ -71,6 +87,8 @@ export interface GameState {
    */
   pressedPlates: string[];
   occupiedPanels: string[];
+  /** Stations, manual objects and the sign, by who stands there; derived like the plates. */
+  presence: Presence;
   /**
    * Running emergency that interrupts everything until it is cleared. In
    * relay mode it carries the consoles and instructions; valves need none.
@@ -114,6 +132,7 @@ export function initialState(mission: Mission): GameState {
     edgework: null,
     pressedPlates: [],
     occupiedPanels: [],
+    presence: NOBODY_PRESENT,
     sabotage: null,
     paused: null,
     items: {},

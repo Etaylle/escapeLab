@@ -3,12 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { applyAction, initialState, parseMission, viewFor } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
 
-const blackoutRaw: unknown = JSON.parse(
-  readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8'),
+const blackout: Mission = parseMission(
+  JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
 );
-// Puzzle-logic tests run without the tile map (stations would gate activation);
-// the map flow itself is covered in map.test.ts.
-const blackout: Mission = parseMission({ ...(blackoutRaw as object), map: undefined });
 const tutorial: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/systemcheck.json', import.meta.url), 'utf8')),
 );
@@ -84,10 +81,9 @@ describe('mission switching & stats', () => {
     expect(tutorial.roles).toHaveLength(2);
     expect(kettenreaktion.roles).toHaveLength(3);
     expect(kettenreaktion.puzzles.some((p) => p.type === 'simon')).toBe(true);
-    // Every shipped mission carries a valid tile map with an escape hatch.
-    for (const mission of [parseMission(blackoutRaw), kettenreaktion, tutorial]) {
-      expect(mission.map).toBeDefined();
-      expect(mission.map?.exit).toBeDefined();
+    // Every shipped mission carries an escape hatch.
+    for (const mission of [blackout, kettenreaktion, tutorial]) {
+      expect(mission.map.exit).toBeDefined();
     }
   });
 });

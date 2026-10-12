@@ -1,13 +1,16 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseMission } from '../src/index.js';
-import type { MapDef, Mission } from '../src/index.js';
+import type { Mission } from '../src/index.js';
+import { reachability, tileKey, type Spot } from '../src/reach.js';
 
 /**
- * Guardrail for every shipped mission: walk the map the way the game does
- * (puzzle doors open for good once solved, plate doors only while a *different*
- * player stands on the plate) and prove that the stations can be activated in
- * order and that everyone can gather at the exit afterwards.
+ * Guardrail for every shipped mission, beyond what the mission validation
+ * already walks (stations in order, manual objects, the sign): everyone can
+ * gather at the exit, every carryable can be carried where it belongs, and
+ * the walk the game does — puzzle doors open for good once solved, plate
+ * doors only while a *different* player stands on the plate — is the one
+ * from core's validation.
  */
 
 const missionsDir = new URL('../../../missions/', import.meta.url);
@@ -15,63 +18,9 @@ const missions: Mission[] = readdirSync(missionsDir)
   .filter((f) => f.endsWith('.json'))
   .map((f) => parseMission(JSON.parse(readFileSync(new URL(f, missionsDir), 'utf8'))));
 
-const key = (x: number, y: number): string => `${x},${y}`;
-const STEPS = [
-  [0, 1],
-  [0, -1],
-  [1, 0],
-  [-1, 0],
-] as const;
-
-function isFloor(map: MapDef, x: number, y: number): boolean {
-  return map.tiles[y]?.charAt(x) === '.';
-}
-
-/** Tiles reachable from `start`, treating doors as walls unless `isOpen` says otherwise. */
-function flood(
-  map: MapDef,
-  start: { x: number; y: number },
-  isOpen: (doorId: string) => boolean,
-): Set<string> {
-  const doorAt = new Map(map.doors.map((d) => [key(d.x, d.y), d.id]));
-  const seen = new Set<string>([key(start.x, start.y)]);
-  const queue: [number, number][] = [[start.x, start.y]];
-  for (let head = 0; head < queue.length; head++) {
-    const current = queue[head];
-    if (current === undefined) {
-      break;
-    }
-    const [x, y] = current;
-    for (const [dx, dy] of STEPS) {
-      const nx = x + dx;
-      const ny = y + dy;
-      const k = key(nx, ny);
-      if (seen.has(k) || !isFloor(map, nx, ny)) {
-        continue;
-      }
-      const doorId = doorAt.get(k);
-      if (doorId !== undefined && !isOpen(doorId)) {
-        continue;
-      }
-      seen.add(k);
-      queue.push([nx, ny]);
-    }
-  }
-  return seen;
-}
-
-function requireMap(mission: Mission): MapDef {
-  const map = mission.map;
-  if (map === undefined) {
-    throw new Error(`mission "${mission.id}" has no map`);
-  }
-  return map;
-}
-
-function spawnsOf(mission: Mission): { x: number; y: number }[] {
-  const map = requireMap(mission);
+function spawnsOf(mission: Mission): Spot[] {
   return mission.roles.map((role) => {
-    const spawn = map.spawns[role.id];
+    const spawn = mission.map.spawns[role.id];
     if (spawn === undefined) {
       throw new Error(`mission "${mission.id}" has no spawn for "${role.id}"`);
     }
@@ -79,78 +28,22 @@ function spawnsOf(mission: Mission): { x: number; y: number }[] {
   });
 }
 
-/**
- * Per-player reachability once `solved` puzzles are done, as a fixpoint: a
- * plate door is passable for a player when some *other* player can reach the
- * plate, which is exactly the cooperation the game requires.
- */
-function reachability(mission: Mission, solved: Set<string>): Set<string>[] {
-  const map = requireMap(mission);
-  const spawns = spawnsOf(mission);
-  let reach: Set<string>[] = spawns.map(() => new Set<string>());
-
-  for (let round = 0; round < spawns.length * map.doors.length + 2; round++) {
-    const next = spawns.map((spawn, i) =>
-      flood(map, spawn, (doorId) => {
-        const opensBy = map.doors.find((d) => d.id === doorId)?.opensBy;
-        if (opensBy === undefined) {
-          return false;
-        }
-        if (opensBy.kind === 'puzzle') {
-          return solved.has(opensBy.puzzleId);
-        }
-        const plate = map.plates.find((p) => p.id === opensBy.plateId);
-        return (
-          plate !== undefined &&
-          reach.some((tiles, j) => j !== i && tiles.has(key(plate.x, plate.y)))
-        );
-      }),
-    );
-    const grew = next.some((tiles, i) => tiles.size !== (reach[i]?.size ?? 0));
-    reach = next;
-    if (!grew) {
-      break;
-    }
-  }
-  return reach;
-}
-
-/** On the station tile or orthogonally next to it, like the in-game check. */
-function canActivate(tiles: Set<string>, station: { x: number; y: number }): boolean {
-  if (tiles.has(key(station.x, station.y))) {
-    return true;
-  }
-  return STEPS.some(([dx, dy]) => tiles.has(key(station.x + dx, station.y + dy)));
-}
-
 describe.each(missions.map((m) => [m.id, m] as const))('mission %s', (_id, mission) => {
-  const map = requireMap(mission);
+  const map = mission.map;
 
   it('spawns every role in a distinct starting position', () => {
-    const spawns = spawnsOf(mission).map((s) => key(s.x, s.y));
+    const spawns = spawnsOf(mission).map((s) => tileKey(s.x, s.y));
     expect(new Set(spawns).size).toBe(spawns.length);
-  });
-
-  it('lets the crew activate every station in mission order', () => {
-    const solved = new Set<string>();
-    for (const puzzle of mission.puzzles) {
-      const station = map.stations.find((s) => s.puzzleId === puzzle.id);
-      expect(station, `station for "${puzzle.id}"`).toBeDefined();
-      const reach = reachability(mission, solved);
-      const whoCan = reach.filter((tiles) => station !== undefined && canActivate(tiles, station));
-      expect(whoCan.length, `nobody can reach station "${puzzle.id}"`).toBeGreaterThan(0);
-      solved.add(puzzle.id);
-    }
   });
 
   it('lets everyone gather at the exit once all puzzles are solved', () => {
     const exit = map.exit;
     expect(exit).toBeDefined();
-    const reach = reachability(mission, new Set(mission.puzzles.map((p) => p.id)));
-    for (const [i, tiles] of reach.entries()) {
+    const solved = new Set(mission.puzzles.map((p) => p.id));
+    for (const [i, tiles] of reachability(map, spawnsOf(mission), solved).entries()) {
       const roleId = mission.roles[i]?.id ?? String(i);
       expect(
-        exit !== undefined && tiles.has(key(exit.x, exit.y)),
+        exit !== undefined && tiles.has(tileKey(exit.x, exit.y)),
         `role "${roleId}" cannot reach the exit`,
       ).toBe(true);
     }
@@ -159,28 +52,26 @@ describe.each(missions.map((m) => [m.id, m] as const))('mission %s', (_id, missi
   it('lets someone fetch and deliver every carryable before it is needed', () => {
     for (const item of map.items) {
       // State of the world while the station waiting for this item is current.
-      const neededBy = item.requiredFor;
       const solved = new Set<string>();
       for (const puzzle of mission.puzzles) {
-        if (puzzle.id === neededBy) {
+        if (puzzle.id === item.requiredFor) {
           break;
         }
         solved.add(puzzle.id);
       }
-      const reach = reachability(mission, solved);
-      const pickup = reach.some((tiles) => tiles.has(key(item.x, item.y)));
-      const dropOff = reach.some((tiles) =>
-        tiles.has(key(item.deliverTo.x, item.deliverTo.y)),
-      );
-      expect(pickup, `nobody can reach item "${item.id}"`).toBe(true);
-      expect(dropOff, `nobody can reach the drop-off of "${item.id}"`).toBe(true);
+      const reach = reachability(map, spawnsOf(mission), solved);
+      const pickup = tileKey(item.x, item.y);
+      const dropOff = tileKey(item.deliverTo.x, item.deliverTo.y);
+      expect(reach.some((tiles) => tiles.has(pickup)), `nobody can reach "${item.id}"`).toBe(true);
+      expect(
+        reach.some((tiles) => tiles.has(dropOff)),
+        `nobody can reach the drop-off of "${item.id}"`,
+      ).toBe(true);
       // And the same player has to be able to do both, since it is carried.
-      const carrier = reach.some(
-        (tiles) =>
-          tiles.has(key(item.x, item.y)) &&
-          tiles.has(key(item.deliverTo.x, item.deliverTo.y)),
-      );
-      expect(carrier, `no single player can carry "${item.id}" all the way`).toBe(true);
+      expect(
+        reach.some((tiles) => tiles.has(pickup) && tiles.has(dropOff)),
+        `no single player can carry "${item.id}" all the way`,
+      ).toBe(true);
     }
   });
 

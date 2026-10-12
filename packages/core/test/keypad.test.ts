@@ -1,18 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import {
-  applyAction,
-  generateEdgework,
-  initialState,
-  parseMission,
-  viewFor,
-} from '../src/index.js';
-import type { Action, GameState, PuzzleContext } from '../src/index.js';
+import { applyAction, generateEdgework, viewFor } from '../src/index.js';
+import type { Action, GameState, PuzzleContext, Viewer } from '../src/index.js';
 import { KEYPAD_COLUMNS, keypadModule } from '../src/puzzles/keypad.js';
 import type { KeypadDef, KeypadState, KeypadView } from '../src/puzzles/keypad.js';
 import { mulberry32 } from '../src/rng.js';
+import { AT_BOOK, AT_STATION, labMission, openLab, started as startedLab, T0 } from './lab.js';
 
 const SEEDS = 300;
-const T0 = 1_000_000;
 const GLYPHS = [...new Set(KEYPAD_COLUMNS.flat())];
 
 /**
@@ -42,32 +36,20 @@ const def: KeypadDef = keypadModule.defSchema.parse({
   type: 'keypad',
   id: 'code',
   title: 'Zugangscode',
-  prompt: '',
-  operatorRoleId: 'steuerpult',
-  manualRoleId: 'anleitung',
   penaltySec: 15,
 });
 
-const mission = parseMission({
-  id: 'keypadtest',
-  title: 'Tastenfeld-Test',
-  story: { intro: 'i', win: 'w', lose: 'l' },
-  timeLimitSec: 600,
-  roles: [
-    { id: 'steuerpult', name: 'Steuerpult', description: '' },
-    { id: 'anleitung', name: 'Anleitung', description: '' },
-  ],
-  puzzles: [def],
-});
+const mission = labMission([def], 'keypadtest');
 
 const edgework = generateEdgework(mulberry32(1));
-const ctx: PuzzleContext = { edgework, alarms: 0, remainingSec: 600, at: T0 };
+const crew = ['op', 'rd'];
+const ctx: PuzzleContext = { edgework, alarms: 0, remainingSec: 600, at: T0, crew };
 
 /** A fresh instance straight from the module. */
 const deal = (seed: number): KeypadState => keypadModule.init(def, mulberry32(seed), ctx);
 
-const viewAs = (state: KeypadState, roleId: string): KeypadView =>
-  keypadModule.view(def, state, roleId, { edgework, alarms: 0 });
+const viewAs = (state: KeypadState, viewer: Viewer): KeypadView =>
+  keypadModule.view(def, state, viewer, { edgework, alarms: 0, crew });
 
 /** Every way to pick `size` of `items`, keeping their order. */
 function subsets<T>(items: readonly T[], size: number): T[][] {
@@ -79,17 +61,9 @@ function subsets<T>(items: readonly T[], size: number): T[][] {
   );
 }
 
-/** Anna works the keypad, Ben holds the manual. */
+/** Anna works the keypad, Ben reads the book. */
 function started(seed = 7): GameState {
-  const actions: Action[] = [
-    { type: 'player-join', playerId: 'p1', name: 'Anna' },
-    { type: 'player-join', playerId: 'p2', name: 'Ben' },
-    { type: 'select-role', playerId: 'p1', roleId: 'steuerpult' },
-    { type: 'select-role', playerId: 'p2', roleId: 'anleitung' },
-    { type: 'set-ready', playerId: 'p2', ready: true },
-    { type: 'start-mission', playerId: 'p1', at: T0, seed },
-  ];
-  return actions.reduce(applyAction, initialState(mission));
+  return openLab(startedLab(mission, seed));
 }
 
 const press = (playerId: string, keyIndex: number): Action => ({
@@ -187,7 +161,7 @@ describe('keypad puzzle', () => {
     expect(deal(7)).not.toEqual(deal(8));
   });
 
-  it('shows the keys to the operator only; everyone sees how many are lit', () => {
+  it('shows the keys at the station only; everyone sees how many are lit', () => {
     const state = started();
     const panel = viewOf(state, 'p1');
     const manual = viewOf(state, 'p2');
@@ -201,7 +175,7 @@ describe('keypad puzzle', () => {
     }
   });
 
-  it('tells the manual role nothing about the keys that were dealt', () => {
+  it('tells the reader nothing about the keys that were dealt', () => {
     const first = started(1);
     const other = [2, 3, 4, 5, 6, 7, 8]
       .map((seed) => started(seed))
@@ -210,7 +184,7 @@ describe('keypad puzzle', () => {
     expect(viewOf(other ?? first, 'p2')).toEqual(viewOf(first, 'p2'));
   });
 
-  it('prints the six columns and the procedure, for the manual role only', () => {
+  it('prints the six columns and the procedure, for the reader only', () => {
     const state = started();
     const printed = keypadModule.manual(def);
     expect(viewOf(state, 'p2').manual).toEqual(printed);
@@ -259,34 +233,35 @@ describe('keypad puzzle', () => {
     expect(keypadOf(again)).toEqual(keypadOf(state));
   });
 
-  it('takes presses from the operator only, and only on one of the four keys', () => {
+  it('takes presses at the station only, and only on one of the four keys', () => {
     const state = started();
-    expect(() => applyAction(state, press('p2', nextKey(state)))).toThrow(/Tastenfeld/);
+    expect(() => applyAction(state, press('p2', nextKey(state)))).toThrow(
+      'Dafür musst du am Pult stehen.',
+    );
     expect(() => applyAction(state, press('p1', 4))).toThrow('Ungültige Eingabe.');
     expect(() => applyAction(state, press('p1', -1))).toThrow('Ungültige Eingabe.');
   });
 
   it(`is solved from the views alone, and any other key is an alarm, for ${SEEDS} seeds`, () => {
-    const crew = [def.operatorRoleId, def.manualRoleId];
     for (let seed = 0; seed < SEEDS; seed++) {
       let state = deal(seed);
       let presses = 0;
       let solved = false;
       while (!solved && presses < 4) {
-        const views = Object.fromEntries(crew.map((roleId) => [roleId, viewAs(state, roleId)]));
+        const views = { operator: viewAs(state, AT_STATION), reader: viewAs(state, AT_BOOK) };
         const moves = keypadModule.solve(def, views, null);
         const move = moves[0];
-        if (moves.length !== 1 || move?.roleId !== def.operatorRoleId) {
+        if (moves.length !== 1 || move?.by !== 'operator') {
           throw new Error(`seed ${seed}: expected one press, got ${JSON.stringify(moves)}`);
         }
         const input = keypadModule.inputSchema.parse(move.input);
         for (const [keyIndex, key] of state.keys.entries()) {
           if (!key.lit && keyIndex !== input.keyIndex) {
-            const wrong = keypadModule.apply(def, state, { keyIndex }, def.operatorRoleId, ctx);
+            const wrong = keypadModule.apply(def, state, { keyIndex }, 'op', ctx);
             expect(wrong.penalty, `seed ${seed}, key ${keyIndex}`).not.toBeNull();
           }
         }
-        const result = keypadModule.apply(def, state, input, def.operatorRoleId, ctx);
+        const result = keypadModule.apply(def, state, input, 'op', ctx);
         expect(result.penalty, `seed ${seed}`).toBeNull();
         state = result.state;
         solved = result.solved;
@@ -297,15 +272,10 @@ describe('keypad puzzle', () => {
     }
   });
 
-  it("refuses to solve without the operator's keys or the manual role", () => {
-    const state = deal(1);
-    const operator = viewAs(state, def.operatorRoleId);
-    const manual = viewAs(state, def.manualRoleId);
-    expect(() => keypadModule.solve(def, { [def.operatorRoleId]: operator }, null)).toThrow(
-      /manual role/,
-    );
-    expect(() => keypadModule.solve(def, { [def.manualRoleId]: manual }, null)).toThrow(
-      /operator's keys/,
+  it('refuses to solve without the keys as the station shows them', () => {
+    const fromBook = viewAs(deal(1), AT_BOOK);
+    expect(() => keypadModule.solve(def, { operator: fromBook, reader: fromBook }, null)).toThrow(
+      /operator's view of the keys/,
     );
   });
 });

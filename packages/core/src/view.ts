@@ -1,15 +1,18 @@
 import type { Difficulty } from './difficulty.js';
 import type { Edgework } from './edgework.js';
+import type { ManualKind } from './mission.js';
 import { CREW_COLORS, type GameState, type Phase, type RunEvent } from './state.js';
-import { moduleFor, type PuzzleDef, type PuzzleView } from './puzzles/index.js';
-import type { ManualSection, ViewContext } from './puzzles/module.js';
+import { moduleFor, type PuzzleView } from './puzzles/index.js';
+import type { ManualSection, Viewer, ViewContext } from './puzzles/module.js';
 import { relayDefFor, relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
-import { doorOpen, platePressed } from './map.js';
+import { doorOpen, operatorsOf, platePressed, readersOf } from './map.js';
 
 /**
  * What a single player is allowed to see. Asymmetric information is enforced
- * here, on the server side — private texts and layouts of other roles never
- * reach a client, so no amount of DevTools digging can leak them.
+ * here, on the server side: what a player sees depends on where they stand.
+ * The instance at a station, the printed rules at a manual object and the
+ * edgework on the sign never reach a client that is not there, so no amount
+ * of DevTools digging can leak them.
  */
 export interface PlayerView {
   phase: Phase;
@@ -56,11 +59,41 @@ export interface PlayerView {
   lastPenaltySec: number | null;
   /** hints bought from mission control this run; they weigh on the grade */
   hintsUsed: number;
-  /** the lab's serial, lamps and cells — only for roles that see them */
+  /** the lab's serial, lamps and cells — only once this player has read the sign */
   edgework: Edgework | null;
+  /** where this player stands right now */
+  presence: PlayerPresence;
+  /** the manual objects this player stands at, with the printed rules of every puzzle they cover */
+  manualsHere: ManualHere[];
   puzzle: PuzzleView | null;
-  /** tile map while a mapped mission is running; null otherwise */
+  /** tile map while a mission is running; null otherwise */
   map: MapView | null;
+}
+
+export interface PlayerPresence {
+  /** puzzle id of the station this player stands at */
+  stationId: string | null;
+  /** id of the manual object this player stands at */
+  manualId: string | null;
+  /** has walked up to the edgework sign this run */
+  signSeen: boolean;
+}
+
+/**
+ * A manual object as read on the spot. Printed rules are no secret — the
+ * Handbuch screen prints them all — so they come whole, in mission order.
+ */
+export interface ManualHere {
+  id: string;
+  label: string;
+  kind: ManualKind;
+  sections: {
+    puzzleId: string;
+    /** position in the mission from 0, like `currentPuzzleIndex` */
+    index: number;
+    title: string;
+    manual: ManualSection[];
+  }[];
 }
 
 /**
@@ -76,7 +109,24 @@ export interface MapView {
   yourSpawn: { x: number; y: number };
   doors: { id: string; x: number; y: number; open: boolean }[];
   plates: { id: string; x: number; y: number; label: string; pressed: boolean }[];
-  stations: { x: number; y: number; title: string; status: 'done' | 'armed' | 'locked' }[];
+  stations: {
+    puzzleId: string;
+    x: number;
+    y: number;
+    title: string;
+    status: 'done' | 'armed' | 'locked';
+  }[];
+  /** books, terminals and wall charts, and the puzzles whose printed rules lie there */
+  manuals: {
+    id: string;
+    kind: ManualKind;
+    x: number;
+    y: number;
+    label: string;
+    puzzleIds: string[];
+  }[];
+  /** the wall sign with the Laborkennung; null on a map without one */
+  edgeworkSign: { x: number; y: number } | null;
   labels: { text: string; x: number; y: number }[];
   /** escape hatch; open once every puzzle is solved */
   exit: { x: number; y: number; open: boolean } | null;
@@ -146,18 +196,63 @@ function storyText(state: GameState): string {
   }
 }
 
-/** Only the edgework-reading roles get it, the audience on exactly their panels. */
-function edgeworkFor(state: GameState, roleId: string | null): Edgework | null {
-  const seesIt = state.mission.roles.some((r) => r.id === roleId && r.seesEdgework);
-  return seesIt ? state.edgework : null;
+/** Views are rebuilt on every change; this is what a module's view may read. */
+function viewContext(state: GameState): ViewContext {
+  if (state.edgework === null) {
+    throw new Error('view: this run has no edgework — was start-mission skipped?');
+  }
+  return {
+    edgework: state.edgework,
+    alarms: state.penaltySeq,
+    crew: state.players.filter((p) => p.connected).map((p) => p.id),
+  };
 }
 
-/** The role that holds the printed rules; button-sync has none. */
-function manualRoleOf(def: PuzzleDef): string | null {
-  return 'manualRoleId' in def ? def.manualRoleId : null;
+/**
+ * Where one player stands. Next to two stations or manual objects at once,
+ * the one of the current puzzle wins.
+ */
+function presenceOf(state: GameState, playerId: string): PlayerPresence {
+  const { presence } = state;
+  const current = state.mission.puzzles[state.currentPuzzleIndex]?.id;
+  const stations = Object.keys(presence.stations).filter((id) =>
+    presence.stations[id]?.includes(playerId),
+  );
+  const manuals = state.mission.map.manuals.filter((m) =>
+    presence.manuals[m.id]?.includes(playerId),
+  );
+  const manual =
+    manuals.find((m) => current !== undefined && m.puzzleIds.includes(current)) ?? manuals[0];
+  return {
+    stationId: stations.find((id) => id === current) ?? stations[0] ?? null,
+    manualId: manual?.id ?? null,
+    signSeen: presence.signSeen.includes(playerId),
+  };
 }
 
-function puzzleViewFor(state: GameState, roleId: string | null): PuzzleView | null {
+function manualsHereFor(state: GameState, playerId: string): ManualHere[] {
+  if (state.phase !== 'playing') {
+    return [];
+  }
+  return state.mission.map.manuals
+    .filter((m) => state.presence.manuals[m.id]?.includes(playerId))
+    .map((m) => ({
+      id: m.id,
+      label: m.label,
+      kind: m.kind,
+      sections: state.mission.puzzles.flatMap((def, index) =>
+        m.puzzleIds.includes(def.id)
+          ? [{ puzzleId: def.id, index, title: def.title, manual: moduleFor(def.type).manual(def) }]
+          : [],
+      ),
+    }));
+}
+
+/**
+ * The open puzzle as one player sees it from where they stand, or as the
+ * audience sees it (`playerId` null): instance, rules and the reader's side.
+ */
+function puzzleViewFor(state: GameState, playerId: string | null): PuzzleView | null {
   if (state.phase !== 'playing' || state.puzzleState === null) {
     return null;
   }
@@ -165,20 +260,22 @@ function puzzleViewFor(state: GameState, roleId: string | null): PuzzleView | nu
   if (def === undefined) {
     return null;
   }
-  if (state.edgework === null) {
-    throw new Error('puzzle view: this run has no edgework — was start-mission skipped?');
-  }
   const puzzleModule = moduleFor(def.type);
-  const ctx: ViewContext = { edgework: state.edgework, alarms: state.penaltySeq };
+  const viewer: Viewer =
+    playerId === null
+      ? { playerId: null, operating: true, reading: true }
+      : {
+          playerId,
+          operating: operatorsOf(state, def.id).includes(playerId),
+          reading: readersOf(state, def.id).includes(playerId),
+        };
   const hintsLeft = def.hints.length - state.hintsRevealed;
   return {
-    ...puzzleModule.view(def, state.puzzleState, roleId, ctx),
+    ...puzzleModule.view(def, state.puzzleState, viewer, viewContext(state)),
     index: state.currentPuzzleIndex,
     total: state.mission.puzzles.length,
     title: def.title,
-    prompt: def.prompt,
-    info: def.infos.find((i) => i.roleId === roleId)?.text ?? null,
-    manual: roleId !== null && roleId === manualRoleOf(def) ? puzzleModule.manual(def) : null,
+    manual: viewer.reading ? puzzleModule.manual(def) : null,
     hints: {
       shown: def.hints.slice(0, state.hintsRevealed),
       left: hintsLeft,
@@ -196,17 +293,13 @@ function relayViewFor(
   state: GameState,
   roleId: string | null,
 ): { def: RelayDef; view: RelayView } | null {
-  const sabotage = state.mission.map?.sabotage;
+  const sabotage = state.mission.map.sabotage;
   const emergency = state.sabotage?.emergency;
   if (sabotage === undefined || emergency === undefined) {
     return null;
   }
-  if (state.edgework === null) {
-    throw new Error('emergency view: this run has no edgework — was start-mission skipped?');
-  }
   const def = relayDefFor(state.mission.roles, sabotage);
-  const ctx: ViewContext = { edgework: state.edgework, alarms: state.penaltySeq };
-  return { def, view: relayModule.view(def, emergency, roleId, ctx) };
+  return { def, view: relayModule.view(def, emergency, roleId, viewContext(state)) };
 }
 
 /** Relay mode adds the role's console and the printed drill to the sabotage view. */
@@ -220,7 +313,7 @@ function relayPartFor(
 
 function mapViewFor(state: GameState, playerId: string, roleId: string | null): MapView | null {
   const map = state.mission.map;
-  if (map === undefined || state.phase !== 'playing') {
+  if (state.phase !== 'playing') {
     return null;
   }
   const you = state.players.find((p) => p.id === playerId);
@@ -244,12 +337,22 @@ function mapViewFor(state: GameState, playerId: string, roleId: string | null): 
       const status =
         index < state.currentPuzzleIndex ? 'done' : index === state.currentPuzzleIndex ? 'armed' : 'locked';
       return {
+        puzzleId: s.puzzleId,
         x: s.x,
         y: s.y,
         title: state.mission.puzzles[index]?.title ?? s.puzzleId,
         status,
       };
     }),
+    manuals: map.manuals.map((m) => ({
+      id: m.id,
+      kind: m.kind,
+      x: m.x,
+      y: m.y,
+      label: m.label,
+      puzzleIds: [...m.puzzleIds],
+    })),
+    edgeworkSign: map.edgeworkSign === undefined ? null : { ...map.edgeworkSign },
     labels: map.labels.map((l) => ({ text: l.text, x: l.x, y: l.y })),
     exit:
       map.exit === undefined
@@ -292,9 +395,10 @@ function mapViewFor(state: GameState, playerId: string, roleId: string | null): 
 }
 
 /**
- * What an audience sees: the whole lab at once and every role's private
- * panel side by side. Spectators cannot act, so revealing everything is the
- * point — watching the two halves fail to line up is the fun part.
+ * What an audience sees: the whole lab at once, the open puzzle with every
+ * side of it and where everybody stands. Spectators cannot act, so
+ * revealing everything is the point — watching the halves fail to line up
+ * is the fun part.
  */
 export interface SpectatorView {
   phase: Phase;
@@ -318,15 +422,17 @@ export interface SpectatorView {
     roleName: string | null;
     color: string;
     connected: boolean;
+    presence: PlayerPresence;
   }[];
   map: MapView | null;
-  /** one entry per role, puzzle and edgework exactly as that role sees them */
+  /** the open puzzle from everywhere at once: instance, printed rules and the reader's side */
+  puzzle: PuzzleView | null;
+  /** the lab's serial, lamps and cells, whether or not anybody has read the sign yet */
+  edgework: Edgework | null;
+  /** one entry per role; during a relay emergency with that role's console and instruction */
   panels: {
     roleId: string;
     roleName: string;
-    puzzle: PuzzleView | null;
-    edgework: Edgework | null;
-    /** during a relay emergency: that role's console and instruction */
     emergency?: RelayView;
   }[];
 }
@@ -359,15 +465,16 @@ export function viewForSpectator(state: GameState): SpectatorView {
       roleName: roleName(p.roleId),
       color: p.color,
       connected: p.connected,
+      presence: presenceOf(state, p.id),
     })),
     map: mapViewFor(state, state.players[0]?.id ?? '', null),
+    puzzle: puzzleViewFor(state, null),
+    edgework: state.edgework,
     panels: state.mission.roles.map((role) => {
       const relay = relayViewFor(state, role.id);
       return {
         roleId: role.id,
         roleName: role.name,
-        puzzle: puzzleViewFor(state, role.id),
-        edgework: edgeworkFor(state, role.id),
         ...(relay === null ? {} : { emergency: relay.view }),
       };
     }),
@@ -381,6 +488,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
   }
   const roleName = (roleId: string | null): string | null =>
     state.mission.roles.find((r) => r.id === roleId)?.name ?? null;
+  const presence = presenceOf(state, playerId);
 
   return {
     phase: state.phase,
@@ -431,8 +539,10 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     penaltySeq: state.penaltySeq,
     lastPenaltySec: state.lastPenaltySec,
     hintsUsed: state.hintsUsed,
-    edgework: edgeworkFor(state, you.roleId),
-    puzzle: puzzleViewFor(state, you.roleId),
+    edgework: presence.signSeen ? state.edgework : null,
+    presence,
+    manualsHere: manualsHereFor(state, playerId),
+    puzzle: puzzleViewFor(state, playerId),
     map: mapViewFor(state, playerId, you.roleId),
   };
 }

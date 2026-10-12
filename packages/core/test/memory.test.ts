@@ -1,18 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import {
-  applyAction,
-  GameError,
-  generateEdgework,
-  initialState,
-  parseMission,
-  viewFor,
-  viewForSpectator,
-} from '../src/index.js';
+import { applyAction, generateEdgework, viewFor, viewForSpectator } from '../src/index.js';
 import type {
   Action,
   GameState,
   ManualSection,
   Mission,
+  Perspectives,
   PuzzleContext,
   SolveAid,
 } from '../src/index.js';
@@ -25,33 +18,25 @@ import {
   type MemoryView,
 } from '../src/puzzles/memory.js';
 import { mulberry32 } from '../src/rng.js';
+import {
+  AT_BOOK,
+  AT_STATION,
+  AUDIENCE,
+  ELSEWHERE,
+  labMission,
+  openLab,
+  started as startedLab,
+  T0,
+} from './lab.js';
 
 const SEEDS = 200;
 const STAGES = 5;
-const T0 = 1_000_000;
 
-const mission: Mission = parseMission({
-  id: 'memorytest',
-  title: 'Speicher-Test',
-  story: { intro: 'i', win: 'w', lose: 'l' },
-  timeLimitSec: 600,
-  roles: [
-    { id: 'pult', name: 'Pult', description: '' },
-    { id: 'handbuch', name: 'Handbuch', description: '' },
-    { id: 'funk', name: 'Funk', description: '' },
-  ],
-  puzzles: [
-    {
-      type: 'memory',
-      id: 'bank',
-      title: 'Speicherbank',
-      prompt: '',
-      operatorRoleId: 'pult',
-      manualRoleId: 'handbuch',
-      penaltySec: 12,
-    },
-  ],
-});
+const mission: Mission = labMission(
+  [{ type: 'memory', id: 'bank', title: 'Speicherbank', penaltySec: 12 }],
+  'memorytest',
+  ['pult', 'handbuch', 'funk'],
+);
 
 function memoryDef(from: Mission): MemoryDef {
   const def = from.puzzles[0];
@@ -62,50 +47,51 @@ function memoryDef(from: Mission): MemoryDef {
 }
 
 const def = memoryDef(mission);
-const ROLE_IDS = mission.roles.map((role) => role.id);
 const ctx: PuzzleContext = {
   edgework: generateEdgework(mulberry32(1)),
   alarms: 0,
   remainingSec: 600,
   at: T0,
+  crew: ['op', 'rd'],
 };
 
 const init = (seed: number): MemoryState => memoryModule.init(def, mulberry32(seed), ctx);
 
-/** Every role's view of the bank as it would arrive over the wire — never the state. */
-function viewsOf(state: MemoryState): Record<string, MemoryView> {
-  return Object.fromEntries(
-    ROLE_IDS.map((roleId) => [
-      roleId,
-      JSON.parse(JSON.stringify(memoryModule.view(def, state, roleId, ctx))) as MemoryView,
-    ]),
-  );
+type Views = Perspectives<MemoryView>;
+
+/** The bank as it would arrive over the wire — never the state. */
+function wire(view: MemoryView): MemoryView {
+  return JSON.parse(JSON.stringify(view)) as MemoryView;
+}
+
+/** The bank seen from the station and from the book. */
+function viewsOf(state: MemoryState): Views {
+  return {
+    operator: wire(memoryModule.view(def, state, AT_STATION, ctx)),
+    reader: wire(memoryModule.view(def, state, AT_BOOK, ctx)),
+  };
 }
 
 /** What the operator reads off the bank. */
-function bankOf(views: Record<string, MemoryView>): {
-  stage: number;
-  display: number;
-  labels: number[];
-} {
-  const bank = views.pult;
-  if (bank?.display == null || bank.labels === null) {
+function bankOf(views: Views): { stage: number; display: number; labels: number[] } {
+  const bank = views.operator;
+  if (bank.display === null || bank.labels === null) {
     throw new Error('expected the operator to see the bank');
   }
   return { stage: bank.stage, display: bank.display, labels: bank.labels };
 }
 
-const layoutOf = (views: Record<string, MemoryView>): string => {
+const layoutOf = (views: Views): string => {
   const bank = bankOf(views);
   return `${bank.display}:${bank.labels.join('')}`;
 };
 
 /** A press by the operator, through the input schema as a client's would go. */
 const press = (state: MemoryState, position: number) =>
-  memoryModule.apply(def, state, memoryModule.inputSchema.parse({ position }), 'pult', ctx);
+  memoryModule.apply(def, state, memoryModule.inputSchema.parse({ position }), 'op', ctx);
 
 /** What a careful crew writes down after a press: the position and the label it read there. */
-function note(views: Record<string, MemoryView>, position: number): MemoryPress {
+function note(views: Views, position: number): MemoryPress {
   const label = bankOf(views).labels[position];
   if (label === undefined) {
     throw new Error(`no button at position ${position}`);
@@ -115,9 +101,9 @@ function note(views: Record<string, MemoryView>, position: number): MemoryPress 
 
 type Transcript = SolveAid<MemoryInput, MemoryView>['transcript'];
 
-/** A press as the crew's transcript keeps it: the operator's input and every view just before. */
-const entry = (views: Record<string, MemoryView>, position: number): Transcript[number] => ({
-  roleId: 'pult',
+/** A press as the crew's transcript keeps it: the operator's input and both views just before. */
+const entry = (views: Views, position: number): Transcript[number] => ({
+  by: 'operator',
   input: { position },
   before: views,
 });
@@ -126,10 +112,10 @@ const entry = (views: Record<string, MemoryView>, position: number): Transcript[
 const kept = (transcript: Transcript) => ({ transcript, remainingSec: null });
 
 /** The solver's move for the crew: exactly one press, by the operator. */
-function solverMove(views: Record<string, MemoryView>, transcript: Transcript): number {
+function solverMove(views: Views, transcript: Transcript): number {
   const moves = memoryModule.solve(def, views, null, kept(transcript));
   expect(moves).toHaveLength(1);
-  expect(moves[0]?.roleId).toBe('pult');
+  expect(moves[0]?.by).toBe('operator');
   return moves[0]?.input.position ?? -1;
 }
 
@@ -249,13 +235,14 @@ describe('memory module', () => {
     expect(() => memoryModule.solve(def, third, null, kept(transcript.slice(1)))).toThrow(
       /stage 3 needs the crew's notes of the 2 stage\(s\) before it/,
     );
-    // One kept from the manual's side never saw the buttons.
-    const handbuch = memoryModule.view(def, state, 'handbuch', ctx);
-    const blind = transcript.map((pressed) => ({ ...pressed, before: { handbuch } }));
+    // One kept at the book never saw the buttons.
+    const atBook = memoryModule.view(def, state, AT_BOOK, ctx);
+    const blindViews = { operator: atBook, reader: atBook };
+    const blind = transcript.map((pressed) => ({ ...pressed, before: blindViews }));
     expect(() => memoryModule.solve(def, third, null, kept(blind))).toThrow(
       /transcript entry 1 lacks the operator's view of the bank/,
     );
-    expect(() => memoryModule.solve(def, { handbuch }, null)).toThrow(/operator's view/);
+    expect(() => memoryModule.solve(def, blindViews, null)).toThrow(/operator's view/);
   });
 
   it('falls back to stage 1 on a wrong press, every stage laid out afresh, old notes void', () => {
@@ -326,21 +313,21 @@ describe('memory module', () => {
     }
   });
 
-  it('shows display and buttons to the operator only, and the presses to nobody', () => {
+  it('shows display and buttons at the station only, and the presses to nobody', () => {
     const transcript: Transcript = [];
     const state = clearStage(clearStage(init(5), transcript), transcript);
     const views = viewsOf(state);
     const blind = { kind: 'memory', stage: 3, display: null, labels: null };
-    expect(views.pult).toEqual({
+    expect(views.operator).toEqual({
       kind: 'memory',
       stage: 3,
       display: expect.any(Number),
       labels: expect.any(Array),
     });
-    expect([...(views.pult?.labels ?? [])].sort()).toEqual([1, 2, 3, 4]);
-    expect(views.handbuch).toEqual(blind);
-    expect(views.funk).toEqual(blind);
-    expect(memoryModule.view(def, state, null, ctx)).toEqual(blind);
+    expect([...(views.operator.labels ?? [])].sort()).toEqual([1, 2, 3, 4]);
+    expect(views.reader).toEqual(blind);
+    expect(memoryModule.view(def, state, ELSEWHERE, ctx)).toEqual(blind);
+    expect(memoryModule.view(def, state, AUDIENCE, ctx)).toEqual(views.operator);
     for (const view of Object.values(views)) {
       const wire = JSON.stringify(view);
       expect(wire).not.toContain('history');
@@ -360,16 +347,6 @@ describe('memory module', () => {
     }
     expect([...displays].sort()).toEqual([1, 2, 3, 4]);
     expect(layouts.size).toBeGreaterThan(60);
-  });
-
-  it('takes presses from the operator only', () => {
-    const state = init(1);
-    expect(() => memoryModule.apply(def, state, { position: 0 }, 'handbuch', ctx)).toThrow(
-      GameError,
-    );
-    expect(() => memoryModule.apply(def, state, { position: 0 }, 'funk', ctx)).toThrow(
-      /Speicherbank/,
-    );
   });
 
   it('accepts nothing but a button position', () => {
@@ -437,34 +414,23 @@ describe('the printed memory manual', () => {
 });
 
 describe('the memory bank in a mission', () => {
-  const crew = [
-    { playerId: 'p1', roleId: 'pult' },
-    { playerId: 'p2', roleId: 'handbuch' },
-    { playerId: 'p3', roleId: 'funk' },
-  ];
-
+  /** p1 at the bank, p2 at the book, p3 somewhere else. */
   function started(seed = 11): GameState {
-    const actions: Action[] = [
-      ...crew.map(({ playerId }): Action => ({ type: 'player-join', playerId, name: playerId })),
-      ...crew.map(({ playerId, roleId }): Action => ({ type: 'select-role', playerId, roleId })),
-      { type: 'set-ready', playerId: 'p2', ready: true },
-      { type: 'set-ready', playerId: 'p3', ready: true },
-      { type: 'start-mission', playerId: 'p1', at: T0, seed },
-    ];
-    return actions.reduce(applyAction, initialState(mission));
+    return openLab(startedLab(mission, seed));
   }
 
-  /** Each role's puzzle view as its client holds it. */
-  function wireViews(state: GameState): Record<string, MemoryView> {
-    const views: Record<string, MemoryView> = {};
-    for (const { playerId, roleId } of crew) {
-      const puzzle = viewFor(state, playerId).puzzle;
-      if (puzzle?.kind !== 'memory') {
-        throw new Error(`expected a memory view for ${playerId}`);
-      }
-      views[roleId] = JSON.parse(JSON.stringify(puzzle)) as MemoryView;
+  /** One player's puzzle view as their client holds it. */
+  function wireView(state: GameState, playerId: string): MemoryView {
+    const puzzle = viewFor(state, playerId).puzzle;
+    if (puzzle?.kind !== 'memory') {
+      throw new Error(`expected a memory view for ${playerId}`);
     }
-    return views;
+    return JSON.parse(JSON.stringify(puzzle)) as MemoryView;
+  }
+
+  /** The views at the bank and at the book. */
+  function wireViews(state: GameState): Views {
+    return { operator: wireView(state, 'p1'), reader: wireView(state, 'p2') };
   }
 
   const pressBy = (playerId: string, position: number, at: number): Action => ({
@@ -486,7 +452,7 @@ describe('the memory bank in a mission', () => {
     let state = started();
     const transcript: Transcript = [];
     state = crewPress(crewPress(state, transcript, T0 + 1000), transcript, T0 + 2000);
-    expect(wireViews(state).handbuch).toMatchObject({
+    expect(wireViews(state).reader).toMatchObject({
       kind: 'memory',
       stage: 3,
       display: null,
@@ -504,7 +470,7 @@ describe('the memory bank in a mission', () => {
       kind: 'penalty',
       label: 'Falsche Taste an der Speicherbank',
     });
-    expect(Object.values(wireViews(state)).map((view) => view.stage)).toEqual([1, 1, 1]);
+    expect(['p1', 'p2', 'p3'].map((id) => wireView(state, id).stage)).toEqual([1, 1, 1]);
 
     for (let stage = 1; stage <= STAGES; stage++) {
       state = crewPress(state, transcript, T0 + 4000 + stage * 1000);
@@ -513,13 +479,13 @@ describe('the memory bank in a mission', () => {
     expect(state.penaltySeq).toBe(1);
   });
 
-  it('gives the manual to the manual role only and never sends a press out', () => {
+  it('gives the manual to the reader only and never sends a press out', () => {
     const state = crewPress(started(), [], T0 + 1000);
     expect(viewFor(state, 'p2').puzzle?.manual).toEqual(memoryModule.manual(def));
     expect(viewFor(state, 'p1').puzzle?.manual).toBeNull();
     expect(viewFor(state, 'p3').puzzle?.manual).toBeNull();
     const wire = [
-      ...crew.map(({ playerId }) => JSON.stringify(viewFor(state, playerId))),
+      ...['p1', 'p2', 'p3'].map((playerId) => JSON.stringify(viewFor(state, playerId))),
       JSON.stringify(viewForSpectator(state)),
     ];
     for (const message of wire) {
@@ -528,8 +494,12 @@ describe('the memory bank in a mission', () => {
     }
   });
 
-  it('lets only the operator press, and only a button that exists', () => {
-    expect(() => applyAction(started(), pressBy('p2', 0, T0 + 1000))).toThrow(/Speicherbank/);
+  it('lets only a player at the bank press, and only a button that exists', () => {
+    for (const playerId of ['p2', 'p3']) {
+      expect(() => applyAction(started(), pressBy(playerId, 0, T0 + 1000))).toThrow(
+        'Dafür musst du am Pult stehen.',
+      );
+    }
     expect(() => applyAction(started(), pressBy('p1', 4, T0 + 1000))).toThrow(
       /Ungültige Eingabe/,
     );
