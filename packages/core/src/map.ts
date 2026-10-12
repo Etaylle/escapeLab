@@ -19,17 +19,29 @@ export function platePressed(state: GameState, plateId: string): boolean {
   return state.pressedPlates.includes(plateId);
 }
 
+/** Whether the crew has solved `puzzleId`: it comes before the current one, or the run is won. */
+function solvedYet(state: GameState, puzzleId: string): boolean {
+  const index = state.mission.puzzles.findIndex((p) => p.id === puzzleId);
+  return index >= 0 && (state.phase === 'won' || index < state.currentPuzzleIndex);
+}
+
+/**
+ * A puzzle door is open once its puzzle is solved; a plate door while its
+ * plate is held, and for good once the puzzle it names in `untilSolved` is.
+ */
 export function doorOpen(map: MapDef, state: GameState, doorId: string): boolean {
   const door = map.doors.find((d) => d.id === doorId);
   if (door === undefined) {
     return false;
   }
-  if (door.opensBy.kind === 'plate') {
-    return platePressed(state, door.opensBy.plateId);
+  const { opensBy } = door;
+  if (opensBy.kind === 'puzzle') {
+    return solvedYet(state, opensBy.puzzleId);
   }
-  const puzzleId = door.opensBy.puzzleId;
-  const index = state.mission.puzzles.findIndex((p) => p.id === puzzleId);
-  return index >= 0 && (state.phase === 'won' || index < state.currentPuzzleIndex);
+  return (
+    platePressed(state, opensBy.plateId) ||
+    (opensBy.untilSolved !== undefined && solvedYet(state, opensBy.untilSolved))
+  );
 }
 
 /**

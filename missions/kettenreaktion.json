@@ -141,7 +141,7 @@
       "wires": { "min": 4, "max": 6 },
       "penaltySec": 30,
       "hints": [
-        "Erst alle Farben von oben ansagen; nur die Liste zur Kabelzahl prüfen, die erste zutreffende Regel gilt."
+        "Die Kabel zählen von oben. Es gilt nur die Liste zur Kabelzahl, und die erste zutreffende Regel entscheidet."
       ],
       "onSolved": "Weiter im Pumpenraum, Südost. Regeln wieder im Archiv."
     },
@@ -150,7 +150,7 @@
       "id": "kuehlkreislauf",
       "title": "Kühlkreislauf",
       "hints": [
-        "Schalter von links ansagen: LED, Markierung, Stern. Bei „wenn“ die Werte vom Schild. Dann einmal PRÜFEN."
+        "LED, Markierung und Stern geben die Zeile, bei „wenn“ gilt das Schild. Sind alle gestellt, wird einmal PRÜFEN gedrückt."
       ],
       "onSolved": "Leitstand offen. Freigabecode dort, Regeln im Messlabor."
     },
@@ -159,7 +159,7 @@
       "id": "freigabecode",
       "title": "Freigabecode",
       "hints": [
-        "Pro Stufe Position und Beschriftung der gedrückten Taste notieren (Notizblock: N); spätere Stufen fragen danach."
+        "Spätere Stufen fragen nach Position und Beschriftung früherer Tasten; der Notizblock liegt auf N."
       ],
       "onSolved": "Resonator offen. Station dahinter, durch die Westtür."
     },
@@ -169,7 +169,7 @@
       "title": "Resonanz-Dämpfung",
       "sequenceLength": 6,
       "hints": [
-        "Jede Stufe beginnt wieder bei der ersten Farbe. Tabelle nach Vokal in der Laborkennung, Zeile nach Alarmstand."
+        "Jede Stufe beginnt wieder bei der ersten Farbe. Die Kennung wählt die Tabelle, der Alarmstand die Zeile."
       ],
       "onSolved": "Leitungsnetz am Westende vom Flur, Kühlmittel zum Kern."
     },
@@ -180,7 +180,7 @@
       "size": 6,
       "penaltySec": 12,
       "hints": [
-        "Nach jedem Schritt die Zelle ansagen, etwa C4; den Weg auf dem Plan vom Ziel rückwärts suchen."
+        "Zellen heißen nach Spalte und Zeile, etwa C4. Der Weg lässt sich auf dem Schaltplan vom Ziel rückwärts finden."
       ],
       "onSolved": "Alle in den Kern. Flurplatte öffnet das Messlabor."
     },

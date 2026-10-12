@@ -71,7 +71,7 @@
       "title": "Kabelprüfung",
       "wires": { "min": 3, "max": 3 },
       "hints": [
-        "Farben von oben ansagen; nur die Liste für 3 Kabel zählt, die erste zutreffende Regel entscheidet."
+        "Kabel von oben gezählt; nur die Liste für 3 Kabel gilt, die erste zutreffende Regel entscheidet."
       ],
       "lights": ["KONTROLLE"],
       "onSolved": "Spulen offen. Platte halten, dann beide nach Osten."

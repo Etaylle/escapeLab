@@ -6,7 +6,8 @@ neue Missionen brauchen keinen Code.
 
 **Rätseltypen:** Kabel trennen (`wiring`), Symbol-Keypad (`keypad`), Schalterbank mit Prüf-Commit
 (`switches`), Speicherbank (`memory`), Frequenz-Abgleich mit Farblegende (`simon`), Morsefunk
-(`morse`), der Knopf (`button`), unsichtbares Labyrinth (`maze`), Synchron-Knöpfe (`button-sync`).
+(`morse`), der Knopf (`button`), unsichtbares Labyrinth (`maze`), Synchron-Knöpfe (`button-sync`),
+Signalkette an zwei Pulten (`signal`).
 Layouts/Codes sind pro Partie zufällig (seeded, deterministisch replaybar), Fehler kosten
 Countdown-Zeit. **Missionen:** Tutorial (2 Spieler), Blackout im Labor (2–3 Spieler, 5 Rätsel),
 Kettenreaktion (3 Spieler, jeder startet in einem anderen verschlossenen Raum und kommt nur mit
@@ -38,8 +39,10 @@ wird eingesetzt, sonst gilt, was am nächsten liegt — Teil aufnehmen, Station 
 die Einblendung sagt vorher, was `E` tut. `Q` legt das Getragene ab, sodass Übergaben möglich sind.
 
 **Orte statt Rollen:** Das Pult einer offenen Station sieht und bedient nur, wer davorsteht
-(`E` *Bedienen*, `Esc` tritt zurück — die Station behält ihren Zustand). Die Regeln liegen
-anderswo — Buch, Terminal, Tafel, Klemmbrett, Spind, Aktenschrank —, manche je Runde woanders.
+(`E` *Bedienen*, `Esc` tritt zurück — die Station behält ihren Zustand). Die Signalkette hat zwei
+Pulte an verschiedenen Orten: Eins zeigt die Zeichenfolge, das andere drückt sie, und nach jeder
+Stufe wechselt die Richtung. Die Regeln liegen anderswo — Buch, Terminal, Tafel, Klemmbrett,
+Spind, Aktenschrank —, manche je Runde woanders.
 Auf der Karte erscheint eine Quelle erst, wenn jemand nahe kommt; Spinde werden durchsucht,
 Schränke mit ihrem Schlüssel aufgeschlossen. Gelesen wird Seite für Seite (`E` *Lesen*; beim
 Labyrinth samt Wandplan), am Rand steht auf Wunsch eine **Notiz der letzten Crew** (kostet Zeit).
@@ -80,7 +83,9 @@ ihr Pult öffnet per `E` als Modal über der Welt. Welt-Code: `packages/client/s
 **Neue Missionen** sind reine JSON-Dateien in `missions/`. `packages/core/test/missionMaps.test.ts`
 prüft jede davon automatisch: gleiche Zeilenlängen, alles auf Bodenfeldern, eine Station pro
 Rätsel — und per Flutfüllung mit den echten Tür-Regeln, dass die Stationen in Reihenfolge
-erreichbar sind und am Ende **alle** den Notausgang erreichen können.
+erreichbar sind und am Ende **alle** den Notausgang erreichen können. Eine Plattentür kann mit
+`untilSolved` ein Rätsel nennen: Ist es gelöst, bleibt sie auch ohne Platte offen (Blackout: die
+Maschinenraumtür nach dem Notstrom).
 
 ## Struktur
 

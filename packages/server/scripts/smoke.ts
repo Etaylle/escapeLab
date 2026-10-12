@@ -2,16 +2,18 @@
  * End-to-end smoke test: boots the real server in-process, then drives two
  * real WebSocket clients through the full Blackout mission on its tile map.
  * The server draws two of the three spawns and a spot for every source, so
- * the walkthrough plans as it goes: at every station whoever is fewer steps
- * from it works it and the other reads at the source that covers it, each
- * holding the other's plate doors open on the way. It streams client-
- * authoritative positions along BFS paths, searches the locker, carries the
- * key from the Serverraum to the cabinet and the spare fuse from the Archiv
- * to the reactor (across the Flur while the camera plate holds its drone),
- * solves every station with its module's solver on the views of whoever
- * stands at the station and whoever reads its rules (plus one deliberate
- * wrong cut and one wrong key), and survives a mid-game reconnect. No answer
- * is written down here.
+ * the walkthrough plans as it goes: at a station with one console whoever is
+ * fewer steps from it works it and the other reads at the source that covers
+ * it, each holding the other's plate doors open on the way — until the first
+ * station is solved and the Maschinenraum door stays open for good. The
+ * Signalkette is worked at two consoles at once, Anna at console A and Ben
+ * at console B. It streams client-authoritative positions along BFS paths,
+ * searches the locker, carries the key from the Serverraum to the cabinet
+ * and the spare fuse from the Archiv to the reactor (across the Flur while
+ * the camera plate holds its drone), solves every station with its module's
+ * solver on the views of whoever stands at it — at either console — and
+ * whoever reads its rules (plus one deliberate wrong cut and one wrong sign),
+ * and survives a mid-game reconnect. No answer is written down here.
  * Run with: pnpm --filter @escapelab/server smoke
  */
 import { readFileSync } from 'node:fs';
@@ -20,6 +22,7 @@ import {
   moduleFor,
   NO_CREDITS,
   parseMission,
+  TOKENS,
   type ConsoleId,
   type Credits,
   type DronePosition,
@@ -31,6 +34,7 @@ import {
   type PuzzleInput,
   type PuzzleView,
   type ServerMessage,
+  type SignalToken,
   type SolveAid,
   type SpectatorView,
 } from '@escapelab/core';
@@ -47,14 +51,19 @@ type Tile = [number, number];
 
 const key = (x: number, y: number): string => `${x},${y}`;
 
-/** Where each station is worked from: a floor tile within reach of it. */
+/**
+ * Where each station is worked from: a floor tile within reach of it — of
+ * console A, where it has two.
+ */
 const STAND: Tile[] = [
   [2, 9], // in front of the fuse box
-  [7, 6], // on the Flur plate beside the keypad, so the Maschinenraum stays open meanwhile
-  [13, 6], // below the switch bank
-  [10, 11], // beside the frequency panel, off the Labor drone's line
+  [7, 5], // beside console A of the Signalkette, in the Flur
+  [13, 6], // below the navigation panel
+  [10, 11], // beside the radio panel, off the Labor drone's line
   [14, 9], // at the reactor, across from the fuse slot
 ];
+/** Beside console B of the Signalkette, in the Maschinenraum. */
+const CONSOLE_B: Tile = [3, 9];
 /** In front of the Labor's door: out of the Labor drone's sight. */
 const OUT_OF_THE_LABOR: Tile = [10, 6];
 
@@ -85,6 +94,13 @@ const EXIT: Tile = [exitAt.x, exitAt.y];
 const fuseSlot =
   mission.map.items.find((i) => i.id === FUSE_ID)?.deliverTo ?? fail('the fuse goes nowhere');
 const FUSE_SLOT: Tile = [fuseSlot.x, fuseSlot.y];
+/** The Maschinenraum door: its plate holds it until the first station is solved, then it stays. */
+const lastingDoor =
+  mission.map.doors.find(
+    (d) => d.opensBy.kind === 'plate' && d.opensBy.untilSolved === mission.puzzles[0]?.id,
+  ) ?? fail('Blackout has no plate door that the first station opens for good');
+const lastingPlate =
+  lastingDoor.opensBy.kind === 'plate' ? lastingDoor.opensBy.plateId : fail('no plate door');
 
 /** The source holding the rules of station `index`. */
 function sourceOf(index: number): { id: string; label: string } {
@@ -95,12 +111,15 @@ function sourceOf(index: number): { id: string; label: string } {
   );
 }
 
-/** What only the station shows, and a line only its printed rules hold, for stations 1–4. */
+/**
+ * What only the station shows, and a line only its printed rules hold, for
+ * the stations one player works and another reads: 1, 3 and 4. (The
+ * Signalkette keeps its consoles apart in `runSignal`.)
+ */
 const SECRETS = [
-  { instance: '"wires":[{', rules: 'mehr als ein schwarzes Kabel vorhanden ist' },
-  { instance: '"keys":[{', rules: 'Genau eine Spalte' },
-  { instance: '"switches":[{', rules: 'hoch, wenn die Kennung' },
-  { instance: '"flashes":["', rules: '1 oder mehr Alarme' },
+  { index: 0, instance: '"wires":[{', rules: 'mehr als ein schwarzes Kabel vorhanden ist' },
+  { index: 2, instance: '"pos":{', rules: 'Andernfalls bleibt der Marker stehen' },
+  { index: 3, instance: '"pattern":"', rules: 'keine 2 Wörter der Frequenztabelle' },
 ];
 
 function fail(message: string): never {
@@ -428,10 +447,17 @@ function closerTo(to: Tile): [TestClient, TestClient] {
   return stepsTo(a, to, b) <= stepsTo(b, to, a) ? [a, b] : [b, a];
 }
 
+/** Whether the door on `tile` stands open with nobody on its plate: it stays open for good. */
+function openForGood(map: MapData, tile: Tile): boolean {
+  const plate = PLATE_OF.get(key(...tile));
+  const held = map.plates.some((p) => p.pressed && p.x === plate?.[0] && p.y === plate[1]);
+  return map.doors.some((d) => d.x === tile[0] && d.y === tile[1] && d.open) && !held;
+}
+
 /**
- * Walk `walker` to `to`. At every plate door on the way it waits in front
- * until `helper` stands on that door's plate, and the helper stays there
- * until the walker is through.
+ * Walk `walker` to `to`. At every plate door on the way that does not stay
+ * open by itself it waits in front until `helper` stands on that door's
+ * plate, and the helper stays there until the walker is through.
  */
 async function bring(walker: TestClient, to: Tile, helper: TestClient): Promise<void> {
   const map = walker.view?.map ?? fail(`${walker.label}: no map`);
@@ -441,7 +467,7 @@ async function bring(walker: TestClient, to: Tile, helper: TestClient): Promise<
     fail(`${walker.label}: no way to ${to.join(',')}, not even with ${helper.label} on a plate`);
   const steps = [from, ...path];
   for (const [i, tile] of steps.entries()) {
-    const plate = PLATE_OF.get(key(...tile));
+    const plate = openForGood(map, tile) ? undefined : PLATE_OF.get(key(...tile));
     const before = steps[i - 1];
     const after = steps[i + 1];
     if (plate !== undefined && before !== undefined && after !== undefined) {
@@ -468,13 +494,20 @@ function itemTile(itemId: string): Tile {
 }
 
 /**
- * Station `index`: whoever is fewer steps from where it is worked works it,
- * the other walks to its source. Holding a plate door for the reader may
- * take the operator off its spot, so it walks back last.
+ * Station `index`: whoever is fewer steps from where it is worked works it
+ * and the other walks to its source — unless the `reader` is named. Holding
+ * a plate door for the reader may take the operator off its spot, so it
+ * walks back last.
  */
-async function takePlaces(index: number): Promise<{ op: TestClient; rd: TestClient }> {
+async function takePlaces(
+  index: number,
+  reader?: TestClient,
+): Promise<{ op: TestClient; rd: TestClient }> {
   const stand = STAND[index] ?? fail(`no spot to work station ${index + 1} from`);
-  const [op, rd] = closerTo(stand);
+  const [op, rd] =
+    reader === undefined
+      ? closerTo(stand)
+      : [crew.find((client) => client !== reader) ?? fail('a crew of one'), reader];
   await bring(op, stand, rd);
   await bring(rd, placeOf(sourceOf(index).id), op);
   await bring(op, stand, rd);
@@ -550,19 +583,20 @@ async function fetchFuse(): Promise<void> {
 // --- puzzle solvers ----------------------------------------------------------
 
 const wiringDef = mission.puzzles[0];
-const keypadDef = mission.puzzles[1];
-const switchesDef = mission.puzzles[2];
-const simonDef = mission.puzzles[3];
+const signalDef = mission.puzzles[1];
+const mazeDef = mission.puzzles[2];
+const morseDef = mission.puzzles[3];
 if (
   wiringDef?.type !== 'wiring' ||
-  keypadDef?.type !== 'keypad' ||
-  switchesDef?.type !== 'switches' ||
-  simonDef?.type !== 'simon'
+  signalDef?.type !== 'signal' ||
+  mazeDef?.type !== 'maze' ||
+  morseDef?.type !== 'morse'
 ) {
-  fail('blackout.json should run wiring, keypad, switches, simon, sync');
+  fail('blackout.json should run wiring, signal, maze, morse, sync');
 }
 // Narrowed re-bindings: closures below keep the precise puzzle types.
 const WIRING = wiringDef;
+const SIGNAL = signalDef;
 
 type Transcript = SolveAid<PuzzleInput, PuzzleView>['transcript'];
 
@@ -757,13 +791,122 @@ async function solveWiring(op: TestClient, rd: TestClient): Promise<void> {
   await solveStation(0);
 }
 
-/** Keypad incl. the mid-game reconnect of the reader, who takes the Laborkennung along. */
-async function solveKeypad(op: TestClient, rd: TestClient): Promise<void> {
-  const clipboard = sourceOf(1).id;
+type SignalView = Extract<PuzzleView, { kind: 'signal' }>;
+
+/** The Signalkette as `view` shows it; null where it is not open. */
+function signalOf(view: PlayerView): SignalView | null {
+  return view.puzzle?.kind === 'signal' ? view.puzzle : null;
+}
+
+/**
+ * At the open Signalkette, stage 1: a press at sending console A is turned
+ * away without an alarm; at console B one right sign, then the deliberate
+ * wrong one, which costs time and starts the stage over.
+ */
+async function signalMissteps(
+  a: TestClient,
+  b: TestClient,
+  sequence: readonly SignalToken[],
+): Promise<void> {
+  const [first, second] = sequence;
+  if (first === undefined || second === undefined) {
+    fail('the Signalkette sends fewer than two signs');
+  }
+  a.send({ kind: 'puzzle-input', input: { press: first } });
+  const refused = await a.expect('refusal at the sending console', isError);
+  assert(refused.message === 'Dieses Pult sendet — das andere gibt ein.',
+    'a press at the sending console is turned away');
+
+  b.send({ kind: 'puzzle-input', input: { press: first } });
+  await b.until('one sign taken', (v) => signalOf(v)?.done === 1);
+  const wrong = TOKENS.find((token) => token !== second) ?? fail('no sign left to press wrongly');
+  const deadlineBefore = b.view?.deadlineAt ?? 0;
+  b.send({ kind: 'puzzle-input', input: { press: wrong } });
+  const afterPenalty = await b.expectView('sees the alarm after a wrong sign', (v) =>
+    v.penaltySeq === 2 && signalOf(v)?.lastResult === 'wrong');
+  assert(
+    (afterPenalty.deadlineAt ?? 0) === deadlineBefore - SIGNAL.penaltySec * 1000 &&
+      signalOf(afterPenalty)?.done === 0,
+    `the wrong sign cost ${SIGNAL.penaltySec}s of deadline and started the stage over`,
+  );
+  credit(b, 'alarms');
+  await a.until('the alarm', (v) => v.penaltySeq === 2);
+}
+
+/** Every view `client` received since its log ran to `from`, as the wire carried it. */
+function viewsSince(client: TestClient, from: number): { raw: string; view: PlayerView }[] {
+  return client.raw.slice(from).flatMap((raw) => {
+    const msg = JSON.parse(raw) as ServerMessage;
+    return msg.kind === 'view' ? [{ raw, view: msg.view }] : [];
+  });
+}
+
+/**
+ * What the consoles received since their logs ran to `from`: console B none
+ * of the sequence it took in stage 1, and neither console the other's keys.
+ */
+function assertConsolesApart(
+  { a, b }: { a: TestClient; b: TestClient },
+  from: { a: number; b: number },
+  { sends, takes }: { sends: SignalView; takes: SignalView },
+): void {
+  const sequence = JSON.stringify(sends.sequence);
+  const takenAtB = viewsSince(b, from.b).filter(({ view }) => signalOf(view)?.stage === 1);
+  assert(
+    takenAtB.length > 0 && takenAtB.every(({ raw }) => !raw.includes(sequence)),
+    'the sequence of stage 1 never reached console B, which took it',
+  );
+  const keysA = JSON.stringify(sends.grid);
+  const keysB = JSON.stringify(takes.grid);
+  assert(
+    !a.raw.slice(from.a).some((raw) => raw.includes(keysB)) &&
+      !b.raw.slice(from.b).some((raw) => raw.includes(keysA)),
+    "neither console ever received the other one's keys",
+  );
+}
+
+/**
+ * Station 2, the Signalkette, worked at two consoles at once: `a` stands at
+ * console A, `b` at console B, and B switches it on. Console A sends stage 1
+ * and B takes it, then the direction swaps with every stage. Nobody is left
+ * to read the Klemmbrett; each console says whether it sends or takes.
+ */
+async function runSignal(a: TestClient, b: TestClient): Promise<void> {
+  const from = { a: a.raw.length, b: b.raw.length };
+  await switchOn(b, 1);
+  const atA = await a.expectView('console A sends stage 1, without the rules', (v) =>
+    signalOf(v)?.role === 'sender' && v.puzzle?.manual === null);
+  const atB = await b.expectView('console B takes it: twelve keys, no sequence, no rules', (v) =>
+    signalOf(v)?.role === 'receiver' &&
+    signalOf(v)?.sequence === null &&
+    signalOf(v)?.grid?.length === TOKENS.length &&
+    v.puzzle?.manual === null);
+  const sends = signalOf(atA) ?? fail('console A lost the Signalkette');
+  const takes = signalOf(atB) ?? fail('console B lost the Signalkette');
+  assert(sends.console === 'a' && takes.console === 'b' && sends.sends === 'a',
+    'each console knows which one it is, and console A sends first');
+  await signalMissteps(a, b, sends.sequence ?? fail('console A shows no sequence'));
+
+  // Stage 1 from the views alone, pressed at console B; then the direction swaps.
+  await play(nextMoves(1), 1);
+  await b.expectView('stage 2: console B sends now', (v) =>
+    signalOf(v)?.stage === 2 && signalOf(v)?.role === 'sender');
+  await a.expectView('stage 2: console A takes now', (v) =>
+    signalOf(v)?.stage === 2 && signalOf(v)?.role === 'receiver');
+  await solveStation(1);
+  assertConsolesApart({ a, b }, from, { sends, takes });
+  // Console A sends the odd stages, so with an even count the last press is A's.
+  credit(SIGNAL.stages % 2 === 0 ? a : b, 'operated');
+  await backOnTheMap(2);
+}
+
+/** The maze, with the mid-game reconnect of the reader, who takes the Laborkennung along. */
+async function solveMaze(op: TestClient, rd: TestClient): Promise<void> {
+  const locker = sourceOf(2).id;
   const joined = rd.joined ?? fail(`${rd.label}: never joined`);
   const name = rd.view?.you.name ?? fail(`${rd.label}: no view yet`);
-  await rd.expectView('reads the keypad table, Laborkennung picked up', (v) =>
-    v.puzzle?.kind === 'keypad' && v.puzzle.manual !== null && v.edgework !== null);
+  await rd.expectView('reads the plan with the walls, Laborkennung picked up', (v) =>
+    v.puzzle?.kind === 'maze' && v.puzzle.cells !== null && v.edgework !== null);
   const before = rd.self;
   rd.close();
   await op.expectView(`sees ${name} disconnected`, (v) =>
@@ -775,8 +918,8 @@ async function solveKeypad(op: TestClient, rd: TestClient): Promise<void> {
   await back.expect('re-joined', isJoined);
   back.playerId = joined.playerId;
   back.joined = joined;
-  const reading = await back.expectView('resumed at the clipboard, the table in hand', (v) =>
-    v.puzzle?.kind === 'keypad' && v.map !== null && v.presence.manualId === clipboard);
+  const reading = await back.expectView('resumed at the Spind, the plan in hand', (v) =>
+    v.puzzle?.kind === 'maze' && v.map !== null && v.presence.manualId === locker);
   assert(reading.edgework !== null, 'the Laborkennung survived the reconnect');
   const seeded = await back.ensureSelf();
   assert(
@@ -785,43 +928,29 @@ async function solveKeypad(op: TestClient, rd: TestClient): Promise<void> {
   );
   crew = crew[0] === rd ? [back, crew[1]] : [crew[0], back];
 
-  const atKeys = await op.until('the crew back together', (v) =>
-    v.pausedFor === null && v.puzzle?.kind === 'keypad');
-  const keys =
-    atKeys.puzzle?.kind === 'keypad' && atKeys.puzzle.keys !== null ? atKeys.puzzle.keys : [];
+  const atPanel = await op.until('the crew back together', (v) =>
+    v.pausedFor === null && v.puzzle?.kind === 'maze');
+  const walls = reading.puzzle?.kind === 'maze' ? reading.puzzle.cells : null;
   assert(
-    keys.length === 4 &&
-      reading.puzzle?.kind === 'keypad' &&
-      reading.puzzle.keys === null &&
-      reading.puzzle.manual !== null,
-    'the table arrived after resume, the keys stay at the keypad',
+    atPanel.puzzle?.kind === 'maze' &&
+      atPanel.puzzle.pos !== null &&
+      atPanel.puzzle.cells === null &&
+      reading.puzzle?.kind === 'maze' &&
+      reading.puzzle.pos === null &&
+      reading.puzzle.manual !== null &&
+      walls !== null,
+    'the plan arrived after resume, the marker stays at the panel',
   );
-  const [right] = nextMoves(1);
-  const rightIdx = right !== undefined && 'keyIndex' in right.input ? right.input.keyIndex : null;
-  const wrongIdx = keys.findIndex((_, i) => i !== rightIdx);
-  op.send({ kind: 'puzzle-input', input: { keyIndex: wrongIdx } });
-  await back.expectView('sees the keypad alarm', (v) => v.penaltySeq === 2);
-  await op.until('the keypad alarm', (v) => v.penaltySeq === 2);
-  credit(op, 'alarms');
-  await solveStation(1);
-}
-
-async function solveSwitches(op: TestClient, rd: TestClient): Promise<void> {
-  await rd.expectView('reads the switch rules but sees no bank', (v) =>
-    v.puzzle?.kind === 'switches' && v.puzzle.switches === null && v.puzzle.manual !== null);
-  const atBank = await op.expectView('stands at the switch bank', (v) =>
-    v.puzzle?.kind === 'switches' && v.puzzle.switches !== null);
-  const bank = atBank.puzzle?.kind === 'switches' ? (atBank.puzzle.switches ?? []) : [];
-  assert(!rd.raw.some((r) => r.includes(JSON.stringify(bank))),
-    'the switch bank never reached the reader');
+  assert(!op.raw.some((r) => r.includes(JSON.stringify(walls))),
+    'the walls never reached the panel');
   await solveStation(2);
 }
 
-async function solveSimon(op: TestClient, rd: TestClient): Promise<void> {
-  await rd.expectView('reads the tables without the flashes', (v) =>
-    v.puzzle?.kind === 'simon' && v.puzzle.flashes === null && v.puzzle.manual !== null);
-  await op.expectView('stands at the flashing panel', (v) =>
-    v.puzzle?.kind === 'simon' && v.puzzle.flashes !== null);
+async function solveMorse(op: TestClient, rd: TestClient): Promise<void> {
+  await rd.expectView('reads the Morse tables but sees no lamp', (v) =>
+    v.puzzle?.kind === 'morse' && v.puzzle.pattern === null && v.puzzle.manual !== null);
+  await op.expectView('stands at the blinking lamp', (v) =>
+    v.puzzle?.kind === 'morse' && v.puzzle.pattern !== null && v.puzzle.manual === null);
   await solveStation(3);
 }
 
@@ -863,7 +992,8 @@ interface OpenWindow {
   reader: LogWindow;
 }
 
-const openWindows: OpenWindow[] = [];
+/** By station index, for the stations one player works and another reads. */
+const openWindows = new Map<number, OpenWindow>();
 
 /**
  * Switch station `index` on from `op`'s spot, let `solve` finish it with
@@ -879,7 +1009,7 @@ async function runStation(
   const reader = { log: rd.raw, from: rd.raw.length };
   await switchOn(op, index);
   await solve();
-  openWindows.push({
+  openWindows.set(index, {
     operator: { ...operator, to: operator.log.length },
     reader: { ...reader, to: reader.log.length },
   });
@@ -889,18 +1019,18 @@ async function runStation(
 }
 
 /**
- * While each of stations 1–4 was open, its instance never reached its reader
- * and its rules never reached its operator. Outside that window a player may
- * well have read them.
+ * While each station one player works and another reads was open, its
+ * instance never reached its reader and its rules never reached its
+ * operator. Outside that window a player may well have read them.
  */
-function assertKeptApart(windows: OpenWindow[]): void {
-  for (const [i, { instance, rules }] of SECRETS.entries()) {
-    const open = windows[i] ?? fail(`station ${i + 1} was never opened`);
+function assertKeptApart(windows: ReadonlyMap<number, OpenWindow>): void {
+  for (const { index, instance, rules } of SECRETS) {
+    const open = windows.get(index) ?? fail(`station ${index + 1} was never opened`);
     const received = ({ log, from, to }: LogWindow): string => log.slice(from, to).join('\n');
     assert(!received(open.reader).includes(instance),
-      `station ${i + 1}: the instance never reached the reader`);
+      `station ${index + 1}: the instance never reached the reader`);
     assert(!received(open.operator).includes(rules),
-      `station ${i + 1}: the printed rules never reached the operator`);
+      `station ${index + 1}: the printed rules never reached the operator`);
   }
 }
 
@@ -1108,21 +1238,28 @@ await runStation(0, atFuseBox, async () => {
   );
   await solveWiring(atFuseBox.op, atFuseBox.rd);
 });
+// Its plate held the Maschinenraum door so far; from now on the door stands open by itself.
+await crew[0].expectView(`"${lastingDoor.id}" stays open with nobody on its plate`, (v) =>
+  v.map?.doors.find((d) => d.id === lastingDoor.id)?.open === true &&
+  v.map.plates.find((p) => p.id === lastingPlate)?.pressed === false);
 
-// Station 2: the keypad in the Flur, its table on the clipboard.
-const atKeypad = await takePlaces(1);
-await runStation(1, atKeypad, () => solveKeypad(atKeypad.op, atKeypad.rd));
+// Station 2: the Signalkette, console A in the Flur and console B in the Maschinenraum.
+const [atA, atB] = crew;
+await walkTo(atA, STAND[1] ?? fail('no spot at console A'));
+await walkTo(atB, CONSOLE_B);
+await runSignal(atA, atB);
 
-// Station 3: the switch bank in the Flur, its rules in the locker, which has to be searched.
-const atBank = await takePlaces(2);
+// Station 3: the maze's panel in the Flur, its plan in the locker, which has to be searched.
+// Whoever read the book walked past the Laborkennung, and reads here.
+const atMaze = await takePlaces(2, atFuseBox.rd);
 const locker = sourceOf(2);
-await openSource(atBank.rd, locker.id, `Spind durchsucht: ${locker.label}`);
-await runStation(2, atBank, () => solveSwitches(atBank.op, atBank.rd));
+await openSource(atMaze.rd, locker.id, `Spind durchsucht: ${locker.label}`);
+await runStation(2, atMaze, () => solveMaze(atMaze.op, atMaze.rd));
 
-// Station 4: the panel in the Labor, its tables in the cabinet the key from the Serverraum opens.
+// Station 4: the radio panel in the Labor, its tables in the cabinet the Serverraum key opens.
 await unlockCabinet();
-const atPanel = await takePlaces(3);
-await runStation(3, atPanel, () => solveSimon(atPanel.op, atPanel.rd));
+const atRadio = await takePlaces(3);
+await runStation(3, atRadio, () => solveMorse(atRadio.op, atRadio.rd));
 
 // Station 5: the reactor, dead until the spare fuse is in; the whole crew presses.
 await fetchFuse();
@@ -1146,7 +1283,7 @@ await walkTo(last, EXIT);
 const won = await first.expectView('won the mission', (v) => v.phase === 'won');
 await last.expectView('won the mission', (v) => v.phase === 'won');
 assert(/erwachen die Systeme/.test(won.storyText), 'win story is shown');
-// At least the wrong cut and the wrong key; patrolling drones may add more.
+// At least the wrong cut and the wrong sign; patrolling drones may add more.
 assert(won.penaltySeq >= 2, 'both deliberate penalties were counted');
 assert(
   won.events.filter((e) => e.kind === 'find').map((e) => e.label).join(' · ') ===
@@ -1210,6 +1347,7 @@ for (const client of crew) {
 }
 console.log(
   '\nSmoke test passed: Blackout with drawn spawns and sources, streamed movement, plates, ' +
-    'the locker, the key, the camera plate, reconnect, penalties and credits. 🎉',
+    'a door that stays open, the Signalkette at two consoles, the locker, the key, the ' +
+    'camera plate, reconnect, penalties and credits. 🎉',
 );
 process.exit(0);

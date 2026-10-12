@@ -147,6 +147,34 @@ describe('mapped missions', () => {
     expect(viewFor(state, 'p1').map?.doors[0]?.open).toBe(true);
   });
 
+  it('keeps a plate door open for good once the puzzle it waits for is solved', () => {
+    const waiting = parseMission({
+      ...JSON.parse(JSON.stringify(fixture)),
+      id: 'haltetuer',
+      map: {
+        ...JSON.parse(JSON.stringify(fixture.map)),
+        doors: [
+          { id: 'd1', x: 4, y: 2, opensBy: { kind: 'plate', plateId: 'p1', untilSolved: 'first' } },
+        ],
+      },
+    });
+    const held = (state: GameState, plates: string[]): GameState =>
+      applyAction(state, { type: 'set-occupancy', plates, panels: [] });
+    const open = (state: GameState): boolean | undefined =>
+      viewFor(state, 'p1').map?.doors[0]?.open;
+    // Before the station is switched on, the plate alone holds the door.
+    let state = started(waiting);
+    expect([open(state), open(held(state, ['p1']))]).toEqual([false, true]);
+    // While it is open, still.
+    state = applyAction(state, { type: 'interact', playerId: 'p2', at: T0 + 1000 });
+    expect([open(state), open(held(state, ['p1']))]).toEqual([false, true]);
+    // Once it is solved, the door stands open with nobody on the plate, and stays so.
+    state = bothPress(state, T0 + 2000);
+    expect(state.currentPuzzleIndex).toBe(1);
+    expect(open(state)).toBe(true);
+    expect(open(held(held(state, ['p1']), []))).toBe(true);
+  });
+
   it('runs the escape phase: exit opens after the last puzzle, escaped wins', () => {
     const withExit = parseMission({
       ...JSON.parse(JSON.stringify(fixture)),

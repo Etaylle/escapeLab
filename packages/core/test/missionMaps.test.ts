@@ -2,15 +2,16 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseMission } from '../src/index.js';
 import type { Mission } from '../src/index.js';
-import { crewsOf, reachability, tileKey, type Spot } from '../src/reach.js';
+import { canStandAt, crewsOf, reachability, tileKey, type Spot } from '../src/reach.js';
 
 /**
  * Guardrail for every shipped mission, beyond what the mission validation
  * already walks (stations in order, every spot of every manual object, the
  * sign): every crew the mission takes can gather at the exit, every
- * carryable can be carried where it belongs, and the walk the game does —
- * puzzle doors open for good once solved, plate doors only while a
- * *different* player stands on the plate — is the one from core's
+ * carryable can be carried where it belongs, a plate door that waits for a
+ * puzzle needs nobody on its plate once that puzzle is solved, and the walk
+ * the game does — puzzle doors open for good once solved, plate doors only
+ * while a *different* player stands on the plate — is the one from core's
  * validation.
  */
 
@@ -101,6 +102,24 @@ describe.each(missions.map((m) => [m.id, m] as const))('mission %s', (_id, missi
     }
   });
 
+  it('lets every player through a plate door alone once the puzzle it waits for is solved', () => {
+    for (const door of map.doors) {
+      const puzzleId = door.opensBy.kind === 'plate' ? door.opensBy.untilSolved : undefined;
+      if (puzzleId === undefined) {
+        continue;
+      }
+      // Nobody stands on the plate any more: each player walks on their own.
+      const solved = new Set([...solvedBefore(mission, puzzleId), puzzleId]);
+      for (const spawn of map.spawns) {
+        const [alone] = reachability(map, [spawn], solved);
+        expect(
+          alone?.has(tileKey(door.x, door.y)),
+          `the player starting at ${tileKey(spawn.x, spawn.y)} cannot pass "${door.id}" alone`,
+        ).toBe(true);
+      }
+    }
+  });
+
   it('keeps the consoles of a station apart, so nobody works both of them alone', () => {
     for (const station of map.stations.filter((s) => s.console === 'a')) {
       const other = map.stations.find((s) => s.puzzleId === station.puzzleId && s.console === 'b');
@@ -122,6 +141,32 @@ describe.each(missions.map((m) => [m.id, m] as const))('mission %s', (_id, missi
         Math.hypot(plate.x - exit.x, plate.y - exit.y),
         `plate "${plate.id}" sits next to the exit`,
       ).toBeGreaterThan(1.5);
+    }
+  });
+});
+
+/**
+ * Blackout's own design, beyond what every mission keeps: the Flur plate
+ * holds the Maschinenraum door only until the fuse box is up, so from the
+ * Signalkette on everybody walks to either console without anyone on it.
+ */
+describe('mission blackout by design', () => {
+  it('lets each player reach both consoles of the Signalkette on their own', () => {
+    const blackout = missions.find((m) => m.id === 'blackout');
+    if (blackout === undefined) {
+      throw new Error('missions/blackout.json is missing');
+    }
+    const consoles = blackout.map.stations.filter((s) => s.puzzleId === 'signalkette');
+    expect(consoles.map((s) => s.console)).toEqual(['a', 'b']);
+    const solved = solvedBefore(blackout, 'signalkette');
+    for (const spawn of blackout.map.spawns) {
+      const [alone = new Set<string>()] = reachability(blackout.map, [spawn], solved);
+      for (const spot of consoles) {
+        expect(
+          canStandAt(alone, spot),
+          `from ${tileKey(spawn.x, spawn.y)} nobody reaches console ${spot.console} alone`,
+        ).toBe(true);
+      }
     }
   });
 });

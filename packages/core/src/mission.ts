@@ -29,8 +29,9 @@ export function startsClosed(kind: ManualKind): boolean {
 
 /**
  * The tile map: players walk a grid, puzzle stations must be activated in
- * mission order, plate doors stay open only while someone stands on the
- * plate, puzzle doors open permanently once solved.
+ * mission order, puzzle doors open permanently once solved, plate doors stay
+ * open only while someone stands on the plate — or, where they name a puzzle
+ * in `untilSolved`, for good once that puzzle is solved.
  * Tiles: '#' wall, '.' floor, ' ' void.
  */
 export const mapDefSchema = z.object({
@@ -44,7 +45,12 @@ export const mapDefSchema = z.object({
         x: coord,
         y: coord,
         opensBy: z.discriminatedUnion('kind', [
-          z.object({ kind: z.literal('plate'), plateId: z.string().min(1) }),
+          z.object({
+            kind: z.literal('plate'),
+            plateId: z.string().min(1),
+            /** a puzzle id: once that puzzle is solved, the door stays open without the plate */
+            untilSolved: z.string().min(1).optional(),
+          }),
           z.object({ kind: z.literal('puzzle'), puzzleId: z.string().min(1) }),
         ]),
       }),
@@ -351,11 +357,21 @@ function checkDoors({ map, puzzleIds, issue, requireFloor }: MapCheck): void {
   }
   for (const door of map.doors) {
     requireFloor(`door "${door.id}"`, door.x, door.y);
-    if (door.opensBy.kind === 'plate' && !plateIds.has(door.opensBy.plateId)) {
-      issue(`map: door "${door.id}" references unknown plate "${door.opensBy.plateId}"`);
+    const { opensBy } = door;
+    if (opensBy.kind === 'puzzle') {
+      if (!puzzleIds.has(opensBy.puzzleId)) {
+        issue(`map: door "${door.id}" references unknown puzzle "${opensBy.puzzleId}"`);
+      }
+      continue;
     }
-    if (door.opensBy.kind === 'puzzle' && !puzzleIds.has(door.opensBy.puzzleId)) {
-      issue(`map: door "${door.id}" references unknown puzzle "${door.opensBy.puzzleId}"`);
+    if (!plateIds.has(opensBy.plateId)) {
+      issue(`map: door "${door.id}" references unknown plate "${opensBy.plateId}"`);
+    }
+    if (opensBy.untilSolved !== undefined && !puzzleIds.has(opensBy.untilSolved)) {
+      issue(
+        `map: door "${door.id}" stays open once unknown puzzle "${opensBy.untilSolved}" ` +
+          'is solved — name a puzzle of this mission in untilSolved',
+      );
     }
   }
 }

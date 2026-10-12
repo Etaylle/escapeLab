@@ -1,14 +1,27 @@
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { MODULES } from '../src/index.js';
-import type { ManualSection } from '../src/index.js';
+import { MODULES, parseMission } from '../src/index.js';
+import type { ManualSection, Mission } from '../src/index.js';
 import { relayDefFor } from '../src/puzzles/relay.js';
 
 /**
  * Every module's printed rules in the frame of a technical manual: the device
  * drawn and described first, the rules as full conditional sentences or
  * tables, a worked example, and the penalty line last — for every variant a
- * def can name, since the pages follow the def's variant fields.
+ * def can name, since the pages follow the def's variant fields. The notes of
+ * the last crew, which lie beside the rules, keep to the same register.
  */
+
+/** What a technical document leaves out: exclamations, a reader addressed, coaching on talk. */
+const OFF_REGISTER = [
+  /!/,
+  /\b(du|dich|dir|dein\w*)\b/i,
+  /ansag|beschreib|gefahrlos|redet|vorles|zurückruf|einzähl|notier/i,
+  /\bSonst\b/,
+];
+
+/** The longest note of the last crew: it has to fit the margin beside the rules. */
+const NOTE_MAX_CHARS = 120;
 
 /** Each module's variants beyond its defaults: every field its printed rules read. */
 const VARIANTS: Record<string, object[]> = {
@@ -25,6 +38,10 @@ const VARIANTS: Record<string, object[]> = {
   simon: [{ legend: 'einfach' }, { sequenceLength: 3 }, { legend: 'einfach', sequenceLength: 8 }],
   maze: [{ size: 4 }, { size: 8 }],
   keypad: [{ penaltySec: 45 }],
+  signal: [
+    { stages: 2, length: 3 },
+    { stages: 6, length: 6 },
+  ],
 };
 
 /** Defs, by a label, for the modules that need more than a type, an id and a title. */
@@ -122,9 +139,24 @@ describe.each(cases)('%s', (_label, type, manual, penaltySec) => {
 
   it('keep to the voice of a technical document', () => {
     const text = JSON.stringify(manual);
-    expect(text).not.toMatch(/!/);
-    expect(text).not.toMatch(/\b(du|dich|dir|dein\w*)\b/i);
-    expect(text).not.toMatch(/ansag|beschreib|gefahrlos|redet|vorles|zurückruf|einzähl|notier/i);
-    expect(text).not.toMatch(/\bSonst\b/);
+    for (const pattern of OFF_REGISTER) {
+      expect(text).not.toMatch(pattern);
+    }
+  });
+});
+
+const missionsDir = new URL('../../../missions/', import.meta.url);
+const missions: Mission[] = readdirSync(missionsDir)
+  .filter((f) => f.endsWith('.json'))
+  .map((f) => parseMission(JSON.parse(readFileSync(new URL(f, missionsDir), 'utf8'))));
+
+describe.each(missions.map((m) => [m.id, m] as const))('the notes in mission %s', (_id, mission) => {
+  it(`keep to the register of the printed rules, ${NOTE_MAX_CHARS} characters at most`, () => {
+    const notes = mission.puzzles.flatMap((puzzle) => puzzle.hints);
+    const off = notes.filter(
+      (note) =>
+        [...note].length > NOTE_MAX_CHARS || OFF_REGISTER.some((pattern) => pattern.test(note)),
+    );
+    expect(off).toEqual([]);
   });
 });

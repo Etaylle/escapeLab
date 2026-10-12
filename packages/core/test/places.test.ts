@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseMission, viewFor } from '../src/index.js';
+import type { MapDef } from '../src/index.js';
+import { reachability, tileKey } from '../src/reach.js';
 import { started } from './lab.js';
 
 /** The book for the wiring station, lying at (1,3) unless told otherwise. */
@@ -258,5 +260,54 @@ describe('the map walk for a whole-crew station', () => {
       const url = new URL(`../../../missions/${id}.json`, import.meta.url);
       expect(() => parseMission(JSON.parse(readFileSync(url, 'utf8'))), id).not.toThrow();
     }
+  });
+});
+
+describe('the map walk past a plate door that stays open once a puzzle is solved', () => {
+  /**
+   * The wiring box in the west room, then a press for everyone in the east
+   * room, behind a plate door whose plate lies in the west room.
+   */
+  const afterTheBox = (opensBy: object) =>
+    lab({
+      puzzles: [
+        { type: 'wiring', id: 'kabel', title: 'Kabel' },
+        { type: 'button-sync', id: 'alle', title: 'Alle' },
+      ],
+      map: {
+        doors: door(opensBy),
+        plates: [{ id: 'p', x: 2, y: 2, label: 'HALTEN' }],
+        stations: [
+          { puzzleId: 'kabel', x: 2, y: 3 },
+          { puzzleId: 'alle', x: 6, y: 2 },
+        ],
+      },
+    });
+  const waiting = { kind: 'plate', plateId: 'p', untilSolved: 'kabel' };
+
+  it('gathers the whole crew behind it only where it waits for the puzzle before', () => {
+    expect(() => parseMission(afterTheBox({ kind: 'plate', plateId: 'p' }))).toThrow(
+      /the whole crew cannot stand at station "alle" together/,
+    );
+    expect(() => parseMission(afterTheBox(waiting))).not.toThrow();
+  });
+
+  it('lets a player through on their own once that puzzle is solved, and only then', () => {
+    const map = parseMission(afterTheBox(waiting)).map;
+    const plain: MapDef = {
+      ...map,
+      doors: map.doors.map((d) => ({ ...d, opensBy: { kind: 'plate' as const, plateId: 'p' } })),
+    };
+    const alone = [{ x: 1, y: 1 }];
+    const east = (on: MapDef, solved: string[]): boolean =>
+      reachability(on, alone, new Set(solved))[0]?.has(tileKey(6, 2)) === true;
+    expect([east(map, []), east(map, ['kabel'])]).toEqual([false, true]);
+    expect([east(plain, []), east(plain, ['kabel'])]).toEqual([false, false]);
+  });
+
+  it('waits for a puzzle the mission has', () => {
+    expect(() => parseMission(afterTheBox({ ...waiting, untilSolved: 'nix' }))).toThrow(
+      /door "tuer" stays open once unknown puzzle "nix" is solved/,
+    );
   });
 });
