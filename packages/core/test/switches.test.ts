@@ -139,7 +139,7 @@ function rowSaysUp(position: string, lab: Edgework): boolean {
   const rules: Record<string, boolean> = {
     hoch: true,
     runter: false,
-    'hoch, wenn die Kennung gerade endet': Number(lab.serial.slice(-1)) % 2 === 0,
+    'hoch, wenn die Kennung gerade endet (0, 2, 4, 6, 8)': Number(lab.serial.slice(-1)) % 2 === 0,
     'hoch, wenn mindestens zwei Zellen': lab.cells >= 2,
     'hoch, wenn SIG leuchtet': lab.indicators.some((i) => i.id === 'SIG' && i.lit),
   };
@@ -162,7 +162,7 @@ function lab(lastDigit: string, cells: number, sig: 'lit' | 'dark' | 'absent'): 
   };
 }
 
-const KENNUNG = 'hoch, wenn die Kennung gerade endet';
+const KENNUNG = 'hoch, wenn die Kennung gerade endet (0, 2, 4, 6, 8)';
 
 describe('switches: the printed rules', () => {
   it('give three features sixteen rows, every combination once, every position twice', () => {
