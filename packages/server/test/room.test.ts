@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseMission, type ServerMessage } from '@escapelab/core';
+import { moduleFor, parseMission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { RoomManager } from '../src/roomManager.js';
 
@@ -70,8 +70,18 @@ describe('Room', () => {
 
     moveTo(room, anna.playerId, 12, 1);
     room.act(anna.playerId, { kind: 'interact' });
-    room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
-    room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
+    // Station 2 is wiring: Ben cuts what its rules name, worked out from both views.
+    const wiring = mission.puzzles[1];
+    const annaView = lastView(anna.messages);
+    const benView = lastView(ben.messages);
+    if (wiring === undefined || annaView.puzzle === null || benView.puzzle === null) {
+      throw new Error('expected the open wiring station');
+    }
+    const views = { anleitung: annaView.puzzle, steuerpult: benView.puzzle };
+    for (const { roleId, input } of moduleFor(wiring.type).solve(wiring, views, benView.edgework)) {
+      const playerId = roleId === 'anleitung' ? anna.playerId : ben.playerId;
+      room.act(playerId, { kind: 'puzzle-input', input });
+    }
     expect(lastView(anna.messages).currentPuzzleIndex).toBe(2);
 
     // Anna holds the plate so the gate to the last station stays open.

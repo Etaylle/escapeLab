@@ -39,14 +39,15 @@ const BLACKOUT_WALKTHROUGH: ({ role: Role; goTo: [number, number] } | { role: Ro
   { role: 'steuerpult', goTo: [2, 9] },
   { role: 'steuerpult', do: 'interact' }, // notstrom
   { role: 'anleitung', goTo: [7, 6] }, // holds flurplatte
-  { role: 'steuerpult', goTo: [8, 6] },
-  { role: 'steuerpult', do: 'interact' }, // zugangscode
-  { role: 'steuerpult', goTo: [16, 6] }, // holds serverplatte
-  { role: 'anleitung', goTo: [16, 3] },
-  { role: 'anleitung', do: 'interact' }, // subsysteme
-  { role: 'anleitung', goTo: [12, 5] }, // leaves while serverplatte is still held
-  { role: 'steuerpult', goTo: [9, 10] },
-  { role: 'steuerpult', do: 'interact' }, // frequenz
+  { role: 'steuerpult', goTo: [6, 6] }, // out of the Maschinenraum while the plate holds
+  { role: 'anleitung', goTo: [8, 6] },
+  { role: 'anleitung', do: 'interact' }, // zugangscode
+  { role: 'anleitung', goTo: [16, 6] }, // holds serverplatte
+  { role: 'steuerpult', goTo: [16, 3] },
+  { role: 'steuerpult', do: 'interact' }, // subsysteme
+  { role: 'steuerpult', goTo: [12, 5] }, // leaves while serverplatte is still held
+  { role: 'anleitung', goTo: [9, 10] },
+  { role: 'anleitung', do: 'interact' }, // frequenz
   // The last station stays dead until the spare fuse arrives from the archive.
   { role: 'anleitung', goTo: [1, 1] },
   { role: 'anleitung', do: 'interact' }, // pick up the fuse
@@ -469,9 +470,9 @@ async function solveWiring(clients: Clients): Promise<void> {
     'manual role does not get the wire layout');
   assert(benW.puzzle?.kind === 'wiring' && benW.puzzle.wires !== null,
     'cutter role gets the wire layout');
-  assert(annaW.puzzle.info !== null && /§4/.test(annaW.puzzle.info),
+  assert(annaW.puzzle.info !== null && /§1/.test(annaW.puzzle.info),
     'manual role has the handbook text');
-  assert(!clients.steuerpult.raw.some((r) => r.includes('§4')),
+  assert(!clients.steuerpult.raw.some((r) => r.includes('§1')),
     'handbook text never reached the cutter');
   assert(annaW.puzzle.manual !== null && benW.puzzle.manual === null,
     'only the manual role gets the printed rules');
@@ -514,15 +515,20 @@ async function solveKeypad(clients: Clients, benJoined: { code: string; playerId
     'avatar position survived the reconnect',
   );
 
-  const keys = benK.puzzle?.kind === 'keypad' && benK.puzzle.keys !== null ? benK.puzzle.keys : [];
-  assert(keys.length === 4, 'keypad keys arrived after resume');
   const crew: Clients = { ...clients, steuerpult: ben2 };
-  await clients.anleitung.until('the crew back together', (v) =>
+  const annaK = await clients.anleitung.until('the crew back together', (v) =>
     v.pausedFor === null && v.puzzle?.kind === 'keypad');
+  // At this station the Anleitung presses the keys and Ben holds the glyph table.
+  const keys = annaK.puzzle?.kind === 'keypad' && annaK.puzzle.keys !== null ? annaK.puzzle.keys : [];
+  assert(
+    keys.length === 4 &&
+      benK.puzzle?.kind === 'keypad' && benK.puzzle.keys === null && benK.puzzle.manual !== null,
+    'keypad table arrived after resume, the keys stay with the Anleitung',
+  );
   const [right] = nextMoves(crew, 1);
   const rightIdx = right !== undefined && 'keyIndex' in right.input ? right.input.keyIndex : null;
   const wrongIdx = keys.findIndex((_, i) => i !== rightIdx);
-  ben2.send({ kind: 'puzzle-input', input: { keyIndex: wrongIdx } });
+  clients.anleitung.send({ kind: 'puzzle-input', input: { keyIndex: wrongIdx } });
   await ben2.expectView('sees the keypad alarm', (v) => v.penaltySeq === 2);
   await clients.anleitung.until('the keypad alarm', (v) => v.penaltySeq === 2);
   await solveStation(crew, 1);
@@ -541,9 +547,10 @@ async function solveSwitches(clients: Clients): Promise<void> {
 }
 
 async function solveSimon(clients: Clients): Promise<void> {
-  await clients.anleitung.expectView('sees the simon station without the flashes', (v) =>
-    v.puzzle?.kind === 'simon' && v.puzzle.flashes === null);
-  await clients.steuerpult.expectView('sees the simon display', (v) =>
+  // Swapped like the keypad: the Anleitung plays the panel, the Steuerpult translates.
+  await clients.steuerpult.expectView('sees the simon station without the flashes', (v) =>
+    v.puzzle?.kind === 'simon' && v.puzzle.flashes === null && v.puzzle.manual !== null);
+  await clients.anleitung.expectView('sees the simon display', (v) =>
     v.puzzle?.kind === 'simon' && v.puzzle.flashes !== null);
   await solveStation(clients, 3);
 }
