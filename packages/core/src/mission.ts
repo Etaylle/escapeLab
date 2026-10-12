@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { moduleFor, puzzleDefSchema, type PuzzleDef } from './puzzles/index.js';
+import { RELAY_MAX_ROLES } from './puzzles/relay.js';
 
 /**
  * Mission format: a mission is pure data (JSON), validated by these schemas.
@@ -51,19 +52,27 @@ export const mapDefSchema = z.object({
    */
   exit: z.object({ x: coord, y: coord }).optional(),
   /**
-   * Recurring emergency: every panel must be manned at the same time, by a
-   * different player each, before the timer runs out. Interrupts whatever
-   * the crew was doing.
+   * Recurring emergency that interrupts whatever the crew was doing. In
+   * `valves` mode every panel must be manned at the same time, by a
+   * different player each, before the timer runs out. In `relay` mode there
+   * are no panels: every role gets a console and reads out instructions for
+   * the others' consoles (puzzles/relay.ts).
    */
   sabotage: z
     .object({
+      mode: z.enum(['valves', 'relay']).default('valves'),
       label: z.string().min(1),
       hint: z.string().default(''),
       firstAfterSec: z.number().int().positive().default(90),
       everySec: z.number().int().positive().default(150),
       durationSec: z.number().int().positive().default(45),
       penaltySec: z.number().int().positive().default(60),
-      panels: z.array(z.object({ id: z.string().min(1), x: coord, y: coord })).min(2),
+      /** relay: seconds an instruction waits for its owner */
+      windowSec: z.number().int().positive().default(12),
+      /** relay: completed instructions that clear it; three per role when left out */
+      required: z.number().int().positive().optional(),
+      /** valves: two at least, each manned by a different player */
+      panels: z.array(z.object({ id: z.string().min(1), x: coord, y: coord })).default([]),
     })
     .optional(),
   /**
@@ -107,6 +116,14 @@ export const mapDefSchema = z.object({
  * and the like) live in each module's def schema.
  */
 function validatePuzzle(puzzle: PuzzleDef, roleIds: Set<string>, ctx: z.RefinementCtx): void {
+  if (puzzle.type === 'relay') {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        `puzzle "${puzzle.id}": relay is an emergency, not a station — ` +
+        'set map.sabotage.mode to "relay" instead',
+    });
+  }
   const refs: string[] = puzzle.infos.map((i) => i.roleId);
   if (puzzle.type === 'button-sync') {
     refs.push(...puzzle.buttons.map((b) => b.roleId));
@@ -269,6 +286,7 @@ function validateMap(
     for (const panel of map.sabotage.panels) {
       requireFloor(`sabotage panel "${panel.id}"`, panel.x, panel.y);
     }
+    validateEmergencyMode(map.sabotage, mission.roles.length, ctx);
   }
   const itemIds = new Set(map.items.map((i) => i.id));
   if (itemIds.size !== map.items.length) {
@@ -332,6 +350,36 @@ function validateMap(
         message: `map: door "${door.id}" references unknown puzzle "${door.opensBy.puzzleId}"`,
       });
     }
+  }
+}
+
+/**
+ * Valves need panels to man; a relay emergency has none and names a console
+ * per role from a fixed pool. (Its other needs — two roles at least,
+ * `required` ≥ 1 — the mission and sabotage schemas already enforce.)
+ */
+function validateEmergencyMode(
+  sabotage: NonNullable<MapDef['sabotage']>,
+  roleCount: number,
+  ctx: z.RefinementCtx,
+): void {
+  if (sabotage.mode === 'valves' && sabotage.panels.length < 2) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'map: a valves emergency needs two sabotage panels at least',
+    });
+  }
+  if (sabotage.mode === 'relay' && sabotage.panels.length > 0) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'map: a relay emergency has no panels — remove sabotage.panels',
+    });
+  }
+  if (sabotage.mode === 'relay' && roleCount > RELAY_MAX_ROLES) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `map: a relay emergency has control names for ${RELAY_MAX_ROLES} roles at most`,
+    });
   }
 }
 

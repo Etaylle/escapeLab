@@ -62,6 +62,8 @@ const ITEM_RADIUS = 0.95;
  * crew may still be locked in its separate starting rooms.
  */
 const SABOTAGE_AFTER_PUZZLES = 2;
+/** A relay emergency's instructions are aged this often. */
+const RELAY_TICK_MS = 1000;
 
 /**
  * One game room: owns the authoritative GameState, player sessions
@@ -82,6 +84,7 @@ export class Room {
   private droneTimer: NodeJS.Timeout | null = null;
   private lastDroneTick = 0;
   private sabotageTimer: NodeJS.Timeout | null = null;
+  private relayTimer: NodeJS.Timeout | null = null;
   private timer: NodeJS.Timeout | null = null;
   private positionsTimer: NodeJS.Timeout | null = null;
   private positionsDirty = false;
@@ -459,7 +462,8 @@ export class Room {
   /** All panels manned at once ends the emergency. */
   private checkSabotageCleared(): void {
     const sabotage = this.state.mission.map?.sabotage;
-    if (this.state.sabotage === null || sabotage === undefined) {
+    // A relay emergency has no panels: only its instructions clear it.
+    if (this.state.sabotage === null || sabotage === undefined || sabotage.mode !== 'valves') {
       return;
     }
     if (this.state.occupiedPanels.length >= sabotage.panels.length) {
@@ -505,6 +509,26 @@ export class Room {
       },
       Math.max(500, nextAt - sinceStart),
     );
+  }
+
+  /**
+   * While a relay emergency runs, its instructions run out on the clock: the
+   * reducer is told the time once a second. A pause stops the ticking.
+   */
+  private reconcileRelayTick(): void {
+    const live =
+      this.state.phase === 'playing' &&
+      this.state.paused === null &&
+      this.state.sabotage?.emergency !== undefined;
+    if (live && this.relayTimer === null) {
+      this.relayTimer = setInterval(
+        () => this.dispatch({ type: 'sabotage-tick', at: Date.now() }),
+        RELAY_TICK_MS,
+      );
+    } else if (!live && this.relayTimer !== null) {
+      clearInterval(this.relayTimer);
+      this.relayTimer = null;
+    }
   }
 
   /**
@@ -628,6 +652,7 @@ export class Room {
     this.reconcileTimer();
     this.reconcileDroneTimer();
     this.reconcileSabotage();
+    this.reconcileRelayTick();
     this.broadcast();
   }
 
@@ -687,6 +712,10 @@ export class Room {
     if (this.sabotageTimer !== null) {
       clearTimeout(this.sabotageTimer);
       this.sabotageTimer = null;
+    }
+    if (this.relayTimer !== null) {
+      clearInterval(this.relayTimer);
+      this.relayTimer = null;
     }
   }
 }

@@ -2,6 +2,7 @@ import type { Difficulty } from './difficulty.js';
 import type { Edgework } from './edgework.js';
 import type { Mission } from './mission.js';
 import type { PuzzleState } from './puzzles/index.js';
+import type { RelayState } from './puzzles/relay.js';
 
 export type Phase = 'lobby' | 'playing' | 'won' | 'lost';
 
@@ -70,8 +71,11 @@ export interface GameState {
    */
   pressedPlates: string[];
   occupiedPanels: string[];
-  /** running emergency that interrupts everything until it is cleared */
-  sabotage: { endsAt: number } | null;
+  /**
+   * Running emergency that interrupts everything until it is cleared. In
+   * relay mode it carries the consoles and instructions; valves need none.
+   */
+  sabotage: { endsAt: number; emergency?: RelayState } | null;
   /**
    * Set while someone is disconnected: the clock, patrols and emergencies
    * all stand still, because the crew cannot finish a mission short-handed.

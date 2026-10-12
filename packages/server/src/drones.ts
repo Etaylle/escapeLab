@@ -88,8 +88,8 @@ export class DronePatrol {
     playerPositions: Map<string, { x: number; y: number }>,
     now: number,
   ): SpottedEvent[] {
-    if (state.puzzleState !== null) {
-      return []; // everyone is heads-down at a console
+    if (state.puzzleState !== null || state.sabotage?.emergency !== undefined) {
+      return []; // everyone is heads-down at a console — a station's or the relay emergency's
     }
     const events: SpottedEvent[] = [];
     for (const drone of this.awake(state)) {

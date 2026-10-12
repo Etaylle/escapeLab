@@ -1,0 +1,549 @@
+import { describe, expect, it } from 'vitest';
+import {
+  applyAction,
+  generateEdgework,
+  initialState,
+  parseMission,
+  viewFor,
+  viewForSpectator,
+} from '../src/index.js';
+import type {
+  Action,
+  GameState,
+  ManualSection,
+  Mission,
+  PlayerView,
+  PuzzleContext,
+  RelayView,
+} from '../src/index.js';
+import { mulberry32 } from '../src/rng.js';
+import {
+  CONTROL_NAMES,
+  RELAY_MAX_ROLES,
+  relayDefFor,
+  relayModule,
+  type RelayDef,
+  type RelayState,
+} from '../src/puzzles/relay.js';
+import { playInstance } from './solveModule.js';
+
+const SEEDS = 200;
+const T0 = 1_000_000;
+const ALARM_AT = T0 + 1000;
+const ROLE_NAMES = ['Anleitung', 'Steuerpult', 'Labor', 'Reaktor', 'Funk', 'Werkstatt', 'Archiv'];
+
+type Control = RelayView['controls'][number];
+type PuzzleInput = Extract<Action, { type: 'puzzle-input' }>;
+
+function must<T>(value: T | null | undefined, what: string): T {
+  if (value === null || value === undefined) {
+    throw new Error(`expected ${what}`);
+  }
+  return value;
+}
+
+/** A corridor lab whose emergencies run in relay mode, crewed by `roleCount` roles. */
+function relayMission(roleCount: number, sabotage: Record<string, unknown> = {}): Mission {
+  const roles = ROLE_NAMES.slice(0, roleCount).map((name, i) => ({
+    id: `r${i}`,
+    name,
+    description: '',
+  }));
+  return parseMission({
+    id: 'relaytest',
+    title: 'Relais-Test',
+    story: { intro: 'i', win: 'w', lose: 'l' },
+    timeLimitSec: 900,
+    roles,
+    puzzles: [
+      {
+        type: 'button-sync',
+        id: 'first',
+        title: 'Erstes',
+        prompt: '',
+        buttons: [{ roleId: 'r0', label: 'A' }],
+      },
+    ],
+    map: {
+      tiles: ['##########', '#........#', '#........#', '##########'],
+      spawns: Object.fromEntries(roles.map((role, i) => [role.id, { x: 1 + i, y: 1 }])),
+      stations: [{ puzzleId: 'first', x: 8, y: 2 }],
+      sabotage: {
+        mode: 'relay',
+        label: 'STEUERUNG SPINNT',
+        hint: 'Anweisungen laut vorlesen!',
+        durationSec: 45,
+        penaltySec: 60,
+        ...sabotage,
+      },
+    },
+  });
+}
+
+function defOf(mission: Mission): RelayDef {
+  return relayDefFor(mission.roles, must(mission.map?.sabotage, 'a sabotage block'));
+}
+
+// --- the module on its own ---------------------------------------------------------
+
+const edgework = generateEdgework(mulberry32(99));
+const ctx = (at: number): PuzzleContext => ({ edgework, alarms: 0, remainingSec: 600, at });
+
+function viewsOf(def: RelayDef, state: RelayState): Record<string, RelayView> {
+  const viewCtx = { edgework, alarms: 0 };
+  return Object.fromEntries(
+    def.roles.map((role) => [role.id, relayModule.view(def, state, role.id, viewCtx)]),
+  );
+}
+
+/**
+ * A perfect crew at the consoles: every round the solver reads the role
+ * views — never the state — and each of its moves goes through the input
+ * schema and `apply`, a second after the round before.
+ */
+function drill(def: RelayDef, seed: number): { state: RelayState; moves: number } {
+  let state = relayModule.init(def, mulberry32(seed), ctx(T0));
+  let moves = 0;
+  for (let round = 1; round <= def.required; round++) {
+    for (const { roleId, input } of relayModule.solve(def, viewsOf(def, state), null)) {
+      moves += 1;
+      const parsed = relayModule.inputSchema.parse(input);
+      const result = relayModule.apply(def, state, parsed, roleId, ctx(T0 + round * 1000));
+      if (result.penalty !== null) {
+        throw new Error(`seed ${seed}: alarm "${result.penalty}" on ${JSON.stringify(input)}`);
+      }
+      state = result.state;
+      if (result.solved) {
+        return { state, moves };
+      }
+    }
+  }
+  throw new Error(`seed ${seed}: not cleared within ${def.required} rounds`);
+}
+
+describe.each([2, 3, 4, RELAY_MAX_ROLES])('relay emergency for %i roles', (roleCount) => {
+  const def = defOf(relayMission(roleCount));
+
+  it(`is cleared from the role views in exactly "required" moves, no miss, ${SEEDS} seeds`, () => {
+    for (let seed = 0; seed < SEEDS; seed++) {
+      const { state, moves } = drill(def, seed);
+      expect(moves, `seed ${seed}`).toBe(def.required);
+      expect(state.missed, `seed ${seed}`).toBe(0);
+    }
+  });
+
+  it('plays through the shared harness like every other module', () => {
+    const roleIds = def.roles.map((role) => role.id);
+    for (let seed = 0; seed < SEEDS; seed++) {
+      expect(playInstance(def, roleIds, seed)).toBe(def.required);
+    }
+  });
+
+  it('gives every role four controls and an instruction for a free control elsewhere', () => {
+    for (let seed = 0; seed < SEEDS; seed++) {
+      const views = viewsOf(def, relayModule.init(def, mulberry32(seed), ctx(T0)));
+      const owner = new Map<string, { roleId: string; control: Control }>();
+      for (const role of def.roles) {
+        const controls = must(views[role.id], 'a view').controls;
+        expect(controls).toHaveLength(4);
+        expect(new Set(controls.map((c) => c.kind))).toEqual(new Set(['switch', 'dial', 'button']));
+        controls.forEach((control) => owner.set(control.name, { roleId: role.id, control }));
+      }
+      expect(owner.size, 'every name once').toBe(4 * def.roles.length);
+      const targets = new Set<string>();
+      for (const role of def.roles) {
+        const wanted = must(views[role.id]?.instruction, 'an instruction');
+        const target = must(owner.get(wanted.control), `a console with ${wanted.control}`);
+        expect(target.roleId, 'never your own console').not.toBe(role.id);
+        expect(def.roles.find((r) => r.id === target.roleId)?.name).toBe(wanted.roleName);
+        expect(wanted.value, 'something the control does not show').not.toBe(target.control.value);
+        expect(wanted.value === 'press').toBe(target.control.kind === 'button');
+        targets.add(wanted.control);
+      }
+      expect(targets.size, 'no two instructions for one control').toBe(def.roles.length);
+    }
+  });
+
+  it('lets no role see another console but the one control its instruction names', () => {
+    for (let seed = 0; seed < SEEDS; seed++) {
+      const views = viewsOf(def, relayModule.init(def, mulberry32(seed), ctx(T0)));
+      for (const role of def.roles) {
+        const view = must(views[role.id], 'a view');
+        const wire = JSON.stringify(view);
+        const foreign = def.roles
+          .filter((other) => other.id !== role.id)
+          .flatMap((other) => must(views[other.id], 'a view').controls)
+          .filter((control) => control.name !== view.instruction?.control);
+        for (const control of foreign) {
+          expect(wire, `seed ${seed}: ${role.id} sees ${control.name}`).not.toContain(control.name);
+        }
+      }
+    }
+  });
+});
+
+describe('relay moves', () => {
+  const def = defOf(relayMission(2));
+
+  it('does not count the right control at the wrong level', () => {
+    const found = Array.from({ length: SEEDS }, (_, seed) => {
+      const state = relayModule.init(def, mulberry32(seed), ctx(T0));
+      const views = viewsOf(def, state);
+      const wanted = must(views['r0']?.instruction, 'an instruction');
+      const target = views['r1']?.controls.find((c) => c.name === wanted.control);
+      return { state, wanted, target };
+    }).find(({ target }) => target?.kind === 'dial');
+    const { state, wanted, target } = must(found, 'an instruction for a dial');
+    const dial = must(target, 'a dial');
+    const level = must(
+      [1, 2, 3, 4, 5].find((l) => l !== wanted.value && l !== dial.value),
+      'a wrong level',
+    );
+    const result = relayModule.apply(
+      def,
+      state,
+      { kind: 'set', control: dial.id, value: level },
+      'r1',
+      ctx(T0 + 1000),
+    );
+    expect(result).toMatchObject({ solved: false, penalty: null });
+    expect(result.state.completed).toBe(0);
+    const after = viewsOf(def, result.state);
+    expect(after['r0']?.instruction).toEqual(wanted);
+    expect(after['r1']?.controls.find((c) => c.id === dial.id)?.value).toBe(level);
+  });
+
+  it('rolls the same consoles for the same stream and other ones otherwise', () => {
+    const first = relayModule.init(def, mulberry32(7), ctx(T0));
+    expect(relayModule.init(def, mulberry32(7), ctx(T0))).toEqual(first);
+    expect(relayModule.init(def, mulberry32(8), ctx(T0)).controls).not.toEqual(first.controls);
+  });
+});
+
+describe('the relay drill', () => {
+  const def = defOf(relayMission(2));
+
+  it('prints the same for every run, with numbered rules that end in a catch-all', () => {
+    const manual = relayModule.manual(def);
+    expect(relayModule.manual(structuredClone(def))).toEqual(manual);
+    expect(manual.map((section) => section.heading)).toEqual(['Notfall-Relais']);
+    const rules = manual[0]?.blocks.find((block) => block.kind === 'rules');
+    expect(rules?.kind === 'rules' ? rules.items.at(-1) : null).toMatch(/^Sonst/);
+    expect(JSON.stringify(manual)).toContain('12 Sekunden');
+    expect(JSON.stringify(manual)).toContain('6 ausgeführte Anweisungen');
+  });
+
+  it('draws the control names from a pool of sixteen or more, all different', () => {
+    expect(CONTROL_NAMES.length).toBeGreaterThanOrEqual(16);
+    expect(new Set(CONTROL_NAMES).size).toBe(CONTROL_NAMES.length);
+  });
+});
+
+// --- the emergency in the game -------------------------------------------------------
+
+function crewOf(mission: Mission): { playerId: string; roleId: string }[] {
+  return mission.roles.map((role, i) => ({ playerId: `p${i}`, roleId: role.id }));
+}
+
+function started(mission: Mission, seed = 1): GameState {
+  const crew = crewOf(mission);
+  const actions: Action[] = [
+    ...crew.map(({ playerId }): Action => ({ type: 'player-join', playerId, name: playerId })),
+    ...crew.map(({ playerId, roleId }): Action => ({ type: 'select-role', playerId, roleId })),
+    ...crew
+      .slice(1)
+      .map(({ playerId }): Action => ({ type: 'set-ready', playerId, ready: true })),
+    { type: 'start-mission', playerId: 'p0', at: T0, seed },
+  ];
+  return actions.reduce(applyAction, initialState(mission));
+}
+
+function alarmed(mission: Mission, seed = 1): GameState {
+  return applyAction(started(mission, seed), { type: 'sabotage-start', at: ALARM_AT });
+}
+
+/** What a client holds: its relay view as it arrives over the wire. */
+function relayOf(state: GameState, playerId: string): RelayView & { manual: ManualSection[] } {
+  const view = JSON.parse(JSON.stringify(viewFor(state, playerId))) as PlayerView;
+  return must(view.map?.sabotage?.relay, `a relay view for ${playerId}`);
+}
+
+function emergencyOf(state: GameState): RelayState {
+  return must(state.sabotage?.emergency, 'a running relay emergency');
+}
+
+/** The crew's answers to what its views show right now, as puzzle-inputs at `at`. */
+function answers(mission: Mission, state: GameState, at: number): PuzzleInput[] {
+  const crew = crewOf(mission);
+  const views = Object.fromEntries(
+    crew.map(({ playerId, roleId }) => [roleId, relayOf(state, playerId)]),
+  );
+  return relayModule.solve(defOf(mission), views, null).map(({ roleId, input }) => ({
+    type: 'puzzle-input',
+    playerId: crew.find((member) => member.roleId === roleId)?.playerId ?? '',
+    at,
+    input,
+  }));
+}
+
+function changeOf(control: Control): boolean | number | 'press' {
+  switch (control.kind) {
+    case 'switch':
+      return !control.value;
+    case 'dial':
+      return (control.value % 5) + 1;
+    case 'button':
+      return 'press';
+  }
+}
+
+describe('a relay emergency in the game', () => {
+  const mission = relayMission(2);
+  const def = defOf(mission);
+  const input = (playerId: string, at: number, value: unknown): PuzzleInput => ({
+    type: 'puzzle-input',
+    playerId,
+    at,
+    input: value,
+  });
+
+  it('drops the station, uses no panels and hands every role its console and the drill', () => {
+    const state = alarmed(mission);
+    expect(state.puzzleState).toBeNull();
+    expect(state.sabotage?.endsAt).toBe(ALARM_AT + 45_000);
+    for (const { playerId } of crewOf(mission)) {
+      const sabotage = viewFor(state, playerId).map?.sabotage;
+      expect(sabotage?.panels).toEqual([]);
+      const relay = relayOf(state, playerId);
+      expect(relay.controls).toHaveLength(4);
+      expect(relay.instruction?.expiresAt).toBe(ALARM_AT + 12_000);
+      expect(relay).toMatchObject({ completed: 0, required: 6, windowSec: 12 });
+      expect(relay.endsAt).toBe(ALARM_AT + 45_000);
+      expect(relay.manual).toEqual(relayModule.manual(def));
+    }
+  });
+
+  it(`is cleared by puzzle-inputs from the views alone, no alarm, ${SEEDS} seeds`, () => {
+    for (let seed = 0; seed < SEEDS; seed++) {
+      let state = alarmed(mission, seed);
+      const deadline = state.deadlineAt;
+      let inputs = 0;
+      for (let round = 1; state.sabotage !== null && round <= def.required; round++) {
+        for (const action of answers(mission, state, ALARM_AT + round * 1000)) {
+          if (state.sabotage !== null) {
+            inputs += 1;
+            state = applyAction(state, action);
+          }
+        }
+      }
+      expect(state.sabotage, `seed ${seed}`).toBeNull();
+      expect(inputs, `seed ${seed}`).toBe(def.required);
+      expect(state.penaltySeq, `seed ${seed}`).toBe(0);
+      expect(state.deadlineAt, `seed ${seed}`).toBe(deadline);
+      expect(state.events.at(-1)?.label).toBe('Notfall behoben');
+    }
+  });
+
+  it('replaces an instruction that ran out and counts it as a miss, without an alarm', () => {
+    let state = alarmed(mission);
+    // Steuerpult's instruction is done at once, so only Anleitung's is left to run out.
+    const forSteuerpult = answers(mission, state, ALARM_AT + 4000).find((a) => a.playerId === 'p0');
+    state = applyAction(state, must(forSteuerpult, 'an answer from p0'));
+    expect(relayOf(state, 'p0').instruction?.expiresAt).toBe(ALARM_AT + 12_000);
+    expect(applyAction(state, { type: 'sabotage-tick', at: ALARM_AT + 11_999 })).toBe(state);
+
+    state = applyAction(state, { type: 'sabotage-tick', at: ALARM_AT + 12_000 });
+    expect(relayOf(state, 'p0').instruction?.expiresAt).toBe(ALARM_AT + 24_000);
+    expect(relayOf(state, 'p1').instruction?.expiresAt).toBe(ALARM_AT + 16_000);
+    expect(emergencyOf(state)).toMatchObject({ completed: 1, missed: 1 });
+    expect(state.penaltySeq).toBe(0);
+  });
+
+  it('still charges the expiry penalty when too few were done in time', () => {
+    const state = alarmed(mission);
+    const before = state.deadlineAt ?? 0;
+    const expired = applyAction(state, { type: 'sabotage-expired', at: ALARM_AT + 45_000 });
+    expect(expired.sabotage).toBeNull();
+    expect(expired.deadlineAt).toBe(before - 60_000);
+    expect(expired.penaltySeq).toBe(1);
+    expect(expired.events.at(-1)?.label).toBe('Notfall nicht rechtzeitig behoben');
+    expect(expired.phase).toBe('playing');
+  });
+
+  it('is not cleared by a valves signal, only by its instructions', () => {
+    const state = alarmed(mission);
+    expect(applyAction(state, { type: 'sabotage-cleared', at: ALARM_AT + 2000 })).toBe(state);
+  });
+
+  it('lets only the owner work a control; a move nobody asked for changes nothing else', () => {
+    const state = alarmed(mission);
+    const anleitung = relayOf(state, 'p0');
+    const steuerpult = relayOf(state, 'p1');
+    const foreign = must(steuerpult.controls[0], 'a control');
+    const reach = { kind: 'set', control: foreign.id, value: changeOf(foreign) };
+    expect(() => applyAction(state, input('p0', ALARM_AT + 2000, reach))).toThrow(/anderen Pult/);
+
+    const idle = must(
+      steuerpult.controls.find((c) => c.name !== anleitung.instruction?.control),
+      'a control nobody asked for',
+    );
+    const value = changeOf(idle);
+    const moved = applyAction(
+      state,
+      input('p1', ALARM_AT + 2000, { kind: 'set', control: idle.id, value }),
+    );
+    expect(emergencyOf(moved)).toMatchObject({ completed: 0, missed: 0 });
+    expect(moved.penaltySeq).toBe(0);
+    expect(relayOf(moved, 'p0').instruction).toEqual(anleitung.instruction);
+    const after = relayOf(moved, 'p1').controls.find((c) => c.id === idle.id);
+    expect(after?.value).toBe(idle.kind === 'button' ? null : value);
+  });
+
+  it('turns away input that does not fit the control or the schema', () => {
+    const state = alarmed(mission);
+    const steuerpult = relayOf(state, 'p1');
+    const move = (value: unknown) => () => applyAction(state, input('p1', ALARM_AT + 2000, value));
+    const control = must(steuerpult.controls[0], 'a control');
+    const misfit = control.kind === 'switch' ? 3 : control.kind === 'dial' ? true : 2;
+    expect(move({ kind: 'set', control: control.id, value: misfit })).toThrow(/Ungültige Eingabe/);
+    expect(move({ kind: 'set', control: control.id, value: 6 })).toThrow(/Ungültige Eingabe/);
+    expect(move({ control: control.id, value: 'press' })).toThrow(/Ungültige Eingabe/);
+    expect(move({ kind: 'set', control: control.id, value: 1, x: 1 })).toThrow(/Ungültige Eingabe/);
+    expect(move({ kind: 'set', control: 'k99', value: 'press' })).toThrow(/gibt es nicht/);
+  });
+
+  it('stands still over a pause: every clock in it moves on by the time frozen', () => {
+    let state = alarmed(mission);
+    const before = emergencyOf(state);
+    state = applyAction(state, { type: 'set-paused', paused: true, at: ALARM_AT + 2000 });
+    expect(applyAction(state, { type: 'sabotage-tick', at: ALARM_AT + 20_000 })).toBe(state);
+    const reach = answers(mission, state, ALARM_AT + 3000)[0];
+    expect(() => applyAction(state, must(reach, 'an answer'))).toThrow(/pausiert/);
+
+    state = applyAction(state, { type: 'set-paused', paused: false, at: ALARM_AT + 32_000 });
+    const after = emergencyOf(state);
+    expect(state.sabotage?.endsAt).toBe(ALARM_AT + 75_000);
+    expect(after.endsAt).toBe(before.endsAt + 30_000);
+    expect(after.instructions.map((i) => i.expiresAt)).toEqual(
+      before.instructions.map((i) => i.expiresAt + 30_000),
+    );
+  });
+
+  it('replays to the same emergency: the start and every replacement come from the seed', () => {
+    const script: Action[] = [
+      { type: 'sabotage-start', at: ALARM_AT },
+      { type: 'sabotage-tick', at: ALARM_AT + 12_000 },
+      { type: 'sabotage-tick', at: ALARM_AT + 24_000 },
+    ];
+    const replay = (seed: number): GameState => script.reduce(applyAction, started(mission, seed));
+    expect(replay(5)).toEqual(replay(5));
+    expect(emergencyOf(replay(5)).controls).not.toEqual(emergencyOf(replay(6)).controls);
+  });
+
+  it("shows the audience every role's console, and nobody's on the map", () => {
+    const state = alarmed(mission);
+    const audience = viewForSpectator(state);
+    for (const [i, panel] of audience.panels.entries()) {
+      expect({ ...panel.emergency, manual: relayModule.manual(def) }).toEqual(
+        relayOf(state, `p${i}`),
+      );
+    }
+    expect(audience.map?.sabotage?.relay).toMatchObject({ controls: [], instruction: null });
+  });
+});
+
+describe('valves mode', () => {
+  const valves = parseMission({
+    ...JSON.parse(JSON.stringify(relayMission(2))),
+    map: {
+      ...JSON.parse(JSON.stringify(relayMission(2).map)),
+      sabotage: {
+        label: 'KÜHLUNG AUSGEFALLEN',
+        durationSec: 40,
+        panels: [
+          { id: 'links', x: 1, y: 2 },
+          { id: 'rechts', x: 7, y: 2 },
+        ],
+      },
+    },
+  });
+
+  it('is the default and keeps its emergency as it was: no console, no ticking', () => {
+    expect(valves.map?.sabotage?.mode).toBe('valves');
+    const state = alarmed(valves);
+    expect(state.sabotage).toEqual({ endsAt: ALARM_AT + 40_000 });
+    expect(Object.keys(state.sabotage ?? {})).toEqual(['endsAt']);
+    expect(Object.keys(viewFor(state, 'p0').map?.sabotage ?? {})).toEqual([
+      'label',
+      'hint',
+      'endsAt',
+      'panels',
+    ]);
+    expect(viewForSpectator(state).panels.some((panel) => 'emergency' in panel)).toBe(false);
+    expect(applyAction(state, { type: 'sabotage-tick', at: ALARM_AT + 30_000 })).toBe(state);
+    expect(() =>
+      applyAction(state, { type: 'puzzle-input', playerId: 'p1', at: ALARM_AT + 2000, input: {} }),
+    ).toThrow(/kein Rätsel/);
+  });
+
+  it('still needs two panels', () => {
+    const lonely = JSON.parse(JSON.stringify(valves));
+    lonely.map.sabotage.panels = [{ id: 'links', x: 1, y: 2 }];
+    expect(() => parseMission(lonely)).toThrow(/two sabotage panels at least/);
+  });
+});
+
+describe('relay missions', () => {
+  it('ask three instructions per role in twelve-second windows unless told otherwise', () => {
+    expect(defOf(relayMission(2))).toMatchObject({ required: 6, windowSec: 12 });
+    expect(defOf(relayMission(4))).toMatchObject({ required: 12 });
+    expect(defOf(relayMission(3, { required: 4, windowSec: 8 }))).toMatchObject({
+      required: 4,
+      windowSec: 8,
+    });
+  });
+
+  it('need two roles and one instruction at least', () => {
+    expect(() => relayMission(1)).toThrow(/roles/);
+    expect(() => relayMission(2, { required: 0 })).toThrow(/map\.sabotage\.required/);
+  });
+
+  it('have no panels and names for six consoles at most', () => {
+    const panels = [
+      { id: 'a', x: 1, y: 2 },
+      { id: 'b', x: 2, y: 2 },
+    ];
+    expect(() => relayMission(2, { panels })).toThrow(/relay emergency has no panels/);
+    expect(RELAY_MAX_ROLES).toBe(6);
+    expect(() => relayMission(RELAY_MAX_ROLES + 1)).toThrow(/for 6 roles at most/);
+  });
+
+  it('never put the relay at a station', () => {
+    expect(() =>
+      parseMission({
+        id: 'stationrelay',
+        title: 'Falsch',
+        story: { intro: 'i', win: 'w', lose: 'l' },
+        timeLimitSec: 300,
+        roles: [
+          { id: 'a', name: 'A', description: '' },
+          { id: 'b', name: 'B', description: '' },
+        ],
+        puzzles: [
+          {
+            type: 'relay',
+            id: 'notfall',
+            title: 'Notfall',
+            prompt: '',
+            roles: [
+              { id: 'a', name: 'A' },
+              { id: 'b', name: 'B' },
+            ],
+            required: 3,
+            durationSec: 30,
+          },
+        ],
+      }),
+    ).toThrow(/relay is an emergency, not a station/);
+  });
+});
