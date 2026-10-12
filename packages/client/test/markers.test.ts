@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { MapView } from '@escapelab/core';
-import { markerTargets, placeMarker } from '../src/world/markers.js';
+import {
+  markerTargets,
+  placeMarker,
+  placeMarkers,
+  type MarkerPlacement,
+  type MarkerPoint,
+} from '../src/world/markers.js';
 import { mapWith, type Manual } from './fixtures.js';
 
 const YOU = 'p1';
@@ -102,6 +108,17 @@ describe('markerTargets — what the player is pointed at', () => {
   it('keeps pointing at the part while someone else carries it', () => {
     const map = mapWith({ items: [item({ carriedBy: 'p2' })] });
     expect(markerTargets(map, YOU)).toEqual([]);
+  });
+
+  it('points at no key before its cabinet is found', () => {
+    const key = item({ id: 'key', label: 'SCHLÜSSEL', deliverTo: null });
+    const hidden = mapWith({ stations: [station(5, 9, 'armed')], items: [key] });
+    expect(markerTargets(hidden, YOU).map((t) => t.label)).toEqual(['STATION']);
+    const found = mapWith({
+      stations: [station(5, 9, 'armed')],
+      items: [{ ...key, deliverTo: { x: 8, y: 5 } }],
+    });
+    expect(markerTargets(found, YOU).map((t) => t.label)).toEqual(['TEIL', 'STATION']);
   });
 
   it('ignores a part that has already been delivered', () => {
@@ -213,5 +230,95 @@ describe('placeMarker — where the arrow lands', () => {
         expect(at.y).toBeLessThanOrEqual(H - 34);
       }
     }
+  });
+});
+
+describe('placeMarkers — targets in the same direction', () => {
+  // A phone's world: 400x560, the objective bar 80px over its top.
+  const W = 400;
+  const H = 560;
+  const BAR = 80;
+  /** „LESEN 12m" in 11px mono */
+  const CAPTION = 60;
+
+  type Box = { left: number; right: number; top: number; bottom: number };
+
+  /** What an arrow and its caption cover, as GameWorld draws them. */
+  function boxes(at: MarkerPlacement, captionWidth: number): Box[] {
+    return [
+      { left: at.x - 13, right: at.x + 13, top: at.y - 13, bottom: at.y + 13 },
+      {
+        left: at.x - captionWidth / 2,
+        right: at.x + captionWidth / 2,
+        top: at.captionY - 8,
+        bottom: at.captionY + 3,
+      },
+    ];
+  }
+
+  function covers(a: Box, b: Box): boolean {
+    return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  }
+
+  /** Placed markers whose arrow or caption covers another one's. */
+  function clashes(points: MarkerPoint[]): number {
+    const placed = placeMarkers(points, W, H, BAR, 1).map((at, i) =>
+      at === null ? [] : boxes(at, points[i]?.captionWidth ?? 0),
+    );
+    let count = 0;
+    placed.forEach((mine, i) =>
+      placed.slice(i + 1).forEach((theirs) => {
+        count += Number(mine.some((a) => theirs.some((b) => covers(a, b))));
+      }),
+    );
+    return count;
+  }
+
+  const at = (px: number, py: number): MarkerPoint => ({ px, py, captionWidth: CAPTION });
+
+  it('pins them as placeMarker does, one by one', () => {
+    const points = [at(-300, 200), at(200, -100), at(200, 300)];
+    expect(placeMarkers(points, W, H, BAR, 1)).toEqual(
+      points.map((p) => placeMarker(p.px, p.py, W, H, BAR, 1)),
+    );
+  });
+
+  it('stacks two on a side: the second arrow clear of the first one’s caption', () => {
+    const [teil, lesen] = placeMarkers([at(-300, 200), at(-100, 205)], W, H, BAR, 1);
+    expect(teil?.y).toBe(200);
+    expect((lesen?.y ?? 0) - 13).toBeGreaterThan(teil?.captionY ?? Infinity);
+    expect(lesen?.captionY).toBe((lesen?.y ?? 0) + 26);
+    expect(lesen?.x).toBe(34);
+  });
+
+  it('lets none cover another, however they bunch on one edge', () => {
+    const left = [210, 200, 205, 215].map((py) => at(-200, py));
+    const middle = [at(-200, 275), at(-200, 285)];
+    const bottom = [at(-200, 520), at(-200, 530), at(-200, 900)];
+    const top = [190, 200, 215].map((px) => at(px, -300));
+    const below = [10, 20].map((px) => at(px, 900));
+    for (const points of [left, middle, bottom, top, below]) {
+      expect(clashes(points)).toBe(0);
+    }
+  });
+
+  it('keeps every arrow on its edge inside the frame, backing a stack up from the end', () => {
+    const placed = placeMarkers([at(-200, 520), at(-200, 530)], W, H, BAR, 1);
+    expect(placed.every((p) => p !== null && p.y <= H - 34 && p.x === 34)).toBe(true);
+    const wide = placeMarkers([at(380, -300), at(390, -300)], W, H, BAR, 1);
+    expect(wide.every((p) => p !== null && p.x <= W - 34 && p.y === BAR + 16)).toBe(true);
+  });
+
+  it('moves nothing that keeps clear already, or lies on another edge', () => {
+    const apart = [at(-300, 120), at(-300, 400), at(200, -300), at(W + 50, 125)];
+    expect(placeMarkers(apart, W, H, BAR, 1)).toEqual(
+      apart.map((p) => placeMarker(p.px, p.py, W, H, BAR, 1)),
+    );
+  });
+
+  it('scales the room it keeps with the device pixel ratio', () => {
+    const points = [at(-600, 400), at(-200, 410)].map((p) => ({ ...p, captionWidth: 120 }));
+    const [first, second] = placeMarkers(points, W * 2, H * 2, BAR, 2);
+    expect((second?.y ?? 0) - (first?.y ?? 0)).toBe((13 + 26 + 3 + 4) * 2);
   });
 });

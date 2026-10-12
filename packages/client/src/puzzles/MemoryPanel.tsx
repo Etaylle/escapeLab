@@ -70,13 +70,13 @@ export function MemoryPanel({ puzzle, send }: PanelProps<'memory'>) {
         </span>
         <Dots total={STAGES} done={puzzle.stage - 1} />
       </div>
-      {puzzle.display !== null && puzzle.labels !== null ? (
-        <Bank display={puzzle.display} labels={puzzle.labels} send={send} />
-      ) : (
-        <p className="big-hint muted">
-          Display und Tasten sind an der anderen Station — lass dir das Display und die
-          Beschriftungen von links nach rechts ansagen.
-        </p>
+      {puzzle.display !== null && puzzle.labels !== null && (
+        <>
+          <p className="muted memory-help">
+            Display und Tasten von links ansagen, erst bei Ansage drücken.
+          </p>
+          <Bank display={puzzle.display} labels={puzzle.labels} send={send} />
+        </>
       )}
       <p className="muted memory-note">Nach jedem Druck notieren: Position und Beschriftung.</p>
       {resets > 0 && (

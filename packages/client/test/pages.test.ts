@@ -63,6 +63,41 @@ describe('paginate', () => {
     expect(pages.slice(2).every((page) => !page.first)).toBe(true);
   });
 
+  it('heads every page a rules list continues on with its heading and „(Fortsetzung)"', () => {
+    const pages = paginate([station('§1 — Lang', [{ kind: 'rules', items: items(14) }])], SMALL);
+    expect(pages[1]?.fragments.slice(0, 2)).toEqual([
+      { kind: 'title', text: '§1 — Lang' },
+      { kind: 'heading', text: '§1 — LANG' },
+    ]);
+    expect(pages.length).toBeGreaterThan(3);
+    for (const page of pages.slice(2)) {
+      expect(page.fragments[0]).toEqual({ kind: 'heading', text: '§1 — LANG (Fortsetzung)' });
+      expect(page.fragments[1]?.kind).toBe('rules');
+    }
+  });
+
+  it('never leaves the last rule — the „Sonst" line — alone on a page', () => {
+    // Five of the six fit under the title: the fifth goes over with the sixth.
+    const book = [station('§1 — Knapp', [{ kind: 'rules', items: items(6) }])];
+    const parts = fragmentsOf(paginate(book, { width: 20, height: 12.5 }), 'rules');
+    expect(parts.map((part) => (part.kind === 'rules' ? part.items.length : 0))).toEqual([4, 2]);
+  });
+
+  it('keeps two rules together on every page a list spans, wherever the list starts', () => {
+    for (let height = 6; height <= 24; height += 1) {
+      for (let count = 2; count <= 9; count += 1) {
+        const lead: ManualBlock = { kind: 'p', text: 'Vorab etwas Text. '.repeat(height % 7) };
+        const book = [station('§1 — Knapp', [lead, { kind: 'rules', items: items(count) }])];
+        const parts = fragmentsOf(paginate(book, { width: 20, height }), 'rules') as Extract<
+          Fragment,
+          { kind: 'rules' }
+        >[];
+        expect(parts.flatMap((part) => part.items)).toEqual(items(count));
+        expect(parts.every((part) => part.items.length >= 2)).toBe(true);
+      }
+    }
+  });
+
   it('repeats the head of a table on every page it spans', () => {
     const head = ['LED', 'Stern', 'Buchstabe'];
     const rows = Array.from({ length: 24 }, (_, i) => ['an', i % 2 === 0 ? 'ja' : 'nein', `${i}`]);
@@ -71,6 +106,7 @@ describe('paginate', () => {
     expect(parts.length).toBeGreaterThan(1);
     expect(parts.every((part) => part.head === head)).toBe(true);
     expect(parts.flatMap((part) => part.rows)).toEqual(rows);
+    expect(fragmentsOf(pages, 'heading')).toHaveLength(1);
   });
 
   it('moves symbol columns and paragraphs on whole', () => {
@@ -130,7 +166,7 @@ describe('paginate', () => {
       const own = pages.filter((page) => page.section === index);
       const units = own.flatMap((page) =>
         page.fragments.flatMap((f): unknown[] => {
-          if (f.kind === 'title') {
+          if (f.kind === 'title' || (f.kind === 'heading' && f.text.endsWith('(Fortsetzung)'))) {
             return [];
           }
           return f.kind === 'rules' ? f.items : f.kind === 'table' ? f.rows : [f];

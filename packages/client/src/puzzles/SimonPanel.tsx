@@ -80,11 +80,6 @@ export function SimonPanel({ puzzle, send }: PanelProps<'simon'>) {
   if (puzzle.flashes === null || puzzle.buttons === null) {
     return (
       <div className="simon">
-        <p className="muted">
-          {puzzle.manual !== null
-            ? 'Lass dir jede blinkende Farbe ansagen und übersetze sie mit der Tabelle im Handbuch.'
-            : 'Die Blinkfolge läuft am Frequenz-Panel.'}
-        </p>
         <StageStatus puzzle={puzzle} />
         {puzzle.lastWrong && <p className="warn">⚠ Falsche Taste — die Stufe beginnt von vorn.</p>}
       </div>
@@ -92,6 +87,7 @@ export function SimonPanel({ puzzle, send }: PanelProps<'simon'>) {
   }
   return (
     <div className="simon">
+      <p className="muted">Jede Blinkfarbe ansagen, erst bei Ansage drücken.</p>
       <StageStatus puzzle={puzzle} />
       <SignalLamp key={`${puzzle.stage}:${puzzle.alarms}:${replays}`} flashes={puzzle.flashes} />
       <button className="simon-replay" onClick={() => setReplays((n) => n + 1)}>

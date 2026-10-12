@@ -62,12 +62,7 @@ function Lamp({ pattern }: { pattern: string }) {
 
 export function MorsePanel({ puzzle, send }: PanelProps<'morse'>) {
   if (puzzle.pattern === null) {
-    return (
-      <div className="big-hint">
-        <p className="muted">Die Signallampe blinkt am Funkpult — lass dir die Zeichen ansagen.</p>
-        <div className="progress-line">Regler: {puzzle.frequency}</div>
-      </div>
-    );
+    return <div className="progress-line">Regler: {puzzle.frequency}</div>;
   }
   const tune = (step: -1 | 1): void => {
     play('click');
@@ -78,7 +73,8 @@ export function MorsePanel({ puzzle, send }: PanelProps<'morse'>) {
       {/* A new word restarts the loop from its long pause. */}
       <Lamp key={puzzle.pattern} pattern={puzzle.pattern} />
       <p className="muted morse-help">
-        Sag die Zeichen an: „kurz", „lang", Pause. Nach der langen Pause beginnt das Wort von vorn.
+        Zeichen ansagen: „kurz", „lang", Pause — nach der langen Pause beginnt das Wort von vorn.
+        Erst bei Ansage senden.
       </p>
       <div className="morse-dial">
         <button aria-label="Frequenz runter" disabled={puzzle.dial <= 0} onClick={() => tune(-1)}>

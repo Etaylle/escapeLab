@@ -36,18 +36,22 @@ function sourceAction(map: MapView, manual: Manual, source: Source, mine?: Item)
 }
 
 /**
- * What pressing E would do where the player stands. Items come first, in the
- * order the server applies; then whichever is nearer, the armed station or a
- * manual object the server already counts this player at — so the prompt
- * never promises something it cannot do. Full hands rule out the station,
- * but not reading or searching; a key goes into its cabinet by unlocking it.
- * A locked cabinet only speaks up when nothing else is in reach.
+ * What pressing E would do where the player stands. A carried part goes in
+ * first at its drop-off; otherwise the nearest of a loose part, the armed
+ * station and a manual object the server already counts this player at — so
+ * the prompt names what E does, and never promises what it cannot do. An open
+ * station (`stationOpen`) only shows its panel, whatever the hands hold, but
+ * switching one on goes through the server, which first takes what is
+ * carried or picks up what lies at the player's feet: then the station is not
+ * offered. A key goes into its cabinet by unlocking it. A locked cabinet only
+ * speaks up when nothing else is in reach.
  */
 export function contextAction(
   map: MapView,
   self: { x: number; y: number },
   youId: string,
   sourcesHere: readonly Source[],
+  stationOpen: boolean,
 ): ContextAction | null {
   const dist = (x: number, y: number): number => Math.hypot(self.x - x, self.y - y);
 
@@ -63,14 +67,14 @@ export function contextAction(
     };
   }
 
+  // The server picks up the first loose part in reach, in map order, and only with free hands.
   const loose = map.items.find(
     (item) => !item.delivered && item.carriedBy === null && dist(item.x, item.y) <= ITEM_RADIUS,
   );
-  if (mine === undefined && loose !== undefined) {
-    return { kind: 'pick', label: `[E] ${loose.label} aufnehmen`, x: loose.x, y: loose.y - 0.95 };
-  }
-
-  const station = mine === undefined ? map.stations.find((s) => s.status === 'armed') : undefined;
+  const station =
+    stationOpen || (mine === undefined && loose === undefined)
+      ? map.stations.find((s) => s.status === 'armed')
+      : undefined;
   const candidates: { action: ContextAction; d: number }[] = map.manuals.flatMap((manual) => {
     const source = sourcesHere.find((here) => here.id === manual.id);
     return source === undefined
@@ -82,6 +86,13 @@ export function contextAction(
           },
         ];
   });
+  if (mine === undefined && loose !== undefined) {
+    const label = `[E] ${loose.label} aufnehmen`;
+    candidates.push({
+      action: { kind: 'pick', label, x: loose.x, y: loose.y - 0.95 },
+      d: dist(loose.x, loose.y),
+    });
+  }
   if (station !== undefined) {
     candidates.push({
       action: { kind: 'operate', label: '[E] Bedienen', x: station.x + 0.5, y: station.y - 0.55 },

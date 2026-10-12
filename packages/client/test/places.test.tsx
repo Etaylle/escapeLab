@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 import type { Edgework, ManualHere, PlayerView, PuzzleView } from '@escapelab/core';
 import { Book } from '../src/screens/Book.js';
 import { GameScreen } from '../src/screens/Game.js';
-import { Legend } from '../src/screens/InfoPanel.js';
+import { InfoPanel, Legend } from '../src/screens/InfoPanel.js';
 import { ReadingOverlay } from '../src/screens/Reading.js';
 import { WorldModal } from '../src/screens/WorldModal.js';
-import { mapWith, type Manual, type Plate } from './fixtures.js';
+import { mapWith, type Item, type Manual, type Plate } from './fixtures.js';
 
 const noop = (): void => undefined;
 
@@ -373,5 +373,48 @@ describe('the start of a run', () => {
       '<button class="hud-info hud-notes" aria-pressed="false">✎ Notizen [N]</button>',
     );
     expect(html).not.toContain('class="notepad"');
+  });
+});
+
+describe('what the crew still has to bring', () => {
+  const fuse: Item = {
+    id: 'fuse',
+    label: 'SICHERUNG',
+    x: 2.5,
+    y: 2.5,
+    carriedBy: null,
+    delivered: false,
+    deliverTo: { x: 4, y: 2 },
+    requiredForTitle: 'Notstrom',
+  };
+  /** A cabinet's key: where it goes stays unknown until the cabinet is found. */
+  const key: Item = { ...fuse, id: 'key', label: 'SCHLÜSSEL', deliverTo: null };
+
+  function lying(items: Item[]): PlayerView {
+    const view = justStarted();
+    return { ...view, map: view.map === null ? null : { ...view.map, items } };
+  }
+
+  function info(view: PlayerView): string {
+    return renderToStaticMarkup(<InfoPanel view={view} onClose={noop} />);
+  }
+
+  it('names no key before its cabinet is found, on the objective bar or in the info panel', () => {
+    const view = lying([fuse, key]);
+    expect(game(view)).toContain('<span class="stage-sub">SICHERUNG fehlt noch</span>');
+    expect(info(view)).toContain('<dt>Noch zu bringen</dt><dd>SICHERUNG</dd>');
+    expect(game(view) + info(view)).not.toContain('SCHLÜSSEL');
+  });
+
+  it('names the key once its cabinet has been found', () => {
+    const view = lying([fuse, { ...key, deliverTo: { x: 5, y: 1 } }]);
+    expect(game(view)).toContain('<span class="stage-sub">SICHERUNG, SCHLÜSSEL fehlt noch</span>');
+    expect(info(view)).toContain('<dt>Noch zu bringen</dt><dd>SICHERUNG, SCHLÜSSEL</dd>');
+  });
+
+  it('says nothing is missing while only an unfound key is left', () => {
+    const view = lying([{ ...fuse, delivered: true }, key]);
+    expect(game(view)).not.toContain('stage-sub');
+    expect(info(view)).not.toContain('Noch zu bringen');
   });
 });

@@ -60,23 +60,14 @@ export function SwitchesPanel({ puzzle, send }: PanelProps<'switches'>) {
     <span className="warn">Fehlversuche: {puzzle.attempts}</span>
   );
   if (puzzle.switches === null) {
-    return (
-      <div className="big-hint">
-        <p className="muted">
-          {puzzle.manual !== null
-            ? 'Die Schalter sieht nur das Pult. Lass dir alle sechs ansagen — LED, Markierung, ' +
-              'Stern — und gib für jeden die Stellung aus deiner Tabelle durch.'
-            : 'Diese Station bedienen zwei andere aus der Crew. Hör mit und prüf ihre Ansagen.'}
-        </p>
-        {failed}
-      </div>
-    );
+    return <div>{failed}</div>;
   }
   const upCount = puzzle.switches.filter((sw) => sw.up).length;
   return (
     <div>
       <p className="muted switches-intro">
-        Sag jeden Schalter an: LED, Markierung, Stern. Umlegen ist gefahrlos — erst PRÜFEN zählt.
+        Jeden Schalter ansagen: LED, Markierung, Stern. Bei Ansage umlegen — gefahrlos, erst PRÜFEN
+        zählt.
       </p>
       <div className="switches-bank" role="group" aria-label="Schalterbank">
         {puzzle.switches.map((sw, i) => (

@@ -599,11 +599,6 @@ button.link:hover {
   font-size: 15px;
 }
 
-.big-hint {
-  font-size: 16px;
-  line-height: 1.6;
-}
-
 .progress-line {
   font-family: var(--mono);
   color: var(--accent);
@@ -3681,5 +3676,116 @@ button.link:hover {
   .book-leaves-back,
   .terminal-body {
     animation: none;
+  }
+}
+
+/* ── steady HUD, short banners on touch screens ─────────────────────────── */
+
+/*
+ * The world's zoom follows the canvas height, and the canvas gets what the
+ * HUD strip leaves over — so the strip keeps one height whatever it shows:
+ * the Laborkennung's room is kept before the sign is read, the radio line
+ * cuts itself short, the crew list scrolls sideways instead of wrapping. One
+ * row on a wide window; a grid of fixed rows up to 820 px.
+ */
+.hud {
+  height: 58px;
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+
+.hud-right {
+  display: contents;
+}
+
+.hud-right > :first-child {
+  margin-left: auto;
+}
+
+.hud-crew {
+  flex: 0 1 auto;
+  min-width: 80px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.hud-crew::-webkit-scrollbar {
+  display: none;
+}
+
+.hud-crew li {
+  flex: none;
+  white-space: nowrap;
+}
+
+.hud .edgework {
+  height: 40px;
+  flex-wrap: nowrap;
+  align-items: center;
+  overflow: hidden;
+}
+
+.hud-radio {
+  flex: 0 1 auto;
+  min-width: 80px;
+}
+
+.hud-info {
+  flex: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 820px) {
+  .hud {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-rows: 20px 27px 40px;
+    grid-template-areas:
+      'crew crew crew'
+      'radio notes info'
+      'chip chip chip';
+    align-items: center;
+    gap: 6px 8px;
+    height: auto;
+  }
+
+  .hud-right > :first-child {
+    margin-left: 0;
+  }
+
+  .hud-crew {
+    grid-area: crew;
+    min-width: 0;
+  }
+
+  .hud-radio {
+    grid-area: radio;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .hud .edgework {
+    grid-area: chip;
+    justify-self: start;
+  }
+
+  .hud-notes {
+    grid-area: notes;
+  }
+
+  .hud-info:last-child {
+    grid-area: info;
+  }
+
+  .hud-info {
+    padding: 5px 9px;
+  }
+}
+
+/* On a touch screen a line stays on the air 4 s, not 7 (BANNER_MS_COARSE). */
+@media (pointer: coarse) {
+  .radio-banner {
+    animation-duration: 4s;
   }
 }

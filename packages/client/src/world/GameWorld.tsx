@@ -27,7 +27,7 @@ import {
   makeWallTile,
 } from './art.js';
 import { contextAction } from './interact.js';
-import { markerTargets, placeMarker } from './markers.js';
+import { markerTargets, placeMarkers } from './markers.js';
 import { worldNews } from './news.js';
 import { roomArea } from './rooms.js';
 import {
@@ -88,7 +88,7 @@ interface Props {
   inputLocked: boolean;
   /** audience view: whole map revealed, no controls, no own avatar */
   spectator: boolean;
-  /** first-time tips wait while the objective bar carries a radio line, so the two never stack */
+  /** first-time tips wait while the objective bar carries a notice, so the two never stack */
   holdTips: boolean;
   /** opens the info panel, which owns the briefing and the key list */
   onToggleInfo: () => void;
@@ -391,16 +391,22 @@ export function GameWorld({
     startAmbience();
 
     /**
-     * Fires the one context action. Reading and coming back to an open
-     * station stay on this client; everything else the server decides. A
-     * locked cabinet only says what is missing.
+     * Fires the one context action. Reading and working an open station stay
+     * on this client; everything else the server decides. A locked cabinet
+     * only says what is missing.
      */
     function tryInteract(): void {
       const current = viewRef.current;
       if (current.map === null || lockedRef.current) {
         return;
       }
-      const action = contextAction(current.map, sim.self, current.you.id, current.sourcesHere);
+      const action = contextAction(
+        current.map,
+        sim.self,
+        current.you.id,
+        current.sourcesHere,
+        current.puzzle !== null,
+      );
       if (action === null || action.kind === 'locked') {
         return;
       }
@@ -1287,11 +1293,19 @@ export function GameWorld({
       }
       // Anything you need to walk to gets an arrow at the screen edge while
       // it is out of sight — in the dark that is the only way to find it.
-      for (const target of markerTargets(map, viewRef.current.you.id)) {
+      ctx.font = `700 ${11 * dpr}px ui-monospace, Menlo, monospace`;
+      ctx.textAlign = 'center';
+      const marks = markerTargets(map, viewRef.current.you.id).map((target) => {
         const [px, py] = worldToScreen(s, w, h, target.x, target.y);
-        const at = placeMarker(px, py, w, h, safeTopCss, dpr);
-        if (at === null) {
-          continue;
+        const tiles = Math.round(Math.hypot(target.x - sim.self.x, target.y - sim.self.y));
+        const caption = `${target.label} ${tiles}m`;
+        return { target, caption, px, py, captionWidth: ctx.measureText(caption).width };
+      });
+      const placements = placeMarkers(marks, w, h, safeTopCss, dpr);
+      marks.forEach(({ target, caption }, i) => {
+        const at = placements[i];
+        if (at == null) {
+          return;
         }
         ctx.save();
         ctx.translate(at.x, at.y);
@@ -1304,15 +1318,13 @@ export function GameWorld({
         ctx.closePath();
         ctx.fill();
         ctx.restore();
-        const tiles = Math.round(Math.hypot(target.x - sim.self.x, target.y - sim.self.y));
         ctx.fillStyle = target.color;
-        ctx.font = `700 ${11 * dpr}px ui-monospace, Menlo, monospace`;
-        ctx.textAlign = 'center';
-        ctx.fillText(`${target.label} ${tiles}m`, at.x, at.captionY);
-      }
+        ctx.fillText(caption, at.x, at.captionY);
+      });
+      const { you, sourcesHere, puzzle } = viewRef.current;
       const action = lockedRef.current
         ? null
-        : contextAction(map, sim.self, viewRef.current.you.id, viewRef.current.sourcesHere);
+        : contextAction(map, sim.self, you.id, sourcesHere, puzzle !== null);
       if (action !== null) {
         const [sx, rawY] = worldToScreen(s, w, h, action.x, action.y);
         // Like the edge arrows: the prompt must stay below the objective bar.

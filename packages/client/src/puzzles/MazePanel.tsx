@@ -76,8 +76,8 @@ export function MazePanel({ puzzle, send }: PanelProps<'maze'>) {
   return (
     <div>
       <p className="muted">
-        Du stehst auf <strong>{here}</strong>, das Ziel ist <strong>{goalName}</strong>. Die
-        Wände sieht nur dein Team — frag nach jeder Richtung!
+        Du stehst auf <strong>{here}</strong>, das Ziel ist <strong>{goalName}</strong>. Feld
+        ansagen, erst bei Ansage gehen.
       </p>
       <MazeGrid puzzle={puzzle} />
       {puzzle.lastResult === 'wall' && <p className="warn">⚠ Gegen die Wand gelaufen!</p>}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { chatText, type PlayerPosition, type PlayerView, type RunEvent } from '@escapelab/core';
-import { fromMissionControl } from '../radio.js';
+import { LAST_CREW } from '../radio.js';
 import type { ChatLine } from '../world/GameWorld.js';
 import { crewTags, CrewTags, presenceNear, type CrewTag } from './Crew.js';
 import { EdgeworkChip } from './EdgeworkChip.js';
@@ -31,10 +31,13 @@ function tagsOf(
   return crewTags(view.map, player, at, pos);
 }
 
-/** A run-report line as the radio strip reads it; mission control is named like a speaker. */
+/** A run-report line as the radio strip reads it; mission control and the last crew are named. */
 function eventLine(event: RunEvent): string {
   const text = event.seconds === null ? event.label : `${event.label} (−${event.seconds}s)`;
-  return fromMissionControl(event) ? `Leitstelle: ${text}` : text;
+  if (event.kind === 'hint') {
+    return `${LAST_CREW} — ${text}`;
+  }
+  return `📻 ${event.kind === 'radio' ? `Leitstelle: ${text}` : text}`;
 }
 
 /** Epoch ms a quick-chat line came in; chat lines are stamped with performance.now(). */
@@ -66,9 +69,10 @@ export function MissionHud({
   // The newest line holds the strip; a chat line only lives as long as its bubble.
   const lastChat = chatsRef.current.at(-1);
   const lastEvent = view.events.at(-1);
+  const nameOf = (id: string): string => view.players.find((p) => p.id === id)?.name ?? '?';
   const radio =
     lastChat !== undefined && (lastEvent === undefined || chatArrival(lastChat) >= lastEvent.at)
-      ? `${view.players.find((p) => p.id === lastChat.playerId)?.name ?? '?'}: ${chatText(lastChat.phrase)}`
+      ? `📻 ${nameOf(lastChat.playerId)}: ${chatText(lastChat.phrase)}`
       : lastEvent === undefined
         ? null
         : eventLine(lastEvent);
@@ -95,7 +99,7 @@ export function MissionHud({
 
       <div className="hud-right">
         {view.edgework !== null && <EdgeworkChip edgework={view.edgework} />}
-        {radio !== null && <span className="hud-radio">📻 {radio}</span>}
+        {radio !== null && <span className="hud-radio">{radio}</span>}
         <button className="hud-info hud-notes" aria-pressed={notesOpen} onClick={onToggleNotes}>
           ✎ Notizen [N]
         </button>

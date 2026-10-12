@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ManualKind, MapView, PlayerView } from '@escapelab/core';
+import { toBring } from '../world/markers.js';
 
 interface Props {
   view: PlayerView;
@@ -68,7 +69,7 @@ export function Legend({ map }: { map: MapView }) {
 export function InfoPanel({ view, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('auftrag');
   const armed = view.map?.stations.find((s) => s.status === 'armed');
-  const pending = view.map?.items.filter((i) => !i.delivered) ?? [];
+  const pending = view.map === null ? [] : toBring(view.map);
   const escaping = view.map?.exit?.open === true;
 
   return (
