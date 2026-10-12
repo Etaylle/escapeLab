@@ -184,19 +184,7 @@
       "prompt": "Der Hauptgenerator sendet seine Taktfolge als Lichtsignal. Sie muss in Steuerimpulse übersetzt und exakt zurückgespielt werden.",
       "operatorRoleId": "steuerpult",
       "manualRoleId": "anleitung",
-      "buttonSymbols": ["♪", "≋", "Ψ", "Ø"],
       "sequenceLength": 5,
-      "penaltySec": 20,
-      "infos": [
-        {
-          "roleId": "anleitung",
-          "text": "Handbuch §7 — FREQUENZ: Deine Legende zeigt, welches Symbol zu welcher Farbe gehört. Das Steuerpult sieht die Blinkfolge. Übersetzt sie gemeinsam, Farbe für Farbe — dann eintippen."
-        },
-        {
-          "roleId": "steuerpult",
-          "text": "Spiel die Blinkfolge ab und sag die Farben an. Die Anleitung übersetzt sie in Symbole — tippe sie in exakt dieser Reihenfolge. Ein Fehler setzt alles zurück (−20 s)."
-        }
-      ],
       "hints": [
         "Steuerpult, spiel die Folge zweimal ab, bevor gedrückt wird. Fünf Farben, und nie kommt dieselbe zweimal direkt hintereinander.",
         "Ein Fehldruck setzt die ganze Folge zurück. Dann neu abspielen und wieder bei der ersten Farbe anfangen, nicht dort, wo ihr aufgehört habt.",

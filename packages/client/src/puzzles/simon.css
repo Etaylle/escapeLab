@@ -1,0 +1,96 @@
+/* --- Frequenz-Abgleich: stage status, signal lamp and the four color keys -------------------- */
+
+.simon {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.simon-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.simon-status strong {
+  color: var(--accent);
+}
+
+.simon-status .code-dots {
+  margin: 0;
+  gap: 8px;
+}
+
+.simon-signal {
+  height: 86px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: #0b1117;
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #0a0f14;
+  transition: background 0.1s;
+}
+
+.simon-replay {
+  align-self: flex-start;
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+
+.simon-pad {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.simon-key {
+  min-height: 76px;
+  border: 2px solid rgba(0, 0, 0, 0.35);
+  border-radius: 12px;
+  color: #0a0f14;
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  filter: saturate(0.8) brightness(0.78);
+  touch-action: manipulation;
+}
+
+.simon-key:hover:not(:disabled) {
+  filter: none;
+}
+
+.simon-key:active {
+  filter: brightness(1.2);
+  transform: scale(0.98);
+}
+
+/* After .simon-signal, so a lit lamp takes the color. */
+.simon-rot {
+  background: #ef4444;
+}
+
+.simon-blau {
+  background: #3b82f6;
+}
+
+.simon-gruen {
+  background: #22c55e;
+}
+
+.simon-gelb {
+  background: #eab308;
+}

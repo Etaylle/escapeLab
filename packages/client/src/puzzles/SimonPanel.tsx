@@ -1,92 +1,114 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { SIMON_COLORS, type SimonColor } from '@escapelab/core';
 import { play, simonTone } from '../sounds.js';
 import { Dots } from './Dots.js';
 import type { PanelProps } from './index.js';
+import './simon.css';
 
-const SIMON_COLOR_MAP: Record<string, { hex: string; label: string }> = {
-  rot: { hex: '#ef4444', label: 'ROT' },
-  gruen: { hex: '#22c55e', label: 'GRÜN' },
-  blau: { hex: '#3b82f6', label: 'BLAU' },
-  gelb: { hex: '#eab308', label: 'GELB' },
+type SimonPuzzle = PanelProps<'simon'>['puzzle'];
+
+const LABELS: Record<SimonColor, string> = {
+  rot: 'ROT',
+  blau: 'BLAU',
+  gruen: 'GRÜN',
+  gelb: 'GELB',
 };
 
-export function SimonPanel({ puzzle, send }: PanelProps<'simon'>) {
-  const [flashing, setFlashing] = useState<number | null>(null);
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+const START_MS = 500;
+/** Lamp lit per flash, then dark until the next one starts. */
+const FLASH_MS = 520;
+const STEP_MS = 800;
+/** Dark pause before the stage's sequence plays again. */
+const LOOP_PAUSE_MS = 1800;
 
-  if (puzzle.legend !== null) {
-    return (
-      <div className="big-hint">
-        <p>Deine Übersetzungslegende — Farbe → Steuerimpuls:</p>
-        <div className="legend">
-          {puzzle.legend.map((entry) => {
-            const color = SIMON_COLOR_MAP[entry.color] ?? { hex: '#999', label: entry.color };
-            return (
-              <div key={entry.color} className="legend-row">
-                <span className="legend-color" style={{ background: color.hex }}>
-                  {color.label}
-                </span>
-                <span className="legend-arrow">→</span>
-                <span className="legend-symbol">{entry.symbol}</span>
-              </div>
-            );
-          })}
-        </div>
-        <Dots total={puzzle.seqLength} done={puzzle.progress} />
-      </div>
-    );
-  }
-  if (puzzle.sequence === null || puzzle.buttons === null) {
-    return (
-      <div className="big-hint">
-        <p className="muted">Die Frequenzanzeige läuft an einer anderen Station.</p>
-        <Dots total={puzzle.seqLength} done={puzzle.progress} />
-      </div>
-    );
-  }
+/**
+ * The signal lamp: plays its colors on a loop from the moment it mounts.
+ * Remount it (new `key`) to start over. Only the first pass beeps, so the
+ * loop does not drone on.
+ */
+function SignalLamp({ flashes }: { flashes: SimonColor[] }) {
+  const [colors] = useState(flashes);
+  const [lit, setLit] = useState<number | null>(null);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let firstPass = true;
+    const show = (i: number): void => {
+      const color = colors[i];
+      if (color === undefined) {
+        firstPass = false;
+        timer = setTimeout(() => show(0), LOOP_PAUSE_MS);
+        return;
+      }
+      setLit(i);
+      if (firstPass) {
+        simonTone(SIMON_COLORS.indexOf(color));
+      }
+      timer = setTimeout(() => {
+        setLit(null);
+        timer = setTimeout(() => show(i + 1), STEP_MS - FLASH_MS);
+      }, FLASH_MS);
+    };
+    timer = setTimeout(() => show(0), START_MS);
+    return () => clearTimeout(timer);
+  }, [colors]);
 
-  const sequence = puzzle.sequence;
-  function playSequence(): void {
-    timers.current.forEach(clearTimeout);
-    timers.current = sequence.map((color, i) => {
-      const colorIdx = Object.keys(SIMON_COLOR_MAP).indexOf(color);
-      return setTimeout(() => {
-        setFlashing(i);
-        simonTone(colorIdx);
-        timers.current.push(setTimeout(() => setFlashing(null), 620));
-      }, i * 800);
-    });
-  }
-
-  const current = flashing !== null ? sequence[flashing] : undefined;
-  const lamp = current !== undefined ? SIMON_COLOR_MAP[current] : undefined;
+  const color = lit === null ? undefined : colors[lit];
   return (
-    <div>
-      <div className="simon-lamp" style={lamp !== undefined ? { background: lamp.hex } : {}}>
-        {lamp !== undefined ? (
-          <span>
-            {lamp.label} ({(flashing ?? 0) + 1}/{sequence.length})
-          </span>
-        ) : (
-          <span className="muted">Signal bereit</span>
-        )}
+    <div className={`simon-signal ${color === undefined ? '' : `simon-${color}`}`} role="status">
+      {lit !== null && color !== undefined && `${LABELS[color]} · ${lit + 1}/${colors.length}`}
+    </div>
+  );
+}
+
+/** Stage, progress within it and the alarm count that picks the table row. */
+function StageStatus({ puzzle }: { puzzle: SimonPuzzle }) {
+  return (
+    <div className="simon-status">
+      <span>
+        Stufe <strong>{puzzle.stage}/{puzzle.stages}</strong>
+      </span>
+      <Dots total={puzzle.stage} done={puzzle.progress} />
+      <span>
+        Alarme <strong>{puzzle.alarms}</strong>
+      </span>
+    </div>
+  );
+}
+
+export function SimonPanel({ puzzle, send }: PanelProps<'simon'>) {
+  const [replays, setReplays] = useState(0);
+  if (puzzle.flashes === null || puzzle.buttons === null) {
+    return (
+      <div className="simon">
+        <p className="muted">
+          {puzzle.manual !== null
+            ? 'Lass dir jede blinkende Farbe ansagen und übersetze sie mit der Tabelle im Handbuch.'
+            : 'Die Blinkfolge läuft am Frequenz-Panel.'}
+        </p>
+        <StageStatus puzzle={puzzle} />
+        {puzzle.lastWrong && <p className="warn">⚠ Falsche Taste — die Stufe beginnt von vorn.</p>}
       </div>
-      <div className="simon-controls">
-        <button onClick={playSequence}>▶ FOLGE ABSPIELEN</button>
-        <Dots total={puzzle.seqLength} done={puzzle.progress} />
-      </div>
-      <div className="simon-buttons">
-        {puzzle.buttons.map((symbol, i) => (
+    );
+  }
+  return (
+    <div className="simon">
+      <StageStatus puzzle={puzzle} />
+      <SignalLamp key={`${puzzle.stage}:${puzzle.alarms}:${replays}`} flashes={puzzle.flashes} />
+      <button className="simon-replay" onClick={() => setReplays((n) => n + 1)}>
+        ↻ NOCHMAL ABSPIELEN
+      </button>
+      {puzzle.lastWrong && <p className="warn">⚠ Falsche Taste — die Stufe beginnt von vorn.</p>}
+      <div className="simon-pad">
+        {puzzle.buttons.map((color) => (
           <button
-            key={i}
-            className={`key ${puzzle.lastWrongIndex === i ? 'key-wrong' : ''}`}
+            key={color}
+            className={`simon-key simon-${color}`}
             onClick={() => {
               play('click');
-              send({ buttonIndex: i });
+              send({ kind: 'press', color });
             }}
           >
-            {symbol}
+            {LABELS[color]}
           </button>
         ))}
       </div>

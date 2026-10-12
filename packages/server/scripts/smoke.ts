@@ -496,10 +496,10 @@ async function solveSwitches(clients: Clients): Promise<void> {
 }
 
 async function solveSimon(clients: Clients): Promise<void> {
-  await clients.anleitung.expectView('sees the simon legend', (v) =>
-    v.puzzle?.kind === 'simon' && v.puzzle.legend !== null);
+  await clients.anleitung.expectView('sees the simon station without the flashes', (v) =>
+    v.puzzle?.kind === 'simon' && v.puzzle.flashes === null);
   await clients.steuerpult.expectView('sees the simon display', (v) =>
-    v.puzzle?.kind === 'simon' && v.puzzle.sequence !== null);
+    v.puzzle?.kind === 'simon' && v.puzzle.flashes !== null);
   await solveStation(clients, 3);
 }
 
