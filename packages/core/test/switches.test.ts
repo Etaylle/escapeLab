@@ -8,6 +8,7 @@ import type {
   SwitchesInput,
   SwitchesState,
   SwitchesView,
+  SwitchView,
 } from '../src/puzzles/switches.js';
 import { mulberry32 } from '../src/rng.js';
 import {
@@ -21,6 +22,7 @@ import {
 import { playInstance } from './solveModule.js';
 
 const SEEDS = 300;
+const FEATURES = [3, 2] as const;
 
 const rawDef = { type: 'switches', id: 'bank', title: 'Bank', penaltySec: 12 };
 const mission = labMission([rawDef], 'schaltertest', 3);
@@ -28,11 +30,16 @@ const parsedDef = mission.puzzles[0];
 if (parsedDef?.type !== 'switches') {
   throw new Error('expected the switch bank as the only puzzle');
 }
+/** The mission names no `features`, so the bank has the default three. */
 const def: SwitchesDef = parsedDef;
 
+function defOf(features: SwitchesDef['features']): SwitchesDef {
+  return switchesModule.defSchema.parse({ ...rawDef, features });
+}
+
 /** p1 at the bank, p2 at the book, p3 somewhere else; only p1 has read the sign. */
-function started(seed = 7): GameState {
-  return openLab(startedLab(mission, seed), { signSeen: ['p1'] });
+function started(seed = 7, from = mission): GameState {
+  return openLab(startedLab(from, seed), { signSeen: ['p1'] });
 }
 
 const send = (playerId: string, input: unknown, at = T0 + 1000): Action => ({
@@ -50,7 +57,7 @@ function switchesView(state: GameState, playerId: string): SwitchesView {
   return puzzle;
 }
 
-function bankOf(state: GameState): Switch[] {
+function bankOf(state: GameState): SwitchView[] {
   const bank = switchesView(state, 'p1').switches;
   if (bank === null) {
     throw new Error('expected the operator to see the bank');
@@ -59,12 +66,12 @@ function bankOf(state: GameState): Switch[] {
 }
 
 /** Plays the crew's moves through the reducer, each from the views as they arrive. */
-function solveThroughReducer(from: GameState): GameState {
+function solveThroughReducer(from: GameState, bank = def): GameState {
   let state = from;
   for (let round = 1; state.phase === 'playing' && round <= 10; round++) {
     const views = { operator: switchesView(state, 'p1'), reader: switchesView(state, 'p2') };
     const edgework = viewFor(state, 'p1').edgework;
-    for (const { input } of switchesModule.solve(def, views, edgework)) {
+    for (const { input } of switchesModule.solve(bank, views, edgework)) {
       state = applyAction(state, send('p1', input, T0 + round * 1000));
     }
   }
@@ -79,63 +86,66 @@ const ctx = (edgework: Edgework): PuzzleContext => ({
   crew: ['op', 'rd'],
 });
 
-function press(state: SwitchesState, input: SwitchesInput, edgework: Edgework) {
-  return switchesModule.apply(def, state, input, 'op', ctx(edgework));
+function press(bank: SwitchesDef, state: SwitchesState, input: SwitchesInput, edgework: Edgework) {
+  return switchesModule.apply(bank, state, input, 'op', ctx(edgework));
 }
 
 /** The bank as the solver would leave it: every switch where the rules want it. */
-function settled(from: SwitchesState, edgework: Edgework): SwitchesState {
+function settled(bank: SwitchesDef, from: SwitchesState, edgework: Edgework): SwitchesState {
   let state = from;
   for (let guard = 0; guard <= 6; guard++) {
     const viewCtx = { edgework, alarms: 0, crew: ['op', 'rd'] };
     const views = {
-      operator: switchesModule.view(def, state, AT_STATION, viewCtx),
-      reader: switchesModule.view(def, state, AT_BOOK, viewCtx),
+      operator: switchesModule.view(bank, state, AT_STATION, viewCtx),
+      reader: switchesModule.view(bank, state, AT_BOOK, viewCtx),
     };
-    const [move] = switchesModule.solve(def, views, edgework);
+    const [move] = switchesModule.solve(bank, views, edgework);
     if (move === undefined || 'check' in move.input) {
       return state;
     }
-    state = press(state, move.input, edgework).state;
+    state = press(bank, state, move.input, edgework).state;
   }
   throw new Error('the solver kept toggling');
 }
 
-function printedTable(): string[][] {
+function printedTable(bank: SwitchesDef): { head: string[]; rows: string[][] } {
   const table = switchesModule
-    .manual(def)
+    .manual(bank)
     .flatMap((section) => section.blocks)
     .find((block) => block.kind === 'table');
   if (table?.kind !== 'table') {
     throw new Error('expected a table in the manual');
   }
-  return table.rows;
+  return table;
 }
 
-/** A switch with the features one row of the printed table names. */
+/** A switch with the features one row of the printed table names; no Stern column, no star. */
 function switchFromRow(row: string[], up: boolean): Switch {
-  const [led, marking, star] = row;
+  const [led, marking] = row;
   return {
     led: led === 'an',
     red: marking === 'rot' || marking === 'beides',
     blue: marking === 'blau' || marking === 'beides',
-    star: star === 'ja',
+    star: row.length === 4 && row[2] === 'ja',
     up,
   };
 }
 
-/** The printed legend, read independently of the module. */
-function legendSaysUp(letter: string, lab: Edgework): boolean {
+/** The position a row prints in its last cell. */
+const positionOf = (row: string[]): string => row.at(-1) ?? '';
+
+/** A printed position, read independently of the module. */
+function rowSaysUp(position: string, lab: Edgework): boolean {
   const rules: Record<string, boolean> = {
-    U: true,
-    N: false,
-    G: Number(lab.serial.slice(-1)) % 2 === 0,
-    Z: lab.cells >= 2,
-    L: lab.indicators.some((i) => i.id === 'SIG' && i.lit),
+    hoch: true,
+    runter: false,
+    'hoch, wenn die Kennung gerade endet': Number(lab.serial.slice(-1)) % 2 === 0,
+    'hoch, wenn mindestens zwei Zellen': lab.cells >= 2,
+    'hoch, wenn SIG leuchtet': lab.indicators.some((i) => i.id === 'SIG' && i.lit),
   };
-  const up = rules[letter];
+  const up = rules[position];
   if (up === undefined) {
-    throw new Error(`unknown letter "${letter}" in the table`);
+    throw new Error(`unknown position "${position}" in the table`);
   }
   return up;
 }
@@ -152,9 +162,12 @@ function lab(lastDigit: string, cells: number, sig: 'lit' | 'dark' | 'absent'): 
   };
 }
 
+const KENNUNG = 'hoch, wenn die Kennung gerade endet';
+
 describe('switches: the printed rules', () => {
-  it('hold one table with every feature combination once and every letter at least twice', () => {
-    const rows = printedTable();
+  it('give three features sixteen rows, every combination once, every position twice', () => {
+    const { head, rows } = printedTable(defOf(3));
+    expect(head).toEqual(['LED', 'Markierung', 'Stern', 'Stellung']);
     expect(rows).toHaveLength(16);
     const combos = new Set(rows.map(([led, marking, star]) => `${led}/${marking}/${star}`));
     expect(combos.size).toBe(16);
@@ -163,67 +176,95 @@ describe('switches: the printed rules', () => {
       expect(['keine', 'rot', 'blau', 'beides']).toContain(marking);
       expect(['ja', 'nein']).toContain(star);
     }
-    const letters = rows.map((row) => row[3] ?? '');
-    for (const letter of ['U', 'N', 'G', 'Z', 'L']) {
-      expect(letters.filter((l) => l === letter).length, letter).toBeGreaterThanOrEqual(2);
+    const positions = rows.map(positionOf);
+    const all = [
+      'hoch',
+      'runter',
+      KENNUNG,
+      'hoch, wenn mindestens zwei Zellen',
+      'hoch, wenn SIG leuchtet',
+    ];
+    for (const position of all) {
+      expect(positions.filter((p) => p === position).length, position).toBeGreaterThanOrEqual(2);
     }
-    expect(new Set(letters)).toEqual(new Set(['U', 'N', 'G', 'Z', 'L']));
+    expect(new Set(positions)).toEqual(new Set(all));
   });
 
-  it('let no single feature give the letter away', () => {
-    const rows = printedTable();
-    for (const column of [0, 1, 2]) {
+  it('give two features eight rows, every combination once, one of them with a condition', () => {
+    const { head, rows } = printedTable(defOf(2));
+    expect(head).toEqual(['LED', 'Markierung', 'Stellung']);
+    expect(rows).toHaveLength(8);
+    expect(new Set(rows.map(([led, marking]) => `${led}/${marking}`)).size).toBe(8);
+    for (const [led, marking] of rows) {
+      expect(['an', 'aus']).toContain(led);
+      expect(['keine', 'rot', 'blau', 'beides']).toContain(marking);
+    }
+    const positions = rows.map(positionOf);
+    expect(positions.filter((p) => p !== 'hoch' && p !== 'runter')).toEqual([KENNUNG]);
+    expect(new Set(positions)).toEqual(new Set(['hoch', 'runter', KENNUNG]));
+  });
+
+  it.each(FEATURES)('let no single feature give the position away, with %i features', (n) => {
+    const { rows } = printedTable(defOf(n));
+    // Two features leave two rows per Markierung, so those two have to differ.
+    const least = n === 3 ? 3 : 2;
+    for (let column = 0; column < n; column++) {
       for (const value of new Set(rows.map((row) => row[column]))) {
-        const letters = new Set(rows.filter((row) => row[column] === value).map((row) => row[3]));
-        expect(letters.size, `column ${column} = ${value}`).toBeGreaterThanOrEqual(3);
+        const positions = new Set(rows.filter((row) => row[column] === value).map(positionOf));
+        expect(positions.size, `column ${column} = ${value}`).toBeGreaterThanOrEqual(least);
       }
     }
   });
 
-  it('end the legend in a catch-all and name the price of a wrong check', () => {
-    const blocks = switchesModule.manual(def).flatMap((section) => section.blocks);
-    const legend = blocks.find((block) => block.kind === 'rules');
-    expect(legend?.kind === 'rules' ? legend.items.at(-1) : null).toMatch(/^Sonst/);
-    expect(JSON.stringify(blocks)).toContain('−12 s');
+  it.each(FEATURES)('need no legend: intro, table, a line on PRÜFEN, with %i features', (n) => {
+    const blocks = switchesModule.manual(defOf(n)).flatMap((section) => section.blocks);
+    expect(blocks.map((block) => block.kind)).toEqual(['p', 'table', 'p']);
+    const [intro, , check] = blocks.map((block) => (block.kind === 'p' ? block.text : ''));
+    expect(intro).toContain(`ansagen: ${n === 3 ? 'LED, Markierung, Stern.' : 'LED, Markierung.'}`);
+    expect(intro?.split(/(?<=\.) /).length).toBeLessThanOrEqual(2);
+    expect(check).toMatch(/PRÜFEN.*−12 s\.$/);
   });
 });
 
-describe('switches: the rules as PRÜFEN enforces them', () => {
+describe.each(FEATURES)('switches with %i features: the rules as PRÜFEN enforces them', (n) => {
+  const bankDef = defOf(n);
   const labs = ['2', '0', '7'].flatMap((digit) =>
     [0, 1, 2, 4].flatMap((cells) =>
       (['lit', 'dark', 'absent'] as const).map((sig) => lab(digit, cells, sig)),
     ),
   );
 
-  it('are exactly the printed table and legend, for every row and every kind of lab', () => {
-    const rows = printedTable();
-    const alwaysDown = rows.find((row) => row[3] === 'N');
+  it('are exactly the printed table, for every row and every kind of lab', () => {
+    const { rows } = printedTable(bankDef);
+    const alwaysDown = rows.find((row) => positionOf(row) === 'runter');
     if (alwaysDown === undefined) {
-      throw new Error('expected an N row');
+      throw new Error('expected a runter row');
     }
     // Five switches that stay down whatever the lab, beside the one under test.
     const fillers = Array.from({ length: 5 }, () => switchFromRow(alwaysDown, false));
     for (const edgework of labs) {
       for (const row of rows) {
-        const up = legendSaysUp(row[3] ?? '', edgework);
+        const up = rowSaysUp(positionOf(row), edgework);
         const bank = (testUp: boolean): SwitchesState => ({
           type: 'switches',
           switches: [switchFromRow(row, testUp), ...fillers],
           attempts: 0,
         });
         const label = `${row.join(' ')} in ${JSON.stringify(edgework)}`;
-        expect(press(bank(up), { check: true }, edgework).solved, label).toBe(true);
-        expect(press(bank(!up), { check: true }, edgework).penalty, label).not.toBeNull();
+        expect(press(bankDef, bank(up), { check: true }, edgework).solved, label).toBe(true);
+        expect(press(bankDef, bank(!up), { check: true }, edgework).penalty, label).not.toBeNull();
       }
     }
   });
 });
 
-describe('switches: a run', () => {
+describe.each(FEATURES)('switches with %i features: a run', (n) => {
+  const bankDef = defOf(n);
+
   it(`is solved from the station's and the book's view, alarm-free, for ${SEEDS} seeds`, () => {
     for (let seed = 0; seed < SEEDS; seed++) {
       // At least one switch goes up and at least one stays down: 1–5 toggles, then PRÜFEN.
-      const moves = playInstance(def, seed);
+      const moves = playInstance(bankDef, seed);
       expect(moves, `seed ${seed}`).toBeGreaterThanOrEqual(2);
       expect(moves, `seed ${seed}`).toBeLessThanOrEqual(6);
     }
@@ -232,22 +273,23 @@ describe('switches: a run', () => {
   it(`alarms on PRÜFEN with any switch wrong, leaving the bank as set, for ${SEEDS} seeds`, () => {
     for (let seed = 0; seed < SEEDS; seed++) {
       const edgework = generateEdgework(mulberry32(seed + 1));
-      const start = switchesModule.init(def, mulberry32(seed), ctx(edgework));
+      const start = switchesModule.init(bankDef, mulberry32(seed), ctx(edgework));
       expect(start.switches.every((sw) => !sw.up)).toBe(true);
       const allUp = { ...start, switches: start.switches.map((sw) => ({ ...sw, up: true })) };
       for (const guess of [start, allUp]) {
-        expect(press(guess, { check: true }, edgework).penalty, `seed ${seed}`).not.toBeNull();
+        const checked = press(bankDef, guess, { check: true }, edgework);
+        expect(checked.penalty, `seed ${seed}`).not.toBeNull();
       }
-      const right = settled(start, edgework);
+      const right = settled(bankDef, start, edgework);
       for (let i = 0; i < 6; i++) {
-        const wrong = press(right, { switchIndex: i }, edgework);
+        const wrong = press(bankDef, right, { switchIndex: i }, edgework);
         expect(wrong).toMatchObject({ solved: false, penalty: null });
-        const checked = press(wrong.state, { check: true }, edgework);
+        const checked = press(bankDef, wrong.state, { check: true }, edgework);
         expect(checked.penalty).toBe('Falsche Schalterstellung');
         expect(checked.solved).toBe(false);
         expect(checked.state).toEqual({ ...wrong.state, attempts: 1 });
       }
-      expect(press(right, { check: true }, edgework)).toEqual({
+      expect(press(bankDef, right, { check: true }, edgework)).toEqual({
         state: right,
         solved: true,
         penalty: null,
@@ -255,6 +297,22 @@ describe('switches: a run', () => {
     }
   });
 
+  it(`rolls and shows stars only with three features, for ${SEEDS} seeds`, () => {
+    let stars = 0;
+    for (let seed = 0; seed < SEEDS; seed++) {
+      const edgework = generateEdgework(mulberry32(seed + 1));
+      const state = switchesModule.init(bankDef, mulberry32(seed), ctx(edgework));
+      stars += state.switches.filter((sw) => sw.star).length;
+      const viewCtx = { edgework, alarms: 0, crew: ['op', 'rd'] };
+      const view = switchesModule.view(bankDef, state, AT_STATION, viewCtx);
+      expect(view.features).toBe(n);
+      expect(view.switches?.every((sw) => 'star' in sw === (n === 3))).toBe(true);
+    }
+    expect(stars > 0).toBe(n === 3);
+  });
+});
+
+describe('switches: a run', () => {
   it('rolls the same bank for the same seed and a different one otherwise', () => {
     expect(bankOf(started(7))).toEqual(bankOf(started(7)));
     expect(bankOf(started(7))).not.toEqual(bankOf(started(8)));
@@ -267,7 +325,7 @@ describe('switches: a run', () => {
     const bystander = viewFor(state, 'p3');
     expect(switchesView(state, 'p1').switches).toHaveLength(6);
     expect(operator.edgework).toEqual(state.edgework);
-    expect(switchesView(state, 'p2')).toMatchObject({ switches: null, attempts: 0 });
+    expect(switchesView(state, 'p2')).toMatchObject({ features: 3, switches: null, attempts: 0 });
     expect(manual.puzzle?.manual).toEqual(switchesModule.manual(def));
     expect(manual.edgework).toBeNull();
     expect(switchesView(state, 'p3')).toMatchObject({ switches: null, manual: null });
@@ -299,6 +357,19 @@ describe('switches: a run', () => {
     const won = solveThroughReducer(wrong);
     expect(won.phase).toBe('won');
     expect(won.penaltySeq).toBe(1);
+  });
+
+  it('shows a bank of two features without stars, over the wire, and wins with it', () => {
+    const simple = labMission([{ ...rawDef, features: 2 }], 'schaltertest-zwei', 3);
+    const state = started(7, simple);
+    const operator = switchesView(state, 'p1');
+    expect(operator.features).toBe(2);
+    expect(operator.switches).toHaveLength(6);
+    expect(JSON.stringify(viewFor(state, 'p1'))).not.toContain('"star"');
+    expect(switchesView(state, 'p2')).toMatchObject({ features: 2, switches: null });
+    const won = solveThroughReducer(state, defOf(2));
+    expect(won.phase).toBe('won');
+    expect(won.penaltySeq).toBe(0);
   });
 
   it('lets only a player at the bank toggle or check', () => {
@@ -333,7 +404,7 @@ describe('switches: the mission format', () => {
   it('needs only the common fields, and knows no roles any more', () => {
     expect(
       switchesModule.defSchema.parse({ type: 'switches', id: 'bank', title: 'Bank' }),
-    ).toMatchObject({ penaltySec: 20, hints: [] });
+    ).toMatchObject({ penaltySec: 20, hints: [], features: 3 });
     expect(() =>
       switchesModule.defSchema.parse({
         type: 'switches',
@@ -342,6 +413,16 @@ describe('switches: the mission format', () => {
         operatorRoleId: 'pult',
       }),
     ).toThrow(/operatorRoleId/);
+  });
+
+  it('takes two or three features, nothing else', () => {
+    expect(defOf(2).features).toBe(2);
+    for (const features of [1, 4, 2.5, '2', null]) {
+      expect(
+        () => switchesModule.defSchema.parse({ ...rawDef, features }),
+        JSON.stringify(features),
+      ).toThrow(/features/);
+    }
   });
 
   it('refuses a map where nobody could read the edgework', () => {

@@ -8,15 +8,19 @@ export type SimonColor = (typeof SIMON_COLORS)[number];
 /**
  * simon puzzle (Frequenz-Abgleich): the panel flashes a color sequence in
  * stages — stage k shows the first k colors — and the operator enters each
- * stage's sequence translated through the printed tables. The Laborkennung
- * picks the table and the alarms so far pick the row, so the translation
- * changes from run to run and after every alarm. A wrong press costs time
- * and restarts the current stage's input; the stage itself is kept.
+ * stage's sequence translated through the printed tables. The alarms so far
+ * pick the row; under the `kennung` legend the Laborkennung picks one of two
+ * tables, so the translation changes from run to run and after each of the
+ * first two alarms, while the `einfach` legend prints one table that changes
+ * with the first alarm only. A wrong press costs time and restarts the
+ * current stage's input; the stage itself is kept.
  */
 const defSchema = z.strictObject({
   type: z.literal('simon'),
   ...commonDefShape,
   sequenceLength: z.number().int().min(3).max(8).default(5),
+  /** kennung: two tables by vowel, three alarm rows each; einfach: one table, two alarm rows */
+  legend: z.enum(['kennung', 'einfach']).default('kennung'),
   penaltySec: z.number().int().positive().default(20),
 });
 export type SimonDef = z.infer<typeof defSchema>;
@@ -54,8 +58,8 @@ export interface SimonView {
 
 /** Flashed color → color to press, for one table row. */
 type Translation = Readonly<Record<SimonColor, SimonColor>>;
-/** One row per alarm count: 0, 1, 2 or more. */
-type TranslationTable = readonly [Translation, Translation, Translation];
+/** One row per alarm count from 0; the last row also holds for every count above it. */
+type TranslationTable = readonly Translation[];
 
 /*
  * Every row is a permutation and none is the identity. Within a table the
@@ -73,6 +77,15 @@ const WITHOUT_VOWEL: TranslationTable = [
   { rot: 'gelb', blau: 'rot', gruen: 'blau', gelb: 'gruen' },
   { rot: 'gruen', blau: 'blau', gruen: 'gelb', gelb: 'rot' },
 ];
+/*
+ * The `einfach` legend's one table: each row swaps two pairs, so no color
+ * stays itself, and the rows differ in every column, so the first alarm
+ * changes every translation.
+ */
+const SIMPLE: TranslationTable = [
+  { rot: 'blau', blau: 'rot', gruen: 'gelb', gelb: 'gruen' },
+  { rot: 'gruen', blau: 'gelb', gruen: 'rot', gelb: 'blau' },
+];
 
 const COLOR_NAMES: Record<SimonColor, string> = {
   rot: 'rot',
@@ -80,27 +93,44 @@ const COLOR_NAMES: Record<SimonColor, string> = {
   gruen: 'grün',
   gelb: 'gelb',
 };
-const ROW_LABELS = ['0 Alarme', '1 Alarm', '≥ 2 Alarme'] as const;
+const ROW_LABELS: Record<SimonDef['legend'], readonly string[]> = {
+  kennung: ['0 Alarme', '1 Alarm', '≥ 2 Alarme'],
+  einfach: ['0 Alarme', '1 oder mehr Alarme'],
+};
 
-function rowFor(alarms: number): 0 | 1 | 2 {
-  if (alarms <= 0) {
-    return 0;
+/** The table this run translates with: the legend's, under `kennung` by the Laborkennung. */
+function tableFor(def: SimonDef, edgework: Edgework | null): TranslationTable {
+  if (def.legend === 'einfach') {
+    return SIMPLE;
   }
-  return alarms === 1 ? 1 : 2;
+  if (edgework === null) {
+    throw new Error(
+      `simon "${def.id}": the translation reads the Laborkennung, ` +
+        'but nobody has read the sign yet',
+    );
+  }
+  return serialHasVowel(edgework) ? WITH_VOWEL : WITHOUT_VOWEL;
 }
 
-/** The color to press for `flashed` under this run's Laborkennung and alarm count. */
-function pressFor(flashed: SimonColor, edgework: Edgework, alarms: number): SimonColor {
-  const table = serialHasVowel(edgework) ? WITH_VOWEL : WITHOUT_VOWEL;
-  return table[rowFor(alarms)][flashed];
+/** The color to press for `flashed`: the table's row for the alarms so far. */
+function pressFor(table: TranslationTable, flashed: SimonColor, alarms: number): SimonColor {
+  const row = table[Math.min(alarms, table.length - 1)];
+  if (row === undefined) {
+    throw new Error(`simon: no table row for ${alarms} alarms`);
+  }
+  return row[flashed];
 }
 
-function tableBlock(label: string, table: TranslationTable): ManualBlock {
+function tableBlock(
+  label: string,
+  table: TranslationTable,
+  rowLabels: readonly string[],
+): ManualBlock {
   return {
     kind: 'table',
     head: [label, ...SIMON_COLORS.map((color) => COLOR_NAMES[color])],
     rows: table.map((row, i) => [
-      ROW_LABELS[i] ?? '',
+      rowLabels[i] ?? '',
       ...SIMON_COLORS.map((color) => COLOR_NAMES[row[color]]),
     ]),
   };
@@ -125,12 +155,12 @@ export const simonModule: PuzzleModule<SimonDef, SimonState, SimonInput, SimonVi
     return { type: 'simon', sequence, stage: 1, progress: 0, lastWrong: false };
   },
 
-  apply(_def, state, input, _playerId, ctx) {
+  apply(def, state, input, _playerId, ctx) {
     const flashed = state.sequence[state.progress];
     if (flashed === undefined || state.progress >= state.stage) {
       return { state, solved: false, penalty: null };
     }
-    if (input.color !== pressFor(flashed, ctx.edgework, ctx.alarms)) {
+    if (input.color !== pressFor(tableFor(def, ctx.edgework), flashed, ctx.alarms)) {
       return {
         state: { ...state, progress: 0, lastWrong: true },
         solved: false,
@@ -165,6 +195,23 @@ export const simonModule: PuzzleModule<SimonDef, SimonState, SimonInput, SimonVi
   },
 
   manual(def) {
+    if (def.legend === 'einfach') {
+      return [
+        {
+          heading: 'Frequenz-Abgleich',
+          blocks: [
+            {
+              kind: 'p',
+              text:
+                'Für jede Blinkfarbe die Taste aus ihrer Spalte tippen, Zeile nach den Alarmen ' +
+                'am Panel, jede Stufe ab der ersten Farbe; falsche Taste: Alarm, ' +
+                `−${def.penaltySec} s, die Stufe beginnt von vorn.`,
+            },
+            tableBlock('Blinkt', SIMPLE, ROW_LABELS.einfach),
+          ],
+        },
+      ];
+    }
     return [
       {
         heading: 'Frequenz-Abgleich',
@@ -180,20 +227,15 @@ export const simonModule: PuzzleModule<SimonDef, SimonState, SimonInput, SimonVi
               `−${def.penaltySec} s, die Stufe beginnt von vorn – mit der Zeile für den ` +
               'neuen Alarmstand.',
           },
-          tableBlock('Mit Vokal', WITH_VOWEL),
-          tableBlock('Ohne Vokal', WITHOUT_VOWEL),
+          tableBlock('Mit Vokal', WITH_VOWEL, ROW_LABELS.kennung),
+          tableBlock('Ohne Vokal', WITHOUT_VOWEL, ROW_LABELS.kennung),
         ],
       },
     ];
   },
 
   solve(def, { operator }, edgework) {
-    if (edgework === null) {
-      throw new Error(
-        `simon "${def.id}": the translation reads the Laborkennung, ` +
-          'but nobody has read the sign yet',
-      );
-    }
+    const table = tableFor(def, edgework);
     if (operator.flashes === null) {
       throw new Error(`simon "${def.id}": solving needs the operator's view`);
     }
@@ -201,7 +243,7 @@ export const simonModule: PuzzleModule<SimonDef, SimonState, SimonInput, SimonVi
     if (flashed === undefined) {
       return [];
     }
-    const color = pressFor(flashed, edgework, operator.alarms);
+    const color = pressFor(table, flashed, operator.alarms);
     return [{ by: 'operator', input: { kind: 'press', color } }];
   },
 };

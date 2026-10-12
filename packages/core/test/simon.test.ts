@@ -30,6 +30,7 @@ import {
 
 const SEEDS = 300;
 const CREW = ['op', 'rd'];
+const LEGENDS = ['kennung', 'einfach'] as const;
 
 /** The colors as the printed page names them. */
 const PRINTED: Record<SimonColor, string> = {
@@ -74,8 +75,9 @@ function printedTables(def: SimonDef): TableBlock[] {
 
 /**
  * What a crew holding nothing but the printed page presses for `flashed`:
- * the table by the Laborkennung, the row by the alarms so far, the column by
- * the flashed color.
+ * the table by the Laborkennung where the page prints more than one, the row
+ * by the alarms so far (the last row holds for any more), the column by the
+ * flashed color.
  */
 function pressFromPage(
   def: SimonDef,
@@ -83,9 +85,11 @@ function pressFromPage(
   edgework: Edgework,
   alarms: number,
 ): SimonColor {
+  const tables = printedTables(def);
   const label = serialHasVowel(edgework) ? 'Mit Vokal' : 'Ohne Vokal';
-  const table = printedTables(def).find((t) => t.head[0] === label);
-  const cell = table?.rows[Math.min(alarms, 2)]?.[table.head.indexOf(PRINTED[flashed])];
+  const table = tables.length === 1 ? tables[0] : tables.find((t) => t.head[0] === label);
+  const row = table?.rows[Math.min(alarms, table.rows.length - 1)];
+  const cell = row?.[table?.head.indexOf(PRINTED[flashed]) ?? -1];
   const color = SIMON_COLORS.find((c) => PRINTED[c] === cell);
   if (color === undefined) {
     throw new Error(`the page has no cell for ${flashed} at ${alarms} alarms (${label})`);
@@ -151,9 +155,9 @@ describe('simon stages', () => {
   });
 });
 
-describe('simon translation', () => {
+describe.each(LEGENDS)('simon translation, legend %s', (legend) => {
   it('accepts exactly the printed color for every table, row and flashed color', () => {
-    const def = defOf();
+    const def = defOf({ legend });
     for (const edgework of [WITH_VOWEL, WITHOUT_VOWEL]) {
       for (const alarms of [0, 1, 2, 3, 7]) {
         for (const flashed of SIMON_COLORS) {
@@ -170,7 +174,15 @@ describe('simon translation', () => {
     }
   });
 
-  it('changes every translation with the Laborkennung and with the first two alarms', () => {
+  it(`is solved from the station's view for every table and row, over ${SEEDS} seeds`, () => {
+    for (let seed = 0; seed < SEEDS; seed++) {
+      expect(playWithSlips(seed, legend)).toBe(true);
+    }
+  });
+});
+
+describe('simon translation by legend', () => {
+  it('kennung: changes every translation with the Laborkennung and the first two alarms', () => {
     const def = defOf();
     for (const flashed of SIMON_COLORS) {
       const rows = [WITH_VOWEL, WITHOUT_VOWEL].map((edgework) =>
@@ -183,19 +195,40 @@ describe('simon translation', () => {
     }
   });
 
-  it("is solved from the station's view for both tables and every row, over 300 seeds", () => {
-    for (let seed = 0; seed < SEEDS; seed++) {
-      expect(playWithSlips(seed)).toBe(true);
+  it('einfach: changes every translation with the first alarm, never with the Kennung', () => {
+    const def = defOf({ legend: 'einfach' });
+    for (const flashed of SIMON_COLORS) {
+      const rows = [WITH_VOWEL, WITHOUT_VOWEL].map((edgework) =>
+        [0, 1, 2, 7].map((alarms) => pressFromPage(def, flashed, edgework, alarms)),
+      );
+      expect(rows[0]).toEqual(rows[1]);
+      const [calm, first, ...more] = rows[0] ?? [];
+      expect(more).toEqual([first, first]);
+      // No color stays itself, and the first alarm moves it on.
+      expect(new Set([flashed, calm, first]).size).toBe(3);
     }
   });
 
-  it('needs the edgework to solve', () => {
+  it('kennung needs the edgework to solve', () => {
     const def = defOf();
     const state = simonModule.init(def, mulberry32(3), ctx(WITH_VOWEL, 0));
     const operator = operatorView(def, state, WITH_VOWEL, 0);
     expect(() => simonModule.solve(def, { operator, reader: operator }, null)).toThrow(
       /Laborkennung/,
     );
+  });
+
+  it('einfach is solved without the edgework', () => {
+    const def = defOf({ legend: 'einfach' });
+    const state = simonModule.init(def, mulberry32(3), ctx(WITH_VOWEL, 0));
+    const operator = operatorView(def, state, WITH_VOWEL, 0);
+    const flashed = operator.flashes?.[0];
+    if (flashed === undefined) {
+      throw new Error('the operator should see a flash');
+    }
+    expect(simonModule.solve(def, { operator, reader: operator }, null)).toEqual([
+      { by: 'operator', input: press(pressFromPage(def, flashed, WITH_VOWEL, 0)) },
+    ]);
   });
 });
 
@@ -205,8 +238,8 @@ describe('simon translation', () => {
  * without moving on, and after each real slip the alarm count goes up, so
  * the crew has to switch rows. Throws on anything else.
  */
-function playWithSlips(seed: number): boolean {
-  const def = defOf({ sequenceLength: 3 + (seed % 6) });
+function playWithSlips(seed: number, legend: SimonDef['legend']): boolean {
+  const def = defOf({ sequenceLength: 3 + (seed % 6), legend });
   const edgework = generateEdgework(mulberry32(seed + 1));
   const rng = mulberry32(seed);
   let alarms = seed % 3;
@@ -281,14 +314,46 @@ describe('simon manual', () => {
     ]);
   });
 
-  it('prints permutations only, none of them the identity', () => {
-    for (const table of printedTables(defOf())) {
+  it('prints one sentence and one table of two rows for the einfach legend', () => {
+    const def = defOf({ legend: 'einfach', sequenceLength: 4, penaltySec: 25 });
+    const [section, ...more] = simonModule.manual(def);
+    expect(more).toEqual([]);
+    expect(section?.heading).toBe('Frequenz-Abgleich');
+    const [rule, ...tables] = section?.blocks ?? [];
+    const text = rule?.kind === 'p' ? rule.text : '';
+    expect(text).toMatch(/Spalte.*Zeile nach den Alarmen.*−25 s/);
+    expect(text).not.toMatch(/Vokal|Kennung/);
+    expect(text.split(/(?<=\.) /)).toEqual([text]);
+    expect(tables).toEqual([
+      {
+        kind: 'table',
+        head: ['Blinkt', 'rot', 'blau', 'grün', 'gelb'],
+        rows: [
+          ['0 Alarme', 'blau', 'rot', 'gelb', 'grün'],
+          ['1 oder mehr Alarme', 'grün', 'gelb', 'rot', 'blau'],
+        ],
+      },
+    ]);
+  });
+
+  it.each(LEGENDS)('prints permutations only, none of them the identity: %s', (legend) => {
+    for (const table of printedTables(defOf({ legend }))) {
       const colors = table.head.slice(1);
       for (const row of table.rows) {
         const cells = row.slice(1);
         expect([...cells].sort()).toEqual([...colors].sort());
         expect(cells).not.toEqual(colors);
       }
+    }
+  });
+
+  it('takes the kennung legend by default, einfach on request, nothing else', () => {
+    expect(defOf().legend).toBe('kennung');
+    expect(defOf({ legend: 'einfach' }).legend).toBe('einfach');
+    for (const legend of ['vokal', 'Einfach', '', 2]) {
+      expect(() => simonModule.defSchema.parse({ ...defOf(), legend }), String(legend)).toThrow(
+        /legend/,
+      );
     }
   });
 });

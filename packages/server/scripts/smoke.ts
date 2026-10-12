@@ -98,8 +98,8 @@ function sourceOf(index: number): { id: string; label: string } {
 const SECRETS = [
   { instance: '"wires":[{', rules: 'Mehr als ein schwarzes Kabel' },
   { instance: '"keys":[{', rules: 'Genau eine Spalte' },
-  { instance: '"switches":[{', rules: 'umlegen, wenn die Laborkennung' },
-  { instance: '"flashes":["', rules: 'Ohne Vokal' },
+  { instance: '"switches":[{', rules: 'hoch, wenn die Kennung' },
+  { instance: '"flashes":["', rules: '1 oder mehr Alarme' },
 ];
 
 function fail(message: string): never {

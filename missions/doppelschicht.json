@@ -160,7 +160,7 @@
       "id": "kuehlung",
       "title": "Kühlkreislauf",
       "hints": [
-        "Schalter von links ansagen: LED, Markierung, Stern. Für G, Z und L die Werte vom Schild. Dann einmal PRÜFEN."
+        "Schalter von links ansagen: LED, Markierung, Stern. Bei „wenn“ die Werte vom Schild. Dann einmal PRÜFEN."
       ],
       "onSolved": "Funkpult im Ostflügel, Ostwand. Regeln im Südwesten."
     },

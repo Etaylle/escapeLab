@@ -173,8 +173,9 @@
       "type": "switches",
       "id": "subsysteme",
       "title": "Subsysteme hochfahren",
+      "features": 2,
       "hints": [
-        "Schalter von links ansagen: LED, Markierung, Stern. Erst alle sechs stellen, dann einmal PRÜFEN."
+        "Schalter von links ansagen: LED, Markierung. Bei „wenn“ die letzte Ziffer der Kennung vom Schild. Dann einmal PRÜFEN."
       ],
       "lights": ["SERVERRAUM"],
       "onSolved": "Labortür offen, Drohne drin. Aktenschrank braucht den Schlüssel."
@@ -183,9 +184,10 @@
       "type": "simon",
       "id": "frequenz",
       "title": "Frequenz-Abgleich",
-      "sequenceLength": 5,
+      "legend": "einfach",
+      "sequenceLength": 4,
       "hints": [
-        "Tabelle nach Vokal in der Laborkennung, Zeile nach Alarmstand; jede Stufe ganz übersetzen."
+        "Spalte nach der Blinkfarbe, Zeile nach den Alarmen am Panel. Jede Stufe beginnt wieder bei der ersten Farbe."
       ],
       "lights": ["LABOR"],
       "onSolved": "Reaktor offen. Ohne Ersatzsicherung bleibt er tot."
