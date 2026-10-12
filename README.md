@@ -1,7 +1,8 @@
 # EscapeLab
 
-Kooperatives Browser-Escape-Spiel: Jede Rolle sieht ein anderes Panel, gelöst wird nur gemeinsam
-— per Stimme. Missionen sind reine Daten (`missions/*.json`) — neue Missionen brauchen keinen Code.
+Kooperatives Browser-Escape-Spiel: Die Maschine sieht, wer am Pult steht, die Regeln, wer am Buch
+steht — gelöst wird nur gemeinsam, per Stimme. Missionen sind reine Daten (`missions/*.json`) —
+neue Missionen brauchen keinen Code.
 
 **Rätseltypen:** Kabel trennen (`wiring`), Symbol-Keypad (`keypad`), Schalterbank mit Prüf-Commit
 (`switches`), Frequenz-Abgleich mit Farblegende (`simon`), unsichtbares Labyrinth (`maze`),
@@ -29,8 +30,14 @@ für alle (farbige Ringe, Pfeil wenn außerhalb des Bildes), `M` blendet die **M
 
 **Tragen:** Manche Stationen bleiben tot, bis ein Gegenstand bei ihnen eingesetzt wurde — die
 Ersatzsicherung liegt im Archiv und muss quer durchs Labor in den Reaktor. `E` ist dabei eine
-einzige Kontexttaste (einsetzen → aufnehmen → Station aktivieren, in dieser Reihenfolge), `Q`
-legt das Getragene ab, sodass Übergaben möglich sind.
+einzige Kontexttaste (einsetzen → aufnehmen → dann, was näher liegt: Station bedienen oder
+lesen), `Q` legt das Getragene ab, sodass Übergaben möglich sind.
+
+**Orte statt Rollen:** Das Pult einer offenen Station sieht und bedient nur, wer davorsteht
+(`E` *Bedienen*, `Esc` tritt zurück — die Station behält ihren Zustand). Die Regeln liegen
+anderswo im Labor an einem Buch, Terminal oder einer Wandtafel (`E` *Lesen*; beim Labyrinth
+zeigt das Terminal auch den Wandplan). Die Laborkennung hängt als Schild im Labor: Wer daran
+vorbeikommt, hat sie ab dann in der Leiste.
 
 **Schwierigkeit:** Der Host wählt in der Lobby zwischen *Entspannt*, *Normal* und *Hart* — das
 skaliert Zeitbudget, alle Zeitstrafen, Drohnentempo und -reichweite sowie Häufigkeit und Dauer
@@ -43,15 +50,15 @@ ansteigenden Piepsern heruntergezählt** — der Schlusston kommt, wenn die Ener
 
 **Oberfläche:** Dauerhaft sichtbar ist nur, was sich ändert — Ziel und Fortschritt liegen als
 Einblendung auf der Welt, die Uhr daneben, darunter eine schmale Leiste mit der Crew und dem
-Live-Status jedes Mitglieds (hält die Platte, trägt etwas, an der Station, getrennt) sowie der
-letzten Funkzeile. Alles zum Nachschlagen — Briefing, eigene Rolle, Tastenliste — steckt im
-**Info-Panel** (Taste `I`, alternativ `H`). Alles, wohin man laufen muss, bekommt am
+Live-Status jedes Mitglieds (hält die Platte, trägt etwas, an der Station, liest, getrennt) sowie
+der letzten Funkzeile. Alles zum Nachschlagen — Auftrag, eine Legende der Kartenobjekte,
+Tastenliste — steckt im **Info-Panel** (Taste `I`, alternativ `H`). Alles, wohin man laufen muss, bekommt am
 Bildschirmrand einen **Richtungspfeil mit Entfernung**, solange es außer Sicht ist. Der Ton
 lässt sich oben rechts abschalten.
 
 **Gefahren unterwegs:** **Wachdrohnen** patrouillieren feste Routen und leuchten einen sichtbaren
-Sichtkegel aus — wer hineinläuft, verliert Zeit (Sichtlinie zählt, an einer Station ist man
-sicher). Dazu schlagen **Notfälle** zu: Mitten im Lauf fällt die Kühlung aus, das offene Rätsel
+Sichtkegel aus — wer hineinläuft, verliert Zeit (Sichtlinie zählt; wer am offenen Pult arbeitet
+oder dessen Regeln liest, ist sicher). Hält jemand eine Kamera-Platte, hängt ihre Drohne still. Dazu schlagen **Notfälle** zu: Mitten im Lauf fällt die Kühlung aus, das offene Rätsel
 bricht ab, und alle Notventile müssen gleichzeitig besetzt werden — je ein Spieler pro Ventil, an
 entgegengesetzten Enden der Karte.
 
@@ -59,10 +66,9 @@ entgegengesetzten Enden der Karte.
 (Canvas, Among-Us-Stil): flüssige Bewegung per WASD/Pfeiltasten, Kamera folgt, das Labor liegt
 im Dunkeln und jede Figur trägt ein Licht. Bewegung ist client-autoritativ (lokale Simulation +
 Positions-Streaming); der Server bleibt Autorität über Rätsel, Türen, Druckplatten (öffnen nur,
-solange jemand draufsteht), Interaktionsdistanz und Timer. Rätsel sind leuchtende Stationen und
-öffnen per `E` als Modal über der Welt. Missionen ohne `map`-Block (Tutorial) laufen im direkten
-Rätsel-Flow. Welt-Code: `packages/client/src/world/` (GameWorld = Simulation/Rendering,
-art = prozedurale Grafik, audio = prozedurale Sounds).
+solange jemand draufsteht), Interaktionsdistanz und Timer. Rätsel sind leuchtende Stationen,
+ihr Pult öffnet per `E` als Modal über der Welt. Welt-Code: `packages/client/src/world/`
+(GameWorld = Simulation/Rendering, art = prozedurale Grafik, audio = prozedurale Sounds).
 
 **Neue Missionen** sind reine JSON-Dateien in `missions/`. `packages/core/test/missionMaps.test.ts`
 prüft jede davon automatisch: gleiche Zeilenlängen, alles auf Bodenfeldern, eine Station pro
@@ -95,8 +101,9 @@ pnpm --filter @escapelab/server smoke   # Ende-zu-Ende über echte WebSockets
 ```
 
 **Zuschauen:** Wer den Raumcode eingibt und auf *Zuschauen* klickt, sieht das ganze Labor ohne
-Dunkelheit, beide Figuren, die Drohnenkegel — **und die privaten Panele aller Rollen
-nebeneinander**. Genau das macht das Zusehen unterhaltsam: Das Publikum sieht beide Hälften und
+Dunkelheit, beide Figuren, die Drohnenkegel — **und die offene Station von allen Seiten**: Pult,
+Regeln und Wandplan zugleich, dazu für jede Figur, ob sie am Pult steht, liest oder die Kennung
+gesehen hat. Genau das macht das Zusehen unterhaltsam: Das Publikum sieht beide Hälften und
 merkt vor den Spielenden, wo die Ansage schiefgeht. Zuschauer können nichts auslösen.
 
 **Nach der Runde:** Der Endbildschirm zeigt ein Einsatzprotokoll (wann welche Station fiel, jeder

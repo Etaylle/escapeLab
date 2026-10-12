@@ -2,7 +2,7 @@ import type { ComponentType } from 'react';
 import type { PuzzleInputOf, PuzzleView } from '@escapelab/core';
 import { ButtonSyncPanel } from './ButtonSyncPanel.js';
 import { KeypadPanel } from './KeypadPanel.js';
-import { MazePanel } from './MazePanel.js';
+import { MazePanel, MazePlan } from './MazePanel.js';
 import { SimonPanel } from './SimonPanel.js';
 import { SwitchesPanel } from './SwitchesPanel.js';
 import { WiringPanel } from './WiringPanel.js';
@@ -13,7 +13,7 @@ import { RelayPanel } from './RelayPanel.js';
 
 export type PuzzleKind = PuzzleView['kind'];
 
-/** What a module's panel gets: the open puzzle as this role sees it, and a way to answer. */
+/** What a module's panel gets: the open puzzle as seen at its station, and a way to answer. */
 export interface PanelProps<K extends PuzzleKind> {
   puzzle: Extract<PuzzleView, { kind: K }>;
   /** sends one of this module's inputs as a `puzzle-input` message */
@@ -39,4 +39,19 @@ export const PANELS: { [K in PuzzleKind]: Panel<K> } = {
   morse: MorsePanel,
   button: ButtonPanel,
   relay: RelayPanel,
+};
+
+/** What a reader panel gets: the open puzzle as seen at a manual object covering it. */
+export interface ReaderProps<K extends PuzzleKind> {
+  puzzle: Extract<PuzzleView, { kind: K }>;
+}
+
+export type Reader<K extends PuzzleKind> = ComponentType<ReaderProps<K>>;
+
+/**
+ * The modules that show a reader more than the printed rules, by kind — the
+ * maze's wall plan. Most have no entry.
+ */
+export const READERS: { [K in PuzzleKind]?: Reader<K> } = {
+  maze: MazePlan,
 };

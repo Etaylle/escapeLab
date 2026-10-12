@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import type { PlayerPosition, DronePosition, SpectatorView } from '@escapelab/core';
+import type {
+  PlayerPosition,
+  PlayerPresence,
+  DronePosition,
+  SpectatorView,
+} from '@escapelab/core';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
@@ -24,6 +29,17 @@ function remaining(deadlineAt: number, now: number): string {
 function elapsed(startedAt: number | null, at: number): string {
   const total = startedAt === null ? 0 : Math.max(0, Math.floor((at - startedAt) / 1000));
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/** Where a crew member stands: at a panel, at a manual object, and whether past the sign. */
+export function PresenceTags({ presence }: { presence: PlayerPresence }) {
+  return (
+    <>
+      {presence.stationId !== null && <span className="presence-tag presence-pult">PULT</span>}
+      {presence.manualId !== null && <span className="presence-tag presence-read">LIEST</span>}
+      {presence.signSeen && <span className="presence-tag presence-sign">KENNUNG</span>}
+    </>
+  );
 }
 
 /** Audience view: the whole lab revealed, plus the open station from every side. */
@@ -86,6 +102,8 @@ export function SpectateScreen({
               inputLocked
               holdTips={false}
               onToggleInfo={noop}
+              onRead={noop}
+              onOperate={noop}
               send={noop}
             />
           )}
@@ -145,6 +163,7 @@ export function SpectateScreen({
             <li key={p.id} className={p.connected ? '' : 'offline'}>
               <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
               {p.name} · {p.roleName ?? '—'}
+              <PresenceTags presence={p.presence} />
             </li>
           ))}
         </ul>

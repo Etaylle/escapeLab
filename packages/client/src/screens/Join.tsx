@@ -86,8 +86,9 @@ export function JoinScreen({ send, connected, missions, rooms, openHandbook }: P
     <div className="card join">
       <h1>⬢ EscapeLab</h1>
       <p className="muted">
-        Kooperatives Escape-Spiel für den Browser: Jede Rolle sieht ein anderes Panel — lösen
-        könnt ihr es nur gemeinsam, per Stimme. Gerät pro Person, Rücken an Rücken, los.
+        Kooperatives Escape-Spiel für den Browser: Die Maschine sieht, wer am Pult steht, die
+        Regeln, wer am Buch steht — lösen könnt ihr es nur gemeinsam, per Stimme. Gerät pro
+        Person, Rücken an Rücken, los.
       </p>
 
       <label>

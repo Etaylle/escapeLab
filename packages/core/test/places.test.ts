@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { parseMission } from '../src/index.js';
+import { parseMission, viewFor } from '../src/index.js';
+import { started } from './lab.js';
 
 /**
  * Two rooms, west (x 1–3) and east (x 5–7), joined by a door at (4,2);
@@ -118,6 +119,26 @@ describe('the mission format after roles', () => {
     const plates = [{ id: 'kamera', x: 3, y: 3, label: 'KAMERA HALTEN' }];
     const frozen = parseMission(lab({ map: { drones: [drone], plates } }));
     expect(frozen.map.drones[0]?.frozenByPlate).toBe('kamera');
+  });
+
+  it('tells the client which plate holds a camera, so it can be drawn as one', () => {
+    const drone = {
+      id: 'wache',
+      waypoints: [
+        { x: 5, y: 1 },
+        { x: 7, y: 1 },
+      ],
+      frozenByPlate: 'kamera',
+    };
+    const plates = [
+      { id: 'kamera', x: 3, y: 3, label: 'KAMERA HALTEN' },
+      { id: 'tuer', x: 2, y: 2, label: 'HALTEN' },
+    ];
+    const view = viewFor(started(parseMission(lab({ map: { drones: [drone], plates } }))), 'p1');
+    expect(view.map?.plates.map((p) => [p.id, p.freezesDrone])).toEqual([
+      ['kamera', true],
+      ['tuer', false],
+    ]);
   });
 });
 

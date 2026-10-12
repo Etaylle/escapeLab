@@ -4,7 +4,7 @@ import type { Edgework } from '@escapelab/core';
 const CELL_SLOTS = 4;
 
 /**
- * The lab's edgework for the roles that read it out: serial, control lamps
+ * The lab's edgework for whoever has read the sign: serial, control lamps
  * and emergency cells, each under the name the manual uses for it.
  */
 export function EdgeworkChip({ edgework }: { edgework: Edgework }) {

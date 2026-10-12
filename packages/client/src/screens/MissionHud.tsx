@@ -49,6 +49,9 @@ function statusOf(
   if (map.stations.some((s) => s.status === 'armed' && near(s.x, s.y, 1.6))) {
     return { text: 'an der Station', tone: 'ok' };
   }
+  if (map.manuals.some((m) => near(m.x, m.y, 1.6))) {
+    return { text: 'liest', tone: 'ok' };
+  }
   return { text: 'unterwegs', tone: 'idle' };
 }
 
@@ -65,7 +68,7 @@ function chatArrival(line: ChatLine): number {
 
 /**
  * The permanent strip under the world. Deliberately thin: only the crew, the
- * edgework for roles that read it out, and the latest radio line, because
+ * edgework once you have read the sign, and the latest radio line, because
  * everything else either sits on the world itself or belongs in the info panel.
  */
 export function MissionHud({ view, positionsRef, chatsRef, onOpenInfo }: Props) {

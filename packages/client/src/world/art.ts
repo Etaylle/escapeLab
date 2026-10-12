@@ -29,10 +29,13 @@ const TAU = Math.PI * 2;
 
 const TEAL = '#2dd4bf';
 const AMBER = '#fbbf24';
+/** Reading: manual objects, like their edge marker. */
+const BLUE = '#60a5fa';
 // 'r, g, b' triples: glow and shadow colors, also their gradient cache keys.
 const TEAL_RGB = '45, 212, 191';
 const AMBER_RGB = '251, 191, 36';
 const GREEN_RGB = '74, 222, 128';
+const BLUE_RGB = '96, 165, 250';
 const SHADOW_RGB = '0, 0, 0';
 /** Near-black edge line for consoles, doors and other props. */
 const PROP_EDGE = '#05080b';
@@ -42,8 +45,10 @@ const MONO = 'ui-monospace, Menlo, monospace';
 const TEXT_SCALE = 32;
 /** 0.26 tile: name tags and station titles. */
 const FONT_HEADING = `bold ${0.26 * TEXT_SCALE}px ${MONO}`;
-/** 0.2 tile: pressure plate labels. */
+/** 0.2 tile: labels of plates, manual objects and the sign. */
 const FONT_LABEL = `bold ${0.2 * TEXT_SCALE}px ${MONO}`;
+/** Label of a prop that is not calling for anybody right now. */
+const IDLE_LABEL = '#8a96a5';
 const HALO_COLOR = 'rgba(3, 6, 10, 0.88)';
 /** Halo stroke width in text space; the halo reaches half of it past each glyph edge. */
 const HALO_WIDTH = 0.075 * TEXT_SCALE;
@@ -842,7 +847,12 @@ export function drawStation(ctx: CanvasRenderingContext2D, o: StationOpts): void
 
 // ---- Pressure plate ------------------------------------------------------------------
 
-export interface PlateOpts { pressed: boolean; label: string }
+export interface PlateOpts {
+  pressed: boolean;
+  label: string;
+  /** holding it freezes a drone: a camera glyph replaces the center indicator */
+  camera: boolean;
+}
 
 const PLATE_SOCKET_R = 0.38;
 const PLATE_RIM_R = 0.335;
@@ -875,8 +885,33 @@ function drawPlateSocket(ctx: CanvasRenderingContext2D): void {
   ctx.stroke();
 }
 
-/** Engraved ring, four bolts and the center indicator (lit teal while pressed). */
-function drawPlateEngraving(ctx: CanvasRenderingContext2D, pressed: boolean): void {
+/** Camera body with viewfinder bump and lens, lit teal while pressed. */
+function drawCameraGlyph(ctx: CanvasRenderingContext2D, pressed: boolean): void {
+  const color = pressed ? TEAL : IDLE_LABEL;
+  ctx.beginPath();
+  roundRectPath(ctx, -0.095, -0.05, 0.19, 0.115, 0.022);
+  ctx.rect(-0.04, -0.078, 0.08, 0.03);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.lineWidth = 0.012;
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, 0.008, 0.036, 0, TAU);
+  ctx.fillStyle = '#151b22';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(0, 0.008, 0.016, 0, TAU);
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+/** Engraved ring, four bolts and the center indicator (lit teal while pressed) or camera. */
+function drawPlateEngraving(
+  ctx: CanvasRenderingContext2D,
+  pressed: boolean,
+  camera: boolean,
+): void {
   ctx.beginPath();
   ctx.arc(0, 0, 0.2, 0, TAU);
   ctx.lineWidth = 0.018;
@@ -894,6 +929,10 @@ function drawPlateEngraving(ctx: CanvasRenderingContext2D, pressed: boolean): vo
   addCircle(ctx, PLATE_BOLT, PLATE_BOLT, 0.018);
   ctx.fillStyle = '#4a5562';
   ctx.fill();
+  if (camera) {
+    drawCameraGlyph(ctx, pressed);
+    return;
+  }
   ctx.beginPath();
   ctx.arc(0, 0, 0.065, 0, TAU);
   ctx.fillStyle = pressed ? TEAL : '#151b22';
@@ -904,7 +943,7 @@ function drawPlateEngraving(ctx: CanvasRenderingContext2D, pressed: boolean): vo
 }
 
 /** The disc stands proud of the floor (thick side wall) or sinks in when pressed. */
-function drawPlateDisc(ctx: CanvasRenderingContext2D, pressed: boolean): void {
+function drawPlateDisc(ctx: CanvasRenderingContext2D, pressed: boolean, camera: boolean): void {
   const r = pressed ? 0.295 : 0.31;
   const cy = pressed ? 0.012 : -0.016;
   const side = pressed ? 0.008 : 0.03;
@@ -924,18 +963,19 @@ function drawPlateDisc(ctx: CanvasRenderingContext2D, pressed: boolean): void {
   ctx.lineWidth = 0.014;
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
   ctx.stroke();
-  drawPlateEngraving(ctx, pressed);
+  drawPlateEngraving(ctx, pressed, camera);
   ctx.translate(0, -cy);
 }
 
 /** Anchor: TILE CENTER. Floor pressure plate: inset metal disc, pressed = sunk + teal rim
- * glow, label under it (0.2 tile mono, dark halo, uppercase). */
+ * glow, label under it (0.2 tile mono, dark halo, uppercase); a camera plate shows a camera
+ * glyph in the middle. */
 export function drawPlate(ctx: CanvasRenderingContext2D, o: PlateOpts): void {
   ctx.save();
   try {
     drawPlateSocket(ctx);
     if (o.pressed) softEllipse(ctx, 0, 0, 0.6, 0.6, TEAL_RGB, 0.45, 'lighter');
-    drawPlateDisc(ctx, o.pressed);
+    drawPlateDisc(ctx, o.pressed, o.camera);
     if (o.pressed) {
       ctx.beginPath();
       ctx.arc(0, 0.006, PLATE_RIM_R, 0, TAU);
@@ -943,7 +983,7 @@ export function drawPlate(ctx: CanvasRenderingContext2D, o: PlateOpts): void {
       ctx.strokeStyle = 'rgba(45, 212, 191, 0.9)';
       ctx.stroke();
     }
-    const color = o.pressed ? '#5eead4' : '#8a96a5';
+    const color = o.pressed ? '#5eead4' : IDLE_LABEL;
     drawHaloText(ctx, o.label.toUpperCase(), 0, 0.41, FONT_LABEL, color, 'top');
   } finally {
     ctx.restore();
@@ -1057,6 +1097,362 @@ export function drawDoor(ctx: CanvasRenderingContext2D, o: DoorOpts): void {
     if (t < 1) drawDoorPanels(ctx, t * DOOR_PANEL_W);
     drawDoorJamb(ctx, -0.5);
     drawDoorJamb(ctx, 0.5 - JAMB_W);
+  } finally {
+    ctx.restore();
+  }
+}
+
+// ---- Manual objects ------------------------------------------------------------------
+
+export interface ManualObjectOpts {
+  kind: 'book' | 'terminal' | 'chart';
+  label: string;
+  /** covers the armed station: blue glow, strength follows pulse */
+  active: boolean;
+  /** 0..1 looping pulse driven by the caller */
+  pulse: number;
+}
+
+const READ_LABEL = '#93c5fd';
+/** Lengths of the lines of print on a page, top to bottom. */
+const PRINT = [0.2, 0.17, 0.21, 0.12, 0.19] as const;
+const PLAN_X = -0.21;
+const PLAN_Y = -0.35;
+const PLAN_W = 0.42;
+const PLAN_H = 0.28;
+/** The route on the terminal's plan, as x, y pairs. */
+const PLAN_ROUTE = [-0.15, -0.3, -0.15, -0.21, 0.01, -0.21, 0.01, -0.13, 0.15, -0.13] as const;
+
+/** Adds one page of the open book; `side` -1 is left of the spine, 1 right of it. */
+function addPage(p: CanvasPath, side: number): void {
+  p.moveTo(side * 0.01, -0.235);
+  p.quadraticCurveTo(side * 0.14, -0.27, side * 0.275, -0.25);
+  p.lineTo(side * 0.31, 0.02);
+  p.quadraticCurveTo(side * 0.15, -0.005, side * 0.01, 0.015);
+  p.closePath();
+}
+
+/** Cover, pages with print, the crease and a ribbon; dimmed paper when not needed now. */
+function drawOpenBook(ctx: CanvasRenderingContext2D, active: boolean): void {
+  ctx.beginPath();
+  ctx.moveTo(-0.3, -0.27);
+  ctx.lineTo(0.3, -0.27);
+  ctx.lineTo(0.34, 0.045);
+  ctx.lineTo(-0.34, 0.045);
+  ctx.closePath();
+  ctx.fillStyle = '#1e3a5f';
+  ctx.fill();
+  ctx.beginPath();
+  addPage(ctx, -1);
+  addPage(ctx, 1);
+  ctx.fillStyle = '#d6cdb4';
+  ctx.fill();
+  if (!active) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(60, 50, 30, 0.22)';
+  ctx.fillRect(-0.04, -0.24, 0.08, 0.255);
+  ctx.beginPath();
+  for (let i = 0; i < PRINT.length; i++) {
+    const y = -0.2 + i * 0.043;
+    ctx.moveTo(-0.05 - (PRINT[i] ?? 0), y);
+    ctx.lineTo(-0.05, y);
+    ctx.moveTo(0.05, y);
+    ctx.lineTo(0.05 + (PRINT[PRINT.length - 1 - i] ?? 0), y);
+  }
+  ctx.moveTo(0, -0.24);
+  ctx.lineTo(0, 0.015);
+  ctx.lineWidth = 0.011;
+  ctx.strokeStyle = 'rgba(52, 44, 30, 0.5)';
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0.07, 0.01);
+  ctx.lineTo(0.1, 0.01);
+  ctx.lineTo(0.1, 0.125);
+  ctx.lineTo(0.085, 0.105);
+  ctx.lineTo(0.07, 0.125);
+  ctx.closePath();
+  ctx.fillStyle = '#c2410c';
+  ctx.fill();
+}
+
+/** Foot, column and a slanted desk with a lip, the open book on top. */
+function drawLectern(ctx: CanvasRenderingContext2D, active: boolean): void {
+  ctx.beginPath();
+  roundRectPath(ctx, -0.17, 0.27, 0.34, 0.09, 0.04);
+  ctx.fillStyle = '#141a21';
+  ctx.fill();
+  ctx.fillStyle = '#1b232c';
+  ctx.fillRect(-0.05, 0.04, 0.1, 0.25);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+  ctx.fillRect(-0.05, 0.04, 0.018, 0.25);
+  ctx.beginPath();
+  ctx.moveTo(-0.33, -0.3);
+  ctx.lineTo(0.33, -0.3);
+  ctx.lineTo(0.39, 0.07);
+  ctx.lineTo(-0.39, 0.07);
+  ctx.closePath();
+  ctx.fillStyle = '#26303b';
+  ctx.fill();
+  ctx.lineWidth = 0.025;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+  ctx.fillStyle = '#1a2129';
+  ctx.fillRect(-0.39, 0.05, 0.78, 0.05);
+  drawOpenBook(ctx, active);
+}
+
+function buildPlanGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
+  const g = ctx.createLinearGradient(0, PLAN_Y, 0, PLAN_Y + PLAN_H);
+  g.addColorStop(0, '#0f2a4a');
+  g.addColorStop(1, '#05080b');
+  return g;
+}
+
+/** Grid and route on the terminal's screen; the rim pulses while it is needed. */
+function drawPlan(ctx: CanvasRenderingContext2D, active: boolean, wave: number): void {
+  const alpha = ctx.globalAlpha;
+  ctx.globalAlpha = alpha * (active ? 1 : 0.45);
+  ctx.beginPath();
+  for (let i = 1; i < 5; i++) {
+    const x = PLAN_X + (PLAN_W * i) / 5;
+    ctx.moveTo(x, PLAN_Y + 0.02);
+    ctx.lineTo(x, PLAN_Y + PLAN_H - 0.02);
+  }
+  for (let i = 1; i < 4; i++) {
+    const y = PLAN_Y + (PLAN_H * i) / 4;
+    ctx.moveTo(PLAN_X + 0.02, y);
+    ctx.lineTo(PLAN_X + PLAN_W - 0.02, y);
+  }
+  ctx.lineWidth = 0.008;
+  ctx.strokeStyle = 'rgba(96, 165, 250, 0.3)';
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(PLAN_ROUTE[0], PLAN_ROUTE[1]);
+  for (let i = 2; i < PLAN_ROUTE.length; i += 2) {
+    ctx.lineTo(PLAN_ROUTE[i] ?? 0, PLAN_ROUTE[i + 1] ?? 0);
+  }
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 0.022;
+  ctx.strokeStyle = READ_LABEL;
+  ctx.stroke();
+  if (active) {
+    ctx.beginPath();
+    roundRectPath(ctx, PLAN_X, PLAN_Y, PLAN_W, PLAN_H, 0.02);
+    ctx.lineWidth = 0.016;
+    ctx.strokeStyle = BLUE;
+    ctx.globalAlpha = alpha * (0.35 + 0.45 * wave);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = alpha;
+}
+
+/** Upright cabinet: the plan on its screen, a keyboard ledge and vents. */
+function drawTerminal(ctx: CanvasRenderingContext2D, active: boolean, wave: number): void {
+  ctx.beginPath();
+  roundRectPath(ctx, -0.29, -0.44, 0.58, 0.8, 0.05);
+  ctx.fillStyle = '#18202a';
+  ctx.fill();
+  ctx.lineWidth = 0.025;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+  ctx.fillRect(-0.24, -0.43, 0.48, 0.012);
+  ctx.beginPath();
+  roundRectPath(ctx, -0.25, -0.39, 0.5, 0.36, 0.03);
+  ctx.fillStyle = '#0b0f14';
+  ctx.fill();
+  ctx.beginPath();
+  roundRectPath(ctx, PLAN_X, PLAN_Y, PLAN_W, PLAN_H, 0.02);
+  ctx.fillStyle = cachedGradient(ctx, buildPlanGradient, '');
+  ctx.fill();
+  drawPlan(ctx, active, wave);
+  ctx.beginPath();
+  roundRectPath(ctx, -0.33, 0.01, 0.66, 0.1, 0.03);
+  ctx.fillStyle = '#222b35';
+  ctx.fill();
+  ctx.lineWidth = 0.02;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(96, 165, 250, 0.22)';
+  for (let i = 0; i < 6; i++) ctx.fillRect(-0.27 + i * 0.09, 0.035, 0.07, 0.025);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  for (let i = 0; i < 3; i++) ctx.fillRect(-0.18, 0.18 + i * 0.045, 0.36, 0.016);
+}
+
+/** A ruled table with a column of colour swatches, as printed on the chart. */
+function drawChartTable(ctx: CanvasRenderingContext2D): void {
+  ctx.fillStyle = 'rgba(30, 58, 95, 0.75)';
+  ctx.fillRect(-0.34, -0.42, 0.68, 0.075);
+  ctx.fillStyle = '#f87171';
+  ctx.fillRect(-0.3, -0.31, 0.12, 0.045);
+  ctx.fillStyle = AMBER;
+  ctx.fillRect(-0.3, -0.23, 0.12, 0.045);
+  ctx.fillStyle = TEAL;
+  ctx.fillRect(-0.3, -0.15, 0.12, 0.045);
+  ctx.fillStyle = BLUE;
+  ctx.fillRect(-0.3, -0.07, 0.12, 0.045);
+  ctx.beginPath();
+  for (let i = 0; i < 4; i++) {
+    const y = -0.265 + i * 0.08;
+    ctx.moveTo(-0.34, y);
+    ctx.lineTo(0.34, y);
+  }
+  ctx.moveTo(-0.14, -0.345);
+  ctx.lineTo(-0.14, 0.06);
+  ctx.moveTo(0.12, -0.345);
+  ctx.lineTo(0.12, 0.06);
+  ctx.lineWidth = 0.009;
+  ctx.strokeStyle = 'rgba(30, 41, 59, 0.5)';
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(30, 41, 59, 0.55)';
+  for (let i = 0; i < 4; i++) {
+    const y = -0.3 + i * 0.08;
+    ctx.fillRect(-0.1, y, 0.16, 0.022);
+    ctx.fillRect(0.16, y, 0.12, 0.022);
+  }
+}
+
+/** Board on an easel with a clamp on top; dimmed paper when not needed now. */
+function drawChart(ctx: CanvasRenderingContext2D, active: boolean): void {
+  ctx.beginPath();
+  ctx.moveTo(-0.24, 0.05);
+  ctx.lineTo(-0.3, 0.37);
+  ctx.moveTo(0.24, 0.05);
+  ctx.lineTo(0.3, 0.37);
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 0.045;
+  ctx.strokeStyle = '#2b3540';
+  ctx.stroke();
+  ctx.beginPath();
+  roundRectPath(ctx, -0.38, -0.46, 0.76, 0.56, 0.03);
+  ctx.fillStyle = '#2b3540';
+  ctx.fill();
+  ctx.lineWidth = 0.025;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+  ctx.fillStyle = '#c3cad3';
+  ctx.fillRect(-0.34, -0.42, 0.68, 0.48);
+  drawChartTable(ctx);
+  if (!active) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillRect(-0.34, -0.42, 0.68, 0.48);
+  }
+  ctx.fillStyle = '#3b4654';
+  ctx.fillRect(-0.07, -0.5, 0.14, 0.06);
+}
+
+/** Anchor: TILE CENTER. Where printed rules lie: an open book on a lectern, a terminal
+ * showing a plan, or a chart on an easel. Covering the armed station = blue glow (strength
+ * follows pulse) and lit paper or screen; label under it (0.2 tile mono, dark halo). */
+export function drawManualObject(ctx: CanvasRenderingContext2D, o: ManualObjectOpts): void {
+  const wave = pulseWave(o.pulse);
+  ctx.save();
+  try {
+    softEllipse(ctx, 0, 0.36, 0.42, 0.12, SHADOW_RGB, 0.45, 'source-over');
+    if (o.active) softEllipse(ctx, 0, -0.12, 0.85, 0.75, BLUE_RGB, 0.14 + 0.26 * wave, 'lighter');
+    if (o.kind === 'book') drawLectern(ctx, o.active);
+    else if (o.kind === 'terminal') drawTerminal(ctx, o.active, wave);
+    else drawChart(ctx, o.active);
+    drawHaloText(ctx, o.label, 0, 0.41, FONT_LABEL, o.active ? READ_LABEL : IDLE_LABEL, 'top');
+  } finally {
+    ctx.restore();
+  }
+}
+
+// ---- Edgework sign -------------------------------------------------------------------
+
+export interface SignOpts {
+  label: string;
+  /** this player has read it: a teal tick instead of the amber call for attention */
+  seen: boolean;
+  /** 0..1 looping pulse driven by the caller */
+  pulse: number;
+}
+
+/** Brushed brass, lit from the top. */
+function buildPlaqueGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
+  const g = ctx.createLinearGradient(0, -0.31, 0, 0.07);
+  g.addColorStop(0, '#b39552');
+  g.addColorStop(1, '#6b5428');
+  return g;
+}
+
+/** Adds the outline of a serial — five characters, a dash, a digit — shifted down by `dy`. */
+function addSerial(p: CanvasPath, dy: number): void {
+  for (let i = 0; i < 5; i++) p.rect(-0.235 + i * 0.07, -0.17 + dy, 0.045, 0.09);
+  p.rect(0.125, -0.13 + dy, 0.035, 0.015);
+  p.rect(0.185, -0.17 + dy, 0.045, 0.09);
+}
+
+/** The serial's shape cut into the brass, never the serial itself; three lamps under it. */
+function drawEngraving(ctx: CanvasRenderingContext2D): void {
+  ctx.beginPath();
+  addSerial(ctx, 0.008);
+  ctx.fillStyle = 'rgba(255, 238, 200, 0.28)';
+  ctx.fill();
+  ctx.beginPath();
+  addSerial(ctx, 0);
+  ctx.rect(-0.2, -0.235, 0.4, 0.014);
+  addCircle(ctx, -0.1, -0.025, 0.022);
+  addCircle(ctx, 0, -0.025, 0.022);
+  addCircle(ctx, 0.1, -0.025, 0.022);
+  ctx.fillStyle = 'rgba(40, 28, 10, 0.8)';
+  ctx.fill();
+}
+
+function drawSeenTick(ctx: CanvasRenderingContext2D): void {
+  ctx.beginPath();
+  ctx.arc(0.3, -0.3, 0.07, 0, TAU);
+  ctx.fillStyle = TEAL;
+  ctx.fill();
+  ctx.lineWidth = 0.016;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0.27, -0.3);
+  ctx.lineTo(0.293, -0.275);
+  ctx.lineTo(0.333, -0.322);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 0.02;
+  ctx.strokeStyle = '#042f2a';
+  ctx.stroke();
+}
+
+/** Anchor: TILE CENTER. The Laborkennung: a brass plaque on two posts, a serial's outline
+ * and three lamps engraved; amber glow (strength follows pulse) until this player has read
+ * it, then a teal tick. Label under it (0.2 tile mono, dark halo). */
+export function drawSign(ctx: CanvasRenderingContext2D, o: SignOpts): void {
+  const wave = pulseWave(o.pulse);
+  ctx.save();
+  try {
+    softEllipse(ctx, 0, 0.33, 0.3, 0.09, SHADOW_RGB, 0.4, 'source-over');
+    softEllipse(ctx, 0, -0.12, 0.75, 0.6, AMBER_RGB, o.seen ? 0.06 : 0.12 + 0.22 * wave, 'lighter');
+    ctx.fillStyle = '#1b232c';
+    ctx.fillRect(-0.2, 0.04, 0.05, 0.28);
+    ctx.fillRect(0.15, 0.04, 0.05, 0.28);
+    ctx.beginPath();
+    roundRectPath(ctx, -0.32, -0.31, 0.64, 0.38, 0.04);
+    ctx.fillStyle = cachedGradient(ctx, buildPlaqueGradient, '');
+    ctx.fill();
+    ctx.lineWidth = 0.022;
+    ctx.strokeStyle = PROP_EDGE;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+    ctx.fillRect(-0.28, -0.3, 0.56, 0.012);
+    ctx.beginPath();
+    addCircle(ctx, -0.27, -0.26, 0.016);
+    addCircle(ctx, 0.27, -0.26, 0.016);
+    addCircle(ctx, -0.27, 0.02, 0.016);
+    addCircle(ctx, 0.27, 0.02, 0.016);
+    ctx.fillStyle = '#3d3020';
+    ctx.fill();
+    drawEngraving(ctx);
+    if (o.seen) drawSeenTick(ctx);
+    drawHaloText(ctx, o.label, 0, 0.36, FONT_LABEL, o.seen ? IDLE_LABEL : '#fcd34d', 'top');
   } finally {
     ctx.restore();
   }

@@ -19,6 +19,11 @@ const SIZES = [
   { name: 'phone', width: 420, height: 760 },
 ];
 
+/** Avatar speed in tiles per second, as the client walks. */
+const SPEED = 4.2;
+/** How close to a tile centre a step has to land, in tiles. */
+const STEP_TOLERANCE = 0.15;
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
@@ -49,6 +54,14 @@ async function overflow(page, label) {
   }
 }
 
+/** How far a modal's panel runs out sideways, in px; 0 when it fits. */
+async function sideways(page, selector) {
+  return page.evaluate((sel) => {
+    const panel = document.querySelector(sel);
+    return panel === null ? 0 : panel.scrollWidth - panel.clientWidth;
+  }, selector);
+}
+
 /** Click a button whose visible text contains `text`. */
 async function clickText(page, text) {
   const button = page.locator('button', { hasText: text }).first();
@@ -56,11 +69,196 @@ async function clickText(page, text) {
   await button.click();
 }
 
-/** Hold a key long enough for the world's render loop to walk on it. */
-async function hold(page, key, ms) {
-  await page.keyboard.down(key);
-  await sleep(ms);
-  await page.keyboard.up(key);
+/**
+ * Listens in on one player's socket: the newest view the server sent it and
+ * where its avatar last reported itself. The walks below steer by these, so
+ * they depend neither on the map's layout nor on how fast the page renders.
+ */
+function eavesdrop(page) {
+  const seen = { view: null, pos: null };
+  page.on('websocket', (socket) => {
+    if (!socket.url().endsWith('/ws')) {
+      return;
+    }
+    socket.on('framereceived', ({ payload }) => {
+      const msg = JSON.parse(String(payload));
+      if (msg.kind === 'view') {
+        seen.view = msg.view;
+      }
+    });
+    socket.on('framesent', ({ payload }) => {
+      const msg = JSON.parse(String(payload));
+      if (msg.kind === 'pos') {
+        seen.pos = { x: msg.x, y: msg.y };
+      }
+    });
+  });
+  return seen;
+}
+
+/** Where the avatar is, in tiles: its last report, or its spawn before it ever moved. */
+function whereIs(seen) {
+  const spawn = seen.view?.map?.yourSpawn;
+  return seen.pos ?? (spawn === undefined ? null : { x: spawn.x + 0.5, y: spawn.y + 0.5 });
+}
+
+/** Shortest walk over floor and open doors, as tiles from `from` to `to`; null if none. */
+function route(map, from, to) {
+  const key = (x, y) => `${x},${y}`;
+  const closed = new Set(map.doors.filter((d) => !d.open).map((d) => key(d.x, d.y)));
+  const walkable = (x, y) => map.tiles[y]?.[x] === '.' && !closed.has(key(x, y));
+  const cameFrom = new Map([[key(from.x, from.y), null]]);
+  const queue = [from];
+  for (let i = 0; i < queue.length; i++) {
+    const at = queue[i];
+    if (at.x === to.x && at.y === to.y) {
+      const path = [];
+      for (let step = at; step !== null; step = cameFrom.get(key(step.x, step.y))) {
+        path.unshift(step);
+      }
+      return path;
+    }
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
+      const next = { x: at.x + dx, y: at.y + dy };
+      if (walkable(next.x, next.y) && !cameFrom.has(key(next.x, next.y))) {
+        cameFrom.set(key(next.x, next.y), at);
+        queue.push(next);
+      }
+    }
+  }
+  return null;
+}
+
+/** The tile the avatar stands on. */
+function tileOf(seen) {
+  const at = whereIs(seen);
+  return at === null ? null : { x: Math.floor(at.x), y: Math.floor(at.y) };
+}
+
+/** Steers the avatar onto a tile centre with short key presses, checking each result. */
+async function stepTo(page, seen, tx, ty) {
+  for (let i = 0; i < 30; i++) {
+    const at = whereIs(seen);
+    const dx = tx - at.x;
+    const dy = ty - at.y;
+    if (Math.abs(dx) < STEP_TOLERANCE && Math.abs(dy) < STEP_TOLERANCE) {
+      return true;
+    }
+    const keys = [];
+    if (Math.abs(dx) >= STEP_TOLERANCE) keys.push(dx > 0 ? 'd' : 'a');
+    if (Math.abs(dy) >= STEP_TOLERANCE) keys.push(dy > 0 ? 's' : 'w');
+    // Never more than a tile's worth at once, so a slow frame cannot carry it far off.
+    const ms = Math.min(240, (Math.hypot(dx, dy) / SPEED) * 1000);
+    for (const key of keys) await page.keyboard.down(key);
+    await sleep(ms);
+    for (const key of keys) await page.keyboard.up(key);
+    await sleep(140); // the avatar reports itself every 80 ms
+  }
+  return false;
+}
+
+/**
+ * Walks the avatar to the tile before `target` on the way there, or leaves it
+ * where it is when it already stands next to it. False when no open way
+ * leads there or the avatar gets stuck.
+ */
+async function walkNear(page, seen, target) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const from = tileOf(seen);
+    const path = from === null ? null : route(seen.view.map, from, target);
+    if (path === null) {
+      return false;
+    }
+    let arrived = true;
+    for (const tile of path.slice(1, -1)) {
+      if (!(await stepTo(page, seen, tile.x + 0.5, tile.y + 0.5))) {
+        arrived = false;
+        break;
+      }
+    }
+    if (arrived) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Presses E until `locator` shows: the server takes a moment to count the avatar as there. */
+async function interactUntil(page, locator) {
+  for (let i = 0; i < 3 && !(await locator.isVisible()); i++) {
+    await sleep(300);
+    await page.keyboard.press('e');
+    await locator.waitFor({ state: 'visible', timeout: 2000 }).catch(() => undefined);
+  }
+  return locator.isVisible();
+}
+
+/** The manual object a player can walk to soonest, one covering the armed station first. */
+function nearestManual(seen) {
+  const map = seen.view.map;
+  const from = tileOf(seen);
+  const armed = map.stations.find((s) => s.status === 'armed')?.puzzleId;
+  const options = map.manuals
+    .map((manual) => ({ manual, path: from === null ? null : route(map, from, manual) }))
+    .filter((option) => option.path !== null)
+    .sort(
+      (a, b) =>
+        Number(b.manual.puzzleIds.includes(armed)) - Number(a.manual.puzzleIds.includes(armed)) ||
+        a.path.length - b.path.length,
+    );
+  return options[0]?.manual ?? null;
+}
+
+/**
+ * reading.png: a player walks to a manual object, presses E and reads. False
+ * when no manual object is in reach for this player.
+ */
+async function captureReading(page, seen, who) {
+  const manual = nearestManual(seen);
+  if (manual === null || !(await walkNear(page, seen, manual))) {
+    return false;
+  }
+  const overlay = page.locator('.reading-modal');
+  if (!(await interactUntil(page, overlay))) {
+    throw new Error(`${who} stands at "${manual.id}", but no .reading-modal opened after 3 tries`);
+  }
+  await sleep(300);
+  await page.screenshot({ path: join(OUT, 'reading.png') });
+  const sections = await overlay.locator('.reading-section').count();
+  const over = await sideways(page, '.reading-modal .panel');
+  console.log(
+    `reading.png        ${who}: "${manual.label}" (${manual.kind}), ${sections} section(s), ` +
+      `panel ${over > 0 ? `!! +${over}px sideways` : 'fits sideways'}`,
+  );
+  await page.keyboard.press('Escape');
+  await overlay.waitFor({ state: 'hidden', timeout: 3000 });
+  return true;
+}
+
+/**
+ * sign.png: the guest has just read the Laborkennung — the note up, the chip
+ * in the HUD. The note waits for the briefing to end, so this may take a while.
+ */
+async function captureSign(page) {
+  const note = await page
+    .locator('.toast')
+    .waitFor({ state: 'visible', timeout: 6000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  await sleep(400); // past its fade-in
+  await page.screenshot({ path: join(OUT, 'sign.png') });
+  const chip = (await page.locator('.hud .edgework').count()) > 0;
+  console.log(
+    `sign.png           guest: note ${note ? 'up' : '!! missing'}, ` +
+      `chip in the HUD ${chip ? 'shown' : '!! missing'}`,
+  );
 }
 
 async function run() {
@@ -70,6 +268,7 @@ async function run() {
   // --- host: create a room and grab the code ---------------------------
   const hostCtx = await browser.newContext({ viewport: SIZES[0] });
   const host = await hostCtx.newPage();
+  const hostSeen = eavesdrop(host);
   host.on('console', (m) => {
     if (m.type() === 'error') console.log('[host console]', m.text());
   });
@@ -88,6 +287,7 @@ async function run() {
   // fine`, so a default context would never show it.
   const guestCtx = await browser.newContext({ viewport: SIZES[2], hasTouch: true });
   const guest = await guestCtx.newPage();
+  const guestSeen = eavesdrop(guest);
   await guest.goto(BASE);
   await guest.getByPlaceholder('z. B. Anna').fill('Ben');
   await guest.getByLabel('Raumcode').fill(code);
@@ -111,7 +311,20 @@ async function run() {
   await sleep(300);
   await clickText(host, 'Mission starten');
   await host.locator('.stage').waitFor({ timeout: 10_000 });
-  await sleep(4200); // let the briefing countdown finish
+  await guest.locator('.stage').waitFor({ timeout: 10_000 });
+  await sleep(500); // presence follows the start within a tick
+  if (guestSeen.view?.map == null) {
+    throw new Error('no running view on the guest socket — does the client still talk on /ws?');
+  }
+
+  // Spawned within sight of the Laborkennung, the guest gets the note as soon
+  // as the briefing is gone: that is the moment for sign.png.
+  const signAtSpawn = guestSeen.view.presence.signSeen;
+  if (signAtSpawn) {
+    await captureSign(guest);
+  }
+  // Let the briefing countdown finish; server and browsers share this clock.
+  await sleep(Math.max(0, guestSeen.view.startedAt + 4200 - Date.now()));
 
   for (const size of SIZES) {
     await host.setViewportSize({ width: size.width, height: size.height });
@@ -140,38 +353,50 @@ async function run() {
   await watcher.screenshot({ path: join(OUT, 'spectate.png') });
   await overflow(watcher, 'spectate @ 1440x820');
 
-  // --- hints: the guest walks to the first station and asks for help ----
+  // --- reading, the sign, hints: the guest reads, then works the first station ---
   // The host's info panel may still be open; close it the way a player would.
   const closeInfo = host.locator('.info-card button', { hasText: 'Schließen' });
   if (await closeInfo.isVisible()) {
     await closeInfo.click();
   }
-  // The guest spawns at (3,10) between two pillars, so up first, then left
-  // along row 9 to the station at (1,9). Retries nudge the same way: walls
-  // stop the avatar inside the station's reach.
-  const modal = guest.locator('.puzzle-modal');
-  for (let attempt = 0; attempt < 4 && !(await modal.isVisible()); attempt++) {
-    await hold(guest, 'w', attempt === 0 ? 400 : 250);
-    await hold(guest, 'a', attempt === 0 ? 900 : 500);
-    await sleep(250);
-    await guest.keyboard.press('e');
-    await modal.waitFor({ state: 'visible', timeout: 2500 }).catch(() => undefined);
+  // Whatever lies within the guest's reach is read; locked away from it, the
+  // host reads instead.
+  if (!(await captureReading(guest, guestSeen, 'guest'))) {
+    console.log('reading.png        guest: no manual object in reach — the host reads instead');
+    if (!(await captureReading(host, hostSeen, 'host'))) {
+      console.log('reading.png        skipped: no manual object in reach of either player');
+    }
   }
-  if (!(await modal.isVisible())) {
-    throw new Error('guest never reached the first station: no .puzzle-modal after 4 tries');
+
+  const sign = guestSeen.view.map.edgeworkSign;
+  if (!signAtSpawn) {
+    if (sign === null) {
+      console.log('sign.png           skipped: this map has no Laborkennung');
+    } else if (await walkNear(guest, guestSeen, sign)) {
+      await captureSign(guest);
+    } else {
+      console.log(`sign.png           skipped: the sign at ${sign.x},${sign.y} is out of reach`);
+    }
   }
+
+  const station = guestSeen.view.map.stations.find((s) => s.status === 'armed');
+  if (station === undefined || !(await walkNear(guest, guestSeen, station))) {
+    throw new Error(`guest cannot walk to the armed station "${station?.puzzleId ?? '(none)'}"`);
+  }
+  const modal = guest.locator('.station-modal');
+  if (!(await interactUntil(guest, modal))) {
+    throw new Error(`guest stands at "${station.puzzleId}", but no .station-modal after 3 tries`);
+  }
+  await sleep(300); // past its fade-in
 
   const strip = guest.locator('.hint-strip');
   const hintButton = guest.locator('.hint-request');
   await strip.scrollIntoViewIfNeeded();
-  const sideways = await guest.evaluate(() => {
-    const panel = document.querySelector('.puzzle-modal .panel');
-    return panel === null ? 0 : panel.scrollWidth - panel.clientWidth;
-  });
+  const stationSideways = await sideways(guest, '.station-modal .panel');
   await guest.screenshot({ path: join(OUT, 'hint-waiting.png') });
   console.log(
     `hint-waiting.png   guest: "${(await hintButton.innerText()).trim()}", ` +
-      `panel ${sideways > 0 ? `!! +${sideways}px sideways` : 'fits sideways'}`,
+      `panel ${stationSideways > 0 ? `!! +${stationSideways}px sideways` : 'fits sideways'}`,
   );
 
   // Mission control holds hints back for 45 s after a station opens.
@@ -201,10 +426,10 @@ async function run() {
   console.log(`hint-revealed.png  guest: ${guestHints} hint(s), next button "${next}"`);
   await host.screenshot({ path: join(OUT, 'radio-banner.png') });
   const hostBanner = (await host.locator('.radio-banner').count()) > 0 ? 'up' : '!! missing';
-  const hostHints = await host.locator('.hint-list li').count();
+  const hostPanel = (await host.locator('.station-modal').count()) > 0;
   console.log(
-    `radio-banner.png   host: banner ${hostBanner} (under the open station), ` +
-      `${hostHints} hint(s) in its strip`,
+    `radio-banner.png   host: banner ${hostBanner}, ` +
+      (hostPanel ? '!! station panel shown away from the station' : 'no station panel away'),
   );
 
   await browser.close();
