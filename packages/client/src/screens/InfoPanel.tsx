@@ -1,16 +1,17 @@
 import { useState } from 'react';
-import type { PlayerView } from '@escapelab/core';
+import type { ManualKind, MapView, PlayerView } from '@escapelab/core';
 
 interface Props {
   view: PlayerView;
   onClose: () => void;
 }
 
-type Tab = 'auftrag' | 'rolle' | 'steuerung';
+type Tab = 'auftrag' | 'karte' | 'steuerung';
 
 const CONTROLS: readonly (readonly [string, string])[] = [
   ['W A S D / Pfeile', 'Laufen'],
-  ['E', 'Station aktivieren, Objekt aufnehmen oder einsetzen'],
+  ['E', 'Bedienen, lesen, aufnehmen oder einsetzen'],
+  ['Esc', 'Pult oder Lesen verlassen'],
   ['Q', 'Getragenes Objekt ablegen — so sind Übergaben möglich'],
   ['Klick auf die Welt', 'Ping für alle setzen'],
   ['C, dann 1–8', 'Schnellchat'],
@@ -18,14 +19,49 @@ const CONTROLS: readonly (readonly [string, string])[] = [
   ['I oder H', 'Dieses Info-Fenster'],
 ];
 
+const KIND_NAMES: Record<ManualKind, string> = {
+  book: 'Buch',
+  terminal: 'Terminal',
+  chart: 'Wandtafel',
+};
+
+/** What the things in the lab are for, one line each; only what this map has. */
+export function Legend({ map }: { map: MapView }) {
+  const kinds = [...new Set(map.manuals.map((m) => KIND_NAMES[m.kind]))];
+  const rows: [string, string, string][] = [];
+  if (kinds.length > 0) {
+    rows.push(['📖', kinds.join(' · '), 'Regeln der Stationen']);
+  }
+  if (map.edgeworkSign !== null) {
+    rows.push(['🪧', 'Schild', 'Laborkennung']);
+  }
+  if (map.plates.some((p) => p.freezesDrone)) {
+    rows.push(['📷', 'Kamera-Platte', 'hält die Drohne an']);
+  }
+  if (map.plates.some((p) => !p.freezesDrone)) {
+    rows.push(['◉', 'HALTEN-Platte', 'hält eine Tür offen']);
+  }
+  return (
+    <dl className="legend">
+      {rows.map(([glyph, what, meaning]) => (
+        <div key={what} className="legend-row">
+          <dt>
+            <span aria-hidden="true">{glyph}</span> {what}
+          </dt>
+          <dd>{meaning}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 /**
- * Everything worth reading but not worth watching: briefing, your own role
- * and the controls. Kept out of the permanent HUD on purpose — that one only
- * shows what changes.
+ * Everything worth reading but not worth watching: briefing, what the
+ * things on the map are for and the controls. Kept out of the permanent HUD
+ * on purpose — that one only shows what changes.
  */
 export function InfoPanel({ view, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('auftrag');
-  const role = view.roles.find((r) => r.id === view.you.roleId);
   const armed = view.map?.stations.find((s) => s.status === 'armed');
   const pending = view.map?.items.filter((i) => !i.delivered) ?? [];
   const escaping = view.map?.exit?.open === true;
@@ -47,7 +83,7 @@ export function InfoPanel({ view, onClose }: Props) {
           {(
             [
               ['auftrag', 'Auftrag'],
-              ['rolle', 'Deine Rolle'],
+              ['karte', 'Karte'],
               ['steuerung', 'Steuerung'],
             ] as const
           ).map(([id, label]) => (
@@ -99,14 +135,8 @@ export function InfoPanel({ view, onClose }: Props) {
           </div>
         )}
 
-        {tab === 'rolle' && (
-          <div className="info-body">
-            <h3 className="info-role">{role?.name ?? '—'}</h3>
-            <p className="story">{role?.description ?? ''}</p>
-            <p className="muted">
-              Niemand sieht genug, um eine Station allein zu lösen — sag laut, was du siehst.
-            </p>
-          </div>
+        {tab === 'karte' && (
+          <div className="info-body">{view.map !== null && <Legend map={view.map} />}</div>
         )}
 
         {tab === 'steuerung' && (

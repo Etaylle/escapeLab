@@ -540,14 +540,6 @@ button.link:hover {
   position: relative;
 }
 
-.game-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 16px;
-  margin-bottom: 6px;
-}
-
 .led-strip {
   display: flex;
   gap: 7px;
@@ -1011,6 +1003,64 @@ button.link:hover {
   max-height: 92vh;
   overflow-y: auto;
   box-shadow: 0 0 0 1px var(--accent-dark), 0 30px 80px rgba(0, 0, 0, 0.7);
+}
+
+/* Label and edgework on the left, wrapping where narrow; the way out stays top right. */
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.modal-head .panel-head {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+}
+
+.modal-close {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* Reading: blue like everything you read, paragraph by paragraph. */
+.reading-modal .panel {
+  box-shadow: 0 0 0 1px #1e3a5f, 0 30px 80px rgba(0, 0, 0, 0.7);
+}
+
+.reading-modal .panel-label {
+  color: #93c5fd;
+}
+
+.reading-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.reading-title {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 15px;
+  letter-spacing: 1px;
+  color: var(--text);
+}
+
+.reading-now .reading-title {
+  color: #93c5fd;
+}
+
+.reading-done {
+  opacity: 0.55;
+}
+
+/* The object names itself in the header. */
+.reading-modal .manual .kicker {
+  display: none;
 }
 
 /* Mission control's hints at a station. Before the first hint, kicker and
@@ -1658,6 +1708,28 @@ button.link:hover {
   margin-top: 16px;
 }
 
+/* Where each crew member stands, in the colours the world uses for it. */
+.presence-tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+.presence-pult {
+  color: var(--accent);
+}
+
+.presence-read {
+  color: #60a5fa;
+}
+
+.presence-sign {
+  color: var(--warn);
+}
+
 .ticker {
   list-style: none;
   margin: 0;
@@ -1977,6 +2049,22 @@ button.link:hover {
   }
 }
 
+/* A note of the bar's own, like the radio line, so nothing has to keep clear of it twice. */
+.toast {
+  flex: 0 0 100%;
+  padding: 6px 12px;
+  border: 1px solid #6b5a2c;
+  border-left: 3px solid var(--warn);
+  border-radius: 10px;
+  background: #15120a;
+  color: #fde68a;
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 1px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  animation: on-air 3.5s ease forwards;
+}
+
 /* ── crew strip under the world ─────────────────────────────────────────── */
 
 .hud {
@@ -2121,9 +2209,34 @@ button.link:hover {
   margin-top: 0;
 }
 
-.info-role {
-  margin: 0 0 6px;
-  font-size: 17px;
+/* What the things on the map are for: one line each, the meanings in one column. */
+.legend {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+}
+
+.legend-row {
+  display: contents;
+}
+
+.legend-row dt,
+.legend-row dd {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.legend-row dt {
+  padding-right: 14px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.legend-row dd {
+  margin: 0;
+  font-size: 14px;
 }
 
 .info-facts {

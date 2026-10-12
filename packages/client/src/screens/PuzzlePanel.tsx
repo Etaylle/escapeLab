@@ -1,5 +1,5 @@
 import type { ClientMessage, PuzzleView } from '@escapelab/core';
-import { PANELS, type Panel } from '../puzzles/index.js';
+import { PANELS, READERS, type Panel, type Reader } from '../puzzles/index.js';
 
 /** The open puzzle's panel; every input it makes goes out as a `puzzle-input`. */
 export function PuzzlePanel({
@@ -20,4 +20,10 @@ export function PuzzlePanel({
       deadlineAt={deadlineAt}
     />
   );
+}
+
+/** What the open puzzle shows a reader beyond its printed rules; nothing for most modules. */
+export function ReaderPanel({ puzzle }: { puzzle: PuzzleView }) {
+  const ModuleReader = READERS[puzzle.kind] as Reader<PuzzleView['kind']> | undefined;
+  return ModuleReader === undefined ? null : <ModuleReader puzzle={puzzle} />;
 }

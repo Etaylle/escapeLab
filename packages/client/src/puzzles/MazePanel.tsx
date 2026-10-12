@@ -1,5 +1,5 @@
 import { play } from '../sounds.js';
-import type { PanelProps } from './index.js';
+import type { PanelProps, ReaderProps } from './index.js';
 
 const COLS = 'ABCDEFGH';
 const CELL = 34;
@@ -62,28 +62,16 @@ function MazeGrid({ puzzle }: { puzzle: PanelProps<'maze'>['puzzle'] }) {
   );
 }
 
+/** The wiring plan at a manual object: the walls and the goal, never the marker. */
+export function MazePlan({ puzzle }: ReaderProps<'maze'>) {
+  return puzzle.cells === null ? null : <MazeGrid puzzle={puzzle} />;
+}
+
 export function MazePanel({ puzzle, send }: PanelProps<'maze'>) {
-  const goalName = `${COLS[puzzle.goal.x] ?? '?'}${puzzle.goal.y + 1}`;
   if (puzzle.pos === null) {
-    return (
-      <div>
-        <p className="muted">
-          {puzzle.cells === null ? (
-            <>
-              Du siehst weder Marker noch Wände. Wiederhol jede angesagte Zelle und führ den Weg
-              mit, damit nichts verloren geht. Ziel: <strong>{goalName}</strong>.
-            </>
-          ) : (
-            <>
-              Du siehst die Wände, aber nicht den Marker. Lass dir die Position ansagen (z. B.
-              „C4") und gib Richtungen durch. Ziel: <strong>{goalName}</strong>.
-            </>
-          )}
-        </p>
-        <MazeGrid puzzle={puzzle} />
-      </div>
-    );
+    return <MazePlan puzzle={puzzle} />;
   }
+  const goalName = `${COLS[puzzle.goal.x] ?? '?'}${puzzle.goal.y + 1}`;
   const here = `${COLS[puzzle.pos.x] ?? '?'}${puzzle.pos.y + 1}`;
   return (
     <div>

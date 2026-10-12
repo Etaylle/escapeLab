@@ -17,12 +17,15 @@ import {
 } from './hazards.js';
 import {
   drawDoor,
+  drawManualObject,
   drawPlate,
   drawScientist,
+  drawSign,
   drawStation,
   makeFloorTile,
   makeWallTile,
 } from './art.js';
+import { contextAction } from './interact.js';
 import { markerTargets, placeMarker } from './markers.js';
 import {
   countdownBeep,
@@ -39,8 +42,6 @@ import {
 const FALLBACK_COLOR = '#2dd4bf';
 const SPEED = 4.2; // tiles per second
 const RADIUS = 0.28; // collision half-size
-const INTERACT_RADIUS = 1.5; // prompt + client-side gate (server allows 1.6)
-const ITEM_RADIUS = 0.9; // pick-up and drop-off reach (server allows 0.95)
 const POS_SEND_MS = 80;
 const PING_LIFETIME_MS = 3200;
 
@@ -72,6 +73,10 @@ interface Props {
   holdTips: boolean;
   /** opens the info panel, which owns the briefing and the key list */
   onToggleInfo: () => void;
+  /** E at a manual object the server counts this player at: reading needs no message */
+  onRead: (manualId: string) => void;
+  /** E at the armed station: show its panel once it is open */
+  onOperate: () => void;
   send: (msg: ClientMessage) => void;
 }
 
@@ -140,49 +145,6 @@ function blocked(map: WorldMap, closedDoors: Set<string>, x: number, y: number):
   return false;
 }
 
-function armedStationOf(map: WorldMap): { x: number; y: number; title: string } | null {
-  const station = map.stations.find((s) => s.status === 'armed');
-  return station === undefined ? null : { x: station.x, y: station.y, title: station.title };
-}
-
-/**
- * What pressing E would do where the player stands — the same priority the
- * server applies, so the prompt never promises something it cannot do.
- */
-function contextAction(
-  map: WorldMap,
-  self: { x: number; y: number },
-  youId: string,
-): { label: string; x: number; y: number } | null {
-  const near = (x: number, y: number, r = ITEM_RADIUS): boolean =>
-    Math.hypot(self.x - x, self.y - y) <= r;
-
-  const mine = map.items.find((item) => item.carriedBy === youId && !item.delivered);
-  if (mine !== undefined) {
-    return near(mine.deliverTo.x + 0.5, mine.deliverTo.y + 0.5)
-      ? {
-          label: `[E] ${mine.label} einsetzen`,
-          x: mine.deliverTo.x + 0.5,
-          y: mine.deliverTo.y - 0.45,
-        }
-      : null;
-  }
-
-  const loose = map.items.find(
-    (item) => !item.delivered && item.carriedBy === null && near(item.x, item.y),
-  );
-  if (loose !== undefined) {
-    return { label: `[E] ${loose.label} aufnehmen`, x: loose.x, y: loose.y - 0.95 };
-  }
-
-  const station = armedStationOf(map);
-  if (station !== null && near(station.x + 0.5, station.y + 0.5, INTERACT_RADIUS)) {
-    return { label: `[E] ${station.title}`, x: station.x + 0.5, y: station.y - 0.55 };
-  }
-  return null;
-}
-
-
 /**
  * The one sentence a newcomer needs right now. Each tip is shown once per
  * session, so a second run is not cluttered with things you already know.
@@ -200,7 +162,7 @@ function coachTip(map: WorldMap, youId: string, carrying: boolean): { id: string
   if (map.exit !== null && map.exit.open) {
     return { id: 'exit', text: 'Der Notausgang ist offen — ihr müsst alle gemeinsam dort ankommen.' };
   }
-  if (map.plates.some((plate) => plate.pressed)) {
+  if (map.plates.some((plate) => plate.pressed && !plate.freezesDrone)) {
     return {
       id: 'plate',
       text: 'Solange jemand auf der Platte steht, bleibt die Tür offen — nicht runtergehen!',
@@ -239,6 +201,12 @@ function drawExit(ctx: CanvasRenderingContext2D, open: boolean, pulse: number): 
   ctx.restore();
 }
 
+/** The manual object prints the rules of the station that is armed now. */
+function coversArmed(map: WorldMap, manual: WorldMap['manuals'][number]): boolean {
+  const armed = map.stations.find((s) => s.status === 'armed');
+  return armed !== undefined && manual.puzzleIds.includes(armed.puzzleId);
+}
+
 /** A door bar is horizontal when its left/right neighbors are barriers. */
 function isHorizontalDoor(map: WorldMap, x: number, y: number): boolean {
   const doorCells = new Set(map.doors.map((d) => `${d.x},${d.y}`));
@@ -257,6 +225,8 @@ export function GameWorld({
   spectator,
   holdTips,
   onToggleInfo,
+  onRead,
+  onOperate,
   send,
 }: Props) {
   const [wheelOpen, setWheelOpen] = useState(false);
@@ -272,6 +242,12 @@ export function GameWorld({
   sendRef.current = send;
   const infoRef = useRef(onToggleInfo);
   infoRef.current = onToggleInfo;
+  const readRef = useRef(onRead);
+  readRef.current = onRead;
+  const operateRef = useRef(onOperate);
+  operateRef.current = onOperate;
+  /** the E key's job, shared with the touch button; set while the render loop runs */
+  const interactRef = useRef<(() => void) | null>(null);
   const simRef = useRef<Sim | null>(null);
 
   useEffect(() => {
@@ -358,18 +334,33 @@ export function GameWorld({
     simRef.current = sim;
     startAmbience();
 
-    /** Fires the one context action; the server decides what it means here. */
+    /**
+     * Fires the one context action. Reading and coming back to an open
+     * station stay on this client; everything else the server decides.
+     */
     function tryInteract(): void {
-      const map = viewRef.current.map;
-      if (map === null || lockedRef.current || viewRef.current.puzzle !== null) {
+      const current = viewRef.current;
+      if (current.map === null || lockedRef.current) {
         return;
       }
-      if (contextAction(map, sim.self, viewRef.current.you.id) === null) {
+      const action = contextAction(current.map, sim.self, current.you.id, current.manualsHere);
+      if (action === null) {
         return;
       }
       stationChirp();
+      if (action.kind === 'read') {
+        readRef.current(action.manualId);
+        return;
+      }
+      if (action.kind === 'operate') {
+        operateRef.current();
+        if (current.puzzle !== null) {
+          return;
+        }
+      }
       sendRef.current({ kind: 'interact' });
     }
+    interactRef.current = tryInteract;
 
     const onKeyDown = (e: KeyboardEvent): void => {
       if (isTextEntry(document.activeElement) || e.altKey || e.ctrlKey || e.metaKey) {
@@ -681,7 +672,7 @@ export function GameWorld({
       for (const plate of map.plates) {
         ctx.save();
         ctx.translate(plate.x + 0.5, plate.y + 0.5);
-        drawPlate(ctx, { pressed: plate.pressed, label: plate.label });
+        drawPlate(ctx, { pressed: plate.pressed, label: plate.label, camera: plate.freezesDrone });
         ctx.restore();
       }
       for (const door of map.doors) {
@@ -698,6 +689,23 @@ export function GameWorld({
         ctx.save();
         ctx.translate(station.x + 0.5, station.y + 0.5);
         drawStation(ctx, { status: station.status, pulse, title: station.title });
+        ctx.restore();
+      }
+      for (const manual of map.manuals) {
+        ctx.save();
+        ctx.translate(manual.x + 0.5, manual.y + 0.5);
+        drawManualObject(ctx, {
+          kind: manual.kind,
+          label: manual.label,
+          active: coversArmed(map, manual),
+          pulse,
+        });
+        ctx.restore();
+      }
+      if (map.edgeworkSign !== null) {
+        ctx.save();
+        ctx.translate(map.edgeworkSign.x + 0.5, map.edgeworkSign.y + 0.5);
+        drawSign(ctx, { label: 'LABORKENNUNG', seen: viewRef.current.presence.signSeen, pulse });
         ctx.restore();
       }
       if (map.exit !== null) {
@@ -954,12 +962,22 @@ export function GameWorld({
           station.status === 'armed' ? '#2dd4bf' : station.status === 'done' ? '#1f6b60' : '#2c3947';
         ctx.fillRect(ox + station.x * cell, oy + station.y * cell, cell, cell);
       }
+      for (const manual of map.manuals) {
+        ctx.fillStyle = coversArmed(map, manual) ? '#60a5fa' : '#2c4766';
+        ctx.fillRect(ox + manual.x * cell, oy + manual.y * cell, cell, cell);
+      }
+      // Half a cell, so it does not pass for a closed door; gone once read.
+      if (map.edgeworkSign !== null && !viewRef.current.presence.signSeen) {
+        const { x, y } = map.edgeworkSign;
+        ctx.fillStyle = '#fcd34d';
+        ctx.fillRect(ox + x * cell + cell / 4, oy + y * cell + cell / 4, cell / 2, cell / 2);
+      }
       if (map.exit !== null) {
         ctx.fillStyle = map.exit.open ? '#4ade80' : '#2c3947';
         ctx.fillRect(ox + map.exit.x * cell, oy + map.exit.y * cell, cell, cell);
       }
       for (const drone of Object.values(dronesRef.current)) {
-        ctx.fillStyle = drone.alerted ? '#f87171' : '#fbbf24';
+        ctx.fillStyle = drone.frozen ? '#7d8f9e' : drone.alerted ? '#f87171' : '#fbbf24';
         ctx.beginPath();
         ctx.arc(ox + drone.x * cell, oy + drone.y * cell, cell * 0.5, 0, Math.PI * 2);
         ctx.fill();
@@ -1041,8 +1059,16 @@ export function GameWorld({
           punch(station.x + 0.5, station.y + 0.5, 1.1, 0.4);
         }
       }
+      for (const manual of map.manuals) {
+        const active = coversArmed(map, manual);
+        punch(manual.x + 0.5, manual.y + 0.5, active ? 2.1 : 1.3, active ? 0.8 : 0.5);
+      }
+      if (map.edgeworkSign !== null) {
+        punch(map.edgeworkSign.x + 0.5, map.edgeworkSign.y + 0.5, 1.4, 0.6);
+      }
+      // A camera plate is worth finding before anybody stands on it.
       for (const plate of map.plates) {
-        if (plate.pressed) {
+        if (plate.pressed || plate.freezesDrone) {
           punch(plate.x + 0.5, plate.y + 0.5, 1.0, 0.5);
         }
       }
@@ -1058,8 +1084,13 @@ export function GameWorld({
         }
         punch(item.deliverTo.x + 0.5, item.deliverTo.y + 0.5, 1.4, 0.6);
       }
-      // Drone cones light their own path, which is what makes them readable.
+      // Drone cones light their own path, which is what makes them readable;
+      // a frozen drone has no cone, only a glimmer around its body.
       for (const drone of Object.values(dronesRef.current)) {
+        if (drone.frozen) {
+          punch(drone.x, drone.y, 0.9, 0.5);
+          continue;
+        }
         const [sx, sy] = worldToScreen(s, w, h, drone.x, drone.y);
         const half = (drone.halfAngleDeg * Math.PI) / 180;
         const r = drone.range * s;
@@ -1135,10 +1166,9 @@ export function GameWorld({
         ctx.textAlign = 'center';
         ctx.fillText(`${target.label} ${tiles}m`, at.x, at.captionY);
       }
-      const action =
-        viewRef.current.puzzle === null
-          ? contextAction(map, sim.self, viewRef.current.you.id)
-          : null;
+      const action = lockedRef.current
+        ? null
+        : contextAction(map, sim.self, viewRef.current.you.id, viewRef.current.manualsHere);
       if (action !== null) {
         const [sx, sy] = worldToScreen(s, w, h, action.x, action.y);
         ctx.font = `700 ${12 * dpr}px ui-monospace, Menlo, monospace`;
@@ -1188,6 +1218,7 @@ export function GameWorld({
       window.removeEventListener('blur', onBlur);
       stopAmbience();
       simRef.current = null;
+      interactRef.current = null;
     };
     // The loop reads everything through refs; mount/unmount is the only dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1202,22 +1233,6 @@ export function GameWorld({
       sim.keys.add(key);
     } else {
       sim.keys.delete(key);
-    }
-  };
-
-  const touchInteract = (): void => {
-    const map = view.map;
-    const sim = simRef.current;
-    if (map === null || sim === null || inputLocked || view.puzzle !== null) {
-      return;
-    }
-    const station = armedStationOf(map);
-    if (station !== null) {
-      const dist = Math.hypot(sim.self.x - (station.x + 0.5), sim.self.y - (station.y + 0.5));
-      if (dist <= INTERACT_RADIUS) {
-        stationChirp();
-        send({ kind: 'interact' });
-      }
     }
   };
 
@@ -1251,7 +1266,7 @@ export function GameWorld({
             </button>
           ))}
         </div>
-        <button className="world-interact" onClick={touchInteract}>
+        <button className="world-interact" onClick={() => interactRef.current?.()}>
           ⚡ [E]
         </button>
         <button

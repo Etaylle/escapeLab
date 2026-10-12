@@ -28,8 +28,8 @@ const GREEN = '#4ade80';
  *
  * An emergency overrides everything and needs every valve at once, since the
  * crew has to split up. Otherwise there is one errand at a time, except that a
- * loose part and the station waiting for it are shown together — they are two
- * legs of the same trip.
+ * loose part, the station waiting for it and the manual objects printing its
+ * rules are shown together — the crew splits up between them.
  */
 export function markerTargets(map: MapView, youId: string): MarkerTarget[] {
   if (map.sabotage !== null) {
@@ -57,6 +57,9 @@ export function markerTargets(map: MapView, youId: string): MarkerTarget[] {
   const armed = map.stations.find((station) => station.status === 'armed');
   if (armed !== undefined) {
     out.push({ x: armed.x + 0.5, y: armed.y + 0.5, color: TEAL, label: 'STATION' });
+    for (const manual of map.manuals.filter((m) => m.puzzleIds.includes(armed.puzzleId))) {
+      out.push({ x: manual.x + 0.5, y: manual.y + 0.5, color: BLUE, label: 'LESEN' });
+    }
   }
   return out;
 }

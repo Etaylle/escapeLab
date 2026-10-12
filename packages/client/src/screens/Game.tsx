@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type {
   ClientMessage,
   DronePosition,
+  ManualHere,
   PlayerPosition,
   PlayerView,
   PuzzleView,
@@ -12,11 +13,13 @@ import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { play } from '../sounds.js';
 import { radioChirp } from '../world/audio.js';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
+import { startRoom } from '../world/rooms.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
 import { MissionHud } from './MissionHud.js';
 import { InfoPanel } from './InfoPanel.js';
 import { Manual } from './Manual.js';
-import { EdgeworkChip } from './EdgeworkChip.js';
+import { ReadingOverlay } from './Reading.js';
+import { WorldModal } from './WorldModal.js';
 
 interface Props {
   view: PlayerView;
@@ -130,8 +133,10 @@ function CriticalVignette({ deadlineAt }: { deadlineAt: number }) {
 
 /** How long the launch briefing covers the screen. */
 const BRIEFING_MS = 3600;
+/** How long the note that the sign was read stays up; its fade in ui.css matches. */
+const SIGN_NOTE_MS = 3500;
 
-/** Mission briefing shown for the first seconds after launch. */
+/** Mission briefing shown for the first seconds after launch: the mission and where you are. */
 function Briefing({ view }: { view: PlayerView }) {
   const now = useNow(200);
   const startedAt = view.startedAt ?? now;
@@ -140,19 +145,24 @@ function Briefing({ view }: { view: PlayerView }) {
     return null;
   }
   const count = msIn < 1200 ? 3 : msIn < 2400 ? 2 : 1;
+  const room = view.map === null ? null : startRoom(view.map);
   return (
     <div className="overlay briefing">
-      <span className="kicker">MISSION GESTARTET</span>
       <h1>{view.missionTitle}</h1>
-      <p>Du bist: <strong>{view.players.find((p) => p.id === view.you.id)?.roleName}</strong></p>
+      {room !== null && (
+        <p>
+          Start: <strong>{room}</strong>
+        </p>
+      )}
       <div className="briefing-count">{count}</div>
     </div>
   );
 }
 
 /**
- * Mission control's side of a station, the same for every role: the hints
- * given so far and the button for the next one, which unlocks after a wait.
+ * Mission control's side of a station, the same for everyone working it:
+ * the hints given so far and the button for the next one, which unlocks
+ * after a wait.
  */
 function HintStrip({
   hints,
@@ -192,16 +202,6 @@ function HintStrip({
   );
 }
 
-/** Whose station this is, and the edgework within reach for roles that read it out. */
-function StationHead({ role, edgework }: { role: string; edgework: PlayerView['edgework'] }) {
-  return (
-    <div className="panel-head">
-      <div className="panel-label">// STATION: {role}</div>
-      {edgework !== null && <EdgeworkChip edgework={edgework} />}
-    </div>
-  );
-}
-
 /** Sounds, screen shake, alarm banner and the SYSTEM-ONLINE stamp. */
 function useFeedback(view: PlayerView): { shaking: boolean; alarmVisible: boolean; stamp: boolean } {
   const [shaking, setShaking] = useState(false);
@@ -221,9 +221,6 @@ function useFeedback(view: PlayerView): { shaking: boolean; alarmVisible: boolea
   useEffect(() => {
     if (view.penaltySeq > prevPenalty.current) {
       prevPenalty.current = view.penaltySeq;
-      if (view.map === null) {
-        play('alarm'); // mapped missions get their alarm from the world audio layer
-      }
       setShaking(true);
       setAlarmVisible(true);
       const shakeTimer = setTimeout(() => setShaking(false), 600);
@@ -235,7 +232,7 @@ function useFeedback(view: PlayerView): { shaking: boolean; alarmVisible: boolea
     }
     prevPenalty.current = view.penaltySeq;
     return undefined;
-  }, [view.penaltySeq, view.map]);
+  }, [view.penaltySeq]);
 
   useEffect(() => {
     const index = view.currentPuzzleIndex;
@@ -294,27 +291,125 @@ function useRadioBanner(view: PlayerView): RunEvent | null {
   return onAir;
 }
 
+/**
+ * True for a moment once this player has walked up to the Laborkennung —
+ * after the briefing, so the note is not lost under it. A player who spawns
+ * at the sign gets it too; one who reconnects later does not, they read it
+ * before.
+ */
+function useSignNote(view: PlayerView): boolean {
+  const signSeen = view.presence.signSeen;
+  const briefingEnds = (view.startedAt ?? 0) + BRIEFING_MS;
+  const [noted, setNoted] = useState(() => signSeen && Date.now() >= briefingEnds);
+  const [up, setUp] = useState(false);
+  useEffect(() => {
+    if (!signSeen || noted) {
+      return undefined;
+    }
+    const on = setTimeout(
+      () => {
+        setNoted(true);
+        setUp(true);
+      },
+      Math.max(0, briefingEnds - Date.now()),
+    );
+    return () => clearTimeout(on);
+  }, [signSeen, noted, briefingEnds]);
+  useEffect(() => {
+    if (!up) {
+      return undefined;
+    }
+    const off = setTimeout(() => setUp(false), SIGN_NOTE_MS);
+    return () => clearTimeout(off);
+  }, [up]);
+  return up;
+}
+
+/**
+ * The modal over the world, if any: the open station's panel while this
+ * player stands at it and asked for it, a manual object's pages while they
+ * stand there. Both follow the server's word on where the player stands;
+ * once that drops, the modal goes and stays gone until asked for again.
+ */
+function useWorldModal(view: PlayerView): {
+  station: PuzzleView | null;
+  reading: ManualHere | null;
+  operate: () => void;
+  read: (manualId: string) => void;
+  close: () => void;
+} {
+  const [operating, setOperating] = useState(false);
+  const [readingId, setReadingId] = useState<string | null>(null);
+  const armed = view.map?.stations.find((s) => s.status === 'armed')?.puzzleId ?? null;
+  const atStation = armed !== null && view.presence.stationId === armed;
+  const wasAtStation = useRef(atStation);
+  useEffect(() => {
+    if (wasAtStation.current && !atStation) {
+      setOperating(false);
+    }
+    wasAtStation.current = atStation;
+  }, [atStation]);
+  const reading = view.manualsHere.find((m) => m.id === readingId) ?? null;
+  useEffect(() => {
+    if (readingId !== null && reading === null) {
+      setReadingId(null);
+    }
+  }, [readingId, reading]);
+  return {
+    station: operating && atStation ? view.puzzle : null,
+    reading,
+    operate: () => setOperating(true),
+    read: setReadingId,
+    close: () => {
+      setOperating(false);
+      setReadingId(null);
+    },
+  };
+}
+
+/** Escape closes whatever lies on top. */
+function useEscape(onEscape: () => void): void {
+  const handler = useRef(onEscape);
+  handler.current = onEscape;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        handler.current();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+}
+
 // --- screen ------------------------------------------------------------------
 
 export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, send }: Props) {
   const { shaking, alarmVisible, stamp } = useFeedback(view);
   const radioLine = useRadioBanner(view);
+  const signNote = useSignNote(view);
+  const modal = useWorldModal(view);
   const [infoOpen, setInfoOpen] = useState(false);
-  const puzzle = view.puzzle;
+  useEscape(() => {
+    if (infoOpen) {
+      setInfoOpen(false);
+    } else {
+      modal.close();
+    }
+  });
   const map = view.map;
-  const relay = map?.sabotage?.relay;
-  if (puzzle === null && map === null) {
+  if (map === null) {
     return <p className="muted">Lade Mission …</p>;
   }
-  const myRole = view.players.find((p) => p.id === view.you.id)?.roleName ?? '—';
-  const armedTitle = map?.stations.find((s) => s.status === 'armed')?.title ?? null;
-  const escaping = map?.exit?.open === true;
-  const missing = map?.items.filter((i) => !i.delivered).map((i) => i.label) ?? [];
+  const relay = map.sabotage?.relay;
+  const armedTitle = map.stations.find((s) => s.status === 'armed')?.title ?? null;
+  const escaping = map.exit?.open === true;
+  const missing = map.items.filter((i) => !i.delivered).map((i) => i.label);
   const missingLabel =
     escaping || missing.length === 0 ? null : `${missing.join(', ')} fehlt noch`;
   const title =
-    puzzle !== null
-      ? puzzle.title
+    view.puzzle !== null
+      ? view.puzzle.title
       : escaping
         ? '🏃 NOTAUSGANG — alle raus, JETZT!'
         : (armedTitle ?? 'Alle Stationen erledigt');
@@ -329,30 +424,8 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
         </div>
       )}
 
-      {map === null && (
-        <div className="game-header">
-          <div>
-            <div
-              className="led-strip"
-              aria-label={`Rätsel ${view.currentPuzzleIndex + 1} von ${view.puzzleCount}`}
-            >
-              {Array.from({ length: view.puzzleCount }, (_, i) => (
-                <span
-                  key={i}
-                  className={`led ${i < view.currentPuzzleIndex ? 'led-done' : ''} ${
-                    i === view.currentPuzzleIndex ? 'led-active' : ''
-                  }`}
-                />
-              ))}
-            </div>
-            <h1>{title}</h1>
-          </div>
-          {view.deadlineAt !== null && <Countdown deadlineAt={view.deadlineAt} />}
-        </div>
-      )}
-
-      {map !== null && relay === undefined && <SabotageAlert sabotage={map.sabotage} />}
-      {map !== null && map.sabotage !== null && relay !== undefined && (
+      {relay === undefined && <SabotageAlert sabotage={map.sabotage} />}
+      {map.sabotage !== null && relay !== undefined && (
         <RelayAlert sabotage={map.sabotage} relay={relay} send={send} />
       )}
 
@@ -377,87 +450,89 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
         </div>
       )}
 
-      {map !== null && (
-        <div className="stage">
-          <div className="stage-top">
-            <div className="stage-goal">
-              <div
-                className="led-strip"
-                aria-label={`Station ${view.currentPuzzleIndex + 1} von ${view.puzzleCount}`}
-              >
-                {Array.from({ length: view.puzzleCount }, (_, i) => (
-                  <span
-                    key={i}
-                    className={`led ${i < view.currentPuzzleIndex ? 'led-done' : ''} ${
-                      i === view.currentPuzzleIndex ? 'led-active' : ''
-                    }`}
-                  />
-                ))}
-              </div>
-              <h1>{title}</h1>
-              {missingLabel !== null && <span className="stage-sub">{missingLabel}</span>}
+      <div className="stage">
+        <div className="stage-top">
+          <div className="stage-goal">
+            <div
+              className="led-strip"
+              aria-label={`Station ${view.currentPuzzleIndex + 1} von ${view.puzzleCount}`}
+            >
+              {Array.from({ length: view.puzzleCount }, (_, i) => (
+                <span
+                  key={i}
+                  className={`led ${i < view.currentPuzzleIndex ? 'led-done' : ''} ${
+                    i === view.currentPuzzleIndex ? 'led-active' : ''
+                  }`}
+                />
+              ))}
             </div>
-            {view.deadlineAt !== null && <Countdown deadlineAt={view.deadlineAt} />}
-            {radioLine !== null && (
-              <div
-                key={`${radioLine.at}-${radioLine.label}`}
-                className="radio-banner"
-                role="status"
-              >
-                <span className="radio-banner-from">📻 LEITSTELLE</span> — {radioLine.label}
-              </div>
-            )}
+            <h1>{title}</h1>
+            {missingLabel !== null && <span className="stage-sub">{missingLabel}</span>}
           </div>
-          <GameWorld
-            view={view}
-            positionsRef={positionsRef}
-            dronesRef={dronesRef}
-            pingsRef={pingsRef}
-            chatsRef={chatsRef}
-            spectator={false}
-            holdTips={radioLine !== null}
-            inputLocked={puzzle !== null || view.pausedFor !== null || relay !== undefined}
-            onToggleInfo={() => setInfoOpen((open) => !open)}
-            send={send}
-          />
+          {view.deadlineAt !== null && <Countdown deadlineAt={view.deadlineAt} />}
+          {radioLine !== null && (
+            <div
+              key={`${radioLine.at}-${radioLine.label}`}
+              className="radio-banner"
+              role="status"
+            >
+              <span className="radio-banner-from">📻 LEITSTELLE</span> — {radioLine.label}
+            </div>
+          )}
+          {signNote && (
+            <div className="toast" role="status">
+              ✓ Laborkennung notiert
+            </div>
+          )}
         </div>
-      )}
-
-      {puzzle !== null &&
-        (map !== null ? (
-          <div className="puzzle-modal" role="dialog" aria-modal="true">
-            <div className="panel">
-              <StationHead role={myRole} edgework={view.edgework} />
-              {puzzle.manual !== null && <Manual sections={puzzle.manual} />}
-              <PuzzlePanel puzzle={puzzle} send={send} deadlineAt={view.deadlineAt} />
-              <HintStrip hints={puzzle.hints} send={send} />
-            </div>
-          </div>
-        ) : (
-          <div className="panel">
-            <StationHead role={myRole} edgework={view.edgework} />
-            {puzzle.manual !== null && <Manual sections={puzzle.manual} />}
-            <PuzzlePanel puzzle={puzzle} send={send} deadlineAt={view.deadlineAt} />
-          </div>
-        ))}
-
-      {map !== null ? (
-        <MissionHud
+        <GameWorld
           view={view}
           positionsRef={positionsRef}
+          dronesRef={dronesRef}
+          pingsRef={pingsRef}
           chatsRef={chatsRef}
-          onOpenInfo={() => setInfoOpen(true)}
+          spectator={false}
+          holdTips={radioLine !== null}
+          inputLocked={
+            modal.station !== null ||
+            modal.reading !== null ||
+            view.pausedFor !== null ||
+            relay !== undefined
+          }
+          onToggleInfo={() => setInfoOpen((open) => !open)}
+          onRead={modal.read}
+          onOperate={modal.operate}
+          send={send}
         />
-      ) : (
-        <ul className="players inline">
-          {view.players.map((p) => (
-            <li key={p.id} className={p.connected ? '' : 'offline'}>
-              {p.name} · {p.roleName ?? '—'}
-              {p.connected ? '' : ' ⚠ getrennt'}
-            </li>
-          ))}
-        </ul>
+      </div>
+
+      {modal.station !== null && (
+        <WorldModal
+          kind="station"
+          label={`§${modal.station.index + 1} — ${modal.station.title}`}
+          edgework={view.edgework}
+          onClose={modal.close}
+        >
+          <PuzzlePanel puzzle={modal.station} send={send} deadlineAt={view.deadlineAt} />
+          <HintStrip hints={modal.station.hints} send={send} />
+        </WorldModal>
       )}
+      {modal.reading !== null && (
+        <ReadingOverlay
+          manual={modal.reading}
+          puzzle={view.puzzle}
+          current={view.currentPuzzleIndex}
+          edgework={view.edgework}
+          onClose={modal.close}
+        />
+      )}
+
+      <MissionHud
+        view={view}
+        positionsRef={positionsRef}
+        chatsRef={chatsRef}
+        onOpenInfo={() => setInfoOpen(true)}
+      />
 
       {infoOpen && <InfoPanel view={view} onClose={() => setInfoOpen(false)} />}
     </div>

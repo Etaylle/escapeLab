@@ -1,27 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { MapView } from '@escapelab/core';
 import { markerTargets, placeMarker } from '../src/world/markers.js';
+import { mapWith, type Manual } from './fixtures.js';
 
 const YOU = 'p1';
-
-function mapWith(parts: Partial<MapView>): MapView {
-  return {
-    width: 20,
-    height: 13,
-    tiles: [],
-    yourSpawn: { x: 1, y: 1 },
-    doors: [],
-    plates: [],
-    stations: [],
-    manuals: [],
-    edgeworkSign: null,
-    labels: [],
-    exit: null,
-    items: [],
-    sabotage: null,
-    ...parts,
-  };
-}
 
 function station(x: number, y: number, status: MapView['stations'][number]['status']) {
   return { puzzleId: 'notstrom', x, y, title: 'Notstrom', status };
@@ -59,6 +41,48 @@ describe('markerTargets — what the player is pointed at', () => {
   it('shows a loose part and the station together — two legs of one trip', () => {
     const map = mapWith({ stations: [station(5, 9, 'armed')], items: [item({ x: 3, y: 4 })] });
     expect(markerTargets(map, YOU).map((t) => t.label)).toEqual(['TEIL', 'STATION']);
+  });
+
+  it('points at every manual object printing the armed station, blue like a part', () => {
+    const book: Manual = {
+      id: 'buch',
+      kind: 'book',
+      x: 2,
+      y: 3,
+      label: 'HANDBUCH',
+      puzzleIds: ['frequenz', 'notstrom'],
+    };
+    const elsewhere: Manual = {
+      ...book,
+      id: 'plan',
+      kind: 'terminal',
+      x: 8,
+      puzzleIds: ['frequenz'],
+    };
+    const map = mapWith({ stations: [station(5, 9, 'armed')], manuals: [book, elsewhere] });
+    expect(markerTargets(map, YOU)).toEqual([
+      { x: 5.5, y: 9.5, color: '#2dd4bf', label: 'STATION' },
+      { x: 2.5, y: 3.5, color: '#60a5fa', label: 'LESEN' },
+    ]);
+  });
+
+  it('points at no manual object once every station is done, or while hands are full', () => {
+    const book: Manual = {
+      id: 'buch',
+      kind: 'book',
+      x: 2,
+      y: 3,
+      label: 'HANDBUCH',
+      puzzleIds: ['notstrom'],
+    };
+    const done = mapWith({ stations: [station(5, 9, 'done')], manuals: [book] });
+    expect(markerTargets(done, YOU)).toEqual([]);
+    const carrying = mapWith({
+      stations: [station(5, 9, 'armed')],
+      manuals: [book],
+      items: [item({ carriedBy: YOU })],
+    });
+    expect(markerTargets(carrying, YOU).map((t) => t.label)).toEqual(['ABGABE']);
   });
 
   it('switches to the drop-off once you pick the part up, and drops the station', () => {

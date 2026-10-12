@@ -108,7 +108,15 @@ export interface MapView {
   /** this player's spawn tile — the client simulates movement from here */
   yourSpawn: { x: number; y: number };
   doors: { id: string; x: number; y: number; open: boolean }[];
-  plates: { id: string; x: number; y: number; label: string; pressed: boolean }[];
+  plates: {
+    id: string;
+    x: number;
+    y: number;
+    label: string;
+    pressed: boolean;
+    /** holding it freezes a drone: a camera plate */
+    freezesDrone: boolean;
+  }[];
   stations: {
     puzzleId: string;
     x: number;
@@ -331,6 +339,7 @@ function mapViewFor(state: GameState, playerId: string, roleId: string | null): 
       y: p.y,
       label: p.label,
       pressed: platePressed(state, p.id),
+      freezesDrone: map.drones.some((d) => d.frozenByPlate === p.id),
     })),
     stations: map.stations.map((s) => {
       const index = state.mission.puzzles.findIndex((p) => p.id === s.puzzleId);

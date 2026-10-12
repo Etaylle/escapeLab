@@ -6,12 +6,18 @@ import type { DronePosition } from '@escapelab/core';
  * scaled to tile units with the origin at the drone's position.
  */
 
-/** The sweeping cone, drawn under the body so the drone sits on top of it. */
+/**
+ * The sweeping cone, drawn under the body so the drone sits on top of it.
+ * A frozen drone sees nothing, so it has none.
+ */
 export function drawDroneCone(
   ctx: CanvasRenderingContext2D,
   drone: DronePosition,
   pulse: number,
 ): void {
+  if (drone.frozen) {
+    return;
+  }
   const half = (drone.halfAngleDeg * Math.PI) / 180;
   const tint = drone.alerted ? '248,113,113' : '251,191,36';
   const gradient = ctx.createRadialGradient(0, 0, 0.2, 0, 0, drone.range);
@@ -124,14 +130,41 @@ export function drawSabotagePanel(
   ctx.restore();
 }
 
-/** The drone itself: dark chassis, a glowing lens and a blinking beacon. */
+/** A padlock hanging over a frozen drone, upright whichever way the drone faces. */
+function drawFrozenLock(ctx: CanvasRenderingContext2D): void {
+  ctx.save();
+  ctx.translate(0, -0.44);
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 0.035;
+  ctx.beginPath();
+  ctx.moveTo(-0.055, 0.01);
+  ctx.arc(0, -0.03, 0.055, Math.PI, 0);
+  ctx.lineTo(0.055, 0.01);
+  ctx.stroke();
+  ctx.fillStyle = '#cbd5e1';
+  ctx.beginPath();
+  ctx.roundRect(-0.085, 0, 0.17, 0.12, 0.025);
+  ctx.fill();
+  ctx.fillStyle = '#1b2733';
+  ctx.beginPath();
+  ctx.arc(0, 0.05, 0.018, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * The drone itself: dark chassis, a glowing lens and a blinking beacon.
+ * Frozen by its plate it hangs dimmed, lens grey and beacon off, under a lock.
+ */
 export function drawDroneBody(
   ctx: CanvasRenderingContext2D,
   drone: DronePosition,
   pulse: number,
 ): void {
-  const accent = drone.alerted ? '#f87171' : '#fbbf24';
+  const accent = drone.frozen ? '#7d8f9e' : drone.alerted ? '#f87171' : '#fbbf24';
+  const alpha = drone.frozen ? 0.5 : 1;
   ctx.save();
+  ctx.globalAlpha = alpha;
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   ctx.beginPath();
   ctx.ellipse(0, 0.26, 0.3, 0.12, 0, 0, Math.PI * 2);
@@ -148,17 +181,20 @@ export function drawDroneBody(
 
   // lens on the facing side
   ctx.fillStyle = accent;
-  ctx.globalAlpha = 0.85;
+  ctx.globalAlpha = alpha * 0.85;
   ctx.beginPath();
   ctx.arc(0.18, 0, 0.09, 0, Math.PI * 2);
   ctx.fill();
-  ctx.globalAlpha = 1;
 
   // beacon on top, blinking with the caller's pulse
-  ctx.fillStyle = accent;
-  ctx.globalAlpha = 0.35 + 0.65 * pulse;
-  ctx.beginPath();
-  ctx.arc(-0.14, 0, 0.055, 0, Math.PI * 2);
-  ctx.fill();
+  if (!drone.frozen) {
+    ctx.globalAlpha = 0.35 + 0.65 * pulse;
+    ctx.beginPath();
+    ctx.arc(-0.14, 0, 0.055, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
+  if (drone.frozen) {
+    drawFrozenLock(ctx);
+  }
 }
