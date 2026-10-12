@@ -2,11 +2,12 @@ import { z } from 'zod';
 import { mulberry32, shuffle, type Rng } from '../rng.js';
 import {
   commonDefShape,
-  type ManualBlock,
+  type ManualSection,
   type Perspectives,
   type PuzzleModule,
   type SolveAid,
 } from './module.js';
+import { deviceFigure, penaltyLine, workedExample } from './printed.js';
 
 /**
  * Memory bank: five stages, each a display digit 1–4 over four buttons
@@ -148,23 +149,30 @@ function notesFrom(
   return notes;
 }
 
-/** A rule as the manual prints it. */
-function ruleText(target: Target): string {
+/** What a rule line tells the crew to press, as the manual prints it. */
+function pressText(target: Target): string {
   switch (target.by) {
     case 'position':
-      return `die ${ORDINALS[target.nth]} Taste`;
+      return `drücke die ${ORDINALS[target.nth]} Taste`;
     case 'label':
-      return `die Taste mit der ${target.label}`;
+      return `drücke die Taste mit der Beschriftung ${target.label}`;
     case 'samePosition':
-      return `dieselbe Position wie in Stufe ${target.stage}`;
+      return `drücke die Taste an derselben Position wie in Stufe ${target.stage}`;
     case 'sameLabel':
-      return `dieselbe Beschriftung wie in Stufe ${target.stage}`;
+      return `drücke die Taste mit derselben Beschriftung wie in Stufe ${target.stage}`;
   }
 }
 
-/** The display shows nothing but 1–4, so the line for the last digit is the catch-all. */
-const lineHead = (display: number): string =>
-  display < DIGITS.length ? `Zeigt das Display ${display}` : `Sonst (Display ${display})`;
+/**
+ * The worked example: stage 1 by position, then stage 2 by the label noted
+ * in stage 1, on a layout that has moved that label to another key.
+ */
+const EXAMPLE: readonly string[] = [
+  'Stufe 1: Display 3; gedrückt die erste Taste, Beschriftung 4.',
+  'Stufe 2: Display 1; Tasten von links 2, 4, 1, 3.',
+  'Stufe 2, Display 1: die Taste mit derselben Beschriftung wie in Stufe 1, also die 4.',
+  'Gedrückt: die zweite Taste.',
+];
 
 /** A fresh layout for one stage, and the seed the next one is drawn from. */
 function drawStage(rng: Rng): Pick<MemoryState, 'display' | 'labels' | 'seed'> {
@@ -219,44 +227,45 @@ export const memoryModule: PuzzleModule<MemoryDef, MemoryState, MemoryInput, Mem
   },
 
   manual(def) {
+    const closing = [
+      workedExample(EXAMPLE),
+      penaltyLine(
+        def.penaltySec,
+        'Die Bank fällt auf Stufe 1 zurück und belegt alle Stufen neu; was davor gedrückt ' +
+          'wurde, zählt nicht mehr.',
+      ),
+    ];
     return [
       {
         heading: 'Speicherbank',
         blocks: [
+          deviceFigure('memory', 'Display über Tasten'),
           {
             kind: 'p',
             text:
-              'Display mit einer Ziffer 1–4, darunter vier Tasten mit den Ziffern 1–4 in ' +
-              'wechselnder Reihenfolge. Fünf Stufen: Jede richtige Taste schaltet eine Stufe ' +
-              'weiter, nach Stufe 5 ist die Bank frei.',
+              'Ein Display zeigt eine Ziffer von 1 bis 4; darunter liegen 4 Tasten, ' +
+              'beschriftet mit 1 bis 4 in wechselnder Reihenfolge. Die Position zählt von ' +
+              'links (erste bis vierte Taste), die Beschriftung ist die Ziffer auf der Taste; ' +
+              '„wie in Stufe k“ meint die in Stufe k gedrückte Taste. Die Bank hat 5 Stufen: ' +
+              'Jede richtige Taste schaltet eine weiter, frühere zeigt sie nicht mehr an.',
           },
-          {
-            kind: 'p',
-            text:
-              'Position: von links gezählt, erste bis vierte Taste. Beschriftung: die Ziffer ' +
-              'auf der Taste. „Wie in Stufe k“ meint die Taste, die in Stufe k gedrückt wurde.',
-          },
-          {
-            kind: 'p',
-            text:
-              'Die Bank zeigt nur die laufende Stufe. Nach jedem Druck Position und ' +
-              'Beschriftung notieren.',
-          },
-          {
-            kind: 'p',
-            text:
-              `Falsche Taste: Alarm, −${def.penaltySec} s. Zurück auf Stufe 1, alle Stufen ` +
-              'neu belegt, die Notizen verfallen.',
-          },
-          ...RULES.flatMap((row, i): ManualBlock[] => [
-            { kind: 'p', text: `Stufe ${i + 1}:` },
-            {
-              kind: 'rules',
-              items: row.map((target, j) => `${lineHead(j + 1)}: ${ruleText(target)}.`),
-            },
-          ]),
         ],
       },
+      ...RULES.map(
+        (row, i): ManualSection => ({
+          heading: `Stufe ${i + 1}`,
+          blocks: [
+            {
+              kind: 'rules',
+              items: row.map(
+                (target, j) => `Wenn das Display ${j + 1} zeigt, ${pressText(target)}.`,
+              ),
+            },
+            // The example and the penalty close the manual, under the last stage.
+            ...(i === RULES.length - 1 ? closing : []),
+          ],
+        }),
+      ),
     ];
   },
 

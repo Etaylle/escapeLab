@@ -469,8 +469,9 @@ describe('Room', () => {
     expect(wires).not.toBeNull();
     expect(JSON.stringify(anna.messages)).not.toContain(JSON.stringify(wires));
     // The three-wire list in the locker never reached Ben, who stands at the box.
-    expect(JSON.stringify(anna.messages)).toContain('Mehr als ein schwarzes Kabel');
-    expect(JSON.stringify(ben.messages)).not.toContain('Mehr als ein schwarzes Kabel');
+    const threeWireRule = 'mehr als ein schwarzes Kabel vorhanden ist';
+    expect(JSON.stringify(anna.messages)).toContain(threeWireRule);
+    expect(JSON.stringify(ben.messages)).not.toContain(threeWireRule);
     room.dispose();
   });
 });

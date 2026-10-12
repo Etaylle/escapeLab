@@ -231,15 +231,60 @@ describe('morse puzzle', () => {
     expect(malformed.filter(accepts)).toEqual([]);
   });
 
-  it('prints rules that name the penalty and end in a catch-all, the same for every run', () => {
+  it('prints the desk and its rules, both tables, and the penalty, the same for every run', () => {
+    const manual = morseModule.manual(def);
+    expect(manual.map((section) => section.heading)).toEqual([
+      'Funkfeuer',
+      'Morsetafel',
+      'Frequenztabelle',
+    ]);
     const rules = blocks.find((b) => b.kind === 'rules');
     if (rules?.kind !== 'rules') {
       throw new Error('expected a rule list');
     }
-    expect(rules.items.at(-1)).toMatch(/^Sonst/);
-    expect(rules.items.join(' ')).toContain('−25\u00a0s');
-    expect(morseModule.manual(def)[0]?.heading).toBe('Funkfeuer');
-    expect(morseModule.manual(structuredClone(def))).toEqual(morseModule.manual(def));
+    expect(rules.items.filter((item) => !/^Wenn .+\.$/.test(item))).toEqual([]);
+    expect(blocks.at(-1)).toEqual({
+      kind: 'p',
+      text: 'Fehlgriff: Alarm, −25 s. Die Lampe morst weiter.',
+    });
+    expect(morseModule.manual(structuredClone(def))).toEqual(manual);
+  });
+
+  it('prints an example that the lamp and both tables bear out', () => {
+    const example = blocks.find((b) => b.kind === 'example');
+    const lines = example?.kind === 'example' ? example.lines : [];
+    const [seen, read, sent] = [
+      /^Gesehen nach der langen Pause: (.+)\.$/,
+      new RegExp(
+        '^Morsetafel: ([A-Z]), ([A-Z]), ([A-Z])\\. ([A-Z]+) passt auf ([A-Z]+) und ([A-Z]+), ' +
+          '([A-Z]+) nur auf ([A-Z]+)\\.$',
+      ),
+      /^Frequenztabelle: ([A-Z]+), (\d,\d{3} MHz)\. /,
+    ].map((pattern, i) => pattern.exec(lines[i] ?? ''));
+    if (!seen || !read || !sent) {
+      throw new Error(`unreadable example: ${JSON.stringify(lines)}`);
+    }
+    // The signals spell the letters named, by international Morse code and by the printed table.
+    const codes = (seen[1] ?? '')
+      .split(', ')
+      .map((code) => code.replace(/·/g, '.').replace(/−/g, '-').replace(/\s/g, ''));
+    const letters = codes.map((code) => INTERNATIONAL.get(code));
+    const letterOf = new Map([...printedCodes()].map(([letter, code]) => [code, letter]));
+    expect(letters).toEqual(read.slice(1, 4));
+    expect(codes.map((code) => letterOf.get(code))).toEqual(letters);
+    // Two letters leave the two words named, three leave one: the word sent.
+    const words = frequencies.rows.map(([word]) => word ?? '');
+    const startingWith = (start = '') => words.filter((word) => word.startsWith(start));
+    expect([read[4], read[7]]).toEqual([letters.slice(0, 2).join(''), letters.join('')]);
+    expect(startingWith(read[4])).toEqual([read[5], read[6]]);
+    expect(startingWith(read[7])).toEqual([read[8]]);
+    expect(sent[1]).toBe(read[8]);
+    expect(printedFrequency(sent[1] ?? '')).toBe(sent[2]);
+    // The lamp blinks that word so, and the desk takes the frequency named.
+    const word = sent[1] ?? '';
+    const state: MorseState = { type: 'morse', word, dial: DIAL.indexOf(sent[2] ?? '') };
+    expect(panelOf(state).pattern?.startsWith(`${codes.join(' ')} `)).toBe(true);
+    expect(press(state, { transmit: true })).toMatchObject({ solved: true, penalty: null });
   });
 
   it('is won through the reducer after a wrong frequency has cost its penalty', () => {

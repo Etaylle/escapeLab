@@ -97,7 +97,7 @@ function sourceOf(index: number): { id: string; label: string } {
 
 /** What only the station shows, and a line only its printed rules hold, for stations 1–4. */
 const SECRETS = [
-  { instance: '"wires":[{', rules: 'Mehr als ein schwarzes Kabel' },
+  { instance: '"wires":[{', rules: 'mehr als ein schwarzes Kabel vorhanden ist' },
   { instance: '"keys":[{', rules: 'Genau eine Spalte' },
   { instance: '"switches":[{', rules: 'hoch, wenn die Kennung' },
   { instance: '"flashes":["', rules: '1 oder mehr Alarme' },

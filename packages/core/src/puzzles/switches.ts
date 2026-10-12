@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { indicatorLit, serialLastDigitIsOdd, type Edgework } from '../edgework.js';
 import type { Rng } from '../rng.js';
 import { commonDefShape, type PuzzleModule } from './module.js';
+import { deviceFigure, penaltyLine, workedExample } from './printed.js';
 
 /**
  * Switch bank (Keep Talking's complicated wires as toggles): the operator
@@ -73,7 +74,7 @@ const UP_IF_EVEN: Rule = {
   up: (edgework) => !serialLastDigitIsOdd(edgework),
 };
 const UP_IF_CELLS: Rule = {
-  text: 'hoch, wenn mindestens zwei Zellen',
+  text: 'hoch, wenn mindestens 2 Zellen',
   up: (edgework) => edgework.cells >= 2,
 };
 const UP_IF_SIG: Rule = {
@@ -117,6 +118,31 @@ const TABLES: Record<SwitchesDef['features'], readonly Row[]> = {
     [true, 'beides', false, DOWN],
     [true, 'beides', true, UP],
   ],
+};
+
+/**
+ * The worked example by feature count: one switch whose row asks the
+ * edgework, the lab it is seen in and where the switch ends.
+ */
+const EXAMPLES: Record<SwitchesDef['features'], readonly string[]> = {
+  2: [
+    'Gesehen: Schalter 4 mit LED aus, Markierung blau. Kennung endet auf 7.',
+    'Zeile aus, blau: hoch, wenn die Kennung gerade endet (0, 2, 4, 6, 8).',
+    '7 ist ungerade: Schalter 4 bleibt unten. Die übrigen nach ihren Zeilen, dann PRÜFEN.',
+  ],
+  3: [
+    'Gesehen: Schalter 2 mit LED an, Markierung rot, ohne Stern. 3 Notstromzellen eingesetzt.',
+    'Zeile an, rot, nein: hoch, wenn mindestens 2 Zellen.',
+    'Gestellt: Schalter 2 hoch. Die übrigen nach ihren Zeilen, dann PRÜFEN.',
+  ],
+};
+
+/** What a switch carries, by feature count, as the device paragraph names it. */
+const FEATURE_WORDS: Record<SwitchesDef['features'], string> = {
+  2: 'eine LED (an oder aus) und eine Markierung (keine, rot, blau oder beides)',
+  3:
+    'eine LED (an oder aus), eine Markierung (keine, rot, blau oder beides) und einen ' +
+    'Stern oder keinen',
 };
 
 function markingOf(sw: SwitchView): Marking {
@@ -218,11 +244,14 @@ export const switchesModule: PuzzleModule<
       {
         heading: 'Subsysteme',
         blocks: [
+          deviceFigure('switches', 'Bank mit Kippschaltern'),
           {
             kind: 'p',
             text:
-              `Jeden Schalter von links ansagen: LED, Markierung${stars ? ', Stern' : ''}. ` +
-              'Die Zeile sagt, ob er hoch oder runter muss.',
+              'Eine Bank aus 6 Kippschaltern, von links gezählt, alle zu Beginn unten. Jeder ' +
+              `Schalter hat ${FEATURE_WORDS[def.features]}; diese Merkmale bestimmen seine ` +
+              'Zeile, die Spalte Stellung seine Endstellung. Sind alle 6 gestellt, wird einmal ' +
+              'PRÜFEN gedrückt; nur PRÜFEN wird gewertet.',
           },
           {
             kind: 'table',
@@ -234,12 +263,8 @@ export const switchesModule: PuzzleModule<
               rule.text,
             ]),
           },
-          {
-            kind: 'p',
-            text:
-              'Erst alle sechs stellen, dann einmal PRÜFEN – falsche Stellung: Alarm, ' +
-              `−${def.penaltySec} s.`,
-          },
+          workedExample(EXAMPLES[def.features]),
+          penaltyLine(def.penaltySec, 'Die Schalter bleiben, wie sie stehen.'),
         ],
       },
     ];

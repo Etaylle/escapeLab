@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { commonDefShape, type ManualBlock, type Move, type PuzzleModule } from './module.js';
+import { deviceFigure, penaltyLine, workedExample } from './printed.js';
 
 /**
  * morse puzzle („Funkfeuer"): the operator's lamp blinks one word in Morse
@@ -123,6 +124,16 @@ function wordKhz(word: string): number {
 const printed = (code: string): string =>
   [...code].map((signal) => (signal === '.' ? '·' : '−')).join('\u00a0');
 
+/**
+ * The worked example: KABEL's first three letters as the lamp shows them —
+ * two letters leave KABEL and KANAL, the third settles it.
+ */
+const EXAMPLE: readonly string[] = [
+  `Gesehen nach der langen Pause: ${['-.-', '.-', '-...'].map(printed).join(', ')}.`,
+  'Morsetafel: K, A, B. KA passt auf KABEL und KANAL, KAB nur auf KABEL.',
+  'Frequenztabelle: KABEL, 3,530 MHz. Mit ◀ ▶ eingestellt, dann SENDEN.',
+];
+
 /** A–M on the left, N–Z on the right. */
 function alphabetTable(): ManualBlock {
   const cells = Object.entries(MORSE).map(([letter, code]) => [letter, printed(code)]);
@@ -174,35 +185,37 @@ export const morseModule: PuzzleModule<MorseDef, MorseState, MorseInput, MorseVi
       {
         heading: 'Funkfeuer',
         blocks: [
+          deviceFigure('morse', 'Funkpult mit Signallampe'),
           {
             kind: 'p',
             text:
-              'Die Signallampe am Funkpult morst ein Wort in Dauerschleife. Kurzes ' +
-              'Aufleuchten: „kurz" (·). Langes Aufleuchten: „lang" (−). Innerhalb eines ' +
-              'Buchstabens bleibt sie nur kurz dunkel, zwischen zwei Buchstaben deutlich ' +
-              'länger, vor jeder Wiederholung lange.',
+              'Die Signallampe am Funkpult morst in Dauerschleife ein Wort der ' +
+              'Frequenztabelle. Kurzes Aufleuchten ist ·, langes −; zwischen 2 Buchstaben ' +
+              'bleibt die Lampe länger dunkel, vor jeder Wiederholung lange. Das Funkpult ' +
+              'wird mit ◀ ▶ auf die Frequenz des Wortes gestellt, dann wird SENDEN gedrückt.',
           },
           {
             kind: 'rules',
             items: [
-              'Funkpult sagt die Zeichen an, Buchstabe für Buchstabe: „kurz, kurz, lang — ' +
-                'Pause — …". Begonnen wird nach der langen Pause.',
-              'Jeden Buchstaben in der Morsetafel nachschlagen. Keine zwei Wörter beginnen ' +
-                'mit denselben drei Buchstaben: Nach drei Buchstaben steht das Wort fest.',
-              'Frequenz des Wortes in der Frequenztabelle ablesen. Funkpult stellt sie mit ' +
-                '◀ ▶ ein und drückt SENDEN.',
-              `Falsche Frequenz gesendet: Alarm, −${def.penaltySec}\u00a0s. ` +
-                'Die Lampe morst weiter.',
-              'Sonst — kein Wort der Tabelle passt: verlesen. Ab der nächsten langen Pause ' +
-                'neu ansagen.',
+              'Wenn die ersten 3 Buchstaben entziffert sind, steht das Wort fest; keine 2 ' +
+                'Wörter der Frequenztabelle beginnen mit denselben 3 Buchstaben.',
+              'Wenn kein Wort der Frequenztabelle so beginnt, ist ein Zeichen verlesen; nach ' +
+                'der nächsten langen Pause beginnt das Wort von vorn.',
             ],
           },
-          alphabetTable(),
+        ],
+      },
+      { heading: 'Morsetafel', blocks: [alphabetTable()] },
+      {
+        heading: 'Frequenztabelle',
+        blocks: [
           {
             kind: 'table',
             head: ['Wort', 'Frequenz'],
             rows: WORDS.map(({ word, khz }) => [word, megahertz(khz)]),
           },
+          workedExample(EXAMPLE),
+          penaltyLine(def.penaltySec, 'Die Lampe morst weiter.'),
         ],
       },
     ];

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { serialHasVowel, type Edgework } from '../edgework.js';
 import { commonDefShape, type ManualBlock, type PuzzleModule } from './module.js';
+import { deviceFigure, penaltyLine, workedExample } from './printed.js';
 
 export const SIMON_COLORS = ['rot', 'blau', 'gruen', 'gelb'] as const;
 export type SimonColor = (typeof SIMON_COLORS)[number];
@@ -98,6 +99,20 @@ const ROW_LABELS: Record<SimonDef['legend'], readonly string[]> = {
   einfach: ['0 Alarme', '1 oder mehr Alarme'],
 };
 
+/** The worked example by legend: stage 2's two flashes, translated by the printed row. */
+const EXAMPLES: Record<SimonDef['legend'], readonly string[]> = {
+  kennung: [
+    'Gesehen: Stufe 2 blinkt rot, dann grün. Kennung ohne A, E und U; 1 Alarm am Panel.',
+    'Tabelle „Ohne Vokal“, Zeile „1 Alarm“: rot ergibt gelb, grün ergibt blau.',
+    'Gedrückt: gelb, dann blau.',
+  ],
+  einfach: [
+    'Gesehen: Stufe 2 blinkt rot, dann grün; 0 Alarme am Panel.',
+    'Zeile „0 Alarme“: rot ergibt blau, grün ergibt gelb.',
+    'Gedrückt: blau, dann gelb.',
+  ],
+};
+
 /** The table this run translates with: the legend's, under `kennung` by the Laborkennung. */
 function tableFor(def: SimonDef, edgework: Edgework | null): TranslationTable {
   if (def.legend === 'einfach') {
@@ -134,6 +149,24 @@ function tableBlock(
       ...SIMON_COLORS.map((color) => COLOR_NAMES[row[color]]),
     ]),
   };
+}
+
+/** What the legend prints between the device paragraph and the example: its tables. */
+function legendBlocks(legend: SimonDef['legend']): ManualBlock[] {
+  if (legend === 'einfach') {
+    return [tableBlock('Blinkt', SIMPLE, ROW_LABELS.einfach)];
+  }
+  return [
+    {
+      kind: 'rules',
+      items: [
+        'Wenn die Laborkennung ein A, E oder U enthält, gilt die Tabelle „Mit Vokal“.',
+        'Andernfalls gilt die Tabelle „Ohne Vokal“.',
+      ],
+    },
+    tableBlock('Mit Vokal', WITH_VOWEL, ROW_LABELS.kennung),
+    tableBlock('Ohne Vokal', WITHOUT_VOWEL, ROW_LABELS.kennung),
+  ];
 }
 
 export const simonModule: PuzzleModule<SimonDef, SimonState, SimonInput, SimonView> = {
@@ -195,40 +228,28 @@ export const simonModule: PuzzleModule<SimonDef, SimonState, SimonInput, SimonVi
   },
 
   manual(def) {
-    if (def.legend === 'einfach') {
-      return [
-        {
-          heading: 'Frequenz-Abgleich',
-          blocks: [
-            {
-              kind: 'p',
-              text:
-                'Für jede Blinkfarbe die Taste aus ihrer Spalte tippen, Zeile nach den Alarmen ' +
-                'am Panel, jede Stufe ab der ersten Farbe; falsche Taste: Alarm, ' +
-                `−${def.penaltySec} s, die Stufe beginnt von vorn.`,
-            },
-            tableBlock('Blinkt', SIMPLE, ROW_LABELS.einfach),
-          ],
-        },
-      ];
-    }
+    const table = def.legend === 'kennung' ? 'In der geltenden Tabelle' : 'In der Tabelle';
     return [
       {
         heading: 'Frequenz-Abgleich',
         blocks: [
+          deviceFigure('simon', 'Panel mit Farbtasten'),
           {
             kind: 'p',
             text:
-              'Das Panel blinkt in Stufen: Stufe 1 zeigt eine Farbe, jede weitere Stufe eine ' +
-              `mehr, bis ${def.sequenceLength}. Jede Stufe ganz übersetzen und in derselben ` +
-              'Reihenfolge tippen. Tabelle „Mit Vokal“, wenn die Laborkennung A, E oder U ' +
-              'enthält, sonst „Ohne Vokal“. Zeile nach dem Alarmstand am Panel, Spalte nach ' +
-              'der blinkenden Farbe; das Feld nennt die Taste. Falsche Taste: Alarm, ' +
-              `−${def.penaltySec} s, die Stufe beginnt von vorn – mit der Zeile für den ` +
-              'neuen Alarmstand.',
+              'Ein Panel mit 4 Farbtasten blinkt eine Farbfolge in Stufen: Stufe 1 zeigt die ' +
+              'erste Farbe, Stufe 2 die ersten 2 und so fort bis Stufe ' +
+              `${def.sequenceLength}. Jede Stufe wird ganz eingegeben, in der gezeigten ` +
+              'Reihenfolge, jede Farbe übersetzt. ' +
+              `${table} bestimmt der Alarmstand am Panel die Zeile und die blinkende Farbe ` +
+              'die Spalte; das Feld nennt die Taste.',
           },
-          tableBlock('Mit Vokal', WITH_VOWEL, ROW_LABELS.kennung),
-          tableBlock('Ohne Vokal', WITHOUT_VOWEL, ROW_LABELS.kennung),
+          ...legendBlocks(def.legend),
+          workedExample(EXAMPLES[def.legend]),
+          penaltyLine(
+            def.penaltySec,
+            'Die Stufe beginnt von vorn, mit der Zeile für den neuen Alarmstand.',
+          ),
         ],
       },
     ];

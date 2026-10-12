@@ -132,6 +132,16 @@ function clearStage(state: MemoryState, transcript: Transcript): MemoryState {
 
 const ORDINALS = ['erste', 'zweite', 'dritte', 'vierte'];
 
+/** Every order of `items`. */
+function permutations(items: number[]): number[][] {
+  if (items.length <= 1) {
+    return [items];
+  }
+  return items.flatMap((item, i) =>
+    permutations([...items.slice(0, i), ...items.slice(i + 1)]).map((rest) => [item, ...rest]),
+  );
+}
+
 /** One printed rule, carried out with the bank in view and the crew's notes at hand. */
 function carryOut(rule: string, labels: number[], notes: MemoryPress[]): number {
   const noted = (stage: string | undefined): MemoryPress => {
@@ -141,47 +151,49 @@ function carryOut(rule: string, labels: number[], notes: MemoryPress[]): number 
     }
     return entry;
   };
-  const byPosition = /^die (erste|zweite|dritte|vierte) Taste\.$/.exec(rule);
+  const byPosition = /^die (erste|zweite|dritte|vierte) Taste$/.exec(rule);
   if (byPosition !== null) {
     return ORDINALS.indexOf(byPosition[1] ?? '');
   }
-  const byLabel = /^die Taste mit der ([1-4])\.$/.exec(rule);
+  const byLabel = /^die Taste mit der Beschriftung ([1-4])$/.exec(rule);
   if (byLabel !== null) {
     return labels.indexOf(Number(byLabel[1]));
   }
-  const samePosition = /^dieselbe Position wie in Stufe ([1-5])\.$/.exec(rule);
+  const samePosition = /^die Taste an derselben Position wie in Stufe ([1-5])$/.exec(rule);
   if (samePosition !== null) {
     return noted(samePosition[1]).position;
   }
-  const sameLabel = /^dieselbe Beschriftung wie in Stufe ([1-5])\.$/.exec(rule);
+  const sameLabel = /^die Taste mit derselben Beschriftung wie in Stufe ([1-5])$/.exec(rule);
   if (sameLabel !== null) {
     return labels.indexOf(noted(sameLabel[1]).label);
   }
   throw new Error(`unreadable rule: "${rule}"`);
 }
 
+/** The key a stage's printed line names for a display digit, as it stands after „drücke". */
+function printedTarget(manual: ManualSection[], stage: number, display: number): string {
+  const list = manual.find((section) => section.heading === `Stufe ${stage}`)?.blocks[0];
+  if (list?.kind !== 'rules') {
+    throw new Error(`the manual has no rule list for stage ${stage}`);
+  }
+  const head = `Wenn das Display ${display} zeigt, drücke `;
+  const line = list.items.find((item) => item.startsWith(head));
+  if (line === undefined || !line.endsWith('.')) {
+    throw new Error(`stage ${stage} has no line for display ${display}`);
+  }
+  return line.slice(head.length, -1);
+}
+
 /**
- * A crew with the printed page and nothing else: the list under „Stufe k:",
- * the line for the display digit or else the catch-all, and what it says.
+ * A crew with the printed page and nothing else: the section „Stufe k", the
+ * line for the display digit, and what it says.
  */
 function readManual(
   manual: ManualSection[],
   bank: ReturnType<typeof bankOf>,
   notes: MemoryPress[],
 ): number {
-  const blocks = manual.flatMap((section) => section.blocks);
-  const heading = blocks.findIndex((b) => b.kind === 'p' && b.text === `Stufe ${bank.stage}:`);
-  const list = blocks[heading + 1];
-  if (heading < 0 || list?.kind !== 'rules') {
-    throw new Error(`the manual has no rule list for stage ${bank.stage}`);
-  }
-  const line =
-    list.items.find((item) => item.startsWith(`Zeigt das Display ${bank.display}: `)) ??
-    list.items.find((item) => item.startsWith('Sonst'));
-  if (line === undefined) {
-    throw new Error(`stage ${bank.stage} has no line for display ${bank.display}`);
-  }
-  return carryOut(line.slice(line.indexOf(': ') + 2), bank.labels, notes);
+  return carryOut(printedTarget(manual, bank.stage, bank.display), bank.labels, notes);
 }
 
 describe('memory module', () => {
@@ -373,18 +385,20 @@ describe('the printed memory manual', () => {
   const blocks = manual.flatMap((section) => section.blocks);
   const lists = blocks.flatMap((block) => (block.kind === 'rules' ? [block.items] : []));
 
-  it('has a list per stage, headed „Stufe k:", of four lines ending in the catch-all', () => {
-    expect(manual).toHaveLength(1);
-    expect(manual[0]?.heading).toBe('Speicherbank');
+  it('has a section per stage, „Stufe k", with a line for each display digit', () => {
+    expect(manual.map((section) => section.heading)).toEqual([
+      'Speicherbank',
+      ...Array.from({ length: STAGES }, (_, i) => `Stufe ${i + 1}`),
+    ]);
     expect(lists).toHaveLength(STAGES);
-    for (const [i, items] of lists.entries()) {
-      const at = blocks.findIndex((block) => block.kind === 'rules' && block.items === items);
-      expect(blocks[at - 1]).toEqual({ kind: 'p', text: `Stufe ${i + 1}:` });
-      expect(items).toHaveLength(4);
-      for (const [d, item] of items.slice(0, 3).entries()) {
-        expect(item.startsWith(`Zeigt das Display ${d + 1}: `), item).toBe(true);
+    for (const section of manual.slice(1)) {
+      const [list] = section.blocks;
+      const items = list?.kind === 'rules' ? list.items : [];
+      expect(items, section.heading).toHaveLength(4);
+      for (const [d, item] of items.entries()) {
+        const head = `Wenn das Display ${d + 1} zeigt, drücke `;
+        expect(item.startsWith(head), item).toBe(true);
       }
-      expect(items[3]).toMatch(/^Sonst \(Display 4\): /);
     }
   });
 
@@ -399,8 +413,54 @@ describe('the printed memory manual', () => {
     }
     const rules = lists.flat().join('\n');
     for (let stage = 1; stage < STAGES; stage++) {
-      expect(rules).toContain(`dieselbe Position wie in Stufe ${stage}.`);
-      expect(rules).toContain(`dieselbe Beschriftung wie in Stufe ${stage}.`);
+      expect(rules).toContain(`an derselben Position wie in Stufe ${stage}.`);
+      expect(rules).toContain(`mit derselben Beschriftung wie in Stufe ${stage}.`);
+    }
+  });
+
+  it('prints an example that the page and the bank bear out', () => {
+    const example = blocks.find((block) => block.kind === 'example');
+    const lines = example?.kind === 'example' ? example.lines : [];
+    const [first, second, rule, pressed] = [
+      /^Stufe 1: Display (\d); gedrückt die (\S+) Taste, Beschriftung (\d)\.$/,
+      /^Stufe 2: Display (\d); Tasten von links (\d), (\d), (\d), (\d)\.$/,
+      /^Stufe 2, Display (\d): (.+), also die (\d)\.$/,
+      /^Gedrückt: die (\S+) Taste\.$/,
+    ].map((pattern, i) => pattern.exec(lines[i] ?? ''));
+    if (!first || !second || !rule || !pressed) {
+      throw new Error(`unreadable example: ${JSON.stringify(lines)}`);
+    }
+    const [display1, display2] = [Number(first[1]), Number(second[1])];
+    const [position1, label1] = [ORDINALS.indexOf(first[2] ?? ''), Number(first[3])];
+    const labels2 = second.slice(2, 6).map(Number);
+    const position2 = ORDINALS.indexOf(pressed[1] ?? '');
+    // Line 3 quotes stage 2's printed line for its display, and the label it leads to.
+    expect(Number(rule[1])).toBe(display2);
+    expect(printedTarget(manual, 2, display2)).toBe(rule[2]);
+    expect(labels2[position2]).toBe(Number(rule[3]));
+    // Stage 1 shows only the pressed key's label; the other three may sit in any order.
+    const layouts = permutations([1, 2, 3, 4]).filter((labels) => labels[position1] === label1);
+    expect(layouts).toHaveLength(6);
+    for (const labels1 of layouts) {
+      const stage1: MemoryState = {
+        type: 'memory',
+        stage: 1,
+        display: display1,
+        labels: labels1,
+        history: [],
+        seed: 1,
+      };
+      expect(readManual(manual, { stage: 1, display: display1, labels: labels1 }, [])).toBe(
+        position1,
+      );
+      const cleared = press(stage1, position1);
+      expect(cleared.penalty).toBeNull();
+      const stage2 = { ...cleared.state, display: display2, labels: labels2 };
+      for (const position of [0, 1, 2, 3]) {
+        expect(press(stage2, position).penalty === null, `key ${position + 1}`).toBe(
+          position === position2,
+        );
+      }
     }
   });
 

@@ -223,9 +223,61 @@ describe('the relay drill', () => {
     expect(relayModule.manual(structuredClone(def))).toEqual(manual);
     expect(manual.map((section) => section.heading)).toEqual(['Notfall-Relais']);
     const rules = manual[0]?.blocks.find((block) => block.kind === 'rules');
-    expect(rules?.kind === 'rules' ? rules.items.at(-1) : null).toMatch(/^Sonst/);
+    expect(rules?.kind === 'rules' ? rules.items.at(-1) : null).toMatch(/^Andernfalls /);
     expect(JSON.stringify(manual)).toContain('12 Sekunden');
     expect(JSON.stringify(manual)).toContain('6 ausgeführte Anweisungen');
+    expect(manual[0]?.blocks.at(-1)).toEqual({
+      kind: 'p',
+      text: 'Notfallzeit abgelaufen, bevor 6 Anweisungen ausgeführt sind: Alarm, −60 s.',
+    });
+  });
+
+  it('prints an example that the consoles bear out', () => {
+    const blocks = relayModule.manual(def)[0]?.blocks ?? [];
+    const example = blocks.find((block) => block.kind === 'example');
+    const rules = blocks.find((block) => block.kind === 'rules');
+    const lines = example?.kind === 'example' ? example.lines : [];
+    const [shown, sits, done] = [
+      /^(\S+)s Pult zeigt: Pult (\S+), „(.+) auf (\d)“\.$/,
+      /^Der (.+) sitzt an (\S+)s Pult: Für (\S+) gilt Regel (\d), für (\S+) Regel (\d)\.$/,
+      /^(\S+) stellt den (.+) auf (\d); die Anweisung zählt, (\S+)s Pult zeigt die nächste\.$/,
+    ].map((pattern, i) => pattern.exec(lines[i] ?? ''));
+    const holder = def.players.find((player) => player.name === shown?.[1]);
+    const owner = def.players.find((player) => player.name === shown?.[2]);
+    if (!shown || !sits || !done || !holder || !owner || rules?.kind !== 'rules') {
+      throw new Error(`unreadable example: ${JSON.stringify(lines)}`);
+    }
+    const [name, level] = [shown[3] ?? '', Number(shown[4])];
+    // Line 2 names the dial, its owner and both players; line 3 the owner setting it.
+    expect([...sits.slice(1, 4), sits[5]]).toEqual([name, owner.name, holder.name, owner.name]);
+    expect(done.slice(1, 5)).toEqual([owner.name, name, String(level), holder.name]);
+    // The holder's rule is the one for another console's element, the owner's for its own.
+    expect(rules.items[Number(sits[4]) - 1]).toMatch(/ein Element eines anderen Pults nennt/);
+    expect(rules.items[Number(sits[6]) - 1]).toMatch(/ein Element dieses Pults nennt/);
+    // A dial of that name on the owner's console, set elsewhere; the holder asks for the level.
+    const base = relayModule.init(def, mulberry32(1), ctx(T0));
+    const setting = { kind: 'dial' as const, value: 1 };
+    const dial = { id: 'kx', ownerId: owner.id, name, setting };
+    const state: RelayState = {
+      ...base,
+      controls: [...base.controls.filter((c) => c.name !== name), dial],
+      instructions: base.instructions.map((i) =>
+        i.holderId === holder.id ? { ...i, controlId: dial.id, value: level } : i,
+      ),
+    };
+    expect(level).not.toBe(dial.setting.value);
+    const before = viewsOf(def, state);
+    expect(before[holder.id]?.instruction).toMatchObject({ playerName: owner.name, control: name });
+    expect(before[owner.id]?.controls.map((control) => control.name)).toContain(name);
+    const set = { kind: 'set' as const, control: dial.id, value: level };
+    expect(() => relayModule.apply(def, state, set, holder.id, ctx(T0 + 1000))).toThrow(
+      /anderen Pult/,
+    );
+    const after = relayModule.apply(def, state, set, owner.id, ctx(T0 + 1000));
+    expect(after).toMatchObject({ penalty: null, state: { completed: base.completed + 1 } });
+    expect(viewsOf(def, after.state)[holder.id]?.instruction).not.toEqual(
+      before[holder.id]?.instruction,
+    );
   });
 
   it('draws the control names from a pool of sixteen or more, all different', () => {
