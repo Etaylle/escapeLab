@@ -128,8 +128,6 @@
       "prompt": "Im Ostflügel hängen fünf Brückenkabel. Welche fallen müssen, steht nur in den Handbüchern im Westen.",
       "operatorRoleId": "technik",
       "manualRoleId": "archiv",
-      "pairsToCut": [["⚡", "♆"], ["☢", "Ϟ"]],
-      "decoyPairs": [["⚡", "Ϟ"], ["♆", "Ѭ"], ["☢", "Ѭ"]],
       "penaltySec": 30,
       "infos": [
         {

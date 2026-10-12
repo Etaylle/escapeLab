@@ -138,8 +138,6 @@
       "prompt": "Sechs Brückenkabel verteilen die Reaktorlast. Zwei müssen fallen — und das Wissen darüber ist auf zwei Stationen verteilt.",
       "operatorRoleId": "steuerpult",
       "manualRoleId": "anleitung",
-      "pairsToCut": [["⚡", "♅"], ["Ϟ", "◬"]],
-      "decoyPairs": [["⚡", "Ϟ"], ["♅", "Ж"], ["◬", "Ж"], ["⚡", "◬"]],
       "penaltySec": 30,
       "infos": [
         {

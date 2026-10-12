@@ -131,8 +131,6 @@
       "prompt": "Im Sicherungskasten hängen fünf Überbrückungskabel. Zwei davon blockieren den Notstromkreis — sie müssen weg, in der richtigen Reihenfolge. Die falschen stehen unter Spannung.",
       "operatorRoleId": "steuerpult",
       "manualRoleId": "anleitung",
-      "pairsToCut": [["⚡", "☢"], ["♆", "Ϟ"]],
-      "decoyPairs": [["⚡", "♆"], ["☢", "Ѭ"], ["Ϟ", "Ѭ"]],
       "penaltySec": 30,
       "infos": [
         {

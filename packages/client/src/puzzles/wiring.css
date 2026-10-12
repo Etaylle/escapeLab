@@ -1,0 +1,173 @@
+/* --- wiring: Notstrom-Brücken ------------------------------------------------------- */
+
+.wiring-box {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(45, 212, 191, 0.05), transparent 60%),
+    #0b1117;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.wiring-wire {
+  width: 100%;
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 1.6rem 1fr 4.6rem;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.wiring-wire:hover:not(:disabled) {
+  background: rgba(45, 212, 191, 0.06);
+  border-color: var(--accent-dark);
+  box-shadow: none;
+}
+
+.wiring-wire:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.wiring-wire:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.wiring-pos,
+.wiring-name {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.wiring-pos {
+  color: var(--muted);
+  text-align: right;
+}
+
+.wiring-name {
+  letter-spacing: 0.5px;
+  color: var(--text);
+}
+
+.wiring-cut .wiring-name {
+  color: var(--muted);
+}
+
+/* the wire, held by a terminal post at each end */
+.wiring-line {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  transition: gap 0.25s ease-out;
+}
+
+.wiring-line::before,
+.wiring-line::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  background: linear-gradient(#9aa7b4, #4b5864);
+}
+
+.wiring-line::before {
+  left: 0;
+}
+
+.wiring-line::after {
+  right: 0;
+}
+
+/* two halves that meet without a seam: rimmed above and below only, overlapping by a pixel */
+.wiring-half {
+  flex: 1;
+  height: 10px;
+  background: var(--wire);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.3),
+    0 -1px 0 var(--wire-edge),
+    0 1px 0 var(--wire-edge);
+  transition: transform 0.25s ease-out;
+}
+
+.wiring-half:first-child {
+  border-radius: 5px 0 0 5px;
+  transform-origin: left center;
+}
+
+.wiring-half:last-child {
+  margin-left: -1px;
+  border-radius: 0 5px 5px 0;
+  transform-origin: right center;
+}
+
+.wiring-wire:hover:not(:disabled) .wiring-half {
+  filter: brightness(1.25);
+}
+
+/* severed: a gap in the middle, both ends drooping, bare copper at the cut */
+.wiring-cut .wiring-line {
+  gap: 22px;
+}
+
+.wiring-cut .wiring-half:first-child {
+  transform: rotate(6deg);
+  box-shadow:
+    inset -4px 0 0 #c2410c,
+    inset 0 2px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.3),
+    0 -1px 0 var(--wire-edge),
+    0 1px 0 var(--wire-edge);
+}
+
+.wiring-cut .wiring-half:last-child {
+  transform: rotate(-6deg);
+  box-shadow:
+    inset 4px 0 0 #c2410c,
+    inset 0 2px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.3),
+    0 -1px 0 var(--wire-edge),
+    0 1px 0 var(--wire-edge);
+}
+
+.wiring-red {
+  --wire: #ef4444;
+  --wire-edge: #7f1d1d;
+}
+
+.wiring-blue {
+  --wire: #3b82f6;
+  --wire-edge: #1e3a8a;
+}
+
+.wiring-yellow {
+  --wire: #facc15;
+  --wire-edge: #854d0e;
+}
+
+.wiring-white {
+  --wire: #f1f5f9;
+  --wire-edge: #64748b;
+}
+
+/* a black wire needs a light rim to show on the dark box */
+.wiring-black {
+  --wire: #0f1216;
+  --wire-edge: #7b8794;
+}
