@@ -43,7 +43,9 @@ function hud(events: RunEvent[]): string {
       positionsRef={{ current: {} }}
       chatsRef={{ current: [] }}
       onOpenInfo={() => undefined}
-    />,
+        notesOpen={false}
+        onToggleNotes={() => undefined}
+      />,
   );
 }
 

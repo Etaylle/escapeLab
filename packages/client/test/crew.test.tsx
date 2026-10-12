@@ -277,6 +277,8 @@ describe('the crew strip', () => {
         positionsRef={{ current: { p1: on(20, 20), p2: on(5, 8), p4: on(11, 11) } }}
         chatsRef={{ current: [] }}
         onOpenInfo={noop}
+        notesOpen={false}
+        onToggleNotes={() => undefined}
       />,
     );
     const entries = html.match(/<li.*?<\/li>/g) ?? [];
