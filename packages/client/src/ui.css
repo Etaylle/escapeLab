@@ -3940,3 +3940,129 @@ button.link:hover {
     font-size: 9pt;
   }
 }
+
+/* ══ the Signalkette: one console sends, the other presses ═════════════════
+ * SignalPanel.tsx. The sending console's strip of signs with a lamp under
+ * each; the receiving console's lamps over its twelve keys, three rows of
+ * four. A sign is its form in its colour over the words both players say
+ * for it, so it reads without the colour as well. A wrong sign shakes the
+ * keys and flashes them red.
+ */
+
+.signal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.signal p {
+  margin: 0;
+}
+
+.signal-stage {
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+}
+
+.signal-strip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 0;
+  padding: 14px 10px;
+  list-style: none;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: #0b1117;
+}
+
+.signal-sign {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 88px;
+}
+
+.signal-glyph {
+  display: block;
+  width: 44px;
+  height: 44px;
+}
+
+.signal-word {
+  font-size: 13px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+/* Like the progress pips: a ring while dark, the accent once its sign is pressed. */
+.signal-lamps {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.signal-lamp {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--line-2);
+  background: var(--panel-2);
+}
+
+.signal-lamp--lit {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 9px var(--accent-glow);
+}
+
+/* Four keys a row however narrow; a long word breaks onto a second line. */
+.signal-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.signal-key {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 84px;
+  padding: 8px 4px;
+  border-radius: 10px;
+  background: #0b1117;
+  touch-action: manipulation;
+}
+
+.signal-key:active {
+  transform: scale(0.97);
+}
+
+.signal-key .signal-glyph {
+  width: 32px;
+  height: 32px;
+}
+
+.signal-key .signal-word {
+  font-size: 12px;
+}
+
+.signal-grid--wrong {
+  animation: shake 0.5s;
+}
+
+.signal-grid--wrong .signal-key {
+  animation: keywrong 0.5s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signal-grid--wrong {
+    animation: none;
+  }
+}

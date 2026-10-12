@@ -141,6 +141,43 @@ describe('contextAction — what E does where the player stands', () => {
   });
 });
 
+describe('contextAction — a station with two consoles', () => {
+  /** Console a at (5,5), console b at (12,5): one puzzle, armed at both. */
+  const consoles: MapView['stations'] = [
+    { ...station, console: 'a' },
+    { ...station, x: 12, console: 'b' },
+  ];
+
+  it('works whichever console the player stands at, shut or open', () => {
+    const map = mapWith({ stations: consoles });
+    for (const open of [SHUT, OPEN]) {
+      expect(contextAction(map, { x: 5.5, y: 6.4 }, YOU, [], open)).toEqual({
+        kind: 'operate',
+        label: '[E] Bedienen',
+        x: 5.5,
+        y: 4.45,
+      });
+      expect(contextAction(map, { x: 12.5, y: 6.4 }, YOU, [], open)).toEqual({
+        kind: 'operate',
+        label: '[E] Bedienen',
+        x: 12.5,
+        y: 4.45,
+      });
+    }
+  });
+
+  it('offers nothing between the consoles, out of reach of both', () => {
+    const map = mapWith({ stations: consoles });
+    expect(contextAction(map, { x: 9, y: 6.4 }, YOU, [], OPEN)).toBeNull();
+  });
+
+  it('takes the nearer of a console and a manual object', () => {
+    const map = mapWith({ stations: consoles, manuals: [{ ...book, x: 11, y: 6 }] });
+    expect(contextAction(map, { x: 11.4, y: 6.6 }, YOU, AT_BOOK, SHUT)?.kind).toBe('read');
+    expect(contextAction(map, { x: 12.4, y: 5.9 }, YOU, AT_BOOK, SHUT)?.kind).toBe('operate');
+  });
+});
+
 describe('contextAction — lockers and cabinets', () => {
   const key = part({ id: 'key', label: 'SCHLÜSSEL', x: 4.5, y: 9.5, deliverTo: { x: 8, y: 5 } });
 

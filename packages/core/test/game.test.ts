@@ -7,12 +7,14 @@ import {
   initialState,
   moduleFor,
   parseMission,
+  stationKey,
   viewFor,
 } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
 import { standing } from './lab.js';
 
-// The tutorial: a whole-crew press, a wiring station read at a locker, a whole-crew finale.
+// The tutorial: a whole-crew press, a Signalkette at two consoles, a wiring station read at
+// a locker, a whole-crew finale.
 const mission: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/systemcheck.json', import.meta.url), 'utf8')),
 );
@@ -36,7 +38,7 @@ function started(at = T0): GameState {
   return run([{ type: 'start-mission', playerId: 'p1', at, seed: 42 }], readyLobby());
 }
 
-/** Stations 1 and 3 of the tutorial are button-syncs: one input, a press. */
+/** Stations 1 and 4 of the tutorial are button-syncs: one input, a press. */
 function press(playerId: string, at: number): Action {
   return { type: 'puzzle-input', playerId, at, input: { press: true } };
 }
@@ -51,7 +53,36 @@ function bothAtStation(state: GameState, at: number): GameState {
   return applyAction(here, { type: 'interact', playerId: 'p2', at });
 }
 
-/** Station 2 switched on: Ben at the wiring box, Anna at the searched locker, Ben past the sign. */
+/**
+ * Station 2 is the Signalkette: Anna at console a, Ben at console b. Each
+ * stage is pressed at the console that receives it, worked out from the two
+ * consoles' views alone, until the station solves.
+ */
+function signalSent(state: GameState, at: number): GameState {
+  const def = state.mission.puzzles[state.currentPuzzleIndex];
+  const consoleB = stationKey({ puzzleId: 'signalprobe', console: 'b' });
+  const here = standing(state, { stations: { signalprobe: ['p1'], [consoleB]: ['p2'] } });
+  let next = applyAction(here, { type: 'interact', playerId: 'p1', at });
+  while (next.currentPuzzleIndex === state.currentPuzzleIndex) {
+    const anna = viewFor(next, 'p1').puzzle;
+    const ben = viewFor(next, 'p2').puzzle;
+    if (def?.type !== 'signal' || anna === null || ben === null) {
+      throw new Error('expected the open Signalkette');
+    }
+    const views = { operator: anna, partner: ben, reader: anna };
+    const moves = moduleFor(def.type).solve(def, views, null);
+    if (moves.length === 0) {
+      throw new Error('the Signalkette is open, but its views show nothing to press');
+    }
+    for (const { by, input } of moves) {
+      const playerId = by === 'partner' ? 'p2' : 'p1';
+      next = applyAction(next, { type: 'puzzle-input', playerId, at, input });
+    }
+  }
+  return next;
+}
+
+/** Station 3 switched on: Ben at the wiring box, Anna at the searched locker, Ben past the sign. */
 function wiringOpen(state: GameState, at: number): GameState {
   const here = standing(state, {
     stations: { doppelbestaetigung: ['p2'] },
@@ -67,7 +98,7 @@ function wiringOpen(state: GameState, at: number): GameState {
   return applyAction(searched, { type: 'interact', playerId: 'p2', at });
 }
 
-/** Station 2 is wiring: the cut its rules name, worked out from the two views alone. */
+/** Station 3 is wiring: the cut its rules name, worked out from the two views alone. */
 function cutRightWire(state: GameState, at: number): GameState {
   const def = state.mission.puzzles[state.currentPuzzleIndex];
   const ben = viewFor(state, 'p2');
@@ -263,21 +294,24 @@ describe('lobby', () => {
 });
 
 describe('playing a full mission', () => {
-  it('opens the hatch after all three puzzles and wins once everyone is out', () => {
+  it('opens the hatch after all four puzzles and wins once everyone is out', () => {
     let state = bothAtStation(started(), T0 + 500);
     // Puzzle 1: everyone at the station presses.
     state = run([press('p1', T0 + 1000), press('p2', T0 + 1200)], state);
     expect(state.currentPuzzleIndex).toBe(1);
-    // Puzzle 2: one right wire, cut at the box while the book is read.
-    state = cutRightWire(wiringOpen(state, T0 + 4000), T0 + 5000);
+    // Puzzle 2: the signs, sent from one console and pressed at the other, both ways.
+    state = signalSent(state, T0 + 2000);
     expect(state.currentPuzzleIndex).toBe(2);
-    // Puzzle 3: both within 3 seconds.
+    // Puzzle 3: one right wire, cut at the box while the book is read.
+    state = cutRightWire(wiringOpen(state, T0 + 4000), T0 + 5000);
+    expect(state.currentPuzzleIndex).toBe(3);
+    // Puzzle 4: both within 3 seconds.
     state = run(
       [press('p1', T0 + 70_000), press('p2', T0 + 72_000)],
       bothAtStation(state, T0 + 60_000),
     );
     expect(state.phase).toBe('playing');
-    expect(state.currentPuzzleIndex).toBe(3);
+    expect(state.currentPuzzleIndex).toBe(4);
     expect(applyAction(state, { type: 'escaped', at: T0 + 80_000 }).phase).toBe('won');
   });
 
@@ -286,6 +320,7 @@ describe('playing a full mission', () => {
       [press('p1', T0 + 1000), press('p2', T0 + 1000)],
       bothAtStation(started(), T0 + 500),
     );
+    state = signalSent(state, T0 + 1200);
     state = cutRightWire(wiringOpen(state, T0 + 1500), T0 + 2000);
     state = run(
       [
@@ -295,7 +330,7 @@ describe('playing a full mission', () => {
       ],
       bothAtStation(state, T0 + 9000),
     );
-    expect(state.currentPuzzleIndex).toBe(2);
+    expect(state.currentPuzzleIndex).toBe(3);
     if (state.puzzleState?.type !== 'button-sync') {
       throw new Error('expected button-sync puzzle state');
     }
@@ -303,7 +338,7 @@ describe('playing a full mission', () => {
     expect(state.puzzleState.lastResult).toBe('missed-window');
     // The late press is still valid as the start of the next attempt.
     state = applyAction(state, press('p1', T0 + 21_000));
-    expect(state.currentPuzzleIndex).toBe(3);
+    expect(state.currentPuzzleIndex).toBe(4);
   });
 
   it('needs every player to press: one press alone solves nothing', () => {
@@ -356,8 +391,8 @@ describe('asymmetric information in views', () => {
       [press('p1', T0 + 1000), press('p2', T0 + 1000)],
       bothAtStation(started(), T0 + 500),
     );
-    const state = wiringOpen(first, T0 + 2000);
-    const def = mission.puzzles[1];
+    const state = wiringOpen(signalSent(first, T0 + 1500), T0 + 2000);
+    const def = mission.puzzles[2];
     const ben = viewFor(state, 'p2');
     const anna = viewFor(state, 'p1');
     if (def === undefined || ben.puzzle?.kind !== 'wiring' || anna.puzzle?.kind !== 'wiring') {

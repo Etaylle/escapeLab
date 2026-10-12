@@ -1,4 +1,5 @@
 import type { MapView } from '@escapelab/core';
+import { consoleName } from './consoles.js';
 
 /** A thing worth walking to, and how its arrow should look. */
 export interface MarkerTarget {
@@ -32,15 +33,31 @@ export function toBring(map: MapView): MapView['items'] {
   return map.items.filter((item) => !item.delivered && item.deliverTo !== null);
 }
 
+type Spot = MapView['stations'][number];
+
+/** Of the armed station's spots the one nearest to `self`: of two consoles, the one to go to. */
+function nearestArmed(map: MapView, self: { x: number; y: number }): Spot | undefined {
+  const away = (spot: Spot): number => Math.hypot(spot.x + 0.5 - self.x, spot.y + 0.5 - self.y);
+  return map.stations
+    .filter((station) => station.status === 'armed')
+    .sort((a, b) => away(a) - away(b))[0];
+}
+
 /**
- * What the player is meant to head for right now, most urgent first.
+ * What the player standing at `self` is meant to head for right now, most
+ * urgent first.
  *
  * An emergency overrides everything and needs every valve at once, since the
  * crew has to split up. Otherwise there is one errand at a time, except that a
  * loose part, the station waiting for it and the manual objects printing its
- * rules are shown together — the crew splits up between them.
+ * rules are shown together — the crew splits up between them. Of a station
+ * with two consoles, the nearer one is shown, named by its console.
  */
-export function markerTargets(map: MapView, youId: string): MarkerTarget[] {
+export function markerTargets(
+  map: MapView,
+  youId: string,
+  self: { x: number; y: number },
+): MarkerTarget[] {
   if (map.sabotage !== null) {
     return map.sabotage.panels.map((panel) => ({
       x: panel.x + 0.5,
@@ -62,9 +79,11 @@ export function markerTargets(map: MapView, youId: string): MarkerTarget[] {
   if (loose !== undefined) {
     out.push({ x: loose.x, y: loose.y, color: BLUE, label: 'TEIL' });
   }
-  const armed = map.stations.find((station) => station.status === 'armed');
+  const armed = nearestArmed(map, self);
   if (armed !== undefined) {
-    out.push({ x: armed.x + 0.5, y: armed.y + 0.5, color: TEAL, label: 'STATION' });
+    const label =
+      armed.console === undefined ? 'STATION' : consoleName(armed.console).toUpperCase();
+    out.push({ x: armed.x + 0.5, y: armed.y + 0.5, color: TEAL, label });
     for (const manual of map.manuals.filter((m) => m.puzzleIds.includes(armed.puzzleId))) {
       out.push({ x: manual.x + 0.5, y: manual.y + 0.5, color: BLUE, label: 'LESEN' });
     }

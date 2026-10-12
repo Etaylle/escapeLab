@@ -8,7 +8,9 @@
  *
  * SHOTS_MISSION names the mission card to start (default Blackout); the
  * crew is two players. Where the first station is a sync station, both
- * press it together, and the run fails unless it solves.
+ * press it together, and the run fails unless it solves. Where the station
+ * after it has two consoles, as in the Systemcheck, each takes one and they
+ * work it from both sides until it solves too.
  */
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -416,6 +418,178 @@ async function captureBothAtStation(reader, operator, station, sync) {
     `station-both       ${reader.name}: ` +
       (returned ? `back near ${back.x},${back.y}` : '!! could not walk back'),
   );
+}
+
+/** Resolves true once `locator` is in the page, false after `ms`. */
+function attached(locator, ms) {
+  return locator.waitFor({ state: 'attached', timeout: ms }).then(
+    () => true,
+    () => false,
+  );
+}
+
+/** The console a player works, as its view names it: „Pult A". */
+function seatOf(player) {
+  return `Pult ${String(player.seen.view.puzzle?.console ?? '?').toUpperCase()}`;
+}
+
+/**
+ * One stage of the Signalkette: `presser` clicks the keys of the sequence the
+ * sender's view shows, in its order and ~150 ms apart, each press counted
+ * before the next and its done-lamp lit on both panels. The last press moves
+ * the stage on, or solves the station. Throws at the press that fails; returns
+ * how many signs went in.
+ */
+async function pressStage(sender, presser) {
+  const { puzzle, currentPuzzleIndex } = sender.seen.view;
+  const { stage, sequence } = puzzle;
+  const keys = '.station-modal .signal-key';
+  if (!(await attached(presser.page.locator(keys), 3000))) {
+    throw new Error(`${presser.name} is to press stage ${stage}, but the panel has no ${keys}`);
+  }
+  const through = () => {
+    const view = presser.seen.view;
+    return view.currentPuzzleIndex > currentPuzzleIndex || (view.puzzle?.stage ?? 0) > stage;
+  };
+  const lamp = (page, i) => page.locator('.station-modal .signal-lamp--lit').nth(i);
+  for (const [i, token] of sequence.entries()) {
+    await presser.page.locator(`${keys}[data-token="${token}"]`).click({ timeout: 3000 });
+    const last = i === sequence.length - 1;
+    const counted = await until(
+      () => (last ? through() : presser.seen.view.puzzle?.done === i + 1),
+      3000,
+    );
+    if (!counted) {
+      const now = presser.seen.view.puzzle;
+      throw new Error(
+        `${presser.name} pressed "${token}", sign ${i + 1} of ${sequence.length} in stage ` +
+          `${stage}, but it did not count (done ${now?.done}, last result ${now?.lastResult})`,
+      );
+    }
+    // The last press clears the lamps: the next stage starts dark.
+    if (!last) {
+      const panels = [sender, presser];
+      const lit = await Promise.all(panels.map(({ page }) => attached(lamp(page, i), 2000)));
+      const dark = panels.filter((_, k) => !lit[k]).map(({ name }) => name);
+      if (dark.length > 0) {
+        throw new Error(`sign ${i + 1} counted, but its lamp is dark for ${dark.join(' and ')}`);
+      }
+    }
+    await sleep(150);
+  }
+  return sequence.length;
+}
+
+/**
+ * signal-sender.png, signal-receiver.png: the station after a solved sync
+ * one may have two consoles. The operator walks to console A, the reader to
+ * console B, and E opens each; both panels are captured at laptop size, the
+ * guest's window going back to its phone size after. Then the crew works it
+ * stage by stage — the receiving side clicks what the sending side's view
+ * shows, and the direction swaps after each stage — until it solves. Throws
+ * with the step that failed.
+ */
+async function captureSignal(operator, reader) {
+  const armed = operator.seen.view.map.stations.filter((s) => s.status === 'armed');
+  const consoleA = armed.find((s) => s.console === 'a');
+  const consoleB = armed.find((s) => s.console === 'b');
+  if (consoleA === undefined || consoleB === undefined) {
+    console.log(`signal-*.png       skipped: "${armed[0]?.title ?? '?'}" has one console`);
+    return;
+  }
+  const title = consoleA.title;
+  const crew = [operator, reader];
+  const seats = [
+    [operator, consoleA],
+    [reader, consoleB],
+  ];
+  for (const [player, spot] of seats) {
+    if (!(await walkNear(player.page, player.seen, spot))) {
+      throw new Error(
+        `${player.name} found no way to console ${spot.console} of "${title}" ` +
+          `at ${spot.x},${spot.y}`,
+      );
+    }
+  }
+  for (const [player, spot] of seats) {
+    if (!(await interactUntil(player.page, player.page.locator('.station-modal')))) {
+      throw new Error(
+        `${player.name} stands at console ${spot.console} of "${title}", ` +
+          'but no .station-modal after 3 tries',
+      );
+    }
+  }
+  const roleOf = (player) => player.seen.view.puzzle?.role ?? null;
+  const roles = () => crew.map((p) => `${p.name} ${roleOf(p)}`).join(', ');
+  await until(() => crew.every((p) => roleOf(p) !== null), 3000);
+  const sender = crew.find((p) => roleOf(p) === 'sender');
+  const receiver = crew.find((p) => roleOf(p) === 'receiver');
+  const signal = operator.seen.view.puzzle?.kind === 'signal';
+  if (!signal || sender === undefined || receiver === undefined) {
+    throw new Error(`both stand at "${title}", but it is no Signalkette with roles: ${roles()}`);
+  }
+
+  const sizes = crew.map(({ page }) => page.viewportSize());
+  await Promise.all(crew.map(({ page }) => page.setViewportSize(SIZES[0])));
+  await sleep(500); // the layout settles, the panel past its fade-in
+  await sender.page.screenshot({ path: join(OUT, 'signal-sender.png') });
+  await receiver.page.screenshot({ path: join(OUT, 'signal-receiver.png') });
+  const signs = await sender.page.locator('.station-modal .signal-strip .signal-sign').count();
+  const keys = await receiver.page.locator('.station-modal .signal-key[data-token]').count();
+  const fits = async ({ page }) => {
+    const over = await sideways(page, '.station-modal .panel');
+    return over > 0 ? `!! +${over}px sideways` : 'fits sideways';
+  };
+  console.log(
+    `signal-sender.png  ${sender.name} at ${seatOf(sender)}: "${title}", ${signs} signs to ` +
+      `send, panel ${await fits(sender)}`,
+  );
+  console.log(
+    `signal-receiver.png ${receiver.name} at ${seatOf(receiver)}: ${keys} keys, ` +
+      `panel ${await fits(receiver)}`,
+  );
+  for (const [i, { page }] of crew.entries()) {
+    if (sizes[i] !== null) {
+      await page.setViewportSize(sizes[i]);
+    }
+  }
+  const { length, stages } = sender.seen.view.puzzle;
+  if (signs !== length || keys !== 12) {
+    throw new Error(
+      `"${title}": the sending panel shows ${signs} of ${length} signs, ` +
+        `the receiving one ${keys} of 12 keys`,
+    );
+  }
+
+  const index = sender.seen.view.currentPuzzleIndex;
+  const solved = () => crew.every((p) => p.seen.view.currentPuzzleIndex > index);
+  let [sending, pressing] = [sender, receiver];
+  for (let stage = 1; stage <= stages; stage++) {
+    const count = await pressStage(sending, pressing);
+    const line =
+      `signal             ${sending.name} sends, ${pressing.name} presses: ` +
+      `${count}/${count}, stage ${stage} of ${stages}`;
+    if (stage === stages) {
+      if (!(await until(solved, 5000))) {
+        throw new Error(`the last stage of "${title}" is in, but the station did not solve`);
+      }
+      console.log(`${line}: "${title}" solved`);
+      return;
+    }
+    // The former receiver sends now: its view has the sequence.
+    const swapped = await until(
+      () =>
+        roleOf(pressing) === 'sender' &&
+        pressing.seen.view.puzzle?.sequence != null &&
+        roleOf(sending) === 'receiver',
+      3000,
+    );
+    if (!swapped) {
+      throw new Error(`stage ${stage} of "${title}" is in, but the roles did not swap: ${roles()}`);
+    }
+    console.log(`${line} through, roles swapped`);
+    [sending, pressing] = [pressing, sending];
+  }
 }
 
 /**
@@ -838,6 +1012,8 @@ async function run() {
     await modal.waitFor({ state: 'hidden', timeout: 3000 });
     if (sync) {
       console.log('hint-*.png         skipped: the station is solved, the next waits for its E');
+      // Where the next station has two consoles, the crew works that one too.
+      await captureSignal(operator, reader);
     } else if (!(await captureNotes(reader.page, reader.seen, reader.name, operator.page))) {
       console.log(`hint-*.png         ${reader.name}: no source on the open station in reach — ${operator.name} asks`);
       if (!(await captureNotes(operator.page, operator.seen, operator.name, reader.page))) {

@@ -1,4 +1,4 @@
-import type { ManualKind } from '@escapelab/core';
+import type { ConsoleId, ManualKind } from '@escapelab/core';
 
 // art.ts — pure Canvas2D drawing for EscapeLab: cute capsule scientists in a moody lab.
 //
@@ -49,6 +49,8 @@ const TEXT_SCALE = 32;
 const FONT_HEADING = `bold ${0.26 * TEXT_SCALE}px ${MONO}`;
 /** 0.2 tile: labels of plates, manual objects and the sign. */
 const FONT_LABEL = `bold ${0.2 * TEXT_SCALE}px ${MONO}`;
+/** 0.17 tile: a console's letter on its station. */
+const FONT_BADGE = `bold ${0.17 * TEXT_SCALE}px ${MONO}`;
 /** Label of a prop that is not calling for anybody right now. */
 const IDLE_LABEL = '#8a96a5';
 const HALO_COLOR = 'rgba(3, 6, 10, 0.88)';
@@ -617,7 +619,10 @@ export interface StationOpts {
   status: 'done' | 'armed' | 'locked';
   /** 0..1 looping pulse driven by the caller */
   pulse: number;
+  /** drawn over an armed station; over a console of a two-console station it names the console */
   title: string;
+  /** which console of a two-console station this is, lettered on it; null at a station with one */
+  console: ConsoleId | null;
 }
 
 type StationStatus = StationOpts['status'];
@@ -629,7 +634,10 @@ interface StationLook {
   /** Top color of the screen gradient; doubles as its cache key. */
   screen: string;
   keys: string;
+  /** Status LEDs, and the disc a console's letter sits on. */
   led: string;
+  /** A console's letter on the LED-colored disc. */
+  badgeInk: string;
 }
 
 const STATION_LOOKS: Readonly<Record<StationStatus, StationLook>> = {
@@ -640,6 +648,7 @@ const STATION_LOOKS: Readonly<Record<StationStatus, StationLook>> = {
     screen: '#0e4943',
     keys: 'rgba(45, 212, 191, 0.32)',
     led: TEAL,
+    badgeInk: PROP_EDGE,
   },
   done: {
     deskTop: '#1e2630',
@@ -648,6 +657,7 @@ const STATION_LOOKS: Readonly<Record<StationStatus, StationLook>> = {
     screen: '#0d2c1b',
     keys: 'rgba(74, 222, 128, 0.16)',
     led: '#4ade80',
+    badgeInk: PROP_EDGE,
   },
   locked: {
     deskTop: '#202328',
@@ -656,8 +666,15 @@ const STATION_LOOKS: Readonly<Record<StationStatus, StationLook>> = {
     screen: '#181b1f',
     keys: 'rgba(255, 255, 255, 0.06)',
     led: '#3f444b',
+    badgeInk: IDLE_LABEL,
   },
 };
+
+/** A console's letter, on a disc over the monitor's top-right corner. */
+const CONSOLE_LETTERS: Readonly<Record<ConsoleId, string>> = { a: 'A', b: 'B' };
+const BADGE_X = 0.31;
+const BADGE_Y = -0.37;
+const BADGE_R = 0.12;
 
 const SCREEN_X = -0.27;
 const SCREEN_Y = -0.39;
@@ -827,9 +844,28 @@ function drawStationScreen(
   ctx.fill();
 }
 
+/** One console of a two-console station: its letter on a disc in the status color. */
+function drawConsoleBadge(ctx: CanvasRenderingContext2D, look: StationLook, id: ConsoleId): void {
+  ctx.beginPath();
+  addCircle(ctx, BADGE_X, BADGE_Y, BADGE_R);
+  ctx.fillStyle = look.led;
+  ctx.fill();
+  ctx.lineWidth = 0.025;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+  ctx.scale(1 / TEXT_SCALE, 1 / TEXT_SCALE);
+  ctx.font = FONT_BADGE;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = look.badgeInk;
+  ctx.fillText(CONSOLE_LETTERS[id], BADGE_X * TEXT_SCALE, BADGE_Y * TEXT_SCALE);
+  ctx.scale(TEXT_SCALE, TEXT_SCALE);
+}
+
 /** Anchor: TILE CENTER. A small console/terminal with glowing screen; armed = teal glow
  * (strength follows pulse) + title text above (0.26 tile mono, dark halo); done = dim
- * green check on screen; locked = grey, small lock glyph. */
+ * green check on screen; locked = grey, small lock glyph. A console of a two-console
+ * station carries its letter on a disc, whatever its status. */
 export function drawStation(ctx: CanvasRenderingContext2D, o: StationOpts): void {
   const look = STATION_LOOKS[o.status];
   const armed = o.status === 'armed';
@@ -841,6 +877,7 @@ export function drawStation(ctx: CanvasRenderingContext2D, o: StationOpts): void
     drawStationCabinet(ctx, look, armed ? 0.35 + 0.65 * wave : 0.85);
     drawStationMonitor(ctx, look);
     drawStationScreen(ctx, o.status, wave);
+    if (o.console !== null) drawConsoleBadge(ctx, look, o.console);
     if (armed) drawHaloText(ctx, o.title, 0, -0.5, FONT_HEADING, '#99f6e4', 'bottom');
   } finally {
     ctx.restore();

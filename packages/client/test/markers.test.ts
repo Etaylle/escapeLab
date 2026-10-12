@@ -10,6 +10,8 @@ import {
 import { mapWith, type Manual } from './fixtures.js';
 
 const YOU = 'p1';
+/** Where the player stands, mid-lab; it only matters between the two consoles of a station. */
+const HERE = { x: 10.5, y: 6.5 };
 
 function station(x: number, y: number, status: MapView['stations'][number]['status']) {
   return { puzzleId: 'notstrom', x, y, title: 'Notstrom', status };
@@ -34,19 +36,48 @@ describe('markerTargets — what the player is pointed at', () => {
     const map = mapWith({
       stations: [station(1, 1, 'done'), station(5, 9, 'armed'), station(8, 2, 'locked')],
     });
-    expect(markerTargets(map, YOU)).toEqual([
+    expect(markerTargets(map, YOU, HERE)).toEqual([
       { x: 5.5, y: 9.5, color: '#2dd4bf', label: 'STATION' },
+    ]);
+  });
+
+  it('points at the nearer console of a station with two, named by its console', () => {
+    const locker: Manual = {
+      id: 'spind',
+      kind: 'locker',
+      x: 8,
+      y: 1,
+      label: 'SPIND',
+      puzzleIds: ['notstrom'],
+      opened: true,
+      needsKey: null,
+    };
+    const map = mapWith({
+      stations: [
+        { ...station(2, 9, 'armed'), console: 'a' },
+        { ...station(15, 9, 'armed'), console: 'b' },
+      ],
+      manuals: [locker],
+    });
+    const lesen = { x: 8.5, y: 1.5, color: '#60a5fa', label: 'LESEN' };
+    expect(markerTargets(map, YOU, { x: 4.5, y: 2.5 })).toEqual([
+      { x: 2.5, y: 9.5, color: '#2dd4bf', label: 'PULT A' },
+      lesen,
+    ]);
+    expect(markerTargets(map, YOU, { x: 13.5, y: 2.5 })).toEqual([
+      { x: 15.5, y: 9.5, color: '#2dd4bf', label: 'PULT B' },
+      lesen,
     ]);
   });
 
   it('shows nothing once every station is done', () => {
     const map = mapWith({ stations: [station(1, 1, 'done')] });
-    expect(markerTargets(map, YOU)).toEqual([]);
+    expect(markerTargets(map, YOU, HERE)).toEqual([]);
   });
 
   it('shows a loose part and the station together — two legs of one trip', () => {
     const map = mapWith({ stations: [station(5, 9, 'armed')], items: [item({ x: 3, y: 4 })] });
-    expect(markerTargets(map, YOU).map((t) => t.label)).toEqual(['TEIL', 'STATION']);
+    expect(markerTargets(map, YOU, HERE).map((t) => t.label)).toEqual(['TEIL', 'STATION']);
   });
 
   it('points at every manual object printing the armed station, blue like a part', () => {
@@ -68,7 +99,7 @@ describe('markerTargets — what the player is pointed at', () => {
       puzzleIds: ['frequenz'],
     };
     const map = mapWith({ stations: [station(5, 9, 'armed')], manuals: [book, elsewhere] });
-    expect(markerTargets(map, YOU)).toEqual([
+    expect(markerTargets(map, YOU, HERE)).toEqual([
       { x: 5.5, y: 9.5, color: '#2dd4bf', label: 'STATION' },
       { x: 2.5, y: 3.5, color: '#60a5fa', label: 'LESEN' },
     ]);
@@ -86,13 +117,13 @@ describe('markerTargets — what the player is pointed at', () => {
       needsKey: null,
     };
     const done = mapWith({ stations: [station(5, 9, 'done')], manuals: [book] });
-    expect(markerTargets(done, YOU)).toEqual([]);
+    expect(markerTargets(done, YOU, HERE)).toEqual([]);
     const carrying = mapWith({
       stations: [station(5, 9, 'armed')],
       manuals: [book],
       items: [item({ carriedBy: YOU })],
     });
-    expect(markerTargets(carrying, YOU).map((t) => t.label)).toEqual(['ABGABE']);
+    expect(markerTargets(carrying, YOU, HERE).map((t) => t.label)).toEqual(['ABGABE']);
   });
 
   it('switches to the drop-off once you pick the part up, and drops the station', () => {
@@ -100,42 +131,42 @@ describe('markerTargets — what the player is pointed at', () => {
       stations: [station(5, 9, 'armed')],
       items: [item({ carriedBy: YOU, deliverTo: { x: 9, y: 2 } })],
     });
-    expect(markerTargets(map, YOU)).toEqual([
+    expect(markerTargets(map, YOU, HERE)).toEqual([
       { x: 9.5, y: 2.5, color: '#60a5fa', label: 'ABGABE' },
     ]);
   });
 
   it('keeps pointing at the part while someone else carries it', () => {
     const map = mapWith({ items: [item({ carriedBy: 'p2' })] });
-    expect(markerTargets(map, YOU)).toEqual([]);
+    expect(markerTargets(map, YOU, HERE)).toEqual([]);
   });
 
   it('points at no key before its cabinet is found', () => {
     const key = item({ id: 'key', label: 'SCHLÜSSEL', deliverTo: null });
     const hidden = mapWith({ stations: [station(5, 9, 'armed')], items: [key] });
-    expect(markerTargets(hidden, YOU).map((t) => t.label)).toEqual(['STATION']);
+    expect(markerTargets(hidden, YOU, HERE).map((t) => t.label)).toEqual(['STATION']);
     const found = mapWith({
       stations: [station(5, 9, 'armed')],
       items: [{ ...key, deliverTo: { x: 8, y: 5 } }],
     });
-    expect(markerTargets(found, YOU).map((t) => t.label)).toEqual(['TEIL', 'STATION']);
+    expect(markerTargets(found, YOU, HERE).map((t) => t.label)).toEqual(['TEIL', 'STATION']);
   });
 
   it('ignores a part that has already been delivered', () => {
     const map = mapWith({ items: [item({ delivered: true })] });
-    expect(markerTargets(map, YOU)).toEqual([]);
+    expect(markerTargets(map, YOU, HERE)).toEqual([]);
   });
 
   it('points at the exit once it opens', () => {
     const map = mapWith({ exit: { x: 18, y: 6, open: true }, items: [item({})] });
-    expect(markerTargets(map, YOU)).toEqual([
+    expect(markerTargets(map, YOU, HERE)).toEqual([
       { x: 18.5, y: 6.5, color: '#4ade80', label: 'AUSGANG' },
     ]);
   });
 
   it('ignores a closed exit', () => {
     const map = mapWith({ exit: { x: 18, y: 6, open: false } });
-    expect(markerTargets(map, YOU)).toEqual([]);
+    expect(markerTargets(map, YOU, HERE)).toEqual([]);
   });
 
   it('an emergency overrides everything and shows every valve at once', () => {
@@ -153,7 +184,7 @@ describe('markerTargets — what the player is pointed at', () => {
         ],
       },
     });
-    expect(markerTargets(map, YOU)).toEqual([
+    expect(markerTargets(map, YOU, HERE)).toEqual([
       { x: 2.5, y: 2.5, color: '#f87171', label: 'VENTIL' },
       { x: 7.5, y: 8.5, color: '#2dd4bf', label: 'VENTIL' },
     ]);
@@ -164,7 +195,7 @@ describe('markerTargets — what the player is pointed at', () => {
     const map = mapWith({
       sabotage: { label: '', hint: '', endsAt: 0, panels },
     });
-    expect(markerTargets(map, YOU)[0]?.color).toBe('#2dd4bf');
+    expect(markerTargets(map, YOU, HERE)[0]?.color).toBe('#2dd4bf');
   });
 });
 

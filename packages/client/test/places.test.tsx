@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { Edgework, ManualHere, PlayerView, PuzzleView } from '@escapelab/core';
 import { Book } from '../src/screens/Book.js';
-import { GameScreen } from '../src/screens/Game.js';
+import { GameScreen, stationLabel } from '../src/screens/Game.js';
 import { InfoPanel, Legend } from '../src/screens/InfoPanel.js';
 import { ReadingOverlay } from '../src/screens/Reading.js';
 import { WorldModal } from '../src/screens/WorldModal.js';
@@ -231,6 +231,39 @@ describe('the station frame', () => {
     expect(html).toContain('aria-label="Schließen"');
     expect(html).toContain('<p>Pult</p>');
     expect(html).not.toContain('edgework');
+  });
+
+  it('names the console this player works where the station has two, and only there', () => {
+    const atB: PuzzleView = {
+      kind: 'signal',
+      stage: 1,
+      stages: 4,
+      length: 4,
+      done: 0,
+      lastResult: null,
+      role: 'receiver',
+      sends: 'a',
+      sequence: null,
+      grid: null,
+      grids: null,
+      index: 1,
+      total: 5,
+      title: 'Signalkette',
+      manual: null,
+      console: 'b',
+    };
+    const consoles = mapWith({
+      stations: [
+        { puzzleId: 'kette', x: 8, y: 5, title: 'Signalkette', status: 'armed', console: 'a' },
+        { puzzleId: 'kette', x: 13, y: 5, title: 'Signalkette', status: 'armed', console: 'b' },
+      ],
+    });
+    expect(stationLabel(atB, consoles)).toBe('§2 — Signalkette · Pult B');
+    // The view names console a at a station with one as well; the label leaves it out.
+    const single = mapWith({
+      stations: [{ puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed' }],
+    });
+    expect(stationLabel({ ...maze(2, null), console: 'a' }, single)).toBe('§3 — Leitungsnetz');
   });
 });
 

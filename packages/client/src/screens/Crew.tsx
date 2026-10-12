@@ -5,6 +5,7 @@ import {
   type PlayerPosition,
   type PlayerPresence,
 } from '@escapelab/core';
+import { consoleName } from '../world/consoles.js';
 
 /** How many play a mission: „2 Spieler", or „2–3 Spieler" where the count may vary. */
 export function crewSizeText({ min, max }: { min: number; max: number }): string {
@@ -16,8 +17,9 @@ export interface CrewTag {
   tone: 'pult' | 'read' | 'hold' | 'carry' | 'sign' | 'away';
 }
 
-/** Where someone stands: at a station, at an open source. */
-type Whereabouts = Pick<PlayerPresence, 'stationId' | 'manualId'>;
+/** Where someone stands: at a station, at which console where that is told, at an open source. */
+type Whereabouts = Pick<PlayerPresence, 'stationId' | 'manualId'> &
+  Partial<Pick<PlayerPresence, 'console'>>;
 
 /**
  * Reach in tiles: of a station or a source, as the server counts someone
@@ -59,6 +61,16 @@ function holding(map: MapView | null, pos: PlayerPosition | undefined): string |
 }
 
 /**
+ * „am Pult", and at a station with two consoles which one, where that is
+ * told: a player's own console, and everybody's to the audience. Where the
+ * others stand is guessed from their position, and the guess names none.
+ */
+function atStation(armed: MapView['stations'][number], at: Whereabouts): string {
+  const seat = armed.console === undefined ? null : (at.console ?? null);
+  return seat === null ? 'am Pult' : `am ${consoleName(seat)}`;
+}
+
+/**
  * What one crew member is doing right now: at the armed station, reading,
  * holding a plate or a valve, carrying something. Plates and loads follow
  * the live position and the map; where they stand is whatever the screen
@@ -74,9 +86,10 @@ export function crewTags(
     return [{ text: 'getrennt', tone: 'away' }];
   }
   const tags: CrewTag[] = [];
+  // A station with two consoles is armed at both; either one has its puzzle id.
   const armed = map?.stations.find((s) => s.status === 'armed');
   if (armed !== undefined && at.stationId === armed.puzzleId) {
-    tags.push({ text: 'am Pult', tone: 'pult' });
+    tags.push({ text: atStation(armed, at), tone: 'pult' });
   }
   if (at.manualId !== null) {
     tags.push({ text: 'liest', tone: 'read' });
