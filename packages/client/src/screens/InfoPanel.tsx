@@ -132,8 +132,8 @@ export function InfoPanel({ view, onClose }: Props) {
               </div>
             </dl>
             <p className="muted">
-              Hat die Leitstelle Hinweise für eine Station, gibt es sie dort nach kurzer Wartezeit
-              auf Anfrage. Jeder kostet Zeit — und schon einer kostet den Rang S.
+              Wo die Regeln der offenen Station liegen, gibt es nach kurzer Wartezeit Notizen der
+              letzten Crew auf Anfrage. Jede kostet Zeit — und schon eine kostet den Rang S.
             </p>
           </div>
         )}
