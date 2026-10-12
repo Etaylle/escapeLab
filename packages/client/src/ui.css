@@ -457,10 +457,6 @@ button.link:hover {
   margin-top: 6px;
 }
 
-.mission-switch {
-  margin-top: 16px;
-}
-
 .roles {
   display: grid;
   gap: 10px;
@@ -789,56 +785,6 @@ button.link:hover {
   }
 }
 
-/* --- wiring ------------------------------------------------------------------------ */
-
-.wirebox {
-  width: 100%;
-  background:
-    radial-gradient(circle at 20% 0%, rgba(45, 212, 191, 0.05), transparent 60%),
-    #0b1117;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-}
-
-.wire path {
-  fill: none;
-  stroke-width: 5;
-  stroke-linecap: round;
-}
-
-.wire .wire-hit {
-  stroke: transparent;
-  stroke-width: 24;
-  cursor: pointer;
-}
-
-.wire:hover path:not(.wire-hit) {
-  filter: brightness(1.45) drop-shadow(0 0 5px currentColor);
-}
-
-.wire-cut path {
-  opacity: 0.4;
-}
-
-.wire-cut {
-  pointer-events: none;
-}
-
-.wire-symbol {
-  fill: var(--text);
-  font-size: 20px;
-  user-select: none;
-}
-
-.wire-scissors {
-  fill: var(--muted);
-  font-size: 16px;
-}
-
-.wire-wrong path:not(.wire-hit) {
-  animation: wirewrong 0.5s 2;
-}
-
 @keyframes wirewrong {
   50% {
     stroke: var(--danger);
@@ -869,203 +815,12 @@ button.link:hover {
   box-shadow: 0 0 9px var(--accent-glow);
 }
 
-.keypad {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  max-width: 330px;
-  margin: 0 auto;
-}
-
-.key {
-  font-size: 30px;
-  padding: 18px 0;
-  border-radius: 12px;
-  background: #0b1117;
-  line-height: 1;
-}
-
-.key:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-
-.key-done {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.key-wrong {
-  animation: keywrong 0.4s 2;
-}
-
 @keyframes keywrong {
   50% {
     border-color: var(--danger);
     color: var(--danger);
     box-shadow: 0 0 14px rgba(248, 113, 113, 0.5);
   }
-}
-
-/* --- switches ----------------------------------------------------------------------------- */
-
-.switchbank {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
-  gap: 10px;
-}
-
-.switch {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 6px;
-  border-radius: 12px;
-  background: #0b1117;
-}
-
-.switch-state {
-  font-size: 10px;
-  letter-spacing: 1px;
-  font-family: var(--mono);
-  color: var(--muted);
-}
-
-.switch-on .switch-state {
-  color: var(--accent);
-}
-
-.switch-lever {
-  width: 22px;
-  height: 46px;
-  border-radius: 11px;
-  background: var(--panel-2);
-  border: 1px solid var(--line-2);
-  position: relative;
-}
-
-.switch-knob {
-  position: absolute;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--muted);
-  bottom: 3px;
-  transition: bottom 0.15s, background 0.15s, box-shadow 0.15s;
-}
-
-.switch-on .switch-knob {
-  bottom: 25px;
-  background: var(--accent);
-  box-shadow: 0 0 9px var(--accent-glow);
-}
-
-.switch-on .switch-lever {
-  border-color: var(--accent-dark);
-}
-
-.switch-symbol {
-  font-size: 24px;
-}
-
-.commit-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.target-symbols {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin: 12px 0;
-}
-
-.target-symbol {
-  font-size: 32px;
-  background: var(--panel-2);
-  border: 1px solid var(--accent-dark);
-  border-radius: 10px;
-  padding: 10px 16px;
-  box-shadow: 0 0 10px rgba(45, 212, 191, 0.15);
-}
-
-/* --- simon -------------------------------------------------------------------------------------- */
-
-.simon-lamp {
-  height: 86px;
-  border-radius: 12px;
-  border: 1px solid var(--line-2);
-  background: #0b1117;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--mono);
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  color: #0a0f14;
-  transition: background 0.1s;
-}
-
-.simon-lamp .muted {
-  color: var(--muted);
-  font-size: 15px;
-  font-weight: 400;
-}
-
-.simon-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  margin: 14px 0 6px;
-}
-
-.simon-controls .code-dots {
-  margin: 0;
-}
-
-.simon-buttons {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  max-width: 420px;
-}
-
-.legend {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 12px 0;
-}
-
-.legend-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.legend-color {
-  width: 86px;
-  text-align: center;
-  padding: 7px 0;
-  border-radius: 8px;
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 700;
-  color: #0a0f14;
-}
-
-.legend-arrow {
-  color: var(--muted);
-}
-
-.legend-symbol {
-  font-size: 26px;
 }
 
 /* --- sync & end --------------------------------------------------------------------------------------- */
@@ -1212,12 +967,6 @@ button.link:hover {
   font-weight: 700;
   background: rgba(15, 118, 110, 0.75);
   border-color: var(--accent-dark);
-}
-
-.world-hint {
-  font-family: var(--mono);
-  font-size: 12px;
-  margin: 0;
 }
 
 /*
@@ -1921,12 +1670,6 @@ button.link:hover {
   color: var(--muted);
 }
 
-.join-watch-note {
-  margin: 12px 0 4px;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
 /* ── lobby browser ──────────────────────────────────────────────────────── */
 
 .rooms {
@@ -2011,11 +1754,6 @@ button.link:hover {
   background: rgba(4, 7, 10, 0.85);
   backdrop-filter: blur(3px);
   cursor: pointer;
-}
-
-.help-card {
-  max-width: 520px;
-  cursor: auto;
 }
 
 .keylist {
