@@ -156,7 +156,7 @@
       "hints": [
         "Farben von oben ansagen, nur die Liste zur Kabelzahl prüfen; die erste zutreffende Regel gilt."
       ],
-      "lights": ["MASCHINENRAUM"],
+      "lights": ["MASCHINENRAUM", "ARCHIV"],
       "onSolved": "Notstrom steht. Tastenfeld im Flur, Tabelle am Klemmbrett."
     },
     {
