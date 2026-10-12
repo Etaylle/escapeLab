@@ -558,7 +558,7 @@ async function run() {
   await guest.locator('.lobby').waitFor({ timeout: 10_000 });
 
   // crew, ready, start — nothing to pick: the start draws who begins where
-  await host.locator('.seat', { hasText: 'Ben' }).waitFor({ timeout: 10_000 });
+  await host.locator('.seat .seat-name', { hasText: /^Ben$/ }).waitFor({ timeout: 10_000 });
   await sleep(300);
   await host.screenshot({ path: join(OUT, 'lobby-filled.png') });
   await guest.screenshot({ path: join(OUT, 'lobby-phone.png') });
