@@ -198,12 +198,31 @@ async function interactUntil(page, locator) {
   return locator.isVisible();
 }
 
-/** The manual object a player can walk to soonest, one covering the armed station first. */
+/** Steps from where a player stands to `target` over floor and open doors; Infinity if none. */
+function stepsTo(seen, target) {
+  const from = tileOf(seen);
+  const path = from === null ? null : route(seen.view.map, from, target);
+  return path === null ? Infinity : path.length;
+}
+
+/**
+ * Nobody has a role: as in the smoke script, whoever the draw put nearer the
+ * armed station works it, and the other one reads.
+ */
+function operatorFirst(players) {
+  const station = players[0].seen.view.map.stations.find((s) => s.status === 'armed');
+  return station === undefined
+    ? players
+    : [...players].sort((a, b) => stepsTo(a.seen, station) - stepsTo(b.seen, station));
+}
+
+/** The open manual object a player can walk to soonest, one covering the armed station first. */
 function nearestManual(seen) {
   const map = seen.view.map;
   const from = tileOf(seen);
   const armed = map.stations.find((s) => s.status === 'armed')?.puzzleId;
   const options = map.manuals
+    .filter((manual) => manual.opened)
     .map((manual) => ({ manual, path: from === null ? null : route(map, from, manual) }))
     .filter((option) => option.path !== null)
     .sort(
@@ -241,10 +260,10 @@ async function captureReading(page, seen, who) {
 }
 
 /**
- * sign.png: the guest has just read the Laborkennung — the note up, the chip
+ * sign.png: a player has just read the Laborkennung — the note up, the chip
  * in the HUD. The note waits for the briefing to end, so this may take a while.
  */
-async function captureSign(page) {
+async function captureSign(page, who) {
   const note = await page
     .locator('.toast')
     .waitFor({ state: 'visible', timeout: 6000 })
@@ -256,8 +275,59 @@ async function captureSign(page) {
   await page.screenshot({ path: join(OUT, 'sign.png') });
   const chip = (await page.locator('.hud .edgework').count()) > 0;
   console.log(
-    `sign.png           guest: note ${note ? 'up' : '!! missing'}, ` +
+    `sign.png           ${who}: note ${note ? 'up' : '!! missing'}, ` +
       `chip in the HUD ${chip ? 'shown' : '!! missing'}`,
+  );
+}
+
+/**
+ * hint-*.png and radio-banner.png: at the open station the operator waits
+ * for mission control's hint and asks for it, and the other player hears it
+ * on the radio. Skipped where the station carries no hint strip.
+ */
+async function captureHints(at, other) {
+  const modal = at.page.locator('.station-modal');
+  const strip = at.page.locator('.hint-strip');
+  if ((await strip.count()) === 0) {
+    console.log(`hint-*.png         skipped: no hint strip at ${at.name}'s station`);
+    return;
+  }
+  const hintButton = at.page.locator('.hint-request');
+  await strip.scrollIntoViewIfNeeded();
+  await at.page.screenshot({ path: join(OUT, 'hint-waiting.png') });
+  console.log(`hint-waiting.png   ${at.name}: "${(await hintButton.innerText()).trim()}"`);
+
+  // Mission control holds hints back for 45 s after a station opens.
+  const readyBy = Date.now() + 55_000;
+  let label = (await hintButton.innerText()).trim();
+  while (!label.startsWith('Hinweis anfordern') && Date.now() < readyBy) {
+    await sleep(1000);
+    if (!(await modal.isVisible())) {
+      throw new Error('the station closed while waiting for a hint (an emergency drops it)');
+    }
+    label = (await hintButton.innerText()).trim();
+  }
+  if (!label.startsWith('Hinweis anfordern')) {
+    throw new Error(`hint button still reads "${label}" after 55 s`);
+  }
+  await strip.scrollIntoViewIfNeeded();
+  await at.page.screenshot({ path: join(OUT, 'hint-ready.png') });
+  console.log(`hint-ready.png     ${at.name}: "${label}"`);
+
+  await hintButton.click();
+  await at.page.locator('.hint-list li').first().waitFor({ timeout: 5000 });
+  await sleep(600);
+  await strip.scrollIntoViewIfNeeded();
+  await at.page.screenshot({ path: join(OUT, 'hint-revealed.png') });
+  const hints = await at.page.locator('.hint-list li').count();
+  const next = (await hintButton.count()) > 0 ? (await hintButton.innerText()).trim() : 'none';
+  console.log(`hint-revealed.png  ${at.name}: ${hints} hint(s), next button "${next}"`);
+  await other.page.screenshot({ path: join(OUT, 'radio-banner.png') });
+  const banner = (await other.page.locator('.radio-banner').count()) > 0 ? 'up' : '!! missing';
+  const panel = (await other.page.locator('.station-modal').count()) > 0;
+  console.log(
+    `radio-banner.png   ${other.name}: banner ${banner}, ` +
+      (panel ? '!! station panel shown away from the station' : 'no station panel away'),
   );
 }
 
@@ -292,11 +362,10 @@ async function run() {
   await guest.getByPlaceholder('z. B. Anna').fill('Ben');
   await guest.getByLabel('Raumcode').fill(code);
   await clickText(guest, 'Beitreten');
-  await guest.locator('.roles').waitFor({ timeout: 10_000 });
+  await guest.locator('.lobby').waitFor({ timeout: 10_000 });
 
-  // roles, ready, start
-  await host.locator('.role', { hasText: 'Anleitung' }).first().click();
-  await guest.locator('.role', { hasText: 'Steuerpult' }).first().click();
+  // crew, ready, start — nothing to pick: the start draws who begins where
+  await host.locator('.seat', { hasText: 'Ben' }).waitFor({ timeout: 10_000 });
   await sleep(300);
   await host.screenshot({ path: join(OUT, 'lobby-filled.png') });
   await guest.screenshot({ path: join(OUT, 'lobby-phone.png') });
@@ -313,15 +382,20 @@ async function run() {
   await host.locator('.stage').waitFor({ timeout: 10_000 });
   await guest.locator('.stage').waitFor({ timeout: 10_000 });
   await sleep(500); // presence follows the start within a tick
-  if (guestSeen.view?.map == null) {
-    throw new Error('no running view on the guest socket — does the client still talk on /ws?');
+  if (guestSeen.view?.map == null || hostSeen.view?.map == null) {
+    throw new Error('no running view on the sockets — does the client still talk on /ws?');
   }
+  const [operator, reader] = operatorFirst([
+    { name: 'Anna', page: host, seen: hostSeen },
+    { name: 'Ben', page: guest, seen: guestSeen },
+  ]);
+  console.log(`the draw:          ${operator.name} works the first station, ${reader.name} reads`);
 
-  // Spawned within sight of the Laborkennung, the guest gets the note as soon
+  // Spawned within sight of the Laborkennung, a player gets the note as soon
   // as the briefing is gone: that is the moment for sign.png.
-  const signAtSpawn = guestSeen.view.presence.signSeen;
-  if (signAtSpawn) {
-    await captureSign(guest);
+  const atSign = [reader, operator].find((p) => p.seen.view.presence.signSeen);
+  if (atSign !== undefined) {
+    await captureSign(atSign.page, atSign.name);
   }
   // Let the briefing countdown finish; server and browsers share this clock.
   await sleep(Math.max(0, guestSeen.view.startedAt + 4200 - Date.now()));
@@ -353,84 +427,58 @@ async function run() {
   await watcher.screenshot({ path: join(OUT, 'spectate.png') });
   await overflow(watcher, 'spectate @ 1440x820');
 
-  // --- reading, the sign, hints: the guest reads, then works the first station ---
+  // --- reading, the sign, the station: one reads, the other works the first station ---
   // The host's info panel may still be open; close it the way a player would.
   const closeInfo = host.locator('.info-card button', { hasText: 'Schließen' });
   if (await closeInfo.isVisible()) {
     await closeInfo.click();
   }
-  // Whatever lies within the guest's reach is read; locked away from it, the
-  // host reads instead.
-  if (!(await captureReading(guest, guestSeen, 'guest'))) {
-    console.log('reading.png        guest: no manual object in reach — the host reads instead');
-    if (!(await captureReading(host, hostSeen, 'host'))) {
+  // Whatever lies within the reader's reach is read; locked away from it, the
+  // operator reads instead.
+  if (!(await captureReading(reader.page, reader.seen, reader.name))) {
+    console.log(
+      `reading.png        ${reader.name}: no manual object in reach — ` +
+        `${operator.name} reads instead`,
+    );
+    if (!(await captureReading(operator.page, operator.seen, operator.name))) {
       console.log('reading.png        skipped: no manual object in reach of either player');
     }
   }
 
-  const sign = guestSeen.view.map.edgeworkSign;
-  if (!signAtSpawn) {
+  const sign = reader.seen.view.map.edgeworkSign;
+  if (atSign === undefined) {
     if (sign === null) {
       console.log('sign.png           skipped: this map has no Laborkennung');
-    } else if (await walkNear(guest, guestSeen, sign)) {
-      await captureSign(guest);
+    } else if (await walkNear(reader.page, reader.seen, sign)) {
+      await captureSign(reader.page, reader.name);
     } else {
       console.log(`sign.png           skipped: the sign at ${sign.x},${sign.y} is out of reach`);
     }
   }
 
-  const station = guestSeen.view.map.stations.find((s) => s.status === 'armed');
-  if (station === undefined || !(await walkNear(guest, guestSeen, station))) {
-    throw new Error(`guest cannot walk to the armed station "${station?.puzzleId ?? '(none)'}"`);
-  }
-  const modal = guest.locator('.station-modal');
-  if (!(await interactUntil(guest, modal))) {
-    throw new Error(`guest stands at "${station.puzzleId}", but no .station-modal after 3 tries`);
-  }
-  await sleep(300); // past its fade-in
-
-  const strip = guest.locator('.hint-strip');
-  const hintButton = guest.locator('.hint-request');
-  await strip.scrollIntoViewIfNeeded();
-  const stationSideways = await sideways(guest, '.station-modal .panel');
-  await guest.screenshot({ path: join(OUT, 'hint-waiting.png') });
-  console.log(
-    `hint-waiting.png   guest: "${(await hintButton.innerText()).trim()}", ` +
-      `panel ${stationSideways > 0 ? `!! +${stationSideways}px sideways` : 'fits sideways'}`,
-  );
-
-  // Mission control holds hints back for 45 s after a station opens.
-  const readyBy = Date.now() + 55_000;
-  let label = (await hintButton.innerText()).trim();
-  while (!label.startsWith('Hinweis anfordern') && Date.now() < readyBy) {
-    await sleep(1000);
-    if (!(await modal.isVisible())) {
-      throw new Error('the station closed while waiting for a hint (an emergency drops it)');
+  // The draw may leave both starts shut off from the first station until a
+  // plate is held; then there is no station to capture this time.
+  const station = operator.seen.view.map.stations.find((s) => s.status === 'armed');
+  if (station === undefined || stepsTo(operator.seen, station) === Infinity) {
+    console.log('station            skipped: no open way from either start to the armed station');
+  } else {
+    if (!(await walkNear(operator.page, operator.seen, station))) {
+      throw new Error(`${operator.name} got stuck on the way to "${station.puzzleId}"`);
     }
-    label = (await hintButton.innerText()).trim();
+    const modal = operator.page.locator('.station-modal');
+    if (!(await interactUntil(operator.page, modal))) {
+      throw new Error(
+        `${operator.name} stands at "${station.puzzleId}", but no .station-modal after 3 tries`,
+      );
+    }
+    await sleep(300); // past its fade-in
+    const stationSideways = await sideways(operator.page, '.station-modal .panel');
+    console.log(
+      `station            ${operator.name}: panel ` +
+        (stationSideways > 0 ? `!! +${stationSideways}px sideways` : 'fits sideways'),
+    );
+    await captureHints(operator, reader);
   }
-  if (!label.startsWith('Hinweis anfordern')) {
-    throw new Error(`hint button still reads "${label}" after 55 s`);
-  }
-  await strip.scrollIntoViewIfNeeded();
-  await guest.screenshot({ path: join(OUT, 'hint-ready.png') });
-  console.log(`hint-ready.png     guest: "${label}"`);
-
-  await hintButton.click();
-  await guest.locator('.hint-list li').first().waitFor({ timeout: 5000 });
-  await sleep(600);
-  await strip.scrollIntoViewIfNeeded();
-  await guest.screenshot({ path: join(OUT, 'hint-revealed.png') });
-  const guestHints = await guest.locator('.hint-list li').count();
-  const next = (await hintButton.count()) > 0 ? (await hintButton.innerText()).trim() : 'none';
-  console.log(`hint-revealed.png  guest: ${guestHints} hint(s), next button "${next}"`);
-  await host.screenshot({ path: join(OUT, 'radio-banner.png') });
-  const hostBanner = (await host.locator('.radio-banner').count()) > 0 ? 'up' : '!! missing';
-  const hostPanel = (await host.locator('.station-modal').count()) > 0;
-  console.log(
-    `radio-banner.png   host: banner ${hostBanner}, ` +
-      (hostPanel ? '!! station panel shown away from the station' : 'no station panel away'),
-  );
 
   await browser.close();
   console.log('screenshots in', OUT);

@@ -78,7 +78,7 @@ function SabotageAlert({ sabotage }: { sabotage: NonNullable<PlayerView['map']>[
 type Sabotage = NonNullable<NonNullable<PlayerView['map']>['sabotage']>;
 
 /**
- * Relay mode: no valves to run to — the role's console stays in front of
+ * Relay mode: no valves to run to — the player's console stays in front of
  * everything until the emergency is over, the instruction to read out on top.
  */
 function RelayAlert({
@@ -151,7 +151,7 @@ function Briefing({ view }: { view: PlayerView }) {
       <h1>{view.missionTitle}</h1>
       {room !== null && (
         <p>
-          Start: <strong>{room}</strong>
+          Du startest im <strong>{room}</strong>
         </p>
       )}
       <div className="briefing-count">{count}</div>

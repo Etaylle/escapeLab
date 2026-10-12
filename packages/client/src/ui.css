@@ -434,11 +434,6 @@ button.link:hover {
   min-width: 0;
 }
 
-/* The column headings already have the gap above them. */
-.lobby-crew > h2:first-child {
-  margin-top: 0;
-}
-
 @media (max-width: 920px) {
   .lobby-cols {
     grid-template-columns: minmax(0, 1fr);
@@ -455,52 +450,6 @@ button.link:hover {
 .lobby-facts {
   display: inline-block;
   margin-top: 6px;
-}
-
-.roles {
-  display: grid;
-  gap: 10px;
-}
-
-.role {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  text-align: left;
-  padding: 10px 14px;
-  border-radius: 10px;
-}
-
-.role-detail {
-  margin: 10px 0 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--muted);
-  /* Reserve the space so hovering from one role to another cannot make the
-     rest of the column jump. */
-  min-height: 42px;
-}
-
-.role-detail strong {
-  color: var(--text);
-}
-
-.role-mine {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), 0 0 14px var(--accent-glow);
-}
-
-.role-name {
-  font-weight: 700;
-  letter-spacing: 0.5px;
-}
-
-.role-taken {
-  flex: none;
-  font-size: 13px;
-  color: var(--accent);
-  font-family: var(--mono);
 }
 
 .players {
@@ -1124,20 +1073,21 @@ button.link:hover {
 
 /* ── crew picker (lobby) ────────────────────────────────────────────────── */
 
+/* The figure above its colours, so it can stand beside the crew list. */
 .crew-picker {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 20px;
-  flex-wrap: wrap;
+  gap: 10px;
   background: var(--bg-2);
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 14px 18px;
+  padding: 12px;
 }
 
 .crew-preview {
-  width: 116px;
-  height: 116px;
+  width: 92px;
+  height: 92px;
   flex: none;
 }
 
@@ -1609,7 +1559,7 @@ button.link:hover {
 }
 
 /*
- * Match log. The panel column has room left over once the role panels are
+ * Match log. The panel column has room left over once the player panels are
  * placed, and a running feed is what an audience actually reads between
  * moves — so the ticker lives here instead of as one line in the footer.
  */
@@ -1708,14 +1658,14 @@ button.link:hover {
   margin-top: 16px;
 }
 
-/* Where each crew member stands, in the colours the world uses for it. */
+/* Where each crew member stands and what they hold, in the colours the world uses for it. */
 .presence-tag {
-  margin-left: 6px;
-  padding: 1px 6px;
+  padding: 1px 7px;
   border: 1px solid currentColor;
   border-radius: 999px;
-  font-size: 10px;
-  letter-spacing: 1px;
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .presence-pult {
@@ -2104,21 +2054,6 @@ button.link:hover {
 .hud-name {
   font-weight: 600;
 }
-
-.hud-role-tag {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.hud-status {
-  font-family: var(--mono);
-  font-size: 11px;
-}
-
-.hud-status-ok { color: var(--accent); }
-.hud-status-warn { color: var(--warn); }
-.hud-status-idle { color: var(--muted); }
 
 .hud-right {
   display: flex;
@@ -2709,4 +2644,192 @@ button.link:hover {
     height: 30pt;
     font-size: 20pt;
   }
+}
+
+/* ── crew: lobby seats, presence tags, credits ──────────────────────────── */
+
+/* The crew list and the figure side by side; in a narrow column the figure goes below. */
+.lobby-crew-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px 26px;
+}
+
+.lobby-roster {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.lobby-look {
+  flex: none;
+}
+
+/* The column headings already have the gap above them. */
+.lobby-roster > h2,
+.lobby-look > h2 {
+  margin-top: 0;
+}
+
+.seats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.seat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-2);
+  font-size: 14px;
+}
+
+.seat .crew-dot {
+  flex: none;
+  margin-right: 0;
+}
+
+.seat-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seat-you .seat-name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.seat .ready-tag {
+  flex: none;
+  margin-left: auto;
+}
+
+.seat-gone,
+.seat-gone .ready-tag {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+/* A seat nobody has taken yet; its text lines up with the names above. */
+.seat-open {
+  padding-left: 28px;
+  border-style: dashed;
+  background: none;
+  color: var(--muted);
+}
+
+.ready-tag-need {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.lobby-draw {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+/* On a phone the figure goes below the crew list and stands beside its colours again. */
+@media (max-width: 560px) {
+  .lobby-look {
+    flex: 1 1 100%;
+  }
+
+  .crew-picker {
+    flex-direction: row;
+    justify-content: center;
+  }
+}
+
+.crew-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* In the audience's footer the tags follow the name in running text. */
+.players.inline .crew-tags {
+  margin-left: 6px;
+}
+
+.presence-hold {
+  color: #c4b5fd;
+}
+
+.presence-carry {
+  color: #fdba74;
+}
+
+.presence-away {
+  color: var(--warn);
+}
+
+.hud-idle {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* Who did what: a row per crew member, a column per kind of deed, nothing done in grey. */
+.credits {
+  overflow-x: auto;
+}
+
+.credits table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.credits th,
+.credits td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.credits thead th {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.credits thead th:first-child,
+.credits tbody th {
+  text-align: left;
+}
+
+.credits tbody th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.credits td {
+  text-align: center;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.credits td.credits-none {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.credits td.credits-alarm {
+  color: var(--danger);
+}
+
+.credits-you th {
+  color: var(--accent);
 }

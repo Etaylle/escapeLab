@@ -1,4 +1,5 @@
 import { difficultyInfos, type ClientMessage, type MissionInfo, type PlayerView } from '@escapelab/core';
+import { crewSizeText } from './Crew.js';
 import { CrewPreview } from './CrewPreview.js';
 import { MapThumb } from './MapThumb.js';
 
@@ -9,13 +10,68 @@ interface Props {
   missions: MissionInfo[];
 }
 
-export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
+/**
+ * Why the host cannot start yet, or null: the connected crew must be a size
+ * the mission takes and everyone but the host must have confirmed — the
+ * server checks the same.
+ */
+export function startBlocker(view: Pick<PlayerView, 'crewSize' | 'players'>): string | null {
+  const crew = view.players.filter((p) => p.connected);
+  const missing = view.crewSize.min - crew.length;
+  if (missing > 0) {
+    return `Noch ${missing} ${missing === 1 ? 'Person' : 'Personen'} nötig`;
+  }
+  if (crew.length > view.crewSize.max) {
+    return 'Zu viele für diese Mission';
+  }
+  const waiting = crew.filter((p) => !p.isHost && !p.ready);
+  return waiting.length === 0 ? null : `Warten auf ${waiting.map((p) => p.name).join(', ')} …`;
+}
+
+/**
+ * The crew so far, then one open row per seat left; the seats the mission
+ * cannot do without say so.
+ */
+function Seats({ view }: { view: PlayerView }) {
   const { min, max } = view.crewSize;
-  const crew = view.players.filter((p) => p.connected).length;
-  const crewFits = min <= crew && crew <= max;
-  const seatsLeft = max - view.players.length;
+  const open = Math.max(0, max - view.players.length);
+  const needed = min - view.players.filter((p) => p.connected).length;
+  return (
+    <ul className="seats">
+      {view.players.map((p) => {
+        const mark = p.connected ? (p.id === view.you.id ? 'seat-you' : '') : 'seat-gone';
+        return (
+          <li key={p.id} className={`seat ${mark}`}>
+            <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
+            <span className="seat-name">
+              {p.isHost ? '★ ' : ''}
+              {p.name}
+            </span>
+            {!p.connected ? (
+              <span className="ready-tag">getrennt</span>
+            ) : (
+              !p.isHost && (
+                <span className={`ready-tag ${p.ready ? 'ready-tag-on' : ''}`}>
+                  {p.ready ? '✓ bereit' : 'noch nicht bereit'}
+                </span>
+              )
+            )}
+          </li>
+        );
+      })}
+      {Array.from({ length: open }, (_, i) => (
+        <li key={`open-${i}`} className="seat seat-open">
+          <span className="seat-name">{i === 0 ? 'frei — Code oben teilen' : 'frei'}</span>
+          {i < needed && <span className="ready-tag ready-tag-need">nötig</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
+  const blocker = startBlocker(view);
   const currentLevel = difficultyInfos().find((l) => l.id === view.difficulty);
-  const waiting = view.players.filter((p) => p.connected && !p.isHost && !p.ready);
   const info = missions.find((m) => m.id === view.missionId);
 
   return (
@@ -27,7 +83,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
               <span className="kicker">MISSION</span>
               <h1>{view.missionTitle}</h1>
               <span className="pill lobby-facts">
-                ⏱ {Math.round(view.timeLimitSec / 60)} min · 👥 {min}–{max} Spieler
+                ⏱ {Math.round(view.timeLimitSec / 60)} min · 👥 {crewSizeText(view.crewSize)}
                 {info !== undefined && ` · 🧩 ${info.puzzleCount} Stationen`}
               </span>
             </div>
@@ -48,7 +104,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
                   >
                     {missions.map((m) => (
                       <option key={m.id} value={m.id}>
-                        {m.title} ({m.players.min}–{m.players.max} Spieler)
+                        {m.title} ({crewSizeText(m.players)})
                       </option>
                     ))}
                   </select>
@@ -84,66 +140,47 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
         </section>
 
         <section className="lobby-crew">
-          <h2>Deine Figur</h2>
-          <div className="crew-picker">
-            <CrewPreview color={view.you.color} name={view.you.name} />
-            <div className="swatches">
-              {view.palette.map((entry) => {
-                const mine = entry.color === view.you.color;
-                const taken = entry.takenByName !== null && !mine;
-                return (
-                  <button
-                    key={entry.color}
-                    className={`swatch ${mine ? 'swatch-mine' : ''}`}
-                    style={{ background: entry.color }}
-                    disabled={taken}
-                    title={entry.takenByName ?? 'frei'}
-                    aria-label={`Farbe ${entry.color}${taken ? ' (belegt)' : ''}`}
-                    onClick={() => send({ kind: 'select-color', color: entry.color })}
-                  >
-                    {taken ? '×' : mine ? '✓' : ''}
-                  </button>
-                );
-              })}
+          <div className="lobby-crew-top">
+            <div className="lobby-roster">
+              <h2>Crew</h2>
+              <Seats view={view} />
+              <p className="muted lobby-draw">Startplätze werden beim Start verlost.</p>
+            </div>
+            <div className="lobby-look">
+              <h2>Deine Farbe</h2>
+              <div className="crew-picker">
+                <CrewPreview color={view.you.color} name={view.you.name} />
+                <div className="swatches">
+                  {view.palette.map((entry) => {
+                    const mine = entry.color === view.you.color;
+                    const taken = entry.takenByName !== null && !mine;
+                    return (
+                      <button
+                        key={entry.color}
+                        className={`swatch ${mine ? 'swatch-mine' : ''}`}
+                        style={{ background: entry.color }}
+                        disabled={taken}
+                        title={entry.takenByName ?? 'frei'}
+                        aria-label={`Farbe ${entry.color}${taken ? ' (belegt)' : ''}`}
+                        onClick={() => send({ kind: 'select-color', color: entry.color })}
+                      >
+                        {taken ? '×' : mine ? '✓' : ''}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
-
-          <p className="muted">Startplätze werden beim Start verlost.</p>
-
-          <h2>Im Raum</h2>
-          <ul className="players">
-            {view.players.map((p) => (
-              <li key={p.id} className={p.connected ? '' : 'offline'}>
-                <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
-                {p.isHost ? '★ ' : ''}
-                {p.name}
-                {p.connected ? '' : ' (getrennt)'}
-                {!p.isHost && (
-                  <span className={`ready-tag ${p.ready ? 'ready-tag-on' : ''}`}>
-                    {p.ready ? '✓ bereit' : 'noch nicht bereit'}
-                  </span>
-                )}
-              </li>
-            ))}
-            {seatsLeft > 0 && (
-              <li className="muted">
-                … noch {seatsLeft} {seatsLeft === 1 ? 'Platz' : 'Plätze'} frei — Code oben teilen
-              </li>
-            )}
-          </ul>
 
           <div className="actions">
             {view.you.isHost ? (
               <button
                 className="primary"
-                disabled={!crewFits || waiting.length > 0}
+                disabled={blocker !== null}
                 onClick={() => send({ kind: 'start-mission' })}
               >
-                {!crewFits
-                  ? `Für diese Mission ${min}–${max} Spieler …`
-                  : waiting.length > 0
-                    ? `Warten auf ${waiting.map((p) => p.name).join(', ')} …`
-                    : '▶ Mission starten'}
+                {blocker ?? '▶ Mission starten'}
               </button>
             ) : (
               <>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ClientMessage, MissionInfo, RoomSummary } from '@escapelab/core';
+import { crewSizeText } from './Crew.js';
 import { MapThumb } from './MapThumb.js';
 
 interface Props {
@@ -33,7 +34,7 @@ function RoomRow({
       <div className="room-main">
         <span className="room-title">{room.missionTitle}</span>
         <span className="room-meta">
-          {running ? '▶ läuft gerade' : `${room.free} von ${room.capacity} Plätzen frei`} ·{' '}
+          👥 {room.players.length}/{room.capacity} · {running ? '▶ läuft gerade · ' : ''}
           {room.difficulty} · Code {room.code}
         </span>
         <span className="room-crew">
@@ -140,8 +141,7 @@ export function JoinScreen({ send, connected, missions, rooms, openHandbook }: P
                   <span className="mission-title">{m.title}</span>
                   <span className="mission-sub">{m.subtitle}</span>
                   <span className="mission-meta">
-                    👥 {m.players.min}–{m.players.max} Spieler · ⏱{' '}
-                    {Math.round(m.timeLimitSec / 60)} min ·{' '}
+                    👥 {crewSizeText(m.players)} · ⏱ {Math.round(m.timeLimitSec / 60)} min ·{' '}
                     {m.puzzleCount} Rätsel
                   </span>
                 </button>

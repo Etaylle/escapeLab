@@ -1,15 +1,11 @@
 import { useEffect, useState } from 'react';
-import type {
-  PlayerPosition,
-  PlayerPresence,
-  DronePosition,
-  SpectatorView,
-} from '@escapelab/core';
+import type { PlayerPosition, DronePosition, SpectatorView } from '@escapelab/core';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
 import { Manual } from './Manual.js';
 import { EdgeworkChip } from './EdgeworkChip.js';
+import { CreditsTable, crewTags, CrewTags, type CrewTag } from './Crew.js';
 
 interface Props {
   view: SpectatorView;
@@ -31,15 +27,17 @@ function elapsed(startedAt: number | null, at: number): string {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
-/** Where a crew member stands: at a panel, at a manual object, and whether past the sign. */
-export function PresenceTags({ presence }: { presence: PlayerPresence }) {
-  return (
-    <>
-      {presence.stationId !== null && <span className="presence-tag presence-pult">PULT</span>}
-      {presence.manualId !== null && <span className="presence-tag presence-read">LIEST</span>}
-      {presence.signSeen && <span className="presence-tag presence-sign">KENNUNG</span>}
-    </>
-  );
+/**
+ * What the audience sees of a crew member: where the server says they stand,
+ * what they hold and carry, and whether they have read the sign.
+ */
+export function audienceTags(
+  view: SpectatorView,
+  player: SpectatorView['players'][number],
+  pos: PlayerPosition | undefined,
+): CrewTag[] {
+  const tags = crewTags(view.map, player, player.presence, pos);
+  return player.presence.signSeen ? [...tags, { text: 'Kennung', tone: 'sign' }] : tags;
 }
 
 /** Audience view: the whole lab revealed, plus the open station from every side. */
@@ -59,6 +57,9 @@ export function SpectateScreen({
 
   const noop = (): void => undefined;
   const feed = view.events.slice(-14).reverse();
+  const over = view.phase === 'won' || view.phase === 'lost';
+  const colorOf = (playerId: string): string | undefined =>
+    view.players.find((p) => p.id === playerId)?.color;
 
   return (
     <div className="spectate">
@@ -110,27 +111,42 @@ export function SpectateScreen({
         </div>
 
         <div className="spectate-panels">
-          <section className="panel">
-            <div className="panel-head">
-              <div className="panel-label">// {view.puzzle?.title ?? 'Station'}</div>
-              {view.edgework !== null && <EdgeworkChip edgework={view.edgework} />}
-            </div>
-            {view.puzzle === null ? (
-              <p className="muted">Unterwegs — gerade keine Station offen.</p>
-            ) : (
-              <>
-                {view.puzzle.manual !== null && <Manual sections={view.puzzle.manual} />}
-                <div className="read-only">
-                  <PuzzlePanel puzzle={view.puzzle} send={noop} deadlineAt={view.deadlineAt} />
-                </div>
-              </>
-            )}
-          </section>
+          {over ? (
+            <section className="panel">
+              <div className="panel-label">// Beiträge</div>
+              <CreditsTable players={view.players} credits={view.credits} />
+            </section>
+          ) : (
+            <section className="panel">
+              <div className="panel-head">
+                <div className="panel-label">// {view.puzzle?.title ?? 'Station'}</div>
+                {view.edgework !== null && <EdgeworkChip edgework={view.edgework} />}
+              </div>
+              {view.puzzle === null ? (
+                <p className="muted">Unterwegs — gerade keine Station offen.</p>
+              ) : (
+                <>
+                  {view.puzzle.manual !== null && <Manual sections={view.puzzle.manual} />}
+                  <div className="read-only">
+                    <PuzzlePanel puzzle={view.puzzle} send={noop} deadlineAt={view.deadlineAt} />
+                  </div>
+                </>
+              )}
+            </section>
+          )}
           {view.panels.map(
             (panel) =>
               panel.emergency !== undefined && (
                 <section key={panel.playerId} className="panel">
-                  <div className="panel-label">// {panel.name}</div>
+                  <div className="panel-label">
+                    //{' '}
+                    <span
+                      className="crew-dot"
+                      style={{ background: colorOf(panel.playerId) }}
+                      aria-hidden="true"
+                    />
+                    {panel.name}
+                  </div>
                   <div className="read-only">
                     <RelayConsole relay={panel.emergency} send={noop} />
                   </div>
@@ -163,7 +179,9 @@ export function SpectateScreen({
             <li key={p.id} className={p.connected ? '' : 'offline'}>
               <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
               {p.name}
-              <PresenceTags presence={p.presence} />
+              {view.phase === 'playing' && (
+                <CrewTags tags={audienceTags(view, p, positionsRef.current[p.id])} />
+              )}
             </li>
           ))}
         </ul>

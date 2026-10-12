@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { ClientMessage, PlayerView, RunEvent } from '@escapelab/core';
 import { play } from '../sounds.js';
 import { recordRun, type MissionRecord } from '../stats.js';
+import { CreditsTable } from './Crew.js';
 
 interface Props {
   view: PlayerView;
@@ -106,6 +107,9 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
         </div>
       )}
 
+      <h2>Beiträge</h2>
+      <CreditsTable players={view.players} credits={view.credits} youId={view.you.id} />
+
       {view.events.length > 0 && startedAt !== null && (
         <>
           <h2>Einsatzprotokoll</h2>
@@ -146,7 +150,7 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
         </p>
         {view.you.isHost && (
           <button onClick={() => send({ kind: 'back-to-lobby' })}>
-            Zur Lobby (Mission, Rollen oder Schwierigkeit ändern)
+            Zur Lobby (Mission oder Schwierigkeit ändern)
           </button>
         )}
         <button className="link" onClick={leaveRoom}>

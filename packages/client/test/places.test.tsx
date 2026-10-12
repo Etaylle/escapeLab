@@ -4,7 +4,6 @@ import type { Edgework, ManualHere, PlayerView, PuzzleView } from '@escapelab/co
 import { GameScreen } from '../src/screens/Game.js';
 import { Legend } from '../src/screens/InfoPanel.js';
 import { ReadingOverlay } from '../src/screens/Reading.js';
-import { PresenceTags } from '../src/screens/Spectate.js';
 import { WorldModal } from '../src/screens/WorldModal.js';
 import { mapWith, type Manual, type Plate } from './fixtures.js';
 
@@ -180,21 +179,6 @@ describe('the map legend', () => {
   });
 });
 
-describe('presence tags for the audience', () => {
-  it('say who stands at a panel, who reads and who has seen the sign', () => {
-    const at = renderToStaticMarkup(
-      <PresenceTags presence={{ stationId: 'kabel', manualId: null, signSeen: true }} />,
-    );
-    expect(at).toContain('PULT');
-    expect(at).toContain('KENNUNG');
-    expect(at).not.toContain('LIEST');
-    const away = renderToStaticMarkup(
-      <PresenceTags presence={{ stationId: null, manualId: 'plan', signSeen: false }} />,
-    );
-    expect(away).toBe('<span class="presence-tag presence-read">LIEST</span>');
-  });
-});
-
 /** A run of Blackout that has just started, seen by the player in the Maschinenraum. */
 function justStarted(parts: Partial<PlayerView> = {}): PlayerView {
   const now = Date.now();
@@ -269,7 +253,7 @@ describe('the start of a run', () => {
     const html = game(justStarted());
     expect(html).toContain(
       '<div class="overlay briefing"><h1>Blackout im Labor</h1>' +
-        '<p>Start: <strong>MASCHINENRAUM</strong></p>',
+        '<p>Du startest im <strong>MASCHINENRAUM</strong></p>',
     );
     expect(html).not.toContain('Du bist');
   });
