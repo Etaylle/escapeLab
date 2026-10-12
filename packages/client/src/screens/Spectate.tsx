@@ -129,8 +129,8 @@ export function SpectateScreen({
           {view.panels.map(
             (panel) =>
               panel.emergency !== undefined && (
-                <section key={panel.roleId} className="panel">
-                  <div className="panel-label">// {panel.roleName}</div>
+                <section key={panel.playerId} className="panel">
+                  <div className="panel-label">// {panel.name}</div>
                   <div className="read-only">
                     <RelayConsole relay={panel.emergency} send={noop} />
                   </div>
@@ -162,7 +162,7 @@ export function SpectateScreen({
           {view.players.map((p) => (
             <li key={p.id} className={p.connected ? '' : 'offline'}>
               <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
-              {p.name} · {p.roleName ?? '—'}
+              {p.name}
               <PresenceTags presence={p.presence} />
             </li>
           ))}
@@ -186,19 +186,17 @@ function spectatorAsPlayerView(view: SpectatorView): Parameters<typeof GameWorld
     missionTitle: view.missionTitle,
     difficulty: view.difficulty,
     storyText: view.storyText,
-    you: { id: '', name: '', roleId: null, color: '#2dd4bf', ready: false, isHost: false },
+    crewSize: { min: view.players.length, max: view.players.length },
+    you: { id: '', name: '', color: '#2dd4bf', ready: false, isHost: false },
     players: view.players.map((p) => ({
       id: p.id,
       name: p.name,
-      roleId: null,
-      roleName: p.roleName,
       color: p.color,
       ready: false,
       connected: p.connected,
       isHost: false,
     })),
     palette: [],
-    roles: [],
     deadlineAt: view.deadlineAt,
     startedAt: view.startedAt,
     finishedAt: view.finishedAt,
@@ -211,8 +209,10 @@ function spectatorAsPlayerView(view: SpectatorView): Parameters<typeof GameWorld
     penaltySeq: view.penaltySeq,
     lastPenaltySec: null,
     hintsUsed: view.hintsUsed,
+    credits: view.credits,
     edgework: null,
     presence: { stationId: null, manualId: null, signSeen: false },
+    sourcesHere: [],
     manualsHere: [],
     puzzle: null,
     map: view.map,

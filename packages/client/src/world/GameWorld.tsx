@@ -721,10 +721,12 @@ export function GameWorld({
         ctx.restore();
       }
       for (const item of map.items) {
-        ctx.save();
-        ctx.translate(item.deliverTo.x + 0.5, item.deliverTo.y + 0.5);
-        drawDropZone(ctx, item.delivered, pulse);
-        ctx.restore();
+        if (item.deliverTo !== null) {
+          ctx.save();
+          ctx.translate(item.deliverTo.x + 0.5, item.deliverTo.y + 0.5);
+          drawDropZone(ctx, item.delivered, pulse);
+          ctx.restore();
+        }
         if (!item.delivered && item.carriedBy === null) {
           ctx.save();
           ctx.translate(item.x, item.y);
@@ -1082,7 +1084,9 @@ export function GameWorld({
         if (!item.delivered && item.carriedBy === null) {
           punch(item.x, item.y, 1.6, 0.7);
         }
-        punch(item.deliverTo.x + 0.5, item.deliverTo.y + 0.5, 1.4, 0.6);
+        if (item.deliverTo !== null) {
+          punch(item.deliverTo.x + 0.5, item.deliverTo.y + 0.5, 1.4, 0.6);
+        }
       }
       // Drone cones light their own path, which is what makes them readable;
       // a frozen drone has no cone, only a glimmer around its body.

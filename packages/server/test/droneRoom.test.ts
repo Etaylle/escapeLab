@@ -16,14 +16,14 @@ const mission: Mission = parseMission({
   title: 'Drohnen-Raum',
   story: { intro: 'i', win: 'w', lose: 'l' },
   timeLimitSec: 600,
-  roles: [
-    { id: 'anleitung', name: 'Anleitung', description: '' },
-    { id: 'steuerpult', name: 'Steuerpult', description: '' },
-  ],
+  players: { min: 2, max: 2 },
   puzzles: ['first', 'second'].map((id) => ({ type: 'button-sync', id, title: id })),
   map: {
     tiles: ['#########', '#.......#', '#.......#', '#########'],
-    spawns: { anleitung: { x: 1, y: 1 }, steuerpult: { x: 7, y: 1 } },
+    spawns: [
+      { x: 1, y: 1 },
+      { x: 7, y: 1 },
+    ],
     stations: [
       { puzzleId: 'first', x: 2, y: 1 },
       { puzzleId: 'second', x: 6, y: 1 },
@@ -78,8 +78,6 @@ describe('Room with a sleeping drone', () => {
     const ben = { ...room.join('Ben'), ...collector() };
     room.attach(anna.playerId, anna.listen);
     room.attach(ben.playerId, ben.listen);
-    room.act(anna.playerId, { kind: 'select-role', roleId: 'anleitung' });
-    room.act(ben.playerId, { kind: 'select-role', roleId: 'steuerpult' });
     room.act(ben.playerId, { kind: 'set-ready', ready: true });
     room.act(anna.playerId, { kind: 'start-mission' });
 
@@ -106,6 +104,7 @@ describe('Room with a sleeping drone', () => {
     vi.advanceTimersByTime(1000);
     expect(lastPositions(anna.messages).drones['wache']).toBeDefined();
     expect(lastView(anna.messages).penaltySeq).toBe(1);
+    expect(lastView(anna.messages).credits[anna.playerId]?.alarms).toBe(1);
     room.dispose();
   });
 });

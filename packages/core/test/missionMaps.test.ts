@@ -2,15 +2,16 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseMission } from '../src/index.js';
 import type { Mission } from '../src/index.js';
-import { reachability, tileKey, type Spot } from '../src/reach.js';
+import { crewsOf, reachability, tileKey, type Spot } from '../src/reach.js';
 
 /**
  * Guardrail for every shipped mission, beyond what the mission validation
- * already walks (stations in order, manual objects, the sign): everyone can
- * gather at the exit, every carryable can be carried where it belongs, and
- * the walk the game does — puzzle doors open for good once solved, plate
- * doors only while a *different* player stands on the plate — is the one
- * from core's validation.
+ * already walks (stations in order, every spot of every manual object, the
+ * sign): every crew the mission takes can gather at the exit, every
+ * carryable can be carried where it belongs, and the walk the game does —
+ * puzzle doors open for good once solved, plate doors only while a
+ * *different* player stands on the plate — is the one from core's
+ * validation.
  */
 
 const missionsDir = new URL('../../../missions/', import.meta.url);
@@ -18,60 +19,64 @@ const missions: Mission[] = readdirSync(missionsDir)
   .filter((f) => f.endsWith('.json'))
   .map((f) => parseMission(JSON.parse(readFileSync(new URL(f, missionsDir), 'utf8'))));
 
-function spawnsOf(mission: Mission): Spot[] {
-  return mission.roles.map((role) => {
-    const spawn = mission.map.spawns[role.id];
-    if (spawn === undefined) {
-      throw new Error(`mission "${mission.id}" has no spawn for "${role.id}"`);
+/** Every crew the mission starts with: each count of players on each choice of spawns. */
+function crews(mission: Mission): Spot[][] {
+  return crewsOf(mission.map.spawns, mission.players.min, mission.players.max);
+}
+
+/** The puzzles solved while the one with `puzzleId` is the current one. */
+function solvedBefore(mission: Mission, puzzleId: string | undefined): Set<string> {
+  const solved = new Set<string>();
+  for (const puzzle of mission.puzzles) {
+    if (puzzle.id === puzzleId) {
+      break;
     }
-    return spawn;
-  });
+    solved.add(puzzle.id);
+  }
+  return solved;
 }
 
 describe.each(missions.map((m) => [m.id, m] as const))('mission %s', (_id, mission) => {
   const map = mission.map;
 
-  it('spawns every role in a distinct starting position', () => {
-    const spawns = spawnsOf(mission).map((s) => tileKey(s.x, s.y));
+  it('draws every player a distinct spawn, enough for the largest crew', () => {
+    const spawns = map.spawns.map((s) => tileKey(s.x, s.y));
     expect(new Set(spawns).size).toBe(spawns.length);
+    expect(spawns.length).toBeGreaterThanOrEqual(mission.players.max);
   });
 
-  it('lets everyone gather at the exit once all puzzles are solved', () => {
+  it('lets every crew gather at the exit once all puzzles are solved', () => {
     const exit = map.exit;
     expect(exit).toBeDefined();
     const solved = new Set(mission.puzzles.map((p) => p.id));
-    for (const [i, tiles] of reachability(map, spawnsOf(mission), solved).entries()) {
-      const roleId = mission.roles[i]?.id ?? String(i);
-      expect(
-        exit !== undefined && tiles.has(tileKey(exit.x, exit.y)),
-        `role "${roleId}" cannot reach the exit`,
-      ).toBe(true);
+    for (const crew of crews(mission)) {
+      for (const [i, tiles] of reachability(map, crew, solved).entries()) {
+        const from = crew[i] === undefined ? String(i) : tileKey(crew[i].x, crew[i].y);
+        expect(
+          exit !== undefined && tiles.has(tileKey(exit.x, exit.y)),
+          `the player starting at ${from} cannot reach the exit`,
+        ).toBe(true);
+      }
     }
   });
 
-  it('lets someone fetch and deliver every carryable before it is needed', () => {
+  it('lets someone in every crew fetch and deliver every carryable before it is needed', () => {
     for (const item of map.items) {
-      // State of the world while the station waiting for this item is current.
-      const solved = new Set<string>();
-      for (const puzzle of mission.puzzles) {
-        if (puzzle.id === item.requiredFor) {
-          break;
-        }
-        solved.add(puzzle.id);
+      if (item.deliverTo === undefined) {
+        continue; // a key: the validation walks it to every spot of its cabinet
       }
-      const reach = reachability(map, spawnsOf(mission), solved);
+      // State of the world while the station waiting for this item is current.
+      const solved = solvedBefore(mission, item.requiredFor);
       const pickup = tileKey(item.x, item.y);
       const dropOff = tileKey(item.deliverTo.x, item.deliverTo.y);
-      expect(reach.some((tiles) => tiles.has(pickup)), `nobody can reach "${item.id}"`).toBe(true);
-      expect(
-        reach.some((tiles) => tiles.has(dropOff)),
-        `nobody can reach the drop-off of "${item.id}"`,
-      ).toBe(true);
-      // And the same player has to be able to do both, since it is carried.
-      expect(
-        reach.some((tiles) => tiles.has(pickup) && tiles.has(dropOff)),
-        `no single player can carry "${item.id}" all the way`,
-      ).toBe(true);
+      for (const crew of crews(mission)) {
+        const reach = reachability(map, crew, solved);
+        // The same player has to be able to do both, since it is carried.
+        expect(
+          reach.some((tiles) => tiles.has(pickup) && tiles.has(dropOff)),
+          `no single player can carry "${item.id}" all the way`,
+        ).toBe(true);
+      }
     }
   });
 
@@ -84,10 +89,12 @@ describe.each(missions.map((m) => [m.id, m] as const))('mission %s', (_id, missi
         if (station === undefined) {
           throw new Error(`mission "${mission.id}" has no station for "${puzzleId}"`);
         }
-        expect(
-          Math.hypot(station.x - manual.x, station.y - manual.y),
-          `"${manual.id}" lies within reach of the station of "${puzzleId}"`,
-        ).toBeGreaterThan(4);
+        for (const spot of manual.spots) {
+          expect(
+            Math.hypot(station.x - spot.x, station.y - spot.y),
+            `"${manual.id}" at ${spot.x},${spot.y} lies within reach of station "${puzzleId}"`,
+          ).toBeGreaterThan(4);
+        }
       }
     }
   });

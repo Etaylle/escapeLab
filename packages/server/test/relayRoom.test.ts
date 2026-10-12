@@ -14,14 +14,14 @@ const mission: Mission = parseMission({
   title: 'Relais-Raum',
   story: { intro: 'i', win: 'w', lose: 'l' },
   timeLimitSec: 900,
-  roles: [
-    { id: 'anleitung', name: 'Anleitung', description: '' },
-    { id: 'steuerpult', name: 'Steuerpult', description: '' },
-  ],
+  players: { min: 2, max: 2 },
   puzzles: ['first', 'second', 'third'].map((id) => ({ type: 'button-sync', id, title: id })),
   map: {
     tiles: ['#########', '#.......#', '#.......#', '#.......#', '#########'],
-    spawns: { anleitung: { x: 3, y: 1 }, steuerpult: { x: 5, y: 1 } },
+    spawns: [
+      { x: 3, y: 1 },
+      { x: 5, y: 1 },
+    ],
     stations: [
       { puzzleId: 'first', x: 2, y: 1 },
       { puzzleId: 'second', x: 4, y: 1 },
@@ -65,23 +65,19 @@ function running(member: Member): boolean {
 }
 
 /**
- * What the crew does, read off the players' screens: whoever has the named
- * control on the named console performs the instruction.
+ * What the crew does, read off the players' screens: whoever is named and
+ * has the named control on their console performs the instruction.
  */
 function callOuts(crew: Member[]): { playerId: string; input: unknown }[] {
   const consoles = crew.map(({ playerId, messages }) => {
     const view = lastView(messages);
-    return {
-      playerId,
-      roleName: view.players.find((p) => p.id === view.you.id)?.roleName ?? null,
-      relay: view.map?.sabotage?.relay ?? null,
-    };
+    return { playerId, name: view.you.name, relay: view.map?.sabotage?.relay ?? null };
   });
   return consoles.flatMap(({ relay }) => {
     const wanted = relay?.instruction ?? null;
     for (const doer of consoles) {
       const control = doer.relay?.controls.find((c) => c.name === wanted?.control);
-      if (wanted !== null && doer.roleName === wanted.roleName && control !== undefined) {
+      if (wanted !== null && doer.name === wanted.playerName && control !== undefined) {
         const input = { kind: 'set', control: control.id, value: wanted.value };
         return [{ playerId: doer.playerId, input }];
       }
@@ -105,8 +101,6 @@ describe('Room relay emergencies', () => {
     const ben = { ...room.join('Ben'), ...collector() };
     room.attach(anna.playerId, anna.listen);
     room.attach(ben.playerId, ben.listen);
-    room.act(anna.playerId, { kind: 'select-role', roleId: 'anleitung' });
-    room.act(ben.playerId, { kind: 'select-role', roleId: 'steuerpult' });
     room.act(ben.playerId, { kind: 'set-ready', ready: true });
     room.act(anna.playerId, { kind: 'start-mission' });
     for (const x of [2, 4]) {
@@ -199,14 +193,14 @@ describe('drones during a relay emergency', () => {
     title: 'Relais-Drohne',
     story: { intro: 'i', win: 'w', lose: 'l' },
     timeLimitSec: 300,
-    roles: [
-      { id: 'anleitung', name: 'Anleitung', description: '' },
-      { id: 'steuerpult', name: 'Steuerpult', description: '' },
-    ],
+    players: { min: 2, max: 2 },
     puzzles: [{ type: 'button-sync', id: 'only', title: 'Einziges' }],
     map: {
       tiles: ['#########', '#...#...#', '#...#...#', '#...#...#', '#########'],
-      spawns: { anleitung: { x: 1, y: 1 }, steuerpult: { x: 3, y: 1 } },
+      spawns: [
+        { x: 1, y: 1 },
+        { x: 3, y: 1 },
+      ],
       stations: [{ puzzleId: 'only', x: 2, y: 1 }],
       drones: [
         {
@@ -230,8 +224,6 @@ describe('drones during a relay emergency', () => {
     const actions: Action[] = [
       { type: 'player-join', playerId: 'p1', name: 'Anna' },
       { type: 'player-join', playerId: 'p2', name: 'Ben' },
-      { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
-      { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
       { type: 'set-ready', playerId: 'p2', ready: true },
       { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 },
     ];

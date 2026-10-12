@@ -1,4 +1,4 @@
-import type { MapDef } from './mission.js';
+import { startsClosed, type ManualDef, type MapDef } from './mission.js';
 import type { GameState } from './state.js';
 
 /** Pure helpers for the tile map: doors, the currently armed station, who stands where. */
@@ -35,10 +35,15 @@ export function operatorsOf(state: GameState, puzzleId: string): string[] {
   return state.presence.stations[puzzleId] ?? [];
 }
 
-/** Players standing at a manual object that covers `puzzleId`: they read its rules. */
+/** Whether a manual object can be read: always, unless it is a locker or cabinet not yet opened. */
+export function sourceOpen(state: GameState, manual: Pick<ManualDef, 'id' | 'kind'>): boolean {
+  return !startsClosed(manual.kind) || state.opened.includes(manual.id);
+}
+
+/** Players standing at an open manual object that covers `puzzleId`: they read its rules. */
 export function readersOf(state: GameState, puzzleId: string): string[] {
   const readers = state.mission.map.manuals
-    .filter((manual) => manual.puzzleIds.includes(puzzleId))
+    .filter((manual) => manual.puzzleIds.includes(puzzleId) && sourceOpen(state, manual))
     .flatMap((manual) => state.presence.manuals[manual.id] ?? []);
   return [...new Set(readers)];
 }

@@ -92,6 +92,22 @@ export function reachability(
   return reach;
 }
 
+/**
+ * Every crew a mission takes: each count of players from `min` to `max`,
+ * starting on any choice of that many spawns. Players are interchangeable,
+ * so these are choices, not orders.
+ */
+export function crewsOf(spawns: readonly Spot[], min: number, max: number): Spot[][] {
+  const choose = (from: readonly Spot[], size: number): Spot[][] =>
+    size === 0
+      ? [[]]
+      : from.flatMap((spot, i) =>
+          choose(from.slice(i + 1), size - 1).map((rest) => [spot, ...rest]),
+        );
+  const sizes = Array.from({ length: Math.max(0, max - min + 1) }, (_, i) => min + i);
+  return sizes.flatMap((size) => choose(spawns, size));
+}
+
 /** On the spot or orthogonally next to it: well within the presence radius. */
 export function canStandAt(tiles: ReadonlySet<string>, spot: Spot): boolean {
   return (

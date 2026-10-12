@@ -91,8 +91,13 @@ export interface PuzzleDefCommon {
   title: string;
   /** what a wrong move costs; already scaled to the difficulty at runtime */
   penaltySec: number;
-  /** up to three progressive hints (nudge → specific → near-answer) from mission control */
+  /**
+   * up to three notes of the last crew (nudge → specific → near-answer),
+   * asked for one at a time at a manual object that covers the station
+   */
   hints: string[];
+  /** labels of the rooms whose lights come on once the puzzle is solved */
+  lights: string[];
   /** mission control's radio line once the puzzle is solved */
   onSolved?: string | undefined;
 }
@@ -105,6 +110,7 @@ export const commonDefShape = {
   id: z.string().min(1),
   title: z.string().min(1),
   hints: z.array(z.string().min(1)).max(3).default([]),
+  lights: z.array(z.string().min(1)).default([]),
   onSolved: z.string().min(1).optional(),
 };
 
@@ -118,17 +124,6 @@ export interface PuzzleViewCommon {
   title: string;
   /** the printed rules — only for readers and the audience */
   manual: ManualSection[] | null;
-  /** mission-control hints — the same for every player and the audience */
-  hints: {
-    /** revealed so far for this puzzle */
-    shown: string[];
-    /** how many more this puzzle has */
-    left: number;
-    /** epoch ms when the next may be requested; null once none are left */
-    readyAt: number | null;
-    /** seconds the next one costs, already scaled to the difficulty */
-    costSec: number;
-  };
 }
 
 /** What every module owns, whether it stands at a station or runs as an emergency. */
@@ -192,30 +187,27 @@ export interface PuzzleModule<
   ): Move<Input>[];
 }
 
-/**
- * The relay emergency's contract: a console per role, which works while
- * roles map 1:1 to players. Keying the consoles by player is a follow-up.
- */
+/** The relay emergency's contract: a console for every player of the run. */
 export interface EmergencyModule<
   Def extends PuzzleDefCommon,
   State,
   Input,
   View extends { kind: Def['type'] },
 > extends ModuleCore<Def, State, Input> {
-  /** throws a GameError (see `fail`) when `roleId` may not make this move at all */
+  /** throws a GameError (see `fail`) when `playerId` may not make this move at all */
   apply(
     def: Def,
     state: State,
     input: Input,
-    roleId: string,
+    playerId: string,
     ctx: PuzzleContext,
   ): ApplyResult<State>;
-  /** role-filtered projection: that role's console and instruction */
-  view(def: Def, state: State, roleId: string | null, ctx: ViewContext): View;
-  /** the crew's next correct inputs, from every role's view, by role id */
+  /** player-filtered projection: that player's console and instruction; none for the audience */
+  view(def: Def, state: State, playerId: string | null, ctx: ViewContext): View;
+  /** the crew's next correct inputs, from every player's view, by player id */
   solve(
     def: Def,
     views: Record<string, View>,
     edgework: Edgework | null,
-  ): { roleId: string; input: Input }[];
+  ): { playerId: string; input: Input }[];
 }

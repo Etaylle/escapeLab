@@ -21,24 +21,36 @@ const probe = {
   title: 'Probe',
   story: { intro: '', win: '', lose: '' },
   timeLimitSec: 600,
-  roles: [
-    { id: 'pult', name: 'Steuerpult', description: '' },
-    { id: 'buch', name: 'Anleitung', description: '' },
-  ],
+  players: { min: 2, max: 2 },
   puzzles: [
     { type: 'maze', id: 'netz', title: 'Leitungsnetz' },
     { type: 'button-sync', id: 'start', title: 'Start' },
   ],
   map: {
     tiles: ['#######', '#.....#', '#######'],
-    spawns: { pult: { x: 1, y: 1 }, buch: { x: 2, y: 1 } },
+    spawns: [
+      { x: 1, y: 1 },
+      { x: 2, y: 1 },
+    ],
     stations: [
       { puzzleId: 'netz', x: 3, y: 1 },
       { puzzleId: 'start', x: 4, y: 1 },
     ],
     manuals: [
-      { id: 'plan', kind: 'terminal', x: 5, y: 1, label: 'SCHALTPLAN', puzzleIds: ['netz'] },
-      { id: 'tafel', kind: 'chart', x: 1, y: 1, label: 'WANDTAFEL', puzzleIds: ['netz'] },
+      {
+        id: 'plan',
+        kind: 'terminal',
+        label: 'SCHALTPLAN',
+        puzzleIds: ['netz'],
+        spots: [{ x: 5, y: 1 }],
+      },
+      {
+        id: 'tafel',
+        kind: 'chart',
+        label: 'WANDTAFEL',
+        puzzleIds: ['netz'],
+        spots: [{ x: 1, y: 1 }],
+      },
     ],
   },
 };

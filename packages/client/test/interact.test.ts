@@ -20,6 +20,8 @@ const book: Manual = {
   y: 5,
   label: 'HANDBUCH',
   puzzleIds: ['notstrom'],
+  opened: true,
+  needsKey: null,
 };
 /** What the server says this player stands at. */
 const AT_BOOK = [{ id: 'buch' }];

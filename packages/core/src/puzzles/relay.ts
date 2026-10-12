@@ -4,9 +4,9 @@ import { mulberry32, shuffle, type Rng } from '../rng.js';
 import { commonDefShape, type EmergencyModule } from './module.js';
 
 /**
- * Notfall-Relais, a Spaceteam-style emergency. Every role gets a console of
- * four controls and always holds one instruction for a control on somebody
- * else's console: it reads the instruction out, the owner performs it, the
+ * Notfall-Relais, a Spaceteam-style emergency. Every player gets a console
+ * of four controls and always holds one instruction for a control on
+ * somebody else's console: they read it out, the owner performs it, the
  * next one follows. An instruction left waiting too long is a miss and is
  * replaced. Enough completed instructions clear the emergency.
  *
@@ -45,21 +45,21 @@ export const CONTROL_NAMES = [
 
 const CONTROLS_PER_CONSOLE = 4;
 /** Every name once per emergency: this many consoles fit the pool. */
-export const RELAY_MAX_ROLES = Math.floor(CONTROL_NAMES.length / CONTROLS_PER_CONSOLE);
+export const RELAY_MAX_PLAYERS = Math.floor(CONTROL_NAMES.length / CONTROLS_PER_CONSOLE);
 const DIAL_MAX = 5;
-/** Without a mission-set `required`, the crew completes this many per role. */
-const REQUIRED_PER_ROLE = 3;
+/** Without a mission-set `required`, the crew completes this many per player. */
+const REQUIRED_PER_PLAYER = 3;
 const KINDS = ['switch', 'dial', 'button'] as const;
 type RelayKind = (typeof KINDS)[number];
 
 const defSchema = z.strictObject({
   type: z.literal('relay'),
   ...commonDefShape,
-  /** every role of the mission: a console each, and an instruction for somebody else's */
-  roles: z
+  /** everyone in the run: a console each, and an instruction for somebody else's */
+  players: z
     .array(z.object({ id: z.string().min(1), name: z.string().min(1) }))
     .min(2)
-    .max(RELAY_MAX_ROLES),
+    .max(RELAY_MAX_PLAYERS),
   /** seconds an instruction waits for its owner before it is a miss */
   windowSec: z.number().int().positive().default(12),
   /** completed instructions that clear the emergency */
@@ -82,16 +82,16 @@ export type RelaySetting =
 
 interface RelayControl {
   id: string;
-  /** the role whose console it sits on */
+  /** the player at whose console it sits */
   ownerId: string;
   name: string;
   setting: RelaySetting;
 }
 
 interface RelayInstruction {
-  /** the role that reads it out */
+  /** the player who reads it out */
   holderId: string;
-  /** always a control on another role's console */
+  /** always a control on another player's console */
   controlId: string;
   value: RelayValue;
   /** epoch ms; from here on it is a miss */
@@ -100,9 +100,9 @@ interface RelayInstruction {
 
 export interface RelayState {
   type: 'relay';
-  /** four per role, in role order */
+  /** four per player, in the run's player order */
   controls: RelayControl[];
-  /** one per role, in role order */
+  /** one per player, in the run's player order */
   instructions: RelayInstruction[];
   completed: number;
   missed: number;
@@ -125,8 +125,8 @@ export interface RelayView {
   controls: ({ id: string; name: string } & RelaySetting)[];
   /** what you read out — always for somebody else's console; null for the audience */
   instruction: {
-    /** whose console the control sits on */
-    roleName: string;
+    /** the name of the player at whose console the control sits */
+    playerName: string;
     control: string;
     value: RelayValue;
     expiresAt: number;
@@ -150,11 +150,12 @@ export interface RelaySabotage {
 }
 
 /**
- * The emergency as a module def: the mission's roles and its sabotage block.
- * Nobody writes it down; it is rebuilt from the mission wherever it is needed.
+ * The emergency as a module def: the run's players and the mission's
+ * sabotage block. Nobody writes it down; it is rebuilt from the game
+ * wherever it is needed.
  */
 export function relayDefFor(
-  roles: readonly { id: string; name: string }[],
+  players: readonly { id: string; name: string }[],
   sabotage: RelaySabotage,
 ): RelayDef {
   return {
@@ -162,9 +163,10 @@ export function relayDefFor(
     id: 'notfall-relais',
     title: sabotage.label,
     hints: [],
-    roles: roles.map((role) => ({ id: role.id, name: role.name })),
+    lights: [],
+    players: players.map((player) => ({ id: player.id, name: player.name })),
     windowSec: sabotage.windowSec,
-    required: sabotage.required ?? REQUIRED_PER_ROLE * roles.length,
+    required: sabotage.required ?? REQUIRED_PER_PLAYER * players.length,
     durationSec: sabotage.durationSec,
     penaltySec: sabotage.penaltySec,
   };
@@ -187,17 +189,19 @@ function randomSetting(kind: RelayKind, rng: Rng): RelaySetting {
   }
 }
 
-/** Four controls per role, every one with its own name from the pool. */
+/** Four controls per player, every one with its own name from the pool. */
 function buildControls(def: RelayDef, rng: Rng): RelayControl[] {
   const names = shuffle(CONTROL_NAMES, rng);
-  return def.roles.flatMap((role, r) =>
+  return def.players.flatMap((player, p) =>
     consoleKinds(rng).map((kind, i) => {
-      const n = r * CONTROLS_PER_CONSOLE + i;
+      const n = p * CONTROLS_PER_CONSOLE + i;
       const name = names[n];
       if (name === undefined) {
-        throw new Error(`relay "${def.id}": control names for at most ${RELAY_MAX_ROLES} roles`);
+        throw new Error(
+          `relay "${def.id}": control names for at most ${RELAY_MAX_PLAYERS} players`,
+        );
       }
-      return { id: `k${n + 1}`, ownerId: role.id, name, setting: randomSetting(kind, rng) };
+      return { id: `k${n + 1}`, ownerId: player.id, name, setting: randomSetting(kind, rng) };
     }),
   );
 }
@@ -241,7 +245,7 @@ function issue(def: RelayDef, state: RelayState, holderId: string, at: number): 
   const rng = mulberry32(state.seed);
   const control = free[Math.floor(rng() * free.length)];
   if (control === undefined) {
-    // Four controls per console, one instruction per role: at least three stay free.
+    // Four controls per console, one instruction per player: at least three stay free.
     throw new Error(`relay "${def.id}": no free control left for "${holderId}"`);
   }
   const fresh: RelayInstruction = {
@@ -252,8 +256,8 @@ function issue(def: RelayDef, state: RelayState, holderId: string, at: number): 
   };
   return {
     ...state,
-    instructions: def.roles.flatMap((role) =>
-      role.id === holderId ? [fresh] : others.filter((i) => i.holderId === role.id),
+    instructions: def.players.flatMap((player) =>
+      player.id === holderId ? [fresh] : others.filter((i) => i.holderId === player.id),
     ),
     seed: Math.floor(rng() * 2 ** 32),
   };
@@ -293,14 +297,14 @@ function spoken(
   instruction: RelayInstruction,
 ): NonNullable<RelayView['instruction']> {
   const control = state.controls.find((c) => c.id === instruction.controlId);
-  const owner = def.roles.find((role) => role.id === control?.ownerId);
+  const owner = def.players.find((player) => player.id === control?.ownerId);
   if (control === undefined || owner === undefined) {
     throw new Error(
       `relay "${def.id}": instruction for unknown control "${instruction.controlId}"`,
     );
   }
   return {
-    roleName: owner.name,
+    playerName: owner.name,
     control: control.name,
     value: instruction.value,
     expiresAt: instruction.expiresAt,
@@ -323,15 +327,15 @@ export const relayModule: EmergencyModule<RelayDef, RelayState, RelayInput, Rela
       seed: Math.floor(rng() * 2 ** 32),
       endsAt: ctx.at + def.durationSec * 1000,
     };
-    return def.roles.reduce((state, role) => issue(def, state, role.id, ctx.at), blank);
+    return def.players.reduce((state, player) => issue(def, state, player.id, ctx.at), blank);
   },
 
-  apply(def, state, input, roleId, ctx) {
+  apply(def, state, input, playerId, ctx) {
     const control = state.controls.find((c) => c.id === input.control);
     if (control === undefined) {
       fail('Dieses Bedienelement gibt es nicht.');
     }
-    if (control.ownerId !== roleId) {
+    if (control.ownerId !== playerId) {
       fail('Das Bedienelement sitzt an einem anderen Pult — sag die Anweisung laut an.');
     }
     const setting = settingFor(control.setting.kind, input.value);
@@ -358,12 +362,12 @@ export const relayModule: EmergencyModule<RelayDef, RelayState, RelayInput, Rela
     };
   },
 
-  view(def, state, roleId) {
-    const own = state.instructions.find((i) => i.holderId === roleId);
+  view(def, state, playerId) {
+    const own = state.instructions.find((i) => i.holderId === playerId);
     return {
       kind: 'relay',
       controls: state.controls
-        .filter((c) => c.ownerId === roleId)
+        .filter((c) => c.ownerId === playerId)
         .map((c) => ({ id: c.id, name: c.name, ...c.setting })),
       instruction: own === undefined ? null : spoken(def, state, own),
       windowSec: def.windowSec,
@@ -413,22 +417,25 @@ export const relayModule: EmergencyModule<RelayDef, RelayState, RelayInput, Rela
   },
 
   solve(def, views) {
-    const consoles = def.roles.map((role) => ({ role, controls: views[role.id]?.controls ?? [] }));
-    return def.roles.flatMap((holder) => {
+    const consoles = def.players.map((player) => ({
+      player,
+      controls: views[player.id]?.controls ?? [],
+    }));
+    return def.players.flatMap((holder) => {
       const wanted = views[holder.id]?.instruction ?? null;
       if (wanted === null) {
         return [];
       }
-      // As the crew does it: the named console's owner finds the named control.
-      for (const { role, controls } of consoles) {
+      // As the crew does it: the named player finds the named control on their console.
+      for (const { player, controls } of consoles) {
         const control = controls.find((c) => c.name === wanted.control);
-        if (role.name === wanted.roleName && control !== undefined) {
+        if (player.name === wanted.playerName && control !== undefined) {
           const input = { kind: 'set' as const, control: control.id, value: wanted.value };
-          return [{ roleId: role.id, input }];
+          return [{ playerId: player.id, input }];
         }
       }
       throw new Error(
-        `relay "${def.id}": no console of ${wanted.roleName} has "${wanted.control}"`,
+        `relay "${def.id}": no console of ${wanted.playerName} has "${wanted.control}"`,
       );
     });
   },

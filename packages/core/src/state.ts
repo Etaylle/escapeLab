@@ -10,7 +10,16 @@ export type Phase = 'lobby' | 'playing' | 'won' | 'lost';
 export interface RunEvent {
   /** epoch ms, turned into mm:ss against startedAt for display */
   at: number;
-  kind: 'puzzle' | 'penalty' | 'sabotage' | 'item' | 'escape' | 'finish' | 'hint' | 'radio';
+  kind:
+    | 'puzzle'
+    | 'penalty'
+    | 'sabotage'
+    | 'item'
+    | 'escape'
+    | 'finish'
+    | 'hint'
+    | 'radio'
+    | 'find';
   label: string;
   /** seconds lost, for penalty and hint lines */
   seconds: number | null;
@@ -56,15 +65,40 @@ export const CREW_COLORS = [
 export interface Player {
   id: string;
   name: string;
-  /** null until the player picks a role in the lobby */
-  roleId: string | null;
   /** '#rrggbb' from CREW_COLORS */
   color: string;
   /** cleared whenever the setup changes, so nobody is dragged in unprepared */
   ready: boolean;
   connected: boolean;
   isHost: boolean;
+  /** the start tile this run drew for the player; null in the lobby */
+  spawn: { x: number; y: number } | null;
 }
+
+/** What one player did over a run, for the end screen. */
+export interface Credits {
+  /** stations their input solved */
+  operated: number;
+  /** stations whose rules they read at a manual object while the station was open */
+  read: number;
+  /** lockers they searched and cabinets they unlocked */
+  found: number;
+  /** items they carried to where they belong, a key into its cabinet included */
+  delivered: number;
+  /** alarms they set off: a wrong move, a drone that caught them */
+  alarms: number;
+  /** notes of the last crew they asked for */
+  hints: number;
+}
+
+export const NO_CREDITS: Credits = {
+  operated: 0,
+  read: 0,
+  found: 0,
+  delivered: 0,
+  alarms: 0,
+  hints: 0,
+};
 
 export interface GameState {
   phase: Phase;
@@ -89,6 +123,16 @@ export interface GameState {
   occupiedPanels: string[];
   /** Stations, manual objects and the sign, by who stands there; derived like the plates. */
   presence: Presence;
+  /** where each manual object lies this run: one of its spots, drawn by start-mission */
+  places: Record<string, { x: number; y: number }>;
+  /** lockers searched and cabinets unlocked this run, by manual object id */
+  opened: string[];
+  /** manual objects somebody has come close to this run; the crew's map shows only these */
+  discovered: string[];
+  /** who did what this run, by player id */
+  credits: Record<string, Credits>;
+  /** players already credited with reading the current station's rules */
+  readersCredited: string[];
   /**
    * Running emergency that interrupts everything until it is cleared. In
    * relay mode it carries the consoles and instructions; valves need none.
@@ -112,11 +156,11 @@ export interface GameState {
   /** increments on every penalty — lets clients retrigger alarm effects */
   penaltySeq: number;
   lastPenaltySec: number | null;
-  /** hints bought over the whole run; they weigh on the grade */
+  /** notes bought over the whole run; they weigh on the grade */
   hintsUsed: number;
-  /** hints revealed for the current puzzle; back to 0 whenever the crew moves on */
+  /** notes revealed for the current puzzle; back to 0 whenever the crew moves on */
   hintsRevealed: number;
-  /** epoch ms; earliest moment the next hint may be requested */
+  /** epoch ms; earliest moment the next note may be asked for */
   hintReadyAt: number | null;
 }
 
@@ -133,6 +177,11 @@ export function initialState(mission: Mission): GameState {
     pressedPlates: [],
     occupiedPanels: [],
     presence: NOBODY_PRESENT,
+    places: {},
+    opened: [],
+    discovered: [],
+    credits: {},
+    readersCredited: [],
     sabotage: null,
     paused: null,
     items: {},

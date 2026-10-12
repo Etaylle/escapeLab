@@ -4,11 +4,12 @@ export {
   MANUAL_KINDS,
   type ManualKind,
   type Mission,
-  type RoleDef,
 } from './mission.js';
 export {
   initialState,
   CREW_COLORS,
+  NO_CREDITS,
+  type Credits,
   type GameState,
   type ItemState,
   type Player,
@@ -25,6 +26,7 @@ export {
   type PlayerView,
   type PlayerPresence,
   type ManualHere,
+  type SourceHere,
   type MapView,
   type Grade,
 } from './view.js';

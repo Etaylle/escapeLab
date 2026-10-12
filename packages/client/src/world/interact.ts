@@ -26,12 +26,13 @@ export function contextAction(
   const dist = (x: number, y: number): number => Math.hypot(self.x - x, self.y - y);
 
   const mine = map.items.find((item) => item.carriedBy === youId && !item.delivered);
-  if (mine !== undefined && dist(mine.deliverTo.x + 0.5, mine.deliverTo.y + 0.5) <= ITEM_RADIUS) {
+  const goal = mine?.deliverTo ?? null;
+  if (mine !== undefined && goal !== null && dist(goal.x + 0.5, goal.y + 0.5) <= ITEM_RADIUS) {
     return {
       kind: 'deliver',
       label: `[E] ${mine.label} einsetzen`,
-      x: mine.deliverTo.x + 0.5,
-      y: mine.deliverTo.y - 0.45,
+      x: goal.x + 0.5,
+      y: goal.y - 0.45,
     };
   }
 

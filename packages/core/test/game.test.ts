@@ -23,13 +23,11 @@ function run(actions: Action[], from?: GameState): GameState {
   return actions.reduce(applyAction, from ?? initialState(mission));
 }
 
-/** Lobby with both roles assigned, ready to start. anna=anleitung (host), ben=steuerpult. */
+/** Lobby with the whole crew, ready to start: Anna (host) and Ben. */
 function readyLobby(): GameState {
   return run([
     { type: 'player-join', playerId: 'p1', name: 'Anna' },
     { type: 'player-join', playerId: 'p2', name: 'Ben' },
-    { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
-    { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
     { type: 'set-ready', playerId: 'p2', ready: true },
   ]);
 }
@@ -85,21 +83,14 @@ describe('lobby', () => {
     expect(state.players.map((p) => p.isHost)).toEqual([true, false]);
   });
 
-  it('rejects taking an occupied role', () => {
-    const state = readyLobby();
-    expect(() =>
-      applyAction(state, { type: 'select-role', playerId: 'p2', roleId: 'anleitung' }),
-    ).toThrow(GameError);
-  });
-
-  it('rejects starting with unassigned roles', () => {
-    const state = run([
-      { type: 'player-join', playerId: 'p1', name: 'Anna' },
-      { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
-    ]);
+  it('rejects starting with fewer players than the mission takes', () => {
+    const state = run([{ type: 'player-join', playerId: 'p1', name: 'Anna' }]);
     expect(() =>
       applyAction(state, { type: 'start-mission', playerId: 'p1', at: T0, seed: 42 }),
-    ).toThrow(/Steuerpult/);
+    ).toThrow(GameError);
+    expect(() =>
+      applyAction(state, { type: 'start-mission', playerId: 'p1', at: T0, seed: 42 }),
+    ).toThrow(/mindestens 2/);
   });
 
   it('rejects start by non-host and join into a full or running game', () => {
@@ -147,8 +138,6 @@ describe('lobby', () => {
     const lobby = run([
       { type: 'player-join', playerId: 'p1', name: 'Anna' },
       { type: 'player-join', playerId: 'p2', name: 'Ben' },
-      { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
-      { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
     ]);
     expect(() =>
       applyAction(lobby, { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 }),
@@ -162,37 +151,34 @@ describe('lobby', () => {
   });
 
   it('clears confirmations whenever the setup changes', () => {
-    // A three-role variant, so there is a free role to switch to.
+    // A variant for up to three, so there is room for a third player.
     const roomy = parseMission({
       ...JSON.parse(JSON.stringify(mission)),
       id: 'three',
-      roles: [
-        ...JSON.parse(JSON.stringify(mission.roles)),
-        { id: 'dritte', name: 'Dritte', description: '' },
-      ],
+      players: { min: 2, max: 3 },
       map: {
         ...JSON.parse(JSON.stringify(mission.map)),
-        spawns: { ...mission.map.spawns, dritte: { x: 2, y: 4 } },
+        spawns: [...mission.map.spawns, { x: 2, y: 4 }],
       },
     });
     const confirmed = run(
       [
         { type: 'player-join', playerId: 'p1', name: 'Anna' },
         { type: 'player-join', playerId: 'p2', name: 'Ben' },
-        { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
         { type: 'set-ready', playerId: 'p2', ready: true },
       ],
       initialState(roomy),
     );
     expect(confirmed.players[1]?.ready).toBe(true);
 
-    // Someone switching role un-readies the crew …
-    const reRoled = applyAction(confirmed, {
-      type: 'select-role',
-      playerId: 'p2',
-      roleId: 'dritte',
+    // The host switching the difficulty un-readies the crew …
+    const harder = applyAction(confirmed, {
+      type: 'switch-mission',
+      playerId: 'p1',
+      mission: roomy,
+      difficulty: 'hart',
     });
-    expect(reRoled.players.every((p) => !p.ready)).toBe(true);
+    expect(harder.players.every((p) => !p.ready)).toBe(true);
 
     // … and so does a third player walking in.
     const joined = applyAction(confirmed, {
@@ -215,7 +201,7 @@ describe('lobby', () => {
     ).toBe(true);
   });
 
-  it('runs a rematch straight from the end screen, keeping the roles', () => {
+  it('runs a rematch straight from the end screen, keeping the crew', () => {
     const finished = applyAction(started(), { type: 'time-expired', at: T0 + 400_000 });
     expect(() =>
       applyAction(finished, { type: 'rematch', playerId: 'p2', at: T0 + 500_000, seed: 2 }),
@@ -234,7 +220,8 @@ describe('lobby', () => {
       seed: 2,
     });
     expect(again.phase).toBe('playing');
-    expect(again.players.map((p) => p.roleId)).toEqual(['anleitung', 'steuerpult']);
+    expect(again.players.map((p) => p.id)).toEqual(['p1', 'p2']);
+    expect(again.players.every((p) => p.spawn !== null)).toBe(true);
     expect(again.currentPuzzleIndex).toBe(0);
     // The fresh report holds nothing but mission control's opener.
     expect(again.events).toEqual([
@@ -252,8 +239,6 @@ describe('lobby', () => {
       [
         { type: 'player-join', playerId: 'p1', name: 'Anna' },
         { type: 'player-join', playerId: 'p2', name: 'Ben' },
-        { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
-        { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
         { type: 'set-ready', playerId: 'p2', ready: true },
         { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 },
         { type: 'time-expired', at: T0 + 400_000 },
@@ -348,11 +333,14 @@ describe('playing a full mission', () => {
     expect(late.phase).toBe('lost');
   });
 
-  it('lets the host return to the lobby with roles intact', () => {
+  it('lets the host return to the lobby with the crew intact and the spawns given back', () => {
     let state = applyAction(started(), { type: 'time-expired', at: T0 + 300_000 });
     state = applyAction(state, { type: 'back-to-lobby', playerId: 'p1' });
     expect(state.phase).toBe('lobby');
-    expect(state.players.map((p) => p.roleId)).toEqual(['anleitung', 'steuerpult']);
+    expect(state.players.map((p) => [p.id, p.spawn])).toEqual([
+      ['p1', null],
+      ['p2', null],
+    ]);
   });
 });
 

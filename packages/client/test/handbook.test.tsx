@@ -91,7 +91,7 @@ describe('HandbookScreen', () => {
     id,
     title,
     subtitle: '',
-    roles: [],
+    players: { min: 2, max: 2 },
     timeLimitSec: 600,
     puzzleCount: 1,
     tiles: [],

@@ -23,6 +23,9 @@ const KIND_NAMES: Record<ManualKind, string> = {
   book: 'Buch',
   terminal: 'Terminal',
   chart: 'Wandtafel',
+  clipboard: 'Klemmbrett',
+  locker: 'Spind',
+  cabinet: 'Aktenschrank',
 };
 
 /** What the things in the lab are for, one line each; only what this map has. */

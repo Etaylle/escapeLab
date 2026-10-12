@@ -31,12 +31,20 @@ const terminal: ManualHere = {
       index: 0,
       title: 'Kabel',
       manual: [{ heading: 'Kabel', blocks: [{ kind: 'p', text: 'Rot zuerst.' }] }],
+      notes: [],
+      noteReadyAt: null,
+      notesLeft: 0,
+      costSec: 20,
     },
     {
       puzzleId: 'netz',
       index: 2,
       title: 'Leitungsnetz',
       manual: [{ heading: 'Netz', blocks: [{ kind: 'p', text: 'Wände zeigt der Plan.' }] }],
+      notes: [],
+      noteReadyAt: null,
+      notesLeft: 0,
+      costSec: 20,
     },
   ],
 };
@@ -54,7 +62,6 @@ function maze(index: number, cells: number[] | null): PuzzleView {
     total: 3,
     title: 'Leitungsnetz',
     manual: null,
-    hints: { shown: [], left: 0, readyAt: null, costSec: 20 },
   };
 }
 
@@ -124,7 +131,16 @@ describe('the station frame', () => {
 });
 
 describe('the map legend', () => {
-  const book: Manual = { id: 'b', kind: 'book', x: 1, y: 1, label: 'HANDBUCH', puzzleIds: ['k'] };
+  const book: Manual = {
+    id: 'b',
+    kind: 'book',
+    x: 1,
+    y: 1,
+    label: 'HANDBUCH',
+    puzzleIds: ['k'],
+    opened: true,
+    needsKey: null,
+  };
   const camera: Plate = {
     id: 'kamera',
     x: 2,
@@ -188,10 +204,10 @@ function justStarted(parts: Partial<PlayerView> = {}): PlayerView {
     missionTitle: 'Blackout im Labor',
     difficulty: 'normal',
     storyText: 'Stromausfall.',
+    crewSize: { min: 2, max: 2 },
     you: {
       id: 'p2',
       name: 'Ben',
-      roleId: 'steuerpult',
       color: '#f472b6',
       ready: true,
       isHost: false,
@@ -200,8 +216,6 @@ function justStarted(parts: Partial<PlayerView> = {}): PlayerView {
       {
         id: 'p2',
         name: 'Ben',
-        roleId: 'steuerpult',
-        roleName: 'Steuerpult',
         color: '#f472b6',
         ready: true,
         connected: true,
@@ -209,7 +223,6 @@ function justStarted(parts: Partial<PlayerView> = {}): PlayerView {
       },
     ],
     palette: [],
-    roles: [],
     deadlineAt: now + 600_000,
     startedAt: now,
     finishedAt: null,
@@ -222,8 +235,10 @@ function justStarted(parts: Partial<PlayerView> = {}): PlayerView {
     penaltySeq: 0,
     lastPenaltySec: null,
     hintsUsed: 0,
+    credits: {},
     edgework: null,
     presence: { stationId: null, manualId: null, signSeen: false },
+    sourcesHere: [],
     manualsHere: [],
     puzzle: null,
     map: mapWith({

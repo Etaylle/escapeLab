@@ -19,14 +19,14 @@ const mission: Mission = parseMission({
   title: 'Drohnen-Test',
   story: { intro: 'i', win: 'w', lose: 'l' },
   timeLimitSec: 300,
-  roles: [
-    { id: 'anleitung', name: 'Anleitung', description: '' },
-    { id: 'steuerpult', name: 'Steuerpult', description: '' },
-  ],
+  players: { min: 2, max: 2 },
   puzzles: [{ type: 'button-sync', id: 'only', title: 'Einziges' }],
   map: {
     tiles: ['#########', '#...#...#', '#...#...#', '#...#...#', '#########'],
-    spawns: { anleitung: { x: 1, y: 1 }, steuerpult: { x: 3, y: 1 } },
+    spawns: [
+      { x: 1, y: 1 },
+      { x: 3, y: 1 },
+    ],
     stations: [{ puzzleId: 'only', x: 2, y: 1 }],
     plates: [{ id: 'kamera', x: 3, y: 3, label: 'KAMERA HALTEN' }],
     drones: [
@@ -75,8 +75,6 @@ function playing(fixture: Mission = mission): GameState {
     [
       { type: 'player-join', playerId: 'p1', name: 'Anna' },
       { type: 'player-join', playerId: 'p2', name: 'Ben' },
-      { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
-      { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
       { type: 'set-ready', playerId: 'p2', ready: true },
       { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 },
     ],
@@ -90,7 +88,13 @@ function at(x: number, y: number): Map<string, { x: number; y: number }> {
 
 /** Who stands at which station, the way the room reports it. */
 function standing(state: GameState, stations: Record<string, string[]>): GameState {
-  return applyAction(state, { type: 'set-presence', stations, manuals: {}, signSeen: [] });
+  return applyAction(state, {
+    type: 'set-presence',
+    stations,
+    manuals: {},
+    signSeen: [],
+    seen: [],
+  });
 }
 
 function patrol(fixture: Mission = mission): DronePatrol {
@@ -128,7 +132,7 @@ describe('DronePatrol', () => {
   it('spots a player straight ahead inside the cone', () => {
     const drones = patrol();
     const events = drones.detect(playing(), at(3.5, 2.5), T0);
-    expect(events).toEqual([{ droneId: 'wache', penaltySec: 15 }]);
+    expect(events).toEqual([{ droneId: 'wache', penaltySec: 15, playerId: 'p1' }]);
   });
 
   it('ignores a player outside the cone angle', () => {

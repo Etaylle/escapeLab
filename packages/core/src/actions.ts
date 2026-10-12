@@ -1,6 +1,8 @@
 import {
   CREW_COLORS,
+  NO_CREDITS,
   NOBODY_PRESENT,
+  type Credits,
   type GameState,
   type ItemState,
   type Player,
@@ -9,8 +11,8 @@ import {
 import type { Difficulty } from './difficulty.js';
 import { generateEdgework } from './edgework.js';
 import { fail } from './errors.js';
-import type { Mission } from './mission.js';
-import { mulberry32 } from './rng.js';
+import type { ManualDef, Mission } from './mission.js';
+import { mulberry32, shuffle } from './rng.js';
 import { moduleFor, type PuzzleDef, type PuzzleState } from './puzzles/index.js';
 import type { PuzzleContext } from './puzzles/module.js';
 import {
@@ -21,7 +23,8 @@ import {
   type RelayDef,
   type RelayState,
 } from './puzzles/relay.js';
-import { armedStation, operatorsOf } from './map.js';
+import { armedStation, operatorsOf, readersOf, sourceOpen } from './map.js';
+import type { Spot } from './reach.js';
 
 /**
  * All game actions. `at` is the authoritative server time (epoch ms) and
@@ -32,23 +35,31 @@ export type Action =
   | { type: 'player-join'; playerId: string; name: string }
   | { type: 'player-connected'; playerId: string }
   | { type: 'player-disconnected'; playerId: string }
-  | { type: 'select-role'; playerId: string; roleId: string }
   | { type: 'select-color'; playerId: string; color: string }
   | { type: 'set-ready'; playerId: string; ready: boolean }
   | { type: 'switch-mission'; playerId: string; mission: Mission; difficulty: Difficulty }
+  /** the players connected right now are the crew, each drawn a spawn; the rest leave */
   | { type: 'start-mission'; playerId: string; at: number; seed: number }
   /** a move at the open puzzle; `input` is checked against that puzzle's module */
   | { type: 'puzzle-input'; playerId: string; at: number; input: unknown }
+  /** a note of the last crew, asked for at a manual object that covers the open puzzle */
   | { type: 'request-hint'; playerId: string; at: number }
   | { type: 'set-occupancy'; plates: string[]; panels: string[] }
-  /** who stands at which station and manual object, and who has seen the sign (stays seen) */
+  /**
+   * who stands at which station and manual object, who has seen the sign
+   * (stays seen) and which manual objects somebody has come close to (stay found)
+   */
   | {
       type: 'set-presence';
       stations: Record<string, string[]>;
       manuals: Record<string, string[]>;
       signSeen: string[];
+      seen: string[];
     }
-  | { type: 'drone-spotted'; at: number; penaltySec: number }
+  /** a locker searched or a cabinet unlocked by a player standing at it */
+  | { type: 'open-source'; playerId: string; manualId: string; at: number }
+  /** `playerId` is the one the drone caught */
+  | { type: 'drone-spotted'; at: number; penaltySec: number; playerId: string }
   | { type: 'sabotage-start'; at: number }
   | { type: 'sabotage-cleared'; at: number }
   | { type: 'sabotage-expired'; at: number }
@@ -83,8 +94,6 @@ export function applyAction(state: GameState, action: Action): GameState {
       return setConnected(state, action.playerId, true);
     case 'player-disconnected':
       return setConnected(state, action.playerId, false);
-    case 'select-role':
-      return selectRole(state, action);
     case 'select-color':
       return selectColor(state, action);
     case 'set-ready':
@@ -107,6 +116,8 @@ export function applyAction(state: GameState, action: Action): GameState {
         : state;
     case 'set-presence':
       return state.phase === 'playing' ? setPresence(state, action) : state;
+    case 'open-source':
+      return openSource(state, action);
     case 'sabotage-start':
       return startSabotage(state, action);
     case 'sabotage-cleared':
@@ -126,7 +137,12 @@ export function applyAction(state: GameState, action: Action): GameState {
       return deliverItem(state, action);
     case 'drone-spotted':
       return state.phase === 'playing'
-        ? applyPenalty(state, action.penaltySec, action.at, 'Von einer Drohne erfasst')
+        ? applyPenalty(
+            credited(state, action.playerId, 'alarms'),
+            action.penaltySec,
+            action.at,
+            'Von einer Drohne erfasst',
+          )
         : state;
     case 'interact':
       return handleInteract(state, action);
@@ -151,18 +167,16 @@ function switchMission(
     fail('Die Mission kann nur in der Lobby gewechselt werden.');
   }
   requireHost(state, action.playerId);
-  if (state.players.length > action.mission.roles.length) {
-    fail(
-      `Für "${action.mission.title}" sind zu viele Spieler im Raum ` +
-        `(max. ${action.mission.roles.length}).`,
-    );
+  const { max } = action.mission.players;
+  if (state.players.length > max) {
+    fail(`Für "${action.mission.title}" sind zu viele Spieler im Raum (max. ${max}).`);
   }
-  const sameMission = state.mission.id === action.mission.id;
-  // Role ids may differ between missions, so a real switch resets the picks.
-  const players = sameMission
-    ? unready(state.players)
-    : unready(state.players).map((p) => ({ ...p, roleId: null }));
-  return { ...state, mission: action.mission, difficulty: action.difficulty, players };
+  return {
+    ...state,
+    mission: action.mission,
+    difficulty: action.difficulty,
+    players: unready(state.players),
+  };
 }
 
 function playerJoin(
@@ -172,8 +186,9 @@ function playerJoin(
   if (state.phase !== 'lobby') {
     fail('Die Mission läuft bereits — Beitritt ist nur in der Lobby möglich.');
   }
-  if (state.players.length >= state.mission.roles.length) {
-    fail(`Der Raum ist voll (max. ${state.mission.roles.length} Spielende für diese Mission).`);
+  const { max } = state.mission.players;
+  if (state.players.length >= max) {
+    fail(`Der Raum ist voll (max. ${max} Spielende für diese Mission).`);
   }
   const name = action.name.trim();
   if (name.length === 0) {
@@ -183,11 +198,11 @@ function playerJoin(
   const player: Player = {
     id: action.playerId,
     name,
-    roleId: null,
     color: CREW_COLORS.find((c) => !taken.has(c)) ?? CREW_COLORS[0],
     ready: false,
     connected: true,
     isHost: state.players.length === 0,
+    spawn: null,
   };
   return { ...state, players: [...unready(state.players), player] };
 }
@@ -234,25 +249,29 @@ function setConnected(state: GameState, playerId: string, connected: boolean): G
   return { ...state, players };
 }
 
-function selectRole(
-  state: GameState,
-  action: { playerId: string; roleId: string },
-): GameState {
-  if (state.phase !== 'lobby') {
-    fail('Rollen können nur in der Lobby gewechselt werden.');
+/** One more of `what` for the player in this run's credits. */
+function credited(state: GameState, playerId: string, what: keyof Credits): GameState {
+  const theirs = state.credits[playerId] ?? NO_CREDITS;
+  return {
+    ...state,
+    credits: { ...state.credits, [playerId]: { ...theirs, [what]: theirs[what] + 1 } },
+  };
+}
+
+/** Whoever reads the open station's rules for the first time is credited with it, once. */
+function creditReaders(state: GameState): GameState {
+  const open = state.mission.puzzles[state.currentPuzzleIndex];
+  if (state.puzzleState === null || open === undefined) {
+    return state;
   }
-  findPlayer(state, action.playerId);
-  if (!state.mission.roles.some((r) => r.id === action.roleId)) {
-    fail('Diese Rolle gibt es in der Mission nicht.');
-  }
-  const takenBy = state.players.find((p) => p.roleId === action.roleId);
-  if (takenBy !== undefined && takenBy.id !== action.playerId) {
-    fail(`Die Rolle ist schon von ${takenBy.name} besetzt.`);
-  }
-  const players = unready(state.players).map((p) =>
-    p.id === action.playerId ? { ...p, roleId: action.roleId } : p,
+  const fresh = readersOf(state, open.id).filter((id) => !state.readersCredited.includes(id));
+  return fresh.reduce(
+    (next, playerId) => ({
+      ...credited(next, playerId, 'read'),
+      readersCredited: [...next.readersCredited, playerId].sort(),
+    }),
+    state,
   );
-  return { ...state, players };
 }
 
 /** What a module may know when it sets up or takes a move at `at`. */
@@ -272,7 +291,7 @@ function puzzleContext(state: GameState, at: number): PuzzleContext {
 /**
  * Who stands where, as the server sees it. Lists are kept sorted and empty
  * ones dropped, so equal presence compares equal; whoever has seen the sign
- * keeps it.
+ * keeps it, and a manual object once found stays on the crew's map.
  */
 function setPresence(
   state: GameState,
@@ -284,14 +303,15 @@ function setPresence(
         .filter(([, players]) => players.length > 0)
         .map(([id, players]) => [id, [...new Set(players)].sort()]),
     );
-  return {
+  return creditReaders({
     ...state,
     presence: {
       stations: tidy(action.stations),
       manuals: tidy(action.manuals),
       signSeen: [...new Set([...state.presence.signSeen, ...action.signSeen])].sort(),
     },
-  };
+    discovered: [...new Set([...state.discovered, ...action.seen])].sort(),
+  });
 }
 
 function initPuzzleState(state: GameState, index: number, at: number): PuzzleState {
@@ -304,17 +324,69 @@ function initPuzzleState(state: GameState, index: number, at: number): PuzzleSta
   return moduleFor(def.type).init(def, rng, puzzleContext(state, at));
 }
 
-/** Put a puzzle on the consoles; mission control holds its hints back for a while. */
+/** Put a puzzle on the consoles; its first note is held back for a while. */
 function openPuzzle(state: GameState, index: number, at: number): GameState {
-  return {
+  return creditReaders({
     ...state,
     puzzleState: initPuzzleState(state, index, at),
     hintReadyAt: at + state.mission.hintDelaySec * 1000,
-  };
+  });
 }
 
 /** Edgework rolls on its own stream, so the puzzle streams stay what they are for a seed. */
 const EDGEWORK_STREAM = 0x45444745;
+/** So do the spawns … */
+const SPAWN_STREAM = 0x5350574e;
+/** … and the places of the manual objects. */
+const PLACES_STREAM = 0x504c4143;
+
+/** Every player of the crew starts on a spawn of their own, drawn from the seed. */
+function drawSpawns(crew: Player[], spawns: readonly Spot[], seed: number): Player[] {
+  const drawn = shuffle(spawns, mulberry32((seed ^ SPAWN_STREAM) >>> 0));
+  return crew.map((player, i) => {
+    const spawn = drawn[i];
+    if (spawn === undefined) {
+      throw new Error(`start: ${crew.length} players, but only ${spawns.length} spawns`);
+    }
+    return { ...player, spawn: { x: spawn.x, y: spawn.y } };
+  });
+}
+
+/** Where each manual object lies this run: one of its spots, drawn from the seed. */
+function placeSources(manuals: readonly ManualDef[], seed: number): GameState['places'] {
+  const rng = mulberry32((seed ^ PLACES_STREAM) >>> 0);
+  return Object.fromEntries(
+    manuals.map((manual) => {
+      const spot = manual.spots[Math.floor(rng() * manual.spots.length)];
+      if (spot === undefined) {
+        throw new Error(`manual object "${manual.id}" has no spot to be drawn to`);
+      }
+      return [manual.id, { x: spot.x, y: spot.y }];
+    }),
+  );
+}
+
+/**
+ * The players connected right now are the crew — as many as the mission
+ * takes — and everyone but the host has confirmed; whoever is gone from the
+ * room is left out of the run.
+ */
+function crewToStart(state: GameState): Player[] {
+  const crew = state.players.filter((p) => p.connected);
+  const { min, max } = state.mission.players;
+  if (crew.length < min) {
+    fail(`Für diese Mission braucht es mindestens ${min} Spielende.`);
+  }
+  if (crew.length > max) {
+    fail(`Für diese Mission sind es zu viele — höchstens ${max} Spielende.`);
+  }
+  // The host starts by pressing start; everyone else confirms beforehand.
+  const waiting = crew.filter((p) => !p.isHost && !p.ready);
+  if (waiting.length > 0) {
+    fail(`Noch nicht bereit: ${waiting.map((p) => p.name).join(', ')}.`);
+  }
+  return crew;
+}
 
 function startMission(
   state: GameState,
@@ -324,21 +396,12 @@ function startMission(
     fail('Die Mission läuft bereits.');
   }
   requireHost(state, action.playerId);
-  const assigned = new Set(
-    state.players.map((p) => p.roleId).filter((r): r is string => r !== null),
-  );
-  const missing = state.mission.roles.filter((r) => !assigned.has(r.id));
-  if (missing.length > 0) {
-    fail(`Noch unbesetzte Rollen: ${missing.map((r) => r.name).join(', ')}.`);
-  }
-  // The host starts by pressing start; everyone else confirms beforehand.
-  const waiting = state.players.filter((p) => !p.isHost && !p.ready);
-  if (waiting.length > 0) {
-    fail(`Noch nicht bereit: ${waiting.map((p) => p.name).join(', ')}.`);
-  }
+  const crew = crewToStart(state);
+  const map = state.mission.map;
   const started: GameState = {
     ...state,
     phase: 'playing',
+    players: drawSpawns(crew, map.spawns, action.seed),
     currentPuzzleIndex: 0,
     puzzleState: null,
     seed: action.seed,
@@ -346,10 +409,15 @@ function startMission(
     pressedPlates: [],
     occupiedPanels: [],
     presence: NOBODY_PRESENT,
+    places: placeSources(map.manuals, action.seed),
+    opened: [],
+    discovered: [],
+    credits: Object.fromEntries(crew.map((player) => [player.id, NO_CREDITS])),
+    readersCredited: [],
     sabotage: null,
     paused: null,
     items: Object.fromEntries(
-      state.mission.map.items.map((item) => [
+      map.items.map((item) => [
         item.id,
         { x: item.x + 0.5, y: item.y + 0.5, carriedBy: null, delivered: false },
       ]),
@@ -401,7 +469,7 @@ export function inEscapePhase(state: GameState): boolean {
 function advance(state: GameState, at: number): GameState {
   const solved = state.mission.puzzles[state.currentPuzzleIndex];
   const reported = logEvent(
-    { ...state, hintsRevealed: 0, hintReadyAt: null },
+    { ...state, hintsRevealed: 0, hintReadyAt: null, readersCredited: [] },
     'puzzle',
     `${solved?.title ?? 'Station'} gelöst`,
     at,
@@ -530,13 +598,13 @@ function clearSabotage(state: GameState, at: number): GameState {
     : logEvent({ ...state, sabotage: null }, 'sabotage', 'Notfall behoben', at);
 }
 
-/** The relay emergency's def; rebuilt from the mission whenever needed, never stored. */
+/** The relay emergency's def; rebuilt from the game whenever needed, never stored. */
 function emergencyDef(state: GameState): RelayDef {
   const sabotage = state.mission.map.sabotage;
   if (sabotage === undefined) {
     throw new Error(`mission "${state.mission.id}" has no sabotage to run a relay emergency`);
   }
-  return relayDefFor(state.mission.roles, sabotage);
+  return relayDefFor(state.players, sabotage);
 }
 
 /** Emergencies roll on their own stream, salted with the moment they start. */
@@ -586,16 +654,14 @@ function handleEmergencyInput(
   if (!input.success) {
     fail('Ungültige Eingabe.');
   }
-  const { roleId } = findPlayer(state, action.playerId);
-  if (roleId === null) {
-    fail('Ohne Rolle kannst du hier nichts tun.');
-  }
+  const player = findPlayer(state, action.playerId);
   const def = emergencyDef(state);
   const ctx = puzzleContext(state, action.at);
-  const result = relayModule.apply(def, emergency, input.data, roleId, ctx);
+  const result = relayModule.apply(def, emergency, input.data, player.id, ctx);
   const next = { ...state, sabotage: { ...sabotage, emergency: result.state } };
   if (result.penalty !== null) {
-    return applyPenalty(next, def.penaltySec, action.at, result.penalty);
+    const blamed = credited(next, player.id, 'alarms');
+    return applyPenalty(blamed, def.penaltySec, action.at, result.penalty);
   }
   return result.solved ? clearSabotage(next, action.at) : next;
 }
@@ -679,33 +745,38 @@ function handlePuzzleInput(
   );
   const next = { ...state, puzzleState: result.state };
   if (result.penalty !== null) {
-    return applyPenalty(next, def.penaltySec, action.at, result.penalty);
+    const blamed = credited(next, player.id, 'alarms');
+    return applyPenalty(blamed, def.penaltySec, action.at, result.penalty);
   }
-  return result.solved ? advance(next, action.at) : next;
+  return result.solved ? advance(credited(next, player.id, 'operated'), action.at) : next;
 }
 
 /**
- * Mission control talks a stuck crew through the open puzzle, one hint at a
- * time. A hint costs time like a penalty but is no alarm, so it leaves the
- * alarm counter alone; the next one only comes after another wait.
+ * The last crew left notes beside the rules: a player reading the open
+ * station's rules may ask for them, one at a time. A note costs time like a
+ * penalty but is no alarm, so it leaves the alarm counter alone; the next
+ * one only comes after another wait.
  */
 function requestHint(state: GameState, action: { playerId: string; at: number }): GameState {
   const ctx = requirePlaying(state, action.playerId, action.at);
   if (ctx === 'lost') {
     return lostNow(state, action.at);
   }
+  if (!readersOf(state, ctx.def.id).includes(ctx.player.id)) {
+    fail('Dafür musst du bei den Regeln dieser Station stehen.');
+  }
   const hint = ctx.def.hints[state.hintsRevealed];
   if (hint === undefined) {
-    fail('Keine weiteren Hinweise für diese Station.');
+    fail('Keine weiteren Notizen zu dieser Station.');
   }
   if (state.hintReadyAt === null || action.at < state.hintReadyAt) {
-    fail('Die Leitstelle braucht noch einen Moment.');
+    fail('Die nächste Notiz braucht noch einen Moment.');
   }
   const { hintCostSec, hintDelaySec } = state.mission;
   const deadlineAt = (state.deadlineAt ?? action.at) - hintCostSec * 1000;
   const helped = logEvent(
     {
-      ...state,
+      ...credited(state, ctx.player.id, 'hints'),
       deadlineAt,
       hintsUsed: state.hintsUsed + 1,
       hintsRevealed: state.hintsRevealed + 1,
@@ -776,6 +847,21 @@ function dropItem(
   };
 }
 
+/** The item comes to rest where it belongs, and whoever brought it gets the credit. */
+function delivered(state: GameState, playerId: string, itemId: string, at: Spot): GameState {
+  return credited(
+    {
+      ...state,
+      items: {
+        ...state.items,
+        [itemId]: { carriedBy: null, delivered: true, x: at.x + 0.5, y: at.y + 0.5 },
+      },
+    },
+    playerId,
+    'delivered',
+  );
+}
+
 function deliverItem(
   state: GameState,
   action: { playerId: string; itemId: string; at: number },
@@ -788,19 +874,11 @@ function deliverItem(
   if (def === undefined) {
     fail('Dieses Objekt gibt es hier nicht.');
   }
+  if (def.deliverTo === undefined) {
+    fail(`${def.label} gehört in ein Schloss — damit wird aufgeschlossen.`);
+  }
   return logEvent(
-    {
-      ...state,
-      items: {
-        ...state.items,
-        [action.itemId]: {
-          carriedBy: null,
-          delivered: true,
-          x: def.deliverTo.x + 0.5,
-          y: def.deliverTo.y + 0.5,
-        },
-      },
-    },
+    delivered(state, action.playerId, action.itemId, def.deliverTo),
     'item',
     `${def.label} eingesetzt`,
     action.at,
@@ -812,6 +890,70 @@ export function missingItemsFor(state: GameState, puzzleId: string): string[] {
   return state.mission.map.items
     .filter((def) => def.requiredFor === puzzleId && state.items[def.id]?.delivered !== true)
     .map((def) => def.label);
+}
+
+/** The locker or cabinet a player stands at, while it is still closed. */
+function closedSourceAt(state: GameState, playerId: string, manualId: string): ManualDef {
+  const source = state.mission.map.manuals.find((m) => m.id === manualId);
+  if (source === undefined || sourceOpen(state, source)) {
+    fail(source === undefined ? 'Das gibt es hier nicht.' : 'Das ist schon offen.');
+  }
+  if (!(state.presence.manuals[source.id] ?? []).includes(playerId)) {
+    fail('Dafür musst du direkt davor stehen.');
+  }
+  return source;
+}
+
+/** A cabinet takes its key out of the hands of the player unlocking it, and keeps it. */
+function unlockWith(state: GameState, playerId: string, source: ManualDef): GameState {
+  const keyId = source.needsKey;
+  if (keyId === undefined) {
+    return state;
+  }
+  const key = state.mission.map.items.find((i) => i.id === keyId);
+  const place = state.places[source.id];
+  if (key === undefined || place === undefined) {
+    throw new Error(`cabinet "${source.id}": no key "${keyId}" or no place this run`);
+  }
+  if (state.items[keyId]?.carriedBy !== playerId) {
+    fail(`Abgeschlossen — es fehlt ${key.label}.`);
+  }
+  return delivered(state, playerId, keyId, place);
+}
+
+/**
+ * A player at a locker searches it, at a cabinet unlocks it with the key in
+ * hand; from then on it reads like a book. Proximity is the presence the
+ * server derived.
+ */
+function openSource(
+  state: GameState,
+  action: { playerId: string; manualId: string; at: number },
+): GameState {
+  if (state.phase !== 'playing') {
+    fail('Dafür muss die Mission laufen.');
+  }
+  if (state.deadlineAt !== null && action.at >= state.deadlineAt) {
+    return lostNow(state, action.at);
+  }
+  if (state.paused !== null) {
+    fail('Die Mission ist pausiert — es fehlt jemand aus der Crew.');
+  }
+  findPlayer(state, action.playerId);
+  const source = closedSourceAt(state, action.playerId, action.manualId);
+  const unlocked = unlockWith(state, action.playerId, source);
+  const done = source.kind === 'cabinet' ? 'Schrank aufgeschlossen' : 'Spind durchsucht';
+  return creditReaders(
+    logEvent(
+      {
+        ...credited(unlocked, action.playerId, 'found'),
+        opened: [...unlocked.opened, source.id].sort(),
+      },
+      'find',
+      `${done}: ${source.label}`,
+      action.at,
+    ),
+  );
 }
 
 /**
@@ -848,8 +990,8 @@ function handleInteract(state: GameState, action: { playerId: string; at: number
 
 
 /**
- * Straight into another run of the same mission with the same roles: the
- * crew confirms on the end screen, the host presses once. Same guards as a
+ * Straight into another run of the same mission with the same crew: it
+ * confirms on the end screen, the host presses once. Same guards as a
  * normal start, just without the detour through the lobby.
  */
 function rematch(
@@ -870,7 +1012,7 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
   return {
     ...state,
     phase: 'lobby',
-    players: unready(state.players),
+    players: unready(state.players).map((p) => ({ ...p, spawn: null })),
     currentPuzzleIndex: 0,
     puzzleState: null,
     seed: null,
@@ -878,6 +1020,11 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     pressedPlates: [],
     occupiedPanels: [],
     presence: NOBODY_PRESENT,
+    places: {},
+    opened: [],
+    discovered: [],
+    credits: {},
+    readersCredited: [],
     sabotage: null,
     paused: null,
     items: {},

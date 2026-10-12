@@ -51,7 +51,7 @@ export class MissionCatalog {
       id: m.id,
       title: m.title,
       subtitle: m.subtitle,
-      roles: m.roles.map((r) => r.name),
+      players: { min: m.players.min, max: m.players.max },
       timeLimitSec: m.timeLimitSec,
       puzzleCount: m.puzzles.length,
       tiles: m.map.tiles,

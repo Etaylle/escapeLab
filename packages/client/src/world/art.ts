@@ -1,3 +1,5 @@
+import type { ManualKind } from '@escapelab/core';
+
 // art.ts — pure Canvas2D drawing for EscapeLab: cute capsule scientists in a moody lab.
 //
 // No imports, no DOM queries, and nothing touches the DOM at import time. All draw
@@ -1105,7 +1107,7 @@ export function drawDoor(ctx: CanvasRenderingContext2D, o: DoorOpts): void {
 // ---- Manual objects ------------------------------------------------------------------
 
 export interface ManualObjectOpts {
-  kind: 'book' | 'terminal' | 'chart';
+  kind: ManualKind;
   label: string;
   /** covers the armed station: blue glow, strength follows pulse */
   active: boolean;

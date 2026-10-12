@@ -12,9 +12,10 @@ import type { Action, GameState, Mission, RunEvent } from '../src/index.js';
 import { standing } from './lab.js';
 
 /**
- * Three stations where the whole crew presses, and an exit hatch, with
- * mission control on the radio: two hints for the first station, one for
- * the second, none for the third. Hint price and delay are left at their
+ * Three stations where the whole crew presses, a chart that covers them
+ * all, and an exit hatch, with mission control on the radio. Beside the
+ * rules lie the last crew's notes: two for the first station, one for the
+ * second, none for the third. Their price and delay are left at the
  * defaults.
  */
 const mission: Mission = parseMission({
@@ -23,10 +24,7 @@ const mission: Mission = parseMission({
   story: { intro: 'i', win: 'w', lose: 'l' },
   timeLimitSec: 600,
   radio: { start: 'Leitstelle hier — wir hören mit.', escape: 'Der Ausgang ist offen, raus da!' },
-  roles: [
-    { id: 'anleitung', name: 'Anleitung', description: '' },
-    { id: 'steuerpult', name: 'Steuerpult', description: '' },
-  ],
+  players: { min: 2, max: 2 },
   puzzles: [
     {
       type: 'button-sync',
@@ -49,11 +47,23 @@ const mission: Mission = parseMission({
   ],
   map: {
     tiles: ['#########', '#.......#', '#########'],
-    spawns: { anleitung: { x: 1, y: 1 }, steuerpult: { x: 7, y: 1 } },
+    spawns: [
+      { x: 1, y: 1 },
+      { x: 7, y: 1 },
+    ],
     stations: [
       { puzzleId: 'first', x: 2, y: 1 },
       { puzzleId: 'second', x: 4, y: 1 },
       { puzzleId: 'third', x: 6, y: 1 },
+    ],
+    manuals: [
+      {
+        id: 'tafel',
+        kind: 'chart',
+        label: 'TAFEL',
+        puzzleIds: ['first', 'second', 'third'],
+        spots: [{ x: 5, y: 1 }],
+      },
     ],
     exit: { x: 3, y: 1 },
   },
@@ -86,8 +96,6 @@ function playing(fixture: Mission = mission): GameState {
     [
       { type: 'player-join', playerId: 'p1', name: 'Anna' },
       { type: 'player-join', playerId: 'p2', name: 'Ben' },
-      { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
-      { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
       { type: 'set-ready', playerId: 'p2', ready: true },
       { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 },
     ],
@@ -95,11 +103,25 @@ function playing(fixture: Mission = mission): GameState {
   );
 }
 
-/** Switch on the armed station with both players standing at it. */
+/** Switch on the armed station with both players standing at it, and Anna at the chart. */
 function open(state: GameState, at: number): GameState {
   const def = state.mission.puzzles[state.currentPuzzleIndex];
-  const here = standing(state, { stations: { [def?.id ?? '']: ['p1', 'p2'] } });
+  const here = standing(state, {
+    stations: { [def?.id ?? '']: ['p1', 'p2'] },
+    manuals: { tafel: ['p1'] },
+  });
   return applyAction(here, { type: 'interact', playerId: 'p2', at });
+}
+
+/** The current station's page of the chart as `playerId` reads it, notes and all. */
+function page(state: GameState, playerId = 'p1') {
+  const sections = viewFor(state, playerId).manualsHere.flatMap((m) => m.sections);
+  const section = sections.find((s) => s.index === state.currentPuzzleIndex);
+  if (section === undefined) {
+    throw new Error(`${playerId} reads nothing of the current station`);
+  }
+  const { notes, noteReadyAt, notesLeft, costSec } = section;
+  return { notes, noteReadyAt, notesLeft, costSec };
 }
 
 /** Every station here is solved by a press from each player. */
@@ -121,15 +143,23 @@ function askForHint(state: GameState, at: number): GameState {
 
 const kinds = (events: RunEvent[]): string[] => events.map((e) => e.kind);
 
-describe('hints on request', () => {
-  it('holds hints back until the crew has spent a while at the open station', () => {
+describe('notes of the last crew', () => {
+  it('holds them back until the crew has spent a while at the open station', () => {
     expect(() => askForHint(playing(), T0 + DELAY_MS)).toThrow(/kein Rätsel/);
     // The wait starts with the station, not with the mission.
     const state = open(playing(), T0 + 100_000);
     expect(() => askForHint(state, T0 + 100_000 + DELAY_MS - 1)).toThrow(/noch einen Moment/);
     const helped = askForHint(state, T0 + 100_000 + DELAY_MS);
     expect(helped.hintsRevealed).toBe(1);
-    expect(viewFor(helped, 'p1').puzzle?.hints.shown).toEqual(['Alle an die Station.']);
+    expect(page(helped).notes).toEqual(['Alle an die Station.']);
+  });
+
+  it('are only given to somebody reading the open station\'s rules', () => {
+    const state = open(playing(), T0);
+    const ask = (playerId: string) => () =>
+      applyAction(state, { type: 'request-hint', playerId, at: T0 + DELAY_MS });
+    expect(ask('p2')).toThrow('Dafür musst du bei den Regeln dieser Station stehen.');
+    expect(ask('p1')).not.toThrow();
   });
 
   it('costs exactly the hint price without sounding the alarm', () => {
@@ -148,39 +178,39 @@ describe('hints on request', () => {
     });
   });
 
-  it('makes the crew wait between hints and has none past the last one', () => {
+  it('makes the crew wait between notes and has none past the last one', () => {
     let state = askForHint(open(playing(), T0), T0 + DELAY_MS);
     expect(() => askForHint(state, T0 + 2 * DELAY_MS - 1)).toThrow(/noch einen Moment/);
     state = askForHint(state, T0 + 2 * DELAY_MS);
-    expect(viewFor(state, 'p1').puzzle?.hints).toEqual({
-      shown: ['Alle an die Station.', 'Jeder drückt einmal.'],
-      left: 0,
-      readyAt: null,
+    expect(page(state)).toEqual({
+      notes: ['Alle an die Station.', 'Jeder drückt einmal.'],
+      notesLeft: 0,
+      noteReadyAt: null,
       costSec: mission.hintCostSec,
     });
-    expect(() => askForHint(state, T0 + 10 * DELAY_MS)).toThrow(/Keine weiteren Hinweise/);
+    expect(() => askForHint(state, T0 + 10 * DELAY_MS)).toThrow(/Keine weiteren Notizen/);
   });
 
-  it('starts every station without hints while the run total keeps counting', () => {
+  it('starts every station without notes while the run total keeps counting', () => {
     let state = open(playing(), T0);
     state = askForHint(askForHint(state, T0 + DELAY_MS), T0 + 2 * DELAY_MS);
     state = open(solve(state, T0 + 100_000), T0 + 110_000);
     expect(state.hintsRevealed).toBe(0);
     expect(state.hintsUsed).toBe(2);
-    expect(viewFor(state, 'p1').puzzle?.hints).toMatchObject({
-      shown: [],
-      left: 1,
-      readyAt: T0 + 110_000 + DELAY_MS,
+    expect(page(state)).toMatchObject({
+      notes: [],
+      notesLeft: 1,
+      noteReadyAt: T0 + 110_000 + DELAY_MS,
     });
 
     state = askForHint(state, T0 + 110_000 + DELAY_MS);
     expect(state.hintsUsed).toBe(3);
-    expect(viewFor(state, 'p1').puzzle?.hints.shown).toEqual(['Wieder alle zusammen.']);
+    expect(page(state).notes).toEqual(['Wieder alle zusammen.']);
 
-    // The third station has no hints at all.
+    // The third station has no notes at all.
     state = open(solve(state, T0 + 200_000), T0 + 210_000);
-    expect(viewFor(state, 'p1').puzzle?.hints).toMatchObject({ shown: [], left: 0, readyAt: null });
-    expect(() => askForHint(state, T0 + 210_000 + DELAY_MS)).toThrow(/Keine weiteren Hinweise/);
+    expect(page(state)).toMatchObject({ notes: [], notesLeft: 0, noteReadyAt: null });
+    expect(() => askForHint(state, T0 + 210_000 + DELAY_MS)).toThrow(/Keine weiteren Notizen/);
   });
 
   it('adds the time spent paused to the wait', () => {
@@ -240,22 +270,28 @@ describe('mission control on the radio', () => {
   });
 });
 
-describe('hint views', () => {
-  it('shows both players and the audience the very same hints', () => {
-    const state = askForHint(open(playing(), T0), T0 + DELAY_MS);
-    const anna = viewFor(state, 'p1');
-    const ben = viewFor(state, 'p2');
-    const audience = viewForSpectator(state);
-    expect(anna.puzzle?.hints.shown).toEqual(['Alle an die Station.']);
-    expect(ben.puzzle?.hints).toEqual(anna.puzzle?.hints);
-    expect(audience.puzzle?.hints).toEqual(anna.puzzle?.hints);
-    expect([anna.hintsUsed, ben.hintsUsed, audience.hintsUsed]).toEqual([1, 1, 1]);
+describe('note views', () => {
+  it('lie beside the open station\'s rules for every reader there, and nowhere else', () => {
+    const asked = askForHint(open(playing(), T0), T0 + DELAY_MS);
+    const both = standing(asked, {
+      stations: { first: ['p1', 'p2'] },
+      manuals: { tafel: ['p1', 'p2'] },
+    });
+    expect(page(both, 'p1').notes).toEqual(['Alle an die Station.']);
+    expect(page(both, 'p2')).toEqual(page(both, 'p1'));
+    const others = viewFor(both, 'p1').manualsHere[0]?.sections.filter((s) => s.index !== 0);
+    expect(others?.every((s) => s.notes.length === 0 && s.notesLeft === 0)).toBe(true);
+    // Ben, at the station only, reads no page, and the station shows no notes.
+    expect(viewFor(asked, 'p2').manualsHere).toEqual([]);
+    expect(viewFor(asked, 'p2').puzzle).not.toHaveProperty('hints');
+    const counts = [viewFor(asked, 'p1'), viewFor(asked, 'p2'), viewForSpectator(asked)];
+    expect(counts.map((view) => view.hintsUsed)).toEqual([1, 1, 1]);
   });
 
   it('charges the difficulty-scaled price it shows', () => {
     const hard = scaleMission(mission, 'hart');
     const state = open(playing(hard), T0);
-    const price = viewFor(state, 'p1').puzzle?.hints.costSec;
+    const price = page(state).costSec;
     expect(price).toBe(hard.hintCostSec);
     expect(price).toBeGreaterThan(mission.hintCostSec);
     const helped = askForHint(state, T0 + DELAY_MS);

@@ -20,7 +20,7 @@ const load = (id: string): Mission =>
  * The tutorial: a press for the whole crew in the Leitstand (12,1), the wiring
  * box in the Kontrolle (2,4) behind a door held by the plate (7,2), whose
  * book (7,1) is read from the plate, and the finale in the Spulen (16,4).
- * Ben spawns at (12,4) beside the sign (13,3), Anna at (8,1) beside the book.
+ * Its spawns are (8,1) beside the book and (12,4) beside the sign (13,3).
  */
 const mission = load('systemcheck');
 
@@ -52,17 +52,27 @@ describe('Room', () => {
     const ben = { ...room.join('Ben'), ...collector() };
     room.attach(anna.playerId, anna.listen);
     room.attach(ben.playerId, ben.listen);
-    room.act(anna.playerId, { kind: 'select-role', roleId: 'anleitung' });
-    room.act(ben.playerId, { kind: 'select-role', roleId: 'steuerpult' });
     return { anna, ben };
   }
 
+  /**
+   * A started run with Anna on the mission's first spawn and Ben on the
+   * second — in the tutorial, Anna beside the book and Ben beside the sign.
+   * The room draws the spawns, so runs are started until it draws that way.
+   */
   function startedRoom(fixture: Mission = mission) {
-    const room = new Room('TEST', fixture);
-    const crew = fullLobby(room);
-    ready(room, crew.ben);
-    room.act(crew.anna.playerId, { kind: 'start-mission' });
-    return { room, ...crew };
+    const [first] = fixture.map.spawns;
+    for (let attempt = 0; attempt < 64; attempt++) {
+      const room = new Room('TEST', fixture);
+      const crew = fullLobby(room);
+      ready(room, crew.ben);
+      room.act(crew.anna.playerId, { kind: 'start-mission' });
+      if (JSON.stringify(lastView(crew.anna.messages).map?.yourSpawn) === JSON.stringify(first)) {
+        return { room, ...crew };
+      }
+      room.dispose();
+    }
+    throw new Error('64 runs, and Anna never drew the first spawn');
   }
 
   /** Teleport an avatar; the room derives plates, presence and interact range from this. */
@@ -310,7 +320,8 @@ describe('Room', () => {
     // The fresh report holds nothing but mission control's opener.
     const report = restarted.events.map((e) => [e.kind, e.label]);
     expect(report).toEqual([['radio', mission.radio.start]]);
-    expect(restarted.players.map((p) => p.roleName)).toEqual(['Anleitung', 'Steuerpult']);
+    expect(restarted.players.map((p) => p.name)).toEqual(['Anna', 'Ben']);
+    expect(mission.map.spawns).toContainEqual(restarted.map?.yourSpawn);
     room.dispose();
   });
 
@@ -325,7 +336,8 @@ describe('Room', () => {
     room.dispose();
   });
 
-  it('passes a hint request to the reducer on the server clock', () => {
+  it('passes a request for a note at the book to the reducer on the server clock', () => {
+    // The book beside Anna's spawn covers the first station too, with a note for it.
     const hinted = parseMission({
       ...JSON.parse(JSON.stringify(mission)),
       id: 'hinttest',
@@ -333,20 +345,30 @@ describe('Room', () => {
         ...puzzle,
         hints: ['Alle an die Station.'],
       })),
+      map: {
+        ...JSON.parse(JSON.stringify(mission.map)),
+        manuals: mission.map.manuals.map((m) => ({
+          ...m,
+          puzzleIds: ['init', ...m.puzzleIds],
+        })),
+      },
     });
     const { room, anna, ben } = startedRoom(hinted);
     const deadline = lastView(anna.messages).deadlineAt ?? 0;
 
     moveTo(room, ben.playerId, 12, 2);
     room.act(ben.playerId, { kind: 'interact' });
+    expect(() => room.act(ben.playerId, { kind: 'request-hint' })).toThrow(/bei den Regeln/);
     expect(() => room.act(anna.playerId, { kind: 'request-hint' })).toThrow(/Moment/);
     vi.advanceTimersByTime(hinted.hintDelaySec * 1000);
     room.act(anna.playerId, { kind: 'request-hint' });
 
-    const view = lastView(ben.messages);
-    expect(view.puzzle?.hints.shown).toEqual(['Alle an die Station.']);
+    const view = lastView(anna.messages);
+    const page = view.manualsHere[0]?.sections.find((s) => s.puzzleId === 'init');
+    expect(page?.notes).toEqual(['Alle an die Station.']);
     expect(view.hintsUsed).toBe(1);
-    expect(view.deadlineAt).toBe(deadline - hinted.hintCostSec * 1000);
+    expect(view.credits[anna.playerId]?.hints).toBe(1);
+    expect(lastView(ben.messages).deadlineAt).toBe(deadline - hinted.hintCostSec * 1000);
     room.dispose();
   });
 

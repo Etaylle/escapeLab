@@ -140,7 +140,8 @@ export function JoinScreen({ send, connected, missions, rooms, openHandbook }: P
                   <span className="mission-title">{m.title}</span>
                   <span className="mission-sub">{m.subtitle}</span>
                   <span className="mission-meta">
-                    👥 {m.roles.length} Rollen · ⏱ {Math.round(m.timeLimitSec / 60)} min ·{' '}
+                    👥 {m.players.min}–{m.players.max} Spieler · ⏱{' '}
+                    {Math.round(m.timeLimitSec / 60)} min ·{' '}
                     {m.puzzleCount} Rätsel
                   </span>
                 </button>

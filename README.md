@@ -18,9 +18,10 @@ Mission, Schwierigkeit, wer schon wartet und wie viele Plätze frei sind — ein
 genügt, niemand muss einen Code weitergeben. Laufende Runden erscheinen ebenfalls, dort führt
 der Knopf zum Zuschauen. Ein Code-Feld bleibt für direkte Verabredungen.
 
-**Ablauf einer Partie:** Lobby (Figur + Farbe wählen, Rolle wählen, **bereitmelden** — der Host
-kann erst starten, wenn alle bestätigt haben, und jede Änderung an Rollen oder Besetzung setzt
-die Bestätigungen zurück) → Briefing-Countdown →
+**Ablauf einer Partie:** Lobby (Figur + Farbe wählen, **bereitmelden** — der Host kann erst
+starten, wenn so viele da sind, wie die Mission braucht, und alle bestätigt haben; jede Änderung
+an Mission oder Besetzung setzt die Bestätigungen zurück; die Startplätze werden beim Start
+verlost) → Briefing-Countdown →
 Stationen in Reihenfolge finden und lösen → wenn alle gelöst sind, öffnet sich der **Notausgang**
 und das ganze Team muss ihn gemeinsam erreichen, bevor die Zeit abläuft → Endbildschirm mit
 Statistiken und persönlicher Bestzeit. **Hilfsmittel:** Klick auf die Welt setzt einen **Ping**
@@ -91,7 +92,7 @@ pnpm dev          # Server (Port 3001) + Vite-Client (Port 5173) parallel
 ```
 
 Dann <http://localhost:5173> in zwei Browser-Tabs/Fenstern öffnen, Raum erstellen,
-Code im zweiten Tab eingeben, Rollen wählen, starten.
+Code im zweiten Tab eingeben, bereitmelden, starten.
 
 ```sh
 pnpm test         # vitest (core: Spiellogik, server: Räume/Reconnect/Timer/Drohnen)
@@ -112,8 +113,7 @@ und Restzeit. Dazu führt dieses Gerät eine kleine Historie je Mission (Läufe,
 Bestzeit, bester Rang). **Nochmal:** Alle bestätigen gleichberechtigt auf dem Endbildschirm, und sobald das letzte Ja
 da ist, startet derselbe Einsatz von selbst — ohne Umweg über die Lobby und ohne dass jemand
 der Startknopf-Mensch sein muss. Fehlt jemand (Verbindung weg), wartet der Neustart auf die
-Rückkehr. Über die Lobby geht es weiterhin, wenn Mission, Rollen oder Schwierigkeit sich
-ändern sollen.
+Rückkehr. Über die Lobby geht es weiterhin, wenn Mission oder Schwierigkeit sich ändern sollen.
 
 ## Für den Demo Day (ein Prozess, eine URL)
 

@@ -3,6 +3,7 @@
   "title": "Blackout im Labor",
   "subtitle": "Der Klassiker für zwei: Handbuch gegen Schaltschrank, acht Minuten gegen die Dunkelheit.",
   "listOrder": 10,
+  "players": { "min": 2, "max": 2 },
   "story": {
     "intro": "23:47 Uhr. Ein Knall, dann Dunkelheit — nur die Notbeleuchtung glimmt rot. Die Notversorgung hält acht Minuten. Einer von euch steht am Schaltschrank, der andere hat das Notfall-Handbuch gefunden. Ihr seht NICHT dasselbe. Redet — oder das Labor bleibt dunkel.",
     "win": "Mit einem tiefen Brummen erwachen die Systeme, Licht flutet das Labor — und hinter euch fällt die Luke des Notausgangs ins Schloss. Draußen, zu zweit, mit laufenden Zentrifugen im Rücken. Ihr habt es geschafft.",
@@ -29,10 +30,10 @@
       "#.....#.....#.....#",
       "###################"
     ],
-    "spawns": {
-      "anleitung": { "x": 3, "y": 2 },
-      "steuerpult": { "x": 3, "y": 10 }
-    },
+    "spawns": [
+      { "x": 3, "y": 2 },
+      { "x": 3, "y": 10 }
+    ],
     "doors": [
       { "id": "archivtuer", "x": 3, "y": 4, "opensBy": { "kind": "puzzle", "puzzleId": "notstrom" } },
       { "id": "maschinentuer", "x": 4, "y": 7, "opensBy": { "kind": "plate", "plateId": "flurplatte" } },
@@ -57,18 +58,16 @@
       {
         "id": "buch-archiv",
         "kind": "book",
-        "x": 2,
-        "y": 1,
         "label": "HANDBUCH",
-        "puzzleIds": ["notstrom", "zugangscode"]
+        "puzzleIds": ["notstrom", "zugangscode"],
+        "spots": [{ "x": 2, "y": 1 }]
       },
       {
         "id": "terminal-server",
         "kind": "terminal",
-        "x": 17,
-        "y": 2,
         "label": "TERMINAL",
-        "puzzleIds": ["subsysteme", "frequenz"]
+        "puzzleIds": ["subsysteme", "frequenz"],
+        "spots": [{ "x": 17, "y": 2 }]
       }
     ],
     "edgeworkSign": { "x": 4, "y": 3 },
@@ -130,18 +129,6 @@
       }
     ]
   },
-  "roles": [
-    {
-      "id": "anleitung",
-      "name": "Anleitung",
-      "description": "Du startest im Archiv, neben Handbuch, Ersatzsicherung und Kennungsschild."
-    },
-    {
-      "id": "steuerpult",
-      "name": "Steuerpult",
-      "description": "Du startest im Maschinenraum, am Sicherungskasten."
-    }
-  ],
   "puzzles": [
     {
       "type": "wiring",

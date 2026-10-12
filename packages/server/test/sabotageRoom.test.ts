@@ -16,14 +16,14 @@ const mission: Mission = parseMission({
   title: 'Sabotage-Raum',
   story: { intro: 'i', win: 'w', lose: 'l' },
   timeLimitSec: 900,
-  roles: [
-    { id: 'anleitung', name: 'Anleitung', description: '' },
-    { id: 'steuerpult', name: 'Steuerpult', description: '' },
-  ],
+  players: { min: 2, max: 2 },
   puzzles: ['first', 'second', 'third'].map((id) => ({ type: 'button-sync', id, title: id })),
   map: {
     tiles: ['#########', '#.......#', '#.......#', '#########'],
-    spawns: { anleitung: { x: 3, y: 1 }, steuerpult: { x: 5, y: 1 } },
+    spawns: [
+      { x: 3, y: 1 },
+      { x: 5, y: 1 },
+    ],
     stations: [
       { puzzleId: 'first', x: 2, y: 1 },
       { puzzleId: 'second', x: 4, y: 1 },
@@ -82,8 +82,6 @@ describe('Room emergencies', () => {
     const ben = { ...room.join('Ben'), ...collector() };
     room.attach(anna.playerId, anna.listen);
     room.attach(ben.playerId, ben.listen);
-    room.act(anna.playerId, { kind: 'select-role', roleId: 'anleitung' });
-    room.act(ben.playerId, { kind: 'select-role', roleId: 'steuerpult' });
     ready(room, ben);
     room.act(anna.playerId, { kind: 'start-mission' });
     for (const x of [2, 4]) {

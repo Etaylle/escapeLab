@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { difficultyInfos, type ClientMessage, type MissionInfo, type PlayerView } from '@escapelab/core';
 import { CrewPreview } from './CrewPreview.js';
 import { MapThumb } from './MapThumb.js';
@@ -11,16 +10,13 @@ interface Props {
 }
 
 export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
-  const allRolesTaken = view.roles.every((r) => r.takenByName !== null);
-  const seatsLeft = view.roles.length - view.players.length;
+  const { min, max } = view.crewSize;
+  const crew = view.players.filter((p) => p.connected).length;
+  const crewFits = min <= crew && crew <= max;
+  const seatsLeft = max - view.players.length;
   const currentLevel = difficultyInfos().find((l) => l.id === view.difficulty);
-  const waiting = view.players.filter((p) => !p.isHost && !p.ready);
+  const waiting = view.players.filter((p) => p.connected && !p.isHost && !p.ready);
   const info = missions.find((m) => m.id === view.missionId);
-  // Role descriptions are long; showing all of them at once is what made the
-  // lobby scroll. One detail line is enough — it follows the pointer and
-  // falls back to the role you picked.
-  const [peek, setPeek] = useState<string | null>(null);
-  const shownRole = view.roles.find((r) => r.id === (peek ?? view.you.roleId)) ?? view.roles[0];
 
   return (
     <div className="card lobby">
@@ -31,7 +27,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
               <span className="kicker">MISSION</span>
               <h1>{view.missionTitle}</h1>
               <span className="pill lobby-facts">
-                ⏱ {Math.round(view.timeLimitSec / 60)} min · 👥 {view.roles.length} Rollen
+                ⏱ {Math.round(view.timeLimitSec / 60)} min · 👥 {min}–{max} Spieler
                 {info !== undefined && ` · 🧩 ${info.puzzleCount} Stationen`}
               </span>
             </div>
@@ -52,7 +48,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
                   >
                     {missions.map((m) => (
                       <option key={m.id} value={m.id}>
-                        {m.title} ({m.roles.length} Rollen)
+                        {m.title} ({m.players.min}–{m.players.max} Spieler)
                       </option>
                     ))}
                   </select>
@@ -112,35 +108,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
             </div>
           </div>
 
-          <h2>Rollen — klick dir deine</h2>
-          <div className="roles">
-            {view.roles.map((role) => {
-              const mine = view.you.roleId === role.id;
-              const taken = role.takenByName !== null && !mine;
-              return (
-                <button
-                  key={role.id}
-                  className={`role ${mine ? 'role-mine' : ''}`}
-                  disabled={taken}
-                  onMouseEnter={() => setPeek(role.id)}
-                  onMouseLeave={() => setPeek(null)}
-                  onFocus={() => setPeek(role.id)}
-                  onBlur={() => setPeek(null)}
-                  onClick={() => send({ kind: 'select-role', roleId: role.id })}
-                >
-                  <span className="role-name">{role.name}</span>
-                  <span className="role-taken">
-                    {role.takenByName !== null ? `👤 ${role.takenByName}` : 'frei'}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          {shownRole !== undefined && (
-            <p className="role-detail">
-              <strong>{shownRole.name}</strong> — {shownRole.description}
-            </p>
-          )}
+          <p className="muted">Startplätze werden beim Start verlost.</p>
 
           <h2>Im Raum</h2>
           <ul className="players">
@@ -149,7 +117,6 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
                 <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
                 {p.isHost ? '★ ' : ''}
                 {p.name}
-                {p.roleName !== null ? ` — ${p.roleName}` : ' — wählt noch …'}
                 {p.connected ? '' : ' (getrennt)'}
                 {!p.isHost && (
                   <span className={`ready-tag ${p.ready ? 'ready-tag-on' : ''}`}>
@@ -169,11 +136,11 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
             {view.you.isHost ? (
               <button
                 className="primary"
-                disabled={!allRolesTaken || waiting.length > 0}
+                disabled={!crewFits || waiting.length > 0}
                 onClick={() => send({ kind: 'start-mission' })}
               >
-                {!allRolesTaken
-                  ? 'Warten, bis alle Rollen besetzt sind …'
+                {!crewFits
+                  ? `Für diese Mission ${min}–${max} Spieler …`
                   : waiting.length > 0
                     ? `Warten auf ${waiting.map((p) => p.name).join(', ')} …`
                     : '▶ Mission starten'}
@@ -182,17 +149,14 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
               <>
                 <button
                   className={view.you.ready ? '' : 'primary'}
-                  disabled={view.you.roleId === null}
                   onClick={() => send({ kind: 'set-ready', ready: !view.you.ready })}
                 >
                   {view.you.ready ? '✓ Bereit — doch nicht?' : 'Ich bin bereit'}
                 </button>
                 <p className="muted">
-                  {view.you.roleId === null
-                    ? 'Wähl zuerst eine Rolle.'
-                    : view.you.ready
-                      ? 'Der Host startet, sobald alle bereit sind.'
-                      : 'Lies deine Rollenbeschreibung in Ruhe — dann melde dich bereit.'}
+                  {view.you.ready
+                    ? 'Der Host startet, sobald alle bereit sind.'
+                    : 'Lies die Mission in Ruhe — dann melde dich bereit.'}
                 </p>
               </>
             )}

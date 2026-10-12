@@ -23,7 +23,7 @@ import { playInstance } from './solveModule.js';
 const SEEDS = 300;
 
 const rawDef = { type: 'switches', id: 'bank', title: 'Bank', penaltySec: 12 };
-const mission = labMission([rawDef], 'schaltertest', ['pult', 'handbuch', 'zaungast']);
+const mission = labMission([rawDef], 'schaltertest', 3);
 const parsedDef = mission.puzzles[0];
 if (parsedDef?.type !== 'switches') {
   throw new Error('expected the switch bank as the only puzzle');

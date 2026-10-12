@@ -120,12 +120,12 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
       });
       return s;
     }
-    case 'select-role':
     case 'select-color':
     case 'set-ready':
     case 'start-mission':
     case 'puzzle-input':
     case 'request-hint':
+    case 'open-source':
     case 'interact':
     case 'drop-item':
     case 'rematch':

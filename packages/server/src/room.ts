@@ -12,6 +12,7 @@ import {
   type ClientMessage,
   type Difficulty,
   type GameState,
+  type MapDef,
   type Mission,
   type PlayerPosition,
   type RoomSummary,
@@ -25,12 +26,12 @@ export type GameMessage = Extract<
   ClientMessage,
   {
     kind:
-      | 'select-role'
       | 'select-color'
       | 'set-ready'
       | 'start-mission'
       | 'puzzle-input'
       | 'request-hint'
+      | 'open-source'
       | 'interact'
       | 'drop-item'
       | 'back-to-lobby'
@@ -44,6 +45,8 @@ const PLATE_RELEASE_RADIUS = 0.75;
 /** A player is at a station, a manual object or the sign this close (in tiles); leaves wider. */
 const PRESENCE_ENTER_RADIUS = 1.6;
 const PRESENCE_LEAVE_RADIUS = 2.0;
+/** A manual object is found for the whole crew once somebody comes this close (in tiles). */
+const DISCOVER_RADIUS = 3.5;
 /** How close to the armed station an interact is accepted. */
 const INTERACT_RADIUS = 1.6;
 /** Everyone must stand on the exit hatch itself (below one tile) to escape. */
@@ -108,10 +111,14 @@ export class Room {
     return { playerId, token };
   }
 
-  /** Re-authenticate a returning player. Throws on a bad token. */
+  /** Re-authenticate a returning player. Throws on a bad token, or once the run left them out. */
   resume(playerId: string, token: string): void {
     if (this.tokens.get(playerId) !== token) {
       throw new Error('Wiederverbinden fehlgeschlagen — Raum neu beitreten.');
+    }
+    if (!this.state.players.some((p) => p.id === playerId)) {
+      this.tokens.delete(playerId);
+      throw new Error('Die Crew ist ohne dich gestartet — Raum neu beitreten.');
     }
     this.dispatch({ type: 'player-connected', playerId });
     this.reconcilePause();
@@ -193,9 +200,6 @@ export class Room {
   /** Player-triggered game actions coming in from the transport layer. */
   act(playerId: string, msg: GameMessage): void {
     switch (msg.kind) {
-      case 'select-role':
-        this.dispatch({ type: 'select-role', playerId, roleId: msg.roleId });
-        break;
       case 'select-color':
         this.dispatch({ type: 'select-color', playerId, color: msg.color });
         break;
@@ -217,6 +221,9 @@ export class Room {
         break;
       case 'request-hint':
         this.dispatch({ type: 'request-hint', playerId, at: Date.now() });
+        break;
+      case 'open-source':
+        this.dispatch({ type: 'open-source', playerId, manualId: msg.manualId, at: Date.now() });
         break;
       case 'interact':
         this.resolveInteract(playerId);
@@ -270,7 +277,7 @@ export class Room {
 
   /** One row for the lobby browser. */
   summary(): RoomSummary {
-    const capacity = this.state.mission.roles.length;
+    const capacity = this.state.mission.players.max;
     const open = this.state.phase === 'lobby';
     return {
       code: this.code,
@@ -308,8 +315,9 @@ export class Room {
   }
 
   /**
-   * One key does the obvious thing: deliver what you carry, otherwise pick up
-   * what lies at your feet, otherwise switch on the station in front of you.
+   * One key does the obvious thing: deliver what you carry (a key unlocks
+   * its cabinet), otherwise pick up what lies at your feet, otherwise switch
+   * on the station in front of you.
    */
   private resolveInteract(playerId: string): void {
     const map = this.state.mission.map;
@@ -324,12 +332,7 @@ export class Room {
 
     const carried = map.items.find((def) => this.state.items[def.id]?.carriedBy === playerId);
     if (carried !== undefined) {
-      if (!near(carried.deliverTo.x + 0.5, carried.deliverTo.y + 0.5)) {
-        throw new Error(
-          `Du trägst ${carried.label} — bring es zum markierten Platz (oder lege es mit Q ab).`,
-        );
-      }
-      this.dispatch({ type: 'deliver-item', playerId, itemId: carried.id, at: Date.now() });
+      this.handOver(playerId, carried, near);
       return;
     }
 
@@ -344,6 +347,27 @@ export class Room {
 
     this.requireNearStation(playerId);
     this.dispatch({ type: 'interact', playerId, at: Date.now() });
+  }
+
+  /** What is carried goes where it belongs: an item to its drop-off, a key into its cabinet. */
+  private handOver(
+    playerId: string,
+    item: MapDef['items'][number],
+    near: (x: number, y: number) => boolean,
+  ): void {
+    const cabinet = this.state.mission.map.manuals.find((m) => m.needsKey === item.id);
+    const goal = cabinet === undefined ? item.deliverTo : this.state.places[cabinet.id];
+    if (goal === undefined || !near(goal.x + 0.5, goal.y + 0.5)) {
+      throw new Error(
+        `Du trägst ${item.label} — bring es zum markierten Platz (oder lege es mit Q ab).`,
+      );
+    }
+    const at = Date.now();
+    this.dispatch(
+      cabinet === undefined
+        ? { type: 'deliver-item', playerId, itemId: item.id, at }
+        : { type: 'open-source', playerId, manualId: cabinet.id, at },
+    );
   }
 
   /** Put down whatever this player is carrying, right where they stand. */
@@ -380,15 +404,14 @@ export class Room {
     }
   }
 
-  /** Place every avatar at its role spawn when a mission starts. */
+  /** Place every avatar on the spawn it drew when a mission starts. */
   private seedPositions(): void {
-    const map = this.state.mission.map;
     if (this.state.phase !== 'playing') {
       return;
     }
     this.positions.clear();
     for (const player of this.state.players) {
-      const spawn = player.roleId !== null ? map.spawns[player.roleId] : undefined;
+      const spawn = player.spawn;
       this.positions.set(player.id, {
         x: (spawn?.x ?? 1) + 0.5,
         y: (spawn?.y ?? 1) + 0.5,
@@ -479,14 +502,15 @@ export class Room {
 
   /**
    * Translate live positions into who stands at which station and manual
-   * object, and who has walked up to the sign; dispatch only on change.
+   * object, who has walked up to the sign and which manual objects somebody
+   * has come close to; dispatch only on change.
    */
   private reconcilePresence(): void {
     const map = this.state.mission.map;
     if (this.state.phase !== 'playing') {
       return;
     }
-    const { presence } = this.state;
+    const { presence, places, discovered } = this.state;
     const atEach = (
       spots: readonly { id: string; x: number; y: number }[],
       was: Record<string, string[]>,
@@ -500,20 +524,28 @@ export class Room {
       map.stations.map((s) => ({ id: s.puzzleId, x: s.x, y: s.y })),
       presence.stations,
     );
-    const manuals = atEach(map.manuals, presence.manuals);
+    const sources = map.manuals.flatMap((m) => {
+      const at = places[m.id];
+      return at === undefined ? [] : [{ id: m.id, x: at.x, y: at.y }];
+    });
+    const manuals = atEach(sources, presence.manuals);
     const sign = map.edgeworkSign;
     const signSeen =
       sign === undefined
         ? presence.signSeen
         : [...new Set([...presence.signSeen, ...this.presentAt(sign.x, sign.y, [])])].sort();
+    const seen = sources
+      .filter((s) => this.occupantsOf(s.x, s.y, DISCOVER_RADIUS).length > 0)
+      .map((s) => s.id);
     const same = (a: Record<string, string[]>, b: Record<string, string[]>): boolean =>
       JSON.stringify(a) === JSON.stringify(b);
     if (
       !same(stations, presence.stations) ||
       !same(manuals, presence.manuals) ||
-      signSeen.length !== presence.signSeen.length
+      signSeen.length !== presence.signSeen.length ||
+      seen.some((id) => !discovered.includes(id))
     ) {
-      this.dispatch({ type: 'set-presence', stations, manuals, signSeen });
+      this.dispatch({ type: 'set-presence', stations, manuals, signSeen, seen });
     }
   }
 
@@ -687,8 +719,8 @@ export class Room {
     this.lastDroneTick = now;
     patrol.step(this.state, dt);
     const spotted = patrol.detect(this.state, this.positionSnapshot(), now);
-    for (const event of spotted) {
-      this.dispatch({ type: 'drone-spotted', at: now, penaltySec: event.penaltySec });
+    for (const { penaltySec, playerId } of spotted) {
+      this.dispatch({ type: 'drone-spotted', at: now, penaltySec, playerId });
     }
     this.positionsDirty = true;
     this.schedulePositionsBroadcast();

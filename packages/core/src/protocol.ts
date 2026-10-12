@@ -29,7 +29,6 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
     playerId: z.string().min(1),
     token: z.string().min(1),
   }),
-  z.object({ kind: z.literal('select-role'), roleId: z.string().min(1) }),
   z.object({ kind: z.literal('select-color'), color: z.string().regex(/^#[0-9a-f]{6}$/i) }),
   z.object({ kind: z.literal('set-ready'), ready: z.boolean() }),
   z.object({ kind: z.literal('switch-mission'), missionId: z.string().min(1) }),
@@ -38,6 +37,8 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   /** a move at the open puzzle; its module's input schema checks `input` */
   z.object({ kind: z.literal('puzzle-input'), input: z.unknown() }),
   z.object({ kind: z.literal('request-hint') }),
+  /** search the locker or unlock the cabinet the player stands at */
+  z.object({ kind: z.literal('open-source'), manualId: z.string().min(1) }),
   z.object({
     kind: z.literal('pos'),
     x: z.number().finite().min(-10).max(500),
@@ -69,7 +70,7 @@ export interface RoomSummary {
   difficulty: Difficulty;
   phase: Phase;
   players: { name: string; color: string; connected: boolean }[];
-  /** how many roles this mission has */
+  /** the most players this mission takes */
   capacity: number;
   /** seats still open; always 0 once the mission is running */
   free: number;
@@ -80,7 +81,8 @@ export interface MissionInfo {
   id: string;
   title: string;
   subtitle: string;
-  roles: string[];
+  /** how many play it; a run starts with any count from min to max */
+  players: { min: number; max: number };
   timeLimitSec: number;
   puzzleCount: number;
   /** tile rows of the map, for the preview thumbnail */

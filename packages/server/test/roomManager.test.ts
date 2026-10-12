@@ -67,8 +67,6 @@ describe('lobby browser', () => {
     const room = manager.create(tutorial);
     const anna = seat(room, 'Anna');
     const ben = seat(room, 'Ben');
-    room.act(anna.playerId, { kind: 'select-role', roleId: 'anleitung' });
-    room.act(ben.playerId, { kind: 'select-role', roleId: 'steuerpult' });
     ready(room, ben);
     room.act(anna.playerId, { kind: 'start-mission' });
 
@@ -83,8 +81,6 @@ describe('lobby browser', () => {
     const running = manager.create(tutorial);
     const anna = seat(running, 'Anna');
     const ben = seat(running, 'Ben');
-    running.act(anna.playerId, { kind: 'select-role', roleId: 'anleitung' });
-    running.act(ben.playerId, { kind: 'select-role', roleId: 'steuerpult' });
     ready(running, ben);
     running.act(anna.playerId, { kind: 'start-mission' });
 

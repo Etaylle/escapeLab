@@ -159,49 +159,6 @@ function Briefing({ view }: { view: PlayerView }) {
   );
 }
 
-/**
- * Mission control's side of a station, the same for everyone working it:
- * the hints given so far and the button for the next one, which unlocks
- * after a wait.
- */
-function HintStrip({
-  hints,
-  send,
-}: {
-  hints: PuzzleView['hints'];
-  send: (msg: ClientMessage) => void;
-}) {
-  const now = useNow(1000);
-  if (hints.shown.length === 0 && hints.left === 0) {
-    return null;
-  }
-  const waitSec = hints.readyAt === null ? 0 : Math.ceil((hints.readyAt - now) / 1000);
-  return (
-    <section className="hint-strip" aria-label="Hinweise der Leitstelle">
-      <span className="kicker">LEITSTELLE</span>
-      {hints.shown.length > 0 && (
-        <ol className="hint-list">
-          {hints.shown.map((text, i) => (
-            <li key={i}>
-              <span aria-hidden="true">📻</span>
-              <span>{text}</span>
-            </li>
-          ))}
-        </ol>
-      )}
-      {hints.left > 0 && (
-        <button
-          className="hint-request"
-          disabled={waitSec > 0}
-          onClick={() => send({ kind: 'request-hint' })}
-        >
-          {waitSec > 0 ? `Hinweis in ${waitSec} s` : `Hinweis anfordern · −${hints.costSec} s`}
-        </button>
-      )}
-    </section>
-  );
-}
-
 /** Sounds, screen shake, alarm banner and the SYSTEM-ONLINE stamp. */
 function useFeedback(view: PlayerView): { shaking: boolean; alarmVisible: boolean; stamp: boolean } {
   const [shaking, setShaking] = useState(false);
@@ -514,7 +471,6 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
           onClose={modal.close}
         >
           <PuzzlePanel puzzle={modal.station} send={send} deadlineAt={view.deadlineAt} />
-          <HintStrip hints={modal.station.hints} send={send} />
         </WorldModal>
       )}
       {modal.reading !== null && (

@@ -13,6 +13,7 @@ export function mapWith(parts: Partial<MapView>): MapView {
     manuals: [],
     edgeworkSign: null,
     labels: [],
+    litRooms: [],
     exit: null,
     items: [],
     sabotage: null,

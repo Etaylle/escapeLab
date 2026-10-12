@@ -3,6 +3,7 @@
   "title": "Kettenreaktion",
   "subtitle": "Für Dreierteams: Handbuch, Diagnose und Steuerpult — keiner weiß genug, alle reden durcheinander.",
   "listOrder": 30,
+  "players": { "min": 3, "max": 3 },
   "story": {
     "intro": "Der Versuchsreaktor im Keller läuft heiß. Das Wissen, ihn zu stoppen, ist auf drei Stationen verteilt: das Handbuch, die Diagnose-Konsole und das Steuerpult. Zehn Minuten. Drei Stimmen. Ein Fehler zu viel — und ihr lernt, was »Kettenreaktion« wörtlich heißt.",
     "win": "Die Kurve flacht ab, das Dröhnen verebbt — und ihr steht zu dritt am Notausgang, als die Schleuse hinter euch zufährt. Drei Stationen, eine Mannschaft, alle draußen. Lehrbuchleistung.",
@@ -29,11 +30,11 @@
       "#.....#..#....#.....#",
       "#####################"
     ],
-    "spawns": {
-      "anleitung": { "x": 2, "y": 2 },
-      "diagnose": { "x": 18, "y": 2 },
-      "steuerpult": { "x": 8, "y": 2 }
-    },
+    "spawns": [
+      { "x": 2, "y": 2 },
+      { "x": 18, "y": 2 },
+      { "x": 8, "y": 2 }
+    ],
     "doors": [
       { "id": "archivtuer", "x": 4, "y": 4, "opensBy": { "kind": "puzzle", "puzzleId": "lastverteilung" } },
       { "id": "schleuse1", "x": 9, "y": 4, "opensBy": { "kind": "plate", "plateId": "archivplatte" } },
@@ -61,18 +62,16 @@
       {
         "id": "buch-archiv",
         "kind": "book",
-        "x": 1,
-        "y": 3,
         "label": "HANDBUCH",
-        "puzzleIds": ["lastverteilung", "kuehlkreislauf"]
+        "puzzleIds": ["lastverteilung", "kuehlkreislauf"],
+        "spots": [{ "x": 1, "y": 3 }]
       },
       {
         "id": "buch-messlabor",
         "kind": "book",
-        "x": 19,
-        "y": 3,
         "label": "HANDBUCH",
-        "puzzleIds": ["freigabecode", "resonanz", "leitungsnetz"]
+        "puzzleIds": ["freigabecode", "resonanz", "leitungsnetz"],
+        "spots": [{ "x": 19, "y": 3 }]
       }
     ],
     "edgeworkSign": { "x": 7, "y": 3 },
@@ -134,23 +133,6 @@
       }
     ]
   },
-  "roles": [
-    {
-      "id": "anleitung",
-      "name": "Anleitung",
-      "description": "Start im Archiv. Bei Lastverteilung und Kühlkreislauf hältst du das Handbuch, den Freigabecode tippst du selbst."
-    },
-    {
-      "id": "diagnose",
-      "name": "Diagnose",
-      "description": "Start im Messlabor. Du stellst die Ventilschalter am Kühlkreislauf, danach hältst du das Handbuch für Freigabecode, Resonanz und Leitungsnetz."
-    },
-    {
-      "id": "steuerpult",
-      "name": "Steuerpult",
-      "description": "Start im Leitstand. Kabel, Lichtfolge, Impuls: Du hast die Hände dran. Nur du siehst Laborkennung, Kontrollleuchten und Notstromzellen."
-    }
-  ],
   "puzzles": [
     {
       "type": "wiring",

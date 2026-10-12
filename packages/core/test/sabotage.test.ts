@@ -8,17 +8,17 @@ const mission: Mission = parseMission({
   title: 'Sabotage-Test',
   story: { intro: 'i', win: 'w', lose: 'l' },
   timeLimitSec: 600,
-  roles: [
-    { id: 'anleitung', name: 'Anleitung', description: '' },
-    { id: 'steuerpult', name: 'Steuerpult', description: '' },
-  ],
+  players: { min: 2, max: 2 },
   puzzles: [
     { type: 'button-sync', id: 'first', title: 'Erstes' },
     { type: 'button-sync', id: 'second', title: 'Zweites' },
   ],
   map: {
     tiles: ['#########', '#.......#', '#.......#', '#########'],
-    spawns: { anleitung: { x: 1, y: 1 }, steuerpult: { x: 7, y: 1 } },
+    spawns: [
+      { x: 1, y: 1 },
+      { x: 7, y: 1 },
+    ],
     stations: [
       { puzzleId: 'first', x: 3, y: 1 },
       { puzzleId: 'second', x: 5, y: 1 },
@@ -48,8 +48,6 @@ function playing(): GameState {
     [
       { type: 'player-join', playerId: 'p1', name: 'Anna' },
       { type: 'player-join', playerId: 'p2', name: 'Ben' },
-      { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
-      { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
       { type: 'set-ready', playerId: 'p2', ready: true },
       { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 },
     ],
@@ -123,7 +121,7 @@ describe('sabotage emergencies', () => {
     expect(applyAction(lobby, { type: 'sabotage-start', at: T0 }).sabotage).toBeNull();
   });
 
-  it('rejects maps with more panels than roles', () => {
+  it('rejects maps with more panels than the smallest crew has players', () => {
     expect(() =>
       parseMission({
         ...JSON.parse(JSON.stringify(mission)),
@@ -139,6 +137,6 @@ describe('sabotage emergencies', () => {
           },
         },
       }),
-    ).toThrow(/more sabotage panels than roles/);
+    ).toThrow(/more sabotage panels than the smallest crew has players/);
   });
 });

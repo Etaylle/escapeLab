@@ -35,7 +35,7 @@ const STAGES = 5;
 const mission: Mission = labMission(
   [{ type: 'memory', id: 'bank', title: 'Speicherbank', penaltySec: 12 }],
   'memorytest',
-  ['pult', 'handbuch', 'funk'],
+  3,
 );
 
 function memoryDef(from: Mission): MemoryDef {

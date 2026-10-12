@@ -100,7 +100,6 @@ export function MissionHud({ view, positionsRef, chatsRef, onOpenInfo }: Props) 
             <li key={p.id} className={mine ? 'hud-me' : ''}>
               <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
               <span className="hud-name">{p.name}</span>
-              <span className="hud-role-tag">{p.roleName ?? '—'}</span>
               <span className={`hud-status hud-status-${status.tone}`}>{status.text}</span>
             </li>
           );

@@ -1,11 +1,11 @@
 import type { Difficulty } from './difficulty.js';
 import type { Edgework } from './edgework.js';
-import type { ManualKind } from './mission.js';
-import { CREW_COLORS, type GameState, type Phase, type RunEvent } from './state.js';
+import type { ManualDef, ManualKind } from './mission.js';
+import { CREW_COLORS, type Credits, type GameState, type Phase, type RunEvent } from './state.js';
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
 import type { ManualSection, Viewer, ViewContext } from './puzzles/module.js';
 import { relayDefFor, relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
-import { doorOpen, operatorsOf, platePressed, readersOf } from './map.js';
+import { doorOpen, operatorsOf, platePressed, readersOf, sourceOpen } from './map.js';
 
 /**
  * What a single player is allowed to see. Asymmetric information is enforced
@@ -20,10 +20,11 @@ export interface PlayerView {
   missionTitle: string;
   difficulty: Difficulty;
   storyText: string;
+  /** how many play the mission; a run starts with any count from min to max */
+  crewSize: { min: number; max: number };
   you: {
     id: string;
     name: string;
-    roleId: string | null;
     color: string;
     ready: boolean;
     isHost: boolean;
@@ -31,8 +32,6 @@ export interface PlayerView {
   players: {
     id: string;
     name: string;
-    roleId: string | null;
-    roleName: string | null;
     color: string;
     ready: boolean;
     connected: boolean;
@@ -40,7 +39,6 @@ export interface PlayerView {
   }[];
   /** crew colors and who holds them, for the lobby picker */
   palette: { color: string; takenByName: string | null }[];
-  roles: { id: string; name: string; description: string; takenByName: string | null }[];
   deadlineAt: number | null;
   startedAt: number | null;
   finishedAt: number | null;
@@ -57,13 +55,17 @@ export interface PlayerView {
   /** increments on every penalty; clients key alarm effects off it */
   penaltySeq: number;
   lastPenaltySec: number | null;
-  /** hints bought from mission control this run; they weigh on the grade */
+  /** notes of the last crew bought this run; they weigh on the grade */
   hintsUsed: number;
+  /** who did what this run, by player id — for the end screen */
+  credits: Record<string, Credits>;
   /** the lab's serial, lamps and cells — only once this player has read the sign */
   edgework: Edgework | null;
   /** where this player stands right now */
   presence: PlayerPresence;
-  /** the manual objects this player stands at, with the printed rules of every puzzle they cover */
+  /** the manual objects this player stands at, open or still closed: what can be done there */
+  sourcesHere: SourceHere[];
+  /** the open manual objects this player stands at, with the rules of every puzzle they cover */
   manualsHere: ManualHere[];
   puzzle: PuzzleView | null;
   /** tile map while a mission is running; null otherwise */
@@ -73,15 +75,27 @@ export interface PlayerView {
 export interface PlayerPresence {
   /** puzzle id of the station this player stands at */
   stationId: string | null;
-  /** id of the manual object this player stands at */
+  /** id of the open manual object this player reads at */
   manualId: string | null;
   /** has walked up to the edgework sign this run */
   signSeen: boolean;
 }
 
+/** A manual object where the player stands: a locker still to search, a cabinet to unlock. */
+export interface SourceHere {
+  id: string;
+  kind: ManualKind;
+  label: string;
+  /** readable: books, terminals, charts and clipboards always, lockers and cabinets once opened */
+  opened: boolean;
+  /** the item that unlocks it, by id — a cabinet's key; null for everything else */
+  needsKey: string | null;
+}
+
 /**
- * A manual object as read on the spot. Printed rules are no secret — the
- * Handbuch screen prints them all — so they come whole, in mission order.
+ * An open manual object as read on the spot. Printed rules are no secret —
+ * the Handbuch screen prints them all — so they come whole, in mission
+ * order. Beside the open station's rules lie the notes of the last crew.
  */
 export interface ManualHere {
   id: string;
@@ -93,6 +107,14 @@ export interface ManualHere {
     index: number;
     title: string;
     manual: ManualSection[];
+    /** the notes asked for so far — for the open station only, empty for every other */
+    notes: string[];
+    /** epoch ms from when the next note may be asked for; null when there is none to ask for */
+    noteReadyAt: number | null;
+    /** how many more notes there are; 0 unless this is the open station */
+    notesLeft: number;
+    /** seconds the next note costs, already scaled to the difficulty */
+    costSec: number;
   }[];
 }
 
@@ -105,7 +127,7 @@ export interface MapView {
   width: number;
   height: number;
   tiles: string[];
-  /** this player's spawn tile — the client simulates movement from here */
+  /** the spawn this player drew — the client simulates movement from here */
   yourSpawn: { x: number; y: number };
   doors: { id: string; x: number; y: number; open: boolean }[];
   plates: {
@@ -124,7 +146,11 @@ export interface MapView {
     title: string;
     status: 'done' | 'armed' | 'locked';
   }[];
-  /** books, terminals and wall charts, and the puzzles whose printed rules lie there */
+  /**
+   * the manual objects the crew has come across so far (the audience sees
+   * all of them), where this run placed them, and the puzzles whose printed
+   * rules lie there
+   */
   manuals: {
     id: string;
     kind: ManualKind;
@@ -132,10 +158,16 @@ export interface MapView {
     y: number;
     label: string;
     puzzleIds: string[];
+    /** readable: always, for a locker or cabinet once opened */
+    opened: boolean;
+    /** a cabinet's key, by item id; null for everything else */
+    needsKey: string | null;
   }[];
   /** the wall sign with the Laborkennung; null on a map without one */
   edgeworkSign: { x: number; y: number } | null;
   labels: { text: string; x: number; y: number }[];
+  /** labels of the rooms whose lights the solved stations have switched on, first lit first */
+  litRooms: string[];
   /** escape hatch; open once every puzzle is solved */
   exit: { x: number; y: number; open: boolean } | null;
   /** carryable objects and where they have to go */
@@ -146,7 +178,8 @@ export interface MapView {
     y: number;
     carriedBy: string | null;
     delivered: boolean;
-    deliverTo: { x: number; y: number };
+    /** a key's is the cabinet it unlocks, once that has been come across; null until then */
+    deliverTo: { x: number; y: number } | null;
     /** title of the station waiting for it, if any */
     requiredForTitle: string | null;
   }[];
@@ -156,7 +189,7 @@ export interface MapView {
     hint: string;
     endsAt: number;
     panels: { id: string; x: number; y: number; occupied: boolean }[];
-    /** relay mode only: this role's console and instruction, and the drill as printed */
+    /** relay mode only: this player's console and instruction, and the drill as printed */
     relay?: RelayView & { manual: ManualSection[] };
   } | null;
 }
@@ -216,6 +249,13 @@ function viewContext(state: GameState): ViewContext {
   };
 }
 
+/** The manual objects `playerId` stands at, in map order. */
+function sourcesAt(state: GameState, playerId: string): ManualDef[] {
+  return state.mission.map.manuals.filter(
+    (m) => state.presence.manuals[m.id]?.includes(playerId) === true,
+  );
+}
+
 /**
  * Where one player stands. Next to two stations or manual objects at once,
  * the one of the current puzzle wins.
@@ -226,9 +266,7 @@ function presenceOf(state: GameState, playerId: string): PlayerPresence {
   const stations = Object.keys(presence.stations).filter((id) =>
     presence.stations[id]?.includes(playerId),
   );
-  const manuals = state.mission.map.manuals.filter((m) =>
-    presence.manuals[m.id]?.includes(playerId),
-  );
+  const manuals = sourcesAt(state, playerId).filter((m) => sourceOpen(state, m));
   const manual =
     manuals.find((m) => current !== undefined && m.puzzleIds.includes(current)) ?? manuals[0];
   return {
@@ -238,22 +276,49 @@ function presenceOf(state: GameState, playerId: string): PlayerPresence {
   };
 }
 
+function sourcesHereFor(state: GameState, playerId: string): SourceHere[] {
+  if (state.phase !== 'playing') {
+    return [];
+  }
+  return sourcesAt(state, playerId).map((m) => ({
+    id: m.id,
+    kind: m.kind,
+    label: m.label,
+    opened: sourceOpen(state, m),
+    needsKey: m.needsKey ?? null,
+  }));
+}
+
+/** The rules of every puzzle a manual object covers; the open station's with its notes. */
+function sectionsOf(state: GameState, manual: ManualDef): ManualHere['sections'] {
+  const open = state.puzzleState === null ? undefined : state.currentPuzzleIndex;
+  return state.mission.puzzles.flatMap((def, index) => {
+    if (!manual.puzzleIds.includes(def.id)) {
+      return [];
+    }
+    const notesLeft = index === open ? def.hints.length - state.hintsRevealed : 0;
+    return [
+      {
+        puzzleId: def.id,
+        index,
+        title: def.title,
+        manual: moduleFor(def.type).manual(def),
+        notes: index === open ? def.hints.slice(0, state.hintsRevealed) : [],
+        noteReadyAt: notesLeft > 0 ? state.hintReadyAt : null,
+        notesLeft,
+        costSec: state.mission.hintCostSec,
+      },
+    ];
+  });
+}
+
 function manualsHereFor(state: GameState, playerId: string): ManualHere[] {
   if (state.phase !== 'playing') {
     return [];
   }
-  return state.mission.map.manuals
-    .filter((m) => state.presence.manuals[m.id]?.includes(playerId))
-    .map((m) => ({
-      id: m.id,
-      label: m.label,
-      kind: m.kind,
-      sections: state.mission.puzzles.flatMap((def, index) =>
-        m.puzzleIds.includes(def.id)
-          ? [{ puzzleId: def.id, index, title: def.title, manual: moduleFor(def.type).manual(def) }]
-          : [],
-      ),
-    }));
+  return sourcesAt(state, playerId)
+    .filter((m) => sourceOpen(state, m))
+    .map((m) => ({ id: m.id, label: m.label, kind: m.kind, sections: sectionsOf(state, m) }));
 }
 
 /**
@@ -277,56 +342,120 @@ function puzzleViewFor(state: GameState, playerId: string | null): PuzzleView | 
           operating: operatorsOf(state, def.id).includes(playerId),
           reading: readersOf(state, def.id).includes(playerId),
         };
-  const hintsLeft = def.hints.length - state.hintsRevealed;
   return {
     ...puzzleModule.view(def, state.puzzleState, viewer, viewContext(state)),
     index: state.currentPuzzleIndex,
     total: state.mission.puzzles.length,
     title: def.title,
     manual: viewer.reading ? puzzleModule.manual(def) : null,
-    hints: {
-      shown: def.hints.slice(0, state.hintsRevealed),
-      left: hintsLeft,
-      readyAt: hintsLeft > 0 ? state.hintReadyAt : null,
-      costSec: state.mission.hintCostSec,
-    },
   };
 }
 
 /**
- * The running relay emergency as one role sees it, with the def it runs on;
- * null in valves mode and between emergencies.
+ * The running relay emergency as one player sees it, with the def it runs
+ * on; null in valves mode and between emergencies.
  */
 function relayViewFor(
   state: GameState,
-  roleId: string | null,
+  playerId: string | null,
 ): { def: RelayDef; view: RelayView } | null {
   const sabotage = state.mission.map.sabotage;
   const emergency = state.sabotage?.emergency;
   if (sabotage === undefined || emergency === undefined) {
     return null;
   }
-  const def = relayDefFor(state.mission.roles, sabotage);
-  return { def, view: relayModule.view(def, emergency, roleId, viewContext(state)) };
+  const def = relayDefFor(state.players, sabotage);
+  return { def, view: relayModule.view(def, emergency, playerId, viewContext(state)) };
 }
 
-/** Relay mode adds the role's console and the printed drill to the sabotage view. */
+/** Relay mode adds the player's console and the printed drill to the sabotage view. */
 function relayPartFor(
   state: GameState,
-  roleId: string | null,
+  playerId: string | null,
 ): Pick<NonNullable<MapView['sabotage']>, 'relay'> {
-  const relay = relayViewFor(state, roleId);
+  const relay = relayViewFor(state, playerId);
   return relay === null ? {} : { relay: { ...relay.view, manual: relayModule.manual(relay.def) } };
 }
 
-function mapViewFor(state: GameState, playerId: string, roleId: string | null): MapView | null {
+/** Who a map view is for: a player, or the audience (null), which sees every manual object. */
+type MapViewer = string | null;
+
+function stationsOnMap(state: GameState): MapView['stations'] {
+  return state.mission.map.stations.map((s) => {
+    const index = state.mission.puzzles.findIndex((p) => p.id === s.puzzleId);
+    const status =
+      index < state.currentPuzzleIndex ? 'done' : index === state.currentPuzzleIndex ? 'armed' : 'locked';
+    return {
+      puzzleId: s.puzzleId,
+      x: s.x,
+      y: s.y,
+      title: state.mission.puzzles[index]?.title ?? s.puzzleId,
+      status,
+    };
+  });
+}
+
+/** Whether a manual object shows on this viewer's map: once found by the crew, always for the audience. */
+function foundBy(state: GameState, viewer: MapViewer): (manualId: string) => boolean {
+  return (manualId) => viewer === null || state.discovered.includes(manualId);
+}
+
+function manualsOnMap(state: GameState, viewer: MapViewer): MapView['manuals'] {
+  const found = foundBy(state, viewer);
+  return state.mission.map.manuals.flatMap((m) => {
+    const place = state.places[m.id];
+    return place === undefined || !found(m.id)
+      ? []
+      : [
+          {
+            id: m.id,
+            kind: m.kind,
+            x: place.x,
+            y: place.y,
+            label: m.label,
+            puzzleIds: [...m.puzzleIds],
+            opened: sourceOpen(state, m),
+            needsKey: m.needsKey ?? null,
+          },
+        ];
+  });
+}
+
+function itemsOnMap(state: GameState, viewer: MapViewer): MapView['items'] {
+  const map = state.mission.map;
+  const found = foundBy(state, viewer);
+  return map.items.map((def) => {
+    const live = state.items[def.id];
+    const lock = map.manuals.find((m) => m.needsKey === def.id);
+    const lockAt = lock !== undefined && found(lock.id) ? state.places[lock.id] : undefined;
+    const goal = def.deliverTo ?? lockAt;
+    return {
+      id: def.id,
+      label: def.label,
+      x: live?.x ?? def.x + 0.5,
+      y: live?.y ?? def.y + 0.5,
+      carriedBy: live?.carriedBy ?? null,
+      delivered: live?.delivered ?? false,
+      deliverTo: goal === undefined ? null : { x: goal.x, y: goal.y },
+      requiredForTitle:
+        state.mission.puzzles.find((p) => p.id === def.requiredFor)?.title ?? null,
+    };
+  });
+}
+
+/** The rooms the solved stations have lit, each once, in the order they lit up. */
+function litRoomsOf(state: GameState): string[] {
+  const solved = state.mission.puzzles.slice(0, state.currentPuzzleIndex);
+  return [...new Set(solved.flatMap((puzzle) => puzzle.lights))];
+}
+
+function mapViewFor(state: GameState, viewer: MapViewer): MapView | null {
   const map = state.mission.map;
   if (state.phase !== 'playing') {
     return null;
   }
-  const you = state.players.find((p) => p.id === playerId);
-  const spawn =
-    you !== undefined && you.roleId !== null ? map.spawns[you.roleId] : undefined;
+  const seat = viewer === null ? state.players[0] : state.players.find((p) => p.id === viewer);
+  const spawn = seat?.spawn;
   return {
     width: map.tiles[0]?.length ?? 0,
     height: map.tiles.length,
@@ -341,28 +470,11 @@ function mapViewFor(state: GameState, playerId: string, roleId: string | null): 
       pressed: platePressed(state, p.id),
       freezesDrone: map.drones.some((d) => d.frozenByPlate === p.id),
     })),
-    stations: map.stations.map((s) => {
-      const index = state.mission.puzzles.findIndex((p) => p.id === s.puzzleId);
-      const status =
-        index < state.currentPuzzleIndex ? 'done' : index === state.currentPuzzleIndex ? 'armed' : 'locked';
-      return {
-        puzzleId: s.puzzleId,
-        x: s.x,
-        y: s.y,
-        title: state.mission.puzzles[index]?.title ?? s.puzzleId,
-        status,
-      };
-    }),
-    manuals: map.manuals.map((m) => ({
-      id: m.id,
-      kind: m.kind,
-      x: m.x,
-      y: m.y,
-      label: m.label,
-      puzzleIds: [...m.puzzleIds],
-    })),
+    stations: stationsOnMap(state),
+    manuals: manualsOnMap(state, viewer),
     edgeworkSign: map.edgeworkSign === undefined ? null : { ...map.edgeworkSign },
     labels: map.labels.map((l) => ({ text: l.text, x: l.x, y: l.y })),
+    litRooms: litRoomsOf(state),
     exit:
       map.exit === undefined
         ? null
@@ -371,20 +483,7 @@ function mapViewFor(state: GameState, playerId: string, roleId: string | null): 
             y: map.exit.y,
             open: state.currentPuzzleIndex >= state.mission.puzzles.length,
           },
-    items: map.items.map((def) => {
-      const live = state.items[def.id];
-      return {
-        id: def.id,
-        label: def.label,
-        x: live?.x ?? def.x + 0.5,
-        y: live?.y ?? def.y + 0.5,
-        carriedBy: live?.carriedBy ?? null,
-        delivered: live?.delivered ?? false,
-        deliverTo: { ...def.deliverTo },
-        requiredForTitle:
-          state.mission.puzzles.find((p) => p.id === def.requiredFor)?.title ?? null,
-      };
-    }),
+    items: itemsOnMap(state, viewer),
     sabotage:
       map.sabotage === undefined || state.sabotage === null
         ? null
@@ -398,7 +497,7 @@ function mapViewFor(state: GameState, playerId: string, roleId: string | null): 
               y: p.y,
               occupied: state.occupiedPanels.includes(p.id),
             })),
-            ...relayPartFor(state, roleId),
+            ...relayPartFor(state, viewer),
           },
   };
 }
@@ -428,27 +527,26 @@ export interface SpectatorView {
   players: {
     id: string;
     name: string;
-    roleName: string | null;
     color: string;
     connected: boolean;
     presence: PlayerPresence;
   }[];
+  /** who did what this run, by player id */
+  credits: Record<string, Credits>;
   map: MapView | null;
   /** the open puzzle from everywhere at once: instance, printed rules and the reader's side */
   puzzle: PuzzleView | null;
   /** the lab's serial, lamps and cells, whether or not anybody has read the sign yet */
   edgework: Edgework | null;
-  /** one entry per role; during a relay emergency with that role's console and instruction */
+  /** one entry per player; during a relay emergency with that player's console and instruction */
   panels: {
-    roleId: string;
-    roleName: string;
+    playerId: string;
+    name: string;
     emergency?: RelayView;
   }[];
 }
 
 export function viewForSpectator(state: GameState): SpectatorView {
-  const roleName = (roleId: string | null): string | null =>
-    state.mission.roles.find((r) => r.id === roleId)?.name ?? null;
   return {
     phase: state.phase,
     missionTitle: state.mission.title,
@@ -471,19 +569,19 @@ export function viewForSpectator(state: GameState): SpectatorView {
     players: state.players.map((p) => ({
       id: p.id,
       name: p.name,
-      roleName: roleName(p.roleId),
       color: p.color,
       connected: p.connected,
       presence: presenceOf(state, p.id),
     })),
-    map: mapViewFor(state, state.players[0]?.id ?? '', null),
+    credits: { ...state.credits },
+    map: mapViewFor(state, null),
     puzzle: puzzleViewFor(state, null),
     edgework: state.edgework,
-    panels: state.mission.roles.map((role) => {
-      const relay = relayViewFor(state, role.id);
+    panels: state.players.map((player) => {
+      const relay = relayViewFor(state, player.id);
       return {
-        roleId: role.id,
-        roleName: role.name,
+        playerId: player.id,
+        name: player.name,
         ...(relay === null ? {} : { emergency: relay.view }),
       };
     }),
@@ -495,8 +593,6 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
   if (you === undefined) {
     throw new Error(`viewFor: player "${playerId}" is not in this game`);
   }
-  const roleName = (roleId: string | null): string | null =>
-    state.mission.roles.find((r) => r.id === roleId)?.name ?? null;
   const presence = presenceOf(state, playerId);
 
   return {
@@ -505,10 +601,10 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     missionTitle: state.mission.title,
     difficulty: state.difficulty,
     storyText: storyText(state),
+    crewSize: { min: state.mission.players.min, max: state.mission.players.max },
     you: {
       id: you.id,
       name: you.name,
-      roleId: you.roleId,
       color: you.color,
       ready: you.ready,
       isHost: you.isHost,
@@ -516,8 +612,6 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     players: state.players.map((p) => ({
       id: p.id,
       name: p.name,
-      roleId: p.roleId,
-      roleName: roleName(p.roleId),
       color: p.color,
       ready: p.ready,
       connected: p.connected,
@@ -526,12 +620,6 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     palette: CREW_COLORS.map((color) => ({
       color,
       takenByName: state.players.find((p) => p.color === color)?.name ?? null,
-    })),
-    roles: state.mission.roles.map((r) => ({
-      id: r.id,
-      name: r.name,
-      description: r.description,
-      takenByName: state.players.find((p) => p.roleId === r.id)?.name ?? null,
     })),
     deadlineAt: state.deadlineAt,
     startedAt: state.startedAt,
@@ -548,10 +636,12 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     penaltySeq: state.penaltySeq,
     lastPenaltySec: state.lastPenaltySec,
     hintsUsed: state.hintsUsed,
+    credits: { ...state.credits },
     edgework: presence.signSeen ? state.edgework : null,
     presence,
+    sourcesHere: sourcesHereFor(state, playerId),
     manualsHere: manualsHereFor(state, playerId),
     puzzle: puzzleViewFor(state, playerId),
-    map: mapViewFor(state, playerId, you.roleId),
+    map: mapViewFor(state, playerId),
   };
 }

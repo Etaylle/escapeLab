@@ -8,22 +8,38 @@ const twoBooks: Mission = parseMission({
   id: 'zweibuecher',
   title: 'Zwei Bücher',
   story: { intro: 'i', win: 'w', lose: 'l' },
+  players: { min: 3, max: 3 },
   timeLimitSec: 600,
-  roles: ['a', 'b', 'c'].map((id) => ({ id, name: id.toUpperCase(), description: '' })),
   puzzles: [
     { type: 'wiring', id: 'kabel', title: 'Kabel' },
     { type: 'keypad', id: 'code', title: 'Code' },
   ],
   map: {
     tiles: ['##########', '#........#', '#........#', '##########'],
-    spawns: { a: { x: 1, y: 1 }, b: { x: 1, y: 2 }, c: { x: 2, y: 2 } },
+    spawns: [
+      { x: 1, y: 1 },
+      { x: 1, y: 2 },
+      { x: 2, y: 2 },
+    ],
     stations: [
       { puzzleId: 'kabel', x: 3, y: 1 },
       { puzzleId: 'code', x: 5, y: 1 },
     ],
     manuals: [
-      { id: 'buch-kabel', kind: 'book', x: 3, y: 2, label: 'KABELBUCH', puzzleIds: ['kabel'] },
-      { id: 'terminal', kind: 'terminal', x: 7, y: 2, label: 'TERMINAL', puzzleIds: ['code'] },
+      {
+        id: 'buch-kabel',
+        kind: 'book',
+        label: 'KABELBUCH',
+        puzzleIds: ['kabel'],
+        spots: [{ x: 3, y: 2 }],
+      },
+      {
+        id: 'terminal',
+        kind: 'terminal',
+        label: 'TERMINAL',
+        puzzleIds: ['code'],
+        spots: [{ x: 7, y: 2 }],
+      },
     ],
     edgeworkSign: { x: 8, y: 1 },
   },
@@ -158,7 +174,16 @@ describe('readers', () => {
         label: 'TERMINAL',
         kind: 'terminal',
         sections: [
-          { puzzleId: 'code', index: 1, title: 'Code', manual: moduleFor(code.type).manual(code) },
+          {
+            puzzleId: 'code',
+            index: 1,
+            title: 'Code',
+            manual: moduleFor(code.type).manual(code),
+            notes: [],
+            noteReadyAt: null,
+            notesLeft: 0,
+            costSec: state.mission.hintCostSec,
+          },
         ],
       },
     ]);
@@ -193,7 +218,7 @@ const INSTANCE: Record<string, keyof PuzzleView | string> = {
 };
 
 describe.each(Object.entries(INSTANCE))('the %s instance', (type, field) => {
-  const mission = labMission([{ type, id: 'x', title: 'X' }], `leak-${type}`, ['a', 'b', 'c']);
+  const mission = labMission([{ type, id: 'x', title: 'X' }], `leak-${type}`, 3);
 
   it('reaches the operator and the audience, never the reader or a bystander', () => {
     // p1 at the station, p2 at the book, p3 anywhere else; all of them past the sign.
@@ -216,11 +241,7 @@ describe.each(Object.entries(INSTANCE))('the %s instance', (type, field) => {
 
 describe('the maze plan', () => {
   it('goes to readers only: neither the navigator nor a bystander gets the walls', () => {
-    const mission = labMission([{ type: 'maze', id: 'netz', title: 'Netz' }], 'plan', [
-      'a',
-      'b',
-      'c',
-    ]);
+    const mission = labMission([{ type: 'maze', id: 'netz', title: 'Netz' }], 'plan', 3);
     // p1 at the navigation desk, p2 at the plan, p3 anywhere else.
     const state = openLab(started(mission));
     const cells = (playerId: string) =>
@@ -236,7 +257,7 @@ describe('button-sync by players', () => {
   const mission = labMission(
     [{ type: 'button-sync', id: 'sync', title: 'Sync', windowMs: 2000 }],
     'sync',
-    ['a', 'b', 'c'],
+    3,
   );
   const press = (playerId: string, at: number): Action => input(playerId, { press: true }, at);
 

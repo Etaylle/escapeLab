@@ -16,18 +16,18 @@ const fixture: Mission = parseMission({
   id: 'maptest',
   title: 'Map-Test',
   story: { intro: 'i', win: 'w', lose: 'l' },
+  players: { min: 2, max: 2 },
   timeLimitSec: 300,
-  roles: [
-    { id: 'anleitung', name: 'Anleitung', description: '' },
-    { id: 'steuerpult', name: 'Steuerpult', description: '' },
-  ],
   puzzles: [
     { type: 'button-sync', id: 'first', title: 'Erstes' },
     { type: 'button-sync', id: 'second', title: 'Zweites' },
   ],
   map: {
     tiles: ['#########', '#...#...#', '#.......#', '#...#...#', '#...#...#', '#########'],
-    spawns: { anleitung: { x: 1, y: 1 }, steuerpult: { x: 3, y: 1 } },
+    spawns: [
+      { x: 1, y: 1 },
+      { x: 3, y: 1 },
+    ],
     doors: [{ id: 'd1', x: 4, y: 2, opensBy: { kind: 'plate', plateId: 'p1' } }],
     plates: [{ id: 'p1', x: 2, y: 3, label: 'HALTEN' }],
     stations: [
@@ -56,35 +56,35 @@ function bothPress(state: GameState, at: number): GameState {
   );
 }
 
-function started(mission: Mission = fixture): GameState {
+function started(mission: Mission = fixture, seed = 1): GameState {
   return run(
     [
       { type: 'player-join', playerId: 'p1', name: 'Anna' },
       { type: 'player-join', playerId: 'p2', name: 'Ben' },
-      { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
-      { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
       { type: 'set-ready', playerId: 'p2', ready: true },
-      { type: 'start-mission', playerId: 'p1', at: T0, seed: 1 },
+      { type: 'start-mission', playerId: 'p1', at: T0, seed },
     ],
     initialState(mission),
   );
 }
 
 describe('mapped missions', () => {
-  it('waits for station activation and exposes the map with spawns', () => {
+  it('waits for station activation and exposes the map with the spawns drawn', () => {
     const state = started();
     expect(state.puzzleState).toBeNull();
     expect(state.pressedPlates).toEqual([]);
     const anna = viewFor(state, 'p1');
     expect(anna.puzzle).toBeNull();
-    expect(anna.map?.yourSpawn).toEqual({ x: 1, y: 1 });
-    expect(viewFor(state, 'p2').map?.yourSpawn).toEqual({ x: 3, y: 1 });
+    const drawn = ['p1', 'p2'].map((id) => viewFor(state, id).map?.yourSpawn);
+    expect(drawn).toEqual(expect.arrayContaining(fixture.map.spawns));
+    expect(drawn).toHaveLength(2);
     expect(anna.map?.stations).toEqual([
       { puzzleId: 'first', x: 1, y: 4, title: 'Erstes', status: 'armed' },
       { puzzleId: 'second', x: 3, y: 4, title: 'Zweites', status: 'locked' },
     ]);
     expect(anna.map?.manuals).toEqual([]);
     expect(anna.map?.edgeworkSign).toBeNull();
+    expect(anna.map?.litRooms).toEqual([]);
   });
 
   it('opens plate doors exactly while the plate is held', () => {

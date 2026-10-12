@@ -3,6 +3,7 @@
   "title": "Doppelschicht",
   "subtitle": "Für vier: zwei Flügel ohne Verbindung. Ihr seht euch nie — bis die Schleuse aufgeht.",
   "listOrder": 40,
+  "players": { "min": 4, "max": 4 },
   "story": {
     "intro": "Das Nordlabor ist in zwei Flügel geteilt, und die Schleuse dazwischen ist verriegelt. Zwei von euch stehen im Westflügel, zwei im Ostflügel — ihr könnt euch nicht sehen und nicht helfen, nur funken. Jede einzelne Station braucht Wissen aus beiden Flügeln. Fünfzehn Minuten.",
     "win": "Der Notausgang fährt auf, und ihr spaziert gemeinsam hinaus. Vier Köpfe, zwei Flügel, eine Schicht.",
@@ -29,12 +30,12 @@
       "#.......#     #.......#",
       "#######################"
     ],
-    "spawns": {
-      "leitstand": { "x": 2, "y": 2 },
-      "archiv": { "x": 2, "y": 10 },
-      "technik": { "x": 20, "y": 2 },
-      "labor": { "x": 20, "y": 10 }
-    },
+    "spawns": [
+      { "x": 2, "y": 2 },
+      { "x": 2, "y": 10 },
+      { "x": 20, "y": 2 },
+      { "x": 20, "y": 10 }
+    ],
     "doors": [
       { "id": "schleuse-west", "x": 8, "y": 7, "opensBy": { "kind": "puzzle", "puzzleId": "druckausgleich" } },
       { "id": "schleuse-ost", "x": 14, "y": 7, "opensBy": { "kind": "puzzle", "puzzleId": "druckausgleich" } }
@@ -53,34 +54,30 @@
       {
         "id": "buch-leitstand",
         "kind": "book",
-        "x": 1,
-        "y": 3,
         "label": "HANDBUCH",
-        "puzzleIds": ["leitungsnetz"]
+        "puzzleIds": ["leitungsnetz"],
+        "spots": [{ "x": 1, "y": 3 }]
       },
       {
         "id": "buch-archiv",
         "kind": "book",
-        "x": 1,
-        "y": 11,
         "label": "HANDBUCH",
-        "puzzleIds": ["notstrom", "funkfeuer"]
+        "puzzleIds": ["notstrom", "funkfeuer"],
+        "spots": [{ "x": 1, "y": 11 }]
       },
       {
         "id": "buch-technik",
         "kind": "book",
-        "x": 21,
-        "y": 3,
         "label": "HANDBUCH",
-        "puzzleIds": ["zugangscode", "druckausgleich"]
+        "puzzleIds": ["zugangscode", "druckausgleich"],
+        "spots": [{ "x": 21, "y": 3 }]
       },
       {
         "id": "buch-labor",
         "kind": "book",
-        "x": 21,
-        "y": 9,
         "label": "HANDBUCH",
-        "puzzleIds": ["kuehlung"]
+        "puzzleIds": ["kuehlung"],
+        "spots": [{ "x": 21, "y": 9 }]
       }
     ],
     "edgeworkSign": { "x": 3, "y": 1 },
@@ -137,28 +134,6 @@
       }
     ]
   },
-  "roles": [
-    {
-      "id": "leitstand",
-      "name": "Leitstand (West)",
-      "description": "Westflügel. Nur du siehst Laborkennung, Kontrollleuchten und Notstromzellen und sagst sie an, wenn eine Regel fragt. Dazu Kühlbank und Netzplan."
-    },
-    {
-      "id": "archiv",
-      "name": "Archiv (West)",
-      "description": "Westflügel. Du hast die Handbücher für Brückenkasten und Funkpult drüben im Osten und bedienst Tastenfeld und Druckknopf."
-    },
-    {
-      "id": "technik",
-      "name": "Technik (Ost)",
-      "description": "Ostflügel. Du liest die Morselampe am Funkpult und hast die Handbücher für Tastenfeld und Druckknopf im Westen."
-    },
-    {
-      "id": "labor",
-      "name": "Labor (Ost)",
-      "description": "Ostflügel. Du bedienst Brückenkasten und Leitungsnetz und hast die Tabelle für die Kühlbank im Westen."
-    }
-  ],
   "puzzles": [
     {
       "type": "wiring",

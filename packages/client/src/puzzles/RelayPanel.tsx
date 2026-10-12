@@ -40,7 +40,7 @@ function Order({ instruction, windowSec }: { instruction: Instruction; windowSec
       className={`relay-order ${share < 0.34 ? 'relay-order--late' : ''}`}
       aria-label="Deine Anweisung"
     >
-      <span className="kicker">LAUT VORLESEN · PULT {instruction.roleName.toUpperCase()}</span>
+      <span className="kicker">LAUT VORLESEN · PULT {instruction.playerName.toUpperCase()}</span>
       <strong className="relay-order-text">
         „{spoken(instruction.control, instruction.value)}"
       </strong>
@@ -92,8 +92,8 @@ function ControlCard({ control, send }: { control: Control; send: (input: RelayI
 }
 
 /**
- * One role's side of the relay emergency: the instruction to read out on
- * top, the crew's progress, and the four controls of this role's console.
+ * One player's side of the relay emergency: the instruction to read out on
+ * top, the crew's progress, and the four controls of their console.
  */
 export function RelayConsole({
   relay,

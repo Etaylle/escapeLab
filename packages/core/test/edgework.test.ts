@@ -137,7 +137,12 @@ describe('edgework in a run', () => {
       playerId: 'p1',
       at: T0 + 500,
     });
-    const state = applyAction(open, { type: 'drone-spotted', at: T0 + 1000, penaltySec: 15 });
+    const state = applyAction(open, {
+      type: 'drone-spotted',
+      at: T0 + 1000,
+      penaltySec: 15,
+      playerId: 'p2',
+    });
     applyAction(state, {
       type: 'puzzle-input',
       playerId: 'p1',

@@ -18,6 +18,7 @@ const EVENT_ICON: Record<RunEvent['kind'], string> = {
   finish: '🏁',
   hint: '💡',
   radio: '📻',
+  find: '🔎',
 };
 
 function fmt(ms: number): string {

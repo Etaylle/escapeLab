@@ -3,6 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { parseMission, viewFor } from '../src/index.js';
 import { started } from './lab.js';
 
+/** The book for the wiring station, lying at (1,3) unless told otherwise. */
+function book(overrides: object = {}) {
+  return {
+    id: 'buch',
+    kind: 'book',
+    label: 'HANDBUCH',
+    puzzleIds: ['kabel'],
+    spots: [{ x: 1, y: 3 }],
+    ...overrides,
+  };
+}
+
 /**
  * Two rooms, west (x 1–3) and east (x 5–7), joined by a door at (4,2);
  * both players spawn in the west room. Every test changes what it needs.
@@ -19,18 +31,18 @@ function lab(overrides: { puzzles?: object[]; map?: object } = {}) {
     id: 'orte',
     title: 'Orte',
     story: { intro: 'i', win: 'w', lose: 'l' },
+    players: { min: 2, max: 2 },
     timeLimitSec: 600,
-    roles: [
-      { id: 'a', name: 'A', description: '' },
-      { id: 'b', name: 'B', description: '' },
-    ],
     puzzles: overrides.puzzles ?? [{ type: 'wiring', id: 'kabel', title: 'Kabel' }],
     map: {
       tiles: ['#########', '#...#...#', '#.......#', '#...#...#', '#########'],
-      spawns: { a: { x: 1, y: 1 }, b: { x: 2, y: 1 } },
+      spawns: [
+        { x: 1, y: 1 },
+        { x: 2, y: 1 },
+      ],
       doors: [],
       stations: [{ puzzleId: 'kabel', x: 2, y: 3 }],
-      manuals: [{ id: 'buch', kind: 'book', x: 1, y: 3, label: 'HANDBUCH', puzzleIds: ['kabel'] }],
+      manuals: [book()],
       edgeworkSign: { x: 3, y: 1 },
       ...overrides.map,
     },
@@ -39,9 +51,7 @@ function lab(overrides: { puzzles?: object[]; map?: object } = {}) {
 
 const door = (opensBy: object) => [{ id: 'tuer', x: 4, y: 2, opensBy }];
 /** The book moved into the east room. */
-const eastBook = [
-  { id: 'buch', kind: 'book', x: 6, y: 1, label: 'HANDBUCH', puzzleIds: ['kabel'] },
-];
+const eastBook = [book({ spots: [{ x: 6, y: 1 }] })];
 
 describe('the mission format after roles', () => {
   it('parses a lab of places', () => {
@@ -63,14 +73,12 @@ describe('the mission format after roles', () => {
       ],
     });
     expect(() => parseMission(old)).toThrow(/Unrecognized keys?: .*prompt/);
-    const seeing = {
+    const roled = {
       ...lab(),
-      roles: [
-        { id: 'a', name: 'A', description: '', seesEdgework: true },
-        { id: 'b', name: 'B', description: '' },
-      ],
+      players: undefined,
+      roles: [{ id: 'a', name: 'A', description: '' }],
     };
-    expect(() => parseMission(seeing)).toThrow(/seesEdgework/);
+    expect(() => parseMission(roled)).toThrow(/players/);
     const buttons = lab({
       puzzles: [{ type: 'button-sync', id: 'kabel', title: 'Sync', buttons: [] }],
     });
@@ -89,19 +97,21 @@ describe('the mission format after roles', () => {
   });
 
   it('rejects a manual object off the floor, twice the same, or for a puzzle nobody has', () => {
-    const book = { id: 'buch', kind: 'book', x: 1, y: 3, label: 'HANDBUCH', puzzleIds: ['kabel'] };
-    expect(() => parseMission(lab({ map: { manuals: [{ ...book, x: 0 }] } }))).toThrow(
+    const offFloor = book({ spots: [{ x: 1, y: 3 }, { x: 0, y: 3 }] });
+    expect(() => parseMission(lab({ map: { manuals: [offFloor] } }))).toThrow(
       /manual object "buch" at 0,3 is not on a floor tile/,
     );
-    expect(() => parseMission(lab({ map: { manuals: [book, { ...book, x: 3 }] } }))).toThrow(
+    const twice = [book(), book({ spots: [{ x: 3, y: 3 }] })];
+    expect(() => parseMission(lab({ map: { manuals: twice } }))).toThrow(
       /manual object ids must be unique/,
     );
     expect(() =>
-      parseMission(lab({ map: { manuals: [{ ...book, puzzleIds: ['kabel', 'nix'] }] } })),
+      parseMission(lab({ map: { manuals: [book({ puzzleIds: ['kabel', 'nix'] })] } })),
     ).toThrow(/manual object "buch" covers unknown puzzle "nix"/);
-    expect(() => parseMission(lab({ map: { manuals: [{ ...book, kind: 'zettel' }] } }))).toThrow(
+    expect(() => parseMission(lab({ map: { manuals: [book({ kind: 'zettel' })] } }))).toThrow(
       /kind/,
     );
+    expect(() => parseMission(lab({ map: { manuals: [book({ spots: [] })] } }))).toThrow(/spots/);
   });
 
   it('freezes a drone only with a plate that exists', () => {
@@ -161,7 +171,7 @@ describe('the map walk', () => {
       },
     });
     expect(() => parseMission(locked)).toThrow(
-      /nobody can reach a manual object for puzzle "kabel" while it is open/,
+      /nobody can reach manual object "buch" at 6,1 while puzzle "kabel" is open/,
     );
   });
 
@@ -205,7 +215,10 @@ describe('the map walk for a whole-crew station', () => {
   it('turns it down where the last one in needs somebody outside on a plate', () => {
     expect(() => parseMission(eastPress({ x: 2, y: 2 }))).toThrow(apart);
     // Somebody inside cannot reach a plate that lies outside for the other one.
-    const oneInside = { a: { x: 1, y: 1 }, b: { x: 6, y: 1 } };
+    const oneInside = [
+      { x: 1, y: 1 },
+      { x: 6, y: 1 },
+    ];
     expect(() => parseMission(eastPress({ x: 2, y: 2 }, oneInside))).toThrow(apart);
   });
 
@@ -214,7 +227,10 @@ describe('the map walk for a whole-crew station', () => {
   });
 
   it('lets somebody inside hold a plate that lies inside for the last one coming in', () => {
-    const oneInside = { a: { x: 1, y: 1 }, b: { x: 6, y: 1 } };
+    const oneInside = [
+      { x: 1, y: 1 },
+      { x: 6, y: 1 },
+    ];
     expect(() => parseMission(eastPress({ x: 6, y: 3 }, oneInside))).not.toThrow();
   });
 

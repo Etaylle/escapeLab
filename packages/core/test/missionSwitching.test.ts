@@ -26,8 +26,6 @@ function started(seed = 42): GameState {
     [
       { type: 'player-join', playerId: 'p1', name: 'Anna' },
       { type: 'player-join', playerId: 'p2', name: 'Ben' },
-      { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
-      { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
       { type: 'set-ready', playerId: 'p2', ready: true },
       { type: 'start-mission', playerId: 'p1', at: T0, seed },
     ],
@@ -36,24 +34,23 @@ function started(seed = 42): GameState {
 }
 
 describe('mission switching & stats', () => {
-  it('lets the host switch the lobby mission and resets roles', () => {
+  it('lets the host switch the lobby mission, keeping the crew', () => {
     let state = run(
       [
         { type: 'player-join', playerId: 'p1', name: 'Anna' },
         { type: 'player-join', playerId: 'p2', name: 'Ben' },
-        { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
       ],
       initialState(blackout),
     );
     state = applyAction(state, { type: 'switch-mission', playerId: 'p1', mission: tutorial, difficulty: 'normal' });
     expect(state.mission.id).toBe('systemcheck');
-    expect(state.players.map((p) => p.roleId)).toEqual([null, null]);
+    expect(state.players.map((p) => p.name)).toEqual(['Anna', 'Ben']);
     expect(() =>
       applyAction(state, { type: 'switch-mission', playerId: 'p2', mission: blackout, difficulty: 'normal' }),
     ).toThrow(/Host/);
   });
 
-  it('refuses switching to a mission with fewer roles than players', () => {
+  it('refuses switching to a mission that takes fewer players than are in the room', () => {
     const three = run(
       [
         { type: 'player-join', playerId: 'p1', name: 'Anna' },
@@ -78,8 +75,8 @@ describe('mission switching & stats', () => {
 
   it('validates the three shipped missions', () => {
     expect(blackout.puzzles).toHaveLength(5);
-    expect(tutorial.roles).toHaveLength(2);
-    expect(kettenreaktion.roles).toHaveLength(3);
+    expect(tutorial.players).toEqual({ min: 2, max: 2 });
+    expect(kettenreaktion.players).toEqual({ min: 3, max: 3 });
     expect(kettenreaktion.puzzles.some((p) => p.type === 'simon')).toBe(true);
     // Every shipped mission carries an escape hatch.
     for (const mission of [blackout, kettenreaktion, tutorial]) {

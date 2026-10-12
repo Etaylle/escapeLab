@@ -9,22 +9,24 @@ const mission: Mission = parseMission({
   title: 'Protokoll-Test',
   story: { intro: 'i', win: 'w', lose: 'l' },
   timeLimitSec: 600,
-  roles: [
-    { id: 'anleitung', name: 'Anleitung', description: '' },
-    { id: 'steuerpult', name: 'Steuerpult', description: '' },
-  ],
+  players: { min: 2, max: 2 },
   puzzles: [
     { type: 'button-sync', id: 'first', title: 'Erstes' },
     { type: 'keypad', id: 'code', title: 'Code', penaltySec: 20 },
   ],
   map: {
     tiles: ['#########', '#.......#', '#########'],
-    spawns: { anleitung: { x: 1, y: 1 }, steuerpult: { x: 7, y: 1 } },
+    spawns: [
+      { x: 1, y: 1 },
+      { x: 7, y: 1 },
+    ],
     stations: [
       { puzzleId: 'first', x: 3, y: 1 },
       { puzzleId: 'code', x: 5, y: 1 },
     ],
-    manuals: [{ id: 'buch', kind: 'book', x: 6, y: 1, label: 'HANDBUCH', puzzleIds: ['code'] }],
+    manuals: [
+      { id: 'buch', kind: 'book', label: 'HANDBUCH', puzzleIds: ['code'], spots: [{ x: 6, y: 1 }] },
+    ],
     exit: { x: 7, y: 1 },
     items: [
       { id: 'teil', label: 'TEIL', x: 1, y: 1, deliverTo: { x: 2, y: 1 }, requiredFor: 'code' },
@@ -52,8 +54,6 @@ function playing(): GameState {
     [
       { type: 'player-join', playerId: 'p1', name: 'Anna' },
       { type: 'player-join', playerId: 'p2', name: 'Ben' },
-      { type: 'select-role', playerId: 'p1', roleId: 'anleitung' },
-      { type: 'select-role', playerId: 'p2', roleId: 'steuerpult' },
       { type: 'set-ready', playerId: 'p2', ready: true },
       { type: 'start-mission', playerId: 'p1', at: T0, seed: 3 },
     ],
@@ -90,6 +90,7 @@ describe('run report', () => {
       type: 'drone-spotted',
       at: T0 + 5000,
       penaltySec: 15,
+      playerId: 'p1',
     });
     expect(state.events).toEqual([
       {
@@ -172,6 +173,7 @@ describe('grades', () => {
         type: 'drone-spotted',
         at: T0 + 1000 + i,
         penaltySec: 1,
+        playerId: 'p2',
       });
     }
     return { ...state, phase: 'won', finishedAt: at };

@@ -18,7 +18,6 @@ function view(pattern: string | null, dial: number): MorseView {
     total: 1,
     title: 'Funkfeuer',
     manual: null,
-    hints: { shown: [], left: 0, readyAt: null, costSec: 20 },
   };
 }
 

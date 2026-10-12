@@ -27,6 +27,8 @@ const LOS_SAMPLE = 0.2;
 export interface SpottedEvent {
   droneId: string;
   penaltySec: number;
+  /** the player it caught */
+  playerId: string;
 }
 
 const frozen = (state: GameState, drone: MapDef['drones'][number]): boolean =>
@@ -121,7 +123,7 @@ export class DronePatrol {
         continue;
       }
       const halfAngle = (drone.halfAngleDeg * Math.PI) / 180;
-      const caught = state.players.some((player) => {
+      const caught = state.players.find((player) => {
         if (!player.connected || covered.has(player.id)) {
           return false;
         }
@@ -144,9 +146,9 @@ export class DronePatrol {
         }
         return this.hasLineOfSight(state, self.x, self.y, pos.x, pos.y);
       });
-      if (caught) {
+      if (caught !== undefined) {
         self.quietUntil = now + ALARM_COOLDOWN_MS;
-        events.push({ droneId: drone.id, penaltySec: drone.penaltySec });
+        events.push({ droneId: drone.id, penaltySec: drone.penaltySec, playerId: caught.id });
       }
     }
     return events;

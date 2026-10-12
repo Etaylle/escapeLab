@@ -41,10 +41,9 @@ export function markerTargets(map: MapView, youId: string): MarkerTarget[] {
     }));
   }
   const carried = map.items.find((item) => item.carriedBy === youId && !item.delivered);
-  if (carried !== undefined) {
-    return [
-      { x: carried.deliverTo.x + 0.5, y: carried.deliverTo.y + 0.5, color: BLUE, label: 'ABGABE' },
-    ];
+  if (carried !== undefined && carried.deliverTo !== null) {
+    const goal = carried.deliverTo;
+    return [{ x: goal.x + 0.5, y: goal.y + 0.5, color: BLUE, label: 'ABGABE' }];
   }
   if (map.exit !== null && map.exit.open) {
     return [{ x: map.exit.x + 0.5, y: map.exit.y + 0.5, color: GREEN, label: 'AUSGANG' }];

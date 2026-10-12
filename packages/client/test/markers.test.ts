@@ -51,6 +51,8 @@ describe('markerTargets — what the player is pointed at', () => {
       y: 3,
       label: 'HANDBUCH',
       puzzleIds: ['frequenz', 'notstrom'],
+      opened: true,
+      needsKey: null,
     };
     const elsewhere: Manual = {
       ...book,
@@ -74,6 +76,8 @@ describe('markerTargets — what the player is pointed at', () => {
       y: 3,
       label: 'HANDBUCH',
       puzzleIds: ['notstrom'],
+      opened: true,
+      needsKey: null,
     };
     const done = mapWith({ stations: [station(5, 9, 'done')], manuals: [book] });
     expect(markerTargets(done, YOU)).toEqual([]);
