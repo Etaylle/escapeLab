@@ -22,6 +22,7 @@ import type {
   PuzzleView,
   SolveAid,
 } from '../src/index.js';
+import { startsClosed, type ManualDef } from '../src/mission.js';
 import { consoleLab, started, standing, T0 } from './lab.js';
 import { MAX_IDLE_SEC, playInstance } from './solveModule.js';
 
@@ -121,9 +122,10 @@ function rolesAt(def: PuzzleDef, crew: string[]): Roles {
 
 /**
  * Switch on the current station, the way the crew walks up to it: whatever
- * it waits for is carried in, then the operator stands at it (and the
- * partner at console b) and the reader at a manual object covering it — or
- * the whole crew at it, where everyone presses.
+ * it waits for is carried in, the reader opens the manual object covering it
+ * where that is shut, then the operator stands at it (and the partner at
+ * console b) and the reader at that manual object — or the whole crew at
+ * it, where everyone presses.
  */
 function openStation(state: GameState, def: PuzzleDef, at: number): GameState {
   const map = state.mission.map;
@@ -137,15 +139,31 @@ function openStation(state: GameState, def: PuzzleDef, at: number): GameState {
     ]);
   const delivered = errands.reduce(applyAction, state);
   const book = map.manuals.find((m) => m.puzzleIds.includes(def.id));
+  const readable =
+    book === undefined || reader === null ? delivered : openedBy(delivered, book, reader, at);
   const consoleB = stationKey({ puzzleId: def.id, console: 'b' });
   const atB = partner === null ? {} : { [consoleB]: [partner] };
   const here = moduleFor(def.type).wholeCrew
-    ? standing(delivered, { stations: { [def.id]: crew } })
-    : standing(delivered, {
+    ? standing(readable, { stations: { [def.id]: crew } })
+    : standing(readable, {
         stations: { [def.id]: [operator], ...atB },
         manuals: book === undefined || reader === null ? {} : { [book.id]: [reader] },
       });
   return applyAction(here, { type: 'interact', playerId: operator, at });
+}
+
+/** A shut manual object opened by `reader`: a locker searched, a cabinet unlocked with its key. */
+function openedBy(state: GameState, source: ManualDef, reader: string, at: number): GameState {
+  if (!startsClosed(source.kind) || state.opened.includes(source.id)) {
+    return state;
+  }
+  const key: Action[] =
+    source.needsKey === undefined
+      ? []
+      : [{ type: 'pick-item', playerId: reader, itemId: source.needsKey, at }];
+  const open: Action = { type: 'open-source', playerId: reader, manualId: source.id, at };
+  const there = standing(state, { manuals: { [source.id]: [reader] } });
+  return [...key, open].reduce(applyAction, there);
 }
 
 /**

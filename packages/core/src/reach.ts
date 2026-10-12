@@ -3,7 +3,8 @@ import type { MapDef } from './mission.js';
 /**
  * Where the crew can walk, for mission validation: puzzle doors open for
  * good once their puzzle is solved, plate doors only while someone stands
- * on the plate. Tiles are keyed "x,y".
+ * on the plate — or for good, too, once the puzzle they name in
+ * `untilSolved` is solved. Tiles are keyed "x,y".
  */
 
 export interface Spot {
@@ -46,10 +47,14 @@ function flood(map: MapDef, start: Spot, isOpen: (door: Door) => boolean): Set<s
   return seen;
 }
 
+/** Whether `solved` opens a door for good: its puzzle, or the one a plate door waits for. */
 const solvedDoor =
   (solved: ReadonlySet<string>) =>
-  (door: Door): boolean =>
-    door.opensBy.kind === 'puzzle' && solved.has(door.opensBy.puzzleId);
+  (door: Door): boolean => {
+    const { opensBy } = door;
+    const puzzleId = opensBy.kind === 'puzzle' ? opensBy.puzzleId : opensBy.untilSolved;
+    return puzzleId !== undefined && solved.has(puzzleId);
+  };
 
 /** Where the plate of a plate door lies; null for a puzzle door or an unknown plate. */
 function plateOf(map: MapDef, door: Door): Spot | null {
@@ -119,10 +124,11 @@ export function canStandAt(tiles: ReadonlySet<string>, spot: Spot): boolean {
 /**
  * Whether every player can stand at `spot` at the same time. Nobody may be
  * left outside holding a plate, so the crew gathers in the spot's home — the
- * tiles joined to it by solved puzzle doors — and the others come in through
- * plate doors whose plate lies inside the home, held by somebody already
- * there: somebody has to start in the home. (A crew that could still make it
- * by trading plates further out is turned down too; that is the safe side.)
+ * tiles joined to it by doors that `solved` opened for good — and the others
+ * come in through plate doors whose plate lies inside the home, held by
+ * somebody already there: somebody has to start in the home. (A crew that
+ * could still make it by trading plates further out is turned down too; that
+ * is the safe side.)
  */
 export function canGather(
   map: MapDef,
