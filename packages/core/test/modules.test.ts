@@ -6,12 +6,24 @@ import {
   moduleFor,
   MODULES,
   parseMission,
+  puzzleDefSchema,
   viewFor,
 } from '../src/index.js';
-import type { Action, GameState, Mission, PlayerView, PuzzleView } from '../src/index.js';
-import { playInstance } from './solveModule.js';
+import type {
+  Action,
+  Edgework,
+  GameState,
+  Mission,
+  PlayerView,
+  PuzzleInput,
+  PuzzleView,
+  SolveAid,
+} from '../src/index.js';
+import { MAX_IDLE_SEC, playInstance } from './solveModule.js';
 
 const SEEDS = 200;
+/** Instance runs of each module no mission file uses yet. */
+const UNSHIPPED_SEEDS = 100;
 const T0 = 1_000_000;
 
 const missionsDir = new URL('../../../missions/', import.meta.url);
@@ -39,6 +51,32 @@ describe.each(cases)('%s', (_label, def, roleIds) => {
     expect(manual.length).toBeGreaterThan(0);
     expect(manual.every((section) => section.blocks.length > 0)).toBe(true);
     expect(puzzleModule.manual(structuredClone(def))).toEqual(manual);
+  });
+});
+
+/** Modules no mission file uses yet, on a crew of two, and the move counts their runs take. */
+const unshipped = [
+  { type: 'memory', id: 'speicherbank', moves: [5] },
+  { type: 'button', id: 'knopf', moves: [1, 2] },
+].map(({ type, id, moves }) => {
+  const def = puzzleDefSchema.parse({
+    type,
+    id,
+    title: id,
+    prompt: '',
+    operatorRoleId: 'pult',
+    manualRoleId: 'handbuch',
+  });
+  return [type, def, moves] as const;
+});
+
+describe.each(unshipped)('%s, which no mission uses yet', (_type, def, moves) => {
+  it(`is solved through the harness without an alarm, for ${UNSHIPPED_SEEDS} seeds`, () => {
+    const taken = new Set<number>();
+    for (let seed = 0; seed < UNSHIPPED_SEEDS; seed++) {
+      taken.add(playInstance(def, ['pult', 'handbuch'], seed));
+    }
+    expect([...taken].sort()).toEqual(moves);
   });
 });
 
@@ -70,34 +108,64 @@ function started(mission: Mission, seed: number): GameState {
   return actions.reduce(applyAction, initialState(mission));
 }
 
+type Transcript = SolveAid<PuzzleInput, PuzzleView>['transcript'];
+
 /** What each client would hold: its view as it arrives over the wire. */
 function wireView(state: GameState, playerId: string): PlayerView {
   return JSON.parse(JSON.stringify(viewFor(state, playerId))) as PlayerView;
 }
 
 /**
+ * What the clients hold of the open puzzle at `at`: every role's view of it,
+ * the edgework if a role sees it and the seconds left on their clock.
+ */
+function crewSees(
+  state: GameState,
+  crew: { playerId: string; roleId: string }[],
+  at: number,
+): { views: Record<string, PuzzleView>; edgework: Edgework | null; remainingSec: number | null } {
+  const seen = crew.map(({ playerId, roleId }) => ({ roleId, view: wireView(state, playerId) }));
+  const views: Record<string, PuzzleView> = {};
+  for (const { roleId, view } of seen) {
+    if (view.puzzle !== null) {
+      views[roleId] = view.puzzle;
+    }
+  }
+  const edgework = seen.map(({ view }) => view.edgework).find((e) => e !== null) ?? null;
+  const deadlineAt = seen[0]?.view.deadlineAt ?? null;
+  const remainingSec = deadlineAt === null ? null : Math.ceil((deadlineAt - at) / 1000);
+  return { views, edgework, remainingSec };
+}
+
+/**
  * A whole mission through the reducer: every client's view goes to the
- * solver, every move goes back as a puzzle-input from the player in that role.
+ * solver, with the crew's transcript of the puzzle and the clock, and every
+ * move goes back as a puzzle-input from the player in that role. Each round
+ * is a second on the clock; a solver that waits only lets it run, up to
+ * MAX_IDLE_SEC rounds in a row.
  */
 function playMission(mission: Mission, seed: number): GameState {
   const crew = crewOf(mission);
+  const transcripts = mission.puzzles.map((): Transcript => []);
   let state = started(mission, seed);
+  let idle = 0;
   for (let round = 1; state.phase === 'playing' && round < 1000; round++) {
     const def = state.mission.puzzles[state.currentPuzzleIndex];
-    if (def === undefined) {
+    const transcript = transcripts[state.currentPuzzleIndex];
+    if (def === undefined || transcript === undefined) {
       throw new Error(`${mission.id}: playing without an open puzzle`);
     }
-    const seen = crew.map(({ playerId, roleId }) => ({ roleId, view: wireView(state, playerId) }));
-    const views: Record<string, PuzzleView> = {};
-    for (const { roleId, view } of seen) {
-      if (view.puzzle !== null) {
-        views[roleId] = view.puzzle;
-      }
+    const at = T0 + round * 1000;
+    const { views, edgework, remainingSec } = crewSees(state, crew, at);
+    const moves = moduleFor(def.type).solve(def, views, edgework, { transcript, remainingSec });
+    idle = moves.length === 0 ? idle + 1 : 0;
+    if (idle > MAX_IDLE_SEC) {
+      const where = `${mission.id}/${def.id} (seed ${seed})`;
+      throw new Error(`${where}: the solver found no move in ${MAX_IDLE_SEC} s`);
     }
-    const edgework = seen.map(({ view }) => view.edgework).find((e) => e !== null) ?? null;
-    for (const { roleId, input } of moduleFor(def.type).solve(def, views, edgework)) {
+    for (const { roleId, input } of moves) {
+      transcript.push({ roleId, input, before: views });
       const playerId = crew.find((member) => member.roleId === roleId)?.playerId ?? '';
-      const at = T0 + round * 1000;
       state = applyAction(state, { type: 'puzzle-input', playerId, at, input });
     }
   }

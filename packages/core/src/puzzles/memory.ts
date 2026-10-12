@@ -1,8 +1,7 @@
 import { z } from 'zod';
-import type { Edgework } from '../edgework.js';
 import { fail } from '../errors.js';
 import { mulberry32, shuffle, type Rng } from '../rng.js';
-import { commonDefShape, type ManualBlock, type PuzzleModule } from './module.js';
+import { commonDefShape, type ManualBlock, type PuzzleModule, type SolveAid } from './module.js';
 
 /**
  * Memory bank: five stages, each a display digit 1–4 over four buttons
@@ -54,17 +53,6 @@ export interface MemoryView {
   display: number | null;
   /** the button labels in position order — only the operator gets them */
   labels: number[] | null;
-}
-
-/** The contract, with the crew's notes as an extra argument to the solver. */
-export interface MemoryModule
-  extends PuzzleModule<MemoryDef, MemoryState, MemoryInput, MemoryView> {
-  solve(
-    def: MemoryDef,
-    views: Record<string, MemoryView>,
-    edgework: Edgework | null,
-    log?: readonly MemoryPress[],
-  ): { roleId: string; input: MemoryInput }[];
 }
 
 /** The button labels, and the digits the display can show. */
@@ -133,6 +121,30 @@ function targetPosition(
   }
 }
 
+/**
+ * The crew's notes, read off the transcript: each press with the label its
+ * button showed the operator just before. A press after which the bank
+ * stands at stage 1 again voids everything noted up to it.
+ */
+function notesFrom(
+  def: MemoryDef,
+  transcript: SolveAid<MemoryInput, MemoryView>['transcript'],
+  views: Record<string, MemoryView>,
+): MemoryPress[] {
+  let notes: MemoryPress[] = [];
+  for (const [i, { input, before }] of transcript.entries()) {
+    const label = before[def.operatorRoleId]?.labels?.[input.position];
+    const after = (transcript[i + 1]?.before ?? views)[def.operatorRoleId];
+    if (label === undefined || after === undefined) {
+      throw new Error(
+        `memory "${def.id}": transcript entry ${i + 1} lacks the operator's view of the bank`,
+      );
+    }
+    notes = after.stage === 1 ? [] : [...notes, { position: input.position, label }];
+  }
+  return notes;
+}
+
 /** A rule as the manual prints it. */
 function ruleText(target: Target): string {
   switch (target.by) {
@@ -160,7 +172,7 @@ function drawStage(rng: Rng): Pick<MemoryState, 'display' | 'labels' | 'seed'> {
   };
 }
 
-export const memoryModule: MemoryModule = {
+export const memoryModule: PuzzleModule<MemoryDef, MemoryState, MemoryInput, MemoryView> = {
   type: 'memory',
   usesEdgework: false,
   defSchema,
@@ -250,24 +262,24 @@ export const memoryModule: MemoryModule = {
 
   /**
    * The bank never shows an earlier stage, so past stage 1 the solver needs
-   * what the crew wrote down: `log` holds the press of every stage cleared
-   * since the last fall back to stage 1, oldest first — the position pressed
-   * and the label that button showed in the operator's view. Without a log
-   * only stage 1 is solvable; a later stage throws, as does a log that does
-   * not match the stage.
+   * what the crew wrote down, and reads it off the aid's transcript: the
+   * press of every stage cleared since the last fall back to stage 1. Without
+   * a transcript only stage 1 is solvable; a later stage whose presses the
+   * transcript does not cover throws.
    */
-  solve(def, views, _edgework, log = []) {
+  solve(def, views, _edgework, aid) {
     const bank = views[def.operatorRoleId];
     if (bank?.display == null || bank.labels === null) {
       throw new Error(`memory "${def.id}": solving needs the operator's view of the bank`);
     }
-    if (log.length !== bank.stage - 1) {
+    const notes = notesFrom(def, aid?.transcript ?? [], views);
+    if (notes.length !== bank.stage - 1) {
       throw new Error(
         `memory "${def.id}": stage ${bank.stage} needs the crew's notes of the ` +
-          `${bank.stage - 1} stage(s) before it as the log argument, got ${log.length}`,
+          `${bank.stage - 1} stage(s) before it from the aid's transcript, got ${notes.length}`,
       );
     }
-    const position = targetPosition(bank.stage, bank.display, bank.labels, log);
+    const position = targetPosition(bank.stage, bank.display, bank.labels, notes);
     return [{ roleId: def.operatorRoleId, input: { position } }];
   },
 };

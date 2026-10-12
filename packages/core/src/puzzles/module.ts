@@ -45,6 +45,21 @@ export interface ApplyResult<State> {
   penalty: string | null;
 }
 
+/**
+ * What a crew knows besides the views on its screens right now: what it did
+ * at the station so far and what the mission clock shows. Only modules whose
+ * views do not tell the whole story read it.
+ */
+export interface SolveAid<Input, View> {
+  /**
+   * every input the crew made at this station so far, oldest first, with the
+   * views it saw just before; inputs made together share them
+   */
+  transcript: { roleId: string; input: Input; before: Record<string, View> }[];
+  /** seconds left on the mission clock right now; null when the caller has no clock */
+  remainingSec: number | null;
+}
+
 /** Fields every puzzle def carries; the reducer and the views rely on them. */
 export interface PuzzleDefCommon {
   type: string;
@@ -128,15 +143,19 @@ export interface PuzzleModule<
   manual(def: Def): ManualSection[];
   /**
    * The crew's next correct input(s), computed only from the role views
-   * (every role's, by role id — what the crew can actually know) and the
-   * edgework, which is null when no role sees it; mission validation only
-   * allows that for modules that ignore it. Inputs returned together are
-   * applied in order at the same moment. Used by the smoke run and by the
-   * property tests that prove every instance is solvable from the views.
+   * (every role's, by role id — what the crew can actually know), the
+   * edgework, which is null when no role sees it (mission validation only
+   * allows that for modules that ignore it), and the aid, for the modules
+   * that need more than the views show. Inputs returned together are
+   * applied in order at the same moment; none means the crew waits, and
+   * the caller asks again once the clock has moved on. Used by the smoke
+   * run and by the property tests that prove every instance is solvable
+   * from what the crew can see.
    */
   solve(
     def: Def,
     views: Record<string, View>,
     edgework: Edgework | null,
+    aid?: SolveAid<Input, View>,
   ): { roleId: string; input: Input }[];
 }

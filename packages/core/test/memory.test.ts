@@ -8,10 +8,18 @@ import {
   viewFor,
   viewForSpectator,
 } from '../src/index.js';
-import type { Action, GameState, ManualSection, Mission, PuzzleContext } from '../src/index.js';
+import type {
+  Action,
+  GameState,
+  ManualSection,
+  Mission,
+  PuzzleContext,
+  SolveAid,
+} from '../src/index.js';
 import {
   memoryModule,
   type MemoryDef,
+  type MemoryInput,
   type MemoryPress,
   type MemoryState,
   type MemoryView,
@@ -105,21 +113,33 @@ function note(views: Record<string, MemoryView>, position: number): MemoryPress 
   return { position, label };
 }
 
+type Transcript = SolveAid<MemoryInput, MemoryView>['transcript'];
+
+/** A press as the crew's transcript keeps it: the operator's input and every view just before. */
+const entry = (views: Record<string, MemoryView>, position: number): Transcript[number] => ({
+  roleId: 'pult',
+  input: { position },
+  before: views,
+});
+
+/** The aid a crew without a clock hands the solver. */
+const kept = (transcript: Transcript) => ({ transcript, remainingSec: null });
+
 /** The solver's move for the crew: exactly one press, by the operator. */
-function solverMove(views: Record<string, MemoryView>, log: MemoryPress[]): number {
-  const moves = memoryModule.solve(def, views, null, log);
+function solverMove(views: Record<string, MemoryView>, transcript: Transcript): number {
+  const moves = memoryModule.solve(def, views, null, kept(transcript));
   expect(moves).toHaveLength(1);
   expect(moves[0]?.roleId).toBe('pult');
   return moves[0]?.input.position ?? -1;
 }
 
-/** One stage cleared the way a careful crew does it: the right press, then a note. */
-function clearStage(state: MemoryState, log: MemoryPress[]): MemoryState {
+/** One stage cleared the way a careful crew does it: the right press, kept in the transcript. */
+function clearStage(state: MemoryState, transcript: Transcript): MemoryState {
   const views = viewsOf(state);
-  const position = solverMove(views, log);
+  const position = solverMove(views, transcript);
   const result = press(state, position);
   expect(result.penalty).toBeNull();
-  log.push(note(views, position));
+  transcript.push(entry(views, position));
   return result.state;
 }
 
@@ -181,18 +201,18 @@ describe('memory module', () => {
   it(`is solved from the views and the crew's notes, without an alarm, for ${SEEDS} seeds`, () => {
     for (let seed = 0; seed < SEEDS; seed++) {
       let state = init(seed);
-      const log: MemoryPress[] = [];
+      const transcript: Transcript = [];
       for (let stage = 1; stage <= STAGES; stage++) {
         const views = viewsOf(state);
         expect(bankOf(views).stage, `seed ${seed}`).toBe(stage);
-        const position = solverMove(views, log);
+        const position = solverMove(views, transcript);
         for (const wrong of [0, 1, 2, 3].filter((p) => p !== position)) {
           expect(press(state, wrong).penalty, `seed ${seed}, stage ${stage}`).not.toBeNull();
         }
         const result = press(state, position);
         expect(result.penalty, `seed ${seed}, stage ${stage}`).toBeNull();
         expect(result.solved).toBe(stage === STAGES);
-        log.push(note(views, position));
+        transcript.push(entry(views, position));
         state = result.state;
       }
     }
@@ -215,20 +235,27 @@ describe('memory module', () => {
     }
   });
 
-  it('solves stage 1 without notes and refuses any stage the notes do not cover', () => {
+  it('solves stage 1 without a transcript and refuses any stage it does not cover', () => {
     const state = init(3);
     const position = memoryModule.solve(def, viewsOf(state), null)[0]?.input.position ?? -1;
     const result = press(state, position);
     expect(result.penalty).toBeNull();
     expect(() => memoryModule.solve(def, viewsOf(result.state), null)).toThrow(
-      /stage 2 needs the crew's notes of the 1 stage\(s\) before it/,
+      /stage 2 needs the crew's notes of the 1 stage\(s\) before it from the aid's transcript/,
     );
-    // Notes left over from before a fall back to stage 1 do not fit either.
-    expect(() =>
-      memoryModule.solve(def, viewsOf(state), null, [{ position: 0, label: 1 }]),
-    ).toThrow(/stage 1 needs/);
-    const manualOnly = { handbuch: memoryModule.view(def, state, 'handbuch', ctx) };
-    expect(() => memoryModule.solve(def, manualOnly, null)).toThrow(/operator's view/);
+    const transcript = [entry(viewsOf(state), position)];
+    const third = viewsOf(clearStage(result.state, transcript));
+    // A transcript begun after stage 1 lacks its press.
+    expect(() => memoryModule.solve(def, third, null, kept(transcript.slice(1)))).toThrow(
+      /stage 3 needs the crew's notes of the 2 stage\(s\) before it/,
+    );
+    // One kept from the manual's side never saw the buttons.
+    const handbuch = memoryModule.view(def, state, 'handbuch', ctx);
+    const blind = transcript.map((pressed) => ({ ...pressed, before: { handbuch } }));
+    expect(() => memoryModule.solve(def, third, null, kept(blind))).toThrow(
+      /transcript entry 1 lacks the operator's view of the bank/,
+    );
+    expect(() => memoryModule.solve(def, { handbuch }, null)).toThrow(/operator's view/);
   });
 
   it('falls back to stage 1 on a wrong press, every stage laid out afresh, old notes void', () => {
@@ -237,34 +264,36 @@ describe('memory module', () => {
     const repeated = [0, 0, 0];
     for (let seed = 0; seed < SEEDS; seed++) {
       let state = init(seed);
-      const log: MemoryPress[] = [];
+      const transcript: Transcript = [];
       const before: string[] = [];
       for (let stage = 1; stage < 3; stage++) {
         before.push(layoutOf(viewsOf(state)));
-        state = clearStage(state, log);
+        state = clearStage(state, transcript);
       }
       const views = viewsOf(state);
       before.push(layoutOf(views));
-      const fall = press(state, (solverMove(views, log) + 1) % 4);
+      const wrong = (solverMove(views, transcript) + 1) % 4;
+      const fall = press(state, wrong);
       expect(fall.penalty).toBe('Falsche Taste an der Speicherbank');
       expect(fall.solved).toBe(false);
+      transcript.push(entry(views, wrong));
       state = fall.state;
       if (layoutOf(viewsOf(state)) === before[2]) {
         repeatedAtFall += 1;
       }
 
-      const fresh: MemoryPress[] = [];
+      // The crew writes on; the solver has to see for itself that the fall voids the notes.
       for (let stage = 1; stage <= STAGES; stage++) {
         const again = viewsOf(state);
         expect(bankOf(again).stage, `seed ${seed}`).toBe(stage);
         if (stage <= 3 && layoutOf(again) === before[stage - 1]) {
           repeated[stage - 1] = (repeated[stage - 1] ?? 0) + 1;
         }
-        const position = solverMove(again, fresh);
+        const position = solverMove(again, transcript);
         const result = press(state, position);
         expect(result.penalty, `seed ${seed}, stage ${stage} after the fall`).toBeNull();
         expect(result.solved).toBe(stage === STAGES);
-        fresh.push(note(again, position));
+        transcript.push(entry(again, position));
         state = result.state;
       }
     }
@@ -274,9 +303,32 @@ describe('memory module', () => {
     }
   });
 
+  it(`reads on through a fall at every stage, 1 and 5 included, for ${SEEDS} seeds`, () => {
+    for (let seed = 0; seed < SEEDS; seed++) {
+      let state = init(seed);
+      const transcript: Transcript = [];
+      for (let fallAt = 1; fallAt <= STAGES; fallAt++) {
+        for (let stage = 1; stage < fallAt; stage++) {
+          state = clearStage(state, transcript);
+        }
+        const views = viewsOf(state);
+        const wrong = (solverMove(views, transcript) + 1) % 4;
+        const fall = press(state, wrong);
+        expect(fall.penalty, `seed ${seed}, fall at stage ${fallAt}`).not.toBeNull();
+        transcript.push(entry(views, wrong));
+        state = fall.state;
+      }
+      for (let stage = 1; stage < STAGES; stage++) {
+        state = clearStage(state, transcript);
+      }
+      const last = press(state, solverMove(viewsOf(state), transcript));
+      expect(last, `seed ${seed}`).toMatchObject({ solved: true, penalty: null });
+    }
+  });
+
   it('shows display and buttons to the operator only, and the presses to nobody', () => {
-    const log: MemoryPress[] = [];
-    const state = clearStage(clearStage(init(5), log), log);
+    const transcript: Transcript = [];
+    const state = clearStage(clearStage(init(5), transcript), transcript);
     const views = viewsOf(state);
     const blind = { kind: 'memory', stage: 3, display: null, labels: null };
     expect(views.pult).toEqual({
@@ -422,18 +474,18 @@ describe('the memory bank in a mission', () => {
     input: { position },
   });
 
-  /** The crew's next press through the reducer; the note goes into `log`. */
-  function crewPress(state: GameState, log: MemoryPress[], at: number): GameState {
+  /** The crew's next press through the reducer, kept in the transcript with the views before it. */
+  function crewPress(state: GameState, transcript: Transcript, at: number): GameState {
     const views = wireViews(state);
-    const position = solverMove(views, log);
-    log.push(note(views, position));
+    const position = solverMove(views, transcript);
+    transcript.push(entry(views, position));
     return applyAction(state, pressBy('p1', position, at));
   }
 
   it('is won by a crew that keeps notes; a wrong press costs time and drops all to stage 1', () => {
     let state = started();
-    const first: MemoryPress[] = [];
-    state = crewPress(crewPress(state, first, T0 + 1000), first, T0 + 2000);
+    const transcript: Transcript = [];
+    state = crewPress(crewPress(state, transcript, T0 + 1000), transcript, T0 + 2000);
     expect(wireViews(state).handbuch).toMatchObject({
       kind: 'memory',
       stage: 3,
@@ -442,8 +494,10 @@ describe('the memory bank in a mission', () => {
     });
 
     const deadline = state.deadlineAt ?? 0;
-    const position = solverMove(wireViews(state), first);
-    state = applyAction(state, pressBy('p1', (position + 1) % 4, T0 + 3000));
+    const views = wireViews(state);
+    const wrong = (solverMove(views, transcript) + 1) % 4;
+    transcript.push(entry(views, wrong));
+    state = applyAction(state, pressBy('p1', wrong, T0 + 3000));
     expect(state.penaltySeq).toBe(1);
     expect(state.deadlineAt).toBe(deadline - 12_000);
     expect(state.events.at(-1)).toMatchObject({
@@ -452,9 +506,8 @@ describe('the memory bank in a mission', () => {
     });
     expect(Object.values(wireViews(state)).map((view) => view.stage)).toEqual([1, 1, 1]);
 
-    const fresh: MemoryPress[] = [];
     for (let stage = 1; stage <= STAGES; stage++) {
-      state = crewPress(state, fresh, T0 + 4000 + stage * 1000);
+      state = crewPress(state, transcript, T0 + 4000 + stage * 1000);
     }
     expect(state.phase).toBe('won');
     expect(state.penaltySeq).toBe(1);

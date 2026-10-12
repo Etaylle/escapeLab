@@ -144,6 +144,13 @@ function releaseInTime(digit: number, remainingSec: number): boolean {
   return [remainingSec, remainingSec + 1].some((sec) => clockText(sec).includes(String(digit)));
 }
 
+/**
+ * The solver's half of the release: whether letting go now counts, judged
+ * the way `release` judges it. Never without a lit strip or a clock to read.
+ */
+const timeToLetGo = (strip: StripColour | null, remainingSec: number | null): boolean =>
+  strip !== null && remainingSec !== null && releaseInTime(releaseDigit(strip), remainingSec);
+
 function pick<T>(items: readonly [T, ...T[]], rng: Rng): T {
   return items[Math.floor(rng() * items.length)] ?? items[0];
 }
@@ -281,11 +288,11 @@ export const buttonModule: PuzzleModule<ButtonDef, ButtonState, ButtonInput, But
   /**
    * Press or hold, from the button on the operator's view and the edgework.
    * The release is the one move the views cannot time — they carry no clock —
-   * so while the button is held this returns nothing: letting go once the
-   * mission clock shows the strip's digit is the crew's job (or the smoke
-   * run's, or a test's).
+   * so while the button is held this lets go only on a second the aid's clock
+   * allows for the strip, and otherwise returns nothing: without a clock the
+   * crew waits for good.
    */
-  solve(def, views, edgework) {
+  solve(def, views, edgework, aid) {
     if (edgework === null) {
       throw new Error(
         `button "${def.id}": the rules read the edgework, but no role sees it — ` +
@@ -297,7 +304,9 @@ export const buttonModule: PuzzleModule<ButtonDef, ButtonState, ButtonInput, But
       throw new Error(`button "${def.id}": solving needs the operator's view of the button`);
     }
     if (panel.holding) {
-      return [];
+      return timeToLetGo(panel.strip, aid?.remainingSec ?? null)
+        ? [{ roleId: def.operatorRoleId, input: { kind: 'release' } }]
+        : [];
     }
     const kind = moveFor({ colour: panel.colour, label: panel.label }, edgework);
     return [{ roleId: def.operatorRoleId, input: { kind } }];
