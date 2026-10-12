@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { RunEvent } from '@escapelab/core';
-import { NEWS_MS, radioNews } from '../src/radio.js';
+import {
+  bannerFrom,
+  NEWS_MS,
+  noticeMs,
+  radioNews,
+  withNews,
+  type Notice,
+} from '../src/radio.js';
 
 const NOW = 1_700_000_000_000;
 
@@ -49,5 +56,31 @@ describe('radioNews — which lines get a banner', () => {
 
   it('takes a line stamped a little ahead of this clock as news', () => {
     expect(radioNews([event('radio', -2000)], 0, NOW)).toHaveLength(1);
+  });
+
+  it('names mission control on its lines and the last crew on a revealed note', () => {
+    expect(bannerFrom(event('radio', 0))).toBe('📻 LEITSTELLE');
+    expect(bannerFrom(event('hint', 0))).toBe('📝 Notiz der letzten Crew');
+  });
+});
+
+describe('the objective bar, one notice at a time', () => {
+  const sign: Notice = { kind: 'sign' };
+  const line = (label: string): Notice => ({ kind: 'line', event: event('radio', 0, label) });
+  const shown = (queue: Notice[]): string[] =>
+    queue.map((notice) => (notice.kind === 'sign' ? 'sign' : notice.event.label));
+
+  it('lets fresh lines replace the queued ones, but never the note that the sign was read', () => {
+    const queued = withNews([line('old'), sign, line('older')], [event('radio', 0, 'new')]);
+    expect(shown(queued)).toEqual(['sign', 'new']);
+    expect(queued[0]).toBe(sign);
+    expect(shown(withNews([sign], [event('hint', 0, 'tip')]))).toEqual(['sign', 'tip']);
+  });
+
+  it('keeps a line up 7 s, 4 s on a touch screen, and the note 3.5 s anywhere', () => {
+    expect(noticeMs(line('x'), false)).toBe(7000);
+    expect(noticeMs(line('x'), true)).toBe(4000);
+    expect(noticeMs(sign, false)).toBe(3500);
+    expect(noticeMs(sign, true)).toBe(3500);
   });
 });

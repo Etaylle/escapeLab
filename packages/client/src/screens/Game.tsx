@@ -6,14 +6,14 @@ import type {
   PlayerPosition,
   PlayerView,
   PuzzleView,
-  RunEvent,
 } from '@escapelab/core';
 import { useKeys, useNow } from '../hooks.js';
-import { BANNER_MS, radioNews } from '../radio.js';
+import { bannerFrom, noticeMs, radioNews, withNews, type Notice } from '../radio.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { play } from '../sounds.js';
 import { radioChirp } from '../world/audio.js';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
+import { toBring } from '../world/markers.js';
 import { startRoom } from '../world/rooms.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
 import { MissionHud } from './MissionHud.js';
@@ -128,8 +128,6 @@ function CriticalVignette({ deadlineAt }: { deadlineAt: number }) {
 
 /** How long the launch briefing covers the screen. */
 const BRIEFING_MS = 3600;
-/** How long the note that the sign was read stays up; its fade in ui.css matches. */
-const SIGN_NOTE_MS = 3500;
 
 /** Mission briefing shown for the first seconds after launch: the mission and where you are. */
 function Briefing({ view }: { view: PlayerView }) {
@@ -203,78 +201,59 @@ function useFeedback(view: PlayerView): { shaking: boolean; alarmVisible: boolea
 }
 
 /**
- * The mission-control line on the air right now, if any. A fresh batch of
- * lines replaces whatever was still waiting — it is the newer news — and is
- * read out one line at a time, each with a chirp. Nothing goes on the air
- * while the briefing still covers the screen.
+ * What the objective bar carries under the goal right now, one notice at a
+ * time so they never stack: the lines on the air as they come in, each with
+ * a chirp (see `withNews` for a fresh batch), and the note once this player
+ * has walked up to the Laborkennung. Nothing shows while the briefing still
+ * covers the screen. A player who spawns at the sign gets the note too; one
+ * who reconnects later does not, they read it before.
  */
-function useRadioBanner(view: PlayerView): RunEvent | null {
+function useNotices(view: PlayerView): Notice | null {
   const seen = useRef(0);
-  const [queue, setQueue] = useState<RunEvent[]>([]);
-  const [onAir, setOnAir] = useState<RunEvent | null>(null);
+  const [queue, setQueue] = useState<Notice[]>([]);
+  const [shown, setShown] = useState<Notice | null>(null);
+  const briefingEnds = (view.startedAt ?? 0) + BRIEFING_MS;
 
   useEffect(() => {
     const news = radioNews(view.events, seen.current, Date.now());
     seen.current = view.events.length;
     if (news.length > 0) {
-      setQueue(news);
+      setQueue((queued) => withNews(queued, news));
     }
   }, [view.events]);
 
+  const signSeen = view.presence.signSeen;
+  const noted = useRef<boolean | null>(null);
+  noted.current ??= signSeen && Date.now() >= briefingEnds;
+  useEffect(() => {
+    if (signSeen && !noted.current) {
+      noted.current = true;
+      setQueue((queued) => [...queued, { kind: 'sign' }]);
+    }
+  }, [signSeen]);
+
   const next = queue[0] ?? null;
-  const briefingEnds = (view.startedAt ?? 0) + BRIEFING_MS;
   useEffect(() => {
     if (next === null) {
-      setOnAir(null);
+      setShown(null);
       return undefined;
     }
     const wait = Math.max(0, briefingEnds - Date.now());
+    const up = noticeMs(next, window.matchMedia('(pointer: coarse)').matches);
     const on = setTimeout(() => {
-      radioChirp();
-      setOnAir(next);
+      if (next.kind === 'line') {
+        radioChirp();
+      }
+      setShown(next);
     }, wait);
-    const off = setTimeout(() => setQueue((lines) => lines.slice(1)), wait + BANNER_MS);
+    const off = setTimeout(() => setQueue((queued) => queued.slice(1)), wait + up);
     return () => {
       clearTimeout(on);
       clearTimeout(off);
     };
   }, [next, briefingEnds]);
 
-  return onAir;
-}
-
-/**
- * True for a moment once this player has walked up to the Laborkennung —
- * after the briefing, so the note is not lost under it. A player who spawns
- * at the sign gets it too; one who reconnects later does not, they read it
- * before.
- */
-function useSignNote(view: PlayerView): boolean {
-  const signSeen = view.presence.signSeen;
-  const briefingEnds = (view.startedAt ?? 0) + BRIEFING_MS;
-  const [noted, setNoted] = useState(() => signSeen && Date.now() >= briefingEnds);
-  const [up, setUp] = useState(false);
-  useEffect(() => {
-    if (!signSeen || noted) {
-      return undefined;
-    }
-    const on = setTimeout(
-      () => {
-        setNoted(true);
-        setUp(true);
-      },
-      Math.max(0, briefingEnds - Date.now()),
-    );
-    return () => clearTimeout(on);
-  }, [signSeen, noted, briefingEnds]);
-  useEffect(() => {
-    if (!up) {
-      return undefined;
-    }
-    const off = setTimeout(() => setUp(false), SIGN_NOTE_MS);
-    return () => clearTimeout(off);
-  }, [up]);
-  return up;
+  return shown;
 }
 
 /**
@@ -346,8 +325,7 @@ export function GameScreen({
   send,
 }: Props) {
   const { shaking, alarmVisible, stamp } = useFeedback(view);
-  const radioLine = useRadioBanner(view);
-  const signNote = useSignNote(view);
+  const notice = useNotices(view);
   const modal = useWorldModal(view);
   const [infoOpen, setInfoOpen] = useState(false);
   const notes = useNotes(roomCode, view.you.id);
@@ -370,7 +348,7 @@ export function GameScreen({
   const relay = map.sabotage?.relay;
   const armedTitle = map.stations.find((s) => s.status === 'armed')?.title ?? null;
   const escaping = map.exit?.open === true;
-  const missing = map.items.filter((i) => !i.delivered).map((i) => i.label);
+  const missing = toBring(map).map((i) => i.label);
   const missingLabel =
     escaping || missing.length === 0 ? null : `${missing.join(', ')} fehlt noch`;
   const title =
@@ -436,16 +414,17 @@ export function GameScreen({
             {missingLabel !== null && <span className="stage-sub">{missingLabel}</span>}
           </div>
           {view.deadlineAt !== null && <Countdown deadlineAt={view.deadlineAt} />}
-          {radioLine !== null && (
+          {notice?.kind === 'line' && (
             <div
-              key={`${radioLine.at}-${radioLine.label}`}
+              key={`${notice.event.at}-${notice.event.label}`}
               className="radio-banner"
               role="status"
             >
-              <span className="radio-banner-from">📻 LEITSTELLE</span> — {radioLine.label}
+              <span className="radio-banner-from">{bannerFrom(notice.event)}</span> —{' '}
+              {notice.event.label}
             </div>
           )}
-          {signNote && (
+          {notice?.kind === 'sign' && (
             <div className="toast" role="status">
               ✓ Laborkennung notiert
             </div>
@@ -458,7 +437,7 @@ export function GameScreen({
           pingsRef={pingsRef}
           chatsRef={chatsRef}
           spectator={false}
-          holdTips={radioLine !== null}
+          holdTips={notice !== null}
           inputLocked={
             modal.station !== null ||
             modal.reading !== null ||

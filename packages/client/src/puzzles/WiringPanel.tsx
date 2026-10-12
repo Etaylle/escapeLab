@@ -20,15 +20,7 @@ export function WiringPanel({ puzzle, send }: PanelProps<'wiring'>) {
     </p>
   );
   if (puzzle.wires === null) {
-    return (
-      <div className="big-hint">
-        <p className="muted">
-          Die Kabel siehst du nicht. Lass dir alle Farben von oben nach unten ansagen und prüf
-          die Liste zur Kabelzahl der Reihe nach.
-        </p>
-        {status}
-      </div>
-    );
+    return status;
   }
   return (
     <div>
@@ -47,7 +39,9 @@ export function WiringPanel({ puzzle, send }: PanelProps<'wiring'>) {
         ))}
       </ol>
       {status}
-      <p className="muted">Antippen trennt sofort — erst alle Farben ansagen.</p>
+      <p className="muted">
+        Farben von oben ansagen, erst bei Ansage trennen — Antippen trennt sofort.
+      </p>
     </div>
   );
 }

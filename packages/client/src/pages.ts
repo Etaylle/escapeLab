@@ -3,8 +3,10 @@ import type { ManualBlock, ManualSection } from '@escapelab/core';
 /**
  * Printed rules laid out as the pages of a book. Page 1 is the contents;
  * every station starts on a fresh page and its blocks flow on from there: a
- * rules list breaks between items, a table repeats its head on every page it
- * spans, everything else moves on whole, and a heading never ends a page.
+ * rules list or a table breaks between items, two at least to a page — the
+ * list repeats its heading „(Fortsetzung)" where it goes on, the table its
+ * head on every page it spans — everything else moves on whole, and a heading
+ * never ends a page.
  * Heights are estimates in em of the page's body text. ui.css draws the page
  * to the same measure at whatever size it is shown, so the same pages come
  * out on every screen — and every player's page 3 is the same page 3.
@@ -242,16 +244,20 @@ class Pager {
 /**
  * A block that may break between its `count` units, `part(from, to)` being
  * the fragment that holds units from..to-1. Each page takes as many units as
- * fit, the first of them together with `lead` (a heading waiting for it);
- * the page that would take the last unit may run `slack` em longer.
+ * fit, the first of them together with `lead` (a heading waiting for it) and
+ * every later page's first with `resumed`. A page holds two units at least,
+ * so neither the first nor the last unit stands alone; the page that would
+ * take the last unit may run `slack` em longer.
  */
 function placeSplit(
   pager: Pager,
   count: number,
   part: (from: number, to: number) => Fragment,
   lead: Fragment[],
+  resumed: Fragment[],
   slack: number,
 ): void {
+  const least = Math.min(2, count);
   const slackTo = (to: number): number => (to === count ? slack : 0);
   let from = 0;
   let before = lead;
@@ -260,24 +266,36 @@ function placeSplit(
     while (to < count && pager.fits([...before, part(from, to + 1)], slackTo(to + 1))) {
       to += 1;
     }
-    if (to === from && !pager.blank()) {
-      pager.turn();
-      continue;
+    if (count > 1 && to === count - 1) {
+      to -= 1;
     }
-    to = Math.max(to, from + 1);
+    if (to - from < least) {
+      if (!pager.blank()) {
+        pager.turn();
+        continue;
+      }
+      // Not even a fresh page holds them: it runs over rather than part them.
+      to = from + least === count - 1 ? count : from + least;
+    }
     pager.put([...before, part(from, to)], slackTo(to));
-    before = [];
+    before = resumed;
     from = to;
     if (from < count) {
       pager.turn();
     }
   }
-  if (before.length > 0) {
-    pager.put(before);
+  if (count === 0) {
+    pager.put(lead);
   }
 }
 
-function place(pager: Pager, block: ManualBlock, lead: Fragment[], slack: number): void {
+function place(
+  pager: Pager,
+  block: ManualBlock,
+  heading: string,
+  lead: Fragment[],
+  slack: number,
+): void {
   switch (block.kind) {
     case 'rules':
       placeSplit(
@@ -285,6 +303,7 @@ function place(pager: Pager, block: ManualBlock, lead: Fragment[], slack: number
         block.items.length,
         (from, to) => ({ kind: 'rules', items: block.items.slice(from, to), start: from + 1 }),
         lead,
+        [{ kind: 'heading', text: `${heading} (Fortsetzung)` }],
         slack,
       );
       return;
@@ -294,6 +313,7 @@ function place(pager: Pager, block: ManualBlock, lead: Fragment[], slack: number
         block.rows.length,
         (from, to) => ({ kind: 'table', head: block.head, rows: block.rows.slice(from, to) }),
         lead,
+        [],
         slack,
       );
       return;
@@ -321,7 +341,7 @@ export function paginate(sections: readonly BookSection[], size: PageSize = BOOK
       let lead: Fragment[] = [{ kind: 'heading', text: part.heading }];
       part.blocks.forEach((block, b) => {
         const closing = p === section.manual.length - 1 && b === part.blocks.length - 1;
-        place(pager, block, lead, closing ? OVERRUN : 0);
+        place(pager, block, part.heading, lead, closing ? OVERRUN : 0);
         lead = [];
       });
       pager.put(lead);

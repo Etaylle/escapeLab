@@ -330,6 +330,58 @@ async function captureReading(page, seen, who) {
   return true;
 }
 
+/**
+ * station-both.png: while the operator keeps the station open, the reader
+ * walks up as well and presses E — the panel has to show for both of them.
+ * Then the reader leaves it and walks back to where it stood.
+ */
+async function captureBothAtStation(reader, operator, station) {
+  const back = tileOf(reader.seen);
+  if (!(await walkNear(reader.page, reader.seen, station))) {
+    console.log(`station-both.png   skipped: ${reader.name} has no way to "${station.puzzleId}"`);
+    return;
+  }
+  const readerSees = await interactUntil(reader.page, reader.page.locator('.station-modal'));
+  const operatorSees = await operator.page.locator('.station-modal').isVisible();
+  await reader.page.screenshot({ path: join(OUT, 'station-both.png') });
+  const missing = [
+    ...(readerSees ? [] : [reader.name]),
+    ...(operatorSees ? [] : [operator.name]),
+  ];
+  console.log(
+    `station-both.png   ${reader.name} joins ${operator.name} at "${station.title}": ` +
+      (missing.length === 0
+        ? 'panel up for both'
+        : `!! no .station-modal for ${missing.join(' and ')}`),
+  );
+  // Whatever E opened instead of the panel locks the avatar too.
+  await reader.page.keyboard.press('Escape');
+  await sleep(300);
+  const returned = back !== null && (await walkNear(reader.page, reader.seen, back));
+  console.log(
+    `station-both       ${reader.name}: ` +
+      (returned ? `back near ${back.x},${back.y}` : '!! could not walk back'),
+  );
+}
+
+/**
+ * The world canvas's size in CSS pixels — the zoom follows its height — with
+ * what shares the column with it: the HUD's height and the banners up.
+ */
+async function layoutOf(page) {
+  return page.evaluate(() => {
+    const canvas = document.querySelector('.world-canvas');
+    const hud = document.querySelector('.hud');
+    return {
+      size: canvas === null ? 'no canvas' : `${canvas.clientWidth}x${canvas.clientHeight}`,
+      hud: hud === null ? 0 : hud.offsetHeight,
+      banners: ['.alarm', '.sabotage', '.banner.error'].filter(
+        (selector) => document.querySelector(selector) !== null,
+      ),
+    };
+  });
+}
+
 /** Whether two boxes overlap; a missing box overlaps nothing. */
 function overlapping(a, b) {
   return (
@@ -592,6 +644,12 @@ async function run() {
   }
   // Let the briefing countdown finish; server and browsers share this clock.
   await sleep(Math.max(0, guestSeen.view.startedAt + 4200 - Date.now()));
+  // The world's zoom follows the canvas height: nothing the run brings up in
+  // the HUD — the sign's chip, a long radio line, the notes — may change it.
+  const steady = [
+    { name: 'Anna', page: host, start: await layoutOf(host) },
+    { name: 'Ben', page: guest, start: await layoutOf(guest) },
+  ];
 
   for (const size of SIZES) {
     await host.setViewportSize({ width: size.width, height: size.height });
@@ -675,6 +733,7 @@ async function run() {
       `station.png        ${operator.name}: "${station.title}", panel ` +
         (stationSideways > 0 ? `!! +${stationSideways}px sideways` : 'fits sideways'),
     );
+    await captureBothAtStation(reader, operator, station);
     // The last crew's notes come only for an open station: leave it open, go read.
     await operator.page.keyboard.press('Escape');
     await modal.waitFor({ state: 'hidden', timeout: 3000 });
@@ -686,6 +745,17 @@ async function run() {
     }
   }
   await captureLitRoom(guest, guestSeen);
+
+  for (const { name, page, start } of steady) {
+    const end = await layoutOf(page);
+    const banners = end.banners.length === 0 ? '' : `, ${end.banners.join(' ')} up`;
+    console.log(
+      `canvas             ${name}: ${start.size} after the briefing, ${end.size} at the end` +
+        (end.size === start.size
+          ? ', the world zoom held'
+          : ` — !! the world zoom moved (HUD ${start.hud} → ${end.hud}px${banners})`),
+    );
+  }
 
   await browser.close();
   console.log('screenshots in', OUT);

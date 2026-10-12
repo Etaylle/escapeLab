@@ -171,8 +171,8 @@ function Console({
       ) : (
         <p className="button-status muted">
           {puzzle.holding
-            ? 'Gehalten. Streifen ansagen — loslassen, wenn die Missionsuhr die Ziffer zeigt.'
-            : 'Kurz tippen = kurz drücken. Gedrückt lassen = halten.'}
+            ? 'Gehalten. Streifen ansagen — loslassen, sobald die Uhr die angesagte Ziffer zeigt.'
+            : 'Farbe und Aufschrift ansagen, erst bei Ansage drücken (kurz tippen) oder halten.'}
         </p>
       )}
     </div>
@@ -180,17 +180,8 @@ function Console({
 }
 
 export function ButtonPanel(props: PanelProps<'button'>) {
-  const { colour, label, holding } = props.puzzle;
-  if (colour === null || label === null) {
-    return (
-      <div className="big-hint">
-        <p className="muted">
-          Der Knopf sitzt an einer anderen Station. Lass dir Farbe und Aufschrift ansagen und
-          prüf die Regeln von oben.
-        </p>
-        {holding && <p>Der Knopf wird gehalten: Frag nach der Farbe des Streifens.</p>}
-      </div>
-    );
-  }
-  return <Console {...props} colour={colour} label={label} />;
+  const { colour, label } = props.puzzle;
+  return colour === null || label === null ? null : (
+    <Console {...props} colour={colour} label={label} />
+  );
 }

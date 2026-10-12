@@ -58,4 +58,19 @@ describe('the HUD radio line', () => {
     expect(html).toMatch(/<section class="hud">.*📻 Spind durchsucht: KLEMMBRETT/s);
     expect(html).not.toContain('Strom weg.');
   });
+
+  it('names mission control on its lines', () => {
+    expect(hud([{ at: 1, kind: 'radio', label: 'Strom weg.', seconds: null }])).toContain(
+      '<span class="hud-radio">📻 Leitstelle: Strom weg.</span>',
+    );
+  });
+
+  it('reads a revealed note as the last crew’s, not as mission control', () => {
+    const html = hud([{ at: 1, kind: 'hint', label: 'Erst die Sicherung.', seconds: 20 }]);
+    expect(html).toContain(
+      '<span class="hud-radio">📝 Notiz der letzten Crew — Erst die Sicherung. (−20s)</span>',
+    );
+    expect(html).not.toContain('Leitstelle');
+    expect(html).not.toContain('📻');
+  });
 });

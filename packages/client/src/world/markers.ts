@@ -24,6 +24,15 @@ const BLUE = '#60a5fa';
 const GREEN = '#4ade80';
 
 /**
+ * What the crew knows it still has to bring. A key's target stays unknown
+ * until its cabinet has been come across, and so does the key: naming it
+ * earlier would give the cabinet away.
+ */
+export function toBring(map: MapView): MapView['items'] {
+  return map.items.filter((item) => !item.delivered && item.deliverTo !== null);
+}
+
+/**
  * What the player is meant to head for right now, most urgent first.
  *
  * An emergency overrides everything and needs every valve at once, since the
@@ -49,7 +58,7 @@ export function markerTargets(map: MapView, youId: string): MarkerTarget[] {
     return [{ x: map.exit.x + 0.5, y: map.exit.y + 0.5, color: GREEN, label: 'AUSGANG' }];
   }
   const out: MarkerTarget[] = [];
-  const loose = map.items.find((item) => !item.delivered && item.carriedBy === null);
+  const loose = toBring(map).find((item) => item.carriedBy === null);
   if (loose !== undefined) {
     out.push({ x: loose.x, y: loose.y, color: BLUE, label: 'TEIL' });
   }
@@ -69,6 +78,13 @@ const MARGIN = 34;
 const BAR_GAP = 16;
 const CAPTION_BELOW = 26;
 const CAPTION_ABOVE = 20;
+/** how far an arrow reaches from its middle, however it is turned */
+const ARROW_REACH = 13;
+/** how far a caption's letters rise above and drop below its baseline */
+const CAPTION_RISE = 8;
+const CAPTION_DROP = 3;
+/** air left between two markers on one edge */
+const MARKER_AIR = 4;
 
 /**
  * Pins an off-screen target to the inside of the frame. `safeTopCss` is the
@@ -101,4 +117,102 @@ export function placeMarker(
     // off the frame.
     captionY: py > h / 2 ? y - CAPTION_ABOVE * dpr : y + CAPTION_BELOW * dpr,
   };
+}
+
+/** A target where it lies on screen, and how wide its caption is drawn; device pixels. */
+export interface MarkerPoint {
+  px: number;
+  py: number;
+  captionWidth: number;
+}
+
+type Edge = 'left' | 'right' | 'top' | 'bottom';
+
+const onSide = (edge: Edge): boolean => edge === 'left' || edge === 'right';
+
+/** A pinned marker on its edge: where along it, and the room it takes before and after that. */
+interface Slot {
+  index: number;
+  edge: Edge;
+  at: number;
+  before: number;
+  after: number;
+}
+
+/**
+ * On a side the arrow and its caption stack, so a marker takes room up and
+ * down; along the top and the bottom the caption is the wider of the two.
+ */
+function slotOf(
+  index: number,
+  at: MarkerPlacement,
+  point: MarkerPoint,
+  w: number,
+  dpr: number,
+): Slot {
+  if (point.px < 0 || point.px > w) {
+    const below = at.captionY > at.y;
+    return {
+      index,
+      edge: point.px < 0 ? 'left' : 'right',
+      at: at.y,
+      before: (below ? ARROW_REACH : CAPTION_ABOVE + CAPTION_RISE) * dpr,
+      after: (below ? CAPTION_BELOW + CAPTION_DROP : ARROW_REACH) * dpr,
+    };
+  }
+  const half = Math.max(ARROW_REACH * dpr, point.captionWidth / 2);
+  return { index, edge: point.py < 0 ? 'top' : 'bottom', at: at.x, before: half, after: half };
+}
+
+/** Moves the slots of one edge apart in their order along it, backing up from its end `hi`. */
+function spread(slots: Slot[], lo: number, hi: number, air: number): void {
+  slots.sort((a, b) => a.at - b.at);
+  let prev: Slot | null = null;
+  for (const slot of slots) {
+    if (prev !== null) {
+      slot.at = Math.max(slot.at, prev.at + prev.after + slot.before + air);
+    }
+    prev = slot;
+  }
+  let next: Slot | null = null;
+  for (const slot of [...slots].reverse()) {
+    const limit = next === null ? hi : next.at - slot.after - next.before - air;
+    slot.at = Math.max(lo, Math.min(slot.at, limit));
+    next = slot;
+  }
+}
+
+/**
+ * Every target pinned as by placeMarker, then the markers sharing an edge
+ * moved along it until none covers another: on a side they stack, each arrow
+ * clear of its neighbour's caption; along the top and the bottom the captions
+ * stand side by side. A stack that would run off its edge backs up.
+ */
+export function placeMarkers(
+  points: readonly MarkerPoint[],
+  w: number,
+  h: number,
+  safeTopCss: number,
+  dpr: number,
+): (MarkerPlacement | null)[] {
+  const placed = points.map((point) => placeMarker(point.px, point.py, w, h, safeTopCss, dpr));
+  const slots = points.flatMap((point, index) => {
+    const at = placed[index];
+    return at == null ? [] : [slotOf(index, at, point, w, dpr)];
+  });
+  const margin = MARGIN * dpr;
+  const top = Math.max(margin, (safeTopCss + BAR_GAP) * dpr);
+  for (const edge of ['left', 'right', 'top', 'bottom'] as const) {
+    const [lo, hi] = onSide(edge) ? [top, h - margin] : [margin, w - margin];
+    spread(slots.filter((slot) => slot.edge === edge), lo, hi, MARKER_AIR * dpr);
+  }
+  for (const slot of slots) {
+    const at = placed[slot.index];
+    if (at != null) {
+      placed[slot.index] = onSide(slot.edge)
+        ? { ...at, y: slot.at, captionY: at.captionY + slot.at - at.y }
+        : { ...at, x: slot.at };
+    }
+  }
+  return placed;
 }

@@ -23,3 +23,4 @@ export function mapWith(parts: Partial<MapView>): MapView {
 
 export type Manual = MapView['manuals'][number];
 export type Plate = MapView['plates'][number];
+export type Item = MapView['items'][number];
