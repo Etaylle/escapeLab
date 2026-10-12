@@ -1170,7 +1170,9 @@ export function GameWorld({
         ? null
         : contextAction(map, sim.self, viewRef.current.you.id, viewRef.current.manualsHere);
       if (action !== null) {
-        const [sx, sy] = worldToScreen(s, w, h, action.x, action.y);
+        const [sx, rawY] = worldToScreen(s, w, h, action.x, action.y);
+        // Like the edge arrows: the prompt must stay below the objective bar.
+        const sy = Math.max(rawY, (safeTopCss + 24) * dpr);
         ctx.font = `700 ${12 * dpr}px ui-monospace, Menlo, monospace`;
         const tw = ctx.measureText(action.label).width + 16 * dpr;
         ctx.fillStyle = 'rgba(7,11,15,0.88)';
