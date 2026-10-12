@@ -444,7 +444,8 @@ async function pressStage(sender, presser) {
   const { puzzle, currentPuzzleIndex } = sender.seen.view;
   const { stage, sequence } = puzzle;
   const keys = '.station-modal .signal-key';
-  if (!(await attached(presser.page.locator(keys), 3000))) {
+  // `waitFor` wants one element: the first key stands for the twelve.
+  if (!(await attached(presser.page.locator(keys).first(), 3000))) {
     throw new Error(`${presser.name} is to press stage ${stage}, but the panel has no ${keys}`);
   }
   const through = () => {
