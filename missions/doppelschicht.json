@@ -101,7 +101,8 @@
     {
       "id": "leitstand",
       "name": "Leitstand (West)",
-      "description": "Westflügel. Du hast die Schaltpläne und die Sollwerte — aber die Anlagen stehen drüben im Osten."
+      "description": "Westflügel. Du hast die Schaltpläne und die Sollwerte — aber die Anlagen stehen drüben im Osten.",
+      "seesEdgework": true
     },
     {
       "id": "archiv",
@@ -147,20 +148,7 @@
       "title": "Kühlkreislauf",
       "prompt": "Die Ventilbank steht im Westflügel — welche Ventile offen sein müssen, misst nur das Labor im Osten.",
       "operatorRoleId": "leitstand",
-      "manualRoleId": "labor",
-      "symbols": ["⌁", "✦", "◉", "⨳", "⌬", "♁", "☍"],
-      "onCount": 4,
-      "penaltySec": 20,
-      "infos": [
-        {
-          "roleId": "labor",
-          "text": "Deine Messkonsole zeigt, welche Ventile OFFEN sein müssen. Diktier sie Zeichen für Zeichen nach Westen."
-        },
-        {
-          "roleId": "leitstand",
-          "text": "Schalten ist gefahrlos, PRÜFEN mit falscher Kombination kostet 20 Sekunden. Wiederhole jede Ansage, bevor du kippst."
-        }
-      ]
+      "manualRoleId": "labor"
     },
     {
       "type": "maze",

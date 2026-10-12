@@ -119,7 +119,8 @@
     {
       "id": "steuerpult",
       "name": "Steuerpult",
-      "description": "Du stehst am Schaltschrank: Kabel, Tasten, Schalter. Du siehst alles — aber ohne Handbuch ist jeder Griff russisches Roulette."
+      "description": "Du stehst am Schaltschrank: Kabel, Tasten, Schalter. Du siehst alles — aber ohne Handbuch ist jeder Griff russisches Roulette.",
+      "seesEdgework": true
     }
   ],
   "puzzles": [
@@ -184,19 +185,6 @@
       "prompt": "Sechs Kippschalter steuern die Subsysteme des Labors. Nur die richtige Kombination bringt das Netz stabil hoch — eine falsche Prüfung wirft die Sicherung.",
       "operatorRoleId": "steuerpult",
       "manualRoleId": "anleitung",
-      "symbols": ["⌁", "✦", "◉", "⨳", "⌬", "♁"],
-      "onCount": 3,
-      "penaltySec": 20,
-      "infos": [
-        {
-          "roleId": "anleitung",
-          "text": "Handbuch §6 — SUBSYSTEME: Dein Display zeigt, welche Systeme ans Netz müssen. Genau diese Schalter nach OBEN, alle anderen nach UNTEN. Erst wenn alles gesetzt ist: prüfen lassen."
-        },
-        {
-          "roleId": "steuerpult",
-          "text": "Kippschalter umlegen ist gefahrlos — aber PRÜFEN mit falscher Kombination löst den Alarm aus (−20 s). Lies die Zeichen vor und stell nach Ansage."
-        }
-      ],
       "hints": [
         "Anleitung, dein Display zeigt drei Zeichen. Genau diese Schalter müssen nach OBEN, alle anderen nach unten. Sag sie dem Steuerpult einzeln an.",
         "Die Reihenfolge am Pult sagt nichts, es zählen nur die Zeichen. Einigt euch auf ein Wort pro Zeichen, dann wird nicht geraten.",
