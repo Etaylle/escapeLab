@@ -1,64 +1,117 @@
 import { z } from 'zod';
+import { serialHasVowel, type Edgework } from '../edgework.js';
 import { fail } from '../errors.js';
-import { shuffle } from '../rng.js';
-import { commonDefShape, type PuzzleModule } from './module.js';
+import { commonDefShape, type ManualBlock, type PuzzleModule } from './module.js';
 
-export const SIMON_COLORS = ['rot', 'gruen', 'blau', 'gelb'] as const;
+export const SIMON_COLORS = ['rot', 'blau', 'gruen', 'gelb'] as const;
 export type SimonColor = (typeof SIMON_COLORS)[number];
 
 /**
- * simon puzzle: the operator watches a flashing color sequence and owns the
- * symbol buttons; the manual role holds the color→symbol legend (generated
- * per game). Wrong press resets progress and costs time.
+ * simon puzzle (Frequenz-Abgleich): the panel flashes a color sequence in
+ * stages — stage k shows the first k colors — and the operator enters each
+ * stage's sequence translated through the printed tables. The Laborkennung
+ * picks the table and the alarms so far pick the row, so the translation
+ * changes from run to run and after every alarm. A wrong press costs time
+ * and restarts the current stage's input; the stage itself is kept.
  */
-const defSchema = z
-  .object({
-    type: z.literal('simon'),
-    ...commonDefShape,
-    operatorRoleId: z.string().min(1),
-    manualRoleId: z.string().min(1),
-    buttonSymbols: z.array(z.string().min(1)).length(4),
-    sequenceLength: z.number().int().min(3).max(8).default(5),
-    penaltySec: z.number().int().positive().default(20),
-  })
-  .superRefine((def, ctx) => {
-    if (new Set(def.buttonSymbols).size !== def.buttonSymbols.length) {
-      ctx.addIssue({ code: 'custom', message: `puzzle "${def.id}": button symbols not unique` });
-    }
-  });
+const defSchema = z.object({
+  type: z.literal('simon'),
+  ...commonDefShape,
+  operatorRoleId: z.string().min(1),
+  manualRoleId: z.string().min(1),
+  sequenceLength: z.number().int().min(3).max(8).default(5),
+  penaltySec: z.number().int().positive().default(20),
+});
 export type SimonDef = z.infer<typeof defSchema>;
 
 export interface SimonState {
   type: 'simon';
-  /** flashing sequence, visible to the operator */
+  /** the whole flashing sequence; stage k shows its first k colors */
   sequence: SimonColor[];
-  /** color→symbol mapping, visible to the manual role */
-  mapping: Record<SimonColor, string>;
-  /** symbol buttons in panel order (shuffled per game) */
-  buttonOrder: string[];
+  /** 1-based: how many colors the current stage flashes */
+  stage: number;
+  /** correct presses so far in the current stage */
   progress: number;
-  lastWrongIndex: number | null;
+  /** the last press was wrong */
+  lastWrong: boolean;
 }
 
-const inputSchema = z.strictObject({ buttonIndex: z.number().int().nonnegative() });
+const inputSchema = z.strictObject({ kind: z.literal('press'), color: z.enum(SIMON_COLORS) });
 export type SimonInput = z.infer<typeof inputSchema>;
 
 export interface SimonView {
   kind: 'simon';
-  /** flashing color sequence — only the operator gets it */
-  sequence: string[] | null;
-  /** symbol buttons in panel order — only the operator gets them */
-  buttons: string[] | null;
-  /** color→symbol legend — only the manual role gets it */
-  legend: { color: string; symbol: string }[] | null;
+  /** what the current stage flashes, in order — only the operator sees it */
+  flashes: SimonColor[] | null;
+  /** the color buttons in panel order — only the operator has them */
+  buttons: SimonColor[] | null;
+  /** 1-based: stage k flashes the first k colors */
+  stage: number;
+  stages: number;
+  /** correct presses so far in the current stage */
   progress: number;
-  seqLength: number;
-  lastWrongIndex: number | null;
+  lastWrong: boolean;
+  /** alarms so far in this run; they pick the table row, so every role sees them */
+  alarms: number;
+}
+
+/** Flashed color → color to press, for one table row. */
+type Translation = Readonly<Record<SimonColor, SimonColor>>;
+/** One row per alarm count: 0, 1, 2 or more. */
+type TranslationTable = readonly [Translation, Translation, Translation];
+
+/*
+ * Every row is a permutation and none is the identity. Within a table the
+ * rows differ in every column, so an alarm changes every translation; the
+ * two tables differ in every cell, so misreading the Laborkennung shows on
+ * the first press. Each color stays itself in exactly one row of the six.
+ */
+const WITH_VOWEL: TranslationTable = [
+  { rot: 'rot', blau: 'gelb', gruen: 'blau', gelb: 'gruen' },
+  { rot: 'blau', blau: 'gruen', gruen: 'gelb', gelb: 'rot' },
+  { rot: 'gelb', blau: 'rot', gruen: 'gruen', gelb: 'blau' },
+];
+const WITHOUT_VOWEL: TranslationTable = [
+  { rot: 'blau', blau: 'gruen', gruen: 'rot', gelb: 'gelb' },
+  { rot: 'gelb', blau: 'rot', gruen: 'blau', gelb: 'gruen' },
+  { rot: 'gruen', blau: 'blau', gruen: 'gelb', gelb: 'rot' },
+];
+
+const COLOR_NAMES: Record<SimonColor, string> = {
+  rot: 'rot',
+  blau: 'blau',
+  gruen: 'grün',
+  gelb: 'gelb',
+};
+const ROW_LABELS = ['0 Alarme', '1 Alarm', '≥ 2 Alarme'] as const;
+
+function rowFor(alarms: number): 0 | 1 | 2 {
+  if (alarms <= 0) {
+    return 0;
+  }
+  return alarms === 1 ? 1 : 2;
+}
+
+/** The color to press for `flashed` under this run's Laborkennung and alarm count. */
+function pressFor(flashed: SimonColor, edgework: Edgework, alarms: number): SimonColor {
+  const table = serialHasVowel(edgework) ? WITH_VOWEL : WITHOUT_VOWEL;
+  return table[rowFor(alarms)][flashed];
+}
+
+function tableBlock(label: string, table: TranslationTable): ManualBlock {
+  return {
+    kind: 'table',
+    head: [label, ...SIMON_COLORS.map((color) => COLOR_NAMES[color])],
+    rows: table.map((row, i) => [
+      ROW_LABELS[i] ?? '',
+      ...SIMON_COLORS.map((color) => COLOR_NAMES[row[color]]),
+    ]),
+  };
 }
 
 export const simonModule: PuzzleModule<SimonDef, SimonState, SimonInput, SimonView> = {
   type: 'simon',
-  usesEdgework: false,
+  usesEdgework: true,
   defSchema,
   inputSchema,
 
@@ -71,58 +124,49 @@ export const simonModule: PuzzleModule<SimonDef, SimonState, SimonInput, SimonVi
         sequence.push(color);
       }
     }
-    const shuffledSymbols = shuffle(def.buttonSymbols, rng);
-    const mapping = {} as Record<SimonColor, string>;
-    SIMON_COLORS.forEach((color, i) => {
-      mapping[color] = shuffledSymbols[i] ?? def.buttonSymbols[i] ?? '?';
-    });
-    return {
-      type: 'simon',
-      sequence,
-      mapping,
-      buttonOrder: shuffle(def.buttonSymbols, rng),
-      progress: 0,
-      lastWrongIndex: null,
-    };
+    return { type: 'simon', sequence, stage: 1, progress: 0, lastWrong: false };
   },
 
-  apply(def, state, input, roleId) {
+  apply(def, state, input, roleId, ctx) {
     if (roleId !== def.operatorRoleId) {
       fail('Nur die Rolle am Frequenz-Panel kann Tasten drücken.');
     }
-    const symbol = state.buttonOrder[input.buttonIndex];
-    const expectedColor = state.sequence[state.progress];
-    if (symbol === undefined || expectedColor === undefined) {
+    const flashed = state.sequence[state.progress];
+    if (flashed === undefined || state.progress >= state.stage) {
       return { state, solved: false, penalty: null };
     }
-    if (symbol !== state.mapping[expectedColor]) {
+    if (input.color !== pressFor(flashed, ctx.edgework, ctx.alarms)) {
       return {
-        state: { ...state, progress: 0, lastWrongIndex: input.buttonIndex },
+        state: { ...state, progress: 0, lastWrong: true },
         solved: false,
         penalty: 'Falscher Steuerimpuls',
       };
     }
     const progress = state.progress + 1;
-    return {
-      state: { ...state, progress, lastWrongIndex: null },
-      solved: progress >= state.sequence.length,
-      penalty: null,
-    };
+    if (progress < state.stage) {
+      return { state: { ...state, progress, lastWrong: false }, solved: false, penalty: null };
+    }
+    if (state.stage < state.sequence.length) {
+      return {
+        state: { ...state, stage: state.stage + 1, progress: 0, lastWrong: false },
+        solved: false,
+        penalty: null,
+      };
+    }
+    return { state: { ...state, progress, lastWrong: false }, solved: true, penalty: null };
   },
 
-  view(def, state, roleId) {
-    const isDisplay = roleId === def.operatorRoleId;
+  view(def, state, roleId, ctx) {
+    const isOperator = roleId === def.operatorRoleId;
     return {
       kind: 'simon',
-      sequence: isDisplay ? [...state.sequence] : null,
-      buttons: isDisplay ? [...state.buttonOrder] : null,
-      legend:
-        roleId === def.manualRoleId
-          ? Object.entries(state.mapping).map(([color, symbol]) => ({ color, symbol }))
-          : null,
+      flashes: isOperator ? state.sequence.slice(0, state.stage) : null,
+      buttons: isOperator ? [...SIMON_COLORS] : null,
+      stage: state.stage,
+      stages: state.sequence.length,
       progress: state.progress,
-      seqLength: state.sequence.length,
-      lastWrongIndex: isDisplay ? state.lastWrongIndex : null,
+      lastWrong: state.lastWrong,
+      alarms: ctx.alarms,
     };
   },
 
@@ -134,32 +178,36 @@ export const simonModule: PuzzleModule<SimonDef, SimonState, SimonInput, SimonVi
           {
             kind: 'p',
             text:
-              `Das Panel blinkt eine Folge aus ${def.sequenceLength} Farben. Jede Farbe steht ` +
-              'für einen Steuerimpuls.',
+              'Das Panel blinkt in Stufen: Stufe 1 zeigt eine Farbe, jede weitere Stufe eine ' +
+              `mehr, bis ${def.sequenceLength}. Jede Stufe ganz übersetzen und in derselben ` +
+              'Reihenfolge tippen. Tabelle „Mit Vokal“, wenn die Laborkennung A, E oder U ' +
+              'enthält, sonst „Ohne Vokal“. Zeile nach dem Alarmstand am Panel, Spalte nach ' +
+              'der blinkenden Farbe; das Feld nennt die Taste. Falsche Taste: Alarm, ' +
+              `−${def.penaltySec} s, die Stufe beginnt von vorn – mit der Zeile für den ` +
+              'neuen Alarmstand.',
           },
-          {
-            kind: 'rules',
-            items: [
-              'Welcher Impuls zu welcher Farbe gehört, zeigt die Legende. ' +
-                'Sie wechselt mit jedem Einsatz.',
-              'Folge Farbe für Farbe übersetzen, Impulse in derselben Reihenfolge tippen.',
-              `Falscher Impuls: Alarm, −${def.penaltySec} s. Die Folge beginnt von vorn.`,
-            ],
-          },
+          tableBlock('Mit Vokal', WITH_VOWEL),
+          tableBlock('Ohne Vokal', WITHOUT_VOWEL),
         ],
       },
     ];
   },
 
-  solve(def, views) {
-    const display = views[def.operatorRoleId];
-    const legend = views[def.manualRoleId]?.legend;
-    if (display?.sequence == null || display.buttons === null || legend == null) {
-      throw new Error(`simon "${def.id}": solving needs the display and the legend views`);
+  solve(def, views, edgework) {
+    if (edgework === null) {
+      throw new Error(
+        `simon "${def.id}": the translation reads the Laborkennung, but no role sees the edgework`,
+      );
     }
-    const color = display.sequence[display.progress];
-    const symbol = legend.find((entry) => entry.color === color)?.symbol;
-    const buttonIndex = display.buttons.findIndex((button) => button === symbol);
-    return buttonIndex < 0 ? [] : [{ roleId: def.operatorRoleId, input: { buttonIndex } }];
+    const operator = views[def.operatorRoleId];
+    if (operator?.flashes == null) {
+      throw new Error(`simon "${def.id}": solving needs the operator's view`);
+    }
+    const flashed = operator.flashes[operator.progress];
+    if (flashed === undefined) {
+      return [];
+    }
+    const color = pressFor(flashed, edgework, operator.alarms);
+    return [{ roleId: def.operatorRoleId, input: { kind: 'press', color } }];
   },
 };

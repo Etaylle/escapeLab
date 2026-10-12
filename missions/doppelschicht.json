@@ -101,7 +101,8 @@
     {
       "id": "leitstand",
       "name": "Leitstand (West)",
-      "description": "Westflügel. Du hast die Schaltpläne und die Sollwerte — aber die Anlagen stehen drüben im Osten."
+      "description": "Westflügel. Du hast die Schaltpläne und die Sollwerte — aber die Anlagen stehen drüben im Osten.",
+      "seesEdgework": true
     },
     {
       "id": "archiv",
@@ -214,23 +215,7 @@
       "prompt": "Das Frequenzpult im Osten blinkt. Die Übersetzungslegende liegt im Archiv im Westen.",
       "operatorRoleId": "technik",
       "manualRoleId": "archiv",
-      "buttonSymbols": ["♪", "≋", "Ψ", "Ø"],
-      "sequenceLength": 6,
-      "penaltySec": 20,
-      "infos": [
-        {
-          "roleId": "archiv",
-          "text": "Deine Legende übersetzt Farben in Impulse. Die Technik liest dir die Blinkfolge vor — antworte Symbol für Symbol."
-        },
-        {
-          "roleId": "technik",
-          "text": "Erst den Speicherkern einsetzen, sonst bleibt das Pult dunkel. Dann abspielen, Farben ansagen, nach Ansage tippen."
-        },
-        {
-          "roleId": "labor",
-          "text": "Messhinweis: Die Folge hat SECHS Impulse. Zähl laut mit — bei Impuls vier verzählen sich alle."
-        }
-      ]
+      "sequenceLength": 6
     },
     {
       "type": "button-sync",

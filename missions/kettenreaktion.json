@@ -126,7 +126,8 @@
     {
       "id": "steuerpult",
       "name": "Steuerpult",
-      "description": "Kabel, Schalter, Tasten — alles deins. Blind. Du bist die Hände eines Teams mit geteiltem Gehirn."
+      "description": "Kabel, Schalter, Tasten — alles deins. Blind. Du bist die Hände eines Teams mit geteiltem Gehirn.",
+      "seesEdgework": true
     }
   ],
   "puzzles": [
@@ -212,23 +213,7 @@
       "prompt": "Der Reaktor pulst seine Resonanzfrequenz als Lichtfolge. Sie muss invertiert zurückgespielt werden — übersetzt über die Legende des Handbuchs.",
       "operatorRoleId": "steuerpult",
       "manualRoleId": "anleitung",
-      "buttonSymbols": ["♪", "≋", "Ψ", "Ø"],
-      "sequenceLength": 6,
-      "penaltySec": 20,
-      "infos": [
-        {
-          "roleId": "anleitung",
-          "text": "Handbuch §6: Deine Legende übersetzt Farben in Dämpfungsimpulse. Das Steuerpult liest dir die Blinkfolge vor — antworte mit den Symbolen, eines nach dem anderen."
-        },
-        {
-          "roleId": "diagnose",
-          "text": "Messhinweis: Die Folge hat SECHS Impulse. Zähl laut mit — bei Impuls 4 verzählen sich alle."
-        },
-        {
-          "roleId": "steuerpult",
-          "text": "Abspielen, Farben ansagen, Symbole nach Ansage tippen. Ein Fehler setzt die Folge zurück (−20 s)."
-        }
-      ]
+      "sequenceLength": 6
     },
     {
       "type": "maze",
