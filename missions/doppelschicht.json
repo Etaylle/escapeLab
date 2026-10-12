@@ -188,24 +188,7 @@
       "title": "Freigabecode",
       "prompt": "Das Tastenfeld steht im Westflügel. Der Code ist auf zwei Konsolen im Osten verteilt.",
       "operatorRoleId": "archiv",
-      "manualRoleId": "technik",
-      "gridSymbols": ["꩜", "ψ", "Ѭ", "⍾", "☖", "Ω", "Ж", "҂", "₪"],
-      "code": ["Ω", "☖", "҂", "Ж"],
-      "penaltySec": 20,
-      "infos": [
-        {
-          "roleId": "technik",
-          "text": "Dein Teil des Codes, Zeichen 1 und 2: 1) Ω (Hufeisen), 2) ☖ (Haus mit Sockel)."
-        },
-        {
-          "roleId": "labor",
-          "text": "Dein Teil des Codes, Zeichen 3 und 4: 3) ҂ (durchgestrichenes Kreuz), 4) Ж (Käfer mit sechs Beinen)."
-        },
-        {
-          "roleId": "archiv",
-          "text": "Neun Tasten, vier davon zählen. Hol dir beide Hälften aus dem Osten, bevor du tippst — ein Fehler setzt alles zurück."
-        }
-      ]
+      "manualRoleId": "technik"
     },
     {
       "type": "simon",

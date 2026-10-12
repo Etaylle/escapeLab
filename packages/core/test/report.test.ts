@@ -27,8 +27,6 @@ const mission: Mission = parseMission({
       prompt: '',
       operatorRoleId: 'steuerpult',
       manualRoleId: 'anleitung',
-      gridSymbols: ['a', 'b', 'c', 'd'],
-      code: ['a', 'b'],
       penaltySec: 20,
     },
   ],
@@ -131,16 +129,16 @@ describe('run report', () => {
       ],
       state,
     );
-    const grid = (() => {
-      const view = viewFor(state, 'p2').puzzle;
-      return view?.kind === 'keypad' ? (view.grid ?? []) : [];
-    })();
-    for (const symbol of ['a', 'b']) {
+    const keypad = state.puzzleState;
+    if (keypad?.type !== 'keypad') {
+      throw new Error('expected the keypad station');
+    }
+    for (const glyph of keypad.order) {
       state = applyAction(state, {
         type: 'puzzle-input',
         playerId: 'p2',
         at: T0 + 10_000,
-        input: { keyIndex: grid.findIndex((k) => k.symbol === symbol) },
+        input: { keyIndex: keypad.keys.findIndex((k) => k.glyph === glyph) },
       });
     }
     expect(kinds(state.events).slice(-2)).toEqual(['puzzle', 'escape']);

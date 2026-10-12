@@ -332,7 +332,6 @@ if (
 }
 // Narrowed re-bindings: closures below keep the precise puzzle types.
 const WIRING = wiringDef;
-const KEYPAD = keypadDef;
 
 interface Clients {
   anleitung: TestClient;
@@ -470,14 +469,14 @@ async function solveKeypad(clients: Clients, benJoined: { code: string; playerId
     'avatar position survived the reconnect',
   );
 
-  const grid = benK.puzzle?.kind === 'keypad' && benK.puzzle.grid !== null ? benK.puzzle.grid : [];
-  assert(grid.length === KEYPAD.gridSymbols.length, 'keypad grid arrived after resume');
+  const keys = benK.puzzle?.kind === 'keypad' && benK.puzzle.keys !== null ? benK.puzzle.keys : [];
+  assert(keys.length === 4, 'keypad keys arrived after resume');
   const crew: Clients = { ...clients, steuerpult: ben2 };
   await clients.anleitung.until('the crew back together', (v) =>
     v.pausedFor === null && v.puzzle?.kind === 'keypad');
   const [right] = nextMoves(crew, 1);
   const rightIdx = right !== undefined && 'keyIndex' in right.input ? right.input.keyIndex : null;
-  const wrongIdx = grid.findIndex((_, i) => i !== rightIdx);
+  const wrongIdx = keys.findIndex((_, i) => i !== rightIdx);
   ben2.send({ kind: 'puzzle-input', input: { keyIndex: wrongIdx } });
   await ben2.expectView('sees the keypad alarm', (v) => v.penaltySeq === 2);
   await clients.anleitung.until('the keypad alarm', (v) => v.penaltySeq === 2);

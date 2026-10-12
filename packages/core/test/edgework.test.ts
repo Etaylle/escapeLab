@@ -60,8 +60,6 @@ const raw = {
       prompt: '',
       operatorRoleId: 'steuerpult',
       manualRoleId: 'anleitung',
-      gridSymbols: ['a', 'b', 'c', 'd'],
-      code: ['a', 'b'],
     },
   ],
 };

@@ -70,17 +70,17 @@ function atSwitches(seed = 42): GameState {
       input: { wireId: wire?.id ?? '' },
     });
   }
-  for (const symbol of keypadDef.code) {
-    const puzzle = viewFor(state, 'p2').puzzle;
-    if (puzzle?.kind !== 'keypad' || puzzle.grid === null) {
-      throw new Error('expected keypad view');
-    }
-    const idx = puzzle.grid.findIndex((k) => k.symbol === symbol);
+  // The keypad deals new keys every run; pressing them in their column's order clears it.
+  const keypad = state.puzzleState;
+  if (keypad?.type !== 'keypad') {
+    throw new Error('expected the keypad');
+  }
+  for (const glyph of keypad.order) {
     state = applyAction(state, {
       type: 'puzzle-input',
       playerId: 'p2',
       at: T0 + 2000,
-      input: { keyIndex: idx },
+      input: { keyIndex: keypad.keys.findIndex((k) => k.glyph === glyph) },
     });
   }
   return state;
