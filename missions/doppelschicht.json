@@ -5,7 +5,7 @@
   "listOrder": 40,
   "story": {
     "intro": "Das Nordlabor ist in zwei Flügel geteilt, und die Schleuse dazwischen ist verriegelt. Zwei von euch stehen im Westflügel, zwei im Ostflügel — ihr könnt euch nicht sehen und nicht helfen, nur funken. Jede einzelne Station braucht Wissen aus beiden Flügeln. Fünfzehn Minuten.",
-    "win": "Die Schleuse fährt auf, zum ersten Mal steht ihr euch gegenüber — und spaziert gemeinsam hinaus. Vier Köpfe, zwei Flügel, eine Schicht.",
+    "win": "Der Notausgang fährt auf, und ihr spaziert gemeinsam hinaus. Vier Köpfe, zwei Flügel, eine Schicht.",
     "lose": "Die Schleuse bleibt zu. Zwei Flügel, vier Leute, und am Ende doch zu wenig geredet."
   },
   "timeLimitSec": 900,
