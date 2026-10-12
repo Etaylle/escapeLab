@@ -175,7 +175,7 @@ describe('button: every instance', () => {
       if (first.solved) {
         continue;
       }
-      // Held: the views cannot time the release, so the solver waits and the clock decides.
+      // Held: the views cannot time the release, so without a clock the solver waits.
       expect(buttonModule.solve(def, viewsOf(first.state, edgework), edgework)).toEqual([]);
       const strip = operatorView(first.state, edgework).strip;
       if (strip === null) {
@@ -297,6 +297,43 @@ describe('button: letting go', () => {
     expect(apply(button('rot', 'HALTEN'), 'hold', edgework).penalty).toBe(
       'Knopf gehalten statt kurz gedrückt',
     );
+  });
+});
+
+describe('button: the solver on the clock', () => {
+  const letGo = [{ roleId: OPERATOR, input: { kind: 'release' } }];
+  /** The aid of a caller that keeps no transcript, reading `remainingSec` off its clock. */
+  const clockAt = (remainingSec: number | null) => ({ transcript: [], remainingSec });
+
+  it('lets go on exactly the seconds a release counts, for every strip over a whole run', () => {
+    const edgework = lab(0);
+    for (const strip of ['blau', 'weiß', 'gelb', 'rot'] as const) {
+      const held = apply(button('blau', 'ABBRUCH', strip), 'hold', edgework).state;
+      const digit = RELEASE_DIGIT[strip];
+      for (let sec = 600; sec > 0; sec--) {
+        const counts = shows(sec, digit) || shows(sec + 1, digit);
+        const moment = `${strip} at ${clock(sec)}`;
+        const moves = buttonModule.solve(def, viewsOf(held, edgework), edgework, clockAt(sec));
+        expect(moves, moment).toEqual(counts ? letGo : []);
+        expect(apply(held, 'release', edgework, sec).solved, moment).toBe(counts);
+      }
+    }
+  });
+
+  it('waits on a held button without a clock, and presses or holds whatever the clock says', () => {
+    const edgework = lab(2);
+    const held = apply(button('blau', 'ABBRUCH', 'weiß'), 'hold', edgework).state;
+    expect(buttonModule.solve(def, viewsOf(held, edgework), edgework, clockAt(null))).toEqual([]);
+    for (const [state, kind] of [
+      [button('blau', 'ABBRUCH'), 'hold'],
+      [button('gelb', 'DRÜCKEN'), 'press'],
+    ] as const) {
+      for (const sec of [null, 600, 124, 1]) {
+        expect(buttonModule.solve(def, viewsOf(state, edgework), edgework, clockAt(sec))).toEqual([
+          { roleId: OPERATOR, input: { kind } },
+        ]);
+      }
+    }
   });
 });
 

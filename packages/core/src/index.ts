@@ -36,6 +36,7 @@ export type {
   PuzzleDefCommon,
   PuzzleModule,
   PuzzleViewCommon,
+  SolveAid,
   ViewContext,
 } from './puzzles/module.js';
 export {

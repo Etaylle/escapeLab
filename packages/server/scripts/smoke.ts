@@ -16,9 +16,11 @@ import {
   type Edgework,
   type PlayerPosition,
   type PlayerView,
+  type PuzzleDef,
   type PuzzleInput,
   type PuzzleView,
   type ServerMessage,
+  type SolveAid,
   type SpectatorView,
 } from '@escapelab/core';
 
@@ -339,6 +341,10 @@ interface Clients {
 }
 
 type Move = { roleId: string; input: PuzzleInput };
+type Transcript = SolveAid<PuzzleInput, PuzzleView>['transcript'];
+
+/** How long the solver may keep a held button waiting for the clock. */
+const MAX_WAIT_SEC = 15;
 
 function clientFor(clients: Clients, roleId: string): TestClient {
   return roleId === 'anleitung' || roleId === 'steuerpult'
@@ -357,19 +363,40 @@ async function waitFor(desc: string, cond: () => boolean): Promise<void> {
 }
 
 /**
+ * What the two clients show of station `index`: each one's view of it, by
+ * role, the edgework if a role sees it and the seconds left on their clock.
+ */
+function crewSees(
+  clients: Clients,
+  index: number,
+): { views: Record<string, PuzzleView>; edgework: Edgework | null; remainingSec: number | null } {
+  const views: Record<string, PuzzleView> = {};
+  let edgework: Edgework | null = null;
+  let deadlineAt: number | null = null;
+  for (const [roleId, client] of Object.entries(clients)) {
+    const view = client.view ?? fail(`${client.label}: no view yet`);
+    views[roleId] = view.puzzle ?? fail(`${client.label}: station ${index + 1} is not open`);
+    edgework ??= view.edgework;
+    deadlineAt ??= view.deadlineAt;
+  }
+  const remainingSec = deadlineAt === null ? null : Math.ceil((deadlineAt - Date.now()) / 1000);
+  return { views, edgework, remainingSec };
+}
+
+/**
  * What the station's module would have the crew do next, worked out from
  * nothing but the two clients' views — and the edgework, if a role sees it.
  */
 function nextMoves(clients: Clients, index: number): Move[] {
   const def = mission.puzzles[index] ?? fail(`blackout has no station ${index + 1}`);
-  const views: Record<string, PuzzleView> = {};
-  let edgework: Edgework | null = null;
-  for (const [roleId, client] of Object.entries(clients)) {
-    const view = client.view ?? fail(`${client.label}: no view yet`);
-    views[roleId] = view.puzzle ?? fail(`${client.label}: station ${index + 1} is not open`);
-    edgework ??= view.edgework;
-  }
+  const { views, edgework } = crewSees(clients, index);
   return moduleFor(def.type).solve(def, views, edgework);
+}
+
+/** Whether the station's operator holds a button down: the one wait a solver may ask for. */
+function holdingDown(def: PuzzleDef, views: Record<string, PuzzleView>): boolean {
+  const operator = def.type === 'button' ? views[def.operatorRoleId] : undefined;
+  return operator?.kind === 'button' && operator.holding;
 }
 
 /**
@@ -395,21 +422,39 @@ async function play(clients: Clients, moves: Move[], index: number): Promise<voi
   );
 }
 
-/** Feed the solver the two clients' views until the station is done. */
+/**
+ * Feed the solver the two clients' views, and the moves it played here so
+ * far, until the station is done. A held button may wait for the clock: the
+ * solver is asked again every second, for up to MAX_WAIT_SEC.
+ */
 async function solveStation(clients: Clients, index: number): Promise<void> {
+  const def = mission.puzzles[index] ?? fail(`blackout has no station ${index + 1}`);
   const crew = Object.values(clients);
   await waitFor(`both clients at station ${index + 1}`, () =>
     crew.every((client) => client.view?.puzzle?.index === index),
   );
+  const transcript: Transcript = [];
+  let waited = 0;
   for (let round = 0; round < 100; round++) {
     if (crew.every((client) => (client.view?.currentPuzzleIndex ?? 0) > index)) {
       console.log(`✓ the solver cleared station ${index + 1} from the views alone`);
       return;
     }
-    const moves = nextMoves(clients, index);
+    const { views, edgework, remainingSec } = crewSees(clients, index);
+    const moves = moduleFor(def.type).solve(def, views, edgework, { transcript, remainingSec });
     if (moves.length === 0) {
-      fail(`the solver has no move for station ${index + 1}`);
+      if (!holdingDown(def, views)) {
+        fail(`the solver has no move for station ${index + 1}`);
+      }
+      if (waited === MAX_WAIT_SEC) {
+        fail(`the solver kept the button at station ${index + 1} held for ${waited} s`);
+      }
+      waited += 1;
+      await sleep(1000);
+      continue;
     }
+    waited = 0;
+    transcript.push(...moves.map((move) => ({ ...move, before: views })));
     await play(clients, moves, index);
   }
   fail(`station ${index + 1} is still open after 100 rounds`);
