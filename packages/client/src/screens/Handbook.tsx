@@ -19,8 +19,9 @@ const EDGEWORK_NOTE =
   'Laborkennung, Kontrollleuchten und Notstromzellen wechseln mit jedem Einsatz und stehen ' +
   'deshalb nicht in diesem Handbuch. Die Laborkennung besteht aus fünf Zeichen, einem ' +
   'Bindestrich und einer Ziffer, etwa K7G3A-2. Die drei Kontrollleuchten tragen Kürzel wie FRQ ' +
-  'oder SIG und sind an oder aus. Notstromzellen sind null bis vier eingesetzt. Wer die Station ' +
-  'bedient, sieht alle drei Angaben und liest sie vor, sobald eine Regel danach fragt.';
+  'oder SIG und sind an oder aus. Notstromzellen sind null bis vier eingesetzt. Genau eine Rolle ' +
+  'sieht alle drei Angaben auf ihrem Pult und liest sie vor, sobald eine Regel danach fragt — ' +
+  'die Rollenbeschreibung sagt, wer das ist.';
 
 async function fetchManual(missionId: string): Promise<MissionManual> {
   const res = await fetch(`/missions/${encodeURIComponent(missionId)}/manual`);

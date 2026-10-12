@@ -68,8 +68,17 @@ export function MazePanel({ puzzle, send }: PanelProps<'maze'>) {
     return (
       <div>
         <p className="muted">
-          Du siehst die Wände, aber nicht den Marker. Lass dir die Position ansagen (z. B. „C4")
-          und gib Richtungen durch. Ziel: <strong>{goalName}</strong>.
+          {puzzle.cells === null ? (
+            <>
+              Du siehst weder Marker noch Wände. Wiederhol jede angesagte Zelle und führ den Weg
+              mit, damit nichts verloren geht. Ziel: <strong>{goalName}</strong>.
+            </>
+          ) : (
+            <>
+              Du siehst die Wände, aber nicht den Marker. Lass dir die Position ansagen (z. B.
+              „C4") und gib Richtungen durch. Ziel: <strong>{goalName}</strong>.
+            </>
+          )}
         </p>
         <MazeGrid puzzle={puzzle} />
       </div>
