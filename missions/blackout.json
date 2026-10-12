@@ -10,8 +10,8 @@
   },
   "timeLimitSec": 540,
   "radio": {
-    "start": "Erst Notstrom: Kasten im Maschinenraum, Südwest. Anleitung sitzt im Archiv bei der Ersatzsicherung. Steuerpult, du liest die Laborkennung.",
-    "escape": "Licht ist wieder da, Applaus später. Notausgang offen, Südostecke hinter dem Reaktor. Die Uhr läuft, bis die ganze Crew draußen ist."
+    "start": "Notstrom zuerst: Kasten im Maschinenraum, Regeln im Archiv.",
+    "escape": "Licht ist da. Notausgang offen, Südostecke."
   },
   "map": {
     "tiles": [
@@ -43,12 +43,13 @@
     ],
     "plates": [
       { "id": "flurplatte", "x": 7, "y": 6, "label": "HALTEN" },
-      { "id": "serverplatte", "x": 16, "y": 6, "label": "HALTEN" }
+      { "id": "serverplatte", "x": 16, "y": 6, "label": "HALTEN" },
+      { "id": "kameraplatte", "x": 11, "y": 5, "label": "KAMERA HALTEN" }
     ],
     "stations": [
       { "puzzleId": "notstrom", "x": 1, "y": 9 },
       { "puzzleId": "zugangscode", "x": 8, "y": 5 },
-      { "puzzleId": "subsysteme", "x": 16, "y": 2 },
+      { "puzzleId": "subsysteme", "x": 13, "y": 5 },
       { "puzzleId": "frequenz", "x": 9, "y": 11 },
       { "puzzleId": "reaktorstart", "x": 15, "y": 9 }
     ],
@@ -57,24 +58,24 @@
         "id": "buch-archiv",
         "kind": "book",
         "x": 2,
-        "y": 3,
+        "y": 1,
         "label": "HANDBUCH",
-        "puzzleIds": ["notstrom", "subsysteme"]
+        "puzzleIds": ["notstrom", "zugangscode"]
       },
       {
-        "id": "buch-maschinenraum",
-        "kind": "book",
-        "x": 2,
-        "y": 11,
-        "label": "HANDBUCH",
-        "puzzleIds": ["zugangscode", "frequenz"]
+        "id": "terminal-server",
+        "kind": "terminal",
+        "x": 17,
+        "y": 2,
+        "label": "TERMINAL",
+        "puzzleIds": ["subsysteme", "frequenz"]
       }
     ],
-    "edgeworkSign": { "x": 4, "y": 9 },
+    "edgeworkSign": { "x": 4, "y": 3 },
     "labels": [
-      { "text": "ARCHIV", "x": 3, "y": 1 },
+      { "text": "ARCHIV", "x": 4, "y": 1 },
       { "text": "SERVERRAUM", "x": 12, "y": 1 },
-      { "text": "FLUR", "x": 13, "y": 5 },
+      { "text": "FLUR", "x": 5, "y": 5 },
       { "text": "MASCHINENRAUM", "x": 3, "y": 8 },
       { "text": "LABOR", "x": 9, "y": 8 },
       { "text": "REAKTOR", "x": 15, "y": 8 }
@@ -112,7 +113,8 @@
         "range": 4.5,
         "halfAngleDeg": 26,
         "penaltySec": 15,
-        "activeAfterSolved": 2
+        "activeAfterSolved": 2,
+        "frozenByPlate": "kameraplatte"
       },
       {
         "id": "laborwache",
@@ -132,12 +134,12 @@
     {
       "id": "anleitung",
       "name": "Anleitung",
-      "description": "Du hast das Notfall-Handbuch, siehst aber nicht jedes Gerät. An zwei Stationen bedienst du selbst — dann hält das Steuerpult die Tabellen."
+      "description": "Du startest im Archiv, neben Handbuch, Ersatzsicherung und Kennungsschild."
     },
     {
       "id": "steuerpult",
       "name": "Steuerpult",
-      "description": "Du stehst am Schaltschrank, nur du siehst die Laborkennung. Ohne Handbuch ist jeder Griff russisches Roulette. An zwei Stationen hältst du die Tabellen."
+      "description": "Du startest im Maschinenraum, am Sicherungskasten."
     }
   ],
   "puzzles": [
@@ -148,33 +150,27 @@
       "wires": { "min": 3, "max": 5 },
       "penaltySec": 30,
       "hints": [
-        "Zählt die Kabel und nehmt NUR die Liste für diese Zahl. Steuerpult, lies alle Farben von oben vor, bevor jemand schneidet.",
-        "Anleitung, prüf die Regeln der Liste von oben nach unten. Die erste, die zutrifft, entscheidet, auch wenn eine spätere ebenfalls passen würde.",
-        "Manche Regeln brauchen Werte vom Pult: letzte Ziffer der Laborkennung, Kontrollleuchte FRQ. Steuerpult, lies sie vor. Kabel 1 ist das oberste."
+        "Farben von oben ansagen, nur die Liste zur Kabelzahl prüfen; die erste zutreffende Regel gilt."
       ],
-      "onSolved": "Notstrom steht, Archiv offen. Anleitung, im Flur auf die Platte, dann kommt das Steuerpult raus. Terminal Flurmitte, diesmal tippst du."
+      "onSolved": "Archiv offen. Flurplatte öffnet den Maschinenraum."
     },
     {
       "type": "keypad",
       "id": "zugangscode",
       "title": "Zugangscode",
       "hints": [
-        "Anleitung, beschreib alle vier Zeichen, bevor gedrückt wird. Steuerpult, such die eine Spalte, in der alle vier stehen. Es passt immer nur eine.",
-        "Ein Zeichen kann in zwei Spalten stehen. Prüft jede Spalte gegen alle vier Tasten. Gedrückt wird in der Reihenfolge der Spalte, von oben nach unten.",
-        "Steuerpult, sag ein Zeichen nach dem anderen an, die Anleitung drückt. Ein Fehlgriff löscht nichts: Leuchtende Tasten bleiben an, weiter mit dem nächsten."
+        "Alle vier Zeichen beschreiben; die eine Spalte mit allen vier gibt die Reihenfolge, von oben."
       ],
-      "onSolved": "Schott offen, Sicherheit wieder wach: Drohne im Flur. Serverraum, Nordost. Anleitung hält die Platte am Ostende, Steuerpult geht rein."
+      "onSolved": "Schott offen. Drohne wach – Kameraplatte vor dem Serverraum."
     },
     {
       "type": "switches",
       "id": "subsysteme",
       "title": "Subsysteme hochfahren",
       "hints": [
-        "Steuerpult, sag alle sechs Schalter von links an: LED an oder aus, Markierung, Stern. Anleitung, schreib zu jedem den Buchstaben aus der Tabelle mit.",
-        "G, Z und L brauchen Werte vom Pult: letzte Ziffer der Laborkennung, Zahl der Notstromzellen, Kontrollleuchte SIG. Steuerpult, lies alles vor, bevor ihr stellt.",
-        "Umlegen heißt OBEN, nicht umlegen heißt UNTEN. Erst alle sechs stellen, dann zählt das Steuerpult die oberen laut nach. Danach einmal PRÜFEN."
+        "Schalter von links ansagen: LED, Markierung, Stern. Erst alle sechs stellen, dann einmal PRÜFEN."
       ],
-      "onSolved": "Netz stabil, Labortür offen, südlich vom Flur. Zweite Drohne pendelt im Labor, geht hinter ihr vorbei. Anleitung ans Panel an der Südwand."
+      "onSolved": "Labortür offen. Zweite Drohne im Labor."
     },
     {
       "type": "simon",
@@ -182,20 +178,16 @@
       "title": "Frequenz-Abgleich",
       "sequenceLength": 5,
       "hints": [
-        "Erst die Tabelle: Steuerpult, steht in der Laborkennung ein A, E oder U, gilt „Mit Vokal“, sonst „Ohne Vokal“. Die Zeile wählt der Alarmstand.",
-        "Anleitung, sag jede Stufe ganz an, von der ersten Farbe an. Steuerpult, übersetz Farbe für Farbe. Getippt wird die Übersetzung, nicht das Blinken.",
-        "Der Alarmstand zählt jeden Alarm, auch einen durch die Drohne. Nach einem Fehlgriff beginnt die Stufe von vorn: Alarmstand neu ablesen, Zeile neu wählen."
+        "Tabelle nach Vokal in der Laborkennung, Zeile nach Alarmstand; jede Stufe ganz übersetzen."
       ],
-      "onSolved": "Frequenz sitzt, der Reaktor im Südosten wartet. Ohne die Ersatzsicherung aus dem Archiv, ganz im Nordwesten, bleibt er tot. Einer holt sie."
+      "onSolved": "Reaktor offen. Ohne Ersatzsicherung bleibt er tot."
     },
     {
       "type": "button-sync",
       "id": "reaktorstart",
       "title": "Reaktor-Neustart",
       "hints": [
-        "Ein Zündschalter allein reicht nicht. Kommt der zweite Druck mehr als zwei Sekunden später, verfällt der erste. Kein Alarm, nur ein neuer Anlauf.",
-        "Beide an eure Zündschalter, dann zählt einer laut ein: drei, zwei, eins, JETZT. Gedrückt wird auf JETZT, von beiden, nicht schon auf eins.",
-        "Zeitfenster verpasst? Der späte Druck zählt schon für den nächsten Anlauf. Wer wieder drücken kann, drückt sofort."
+        "Beide an den Reaktor, laut einzählen und auf JETZT gleichzeitig drücken."
       ],
       "windowMs": 2000
     }

@@ -236,7 +236,10 @@ describe('lobby', () => {
     expect(again.phase).toBe('playing');
     expect(again.players.map((p) => p.roleId)).toEqual(['anleitung', 'steuerpult']);
     expect(again.currentPuzzleIndex).toBe(0);
-    expect(again.events).toEqual([]);
+    // The fresh report holds nothing but mission control's opener.
+    expect(again.events).toEqual([
+      { at: T0 + 500_000, kind: 'radio', label: mission.radio.start, seconds: null },
+    ]);
     expect(again.deadlineAt).toBe(T0 + 500_000 + mission.timeLimitSec * 1000);
   });
 
