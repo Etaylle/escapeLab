@@ -1,0 +1,107 @@
+/* --- memory --------------------------------------------------------------------------- */
+
+.memory {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.memory-stage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.memory-stage .code-dots {
+  margin: 0;
+}
+
+.memory-display {
+  display: grid;
+  place-items: center;
+  height: 120px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: #0b1117;
+  font-family: var(--mono);
+  font-size: 76px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  text-shadow: 0 0 18px var(--accent-glow);
+}
+
+.memory-keys {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.memory-key {
+  min-height: 76px;
+  padding: 0;
+  border-radius: 12px;
+  background: #0b1117;
+  font-family: var(--mono);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.memory .big-hint,
+.memory-note {
+  margin: 0;
+}
+
+.memory-note {
+  font-size: 13px;
+}
+
+/* The fall back to stage 1, flashed over the bank; taps go through it. */
+.memory-reset {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--danger);
+  border-radius: 12px;
+  background: rgba(88, 27, 27, 0.9);
+  color: #fecaca;
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  pointer-events: none;
+  animation: memory-reset 1.8s forwards;
+}
+
+@keyframes memory-reset {
+  0% {
+    opacity: 0;
+  }
+  10%,
+  30%,
+  50% {
+    opacity: 1;
+  }
+  20%,
+  40% {
+    opacity: 0.55;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
