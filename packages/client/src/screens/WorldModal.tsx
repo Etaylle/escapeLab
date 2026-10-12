@@ -9,6 +9,7 @@ import { EdgeworkChip } from './EdgeworkChip.js';
  */
 export function WorldModal({
   kind,
+  look,
   label,
   edgework,
   onClose,
@@ -16,14 +17,17 @@ export function WorldModal({
 }: {
   /** names the frame's class: `station-modal` or `reading-modal` */
   kind: 'station' | 'reading';
+  /** further classes for what is inside: a book, a terminal, a wall chart */
+  look?: string;
   label: string;
   edgework: Edgework | null;
   onClose: () => void;
   children: ReactNode;
 }) {
+  const frame = `puzzle-modal ${kind}-modal`;
   return (
     <div
-      className={`puzzle-modal ${kind}-modal`}
+      className={look === undefined ? frame : `${frame} ${look}`}
       role="dialog"
       aria-modal="true"
       aria-label={label}

@@ -9,6 +9,7 @@ import type {
   ServerMessage,
   SpectatorView,
 } from '@escapelab/core';
+import { forgetNotes, localStore } from './notes.js';
 
 interface Credentials {
   code: string;
@@ -51,6 +52,16 @@ function loadCredentials(): Credentials | null {
   } catch {
     return null;
   }
+}
+
+/** Out of the room for good: what this player noted there goes with it. */
+function forgetRoom(): void {
+  const creds = loadCredentials();
+  const store = localStore();
+  if (creds !== null && store !== null) {
+    forgetNotes(store, creds.code, creds.playerId);
+  }
+  sessionStorage.removeItem(STORAGE_KEY);
 }
 
 function wsUrl(): string {
@@ -154,7 +165,7 @@ export function useGameConnection(): Connection {
           if (resumingRef.current) {
             // Stored session is dead (room swept / token invalid): back to join.
             resumingRef.current = false;
-            sessionStorage.removeItem(STORAGE_KEY);
+            forgetRoom();
             setRoomCode(null);
             setView(null);
           }
@@ -188,7 +199,7 @@ export function useGameConnection(): Connection {
     },
     dismissError: () => setError(null),
     leaveRoom: () => {
-      sessionStorage.removeItem(STORAGE_KEY);
+      forgetRoom();
       location.reload();
     },
   };

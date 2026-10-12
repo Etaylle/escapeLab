@@ -214,9 +214,67 @@ function nearestManual(seen) {
   return options[0]?.manual ?? null;
 }
 
+/** Text of the first match, trimmed; null when nothing matches. */
+async function textOf(locator) {
+  return (await locator.count()) === 0 ? null : (await locator.first().innerText()).trim();
+}
+
+/** Book pages whose text runs past their foot: the pagination estimate fell short there. */
+async function pagesRunningOver(page) {
+  return page.evaluate(
+    () =>
+      [...document.querySelectorAll('.reading-modal .page-text')].filter(
+        (text) => text.scrollHeight - text.clientHeight > 1,
+      ).length,
+  );
+}
+
 /**
- * reading.png: a player walks to a manual object, presses E and reads. False
- * when no manual object is in reach for this player.
+ * reading-page2.png: one page turned — by a swipe across the pages, falling
+ * back to the arrow key if the swipe did nothing — forwards unless the
+ * source opened at its end. A wall chart has nothing to turn.
+ */
+async function capturePageTurn(page, overlay, who) {
+  const where = overlay.locator('.book-where, .terminal-status');
+  const before = await textOf(where);
+  if (before === null) {
+    console.log(`reading-page2.png  skipped: ${who} reads a wall chart, it has no pages`);
+    return;
+  }
+  const forwards = !(await overlay.locator('.turn-next').isDisabled());
+  if (!forwards && (await overlay.locator('.turn-back').isDisabled())) {
+    console.log(`reading-page2.png  skipped: "${before}" is all there is`);
+    return;
+  }
+  const box = await overlay.locator('.book-pages, .terminal-body').first().boundingBox();
+  if (box !== null) {
+    const y = box.y + box.height / 2;
+    const [from, to] = forwards ? [0.75, 0.2] : [0.25, 0.8];
+    await page.mouse.move(box.x + box.width * from, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * to, y, { steps: 6 });
+    await page.mouse.up();
+  }
+  await sleep(450);
+  let after = await textOf(where);
+  let how = 'swiped';
+  if (after === before) {
+    await page.keyboard.press(forwards ? 'ArrowRight' : 'ArrowLeft');
+    await sleep(450);
+    after = await textOf(where);
+    how = '!! the swipe did nothing, turned by key';
+  }
+  await page.screenshot({ path: join(OUT, 'reading-page2.png') });
+  console.log(
+    `reading-page2.png  ${who}: "${before}" → "${after}" ` +
+      `(${after === before ? '!! did not turn' : how}), ` +
+      `${await pagesRunningOver(page)} page(s) run over`,
+  );
+}
+
+/**
+ * reading.png: a player walks to a manual object, presses E and reads; then
+ * turns a page. False when no manual object is in reach for this player.
  */
 async function captureReading(page, seen, who) {
   const manual = nearestManual(seen);
@@ -227,16 +285,127 @@ async function captureReading(page, seen, who) {
   if (!(await interactUntil(page, overlay))) {
     throw new Error(`${who} stands at "${manual.id}", but no .reading-modal opened after 3 tries`);
   }
-  await sleep(300);
+  await sleep(400); // past the page's fade-in
   await page.screenshot({ path: join(OUT, 'reading.png') });
-  const sections = await overlay.locator('.reading-section').count();
+  const shows = await textOf(overlay.locator('.book-where, .terminal-status'));
   const over = await sideways(page, '.reading-modal .panel');
   console.log(
-    `reading.png        ${who}: "${manual.label}" (${manual.kind}), ${sections} section(s), ` +
+    `reading.png        ${who}: "${manual.label}" (${manual.kind}), ${shows ?? 'one sheet'}, ` +
+      `${await pagesRunningOver(page)} page(s) run over, ` +
       `panel ${over > 0 ? `!! +${over}px sideways` : 'fits sideways'}`,
   );
+  await capturePageTurn(page, overlay, who);
   await page.keyboard.press('Escape');
   await overlay.waitFor({ state: 'hidden', timeout: 3000 });
+  return true;
+}
+
+/** Whether two boxes overlap; a missing box overlaps nothing. */
+function overlapping(a, b) {
+  return (
+    a !== null &&
+    b !== null &&
+    a.x < b.x + b.width &&
+    b.x < a.x + a.width &&
+    a.y < b.y + b.height &&
+    b.y < a.y + a.height
+  );
+}
+
+/**
+ * notepad.png: the guest opens the notepad from the HUD, writes a line and
+ * takes the Laborkennung over. The pad is kept per room, so a reload has to
+ * bring the text back.
+ */
+async function captureNotepad(page) {
+  const pad = page.locator('.notepad');
+  await page.locator('.hud-notes').click();
+  await pad.waitFor({ state: 'visible', timeout: 3000 });
+  await pad.locator('textarea').fill('Spalte 4: Ω ☆ ¶ Ѭ');
+  const take = pad.locator('.notepad-take');
+  const offered = !(await take.isDisabled());
+  if (offered) {
+    await take.click();
+  }
+  await sleep(300);
+  await page.screenshot({ path: join(OUT, 'notepad.png') });
+  const written = await pad.locator('textarea').inputValue();
+  const dpad = await page.locator('.world-dpad').boundingBox();
+  const blocks = overlapping(await pad.boundingBox(), dpad);
+  console.log(
+    `notepad.png        guest: ` +
+      `${offered ? 'Laborkennung taken over' : '!! Laborkennung not offered'}, ` +
+      `${blocks ? '!! covers the steering pad' : 'clear of the steering pad'}`,
+  );
+
+  await page.reload();
+  await page.locator('.stage').waitFor({ timeout: 10_000 });
+  await page.locator('.overlay.pause').waitFor({ state: 'hidden', timeout: 10_000 });
+  await page.locator('.hud-notes').click();
+  await pad.waitFor({ state: 'visible', timeout: 3000 });
+  const kept = (await pad.locator('textarea').inputValue()) === written;
+  console.log(
+    `notepad            guest: ${kept ? 'text kept over a reload' : '!! text lost on reload'}`,
+  );
+  await pad.locator('.notepad-close').click();
+  await pad.waitFor({ state: 'hidden', timeout: 3000 });
+}
+
+/**
+ * hint-*.png: at a source covering the open station, a player asks the last
+ * crew for a note in the book's margin — while it is still held back, once it
+ * may be asked for, and with the note written in; the other player hears it
+ * on the radio meanwhile. False when no such source is in this player's reach.
+ */
+async function captureNotes(page, seen, who, other) {
+  const armed = seen.view.map.stations.find((s) => s.status === 'armed')?.puzzleId;
+  const source = nearestManual(seen);
+  const covers = source !== null && source.puzzleIds.includes(armed);
+  if (!covers || !(await walkNear(page, seen, source))) {
+    return false;
+  }
+  const overlay = page.locator('.reading-modal');
+  if (!(await interactUntil(page, overlay))) {
+    throw new Error(`${who} stands at "${source.id}", but no .reading-modal opened after 3 tries`);
+  }
+  const ask = overlay.locator('.note-ask');
+  await ask.waitFor({ state: 'visible', timeout: 3000 }).catch(() => undefined);
+  if ((await ask.count()) === 0) {
+    throw new Error(`${who} reads "${source.id}", but no .note-ask beside the open station`);
+  }
+  await page.screenshot({ path: join(OUT, 'hint-waiting.png') });
+  let label = (await ask.innerText()).trim();
+  console.log(`hint-waiting.png   ${who}: "${label}"`);
+
+  // The last crew's notes are held back for 45 s after a station opens.
+  const readyBy = Date.now() + 60_000;
+  while (!label.startsWith('Notiz der letzten Crew') && Date.now() < readyBy) {
+    await sleep(1000);
+    if (!(await overlay.isVisible())) {
+      throw new Error('the book closed while waiting for a note');
+    }
+    label = (await ask.innerText()).trim();
+  }
+  if (!label.startsWith('Notiz der letzten Crew')) {
+    throw new Error(`the ask button still reads "${label}" after 60 s`);
+  }
+  await page.screenshot({ path: join(OUT, 'hint-ready.png') });
+  console.log(`hint-ready.png     ${who}: "${label}"`);
+
+  await ask.click();
+  await overlay.locator('.margin-note').first().waitFor({ timeout: 5000 });
+  await sleep(600);
+  await page.screenshot({ path: join(OUT, 'hint-revealed.png') });
+  const notes = await overlay.locator('.margin-note').count();
+  const next = (await textOf(ask)) ?? 'none';
+  console.log(`hint-revealed.png  ${who}: ${notes} note(s) in the margin, next button "${next}"`);
+  await other.screenshot({ path: join(OUT, 'radio-banner.png') });
+  const banner = (await other.locator('.radio-banner').count()) > 0 ? 'up' : '!! missing';
+  const panel = (await other.locator('.station-modal').count()) > 0;
+  console.log(
+    `radio-banner.png   the other player: banner ${banner}, ` +
+      (panel ? '!! station panel shown away from the station' : 'no station panel away'),
+  );
   return true;
 }
 
@@ -353,7 +522,7 @@ async function run() {
   await watcher.screenshot({ path: join(OUT, 'spectate.png') });
   await overflow(watcher, 'spectate @ 1440x820');
 
-  // --- reading, the sign, hints: the guest reads, then works the first station ---
+  // --- reading, the sign, notes: the guest reads, opens the first station, asks for a note ---
   // The host's info panel may still be open; close it the way a player would.
   const closeInfo = host.locator('.info-card button', { hasText: 'Schließen' });
   if (await closeInfo.isVisible()) {
@@ -378,7 +547,9 @@ async function run() {
       console.log(`sign.png           skipped: the sign at ${sign.x},${sign.y} is out of reach`);
     }
   }
+  await captureNotepad(guest);
 
+  // The last crew's notes come only for an open station: open it, then go read.
   const station = guestSeen.view.map.stations.find((s) => s.status === 'armed');
   if (station === undefined || !(await walkNear(guest, guestSeen, station))) {
     throw new Error(`guest cannot walk to the armed station "${station?.puzzleId ?? '(none)'}"`);
@@ -388,49 +559,20 @@ async function run() {
     throw new Error(`guest stands at "${station.puzzleId}", but no .station-modal after 3 tries`);
   }
   await sleep(300); // past its fade-in
-
-  const strip = guest.locator('.hint-strip');
-  const hintButton = guest.locator('.hint-request');
-  await strip.scrollIntoViewIfNeeded();
   const stationSideways = await sideways(guest, '.station-modal .panel');
-  await guest.screenshot({ path: join(OUT, 'hint-waiting.png') });
+  await guest.screenshot({ path: join(OUT, 'station.png') });
   console.log(
-    `hint-waiting.png   guest: "${(await hintButton.innerText()).trim()}", ` +
+    `station.png        guest: "${station.title}", ` +
       `panel ${stationSideways > 0 ? `!! +${stationSideways}px sideways` : 'fits sideways'}`,
   );
-
-  // Mission control holds hints back for 45 s after a station opens.
-  const readyBy = Date.now() + 55_000;
-  let label = (await hintButton.innerText()).trim();
-  while (!label.startsWith('Hinweis anfordern') && Date.now() < readyBy) {
-    await sleep(1000);
-    if (!(await modal.isVisible())) {
-      throw new Error('the station closed while waiting for a hint (an emergency drops it)');
+  await guest.keyboard.press('Escape');
+  await modal.waitFor({ state: 'hidden', timeout: 3000 });
+  if (!(await captureNotes(guest, guestSeen, 'guest', host))) {
+    console.log('hint-*.png         guest: no source on the open station in reach — the host asks');
+    if (!(await captureNotes(host, hostSeen, 'host', guest))) {
+      console.log('hint-*.png         skipped: no source on the open station in reach of either');
     }
-    label = (await hintButton.innerText()).trim();
   }
-  if (!label.startsWith('Hinweis anfordern')) {
-    throw new Error(`hint button still reads "${label}" after 55 s`);
-  }
-  await strip.scrollIntoViewIfNeeded();
-  await guest.screenshot({ path: join(OUT, 'hint-ready.png') });
-  console.log(`hint-ready.png     guest: "${label}"`);
-
-  await hintButton.click();
-  await guest.locator('.hint-list li').first().waitFor({ timeout: 5000 });
-  await sleep(600);
-  await strip.scrollIntoViewIfNeeded();
-  await guest.screenshot({ path: join(OUT, 'hint-revealed.png') });
-  const guestHints = await guest.locator('.hint-list li').count();
-  const next = (await hintButton.count()) > 0 ? (await hintButton.innerText()).trim() : 'none';
-  console.log(`hint-revealed.png  guest: ${guestHints} hint(s), next button "${next}"`);
-  await host.screenshot({ path: join(OUT, 'radio-banner.png') });
-  const hostBanner = (await host.locator('.radio-banner').count()) > 0 ? 'up' : '!! missing';
-  const hostPanel = (await host.locator('.station-modal').count()) > 0;
-  console.log(
-    `radio-banner.png   host: banner ${hostBanner}, ` +
-      (hostPanel ? '!! station panel shown away from the station' : 'no station panel away'),
-  );
 
   await browser.close();
   console.log('screenshots in', OUT);
