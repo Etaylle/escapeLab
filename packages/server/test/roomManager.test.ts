@@ -54,11 +54,13 @@ describe('lobby browser', () => {
     const manager = new RoomManager();
     const room = manager.create(blackout);
     seat(room, 'Anna');
-    expect(manager.list()[0]?.free).toBe(1);
+    expect(manager.list()[0]?.free).toBe(2);
     seat(room, 'Ben');
+    expect(manager.list()[0]?.free).toBe(1);
+    seat(room, 'Cleo');
     const full = manager.list()[0];
     expect(full?.free).toBe(0);
-    expect(full?.players.map((p) => p.name)).toEqual(['Anna', 'Ben']);
+    expect(full?.players.map((p) => p.name)).toEqual(['Anna', 'Ben', 'Cleo']);
     room.dispose();
   });
 

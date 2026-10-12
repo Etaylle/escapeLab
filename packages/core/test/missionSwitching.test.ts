@@ -59,8 +59,14 @@ describe('mission switching & stats', () => {
       ],
       initialState(kettenreaktion),
     );
+    // The tutorial is for exactly two.
     expect(() =>
-      applyAction(three, { type: 'switch-mission', playerId: 'p1', mission: blackout, difficulty: 'normal' }),
+      applyAction(three, {
+        type: 'switch-mission',
+        playerId: 'p1',
+        mission: tutorial,
+        difficulty: 'normal',
+      }),
     ).toThrow(/zu viele Spieler/);
   });
 
