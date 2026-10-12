@@ -1,18 +1,18 @@
 {
   "id": "kettenreaktion",
   "title": "Kettenreaktion",
-  "subtitle": "Für Dreierteams: Handbuch, Diagnose und Steuerpult — keiner weiß genug, alle reden durcheinander.",
+  "subtitle": "Für drei: Jeder startet eingeschlossen, keiner kommt allein heraus.",
   "listOrder": 30,
   "players": { "min": 3, "max": 3 },
   "story": {
-    "intro": "Der Versuchsreaktor im Keller läuft heiß. Das Wissen, ihn zu stoppen, ist auf drei Stationen verteilt: das Handbuch, die Diagnose-Konsole und das Steuerpult. Zehn Minuten. Drei Stimmen. Ein Fehler zu viel — und ihr lernt, was »Kettenreaktion« wörtlich heißt.",
-    "win": "Die Kurve flacht ab, das Dröhnen verebbt — und ihr steht zu dritt am Notausgang, als die Schleuse hinter euch zufährt. Drei Stationen, eine Mannschaft, alle draußen. Lehrbuchleistung.",
+    "intro": "Der Versuchsreaktor im Keller läuft heiß. Jeder von euch sitzt in einem anderen verschlossenen Raum: Archiv, Leitstand, Messlabor. Die Regeln stehen in den Büchern im Archiv und im Messlabor, die Laborkennung hängt im Leitstand. Ein Fehler zu viel — und ihr lernt, was »Kettenreaktion« wörtlich heißt.",
+    "win": "Die Kurve flacht ab, das Dröhnen verebbt — und ihr steht zu dritt am Notausgang, als die Luke hinter euch zufährt. Drei Räume, eine Mannschaft, alle draußen. Lehrbuchleistung.",
     "lose": "Die Anzeigen springen auf Rot, dann auf Schwarz. Evakuierungssirenen. Immerhin: Simulationsende. Beim nächsten Mal redet ihr schneller — und präziser."
   },
   "timeLimitSec": 600,
   "radio": {
-    "start": "Steuerpult steckt im Leitstand. Anleitung, Diagnose: auf die HALTEN-Platte in eurem Raum, das öffnet die Schleuse. Erste Station im Flur.",
-    "escape": "Notausgang offen: Westende vom Flur, beim Leitungsnetz. Die Uhr läuft, bis alle drei draußen sind."
+    "start": "Platten in Archiv und Messlabor öffnen die Schleuse. Erste Station im Flur.",
+    "escape": "Notausgang offen, Westende vom Flur. Alle drei hin."
   },
   "map": {
     "tiles": [
@@ -141,33 +141,27 @@
       "wires": { "min": 4, "max": 6 },
       "penaltySec": 30,
       "hints": [
-        "Zählt die Kabel und nehmt NUR die Liste für diese Zahl. Steuerpult, lies alle Farben von oben vor, bevor jemand schneidet.",
-        "Schon die erste Regel eurer Liste fragt Laborkennung, Kontrollleuchten oder Notstromzellen ab. Die sieht nur das Steuerpult: Anleitung fragt, Steuerpult liest vor.",
-        "Regeln strikt von oben prüfen, die erste zutreffende entscheidet, auch wenn eine spätere besser passt. Gezählt wird von oben, getrennte Kabel zählen mit."
+        "Erst alle Farben von oben ansagen; nur die Liste zur Kabelzahl prüfen, die erste zutreffende Regel gilt."
       ],
-      "onSolved": "Last verteilt, Archiv offen. Einer auf die HALTEN-Platte im Flur, dann kommt die Diagnose raus. Weiter im Pumpenraum, Südost."
+      "onSolved": "Weiter im Pumpenraum, Südost. Regeln wieder im Archiv."
     },
     {
       "type": "switches",
       "id": "kuehlkreislauf",
       "title": "Kühlkreislauf",
       "hints": [
-        "Diagnose, sag alle sechs Schalter von links an: LED an oder aus, Markierung, Stern. Anleitung nennt zu jedem den Buchstaben, erst dann wird gestellt.",
-        "Für G, Z und L braucht die Anleitung Angaben vom Steuerpult: letzte Ziffer der Laborkennung, Zahl der Notstromzellen, ob SIG da ist und leuchtet.",
-        "Umlegen ist gefahrlos, nur PRÜFEN kostet. Vorher liest die Diagnose alle sechs Stellungen vor, und die Anleitung gleicht sie mit ihrer Liste ab."
+        "Schalter von links ansagen: LED, Markierung, Stern. Für G, Z und L die Werte vom Schild. Dann einmal PRÜFEN."
       ],
-      "onSolved": "Kühlung steht, Leitstandtür offen. Anleitung zum Freigabecode im Leitstand, Steuerpult führt Protokoll. Stift bereit."
+      "onSolved": "Leitstand offen. Freigabecode dort, Regeln im Messlabor."
     },
     {
       "type": "memory",
       "id": "freigabecode",
       "title": "Freigabecode",
       "hints": [
-        "Protokoll ist Pflicht: Steuerpult schreibt nach jedem Druck Stufe, Position von links und Beschriftung auf. Die Bank zeigt frühere Stufen nie wieder.",
-        "Ein Fehldruck wirft auf Stufe 1 zurück und belegt alle Stufen neu. Dann das Protokoll streichen und mit Stufe 1 frisch anfangen.",
-        "Position und Beschriftung nicht verwechseln. „Dieselbe Beschriftung“: die Ziffer im neuen Tastenbild suchen. „Dieselbe Position“: derselbe Platz von links."
+        "Pro Stufe Position und Beschriftung der gedrückten Taste notieren (Notizblock: N); spätere Stufen fragen danach."
       ],
-      "onSolved": "Freigabe erteilt, Resonator offen, südlich der Flurmitte. Durch die Westtür zur Station."
+      "onSolved": "Resonator offen. Station dahinter, durch die Westtür."
     },
     {
       "type": "simon",
@@ -175,11 +169,9 @@
       "title": "Resonanz-Dämpfung",
       "sequenceLength": 6,
       "hints": [
-        "Jede Stufe beginnt wieder bei der ersten Farbe. Steuerpult sagt die ganze Folge an, Diagnose übersetzt Farbe für Farbe, erst dann wird getippt.",
-        "Steuerpult, sag zuerst, ob die Laborkennung A, E oder U enthält. Das wählt die Tabelle, und die gilt für die ganze Station.",
-        "Die Zeile richtet sich nach dem Alarmstand am Panel. Er zählt jeden Alarm des Laufs, auch Drohnen und verpasste Notfälle. Springt er, gilt sofort die neue Zeile."
+        "Jede Stufe beginnt wieder bei der ersten Farbe. Tabelle nach Vokal in der Laborkennung, Zeile nach Alarmstand."
       ],
-      "onSolved": "Resonanz gedämpft, Kerntür offen. Nächste Station: Flur, Westende. Wer frei ist, bringt das Kühlmittel aus dem Pumpenraum in den Kern."
+      "onSolved": "Leitungsnetz am Westende vom Flur, Kühlmittel zum Kern."
     },
     {
       "type": "maze",
@@ -188,21 +180,14 @@
       "size": 6,
       "penaltySec": 12,
       "hints": [
-        "Steuerpult, sag nach jedem Schritt die Zelle an: Spalte, dann Zeile, etwa „C4“. Diagnose sucht den Weg auf dem Plan vom Ziel aus rückwärts.",
-        "Oben ist Zeile 1, links Spalte A. Sagt oben, unten, links, rechts, keine Himmelsrichtungen. Ein Schritt pro Ansage, dann die neue Zelle melden.",
-        "Anleitung, wiederhol jede gemeldete Zelle und führ den Weg mit. Nach einer Wand steht der Marker noch auf derselben Zelle: neu ansagen, neu planen."
+        "Nach jedem Schritt die Zelle ansagen, etwa C4; den Weg auf dem Plan vom Ziel rückwärts suchen."
       ],
-      "onSolved": "Impuls durch. Letzte Station im Kern, Südwest, nur mit Kühlmittel. Weg durch die Kammer."
+      "onSolved": "Alle in den Kern. Flurplatte öffnet das Messlabor."
     },
     {
       "type": "button-sync",
       "id": "abschaltung",
       "title": "Synchron-Abschaltung",
-      "hints": [
-        "Ein Druck gilt nur zweieinhalb Sekunden. Kommt der letzte später, verfallen die frühen. Kein Alarm, nur ein neuer Anlauf.",
-        "Anleitung zählt laut ein: drei, zwei, eins, JETZT. Alle drei drücken auf JETZT, keiner schon auf eins."
-      ],
-      "onSolved": "Abschaltung bestätigt, die Kurve fällt.",
       "windowMs": 2500
     }
   ]

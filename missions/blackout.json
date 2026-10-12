@@ -9,7 +9,7 @@
     "win": "Mit einem tiefen Brummen erwachen die Systeme, Licht flutet das Labor — und hinter euch fällt die Luke des Notausgangs ins Schloss. Alle draußen, die Zentrifugen laufen wieder. Ihr habt es geschafft.",
     "lose": "Ein letztes Flackern, dann ist es still. Die Notversorgung ist erschöpft, die Proben sind verloren. Das Labor bleibt dunkel … bis zum nächsten Versuch."
   },
-  "timeLimitSec": 540,
+  "timeLimitSec": 660,
   "radio": {
     "start": "Notstrom zuerst: Kasten im Maschinenraum, Handbuch im Archiv.",
     "escape": "Licht ist da. Notausgang offen, Südostecke."
@@ -100,7 +100,7 @@
       {
         "id": "ersatzsicherung",
         "label": "SICHERUNG",
-        "x": 1,
+        "x": 5,
         "y": 1,
         "deliverTo": { "x": 16, "y": 9 },
         "requiredFor": "reaktorstart"

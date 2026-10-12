@@ -1,18 +1,18 @@
 {
   "id": "doppelschicht",
   "title": "Doppelschicht",
-  "subtitle": "Für vier: zwei Flügel ohne Verbindung. Ihr seht euch nie — bis die Schleuse aufgeht.",
+  "subtitle": "Für vier: zwei Flügel ohne Verbindung — bis die Schleuse aufgeht.",
   "listOrder": 40,
   "players": { "min": 4, "max": 4 },
   "story": {
-    "intro": "Das Nordlabor ist in zwei Flügel geteilt, und die Schleuse dazwischen ist verriegelt. Zwei von euch stehen im Westflügel, zwei im Ostflügel — ihr könnt euch nicht sehen und nicht helfen, nur funken. Jede einzelne Station braucht Wissen aus beiden Flügeln. Fünfzehn Minuten.",
+    "intro": "Das Nordlabor ist in zwei Flügel geteilt, die Schleuse dazwischen ist verriegelt. Zwei von euch starten im Westflügel, zwei im Ostflügel; von Flügel zu Flügel geht nur Funk. Neben jedem Startplatz liegt ein Handbuch, immer mit Regeln für den anderen Flügel. Die Laborkennung hängt im Westflügel.",
     "win": "Der Notausgang fährt auf, und ihr spaziert gemeinsam hinaus. Vier Köpfe, zwei Flügel, eine Schicht.",
-    "lose": "Die Schleuse bleibt zu. Zwei Flügel, vier Leute, und am Ende doch zu wenig geredet."
+    "lose": "Die Zeit ist um. Zwei Flügel, vier Leute — und am Ende doch zu wenig geredet."
   },
   "timeLimitSec": 900,
   "radio": {
-    "start": "Erst Notstrom: Brückenkasten im Ostflügel, unter dem Schild. Labor schneidet, Archiv hat die Listen, Leitstand die Laborkennung.",
-    "escape": "Not-Aus bestätigt. Ausgang in der Schleusenmitte. Die Uhr läuft, bis alle vier dort stehen."
+    "start": "Notstrom zuerst: Kasten im Ostflügel, Regeln im Südwesten.",
+    "escape": "Notausgang offen, Schleusenmitte. Alle vier hin."
   },
   "map": {
     "tiles": [
@@ -142,44 +142,36 @@
       "wires": { "min": 4, "max": 6 },
       "penaltySec": 30,
       "hints": [
-        "Labor, zähl die Kabel und lies alle Farben von oben vor, bevor jemand schneidet. Archiv, nimm nur die Liste für genau diese Zahl.",
-        "Archiv, prüf die Regeln der Liste von oben, die erste zutreffende gilt. Fragt eine nach Laborkennung, Leuchte oder Zellen, sagt der Leitstand an.",
-        "Gezählt wird von oben, getrennte Kabel zählen mit. Archiv nennt die Position, Labor wiederholt Farbe und Nummer und schneidet erst dann."
+        "Farben von oben ansagen, nur die Liste zur Kabelzahl prüfen. Kennung, Leuchten und Zellen: Schild im Westflügel."
       ],
-      "onSolved": "Notstrom steht. Archiv, Tastenfeld in der Südostecke vom Westflügel, Technik hat die Zeichentabelle. Die Drohne pendelt genau dort."
+      "onSolved": "Tastenfeld im Westflügel, Südostecke. Regeln im Nordosten."
     },
     {
       "type": "keypad",
       "id": "zugangscode",
       "title": "Freigabecode",
       "hints": [
-        "Archiv, beschreib alle vier Zeichen, bevor du drückst. Technik, such die eine Spalte, in der alle vier stehen. Es passt immer genau eine.",
-        "Steht ein Zeichen in zwei Spalten, entscheiden die anderen drei. Technik, prüf jede Spalte gegen alle vier Beschreibungen, nicht nur gegen eine.",
-        "Gedrückt wird in der Reihenfolge der Spalte, von oben nach unten. Technik nennt das nächste Zeichen, Archiv beschreibt seine Taste zurück, dann drücken."
+        "Erst alle vier Zeichen beschreiben, dann die eine Spalte mit allen vier suchen; ihre Reihenfolge von oben gilt."
       ],
-      "onSolved": "Freigabe erteilt. Leitstand, Kühlbank an der Westwand, Labor hat die Tabelle. Halte Laborkennung, Zellen und Leuchten bereit."
+      "onSolved": "Kühlbank im Westflügel, Westwand. Regeln im Südosten."
     },
     {
       "type": "switches",
       "id": "kuehlung",
       "title": "Kühlkreislauf",
       "hints": [
-        "Leitstand, sag alle sechs Schalter von links an: LED, Markierung, Stern. Labor, such für jeden die Zeile und notier den Buchstaben.",
-        "Für G, Z und L braucht Labor drei Angaben vom Leitstand: letzte Ziffer der Laborkennung, Zahl der Notstromzellen, Kontrollleuchte SIG.",
-        "Umlegen ist gefahrlos, erst PRÜFEN zählt. Leitstand, lies vor dem Prüfen alle sechs Stellungen zurück, Labor gleicht sie mit den Buchstaben ab."
+        "Schalter von links ansagen: LED, Markierung, Stern. Für G, Z und L die Werte vom Schild. Dann einmal PRÜFEN."
       ],
-      "onSolved": "Kühlung stabil. Technik, Funkpult an der Ostwand im Ostflügel. Archiv, Morsetafel und Frequenztabelle bereithalten."
+      "onSolved": "Funkpult im Ostflügel, Ostwand. Regeln im Südwesten."
     },
     {
       "type": "morse",
       "id": "funkfeuer",
       "title": "Funkfeuer",
       "hints": [
-        "Technik, wart die lange Pause ab, dann sag jeden Buchstaben als kurz und lang an. Archiv, schlag jeden einzeln in der Morsetafel nach.",
-        "Drei Buchstaben reichen, dann steht das Wort in der Frequenztabelle fest. Passt keines, ab der nächsten langen Pause neu ansagen.",
-        "Archiv nennt die Frequenz, Technik stellt sie mit den Pfeiltasten ein, liest die Anzeige Ziffer für Ziffer zurück und drückt erst dann SENDEN."
+        "Ab der langen Pause jeden Buchstaben als kurz und lang ansagen; nach drei Buchstaben steht das Wort fest."
       ],
-      "onSolved": "Funkkontakt steht. Ostflügel, bringt den Speicherkern aus der Nordostecke an die Schleusenwand. Netz gleich südlich, Drohne beachten."
+      "onSolved": "Speicherkern an die Schleusenwand, Schaltplan im Nordwesten."
     },
     {
       "type": "maze",
@@ -188,31 +180,23 @@
       "size": 6,
       "penaltySec": 12,
       "hints": [
-        "Labor, sag zuerst deine Zelle an, Spalte und Zeile, etwa C4. Leitstand, such sie im Plan und leg den Weg zum Ziel fest, bevor es losgeht.",
-        "Ein Schritt pro Ansage: Leitstand sagt oben, unten, links oder rechts, Labor geht und meldet die neue Zelle. So fällt ein Fehler sofort auf.",
-        "Leitstand, verfolg den Weg vom Ziel rückwärts bis zum Impuls, dann fallen Sackgassen weg. Nach einer Wand bleibt der Impuls stehen: Zelle neu ansagen."
+        "Nach jedem Schritt die Zelle ansagen, etwa C4; den Weg auf dem Plan vom Ziel rückwärts suchen."
       ],
-      "onSolved": "Impuls ist durch. Archiv, Druckknopf im Westflügel unter dem Schild. Technik hat die Regeln, Leitstand liest Zellen und Leuchten vor."
+      "onSolved": "Druckknopf im Westflügel, Nordseite. Regeln im Nordosten."
     },
     {
       "type": "button",
       "id": "druckausgleich",
       "title": "Druckausgleich",
       "hints": [
-        "Archiv, sag Farbe und Aufschrift an. Technik, prüf die Regeln von oben. Fragt eine nach Zellen oder Leuchten, sagt der Leitstand an.",
-        "Halten heißt gedrückt lassen. Archiv, sag sofort die Farbe des Streifens an, Technik liest dazu die Ziffer aus der zweiten Liste.",
-        "Archiv, loslassen, sobald die Ziffer irgendwo auf der Missionsuhr im Knopffeld steht, egal ob bei Minuten oder Sekunden."
+        "Beim Halten sofort die Streifenfarbe ansagen; loslassen, sobald ihre Ziffer irgendwo auf der Missionsuhr steht."
       ],
-      "onSolved": "Druck ausgeglichen, Schleuse offen. Letzte Station: Not-Aus an der Westwand, Höhe Schleuse. Alle vier an die Freigaben, Leitstand zählt ein."
+      "onSolved": "Schleuse offen. Alle vier zum Not-Aus, Westwand."
     },
     {
       "type": "button-sync",
       "id": "notaus",
       "title": "Not-Aus beider Flügel",
-      "hints": [
-        "Alle vier Freigaben müssen innerhalb von drei Sekunden gedrückt sein. Ein zu früher Druck verfällt, kein Alarm, nur ein neuer Anlauf.",
-        "Leitstand zählt für beide Flügel ein: drei, zwei, eins, JETZT. Gedrückt wird auf JETZT, von allen vier, nicht schon auf eins."
-      ],
       "windowMs": 3000
     }
   ]
