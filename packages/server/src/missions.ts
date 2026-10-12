@@ -96,6 +96,10 @@ function stationRoles(
       manualRoleName: null,
     };
   }
+  if (!('operatorRoleId' in def)) {
+    // An emergency module never stands at a station; mission validation rejects that.
+    throw new Error(`"${def.type}" is not a station module`);
+  }
   return {
     operatorRoleName: roleName(def.operatorRoleId),
     manualRoleName: roleName(def.manualRoleId),

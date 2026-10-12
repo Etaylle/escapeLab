@@ -64,6 +64,7 @@ export {
   type DronePosition,
 } from './protocol.js';
 export { SIMON_COLORS, type SimonColor } from './puzzles/simon.js';
+export type { RelayView } from './puzzles/relay.js';
 export { CHAT_PHRASES, CHAT_PHRASE_IDS, chatText, type ChatPhrase } from './chat.js';
 export {
   scaleMission,

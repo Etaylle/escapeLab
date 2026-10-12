@@ -12,6 +12,14 @@ import type { Mission } from './mission.js';
 import { mulberry32 } from './rng.js';
 import { moduleFor, type PuzzleDef, type PuzzleState } from './puzzles/index.js';
 import type { PuzzleContext } from './puzzles/module.js';
+import {
+  expireRelay,
+  relayDefFor,
+  relayModule,
+  shiftRelay,
+  type RelayDef,
+  type RelayState,
+} from './puzzles/relay.js';
 import { armedStation } from './map.js';
 
 /**
@@ -36,6 +44,8 @@ export type Action =
   | { type: 'sabotage-start'; at: number }
   | { type: 'sabotage-cleared'; at: number }
   | { type: 'sabotage-expired'; at: number }
+  /** once a second during a relay emergency: instructions that ran out are replaced */
+  | { type: 'sabotage-tick'; at: number }
   | { type: 'set-paused'; paused: boolean; at: number }
   | { type: 'pick-item'; playerId: string; itemId: string; at: number }
   | { type: 'drop-item'; playerId: string; itemId: string; x: number; y: number; at: number }
@@ -90,11 +100,12 @@ export function applyAction(state: GameState, action: Action): GameState {
     case 'sabotage-start':
       return startSabotage(state, action);
     case 'sabotage-cleared':
-      return state.sabotage === null
-        ? state
-        : logEvent({ ...state, sabotage: null }, 'sabotage', 'Notfall behoben', action.at);
+      // Manned valves; a relay emergency is only cleared by its instructions.
+      return state.sabotage?.emergency === undefined ? clearSabotage(state, action.at) : state;
     case 'sabotage-expired':
       return expireSabotage(state, action);
+    case 'sabotage-tick':
+      return tickEmergency(state, action);
     case 'set-paused':
       return setPaused(state, action);
     case 'pick-item':
@@ -463,16 +474,108 @@ function startSabotage(state: GameState, action: { at: number }): GameState {
   if (state.phase !== 'playing' || sabotage === undefined || state.sabotage !== null) {
     return state;
   }
+  const endsAt = action.at + sabotage.durationSec * 1000;
   return logEvent(
     {
       ...state,
       puzzleState: null,
-      sabotage: { endsAt: action.at + sabotage.durationSec * 1000 },
+      sabotage:
+        sabotage.mode === 'relay'
+          ? { endsAt, emergency: openEmergency(state, action.at) }
+          : { endsAt },
     },
     'sabotage',
     `Notfall: ${sabotage.label}`,
     action.at,
   );
+}
+
+/** The emergency is over in time: the crew can get back to the stations. */
+function clearSabotage(state: GameState, at: number): GameState {
+  return state.sabotage === null
+    ? state
+    : logEvent({ ...state, sabotage: null }, 'sabotage', 'Notfall behoben', at);
+}
+
+/** The relay emergency's def; rebuilt from the mission whenever needed, never stored. */
+function emergencyDef(state: GameState): RelayDef {
+  const sabotage = state.mission.map?.sabotage;
+  if (sabotage === undefined) {
+    throw new Error(`mission "${state.mission.id}" has no sabotage to run a relay emergency`);
+  }
+  return relayDefFor(state.mission.roles, sabotage);
+}
+
+/** Emergencies roll on their own stream, salted with the moment they start. */
+const EMERGENCY_STREAM = 0x52454c41;
+
+/** A relay emergency's consoles and first instructions, rolled from the run's seed. */
+function openEmergency(state: GameState, at: number): RelayState {
+  const rng = mulberry32(((state.seed ?? 0) ^ EMERGENCY_STREAM ^ at) >>> 0);
+  return relayModule.init(emergencyDef(state), rng, puzzleContext(state, at));
+}
+
+/** Instructions run out on the clock; each that did is a miss and is replaced. */
+function tickEmergency(state: GameState, action: { at: number }): GameState {
+  const emergency = state.sabotage?.emergency;
+  if (
+    state.phase !== 'playing' ||
+    state.paused !== null ||
+    state.sabotage === null ||
+    emergency === undefined
+  ) {
+    return state;
+  }
+  const aged = expireRelay(emergencyDef(state), emergency, action.at);
+  if (aged === emergency) {
+    return state;
+  }
+  return { ...state, sabotage: { ...state.sabotage, emergency: aged } };
+}
+
+/**
+ * A move at a relay emergency's consoles — while one runs, every input goes
+ * there. Enough completed instructions clear it the way manned valves do.
+ */
+function handleEmergencyInput(
+  state: GameState,
+  action: { playerId: string; at: number; input: unknown },
+  sabotage: NonNullable<GameState['sabotage']>,
+  emergency: RelayState,
+): GameState {
+  if (state.paused !== null) {
+    fail('Die Mission ist pausiert — es fehlt jemand aus der Crew.');
+  }
+  if (state.deadlineAt !== null && action.at >= state.deadlineAt) {
+    return lostNow(state, action.at);
+  }
+  const input = relayModule.inputSchema.safeParse(action.input);
+  if (!input.success) {
+    fail('Ungültige Eingabe.');
+  }
+  const { roleId } = findPlayer(state, action.playerId);
+  if (roleId === null) {
+    fail('Ohne Rolle kannst du hier nichts tun.');
+  }
+  const def = emergencyDef(state);
+  const ctx = puzzleContext(state, action.at);
+  const result = relayModule.apply(def, emergency, input.data, roleId, ctx);
+  const next = { ...state, sabotage: { ...sabotage, emergency: result.state } };
+  if (result.penalty !== null) {
+    return applyPenalty(next, def.penaltySec, action.at, result.penalty);
+  }
+  return result.solved ? clearSabotage(next, action.at) : next;
+}
+
+/** The emergency's deadline, and a relay's instruction clocks, moved on by `ms`. */
+function shiftSabotage(
+  sabotage: NonNullable<GameState['sabotage']>,
+  ms: number,
+): NonNullable<GameState['sabotage']> {
+  const endsAt = sabotage.endsAt + ms;
+  return sabotage.emergency === undefined
+    ? { endsAt }
+    : { endsAt, emergency: shiftRelay(sabotage.emergency, ms) };
 }
 
 /**
@@ -494,7 +597,7 @@ function setPaused(state: GameState, action: { paused: boolean; at: number }): G
     ...state,
     paused: null,
     deadlineAt: state.deadlineAt === null ? null : state.deadlineAt + frozen,
-    sabotage: state.sabotage === null ? null : { endsAt: state.sabotage.endsAt + frozen },
+    sabotage: state.sabotage === null ? null : shiftSabotage(state.sabotage, frozen),
     hintReadyAt: state.hintReadyAt === null ? null : state.hintReadyAt + frozen,
   };
 }
@@ -517,6 +620,10 @@ function handlePuzzleInput(
   state: GameState,
   action: { playerId: string; at: number; input: unknown },
 ): GameState {
+  const sabotage = state.sabotage;
+  if (state.phase === 'playing' && sabotage?.emergency !== undefined) {
+    return handleEmergencyInput(state, action, sabotage, sabotage.emergency);
+  }
   const playing = requirePlaying(state, action.playerId, action.at);
   if (playing === 'lost') {
     return lostNow(state, action.at);

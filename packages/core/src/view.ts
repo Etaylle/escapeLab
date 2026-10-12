@@ -2,7 +2,8 @@ import type { Difficulty } from './difficulty.js';
 import type { Edgework } from './edgework.js';
 import { CREW_COLORS, type GameState, type Phase, type RunEvent } from './state.js';
 import { moduleFor, type PuzzleDef, type PuzzleView } from './puzzles/index.js';
-import type { ViewContext } from './puzzles/module.js';
+import type { ManualSection, ViewContext } from './puzzles/module.js';
+import { relayDefFor, relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
 import { doorOpen, platePressed } from './map.js';
 
 /**
@@ -97,6 +98,8 @@ export interface MapView {
     hint: string;
     endsAt: number;
     panels: { id: string; x: number; y: number; occupied: boolean }[];
+    /** relay mode only: this role's console and instruction, and the drill as printed */
+    relay?: RelayView & { manual: ManualSection[] };
   } | null;
 }
 
@@ -185,7 +188,37 @@ function puzzleViewFor(state: GameState, roleId: string | null): PuzzleView | nu
   };
 }
 
-function mapViewFor(state: GameState, playerId: string): MapView | null {
+/**
+ * The running relay emergency as one role sees it, with the def it runs on;
+ * null in valves mode and between emergencies.
+ */
+function relayViewFor(
+  state: GameState,
+  roleId: string | null,
+): { def: RelayDef; view: RelayView } | null {
+  const sabotage = state.mission.map?.sabotage;
+  const emergency = state.sabotage?.emergency;
+  if (sabotage === undefined || emergency === undefined) {
+    return null;
+  }
+  if (state.edgework === null) {
+    throw new Error('emergency view: this run has no edgework — was start-mission skipped?');
+  }
+  const def = relayDefFor(state.mission.roles, sabotage);
+  const ctx: ViewContext = { edgework: state.edgework, alarms: state.penaltySeq };
+  return { def, view: relayModule.view(def, emergency, roleId, ctx) };
+}
+
+/** Relay mode adds the role's console and the printed drill to the sabotage view. */
+function relayPartFor(
+  state: GameState,
+  roleId: string | null,
+): Pick<NonNullable<MapView['sabotage']>, 'relay'> {
+  const relay = relayViewFor(state, roleId);
+  return relay === null ? {} : { relay: { ...relay.view, manual: relayModule.manual(relay.def) } };
+}
+
+function mapViewFor(state: GameState, playerId: string, roleId: string | null): MapView | null {
   const map = state.mission.map;
   if (map === undefined || state.phase !== 'playing') {
     return null;
@@ -253,6 +286,7 @@ function mapViewFor(state: GameState, playerId: string): MapView | null {
               y: p.y,
               occupied: state.occupiedPanels.includes(p.id),
             })),
+            ...relayPartFor(state, roleId),
           },
   };
 }
@@ -292,6 +326,8 @@ export interface SpectatorView {
     roleName: string;
     puzzle: PuzzleView | null;
     edgework: Edgework | null;
+    /** during a relay emergency: that role's console and instruction */
+    emergency?: RelayView;
   }[];
 }
 
@@ -324,13 +360,17 @@ export function viewForSpectator(state: GameState): SpectatorView {
       color: p.color,
       connected: p.connected,
     })),
-    map: mapViewFor(state, state.players[0]?.id ?? ''),
-    panels: state.mission.roles.map((role) => ({
-      roleId: role.id,
-      roleName: role.name,
-      puzzle: puzzleViewFor(state, role.id),
-      edgework: edgeworkFor(state, role.id),
-    })),
+    map: mapViewFor(state, state.players[0]?.id ?? '', null),
+    panels: state.mission.roles.map((role) => {
+      const relay = relayViewFor(state, role.id);
+      return {
+        roleId: role.id,
+        roleName: role.name,
+        puzzle: puzzleViewFor(state, role.id),
+        edgework: edgeworkFor(state, role.id),
+        ...(relay === null ? {} : { emergency: relay.view }),
+      };
+    }),
   };
 }
 
@@ -393,6 +433,6 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     hintsUsed: state.hintsUsed,
     edgework: edgeworkFor(state, you.roleId),
     puzzle: puzzleViewFor(state, you.roleId),
-    map: mapViewFor(state, playerId),
+    map: mapViewFor(state, playerId, you.roleId),
   };
 }

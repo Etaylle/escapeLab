@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { PlayerPosition, DronePosition, SpectatorView } from '@escapelab/core';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
+import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
 import { Manual } from './Manual.js';
 import { EdgeworkChip } from './EdgeworkChip.js';
@@ -97,7 +98,11 @@ export function SpectateScreen({
                 <div className="panel-label">// {panel.roleName}</div>
                 {panel.edgework !== null && <EdgeworkChip edgework={panel.edgework} />}
               </div>
-              {panel.puzzle === null ? (
+              {panel.emergency !== undefined ? (
+                <div className="read-only">
+                  <RelayConsole relay={panel.emergency} send={noop} />
+                </div>
+              ) : panel.puzzle === null ? (
                 <p className="muted">Unterwegs — gerade keine Station offen.</p>
               ) : (
                 <>

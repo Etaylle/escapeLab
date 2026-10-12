@@ -8,6 +8,7 @@ import type {
   RunEvent,
 } from '@escapelab/core';
 import { BANNER_MS, radioNews } from '../radio.js';
+import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { play } from '../sounds.js';
 import { radioChirp } from '../world/audio.js';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
@@ -66,6 +67,46 @@ function SabotageAlert({ sabotage }: { sabotage: NonNullable<PlayerView['map']>[
         <span className="muted">
           {manned}/{sabotage.panels.length} besetzt
         </span>
+      </div>
+    </div>
+  );
+}
+
+type Sabotage = NonNullable<NonNullable<PlayerView['map']>['sabotage']>;
+
+/**
+ * Relay mode: no valves to run to — the role's console stays in front of
+ * everything until the emergency is over, the instruction to read out on top.
+ */
+function RelayAlert({
+  sabotage,
+  relay,
+  send,
+}: {
+  sabotage: Sabotage;
+  relay: NonNullable<Sabotage['relay']>;
+  send: (msg: ClientMessage) => void;
+}) {
+  const now = useNow(200);
+  const left = Math.max(0, Math.ceil((sabotage.endsAt - now) / 1000));
+  return (
+    <div
+      className="puzzle-modal relay-modal"
+      role="alertdialog"
+      aria-modal="true"
+      aria-label={sabotage.label}
+    >
+      <div className="panel">
+        <div className="sabotage-head">
+          <span className="sabotage-label">🚨 {sabotage.label}</span>
+          <span className="sabotage-clock">{left}s</span>
+        </div>
+        {sabotage.hint !== '' && <p className="sabotage-hint">{sabotage.hint}</p>}
+        <RelayConsole relay={relay} send={(input) => send({ kind: 'puzzle-input', input })} />
+        <details className="relay-manual">
+          <summary>ABLAUF NACHLESEN</summary>
+          <Manual sections={relay.manual} />
+        </details>
       </div>
     </div>
   );
@@ -261,6 +302,7 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
   const [infoOpen, setInfoOpen] = useState(false);
   const puzzle = view.puzzle;
   const map = view.map;
+  const relay = map?.sabotage?.relay;
   if (puzzle === null && map === null) {
     return <p className="muted">Lade Mission …</p>;
   }
@@ -311,7 +353,10 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
 
       {puzzle !== null && map === null && <p className="story">{puzzle.prompt}</p>}
 
-      {map !== null && <SabotageAlert sabotage={map.sabotage} />}
+      {map !== null && relay === undefined && <SabotageAlert sabotage={map.sabotage} />}
+      {map !== null && map.sabotage !== null && relay !== undefined && (
+        <RelayAlert sabotage={map.sabotage} relay={relay} send={send} />
+      )}
 
       {alarmVisible && view.lastPenaltySec !== null && (
         <div key={view.penaltySeq} className="alarm">
@@ -373,7 +418,7 @@ export function GameScreen({ view, positionsRef, dronesRef, pingsRef, chatsRef, 
             chatsRef={chatsRef}
             spectator={false}
             holdTips={radioLine !== null}
-            inputLocked={puzzle !== null || view.pausedFor !== null}
+            inputLocked={puzzle !== null || view.pausedFor !== null || relay !== undefined}
             onToggleInfo={() => setInfoOpen((open) => !open)}
             send={send}
           />

@@ -9,6 +9,7 @@ import { wiringModule } from './wiring.js';
 import { memoryModule } from './memory.js';
 import { morseModule } from './morse.js';
 import { buttonModule } from './button.js';
+import { relayModule } from './relay.js';
 
 /**
  * Every puzzle type the game knows. Adding one is a file in this folder, an
@@ -25,6 +26,7 @@ export const MODULES = [
   memoryModule,
   morseModule,
   buttonModule,
+  relayModule,
 ] as const;
 
 type Module = (typeof MODULES)[number];
