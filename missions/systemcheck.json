@@ -49,7 +49,8 @@
     {
       "id": "steuerpult",
       "name": "Steuerpult",
-      "description": "Du sitzt an den Knöpfen. Ohne Ansagen der Anleitung drückst du besser nichts."
+      "description": "Du sitzt an den Knöpfen. Ohne Ansagen der Anleitung drückst du besser nichts.",
+      "seesEdgework": true
     }
   ],
   "puzzles": [
@@ -67,20 +68,29 @@
       ]
     },
     {
-      "type": "button-sync",
+      "type": "wiring",
       "id": "doppelbestaetigung",
-      "title": "Doppelbestätigung",
-      "prompt": "Der Reaktorstart braucht zwei unabhängige Bestätigungen.",
-      "buttons": [
-        { "roleId": "anleitung", "label": "BESTÄTIGEN (Handbuch)" },
-        { "roleId": "steuerpult", "label": "BESTÄTIGEN (Pult)" }
-      ],
+      "title": "Kabelprüfung",
+      "prompt": "Übungskasten mit drei Kabeln, eines muss getrennt werden. Welches, sagt nur das Handbuch: Steuerpult, lies die Farben vor. Die Anleitung hat die Regel.",
+      "operatorRoleId": "steuerpult",
+      "manualRoleId": "anleitung",
+      "wires": { "min": 3, "max": 3 },
       "infos": [
         {
           "roleId": "anleitung",
-          "text": "Handbuch §2: Reihenfolge egal — aber es müssen beide bestätigen. Danach steht die letzte Station hinter dem Halteschott: Einer muss auf der Bodenplatte HALTEN stehen bleiben, damit das Schott für den anderen offen bleibt."
+          "text": "Handbuch §2 liegt vor dir. Die Kabel siehst du nicht, nur die Regeln — frag nach, bis du sicher bist."
+        },
+        {
+          "roleId": "steuerpult",
+          "text": "Oben am Pult: Laborkennung, Kontrollleuchten, Notstromzellen. Hier braucht ihr nichts davon, an späteren Stationen schon."
         }
-      ]
+      ],
+      "hints": [
+        "Steuerpult, lies die drei Farben von oben nach unten vor. Anleitung, nimm die Liste für 3 Kabel und geh sie von oben durch.",
+        "Die erste Regel, die zutrifft, gilt, alle danach nicht mehr. Kabel 1 ist das oberste. Getrennt wird erst, wenn ihr euch einig seid.",
+        "Bei drei Kabeln fragt keine Regel nach dem Pult. Bei mehr Kabeln schon: Dann liest das Steuerpult Laborkennung, Kontrollleuchten oder Zellen vor."
+      ],
+      "onSolved": "Genau so läuft es ab jetzt: einer sieht, einer hat die Regel. Letzte Station hinter dem Halteschott: Einer hält die Platte, einer geht."
     },
     {
       "type": "button-sync",

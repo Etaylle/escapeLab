@@ -10,7 +10,7 @@
   },
   "timeLimitSec": 540,
   "radio": {
-    "start": "Erst Notstrom: Kasten im Maschinenraum, Südwest. Anleitung sitzt bis dahin im Archiv, neben der Ersatzsicherung. Funk offen.",
+    "start": "Erst Notstrom: Kasten im Maschinenraum, Südwest. Anleitung sitzt im Archiv bei der Ersatzsicherung. Steuerpult, du liest die Laborkennung.",
     "escape": "Licht ist wieder da, Applaus später. Notausgang offen, Südostecke hinter dem Reaktor. Die Uhr läuft, bis die ganze Crew draußen ist."
   },
   "map": {
@@ -72,16 +72,15 @@
       }
     ],
     "sabotage": {
-      "label": "KÜHLKREISLAUF BRICHT ZUSAMMEN",
-      "hint": "Beide Notventile im Flur gleichzeitig besetzen — eines ganz links, eines ganz rechts!",
+      "mode": "relay",
+      "label": "KÜHLKREISLAUF — RELAIS VON HAND",
+      "hint": "Lest eure Anweisung sofort laut vor. Schalten darf nur, wer das Element am eigenen Pult hat. Danach laut bestätigen.",
       "firstAfterSec": 100,
       "everySec": 150,
       "durationSec": 45,
       "penaltySec": 60,
-      "panels": [
-        { "id": "ventil-west", "x": 2, "y": 5 },
-        { "id": "ventil-ost", "x": 16, "y": 5 }
-      ]
+      "windowSec": 15,
+      "required": 6
     },
     "drones": [
       {
@@ -114,12 +113,12 @@
     {
       "id": "anleitung",
       "name": "Anleitung",
-      "description": "Du hast das Notfall-Handbuch. Nur du kennst die richtigen Schritte — aber du siehst weder Kabel noch Tasten."
+      "description": "Du hast das Notfall-Handbuch, siehst aber nicht jedes Gerät. An zwei Stationen bedienst du selbst — dann hält das Steuerpult die Tabellen."
     },
     {
       "id": "steuerpult",
       "name": "Steuerpult",
-      "description": "Du stehst am Schaltschrank: Kabel, Tasten, Schalter. Du siehst alles — aber ohne Handbuch ist jeder Griff russisches Roulette.",
+      "description": "Du stehst am Schaltschrank, nur du siehst die Laborkennung. Ohne Handbuch ist jeder Griff russisches Roulette. An zwei Stationen hältst du die Tabellen.",
       "seesEdgework": true
     }
   ],
@@ -128,75 +127,106 @@
       "type": "wiring",
       "id": "notstrom",
       "title": "Notstrom-Brücken",
-      "prompt": "Im Sicherungskasten hängen fünf Überbrückungskabel. Zwei davon blockieren den Notstromkreis — sie müssen weg, in der richtigen Reihenfolge. Die falschen stehen unter Spannung.",
+      "prompt": "Im Sicherungskasten hängen drei bis fünf farbige Überbrückungskabel. Genau eines blockiert den Notstrom und muss getrennt werden. Die anderen stehen unter Spannung.",
       "operatorRoleId": "steuerpult",
       "manualRoleId": "anleitung",
+      "wires": { "min": 3, "max": 5 },
       "penaltySec": 30,
       "infos": [
         {
           "roleId": "anleitung",
-          "text": "Handbuch §4 — NOTSTROM: Trenne ZUERST das Kabel zwischen Hochspannungszeichen (⚡) und Strahlungszeichen (☢). DANACH das Kabel zwischen Dreizack (♆) und Blitz-Haken (Ϟ). WARNUNG: Jedes andere Kabel löst den Alarm aus und kostet 30 Sekunden. Frag nach, was auf den Kabeln steht! — Randnotiz: Die Ersatzsicherung liegt im Archiv und muss irgendwann in den Reaktor."
+          "text": "Handbuch §1 liegt aufgeschlagen vor dir, eine Liste pro Kabelzahl. Randnotiz: Die Ersatzsicherung hier im Archiv muss später in den Reaktor."
         },
         {
           "roleId": "steuerpult",
-          "text": "Die Kabelenden tragen eingravierte Zeichen. Beschreibe sie der Anleitung — und schneide erst, wenn ihr euch sicher seid."
+          "text": "Kabel, Laborkennung und Kontrollleuchten siehst nur du. Das Handbuch kann nach allem davon fragen."
         }
       ],
       "hints": [
-        "Steuerpult, lies alle fünf Kabel vor, jedes mit beiden Enden. Jedes Zeichen hängt an zwei Kabeln, ein Ende allein reicht nicht.",
-        "Die Reihenfolge zählt. Anleitung, frag zuerst nach dem Kabel zwischen ⚡ und ☢. Welches Ende links oder rechts sitzt, ist egal.",
-        "Erst ⚡–☢ trennen, Hochspannung zu Strahlung. Dann ♆–Ϟ, Dreizack zu Blitz-Haken. Die anderen drei Kabel bleiben dran."
+        "Zählt die Kabel und nehmt NUR die Liste für diese Zahl. Steuerpult, lies alle Farben von oben vor, bevor jemand schneidet.",
+        "Anleitung, prüf die Regeln der Liste von oben nach unten. Die erste, die zutrifft, entscheidet, auch wenn eine spätere ebenfalls passen würde.",
+        "Manche Regeln brauchen Werte vom Pult: letzte Ziffer der Laborkennung, Kontrollleuchte FRQ. Steuerpult, lies sie vor. Kabel 1 ist das oberste."
       ],
-      "onSolved": "Notstrom steht, Archiv entriegelt. Anleitung, im Flur auf die Platte, die hält den Maschinenraum offen. Dann zum Terminal, Flurmitte."
+      "onSolved": "Notstrom steht, Archiv offen. Anleitung, im Flur auf die Platte, dann kommt das Steuerpult raus. Terminal Flurmitte, diesmal tippst du."
     },
     {
       "type": "keypad",
       "id": "zugangscode",
       "title": "Zugangscode",
-      "prompt": "Das Bedienfeld des Hauptservers verlangt einen Symbolcode. Vier Zeichen, richtige Reihenfolge. Ein Fehler setzt die Eingabe zurück.",
-      "operatorRoleId": "steuerpult",
-      "manualRoleId": "anleitung",
-      "hints": [
-        "Eine Taste pro Ansage. Ein falscher Druck setzt die ganze Eingabe zurück, dann geht es wieder beim ersten Zeichen los.",
-        "Anleitung, lies die Beschreibung aus dem Handbuch vor, nicht nur das Zeichen. Steuerpult, beschreib die Taste, die du meinst, und warte auf das Okay.",
-        "Der Code: ☖ Haus mit Sockel, ꩜ Spirale, Ж Käfer mit sechs Beinen, ₪ Tor mit Gittern. Genau in dieser Reihenfolge, eins nach dem anderen."
+      "prompt": "Das Terminal am Flurschott verlangt einen Zugangscode: vier Tasten mit fremden Zeichen, ohne jede Nummer. Ein Fehlgriff löst Alarm aus.",
+      "operatorRoleId": "anleitung",
+      "manualRoleId": "steuerpult",
+      "infos": [
+        {
+          "roleId": "anleitung",
+          "text": "Diesmal stehst du am Gerät. Die Zeichentabelle hat das Steuerpult, deine Tasten sieht es nicht."
+        },
+        {
+          "roleId": "steuerpult",
+          "text": "Handbuch §2 hängt als Aushang an deinem Pult: sechs Spalten Zeichen. Die Tasten sieht nur die Anleitung."
+        }
       ],
-      "onSolved": "Schott offen, aber die Sicherheit ist wieder wach: Drohne im Flur. Serverraum, Nordost. Einer hält die Platte am Ostende, einer geht rein."
+      "hints": [
+        "Anleitung, beschreib alle vier Zeichen, bevor gedrückt wird. Steuerpult, such die eine Spalte, in der alle vier stehen. Es passt immer nur eine.",
+        "Ein Zeichen kann in zwei Spalten stehen. Prüft jede Spalte gegen alle vier Tasten. Gedrückt wird in der Reihenfolge der Spalte, von oben nach unten.",
+        "Steuerpult, sag ein Zeichen nach dem anderen an, die Anleitung drückt. Ein Fehlgriff löscht nichts: Leuchtende Tasten bleiben an, weiter mit dem nächsten."
+      ],
+      "onSolved": "Schott offen, Sicherheit wieder wach: Drohne im Flur. Serverraum, Nordost. Anleitung hält die Platte am Ostende, Steuerpult geht rein."
     },
     {
       "type": "switches",
       "id": "subsysteme",
       "title": "Subsysteme hochfahren",
-      "prompt": "Sechs Kippschalter steuern die Subsysteme des Labors. Nur die richtige Kombination bringt das Netz stabil hoch — eine falsche Prüfung wirft die Sicherung.",
+      "prompt": "Sechs Kippschalter fahren die Subsysteme hoch: jeder mit LED, manche mit Farbmarkierung oder Stern. Umlegen ist gefahrlos, eine falsche Prüfung wirft die Sicherung.",
       "operatorRoleId": "steuerpult",
       "manualRoleId": "anleitung",
-      "hints": [
-        "Anleitung, dein Display zeigt drei Zeichen. Genau diese Schalter müssen nach OBEN, alle anderen nach unten. Sag sie dem Steuerpult einzeln an.",
-        "Die Reihenfolge am Pult sagt nichts, es zählen nur die Zeichen. Einigt euch auf ein Wort pro Zeichen, dann wird nicht geraten.",
-        "Vor dem Prüfen: Steuerpult liest jeden Schalter vor, der OBEN steht. Genau drei, und jeder davon muss auf dem Display der Anleitung stehen."
+      "infos": [
+        {
+          "roleId": "anleitung",
+          "text": "Handbuch §3 liegt aufgeschlagen: eine Merkmalstabelle, darunter, was jeder Buchstabe verlangt."
+        },
+        {
+          "roleId": "steuerpult",
+          "text": "Alle sechs Schalter stehen unten. Laborkennung, Kontrollleuchten und Notstromzellen hast nur du im Blick."
+        }
       ],
-      "onSolved": "Netz stabil, Labortür offen, südlich vom Flur. Die zweite Drohne pendelt jetzt im Labor. Station an der Südwand, geht hinter ihr vorbei."
+      "hints": [
+        "Steuerpult, sag alle sechs Schalter von links an: LED an oder aus, Markierung, Stern. Anleitung, schreib zu jedem den Buchstaben aus der Tabelle mit.",
+        "G, Z und L brauchen Werte vom Pult: letzte Ziffer der Laborkennung, Zahl der Notstromzellen, Kontrollleuchte SIG. Steuerpult, lies alles vor, bevor ihr stellt.",
+        "Umlegen heißt OBEN, nicht umlegen heißt UNTEN. Erst alle sechs stellen, dann zählt das Steuerpult die oberen laut nach. Danach einmal PRÜFEN."
+      ],
+      "onSolved": "Netz stabil, Labortür offen, südlich vom Flur. Zweite Drohne pendelt im Labor, geht hinter ihr vorbei. Anleitung ans Panel an der Südwand."
     },
     {
       "type": "simon",
       "id": "frequenz",
       "title": "Frequenz-Abgleich",
-      "prompt": "Der Hauptgenerator sendet seine Taktfolge als Lichtsignal. Sie muss in Steuerimpulse übersetzt und exakt zurückgespielt werden.",
-      "operatorRoleId": "steuerpult",
-      "manualRoleId": "anleitung",
+      "prompt": "Der Generator blinkt seine Taktfolge in Stufen, jede Stufe eine Farbe länger. Jede Stufe muss übersetzt zurückgetippt werden, Farbe für Farbe.",
+      "operatorRoleId": "anleitung",
+      "manualRoleId": "steuerpult",
       "sequenceLength": 5,
-      "hints": [
-        "Steuerpult, spiel die Folge zweimal ab, bevor gedrückt wird. Fünf Farben, und nie kommt dieselbe zweimal direkt hintereinander.",
-        "Ein Fehldruck setzt die ganze Folge zurück. Dann neu abspielen und wieder bei der ersten Farbe anfangen, nicht dort, wo ihr aufgehört habt.",
-        "Eine Farbe nach der anderen: Steuerpult sagt sie an, Anleitung nennt das Symbol aus der Legende, Steuerpult wiederholt es und drückt erst dann."
+      "infos": [
+        {
+          "roleId": "anleitung",
+          "text": "Diesmal stehst du am Panel: Blinkfolge, Farbtasten, Alarmzähler. Die Tabellen hat das Steuerpult."
+        },
+        {
+          "roleId": "steuerpult",
+          "text": "Handbuch §4 klebt an deinem Pult: zwei Übersetzungstabellen. Die Blinkfolge sieht nur die Anleitung."
+        }
       ],
-      "onSolved": "Frequenz sitzt, Reaktor im Südosten bereit. Ohne die Ersatzsicherung aus dem Archiv, ganz im Nordwesten, bleibt er tot. Bringt sie hin."
+      "hints": [
+        "Erst die Tabelle: Steuerpult, steht in der Laborkennung ein A, E oder U, gilt „Mit Vokal“, sonst „Ohne Vokal“. Die Zeile wählt der Alarmstand.",
+        "Anleitung, sag jede Stufe ganz an, von der ersten Farbe an. Steuerpult, übersetz Farbe für Farbe. Getippt wird die Übersetzung, nicht das Blinken.",
+        "Der Alarmstand zählt jeden Alarm, auch einen durch die Drohne. Nach einem Fehlgriff beginnt die Stufe von vorn: Alarmstand neu ablesen, Zeile neu wählen."
+      ],
+      "onSolved": "Frequenz sitzt, der Reaktor im Südosten wartet. Ohne die Ersatzsicherung aus dem Archiv, ganz im Nordwesten, bleibt er tot. Einer holt sie."
     },
     {
       "type": "button-sync",
       "id": "reaktorstart",
       "title": "Reaktor-Neustart",
-      "prompt": "Letzter Schritt: Die beiden Zündschalter des Reaktors sitzen an getrennten Stationen — und sie akzeptieren nur einen synchronen Impuls.",
+      "prompt": "Letzter Schritt: zwei Zündschalter an getrennten Pulten. Der Reaktor nimmt nur einen gemeinsamen Impuls, beide Drücke innerhalb von zwei Sekunden.",
       "buttons": [
         { "roleId": "anleitung", "label": "ZÜNDUNG A" },
         { "roleId": "steuerpult", "label": "ZÜNDUNG B" }
@@ -204,12 +234,13 @@
       "infos": [
         {
           "roleId": "anleitung",
-          "text": "Handbuch §8 — NEUSTART: Ohne eingesetzte Ersatzsicherung bleibt die Station tot. Dann: Beide Zündschalter müssen innerhalb von 2 Sekunden gedrückt werden. Zählt gemeinsam ein: drei — zwei — eins — JETZT."
+          "text": "Handbuch §5, Neustart: Du zählst ein, laut und deutlich — drei, zwei, eins, JETZT."
         }
       ],
       "hints": [
         "Ein Zündschalter allein reicht nicht. Kommt der zweite Druck mehr als zwei Sekunden später, verfällt der erste. Kein Alarm, nur ein neuer Anlauf.",
-        "Beide an eure Zündschalter, dann zählt einer laut ein: drei, zwei, eins, JETZT. Gedrückt wird auf JETZT, von beiden, nicht schon auf eins."
+        "Beide an eure Zündschalter, dann zählt einer laut ein: drei, zwei, eins, JETZT. Gedrückt wird auf JETZT, von beiden, nicht schon auf eins.",
+        "Zeitfenster verpasst? Der späte Druck zählt schon für den nächsten Anlauf. Wer wieder drücken kann, drückt sofort."
       ],
       "windowMs": 2000
     }

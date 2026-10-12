@@ -5,6 +5,7 @@ import {
   CREW_COLORS,
   GameError,
   initialState,
+  moduleFor,
   parseMission,
   viewFor,
 } from '../src/index.js';
@@ -40,9 +41,26 @@ function started(at = T0): GameState {
   return run([{ type: 'start-mission', playerId: 'p1', at, seed: 42 }], readyLobby());
 }
 
-/** Every station of the tutorial is a button-sync: one input, a press. */
+/** Stations 1 and 3 of the tutorial are button-syncs: one input, a press. */
 function press(playerId: string, at: number): Action {
   return { type: 'puzzle-input', playerId, at, input: { press: true } };
+}
+
+/** Station 2 is wiring: the cut its rules name, worked out from the two views alone. */
+function cutRightWire(state: GameState, at: number): GameState {
+  const def = state.mission.puzzles[state.currentPuzzleIndex];
+  const anna = viewFor(state, 'p1');
+  const ben = viewFor(state, 'p2');
+  if (def?.type !== 'wiring' || anna.puzzle === null || ben.puzzle === null) {
+    throw new Error('expected the open wiring station');
+  }
+  const views = { anleitung: anna.puzzle, steuerpult: ben.puzzle };
+  let next = state;
+  for (const { roleId, input } of moduleFor(def.type).solve(def, views, ben.edgework)) {
+    const playerId = roleId === 'anleitung' ? 'p1' : 'p2';
+    next = applyAction(next, { type: 'puzzle-input', playerId, at, input });
+  }
+  return next;
 }
 
 describe('lobby', () => {
@@ -236,14 +254,8 @@ describe('playing a full mission', () => {
     // Puzzle 1: only steuerpult has a button.
     state = applyAction(state, press('p2', T0 + 1000));
     expect(state.currentPuzzleIndex).toBe(1);
-    // Puzzle 2: both press, any order, no window.
-    state = run(
-      [
-        press('p1', T0 + 5000),
-        press('p2', T0 + 60_000),
-      ],
-      state,
-    );
+    // Puzzle 2: one right wire, cut by steuerpult.
+    state = cutRightWire(state, T0 + 5000);
     expect(state.currentPuzzleIndex).toBe(2);
     // Puzzle 3: both within 3 seconds.
     state = run(
@@ -257,12 +269,10 @@ describe('playing a full mission', () => {
   });
 
   it('expires a press outside the sync window and counts the attempt', () => {
-    let state = started();
+    let state = applyAction(started(), press('p2', T0 + 1000));
+    state = cutRightWire(state, T0 + 2000);
     state = run(
       [
-        press('p2', T0 + 1000),
-        press('p1', T0 + 2000),
-        press('p2', T0 + 3000),
         // Window puzzle: first press at +10s, partner misses the 3s window.
         press('p1', T0 + 10_000),
         press('p2', T0 + 20_000),
