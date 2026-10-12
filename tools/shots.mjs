@@ -389,6 +389,7 @@ async function captureBothAtStation(reader, operator, station, sync) {
   }
   const readerSees = await interactUntil(reader.page, reader.page.locator('.station-modal'));
   const operatorSees = await operator.page.locator('.station-modal').isVisible();
+  await sleep(400); // past the panel's fade-in
   await reader.page.screenshot({ path: join(OUT, 'station-both.png') });
   const missing = [
     ...(readerSees ? [] : [reader.name]),
@@ -452,7 +453,7 @@ function overlapping(a, b) {
  * takes the Laborkennung over. The pad is kept per room, so a reload has to
  * bring the text back.
  */
-async function captureNotepad(page) {
+async function captureNotepad(page, seen) {
   const pad = page.locator('.notepad');
   await page.locator('.hud-notes').click();
   await pad.waitFor({ state: 'visible', timeout: 3000 });
@@ -467,9 +468,14 @@ async function captureNotepad(page) {
   const written = await pad.locator('textarea').inputValue();
   const dpad = await page.locator('.world-dpad').boundingBox();
   const blocks = overlapping(await pad.boundingBox(), dpad);
+  // The pad offers the Laborkennung only to a player who has read the sign.
+  const kennung = offered
+    ? 'Laborkennung taken over'
+    : seen.view.edgework === null
+      ? 'no Laborkennung read yet, none to take over'
+      : '!! Laborkennung read but not offered';
   console.log(
-    `notepad.png        guest: ` +
-      `${offered ? 'Laborkennung taken over' : '!! Laborkennung not offered'}, ` +
+    `notepad.png        guest: ${kennung}, ` +
       `${blocks ? '!! covers the steering pad' : 'clear of the steering pad'}`,
   );
 
@@ -578,12 +584,13 @@ async function captureNotes(page, seen, who, other) {
 
 /**
  * sign.png: a player has just read the Laborkennung — the note up, the chip
- * in the HUD. The note waits for the briefing to end, so this may take a while.
+ * in the HUD. The note waits for the briefing to end and for the radio lines
+ * queued before it, so this may take a while.
  */
 async function captureSign(page, who) {
   const note = await page
     .locator('.toast')
-    .waitFor({ state: 'visible', timeout: 6000 })
+    .waitFor({ state: 'visible', timeout: 25_000 })
     .then(
       () => true,
       () => false,
@@ -799,7 +806,7 @@ async function run() {
       console.log(`sign.png           skipped: the sign at ${sign.x},${sign.y} is out of reach`);
     }
   }
-  await captureNotepad(guest);
+  await captureNotepad(guest, guestSeen);
 
   // The draw may leave both starts shut off from the first station until a
   // plate is held; then there is no station to capture this time.
