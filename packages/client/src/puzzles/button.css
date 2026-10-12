@@ -1,0 +1,146 @@
+/* --- button ------------------------------------------------------------------------ */
+
+.button-console {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.button-clock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--mono);
+}
+
+.button-clock-label,
+.button-caption {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--muted);
+}
+
+.button-clock-time {
+  font-size: 32px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 3px;
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--accent-glow);
+}
+
+.button-rig {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.button-mount,
+.button-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A fat round cap on a dark collar; it sinks by its lift while pressed or held. */
+.button-face {
+  --lift: 8px;
+  width: 168px;
+  height: 168px;
+  padding: 0;
+  border-radius: 50%;
+  border: 6px solid #0b1117;
+  box-shadow:
+    0 0 0 2px var(--line-2),
+    0 var(--lift) 0 #05080b,
+    0 calc(var(--lift) + 4px) 20px rgba(0, 0, 0, 0.5);
+  transform: translateY(calc(8px - var(--lift)));
+  font-family: var(--mono);
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: transform 0.06s, box-shadow 0.06s;
+}
+
+/* The shared hover glow would flatten the cap: keep the collar and the lift. */
+.button-face:hover:not(:disabled) {
+  border-color: #0b1117;
+  box-shadow:
+    0 0 0 2px var(--accent-dark),
+    0 var(--lift) 0 #05080b,
+    0 calc(var(--lift) + 4px) 20px rgba(0, 0, 0, 0.5);
+}
+
+.button-face:active,
+.button-face[aria-pressed='true'] {
+  --lift: 2px;
+}
+
+.button-face:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.button-face--red {
+  background: #ef4444;
+  color: #fff;
+}
+
+.button-face--blue {
+  background: #3b82f6;
+  color: #fff;
+}
+
+.button-face--yellow {
+  background: #eab308;
+  color: #0a0f14;
+}
+
+.button-face--white {
+  background: #e5e7eb;
+  color: #0a0f14;
+}
+
+.button-strip-bar {
+  width: 26px;
+  height: 168px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: #0b1117;
+  transition: background 0.1s, box-shadow 0.1s;
+}
+
+.button-strip--red .button-strip-bar {
+  background: #ef4444;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.7);
+}
+
+.button-strip--blue .button-strip-bar {
+  background: #3b82f6;
+  box-shadow: 0 0 16px rgba(59, 130, 246, 0.7);
+}
+
+.button-strip--yellow .button-strip-bar {
+  background: #eab308;
+  box-shadow: 0 0 16px rgba(234, 179, 8, 0.7);
+}
+
+.button-strip--white .button-strip-bar {
+  background: #e5e7eb;
+  box-shadow: 0 0 16px rgba(229, 231, 235, 0.6);
+}
+
+.button-status {
+  margin: 0;
+  min-height: 2.8em;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.4;
+}
