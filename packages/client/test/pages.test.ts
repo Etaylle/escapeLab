@@ -118,6 +118,23 @@ describe('paginate', () => {
     expect(pages[2]?.fragments).toEqual([columns]);
   });
 
+  it('moves an example box and a device drawing on whole, each taking its room', () => {
+    const drawing: ManualBlock = { kind: 'figure', of: 'wiring', caption: 'Abb. 1: der Kasten' };
+    const worked: ManualBlock = {
+      kind: 'example',
+      title: 'Beispiel',
+      lines: ['rot, blau, blau', 'Regel 4 greift', 'Kabel 3 trennen'],
+    };
+    const pages = paginate([station('§1 — Kabel', [drawing, worked])], SMALL);
+    const kinds = pages.map((page) => page.fragments.map((f) => f.kind));
+    expect(fragmentsOf(pages, 'figure')).toHaveLength(1);
+    expect(fragmentsOf(pages, 'example')).toHaveLength(1);
+    // The drawing fills most of the small page: the example box gets the next one, whole.
+    const drawn = kinds.findIndex((page) => page.includes('figure'));
+    expect(kinds[drawn]).not.toContain('example');
+    expect(kinds[drawn + 1]).toEqual(['example']);
+  });
+
   it('never ends a page on a heading: it moves on with what it heads', () => {
     // Room is left for the heading, not for the heading and a first rule.
     const text = 'Ein Absatz, der fast die ganze Seite füllt. '.repeat(2);

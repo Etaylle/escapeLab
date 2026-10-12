@@ -20,7 +20,11 @@ export type ManualBlock =
   | { kind: 'rules'; items: string[] }
   | { kind: 'table'; head: string[]; rows: string[][] }
   // keypad's symbol columns
-  | { kind: 'columns'; columns: string[][] };
+  | { kind: 'columns'; columns: string[][] }
+  // a worked example in a box: what was seen, which rule applied, what was done
+  | { kind: 'example'; title: string; lines: string[] }
+  // a line drawing of the device; the client draws it for the module's type (`of`)
+  | { kind: 'figure'; of: string; caption: string };
 
 /** What a module gets to know when it sets up or takes a move. */
 export interface PuzzleContext {

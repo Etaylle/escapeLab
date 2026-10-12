@@ -3815,3 +3815,34 @@ button.link:hover {
 .relay-modal:focus {
   outline: none;
 }
+
+/* ── worked examples and device drawings in the printed rules ──────────── */
+
+.manual-example {
+  margin: 0.6em 0;
+  padding: 0.5em 0.8em;
+  border: 1px solid currentColor;
+  font-size: 15px;
+}
+
+.manual-example-title {
+  display: block;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.manual-example-lines {
+  margin: 0.3em 0 0;
+  padding-left: 1.7em;
+}
+
+.manual-figure {
+  margin: 0.6em 0;
+}
+
+.manual-figure figcaption {
+  font-size: 13px;
+  opacity: 0.8;
+}

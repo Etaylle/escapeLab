@@ -30,6 +30,8 @@ export type Fragment =
   | { kind: 'rules'; items: string[]; start: number }
   | { kind: 'table'; head: string[]; rows: string[][] }
   | { kind: 'columns'; columns: string[][] }
+  | { kind: 'example'; title: string; lines: string[] }
+  | { kind: 'figure'; of: string; caption: string }
   | { kind: 'reader' };
 
 export interface BookPage {
@@ -75,6 +77,11 @@ const GLYPH_ROW = 2.3;
 const COLUMNS_PAD = 0.6;
 /** The reader's plan is drawn this tall. */
 const READER = 13;
+/** An example box's padding, sideways in all and top and bottom together. */
+const EXAMPLE_SIDES = 1.6;
+const EXAMPLE_ENDS = 1.4;
+/** A device drawing is set this tall, its caption below. */
+const FIGURE = 7;
 /** A station's last lines may run this far into the foot of its page rather than open one. */
 const OVERRUN = 1.5;
 
@@ -149,6 +156,14 @@ function heightOf(fragment: Fragment, width: number): number {
       return tableHeight(fragment.head, fragment.rows, width);
     case 'columns':
       return Math.max(0, ...fragment.columns.map((c) => c.length)) * GLYPH_ROW + COLUMNS_PAD;
+    case 'example':
+      return (
+        textHeight(fragment.title, width - EXAMPLE_SIDES, HEADING) +
+        rulesHeight(fragment.lines, width - EXAMPLE_SIDES) +
+        EXAMPLE_ENDS
+      );
+    case 'figure':
+      return FIGURE + textHeight(fragment.caption, width, BODY);
     case 'reader':
       return READER;
   }

@@ -71,5 +71,22 @@ export function Block({ block, start }: { block: ManualBlock; start?: number }) 
           ))}
         </div>
       );
+    case 'example':
+      return (
+        <aside className="manual-example">
+          <strong className="manual-example-title">{block.title}</strong>
+          <ol className="manual-example-lines">
+            {block.lines.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ol>
+        </aside>
+      );
+    case 'figure':
+      return (
+        <figure className="manual-figure" data-of={block.of}>
+          <figcaption>{block.caption}</figcaption>
+        </figure>
+      );
   }
 }
