@@ -7,6 +7,7 @@ import { SimonPanel } from './SimonPanel.js';
 import { SwitchesPanel } from './SwitchesPanel.js';
 import { WiringPanel } from './WiringPanel.js';
 import { MemoryPanel } from './MemoryPanel.js';
+import { MorsePanel } from './MorsePanel.js';
 
 export type PuzzleKind = PuzzleView['kind'];
 
@@ -33,4 +34,5 @@ export const PANELS: { [K in PuzzleKind]: Panel<K> } = {
   simon: SimonPanel,
   maze: MazePanel,
   memory: MemoryPanel,
+  morse: MorsePanel,
 };
