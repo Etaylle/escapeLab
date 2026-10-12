@@ -1,77 +1,78 @@
 import { play } from '../sounds.js';
 import type { PanelProps } from './index.js';
+import './wiring.css';
+
+type Wire = NonNullable<PanelProps<'wiring'>['puzzle']['wires']>[number];
+
+/** Stroke colour per wire; the name is printed beside it as well, for colour-blind players. */
+const TONE: Record<Wire['color'], string> = {
+  rot: 'wiring-red',
+  blau: 'wiring-blue',
+  gelb: 'wiring-yellow',
+  weiß: 'wiring-white',
+  schwarz: 'wiring-black',
+};
 
 export function WiringPanel({ puzzle, send }: PanelProps<'wiring'>) {
+  const status = (
+    <p className="progress-line">
+      Kabel: {puzzle.wireCount} · getrennt: {puzzle.cutsDone}
+    </p>
+  );
   if (puzzle.wires === null) {
     return (
       <div className="big-hint">
         <p className="muted">
-          Du siehst den Sicherungskasten nicht — hier zählt dein Wissen. Frag, welche Zeichen auf
-          den Kabeln stehen!
+          Die Kabel siehst du nicht. Lass dir alle Farben von oben nach unten ansagen und prüf
+          die Liste zur Kabelzahl der Reihe nach.
         </p>
-        <div className="progress-line">
-          Getrennt: {puzzle.cutsDone}/{puzzle.cutsNeeded}
-        </div>
+        {status}
       </div>
     );
   }
-  const n = puzzle.wires.length;
-  const rowH = 46;
   return (
     <div>
-      <svg
-        className="wirebox"
-        viewBox={`0 0 420 ${n * rowH + 20}`}
-        role="group"
-        aria-label="Sicherungskasten"
-      >
-        {puzzle.wires.map((wire, i) => {
-          const y = 34 + i * rowH;
-          const wrong = puzzle.lastWrongWireId === wire.id;
-          return (
-            <g
-              key={wire.id}
-              className={`wire ${wire.cut ? 'wire-cut' : ''} ${wrong ? 'wire-wrong' : ''}`}
-              onClick={() => {
-                if (!wire.cut) {
-                  play('click');
-                  send({ wireId: wire.id });
-                }
+      <ol className="wiring-box" aria-label="Kabel, von oben gezählt">
+        {puzzle.wires.map((wire, i) => (
+          <li key={wire.id}>
+            <WireButton
+              wire={wire}
+              position={i + 1}
+              onCut={() => {
+                play('click');
+                send({ wireId: wire.id });
               }}
-            >
-              <text x={18} y={y + 6} className="wire-symbol" textAnchor="middle">
-                {wire.left}
-              </text>
-              {wire.cut ? (
-                <>
-                  <path d={`M 40 ${y} C 110 ${y}, 150 ${y + 14}, 185 ${y + 18}`}
-                    stroke={wire.color} />
-                  <path d={`M 235 ${y + 18} C 270 ${y + 14}, 310 ${y}, 380 ${y}`}
-                    stroke={wire.color} />
-                  <text x={210} y={y + 16} className="wire-scissors" textAnchor="middle">
-                    ✂
-                  </text>
-                </>
-              ) : (
-                <>
-                  <path d={`M 40 ${y} C 150 ${y - 8}, 270 ${y + 8}, 380 ${y}`}
-                    stroke={wire.color} />
-                  <path
-                    className="wire-hit"
-                    d={`M 40 ${y} C 150 ${y - 8}, 270 ${y + 8}, 380 ${y}`}
-                  />
-                </>
-              )}
-              <text x={402} y={y + 6} className="wire-symbol" textAnchor="middle">
-                {wire.right}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-      <p className="muted">
-        Kabel anklicken trennt es sofort — getrennt: {puzzle.cutsDone}/{puzzle.cutsNeeded}
-      </p>
+            />
+          </li>
+        ))}
+      </ol>
+      {status}
+      <p className="muted">Antippen trennt sofort — erst alle Farben ansagen.</p>
     </div>
+  );
+}
+
+interface WireButtonProps {
+  wire: Wire;
+  /** counted from the top, as the manual counts */
+  position: number;
+  onCut: () => void;
+}
+
+function WireButton({ wire, position, onCut }: WireButtonProps) {
+  return (
+    <button
+      className={`wiring-wire ${TONE[wire.color]} ${wire.cut ? 'wiring-cut' : ''}`}
+      disabled={wire.cut}
+      onClick={onCut}
+      aria-label={`Kabel ${position}, ${wire.color}${wire.cut ? ', getrennt' : ''}`}
+    >
+      <span className="wiring-pos">{position}</span>
+      <span className="wiring-line" aria-hidden="true">
+        <span className="wiring-half" />
+        <span className="wiring-half" />
+      </span>
+      <span className="wiring-name">{wire.color}</span>
+    </button>
   );
 }

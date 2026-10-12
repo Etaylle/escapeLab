@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { applyAction, GameError, initialState, parseMission, viewFor } from '../src/index.js';
 import type { Action, GameState, Mission, PlayerView } from '../src/index.js';
+import { wiringModule } from '../src/puzzles/wiring.js';
 
 const blackoutRaw: unknown = JSON.parse(
   readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8'),
@@ -38,9 +39,6 @@ function started(seed = 42): GameState {
   );
 }
 
-const pairMatches = (w: { left: string; right: string }, [a, b]: readonly [string, string]) =>
-  (w.left === a && w.right === b) || (w.left === b && w.right === a);
-
 /** PRÜFEN on the switch bank. */
 const commit = (playerId: string, at: number): Action => ({
   type: 'puzzle-input',
@@ -57,19 +55,21 @@ function atSwitches(seed = 42): GameState {
   if (wiringDef?.type !== 'wiring' || keypadDef?.type !== 'keypad') {
     throw new Error('unexpected blackout puzzle order');
   }
-  for (const target of wiringDef.pairsToCut) {
-    const puzzle = viewFor(state, 'p2').puzzle;
-    if (puzzle?.kind !== 'wiring' || puzzle.wires === null) {
-      throw new Error('expected wiring view');
-    }
-    const wire = puzzle.wires.find((w) => pairMatches(w, target));
-    state = applyAction(state, {
-      type: 'puzzle-input',
-      playerId: 'p2',
-      at: T0 + 1000,
-      input: { wireId: wire?.id ?? '' },
-    });
+  const wiringView = viewFor(state, 'p2');
+  if (wiringView.puzzle?.kind !== 'wiring') {
+    throw new Error('expected wiring view');
   }
+  const [cut] = wiringModule.solve(
+    wiringDef,
+    { steuerpult: wiringView.puzzle },
+    wiringView.edgework,
+  );
+  state = applyAction(state, {
+    type: 'puzzle-input',
+    playerId: 'p2',
+    at: T0 + 1000,
+    input: cut?.input,
+  });
   for (const symbol of keypadDef.code) {
     const puzzle = viewFor(state, 'p2').puzzle;
     if (puzzle?.kind !== 'keypad' || puzzle.grid === null) {

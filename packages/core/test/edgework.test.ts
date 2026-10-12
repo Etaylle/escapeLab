@@ -14,22 +14,8 @@ import {
   viewForSpectator,
 } from '../src/index.js';
 import type { Action, Edgework, GameState, Mission } from '../src/index.js';
-import type * as Registry from '../src/puzzles/index.js';
 import { wiringModule } from '../src/puzzles/wiring.js';
 import { mulberry32 } from '../src/rng.js';
-
-// No shipped module reads the edgework yet, so the mission check runs with
-// the keypad pretending to.
-vi.mock('../src/puzzles/index.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof Registry>();
-  return {
-    ...actual,
-    moduleFor: (type: Registry.PuzzleDef['type']) => {
-      const found = actual.moduleFor(type);
-      return type === 'keypad' ? { ...found, usesEdgework: true } : found;
-    },
-  };
-});
 
 const T0 = 1_000_000;
 
@@ -50,8 +36,6 @@ const raw = {
       prompt: '',
       operatorRoleId: 'steuerpult',
       manualRoleId: 'anleitung',
-      pairsToCut: [['A', 'B']],
-      decoyPairs: [['C', 'D']],
     },
     {
       type: 'keypad',
@@ -210,8 +194,8 @@ describe('edgework in the mission format', () => {
       ...raw,
       roles: raw.roles.map((role) => ({ ...role, seesEdgework: false })),
     };
-    expect(() => parseMission(blind)).toThrow(/"code" read the edgework, but no role sees it/);
-    const withoutReader = { ...blind, puzzles: raw.puzzles.filter((p) => p.type !== 'keypad') };
+    expect(() => parseMission(blind)).toThrow(/"kabel" read the edgework, but no role sees it/);
+    const withoutReader = { ...blind, puzzles: raw.puzzles.filter((p) => p.type !== 'wiring') };
     expect(() => parseMission(withoutReader)).not.toThrow();
   });
 });

@@ -126,7 +126,8 @@
     {
       "id": "steuerpult",
       "name": "Steuerpult",
-      "description": "Kabel, Schalter, Tasten — alles deins. Blind. Du bist die Hände eines Teams mit geteiltem Gehirn."
+      "description": "Kabel, Schalter, Tasten — alles deins. Blind. Du bist die Hände eines Teams mit geteiltem Gehirn.",
+      "seesEdgework": true
     }
   ],
   "puzzles": [
@@ -137,8 +138,6 @@
       "prompt": "Sechs Brückenkabel verteilen die Reaktorlast. Zwei müssen fallen — und das Wissen darüber ist auf zwei Stationen verteilt.",
       "operatorRoleId": "steuerpult",
       "manualRoleId": "anleitung",
-      "pairsToCut": [["⚡", "♅"], ["Ϟ", "◬"]],
-      "decoyPairs": [["⚡", "Ϟ"], ["♅", "Ж"], ["◬", "Ж"], ["⚡", "◬"]],
       "penaltySec": 30,
       "infos": [
         {

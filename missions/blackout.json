@@ -119,7 +119,8 @@
     {
       "id": "steuerpult",
       "name": "Steuerpult",
-      "description": "Du stehst am Schaltschrank: Kabel, Tasten, Schalter. Du siehst alles — aber ohne Handbuch ist jeder Griff russisches Roulette."
+      "description": "Du stehst am Schaltschrank: Kabel, Tasten, Schalter. Du siehst alles — aber ohne Handbuch ist jeder Griff russisches Roulette.",
+      "seesEdgework": true
     }
   ],
   "puzzles": [
@@ -130,8 +131,6 @@
       "prompt": "Im Sicherungskasten hängen fünf Überbrückungskabel. Zwei davon blockieren den Notstromkreis — sie müssen weg, in der richtigen Reihenfolge. Die falschen stehen unter Spannung.",
       "operatorRoleId": "steuerpult",
       "manualRoleId": "anleitung",
-      "pairsToCut": [["⚡", "☢"], ["♆", "Ϟ"]],
-      "decoyPairs": [["⚡", "♆"], ["☢", "Ѭ"], ["Ϟ", "Ѭ"]],
       "penaltySec": 30,
       "infos": [
         {

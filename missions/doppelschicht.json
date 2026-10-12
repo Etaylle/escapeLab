@@ -111,7 +111,8 @@
     {
       "id": "technik",
       "name": "Technik (Ost)",
-      "description": "Ostflügel. Kabel, Frequenzpult, Werkzeug — du schraubst, was der Westen dir ansagt."
+      "description": "Ostflügel. Kabel, Frequenzpult, Werkzeug — du schraubst, was der Westen dir ansagt.",
+      "seesEdgework": true
     },
     {
       "id": "labor",
@@ -127,8 +128,6 @@
       "prompt": "Im Ostflügel hängen fünf Brückenkabel. Welche fallen müssen, steht nur in den Handbüchern im Westen.",
       "operatorRoleId": "technik",
       "manualRoleId": "archiv",
-      "pairsToCut": [["⚡", "♆"], ["☢", "Ϟ"]],
-      "decoyPairs": [["⚡", "Ϟ"], ["♆", "Ѭ"], ["☢", "Ѭ"]],
       "penaltySec": 30,
       "infos": [
         {

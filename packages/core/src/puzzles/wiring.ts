@@ -1,37 +1,44 @@
 import { z } from 'zod';
+import { indicatorLit, serialLastDigitIsOdd, type Edgework } from '../edgework.js';
 import { fail } from '../errors.js';
-import { shuffle } from '../rng.js';
-import { commonDefShape, type PuzzleModule } from './module.js';
-
-const WIRE_COLORS = ['#f87171', '#60a5fa', '#fbbf24', '#34d399', '#c084fc', '#f472b6'];
-
-const symbolPairSchema = z.tuple([z.string().min(1), z.string().min(1)]);
-const pairKey = ([a, b]: readonly [string, string]): string => [a, b].sort().join('\u0000');
+import { commonDefShape, type ManualSection, type PuzzleModule } from './module.js';
 
 /**
- * wiring puzzle: the operator sees wires whose ends carry symbols (layout
- * shuffled per game). `pairsToCut` must be cut in order; decoys and
- * out-of-order cuts trigger an alarm (time penalty), the wire stays intact.
+ * Emergency-power bridges, after Keep Talking's wires: the operator sees three
+ * to six coloured wires, the manual holds one numbered rule list per wire
+ * count. The rules read the colours by count and position, and the lab's
+ * edgework, so exactly one wire is right — a different one every run, while
+ * the printed lists never change. A wrong cut costs time, and that wire stays
+ * cut.
  */
+
+export const WIRE_COLORS = ['rot', 'blau', 'gelb', 'weiß', 'schwarz'] as const;
+export type WireColor = (typeof WIRE_COLORS)[number];
+
+const MIN_WIRES = 3;
+const MAX_WIRES = 6;
+const wireCountSchema = z.number().int().min(MIN_WIRES).max(MAX_WIRES);
+
 const defSchema = z
   .object({
     type: z.literal('wiring'),
     ...commonDefShape,
     operatorRoleId: z.string().min(1),
     manualRoleId: z.string().min(1),
-    pairsToCut: z.array(symbolPairSchema).min(1),
-    decoyPairs: z.array(symbolPairSchema).min(1),
+    /** how many wires a run may draw, both ends included */
+    wires: z
+      .object({ min: wireCountSchema, max: wireCountSchema })
+      .default({ min: MIN_WIRES, max: MAX_WIRES }),
     penaltySec: z.number().int().positive().default(30),
   })
   .superRefine((def, ctx) => {
-    const targets = new Set(def.pairsToCut.map(pairKey));
-    if (targets.size !== def.pairsToCut.length) {
-      ctx.addIssue({ code: 'custom', message: `puzzle "${def.id}": duplicate target pair` });
-    }
-    if (def.decoyPairs.some((d) => targets.has(pairKey(d)))) {
+    if (def.wires.min > def.wires.max) {
       ctx.addIssue({
         code: 'custom',
-        message: `puzzle "${def.id}": a decoy pair duplicates a target pair`,
+        path: ['wires'],
+        message:
+          `puzzle "${def.id}": wires.min (${def.wires.min}) is above wires.max ` +
+          `(${def.wires.max}) — swap them or make them equal`,
       });
     }
   });
@@ -39,18 +46,14 @@ export type WiringDef = z.infer<typeof defSchema>;
 
 export interface Wire {
   id: string;
-  color: string;
-  left: string;
-  right: string;
+  color: WireColor;
   cut: boolean;
 }
 
 export interface WiringState {
   type: 'wiring';
+  /** top to bottom, as the operator sees them; cut wires stay in place */
   wires: Wire[];
-  /** how many of def.pairsToCut are already cut, in order */
-  cutsDone: number;
-  lastWrongWireId: string | null;
 }
 
 const inputSchema = z.strictObject({ wireId: z.string().min(1) });
@@ -58,109 +61,240 @@ export type WiringInput = z.infer<typeof inputSchema>;
 
 export interface WiringView {
   kind: 'wiring';
-  /** wire layout — only the operator gets it, everyone else sees null */
+  /** top to bottom — only the operator sees the wires, everyone else gets null */
   wires: Wire[] | null;
+  wireCount: number;
   cutsDone: number;
-  cutsNeeded: number;
-  lastWrongWireId: string | null;
 }
 
-const samePair = (wire: Wire, [a, b]: readonly [string, string]): boolean =>
-  (wire.left === a && wire.right === b) || (wire.left === b && wire.right === a);
+interface Rule {
+  /** the printed line */
+  text: string;
+  applies(colors: readonly WireColor[], edgework: Edgework): boolean;
+  /** zero-based position of the wire to cut; only asked once the rule applies */
+  cut(colors: readonly WireColor[]): number;
+}
+
+const count = (colors: readonly WireColor[], color: WireColor): number =>
+  colors.filter((c) => c === color).length;
+const lastPosition = (colors: readonly WireColor[]): number => colors.length - 1;
+
+/**
+ * The printed lists, one per wire count. The first rule that applies decides,
+ * every list ends in a catch-all, and a rule that names a colour's wire only
+ * applies when such a wire exists — so every colouring has exactly one answer.
+ */
+const RULE_LISTS: readonly { wireCount: number; rules: readonly Rule[] }[] = [
+  {
+    wireCount: 3,
+    rules: [
+      {
+        text: 'Mehr als ein schwarzes Kabel: das erste schwarze Kabel.',
+        applies: (c) => count(c, 'schwarz') > 1,
+        cut: (c) => c.indexOf('schwarz'),
+      },
+      {
+        text: 'Letztes Kabel gelb: das erste Kabel.',
+        applies: (c) => c[lastPosition(c)] === 'gelb',
+        cut: () => 0,
+      },
+      {
+        text: 'Genau ein rotes Kabel: das zweite Kabel.',
+        applies: (c) => count(c, 'rot') === 1,
+        cut: () => 1,
+      },
+      {
+        text: 'Erstes Kabel blau: das letzte blaue Kabel.',
+        applies: (c) => c[0] === 'blau',
+        cut: (c) => c.lastIndexOf('blau'),
+      },
+      { text: 'Sonst: das letzte Kabel.', applies: () => true, cut: lastPosition },
+    ],
+  },
+  {
+    wireCount: 4,
+    rules: [
+      {
+        text: 'Laborkennung endet ungerade und kein gelbes Kabel: das zweite Kabel.',
+        applies: (c, e) => serialLastDigitIsOdd(e) && count(c, 'gelb') === 0,
+        cut: () => 1,
+      },
+      {
+        text: 'Mehr als ein weißes Kabel: das erste weiße Kabel.',
+        applies: (c) => count(c, 'weiß') > 1,
+        cut: (c) => c.indexOf('weiß'),
+      },
+      {
+        text: 'Genau ein rotes Kabel: das letzte Kabel.',
+        applies: (c) => count(c, 'rot') === 1,
+        cut: lastPosition,
+      },
+      {
+        text: 'Kein schwarzes Kabel: das erste Kabel.',
+        applies: (c) => count(c, 'schwarz') === 0,
+        cut: () => 0,
+      },
+      { text: 'Sonst: das dritte Kabel.', applies: () => true, cut: () => 2 },
+    ],
+  },
+  {
+    wireCount: 5,
+    rules: [
+      {
+        text: 'Kontrollleuchte FRQ leuchtet und genau ein blaues Kabel: das letzte Kabel.',
+        applies: (c, e) => indicatorLit(e, 'FRQ') && count(c, 'blau') === 1,
+        cut: lastPosition,
+      },
+      {
+        text: 'Letztes Kabel rot: das dritte Kabel.',
+        applies: (c) => c[lastPosition(c)] === 'rot',
+        cut: () => 2,
+      },
+      {
+        text: 'Kein gelbes Kabel: das erste Kabel.',
+        applies: (c) => count(c, 'gelb') === 0,
+        cut: () => 0,
+      },
+      {
+        text: 'Mehr als ein weißes Kabel: das letzte weiße Kabel.',
+        applies: (c) => count(c, 'weiß') > 1,
+        cut: (c) => c.lastIndexOf('weiß'),
+      },
+      {
+        text: 'Genau ein schwarzes Kabel: das vierte Kabel.',
+        applies: (c) => count(c, 'schwarz') === 1,
+        cut: () => 3,
+      },
+      { text: 'Sonst: das zweite Kabel.', applies: () => true, cut: () => 1 },
+    ],
+  },
+  {
+    wireCount: 6,
+    rules: [
+      {
+        text: 'Mindestens zwei Notstromzellen und kein weißes Kabel: das zweite Kabel.',
+        applies: (c, e) => e.cells >= 2 && count(c, 'weiß') === 0,
+        cut: () => 1,
+      },
+      {
+        text: 'Mehr als ein gelbes Kabel: das letzte gelbe Kabel.',
+        applies: (c) => count(c, 'gelb') > 1,
+        cut: (c) => c.lastIndexOf('gelb'),
+      },
+      {
+        text: 'Genau ein schwarzes Kabel: das schwarze Kabel.',
+        applies: (c) => count(c, 'schwarz') === 1,
+        cut: (c) => c.indexOf('schwarz'),
+      },
+      {
+        text: 'Erstes Kabel blau: das vierte Kabel.',
+        applies: (c) => c[0] === 'blau',
+        cut: () => 3,
+      },
+      {
+        text: 'Genau ein rotes Kabel: das dritte Kabel.',
+        applies: (c) => count(c, 'rot') === 1,
+        cut: () => 2,
+      },
+      { text: 'Sonst: das erste Kabel.', applies: () => true, cut: () => 0 },
+    ],
+  },
+];
+
+/** Zero-based position of the one wire the printed rules say to cut. */
+function wireToCut(colors: readonly WireColor[], edgework: Edgework): number {
+  const list = RULE_LISTS.find((l) => l.wireCount === colors.length);
+  const at = list?.rules.find((rule) => rule.applies(colors, edgework))?.cut(colors) ?? -1;
+  if (at < 0 || at >= colors.length) {
+    throw new Error(
+      `wiring: the rules decide nothing for ${colors.length} wires (${colors.join(', ')})`,
+    );
+  }
+  return at;
+}
 
 export const wiringModule: PuzzleModule<WiringDef, WiringState, WiringInput, WiringView> = {
   type: 'wiring',
-  usesEdgework: false,
+  usesEdgework: true,
   defSchema,
   inputSchema,
 
-  /** Lay out target and decoy pairs in a shuffled order with random end-swap and colors. */
   init(def, rng) {
-    const pairs = shuffle([...def.pairsToCut, ...def.decoyPairs], rng);
-    const wires = pairs.map(([a, b], idx): Wire => {
-      const swapped = rng() < 0.5;
-      return {
-        id: `w${idx}`,
-        color: WIRE_COLORS[Math.floor(rng() * WIRE_COLORS.length)] ?? '#8b98a5',
-        left: swapped ? b : a,
-        right: swapped ? a : b,
-        cut: false,
-      };
-    });
-    return { type: 'wiring', wires, cutsDone: 0, lastWrongWireId: null };
+    const { min, max } = def.wires;
+    const wireCount = min + Math.floor(rng() * (max - min + 1));
+    const wires = Array.from({ length: wireCount }, (_, i): Wire => ({
+      id: `w${i}`,
+      color: WIRE_COLORS[Math.floor(rng() * WIRE_COLORS.length)] ?? 'rot',
+      cut: false,
+    }));
+    return { type: 'wiring', wires };
   },
 
-  apply(def, state, input, roleId) {
+  apply(def, state, input, roleId, ctx) {
     if (roleId !== def.operatorRoleId) {
       fail('Nur die Rolle am Schaltschrank kann Kabel trennen.');
     }
     const wire = state.wires.find((w) => w.id === input.wireId);
     if (wire === undefined || wire.cut) {
-      // Stale click (already cut / unknown id): ignore without penalty.
+      // A stale click — that wire is already cut, or was never on this panel.
       return { state, solved: false, penalty: null };
     }
-    const expected = def.pairsToCut[state.cutsDone];
-    if (expected === undefined || !samePair(wire, expected)) {
-      return {
-        state: { ...state, lastWrongWireId: wire.id },
-        solved: false,
-        penalty: 'Falsches Kabel getrennt',
-      };
-    }
-    const wires = state.wires.map((w) => (w.id === wire.id ? { ...w, cut: true } : w));
-    const cutsDone = state.cutsDone + 1;
+    const at = state.wires.indexOf(wire);
+    const solved = at === wireToCut(state.wires.map((w) => w.color), ctx.edgework);
     return {
-      state: { type: 'wiring', wires, cutsDone, lastWrongWireId: null },
-      solved: cutsDone >= def.pairsToCut.length,
-      penalty: null,
+      state: { ...state, wires: state.wires.map((w, i) => (i === at ? { ...w, cut: true } : w)) },
+      solved,
+      penalty: solved ? null : 'Falsches Kabel getrennt',
     };
   },
 
   view(def, state, roleId) {
-    const isCutter = roleId === def.operatorRoleId;
     return {
       kind: 'wiring',
-      wires: isCutter ? state.wires : null,
-      cutsDone: state.cutsDone,
-      cutsNeeded: def.pairsToCut.length,
-      lastWrongWireId: isCutter ? state.lastWrongWireId : null,
+      wires: roleId === def.operatorRoleId ? state.wires.map((w) => ({ ...w })) : null,
+      wireCount: state.wires.length,
+      cutsDone: state.wires.filter((w) => w.cut).length,
     };
   },
 
   manual(def) {
-    const wires = def.pairsToCut.length + def.decoyPairs.length;
     return [
       {
-        heading: 'Sicherungskasten',
+        heading: 'Notstrom-Brücken',
         blocks: [
           {
             kind: 'p',
             text:
-              `${wires} Kabel, jedes Ende trägt ein Zeichen. ${def.pairsToCut.length} davon ` +
-              'sind in fester Reihenfolge zu trennen.',
-          },
-          {
-            kind: 'rules',
-            items: [
-              'Welche Kabel in welcher Reihenfolge fallen, steht in den Unterlagen der Crew.',
-              'Ein Kabel wird über die Zeichen an seinen beiden Enden benannt.',
-              `Falsches Kabel oder falsche Reihenfolge: Alarm, −${def.penaltySec} s. ` +
-                'Das Kabel bleibt ganz.',
-            ],
+              'Zuerst alle Kabel von oben nach unten ansagen, jedes mit Farbe. Gezählt wird ' +
+              'von oben; getrennte Kabel zählen mit. Es gilt nur die Liste zur Kabelzahl: ' +
+              'Regeln der Reihe nach prüfen, die erste zutreffende entscheidet. ' +
+              `Falsches Kabel: Alarm, −${def.penaltySec} s.`,
           },
         ],
       },
+      ...RULE_LISTS.map(
+        (list): ManualSection => ({
+          heading: `${list.wireCount} Kabel`,
+          blocks: [{ kind: 'rules', items: list.rules.map((rule) => rule.text) }],
+        }),
+      ),
     ];
   },
 
-  /** The cut order is the mission's own text (the manual role's info), so it comes from the def. */
-  solve(def, views) {
-    const cutter = views[def.operatorRoleId];
-    if (cutter?.wires == null) {
+  solve(def, views, edgework) {
+    const wires = views[def.operatorRoleId]?.wires;
+    if (wires == null) {
       throw new Error(`wiring "${def.id}": solving needs the operator's view of the wires`);
     }
-    const target = def.pairsToCut[cutter.cutsDone];
-    const wire = cutter.wires.find((w) => !w.cut && target !== undefined && samePair(w, target));
-    return wire === undefined ? [] : [{ roleId: def.operatorRoleId, input: { wireId: wire.id } }];
+    if (edgework === null) {
+      throw new Error(
+        `wiring "${def.id}": the rules read the edgework, but no role sees it — ` +
+          'set "seesEdgework": true on the operator role',
+      );
+    }
+    const wire = wires[wireToCut(wires.map((w) => w.color), edgework)];
+    return wire === undefined || wire.cut
+      ? []
+      : [{ roleId: def.operatorRoleId, input: { wireId: wire.id } }];
   },
 };
