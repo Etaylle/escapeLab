@@ -157,6 +157,7 @@ describe('the printed maze rules', () => {
     remainingSec: 600,
     at: T0,
     crew: ['op', 'rd'],
+    console: 'a',
   };
   const defOf = (size: number): MazeDef =>
     mazeModule.defSchema.parse({ type: 'maze', id: 'netz', title: 'Netz', size, penaltySec: 12 });

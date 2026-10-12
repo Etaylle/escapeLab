@@ -243,7 +243,7 @@ export const signalModule: PuzzleModule<SignalDef, SignalState, SignalInput, Sig
             kind: 'rules',
             items: [
               'Wenn die Nummer der Stufe ungerade ist, sendet Pult A, und Pult B empfängt.',
-              'Andernfalls sendet Pult B, und Pult A empfängt.',
+              'Wenn die Nummer der Stufe gerade ist, sendet Pult B, und Pult A empfängt.',
               `Wenn alle ${def.length} Zeichen einer Stufe gedrückt sind, beginnt die ` +
                 'nächste Stufe.',
               `Wenn Stufe ${def.stages} vollständig gedrückt ist, ist die Signalkette ` +
