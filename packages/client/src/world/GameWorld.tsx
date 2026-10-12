@@ -5,6 +5,7 @@ import {
   type ChatPhrase,
   type ClientMessage,
   type DronePosition,
+  type ManualKind,
   type PlayerPosition,
   type PlayerView,
 } from '@escapelab/core';
@@ -27,10 +28,15 @@ import {
 } from './art.js';
 import { contextAction } from './interact.js';
 import { markerTargets, placeMarker } from './markers.js';
+import { worldNews } from './news.js';
+import { roomArea } from './rooms.js';
 import {
+  cabinetUnlock,
   countdownBeep,
+  discoveryBlip,
   doorSlide,
   footstep,
+  lockerOpen,
   pingBlip,
   setTension,
   powerDrain,
@@ -46,6 +52,19 @@ const POS_SEND_MS = 80;
 const PING_LIFETIME_MS = 3200;
 
 const CHAT_LIFETIME_MS = 4200;
+/** How long „… entdeckt" stays over a source the crew has just come across. */
+const CAPTION_SECONDS = 2;
+/** A locker or cabinet opening this close (in tiles) is heard. */
+const HEAR_RADIUS = 4;
+
+const SOURCE_NAMES: Record<ManualKind, string> = {
+  book: 'Buch',
+  terminal: 'Terminal',
+  chart: 'Wandtafel',
+  clipboard: 'Klemmbrett',
+  locker: 'Spind',
+  cabinet: 'Aktenschrank',
+};
 
 export interface MapPing {
   playerId: string;
@@ -113,6 +132,12 @@ interface Sim {
   sabotageWasOn: boolean;
   /** last whole second announced by the countdown, so each tick fires once */
   lastBeepAt: number;
+  /** the map as the last frame saw it, to tell what changed since; null before the first */
+  seen: WorldMap | null;
+  /** „… entdeckt" over sources the crew has just come across, `at` in sim time */
+  captions: { x: number; y: number; text: string; at: number }[];
+  /** lit rooms by label: the tiles their lights reach and the sim time they came on */
+  lit: Map<string, { tiles: { x: number; y: number }[]; since: number }>;
 }
 
 const MOVE_KEYS: Record<string, [number, number]> = {
@@ -149,11 +174,22 @@ function blocked(map: WorldMap, closedDoors: Set<string>, x: number, y: number):
  * The one sentence a newcomer needs right now. Each tip is shown once per
  * session, so a second run is not cluttered with things you already know.
  */
-function coachTip(map: WorldMap, youId: string, carrying: boolean): { id: string; text: string } | null {
+function coachTip(
+  map: WorldMap,
+  youId: string,
+  carried: WorldMap['items'][number] | undefined,
+): { id: string; text: string } | null {
   if (map.sabotage !== null) {
     return { id: 'sabotage', text: 'Notfall! Jede Person an ein eigenes Ventil — sofort losrennen.' };
   }
-  if (carrying) {
+  // A key has no marked spot: it goes into a cabinet, found or not yet.
+  if (carried !== undefined && (carried.deliverTo === null || opensCabinet(map, carried.id))) {
+    return {
+      id: 'key',
+      text: 'Ein Schlüssel: Er schließt einen Aktenschrank auf — dort E drücken.',
+    };
+  }
+  if (carried !== undefined) {
     return {
       id: 'carry',
       text: 'Du trägst etwas: Bring es zur markierten Fläche und drücke E. Mit Q legst du es ab.',
@@ -205,6 +241,23 @@ function drawExit(ctx: CanvasRenderingContext2D, open: boolean, pulse: number): 
 function coversArmed(map: WorldMap, manual: WorldMap['manuals'][number]): boolean {
   const armed = map.stations.find((s) => s.status === 'armed');
   return armed !== undefined && manual.puzzleIds.includes(armed.puzzleId);
+}
+
+/** A cabinet's key goes into its padlock: the cabinet is the drop-off, no zone needed. */
+function opensCabinet(map: WorldMap, itemId: string): boolean {
+  return map.manuals.some((manual) => manual.needsKey === itemId);
+}
+
+/**
+ * How far a room's lights are up `t` seconds after they came on: strip lights
+ * that stutter for a moment, then rise to full within the second.
+ */
+function lightsUp(t: number): number {
+  if (t >= 1) {
+    return 1;
+  }
+  const rise = t * (2 - t);
+  return t < 0.35 && Math.sin(t * 60) < 0 ? rise * 0.3 : rise;
 }
 
 /** A door bar is horizontal when its left/right neighbors are barriers. */
@@ -262,10 +315,10 @@ export function GameWorld({
       setTip(null);
       return undefined;
     }
-    const carrying = view.map.items.some(
+    const carried = view.map.items.find(
       (item) => item.carriedBy === view.you.id && !item.delivered,
     );
-    const next = coachTip(view.map, view.you.id, carrying);
+    const next = coachTip(view.map, view.you.id, carried);
     if (next === null || seenTips.current.has(next.id)) {
       setTip(null);
       return undefined;
@@ -330,21 +383,29 @@ export function GameWorld({
       minimap: true,
       sabotageWasOn: false,
       lastBeepAt: Number.POSITIVE_INFINITY,
+      seen: null,
+      captions: [],
+      lit: new Map(),
     };
     simRef.current = sim;
     startAmbience();
 
     /**
      * Fires the one context action. Reading and coming back to an open
-     * station stay on this client; everything else the server decides.
+     * station stay on this client; everything else the server decides. A
+     * locked cabinet only says what is missing.
      */
     function tryInteract(): void {
       const current = viewRef.current;
       if (current.map === null || lockedRef.current) {
         return;
       }
-      const action = contextAction(current.map, sim.self, current.you.id, current.manualsHere);
-      if (action === null) {
+      const action = contextAction(current.map, sim.self, current.you.id, current.sourcesHere);
+      if (action === null || action.kind === 'locked') {
+        return;
+      }
+      if (action.kind === 'open') {
+        sendRef.current({ kind: 'open-source', manualId: action.manualId });
         return;
       }
       stationChirp();
@@ -556,6 +617,9 @@ export function GameWorld({
           anim.t += (target - anim.t) * (1 - Math.exp(-dt * 7));
         }
       }
+      if (map !== sim.seen) {
+        look(map);
+      }
 
       // The lab gets louder as the clock runs out, and counts the last ten
       // seconds out loud.
@@ -597,6 +661,37 @@ export function GameWorld({
         sim.cam.y += (sim.self.y - sim.cam.y) * ck;
       }
       sim.time += dt;
+    }
+
+    /**
+     * The lab answering the crew: a source somebody came across gets a blip
+     * and a caption, a locker or cabinet opening within earshot its sound, a
+     * room whose lights came on the door sound and a fade-in. Whatever this
+     * client finds on its first look was there before it came in.
+     */
+    function look(map: WorldMap): void {
+      const news = worldNews(sim.seen, map);
+      sim.seen = map;
+      for (const manual of news.found) {
+        const text = `${SOURCE_NAMES[manual.kind]} entdeckt`;
+        sim.captions.push({ x: manual.x + 0.5, y: manual.y, text, at: sim.time });
+      }
+      if (news.found.length > 0) {
+        discoveryBlip();
+      }
+      for (const manual of news.opened) {
+        const away = Math.hypot(manual.x + 0.5 - sim.self.x, manual.y + 0.5 - sim.self.y);
+        if (spectator || away <= HEAR_RADIUS) {
+          (manual.kind === 'cabinet' ? cabinetUnlock : lockerOpen)();
+        }
+      }
+      for (const room of map.litRooms.filter((text) => !sim.lit.has(text))) {
+        const tiles = map.labels.filter((l) => l.text === room).flatMap((l) => roomArea(map, l));
+        sim.lit.set(room, { tiles, since: news.lit.includes(room) ? sim.time : -Infinity });
+      }
+      if (news.lit.length > 0) {
+        doorSlide();
+      }
     }
 
     function worldToScreen(s: number, w: number, h: number, x: number, y: number): [number, number] {
@@ -698,6 +793,7 @@ export function GameWorld({
           kind: manual.kind,
           label: manual.label,
           active: coversArmed(map, manual),
+          opened: manual.opened,
           pulse,
         });
         ctx.restore();
@@ -721,7 +817,7 @@ export function GameWorld({
         ctx.restore();
       }
       for (const item of map.items) {
-        if (item.deliverTo !== null) {
+        if (item.deliverTo !== null && !opensCabinet(map, item.id)) {
           ctx.save();
           ctx.translate(item.deliverTo.x + 0.5, item.deliverTo.y + 0.5);
           drawDropZone(ctx, item.delivered, pulse);
@@ -860,6 +956,39 @@ export function GameWorld({
           ctx.fill();
           ctx.restore();
         }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    /** A tag on the screen like the E prompt: a dark pill with rim and text in `tint`. */
+    function drawTag(text: string, sx: number, sy: number, tint: string, dpr: number): void {
+      if (ctx == null) {
+        return;
+      }
+      ctx.font = `700 ${12 * dpr}px ui-monospace, Menlo, monospace`;
+      const tw = ctx.measureText(text).width + 16 * dpr;
+      ctx.fillStyle = 'rgba(7,11,15,0.88)';
+      ctx.strokeStyle = tint;
+      ctx.lineWidth = dpr;
+      ctx.beginPath();
+      ctx.roundRect(sx - tw / 2, sy - 11 * dpr, tw, 20 * dpr, 5 * dpr);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = tint;
+      ctx.fillText(text, sx, sy + 4 * dpr);
+    }
+
+    /** „Spind entdeckt" over a source the crew has just come across, rising as it fades. */
+    function renderCaptions(s: number, w: number, h: number, dpr: number): void {
+      if (ctx == null) {
+        return;
+      }
+      sim.captions = sim.captions.filter((c) => sim.time - c.at < CAPTION_SECONDS);
+      for (const caption of sim.captions) {
+        const age = (sim.time - caption.at) / CAPTION_SECONDS;
+        const [sx, rawY] = worldToScreen(s, w, h, caption.x, caption.y - 1 - 0.3 * age);
+        ctx.globalAlpha = Math.min(1, age * 10, (1 - age) * 4);
+        drawTag(caption.text, sx, Math.max(rawY, (safeTopCss + 24) * dpr), '#93c5fd', dpr);
       }
       ctx.globalAlpha = 1;
     }
@@ -1112,6 +1241,17 @@ export function GameWorld({
         octx.restore();
         punch(drone.x, drone.y, 1.1, 0.75);
       }
+      // A lit room keeps no darkness at all, walls and doors included; one
+      // path per room, so its tiles meet without seams.
+      for (const room of sim.lit.values()) {
+        octx.fillStyle = `rgba(0,0,0,${lightsUp(sim.time - room.since)})`;
+        octx.beginPath();
+        for (const tile of room.tiles) {
+          const [sx, sy] = worldToScreen(s, w, h, tile.x, tile.y);
+          octx.rect(sx, sy, s, s);
+        }
+        octx.fill();
+      }
 
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.drawImage(overlay, 0, 0);
@@ -1172,23 +1312,15 @@ export function GameWorld({
       }
       const action = lockedRef.current
         ? null
-        : contextAction(map, sim.self, viewRef.current.you.id, viewRef.current.manualsHere);
+        : contextAction(map, sim.self, viewRef.current.you.id, viewRef.current.sourcesHere);
       if (action !== null) {
         const [sx, rawY] = worldToScreen(s, w, h, action.x, action.y);
         // Like the edge arrows: the prompt must stay below the objective bar.
         const sy = Math.max(rawY, (safeTopCss + 24) * dpr);
-        ctx.font = `700 ${12 * dpr}px ui-monospace, Menlo, monospace`;
-        const tw = ctx.measureText(action.label).width + 16 * dpr;
-        ctx.fillStyle = 'rgba(7,11,15,0.88)';
-        ctx.strokeStyle = '#2dd4bf';
-        ctx.lineWidth = dpr;
-        ctx.beginPath();
-        ctx.roundRect(sx - tw / 2, sy - 11 * dpr, tw, 20 * dpr, 5 * dpr);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = '#2dd4bf';
-        ctx.fillText(action.label, sx, sy + 4 * dpr);
+        // Amber where E does nothing yet: something is missing.
+        drawTag(action.label, sx, sy, action.kind === 'locked' ? '#fbbf24' : '#2dd4bf', dpr);
       }
+      renderCaptions(s, w, h, dpr);
       renderChatBubbles(s, w, h, dpr);
 
       // A standing reminder while hands are full.

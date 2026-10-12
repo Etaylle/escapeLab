@@ -10,7 +10,7 @@ type Tab = 'auftrag' | 'karte' | 'steuerung';
 
 const CONTROLS: readonly (readonly [string, string])[] = [
   ['W A S D / Pfeile', 'Laufen'],
-  ['E', 'Bedienen, lesen, aufnehmen oder einsetzen'],
+  ['E', 'Bedienen, lesen, durchsuchen, aufschließen, aufnehmen oder einsetzen'],
   ['Esc', 'Pult oder Lesen verlassen'],
   ['Q', 'Getragenes Objekt ablegen — so sind Übergaben möglich'],
   ['Klick auf die Welt', 'Ping für alle setzen'],

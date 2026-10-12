@@ -1111,6 +1111,8 @@ export interface ManualObjectOpts {
   label: string;
   /** covers the armed station: blue glow, strength follows pulse */
   active: boolean;
+  /** a locker searched, a cabinet unlocked; everything else is always open */
+  opened: boolean;
   /** 0..1 looping pulse driven by the caller */
   pulse: number;
 }
@@ -1118,6 +1120,10 @@ export interface ManualObjectOpts {
 const READ_LABEL = '#93c5fd';
 /** Lengths of the lines of print on a page, top to bottom. */
 const PRINT = [0.2, 0.17, 0.21, 0.12, 0.19] as const;
+const PAPER = '#d6cdb4';
+const PAPER_PRINT = 'rgba(52, 44, 30, 0.5)';
+/** Laid over the paper of a manual object that is not needed right now. */
+const PAPER_DIM = 'rgba(0, 0, 0, 0.3)';
 const PLAN_X = -0.21;
 const PLAN_Y = -0.35;
 const PLAN_W = 0.42;
@@ -1147,10 +1153,10 @@ function drawOpenBook(ctx: CanvasRenderingContext2D, active: boolean): void {
   ctx.beginPath();
   addPage(ctx, -1);
   addPage(ctx, 1);
-  ctx.fillStyle = '#d6cdb4';
+  ctx.fillStyle = PAPER;
   ctx.fill();
   if (!active) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillStyle = PAPER_DIM;
     ctx.fill();
   }
   ctx.fillStyle = 'rgba(60, 50, 30, 0.22)';
@@ -1166,7 +1172,7 @@ function drawOpenBook(ctx: CanvasRenderingContext2D, active: boolean): void {
   ctx.moveTo(0, -0.24);
   ctx.lineTo(0, 0.015);
   ctx.lineWidth = 0.011;
-  ctx.strokeStyle = 'rgba(52, 44, 30, 0.5)';
+  ctx.strokeStyle = PAPER_PRINT;
   ctx.stroke();
   ctx.beginPath();
   ctx.moveTo(0.07, 0.01);
@@ -1339,25 +1345,311 @@ function drawChart(ctx: CanvasRenderingContext2D, active: boolean): void {
   ctx.fillRect(-0.34, -0.42, 0.68, 0.48);
   drawChartTable(ctx);
   if (!active) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillStyle = PAPER_DIM;
     ctx.fillRect(-0.34, -0.42, 0.68, 0.48);
   }
   ctx.fillStyle = '#3b4654';
   ctx.fillRect(-0.07, -0.5, 0.14, 0.06);
 }
 
+/** A sheet of paper with lines of print, from its top left corner; dimmed when not needed. */
+function drawSheet(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  active: boolean,
+): void {
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.fillStyle = PAPER;
+  ctx.fill();
+  if (!active) {
+    ctx.fillStyle = PAPER_DIM;
+    ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(30, 58, 95, 0.75)';
+  ctx.fillRect(x + w * 0.14, y + h * 0.1, w * 0.45, h * 0.06);
+  ctx.beginPath();
+  const lines = Math.floor((h * 0.68) / 0.05);
+  for (let i = 0; i < lines; i++) {
+    const length = ((PRINT[i % PRINT.length] ?? 0.2) / 0.21) * w * 0.72;
+    ctx.moveTo(x + w * 0.14, y + h * 0.27 + i * 0.05);
+    ctx.lineTo(x + w * 0.14 + length, y + h * 0.27 + i * 0.05);
+  }
+  ctx.lineWidth = 0.011;
+  ctx.strokeStyle = PAPER_PRINT;
+  ctx.stroke();
+}
+
+/** The hook the clipboard hangs from, in the wall just above its tile. */
+const HOOK_Y = -0.52;
+
+/** Hardboard with a spring clip and a sheet of rules, hanging slightly askew from its hook. */
+function drawClipboard(ctx: CanvasRenderingContext2D, active: boolean): void {
+  ctx.beginPath();
+  addCircle(ctx, 0, HOOK_Y, 0.03);
+  ctx.fillStyle = '#2b3540';
+  ctx.fill();
+  ctx.translate(0, HOOK_Y);
+  ctx.rotate(-0.05);
+  ctx.translate(0, -HOOK_Y);
+  ctx.beginPath();
+  roundRectPath(ctx, -0.17, -0.41, 0.4, 0.6, 0.035);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.fill();
+  ctx.beginPath();
+  roundRectPath(ctx, -0.2, -0.44, 0.4, 0.6, 0.035);
+  ctx.fillStyle = '#6b4f33';
+  ctx.fill();
+  ctx.lineWidth = 0.02;
+  ctx.strokeStyle = '#3a2a1a';
+  ctx.stroke();
+  drawSheet(ctx, -0.16, -0.35, 0.32, 0.46, active);
+  ctx.beginPath();
+  roundRectPath(ctx, -0.05, -0.5, 0.1, 0.05, 0.018);
+  ctx.fillStyle = '#7b8794';
+  ctx.fill();
+  ctx.beginPath();
+  roundRectPath(ctx, -0.11, -0.47, 0.22, 0.09, 0.025);
+  ctx.fillStyle = '#9aa5b1';
+  ctx.fill();
+  ctx.lineWidth = 0.012;
+  ctx.strokeStyle = '#3f4954';
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+  ctx.fillRect(-0.08, -0.455, 0.16, 0.012);
+}
+
+const LOCKER_X = -0.23;
+const LOCKER_TOP = -0.42;
+const LOCKER_W = 0.46;
+const LOCKER_H = 0.72;
+
+/** Four slits pressed into a locker door from `y` down, each with a lit lower lip. */
+function drawLouvres(ctx: CanvasRenderingContext2D, y: number): void {
+  for (let i = 0; i < 4; i++) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.fillRect(-0.13, y + i * 0.04, 0.26, 0.016);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+    ctx.fillRect(-0.13, y + i * 0.04 + 0.016, 0.26, 0.008);
+  }
+}
+
+/** The shut door: louvres top and bottom, a name card and the handle. */
+function drawLockerDoor(ctx: CanvasRenderingContext2D): void {
+  ctx.beginPath();
+  roundRectPath(ctx, LOCKER_X, LOCKER_TOP, LOCKER_W, LOCKER_H, 0.025);
+  ctx.fillStyle = '#434c57';
+  ctx.fill();
+  ctx.lineWidth = 0.014;
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.fillRect(LOCKER_X + 0.02, LOCKER_TOP + 0.012, LOCKER_W - 0.04, 0.012);
+  drawLouvres(ctx, -0.35);
+  drawLouvres(ctx, 0.13);
+  ctx.fillStyle = '#b5ae98';
+  ctx.fillRect(-0.08, -0.16, 0.16, 0.06);
+  ctx.beginPath();
+  roundRectPath(ctx, 0.12, -0.08, 0.045, 0.17, 0.018);
+  ctx.fillStyle = '#9aa4b1';
+  ctx.fill();
+  ctx.lineWidth = 0.012;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+}
+
+/** Searched: the door swung out past its hinge, a shelf inside and a sheet of rules. */
+function drawLockerOpen(ctx: CanvasRenderingContext2D, active: boolean): void {
+  ctx.beginPath();
+  roundRectPath(ctx, LOCKER_X, LOCKER_TOP, LOCKER_W, LOCKER_H, 0.025);
+  ctx.fillStyle = '#0c1015';
+  ctx.fill();
+  ctx.fillStyle = '#39424c';
+  ctx.fillRect(LOCKER_X, -0.27, LOCKER_W, 0.03);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.fillRect(LOCKER_X, -0.27, LOCKER_W, 0.008);
+  ctx.save();
+  ctx.rotate(0.05);
+  drawSheet(ctx, -0.1, -0.17, 0.22, 0.32, active);
+  ctx.restore();
+  ctx.beginPath();
+  addCircle(ctx, 0.008, -0.155, 0.018);
+  ctx.fillStyle = '#c2410c';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(LOCKER_X, LOCKER_TOP);
+  ctx.lineTo(LOCKER_X - 0.16, LOCKER_TOP - 0.05);
+  ctx.lineTo(LOCKER_X - 0.16, LOCKER_TOP + LOCKER_H + 0.05);
+  ctx.lineTo(LOCKER_X, LOCKER_TOP + LOCKER_H);
+  ctx.closePath();
+  ctx.fillStyle = '#353d47';
+  ctx.fill();
+  ctx.lineWidth = 0.014;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+  ctx.beginPath();
+  for (let i = 0; i < 4; i++) {
+    ctx.moveTo(LOCKER_X - 0.035, -0.33 + i * 0.04);
+    ctx.lineTo(LOCKER_X - 0.125, -0.35 + i * 0.04);
+    ctx.moveTo(LOCKER_X - 0.035, 0.15 + i * 0.04);
+    ctx.lineTo(LOCKER_X - 0.125, 0.16 + i * 0.04);
+  }
+  ctx.lineWidth = 0.014;
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.stroke();
+}
+
+/** A grey steel locker, shut or — once searched — standing open with the rules inside. */
+function drawLocker(ctx: CanvasRenderingContext2D, active: boolean, opened: boolean): void {
+  ctx.beginPath();
+  roundRectPath(ctx, -0.27, -0.47, 0.54, 0.84, 0.04);
+  ctx.fillStyle = '#272e36';
+  ctx.fill();
+  ctx.lineWidth = 0.025;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+  ctx.fillRect(-0.23, -0.46, 0.46, 0.012);
+  if (opened) drawLockerOpen(ctx, active);
+  else drawLockerDoor(ctx);
+}
+
+const DRAWER_X = -0.26;
+const DRAWER_W = 0.52;
+const DRAWER_H = 0.22;
+/** Tops of the cabinet's three drawers, top to bottom. */
+const DRAWER_TOPS = [-0.38, -0.13, 0.12] as const;
+const DRAWER_FRONT = '#3a4336';
+/** A drawer pulled out catches more of the light. */
+const DRAWER_FRONT_OUT = '#46513f';
+/** Tabs of the hanging files in the open drawer. */
+const FILE_TABS = ['#f87171', BLUE, AMBER, '#4ade80', TEAL] as const;
+
+/** A drawer front with its label card and pull handle, `top` its upper edge. */
+function drawDrawer(ctx: CanvasRenderingContext2D, top: number, front: string): void {
+  ctx.beginPath();
+  roundRectPath(ctx, DRAWER_X, top, DRAWER_W, DRAWER_H, 0.02);
+  ctx.fillStyle = front;
+  ctx.fill();
+  ctx.lineWidth = 0.012;
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+  ctx.fillRect(DRAWER_X + 0.02, top + 0.01, DRAWER_W - 0.04, 0.01);
+  ctx.fillStyle = '#b9b29a';
+  ctx.fillRect(-0.07, top + 0.04, 0.14, 0.05);
+  ctx.beginPath();
+  roundRectPath(ctx, -0.1, top + 0.125, 0.2, 0.04, 0.016);
+  ctx.fillStyle = '#a3ab9c';
+  ctx.fill();
+  ctx.lineWidth = 0.01;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+}
+
+/** A hasp over the top drawer and a brass padlock hanging from it. */
+function drawPadlock(ctx: CanvasRenderingContext2D): void {
+  ctx.beginPath();
+  roundRectPath(ctx, 0.15, -0.43, 0.05, 0.17, 0.015);
+  ctx.fillStyle = '#59605c';
+  ctx.fill();
+  ctx.lineWidth = 0.012;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0.125, -0.21);
+  ctx.arc(0.175, -0.25, 0.05, Math.PI, 0);
+  ctx.lineTo(0.225, -0.21);
+  ctx.lineWidth = 0.024;
+  ctx.strokeStyle = '#b6bec7';
+  ctx.stroke();
+  ctx.beginPath();
+  roundRectPath(ctx, 0.095, -0.225, 0.16, 0.13, 0.03);
+  ctx.fillStyle = '#c9a54a';
+  ctx.fill();
+  ctx.lineWidth = 0.014;
+  ctx.strokeStyle = '#5c4718';
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+  ctx.fillRect(0.115, -0.212, 0.12, 0.014);
+  ctx.beginPath();
+  addCircle(ctx, 0.175, -0.17, 0.017);
+  ctx.rect(0.168, -0.165, 0.014, 0.035);
+  ctx.fillStyle = '#3d2f12';
+  ctx.fill();
+}
+
+/** Unlocked: the top drawer pulled out, its files and a sheet of rules standing up in it. */
+function drawOpenDrawer(ctx: CanvasRenderingContext2D, active: boolean): void {
+  const top = DRAWER_TOPS[0];
+  const front = top + 0.15;
+  ctx.fillStyle = '#0b0e0b';
+  ctx.fillRect(DRAWER_X, top, DRAWER_W, DRAWER_H);
+  for (let i = 0; i < FILE_TABS.length; i++) {
+    const x = DRAWER_X + 0.04 + i * 0.09;
+    ctx.fillStyle = i % 2 === 0 ? '#b8975a' : '#9c7f48';
+    ctx.fillRect(x, top + 0.03, 0.08, front - top);
+    ctx.fillStyle = FILE_TABS[i] ?? AMBER;
+    ctx.fillRect(x + 0.012, top + 0.005, 0.035, 0.03);
+  }
+  drawSheet(ctx, -0.09, top - 0.1, 0.18, 0.24, active);
+  drawDrawer(ctx, front, DRAWER_FRONT_OUT);
+}
+
+/** A filing cabinet under a padlock or — once unlocked — with its top drawer pulled out. */
+function drawCabinet(ctx: CanvasRenderingContext2D, active: boolean, opened: boolean): void {
+  ctx.beginPath();
+  roundRectPath(ctx, -0.3, -0.43, 0.6, 0.8, 0.035);
+  ctx.fillStyle = '#262c25';
+  ctx.fill();
+  ctx.lineWidth = 0.025;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+  ctx.fillRect(-0.26, -0.42, 0.52, 0.012);
+  for (const top of opened ? DRAWER_TOPS.slice(1) : DRAWER_TOPS) drawDrawer(ctx, top, DRAWER_FRONT);
+  if (opened) drawOpenDrawer(ctx, active);
+  else drawPadlock(ctx);
+}
+
 /** Anchor: TILE CENTER. Where printed rules lie: an open book on a lectern, a terminal
- * showing a plan, or a chart on an easel. Covering the armed station = blue glow (strength
+ * showing a plan, a chart on an easel, a clipboard on a hook in the wall above, a grey locker
+ * (ajar once searched, the rules inside) or a filing cabinet under a padlock (gone once
+ * unlocked, the top drawer pulled out). Covering the armed station = blue glow (strength
  * follows pulse) and lit paper or screen; label under it (0.2 tile mono, dark halo). */
 export function drawManualObject(ctx: CanvasRenderingContext2D, o: ManualObjectOpts): void {
   const wave = pulseWave(o.pulse);
   ctx.save();
   try {
-    softEllipse(ctx, 0, 0.36, 0.42, 0.12, SHADOW_RGB, 0.45, 'source-over');
+    // A clipboard hangs on the wall and casts its shadow there.
+    const shadow = o.kind === 'clipboard' ? 0 : 0.45;
+    softEllipse(ctx, 0, 0.36, 0.42, 0.12, SHADOW_RGB, shadow, 'source-over');
     if (o.active) softEllipse(ctx, 0, -0.12, 0.85, 0.75, BLUE_RGB, 0.14 + 0.26 * wave, 'lighter');
-    if (o.kind === 'book') drawLectern(ctx, o.active);
-    else if (o.kind === 'terminal') drawTerminal(ctx, o.active, wave);
-    else drawChart(ctx, o.active);
+    ctx.save();
+    switch (o.kind) {
+      case 'book':
+        drawLectern(ctx, o.active);
+        break;
+      case 'terminal':
+        drawTerminal(ctx, o.active, wave);
+        break;
+      case 'chart':
+        drawChart(ctx, o.active);
+        break;
+      case 'clipboard':
+        drawClipboard(ctx, o.active);
+        break;
+      case 'locker':
+        drawLocker(ctx, o.active, o.opened);
+        break;
+      case 'cabinet':
+        drawCabinet(ctx, o.active, o.opened);
+        break;
+    }
+    ctx.restore();
     drawHaloText(ctx, o.label, 0, 0.41, FONT_LABEL, o.active ? READ_LABEL : IDLE_LABEL, 'top');
   } finally {
     ctx.restore();

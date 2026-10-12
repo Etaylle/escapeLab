@@ -24,7 +24,21 @@ const book: Manual = {
   needsKey: null,
 };
 /** What the server says this player stands at. */
-const AT_BOOK = [{ id: 'buch' }];
+const AT_BOOK = [{ id: 'buch', kind: 'book', opened: true, needsKey: null }] as const;
+
+/** A locker at (2,5) and a cabinet at (8,5) unlocked by the key, both covering the station. */
+const locker: Manual = { ...book, id: 'spind', kind: 'locker', label: 'SPIND', opened: false };
+const cabinet: Manual = {
+  ...book,
+  id: 'schrank',
+  kind: 'cabinet',
+  x: 8,
+  label: 'SCHRANK',
+  opened: false,
+  needsKey: 'key',
+};
+const AT_LOCKER = [{ id: 'spind', kind: 'locker', opened: false, needsKey: null }] as const;
+const AT_CABINET = [{ id: 'schrank', kind: 'cabinet', opened: false, needsKey: 'key' }] as const;
 
 function part(parts: Partial<MapView['items'][number]>): MapView['items'][number] {
   return {
@@ -94,5 +108,56 @@ describe('contextAction — what E does where the player stands', () => {
   it('offers nothing out of reach', () => {
     const map = mapWith({ stations: [station], manuals: [book] });
     expect(contextAction(map, { x: 9.5, y: 9.5 }, YOU, AT_BOOK)).toBeNull();
+  });
+});
+
+describe('contextAction — lockers and cabinets', () => {
+  const key = part({ id: 'key', label: 'SCHLÜSSEL', x: 4.5, y: 9.5, deliverTo: { x: 8, y: 5 } });
+
+  it('searches a closed locker, full hands or not, and reads it once open', () => {
+    const map = mapWith({ manuals: [locker] });
+    expect(contextAction(map, { x: 2.5, y: 6.4 }, YOU, AT_LOCKER)).toMatchObject({
+      kind: 'open',
+      manualId: 'spind',
+      label: '[E] Durchsuchen',
+    });
+    const carrying = mapWith({ manuals: [locker], items: [part({ carriedBy: YOU })] });
+    expect(contextAction(carrying, { x: 2.5, y: 6.4 }, YOU, AT_LOCKER)?.kind).toBe('open');
+    const open = mapWith({ manuals: [{ ...locker, opened: true }] });
+    const searched = [{ ...AT_LOCKER[0], opened: true }];
+    expect(contextAction(open, { x: 2.5, y: 6.4 }, YOU, searched)).toMatchObject({
+      kind: 'read',
+      manualId: 'spind',
+      label: '[E] Lesen',
+    });
+  });
+
+  it('unlocks a cabinet with its key in hand rather than handing the key in', () => {
+    const map = mapWith({ manuals: [cabinet], items: [{ ...key, carriedBy: YOU }] });
+    expect(contextAction(map, { x: 8.5, y: 5.6 }, YOU, AT_CABINET)).toMatchObject({
+      kind: 'open',
+      manualId: 'schrank',
+      label: '[E] Aufschließen',
+    });
+    expect(contextAction(map, { x: 8.5, y: 5.6 }, YOU, [])).toBeNull();
+  });
+
+  it('names the missing key at a locked cabinet, and E there does nothing', () => {
+    const away = mapWith({ manuals: [cabinet], items: [key] });
+    expect(contextAction(away, { x: 8.5, y: 6.4 }, YOU, AT_CABINET)).toEqual({
+      kind: 'locked',
+      label: '🔒 SCHLÜSSEL fehlt',
+      x: 8.5,
+      y: 4.45,
+    });
+    const otherHands = mapWith({ manuals: [cabinet], items: [{ ...key, carriedBy: 'p2' }] });
+    expect(contextAction(otherHands, { x: 8.5, y: 6.4 }, YOU, AT_CABINET)?.kind).toBe('locked');
+    const wrongPart = mapWith({ manuals: [cabinet], items: [key, part({ carriedBy: YOU })] });
+    expect(contextAction(wrongPart, { x: 8.5, y: 6.4 }, YOU, AT_CABINET)?.kind).toBe('locked');
+  });
+
+  it('lets a missing key hide nothing that can be done', () => {
+    const map = mapWith({ stations: [station], manuals: [{ ...cabinet, x: 5, y: 6 }] });
+    expect(contextAction(map, { x: 5.5, y: 6.4 }, YOU, AT_CABINET)?.kind).toBe('operate');
   });
 });
