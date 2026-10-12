@@ -34,7 +34,16 @@ export class StaticSite {
       return false;
     }
     const path = (req.url ?? '/').split('?')[0] ?? '/';
-    const file = this.resolve(path) ?? this.resolve('/index.html');
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(path);
+    } catch {
+      // A broken escape sequence is a bad request, not a reason to go down.
+      res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
+      res.end('Ungültiger Pfad');
+      return true;
+    }
+    const file = this.resolve(decoded) ?? this.resolve('/index.html');
     if (file === null) {
       return false;
     }
@@ -52,7 +61,7 @@ export class StaticSite {
 
   /** Map a URL path to a file inside the root, or null if it escapes or is missing. */
   private resolve(path: string): string | null {
-    const clean = normalize(decodeURIComponent(path)).replace(/^(\.\.[/\\])+/, '');
+    const clean = normalize(path).replace(/^(\.\.[/\\])+/, '');
     const file = join(this.root, clean === '/' ? 'index.html' : clean);
     if (!file.startsWith(this.root)) {
       return null;
