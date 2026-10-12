@@ -18,6 +18,7 @@ function view(pattern: string | null, dial: number): MorseView {
     total: 1,
     title: 'Funkfeuer',
     manual: null,
+    console: 'a',
   };
 }
 

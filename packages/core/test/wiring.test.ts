@@ -63,6 +63,7 @@ const ctx = (edgework: Edgework): PuzzleContext => ({
   remainingSec: 600,
   at: T0,
   crew: ['op', 'rd'],
+  console: 'a',
 });
 
 function colorsOf(spoken: string): WireColor[] {

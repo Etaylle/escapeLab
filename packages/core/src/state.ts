@@ -31,7 +31,7 @@ export interface RunEvent {
  * who knows the edgework.
  */
 export interface Presence {
-  /** players at each station, by puzzle id */
+  /** players at each station spot, by `stationKey`: the puzzle id, `<puzzleId>/b` at console b */
   stations: Record<string, string[]>;
   /** players at each manual object, by its id */
   manuals: Record<string, string[]>;

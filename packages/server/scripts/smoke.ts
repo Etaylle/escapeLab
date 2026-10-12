@@ -20,6 +20,7 @@ import {
   moduleFor,
   NO_CREDITS,
   parseMission,
+  type ConsoleId,
   type Credits,
   type DronePosition,
   type Edgework,
@@ -580,40 +581,54 @@ async function waitFor(desc: string, cond: () => boolean): Promise<void> {
 
 /**
  * Who works station `index` and who reads its rules, by where the clients
- * stand: the operator at the station, the reader at a source that covers
- * it. Where the whole crew presses, everyone stands at the station.
+ * stand: the operator at the station (at console a where it has two), the
+ * partner at console b, the reader at a source that covers it — or, with
+ * nobody there, whoever is not the operator. Where the whole crew presses,
+ * everyone stands at the station.
  */
-function sidesOf(index: number): { operator: TestClient; reader: TestClient } {
+function sidesOf(index: number): {
+  operator: TestClient;
+  partner: TestClient | null;
+  reader: TestClient;
+} {
   const def = mission.puzzles[index] ?? fail(`blackout has no station ${index + 1}`);
+  const consoleOf = (client: TestClient): ConsoleId | null =>
+    client.view?.presence.stationId === def.id ? client.view.presence.console : null;
   const operator =
-    crew.find((client) => client.view?.presence.stationId === def.id) ??
+    crew.find((client) => consoleOf(client) === 'a') ??
     fail(`nobody stands at station ${index + 1}`);
+  const partner = crew.find((client) => consoleOf(client) === 'b') ?? null;
   const reads = (client: TestClient): boolean =>
     client.view?.manualsHere.some((m) => m.sections.some((s) => s.puzzleId === def.id)) === true;
   const reader =
     crew.find((client) => client !== operator && reads(client)) ??
     crew.find((client) => client !== operator) ??
     fail(`nobody beside the operator at station ${index + 1}`);
-  return { operator, reader };
+  return { operator, partner, reader };
 }
 
 /**
- * What the two clients show of station `index`: the view at the station and
- * the view at the source, the edgework if one of them has read the sign, and
- * the seconds left on their clock.
+ * What the clients show of station `index`: the view at the station (and at
+ * its console b) and the view at the source, the edgework if one of them
+ * has read the sign, and the seconds left on their clock.
  */
 function crewSees(
   index: number,
 ): { views: Perspectives<PuzzleView>; edgework: Edgework | null; remainingSec: number | null } {
-  const { operator, reader } = sidesOf(index);
+  const { operator, partner, reader } = sidesOf(index);
   const atStation = operator.view ?? fail(`${operator.label}: no view yet`);
+  const atB = partner === null ? null : (partner.view ?? fail(`${partner.label}: no view yet`));
   const atSource = reader.view ?? fail(`${reader.label}: no view yet`);
   const open = (client: TestClient, view: PlayerView): PuzzleView =>
     view.puzzle ?? fail(`${client.label}: station ${index + 1} is not open`);
   const deadlineAt = atStation.deadlineAt;
   return {
-    views: { operator: open(operator, atStation), reader: open(reader, atSource) },
-    edgework: atStation.edgework ?? atSource.edgework,
+    views: {
+      operator: open(operator, atStation),
+      ...(partner === null || atB === null ? {} : { partner: open(partner, atB) }),
+      reader: open(reader, atSource),
+    },
+    edgework: atStation.edgework ?? atB?.edgework ?? atSource.edgework,
     remainingSec: deadlineAt === null ? null : Math.ceil((deadlineAt - Date.now()) / 1000),
   };
 }
@@ -635,16 +650,24 @@ function holdingDown(views: Perspectives<PuzzleView>): boolean {
 
 /**
  * Send moves and wait for their effect everywhere: an operator move comes
- * from the client at the station, an `everyone` move from both; every
- * accepted input is one broadcast to each client, and each acting client's
- * station has changed or closed.
+ * from the client at the station, a partner move from the client at its
+ * console b, an `everyone` move from both; every accepted input is one
+ * broadcast to each client, and each acting client's station has changed or
+ * closed.
  */
 async function play(moves: Move<PuzzleInput>[], index: number): Promise<void> {
   const counts = crew.map((client) => client.viewCount);
-  const { operator } = sidesOf(index);
-  const sent = moves.flatMap((move) =>
-    (move.by === 'everyone' ? crew : [operator]).map((client) => ({ client, move })),
-  );
+  const { operator, partner } = sidesOf(index);
+  const sendersOf = (by: Move<PuzzleInput>['by']): TestClient[] => {
+    if (by === 'everyone') {
+      return crew;
+    }
+    if (by === 'partner') {
+      return [partner ?? fail(`nobody stands at console b of station ${index + 1}`)];
+    }
+    return [operator];
+  };
+  const sent = moves.flatMap((move) => sendersOf(move.by).map((client) => ({ client, move })));
   const before = sent.map(({ client }) => JSON.stringify(client.view?.puzzle));
   for (const { client, move } of sent) {
     client.send({ kind: 'puzzle-input', input: move.input });
@@ -810,13 +833,17 @@ async function solveSync(): Promise<void> {
   await solveStation(4);
 }
 
-/** Switch on the armed station from where `client` stands, which has to be within reach. */
+/**
+ * Switch on the armed station from where `client` stands, which has to be
+ * within reach of it — of either console, where it has two.
+ */
 async function switchOn(client: TestClient, index: number): Promise<void> {
   const self = await client.ensureSelf();
-  const station = client.view?.map?.stations.find((s) => s.status === 'armed');
+  const armed = client.view?.map?.stations.filter((s) => s.status === 'armed') ?? [];
   assert(
-    station !== undefined &&
-      Math.hypot(self.x - (station.x + 0.5), self.y - (station.y + 0.5)) <= 1.6,
+    armed.some(
+      (station) => Math.hypot(self.x - (station.x + 0.5), self.y - (station.y + 0.5)) <= 1.6,
+    ),
     `${client.label} stands within interact range of station ${index + 1}`,
   );
   client.send({ kind: 'interact' });

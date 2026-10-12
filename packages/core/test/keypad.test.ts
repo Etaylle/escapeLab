@@ -43,7 +43,7 @@ const mission = labMission([def], 'keypadtest');
 
 const edgework = generateEdgework(mulberry32(1));
 const crew = ['op', 'rd'];
-const ctx: PuzzleContext = { edgework, alarms: 0, remainingSec: 600, at: T0, crew };
+const ctx: PuzzleContext = { edgework, alarms: 0, remainingSec: 600, at: T0, crew, console: 'a' };
 
 /** A fresh instance straight from the module. */
 const deal = (seed: number): KeypadState => keypadModule.init(def, mulberry32(seed), ctx);

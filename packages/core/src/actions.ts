@@ -14,7 +14,7 @@ import { fail } from './errors.js';
 import type { ManualDef, Mission } from './mission.js';
 import { mulberry32, shuffle } from './rng.js';
 import { moduleFor, type PuzzleDef, type PuzzleState } from './puzzles/index.js';
-import type { PuzzleContext } from './puzzles/module.js';
+import type { ConsoleId, PuzzleContext } from './puzzles/module.js';
 import {
   expireRelay,
   relayDefFor,
@@ -23,7 +23,7 @@ import {
   type RelayDef,
   type RelayState,
 } from './puzzles/relay.js';
-import { armedStation, operatorsOf, readersOf, sourceOpen } from './map.js';
+import { armedStations, consoleOf, readersOf, sourceOpen } from './map.js';
 import type { Spot } from './reach.js';
 
 /**
@@ -46,8 +46,9 @@ export type Action =
   | { type: 'request-hint'; playerId: string; at: number }
   | { type: 'set-occupancy'; plates: string[]; panels: string[] }
   /**
-   * who stands at which station and manual object, who has seen the sign
-   * (stays seen) and which manual objects somebody has come close to (stay found)
+   * who stands at which station spot (by `stationKey`) and manual object, who
+   * has seen the sign (stays seen) and which manual objects somebody has
+   * come close to (stay found)
    */
   | {
       type: 'set-presence';
@@ -280,8 +281,12 @@ function creditReaders(state: GameState): GameState {
   );
 }
 
-/** What a module may know when it sets up or takes a move at `at`. */
-function puzzleContext(state: GameState, at: number): PuzzleContext {
+/**
+ * What a module may know when it sets up or takes a move at `at`, made at
+ * console `from` (null where nobody stands at a station: in `init`, in an
+ * emergency).
+ */
+function puzzleContext(state: GameState, at: number, from: ConsoleId | null): PuzzleContext {
   if (state.edgework === null) {
     throw new Error('puzzle context: this run has no edgework — was start-mission skipped?');
   }
@@ -291,6 +296,7 @@ function puzzleContext(state: GameState, at: number): PuzzleContext {
     remainingSec: Math.max(0, Math.ceil(((state.deadlineAt ?? at) - at) / 1000)),
     at,
     crew: state.players.filter((p) => p.connected).map((p) => p.id),
+    console: from,
   };
 }
 
@@ -327,7 +333,7 @@ function initPuzzleState(state: GameState, index: number, at: number): PuzzleSta
   }
   // Distinct deterministic stream per puzzle.
   const rng = mulberry32(((state.seed ?? 0) + index * 7919) >>> 0);
-  return moduleFor(def.type).init(def, rng, puzzleContext(state, at));
+  return moduleFor(def.type).init(def, rng, puzzleContext(state, at, null));
 }
 
 /** Put a puzzle on the consoles; its first note is held back for a while. */
@@ -619,7 +625,7 @@ const EMERGENCY_STREAM = 0x52454c41;
 /** A relay emergency's consoles and first instructions, rolled from the run's seed. */
 function openEmergency(state: GameState, at: number): RelayState {
   const rng = mulberry32(((state.seed ?? 0) ^ EMERGENCY_STREAM ^ at) >>> 0);
-  return relayModule.init(emergencyDef(state), rng, puzzleContext(state, at));
+  return relayModule.init(emergencyDef(state), rng, puzzleContext(state, at, null));
 }
 
 /** Instructions run out on the clock; each that did is a miss and is replaced. */
@@ -662,7 +668,7 @@ function handleEmergencyInput(
   }
   const player = findPlayer(state, action.playerId);
   const def = emergencyDef(state);
-  const ctx = puzzleContext(state, action.at);
+  const ctx = puzzleContext(state, action.at, null);
   const result = relayModule.apply(def, emergency, input.data, player.id, ctx);
   const next = { ...state, sabotage: { ...sabotage, emergency: result.state } };
   if (result.penalty !== null) {
@@ -720,7 +726,10 @@ function expireSabotage(state: GameState, action: { at: number }): GameState {
   );
 }
 
-/** One move at the open puzzle, interpreted by that puzzle's module. */
+/**
+ * One move at the open puzzle, interpreted by that puzzle's module, from the
+ * console the player stands at.
+ */
 function handlePuzzleInput(
   state: GameState,
   action: { playerId: string; at: number; input: unknown },
@@ -734,7 +743,8 @@ function handlePuzzleInput(
     return lostNow(state, action.at);
   }
   const { player, def, puzzleState } = playing;
-  if (!operatorsOf(state, def.id).includes(player.id)) {
+  const from = consoleOf(state, def.id, player.id);
+  if (from === null) {
     fail('Dafür musst du am Pult stehen.');
   }
   const puzzleModule = moduleFor(def.type);
@@ -747,7 +757,7 @@ function handlePuzzleInput(
     puzzleState,
     input.data,
     player.id,
-    puzzleContext(state, action.at),
+    puzzleContext(state, action.at, from),
   );
   const next = { ...state, puzzleState: result.state };
   if (result.penalty !== null) {
@@ -984,7 +994,7 @@ function handleInteract(state: GameState, action: { playerId: string; at: number
   }
   findPlayer(state, action.playerId);
   const current = state.mission.puzzles[state.currentPuzzleIndex];
-  if (armedStation(state.mission.map, state) === null || current === undefined) {
+  if (armedStations(state.mission.map, state).length === 0 || current === undefined) {
     fail('Hier gibt es nichts zu aktivieren.');
   }
   const missing = missingItemsFor(state, current.id);

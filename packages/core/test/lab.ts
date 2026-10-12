@@ -42,6 +42,56 @@ export function labMission(puzzles: object[], id = 'labor', crew = 2): Mission {
 }
 
 /**
+ * A corridor lab for a crew of two or three with a station of two consoles:
+ * the Signalkette with console a at (6,1) and console b at (13,1), then a
+ * wiring box at (3,1); one book between the consoles covers both, and the
+ * hatch waits at the east end.
+ *
+ *   0123456789012345
+ * 0 ################
+ * 1 #..............#   box (3,1); console a (6,1); console b (13,1)
+ * 2 #..............#   spawns (1,1) (1,2) (2,1); sign (2,2); book (9,2); exit (14,2)
+ * 3 ################
+ */
+export function consoleLab(crew = 2, id = 'doppelpult'): Mission {
+  return parseMission({
+    id,
+    title: 'Doppelpult',
+    players: { min: crew, max: crew },
+    story: { intro: 'i', win: 'w', lose: 'l' },
+    timeLimitSec: 600,
+    puzzles: [
+      { type: 'signal', id: 'kette', title: 'Signalkette' },
+      { type: 'wiring', id: 'kabel', title: 'Kabel' },
+    ],
+    map: {
+      tiles: ['################', '#..............#', '#..............#', '################'],
+      spawns: [
+        { x: 1, y: 1 },
+        { x: 1, y: 2 },
+        { x: 2, y: 1 },
+      ],
+      stations: [
+        { puzzleId: 'kette', x: 6, y: 1, console: 'a' },
+        { puzzleId: 'kette', x: 13, y: 1, console: 'b' },
+        { puzzleId: 'kabel', x: 3, y: 1 },
+      ],
+      manuals: [
+        {
+          id: 'buch',
+          kind: 'book',
+          label: 'HANDBUCH',
+          puzzleIds: ['kette', 'kabel'],
+          spots: [{ x: 9, y: 2 }],
+        },
+      ],
+      edgeworkSign: { x: 2, y: 2 },
+      exit: { x: 14, y: 2 },
+    },
+  });
+}
+
+/**
  * The smallest crew the mission takes joins — p1, p2, … — everyone but the
  * host confirms, the host starts.
  */
@@ -96,8 +146,22 @@ export function openLab(
   return applyAction(here, { type: 'interact', playerId: operator, at });
 }
 
-/** Where a module's view is asked from: the station, the book, somewhere else, the audience. */
-export const AT_STATION = { playerId: 'op', operating: true, reading: false } as const;
-export const AT_BOOK = { playerId: 'rd', operating: false, reading: true } as const;
-export const ELSEWHERE = { playerId: 'x', operating: false, reading: false } as const;
-export const AUDIENCE = { playerId: null, operating: true, reading: true } as const;
+/**
+ * Where a module's view is asked from: the station (console a where there
+ * are two), console b, the book, somewhere else, the audience.
+ */
+export const AT_STATION = { playerId: 'op', operating: true, reading: false, console: 'a' } as const;
+export const AT_CONSOLE_B = {
+  playerId: 'pt',
+  operating: true,
+  reading: false,
+  console: 'b',
+} as const;
+export const AT_BOOK = { playerId: 'rd', operating: false, reading: true, console: null } as const;
+export const ELSEWHERE = {
+  playerId: 'x',
+  operating: false,
+  reading: false,
+  console: null,
+} as const;
+export const AUDIENCE = { playerId: null, operating: true, reading: true, console: null } as const;

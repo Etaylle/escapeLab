@@ -3,9 +3,9 @@ import type { Edgework } from './edgework.js';
 import type { ManualDef, ManualKind } from './mission.js';
 import { CREW_COLORS, type Credits, type GameState, type Phase, type RunEvent } from './state.js';
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
-import type { ManualSection, Viewer, ViewContext } from './puzzles/module.js';
+import type { ConsoleId, ManualSection, Viewer, ViewContext } from './puzzles/module.js';
 import { relayDefFor, relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
-import { doorOpen, operatorsOf, platePressed, readersOf, sourceOpen } from './map.js';
+import { consoleOf, doorOpen, platePressed, readersOf, sourceOpen } from './map.js';
 
 /**
  * What a single player is allowed to see. Asymmetric information is enforced
@@ -75,6 +75,8 @@ export interface PlayerView {
 export interface PlayerPresence {
   /** puzzle id of the station this player stands at */
   stationId: string | null;
+  /** the console of that station they stand at: 'a' where it has one; null with no station */
+  console: ConsoleId | null;
   /** id of the open manual object this player reads at */
   manualId: string | null;
   /** has walked up to the edgework sign this run */
@@ -139,12 +141,15 @@ export interface MapView {
     /** holding it freezes a drone: a camera plate */
     freezesDrone: boolean;
   }[];
+  /** one entry per spot: a station with two consoles has two, the same puzzle at both */
   stations: {
     puzzleId: string;
     x: number;
     y: number;
     title: string;
     status: 'done' | 'armed' | 'locked';
+    /** which console the spot is; left out where the station has one */
+    console?: ConsoleId;
   }[];
   /**
    * the manual objects the crew has come across so far (the audience sees
@@ -261,18 +266,19 @@ function sourcesAt(state: GameState, playerId: string): ManualDef[] {
  * the one of the current puzzle wins.
  */
 function presenceOf(state: GameState, playerId: string): PlayerPresence {
-  const { presence } = state;
   const current = state.mission.puzzles[state.currentPuzzleIndex]?.id;
-  const stations = Object.keys(presence.stations).filter((id) =>
-    presence.stations[id]?.includes(playerId),
+  const stations = [...new Set(state.mission.map.stations.map((s) => s.puzzleId))].filter(
+    (id) => consoleOf(state, id, playerId) !== null,
   );
+  const stationId = stations.find((id) => id === current) ?? stations[0] ?? null;
   const manuals = sourcesAt(state, playerId).filter((m) => sourceOpen(state, m));
   const manual =
     manuals.find((m) => current !== undefined && m.puzzleIds.includes(current)) ?? manuals[0];
   return {
-    stationId: stations.find((id) => id === current) ?? stations[0] ?? null,
+    stationId,
+    console: stationId === null ? null : consoleOf(state, stationId, playerId),
     manualId: manual?.id ?? null,
-    signSeen: presence.signSeen.includes(playerId),
+    signSeen: state.presence.signSeen.includes(playerId),
   };
 }
 
@@ -334,20 +340,28 @@ function puzzleViewFor(state: GameState, playerId: string | null): PuzzleView | 
     return null;
   }
   const puzzleModule = moduleFor(def.type);
-  const viewer: Viewer =
-    playerId === null
-      ? { playerId: null, operating: true, reading: true }
-      : {
-          playerId,
-          operating: operatorsOf(state, def.id).includes(playerId),
-          reading: readersOf(state, def.id).includes(playerId),
-        };
+  const viewer = viewerOf(state, def.id, playerId);
   return {
     ...puzzleModule.view(def, state.puzzleState, viewer, viewContext(state)),
     index: state.currentPuzzleIndex,
     total: state.mission.puzzles.length,
     title: def.title,
     manual: viewer.reading ? puzzleModule.manual(def) : null,
+    console: viewer.console,
+  };
+}
+
+/** Who looks at the open puzzle `puzzleId` from where; the audience sees it from everywhere. */
+function viewerOf(state: GameState, puzzleId: string, playerId: string | null): Viewer {
+  if (playerId === null) {
+    return { playerId: null, operating: true, reading: true, console: null };
+  }
+  const at = consoleOf(state, puzzleId, playerId);
+  return {
+    playerId,
+    operating: at !== null,
+    reading: readersOf(state, puzzleId).includes(playerId),
+    console: at,
   };
 }
 
@@ -391,6 +405,7 @@ function stationsOnMap(state: GameState): MapView['stations'] {
       y: s.y,
       title: state.mission.puzzles[index]?.title ?? s.puzzleId,
       status,
+      ...(s.console === undefined ? {} : { console: s.console }),
     };
   });
 }

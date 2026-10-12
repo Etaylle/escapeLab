@@ -84,6 +84,7 @@ const ctx = (edgework: Edgework): PuzzleContext => ({
   remainingSec: 600,
   at: T0,
   crew: ['op', 'rd'],
+  console: 'a',
 });
 
 function press(bank: SwitchesDef, state: SwitchesState, input: SwitchesInput, edgework: Edgework) {

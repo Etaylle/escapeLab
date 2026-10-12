@@ -229,7 +229,7 @@ function spectatorAsPlayerView(view: SpectatorView): Parameters<typeof GameWorld
     hintsUsed: view.hintsUsed,
     credits: view.credits,
     edgework: null,
-    presence: { stationId: null, manualId: null, signSeen: false },
+    presence: { stationId: null, console: null, manualId: null, signSeen: false },
     sourcesHere: [],
     manualsHere: [],
     puzzle: null,

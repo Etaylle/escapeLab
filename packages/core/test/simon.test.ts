@@ -58,6 +58,7 @@ const ctx = (edgework: Edgework, alarms: number): PuzzleContext => ({
   remainingSec: 600,
   at: T0,
   crew: CREW,
+  console: 'a',
 });
 
 const press = (color: SimonColor) => ({ kind: 'press', color }) as const;

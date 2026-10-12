@@ -6,6 +6,7 @@ import {
   MODULES,
   parseMission,
   puzzleDefSchema,
+  stationKey,
   viewFor,
 } from '../src/index.js';
 import type {
@@ -21,7 +22,7 @@ import type {
   PuzzleView,
   SolveAid,
 } from '../src/index.js';
-import { started, standing, T0 } from './lab.js';
+import { consoleLab, started, standing, T0 } from './lab.js';
 import { MAX_IDLE_SEC, playInstance } from './solveModule.js';
 
 const SEEDS = 200;
@@ -53,10 +54,12 @@ describe.each(cases)('%s', (_label, def) => {
   });
 });
 
-/** Two modules on their own, and the move counts their runs take. */
+/** Modules on their own, and the move counts their runs take. */
 const own = [
   { type: 'memory', id: 'speicherbank', moves: [5] },
   { type: 'button', id: 'knopf', moves: [1, 2] },
+  // four stages of four signs
+  { type: 'signal', id: 'signalkette', moves: [16] },
 ].map(({ type, id, moves }) => {
   const def = puzzleDefSchema.parse({ type, id, title: id });
   return [type, def, moves] as const;
@@ -93,62 +96,113 @@ function wireView(state: GameState, playerId: string): PlayerView {
   return JSON.parse(JSON.stringify(viewFor(state, playerId))) as PlayerView;
 }
 
-/** The operator works every station, the reader reads every book; nobody else does anything. */
-const OPERATOR = 'p1';
-const READER = 'p2';
+/** Who does what at one station; nobody else does anything. */
+interface Roles {
+  /** works the station, at console a where it has two */
+  operator: string;
+  /** works console b; null at a station with one console */
+  partner: string | null;
+  /** reads the rules at a manual object; null when the crew has nobody left for it */
+  reader: string | null;
+}
+
+/**
+ * p1 works every station, p2 reads every book — except at a station with
+ * two consoles, where p2 works console b and p3, if the crew has one, reads.
+ */
+function rolesAt(def: PuzzleDef, crew: string[]): Roles {
+  const twoConsoles = moduleFor(def.type).consoles === 2;
+  return {
+    operator: 'p1',
+    partner: twoConsoles ? 'p2' : null,
+    reader: (twoConsoles ? crew[2] : crew[1]) ?? null,
+  };
+}
 
 /**
  * Switch on the current station, the way the crew walks up to it: whatever
- * it waits for is carried in, then the operator stands at it and the reader
- * at a manual object covering it — or the whole crew at it, where everyone
- * presses.
+ * it waits for is carried in, then the operator stands at it (and the
+ * partner at console b) and the reader at a manual object covering it — or
+ * the whole crew at it, where everyone presses.
  */
 function openStation(state: GameState, def: PuzzleDef, at: number): GameState {
   const map = state.mission.map;
   const crew = state.players.map((p) => p.id);
+  const { operator, partner, reader } = rolesAt(def, crew);
   const errands = map.items
     .filter((item) => item.requiredFor === def.id)
     .flatMap((item): Action[] => [
-      { type: 'pick-item', playerId: OPERATOR, itemId: item.id, at },
-      { type: 'deliver-item', playerId: OPERATOR, itemId: item.id, at },
+      { type: 'pick-item', playerId: operator, itemId: item.id, at },
+      { type: 'deliver-item', playerId: operator, itemId: item.id, at },
     ]);
   const delivered = errands.reduce(applyAction, state);
   const book = map.manuals.find((m) => m.puzzleIds.includes(def.id));
+  const consoleB = stationKey({ puzzleId: def.id, console: 'b' });
+  const atB = partner === null ? {} : { [consoleB]: [partner] };
   const here = moduleFor(def.type).wholeCrew
     ? standing(delivered, { stations: { [def.id]: crew } })
     : standing(delivered, {
-        stations: { [def.id]: [OPERATOR] },
-        manuals: book === undefined ? {} : { [book.id]: [READER] },
+        stations: { [def.id]: [operator], ...atB },
+        manuals: book === undefined || reader === null ? {} : { [book.id]: [reader] },
       });
-  return applyAction(here, { type: 'interact', playerId: OPERATOR, at });
+  return applyAction(here, { type: 'interact', playerId: operator, at });
 }
 
 /**
- * What the two clients hold of the open puzzle at `at`: the operator's and
- * the reader's view of it, the edgework if one of them has read the sign,
- * and the seconds left on their clock.
+ * What the clients hold of the open puzzle at `at`: the operator's, the
+ * partner's and the reader's view of it — with nobody left to read, the
+ * partner's stands in — the edgework if one of them has read the sign, and
+ * the seconds left on their clock.
  */
 function crewSees(
   state: GameState,
+  { operator, partner, reader }: Roles,
   at: number,
 ): { views: Perspectives<PuzzleView>; edgework: Edgework | null; remainingSec: number | null } {
-  const operator = wireView(state, OPERATOR);
-  const reader = wireView(state, READER);
-  if (operator.puzzle === null || reader.puzzle === null) {
-    throw new Error(`${state.mission.id}: the clients have no open puzzle`);
+  const openAt = (client: PlayerView): PuzzleView => {
+    if (client.puzzle === null) {
+      throw new Error(`${state.mission.id}: the clients have no open puzzle`);
+    }
+    return client.puzzle;
+  };
+  const atA = wireView(state, operator);
+  const atB = partner === null ? null : wireView(state, partner);
+  const atBook = reader === null ? atB : wireView(state, reader);
+  if (atBook === null) {
+    throw new Error(`${state.mission.id}: nobody reads, and nobody works console b`);
   }
-  const deadlineAt = operator.deadlineAt;
+  const deadlineAt = atA.deadlineAt;
   return {
-    views: { operator: operator.puzzle, reader: reader.puzzle },
-    edgework: operator.edgework ?? reader.edgework,
+    views: {
+      operator: openAt(atA),
+      ...(atB === null ? {} : { partner: openAt(atB) }),
+      reader: openAt(atBook),
+    },
+    edgework: atA.edgework ?? atB?.edgework ?? atBook.edgework,
     remainingSec: deadlineAt === null ? null : Math.ceil((deadlineAt - at) / 1000),
   };
 }
 
-/** Every move as the puzzle-inputs it takes: from the operator, or from every player. */
-function inputsFor(moves: Move<PuzzleInput>[], crew: string[], at: number): Action[] {
+/**
+ * Every move as the puzzle-inputs it takes: from the operator, from the
+ * partner, or from every player at the station.
+ */
+function inputsFor(moves: Move<PuzzleInput>[], roles: Roles, crew: string[], at: number): Action[] {
+  const { operator, partner } = roles;
+  const senders = (by: Move<PuzzleInput>['by']): string[] => {
+    if (by === 'everyone') {
+      return partner === null ? crew : [operator, partner];
+    }
+    if (by === 'partner') {
+      if (partner === null) {
+        throw new Error('a partner move at a station with one console');
+      }
+      return [partner];
+    }
+    return [operator];
+  };
   return moves.flatMap((move) =>
-    (move.by === 'everyone' ? crew : [OPERATOR]).map(
+    senders(move.by).map(
       (playerId): Action => ({ type: 'puzzle-input', playerId, at, input: move.input }),
     ),
   );
@@ -156,11 +210,12 @@ function inputsFor(moves: Move<PuzzleInput>[], crew: string[], at: number): Acti
 
 /**
  * A whole mission through the reducer: the crew walks past the sign, then
- * at every station the operator's and the reader's views go to the solver,
- * with the crew's transcript of the puzzle and the clock, and every move
- * goes back as puzzle-inputs. Each round is a second on the clock; a solver
- * that waits only lets it run, up to MAX_IDLE_SEC rounds in a row. Stops
- * once the last station is solved; getting out is the server's call.
+ * at every station the operator's, the partner's and the reader's views go
+ * to the solver, with the crew's transcript of the puzzle and the clock,
+ * and every move goes back as puzzle-inputs. Each round is a second on the
+ * clock; a solver that waits only lets it run, up to MAX_IDLE_SEC rounds in
+ * a row. Stops once the last station is solved; getting out is the
+ * server's call.
  */
 function playMission(mission: Mission, seed: number): GameState {
   const transcripts = mission.puzzles.map((): Transcript => []);
@@ -178,19 +233,27 @@ function playMission(mission: Mission, seed: number): GameState {
     if (state.puzzleState === null) {
       state = openStation(state, def, at);
     }
-    const { views, edgework, remainingSec } = crewSees(state, at);
+    const roles = rolesAt(def, crew);
+    const { views, edgework, remainingSec } = crewSees(state, roles, at);
     const moves = moduleFor(def.type).solve(def, views, edgework, { transcript, remainingSec });
     idle = moves.length === 0 ? idle + 1 : 0;
     if (idle > MAX_IDLE_SEC) {
       throw new Error(`${mission.id}/${def.id} (seed ${seed}): no move in ${MAX_IDLE_SEC} s`);
     }
     transcript.push(...moves.map((move) => ({ ...move, before: views })));
-    state = inputsFor(moves, crew, at).reduce(applyAction, state);
+    state = inputsFor(moves, roles, crew, at).reduce(applyAction, state);
   }
   return state;
 }
 
-describe.each(missions.map((m) => [m.id, m] as const))('mission %s', (_id, mission) => {
+/**
+ * Beside the shipped missions, a lab with a station of two consoles, for a
+ * crew of two (nobody left to read there) and of three.
+ */
+const labs = [consoleLab(2, 'doppelpult-zwei'), consoleLab(3, 'doppelpult-drei')];
+const played = [...missions, ...labs].map((m) => [m.id, m] as const);
+
+describe.each(played)('mission %s', (_id, mission) => {
   it(`is won through the reducer without an alarm for ${SEEDS} seeds`, () => {
     for (let seed = 0; seed < SEEDS; seed++) {
       const state = playMission(mission, seed);
@@ -206,9 +269,10 @@ describe.each(missions.map((m) => [m.id, m] as const))('mission %s', (_id, missi
       throw new Error(`${mission.id} has no puzzles`);
     }
     const state = openStation(started(mission, 1), def, T0 + 1000);
+    const { reader } = rolesAt(def, state.players.map((p) => p.id));
     for (const { id } of state.players) {
       const manual = viewFor(state, id).puzzle?.manual ?? null;
-      const reads = id === READER && !moduleFor(def.type).wholeCrew;
+      const reads = id === reader && !moduleFor(def.type).wholeCrew;
       expect(manual, id).toEqual(reads ? moduleFor(def.type).manual(def) : null);
     }
   });

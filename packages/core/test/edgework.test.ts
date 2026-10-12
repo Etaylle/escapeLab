@@ -130,7 +130,7 @@ describe('edgework in a run', () => {
     expect(viewFor(later, 'p1').presence.signSeen).toBe(true);
   });
 
-  it('hands a module the edgework, the alarms so far, the seconds left and the crew', () => {
+  it('hands a module the edgework, the alarms, the seconds left, the crew and the console', () => {
     const apply = vi.spyOn(wiringModule, 'apply');
     const open = applyAction(standing(playing(), { stations: { kabel: ['p1'] } }), {
       type: 'interact',
@@ -157,6 +157,8 @@ describe('edgework in a run', () => {
       remainingSec: 575,
       at: T0 + 10_500,
       crew: ['p1', 'p2'],
+      // the box has one console, which counts as console a
+      console: 'a',
     });
     expect(apply.mock.calls[0]?.[3]).toBe('p1');
     apply.mockRestore();

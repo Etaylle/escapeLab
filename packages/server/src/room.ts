@@ -2,9 +2,10 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { DronePatrol } from './drones.js';
 import {
   applyAction,
-  armedStation,
+  armedStations,
   inEscapePhase,
   initialState,
+  stationKey,
   viewFor,
   viewForSpectator,
   type Action,
@@ -404,9 +405,9 @@ export class Room {
     if (this.state.paused !== null) {
       return; // reducer rejects with a clearer message
     }
-    const station = armedStation(this.state.mission.map, this.state);
+    const stations = armedStations(this.state.mission.map, this.state);
     const pos = this.positions.get(playerId);
-    if (station === null || pos === undefined) {
+    if (stations.length === 0 || pos === undefined) {
       throw new Error('Hier gibt es nichts zu aktivieren — geht zur leuchtenden Station.');
     }
     if (!this.stationInReach(playerId)) {
@@ -414,14 +415,15 @@ export class Room {
     }
   }
 
-  /** Whether the armed station lies within this player's reach. */
+  /** Whether the armed station — any of its consoles — lies within this player's reach. */
   private stationInReach(playerId: string): boolean {
-    const station = armedStation(this.state.mission.map, this.state);
     const pos = this.positions.get(playerId);
     return (
-      station !== null &&
       pos !== undefined &&
-      Math.hypot(pos.x - (station.x + 0.5), pos.y - (station.y + 0.5)) <= INTERACT_RADIUS
+      armedStations(this.state.mission.map, this.state).some(
+        (station) =>
+          Math.hypot(pos.x - (station.x + 0.5), pos.y - (station.y + 0.5)) <= INTERACT_RADIUS,
+      )
     );
   }
 
@@ -522,7 +524,8 @@ export class Room {
   }
 
   /**
-   * Translate live positions into who stands at which station and manual
+   * Translate live positions into who stands at which station spot — each
+   * console of a station on its own, keyed by `stationKey` — and manual
    * object, who has walked up to the sign and which manual objects somebody
    * has come close to; dispatch only on change.
    */
@@ -542,7 +545,7 @@ export class Room {
           .filter(([, players]) => players.length > 0),
       );
     const stations = atEach(
-      map.stations.map((s) => ({ id: s.puzzleId, x: s.x, y: s.y })),
+      map.stations.map((s) => ({ id: stationKey(s), x: s.x, y: s.y })),
       presence.stations,
     );
     const sources = map.manuals.flatMap((m) => {

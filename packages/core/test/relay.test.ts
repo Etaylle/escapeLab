@@ -87,6 +87,7 @@ const ctx = (at: number): PuzzleContext => ({
   remainingSec: 600,
   at,
   crew: [],
+  console: null,
 });
 
 function viewsOf(def: RelayDef, state: RelayState): Record<string, RelayView> {

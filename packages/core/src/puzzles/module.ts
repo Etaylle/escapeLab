@@ -26,6 +26,12 @@ export type ManualBlock =
   // a line drawing of the device; the client draws it for the module's type (`of`)
   | { kind: 'figure'; of: string; caption: string };
 
+/**
+ * One of the two consoles of a station that is worked from two places. A
+ * station with one console counts as console a.
+ */
+export type ConsoleId = 'a' | 'b';
+
 /** What a module gets to know when it sets up or takes a move. */
 export interface PuzzleContext {
   edgework: Edgework;
@@ -36,6 +42,8 @@ export interface PuzzleContext {
   at: number;
   /** ids of the connected players */
   crew: string[];
+  /** the console the move comes from: 'a' at a station with one; null in `init` and emergencies */
+  console: ConsoleId | null;
 }
 
 /** Views are rebuilt on every change, not on every tick, so they get no clock. */
@@ -45,21 +53,34 @@ export type ViewContext = Pick<PuzzleContext, 'edgework' | 'alarms' | 'crew'>;
 export interface Viewer {
   /** null for the spectator */
   playerId: string | null;
-  /** standing at the open station */
+  /** standing at the open station, at either of its consoles */
   operating: boolean;
   /** standing at a manual object that covers this station */
   reading: boolean;
+  /**
+   * the console they stand at: 'a' at a station with one, 'a' or 'b' at a
+   * station with two; null for readers, bystanders and the spectator
+   */
+  console: ConsoleId | null;
 }
 
-/** The open puzzle as the crew sees it: at the station, and at a manual object covering it. */
+/**
+ * The open puzzle as the crew sees it: at the station (at console a where
+ * there are two), at console b, and at a manual object covering it.
+ */
 export interface Perspectives<View> {
   operator: View;
+  /** only at a station with two consoles */
+  partner?: View;
   reader: View;
 }
 
-/** One input for the crew: sent by a player at the station, or by every player there. */
+/**
+ * One input for the crew: sent by a player at the station (at console a
+ * where there are two), by the player at console b, or by every player there.
+ */
 export interface Move<Input> {
-  by: 'operator' | 'everyone';
+  by: 'operator' | 'partner' | 'everyone';
   input: Input;
 }
 
@@ -128,6 +149,8 @@ export interface PuzzleViewCommon {
   title: string;
   /** the printed rules — only for readers and the audience */
   manual: ManualSection[] | null;
+  /** the viewer's console, as in `Viewer` */
+  console: ConsoleId | null;
 }
 
 /** What every module owns, whether it stands at a station or runs as an emergency. */
@@ -161,8 +184,15 @@ export interface PuzzleModule<
    */
   readonly wholeCrew: boolean;
   /**
+   * 2 for a station with two consoles, a and b, in different places: the
+   * open puzzle is one instance, each console shows its own part of it and
+   * takes inputs. Left out for a station with one console.
+   */
+  readonly consoles?: 2;
+  /**
    * A move by `playerId`, who stands at the station (the reducer checks
-   * that); throws a GameError (see `fail`) when the move is not allowed at all.
+   * that, and says at which console in `ctx.console`); throws a GameError
+   * (see `fail`) when the move is not allowed at all.
    */
   apply(
     def: Def,
@@ -175,13 +205,13 @@ export interface PuzzleModule<
   view(def: Def, state: State, viewer: Viewer, ctx: ViewContext): View;
   /**
    * The crew's next correct input(s), computed only from what the crew can
-   * actually know: the view at the station, the view at a manual object, the
-   * edgework (null while nobody has read the sign) and the aid, for the
-   * modules that need more than the views show. Inputs returned together
-   * are applied in order at the same moment; none means the crew waits, and
-   * the caller asks again once the clock has moved on. Used by the smoke run
-   * and by the property tests that prove every instance is solvable from
-   * what the crew can see.
+   * actually know: the view at the station (at each console where there are
+   * two), the view at a manual object, the edgework (null while nobody has
+   * read the sign) and the aid, for the modules that need more than the
+   * views show. Inputs returned together are applied in order at the same
+   * moment; none means the crew waits, and the caller asks again once the
+   * clock has moved on. Used by the smoke run and by the property tests that
+   * prove every instance is solvable from what the crew can see.
    */
   solve(
     def: Def,

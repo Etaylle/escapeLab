@@ -71,6 +71,7 @@ function maze(index: number, cells: number[] | null): PuzzleView {
     total: 3,
     title: 'Leitungsnetz',
     manual: null,
+    console: null,
   };
 }
 
@@ -311,7 +312,7 @@ function justStarted(parts: Partial<PlayerView> = {}): PlayerView {
     hintsUsed: 0,
     credits: {},
     edgework: null,
-    presence: { stationId: null, manualId: null, signSeen: false },
+    presence: { stationId: null, console: null, manualId: null, signSeen: false },
     sourcesHere: [],
     manualsHere: [],
     puzzle: null,
@@ -352,7 +353,7 @@ describe('the start of a run', () => {
   it('opens no modal by itself, not even standing at the open station', () => {
     const html = game(
       justStarted({
-        presence: { stationId: 'kabel', manualId: null, signSeen: false },
+        presence: { stationId: 'kabel', console: 'a', manualId: null, signSeen: false },
         puzzle: maze(0, null),
       }),
     );
@@ -362,7 +363,10 @@ describe('the start of a run', () => {
   it('shows no edgework anywhere before the sign, and the chip in the HUD after it', () => {
     expect(game(justStarted())).not.toContain('edgework');
     const seen = game(
-      justStarted({ presence: { stationId: null, manualId: null, signSeen: true }, edgework }),
+      justStarted({
+        presence: { stationId: null, console: null, manualId: null, signSeen: true },
+        edgework,
+      }),
     );
     expect(seen).toMatch(/<section class="hud">.*class="edgework"/s);
   });

@@ -206,12 +206,13 @@ describe('Room', () => {
       watched?.kind === 'spectator-view'
         ? watched.view.players.find((p) => p.id === ben.playerId)?.presence
         : undefined;
-    expect(gone).toEqual({ stationId: null, manualId: null, signSeen: true });
+    expect(gone).toEqual({ stationId: null, console: null, manualId: null, signSeen: true });
     room.resume(ben.playerId, ben.token);
     const back = collector();
     room.attach(ben.playerId, back.listen);
     expect(lastView(back.messages).presence).toEqual({
       stationId: 'init',
+      console: 'a',
       manualId: null,
       signSeen: true,
     });

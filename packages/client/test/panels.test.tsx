@@ -1,6 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { generateEdgework, moduleFor, puzzleDefSchema, type PuzzleView } from '@escapelab/core';
+import {
+  generateEdgework,
+  moduleFor,
+  puzzleDefSchema,
+  tokenLabel,
+  type ConsoleId,
+  type PuzzleView,
+} from '@escapelab/core';
 import { PANELS } from '../src/puzzles/index.js';
 import { PuzzlePanel } from '../src/screens/PuzzlePanel.js';
 
@@ -13,17 +20,26 @@ function lcg(seed: number): () => number {
   };
 }
 
-/** The open puzzle of `type` as a player sees it, at its station or away from it. */
-function seen(type: string, operating = true, fields: Record<string, unknown> = {}): PuzzleView {
+/**
+ * The open puzzle of `type` as a player sees it, at its station — at console
+ * `seat` where it has two — or away from it.
+ */
+function seen(
+  type: string,
+  operating = true,
+  fields: Record<string, unknown> = {},
+  seat: ConsoleId | null = operating ? 'a' : null,
+): PuzzleView {
   const def = puzzleDefSchema.parse({ type, id: type, title: 'Station', ...fields });
   const station = moduleFor(def.type);
   const rng = lcg(7);
   const edgework = generateEdgework(rng);
   const crew = ['p1', 'p2'];
-  const state = station.init(def, rng, { edgework, alarms: 0, remainingSec: 600, at: 0, crew });
-  const viewer = { playerId: 'p1', operating, reading: false };
+  const setup = { edgework, alarms: 0, remainingSec: 600, at: 0, crew, console: null };
+  const state = station.init(def, rng, setup);
+  const viewer = { playerId: 'p1', operating, reading: false, console: seat };
   const view = station.view(def, state, viewer, { edgework, alarms: 0, crew });
-  return { ...view, index: 0, total: 1, title: def.title, manual: null };
+  return { ...view, index: 0, total: 1, title: def.title, manual: null, console: seat };
 }
 
 function panel(puzzle: PuzzleView): string {
@@ -66,5 +82,21 @@ describe('the switch bank', () => {
     expect(html).toContain('Jeden Schalter ansagen: LED, Markierung, Stern. Bei Ansage umlegen');
     expect(html.match(/class="switches-star"/g)).toHaveLength(6);
     expect(html.match(/<span>(kein )?Stern<\/span>/g)).toHaveLength(6);
+  });
+});
+
+describe('the signal chain', () => {
+  it('reads the sequence out at the sending console, offers twelve keys at the other', () => {
+    const sending = seen('signal');
+    const sequence = sending.kind === 'signal' ? (sending.sequence ?? []) : [];
+    expect(sequence).toHaveLength(4);
+    const sender = panel(sending);
+    expect(sender).toContain('Stufe 1 von 4 — dieses Pult sendet');
+    expect(sender).toContain(`Ansage: ${sequence.map(tokenLabel).join(', ')}`);
+    expect(sender).not.toContain('<button');
+    const receiver = panel(seen('signal', true, {}, 'b'));
+    expect(receiver).toContain('Stufe 1 von 4 — dieses Pult gibt ein');
+    expect(receiver.match(/<button data-token="[a-z]+-[a-z]+">/g)).toHaveLength(12);
+    expect(panel(seen('signal', false))).toContain('Dieses Pult ist nicht angeschlossen.');
   });
 });

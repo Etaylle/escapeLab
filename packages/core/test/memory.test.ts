@@ -53,6 +53,7 @@ const ctx: PuzzleContext = {
   remainingSec: 600,
   at: T0,
   crew: ['op', 'rd'],
+  console: 'a',
 };
 
 const init = (seed: number): MemoryState => memoryModule.init(def, mulberry32(seed), ctx);

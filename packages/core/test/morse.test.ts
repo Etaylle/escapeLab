@@ -29,7 +29,7 @@ function morseDef(): MorseDef {
 const def = morseDef();
 const edgework = generateEdgework(mulberry32(1));
 const crew = ['op', 'rd'];
-const ctx: PuzzleContext = { edgework, alarms: 0, remainingSec: 600, at: T0, crew };
+const ctx: PuzzleContext = { edgework, alarms: 0, remainingSec: 600, at: T0, crew, console: 'a' };
 
 const fresh = (seed: number): MorseState => morseModule.init(def, mulberry32(seed), ctx);
 /** The radio desk as the player standing at it sees it. */

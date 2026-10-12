@@ -10,6 +10,7 @@ import { MemoryPanel } from './MemoryPanel.js';
 import { MorsePanel } from './MorsePanel.js';
 import { ButtonPanel } from './ButtonPanel.js';
 import { RelayPanel } from './RelayPanel.js';
+import { SignalPanel } from './SignalPanel.js';
 
 export type PuzzleKind = PuzzleView['kind'];
 
@@ -38,6 +39,7 @@ export const PANELS: { [K in PuzzleKind]: Panel<K> } = {
   memory: MemoryPanel,
   morse: MorsePanel,
   button: ButtonPanel,
+  signal: SignalPanel,
   relay: RelayPanel,
 };
 

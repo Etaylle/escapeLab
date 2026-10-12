@@ -53,7 +53,20 @@ export const mapDefSchema = z.object({
   plates: z
     .array(z.object({ id: z.string().min(1), x: coord, y: coord, label: z.string().default('') }))
     .default([]),
-  stations: z.array(z.object({ puzzleId: z.string().min(1), x: coord, y: coord })).min(1),
+  /**
+   * Where each puzzle is worked: one spot, or — for a module worked at two
+   * consoles — one spot for console a and one for console b.
+   */
+  stations: z
+    .array(
+      z.object({
+        puzzleId: z.string().min(1),
+        x: coord,
+        y: coord,
+        console: z.enum(['a', 'b']).optional(),
+      }),
+    )
+    .min(1),
   labels: z.array(z.object({ text: z.string().min(1), x: coord, y: coord })).default([]),
   /**
    * Where the printed rules lie — a book, a terminal, a wall chart, a
@@ -233,13 +246,13 @@ function validateMap(mission: MissionParts, ctx: z.RefinementCtx): void {
   if (map.exit !== undefined) {
     check.requireFloor('exit', map.exit.x, map.exit.y);
   }
-  checkStations(check);
+  const stations = mission.puzzles.filter((p) => p.type !== 'relay');
+  checkStations(check, stations);
   checkPlates(check);
   checkDoors(check);
   checkSabotage(check, mission.players.min);
   checkItems(check);
   checkDrones(check, mission.puzzles.length);
-  const stations = mission.puzzles.filter((p) => p.type !== 'relay');
   checkLights(check, stations);
   checkManuals(check, stations);
   checkSpots(check);
@@ -257,13 +270,17 @@ function checkSpawns({ map, issue, requireFloor }: MapCheck, maxPlayers: number)
   }
 }
 
-function checkStations({ map, puzzleIds, issue, requireFloor }: MapCheck): void {
-  const stationIds = map.stations.map((s) => s.puzzleId);
-  if (new Set(stationIds).size !== stationIds.length) {
-    issue('map: duplicate station for a puzzle');
-  }
+type StationDef = MapDef['stations'][number];
+
+/**
+ * Every puzzle has its station on the floor: one spot without a console, or
+ * — where its module is worked at two consoles — console a and console b
+ * on two different tiles.
+ */
+function checkStations(check: MapCheck, stations: PuzzleDef[]): void {
+  const { map, puzzleIds, issue, requireFloor } = check;
   for (const id of puzzleIds) {
-    if (!stationIds.includes(id)) {
+    if (!map.stations.some((s) => s.puzzleId === id)) {
       issue(`map: no station for puzzle "${id}"`);
     }
   }
@@ -271,7 +288,49 @@ function checkStations({ map, puzzleIds, issue, requireFloor }: MapCheck): void 
     if (!puzzleIds.has(station.puzzleId)) {
       issue(`map: station references unknown puzzle "${station.puzzleId}"`);
     }
-    requireFloor(`station "${station.puzzleId}"`, station.x, station.y);
+    const what =
+      station.console === undefined
+        ? `station "${station.puzzleId}"`
+        : `console ${station.console} of station "${station.puzzleId}"`;
+    requireFloor(what, station.x, station.y);
+  }
+  for (const puzzle of stations) {
+    const spots = map.stations.filter((s) => s.puzzleId === puzzle.id);
+    if (spots.length === 0) {
+      continue;
+    }
+    if (moduleFor(puzzle.type).consoles === 2) {
+      checkConsoles(issue, puzzle.id, spots);
+    } else {
+      checkOneConsole(issue, puzzle.id, spots);
+    }
+  }
+}
+
+/** A station worked at two consoles: console a and console b, once each, apart. */
+function checkConsoles(issue: MapCheck['issue'], puzzleId: string, spots: StationDef[]): void {
+  const a = spots.find((s) => s.console === 'a');
+  const b = spots.find((s) => s.console === 'b');
+  if (a === undefined || b === undefined || spots.length !== 2) {
+    issue(
+      `map: puzzle "${puzzleId}" is worked at two consoles — give it one station with ` +
+        'console "a" and one with console "b"',
+    );
+  } else if (a.x === b.x && a.y === b.y) {
+    issue(
+      `map: consoles a and b of station "${puzzleId}" both stand at ${a.x},${a.y} — ` +
+        'put them on different tiles',
+    );
+  }
+}
+
+/** A station worked at one console: one spot, and no console named. */
+function checkOneConsole(issue: MapCheck['issue'], puzzleId: string, spots: StationDef[]): void {
+  if (spots.length > 1) {
+    issue(`map: ${spots.length} stations for puzzle "${puzzleId}" — it is worked at one console`);
+  }
+  if (spots.some((s) => s.console !== undefined)) {
+    issue(`map: station "${puzzleId}" is worked at one console — leave out console`);
   }
 }
 
@@ -503,10 +562,10 @@ function checkSolvable(check: MapCheck, players: Crew, stations: PuzzleDef[]): v
 
 /**
  * One crew through the stations in mission order: each can be reached — by
- * the whole crew together where everyone presses — every spot of a manual
- * object can be reached once the first puzzle it covers is open (a
- * cabinet's with its key in hand), and the sign before the first rule that
- * reads it.
+ * the whole crew together where everyone presses, by two players at once
+ * where it has two consoles — every spot of a manual object can be reached
+ * once the first puzzle it covers is open (a cabinet's with its key in
+ * hand), and the sign before the first rule that reads it.
  */
 function walkStations(check: MapCheck, crew: Spot[], stations: PuzzleDef[]): void {
   const firstNeed = (manual: ManualDef): string | undefined =>
@@ -514,9 +573,9 @@ function walkStations(check: MapCheck, crew: Spot[], stations: PuzzleDef[]): voi
   const solved = new Set<string>();
   for (const puzzle of stations) {
     const reach = reachability(check.map, crew, solved);
-    const station = check.map.stations.find((s) => s.puzzleId === puzzle.id);
-    if (station !== undefined) {
-      checkReachable(check, { crew, solved, reach }, puzzle, station);
+    const spots = check.map.stations.filter((s) => s.puzzleId === puzzle.id);
+    if (spots.length > 0) {
+      checkReachable(check, { crew, solved, reach }, puzzle, spots);
     }
     for (const manual of check.map.manuals.filter((m) => firstNeed(m) === puzzle.id)) {
       checkSource(check, reach, manual, puzzle.id);
@@ -537,11 +596,17 @@ function checkReachable(
   { map, issue }: MapCheck,
   { crew, solved, reach }: Stage,
   puzzle: PuzzleDef,
-  station: Spot,
+  spots: StationDef[],
 ): void {
-  const { wholeCrew, usesEdgework } = moduleFor(puzzle.type);
+  const { wholeCrew, usesEdgework, consoles } = moduleFor(puzzle.type);
   const someone = (spot: Spot): boolean => reach.some((tiles) => canStandAt(tiles, spot));
-  if (wholeCrew ? !canGather(map, crew, solved, station) : !someone(station)) {
+  const [station] = spots;
+  if (consoles === 2) {
+    checkConsoleReach(issue, reach, puzzle.id, spots);
+  } else if (
+    station !== undefined &&
+    (wholeCrew ? !canGather(map, crew, solved, station) : !someone(station))
+  ) {
     issue(
       wholeCrew
         ? `map: the whole crew cannot stand at station "${puzzle.id}" together — nobody may ` +
@@ -552,6 +617,44 @@ function checkReachable(
   if (usesEdgework && map.edgeworkSign !== undefined && !someone(map.edgeworkSign)) {
     issue(`map: nobody can reach the edgework sign before puzzle "${puzzle.id}" reads it`);
   }
+}
+
+/**
+ * A station with two consoles is worked by two players at once: somebody
+ * at console a and somebody else at console b, each walking the doors as
+ * for a station with one. Names the console nobody else can reach.
+ */
+function checkConsoleReach(
+  issue: MapCheck['issue'],
+  reach: Set<string>[],
+  puzzleId: string,
+  spots: StationDef[],
+): void {
+  const a = spots.find((s) => s.console === 'a');
+  const b = spots.find((s) => s.console === 'b');
+  if (a === undefined || b === undefined) {
+    return; // checkStations reports the missing console
+  }
+  const at = (spot: Spot): number[] =>
+    reach.flatMap((tiles, player) => (canStandAt(tiles, spot) ? [player] : []));
+  const problem = consoleOutOfReach(at(a), at(b));
+  if (problem !== null) {
+    issue(`map: ${problem} of station "${puzzleId}" once the puzzles before it are solved`);
+  }
+}
+
+/** Who cannot work which console, by the players who can stand at each; null when two can. */
+function consoleOutOfReach(atA: number[], atB: number[]): string | null {
+  if (atA.length === 0) {
+    return 'nobody can reach console a';
+  }
+  if (atB.length === 0) {
+    return 'nobody can reach console b';
+  }
+  if (atA.some((i) => atB.some((j) => j !== i))) {
+    return null;
+  }
+  return 'nobody but the player at console a can reach console b';
 }
 
 /**

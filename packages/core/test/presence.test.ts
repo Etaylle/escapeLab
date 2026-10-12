@@ -103,16 +103,19 @@ describe('presence from the server', () => {
     });
     expect(viewFor(state, 'p1').presence).toEqual({
       stationId: 'kabel',
+      console: 'a',
       manualId: null,
       signSeen: false,
     });
     expect(viewFor(state, 'p2').presence).toEqual({
       stationId: null,
+      console: null,
       manualId: 'buch-kabel',
       signSeen: false,
     });
     expect(viewFor(state, 'p3').presence).toEqual({
       stationId: null,
+      console: null,
       manualId: null,
       signSeen: true,
     });

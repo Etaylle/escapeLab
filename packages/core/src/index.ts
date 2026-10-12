@@ -42,6 +42,7 @@ export {
 } from './puzzles/index.js';
 export type {
   ApplyResult,
+  ConsoleId,
   EmergencyModule,
   ManualBlock,
   ManualSection,
@@ -66,7 +67,15 @@ export {
   type Edgework,
   type IndicatorId,
 } from './edgework.js';
-export { doorOpen, platePressed, armedStation, operatorsOf, readersOf } from './map.js';
+export {
+  doorOpen,
+  platePressed,
+  armedStations,
+  consoleOf,
+  operatorsOf,
+  readersOf,
+  stationKey,
+} from './map.js';
 export { type MapDef } from './mission.js';
 export {
   parseClientMessage,
@@ -81,6 +90,7 @@ export {
   type DronePosition,
 } from './protocol.js';
 export { SIMON_COLORS, type SimonColor } from './puzzles/simon.js';
+export { TOKENS, tokenLabel, type SignalToken } from './puzzles/signal.js';
 export type { RelayView } from './puzzles/relay.js';
 export { CHAT_PHRASES, CHAT_PHRASE_IDS, chatText, type ChatPhrase } from './chat.js';
 export {

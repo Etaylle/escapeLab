@@ -85,17 +85,30 @@ describe.each(missions.map((m) => [m.id, m] as const))('mission %s', (_id, missi
     // there), so centres more than twice that apart share no standing spot.
     for (const manual of map.manuals) {
       for (const puzzleId of manual.puzzleIds) {
-        const station = map.stations.find((s) => s.puzzleId === puzzleId);
-        if (station === undefined) {
+        const stations = map.stations.filter((s) => s.puzzleId === puzzleId);
+        if (stations.length === 0) {
           throw new Error(`mission "${mission.id}" has no station for "${puzzleId}"`);
         }
-        for (const spot of manual.spots) {
-          expect(
-            Math.hypot(station.x - spot.x, station.y - spot.y),
-            `"${manual.id}" at ${spot.x},${spot.y} lies within reach of station "${puzzleId}"`,
-          ).toBeGreaterThan(4);
+        for (const station of stations) {
+          for (const spot of manual.spots) {
+            expect(
+              Math.hypot(station.x - spot.x, station.y - spot.y),
+              `"${manual.id}" at ${spot.x},${spot.y} lies within reach of station "${puzzleId}"`,
+            ).toBeGreaterThan(4);
+          }
         }
       }
+    }
+  });
+
+  it('keeps the consoles of a station apart, so nobody works both of them alone', () => {
+    for (const station of map.stations.filter((s) => s.console === 'a')) {
+      const other = map.stations.find((s) => s.puzzleId === station.puzzleId && s.console === 'b');
+      expect(other, `station "${station.puzzleId}" has no console b`).toBeDefined();
+      expect(
+        Math.hypot(station.x - (other?.x ?? station.x), station.y - (other?.y ?? station.y)),
+        `the consoles of station "${station.puzzleId}" stand within reach of each other`,
+      ).toBeGreaterThan(4);
     }
   });
 

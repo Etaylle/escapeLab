@@ -54,7 +54,7 @@ function annaSees(players: Seat[], parts: Partial<PlayerView> = {}): PlayerView 
     hintsUsed: 0,
     credits: {},
     edgework: null,
-    presence: { stationId: null, manualId: null, signSeen: false },
+    presence: { stationId: null, console: null, manualId: null, signSeen: false },
     sourcesHere: [],
     manualsHere: [],
     puzzle: null,
@@ -268,7 +268,7 @@ describe('the crew strip', () => {
     const dora = seat('p4', 'Dora', { color: '#60a5fa' });
     const view = annaSees([anna, ben, { ...carla, connected: false }, dora], {
       phase: 'playing',
-      presence: { stationId: null, manualId: 'buch', signSeen: false },
+      presence: { stationId: null, console: null, manualId: 'buch', signSeen: false },
       map: lab,
     });
     const html = renderToStaticMarkup(
@@ -333,7 +333,7 @@ describe('the audience', () => {
     name: p.name,
     color: p.color,
     connected: true,
-    presence: { stationId: null, manualId: null, signSeen },
+    presence: { stationId: null, console: null, manualId: null, signSeen },
   });
   /** Anna has read the sign, Ben has not. */
   const watchedAnna = watch(anna, true);
