@@ -368,15 +368,8 @@ export function GameScreen({
         </div>
       )}
 
-      {relay === undefined && <SabotageAlert sabotage={map.sabotage} />}
       {map.sabotage !== null && relay !== undefined && (
         <RelayAlert sabotage={map.sabotage} relay={relay} send={send} />
-      )}
-
-      {alarmVisible && view.lastPenaltySec !== null && (
-        <div key={view.penaltySeq} className="alarm">
-          🚨 ALARM — Fehlversuch! −{view.lastPenaltySec} Sekunden
-        </div>
       )}
 
       {view.pausedFor !== null && (
@@ -427,6 +420,12 @@ export function GameScreen({
           {notice?.kind === 'sign' && (
             <div className="toast" role="status">
               ✓ Laborkennung notiert
+            </div>
+          )}
+          {relay === undefined && <SabotageAlert sabotage={map.sabotage} />}
+          {alarmVisible && view.lastPenaltySec !== null && (
+            <div key={view.penaltySeq} className="alarm" role="alert">
+              🚨 ALARM — Fehlversuch! −{view.lastPenaltySec} Sekunden
             </div>
           )}
         </div>

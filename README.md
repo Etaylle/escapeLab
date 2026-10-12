@@ -33,9 +33,9 @@ funktioniert das Spiel auch ohne Voice-Chat.
 **Tragen:** Manche Stationen bleiben tot, bis ein Gegenstand bei ihnen eingesetzt wurde — die
 Ersatzsicherung liegt im Archiv und muss quer durchs Labor in den Reaktor —, und manche Regeln
 liegen in einem abgeschlossenen Schrank, dessen Schlüssel erst geholt werden muss (Blackout: vom
-Serverraum zum Aktenschrank im Labor). `E` ist dabei eine einzige Kontexttaste (einsetzen →
-aufnehmen → dann, was näher liegt: Station bedienen oder lesen), `Q` legt das Getragene ab,
-sodass Übergaben möglich sind.
+Serverraum zum Aktenschrank im Labor). `E` ist dabei eine einzige Kontexttaste: An der Abgabestelle
+wird eingesetzt, sonst gilt, was am nächsten liegt — Teil aufnehmen, Station bedienen oder lesen;
+die Einblendung sagt vorher, was `E` tut. `Q` legt das Getragene ab, sodass Übergaben möglich sind.
 
 **Orte statt Rollen:** Das Pult einer offenen Station sieht und bedient nur, wer davorsteht
 (`E` *Bedienen*, `Esc` tritt zurück — die Station behält ihren Zustand). Die Regeln liegen
