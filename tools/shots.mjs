@@ -4,7 +4,11 @@
  * can be looked at instead of guessed.
  *
  *   PLAYWRIGHT_BROWSERS_PATH=$PWD/.playwright-browsers \
- *     node tools/shots.mjs [baseUrl] [outDir]
+ *     [SHOTS_MISSION=Systemcheck] node tools/shots.mjs [baseUrl] [outDir]
+ *
+ * SHOTS_MISSION names the mission card to start (default Blackout); the
+ * crew is two players. Where the first station is a sync station, both
+ * press it together, and the run fails unless it solves.
  */
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -12,6 +16,7 @@ import { chromium } from 'playwright';
 
 const BASE = process.argv[2] ?? 'http://localhost:5173';
 const OUT = process.argv[3] ?? '/tmp/escapelab-shots';
+const MISSION = process.env.SHOTS_MISSION || 'Blackout';
 
 const SIZES = [
   { name: 'laptop-13', width: 1440, height: 820 },
@@ -331,13 +336,54 @@ async function captureReading(page, seen, who) {
 }
 
 /**
+ * A sync station takes every press within its window: both players click
+ * its button at the same moment, and the station has to solve — the lit
+ * rooms grow, and the LED strip moves on for both. Throws when it does not.
+ */
+async function pressTogether(players, station) {
+  const [first] = players;
+  const litBefore = first.seen.view.map.litRooms.length;
+  const done = (page) => page.locator('.led-strip .led-done');
+  const doneBefore = await Promise.all(players.map(({ page }) => done(page).count()));
+  await Promise.all(players.map(({ page }) => page.locator('.station-modal .big-button').click()));
+  const lit = await until(() => first.seen.view.map.litRooms.length > litBefore, 5000);
+  const moved = await Promise.all(
+    players.map(({ page }, i) =>
+      done(page)
+        .nth(doneBefore[i])
+        .waitFor({ state: 'attached', timeout: 5000 })
+        .then(
+          () => true,
+          () => false,
+        ),
+    ),
+  );
+  const stuck = players.filter((_, i) => !moved[i]).map(({ name }) => name);
+  if (!lit || stuck.length > 0) {
+    const why = [
+      ...(lit ? [] : ['no room lit up']),
+      ...(stuck.length === 0 ? [] : [`the LED strip stood still for ${stuck.join(' and ')}`]),
+    ];
+    throw new Error(`both pressed "${station.title}", but it did not solve: ${why.join(', ')}`);
+  }
+  console.log(
+    `sync               ${players.map(({ name }) => name).join(' and ')} pressed ` +
+      `"${station.title}" together: solved, ${first.seen.view.map.litRooms.join(', ')} lit`,
+  );
+}
+
+/**
  * station-both.png: while the operator keeps the station open, the reader
  * walks up as well and presses E — the panel has to show for both of them.
- * Then the reader leaves it and walks back to where it stood.
+ * At a sync station both then press it together. Then the reader leaves it
+ * and walks back to where it stood.
  */
-async function captureBothAtStation(reader, operator, station) {
+async function captureBothAtStation(reader, operator, station, sync) {
   const back = tileOf(reader.seen);
   if (!(await walkNear(reader.page, reader.seen, station))) {
+    if (sync) {
+      throw new Error(`${reader.name} has no way to the sync station "${station.title}"`);
+    }
     console.log(`station-both.png   skipped: ${reader.name} has no way to "${station.puzzleId}"`);
     return;
   }
@@ -354,6 +400,13 @@ async function captureBothAtStation(reader, operator, station) {
         ? 'panel up for both'
         : `!! no .station-modal for ${missing.join(' and ')}`),
   );
+  if (sync) {
+    if (missing.length > 0) {
+      const who = missing.join(' and ');
+      throw new Error(`"${station.title}" wants both presses, but ${who} has no panel`);
+    }
+    await pressTogether([operator, reader], station);
+  }
   // Whatever E opened instead of the panel locks the avatar too.
   await reader.page.keyboard.press('Escape');
   await sleep(300);
@@ -434,6 +487,38 @@ async function captureNotepad(page) {
 }
 
 /**
+ * An emergency closes whatever a player has open, and nothing reopens by
+ * itself. The walkthrough works no console and mans no valve, so it waits
+ * the emergency out and presses E again. Returns how long that took, in ms;
+ * throws when `overlay` closed with no emergency on or stays shut after it.
+ */
+async function reopenAfterEmergency(page, seen, overlay, who) {
+  const sabotage = seen.view.map.sabotage;
+  if (sabotage === null) {
+    throw new Error(`${who}: the book closed while waiting for a note, with no emergency on`);
+  }
+  const from = Date.now();
+  const onTop =
+    sabotage.relay === undefined
+      ? 'valves'
+      : (await page.locator('.relay-modal').isVisible())
+        ? 'relay console up'
+        : '!! no relay console';
+  const over = await until(
+    () => seen.view.map.sabotage === null,
+    Math.max(0, sabotage.endsAt - Date.now()) + 10_000,
+  );
+  if (!over || !(await interactUntil(page, overlay))) {
+    throw new Error(`${who}: "${sabotage.label}" closed the book, and it did not open again after`);
+  }
+  console.log(
+    `emergency          ${who}: "${sabotage.label}" closed the book (${onTop}), ` +
+      'E opened it again after it',
+  );
+  return Date.now() - from;
+}
+
+/**
  * hint-*.png: at a source covering the open station, a player asks the last
  * crew for a note in the book's margin — while it is still held back, once it
  * may be asked for, and with the note written in; the other player hears it
@@ -460,11 +545,11 @@ async function captureNotes(page, seen, who, other) {
   console.log(`hint-waiting.png   ${who}: "${label}"`);
 
   // The last crew's notes are held back for 45 s after a station opens.
-  const readyBy = Date.now() + 60_000;
+  let readyBy = Date.now() + 60_000;
   while (!label.startsWith('Notiz der letzten Crew') && Date.now() < readyBy) {
     await sleep(1000);
     if (!(await overlay.isVisible())) {
-      throw new Error('the book closed while waiting for a note');
+      readyBy += await reopenAfterEmergency(page, seen, overlay, who);
     }
     label = (await ask.innerText()).trim();
   }
@@ -555,8 +640,8 @@ async function captureLocker(page, seen, audience) {
 
 /**
  * lit-room.png: the first room a solved station lit, with the guest walked
- * inside where a way leads there. This walkthrough solves no station itself,
- * so while litRooms is empty it only says so.
+ * inside where a way leads there. The walkthrough solves a sync station
+ * only, so elsewhere litRooms stays empty and this only says so.
  */
 async function captureLitRoom(page, seen) {
   const map = seen.view?.map;
@@ -590,11 +675,16 @@ async function run() {
   host.on('pageerror', (e) => console.log('[host error]', e.message));
   await host.goto(BASE);
   await host.getByPlaceholder('z. B. Anna').fill('Anna');
-  await host.locator('.mission', { hasText: 'Blackout' }).first().click();
+  await host.locator('.mission').first().waitFor({ timeout: 10_000 });
+  const card = host.locator('.mission', { hasText: MISSION }).first();
+  if ((await card.count()) === 0) {
+    throw new Error(`no mission card reads "${MISSION}" — SHOTS_MISSION has to name one`);
+  }
+  await card.click();
   await clickText(host, 'Runde eröffnen');
   await host.locator('.room-code strong').waitFor({ timeout: 10_000 });
   const code = (await host.locator('.room-code strong').innerText()).trim();
-  console.log('room code:', code);
+  console.log('room code:', code, `(${MISSION})`);
   await host.screenshot({ path: join(OUT, 'lobby-host.png') });
 
   // --- guest: join by code ---------------------------------------------
@@ -733,11 +823,15 @@ async function run() {
       `station.png        ${operator.name}: "${station.title}", panel ` +
         (stationSideways > 0 ? `!! +${stationSideways}px sideways` : 'fits sideways'),
     );
-    await captureBothAtStation(reader, operator, station);
+    // A sync station needs the whole crew's press: the walkthrough solves it.
+    const sync = operator.seen.view.puzzle?.kind === 'button-sync';
+    await captureBothAtStation(reader, operator, station, sync);
     // The last crew's notes come only for an open station: leave it open, go read.
     await operator.page.keyboard.press('Escape');
     await modal.waitFor({ state: 'hidden', timeout: 3000 });
-    if (!(await captureNotes(reader.page, reader.seen, reader.name, operator.page))) {
+    if (sync) {
+      console.log('hint-*.png         skipped: the station is solved, the next waits for its E');
+    } else if (!(await captureNotes(reader.page, reader.seen, reader.name, operator.page))) {
       console.log(`hint-*.png         ${reader.name}: no source on the open station in reach — ${operator.name} asks`);
       if (!(await captureNotes(operator.page, operator.seen, operator.name, reader.page))) {
         console.log('hint-*.png         skipped: no source on the open station in reach of either');

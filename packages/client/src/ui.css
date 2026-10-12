@@ -3798,3 +3798,20 @@ button.link:hover {
     animation-duration: 4s;
   }
 }
+
+/* ── the relay console over everything ──────────────────────────────────── */
+
+/*
+ * Above a station's panel, the pages and the notepad, whatever the order
+ * they came in. Only the full-screen notices lie higher: the briefing, a
+ * solve's stamp and the pause, which stops the emergency's clock as well;
+ * the info panel stays shut while the console is up. The console holds the
+ * focus to take the keys, so its frame draws no ring of its own.
+ */
+.puzzle-modal.relay-modal {
+  z-index: 59;
+}
+
+.relay-modal:focus {
+  outline: none;
+}

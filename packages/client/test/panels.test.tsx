@@ -14,8 +14,8 @@ function lcg(seed: number): () => number {
 }
 
 /** The open puzzle of `type` as a player sees it, at its station or away from it. */
-function seen(type: string, operating = true): PuzzleView {
-  const def = puzzleDefSchema.parse({ type, id: type, title: 'Station' });
+function seen(type: string, operating = true, fields: Record<string, unknown> = {}): PuzzleView {
+  const def = puzzleDefSchema.parse({ type, id: type, title: 'Station', ...fields });
   const station = moduleFor(def.type);
   const rng = lcg(7);
   const edgework = generateEdgework(rng);
@@ -50,4 +50,21 @@ describe('station panels', () => {
       expect(panel(seen(type))).toContain('Ansage');
     },
   );
+});
+
+describe('the switch bank', () => {
+  it('shows LED and Markierung only on a bank of two features', () => {
+    const html = panel(seen('switches', true, { features: 2 }));
+    expect(html.match(/class="switches-item/g)).toHaveLength(6);
+    expect(html).toContain('Jeden Schalter ansagen: LED, Markierung. Bei Ansage umlegen');
+    expect(html).not.toContain('switches-star');
+    expect(html).not.toContain('Stern');
+  });
+
+  it('keeps the star’s row and word on a bank of three', () => {
+    const html = panel(seen('switches', true, { features: 3 }));
+    expect(html).toContain('Jeden Schalter ansagen: LED, Markierung, Stern. Bei Ansage umlegen');
+    expect(html.match(/class="switches-star"/g)).toHaveLength(6);
+    expect(html.match(/<span>(kein )?Stern<\/span>/g)).toHaveLength(6);
+  });
 });

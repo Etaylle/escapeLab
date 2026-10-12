@@ -75,6 +75,8 @@ type Sabotage = NonNullable<NonNullable<PlayerView['map']>['sabotage']>;
 /**
  * Relay mode: no valves to run to — the player's console stays in front of
  * everything until the emergency is over, the instruction to read out on top.
+ * It takes the keys: focus moves in, and what is pressed there reaches
+ * neither the world nor the screen's shortcuts.
  */
 function RelayAlert({
   sabotage,
@@ -86,13 +88,20 @@ function RelayAlert({
   send: (msg: ClientMessage) => void;
 }) {
   const now = useNow(200);
+  const frame = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    frame.current?.focus();
+  }, []);
   const left = Math.max(0, Math.ceil((sabotage.endsAt - now) / 1000));
   return (
     <div
+      ref={frame}
       className="puzzle-modal relay-modal"
       role="alertdialog"
       aria-modal="true"
       aria-label={sabotage.label}
+      tabIndex={-1}
+      onKeyDown={(e) => e.stopPropagation()}
     >
       <div className="panel">
         <div className="sabotage-head">
@@ -256,44 +265,87 @@ function useNotices(view: PlayerView): Notice | null {
   return shown;
 }
 
+/** What this player has open over the world. */
+export interface Opened {
+  /** the open station's panel, asked for at the station */
+  operating: boolean;
+  /** the source being read, by manual id */
+  readingId: string | null;
+  notes: boolean;
+  info: boolean;
+}
+
+const NOTHING_OPEN: Opened = { operating: false, readingId: null, notes: false, info: false };
+
 /**
- * The modal over the world, if any: the open station's panel while this
- * player stands at it and asked for it, a manual object's pages while they
- * stand there. Both follow the server's word on where the player stands;
- * once that drops, the modal goes and stays gone until asked for again.
+ * What stays open as an emergency comes and goes. The moment one starts,
+ * relay or valves, everything over the world closes: a book or a panel left
+ * open would hide the alarm and keep the keys. When it ends, nothing comes
+ * back by itself.
  */
-function useWorldModal(view: PlayerView): {
+export function stillOpen(opened: Opened, wasEmergency: boolean, emergency: boolean): Opened {
+  return emergency && !wasEmergency ? NOTHING_OPEN : opened;
+}
+
+/**
+ * What lies over the world: the open station's panel while this player
+ * stands at it and asked for it, a manual object's pages while they stand
+ * there, the notepad, the info panel. Panel and pages follow the server's
+ * word on where the player stands; once that drops, they go and stay gone
+ * until asked for again. An emergency closes all of it (`stillOpen`), and
+ * while the relay console is up it keeps the keys: the notepad does not
+ * open under it, nor the info panel over it.
+ */
+function useOpened(view: PlayerView): {
   station: PuzzleView | null;
   reading: ManualHere | null;
-  operate: () => void;
-  read: (manualId: string) => void;
-  close: () => void;
+  notes: boolean;
+  info: boolean;
+  /** opens or closes what it names, the rest stays as it is */
+  set: (parts: Partial<Opened>) => void;
+  toggleNotes: () => void;
+  toggleInfo: () => void;
 } {
-  const [operating, setOperating] = useState(false);
-  const [readingId, setReadingId] = useState<string | null>(null);
+  const [opened, setOpened] = useState(NOTHING_OPEN);
   const armed = view.map?.stations.find((s) => s.status === 'armed')?.puzzleId ?? null;
   const atStation = armed !== null && view.presence.stationId === armed;
   const wasAtStation = useRef(atStation);
   useEffect(() => {
     if (wasAtStation.current && !atStation) {
-      setOperating(false);
+      setOpened((now) => ({ ...now, operating: false }));
     }
     wasAtStation.current = atStation;
   }, [atStation]);
+  const readingId = opened.readingId;
   const reading = view.manualsHere.find((m) => m.id === readingId) ?? null;
   useEffect(() => {
     if (readingId !== null && reading === null) {
-      setReadingId(null);
+      setOpened((now) => ({ ...now, readingId: null }));
     }
   }, [readingId, reading]);
+  const emergency = view.map !== null && view.map.sabotage !== null;
+  const wasEmergency = useRef(emergency);
+  useEffect(() => {
+    const was = wasEmergency.current;
+    wasEmergency.current = emergency;
+    setOpened((now) => stillOpen(now, was, emergency));
+  }, [emergency]);
+  const relayUp = view.map?.sabotage?.relay !== undefined;
   return {
-    station: operating && atStation ? view.puzzle : null,
+    station: opened.operating && atStation ? view.puzzle : null,
     reading,
-    operate: () => setOperating(true),
-    read: setReadingId,
-    close: () => {
-      setOperating(false);
-      setReadingId(null);
+    notes: opened.notes,
+    info: opened.info,
+    set: (parts) => setOpened((now) => ({ ...now, ...parts })),
+    toggleNotes: () => {
+      if (!relayUp) {
+        setOpened((now) => ({ ...now, notes: !now.notes }));
+      }
+    },
+    toggleInfo: () => {
+      if (!relayUp) {
+        setOpened((now) => ({ ...now, info: !now.info }));
+      }
     },
   };
 }
@@ -326,19 +378,17 @@ export function GameScreen({
 }: Props) {
   const { shaking, alarmVisible, stamp } = useFeedback(view);
   const notice = useNotices(view);
-  const modal = useWorldModal(view);
-  const [infoOpen, setInfoOpen] = useState(false);
+  const open = useOpened(view);
   const notes = useNotes(roomCode, view.you.id);
-  const [notesOpen, setNotesOpen] = useState(false);
-  const toggleNotes = (): void => setNotesOpen((open) => !open);
-  useKeys(['n'], toggleNotes);
+  const closeModal = (): void => open.set({ operating: false, readingId: null });
+  useKeys(['n'], open.toggleNotes);
   useEscape(() => {
-    if (infoOpen) {
-      setInfoOpen(false);
-    } else if (modal.station !== null || modal.reading !== null) {
-      modal.close();
+    if (open.info) {
+      open.set({ info: false });
+    } else if (open.station !== null || open.reading !== null) {
+      closeModal();
     } else {
-      setNotesOpen(false);
+      open.set({ notes: false });
     }
   });
   const map = view.map;
@@ -438,40 +488,44 @@ export function GameScreen({
           spectator={false}
           holdTips={notice !== null}
           inputLocked={
-            modal.station !== null ||
-            modal.reading !== null ||
+            open.station !== null ||
+            open.reading !== null ||
             view.pausedFor !== null ||
             relay !== undefined
           }
-          onToggleInfo={() => setInfoOpen((open) => !open)}
-          onRead={modal.read}
-          onOperate={modal.operate}
+          onToggleInfo={open.toggleInfo}
+          onRead={(manualId) => open.set({ readingId: manualId })}
+          onOperate={() => open.set({ operating: true })}
           send={send}
         />
-        {notesOpen && (
-          <Notepad notes={notes} edgework={view.edgework} onClose={() => setNotesOpen(false)} />
+        {open.notes && (
+          <Notepad
+            notes={notes}
+            edgework={view.edgework}
+            onClose={() => open.set({ notes: false })}
+          />
         )}
       </div>
 
-      {modal.station !== null && (
+      {open.station !== null && (
         <WorldModal
           kind="station"
-          label={`§${modal.station.index + 1} — ${modal.station.title}`}
+          label={`§${open.station.index + 1} — ${open.station.title}`}
           edgework={view.edgework}
-          onClose={modal.close}
+          onClose={closeModal}
         >
-          <PuzzlePanel puzzle={modal.station} send={send} deadlineAt={view.deadlineAt} />
+          <PuzzlePanel puzzle={open.station} send={send} deadlineAt={view.deadlineAt} />
         </WorldModal>
       )}
-      {modal.reading !== null && (
+      {open.reading !== null && (
         <ReadingOverlay
-          key={modal.reading.id}
-          manual={modal.reading}
+          key={open.reading.id}
+          manual={open.reading}
           puzzle={view.puzzle}
           current={view.currentPuzzleIndex}
           edgework={view.edgework}
           onAskNote={() => send({ kind: 'request-hint' })}
-          onClose={modal.close}
+          onClose={closeModal}
         />
       )}
 
@@ -479,12 +533,12 @@ export function GameScreen({
         view={view}
         positionsRef={positionsRef}
         chatsRef={chatsRef}
-        notesOpen={notesOpen}
-        onToggleNotes={toggleNotes}
-        onOpenInfo={() => setInfoOpen(true)}
+        notesOpen={open.notes}
+        onToggleNotes={open.toggleNotes}
+        onOpenInfo={() => open.set({ info: true })}
       />
 
-      {infoOpen && <InfoPanel view={view} onClose={() => setInfoOpen(false)} />}
+      {open.info && <InfoPanel view={view} onClose={() => open.set({ info: false })} />}
     </div>
   );
 }

@@ -15,18 +15,21 @@ function markingWord(sw: Switch): string {
 }
 
 /** The features in the manual's words, so nobody has to tell colours apart to read them out. */
-function featureWords(sw: Switch): string[] {
-  return [sw.led ? 'LED an' : 'LED aus', markingWord(sw), sw.star ? 'Stern' : 'kein Stern'];
+function featureWords(sw: Switch, stars: boolean): string[] {
+  const words = [sw.led ? 'LED an' : 'LED aus', markingWord(sw)];
+  return stars ? [...words, sw.star ? 'Stern' : 'kein Stern'] : words;
 }
 
 interface SwitchItemProps {
   sw: Switch;
   number: number;
+  /** a bank of three features: the star gets its row and its word */
+  stars: boolean;
   onToggle: () => void;
 }
 
-function SwitchItem({ sw, number, onToggle }: SwitchItemProps) {
-  const words = featureWords(sw);
+function SwitchItem({ sw, number, stars, onToggle }: SwitchItemProps) {
+  const words = featureWords(sw, stars);
   const position = sw.up ? 'OBEN' : 'unten';
   return (
     <button
@@ -41,7 +44,7 @@ function SwitchItem({ sw, number, onToggle }: SwitchItemProps) {
         {sw.red && <span className="switches-band red" />}
         {sw.blue && <span className="switches-band blue" />}
       </span>
-      <span className="switches-star">{sw.star ? '★' : ''}</span>
+      {stars && <span className="switches-star">{sw.star ? '★' : ''}</span>}
       <span className="switches-lever">
         <span className="switches-knob" />
       </span>
@@ -63,11 +66,12 @@ export function SwitchesPanel({ puzzle, send }: PanelProps<'switches'>) {
     return <div>{failed}</div>;
   }
   const upCount = puzzle.switches.filter((sw) => sw.up).length;
+  const stars = puzzle.features === 3;
   return (
     <div>
       <p className="muted switches-intro">
-        Jeden Schalter ansagen: LED, Markierung, Stern. Bei Ansage umlegen — gefahrlos, erst PRÜFEN
-        zählt.
+        Jeden Schalter ansagen: LED, Markierung{stars && ', Stern'}. Bei Ansage umlegen —
+        gefahrlos, erst PRÜFEN zählt.
       </p>
       <div className="switches-bank" role="group" aria-label="Schalterbank">
         {puzzle.switches.map((sw, i) => (
@@ -75,6 +79,7 @@ export function SwitchesPanel({ puzzle, send }: PanelProps<'switches'>) {
             key={i}
             sw={sw}
             number={i + 1}
+            stars={stars}
             onToggle={() => {
               play('click');
               send({ switchIndex: i });
