@@ -69,7 +69,7 @@ interface Rule {
 const UP: Rule = { text: 'hoch', up: () => true };
 const DOWN: Rule = { text: 'runter', up: () => false };
 const UP_IF_EVEN: Rule = {
-  text: 'hoch, wenn die Kennung gerade endet',
+  text: 'hoch, wenn die Kennung gerade endet (0, 2, 4, 6, 8)',
   up: (edgework) => !serialLastDigitIsOdd(edgework),
 };
 const UP_IF_CELLS: Rule = {
