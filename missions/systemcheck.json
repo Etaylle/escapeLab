@@ -74,7 +74,7 @@
       "stages": 2,
       "length": 3,
       "hints": [
-        "Zeichen von links ansagen, Farbe und Form; in derselben Folge drücken. Nach jeder Stufe wechselt die Richtung."
+        "Das sendende Pult zeigt Farbe und Form; das andere drückt in derselben Folge. Nach jeder Stufe wechselt die Richtung."
       ],
       "lights": [],
       "onSolved": "Signal steht. Platte hält die Kontrolltür, Spind daneben durchsuchen."
@@ -85,7 +85,7 @@
       "title": "Kabelprüfung",
       "wires": { "min": 3, "max": 3 },
       "hints": [
-        "Farben von oben ansagen; nur die Liste für 3 Kabel zählt, die erste zutreffende Regel entscheidet."
+        "Kabel von oben gezählt; nur die Liste für 3 Kabel gilt, die erste zutreffende Regel entscheidet."
       ],
       "lights": ["KONTROLLE"],
       "onSolved": "Spulen offen. Platte halten, dann beide nach Osten."
