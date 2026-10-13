@@ -858,6 +858,15 @@ async function run() {
   await host.goto(BASE);
   await host.getByPlaceholder('z. B. Anna').fill('Anna');
   await host.locator('.mission').first().waitFor({ timeout: 10_000 });
+  // The join screen, every mission in view, has to fit a laptop window too.
+  await host.screenshot({ path: join(OUT, 'join.png') });
+  await overflow(host, 'join @ 1440x820');
+  await host.setViewportSize({ width: 1280, height: 720 });
+  await sleep(400);
+  await overflow(host, 'join @ 1280x720');
+  await host.screenshot({ path: join(OUT, 'join-1280.png') });
+  await host.setViewportSize(SIZES[0]);
+  await sleep(300);
   const card = host.locator('.mission', { hasText: MISSION }).first();
   if ((await card.count()) === 0) {
     throw new Error(`no mission card reads "${MISSION}" — SHOTS_MISSION has to name one`);
@@ -877,6 +886,9 @@ async function run() {
   const guestSeen = eavesdrop(guest);
   await guest.goto(BASE);
   await guest.getByPlaceholder('z. B. Anna').fill('Ben');
+  // On a phone the join screen stacks and scrolls; this shows its top.
+  await guest.locator('.mission').first().waitFor({ timeout: 10_000 });
+  await guest.screenshot({ path: join(OUT, 'join-phone.png') });
   await guest.getByLabel('Raumcode').fill(code);
   await clickText(guest, 'Beitreten');
   await guest.locator('.lobby').waitFor({ timeout: 10_000 });

@@ -131,17 +131,55 @@ describe('the join screen', () => {
     vi.unstubAllGlobals();
   });
 
-  it('says how many play each mission and how full each room is', () => {
+  const blackout: MissionInfo = {
+    id: 'blackout',
+    title: 'Blackout im Labor',
+    subtitle: 'Für zwei oder drei.',
+    players: { min: 2, max: 3 },
+    timeLimitSec: 480,
+    puzzleCount: 5,
+    tiles: [],
+  };
+  const tutorial: MissionInfo = {
+    id: 'systemcheck',
+    title: 'Tutorial: Systemcheck',
+    subtitle: 'Zum Warmwerden.',
+    players: { min: 2, max: 2 },
+    timeLimitSec: 420,
+    puzzleCount: 3,
+    tiles: [],
+  };
+
+  function joinScreen(missions: MissionInfo[], rooms: RoomSummary[] = []): string {
     vi.stubGlobal('window', { location: { search: '' } });
-    const mission: MissionInfo = {
-      id: 'blackout',
-      title: 'Blackout im Labor',
-      subtitle: 'Für zwei oder drei.',
-      players: { min: 2, max: 3 },
-      timeLimitSec: 480,
-      puzzleCount: 5,
-      tiles: [],
-    };
+    return renderToStaticMarkup(
+      <JoinScreen send={noop} connected missions={missions} rooms={rooms} openHandbook={noop} />,
+    );
+  }
+
+  /** The mission cards, in order. */
+  const cards = (html: string): string[] =>
+    html.match(/<button class="mission[ "].*?<\/button>/g) ?? [];
+
+  it('lays the missions out as a grid of cards, each with one line of facts', () => {
+    const html = joinScreen([blackout, tutorial]);
+    expect(html).toContain('<div class="mission-grid">');
+    const both = cards(html);
+    expect(both.map((card) => card.match(/class="mission-meta"/g)?.length)).toEqual([1, 1]);
+    expect(both[1]).toContain('<span class="mission-meta">2 Spieler · 7 min · 3 Rätsel</span>');
+  });
+
+  it('spells out the subtitle on the picked card only, the others carry it as a tooltip', () => {
+    // Nobody has picked yet, so the first mission is.
+    const [picked, other] = cards(joinScreen([blackout, tutorial]));
+    expect(picked).toContain('aria-pressed="true"');
+    expect(picked).toContain('<span class="mission-sub">Für zwei oder drei.</span>');
+    expect(other).toContain('aria-pressed="false"');
+    expect(other).toContain('title="Zum Warmwerden."');
+    expect(other).not.toContain('mission-sub');
+  });
+
+  it('says how many play each mission and how full each room is', () => {
     const room: RoomSummary = {
       code: 'QXT4',
       missionId: 'blackout',
@@ -155,16 +193,8 @@ describe('the join screen', () => {
       capacity: 3,
       free: 1,
     };
-    const html = renderToStaticMarkup(
-      <JoinScreen
-        send={noop}
-        connected
-        missions={[mission]}
-        rooms={[room]}
-        openHandbook={noop}
-      />,
-    );
-    expect(html).toContain('👥 2–3 Spieler');
+    const html = joinScreen([blackout], [room]);
+    expect(html).toContain('2–3 Spieler · 8 min · 5 Rätsel');
     expect(html).toContain('👥 2/3');
     expect(html).not.toMatch(/Rolle/);
   });

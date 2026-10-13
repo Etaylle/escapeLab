@@ -354,56 +354,6 @@ button.link:hover {
 
 /* --- join ------------------------------------------------------------------- */
 
-.join-grid {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 28px;
-  margin-top: 10px;
-}
-
-@media (max-width: 640px) {
-  .join-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.mission-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.mission {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  text-align: left;
-  padding: 13px 15px;
-  border-radius: 10px;
-}
-
-.mission-selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), 0 0 14px var(--accent-glow);
-}
-
-.mission-title {
-  font-weight: 700;
-}
-
-.mission-sub {
-  font-size: 13px;
-  color: var(--muted);
-  line-height: 1.4;
-}
-
-.mission-meta {
-  font-size: 12px;
-  color: var(--accent);
-  font-family: var(--mono);
-}
-
 .join-with-code {
   display: flex;
   gap: 8px;
@@ -1777,26 +1727,6 @@ button.link:hover {
 
 .map-thumb-floor {
   fill: #2a3f52;
-}
-
-.mission-selected .map-thumb-floor {
-  fill: var(--accent-dark);
-}
-
-.mission {
-  position: relative;
-}
-
-.mission .map-thumb {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-}
-
-.mission-title,
-.mission-sub,
-.mission-meta {
-  padding-right: 92px;
 }
 
 .history {
@@ -4065,4 +3995,116 @@ button.link:hover {
   .signal-grid--wrong {
     animation: none;
   }
+}
+
+/* ══ the join screen: missions as a compact grid ═══════════════════════════
+ * Join.tsx. The card gets more room than the default 680px, so that two
+ * columns of missions fit beside „Mit Code" and four missions take two
+ * rows: with no round open, the screen fits a 1280×720 window. A mission
+ * card is as tall as its map frame plus padding, 90px: the map on the left,
+ * the title and one line of facts beside it, the subtitle only on the
+ * picked card. Narrow, the cards go into one column; under 640px „Mit Code"
+ * moves below them.
+ */
+
+.card.join {
+  max-width: 1040px;
+  padding: 22px 26px;
+}
+
+/* A grid item's first margin does not collapse, so the grid carries the
+   space above both headings. */
+.join-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(220px, 1fr);
+  gap: 24px;
+  margin-top: 20px;
+}
+
+.join-grid h2 {
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .join-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.join-create {
+  container: missions / inline-size;
+}
+
+.mission-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+/* Two cards a row once each gets 290px: the longest title and line of
+   facts still fit beside the map. */
+@container missions (min-width: 590px) {
+  .mission-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.mission {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 10px;
+  text-align: left;
+}
+
+.mission-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 14px var(--accent-glow);
+}
+
+.mission:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The same 72 × 64 frame for every map; a wide one sits letterboxed in it. */
+.mission .map-thumb {
+  min-width: 72px;
+  max-width: 72px;
+}
+
+.mission-selected .map-thumb-floor {
+  fill: var(--accent-dark);
+}
+
+.mission-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mission-title,
+.mission-meta,
+.mission-sub {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mission-title {
+  font-weight: 700;
+}
+
+.mission-meta {
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.mission-sub {
+  font-size: 12px;
+  color: var(--muted);
 }

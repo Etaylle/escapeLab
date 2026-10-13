@@ -60,6 +60,39 @@ function RoomRow({
   );
 }
 
+/**
+ * One mission to pick: its map, its name and one line of facts. The picked
+ * one also spells out its subtitle; on the others it is the tooltip.
+ */
+function MissionCard({
+  mission,
+  selected,
+  onSelect,
+}: {
+  mission: MissionInfo;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      className={`mission ${selected ? 'mission-selected' : ''}`}
+      aria-pressed={selected}
+      title={mission.subtitle}
+      onClick={onSelect}
+    >
+      <MapThumb tiles={mission.tiles} height={64} />
+      <span className="mission-text">
+        <span className="mission-title">{mission.title}</span>
+        <span className="mission-meta">
+          {crewSizeText(mission.players)} · {Math.round(mission.timeLimitSec / 60)} min ·{' '}
+          {mission.puzzleCount} Rätsel
+        </span>
+        {selected && <span className="mission-sub">{mission.subtitle}</span>}
+      </span>
+    </button>
+  );
+}
+
 export function JoinScreen({ send, connected, missions, rooms, openHandbook }: Props) {
   const [name, setName] = useState('');
   // An invite link carries the room in ?room=, so the code field is already
@@ -130,21 +163,14 @@ export function JoinScreen({ send, connected, missions, rooms, openHandbook }: P
         <section className="join-create">
           <h2>Neue Runde eröffnen</h2>
           {missions.length > 0 ? (
-            <div className="mission-list">
+            <div className="mission-grid">
               {missions.map((m) => (
-                <button
+                <MissionCard
                   key={m.id}
-                  className={`mission ${selected === m.id ? 'mission-selected' : ''}`}
-                  onClick={() => setMissionId(m.id)}
-                >
-                  <MapThumb tiles={m.tiles} height={44} />
-                  <span className="mission-title">{m.title}</span>
-                  <span className="mission-sub">{m.subtitle}</span>
-                  <span className="mission-meta">
-                    👥 {crewSizeText(m.players)} · ⏱ {Math.round(m.timeLimitSec / 60)} min ·{' '}
-                    {m.puzzleCount} Rätsel
-                  </span>
-                </button>
+                  mission={m}
+                  selected={selected === m.id}
+                  onSelect={() => setMissionId(m.id)}
+                />
               ))}
             </div>
           ) : (
