@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { PlayerPosition, DronePosition, SpectatorView } from '@escapelab/core';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
+import type { KnownPositions } from '../world/movement.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
 import { Manual } from './Manual.js';
@@ -9,7 +10,7 @@ import { CreditsTable, crewTags, CrewTags, type CrewTag } from './Crew.js';
 
 interface Props {
   view: SpectatorView;
-  positionsRef: React.MutableRefObject<Record<string, PlayerPosition>>;
+  positionsRef: React.MutableRefObject<KnownPositions>;
   dronesRef: React.MutableRefObject<Record<string, DronePosition>>;
   pingsRef: React.MutableRefObject<MapPing[]>;
   chatsRef: React.MutableRefObject<ChatLine[]>;
@@ -180,7 +181,7 @@ export function SpectateScreen({
               <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
               {p.name}
               {view.phase === 'playing' && (
-                <CrewTags tags={audienceTags(view, p, positionsRef.current[p.id])} />
+                <CrewTags tags={audienceTags(view, p, positionsRef.current.players[p.id])} />
               )}
             </li>
           ))}

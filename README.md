@@ -75,10 +75,12 @@ entgegengesetzten Enden der Karte.
 **Spielwelt:** Alle Missionen spielen in einer gerenderten Top-Down-Laborwelt
 (Canvas, Among-Us-Stil): flüssige Bewegung per WASD/Pfeiltasten, Kamera folgt, das Labor liegt
 im Dunkeln und jede Figur trägt ein Licht. Bewegung ist client-autoritativ (lokale Simulation +
-Positions-Streaming); der Server bleibt Autorität über Rätsel, Türen, Druckplatten (öffnen nur,
-solange jemand draufsteht), Interaktionsdistanz und Timer. Rätsel sind leuchtende Stationen,
-ihr Pult öffnet per `E` als Modal über der Welt. Welt-Code: `packages/client/src/world/`
-(GameWorld = Simulation/Rendering, art = prozedurale Grafik, audio = prozedurale Sounds).
+Positions-Streaming), doch der Server nimmt nur Schritte an, die eine Figur gehen kann — keine
+durch Wände oder geschlossene Türen —, und bleibt Autorität über Rätsel, Türen, Druckplatten
+(öffnen nur, solange jemand draufsteht), Interaktionsdistanz und Timer. Rätsel sind leuchtende
+Stationen, ihr Pult öffnet per `E` als Modal über der Welt. Welt-Code:
+`packages/client/src/world/` (GameWorld = Simulation/Rendering, art = prozedurale Grafik,
+audio = prozedurale Sounds).
 
 **Neue Missionen** sind reine JSON-Dateien in `missions/`. `packages/core/test/missionMaps.test.ts`
 prüft jede davon automatisch: gleiche Zeilenlängen, alles auf Bodenfeldern, eine Station pro

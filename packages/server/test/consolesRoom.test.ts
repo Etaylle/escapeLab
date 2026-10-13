@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
+import { walkTo, type Walker } from './walk.js';
 
 /**
  * A corridor for two or three with a station of two consoles: the
@@ -60,8 +61,8 @@ describe('Room with a station of two consoles', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  function moveTo(room: Room, playerId: string, x: number, y: number): void {
-    room.updatePosition(playerId, { x: x + 0.5, y: y + 0.5, facing: 0, moving: false });
+  function moveTo(room: Room, player: Walker, x: number, y: number): void {
+    walkTo(room, player, x + 0.5, y + 0.5);
   }
 
   /** A run for Anna, Ben and Cleo, everybody still on a spawn. */
@@ -84,9 +85,9 @@ describe('Room with a station of two consoles', () => {
   /** Anna at console a, Ben at console b, Cleo at the book. */
   function inPlace() {
     const run = started();
-    moveTo(run.room, run.anna.playerId, 5, 1);
-    moveTo(run.room, run.ben.playerId, 13, 1);
-    moveTo(run.room, run.cleo.playerId, 9, 2);
+    moveTo(run.room, run.anna, 5, 1);
+    moveTo(run.room, run.ben, 13, 1);
+    moveTo(run.room, run.cleo, 9, 2);
     return run;
   }
 
@@ -99,7 +100,7 @@ describe('Room with a station of two consoles', () => {
       console: null,
       manualId: 'buch',
     });
-    moveTo(room, ben.playerId, 9, 1);
+    moveTo(room, ben, 9, 1);
     expect(lastView(ben.messages).presence).toMatchObject({ stationId: null, console: null });
     room.dispose();
   });

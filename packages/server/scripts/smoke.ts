@@ -13,7 +13,9 @@
  * the camera plate holds its drone), solves every station with its module's
  * solver on the views of whoever stands at it — at either console — and
  * whoever reads its rules (plus one deliberate wrong cut and one wrong sign),
- * and survives a mid-game reconnect. No answer is written down here.
+ * and survives a mid-game reconnect. After the rematch everybody stands on
+ * the spawn just drawn, and a position from the run before is dropped. No
+ * answer is written down here.
  * Run with: pnpm --filter @escapelab/server smoke
  */
 import { readFileSync } from 'node:fs';
@@ -150,6 +152,8 @@ class TestClient {
   viewCount = 0;
   spectatorView: SpectatorView | null = null;
   positions: Record<string, PlayerPosition> = {};
+  /** the run the latest positions belong to, by its `startedAt` */
+  positionsRun: number | null = null;
   drones: Record<string, DronePosition> = {};
   playerId: string | null = null;
   /** what the server handed out on joining, for resuming after a drop */
@@ -177,6 +181,7 @@ class TestClient {
       }
       if (msg.kind === 'positions') {
         this.positions = msg.players;
+        this.positionsRun = msg.run;
         this.drones = msg.drones;
       }
       this.queue.push(msg);
@@ -195,9 +200,11 @@ class TestClient {
     this.socket.send(JSON.stringify(msg));
   }
 
+  /** Stream a position, stamped with the run this client plays. */
   sendPos(x: number, y: number, moving: boolean): void {
     this.self = { x, y };
-    this.send({ kind: 'pos', x, y, facing: 0, moving });
+    const run = this.view?.startedAt ?? fail(`${this.label}: no run to walk in`);
+    this.send({ kind: 'pos', run, x, y, facing: 0, moving });
   }
 
   close(): void {
@@ -281,13 +288,16 @@ class TestClient {
     return view;
   }
 
-  /** Adopt the server-seeded position for our own avatar. */
+  /** Adopt the server-seeded position of this run for our own avatar. */
   async ensureSelf(): Promise<{ x: number; y: number }> {
     if (this.self !== null) {
       return this.self;
     }
     const id = this.playerId ?? fail(`${this.label}: no playerId yet`);
-    await this.untilPositions('own seeded position', (p) => p[id] !== undefined);
+    await this.untilPositions(
+      'own seeded position',
+      (p) => this.positionsRun === this.view?.startedAt && p[id] !== undefined,
+    );
     const pos = this.positions[id] ?? fail(`${this.label}: missing own position`);
     this.self = { x: pos.x, y: pos.y };
     return this.self;
@@ -1341,6 +1351,37 @@ assert(
   mission.map.spawns.some((s) => s.x === redrawn?.x && s.y === redrawn.y),
   'the rematch draws the spawns again',
 );
+
+// Nobody starts the rematch where the run before left them: its positions put everybody on
+// the spawn just drawn, and a position stamped with the run before is dropped.
+const lastRun = won.startedAt ?? fail('the won run has no start');
+const newRun = replay.startedAt ?? fail('the rematch has no start');
+for (const client of crew) {
+  await client.until('the rematch', (v) => v.phase === 'playing' && v.startedAt === newRun);
+}
+const onSpawn = (positions: Record<string, PlayerPosition>, member: TestClient): boolean => {
+  const spawn = spawnOf(member);
+  const at = positions[member.playerId ?? ''];
+  return at !== undefined && at.x === spawn.x + 0.5 && at.y === spawn.y + 0.5;
+};
+for (const client of crew) {
+  await client.untilPositions('the rematch with everybody on a fresh spawn', (p) =>
+    client.positionsRun === newRun && crew.every((member) => onSpawn(p, member)));
+}
+console.log('✓ after the rematch, both clients see everybody on the spawn just drawn');
+// One step south of the spawn, on floor for every spawn: the new run would take it.
+const fresh = spawnOf(first);
+const southward = { x: fresh.x + 0.5, y: fresh.y + 1, facing: 0, moving: true };
+first.send({ kind: 'pos', run: lastRun, ...southward });
+// The server answers in order: once the room list is back, it has handled the position.
+first.send({ kind: 'list-rooms' });
+await first.expect(
+  'room list after the stale position',
+  (m): m is Extract<ServerMessage, { kind: 'rooms' }> => m.kind === 'rooms',
+);
+const handled = first.positions;
+await first.untilPositions('a broadcast after the stale position', (p) => p !== handled);
+assert(onSpawn(first.positions, first), 'a position stamped with the run before is dropped');
 
 for (const client of crew) {
   client.close();

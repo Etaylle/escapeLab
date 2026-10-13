@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { chatText, type PlayerPosition, type PlayerView, type RunEvent } from '@escapelab/core';
 import { LAST_CREW } from '../radio.js';
 import type { ChatLine } from '../world/GameWorld.js';
+import type { KnownPositions } from '../world/movement.js';
 import { crewTags, CrewTags, presenceNear, type CrewTag } from './Crew.js';
 import { EdgeworkChip } from './EdgeworkChip.js';
 
 interface Props {
   view: PlayerView;
-  positionsRef: React.MutableRefObject<Record<string, PlayerPosition>>;
+  positionsRef: React.MutableRefObject<KnownPositions>;
   chatsRef: React.MutableRefObject<ChatLine[]>;
   notesOpen: boolean;
   onToggleNotes: () => void;
@@ -65,7 +66,7 @@ export function MissionHud({
   }, []);
   void tick;
 
-  const positions = positionsRef.current;
+  const positions = positionsRef.current.players;
   // The newest line holds the strip; a chat line only lives as long as its bubble.
   const lastChat = chatsRef.current.at(-1);
   const lastEvent = view.events.at(-1);

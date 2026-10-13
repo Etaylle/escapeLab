@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
+import { walkTo, type Walker } from './walk.js';
 
 /**
  * A corridor for two or three: the wiring box at its west end beside the
@@ -67,8 +68,8 @@ describe('Room with sources to find and open', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  function moveTo(room: Room, playerId: string, x: number, y: number): void {
-    room.updatePosition(playerId, { x: x + 0.5, y: y + 0.5, facing: 0, moving: false });
+  function moveTo(room: Room, player: Walker, x: number, y: number): void {
+    walkTo(room, player, x + 0.5, y + 0.5);
   }
 
   function started() {
@@ -86,11 +87,11 @@ describe('Room with sources to find and open', () => {
     const { room, anna, ben } = started();
     const found = (): string[] => (lastView(ben.messages).map?.manuals ?? []).map((m) => m.id);
     expect(found()).toEqual([]);
-    moveTo(room, anna.playerId, 10, 1); // four tiles short of the locker
+    moveTo(room, anna, 10, 1); // four tiles short of the locker
     expect(found()).toEqual([]);
-    moveTo(room, anna.playerId, 11, 1); // three and a half
+    moveTo(room, anna, 11, 1); // three and a half
     expect(found()).toEqual(['spind', 'schrank']);
-    moveTo(room, anna.playerId, 1, 1);
+    moveTo(room, anna, 1, 1);
     expect(found()).toEqual(['spind', 'schrank']);
     expect(lastView(anna.messages).map?.manuals[0]).toMatchObject({ x: 14, y: 1, opened: false });
     room.dispose();
@@ -98,11 +99,11 @@ describe('Room with sources to find and open', () => {
 
   it('searches a locker for a player standing at it, and nobody further away', () => {
     const { room, anna, ben } = started();
-    moveTo(room, anna.playerId, 12, 1);
+    moveTo(room, anna, 12, 1);
     expect(() => room.act(anna.playerId, { kind: 'open-source', manualId: 'spind' })).toThrow(
       'Dafür musst du direkt davor stehen.',
     );
-    moveTo(room, anna.playerId, 13, 1); // beside the locker, and diagonally by the cabinet
+    moveTo(room, anna, 13, 1); // beside the locker, and diagonally by the cabinet
     expect(lastView(anna.messages).sourcesHere.map((s) => [s.id, s.opened])).toEqual([
       ['spind', false],
       ['schrank', false],
@@ -117,12 +118,12 @@ describe('Room with sources to find and open', () => {
 
   it('unlocks a cabinet with the key in hand, by the one key that does the obvious thing', () => {
     const { room, anna } = started();
-    moveTo(room, anna.playerId, 8, 2);
+    moveTo(room, anna, 8, 2);
     room.act(anna.playerId, { kind: 'interact' });
     expect(lastView(anna.messages).map?.items[0]?.carriedBy).toBe(anna.playerId);
-    moveTo(room, anna.playerId, 11, 2);
+    moveTo(room, anna, 11, 2);
     expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/markierten Platz/);
-    moveTo(room, anna.playerId, 14, 2);
+    moveTo(room, anna, 14, 2);
     room.act(anna.playerId, { kind: 'interact' });
     const view = lastView(anna.messages);
     expect(view.sourcesHere.find((s) => s.id === 'schrank')?.opened).toBe(true);

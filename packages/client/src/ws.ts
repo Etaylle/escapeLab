@@ -3,13 +3,13 @@ import type {
   ChatPhrase,
   ClientMessage,
   DronePosition,
-  PlayerPosition,
   PlayerView,
   RoomSummary,
   ServerMessage,
   SpectatorView,
 } from '@escapelab/core';
 import { forgetNotes, localStore } from './notes.js';
+import type { KnownPositions } from './world/movement.js';
 
 interface Credentials {
   code: string;
@@ -28,10 +28,11 @@ export interface Connection {
   roomCode: string | null;
   error: string | null;
   /**
-   * Live avatar positions, written on every positions broadcast WITHOUT a
-   * React re-render — the canvas render loop reads this ref directly.
+   * Live avatar positions with the run they belong to, written on every
+   * positions broadcast WITHOUT a React re-render — the canvas render loop
+   * reads this ref directly.
    */
-  positions: MutableRefObject<Record<string, PlayerPosition>>;
+  positions: MutableRefObject<KnownPositions>;
   /** Live drone patrols, same no-re-render contract as `positions`. */
   drones: MutableRefObject<Record<string, DronePosition>>;
   /** Map pings, newest last; the render loop drains expired ones itself. */
@@ -82,7 +83,7 @@ export function useGameConnection(): Connection {
   const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const resumingRef = useRef(false);
-  const positionsRef = useRef<Record<string, PlayerPosition>>({});
+  const positionsRef = useRef<KnownPositions>({ run: null, players: {} });
   const dronesRef = useRef<Record<string, DronePosition>>({});
   const pingsRef = useRef<{ playerId: string; x: number; y: number; at: number }[]>([]);
   const chatsRef = useRef<{ playerId: string; phrase: ChatPhrase; at: number }[]>([]);
@@ -143,7 +144,7 @@ export function useGameConnection(): Connection {
           setRooms(msg.rooms);
           break;
         case 'positions':
-          positionsRef.current = msg.players;
+          positionsRef.current = { run: msg.run, players: msg.players };
           dronesRef.current = msg.drones;
           break;
         case 'ping':
