@@ -3876,7 +3876,8 @@ button.link:hover {
  * each; the receiving console's lamps over its twelve keys, three rows of
  * four. A sign is its form in its colour over the words both players say
  * for it, so it reads without the colour as well. A wrong sign shakes the
- * keys and flashes them red.
+ * keys and flashes them red. The audience gets the strip and, under it, the
+ * keys of both consoles, which nobody can press there.
  */
 
 .signal {
@@ -3995,6 +3996,21 @@ button.link:hover {
   .signal-grid--wrong {
     animation: none;
   }
+}
+
+/* Each console's keys under its name, for the audience. */
+.signal-console {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.signal-console-name {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--muted);
 }
 
 /* ══ the join screen: missions as a compact grid ═══════════════════════════

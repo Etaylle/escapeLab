@@ -159,6 +159,7 @@ describe('edgework in a run', () => {
       crew: ['p1', 'p2'],
       // the box has one console, which counts as console a
       console: 'a',
+      atConsoles: { a: [], b: [] },
     });
     expect(apply.mock.calls[0]?.[3]).toBe('p1');
     apply.mockRestore();

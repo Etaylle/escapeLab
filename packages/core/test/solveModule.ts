@@ -52,6 +52,8 @@ export function playInstance(def: PuzzleDef, seed: number): number {
   const crew = twoConsoles ? [OPERATOR, PARTNER, READER] : [OPERATOR, READER];
   const edgework = generateEdgework(mulberry32(seed + 1));
   let remainingSec = START_SEC;
+  // Where the station has two consoles, the operator stands at a and the partner at b.
+  const atConsoles = twoConsoles ? { a: [OPERATOR], b: [PARTNER] } : { a: [], b: [] };
   const ctx = (at: number, from: ConsoleId | null): PuzzleContext => ({
     edgework,
     alarms: 0,
@@ -59,6 +61,7 @@ export function playInstance(def: PuzzleDef, seed: number): number {
     at,
     crew,
     console: from,
+    atConsoles: from === null ? { a: [], b: [] } : atConsoles,
   });
   const viewCtx: ViewContext = { edgework, alarms: 0, crew };
   let state = puzzleModule.init(def, mulberry32(seed), ctx(T0, null));

@@ -895,8 +895,9 @@ async function runSignal(a: TestClient, b: TestClient): Promise<void> {
     signalOf(v)?.stage === 2 && signalOf(v)?.role === 'receiver');
   await solveStation(1);
   assertConsolesApart({ a, b }, from, { sends, takes });
-  // Console A sends the odd stages, so with an even count the last press is A's.
-  credit(SIGNAL.stages % 2 === 0 ? a : b, 'operated');
+  // The Signalkette counts for both consoles, whichever pressed last.
+  credit(a, 'operated');
+  credit(b, 'operated');
   await backOnTheMap(2);
 }
 
@@ -1311,8 +1312,11 @@ for (const client of crew) {
   assert(got.alarms >= did.alarms && got.hints === 0,
     `${client.label} carries its ${did.alarms} deliberate alarms and asked for no note`);
 }
-assert(summed('operated') === mission.puzzles.length,
-  'every station is credited to the player whose input solved it');
+// A station counts once, one with two consoles once for each of its consoles.
+const workedAt = (def: (typeof mission.puzzles)[number]): number =>
+  moduleFor(def.type).consoles ?? 1;
+assert(summed('operated') === mission.puzzles.reduce((sum, def) => sum + workedAt(def), 0),
+  'every station is credited to whoever worked it, the Signalkette to both consoles');
 assert(summed('alarms') === won.penaltySeq, 'every alarm is credited to whoever set it off');
 
 // The next run starts by itself once the whole crew confirms on the end screen.

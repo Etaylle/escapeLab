@@ -289,9 +289,9 @@ function Morse() {
     <>
       <Housing x={40} width={296} />
       <Lamp x={88} y={46} r={14} lit />
-      <rect x={64} y={92} width={48} height={28} rx={4} />
-      <Mark x={88} y={111} size={13}>
-        TX
+      <rect x={56} y={92} width={64} height={28} rx={4} />
+      <Mark x={88} y={110} size={11}>
+        SENDEN
       </Mark>
       <path d={`M146 48H304${MORSE_SCALE}`} />
       <path d="M210 52l-5 8h10z" {...TINT} />
@@ -310,17 +310,11 @@ function Morse() {
 
 /** The field's top left corner, the side of a cell and the cells a side. */
 const MAZE = { x: 137, y: 24, cell: 17, size: 6 };
-/** Walls as [x1, y1, x2, y2] on the grid's lines. */
-const MAZE_WALLS = [
-  [2, 0, 2, 2],
-  [3, 2, 6, 2],
-  [4, 3, 4, 5],
-  [0, 4, 2, 4],
-  [1, 1, 1, 3],
-  [2, 5, 4, 5],
-] as const;
 
-/** The 6 × 6 field with its letters and numbers, a few walls, the marker and the goal. */
+/**
+ * The navigation console: the 6 × 6 field with its letters and numbers, the
+ * marker and the goal — and no walls, which only the Schaltplan shows.
+ */
 function Maze() {
   const { x, y, cell, size } = MAZE;
   const span = size * cell;
@@ -328,9 +322,6 @@ function Maze() {
     const at = (i + 1) * cell;
     return `M${x + at} ${y}V${y + span}M${x} ${y + at}H${x + span}`;
   });
-  const walls = MAZE_WALLS.map(
-    ([x1, y1, x2, y2]) => `M${x + x1 * cell} ${y + y1 * cell}L${x + x2 * cell} ${y + y2 * cell}`,
-  );
   return (
     <>
       {Array.from({ length: size }, (_, i) => (
@@ -345,7 +336,6 @@ function Maze() {
       ))}
       <path d={lines.join('')} strokeWidth={0.6} strokeOpacity={0.4} />
       <rect x={x} y={y} width={span} height={span} strokeWidth={1.6} />
-      <path d={walls.join('')} strokeWidth={2.6} />
       <circle cx={x + cell / 2} cy={y + 5.5 * cell} r={5} {...TINT} />
       <path d={`M${x + 5.5 * cell} ${y + 2}l6.5 11h-13z`} {...TINT} />
     </>
@@ -365,15 +355,49 @@ function ButtonSync() {
   );
 }
 
-/** The four sliders: where each one stands and how high its knob is. */
-const SLIDERS = [
-  { x: 119, at: 58 },
-  { x: 165, at: 86 },
-  { x: 211, at: 72 },
-  { x: 257, at: 100 },
-];
+/** A Schalter on its plate around (x, 72): the lever up for AN, down for AUS. */
+function ToggleSwitch({ x, on }: { x: number; on: boolean }) {
+  return (
+    <>
+      <rect x={x - 9} y={48} width={18} height={48} rx={3} />
+      <path d={`M${x} 72V${on ? 58 : 86}`} strokeWidth={2.2} />
+      <circle cx={x} cy={72} r={3} />
+      <circle cx={x} cy={on ? 56 : 88} r={4.5} {...TINT} />
+    </>
+  );
+}
 
-/** A console of four sliders over their name plates, under a strip of lamps. */
+/** A Drehregler around (x, 72): the knob, a tick for each of its 5 levels, the pointer on one. */
+function Dial({ x, level }: { x: number; level: number }) {
+  // The levels run from the lower left over the top to the lower right, 60° apart.
+  const towards = (step: number, r: number): string => {
+    const angle = ((150 + step * 60) * Math.PI) / 180;
+    return `${round(x + r * Math.cos(angle))} ${round(72 + r * Math.sin(angle))}`;
+  };
+  const ticks = [0, 1, 2, 3, 4].map((step) => `M${towards(step, 16)}L${towards(step, 20)}`);
+  return (
+    <>
+      <path d={ticks.join('')} strokeWidth={1} />
+      <circle cx={x} cy={72} r={12} {...TINT} />
+      <path d={`M${x} 72L${towards(level - 1, 9)}`} strokeWidth={2} />
+    </>
+  );
+}
+
+/** A Taster around (x, 72): a round cap in its square bezel. */
+function PushButton({ x }: { x: number }) {
+  return (
+    <>
+      <rect x={x - 13} y={59} width={26} height={26} rx={4} />
+      <circle cx={x} cy={72} r={8} {...TINT} />
+    </>
+  );
+}
+
+/**
+ * A relay console: a Schalter at AN, a Drehregler, a Taster and a Schalter
+ * at AUS, each over its name plate, under a strip of lamps.
+ */
 function Relay() {
   return (
     <>
@@ -382,14 +406,12 @@ function Relay() {
       {Array.from({ length: 8 }, (_, k) => (
         <circle key={k} cx={106 + k * 24} cy={22} r={4} {...(k < 3 ? GLOW : {})} />
       ))}
-      {SLIDERS.map(({ x, at }) => (
+      <ToggleSwitch x={119} on />
+      <Dial x={165} level={4} />
+      <PushButton x={211} />
+      <ToggleSwitch x={257} on={false} />
+      {[119, 165, 211, 257].map((x) => (
         <g key={x}>
-          <path
-            d={[44, 58, 72, 86, 100].map((y) => `M${x - 14} ${y}h6`).join('')}
-            strokeWidth={0.8}
-          />
-          <rect x={x - 3} y={40} width={6} height={64} rx={3} />
-          <rect x={x - 10} y={at - 5} width={20} height={10} rx={2} {...TINT} />
           <rect x={x - 17} y={112} width={34} height={14} rx={2} />
           <Lettering x={x - 10} y={119} width={20} />
         </g>
@@ -502,12 +524,12 @@ const DRAWINGS: Record<PuzzleDef['type'], Drawing> = {
     draw: Memory,
   },
   morse: {
-    label: 'Funkgerät: Signallampe, Sendetaste TX und Frequenzregler mit Skala',
+    label: 'Funkgerät: Signallampe, Taste SENDEN und Frequenzregler mit Skala',
     draw: Morse,
   },
   maze: {
     label:
-      'Labyrinth: Raster aus 6 × 6 Feldern mit einigen Wänden, ' +
+      'Navigationspult: Raster aus 6 × 6 Feldern ohne Wände, ' +
       'Kreis als Markierung, Dreieck als Ziel',
     draw: Maze,
   },
@@ -516,7 +538,9 @@ const DRAWINGS: Record<PuzzleDef['type'], Drawing> = {
     draw: ButtonSync,
   },
   relay: {
-    label: 'Schaltpult: 4 beschriftete Schieberegler unter einer Lampenleiste',
+    label:
+      'Schaltpult: 2 Schalter, ein Drehregler und ein Taster, beschriftet, ' +
+      'unter einer Lampenleiste',
     draw: Relay,
   },
   signal: {

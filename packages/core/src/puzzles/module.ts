@@ -44,6 +44,11 @@ export interface PuzzleContext {
   crew: string[];
   /** the console the move comes from: 'a' at a station with one; null in `init` and emergencies */
   console: ConsoleId | null;
+  /**
+   * ids of the players at each console of a station with two, from presence;
+   * both empty at a station with one, in `init` and in emergencies
+   */
+  atConsoles: Record<ConsoleId, string[]>;
 }
 
 /** Views are rebuilt on every change, not on every tick, so they get no clock. */

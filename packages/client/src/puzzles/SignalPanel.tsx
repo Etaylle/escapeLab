@@ -108,11 +108,25 @@ function Keys({
   );
 }
 
+/** A console's twelve keys for the audience, three rows of four: shown, never pressed. */
+function Layout({ grid }: { grid: SignalToken[] }) {
+  return (
+    <div className="signal-grid">
+      {grid.map((token) => (
+        <span key={token} className="signal-key" data-token={token}>
+          <Sign token={token} />
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /**
  * The Signalkette at one console. The sending console shows the stage's
  * sequence, sign by sign; the receiving one has the twelve signs as keys and
  * presses the sequence in its order. Both light a lamp per sign pressed, and
- * the direction swaps with every stage. The audience sees what is sent.
+ * the direction swaps with every stage. The audience sees what is sent and
+ * the keys of both consoles.
  */
 export function SignalPanel({ puzzle, send }: PanelProps<'signal'>) {
   const stage = `Stufe ${puzzle.stage} von ${puzzle.stages}`;
@@ -122,6 +136,22 @@ export function SignalPanel({ puzzle, send }: PanelProps<'signal'>) {
       ⚠ Falsches Zeichen — Stufe von vorn.
     </p>
   );
+  if (puzzle.role === null && puzzle.grids !== null) {
+    const grids = puzzle.grids;
+    return (
+      <div className="signal">
+        <p className="signal-stage">{`${stage} — ${consoleName(puzzle.sends)} sendet`}</p>
+        {puzzle.sequence !== null && <Strip sequence={puzzle.sequence} done={puzzle.done} />}
+        {warning}
+        {(['a', 'b'] as const).map((side) => (
+          <section key={side} className="signal-console" aria-label={consoleName(side)}>
+            <h4 className="signal-console-name">{consoleName(side)}</h4>
+            <Layout grid={grids[side]} />
+          </section>
+        ))}
+      </div>
+    );
+  }
   if (puzzle.role === 'receiver' && puzzle.grid !== null) {
     return (
       <div className="signal">
@@ -133,14 +163,12 @@ export function SignalPanel({ puzzle, send }: PanelProps<'signal'>) {
       </div>
     );
   }
-  if (puzzle.sequence !== null) {
-    const sender = puzzle.role === 'sender';
-    const who = sender ? 'dieses Pult' : consoleName(puzzle.sends);
+  if (puzzle.role === 'sender' && puzzle.sequence !== null) {
     return (
       <div className="signal">
-        <p className="signal-stage">{`${stage} — ${who} sendet`}</p>
+        <p className="signal-stage">{`${stage} — dieses Pult sendet`}</p>
         <Strip sequence={puzzle.sequence} done={puzzle.done} />
-        {sender && <p className="muted">Ansage von links, bis alle Lampen brennen.</p>}
+        <p className="muted">Ansage von links, bis alle Lampen brennen.</p>
         {warning}
       </div>
     );

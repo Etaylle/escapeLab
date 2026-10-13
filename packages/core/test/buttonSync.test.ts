@@ -43,7 +43,15 @@ function play(
 }
 
 function ctx(crew: string[], at: number): PuzzleContext {
-  return { edgework, alarms: 0, remainingSec: 600, at, crew, console: 'a' };
+  return {
+    edgework,
+    alarms: 0,
+    remainingSec: 600,
+    at,
+    crew,
+    console: 'a',
+    atConsoles: { a: [], b: [] },
+  };
 }
 
 describe('button-sync: the printed example', () => {

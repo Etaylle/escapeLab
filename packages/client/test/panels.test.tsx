@@ -9,7 +9,7 @@ import {
   type PuzzleView,
 } from '@escapelab/core';
 import { PANELS } from '../src/puzzles/index.js';
-import { PuzzlePanel } from '../src/screens/PuzzlePanel.js';
+import { PuzzlePanel, ReaderPanel } from '../src/screens/PuzzlePanel.js';
 
 /** A small deterministic generator, enough to set an instance up. */
 function lcg(seed: number): () => number {
@@ -21,23 +21,33 @@ function lcg(seed: number): () => number {
 }
 
 /**
- * The open puzzle of `type` as a player sees it, at its station — at console
- * `seat` where it has two — or away from it.
+ * The open puzzle of `type` as player `who` sees it, at its station — at
+ * console `seat` where it has two — or away from it; with `who` null, as the
+ * audience sees it.
  */
 function seen(
   type: string,
   operating = true,
   fields: Record<string, unknown> = {},
   seat: ConsoleId | null = operating ? 'a' : null,
+  who: string | null = 'p1',
 ): PuzzleView {
   const def = puzzleDefSchema.parse({ type, id: type, title: 'Station', ...fields });
   const station = moduleFor(def.type);
   const rng = lcg(7);
   const edgework = generateEdgework(rng);
   const crew = ['p1', 'p2'];
-  const setup = { edgework, alarms: 0, remainingSec: 600, at: 0, crew, console: null };
+  const setup = {
+    edgework,
+    alarms: 0,
+    remainingSec: 600,
+    at: 0,
+    crew,
+    console: null,
+    atConsoles: { a: [], b: [] },
+  };
   const state = station.init(def, rng, setup);
-  const viewer = { playerId: 'p1', operating, reading: false, console: seat };
+  const viewer = { playerId: who, operating, reading: false, console: seat };
   const view = station.view(def, state, viewer, { edgework, alarms: 0, crew });
   return { ...view, index: 0, total: 1, title: def.title, manual: null, console: seat };
 }
@@ -82,6 +92,55 @@ describe('the switch bank', () => {
     expect(html).toContain('Jeden Schalter ansagen: LED, Markierung, Stern. Bei Ansage umlegen');
     expect(html.match(/class="switches-star"/g)).toHaveLength(6);
     expect(html.match(/<span>(kein )?Stern<\/span>/g)).toHaveLength(6);
+  });
+});
+
+describe('the maze', () => {
+  type Label = { at: number; name: string };
+
+  /** The grid's labels as drawn: column letters by x, row numbers by y. */
+  function labelsOf(html: string): { columns: Label[]; rows: Label[] } {
+    const column = /<text x="([\d.]+)" y="[\d.]+" text-anchor="middle">([A-H])<\/text>/g;
+    const row = /<text x="[\d.]+" y="([\d.]+)" text-anchor="end">(\d)<\/text>/g;
+    const read = (m: RegExpMatchArray): Label => ({ at: Number(m[1]), name: m[2] ?? '' });
+    return {
+      columns: [...html.matchAll(column)].map(read),
+      rows: [...html.matchAll(row)].map(read),
+    };
+  }
+
+  const inOrder = (labels: Label[]): string =>
+    [...labels].sort((p, q) => p.at - q.at).map((label) => label.name).join('');
+
+  /** The name of the label lying closest to `at`. */
+  function nearest(labels: Label[], at: number): string {
+    const away = (label: Label): number => Math.abs(label.at - at);
+    return labels.reduce((best, label) => (away(label) < away(best) ? label : best)).name;
+  }
+
+  it('letters columns from the left and numbers rows from the top, as its rules say', () => {
+    const view = seen('maze');
+    if (view.kind !== 'maze' || view.pos === null) {
+      throw new Error('expected the navigation console');
+    }
+    const html = panel(view);
+    const { columns, rows } = labelsOf(html);
+    expect(inOrder(columns)).toBe('ABCDEF');
+    expect(inOrder(rows)).toBe('123456');
+    // The marker stands in the column and the row the panel names it by.
+    const here = `${'ABCDEF'.charAt(view.pos.x)}${view.pos.y + 1}`;
+    expect(html).toContain(`Du stehst auf <strong>${here}</strong>`);
+    const marker = /<circle class="maze-marker[^"]*" cx="([\d.]+)" cy="([\d.]+)"/.exec(html);
+    const [cx, cy] = [Number(marker?.[1]), Number(marker?.[2])];
+    expect(`${nearest(columns, cx)}${nearest(rows, cy)}`).toBe(here);
+    // The plan at a manual object counts the same way.
+    const plan = labelsOf(
+      renderToStaticMarkup(
+        <ReaderPanel puzzle={{ ...view, pos: null, cells: new Array<number>(36).fill(15) }} />,
+      ),
+    );
+    expect(inOrder(plan.columns)).toBe('ABCDEF');
+    expect(inOrder(plan.rows)).toBe('123456');
   });
 });
 
@@ -143,5 +202,22 @@ describe('the signal chain', () => {
 
   it('tells a console nobody stands at that it is not connected', () => {
     expect(panel(seen('signal', false))).toContain('Dieses Pult ist nicht angeschlossen.');
+  });
+
+  it('shows the audience the strip and both consoles’ keys by name, none to press', () => {
+    const watched = seen('signal', true, {}, null, null);
+    if (watched.kind !== 'signal' || watched.sequence === null || watched.grids === null) {
+      throw new Error('expected the audience to see the sequence and both consoles');
+    }
+    const { sequence, grids } = watched;
+    const html = panel({ ...watched, done: 1 });
+    expect(html).toContain('Stufe 1 von 4 — Pult A sendet');
+    const names = [...html.matchAll(/<h4 class="signal-console-name">([^<]*)<\/h4>/g)];
+    expect(names.map((m) => m[1])).toEqual(['Pult A', 'Pult B']);
+    const key = /<span class="signal-key" data-token="([a-z]+-[a-z]+)">/g;
+    expect([...html.matchAll(key)].map((m) => m[1])).toEqual([...grids.a, ...grids.b]);
+    expect(words(html)).toEqual([...sequence, ...grids.a, ...grids.b].map(tokenLabel));
+    expect(lit(html)).toBe(1);
+    expect(html).not.toContain('<button');
   });
 });

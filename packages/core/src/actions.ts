@@ -23,7 +23,14 @@ import {
   type RelayDef,
   type RelayState,
 } from './puzzles/relay.js';
-import { armedStations, consoleOf, readersOf, sourceOpen } from './map.js';
+import {
+  armedStations,
+  consoleOf,
+  operatorsOf,
+  readersOf,
+  sourceOpen,
+  stationKey,
+} from './map.js';
 import type { Spot } from './reach.js';
 
 /**
@@ -297,7 +304,24 @@ function puzzleContext(state: GameState, at: number, from: ConsoleId | null): Pu
     at,
     crew: state.players.filter((p) => p.connected).map((p) => p.id),
     console: from,
+    atConsoles: presentAtConsoles(state, from),
   };
+}
+
+/**
+ * Who stands at each console of the open station, for a move made at one
+ * of them: both empty at a station with one console, and for a move made
+ * at no console at all.
+ */
+function presentAtConsoles(state: GameState, from: ConsoleId | null): PuzzleContext['atConsoles'] {
+  const open = state.mission.puzzles[state.currentPuzzleIndex];
+  if (from === null || open === undefined || moduleFor(open.type).consoles !== 2) {
+    return { a: [], b: [] };
+  }
+  const at = (console: ConsoleId): string[] => [
+    ...(state.presence.stations[stationKey({ puzzleId: open.id, console })] ?? []),
+  ];
+  return { a: at('a'), b: at('b') };
 }
 
 /**
@@ -764,7 +788,17 @@ function handlePuzzleInput(
     const blamed = credited(next, player.id, 'alarms');
     return applyPenalty(blamed, def.penaltySec, action.at, result.penalty);
   }
-  return result.solved ? advance(credited(next, player.id, 'operated'), action.at) : next;
+  return result.solved ? advance(creditWorkers(next, def, player.id), action.at) : next;
+}
+
+/**
+ * A solved station counts for whoever worked it: the player whose input
+ * solved it — at a station with two consoles everybody at either console,
+ * since it takes both of them to work it.
+ */
+function creditWorkers(state: GameState, def: PuzzleDef, playerId: string): GameState {
+  const workers = moduleFor(def.type).consoles === 2 ? operatorsOf(state, def.id) : [playerId];
+  return workers.reduce((next, id) => credited(next, id, 'operated'), state);
 }
 
 /**

@@ -34,29 +34,40 @@ export function toBring(map: MapView): MapView['items'] {
 }
 
 type Spot = MapView['stations'][number];
+type Point = { x: number; y: number };
 
-/** Of the armed station's spots the one nearest to `self`: of two consoles, the one to go to. */
-function nearestArmed(map: MapView, self: { x: number; y: number }): Spot | undefined {
-  const away = (spot: Spot): number => Math.hypot(spot.x + 0.5 - self.x, spot.y + 0.5 - self.y);
-  return map.stations
-    .filter((station) => station.status === 'armed')
-    .sort((a, b) => away(a) - away(b))[0];
+/** A crew member this close to a console stands at it, in tiles — as the server counts it. */
+const AT_CONSOLE = 1.6;
+
+/**
+ * Of the armed station's spots the one to go to from `self`: of two
+ * consoles, the one nobody else of the crew stands at, by their live
+ * positions; with both or neither taken, the nearer one.
+ */
+function armedSpotFor(map: MapView, self: Point, others: readonly Point[]): Spot | undefined {
+  const away = (spot: Spot, from: Point): number =>
+    Math.hypot(spot.x + 0.5 - from.x, spot.y + 0.5 - from.y);
+  const armed = map.stations.filter((station) => station.status === 'armed');
+  const free = armed.filter((spot) => others.every((other) => away(spot, other) > AT_CONSOLE));
+  return (free.length > 0 ? free : armed).sort((a, b) => away(a, self) - away(b, self))[0];
 }
 
 /**
  * What the player standing at `self` is meant to head for right now, most
- * urgent first.
+ * urgent first; `crew` holds the live positions of the crew by player id.
  *
  * An emergency overrides everything and needs every valve at once, since the
  * crew has to split up. Otherwise there is one errand at a time, except that a
  * loose part, the station waiting for it and the manual objects printing its
  * rules are shown together — the crew splits up between them. Of a station
- * with two consoles, the nearer one is shown, named by its console.
+ * with two consoles, the one nobody else stands at is shown, else the nearer
+ * one, named by its console.
  */
 export function markerTargets(
   map: MapView,
   youId: string,
-  self: { x: number; y: number },
+  self: Point,
+  crew: Readonly<Record<string, Point>> = {},
 ): MarkerTarget[] {
   if (map.sabotage !== null) {
     return map.sabotage.panels.map((panel) => ({
@@ -79,7 +90,8 @@ export function markerTargets(
   if (loose !== undefined) {
     out.push({ x: loose.x, y: loose.y, color: BLUE, label: 'TEIL' });
   }
-  const armed = nearestArmed(map, self);
+  const others = Object.entries(crew).flatMap(([id, at]) => (id === youId ? [] : [at]));
+  const armed = armedSpotFor(map, self, others);
   if (armed !== undefined) {
     const label =
       armed.console === undefined ? 'STATION' : consoleName(armed.console).toUpperCase();

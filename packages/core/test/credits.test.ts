@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, moduleFor, NO_CREDITS, viewFor, viewForSpectator } from '../src/index.js';
+import {
+  applyAction,
+  moduleFor,
+  NO_CREDITS,
+  stationKey,
+  viewFor,
+  viewForSpectator,
+} from '../src/index.js';
 import type { Action, GameState } from '../src/index.js';
-import { labMission, openLab, standing, started, T0 } from './lab.js';
+import { consoleLab, labMission, openLab, standing, started, T0 } from './lab.js';
 
 /** Two wiring stations in the corridor lab, one book for both; p1 works, p2 reads. */
 const mission = labMission([
@@ -51,6 +58,15 @@ describe('credits', () => {
     expect(state.credits['p2']).toMatchObject({ alarms: 0, operated: 0 });
   });
 
+  it('count a station of one console for the input that solved it, not for others at it', () => {
+    let state = openLab(started(mission));
+    const cut = rightCut(state, T0 + 2000);
+    state = applyAction(standing(state, { stations: { erst: ['p1', 'p2'] } }), cut);
+    expect(state.currentPuzzleIndex).toBe(1);
+    expect(state.credits['p1']?.operated).toBe(1);
+    expect(state.credits['p2']?.operated).toBe(0);
+  });
+
   it('count reading once per station, however often the reader comes and goes', () => {
     let state = openLab(started(mission));
     expect(state.credits['p2']?.read).toBe(1);
@@ -79,5 +95,55 @@ describe('credits', () => {
     });
     expect(state.credits['p2']).toMatchObject({ alarms: 1, hints: 1 });
     expect(state.credits['p1']).toEqual(NO_CREDITS);
+  });
+});
+
+/** Where presence keeps console b of the console lab's Signalkette. */
+const CONSOLE_B = stationKey({ puzzleId: 'kette', console: 'b' });
+
+/**
+ * The console lab's Signalkette switched on and closed from the two
+ * consoles' views: p1 presses at console a, p2 at console b.
+ */
+function chainClosed(state: GameState): GameState {
+  let next = applyAction(state, { type: 'interact', playerId: 'p2', at: T0 + 500 });
+  for (let round = 1; next.currentPuzzleIndex === 0; round++) {
+    const def = next.mission.puzzles[0];
+    const atA = viewFor(next, 'p1').puzzle;
+    const atB = viewFor(next, 'p2').puzzle;
+    if (def === undefined || atA === null || atB === null || round > 10) {
+      throw new Error('expected the open Signalkette');
+    }
+    const views = { operator: atA, partner: atB, reader: atA };
+    for (const { by, input } of moduleFor(def.type).solve(def, views, null)) {
+      const playerId = by === 'partner' ? 'p2' : 'p1';
+      next = applyAction(next, { type: 'puzzle-input', playerId, at: T0 + round * 1000, input });
+    }
+  }
+  return next;
+}
+
+describe('credits at a station with two consoles', () => {
+  it('go to both consoles, whoever pressed last, and not to the reader', () => {
+    const closed = chainClosed(
+      standing(started(consoleLab(3)), {
+        stations: { kette: ['p1'], [CONSOLE_B]: ['p2'] },
+        manuals: { buch: ['p3'] },
+      }),
+    );
+    expect(closed.currentPuzzleIndex).toBe(1);
+    expect(closed.credits['p1']).toMatchObject({ operated: 1, read: 0 });
+    expect(closed.credits['p2']).toMatchObject({ operated: 1, read: 0 });
+    expect(closed.credits['p3']).toMatchObject({ operated: 0, read: 1 });
+  });
+
+  it('go to everybody at either console', () => {
+    const closed = chainClosed(
+      standing(started(consoleLab(3)), { stations: { kette: ['p1'], [CONSOLE_B]: ['p2', 'p3'] } }),
+    );
+    expect(closed.currentPuzzleIndex).toBe(1);
+    for (const playerId of ['p1', 'p2', 'p3']) {
+      expect(closed.credits[playerId]?.operated, playerId).toBe(1);
+    }
   });
 });

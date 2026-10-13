@@ -61,7 +61,8 @@ export const mapDefSchema = z.object({
     .default([]),
   /**
    * Where each puzzle is worked: one spot, or — for a module worked at two
-   * consoles — one spot for console a and one for console b.
+   * consoles — one spot for console a and one for console b, more than 4
+   * tiles apart.
    */
   stations: z
     .array(
@@ -280,8 +281,8 @@ type StationDef = MapDef['stations'][number];
 
 /**
  * Every puzzle has its station on the floor: one spot without a console, or
- * — where its module is worked at two consoles — console a and console b
- * on two different tiles.
+ * — where its module is worked at two consoles — console a and console b,
+ * more than CONSOLES_APART tiles apart.
  */
 function checkStations(check: MapCheck, stations: PuzzleDef[]): void {
   const { map, puzzleIds, issue, requireFloor } = check;
@@ -313,6 +314,13 @@ function checkStations(check: MapCheck, stations: PuzzleDef[]): void {
   }
 }
 
+/**
+ * How far apart the two consoles of a station stand at least, in tiles: the
+ * server keeps a player at a spot within 2 tiles of it once there, so with
+ * more than twice that between them nobody is ever counted at both.
+ */
+const CONSOLES_APART = 4;
+
 /** A station worked at two consoles: console a and console b, once each, apart. */
 function checkConsoles(issue: MapCheck['issue'], puzzleId: string, spots: StationDef[]): void {
   const a = spots.find((s) => s.console === 'a');
@@ -322,10 +330,14 @@ function checkConsoles(issue: MapCheck['issue'], puzzleId: string, spots: Statio
       `map: puzzle "${puzzleId}" is worked at two consoles — give it one station with ` +
         'console "a" and one with console "b"',
     );
-  } else if (a.x === b.x && a.y === b.y) {
+    return;
+  }
+  const apart = Math.hypot(a.x - b.x, a.y - b.y);
+  if (apart <= CONSOLES_APART) {
     issue(
-      `map: consoles a and b of station "${puzzleId}" both stand at ${a.x},${a.y} — ` +
-        'put them on different tiles',
+      `map: consoles a and b of station "${puzzleId}" at ${a.x},${a.y} and ${b.x},${b.y} ` +
+        `stand ${Number(apart.toFixed(1))} tiles apart — put them more than ` +
+        `${CONSOLES_APART} apart, so nobody is counted at both`,
     );
   }
 }
