@@ -77,17 +77,18 @@ entgegengesetzten Enden der Karte.
 im Dunkeln und jede Figur trägt ein Licht. Bewegung ist client-autoritativ (lokale Simulation +
 Positions-Streaming), doch der Server nimmt nur Schritte an, die eine Figur gehen kann — keine
 durch Wände oder geschlossene Türen —, und bleibt Autorität über Rätsel, Türen, Druckplatten
-(öffnen nur, solange jemand draufsteht), Interaktionsdistanz und Timer. Rätsel sind leuchtende
-Stationen, ihr Pult öffnet per `E` als Modal über der Welt. Welt-Code:
-`packages/client/src/world/` (GameWorld = Simulation/Rendering, art = prozedurale Grafik,
-audio = prozedurale Sounds).
+(öffnen, solange jemand draufsteht — eine Tür mit `untilSolved` bleibt nach dem genannten
+Rätsel offen), Interaktionsdistanz und Timer. Rätsel sind leuchtende Stationen, ihr Pult öffnet
+per `E` als Modal über der Welt. Welt-Code: `packages/client/src/world/` (GameWorld =
+Simulation/Rendering, art = prozedurale Grafik, audio = prozedurale Sounds).
 
 **Neue Missionen** sind reine JSON-Dateien in `missions/`. `packages/core/test/missionMaps.test.ts`
 prüft jede davon automatisch: gleiche Zeilenlängen, alles auf Bodenfeldern, eine Station pro
-Rätsel — und per Flutfüllung mit den echten Tür-Regeln, dass die Stationen in Reihenfolge
-erreichbar sind und am Ende **alle** den Notausgang erreichen können. Eine Plattentür kann mit
-`untilSolved` ein Rätsel nennen: Ist es gelöst, bleibt sie auch ohne Platte offen (Blackout: die
-Maschinenraumtür nach dem Notstrom).
+Rätsel — bei einem Rätsel mit zwei Pulten (Signalkette) je eine für Pult A und Pult B, mehr als
+vier Felder auseinander — und per Flutfüllung mit den echten Tür-Regeln, dass die Stationen in
+Reihenfolge erreichbar sind und am Ende **alle** den Notausgang erreichen können. Eine
+Plattentür kann mit `untilSolved` ein Rätsel nennen: Ist es gelöst, bleibt sie auch ohne Platte
+offen (Blackout: die Maschinenraumtür nach dem Notstrom).
 
 ## Struktur
 

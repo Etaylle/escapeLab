@@ -44,7 +44,9 @@ export function tokenLabel(token: SignalToken): string {
  * twelve signs as keys, laid out differently at either console, and presses
  * the sequence in order. Console a sends first; the direction swaps with
  * every stage. A wrong sign costs time and starts the stage's input again;
- * a key pressed at the sending console is turned away, without an alarm.
+ * a key pressed at the sending console is turned away, without an alarm,
+ * and so is one pressed at the receiving console while nobody else stands
+ * at the sending one: a single player cannot read there and press here.
  */
 const defSchema = z.strictObject({
   type: z.literal('signal'),
@@ -98,6 +100,17 @@ export interface SignalView {
 
 /** The console that sends in (0-based) `stage`: a first, then turn and turn about. */
 const sendingConsole = (stage: number): ConsoleId => (stage % 2 === 0 ? 'a' : 'b');
+
+/** The sequence of the stage under way; `init` deals one for every stage. */
+function sequenceNow(state: SignalState): SignalToken[] {
+  const sequence = state.sequences[state.stage];
+  if (sequence === undefined) {
+    throw new Error(
+      `signal: no sequence for stage ${state.stage + 1} of ${state.sequences.length}`,
+    );
+  }
+  return sequence;
+}
 
 /**
  * Console b's keys: console a's moved round one random cycle (Sattolo's
@@ -170,17 +183,22 @@ export const signalModule: PuzzleModule<SignalDef, SignalState, SignalInput, Sig
     };
   },
 
-  apply(_def, state, input, _playerId, ctx) {
+  apply(_def, state, input, playerId, ctx) {
     if (ctx.console === null) {
       fail('Dafür musst du am Pult stehen.');
     }
-    if (ctx.console === sendingConsole(state.stage)) {
+    const sends = sendingConsole(state.stage);
+    if (ctx.console === sends) {
       fail('Dieses Pult sendet — das andere gibt ein.');
     }
-    const sequence = state.sequences[state.stage] ?? [];
+    // Reading the sequence at one console and pressing it at the other takes two people.
+    if (!ctx.atConsoles[sends].some((id) => id !== playerId)) {
+      fail('Am sendenden Pult steht niemand.');
+    }
+    const sequence = sequenceNow(state);
     const expected = sequence[state.done];
     if (expected === undefined) {
-      return { state, solved: false, penalty: null };
+      throw new Error(`signal: stage ${state.stage + 1} is pressed in full — the chain is closed`);
     }
     if (input.press !== expected) {
       return {
@@ -205,7 +223,7 @@ export const signalModule: PuzzleModule<SignalDef, SignalState, SignalInput, Sig
 
   view(_def, state, viewer) {
     const sends = sendingConsole(state.stage);
-    const sequence = state.sequences[state.stage] ?? [];
+    const sequence = sequenceNow(state);
     const at = viewer.operating ? viewer.console : null;
     const role = roleOf(at, sends);
     const audience = viewer.playerId === null;

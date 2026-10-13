@@ -1335,7 +1335,12 @@ export function GameWorld({
       // it is out of sight — in the dark that is the only way to find it.
       ctx.font = `700 ${11 * dpr}px ui-monospace, Menlo, monospace`;
       ctx.textAlign = 'center';
-      const marks = markerTargets(map, viewRef.current.you.id, sim.self).map((target) => {
+      const marks = markerTargets(
+        map,
+        viewRef.current.you.id,
+        sim.self,
+        positionsOf(positionsRef.current, sim.run),
+      ).map((target) => {
         const [px, py] = worldToScreen(s, w, h, target.x, target.y);
         const tiles = Math.round(Math.hypot(target.x - sim.self.x, target.y - sim.self.y));
         const caption = `${target.label} ${tiles}m`;

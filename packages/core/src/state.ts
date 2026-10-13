@@ -77,7 +77,10 @@ export interface Player {
 
 /** What one player did over a run, for the end screen. */
 export interface Credits {
-  /** stations their input solved */
+  /**
+   * stations they worked as they were solved: their input solved it, or —
+   * at a station with two consoles — they stood at either console
+   */
   operated: number;
   /** stations whose rules they read at a manual object while the station was open */
   read: number;

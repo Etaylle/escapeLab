@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
+import { moduleFor, parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { walkTo, type Walker } from './walk.js';
 
@@ -132,6 +132,55 @@ describe('Room with a station of two consoles', () => {
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: first } });
     expect(lastView(ben.messages).puzzle).toMatchObject({ kind: 'signal', done: 1 });
     expect(lastView(ben.messages).penaltySeq).toBe(0);
+    room.dispose();
+  });
+
+  it('turns away a press at console b while nobody stands at console a, without an alarm', () => {
+    const { room, anna, ben, cleo } = inPlace();
+    room.act(ben.playerId, { kind: 'interact' });
+    const atA = lastView(anna.messages).puzzle;
+    const first = atA?.kind === 'signal' ? atA.sequence?.[0] : undefined;
+    if (first === undefined) {
+      throw new Error('expected console a to show the sequence');
+    }
+    // Anna has read the sequence at console a; Ben steps away, and she walks over to console b.
+    moveTo(room, ben, 9, 1);
+    moveTo(room, anna, 12, 1);
+    expect(lastView(anna.messages).presence).toMatchObject({ stationId: 'kette', console: 'b' });
+    expect(() =>
+      room.act(anna.playerId, { kind: 'puzzle-input', input: { press: first } }),
+    ).toThrow('Am sendenden Pult steht niemand.');
+    expect(lastView(cleo.messages)).toMatchObject({
+      penaltySeq: 0,
+      puzzle: { kind: 'signal', done: 0, lastResult: null },
+    });
+    // With Ben at console a, the same press from console b counts.
+    moveTo(room, ben, 5, 1);
+    room.act(anna.playerId, { kind: 'puzzle-input', input: { press: first } });
+    expect(lastView(cleo.messages)).toMatchObject({ penaltySeq: 0, puzzle: { done: 1 } });
+    room.dispose();
+  });
+
+  it('credits both consoles once the chain is closed, and the reader with reading', () => {
+    const { room, anna, ben, cleo } = inPlace();
+    room.act(ben.playerId, { kind: 'interact' });
+    const [def] = mission.puzzles;
+    for (let round = 0; lastView(cleo.messages).phase === 'playing'; round++) {
+      const atA = lastView(anna.messages).puzzle;
+      const atB = lastView(ben.messages).puzzle;
+      if (def === undefined || atA === null || atB === null || round > 10) {
+        throw new Error('expected the open Signalkette');
+      }
+      const views = { operator: atA, partner: atB, reader: atA };
+      for (const { by, input } of moduleFor(def.type).solve(def, views, null)) {
+        room.act((by === 'partner' ? ben : anna).playerId, { kind: 'puzzle-input', input });
+      }
+    }
+    const { phase, credits } = lastView(cleo.messages);
+    expect(phase).toBe('won');
+    expect(credits[anna.playerId]).toMatchObject({ operated: 1, read: 0 });
+    expect(credits[ben.playerId]).toMatchObject({ operated: 1, read: 0 });
+    expect(credits[cleo.playerId]).toMatchObject({ operated: 0, read: 1 });
     room.dispose();
   });
 });

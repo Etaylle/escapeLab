@@ -48,23 +48,38 @@ function defOf(fields: Partial<SignalDef> = {}): SignalDef {
   });
 }
 
-/** What a move from console `from` gets to know; null for the setup. */
-const ctx = (from: ConsoleId | null): PuzzleContext => ({
+type AtConsoles = PuzzleContext['atConsoles'];
+
+/** Both consoles manned: op at console a, pt at console b. */
+const MANNED: AtConsoles = { a: ['op'], b: ['pt'] };
+
+/** What a move from console `from` gets to know, with who stands where; null for the setup. */
+const ctx = (from: ConsoleId | null, atConsoles = MANNED): PuzzleContext => ({
   edgework,
   alarms: 0,
   remainingSec: 600,
   at: T0,
   crew: CREW,
   console: from,
+  atConsoles,
 });
 
 const deal = (def: SignalDef, seed: number): SignalState =>
   signalModule.init(def, mulberry32(seed), ctx(null));
 
-/** A press of `token` at console `from`, through the input schema as a client's would go. */
-function press(def: SignalDef, state: SignalState, token: SignalToken, from: ConsoleId | null) {
+/**
+ * A press of `token` at console `from` — by op at console a, by pt at
+ * console b — through the input schema as a client's would go.
+ */
+function press(
+  def: SignalDef,
+  state: SignalState,
+  token: SignalToken,
+  from: ConsoleId | null,
+  atConsoles = MANNED,
+) {
   const input = signalModule.inputSchema.parse({ press: token });
-  return signalModule.apply(def, state, input, from === 'b' ? 'pt' : 'op', ctx(from));
+  return signalModule.apply(def, state, input, from === 'b' ? 'pt' : 'op', ctx(from, atConsoles));
 }
 
 const seenFrom = (def: SignalDef, state: SignalState, viewer: Viewer): SignalView =>
@@ -250,6 +265,38 @@ describe('signal presses', () => {
     );
   });
 
+  it('are refused, without an alarm, at the receiving console with nobody else sending', () => {
+    const def = defOf();
+    const state = deal(def, 3);
+    const right = state.sequences[0]?.[0] ?? 'rot-kreis';
+    // The solo walk: pt read the sequence at console a and walked over to b.
+    // Counted at both consoles at once is still nobody else at a.
+    for (const alone of [{ a: [], b: ['pt'] }, { a: ['pt'], b: ['pt'] }]) {
+      expect(() => press(def, state, right, 'b', alone), JSON.stringify(alone)).toThrow(GameError);
+      expect(() => press(def, state, right, 'b', alone)).toThrow(
+        'Am sendenden Pult steht niemand.',
+      );
+    }
+    // From stage 2 on console b sends, and it is console b that needs somebody.
+    const second = { ...state, stage: 1 };
+    const next = second.sequences[1]?.[0] ?? 'rot-kreis';
+    expect(() => press(def, second, next, 'a', { a: ['op'], b: [] })).toThrow(
+      'Am sendenden Pult steht niemand.',
+    );
+    expect(press(def, second, next, 'a').state).toMatchObject({ stage: 1, done: 1 });
+  });
+
+  it('are taken at the receiving console while somebody else stands at the sending one', () => {
+    const def = defOf();
+    const state = deal(def, 3);
+    const right = state.sequences[0]?.[0] ?? 'rot-kreis';
+    for (const manned of [MANNED, { a: ['rd', 'op'], b: ['pt', 'x'] }]) {
+      const taken = press(def, state, right, 'b', manned);
+      expect(taken.penalty).toBeNull();
+      expect(taken.state).toMatchObject({ stage: 0, done: 1, lastResult: null });
+    }
+  });
+
   it('take a wrong sign as one alarm and start the stage again, sequence and stage kept', () => {
     const def = defOf();
     let state = deal(def, 4);
@@ -269,6 +316,21 @@ describe('signal presses', () => {
     const again = press(def, slip.state, sequence[0] ?? 'rot-kreis', 'b');
     expect(again.penalty).toBeNull();
     expect(again.state).toMatchObject({ stage: 0, done: 1, lastResult: null });
+  });
+
+  it('throw on a stage without a sequence, or once the chain is closed', () => {
+    const def = defOf();
+    const state = deal(def, 3);
+    const lost = { ...state, stage: 1, sequences: state.sequences.slice(0, 1) };
+    const missing = 'signal: no sequence for stage 2 of 1';
+    expect(() => press(def, lost, 'rot-kreis', 'a')).toThrow(missing);
+    expect(() => seenFrom(def, lost, AT_STATION)).toThrow(missing);
+    // The last stage pressed in full: the reducer has moved on, nothing may press here.
+    const last = def.stages - 1;
+    const closed = { ...state, stage: last, done: def.length };
+    expect(() => press(def, closed, 'rot-kreis', last % 2 === 0 ? 'b' : 'a')).toThrow(
+      `signal: stage ${def.stages} is pressed in full — the chain is closed`,
+    );
   });
 
   it('take nothing but one of the twelve signs', () => {
@@ -426,13 +488,16 @@ describe('signal manual', () => {
   });
 });
 
+/** Where presence keeps console b of the lab's Signalkette. */
+const CONSOLE_B = stationKey({ puzzleId: 'kette', console: 'b' });
+
 /**
  * A run of the console lab for three: Anna (p1) at console a, Ben (p2) at
  * console b, Cleo (p3) at the book; Ben switches the station on.
  */
 function signalRun(): GameState {
   const here = standing(started(consoleLab(3), 11), {
-    stations: { kette: ['p1'], [stationKey({ puzzleId: 'kette', console: 'b' })]: ['p2'] },
+    stations: { kette: ['p1'], [CONSOLE_B]: ['p2'] },
     manuals: { buch: ['p3'] },
     signSeen: ['p1', 'p2', 'p3'],
   });
@@ -491,6 +556,34 @@ describe('signal in a run', () => {
     const taken = applyAction(state, pressBy('p2', first));
     expect(signalOf(taken, 'p1')).toMatchObject({ done: 1, lastResult: null });
     expect(taken.penaltySeq).toBe(0);
+  });
+
+  it('refuses the solo walk without an alarm, and takes the press once a partner sends', () => {
+    const state = signalRun();
+    const [first] = signalOf(state, 'p1').sequence ?? [];
+    if (first === undefined) {
+      throw new Error('expected a sequence at console a');
+    }
+    // Anna read the sequence at console a and walked over to console b; Ben is at the book.
+    const walked = standing(state, {
+      stations: { [CONSOLE_B]: ['p1'] },
+      manuals: { buch: ['p2', 'p3'] },
+    });
+    expect(signalOf(walked, 'p1')).toMatchObject({ console: 'b', role: 'receiver' });
+    expect(() => applyAction(walked, pressBy('p1', first))).toThrow(GameError);
+    expect(() => applyAction(walked, pressBy('p1', first))).toThrow(
+      'Am sendenden Pult steht niemand.',
+    );
+    // Ben steps up to console a: the same press counts, and no alarm went off on the way.
+    const manned = standing(walked, {
+      stations: { kette: ['p2'], [CONSOLE_B]: ['p1'] },
+      manuals: { buch: ['p3'] },
+    });
+    const taken = applyAction(manned, pressBy('p1', first));
+    expect(signalOf(taken, 'p2')).toMatchObject({ role: 'sender', done: 1, lastResult: null });
+    expect(taken.penaltySeq).toBe(0);
+    expect(taken.deadlineAt).toBe(state.deadlineAt);
+    expect(taken.credits['p1']?.alarms).toBe(0);
   });
 
   it('charges a wrong sign once, to whoever pressed it', () => {

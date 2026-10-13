@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { MODULES } from '@escapelab/core';
+import { MODULES, moduleFor, puzzleDefSchema } from '@escapelab/core';
 import { Figure } from '../src/screens/Figure.js';
 
 /** What each drawing says it shows, in German: every module the core knows. */
@@ -11,10 +11,10 @@ const SAYS: Record<string, RegExp> = {
   simon: /^Farbtasten: 4 Tasten im Quadrat.*Alarmzähler/,
   button: /^Großer runder Knopf mit Aufschrift.*Farbstreifen/,
   memory: /^Speicherfeld: Display mit einer Ziffer/,
-  morse: /^Funkgerät: Signallampe, Sendetaste TX und Frequenzregler/,
-  maze: /^Labyrinth: Raster aus 6 × 6 Feldern/,
+  morse: /^Funkgerät: Signallampe, Taste SENDEN und Frequenzregler/,
+  maze: /^Navigationspult: Raster aus 6 × 6 Feldern ohne Wände, Kreis.*Dreieck/,
   'button-sync': /^Großer Knopf unter 2 Lampen/,
-  relay: /^Schaltpult: 4 beschriftete Schieberegler/,
+  relay: /^Schaltpult: 2 Schalter, ein Drehregler und ein Taster, beschriftet/,
   signal: /^Zwei Pulte nebeneinander/,
 };
 
@@ -47,6 +47,25 @@ describe('Figure', () => {
   it('tells every device apart in words', () => {
     const labels = Object.keys(SAYS).map((type) => drawing(type).label);
     expect(new Set(labels).size).toBe(labels.length);
+  });
+
+  it('draws the maze as the navigation console its caption names, without walls', () => {
+    const def = puzzleDefSchema.parse({ type: 'maze', id: 'netz', title: 'Netz' });
+    const [figure] = moduleFor(def.type)
+      .manual(def)
+      .flatMap((section) => section.blocks)
+      .filter((block) => block.kind === 'figure');
+    expect(figure).toMatchObject({ of: 'maze', caption: 'Abb. 1 — Navigationspult mit Raster' });
+    const { html, label } = drawing('maze');
+    expect(label).toMatch(/^Navigationspult: .*ohne Wände/);
+    // A wall was a heavy line across the field; the panel draws none.
+    expect(html).not.toContain('stroke-width="2.6"');
+  });
+
+  it('letters the radio key SENDEN, as panel and rules call it', () => {
+    const { html } = drawing('morse');
+    expect(html).toContain('>SENDEN</text>');
+    expect(html).not.toContain('>TX</text>');
   });
 
   it('frames a device it has no drawing for, naming its type, and never throws', () => {

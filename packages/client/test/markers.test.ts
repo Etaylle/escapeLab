@@ -70,6 +70,50 @@ describe('markerTargets — what the player is pointed at', () => {
     ]);
   });
 
+  describe('of a station with two consoles, by where the crew stands', () => {
+    const map = mapWith({
+      stations: [
+        { ...station(2, 9, 'armed'), console: 'a' },
+        { ...station(15, 9, 'armed'), console: 'b' },
+      ],
+    });
+    const pultA = { x: 2.5, y: 9.5, color: '#2dd4bf', label: 'PULT A' };
+    const pultB = { x: 15.5, y: 9.5, color: '#2dd4bf', label: 'PULT B' };
+    const NEAR_A = { x: 4.5, y: 2.5 };
+    const NEAR_B = { x: 13.5, y: 2.5 };
+
+    it('points at the console nobody else stands at, the farther one too', () => {
+      expect(markerTargets(map, YOU, NEAR_A, { p2: { x: 2.5, y: 9.5 } })).toEqual([pultB]);
+      expect(markerTargets(map, YOU, NEAR_B, { p2: { x: 15, y: 10 } })).toEqual([pultA]);
+    });
+
+    it('counts a crew member up to 1.6 tiles from a console as standing at it', () => {
+      // 2.5 − 0.9 is 1.6 to the last bit, so this is the edge itself.
+      expect(markerTargets(map, YOU, NEAR_A, { p2: { x: 0.9, y: 9.5 } })).toEqual([pultB]);
+      expect(markerTargets(map, YOU, NEAR_A, { p2: { x: 0.8, y: 9.5 } })).toEqual([pultA]);
+    });
+
+    it('falls back to the nearer console with both taken, or neither', () => {
+      const both = { p2: { x: 2.5, y: 9.5 }, p3: { x: 15.5, y: 9.5 } };
+      expect(markerTargets(map, YOU, NEAR_A, both)).toEqual([pultA]);
+      expect(markerTargets(map, YOU, NEAR_B, both)).toEqual([pultB]);
+      const away = { p2: { x: 9.5, y: 2.5 } };
+      expect(markerTargets(map, YOU, NEAR_A, away)).toEqual([pultA]);
+      expect(markerTargets(map, YOU, NEAR_B, away)).toEqual([pultB]);
+    });
+
+    it('never takes the player for somebody else standing at a console', () => {
+      expect(markerTargets(map, YOU, NEAR_A, { [YOU]: { x: 2.5, y: 9.5 } })).toEqual([pultA]);
+    });
+
+    it('leaves a station of one console where it is, whoever stands at it', () => {
+      const single = mapWith({ stations: [station(5, 9, 'armed')] });
+      expect(markerTargets(single, YOU, HERE, { p2: { x: 5.5, y: 9.5 } })).toEqual([
+        { x: 5.5, y: 9.5, color: '#2dd4bf', label: 'STATION' },
+      ]);
+    });
+  });
+
   it('shows nothing once every station is done', () => {
     const map = mapWith({ stations: [station(1, 1, 'done')] });
     expect(markerTargets(map, YOU, HERE)).toEqual([]);

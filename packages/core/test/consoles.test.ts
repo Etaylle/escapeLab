@@ -56,10 +56,24 @@ describe('stations with two consoles in the mission format', () => {
     }
   });
 
-  it('keep the consoles apart', () => {
+  it('keep the consoles more than 4 tiles apart, so nobody is counted at both', () => {
+    const tooClose = (x: number, y: number, apart: string): RegExp =>
+      new RegExp(
+        `consoles a and b of station "kette" at 6,1 and ${x},${y} stand ${apart} tiles apart ` +
+          '— put them more than 4 apart, so nobody is counted at both',
+      );
     expect(() => parseMission(withStations([AT_A, { ...AT_B, x: 6 }, KABEL]))).toThrow(
-      /consoles a and b of station "kette" both stand at 6,1 — put them on different tiles/,
+      tooClose(6, 1, '0'),
     );
+    expect(() => parseMission(withStations([AT_A, { ...AT_B, x: 10 }, KABEL]))).toThrow(
+      tooClose(10, 1, '4'),
+    );
+    expect(() => parseMission(withStations([AT_A, { ...AT_B, x: 8, y: 2 }, KABEL]))).toThrow(
+      tooClose(8, 2, '2.2'),
+    );
+    for (const b of [{ x: 11, y: 1 }, { x: 10, y: 2 }]) {
+      expect(() => parseMission(withStations([AT_A, { ...AT_B, ...b }, KABEL]))).not.toThrow();
+    }
   });
 
   it('leave a station of one console without a console, and alone', () => {
