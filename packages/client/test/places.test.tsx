@@ -378,7 +378,7 @@ function game(view: PlayerView): string {
     <GameScreen
       view={view}
       roomCode="KX4P"
-      positionsRef={{ current: {} }}
+      positionsRef={{ current: { run: null, players: {} } }}
       dronesRef={{ current: {} }}
       pingsRef={{ current: [] }}
       chatsRef={{ current: [] }}

@@ -4,7 +4,6 @@ import type {
   DronePosition,
   ManualHere,
   MapView,
-  PlayerPosition,
   PlayerView,
   PuzzleView,
 } from '@escapelab/core';
@@ -16,6 +15,7 @@ import { radioChirp } from '../world/audio.js';
 import { consoleName } from '../world/consoles.js';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
 import { toBring } from '../world/markers.js';
+import type { KnownPositions } from '../world/movement.js';
 import { startRoom } from '../world/rooms.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
 import { MissionHud } from './MissionHud.js';
@@ -29,7 +29,7 @@ interface Props {
   view: PlayerView;
   /** the room this run plays in; the notepad is kept under it */
   roomCode: string | null;
-  positionsRef: React.MutableRefObject<Record<string, PlayerPosition>>;
+  positionsRef: React.MutableRefObject<KnownPositions>;
   dronesRef: React.MutableRefObject<Record<string, DronePosition>>;
   pingsRef: React.MutableRefObject<MapPing[]>;
   chatsRef: React.MutableRefObject<ChatLine[]>;

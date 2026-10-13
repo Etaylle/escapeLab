@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
+import { walkTo, type Walker } from './walk.js';
 
 /** The host's start now requires everyone else to have confirmed. */
 function ready(room: Room, ...players: { playerId: string }[]): void {
@@ -62,14 +63,14 @@ describe('Room emergencies', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  function moveTo(room: Room, playerId: string, x: number, y: number): void {
-    room.updatePosition(playerId, { x: x + 0.5, y: y + 0.5, facing: 0, moving: false });
+  function moveTo(room: Room, player: Walker, x: number, y: number): void {
+    walkTo(room, player, x + 0.5, y + 0.5);
   }
 
   /** Both at the station, switched on, both press. */
-  function solveAt(room: Room, x: number, anna: { playerId: string }, ben: { playerId: string }) {
-    moveTo(room, ben.playerId, x, 1);
-    moveTo(room, anna.playerId, x, 2);
+  function solveAt(room: Room, x: number, anna: Walker, ben: Walker) {
+    moveTo(room, ben, x, 1);
+    moveTo(room, anna, x, 2);
     room.act(ben.playerId, { kind: 'interact' });
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
@@ -101,9 +102,9 @@ describe('Room emergencies', () => {
   it('is cleared when both valves are manned by different players', () => {
     const { room, anna, ben } = midMission();
     vi.advanceTimersByTime(61_000);
-    moveTo(room, anna.playerId, 1, 2);
+    moveTo(room, anna, 1, 2);
     expect(lastView(anna.messages).map?.sabotage).not.toBeNull();
-    moveTo(room, ben.playerId, 7, 2);
+    moveTo(room, ben, 7, 2);
     expect(lastView(anna.messages).map?.sabotage).toBeNull();
     room.dispose();
   });
@@ -112,7 +113,7 @@ describe('Room emergencies', () => {
     const { room, anna } = midMission();
     vi.advanceTimersByTime(61_000);
     // Anna alone cannot be at both ends; standing on one is not enough.
-    moveTo(room, anna.playerId, 1, 2);
+    moveTo(room, anna, 1, 2);
     expect(lastView(anna.messages).map?.sabotage?.panels.filter((p) => p.occupied)).toHaveLength(
       1,
     );

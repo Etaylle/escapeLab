@@ -40,7 +40,7 @@ function hud(events: RunEvent[]): string {
   return renderToStaticMarkup(
     <MissionHud
       view={view}
-      positionsRef={{ current: {} }}
+      positionsRef={{ current: { run: null, players: {} } }}
       chatsRef={{ current: [] }}
       onOpenInfo={() => undefined}
         notesOpen={false}

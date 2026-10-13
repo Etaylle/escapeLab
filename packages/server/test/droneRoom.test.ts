@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
+import { walkTo, type Walker } from './walk.js';
 
 /**
  * Corridor with two stations and a patrol that sleeps until the first is done.
@@ -68,8 +69,8 @@ describe('Room with a sleeping drone', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  function moveTo(room: Room, playerId: string, x: number, y: number): void {
-    room.updatePosition(playerId, { x: x + 0.5, y: y + 0.5, facing: 0, moving: false });
+  function moveTo(room: Room, player: Walker, x: number, y: number): void {
+    walkTo(room, player, x + 0.5, y + 0.5);
   }
 
   it('keeps it hidden and harmless until the first station is done', () => {
@@ -82,7 +83,7 @@ describe('Room with a sleeping drone', () => {
     room.act(anna.playerId, { kind: 'start-mission' });
 
     // Anna loiters right in front of it while the patrol simulation keeps ticking.
-    moveTo(room, anna.playerId, 3, 2);
+    moveTo(room, anna, 3, 2);
     vi.advanceTimersByTime(5000);
     const streamed = anna.messages.filter((m) => m.kind === 'positions');
     expect(streamed.length).toBeGreaterThan(10);
@@ -90,12 +91,12 @@ describe('Room with a sleeping drone', () => {
     expect(lastView(anna.messages).penaltySeq).toBe(0);
 
     // The first solve wakes it up exactly where its patrol starts …
-    moveTo(room, ben.playerId, 2, 1);
-    moveTo(room, anna.playerId, 2, 2);
+    moveTo(room, ben, 2, 1);
+    moveTo(room, anna, 2, 2);
     room.act(ben.playerId, { kind: 'interact' });
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
-    moveTo(room, anna.playerId, 3, 2);
+    moveTo(room, anna, 3, 2);
     const audience = collector();
     room.attachSpectator(audience.listen);
     expect(lastPositions(audience.messages).drones['wache']).toMatchObject({ x: 1.5, y: 2.5 });

@@ -1,8 +1,12 @@
 import { startsClosed, type ManualDef, type MapDef } from './mission.js';
 import type { ConsoleId } from './puzzles/module.js';
+import { tileKey, type Spot } from './reach.js';
 import type { GameState } from './state.js';
 
-/** Pure helpers for the tile map: doors, the currently armed station, who stands where. */
+/**
+ * Pure helpers for the tile map: doors, the steps an avatar can take, the
+ * currently armed station, who stands where.
+ */
 
 /** One spot of a station on the map: its puzzle, and which console where it has two. */
 type StationSpot = Pick<MapDef['stations'][number], 'puzzleId' | 'console'>;
@@ -42,6 +46,45 @@ export function doorOpen(map: MapDef, state: GameState, doorId: string): boolean
     platePressed(state, opensBy.plateId) ||
     (opensBy.untilSolved !== undefined && solvedYet(state, opensBy.untilSolved))
   );
+}
+
+/**
+ * The longest step an avatar takes between two position updates, in tiles:
+ * clients walk 4.2 tiles and send about 12 updates a second, so a step is
+ * about 0.35, and a burst after some lag stays below this.
+ */
+export const MAX_STEP = 1.5;
+/** How finely a step is checked along its way, in tiles. */
+const STEP_SAMPLE = 0.2;
+
+/**
+ * Whether an avatar can get from `from` to `to` between two position
+ * updates: at most MAX_STEP tiles, and every point along the way, sampled
+ * every STEP_SAMPLE tiles, on floor that is no door shut right now. The tile
+ * the step starts on never stops it — a door may have shut on whoever
+ * stands in it.
+ */
+export function stepAllowed(map: MapDef, state: GameState, from: Spot, to: Spot): boolean {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.hypot(dx, dy);
+  if (length > MAX_STEP) {
+    return false;
+  }
+  const shut = new Set(
+    map.doors.filter((door) => !doorOpen(map, state, door.id)).map((d) => tileKey(d.x, d.y)),
+  );
+  const start = tileKey(Math.floor(from.x), Math.floor(from.y));
+  const samples = Math.ceil(length / STEP_SAMPLE);
+  for (let i = 1; i <= samples; i++) {
+    const x = Math.floor(from.x + (dx * i) / samples);
+    const y = Math.floor(from.y + (dy * i) / samples);
+    const tile = tileKey(x, y);
+    if (tile !== start && (map.tiles[y]?.charAt(x) !== '.' || shut.has(tile))) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**

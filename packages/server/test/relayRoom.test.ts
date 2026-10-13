@@ -3,6 +3,7 @@ import { applyAction, initialState, parseMission } from '@escapelab/core';
 import type { Action, GameState, MapDef, Mission, ServerMessage } from '@escapelab/core';
 import { DronePatrol } from '../src/drones.js';
 import { Room } from '../src/room.js';
+import { walkTo, type Walker } from './walk.js';
 
 /**
  * Corridor with three stations along its top row; its emergencies run in
@@ -90,8 +91,8 @@ describe('Room relay emergencies', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  function moveTo(room: Room, playerId: string, x: number, y: number): void {
-    room.updatePosition(playerId, { x: x + 0.5, y: y + 0.5, facing: 0, moving: false });
+  function moveTo(room: Room, player: Walker, x: number, y: number): void {
+    walkTo(room, player, x + 0.5, y + 0.5);
   }
 
   /** Lobby, mission start, and the two station solves that arm emergencies. */
@@ -104,8 +105,8 @@ describe('Room relay emergencies', () => {
     room.act(ben.playerId, { kind: 'set-ready', ready: true });
     room.act(anna.playerId, { kind: 'start-mission' });
     for (const x of [2, 4]) {
-      moveTo(room, ben.playerId, x, 1);
-      moveTo(room, anna.playerId, x, 2);
+      moveTo(room, ben, x, 1);
+      moveTo(room, anna, x, 2);
       room.act(ben.playerId, { kind: 'interact' });
       room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
       room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
@@ -128,13 +129,13 @@ describe('Room relay emergencies', () => {
   it('is not cleared by anyone standing anywhere, nor does walking send views', () => {
     const { room, anna, ben } = midMission();
     vi.advanceTimersByTime(61_000);
-    moveTo(room, anna.playerId, 1, 3);
-    moveTo(room, ben.playerId, 7, 3);
+    moveTo(room, anna, 1, 3);
+    moveTo(room, ben, 7, 3);
     const views = (): number => anna.messages.filter((m) => m.kind === 'view').length;
     const before = views();
     for (const x of [1, 4, 7]) {
-      moveTo(room, anna.playerId, x, 3);
-      moveTo(room, ben.playerId, 8 - x, 3);
+      moveTo(room, anna, x, 3);
+      moveTo(room, ben, 8 - x, 3);
     }
     expect(running(anna)).toBe(true);
     expect(views()).toBe(before);

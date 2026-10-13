@@ -294,7 +294,9 @@ describe('the crew strip', () => {
     const html = renderToStaticMarkup(
       <MissionHud
         view={view}
-        positionsRef={{ current: { p1: on(20, 20), p2: on(5, 8), p4: on(11, 11) } }}
+        positionsRef={{
+          current: { run: null, players: { p1: on(20, 20), p2: on(5, 8), p4: on(11, 11) } },
+        }}
         chatsRef={{ current: [] }}
         onOpenInfo={noop}
         notesOpen={false}
@@ -319,7 +321,7 @@ describe('the crew strip', () => {
     const html = renderToStaticMarkup(
       <MissionHud
         view={view}
-        positionsRef={{ current: { p1: on(13, 6), p2: on(8, 6) } }}
+        positionsRef={{ current: { run: null, players: { p1: on(13, 6), p2: on(8, 6) } } }}
         chatsRef={{ current: [] }}
         onOpenInfo={noop}
         notesOpen={false}
@@ -425,7 +427,7 @@ describe('the audience', () => {
     const html = renderToStaticMarkup(
       <SpectateScreen
         view={finished()}
-        positionsRef={{ current: {} }}
+        positionsRef={{ current: { run: null, players: {} } }}
         dronesRef={{ current: {} }}
         pingsRef={{ current: [] }}
         chatsRef={{ current: [] }}

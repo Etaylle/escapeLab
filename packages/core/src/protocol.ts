@@ -41,6 +41,8 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('open-source'), manualId: z.string().min(1) }),
   z.object({
     kind: z.literal('pos'),
+    /** the run the client plays, by its `startedAt`: a position from another run is dropped */
+    run: z.number().finite(),
     x: z.number().finite().min(-10).max(500),
     y: z.number().finite().min(-10).max(500),
     /** facing angle in radians */
@@ -139,6 +141,8 @@ export type ServerMessage =
   | { kind: 'rooms'; rooms: RoomSummary[] }
   | {
       kind: 'positions';
+      /** the run these positions belong to, by its `startedAt` */
+      run: number | null;
       players: Record<string, PlayerPosition>;
       drones: Record<string, DronePosition>;
     }

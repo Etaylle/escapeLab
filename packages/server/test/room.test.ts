@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { moduleFor, parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { RoomManager } from '../src/roomManager.js';
+import { walkTo, type Walker } from './walk.js';
 
 /** The host's start now requires everyone else to have confirmed. */
 function ready(room: Room, ...players: { playerId: string }[]): void {
@@ -77,27 +78,25 @@ describe('Room', () => {
     throw new Error('64 runs, and Anna never drew the first spawn');
   }
 
-  /** Teleport an avatar; the room derives plates, presence and interact range from this. */
-  function moveTo(room: Room, playerId: string, x: number, y: number): void {
-    room.updatePosition(playerId, { x: x + 0.5, y: y + 0.5, facing: 0, moving: false });
+  /** Walk an avatar to a tile; the room derives plates, presence and interact range from this. */
+  function moveTo(room: Room, player: Walker, x: number, y: number): void {
+    walkTo(room, player, x + 0.5, y + 0.5);
   }
 
-  /** Put an avatar at an exact spot, in tiles. */
-  function placeAt(room: Room, playerId: string, x: number, y: number): void {
-    room.updatePosition(playerId, { x, y, facing: 0, moving: false });
+  /** Walk an avatar to an exact spot, in tiles. */
+  function placeAt(room: Room, player: Walker, x: number, y: number): void {
+    walkTo(room, player, x, y);
   }
-
-  type Player = { playerId: string; messages: ServerMessage[] };
 
   /**
    * Station 2, the Signalprobe: Anna walks up to console a, Ben to console b,
    * Anna switches it on, and every stage is pressed at the console that
    * receives it, worked out from the two views alone.
    */
-  function sendSignals(room: Room, anna: Player, ben: Player): void {
+  function sendSignals(room: Room, anna: Walker, ben: Walker): void {
     const signal = mission.puzzles[1];
-    moveTo(room, anna.playerId, 8, 4);
-    moveTo(room, ben.playerId, 13, 4);
+    moveTo(room, anna, 8, 4);
+    moveTo(room, ben, 13, 4);
     room.act(anna.playerId, { kind: 'interact' });
     while (lastView(anna.messages).currentPuzzleIndex === 1) {
       const operator = lastView(anna.messages).puzzle;
@@ -126,8 +125,8 @@ describe('Room', () => {
     expect(lastView(anna.messages).presence.manualId).toBeNull();
 
     // Station 1 sits in the Leitstand: the whole crew walks there and presses.
-    moveTo(room, ben.playerId, 12, 2);
-    moveTo(room, anna.playerId, 11, 1);
+    moveTo(room, ben, 12, 2);
+    moveTo(room, anna, 11, 1);
     room.act(ben.playerId, { kind: 'interact' });
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
@@ -139,11 +138,11 @@ describe('Room', () => {
 
     // Station 3 is wiring: Anna holds the Kontrolle door and searches the locker beside it, Ben
     // works the box.
-    moveTo(room, anna.playerId, 7, 2);
+    moveTo(room, anna, 7, 2);
     expect(lastView(ben.messages).map?.doors.find((d) => d.id === 'kontrolltuer')?.open).toBe(true);
     room.act(anna.playerId, { kind: 'open-source', manualId: 'spind-leitstand' });
     expect(lastView(anna.messages).presence.manualId).toBe('spind-leitstand');
-    moveTo(room, ben.playerId, 2, 3);
+    moveTo(room, ben, 2, 3);
     room.act(ben.playerId, { kind: 'interact' });
     const wiring = mission.puzzles[2];
     const annaView = lastView(anna.messages);
@@ -159,8 +158,8 @@ describe('Room', () => {
     // Solving it opened the Spulen for good.
     expect(lastView(ben.messages).map?.doors.find((d) => d.id === 'halteschott')?.open).toBe(true);
 
-    moveTo(room, ben.playerId, 16, 3);
-    moveTo(room, anna.playerId, 16, 5);
+    moveTo(room, ben, 16, 3);
+    moveTo(room, anna, 16, 5);
     room.act(ben.playerId, { kind: 'interact' });
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
@@ -171,9 +170,9 @@ describe('Room', () => {
     expect(afterPuzzles.map?.exit?.open).toBe(true);
 
     // One player at the hatch is not enough.
-    moveTo(room, ben.playerId, 10, 1);
+    moveTo(room, ben, 10, 1);
     expect(lastView(ben.messages).phase).toBe('playing');
-    moveTo(room, anna.playerId, 10, 1);
+    moveTo(room, anna, 10, 1);
     expect(lastView(anna.messages).phase).toBe('won');
     expect(lastView(ben.messages).phase).toBe('won');
     room.dispose();
@@ -183,13 +182,13 @@ describe('Room', () => {
     const { room, ben } = startedRoom();
     const at = () => lastView(ben.messages).presence.stationId;
     // The press station sits at (12,1); its centre is (12.5, 1.5).
-    placeAt(room, ben.playerId, 12.5, 3.0);
+    placeAt(room, ben, 12.5, 3.0);
     expect(at()).toBe('init');
-    placeAt(room, ben.playerId, 12.5, 3.4);
+    placeAt(room, ben, 12.5, 3.4);
     expect(at()).toBe('init');
-    placeAt(room, ben.playerId, 12.5, 3.6);
+    placeAt(room, ben, 12.5, 3.6);
     expect(at()).toBeNull();
-    placeAt(room, ben.playerId, 12.5, 3.4);
+    placeAt(room, ben, 12.5, 3.4);
     expect(at()).toBeNull();
     room.dispose();
   });
@@ -197,10 +196,12 @@ describe('Room', () => {
   it('sends a view only when somebody arrives or leaves, not on every step', () => {
     const { room, ben } = startedRoom();
     const views = (): number => ben.messages.filter((m) => m.kind === 'view').length;
-    moveTo(room, ben.playerId, 8, 3);
+    // Up from the sign and along row 3, out of reach of every console.
+    moveTo(room, ben, 12, 3);
+    moveTo(room, ben, 8, 3);
     const before = views();
     for (const x of [9, 8, 9, 8]) {
-      moveTo(room, ben.playerId, x, 3);
+      moveTo(room, ben, x, 3);
     }
     expect(views()).toBe(before);
     room.dispose();
@@ -210,8 +211,8 @@ describe('Room', () => {
     const { room, anna, ben } = startedRoom();
     expect(lastView(anna.messages).presence.signSeen).toBe(false);
     expect(lastView(anna.messages).edgework).toBeNull();
-    moveTo(room, anna.playerId, 12, 4);
-    moveTo(room, anna.playerId, 8, 1);
+    moveTo(room, anna, 12, 4);
+    moveTo(room, anna, 8, 1);
     expect(lastView(anna.messages).presence.signSeen).toBe(true);
     expect(lastView(anna.messages).edgework).toEqual(lastView(ben.messages).edgework);
     room.dispose();
@@ -219,7 +220,7 @@ describe('Room', () => {
 
   it('refuses a puzzle input from a player away from the station', () => {
     const { room, anna, ben } = startedRoom();
-    moveTo(room, ben.playerId, 12, 2);
+    moveTo(room, ben, 12, 2);
     room.act(ben.playerId, { kind: 'interact' });
     expect(lastView(anna.messages).puzzle).not.toBeNull();
     expect(() =>
@@ -232,7 +233,7 @@ describe('Room', () => {
     const { room, anna, ben } = startedRoom();
     const audience = collector();
     room.attachSpectator(audience.listen);
-    moveTo(room, ben.playerId, 12, 2);
+    moveTo(room, ben, 12, 2);
     room.detach(ben.playerId);
     expect(lastView(anna.messages).pausedFor).toEqual(['Ben']);
     const watched = audience.messages.filter((m) => m.kind === 'spectator-view').at(-1);
@@ -258,7 +259,7 @@ describe('Room', () => {
     const deadline = lastView(anna.messages).deadlineAt ?? 0;
 
     // Anna is standing right at the first station when Ben drops out.
-    moveTo(room, anna.playerId, 12, 2);
+    moveTo(room, anna, 12, 2);
     room.detach(ben.playerId);
     const paused = lastView(anna.messages);
     expect(paused.pausedFor).toEqual(['Ben']);
@@ -309,16 +310,18 @@ describe('Room', () => {
     });
     const { room, anna, ben } = startedRoom(withItem);
 
-    // Out of reach of the fuse, the key does nothing useful.
-    moveTo(room, anna.playerId, 5, 1);
+    // The fuse lies in the Kontrolle; Ben holds its door. Out of reach of the
+    // fuse, the key does nothing useful.
+    moveTo(room, ben, 7, 2);
+    moveTo(room, anna, 5, 1);
     expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/Zu weit weg/);
 
     // At the fuse it picks it up — and full hands switch station one on like empty ones.
-    moveTo(room, anna.playerId, 1, 1);
+    moveTo(room, anna, 1, 1);
     room.act(anna.playerId, { kind: 'interact' });
     expect(lastView(anna.messages).map?.items[0]?.carriedBy).toBe(anna.playerId);
-    moveTo(room, ben.playerId, 12, 2);
-    moveTo(room, anna.playerId, 11, 1);
+    moveTo(room, anna, 11, 1);
+    moveTo(room, ben, 12, 2);
     room.act(anna.playerId, { kind: 'interact' });
     expect(lastView(anna.messages).puzzle).not.toBeNull();
     expect(lastView(anna.messages).map?.items[0]?.carriedBy).toBe(anna.playerId);
@@ -327,23 +330,25 @@ describe('Room', () => {
     // Full hands press signs as well as empty ones.
     sendSignals(room, anna, ben);
 
-    // The gated station asks for the fuse, from empty hands and from full ones alike.
-    moveTo(room, ben.playerId, 2, 3);
+    // The gated station asks for the fuse, from empty hands and from full ones
+    // alike. Anna holds the door for Ben, and it shuts behind her.
+    moveTo(room, anna, 7, 2);
+    moveTo(room, ben, 2, 3);
     expect(() => room.act(ben.playerId, { kind: 'interact' })).toThrow(/fehlt noch: SICHERUNG/);
-    moveTo(room, anna.playerId, 2, 3);
+    moveTo(room, anna, 2, 3);
     expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/fehlt noch: SICHERUNG/);
 
     // Carrying it anywhere else refuses politely.
-    moveTo(room, anna.playerId, 6, 1);
+    moveTo(room, anna, 5, 1);
     expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/markierten Platz/);
 
     // Q drops it right where she stands, and it can be picked up again.
     room.act(anna.playerId, { kind: 'drop-item' });
-    expect(lastView(anna.messages).map?.items[0]).toMatchObject({ carriedBy: null, x: 6.5 });
+    expect(lastView(anna.messages).map?.items[0]).toMatchObject({ carriedBy: null, x: 5.5 });
     room.act(anna.playerId, { kind: 'interact' });
 
     // On the slot the same key installs it and the station comes alive.
-    moveTo(room, anna.playerId, 3, 4);
+    moveTo(room, anna, 3, 4);
     room.act(anna.playerId, { kind: 'interact' });
     expect(lastView(anna.messages).map?.items[0]?.delivered).toBe(true);
     room.act(ben.playerId, { kind: 'interact' });
@@ -405,7 +410,7 @@ describe('Room', () => {
     const deadline = lastView(anna.messages).deadlineAt ?? 0;
 
     room.act(anna.playerId, { kind: 'open-source', manualId: 'spind-leitstand' });
-    moveTo(room, ben.playerId, 12, 2);
+    moveTo(room, ben, 12, 2);
     room.act(ben.playerId, { kind: 'interact' });
     expect(() => room.act(ben.playerId, { kind: 'request-hint' })).toThrow(/bei den Regeln/);
     expect(() => room.act(anna.playerId, { kind: 'request-hint' })).toThrow(/Moment/);
@@ -423,8 +428,8 @@ describe('Room', () => {
 
   it('passes a puzzle input on to the open puzzle, which turns down what it does not take', () => {
     const { room, anna, ben } = startedRoom();
-    moveTo(room, ben.playerId, 12, 2);
-    moveTo(room, anna.playerId, 11, 1);
+    moveTo(room, ben, 12, 2);
+    moveTo(room, anna, 11, 1);
     room.act(ben.playerId, { kind: 'interact' });
 
     expect(() =>
@@ -447,7 +452,7 @@ describe('Room', () => {
   it('releases a plate when its holder disconnects', () => {
     // Blackout: the Flur plate at (7,6) holds the Maschinenraum door.
     const { room, anna, ben } = startedRoom(load('blackout'));
-    moveTo(room, anna.playerId, 7, 6);
+    moveTo(room, anna, 7, 6);
     expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(true);
     room.detach(anna.playerId);
     expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(false);
@@ -491,15 +496,16 @@ describe('Room', () => {
 
   it("keeps the wires off the reader's wire and the rules off the operator's", () => {
     const { room, anna, ben } = startedRoom();
-    moveTo(room, ben.playerId, 12, 2);
-    moveTo(room, anna.playerId, 11, 1);
+    moveTo(room, ben, 12, 2);
+    moveTo(room, anna, 11, 1);
     room.act(ben.playerId, { kind: 'interact' });
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
     sendSignals(room, anna, ben);
-    moveTo(room, anna.playerId, 7, 2);
+    // The way into the Kontrolle runs past the locker: Ben goes in while it is still shut.
+    moveTo(room, anna, 7, 2);
+    moveTo(room, ben, 2, 3);
     room.act(anna.playerId, { kind: 'open-source', manualId: 'spind-leitstand' });
-    moveTo(room, ben.playerId, 2, 3);
     room.act(ben.playerId, { kind: 'interact' });
     const benView = lastView(ben.messages);
     const wires = benView.puzzle?.kind === 'wiring' ? benView.puzzle.wires : null;

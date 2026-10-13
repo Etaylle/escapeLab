@@ -6,7 +6,6 @@ import {
   type ClientMessage,
   type DronePosition,
   type ManualKind,
-  type PlayerPosition,
   type PlayerView,
 } from '@escapelab/core';
 import {
@@ -29,6 +28,14 @@ import {
 import { spotTitle } from './consoles.js';
 import { contextAction } from './interact.js';
 import { markerTargets, placeMarkers } from './markers.js';
+import {
+  correction,
+  ECHO_MS,
+  positionsOf,
+  startingSpot,
+  type KnownPositions,
+  type Streamed,
+} from './movement.js';
 import { worldNews } from './news.js';
 import { roomArea } from './rooms.js';
 import {
@@ -82,7 +89,7 @@ export interface ChatLine {
 
 interface Props {
   view: PlayerView;
-  positionsRef: React.MutableRefObject<Record<string, PlayerPosition>>;
+  positionsRef: React.MutableRefObject<KnownPositions>;
   dronesRef: React.MutableRefObject<Record<string, DronePosition>>;
   pingsRef: React.MutableRefObject<MapPing[]>;
   chatsRef: React.MutableRefObject<ChatLine[]>;
@@ -112,8 +119,11 @@ interface OtherAvatar {
 }
 
 interface Sim {
-  adopted: boolean;
+  /** the run `self` was placed for, by its `startedAt`; null before the first frame */
+  run: number | null;
   self: { x: number; y: number; facing: number; moving: boolean };
+  /** what this client streamed lately: its own steps coming back are no correction */
+  streamed: Streamed[];
   others: Map<string, OtherAvatar>;
   keys: Set<string>;
   doors: Map<string, { t: number; target: number }>;
@@ -367,8 +377,9 @@ export function GameWorld({
     }
 
     const sim: Sim = {
-      adopted: false,
+      run: null,
       self: { x: 0, y: 0, facing: 0, moving: false },
+      streamed: [],
       others: new Map(),
       keys: new Set(),
       doors: new Map(),
@@ -500,23 +511,32 @@ export function GameWorld({
       canvas.addEventListener('pointerdown', onPointerDown);
     }
 
-    const lastSent = { x: NaN, y: NaN, facing: NaN, moving: false };
+    // Every position goes out stamped with the run it was walked in.
+    const lastSent = { run: NaN, x: NaN, y: NaN, facing: NaN, moving: false };
     const posTimer = setInterval(() => {
-      if (!sim.adopted || spectator) {
+      const run = sim.run;
+      if (run === null || spectator) {
         return;
       }
       const { x, y, facing, moving } = sim.self;
       const changed =
+        run !== lastSent.run ||
         Math.abs(x - lastSent.x) > 0.01 ||
         Math.abs(y - lastSent.y) > 0.01 ||
         Math.abs(facing - lastSent.facing) > 0.05 ||
         moving !== lastSent.moving;
       if (changed) {
-        Object.assign(lastSent, { x, y, facing, moving });
+        Object.assign(lastSent, { run, x, y, facing, moving });
+        const now = performance.now();
+        const spot = { x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 };
+        sim.streamed = [
+          ...sim.streamed.filter((sent) => now - sent.at <= ECHO_MS),
+          { ...spot, at: now },
+        ];
         sendRef.current({
           kind: 'pos',
-          x: Math.round(x * 100) / 100,
-          y: Math.round(y * 100) / 100,
+          run,
+          ...spot,
           facing: Math.round(facing * 100) / 100,
           moving,
         });
@@ -526,25 +546,37 @@ export function GameWorld({
     let raf = 0;
     let prev = performance.now();
 
+    /**
+     * Your avatar by the server's word: every run starts it on its spawn — on
+     * the first frame, and after a rematch with the world still up — and a
+     * step the server refused puts it back where the server kept it.
+     */
+    function followServer(map: WorldMap, youId: string, run: number | null): void {
+      const known = positionsRef.current;
+      if (sim.run !== run) {
+        const start = startingSpot(known, youId, map, run);
+        Object.assign(sim.self, start);
+        sim.cam.x = start.x;
+        sim.cam.y = start.y;
+        sim.run = run;
+        sim.streamed = [];
+        return;
+      }
+      const back = correction(known, youId, run, sim.self, sim.streamed, performance.now());
+      if (back !== null) {
+        Object.assign(sim.self, back);
+      }
+    }
+
     function step(dt: number, map: WorldMap): void {
       // Spectators own no avatar, so every streamed position is "someone else".
       const youId = spectator ? '' : viewRef.current.you.id;
+      const run = viewRef.current.startedAt;
       if (spectator) {
-        sim.adopted = true;
         sim.cam.x = map.width / 2;
         sim.cam.y = map.height / 2;
-      } else if (!sim.adopted) {
-        const seeded = positionsRef.current[youId];
-        if (seeded !== undefined) {
-          sim.self.x = seeded.x;
-          sim.self.y = seeded.y;
-        } else {
-          sim.self.x = map.yourSpawn.x + 0.5;
-          sim.self.y = map.yourSpawn.y + 0.5;
-        }
-        sim.cam.x = sim.self.x;
-        sim.cam.y = sim.self.y;
-        sim.adopted = true;
+      } else {
+        followServer(map, youId, run);
       }
 
       // input → velocity
@@ -585,7 +617,8 @@ export function GameWorld({
 
       // remote avatars ease toward their streamed positions
       const k = 1 - Math.exp(-dt * 12);
-      for (const [id, pos] of Object.entries(positionsRef.current)) {
+      const live = positionsOf(positionsRef.current, run);
+      for (const [id, pos] of Object.entries(live)) {
         if (id === youId) {
           continue;
         }
@@ -605,7 +638,7 @@ export function GameWorld({
         }
       }
       for (const id of sim.others.keys()) {
-        if (positionsRef.current[id] === undefined) {
+        if (live[id] === undefined) {
           sim.others.delete(id);
         }
       }

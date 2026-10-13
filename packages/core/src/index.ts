@@ -70,6 +70,7 @@ export {
 export {
   doorOpen,
   platePressed,
+  stepAllowed,
   armedStations,
   consoleOf,
   operatorsOf,

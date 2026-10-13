@@ -6,6 +6,7 @@ import {
   inEscapePhase,
   initialState,
   stationKey,
+  stepAllowed,
   viewFor,
   viewForSpectator,
   type Action,
@@ -75,8 +76,9 @@ const RELAY_TICK_MS = 1000;
 /**
  * One game room: owns the authoritative GameState, player sessions
  * (reconnect tokens), the mission timer and the live avatar positions.
- * Movement is client-authoritative; the room turns positions into plate
- * state and presence and validates interaction distance. Transport-agnostic.
+ * Movement is client-authoritative within limits: the room takes only steps
+ * an avatar can walk, turns positions into plate state and presence and
+ * validates interaction distance. Transport-agnostic.
  */
 export class Room {
   readonly code: string;
@@ -95,6 +97,8 @@ export class Room {
   private timer: NodeJS.Timeout | null = null;
   private positionsTimer: NodeJS.Timeout | null = null;
   private positionsDirty = false;
+  /** steps refused in this room so far, for the log */
+  private refusedSteps = 0;
   /** epoch ms since the room has had no connected players, null while occupied */
   emptySince: number | null = null;
 
@@ -134,11 +138,7 @@ export class Room {
     this.emptySince = null;
     listener({ kind: 'view', view: viewFor(this.state, playerId) });
     if (this.positions.size > 0) {
-      listener({
-        kind: 'positions',
-        players: Object.fromEntries(this.positions),
-        drones: this.drones?.snapshot(this.state, Date.now()) ?? {},
-      });
+      listener(this.positionsMessage());
     }
   }
 
@@ -150,11 +150,7 @@ export class Room {
     this.spectators.add(listener);
     listener({ kind: 'spectator-view', view: viewForSpectator(this.state), code: this.code });
     if (this.positions.size > 0) {
-      listener({
-        kind: 'positions',
-        players: Object.fromEntries(this.positions),
-        drones: this.drones?.snapshot(this.state, Date.now()) ?? {},
-      });
+      listener(this.positionsMessage());
     }
     return () => this.spectators.delete(listener);
   }
@@ -185,13 +181,40 @@ export class Room {
     }
   }
 
-  /** Client-authoritative avatar position; feeds plates, presence and the position fan-out. */
-  updatePosition(playerId: string, pos: PlayerPosition): void {
-    if (this.state.phase !== 'playing' || this.state.paused !== null) {
+  /**
+   * Client-authoritative avatar position, within limits; feeds plates,
+   * presence and the position fan-out. A position the client sent for
+   * another run (`run`, by its `startedAt`) is dropped. A step no avatar can
+   * walk — too long, or through a wall or a shut door — is refused: the
+   * player stays where the room had them, and the next fan-out says so.
+   */
+  updatePosition(playerId: string, run: number, pos: PlayerPosition): void {
+    if (
+      this.state.phase !== 'playing' ||
+      this.state.paused !== null ||
+      run !== this.state.startedAt
+    ) {
+      return;
+    }
+    // Every member of the crew stands on a spot from the moment the run is
+    // seeded; a position for anyone else has nothing to step from.
+    const from = this.positions.get(playerId);
+    if (from === undefined) {
+      return;
+    }
+    this.positionsDirty = true;
+    if (!stepAllowed(this.state.mission.map, this.state, from, pos)) {
+      this.refusedSteps += 1;
+      const name = this.state.players.find((p) => p.id === playerId)?.name ?? playerId;
+      const at = (p: PlayerPosition): string => `${p.x.toFixed(2)},${p.y.toFixed(2)}`;
+      console.warn(
+        `[escapelab] room ${this.code}: refused ${name}'s step from ${at(from)} to ${at(pos)} ` +
+          `(${this.refusedSteps} refused here so far)`,
+      );
+      this.schedulePositionsBroadcast();
       return;
     }
     this.positions.set(playerId, pos);
-    this.positionsDirty = true;
     this.reconcilePlates();
     this.reconcilePresence();
     this.checkEscape();
@@ -710,11 +733,20 @@ export class Room {
 
   private broadcastPositions(): void {
     this.positionsDirty = false;
-    const players = Object.fromEntries(this.positions);
-    const drones = this.drones?.snapshot(this.state, Date.now()) ?? {};
+    const msg = this.positionsMessage();
     for (const listener of this.audience) {
-      listener({ kind: 'positions', players, drones });
+      listener(msg);
     }
+  }
+
+  /** Where everybody stands right now, stamped with the run it belongs to. */
+  private positionsMessage(): ServerMessage {
+    return {
+      kind: 'positions',
+      run: this.state.startedAt,
+      players: Object.fromEntries(this.positions),
+      drones: this.drones?.snapshot(this.state, Date.now()) ?? {},
+    };
   }
 
   /** Fixed-rate patrol simulation; only runs while a mission with drones is live. */
