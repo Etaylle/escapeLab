@@ -7,11 +7,11 @@
   "story": {
     "intro": "23:47 Uhr: ein Knall, dann Dunkelheit — nur die Notbeleuchtung glimmt rot. Ihr seid quer durchs Labor verstreut, die Regeln auch: Handbuch, Klemmbrett, Spind, Aktenschrank. Wer am Pult steht, sieht keine Regeln, und ein Pult wird zu zweit bedient, an zwei Orten zugleich. Allein bleibt das Labor dunkel.",
     "win": "Mit einem tiefen Brummen erwachen die Systeme, Licht flutet das Labor — und hinter euch fällt die Luke des Notausgangs ins Schloss. Alle draußen, die Zentrifugen laufen wieder. Ihr habt es geschafft.",
-    "lose": "Ein letztes Flackern, dann ist es still. Die Notversorgung ist erschöpft, die Proben sind verloren. Das Labor bleibt dunkel … bis zum nächsten Versuch."
+    "lose": "Ein letztes Flackern, dann ist es still. Die Notversorgung fällt aus, die Proben sind verloren. Das Labor bleibt dunkel … bis zum nächsten Versuch."
   },
   "timeLimitSec": 660,
   "radio": {
-    "start": "Notstrom zuerst: Kasten im Maschinenraum, Handbuch im Archiv.",
+    "start": "Notstrom zuerst: Kasten im Maschinenraum, Prüfpult im Flur, Handbuch im Archiv.",
     "escape": "Licht ist da. Notausgang offen, Südostecke."
   },
   "map": {
@@ -48,7 +48,8 @@
       { "id": "kameraplatte", "x": 11, "y": 5, "label": "KAMERA HALTEN" }
     ],
     "stations": [
-      { "puzzleId": "notstrom", "x": 1, "y": 9 },
+      { "puzzleId": "notstrom", "x": 1, "y": 9, "console": "a" },
+      { "puzzleId": "notstrom", "x": 5, "y": 6, "console": "b" },
       { "puzzleId": "signalkette", "x": 8, "y": 5, "console": "a" },
       { "puzzleId": "signalkette", "x": 4, "y": 9, "console": "b" },
       { "puzzleId": "subsysteme", "x": 13, "y": 5 },
@@ -149,13 +150,14 @@
   },
   "puzzles": [
     {
-      "type": "wiring",
+      "type": "circuit",
       "id": "notstrom",
-      "title": "Notstrom-Brücken",
-      "wires": { "min": 3, "max": 5 },
+      "title": "Notstrom-Kasten",
+      "wires": { "min": 4, "max": 6 },
+      "shorts": 3,
       "penaltySec": 30,
       "hints": [
-        "Die Kabel zählen von oben. Es gilt nur die Liste zur Kabelzahl, und die erste zutreffende Regel entscheidet."
+        "Das Prüfpult misst je Kabel, nach jedem Schnitt neu. Die Laborkennung entscheidet: höchste oder niedrigste Spannung."
       ],
       "lights": ["MASCHINENRAUM", "ARCHIV"],
       "onSolved": "Notstrom steht, die Tür bleibt offen. Zwei Pulte: Flur und Maschinenraum."
@@ -166,8 +168,10 @@
       "title": "Signalkette",
       "stages": 4,
       "length": 4,
+      "legend": true,
+      "fleetingFrom": 3,
       "hints": [
-        "Zeichen heißen nach Farbe und Form, etwa „rotes Dreieck“. Pult A sendet Stufe 1; nach jeder Stufe wechselt die Richtung."
+        "Die Legende am Klemmbrett nennt je Pult die Zeile einer Farbe; ab Stufe 3 laufen die Zeichen durch."
       ],
       "lights": ["FLUR"],
       "onSolved": "Schott offen. Drohne wach – Kameraplatte vor dem Serverraum."

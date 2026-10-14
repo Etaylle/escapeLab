@@ -20,6 +20,11 @@ Kooperatives Multiplayer-Escape-Spiel (Studienprojekt, FH-Themengruppe Schefer-W
   und jede Startplatz-Auswahl. Regeln liegen an Quellen in der Welt (Buch, Terminal, Tafel,
   Klemmbrett, Spind, Schrank), teils mit Kandidatenplätzen, die der Seed wählt; nichts, was
   Regeln enthält, ist tragbar.
+- Niemand bedient eine Station allein: Eine Eingabe zählt nur, solange ein zweites
+  Crewmitglied am anderen Pult oder an einer geöffneten Quelle der Station steht (`backupsOf`
+  in `core/src/map.ts`, vom Reducer durchgesetzt; ausgenommen Stationen, an denen die ganze Crew
+  drückt), und die Validierung beweist für jede Crew, dass zwei Verschiedene zugleich dort
+  stehen können.
 - Missionen sind Daten (`missions/*.json`, zod-validiert). Eine Plattentür hält nur, solange
   jemand auf der Platte steht — nennt sie mit `untilSolved` ein Rätsel, bleibt sie nach dessen
   Lösung offen. Ein Rätseltyp ist ein Modul unter `core/src/puzzles/<typ>.ts` nach dem Vertrag

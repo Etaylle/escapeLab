@@ -7,12 +7,28 @@ neue Missionen brauchen keinen Code.
 **Rätseltypen:** Kabel trennen (`wiring`), Symbol-Keypad (`keypad`), Schalterbank mit Prüf-Commit
 (`switches`), Speicherbank (`memory`), Frequenz-Abgleich mit Farblegende (`simon`), Morsefunk
 (`morse`), der Knopf (`button`), unsichtbares Labyrinth (`maze`), Synchron-Knöpfe (`button-sync`),
-Signalkette an zwei Pulten (`signal`).
+Signalkette an zwei Pulten (`signal`), Sicherungskasten und Prüfpult an zwei Pulten (`circuit`).
 Layouts/Codes sind pro Partie zufällig (seeded, deterministisch replaybar), Fehler kosten
 Countdown-Zeit. **Missionen:** Tutorial (2 Spieler), Blackout im Labor (2–3 Spieler, 5 Rätsel),
 Kettenreaktion (3 Spieler, jeder startet in einem anderen verschlossenen Raum und kommt nur mit
 Hilfe heraus) und Doppelschicht (4 Spieler in **zwei getrennten Flügeln** — die Regeln jeder
 Station liegen im anderen Flügel, und erst der Druckausgleich öffnet die Schleuse dazwischen).
+
+**Blackout im Labor** (2–3 Spieler, 11 Minuten auf *Normal*), die Stationen in Reihenfolge:
+
+1. *Notstrom-Kasten* (`circuit`): Sicherungskasten im Maschinenraum hinter der Plattentür,
+   Prüfpult im Flur davor; die Regeln im Handbuch im Archiv, die Laborkennung daneben. Nach
+   jedem Schnitt wird neu gemessen, ein Fehlschnitt verdrahtet den Kasten neu.
+2. *Signalkette* (`signal` mit Legende): Pult A im Flur, Pult B im Maschinenraum, die Legende
+   auf dem Klemmbrett; ab Stufe 3 zeigt das sendende Pult die Zeichen nacheinander.
+3. *Leitungsnetz* (`maze`): Navigationspult im Flur hinter dem Schott, der Wandplan im Spind.
+4. *Frequenz-Abgleich* (`morse`): Pult im Labor, die Tabellen im Aktenschrank, dessen Schlüssel
+   im Serverraum liegt.
+5. *Reaktor-Neustart* (`button-sync`): erst mit der Ersatzsicherung aus dem Archiv; die ganze
+   Crew drückt gemeinsam.
+
+Keine Station lässt sich allein bedienen (siehe *Nie allein*), und auf *Normal* beendet der
+fünfte Alarm den Lauf — auf *Hart* der dritte, auf *Entspannt* gibt es keine Grenze.
 
 **Beitreten:** Auf der Startseite steht eine Liste aller **offenen Runden** mit Kartenvorschau,
 Mission, Schwierigkeit, wer schon wartet und wie viele Plätze frei sind — ein Klick auf *Beitreten*
@@ -89,13 +105,14 @@ Simulation/Rendering, art = prozedurale Grafik, audio = prozedurale Sounds).
 
 **Neue Missionen** sind reine JSON-Dateien in `missions/`. `packages/core/test/missionMaps.test.ts`
 prüft jede davon automatisch: gleiche Zeilenlängen, alles auf Bodenfeldern, eine Station pro
-Rätsel — bei einem Rätsel mit zwei Pulten (Signalkette) je eine für Pult A und Pult B, mehr als
-vier Felder auseinander — und per Flutfüllung mit den echten Tür-Regeln, dass die Stationen in
-Reihenfolge erreichbar sind und am Ende **alle** den Notausgang erreichen können. Eine
-Plattentür kann mit `untilSolved` ein Rätsel nennen: Ist es gelöst, bleibt sie auch ohne Platte
-offen (Blackout: die Maschinenraumtür nach dem Notstrom). An jeder Station mit einem Pult muss
-außerdem — wohin ihre Regeln auch ausgelost werden — einer am Pult stehen können, während ein
-anderer sie zugleich liest.
+Rätsel — bei einem Rätsel mit zwei Pulten (Notstrom-Kasten, Signalkette) je eine für Pult A und
+Pult B, mehr als vier Felder auseinander — und per Flutfüllung mit den echten Tür-Regeln, dass
+die Stationen in Reihenfolge erreichbar sind und am Ende **alle** den Notausgang erreichen
+können. Eine Plattentür kann mit `untilSolved` ein Rätsel nennen: Ist es gelöst, bleibt sie auch
+ohne Platte offen (Blackout: die Maschinenraumtür nach dem Notstrom). An jeder Station mit einem
+Pult muss außerdem — wohin ihre Regeln auch ausgelost werden — einer am Pult stehen können,
+während ein anderer sie zugleich liest, und an jeder mit zwei Pulten müssen zwei Verschiedene
+zugleich an beiden stehen können.
 
 ## Struktur
 
