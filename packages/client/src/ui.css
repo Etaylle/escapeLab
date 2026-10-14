@@ -4124,3 +4124,130 @@ button.link:hover {
   font-size: 12px;
   color: var(--muted);
 }
+
+/* ══ Sicherungskasten + Prüfpult: one console cuts, the other measures ═════
+ * CircuitPanel.tsx. Console a's wires are the wiring box's own (wiring.css).
+ * Console b is a meter: a dark readout of the wire probed last, a key per
+ * wire by its number, and this round's measurements as a list. A short
+ * shakes either console. The audience gets both consoles: the wires with
+ * their voltages now, the dead one marked, and the meter's list.
+ */
+
+.circuit {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.circuit p {
+  margin: 0;
+}
+
+.circuit--short {
+  animation: shake 0.5s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .circuit--short {
+    animation: none;
+  }
+}
+
+.circuit-left {
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+}
+
+.circuit-wire {
+  touch-action: manipulation;
+}
+
+/* For the audience a fourth column: the wire's voltage now, or „tot". Two
+   classes, so it holds over wiring.css whichever loads last. */
+.wiring-wire.circuit-wire--watched {
+  grid-template-columns: 1.6rem 1fr 4.6rem 3.6rem;
+}
+
+.circuit-volts {
+  font-family: var(--mono);
+  font-size: 13px;
+  text-align: right;
+  color: var(--accent);
+}
+
+/* The meter's display: one line in the digits of a panel meter. */
+.circuit-readout {
+  display: block;
+  padding: 14px 16px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: #050a0e;
+  font-family: var(--mono);
+  font-size: 26px;
+  letter-spacing: 1px;
+  text-align: center;
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--accent-glow);
+}
+
+/* A key per wire, as many a row as fit; six fit on a phone. */
+.circuit-keys {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+  gap: 8px;
+}
+
+.circuit-probe {
+  min-height: 56px;
+  padding: 8px 0;
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 700;
+  background: #0b1117;
+  touch-action: manipulation;
+}
+
+.circuit-probe:active {
+  transform: scale(0.97);
+}
+
+.circuit-readings {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 4px 16px;
+  margin: 0;
+  padding: 10px 12px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.circuit-readings li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.circuit-reading {
+  color: var(--text);
+}
+
+/* Each console under its name, for the audience. */
+.circuit-console {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.circuit-console-name {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--muted);
+}

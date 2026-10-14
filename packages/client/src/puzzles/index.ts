@@ -11,6 +11,7 @@ import { MorsePanel } from './MorsePanel.js';
 import { ButtonPanel } from './ButtonPanel.js';
 import { RelayPanel } from './RelayPanel.js';
 import { SignalPanel } from './SignalPanel.js';
+import { CircuitPanel } from './CircuitPanel.js';
 
 export type PuzzleKind = PuzzleView['kind'];
 
@@ -41,6 +42,7 @@ export const PANELS: { [K in PuzzleKind]: Panel<K> } = {
   button: ButtonPanel,
   signal: SignalPanel,
   relay: RelayPanel,
+  circuit: CircuitPanel,
 };
 
 /** What a reader panel gets: the open puzzle as seen at a manual object covering it. */
