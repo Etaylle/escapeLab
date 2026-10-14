@@ -2,21 +2,23 @@
  * End-to-end smoke test: boots the real server in-process, then drives two
  * real WebSocket clients through the full Blackout mission on its tile map.
  * The server draws two of the three spawns and a spot for every source, so
- * the walkthrough plans as it goes: at a station with one console whoever is
- * fewer steps from it works it and the other reads at the source that covers
- * it, each holding the other's plate doors open on the way — until the first
- * station is solved and the Maschinenraum door stays open for good. The
- * Signalkette is worked at two consoles at once, Anna at console A and Ben
- * at console B. It streams client-authoritative positions along BFS paths,
- * searches the locker, carries the key from the Serverraum to the cabinet
- * and the spare fuse from the Archiv to the reactor (across the Flur while
- * the camera plate holds its drone), solves every station with its module's
- * solver on the views of whoever stands at it — at either console — and
- * whoever reads its rules (plus one deliberate wrong cut and one wrong sign),
- * has an input turned away while the reader steps off from the radio panel's
- * rules, and survives a mid-game reconnect. After the rematch everybody
- * stands on the spawn just drawn, and a position from the run before is
- * dropped. No answer is written down here.
+ * the walkthrough plans as it goes, each client holding the other's plate
+ * doors open on the way. The Notstrom-Kasten and the Signalkette are worked
+ * at two consoles at once, Anna at console A and Ben at console B: Ben reads
+ * the Handbuch and walks past the Laborkennung first, then lets Anna into
+ * the Maschinenraum to the fuse box and measures at the meter in the Flur —
+ * once the box is safe, the Maschinenraum door stays open for good. At a
+ * station with one console whoever is fewer steps from it works it and the
+ * other reads at the source that covers it. It streams client-authoritative
+ * positions along BFS paths, searches the locker, carries the key from the
+ * Serverraum to the cabinet and the spare fuse from the Archiv to the
+ * reactor (across the Flur while the camera plate holds its drone), solves
+ * every station with its module's solver on the views of whoever stands at
+ * it — at either console — and whoever reads its rules (plus one deliberate
+ * short and one wrong key), has an input turned away while the reader steps
+ * off from the radio panel's rules, and survives a mid-game reconnect. After
+ * the rematch everybody stands on the spawn just drawn, and a position from
+ * the run before is dropped. No answer is written down here.
  * Run with: pnpm --filter @escapelab/server smoke
  */
 import { readFileSync } from 'node:fs';
@@ -37,7 +39,6 @@ import {
   type PuzzleInput,
   type PuzzleView,
   type ServerMessage,
-  type SignalToken,
   type SolveAid,
   type SpectatorView,
 } from '@escapelab/core';
@@ -59,14 +60,19 @@ const key = (x: number, y: number): string => `${x},${y}`;
  * console A, where it has two.
  */
 const STAND: Tile[] = [
-  [2, 9], // in front of the fuse box
+  [2, 9], // in front of the fuse box, console A of the Notstrom-Kasten, in the Maschinenraum
   [7, 5], // beside console A of the Signalkette, in the Flur
   [13, 6], // below the navigation panel
   [10, 11], // beside the radio panel, off the Labor drone's line
   [14, 9], // at the reactor, across from the fuse slot
 ];
-/** Beside console B of the Signalkette, in the Maschinenraum. */
-const CONSOLE_B: Tile = [3, 9];
+/** Beside console B of the stations worked at two consoles, by station index. */
+const CONSOLE_B = new Map<number, Tile>([
+  [0, [5, 5]], // north of the meter, in the Flur by the Maschinenraum door
+  [1, [3, 9]], // beside console B of the Signalkette, in the Maschinenraum
+]);
+/** Beside the Laborkennung, in the Archiv. */
+const BY_THE_SIGN: Tile = [3, 3];
 /** In front of the Labor's door: out of the Labor drone's sight. */
 const OUT_OF_THE_LABOR: Tile = [10, 6];
 
@@ -116,11 +122,10 @@ function sourceOf(index: number): { id: string; label: string } {
 
 /**
  * What only the station shows, and a line only its printed rules hold, for
- * the stations one player works and another reads: 1, 3 and 4. (The
- * Signalkette keeps its consoles apart in `runSignal`.)
+ * the stations one player works and another reads: 3 and 4. (The stations
+ * worked at two consoles keep them apart in `runCircuit` and `runSignal`.)
  */
 const SECRETS = [
-  { index: 0, instance: '"wires":[{', rules: 'mehr als ein schwarzes Kabel vorhanden ist' },
   { index: 2, instance: '"pos":{', rules: 'Andernfalls bleibt der Marker stehen' },
   { index: 3, instance: '"pattern":"', rules: 'keine 2 Wörter der Frequenztabelle' },
 ];
@@ -525,6 +530,34 @@ async function takePlaces(
   return { op, rd };
 }
 
+/**
+ * Station `index` is worked at two consoles at once: `a` at console A, `b`
+ * at console B. Holding a plate door for `a` may take `b` off its console,
+ * so `b` takes its place first and walks back last.
+ */
+async function takeConsoles(index: number, a: TestClient, b: TestClient): Promise<void> {
+  const atA = STAND[index] ?? fail(`no spot at console A of station ${index + 1}`);
+  const atB = CONSOLE_B.get(index) ?? fail(`no spot at console B of station ${index + 1}`);
+  await bring(b, atB, a);
+  await bring(a, atA, b);
+  await bring(b, atB, a);
+}
+
+/**
+ * Before the Notstrom-Kasten opens, `reader` reads its rules in the
+ * Handbuch and walks past the Laborkennung, whose serial the rules read.
+ */
+async function readUp(reader: TestClient, helper: TestClient): Promise<void> {
+  const book = sourceOf(0);
+  await bring(reader, placeOf(book.id), helper);
+  const covers = (m: PlayerView['manualsHere'][number]): boolean =>
+    m.id === book.id && m.sections.some((s) => s.puzzleId === CIRCUIT.id);
+  await reader.expectView(`reads the rules of the ${CIRCUIT.title} in the ${book.label}`, (v) =>
+    v.manualsHere.some(covers));
+  await bring(reader, BY_THE_SIGN, helper);
+  await reader.expectView('has the Laborkennung', (v) => v.edgework !== null);
+}
+
 // --- items and sources -------------------------------------------------------
 
 /** E with an item at the client's feet picks it up. */
@@ -593,20 +626,21 @@ async function fetchFuse(): Promise<void> {
 
 // --- puzzle solvers ----------------------------------------------------------
 
-const wiringDef = mission.puzzles[0];
+const circuitDef = mission.puzzles[0];
 const signalDef = mission.puzzles[1];
 const mazeDef = mission.puzzles[2];
 const morseDef = mission.puzzles[3];
 if (
-  wiringDef?.type !== 'wiring' ||
+  circuitDef?.type !== 'circuit' ||
   signalDef?.type !== 'signal' ||
+  !signalDef.legend ||
   mazeDef?.type !== 'maze' ||
   morseDef?.type !== 'morse'
 ) {
-  fail('blackout.json should run wiring, signal, maze, morse, sync');
+  fail('blackout.json should run circuit, signal with its legend, maze, morse, sync');
 }
 // Narrowed re-bindings: closures below keep the precise puzzle types.
-const WIRING = wiringDef;
+const CIRCUIT = circuitDef;
 const SIGNAL = signalDef;
 
 type Transcript = SolveAid<PuzzleInput, PuzzleView>['transcript'];
@@ -764,42 +798,125 @@ async function solveStation(index: number): Promise<void> {
   fail(`station ${index + 1} is still open after 100 rounds`);
 }
 
-async function solveWiring(op: TestClient, rd: TestClient): Promise<void> {
-  const book = sourceOf(0).id;
-  const atBook = await rd.expectView('reads the wiring rules at the book', (v) =>
-    v.puzzle?.kind === 'wiring' && v.presence.manualId === book);
-  const atBox = await op.expectView('stands at the wiring box', (v) =>
-    v.puzzle?.kind === 'wiring' && v.presence.stationId === 'notstrom');
-  assert(atBook.puzzle?.kind === 'wiring' && atBook.puzzle.wires === null,
-    'the reader does not get the wire layout');
-  assert(atBox.puzzle?.kind === 'wiring' && atBox.puzzle.wires !== null,
-    'the operator gets the wire layout');
-  assert(atBook.puzzle.manual !== null && atBox.puzzle.manual === null,
-    'only the reader gets the printed rules');
-  assert(atBook.edgework !== null && atBox.edgework === null,
-    'the edgework went to whoever walked past the sign in the Archiv, not to the box');
+type CircuitView = Extract<PuzzleView, { kind: 'circuit' }>;
 
-  // The deliberate mistake: any wire but the one the solver would cut.
+/** The Notstrom-Kasten as `view` shows it; null where it is not open. */
+function circuitOf(view: PlayerView | null): CircuitView | null {
+  return view?.puzzle?.kind === 'circuit' ? view.puzzle : null;
+}
+
+/** The solver's next moves at the Notstrom-Kasten, every one of them from the side `by`. */
+async function playCircuit(by: Move<PuzzleInput>['by'], what: string): Promise<void> {
+  const moves = nextMoves(0);
+  assert(moves.length > 0 && moves.every((move) => move.by === by),
+    `${what}: ${moves.length} move(s), all from the ${by === 'partner' ? 'meter' : 'box'}`);
+  await play(moves, 0);
+}
+
+/**
+ * The deliberate short, with every wire of the round measured and a wire
+ * cut before: the box cuts a whole wire the rules do not name. It costs the
+ * def's penaltySec, the box is rewired — every wire whole again — and the
+ * meter's readings are gone.
+ */
+async function shortTheBox(box: TestClient, meter: TestClient): Promise<void> {
   const [right] = nextMoves(0);
-  const rightId = right !== undefined && 'wireId' in right.input ? right.input.wireId : null;
-  const wires =
-    atBox.puzzle.kind === 'wiring' && atBox.puzzle.wires !== null ? atBox.puzzle.wires : [];
-  const wrong = wires.find((w) => w.id !== rightId) ?? fail('no wire left to cut wrongly');
-  const deadlineBefore = atBox.deadlineAt ?? 0;
-  op.send({ kind: 'puzzle-input', input: { wireId: wrong.id } });
-  const afterPenalty = await op.expectView('sees the alarm after a wrong cut',
-    (v) => v.penaltySeq === 1);
-  assert((afterPenalty.deadlineAt ?? 0) === deadlineBefore - WIRING.penaltySec * 1000,
-    `wrong cut cost ${WIRING.penaltySec}s of deadline`);
-  credit(op, 'alarms');
-  await rd.until('the alarm', (v) => v.penaltySeq === 1);
+  const named = right?.by === 'operator' && 'cut' in right.input ? right.input.cut : null;
+  const wires = circuitOf(box.view)?.wires ?? fail(`${box.label}: the box shows no wires`);
+  const wrong = wires.findIndex((wire, i) => !wire.cut && i !== named);
+  if (named === null || wrong < 0) {
+    fail('the rules name no wire, or no other whole wire is left to cut wrongly');
+  }
+  assert(wires.some((wire) => wire.cut), 'a wire is cut before the short');
+  const deadlineBefore = box.view?.deadlineAt ?? 0;
+  box.send({ kind: 'puzzle-input', input: { cut: wrong } });
+  const shorted = await box.expectView('sees the alarm after a wrong cut', (v) =>
+    v.penaltySeq === 1 && circuitOf(v)?.lastResult === 'short');
+  assert((shorted.deadlineAt ?? 0) === deadlineBefore - CIRCUIT.penaltySec * 1000,
+    `the short cost ${CIRCUIT.penaltySec}s of deadline`);
+  assert(circuitOf(shorted)?.wires?.every((wire) => !wire.cut) === true,
+    'the short rewired the box: every wire whole again');
+  await meter.expectView('sees the readings cleared by the short', (v) => {
+    const circuit = circuitOf(v);
+    return v.penaltySeq === 1 && circuit?.readings?.every((r) => r === null) === true &&
+      circuit.probed === null;
+  });
+  credit(box, 'alarms');
+}
 
-  // The reader cannot cut from the book.
-  rd.send({ kind: 'puzzle-input', input: { wireId: wrong.id } });
-  const refused = await rd.expect('refusal away from the box', isError);
-  assert(refused.message === 'Dafür musst du am Pult stehen.', 'a cut from the book is refused');
-
+/**
+ * The Notstrom-Kasten from the views alone: the solver's probes go from the
+ * meter, its cuts from the box — after a cut at the meter is turned away,
+ * and with the deliberate short in the second round, after which the box is
+ * still made safe.
+ */
+async function solveCircuit(box: TestClient, meter: TestClient): Promise<void> {
+  meter.send({ kind: 'puzzle-input', input: { cut: 0 } });
+  const refused = await meter.expect('refusal at the meter', isError);
+  assert(refused.message === 'Dieses Pult schneidet nicht.', 'a cut at the meter is turned away');
+  await playCircuit('partner', 'the meter measures every wire');
+  await playCircuit('operator', 'the box cuts the wire the rules name');
+  await playCircuit('partner', 'the meter measures again after the cut');
+  await shortTheBox(box, meter);
   await solveStation(0);
+}
+
+/**
+ * What the consoles received since their logs ran to `from`, while the
+ * Notstrom-Kasten was open: the meter never the box's wires, the box never
+ * a reading, neither console its printed rules.
+ */
+function assertBoxAndMeterApart(
+  { box, meter }: { box: TestClient; meter: TestClient },
+  from: { box: number; meter: number },
+): void {
+  const atBox = box.raw.slice(from.box).join('\n');
+  const atMeter = meter.raw.slice(from.meter).join('\n');
+  assert(!atMeter.includes('"wires":[{'), 'the wires never reached the meter');
+  assert(!atBox.includes('"readings":['), 'no reading ever reached the box');
+  const rules = 'niedrigsten gemessenen Spannung';
+  assert(!atBox.includes(rules) && !atMeter.includes(rules),
+    'the printed rules never reached either console');
+}
+
+/**
+ * Station 1, the Notstrom-Kasten, worked at two consoles at once: `box` at
+ * the fuse box (console A), `meter` at the meter (console B), and the meter
+ * switches it on. The box shows the wires and no voltage, the meter a
+ * reading per wire and no colour, neither the rules; the audience sees all.
+ */
+async function runCircuit(box: TestClient, meter: TestClient): Promise<void> {
+  const from = { box: box.raw.length, meter: meter.raw.length };
+  await switchOn(meter, 0);
+  const boxView = await box.expectView('console A shows the box: wires, no voltage, no rules',
+    (v) => {
+      const circuit = circuitOf(v);
+      return circuit?.role === 'box' && circuit.wires !== null && circuit.readings === null &&
+        circuit.voltages === null && v.puzzle?.manual === null;
+    });
+  const meterView = await meter.expectView('console B shows the meter: no colour, no rules',
+    (v) => {
+      const circuit = circuitOf(v);
+      return circuit?.role === 'meter' && circuit.wires === null &&
+        circuit.readings?.length === circuit.count && v.puzzle?.manual === null;
+    });
+  assert(circuitOf(meterView)?.count === circuitOf(boxView)?.wires?.length,
+    'the meter counts the wires the box shows');
+  const live = await zoe.untilSpectator('sees both consoles of the running puzzle', (v) =>
+    v.puzzle?.kind === 'circuit');
+  assert(
+    live.puzzle?.kind === 'circuit' &&
+      live.puzzle.wires !== null &&
+      live.puzzle.voltages !== null &&
+      live.puzzle.manual !== null,
+    'spectator sees the wires, their voltages and the printed rules at the same time',
+  );
+  await solveCircuit(box, meter);
+  assertBoxAndMeterApart({ box, meter }, from);
+  // The Notstrom-Kasten counts for both consoles, whichever cut last.
+  credit(box, 'operated');
+  credit(meter, 'operated');
+  await backOnTheMap(1);
 }
 
 type SignalView = Extract<PuzzleView, { kind: 'signal' }>;
@@ -809,36 +926,39 @@ function signalOf(view: PlayerView): SignalView | null {
   return view.puzzle?.kind === 'signal' ? view.puzzle : null;
 }
 
+/** The key a solver's move presses at console B, which receives stage 1; null for any other. */
+function keyAtB(move: Move<PuzzleInput> | undefined): { row: number; shape: string } | null {
+  return move?.by === 'partner' && 'key' in move.input ? move.input.key : null;
+}
+
 /**
- * At the open Signalkette, stage 1: a press at sending console A is turned
- * away without an alarm; at console B one right sign, then the deliberate
- * wrong one, which costs time and starts the stage over.
+ * At the open Signalkette, stage 1: a key pressed at sending console A is
+ * turned away without an alarm; at console B the key of the first sign,
+ * then the deliberate wrong one — the second sign's shape in the next row,
+ * which stands for another colour — which costs time and starts the stage
+ * over.
  */
-async function signalMissteps(
-  a: TestClient,
-  b: TestClient,
-  sequence: readonly SignalToken[],
-): Promise<void> {
-  const [first, second] = sequence;
-  if (first === undefined || second === undefined) {
-    fail('the Signalkette sends fewer than two signs');
+async function signalMissteps(a: TestClient, b: TestClient): Promise<void> {
+  const [first, second] = nextMoves(1).map(keyAtB);
+  if (first == null || second == null) {
+    fail('the solver presses no two keys at console B in stage 1');
   }
-  a.send({ kind: 'puzzle-input', input: { press: first } });
+  a.send({ kind: 'puzzle-input', input: { key: first } });
   const refused = await a.expect('refusal at the sending console', isError);
   assert(refused.message === 'Dieses Pult sendet — das andere gibt ein.',
-    'a press at the sending console is turned away');
+    'a key pressed at the sending console is turned away');
 
-  b.send({ kind: 'puzzle-input', input: { press: first } });
+  b.send({ kind: 'puzzle-input', input: { key: first } });
   await b.until('one sign taken', (v) => signalOf(v)?.done === 1);
-  const wrong = TOKENS.find((token) => token !== second) ?? fail('no sign left to press wrongly');
+  const wrong = { row: (second.row % 4) + 1, shape: second.shape };
   const deadlineBefore = b.view?.deadlineAt ?? 0;
-  b.send({ kind: 'puzzle-input', input: { press: wrong } });
-  const afterPenalty = await b.expectView('sees the alarm after a wrong sign', (v) =>
+  b.send({ kind: 'puzzle-input', input: { key: wrong } });
+  const afterPenalty = await b.expectView('sees the alarm after a wrong key', (v) =>
     v.penaltySeq === 2 && signalOf(v)?.lastResult === 'wrong');
   assert(
     (afterPenalty.deadlineAt ?? 0) === deadlineBefore - SIGNAL.penaltySec * 1000 &&
       signalOf(afterPenalty)?.done === 0,
-    `the wrong sign cost ${SIGNAL.penaltySec}s of deadline and started the stage over`,
+    `the wrong key cost ${SIGNAL.penaltySec}s of deadline and started the stage over`,
   );
   credit(b, 'alarms');
   await a.until('the alarm', (v) => v.penaltySeq === 2);
@@ -853,26 +973,48 @@ function viewsSince(client: TestClient, from: number): { raw: string; view: Play
 }
 
 /**
- * What the consoles received since their logs ran to `from`: console B none
- * of the sequence it took in stage 1, and neither console the other's keys.
+ * What console B received since its log ran to `from` while it took stage
+ * 1: none of the sequence and no sign at all — its keys are rows of shapes,
+ * which only the printed legend gives colours — and the same keys as A.
  */
 function assertConsolesApart(
-  { a, b }: { a: TestClient; b: TestClient },
-  from: { a: number; b: number },
+  b: TestClient,
+  from: number,
   { sends, takes }: { sends: SignalView; takes: SignalView },
 ): void {
   const sequence = JSON.stringify(sends.sequence);
-  const takenAtB = viewsSince(b, from.b).filter(({ view }) => signalOf(view)?.stage === 1);
+  const takenAtB = viewsSince(b, from).filter(({ view }) => signalOf(view)?.stage === 1);
   assert(
     takenAtB.length > 0 && takenAtB.every(({ raw }) => !raw.includes(sequence)),
     'the sequence of stage 1 never reached console B, which took it',
   );
-  const keysA = JSON.stringify(sends.grid);
-  const keysB = JSON.stringify(takes.grid);
   assert(
-    !a.raw.slice(from.a).some((raw) => raw.includes(keysB)) &&
-      !b.raw.slice(from.b).some((raw) => raw.includes(keysA)),
-    "neither console ever received the other one's keys",
+    takenAtB.every(({ raw }) => !TOKENS.some((token) => raw.includes(`"${token}"`))),
+    'console B took stage 1 without a single coloured sign',
+  );
+  assert(
+    takes.grid === null && JSON.stringify(takes.keys) === JSON.stringify(sends.keys),
+    'both consoles show the same keys of shapes, in rows without a colour',
+  );
+}
+
+/**
+ * From stage `fleetingFrom` on the sending console shows the signs one at a
+ * time, before that all at once: so say the views the consoles received
+ * since their logs ran to `from`.
+ */
+function assertFleeting(consoles: { client: TestClient; from: number }[]): void {
+  const fleetingFrom = SIGNAL.fleetingFrom ?? fail('the Signalkette shows every stage at once');
+  const seen = consoles.flatMap(({ client, from }) =>
+    viewsSince(client, from).flatMap(({ view }) => {
+      const signal = signalOf(view);
+      return signal === null ? [] : [signal];
+    }),
+  );
+  assert(
+    seen.some((signal) => signal.fleeting) &&
+      seen.every((signal) => signal.fleeting === signal.stage >= fleetingFrom),
+    `the signs come one at a time from stage ${fleetingFrom} on, all at once before`,
   );
 }
 
@@ -885,18 +1027,18 @@ function assertConsolesApart(
 async function runSignal(a: TestClient, b: TestClient): Promise<void> {
   const from = { a: a.raw.length, b: b.raw.length };
   await switchOn(b, 1);
-  const atA = await a.expectView('console A sends stage 1, without the rules', (v) =>
-    signalOf(v)?.role === 'sender' && v.puzzle?.manual === null);
+  const atA = await a.expectView('console A sends stage 1, all signs at once, no rules', (v) =>
+    signalOf(v)?.role === 'sender' && signalOf(v)?.fleeting === false && v.puzzle?.manual === null);
   const atB = await b.expectView('console B takes it: twelve keys, no sequence, no rules', (v) =>
     signalOf(v)?.role === 'receiver' &&
     signalOf(v)?.sequence === null &&
-    signalOf(v)?.grid?.length === TOKENS.length &&
+    signalOf(v)?.keys?.length === TOKENS.length &&
     v.puzzle?.manual === null);
   const sends = signalOf(atA) ?? fail('console A lost the Signalkette');
   const takes = signalOf(atB) ?? fail('console B lost the Signalkette');
   assert(sends.console === 'a' && takes.console === 'b' && sends.sends === 'a',
     'each console knows which one it is, and console A sends first');
-  await signalMissteps(a, b, sends.sequence ?? fail('console A shows no sequence'));
+  await signalMissteps(a, b);
 
   // Stage 1 from the views alone, pressed at console B; then the direction swaps.
   await play(nextMoves(1), 1);
@@ -905,7 +1047,11 @@ async function runSignal(a: TestClient, b: TestClient): Promise<void> {
   await a.expectView('stage 2: console A takes now', (v) =>
     signalOf(v)?.stage === 2 && signalOf(v)?.role === 'receiver');
   await solveStation(1);
-  assertConsolesApart({ a, b }, from, { sends, takes });
+  assertConsolesApart(b, from.b, { sends, takes });
+  assertFleeting([
+    { client: a, from: from.a },
+    { client: b, from: from.b },
+  ]);
   // The Signalkette counts for both consoles, whichever pressed last.
   credit(a, 'operated');
   credit(b, 'operated');
@@ -1285,17 +1431,12 @@ async function backOnTheMap(solved: number): Promise<void> {
   }
 }
 
-// Station 1: the fuse box in the Maschinenraum, its rules in the book in the Archiv.
-const atFuseBox = await takePlaces(0);
-await runStation(0, atFuseBox, async () => {
-  const live = await zoe.untilSpectator('sees both sides of the running puzzle', (v) =>
-    v.puzzle?.kind === 'wiring');
-  assert(
-    live.puzzle?.kind === 'wiring' && live.puzzle.wires !== null && live.puzzle.manual !== null,
-    'spectator sees the wires and the printed rules at the same time',
-  );
-  await solveWiring(atFuseBox.op, atFuseBox.rd);
-});
+// Station 1: the Notstrom-Kasten, the fuse box in the Maschinenraum and the meter in the Flur,
+// its rules in the book in the Archiv. Ben reads them and the Laborkennung, then lets Anna in.
+const [atBox, atMeter] = crew;
+await readUp(atMeter, atBox);
+await takeConsoles(0, atBox, atMeter);
+await runCircuit(atBox, atMeter);
 // Its plate held the Maschinenraum door so far; from now on the door stands open by itself.
 await crew[0].expectView(`"${lastingDoor.id}" stays open with nobody on its plate`, (v) =>
   v.map?.doors.find((d) => d.id === lastingDoor.id)?.open === true &&
@@ -1303,13 +1444,12 @@ await crew[0].expectView(`"${lastingDoor.id}" stays open with nobody on its plat
 
 // Station 2: the Signalkette, console A in the Flur and console B in the Maschinenraum.
 const [atA, atB] = crew;
-await walkTo(atA, STAND[1] ?? fail('no spot at console A'));
-await walkTo(atB, CONSOLE_B);
+await takeConsoles(1, atA, atB);
 await runSignal(atA, atB);
 
 // Station 3: the maze's panel in the Flur, its plan in the locker, which has to be searched.
-// Whoever read the book walked past the Laborkennung, and reads here.
-const atMaze = await takePlaces(2, atFuseBox.rd);
+// Ben walked past the Laborkennung before the Notstrom-Kasten, and reads here.
+const atMaze = await takePlaces(2, atMeter);
 const locker = sourceOf(2);
 await openSource(atMaze.rd, locker.id, `Spind durchsucht: ${locker.label}`);
 await runStation(2, atMaze, () => solveMaze(atMaze.op, atMaze.rd));
@@ -1439,7 +1579,7 @@ for (const client of crew) {
 }
 console.log(
   '\nSmoke test passed: Blackout with drawn spawns and sources, streamed movement, plates, ' +
-    'a door that stays open, the Signalkette at two consoles, the locker, the key, the ' +
-    'camera plate, reconnect, penalties and credits. 🎉',
+    'a door that stays open, the Notstrom-Kasten and the Signalkette at two consoles, the ' +
+    'locker, the key, the camera plate, reconnect, penalties and credits. 🎉',
 );
 process.exit(0);

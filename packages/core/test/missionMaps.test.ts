@@ -2,18 +2,31 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseMission } from '../src/index.js';
 import type { Mission } from '../src/index.js';
-import { canStandAt, crewsOf, reachability, tileKey, type Spot } from '../src/reach.js';
+import {
+  canStandAt,
+  crewsOf,
+  reachability,
+  tileKey,
+  twoAtOnce,
+  type Spot,
+} from '../src/reach.js';
 
 /**
  * Guardrail for every shipped mission, beyond what the mission validation
  * already walks (stations in order, every spot of every manual object, the
  * sign): every crew the mission takes can gather at the exit, every
  * carryable can be carried where it belongs, a plate door that waits for a
- * puzzle needs nobody on its plate once that puzzle is solved, and the walk
- * the game does — puzzle doors open for good once solved, plate doors only
- * while a *different* player stands on the plate — is the one from core's
- * validation.
+ * puzzle needs nobody on its plate once that puzzle is solved, both consoles
+ * of a station can be manned at once, and the walk the game does — puzzle
+ * doors open for good once solved, plate doors only while a *different*
+ * player stands on the plate — is the one from core's validation. The lose
+ * story names no cause, since a run is lost to the clock or to the alarm
+ * limit and the end screen's last report line says which.
  */
+
+/** Words that tie a lost run to the clock or to the alarms. */
+const A_CAUSE =
+  /\b(Zeit|Uhr|Countdown|abgelaufen|Sekunde\w*|Minute\w*|erschöpft|Alarm\w*|Fehler\w*)\b/i;
 
 const missionsDir = new URL('../../../missions/', import.meta.url);
 const missions: Mission[] = readdirSync(missionsDir)
@@ -131,6 +144,29 @@ describe.each(missions.map((m) => [m.id, m] as const))('mission %s', (_id, missi
     }
   });
 
+  it('lets two different players man both consoles of a station at once, for every crew', () => {
+    // One walks to a console, the others holding plates for them, and stays
+    // there; another walks to the other one without the help of the first.
+    for (const a of map.stations.filter((s) => s.console === 'a')) {
+      const b = map.stations.find((s) => s.puzzleId === a.puzzleId && s.console === 'b');
+      if (b === undefined) {
+        throw new Error(`mission "${mission.id}" has no console b for "${a.puzzleId}"`);
+      }
+      const solved = solvedBefore(mission, a.puzzleId);
+      for (const crew of crews(mission)) {
+        const from = crew.map((spawn) => tileKey(spawn.x, spawn.y)).join(' · ');
+        expect(
+          twoAtOnce(map, crew, solved)(a, b),
+          `the crew starting at ${from} cannot man both consoles of "${a.puzzleId}" at once`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('tells the lose story without naming why the run was lost', () => {
+    expect(mission.story.lose).not.toMatch(A_CAUSE);
+  });
+
   it('keeps the exit clear of plates so nobody is counted out by accident', () => {
     const exit = map.exit;
     if (exit === undefined) {
@@ -146,16 +182,38 @@ describe.each(missions.map((m) => [m.id, m] as const))('mission %s', (_id, missi
 });
 
 /**
- * Blackout's own design, beyond what every mission keeps: the Flur plate
- * holds the Maschinenraum door only until the fuse box is up, so from the
- * Signalkette on everybody walks to either console without anyone on it.
+ * Blackout's own design, beyond what every mission keeps: the fuse box of
+ * the Notstrom-Kasten lies behind the Maschinenraum door, its meter outside
+ * where whoever holds the door's plate walks on to it. The plate holds the
+ * door only until the box is safe, so from the Signalkette on everybody
+ * walks to either console without anyone on it.
  */
 describe('mission blackout by design', () => {
-  it('lets each player reach both consoles of the Signalkette on their own', () => {
-    const blackout = missions.find((m) => m.id === 'blackout');
-    if (blackout === undefined) {
-      throw new Error('missions/blackout.json is missing');
+  const blackout = missions.find((m) => m.id === 'blackout');
+  if (blackout === undefined) {
+    throw new Error('missions/blackout.json is missing');
+  }
+
+  it('puts the fuse box behind the plate door and its meter on the plate holder\'s side', () => {
+    const map = blackout.map;
+    const [box, meter] = ['a', 'b'].map((side) =>
+      map.stations.find((s) => s.puzzleId === 'notstrom' && s.console === side),
+    );
+    const door = map.doors.find(
+      (d) => d.opensBy.kind === 'plate' && d.opensBy.untilSolved === 'notstrom',
+    );
+    const plateId = door?.opensBy.kind === 'plate' ? door.opensBy.plateId : undefined;
+    const plate = map.plates.find((p) => p.id === plateId);
+    if (box === undefined || meter === undefined || plate === undefined) {
+      throw new Error('Blackout needs the Notstrom-Kasten at two consoles and a plate door for it');
     }
+    // Nobody else around: the plate holder on their own, with nothing solved yet.
+    const [alone = new Set<string>()] = reachability(map, [plate], new Set());
+    expect(canStandAt(alone, meter), 'the plate holder cannot walk on to the meter').toBe(true);
+    expect(canStandAt(alone, box), 'the fuse box lies open without the plate').toBe(false);
+  });
+
+  it('lets each player reach both consoles of the Signalkette on their own', () => {
     const consoles = blackout.map.stations.filter((s) => s.puzzleId === 'signalkette');
     expect(consoles.map((s) => s.console)).toEqual(['a', 'b']);
     const solved = solvedBefore(blackout, 'signalkette');

@@ -7,7 +7,7 @@
   "story": {
     "intro": "Das Nordlabor ist in zwei Flügel geteilt, die Schleuse dazwischen ist verriegelt. Zwei von euch starten im Westflügel, zwei im Ostflügel; von Flügel zu Flügel geht nur Funk. Neben jedem Startplatz liegt ein Handbuch, immer mit Regeln für den anderen Flügel. Die Laborkennung hängt im Westflügel.",
     "win": "Der Notausgang fährt auf, und ihr spaziert gemeinsam hinaus. Vier Köpfe, zwei Flügel, eine Schicht.",
-    "lose": "Die Zeit ist um. Zwei Flügel, vier Leute — und am Ende doch zu wenig geredet."
+    "lose": "Das Nordlabor fährt herunter. Zwei Flügel, vier Leute — und am Ende doch zu wenig geredet."
   },
   "timeLimitSec": 900,
   "radio": {
