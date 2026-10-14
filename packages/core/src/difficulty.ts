@@ -71,7 +71,12 @@ export function difficultyInfos(): { id: Difficulty; label: string; description:
 const atLeast = (value: number, min = 1): number => Math.max(min, Math.round(value));
 
 function scalePuzzle(puzzle: PuzzleDef, factor: number): PuzzleDef {
-  return { ...puzzle, penaltySec: atLeast(puzzle.penaltySec * factor, 5) };
+  const scaled = { ...puzzle, penaltySec: atLeast(puzzle.penaltySec * factor, 5) };
+  // A burnt-out box costs its own price, and that is a penalty like any other.
+  if ('burnoutSec' in scaled) {
+    return { ...scaled, burnoutSec: atLeast(scaled.burnoutSec * factor, 5) };
+  }
+  return scaled;
 }
 
 /**

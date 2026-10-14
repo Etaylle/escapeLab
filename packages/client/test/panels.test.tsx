@@ -408,3 +408,113 @@ describe('a fleeting strip', () => {
     ]);
   });
 });
+
+describe('the fuse box and the meter', () => {
+  type CircuitSeen = Extract<PuzzleView, { kind: 'circuit' }>;
+
+  /** The box of five at console `seat`, with what `change` says happened since. */
+  function at(seat: ConsoleId, change: Partial<CircuitSeen> = {}): CircuitSeen {
+    const view = seen('circuit', true, { wires: { min: 5, max: 5 } }, seat);
+    if (view.kind !== 'circuit') {
+      throw new Error(`expected the fuse box, got ${view.kind}`);
+    }
+    return { ...view, ...change };
+  }
+
+  const COLOURS = ['rot', 'blau', 'gelb', 'weiß', 'schwarz'];
+  /** A voltage anywhere in the markup. */
+  const VOLTS = /\d+ V\b/;
+  /** This round's readings as the meter lists them, wire by wire. */
+  const listed = (html: string): string[] =>
+    [...html.matchAll(/<span class="circuit-reading">([^<]*)<\/span>/g)].map((m) => m[1] ?? '');
+
+  it('gives the box a button per wire, numbered from the top in its colour, and no voltage', () => {
+    const box = at('a');
+    const wires = box.wires ?? [];
+    expect(wires).toHaveLength(5);
+    const html = panel(box);
+    const buttons = [...html.matchAll(/<button class="circuit-wire [^"]*" data-index="(\d)"/g)];
+    expect(buttons.map((m) => Number(m[1]))).toEqual([0, 1, 2, 3, 4]);
+    const names = [...html.matchAll(/<span class="wiring-name">([^<]*)<\/span>/g)];
+    expect(names.map((m) => m[1])).toEqual(wires.map((wire) => wire.colour));
+    expect(html.match(/<span class="wiring-pos">\d<\/span>/g)).toHaveLength(5);
+    expect(html).toContain('Noch unter Spannung: 4');
+    expect(html).not.toMatch(VOLTS);
+    expect(html).not.toMatch(/circuit-(probe|readout|reading)/);
+  });
+
+  it('shows a cut wire cut, and lets nobody cut it again', () => {
+    const box = at('a');
+    const wires = (box.wires ?? []).map((wire, i) => ({ ...wire, cut: i === 2 }));
+    const html = panel({ ...box, wires, liveLeft: 3 });
+    const cut = /<button class="circuit-wire [^"]*wiring-cut" data-index="(\d)" disabled=""/g;
+    expect([...html.matchAll(cut)].map((m) => m[1])).toEqual(['2']);
+    expect(html).toContain('Noch unter Spannung: 3');
+  });
+
+  it('gives the meter a key per wire, the display and the readings, and no colour', () => {
+    const meter = at('b');
+    const html = panel(meter);
+    const keys = [...html.matchAll(/<button class="circuit-probe" data-index="(\d)"[^>]*>(\d)</g)];
+    expect(keys.map((m) => [Number(m[1]), Number(m[2])])).toEqual([
+      [0, 1],
+      [1, 2],
+      [2, 3],
+      [3, 4],
+      [4, 5],
+    ]);
+    expect(html).toContain('<output class="circuit-readout" aria-live="polite">—</output>');
+    expect(listed(html)).toEqual(['—', '—', '—', '—', '—']);
+    expect(html).toContain('Noch unter Spannung: 4');
+    expect(html).not.toMatch(VOLTS);
+    expect(html).not.toMatch(/circuit-wire|wiring-/);
+    for (const colour of COLOURS) {
+      expect(html).not.toContain(colour);
+    }
+  });
+
+  it('reads out the wire measured last, and lists the round’s readings', () => {
+    const html = panel(at('b', { readings: [24, 0, 110, null, null], probed: 2 }));
+    const readout = /<output class="circuit-readout" aria-live="polite">([^<]*)<\/output>/;
+    expect(readout.exec(html)?.[1]).toBe('Kabel 3: 110 V');
+    expect(listed(html)).toEqual(['24 V', '0 V', '110 V', '—', '—']);
+    // A new round clears the readings: the display keeps the wire, without a voltage.
+    expect(readout.exec(panel(at('b', { probed: 2 })))?.[1]).toBe('Kabel 3: —');
+  });
+
+  it('says a short rewired the box and shakes it, and what a burnout costs', () => {
+    const shorted = panel(at('a', { lastResult: 'short', shorts: 1 }));
+    expect(shorted).toContain('<div class="circuit circuit--short">');
+    expect(shorted).toContain('<p class="warn" role="status">Kurzschluss — neu verdrahtet.</p>');
+    const burnt = panel(at('b', { lastResult: 'burnout', shorts: 3, burnoutSec: 75 }));
+    expect(burnt).toContain('<div class="circuit circuit--short">');
+    expect(burnt).toContain('<p class="warn" role="status">Kasten durchgebrannt — −75 s.</p>');
+    for (const calm of [panel(at('a')), panel(at('b'))]) {
+      expect(calm).toContain('<div class="circuit">');
+      expect(calm).not.toMatch(/Kurzschluss|durchgebrannt/);
+    }
+  });
+
+  it('tells a console nobody stands at that it is not connected', () => {
+    expect(panel(seen('circuit', false))).toBe(
+      '<p class="muted">Dieses Pult ist nicht angeschlossen.</p>',
+    );
+  });
+
+  it('shows the audience both consoles, every voltage and the dead wire, none to press', () => {
+    const watched = seen('circuit', true, { wires: { min: 5, max: 5 } }, null, null);
+    if (watched.kind !== 'circuit' || watched.voltages === null || watched.dead === null) {
+      throw new Error('expected the audience to see every voltage');
+    }
+    const { voltages, dead } = watched;
+    const html = panel(watched);
+    const names = [...html.matchAll(/<h4 class="circuit-console-name">([^<]*)<\/h4>/g)];
+    expect(names.map((m) => m[1])).toEqual(['Pult A', 'Pult B']);
+    const shown = [...html.matchAll(/<span class="circuit-volts">([^<]*)<\/span>/g)];
+    expect(shown.map((m) => m[1])).toEqual(voltages.map((v, i) => (dead[i] ? 'tot' : `${v} V`)));
+    expect(dead.filter(Boolean)).toHaveLength(1);
+    const rows = /<span class="circuit-wire [^"]*circuit-wire--watched" data-index/g;
+    expect(html.match(rows)).toHaveLength(5);
+    expect(html).not.toContain('<button');
+  });
+});

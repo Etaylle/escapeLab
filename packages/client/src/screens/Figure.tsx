@@ -475,6 +475,74 @@ function Signal() {
   );
 }
 
+/** The meter's pivot and the radius of its scale. */
+const DIAL = { x: 281, y: 76, r: 44 };
+
+/** The point at `angle` degrees (clockwise from east) and `r` units out from the meter's pivot. */
+function onDial(angle: number, r: number): string {
+  const rad = (angle * Math.PI) / 180;
+  return `${round(DIAL.x + r * Math.cos(rad))} ${round(DIAL.y + r * Math.sin(rad))}`;
+}
+
+/**
+ * Two consoles side by side: at A the box with five wires numbered from the
+ * top, the third cut; at B the meter — a needle over a scale, under it a key
+ * for each wire's number.
+ */
+function Circuit() {
+  const ticks = Array.from({ length: 7 }, (_, k) => {
+    const angle = 205 + (k * 130) / 6;
+    return `M${onDial(angle, k % 2 === 0 ? 35 : 38)}L${onDial(angle, DIAL.r)}`;
+  });
+  const arc = `M${onDial(205, DIAL.r)}A${DIAL.r} ${DIAL.r} 0 0 1 ${onDial(335, DIAL.r)}`;
+  return (
+    <>
+      <rect x={28} y={6} width={150} height={128} rx={6} strokeWidth={1.6} />
+      <Mark x={103} y={18} size={9}>
+        PULT A
+      </Mark>
+      <rect x={40} y={22} width={10} height={102} rx={2} />
+      <rect x={156} y={22} width={10} height={102} rx={2} />
+      {[32, 52, 72, 92, 112].map((y, i) => (
+        <g key={y}>
+          <Mark x={22} y={y + 3.5} anchor="end">
+            {i + 1}
+          </Mark>
+          <circle cx={45} cy={y} r={2.6} />
+          <circle cx={161} cy={y} r={2.6} />
+          <path
+            d={
+              i === 2
+                ? `M48 ${y}Q72 ${y + 3} 93 ${y + 8}M113 ${y + 8}Q134 ${y + 3} 158 ${y}`
+                : `M48 ${y}Q103 ${y + 7} 158 ${y}`
+            }
+            strokeWidth={2.2}
+          />
+        </g>
+      ))}
+      <rect x={206} y={6} width={150} height={128} rx={6} strokeWidth={1.6} />
+      <Mark x={281} y={18} size={9}>
+        PULT B
+      </Mark>
+      <rect x={220} y={24} width={122} height={60} rx={3} />
+      <path d={`${arc}${ticks.join('')}`} />
+      <Mark x={262} y={74} size={9}>
+        V
+      </Mark>
+      <path d={`M${DIAL.x} ${DIAL.y}L${onDial(300, 38)}`} strokeWidth={1.6} />
+      <circle cx={DIAL.x} cy={DIAL.y} r={3} {...TINT} />
+      {[1, 2, 3, 4, 5].map((key, k) => (
+        <g key={key}>
+          <rect x={224 + k * 24} y={96} width={18} height={22} rx={2} />
+          <Mark x={233 + k * 24} y={111} size={10}>
+            {key}
+          </Mark>
+        </g>
+      ))}
+    </>
+  );
+}
+
 /** A device without a drawing: an empty frame naming its type, so its pages still print. */
 function Frame({ of }: { of: string }) {
   return (
@@ -548,6 +616,12 @@ const DRAWINGS: Record<PuzzleDef['type'], Drawing> = {
       'Zwei Pulte nebeneinander: links eine Reihe aus 4 Formen, rechts ein Raster aus 3 × 4 ' +
       'Formen, dazwischen ein Pfeil',
     draw: Signal,
+  },
+  circuit: {
+    label:
+      'Sicherungskasten und Prüfpult: links 5 Kabel übereinander, eines durchtrennt, ' +
+      'rechts ein Zeigerinstrument über 5 Zifferntasten',
+    draw: Circuit,
   },
 };
 

@@ -16,6 +16,7 @@ const SAYS: Record<string, RegExp> = {
   'button-sync': /^Großer Knopf unter 2 Lampen/,
   relay: /^Schaltpult: 2 Schalter, ein Drehregler und ein Taster, beschriftet/,
   signal: /^Zwei Pulte nebeneinander/,
+  circuit: /^Sicherungskasten und Prüfpult: links 5 Kabel.*Zeigerinstrument über 5 Zifferntasten/,
 };
 
 function drawing(of: string): { html: string; label: string } {

@@ -104,6 +104,8 @@ export interface ApplyResult<State> {
    * penaltySec is charged and the alarm fires. Null when the move was fine.
    */
   penalty: string | null;
+  /** what this penalty costs when it is not the def's penaltySec, as a burnt-out box's */
+  penaltySec?: number;
 }
 
 /**

@@ -808,7 +808,7 @@ function handlePuzzleInput(
   const next = { ...state, puzzleState: result.state };
   if (result.penalty !== null) {
     const blamed = credited(next, player.id, 'alarms');
-    return applyPenalty(blamed, def.penaltySec, action.at, result.penalty);
+    return applyPenalty(blamed, result.penaltySec ?? def.penaltySec, action.at, result.penalty);
   }
   return result.solved ? advance(creditWorkers(next, def, player.id), action.at) : next;
 }
