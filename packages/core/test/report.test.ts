@@ -117,11 +117,9 @@ describe('run report', () => {
 
     // Solve both stations: the last one unlocks the exit rather than winning.
     state = firstSolved(state, T0 + 8000);
-    state = applyAction(standing(state, { stations: { code: ['p2'] } }), {
-      type: 'interact',
-      playerId: 'p2',
-      at: T0 + 9000,
-    });
+    // Ben works the keypad while Anna reads its rules.
+    const atKeypad = standing(state, { stations: { code: ['p2'] }, manuals: { buch: ['p1'] } });
+    state = applyAction(atKeypad, { type: 'interact', playerId: 'p2', at: T0 + 9000 });
     const keypad = state.puzzleState;
     if (keypad?.type !== 'keypad') {
       throw new Error('expected the keypad station');

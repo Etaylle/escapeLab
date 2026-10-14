@@ -49,6 +49,13 @@ export interface PuzzleContext {
    * both empty at a station with one, in `init` and in emergencies
    */
   atConsoles: Record<ConsoleId, string[]>;
+  /**
+   * ids of the players at an open manual object covering the station, from
+   * presence — the mover too, if they stand at one; empty in `init` and in
+   * emergencies. The reducer already refused the move unless somebody else
+   * stands here or at the other console (except where the whole crew works it).
+   */
+  readers: string[];
 }
 
 /** Views are rebuilt on every change, not on every tick, so they get no clock. */
@@ -156,6 +163,14 @@ export interface PuzzleViewCommon {
   manual: ManualSection[] | null;
   /** the viewer's console, as in `Viewer` */
   console: ConsoleId | null;
+  /**
+   * The second person who lets the viewer's inputs count: another crew member
+   * at the station's other console or at an open manual object covering it,
+   * and where — the console („Pult B") or the object's label („SPIND"). Null
+   * while nobody backs the viewer up, and for the audience, for players away
+   * from the station and where the whole crew works it.
+   */
+  backup: { name: string; where: string } | null;
 }
 
 /** What every module owns, whether it stands at a station or runs as an emergency. */

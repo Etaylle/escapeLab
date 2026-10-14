@@ -51,6 +51,7 @@ function ctx(crew: string[], at: number): PuzzleContext {
     crew,
     console: 'a',
     atConsoles: { a: [], b: [] },
+    readers: [],
   };
 }
 

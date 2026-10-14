@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { Edgework, ManualHere, PlayerView, PuzzleView } from '@escapelab/core';
 import { Book } from '../src/screens/Book.js';
-import { GameScreen, stationLabel } from '../src/screens/Game.js';
+import { backupNote, GameScreen, StationModal, stationLabel } from '../src/screens/Game.js';
 import { InfoPanel, Legend } from '../src/screens/InfoPanel.js';
 import { ReadingOverlay } from '../src/screens/Reading.js';
 import { WorldModal } from '../src/screens/WorldModal.js';
@@ -72,6 +72,7 @@ function maze(index: number, cells: number[] | null): PuzzleView {
     title: 'Leitungsnetz',
     manual: null,
     console: null,
+    backup: null,
   };
 }
 
@@ -251,6 +252,7 @@ describe('the station frame', () => {
       title: 'Signalkette',
       manual: null,
       console: 'b',
+      backup: null,
     };
     const consoles = mapWith({
       stations: [
@@ -264,6 +266,67 @@ describe('the station frame', () => {
       stations: [{ puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed' }],
     });
     expect(stationLabel({ ...maze(2, null), console: 'a' }, single)).toBe('§3 — Leitungsnetz');
+  });
+
+  /** The frame the station opens in, as the game shows it, at a station with one console. */
+  function stationFrame(puzzle: PuzzleView): string {
+    const single = mapWith({
+      stations: [{ puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed' }],
+    });
+    return renderToStaticMarkup(
+      <StationModal
+        puzzle={puzzle}
+        map={single}
+        edgework={null}
+        deadlineAt={null}
+        send={noop}
+        onClose={noop}
+      />,
+    );
+  }
+
+  it('says under the label who backs this player up, and where', () => {
+    const atMaze: PuzzleView = { ...maze(2, null), console: 'a' };
+    const backed = stationFrame({ ...atMaze, backup: { name: 'Ben', where: 'SPIND' } });
+    expect(backed).toContain(
+      '<div class="panel-label">// §3 — Leitungsnetz</div>' +
+        '<p class="modal-note muted">Mit Ben bei: SPIND</p>',
+    );
+    // At a station with two consoles, the other console backs this one up.
+    expect(backupNote({ ...atMaze, backup: { name: 'Ben', where: 'Pult B' } })).toEqual({
+      text: 'Mit Ben an Pult B',
+      tone: 'muted',
+    });
+    expect(backupNote({ ...atMaze, backup: { name: 'Anna', where: 'Pult A' } })?.text).toBe(
+      'Mit Anna an Pult A',
+    );
+  });
+
+  it('warns while nobody backs this player up', () => {
+    const alone = stationFrame({ ...maze(2, null), console: 'a', backup: null });
+    expect(alone).toContain(
+      '<p class="modal-note warn">Allein — jemand muss zu den Regeln oder ans andere Pult</p>',
+    );
+  });
+
+  it('says nothing about it where the whole crew presses, nor over a book', () => {
+    const reactor: PuzzleView = {
+      kind: 'button-sync',
+      youPressed: false,
+      pressedCount: 1,
+      requiredCount: 2,
+      attempts: 0,
+      lastResult: null,
+      index: 4,
+      total: 5,
+      title: 'Reaktor-Neustart',
+      manual: null,
+      console: 'a',
+      backup: null,
+    };
+    expect(stationFrame(reactor)).toContain('// §5 — Reaktor-Neustart');
+    expect(stationFrame(reactor)).not.toContain('modal-note');
+    expect(read(null)).not.toContain('modal-note');
   });
 });
 

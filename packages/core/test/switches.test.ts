@@ -86,6 +86,7 @@ const ctx = (edgework: Edgework): PuzzleContext => ({
   crew: ['op', 'rd'],
   console: 'a',
   atConsoles: { a: [], b: [] },
+  readers: [],
 });
 
 function press(bank: SwitchesDef, state: SwitchesState, input: SwitchesInput, edgework: Edgework) {

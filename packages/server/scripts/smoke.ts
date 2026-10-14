@@ -13,9 +13,10 @@
  * the camera plate holds its drone), solves every station with its module's
  * solver on the views of whoever stands at it — at either console — and
  * whoever reads its rules (plus one deliberate wrong cut and one wrong sign),
- * and survives a mid-game reconnect. After the rematch everybody stands on
- * the spawn just drawn, and a position from the run before is dropped. No
- * answer is written down here.
+ * has an input turned away while the reader steps off from the radio panel's
+ * rules, and survives a mid-game reconnect. After the rematch everybody
+ * stands on the spawn just drawn, and a position from the run before is
+ * dropped. No answer is written down here.
  * Run with: pnpm --filter @escapelab/server smoke
  */
 import { readFileSync } from 'node:fs';
@@ -962,7 +963,48 @@ async function solveMorse(op: TestClient, rd: TestClient): Promise<void> {
     v.puzzle?.kind === 'morse' && v.puzzle.pattern === null && v.puzzle.manual !== null);
   await op.expectView('stands at the blinking lamp', (v) =>
     v.puzzle?.kind === 'morse' && v.puzzle.pattern !== null && v.puzzle.manual === null);
+  await readerStepsAway(op, rd);
   await solveStation(3);
+}
+
+/**
+ * The Labor's north-west corner, by every spot of the cabinet: from here the
+ * way to the north-east corner runs along the north wall, far from the radio
+ * panel, so the reader never comes close enough to see the lamp.
+ */
+const LABOR_CORNER: Tile = [7, 8];
+/** The Labor's north-east corner: out of reach of every spot of the cabinet and of the panel. */
+const AWAY_FROM_THE_CABINET: Tile = [11, 8];
+const ALONE = 'Allein geht das nicht — jemand muss am anderen Pult oder bei den Regeln stehen.';
+
+/**
+ * Nobody works a station alone: the operator's panel names the reader at
+ * the cabinet as backup; with the reader stepped away it names nobody and
+ * the next input is turned away; back at the cabinet, the reader backs the
+ * operator up again.
+ */
+async function readerStepsAway(op: TestClient, rd: TestClient): Promise<void> {
+  const cabinet = sourceOf(3);
+  const name = rd.view?.you.name ?? fail(`${rd.label}: no view yet`);
+  const backedBy = (v: PlayerView): boolean =>
+    v.puzzle?.backup?.name === name && v.puzzle.backup.where === cabinet.label;
+  await op.expectView(`names ${name} at the ${cabinet.label} as backup`, backedBy);
+  const [move] = nextMoves(3);
+  if (move === undefined) {
+    fail('the solver has no first move at the radio panel');
+  }
+  for (const to of [LABOR_CORNER, AWAY_FROM_THE_CABINET]) {
+    await walkTo(rd, to);
+  }
+  await op.expectView('names no backup with the reader away', (v) =>
+    v.puzzle?.kind === 'morse' && v.puzzle.backup === null);
+  op.send({ kind: 'puzzle-input', input: move.input });
+  const refused = await op.expect('refusal with nobody at the rules', isError);
+  assert(refused.message === ALONE, 'an input with nobody at the rules is turned away');
+  for (const to of [LABOR_CORNER, placeOf(cabinet.id)]) {
+    await walkTo(rd, to);
+  }
+  await op.expectView(`names ${name} as backup again`, backedBy);
 }
 
 async function solveSync(): Promise<void> {

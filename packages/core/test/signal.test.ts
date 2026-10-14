@@ -62,6 +62,7 @@ const ctx = (from: ConsoleId | null, atConsoles = MANNED): PuzzleContext => ({
   crew: CREW,
   console: from,
   atConsoles,
+  readers: [],
 });
 
 const deal = (def: SignalDef, seed: number): SignalState =>

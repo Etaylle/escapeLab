@@ -138,3 +138,41 @@ export function readersOf(state: GameState, puzzleId: string): string[] {
     .flatMap((manual) => state.presence.manuals[manual.id] ?? []);
   return [...new Set(readers)];
 }
+
+/** A crew member backing up a player at a station, and where they stand. */
+export interface Backup {
+  playerId: string;
+  /** the other console as the lab names it („Pult B"), or the manual object's label */
+  where: string;
+}
+
+/**
+ * Who backs up `playerId` at the station of `puzzleId`: every other crew
+ * member at the station's other console, where it has two, then at every
+ * open manual object covering it, in map order. Empty while `playerId`
+ * stands at neither console. Nobody works a station alone — the reducer
+ * takes an input only with somebody here.
+ */
+export function backupsOf(state: GameState, puzzleId: string, playerId: string): Backup[] {
+  const at = consoleOf(state, puzzleId, playerId);
+  if (at === null) {
+    return [];
+  }
+  const other: ConsoleId = at === 'a' ? 'b' : 'a';
+  const twoConsoles = state.mission.map.stations.some(
+    (s) => s.puzzleId === puzzleId && s.console !== undefined,
+  );
+  const atOther = twoConsoles
+    ? (state.presence.stations[stationKey({ puzzleId, console: other })] ?? []).map(
+        (id): Backup => ({ playerId: id, where: `Pult ${other.toUpperCase()}` }),
+      )
+    : [];
+  const reading = state.mission.map.manuals
+    .filter((manual) => manual.puzzleIds.includes(puzzleId) && sourceOpen(state, manual))
+    .flatMap((manual) =>
+      (state.presence.manuals[manual.id] ?? []).map(
+        (id): Backup => ({ playerId: id, where: manual.label }),
+      ),
+    );
+  return [...atOther, ...reading].filter((backup) => backup.playerId !== playerId);
+}
