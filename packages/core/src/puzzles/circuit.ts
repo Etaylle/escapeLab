@@ -18,7 +18,8 @@ import { WIRE_COLORS, type WireColor } from './wiring.js';
  * and the box is rewired (every wire whole, a dead wire and voltages of a
  * fresh wiring). From the def's `shorts`-th short on, the box burns out
  * instead, which costs `burnoutSec`. A key pressed at the wrong console is
- * turned away without an alarm.
+ * turned away without an alarm, and so is a cut while nobody else stands at
+ * the meter: a single player cannot measure there and cut here.
  */
 
 const MIN_WIRES = 4;
@@ -274,7 +275,7 @@ export const circuitModule: PuzzleModule<CircuitDef, CircuitState, CircuitInput,
     if (ctx.console !== 'a') {
       fail('Dieses Pult schneidet nicht.');
     }
-    // The readings come from the meter: a cut counts only with somebody else at it.
+    // Measuring at the meter and cutting at the box takes two people.
     if (!ctx.atConsoles.b.some((id) => id !== playerId)) {
       fail('Am Prüfpult steht niemand.');
     }
