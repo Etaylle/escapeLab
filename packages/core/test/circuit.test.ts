@@ -70,30 +70,40 @@ function defOf(fields: object = {}): CircuitDef {
   });
 }
 
-/** What a move from console `from` gets to know: op at console a, pt at console b. */
-const ctx = (from: ConsoleId | null, edgework = EVEN): PuzzleContext => ({
+type AtConsoles = PuzzleContext['atConsoles'];
+
+/** Both consoles manned: op at console a, pt at console b. */
+const MANNED: AtConsoles = { a: ['op'], b: ['pt'] };
+
+/** What a move from console `from` gets to know, with who stands where; null for the setup. */
+const ctx = (from: ConsoleId | null, edgework = EVEN, atConsoles = MANNED): PuzzleContext => ({
   edgework,
   alarms: 0,
   remainingSec: 600,
   at: T0,
   crew: CREW,
   console: from,
-  atConsoles: from === null ? { a: [], b: [] } : { a: ['op'], b: ['pt'] },
+  atConsoles: from === null ? { a: [], b: [] } : atConsoles,
 });
 
 const deal = (def: CircuitDef, seed: number): CircuitState =>
   circuitModule.init(def, mulberry32(seed), ctx(null));
 
-/** An input from console `from` — op at a, pt at b — through the schema, as a client's goes. */
+/**
+ * An input from console `from` — by op at a, by pt at b — through the
+ * schema, as a client's goes, with who stands where.
+ */
 function send(
   def: CircuitDef,
   state: CircuitState,
   input: CircuitInput,
   from: ConsoleId,
   edgework = EVEN,
+  atConsoles = MANNED,
 ) {
   const parsed = circuitModule.inputSchema.parse(input);
-  return circuitModule.apply(def, state, parsed, from === 'a' ? 'op' : 'pt', ctx(from, edgework));
+  const by = from === 'a' ? 'op' : 'pt';
+  return circuitModule.apply(def, state, parsed, by, ctx(from, edgework, atConsoles));
 }
 const cut = (def: CircuitDef, state: CircuitState, index: number, edgework = EVEN) =>
   send(def, state, { cut: index }, 'a', edgework);
@@ -297,6 +307,38 @@ describe('circuit inputs', () => {
     expect(() => send(def, state, { probe: 0 }, 'a')).toThrow('Dieses Pult misst nicht.');
     const nowhere = { ...ctx('a'), console: null };
     expect(() => circuitModule.apply(def, state, { cut: named }, 'x', nowhere)).toThrow(GameError);
+  });
+
+  it('refuse a cut, without an alarm, while nobody else stands at the meter', () => {
+    const def = defOf();
+    const state = probeAll(def, deal(def, 2));
+    const named = ruleSays(voltagesOf(def, state), false);
+    const cutWith = (atConsoles: AtConsoles) =>
+      send(def, state, { cut: named }, 'a', EVEN, atConsoles);
+    // The solo walk: op measured at the meter and walked over to the box. Counted at
+    // both consoles at once is still nobody else at the meter.
+    for (const alone of [{ a: ['op'], b: [] }, { a: ['op'], b: ['op'] }]) {
+      expect(() => cutWith(alone), JSON.stringify(alone)).toThrow(GameError);
+      expect(() => cutWith(alone)).toThrow('Am Prüfpult steht niemand.');
+    }
+    // A wrong cut is turned away the same way, before it can short the box.
+    const wrong = besides(named, state.cuts.length);
+    expect(() => send(def, state, { cut: wrong }, 'a', EVEN, { a: ['op'], b: [] })).toThrow(
+      'Am Prüfpult steht niemand.',
+    );
+    for (const manned of [MANNED, { a: ['op', 'rd'], b: ['op', 'pt'] }]) {
+      const taken = cutWith(manned);
+      expect(taken.penalty).toBeNull();
+      expect(taken.state.cuts[named]).toBe(true);
+    }
+  });
+
+  it('take a probe at the meter with nobody at the box', () => {
+    const def = defOf();
+    const state = deal(def, 2);
+    const measured = send(def, state, { probe: 1 }, 'b', EVEN, { a: [], b: ['pt'] });
+    expect(measured.penalty).toBeNull();
+    expect(measured.state.readings[1]).toBe(voltagesOf(def, state)[1]);
   });
 
   it('refuse a wire the box does not have, and take nothing but a cut or a probe', () => {
@@ -763,6 +805,42 @@ describe('circuit in a run', () => {
     expect(circuitOf(measured, 'p1').wires).toEqual(circuitOf(state, 'p1').wires);
     expect(measured.penaltySeq).toBe(0);
     expect(measured.deadlineAt).toBe(state.deadlineAt);
+  });
+
+  it('refuses the solo walk without an alarm, and takes the cut once somebody measures', () => {
+    const state = circuitRun();
+    // Anna leaves the box for the meter and measures every wire; Ben and Cleo are at the book.
+    const atMeter = standing(state, {
+      stations: { [CONSOLE_B]: ['p1'] },
+      manuals: { buch: ['p2', 'p3'] },
+    });
+    const count = circuitOf(atMeter, 'p1').count ?? 0;
+    const measured = Array.from({ length: count }, (_, i) => input('p1', { probe: i })).reduce(
+      applyAction,
+      atMeter,
+    );
+    const volts = circuitOf(measured, 'p1').readings?.map((r) => r ?? 0) ?? [];
+    const named = ruleSays(volts, serialLastDigitIsOdd(labOf(state)));
+    // She walks back to the box and cuts the wire the rules name: nobody is at the meter now.
+    const walked = standing(measured, {
+      stations: { kasten: ['p1'] },
+      manuals: { buch: ['p2', 'p3'] },
+    });
+    expect(circuitOf(walked, 'p1')).toMatchObject({ console: 'a', role: 'box' });
+    expect(() => applyAction(walked, input('p1', { cut: named }))).toThrow(GameError);
+    expect(() => applyAction(walked, input('p1', { cut: named }))).toThrow(
+      'Am Prüfpult steht niemand.',
+    );
+    // Ben steps up to the meter: the same cut counts, and no alarm went off on the way.
+    const manned = standing(walked, {
+      stations: { kasten: ['p1'], [CONSOLE_B]: ['p2'] },
+      manuals: { buch: ['p3'] },
+    });
+    const taken = applyAction(manned, input('p1', { cut: named }));
+    expect(circuitOf(taken, 'p1').wires?.[named]?.cut).toBe(true);
+    expect(taken.penaltySeq).toBe(0);
+    expect(taken.deadlineAt).toBe(state.deadlineAt);
+    expect(taken.credits['p1']?.alarms).toBe(0);
   });
 
   it('charges a short once, to whoever cut, and rewires the box', () => {
