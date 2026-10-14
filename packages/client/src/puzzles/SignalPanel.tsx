@@ -1,10 +1,13 @@
-import type { ReactNode } from 'react';
+import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { tokenLabel, type SignalToken } from '@escapelab/core';
 import { play } from '../sounds.js';
 import { consoleName } from '../world/consoles.js';
 import type { PanelProps } from './index.js';
 
 type SignalPuzzle = PanelProps<'signal'>['puzzle'];
+type SignalSend = PanelProps<'signal'>['send'];
+/** A key of shapes, at a console with the legend: its row and its form. */
+type RowKey = NonNullable<SignalPuzzle['keys']>[number];
 type Colour = SignalToken extends `${infer C}-${string}` ? C : never;
 type Form = SignalToken extends `${string}-${infer F}` ? F : never;
 
@@ -22,6 +25,56 @@ const FORMS: Record<Form, (fill: string) => ReactNode> = {
   dreieck: (fill) => <path d="M12 2.5 22 20H2Z" fill={fill} />,
   quadrat: (fill) => <rect x={3.5} y={3.5} width={17} height={17} rx={1.5} fill={fill} />,
 };
+
+/** The forms' names, as a key of shapes prints them under its form. */
+const FORM_NAMES: Record<Form, string> = {
+  kreis: 'Kreis',
+  dreieck: 'Dreieck',
+  quadrat: 'Quadrat',
+};
+
+/** How long each sign of a fleeting strip shows, one after the other. */
+export const FLEETING_SIGN_MS = 1200;
+/** How long a fleeting strip stays dark after its last sign, before it starts over. */
+export const FLEETING_PAUSE_MS = 2000;
+
+/**
+ * Where a fleeting strip of `count` signs stands `ms` after it started: the
+ * sign it shows — null in the dark pause after the last one — and how many
+ * ms until that changes. Each sign shows for FLEETING_SIGN_MS in turn, then
+ * the strip stays dark for FLEETING_PAUSE_MS and starts over; a time before
+ * the start counts as the start.
+ */
+export function fleetingAt(ms: number, count: number): { shown: number | null; untilNext: number } {
+  const signs = count * FLEETING_SIGN_MS;
+  const cycle = signs + FLEETING_PAUSE_MS;
+  const into = Math.max(0, ms) % cycle;
+  if (into < signs) {
+    const shown = Math.floor(into / FLEETING_SIGN_MS);
+    return { shown, untilNext: (shown + 1) * FLEETING_SIGN_MS - into };
+  }
+  return { shown: null, untilNext: cycle - into };
+}
+
+/**
+ * The sign a fleeting strip of `count` signs shows now: the first as it
+ * appears, then on by itself, a timer to every change; null in the pause.
+ */
+function useFleeting(count: number): number | null {
+  const [shown, setShown] = useState<number | null>(0);
+  useEffect(() => {
+    const start = performance.now();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const step = (): void => {
+      const now = fleetingAt(performance.now() - start, count);
+      setShown(now.shown);
+      timer = setTimeout(step, now.untilNext);
+    };
+    timer = setTimeout(step, fleetingAt(0, count).untilNext);
+    return () => clearTimeout(timer);
+  }, [count]);
+  return shown;
+}
 
 /** A sign's colour and form, read off its id: „rot-dreieck" is a red triangle. */
 function partsOf(token: SignalToken): [Colour, Form] {
@@ -45,6 +98,18 @@ function Sign({ token }: { token: SignalToken }) {
   );
 }
 
+/** A key of shapes: its form in the key's own grey, its name under it, no colour at all. */
+function Shape({ form }: { form: Form }) {
+  return (
+    <>
+      <svg className="signal-glyph" viewBox="0 0 24 24" aria-hidden="true">
+        {FORMS[form]('currentColor')}
+      </svg>
+      <span className="signal-word">{FORM_NAMES[form]}</span>
+    </>
+  );
+}
+
 /** One sign's lamp: lit once the sign is pressed. */
 function Lamp({ lit }: { lit: boolean }) {
   return <span className={lit ? 'signal-lamp signal-lamp--lit' : 'signal-lamp'} />;
@@ -57,6 +122,35 @@ function Strip({ sequence, done }: { sequence: SignalToken[]; done: number }) {
       {sequence.map((token, i) => (
         <li key={i} className="signal-sign">
           <Sign token={token} />
+          <Lamp lit={i < done} />
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/**
+ * The stage's sequence one sign at a time, each in its own place over its
+ * lamp: the signs show in turn from the left, then the strip goes dark and
+ * starts over. The lamps stay, lit as far as the signs are pressed.
+ */
+function FleetingStrip({ sequence, done }: { sequence: SignalToken[]; done: number }) {
+  const shown = useFleeting(sequence.length);
+  return (
+    <ol
+      className="signal-strip signal-strip--fleeting"
+      aria-label={`Folge, ${done} von ${sequence.length} gedrückt`}
+    >
+      {sequence.map((token, i) => (
+        <li key={i} className={i === shown ? 'signal-sign signal-sign--shown' : 'signal-sign'}>
+          {i === shown ? (
+            <Sign token={token} />
+          ) : (
+            <>
+              <span className="signal-glyph signal-glyph--dark" aria-hidden="true" />
+              <span className="signal-word" aria-hidden="true" />
+            </>
+          )}
           <Lamp lit={i < done} />
         </li>
       ))}
@@ -80,15 +174,7 @@ function Lamps({ puzzle }: { puzzle: SignalPuzzle }) {
 }
 
 /** This console's twelve keys, three rows of four; a wrong sign shakes them. */
-function Keys({
-  grid,
-  wrong,
-  send,
-}: {
-  grid: SignalToken[];
-  wrong: boolean;
-  send: PanelProps<'signal'>['send'];
-}) {
+function Keys({ grid, wrong, send }: { grid: SignalToken[]; wrong: boolean; send: SignalSend }) {
   return (
     <div className={wrong ? 'signal-grid signal-grid--wrong' : 'signal-grid'}>
       {grid.map((token) => (
@@ -121,57 +207,185 @@ function Layout({ grid }: { grid: SignalToken[] }) {
   );
 }
 
+/** The keys of shapes row by row, in the order the view lists them. */
+function byRow(keys: RowKey[]): [RowKey['row'], Form[]][] {
+  const rows = new Map<RowKey['row'], Form[]>();
+  for (const { row, shape } of keys) {
+    rows.set(row, [...(rows.get(row) ?? []), shape]);
+  }
+  return [...rows];
+}
+
+/** A key of shapes by its row and form; `send` null for the audience, which presses none. */
+interface RowKeyProps {
+  row: RowKey['row'];
+  form: Form;
+  send: SignalSend | null;
+}
+
+/** One key of shapes: pressed at the receiving console, only shown to the audience. */
+function RowKeyCap({ row, form, send }: RowKeyProps) {
+  if (send === null) {
+    return (
+      <span className="signal-key signal-key--shape" data-row={row} data-shape={form}>
+        <Shape form={form} />
+      </span>
+    );
+  }
+  return (
+    <button
+      className="signal-key signal-key--shape"
+      data-row={row}
+      data-shape={form}
+      aria-label={`Zeile ${row}, ${FORM_NAMES[form]}`}
+      onClick={() => {
+        play('click');
+        send({ key: { row, shape: form } });
+      }}
+    >
+      <Shape form={form} />
+    </button>
+  );
+}
+
+/** A console's keys of shapes; `send` null for the audience, which presses none. */
+interface RowKeysProps {
+  keys: RowKey[];
+  wrong: boolean;
+  send: SignalSend | null;
+}
+
 /**
- * The Signalkette at one console. The sending console shows the stage's
- * sequence, sign by sign; the receiving one has the twelve signs as keys and
- * presses the sequence in its order. Both light a lamp per sign pressed, and
- * the direction swaps with every stage. The audience sees what is sent and
- * the keys of both consoles.
+ * A console's keys with the legend: four numbered rows of the three forms,
+ * grey — which colour a row stands for, only the printed legend says. A
+ * wrong sign shakes them.
  */
-export function SignalPanel({ puzzle, send }: PanelProps<'signal'>) {
-  const stage = `Stufe ${puzzle.stage} von ${puzzle.stages}`;
-  const wrong = puzzle.lastResult === 'wrong';
-  const warning = wrong && (
+function RowKeys({ keys, wrong, send }: RowKeysProps) {
+  const layout = 'signal-grid signal-grid--rows';
+  return (
+    <div className={wrong ? `${layout} signal-grid--wrong` : layout}>
+      {byRow(keys).map(([row, forms]) => (
+        <Fragment key={row}>
+          <span className="signal-row-number">{row}</span>
+          {forms.map((form) => (
+            <RowKeyCap key={form} row={row} form={form} send={send} />
+          ))}
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
+/** The warning after a wrong sign, at both consoles and for the audience. */
+function Warning({ puzzle }: { puzzle: SignalPuzzle }) {
+  if (puzzle.lastResult !== 'wrong') {
+    return null;
+  }
+  return (
     <p className="warn" role="status">
       ⚠ Falsches Zeichen — Stufe von vorn.
     </p>
   );
-  if (puzzle.role === null && puzzle.grids !== null) {
-    const grids = puzzle.grids;
-    return (
-      <div className="signal">
-        <p className="signal-stage">{`${stage} — ${consoleName(puzzle.sends)} sendet`}</p>
-        {puzzle.sequence !== null && <Strip sequence={puzzle.sequence} done={puzzle.done} />}
-        {warning}
-        {(['a', 'b'] as const).map((side) => (
+}
+
+const stageOf = (puzzle: SignalPuzzle): string => `Stufe ${puzzle.stage} von ${puzzle.stages}`;
+
+/**
+ * What the audience sees: the sequence, and under it the keys — each
+ * console's own without the legend, the rows both share with it.
+ */
+function Audience({ puzzle, sequence }: { puzzle: SignalPuzzle; sequence: SignalToken[] }) {
+  const { grids, keys } = puzzle;
+  const both = `${consoleName('a')} und ${consoleName('b')}`;
+  return (
+    <div className="signal">
+      <p className="signal-stage">{`${stageOf(puzzle)} — ${consoleName(puzzle.sends)} sendet`}</p>
+      <Strip sequence={sequence} done={puzzle.done} />
+      <Warning puzzle={puzzle} />
+      {grids !== null &&
+        (['a', 'b'] as const).map((side) => (
           <section key={side} className="signal-console" aria-label={consoleName(side)}>
             <h4 className="signal-console-name">{consoleName(side)}</h4>
             <Layout grid={grids[side]} />
           </section>
         ))}
-      </div>
-    );
+      {keys !== null && (
+        <section className="signal-console" aria-label={both}>
+          <h4 className="signal-console-name">{both}</h4>
+          <RowKeys keys={keys} wrong={false} send={null} />
+        </section>
+      )}
+    </div>
+  );
+}
+
+/** The receiving console: a lamp per sign, then its keys — the signs, or rows of shapes. */
+function Receiver({ puzzle, keys }: { puzzle: SignalPuzzle; keys: ReactNode }) {
+  return (
+    <div className="signal">
+      <p className="signal-stage">{`${stageOf(puzzle)} — dieses Pult gibt ein`}</p>
+      <Lamps puzzle={puzzle} />
+      <p className="muted">
+        {puzzle.keys === null
+          ? 'Erst bei Ansage drücken.'
+          : 'Erst bei Ansage drücken; die Zeile zur Farbe nennt die Legende.'}
+      </p>
+      <Warning puzzle={puzzle} />
+      {keys}
+    </div>
+  );
+}
+
+/** The receiving console's keys: the signs themselves, or with the legend rows of shapes. */
+function receivingKeys(puzzle: SignalPuzzle, send: SignalSend): ReactNode {
+  const wrong = puzzle.lastResult === 'wrong';
+  if (puzzle.grid !== null) {
+    return <Keys grid={puzzle.grid} wrong={wrong} send={send} />;
   }
-  if (puzzle.role === 'receiver' && puzzle.grid !== null) {
-    return (
-      <div className="signal">
-        <p className="signal-stage">{`${stage} — dieses Pult gibt ein`}</p>
-        <Lamps puzzle={puzzle} />
-        <p className="muted">Erst bei Ansage drücken.</p>
-        {warning}
-        <Keys grid={puzzle.grid} wrong={wrong} send={send} />
-      </div>
-    );
+  if (puzzle.keys !== null) {
+    return <RowKeys keys={puzzle.keys} wrong={wrong} send={send} />;
   }
-  if (puzzle.role === 'sender' && puzzle.sequence !== null) {
-    return (
-      <div className="signal">
-        <p className="signal-stage">{`${stage} — dieses Pult sendet`}</p>
-        <Strip sequence={puzzle.sequence} done={puzzle.done} />
-        <p className="muted">Ansage von links, bis alle Lampen brennen.</p>
-        {warning}
-      </div>
-    );
+  return null;
+}
+
+/**
+ * The sending console: the stage's sequence over its lamps — side by side,
+ * or one sign at a time from the stage on that the rules call fleeting.
+ */
+function Sender({ puzzle, sequence }: { puzzle: SignalPuzzle; sequence: SignalToken[] }) {
+  return (
+    <div className="signal">
+      <p className="signal-stage">{`${stageOf(puzzle)} — dieses Pult sendet`}</p>
+      {puzzle.fleeting ? (
+        <FleetingStrip key={puzzle.stage} sequence={sequence} done={puzzle.done} />
+      ) : (
+        <Strip sequence={sequence} done={puzzle.done} />
+      )}
+      <p className="muted">Ansage von links, bis alle Lampen brennen.</p>
+      <Warning puzzle={puzzle} />
+    </div>
+  );
+}
+
+/**
+ * The Signalkette at one console. The sending console shows the stage's
+ * sequence, sign by sign — side by side, or one at a time where the stage
+ * is fleeting; the receiving one has twelve keys and presses the sequence
+ * in its order: the signs themselves, or with the legend rows of grey
+ * shapes. Both light a lamp per sign pressed, and the direction swaps with
+ * every stage. The audience sees what is sent and the keys.
+ */
+export function SignalPanel({ puzzle, send }: PanelProps<'signal'>) {
+  const { role, sequence } = puzzle;
+  if (role === null && sequence !== null) {
+    return <Audience puzzle={puzzle} sequence={sequence} />;
+  }
+  if (role === 'sender' && sequence !== null) {
+    return <Sender puzzle={puzzle} sequence={sequence} />;
+  }
+  const keys = role === 'receiver' ? receivingKeys(puzzle, send) : null;
+  if (keys !== null) {
+    return <Receiver puzzle={puzzle} keys={keys} />;
   }
   return <p className="muted">Dieses Pult ist nicht angeschlossen.</p>;
 }
