@@ -45,11 +45,13 @@ function seen(
     crew,
     console: null,
     atConsoles: { a: [], b: [] },
+    readers: [],
   };
   const state = station.init(def, rng, setup);
   const viewer = { playerId: who, operating, reading: false, console: seat };
   const view = station.view(def, state, viewer, { edgework, alarms: 0, crew });
-  return { ...view, index: 0, total: 1, title: def.title, manual: null, console: seat };
+  const common = { index: 0, total: 1, title: def.title, manual: null, console: seat };
+  return { ...view, ...common, backup: null };
 }
 
 function panel(puzzle: PuzzleView): string {

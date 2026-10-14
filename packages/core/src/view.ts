@@ -5,7 +5,7 @@ import { CREW_COLORS, type Credits, type GameState, type Phase, type RunEvent } 
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
 import type { ConsoleId, ManualSection, Viewer, ViewContext } from './puzzles/module.js';
 import { relayDefFor, relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
-import { consoleOf, doorOpen, platePressed, readersOf, sourceOpen } from './map.js';
+import { backupsOf, consoleOf, doorOpen, platePressed, readersOf, sourceOpen } from './map.js';
 
 /**
  * What a single player is allowed to see. Asymmetric information is enforced
@@ -358,7 +358,23 @@ function puzzleViewFor(state: GameState, playerId: string | null): PuzzleView | 
     title: def.title,
     manual: viewer.reading ? puzzleModule.manual(def) : null,
     console: viewer.console,
+    backup: puzzleModule.wholeCrew ? null : backupFor(state, def.id, playerId),
   };
+}
+
+/**
+ * Who lets `playerId`'s inputs at the open station of `puzzleId` count, by
+ * name, and where they stand; null for the audience, away from the station
+ * and while nobody backs them up.
+ */
+function backupFor(
+  state: GameState,
+  puzzleId: string,
+  playerId: string | null,
+): PuzzleView['backup'] {
+  const [first] = playerId === null ? [] : backupsOf(state, puzzleId, playerId);
+  const name = state.players.find((p) => p.id === first?.playerId)?.name;
+  return first === undefined || name === undefined ? null : { name, where: first.where };
 }
 
 /** Who looks at the open puzzle `puzzleId` from where; the audience sees it from everywhere. */

@@ -4157,4 +4157,14 @@ button.link:hover {
 .briefing-alarms {
   font-family: var(--mono);
   color: var(--warn);
+/* ══ the second person at a station ═══════════════════════════════════════
+ * Game.tsx (StationModal) and WorldModal.tsx: under the station's label, who
+ * backs this player up, muted — or, in the warning colour, that nobody does.
+ */
+
+/* A line of its own under the label and the Laborkennung. */
+.modal-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13px;
 }

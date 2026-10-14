@@ -134,12 +134,18 @@ describe('the operator gate', () => {
     expect(() => applyAction(state, input('p2', { wireId }))).toThrow(
       'Dafür musst du am Pult stehen.',
     );
-    const there = standing(state, { stations: { kabel: ['p1', 'p2'] } });
+    const there = standing(state, {
+      stations: { kabel: ['p1', 'p2'] },
+      manuals: { 'buch-kabel': ['p3'] },
+    });
     expect(applyAction(there, input('p2', { wireId })).puzzleState).not.toEqual(state.puzzleState);
   });
 
   it('keeps the station as it is when everybody walks away, and shows it again on return', () => {
-    const state = wiringOpen();
+    const state = standing(wiringOpen(), {
+      stations: { kabel: ['p1'] },
+      manuals: { 'buch-kabel': ['p2'] },
+    });
     const wires = wiringOf(viewFor(state, 'p1').puzzle).wires ?? [];
     const cut = applyAction(state, input('p1', { wireId: wires[0]?.id ?? '' }));
     const away = standing(cut, {});

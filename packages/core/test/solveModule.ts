@@ -62,6 +62,7 @@ export function playInstance(def: PuzzleDef, seed: number): number {
     crew,
     console: from,
     atConsoles: from === null ? { a: [], b: [] } : atConsoles,
+    readers: from === null ? [] : [READER],
   });
   const viewCtx: ViewContext = { edgework, alarms: 0, crew };
   let state = puzzleModule.init(def, mulberry32(seed), ctx(T0, null));

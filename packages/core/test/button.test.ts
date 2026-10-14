@@ -102,6 +102,7 @@ const ctx = (edgework: Edgework, remainingSec = 600): PuzzleContext => ({
   crew: CREW,
   console: 'a',
   atConsoles: { a: [], b: [] },
+  readers: [],
 });
 
 function apply(state: ButtonState, kind: ButtonInput['kind'], lab: Edgework, remainingSec = 600) {

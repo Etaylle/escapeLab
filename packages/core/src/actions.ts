@@ -25,6 +25,7 @@ import {
 } from './puzzles/relay.js';
 import {
   armedStations,
+  backupsOf,
   consoleOf,
   operatorsOf,
   readersOf,
@@ -297,6 +298,7 @@ function puzzleContext(state: GameState, at: number, from: ConsoleId | null): Pu
   if (state.edgework === null) {
     throw new Error('puzzle context: this run has no edgework — was start-mission skipped?');
   }
+  const open = state.mission.puzzles[state.currentPuzzleIndex];
   return {
     edgework: state.edgework,
     alarms: state.penaltySeq,
@@ -305,6 +307,7 @@ function puzzleContext(state: GameState, at: number, from: ConsoleId | null): Pu
     crew: state.players.filter((p) => p.connected).map((p) => p.id),
     console: from,
     atConsoles: presentAtConsoles(state, from),
+    readers: from === null || open === undefined ? [] : readersOf(state, open.id),
   };
 }
 
@@ -765,7 +768,10 @@ function expireSabotage(state: GameState, action: { at: number }): GameState {
 
 /**
  * One move at the open puzzle, interpreted by that puzzle's module, from the
- * console the player stands at.
+ * console the player stands at. It counts only with a second person there:
+ * another crew member at the station's other console or at the rules —
+ * except where the whole crew works the panel. Alone, it is turned away
+ * without an alarm.
  */
 function handlePuzzleInput(
   state: GameState,
@@ -785,6 +791,9 @@ function handlePuzzleInput(
     fail('Dafür musst du am Pult stehen.');
   }
   const puzzleModule = moduleFor(def.type);
+  if (!puzzleModule.wholeCrew && backupsOf(state, def.id, player.id).length === 0) {
+    fail('Allein geht das nicht — jemand muss am anderen Pult oder bei den Regeln stehen.');
+  }
   const input = puzzleModule.inputSchema.safeParse(action.input);
   if (!input.success) {
     fail('Ungültige Eingabe.');

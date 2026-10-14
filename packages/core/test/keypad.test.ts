@@ -51,6 +51,7 @@ const ctx: PuzzleContext = {
   crew,
   console: 'a',
   atConsoles: { a: [], b: [] },
+  readers: [],
 };
 
 /** A fresh instance straight from the module. */

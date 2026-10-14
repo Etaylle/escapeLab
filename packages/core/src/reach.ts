@@ -147,3 +147,41 @@ export function canGather(
     flood(map, spawn, (door) => opened(door) || heldInside(door));
   return someoneInside && spawns.every((spawn) => canStandAt(walksIn(spawn), spot));
 }
+
+/**
+ * Whether two different players can stand at two spots at the same time
+ * once `solved` puzzles are done, asked of as many pairs of spots as needed:
+ * one of them walks to their spot first — the others holding plates for
+ * them, as in `reachability` — and stays there; then another walks to the
+ * other spot with the help of everybody but the one who stays.
+ */
+export function twoAtOnce(
+  map: MapDef,
+  spawns: readonly Spot[],
+  solved: ReadonlySet<string>,
+): (one: Spot, other: Spot) => boolean {
+  const reach = reachability(map, spawns, solved);
+  const staying = new Map<number, Set<string>[]>();
+  /** What the others reach while player `first` stands still. */
+  const others = (first: number): Set<string>[] => {
+    const known = staying.get(first);
+    if (known !== undefined) {
+      return known;
+    }
+    const rest = reachability(map, spawns.filter((_, i) => i !== first), solved);
+    staying.set(first, rest);
+    return rest;
+  };
+  return (one, other) => {
+    const orders: [Spot, Spot][] = [
+      [one, other],
+      [other, one],
+    ];
+    return reach.some((tiles, first) =>
+      orders.some(
+        ([mine, theirs]) =>
+          canStandAt(tiles, mine) && others(first).some((rest) => canStandAt(rest, theirs)),
+      ),
+    );
+  };
+}

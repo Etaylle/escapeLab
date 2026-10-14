@@ -1,7 +1,15 @@
 import { z } from 'zod';
 import { moduleFor, puzzleDefSchema, type PuzzleDef } from './puzzles/index.js';
 import { RELAY_MAX_PLAYERS } from './puzzles/relay.js';
-import { canGather, canStandAt, crewsOf, reachability, tileKey, type Spot } from './reach.js';
+import {
+  canGather,
+  canStandAt,
+  crewsOf,
+  reachability,
+  tileKey,
+  twoAtOnce,
+  type Spot,
+} from './reach.js';
 
 /**
  * Mission format: a mission is pure data (JSON), validated by these schemas.
@@ -596,7 +604,8 @@ function checkSolvable(check: MapCheck, players: Crew, stations: PuzzleDef[]): v
 /**
  * One crew through the stations in mission order: each can be reached — by
  * the whole crew together where everyone presses, by two players at once
- * where it has two consoles — every spot of a manual object can be reached
+ * where it has two consoles, and by one player while another reads its
+ * rules where it has one — every spot of a manual object can be reached
  * once the first puzzle it covers is open (a cabinet's with its key in
  * hand), and the sign before the first rule that reads it.
  */
@@ -609,6 +618,7 @@ function walkStations(check: MapCheck, crew: Spot[], stations: PuzzleDef[]): voi
     const spots = check.map.stations.filter((s) => s.puzzleId === puzzle.id);
     if (spots.length > 0) {
       checkReachable(check, { crew, solved, reach }, puzzle, spots);
+      checkBackup(check, { crew, solved, reach }, puzzle, spots);
     }
     for (const manual of check.map.manuals.filter((m) => firstNeed(m) === puzzle.id)) {
       checkSource(check, reach, manual, puzzle.id);
@@ -688,6 +698,36 @@ function consoleOutOfReach(atA: number[], atB: number[]): string | null {
     return null;
   }
   return 'nobody but the player at console a can reach console b';
+}
+
+/**
+ * Nobody works a station alone: at a station with one console, wherever its
+ * rules are drawn to, one player can stand at it while another stands at a
+ * source covering it — lockers and cabinets alike, which other checks see
+ * opened. A station with two consoles has its second player at the other
+ * console; one the whole crew works needs nobody to read. What nobody can
+ * reach at all, other checks report.
+ */
+function checkBackup(check: MapCheck, stage: Stage, puzzle: PuzzleDef, spots: StationDef[]): void {
+  const { wholeCrew, consoles } = moduleFor(puzzle.type);
+  const [station] = spots;
+  const someone = (spot: Spot): boolean => stage.reach.some((tiles) => canStandAt(tiles, spot));
+  if (wholeCrew || consoles === 2 || station === undefined || !someone(station)) {
+    return;
+  }
+  const pair = twoAtOnce(check.map, stage.crew, stage.solved);
+  const sources = check.map.manuals.filter((manual) => manual.puzzleIds.includes(puzzle.id));
+  // Each source lies on one of its spots; one source that pairs up there is enough.
+  const alone = sources.flatMap((manual) => {
+    const spot = manual.spots.find((s) => someone(s) && !pair(station, s));
+    return spot === undefined ? [] : [`${manual.label} at ${spot.x},${spot.y}`];
+  });
+  if (sources.length > 0 && alone.length === sources.length) {
+    check.issue(
+      `map: station "${puzzle.id}" and its rules (${alone.join(', ')}) are never reachable ` +
+        'by two different players at once — the crew would be alone',
+    );
+  }
 }
 
 /**

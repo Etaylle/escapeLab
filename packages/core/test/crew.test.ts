@@ -5,14 +5,15 @@ import { T0 } from './lab.js';
 
 /**
  * Two rooms, west (x 1–3) and east (x 5–7), joined by a door at (4,2) that
- * opens once the wiring is cut; the wiring box and its book stand in the
- * west room. Every test picks the spawns and the player count it needs.
+ * stands open while somebody holds its plate at (3,3), in the west room; the
+ * wiring box and its book stand in the west room too. Every test picks the
+ * spawns and the player count it needs.
  *
  *   012345678
  * 0 #########
  * 1 #...#...#
  * 2 #.......#   door at (4,2)
- * 3 #...#...#
+ * 3 #...#...#   plate at (3,3)
  * 4 #########
  */
 function lab(players: { min: number; max: number }, spawns: { x: number; y: number }[]): object {
@@ -26,7 +27,8 @@ function lab(players: { min: number; max: number }, spawns: { x: number; y: numb
     map: {
       tiles: ['#########', '#...#...#', '#.......#', '#...#...#', '#########'],
       spawns,
-      doors: [{ id: 'tuer', x: 4, y: 2, opensBy: { kind: 'puzzle', puzzleId: 'kabel' } }],
+      doors: [{ id: 'tuer', x: 4, y: 2, opensBy: { kind: 'plate', plateId: 'platte' } }],
+      plates: [{ id: 'platte', x: 3, y: 3, label: 'HALTEN' }],
       stations: [{ puzzleId: 'kabel', x: 2, y: 3 }],
       manuals: [
         {
@@ -127,7 +129,8 @@ describe('the player count in the mission format', () => {
   });
 
   it('is walked for every crew it takes: every count, every choice of spawns', () => {
-    // Both east spawns drawn for a crew of two: nobody gets to the box behind the door.
+    // Both east spawns drawn for a crew of two: nobody holds the plate in the west room, so
+    // nobody gets to the box behind the door.
     const east = [...WEST, { x: 6, y: 1 }, { x: 7, y: 1 }];
     expect(() => parseMission(lab({ min: 2, max: 2 }, east))).toThrow(
       /nobody can reach station "kabel" .*\(crew of 2 starting at 6,1 · 7,1\)/,

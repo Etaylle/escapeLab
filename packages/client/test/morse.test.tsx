@@ -19,6 +19,7 @@ function view(pattern: string | null, dial: number): MorseView {
     title: 'Funkfeuer',
     manual: null,
     console: 'a',
+    backup: null,
   };
 }
 

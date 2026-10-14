@@ -60,6 +60,7 @@ const ctx = (edgework: Edgework, alarms: number): PuzzleContext => ({
   crew: CREW,
   console: 'a',
   atConsoles: { a: [], b: [] },
+  readers: [],
 });
 
 const press = (color: SimonColor) => ({ kind: 'press', color }) as const;

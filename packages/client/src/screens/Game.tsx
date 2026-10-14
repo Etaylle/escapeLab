@@ -7,6 +7,7 @@ import type {
   PlayerView,
   PuzzleView,
 } from '@escapelab/core';
+import { moduleFor } from '@escapelab/core';
 import { useKeys, useNow } from '../hooks.js';
 import { bannerFrom, noticeMs, radioNews, withNews, type Notice } from '../radio.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
@@ -23,7 +24,7 @@ import { InfoPanel } from './InfoPanel.js';
 import { Manual } from './Manual.js';
 import { Notepad, useNotes } from './Notepad.js';
 import { ReadingOverlay } from './Reading.js';
-import { WorldModal } from './WorldModal.js';
+import { WorldModal, type ModalNote } from './WorldModal.js';
 
 interface Props {
   view: PlayerView;
@@ -398,6 +399,52 @@ export function stationLabel(puzzle: PuzzleView, map: MapView): string {
     : label;
 }
 
+/**
+ * The line under the station frame's label: who lets this player's inputs
+ * count, and where — „Mit Ben an Pult B", „Mit Ben bei: SPIND" — or, as a
+ * warning, that nobody does yet. None where the whole crew works the panel.
+ */
+export function backupNote(puzzle: PuzzleView): ModalNote | null {
+  if (moduleFor(puzzle.kind).wholeCrew) {
+    return null;
+  }
+  const { backup } = puzzle;
+  if (backup === null) {
+    return { text: 'Allein — jemand muss zu den Regeln oder ans andere Pult', tone: 'warn' };
+  }
+  const atConsole = backup.where === consoleName('a') || backup.where === consoleName('b');
+  return { text: `Mit ${backup.name} ${atConsole ? 'an' : 'bei:'} ${backup.where}`, tone: 'muted' };
+}
+
+/** The open station over the world: its label, who backs this player up, its panel. */
+export function StationModal({
+  puzzle,
+  map,
+  edgework,
+  deadlineAt,
+  send,
+  onClose,
+}: {
+  puzzle: PuzzleView;
+  map: MapView;
+  edgework: PlayerView['edgework'];
+  deadlineAt: number | null;
+  send: (msg: ClientMessage) => void;
+  onClose: () => void;
+}) {
+  return (
+    <WorldModal
+      kind="station"
+      label={stationLabel(puzzle, map)}
+      edgework={edgework}
+      note={backupNote(puzzle)}
+      onClose={onClose}
+    >
+      <PuzzlePanel puzzle={puzzle} send={send} deadlineAt={deadlineAt} />
+    </WorldModal>
+  );
+}
+
 /** Escape closes whatever lies on top. */
 function useEscape(onEscape: () => void): void {
   const handler = useRef(onEscape);
@@ -565,14 +612,14 @@ export function GameScreen({
       </div>
 
       {open.station !== null && (
-        <WorldModal
-          kind="station"
-          label={stationLabel(open.station, map)}
+        <StationModal
+          puzzle={open.station}
+          map={map}
           edgework={view.edgework}
+          deadlineAt={view.deadlineAt}
+          send={send}
           onClose={closeModal}
-        >
-          <PuzzlePanel puzzle={open.station} send={send} deadlineAt={view.deadlineAt} />
-        </WorldModal>
+        />
       )}
       {open.reading !== null && (
         <ReadingOverlay

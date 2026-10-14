@@ -11,10 +11,11 @@ import type { Action, GameState } from '../src/index.js';
 import { consoleLab, labMission, openLab, standing, started, T0 } from './lab.js';
 
 /** Two wiring stations in the corridor lab, one book for both; p1 works, p2 reads. */
-const mission = labMission([
+const PUZZLES = [
   { type: 'wiring', id: 'erst', title: 'Erst', hints: ['Von oben zählen.'] },
   { type: 'wiring', id: 'dann', title: 'Dann' },
-]);
+];
+const mission = labMission(PUZZLES);
 
 /** The cut the open station's rules name, worked out from the two views alone. */
 function rightCut(state: GameState, at: number): Action {
@@ -59,9 +60,14 @@ describe('credits', () => {
   });
 
   it('count a station of one console for the input that solved it, not for others at it', () => {
-    let state = openLab(started(mission));
+    let state = openLab(started(labMission(PUZZLES, 'labor-drei', 3)));
     const cut = rightCut(state, T0 + 2000);
-    state = applyAction(standing(state, { stations: { erst: ['p1', 'p2'] } }), cut);
+    // p2 joins p1 at the box, and p3 reads in their place
+    const together = standing(state, {
+      stations: { erst: ['p1', 'p2'] },
+      manuals: { buch: ['p3'] },
+    });
+    state = applyAction(together, cut);
     expect(state.currentPuzzleIndex).toBe(1);
     expect(state.credits['p1']?.operated).toBe(1);
     expect(state.credits['p2']?.operated).toBe(0);

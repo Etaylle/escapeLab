@@ -37,6 +37,7 @@ const ctx: PuzzleContext = {
   crew,
   console: 'a',
   atConsoles: { a: [], b: [] },
+  readers: [],
 };
 
 const fresh = (seed: number): MorseState => morseModule.init(def, mulberry32(seed), ctx);

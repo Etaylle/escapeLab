@@ -49,6 +49,11 @@ Labyrinth samt Wandplan), am Rand steht auf Wunsch eine **Notiz der letzten Crew
 Die Laborkennung hängt als Schild im Labor: Wer daran vorbeikommt, hat sie ab dann in der Leiste
 und übernimmt sie per Knopf in den Notizblock.
 
+**Nie allein:** Eine Eingabe am Pult zählt nur, solange noch jemand am anderen Pult oder bei den
+Regeln dieser Station steht — sonst wird sie ohne Alarm abgewiesen. Der Kopf des Pults nennt die
+zweite Person („Mit Ben bei: SPIND“, „Mit Ben an Pult B“) oder warnt, dass sie fehlt. Ausgenommen
+sind Stationen, an denen die ganze Crew gemeinsam drückt.
+
 **Schwierigkeit:** Der Host wählt in der Lobby zwischen *Entspannt*, *Normal* und *Hart* — das
 skaliert Zeitbudget, alle Zeitstrafen, Drohnentempo und -reichweite sowie Häufigkeit und Dauer
 der Notfälle. **Verbindungsabbruch:** Fehlt jemand aus der Crew, pausiert die Mission komplett
@@ -88,7 +93,9 @@ Rätsel — bei einem Rätsel mit zwei Pulten (Signalkette) je eine für Pult A 
 vier Felder auseinander — und per Flutfüllung mit den echten Tür-Regeln, dass die Stationen in
 Reihenfolge erreichbar sind und am Ende **alle** den Notausgang erreichen können. Eine
 Plattentür kann mit `untilSolved` ein Rätsel nennen: Ist es gelöst, bleibt sie auch ohne Platte
-offen (Blackout: die Maschinenraumtür nach dem Notstrom).
+offen (Blackout: die Maschinenraumtür nach dem Notstrom). An jeder Station mit einem Pult muss
+außerdem — wohin ihre Regeln auch ausgelost werden — einer am Pult stehen können, während ein
+anderer sie zugleich liest.
 
 ## Struktur
 
