@@ -1,3 +1,4 @@
+import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
@@ -9,6 +10,11 @@ import {
   type PuzzleView,
 } from '@escapelab/core';
 import { PANELS } from '../src/puzzles/index.js';
+import {
+  FLEETING_PAUSE_MS,
+  FLEETING_SIGN_MS,
+  fleetingAt,
+} from '../src/puzzles/SignalPanel.js';
 import { PuzzlePanel, ReaderPanel } from '../src/screens/PuzzlePanel.js';
 
 /** A small deterministic generator, enough to set an instance up. */
@@ -147,20 +153,47 @@ describe('the maze', () => {
 describe('the signal chain', () => {
   type SignalSeen = Extract<PuzzleView, { kind: 'signal' }>;
 
-  /** Stage 1 at console `seat` — console a sends it — with what `change` says happened since. */
-  function at(seat: ConsoleId, change: Partial<SignalSeen> = {}): SignalSeen {
-    const view = seen('signal', true, {}, seat);
+  /**
+   * Stage 1 of a Signalkette with the def's `fields` — console a sends it —
+   * at console `seat`, or as the audience sees it with `seat` null.
+   */
+  function signalAt(seat: ConsoleId | null, fields: Record<string, unknown> = {}): SignalSeen {
+    const view = seen('signal', true, fields, seat, seat === null ? null : 'p1');
     if (view.kind !== 'signal') {
       throw new Error(`expected the signal chain, got ${view.kind}`);
     }
-    return { ...view, ...change };
+    return view;
   }
+
+  /** Stage 1 at console `seat` — console a sends it — with what `change` says happened since. */
+  const at = (seat: ConsoleId, change: Partial<SignalSeen> = {}): SignalSeen => ({
+    ...signalAt(seat),
+    ...change,
+  });
 
   /** What the panel prints under each sign, in the order it shows them. */
   const words = (html: string): string[] =>
     [...html.matchAll(/<span class="signal-word">([^<]*)<\/span>/g)].map((m) => m[1] ?? '');
 
   const lit = (html: string): number => html.match(/signal-lamp--lit/g)?.length ?? 0;
+
+  /** The keys of shapes as drawn — buttons, or the audience's spans — by row and form. */
+  function rowKeys(html: string, tag: 'button' | 'span') {
+    const key = new RegExp(
+      `<${tag} class="signal-key signal-key--shape" data-row="(\\d)" data-shape="([a-z]+)"`,
+      'g',
+    );
+    return [...html.matchAll(key)].map((m) => ({ row: Number(m[1]), shape: m[2] }));
+  }
+
+  const rowNumbers = (html: string): string[] =>
+    [...html.matchAll(/<span class="signal-row-number">(\d)<\/span>/g)].map((m) => m[1] ?? '');
+
+  /** The names under the keys of shapes, row by row. */
+  const FORMS_BY_ROW = Array.from({ length: 4 }, () => ['Kreis', 'Dreieck', 'Quadrat']).flat();
+
+  /** A colour anywhere: drawn, or named. */
+  const COLOURED = /fill="#|\b(rot|blau|grün|gruen|gelb)/i;
 
   it('shows the sending console the sequence in words, a lamp under each sign, no key', () => {
     const sending = at('a');
@@ -172,6 +205,39 @@ describe('the signal chain', () => {
     expect(html.match(/class="signal-lamp/g)).toHaveLength(4);
     expect(lit(html)).toBe(0);
     expect(html).not.toContain('<button');
+    // Side by side, every sign at once: nothing fleeting about it.
+    expect(html).not.toMatch(/fleeting|signal-sign--shown|signal-glyph--dark/);
+  });
+
+  it('shows a fleeting stage one sign at a time in its own place, every lamp kept', () => {
+    const sending = { ...signalAt('a', { fleetingFrom: 1 }), done: 1 };
+    expect(sending.fleeting).toBe(true);
+    const [first, ...rest] = sending.sequence ?? [];
+    expect(rest).toHaveLength(3);
+    const html = panel(sending);
+    expect(html).toContain('Stufe 1 von 4 — dieses Pult sendet');
+    expect(html).toContain('<ol class="signal-strip signal-strip--fleeting"');
+    // As the strip appears, its first sign shows; the other places are dark.
+    const places = [...html.matchAll(/<li class="([^"]*)">/g)].map((m) => m[1]);
+    expect(places).toEqual([
+      'signal-sign signal-sign--shown',
+      'signal-sign',
+      'signal-sign',
+      'signal-sign',
+    ]);
+    expect(words(html)).toEqual([tokenLabel(first ?? 'rot-kreis')]);
+    expect(html.match(/signal-glyph--dark/g)).toHaveLength(3);
+    expect(html.match(/class="signal-lamp/g)).toHaveLength(4);
+    expect(lit(html)).toBe(1);
+    expect(html).not.toContain('<button');
+  });
+
+  it('keeps the strip side by side in the stages before the fleeting one', () => {
+    const sending = signalAt('a', { fleetingFrom: 2 });
+    expect(sending.fleeting).toBe(false);
+    const html = panel(sending);
+    expect(words(html)).toEqual((sending.sequence ?? []).map(tokenLabel));
+    expect(html).not.toContain('signal-strip--fleeting');
   });
 
   it('gives the receiving console its twelve signs as keys, and no sequence', () => {
@@ -182,6 +248,63 @@ describe('the signal chain', () => {
     expect([...html.matchAll(key)].map((m) => m[1])).toEqual(receiving.grid);
     expect(words(html)).toEqual((receiving.grid ?? []).map(tokenLabel));
     expect(html).not.toContain('signal-strip');
+    expect(html).not.toMatch(/signal-key--shape|signal-row-number|Legende/);
+  });
+
+  it('gives the receiving console with the legend 12 grey keys in numbered rows, no colour', () => {
+    const receiving = signalAt('b', { legend: true });
+    const html = panel(receiving);
+    expect(html).toContain('Stufe 1 von 4 — dieses Pult gibt ein');
+    expect(rowKeys(html, 'button')).toEqual(receiving.keys);
+    expect(rowKeys(html, 'button')).toHaveLength(12);
+    expect(rowNumbers(html)).toEqual(['1', '2', '3', '4']);
+    expect(words(html)).toEqual(FORMS_BY_ROW);
+    expect(html.match(/fill="currentColor"/g)).toHaveLength(12);
+    expect(html).not.toMatch(COLOURED);
+    expect(html).not.toContain('data-token');
+    expect(html).not.toContain('signal-strip');
+    expect(html).toContain('Erst bei Ansage drücken; die Zeile zur Farbe nennt die Legende.');
+    expect(html.match(/class="signal-lamp( signal-lamp--lit)?"/g)).toHaveLength(4);
+  });
+
+  /**
+   * Every element `node` renders to, its function components called through:
+   * enough to reach a panel's keys and press them without a DOM. Only for
+   * parts that use no hooks, as the receiving console's do.
+   */
+  function elementsOf(node: ReactNode): ReactElement<Record<string, unknown>>[] {
+    if (Array.isArray(node)) {
+      return node.flatMap((child: ReactNode) => elementsOf(child));
+    }
+    if (!isValidElement<Record<string, unknown>>(node)) {
+      return [];
+    }
+    if (typeof node.type === 'function') {
+      return elementsOf((node.type as (props: unknown) => ReactNode)(node.props));
+    }
+    return [node, ...elementsOf(node.props['children'] as ReactNode)];
+  }
+
+  /** What the receiving console sends for each of its keys, pressed in turn. */
+  function pressEvery(puzzle: SignalSeen): unknown[] {
+    const sent: unknown[] = [];
+    const Panel = PANELS.signal;
+    const tree = <Panel puzzle={puzzle} send={(input) => sent.push(input)} deadlineAt={null} />;
+    const keys = elementsOf(tree).filter((element) => element.type === 'button');
+    expect(keys).toHaveLength(12);
+    for (const key of keys) {
+      (key.props['onClick'] as () => void)();
+    }
+    return sent;
+  }
+
+  it('sends a sign’s key as the sign, and a key of shapes as its row and its form', () => {
+    const plain = at('b');
+    expect(pressEvery(plain)).toEqual((plain.grid ?? []).map((token) => ({ press: token })));
+    const legend = signalAt('b', { legend: true });
+    expect(pressEvery(legend)).toEqual(
+      (legend.keys ?? []).map(({ row, shape }) => ({ key: { row, shape } })),
+    );
   });
 
   it('lights a lamp for every sign pressed, at both consoles', () => {
@@ -198,6 +321,9 @@ describe('the signal chain', () => {
     const right = panel(at('b'));
     expect(right).not.toContain('Falsches Zeichen');
     expect(right).not.toContain('signal-grid--wrong');
+    const rows = panel({ ...signalAt('b', { legend: true }), lastResult: 'wrong' });
+    expect(rows).toContain(`<p class="warn" role="status">${message}</p>`);
+    expect(rows).toContain('class="signal-grid signal-grid--rows signal-grid--wrong"');
   });
 
   it('tells a console nobody stands at that it is not connected', () => {
@@ -219,5 +345,64 @@ describe('the signal chain', () => {
     expect(words(html)).toEqual([...sequence, ...grids.a, ...grids.b].map(tokenLabel));
     expect(lit(html)).toBe(1);
     expect(html).not.toContain('<button');
+  });
+
+  it('shows the audience with the legend the strip and the rows both consoles share', () => {
+    const watched = signalAt(null, { legend: true, fleetingFrom: 1 });
+    const sequence = watched.sequence ?? [];
+    expect(sequence).toHaveLength(4);
+    const html = panel(watched);
+    expect(html).toContain('Stufe 1 von 4 — Pult A sendet');
+    // The audience follows the whole sequence, fleeting or not.
+    expect(html).toContain('<ol class="signal-strip"');
+    const names = [...html.matchAll(/<h4 class="signal-console-name">([^<]*)<\/h4>/g)];
+    expect(names.map((m) => m[1])).toEqual(['Pult A und Pult B']);
+    expect(rowKeys(html, 'span')).toEqual(watched.keys);
+    expect(rowNumbers(html)).toEqual(['1', '2', '3', '4']);
+    expect(words(html)).toEqual([...sequence.map(tokenLabel), ...FORMS_BY_ROW]);
+    expect(html).not.toContain('<button');
+  });
+});
+
+describe('a fleeting strip', () => {
+  it('shows each sign for 1.2 s in turn, then stays dark for 2 s and starts over', () => {
+    expect([FLEETING_SIGN_MS, FLEETING_PAUSE_MS]).toEqual([1200, 2000]);
+    const shownAt = (ms: number) => fleetingAt(ms, 4).shown;
+    expect([0, 1199, 1200, 2399, 2400, 3600, 4799].map(shownAt)).toEqual([0, 0, 1, 1, 2, 3, 3]);
+    expect([4800, 6799].map(shownAt)).toEqual([null, null]);
+    expect([6800, 8000, 3 * 6800 + 4799, 3 * 6800 + 4800].map(shownAt)).toEqual([0, 1, 3, null]);
+  });
+
+  it('counts a time before its start as the start', () => {
+    expect(fleetingAt(-500, 4)).toEqual(fleetingAt(0, 4));
+  });
+
+  it('says how long until it changes, so that one timer per change keeps it going', () => {
+    expect(fleetingAt(0, 3)).toEqual({ shown: 0, untilNext: 1200 });
+    expect(fleetingAt(1000, 3)).toEqual({ shown: 0, untilNext: 200 });
+    expect(fleetingAt(3600, 3)).toEqual({ shown: null, untilNext: 2000 });
+    expect(fleetingAt(5000, 3)).toEqual({ shown: null, untilNext: 600 });
+    // From change to change: every sign, the pause, and round again.
+    let ms = 0;
+    const steps: (number | null)[] = [];
+    for (let step = 0; step < 8; step++) {
+      const { shown, untilNext } = fleetingAt(ms, 3);
+      steps.push(shown);
+      ms += untilNext;
+    }
+    expect(steps).toEqual([0, 1, 2, null, 0, 1, 2, null]);
+    expect(ms).toBe(2 * (3 * 1200 + 2000));
+  });
+
+  it.each([3, 4, 5, 6])('gives each of %i signs the same time over a cycle', (count) => {
+    const time = new Map<number | null, number>();
+    for (let ms = 0; ms < count * 1200 + 2000; ms += 100) {
+      const { shown } = fleetingAt(ms, count);
+      time.set(shown, (time.get(shown) ?? 0) + 100);
+    }
+    expect([...time]).toEqual([
+      ...Array.from({ length: count }, (_, i): [number, number] => [i, 1200]),
+      [null, 2000],
+    ]);
   });
 });

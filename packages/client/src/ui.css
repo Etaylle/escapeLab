@@ -4124,3 +4124,38 @@ button.link:hover {
   font-size: 12px;
   color: var(--muted);
 }
+
+/* ══ the Signalkette's legend and fleeting display ═════════════════════════
+ * SignalPanel.tsx. With the legend, the receiving console's keys are four
+ * numbered rows of the three forms in grey: the row's number on the left,
+ * the colour only in the printed legend; a wrong sign still flashes them
+ * red. A fleeting strip shows one sign at a time in its own place, the
+ * other places dark windows; each place keeps room for a word of two lines,
+ * so the lamps under them stay put while the signs come and go.
+ */
+
+.signal-grid--rows {
+  grid-template-columns: 2em repeat(3, minmax(0, 1fr));
+}
+
+.signal-row-number {
+  align-self: center;
+  font-family: var(--mono);
+  font-size: 18px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.signal-key--shape {
+  color: #a3aeb9;
+}
+
+.signal-strip--fleeting .signal-word {
+  min-height: 2.4em;
+}
+
+.signal-glyph--dark {
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--line);
+}

@@ -14,12 +14,20 @@ import type {
   ConsoleId,
   GameState,
   ManualBlock,
+  ManualSection,
+  Mission,
   PuzzleContext,
   SignalToken,
   Viewer,
 } from '../src/index.js';
-import { signalModule } from '../src/puzzles/signal.js';
-import type { SignalDef, SignalState, SignalView } from '../src/puzzles/signal.js';
+import { LEGEND, signalModule } from '../src/puzzles/signal.js';
+import type {
+  LegendRow,
+  SignalDef,
+  SignalKey,
+  SignalState,
+  SignalView,
+} from '../src/puzzles/signal.js';
 import { mulberry32 } from '../src/rng.js';
 import {
   AT_BOOK,
@@ -68,22 +76,47 @@ const deal = (def: SignalDef, seed: number): SignalState =>
   signalModule.init(def, mulberry32(seed), ctx(null));
 
 /**
- * A press of `token` at console `from` — by op at console a, by pt at
- * console b — through the input schema as a client's would go.
+ * An input at console `from` — by op at console a, by pt at console b —
+ * through the input schema as a client's would go.
  */
-function press(
+function send(
+  def: SignalDef,
+  state: SignalState,
+  input: unknown,
+  from: ConsoleId | null,
+  atConsoles = MANNED,
+) {
+  const parsed = signalModule.inputSchema.parse(input);
+  return signalModule.apply(def, state, parsed, from === 'b' ? 'pt' : 'op', ctx(from, atConsoles));
+}
+
+/** A press of the sign's own key, at a console without the legend. */
+const press = (
   def: SignalDef,
   state: SignalState,
   token: SignalToken,
   from: ConsoleId | null,
   atConsoles = MANNED,
-) {
-  const input = signalModule.inputSchema.parse({ press: token });
-  return signalModule.apply(def, state, input, from === 'b' ? 'pt' : 'op', ctx(from, atConsoles));
-}
+) => send(def, state, { press: token }, from, atConsoles);
+
+/** A press of a key of shapes, at a console with the legend. */
+const pressKey = (
+  def: SignalDef,
+  state: SignalState,
+  key: SignalKey,
+  from: ConsoleId | null,
+  atConsoles = MANNED,
+) => send(def, state, { key }, from, atConsoles);
 
 const seenFrom = (def: SignalDef, state: SignalState, viewer: Viewer): SignalView =>
   signalModule.view(def, state, viewer, viewCtx);
+
+/** The crew's views: console a, console b, the book. */
+const viewsOf = (def: SignalDef, state: SignalState) => ({
+  operator: seenFrom(def, state, AT_STATION),
+  partner: seenFrom(def, state, AT_CONSOLE_B),
+  reader: seenFrom(def, state, AT_BOOK),
+});
 
 /** The sequence the receiving console has to press now, as the sending console shows it. */
 function shownSequence(def: SignalDef, state: SignalState): SignalToken[] {
@@ -96,12 +129,57 @@ function shownSequence(def: SignalDef, state: SignalState): SignalToken[] {
   return sender.sequence;
 }
 
+/** The coloured keys of both consoles, as a def without the legend deals them. */
+function gridsOf(state: SignalState): Record<ConsoleId, SignalToken[]> {
+  if (state.grids === null) {
+    throw new Error('expected the coloured keys of a station without the legend');
+  }
+  return state.grids;
+}
+
 /** The other console. */
 const across = (side: ConsoleId): ConsoleId => (side === 'a' ? 'b' : 'a');
 
 /** A sign that is not `token`. */
 const besides = (token: SignalToken | undefined): SignalToken =>
   TOKENS.find((other) => other !== token) ?? 'rot-kreis';
+
+const ROWS: readonly LegendRow[] = [1, 2, 3, 4];
+type Shape = SignalKey['shape'];
+const SHAPES: readonly Shape[] = ['kreis', 'dreieck', 'quadrat'];
+
+/** A console's keys with the legend: 4 rows of the three shapes, row 1 first. */
+const ROW_KEYS: SignalKey[] = ROWS.flatMap((row) => SHAPES.map((shape) => ({ row, shape })));
+
+/** A sign's colour and shape, read off its id: „rot-dreieck" is red and a triangle. */
+function partsOf(token: SignalToken): [string, Shape] {
+  const [colour = '', shape = 'kreis'] = token.split('-') as [string, Shape];
+  return [colour, shape];
+}
+
+/** The key that stands for `token` at console `side`, looked up in the module's legend. */
+function keyAt(token: SignalToken, side: ConsoleId): SignalKey {
+  const [colour, shape] = partsOf(token);
+  const row = ROWS.find((r) => LEGEND[side][r] === colour);
+  if (row === undefined) {
+    throw new Error(`no row of console ${side} stands for ${colour}`);
+  }
+  return { row, shape };
+}
+
+/** The stage under way, pressed in full at the receiving console as the solver says. */
+function stageThrough(def: SignalDef, state: SignalState): SignalState {
+  let now = state;
+  for (const { by, input } of signalModule.solve(def, viewsOf(def, now), null)) {
+    const result = send(def, now, input, by === 'partner' ? 'b' : 'a');
+    expect(result.penalty).toBeNull();
+    now = result.state;
+  }
+  return now;
+}
+
+/** Any colour word, as an id or as printed. */
+const COLOUR_WORD = /rot|blau|gr(ü|ue)n|gelb/i;
 
 describe('the signs', () => {
   it('are twelve, every colour in every shape, each said as players say it', () => {
@@ -118,6 +196,24 @@ describe('the signs', () => {
   });
 });
 
+describe('the legend', () => {
+  it('gives every console each colour in one row, and no row the same colour at both', () => {
+    for (const side of ['a', 'b'] as const) {
+      const colours = ROWS.map((row) => LEGEND[side][row]);
+      expect([...colours].sort()).toEqual(['blau', 'gelb', 'gruen', 'rot']);
+    }
+    expect(ROWS.filter((row) => LEGEND.a[row] === LEGEND.b[row])).toEqual([]);
+  });
+
+  it('turns each sign into one key at either console, and back', () => {
+    for (const side of ['a', 'b'] as const) {
+      const keys = TOKENS.map((token) => keyAt(token, side));
+      expect(new Set(keys.map(({ row, shape }) => `${row} ${shape}`)).size).toBe(12);
+      expect(keys.map(({ row, shape }) => `${LEGEND[side][row]}-${shape}`)).toEqual(TOKENS);
+    }
+  });
+});
+
 describe('signal setup', () => {
   it('takes 4 stages of 4 signs and 20 s by default, 2–6 stages of 3–6 signs at most', () => {
     expect(defOf()).toMatchObject({ stages: 4, length: 4, penaltySec: 20 });
@@ -127,10 +223,43 @@ describe('signal setup', () => {
     expect(defOf({ stages: 6, length: 3 })).toMatchObject({ stages: 6, length: 3 });
   });
 
+  it('has no legend and no fleeting display by default, either on request', () => {
+    expect(defOf()).toMatchObject({ legend: false, fleetingFrom: null });
+    expect(defOf({ legend: true, fleetingFrom: 4 })).toMatchObject({
+      legend: true,
+      fleetingFrom: 4,
+    });
+    expect(defOf({ stages: 6, fleetingFrom: 1 }).fleetingFrom).toBe(1);
+    expect(defOf({ stages: 6, fleetingFrom: 6 }).fleetingFrom).toBe(6);
+  });
+
+  it('turns a fleeting display down that starts nowhere or after the last stage', () => {
+    const parsed = (fields: object) =>
+      signalModule.defSchema.safeParse({ type: 'signal', id: 'kette', title: 'T', ...fields });
+    for (const fields of [
+      { fleetingFrom: 0 },
+      { fleetingFrom: 2.5 },
+      { fleetingFrom: '2' },
+      { legend: 'ja' },
+      { legend: 1 },
+    ]) {
+      expect(parsed(fields).success, JSON.stringify(fields)).toBe(false);
+    }
+    const late = parsed({ stages: 3, fleetingFrom: 4 });
+    expect(late.success).toBe(false);
+    expect(late.error?.issues.map((issue) => [issue.path, issue.message])).toEqual([
+      [
+        ['fleetingFrom'],
+        'puzzle "kette": fleetingFrom (4) is past the last stage (3), so no stage would show ' +
+          'its signs one at a time — lower it, or set it to null',
+      ],
+    ]);
+  });
+
   it('lays all twelve keys out at each console, no sign in the same place at both', () => {
     const sorted = [...TOKENS].sort();
     for (let seed = 0; seed < SEEDS; seed++) {
-      const { grids } = deal(defOf(), seed);
+      const grids = gridsOf(deal(defOf(), seed));
       expect([...grids.a].sort(), `seed ${seed}`).toEqual(sorted);
       expect([...grids.b].sort(), `seed ${seed}`).toEqual(sorted);
       expect(
@@ -140,10 +269,16 @@ describe('signal setup', () => {
     }
   });
 
+  it('deals no coloured keys with the legend: both consoles have the same rows of shapes', () => {
+    for (let seed = 0; seed < 20; seed++) {
+      expect(deal(defOf({ legend: true }), seed).grids).toBeNull();
+    }
+  });
+
   it('draws a sequence per stage, never the same sign twice in a row, the same for a seed', () => {
     const seen = new Set<string>();
     for (let seed = 0; seed < SEEDS; seed++) {
-      const def = defOf({ stages: 2 + (seed % 5), length: 3 + (seed % 4) });
+      const def = defOf({ stages: 2 + (seed % 5), length: 3 + (seed % 4), legend: seed % 2 === 0 });
       const { sequences } = deal(def, seed);
       expect(deal(def, seed).sequences).toEqual(sequences);
       expect(sequences).toHaveLength(def.stages);
@@ -167,6 +302,7 @@ describe('signal setup', () => {
       lastResult: null,
       role: 'sender',
       sends: 'a',
+      fleeting: false,
     });
   });
 });
@@ -176,18 +312,23 @@ describe('signal views', () => {
     const def = defOf();
     for (let seed = 0; seed < 50; seed++) {
       const state = deal(def, seed);
+      const grids = gridsOf(state);
       const sequence = state.sequences[0] ?? [];
       const atA = seenFrom(def, state, AT_STATION);
       const atB = seenFrom(def, state, AT_CONSOLE_B);
-      expect(atA).toMatchObject({ role: 'sender', sequence, grid: state.grids.a, grids: null });
-      expect(atB).toMatchObject({ role: 'receiver', sequence: null, grid: state.grids.b });
+      expect(atA).toMatchObject({ role: 'sender', sequence, grid: grids.a, grids: null });
+      expect(atB).toMatchObject({ role: 'receiver', sequence: null, grid: grids.b });
       expect(atB.grids).toBeNull();
+      for (const view of [atA, atB]) {
+        expect(view.keys).toBeNull();
+      }
       for (const away of [AT_BOOK, ELSEWHERE]) {
         expect(seenFrom(def, state, away)).toMatchObject({
           role: null,
           sequence: null,
           grid: null,
           grids: null,
+          keys: null,
         });
       }
       const wire = (viewer: Viewer): string => JSON.stringify(seenFrom(def, state, viewer));
@@ -196,11 +337,11 @@ describe('signal views', () => {
         expect(wire(viewer)).not.toContain('"sequence":[');
       }
       // Nobody but the audience sees the other console's keys.
-      expect(wire(AT_STATION)).not.toContain(JSON.stringify(state.grids.b));
-      expect(wire(AT_CONSOLE_B)).not.toContain(JSON.stringify(state.grids.a));
+      expect(wire(AT_STATION)).not.toContain(JSON.stringify(grids.b));
+      expect(wire(AT_CONSOLE_B)).not.toContain(JSON.stringify(grids.a));
       for (const viewer of [AT_BOOK, ELSEWHERE]) {
-        expect(wire(viewer)).not.toContain(JSON.stringify(state.grids.a));
-        expect(wire(viewer)).not.toContain(JSON.stringify(state.grids.b));
+        expect(wire(viewer)).not.toContain(JSON.stringify(grids.a));
+        expect(wire(viewer)).not.toContain(JSON.stringify(grids.b));
       }
     }
   });
@@ -213,7 +354,74 @@ describe('signal views', () => {
       sequence: state.sequences[0],
       grid: null,
       grids: state.grids,
+      keys: null,
     });
+  });
+
+  it('give the receiving console rows of shapes and not one colour, stage after stage', () => {
+    const def = defOf({ legend: true });
+    for (let seed = 0; seed < 50; seed++) {
+      let state = deal(def, seed);
+      for (let stage = 1; stage <= def.stages; stage++) {
+        const [sender, receiver] =
+          stage % 2 === 1 ? [AT_STATION, AT_CONSOLE_B] : [AT_CONSOLE_B, AT_STATION];
+        const taking = seenFrom(def, state, receiver);
+        expect(taking).toMatchObject({
+          stage,
+          role: 'receiver',
+          sequence: null,
+          grid: null,
+          grids: null,
+          keys: ROW_KEYS,
+        });
+        expect(JSON.stringify(taking), `seed ${seed}, stage ${stage}`).not.toMatch(COLOUR_WORD);
+        // The sending console still shows coloured signs.
+        expect(seenFrom(def, state, sender)).toMatchObject({
+          role: 'sender',
+          sequence: state.sequences[stage - 1],
+          grid: null,
+          grids: null,
+          keys: ROW_KEYS,
+        });
+        state = stageThrough(def, state);
+      }
+    }
+  });
+
+  it('show the legend’s keys to the audience too, and nothing of the station away from it', () => {
+    const def = defOf({ legend: true });
+    const state = deal(def, 5);
+    expect(seenFrom(def, state, AUDIENCE)).toMatchObject({
+      role: null,
+      sequence: state.sequences[0],
+      grid: null,
+      grids: null,
+      keys: ROW_KEYS,
+    });
+    for (const away of [AT_BOOK, ELSEWHERE]) {
+      expect(seenFrom(def, state, away)).toMatchObject({
+        role: null,
+        sequence: null,
+        grid: null,
+        grids: null,
+        keys: null,
+      });
+    }
+  });
+
+  it('say from which stage on the sending console shows one sign at a time, to everyone', () => {
+    for (const fleetingFrom of [null, 1, 3, 5]) {
+      const def = defOf({ stages: 5, length: 3, fleetingFrom });
+      let state = deal(def, 4);
+      for (let stage = 1; stage <= def.stages; stage++) {
+        const fleeting = fleetingFrom !== null && stage >= fleetingFrom;
+        for (const viewer of [AT_STATION, AT_CONSOLE_B, AT_BOOK, ELSEWHERE, AUDIENCE]) {
+          const view = seenFrom(def, state, viewer);
+          expect(view, `from ${fleetingFrom}, stage ${stage}`).toMatchObject({ stage, fleeting });
+        }
+        state = stageThrough(def, state);
+      }
+    }
   });
 
   it('swap sides with every stage, all the way through', () => {
@@ -253,6 +461,13 @@ describe('signal presses', () => {
     // From stage 2 on console b sends, and it is console b that is refused.
     const second = { ...state, stage: 1 };
     expect(() => press(def, second, second.sequences[1]?.[0] ?? 'rot-kreis', 'b')).toThrow(
+      'Dieses Pult sendet — das andere gibt ein.',
+    );
+    // With the legend as well.
+    const legend = defOf({ legend: true });
+    const rows = deal(legend, 2);
+    const key = keyAt(rows.sequences[0]?.[0] ?? 'rot-kreis', 'a');
+    expect(() => pressKey(legend, rows, key, 'a')).toThrow(
       'Dieses Pult sendet — das andere gibt ein.',
     );
   });
@@ -333,7 +548,7 @@ describe('signal presses', () => {
     );
   });
 
-  it('take nothing but one of the twelve signs', () => {
+  it('take nothing but one of the twelve signs, or a row from 1 to 4 and a shape', () => {
     for (const input of [
       { press: 'lila-kreis' },
       { press: 'rot-Kreis' },
@@ -341,55 +556,141 @@ describe('signal presses', () => {
       { press: 'rot-kreis', twice: true },
       {},
       { wireId: 'w1' },
+      { key: { row: 0, shape: 'kreis' } },
+      { key: { row: 5, shape: 'kreis' } },
+      { key: { row: 1.5, shape: 'kreis' } },
+      { key: { row: '1', shape: 'kreis' } },
+      { key: { row: 1, shape: 'stern' } },
+      { key: { row: 1 } },
+      { key: { row: 1, shape: 'kreis', colour: 'rot' } },
+      { key: { row: 1, shape: 'kreis' }, press: 'rot-kreis' },
+      { key: 'rot-kreis' },
     ]) {
       expect(signalModule.inputSchema.safeParse(input).success, JSON.stringify(input)).toBe(false);
     }
     for (const token of TOKENS) {
       expect(signalModule.inputSchema.parse({ press: token })).toEqual({ press: token });
     }
+    for (const key of ROW_KEYS) {
+      expect(signalModule.inputSchema.parse({ key })).toEqual({ key });
+    }
+  });
+
+  it('turn away, without an alarm, a kind of key the console does not have', () => {
+    const legend = defOf({ legend: true });
+    const rows = deal(legend, 3);
+    const right = rows.sequences[0]?.[0] ?? 'rot-kreis';
+    // A sign's own key at a console of rows of shapes, even the right sign.
+    expect(() => press(legend, rows, right, 'b')).toThrow(GameError);
+    expect(() => press(legend, rows, right, 'b')).toThrow(
+      'Diese Taste gibt es an diesem Pult nicht.',
+    );
+    // A key of shapes at a console of coloured keys.
+    const plain = defOf();
+    const signs = deal(plain, 3);
+    for (const key of ROW_KEYS) {
+      expect(() => pressKey(plain, signs, key, 'b')).toThrow(
+        'Diese Taste gibt es an diesem Pult nicht.',
+      );
+    }
+  });
+
+  it('read a key of shapes through the receiving console’s row of the legend', () => {
+    const def = defOf({ legend: true });
+    const dealt = deal(def, 8);
+    for (const receives of ['a', 'b'] as const) {
+      for (const token of TOKENS) {
+        // Stage 1 is taken at console b, stage 2 at console a; the stage starts on `token`.
+        const stage = receives === 'b' ? 0 : 1;
+        const sequences = dealt.sequences.map((sequence) => [token, ...sequence.slice(1)]);
+        const state: SignalState = { ...dealt, stage, sequences };
+        const right = keyAt(token, receives);
+        const taken = pressKey(def, state, right, receives);
+        expect(taken.penalty, `${token} at ${receives}`).toBeNull();
+        expect(taken.state).toMatchObject({ stage, done: 1, lastResult: null });
+        // The same shape in any other row is another colour: an alarm.
+        for (const row of ROWS.filter((r) => r !== right.row)) {
+          const slip = pressKey(def, state, { row, shape: right.shape }, receives);
+          expect(slip.penalty).toBe('Signalkette: falsches Zeichen');
+          expect(slip.state).toMatchObject({ stage, done: 0, lastResult: 'wrong' });
+        }
+        // The other console's row for the colour is the wrong one.
+        const elsewhere = keyAt(token, across(receives));
+        expect(pressKey(def, state, elsewhere, receives).penalty).toBe(
+          'Signalkette: falsches Zeichen',
+        );
+      }
+    }
   });
 });
 
 describe('signal solver', () => {
-  it(`solves ${SEEDS} instances from the consoles' views, without the edgework`, () => {
-    // The harness hands the edgework only to modules that read it.
-    expect(signalModule.usesEdgework).toBe(false);
-    for (let seed = 0; seed < SEEDS; seed++) {
-      const def = defOf({ stages: 2 + (seed % 5), length: 3 + (seed % 4) });
-      expect(playInstance(def, seed), `seed ${seed}`).toBe(def.stages * def.length);
-    }
-  });
+  it.each([
+    { legend: false, fleeting: false },
+    { legend: true, fleeting: false },
+    { legend: false, fleeting: true },
+    { legend: true, fleeting: true },
+  ])(
+    `solves ${SEEDS} instances from the consoles' views, legend $legend, fleeting $fleeting`,
+    ({ legend, fleeting }) => {
+      // The harness hands the edgework only to modules that read it.
+      expect(signalModule.usesEdgework).toBe(false);
+      for (let seed = 0; seed < SEEDS; seed++) {
+        const stages = 2 + (seed % 5);
+        const fleetingFrom = fleeting ? 1 + (seed % stages) : null;
+        const def = defOf({ stages, length: 3 + (seed % 4), legend, fleetingFrom });
+        expect(playInstance(def, seed), `seed ${seed}`).toBe(def.stages * def.length);
+      }
+    },
+  );
 
   it('presses at the receiving console what is left of the stage', () => {
     const def = defOf();
-    const views = (state: SignalState) => ({
-      operator: seenFrom(def, state, AT_STATION),
-      partner: seenFrom(def, state, AT_CONSOLE_B),
-      reader: seenFrom(def, state, AT_BOOK),
-    });
     let state = deal(def, 6);
     const first = state.sequences[0] ?? [];
-    expect(signalModule.solve(def, views(state), null)).toEqual(
+    expect(signalModule.solve(def, viewsOf(def, state), null)).toEqual(
       first.map((token) => ({ by: 'partner', input: { press: token } })),
     );
     state = press(def, state, first[0] ?? 'rot-kreis', 'b').state;
-    expect(signalModule.solve(def, views(state), null)).toEqual(
+    expect(signalModule.solve(def, viewsOf(def, state), null)).toEqual(
       first.slice(1).map((token) => ({ by: 'partner', input: { press: token } })),
     );
     const second = { ...state, stage: 1, done: 0 };
-    expect(signalModule.solve(def, views(second), null)).toEqual(
+    expect(signalModule.solve(def, viewsOf(def, second), null)).toEqual(
       (second.sequences[1] ?? []).map((token) => ({ by: 'operator', input: { press: token } })),
     );
   });
 
+  it('presses the keys the legend gives the receiving console, with the legend', () => {
+    const def = defOf({ legend: true });
+    let state = deal(def, 6);
+    const first = state.sequences[0] ?? [];
+    expect(signalModule.solve(def, viewsOf(def, state), null)).toEqual(
+      first.map((token) => ({ by: 'partner', input: { key: keyAt(token, 'b') } })),
+    );
+    state = pressKey(def, state, keyAt(first[0] ?? 'rot-kreis', 'b'), 'b').state;
+    expect(signalModule.solve(def, viewsOf(def, state), null)).toEqual(
+      first.slice(1).map((token) => ({ by: 'partner', input: { key: keyAt(token, 'b') } })),
+    );
+    const second = { ...state, stage: 1, done: 0 };
+    expect(signalModule.solve(def, viewsOf(def, second), null)).toEqual(
+      (second.sequences[1] ?? []).map((token) => ({
+        by: 'operator',
+        input: { key: keyAt(token, 'a') },
+      })),
+    );
+  });
+
   it('has no move when no view shows the sequence', () => {
-    const def = defOf();
-    const reader = seenFrom(def, deal(def, 6), AT_BOOK);
-    expect(signalModule.solve(def, { operator: reader, reader }, null)).toEqual([]);
+    for (const def of [defOf(), defOf({ legend: true })]) {
+      const reader = seenFrom(def, deal(def, 6), AT_BOOK);
+      expect(signalModule.solve(def, { operator: reader, reader }, null)).toEqual([]);
+    }
   });
 });
 
 type ExampleBlock = Extract<ManualBlock, { kind: 'example' }>;
+type TableBlock = Extract<ManualBlock, { kind: 'table' }>;
 
 /** The example box's lines; the manual has exactly one. */
 function exampleOf(def: SignalDef): string[] {
@@ -399,6 +700,26 @@ function exampleOf(def: SignalDef): string[] {
     .filter((block): block is ExampleBlock => block.kind === 'example');
   expect(boxes).toHaveLength(1);
   return boxes[0]?.lines ?? [];
+}
+
+/** The rules as printed, in order. */
+const rulesOf = (def: SignalDef): string[] =>
+  signalModule
+    .manual(def)
+    .flatMap((section) => section.blocks)
+    .flatMap((block) => (block.kind === 'rules' ? block.items : []));
+
+/** The table of the section „Legende"; the manual has one with the legend. */
+function legendOf(def: SignalDef): TableBlock {
+  const section = signalModule.manual(def).find(({ heading }) => heading === 'Legende');
+  const tables = (section?.blocks ?? []).filter(
+    (block): block is TableBlock => block.kind === 'table',
+  );
+  const [table, ...more] = tables;
+  if (table === undefined || more.length > 0) {
+    throw new Error(`expected one table under „Legende", got ${tables.length}`);
+  }
+  return table;
 }
 
 /** The signs a line lists after its colon, read back the way a player would. */
@@ -412,6 +733,47 @@ function signsIn(line: string): SignalToken[] {
     return token;
   });
 }
+
+/** A colour as the legend prints it, back to the sign's colour. */
+const PRINTED_COLOURS: Record<string, string> = {
+  rot: 'rot',
+  blau: 'blau',
+  grün: 'gruen',
+  gelb: 'gelb',
+};
+
+/** A shape as the rules name it, back to the key's shape. */
+const PRINTED_SHAPES: Record<string, Shape> = {
+  Kreis: 'kreis',
+  Dreieck: 'dreieck',
+  Quadrat: 'quadrat',
+};
+
+/** One key as the rules name it, „Dreieck in Zeile 3", read back. */
+function keyNamed(name: string): SignalKey {
+  const [, noun = '', row = ''] = /^(\S+) in Zeile ([1-4])$/.exec(name.trim()) ?? [];
+  const shape = PRINTED_SHAPES[noun];
+  if (shape === undefined) {
+    throw new Error(`"${name.trim()}" is no key of shapes`);
+  }
+  return { row: Number(row) as LegendRow, shape };
+}
+
+/** The keys a line lists after its colon. */
+const keysIn = (line: string): SignalKey[] =>
+  line
+    .slice(line.indexOf(':') + 1)
+    .replace(/\.$/, '')
+    .split(',')
+    .map(keyNamed);
+
+/** What a technical document leaves out: exclamations, a reader addressed, coaching on talk. */
+const OFF_REGISTER = [
+  /!/,
+  /\b(du|dich|dir|dein\w*)\b/i,
+  /ansag|beschreib|gefahrlos|redet|vorles|zurückruf|einzähl|notier/i,
+  /\bSonst\b/,
+];
 
 describe('signal manual', () => {
   it('prints the drawing, the device, the rules, the example and the penalty in order', () => {
@@ -434,24 +796,113 @@ describe('signal manual', () => {
     const rules = blocks[2]?.kind === 'rules' ? blocks[2].items : [];
     expect(rules.join(' ')).toContain('Wenn Stufe 5 vollständig gedrückt ist');
     expect(rules.join(' ')).toContain('Wenn alle 3 Zeichen einer Stufe gedrückt sind');
+    expect(rules.join(' ')).not.toMatch(/Legende|nacheinander/);
   });
 
-  it('speaks in full conditional sentences, without „du" and without exclamation marks', () => {
-    const manual = signalModule.manual(defOf());
+  it('with the legend: shapes only at the receiving console, the legend in a section', () => {
+    const def = defOf({ stages: 5, length: 3, penaltySec: 25, legend: true });
+    const [device, legend, ...more] = signalModule.manual(def);
+    expect(more).toEqual([]);
+    expect(device?.heading).toBe('Signalkette');
+    expect(device?.blocks.map((block) => block.kind)).toEqual(['figure', 'p', 'rules']);
+    const text = device?.blocks[1]?.kind === 'p' ? device.blocks[1].text : '';
+    expect(text).toMatch(/^Zwei Pulte, A und B\. .*Richtung\.$/);
+    expect(text).toContain(
+      'Folge von 3 farbigen Zeichen; das empfangende Pult zeigt nur Formen: 12 graue Tasten ' +
+        'in 4 nummerierten Zeilen',
+    );
+    expect(legend?.heading).toBe('Legende');
+    expect(legend?.blocks.map((block) => block.kind)).toEqual(['table', 'example', 'p']);
+    expect(legend?.blocks.at(-1)).toEqual({ kind: 'p', text: 'Fehlgriff: Alarm, −25 s.' });
+    expect(rulesOf(def)).toContain(
+      'Wenn ein Zeichen gesendet wird, wird am empfangenden Pult die Taste seiner Form in der ' +
+        'Zeile gedrückt, die die Legende diesem Pult für seine Farbe nennt.',
+    );
+    expect(rulesOf(def)).toContain(
+      'Wenn eine Taste gedrückt wird, die nicht für das nächste Zeichen der Folge steht, ' +
+        'beginnt die Stufe von vorn; die Folge bleibt dieselbe.',
+    );
+  });
+
+  it('prints the legend the consoles press by, row for row', () => {
+    const table = legendOf(defOf({ legend: true }));
+    expect(table.head).toEqual(['Zeile', 'Pult A', 'Pult B']);
+    expect(table.rows.map(([row]) => row)).toEqual(['1', '2', '3', '4']);
+    for (const [column, side] of [
+      [1, 'a'],
+      [2, 'b'],
+    ] as const) {
+      const printed = table.rows.map((cells) => PRINTED_COLOURS[cells[column] ?? '']);
+      expect(printed, `Pult ${side.toUpperCase()}`).toEqual(ROWS.map((row) => LEGEND[side][row]));
+    }
+    // Each printed row is the row whose keys the console takes for that colour.
+    const def = defOf({ legend: true });
+    const dealt = deal(def, 2);
+    for (const [column, side] of [
+      [1, 'a'],
+      [2, 'b'],
+    ] as const) {
+      for (const cells of table.rows) {
+        const row = Number(cells[0]) as LegendRow;
+        const token = `${PRINTED_COLOURS[cells[column] ?? '']}-dreieck` as SignalToken;
+        const sequences = dealt.sequences.map((sequence) => [token, ...sequence.slice(1)]);
+        const state: SignalState = { ...dealt, stage: side === 'b' ? 0 : 1, sequences };
+        expect(pressKey(def, state, { row, shape: 'dreieck' }, side).penalty).toBeNull();
+      }
+    }
+  });
+
+  it('says from which stage on the sending console shows the signs one at a time', () => {
+    for (const fleetingFrom of [1, 3, 5]) {
+      const rules = rulesOf(defOf({ stages: 5, fleetingFrom }));
+      expect(rules.filter((rule) => rule.includes('nacheinander'))).toEqual([
+        `Wenn die Stufe ${fleetingFrom} erreicht ist, zeigt das sendende Pult die Zeichen ` +
+          'nacheinander.',
+      ]);
+    }
+    expect(rulesOf(defOf({ stages: 5 })).join(' ')).not.toContain('nacheinander');
+  });
+
+  it.each([
+    {},
+    { legend: true },
+    { fleetingFrom: 2 },
+    { legend: true, fleetingFrom: 1, stages: 6, length: 6, penaltySec: 45 },
+    { legend: true, stages: 2, length: 3 },
+  ])('keeps the frame and the voice of a technical document: %j', (variant) => {
+    const manual: ManualSection[] = signalModule.manual(defOf(variant));
     const blocks = manual.flatMap((section) => section.blocks);
+    const [figure, description] = manual[0]?.blocks ?? [];
+    expect(figure).toMatchObject({ kind: 'figure', of: 'signal' });
+    const text = description?.kind === 'p' ? description.text : '';
+    expect(text.split(/(?<=\.) (?=[A-ZÄÖÜ„])/).length, text).toBeLessThanOrEqual(3);
+    expect(blocks.filter((block) => block.kind === 'figure')).toHaveLength(1);
+    const [example, penalty] = blocks.slice(-2);
+    expect(example?.kind).toBe('example');
+    const lines = example?.kind === 'example' ? example.lines : [];
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+    expect(lines.length).toBeLessThanOrEqual(4);
+    expect(lines.filter((line) => !/\.$/.test(line))).toEqual([]);
+    expect(penalty?.kind === 'p' ? penalty.text : '').toMatch(/^Fehlgriff: Alarm, −\d+ s\.$/);
     const rules = blocks.flatMap((block) => (block.kind === 'rules' ? block.items : []));
     expect(rules.length).toBeGreaterThan(3);
-    for (const rule of rules) {
-      expect(rule).toMatch(/^(Wenn |Andernfalls ).*\.$/);
+    expect(rules.filter((rule) => !/^Wenn .+, .+\.$/.test(rule))).toEqual([]);
+    const printed = JSON.stringify(manual);
+    for (const pattern of OFF_REGISTER) {
+      expect(printed).not.toMatch(pattern);
     }
-    const text = JSON.stringify(manual);
-    expect(text).not.toMatch(/\b(du|dein|dich|dir)\b|!|ansagen|beschreiben/i);
   });
 
   it('is the same for every run: it hangs on the def alone', () => {
     const def = defOf();
     expect(signalModule.manual(structuredClone(def))).toEqual(signalModule.manual(def));
-    expect(signalModule.manual(defOf({ length: 5 }))).not.toEqual(signalModule.manual(def));
+    const legend = defOf({ legend: true, fleetingFrom: 2 });
+    expect(signalModule.manual(structuredClone(legend))).toEqual(signalModule.manual(legend));
+    for (const other of [{ length: 5 }, { legend: true }, { fleetingFrom: 2 }]) {
+      expect(signalModule.manual(defOf(other)), JSON.stringify(other)).not.toEqual(
+        signalModule.manual(def),
+      );
+    }
   });
 
   it.each([3, 4, 5, 6])('works its example the way the station does (%i signs)', (length) => {
@@ -486,17 +937,71 @@ describe('signal manual', () => {
       done: 0,
     });
   });
+
+  it.each([3, 4, 5, 6])('walks its example through the legend as the station does (%i)', (n) => {
+    const def = defOf({ length: n, legend: true });
+    const [shown, rule, lookedUp, pressed] = exampleOf(def);
+    const signs = signsIn(shown ?? '');
+    expect(signs).toHaveLength(n);
+    expect(shown).toMatch(/^Stufe 1, Pult A zeigt:/);
+    expect(rule).toBe('Stufe 1 ist ungerade: Pult A sendet, Pult B empfängt.');
+    // One sign walked through the printed legend: Pult B's column, the row of its colour.
+    const walk = new RegExp(
+      '^(.+): In der Legende steht (\\S+) bei Pult B in Zeile ([1-4]); ' +
+        'gedrückt wird (der|das) (\\S+) in Zeile ([1-4])\\.$',
+    ).exec(lookedUp ?? '');
+    if (walk === null) {
+      throw new Error(`the example walks no sign through the legend: "${lookedUp}"`);
+    }
+    const [, said = '', colour = '', row = '', article = '', noun = '', again = ''] = walk;
+    const [first = 'rot-kreis'] = signs;
+    const [colourOfFirst, shapeOfFirst] = partsOf(first);
+    expect(said.toLowerCase()).toBe(tokenLabel(first).toLowerCase());
+    expect(PRINTED_COLOURS[colour]).toBe(colourOfFirst);
+    expect(legendOf(def).rows[Number(row) - 1]?.[2]).toBe(colour);
+    expect(again).toBe(row);
+    expect(PRINTED_SHAPES[noun]).toBe(shapeOfFirst);
+    expect(article).toBe(noun === 'Kreis' ? 'der' : 'das');
+    // The keys pressed at B: the first is the one walked through, and the station takes them all.
+    expect(pressed).toMatch(/^An Pult B gedrückt:/);
+    const keys = keysIn(pressed ?? '');
+    expect(keys).toHaveLength(n);
+    expect(keys[0]).toEqual({ row: Number(row), shape: shapeOfFirst });
+    const dealt = deal(def, 1);
+    let state: SignalState = { ...dealt, sequences: [signs, ...dealt.sequences.slice(1)] };
+    for (const key of keys) {
+      expect(() => pressKey(def, state, key, 'a')).toThrow(GameError);
+      const result = pressKey(def, state, key, 'b');
+      expect(result.penalty, JSON.stringify(key)).toBeNull();
+      state = result.state;
+    }
+    expect(seenFrom(def, state, AT_CONSOLE_B)).toMatchObject({
+      stage: 2,
+      sends: 'b',
+      role: 'sender',
+      done: 0,
+    });
+  });
 });
 
 /** Where presence keeps console b of the lab's Signalkette. */
 const CONSOLE_B = stationKey({ puzzleId: 'kette', console: 'b' });
 
+/** The console lab with its Signalkette set to `fields`. */
+function labWith(fields: Partial<SignalDef>): Mission {
+  const lab = consoleLab(3);
+  return {
+    ...lab,
+    puzzles: lab.puzzles.map((def) => (def.type === 'signal' ? { ...def, ...fields } : def)),
+  };
+}
+
 /**
  * A run of the console lab for three: Anna (p1) at console a, Ben (p2) at
  * console b, Cleo (p3) at the book; Ben switches the station on.
  */
-function signalRun(): GameState {
-  const here = standing(started(consoleLab(3), 11), {
+function signalRun(mission = consoleLab(3)): GameState {
+  const here = standing(started(mission, 11), {
     stations: { kette: ['p1'], [CONSOLE_B]: ['p2'] },
     manuals: { buch: ['p3'] },
     signSeen: ['p1', 'p2', 'p3'],
@@ -517,6 +1022,13 @@ const pressBy = (playerId: string, token: SignalToken, at = T0 + 1000): Action =
   playerId,
   at,
   input: { press: token },
+});
+
+const keyBy = (playerId: string, key: SignalKey, at = T0 + 1000): Action => ({
+  type: 'puzzle-input',
+  playerId,
+  at,
+  input: { key },
 });
 
 describe('signal in a run', () => {
@@ -616,5 +1128,38 @@ describe('signal in a run', () => {
     expect(state.currentPuzzleIndex).toBe(1);
     expect(state.penaltySeq).toBe(0);
     expect(state.events.some((e) => e.label === 'Signalkette gelöst')).toBe(true);
+  });
+
+  it('with the legend: no colour reaches console b, the book prints the legend', () => {
+    const state = signalRun(labWith({ legend: true }));
+    const sequence = signalOf(state, 'p1').sequence ?? [];
+    expect(sequence).toHaveLength(4);
+    expect(signalOf(state, 'p2')).toMatchObject({ role: 'receiver', keys: ROW_KEYS, grid: null });
+    expect(JSON.stringify(signalOf(state, 'p2'))).not.toMatch(COLOUR_WORD);
+    expect(signalOf(state, 'p3').manual?.map(({ heading }) => heading)).toEqual([
+      'Signalkette',
+      'Legende',
+    ]);
+    const audience = viewForSpectator(state).puzzle;
+    expect(audience).toMatchObject({ sequence, grids: null, keys: ROW_KEYS });
+  });
+
+  it('with the legend: takes the keys through it, and turns a sign’s own key away', () => {
+    let state = signalRun(labWith({ legend: true }));
+    const [first = 'rot-kreis'] = signalOf(state, 'p1').sequence ?? [];
+    expect(() => applyAction(state, pressBy('p2', first))).toThrow(
+      'Diese Taste gibt es an diesem Pult nicht.',
+    );
+    for (let stage = 1; stage <= 4; stage++) {
+      const [sender, receiver, side] =
+        stage % 2 === 1 ? (['p1', 'p2', 'b'] as const) : (['p2', 'p1', 'a'] as const);
+      const sequence = signalOf(state, sender).sequence ?? [];
+      state = sequence.reduce(
+        (s, token) => applyAction(s, keyBy(receiver, keyAt(token, side), T0 + stage * 1000)),
+        state,
+      );
+    }
+    expect(state.currentPuzzleIndex).toBe(1);
+    expect(state.penaltySeq).toBe(0);
   });
 });

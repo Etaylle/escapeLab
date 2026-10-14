@@ -246,6 +246,8 @@ describe('the station frame', () => {
       sequence: null,
       grid: null,
       grids: null,
+      fleeting: false,
+      keys: null,
       index: 1,
       total: 5,
       title: 'Signalkette',
