@@ -1123,6 +1123,11 @@ assert(
   drawn.every((at) => spawns.includes(at)) && new Set(drawn).size === crew.length,
   `the draw put Anna at ${drawn[0] ?? '?'} and Ben at ${drawn[1] ?? '?'}, two spawns of three`,
 );
+// The room plays on normal, where the fifth alarm ends the run; the walkthrough sets off two.
+assert(
+  crew.every((client) => client.view?.alarms.count === 0 && client.view?.alarms.limit === 5),
+  'the run starts on normal with no alarm and a limit of five',
+);
 
 // An audience connection sees the whole lab, every side of a puzzle and who stands where.
 const zoe = new TestClient('zoe');

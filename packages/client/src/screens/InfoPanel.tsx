@@ -133,6 +133,12 @@ export function InfoPanel({ view, onClose }: Props) {
                 <dt>Schwierigkeit</dt>
                 <dd>{view.difficulty}</dd>
               </div>
+              {view.alarms.limit !== null && (
+                <div>
+                  <dt>Alarme</dt>
+                  <dd>{`höchstens ${view.alarms.limit}`}</dd>
+                </div>
+              )}
             </dl>
             <p className="muted">
               Neben den Regeln der offenen Station hat die letzte Crew Notizen hinterlassen: Wer

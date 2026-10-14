@@ -190,6 +190,11 @@ export const missionSchema = z
     hintCostSec: z.number().int().positive().default(20),
     /** seconds at an open puzzle before the first or next note may be asked for */
     hintDelaySec: z.number().int().positive().default(45),
+    /**
+     * how many alarms end the run — the one that reaches it loses — or null
+     * for no limit; left out, `scaleMission` sets it from the difficulty
+     */
+    maxAlarms: z.number().int().positive().nullable().optional(),
     /** mission control's lines for the start of the run and the unlocked exit */
     radio: z
       .object({

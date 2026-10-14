@@ -4124,3 +4124,37 @@ button.link:hover {
   font-size: 12px;
   color: var(--muted);
 }
+
+/* ── the alarm limit: marks under the clock, a line in the briefing ────── */
+
+/* The clock with the alarm marks under it, at the bar's right end. */
+.stage-clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+
+.alarm-marks {
+  display: flex;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+
+.alarm-mark-lit {
+  color: var(--danger);
+}
+
+/* The last free mark: the next alarm ends the run. */
+.alarm-mark-warn {
+  color: var(--warn);
+}
+
+.briefing-alarms {
+  font-family: var(--mono);
+  color: var(--warn);
+}

@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { Edgework, ManualHere, PlayerView, PuzzleView } from '@escapelab/core';
 import { Book } from '../src/screens/Book.js';
-import { GameScreen, stationLabel } from '../src/screens/Game.js';
+import { AlarmMarks, GameScreen, stationLabel } from '../src/screens/Game.js';
 import { InfoPanel, Legend } from '../src/screens/InfoPanel.js';
 import { ReadingOverlay } from '../src/screens/Reading.js';
 import { WorldModal } from '../src/screens/WorldModal.js';
@@ -356,6 +356,7 @@ function justStarted(parts: Partial<PlayerView> = {}): PlayerView {
     grade: null,
     penaltySeq: 0,
     lastPenaltySec: null,
+    alarms: { count: 0, limit: 5 },
     hintsUsed: 0,
     credits: {},
     edgework: null,
@@ -388,11 +389,12 @@ function game(view: PlayerView): string {
 }
 
 describe('the start of a run', () => {
-  it('briefs with the mission and the start room only', () => {
+  it('briefs with the mission, the start room and the alarm limit only', () => {
     const html = game(justStarted());
     expect(html).toContain(
       '<div class="overlay briefing"><h1>Blackout im Labor</h1>' +
-        '<p>Du startest im <strong>MASCHINENRAUM</strong></p>',
+        '<p>Du startest im <strong>MASCHINENRAUM</strong></p>' +
+        '<p class="briefing-alarms">Alarme: höchstens 5</p><div class="briefing-count">',
     );
     expect(html).not.toContain('Du bist');
   });
@@ -476,5 +478,60 @@ describe('what the crew still has to bring', () => {
     const view = lying([{ ...fuse, delivered: true }, key]);
     expect(game(view)).not.toContain('stage-sub');
     expect(info(view)).not.toContain('Noch zu bringen');
+  });
+});
+
+describe('the alarm limit', () => {
+  const marks = (count: number, limit: number | null): string =>
+    renderToStaticMarkup(<AlarmMarks alarms={{ count, limit }} />);
+  const LIT = '<span class="alarm-mark alarm-mark-lit">✕</span>';
+  const FREE = '<span class="alarm-mark">○</span>';
+  const LAST_FREE = '<span class="alarm-mark alarm-mark-warn">○</span>';
+
+  it('marks every alarm the limit allows, all free before the first', () => {
+    expect(marks(0, 5)).toBe(
+      '<div class="alarm-marks" role="img" aria-label="Alarme: 0 von höchstens 5">' +
+        `${FREE.repeat(5)}</div>`,
+    );
+  });
+
+  it('lights a mark for every alarm so far', () => {
+    expect(marks(2, 5)).toContain(`>${LIT.repeat(2)}${FREE.repeat(3)}</div>`);
+  });
+
+  it('turns the last free mark the warning colour', () => {
+    expect(marks(4, 5)).toContain(`>${LIT.repeat(4)}${LAST_FREE}</div>`);
+    expect(marks(0, 1)).toContain(`>${LAST_FREE}</div>`);
+  });
+
+  it('has every mark lit at the limit', () => {
+    expect(marks(5, 5)).toContain(`>${LIT.repeat(5)}</div>`);
+  });
+
+  it('shows nothing without a limit', () => {
+    expect(marks(3, null)).toBe('');
+  });
+
+  it('sits under the clock in the objective bar', () => {
+    const html = game(justStarted({ alarms: { count: 1, limit: 3 } }));
+    expect(html).toMatch(
+      new RegExp(
+        '<div class="stage-clock"><div class="countdown [^"]*">\\d\\d:\\d\\d</div>' +
+          `<div class="alarm-marks"[^>]*>${LIT}${FREE.repeat(2)}</div></div>`,
+      ),
+    );
+  });
+
+  it('names the limit in the info panel', () => {
+    const html = renderToStaticMarkup(<InfoPanel view={justStarted()} onClose={noop} />);
+    expect(html).toContain('<dt>Alarme</dt><dd>höchstens 5</dd>');
+  });
+
+  it('leaves out marks, briefing line and info line where there is no limit', () => {
+    const view = justStarted({ alarms: { count: 2, limit: null } });
+    const html = game(view) + renderToStaticMarkup(<InfoPanel view={view} onClose={noop} />);
+    expect(html).toContain('<div class="stage-clock"><div class="countdown ');
+    expect(html).not.toContain('alarm-mark');
+    expect(html).not.toContain('Alarme');
   });
 });

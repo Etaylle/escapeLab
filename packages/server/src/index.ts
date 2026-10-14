@@ -56,9 +56,15 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
   switch (msg.kind) {
     case 'create-room':
     case 'join-room': {
+      // A new room plays on normal, which has its own alarm limit: scaled from the start.
       const room =
         msg.kind === 'create-room'
-          ? manager.create(msg.missionId !== undefined ? catalog.get(msg.missionId) : catalog.default)
+          ? manager.create(
+              scaleMission(
+                msg.missionId !== undefined ? catalog.get(msg.missionId) : catalog.default,
+                'normal',
+              ),
+            )
           : manager.get(msg.code);
       const { playerId, token } = room.join(msg.name);
       send(socket, { kind: 'joined', code: room.code, playerId, token });

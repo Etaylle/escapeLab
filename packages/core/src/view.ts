@@ -55,6 +55,11 @@ export interface PlayerView {
   /** increments on every penalty; clients key alarm effects off it */
   penaltySeq: number;
   lastPenaltySec: number | null;
+  /**
+   * the alarms so far and how many end the run — the one that reaches the
+   * limit loses it; null where the mission has none
+   */
+  alarms: { count: number; limit: number | null };
   /** notes of the last crew bought this run; they weigh on the grade */
   hintsUsed: number;
   /** who did what this run, by player id — for the end screen */
@@ -229,6 +234,11 @@ function gradeFor(state: GameState): Grade | null {
     return { rank: 'B', label: 'Solide — es hat gewackelt, aber ihr seid raus' };
   }
   return { rank: 'C', label: 'Knapp vorbei an der Katastrophe' };
+}
+
+/** The alarms so far against the mission's limit; every viewer sees the same. */
+function alarmsOf(state: GameState): PlayerView['alarms'] {
+  return { count: state.penaltySeq, limit: state.mission.maxAlarms ?? null };
 }
 
 function storyText(state: GameState): string {
@@ -535,6 +545,8 @@ export interface SpectatorView {
   currentPuzzleIndex: number;
   puzzleCount: number;
   penaltySeq: number;
+  /** the alarms so far and how many end the run, as the players see them */
+  alarms: PlayerView['alarms'];
   hintsUsed: number;
   pausedFor: string[] | null;
   events: RunEvent[];
@@ -574,6 +586,7 @@ export function viewForSpectator(state: GameState): SpectatorView {
     currentPuzzleIndex: state.currentPuzzleIndex,
     puzzleCount: state.mission.puzzles.length,
     penaltySeq: state.penaltySeq,
+    alarms: alarmsOf(state),
     hintsUsed: state.hintsUsed,
     pausedFor:
       state.paused === null
@@ -650,6 +663,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     grade: gradeFor(state),
     penaltySeq: state.penaltySeq,
     lastPenaltySec: state.lastPenaltySec,
+    alarms: alarmsOf(state),
     hintsUsed: state.hintsUsed,
     credits: { ...state.credits },
     edgework: presence.signSeen ? state.edgework : null,

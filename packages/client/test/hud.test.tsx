@@ -28,6 +28,7 @@ function hud(events: RunEvent[]): string {
     grade: null,
     penaltySeq: 0,
     lastPenaltySec: null,
+    alarms: { count: 0, limit: 5 },
     hintsUsed: 0,
     credits: {},
     edgework: null,

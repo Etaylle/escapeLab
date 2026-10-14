@@ -51,6 +51,7 @@ function annaSees(players: Seat[], parts: Partial<PlayerView> = {}): PlayerView 
     grade: null,
     penaltySeq: 0,
     lastPenaltySec: null,
+    alarms: { count: 0, limit: 5 },
     hintsUsed: 0,
     credits: {},
     edgework: null,
@@ -397,6 +398,32 @@ describe('the end screen', () => {
     expect(rows[0]).toContain('<td class="credits-none">0</td>');
     expect(html).not.toMatch(/Rolle/);
   });
+
+  it('ends the report of a run lost to alarms with the reason', () => {
+    const reason = 'Zu viele Alarme — Notversorgung abgeschaltet.';
+    const view = annaSees([anna, ben], {
+      phase: 'lost',
+      startedAt: 1_000,
+      finishedAt: 181_000,
+      deadlineAt: 400_000,
+      penaltySeq: 3,
+      alarms: { count: 3, limit: 3 },
+      events: [
+        { at: 61_000, kind: 'penalty', label: 'Von einer Drohne erfasst', seconds: 21 },
+        { at: 121_000, kind: 'penalty', label: 'Falsche Taste', seconds: 7 },
+        { at: 181_000, kind: 'penalty', label: 'Notfall nicht rechtzeitig behoben', seconds: 84 },
+        { at: 181_000, kind: 'finish', label: reason, seconds: null },
+      ],
+    });
+    const html = renderToStaticMarkup(<EndScreen view={view} send={noop} leaveRoom={noop} />);
+    expect(html).toContain('✖ GESCHEITERT');
+    const lines = html.match(/<li class="report-[a-z]+">.*?<\/li>/g) ?? [];
+    expect(lines).toHaveLength(4);
+    expect(lines.at(-1)).toBe(
+      '<li class="report-finish"><span class="report-time">3:00</span>' +
+        `<span class="report-icon">🏁</span><span class="report-text">${reason}</span></li>`,
+    );
+  });
 });
 
 describe('the audience', () => {
@@ -426,6 +453,7 @@ describe('the audience', () => {
       currentPuzzleIndex: 5,
       puzzleCount: 5,
       penaltySeq: 2,
+      alarms: { count: 2, limit: 5 },
       hintsUsed: 1,
       pausedFor: null,
       events: [],

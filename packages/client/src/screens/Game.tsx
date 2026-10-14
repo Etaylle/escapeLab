@@ -128,6 +128,32 @@ function Countdown({ deadlineAt }: { deadlineAt: number }) {
   return <div className={`countdown ${stage}`}>{formatRemaining(deadlineAt, now)}</div>;
 }
 
+/**
+ * The alarms against the limit, under the clock: a mark for every alarm the
+ * limit allows, ✕ once charged, ○ while free. The last free one turns the
+ * warning colour — the next alarm ends the run. Nothing without a limit.
+ */
+export function AlarmMarks({ alarms }: { alarms: PlayerView['alarms'] }) {
+  const { count, limit } = alarms;
+  if (limit === null) {
+    return null;
+  }
+  const lastFree = count === limit - 1;
+  return (
+    <div className="alarm-marks" role="img" aria-label={`Alarme: ${count} von höchstens ${limit}`}>
+      {Array.from({ length: limit }, (_, i) => {
+        const lit = i < count;
+        const tone = lit ? ' alarm-mark-lit' : lastFree ? ' alarm-mark-warn' : '';
+        return (
+          <span key={i} className={`alarm-mark${tone}`}>
+            {lit ? '✕' : '○'}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Red edge glow while the clock runs out. */
 function CriticalVignette({ deadlineAt }: { deadlineAt: number }) {
   const now = useNow(500);
@@ -140,7 +166,10 @@ function CriticalVignette({ deadlineAt }: { deadlineAt: number }) {
 /** How long the launch briefing covers the screen. */
 const BRIEFING_MS = 3600;
 
-/** Mission briefing shown for the first seconds after launch: the mission and where you are. */
+/**
+ * Mission briefing shown for the first seconds after launch: the mission,
+ * where you are and how many alarms the run takes.
+ */
 function Briefing({ view }: { view: PlayerView }) {
   const now = useNow(200);
   const startedAt = view.startedAt ?? now;
@@ -157,6 +186,9 @@ function Briefing({ view }: { view: PlayerView }) {
         <p>
           Du startest im <strong>{room}</strong>
         </p>
+      )}
+      {view.alarms.limit !== null && (
+        <p className="briefing-alarms">{`Alarme: höchstens ${view.alarms.limit}`}</p>
       )}
       <div className="briefing-count">{count}</div>
     </div>
@@ -478,7 +510,10 @@ export function GameScreen({
             <h1>{title}</h1>
             {missingLabel !== null && <span className="stage-sub">{missingLabel}</span>}
           </div>
-          {view.deadlineAt !== null && <Countdown deadlineAt={view.deadlineAt} />}
+          <div className="stage-clock">
+            {view.deadlineAt !== null && <Countdown deadlineAt={view.deadlineAt} />}
+            <AlarmMarks alarms={view.alarms} />
+          </div>
           {notice?.kind === 'line' && (
             <div
               key={`${notice.event.at}-${notice.event.label}`}

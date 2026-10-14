@@ -16,8 +16,35 @@ function penalties(mission: Mission): number[] {
 }
 
 describe('difficulty scaling', () => {
-  it('leaves a mission untouched on normal', () => {
-    expect(scaleMission(blackout, 'normal')).toBe(blackout);
+  it('leaves every number as authored on normal and only sets the alarm limit', () => {
+    expect(scaleMission(blackout, 'normal')).toEqual({ ...blackout, maxAlarms: 5 });
+  });
+
+  it('ends the run at five alarms on normal, three on hard and never when relaxed', () => {
+    expect(blackout.maxAlarms).toBeUndefined();
+    expect(DIFFICULTIES.map((d) => scaleMission(blackout, d).maxAlarms)).toEqual([null, 5, 3]);
+  });
+
+  it('keeps an alarm limit the mission sets, no limit included, at every level', () => {
+    const limited = (maxAlarms: number | null): Mission =>
+      parseMission({ ...JSON.parse(JSON.stringify(blackout)), maxAlarms });
+    expect(DIFFICULTIES.map((d) => scaleMission(limited(2), d).maxAlarms)).toEqual([2, 2, 2]);
+    expect(DIFFICULTIES.map((d) => scaleMission(limited(null), d).maxAlarms)).toEqual([
+      null,
+      null,
+      null,
+    ]);
+  });
+
+  it('takes an alarm limit of one whole alarm or more', () => {
+    const limited = (maxAlarms: unknown): unknown => ({
+      ...JSON.parse(JSON.stringify(blackout)),
+      maxAlarms,
+    });
+    expect(() => parseMission(limited(1))).not.toThrow();
+    expect(() => parseMission(limited(0))).toThrow(/maxAlarms/);
+    expect(() => parseMission(limited(2.5))).toThrow(/maxAlarms/);
+    expect(() => parseMission(limited('5'))).toThrow(/maxAlarms/);
   });
 
   it('never mutates the mission it scales from', () => {

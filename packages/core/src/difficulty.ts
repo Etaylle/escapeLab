@@ -3,8 +3,9 @@ import type { PuzzleDef } from './puzzles/index.js';
 
 /**
  * Difficulty is applied by scaling a mission into a new mission, so every
- * consumer downstream — deadlines, penalties, patrols, emergencies — keeps
- * working on plain mission data and knows nothing about difficulty.
+ * consumer downstream — deadlines, penalties, patrols, emergencies, the
+ * alarm limit — keeps working on plain mission data and knows nothing about
+ * difficulty.
  */
 
 export const DIFFICULTIES = ['entspannt', 'normal', 'hart'] as const;
@@ -19,6 +20,8 @@ interface Scaling {
   droneRange: number;
   sabotageGap: number;
   sabotageDuration: number;
+  /** alarms that end the run where the mission sets no limit of its own; null for none */
+  maxAlarms: number | null;
 }
 
 const SCALING: Record<Difficulty, Scaling> = {
@@ -31,6 +34,7 @@ const SCALING: Record<Difficulty, Scaling> = {
     droneRange: 0.85,
     sabotageGap: 1.5,
     sabotageDuration: 1.3,
+    maxAlarms: null,
   },
   normal: {
     label: 'Normal',
@@ -41,6 +45,7 @@ const SCALING: Record<Difficulty, Scaling> = {
     droneRange: 1,
     sabotageGap: 1,
     sabotageDuration: 1,
+    maxAlarms: 5,
   },
   hart: {
     label: 'Hart',
@@ -51,6 +56,7 @@ const SCALING: Record<Difficulty, Scaling> = {
     droneRange: 1.15,
     sabotageGap: 0.7,
     sabotageDuration: 0.85,
+    maxAlarms: 3,
   },
 };
 
@@ -68,15 +74,21 @@ function scalePuzzle(puzzle: PuzzleDef, factor: number): PuzzleDef {
   return { ...puzzle, penaltySec: atLeast(puzzle.penaltySec * factor, 5) };
 }
 
-/** Returns a copy of `mission` with every difficulty-dependent number scaled. */
+/**
+ * Returns a copy of `mission` with every difficulty-dependent number scaled
+ * and its alarm limit set.
+ */
 export function scaleMission(mission: Mission, difficulty: Difficulty): Mission {
   const s = SCALING[difficulty];
+  // A count, not a cost: a limit the mission sets (null included) stands at every level.
+  const maxAlarms = mission.maxAlarms === undefined ? s.maxAlarms : mission.maxAlarms;
   if (difficulty === 'normal') {
-    return mission;
+    return { ...mission, maxAlarms };
   }
   const map = mission.map;
   return {
     ...mission,
+    maxAlarms,
     timeLimitSec: atLeast(mission.timeLimitSec * s.time, 60),
     hintCostSec: atLeast(mission.hintCostSec * s.penalty, 5),
     puzzles: mission.puzzles.map((puzzle) => scalePuzzle(puzzle, s.penalty)),

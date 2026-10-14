@@ -578,26 +578,39 @@ function logRadio(state: GameState, text: string | undefined, at: number): GameS
   return text === undefined ? state : logEvent(state, 'radio', text, at);
 }
 
-/** Shrink the deadline; losing immediately if the penalty eats the rest. */
+/** Why a run was lost: the last line of its report. */
+const OUT_OF_TIME = 'Zeit abgelaufen';
+const TOO_MANY_ALARMS = 'Zu viele Alarme — Notversorgung abgeschaltet.';
+
+/**
+ * Sound the alarm: count it and shrink the deadline. Every alarm of the run
+ * comes through here — a wrong move at a station or an emergency console, a
+ * drone sighting, an emergency that ran out. The alarm that reaches the
+ * mission's limit loses the run at once, whatever is left on the clock; so
+ * does one whose penalty eats the rest of the time.
+ */
 function applyPenalty(state: GameState, sec: number, at: number, reason: string): GameState {
   const deadlineAt = (state.deadlineAt ?? at) - sec * 1000;
+  const penaltySeq = state.penaltySeq + 1;
   const punished = logEvent(
-    { ...state, deadlineAt, penaltySeq: state.penaltySeq + 1, lastPenaltySec: sec },
+    { ...state, deadlineAt, penaltySeq, lastPenaltySec: sec },
     'penalty',
     reason,
     at,
     sec,
   );
-  return at >= deadlineAt
-    ? lostNow(punished, at)
-    : punished;
+  const limit = state.mission.maxAlarms;
+  if (typeof limit === 'number' && penaltySeq >= limit) {
+    return lostNow(punished, at, TOO_MANY_ALARMS);
+  }
+  return at >= deadlineAt ? lostNow(punished, at) : punished;
 }
 
-function lostNow(state: GameState, at: number): GameState {
+function lostNow(state: GameState, at: number, why = OUT_OF_TIME): GameState {
   return logEvent(
     { ...state, phase: 'lost', players: unready(state.players), puzzleState: null, finishedAt: at },
     'finish',
-    'Zeit abgelaufen',
+    why,
     at,
   );
 }

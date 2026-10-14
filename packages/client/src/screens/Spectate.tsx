@@ -227,6 +227,7 @@ function spectatorAsPlayerView(view: SpectatorView): Parameters<typeof GameWorld
     grade: view.grade,
     penaltySeq: view.penaltySeq,
     lastPenaltySec: null,
+    alarms: view.alarms,
     hintsUsed: view.hintsUsed,
     credits: view.credits,
     edgework: null,
