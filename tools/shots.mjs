@@ -11,9 +11,10 @@
  * press it together, and the run fails unless it solves. Where the station
  * after it has two consoles, each takes one and both panels are captured;
  * a Signalkette, as in the Systemcheck, they work from both sides until it
- * solves too. A first station behind a plate door, as Blackout's
- * Notstrom-Kasten, is captured only where the draw starts somebody behind
- * that door, and never worked.
+ * solves too. Where the first station has two consoles, as Blackout's
+ * Notstrom-Kasten, the guest holds the plate door for the host on the way
+ * to console A where needed, then both consoles are captured and the meter
+ * measures every wire once; nothing is cut.
  */
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -485,13 +486,15 @@ async function pressStage(sender, presser) {
 }
 
 /**
- * console-a.png, console-b.png: the station after a solved sync one may
- * have two consoles, whatever its kind. The operator walks to console A,
- * the reader to console B, and E opens each; both panels are captured at
- * laptop size, the guest's window going back to its phone size after, and
- * the log names the panel's kind. A Signalkette the crew then works until
- * it solves (`solveSignal`); any other kind is left open. Throws with the
- * step that failed.
+ * console-a.png, console-b.png: a station with two consoles, whatever its
+ * kind — the one after a solved sync station, or a first one the crew got
+ * into (`manBothConsoles`). The operator walks to console A, the reader to
+ * console B, and E opens each; both panels are captured at laptop size, the
+ * guest's window going back to its phone size after, and the log names the
+ * panel's kind. A Signalkette the crew then works until it solves
+ * (`solveSignal`); at a fuse box the meter measures every wire once
+ * (`measureEveryWire`); any other kind is left open. Throws with the step
+ * that failed.
  */
 async function captureConsoles(operator, reader) {
   const armed = operator.seen.view.map.stations.filter((s) => s.status === 'armed');
@@ -547,11 +550,114 @@ async function captureConsoles(operator, reader) {
       await page.setViewportSize(sizes[i]);
     }
   }
-  if (kind !== 'signal') {
+  if (kind === 'signal') {
+    await solveSignal(crew, title);
+  } else if (kind === 'circuit') {
+    await measureEveryWire(reader, title);
+  } else {
     console.log(`consoles           "${title}" is a ${kind} panel: captured, left open`);
-    return;
   }
-  await solveSignal(crew, title);
+}
+
+/**
+ * At a fuse box's meter: every probe key pressed once, its wire's reading
+ * in the meter's view before the next key. Nothing is cut. Throws at the
+ * key whose reading stays empty.
+ */
+async function measureEveryWire(meter, title) {
+  const count = meter.seen.view.puzzle?.count ?? 0;
+  const keys = await meter.page.locator('.station-modal .circuit-probe[data-index]').count();
+  if (count === 0 || keys !== count) {
+    throw new Error(`"${title}": the meter shows ${keys} probe keys for ${count} wires`);
+  }
+  for (let i = 0; i < count; i++) {
+    const key = meter.page.locator(`.station-modal .circuit-probe[data-index="${i}"]`);
+    await key.click({ timeout: 3000 });
+    if (!(await until(() => meter.seen.view.puzzle?.readings?.[i] != null, 3000))) {
+      throw new Error(
+        `${meter.name} measured wire ${i + 1} of "${title}", but its reading stayed empty`,
+      );
+    }
+    await sleep(150);
+  }
+  const readings = meter.seen.view.puzzle?.readings ?? [];
+  const volts = readings.map((reading) => `${reading} V`).join(', ');
+  console.log(
+    `circuit            ${meter.name} at ${seatOf(meter)} measured all ${count} wires: ` +
+      `${volts}; nothing cut`,
+  );
+}
+
+/** Steps onto a plate's tile and stays there; throws unless the view counts the plate held. */
+async function holdPlate(player, plate) {
+  const held = () => player.seen.view.map.plates.some((p) => p.id === plate.id && p.pressed);
+  const onIt =
+    (await walkNear(player.page, player.seen, plate)) &&
+    (await stepTo(player.page, player.seen, plate.x + 0.5, plate.y + 0.5));
+  if (!onIt || !(await until(held, 3000))) {
+    throw new Error(`${player.name} could not get onto the plate at ${plate.x},${plate.y}`);
+  }
+}
+
+/**
+ * How `box` gets to console A: on their own, or through the plate door that
+ * `meter` holds — the nearest plate `meter` reaches. Null when neither works.
+ */
+function entryPlan([box, meter], consoleA, plates) {
+  if (stepsTo(box.seen, consoleA) !== Infinity) {
+    return { box, meter, plate: null };
+  }
+  const steps = (plate) => stepsTo(meter.seen, plate);
+  const [nearest] = plates
+    .filter((plate) => steps(plate) !== Infinity)
+    .sort((one, other) => steps(one) - steps(other));
+  return nearest === undefined ? null : { box, meter, plate: nearest };
+}
+
+/**
+ * A first station worked at two consoles, as Blackout's Notstrom-Kasten,
+ * whose console A may lie behind a plate door. Whoever reaches console A on
+ * their own works it, the host before the guest; otherwise the host does,
+ * and the guest holds the nearest plate in reach until the host is through.
+ * The plate holder then walks on to console B, and both consoles are
+ * captured (`captureConsoles`). Returns who stands at A and who at B; null,
+ * with a log line, when the draw lets nobody through.
+ */
+async function manBothConsoles(players) {
+  const map = players[0].seen.view.map;
+  const consoleA = map.stations.find((s) => s.status === 'armed' && s.console === 'a');
+  if (consoleA === undefined) {
+    throw new Error('the armed station has no console A');
+  }
+  // Camera plates hold drones still, not doors.
+  const plates = map.plates.filter((plate) => !plate.freezesDrone);
+  const plan = [players, [...players].reverse()]
+    .map((pair) => entryPlan(pair, consoleA, plates))
+    .find((option) => option !== null);
+  if (plan === undefined) {
+    console.log(
+      `console-*.png      skipped: nobody reaches console A of "${consoleA.title}", ` +
+        'and nobody else a plate to hold the way open',
+    );
+    return null;
+  }
+  const { box, meter, plate } = plan;
+  if (plate !== null) {
+    await holdPlate(meter, plate);
+    const open = await until(() => stepsTo(box.seen, consoleA) !== Infinity, 3000);
+    if (!open || !(await walkNear(box.page, box.seen, consoleA))) {
+      throw new Error(
+        `${meter.name} holds the plate at ${plate.x},${plate.y}, but ${box.name} found no ` +
+          `way through to console A of "${consoleA.title}"`,
+      );
+    }
+    console.log(
+      `plate              ${meter.name} holds "${plate.label}" at ${plate.x},${plate.y}, ` +
+        `${box.name} walked through to console A`,
+    );
+  }
+  await captureConsoles(box, meter);
+  return { box, meter };
 }
 
 /**
@@ -778,6 +884,23 @@ async function captureNotes(page, seen, who, other) {
 }
 
 /**
+ * hint-*.png from the first of two players who reaches a source on the open
+ * station, `first` before `second`; a log line when neither does.
+ */
+async function askForNotes(first, second) {
+  if (await captureNotes(first.page, first.seen, first.name, second.page)) {
+    return;
+  }
+  console.log(
+    `hint-*.png         ${first.name}: no source on the open station in reach — ` +
+      `${second.name} asks`,
+  );
+  if (!(await captureNotes(second.page, second.seen, second.name, first.page))) {
+    console.log('hint-*.png         skipped: no source on the open station in reach of either');
+  }
+}
+
+/**
  * sign.png: a player has just read the Laborkennung — the note up, the chip
  * in the HUD. The note waits for the briefing to end and for the radio lines
  * queued before it, so this may take a while.
@@ -934,10 +1057,9 @@ async function run() {
   if (guestSeen.view?.map == null || hostSeen.view?.map == null) {
     throw new Error('no running view on the sockets — does the client still talk on /ws?');
   }
-  const [operator, reader] = operatorFirst([
-    { name: 'Anna', page: host, seen: hostSeen },
-    { name: 'Ben', page: guest, seen: guestSeen },
-  ]);
+  const anna = { name: 'Anna', page: host, seen: hostSeen };
+  const ben = { name: 'Ben', page: guest, seen: guestSeen };
+  const [operator, reader] = operatorFirst([anna, ben]);
   console.log(`the draw:          ${operator.name} works the first station, ${reader.name} reads`);
 
   // Spawned within sight of the Laborkennung, a player gets the note as soon
@@ -1015,10 +1137,22 @@ async function run() {
   }
   await captureNotepad(guest, guestSeen);
 
+  const firstSpots = operator.seen.view.map.stations.filter((s) => s.status === 'armed');
   // The draw may leave both starts shut off from the first station until a
-  // plate is held; then there is no station to capture this time.
-  const station = operator.seen.view.map.stations.find((s) => s.status === 'armed');
-  if (station === undefined || stepsTo(operator.seen, station) === Infinity) {
+  // plate is held; then there is no station to capture this time — unless it
+  // is worked at two consoles, where one holds the plate for the other.
+  const station = firstSpots[0];
+  if (firstSpots.some((s) => s.console === 'b')) {
+    const pair = await manBothConsoles([anna, ben]);
+    if (pair !== null) {
+      // The last crew's notes come only for an open station: leave it open, go read.
+      for (const { page } of [pair.box, pair.meter]) {
+        await page.keyboard.press('Escape');
+        await page.locator('.station-modal').waitFor({ state: 'hidden', timeout: 3000 });
+      }
+      await askForNotes(pair.meter, pair.box);
+    }
+  } else if (station === undefined || stepsTo(operator.seen, station) === Infinity) {
     console.log('station            skipped: no open way from either start to the armed station');
   } else {
     if (!(await walkNear(operator.page, operator.seen, station))) {
@@ -1047,11 +1181,8 @@ async function run() {
       console.log('hint-*.png         skipped: the station is solved, the next waits for its E');
       // Where the next station has two consoles, the crew captures both; a Signalkette it works.
       await captureConsoles(operator, reader);
-    } else if (!(await captureNotes(reader.page, reader.seen, reader.name, operator.page))) {
-      console.log(`hint-*.png         ${reader.name}: no source on the open station in reach — ${operator.name} asks`);
-      if (!(await captureNotes(operator.page, operator.seen, operator.name, reader.page))) {
-        console.log('hint-*.png         skipped: no source on the open station in reach of either');
-      }
+    } else {
+      await askForNotes(reader, operator);
     }
   }
   await captureLitRoom(guest, guestSeen);
