@@ -87,6 +87,7 @@ import {
   objectGlowStops,
   OWN_BEAM_STOPS,
   OWN_GLOW_STOPS,
+  powerLamp,
   reachOf,
   type Lamp,
   type LampMount,
@@ -264,23 +265,35 @@ interface EdgeMarker {
 
 /** This frame's light, worked out before anything is drawn. */
 interface FrameLight {
-  /** your lamp; null for the audience */
+  /** your lamp — while the lab has its power, the room's light round you; null for the audience */
   own: Lit | null;
-  /** the lamps the rest of the crew carry */
+  /** the lamps the rest of the crew carry; none while the power is on */
   crew: Lit[];
   /** the drones' eyes, by drone id; a frozen drone looks nowhere */
   eyes: Map<string, Lit>;
   /** the emergency lamps, where they hang and what they light; none while the power is on */
   lamps: { mount: LampMount; lit: Lit }[];
   /**
-   * whether the world shows what lies at (x, y): everything while the power
-   * is on, then what some light falls on now or did this run
+   * whether the world shows what lies at (x, y): what some light falls on
+   * now or did this run — everything, for the audience
    */
   shown: (x: number, y: number) => boolean;
+  /**
+   * whether the tile at (x, y) is in the colours of the lab with its power
+   * on: where your light falls while the lab has it — all of the lab, for
+   * the audience — and nowhere in the dark
+   */
+  powered: (x: number, y: number) => boolean;
+  /**
+   * whether somebody of the crew standing at (x, y) shows: anywhere in the
+   * dark, where the lamp they carry lights them up; while the lab has its
+   * power, nobody carries one, so only where your light falls
+   */
+  crewShown: (x: number, y: number) => boolean;
 }
 
-/** A frame's light while the power is on: the lab is lit, nobody needs a lamp, all of it shows. */
-const POWERED: FrameLight = { own: null, crew: [], eyes: new Map(), lamps: [], shown: () => true };
+/** A frame's lights, before what they show is worked out. */
+type FrameLamps = Pick<FrameLight, 'own' | 'crew' | 'eyes' | 'lamps'>;
 
 const MOVE_KEYS: Record<string, [number, number]> = {
   arrowup: [0, -1],
@@ -964,25 +977,66 @@ export function GameWorld({
     }
 
     /**
-     * This frame's light: your lamp, the crew's lamps, the drones' eyes and
-     * the emergency lamps, each cut off by walls and shut doors; and what
-     * the world shows — whatever lies where light falls now, in a lit room,
-     * or fell earlier this run. The audience sees the whole lab, and the
-     * drones' cones only. While the power is on, the frame's light is POWERED.
+     * This frame's light, each cut off by walls and shut doors: in the dark
+     * your lamp, the crew's lamps, the drones' eyes and the emergency lamps;
+     * while the lab has its power (`powered`), the room's own light round
+     * you instead. And what the world shows — whatever lies where light
+     * falls now, in a lit room, or fell earlier this run. The audience sees
+     * the whole lab, and the drones' cones only.
      */
-    function lightUp(map: WorldMap): FrameLight {
+    function lightUp(map: WorldMap, powered: boolean): FrameLight {
+      const memory = runLight();
+      const shut = doorsShut(map);
+      const lit = (lamp: Lamp): Lit => ({
+        lamp,
+        sight: memory.look(map, lamp, reachOf(lamp), shut),
+      });
+      const lamps = powered ? powerLights(lit) : darkLights(map, lit);
+      const falling = remember(memory.seen, lamps);
+      const shown = (x: number, y: number): boolean =>
+        spectator || memory.seen.has(`${Math.floor(x)},${Math.floor(y)}`);
+      const inPower = (x: number, y: number): boolean =>
+        powered && (spectator || falling.has(`${x},${y}`));
+      const crewShown = (x: number, y: number): boolean =>
+        !powered || spectator || falling.has(`${Math.floor(x)},${Math.floor(y)}`);
+      return { ...lamps, shown, powered: inPower, crewShown };
+    }
+
+    /** What this run's light has done so far: a fresh memory once a new run has started. */
+    function runLight(): LightMemory {
       const run = viewRef.current.startedAt;
       if (sim.light.run !== run) {
         sim.light = lightMemory(run);
       }
-      const { look, seen } = sim.light;
-      const shut = doorsShut(map);
-      const lit = (lamp: Lamp): Lit => ({ lamp, sight: look(map, lamp, reachOf(lamp), shut) });
+      return sim.light;
+    }
+
+    /**
+     * The light while the lab has its power: the room's own round you, all
+     * round as far as you see. Nobody needs a lamp, and the emergency lamps
+     * are dark glass.
+     */
+    function powerLights(lit: (lamp: Lamp) => Lit): FrameLamps {
+      return {
+        own: spectator ? null : lit(powerLamp(sim.self)),
+        crew: [],
+        eyes: new Map(),
+        lamps: [],
+      };
+    }
+
+    /** The lights of the dark: your flashlight, the crew's lamps, the drones' eyes, the lamps. */
+    function darkLights(map: WorldMap, lit: (lamp: Lamp) => Lit): FrameLamps {
       const cone = { facing: sim.self.facing, halfAngle: CONE_HALF_ANGLE, reach: CONE_REACH };
       const own = spectator ? null : lit({ x: sim.self.x, y: sim.self.y, glow: OWN_GLOW, beam: cone });
       const crew = spectator
         ? []
         : [...sim.others.values()].map((o) => lit({ x: o.rx, y: o.ry, glow: CREW_GLOW, beam: null }));
+      return { own, crew, eyes: droneEyes(lit), lamps: burningLamps(map, lit) };
+    }
+
+    /** The drones' eyes, by drone id: a frozen drone looks nowhere. */
+    function droneEyes(lit: (lamp: Lamp) => Lit): Map<string, Lit> {
       const eyes = new Map<string, Lit>();
       for (const [id, drone] of Object.entries(dronesRef.current)) {
         if (drone.frozen) {
@@ -992,19 +1046,26 @@ export function GameWorld({
         const beam = { facing: drone.facing, halfAngle, reach: drone.range };
         eyes.set(id, lit({ x: drone.x, y: drone.y, glow: 0, beam }));
       }
-      const lamps = burningLamps(map, lit);
+      return eyes;
+    }
+
+    /**
+     * Marks the tiles `lamps` light now as seen, and the lit rooms whole:
+     * whatever lies there stays drawn this run. Returns the tiles lit now.
+     */
+    function remember(seen: Set<string>, { own, crew, eyes, lamps }: FrameLamps): Set<string> {
+      const falling = new Set<string>();
       const lights = [...(own === null ? [] : [own]), ...crew, ...eyes.values()];
       for (const { lamp, sight } of [...lights, ...lamps.map((l) => l.lit)]) {
         for (const key of litTiles(lamp, sight)) {
+          falling.add(key);
           seen.add(key);
         }
       }
       for (const tile of [...sim.lit.values()].flatMap((room) => room.tiles)) {
         seen.add(`${tile.x},${tile.y}`);
       }
-      const shown = (x: number, y: number): boolean =>
-        spectator || seen.has(`${Math.floor(x)},${Math.floor(y)}`);
-      return { own, crew, eyes, lamps, shown };
+      return falling;
     }
 
     /**
@@ -1108,14 +1169,14 @@ export function GameWorld({
       });
       sim.scale = s;
       const scene = sceneNow();
-      const light = scene.lit ? POWERED : lightUp(map);
+      const light = lightUp(map, scene.lit);
       const text = textAt(s, dpr);
 
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = '#04070a';
       ctx.fillRect(0, 0, w, h);
       ctx.setTransform(s, 0, 0, s, w / 2 - sim.draw.x * s, h / 2 - sim.draw.y * s);
-      drawTiles(map, s, w, h, scene.lit);
+      drawTiles(map, s, w, h, light.powered);
       const pulse = (Math.sin(sim.time * 4) + 1) / 2;
       drawProps(map, light, pulse, text);
       drawLamps(map, scene.lit);
@@ -1146,8 +1207,9 @@ export function GameWorld({
     }
 
     /**
-     * The light over the picture: the lab's own while the power is on, else
-     * the dark with what cuts it open — the audience sees the lab whole.
+     * The light over the picture: the darkness, and what cuts it open — the
+     * lab's own warm light where you see while it has its power. The
+     * audience sees the lab whole, warm all over while the power is on.
      */
     function renderLight(
       map: WorldMap,
@@ -1158,8 +1220,9 @@ export function GameWorld({
       powered: boolean,
     ): void {
       if (powered) {
-        renderPowerOn(map, s, w, h);
-      } else if (!spectator) {
+        renderPowerOn(map, s, w, h, light.own);
+      }
+      if (!spectator) {
         renderLighting(map, s, w, h, light);
       }
     }
@@ -1198,15 +1261,20 @@ export function GameWorld({
     }
 
     /**
-     * The lab with its power on: the ceiling lights' warm pools over the whole
-     * of it, and a warm lift over the picture — no darkness, nobody's lamp.
+     * The lab with its power on: the ceiling lights' warm pools and a warm lift
+     * over the picture, as far as `own` light falls — a player sees what is in
+     * sight, nothing behind a wall; the audience, with no light of its own,
+     * the whole lab. The darkness goes over it after.
      */
-    function renderPowerOn(map: WorldMap, s: number, w: number, h: number): void {
+    function renderPowerOn(map: WorldMap, s: number, w: number, h: number, own: Lit | null): void {
       if (ctx == null) {
         return;
       }
       ctx.save();
       ctx.setTransform(s, 0, 0, s, w / 2 - sim.draw.x * s, h / 2 - sim.draw.y * s);
+      if (own !== null) {
+        ctx.clip(clipPath(own));
+      }
       ctx.globalCompositeOperation = 'lighter';
       ctx.drawImage(warmOf(map), 0, 0, map.width, map.height);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1218,10 +1286,16 @@ export function GameWorld({
 
     /**
      * Floor and walls, as far as the canvas shows them, in the colours of the
-     * lab with its power on — all of it while the lab has its power
-     * (`powered`), then in the rooms whose lights are back; tile space.
+     * lab with its power on where `powered` says so — or in a room whose
+     * lights are back; tile space.
      */
-    function drawTiles(map: WorldMap, s: number, w: number, h: number, powered: boolean): void {
+    function drawTiles(
+      map: WorldMap,
+      s: number,
+      w: number,
+      h: number,
+      powered: (x: number, y: number) => boolean,
+    ): void {
       if (ctx == null) {
         return;
       }
@@ -1232,7 +1306,8 @@ export function GameWorld({
       for (let ty = y0; ty <= y1; ty++) {
         const row = map.tiles[ty] ?? '';
         for (let tx = x0; tx <= x1; tx++) {
-          const texture = textureOf(row.charAt(tx), powered || sim.litTiles.has(`${tx},${ty}`));
+          const lit = powered(tx, ty) || sim.litTiles.has(`${tx},${ty}`);
+          const texture = textureOf(row.charAt(tx), lit);
           if (texture !== null) {
             ctx.drawImage(texture, tx, ty, 1, 1);
           }
@@ -1346,7 +1421,7 @@ export function GameWorld({
       const youId = viewRef.current.you.id;
       const metaOf = new Map(viewRef.current.players.map((p) => [p.id, p]));
       const speaking = voiceRef.current?.getState().speaking;
-      for (const [id, other] of sim.others) {
+      for (const [id, other] of [...sim.others].filter(([, o]) => light.crewShown(o.rx, o.ry))) {
         const meta = metaOf.get(id);
         ctx.save();
         ctx.translate(other.rx, other.ry + 0.3);
@@ -1769,13 +1844,14 @@ export function GameWorld({
       octx.globalCompositeOperation = 'destination-out';
       const { punch, beam, within } = lightCutters(octx, s, w, h);
 
-      // Your lamp: a lit circle round you plus a flashlight cone in facing direction;
-      // everybody else's softer glow. Each lights what it can see, and nothing behind
-      // a wall — so the walls cut a clean edge into the circle.
+      // Your light: a lit circle round you — the room's own, as far as you see,
+      // while the lab has its power — and in the dark a flashlight cone in facing
+      // direction; everybody else's softer glow. Each lights what it can see, and
+      // nothing behind a wall — so the walls cut a clean edge into the circle.
       const own = light.own;
       if (own !== null) {
         within(own, () => {
-          punch(own.lamp.x, own.lamp.y, OWN_GLOW, OWN_GLOW_STOPS);
+          punch(own.lamp.x, own.lamp.y, own.lamp.glow, OWN_GLOW_STOPS);
           beam(own, OWN_BEAM_STOPS);
         });
       }

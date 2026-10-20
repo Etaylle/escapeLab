@@ -146,6 +146,18 @@ export function emergencyLamp(mount: LampMount): Lamp {
   return { x: mount.x, y: mount.y, glow: EMERGENCY_GLOW, beam: null };
 }
 
+/** How far a player sees while the lab has its power, in tiles. */
+export const POWER_REACH = 9;
+
+/**
+ * The light round a player while the lab has its power: the room's own, all
+ * round as far as POWER_REACH, and no beam — walls and shut doors stop it
+ * like any light, so nothing behind them shows.
+ */
+export function powerLamp(at: Spot): Lamp {
+  return { x: at.x, y: at.y, glow: POWER_REACH, beam: null };
+}
+
 /** The glow an object gives off on its own, `strength` deep in its middle. */
 export function objectGlowStops(strength: number): Stops {
   return [

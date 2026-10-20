@@ -19,17 +19,19 @@
  *
  * Cold open: a mission with an intro, as Blackout, opens with the power on.
  * While NORMALBETRIEB shows, the host's window grows to 1440×1000, the host
- * looks round its room and the guest walks three tiles towards it — the
+ * steps into its room and the guest walks three tiles towards it — the
  * host's frames meanwhile are the sample of the lit scene — and
- * cold-open.png catches both in the lit lab; a player spawned at the
- * Laborkennung gets its note at once (sign.png). Two seconds after the clock
- * starts counting comes blackout.png, the emergency lamps red. Then both go
- * to the first station, a main switch — whoever is locked in let out over a
- * plate first — and E opens its panel for each (lever.png, every lever lit);
- * both throw together, the run fails unless the lights come up, and
- * lit-flur.png shows the room it lit, the panel closed by itself. The log
- * says how long the lever took from the blackout. A mission without an
- * intro skips all of this.
+ * cold-open.png catches the host's room lit and warm: the power lights what
+ * the host sees, nothing behind a wall, and the run fails unless most of the
+ * world stays dark. A player spawned at the Laborkennung gets its note at
+ * once (sign.png). Two seconds after the clock starts counting comes
+ * blackout.png, the emergency lamps red. Then both go to the first station,
+ * a main switch — whoever is locked in let out over a plate first — and E
+ * opens its panel for each (lever.png, every lever lit); both throw
+ * together, the run fails unless the lights come up, and lit-flur.png shows
+ * the room it lit, the panel closed by itself. The log says how long the
+ * lever took from the blackout. A mission without an intro skips all of
+ * this.
  *
  * On the way, both open the Bestenliste from the join screen (history.png,
  * history-phone.png): measured like the join screen, at 1280×720 too, and on
@@ -728,11 +730,11 @@ async function approach(player, target, tiles) {
 }
 
 /**
- * One step from where `player` stands into the room — north, east, south or
- * west, the first that is floor — and back: looking round it, as a player
- * does first, which brings what lies there into sight.
+ * One step from where `player` stands into its room — north, east, south or
+ * west, the first that is floor — as a player does first, which brings more
+ * of the room into sight. The player stays there.
  */
-async function lookAround(player) {
+async function stepIntoRoom(player) {
   const home = tileOf(player.seen);
   const map = player.seen.view.map;
   const step = [
@@ -745,17 +747,47 @@ async function lookAround(player) {
     return;
   }
   await stepTo(player.page, player.seen, home.x + step[0] + 0.5, home.y + step[1] + 0.5);
-  await stepTo(player.page, player.seen, home.x + 0.5, home.y + 0.5);
 }
 
 /**
- * cold-open.png: a mission with an intro opens with the power on — the lab
- * lit and warm, NORMALBETRIEB where the clock will be. The host's window
- * grows to COLD_OPEN; while the power is on, the host looks round its room
- * and the guest walks a few steps towards the host, so that both stand in
- * the window, and the host's frames meanwhile are the sample of the lit
- * scene. Throws when NORMALBETRIEB never shows or the lights are out before
- * the shot.
+ * How much of the world canvas the light shows and how much lies in the
+ * dark, as shares of its pixels by brightness: a lit tile is far brighter
+ * than the darkness, which leaves an unlit one a shadow.
+ */
+async function worldShares(page) {
+  return page.evaluate(() => {
+    const canvas = document.querySelector('.world-canvas');
+    const data = canvas?.getContext('2d')?.getImageData(0, 0, canvas.width, canvas.height).data;
+    if (data === undefined) {
+      return { lit: 0, dark: 0 };
+    }
+    let lit = 0;
+    let dark = 0;
+    let all = 0;
+    // Every seventh pixel is plenty, and the stride does not line up with the rows.
+    for (let i = 0; i < data.length; i += 4 * 7) {
+      const luma = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+      all += 1;
+      if (luma >= 48) {
+        lit += 1;
+      } else if (luma < 24) {
+        dark += 1;
+      }
+    }
+    return { lit: lit / all, dark: dark / all };
+  });
+}
+
+/**
+ * cold-open.png: a mission with an intro opens with the power on —
+ * NORMALBETRIEB where the clock will be, and the lab lit and warm as far as
+ * the player sees, nothing behind a wall. The host's window grows to
+ * COLD_OPEN; while the power is on, the host steps into its room and the
+ * guest walks a few steps towards the host — showing only where the host
+ * can see it — and the host's frames meanwhile are the sample of the lit
+ * scene. Fails unless the shot shows the host's sight lit and most of the
+ * world dark; throws when NORMALBETRIEB never shows or the lights are out
+ * before the shot.
  */
 async function captureColdOpen(host, guest) {
   if (!(await attached(host.page.locator('.stage-clock .power-status'), 5000))) {
@@ -768,7 +800,7 @@ async function captureColdOpen(host, guest) {
   await sampleFrames(host.page, 'in the lit lab, the power still on', async () => {
     const [steps] = await Promise.all([
       toward === null ? 0 : approach(guest, toward, 3),
-      lookAround(host),
+      stepIntoRoom(host),
     ]);
     walked = steps;
   });
@@ -777,10 +809,21 @@ async function captureColdOpen(host, guest) {
   }
   await capture(host.page, 'cold-open.png');
   const status = await textOf(host.page.locator('.stage-clock .power-status'));
+  const room = await textOf(host.page.locator('.stage-goal--power .stage-sub'));
+  const { lit, dark } = await worldShares(host.page);
+  const share = (part) => `${Math.round(part * 100)} %`;
+  const found = host.seen.view.map.manuals.map((manual) => manual.kind).join(', ') || 'none';
   console.log(
     `cold-open.png      ${host.name} @ ${COLD_OPEN.width}x${COLD_OPEN.height}: "${status}", ` +
-      `the lab lit; ${guest.name} walked ${walked} tile(s) towards ${host.name}`,
+      `"${room}"; ${share(lit)} of the world lit, ${share(dark)} dark; sources found: ` +
+      `${found}; ${guest.name} walked ${walked} tile(s) towards ${host.name}`,
   );
+  if (lit < 0.02 || dark < 0.5) {
+    fail(
+      `cold-open.png: ${share(lit)} lit and ${share(dark)} dark — with the power on, ` +
+        `${host.name} should see the lab lit as far as it sees, and the rest dark`,
+    );
+  }
   await host.page.setViewportSize(SIZES[0]);
 }
 
