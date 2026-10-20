@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- icon.svg for launchers that cut their own shape: the ground runs to every edge, and the
+       glyph stays inside the safe circle (radius 40 % of the side) that every mask keeps. -->
+  <defs>
+    <radialGradient id="ground" cx="0.5" cy="0" r="1">
+      <stop offset="0" stop-color="#13202c" />
+      <stop offset="0.6" stop-color="#0a0f14" />
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#ground)" />
+  <path d="M256 92 397 174v164L256 420l-141-82V174Z" fill="#2dd4bf" opacity="0.16" />
+  <path d="M256 126 368 191v130L256 386l-112-65V191Z" fill="#2dd4bf" />
+  <circle cx="256" cy="231" r="36" fill="#0a0f14" />
+  <path d="M238 251h36l14 66h-64Z" fill="#0a0f14" />
+</svg>

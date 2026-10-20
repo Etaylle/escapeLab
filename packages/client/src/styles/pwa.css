@@ -1,0 +1,76 @@
+/* ══ the app on a phone: the notch, the install offer, a new version ═══════
+ * index.html sets viewport-fit=cover: on a notched phone the page runs under
+ * the notch, the rounded corners and the home bar. The app's box keeps every
+ * control inside the safe area — top bar, lobby, world, pad, HUD — and what
+ * lies outside it shows the page's dark ground. The fixed layers lie over the
+ * window, not in the box, so each keeps clear on its own, by margins: they
+ * add to wherever the layer's own rules place it. Without a notch every
+ * inset is 0 and nothing moves.
+ */
+
+.app {
+  padding:
+    env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+.overlay,
+.puzzle-modal {
+  margin:
+    env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+.banner.error,
+.update-line {
+  margin: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0
+    env(safe-area-inset-left, 0px);
+}
+
+.coach.coach--panel {
+  margin-top: env(safe-area-inset-top, 0px);
+}
+
+/* ── the join screen's offer to install, on a phone (screens/Install.tsx) ── */
+
+.install-line {
+  margin: -4px 0 14px;
+  font-size: 14px;
+}
+
+.install-line button.link {
+  padding: 4px 0;
+  color: var(--accent);
+}
+
+/* ── a newer version took over (screens/Install.tsx) ────────────────────── */
+
+/* Over the top bar like an error, and under one when both are up: anything
+   that changed the main area's height would re-zoom a running world. */
+.update-line {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 39;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 20px;
+  background: #0b2b2a;
+  border-bottom: 1px solid var(--accent);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+
+.update-line button.link {
+  color: var(--accent);
+}
+
+.update-line button.update-line-close {
+  color: var(--muted);
+  text-decoration: none;
+}

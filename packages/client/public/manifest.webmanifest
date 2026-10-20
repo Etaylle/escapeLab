@@ -1,0 +1,24 @@
+{
+  "id": "/",
+  "name": "EscapeLab",
+  "short_name": "EscapeLab",
+  "description": "Kooperatives Escape-Spiel: lösen könnt ihr es nur gemeinsam, per Stimme.",
+  "lang": "de",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0a0f14",
+  "theme_color": "#0d141b",
+  "categories": ["games"],
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

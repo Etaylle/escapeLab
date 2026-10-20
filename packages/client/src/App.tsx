@@ -1,9 +1,11 @@
 import { Activity, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { isMuted, setMuted } from './world/audio.js';
 import { difficultyInfos, type Difficulty, type MissionInfo } from '@escapelab/core';
+import { useRunScreen } from './runScreen.js';
 import { useGameConnection } from './ws.js';
 import { HandbookScreen } from './screens/Handbook.js';
 import { Icon, type IconName } from './screens/Icon.js';
+import { UpdateNotice } from './screens/Install.js';
 import { JoinScreen } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
 import { GameScreen } from './screens/Game.js';
@@ -80,12 +82,15 @@ export function App() {
   // booklet is open, or null.
   const [handbook, setHandbook] = useState<string | null>(null);
   const contentRef = useRef<HTMLElement>(null);
+  // This player is in a run: on a phone that is fullscreen, sideways and awake.
+  const playing = conn.view?.phase === 'playing' && conn.view.map !== null;
+  useRunScreen(playing);
   // A running mission takes over the whole window, for players and for the
   // audience alike — the latter matters on a projector. So does the lobby,
   // the crew's room before the run.
   const immersive =
     conn.view?.phase === 'lobby' ||
-    (conn.view?.phase === 'playing' && conn.view.map !== null) ||
+    playing ||
     (conn.spectatorView !== null && conn.spectatorView.map !== null);
   // Which mission is running, for the header. The lobby already has it as its
   // headline, so naming it twice there would be noise.
@@ -147,6 +152,7 @@ export function App() {
           </button>
         </div>
       )}
+      <UpdateNotice />
 
       <main ref={contentRef} className={`content ${immersive ? 'content--stage' : ''}`}>
         {renderScreen()}

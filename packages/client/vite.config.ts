@@ -1,8 +1,10 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import { serviceWorker } from './src/sw/build.js';
 
 export default defineConfig({
-  plugins: [react()],
+  // The service worker comes out of `vite build` only: dist/sw.js beside the page.
+  plugins: [react(), serviceWorker()],
   build: {
     rollupOptions: {
       output: {

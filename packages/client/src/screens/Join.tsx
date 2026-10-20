@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ClientMessage, MissionInfo, RoomSummary } from '@escapelab/core';
 import { crewSizeText } from './Crew.js';
 import { Icon } from './Icon.js';
+import { InstallOffer } from './Install.js';
 import { MapThumb } from './MapThumb.js';
 
 interface Props {
@@ -132,6 +133,7 @@ export function JoinScreen({ send, connected, missions, rooms, openHandbook }: P
         Regeln, wer am Buch steht — lösen könnt ihr es nur gemeinsam, per Stimme. Gerät pro
         Person, Rücken an Rücken, los.
       </p>
+      <InstallOffer />
 
       <label>
         Dein Name
