@@ -29,7 +29,7 @@ import {
   worldText,
   type WorldText,
 } from './art.js';
-import { contextAction, promptText } from './interact.js';
+import { carriedItem, contextAction, promptText } from './interact.js';
 import {
   markerBoxes,
   markerTargets,
@@ -303,7 +303,7 @@ function coachTip(
       id: 'carry',
       text: keyboard
         ? 'Du trägst etwas: Bring es zur markierten Fläche und drücke E. Mit Q legst du es ab.'
-        : 'Du trägst etwas: Bring es zur markierten Fläche und tippe ⚡.',
+        : 'Du trägst etwas: Bring es zur markierten Fläche und tippe ⚡. Mit 📦 legst du es ab.',
     };
   }
   if (map.exit !== null && map.exit.open) {
@@ -415,7 +415,11 @@ export function GameWorld({
   operateRef.current = onOperate;
   /** the E key's job, shared with the touch button; set while the render loop runs */
   const interactRef = useRef<(() => void) | null>(null);
+  /** the Q key's job, shared with the touch button; set while the render loop runs */
+  const dropRef = useRef<(() => void) | null>(null);
   const simRef = useRef<Sim | null>(null);
+  /** what this player carries now; while there is something, a touch screen offers to drop it */
+  const load = spectator || view.map === null ? undefined : carriedItem(view.map, view.you.id);
 
   useEffect(() => {
     if (lockedRef.current) {
@@ -432,10 +436,8 @@ export function GameWorld({
       setTip(null);
       return;
     }
-    const carried = view.map.items.find(
-      (item) => item.carriedBy === view.you.id && !item.delivered,
-    );
     const keyboard = !window.matchMedia(TOUCH).matches;
+    const carried = carriedItem(view.map, view.you.id);
     const next = coachTip(view.map, view.you.id, carried, station, keyboard);
     const fresh = firstSight(next, SEEN_TIPS);
     if (fresh !== null) {
@@ -562,6 +564,14 @@ export function GameWorld({
     }
     interactRef.current = tryInteract;
 
+    /** Puts down what this player carries, where they stand; the server knows what that is. */
+    function dropItem(): void {
+      if (!lockedRef.current) {
+        sendRef.current({ kind: 'drop-item' });
+      }
+    }
+    dropRef.current = dropItem;
+
     const onKeyDown = (e: KeyboardEvent): void => {
       if (isTextEntry(document.activeElement) || e.altKey || e.ctrlKey || e.metaKey) {
         return;
@@ -577,9 +587,7 @@ export function GameWorld({
         tryInteract();
       } else if (key === 'q' && !e.repeat) {
         e.preventDefault();
-        if (!lockedRef.current) {
-          sendRef.current({ kind: 'drop-item' });
-        }
+        dropItem();
       } else if (key === 'm' && !e.repeat) {
         sim.minimap = !sim.minimap;
       } else if (key === 'c' && !e.repeat) {
@@ -1667,14 +1675,13 @@ export function GameWorld({
 
     /**
      * A standing reminder of the Q key while hands are full. A touch screen has
-     * no key to put things down with, and its crew strip says what you carry.
+     * its 📦 button for that instead, and its crew strip says what you carry.
      */
     function renderCarrying(map: WorldMap, view: Viewport): void {
       if (ctx == null || touchPad.matches) {
         return;
       }
-      const youId = viewRef.current.you.id;
-      const carrying = map.items.find((item) => item.carriedBy === youId && !item.delivered);
+      const carrying = carriedItem(map, viewRef.current.you.id);
       if (carrying !== undefined) {
         ctx.font = `700 ${12 * view.dpr}px ui-monospace, Menlo, monospace`;
         ctx.fillStyle = '#60a5fa';
@@ -1705,6 +1712,7 @@ export function GameWorld({
       stopAmbience();
       simRef.current = null;
       interactRef.current = null;
+      dropRef.current = null;
     };
     // The loop reads everything through refs; mount/unmount is the only dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1761,14 +1769,29 @@ export function GameWorld({
             </button>
           ))}
         </div>
-        {/* The key on a button shows only where there are keys (world.css). */}
-        <button
-          className="world-interact"
-          aria-label="Benutzen"
-          onClick={() => interactRef.current?.()}
-        >
-          ⚡<span className="world-key"> [E]</span>
-        </button>
+        {/*
+         * The action button, and over it while hands are full the one that puts
+         * the load down: a touch screen's Q (world.css shows it there only).
+         * The key on a button shows only where there are keys.
+         */}
+        <div className="world-actions">
+          {load !== undefined && (
+            <button
+              className="world-drop"
+              aria-label="Ablegen"
+              onClick={() => dropRef.current?.()}
+            >
+              📦
+            </button>
+          )}
+          <button
+            className="world-interact"
+            aria-label="Benutzen"
+            onClick={() => interactRef.current?.()}
+          >
+            ⚡<span className="world-key"> [E]</span>
+          </button>
+        </div>
         <button
           className="world-chat-toggle"
           aria-label="Schnellchat"

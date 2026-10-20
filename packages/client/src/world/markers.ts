@@ -1,5 +1,6 @@
 import type { MapView } from '@escapelab/core';
 import { consoleName } from './consoles.js';
+import { carriedItem } from './interact.js';
 import { overlaps, type Box, type Viewport } from './viewport.js';
 
 /** A thing worth walking to, and how its arrow should look. */
@@ -78,7 +79,7 @@ export function markerTargets(
       label: 'VENTIL',
     }));
   }
-  const carried = map.items.find((item) => item.carriedBy === youId && !item.delivered);
+  const carried = carriedItem(map, youId);
   if (carried !== undefined && carried.deliverTo !== null) {
     const goal = carried.deliverTo;
     return [{ x: goal.x + 0.5, y: goal.y + 0.5, color: BLUE, label: 'ABGABE' }];

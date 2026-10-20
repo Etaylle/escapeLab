@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MapView } from '@escapelab/core';
-import { contextAction, promptText } from '../src/world/interact.js';
+import { carriedItem, contextAction, promptText } from '../src/world/interact.js';
 import { mapWith, type Manual } from './fixtures.js';
 
 const YOU = 'p1';
@@ -267,5 +267,21 @@ describe('promptText — the prompt over the world', () => {
       expect(promptText(locked, KEYBOARD)).toBe('🔒 SCHLÜSSEL fehlt');
       expect(promptText(locked, TOUCH)).toBe('🔒 SCHLÜSSEL fehlt');
     }
+  });
+});
+
+describe('carriedItem — what a player has in hand', () => {
+  it('finds the item a player carries, and only theirs', () => {
+    const items = [part({ id: 'kern', carriedBy: 'p2' }), part({ carriedBy: YOU })];
+    const map = mapWith({ items });
+    expect(carriedItem(map, YOU)?.id).toBe('fuse');
+    expect(carriedItem(map, 'p2')?.id).toBe('kern');
+    expect(carriedItem(map, 'p3')).toBeUndefined();
+  });
+
+  it('finds nothing in empty hands, or once the item is in its place', () => {
+    expect(carriedItem(mapWith({ items: [part({})] }), YOU)).toBeUndefined();
+    const placed = mapWith({ items: [part({ carriedBy: YOU, delivered: true })] });
+    expect(carriedItem(placed, YOU)).toBeUndefined();
   });
 });

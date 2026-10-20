@@ -28,6 +28,11 @@ type Source = Pick<SourceHere, 'id' | 'kind' | 'opened' | 'needsKey'>;
 type Manual = MapView['manuals'][number];
 type Item = MapView['items'][number];
 
+/** What `playerId` carries right now: an item in their hands, not yet set in its place. */
+export function carriedItem(map: Pick<MapView, 'items'>, playerId: string): Item | undefined {
+  return map.items.find((item) => item.carriedBy === playerId && !item.delivered);
+}
+
 /**
  * E at a manual object: read it once it is open, search a closed locker,
  * unlock a cabinet with its key in hand — or learn which key is missing.
@@ -68,7 +73,7 @@ export function contextAction(
 ): ContextAction | null {
   const dist = (x: number, y: number): number => Math.hypot(self.x - x, self.y - y);
 
-  const mine = map.items.find((item) => item.carriedBy === youId && !item.delivered);
+  const mine = carriedItem(map, youId);
   const key = mine !== undefined && map.manuals.some((manual) => manual.needsKey === mine.id);
   const goal = key ? null : (mine?.deliverTo ?? null);
   if (mine !== undefined && goal !== null && dist(goal.x + 0.5, goal.y + 0.5) <= ITEM_RADIUS) {

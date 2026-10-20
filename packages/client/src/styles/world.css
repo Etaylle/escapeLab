@@ -43,3 +43,46 @@
     display: none;
   }
 }
+
+/* ── putting down what you carry, on a touch screen ───────────────────── */
+
+/*
+ * The action button, and stacked over it while your hands are full a round
+ * one that puts the load down (Q on a keyboard). The column keeps one width
+ * either way, so the pad beside it never shifts under a thumb, and the stack
+ * stays lower than the pad, so the cluster's measured reach — which the edge
+ * arrows, room names, minimap and tips keep clear of — does not change.
+ */
+.world-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 52px;
+}
+
+.world-drop {
+  display: none;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border-radius: 50%;
+  border-color: #60a5fa;
+  background: rgba(29, 78, 137, 0.8);
+  font-size: 22px;
+  line-height: 1;
+}
+
+@media (pointer: coarse) {
+  .world-drop {
+    display: grid;
+    place-items: center;
+  }
+}
+
+/* With a mouse and keys the column holds nothing to show. */
+@media (pointer: fine) {
+  .world-actions {
+    display: none;
+  }
+}
