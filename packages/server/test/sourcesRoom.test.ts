@@ -51,6 +51,42 @@ const mission: Mission = parseMission({
   },
 });
 
+/**
+ * Two rooms and a plate door between them, the locker in the east one: three
+ * tiles straight behind the door at (6,2), or round its corner at (5,1).
+ *
+ *   0123456789
+ * 0 ##########
+ * 1 #...#....#   spawns (1,1) and (2,1)
+ * 2 #........#   station (1,2); door (4,2)
+ * 3 #...#....#   plate (1,3); sign (3,3)
+ * 4 ##########
+ */
+function behindTheDoor(locker: { x: number; y: number }): Mission {
+  return parseMission({
+    id: 'sichtraum',
+    title: 'Sicht-Raum',
+    players: { min: 2, max: 2 },
+    story: { intro: 'i', win: 'w', lose: 'l' },
+    timeLimitSec: 600,
+    puzzles: [{ type: 'wiring', id: 'kabel', title: 'Kabel' }],
+    map: {
+      tiles: ['##########', '#...#....#', '#........#', '#...#....#', '##########'],
+      spawns: [
+        { x: 1, y: 1 },
+        { x: 2, y: 1 },
+      ],
+      stations: [{ puzzleId: 'kabel', x: 1, y: 2 }],
+      doors: [{ id: 'tuer', x: 4, y: 2, opensBy: { kind: 'plate', plateId: 'platte' } }],
+      plates: [{ id: 'platte', x: 1, y: 3, label: 'HALTEN' }],
+      manuals: [
+        { id: 'spind', kind: 'locker', label: 'SPIND', puzzleIds: ['kabel'], spots: [locker] },
+      ],
+      edgeworkSign: { x: 3, y: 3 },
+    },
+  });
+}
+
 function collector(): { messages: ServerMessage[]; listen: (m: ServerMessage) => void } {
   const messages: ServerMessage[] = [];
   return { messages, listen: (m) => messages.push(m) };
@@ -72,8 +108,8 @@ describe('Room with sources to find and open', () => {
     walkTo(room, player, x + 0.5, y + 0.5);
   }
 
-  function started() {
-    const room = new Room('TEST', mission);
+  function started(lab: Mission = mission) {
+    const room = new Room('TEST', lab);
     const anna = { ...room.join('Anna'), ...collector() };
     const ben = { ...room.join('Ben'), ...collector() };
     room.attach(anna.playerId, anna.listen);
@@ -94,6 +130,33 @@ describe('Room with sources to find and open', () => {
     moveTo(room, anna, 1, 1);
     expect(found()).toEqual(['spind', 'schrank']);
     expect(lastView(anna.messages).map?.manuals[0]).toMatchObject({ x: 14, y: 1, opened: false });
+    room.dispose();
+  });
+
+  it('finds nothing through a wall or a shut door, close as it is, and finds it through the open door', () => {
+    const { room, anna, ben } = started(behindTheDoor({ x: 6, y: 2 }));
+    const found = (): string[] => (lastView(ben.messages).map?.manuals ?? []).map((m) => m.id);
+    moveTo(room, anna, 3, 1); // three tiles from the locker, the wall between
+    expect(found()).toEqual([]);
+    moveTo(room, anna, 3, 2); // three tiles from it, the shut door between
+    expect(found()).toEqual([]);
+    moveTo(room, ben, 1, 3); // onto the plate: the door opens before Anna's eyes
+    expect(lastView(ben.messages).map?.doors[0]?.open).toBe(true);
+    expect(found()).toEqual(['spind']);
+    moveTo(room, ben, 1, 1); // off the plate again: found stays found
+    expect(lastView(ben.messages).map?.doors[0]?.open).toBe(false);
+    expect(found()).toEqual(['spind']);
+    room.dispose();
+  });
+
+  it('finds a source round the corner of a door only for whoever walks in', () => {
+    const { room, anna, ben } = started(behindTheDoor({ x: 5, y: 1 }));
+    const found = (): string[] => (lastView(anna.messages).map?.manuals ?? []).map((m) => m.id);
+    moveTo(room, ben, 1, 3); // the door opens
+    moveTo(room, anna, 3, 2); // before the open door, two tiles off: the wall beside it hides it
+    expect(found()).toEqual([]);
+    moveTo(room, anna, 5, 2); // through the door, the locker a step ahead
+    expect(found()).toEqual(['spind']);
     room.dispose();
   });
 

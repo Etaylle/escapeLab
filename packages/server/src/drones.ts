@@ -1,8 +1,9 @@
 import {
-  doorOpen,
+  canSee,
   operatorsOf,
   platePressed,
   readersOf,
+  shutDoors,
   type DronePosition,
   type GameState,
   type MapDef,
@@ -22,7 +23,6 @@ interface DroneRuntime {
 const ALARM_COOLDOWN_MS = 5000;
 /** The cone is slightly blind right at the drone so you can slip past behind it. */
 const MIN_SPOT_DISTANCE = 0.4;
-const LOS_SAMPLE = 0.2;
 
 export interface SpottedEvent {
   droneId: string;
@@ -45,7 +45,8 @@ function headsDown(state: GameState): Set<string> {
 
 /**
  * Drone patrols: deterministic waypoint loops, cone-of-vision detection with
- * line of sight, and a cooldown so one sighting costs time exactly once.
+ * line of sight — core's `canSee`, the rule the crew finds sources by and the
+ * lamps light by — and a cooldown so one sighting costs time exactly once.
  * Players heads-down at the open puzzle — working its station or reading its
  * rules — are not spotted: the console counts as cover, which keeps the
  * penalty fair. A drone with `activeAfterSolved` sleeps at its first waypoint
@@ -116,6 +117,7 @@ export class DronePatrol {
       return []; // everyone is heads-down at the relay emergency's consoles
     }
     const covered = headsDown(state);
+    const shut = shutDoors(this.map, state);
     const events: SpottedEvent[] = [];
     for (const drone of this.watching(state)) {
       const self = this.runtime.get(drone.id);
@@ -144,7 +146,7 @@ export class DronePatrol {
         if (delta > halfAngle) {
           return false;
         }
-        return this.hasLineOfSight(state, self.x, self.y, pos.x, pos.y);
+        return canSee(this.map, self, pos, shut);
       });
       if (caught !== undefined) {
         self.quietUntil = now + ALARM_COOLDOWN_MS;
@@ -182,29 +184,5 @@ export class DronePatrol {
   /** Awake and not held still by its plate: these move and see. */
   private watching(state: GameState): MapDef['drones'] {
     return this.awake(state).filter((drone) => !frozen(state, drone));
-  }
-
-  private hasLineOfSight(
-    state: GameState,
-    ax: number,
-    ay: number,
-    bx: number,
-    by: number,
-  ): boolean {
-    const steps = Math.ceil(Math.hypot(bx - ax, by - ay) / LOS_SAMPLE);
-    for (let i = 1; i < steps; i++) {
-      const x = ax + ((bx - ax) * i) / steps;
-      const y = ay + ((by - ay) * i) / steps;
-      const tx = Math.floor(x);
-      const ty = Math.floor(y);
-      if (this.map.tiles[ty]?.charAt(tx) !== '.') {
-        return false;
-      }
-      const door = this.map.doors.find((d) => d.x === tx && d.y === ty);
-      if (door !== undefined && !doorOpen(this.map, state, door.id)) {
-        return false;
-      }
-    }
-    return true;
   }
 }

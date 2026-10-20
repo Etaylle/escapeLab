@@ -46,6 +46,40 @@ const mission: Mission = parseMission({
   },
 });
 
+/**
+ * The two chambers joined by a plate door at (4,2), right in the drone's line.
+ *
+ *   012345678
+ * 0 #########
+ * 1 #...#...#
+ * 2 #.......#   drone (1,2) facing the door (4,2)
+ * 3 #...#...#   plate (1,3)
+ * 4 #########
+ */
+const doorway: Mission = parseMission({
+  ...JSON.parse(JSON.stringify(mission)),
+  id: 'doorwaytest',
+  map: {
+    ...JSON.parse(JSON.stringify(mission.map)),
+    tiles: ['#########', '#...#...#', '#.......#', '#...#...#', '#########'],
+    doors: [{ id: 'tuer', x: 4, y: 2, opensBy: { kind: 'plate', plateId: 'platte' } }],
+    plates: [{ id: 'platte', x: 1, y: 3, label: 'HALTEN' }],
+    drones: [
+      {
+        id: 'wache',
+        waypoints: [
+          { x: 1, y: 2 },
+          { x: 3, y: 2 },
+        ],
+        speed: 1,
+        range: 6,
+        halfAngleDeg: 30,
+        penaltySec: 15,
+      },
+    ],
+  },
+});
+
 /** The same lab with a second station; the drone sleeps until the first one is done. */
 const sleeper: Mission = parseMission({
   ...JSON.parse(JSON.stringify(mission)),
@@ -144,6 +178,14 @@ describe('DronePatrol', () => {
     const drones = patrol();
     // (6.5,2.5) is dead ahead and in range, but the pillar at column 4 blocks it.
     expect(drones.detect(playing(), at(6.5, 2.5), T0)).toEqual([]);
+  });
+
+  it('looks through an open door in its line, and not through a shut one', () => {
+    const drones = patrol(doorway);
+    const shut = playing(doorway);
+    expect(drones.detect(shut, at(6.5, 2.5), T0)).toEqual([]);
+    const open = applyAction(shut, { type: 'set-occupancy', plates: ['platte'], panels: [] });
+    expect(drones.detect(open, at(6.5, 2.5), T0)).toHaveLength(1);
   });
 
   it('ignores a player beyond its range', () => {

@@ -70,6 +70,7 @@ export {
 export {
   doorOpen,
   platePressed,
+  shutDoors,
   stepAllowed,
   armedStations,
   consoleOf,
@@ -77,6 +78,7 @@ export {
   readersOf,
   stationKey,
 } from './map.js';
+export { canSee, sightFrom, visibleTiles, type Sight, type SightMap } from './sight.js';
 export { type MapDef } from './mission.js';
 export {
   parseClientMessage,

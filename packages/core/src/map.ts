@@ -48,6 +48,13 @@ export function doorOpen(map: MapDef, state: GameState, doorId: string): boolean
   );
 }
 
+/** The doors shut right now, by tile key: they stop avatars and sight alike. */
+export function shutDoors(map: MapDef, state: GameState): Set<string> {
+  return new Set(
+    map.doors.filter((door) => !doorOpen(map, state, door.id)).map((d) => tileKey(d.x, d.y)),
+  );
+}
+
 /**
  * The longest step an avatar takes between two position updates, in tiles:
  * clients walk 4.2 tiles and send about 12 updates a second, so a step is
@@ -71,9 +78,7 @@ export function stepAllowed(map: MapDef, state: GameState, from: Spot, to: Spot)
   if (length > MAX_STEP) {
     return false;
   }
-  const shut = new Set(
-    map.doors.filter((door) => !doorOpen(map, state, door.id)).map((d) => tileKey(d.x, d.y)),
-  );
+  const shut = shutDoors(map, state);
   const start = tileKey(Math.floor(from.x), Math.floor(from.y));
   const samples = Math.ceil(length / STEP_SAMPLE);
   for (let i = 1; i <= samples; i++) {
