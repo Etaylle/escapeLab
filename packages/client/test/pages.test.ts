@@ -4,13 +4,16 @@ import {
   BOOK_PAGE,
   filled,
   firstPageOf,
+  leafFor,
   lineCount,
+  openingPage,
   paginate,
   pagesInView,
   turnFrom,
   type BookPage,
   type BookSection,
   type Fragment,
+  type Leaf,
 } from '../src/pages.js';
 import { FIGURE_VIEW } from '../src/screens/Figure.js';
 
@@ -30,7 +33,7 @@ function fragmentsOf(pages: BookPage[], kind: Fragment['kind']): Fragment[] {
 }
 
 describe('paginate', () => {
-  it('opens with the contents, then every station on a fresh page under its title', () => {
+  it('opens with the cover, then every station on a fresh page under its title', () => {
     const pages = paginate([
       station('§1 — Kabel', [{ kind: 'p', text: 'Rot zuerst.' }]),
       station('§3 — Netz', [{ kind: 'p', text: 'Wände zeigt der Plan.' }]),
@@ -309,6 +312,80 @@ describe('lineCount', () => {
   it('breaks a word longer than a line inside itself', () => {
     expect(lineCount('Notstromzellen', 5)).toBe(3);
     expect(lineCount('ab Notstromzellen', 5)).toBe(4);
+  });
+});
+
+describe('opening the book', () => {
+  const one = paginate([station('§2 — Kabel', [{ kind: 'p', text: 'Rot zuerst.' }])]);
+  const three = paginate([
+    station('§1 — Kabel', [{ kind: 'p', text: 'Rot zuerst.' }]),
+    station('§3 — Netz', [{ kind: 'rules', items: items(30) }]),
+    station('§5 — Frequenz', [{ kind: 'p', text: 'Langsam drehen.' }]),
+  ]);
+
+  it('opens where the bookmark lies: the first page of the station that is up', () => {
+    expect(openingPage(three, 2)).toBe(firstPageOf(three, 2));
+    expect(openingPage(three, 2)).toBeGreaterThan(3);
+    expect(openingPage(one, 0)).toBe(2);
+  });
+
+  it('opens a book of one station on it, past the cover; any other on the cover', () => {
+    expect(openingPage(one, null)).toBe(2);
+    expect(openingPage(three, null)).toBe(1);
+    expect(openingPage(paginate([]), null)).toBe(1);
+  });
+});
+
+/** The pages open while a leaf lifts, as they lay before the turn. */
+function before(leaf: Leaf, spread: boolean): number[] {
+  if (!spread) {
+    return leaf.dir === 1 ? [leaf.front] : leaf.under;
+  }
+  return leaf.dir === 1 ? [leaf.under[0]!, leaf.front] : [leaf.front, leaf.under[1]!];
+}
+
+/** The pages open once the leaf lies still. */
+function after(leaf: Leaf, spread: boolean): number[] {
+  if (!spread) {
+    return leaf.dir === 1 ? leaf.under : [leaf.front];
+  }
+  return leaf.dir === 1 ? [leaf.back!, leaf.under[1]!] : [leaf.under[0]!, leaf.back!];
+}
+
+describe('a turning leaf', () => {
+  it('turns a spread over the spine: the right page forwards, the left one back', () => {
+    expect(leafFor(1, 3, true)).toEqual({ dir: 1, under: [1, 4], front: 2, back: 3 });
+    expect(leafFor(4, 2, true)).toEqual({ dir: -1, under: [1, 4], front: 3, back: 2 });
+    // The contents or a tab jump: one leaf all the same.
+    expect(leafFor(2, 7, true)).toEqual({ dir: 1, under: [1, 8], front: 2, back: 7 });
+  });
+
+  it('lifts a page alone away going forwards, and lays the one before down going back', () => {
+    expect(leafFor(2, 3, false)).toEqual({ dir: 1, under: [3], front: 2, back: null });
+    expect(leafFor(3, 2, false)).toEqual({ dir: -1, under: [3], front: 2, back: null });
+  });
+
+  it('turns nothing within one view', () => {
+    expect(leafFor(1, 2, true)).toBeNull();
+    expect(leafFor(4, 4, false)).toBeNull();
+  });
+
+  it('starts from the view it leaves and lands on exactly the one turnFrom leads to', () => {
+    for (const spread of [false, true]) {
+      for (let page = 1; page <= 9; page += 1) {
+        for (const dir of [1, -1] as const) {
+          const to = turnFrom(page, 9, spread, dir);
+          const leaf = to === null ? null : leafFor(page, to, spread);
+          if (to === null || leaf === null) {
+            expect(to).toBeNull();
+            continue;
+          }
+          expect(leaf.dir).toBe(dir);
+          expect(before(leaf, spread)).toEqual(pagesInView(page, spread));
+          expect(after(leaf, spread)).toEqual(pagesInView(to, spread));
+        }
+      }
+    }
   });
 });
 

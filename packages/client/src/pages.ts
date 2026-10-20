@@ -1,7 +1,7 @@
 import type { ManualBlock, ManualSection } from '@escapelab/core';
 
 /**
- * Printed rules laid out as the pages of a book. Page 1 is the contents;
+ * Printed rules laid out as the pages of a book. Page 1 is the cover;
  * every station starts on a fresh page and its blocks flow on from there: a
  * rules list or a table breaks between items, two at least to a page — the
  * list repeats its heading „(Fortsetzung)" where it goes on, the table its
@@ -35,9 +35,9 @@ export type Fragment =
   | { kind: 'reader' };
 
 export interface BookPage {
-  /** the station the page belongs to, by index into the sections; null for the contents */
+  /** the station the page belongs to, by index into the sections; null for the cover */
   section: number | null;
-  /** opens its station, or is the contents */
+  /** opens its station, or is the cover */
   first: boolean;
   fragments: Fragment[];
 }
@@ -228,7 +228,7 @@ class Pager {
 
   constructor(private readonly size: PageSize) {}
 
-  /** A fresh page: a station's first, a continuation, or the contents (null). */
+  /** A fresh page: a station's first, a continuation, or the cover (null). */
   open(section: number | null, first: boolean): void {
     this.pages.push({ section, first, fragments: [] });
     this.used = 0;
@@ -358,7 +358,7 @@ function place(
 }
 
 /**
- * The book's pages: the contents, then each section from a fresh page. A
+ * The book's pages: the cover, then each section from a fresh page. A
  * reader's plan goes right under the station's title, so it is on the page
  * the bookmark opens; the station's last block may run a little long rather
  * than leave a line or two alone on a page.
@@ -391,6 +391,19 @@ export function firstPageOf(pages: readonly BookPage[], section: number): number
   return index < 0 ? null : index + 1;
 }
 
+/**
+ * The page a book opens at: where the bookmark lies — the first page of
+ * `marked`, the section that is up now — if the book has it; a book of a
+ * single section opens on that section, past the cover; any other on the
+ * cover, whose contents lead on from there.
+ */
+export function openingPage(pages: readonly BookPage[], marked: number | null): number {
+  const sections = new Set(pages.flatMap((page) => (page.section === null ? [] : [page.section])));
+  const only = sections.size === 1 ? [...sections][0] : undefined;
+  const at = marked ?? only ?? null;
+  return (at === null ? null : firstPageOf(pages, at)) ?? 1;
+}
+
 /** The first page in view: `page` itself, or the left page of the spread holding it. */
 function viewStart(page: number, spread: boolean): number {
   return spread && page % 2 === 0 ? page - 1 : page;
@@ -406,4 +419,42 @@ export function pagesInView(page: number, spread: boolean): number[] {
 export function turnFrom(page: number, total: number, spread: boolean, dir: 1 | -1): number | null {
   const next = viewStart(page, spread) + dir * (spread ? 2 : 1);
   return next >= 1 && next <= total ? next : null;
+}
+
+/**
+ * A leaf in the middle of a turn: the pages lying open beneath it and the
+ * pages on its two faces. In a spread it turns over the spine — forwards
+ * from right to left, back from left to right — lifting `front` off the
+ * view it leaves and landing `back` in the view it opens. Alone, a page is
+ * lifted away (forwards) or laid down (back): `front` is that page, and
+ * there is no `back`.
+ */
+export interface Leaf {
+  dir: 1 | -1;
+  /** the pages open beneath the leaf, left to right */
+  under: number[];
+  front: number;
+  back: number | null;
+}
+
+/**
+ * The leaf that turns from the view holding page `from` to the one holding
+ * `to`; null when both are in the same view. Once it lies still, the book
+ * shows exactly `pagesInView(to)`.
+ */
+export function leafFor(from: number, to: number, spread: boolean): Leaf | null {
+  const leaving = viewStart(from, spread);
+  const arriving = viewStart(to, spread);
+  if (leaving === arriving) {
+    return null;
+  }
+  const dir = arriving > leaving ? 1 : -1;
+  if (!spread) {
+    return dir === 1
+      ? { dir, under: [arriving], front: leaving, back: null }
+      : { dir, under: [leaving], front: arriving, back: null };
+  }
+  return dir === 1
+    ? { dir, under: [leaving, arriving + 1], front: leaving + 1, back: arriving }
+    : { dir, under: [arriving, leaving + 1], front: leaving, back: arriving + 1 };
 }

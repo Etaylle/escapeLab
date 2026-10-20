@@ -627,6 +627,8 @@ export function GameScreen({
           manual={open.reading}
           puzzle={view.puzzle}
           current={view.currentPuzzleIndex}
+          mission={view.missionTitle}
+          map={map}
           edgework={view.edgework}
           onAskNote={() => send({ kind: 'request-hint' })}
           onClose={closeModal}

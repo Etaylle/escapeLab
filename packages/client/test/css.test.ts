@@ -1,12 +1,18 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Nothing parses ui.css before the browser does, and a browser swallows every
- * rule after an unclosed one without a word. Sections merged at the file's
- * end have lost a closing brace before; this keeps the braces balanced.
+ * Nothing parses a stylesheet before the browser does, and a browser swallows
+ * every rule after an unclosed one without a word. Sections merged at a
+ * file's end have lost a closing brace before; this keeps the braces of
+ * ui.css and of every sheet under styles/ balanced — and every one of those
+ * imported, since a sheet nobody imports styles nothing.
  */
-const css = readFileSync(new URL('../src/ui.css', import.meta.url), 'utf8');
+const SRC = new URL('../src/', import.meta.url);
+const STYLES = readdirSync(new URL('styles/', SRC))
+  .filter((name) => name.endsWith('.css'))
+  .sort();
+const SHEETS = ['ui.css', ...STYLES.map((name) => `styles/${name}`)];
 
 /** Opening lines of the blocks still open at the end, comments skipped. */
 function unclosedBlocks(source: string): string[] {
@@ -32,9 +38,19 @@ function unclosedBlocks(source: string): string[] {
   return open;
 }
 
-describe('ui.css', () => {
+describe.each(SHEETS)('%s', (sheet) => {
   it('closes every block it opens', () => {
-    expect(unclosedBlocks(css)).toEqual([]);
+    expect(unclosedBlocks(readFileSync(new URL(sheet, SRC), 'utf8'))).toEqual([]);
+  });
+});
+
+describe('the stylesheets', () => {
+  it('are imported by main.tsx, ui.css first and every sheet under styles/ after it', () => {
+    expect(STYLES.length).toBeGreaterThan(0);
+    const main = readFileSync(new URL('main.tsx', SRC), 'utf8');
+    const imports = [...main.matchAll(/^import '\.\/(.+\.css)';$/gm)].map((match) => match[1]);
+    expect(imports[0]).toBe('ui.css');
+    expect(imports.slice(1).sort()).toEqual(SHEETS.slice(1));
   });
 
   it('would notice a block left open', () => {
