@@ -1,4 +1,5 @@
 import type { MapView } from '@escapelab/core';
+import { runsOf, type Run } from './light.js';
 
 type Spot = { x: number; y: number };
 type RoomMap = Pick<MapView, 'tiles' | 'doors'>;
@@ -60,6 +61,40 @@ export function roomArea(map: RoomMap, from: Spot): Spot[] {
     }
   }
   return [...area.values()];
+}
+
+/** Tiles of lit rooms that the same rooms light, as runs along their rows. */
+export interface LitGroup {
+  /** the rooms whose light reaches these tiles, by name: two for a wall or door between them */
+  rooms: string[];
+  runs: Run[];
+}
+
+/**
+ * The tiles of the lit rooms (`rooms`: the tiles each lights, by name),
+ * grouped by which of them light each tile — a wall or a door two rooms
+ * share is lit by both — each tile counted once however often listed.
+ */
+export function litGroups(rooms: ReadonlyMap<string, readonly Spot[]>): LitGroup[] {
+  const lighting = new Map<string, Set<string>>();
+  for (const [room, tiles] of rooms) {
+    for (const tile of tiles) {
+      const at = key(tile.x, tile.y);
+      lighting.set(at, (lighting.get(at) ?? new Set()).add(room));
+    }
+  }
+  const groups = new Map<string, { rooms: string[]; tiles: string[] }>();
+  for (const [at, lit] of lighting) {
+    const names = [...lit];
+    const id = names.join('\n');
+    const group = groups.get(id) ?? { rooms: names, tiles: [] };
+    group.tiles.push(at);
+    groups.set(id, group);
+  }
+  return [...groups.values()].map(({ rooms: names, tiles }) => ({
+    rooms: names,
+    runs: runsOf(tiles),
+  }));
 }
 
 /** A room's lights come on over this long, ms: the Notlicht moment, and every station after. */

@@ -11,12 +11,14 @@ import {
   lampMount,
   lightClip,
   litTiles,
+  litTilesCache,
   objectGlowStops,
   OWN_BEAM_STOPS,
   OWN_GLOW_STOPS,
   POWER_REACH,
   powerLamp,
   reachOf,
+  runsOf,
   sightCache,
   type Lamp,
   type Stops,
@@ -120,12 +122,49 @@ describe('sightCache', () => {
     expect(look(map, { x: 2.5, y: 2.5 }, 3, open)).not.toBe(first);
   });
 
-  it('forgets everything once it holds as many sights as it may', () => {
+  it('forgets the sight asked for longest ago once it holds as many as it may', () => {
     const look = sightCache(2);
     const first = look(map, { x: 1.5, y: 1.5 }, 3, open);
-    look(map, { x: 2.5, y: 1.5 }, 3, open);
+    const second = look(map, { x: 2.5, y: 1.5 }, 3, open);
     look(map, { x: 3.5, y: 1.5 }, 3, open);
     expect(look(map, { x: 1.5, y: 1.5 }, 3, open)).not.toBe(first);
+    expect(look(map, { x: 2.5, y: 1.5 }, 3, open)).not.toBe(second);
+  });
+
+  it('keeps the sight of a lamp standing still while a moving one fills it up', () => {
+    const look = sightCache(2);
+    const still = look(map, { x: 1.5, y: 1.5 }, 3, open);
+    for (const x of [2.5, 3.5, 5.5, 6.5, 7.5]) {
+      look(map, { x, y: 2.5 }, 3, open);
+      expect(look(map, { x: 1.5, y: 1.5 }, 3, open)).toBe(still);
+    }
+  });
+});
+
+describe('litTilesCache', () => {
+  it('works out a lamp’s tiles once for a sight, and afresh for another lamp or sight', () => {
+    const lights = litTilesCache();
+    const lamp = glow(2.5, 2.5, 1.5);
+    const sight = sightFrom(map, lamp, 1.5, open);
+    const first = lights(lamp, sight);
+    expect(first).toEqual(litTiles(lamp, sight));
+    expect(lights({ ...lamp }, sight)).toBe(first);
+    const wider = glow(2.5, 2.5, 3);
+    expect(lights(wider, sight)).toEqual(litTiles(wider, sight));
+    const other = sightFrom(map, lamp, 1.5, shut);
+    expect(lights(lamp, other)).not.toBe(first);
+    expect(lights(lamp, other)).toEqual(litTiles(lamp, other));
+  });
+});
+
+describe('runsOf', () => {
+  it('merges tiles side by side in a row, whatever order they come in, and nothing else', () => {
+    expect(runsOf(['3,1', '1,1', '2,1', '1,2', '5,1'])).toEqual([
+      { x: 1, y: 1, length: 3 },
+      { x: 5, y: 1, length: 1 },
+      { x: 1, y: 2, length: 1 },
+    ]);
+    expect(runsOf([])).toEqual([]);
   });
 });
 

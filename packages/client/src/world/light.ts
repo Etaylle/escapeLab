@@ -43,6 +43,9 @@ export interface Lit {
   sight: Sight;
 }
 
+/** The tiles a lamp lights from a sight, by key, as `litTiles` says. */
+export type Lights = (lamp: Lamp, sight: Sight) => readonly string[];
+
 /** What a run remembers of its light. */
 export interface LightMemory {
   /** the run, by its `startedAt`; null before one */
@@ -51,6 +54,8 @@ export interface LightMemory {
   seen: Set<string>;
   /** the run's sights, remembered by where they were taken from */
   look: Look;
+  /** the tiles its lamps light, remembered for the sight each lit them from */
+  lights: Lights;
 }
 
 /**
@@ -192,8 +197,8 @@ export function reachOf(lamp: Lamp): number {
   return Math.max(lamp.glow, lamp.beam?.reach ?? 0);
 }
 
-/** Tiles merged into runs along their rows, top to bottom and left to right. */
-function runsOf(keys: Iterable<string>): Run[] {
+/** Tiles, by key, merged into runs along their rows, top to bottom and left to right. */
+export function runsOf(keys: Iterable<string>): Run[] {
   const tiles = [...keys].map(spotOf).sort((a, b) => a.y - b.y || a.x - b.x);
   const runs: Run[] = [];
   for (const tile of tiles) {
@@ -240,13 +245,14 @@ export function litTiles(lamp: Lamp, sight: Sight): string[] {
 
 /** A run's light before any has fallen: nothing seen, no sight taken yet. */
 export function lightMemory(run: number | null): LightMemory {
-  return { run, seen: new Set(), look: sightCache() };
+  return { run, seen: new Set(), look: sightCache(), lights: litTilesCache() };
 }
 
 /**
- * `sightFrom`, remembering the last sights taken, by where from to a
- * thousandth of a tile: a lamp standing still costs nothing. Good for one
- * map; take a fresh one for another.
+ * `sightFrom`, remembering the sights asked for last, by where from to a
+ * thousandth of a tile: a lamp standing still costs nothing, however much
+ * else moves — once it holds `limit` sights, the one asked for longest ago
+ * goes. Good for one map; take a fresh one for another.
  */
 export function sightCache(limit = 64): Look {
   const known = new Map<string, Sight>();
@@ -255,13 +261,38 @@ export function sightCache(limit = 64): Look {
     const key = `${from.x},${from.y},${reach},${[...shut].sort().join(';')}`;
     const seen = known.get(key);
     if (seen !== undefined) {
+      // A map keeps its keys in the order they were set: the sight asked for last moves to the end.
+      known.delete(key);
+      known.set(key, seen);
       return seen;
     }
     if (known.size >= limit) {
-      known.clear();
+      const oldest = known.keys().next();
+      if (oldest.done !== true) {
+        known.delete(oldest.value);
+      }
     }
     const sight = sightFrom(map, from, reach, shut);
     known.set(key, sight);
     return sight;
+  };
+}
+
+/**
+ * `litTiles`, remembered for the last lamp that lit from each sight: a lamp
+ * standing still — the hatch, an emergency lamp, a door's spill — works its
+ * tiles out once, not every frame.
+ */
+export function litTilesCache(): Lights {
+  const known = new WeakMap<Sight, { lamp: string; tiles: readonly string[] }>();
+  return (lamp, sight) => {
+    const id = JSON.stringify(lamp);
+    const last = known.get(sight);
+    if (last?.lamp === id) {
+      return last.tiles;
+    }
+    const tiles = litTiles(lamp, sight);
+    known.set(sight, { lamp: id, tiles });
+    return tiles;
   };
 }

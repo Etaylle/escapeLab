@@ -4,7 +4,7 @@
  * can be looked at instead of guessed.
  *
  *   PLAYWRIGHT_BROWSERS_PATH=$PWD/.playwright-browsers \
- *     [SHOTS_MISSION=Systemcheck] [SHOTS_FRAME_P95_MS=40] \
+ *     [SHOTS_MISSION=Systemcheck] [SHOTS_FRAME_P95_MS=40] [SHOTS_CPU_SLOWDOWN=4] \
  *     node tools/shots.mjs [baseUrl] [outDir]
  *
  * SHOTS_MISSION names the mission card to start (default Blackout); the
@@ -71,9 +71,11 @@
  * the station step — and in a mission with an intro once more, shorter, in
  * the lit lab before the blackout. Each sample logs p50 and p95; a p95 above
  * SHOTS_FRAME_P95_MS (default 40) fails the run, as does any step that
- * throws. A capture the draw leaves out is logged as `skipped:` with why, and
- * fails nothing. The last line counts the captures taken, skipped and failed;
- * the exit code is 1 when any failed.
+ * throws. SHOTS_CPU_SLOWDOWN (default 1) slows every page's main thread that
+ * many times (Chromium's CPU throttling), so a fast machine measures the
+ * frames as a CI runner without a GPU would. A capture the draw leaves out is
+ * logged as `skipped:` with why, and fails nothing. The last line counts the
+ * captures taken, skipped and failed; the exit code is 1 when any failed.
  *
  * Voice: Chromium runs with a fake microphone that needs no prompt (its beeps
  * are the voice), and both players switch theirs on in the lobby. Both pages
@@ -107,6 +109,13 @@ const BASE = process.argv[2] ?? 'http://localhost:5173';
 const OUT = process.argv[3] ?? '/tmp/escapelab-shots';
 const MISSION = process.env.SHOTS_MISSION || 'Blackout';
 const FRAME_P95_MS = frameBudget(process.env.SHOTS_FRAME_P95_MS);
+/**
+ * How many times slower than this machine every page runs: SHOTS_CPU_SLOWDOWN,
+ * 1 when unset. Chromium's own throttle (CDP Emulation.setCPUThrottlingRate)
+ * slows each page's main thread, so a fast machine measures the frame budget
+ * as a CI runner, with no GPU and little CPU, would.
+ */
+const CPU_SLOWDOWN = cpuSlowdown(process.env.SHOTS_CPU_SLOWDOWN);
 /**
  * The seed the host's room is pinned to (`?seed=`, taken by a server with
  * ALLOW_SEED=1 as `pnpm dev` and CI set it), so that who starts where, where
@@ -198,6 +207,28 @@ function frameBudget(text) {
     throw new Error(`SHOTS_FRAME_P95_MS has to be a number of milliseconds above 0, not "${text}"`);
   }
   return ms;
+}
+
+/** The slowdown of every page: SHOTS_CPU_SLOWDOWN, a factor from 1 up, or 1 when unset. */
+function cpuSlowdown(text) {
+  if (text === undefined || text === '') {
+    return 1;
+  }
+  const rate = Number(text);
+  if (!(rate >= 1)) {
+    throw new Error(`SHOTS_CPU_SLOWDOWN has to be a factor of 1 or more, not "${text}"`);
+  }
+  return rate;
+}
+
+/** A new page in `context`, its main thread slowed down CPU_SLOWDOWN times before it loads. */
+async function openPage(context) {
+  const page = await context.newPage();
+  if (CPU_SLOWDOWN > 1) {
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU_SLOWDOWN });
+  }
+  return page;
 }
 
 /**
@@ -2290,7 +2321,7 @@ async function sharedLink(page) {
  * marked as shared and not saved.
  */
 async function openShared(context, link, card) {
-  const page = await context.newPage();
+  const page = await openPage(context);
   page.on('pageerror', (e) => console.log('[shared error]', e.message));
   try {
     await page.goto(link);
@@ -2321,7 +2352,7 @@ async function captureEditor() {
   // The link „Teilen" makes is read off the clipboard where the page may write it.
   const permissions = ['clipboard-read', 'clipboard-write'];
   const context = await browser.newContext({ viewport: SIZES[0], permissions });
-  const page = await context.newPage();
+  const page = await openPage(context);
   page.on('pageerror', (e) => console.log('[editor error]', e.message));
   try {
     await paintProbe(page);
@@ -2592,12 +2623,15 @@ async function playToTheEnd(host, guest, watcher, pinned) {
 
 async function run() {
   mkdirSync(OUT, { recursive: true });
+  if (CPU_SLOWDOWN > 1) {
+    console.log(`cpu                every page slowed down ${CPU_SLOWDOWN}× (SHOTS_CPU_SLOWDOWN)`);
+  }
   browser = await chromium.launch({ args: VOICE_FLAGS });
   await captureEditor();
 
   // --- host: create a room and grab the code ---------------------------
   const hostCtx = await browser.newContext({ viewport: SIZES[0] });
-  const host = await hostCtx.newPage();
+  const host = await openPage(hostCtx);
   const hostSeen = eavesdrop(host);
   host.on('console', (m) => {
     if (m.type() === 'error') console.log('[host console]', m.text());
@@ -2645,7 +2679,7 @@ async function run() {
   // Touch-capable on purpose: the on-screen D-pad is hidden for `pointer:
   // fine`, so a default context would never show it.
   const guestCtx = await browser.newContext({ viewport: SIZES[2], hasTouch: true });
-  const guest = await guestCtx.newPage();
+  const guest = await openPage(guestCtx);
   const guestSeen = eavesdrop(guest);
   // Traced for its voice links; its frames are never sampled.
   await guest.goto(traced(BASE));
@@ -2735,7 +2769,7 @@ async function run() {
   await host.keyboard.press('Escape');
 
   const watcherCtx = await browser.newContext({ viewport: SIZES[0] });
-  const watcher = await watcherCtx.newPage();
+  const watcher = await openPage(watcherCtx);
   const watcherSeen = eavesdrop(watcher);
   // Traced for its voice links; its frames are never sampled.
   await watcher.goto(traced(BASE));
