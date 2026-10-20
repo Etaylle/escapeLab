@@ -2,8 +2,19 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover runs the page under a phone's notch; styles/pwa.css keeps the
+         controls inside the safe area. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>EscapeLab</title>
+    <meta name="theme-color" content="#0d141b" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <!-- Safari on iOS reads its own tags for the home screen: the app's name, no browser bar,
+         the status bar over the page. It takes no SVG as its icon, so it shows a snapshot. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="EscapeLab" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <!-- The last crew's hand in the margins; ui.css falls back to a cursive face offline. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
