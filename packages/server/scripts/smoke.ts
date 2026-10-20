@@ -24,6 +24,7 @@
 import { readFileSync } from 'node:fs';
 import WebSocket from 'ws';
 import {
+  canSee,
   moduleFor,
   NO_CREDITS,
   parseMission,
@@ -574,12 +575,17 @@ async function install(client: TestClient, itemId: string): Promise<void> {
     v.map?.items.find((i) => i.id === itemId)?.delivered === true);
 }
 
-/** Search the locker or unlock the cabinet the client stands at; the run report logs the find. */
+/**
+ * Search the locker or unlock the cabinet the client stands at; the run report logs the find.
+ * Sources are found by sight, so whoever walked into the room up to it has found it for the crew.
+ */
 async function openSource(client: TestClient, manualId: string, find: string): Promise<void> {
   const before = await client.expectView(`stands at ${manualId}, still shut`, (v) =>
     v.sourcesHere.some((s) => s.id === manualId && !s.opened) &&
     !v.manualsHere.some((m) => m.id === manualId));
   assert(before.presence.manualId !== manualId, `${manualId} shows no rules before it is opened`);
+  assert(before.map?.manuals.some((m) => m.id === manualId) === true,
+    `${client.label} walked up to ${manualId} and found it for the crew`);
   client.send({ kind: 'open-source', manualId });
   await client.expectView(`opened ${manualId}, the rules in hand`, (v) =>
     v.manualsHere.some((m) => m.id === manualId));
@@ -1340,15 +1346,22 @@ await zoe.untilSpectator('sees where everybody stands', (v) =>
     JSON.stringify(p.presence) ===
       JSON.stringify(crew.find((client) => client.playerId === p.id)?.view?.presence)));
 
-// The sign and the sources go to whoever comes near them, the sources for the whole crew.
+// The sign and the sources go to whoever comes near them, the sources for the whole crew —
+// and a source only to somebody who has it in sight: through a wall nobody finds anything.
 const sign = mission.map.edgeworkSign ?? fail('Blackout has no sign');
-const near = (spot: Tile, radius: number): boolean =>
+const doorsAtStart = crew[0].view?.map?.doors ?? fail('anna: no doors at the start');
+const shutAtStart = new Set(doorsAtStart.filter((d) => !d.open).map((d) => key(d.x, d.y)));
+const middle = (x: number, y: number): { x: number; y: number } => ({ x: x + 0.5, y: y + 0.5 });
+const inSight = (spot: Tile, radius: number): boolean =>
   crew.some((client) => {
     const at = spawnOf(client);
-    return Math.hypot(spot[0] - at.x, spot[1] - at.y) <= radius;
+    return (
+      Math.hypot(spot[0] - at.x, spot[1] - at.y) <= radius &&
+      canSee(mission.map, middle(at.x, at.y), middle(...spot), shutAtStart)
+    );
   });
 const foundAtStart = mission.map.manuals
-  .filter((m) => near(placeOf(m.id), 3.5))
+  .filter((m) => inSight(placeOf(m.id), 3.5))
   .map((m) => m.id)
   .join(',');
 for (const client of crew) {

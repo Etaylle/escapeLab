@@ -3,8 +3,10 @@ import { DronePatrol } from './drones.js';
 import {
   applyAction,
   armedStations,
+  canSee,
   inEscapePhase,
   initialState,
+  shutDoors,
   stationKey,
   stepAllowed,
   viewFor,
@@ -47,7 +49,10 @@ const PLATE_RELEASE_RADIUS = 0.75;
 /** A player is at a station, a manual object or the sign this close (in tiles); leaves wider. */
 const PRESENCE_ENTER_RADIUS = 1.6;
 const PRESENCE_LEAVE_RADIUS = 2.0;
-/** A manual object is found for the whole crew once somebody comes this close (in tiles). */
+/**
+ * A manual object is found for the whole crew once somebody comes this close
+ * (in tiles) and has it in sight: through a wall nobody finds anything.
+ */
 const DISCOVER_RADIUS = 3.5;
 /** How close to the armed station an interact is accepted. */
 const INTERACT_RADIUS = 1.6;
@@ -546,11 +551,20 @@ export class Room {
       .sort();
   }
 
+  /** Whether a connected player within DISCOVER_RADIUS of a source's tile has it in sight. */
+  private sighted(spot: { x: number; y: number }, shut: ReadonlySet<string>): boolean {
+    const middle = { x: spot.x + 0.5, y: spot.y + 0.5 };
+    return this.occupantsOf(spot.x, spot.y, DISCOVER_RADIUS).some((id) => {
+      const pos = this.positions.get(id);
+      return pos !== undefined && canSee(this.state.mission.map, pos, middle, shut);
+    });
+  }
+
   /**
    * Translate live positions into who stands at which station spot — each
    * console of a station on its own, keyed by `stationKey` — and manual
    * object, who has walked up to the sign and which manual objects somebody
-   * has come close to; dispatch only on change.
+   * has come close to and seen for the first time; dispatch only on change.
    */
   private reconcilePresence(): void {
     const map = this.state.mission.map;
@@ -581,8 +595,9 @@ export class Room {
       sign === undefined
         ? presence.signSeen
         : [...new Set([...presence.signSeen, ...this.presentAt(sign.x, sign.y, [])])].sort();
+    const shut = shutDoors(map, this.state);
     const seen = sources
-      .filter((s) => this.occupantsOf(s.x, s.y, DISCOVER_RADIUS).length > 0)
+      .filter((s) => !discovered.includes(s.id) && this.sighted(s, shut))
       .map((s) => s.id);
     const same = (a: Record<string, string[]>, b: Record<string, string[]>): boolean =>
       JSON.stringify(a) === JSON.stringify(b);
@@ -590,7 +605,7 @@ export class Room {
       !same(stations, presence.stations) ||
       !same(manuals, presence.manuals) ||
       signSeen.length !== presence.signSeen.length ||
-      seen.some((id) => !discovered.includes(id))
+      seen.length > 0
     ) {
       this.dispatch({ type: 'set-presence', stations, manuals, signSeen, seen });
     }

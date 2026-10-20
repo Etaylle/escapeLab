@@ -56,7 +56,7 @@ export type Action =
   /**
    * who stands at which station spot (by `stationKey`) and manual object, who
    * has seen the sign (stays seen) and which manual objects somebody has
-   * come close to (stay found)
+   * come close to and has in sight (stay found)
    */
   | {
       type: 'set-presence';

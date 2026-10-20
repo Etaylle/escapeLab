@@ -52,6 +52,16 @@ import {
   stationChirp,
   stopAmbience,
 } from './audio.js';
+import {
+  doorsShut,
+  lightClip,
+  lightMemory,
+  litTiles,
+  reachOf,
+  type Lamp,
+  type LightMemory,
+  type Lit,
+} from './light.js';
 
 const FALLBACK_COLOR = '#2dd4bf';
 const SPEED = 4.2; // tiles per second
@@ -64,6 +74,12 @@ const CHAT_LIFETIME_MS = 4200;
 const CAPTION_SECONDS = 2;
 /** A locker or cabinet opening this close (in tiles) is heard. */
 const HEAR_RADIUS = 4;
+/** Your lamp: a glow all round, and a flashlight cone where you face — in tiles and radians. */
+const OWN_GLOW = 3.2;
+const CONE_REACH = 7.5;
+const CONE_HALF_ANGLE = 0.5;
+/** The glow of the lamp everybody else of the crew carries, in tiles. */
+const CREW_GLOW = 2.8;
 
 const SOURCE_NAMES: Record<ManualKind, string> = {
   book: 'Buch',
@@ -149,6 +165,23 @@ interface Sim {
   captions: { x: number; y: number; text: string; at: number }[];
   /** lit rooms by label: the tiles their lights reach and the sim time they came on */
   lit: Map<string, { tiles: { x: number; y: number }[]; since: number }>;
+  /** what this run's lamps and drones have lit so far, and their sights */
+  light: LightMemory;
+}
+
+/** Cuts a radial glow of `radius` tiles into the darkness at (wx, wy), `strength` deep in its middle. */
+type Punch = (wx: number, wy: number, radius: number, strength: number) => void;
+
+/** This frame's light, worked out before anything is drawn. */
+interface FrameLight {
+  /** your lamp; null for the audience */
+  own: Lit | null;
+  /** the lamps the rest of the crew carry */
+  crew: Lit[];
+  /** the drones' eyes, by drone id; a frozen drone looks nowhere */
+  eyes: Map<string, Lit>;
+  /** whether the world shows what lies at (x, y): some light falls on its tile now or did this run */
+  shown: (x: number, y: number) => boolean;
 }
 
 const MOVE_KEYS: Record<string, [number, number]> = {
@@ -398,6 +431,7 @@ export function GameWorld({
       seen: null,
       captions: [],
       lit: new Map(),
+      light: lightMemory(null),
     };
     simRef.current = sim;
     startAmbience();
@@ -758,6 +792,67 @@ export function GameWorld({
           : Math.min(map.height - halfH + bias, Math.max(halfH, sim.cam.y + bias));
     }
 
+    /**
+     * This frame's light: your lamp, the crew's lamps and the drones' eyes,
+     * each cut off by walls and shut doors; and what the world shows —
+     * whatever lies where light falls now, in a lit room, or fell earlier
+     * this run. The audience sees the whole lab, and the drones' cones only.
+     */
+    function lightUp(map: WorldMap): FrameLight {
+      const run = viewRef.current.startedAt;
+      if (sim.light.run !== run) {
+        sim.light = lightMemory(run);
+      }
+      const { look, seen } = sim.light;
+      const shut = doorsShut(map);
+      const lit = (lamp: Lamp): Lit => ({ lamp, sight: look(map, lamp, reachOf(lamp), shut) });
+      const cone = { facing: sim.self.facing, halfAngle: CONE_HALF_ANGLE, reach: CONE_REACH };
+      const own = spectator ? null : lit({ x: sim.self.x, y: sim.self.y, glow: OWN_GLOW, beam: cone });
+      const crew = spectator
+        ? []
+        : [...sim.others.values()].map((o) => lit({ x: o.rx, y: o.ry, glow: CREW_GLOW, beam: null }));
+      const eyes = new Map<string, Lit>();
+      for (const [id, drone] of Object.entries(dronesRef.current)) {
+        if (drone.frozen) {
+          continue;
+        }
+        const halfAngle = (drone.halfAngleDeg * Math.PI) / 180;
+        const beam = { facing: drone.facing, halfAngle, reach: drone.range };
+        eyes.set(id, lit({ x: drone.x, y: drone.y, glow: 0, beam }));
+      }
+      for (const { lamp, sight } of [...(own === null ? [] : [own]), ...crew, ...eyes.values()]) {
+        for (const key of litTiles(lamp, sight)) {
+          seen.add(key);
+        }
+      }
+      for (const tile of [...sim.lit.values()].flatMap((room) => room.tiles)) {
+        seen.add(`${tile.x},${tile.y}`);
+      }
+      const shown = (x: number, y: number): boolean =>
+        spectator || seen.has(`${Math.floor(x)},${Math.floor(y)}`);
+      return { own, crew, eyes, shown };
+    }
+
+    /** Clip paths in tiles, by the sight they were made from: a lamp standing still reuses its own. */
+    const clipPaths = new WeakMap<Lit['sight'], Path2D>();
+
+    /** Where a light falls, as a path in tiles: the floor it sees and the walls it lights whole. */
+    function clipPath({ sight }: Lit): Path2D {
+      const known = clipPaths.get(sight);
+      if (known !== undefined) {
+        return known;
+      }
+      const { outline, walls } = lightClip(sight);
+      const path = new Path2D();
+      outline.forEach((spot, i) => (i === 0 ? path.moveTo(spot.x, spot.y) : path.lineTo(spot.x, spot.y)));
+      path.closePath();
+      for (const run of walls) {
+        path.rect(run.x, run.y, run.length, 1);
+      }
+      clipPaths.set(sight, path);
+      return path;
+    }
+
     function render(map: WorldMap): void {
       if (canvas == null || ctx == null || octx == null) {
         return;
@@ -782,6 +877,7 @@ export function GameWorld({
           Math.min(170, Math.max(cover, Math.min(88, h / 10.5)));
       clampCamera(map, s, w, h, touchPad.matches && !spectator ? 60 * dpr : 0);
       sim.scale = s;
+      const light = lightUp(map);
 
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = '#04070a';
@@ -804,7 +900,10 @@ export function GameWorld({
         }
       }
 
-      for (const plate of map.plates) {
+      // Objects show only where some light has fallen — a cabinet behind a wall stays
+      // unseen. Sources reach this map once found; a station that is up or done, the
+      // sign, the hatch and the valves always show.
+      for (const plate of map.plates.filter((p) => light.shown(p.x, p.y))) {
         ctx.save();
         ctx.translate(plate.x + 0.5, plate.y + 0.5);
         drawPlate(ctx, { pressed: plate.pressed, label: plate.label, camera: plate.freezesDrone });
@@ -822,6 +921,9 @@ export function GameWorld({
       const pulse = (Math.sin(sim.time * 4) + 1) / 2;
       // Every spot: a station with two consoles stands twice, both lit while it is armed.
       for (const station of map.stations) {
+        if (station.status === 'locked' && !light.shown(station.x, station.y)) {
+          continue;
+        }
         ctx.save();
         ctx.translate(station.x + 0.5, station.y + 0.5);
         drawStation(ctx, {
@@ -863,13 +965,14 @@ export function GameWorld({
         ctx.restore();
       }
       for (const item of map.items) {
-        if (item.deliverTo !== null && !opensCabinet(map, item.id)) {
+        const zone = item.deliverTo;
+        if (zone !== null && !opensCabinet(map, item.id) && light.shown(zone.x, zone.y)) {
           ctx.save();
-          ctx.translate(item.deliverTo.x + 0.5, item.deliverTo.y + 0.5);
+          ctx.translate(zone.x + 0.5, zone.y + 0.5);
           drawDropZone(ctx, item.delivered, pulse);
           ctx.restore();
         }
-        if (!item.delivered && item.carriedBy === null) {
+        if (!item.delivered && item.carriedBy === null && light.shown(item.x, item.y)) {
           ctx.save();
           ctx.translate(item.x, item.y);
           drawCarryable(ctx, pulse, false);
@@ -877,9 +980,14 @@ export function GameWorld({
         }
       }
 
-      // drone cones go under the avatars so figures stay readable inside them
-      for (const drone of Object.values(dronesRef.current)) {
+      // drone cones go under the avatars so figures stay readable inside them; a cone
+      // ends at the walls, like the drone's sight on the server
+      for (const [id, drone] of Object.entries(dronesRef.current)) {
+        const eye = light.eyes.get(id);
         ctx.save();
+        if (eye !== undefined) {
+          ctx.clip(clipPath(eye));
+        }
         ctx.translate(drone.x, drone.y);
         drawDroneCone(ctx, drone, pulse);
         ctx.restore();
@@ -947,7 +1055,7 @@ export function GameWorld({
       }
 
       if (!spectator) {
-        renderLighting(map, s, w, h);
+        renderLighting(map, s, w, h, light);
         renderMinimap(map, w, h, dpr);
       }
       renderPings(s, w, h, dpr);
@@ -1180,55 +1288,12 @@ export function GameWorld({
       ctx.globalAlpha = 1;
     }
 
-    function renderLighting(map: WorldMap, s: number, w: number, h: number): void {
-      if (octx == null || ctx == null) {
-        return;
-      }
-      octx.setTransform(1, 0, 0, 1, 0, 0);
-      octx.globalCompositeOperation = 'source-over';
-      const deadlineAt = viewRef.current.deadlineAt;
-      const lowTime = deadlineAt !== null && deadlineAt - Date.now() < 60_000;
-      // The lab dims further during the final minute.
-      const base =
-        (lowTime ? 0.945 : 0.92) + 0.02 * Math.sin(sim.time * (lowTime ? 3.2 : 1.7));
-      octx.clearRect(0, 0, w, h);
-      octx.fillStyle = `rgba(3,5,9,${base})`;
-      octx.fillRect(0, 0, w, h);
-      octx.globalCompositeOperation = 'destination-out';
-
-      const punch = (wx: number, wy: number, radius: number, strength: number): void => {
-        const [sx, sy] = worldToScreen(s, w, h, wx, wy);
-        const r = radius * s;
-        const g = octx.createRadialGradient(sx, sy, 0, sx, sy, r);
-        g.addColorStop(0, `rgba(0,0,0,${strength})`);
-        g.addColorStop(0.55, `rgba(0,0,0,${strength * 0.55})`);
-        g.addColorStop(1, 'rgba(0,0,0,0)');
-        octx.fillStyle = g;
-        octx.fillRect(sx - r, sy - r, r * 2, r * 2);
-      };
-
-      // Your lamp: a close radial glow plus a flashlight cone in facing direction.
-      punch(sim.self.x, sim.self.y, 3.2, 1);
-      {
-        const [sx, sy] = worldToScreen(s, w, h, sim.self.x, sim.self.y);
-        const coneR = 7.5 * s;
-        octx.save();
-        octx.beginPath();
-        octx.moveTo(sx, sy);
-        octx.arc(sx, sy, coneR, sim.self.facing - 0.5, sim.self.facing + 0.5);
-        octx.closePath();
-        octx.clip();
-        const g = octx.createRadialGradient(sx, sy, 0, sx, sy, coneR);
-        g.addColorStop(0, 'rgba(0,0,0,0.95)');
-        g.addColorStop(0.6, 'rgba(0,0,0,0.6)');
-        g.addColorStop(1, 'rgba(0,0,0,0)');
-        octx.fillStyle = g;
-        octx.fillRect(sx - coneR, sy - coneR, coneR * 2, coneR * 2);
-        octx.restore();
-      }
-      for (const other of sim.others.values()) {
-        punch(other.rx, other.ry, 2.8, 0.9);
-      }
+    /**
+     * The glow the lab's objects give off on their own: the armed station's
+     * beacon, the sources found, the sign, the open hatch, the valves — and,
+     * on tiles light has fallen on, plates worth finding, crates and drop-offs.
+     */
+    function glowObjects(map: WorldMap, light: FrameLight, punch: Punch): void {
       for (const station of map.stations) {
         if (station.status === 'armed') {
           punch(station.x + 0.5, station.y + 0.5, 2.4, 0.85);
@@ -1244,7 +1309,7 @@ export function GameWorld({
         punch(map.edgeworkSign.x + 0.5, map.edgeworkSign.y + 0.5, 1.4, 0.6);
       }
       // A camera plate is worth finding before anybody stands on it.
-      for (const plate of map.plates) {
+      for (const plate of map.plates.filter((p) => light.shown(p.x, p.y))) {
         if (plate.pressed || plate.freezesDrone) {
           punch(plate.x + 0.5, plate.y + 0.5, 1.0, 0.5);
         }
@@ -1256,35 +1321,96 @@ export function GameWorld({
         punch(panel.x + 0.5, panel.y + 0.5, 2.4, 0.9);
       }
       for (const item of map.items) {
-        if (!item.delivered && item.carriedBy === null) {
+        if (!item.delivered && item.carriedBy === null && light.shown(item.x, item.y)) {
           punch(item.x, item.y, 1.6, 0.7);
         }
-        if (item.deliverTo !== null) {
-          punch(item.deliverTo.x + 0.5, item.deliverTo.y + 0.5, 1.4, 0.6);
+        const zone = item.deliverTo;
+        if (zone !== null && light.shown(zone.x, zone.y)) {
+          punch(zone.x + 0.5, zone.y + 0.5, 1.4, 0.6);
         }
       }
-      // Drone cones light their own path, which is what makes them readable;
-      // a frozen drone has no cone, only a glimmer around its body.
-      for (const drone of Object.values(dronesRef.current)) {
-        if (drone.frozen) {
-          punch(drone.x, drone.y, 0.9, 0.5);
-          continue;
-        }
-        const [sx, sy] = worldToScreen(s, w, h, drone.x, drone.y);
-        const half = (drone.halfAngleDeg * Math.PI) / 180;
-        const r = drone.range * s;
-        octx.save();
-        octx.beginPath();
-        octx.moveTo(sx, sy);
-        octx.arc(sx, sy, r, drone.facing - half, drone.facing + half);
-        octx.closePath();
-        octx.clip();
+    }
+
+    function renderLighting(map: WorldMap, s: number, w: number, h: number, light: FrameLight): void {
+      if (octx == null || ctx == null) {
+        return;
+      }
+      octx.setTransform(1, 0, 0, 1, 0, 0);
+      octx.globalCompositeOperation = 'source-over';
+      const deadlineAt = viewRef.current.deadlineAt;
+      const lowTime = deadlineAt !== null && deadlineAt - Date.now() < 60_000;
+      // The lab dims further during the final minute.
+      const base =
+        (lowTime ? 0.945 : 0.92) + 0.02 * Math.sin(sim.time * (lowTime ? 3.2 : 1.7));
+      octx.clearRect(0, 0, w, h);
+      octx.fillStyle = `rgba(3,5,9,${base})`;
+      octx.fillRect(0, 0, w, h);
+      octx.globalCompositeOperation = 'destination-out';
+
+      const punch: Punch = (wx, wy, radius, strength) => {
+        const [sx, sy] = worldToScreen(s, w, h, wx, wy);
+        const r = radius * s;
         const g = octx.createRadialGradient(sx, sy, 0, sx, sy, r);
-        g.addColorStop(0, 'rgba(0,0,0,0.9)');
+        g.addColorStop(0, `rgba(0,0,0,${strength})`);
+        g.addColorStop(0.55, `rgba(0,0,0,${strength * 0.55})`);
         g.addColorStop(1, 'rgba(0,0,0,0)');
         octx.fillStyle = g;
         octx.fillRect(sx - r, sy - r, r * 2, r * 2);
+      };
+      /** A beam from `lamp`: its cone, fading out along the gradient `stops` (offset, depth). */
+      const beam = ({ lamp }: Lit, stops: readonly (readonly [number, number])[]): void => {
+        if (lamp.beam === null) {
+          return;
+        }
+        const { facing, halfAngle, reach } = lamp.beam;
+        const [sx, sy] = worldToScreen(s, w, h, lamp.x, lamp.y);
+        const r = reach * s;
+        octx.save();
+        octx.beginPath();
+        octx.moveTo(sx, sy);
+        octx.arc(sx, sy, r, facing - halfAngle, facing + halfAngle);
+        octx.closePath();
+        octx.clip();
+        const g = octx.createRadialGradient(sx, sy, 0, sx, sy, r);
+        for (const [offset, depth] of stops) {
+          g.addColorStop(offset, `rgba(0,0,0,${depth})`);
+        }
+        octx.fillStyle = g;
+        octx.fillRect(sx - r, sy - r, r * 2, r * 2);
         octx.restore();
+      };
+      /** Cuts light into the darkness only where `lit` can see: walls and shut doors stop it. */
+      const within = (lit: Lit, draw: () => void): void => {
+        octx.save();
+        octx.setTransform(s, 0, 0, s, w / 2 - sim.draw.x * s, h / 2 - sim.draw.y * s);
+        octx.clip(clipPath(lit));
+        octx.setTransform(1, 0, 0, 1, 0, 0);
+        draw();
+        octx.restore();
+      };
+
+      // Your lamp: a close radial glow plus a flashlight cone in facing direction;
+      // everybody else's glow. Each lights what it can see, and nothing behind a wall.
+      const own = light.own;
+      if (own !== null) {
+        within(own, () => {
+          punch(own.lamp.x, own.lamp.y, OWN_GLOW, 1);
+          beam(own, [[0, 0.95], [0.6, 0.6], [1, 0]]);
+        });
+      }
+      for (const lit of light.crew) {
+        within(lit, () => punch(lit.lamp.x, lit.lamp.y, CREW_GLOW, 0.9));
+      }
+      glowObjects(map, light, punch);
+      // Drone cones light their own path as far as the drone sees, which is what
+      // makes them readable; a frozen drone has no cone, only a glimmer around its body.
+      for (const [id, drone] of Object.entries(dronesRef.current)) {
+        const eye = light.eyes.get(id);
+        if (eye === undefined) {
+          punch(drone.x, drone.y, 0.9, 0.5);
+          continue;
+        }
+        within(eye, () => beam(eye, [[0, 0.9], [1, 0]]));
         punch(drone.x, drone.y, 1.1, 0.75);
       }
       // A lit room keeps no darkness at all, walls and doors included; one
