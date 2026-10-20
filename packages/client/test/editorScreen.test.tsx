@@ -4,6 +4,8 @@ import type { MissionInfo } from '@escapelab/core';
 import { fitTile } from '../src/editor/EditorCanvas.js';
 import { EditorScreen, TOOLS } from '../src/editor/EditorScreen.js';
 import { newDraft, type Draft } from '../src/editor/draft.js';
+import { ID_TAKEN_NOTE } from '../src/editor/MissionForm.js';
+import { workOf, type EditorWork } from '../src/editor/session.js';
 import { lineBetween, paint, place, type PlacingTool } from '../src/editor/tools.js';
 import { validateDraft, type Finding, type Validation } from '../src/editor/validate.js';
 import { ValidatorPanel } from '../src/editor/ValidatorPanel.js';
@@ -22,6 +24,14 @@ function probe(...steps: [PlacingTool, { x: number; y: number }][]): Draft {
   }
   return draft;
 }
+
+/** Two starts, the keypad's station and a book for its rules: a sound mission. */
+const SOUND: [PlacingTool, { x: number; y: number }][] = [
+  ['spawn', { x: 3, y: 4 }],
+  ['spawn', { x: 4, y: 4 }],
+  ['station', { x: 7, y: 3 }],
+  ['source', { x: 7, y: 5 }],
+];
 
 const finding = (severity: Finding['severity'], text: string, pointed = true): Finding => ({
   severity,
@@ -114,9 +124,20 @@ describe('the editor screen', () => {
       custom: true,
     },
   ];
-  const html = renderToStaticMarkup(
-    <EditorScreen missions={missions} reloadMissions={noop} openHandbook={noop} back={noop} />,
-  );
+  const screen = (work: EditorWork, connected = true): string =>
+    renderToStaticMarkup(
+      <EditorScreen
+        missions={missions}
+        reloadMissions={noop}
+        openHandbook={noop}
+        back={noop}
+        work={work}
+        onWork={noop}
+        connected={connected}
+        startTestRun={noop}
+      />,
+    );
+  const html = screen(workOf(newDraft()));
 
   it('opens on a new mission with every tool, the mission form and the validator', () => {
     for (const { tool, label } of TOOLS) {
@@ -136,6 +157,37 @@ describe('the editor screen', () => {
       '<button class="primary" disabled="" title="Erst die Fehler beheben">Speichern</button>',
     );
     expect(html).toMatch(/<button disabled="" title="Erst speichern">Handbuch<\/button>/);
+  });
+
+  it('offers a test run only to a mission without errors, counting them otherwise', () => {
+    // A new draft lacks starts, a station and a source for its keypad.
+    const errors = validateDraft(newDraft()).errors;
+    expect(errors).toBeGreaterThan(1);
+    expect(html).toContain(
+      `<button disabled="" aria-expanded="false" title="Erst die ${errors} Fehler beheben">` +
+        'Probespiel</button>',
+    );
+    const sound = screen(workOf(probe(...SOUND)));
+    expect(sound).toContain(
+      '<button aria-expanded="false" ' +
+        'title="Speichern und eine Runde mit dieser Mission eröffnen">Probespiel</button>',
+    );
+  });
+
+  it('offers a link to share, and marks a mission opened from one until it is saved', () => {
+    expect(html).toContain('Teilen</button>');
+    expect(html).not.toContain('GETEILT');
+    const shared = screen({ ...workOf(probe()), shared: true });
+    expect(shared).toContain('<span class="editor-shared">GETEILT · nicht gespeichert</span>');
+    expect(shared).not.toContain('ungespeichert</span>');
+    const changed = screen({ ...workOf(newDraft()), draft: probe() });
+    expect(changed).toContain('<span class="editor-dirty">ungespeichert</span>');
+  });
+
+  it('notes under the title of a shared mission that its id is taken here', () => {
+    const titled = { ...probe(), title: 'Probe' };
+    expect(screen({ ...workOf(titled), shared: true })).toContain(ID_TAKEN_NOTE);
+    expect(screen(workOf(titled))).not.toContain(ID_TAKEN_NOTE);
   });
 
   it('speaks German without pictographs', () => {

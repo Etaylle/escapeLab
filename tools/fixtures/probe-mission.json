@@ -1,0 +1,49 @@
+{
+  "id": "custom-probe",
+  "title": "Probe",
+  "subtitle": "Ein Raum, ein Kabelpult, ein Buch, ein Ausgang.",
+  "players": { "min": 2, "max": 2 },
+  "timeLimitSec": 600,
+  "story": {
+    "intro": "Ein Prüfraum: Am Pult liegt ein Kabelsatz, im Buch stehen die Regeln.",
+    "win": "Der Ausgang ist offen, die Crew ist draußen.",
+    "lose": "Die Zeit ist um."
+  },
+  "puzzles": [
+    {
+      "type": "wiring",
+      "id": "kabel",
+      "title": "Kabelpult",
+      "wires": { "min": 3, "max": 5 },
+      "hints": ["Erst die Drähte zählen.", "Dann die Liste für diese Zahl lesen."],
+      "lights": ["PRÜFRAUM"]
+    }
+  ],
+  "map": {
+    "tiles": [
+      "##########",
+      "#........#",
+      "#........#",
+      "#........#",
+      "#........#",
+      "##########"
+    ],
+    "spawns": [
+      { "x": 1, "y": 1 },
+      { "x": 1, "y": 4 }
+    ],
+    "stations": [{ "puzzleId": "kabel", "x": 5, "y": 1 }],
+    "labels": [{ "text": "PRÜFRAUM", "x": 3, "y": 2 }],
+    "manuals": [
+      {
+        "id": "buch",
+        "kind": "book",
+        "label": "HANDBUCH",
+        "puzzleIds": ["kabel"],
+        "spots": [{ "x": 5, "y": 4 }]
+      }
+    ],
+    "edgeworkSign": { "x": 8, "y": 2 },
+    "exit": { "x": 8, "y": 4 }
+  }
+}

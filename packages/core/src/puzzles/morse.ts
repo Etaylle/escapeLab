@@ -149,6 +149,7 @@ export const morseModule: PuzzleModule<MorseDef, MorseState, MorseInput, MorseVi
   type: 'morse',
   usesEdgework: false,
   wholeCrew: false,
+  fields: [],
   defSchema,
   inputSchema,
 

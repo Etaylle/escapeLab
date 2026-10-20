@@ -269,6 +269,19 @@ export const wiringModule: PuzzleModule<WiringDef, WiringState, WiringInput, Wir
   type: 'wiring',
   usesEdgework: true,
   wholeCrew: false,
+  fields: [
+    {
+      key: 'wires',
+      label: 'Drähte',
+      help:
+        'So viele Drähte kann ein Lauf ziehen, von–bis; jede Anzahl hat ihre eigene ' +
+        'Regelliste.',
+      kind: 'range',
+      min: MIN_WIRES,
+      max: MAX_WIRES,
+      default: { min: MIN_WIRES, max: MAX_WIRES },
+    },
+  ],
   defSchema,
   inputSchema,
 

@@ -122,6 +122,20 @@ export const buttonSyncModule: PuzzleModule<
   type: 'button-sync',
   usesEdgework: false,
   wholeCrew: true,
+  fields: [
+    {
+      key: 'windowMs',
+      label: 'Zeitfenster in ms',
+      help:
+        'So dicht nacheinander muss die ganze Crew drücken, sonst verfallen die Drücke; ' +
+        'leer = ohne Frist.',
+      kind: 'int',
+      min: 500,
+      max: 10_000,
+      default: 3000,
+      off: 'omit',
+    },
+  ],
   defSchema,
   inputSchema,
 

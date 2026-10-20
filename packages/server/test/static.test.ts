@@ -51,6 +51,19 @@ describe('StaticSite', () => {
     }
   });
 
+  it('serves the page itself for the editor’s address, which a shared link opens', async () => {
+    const site = siteWith();
+    const { res, status, headers } = fakeResponse();
+    expect(site.serve(request('/editor'), res)).toBe(true);
+    expect(status()).toBe(200);
+    expect(headers()['content-type']).toBe('text/html; charset=utf-8');
+    const chunks: Buffer[] = [];
+    for await (const chunk of res as unknown as AsyncIterable<Buffer>) {
+      chunks.push(chunk);
+    }
+    expect(Buffer.concat(chunks).toString('utf8')).toBe('<!doctype html><title>t</title>');
+  });
+
   it('answers a malformed percent-encoding instead of throwing', () => {
     const site = siteWith();
     const { res, status } = fakeResponse();

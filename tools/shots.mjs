@@ -47,12 +47,18 @@
  * join screen, paints a 7 × 5 room, places a start and a station and
  * captures what the validator says (editor.png, and the layout at
  * 1280×720 and on a phone); a second start and a book make the mission
- * sound, it is saved as custom-probe, has to show on the join screen, and is
+ * sound, it is saved as custom-probe and has to show on the join screen.
+ * Then the editor, opened at /editor, imports tools/fixtures/probe-mission.json
+ * („Probe", custom-probe) and starts a test run from it: the lobby has to
+ * show the probe (editor-play.png), „Zurück zum Editor" in the top bar has
+ * to bring the editor back with the draft, and the link „Teilen" makes —
+ * off the clipboard, or out of the box the editor marks it in — has to open
+ * the same mission in a page of its own (editor-shared.png). custom-probe is
  * deleted again through the API whatever happened before.
  */
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { URL } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 import { chromium } from 'playwright';
 import { percentile } from './percentile.mjs';
 
@@ -1580,16 +1586,120 @@ async function saveProbe(page) {
   console.log('editor             saved as custom-probe, and its card is on the join screen');
 }
 
+/** The mission the editor imports for its test run and its link: „Probe", custom-probe. */
+const PROBE_FILE = fileURLToPath(new URL('fixtures/probe-mission.json', import.meta.url));
+
+/**
+ * The editor at its own address, the probe mission imported through
+ * „Importieren"; a draft left unsaved there is discarded when the editor
+ * asks.
+ */
+async function importProbe(page) {
+  await page.goto(new URL('/editor', BASE).href);
+  await page.locator('.editor-canvas').waitFor({ timeout: 10_000 });
+  await page.locator('.editor-actions input[type="file"]').setInputFiles(PROBE_FILE);
+  const imported = page.locator('.editor-status', { hasText: 'importiert' });
+  const asked = page.locator('.editor-confirm button', { hasText: 'Verwerfen' });
+  await imported.or(asked).first().waitFor({ timeout: 5000 });
+  if (await asked.isVisible()) {
+    await asked.click();
+    await imported.waitFor({ timeout: 5000 });
+  }
+  await page.locator('.editor-name strong', { hasText: 'Probe' }).waitFor({ timeout: 5000 });
+}
+
+/**
+ * editor-play.png: „Probespiel" with a name saves the probe and opens a room
+ * for it; the lobby has to show the probe, and its top bar the way back.
+ */
+async function playProbe(page) {
+  const play = page.locator('.editor-actions button:not([disabled])', { hasText: 'Probespiel' });
+  const sound = await play.waitFor({ timeout: 3000 }).then(
+    () => true,
+    () => false,
+  );
+  if (!sound) {
+    throw new Error(`the imported probe stays unsound: ${(await editorErrors(page)).join(' | ')}`);
+  }
+  await play.click();
+  await page.locator('.editor-play input').fill('Anna');
+  await page.locator('.editor-play button[type="submit"]').click();
+  await page.locator('.lobby', { hasText: 'Probe' }).waitFor({ timeout: 10_000 });
+  const code = (await page.locator('.room-code strong').innerText()).trim();
+  await sleep(500);
+  await capture(page, 'editor-play.png');
+  await overflow(page, 'editor-play @ 1440x820');
+  const back = await page.locator('.topbar-editor').isVisible();
+  console.log(
+    `editor-play.png    Probespiel: room ${code}, the lobby shows „Probe"; ` +
+      (back ? '„Zurück zum Editor" in the top bar' : '!! no way back to the editor'),
+  );
+  if (!back) {
+    fail('editor: the test run’s lobby offers no „Zurück zum Editor"');
+  }
+}
+
+/** „Zurück zum Editor": out of the room, the page reloads on the editor with the probe again. */
+async function backToEditor(page) {
+  await Promise.all([page.waitForEvent('load'), page.locator('.topbar-editor').click()]);
+  await page.locator('.editor-name strong', { hasText: 'Probe' }).waitFor({ timeout: 10_000 });
+  const path = new URL(page.url()).pathname;
+  console.log(`editor             back from the lobby on ${path}, „Probe" open again`);
+  if (path !== '/editor') {
+    fail(`editor: back from the test run on ${path}, not on /editor`);
+  }
+}
+
+/** „Teilen": the link off the clipboard, or out of the box the editor marks it in. */
+async function sharedLink(page) {
+  await clickText(page, 'Teilen');
+  const copied = page.locator('.editor-status-ok', { hasText: 'Link kopiert' });
+  const box = page.locator('.editor-share input');
+  await copied.or(box).first().waitFor({ timeout: 5000 });
+  if (await box.isVisible()) {
+    return { link: await box.inputValue(), via: 'the marked box' };
+  }
+  const link = await page.evaluate(() => globalThis.navigator.clipboard.readText());
+  return { link, via: 'the clipboard' };
+}
+
+/**
+ * editor-shared.png: the link in a page of its own opens the editor on the
+ * same mission — its title, and its card's line with the station count —
+ * marked as shared and not saved.
+ */
+async function openShared(context, link, card) {
+  const page = await context.newPage();
+  page.on('pageerror', (e) => console.log('[shared error]', e.message));
+  try {
+    await page.goto(link);
+    await page.locator('.editor-name strong', { hasText: 'Probe' }).waitFor({ timeout: 10_000 });
+    await page.locator('.editor-shared').waitFor({ timeout: 5000 });
+    const seen = await page.locator('.editor-card-meta').innerText();
+    await sleep(500);
+    await capture(page, 'editor-shared.png');
+    console.log(`editor-shared.png  the link opens „Probe" (${seen}), marked GETEILT`);
+    if (seen !== card) {
+      fail(`editor: the shared probe reads "${seen}", the original "${card}"`);
+    }
+  } finally {
+    await page.close();
+  }
+}
+
 /**
  * editor.png: the editor, opened from the join screen, with a room, a start
  * and a station in its lab and the validator naming what is missing — a
  * second start, a source for the keypad's rules. Made sound, the probe is
- * saved as custom-probe and has to show on the join screen. It is deleted
- * through the API in any case, so the walkthrough after it meets the
- * shipped missions only.
+ * saved as custom-probe and has to show on the join screen. Then the
+ * imported probe mission is played from the editor and shared by link
+ * (editor-play.png, editor-shared.png). It is deleted through the API in any
+ * case, so the walkthrough after it meets the shipped missions only.
  */
 async function captureEditor() {
-  const context = await browser.newContext({ viewport: SIZES[0] });
+  // The link „Teilen" makes is read off the clipboard where the page may write it.
+  const permissions = ['clipboard-read', 'clipboard-write'];
+  const context = await browser.newContext({ viewport: SIZES[0], permissions });
   const page = await context.newPage();
   page.on('pageerror', (e) => console.log('[editor error]', e.message));
   try {
@@ -1597,6 +1707,18 @@ async function captureEditor() {
     await captureValidator(page);
     await editorLayouts(page);
     await saveProbe(page);
+  } catch (err) {
+    console.log(`editor             !! ${firstLine(err)}`);
+    fail(`editor: ${firstLine(err)}`);
+  }
+  try {
+    await importProbe(page);
+    await playProbe(page);
+    await backToEditor(page);
+    const card = await page.locator('.editor-card-meta').innerText();
+    const { link, via } = await sharedLink(page);
+    console.log(`editor             „Teilen": a link of ${link.length} characters, from ${via}`);
+    await openShared(context, link, card);
   } catch (err) {
     console.log(`editor             !! ${firstLine(err)}`);
     fail(`editor: ${firstLine(err)}`);

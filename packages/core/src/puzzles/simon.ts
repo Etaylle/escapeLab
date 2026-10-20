@@ -173,6 +173,30 @@ export const simonModule: PuzzleModule<SimonDef, SimonState, SimonInput, SimonVi
   type: 'simon',
   usesEdgework: true,
   wholeCrew: false,
+  fields: [
+    {
+      key: 'sequenceLength',
+      label: 'Länge der Folge',
+      help: 'So viele Stufen: Stufe 1 blinkt eine Farbe, jede weitere eine mehr.',
+      kind: 'int',
+      min: 3,
+      max: 8,
+      default: 5,
+    },
+    {
+      key: 'legend',
+      label: 'Tabellen',
+      help:
+        'Nach Laborkennung wechselt die Übersetzung von Lauf zu Lauf; eine Tabelle nur mit ' +
+        'dem ersten Alarm.',
+      kind: 'choice',
+      options: [
+        { value: 'kennung', label: 'zwei, nach Laborkennung' },
+        { value: 'einfach', label: 'eine' },
+      ],
+      default: 'kennung',
+    },
+  ],
   defSchema,
   inputSchema,
 

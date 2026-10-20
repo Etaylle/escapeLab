@@ -302,13 +302,26 @@ describe('puzzles', () => {
     expect(shiftPuzzle(draft, 0, -1)).toBe(draft);
   });
 
-  it('retypes a puzzle: its own fields go, its stations follow the consoles', () => {
+  it('retypes a puzzle: the new module’s fields at their defaults, its stations follow', () => {
     let draft = addPuzzle(room(), 'circuit');
     draft = put(put(draft, 'station', { x: 3, y: 3 }), 'station', { x: 3, y: 6 });
     draft = put(draft, 'station', { x: 8, y: 6 });
-    draft = { ...draft, puzzles: draft.puzzles.map((p) => ({ ...p, extra: { shorts: 4 } })) };
+    expect(draft.puzzles[1]?.fields).toEqual({
+      wires: { min: 4, max: 6 },
+      shorts: 3,
+      burnoutSec: 60,
+    });
+    draft = {
+      ...draft,
+      puzzles: draft.puzzles.map((p, i) =>
+        i === 1 ? { ...p, fields: { ...p.fields, shorts: 5 }, penaltySec: 45 } : p,
+      ),
+    };
     const single = retype(draft, 1, 'keypad');
-    expect(single.puzzles[1]).toMatchObject({ type: 'keypad', extra: {} });
+    // The penalty is every puzzle's; what was the circuit's own goes with the circuit.
+    expect(single.puzzles[1]).toMatchObject({ type: 'keypad', penaltySec: 45, fields: {} });
+    expect(Object.keys(single.puzzles[1]?.fields ?? { shorts: 5 })).toEqual([]);
+    expect(retype(draft, 1, 'maze').puzzles[1]?.fields).toEqual({ size: 6 });
     expect(single.map.stations.filter((s) => s.puzzleId === 'sicherungskasten')).toEqual([
       { puzzleId: 'sicherungskasten', x: 3, y: 6 },
     ]);

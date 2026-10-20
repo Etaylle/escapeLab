@@ -388,6 +388,45 @@ export const signalModule: PuzzleModule<SignalDef, SignalState, SignalInput, Sig
   usesEdgework: false,
   wholeCrew: false,
   consoles: 2,
+  fields: [
+    {
+      key: 'stages',
+      label: 'Stufen',
+      help: 'So viele Folgen gehen hin und her; nach jeder Stufe wechselt die Richtung.',
+      kind: 'int',
+      min: 2,
+      max: 6,
+      default: 4,
+    },
+    {
+      key: 'length',
+      label: 'Zeichen je Folge',
+      help: 'So viele Zeichen sendet jede Stufe.',
+      kind: 'int',
+      min: 3,
+      max: 6,
+      default: 4,
+    },
+    {
+      key: 'legend',
+      label: 'Legende',
+      help:
+        'Die Tasten zeigen nur Formen in Zeilen; welche Zeile welche Farbe ist, steht in ' +
+        'der gedruckten Legende.',
+      kind: 'bool',
+      default: false,
+    },
+    {
+      key: 'fleetingFrom',
+      label: 'Flüchtig ab Stufe',
+      help: 'Ab dieser Stufe verschwinden die Zeichen nach kurzer Zeit; leer = nie.',
+      kind: 'int',
+      min: 1,
+      max: 6,
+      default: 3,
+      off: 'null',
+    },
+  ],
   defSchema,
   inputSchema,
 

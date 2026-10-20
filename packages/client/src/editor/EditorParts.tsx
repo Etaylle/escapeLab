@@ -53,19 +53,36 @@ interface BarProps {
   title: string;
   id: string;
   dirty: boolean;
+  /** opened from a shared link and not saved since */
+  shared: boolean;
   /** the catalog has a custom mission of this id: its handbook can be opened */
   saved: boolean;
   /** save is open only to a sound mission while nothing else is under way */
   canSave: boolean;
   saveTitle: string;
+  /** a test run is open to a mission without errors; `playTitle` says why not */
+  canPlay: boolean;
+  playTitle: string;
+  /** the test run's form is open */
+  playing: boolean;
   loading: boolean;
   onNew: () => void;
   onLoad: () => void;
   onImport: (file: File) => void;
   onExport: () => void;
+  onShare: () => void;
   onHandbook: () => void;
+  onPlay: () => void;
   onSave: () => void;
   back: () => void;
+}
+
+/** Beside the mission's name: shared and not saved yet, or changed since it was saved. */
+function SavedMark({ shared, dirty }: { shared: boolean; dirty: boolean }) {
+  if (shared) {
+    return <span className="editor-shared">GETEILT · nicht gespeichert</span>;
+  }
+  return dirty ? <span className="editor-dirty">ungespeichert</span> : null;
 }
 
 /** The mission's name and id, and everything that can be done with it as a whole. */
@@ -88,7 +105,7 @@ export function EditorBar(props: BarProps) {
         <span className="kicker">MISSIONS-EDITOR</span>
         <strong>{props.title || 'Ohne Titel'}</strong>
         <code className="editor-id">{props.id}</code>
-        {props.dirty && <span className="editor-dirty">ungespeichert</span>}
+        <SavedMark shared={props.shared} dirty={props.dirty} />
       </div>
       <div className="editor-actions">
         <button onClick={props.onNew}>Neu</button>
@@ -97,12 +114,23 @@ export function EditorBar(props: BarProps) {
         </button>
         <button onClick={() => fileRef.current?.click()}>Importieren</button>
         <button onClick={props.onExport}>Exportieren</button>
+        <button title="Ein Link, der die ganze Mission enthält" onClick={props.onShare}>
+          Teilen
+        </button>
         <button
           disabled={!props.saved}
           title={props.saved ? 'Das Handbuch der gespeicherten Fassung' : 'Erst speichern'}
           onClick={props.onHandbook}
         >
           Handbuch
+        </button>
+        <button
+          disabled={!props.canPlay}
+          aria-expanded={props.playing}
+          title={props.playTitle}
+          onClick={props.onPlay}
+        >
+          Probespiel
         </button>
         <button
           className="primary"
@@ -167,6 +195,73 @@ export function Notices({
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * The test run's form: the name the room opens under — the join screen's,
+ * where it has one — and the start, which saves the mission first.
+ */
+export function PlayForm({
+  name,
+  onName,
+  blocked,
+  onStart,
+  onCancel,
+}: {
+  name: string;
+  onName: (name: string) => void;
+  /** why the run cannot start now; null when it can */
+  blocked: string | null;
+  onStart: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <form
+      className="editor-play"
+      aria-label="Probespiel"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onStart();
+      }}
+    >
+      <label className="editor-field">
+        Dein Name
+        <input
+          value={name}
+          maxLength={40}
+          placeholder="z. B. Anna"
+          autoFocus
+          onChange={(e) => onName(e.target.value)}
+        />
+      </label>
+      <button type="submit" className="primary" disabled={blocked !== null || name.trim() === ''}>
+        Starten
+      </button>
+      <button type="button" className="link" onClick={onCancel}>
+        Abbrechen
+      </button>
+      {blocked !== null && <span className="editor-note">{blocked}</span>}
+    </form>
+  );
+}
+
+/** Puts the cursor into the link and marks all of it, once, as the box opens. */
+function selectAll(input: HTMLInputElement | null): void {
+  input?.focus();
+  input?.select();
+}
+
+/** A link the clipboard would not take: marked in a box of its own, to copy by hand. */
+export function ShareBox({ link, onClose }: { link: string; onClose: () => void }) {
+  return (
+    <div className="editor-share" role="status">
+      <span>Link markiert — mit Strg+C kopieren</span>
+      <input readOnly value={link} aria-label="Link zur Mission" ref={selectAll} />
+      <button className="link" onClick={onClose}>
+        schließen
+      </button>
+    </div>
   );
 }
 
@@ -359,6 +454,8 @@ const TABS: readonly (readonly [Tab, string])[] = [
 interface SideProps {
   draft: Draft;
   validation: Validation;
+  /** a shared mission whose id a mission on this server has already */
+  idTaken: boolean;
   onChange: (draft: Draft) => void;
   tab: Tab;
   onTab: (tab: Tab) => void;
@@ -395,7 +492,12 @@ export function SidePanel(props: SideProps) {
       </div>
       <div className="editor-pane" role="tabpanel">
         {tab === 'mission' && (
-          <MissionForm draft={draft} validation={validation} onChange={onChange} />
+          <MissionForm
+            draft={draft}
+            validation={validation}
+            idTaken={props.idTaken}
+            onChange={onChange}
+          />
         )}
         {tab === 'puzzles' && (
           <PuzzleList

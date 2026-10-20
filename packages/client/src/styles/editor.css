@@ -102,6 +102,15 @@
   white-space: nowrap;
 }
 
+/* A mission opened from a link lives in this browser only until it is saved. */
+.editor-shared {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: #93c5fd;
+  white-space: nowrap;
+}
+
 .editor-actions {
   display: flex;
   flex-wrap: wrap;
@@ -161,6 +170,48 @@
 .editor-confirm button {
   padding: 6px 12px;
   font-size: 14px;
+}
+
+/* The test run's form and a link to copy by hand: one row under the bar, like the status. */
+.editor-play,
+.editor-share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px 12px;
+  padding: 7px 12px;
+  border: 1px solid var(--accent-dark);
+  border-radius: 10px;
+  font-size: 14px;
+  background: var(--bg-2);
+}
+
+.editor-play .editor-field {
+  flex: 0 1 260px;
+  min-width: 0;
+  margin: 0;
+}
+
+.editor-play button {
+  padding: 7px 14px;
+  font-size: 14px;
+}
+
+.editor-play .editor-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.editor-share {
+  align-items: center;
+  border-color: #93c5fd;
+}
+
+.editor-share input {
+  flex: 1 1 240px;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 12px;
 }
 
 .editor-load {
@@ -461,6 +512,17 @@
   accent-color: var(--accent);
 }
 
+/* A module's yes-or-no setting: the box and its label in a row, the help line under it. */
+.editor-check-field {
+  display: flex;
+  flex-direction: column;
+}
+
+/* A module's from–to setting: two numbers side by side under the setting's name. */
+.editor-range .editor-row .editor-field {
+  margin: 0;
+}
+
 .editor-spots {
   list-style: none;
   margin: 2px 0 0;
@@ -756,6 +818,27 @@
 .editor-finding:disabled {
   opacity: 0.85;
   cursor: default;
+}
+
+/* ── the way back from a test run, in the app's top bar (App.tsx) ───────── */
+
+.topbar-editor {
+  flex: none;
+  padding: 4px 12px;
+  border-color: var(--accent-dark);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  color: var(--accent);
+}
+
+/* A phone-wide bar keeps the word that matters; the button still reads in full to a reader. */
+@media (max-width: 560px) {
+  .topbar-editor-way {
+    display: none;
+  }
 }
 
 /* ── narrow windows: stacked, and the page scrolls ──────────────────────── */

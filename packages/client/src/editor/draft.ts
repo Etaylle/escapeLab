@@ -2,6 +2,7 @@ import {
   MODULES,
   missionSchema,
   moduleFor,
+  type FieldSpec,
   type ManualKind,
   type PuzzleDef,
 } from '@escapelab/core';
@@ -9,12 +10,13 @@ import {
 /**
  * The mission the editor works on. It holds what the mission file holds, in
  * a shape that is easy to edit: every list there even where the file may
- * leave it out, optional words as '' where the file leaves them out, and
- * what part 1 of the editor does not show (penalties, a module's own
- * fields, a drone's speed, the emergency) kept as it came. A draft may be
- * unsound — that is what the validator is for — but it always has the
- * file's types, so the validator's map and reachability checks can run.
- * Its id is no field of its own: it follows from the title (`customIdOf`).
+ * leave it out, optional words as '' where the file leaves them out, every
+ * field a puzzle's module lists (`fields`), and what the editor does not
+ * show (a drone's speed, the emergency, the cost of notes) kept as it came.
+ * A draft may be unsound — that is what the validator is for — but it
+ * always has the file's types, so the validator's map and reachability
+ * checks can run. Its id is no field of its own: it follows from the title
+ * (`customIdOf`).
  */
 
 export interface Tile {
@@ -63,8 +65,13 @@ export interface DraftPuzzle {
   lights: string[];
   /** '' for none */
   onSolved: string;
-  /** penaltySec and the module's own fields (wires, stages, …), as they came */
-  extra: Record<string, unknown>;
+  /** what a wrong move costs, in seconds; null for the module's own default */
+  penaltySec: number | null;
+  /**
+   * the module's own fields (wires, stages, …) by key, exactly those its
+   * module lists; an empty field that can be off holds null
+   */
+  fields: Record<string, unknown>;
 }
 
 export type DoorOpens =
@@ -218,6 +225,25 @@ export function freeId(base: string, taken: Iterable<string>): string {
   return `${base}-${n}`;
 }
 
+// ── a module's own fields ────────────────────────────────────────────────
+
+/** The fields a module lists for its puzzles, in the order its form shows them. */
+export function fieldSpecs(type: StationType): readonly FieldSpec[] {
+  return moduleFor(type).fields;
+}
+
+/** Every field of a module's own at its default: what a new puzzle of the type starts with. */
+export function defaultFields(type: StationType): Record<string, unknown> {
+  return Object.fromEntries(
+    fieldSpecs(type).map((spec) => [spec.key, structuredClone(spec.default)]),
+  );
+}
+
+/** What a wrong move costs at a puzzle of this type whose file names no penaltySec. */
+export function defaultPenalty(type: StationType): number {
+  return moduleFor(type).defSchema.parse({ type, id: type, title: type }).penaltySec;
+}
+
 // ── new drafts ───────────────────────────────────────────────────────────
 
 /** A new puzzle of a type: named after its module, every field of its own at the default. */
@@ -230,7 +256,8 @@ export function newPuzzle(type: StationType, taken: Iterable<string>): DraftPuzz
     hints: [],
     lights: [],
     onSolved: '',
-    extra: {},
+    penaltySec: null,
+    fields: defaultFields(type),
   };
 }
 
@@ -279,12 +306,40 @@ function given<K extends string, V>(key: K, value: V | '' | undefined): { [P in 
   return value === '' || value === undefined ? {} : ({ [key]: value } as { [P in K]: V });
 }
 
+/** A list of words as the file keeps it: trimmed, the blank lines left out. */
+function wordsJson(words: unknown): unknown {
+  return Array.isArray(words)
+    ? words.map((word) => String(word).trim()).filter((word) => word !== '')
+    : words;
+}
+
+/**
+ * A puzzle's own fields as the file has them: those `specs` list, nothing
+ * else. An empty field that can be off is written the way its module says,
+ * as null or as no key at all; a list of words without its blank lines.
+ */
+export function fieldsToJson(
+  specs: readonly FieldSpec[],
+  fields: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  const json: Record<string, unknown> = {};
+  for (const spec of specs) {
+    const value = fields[spec.key];
+    if (value === undefined || (value === null && spec.kind === 'int' && spec.off === 'omit')) {
+      continue;
+    }
+    json[spec.key] = spec.kind === 'words' ? wordsJson(value) : structuredClone(value);
+  }
+  return json;
+}
+
 function puzzleJson(puzzle: DraftPuzzle): Record<string, unknown> {
   return {
     type: puzzle.type,
     id: puzzle.id,
     title: puzzle.title,
-    ...puzzle.extra,
+    ...fieldsToJson(fieldSpecs(puzzle.type), puzzle.fields),
+    ...(puzzle.penaltySec === null ? {} : { penaltySec: puzzle.penaltySec }),
     hints: puzzle.hints.filter((hint) => hint.trim() !== ''),
     lights: [...puzzle.lights],
     ...given('onSolved', puzzle.onSolved),
@@ -368,12 +423,15 @@ interface LooseTile {
 }
 
 interface LoosePuzzle {
+  /** the module's own fields, and whatever else the file may hold */
+  [key: string]: unknown;
   type: string;
   id: string;
   title: string;
   hints?: string[] | undefined;
   lights?: string[] | undefined;
   onSolved?: string | undefined;
+  penaltySec?: number | undefined;
 }
 
 interface LooseMap {
@@ -436,16 +494,59 @@ function extraOf(object: object, known: readonly string[]): Record<string, unkno
 
 const tile = ({ x, y }: LooseTile): Tile => ({ x, y });
 
+/** The keys every puzzle has besides its module's own: the puzzle form's common inputs. */
+const COMMON_KEYS: ReadonlySet<string> = new Set([
+  'type',
+  'id',
+  'title',
+  'hints',
+  'lights',
+  'onSolved',
+  'penaltySec',
+]);
+
+/** What a file without the key says: off for a field that can be off, else its default. */
+function missingValue(spec: FieldSpec): unknown {
+  return spec.kind === 'int' && spec.off !== undefined ? null : structuredClone(spec.default);
+}
+
+/**
+ * A puzzle's own fields from its file: every one `specs` list, those the
+ * file leaves out as it means them — off where a field can be off, else
+ * the default the schema fills in too.
+ */
+export function fieldsFromJson(
+  specs: readonly FieldSpec[],
+  puzzle: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    specs.map((spec) => {
+      const value = puzzle[spec.key];
+      return [spec.key, value === undefined ? missingValue(spec) : structuredClone(value)];
+    }),
+  );
+}
+
+/** The keys of a station's puzzle that neither every puzzle nor its module knows. */
+function strangeKeys(puzzle: LoosePuzzle, type: StationType): string[] {
+  const own = new Set(fieldSpecs(type).map((spec) => spec.key));
+  return Object.keys(puzzle).filter((key) => !COMMON_KEYS.has(key) && !own.has(key));
+}
+
+/** A station's type; a relay never gets here, draftFromJson turns a file with one away. */
+const stationType = (puzzle: LoosePuzzle): StationType => puzzle.type as StationType;
+
 function puzzleOf(puzzle: LoosePuzzle): DraftPuzzle {
+  const type = stationType(puzzle);
   return {
-    // A relay never gets here: draftFromJson turns a file with one away.
-    type: puzzle.type as StationType,
+    type,
     id: puzzle.id,
     title: puzzle.title,
     hints: [...(puzzle.hints ?? [])],
     lights: [...(puzzle.lights ?? [])],
     onSolved: puzzle.onSolved ?? '',
-    extra: extraOf(puzzle, ['type', 'id', 'title', 'hints', 'lights', 'onSolved']),
+    penaltySec: puzzle.penaltySec ?? null,
+    fields: fieldsFromJson(fieldSpecs(type), puzzle),
   };
 }
 
@@ -569,22 +670,25 @@ const SHAPE_ISSUES: ReadonlySet<string> = new Set([
 export type Loaded = { ok: true; draft: Draft } | { ok: false; problems: string[] };
 
 /**
- * A draft from a mission file — a shipped one, one from the server, or an
- * export that was still unsound when it was saved. Turns away what is no
- * mission file at all: anything with a field of the wrong type, a module
- * the game does not know, or a relay at a station.
+ * A draft from a mission file — a shipped one, one from the server, a
+ * shared link, or an export that was still unsound when it was saved. What
+ * the file leaves out reads as the schema means it: a module's own field at
+ * its default (or off, where it can be), no penaltySec as the module's own.
+ * Turns away what is no mission file at all: anything with a field of the
+ * wrong type, a module the game does not know, a relay at a station, or a
+ * puzzle field neither every puzzle nor its module knows — the draft could
+ * not keep it.
  */
 export function draftFromJson(data: unknown): Loaded {
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
     return { ok: false, problems: ['Die Datei enthält kein Missionsobjekt.'] };
   }
   const parsed = missionSchema.safeParse(data);
-  if (parsed.success) {
-    return { ok: true, draft: draftOf(parsed.data) };
-  }
-  const problems = parsed.error.issues
-    .filter((issue) => SHAPE_ISSUES.has(issue.code))
-    .map((issue) => `${issue.path.map(String).join('.') || '(Wurzel)'}: ${issue.message}`);
+  const problems = parsed.success
+    ? []
+    : parsed.error.issues
+        .filter((issue) => SHAPE_ISSUES.has(issue.code))
+        .map((issue) => `${issue.path.map(String).join('.') || '(Wurzel)'}: ${issue.message}`);
   if (problems.length > 0) {
     return { ok: false, problems };
   }
@@ -594,6 +698,12 @@ export function draftFromJson(data: unknown): Loaded {
   if (relays.length > 0) {
     const ids = relays.map((p) => `„${p.id}“`).join(', ');
     return { ok: false, problems: [`Rätsel ${ids}: relay ist ein Notfall, keine Station.`] };
+  }
+  const strangers = mission.puzzles.flatMap((p) =>
+    strangeKeys(p, stationType(p)).map((key) => `Rätsel „${p.id}“: unbekanntes Feld „${key}“.`),
+  );
+  if (strangers.length > 0) {
+    return { ok: false, problems: strangers };
   }
   return { ok: true, draft: draftOf(mission) };
 }

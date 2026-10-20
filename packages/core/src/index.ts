@@ -54,6 +54,7 @@ export type {
   ApplyResult,
   ConsoleId,
   EmergencyModule,
+  FieldSpec,
   ManualBlock,
   ManualSection,
   Move,

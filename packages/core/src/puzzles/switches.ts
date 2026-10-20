@@ -194,6 +194,17 @@ export const switchesModule: PuzzleModule<
   type: 'switches',
   usesEdgework: true,
   wholeCrew: false,
+  fields: [
+    {
+      key: 'features',
+      label: 'Merkmale je Schalter',
+      help: '3: LED, Markierung und Stern, 16 Zeilen in der Tabelle; 2: ohne Stern, 8 Zeilen.',
+      kind: 'int',
+      min: 2,
+      max: 3,
+      default: 3,
+    },
+  ],
   defSchema,
   inputSchema,
 

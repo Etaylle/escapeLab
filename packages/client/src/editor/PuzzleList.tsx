@@ -1,13 +1,24 @@
 import { useState } from 'react';
 import { moduleFor } from '@escapelab/core';
 import {
+  defaultPenalty,
   MODULE_NAMES,
   STATION_TYPES,
   type Draft,
   type DraftPuzzle,
   type StationType,
 } from './draft.js';
-import { ChecksField, IdField, SelectField, TextField, type Choice } from './fields.js';
+import {
+  ChecksField,
+  FormHead,
+  IdField,
+  inputId,
+  OptionalNumberField,
+  SelectField,
+  TextField,
+  type Choice,
+} from './fields.js';
+import { ModuleForm } from './ModuleForm.js';
 import { addPuzzle, remove, rename, replaceAt, retype, shiftPuzzle } from './tools.js';
 import { messagesAt, type Validation } from './validate.js';
 
@@ -36,6 +47,9 @@ const asType = (value: string): StationType => STATION_TYPES.find((t) => t === v
 
 const HINTS = [0, 1, 2] as const;
 
+/** Under the type list: what picking another does to the fields below. */
+export const RETYPE_NOTE = 'Eine andere Art setzt die Einstellungen auf ihre Vorgaben zurück.';
+
 interface FormProps {
   draft: Draft;
   index: number;
@@ -44,56 +58,93 @@ interface FormProps {
   onRemove: () => void;
 }
 
+/** The last crew's three notes; empty ones at the end are no notes. */
+function HintFields({
+  puzzle,
+  path,
+  validation,
+  onChange,
+}: {
+  puzzle: DraftPuzzle;
+  /** the puzzle's dotted path in the mission file */
+  path: string;
+  validation: Validation;
+  onChange: (hints: string[]) => void;
+}) {
+  return HINTS.map((n) => (
+    <TextField
+      key={n}
+      label={`Notiz ${n + 1} der letzten Crew`}
+      value={puzzle.hints[n] ?? ''}
+      placeholder={n === 0 ? 'ein Schubs' : n === 1 ? 'genauer' : 'fast die Lösung'}
+      id={inputId(`${path}.hints.${n}`)}
+      onChange={(hint) => {
+        const hints = HINTS.map((i) => (i === n ? hint : (puzzle.hints[i] ?? '')));
+        while (hints.at(-1) === '') {
+          hints.pop();
+        }
+        onChange(hints);
+      }}
+      issues={messagesAt(validation, `${path}.hints.${n}`)}
+    />
+  ));
+}
+
 function PuzzleForm({ draft, index, validation, onChange, onRemove }: FormProps) {
   const puzzle = draft.puzzles[index];
   if (puzzle === undefined) {
     return null;
   }
-  const at = (field: string): string[] => messagesAt(validation, `puzzles.${index}.${field}`);
+  const path = `puzzles.${index}`;
+  const at = (field: string): string[] => messagesAt(validation, `${path}.${field}`);
   const set = (next: DraftPuzzle): void =>
     onChange({ ...draft, puzzles: replaceAt(draft.puzzles, index, next) });
   const rooms = [...new Set(draft.map.labels.map((l) => l.text))];
   // A room a puzzle lights that no label names stays in the list, so it can be unticked.
   const lights = [...rooms, ...puzzle.lights.filter((room) => !rooms.includes(room))];
-  const own = Object.keys(puzzle.extra).filter((key) => key !== 'penaltySec');
   return (
     <div className="editor-puzzle-form">
       <SelectField
         label="Art"
         value={puzzle.type}
         choices={TYPE_CHOICES}
+        note={RETYPE_NOTE}
         onChange={(type) => onChange(retype(draft, index, asType(type)))}
       />
       <IdField
         label="Kennung"
         value={puzzle.id}
         taken={draft.puzzles.filter((p) => p !== puzzle).map((p) => p.id)}
+        id={inputId(`${path}.id`)}
         onChange={(id) => onChange(rename(draft, 'puzzle', puzzle.id, id))}
         issues={at('id')}
       />
       <TextField
         label="Titel"
         value={puzzle.title}
+        id={inputId(`${path}.title`)}
         onChange={(title) => set({ ...puzzle, title })}
         issues={at('title')}
       />
-      {HINTS.map((n) => (
-        <TextField
-          key={n}
-          label={`Notiz ${n + 1} der letzten Crew`}
-          value={puzzle.hints[n] ?? ''}
-          placeholder={n === 0 ? 'ein Schubs' : n === 1 ? 'genauer' : 'fast die Lösung'}
-          onChange={(hint) => {
-            const hints = HINTS.map((i) => (i === n ? hint : (puzzle.hints[i] ?? '')));
-            // Empty notes at the end are no notes.
-            while (hints.at(-1) === '') {
-              hints.pop();
-            }
-            set({ ...puzzle, hints });
-          }}
-          issues={at(`hints.${n}`)}
-        />
-      ))}
+      <FormHead title="Einstellungen" where={MODULE_NAMES[puzzle.type].kind} />
+      <ModuleForm draft={draft} index={index} validation={validation} onChange={onChange} />
+      <OptionalNumberField
+        label="Fehlgriff in Sekunden"
+        value={puzzle.penaltySec}
+        placeholder={String(defaultPenalty(puzzle.type))}
+        note="So viel Zeit kostet ein Fehlgriff; leer = Vorgabe des Moduls."
+        min={1}
+        id={inputId(`${path}.penaltySec`)}
+        onChange={(penaltySec) => set({ ...puzzle, penaltySec })}
+        issues={at('penaltySec')}
+      />
+      <FormHead title="Notizen, Licht, Funk" />
+      <HintFields
+        puzzle={puzzle}
+        path={path}
+        validation={validation}
+        onChange={(hints) => set({ ...puzzle, hints })}
+      />
       <ChecksField
         label="Gelöst, geht hier das Licht an"
         value={puzzle.lights}
@@ -105,13 +156,10 @@ function PuzzleForm({ draft, index, validation, onChange, onRemove }: FormProps)
       <TextField
         label="Funkspruch, wenn gelöst"
         value={puzzle.onSolved}
+        id={inputId(`${path}.onSolved`)}
         onChange={(onSolved) => set({ ...puzzle, onSolved })}
+        issues={at('onSolved')}
       />
-      {own.length > 0 && (
-        <p className="editor-note">
-          Eigene Felder des Moduls bleiben, wie sie sind: {own.join(', ')}.
-        </p>
-      )}
       <button className="link editor-remove" title="Mit seinen Stationen" onClick={onRemove}>
         Rätsel entfernen
       </button>
@@ -121,8 +169,8 @@ function PuzzleForm({ draft, index, validation, onChange, onRemove }: FormProps)
 
 /**
  * The mission's puzzles in the order the crew meets them: each opens to
- * its form — the module and the fields every puzzle has; a module's own
- * fields keep their defaults (part 2 of the editor sets them).
+ * its form — the module, the fields every puzzle has and the module's own
+ * settings, each with what the validator says of it underneath.
  */
 export function PuzzleList({ draft, validation, onChange, open, onOpen }: Props) {
   const [adding, setAdding] = useState<StationType>('keypad');
