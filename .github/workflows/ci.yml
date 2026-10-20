@@ -19,3 +19,64 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
+
+  # Two real browsers play Blackout and the Systemcheck against the production
+  # build (tools/shots.mjs); the screenshots and logs are kept for 14 days.
+  walkthrough:
+    needs: check
+    runs-on: ubuntu-latest
+    # Setup takes about 4 minutes; each run about 1 locally, 8 at most here.
+    timeout-minutes: 25
+    defaults:
+      run:
+        # Named, bash runs with -o pipefail: a walkthrough piped through tee
+        # still fails its step when it exits non-zero.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
+      - run: pnpm build
+      - name: Start the production server
+        id: server
+        run: |
+          PORT=3001 pnpm start > server.log 2>&1 &
+          for _ in $(seq 60); do
+            if curl -fsS http://localhost:3001/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::The server did not answer /health within 60 s."
+          cat server.log
+          exit 1
+      - name: Walkthrough (Blackout)
+        timeout-minutes: 8
+        run: >-
+          node tools/shots.mjs http://localhost:3001 shots-blackout 2>&1
+          | tee shots-blackout.log
+      - name: Walkthrough (Systemcheck)
+        # Runs after a failed Blackout run too: both sets of screenshots are wanted.
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        timeout-minutes: 8
+        env:
+          SHOTS_MISSION: Systemcheck
+        run: >-
+          node tools/shots.mjs http://localhost:3001 shots-systemcheck 2>&1
+          | tee shots-systemcheck.log
+      - name: Keep screenshots and logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: walkthrough
+          path: |
+            shots-blackout/
+            shots-systemcheck/
+            shots-blackout.log
+            shots-systemcheck.log
+            server.log
+          retention-days: 14

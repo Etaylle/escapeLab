@@ -4,7 +4,8 @@
  * can be looked at instead of guessed.
  *
  *   PLAYWRIGHT_BROWSERS_PATH=$PWD/.playwright-browsers \
- *     [SHOTS_MISSION=Systemcheck] node tools/shots.mjs [baseUrl] [outDir]
+ *     [SHOTS_MISSION=Systemcheck] [SHOTS_FRAME_P95_MS=40] \
+ *     node tools/shots.mjs [baseUrl] [outDir]
  *
  * SHOTS_MISSION names the mission card to start (default Blackout); the
  * crew is two players. Where the first station is a sync station, both
@@ -15,14 +16,26 @@
  * Notstrom-Kasten, the guest holds the plate door for the host on the way
  * to console A where needed, then both consoles are captured and the meter
  * measures every wire once; nothing is cut.
+ *
+ * The base URL is the Vite dev server by default (`pnpm dev`), or the
+ * production server (`pnpm build && pnpm start`, http://localhost:3001) as in
+ * CI. The host's page opens with `?trace=1`, so the world keeps its frame
+ * durations (animation frame to animation frame, 16.7 ms at 60 Hz); after the
+ * game screenshots and after the station step the run logs their p50 and p95. A p95 above SHOTS_FRAME_P95_MS (default 40) fails
+ * the run, as does any step that throws; a capture the draw leaves out is
+ * logged as `skipped:` with why, and fails nothing. The last line counts the
+ * captures taken, skipped and failed; the exit code is 1 when any failed.
  */
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { URL } from 'node:url';
 import { chromium } from 'playwright';
+import { percentile } from './percentile.mjs';
 
 const BASE = process.argv[2] ?? 'http://localhost:5173';
 const OUT = process.argv[3] ?? '/tmp/escapelab-shots';
 const MISSION = process.env.SHOTS_MISSION || 'Blackout';
+const FRAME_P95_MS = frameBudget(process.env.SHOTS_FRAME_P95_MS);
 
 const SIZES = [
   { name: 'laptop-13', width: 1440, height: 820 },
@@ -36,6 +49,84 @@ const SPEED = 4.2;
 const STEP_TOLERANCE = 0.15;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * The p95 frame duration the run fails above, in ms: SHOTS_FRAME_P95_MS, or
+ * 40 when unset, loose enough for a shared CI machine.
+ */
+function frameBudget(text) {
+  if (text === undefined || text === '') {
+    return 40;
+  }
+  const ms = Number(text);
+  if (!(ms > 0)) {
+    throw new Error(`SHOTS_FRAME_P95_MS has to be a number of milliseconds above 0, not "${text}"`);
+  }
+  return ms;
+}
+
+/** What the run did, for the summary at its end. */
+const tally = { taken: 0, skipped: 0, failures: [] };
+
+/** The browser of this run; closed at its end, however that comes. */
+let browser = null;
+
+/** Saves what `page` shows as `name` in the output folder, and counts it. */
+async function capture(page, name) {
+  await page.screenshot({ path: join(OUT, name) });
+  tally.taken += 1;
+}
+
+/** Logs a capture this run leaves out, and why. A skip fails nothing. */
+function skip(label, why) {
+  console.log(`${label.padEnd(18)} skipped: ${why}`);
+  tally.skipped += 1;
+}
+
+/** Notes a check that fails the run; the walkthrough goes on, so every capture is still taken. */
+function fail(what) {
+  tally.failures.push(what);
+}
+
+/** `url` with `?trace=1` added: the world then keeps its frame durations for `sampleFrames`. */
+function traced(url) {
+  const withFlag = new URL(url);
+  withFlag.searchParams.set('trace', '1');
+  return withFlag.href;
+}
+
+/**
+ * Reads the last frame durations off a page opened with `traced` and logs
+ * their p50 and p95. A p95 over the budget fails the run, as does a page with
+ * no frames to read.
+ */
+async function sampleFrames(page, when) {
+  const frames = await page.evaluate(() => globalThis.__escapelab?.frames ?? []);
+  if (frames.length === 0) {
+    console.log(`frames             !! none ${when}: the page keeps no frame trace under ?trace=1`);
+    fail(`no frame trace ${when}`);
+    return;
+  }
+  const p95 = percentile(frames, 95);
+  const over = p95 > FRAME_P95_MS;
+  console.log(
+    `frames             p50 ${percentile(frames, 50).toFixed(1)} ms · p95 ${p95.toFixed(1)} ms ` +
+      `(${frames.length}) ${when}: ` +
+      (over ? `!! over the budget of ${FRAME_P95_MS} ms` : `within ${FRAME_P95_MS} ms`),
+  );
+  if (over) {
+    fail(`frame p95 ${p95.toFixed(1)} ms ${when}, over ${FRAME_P95_MS} ms`);
+  }
+}
+
+/** The run's last line: captures taken, skipped and failed, and what failed. */
+function summarize() {
+  const { taken, skipped, failures } = tally;
+  console.log(
+    `summary            ${taken} captures taken, ${skipped} skipped, ${failures.length} failed` +
+      (failures.length === 0 ? '' : ` — ${failures.join('; ')}`),
+  );
+}
 
 /**
  * Reports how far the main area overflows its window. A screen that scrolls
@@ -281,12 +372,12 @@ async function capturePageTurn(page, overlay, who) {
   const where = overlay.locator('.book-where, .terminal-status');
   const before = await textOf(where);
   if (before === null) {
-    console.log(`reading-page2.png  skipped: ${who} reads a wall chart, it has no pages`);
+    skip('reading-page2.png', `${who} reads a wall chart, it has no pages`);
     return;
   }
   const forwards = !(await overlay.locator('.turn-next').isDisabled());
   if (!forwards && (await overlay.locator('.turn-back').isDisabled())) {
-    console.log(`reading-page2.png  skipped: "${before}" is all there is`);
+    skip('reading-page2.png', `"${before}" is the whole source, no page to turn either way`);
     return;
   }
   const box = await overlay.locator('.book-pages, .terminal-body').first().boundingBox();
@@ -307,7 +398,7 @@ async function capturePageTurn(page, overlay, who) {
     after = await textOf(where);
     how = '!! the swipe did nothing, turned by key';
   }
-  await page.screenshot({ path: join(OUT, 'reading-page2.png') });
+  await capture(page, 'reading-page2.png');
   console.log(
     `reading-page2.png  ${who}: "${before}" → "${after}" ` +
       `(${after === before ? '!! did not turn' : how}), ` +
@@ -329,7 +420,7 @@ async function captureReading(page, seen, who) {
     throw new Error(`${who} stands at "${manual.id}", but no .reading-modal opened after 3 tries`);
   }
   await sleep(400); // past the page's fade-in
-  await page.screenshot({ path: join(OUT, 'reading.png') });
+  await capture(page, 'reading.png');
   const shows = await textOf(overlay.locator('.book-where, .terminal-status'));
   const over = await sideways(page, '.reading-modal .panel');
   console.log(
@@ -392,13 +483,13 @@ async function captureBothAtStation(reader, operator, station, sync) {
     if (sync) {
       throw new Error(`${reader.name} has no way to the sync station "${station.title}"`);
     }
-    console.log(`station-both.png   skipped: ${reader.name} has no way to "${station.puzzleId}"`);
+    skip('station-both.png', `${reader.name} has no way to "${station.puzzleId}"`);
     return;
   }
   const readerSees = await interactUntil(reader.page, reader.page.locator('.station-modal'));
   const operatorSees = await operator.page.locator('.station-modal').isVisible();
   await sleep(400); // past the panel's fade-in
-  await reader.page.screenshot({ path: join(OUT, 'station-both.png') });
+  await capture(reader.page, 'station-both.png');
   const missing = [
     ...(readerSees ? [] : [reader.name]),
     ...(operatorSees ? [] : [operator.name]),
@@ -503,7 +594,10 @@ async function captureConsoles(operator, reader) {
   const consoleA = armed.find((s) => s.console === 'a');
   const consoleB = armed.find((s) => s.console === 'b');
   if (consoleA === undefined || consoleB === undefined) {
-    console.log(`console-*.png      skipped: "${armed[0]?.title ?? '?'}" has one console`);
+    skip(
+      'console-*.png',
+      armed.length === 0 ? 'no station is armed' : `"${armed[0].title}" has one console`,
+    );
     return;
   }
   const title = consoleA.title;
@@ -540,7 +634,7 @@ async function captureConsoles(operator, reader) {
   await Promise.all(crew.map(({ page }) => page.setViewportSize(SIZES[0])));
   await sleep(500); // the layout settles, the panel past its fade-in
   for (const [player, spot] of seats) {
-    await player.page.screenshot({ path: join(OUT, `console-${spot.console}.png`) });
+    await capture(player.page, `console-${spot.console}.png`);
     const over = await sideways(player.page, '.station-modal .panel');
     console.log(
       `console-${spot.console}.png      ${player.name} at ${seatOf(player)}: "${title}", ` +
@@ -637,8 +731,9 @@ async function manBothConsoles(players) {
     .map((pair) => entryPlan(pair, consoleA, plates))
     .find((option) => option !== null);
   if (plan === undefined) {
-    console.log(
-      `console-*.png      skipped: nobody reaches console A of "${consoleA.title}", ` +
+    skip(
+      'console-*.png',
+      `nobody reaches console A of "${consoleA.title}", ` +
         'and nobody else a plate to hold the way open',
     );
     return null;
@@ -767,7 +862,7 @@ async function captureNotepad(page, seen) {
     await take.click();
   }
   await sleep(300);
-  await page.screenshot({ path: join(OUT, 'notepad.png') });
+  await capture(page, 'notepad.png');
   const written = await pad.locator('textarea').inputValue();
   const dpad = await page.locator('.world-dpad').boundingBox();
   const blocks = overlapping(await pad.boundingBox(), dpad);
@@ -849,7 +944,7 @@ async function captureNotes(page, seen, who, other) {
   if ((await ask.count()) === 0) {
     throw new Error(`${who} reads "${source.id}", but no .note-ask beside the open station`);
   }
-  await page.screenshot({ path: join(OUT, 'hint-waiting.png') });
+  await capture(page, 'hint-waiting.png');
   let label = (await ask.innerText()).trim();
   console.log(`hint-waiting.png   ${who}: "${label}"`);
 
@@ -865,17 +960,17 @@ async function captureNotes(page, seen, who, other) {
   if (!label.startsWith('Notiz der letzten Crew')) {
     throw new Error(`the ask button still reads "${label}" after 60 s`);
   }
-  await page.screenshot({ path: join(OUT, 'hint-ready.png') });
+  await capture(page, 'hint-ready.png');
   console.log(`hint-ready.png     ${who}: "${label}"`);
 
   await ask.click();
   await overlay.locator('.margin-note').first().waitFor({ timeout: 5000 });
   await sleep(600);
-  await page.screenshot({ path: join(OUT, 'hint-revealed.png') });
+  await capture(page, 'hint-revealed.png');
   const notes = await overlay.locator('.margin-note').count();
   const next = (await textOf(ask)) ?? 'none';
   console.log(`hint-revealed.png  ${who}: ${notes} note(s) in the margin, next button "${next}"`);
-  await other.screenshot({ path: join(OUT, 'radio-banner.png') });
+  await capture(other, 'radio-banner.png');
   const banner = (await other.locator('.radio-banner').count()) > 0 ? 'up' : '!! missing';
   const panel = (await other.locator('.station-modal').count()) > 0;
   console.log(
@@ -898,7 +993,7 @@ async function askForNotes(first, second) {
       `${second.name} asks`,
   );
   if (!(await captureNotes(second.page, second.seen, second.name, first.page))) {
-    console.log('hint-*.png         skipped: no source on the open station in reach of either');
+    skip('hint-*.png', 'no source on the open station in reach of either');
   }
 }
 
@@ -916,7 +1011,7 @@ async function captureSign(page, who) {
       () => false,
     );
   await sleep(400); // past its fade-in
-  await page.screenshot({ path: join(OUT, 'sign.png') });
+  await capture(page, 'sign.png');
   const chip = (await page.locator('.hud .edgework').count()) > 0;
   console.log(
     `sign.png           ${who}: note ${note ? 'up' : '!! missing'}, ` +
@@ -939,18 +1034,26 @@ async function captureLocker(page, seen, audience) {
     .filter((option) => option.path !== null)
     .sort((a, b) => a.path.length - b.path.length);
   const locker = options[0]?.locker;
-  if (locker === undefined || !(await walkNear(page, seen, locker))) {
+  if (locker === undefined) {
     const where = lockers.map((l) => `${l.x},${l.y}`).join(' · ');
-    console.log(
+    skip(
+      'locker.png',
       lockers.length === 0
-        ? 'locker.png         skipped: no closed locker on this map'
-        : `locker.png         skipped: no locker in the guest's reach (${where})`,
+        ? 'no closed locker on this map'
+        : `no locker in the guest's reach (${where})`,
+    );
+    return;
+  }
+  if (!(await walkNear(page, seen, locker))) {
+    skip(
+      'locker.png',
+      `the guest's walk to the locker at ${locker.x},${locker.y} broke off (stuck, or a door shut)`,
     );
     return;
   }
   const here = await until(() => seen.view.sourcesHere.some((s) => s.id === locker.id), 3000);
   await sleep(400); // the prompt is drawn from the next frame on
-  await page.screenshot({ path: join(OUT, 'locker.png') });
+  await capture(page, 'locker.png');
   await page.keyboard.press('e');
   const searched = await until(
     () => seen.view.map.manuals.some((m) => m.id === locker.id && m.opened),
@@ -974,14 +1077,14 @@ async function captureLitRoom(page, seen) {
   const map = seen.view?.map;
   const room = map?.litRooms[0];
   if (map == null || room === undefined) {
-    console.log('lit-room.png       skipped: litRooms is empty — no station solved in this run');
+    skip('lit-room.png', 'litRooms is empty — no station solved in this run');
     return;
   }
   await page.keyboard.press('Escape');
   const label = map.labels.find((l) => l.text === room);
   const inside = label !== undefined && (await walkNear(page, seen, label));
   await sleep(1200); // past the lights coming up
-  await page.screenshot({ path: join(OUT, 'lit-room.png') });
+  await capture(page, 'lit-room.png');
   console.log(
     `lit-room.png       guest: ${map.litRooms.join(', ')} lit, ` +
       (inside ? `guest inside ${room}` : `!! guest outside ${room}, no way in`),
@@ -990,7 +1093,7 @@ async function captureLitRoom(page, seen) {
 
 async function run() {
   mkdirSync(OUT, { recursive: true });
-  const browser = await chromium.launch();
+  browser = await chromium.launch();
 
   // --- host: create a room and grab the code ---------------------------
   const hostCtx = await browser.newContext({ viewport: SIZES[0] });
@@ -1000,16 +1103,16 @@ async function run() {
     if (m.type() === 'error') console.log('[host console]', m.text());
   });
   host.on('pageerror', (e) => console.log('[host error]', e.message));
-  await host.goto(BASE);
+  await host.goto(traced(BASE));
   await host.getByPlaceholder('z. B. Anna').fill('Anna');
   await host.locator('.mission').first().waitFor({ timeout: 10_000 });
   // The join screen, every mission in view, has to fit a laptop window too.
-  await host.screenshot({ path: join(OUT, 'join.png') });
+  await capture(host, 'join.png');
   await overflow(host, 'join @ 1440x820');
   await host.setViewportSize({ width: 1280, height: 720 });
   await sleep(400);
   await overflow(host, 'join @ 1280x720');
-  await host.screenshot({ path: join(OUT, 'join-1280.png') });
+  await capture(host, 'join-1280.png');
   await host.setViewportSize(SIZES[0]);
   await sleep(300);
   const card = host.locator('.mission', { hasText: MISSION }).first();
@@ -1021,7 +1124,7 @@ async function run() {
   await host.locator('.room-code strong').waitFor({ timeout: 10_000 });
   const code = (await host.locator('.room-code strong').innerText()).trim();
   console.log('room code:', code, `(${MISSION})`);
-  await host.screenshot({ path: join(OUT, 'lobby-host.png') });
+  await capture(host, 'lobby-host.png');
 
   // --- guest: join by code ---------------------------------------------
   // Touch-capable on purpose: the on-screen D-pad is hidden for `pointer:
@@ -1033,7 +1136,7 @@ async function run() {
   await guest.getByPlaceholder('z. B. Anna').fill('Ben');
   // On a phone the join screen stacks and scrolls; this shows its top.
   await guest.locator('.mission').first().waitFor({ timeout: 10_000 });
-  await guest.screenshot({ path: join(OUT, 'join-phone.png') });
+  await capture(guest, 'join-phone.png');
   await guest.getByLabel('Raumcode').fill(code);
   await clickText(guest, 'Beitreten');
   await guest.locator('.lobby').waitFor({ timeout: 10_000 });
@@ -1041,8 +1144,8 @@ async function run() {
   // crew, ready, start — nothing to pick: the start draws who begins where
   await host.locator('.seat .seat-name', { hasText: /^Ben$/ }).waitFor({ timeout: 10_000 });
   await sleep(300);
-  await host.screenshot({ path: join(OUT, 'lobby-filled.png') });
-  await guest.screenshot({ path: join(OUT, 'lobby-phone.png') });
+  await capture(host, 'lobby-filled.png');
+  await capture(guest, 'lobby-phone.png');
   // A phone scrolls the lobby down and the crew's row sideways, but nothing
   // else may run out past the window's edge.
   const phoneOver = await sideways(guest, '.content');
@@ -1054,7 +1157,7 @@ async function run() {
   await host.setViewportSize({ width: 1280, height: 720 });
   await sleep(400);
   await overflow(host, 'lobby @ 1280x720');
-  await host.screenshot({ path: join(OUT, 'lobby-1280.png') });
+  await capture(host, 'lobby-1280.png');
   await host.setViewportSize(SIZES[0]);
   await sleep(300);
   await clickText(guest, 'Ich bin bereit');
@@ -1089,18 +1192,19 @@ async function run() {
   for (const size of SIZES) {
     await host.setViewportSize({ width: size.width, height: size.height });
     await sleep(700);
-    await host.screenshot({ path: join(OUT, `game-${size.name}.png`) });
+    await capture(host, `game-${size.name}.png`);
     await overflow(host, `game @ ${size.width}x${size.height}`);
   }
   // The guest's window is phone-sized and touch-capable all along.
-  await guest.screenshot({ path: join(OUT, 'game-phone-touch.png') });
+  await capture(guest, 'game-phone-touch.png');
+  await sampleFrames(host, 'after the game screenshots');
 
   // info panel and spectator view at laptop size
   await host.setViewportSize(SIZES[0]);
   await sleep(400);
   await host.keyboard.press('i');
   await sleep(400);
-  await host.screenshot({ path: join(OUT, 'info-panel.png') });
+  await capture(host, 'info-panel.png');
   await host.keyboard.press('Escape');
 
   const watcherCtx = await browser.newContext({ viewport: SIZES[0] });
@@ -1111,7 +1215,7 @@ async function run() {
   await clickText(watcher, 'Mit Code zuschauen');
   await watcher.locator('.spectate').waitFor({ timeout: 10_000 });
   await sleep(1200);
-  await watcher.screenshot({ path: join(OUT, 'spectate.png') });
+  await capture(watcher, 'spectate.png');
   await overflow(watcher, 'spectate @ 1440x820');
 
   await captureLocker(guest, guestSeen, watcherSeen);
@@ -1130,18 +1234,24 @@ async function run() {
         `${operator.name} reads instead`,
     );
     if (!(await captureReading(operator.page, operator.seen, operator.name))) {
-      console.log('reading.png        skipped: no manual object in reach of either player');
+      skip('reading.png', 'no manual object in reach of either player');
     }
   }
 
   const sign = reader.seen.view.map.edgeworkSign;
   if (atSign === undefined) {
     if (sign === null) {
-      console.log('sign.png           skipped: this map has no Laborkennung');
+      skip('sign.png', 'this map has no Laborkennung');
     } else if (await walkNear(reader.page, reader.seen, sign)) {
       await captureSign(reader.page, reader.name);
     } else {
-      console.log(`sign.png           skipped: the sign at ${sign.x},${sign.y} is out of reach`);
+      skip(
+        'sign.png',
+        stepsTo(reader.seen, sign) === Infinity
+          ? `the sign at ${sign.x},${sign.y} is out of ${reader.name}'s reach`
+          : `${reader.name}'s walk to the sign at ${sign.x},${sign.y} broke off ` +
+              '(stuck, or a door shut)',
+      );
     }
   }
   await captureNotepad(guest, guestSeen);
@@ -1162,7 +1272,12 @@ async function run() {
       await askForNotes(pair.meter, pair.box);
     }
   } else if (station === undefined || stepsTo(operator.seen, station) === Infinity) {
-    console.log('station            skipped: no open way from either start to the armed station');
+    skip(
+      'station',
+      station === undefined
+        ? 'no station is armed'
+        : 'no open way from either start to the armed station',
+    );
   } else {
     if (!(await walkNear(operator.page, operator.seen, station))) {
       throw new Error(`${operator.name} got stuck on the way to "${station.puzzleId}"`);
@@ -1175,7 +1290,7 @@ async function run() {
     }
     await sleep(300); // past its fade-in
     const stationSideways = await sideways(operator.page, '.station-modal .panel');
-    await operator.page.screenshot({ path: join(OUT, 'station.png') });
+    await capture(operator.page, 'station.png');
     console.log(
       `station.png        ${operator.name}: "${station.title}", panel ` +
         (stationSideways > 0 ? `!! +${stationSideways}px sideways` : 'fits sideways'),
@@ -1187,13 +1302,18 @@ async function run() {
     await operator.page.keyboard.press('Escape');
     await modal.waitFor({ state: 'hidden', timeout: 3000 });
     if (sync) {
-      console.log('hint-*.png         skipped: the station is solved, the next waits for its E');
+      skip(
+        'hint-*.png',
+        'notes come for an open station only: the sync station is solved, ' +
+          'and nobody has opened the next yet',
+      );
       // Where the next station has two consoles, the crew captures both; a Signalkette it works.
       await captureConsoles(operator, reader);
     } else {
       await askForNotes(reader, operator);
     }
   }
+  await sampleFrames(host, 'after the station step');
   await captureLitRoom(guest, guestSeen);
 
   for (const { name, page, start } of steady) {
@@ -1211,7 +1331,25 @@ async function run() {
   console.log('screenshots in', OUT);
 }
 
-run().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+/**
+ * Runs the walkthrough, then prints the summary as the last line. A step that
+ * throws ends the walkthrough there and counts as failed; the exit code is set
+ * rather than forced, so a log piped through tee keeps its last lines.
+ */
+async function main() {
+  try {
+    await run();
+  } catch (err) {
+    console.error(err);
+    // Playwright appends its call log to the message: the first line names the step.
+    fail(String(err instanceof Error ? err.message : err).split('\n')[0]);
+  }
+  // A step that threw leaves the browser running, and the process with it.
+  if (browser?.isConnected()) {
+    await browser.close();
+  }
+  summarize();
+  process.exitCode = tally.failures.length === 0 ? 0 : 1;
+}
+
+await main();

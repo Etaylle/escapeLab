@@ -29,6 +29,7 @@ import {
   worldText,
   type WorldText,
 } from './art.js';
+import { frameTrace, traceRequested } from './frameTrace.js';
 import { carriedItem, contextAction, promptText } from './interact.js';
 import {
   markerBoxes,
@@ -674,6 +675,11 @@ export function GameWorld({
 
     let raf = 0;
     let prev = performance.now();
+    // `?trace=1`: the walkthrough reads the last frame durations off the page.
+    const trace = traceRequested(location.search) ? frameTrace() : null;
+    if (trace !== null) {
+      window.__escapelab = trace;
+    }
 
     /**
      * Your avatar by the server's word: every run starts it on its spawn — on
@@ -1690,6 +1696,7 @@ export function GameWorld({
     }
 
     function frame(now: number): void {
+      trace?.record(now - prev);
       const dt = Math.min(0.05, (now - prev) / 1000);
       prev = now;
       const map = viewRef.current.map;
@@ -1710,6 +1717,9 @@ export function GameWorld({
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
       stopAmbience();
+      if (window.__escapelab === trace) {
+        delete window.__escapelab;
+      }
       simRef.current = null;
       interactRef.current = null;
       dropRef.current = null;
