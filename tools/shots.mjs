@@ -35,7 +35,12 @@
  *
  * On the way, both open the Bestenliste from the join screen (history.png,
  * history-phone.png): measured like the join screen, at 1280×720 too, and on
- * the phone for running out sideways.
+ * the phone for running out sideways. The host's lobby, with its strip of
+ * mission cards, is captured on a phone held sideways as well
+ * (lobby-landscape.png). Once the sign is read, the guest's phone is turned
+ * sideways and the HUD's Info button has to lie whole inside the window —
+ * where the host read the sign, in the host's window at that size too — or
+ * the run fails: the Laborkennung's chip may never push it off the screen.
  *
  * The base URL is the Vite dev server by default (`pnpm dev`), or the
  * production server (`pnpm build && pnpm start`, http://localhost:3001) as in
@@ -64,12 +69,18 @@
  * join screen, paints a 7 × 5 room, places a start and a station and
  * captures what the validator says (editor.png, and the layout at
  * 1280×720 and on a phone); a second start and a book make the mission
- * sound, it is saved as custom-probe, has to show on the join screen, and is
+ * sound, it is saved as custom-probe and has to show on the join screen.
+ * Then the editor, opened at /editor, imports tools/fixtures/probe-mission.json
+ * („Probe", custom-probe) and starts a test run from it: the lobby has to
+ * show the probe (editor-play.png), „Zurück zum Editor" in the top bar has
+ * to bring the editor back with the draft, and the link „Teilen" makes —
+ * off the clipboard, or out of the box the editor marks it in — has to open
+ * the same mission in a page of its own (editor-shared.png). custom-probe is
  * deleted again through the API whatever happened before.
  */
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { URL } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 import { chromium } from 'playwright';
 import { percentile } from './percentile.mjs';
 
@@ -1529,6 +1540,73 @@ async function captureSign(page, who) {
 }
 
 /**
+ * Turns `player`'s page to `size` and back, and fails the run unless the
+ * HUD's Info button lies whole inside the window there: once the sign is
+ * read, the Laborkennung's chip may never push it off the screen. Logs
+ * whether the chip was up on that page, so a check without it says so.
+ */
+async function infoInView(player, size, how) {
+  const { page, name } = player;
+  const before = page.viewportSize();
+  await page.setViewportSize({ width: size.width, height: size.height });
+  await sleep(700);
+  const box = await page.locator('.hud button', { hasText: 'Info' }).boundingBox();
+  const chip = (await page.locator('.hud .edgework').count()) > 0;
+  const inside =
+    box !== null &&
+    box.x >= 0 &&
+    box.y >= 0 &&
+    box.x + box.width <= size.width + 0.5 &&
+    box.y + box.height <= size.height + 0.5;
+  const edge = box === null ? 'no Info button' : `right edge ${Math.round(box.x + box.width)}`;
+  const where = `${name} @ ${size.width}x${size.height} ${how}, chip ${chip ? 'up' : 'not read'}`;
+  console.log(
+    `${inside ? 'ok  in view' : '!! cut off '} info button, ${where}: ${edge}/${size.width}`,
+  );
+  if (!inside) {
+    fail(`the Info button is cut off @ ${size.width}x${size.height} for ${name} (${edge})`);
+  }
+  await page.setViewportSize(before);
+  await sleep(400);
+}
+
+/**
+ * After the sign step: the Info button on the guest's phone held sideways —
+ * and where the host read the sign, in the host's window at the same size,
+ * so that the chip is checked at that width in every mission.
+ */
+async function infoAfterSign(reader, guest) {
+  const turned = SIZES[3];
+  await infoInView(guest, turned, '(phone sideways)');
+  if (reader !== undefined && reader.page !== guest.page) {
+    await infoInView(reader, turned, '(window, no touch)');
+  }
+}
+
+/**
+ * lobby-landscape.png: the host's lobby on a phone held sideways, scrolled
+ * to the mission panel's top, so that its strip of mission cards stands
+ * clear of the start bar at the window's foot. The lobby may scroll down
+ * there, but nothing may run out sideways: the strip scrolls in its own box.
+ */
+async function captureLobbySideways(page) {
+  const { width, height } = SIZES[3];
+  await page.setViewportSize({ width, height });
+  await sleep(400);
+  const shown = (await page.locator('.lobby-missions').count()) > 0;
+  await page.locator('.lobby-panel').evaluate((el) => el.scrollIntoView({ block: 'start' }));
+  await sleep(200);
+  await capture(page, 'lobby-landscape.png');
+  const over = await sideways(page, '.content');
+  const cards = await page.locator('.lobby-mission').count();
+  console.log(
+    `lobby-landscape.png Anna's lobby @ ${width}x${height}: ` +
+      (shown ? `${cards} mission cards, ` : '!! no mission strip, ') +
+      (over > 0 ? `!! +${over}px sideways` : 'fits sideways'),
+  );
+}
+
+/**
  * locker.png: the guest stands before the nearest locker it can walk to,
  * „Durchsuchen" on offer, then searches it — the find has to reach the HUD
  * line. Lockers lie undiscovered at first, so where they are comes from the
@@ -1919,16 +1997,120 @@ async function saveProbe(page) {
   console.log('editor             saved as custom-probe, and its card is on the join screen');
 }
 
+/** The mission the editor imports for its test run and its link: „Probe", custom-probe. */
+const PROBE_FILE = fileURLToPath(new URL('fixtures/probe-mission.json', import.meta.url));
+
+/**
+ * The editor at its own address, the probe mission imported through
+ * „Importieren"; a draft left unsaved there is discarded when the editor
+ * asks.
+ */
+async function importProbe(page) {
+  await page.goto(new URL('/editor', BASE).href);
+  await page.locator('.editor-canvas').waitFor({ timeout: 10_000 });
+  await page.locator('.editor-actions input[type="file"]').setInputFiles(PROBE_FILE);
+  const imported = page.locator('.editor-status', { hasText: 'importiert' });
+  const asked = page.locator('.editor-confirm button', { hasText: 'Verwerfen' });
+  await imported.or(asked).first().waitFor({ timeout: 5000 });
+  if (await asked.isVisible()) {
+    await asked.click();
+    await imported.waitFor({ timeout: 5000 });
+  }
+  await page.locator('.editor-name strong', { hasText: 'Probe' }).waitFor({ timeout: 5000 });
+}
+
+/**
+ * editor-play.png: „Probespiel" with a name saves the probe and opens a room
+ * for it; the lobby has to show the probe, and its top bar the way back.
+ */
+async function playProbe(page) {
+  const play = page.locator('.editor-actions button:not([disabled])', { hasText: 'Probespiel' });
+  const sound = await play.waitFor({ timeout: 3000 }).then(
+    () => true,
+    () => false,
+  );
+  if (!sound) {
+    throw new Error(`the imported probe stays unsound: ${(await editorErrors(page)).join(' | ')}`);
+  }
+  await play.click();
+  await page.locator('.editor-play input').fill('Anna');
+  await page.locator('.editor-play button[type="submit"]').click();
+  await page.locator('.lobby', { hasText: 'Probe' }).waitFor({ timeout: 10_000 });
+  const code = (await page.locator('.room-code strong').innerText()).trim();
+  await sleep(500);
+  await capture(page, 'editor-play.png');
+  await overflow(page, 'editor-play @ 1440x820');
+  const back = await page.locator('.topbar-editor').isVisible();
+  console.log(
+    `editor-play.png    Probespiel: room ${code}, the lobby shows „Probe"; ` +
+      (back ? '„Zurück zum Editor" in the top bar' : '!! no way back to the editor'),
+  );
+  if (!back) {
+    fail('editor: the test run’s lobby offers no „Zurück zum Editor"');
+  }
+}
+
+/** „Zurück zum Editor": out of the room, the page reloads on the editor with the probe again. */
+async function backToEditor(page) {
+  await Promise.all([page.waitForEvent('load'), page.locator('.topbar-editor').click()]);
+  await page.locator('.editor-name strong', { hasText: 'Probe' }).waitFor({ timeout: 10_000 });
+  const path = new URL(page.url()).pathname;
+  console.log(`editor             back from the lobby on ${path}, „Probe" open again`);
+  if (path !== '/editor') {
+    fail(`editor: back from the test run on ${path}, not on /editor`);
+  }
+}
+
+/** „Teilen": the link off the clipboard, or out of the box the editor marks it in. */
+async function sharedLink(page) {
+  await clickText(page, 'Teilen');
+  const copied = page.locator('.editor-status-ok', { hasText: 'Link kopiert' });
+  const box = page.locator('.editor-share input');
+  await copied.or(box).first().waitFor({ timeout: 5000 });
+  if (await box.isVisible()) {
+    return { link: await box.inputValue(), via: 'the marked box' };
+  }
+  const link = await page.evaluate(() => globalThis.navigator.clipboard.readText());
+  return { link, via: 'the clipboard' };
+}
+
+/**
+ * editor-shared.png: the link in a page of its own opens the editor on the
+ * same mission — its title, and its card's line with the station count —
+ * marked as shared and not saved.
+ */
+async function openShared(context, link, card) {
+  const page = await context.newPage();
+  page.on('pageerror', (e) => console.log('[shared error]', e.message));
+  try {
+    await page.goto(link);
+    await page.locator('.editor-name strong', { hasText: 'Probe' }).waitFor({ timeout: 10_000 });
+    await page.locator('.editor-shared').waitFor({ timeout: 5000 });
+    const seen = await page.locator('.editor-card-meta').innerText();
+    await sleep(500);
+    await capture(page, 'editor-shared.png');
+    console.log(`editor-shared.png  the link opens „Probe" (${seen}), marked GETEILT`);
+    if (seen !== card) {
+      fail(`editor: the shared probe reads "${seen}", the original "${card}"`);
+    }
+  } finally {
+    await page.close();
+  }
+}
+
 /**
  * editor.png: the editor, opened from the join screen, with a room, a start
  * and a station in its lab and the validator naming what is missing — a
  * second start, a source for the keypad's rules. Made sound, the probe is
- * saved as custom-probe and has to show on the join screen. It is deleted
- * through the API in any case, so the walkthrough after it meets the
- * shipped missions only.
+ * saved as custom-probe and has to show on the join screen. Then the
+ * imported probe mission is played from the editor and shared by link
+ * (editor-play.png, editor-shared.png). It is deleted through the API in any
+ * case, so the walkthrough after it meets the shipped missions only.
  */
 async function captureEditor() {
-  const context = await browser.newContext({ viewport: SIZES[0] });
+  // The link „Teilen" makes is read off the clipboard where the page may write it.
+  const permissions = ['clipboard-read', 'clipboard-write'];
+  const context = await browser.newContext({ viewport: SIZES[0], permissions });
   const page = await context.newPage();
   page.on('pageerror', (e) => console.log('[editor error]', e.message));
   try {
@@ -1936,6 +2118,18 @@ async function captureEditor() {
     await captureValidator(page);
     await editorLayouts(page);
     await saveProbe(page);
+  } catch (err) {
+    console.log(`editor             !! ${firstLine(err)}`);
+    fail(`editor: ${firstLine(err)}`);
+  }
+  try {
+    await importProbe(page);
+    await playProbe(page);
+    await backToEditor(page);
+    const card = await page.locator('.editor-card-meta').innerText();
+    const { link, via } = await sharedLink(page);
+    console.log(`editor             „Teilen": a link of ${link.length} characters, from ${via}`);
+    await openShared(context, link, card);
   } catch (err) {
     console.log(`editor             !! ${firstLine(err)}`);
     fail(`editor: ${firstLine(err)}`);
@@ -2037,6 +2231,7 @@ async function run() {
   await sleep(400);
   await overflow(host, 'lobby @ 1280x720');
   await capture(host, 'lobby-1280.png');
+  await captureLobbySideways(host);
   await host.setViewportSize(SIZES[0]);
   await sleep(300);
   await micsOn([
@@ -2054,6 +2249,9 @@ async function run() {
   const anna = { name: 'Anna', page: host, seen: hostSeen, traced: true };
   const ben = { name: 'Ben', page: guest, seen: guestSeen };
   const { operator, reader, atSign } = await firstMoments(anna, ben);
+  if (atSign !== undefined) {
+    await infoAfterSign(atSign, ben);
+  }
   // Let the briefing countdown finish; server and browsers share this clock.
   await sleep(Math.max(0, guestSeen.view.startedAt + 4200 - Date.now()));
   // The world's zoom follows the canvas height: nothing the run brings up in
@@ -2131,6 +2329,7 @@ async function run() {
       skip('sign.png', 'this map has no Laborkennung');
     } else if (await walkNear(reader.page, reader.seen, sign)) {
       await captureSign(reader.page, reader.name);
+      await infoAfterSign(reader, ben);
     } else {
       skip(
         'sign.png',

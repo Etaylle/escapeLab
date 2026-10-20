@@ -214,7 +214,7 @@ describe('the microphone in the lobby', () => {
       iconsAsWords(
         within(
           voiceOf({ mic }),
-          <LobbyScreen view={view} send={noop} leaveRoom={noop} missions={[]} />,
+          <LobbyScreen view={view} send={noop} leaveRoom={noop} missions={[]} stats={[]} />,
         ),
       );
     const host = annaSees('lobby');

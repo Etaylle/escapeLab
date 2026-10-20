@@ -128,6 +128,33 @@ export const buttonSyncModule: PuzzleModule<
   type: 'button-sync',
   usesEdgework: false,
   wholeCrew: true,
+  fields: [
+    {
+      key: 'windowMs',
+      label: 'Zeitfenster in ms',
+      help:
+        'So dicht nacheinander muss die ganze Crew drücken, sonst verfallen die Drücke; ' +
+        'leer = ohne Frist.',
+      kind: 'int',
+      min: 500,
+      max: 10_000,
+      default: 3000,
+      off: 'omit',
+    },
+    {
+      key: 'style',
+      label: 'Bauform',
+      help:
+        'Ein Pilztaster für alle oder ein Hauptschalter mit einem Hebel je Crewmitglied; ' +
+        'gedrückt wird gleich.',
+      kind: 'choice',
+      options: [
+        { value: 'button', label: 'Taster' },
+        { value: 'lever', label: 'Hebel' },
+      ],
+      default: 'button',
+    },
+  ],
   defSchema,
   inputSchema,
 

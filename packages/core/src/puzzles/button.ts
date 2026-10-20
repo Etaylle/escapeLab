@@ -213,6 +213,7 @@ export const buttonModule: PuzzleModule<ButtonDef, ButtonState, ButtonInput, But
   type: 'button',
   usesEdgework: true,
   wholeCrew: false,
+  fields: [],
   defSchema,
   inputSchema,
 

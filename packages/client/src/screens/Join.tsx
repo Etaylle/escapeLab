@@ -6,6 +6,7 @@ import {
   type MissionStats,
   type RoomSummary,
 } from '@escapelab/core';
+import { localStore } from '../notes.js';
 import { recordLine } from '../runStats.js';
 import { crewSizeText } from './Crew.js';
 import { HttpsHint } from './HttpsHint.js';
@@ -27,6 +28,45 @@ interface Props {
 }
 
 const REFRESH_MS = 2500;
+
+/** Where the browser keeps the name last typed on the join screen. */
+const NAME_KEY = 'escapelab-name';
+
+/**
+ * The name last typed on the join screen, kept by the browser: the join
+ * screen and the editor's test run start with it. '' where there is none.
+ */
+export function lastName(): string {
+  try {
+    return localStore()?.getItem(NAME_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** Keeps the name for next time; nothing is kept where the browser refuses. */
+export function keepName(name: string): void {
+  try {
+    const store = localStore();
+    if (name.trim() === '') {
+      store?.removeItem(NAME_KEY);
+    } else {
+      store?.setItem(NAME_KEY, name);
+    }
+  } catch (err) {
+    console.warn(`[escapelab] the name is not kept: ${String(err)}`);
+  }
+}
+
+/** The name field's text, starting with the name kept last and kept again as it is typed. */
+function useKeptName(): [string, (name: string) => void] {
+  const [name, setName] = useState(lastName);
+  const type = (next: string): void => {
+    setName(next);
+    keepName(next);
+  };
+  return [name, type];
+}
 
 /**
  * The message that opens a room for `missionId`, or for the server's first
@@ -150,7 +190,7 @@ export function JoinScreen({
   openHistory,
   openEditor,
 }: Props) {
-  const [name, setName] = useState('');
+  const [name, setName] = useKeptName();
   // An invite link carries the room in ?room=, so the code field is already
   // filled and all that is left to do is type a name.
   const [code, setCode] = useState(

@@ -86,10 +86,11 @@ export function winShare(wins: number, runs: number): string {
 }
 
 /**
- * A mission's record in one line over the difficulties given, „Beste Zeit
- * 7:42 · 63 % gewonnen"; null before their first run.
+ * A mission's record over the difficulties given, in its two halves: the
+ * best time, „Beste Zeit 7:42", and the share won, „63 % gewonnen"; null
+ * before their first run.
  */
-export function recordLine(groups: readonly DifficultyStats[]): string | null {
+export function recordParts(groups: readonly DifficultyStats[]): [string, string] | null {
   const runs = groups.reduce((sum, group) => sum + group.runs, 0);
   if (runs === 0) {
     return null;
@@ -98,7 +99,15 @@ export function recordLine(groups: readonly DifficultyStats[]): string | null {
   const bests = groups.flatMap((group) => (group.bestSeconds === null ? [] : [group.bestSeconds]));
   const best =
     bests.length === 0 ? 'Noch keine Bestzeit' : `Beste Zeit ${clock(Math.min(...bests))}`;
-  return `${best} · ${winShare(wins, runs)} gewonnen`;
+  return [best, `${winShare(wins, runs)} gewonnen`];
+}
+
+/**
+ * A mission's record in one line over the difficulties given, „Beste Zeit
+ * 7:42 · 63 % gewonnen"; null before their first run.
+ */
+export function recordLine(groups: readonly DifficultyStats[]): string | null {
+  return recordParts(groups)?.join(' · ') ?? null;
 }
 
 export function difficultyLabel(id: Difficulty): string {

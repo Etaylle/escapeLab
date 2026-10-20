@@ -3,6 +3,7 @@ import type { ClientMessage, PlayerView, RunEvent } from '@escapelab/core';
 import { clock } from '../runStats.js';
 import { play } from '../sounds.js';
 import { CreditsTable } from './Crew.js';
+import { Icon, type IconName } from './Icon.js';
 import { RunStanding } from './Standing.js';
 
 interface Props {
@@ -11,17 +12,18 @@ interface Props {
   leaveRoom: () => void;
 }
 
-const EVENT_ICON: Record<RunEvent['kind'], string> = {
-  puzzle: '✔',
-  penalty: '🚨',
-  sabotage: '⚠',
-  item: '📦',
-  escape: '🚪',
-  finish: '🏁',
-  hint: '💡',
-  radio: '📻',
-  find: '🔎',
-  power: '⚡',
+/** Each line of the run report under the icon of what happened; notes and radio as on the HUD. */
+const EVENT_ICON: Record<RunEvent['kind'], IconName> = {
+  puzzle: 'check',
+  penalty: 'siren',
+  sabotage: 'warning',
+  item: 'box',
+  escape: 'exit',
+  finish: 'flag',
+  hint: 'note',
+  radio: 'radio',
+  find: 'search',
+  power: 'power',
 };
 
 /** Milliseconds as m:ss. */
@@ -47,7 +49,9 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
   return (
     <div className={`card end ${won ? 'end-won' : 'end-lost'}`}>
       <span className="kicker">{view.missionTitle}</span>
-      <h1>{won ? '✔ ENTKOMMEN' : '✖ GESCHEITERT'}</h1>
+      <h1>
+        <Icon name={won ? 'check' : 'cross'} /> {won ? 'ENTKOMMEN' : 'GESCHEITERT'}
+      </h1>
       <p className="story">{view.storyText}</p>
 
       {haveStats && (
@@ -105,7 +109,9 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
             {view.events.map((event, i) => (
               <li key={`${event.at}-${i}`} className={`report-${event.kind}`}>
                 <span className="report-time">{fmt(event.at - startedAt)}</span>
-                <span className="report-icon">{EVENT_ICON[event.kind]}</span>
+                <span className="report-icon">
+                  <Icon name={EVENT_ICON[event.kind]} />
+                </span>
                 <span className="report-text">{event.label}</span>
                 {event.seconds !== null && (
                   <span className="report-cost">−{event.seconds}s</span>
@@ -121,7 +127,8 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
           className={view.you.ready ? '' : 'primary'}
           onClick={() => send({ kind: 'set-ready', ready: !view.you.ready })}
         >
-          {view.you.ready ? '✓ Bereit für nochmal' : '↻ Nochmal — ich bin dabei'}
+          <Icon name={view.you.ready ? 'check' : 'replay'} />{' '}
+          {view.you.ready ? 'Bereit für nochmal' : 'Nochmal — ich bin dabei'}
         </button>
         <p className="muted">
           {confirmed}/{crew.length} bereit

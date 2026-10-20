@@ -441,7 +441,7 @@ const PLAIN: Readonly<Partial<Record<Ref['kind'], { title: string; note: string 
   },
   panel: {
     title: 'Notventil',
-    note: 'Gehört zum Notfall der Mission; den bearbeitet Teil 2 des Editors.',
+    note: 'Gehört zum Notfall der Mission; dessen übrige Einstellungen bleiben, wie sie kamen.',
   },
 };
 

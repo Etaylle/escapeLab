@@ -1,4 +1,5 @@
 import {
+  defaultFields,
   freeId,
   newPuzzle,
   SOURCE_NAMES,
@@ -645,9 +646,10 @@ export function shiftPuzzle(draft: Draft, index: number, by: -1 | 1): Draft {
 }
 
 /**
- * Gives a puzzle another module. Its own fields belong to the old module and
- * go; its stations follow: one console keeps the first and drops the
- * console letter, two consoles letter the one there as console a.
+ * Gives a puzzle another module. Its own fields belong to the old module:
+ * the new module's take their place, at their defaults. Its stations
+ * follow: one console keeps the first and drops the console letter, two
+ * consoles letter the one there as console a.
  */
 export function retype(draft: Draft, index: number, type: StationType): Draft {
   const puzzle = draft.puzzles[index];
@@ -666,7 +668,7 @@ export function retype(draft: Draft, index: number, type: StationType): Draft {
   const others = draft.map.stations.filter((s) => s.puzzleId !== puzzle.id);
   return {
     ...draft,
-    puzzles: replaceAt(draft.puzzles, index, { ...puzzle, type, extra: {} }),
+    puzzles: replaceAt(draft.puzzles, index, { ...puzzle, type, fields: defaultFields(type) }),
     map: { ...draft.map, stations: [...others, ...kept] },
   };
 }

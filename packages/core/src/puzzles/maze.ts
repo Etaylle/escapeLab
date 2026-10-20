@@ -155,6 +155,17 @@ export const mazeModule: PuzzleModule<MazeDef, MazeState, MazeInput, MazeView> =
   type: 'maze',
   usesEdgework: false,
   wholeCrew: false,
+  fields: [
+    {
+      key: 'size',
+      label: 'Größe',
+      help: 'Felder je Seite des Labyrinths; je größer, desto länger der Weg.',
+      kind: 'int',
+      min: 4,
+      max: 8,
+      default: 6,
+    },
+  ],
   defSchema,
   inputSchema,
 

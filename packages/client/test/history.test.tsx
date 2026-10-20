@@ -8,7 +8,7 @@ import type {
   MissionStanding,
   MissionStats,
 } from '@escapelab/core';
-import { clock, recordLine, winShare } from '../src/runStats.js';
+import { clock, recordLine, recordParts, winShare } from '../src/runStats.js';
 import { HistoryBoard, HistoryScreen } from '../src/screens/History.js';
 import { JoinScreen } from '../src/screens/Join.js';
 import { Standing, type FinishedRun } from '../src/screens/Standing.js';
@@ -101,6 +101,18 @@ describe('the Bestenliste in words and numbers', () => {
     expect(recordLine(both)).toBe(`Beste Zeit 7:42 · 50${NBSP}% gewonnen`);
     expect(recordLine([level({ runs: 3 })])).toBe(`Noch keine Bestzeit · 0${NBSP}% gewonnen`);
     expect(recordLine([])).toBeNull();
+  });
+
+  it('halves that line where a card has two short lines for it: the time, then the share', () => {
+    expect(recordParts([level({ runs: 8, wins: 5, bestSeconds: 462 })])).toEqual([
+      'Beste Zeit 7:42',
+      `63${NBSP}% gewonnen`,
+    ]);
+    expect(recordParts([level({ runs: 3 })])).toEqual([
+      'Noch keine Bestzeit',
+      `0${NBSP}% gewonnen`,
+    ]);
+    expect(recordParts([])).toBeNull();
   });
 });
 

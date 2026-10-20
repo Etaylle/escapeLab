@@ -1,16 +1,29 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { isCustomMissionId, parseMission } from '@escapelab/core';
+import {
+  checkMission,
+  isCustomMissionId,
+  moduleFor,
+  parseMission,
+  type FieldSpec,
+} from '@escapelab/core';
 import {
   copyOf,
   customIdOf,
+  defaultFields,
+  defaultPenalty,
   draftFromJson,
   draftToJson,
+  fieldsFromJson,
+  fieldsToJson,
   freeId,
   newDraft,
+  newPuzzle,
   slugOf,
   STATION_TYPES,
+  twoConsoles,
   type Draft,
+  type StationType,
 } from '../src/editor/draft.js';
 
 const MISSIONS = new URL('../../../missions/', import.meta.url);
@@ -27,6 +40,55 @@ function loaded(data: unknown): Draft {
     throw new Error(result.problems.join('; '));
   }
   return result.draft;
+}
+
+/** An object without one of its keys. */
+function without(object: Record<string, unknown>, key: string): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(object).filter(([k]) => k !== key));
+}
+
+/**
+ * The smallest sound lab around a new puzzle of `type`: one room, two
+ * starts, its station — at two consoles far apart where it has two — a
+ * book with its rules unless the whole crew works it, and the sign.
+ */
+function labFor(type: StationType): Draft {
+  const puzzle = newPuzzle(type, []);
+  const blank = newDraft();
+  const stations = twoConsoles(type)
+    ? [
+        { puzzleId: puzzle.id, x: 2, y: 3, console: 'a' as const },
+        { puzzleId: puzzle.id, x: 9, y: 3, console: 'b' as const },
+      ]
+    : [{ puzzleId: puzzle.id, x: 6, y: 3 }];
+  const book = {
+    id: 'buch',
+    kind: 'book' as const,
+    label: 'HANDBUCH',
+    puzzleIds: [puzzle.id],
+    spots: [{ x: 6, y: 5 }],
+    needsKey: '',
+  };
+  return {
+    ...blank,
+    title: `Probe ${type}`,
+    puzzles: [puzzle],
+    map: {
+      ...blank.map,
+      tiles: [
+        '#'.repeat(12),
+        ...Array.from({ length: 5 }, () => `#${'.'.repeat(10)}#`),
+        '#'.repeat(12),
+      ],
+      spawns: [
+        { x: 1, y: 1 },
+        { x: 1, y: 2 },
+      ],
+      stations,
+      manuals: moduleFor(type).wholeCrew ? [] : [book],
+      edgeworkSign: { x: 10, y: 1 },
+    },
+  };
 }
 
 describe('slugOf and customIdOf', () => {
@@ -91,12 +153,11 @@ describe('draft ↔ JSON', () => {
     expect(again.id).toBe(customIdOf(original.title));
   });
 
-  it('keeps what part 1 does not show: module fields, drones, the emergency, listOrder', () => {
+  it('keeps what the editor does not show: drones, the emergency, listOrder, intro, lamps', () => {
     const blackout = shipped.find(({ name }) => name === 'blackout.json')?.data;
     const json = draftToJson(loaded(blackout)) as {
       listOrder: number;
       intro: unknown;
-      puzzles: Record<string, unknown>[];
       map: {
         drones: Record<string, unknown>[];
         sabotage: Record<string, unknown>;
@@ -105,12 +166,6 @@ describe('draft ↔ JSON', () => {
     };
     expect(json.listOrder).toBe(10);
     expect(json.intro).toEqual({ lightsSec: 3 });
-    expect(json.puzzles.find((p) => p['id'] === 'notstrom')).toMatchObject({
-      type: 'circuit',
-      wires: { min: 4, max: 6 },
-      shorts: 3,
-    });
-    expect(json.puzzles[0]).toMatchObject({ type: 'button-sync', style: 'lever' });
     expect(json.map.drones[0]).toMatchObject({ speed: 1.7, frozenByPlate: 'kameraplatte' });
     expect(json.map.sabotage).toMatchObject({
       mode: 'relay',
@@ -120,7 +175,57 @@ describe('draft ↔ JSON', () => {
     });
     expect(json.map.lamps).toHaveLength(5);
   });
+});
 
+describe('a puzzle’s own fields and penalty, draft ↔ JSON', () => {
+  it('reads a module’s own fields and the penalty into the puzzle, and writes them back', () => {
+    const blackout = shipped.find(({ name }) => name === 'blackout.json')?.data;
+    const draft = loaded(blackout);
+    expect(draft.puzzles.map((p) => [p.type, p.penaltySec, p.fields])).toEqual([
+      ['button-sync', null, { windowMs: 2000, style: 'lever' }],
+      ['circuit', 30, { wires: { min: 4, max: 6 }, shorts: 3, burnoutSec: 60 }],
+      ['signal', null, { stages: 4, length: 4, legend: true, fleetingFrom: 3 }],
+      ['maze', null, { size: 6 }],
+      ['morse', null, {}],
+      ['button-sync', null, { windowMs: 2000, style: 'button' }],
+    ]);
+    const json = draftToJson(draft) as { puzzles: Record<string, unknown>[] };
+    expect(json.puzzles[0]).toMatchObject({ type: 'button-sync', style: 'lever' });
+    expect(json.puzzles[1]).toMatchObject({ wires: { min: 4, max: 6 }, penaltySec: 30 });
+    // Left out of the file, the penalty is left to the module: no key, no number.
+    expect(json.puzzles[3]).toMatchObject({ type: 'maze', size: 6 });
+    expect(json.puzzles[3]).not.toHaveProperty('penaltySec');
+    expect(defaultPenalty('maze')).toBe(15);
+  });
+
+  it('reads a field that can be off and is left out as off, and leaves it out again', () => {
+    const json = draftToJson(labFor('button-sync')) as { puzzles: Record<string, unknown>[] };
+    const bare = { ...json, puzzles: json.puzzles.map((p) => without(p, 'windowMs')) };
+    const signal = draftToJson(labFor('signal')) as { puzzles: Record<string, unknown>[] };
+    const never = { ...signal, puzzles: signal.puzzles.map((p) => without(p, 'fleetingFrom')) };
+    const sync = loaded(bare).puzzles[0];
+    expect(sync?.fields).toEqual({ windowMs: null, style: 'button' });
+    expect(draftToJson(loaded(bare))).toEqual(bare);
+    expect(loaded(never).puzzles[0]?.fields).toMatchObject({ fleetingFrom: null });
+    // The schema's "off" for fleetingFrom is null, and so the file says it.
+    const written = draftToJson(loaded(never)) as { puzzles: Record<string, unknown>[] };
+    expect(written.puzzles[0]?.['fleetingFrom']).toBeNull();
+  });
+
+  it('turns away a puzzle field neither every puzzle nor its module knows', () => {
+    const json = draftToJson(labFor('maze')) as { puzzles: Record<string, unknown>[] };
+    const odd = { ...json, puzzles: json.puzzles.map((p) => ({ ...p, walls: 12, seed: 3 })) };
+    expect(draftFromJson(odd)).toEqual({
+      ok: false,
+      problems: [
+        'Rätsel „leitungsnetz“: unbekanntes Feld „walls“.',
+        'Rätsel „leitungsnetz“: unbekanntes Feld „seed“.',
+      ],
+    });
+  });
+});
+
+describe('draft ↔ JSON, unsound and broken', () => {
   it('leaves out of the file what the draft leaves empty', () => {
     const draft = newDraft();
     const json = draftToJson({
@@ -188,5 +293,102 @@ describe('draft ↔ JSON', () => {
     const copy = copyOf(loaded(blackout));
     expect(copy.title).toBe('Blackout im Labor (Kopie)');
     expect(draftToJson(copy)['id']).toBe('custom-blackout-im-labor-kopie');
+  });
+});
+
+describe.each(STATION_TYPES)('a new %s puzzle', (type) => {
+  it('starts with every field of its module at the default, the penalty left to it', () => {
+    const puzzle = newPuzzle(type, []);
+    expect(puzzle.penaltySec).toBeNull();
+    expect(puzzle.fields).toEqual(defaultFields(type));
+    expect(Object.keys(puzzle.fields)).toEqual(moduleFor(type).fields.map((f) => f.key));
+  });
+
+  it('makes a mission file the game takes, and reads back as it was', () => {
+    const draft = labFor(type);
+    const json = draftToJson(draft);
+    const check = checkMission(json);
+    expect(check.ok ? [] : check.issues).toEqual([]);
+    expect(loaded(json)).toEqual(draft);
+  });
+});
+
+describe('a module’s own fields in the file', () => {
+  const specs: FieldSpec[] = [
+    { key: 'size', label: 'Größe', help: 'h.', kind: 'int', min: 4, max: 8, default: 6 },
+    {
+      key: 'window',
+      label: 'Fenster',
+      help: 'h.',
+      kind: 'int',
+      min: 1,
+      max: 9,
+      default: 3,
+      off: 'omit',
+    },
+    { key: 'from', label: 'Ab', help: 'h.', kind: 'int', min: 1, max: 6, default: 3, off: 'null' },
+    { key: 'legend', label: 'Legende', help: 'h.', kind: 'bool', default: false },
+    {
+      key: 'mode',
+      label: 'Art',
+      help: 'h.',
+      kind: 'choice',
+      options: [
+        { value: 'a', label: 'A' },
+        { value: 'b', label: 'B' },
+      ],
+      default: 'a',
+    },
+    {
+      key: 'wires',
+      label: 'Drähte',
+      help: 'h.',
+      kind: 'range',
+      min: 3,
+      max: 6,
+      default: { min: 3, max: 6 },
+    },
+  ];
+
+  it('reads each left-out key as the file means it: off where it can be, else the default', () => {
+    expect(fieldsFromJson(specs, { type: 'x', size: 7, legend: true })).toEqual({
+      size: 7,
+      window: null,
+      from: null,
+      legend: true,
+      mode: 'a',
+      wires: { min: 3, max: 6 },
+    });
+  });
+
+  it('writes the listed fields only, and an empty one that can be off as null or no key', () => {
+    const fields = {
+      size: 5,
+      window: null,
+      from: null,
+      legend: false,
+      mode: 'b',
+      wires: { min: 4, max: 5 },
+      stray: 1,
+    };
+    expect(fieldsToJson(specs, fields)).toEqual({
+      size: 5,
+      from: null,
+      legend: false,
+      mode: 'b',
+      wires: { min: 4, max: 5 },
+    });
+    expect(fieldsToJson(specs, { ...fields, window: 4, from: 2 })).toMatchObject({
+      window: 4,
+      from: 2,
+    });
+  });
+
+  it('copies what it reads and writes, so the draft and the file never share an object', () => {
+    const file = { wires: { min: 4, max: 6 } };
+    const fields = fieldsFromJson(specs, file);
+    expect(fields['wires']).toEqual(file.wires);
+    expect(fields['wires']).not.toBe(file.wires);
+    expect(fieldsToJson(specs, fields)['wires']).not.toBe(fields['wires']);
   });
 });

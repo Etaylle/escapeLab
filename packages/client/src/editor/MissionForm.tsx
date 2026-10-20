@@ -8,8 +8,15 @@ import { messagesAt, type Validation } from './validate.js';
 interface Props {
   draft: Draft;
   validation: Validation;
+  /** a shared mission whose id, which the title gives, a mission on this server has already */
+  idTaken: boolean;
   onChange: (draft: Draft) => void;
 }
+
+/** Under the title of a shared mission whose id is taken here: the title is the way to another. */
+export const ID_TAKEN_NOTE =
+  'Diese Kennung hat hier schon eine Mission; Speichern ersetzt sie. ' +
+  'Ein anderer Titel gibt eine neue.';
 
 const clock = (sec: number): string =>
   `${Math.floor(sec / 60)}:${String(Math.max(0, sec % 60)).padStart(2, '0')} min`;
@@ -18,7 +25,7 @@ const clock = (sec: number): string =>
  * The mission's own fields, and the card it gets in the mission picker —
  * thumbnail, title, the line of facts — as the join screen will show it.
  */
-export function MissionForm({ draft, validation, onChange }: Props) {
+export function MissionForm({ draft, validation, idTaken, onChange }: Props) {
   const at = (path: string): string[] => messagesAt(validation, path);
   // The one rule on players has no field of its own in the file's paths.
   const crew = validation.findings.filter((f) => f.path === '' && f.text.startsWith('players:'));
@@ -39,6 +46,7 @@ export function MissionForm({ draft, validation, onChange }: Props) {
       <TextField
         label="Titel"
         value={draft.title}
+        note={idTaken ? ID_TAKEN_NOTE : undefined}
         onChange={(title) => onChange({ ...draft, title })}
         issues={at('title')}
       />

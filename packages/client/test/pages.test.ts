@@ -1,6 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { MODULES, type ManualBlock, type ManualSection } from '@escapelab/core';
+import {
+  MODULES,
+  moduleFor,
+  PATTERN_FIGURE,
+  type ManualBlock,
+  type ManualSection,
+} from '@escapelab/core';
 import {
   BOOK_PAGE,
   FIGURE_WIDTH,
@@ -251,6 +257,32 @@ describe('paginate', () => {
         expect(page.fragments.length).toBeGreaterThan(0);
       });
     });
+  });
+
+  it('sets the Signalkette’s legend, its key of patterns drawn, within the page', () => {
+    const signal = moduleFor('signal');
+    const def = signal.defSchema.parse({
+      type: 'signal',
+      id: 'kette',
+      title: 'Signalkette',
+      legend: true,
+      fleetingFrom: 3,
+    });
+    for (const reader of [false, true]) {
+      const manual = signal.manual(def as never);
+      const pages = paginate([{ title: '§2 — Signalkette', manual, reader }]);
+      const own = pages.filter((page) => page.section === 0);
+      const fragments = own.flatMap((page) => page.fragments);
+      expect(fragments.flatMap((f) => (f.kind === 'figure' ? [f.of] : []))).toEqual([
+        'signal',
+        PATTERN_FIGURE,
+      ]);
+      expect(fragments.flatMap((f) => (f.kind === 'table' ? f.rows : []))).toHaveLength(4);
+      own.forEach((page, i) => {
+        const room = i === own.length - 1 ? BOOK_PAGE.height + 1.5 : BOOK_PAGE.height;
+        expect(filled(page), `reader ${reader}, page ${i + 1}`).toBeLessThanOrEqual(room);
+      });
+    }
   });
 });
 

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
-import { tokenLabel, type SignalToken } from '@escapelab/core';
+import { SIGNAL_PATTERNS, tokenLabel, type SignalPattern, type SignalToken } from '@escapelab/core';
 import { Icon } from '../screens/Icon.js';
 import { play } from '../sounds.js';
 import { consoleName } from '../world/consoles.js';
@@ -36,23 +36,12 @@ const FORM_NAMES: Record<Form, string> = {
   quadrat: 'Quadrat',
 };
 
-/** How a sign's colour shows without its hue: printed over the form, darker. */
-export type Texture = 'plain' | 'dots' | 'stripes' | 'ring';
-
 /**
- * The texture each colour carries, so that nobody has to tell the colours
- * apart: red plain, blue dotted, green striped, yellow with a ring.
+ * The texture a sign carries over its form, darker: the pattern of its
+ * colour, the one the printed legend names beside the colour.
  */
-const TEXTURES: Record<Colour, Texture> = {
-  rot: 'plain',
-  blau: 'dots',
-  gruen: 'stripes',
-  gelb: 'ring',
-};
-
-/** The texture a sign carries, by its colour. */
-export function textureOf(token: SignalToken): Texture {
-  return TEXTURES[partsOf(token)[0]];
+export function textureOf(token: SignalToken): SignalPattern {
+  return SIGNAL_PATTERNS[partsOf(token)[0]];
 }
 
 /** The polygons' corners, clockwise on screen; the circle has none. */
@@ -140,7 +129,7 @@ const STRIPES: Record<Form, [Point, Point][]> = {
 const INK = 'rgba(6, 9, 12, 0.42)';
 
 /** A sign's texture over its form, by the texture its colour carries. */
-function TextureOver({ texture, form }: { texture: Texture; form: Form }) {
+function TextureOver({ texture, form }: { texture: SignalPattern; form: Form }) {
   const className = `signal-texture signal-texture--${texture}`;
   switch (texture) {
     case 'plain':
@@ -243,7 +232,7 @@ function Sign({ token }: { token: SignalToken }) {
       aria-label={tokenLabel(token)}
     >
       {FORMS[form](COLOURS[colour])}
-      <TextureOver texture={TEXTURES[colour]} form={form} />
+      <TextureOver texture={SIGNAL_PATTERNS[colour]} form={form} />
     </svg>
   );
 }

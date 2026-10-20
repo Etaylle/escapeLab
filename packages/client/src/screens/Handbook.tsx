@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { MissionInfo, MissionManual, MissionManualStation } from '@escapelab/core';
+import { Icon } from './Icon.js';
 import { Manual } from './Manual.js';
 
 interface Props {
@@ -80,7 +81,7 @@ export function HandbookScreen({ missions, missionId, selectMission, back }: Pro
           disabled={loaded.status !== 'ready'}
           onClick={() => window.print()}
         >
-          🖨 Drucken
+          <Icon name="printer" /> Drucken
         </button>
       </div>
       {loaded.status === 'loading' && <p className="muted">Lade Handbuch …</p>}

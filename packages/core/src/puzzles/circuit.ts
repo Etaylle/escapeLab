@@ -236,6 +236,37 @@ export const circuitModule: PuzzleModule<CircuitDef, CircuitState, CircuitInput,
   usesEdgework: true,
   wholeCrew: false,
   consoles: 2,
+  fields: [
+    {
+      key: 'wires',
+      label: 'Drähte',
+      help: 'So viele Drähte kann ein Lauf in den Kasten ziehen, von–bis.',
+      kind: 'range',
+      min: MIN_WIRES,
+      max: MAX_WIRES,
+      default: { min: MIN_WIRES, max: MAX_WIRES },
+    },
+    {
+      key: 'shorts',
+      label: 'Durchgebrannt ab Kurzschluss',
+      help:
+        'Ab diesem Kurzschluss brennt der Kasten durch: dieser und jeder weitere kostet ' +
+        'die Durchbrenn-Zeit.',
+      kind: 'int',
+      min: 2,
+      max: 5,
+      default: 3,
+    },
+    {
+      key: 'burnoutSec',
+      label: 'Durchbrenn-Zeit in Sekunden',
+      help: 'So viel kostet ein Kurzschluss, sobald der Kasten durchgebrannt ist.',
+      kind: 'int',
+      min: 1,
+      max: 600,
+      default: 60,
+    },
+  ],
   defSchema,
   inputSchema,
 

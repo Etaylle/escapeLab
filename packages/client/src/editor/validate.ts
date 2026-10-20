@@ -249,3 +249,10 @@ export function validateDraft(
 export function messagesAt(validation: Validation, path: string): string[] {
   return validation.findings.filter((f) => f.path === path).map((f) => f.message);
 }
+
+/** The messages about a field and every part of it: `wires` with `wires.min` and `wires.max`. */
+export function messagesUnder(validation: Validation, path: string): string[] {
+  return validation.findings
+    .filter((f) => f.path === path || f.path.startsWith(`${path}.`))
+    .map((f) => f.message);
+}

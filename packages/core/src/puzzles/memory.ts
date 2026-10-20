@@ -187,6 +187,7 @@ export const memoryModule: PuzzleModule<MemoryDef, MemoryState, MemoryInput, Mem
   type: 'memory',
   usesEdgework: false,
   wholeCrew: false,
+  fields: [],
   defSchema,
   inputSchema,
 

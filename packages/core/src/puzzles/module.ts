@@ -163,6 +163,38 @@ export const commonDefShape = {
 /** An object schema whose output is the def — zod can only discriminate on `type` in those. */
 export type DefSchema<Def> = z.ZodType<Def> & z.core.$ZodTypeDiscriminable;
 
+/**
+ * One field of a module's own def, as the mission editor offers it: the key
+ * in the def, a label and one line of help in German saying what the field
+ * changes in play, and the kind of input with its bounds and default.
+ *
+ * - `int`: a whole number from min to max. With `off`, the field may be left
+ *   empty, which the file says the way the schema means "off": null
+ *   (`'null'`) or no key at all (`'omit'`). A file without the key is off.
+ * - `bool`: ticked or not.
+ * - `choice`: one of the options, by value.
+ * - `range`: a `{ min, max }` pair of whole numbers, both from min to max.
+ *
+ * Every field's default is what a new puzzle of the module starts with;
+ * where the field cannot be off, it is also what the schema fills in for a
+ * file without the key.
+ */
+export type FieldSpec = { key: string; label: string; help: string } & (
+  | { kind: 'int'; min: number; max: number; default: number; off?: 'null' | 'omit' }
+  | { kind: 'bool'; default: boolean }
+  | {
+      kind: 'choice';
+      options: readonly { value: string; label: string }[];
+      default: string;
+    }
+  | {
+      kind: 'range';
+      min: number;
+      max: number;
+      default: { readonly min: number; readonly max: number };
+    }
+);
+
 /** What the views attach to every module's own part of the open puzzle. */
 export interface PuzzleViewCommon {
   index: number;
@@ -212,6 +244,12 @@ export interface PuzzleModule<
    * to stand at it together.
    */
   readonly wholeCrew: boolean;
+  /**
+   * The def's own fields as the mission editor offers them: one for every
+   * key of `defSchema` besides the common ones, in the order the form shows
+   * them; empty for a module with none.
+   */
+  readonly fields: readonly FieldSpec[];
   /**
    * 2 for a station with two consoles, a and b, in different places: the
    * open puzzle is one instance, each console shows its own part of it and

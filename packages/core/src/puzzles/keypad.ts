@@ -73,6 +73,7 @@ export const keypadModule: PuzzleModule<KeypadDef, KeypadState, KeypadInput, Key
   type: 'keypad',
   usesEdgework: false,
   wholeCrew: false,
+  fields: [],
   defSchema,
   inputSchema,
 
