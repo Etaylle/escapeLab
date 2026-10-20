@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import {
+  LEVER_FIGURE,
   PATTERN_FIGURE,
   SIGNAL_PATTERNS,
   type PuzzleDef,
@@ -362,6 +363,39 @@ function ButtonSync() {
   );
 }
 
+/** Where the main switch's two levers stand, across. */
+const LEVERS = [158, 218] as const;
+
+/**
+ * The main switch a sync station is drawn as where its style says lever: a
+ * plate over two levers side by side, each in its slot between AUS at the
+ * top and EIN at the foot, a lamp over each — the first lit, its partner
+ * there. Both stand at AUS.
+ */
+function LeverSwitch() {
+  return (
+    <>
+      <Housing x={108} width={160} />
+      <rect x={124} y={14} width={128} height={18} rx={2} {...TINT} />
+      <Lettering x={138} y={23} width={100} />
+      {LEVERS.map((x, i) => (
+        <g key={x}>
+          <Lamp x={x} y={45} r={4} lit={i === 0} />
+          <rect x={x - 6} y={58} width={12} height={66} rx={6} />
+          <Mark x={x + 21} y={68} size={7} anchor="start">
+            AUS
+          </Mark>
+          <Mark x={x + 21} y={122} size={7} anchor="start">
+            EIN
+          </Mark>
+          <path d={`M${x} 66V78`} strokeWidth={3} />
+          <rect x={x - 17} y={60} width={34} height={10} rx={3} {...TINT} />
+        </g>
+      ))}
+    </>
+  );
+}
+
 /** A Schalter on its plate around (x, 72): the lever up for AN, down for AUS. */
 function ToggleSwitch({ x, on }: { x: number; on: boolean }) {
   return (
@@ -660,8 +694,14 @@ interface Drawing {
   draw: () => ReactNode;
 }
 
-/** Every module the core knows has its drawing, and so has the Signalkette's key of patterns. */
-const DRAWINGS: Record<PuzzleDef['type'] | typeof PATTERN_FIGURE, Drawing> = {
+/**
+ * Every module the core knows has its drawing, and so have the Signalkette's
+ * key of patterns and the main switch a sync station may be built as.
+ */
+const DRAWINGS: Record<
+  PuzzleDef['type'] | typeof PATTERN_FIGURE | typeof LEVER_FIGURE,
+  Drawing
+> = {
   wiring: {
     label: 'Sicherungskasten: 4 Kabel übereinander, oben eine Kontrolllampe, ein Kabel durchtrennt',
     draw: Wiring,
@@ -703,6 +743,10 @@ const DRAWINGS: Record<PuzzleDef['type'] | typeof PATTERN_FIGURE, Drawing> = {
   'button-sync': {
     label: 'Großer Knopf unter 2 Lampen, eine je Druck',
     draw: ButtonSync,
+  },
+  [LEVER_FIGURE]: {
+    label: 'Hauptschalter: ein Schild über 2 Hebeln nebeneinander, über jedem Hebel eine Lampe',
+    draw: LeverSwitch,
   },
   relay: {
     label:

@@ -213,20 +213,20 @@ describe('markerTargets — what the player is pointed at', () => {
   });
 
   it('points at the exit once it opens', () => {
-    const map = mapWith({ exit: { x: 18, y: 6, open: true }, items: [item({})] });
+    const map = mapWith({ exit: { x: 18, y: 6, open: true, openedAt: 1, atExit: [] }, items: [item({})] });
     expect(markerTargets(map, YOU, HERE)).toEqual([
       { x: 18.5, y: 6.5, color: '#4ade80', label: 'AUSGANG' },
     ]);
   });
 
   it('ignores a closed exit', () => {
-    const map = mapWith({ exit: { x: 18, y: 6, open: false } });
+    const map = mapWith({ exit: { x: 18, y: 6, open: false, openedAt: null, atExit: [] } });
     expect(markerTargets(map, YOU, HERE)).toEqual([]);
   });
 
   it('an emergency overrides everything and shows every valve at once', () => {
     const map = mapWith({
-      exit: { x: 18, y: 6, open: true },
+      exit: { x: 18, y: 6, open: true, openedAt: 1, atExit: [] },
       items: [item({ carriedBy: YOU })],
       stations: [station(5, 9, 'armed')],
       sabotage: {

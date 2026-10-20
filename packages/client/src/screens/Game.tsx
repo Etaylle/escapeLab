@@ -7,7 +7,7 @@ import type {
   PlayerView,
   PuzzleView,
 } from '@escapelab/core';
-import { useKeys, useNow } from '../hooks.js';
+import { useKeys, useMedia, useNow } from '../hooks.js';
 import { airIcon, bannerFrom, noticeMs, radioNews, withNews, type Notice } from '../radio.js';
 import { useSolvedHold, type DeviceRun } from '../puzzles/Device.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
@@ -15,6 +15,8 @@ import { play } from '../sounds.js';
 import { radioChirp } from '../world/audio.js';
 import { opensLit, REVEAL_MS, useDarkSince, useRevealed } from '../world/coldOpen.js';
 import { consoleName } from '../world/consoles.js';
+import { escapeChecklist, escaping, type Mate } from '../world/escape.js';
+import { REDUCED_MOTION, veilOf, type Ending, type Finale } from '../world/finale.js';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
 import { toBring } from '../world/markers.js';
 import type { KnownPositions } from '../world/movement.js';
@@ -37,6 +39,8 @@ interface Props {
   pingsRef: React.MutableRefObject<MapPing[]>;
   chatsRef: React.MutableRefObject<ChatLine[]>;
   send: (msg: ClientMessage) => void;
+  /** the run's end, while the world still plays it on this screen (finale.ts); none before */
+  finale: Finale | null;
 }
 
 function formatRemaining(deadlineAt: number, now: number): string {
@@ -130,12 +134,21 @@ function RelayAlert({
 
 /**
  * The mission clock. Until `flashUntil` (epoch ms) — where it has just
- * started on this screen — its digits flash red, once.
+ * started on this screen — its digits flash red, once. It pulses red in the
+ * last minute, and all through the escape (`escaping`).
  */
-function Countdown({ deadlineAt, flashUntil }: { deadlineAt: number; flashUntil: number | null }) {
+function Countdown({
+  deadlineAt,
+  flashUntil,
+  escaping,
+}: {
+  deadlineAt: number;
+  flashUntil: number | null;
+  escaping: boolean;
+}) {
   const now = useNow(200);
   const left = deadlineAt - now;
-  const stage = left < 10_000 ? 'final' : left < 60_000 ? 'critical' : '';
+  const stage = left < 10_000 ? 'final' : left < 60_000 || escaping ? 'critical' : '';
   const start = flashUntil !== null && now < flashUntil ? ' countdown--start' : '';
   return <div className={`countdown ${stage}${start}`}>{formatRemaining(deadlineAt, now)}</div>;
 }
@@ -179,10 +192,10 @@ export function AlarmMarks({ alarms }: { alarms: PlayerView['alarms'] }) {
   );
 }
 
-/** Red edge glow while the clock runs out. */
-function CriticalVignette({ deadlineAt }: { deadlineAt: number }) {
+/** Red edge glow while the clock runs out, and all through the escape. */
+function CriticalVignette({ deadlineAt, escaping }: { deadlineAt: number; escaping: boolean }) {
   const now = useNow(500);
-  if (deadlineAt - now >= 60_000) {
+  if (deadlineAt - now >= 60_000 && !escaping) {
     return null;
   }
   return <div className="vignette" aria-hidden="true" />;
@@ -220,9 +233,11 @@ function Briefing({ view }: { view: PlayerView }) {
   );
 }
 
-/** Sounds, screen shake, alarm banner and the SYSTEM-ONLINE stamp. */
-function useFeedback(view: PlayerView): { shaking: boolean; alarmVisible: boolean; stamp: boolean } {
-  const [shaking, setShaking] = useState(false);
+/**
+ * Sounds, the alarm banner and the SYSTEM-ONLINE stamp; the world strobes and
+ * shakes at an alarm on its own (world/alarm.ts).
+ */
+function useFeedback(view: PlayerView): { alarmVisible: boolean; stamp: boolean } {
   const [alarmVisible, setAlarmVisible] = useState(false);
   const [stamp, setStamp] = useState(false);
   const prevPenalty = useRef(view.penaltySeq);
@@ -239,14 +254,9 @@ function useFeedback(view: PlayerView): { shaking: boolean; alarmVisible: boolea
   useEffect(() => {
     if (view.penaltySeq > prevPenalty.current) {
       prevPenalty.current = view.penaltySeq;
-      setShaking(true);
       setAlarmVisible(true);
-      const shakeTimer = setTimeout(() => setShaking(false), 600);
       const alarmTimer = setTimeout(() => setAlarmVisible(false), 4000);
-      return () => {
-        clearTimeout(shakeTimer);
-        clearTimeout(alarmTimer);
-      };
+      return () => clearTimeout(alarmTimer);
     }
     prevPenalty.current = view.penaltySeq;
     return undefined;
@@ -265,7 +275,7 @@ function useFeedback(view: PlayerView): { shaking: boolean; alarmVisible: boolea
     return undefined;
   }, [view.currentPuzzleIndex]);
 
-  return { shaking, alarmVisible, stamp };
+  return { alarmVisible, stamp };
 }
 
 /**
@@ -526,7 +536,7 @@ interface Goal {
 
 function goalOf(view: PlayerView, map: MapView): Goal {
   const armedTitle = map.stations.find((s) => s.status === 'armed')?.title ?? null;
-  const escaping = map.exit?.open === true;
+  const out = escaping(map);
   // What the station in front of the crew lacks, and what a later one will — hands are
   // free to carry it now.
   const parts = toBring(map);
@@ -542,12 +552,28 @@ function goalOf(view: PlayerView, map: MapView): Goal {
     title:
       view.puzzle !== null
         ? view.puzzle.title
-        : escaping
-          ? 'NOTAUSGANG — alle raus, JETZT!'
+        : out
+          ? 'ALLE ZUM NOTAUSGANG'
           : (armedTitle ?? 'Alle Stationen erledigt'),
-    exitCall: view.puzzle === null && escaping,
-    missing: escaping || errands.length === 0 ? null : errands.join(' · '),
+    exitCall: view.puzzle === null && out,
+    missing: out || errands.length === 0 ? null : errands.join(' · '),
   };
+}
+
+/** The escape's checklist under the goal: the crew by name, each ticked off on the hatch. */
+export function EscapeChecklist({ mates }: { mates: Mate[] }) {
+  const out = mates.filter((mate) => mate.out).length;
+  return (
+    <ul className="escape-list" aria-label={`Am Notausgang: ${out} von ${mates.length}`}>
+      {mates.map((mate) => (
+        <li key={mate.id} className={mate.out ? 'escape-mate escape-mate--out' : 'escape-mate'}>
+          <span className="crew-dot" style={{ background: mate.color }} aria-hidden="true" />
+          {mate.name}
+          {mate.out && <Icon name="check" />}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 /**
@@ -564,10 +590,13 @@ function PowerGoal({ view, map }: { view: PlayerView; map: MapView }) {
   );
 }
 
-/** The run's progress and what to do now: a LED a station, the goal line under it. */
-function StageGoal({ view, goal }: { view: PlayerView; goal: Goal }) {
+/**
+ * The run's progress and what to do now: a LED a station, the goal line
+ * under it — in the escape, the crew's checklist for the hatch.
+ */
+function StageGoal({ view, map, goal }: { view: PlayerView; map: MapView; goal: Goal }) {
   return (
-    <div className="stage-goal">
+    <div className={goal.exitCall ? 'stage-goal stage-goal--escape' : 'stage-goal'}>
       <div
         className="led-strip"
         aria-label={`Station ${view.currentPuzzleIndex + 1} von ${view.puzzleCount}`}
@@ -590,6 +619,9 @@ function StageGoal({ view, goal }: { view: PlayerView; goal: Goal }) {
         {goal.title}
       </h1>
       {goal.missing !== null && <span className="stage-sub">{goal.missing}</span>}
+      {goal.exitCall && map.exit !== null && (
+        <EscapeChecklist mates={escapeChecklist(view.players, map.exit)} />
+      )}
     </div>
   );
 }
@@ -616,7 +648,7 @@ export function StageTop({
   return (
     <div className="stage-top">
       {coldOpen.dark ? (
-        <StageGoal view={view} goal={goalOf(view, map)} />
+        <StageGoal view={view} map={map} goal={goalOf(view, map)} />
       ) : (
         <PowerGoal view={view} map={map} />
       )}
@@ -625,7 +657,11 @@ export function StageTop({
           <PowerStatus />
         ) : (
           view.deadlineAt !== null && (
-            <Countdown deadlineAt={view.deadlineAt} flashUntil={coldOpen.flashUntil} />
+            <Countdown
+              deadlineAt={view.deadlineAt}
+              flashUntil={coldOpen.flashUntil}
+              escaping={escaping(map)}
+            />
           )
         )}
         <AlarmMarks alarms={view.alarms} />
@@ -657,25 +693,72 @@ export function StageTop({
   );
 }
 
+/**
+ * The ending's last fade over the whole screen (finale.ts): to white for a
+ * run won, to black for one lost — timed from when the ending started on
+ * this screen, however late the veil went up.
+ */
+export function FinaleVeil({ ending, since }: { ending: Ending; since: number }) {
+  const reduced = useMedia(REDUCED_MOTION);
+  const [shown] = useState(() => Date.now());
+  const veil = veilOf(ending, reduced);
+  const timing = {
+    animationDelay: `${Math.round(since + veil.delay - shown)}ms`,
+    animationDuration: `${Math.round(veil.duration)}ms`,
+  };
+  return <div className={`finale-veil finale-veil--${veil.tone}`} style={timing} aria-hidden="true" />;
+}
+
 // --- screen ------------------------------------------------------------------
 
-export function GameScreen({
+/** The run frozen for a missing crew member: whom the crew waits for. */
+function PauseOverlay({ pausedFor }: { pausedFor: string[] }) {
+  return (
+    <div className="overlay pause" role="status">
+      <span className="kicker">MISSION PAUSIERT</span>
+      <h1>
+        <Icon name="pause" /> Verbindung verloren
+      </h1>
+      <p>
+        {pausedFor.length > 0
+          ? `Warten auf ${pausedFor.join(', ')} — Uhr, Patrouillen und Notfälle stehen still.`
+          : 'Warten auf die Crew — Uhr, Patrouillen und Notfälle stehen still.'}
+      </p>
+      <p className="muted">Wer getrennt wurde, lädt einfach die Seite neu und ist wieder dabei.</p>
+    </div>
+  );
+}
+
+/** What comes and goes over a run: the clock's red edge, the briefing, the stamp, the pause. */
+function RunOverlays({
   view,
-  roomCode,
-  positionsRef,
-  dronesRef,
-  pingsRef,
-  chatsRef,
-  send,
-}: Props) {
-  const { shaking, alarmVisible, stamp } = useFeedback(view);
-  const coldOpen = useColdOpen(view);
-  const notice = useNotices(view, coldOpen.gates);
-  const open = useOpened(view);
-  const station = useSolvedHold(open.station, view.currentPuzzleIndex);
-  const notes = useNotes(roomCode, view.you.id);
-  const closeModal = (): void => open.set({ operating: false, readingId: null });
-  useKeys(['n'], open.toggleNotes);
+  map,
+  coldOpen,
+  stamp,
+}: {
+  view: PlayerView;
+  map: MapView;
+  coldOpen: ColdOpen;
+  stamp: boolean;
+}) {
+  return (
+    <>
+      {view.deadlineAt !== null && (
+        <CriticalVignette deadlineAt={view.deadlineAt} escaping={escaping(map)} />
+      )}
+      {!coldOpen.intro && <Briefing view={view} />}
+      {stamp && (
+        <div className="overlay stamp" aria-hidden="true">
+          <span>✔ SYSTEM ONLINE</span>
+        </div>
+      )}
+      {view.pausedFor !== null && <PauseOverlay pausedFor={view.pausedFor} />}
+    </>
+  );
+}
+
+/** Escape closes what lies on top: the info panel, a panel or pages, then the notepad. */
+function useEscapeCloses(open: ReturnType<typeof useOpened>, closeModal: () => void): void {
   useEscape(() => {
     if (open.info) {
       open.set({ info: false });
@@ -685,42 +768,92 @@ export function GameScreen({
       open.set({ notes: false });
     }
   });
+}
+
+/** The station's panel or a source's pages over the world, as this player opened them. */
+function OverTheWorld({
+  view,
+  map,
+  station,
+  reading,
+  send,
+  onClose,
+}: {
+  view: PlayerView;
+  map: MapView;
+  station: PuzzleView | null;
+  reading: ManualHere | null;
+  send: (msg: ClientMessage) => void;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      {station !== null && (
+        <StationModal
+          puzzle={station}
+          run={{ alarms: view.penaltySeq, solved: view.currentPuzzleIndex }}
+          map={map}
+          edgework={view.edgework}
+          deadlineAt={view.deadlineAt}
+          send={send}
+          onClose={onClose}
+        />
+      )}
+      {reading !== null && (
+        <ReadingOverlay
+          key={reading.id}
+          manual={reading}
+          puzzle={view.puzzle}
+          current={view.currentPuzzleIndex}
+          mission={view.missionTitle}
+          map={map}
+          edgework={view.edgework}
+          onAskNote={() => send({ kind: 'request-hint' })}
+          onClose={onClose}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * The running mission. While its end plays in the world (`finale`), nothing
+ * lies over the world any more, the controls are gone and the HUD fades,
+ * until the veil closes over the screen.
+ */
+export function GameScreen({
+  view,
+  roomCode,
+  positionsRef,
+  dronesRef,
+  pingsRef,
+  chatsRef,
+  send,
+  finale,
+}: Props) {
+  const { alarmVisible, stamp } = useFeedback(view);
+  const coldOpen = useColdOpen(view);
+  const notice = useNotices(view, coldOpen.gates);
+  const open = useOpened(view);
+  const station = useSolvedHold(open.station, view.currentPuzzleIndex);
+  const notes = useNotes(roomCode, view.you.id);
+  const closeModal = (): void => open.set({ operating: false, readingId: null });
+  useKeys(['n'], open.toggleNotes);
+  useEscapeCloses(open, closeModal);
   const map = view.map;
   if (map === null) {
     return <p className="muted">Lade Mission …</p>;
   }
   const relay = map.sabotage?.relay;
   const missingLabel = coldOpen.dark ? goalOf(view, map).missing : null;
+  const live = finale === null;
+  const ending = finale === null ? 'game' : `game game--finale game--${finale.ending.split(':')[0]}`;
 
   return (
-    <div className={`game ${shaking ? 'shake' : ''}`}>
-      {view.deadlineAt !== null && <CriticalVignette deadlineAt={view.deadlineAt} />}
-      {!coldOpen.intro && <Briefing view={view} />}
-      {stamp && (
-        <div className="overlay stamp" aria-hidden="true">
-          <span>✔ SYSTEM ONLINE</span>
-        </div>
-      )}
-
-      {map.sabotage !== null && relay !== undefined && (
+    <div className={ending}>
+      {live && <RunOverlays view={view} map={map} coldOpen={coldOpen} stamp={stamp} />}
+      {live && map.sabotage !== null && relay !== undefined && (
         <RelayAlert sabotage={map.sabotage} relay={relay} send={send} />
-      )}
-
-      {view.pausedFor !== null && (
-        <div className="overlay pause" role="status">
-          <span className="kicker">MISSION PAUSIERT</span>
-          <h1>
-            <Icon name="pause" /> Verbindung verloren
-          </h1>
-          <p>
-            {view.pausedFor.length > 0
-              ? `Warten auf ${view.pausedFor.join(', ')} — Uhr, Patrouillen und Notfälle stehen still.`
-              : 'Warten auf die Crew — Uhr, Patrouillen und Notfälle stehen still.'}
-          </p>
-          <p className="muted">
-            Wer getrennt wurde, lädt einfach die Seite neu und ist wieder dabei.
-          </p>
-        </div>
       )}
 
       <div className="stage">
@@ -739,9 +872,11 @@ export function GameScreen({
           chatsRef={chatsRef}
           spectator={false}
           darkSince={coldOpen.darkSince}
+          finale={finale === null ? null : { ending: finale.ending, since: finale.since }}
           station={station}
           holdTips={notice !== null}
           inputLocked={
+            !live ||
             station !== null ||
             open.reading !== null ||
             view.pausedFor !== null ||
@@ -752,36 +887,18 @@ export function GameScreen({
           onOperate={() => open.set({ operating: true })}
           send={send}
         />
-        {open.notes && (
-          <Notepad
-            notes={notes}
-            edgework={view.edgework}
-            onClose={() => open.set({ notes: false })}
-          />
+        {live && open.notes && (
+          <Notepad notes={notes} edgework={view.edgework} onClose={() => open.set({ notes: false })} />
         )}
       </div>
 
-      {station !== null && (
-        <StationModal
-          puzzle={station}
-          run={{ alarms: view.penaltySeq, solved: view.currentPuzzleIndex }}
+      {live && (
+        <OverTheWorld
+          view={view}
           map={map}
-          edgework={view.edgework}
-          deadlineAt={view.deadlineAt}
+          station={station}
+          reading={open.reading}
           send={send}
-          onClose={closeModal}
-        />
-      )}
-      {open.reading !== null && (
-        <ReadingOverlay
-          key={open.reading.id}
-          manual={open.reading}
-          puzzle={view.puzzle}
-          current={view.currentPuzzleIndex}
-          mission={view.missionTitle}
-          map={map}
-          edgework={view.edgework}
-          onAskNote={() => send({ kind: 'request-hint' })}
           onClose={closeModal}
         />
       )}
@@ -798,7 +915,8 @@ export function GameScreen({
         onOpenInfo={() => open.set({ info: true })}
       />
 
-      {open.info && <InfoPanel view={view} onClose={() => open.set({ info: false })} />}
+      {live && open.info && <InfoPanel view={view} onClose={() => open.set({ info: false })} />}
+      {finale !== null && <FinaleVeil ending={finale.ending} since={finale.since} />}
     </div>
   );
 }

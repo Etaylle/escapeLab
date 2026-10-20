@@ -164,17 +164,30 @@ describe('Room', () => {
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
 
-    // All puzzles done: still playing, but the hatch is open.
+    // All puzzles done: still playing, but the hatch is open — since the last press — and
+    // nobody stands on it yet.
     const afterPuzzles = lastView(anna.messages);
     expect(afterPuzzles.phase).toBe('playing');
-    expect(afterPuzzles.map?.exit?.open).toBe(true);
+    const unlocked = afterPuzzles.events.find((e) => e.kind === 'escape')?.at;
+    expect(afterPuzzles.map?.exit).toMatchObject({ open: true, openedAt: unlocked, atExit: [] });
 
-    // One player at the hatch is not enough.
+    // One player at the hatch is not enough; the checklist ticks Ben off for both of them.
     moveTo(room, ben, 10, 1);
     expect(lastView(ben.messages).phase).toBe('playing');
+    expect(lastView(anna.messages).map?.exit?.atExit).toEqual([ben.playerId]);
+    // A step off the hatch takes him off the list again.
+    placeAt(room, ben, 10.5, 2.3);
+    expect(lastView(anna.messages).map?.exit?.atExit).toEqual([]);
+    moveTo(room, ben, 10, 1);
     moveTo(room, anna, 10, 1);
     expect(lastView(anna.messages).phase).toBe('won');
     expect(lastView(ben.messages).phase).toBe('won');
+    // The last view of the run had both on the hatch: the views and the escape agree.
+    const lastPlaying = anna.messages
+      .filter((m) => m.kind === 'view' && m.view.phase === 'playing')
+      .at(-1);
+    const both = [anna.playerId, ben.playerId].sort();
+    expect(lastPlaying?.kind === 'view' && lastPlaying.view.map?.exit?.atExit).toEqual(both);
     room.dispose();
   });
 

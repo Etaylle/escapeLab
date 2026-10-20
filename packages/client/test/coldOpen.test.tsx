@@ -14,6 +14,14 @@ import {
   STALE_MS,
 } from '../src/world/coldOpen.js';
 import { ceilingLights, lightLevels } from '../src/world/power.js';
+import {
+  BrokenContext,
+  fakeAudio,
+  freshAudio,
+  ramps,
+  started,
+  startedAt,
+} from './fakeAudio.js';
 import { mapWith } from './fixtures.js';
 
 const START = 1_000_000;
@@ -250,102 +258,9 @@ describe('the ceiling lights of the lab with its power on', () => {
   });
 });
 
-/** Every audio source the fake context was told to start, by what it is and when. */
-const started: { kind: string; at: number }[] = [];
-const ramps: { to: number; at: number }[] = [];
-
-class FakeParam {
-  value = 0;
-  setValueAtTime(): this {
-    return this;
-  }
-  linearRampToValueAtTime(): this {
-    return this;
-  }
-  exponentialRampToValueAtTime(to: number, at: number): this {
-    ramps.push({ to, at });
-    return this;
-  }
-  setTargetAtTime(): this {
-    return this;
-  }
-  cancelScheduledValues(): this {
-    return this;
-  }
-}
-
-class FakeNode {
-  connect<T>(next: T): T {
-    return next;
-  }
-  disconnect(): void {}
-}
-
-class FakeSource extends FakeNode {
-  onended: (() => void) | null = null;
-  constructor(readonly kind: string) {
-    super();
-  }
-  start(at = 0): void {
-    started.push({ kind: this.kind, at });
-  }
-  stop(): void {}
-}
-
-class FakeOscillator extends FakeSource {
-  type = 'sine';
-  frequency = new FakeParam();
-  constructor() {
-    super('tone');
-  }
-}
-
-/** Just enough of an AudioContext for the lab's sounds, its clock at 10 s. */
-class FakeContext {
-  state = 'running';
-  currentTime = 10;
-  sampleRate = 8000;
-  destination = new FakeNode();
-  onstatechange: (() => void) | null = null;
-  createGain() {
-    return Object.assign(new FakeNode(), { gain: new FakeParam() });
-  }
-  createOscillator() {
-    return new FakeOscillator();
-  }
-  createBiquadFilter() {
-    const filter = { type: '', frequency: new FakeParam(), Q: new FakeParam() };
-    return Object.assign(new FakeNode(), filter);
-  }
-  createBufferSource() {
-    return Object.assign(new FakeSource('noise'), { buffer: null, loop: false });
-  }
-  createDelay() {
-    return Object.assign(new FakeNode(), { delayTime: new FakeParam() });
-  }
-  createBuffer(_channels: number, length: number, rate: number) {
-    return { duration: length / rate, getChannelData: () => new Float32Array(length) };
-  }
-  resume() {
-    return Promise.resolve();
-  }
-}
-
-/** The audio module afresh, its engine made on the fake context. */
-async function freshAudio() {
-  vi.resetModules();
-  return import('../src/world/audio.js');
-}
-
-/** Whether a source of `kind` was started at `at` on the fake clock, give or take a millisecond. */
-const startedAt = (kind: string, at: number): boolean =>
-  started.some((s) => s.kind === kind && Math.abs(s.at - at) < 0.002);
-
 describe('the sounds of the cold open', () => {
   beforeEach(() => {
-    started.length = 0;
-    ramps.length = 0;
-    vi.stubGlobal('AudioContext', FakeContext);
+    fakeAudio();
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -390,14 +305,7 @@ describe('the sounds of the cold open', () => {
       none.leverChunk();
       none.stopPowerHum();
     }).not.toThrow();
-    vi.stubGlobal(
-      'AudioContext',
-      class extends FakeContext {
-        override createOscillator(): FakeOscillator {
-          throw new Error('no oscillators here');
-        }
-      },
-    );
+    vi.stubGlobal('AudioContext', BrokenContext);
     const broken = await freshAudio();
     expect(() => {
       broken.startPowerHum();

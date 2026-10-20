@@ -184,7 +184,13 @@ describe('mapped missions', () => {
     let state = started(withExit);
     // Escaping before the puzzles are done is rejected.
     expect(() => applyAction(state, { type: 'escaped', at: T0 + 1 })).toThrow(/verriegelt/);
-    expect(viewFor(state, 'p1').map?.exit).toEqual({ x: 1, y: 2, open: false });
+    expect(viewFor(state, 'p1').map?.exit).toEqual({
+      x: 1,
+      y: 2,
+      open: false,
+      openedAt: null,
+      atExit: [],
+    });
 
     state = bothPress(
       applyAction(state, { type: 'interact', playerId: 'p2', at: T0 + 1000 }),

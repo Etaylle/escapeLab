@@ -127,12 +127,13 @@ function watched(parts: Partial<SpectatorView>): SpectatorView {
 }
 
 const end = (view: PlayerView): string =>
-  renderToStaticMarkup(<EndScreen view={view} send={noop} leaveRoom={noop} />);
+  renderToStaticMarkup(<EndScreen view={view} fresh={false} send={noop} leaveRoom={noop} />);
 
 const spectate = (view: SpectatorView): string =>
   renderToStaticMarkup(
     <SpectateScreen
       view={view}
+      finale={null}
       positionsRef={{ current: { run: null, players: {} } }}
       dronesRef={{ current: {} }}
       pingsRef={{ current: [] }}
@@ -163,8 +164,9 @@ describe('the screens around a run', () => {
       expect(html).not.toMatch(EMOJI);
       expect(html).not.toMatch(PICTOGRAPH);
     }
-    expect(iconsAsWords(won)).toContain('<h1>[check] ENTKOMMEN</h1>');
-    expect(iconsAsWords(lost)).toContain('<h1>[cross] GESCHEITERT</h1>');
+    expect(won).toContain('<h1 class="end-title-word">GESCHAFFT</h1>');
+    expect(lost).toContain('<h1 class="end-title-word">ZEIT ABGELAUFEN</h1>');
+    expect(iconsAsWords(won)).toContain('[exit] NOTAUSGANG');
     const icons = [...iconsAsWords(won).matchAll(/<span class="report-icon">\[([a-z-]+)\]/g)];
     expect(icons.map((m) => m[1])).toEqual([
       'check',
@@ -196,8 +198,10 @@ describe('the screens around a run', () => {
     expect(iconsAsWords(states.paused)).toContain(
       '<div class="banner-result">[pause] Pausiert — warten auf Ben</div>',
     );
-    expect(iconsAsWords(states.won)).toContain('[check] Geschafft — Rang A</div>');
-    expect(iconsAsWords(states.lost)).toContain('[cross] Gescheitert</div>');
+    // A run that is over shows its title card where the world was.
+    expect(states.won).toContain('<h1 class="end-title-word">GESCHAFFT</h1>');
+    expect(states.won).toContain('<span class="grade-rank">A</span>');
+    expect(states.lost).toContain('<h1 class="end-title-word">ZEIT ABGELAUFEN</h1>');
     // The Laborkennung's lamps are lettering of the chip, no emoji.
     expect(states.paused).toContain('class="edgework"');
   });

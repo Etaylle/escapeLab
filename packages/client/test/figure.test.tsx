@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
+  LEVER_FIGURE,
   MODULES,
   moduleFor,
   PATTERN_FIGURE,
@@ -112,6 +113,27 @@ describe('Figure', () => {
     expect(dots.match(/<circle [^>]*r="1.5"/g)?.length).toBeGreaterThan(12);
     expect(stripes.match(/M[\d.]+ [\d.]+L/g)).toHaveLength(5);
     expect(ring).toMatch(/<circle cx="317" cy="52" r="8" stroke-width="2.6"><\/circle>/);
+  });
+
+  it('draws a main switch for the lever its manual names: a plate, two levers, AUS and EIN', () => {
+    const lever = puzzleDefSchema.parse({ type: 'button-sync', id: 'n', title: 'N', style: 'lever' });
+    const [figure] = moduleFor(lever.type)
+      .manual(lever)
+      .flatMap((section) => section.blocks)
+      .filter((block) => block.kind === 'figure');
+    expect(figure).toMatchObject({ of: LEVER_FIGURE, caption: 'Abb. 1 — Hauptschalter mit Hebeln' });
+    const { html, label } = drawing(LEVER_FIGURE);
+    expect(html).toMatch(/^<svg class="figure" viewBox="0 0 376 140" role="img" aria-label="/);
+    expect(label).toBe(
+      'Hauptschalter: ein Schild über 2 Hebeln nebeneinander, über jedem Hebel eine Lampe',
+    );
+    expect(label).not.toBe(drawing('button-sync').label);
+    expect(html).not.toContain(`>${LEVER_FIGURE}</text>`);
+    expect(html).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i);
+    const lettering = [...html.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
+    expect(lettering).toEqual(['AUS', 'EIN', 'AUS', 'EIN']);
+    // Two handles, each a bar across its slot.
+    expect(html.match(/<rect [^>]*width="34" height="10"/g)).toHaveLength(2);
   });
 
   it('frames a device it has no drawing for, naming its type, and never throws', () => {

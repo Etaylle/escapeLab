@@ -1,6 +1,7 @@
 import { CREW_COLORS } from '@escapelab/core';
 import {
   drawDoor,
+  drawExitHatch,
   drawManualObject,
   drawPlate,
   drawScientist,
@@ -9,7 +10,6 @@ import {
   worldText,
   type WorldText,
 } from '../world/art.js';
-import { drawExit } from '../world/GameWorld.js';
 import { drawCarryable, drawDropZone, drawDroneBody, drawSabotagePanel } from '../world/hazards.js';
 import type { Draft, DraftDrone, Tile } from './draft.js';
 import { mapSize, tilesOf, type Pending, type Ref, type Tool } from './tools.js';
@@ -179,7 +179,7 @@ function paintMarks(ctx: Ctx, draft: Draft, text: WorldText): void {
   }
   const exit = map.exit;
   if (exit !== undefined) {
-    at(ctx, exit.x + 0.5, exit.y + 0.5, () => drawExit(ctx, true, STILL));
+    at(ctx, exit.x + 0.5, exit.y + 0.5, () => drawExitHatch(ctx, { open: 1, pulse: STILL }));
   }
   for (const panel of map.sabotage?.panels ?? []) {
     at(ctx, panel.x + 0.5, panel.y + 0.5, () => drawSabotagePanel(ctx, false, STILL));
@@ -389,7 +389,7 @@ const GLYPHS: Readonly<Record<Tool, Glyph>> = {
   ),
   sign: centred((ctx) => drawSign(ctx, { label: '', seen: false, pulse: STILL })),
   label: (ctx) => paintGlyphMark(ctx, 'label'),
-  exit: centred((ctx) => drawExit(ctx, true, STILL)),
+  exit: centred((ctx) => drawExitHatch(ctx, { open: 1, pulse: STILL })),
   item: centred((ctx) => drawCarryable(ctx, { label: '', pulse: STILL, carried: false })),
   drone: centred((ctx) => drawDroneBody(ctx, STILL_DRONE, STILL)),
 };

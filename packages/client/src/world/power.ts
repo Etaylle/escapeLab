@@ -15,8 +15,24 @@ type PowerMap = Pick<MapView, 'tiles' | 'width' | 'height'>;
 const FIXTURE_SPACING = 3;
 /** How far a ceiling light reaches, in tiles; walls stop it. */
 export const POOL_REACH = 3.2;
-/** The warm light of the lamps, and how strong it falls on the floor between them and under one. */
-const WARM = [255, 214, 168] as const;
+/** A light's colour, red, green and blue. */
+export type Tint = readonly [number, number, number];
+/** The ceiling lights in one colour, and how strong their pools fall against the warm ones. */
+export interface CeilingLight {
+  tint: Tint;
+  strength: number;
+}
+/** The warm light of the lamps with the power on … */
+export const WARM: CeilingLight = { tint: [255, 214, 168], strength: 1 };
+/** … and the red they burn in once the escape's siren sounds: stronger, a red you notice. */
+export const ALARM_RED: CeilingLight = { tint: [255, 64, 46], strength: 1.8 };
+/** The tint `t` of the way from `from` to `to`, each part rounded. */
+export function mixTint(from: Tint, to: Tint, t: number): Tint {
+  const mix = (a: number, b: number): number => Math.round(a + (b - a) * t);
+  return [mix(from[0], to[0]), mix(from[1], to[1]), mix(from[2], to[2])];
+}
+
+/** How strong it falls on the floor between the lamps, and under one. */
 const WASH_ALPHA = 0.04;
 const POOL_ALPHA = 0.16;
 
@@ -74,11 +90,12 @@ export function lightLevels(map: PowerMap): number[][] {
 }
 
 /**
- * The ceiling lights' pools for a map, one pixel a tile: a faint warm wash
- * over the floor and more under every light. Drawn scaled up over the
- * world, smoothly, with 'lighter'.
+ * The pools of the ceiling `light` for a map, one pixel a tile: a faint wash
+ * over the floor and more under every lamp, in its colour and strength.
+ * Drawn scaled up over the world, smoothly, with 'lighter'.
  */
-export function warmLayer(map: PowerMap): HTMLCanvasElement {
+export function ceilingLayer(map: PowerMap, light: CeilingLight): HTMLCanvasElement {
+  const { tint, strength } = light;
   const canvas = document.createElement('canvas');
   canvas.width = map.width;
   canvas.height = map.height;
@@ -91,10 +108,11 @@ export function warmLayer(map: PowerMap): HTMLCanvasElement {
     row.forEach((level, x) => {
       const i = (y * map.width + x) * 4;
       const floor = map.tiles[y]?.charAt(x) === '.';
-      image.data[i] = WARM[0];
-      image.data[i + 1] = WARM[1];
-      image.data[i + 2] = WARM[2];
-      image.data[i + 3] = floor ? Math.round(255 * (WASH_ALPHA + POOL_ALPHA * level)) : 0;
+      image.data[i] = tint[0];
+      image.data[i + 1] = tint[1];
+      image.data[i + 2] = tint[2];
+      const alpha = (WASH_ALPHA + POOL_ALPHA * level) * strength;
+      image.data[i + 3] = floor ? Math.round(255 * alpha) : 0;
     });
   });
   ctx.putImageData(image, 0, 0);

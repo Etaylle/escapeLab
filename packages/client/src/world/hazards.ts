@@ -275,6 +275,41 @@ function drawFrozenLock(ctx: CanvasRenderingContext2D): void {
 }
 
 /**
+ * The „!" a drone wears for a second after an alarm (alarm.ts): a red badge
+ * over it, upright whichever way it faces. It pops up at once and fades in
+ * its last quarter; `age` runs from 0 to 1 over its second. Anchor: the
+ * drone's position, scaled to tile units.
+ */
+export function drawAlarmMark(ctx: CanvasRenderingContext2D, age: number): void {
+  if (age < 0 || age >= 1) {
+    return;
+  }
+  const pop = 1 + 0.45 * Math.max(0, 1 - age * 8);
+  ctx.save();
+  ctx.globalAlpha *= Math.min(1, (1 - age) * 4);
+  ctx.translate(0, -0.66);
+  ctx.scale(pop, pop);
+  ctx.fillStyle = '#ef4444';
+  ctx.strokeStyle = '#2a0707';
+  ctx.lineWidth = 0.035;
+  ctx.beginPath();
+  ctx.moveTo(-0.07, 0.15);
+  ctx.lineTo(0, 0.29);
+  ctx.lineTo(0.07, 0.15);
+  ctx.arc(0, 0, 0.19, Math.PI * 0.32, Math.PI * 0.68, true);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#fff7f7';
+  ctx.beginPath();
+  ctx.roundRect(-0.032, -0.125, 0.064, 0.15, 0.02);
+  ctx.moveTo(0.036, 0.085);
+  ctx.arc(0, 0.085, 0.036, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
  * The drone itself: dark chassis, a glowing lens and a blinking beacon.
  * Frozen by its plate it hangs dimmed, lens grey and beacon off, under a lock.
  */

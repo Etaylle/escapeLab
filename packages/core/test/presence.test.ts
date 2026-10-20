@@ -76,6 +76,7 @@ describe('presence from the server', () => {
       stations: { kabel: ['p1', 'p2'] },
       manuals: { terminal: ['p3'] },
       signSeen: ['p2'],
+      exit: [],
     });
     const ended = applyAction(started(twoBooks), { type: 'time-expired', at: T0 + 600_000 });
     expect(standing(ended, { stations: { kabel: ['p1'] } }).presence).toEqual(ended.presence);
@@ -90,7 +91,7 @@ describe('presence from the server', () => {
       { type: 'rematch', playerId: 'p1', at: T0 + 700_000, seed: 3 },
     ];
     const again = rematch.reduce(applyAction, lost);
-    const empty = { stations: {}, manuals: {}, signSeen: [] };
+    const empty = { stations: {}, manuals: {}, signSeen: [], exit: [] };
     expect(again.presence).toEqual(empty);
     expect(applyAction(lost, { type: 'back-to-lobby', playerId: 'p1' }).presence).toEqual(empty);
   });

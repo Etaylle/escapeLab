@@ -106,8 +106,43 @@ const BANG_LEVEL = 0.07;
 const CLICK_LEVEL = 0.04;
 const LEVER_LEVEL = 0.06;
 
-/** The power hum's nodes: its voices, the stage that fades and sags it, and its outlet. */
-interface PowerHum {
+/** The alarm's horn: two detuned saws in a horn's band. */
+const KLAXON_LEVEL = 0.045;
+const KLAXON_PITCH = [392, 396] as const;
+/** A short alarm: two blasts [s from now, strength, pitch factor]. */
+const KLAXON_BLASTS = [
+  [0, 1, 1],
+  [0.22, 0.85, 0.94],
+] as const;
+/** A run lost to its alarms: blast after blast, each weaker and lower, ~1.5 s. */
+const KLAXON_FADING = [
+  [0, 1, 1],
+  [0.3, 0.75, 0.95],
+  [0.6, 0.5, 0.89],
+  [0.9, 0.3, 0.83],
+  [1.2, 0.16, 0.76],
+] as const;
+/** The escape's siren: quiet under everything, two tones taking turns. */
+const SIREN_LEVEL = 0.08;
+const SIREN_TONES = [440, 587] as const;
+/** Each tone holds for half a period of this, Hz. */
+const SIREN_RATE = 0.8;
+const SIREN_FADE_IN = 0.4;
+const SIREN_FADE_OUT = 0.3;
+/** The hatch grinding open, s: as long as the picture takes (escape.ts). */
+const GRIND_SECONDS = 2;
+const GRIND_LEVEL = 0.05;
+/** The end of a run won: a C major chord over a breath of wind. */
+const CHORD_LEVEL = 0.045;
+const CHORD_NOTES = [261.63, 329.63, 392, 523.25] as const;
+const WIND_LEVEL = 0.03;
+const WIND_SECONDS = 3.6;
+
+/**
+ * A sound that runs until it is stopped — the power hum, the siren: its
+ * sources, the stage that fades it, and its outlet.
+ */
+interface Loop {
   readonly sources: OscillatorNode[];
   readonly level: GainNode;
   readonly out: GainNode;
@@ -127,7 +162,8 @@ let engine: Engine | null = null;
 let engineUnavailable = false;
 let noise: AudioBuffer | null = null;
 let ambience: Ambience | null = null;
-let powerHum: PowerHum | null = null;
+let powerHum: Loop | null = null;
+let siren: Loop | null = null;
 let distantTimer: ReturnType<typeof setTimeout> | undefined;
 /** Current tension level, so repeated calls do not re-ramp the same value. */
 let tension = 0;
@@ -665,7 +701,276 @@ export function leverChunk(): void {
   }
 }
 
-function buildPowerHum(audio: Engine): PowerHum {
+/** A short klaxon for an alarm, ~0.4 s: two harsh blasts of a horn, the second a little lower. */
+export function klaxon(): void {
+  try {
+    const audio = runningEngine();
+    if (audio === null) return;
+    hornBlasts(audio, KLAXON_BLASTS);
+  } catch {
+    // Deliberately silent: the alarm strobes on screen as well.
+  }
+}
+
+/**
+ * The klaxon of a run lost to its alarms, ~1.5 s: blast after blast, each weaker and lower, as
+ * the emergency supply gives out.
+ */
+export function klaxonFade(): void {
+  try {
+    const audio = runningEngine();
+    if (audio === null) return;
+    hornBlasts(audio, KLAXON_FADING);
+  } catch {
+    // Deliberately silent: the card says it as well.
+  }
+}
+
+/** A room's lights coming on: the relay pulling in, then the faint tick of the tubes striking. */
+export function lightsOnClick(): void {
+  try {
+    const audio = runningEngine();
+    if (audio === null) return;
+    const { ctx, master } = audio;
+    const t = ctx.currentTime + LOOKAHEAD;
+    relayClick(ctx, master, t);
+    const out = outlet(ctx, master, CLICK_LEVEL * 0.6);
+    const strikeUp = tone(ctx, out, {
+      type: 'sine',
+      at: t + 0.12,
+      from: 5200,
+      to: 4900,
+      peak: 0.3,
+      attack: 0.002,
+      hold: 0,
+      decay: 0.08,
+    });
+    onAllEnded([strikeUp], () => out.disconnect());
+  } catch {
+    // Deliberately silent: the room lights up on screen as well.
+  }
+}
+
+/**
+ * Idempotent. The escape's siren: two tones taking turns, high and low, looping quietly under
+ * everything — fading in over ~0.4 s — until `stopSiren` ends it.
+ */
+export function startSiren(): void {
+  try {
+    if (siren !== null) return;
+    const audio = getEngine();
+    if (audio === null || audio.ctx.state === 'closed') return;
+    unlock();
+    siren = buildSiren(audio);
+  } catch {
+    // Deliberately silent: the hatch and the red light say it as well.
+  }
+}
+
+/** Fades the siren out in ~0.3 s and stops it. Safe when none plays. */
+export function stopSiren(): void {
+  try {
+    const current = siren;
+    siren = null;
+    if (current !== null && engine !== null) {
+      const now = engine.ctx.currentTime;
+      const level = current.level.gain.value;
+      current.level.gain.cancelScheduledValues(now);
+      windDown(current, now, SIREN_FADE_OUT, 1, level);
+    }
+  } catch {
+    // Deliberately silent: the siren's nodes are released with the context at the latest.
+  }
+}
+
+/**
+ * The hatch grinding open, ~2 s: steel dragging on steel in jerks over a straining motor, then
+ * the leaves striking home with a clunk.
+ */
+export function exitGrind(): void {
+  try {
+    const audio = runningEngine();
+    if (audio === null) return;
+    const { ctx } = audio;
+    const t = ctx.currentTime + LOOKAHEAD;
+    const out = outlet(ctx, audio.master, GRIND_LEVEL);
+    const sources = [...scrape(ctx, out, t), motor(ctx, out, t)];
+    const end = t + GRIND_SECONDS;
+    sources.push(
+      tone(ctx, out, {
+        type: 'sine',
+        at: end,
+        from: 92,
+        to: 38,
+        peak: 1,
+        attack: 0.003,
+        hold: 0.03,
+        decay: 0.45,
+      }),
+    );
+    onAllEnded(sources, () => out.disconnect());
+    strike(ctx, audio.master, end, 110, GRIND_LEVEL * 0.6);
+  } catch {
+    // Deliberately silent: the hatch opens on screen as well.
+  }
+}
+
+/** The end of a run won, ~3.6 s: a soft major chord swelling and dying away over a breath of wind. */
+export function victoryChord(): void {
+  try {
+    const audio = runningEngine();
+    if (audio === null) return;
+    const t = audio.ctx.currentTime + LOOKAHEAD;
+    chord(audio.ctx, audio.master, t);
+    wind(audio.ctx, audio.master, t);
+  } catch {
+    // Deliberately silent: the card says it as well.
+  }
+}
+
+/** Horn blasts from now, each [s from now, strength 0–1, pitch factor], through a horn's band. */
+function hornBlasts(audio: Engine, shots: readonly (readonly [number, number, number])[]): void {
+  const { ctx } = audio;
+  const t = ctx.currentTime + LOOKAHEAD;
+  const out = outlet(ctx, audio.master, KLAXON_LEVEL);
+  const horn = biquad(ctx, 'bandpass', 900, 1.3);
+  horn.connect(out);
+  const sources = shots.flatMap(([delay, strength, pitch]) => {
+    const level = gain(ctx, 0);
+    applyEnvelope(level.gain, t + delay, { peak: strength, attack: 0.012, hold: 0.13, decay: 0.05 });
+    level.connect(horn);
+    return KLAXON_PITCH.map((frequency) => {
+      const saw = ctx.createOscillator();
+      saw.type = 'sawtooth';
+      saw.frequency.setValueAtTime(frequency * pitch, t + delay);
+      saw.connect(level);
+      saw.start(t + delay);
+      saw.stop(t + delay + 0.22);
+      return saw;
+    });
+  });
+  onAllEnded(sources, () => out.disconnect());
+}
+
+function buildSiren(audio: Engine): Loop {
+  const { ctx } = audio;
+  const t = ctx.currentTime;
+  const out = outlet(ctx, audio.master, SIREN_LEVEL);
+  const level = gain(ctx, 0);
+  level.gain.setValueAtTime(0, t);
+  level.gain.linearRampToValueAtTime(1, t + SIREN_FADE_IN);
+  level.connect(out);
+  const [low, high] = SIREN_TONES;
+  const voice = ctx.createOscillator();
+  voice.type = 'triangle';
+  voice.frequency.value = (low + high) / 2;
+  // A square wave swings the pitch from one tone to the other; smoothed, so each turn glides.
+  const turns = ctx.createOscillator();
+  turns.type = 'square';
+  turns.frequency.value = SIREN_RATE;
+  const glide = biquad(ctx, 'lowpass', 25, 0);
+  const swing = gain(ctx, (high - low) / 2);
+  chain(turns, glide, swing);
+  swing.connect(voice.frequency);
+  chain(voice, biquad(ctx, 'lowpass', 1800, 0), level);
+  voice.start(t);
+  turns.start(t);
+  return { sources: [voice, turns], level, out };
+}
+
+/** Steel dragging on steel: noise in a low band, chopped into stick-slip jerks that speed up. */
+function scrape(ctx: AudioContext, dest: AudioNode, at: number): AudioScheduledSourceNode[] {
+  const end = at + GRIND_SECONDS;
+  const drag = noiseBurst(ctx, at, GRIND_SECONDS);
+  const chopper = gain(ctx, 0.5);
+  const slip = ctx.createOscillator();
+  slip.type = 'sawtooth';
+  slip.frequency.setValueAtTime(9, at);
+  slip.frequency.linearRampToValueAtTime(16, end);
+  const depth = gain(ctx, 0.5);
+  chain(slip, depth);
+  depth.connect(chopper.gain);
+  const swell = gain(ctx, 0);
+  swell.gain.setValueAtTime(0, at);
+  swell.gain.linearRampToValueAtTime(0.9, at + 0.15);
+  swell.gain.setValueAtTime(0.9, end - 0.2);
+  swell.gain.linearRampToValueAtTime(0, end);
+  chain(drag, biquad(ctx, 'bandpass', 380, 2.5), chopper, swell, dest);
+  slip.start(at);
+  slip.stop(end);
+  return [drag, slip];
+}
+
+/** The motor straining under the hatch: a low saw climbing as the leaves give way. */
+function motor(ctx: AudioContext, dest: AudioNode, at: number): OscillatorNode {
+  const end = at + GRIND_SECONDS;
+  const saw = ctx.createOscillator();
+  saw.type = 'sawtooth';
+  saw.frequency.setValueAtTime(40, at);
+  saw.frequency.linearRampToValueAtTime(58, end);
+  const level = gain(ctx, 0);
+  level.gain.setValueAtTime(0, at);
+  level.gain.linearRampToValueAtTime(0.5, at + 0.3);
+  level.gain.linearRampToValueAtTime(0, end);
+  chain(saw, biquad(ctx, 'lowpass', 260, 0), level, dest);
+  saw.start(at);
+  saw.stop(end + 0.02);
+  return saw;
+}
+
+/** C major, spread over two octaves: each note a sine with a triangle above, 50 ms apart. */
+function chord(ctx: AudioContext, dest: AudioNode, at: number): void {
+  const out = outlet(ctx, dest, CHORD_LEVEL);
+  const warm = biquad(ctx, 'lowpass', 2400, 0);
+  warm.connect(out);
+  const voices = CHORD_NOTES.flatMap((frequency, i) => [
+    tone(ctx, warm, {
+      type: 'sine',
+      at: at + i * 0.05,
+      from: frequency,
+      to: frequency,
+      peak: 0.5,
+      attack: 0.09,
+      hold: 0.5,
+      decay: 2.3,
+    }),
+    tone(ctx, warm, {
+      type: 'triangle',
+      at: at + i * 0.05,
+      from: frequency * 2,
+      to: frequency * 2,
+      peak: 0.12,
+      attack: 0.09,
+      hold: 0.3,
+      decay: 1.6,
+    }),
+  ]);
+  onAllEnded(voices, () => out.disconnect());
+}
+
+/** Wind outside: noise in a band that drifts up and back while it swells and dies away. */
+function wind(ctx: AudioContext, dest: AudioNode, at: number): void {
+  const end = at + WIND_SECONDS;
+  const out = outlet(ctx, dest, WIND_LEVEL);
+  const air = ctx.createBufferSource();
+  air.buffer = noiseBuffer(ctx);
+  air.loop = true;
+  const band = biquad(ctx, 'bandpass', 420, 0.8);
+  band.frequency.setValueAtTime(420, at);
+  band.frequency.linearRampToValueAtTime(900, at + 1.6);
+  band.frequency.linearRampToValueAtTime(520, end);
+  const swell = gain(ctx, 0);
+  swell.gain.setValueAtTime(0, at);
+  swell.gain.linearRampToValueAtTime(1, at + 1);
+  swell.gain.linearRampToValueAtTime(0.6, at + 2.2);
+  swell.gain.linearRampToValueAtTime(0, end);
+  chain(air, band, swell, out);
+  air.start(at);
+  air.stop(end + 0.05);
+  onAllEnded([air], () => out.disconnect());
+}
+
+function buildPowerHum(audio: Engine): Loop {
   const { ctx } = audio;
   const t = ctx.currentTime;
   const out = outlet(ctx, audio.master, POWER_LEVEL);
@@ -698,7 +1003,7 @@ function sag(param: AudioParam, at: number, drops: BlackoutCue['drops']): void {
  * The hum dies from `at` over `seconds`, from `level` down to silence, its pitch falling to
  * `fall` times, and stops.
  */
-function windDown(hum: PowerHum, at: number, seconds: number, fall: number, level = 1): void {
+function windDown(hum: Loop, at: number, seconds: number, fall: number, level = 1): void {
   const end = at + seconds;
   hum.level.gain.setValueAtTime(Math.max(SILENCE, level), at);
   hum.level.gain.exponentialRampToValueAtTime(SILENCE, end);

@@ -80,6 +80,31 @@ function press(
   };
 }
 
+/**
+ * The drawing a main switch's manual opens on — a plate over a lever for each
+ * of the crew — by the figure id the client draws it for. The button's is
+ * the module type, as every module's.
+ */
+export const LEVER_FIGURE = 'button-sync-lever';
+
+/** What the manual's opening says the device is, and how the crew works it, by its look. */
+const DEVICE: Record<ButtonSyncDef['style'], { figure: string; caption: string; text: string }> = {
+  button: {
+    figure: 'button-sync',
+    caption: 'Pult mit Synchrontaste',
+    text:
+      'Eine Taste für die ganze Crew: Jedes Crewmitglied steht dabei am Pult und drückt sie ' +
+      'einmal.',
+  },
+  lever: {
+    figure: LEVER_FIGURE,
+    caption: 'Hauptschalter mit Hebeln',
+    text:
+      'Ein Hebel je Crewmitglied: Jedes Crewmitglied steht dabei am Schalter und legt seinen ' +
+      'Hebel einmal um.',
+  },
+};
+
 /** "2,5 Sekunden" for 2500 ms, "1 Sekunde" for 1000 — German decimal comma. */
 const duration = (ms: number): string =>
   `${String(ms / 1000).replace('.', ',')} Sekunde${ms === 1000 ? '' : 'n'}`;
@@ -179,17 +204,13 @@ export const buttonSyncModule: PuzzleModule<
 
   manual(def) {
     const { rules, example } = printedRules(def.windowMs);
+    const device = DEVICE[def.style];
     return [
       {
         heading: 'Synchronschaltung',
         blocks: [
-          deviceFigure('button-sync', 'Pult mit Synchrontaste'),
-          {
-            kind: 'p',
-            text:
-              'Eine Taste für die ganze Crew: Jedes Crewmitglied steht dabei am Pult und ' +
-              'drückt sie einmal.',
-          },
+          deviceFigure(device.figure, device.caption),
+          { kind: 'p', text: device.text },
           { kind: 'rules', items: rules },
           workedExample(example),
           // Nothing here raises an alarm — a missed window only costs the attempt.

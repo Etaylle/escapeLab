@@ -166,7 +166,7 @@
       "style": "lever",
       "windowMs": 2000,
       "hints": ["Beide an den Hebel. Dann gleichzeitig E."],
-      "lights": ["FLUR"],
+      "lights": ["FLUR", "ARCHIV"],
       "onSolved": "Notstrom: Kasten Maschinenraum, Prüfpult Flur, Handbuch Archiv."
     },
     {
@@ -179,7 +179,7 @@
       "hints": [
         "Das Prüfpult misst je Kabel, nach jedem Schnitt neu. Die Laborkennung entscheidet: höchste oder niedrigste Spannung."
       ],
-      "lights": ["MASCHINENRAUM", "ARCHIV"],
+      "lights": ["MASCHINENRAUM"],
       "onSolved": "Notstrom steht, die Tür bleibt offen. Zwei Pulte: Flur und Maschinenraum."
     },
     {

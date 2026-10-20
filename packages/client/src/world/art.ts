@@ -1362,6 +1362,106 @@ export function drawDoor(ctx: CanvasRenderingContext2D, o: DoorOpts): void {
   }
 }
 
+// ---- Exit hatch ----------------------------------------------------------------------
+
+export interface ExitHatchOpts {
+  /** 0 shut … 1 open: its two leaves slide apart as the hatch grinds open; caller animates */
+  open: number;
+  /** 0..1 looping pulse driven by the caller */
+  pulse: number;
+}
+
+/** Half the hatch's frame, and half the opening its leaves close, in tiles. */
+const HATCH_HALF = 0.42;
+const SHAFT_HALF = 0.31;
+const HATCH_GREEN = '#4ade80';
+
+/** The way out under the leaves: green-white light, brightest in the middle of the gap. */
+function buildShaftGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
+  const g = ctx.createLinearGradient(-SHAFT_HALF, 0, SHAFT_HALF, 0);
+  g.addColorStop(0, '#2fbf6a');
+  g.addColorStop(0.5, '#f4fff8');
+  g.addColorStop(1, '#2fbf6a');
+  return g;
+}
+
+/** The frame's border in yellow and black, slanting, as a way out is marked on a floor. */
+function drawHatchStripes(ctx: CanvasRenderingContext2D, lit: boolean): void {
+  ctx.save();
+  ctx.beginPath();
+  roundRectPath(ctx, -HATCH_HALF, -HATCH_HALF, HATCH_HALF * 2, HATCH_HALF * 2, 0.06);
+  ctx.rect(SHAFT_HALF + 0.03, -SHAFT_HALF - 0.03, -2 * (SHAFT_HALF + 0.03), 2 * (SHAFT_HALF + 0.03));
+  ctx.clip('evenodd');
+  ctx.fillStyle = lit ? AMBER : 'rgba(251, 191, 36, 0.35)';
+  for (let x = -0.9; x < 0.9; x += 0.16) {
+    ctx.beginPath();
+    ctx.moveTo(x, -HATCH_HALF);
+    ctx.lineTo(x + 0.08, -HATCH_HALF);
+    ctx.lineTo(x + 0.08 + 2 * HATCH_HALF, HATCH_HALF);
+    ctx.lineTo(x + 2 * HATCH_HALF, HATCH_HALF);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** One leaf, from the shaft's edge at `outer` to its leading edge at `inner`, ribbed for grip. */
+function drawHatchLeaf(ctx: CanvasRenderingContext2D, outer: number, inner: number): void {
+  const [x0, x1] = outer < inner ? [outer, inner] : [inner, outer];
+  if (x1 - x0 <= 0.005) return;
+  ctx.fillStyle = '#3a444f';
+  ctx.fillRect(x0, -SHAFT_HALF, x1 - x0, SHAFT_HALF * 2);
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.lineWidth = 0.02;
+  ctx.beginPath();
+  for (let y = -SHAFT_HALF + 0.1; y < SHAFT_HALF; y += 0.1) {
+    ctx.moveTo(x0 + 0.03, y);
+    ctx.lineTo(x1 - 0.03, y);
+  }
+  ctx.stroke();
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.lineWidth = 0.025;
+  ctx.strokeRect(x0, -SHAFT_HALF, x1 - x0, SHAFT_HALF * 2);
+}
+
+/**
+ * Anchor: TILE CENTER. The exit hatch in the floor: a steel frame marked in
+ * yellow and black around two leaves. As `open` rises the leaves slide
+ * apart and the green-white light outside shines up between them; a lamp on
+ * the frame burns red while it is locked and pulses green once it opens.
+ */
+export function drawExitHatch(ctx: CanvasRenderingContext2D, o: ExitHatchOpts): void {
+  const t = clamp01(o.open);
+  const wave = pulseWave(o.pulse);
+  ctx.save();
+  try {
+    softEllipse(ctx, 0, 0.05, 0.55, 0.5, SHADOW_RGB, 0.35, 'source-over');
+    ctx.beginPath();
+    roundRectPath(ctx, -HATCH_HALF, -HATCH_HALF, HATCH_HALF * 2, HATCH_HALF * 2, 0.06);
+    ctx.fillStyle = '#161c22';
+    ctx.fill();
+    ctx.lineWidth = 0.03;
+    ctx.strokeStyle = PROP_EDGE;
+    ctx.stroke();
+    drawHatchStripes(ctx, t > 0);
+    const gap = t * SHAFT_HALF;
+    if (gap > 0) {
+      ctx.fillStyle = cachedGradient(ctx, buildShaftGradient, '');
+      ctx.fillRect(-gap, -SHAFT_HALF, gap * 2, SHAFT_HALF * 2);
+      softEllipse(ctx, 0, 0, 0.5, 0.5, GREEN_RGB, 0.35 * t * (0.75 + 0.25 * wave), 'lighter');
+    }
+    drawHatchLeaf(ctx, -SHAFT_HALF, -gap);
+    drawHatchLeaf(ctx, SHAFT_HALF, gap);
+    ctx.beginPath();
+    addCircle(ctx, 0, -HATCH_HALF + 0.045, 0.035);
+    ctx.fillStyle = t > 0 ? HATCH_GREEN : '#b91c1c';
+    ctx.globalAlpha *= t > 0 ? 0.55 + 0.45 * wave : 0.8;
+    ctx.fill();
+  } finally {
+    ctx.restore();
+  }
+}
+
 // ---- Manual objects ------------------------------------------------------------------
 
 export interface ManualObjectOpts {

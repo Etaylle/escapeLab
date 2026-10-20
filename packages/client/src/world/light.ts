@@ -88,6 +88,13 @@ export const DRONE_BEAM_STOPS: Stops = [
   [1, 0],
 ];
 
+/** A lit room's light through an open door: bright in the doorway, fading out into the dark. */
+export const SPILL_STOPS: Stops = [
+  [0, 0.85],
+  [0.5, 0.45],
+  [1, 0],
+];
+
 /** An emergency lamp's glow: dim even in its middle, fading out well before its rim. */
 export const EMERGENCY_STOPS: Stops = [
   [0, 0.55],

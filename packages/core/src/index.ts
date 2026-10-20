@@ -120,6 +120,7 @@ export {
   type DronePosition,
 } from './protocol.js';
 export { SIMON_COLORS, type SimonColor } from './puzzles/simon.js';
+export { LEVER_FIGURE } from './puzzles/buttonSync.js';
 export {
   PATTERN_FIGURE,
   SIGNAL_PATTERNS,

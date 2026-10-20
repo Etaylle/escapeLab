@@ -62,6 +62,32 @@ export function roomArea(map: RoomMap, from: Spot): Spot[] {
   return [...area.values()];
 }
 
+/** A room's lights come on over this long, ms: the Notlicht moment, and every station after. */
+export const WARM_UP_MS = 500;
+
+/** The two dips of strip lights striking on the way up: from, to (ms) and how far down, 0 to 1. */
+const DIPS: readonly (readonly [number, number, number])[] = [
+  [120, 175, 0.75],
+  [280, 330, 0.55],
+];
+
+/**
+ * How far a room's lights are up `ms` after they came on, 0 to 1: rising
+ * through the half second with two dips — under reduced motion without.
+ */
+export function warmUp(ms: number, reduced = false): number {
+  if (ms >= WARM_UP_MS) {
+    return 1;
+  }
+  if (ms <= 0) {
+    return 0;
+  }
+  const t = ms / WARM_UP_MS;
+  const rise = t * (2 - t);
+  const dip = reduced ? undefined : DIPS.find(([from, to]) => ms >= from && ms < to);
+  return dip === undefined ? rise : rise * (1 - dip[2]);
+}
+
 /**
  * The name of the room this player starts in: the room label on the floor
  * around the spawn that no door cuts through, failing that the label nearest

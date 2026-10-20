@@ -87,9 +87,11 @@ describe('the seed on screen', () => {
 
   it("closes the end screen with the run's seed, muted, in a pinned room only", () => {
     const pinned = lostRun({ seed: { room: 40, run: 41 } });
-    const html = renderToStaticMarkup(<EndScreen view={pinned} send={noop} leaveRoom={noop} />);
-    expect(html).toMatch(/<p class="muted run-seed">Seed 41<\/p><\/div>$/);
-    const rolled = <EndScreen view={lostRun()} send={noop} leaveRoom={noop} />;
+    const html = renderToStaticMarkup(
+      <EndScreen view={pinned} fresh={false} send={noop} leaveRoom={noop} />,
+    );
+    expect(html).toMatch(/<p class="muted run-seed">Seed 41<\/p><\/div><\/div>$/);
+    const rolled = <EndScreen view={lostRun()} fresh={false} send={noop} leaveRoom={noop} />;
     expect(renderToStaticMarkup(rolled)).not.toContain('Seed');
   });
 });
