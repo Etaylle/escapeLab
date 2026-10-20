@@ -18,6 +18,7 @@ export {
   type RunEvent,
 } from './state.js';
 export { applyAction, inEscapePhase, missingItemsFor, type Action } from './actions.js';
+export { runReport, type RunOutcome, type RunReport, type StationReport } from './report.js';
 export { GameError } from './errors.js';
 export {
   viewFor,

@@ -16,12 +16,15 @@
  * every station with its module's solver on the views of whoever stands at
  * it — at either console — and whoever reads its rules (plus one deliberate
  * short and one wrong key), has an input turned away while the reader steps
- * off from the radio panel's rules, and survives a mid-game reconnect. After
- * the rematch everybody stands on the spawn just drawn, and a position from
- * the run before is dropped. No answer is written down here.
+ * off from the radio panel's rules, and survives a mid-game reconnect. The
+ * won run leaves its report in a run log in a temporary folder. After the
+ * rematch everybody stands on the spawn just drawn, and a position from the
+ * run before is dropped. No answer is written down here.
  * Run with: pnpm --filter @escapelab/server smoke
  */
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import WebSocket from 'ws';
 import {
   canSee,
@@ -39,6 +42,7 @@ import {
   type PlayerView,
   type PuzzleInput,
   type PuzzleView,
+  type RunReport,
   type ServerMessage,
   type SolveAid,
   type SpectatorView,
@@ -46,6 +50,10 @@ import {
 
 const PORT = 3102;
 process.env['PORT'] = String(PORT);
+// Finished runs go to a log in a folder of their own, which the server has to make first.
+const runsDir = mkdtempSync(join(tmpdir(), 'escapelab-smoke-'));
+const RUNS_LOG = join(runsDir, 'logs', 'runs.jsonl');
+process.env['RUNS_LOG'] = RUNS_LOG;
 await import('../src/index.js');
 
 const mission = parseMission(
@@ -1529,6 +1537,51 @@ assert(summed('operated') === mission.puzzles.reduce((sum, def) => sum + workedA
   'every station is credited to whoever worked it, the Signalkette to both consoles');
 assert(summed('alarms') === won.penaltySeq, 'every alarm is credited to whoever set it off');
 
+// The won run left one line in the run log: its report, which names nobody.
+const logged = readFileSync(RUNS_LOG, 'utf8').trimEnd().split('\n');
+assert(logged.length === 1, `the won run left one line in ${RUNS_LOG}`);
+const line = logged[0] ?? '';
+const report = JSON.parse(line) as RunReport;
+assert(
+  report.version === 1 &&
+    report.missionId === mission.id &&
+    report.difficulty === 'normal' &&
+    report.outcome === 'won' &&
+    report.alarmLimit === 5 &&
+    report.timeLimitSec === mission.timeLimitSec,
+  'the run report names the mission as played on normal, and the win',
+);
+assert(
+  report.startedAt === won.startedAt && report.finishedAt === won.finishedAt,
+  'the run report has the start and the finish the end screen shows',
+);
+assert(
+  report.crewSize === 2 &&
+    Object.keys(report.spawns).join() === 'p1,p2' &&
+    Object.keys(report.credits).join() === 'p1,p2' &&
+    Object.values(report.spawns).every((at) =>
+      mission.map.spawns.some((s) => s.x === at.x && s.y === at.y)),
+  'the run report has the crew as p1 and p2, each on a spawn of the mission',
+);
+assert(
+  report.stations.map((s) => s.puzzleId).join() === mission.puzzles.map((p) => p.id).join() &&
+    report.stations.every((s, i) =>
+      s.openedAt !== null &&
+      s.solvedAt !== null &&
+      s.solvedAt >= s.openedAt &&
+      s.openedAt === (report.stations[i - 1]?.solvedAt ?? report.startedAt)),
+  'the run report has every station, each up from the solve before it until its own',
+);
+assert(
+  report.penalties.reduce((sum, p) => sum + p.count, 0) === won.penaltySeq &&
+    report.stations.reduce((sum, s) => sum + s.alarms, 0) >= 2,
+  'the run report has every alarm by its cause, the two deliberate ones at their stations',
+);
+assert(
+  won.players.every((p) => !line.includes(p.name) && !line.includes(p.id)),
+  'the run report holds no name and no player id',
+);
+
 // The next run starts by itself once the whole crew confirms on the end screen.
 assert(
   (first.view?.players ?? []).every((p) => !p.ready),
@@ -1590,6 +1643,7 @@ assert(onSpawn(first.positions, first), 'a position stamped with the run before 
 for (const client of crew) {
   client.close();
 }
+rmSync(runsDir, { recursive: true, force: true });
 console.log(
   '\nSmoke test passed: Blackout with drawn spawns and sources, streamed movement, plates, ' +
     'a door that stays open, the Notstrom-Kasten and the Signalkette at two consoles, the ' +
