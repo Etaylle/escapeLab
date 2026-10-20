@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { roomArea, roomFloor, startRoom } from '../src/world/rooms.js';
+import { litGroups, roomArea, roomFloor, startRoom } from '../src/world/rooms.js';
 
 /**
  * Two rooms, west (x 1–3) and east (x 5–7), joined by a door at (4,2).
@@ -89,5 +89,37 @@ describe("roomArea — what a room's lights reach", () => {
 
   it('lights nothing for a label off the floor', () => {
     expect(roomArea({ tiles, doors }, { x: 4, y: 0 })).toEqual([]);
+  });
+});
+
+describe('litGroups — the lit rooms’ tiles by the rooms that light them', () => {
+  const west = roomArea({ tiles, doors }, { x: 2, y: 1 });
+  const east = roomArea({ tiles, doors }, { x: 6, y: 1 });
+  /** The tiles of a group's runs, by key. */
+  const tilesOf = (runs: { x: number; y: number; length: number }[]): string[] =>
+    runs.flatMap((run) => Array.from({ length: run.length }, (_, i) => `${run.x + i},${run.y}`));
+
+  it('gives a wall and a door two rooms share to both, and every other tile to its room', () => {
+    const groups = litGroups(
+      new Map([
+        ['WEST', west],
+        ['OST', east],
+      ]),
+    );
+    const shared = groups.find((group) => group.rooms.length === 2);
+    expect(shared?.rooms.sort()).toEqual(['OST', 'WEST']);
+    expect(tilesOf(shared?.runs ?? []).sort()).toEqual(['4,0', '4,1', '4,2', '4,3', '4,4']);
+    const own = groups.find((group) => group.rooms.join() === 'WEST');
+    expect(tilesOf(own?.runs ?? [])).toHaveLength(west.length - 5);
+    expect(own?.runs[0]).toEqual({ x: 0, y: 0, length: 4 });
+    const all = groups.flatMap((group) => tilesOf(group.runs));
+    expect(new Set(all).size).toBe(all.length);
+  });
+
+  it('counts a tile listed twice for one room once, and gives nothing for no room lit', () => {
+    const groups = litGroups(new Map([['WEST', [...west, ...west]]]));
+    expect(groups).toHaveLength(1);
+    expect(tilesOf(groups[0]?.runs ?? [])).toHaveLength(west.length);
+    expect(litGroups(new Map())).toEqual([]);
   });
 });

@@ -39,6 +39,7 @@ import {
   worldText,
   type WorldText,
 } from './art.js';
+import { bake, bakeBox, bakeStep, drawBaked, type Baked } from './baked.js';
 import { blackoutCue, coldOpenFrame, SEQUENCE_MS, type ColdOpenFrame } from './coldOpen.js';
 import {
   doorOpenness,
@@ -76,7 +77,7 @@ import {
   type Streamed,
 } from './movement.js';
 import { worldNews } from './news.js';
-import { roomArea, warmUp } from './rooms.js';
+import { litGroups, roomArea, warmUp, type LitGroup } from './rooms.js';
 import {
   blackoutSounds,
   cabinetUnlock,
@@ -106,12 +107,12 @@ import {
   lampMount,
   lightClip,
   lightMemory,
-  litTiles,
   objectGlowStops,
   OWN_BEAM_STOPS,
   OWN_GLOW_STOPS,
   powerLamp,
   reachOf,
+  runsOf,
   SPILL_STOPS,
   type Lamp,
   type LampMount,
@@ -350,6 +351,21 @@ const MOVE_KEYS: Record<string, [number, number]> = {
   arrowright: [1, 0],
   d: [1, 0],
 };
+
+/** A radial gradient cutting darkness `stops` deep round (x, y) out to `r`, in `g`'s space. */
+function cutGradient(
+  g: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+  stops: Stops,
+): CanvasGradient {
+  const gradient = g.createRadialGradient(x, y, 0, x, y, r);
+  for (const [offset, depth] of stops) {
+    gradient.addColorStop(offset, `rgba(0,0,0,${depth})`);
+  }
+  return gradient;
+}
 
 function isTextEntry(el: Element | null): boolean {
   return el !== null && ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
@@ -969,13 +985,22 @@ export function GameWorld({
       }
     }
 
-    /** The lights of `room` are on, since `since` (sim time): its tiles, as a set and as a path. */
+    /**
+     * The lights of `room` are on, since `since` (sim time): its tiles, as a
+     * set and as a path of their rows — and seen, whatever lies there, from
+     * now on this run.
+     */
     function lightRoom(map: WorldMap, room: string, since: number): void {
       const tiles = map.labels.filter((l) => l.text === room).flatMap((l) => roomArea(map, l));
+      const keys = new Set(tiles.map((tile) => `${tile.x},${tile.y}`));
       const path = new Path2D();
-      for (const tile of tiles) {
-        path.rect(tile.x, tile.y, 1, 1);
-        sim.litTiles.add(`${tile.x},${tile.y}`);
+      for (const run of runsOf(keys)) {
+        path.rect(run.x, run.y, run.length, 1);
+      }
+      const { seen } = runLight();
+      for (const key of keys) {
+        sim.litTiles.add(key);
+        seen.add(key);
       }
       sim.lit.set(room, { tiles, path, since });
     }
@@ -1002,7 +1027,7 @@ export function GameWorld({
         sight: memory.look(map, lamp, reachOf(lamp), shut),
       });
       const lamps = powered ? powerLights(lit) : darkLights(map, lit);
-      const falling = remember(memory.seen, lamps);
+      const falling = remember(memory, lamps);
       const everything = spectator || whole;
       const shown = (x: number, y: number): boolean =>
         everything || memory.seen.has(`${Math.floor(x)},${Math.floor(y)}`);
@@ -1013,11 +1038,17 @@ export function GameWorld({
       return { ...lamps, shown, powered: inPower, crewShown };
     }
 
-    /** What this run's light has done so far: a fresh memory once a new run has started. */
+    /**
+     * What this run's light has done so far: a fresh memory once a new run
+     * has started, the lit rooms seen from the start.
+     */
     function runLight(): LightMemory {
       const run = viewRef.current.startedAt;
       if (sim.light.run !== run) {
         sim.light = lightMemory(run);
+        for (const key of sim.litTiles) {
+          sim.light.seen.add(key);
+        }
       }
       return sim.light;
     }
@@ -1106,10 +1137,11 @@ export function GameWorld({
     }
 
     /**
-     * Marks the tiles `lamps` light now as seen, and the lit rooms whole:
-     * whatever lies there stays drawn this run. Returns the tiles lit now.
+     * Marks the tiles `lamps` light now as seen in `memory`, as a lit room's
+     * are from the moment its lights come on (`lightRoom`): whatever lies
+     * there stays drawn this run. Returns the tiles lit now.
      */
-    function remember(seen: Set<string>, lamps: FrameLamps): Set<string> {
+    function remember(memory: LightMemory, lamps: FrameLamps): Set<string> {
       const falling = new Set<string>();
       const { own, crew, eyes, exit, spills } = lamps;
       const lights = [
@@ -1121,13 +1153,10 @@ export function GameWorld({
         ...spills.map((spill) => spill.lit),
       ];
       for (const { lamp, sight } of lights) {
-        for (const key of litTiles(lamp, sight)) {
+        for (const key of memory.lights(lamp, sight)) {
           falling.add(key);
-          seen.add(key);
+          memory.seen.add(key);
         }
-      }
-      for (const tile of [...sim.lit.values()].flatMap((room) => room.tiles)) {
-        seen.add(`${tile.x},${tile.y}`);
       }
       return falling;
     }
@@ -1888,11 +1917,7 @@ export function GameWorld({
       const punch: Punch = (wx, wy, radius, stops) => {
         const [sx, sy] = worldToScreen(s, w, h, wx, wy);
         const r = radius * s;
-        const g = cut.createRadialGradient(sx, sy, 0, sx, sy, r);
-        for (const [offset, depth] of stops) {
-          g.addColorStop(offset, `rgba(0,0,0,${depth})`);
-        }
-        cut.fillStyle = g;
+        cut.fillStyle = cutGradient(cut, sx, sy, r, stops);
         cut.fillRect(sx - r, sy - r, r * 2, r * 2);
       };
       /** A beam from `lamp`: its cone, fading out along the gradient `stops`. */
@@ -1909,11 +1934,7 @@ export function GameWorld({
         cut.arc(sx, sy, r, facing - halfAngle, facing + halfAngle);
         cut.closePath();
         cut.clip();
-        const g = cut.createRadialGradient(sx, sy, 0, sx, sy, r);
-        for (const [offset, depth] of stops) {
-          g.addColorStop(offset, `rgba(0,0,0,${depth})`);
-        }
-        cut.fillStyle = g;
+        cut.fillStyle = cutGradient(cut, sx, sy, r, stops);
         cut.fillRect(sx - r, sy - r, r * 2, r * 2);
         cut.restore();
       };
@@ -1951,9 +1972,8 @@ export function GameWorld({
       ctx.drawImage(overlay, 0, 0);
       ctx.globalAlpha = 1;
       const red = escapeRed();
-      renderCeilingLights(map, s, w, h, red);
+      renderRoomLight(map, s, w, h, light.exit, red);
       renderLampLight(light, burn, s, w, h);
-      renderExitLight(light.exit, s, w, h);
       renderSpillLight(light.spills, red, s, w, h);
       renderEscapeTint(red, w, h);
     }
@@ -1982,6 +2002,7 @@ export function GameWorld({
       octx.clearRect(0, 0, w, h);
       octx.fillStyle = `rgba(3,5,9,${base})`;
       octx.fillRect(0, 0, w, h);
+      litDarkness(base, s, w, h);
       octx.globalCompositeOperation = 'destination-out';
       const { punch, beam, within } = lightCutters(octx, s, w, h);
 
@@ -2017,24 +2038,51 @@ export function GameWorld({
         punch(drone.x, drone.y, 1.1, objectGlowStops(0.75));
       }
       // The open hatch, and a lit room through an open door, as far as each stands open.
-      if (light.exit !== null) {
-        const { lit, open } = light.exit;
-        within(lit, () => punch(lit.lamp.x, lit.lamp.y, EXIT_GLOW, objectGlowStops(0.95 * open)));
-      }
+      cutHatch(map, light.exit, s, w, h);
       for (const { lit, open } of light.spills) {
         within(lit, () => beam(lit, SPILL_STOPS.map(([offset, depth]) => [offset, depth * open])));
       }
-      // A lit room keeps no darkness at all, walls and doors included — but on
-      // the escape's alarm lighting some; one path per room, so its tiles meet
-      // without seams.
+    }
+
+    /** The lit rooms' tiles grouped by the rooms lighting them (rooms.ts), for the rooms lit. */
+    let litTileGroups: { lit: string; groups: LitGroup[] } | null = null;
+
+    /**
+     * A lit room keeps no darkness at all, walls and doors included — some
+     * while its lights are still coming on, and on the escape's alarm
+     * lighting: a tile keeps of the overlay's darkness, `base` deep, what
+     * every room lighting it leaves. Its pixels are cleared and filled anew,
+     * whole ones, so that neighbouring tiles meet without seams; the lamps
+     * cut into it after.
+     */
+    function litDarkness(base: number, s: number, w: number, h: number): void {
+      if (octx == null) {
+        return;
+      }
+      const lit = [...sim.lit.keys()].join('\n');
+      if (litTileGroups?.lit !== lit) {
+        const rooms = new Map([...sim.lit].map(([label, room]) => [label, room.tiles]));
+        litTileGroups = { lit, groups: litGroups(rooms) };
+      }
       const [most, least] = ALARM_DIM;
       const alarmDim = escapeRed() * (most + (least - most) * sirenSwell());
-      for (const room of sim.lit.values()) {
-        octx.save();
-        octx.setTransform(s, 0, 0, s, w / 2 - sim.draw.x * s, h / 2 - sim.draw.y * s);
-        octx.fillStyle = `rgba(0,0,0,${roomUp(room.since) * (1 - alarmDim)})`;
-        octx.fill(room.path);
-        octx.restore();
+      const left = (room: string): number =>
+        1 - roomUp(sim.lit.get(room)?.since ?? -Infinity) * (1 - alarmDim);
+      const pixel = (x: number, y: number): [number, number] => {
+        const [sx, sy] = worldToScreen(s, w, h, x, y);
+        return [Math.round(sx), Math.round(sy)];
+      };
+      for (const { rooms, runs } of litTileGroups.groups) {
+        const keep = rooms.reduce((dark, room) => dark * left(room), 1);
+        octx.fillStyle = `rgba(3,5,9,${base * keep})`;
+        for (const run of runs) {
+          const [x0, y0] = pixel(run.x, run.y);
+          const [x1, y1] = pixel(run.x + run.length, run.y + 1);
+          octx.clearRect(x0, y0, x1 - x0, y1 - y0);
+          if (keep > 0) {
+            octx.fillRect(x0, y0, x1 - x0, y1 - y0);
+          }
+        }
       }
     }
 
@@ -2057,33 +2105,146 @@ export function GameWorld({
       return redShift(Date.now() - since);
     }
 
+    /** The light of the lit rooms and the open hatch as last baked, and what it was baked for. */
+    let roomLightBaked: { key: string; sight: Lit['sight'] | null; baked: Baked | null } | null =
+      null;
+
     /**
-     * A room a solved station lit glows warm again, as the whole lab did with
-     * the power on — and turns red, `red` of the way, as the escape's siren
-     * sounds.
+     * The light the lit rooms and the open hatch add over the darkness: a
+     * room a solved station lit glows warm again, as the whole lab did with
+     * the power on, and turns red, `red` of the way, as the escape's siren
+     * sounds; the hatch spills its green-white light as far as it has ground
+     * open, cut off by the walls like every light. Baked (baked.ts): a frame
+     * lays it over the picture in one go.
      */
-    function renderCeilingLights(map: WorldMap, s: number, w: number, h: number, red: number): void {
-      if (ctx == null || sim.lit.size === 0) {
+    function renderRoomLight(
+      map: WorldMap,
+      s: number,
+      w: number,
+      h: number,
+      exit: FrameLight['exit'],
+      red: number,
+    ): void {
+      const baked = roomLight(map, exit, red);
+      if (ctx == null || baked === null) {
         return;
+      }
+      ctx.save();
+      ctx.setTransform(s, 0, 0, s, w / 2 - sim.draw.x * s, h / 2 - sim.draw.y * s);
+      ctx.globalCompositeOperation = 'lighter';
+      drawBaked(ctx, baked);
+      ctx.restore();
+    }
+
+    /**
+     * The lit rooms' and the open hatch's light, baked again only once it has
+     * changed since the last bake — a room warming up, the red coming in,
+     * the hatch grinding open, each in the steps of `bakeStep`, or the walls
+     * and doors the hatch's light stops at. Null while there is none.
+     */
+    function roomLight(map: WorldMap, exit: FrameLight['exit'], red: number): Baked | null {
+      const rooms = [...sim.lit].map(([label, room]) => `${label} ${bakeStep(roomUp(room.since))}`);
+      const open = exit === null ? 'shut' : bakeStep(exit.open);
+      const key = [map.tiles.join('/'), bakeStep(red), open, ...rooms].join('|');
+      const sight = exit?.lit.sight ?? null;
+      if (roomLightBaked === null || roomLightBaked.key !== key || roomLightBaked.sight !== sight) {
+        const into = roomLightBaked?.baked?.canvas;
+        roomLightBaked = { key, sight, baked: bakeRoomLight(map, exit, bakeStep(red), into) };
+      }
+      return roomLightBaked.baked;
+    }
+
+    /**
+     * Bakes the lit rooms' ceiling lights, `red` of the way from warm to red,
+     * and the open hatch's glow over them — into `into`, where given.
+     */
+    function bakeRoomLight(
+      map: WorldMap,
+      exit: FrameLight['exit'],
+      red: number,
+      into: HTMLCanvasElement | undefined,
+    ): Baked | null {
+      const rooms = [...sim.lit.values()];
+      const glows = exit === null ? [] : [{ x: exit.lit.lamp.x, y: exit.lit.lamp.y, r: EXIT_GLOW }];
+      const box = bakeBox(map, rooms.flatMap((room) => room.tiles), glows);
+      if (box === null) {
+        return null;
       }
       const tints = [
         { layer: layerOf(map, WARM), share: 1 - red },
         { layer: layerOf(map, ALARM_RED), share: red },
       ].filter(({ share }) => share > 0);
-      ctx.save();
-      ctx.setTransform(s, 0, 0, s, w / 2 - sim.draw.x * s, h / 2 - sim.draw.y * s);
-      ctx.globalCompositeOperation = 'lighter';
-      for (const room of sim.lit.values()) {
-        const up = roomUp(room.since);
-        ctx.save();
-        ctx.clip(room.path);
-        for (const { layer, share } of tints) {
-          ctx.globalAlpha = up * share;
-          ctx.drawImage(layer, 0, 0, map.width, map.height);
+      const draw = (g: CanvasRenderingContext2D): void => {
+        g.globalCompositeOperation = 'lighter';
+        for (const room of rooms) {
+          g.save();
+          g.clip(room.path);
+          for (const { layer, share } of tints) {
+            g.globalAlpha = bakeStep(roomUp(room.since)) * share;
+            g.drawImage(layer, 0, 0, map.width, map.height);
+          }
+          g.restore();
         }
-        ctx.restore();
+        if (exit !== null) {
+          bakeHatchGlow(g, exit.lit, bakeStep(exit.open));
+        }
+      };
+      return bake(box, draw, into);
+    }
+
+    /** The open hatch's green-white light, `open` (0 to 1) of its full, where `lit` sees; tiles. */
+    function bakeHatchGlow(g: CanvasRenderingContext2D, lit: Lit, open: number): void {
+      const { x, y } = lit.lamp;
+      const glow = g.createRadialGradient(x, y, 0, x, y, EXIT_GLOW);
+      glow.addColorStop(0, `rgba(240, 255, 246, ${0.8 * open})`);
+      glow.addColorStop(0.16, `rgba(160, 245, 196, ${0.5 * open})`);
+      glow.addColorStop(0.5, `rgba(74, 222, 128, ${0.18 * open})`);
+      glow.addColorStop(1, 'rgba(74, 222, 128, 0)');
+      g.save();
+      g.clip(clipPath(lit));
+      g.fillStyle = glow;
+      g.fillRect(x - EXIT_GLOW, y - EXIT_GLOW, EXIT_GLOW * 2, EXIT_GLOW * 2);
+      g.restore();
+    }
+
+    /** The open hatch's light cut into the darkness as last baked, and the sight it was cut to. */
+    let hatchCutBaked: { sight: Lit['sight']; baked: Baked | null } | null = null;
+
+    /**
+     * Cuts the open hatch's light into the darkness as far as it stands open,
+     * where it can see — baked once for that sight (baked.ts), so a frame
+     * cuts it in one go.
+     */
+    function cutHatch(
+      map: WorldMap,
+      exit: FrameLight['exit'],
+      s: number,
+      w: number,
+      h: number,
+    ): void {
+      if (octx == null || exit === null) {
+        return;
       }
-      ctx.restore();
+      const { lit } = exit;
+      if (hatchCutBaked?.sight !== lit.sight) {
+        const { x, y } = lit.lamp;
+        const box = bakeBox(map, [], [{ x, y, r: EXIT_GLOW }]);
+        const cut = (g: CanvasRenderingContext2D): void => {
+          g.clip(clipPath(lit));
+          g.fillStyle = cutGradient(g, x, y, EXIT_GLOW, objectGlowStops(0.95));
+          g.fillRect(x - EXIT_GLOW, y - EXIT_GLOW, EXIT_GLOW * 2, EXIT_GLOW * 2);
+        };
+        const into = hatchCutBaked?.baked?.canvas;
+        hatchCutBaked = { sight: lit.sight, baked: box === null ? null : bake(box, cut, into) };
+      }
+      if (hatchCutBaked.baked === null) {
+        return;
+      }
+      octx.save();
+      octx.setTransform(s, 0, 0, s, w / 2 - sim.draw.x * s, h / 2 - sim.draw.y * s);
+      octx.globalAlpha = exit.open;
+      drawBaked(octx, hatchCutBaked.baked);
+      octx.restore();
     }
 
     /**
@@ -2140,22 +2301,6 @@ export function GameWorld({
         red.addColorStop(1, 'rgba(255, 38, 32, 0)');
         addLight(lit, red, sx, sy, r);
       }
-    }
-
-    /** The green-white light out of the open hatch, as far as it has ground open. */
-    function renderExitLight(exit: FrameLight['exit'], s: number, w: number, h: number): void {
-      if (ctx == null || exit === null) {
-        return;
-      }
-      const { lit, open } = exit;
-      const [sx, sy] = worldToScreen(s, w, h, lit.lamp.x, lit.lamp.y);
-      const r = EXIT_GLOW * s;
-      const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
-      glow.addColorStop(0, `rgba(240, 255, 246, ${0.8 * open})`);
-      glow.addColorStop(0.16, `rgba(160, 245, 196, ${0.5 * open})`);
-      glow.addColorStop(0.5, `rgba(74, 222, 128, ${0.18 * open})`);
-      glow.addColorStop(1, 'rgba(74, 222, 128, 0)');
-      addLight(lit, glow, sx, sy, r);
     }
 
     /** A lit room's light through an open door: a wedge of its colour falling into the dark. */
