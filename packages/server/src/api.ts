@@ -12,10 +12,12 @@ export interface ApiResponse {
 }
 
 const MANUAL_PATH = /^\/missions\/([^/]+)\/manual$/;
+const MISSION_PATH = /^\/missions\/([^/]+)$/;
 
 /**
- * The JSON routes: health, the mission list for the picker and one mission's
- * printed manual. Null for any other path, which is the static site's.
+ * The JSON routes: health, the mission list for the picker, one mission
+ * whole (for the editor to start from) and one mission's printed manual.
+ * Null for any other path, which is the static site's.
  */
 export function apiResponse(catalog: MissionCatalog, url: string): ApiResponse | null {
   const path = url.split('?')[0] ?? url;
@@ -24,6 +26,14 @@ export function apiResponse(catalog: MissionCatalog, url: string): ApiResponse |
   }
   if (path === '/missions') {
     return { status: 200, body: catalog.infos() };
+  }
+  const whole = MISSION_PATH.exec(path)?.[1];
+  if (whole !== undefined) {
+    const id = decodeSegment(whole);
+    const mission = id === null ? undefined : catalog.find(id);
+    return mission === undefined
+      ? { status: 404, body: { error: `Mission "${id ?? whole}" gibt es nicht.` } }
+      : { status: 200, body: mission };
   }
   const segment = MANUAL_PATH.exec(path)?.[1];
   if (segment === undefined) {

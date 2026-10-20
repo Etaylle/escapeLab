@@ -106,7 +106,7 @@ describe('GET /missions/:id/manual', () => {
 
   it('leaves every other path to the static site', () => {
     expect(apiResponse(shipped, '/')).toBeNull();
-    expect(apiResponse(shipped, '/missions/blackout')).toBeNull();
+    expect(apiResponse(shipped, '/missions/blackout/extra')).toBeNull();
     expect(apiResponse(shipped, '/missions/blackout/manual/extra')).toBeNull();
   });
 });

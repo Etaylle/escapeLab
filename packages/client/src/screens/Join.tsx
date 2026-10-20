@@ -22,6 +22,8 @@ interface Props {
   stats: MissionStats[];
   openHandbook: (missionId: string) => void;
   openHistory: (missionId: string) => void;
+  /** opens the mission editor; without it the join screen offers none */
+  openEditor?: () => void;
 }
 
 const REFRESH_MS = 2500;
@@ -146,6 +148,7 @@ export function JoinScreen({
   stats,
   openHandbook,
   openHistory,
+  openEditor,
 }: Props) {
   const [name, setName] = useState('');
   // An invite link carries the room in ?room=, so the code field is already
@@ -258,6 +261,14 @@ export function JoinScreen({
                 onClick={() => openHistory(selected)}
               >
                 <Icon name="podium" /> Bestenliste
+              </button>
+            )}
+            {openEditor !== undefined && (
+              <button
+                title="Eine eigene Mission bauen oder eine vorhandene abwandeln"
+                onClick={openEditor}
+              >
+                <Icon name="pencil" /> Editor
               </button>
             )}
           </div>

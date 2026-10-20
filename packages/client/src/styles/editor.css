@@ -1,0 +1,836 @@
+/* ══ the mission editor (editor/*.tsx) ══════════════════════════════════════
+ * A workbench that fills the window: the bar with the mission's name and
+ * what can be done with it on top; below it the tools, the map and a side
+ * column with the forms over the validator. Only the inner panels scroll,
+ * so nothing runs past the window at 1440×820 or 1280×720. Under 980px the
+ * three columns stack and the page scrolls as the join screen does; the
+ * tools then run in a row that scrolls sideways.
+ */
+
+.content--editor {
+  align-items: stretch;
+  padding: 12px 14px 14px;
+  overflow: hidden;
+}
+
+.editor {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editor input,
+.editor select,
+.editor textarea {
+  font-size: 14px;
+  padding: 7px 9px;
+}
+
+.editor textarea {
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: inherit;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.editor textarea:focus {
+  outline: 2px solid var(--accent-dark);
+  border-color: var(--accent-dark);
+}
+
+/* A panel of the workbench: the bar, the tools, the map's frame, the forms. */
+.editor-bar,
+.editor-tools,
+.editor-pane,
+.editor-check,
+.editor-load {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--bg-2) 100%);
+}
+
+/* ── the bar ────────────────────────────────────────────────────────────── */
+
+.editor-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 12px;
+}
+
+.editor-back {
+  padding: 4px 2px;
+}
+
+.editor-name {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+
+.editor-name strong {
+  min-width: 0;
+  font-size: 18px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.editor-id {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.editor-dirty {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--warn);
+  white-space: nowrap;
+}
+
+.editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.editor-actions button {
+  padding: 7px 12px;
+  font-size: 14px;
+}
+
+/* ── status, confirmation, the list to load from ────────────────────────── */
+
+.editor-status,
+.editor-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 7px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  font-size: 14px;
+  background: var(--bg-2);
+}
+
+.editor-status .link {
+  margin-left: auto;
+}
+
+.editor-status ul {
+  flex-basis: 100%;
+  max-height: 96px;
+  overflow-y: auto;
+  margin: 0;
+  padding-left: 18px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.editor-status-ok {
+  border-color: var(--accent-dark);
+  color: var(--accent);
+}
+
+.editor-status-error {
+  border-color: rgba(248, 113, 113, 0.55);
+  color: var(--danger);
+}
+
+.editor-confirm {
+  border-color: rgba(251, 191, 36, 0.6);
+  background: rgba(251, 191, 36, 0.07);
+}
+
+.editor-confirm button {
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.editor-load {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 6px;
+  max-height: 34vh;
+  overflow-y: auto;
+}
+
+.editor-load-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--bg-2);
+}
+
+.editor-load-row .map-thumb {
+  max-width: 64px;
+}
+
+.editor-load-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.editor-load-kind {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.editor-load-row button {
+  padding: 6px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.editor-danger {
+  border-color: rgba(248, 113, 113, 0.7);
+  color: var(--danger);
+}
+
+/* ── the workbench ──────────────────────────────────────────────────────── */
+
+.editor-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 172px minmax(0, 1fr) clamp(300px, 26vw, 390px);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.editor-tools {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+
+.editor-tool-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.editor-tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 5px 2px 4px;
+  border-radius: 8px;
+  font-size: 12px;
+  background: var(--bg-2);
+}
+
+.editor-tool[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: #10302c;
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 0 12px var(--accent-glow);
+}
+
+.editor-tool-glyph {
+  width: 28px;
+  height: 28px;
+}
+
+.editor-tool-help {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.editor-tool-options .editor-field {
+  margin: 6px 0;
+}
+
+/* The map sits on the dark of an unlit lab, centred in whatever room it gets. */
+.editor-map {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 45%, rgba(45, 212, 191, 0.05) 0%, transparent 70%),
+    #04070a;
+}
+
+.editor-canvas {
+  display: block;
+  flex: none;
+  touch-action: none;
+  cursor: crosshair;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.12);
+}
+
+.editor-canvas-select {
+  cursor: pointer;
+}
+
+.editor-canvas-pick {
+  cursor: copy;
+}
+
+.editor-side {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editor-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.editor-tab {
+  flex: 1;
+  padding: 7px 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.editor-tab[aria-selected='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #10302c;
+}
+
+.editor-pane {
+  flex: 1 1 56%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 12px 10px;
+}
+
+.editor-check {
+  flex: 1 1 44%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px;
+}
+
+/* ── forms ──────────────────────────────────────────────────────────────── */
+
+.editor-field {
+  margin: 10px 0;
+  gap: 5px;
+  font-size: 11px;
+}
+
+.editor-field input,
+.editor-field select,
+.editor-field textarea {
+  min-width: 0;
+}
+
+/* The words under a field are sentences, not labels. */
+.editor-issue,
+.editor-note,
+.editor-value,
+.editor-spots {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.editor-issue {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--danger);
+}
+
+.editor-note {
+  margin: 6px 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.editor-value {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.editor-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.editor-form-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 14px 0 2px;
+}
+
+.editor-form-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.editor-where {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.editor-remove {
+  margin-left: auto;
+  color: var(--danger);
+}
+
+.editor-checks {
+  border: none;
+  padding: 0;
+  margin: 10px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editor-checks legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.editor-check-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text);
+}
+
+.editor-check-row input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.editor-spots {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.editor-spots li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.editor-pick {
+  width: 100%;
+  margin: 2px 0 6px;
+  padding: 7px 10px;
+  font-size: 13px;
+  border-style: dashed;
+}
+
+.editor-pending {
+  margin: 12px 0 4px;
+  font-size: 14px;
+  color: #93c5fd;
+}
+
+.editor-verdicts {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editor-verdict {
+  padding: 6px 8px;
+  border-left: 3px solid var(--line-2);
+  border-radius: 6px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  background: var(--bg-2);
+}
+
+.editor-verdict-error {
+  border-left-color: var(--danger);
+}
+
+.editor-verdict-warning {
+  border-left-color: var(--warn);
+}
+
+/* The mission as its card in the picker will show it. */
+.editor-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0 4px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-2);
+}
+
+.editor-card .map-thumb {
+  max-width: 110px;
+}
+
+.editor-card-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.editor-card-text strong,
+.editor-card-meta {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.editor-card-meta {
+  font-size: 12px;
+  color: var(--accent);
+}
+
+/* ── puzzles ────────────────────────────────────────────────────────────── */
+
+.editor-puzzle-list {
+  list-style: none;
+  margin: 10px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editor-puzzle-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.editor-puzzle-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  font-size: 14px;
+  text-align: left;
+}
+
+.editor-puzzle-open .editor-puzzle-title {
+  border-color: var(--accent-dark);
+}
+
+.editor-puzzle-no {
+  font-family: var(--mono);
+  color: var(--accent);
+}
+
+.editor-puzzle-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.editor-puzzle-kind {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.editor-puzzle-errors {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-align: center;
+  color: #1a0505;
+  background: var(--danger);
+}
+
+.editor-icon-button {
+  padding: 6px 7px;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.editor-puzzle-form {
+  margin: 4px 0 6px 10px;
+  padding: 0 0 0 10px;
+  border-left: 2px solid var(--line-2);
+}
+
+.editor-add {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* The type list gives way to the button; its longest entry would push it out of the pane. */
+.editor-add .editor-field {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.editor-add button {
+  flex: none;
+}
+
+/* ── the validator ──────────────────────────────────────────────────────── */
+
+.editor-check-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-check-head h2 {
+  margin: 0;
+}
+
+.editor-verdict-chip {
+  padding: 2px 9px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.editor-verdict-ok {
+  color: var(--accent);
+  border-color: var(--accent-dark);
+  background: rgba(45, 212, 191, 0.1);
+}
+
+.editor-verdict-bad {
+  color: var(--danger);
+  border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.editor-check-ms {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.editor-check-clean {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.editor-check-group h3 {
+  margin: 12px 0 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.editor-check-count {
+  margin-left: 4px;
+  color: var(--muted);
+}
+
+.editor-check-error h3 {
+  color: var(--danger);
+}
+
+.editor-check-warning h3 {
+  color: var(--warn);
+}
+
+.editor-check-info h3 {
+  color: var(--muted);
+}
+
+.editor-check-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editor-finding {
+  display: block;
+  width: 100%;
+  padding: 6px 9px;
+  border: 1px solid transparent;
+  border-left: 3px solid var(--line-2);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: left;
+  overflow-wrap: anywhere;
+  background: var(--bg-2);
+}
+
+.editor-check-error .editor-finding {
+  border-left-color: var(--danger);
+}
+
+.editor-check-warning .editor-finding {
+  border-left-color: var(--warn);
+}
+
+.editor-finding[aria-pressed='true'] {
+  border-color: rgba(248, 113, 113, 0.6);
+  background: rgba(248, 113, 113, 0.1);
+}
+
+/* A finding that points nowhere is read, not clicked. */
+.editor-finding:disabled {
+  opacity: 0.85;
+  cursor: default;
+}
+
+/* ── narrow windows: stacked, and the page scrolls ──────────────────────── */
+
+@media (max-width: 1180px) {
+  .editor-body {
+    grid-template-columns: 142px minmax(0, 1fr) 300px;
+  }
+
+  .editor-tool-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-tool {
+    flex-direction: row;
+    gap: 8px;
+    padding: 3px 8px;
+  }
+}
+
+/* The page grows with the editor and scrolls; every panel takes the height
+   of what it holds, the map the height its proportions give it. */
+@media (max-width: 980px) {
+  .content--editor {
+    align-items: flex-start;
+    overflow-y: auto;
+    padding: 10px;
+  }
+
+  .editor {
+    min-height: auto;
+  }
+
+  .editor-body {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .editor-tools,
+  .editor-side {
+    flex: none;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .editor-tool-grid {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .editor-tool {
+    flex: none;
+    flex-direction: column;
+    width: 70px;
+    gap: 2px;
+    padding: 5px 2px 4px;
+  }
+
+  .editor-map {
+    flex: none;
+    aspect-ratio: var(--map-aspect, 20 / 13);
+    max-height: 70vh;
+  }
+
+  .editor-pane,
+  .editor-check {
+    flex: none;
+    max-height: 60vh;
+  }
+}
+
+@media (max-width: 560px) {
+  .editor-name .kicker {
+    display: none;
+  }
+}

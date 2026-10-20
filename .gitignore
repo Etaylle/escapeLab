@@ -6,3 +6,5 @@ dist/
 .worktrees/
 # `pnpm cert`'s certificate and private key: made per machine, never shared.
 packages/server/cert/
+# Missions saved from the editor: made on this server, not shipped.
+missions/custom/

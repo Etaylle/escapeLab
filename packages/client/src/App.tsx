@@ -1,4 +1,4 @@
-import { Activity, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Activity, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { isMuted, setMuted } from './world/audio.js';
 import {
   difficultyInfos,
@@ -10,6 +10,7 @@ import { STATS_PATH, useJson } from './runStats.js';
 import { useRunScreen } from './runScreen.js';
 import { useVoiceMesh, VoiceContext } from './voice/useVoice.js';
 import { useGameConnection } from './ws.js';
+import { EditorScreen } from './editor/EditorScreen.js';
 import { HandbookScreen } from './screens/Handbook.js';
 import { HistoryScreen } from './screens/History.js';
 import { Icon, type IconName } from './screens/Icon.js';
@@ -99,6 +100,8 @@ export function App() {
   const [history, setHistory] = useState<string | null>(null);
   // The join screen's cards say each mission's record; without it they say nothing.
   const stats = useJson<MissionStats[]>(STATS_PATH);
+  // The mission editor, another page off the join screen; the booklet opens over it.
+  const [editor, setEditor] = useState(false);
   const contentRef = useRef<HTMLElement>(null);
   // This player is in a run: on a phone that is fullscreen, sideways and awake.
   const playing = conn.view?.phase === 'playing' && conn.view.map !== null;
@@ -117,12 +120,19 @@ export function App() {
   // A tester sees in the lobby that the room is pinned to a seed (?seed=).
   const pinnedTo = conn.view?.phase === 'lobby' ? (conn.view.seed?.room ?? null) : null;
 
-  useEffect(() => {
+  // Fetched at the start, and again whenever the editor saves or deletes a mission.
+  const loadMissions = useCallback(() => {
     fetch('/missions')
       .then((res) => (res.ok ? res.json() : []))
       .then((list: MissionInfo[]) => setMissions(list))
       .catch(() => setMissions([]));
   }, []);
+  useEffect(() => {
+    loadMissions();
+  }, [loadMissions]);
+  // The editor fills the window as a run does, but it scrolls on a phone (styles/editor.css).
+  const editing = editor && handbook === null && conn.view === null && conn.spectatorView === null;
+  const layout = immersive ? 'content--stage' : editing ? 'content--editor' : '';
 
   // Every screen shares one scrolling area, the booklet too; each opens at its
   // top — the lobby on a phone would otherwise open where the join screen was
@@ -130,7 +140,7 @@ export function App() {
   const screen = screenOf(conn);
   useLayoutEffect(() => {
     contentRef.current?.scrollTo(0, 0);
-  }, [handbook, history, screen]);
+  }, [handbook, history, editor, screen]);
 
   return (
     <div className="app">
@@ -174,7 +184,7 @@ export function App() {
       )}
       <UpdateNotice />
 
-      <main ref={contentRef} className={`content ${immersive ? 'content--stage' : ''}`}>
+      <main ref={contentRef} className={`content ${layout}`}>
         <VoiceContext value={voice}>{renderScreen()}</VoiceContext>
       </main>
     </div>
@@ -198,7 +208,7 @@ export function App() {
       // so a typed name and the picked mission are still there on the way back.
       return (
         <>
-          <Activity mode={handbook === null && history === null ? 'visible' : 'hidden'}>
+          <Activity mode={handbook === null && history === null && !editor ? 'visible' : 'hidden'}>
             <JoinScreen
               send={conn.send}
               connected={conn.status === 'open'}
@@ -207,8 +217,19 @@ export function App() {
               stats={stats.status === 'ready' ? stats.value : []}
               openHandbook={setHandbook}
               openHistory={setHistory}
+              openEditor={() => setEditor(true)}
             />
           </Activity>
+          {editor && (
+            <Activity mode={handbook === null ? 'visible' : 'hidden'}>
+              <EditorScreen
+                missions={missions}
+                reloadMissions={loadMissions}
+                openHandbook={setHandbook}
+                back={() => setEditor(false)}
+              />
+            </Activity>
+          )}
           {handbook !== null && (
             <HandbookScreen
               missions={missions}

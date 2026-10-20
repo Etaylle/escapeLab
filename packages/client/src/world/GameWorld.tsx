@@ -326,7 +326,7 @@ function coachTip(
 }
 
 /** Escape hatch: dim grey while locked, pulsing green once it opens. */
-function drawExit(ctx: CanvasRenderingContext2D, open: boolean, pulse: number): void {
+export function drawExit(ctx: CanvasRenderingContext2D, open: boolean, pulse: number): void {
   ctx.save();
   const glow = open ? 0.35 + 0.3 * pulse : 0;
   if (open) {

@@ -1,9 +1,11 @@
 export {
   parseMission,
+  checkMission,
   missionSchema,
   MANUAL_KINDS,
   type ManualKind,
   type Mission,
+  type MissionCheck,
 } from './mission.js';
 export {
   initialState,
@@ -94,6 +96,7 @@ export {
   rtcSignalSchema,
   RTC_SIGNAL_MAX,
   SEED_MAX,
+  isCustomMissionId,
   type RtcSignal,
   type ClientMessage,
   type ServerMessage,

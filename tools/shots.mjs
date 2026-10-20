@@ -42,6 +42,13 @@
  * has to show for the host on both pages (voice.png, voice-phone.png). After
  * the guest's reload the link has to come up again. Any of these that fails,
  * fails the run.
+ *
+ * Editor: before the walkthrough a page of its own opens the editor from the
+ * join screen, paints a 7 × 5 room, places a start and a station and
+ * captures what the validator says (editor.png, and the layout at
+ * 1280×720 and on a phone); a second start and a book make the mission
+ * sound, it is saved as custom-probe, has to show on the join screen, and is
+ * deleted again through the API whatever happened before.
  */
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -1471,9 +1478,145 @@ async function listenIn(watcher, players) {
   }
 }
 
+/** Where on the screen tile x,y of the editor's map is, measured afresh: the map refits. */
+async function editorTile(page, x, y) {
+  const canvas = page.locator('.editor-canvas');
+  const box = await canvas.boundingBox();
+  const px = Number(await canvas.getAttribute('data-tile-px'));
+  if (box === null || !(px > 0)) {
+    throw new Error('the editor shows no map (.editor-canvas with data-tile-px)');
+  }
+  return { x: box.x + (x + 0.5) * px, y: box.y + (y + 0.5) * px };
+}
+
+/** Picks an editor tool and presses its map at tile x,y. */
+async function placeWith(page, tool, x, y) {
+  await page.locator(`[data-tool="${tool}"]`).click();
+  const at = await editorTile(page, x, y);
+  await page.mouse.click(at.x, at.y);
+}
+
+/** The editor's error findings, as listed. */
+async function editorErrors(page) {
+  return page.locator('.editor-check-error .editor-finding').allInnerTexts();
+}
+
+/** The first line of what went wrong. */
+const firstLine = (err) => String(err instanceof Error ? err.message : err).split('\n')[0];
+
+/**
+ * From the join screen into the editor: the new mission called „Probe", so
+ * it is saved as custom-probe; a 7 × 5 room painted row by row with the
+ * floor brush into its blank lab of wall, a start and the keypad's station.
+ */
+async function paintProbe(page) {
+  await page.goto(BASE);
+  await page.locator('.mission').first().waitFor({ timeout: 10_000 });
+  await clickText(page, 'Editor');
+  await page.locator('.editor-canvas').waitFor({ timeout: 5000 });
+  await page.locator('.editor-tab', { hasText: 'Mission' }).click();
+  await page.getByLabel('Titel', { exact: true }).fill('Probe');
+  await page.locator('[data-tool="floor"]').click();
+  for (let y = 2; y <= 6; y++) {
+    const from = await editorTile(page, 2, y);
+    const to = await editorTile(page, 8, y);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 12 });
+    await page.mouse.up();
+  }
+  await placeWith(page, 'spawn', 3, 4);
+  await placeWith(page, 'station', 7, 3);
+}
+
+/** editor.png with what the validator says now; it has to say something. */
+async function captureValidator(page) {
+  await sleep(700); // past the pause the validator waits for
+  const errors = await editorErrors(page);
+  await capture(page, 'editor.png');
+  const said = errors.length === 0 ? '!! the validator says nothing' : errors.join(' | ');
+  console.log(`editor.png         room, start, station: ${errors.length} error(s) — ${said}`);
+  if (errors.length === 0) {
+    fail('editor: the validator let a mission with one start pass');
+  }
+}
+
+/** The editor has to fit a laptop and 1280×720, and a phone sideways. */
+async function editorLayouts(page) {
+  await overflow(page, 'editor @ 1440x820');
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await sleep(400);
+  await overflow(page, 'editor @ 1280x720');
+  await capture(page, 'editor-1280.png');
+  await page.setViewportSize({ width: SIZES[2].width, height: SIZES[2].height });
+  await sleep(400);
+  const over = await sideways(page, '.content');
+  await capture(page, 'editor-phone.png');
+  const fits = over > 0 ? `!! +${over}px sideways` : 'scrolls down, fits sideways';
+  console.log(`editor-phone.png   the editor @ 420x760 ${fits}`);
+  if (over > 0) {
+    fail(`editor: +${over}px sideways on a phone`);
+  }
+  await page.setViewportSize(SIZES[0]);
+  await sleep(400);
+}
+
+/** A second start and a book make the probe sound; saved, its card has to be on the join screen. */
+async function saveProbe(page) {
+  await placeWith(page, 'spawn', 4, 4);
+  await placeWith(page, 'source', 7, 5);
+  const save = page.locator('.editor-actions button.primary:not([disabled])');
+  const sound = await save.waitFor({ timeout: 3000 }).then(
+    () => true,
+    () => false,
+  );
+  if (!sound) {
+    throw new Error(`the probe stays unsound: ${(await editorErrors(page)).join(' | ')}`);
+  }
+  await save.click();
+  await page.locator('.editor-status-ok').waitFor({ timeout: 5000 });
+  await clickText(page, 'Zurück');
+  await page.locator('.mission', { hasText: 'Probe' }).waitFor({ timeout: 5000 });
+  console.log('editor             saved as custom-probe, and its card is on the join screen');
+}
+
+/**
+ * editor.png: the editor, opened from the join screen, with a room, a start
+ * and a station in its lab and the validator naming what is missing — a
+ * second start, a source for the keypad's rules. Made sound, the probe is
+ * saved as custom-probe and has to show on the join screen. It is deleted
+ * through the API in any case, so the walkthrough after it meets the
+ * shipped missions only.
+ */
+async function captureEditor() {
+  const context = await browser.newContext({ viewport: SIZES[0] });
+  const page = await context.newPage();
+  page.on('pageerror', (e) => console.log('[editor error]', e.message));
+  try {
+    await paintProbe(page);
+    await captureValidator(page);
+    await editorLayouts(page);
+    await saveProbe(page);
+  } catch (err) {
+    console.log(`editor             !! ${firstLine(err)}`);
+    fail(`editor: ${firstLine(err)}`);
+  }
+  const res = await page.request
+    .delete(new URL('/missions/custom/custom-probe', BASE).href)
+    .catch(() => null);
+  // 404 is fine where the probe never got saved; anything else leaves it behind.
+  const status = res?.status() ?? 'no answer';
+  console.log(`editor             custom-probe deleted again: ${status}`);
+  if (status !== 200 && status !== 404) {
+    fail(`editor: custom-probe could not be deleted again (${status})`);
+  }
+  await context.close();
+}
+
 async function run() {
   mkdirSync(OUT, { recursive: true });
   browser = await chromium.launch({ args: VOICE_FLAGS });
+  await captureEditor();
 
   // --- host: create a room and grab the code ---------------------------
   const hostCtx = await browser.newContext({ viewport: SIZES[0] });

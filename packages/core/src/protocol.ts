@@ -127,6 +127,17 @@ export interface MissionInfo {
   puzzleCount: number;
   /** tile rows of the map, for the preview thumbnail */
   tiles: string[];
+  /** made in the editor and kept in missions/custom/; left out for the shipped missions */
+  custom?: boolean;
+}
+
+/**
+ * The id of a mission made in the editor: „custom-" and a slug of lower-case
+ * letters and digits in dash-separated words, 64 characters at most. It is
+ * the file name under missions/custom/ as well, so nothing else may pass.
+ */
+export function isCustomMissionId(id: string): boolean {
+  return id.length <= 64 && /^custom(?:-[a-z0-9]+)+$/.test(id);
 }
 
 /**
