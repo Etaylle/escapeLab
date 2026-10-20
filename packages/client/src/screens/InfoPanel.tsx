@@ -18,6 +18,7 @@ const CONTROLS: readonly (readonly [string, string])[] = [
   ['Q', 'Getragenes Objekt ablegen — so sind Übergaben möglich'],
   ['Klick auf die Welt', 'Ping für alle setzen'],
   ['C, dann 1–8', 'Schnellchat'],
+  ['V halten', 'Sprechen — das Mikrofon wird in der Lobby aktiviert'],
   ['N', 'Notizblock — bleibt für diesen Raum gespeichert'],
   ['M', 'Minikarte ein- und ausblenden'],
   ['I oder H', 'Dieses Info-Fenster'],

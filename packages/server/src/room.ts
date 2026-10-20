@@ -21,6 +21,7 @@ import {
   type Mission,
   type PlayerPosition,
   type RoomSummary,
+  type RtcSignal,
   type RunReport,
   type ServerMessage,
 } from '@escapelab/core';
@@ -69,6 +70,13 @@ const POSITIONS_INTERVAL_MS = 66;
 const PING_COOLDOWN_MS = 700;
 /** Same idea for quick chat, a little slower so it stays readable. */
 const CHAT_COOLDOWN_MS = 1200;
+/**
+ * Voice signals one member may send at once, and how many more come free
+ * each second: a voice link takes an offer or answer and a handful of
+ * candidates, and a crew of four sets up three links per player at once.
+ */
+const SIGNAL_BURST = 60;
+const SIGNALS_PER_SEC = 10;
 /** Patrol simulation step. */
 const DRONE_TICK_MS = 80;
 /** How close you must stand to man an emergency panel. */
@@ -96,10 +104,13 @@ export class Room {
   private state: GameState;
   private readonly tokens = new Map<string, string>();
   private readonly listeners = new Map<string, Listener>();
-  private readonly spectators = new Set<Listener>();
+  /** audience connections, by the id each got on attaching */
+  private readonly spectators = new Map<string, Listener>();
   private readonly positions = new Map<string, PlayerPosition>();
   private readonly lastPingAt = new Map<string, number>();
   private readonly lastChatAt = new Map<string, number>();
+  /** each member's voice signals still allowed, and when that was last worked out (epoch ms) */
+  private readonly signalAllowance = new Map<string, { left: number; at: number }>();
   private drones: DronePatrol | null = null;
   private droneTimer: NodeJS.Timeout | null = null;
   private lastDroneTick = 0;
@@ -159,15 +170,23 @@ export class Room {
 
   /**
    * Audience connection: read-only, gets the revealing view plus the same
-   * live position, ping and chat stream the players get.
+   * live position, ping and chat stream the players get. Its id is what the
+   * crew's voice signals address it by while it listens in.
    */
-  attachSpectator(listener: Listener): () => void {
-    this.spectators.add(listener);
+  attachSpectator(listener: Listener): { spectatorId: string; detach: () => void } {
+    const spectatorId = `audience-${randomUUID()}`;
+    this.spectators.set(spectatorId, listener);
     listener({ kind: 'spectator-view', view: viewForSpectator(this.state), code: this.code });
     if (this.positions.size > 0) {
       listener(this.positionsMessage());
     }
-    return () => this.spectators.delete(listener);
+    return {
+      spectatorId,
+      detach: () => {
+        this.spectators.delete(spectatorId);
+        this.signalAllowance.delete(spectatorId);
+      },
+    };
   }
 
   /** Connection lost: keep the player (they may resume), notify the others. */
@@ -312,6 +331,41 @@ export class Room {
     for (const listener of this.audience) {
       listener({ kind: 'chat', playerId, phrase });
     }
+  }
+
+  /**
+   * Passes a voice signal on, unread, from one connected member of the room
+   * to another: between two players, from a player to a spectator listening
+   * in, from a spectator to a player — never between two spectators, never
+   * back to its sender. A member may send SIGNAL_BURST at once and
+   * SIGNALS_PER_SEC more each second. Like a chat line within its cooldown,
+   * a signal over that or for nobody it may reach is dropped without a word:
+   * voice is best effort, and the client retries a link that does not come up.
+   * Returns whether it went out.
+   */
+  relaySignal(from: string, to: string, signal: RtcSignal): boolean {
+    const fromPlayer = this.listeners.has(from);
+    if ((!fromPlayer && !this.spectators.has(from)) || !this.allowSignal(from, Date.now())) {
+      return false;
+    }
+    const target = this.listeners.get(to) ?? (fromPlayer ? this.spectators.get(to) : undefined);
+    if (target === undefined || to === from) {
+      return false;
+    }
+    target({ kind: 'rtc', from, signal });
+    return true;
+  }
+
+  /** Takes a signal off a member's allowance, topped up since the last; false when none is left. */
+  private allowSignal(member: string, now: number): boolean {
+    const was = this.signalAllowance.get(member);
+    const left =
+      was === undefined
+        ? SIGNAL_BURST
+        : Math.min(SIGNAL_BURST, was.left + ((now - was.at) / 1000) * SIGNALS_PER_SEC);
+    const allowed = left >= 1;
+    this.signalAllowance.set(member, { left: allowed ? left - 1 : left, at: now });
+    return allowed;
   }
 
   /** One row for the lobby browser. */
@@ -857,7 +911,7 @@ export class Room {
     }
     if (this.spectators.size > 0) {
       const view = viewForSpectator(this.state);
-      for (const listener of this.spectators) {
+      for (const listener of this.spectators.values()) {
         listener({ kind: 'spectator-view', view, code: this.code });
       }
     }
@@ -865,7 +919,7 @@ export class Room {
 
   /** Everyone attached to this room, players and audience alike. */
   private get audience(): Listener[] {
-    return [...this.listeners.values(), ...this.spectators];
+    return [...this.listeners.values(), ...this.spectators.values()];
   }
 
   dispose(): void {

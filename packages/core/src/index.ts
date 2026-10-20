@@ -84,6 +84,9 @@ export { type MapDef } from './mission.js';
 export {
   parseClientMessage,
   clientMessageSchema,
+  rtcSignalSchema,
+  RTC_SIGNAL_MAX,
+  type RtcSignal,
   type ClientMessage,
   type ServerMessage,
   type MissionInfo,

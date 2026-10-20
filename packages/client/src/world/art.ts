@@ -535,6 +535,30 @@ function drawYouRing(ctx: CanvasRenderingContext2D): void {
   ctx.stroke();
 }
 
+/**
+ * Somebody speaking: a soft ring in their colour round their feet, wider than
+ * the white ring under your own, breathing with `time` (s). Anchor: FEET
+ * CENTER, drawn before the figure so that it stands in it.
+ */
+export function drawVoiceRing(ctx: CanvasRenderingContext2D, color: string, time: number): void {
+  const breath = 0.5 + 0.5 * Math.sin(time * 8);
+  const rx = 0.46 + 0.05 * breath;
+  const ry = 0.17 + 0.02 * breath;
+  ctx.save();
+  const alpha = ctx.globalAlpha;
+  ctx.strokeStyle = color;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx, ry, 0, 0, TAU);
+  // A wide faint band for the glow, a thin bright line on it.
+  ctx.globalAlpha = alpha * (0.22 + 0.12 * breath);
+  ctx.lineWidth = 0.13;
+  ctx.stroke();
+  ctx.globalAlpha = alpha * (0.6 + 0.3 * breath);
+  ctx.lineWidth = 0.035;
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** Anchor: FEET CENTER. Body ~0.62 tile wide, ~0.85 tile tall. */
 export function drawScientist(ctx: CanvasRenderingContext2D, o: ScientistOpts): void {
   // Resolved first so an invalid color throws before anything is drawn.

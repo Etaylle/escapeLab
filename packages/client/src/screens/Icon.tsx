@@ -14,6 +14,7 @@ export type IconName =
   | 'eye'
   | 'hex'
   | 'info'
+  | 'mic'
   | 'note'
   | 'pause'
   | 'pencil'
@@ -92,6 +93,13 @@ const GLYPHS: Record<IconName, ReactNode> = {
       <circle cx="8" cy="8" r="6.25" />
       <path d="M8 7.25v4.25" />
       <circle cx="8" cy="4.75" r="1" {...SOLID} />
+    </>
+  ),
+  // A microphone: its capsule in the cradle, on a short stand.
+  mic: (
+    <>
+      <rect x="5.75" y="1.75" width="4.5" height="7.5" rx="2.25" />
+      <path d="M3.5 7a4.5 4.5 0 0 0 9 0M8 11.5v2.75M5.5 14.25h5" />
     </>
   ),
   note: <path d="M3.5 1.75h6l3 3v9.5h-9Zm6 0v3h3M5.75 8h4.5m-4.5 2.75h4.5" />,

@@ -16,7 +16,9 @@
  * every station with its module's solver on the views of whoever stands at
  * it — at either console — and whoever reads its rules (plus one deliberate
  * short and one wrong key), has an input turned away while the reader steps
- * off from the radio panel's rules, and survives a mid-game reconnect. The
+ * off from the radio panel's rules, and survives a mid-game reconnect. A fake
+ * voice offer, answer and candidate go between Anna and Ben through the
+ * server, and one for a player in another room goes nowhere. The
  * won run leaves its report in a run log in a temporary folder. After the
  * rematch everybody stands on the spawn just drawn, and a position from the
  * run before is dropped. No answer is written down here.
@@ -1411,6 +1413,51 @@ assert(
   said.playerId === annaJoined.playerId && said.phrase === 'drohne',
   'quick chat is broadcast with its sender and phrase',
 );
+
+// Voice signals: Anna offers, Ben answers, a candidate follows — each reaches the one player it
+// names, stamped with its sender and otherwise untouched; the spectator hears none of them.
+const isRtc = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'rtc' }> => m.kind === 'rtc';
+const isRooms = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'rooms' }> =>
+  m.kind === 'rooms';
+const voiceOffer = { type: 'offer', sdp: 'v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\ns=-\r\n' } as const;
+const voiceAnswer = { type: 'answer', sdp: 'v=0\r\no=- 3 2 IN IP4 127.0.0.1\r\ns=-\r\n' } as const;
+const voiceCandidate = {
+  type: 'ice',
+  candidate: {
+    candidate: 'candidate:1 1 udp 2122260223 127.0.0.1 50000 typ host',
+    sdpMid: '0',
+    sdpMLineIndex: 0,
+  },
+} as const;
+const exchange = [
+  { from: anna, to: ben, signal: voiceOffer },
+  { from: ben, to: anna, signal: voiceAnswer },
+  { from: anna, to: ben, signal: voiceCandidate },
+];
+for (const { from, to, signal } of exchange) {
+  from.send({ kind: 'rtc', to: to.playerId, signal });
+  const relayed = await to.expect(`voice ${signal.type} arrives`, isRtc);
+  assert(
+    relayed.from === from.playerId && JSON.stringify(relayed.signal) === JSON.stringify(signal),
+    `a voice ${signal.type} from ${from.label} reaches ${to.label} as it was sent`,
+  );
+}
+// The wrong target: a player in another room. The server drops the signal without a word; once
+// Anna's room list is back, it has handled it.
+const dora = new TestClient('dora');
+await dora.open();
+dora.send({ kind: 'create-room', name: 'Dora', missionId: 'blackout' });
+const doraJoined = await dora.expect('joined', isJoined);
+anna.send({ kind: 'rtc', to: doraJoined.playerId, signal: voiceOffer });
+anna.send({ kind: 'list-rooms' });
+await anna.expect('room list after the stray voice signal', isRooms);
+await sleep(200);
+assert(
+  !dora.hasQueued(isRtc) && !anna.hasQueued(isError),
+  'a voice signal for a player of another room is refused, quietly',
+);
+assert(!zoe.hasQueued(isRtc), 'the spectator hears none of the crew’s voice signals');
+dora.close();
 
 /** Ids of the drones in the client's latest positions message, sorted and comma-joined. */
 const streamedDrones = (client: TestClient): string =>

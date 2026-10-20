@@ -2,8 +2,8 @@
  * The walkthrough's frame budget (`tools/shots.mjs`): a page opened with
  * `?trace=1` keeps the world's last frame durations — the time from one
  * animation frame to the next, unclamped — and the harness reads them off
- * `window.__escapelab.frames`, after `resetFrames()` to sample a window of
- * its own choosing. Without the flag nothing is kept.
+ * `window.__escapelab.frames` (probes.ts), after `resetFrames()` to sample a
+ * window of its own choosing. Without the flag nothing is kept.
  */
 
 /** How many frame durations the trace keeps: about five seconds at 60 Hz. */
@@ -19,14 +19,7 @@ export interface FrameTrace {
   resetFrames(): void;
 }
 
-declare global {
-  interface Window {
-    /** Probes for the walkthrough harness, only there when the URL asks for them. */
-    __escapelab?: { readonly frames: number[]; resetFrames(): void };
-  }
-}
-
-/** Whether a page's query string asks for the frame trace: `?trace=1`. */
+/** Whether a page's query string asks for the frame trace and the other probes: `?trace=1`. */
 export function traceRequested(search: string): boolean {
   return new URLSearchParams(search).get('trace') === '1';
 }

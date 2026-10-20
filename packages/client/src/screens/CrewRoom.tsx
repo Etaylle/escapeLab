@@ -1,8 +1,10 @@
 import { useId, type CSSProperties } from 'react';
 import type { ClientMessage, PlayerView } from '@escapelab/core';
+import { useVoice } from '../voice/useVoice.js';
 import { makeFloorTile, makeWallTile } from '../world/art.js';
 import { CrewFigure, type Facing } from './CrewFigure.js';
 import { Icon, type IconName } from './Icon.js';
+import { MicSetup } from './Voice.js';
 
 type Member = PlayerView['players'][number];
 
@@ -63,11 +65,15 @@ interface SeatProps {
   facing: Facing;
   isYou: boolean;
   phase: number;
+  /** they talk right now: their figure glows (voice.css) */
+  speaking: boolean;
 }
 
-function CrewSeat({ member, facing, isYou, phase }: SeatProps) {
+function CrewSeat({ member, facing, isYou, phase, speaking }: SeatProps) {
   const badge = badgeOf(member);
-  const marks = `seat${isYou ? ' seat-you' : ''}${member.connected ? '' : ' seat-gone'}`;
+  const marks =
+    `seat${isYou ? ' seat-you' : ''}${member.connected ? '' : ' seat-gone'}` +
+    (speaking ? ' seat-speaking' : '');
   return (
     <li className={marks}>
       <span className="seat-name">{member.name}</span>
@@ -223,12 +229,15 @@ function roomTiles(): CSSProperties | undefined {
 /**
  * The crew's room before the run: everybody standing on the lab's floor in
  * front of its wall, this player in the middle and a step nearer, with the
- * crew colours at their feet.
+ * crew colours at their feet. On the wall the sign, and opposite it the
+ * microphone; whoever speaks lights up where they stand.
  */
 export function CrewRoom({ view, send }: { view: PlayerView; send: (msg: ClientMessage) => void }) {
+  const speaking = useVoice()?.state.speaking;
   return (
     <section className="crew-room" style={roomTiles()} aria-label="Crew">
       <p className="crew-room-sign">Startplätze werden beim Start verlost.</p>
+      <MicSetup />
       <ul className="seats">
         {lineup(view).map((place, i) =>
           place.kind === 'crew' ? (
@@ -238,6 +247,7 @@ export function CrewRoom({ view, send }: { view: PlayerView; send: (msg: ClientM
               facing={place.facing}
               isYou={place.member.id === view.you.id}
               phase={i * 1.9}
+              speaking={speaking?.has(place.member.id) === true}
             />
           ) : (
             <FreeSeat key={`free-${i}`} first={place.first} needed={place.needed} />

@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { chatText, type PlayerPosition, type PlayerView, type RunEvent } from '@escapelab/core';
 import { useMedia } from '../hooks.js';
 import { airIcon, LAST_CREW } from '../radio.js';
+import { useVoice, type Voice } from '../voice/useVoice.js';
 import type { ChatLine } from '../world/GameWorld.js';
 import type { KnownPositions } from '../world/movement.js';
 import { crewTags, CrewTags, presenceNear, type CrewTag } from './Crew.js';
 import { EdgeworkChip } from './EdgeworkChip.js';
 import { Icon } from './Icon.js';
+import { SpeakingMark } from './Voice.js';
 
 interface Props {
   view: PlayerView;
@@ -88,6 +90,23 @@ function chatArrival(line: ChatLine): number {
 }
 
 /**
+ * The switch between talking by the key — V, or the talk button on a touch
+ * screen — and a microphone that stays open, for a crew that wants it so.
+ */
+function MicSwitch({ voice, touch }: { voice: Voice; touch: boolean }) {
+  const { mesh, state } = voice;
+  return (
+    <button
+      className="hud-info hud-mic"
+      aria-pressed={state.open}
+      onClick={() => mesh.setOpen(!state.open)}
+    >
+      <Icon name="mic" /> {state.open ? 'Mikro: offen' : withKey('Mikro: Taste', 'V', touch)}
+    </button>
+  );
+}
+
+/**
  * The permanent strip under the world. Deliberately thin: only the crew, the
  * edgework once you have read the sign, and the latest radio line, because
  * everything else either sits on the world itself or belongs in the info panel.
@@ -108,6 +127,8 @@ export function MissionHud({
   }, []);
   void tick;
   const touch = useMedia('(pointer: coarse)');
+  const voice = useVoice();
+  const talking = voice?.state.mic === 'on' ? voice : null;
 
   const positions = positionsRef.current.players;
   // The newest line holds the strip; a chat line only lives as long as its bubble.
@@ -123,7 +144,8 @@ export function MissionHud({
   const radio = tickerLine(view.events.at(-1), heard, onAir);
 
   return (
-    <section className="hud">
+    // The switch takes a place of its own in the strip's rows (voice.css).
+    <section className={talking === null ? 'hud' : 'hud hud--voice'}>
       <ul className="hud-crew">
         {view.players.map((p) => {
           const tags = tagsOf(view, p, positions);
@@ -132,6 +154,7 @@ export function MissionHud({
             <li key={p.id} className={mine ? 'hud-me' : ''}>
               <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
               <span className="hud-name">{p.name}</span>
+              {voice?.state.speaking.has(p.id) === true && <SpeakingMark />}
               {tags.length > 0 ? (
                 <CrewTags tags={tags} />
               ) : (
@@ -149,6 +172,7 @@ export function MissionHud({
             <Icon name={radio.icon} /> {radio.text}
           </span>
         )}
+        {talking !== null && <MicSwitch voice={talking} touch={touch} />}
         <button className="hud-info hud-notes" aria-pressed={notesOpen} onClick={onToggleNotes}>
           <Icon name="pencil" /> {withKey('Notizen', 'N', touch)}
         </button>
