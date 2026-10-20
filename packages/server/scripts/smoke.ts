@@ -53,7 +53,8 @@ import {
   type SpectatorView,
 } from '@escapelab/core';
 
-const PORT = 3102;
+/** 3102 unless SMOKE_PORT says otherwise, so two smokes (or a smoke next to a server) can run. */
+const PORT = Number(process.env['SMOKE_PORT'] ?? 3102);
 process.env['PORT'] = String(PORT);
 // The smoke talks ws://, even where packages/server/cert/ would make the server speak https.
 process.env['TLS'] = 'off';
