@@ -37,9 +37,10 @@ const COPY_SAYS: Readonly<Record<CopyState, { icon: IconName; text: string }>> =
  * The room's code, the one place it stands — in the lobby too, where the
  * free places point up to it. It stays readable for saying out loud; the
  * button hands over a link that drops the other person straight into the
- * room, and says whether that worked.
+ * room, and says whether that worked. Beside it, muted, the seed a tester
+ * pinned the room to, where one is given.
  */
-export function RoomCode({ code }: { code: string }) {
+export function RoomCode({ code, seed = null }: { code: string; seed?: number | null }) {
   const [copy, setCopy] = useState<CopyState>('idle');
   useEffect(() => {
     if (copy === 'idle') {
@@ -63,14 +64,17 @@ export function RoomCode({ code }: { code: string }) {
   };
   const says = COPY_SAYS[copy];
   return (
-    <button className="room-code" title={`Einladungslink kopieren: ${invite}`} onClick={copyLink}>
-      <span className="room-code-prefix">Raum: </span>
-      <strong>{code}</strong>
-      <span className="room-code-action">
-        {' '}
-        <Icon name={says.icon} /> {says.text}
-      </span>
-    </button>
+    <>
+      <button className="room-code" title={`Einladungslink kopieren: ${invite}`} onClick={copyLink}>
+        <span className="room-code-prefix">Raum: </span>
+        <strong>{code}</strong>
+        <span className="room-code-action">
+          {' '}
+          <Icon name={says.icon} /> {says.text}
+        </span>
+      </button>
+      {seed !== null && <span className="muted room-seed">Seed {seed}</span>}
+    </>
   );
 }
 
@@ -110,6 +114,8 @@ export function App() {
   // headline, so naming it twice there would be noise.
   const running =
     conn.spectatorView ?? (conn.view !== null && conn.view.phase !== 'lobby' ? conn.view : null);
+  // A tester sees in the lobby that the room is pinned to a seed (?seed=).
+  const pinnedTo = conn.view?.phase === 'lobby' ? (conn.view.seed?.room ?? null) : null;
 
   useEffect(() => {
     fetch('/missions')
@@ -133,7 +139,7 @@ export function App() {
         <span className="logo">
           <Icon name="hex" /> ESCAPELAB
         </span>
-        {conn.roomCode !== null && <RoomCode code={conn.roomCode} />}
+        {conn.roomCode !== null && <RoomCode code={conn.roomCode} seed={pinnedTo} />}
         {running !== null && (
           <span className="topbar-mission">
             {running.missionTitle}

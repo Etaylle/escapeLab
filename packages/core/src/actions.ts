@@ -36,7 +36,8 @@ import type { Spot } from './reach.js';
 
 /**
  * All game actions. `at` is the authoritative server time (epoch ms) and
- * `seed` the server-rolled PRNG seed — the reducer itself never reads a
+ * `seed` the server-rolled PRNG seed, which a room pinned to a seed passes
+ * over for its own (`GameState.roomSeed`) — the reducer itself never reads a
  * clock or RNG, which keeps every game deterministic and replayable.
  */
 export type Action =
@@ -427,6 +428,15 @@ function crewToStart(state: GameState): Player[] {
   return crew;
 }
 
+/**
+ * The seed a run plays: in a room pinned to a seed, run n (from 0) plays
+ * seed + n, wrapped to 32 bits, so that any of its runs can be named by its
+ * seed and played again; in any other room, the seed the server rolled.
+ */
+function runSeed(state: GameState, rolled: number): number {
+  return state.roomSeed === null ? rolled : (state.roomSeed + state.runs) >>> 0;
+}
+
 function startMission(
   state: GameState,
   action: { playerId: string; at: number; seed: number },
@@ -437,18 +447,20 @@ function startMission(
   requireHost(state, action.playerId);
   const crew = crewToStart(state);
   const map = state.mission.map;
+  const seed = runSeed(state, action.seed);
   const started: GameState = {
     ...state,
     phase: 'playing',
-    players: drawSpawns(crew, map.spawns, action.seed),
+    players: drawSpawns(crew, map.spawns, seed),
     currentPuzzleIndex: 0,
     puzzleState: null,
-    seed: action.seed,
-    edgework: generateEdgework(mulberry32((action.seed ^ EDGEWORK_STREAM) >>> 0)),
+    seed,
+    runs: state.runs + 1,
+    edgework: generateEdgework(mulberry32((seed ^ EDGEWORK_STREAM) >>> 0)),
     pressedPlates: [],
     occupiedPanels: [],
     presence: NOBODY_PRESENT,
-    places: placeSources(map.manuals, action.seed),
+    places: placeSources(map.manuals, seed),
     opened: [],
     discovered: [],
     credits: Object.fromEntries(crew.map((player) => [player.id, NO_CREDITS])),

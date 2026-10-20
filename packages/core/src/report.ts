@@ -48,6 +48,8 @@ export interface RunReport {
   crew: string[];
   /** the start tile each crew member drew, by p1…pn */
   spawns: Record<string, { x: number; y: number }>;
+  /** the seed the run played, only where a tester pinned the room: `?seed=` plays it again */
+  seed?: number;
   startedAt: number;
   finishedAt: number;
   outcome: RunOutcome;
@@ -80,6 +82,7 @@ export function runReport(state: GameState, roomCode: string): RunReport {
     crewSize: crew.length,
     crew: crew.map(({ player }) => cut(player.name)),
     spawns: Object.fromEntries(crew.map(({ player, alias }) => [alias, spawnOf(player, alias)])),
+    ...(state.roomSeed === null || state.seed === null ? {} : { seed: state.seed }),
     startedAt,
     finishedAt,
     outcome: outcomeOf(state, alarmLimit),

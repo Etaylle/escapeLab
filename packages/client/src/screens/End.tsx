@@ -136,6 +136,9 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
           Raum verlassen
         </button>
       </div>
+
+      {/* A pinned room's run, for a bug report: ?seed= with it plays this run again. */}
+      {view.seed?.run != null && <p className="muted run-seed">Seed {view.seed.run}</p>}
     </div>
   );
 }

@@ -43,8 +43,9 @@ jobs:
       - run: pnpm build
       - name: Start the production server
         id: server
+        # ALLOW_SEED=1: the walkthrough pins its room to a seed (?seed=), so every run draws alike.
         run: |
-          PORT=3001 pnpm start > server.log 2>&1 &
+          PORT=3001 ALLOW_SEED=1 pnpm start > server.log 2>&1 &
           for _ in $(seq 60); do
             if curl -fsS http://localhost:3001/health; then
               exit 0

@@ -6,15 +6,53 @@ const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
 const EMPTY_ROOM_TTL_MS = 10 * 60 * 1000;
 
+/**
+ * Whether a new room may be pinned to a seed, so that its runs repeat: with
+ * ALLOW_SEED=1, as `pnpm dev` and CI set it; not with 0 or unset. Throws for
+ * anything else, so that a misspelt switch cannot leave a test run to chance.
+ */
+export function seedsAllowed(env: NodeJS.ProcessEnv): boolean {
+  const flag = env['ALLOW_SEED'] ?? '';
+  if (flag === '1') {
+    return true;
+  }
+  if (flag === '' || flag === '0') {
+    return false;
+  }
+  throw new Error(
+    `ALLOW_SEED=${flag} versteht der Server nicht — ALLOW_SEED=1 lässt Räume einen festen ` +
+      'Seed tragen, ohne bleibt es beim Zufall',
+  );
+}
+
 export class RoomManager {
   private readonly rooms = new Map<string, Room>();
 
-  /** `onRunFinished` hears of every run that ends in any of these rooms. */
-  constructor(private readonly onRunFinished: RunListener = () => undefined) {}
+  /**
+   * `onRunFinished` hears of every run that ends in any of these rooms;
+   * `allowSeed` (`seedsAllowed`) lets a new room be pinned to a seed.
+   */
+  constructor(
+    private readonly onRunFinished: RunListener = () => undefined,
+    private readonly allowSeed = false,
+  ) {}
 
-  create(mission: Mission): Room {
+  /**
+   * A new room for `mission`. Where seeds are allowed, `seed` pins its runs
+   * (run n plays seed + n); elsewhere the room rolls every run anew, and the
+   * log says the seed went unused.
+   */
+  create(mission: Mission, seed: number | null = null): Room {
     const code = this.freshCode();
-    const room = new Room(code, mission, this.onRunFinished);
+    const pinned = this.allowSeed ? seed : null;
+    if (seed !== null && pinned === null) {
+      console.warn(
+        `[escapelab] room ${code}: seed ${seed} ignored — rooms take a seed only with ALLOW_SEED=1`,
+      );
+    } else if (pinned !== null) {
+      console.log(`[escapelab] room ${code}: pinned to seed ${pinned}, run n plays seed + n`);
+    }
+    const room = new Room(code, mission, this.onRunFinished, pinned);
     this.rooms.set(code, room);
     return room;
   }

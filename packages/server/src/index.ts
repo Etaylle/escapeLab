@@ -9,7 +9,7 @@ import {
 } from '@escapelab/core';
 import { apiResponse, serveRuns, statsResponse, type RunsExport } from './api.js';
 import { MissionCatalog } from './missions.js';
-import { RoomManager } from './roomManager.js';
+import { RoomManager, seedsAllowed } from './roomManager.js';
 import { DEFAULT_RUNS_LOG } from './runLog.js';
 import { loadRunStats, logRun } from './runStats.js';
 import { StaticSite } from './static.js';
@@ -29,7 +29,8 @@ const catalog = new MissionCatalog(MISSIONS_DIR);
 const site = new StaticSite(fileURLToPath(new URL('../../client/dist', import.meta.url)));
 // The Bestenliste: read from the log once, then counted run by run as they are logged.
 const stats = loadRunStats(RUNS_LOG);
-const manager = new RoomManager(logRun(RUNS_LOG, stats));
+// A room pinned to a seed repeats its runs: for the walkthrough and bug reports, not for play.
+const manager = new RoomManager(logRun(RUNS_LOG, stats), seedsAllowed(process.env));
 setInterval(() => manager.sweep(), 60_000).unref();
 
 /** Per-connection session, set once the socket joins or resumes into a room. */
@@ -77,6 +78,7 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
                 msg.missionId !== undefined ? catalog.get(msg.missionId) : catalog.default,
                 'normal',
               ),
+              msg.seed ?? null,
             )
           : manager.get(msg.code);
       const { playerId, token } = room.join(msg.name);

@@ -53,6 +53,29 @@ const BASE = process.argv[2] ?? 'http://localhost:5173';
 const OUT = process.argv[3] ?? '/tmp/escapelab-shots';
 const MISSION = process.env.SHOTS_MISSION || 'Blackout';
 const FRAME_P95_MS = frameBudget(process.env.SHOTS_FRAME_P95_MS);
+/**
+ * The seed the host's room is pinned to (`?seed=`, taken by a server with
+ * ALLOW_SEED=1 as `pnpm dev` and CI set it), so that who starts where, where
+ * the sources lie and every station repeat from run to run. SHOTS_SEED
+ * overrides it; another mission goes unpinned, and the skips below still say
+ * what its draw left out. Found by printing the core's draw of a crew of two
+ * for seeds 1…50 and replaying the steps below that depend on it, in a room:
+ *
+ * - Blackout 5: Ben starts in the Maschinenraum and works console A of the
+ *   Notstrom-Kasten, no plate held; Anna starts in the Archiv by the sign
+ *   (sign.png), and her pacing for the first frame sample brings the book at
+ *   (2,1) into sight, so she reads it, works console B and asks for the notes
+ *   (reading, console-*, hint-*). Not the host by console A: the Archiv's
+ *   pillars hide every source from its spawn, and the guest takes no step
+ *   before reading, so reading.png would be skipped.
+ * - Systemcheck 1: the usual, Ben by the first station and the sign works it,
+ *   Anna by the locker reads it.
+ */
+const SEEDS = new Map([
+  ['blackout', 5],
+  ['systemcheck', 1],
+]);
+const SEED = seedFor(process.env.SHOTS_SEED, SEEDS.get(MISSION.toLowerCase()));
 
 const SIZES = [
   { name: 'laptop-13', width: 1440, height: 820 },
@@ -104,6 +127,30 @@ function frameBudget(text) {
     throw new Error(`SHOTS_FRAME_P95_MS has to be a number of milliseconds above 0, not "${text}"`);
   }
   return ms;
+}
+
+/**
+ * The seed of the host's room: SHOTS_SEED where set, else `pinned`, the
+ * mission's; null for none, which leaves the room to chance.
+ */
+function seedFor(text, pinned) {
+  if (text === undefined || text === '') {
+    return pinned ?? null;
+  }
+  if (!/^\d{1,10}$/.test(text) || Number(text) > 0xffffffff) {
+    throw new Error(`SHOTS_SEED has to be a whole number from 0 to 4294967295, not "${text}"`);
+  }
+  return Number(text);
+}
+
+/** `url` with `?seed=` where this run has a seed: the room the host opens there is pinned to it. */
+function seeded(url) {
+  if (SEED === null) {
+    return url;
+  }
+  const withSeed = new URL(url);
+  withSeed.searchParams.set('seed', String(SEED));
+  return withSeed.href;
 }
 
 /** What the run did, for the summary at its end. */
@@ -1437,7 +1484,7 @@ async function run() {
   });
   host.on('pageerror', (e) => console.log('[host error]', e.message));
   // Only the host's page keeps a frame trace: every frame sample reads it.
-  await host.goto(traced(BASE));
+  await host.goto(seeded(traced(BASE)));
   await host.getByPlaceholder('z. B. Anna').fill('Anna');
   await host.locator('.mission').first().waitFor({ timeout: 10_000 });
   // The join screen, every mission in view, has to fit a laptop window too.
@@ -1459,6 +1506,19 @@ async function run() {
   await host.locator('.room-code strong').waitFor({ timeout: 10_000 });
   const code = (await host.locator('.room-code strong').innerText()).trim();
   console.log('room code:', code, `(${MISSION})`);
+  if (SEED !== null) {
+    // The lobby names the seed beside the code once the server has pinned the room to it.
+    const label = host.locator('.room-seed');
+    await label.waitFor({ timeout: 3000 }).catch(() => undefined);
+    const shown = await textOf(label);
+    console.log(
+      `seed               ${SEED}: ` +
+        (shown === `Seed ${SEED}`
+          ? 'the room is pinned to it'
+          : `!! the room is not pinned (${shown ?? 'no seed beside the code'}): ` +
+            'the server takes one only with ALLOW_SEED=1, so the draw is chance'),
+    );
+  }
   await capture(host, 'lobby-host.png');
 
   // --- guest: join by code ---------------------------------------------

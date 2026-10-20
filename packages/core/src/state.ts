@@ -114,6 +114,14 @@ export interface GameState {
   puzzleState: PuzzleState | null;
   /** PRNG seed for this run; set by start-mission */
   seed: number | null;
+  /**
+   * The seed a tester pinned the room to, so that its runs repeat (dev and CI
+   * only), or null: then every run plays the seed the server rolled for it.
+   * A pinned room's run n (from 0) plays roomSeed + n.
+   */
+  roomSeed: number | null;
+  /** runs started in this room so far: the n of the next one */
+  runs: number;
   /** serial, lamps and cells of this run; rolled from the seed by start-mission */
   edgework: Edgework | null;
   /**
@@ -167,7 +175,8 @@ export interface GameState {
   hintReadyAt: number | null;
 }
 
-export function initialState(mission: Mission): GameState {
+/** A fresh room for `mission`, its runs pinned to `roomSeed` where a tester asked for one. */
+export function initialState(mission: Mission, roomSeed: number | null = null): GameState {
   return {
     phase: 'lobby',
     mission,
@@ -176,6 +185,8 @@ export function initialState(mission: Mission): GameState {
     currentPuzzleIndex: 0,
     puzzleState: null,
     seed: null,
+    roomSeed,
+    runs: 0,
     edgework: null,
     pressedPlates: [],
     occupiedPanels: [],
