@@ -11,6 +11,7 @@ import { crewSizeText } from './Crew.js';
 import { CrewRoom } from './CrewRoom.js';
 import { Icon } from './Icon.js';
 import { MapThumb } from './MapThumb.js';
+import { MicSetup } from './Voice.js';
 
 type Send = (msg: ClientMessage) => void;
 
@@ -227,8 +228,8 @@ function StartArea({ view, send }: { view: PlayerView; send: Send }) {
 
 /**
  * The lobby as the crew's room: everybody on stage, the colours at your feet,
- * the mission beside them with its settings and the start. The room's code
- * stands once, in the header, where the free places point.
+ * the mission beside them with its settings, the microphone and the start.
+ * The room's code stands once, in the header, where the free places point.
  */
 export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
   const info = missions.find((m) => m.id === view.missionId);
@@ -247,6 +248,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
         ) : (
           <Levels current={view.difficulty} pick={null} />
         )}
+        <MicSetup />
         <StartArea view={view} send={send} />
         <div className="lobby-foot">
           <button className="link" onClick={leaveRoom}>

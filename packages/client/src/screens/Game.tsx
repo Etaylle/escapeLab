@@ -642,6 +642,7 @@ export function GameScreen({
         positionsRef={positionsRef}
         chatsRef={chatsRef}
         onAir={notice?.kind === 'line'}
+        parts={missingLabel}
         notesOpen={open.notes}
         onToggleNotes={open.toggleNotes}
         onOpenInfo={() => open.set({ info: true })}

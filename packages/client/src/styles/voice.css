@@ -9,43 +9,21 @@
 /* ── the lobby: the microphone, asked for on a click ────────────────────── */
 
 /*
- * A plate on the crew room's wall opposite the sign (lobby.css): the button,
- * or the microphone on, and one quiet line under it. It lies over the wall,
- * clear of the lamp in the middle, and takes no room from the crew or the
- * mission; where the room is too narrow for both plates, it hangs under the
- * sign.
+ * A row of the mission panel between the difficulty and the start (Lobby.tsx):
+ * the button, or the microphone on with its switch, and one quiet line beside
+ * them. The line wraps in the room the row leaves it, and takes a row of its
+ * own where that is less than 6em. On a phone the row stacks with the panel.
  */
 .voice-setup {
-  position: absolute;
-  top: 14px;
-  right: 16px;
-  z-index: 2;
-  max-width: calc(50% - 100px);
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
   align-items: center;
   gap: 6px 10px;
-  padding: 6px 8px;
-  border: 1px solid #26303c;
-  border-radius: 6px;
-  background: rgba(5, 8, 11, 0.82);
-}
-
-@media (max-width: 640px) {
-  .voice-setup {
-    position: relative;
-    top: auto;
-    right: auto;
-    align-self: flex-start;
-    max-width: calc(100% - 32px);
-    margin: 8px 16px 0;
-    justify-content: flex-start;
-  }
 }
 
 .voice-ask,
 .voice-talk {
+  flex: none;
   padding: 7px 12px;
   font-size: 14px;
 }
@@ -57,19 +35,13 @@
   white-space: nowrap;
 }
 
-/* How to talk, or why there is no microphone: a row of its own. */
+/* How to talk, or why there is no microphone. */
 .voice-line {
-  flex-basis: 100%;
+  flex: 1 1 6em;
   min-width: 0;
   font-size: 12px;
+  line-height: 1.3;
   color: var(--muted);
-  text-align: right;
-}
-
-@media (max-width: 640px) {
-  .voice-line {
-    text-align: left;
-  }
 }
 
 .voice-setup .voice-off {

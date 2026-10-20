@@ -200,7 +200,14 @@ describe('the lobby', () => {
       '<span class="seat-badge seat-badge-host">[star] Host</span><canvas',
     );
     expect(seats[2]).toContain('<span class="seat-badge seat-badge-wait">noch nicht bereit</span>');
-    expect(lobby(annaSees([anna]))).toContain('Startplätze werden beim Start verlost.');
+  });
+
+  it('hangs no notice on the wall: the free places’ outlines say what matters', () => {
+    const html = lobby(annaSees([anna]));
+    // The row of places is the first thing in the room.
+    expect(html).toMatch(/<section class="crew-room"[^>]*><ul class="seats">/);
+    expect(html).not.toContain('Startplätze');
+    expect(LOBBY_CSS).not.toContain('crew-room-sign');
   });
 
   it('draws a free place as a dashed outline, the first asking for the code to be shared', () => {
@@ -583,6 +590,7 @@ describe('the crew strip', () => {
         }}
         chatsRef={{ current: [] }}
         onAir={false}
+        parts={null}
         onOpenInfo={noop}
         notesOpen={false}
         onToggleNotes={() => undefined}
@@ -609,6 +617,7 @@ describe('the crew strip', () => {
         positionsRef={{ current: { run: null, players: { p1: on(13, 6), p2: on(8, 6) } } }}
         chatsRef={{ current: [] }}
         onAir={false}
+        parts={null}
         onOpenInfo={noop}
         notesOpen={false}
         onToggleNotes={noop}

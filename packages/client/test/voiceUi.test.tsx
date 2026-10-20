@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { PlayerView } from '@escapelab/core';
 import { CrewRoom } from '../src/screens/CrewRoom.js';
+import { LobbyScreen } from '../src/screens/Lobby.js';
 import { MissionHud } from '../src/screens/MissionHud.js';
 import { MicSetup } from '../src/screens/Voice.js';
 import type { VoiceMesh, VoiceState } from '../src/voice/mesh.js';
@@ -83,6 +84,7 @@ function hud(voice: VoiceMesh | null): string {
       positionsRef={{ current: { run: null, players: {} } }}
       chatsRef={{ current: [] }}
       onAir={false}
+      parts={null}
       notesOpen={false}
       onToggleNotes={noop}
       onOpenInfo={noop}
@@ -193,16 +195,49 @@ describe('the microphone in the lobby', () => {
     }
   });
 
-  it('hangs on the crew room’s wall beside the sign, and lights the seat of whoever speaks', () => {
+  it('leaves the crew room’s wall bare, and lights the seat of whoever speaks', () => {
     const room = (speaking: string[]): string =>
       within(
         voiceOf({ mic: 'off', speaking: new Set(speaking) }),
         <CrewRoom view={annaSees('lobby')} send={noop} />,
       );
-    expect(room([])).toMatch(/<p class="crew-room-sign">[^<]*<\/p><div class="voice-setup">/);
+    expect(room([])).not.toContain('voice-setup');
     expect(room(['p2']).match(/seat-speaking/g)).toHaveLength(1);
     expect(room(['p2'])).toMatch(/<li class="seat seat-speaking"><span class="seat-name">Ben/);
     expect(room([])).not.toContain('seat-speaking');
+  });
+
+  it('is a row of the mission panel, between the difficulty and the start', () => {
+    const lobby = (view: PlayerView, mic: VoiceState['mic']): string =>
+      iconsAsWords(
+        within(
+          voiceOf({ mic }),
+          <LobbyScreen view={view} send={noop} leaveRoom={noop} missions={[]} />,
+        ),
+      );
+    const host = annaSees('lobby');
+    for (const view of [host, { ...host, you: ben }]) {
+      const html = lobby(view, 'off');
+      expect(html.match(/class="voice-setup/g)).toHaveLength(1);
+      const panel = html.slice(html.indexOf('<aside class="lobby-panel'));
+      const order = ['class="lobby-levels"', 'class="voice-setup"', 'class="lobby-go"'].map(
+        (part) => panel.indexOf(part),
+      );
+      expect(order.every((at) => at >= 0)).toBe(true);
+      expect([...order].sort((a, b) => a - b)).toEqual(order);
+      // What the screenshot run clicks, and what it then looks for.
+      expect(panel).toContain('<button class="voice-ask">[mic] Mikrofon aktivieren</button>');
+      expect(lobby(view, 'on')).toMatch(
+        /<aside class="lobby-panel.*<span class="voice-on">\[mic\] Mikro an<\/span>/,
+      );
+    }
+  });
+
+  it('stands in the panel’s flow, no longer laid over the wall', () => {
+    const css = readFileSync(new URL('../src/styles/voice.css', import.meta.url), 'utf8');
+    const row = /\n\.voice-setup \{[^}]*\}/.exec(css)?.[0];
+    expect(row).toContain('display: flex;');
+    expect(row).not.toContain('position');
   });
 });
 

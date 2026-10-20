@@ -16,6 +16,8 @@ interface Props {
   chatsRef: React.MutableRefObject<ChatLine[]>;
   /** a line is on the air in the banner over the world right now */
   onAir: boolean;
+  /** what the crew still has to bring, as the objective bar says it; null for nothing */
+  parts: string | null;
   notesOpen: boolean;
   onToggleNotes: () => void;
   onOpenInfo: () => void;
@@ -107,6 +109,27 @@ function MicSwitch({ voice, touch }: { voice: Voice; touch: boolean }) {
 }
 
 /**
+ * The radio strip's line. Sideways on a phone, where the objective bar drops
+ * what the crew still has to bring, it carries that in front; elsewhere that
+ * stays hidden, and so does a line with nothing else in it (pwa.css).
+ */
+function RadioStrip({ radio, parts }: { radio: Ticker | null; parts: string | null }) {
+  if (radio === null && parts === null) {
+    return null;
+  }
+  return (
+    <span className={radio === null ? 'hud-radio hud-radio--parts' : 'hud-radio'}>
+      {parts !== null && <span className="hud-parts">{parts}</span>}
+      {radio !== null && (
+        <>
+          <Icon name={radio.icon} /> {radio.text}
+        </>
+      )}
+    </span>
+  );
+}
+
+/**
  * The permanent strip under the world. Deliberately thin: only the crew, the
  * edgework once you have read the sign, and the latest radio line, because
  * everything else either sits on the world itself or belongs in the info panel.
@@ -116,6 +139,7 @@ export function MissionHud({
   positionsRef,
   chatsRef,
   onAir,
+  parts,
   notesOpen,
   onToggleNotes,
   onOpenInfo,
@@ -167,11 +191,7 @@ export function MissionHud({
 
       <div className="hud-right">
         {view.edgework !== null && <EdgeworkChip edgework={view.edgework} />}
-        {radio !== null && (
-          <span className="hud-radio">
-            <Icon name={radio.icon} /> {radio.text}
-          </span>
-        )}
+        <RadioStrip radio={radio} parts={parts} />
         {talking !== null && <MicSwitch voice={talking} touch={touch} />}
         <button className="hud-info hud-notes" aria-pressed={notesOpen} onClick={onToggleNotes}>
           <Icon name="pencil" /> {withKey('Notizen', 'N', touch)}

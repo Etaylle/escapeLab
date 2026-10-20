@@ -73,11 +73,28 @@ html {
 }
 
 /*
+ * What the crew still has to bring rides in the HUD's radio line only
+ * sideways (below); everywhere else the objective bar says it. A radio line
+ * with nothing else in it is not shown there either, and the button after it
+ * takes over its push to the right (ui.css).
+ */
+.hud-parts,
+.hud-radio--parts {
+  display: none;
+}
+
+.hud-radio--parts:first-child + * {
+  margin-left: auto;
+}
+
+/*
  * A phone held sideways has some 360–430 px of height, and the world's zoom
  * follows the canvas's. During a run the chrome around the world is slimmer
- * there: a thin top bar, less padding, a smaller objective bar, and the crew
- * strip's buttons a thumb tall. The control cluster stays at the right edge,
- * where the notepad, the tips and the chat wheel expect it.
+ * there: a thin top bar, less padding, an objective bar of one line with a
+ * radio banner of one line under it, and the crew strip's buttons a thumb
+ * tall. All of it by this query alone, so the world keeps its size through a
+ * run. The control cluster stays at the right edge, where the notepad, the
+ * tips and the chat wheel expect it.
  */
 @media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
   .app:has(> .content--stage > .game) > .topbar {
@@ -116,6 +133,35 @@ html {
 
   .stage-top .countdown.final {
     font-size: 20px;
+  }
+
+  /* A line on the air, cut short where it runs out; the radio line has it after. */
+  .radio-banner {
+    padding: 4px 10px;
+    font-size: 13px;
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* The bar keeps to the goal: what to bring goes in front of the radio line. */
+  .stage-sub {
+    display: none;
+  }
+
+  .hud-parts {
+    display: inline;
+    margin-right: 12px;
+    color: var(--warn);
+  }
+
+  .hud-radio--parts {
+    display: block;
+  }
+
+  .hud-radio--parts:first-child + * {
+    margin-left: 0;
   }
 
   .hud-info {

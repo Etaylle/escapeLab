@@ -54,8 +54,8 @@ export function TalkButton({ className, children }: { className: string; childre
 }
 
 /**
- * The microphone in the lobby, a plate on the crew room's wall: asked for on
- * a click, never by itself. Once on, a way to switch it off and how to talk —
+ * The microphone in the lobby, a row of the mission panel: asked for on a
+ * click, never by itself. Once on, a way to switch it off and how to talk —
  * V, or a button held on a touch screen; without one, one quiet line why.
  */
 export function MicSetup() {

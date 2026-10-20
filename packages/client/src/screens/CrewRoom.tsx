@@ -4,7 +4,6 @@ import { useVoice } from '../voice/useVoice.js';
 import { makeFloorTile, makeWallTile } from '../world/art.js';
 import { CrewFigure, type Facing } from './CrewFigure.js';
 import { Icon, type IconName } from './Icon.js';
-import { MicSetup } from './Voice.js';
 
 type Member = PlayerView['players'][number];
 
@@ -229,15 +228,12 @@ function roomTiles(): CSSProperties | undefined {
 /**
  * The crew's room before the run: everybody standing on the lab's floor in
  * front of its wall, this player in the middle and a step nearer, with the
- * crew colours at their feet. On the wall the sign, and opposite it the
- * microphone; whoever speaks lights up where they stand.
+ * crew colours at their feet. Whoever speaks lights up where they stand.
  */
 export function CrewRoom({ view, send }: { view: PlayerView; send: (msg: ClientMessage) => void }) {
   const speaking = useVoice()?.state.speaking;
   return (
     <section className="crew-room" style={roomTiles()} aria-label="Crew">
-      <p className="crew-room-sign">Startplätze werden beim Start verlost.</p>
-      <MicSetup />
       <ul className="seats">
         {lineup(view).map((place, i) =>
           place.kind === 'crew' ? (

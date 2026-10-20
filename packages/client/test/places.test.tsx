@@ -799,7 +799,14 @@ describe('what the crew still has to bring', () => {
   it('says nothing is missing while only an unfound key is left', () => {
     const view = lying([{ ...fuse, delivered: true }, key]);
     expect(game(view)).not.toContain('stage-sub');
+    expect(game(view)).not.toContain('hud-parts');
     expect(info(view)).not.toContain('Noch zu bringen');
+  });
+
+  it('hands the line to the HUD as well, for a phone held sideways', () => {
+    const html = game(lying([fuse]));
+    expect(html).toContain('<span class="stage-sub">SICHERUNG fehlt noch</span>');
+    expect(html).toContain('<span class="hud-parts">SICHERUNG fehlt noch</span>');
   });
 });
 
