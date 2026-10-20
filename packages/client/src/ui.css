@@ -547,43 +547,6 @@ button.link:hover {
   }
 }
 
-.overlay.stamp {
-  pointer-events: none;
-  background: transparent;
-}
-
-.overlay.stamp span {
-  font-family: var(--mono);
-  font-size: 44px;
-  font-weight: 700;
-  letter-spacing: 4px;
-  color: var(--accent);
-  border: 3px solid var(--accent);
-  border-radius: 12px;
-  padding: 16px 30px;
-  background: rgba(7, 11, 15, 0.85);
-  box-shadow: 0 0 40px var(--accent-glow);
-  transform: rotate(-6deg);
-  animation: stampin 1.4s forwards;
-}
-
-@keyframes stampin {
-  0% {
-    transform: rotate(-6deg) scale(2.2);
-    opacity: 0;
-  }
-  18% {
-    transform: rotate(-6deg) scale(1);
-    opacity: 1;
-  }
-  80% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
 @keyframes fadein {
   from {
     opacity: 0;
@@ -2543,8 +2506,8 @@ button.link:hover {
 
 /*
  * Above a station's panel, the pages and the notepad, whatever the order
- * they came in. Only the full-screen notices lie higher: the briefing, a
- * solve's stamp and the pause, which stops the emergency's clock as well;
+ * they came in. Only the full-screen notices lie higher: the briefing and
+ * the pause, which stops the emergency's clock as well;
  * the info panel stays shut while the console is up. The console holds the
  * focus to take the keys, so its frame draws no ring of its own.
  */

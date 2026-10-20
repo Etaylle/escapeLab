@@ -234,14 +234,13 @@ function Briefing({ view }: { view: PlayerView }) {
 }
 
 /**
- * Sounds, the alarm banner and the SYSTEM-ONLINE stamp; the world strobes and
- * shakes at an alarm on its own (world/alarm.ts).
+ * The start's sound and the alarm banner; the world strobes and shakes at an
+ * alarm on its own (world/alarm.ts), and a solved station's device sweeps,
+ * sounds and closes itself (puzzles/Device.tsx).
  */
-function useFeedback(view: PlayerView): { alarmVisible: boolean; stamp: boolean } {
+function useFeedback(view: PlayerView): { alarmVisible: boolean } {
   const [alarmVisible, setAlarmVisible] = useState(false);
-  const [stamp, setStamp] = useState(false);
   const prevPenalty = useRef(view.penaltySeq);
-  const prevPuzzle = useRef(view.puzzle?.index ?? 0);
   const started = useRef(false);
 
   useEffect(() => {
@@ -262,20 +261,7 @@ function useFeedback(view: PlayerView): { alarmVisible: boolean; stamp: boolean 
     return undefined;
   }, [view.penaltySeq]);
 
-  useEffect(() => {
-    const index = view.currentPuzzleIndex;
-    if (index > prevPuzzle.current) {
-      play('solved');
-      setStamp(true);
-      const timer = setTimeout(() => setStamp(false), 1400);
-      prevPuzzle.current = index;
-      return () => clearTimeout(timer);
-    }
-    prevPuzzle.current = index;
-    return undefined;
-  }, [view.currentPuzzleIndex]);
-
-  return { alarmVisible, stamp };
+  return { alarmVisible };
 }
 
 /**
@@ -729,17 +715,15 @@ function PauseOverlay({ pausedFor }: { pausedFor: string[] }) {
   );
 }
 
-/** What comes and goes over a run: the clock's red edge, the briefing, the stamp, the pause. */
+/** What comes and goes over a run: the clock's red edge, the briefing, the pause. */
 function RunOverlays({
   view,
   map,
   coldOpen,
-  stamp,
 }: {
   view: PlayerView;
   map: MapView;
   coldOpen: ColdOpen;
-  stamp: boolean;
 }) {
   return (
     <>
@@ -747,11 +731,6 @@ function RunOverlays({
         <CriticalVignette deadlineAt={view.deadlineAt} escaping={escaping(map)} />
       )}
       {!coldOpen.intro && <Briefing view={view} />}
-      {stamp && (
-        <div className="overlay stamp" aria-hidden="true">
-          <span>✔ SYSTEM ONLINE</span>
-        </div>
-      )}
       {view.pausedFor !== null && <PauseOverlay pausedFor={view.pausedFor} />}
     </>
   );
@@ -831,7 +810,7 @@ export function GameScreen({
   send,
   finale,
 }: Props) {
-  const { alarmVisible, stamp } = useFeedback(view);
+  const { alarmVisible } = useFeedback(view);
   const coldOpen = useColdOpen(view);
   const notice = useNotices(view, coldOpen.gates);
   const open = useOpened(view);
@@ -851,7 +830,7 @@ export function GameScreen({
 
   return (
     <div className={ending}>
-      {live && <RunOverlays view={view} map={map} coldOpen={coldOpen} stamp={stamp} />}
+      {live && <RunOverlays view={view} map={map} coldOpen={coldOpen} />}
       {live && map.sabotage !== null && relay !== undefined && (
         <RelayAlert sabotage={map.sabotage} relay={relay} send={send} />
       )}

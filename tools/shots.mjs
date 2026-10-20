@@ -11,10 +11,11 @@
  * crew is two players. Where the first station is a sync station, both
  * press it together, and the run fails unless it solves; right after the
  * presses device-solved.png catches the solved device, its status strip
- * sweeping green, before it closes itself — the run fails where it never
- * shows solved or is gone before the shot. Where the station after it has
- * two consoles, each takes one and both panels are captured; a Signalkette,
- * as in the Systemcheck, they work from both sides until it solves too.
+ * sweeping green, before it closes itself — the run fails where any sync
+ * station never shows solved, lies under an overlay, or does not close
+ * itself. Where the station after it has two consoles, each takes one and
+ * both panels are captured; a Signalkette, as in the Systemcheck, they work
+ * from both sides until it solves too.
  * Where the first station has two consoles, as Blackout's Notstrom-Kasten,
  * the guest holds the plate door for the host on the way to console A where
  * needed, then both consoles are captured and the meter measures every wire
@@ -703,41 +704,82 @@ async function pressTogether(players, station) {
 /** How long after a solve a device closes itself, as puzzles/Device.tsx says (SOLVED_CLOSE_MS). */
 const SOLVED_CLOSE_MS = 800;
 
+/** Whether device-solved.png is taken: the first sync station the run solves takes it. */
+let solvedShot = false;
+
 /**
- * device-solved.png: a sync station right after the crew's presses — solved,
- * its status strip sweeping green along the bezel's foot and its plate
- * dimmed — before it closes itself. Fails where the device never shows solved
- * or has closed before the shot.
+ * What a solved device shows at its shot: the status strip's LEDs gone green
+ * so far, and any overlay lying over the device — nothing may cover it, its
+ * own sweep is the solve's whole show.
+ */
+function solvedLook(page) {
+  return page.evaluate(() => {
+    const view = document.defaultView;
+    const device = document.querySelector('.station-modal .device--solved');
+    const strip = [...document.querySelectorAll('.station-modal .device-strip-led')];
+    const green = (led) => {
+      const [r, g] = (view.getComputedStyle(led).backgroundColor.match(/\d+/g) ?? []).map(Number);
+      return g > 150 && g > r;
+    };
+    const box = device?.getBoundingClientRect();
+    const over = (el) => {
+      const r = el.getBoundingClientRect();
+      const meets = box !== undefined && r.left < box.right && r.right > box.left;
+      return meets && r.top < box.bottom && r.bottom > box.top;
+    };
+    const covers = [...document.querySelectorAll('.overlay')]
+      .filter((el) => over(el) && Number(view.getComputedStyle(el).opacity) > 0.05)
+      .map((el) => el.getAttribute('class'));
+    return { lit: strip.filter(green).length, all: strip.length, covers };
+  });
+}
+
+/**
+ * A sync station right after the crew's presses: it has to show solved — its
+ * status strip sweeping green along the bezel's foot, its plate dimmed — with
+ * nothing over it, and close itself SOLVED_CLOSE_MS later. The first one the
+ * run solves is shot as it sweeps (device-solved.png). Fails where it never
+ * shows solved, lies covered, or does not close itself.
  */
 async function captureSolved(player, station) {
   const solved = player.page.locator('.station-modal .device--solved');
   const since = Date.now();
   if (!(await attached(solved, 3000))) {
-    console.log(`device-solved.png  !! "${station.title}" never showed solved for ${player.name}`);
-    fail(`device-solved.png: "${station.title}" never showed solved`);
+    console.log(`device-solved      !! "${station.title}" never showed solved for ${player.name}`);
+    fail(`device-solved: "${station.title}" never showed solved`);
     return;
   }
   const seen = Date.now();
   await sleep(180); // the sweep under way along the strip
-  await capture(player.page, 'device-solved.png');
-  const shot = Date.now();
-  const open = await solved.isVisible();
-  const leds = await player.page.evaluate(() => {
-    const strip = [...document.querySelectorAll('.station-modal .device-strip-led')];
-    const green = (led) => {
-      const colour = document.defaultView.getComputedStyle(led).backgroundColor;
-      const [r, g] = (colour.match(/\d+/g) ?? []).map(Number);
-      return g > 150 && g > r;
-    };
-    return { lit: strip.filter(green).length, all: strip.length };
-  });
-  console.log(
-    `device-solved.png  ${player.name}: "${station.title}" solved ${seen - since} ms after the ` +
-      `presses, shot ${shot - seen} ms into it — ${leds.lit} of ${leds.all} strip LEDs green ` +
-      `then, the device ${open ? 'still open' : '!! closed already'}`,
+  const look = await solvedLook(player.page);
+  const first = !solvedShot;
+  if (first) {
+    await capture(player.page, 'device-solved.png');
+    solvedShot = true;
+  }
+  const shot = Date.now() - seen;
+  const gone = await solved.waitFor({ state: 'detached', timeout: SOLVED_CLOSE_MS + 1500 }).then(
+    () => Date.now() - seen,
+    () => null,
   );
-  if (!open || shot - seen >= SOLVED_CLOSE_MS) {
-    fail(`device-solved.png: the device closed before the shot (${shot - seen} ms in)`);
+  const timing = { since: seen - since, shot, gone };
+  reportSolved(`${player.name}: "${station.title}"`, first, look, timing);
+}
+
+/**
+ * A solved sync station in the log — when it showed solved after the presses,
+ * when it was looked at, what lay over it, when it closed itself — and in the
+ * failures where it was covered, looked at too late or never closed itself.
+ */
+function reportSolved(what, first, look, { since, shot, gone }) {
+  console.log(
+    `${first ? 'device-solved.png ' : 'device-solved     '} ${what} solved ${since} ms after the ` +
+      `presses, shot ${shot} ms into it — ${look.lit} of ${look.all} strip LEDs green, ` +
+      `${look.covers.length === 0 ? 'nothing over it' : `!! under ${look.covers.join(', ')}`}; ` +
+      (gone === null ? '!! it stayed open' : `it closed itself after ${gone} ms`),
+  );
+  if (look.covers.length > 0 || gone === null || shot >= SOLVED_CLOSE_MS) {
+    fail(`device-solved: ${what} covered, looked at too late, or never closed itself`);
   }
 }
 
