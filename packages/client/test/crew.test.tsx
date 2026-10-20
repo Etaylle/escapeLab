@@ -299,7 +299,9 @@ describe('the lobby', () => {
 
   it('gives the host the mission strip and the difficulty to pick, the others only to see', () => {
     const host = lobby(annaSees([anna, ben]), [blackout, tutorial]);
-    expect(host).toContain('<div class="lobby-missions" role="radiogroup" aria-label="Mission wechseln">');
+    expect(host).toContain(
+      '<div class="lobby-missions" role="radiogroup" aria-label="Mission wechseln">',
+    );
     expect(host).not.toContain('<select');
     expect(host.match(/<button class="level-chip[ "]/g)).toHaveLength(3);
     expect(host).toContain('aria-pressed="true">Normal</button>');
@@ -317,11 +319,15 @@ describe('the lobby', () => {
       '<p class="lobby-facts"><span>[clock] 8 min</span><span>[crew] 2–3 Spieler</span>' +
       '<span>[station] 5 Stationen</span></p>';
     const guest = lobby(benSees([anna, ben], false), [withMap, tutorial]);
-    expect(guest).toContain('<h1>Blackout im Labor</h1><div class="lobby-map"><svg class="map-thumb"');
+    expect(guest).toContain(
+      '<h1>Blackout im Labor</h1><div class="lobby-map"><svg class="map-thumb"',
+    );
     expect(guest).toContain(facts);
     // The host's strip stands in the map's place, every card with a map of its own.
     const host = lobby(annaSees([anna]), [withMap, tutorial]);
-    expect(host).toContain('<h1>Blackout im Labor</h1><div class="lobby-missions" role="radiogroup"');
+    expect(host).toContain(
+      '<h1>Blackout im Labor</h1><div class="lobby-missions" role="radiogroup"',
+    );
     expect(host).not.toContain('class="lobby-map"');
     expect(host).toContain(`</div>${facts}`);
     // With one mission there is nothing to pick: the host sees the map like everyone.
@@ -347,7 +353,7 @@ describe('the lobby', () => {
     return iconsAsWords(html).match(/<button class="lobby-mission[ "].*?<\/button>/g) ?? [];
   }
 
-  it('lays every mission out as a card in one radio group, the room’s ticked and Tab’s stop', () => {
+  it('lays every mission out as a card in one radio group, the room’s ticked, Tab’s stop', () => {
     const [first, second] = strip('systemcheck', [played]);
     expect(first).toBe(
       '<button class="lobby-mission" role="radio" aria-checked="false" tabindex="-1" ' +
