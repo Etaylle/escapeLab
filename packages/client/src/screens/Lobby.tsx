@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   difficultyInfos,
   type ClientMessage,
@@ -8,14 +8,13 @@ import {
 } from '@escapelab/core';
 import { crewSizeText } from './Crew.js';
 import { CrewRoom } from './CrewRoom.js';
+import { Icon } from './Icon.js';
 import { MapThumb } from './MapThumb.js';
 
 type Send = (msg: ClientMessage) => void;
 
 interface Props {
   view: PlayerView;
-  /** the room's code, for inviting; null before the server has named it */
-  roomCode: string | null;
   send: Send;
   leaveRoom: () => void;
   missions: MissionInfo[];
@@ -52,25 +51,46 @@ function MissionHead({ view, info }: { view: PlayerView; info: MissionInfo | und
         </div>
       )}
       <p className="lobby-facts">
-        ⏱ {Math.round(view.timeLimitSec / 60)} min · 👥 {crewSizeText(view.crewSize)}
-        {info !== undefined && ` · 🧩 ${info.puzzleCount} Stationen`}
+        <span>
+          <Icon name="clock" /> {Math.round(view.timeLimitSec / 60)} min
+        </span>
+        <span>
+          <Icon name="crew" /> {crewSizeText(view.crewSize)}
+        </span>
+        {info !== undefined && (
+          <span>
+            <Icon name="station" /> {info.puzzleCount} Stationen
+          </span>
+        )}
       </p>
     </header>
   );
 }
 
-/** The story in two lines, the rest behind „mehr". */
-function Story({ text }: { text: string }) {
-  const [open, setOpen] = useState(false);
+interface StoryProps {
+  text: string;
+  /** whether „mehr" is open: the whole story, and on a phone the map as well */
+  open: boolean;
+  toggle: () => void;
+}
+
+/**
+ * The story in two lines, the rest behind „mehr". On a phone the story and
+ * the map both wait behind „mehr", so the crew stays in view over the start;
+ * there „mehr" shows for a short story too (lobby.css).
+ */
+function Story({ text, open, toggle }: StoryProps) {
   const long = text.length > STORY_FITS;
   return (
     <div className="lobby-story">
       <p className={long && !open ? 'story story-short' : 'story'}>{text}</p>
-      {long && (
-        <button className="link" aria-expanded={open} onClick={() => setOpen(!open)}>
-          {open ? 'weniger' : 'mehr'}
-        </button>
-      )}
+      <button
+        className={long ? 'link lobby-more' : 'link lobby-more lobby-more-phone'}
+        aria-expanded={open}
+        onClick={toggle}
+      >
+        {open ? 'weniger' : 'mehr'}
+      </button>
     </div>
   );
 }
@@ -150,6 +170,7 @@ function HostSetup({ view, send, missions }: HostSetupProps) {
 /**
  * The host's start, locked with the reason while it is; everyone else's
  * ready switch, with what the start still waits for once they are ready.
+ * On a phone this bar sticks to the bottom of the window (lobby.css).
  */
 function StartArea({ view, send }: { view: PlayerView; send: Send }) {
   const blocker = startBlocker(view);
@@ -161,7 +182,11 @@ function StartArea({ view, send }: { view: PlayerView; send: Send }) {
           disabled={blocker !== null}
           onClick={() => send({ kind: 'start-mission' })}
         >
-          {blocker ?? '▶ Mission starten'}
+          {blocker ?? (
+            <>
+              <Icon name="play" /> Mission starten
+            </>
+          )}
         </button>
       </div>
     );
@@ -173,7 +198,13 @@ function StartArea({ view, send }: { view: PlayerView; send: Send }) {
         className={ready ? 'lobby-start' : 'primary lobby-start'}
         onClick={() => send({ kind: 'set-ready', ready: !ready })}
       >
-        {ready ? '✓ Bereit — doch nicht?' : 'Ich bin bereit'}
+        {ready ? (
+          <>
+            <Icon name="check" /> Bereit — doch nicht?
+          </>
+        ) : (
+          'Ich bin bereit'
+        )}
       </button>
       <p className="muted lobby-go-note">
         {ready
@@ -184,61 +215,23 @@ function StartArea({ view, send }: { view: PlayerView; send: Send }) {
   );
 }
 
-type CopyState = 'idle' | 'done' | 'failed';
-
-const COPY_LABELS: Readonly<Record<CopyState, string>> = {
-  idle: '⧉ Link kopieren',
-  done: '✓ Link kopiert',
-  failed: '✗ nicht kopiert',
-};
-
-/** The code to read out, and a link that drops the next person straight into the room. */
-function Invite({ code }: { code: string }) {
-  const [copy, setCopy] = useState<CopyState>('idle');
-  useEffect(() => {
-    if (copy === 'idle') {
-      return undefined;
-    }
-    const timer = setTimeout(() => setCopy('idle'), 1500);
-    return () => clearTimeout(timer);
-  }, [copy]);
-
-  const copyLink = (): void => {
-    const link = `${window.location.origin}${window.location.pathname}?room=${code}`;
-    // Without a secure origin, as on a LAN address, the browser has no clipboard.
-    if (navigator.clipboard === undefined) {
-      setCopy('failed');
-      return;
-    }
-    navigator.clipboard.writeText(link).then(
-      () => setCopy('done'),
-      () => setCopy('failed'),
-    );
-  };
-
-  return (
-    <div className="lobby-invite">
-      <span className="lobby-invite-label">Code</span>
-      <strong className="lobby-code">{code}</strong>
-      <button className="lobby-copy" onClick={copyLink}>
-        {COPY_LABELS[copy]}
-      </button>
-    </div>
-  );
-}
-
 /**
  * The lobby as the crew's room: everybody on stage, the colours at your feet,
- * the mission beside them with its settings, the start and the invite.
+ * the mission beside them with its settings and the start. The room's code
+ * stands once, in the header, where the free places point.
  */
-export function LobbyScreen({ view, roomCode, send, leaveRoom, missions }: Props) {
+export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
   const info = missions.find((m) => m.id === view.missionId);
+  const [more, setMore] = useState(false);
   return (
     <div className="lobby">
       <CrewRoom view={view} send={send} />
-      <aside className="lobby-panel" aria-label="Mission">
+      <aside
+        className={more ? 'lobby-panel lobby-panel-more' : 'lobby-panel'}
+        aria-label="Mission"
+      >
         <MissionHead view={view} info={info} />
-        <Story text={view.storyText} />
+        <Story text={view.storyText} open={more} toggle={() => setMore(!more)} />
         {view.you.isHost ? (
           <HostSetup view={view} send={send} missions={missions} />
         ) : (
@@ -246,7 +239,6 @@ export function LobbyScreen({ view, roomCode, send, leaveRoom, missions }: Props
         )}
         <StartArea view={view} send={send} />
         <div className="lobby-foot">
-          {roomCode !== null && <Invite code={roomCode} />}
           <button className="link" onClick={leaveRoom}>
             Raum verlassen
           </button>

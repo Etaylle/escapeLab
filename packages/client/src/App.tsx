@@ -3,6 +3,7 @@ import { isMuted, setMuted } from './world/audio.js';
 import { difficultyInfos, type Difficulty, type MissionInfo } from '@escapelab/core';
 import { useGameConnection } from './ws.js';
 import { HandbookScreen } from './screens/Handbook.js';
+import { Icon, type IconName } from './screens/Icon.js';
 import { JoinScreen } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
 import { GameScreen } from './screens/Game.js';
@@ -13,35 +14,62 @@ function difficultyLabel(id: Difficulty): string {
   return difficultyInfos().find((level) => level.id === id)?.label ?? id;
 }
 
-function RoomCode({ code }: { code: string }) {
-  const [copied, setCopied] = useState(false);
+/** How copying the invite went: not tried, done, or failed. */
+type CopyState = 'idle' | 'done' | 'failed';
+
+const COPY_SAYS: Readonly<Record<CopyState, { icon: IconName; text: string }>> = {
+  idle: { icon: 'copy', text: 'Link' },
+  done: { icon: 'check', text: 'Link kopiert' },
+  failed: { icon: 'cross', text: 'nicht kopiert' },
+};
+
+/**
+ * The room's code, the one place it stands — in the lobby too, where the
+ * free places point up to it. It stays readable for saying out loud; the
+ * button hands over a link that drops the other person straight into the
+ * room, and says whether that worked.
+ */
+export function RoomCode({ code }: { code: string }) {
+  const [copy, setCopy] = useState<CopyState>('idle');
   useEffect(() => {
-    if (!copied) {
+    if (copy === 'idle') {
       return undefined;
     }
-    const timer = setTimeout(() => setCopied(false), 1500);
+    const timer = setTimeout(() => setCopy('idle'), 1500);
     return () => clearTimeout(timer);
-  }, [copied]);
+  }, [copy]);
 
-  // The code stays readable for saying out loud; the button hands over a link
-  // that drops the other person straight into this room.
   const invite = `${window.location.origin}${window.location.pathname}?room=${code}`;
+  const copyLink = (): void => {
+    // Without a secure origin, as on a LAN address, the browser has no clipboard.
+    if (navigator.clipboard === undefined) {
+      setCopy('failed');
+      return;
+    }
+    navigator.clipboard.writeText(invite).then(
+      () => setCopy('done'),
+      () => setCopy('failed'),
+    );
+  };
+  const says = COPY_SAYS[copy];
   return (
-    <button
-      className="room-code"
-      title={`Einladungslink kopieren: ${invite}`}
-      onClick={() => {
-        navigator.clipboard
-          ?.writeText(invite)
-          .then(() => setCopied(true))
-          .catch(() => undefined);
-      }}
-    >
+    <button className="room-code" title={`Einladungslink kopieren: ${invite}`} onClick={copyLink}>
       <span className="room-code-prefix">Raum: </span>
       <strong>{code}</strong>
-      <span className="room-code-action"> {copied ? '✓ Link kopiert' : '⧉ Link'}</span>
+      <span className="room-code-action">
+        {' '}
+        <Icon name={says.icon} /> {says.text}
+      </span>
     </button>
   );
+}
+
+/** Which screen is up, so that each opens at its top. */
+function screenOf(conn: ReturnType<typeof useGameConnection>): string {
+  if (conn.spectatorView !== null) {
+    return 'spectate';
+  }
+  return conn.view?.phase ?? 'join';
 }
 
 export function App() {
@@ -71,16 +99,21 @@ export function App() {
       .catch(() => setMissions([]));
   }, []);
 
-  // Join screen and booklet share one scrolling area; each opens at its top.
+  // Every screen shares one scrolling area, the booklet too; each opens at its
+  // top — the lobby on a phone would otherwise open where the join screen was
+  // left, scrolled past the crew.
+  const screen = screenOf(conn);
   useLayoutEffect(() => {
     contentRef.current?.scrollTo(0, 0);
-  }, [handbook]);
+  }, [handbook, screen]);
 
   return (
     <div className="app">
       <div className="scanlines" aria-hidden="true" />
       <header className="topbar">
-        <span className="logo">⬢ ESCAPELAB</span>
+        <span className="logo">
+          <Icon name="hex" /> ESCAPELAB
+        </span>
         {conn.roomCode !== null && <RoomCode code={conn.roomCode} />}
         {running !== null && (
           <span className="topbar-mission">
@@ -91,13 +124,14 @@ export function App() {
         <button
           className="sound-toggle"
           title={sound ? 'Ton ausschalten' : 'Ton einschalten'}
+          aria-label="Ton"
           aria-pressed={sound}
           onClick={() => {
             setMuted(sound);
             setSound(!sound);
           }}
         >
-          {sound ? '🔊' : '🔇'}
+          <Icon name={sound ? 'speaker' : 'speaker-off'} />
         </button>
         <span className={`conn conn-${conn.status}`}>
           {conn.status === 'open' ? '●' : '○'}
@@ -163,7 +197,6 @@ export function App() {
         return (
           <LobbyScreen
             view={conn.view}
-            roomCode={conn.roomCode}
             send={conn.send}
             leaveRoom={conn.leaveRoom}
             missions={missions}

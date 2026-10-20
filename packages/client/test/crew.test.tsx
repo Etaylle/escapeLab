@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -8,6 +9,7 @@ import type {
   RoomSummary,
   SpectatorView,
 } from '@escapelab/core';
+import { RoomCode } from '../src/App.js';
 import { crewSizeText, crewTags, presenceNear } from '../src/screens/Crew.js';
 import { lineup, type Place } from '../src/screens/CrewRoom.js';
 import { EndScreen } from '../src/screens/End.js';
@@ -15,7 +17,7 @@ import { JoinScreen } from '../src/screens/Join.js';
 import { LobbyScreen, startBlocker } from '../src/screens/Lobby.js';
 import { MissionHud } from '../src/screens/MissionHud.js';
 import { audienceTags, SpectateScreen } from '../src/screens/Spectate.js';
-import { mapWith } from './fixtures.js';
+import { iconsAsWords, mapWith, PICTOGRAPH } from './fixtures.js';
 
 const noop = (): void => undefined;
 
@@ -91,9 +93,29 @@ const tutorial: MissionInfo = {
   tiles: [],
 };
 
+const LOBBY_CSS = readFileSync(new URL('../src/styles/lobby.css', import.meta.url), 'utf8');
+
+/** The block a stylesheet opens with `head`, braces and all; nested blocks included. */
+function blockOf(sheet: string, head: string): string {
+  const start = sheet.indexOf(head);
+  if (start < 0) {
+    throw new Error(`the stylesheet has no "${head}"`);
+  }
+  let depth = 0;
+  for (let i = start + head.length - 1; i < sheet.length; i++) {
+    depth += sheet.charAt(i) === '{' ? 1 : sheet.charAt(i) === '}' ? -1 : 0;
+    if (depth === 0) {
+      return sheet.slice(start, i + 1);
+    }
+  }
+  throw new Error(`"${head}" is never closed`);
+}
+
 function lobby(view: PlayerView, missions: MissionInfo[] = []): string {
-  return renderToStaticMarkup(
-    <LobbyScreen view={view} roomCode="QXT4" send={noop} leaveRoom={noop} missions={missions} />,
+  return iconsAsWords(
+    renderToStaticMarkup(
+      <LobbyScreen view={view} send={noop} leaveRoom={noop} missions={missions} />,
+    ),
   );
 }
 
@@ -170,11 +192,13 @@ describe('the lobby', () => {
     expect(seats).toHaveLength(3);
     expect(seats[0]).toBe(
       '<li class="seat"><span class="seat-name">Ben</span>' +
-        '<span class="seat-badge seat-badge-ready">✓ bereit</span>' +
+        '<span class="seat-badge seat-badge-ready">[check] bereit</span>' +
         '<canvas class="seat-figure" aria-hidden="true"></canvas></li>',
     );
     expect(seats[1]).toContain('<li class="seat seat-you"><span class="seat-name">Anna</span>');
-    expect(seats[1]).toContain('<span class="seat-badge seat-badge-host">★ Host</span><canvas');
+    expect(seats[1]).toContain(
+      '<span class="seat-badge seat-badge-host">[star] Host</span><canvas',
+    );
     expect(seats[2]).toContain('<span class="seat-badge seat-badge-wait">noch nicht bereit</span>');
     expect(lobby(annaSees([anna]))).toContain('Startplätze werden beim Start verlost.');
   });
@@ -213,16 +237,26 @@ describe('the lobby', () => {
     expect(chips).toHaveLength(3);
     expect(chips[0]).toBe(
       '<button class="chip chip-mine" style="--chip:#2dd4bf" aria-pressed="true" ' +
-        'aria-label="Türkis — deine Farbe" title="Türkis — deine Farbe">✓</button>',
+        'aria-label="Türkis — deine Farbe" title="Türkis — deine Farbe">[check]</button>',
     );
     expect(chips[1]).toBe(
-      '<button class="chip" style="--chip:#f472b6" disabled="" aria-pressed="false" ' +
+      '<button class="chip chip-taken" style="--chip:#f472b6" disabled="" aria-pressed="false" ' +
         'aria-label="Pink — trägt Ben" title="Pink — trägt Ben">B</button>',
     );
     expect(chips[2]).toBe(
       '<button class="chip" style="--chip:#fbbf24" aria-pressed="false" ' +
         'aria-label="Gelb" title="Gelb"></button>',
     );
+  });
+
+  it('keeps a taken colour in its full hue, struck through under the initial', () => {
+    const taken = blockOf(LOBBY_CSS, '.chip-taken:disabled {');
+    // The chip's own colour is the ground; over it only a slash, clear at both ends.
+    expect(taken).toMatch(/background:[^;]*var\(--chip\);/);
+    expect(taken).toContain('transparent 0 44%');
+    expect(taken).toContain('transparent 56%');
+    // No rule darkens every taken chip as a whole any more.
+    expect(LOBBY_CSS).not.toContain('.chip:disabled');
   });
 
   it('keeps the start locked with the reason on it, and has no roles to pick', () => {
@@ -234,7 +268,7 @@ describe('the lobby', () => {
     const waiting = lobby(annaSees([anna, ben, { ...carla, ready: true }]));
     expect(waiting).toContain('disabled="">Warten auf Ben …</button>');
     const ready = lobby(annaSees([anna, { ...ben, ready: true }]));
-    expect(ready).toContain('<button class="primary lobby-start">▶ Mission starten</button>');
+    expect(ready).toContain('<button class="primary lobby-start">[play] Mission starten</button>');
   });
 
   it('lets a guest say ready and tells them what the start still waits for', () => {
@@ -243,7 +277,7 @@ describe('the lobby', () => {
     expect(unready).toContain('Lies die Mission — dann melde dich bereit.');
     expect(unready).not.toContain('Mission starten');
     const waiting = lobby(benSees([anna, { ...ben, ready: true }, carla], true));
-    expect(waiting).toContain('<button class="lobby-start">✓ Bereit — doch nicht?</button>');
+    expect(waiting).toContain('<button class="lobby-start">[check] Bereit — doch nicht?</button>');
     expect(waiting).toContain('Warten auf Carla …');
     expect(lobby(benSees([anna, { ...ben, ready: true }], true))).toContain(
       'Alle bereit — der Host startet.',
@@ -269,7 +303,10 @@ describe('the lobby', () => {
     expect(html).toContain(
       '<h1>Blackout im Labor</h1><div class="lobby-map"><svg class="map-thumb"',
     );
-    expect(html).toContain('<p class="lobby-facts">⏱ 8 min · 👥 2–3 Spieler · 🧩 5 Stationen</p>');
+    expect(html).toContain(
+      '<p class="lobby-facts"><span>[clock] 8 min</span><span>[crew] 2–3 Spieler</span>' +
+        '<span>[station] 5 Stationen</span></p>',
+    );
   });
 
   it('cuts a long story to two lines with „mehr", and leaves a short one whole', () => {
@@ -278,17 +315,70 @@ describe('the lobby', () => {
       'Ihr seid quer durchs Labor verstreut.';
     const long = lobby(annaSees([anna], { storyText: story }));
     expect(long).toContain('<p class="story story-short">23:47 Uhr');
-    expect(long).toContain('<button class="link" aria-expanded="false">mehr</button>');
+    expect(long).toContain('<button class="link lobby-more" aria-expanded="false">mehr</button>');
     const short = lobby(annaSees([anna]));
     expect(short).toContain('<p class="story">Stromausfall.</p>');
-    expect(short).not.toContain('aria-expanded');
+    // Only a phone needs „mehr" under a story that fits: there it opens the map too.
+    expect(short).toContain(
+      '<button class="link lobby-more lobby-more-phone" aria-expanded="false">mehr</button>',
+    );
+    expect(short).toContain('<aside class="lobby-panel" aria-label="Mission">');
   });
 
-  it('hands out the room code with a link to copy, and the way out', () => {
+  it('keeps the crew in view on a phone: the start at the foot, the map behind „mehr"', () => {
+    const stacked = blockOf(LOBBY_CSS, '@media (max-width: 860px) {');
+    const bar = blockOf(stacked, '.lobby-go {');
+    expect(bar).toContain('position: sticky;');
+    expect(bar).toContain('bottom: 0;');
+    const phone = blockOf(LOBBY_CSS, '@media (max-width: 480px) {');
+    const hidden = blockOf(
+      phone,
+      '.lobby-panel:not(.lobby-panel-more) .lobby-map,\n' +
+        '  .lobby-panel:not(.lobby-panel-more) .lobby-story .story {',
+    );
+    expect(hidden).toContain('display: none;');
+    expect(blockOf(phone, '.lobby-more-phone {')).toContain('display: inline-block;');
+  });
+
+  it('leaves the room code to the header, where the free place points, and has the way out', () => {
     const html = lobby(annaSees([anna]));
-    expect(html).toContain('<strong class="lobby-code">QXT4</strong>');
-    expect(html).toContain('<button class="lobby-copy">⧉ Link kopieren</button>');
-    expect(html).toContain('<button class="link">Raum verlassen</button>');
+    expect(html).toContain('frei — Code oben teilen');
+    expect(html).not.toMatch(/lobby-code|lobby-invite|room-code|Link kopieren/);
+    expect(html).toContain('<div class="lobby-foot"><button class="link">Raum verlassen</button>');
+  });
+
+  it('draws its icons, never the platform’s emoji', () => {
+    const palette = [
+      { color: '#2dd4bf', takenByName: 'Anna' },
+      { color: '#f472b6', takenByName: 'Ben' },
+    ];
+    const views = [
+      annaSees([anna, { ...ben, ready: true }], { palette }),
+      benSees([anna, { ...ben, ready: true }, carla], true),
+    ];
+    for (const view of views) {
+      const html = renderToStaticMarkup(
+        <LobbyScreen view={view} send={noop} leaveRoom={noop} missions={[blackout, tutorial]} />,
+      );
+      expect(html).toContain('class="icon icon-');
+      expect(html).not.toMatch(PICTOGRAPH);
+    }
+  });
+});
+
+describe('the room code in the header', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('stands once, to read out, with the link to copy', () => {
+    vi.stubGlobal('window', { location: { origin: 'http://lab', pathname: '/' } });
+    const html = iconsAsWords(renderToStaticMarkup(<RoomCode code="QXT4" />));
+    expect(html).toBe(
+      '<button class="room-code" title="Einladungslink kopieren: http://lab/?room=QXT4">' +
+        '<span class="room-code-prefix">Raum: </span><strong>QXT4</strong>' +
+        '<span class="room-code-action"> [copy] Link</span></button>',
+    );
   });
 });
 
@@ -297,12 +387,29 @@ describe('the join screen', () => {
     vi.unstubAllGlobals();
   });
 
-  function joinScreen(missions: MissionInfo[], rooms: RoomSummary[] = []): string {
+  /** The join screen's markup as drawn: its icons by name, or as they are with `raw`. */
+  function joinScreen(missions: MissionInfo[], rooms: RoomSummary[] = [], raw = false): string {
     vi.stubGlobal('window', { location: { search: '' } });
-    return renderToStaticMarkup(
+    const html = renderToStaticMarkup(
       <JoinScreen send={noop} connected missions={missions} rooms={rooms} openHandbook={noop} />,
     );
+    return raw ? html : iconsAsWords(html);
   }
+
+  /** A room of two for three, waiting in its lobby, or with `phase` already running. */
+  const room = (phase: RoomSummary['phase'] = 'lobby', code = 'QXT4'): RoomSummary => ({
+    code,
+    missionId: 'blackout',
+    missionTitle: 'Blackout im Labor',
+    difficulty: 'normal',
+    phase,
+    players: [
+      { name: 'Anna', color: '#2dd4bf', connected: true },
+      { name: 'Ben', color: '#f472b6', connected: true },
+    ],
+    capacity: 3,
+    free: 1,
+  });
 
   /** The mission cards, in order. */
   const cards = (html: string): string[] =>
@@ -313,7 +420,11 @@ describe('the join screen', () => {
     expect(html).toContain('<div class="mission-grid">');
     const both = cards(html);
     expect(both.map((card) => card.match(/class="mission-meta"/g)?.length)).toEqual([1, 1]);
-    expect(both[1]).toContain('<span class="mission-meta">2 Spieler · 7 min · 3 Rätsel</span>');
+    expect(both[1]).toContain('<span class="mission-meta">2 Spieler · 7 min · 3 Stationen</span>');
+  });
+
+  it('counts Stationen, as the lobby and the run do — never Rätsel', () => {
+    expect(joinScreen([blackout, tutorial], [room()])).not.toContain('Rätsel');
   });
 
   it('spells out the subtitle on the picked card only, the others carry it as a tooltip', () => {
@@ -327,23 +438,19 @@ describe('the join screen', () => {
   });
 
   it('says how many play each mission and how full each room is', () => {
-    const room: RoomSummary = {
-      code: 'QXT4',
-      missionId: 'blackout',
-      missionTitle: 'Blackout im Labor',
-      difficulty: 'normal',
-      phase: 'lobby',
-      players: [
-        { name: 'Anna', color: '#2dd4bf', connected: true },
-        { name: 'Ben', color: '#f472b6', connected: true },
-      ],
-      capacity: 3,
-      free: 1,
-    };
-    const html = joinScreen([blackout], [room]);
-    expect(html).toContain('2–3 Spieler · 8 min · 5 Rätsel');
-    expect(html).toContain('👥 2/3');
+    const html = joinScreen([blackout], [room()]);
+    expect(html).toContain('2–3 Spieler · 8 min · 5 Stationen');
+    expect(html).toContain('<span class="room-meta">[crew] 2/3 · normal · Code QXT4</span>');
     expect(html).not.toMatch(/Rolle/);
+    const running = joinScreen([blackout], [room('playing')]);
+    expect(running).toContain('[crew] 2/3 · [play] läuft gerade · normal · Code QXT4');
+    expect(running).toContain('[eye] Zuschauen</button>');
+  });
+
+  it('draws its icons, never the platform’s emoji', () => {
+    const html = joinScreen([blackout, tutorial], [room(), room('playing', 'ZK9P')], true);
+    expect(html).toContain('class="icon icon-');
+    expect(html).not.toMatch(PICTOGRAPH);
   });
 });
 
@@ -475,6 +582,7 @@ describe('the crew strip', () => {
           current: { run: null, players: { p1: on(20, 20), p2: on(5, 8), p4: on(11, 11) } },
         }}
         chatsRef={{ current: [] }}
+        onAir={false}
         onOpenInfo={noop}
         notesOpen={false}
         onToggleNotes={() => undefined}
@@ -500,6 +608,7 @@ describe('the crew strip', () => {
         view={view}
         positionsRef={{ current: { run: null, players: { p1: on(13, 6), p2: on(8, 6) } } }}
         chatsRef={{ current: [] }}
+        onAir={false}
         onOpenInfo={noop}
         notesOpen={false}
         onToggleNotes={noop}

@@ -696,16 +696,6 @@ button.link:hover {
   color: #042f2a;
 }
 
-.puzzle-status {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 14px;
-  color: var(--muted);
-  margin-top: 12px;
-  font-family: var(--mono);
-}
-
 .warn {
   color: var(--warn);
 }

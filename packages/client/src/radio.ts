@@ -14,7 +14,7 @@ export const SIGN_NOTE_MS = 3500;
 export const NEWS_MS = 10_000;
 
 /** A revealed note goes on the air under the last crew's name, not mission control's. */
-export const LAST_CREW = '📝 Notiz der letzten Crew';
+export const LAST_CREW = 'Notiz der letzten Crew';
 
 /** What goes on the air: mission control's scripted lines and the notes the crew revealed. */
 function onAir(event: RunEvent): boolean {
@@ -23,7 +23,12 @@ function onAir(event: RunEvent): boolean {
 
 /** Who a line on the air is from, as the banner names them. */
 export function bannerFrom(event: RunEvent): string {
-  return event.kind === 'hint' ? LAST_CREW : '📻 LEITSTELLE';
+  return event.kind === 'hint' ? LAST_CREW : 'LEITSTELLE';
+}
+
+/** The icon beside a line of the run: the last crew's note for theirs, the radio for the rest. */
+export function airIcon(event: RunEvent): 'note' | 'radio' {
+  return event.kind === 'hint' ? 'note' : 'radio';
 }
 
 /**

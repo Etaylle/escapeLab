@@ -1,23 +1,40 @@
+import { Icon } from '../screens/Icon.js';
+import { DeviceLamp } from './Device.js';
 import type { PanelProps } from './index.js';
 
+/**
+ * The Synchronschaltung, as the printed figure draws it: one mushroom
+ * button in a steel collar for the whole crew, under a lamp for each crew
+ * member that lights as their press comes in and goes dark again where it
+ * expired. Pressed, the button stays down. `.big-button` is what the
+ * screenshot harness presses.
+ */
 export function ButtonSyncPanel({ puzzle, send }: PanelProps<'button-sync'>) {
+  const { pressedCount, requiredCount, youPressed } = puzzle;
   return (
-    <div>
-      <button
-        className="big-button"
-        disabled={puzzle.youPressed}
-        onClick={() => send({ press: true })}
+    <div className="sync">
+      <div
+        className="sync-lamps"
+        role="img"
+        aria-label={`${pressedCount} von ${requiredCount} gedrückt`}
       >
-        {puzzle.youPressed ? '✓ GEDRÜCKT' : '⏻ DRÜCKEN'}
-      </button>
-      <div className="puzzle-status">
-        <span>
-          {puzzle.pressedCount}/{puzzle.requiredCount} bestätigt
-        </span>
-        {puzzle.lastResult === 'missed-window' && (
-          <span className="warn">⚠ Zeitfenster verpasst (Versuch {puzzle.attempts})</span>
-        )}
+        {Array.from({ length: requiredCount }, (_, i) => (
+          <DeviceLamp key={i} tone={i < pressedCount ? 'green' : 'off'} />
+        ))}
       </div>
+      <div className="sync-collar">
+        <button
+          className="big-button sync-button"
+          disabled={youPressed}
+          aria-label={youPressed ? 'Gedrückt' : 'Drücken'}
+          onClick={() => send({ press: true })}
+        />
+      </div>
+      {puzzle.lastResult === 'missed-window' && (
+        <p className="warn" role="status">
+          <Icon name="warning" /> Zeitfenster verpasst — Versuch {puzzle.attempts}
+        </p>
+      )}
     </div>
   );
 }

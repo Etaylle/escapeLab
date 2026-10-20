@@ -24,3 +24,14 @@ export function mapWith(parts: Partial<MapView>): MapView {
 export type Manual = MapView['manuals'][number];
 export type Plate = MapView['plates'][number];
 export type Item = MapView['items'][number];
+
+/**
+ * Markup with every icon (screens/Icon.tsx) written as its name in brackets,
+ * „[check]", so that what a screen says reads in one line.
+ */
+export function iconsAsWords(html: string): string {
+  return html.replace(/<svg class="icon icon-([a-z-]+)"[^>]*>.*?<\/svg>/g, '[$1]');
+}
+
+/** A pictograph the platform draws in its own style: an emoji, or a symbol used as one. */
+export const PICTOGRAPH = /[\p{Extended_Pictographic}✓✗⧉⬢⏻]/u;

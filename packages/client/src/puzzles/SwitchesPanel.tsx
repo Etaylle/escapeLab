@@ -1,3 +1,4 @@
+import { Icon } from '../screens/Icon.js';
 import { play } from '../sounds.js';
 import type { PanelProps } from './index.js';
 import './switches.css';
@@ -87,7 +88,7 @@ export function SwitchesPanel({ puzzle, send }: PanelProps<'switches'>) {
         <span className="muted">{upCount} von 6 oben</span>
         {failed}
         <button className="primary" onClick={() => send({ check: true })}>
-          ⏻ PRÜFEN
+          <Icon name="power" /> PRÜFEN
         </button>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { SIMON_COLORS, type SimonColor } from '@escapelab/core';
+import { Icon } from '../screens/Icon.js';
 import { play, simonTone } from '../sounds.js';
 import { Dots } from './Dots.js';
 import type { PanelProps } from './index.js';
@@ -75,13 +76,22 @@ function StageStatus({ puzzle }: { puzzle: SimonPuzzle }) {
   );
 }
 
+/** What a wrong key did, under the lamp and at a console without one alike. */
+function WrongKey() {
+  return (
+    <p className="warn">
+      <Icon name="warning" /> Falsche Taste — die Stufe beginnt von vorn.
+    </p>
+  );
+}
+
 export function SimonPanel({ puzzle, send }: PanelProps<'simon'>) {
   const [replays, setReplays] = useState(0);
   if (puzzle.flashes === null || puzzle.buttons === null) {
     return (
       <div className="simon">
         <StageStatus puzzle={puzzle} />
-        {puzzle.lastWrong && <p className="warn">⚠ Falsche Taste — die Stufe beginnt von vorn.</p>}
+        {puzzle.lastWrong && <WrongKey />}
       </div>
     );
   }
@@ -92,7 +102,7 @@ export function SimonPanel({ puzzle, send }: PanelProps<'simon'>) {
       <button className="simon-replay" onClick={() => setReplays((n) => n + 1)}>
         ↻ NOCHMAL ABSPIELEN
       </button>
-      {puzzle.lastWrong && <p className="warn">⚠ Falsche Taste — die Stufe beginnt von vorn.</p>}
+      {puzzle.lastWrong && <WrongKey />}
       <div className="simon-pad">
         {puzzle.buttons.map((color) => (
           <button

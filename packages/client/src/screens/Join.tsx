@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ClientMessage, MissionInfo, RoomSummary } from '@escapelab/core';
 import { crewSizeText } from './Crew.js';
+import { Icon } from './Icon.js';
 import { MapThumb } from './MapThumb.js';
 
 interface Props {
@@ -34,7 +35,12 @@ function RoomRow({
       <div className="room-main">
         <span className="room-title">{room.missionTitle}</span>
         <span className="room-meta">
-          👥 {room.players.length}/{room.capacity} · {running ? '▶ läuft gerade · ' : ''}
+          <Icon name="crew" /> {room.players.length}/{room.capacity} ·{' '}
+          {running && (
+            <>
+              <Icon name="play" /> läuft gerade ·{' '}
+            </>
+          )}
           {room.difficulty} · Code {room.code}
         </span>
         <span className="room-crew">
@@ -49,7 +55,7 @@ function RoomRow({
       </div>
       {running || room.free === 0 ? (
         <button onClick={onWatch} disabled={!running}>
-          👁 Zuschauen
+          <Icon name="eye" /> Zuschauen
         </button>
       ) : (
         <button className="primary" onClick={onJoin} disabled={!canJoin}>
@@ -85,7 +91,7 @@ function MissionCard({
         <span className="mission-title">{mission.title}</span>
         <span className="mission-meta">
           {crewSizeText(mission.players)} · {Math.round(mission.timeLimitSec / 60)} min ·{' '}
-          {mission.puzzleCount} Rätsel
+          {mission.puzzleCount} Stationen
         </span>
         {selected && <span className="mission-sub">{mission.subtitle}</span>}
       </span>
@@ -118,7 +124,9 @@ export function JoinScreen({ send, connected, missions, rooms, openHandbook }: P
 
   return (
     <div className="card join">
-      <h1>⬢ EscapeLab</h1>
+      <h1>
+        <Icon name="hex" /> EscapeLab
+      </h1>
       <p className="muted">
         Kooperatives Escape-Spiel für den Browser: Die Maschine sieht, wer am Pult steht, die
         Regeln, wer am Buch steht — lösen könnt ihr es nur gemeinsam, per Stimme. Gerät pro
@@ -195,7 +203,7 @@ export function JoinScreen({ send, connected, missions, rooms, openHandbook }: P
                 title="Die Regeln dieser Mission lesen und ausdrucken"
                 onClick={() => openHandbook(selected)}
               >
-                📖 Handbuch
+                <Icon name="book" /> Handbuch
               </button>
             )}
           </div>
@@ -224,7 +232,7 @@ export function JoinScreen({ send, connected, missions, rooms, openHandbook }: P
             disabled={!connected || code.trim().length === 0}
             onClick={() => send({ kind: 'spectate', code: code.trim() })}
           >
-            👁 Mit Code zuschauen
+            <Icon name="eye" /> Mit Code zuschauen
           </button>
         </section>
       </div>

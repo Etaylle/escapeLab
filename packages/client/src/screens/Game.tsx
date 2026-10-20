@@ -8,7 +8,7 @@ import type {
   PuzzleView,
 } from '@escapelab/core';
 import { useKeys, useNow } from '../hooks.js';
-import { bannerFrom, noticeMs, radioNews, withNews, type Notice } from '../radio.js';
+import { airIcon, bannerFrom, noticeMs, radioNews, withNews, type Notice } from '../radio.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { play } from '../sounds.js';
 import { radioChirp } from '../world/audio.js';
@@ -18,6 +18,7 @@ import { toBring } from '../world/markers.js';
 import type { KnownPositions } from '../world/movement.js';
 import { startRoom } from '../world/rooms.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
+import { Icon } from './Icon.js';
 import { MissionHud } from './MissionHud.js';
 import { InfoPanel } from './InfoPanel.js';
 import { Manual } from './Manual.js';
@@ -54,7 +55,9 @@ function SabotageAlert({ sabotage }: { sabotage: NonNullable<PlayerView['map']>[
   return (
     <div className="sabotage" role="alert">
       <div className="sabotage-head">
-        <span className="sabotage-label">🚨 {sabotage.label}</span>
+        <span className="sabotage-label">
+          <Icon name="siren" /> {sabotage.label}
+        </span>
         <span className="sabotage-clock">{left}s</span>
       </div>
       <p className="sabotage-hint">{sabotage.hint}</p>
@@ -107,7 +110,9 @@ function RelayAlert({
     >
       <div className="panel">
         <div className="sabotage-head">
-          <span className="sabotage-label">🚨 {sabotage.label}</span>
+          <span className="sabotage-label">
+            <Icon name="siren" /> {sabotage.label}
+          </span>
           <span className="sabotage-clock">{left}s</span>
         </div>
         {sabotage.hint !== '' && <p className="sabotage-hint">{sabotage.hint}</p>}
@@ -486,11 +491,12 @@ export function GameScreen({
     forLater.length === 0 ? null : `${forLater.map((i) => i.label).join(', ')} mitnehmen`,
   ].filter((line): line is string => line !== null);
   const missingLabel = escaping || errands.length === 0 ? null : errands.join(' · ');
+  const exitCall = view.puzzle === null && escaping;
   const title =
     view.puzzle !== null
       ? view.puzzle.title
       : escaping
-        ? '🏃 NOTAUSGANG — alle raus, JETZT!'
+        ? 'NOTAUSGANG — alle raus, JETZT!'
         : (armedTitle ?? 'Alle Stationen erledigt');
 
   return (
@@ -510,7 +516,9 @@ export function GameScreen({
       {view.pausedFor !== null && (
         <div className="overlay pause" role="status">
           <span className="kicker">MISSION PAUSIERT</span>
-          <h1>⏸ Verbindung verloren</h1>
+          <h1>
+            <Icon name="pause" /> Verbindung verloren
+          </h1>
           <p>
             {view.pausedFor.length > 0
               ? `Warten auf ${view.pausedFor.join(', ')} — Uhr, Patrouillen und Notfälle stehen still.`
@@ -538,7 +546,14 @@ export function GameScreen({
                 />
               ))}
             </div>
-            <h1>{title}</h1>
+            <h1>
+              {exitCall && (
+                <>
+                  <Icon name="exit" />{' '}
+                </>
+              )}
+              {title}
+            </h1>
             {missingLabel !== null && <span className="stage-sub">{missingLabel}</span>}
           </div>
           <div className="stage-clock">
@@ -551,8 +566,10 @@ export function GameScreen({
               className="radio-banner"
               role="status"
             >
-              <span className="radio-banner-from">{bannerFrom(notice.event)}</span> —{' '}
-              {notice.event.label}
+              <span className="radio-banner-from">
+                <Icon name={airIcon(notice.event)} /> {bannerFrom(notice.event)}
+              </span>{' '}
+              — {notice.event.label}
             </div>
           )}
           {notice?.kind === 'sign' && (
@@ -563,7 +580,7 @@ export function GameScreen({
           {relay === undefined && <SabotageAlert sabotage={map.sabotage} />}
           {alarmVisible && view.lastPenaltySec !== null && (
             <div key={view.penaltySeq} className="alarm" role="alert">
-              🚨 ALARM — Fehlversuch! −{view.lastPenaltySec} Sekunden
+              <Icon name="siren" /> ALARM — Fehlversuch! −{view.lastPenaltySec} Sekunden
             </div>
           )}
         </div>
@@ -624,6 +641,7 @@ export function GameScreen({
         view={view}
         positionsRef={positionsRef}
         chatsRef={chatsRef}
+        onAir={notice?.kind === 'line'}
         notesOpen={open.notes}
         onToggleNotes={open.toggleNotes}
         onOpenInfo={() => open.set({ info: true })}

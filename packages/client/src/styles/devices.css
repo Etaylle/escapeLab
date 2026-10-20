@@ -390,15 +390,148 @@
   text-align: center;
 }
 
+/* ══ Synchronschaltung: one mushroom button for the whole crew ═════════════
+ * ButtonSyncPanel.tsx, after the printed figure: a lamp per crew member in a
+ * dark strip, lit while their press counts, and under it a domed cap in a
+ * steel collar that sinks while pressed and stays down, lit, once pressed.
+ * The cap is a `.big-button` for the screenshot harness; these rules take
+ * over its look from ui.css.
+ */
+
+.sync {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 6px 0 4px;
+}
+
+.sync p {
+  margin: 0;
+}
+
+.sync-lamps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: #090d10;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    inset 0 2px 5px rgba(0, 0, 0, 0.85),
+    0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.sync-lamps .device-lamp {
+  width: 18px;
+  height: 18px;
+}
+
+/* The collar: a ring of turned steel round a dark well. */
+.sync-collar {
+  display: grid;
+  place-items: center;
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, #04070a 0 57%, transparent 58%),
+    conic-gradient(from 200deg, #9aa4ad, #4a545d, #c9d1d8, #59636c, #9aa4ad);
+  box-shadow:
+    0 0 0 2px #0b0f13,
+    0 2px 0 3px rgba(255, 255, 255, 0.06),
+    0 10px 18px -6px rgba(0, 0, 0, 0.8);
+}
+
+/* The cap: a dome lit from the upper left on a skirt of its own colour; it
+   stands proud of the collar and sinks by --press. */
+.big-button.sync-button {
+  --press: 0px;
+  width: 128px;
+  height: 128px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 36% 28%,
+    #e3fffa 0%,
+    #5ce6d1 16%,
+    #17a593 52%,
+    #0b5d55 100%
+  );
+  box-shadow:
+    0 calc(9px - var(--press)) 0 #06423c,
+    0 calc(15px - var(--press)) 16px rgba(0, 0, 0, 0.65),
+    inset 0 -7px 12px rgba(0, 0, 0, 0.35),
+    inset 0 3px 3px rgba(255, 255, 255, 0.35);
+  transform: translateY(calc(var(--press) - 6px));
+  touch-action: manipulation;
+  transition:
+    transform 0.07s,
+    box-shadow 0.07s;
+}
+
+.big-button.sync-button:hover:not(:disabled) {
+  background: radial-gradient(
+    circle at 36% 28%,
+    #f0fffc 0%,
+    #74eedb 16%,
+    #1db8a4 52%,
+    #0d6a61 100%
+  );
+  box-shadow:
+    0 calc(9px - var(--press)) 0 #06423c,
+    0 calc(15px - var(--press)) 16px rgba(0, 0, 0, 0.65),
+    inset 0 -7px 12px rgba(0, 0, 0, 0.35),
+    inset 0 3px 3px rgba(255, 255, 255, 0.35);
+}
+
+.big-button.sync-button:active:not(:disabled) {
+  --press: 6px;
+}
+
+/* Pressed: down in its collar and glowing until the press runs out. */
+.big-button.sync-button:disabled {
+  --press: 8px;
+  opacity: 1;
+  cursor: default;
+  background: radial-gradient(
+    circle at 36% 28%,
+    #c9fff5 0%,
+    #2dd4bf 30%,
+    #0f766e 100%
+  );
+  box-shadow:
+    0 calc(9px - var(--press)) 0 #06423c,
+    inset 0 -5px 10px rgba(0, 0, 0, 0.3),
+    0 0 26px rgba(45, 212, 191, 0.55);
+}
+
+.big-button.sync-button:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .big-button.sync-button {
+    transition: none;
+  }
+}
+
 /* ══ Sicherungskasten + Prüfpult: one console cuts, the other measures ═════
- * CircuitPanel.tsx. Console a: the wiring box's wires (wiring.css) behind a
- * glass door, a cutter for a cursor over them, the KURZSCHLUSS lamp and the
- * counter of live wires beside it. Console b: an analog dial whose needle
- * swings to the last reading, the reading in seven segments, a pushbutton
- * per wire under it, and beside them the counter and the paper strip of
- * this round's readings. A short shakes either console. The audience gets
- * both: the wires with their voltages now, the dead one marked, and the
- * meter's display and strip.
+ * CircuitPanel.tsx. Console a: behind a glass door a pale board with a
+ * terminal strip down either side and the cables sagging between them, as
+ * the printed figure draws it — their colour the only thing that tells them
+ * apart, a grey tracer on the black one; a cutter shows over the cable under
+ * the pointer, and a cut one hangs from its terminals, copper bare. Beside
+ * the door the KURZSCHLUSS lamp and the counter of live wires. Console b: an
+ * analog dial whose needle swings to the last reading, the reading in seven
+ * segments, a pushbutton per wire under it, and beside them the counter and
+ * the paper strip of this round's readings. A short shakes either console.
+ * The audience gets both: the cables with their voltages now, the dead one
+ * marked, and the meter's display and strip.
  */
 
 .circuit {
@@ -425,21 +558,203 @@
   }
 }
 
+/* ── the board and its cables ── */
+
+/* Pale insulating board; the rows lie edge to edge, so their terminals make
+   one strip down either side. */
+.circuit-board {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 8px 6px;
+  list-style: none;
+  border-radius: 6px;
+  background:
+    repeating-linear-gradient(0deg, rgba(90, 80, 60, 0.035) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #ddd7c8, #c3bcab);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.45),
+    inset 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* A row: its number printed on the board, a terminal, the cable, a terminal. */
 .circuit-wire {
+  display: grid;
+  grid-template-columns: 1.5rem 16px minmax(0, 1fr) 16px;
+  align-items: start;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 6px 0 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: #3b3a35;
+  text-align: left;
   touch-action: manipulation;
 }
 
-/* For the audience a fourth column: the wire's voltage now, or „tot". Two
-   classes, so it holds over wiring.css whichever loads last. */
-.wiring-wire.circuit-wire--watched {
-  grid-template-columns: 1.6rem 1fr 4.6rem 3.6rem;
+/* For the audience a fifth column: the wire's voltage now, or „tot". */
+.circuit-wire--watched {
+  grid-template-columns: 1.5rem 16px minmax(0, 1fr) 16px 3.4rem;
+}
+
+/* No glow here: the board lightens under the pointer and the cutter shows. */
+.circuit-wire:hover:not(:disabled) {
+  border: none;
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: none;
+}
+
+.circuit-wire:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.circuit-wire:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+
+.circuit-number {
+  padding-top: 4px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* A length of the terminal strip, its brass screw where the cable goes in. */
+.circuit-terminal {
+  position: relative;
+  z-index: 1;
+  align-self: stretch;
+  background: linear-gradient(90deg, #5b6268, #b3bac0 45%, #6b7278);
+}
+
+.circuit-terminal::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  width: 11px;
+  height: 11px;
+  margin: -5.5px 0 0 -5.5px;
+  border-radius: 50%;
+  background:
+    linear-gradient(45deg, transparent 42%, #3a2d12 42% 58%, transparent 58%),
+    radial-gradient(circle at 35% 30%, #fbefc4, #c9a24a 55%, #74581f);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+
+/* The cable reaches under both screws. */
+.circuit-run {
+  position: relative;
+  margin: 0 -8px;
+}
+
+.cable {
+  display: block;
+  width: 100%;
+  height: 44px;
+  overflow: visible;
+}
+
+.cable path {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.cable-shadow {
+  stroke: rgba(40, 30, 10, 0.2);
+  stroke-width: 8px;
+}
+
+.cable-edge {
+  stroke: var(--cable-edge);
+  stroke-width: 9px;
+}
+
+.cable-core {
+  stroke: var(--cable);
+  stroke-width: 6px;
+}
+
+.cable-tracer {
+  stroke: #9ba6b1;
+  stroke-width: 1.6px;
+  stroke-dasharray: 7 6;
+  stroke-linecap: butt;
+}
+
+.cable-sheen {
+  stroke: rgba(255, 255, 255, 0.38);
+  stroke-width: 1.5px;
+}
+
+.cable-bare {
+  stroke: #c9782f;
+  stroke-width: 5px;
+}
+
+.cable--red {
+  --cable: #dc3b3b;
+  --cable-edge: #6e1515;
+}
+
+.cable--blue {
+  --cable: #2f6fe0;
+  --cable-edge: #142f6e;
+}
+
+.cable--yellow {
+  --cable: #f3c316;
+  --cable-edge: #7a5a06;
+}
+
+.cable--white {
+  --cable: #f5f7f9;
+  --cable-edge: #55606b;
+}
+
+.cable--black {
+  --cable: #1a1e23;
+  --cable-edge: #020304;
+}
+
+/* The cutter over the middle of the cable, shown where a tap or a click would cut. */
+.circuit-cutter {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: -12px;
+  border-radius: 50%;
+  background: rgba(17, 22, 27, 0.88);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  color: #f1f5f9;
+  font-size: 15px;
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+
+.circuit-wire:hover:not(:disabled) .circuit-cutter,
+.circuit-wire:focus-visible .circuit-cutter {
+  opacity: 1;
 }
 
 .circuit-volts {
+  padding-top: 4px;
   font-family: var(--mono);
   font-size: 13px;
+  font-weight: 700;
+  line-height: 16px;
   text-align: right;
-  color: var(--accent);
+  color: #0f5f57;
 }
 
 /* ── console a: the box ── */
@@ -495,15 +810,10 @@
   pointer-events: none;
 }
 
-.circuit-door .wiring-box {
-  border-color: #05080b;
-  background: #070b0e;
-}
-
 /* A cutter for a cursor over every wire still whole: a pair of open
    scissors, white with a dark rim, the hot spot between the blades. The
    URL goes on over several lines, each ending in a backslash. */
-.circuit-door .wiring-wire:not(:disabled) {
+button.circuit-wire:not(:disabled) {
   cursor:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' \
 viewBox='0 0 24 24'%3E%3Cg fill='none' stroke-linecap='round'%3E%3Cg stroke='%2305080b' \
@@ -863,13 +1173,14 @@ cy='20.5' r='2.8'/%3E%3Ccircle cx='20.5' cy='14.5' r='2.8'/%3E%3C/g%3E%3C/g%3E%3
 /* ══ the Signalkette: one console sends, the other presses ═════════════════
  * SignalPanel.tsx. Both consoles carry the stage LEDs and two backlit
  * legends, SENDEN and EINGABE, one of them burning. The sending console's
- * signs are lamps behind smoked glass, each in its colour with its words
- * under it and a done lamp below; the receiving console has the done lamps
- * behind glass and twelve backlit pushbuttons, three rows of four — or,
- * with the legend, grey engraved buttons in four rows numbered on plates.
- * A wrong sign shakes the keys and flashes them red. A fleeting strip shows
- * one sign at a time, the other lamps dark. The audience gets the strip
- * and, under it, the keys of both consoles, which nobody can press there.
+ * signs are lamps behind smoked glass, each in its colour with its colour's
+ * texture printed over it (SignalPanel draws it) and a done lamp below — no
+ * word anywhere; the receiving console has the done lamps behind glass and
+ * twelve backlit pushbuttons, three rows of four — or, with the legend,
+ * grey engraved buttons in four rows numbered on plates. A wrong sign shakes
+ * the keys and flashes them red. A fleeting strip shows one sign at a time,
+ * the other lamps dark. The audience gets the strip and, under it, the keys
+ * of both consoles, which nobody can press there.
  */
 
 .signal {
@@ -976,9 +1287,9 @@ cy='20.5' r='2.8'/%3E%3Ccircle cx='20.5' cy='14.5' r='2.8'/%3E%3C/g%3E%3C/g%3E%3
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  width: 88px;
-  padding: 8px 4px 7px;
+  gap: 8px;
+  width: 66px;
+  padding: 9px 4px 8px;
   border-radius: 8px;
   background:
     radial-gradient(circle at 50% 32%, rgba(255, 255, 255, 0.05), transparent 65%),
@@ -992,13 +1303,6 @@ cy='20.5' r='2.8'/%3E%3Ccircle cx='20.5' cy='14.5' r='2.8'/%3E%3C/g%3E%3C/g%3E%3
   width: 44px;
   height: 44px;
   filter: drop-shadow(0 0 6px currentColor);
-}
-
-.signal-word {
-  font-size: 13px;
-  line-height: 1.2;
-  text-align: center;
-  color: #d4dde5;
 }
 
 /* The done lamps, one per sign: dark rings that light as the signs go in. */
@@ -1025,7 +1329,7 @@ cy='20.5' r='2.8'/%3E%3Ccircle cx='20.5' cy='14.5' r='2.8'/%3E%3C/g%3E%3C/g%3E%3
     0 0 10px 2px var(--accent-glow);
 }
 
-/* The key field: four keys a row however narrow, a long word on two lines. */
+/* The key field: four keys a row however narrow. */
 .signal-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1038,9 +1342,9 @@ cy='20.5' r='2.8'/%3E%3Ccircle cx='20.5' cy='14.5' r='2.8'/%3E%3C/g%3E%3C/g%3E%3
     inset 0 2px 6px rgba(0, 0, 0, 0.7);
 }
 
-/* A backlit pushbutton: a dark rubber cap, its sign glowing through it and
-   its words under the sign; it sinks by `--press` while pressed. Hover
-   keeps the cap's shadow against the shared glow and lightens its top. */
+/* A backlit pushbutton: a dark rubber cap, its sign glowing through it; it
+   sinks by `--press` while pressed. Hover keeps the cap's shadow against
+   the shared glow and lightens its top. */
 .signal-key {
   --press: 0px;
   --cap-edge: #05080b;
@@ -1050,8 +1354,7 @@ cy='20.5' r='2.8'/%3E%3Ccircle cx='20.5' cy='14.5' r='2.8'/%3E%3C/g%3E%3C/g%3E%3
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  min-height: 84px;
+  min-height: 70px;
   padding: 8px 4px;
   border: none;
   border-radius: 12px;
@@ -1088,13 +1391,8 @@ button.signal-key:active {
 }
 
 .signal-key .signal-glyph {
-  width: 32px;
-  height: 32px;
-}
-
-.signal-key .signal-word {
-  font-size: 12px;
-  color: #93a1ad;
+  width: 40px;
+  height: 40px;
 }
 
 .signal-grid--wrong {
@@ -1149,17 +1447,6 @@ button.signal-key:active {
 
 .signal-key--shape .signal-glyph {
   filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.55));
-}
-
-.signal-key--shape .signal-word {
-  color: #2f3841;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
-}
-
-/* A fleeting strip keeps room for a word of two lines under every lamp,
-   so the done lamps stay put while the signs come and go. */
-.signal-strip--fleeting .signal-word {
-  min-height: 2.4em;
 }
 
 .signal-glyph--dark {
@@ -1250,7 +1537,7 @@ button.signal-key:active {
   }
 
   .signal-sign {
-    width: 68px;
+    width: 56px;
   }
 
   .signal-glyph {
@@ -1259,6 +1546,11 @@ button.signal-key:active {
   }
 
   .signal-key {
-    min-height: 74px;
+    min-height: 62px;
+  }
+
+  .signal-key .signal-glyph {
+    width: 34px;
+    height: 34px;
   }
 }
