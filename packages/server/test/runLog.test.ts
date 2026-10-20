@@ -11,7 +11,7 @@ import {
   type ServerMessage,
 } from '@escapelab/core';
 import { RoomManager } from '../src/roomManager.js';
-import { appendRun, parseRuns } from '../src/runLog.js';
+import { appendRun, parseRuns, readRuns } from '../src/runLog.js';
 import type { Room } from '../src/room.js';
 import { walkTo, type Walker } from './walk.js';
 
@@ -49,7 +49,15 @@ const mission: Mission = parseMission({
 /** A report as a finished run leaves one: this lab, lost on time before anybody joined in. */
 function someReport(): RunReport {
   const lost = { ...initialState(mission), phase: 'lost' as const, startedAt: 1, finishedAt: 2 };
-  return runReport(lost);
+  return runReport(lost, 'QXT4');
+}
+
+/** `report` as version 1 wrote it, before names and the room went in. */
+function asVersion1(report: RunReport): string {
+  const old: Record<string, unknown> = { ...report, version: 1 };
+  delete old['crew'];
+  delete old['roomCode'];
+  return JSON.stringify(old);
 }
 
 let dir = '';
@@ -67,12 +75,16 @@ describe('appendRun', () => {
     expect(linesOf(file).map((line) => JSON.parse(line))).toEqual([someReport(), someReport()]);
   });
 
+  it('says whether the line was written', () => {
+    expect(appendRun(join(dir, 'runs.jsonl'), someReport())).toBe(true);
+  });
+
   it('logs a write that fails instead of throwing it', () => {
     const blocker = join(dir, 'datei');
     writeFileSync(blocker, 'kein Ordner');
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
-      expect(() => appendRun(join(blocker, 'runs.jsonl'), someReport())).not.toThrow();
+      expect(appendRun(join(blocker, 'runs.jsonl'), someReport())).toBe(false);
       expect(logged).toHaveBeenCalledWith(expect.stringContaining(join(blocker, 'runs.jsonl')));
       expect(logged).toHaveBeenCalledWith(expect.stringContaining('RUNS_LOG'));
     } finally {
@@ -89,15 +101,44 @@ describe('parseRuns', () => {
     expect(parseRuns('', 'runs.jsonl')).toEqual([]);
   });
 
+  it('reads the reports of version 1, without names, and of version 2 side by side', () => {
+    const report = someReport();
+    const text = `${asVersion1(report)}\n${JSON.stringify({ ...report, crew: ['Anna', 'Ben'] })}\n`;
+    const [old, named] = parseRuns(text, 'runs.jsonl');
+    expect(old).toMatchObject({ version: 1, missionId: 'protokollraum' });
+    expect(old).not.toHaveProperty('crew');
+    expect(named).toMatchObject({ version: 2, roomCode: 'QXT4', crew: ['Anna', 'Ben'] });
+  });
+
   it('names the line that is no run report', () => {
     const good = JSON.stringify(someReport());
-    expect(() => parseRuns(`${good}\n{"version":1,`, 'runs.jsonl')).toThrow(
+    expect(() => parseRuns(`${good}\n{"version":2,`, 'runs.jsonl')).toThrow(
       /^runs\.jsonl:2: not JSON/,
     );
-    expect(() => parseRuns(`${good}\n${good.replace('"version":1', '"version":2')}`, 'r')).toThrow(
-      /^r:2: not a run report of version 1/,
-    );
-    expect(() => parseRuns('[1,2]', 'r')).toThrow(/^r:1: not a run report/);
+    const broken = [
+      good.replace('"version":2', '"version":3'),
+      // version 2 without its names, or with a name that is none
+      asVersion1(someReport()).replace('"version":1', '"version":2'),
+      good.replace('"crew":[]', '"crew":[7]'),
+      good.replace('"difficulty":"normal"', '"difficulty":"extrem"'),
+      good.replace('"outcome":"lost:time"', '"outcome":"vielleicht"'),
+      '[1,2]',
+    ];
+    for (const line of broken) {
+      expect(() => parseRuns(`${good}\n${line}`, 'r'), line).toThrow(
+        /^r:2: not a run report of version 1 or 2 — fix or delete that line$/,
+      );
+    }
+  });
+
+  it('reads on past a line that holds no run, for whoever must not stop at it', () => {
+    const good = JSON.stringify(someReport());
+    const { runs, problems } = readRuns(`${good}\nkaputt\n\n${good}\n{}`, 'runs.jsonl');
+    expect(runs).toHaveLength(2);
+    expect(problems).toEqual([
+      expect.stringMatching(/^runs\.jsonl:2: not JSON/),
+      'runs.jsonl:5: not a run report of version 1 or 2 — fix or delete that line',
+    ]);
   });
 });
 
@@ -175,9 +216,13 @@ describe('a room', () => {
         { puzzleId: 'zweite', openedAt: rematchAt + 10_000, seconds: 20, alarms: 0 },
       ],
     });
-    // Nobody is named, by name or by id.
-    for (const secret of ['Anna', 'Ben', anna.playerId, ben.playerId]) {
-      expect(text).not.toContain(secret);
+    // The crew goes by the names it played under, in the order it joined, and the room by its
+    // code; nobody by id.
+    for (const run of [lost, won]) {
+      expect(run).toMatchObject({ version: 2, roomCode: room.code, crew: ['Anna', 'Ben'] });
+    }
+    for (const id of [anna.playerId, ben.playerId]) {
+      expect(text).not.toContain(id);
     }
     room.dispose();
   });

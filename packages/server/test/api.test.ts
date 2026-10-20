@@ -5,9 +5,17 @@ import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { moduleFor, type MissionManual } from '@escapelab/core';
-import { apiResponse, serveRuns, type RunsExport } from '../src/api.js';
+import {
+  moduleFor,
+  type MissionManual,
+  type MissionStanding,
+  type MissionStats,
+  type RunOutcome,
+  type RunReport,
+} from '@escapelab/core';
+import { apiResponse, serveRuns, statsResponse, type RunsExport } from '../src/api.js';
 import { MissionCatalog } from '../src/missions.js';
+import { RunStats } from '../src/runStats.js';
 
 const shipped = new MissionCatalog(fileURLToPath(new URL('../../../missions', import.meta.url)));
 
@@ -100,6 +108,98 @@ describe('GET /missions/:id/manual', () => {
     expect(apiResponse(shipped, '/')).toBeNull();
     expect(apiResponse(shipped, '/missions/blackout')).toBeNull();
     expect(apiResponse(shipped, '/missions/blackout/manual/extra')).toBeNull();
+  });
+});
+
+describe('GET /stats', () => {
+  const DAY = Date.UTC(2026, 9, 20, 12, 0);
+
+  /** A run on blackout as the server logs it, by Anna and Ben in room QXT4. */
+  function run(seconds: number, at: number, outcome: RunOutcome = 'won'): RunReport {
+    return {
+      version: 2,
+      missionId: 'blackout',
+      roomCode: 'QXT4',
+      difficulty: 'normal',
+      timeLimitSec: 480,
+      alarmLimit: 5,
+      crewSize: 2,
+      crew: ['Anna', 'Ben'],
+      spawns: { p1: { x: 1, y: 1 }, p2: { x: 2, y: 1 } },
+      startedAt: at - seconds * 1000,
+      finishedAt: at,
+      outcome,
+      stations: [],
+      emergencies: { count: 0, failed: 0 },
+      penalties: [],
+      credits: {},
+    };
+  }
+
+  const stats = new RunStats([
+    run(400, DAY),
+    run(300, DAY + 1),
+    run(480, DAY + 2, 'lost:time'),
+    { ...run(500, DAY + 3), missionId: 'abgeschafft' },
+  ]);
+  const ask = (url: string) => statsResponse(stats, shipped, url);
+
+  it('lists every mission with runs, its crews by name and nothing else', () => {
+    const res = ask('/stats');
+    expect(res).toEqual({ status: 200, body: stats.all() });
+    const body = res?.body as MissionStats[];
+    expect(body.map((mission) => mission.missionId)).toEqual(['abgeschafft', 'blackout']);
+    const text = JSON.stringify(body);
+    expect(text).toContain('"crew":["Anna","Ben"]');
+    for (const secret of ['QXT4', 'p1', 'spawns', 'credits']) {
+      expect(text).not.toContain(secret);
+    }
+  });
+
+  it('answers one mission: its stats, none yet where the catalog has it unplayed', () => {
+    expect(ask('/stats/blackout')).toEqual({
+      status: 200,
+      body: { ...stats.mission('blackout'), place: null },
+    });
+    expect(ask('/stats/systemcheck?run=1')).toEqual({
+      status: 200,
+      body: { missionId: 'systemcheck', difficulties: [], place: null },
+    });
+    // A mission gone from the catalog keeps its runs.
+    expect(ask('/stats/abgeschafft')?.status).toBe(200);
+  });
+
+  it('places the won run that finished at ?run=, and no lost one', () => {
+    const placed = (url: string): MissionStanding['place'] =>
+      (ask(url)?.body as MissionStanding).place;
+    expect(placed(`/stats/blackout?run=${DAY}`)).toEqual({ difficulty: 'normal', place: 2 });
+    expect(placed(`/stats/blackout?fresh=1&run=${DAY + 1}`)).toEqual({
+      difficulty: 'normal',
+      place: 1,
+    });
+    expect(placed(`/stats/blackout?run=${DAY + 2}`)).toBeNull();
+    expect(placed(`/stats/blackout?run=${DAY + 99}`)).toBeNull();
+  });
+
+  it('turns away a mission nobody knows with 404, and a ?run= that is no time with 400', () => {
+    for (const id of ['gibt-es-nicht', '%E0%A4%A']) {
+      expect(ask(`/stats/${id}`)).toEqual({
+        status: 404,
+        body: { error: expect.stringContaining('gibt es nicht') },
+      });
+    }
+    for (const run of ['', 'gestern', '-5', '1.5']) {
+      expect(ask(`/stats/blackout?run=${run}`)).toEqual({
+        status: 400,
+        body: { error: expect.stringContaining('?run=') },
+      });
+    }
+  });
+
+  it('leaves every other path to the rest of the server', () => {
+    for (const url of ['/', '/statistik', '/stats/blackout/runs', '/missions']) {
+      expect(ask(url), url).toBeNull();
+    }
   });
 });
 

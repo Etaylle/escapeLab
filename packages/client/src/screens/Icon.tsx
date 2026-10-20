@@ -20,6 +20,7 @@ export type IconName =
   | 'pencil'
   | 'plate'
   | 'play'
+  | 'podium'
   | 'power'
   | 'radio'
   | 'sign'
@@ -117,6 +118,8 @@ const GLYPHS: Record<IconName, ReactNode> = {
     </>
   ),
   play: <path d="M5 3.5v9l7.5-4.5Z" {...SOLID} />,
+  // The winners' steps: the first in the middle, the second left, the third right.
+  podium: <path d="M1.75 14V8.5h4V4.5h4.5V10h4V14ZM5.75 8.5V14m4.5-4V14" />,
   // The standby symbol printed on a power switch.
   power: <path d="M4.6 4.75a5.25 5.25 0 1 0 6.8 0M8 2v6" />,
   radio: (

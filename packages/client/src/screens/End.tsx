@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import type { ClientMessage, PlayerView, RunEvent } from '@escapelab/core';
+import { clock } from '../runStats.js';
 import { play } from '../sounds.js';
-import { recordRun, type MissionRecord } from '../stats.js';
 import { CreditsTable } from './Crew.js';
+import { RunStanding } from './Standing.js';
 
 interface Props {
   view: PlayerView;
@@ -22,11 +23,9 @@ const EVENT_ICON: Record<RunEvent['kind'], string> = {
   find: '🔎',
 };
 
+/** Milliseconds as m:ss. */
 function fmt(ms: number): string {
-  const totalSec = Math.max(0, Math.round(ms / 1000));
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  return `${min}:${String(sec).padStart(2, '0')}`;
+  return clock(ms / 1000);
 }
 
 export function EndScreen({ view, send, leaveRoom }: Props) {
@@ -40,17 +39,6 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
   const usedMs = haveStats ? finishedAt - startedAt : 0;
   const remainingMs = haveStats && deadlineAt !== null ? Math.max(0, deadlineAt - finishedAt) : 0;
 
-  // Folded into this browser's history exactly once per finished run.
-  const recordRef = useRef<ReturnType<typeof recordRun> | null>(null);
-  if (recordRef.current === null && haveStats) {
-    recordRef.current = recordRun(view.missionId, {
-      won,
-      usedMs,
-      rank: view.grade?.rank ?? null,
-    });
-  }
-  const record = recordRef.current;
-  const history: MissionRecord | null = record?.after ?? null;
   const crew = view.players.filter((p) => p.connected);
   const waiting = crew.filter((p) => !p.ready);
   const confirmed = crew.length - waiting.length;
@@ -81,22 +69,6 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
             <span className="stat-value">{view.hintsUsed}</span>
             <span className="stat-label">{view.hintsUsed === 1 ? 'Hinweis' : 'Hinweise'}</span>
           </div>
-          {history !== null && history.bestMs !== null && (
-            <div className={`stat ${record?.newBestTime === true ? 'stat-best' : ''}`}>
-              <span className="stat-value">{fmt(history.bestMs)}</span>
-              <span className="stat-label">
-                {record?.newBestTime === true ? '🏆 neue Bestzeit' : 'Bestzeit'}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {record !== null && (record.newBestTime || record.newBestRank) && (
-        <div className="record-banner">
-          🏆 {record.newBestTime ? 'Neue Bestzeit!' : ''}
-          {record.newBestTime && record.newBestRank ? ' · ' : ''}
-          {record.newBestRank ? `Bester Rang bisher: ${record.after.bestRank}` : ''}
         </div>
       )}
 
@@ -105,6 +77,21 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
           <span className="grade-rank">{view.grade.rank}</span>
           <span className="grade-label">{view.grade.label}</span>
         </div>
+      )}
+
+      {haveStats && (
+        <RunStanding
+          run={{
+            missionId: view.missionId,
+            missionTitle: view.missionTitle,
+            difficulty: view.difficulty,
+            won,
+            crew: view.players.map((p) => p.name),
+            seconds: usedMs / 1000,
+            alarms: view.penaltySeq,
+            finishedAt,
+          }}
+        />
       )}
 
       <h2>Beiträge</h2>
@@ -126,14 +113,6 @@ export function EndScreen({ view, send, leaveRoom }: Props) {
             ))}
           </ol>
         </>
-      )}
-
-      {history !== null && history.runs > 1 && (
-        <p className="muted history">
-          Auf diesem Gerät: {history.runs} Läufe, {history.wins} geschafft
-          {history.bestMs !== null ? ` · Bestzeit ${fmt(history.bestMs)}` : ''}
-          {history.bestRank !== null ? ` · bester Rang ${history.bestRank}` : ''}
-        </p>
       )}
 
       <div className="actions">

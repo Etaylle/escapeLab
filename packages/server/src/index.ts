@@ -7,10 +7,11 @@ import {
   type ClientMessage,
   type ServerMessage,
 } from '@escapelab/core';
-import { apiResponse, serveRuns, type RunsExport } from './api.js';
+import { apiResponse, serveRuns, statsResponse, type RunsExport } from './api.js';
 import { MissionCatalog } from './missions.js';
 import { RoomManager } from './roomManager.js';
-import { appendRun, DEFAULT_RUNS_LOG } from './runLog.js';
+import { DEFAULT_RUNS_LOG } from './runLog.js';
+import { loadRunStats, logRun } from './runStats.js';
 import { StaticSite } from './static.js';
 import { createWebServer, lanUrls, tlsLogLine, tlsSetup } from './tls.js';
 import type { Room } from './room.js';
@@ -26,7 +27,9 @@ const tls = tlsSetup(process.env);
 
 const catalog = new MissionCatalog(MISSIONS_DIR);
 const site = new StaticSite(fileURLToPath(new URL('../../client/dist', import.meta.url)));
-const manager = new RoomManager((report) => appendRun(RUNS_LOG, report));
+// The Bestenliste: read from the log once, then counted run by run as they are logged.
+const stats = loadRunStats(RUNS_LOG);
+const manager = new RoomManager(logRun(RUNS_LOG, stats));
 setInterval(() => manager.sweep(), 60_000).unref();
 
 /** Per-connection session, set once the socket joins or resumes into a room. */
@@ -42,7 +45,8 @@ const httpServer = createWebServer(tls, (req, res) => {
   if (serveRuns(runs, req, res)) {
     return;
   }
-  const api = apiResponse(catalog, req.url ?? '/');
+  const url = req.url ?? '/';
+  const api = apiResponse(catalog, url) ?? statsResponse(stats, catalog, url);
   if (api !== null) {
     res.writeHead(api.status, { 'content-type': 'application/json' });
     res.end(JSON.stringify(api.body));
@@ -200,6 +204,7 @@ httpServer.listen(PORT, () => {
     ? 'GET /runs.jsonl takes RUNS_TOKEN'
     : 'RUNS_TOKEN unset: no download';
   console.log(`[escapelab] finished runs go to ${RUNS_LOG} (${download})`);
+  console.log(`[escapelab] GET /stats ranks the ${stats.runs} runs logged so far`);
   if (site.available) {
     for (const url of lanUrls(PORT, tls.on)) {
       console.log(`[escapelab] im Netzwerk erreichbar: ${url}`);

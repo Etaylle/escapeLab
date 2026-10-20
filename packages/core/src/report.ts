@@ -23,20 +23,29 @@ export interface StationReport {
   hints: number;
 }
 
+/** A name in a report is cut to this many characters. */
+const NAME_MAX = 24;
+
 /**
- * What a finished run leaves behind for balancing, as plain JSON. Nothing in
- * it names a player or carries a player id: the crew is p1…pn in the order
- * it joined. Times are epoch ms like the state's.
+ * What a finished run leaves behind for balancing and the Bestenliste, as
+ * plain JSON. It names the crew by the names they played under — a game on
+ * the LAN, first names typed at the door — but carries no player id: past
+ * `crew`, everybody is p1…pn, in the order they joined. Times are epoch ms
+ * like the state's.
  */
 export interface RunReport {
-  version: 1;
+  version: 2;
   missionId: string;
+  /** the code of the room it was played in */
+  roomCode: string;
   difficulty: Difficulty;
   /** seconds on the clock at the start, scaled to the difficulty */
   timeLimitSec: number;
   /** the alarm that reaches this many loses the run; null where the mission has no limit */
   alarmLimit: number | null;
   crewSize: number;
+  /** the names the crew played under, p1…pn in order, each cut to NAME_MAX characters */
+  crew: string[];
   /** the start tile each crew member drew, by p1…pn */
   spawns: Record<string, { x: number; y: number }>;
   startedAt: number;
@@ -53,21 +62,23 @@ export interface RunReport {
 }
 
 /**
- * The report of a finished run, derived from its final state alone: the
- * events say when each station fell and what went wrong where. Throws for a
- * run that is not over yet.
+ * The report of a finished run in the room `roomCode`, derived from its final
+ * state alone: the events say when each station fell and what went wrong
+ * where. Throws for a run that is not over yet.
  */
-export function runReport(state: GameState): RunReport {
+export function runReport(state: GameState, roomCode: string): RunReport {
   const { startedAt, finishedAt } = finishedRun(state);
   const crew = state.players.map((player, i) => ({ player, alias: `p${i + 1}` }));
   const alarmLimit = state.mission.maxAlarms ?? null;
   return {
-    version: 1,
+    version: 2,
     missionId: state.mission.id,
+    roomCode,
     difficulty: state.difficulty,
     timeLimitSec: state.mission.timeLimitSec,
     alarmLimit,
     crewSize: crew.length,
+    crew: crew.map(({ player }) => cut(player.name)),
     spawns: Object.fromEntries(crew.map(({ player, alias }) => [alias, spawnOf(player, alias)])),
     startedAt,
     finishedAt,
@@ -89,6 +100,11 @@ function finishedRun(state: GameState): { startedAt: number; finishedAt: number 
     );
   }
   return { startedAt, finishedAt };
+}
+
+/** A name cut to NAME_MAX characters, whole ones — never half an emoji — without a final space. */
+function cut(name: string): string {
+  return [...name].slice(0, NAME_MAX).join('').trimEnd();
 }
 
 function spawnOf(player: Player, alias: string): { x: number; y: number } {

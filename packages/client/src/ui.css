@@ -891,11 +891,6 @@ button.link:hover {
   vertical-align: baseline;
 }
 
-.stat-best {
-  border-color: var(--accent);
-  box-shadow: 0 0 14px var(--accent-glow);
-}
-
 /* ── sabotage emergency ─────────────────────────────────────────────────── */
 
 .sabotage {
@@ -1113,18 +1108,6 @@ button.link:hover {
 }
 
 /* ── run report & grade ─────────────────────────────────────────────────── */
-
-.record-banner {
-  margin-top: 16px;
-  padding: 10px 14px;
-  border: 1px solid var(--accent);
-  border-radius: 10px;
-  background: rgba(45, 212, 191, 0.12);
-  color: var(--accent);
-  font-family: var(--mono);
-  font-weight: 700;
-  letter-spacing: 1px;
-}
 
 .grade {
   display: flex;
@@ -1544,12 +1527,6 @@ button.link:hover {
 
 .map-thumb-floor {
   fill: #2a3f52;
-}
-
-.history {
-  margin-top: 14px;
-  font-family: var(--mono);
-  font-size: 13px;
 }
 
 /* ── stage: the world with its own overlay bar ──────────────────────────── */

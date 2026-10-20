@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { ClientMessage, MissionInfo, RoomSummary } from '@escapelab/core';
+import type { ClientMessage, MissionInfo, MissionStats, RoomSummary } from '@escapelab/core';
+import { recordLine } from '../runStats.js';
 import { crewSizeText } from './Crew.js';
 import { HttpsHint } from './HttpsHint.js';
 import { Icon } from './Icon.js';
@@ -11,7 +12,10 @@ interface Props {
   connected: boolean;
   missions: MissionInfo[];
   rooms: RoomSummary[];
+  /** the Bestenliste's runs, by mission */
+  stats: MissionStats[];
   openHandbook: (missionId: string) => void;
+  openHistory: (missionId: string) => void;
 }
 
 const REFRESH_MS = 2500;
@@ -70,17 +74,21 @@ function RoomRow({
 
 /**
  * One mission to pick: its map, its name and one line of facts. The picked
- * one also spells out its subtitle; on the others it is the tooltip.
+ * one also spells out its subtitle; on the others it is the tooltip. Once
+ * the mission has been played, a line says its best time and win rate.
  */
 function MissionCard({
   mission,
+  stats,
   selected,
   onSelect,
 }: {
   mission: MissionInfo;
+  stats: MissionStats | undefined;
   selected: boolean;
   onSelect: () => void;
 }) {
+  const record = recordLine(stats?.difficulties ?? []);
   return (
     <button
       className={`mission ${selected ? 'mission-selected' : ''}`}
@@ -96,12 +104,21 @@ function MissionCard({
           {mission.puzzleCount} Stationen
         </span>
         {selected && <span className="mission-sub">{mission.subtitle}</span>}
+        {record !== null && <span className="mission-record">{record}</span>}
       </span>
     </button>
   );
 }
 
-export function JoinScreen({ send, connected, missions, rooms, openHandbook }: Props) {
+export function JoinScreen({
+  send,
+  connected,
+  missions,
+  rooms,
+  stats,
+  openHandbook,
+  openHistory,
+}: Props) {
   const [name, setName] = useState('');
   // An invite link carries the room in ?room=, so the code field is already
   // filled and all that is left to do is type a name.
@@ -180,6 +197,7 @@ export function JoinScreen({ send, connected, missions, rooms, openHandbook }: P
                 <MissionCard
                   key={m.id}
                   mission={m}
+                  stats={stats.find((s) => s.missionId === m.id)}
                   selected={selected === m.id}
                   onSelect={() => setMissionId(m.id)}
                 />
@@ -208,6 +226,14 @@ export function JoinScreen({ send, connected, missions, rooms, openHandbook }: P
                 onClick={() => openHandbook(selected)}
               >
                 <Icon name="book" /> Handbuch
+              </button>
+            )}
+            {selected !== null && (
+              <button
+                title="Die schnellsten Crews jeder Mission, zum Ansehen und Ausdrucken"
+                onClick={() => openHistory(selected)}
+              >
+                <Icon name="podium" /> Bestenliste
               </button>
             )}
           </div>

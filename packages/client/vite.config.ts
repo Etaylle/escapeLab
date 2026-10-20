@@ -18,6 +18,7 @@ export default defineConfig({
     proxy: {
       '/ws': { target: 'ws://localhost:3001', ws: true },
       '/missions': { target: 'http://localhost:3001' },
+      '/stats': { target: 'http://localhost:3001' },
     },
   },
 });

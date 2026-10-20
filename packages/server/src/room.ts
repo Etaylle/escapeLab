@@ -874,7 +874,7 @@ export class Room {
     this.state = applyAction(this.state, action);
     // A run ends exactly once, won or lost; a rematch is a run of its own.
     if (wasPlaying && (this.state.phase === 'won' || this.state.phase === 'lost')) {
-      this.onRunFinished(runReport(this.state));
+      this.onRunFinished(runReport(this.state, this.code));
     }
     this.reconcileTimer();
     this.reconcileDroneTimer();

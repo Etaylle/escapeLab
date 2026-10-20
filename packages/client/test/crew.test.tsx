@@ -398,7 +398,15 @@ describe('the join screen', () => {
   function joinScreen(missions: MissionInfo[], rooms: RoomSummary[] = [], raw = false): string {
     vi.stubGlobal('window', { location: { search: '' } });
     const html = renderToStaticMarkup(
-      <JoinScreen send={noop} connected missions={missions} rooms={rooms} openHandbook={noop} />,
+      <JoinScreen
+        send={noop}
+        connected
+        missions={missions}
+        rooms={rooms}
+        stats={[]}
+        openHandbook={noop}
+        openHistory={noop}
+      />,
     );
     return raw ? html : iconsAsWords(html);
   }
