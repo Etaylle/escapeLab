@@ -1,5 +1,3 @@
-import { createServer } from 'node:http';
-import { networkInterfaces } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
@@ -14,6 +12,7 @@ import { MissionCatalog } from './missions.js';
 import { RoomManager } from './roomManager.js';
 import { appendRun, DEFAULT_RUNS_LOG } from './runLog.js';
 import { StaticSite } from './static.js';
+import { createWebServer, lanUrls, tlsLogLine, tlsSetup } from './tls.js';
 import type { Room } from './room.js';
 
 const PORT = Number(process.env['PORT'] ?? 3001);
@@ -22,6 +21,8 @@ const MISSIONS_DIR =
 // An empty RUNS_LOG counts as unset, like an empty RUNS_TOKEN.
 const RUNS_LOG = process.env['RUNS_LOG'] || DEFAULT_RUNS_LOG;
 const runs: RunsExport = { file: RUNS_LOG, token: process.env['RUNS_TOKEN'] };
+// https where packages/server/cert/ (or TLS_CERT and TLS_KEY) holds a pair, else http.
+const tls = tlsSetup(process.env);
 
 const catalog = new MissionCatalog(MISSIONS_DIR);
 const site = new StaticSite(fileURLToPath(new URL('../../client/dist', import.meta.url)));
@@ -36,7 +37,7 @@ interface Session {
   detachSpectator?: () => void;
 }
 
-const httpServer = createServer((req, res) => {
+const httpServer = createWebServer(tls, (req, res) => {
   if (serveRuns(runs, req, res)) {
     return;
   }
@@ -183,23 +184,17 @@ wss.on('connection', (socket) => {
   });
 });
 
-/** Every LAN address the game is reachable on — handy when people join on their phones. */
-function lanUrls(port: number): string[] {
-  return Object.values(networkInterfaces())
-    .flat()
-    .filter((net) => net !== undefined && net.family === 'IPv4' && !net.internal)
-    .map((net) => `http://${net?.address ?? ''}:${port}`);
-}
-
 httpServer.listen(PORT, () => {
   const ids = catalog.all.map((m) => m.id).join(', ');
-  console.log(`[escapelab] server on http://localhost:${PORT} (ws: /ws, missions: ${ids})`);
+  const scheme = tls.on ? 'https' : 'http';
+  console.log(`[escapelab] server on ${scheme}://localhost:${PORT} (ws: /ws, missions: ${ids})`);
+  console.log(`[escapelab] ${tlsLogLine(tls)}`);
   const download = runs.token
     ? 'GET /runs.jsonl takes RUNS_TOKEN'
     : 'RUNS_TOKEN unset: no download';
   console.log(`[escapelab] finished runs go to ${RUNS_LOG} (${download})`);
   if (site.available) {
-    for (const url of lanUrls(PORT)) {
+    for (const url of lanUrls(PORT, tls.on)) {
       console.log(`[escapelab] im Netzwerk erreichbar: ${url}`);
     }
   } else {

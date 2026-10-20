@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ClientMessage, MissionInfo, RoomSummary } from '@escapelab/core';
 import { crewSizeText } from './Crew.js';
+import { HttpsHint } from './HttpsHint.js';
 import { Icon } from './Icon.js';
 import { InstallOffer } from './Install.js';
 import { MapThumb } from './MapThumb.js';
@@ -134,6 +135,7 @@ export function JoinScreen({ send, connected, missions, rooms, openHandbook }: P
         Person, Rücken an Rücken, los.
       </p>
       <InstallOffer />
+      <HttpsHint />
 
       <label>
         Dein Name

@@ -157,23 +157,41 @@ Rückkehr. Über die Lobby geht es weiterhin, wenn Mission oder Schwierigkeit si
 ## Für den Demo Day (ein Prozess, eine URL)
 
 ```sh
+pnpm cert         # einmal: Zertifikat für HTTPS im LAN (braucht openssl, macOS/Linux haben es)
 pnpm build        # Client-Bundle nach packages/client/dist
 pnpm start        # Server liefert Spiel + API + WebSocket auf einem Port
 ```
 
 Beim Start schreibt der Server alle Netzwerk-Adressen in die Konsole
-(`http://10.0.0.184:3001`) — unter dieser Adresse können Mitspielende im selben WLAN direkt
-mit Laptop oder Handy beitreten, ohne irgendetwas zu installieren. Port über `PORT=8080`
-änderbar.
+(`https://10.0.0.184:3001`, ohne Zertifikat `http://…`) — unter dieser Adresse können
+Mitspielende im selben WLAN direkt mit Laptop oder Handy beitreten, ohne irgendetwas zu
+installieren. Port über `PORT=8080` änderbar.
+
+**HTTPS im LAN, ohne Hosting:** Mikrofon und wach bleibenden Bildschirm gibt ein Handy nur einer
+sicheren Adresse frei, und `http://<LAN-IP>:3001` ist keine. `pnpm cert` legt ein
+selbstsigniertes Zertifikat nach `packages/server/cert/` (nicht im Repo), gültig für `localhost`,
+`127.0.0.1` und die LAN-Adressen dieses Rechners — nach einem Netzwechsel `pnpm cert --force`.
+Liegt es dort, spricht der Server HTTPS (`TLS: an` im Log); die Adresse mit `https://` eintippen.
+Beim ersten Besuch warnt jedes Handy einmal vor dem Zertifikat:
+
+- Chrome (Android): „Erweitert“, dann „Weiter zu 10.0.0.184 (unsicher)“.
+- Safari (iOS): „Details einblenden“, dann „diese Website besuchen“ und „Website besuchen“.
+- Danach gehen Mikrofon und der wach bleibende Bildschirm im Lauf. Installieren als App und den
+  Service Worker lässt Chrome erst zu, wenn das Handy dem Zertifikat vertraut — eine bestätigte
+  Warnung reicht dafür nicht.
+
+| Variable | Wirkung |
+| --- | --- |
+| `TLS_CERT`, `TLS_KEY` | Zertifikat und Schlüssel (PEM) von anderswo statt aus `packages/server/cert/`. |
+| `TLS=off` | Immer http, auch mit Zertifikat. So laufen `pnpm dev` (Vite leitet per http weiter) und der Smoke-Test. |
 
 **Auf dem Handy:** Ein Lauf geht in den Vollbildmodus (beim Bereitmelden oder Starten, sonst
 beim ersten Antippen) und dreht sich ins Querformat — auch über `http://<LAN-IP>:3001`, in den
 Browsern von Android; das iPhone kennt beides nicht. Die PWA-Teile brauchen dagegen eine sichere
 Adresse, also HTTPS oder `localhost`: die App auf den Startbildschirm legen, der Service Worker
 (Zwischenspeicher, Zeile „Neue Version — neu laden“) und ein Bildschirm, der wach bleibt. Über
-die LAN-Adresse per http fehlen sie still, ohne Fehlermeldung. Im LAN gibt es sie später mit
-einem selbstsignierten Zertifikat, dem die Handys vertrauen (der Server spricht bisher nur
-http).
+die LAN-Adresse per http fehlen sie still; nur die Startseite sagt in einer Zeile, dass es
+ohne HTTPS kein Mikrofon gibt.
 
 **Laufprotokoll (ohne Datenbank):** Jeder beendete Lauf, gewonnen oder verloren, hängt seinen
 Bericht als eine Zeile JSON an eine Datei an; jede Revanche bekommt ihre eigene Zeile. Darin

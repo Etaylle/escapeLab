@@ -9,6 +9,7 @@ import './styles/lobby.css';
 import './styles/devices.css';
 import './styles/book.css';
 import './styles/pwa.css';
+import './styles/https.css';
 
 watchInstallOffer();
 // The worker caches the build; `vite` serves none, and a worker would stand in its way.

@@ -4,3 +4,5 @@ dist/
 .DS_Store
 .playwright-browsers/
 .worktrees/
+# `pnpm cert`'s certificate and private key: made per machine, never shared.
+packages/server/cert/

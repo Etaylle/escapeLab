@@ -50,6 +50,8 @@ import {
 
 const PORT = 3102;
 process.env['PORT'] = String(PORT);
+// The smoke talks ws://, even where packages/server/cert/ would make the server speak https.
+process.env['TLS'] = 'off';
 // Finished runs go to a log in a folder of their own, which the server has to make first.
 const runsDir = mkdtempSync(join(tmpdir(), 'escapelab-smoke-'));
 const RUNS_LOG = join(runsDir, 'logs', 'runs.jsonl');

@@ -1,0 +1,15 @@
+/* ══ the join screen over plain http: no microphone (screens/HttpsHint.tsx) ══
+ * One quiet line under the introduction, where a phone on a secure origin
+ * gets its install offer instead (the two never show together).
+ */
+
+.https-hint {
+  margin: -4px 0 14px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.https-hint code {
+  color: var(--text);
+  font-family: var(--mono);
+}

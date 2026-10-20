@@ -45,6 +45,9 @@ const SIZES = [
   { name: 'laptop-13', width: 1440, height: 820 },
   { name: 'split-screen', width: 960, height: 760 },
   { name: 'phone', width: 420, height: 760 },
+  // A phone held sideways, as a run turns it. Only a touch window shows its layout (the query
+  // asks for a coarse pointer), so the guest's phone is turned, not the host's window.
+  { name: 'phone-landscape', width: 844, height: 390, hasTouch: true },
 ];
 
 /** Avatar speed in tiles per second, as the client walks. */
@@ -1240,7 +1243,7 @@ async function run() {
     { name: 'Ben', page: guest, start: await layoutOf(guest) },
   ];
 
-  for (const size of SIZES) {
+  for (const size of SIZES.filter((s) => !s.hasTouch)) {
     await host.setViewportSize({ width: size.width, height: size.height });
     await sleep(700);
     await capture(host, `game-${size.name}.png`);
@@ -1248,6 +1251,16 @@ async function run() {
   }
   // The guest's window is phone-sized and touch-capable all along.
   await capture(guest, 'game-phone-touch.png');
+  // Ben turns the phone sideways: the landscape layout, pad and all. Its zoom has to hold
+  // there too, so the end of the run turns the phone once more and compares.
+  const turned = SIZES[3];
+  await guest.setViewportSize({ width: turned.width, height: turned.height });
+  await sleep(700);
+  await capture(guest, `game-${turned.name}.png`);
+  await overflow(guest, `game @ ${turned.width}x${turned.height}, Ben's phone sideways`);
+  steady.push({ name: 'Ben sideways', page: guest, start: await layoutOf(guest), turn: turned });
+  await guest.setViewportSize(SIZES[2]);
+  await sleep(400);
 
   // info panel and spectator view at laptop size
   await host.setViewportSize(SIZES[0]);
@@ -1376,7 +1389,11 @@ async function run() {
   }
   await captureLitRoom(guest, guestSeen);
 
-  for (const { name, page, start } of steady) {
+  for (const { name, page, start, turn } of steady) {
+    if (turn !== undefined) {
+      await page.setViewportSize({ width: turn.width, height: turn.height });
+      await sleep(700);
+    }
     const end = await layoutOf(page);
     const banners = end.banners.length === 0 ? '' : `, ${end.banners.join(' ')} up`;
     console.log(
