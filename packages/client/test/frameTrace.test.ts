@@ -44,6 +44,32 @@ describe('frameTrace — the last frame durations for the walkthrough', () => {
     expect(fedWith(2 * TRACE_FRAMES + 7).frames).toEqual(ringFrom(TRACE_FRAMES + 7));
   });
 
+  it('forgets everything on a reset, then keeps durations oldest first again', () => {
+    // Wrapped first: the next slot is in the middle of the ring, not at its start.
+    const trace = fedWith(TRACE_FRAMES + 5);
+    trace.resetFrames();
+    expect(trace.frames).toEqual([]);
+    trace.record(16.7);
+    trace.record(33.4);
+    expect(trace.frames).toEqual([16.7, 33.4]);
+  });
+
+  it('fills and laps the ring afresh after a reset', () => {
+    const trace = fedWith(TRACE_FRAMES + 5);
+    trace.resetFrames();
+    for (let ms = 1000; ms < 1000 + TRACE_FRAMES + 3; ms++) {
+      trace.record(ms);
+    }
+    expect(trace.frames).toEqual(ringFrom(1003));
+  });
+
+  it('can be reset while still empty', () => {
+    const trace = frameTrace();
+    trace.resetFrames();
+    trace.record(16.7);
+    expect(trace.frames).toEqual([16.7]);
+  });
+
   it('hands out a copy that later frames leave alone', () => {
     const trace = fedWith(3);
     const read = trace.frames;

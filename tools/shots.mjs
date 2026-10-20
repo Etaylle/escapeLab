@@ -20,11 +20,15 @@
  * The base URL is the Vite dev server by default (`pnpm dev`), or the
  * production server (`pnpm build && pnpm start`, http://localhost:3001) as in
  * CI. The host's page opens with `?trace=1`, so the world keeps its frame
- * durations (animation frame to animation frame, 16.7 ms at 60 Hz); after the
- * game screenshots and after the station step the run logs their p50 and p95. A p95 above SHOTS_FRAME_P95_MS (default 40) fails
- * the run, as does any step that throws; a capture the draw leaves out is
- * logged as `skipped:` with why, and fails nothing. The last line counts the
- * captures taken, skipped and failed; the exit code is 1 when any failed.
+ * durations (animation frame to animation frame, 16.7 ms at 60 Hz). Three
+ * times the run resets them and samples two quiet seconds, with no
+ * screenshot, resize or click in them: the host pacing inside its tile after
+ * the game screenshots, idle at an open station panel, and pacing again after
+ * the station step. Each sample logs p50 and p95; a p95 above
+ * SHOTS_FRAME_P95_MS (default 40) fails the run, as does any step that
+ * throws. A capture the draw leaves out is logged as `skipped:` with why, and
+ * fails nothing. The last line counts the captures taken, skipped and failed;
+ * the exit code is 1 when any failed.
  */
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -47,6 +51,8 @@ const SIZES = [
 const SPEED = 4.2;
 /** How close to a tile centre a step has to land, in tiles. */
 const STEP_TOLERANCE = 0.15;
+/** How long a frame sample runs, in ms. */
+const SAMPLE_MS = 2000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -70,6 +76,9 @@ const tally = { taken: 0, skipped: 0, failures: [] };
 
 /** The browser of this run; closed at its end, however that comes. */
 let browser = null;
+
+/** Whether a frame sample was taken at an open station panel; a run without one says so. */
+let panelSampled = false;
 
 /** Saves what `page` shows as `name` in the output folder, and counts it. */
 async function capture(page, name) {
@@ -96,15 +105,28 @@ function traced(url) {
 }
 
 /**
- * Reads the last frame durations off a page opened with `traced` and logs
- * their p50 and p95. A p95 over the budget fails the run, as does a page with
- * no frames to read.
+ * Samples a page opened with `traced`: resets its frame trace, lets `quiet`
+ * fill the window and logs p50 and p95 of the durations recorded meanwhile.
+ * Nothing in `quiet` may screenshot, resize or click: those stalls are the
+ * harness's, not the game's. A p95 over the budget fails the run, as does a
+ * page without a trace or a window without frames.
  */
-async function sampleFrames(page, when) {
+async function sampleFrames(page, when, quiet) {
+  const found = await page.evaluate(() => {
+    const probe = globalThis.__escapelab;
+    probe?.resetFrames();
+    return probe !== undefined;
+  });
+  if (!found) {
+    console.log(`frames             !! no trace ${when}: the page keeps none under ?trace=1`);
+    fail(`no frame trace ${when}`);
+    return;
+  }
+  await quiet();
   const frames = await page.evaluate(() => globalThis.__escapelab?.frames ?? []);
   if (frames.length === 0) {
-    console.log(`frames             !! none ${when}: the page keeps no frame trace under ?trace=1`);
-    fail(`no frame trace ${when}`);
+    console.log(`frames             !! no frames recorded ${when}`);
+    fail(`no frames recorded ${when}`);
     return;
   }
   const p95 = percentile(frames, 95);
@@ -266,6 +288,27 @@ async function stepTo(page, seen, tx, ty) {
     await sleep(140); // the avatar reports itself every 80 ms
   }
   return false;
+}
+
+/**
+ * Walks `player` to and fro inside the tile it stands on for `ms`, then back
+ * to the tile's centre. The lamp moves, so every moving frame works its light
+ * out anew, as in play, where a lamp standing still reuses its last sight.
+ * A fifth of a tile each way presses no plate on a tile next door, and stays
+ * inside the radius that keeps the player present wherever it already was.
+ */
+async function pace(player, ms) {
+  const home = tileOf(player.seen);
+  if (home === null) {
+    await sleep(ms);
+    return;
+  }
+  const [x, y] = [home.x + 0.5, home.y + 0.5];
+  const end = Date.now() + ms;
+  for (let leg = 0; Date.now() < end; leg++) {
+    await stepTo(player.page, player.seen, x + (leg % 2 === 0 ? 0.2 : -0.2), y);
+  }
+  await stepTo(player.page, player.seen, x, y);
 }
 
 /**
@@ -645,6 +688,13 @@ async function captureConsoles(operator, reader) {
     if (sizes[i] !== null) {
       await page.setViewportSize(sizes[i]);
     }
+  }
+  // The blur behind an open panel is the game's own cost: it keeps the budget too.
+  const watched = crew.find((player) => player.traced);
+  if (watched !== undefined) {
+    await sleep(300); // past the resize
+    await sampleFrames(watched.page, `idle at the open "${title}" panel`, () => sleep(SAMPLE_MS));
+    panelSampled = true;
   }
   if (kind === 'signal') {
     await solveSignal(crew, title);
@@ -1103,6 +1153,7 @@ async function run() {
     if (m.type() === 'error') console.log('[host console]', m.text());
   });
   host.on('pageerror', (e) => console.log('[host error]', e.message));
+  // Only the host's page keeps a frame trace: every frame sample reads it.
   await host.goto(traced(BASE));
   await host.getByPlaceholder('z. B. Anna').fill('Anna');
   await host.locator('.mission').first().waitFor({ timeout: 10_000 });
@@ -1169,7 +1220,7 @@ async function run() {
   if (guestSeen.view?.map == null || hostSeen.view?.map == null) {
     throw new Error('no running view on the sockets — does the client still talk on /ws?');
   }
-  const anna = { name: 'Anna', page: host, seen: hostSeen };
+  const anna = { name: 'Anna', page: host, seen: hostSeen, traced: true };
   const ben = { name: 'Ben', page: guest, seen: guestSeen };
   const [operator, reader] = operatorFirst([anna, ben]);
   console.log(`the draw:          ${operator.name} works the first station, ${reader.name} reads`);
@@ -1197,11 +1248,11 @@ async function run() {
   }
   // The guest's window is phone-sized and touch-capable all along.
   await capture(guest, 'game-phone-touch.png');
-  await sampleFrames(host, 'after the game screenshots');
 
   // info panel and spectator view at laptop size
   await host.setViewportSize(SIZES[0]);
   await sleep(400);
+  await sampleFrames(host, 'pacing, after the game screenshots', () => pace(anna, SAMPLE_MS));
   await host.keyboard.press('i');
   await sleep(400);
   await capture(host, 'info-panel.png');
@@ -1313,7 +1364,16 @@ async function run() {
       await askForNotes(reader, operator);
     }
   }
-  await sampleFrames(host, 'after the station step');
+  // The world on its own again: whatever the host still has open closes first.
+  const onTop = host.locator('.station-modal, .reading-modal').first();
+  if (await onTop.isVisible()) {
+    await host.keyboard.press('Escape');
+    await onTop.waitFor({ state: 'hidden', timeout: 3000 });
+  }
+  await sampleFrames(host, 'pacing, after the station step', () => pace(anna, SAMPLE_MS));
+  if (!panelSampled) {
+    skip('frames', 'no station panel was open on the host page, so none was sampled with one');
+  }
   await captureLitRoom(guest, guestSeen);
 
   for (const { name, page, start } of steady) {
