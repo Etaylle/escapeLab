@@ -12,6 +12,8 @@ interface Props {
   missions: MissionInfo[];
   rooms: RoomSummary[];
   openHandbook: (missionId: string) => void;
+  /** opens the mission editor; without it the join screen offers none */
+  openEditor?: () => void;
 }
 
 const REFRESH_MS = 2500;
@@ -101,7 +103,7 @@ function MissionCard({
   );
 }
 
-export function JoinScreen({ send, connected, missions, rooms, openHandbook }: Props) {
+export function JoinScreen({ send, connected, missions, rooms, openHandbook, openEditor }: Props) {
   const [name, setName] = useState('');
   // An invite link carries the room in ?room=, so the code field is already
   // filled and all that is left to do is type a name.
@@ -208,6 +210,14 @@ export function JoinScreen({ send, connected, missions, rooms, openHandbook }: P
                 onClick={() => openHandbook(selected)}
               >
                 <Icon name="book" /> Handbuch
+              </button>
+            )}
+            {openEditor !== undefined && (
+              <button
+                title="Eine eigene Mission bauen oder eine vorhandene abwandeln"
+                onClick={openEditor}
+              >
+                <Icon name="pencil" /> Editor
               </button>
             )}
           </div>

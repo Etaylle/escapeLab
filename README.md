@@ -123,6 +123,16 @@ Pult muss außerdem — wohin ihre Regeln auch ausgelost werden — einer am Pul
 während ein anderer sie zugleich liest, und an jeder mit zwei Pulten müssen zwei Verschiedene
 zugleich an beiden stehen können.
 
+**Missions-Editor:** „Editor" auf der Startseite öffnet eine Werkbank: das Labor mit den Kacheln
+des Spiels auf eine Leinwand malen, Startplätze, Türen, Platten, Stationen, Quellen, Schild,
+Raumnamen, Ausgang, Teile und Drohnenwege setzen und in Seitenformularen bearbeiten. Die Prüfung
+läuft bei jeder Änderung mit — dieselbe wie `parseMission`, Erreichbarkeitsbeweise inklusive —
+und zeigt jeden Fehler auf der Karte. Gespeichert wird als eigene Mission `custom-…` nach
+`missions/custom/` (nicht im Repo, Ort per `CUSTOM_MISSIONS_DIR`): `POST /missions/custom`
+(JSON bis 256 kB), `DELETE /missions/custom/:id`, ohne Login, je Adresse 30 Änderungen pro
+Minute; `GET /missions/:id` liefert eine Mission ganz. Jede Mission des Katalogs öffnet als
+Vorlage (eine mitgelieferte als Kopie), Missionsdateien gehen per Export und Import hin und her.
+
 ## Struktur
 
 | Paket | Zweck |

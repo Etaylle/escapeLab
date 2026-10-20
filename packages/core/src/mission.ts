@@ -779,14 +779,28 @@ export type MapDef = z.infer<typeof mapDefSchema>;
 export type ManualDef = MapDef['manuals'][number];
 export type Mission = z.infer<typeof missionSchema>;
 
+/** Mission data checked: the mission, or every issue found, each as "path: message". */
+export type MissionCheck = { ok: true; mission: Mission } | { ok: false; issues: string[] };
+
+/**
+ * Checks mission data against the format and every map rule, the
+ * reachability proofs included, without throwing: what `parseMission`
+ * does, with the issues as a list.
+ */
+export function checkMission(data: unknown): MissionCheck {
+  const result = missionSchema.safeParse(data);
+  if (result.success) {
+    return { ok: true, mission: result.data };
+  }
+  const where = (path: readonly PropertyKey[]): string => path.map(String).join('.') || '(root)';
+  return { ok: false, issues: result.error.issues.map((i) => `${where(i.path)}: ${i.message}`) };
+}
+
 /** Parse and validate a mission from unknown JSON data. Throws with details on invalid input. */
 export function parseMission(data: unknown): Mission {
-  const result = missionSchema.safeParse(data);
-  if (!result.success) {
-    const issues = result.error.issues
-      .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
-      .join('; ');
-    throw new Error(`Invalid mission file: ${issues}`);
+  const checked = checkMission(data);
+  if (!checked.ok) {
+    throw new Error(`Invalid mission file: ${checked.issues.join('; ')}`);
   }
-  return result.data;
+  return checked.mission;
 }

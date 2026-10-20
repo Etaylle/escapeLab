@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
@@ -8,6 +9,7 @@ import {
   type ServerMessage,
 } from '@escapelab/core';
 import { apiResponse, serveRuns, type RunsExport } from './api.js';
+import { customMissions, serveCustomMissions } from './customMissions.js';
 import { MissionCatalog } from './missions.js';
 import { RoomManager } from './roomManager.js';
 import { appendRun, DEFAULT_RUNS_LOG } from './runLog.js';
@@ -24,7 +26,10 @@ const runs: RunsExport = { file: RUNS_LOG, token: process.env['RUNS_TOKEN'] };
 // https where packages/server/cert/ (or TLS_CERT and TLS_KEY) holds a pair, else http.
 const tls = tlsSetup(process.env);
 
-const catalog = new MissionCatalog(MISSIONS_DIR);
+// Missions made in the editor: missions/custom/ beside the shipped ones (not in the repo).
+const CUSTOM_MISSIONS_DIR = process.env['CUSTOM_MISSIONS_DIR'] || join(MISSIONS_DIR, 'custom');
+const catalog = new MissionCatalog(MISSIONS_DIR, CUSTOM_MISSIONS_DIR);
+const editing = customMissions(catalog);
 const site = new StaticSite(fileURLToPath(new URL('../../client/dist', import.meta.url)));
 const manager = new RoomManager((report) => appendRun(RUNS_LOG, report));
 setInterval(() => manager.sweep(), 60_000).unref();
@@ -40,6 +45,9 @@ interface Session {
 
 const httpServer = createWebServer(tls, (req, res) => {
   if (serveRuns(runs, req, res)) {
+    return;
+  }
+  if (serveCustomMissions(editing, req, res)) {
     return;
   }
   const api = apiResponse(catalog, req.url ?? '/');
