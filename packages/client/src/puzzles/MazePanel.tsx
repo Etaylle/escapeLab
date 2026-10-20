@@ -75,9 +75,11 @@ export function MazePanel({ puzzle, send }: PanelProps<'maze'>) {
   const here = `${COLS[puzzle.pos.x] ?? '?'}${puzzle.pos.y + 1}`;
   return (
     <div>
-      <p className="muted">
-        Du stehst auf <strong>{here}</strong>, das Ziel ist <strong>{goalName}</strong>. Feld
-        ansagen, erst bei Ansage gehen.
+      <p className="maze-readout">
+        <span className="device-engraving">POSITION</span>
+        <span className="maze-lcd">{here}</span>
+        <span className="device-engraving">ZIEL</span>
+        <span className="maze-lcd">{goalName}</span>
       </p>
       <MazeGrid puzzle={puzzle} />
       {puzzle.lastResult === 'wall' && <p className="warn">⚠ Gegen die Wand gelaufen!</p>}

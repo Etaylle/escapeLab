@@ -16,7 +16,6 @@ export function KeypadPanel({ puzzle, send }: PanelProps<'keypad'>) {
   }
   return (
     <div>
-      <p className="muted">Zeichen beschreiben, erst bei Ansage drücken.</p>
       <div className="keypad-grid">
         {puzzle.keys.map((key, i) => (
           <button

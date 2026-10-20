@@ -87,7 +87,6 @@ export function SimonPanel({ puzzle, send }: PanelProps<'simon'>) {
   }
   return (
     <div className="simon">
-      <p className="muted">Jede Blinkfarbe ansagen, erst bei Ansage drücken.</p>
       <StageStatus puzzle={puzzle} />
       <SignalLamp key={`${puzzle.stage}:${puzzle.alarms}:${replays}`} flashes={puzzle.flashes} />
       <button className="simon-replay" onClick={() => setReplays((n) => n + 1)}>

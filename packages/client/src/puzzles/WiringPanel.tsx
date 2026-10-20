@@ -39,9 +39,6 @@ export function WiringPanel({ puzzle, send }: PanelProps<'wiring'>) {
         ))}
       </ol>
       {status}
-      <p className="muted">
-        Farben von oben ansagen, erst bei Ansage trennen — Antippen trennt sofort.
-      </p>
     </div>
   );
 }

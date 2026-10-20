@@ -2,23 +2,17 @@ import type { ReactNode } from 'react';
 import type { Edgework } from '@escapelab/core';
 import { EdgeworkChip } from './EdgeworkChip.js';
 
-/** A line under the frame's label, plain or as a warning. */
-export interface ModalNote {
-  text: string;
-  tone: 'muted' | 'warn';
-}
-
 /**
- * The frame a station's panel and a manual object's pages open in, over the
- * world: what you are looking at, the Laborkennung once you have read it,
- * a line on who backs you up at a station, and the way out.
+ * The frame a station's device and a manual object's pages open in, over
+ * the world: what you are reading — a station's device carries its own
+ * label plate, so its name stays with the dialog — the Laborkennung once
+ * you have read it, and the way out.
  */
 export function WorldModal({
   kind,
   look,
   label,
   edgework,
-  note = null,
   onClose,
   children,
 }: {
@@ -26,10 +20,9 @@ export function WorldModal({
   kind: 'station' | 'reading';
   /** further classes for what is inside: a book, a terminal, a wall chart */
   look?: string;
+  /** the dialog's name; printed over a manual object's pages */
   label: string;
   edgework: Edgework | null;
-  /** under the label: at a station, who backs this player up — or that nobody does */
-  note?: ModalNote | null;
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -44,9 +37,8 @@ export function WorldModal({
       <div className="panel">
         <div className="modal-head">
           <div className="panel-head">
-            <div className="panel-label">// {label}</div>
+            {kind === 'reading' && <div className="panel-label">// {label}</div>}
             {edgework !== null && <EdgeworkChip edgework={edgework} />}
-            {note !== null && <p className={`modal-note ${note.tone}`}>{note.text}</p>}
           </div>
           <button
             className="modal-close"

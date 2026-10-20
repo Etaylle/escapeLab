@@ -18,12 +18,6 @@
     0 0 64px var(--accent-glow);
 }
 
-.morse-help {
-  margin: 0 0 14px;
-  font-size: 14px;
-  text-align: center;
-}
-
 .morse-dial {
   display: grid;
   grid-template-columns: 56px 1fr 56px;

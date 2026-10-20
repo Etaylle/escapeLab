@@ -72,10 +72,6 @@ export function MorsePanel({ puzzle, send }: PanelProps<'morse'>) {
     <div>
       {/* A new word restarts the loop from its long pause. */}
       <Lamp key={puzzle.pattern} pattern={puzzle.pattern} />
-      <p className="muted morse-help">
-        Zeichen ansagen: „kurz", „lang", Pause — nach der langen Pause beginnt das Wort von vorn.
-        Erst bei Ansage senden.
-      </p>
       <div className="morse-dial">
         <button aria-label="Frequenz runter" disabled={puzzle.dial <= 0} onClick={() => tune(-1)}>
           ◀

@@ -55,15 +55,6 @@
   line-height: 1;
 }
 
-.memory-help,
-.memory-note {
-  margin: 0;
-}
-
-.memory-note {
-  font-size: 13px;
-}
-
 /* The fall back to stage 1, flashed over the bank; taps go through it. */
 .memory-reset {
   position: absolute;

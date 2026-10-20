@@ -69,10 +69,6 @@ export function SwitchesPanel({ puzzle, send }: PanelProps<'switches'>) {
   const stars = puzzle.features === 3;
   return (
     <div>
-      <p className="muted switches-intro">
-        Jeden Schalter ansagen: LED, Markierung{stars && ', Stern'}. Bei Ansage umlegen —
-        gefahrlos, erst PRÜFEN zählt.
-      </p>
       <div className="switches-bank" role="group" aria-label="Schalterbank">
         {puzzle.switches.map((sw, i) => (
           <SwitchItem

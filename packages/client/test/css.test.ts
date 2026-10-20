@@ -42,6 +42,7 @@ function unclosedBlocks(source: string): string[] {
 describe('the stylesheets', () => {
   it('include every sheet under styles/', () => {
     expect(sheets).toContain('styles/lobby.css');
+    expect(sheets).toContain('styles/devices.css');
   });
 
   it.each(sheets)('%s closes every block it opens', (sheet) => {

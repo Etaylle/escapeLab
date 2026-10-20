@@ -1,7 +1,11 @@
 import type { ClientMessage, PuzzleView } from '@escapelab/core';
+import { Device, deviceOf } from '../puzzles/Device.js';
 import { PANELS, READERS, type Panel, type Reader } from '../puzzles/index.js';
 
-/** The open puzzle's panel; every input it makes goes out as a `puzzle-input`. */
+/**
+ * The open puzzle's panel in its device frame, so that every station shares
+ * one physical look; every input it makes goes out as a `puzzle-input`.
+ */
 export function PuzzlePanel({
   puzzle,
   send,
@@ -14,11 +18,13 @@ export function PuzzlePanel({
   // PANELS is keyed by kind, so the entry for this kind takes exactly this puzzle.
   const ModulePanel = PANELS[puzzle.kind] as Panel<PuzzleView['kind']>;
   return (
-    <ModulePanel
-      puzzle={puzzle}
-      send={(input) => send({ kind: 'puzzle-input', input })}
-      deadlineAt={deadlineAt}
-    />
+    <Device {...deviceOf(puzzle)}>
+      <ModulePanel
+        puzzle={puzzle}
+        send={(input) => send({ kind: 'puzzle-input', input })}
+        deadlineAt={deadlineAt}
+      />
+    </Device>
   );
 }
 

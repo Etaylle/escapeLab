@@ -7,7 +7,9 @@ import {
   type DronePosition,
   type ManualKind,
   type PlayerView,
+  type PuzzleView,
 } from '@escapelab/core';
+import { deviceCoach, firstSight, type CoachMark } from '../puzzles/coach.js';
 import {
   drawCarryable,
   drawDropZone,
@@ -96,6 +98,8 @@ interface Props {
   inputLocked: boolean;
   /** audience view: whole map revealed, no controls, no own avatar */
   spectator: boolean;
+  /** the station whose panel lies over the world, for its device's coach mark; none by default */
+  station?: PuzzleView | null;
   /** first-time tips wait while the objective bar carries a notice, so the two never stack */
   holdTips: boolean;
   /** opens the info panel, which owns the briefing and the key list */
@@ -182,14 +186,27 @@ function blocked(map: WorldMap, closedDoors: Set<string>, x: number, y: number):
 }
 
 /**
- * The one sentence a newcomer needs right now. Each tip is shown once per
- * session, so a second run is not cluttered with things you already know.
+ * The tips this page has shown. Each is shown once per session — across
+ * runs, so a second run is not cluttered with things you already know.
+ */
+const SEEN_TIPS = new Set<string>();
+
+/** How long a tip stays up at most. */
+const TIP_MS = 6500;
+
+/**
+ * The one sentence a newcomer needs right now. Over an open station that is
+ * its device's line, and nothing about the world the panel covers.
  */
 function coachTip(
   map: WorldMap,
   youId: string,
   carried: WorldMap['items'][number] | undefined,
-): { id: string; text: string } | null {
+  station: PuzzleView | null,
+): CoachMark | null {
+  if (station !== null) {
+    return deviceCoach(station);
+  }
   if (map.sabotage !== null) {
     return { id: 'sabotage', text: 'Notfall! Jede Person an ein eigenes Ventil — sofort losrennen.' };
   }
@@ -287,6 +304,7 @@ export function GameWorld({
   chatsRef,
   inputLocked,
   spectator,
+  station = null,
   holdTips,
   onToggleInfo,
   onRead,
@@ -294,8 +312,8 @@ export function GameWorld({
   send,
 }: Props) {
   const [wheelOpen, setWheelOpen] = useState(false);
-  const [tip, setTip] = useState<{ id: string; text: string } | null>(null);
-  const seenTips = useRef(new Set<string>());
+  /** the tip up now, and whether it lies over a station's panel rather than over the world */
+  const [tip, setTip] = useState<(CoachMark & { overPanel: boolean }) | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const controlsRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef(view);
@@ -320,25 +338,35 @@ export function GameWorld({
     }
   }, [inputLocked]);
 
-  // Coach marks react to the view, not to the render loop.
+  // Coach marks react to the view, not to the render loop: a new view comes
+  // with every move anyone makes, so a tip stays up while it still fits, for
+  // TIP_MS at most. The world's tips wait while the objective bar carries a
+  // notice, so the two never stack; a station's panel covers that bar.
   useEffect(() => {
-    if (spectator || view.map === null || holdTips) {
+    if (spectator || view.map === null || (holdTips && station === null)) {
       setTip(null);
-      return undefined;
+      return;
     }
     const carried = view.map.items.find(
       (item) => item.carriedBy === view.you.id && !item.delivered,
     );
-    const next = coachTip(view.map, view.you.id, carried);
-    if (next === null || seenTips.current.has(next.id)) {
+    const next = coachTip(view.map, view.you.id, carried, station);
+    const fresh = firstSight(next, SEEN_TIPS);
+    if (fresh !== null) {
+      SEEN_TIPS.add(fresh.id);
+      setTip({ ...fresh, overPanel: station !== null });
+    } else if (next?.id !== tip?.id) {
       setTip(null);
+    }
+  }, [view, station, spectator, holdTips, tip]);
+
+  useEffect(() => {
+    if (tip === null) {
       return undefined;
     }
-    seenTips.current.add(next.id);
-    setTip(next);
-    const timer = setTimeout(() => setTip(null), 6500);
+    const timer = setTimeout(() => setTip(null), TIP_MS);
     return () => clearTimeout(timer);
-  }, [view, spectator, holdTips]);
+  }, [tip]);
 
 
   useEffect(() => {
@@ -1434,7 +1462,9 @@ export function GameWorld({
   return (
     <div className="world-wrap">
       <canvas ref={canvasRef} className={`world-canvas ${spectator ? 'world-canvas--wide' : ''}`} />
-      {tip !== null && <div className="coach">{tip.text}</div>}
+      {tip !== null && (
+        <div className={tip.overPanel ? 'coach coach--panel' : 'coach'}>{tip.text}</div>
+      )}
       {!spectator && (
       <div className="world-controls" ref={controlsRef}>
         <div className="world-dpad" role="group" aria-label="Steuerkreuz">

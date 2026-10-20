@@ -166,15 +166,9 @@ function Console({
           <span className="button-caption">{strip === null ? 'AUS' : strip.word}</span>
         </div>
       </div>
-      {puzzle.lastResult !== null ? (
-        <p className="button-status warn">{MISTAKES[puzzle.lastResult]}</p>
-      ) : (
-        <p className="button-status muted">
-          {puzzle.holding
-            ? 'Gehalten. Streifen ansagen — loslassen, sobald die Uhr die angesagte Ziffer zeigt.'
-            : 'Farbe und Aufschrift ansagen, erst bei Ansage drücken (kurz tippen) oder halten.'}
-        </p>
-      )}
+      <p className="button-status warn" role="status">
+        {puzzle.lastResult === null ? '' : MISTAKES[puzzle.lastResult]}
+      </p>
     </div>
   );
 }

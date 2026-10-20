@@ -1,9 +1,5 @@
 /* --- switches: six toggles in a row, features drawn above each lever and named below ------ */
 
-.switches-intro {
-  margin: 0 0 12px;
-}
-
 .switches-bank {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));

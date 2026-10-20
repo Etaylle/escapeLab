@@ -2,13 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { Edgework, ManualHere, PlayerView, PuzzleView } from '@escapelab/core';
 import { Book } from '../src/screens/Book.js';
-import {
-  AlarmMarks,
-  backupNote,
-  GameScreen,
-  StationModal,
-  stationLabel,
-} from '../src/screens/Game.js';
+import { AlarmMarks, GameScreen, StationModal, stationLabel } from '../src/screens/Game.js';
 import { InfoPanel, Legend } from '../src/screens/InfoPanel.js';
 import { ReadingOverlay } from '../src/screens/Reading.js';
 import { WorldModal } from '../src/screens/WorldModal.js';
@@ -227,14 +221,17 @@ describe('reading a wall chart', () => {
 });
 
 describe('the station frame', () => {
-  it('names the station by paragraph, has a way out and no chip before the sign', () => {
+  it('names the station to the dialog only, has a way out and no chip before the sign', () => {
     const html = renderToStaticMarkup(
       <WorldModal kind="station" label="§1 — Notstrom" edgework={null} onClose={noop}>
         <p>Pult</p>
       </WorldModal>,
     );
-    expect(html).toContain('class="puzzle-modal station-modal"');
-    expect(html).toContain('<div class="panel-label">// §1 — Notstrom</div>');
+    expect(html).toContain(
+      'class="puzzle-modal station-modal" role="dialog" aria-modal="true" aria-label="§1 — Notstrom"',
+    );
+    // The device's plate prints the name; the frame does not say it twice.
+    expect(html).not.toContain('panel-label');
     expect(html).toContain('aria-label="Schließen"');
     expect(html).toContain('<p>Pult</p>');
     expect(html).not.toContain('edgework');
@@ -293,27 +290,38 @@ describe('the station frame', () => {
     );
   }
 
-  it('says under the label who backs this player up, and where', () => {
-    const atMaze: PuzzleView = { ...maze(2, null), console: 'a' };
-    const backed = stationFrame({ ...atMaze, backup: { name: 'Ben', where: 'SPIND' } });
-    expect(backed).toContain(
-      '<div class="panel-label">// §3 — Leitungsnetz</div>' +
-        '<p class="modal-note muted">Mit Ben bei: SPIND</p>',
+  it('opens on the device, its plate naming the station by paragraph', () => {
+    const html = stationFrame({ ...maze(2, null), console: 'a' });
+    expect(html).toContain('aria-label="§3 — Leitungsnetz"');
+    expect(html).toContain(
+      '<div class="device device--maze">' +
+        '<span class="device-screw device-screw--tl" aria-hidden="true"></span>',
     );
-    // At a station with two consoles, the other console backs this one up.
-    expect(backupNote({ ...atMaze, backup: { name: 'Ben', where: 'Pult B' } })).toEqual({
-      text: 'Mit Ben an Pult B',
-      tone: 'muted',
-    });
-    expect(backupNote({ ...atMaze, backup: { name: 'Anna', where: 'Pult A' } })?.text).toBe(
-      'Mit Anna an Pult A',
+    expect(html).toContain(
+      '<span class="device-plate-paragraph">§3</span>' +
+        '<span class="device-plate-title">Leitungsnetz</span></div>',
     );
   });
 
-  it('warns while nobody backs this player up', () => {
+  it('says on its LED strip who backs this player up, and where', () => {
+    const atMaze: PuzzleView = { ...maze(2, null), console: 'a' };
+    const backed = stationFrame({ ...atMaze, backup: { name: 'Ben', where: 'SPIND' } });
+    expect(backed).toContain(
+      '<li class="device-led device-led--green">' +
+        '<span class="device-lamp device-lamp--green" aria-hidden="true"></span>' +
+        '<span class="device-led-label">PARTNER</span>' +
+        '<span class="device-led-detail">Ben · SPIND</span></li>',
+    );
+    expect(backed).not.toContain('modal-note');
+  });
+
+  it('warns on its LED strip while nobody backs this player up, and where to stand', () => {
     const alone = stationFrame({ ...maze(2, null), console: 'a', backup: null });
     expect(alone).toContain(
-      '<p class="modal-note warn">Allein — jemand muss zu den Regeln oder ans andere Pult</p>',
+      '<li class="device-led device-led--red">' +
+        '<span class="device-lamp device-lamp--red" aria-hidden="true"></span>' +
+        '<span class="device-led-label">KEIN PARTNER</span>' +
+        '<span class="device-led-detail">jemand zu den Regeln</span></li>',
     );
   });
 
@@ -332,9 +340,12 @@ describe('the station frame', () => {
       console: 'a',
       backup: null,
     };
-    expect(stationFrame(reactor)).toContain('// §5 — Reaktor-Neustart');
-    expect(stationFrame(reactor)).not.toContain('modal-note');
-    expect(read(null)).not.toContain('modal-note');
+    expect(stationFrame(reactor)).toContain(
+      '<span class="device-plate-paragraph">§5</span>' +
+        '<span class="device-plate-title">Reaktor-Neustart</span>',
+    );
+    expect(stationFrame(reactor)).not.toContain('device-led');
+    expect(read(null)).not.toContain('device-led');
   });
 });
 
