@@ -1,7 +1,9 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { MODULES, type ManualBlock, type ManualSection } from '@escapelab/core';
 import {
   BOOK_PAGE,
+  FIGURE_WIDTH,
   filled,
   firstPageOf,
   leafFor,
@@ -271,10 +273,11 @@ describe('drawings and example boxes as ui.css sets them', () => {
     expect(counted - css).toBeLessThan(0.01);
   }
 
-  it('counts a drawing 7 em tall across the column, its caption 0.2 em under it', () => {
-    // Figure.tsx draws 376 × 140 units, spanning the 18.8 em column.
-    const drawn = (BOOK_PAGE.width * FIGURE_VIEW.height) / FIGURE_VIEW.width;
+  it('counts a drawing 7 em tall in the column, its caption 0.2 em under it', () => {
+    // Figure.tsx draws 376 × 140 units across its 18.8 em, centred in the column.
+    const drawn = (FIGURE_WIDTH * FIGURE_VIEW.height) / FIGURE_VIEW.width;
     expect(drawn).toBeCloseTo(7, 9);
+    expect(FIGURE_WIDTH).toBeLessThan(BOOK_PAGE.width);
     // The caption: 0.8 em of the body face, its margin 0.25 of its own em.
     const caption = 0.8 * BODY_LINE;
     const gap = 0.25 * 0.8;
@@ -296,9 +299,46 @@ describe('drawings and example boxes as ui.css sets them', () => {
       lines,
     });
     close(alone(example('Gesehen: rot.', 'Getrennt: Nr. 2.')), box(2, 2));
-    // The padding takes 0.7 em a side: 17.4 em of the body face hold 33 characters a line.
-    close(alone(example('x'.repeat(33))), box(1, 1));
-    close(alone(example('x'.repeat(34))), box(1, 2));
+    // The padding takes 0.7 em a side: 23.2 em of the body face hold 44 characters a line.
+    close(alone(example('x'.repeat(44))), box(1, 1));
+    close(alone(example('x'.repeat(45))), box(1, 2));
+  });
+});
+
+/**
+ * The page as styles/book.css draws it, against what the pager counts: the
+ * sheet 30 em across, the text column between the margins as tall as it
+ * counts and a little wider — so a line that only just fits is counted as
+ * two, and a page never runs over for it.
+ */
+describe('the page as book.css draws it', () => {
+  const sheet = readFileSync(new URL('../src/styles/book.css', import.meta.url), 'utf8');
+  /** The em values of a declaration in the first rule `selector` opens. */
+  function ems(selector: string, property: string): number[] {
+    const from = sheet.indexOf(`${selector} {`);
+    if (from < 0) {
+      throw new Error(`book.css has no rule "${selector}"`);
+    }
+    const rule = sheet.slice(from, sheet.indexOf('}', from));
+    const value = new RegExp(`\\n  ${property}: ([^;]+);`).exec(rule)?.[1] ?? '';
+    return [...value.matchAll(/([\d.]+)em/g)].map((m) => Number(m[1]));
+  }
+
+  it('sets one text column between a gutter of 1.8 em and an outer margin of 3', () => {
+    const [column = 0] = ems('.page-in', 'grid-template-columns');
+    const [top = 0, outer = 0, bottom = 0, gutter = 0] = ems('.page-in', 'padding');
+    expect([gutter, column, outer]).toEqual([1.8, 25.2, 3]);
+    expect(gutter + column + outer).toBeCloseTo(30, 9);
+    expect(42 - top - bottom).toBeCloseTo(BOOK_PAGE.height, 9);
+    // A left-hand page mirrors it: the gutter on its right.
+    expect(ems('.page-left .page-in', 'padding')).toEqual([top, gutter, bottom, outer]);
+  });
+
+  it('counts the column a little narrower than it is drawn, never wider', () => {
+    const [column = 0] = ems('.page-in', 'grid-template-columns');
+    const slack = column - BOOK_PAGE.width;
+    expect(slack).toBeGreaterThan(0);
+    expect(slack).toBeLessThanOrEqual(0.6 + 1e-9);
   });
 });
 

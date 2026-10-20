@@ -4,7 +4,7 @@ import { useKeys, useMedia, useSwipe } from '../hooks.js';
 import { roomFloor } from '../world/rooms.js';
 import {
   Book,
-  MarginNotes,
+  NoteSlip,
   progressOf,
   SectionReader,
   stationTitle,
@@ -58,7 +58,8 @@ interface SourceProps {
 
 /**
  * A terminal shows one station per screen and starts at the one that is up
- * now, if it covers it. The last crew's notes stick on a slip beside it.
+ * now, if it covers it. The last crew's note is a sticky label on its
+ * bezel, there whichever screen is up.
  */
 function Terminal({ manual, puzzle, current, onAskNote }: SourceProps) {
   const sections = manual.sections;
@@ -99,7 +100,7 @@ function Terminal({ manual, puzzle, current, onAskNote }: SourceProps) {
         </div>
         <span className="terminal-led" aria-hidden="true" />
       </div>
-      <MarginNotes section={section} onAsk={onAskNote} />
+      <NoteSlip sections={sections} onAsk={onAskNote} />
     </div>
   );
 }
@@ -108,8 +109,7 @@ function ChartSection({
   section,
   puzzle,
   current,
-  onAskNote,
-}: Omit<SourceProps, 'manual'> & { section: ReadSection }) {
+}: Pick<SourceProps, 'puzzle' | 'current'> & { section: ReadSection }) {
   return (
     <section className={`chart-section chart-${progressOf(section, current)}`}>
       <div className="chart-text">
@@ -117,24 +117,29 @@ function ChartSection({
         <SectionReader puzzle={puzzle} section={section} />
         <Manual sections={section.manual} />
       </div>
-      <MarginNotes section={section} onAsk={onAskNote} />
     </section>
   );
 }
 
 /**
- * A wall chart is one sheet pinned up: every station it covers at once, the
- * notes beside the open one.
+ * A wall chart is one sheet pinned up: every station it covers at once. The
+ * last crew's note is a label stuck on the board beside it.
  */
-function Chart({ manual, ...rest }: SourceProps) {
+function Chart({ manual, puzzle, current, onAskNote }: SourceProps) {
   return (
     <div className="chart">
       <article className="chart-sheet">
         <h2 className="chart-title">{manual.label}</h2>
         {manual.sections.map((section) => (
-          <ChartSection key={section.puzzleId} section={section} {...rest} />
+          <ChartSection
+            key={section.puzzleId}
+            section={section}
+            puzzle={puzzle}
+            current={current}
+          />
         ))}
       </article>
+      <NoteSlip sections={manual.sections} onAsk={onAskNote} />
     </div>
   );
 }

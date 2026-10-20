@@ -59,15 +59,38 @@ function AskNote({ section, onAsk }: { section: ReadSection; onAsk: () => void }
 }
 
 /**
- * What the last crew wrote beside the open station's rules, in their hand,
- * and the way to ask for the next note; nothing beside any other station.
+ * The station the last crew left notes on among a source's: the open one,
+ * the only station the view gives notes or notes still to ask for; none
+ * where the source does not cover it.
  */
-export function MarginNotes({ section, onAsk }: { section: ReadSection; onAsk: () => void }) {
-  if (section.notes.length === 0 && section.notesLeft === 0) {
+function notedSection(sections: readonly ReadSection[]): ReadSection | null {
+  return sections.find((section) => section.notes.length > 0 || section.notesLeft > 0) ?? null;
+}
+
+/**
+ * The last crew's note, stuck on the source itself rather than on a page —
+ * a slip tucked into a book, a Post-it on a clipboard's board, a sticky
+ * label on a terminal's bezel or by a wall chart (styles/book.css) — so it
+ * is there whichever page or screen is open. It names the station it is
+ * for and holds the notes asked for so far, in their hand, and the way to
+ * ask for the next; nothing at all where the source does not cover the
+ * open station.
+ */
+export function NoteSlip({
+  sections,
+  onAsk,
+}: {
+  sections: readonly ReadSection[];
+  onAsk: () => void;
+}) {
+  const section = notedSection(sections);
+  if (section === null) {
     return null;
   }
+  const label = `Notizen der letzten Crew zu ${stationTitle(section)}`;
   return (
-    <aside className="margin" aria-label="Notizen der letzten Crew">
+    <aside className="note-slip" aria-label={label}>
+      <p className="note-slip-for">{`zu §${section.index + 1}`}</p>
       {section.notes.length > 0 && (
         <ol className="margin-notes">
           {section.notes.map((note, i) => (
@@ -202,9 +225,9 @@ function FragmentView({
 }
 
 /**
- * A sheet of paper: the text, the outer margin, the page number in the
- * bottom outer corner and the manual's line centred under the text. A
- * station's first page carries the ribbon while the station is up and a
+ * A sheet of paper: the text within a book's usual margins, the page number
+ * in the bottom outer corner and the manual's line centred under the text.
+ * A station's first page carries the ribbon while the station is up and a
  * stamp once it is done; the pages after it name the station at the top.
  */
 function Sheet({
@@ -213,7 +236,6 @@ function Sheet({
   progress,
   opener,
   head,
-  margin,
   children,
 }: {
   number: number;
@@ -221,7 +243,6 @@ function Sheet({
   progress: Progress;
   opener: boolean;
   head: string | null;
-  margin: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -229,7 +250,6 @@ function Sheet({
       <div className="page-in">
         {head !== null && <header className="page-head">{head}</header>}
         <div className="page-text">{children}</div>
-        <div className="page-margin">{margin}</div>
         <span className="page-folio">{number}</span>
         <footer className="page-foot" aria-hidden="true">
           {FOOTER}
@@ -277,7 +297,6 @@ function PageView({ number, side, book }: { number: number; side: Side; book: Bo
       progress={progressOf(section, book.current)}
       opener={page.first}
       head={page.first ? null : stationTitle(section)}
-      margin={page.first ? <MarginNotes section={section} onAsk={book.onAskNote} /> : null}
     >
       {page.fragments.map((fragment, i) => (
         <FragmentView key={i} fragment={fragment} section={section} puzzle={book.puzzle} />
@@ -389,6 +408,18 @@ function usePage(opening: number, total: number, spread: boolean) {
   return { at, go, turning: turning?.spread === spread ? turning : null };
 }
 
+/** The book's look: a spread or a single page, bound or clipped, with a note on it or not. */
+function lookOf(spread: boolean, binding: Binding, noted: boolean): string {
+  const parts = ['book', spread ? 'book-spread' : 'book-single'];
+  if (binding === 'clip') {
+    parts.push('book-clip');
+  }
+  if (noted) {
+    parts.push('book-noted');
+  }
+  return parts.join(' ');
+}
+
 /**
  * Paper sources read as a book: the cover first, every station from a page
  * of its own, two pages side by side where the window is wide enough — or,
@@ -396,6 +427,8 @@ function usePage(opening: number, total: number, spread: boolean) {
  * at the station that is up now, if this book covers it, at its only
  * station, or on the cover. It turns with the arrow keys, the arrows below
  * it, a swipe, the contents or a thumb tab, a leaf turning over each time.
+ * The last crew's note on the open station stays with the book as it turns:
+ * a slip tucked in at the front, or a Post-it on the clipboard's board.
  */
 export function Book({
   manual,
@@ -440,11 +473,11 @@ export function Book({
   const shown = pagesInView(at, spread);
   const book: BookContext = { manual, puzzle, current, pages, imprint, onOpen: go, onAskNote };
   const sideOf = (i: number): Side => (spread ? (i === 0 ? 'left' : 'right') : 'single');
-  const look = `book book-${spread ? 'spread' : 'single'}${binding === 'clip' ? ' book-clip' : ''}`;
   return (
-    <div className={look}>
+    <div className={lookOf(spread, binding, notedSection(manual.sections) !== null)}>
       <div className="book-pages" {...swipe}>
         <div className="book-leaves">
+          <NoteSlip sections={manual.sections} onAsk={onAskNote} />
           {(turning?.leaf.under ?? shown).map((number, i) => (
             <PageView key={number} number={number} side={sideOf(i)} book={book} />
           ))}

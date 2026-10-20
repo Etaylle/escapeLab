@@ -5,8 +5,9 @@ import type { PuzzleDef } from '@escapelab/core';
  * Line drawings of the devices for the printed rules, one per module type.
  * Thin strokes in the colour of the text around them; a surface is only ever
  * hatched or lightly tinted, so a drawing reads the same on paper, on the
- * terminal's glass and from a printer. Drawn to the book's text column: 376
- * units across its 18.8 em and 140 down, so 7 em tall, as pages.ts counts it.
+ * terminal's glass and from a printer. Drawn 376 units across and 140 down:
+ * on a book's page it is set 18.8 em wide (pages.ts FIGURE_WIDTH), centred
+ * in the text column, so 7 em tall, as pages.ts counts it.
  */
 
 /** The drawing's size in its own units. */

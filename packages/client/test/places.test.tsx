@@ -169,6 +169,22 @@ describe('reading at a terminal', () => {
     expect(read(null)).not.toContain('class="edgework"');
     expect(read(null, 2, edgework)).toContain('class="edgework"');
   });
+
+  it('wears the last crew’s note as a label on its case, whichever screen is up', () => {
+    const [first, third] = terminal.sections as [Section, Section];
+    const notes = { ...third, notes: ['Plan vom Ziel aus lesen.'], notesLeft: 1 };
+    const noted: ManualHere = { ...terminal, sections: [first, notes] };
+    for (const current of [0, 2]) {
+      const html = read(null, current, null, noted);
+      expect(html).toContain('<span class="terminal-led" aria-hidden="true"></span></div>');
+      expect(html).toContain(
+        '</div><aside class="note-slip" aria-label="Notizen der letzten Crew zu §3 — ' +
+          'Leitungsnetz"><p class="note-slip-for">zu §3</p>',
+      );
+      expect(html.match(/class="margin-note"/g)).toHaveLength(1);
+    }
+    expect(read(null, 0)).not.toContain('note-slip');
+  });
 });
 
 describe('reading a book', () => {
@@ -296,16 +312,37 @@ describe('reading a book', () => {
     expect(read(null, 2, null, bound())).toContain('<div class="book book-single">');
   });
 
-  it('writes the revealed notes beside the open station, with the way to ask for the next', () => {
-    const html = opened(
-      bound({ notes: ['Erst die Farben ansagen.'], notesLeft: 2, noteReadyAt: Date.now() - 1000 }),
-      2,
+  /** The open station's notes so far, one more to ask for now. */
+  const noted = (): Partial<Section> => ({
+    notes: ['Erst die Farben ansagen.'],
+    notesLeft: 2,
+    noteReadyAt: Date.now() - 1000,
+  });
+
+  /** The last crew's note as drawn, wherever it lies. */
+  const slip = (html: string): string | undefined =>
+    /<aside class="note-slip".*?<\/aside>/.exec(html)?.[0];
+
+  it('slips the last crew’s note into the book: the notes, and the way to ask for the next', () => {
+    expect(slip(opened(bound(noted()), 2))).toBe(
+      '<aside class="note-slip" aria-label="Notizen der letzten Crew zu §3 — Leitungsnetz">' +
+        '<p class="note-slip-for">zu §3</p><ol class="margin-notes">' +
+        '<li class="margin-note">Erst die Farben ansagen.</li></ol>' +
+        '<button class="note-ask">Notiz der letzten Crew erbitten · −20 s</button></aside>',
     );
-    expect(html).toContain('<aside class="margin" aria-label="Notizen der letzten Crew">');
-    expect(html).toContain('<li class="margin-note">Erst die Farben ansagen.</li>');
-    expect(html).toContain(
-      '<button class="note-ask">Notiz der letzten Crew erbitten · −20 s</button>',
-    );
+  });
+
+  it('keeps the note with the book, not on a page: there on every page and spread', () => {
+    const atStation = opened(bound(noted()), 2);
+    // Tucked in under the pages, the first thing in the book, whichever page lies open.
+    expect(atStation).toContain('<div class="book-leaves"><aside class="note-slip"');
+    expect(atStation).toContain('<div class="book book-single book-noted">');
+    for (const html of [opened(bound(noted()), 1), opened(bound(noted()), 0, true)]) {
+      expect(slip(html)).toBe(slip(atStation));
+      expect(html.indexOf('note-slip')).toBeLessThan(html.indexOf('<article class="page'));
+    }
+    // No page keeps a margin for notes any more.
+    expect(atStation).not.toMatch(/page-margin|class="margin"/);
   });
 
   it('counts down to the next note, and offers none once all are out', () => {
@@ -316,9 +353,17 @@ describe('reading a book', () => {
     expect(done).not.toContain('note-ask');
   });
 
-  it('keeps the margin clean beside a station that is not open', () => {
-    const elsewhere = opened(bound({ notes: ['Nur hier.'], notesLeft: 1 }), 0);
-    expect(elsewhere).not.toContain('class="margin"');
+  it('puts no note on a source that does not cover the open station', () => {
+    const plain = opened(bound(), 2);
+    expect(plain).not.toContain('note-slip');
+    expect(plain).toContain('<div class="book book-single">');
+  });
+
+  it('sticks the note on the clipboard’s board, beside the sheet and not on it', () => {
+    const html = read(null, 2, null, bound(noted(), 'clipboard'));
+    expect(html).toContain('<div class="book book-single book-clip book-noted">');
+    expect(html).toContain('<div class="book-leaves"><aside class="note-slip"');
+    expect(html.match(/class="margin-note"/g)).toHaveLength(1);
   });
 
   it('prints the manual’s line at the foot of every page but the cover', () => {
@@ -399,7 +444,7 @@ describe('where a source lies', () => {
 });
 
 describe('reading a wall chart', () => {
-  it('shows every station it covers at once, the notes beside the open one', () => {
+  it('shows every station it covers at once, the note on the board beside it', () => {
     const chart = bound({ notes: ['Plan vom Ziel aus lesen.'], notesLeft: 0 }, 'chart');
     const html = read(null, 2, null, chart);
     expect(html).toContain('class="puzzle-modal reading-modal reading-chart"');
@@ -407,6 +452,9 @@ describe('reading a wall chart', () => {
     expect(html).toContain('<h3 class="chart-heading">§3 — Leitungsnetz</h3>');
     expect(html).toContain('<p>Rot zuerst.</p>');
     expect(html.match(/class="margin-note"/g)).toHaveLength(1);
+    // Off the sheet: after it, on the board, not in a station's section.
+    expect(html).toContain('</article><aside class="note-slip"');
+    expect(read(null, 2, null, bound({}, 'chart'))).not.toContain('note-slip');
   });
 });
 
