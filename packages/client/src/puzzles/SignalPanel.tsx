@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { tokenLabel, type SignalToken } from '@escapelab/core';
 import { play } from '../sounds.js';
 import { consoleName } from '../world/consoles.js';
+import { DeviceLamp, type LampTone } from './Device.js';
 import type { PanelProps } from './index.js';
 
 type SignalPuzzle = PanelProps<'signal'>['puzzle'];
@@ -83,14 +84,20 @@ function partsOf(token: SignalToken): [Colour, Form] {
 }
 
 /**
- * A sign as both consoles show it: its form in its colour, and under it the
- * words both players say for it, „rotes Dreieck".
+ * A sign as both consoles show it: its form in its colour, glowing in it
+ * like a lamp, and under it the words both players say for it, „rotes
+ * Dreieck".
  */
 function Sign({ token }: { token: SignalToken }) {
   const [colour, form] = partsOf(token);
   return (
     <>
-      <svg className="signal-glyph" viewBox="0 0 24 24" aria-hidden="true">
+      <svg
+        className="signal-glyph"
+        viewBox="0 0 24 24"
+        style={{ color: COLOURS[colour] }}
+        aria-hidden="true"
+      >
         {FORMS[form](COLOURS[colour])}
       </svg>
       <span className="signal-word">{tokenLabel(token)}</span>
@@ -288,7 +295,64 @@ function Warning({ puzzle }: { puzzle: SignalPuzzle }) {
   );
 }
 
-const stageOf = (puzzle: SignalPuzzle): string => `Stufe ${puzzle.stage} von ${puzzle.stages}`;
+/** A stage's LED: green once done, amber while under way, dark ahead. */
+function stageTone(lamp: number, stage: number): LampTone {
+  if (lamp < stage) {
+    return 'green';
+  }
+  return lamp === stage ? 'amber' : 'off';
+}
+
+/** The stage LEDs, one per stage, with „STUFE" engraved under them. */
+function StageLeds({ puzzle }: { puzzle: SignalPuzzle }) {
+  return (
+    <div
+      className="signal-stages"
+      role="img"
+      aria-label={`Stufe ${puzzle.stage} von ${puzzle.stages}`}
+    >
+      <span className="signal-stage-lamps">
+        {Array.from({ length: puzzle.stages }, (_, i) => (
+          <DeviceLamp key={i} tone={stageTone(i + 1, puzzle.stage)} />
+        ))}
+      </span>
+      <span className="device-engraving">STUFE</span>
+    </div>
+  );
+}
+
+/** Backlit legends, as over a console's mode keys: the one that burns says what is on. */
+function Mode({ label, legends, lit }: { label: string; legends: string[]; lit: string }) {
+  return (
+    <div className="signal-mode">
+      <span className="device-engraving">{label}</span>
+      {legends.map((legend) => (
+        <span
+          key={legend}
+          className={legend === lit ? 'signal-legend signal-legend--lit' : 'signal-legend'}
+        >
+          {legend}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** What this console does this stage: sends the sequence, or takes it in. */
+function ConsoleMode({ sending }: { sending: boolean }) {
+  const lit = sending ? 'SENDEN' : 'EINGABE';
+  return <Mode label="BETRIEB" legends={['SENDEN', 'EINGABE']} lit={lit} />;
+}
+
+/** A console's top row: the stage LEDs on the left, the mode legends on the right. */
+function Status({ puzzle, mode }: { puzzle: SignalPuzzle; mode: ReactNode }) {
+  return (
+    <div className="signal-status">
+      <StageLeds puzzle={puzzle} />
+      {mode}
+    </div>
+  );
+}
 
 /**
  * What the audience sees: the sequence, and under it the keys — each
@@ -297,9 +361,11 @@ const stageOf = (puzzle: SignalPuzzle): string => `Stufe ${puzzle.stage} von ${p
 function Audience({ puzzle, sequence }: { puzzle: SignalPuzzle; sequence: SignalToken[] }) {
   const { grids, keys } = puzzle;
   const both = `${consoleName('a')} und ${consoleName('b')}`;
+  const sides = (['a', 'b'] as const).map((side) => consoleName(side).toUpperCase());
+  const sender = consoleName(puzzle.sends).toUpperCase();
   return (
     <div className="signal">
-      <p className="signal-stage">{`${stageOf(puzzle)} — ${consoleName(puzzle.sends)} sendet`}</p>
+      <Status puzzle={puzzle} mode={<Mode label="SENDET" legends={sides} lit={sender} />} />
       <Strip sequence={sequence} done={puzzle.done} />
       <Warning puzzle={puzzle} />
       {grids !== null &&
@@ -319,17 +385,15 @@ function Audience({ puzzle, sequence }: { puzzle: SignalPuzzle; sequence: Signal
   );
 }
 
-/** The receiving console: a lamp per sign, then its keys — the signs, or rows of shapes. */
+/**
+ * The receiving console: a lamp per sign behind its glass, then its keys —
+ * the signs, or rows of shapes.
+ */
 function Receiver({ puzzle, keys }: { puzzle: SignalPuzzle; keys: ReactNode }) {
   return (
     <div className="signal">
-      <p className="signal-stage">{`${stageOf(puzzle)} — dieses Pult gibt ein`}</p>
+      <Status puzzle={puzzle} mode={<ConsoleMode sending={false} />} />
       <Lamps puzzle={puzzle} />
-      <p className="muted">
-        {puzzle.keys === null
-          ? 'Erst bei Ansage drücken.'
-          : 'Erst bei Ansage drücken; die Zeile zur Farbe nennt die Legende.'}
-      </p>
       <Warning puzzle={puzzle} />
       {keys}
     </div>
@@ -349,19 +413,19 @@ function receivingKeys(puzzle: SignalPuzzle, send: SignalSend): ReactNode {
 }
 
 /**
- * The sending console: the stage's sequence over its lamps — side by side,
- * or one sign at a time from the stage on that the rules call fleeting.
+ * The sending console: the stage's sequence as lamps behind glass, a done
+ * lamp under each — side by side, or one sign at a time from the stage on
+ * that the rules call fleeting.
  */
 function Sender({ puzzle, sequence }: { puzzle: SignalPuzzle; sequence: SignalToken[] }) {
   return (
     <div className="signal">
-      <p className="signal-stage">{`${stageOf(puzzle)} — dieses Pult sendet`}</p>
+      <Status puzzle={puzzle} mode={<ConsoleMode sending />} />
       {puzzle.fleeting ? (
         <FleetingStrip key={puzzle.stage} sequence={sequence} done={puzzle.done} />
       ) : (
         <Strip sequence={sequence} done={puzzle.done} />
       )}
-      <p className="muted">Ansage von links, bis alle Lampen brennen.</p>
       <Warning puzzle={puzzle} />
     </div>
   );

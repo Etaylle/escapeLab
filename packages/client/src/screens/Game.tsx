@@ -7,7 +7,6 @@ import type {
   PlayerView,
   PuzzleView,
 } from '@escapelab/core';
-import { moduleFor } from '@escapelab/core';
 import { useKeys, useNow } from '../hooks.js';
 import { bannerFrom, noticeMs, radioNews, withNews, type Notice } from '../radio.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
@@ -24,7 +23,7 @@ import { InfoPanel } from './InfoPanel.js';
 import { Manual } from './Manual.js';
 import { Notepad, useNotes } from './Notepad.js';
 import { ReadingOverlay } from './Reading.js';
-import { WorldModal, type ModalNote } from './WorldModal.js';
+import { WorldModal } from './WorldModal.js';
 
 interface Props {
   view: PlayerView;
@@ -386,7 +385,7 @@ function useOpened(view: PlayerView): {
 }
 
 /**
- * The station frame's label: the open station by paragraph and title, and
+ * The station frame's name: the open station by paragraph and title, and
  * where it has two consoles the one this player works — „§2 — Signalkette ·
  * Pult B". The view calls a station with one console console a as well, so
  * whether there are two is the map's to tell.
@@ -400,23 +399,9 @@ export function stationLabel(puzzle: PuzzleView, map: MapView): string {
 }
 
 /**
- * The line under the station frame's label: who lets this player's inputs
- * count, and where — „Mit Ben an Pult B", „Mit Ben bei: SPIND" — or, as a
- * warning, that nobody does yet. None where the whole crew works the panel.
+ * The open station over the world: its device, which names it on its plate
+ * and says on its LED strip who backs this player up.
  */
-export function backupNote(puzzle: PuzzleView): ModalNote | null {
-  if (moduleFor(puzzle.kind).wholeCrew) {
-    return null;
-  }
-  const { backup } = puzzle;
-  if (backup === null) {
-    return { text: 'Allein — jemand muss zu den Regeln oder ans andere Pult', tone: 'warn' };
-  }
-  const atConsole = backup.where === consoleName('a') || backup.where === consoleName('b');
-  return { text: `Mit ${backup.name} ${atConsole ? 'an' : 'bei:'} ${backup.where}`, tone: 'muted' };
-}
-
-/** The open station over the world: its label, who backs this player up, its panel. */
 export function StationModal({
   puzzle,
   map,
@@ -437,7 +422,6 @@ export function StationModal({
       kind="station"
       label={stationLabel(puzzle, map)}
       edgework={edgework}
-      note={backupNote(puzzle)}
       onClose={onClose}
     >
       <PuzzlePanel puzzle={puzzle} send={send} deadlineAt={deadlineAt} />
@@ -590,6 +574,7 @@ export function GameScreen({
           pingsRef={pingsRef}
           chatsRef={chatsRef}
           spectator={false}
+          station={open.station}
           holdTips={notice !== null}
           inputLocked={
             open.station !== null ||

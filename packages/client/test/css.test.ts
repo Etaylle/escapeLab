@@ -1,12 +1,19 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Nothing parses ui.css before the browser does, and a browser swallows every
- * rule after an unclosed one without a word. Sections merged at the file's
- * end have lost a closing brace before; this keeps the braces balanced.
+ * Nothing parses the stylesheets before the browser does, and a browser
+ * swallows every rule after an unclosed one without a word. Sections merged
+ * at a file's end have lost a closing brace before; this keeps the braces
+ * balanced in ui.css and in every sheet under styles/.
  */
-const css = readFileSync(new URL('../src/ui.css', import.meta.url), 'utf8');
+const src = new URL('../src/', import.meta.url);
+const sheets = [
+  'ui.css',
+  ...readdirSync(new URL('styles/', src))
+    .filter((name) => name.endsWith('.css'))
+    .map((name) => `styles/${name}`),
+];
 
 /** Opening lines of the blocks still open at the end, comments skipped. */
 function unclosedBlocks(source: string): string[] {
@@ -32,9 +39,13 @@ function unclosedBlocks(source: string): string[] {
   return open;
 }
 
-describe('ui.css', () => {
-  it('closes every block it opens', () => {
-    expect(unclosedBlocks(css)).toEqual([]);
+describe('the stylesheets', () => {
+  it('include every sheet under styles/', () => {
+    expect(sheets).toContain('styles/devices.css');
+  });
+
+  it.each(sheets)('%s closes every block it opens', (sheet) => {
+    expect(unclosedBlocks(readFileSync(new URL(sheet, src), 'utf8'))).toEqual([]);
   });
 
   it('would notice a block left open', () => {

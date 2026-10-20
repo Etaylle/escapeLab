@@ -71,14 +71,8 @@ export function MemoryPanel({ puzzle, send }: PanelProps<'memory'>) {
         <Dots total={STAGES} done={puzzle.stage - 1} />
       </div>
       {puzzle.display !== null && puzzle.labels !== null && (
-        <>
-          <p className="muted memory-help">
-            Display und Tasten von links ansagen, erst bei Ansage drücken.
-          </p>
-          <Bank display={puzzle.display} labels={puzzle.labels} send={send} />
-        </>
+        <Bank display={puzzle.display} labels={puzzle.labels} send={send} />
       )}
-      <p className="muted memory-note">Nach jedem Druck notieren: Position und Beschriftung.</p>
       {resets > 0 && (
         <p key={resets} className="memory-reset" role="status">
           Zurück auf Stufe 1
