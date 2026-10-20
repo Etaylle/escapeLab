@@ -9,19 +9,23 @@ import {
   type ClientMessage,
   type ServerMessage,
 } from '@escapelab/core';
-import { apiResponse } from './api.js';
+import { apiResponse, serveRuns, type RunsExport } from './api.js';
 import { MissionCatalog } from './missions.js';
 import { RoomManager } from './roomManager.js';
+import { appendRun, DEFAULT_RUNS_LOG } from './runLog.js';
 import { StaticSite } from './static.js';
 import type { Room } from './room.js';
 
 const PORT = Number(process.env['PORT'] ?? 3001);
 const MISSIONS_DIR =
   process.env['MISSIONS_DIR'] ?? fileURLToPath(new URL('../../../missions', import.meta.url));
+// An empty RUNS_LOG counts as unset, like an empty RUNS_TOKEN.
+const RUNS_LOG = process.env['RUNS_LOG'] || DEFAULT_RUNS_LOG;
+const runs: RunsExport = { file: RUNS_LOG, token: process.env['RUNS_TOKEN'] };
 
 const catalog = new MissionCatalog(MISSIONS_DIR);
 const site = new StaticSite(fileURLToPath(new URL('../../client/dist', import.meta.url)));
-const manager = new RoomManager();
+const manager = new RoomManager((report) => appendRun(RUNS_LOG, report));
 setInterval(() => manager.sweep(), 60_000).unref();
 
 /** Per-connection session, set once the socket joins or resumes into a room. */
@@ -33,6 +37,9 @@ interface Session {
 }
 
 const httpServer = createServer((req, res) => {
+  if (serveRuns(runs, req, res)) {
+    return;
+  }
   const api = apiResponse(catalog, req.url ?? '/');
   if (api !== null) {
     res.writeHead(api.status, { 'content-type': 'application/json' });
@@ -187,6 +194,10 @@ function lanUrls(port: number): string[] {
 httpServer.listen(PORT, () => {
   const ids = catalog.all.map((m) => m.id).join(', ');
   console.log(`[escapelab] server on http://localhost:${PORT} (ws: /ws, missions: ${ids})`);
+  const download = runs.token
+    ? 'GET /runs.jsonl takes RUNS_TOKEN'
+    : 'RUNS_TOKEN unset: no download';
+  console.log(`[escapelab] finished runs go to ${RUNS_LOG} (${download})`);
   if (site.available) {
     for (const url of lanUrls(PORT)) {
       console.log(`[escapelab] im Netzwerk erreichbar: ${url}`);

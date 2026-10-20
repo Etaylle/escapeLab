@@ -150,7 +150,7 @@ export function applyAction(state: GameState, action: Action): GameState {
             credited(state, action.playerId, 'alarms'),
             action.penaltySec,
             action.at,
-            'Von einer Drohne erfasst',
+            DRONE_ALARM,
           )
         : state;
     case 'interact':
@@ -584,6 +584,13 @@ function logRadio(state: GameState, text: string | undefined, at: number): GameS
 /** Why a run was lost: the last line of its report. */
 const OUT_OF_TIME = 'Zeit abgelaufen';
 const TOO_MANY_ALARMS = 'Zu viele Alarme — Notversorgung abgeschaltet.';
+/**
+ * The report lines of the two alarms no station sets off, and of an
+ * emergency cleared in time — `runReport` tells the alarms apart by them.
+ */
+export const DRONE_ALARM = 'Von einer Drohne erfasst';
+export const EMERGENCY_MISSED = 'Notfall nicht rechtzeitig behoben';
+export const EMERGENCY_CLEARED = 'Notfall behoben';
 
 /**
  * Sound the alarm: count it and shrink the deadline. Every alarm of the run
@@ -647,7 +654,7 @@ function startSabotage(state: GameState, action: { at: number }): GameState {
 function clearSabotage(state: GameState, at: number): GameState {
   return state.sabotage === null
     ? state
-    : logEvent({ ...state, sabotage: null }, 'sabotage', 'Notfall behoben', at);
+    : logEvent({ ...state, sabotage: null }, 'sabotage', EMERGENCY_CLEARED, at);
 }
 
 /** The relay emergency's def; rebuilt from the game whenever needed, never stored. */
@@ -762,7 +769,7 @@ function expireSabotage(state: GameState, action: { at: number }): GameState {
     { ...state, sabotage: null },
     sabotage.penaltySec,
     action.at,
-    'Notfall nicht rechtzeitig behoben',
+    EMERGENCY_MISSED,
   );
 }
 

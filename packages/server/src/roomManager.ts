@@ -1,5 +1,5 @@
 import type { Mission, RoomSummary } from '@escapelab/core';
-import { Room } from './room.js';
+import { Room, type RunListener } from './room.js';
 
 /** Room codes avoid ambiguous characters (0/O, 1/I/L). */
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -9,9 +9,12 @@ const EMPTY_ROOM_TTL_MS = 10 * 60 * 1000;
 export class RoomManager {
   private readonly rooms = new Map<string, Room>();
 
+  /** `onRunFinished` hears of every run that ends in any of these rooms. */
+  constructor(private readonly onRunFinished: RunListener = () => undefined) {}
+
   create(mission: Mission): Room {
     const code = this.freshCode();
-    const room = new Room(code, mission);
+    const room = new Room(code, mission, this.onRunFinished);
     this.rooms.set(code, room);
     return room;
   }

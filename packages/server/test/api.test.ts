@@ -1,10 +1,12 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { moduleFor, type MissionManual } from '@escapelab/core';
-import { apiResponse } from '../src/api.js';
+import { apiResponse, serveRuns, type RunsExport } from '../src/api.js';
 import { MissionCatalog } from '../src/missions.js';
 
 const shipped = new MissionCatalog(fileURLToPath(new URL('../../../missions', import.meta.url)));
@@ -98,5 +100,90 @@ describe('GET /missions/:id/manual', () => {
     expect(apiResponse(shipped, '/')).toBeNull();
     expect(apiResponse(shipped, '/missions/blackout')).toBeNull();
     expect(apiResponse(shipped, '/missions/blackout/manual/extra')).toBeNull();
+  });
+});
+
+interface Answer {
+  status: number;
+  headers: Record<string, string>;
+  body: string;
+}
+
+/** A writable the log can be piped into, recording the answer instead of sending it. */
+function fakeResponse(): { res: ServerResponse; answered: Promise<Answer> } {
+  const answer: Answer = { status: 0, headers: {}, body: '' };
+  const res = Object.assign(new PassThrough(), {
+    writeHead(status: number, headers: Record<string, string> = {}) {
+      Object.assign(answer, { status, headers });
+      return res;
+    },
+  });
+  const chunks: Buffer[] = [];
+  res.on('data', (chunk: Buffer) => chunks.push(chunk));
+  const answered = new Promise<Answer>((resolve) =>
+    res.on('end', () => resolve({ ...answer, body: Buffer.concat(chunks).toString('utf8') })),
+  );
+  return { res: res as unknown as ServerResponse, answered };
+}
+
+function get(url: string, authorization?: string): IncomingMessage {
+  const headers = authorization === undefined ? {} : { authorization };
+  return { url, method: 'GET', headers } as IncomingMessage;
+}
+
+describe('GET /runs.jsonl', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'escapelab-runs-route-'));
+  const file = join(dir, 'runs.jsonl');
+  writeFileSync(file, '{"version":1,"missionId":"a"}\n{"version":1,"missionId":"b"}\n');
+  const withToken: RunsExport = { file, token: 'geheim-42' };
+
+  async function ask(runs: RunsExport, req: IncomingMessage): Promise<Answer> {
+    const { res, answered } = fakeResponse();
+    expect(serveRuns(runs, req, res)).toBe(true);
+    return answered;
+  }
+
+  it('is not there while RUNS_TOKEN is unset or empty, whatever the request carries', async () => {
+    for (const token of [undefined, '']) {
+      for (const authorization of [undefined, 'Bearer ', 'Bearer geheim-42']) {
+        const answer = await ask({ file, token }, get('/runs.jsonl', authorization));
+        expect(answer).toEqual({ status: 404, headers: {}, body: '' });
+      }
+    }
+  });
+
+  it('turns a request away without the token, or with any other', async () => {
+    const tries = [undefined, '', 'Bearer', 'Bearer geheim', 'Basic geheim-42', 'geheim-42'];
+    for (const authorization of [...tries, 'Bearer geheim-42 nochwas']) {
+      const answer = await ask(withToken, get('/runs.jsonl', authorization));
+      expect(answer, String(authorization)).toEqual({
+        status: 401,
+        headers: { 'www-authenticate': 'Bearer' },
+        body: '',
+      });
+    }
+  });
+
+  it('hands the log out for the token', async () => {
+    for (const authorization of ['Bearer geheim-42', 'bearer  geheim-42']) {
+      const answer = await ask(withToken, get('/runs.jsonl?fresh=1', authorization));
+      expect(answer.status).toBe(200);
+      expect(answer.headers['content-type']).toBe('application/x-ndjson; charset=utf-8');
+      expect(answer.body).toBe(readFileSync(file, 'utf8'));
+    }
+  });
+
+  it('hands out an empty log until the first run has finished', async () => {
+    const before = { file: join(dir, 'noch-leer', 'runs.jsonl'), token: 'geheim-42' };
+    const answer = await ask(before, get('/runs.jsonl', 'Bearer geheim-42'));
+    expect(answer).toMatchObject({ status: 200, body: '' });
+  });
+
+  it('leaves every other path and method to the rest of the server', () => {
+    const { res } = fakeResponse();
+    const post = { ...get('/runs.jsonl', 'Bearer geheim-42'), method: 'POST' } as IncomingMessage;
+    expect(serveRuns(withToken, get('/runs'), res)).toBe(false);
+    expect(serveRuns(withToken, get('/runs.jsonl/x', 'Bearer geheim-42'), res)).toBe(false);
+    expect(serveRuns(withToken, post, res)).toBe(false);
   });
 });

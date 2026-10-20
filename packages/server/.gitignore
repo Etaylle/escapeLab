@@ -1,0 +1,2 @@
+# The run log the server appends to by default (RUNS_LOG unset).
+data/

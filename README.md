@@ -166,6 +166,30 @@ Beim Start schreibt der Server alle Netzwerk-Adressen in die Konsole
 mit Laptop oder Handy beitreten, ohne irgendetwas zu installieren. Port über `PORT=8080`
 änderbar.
 
+**Laufprotokoll (ohne Datenbank):** Jeder beendete Lauf, gewonnen oder verloren, hängt seinen
+Bericht als eine Zeile JSON an eine Datei an; jede Revanche bekommt ihre eigene Zeile. Darin
+stehen Mission, Schwierigkeit, Zeitlimit und Alarmgrenze, Crew-Größe und gezogene Startplätze,
+Start, Ende und Ausgang (`won`, `lost:time`, `lost:alarms`), je Station wann sie dran war und
+wann sie fiel, die Sekunden dazwischen, ihre Alarme und Notizen, dazu die Notfälle, alle Alarme
+nach Ursache und die Beiträge. Namen kommen nicht hinein, die Crew heißt `p1` bis `pn`. Kann
+der Server nicht schreiben (Platte voll, falscher Pfad), steht das im Server-Log, und das Spiel
+läuft weiter.
+
+| Variable | Wirkung |
+| --- | --- |
+| `RUNS_LOG` | Pfad der Protokolldatei, am besten absolut. Ohne: `packages/server/data/runs.jsonl`. Fehlende Ordner legt der Server an. |
+| `RUNS_TOKEN` | Gibt `GET /runs.jsonl` frei, nur mit dem Header `Authorization: Bearer <RUNS_TOKEN>`. Ohne Token antwortet die Route 404. |
+
+```sh
+RUNS_TOKEN=… RUNS_LOG=/var/lib/escapelab/runs.jsonl pnpm start
+curl -H "Authorization: Bearer $RUNS_TOKEN" http://<host>:3001/runs.jsonl -o runs.jsonl
+pnpm --filter @escapelab/server runs runs.jsonl   # Tabelle zum Balancing
+```
+
+Die Tabelle zeigt je Mission und Schwierigkeit Läufe, Siegquote und mittlere Dauer (Median),
+je Station die mittleren Sekunden und Alarme und die drei langsamsten Stationen. Ohne
+Dateiangabe liest `runs` die Datei aus `RUNS_LOG` bzw. die Standarddatei.
+
 ## Architektur in einem Satz
 
 `core` kennt weder Netzwerk noch Uhr (Zeit kommt als `at` in Aktionen) — der Server ist eine

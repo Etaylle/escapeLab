@@ -6,6 +6,7 @@ import {
   canSee,
   inEscapePhase,
   initialState,
+  runReport,
   shutDoors,
   stationKey,
   stepAllowed,
@@ -20,10 +21,14 @@ import {
   type Mission,
   type PlayerPosition,
   type RoomSummary,
+  type RunReport,
   type ServerMessage,
 } from '@escapelab/core';
 
 type Listener = (msg: ServerMessage) => void;
+
+/** Hears of every run that ends in a room, won or lost, with the run's report. */
+export type RunListener = (report: RunReport) => void;
 
 /** The subset of client messages that map 1:1 onto game actions. */
 export type GameMessage = Extract<
@@ -83,7 +88,8 @@ const RELAY_TICK_MS = 1000;
  * (reconnect tokens), the mission timer and the live avatar positions.
  * Movement is client-authoritative within limits: the room takes only steps
  * an avatar can walk, turns positions into plate state and presence and
- * validates interaction distance. Transport-agnostic.
+ * validates interaction distance. Every run that ends goes to
+ * `onRunFinished` as a report. Transport-agnostic.
  */
 export class Room {
   readonly code: string;
@@ -107,7 +113,11 @@ export class Room {
   /** epoch ms since the room has had no connected players, null while occupied */
   emptySince: number | null = null;
 
-  constructor(code: string, mission: Mission) {
+  constructor(
+    code: string,
+    mission: Mission,
+    private readonly onRunFinished: RunListener = () => undefined,
+  ) {
     this.code = code;
     this.state = initialState(mission);
   }
@@ -806,7 +816,12 @@ export class Room {
   }
 
   private dispatch(action: Action): void {
+    const wasPlaying = this.state.phase === 'playing';
     this.state = applyAction(this.state, action);
+    // A run ends exactly once, won or lost; a rematch is a run of its own.
+    if (wasPlaying && (this.state.phase === 'won' || this.state.phase === 'lost')) {
+      this.onRunFinished(runReport(this.state));
+    }
     this.reconcileTimer();
     this.reconcileDroneTimer();
     this.reconcileSabotage();
