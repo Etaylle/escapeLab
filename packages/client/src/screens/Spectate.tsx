@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { PlayerPosition, DronePosition, SpectatorView } from '@escapelab/core';
+import { useVoice } from '../voice/useVoice.js';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
 import type { KnownPositions } from '../world/movement.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
@@ -7,6 +8,7 @@ import { PuzzlePanel } from './PuzzlePanel.js';
 import { Manual } from './Manual.js';
 import { EdgeworkChip } from './EdgeworkChip.js';
 import { CreditsTable, crewTags, CrewTags, type CrewTag } from './Crew.js';
+import { ListenToggle, SpeakingMark } from './Voice.js';
 
 interface Props {
   view: SpectatorView;
@@ -55,6 +57,7 @@ export function SpectateScreen({
     const timer = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(timer);
   }, []);
+  const speaking = useVoice()?.state.speaking;
 
   const noop = (): void => undefined;
   const feed = view.events.slice(-14).reverse();
@@ -180,12 +183,14 @@ export function SpectateScreen({
             <li key={p.id} className={p.connected ? '' : 'offline'}>
               <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
               {p.name}
+              {speaking?.has(p.id) === true && <SpeakingMark />}
               {view.phase === 'playing' && (
                 <CrewTags tags={audienceTags(view, p, positionsRef.current.players[p.id])} />
               )}
             </li>
           ))}
         </ul>
+        <ListenToggle />
         <button className="link" onClick={leaveRoom}>
           Zuschauen beenden
         </button>

@@ -1,0 +1,186 @@
+/* ══ the crew's voice: push-to-talk between the players (voice/, screens/Voice.tsx) ══
+ * The microphone in the lobby and a seat lit while its crew member speaks,
+ * the talk button in the world's control cluster, the HUD's switch between
+ * the key and an open microphone, the mark beside whoever speaks, and the
+ * audience's switch to listen in. The ring round a speaking avatar is drawn
+ * on the canvas (world/art.ts).
+ */
+
+/* ── the lobby: the microphone, asked for on a click ────────────────────── */
+
+/*
+ * A plate on the crew room's wall opposite the sign (lobby.css): the button,
+ * or the microphone on, and one quiet line under it. It lies over the wall,
+ * clear of the lamp in the middle, and takes no room from the crew or the
+ * mission; where the room is too narrow for both plates, it hangs under the
+ * sign.
+ */
+.voice-setup {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 2;
+  max-width: calc(50% - 100px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 6px 8px;
+  border: 1px solid #26303c;
+  border-radius: 6px;
+  background: rgba(5, 8, 11, 0.82);
+}
+
+@media (max-width: 640px) {
+  .voice-setup {
+    position: relative;
+    top: auto;
+    right: auto;
+    align-self: flex-start;
+    max-width: calc(100% - 32px);
+    margin: 8px 16px 0;
+    justify-content: flex-start;
+  }
+}
+
+.voice-ask,
+.voice-talk {
+  padding: 7px 12px;
+  font-size: 14px;
+}
+
+.voice-on {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* How to talk, or why there is no microphone: a row of its own. */
+.voice-line {
+  flex-basis: 100%;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .voice-line {
+    text-align: left;
+  }
+}
+
+.voice-setup .voice-off {
+  font-size: 13px;
+}
+
+/* Held to talk on a touch screen: no scroll, selection or callout under the thumb. */
+.voice-talk {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.voice-talk--on {
+  border-color: var(--accent);
+  background: var(--accent-dark);
+  box-shadow: 0 0 14px var(--accent-glow);
+}
+
+/* A crew member speaking: their figure in the room glows. */
+.seat-speaking .seat-figure {
+  filter: drop-shadow(0 0 3px var(--accent)) drop-shadow(0 0 12px var(--accent-glow));
+}
+
+/* ── who speaks: the microphone beside a name ───────────────────────────── */
+
+.voice-speaking {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+  animation: voice-speaking 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes voice-speaking {
+  from {
+    opacity: 0.55;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* ── the HUD's switch: by the key, or open ──────────────────────────────── */
+
+.hud-mic[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/*
+ * Under 820 px the strip is a grid with a place for every button (ui.css):
+ * with the switch in it, the row of buttons takes one column more. The rows
+ * keep their heights, and the world its zoom.
+ */
+@media (max-width: 820px) {
+  .hud.hud--voice {
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    grid-template-areas:
+      'crew crew crew crew'
+      'radio mic notes info'
+      'chip chip chip chip';
+  }
+
+  .hud-mic {
+    grid-area: mic;
+  }
+}
+
+/* Sideways on a phone the buttons share the first row with the crew (pwa.css). */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) and
+  (max-width: 820px) {
+  .hud.hud--voice {
+    grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+    grid-template-areas:
+      'crew chip mic notes info'
+      'radio radio radio radio radio';
+  }
+}
+
+/* ── the talk button in the world's control cluster ─────────────────────── */
+
+/* A keyboard has V for it: the button shows on a touch screen only. */
+.world-talk {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .world-talk {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(26, 38, 48, 0.8);
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  /* Lit while held: by a finger, or by V on a keyboard plugged in. */
+  .world-talk--on {
+    border-color: var(--accent);
+    background: rgba(15, 118, 110, 0.9);
+    box-shadow: 0 0 18px var(--accent-glow);
+  }
+}
+
+/* ── the audience: listening in ─────────────────────────────────────────── */
+
+.spectate-listen[aria-pressed='true'] {
+  color: var(--accent);
+}

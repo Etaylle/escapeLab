@@ -29,6 +29,15 @@
  * throws. A capture the draw leaves out is logged as `skipped:` with why, and
  * fails nothing. The last line counts the captures taken, skipped and failed;
  * the exit code is 1 when any failed.
+ *
+ * Voice: Chromium runs with a fake microphone that needs no prompt (its beeps
+ * are the voice), and both players switch theirs on in the lobby. Both pages
+ * open with `?trace=1`, so their voice links can be read off
+ * `window.__escapelab.voice`. In the run both ends of the link have to reach
+ * `connected`, and while the host holds V for two seconds the speaking mark
+ * has to show for the host on both pages (voice.png, voice-phone.png). After
+ * the guest's reload the link has to come up again. Any of these that fails,
+ * fails the run.
  */
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -56,6 +65,21 @@ const SPEED = 4.2;
 const STEP_TOLERANCE = 0.15;
 /** How long a frame sample runs, in ms. */
 const SAMPLE_MS = 2000;
+/**
+ * Chromium's switches for the voice: a fake microphone (it beeps) handed out
+ * without a prompt, links between two pages on this one machine even with no
+ * network, and sound that plays without a click first.
+ */
+const VOICE_FLAGS = [
+  '--use-fake-ui-for-media-stream',
+  '--use-fake-device-for-media-stream',
+  '--allow-loopback-in-peer-connection',
+  '--autoplay-policy=no-user-gesture-required',
+];
+/** How long the voice links get to come up, in ms. */
+const LINK_MS = 15_000;
+/** How long the host holds V, in ms. */
+const TALK_MS = 2000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -115,10 +139,14 @@ function traced(url) {
  * page without a trace or a window without frames.
  */
 async function sampleFrames(page, when, quiet) {
+  // The probes hold the voice as well: the frames are there only while a world is up.
   const found = await page.evaluate(() => {
     const probe = globalThis.__escapelab;
-    probe?.resetFrames();
-    return probe !== undefined;
+    if (typeof probe?.resetFrames !== 'function') {
+      return false;
+    }
+    probe.resetFrames();
+    return true;
   });
   if (!found) {
     console.log(`frames             !! no trace ${when}: the page keeps none under ?trace=1`);
@@ -1144,9 +1172,151 @@ async function captureLitRoom(page, seen) {
   );
 }
 
+/** A page's voice as `?trace=1` shows it (window.__escapelab.voice); null without one. */
+function voiceOf(page) {
+  return page.evaluate(() => globalThis.__escapelab?.voice ?? null);
+}
+
+/** Every page's link states, for a log line: „Anna connected, Ben connecting". */
+async function linkStates(pages) {
+  const voices = await Promise.all(pages.map(({ page }) => voiceOf(page)));
+  return pages
+    .map(({ name }, i) => {
+      const states = Object.values(voices[i]?.states ?? {});
+      return `${name} ${states.length === 0 ? 'no link' : states.join('/')}`;
+    })
+    .join(', ');
+}
+
+/** Polls until every page has a voice link and all of them are connected; whether they came up. */
+async function linksUp(pages) {
+  const up = async ({ page }) => {
+    const states = Object.values((await voiceOf(page))?.states ?? {});
+    return states.length > 0 && states.every((state) => state === 'connected');
+  };
+  const end = Date.now() + LINK_MS;
+  for (;;) {
+    const all = (await Promise.all(pages.map(up))).every(Boolean);
+    if (all || Date.now() > end) {
+      return all;
+    }
+    await sleep(250);
+  }
+}
+
+/**
+ * In the lobby both players switch their microphone on as a player would:
+ * the button, then „Mikro an". The launch flags make it a fake one, handed
+ * out without a prompt; the contexts are allowed to use it.
+ */
+async function micsOn(players) {
+  const origin = new URL(BASE).origin;
+  for (const { page } of players) {
+    await page.context().grantPermissions(['microphone'], { origin });
+    await clickText(page, 'Mikrofon aktivieren');
+  }
+  const on = await Promise.all(
+    players.map(({ page }) => attached(page.locator('.voice-on'), 5000)),
+  );
+  const off = players.filter((_, i) => !on[i]);
+  const why = await Promise.all(off.map(({ page }) => textOf(page.locator('.voice-line'))));
+  console.log(
+    `voice              microphones in the lobby: ` +
+      (off.length === 0
+        ? 'on for both'
+        : `!! off for ${off.map(({ name }, i) => `${name} ("${why[i]}")`).join(' and ')}`),
+  );
+  if (off.length > 0) {
+    fail(`no microphone in the lobby for ${off.map(({ name }) => name).join(' and ')}`);
+  }
+}
+
+/**
+ * voice.png, voice-phone.png: in the run the link between the two comes up
+ * on both ends, and while the host holds V for TALK_MS the speaking mark
+ * shows beside the host's name — on its own page from its own level, on the
+ * guest's from the sound that came over the link. Captured mid-hold.
+ */
+async function captureVoice(host, guest) {
+  const crew = [host, guest];
+  if (!(await linksUp(crew))) {
+    const states = await linkStates(crew);
+    console.log(`voice              !! no link after ${LINK_MS / 1000} s: ${states}`);
+    fail('the voice link did not connect');
+    return;
+  }
+  console.log(`voice              linked: ${await linkStates(crew)}`);
+  const marked = async ({ page }) => {
+    const row = page.locator('.hud-crew li', { hasText: host.name });
+    return (await row.locator('.voice-speaking').count()) > 0;
+  };
+  const seen = crew.map(() => false);
+  let shot = false;
+  await host.page.keyboard.down('v');
+  for (const end = Date.now() + TALK_MS; Date.now() < end; ) {
+    const marks = await Promise.all(crew.map(marked));
+    marks.forEach((mark, i) => {
+      seen[i] ||= mark;
+    });
+    if (!shot && marks.every(Boolean)) {
+      await capture(host.page, 'voice.png');
+      await capture(guest.page, 'voice-phone.png');
+      shot = true;
+    }
+    await sleep(100);
+  }
+  if (!shot) {
+    await capture(host.page, 'voice.png');
+    await capture(guest.page, 'voice-phone.png');
+  }
+  await host.page.keyboard.up('v');
+  const deaf = crew.filter((_, i) => !seen[i]).map(({ name }) => name);
+  console.log(
+    `voice.png          ${host.name} held V for ${TALK_MS / 1000} s: ` +
+      (deaf.length === 0
+        ? 'the speaking mark showed on both pages'
+        : `!! no speaking mark on ${deaf.join(' and ')}'s page`),
+  );
+  if (deaf.length > 0) {
+    fail(`no speaking mark for ${host.name} on ${deaf.join(' and ')}'s page while V was held`);
+  }
+  await sleep(600); // the mark goes out before the next captures
+}
+
+/** After the guest's reload its link comes up again, and its microphone with it. */
+async function voiceAfterReload(host, guest) {
+  const crew = [host, guest];
+  const up = await linksUp(crew);
+  const mic = (await voiceOf(guest.page))?.mic ?? 'no voice';
+  console.log(
+    `voice              after ${guest.name}'s reload: ` +
+      (up ? 'linked again' : `!! ${await linkStates(crew)}`) +
+      `, ${guest.name}'s microphone ${mic === 'on' ? 'back on' : `!! ${mic}`}`,
+  );
+  if (!up) {
+    fail(`the voice link did not come up again after ${guest.name}'s reload`);
+  }
+}
+
+/** The audience listens in: a receive-only link to every player comes up. */
+async function listenIn(watcher, players) {
+  const audience = [{ name: 'audience', page: watcher }];
+  await clickText(watcher, 'Crew mithören');
+  const all = await linksUp(audience);
+  const links = Object.keys((await voiceOf(watcher))?.states ?? {}).length;
+  const heard = all && links === players.length;
+  console.log(
+    `voice              the audience listens in: ` +
+      (heard ? `linked to all ${links} players` : `!! ${await linkStates(audience)}`),
+  );
+  if (!heard) {
+    fail('the audience did not link up to every player');
+  }
+}
+
 async function run() {
   mkdirSync(OUT, { recursive: true });
-  browser = await chromium.launch();
+  browser = await chromium.launch({ args: VOICE_FLAGS });
 
   // --- host: create a room and grab the code ---------------------------
   const hostCtx = await browser.newContext({ viewport: SIZES[0] });
@@ -1186,7 +1356,8 @@ async function run() {
   const guestCtx = await browser.newContext({ viewport: SIZES[2], hasTouch: true });
   const guest = await guestCtx.newPage();
   const guestSeen = eavesdrop(guest);
-  await guest.goto(BASE);
+  // Traced for its voice links; its frames are never sampled.
+  await guest.goto(traced(BASE));
   await guest.getByPlaceholder('z. B. Anna').fill('Ben');
   // On a phone the join screen stacks and scrolls; this shows its top.
   await guest.locator('.mission').first().waitFor({ timeout: 10_000 });
@@ -1214,6 +1385,10 @@ async function run() {
   await capture(host, 'lobby-1280.png');
   await host.setViewportSize(SIZES[0]);
   await sleep(300);
+  await micsOn([
+    { name: 'Anna', page: host },
+    { name: 'Ben', page: guest },
+  ]);
   await clickText(guest, 'Ich bin bereit');
   await sleep(300);
   await clickText(host, 'Mission starten');
@@ -1242,6 +1417,7 @@ async function run() {
     { name: 'Anna', page: host, start: await layoutOf(host) },
     { name: 'Ben', page: guest, start: await layoutOf(guest) },
   ];
+  await captureVoice(anna, ben);
 
   for (const size of SIZES.filter((s) => !s.hasTouch)) {
     await host.setViewportSize({ width: size.width, height: size.height });
@@ -1274,13 +1450,15 @@ async function run() {
   const watcherCtx = await browser.newContext({ viewport: SIZES[0] });
   const watcher = await watcherCtx.newPage();
   const watcherSeen = eavesdrop(watcher);
-  await watcher.goto(BASE);
+  // Traced for its voice links; its frames are never sampled.
+  await watcher.goto(traced(BASE));
   await watcher.getByLabel('Raumcode').fill(code);
   await clickText(watcher, 'Mit Code zuschauen');
   await watcher.locator('.spectate').waitFor({ timeout: 10_000 });
   await sleep(1200);
   await capture(watcher, 'spectate.png');
   await overflow(watcher, 'spectate @ 1440x820');
+  await listenIn(watcher, [anna, ben]);
 
   await captureLocker(guest, guestSeen, watcherSeen);
 
@@ -1319,6 +1497,7 @@ async function run() {
     }
   }
   await captureNotepad(guest, guestSeen);
+  await voiceAfterReload(anna, ben);
 
   const firstSpots = operator.seen.view.map.stations.filter((s) => s.status === 'armed');
   // The draw may leave both starts shut off from the first station until a

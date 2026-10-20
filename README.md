@@ -47,6 +47,15 @@ für alle (farbige Ringe, Pfeil wenn außerhalb des Bildes), `M` blendet die **M
 (acht feste Sätze, Tasten `1`–`8`, erscheinen als Sprechblase über der Figur) — damit
 funktioniert das Spiel auch ohne Voice-Chat.
 
+**Sprechen:** In der Lobby lässt sich das **Mikrofon** aktivieren (nie von selbst); dann geht
+die Stimme hinaus, solange `V` gedrückt bleibt — auf dem Handy die 🎤-Taste; die Leiste schaltet
+auf „Mikro: offen“.
+Die Stimmen gehen direkt von Browser zu Browser (WebRTC; der Server vermittelt nur den Aufbau)
+und klingen nach Nähe: bis 4 Kacheln voll, bis 10 Kacheln leiser werdend, durch Wände gedämpft
+— nie ganz stumm. Wer spricht, steht in einem Ring. Zuschauer können mithören, nicht sprechen.
+Ohne Mikrofon hört man die Crew trotzdem. Das Mikrofon braucht HTTPS (oder `localhost`); übers
+Internet hilft `?stun=1` in der Adresse.
+
 **Tragen:** Manche Stationen bleiben tot, bis ein Gegenstand bei ihnen eingesetzt wurde — die
 Ersatzsicherung liegt im Archiv und muss quer durchs Labor in den Reaktor —, und manche Regeln
 liegen in einem abgeschlossenen Schrank, dessen Schlüssel erst geholt werden muss (Blackout: vom

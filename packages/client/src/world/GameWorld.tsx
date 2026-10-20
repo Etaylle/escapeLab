@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import {
   chatText,
   CHAT_PHRASE_IDS,
@@ -9,7 +9,10 @@ import {
   type PlayerView,
   type PuzzleView,
 } from '@escapelab/core';
+import { addProbes } from '../probes.js';
 import { deviceCoach, firstSight, type CoachMark } from '../puzzles/coach.js';
+import { TalkButton } from '../screens/Voice.js';
+import { VoiceContext } from '../voice/useVoice.js';
 import {
   drawCarryable,
   drawDropZone,
@@ -24,6 +27,7 @@ import {
   drawScientist,
   drawSign,
   drawStation,
+  drawVoiceRing,
   makeFloorTile,
   makeWallTile,
   worldText,
@@ -415,6 +419,10 @@ export function GameWorld({
   readRef.current = onRead;
   const operateRef = useRef(onOperate);
   operateRef.current = onOperate;
+  /** the crew's voice, read on every frame for who speaks; none outside the app */
+  const voice = useContext(VoiceContext);
+  const voiceRef = useRef(voice);
+  voiceRef.current = voice;
   /** the E key's job, shared with the touch button; set while the render loop runs */
   const interactRef = useRef<(() => void) | null>(null);
   /** the Q key's job, shared with the touch button; set while the render loop runs */
@@ -680,9 +688,15 @@ export function GameWorld({
     let frames = 0;
     // `?trace=1`: the walkthrough reads the last frame durations off the page.
     const trace = traceRequested(location.search) ? frameTrace() : null;
-    if (trace !== null) {
-      window.__escapelab = trace;
-    }
+    const dropTrace =
+      trace === null
+        ? null
+        : addProbes({
+            get frames() {
+              return trace.frames;
+            },
+            resetFrames: () => trace.resetFrames(),
+          });
 
     /**
      * Your avatar by the server's word: every run starts it on its spawn — on
@@ -1118,13 +1132,17 @@ export function GameWorld({
         ctx.restore();
       }
 
-      // avatars: remote first, local on top
+      // avatars: remote first, local on top; whoever speaks stands in a ring
       const youId = viewRef.current.you.id;
       const metaOf = new Map(viewRef.current.players.map((p) => [p.id, p]));
+      const speaking = voiceRef.current?.getState().speaking;
       for (const [id, other] of sim.others) {
         const meta = metaOf.get(id);
         ctx.save();
         ctx.translate(other.rx, other.ry + 0.3);
+        if (speaking?.has(id) === true) {
+          drawVoiceRing(ctx, meta?.color ?? FALLBACK_COLOR, sim.time);
+        }
         drawScientist(ctx, {
           color: meta?.color ?? FALLBACK_COLOR,
           name: meta?.name ?? '???',
@@ -1141,6 +1159,9 @@ export function GameWorld({
         const you = metaOf.get(youId);
         ctx.save();
         ctx.translate(sim.self.x, sim.self.y + 0.3);
+        if (speaking?.has(youId) === true) {
+          drawVoiceRing(ctx, you?.color ?? FALLBACK_COLOR, sim.time);
+        }
         drawScientist(ctx, {
           color: you?.color ?? FALLBACK_COLOR,
           name: you?.name ?? 'DU',
@@ -1724,9 +1745,7 @@ export function GameWorld({
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
       stopAmbience();
-      if (window.__escapelab === trace) {
-        delete window.__escapelab;
-      }
+      dropTrace?.();
       simRef.current = null;
       interactRef.current = null;
       dropRef.current = null;
@@ -1817,6 +1836,8 @@ export function GameWorld({
         >
           💬<span className="world-key"> [C]</span>
         </button>
+        {/* Held to talk, on a touch screen with the microphone on; V does it on a keyboard. */}
+        <TalkButton className="world-talk">🎤</TalkButton>
       </div>
       )}
 

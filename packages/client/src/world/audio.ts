@@ -128,6 +128,24 @@ export function stopAmbience(): void {
 }
 
 
+/**
+ * The one shared AudioContext, for the crew's voice (voice/mesh.ts): made on
+ * first use like every sound's, and nudged to resume — from a click that
+ * wakes it. Voices go to its output past the master gain, so turning the
+ * lab's sound off leaves the crew audible. Null where there is no Web Audio.
+ */
+export function sharedAudio(): AudioContext | null {
+  try {
+    const audio = getEngine();
+    if (audio === null || audio.ctx.state === 'closed') return null;
+    unlock();
+    return audio.ctx;
+  } catch {
+    // Deliberately silent: without Web Audio the crew is simply not heard.
+    return null;
+  }
+}
+
 function readStoredMute(): boolean {
   try {
     return localStorage.getItem(MUTE_STORAGE_KEY) === '1';

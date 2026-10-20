@@ -32,6 +32,7 @@ setInterval(() => manager.sweep(), 60_000).unref();
 /** Per-connection session, set once the socket joins or resumes into a room. */
 interface Session {
   room: Room;
+  /** the player's id; for an audience connection, its spectator id */
   playerId: string;
   /** set for audience connections, which detach instead of leaving the game */
   detachSpectator?: () => void;
@@ -84,8 +85,9 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
       return session;
     case 'spectate': {
       const room = manager.get(msg.code);
-      const detachSpectator = room.attachSpectator((m) => send(socket, m));
-      return { room, playerId: '', detachSpectator };
+      // An audience connection goes by its spectator id: voice signals reach it by that.
+      const { spectatorId, detach } = room.attachSpectator((m) => send(socket, m));
+      return { room, playerId: spectatorId, detachSpectator: detach };
     }
     case 'resume': {
       const room = manager.get(msg.code);
@@ -122,6 +124,11 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
     case 'chat': {
       const s = requireSession(session);
       s.room.chat(s.playerId, msg.phrase);
+      return s;
+    }
+    case 'rtc': {
+      const s = requireSession(session);
+      s.room.relaySignal(s.playerId, msg.to, msg.signal);
       return s;
     }
     case 'pos': {

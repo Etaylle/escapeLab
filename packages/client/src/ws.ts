@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import type {
   ChatPhrase,
   ClientMessage,
   DronePosition,
   PlayerView,
   RoomSummary,
+  RtcSignal,
   ServerMessage,
   SpectatorView,
 } from '@escapelab/core';
@@ -40,8 +41,23 @@ export interface Connection {
   /** Quick-chat lines, newest last; drained by the render loop like pings. */
   chats: MutableRefObject<{ playerId: string; phrase: ChatPhrase; at: number }[]>;
   send: (msg: ClientMessage) => void;
+  /**
+   * Hears every server message in the order it came, as it comes — before
+   * React renders any of it — and the socket dropping. The voice keeps its
+   * links by this: a signal must never overtake the view sent before it.
+   * Returns how to stop listening. Stable for the connection's life.
+   */
+  listen: (listener: ServerListener) => () => void;
+  /** Sends a voice signal to one member of the room; unlike `send`, it leaves a shown error be. */
+  signal: (to: string, signal: RtcSignal) => void;
   dismissError: () => void;
   leaveRoom: () => void;
+}
+
+/** Hears the server: each message as it comes in, and the socket dropping. */
+export interface ServerListener {
+  message: (msg: ServerMessage) => void;
+  closed: () => void;
 }
 
 const STORAGE_KEY = 'escapelab-session';
@@ -87,6 +103,21 @@ export function useGameConnection(): Connection {
   const dronesRef = useRef<Record<string, DronePosition>>({});
   const pingsRef = useRef<{ playerId: string; x: number; y: number; at: number }[]>([]);
   const chatsRef = useRef<{ playerId: string; phrase: ChatPhrase; at: number }[]>([]);
+  const listenersRef = useRef(new Set<ServerListener>());
+
+  const listen = useCallback((listener: ServerListener) => {
+    listenersRef.current.add(listener);
+    return () => {
+      listenersRef.current.delete(listener);
+    };
+  }, []);
+
+  const signal = useCallback((to: string, rtc: RtcSignal) => {
+    const socket = socketRef.current;
+    if (socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ kind: 'rtc', to, signal: rtc } satisfies ClientMessage));
+    }
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -111,11 +142,17 @@ export function useGameConnection(): Connection {
       socket.onmessage = (event) => {
         const msg = JSON.parse(String(event.data)) as ServerMessage;
         handleServerMessage(msg);
+        for (const listener of listenersRef.current) {
+          listener.message(msg);
+        }
       };
 
       socket.onclose = () => {
         if (disposed) {
           return;
+        }
+        for (const listener of listenersRef.current) {
+          listener.closed();
         }
         setStatus('closed');
         retryTimer = setTimeout(connect, retryDelay);
@@ -198,6 +235,8 @@ export function useGameConnection(): Connection {
       setError(null);
       socketRef.current?.send(JSON.stringify(msg));
     },
+    listen,
+    signal,
     dismissError: () => setError(null),
     leaveRoom: () => {
       forgetRoom();

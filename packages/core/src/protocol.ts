@@ -10,6 +10,34 @@ import type { PlayerView, SpectatorView } from './view.js';
  * zod-validated on the server before it touches game logic.
  */
 
+/** The most a voice signal may weigh as JSON, in characters: an audio offer runs to a few kB. */
+export const RTC_SIGNAL_MAX = 16 * 1024;
+
+const sdpSchema = z.string().min(1).max(RTC_SIGNAL_MAX);
+
+/**
+ * A WebRTC signal for the crew's push-to-talk (client/src/voice): an offer or
+ * an answer with its session description, or one ICE candidate. The server
+ * checks its shape and weight and relays it to one member of the room, unread.
+ */
+export const rtcSignalSchema = z
+  .discriminatedUnion('type', [
+    z.object({ type: z.literal('offer'), sdp: sdpSchema }),
+    z.object({ type: z.literal('answer'), sdp: sdpSchema }),
+    z.object({
+      type: z.literal('ice'),
+      candidate: z.object({
+        candidate: z.string().max(RTC_SIGNAL_MAX),
+        sdpMid: z.string().max(64).nullable().optional(),
+        sdpMLineIndex: z.number().int().min(0).max(1024).nullable().optional(),
+        usernameFragment: z.string().max(256).nullable().optional(),
+      }),
+    }),
+  ])
+  .refine((signal) => JSON.stringify(signal).length <= RTC_SIGNAL_MAX);
+
+export type RtcSignal = z.infer<typeof rtcSignalSchema>;
+
 export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('create-room'),
@@ -62,6 +90,8 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('back-to-lobby') }),
   z.object({ kind: z.literal('rematch') }),
+  /** a voice signal for one other member of the room, by id */
+  z.object({ kind: z.literal('rtc'), to: z.string().min(1).max(64), signal: rtcSignalSchema }),
 ]);
 
 /** One row in the lobby browser. */
@@ -148,6 +178,8 @@ export type ServerMessage =
     }
   | { kind: 'ping'; playerId: string; x: number; y: number }
   | { kind: 'chat'; playerId: string; phrase: ChatPhrase }
+  /** a voice signal from another member of the room, as they sent it */
+  | { kind: 'rtc'; from: string; signal: RtcSignal }
   | { kind: 'error'; message: string };
 
 export function parseClientMessage(raw: string): ClientMessage {

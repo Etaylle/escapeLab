@@ -2,6 +2,7 @@ import { Activity, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { isMuted, setMuted } from './world/audio.js';
 import { difficultyInfos, type Difficulty, type MissionInfo } from '@escapelab/core';
 import { useRunScreen } from './runScreen.js';
+import { useVoiceMesh, VoiceContext } from './voice/useVoice.js';
 import { useGameConnection } from './ws.js';
 import { HandbookScreen } from './screens/Handbook.js';
 import { Icon, type IconName } from './screens/Icon.js';
@@ -76,6 +77,8 @@ function screenOf(conn: ReturnType<typeof useGameConnection>): string {
 
 export function App() {
   const conn = useGameConnection();
+  // The crew's voice lives as long as the page: lobby, run and end screen alike.
+  const voice = useVoiceMesh(conn);
   const [sound, setSound] = useState(() => !isMuted());
   const [missions, setMissions] = useState<MissionInfo[]>([]);
   // The handbook is a page of its own off the join screen: the mission whose
@@ -155,7 +158,7 @@ export function App() {
       <UpdateNotice />
 
       <main ref={contentRef} className={`content ${immersive ? 'content--stage' : ''}`}>
-        {renderScreen()}
+        <VoiceContext value={voice}>{renderScreen()}</VoiceContext>
       </main>
     </div>
   );
