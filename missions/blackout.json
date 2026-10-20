@@ -10,8 +10,9 @@
     "lose": "Ein letztes Flackern, dann ist es still. Die Notversorgung fällt aus, die Proben sind verloren. Das Labor bleibt dunkel … bis zum nächsten Versuch."
   },
   "timeLimitSec": 660,
+  "intro": { "lightsSec": 3 },
   "radio": {
-    "start": "Notstrom zuerst: Kasten im Maschinenraum, Prüfpult im Flur, Handbuch im Archiv.",
+    "start": "Strom weg. Notlicht: Hebel im Flur, zu zweit.",
     "escape": "Licht ist da. Notausgang offen, Südostecke."
   },
   "map": {
@@ -48,6 +49,7 @@
       { "id": "kameraplatte", "x": 11, "y": 5, "label": "KAMERA HALTEN" }
     ],
     "stations": [
+      { "puzzleId": "notlicht", "x": 7, "y": 5 },
       { "puzzleId": "notstrom", "x": 1, "y": 9, "console": "a" },
       { "puzzleId": "notstrom", "x": 5, "y": 6, "console": "b" },
       { "puzzleId": "signalkette", "x": 8, "y": 5, "console": "a" },
@@ -88,6 +90,13 @@
       }
     ],
     "edgeworkSign": { "x": 4, "y": 3 },
+    "lamps": [
+      { "x": 7, "y": 4 },
+      { "x": 4, "y": 6 },
+      { "x": 8, "y": 6 },
+      { "x": 10, "y": 6 },
+      { "x": 12, "y": 4 }
+    ],
     "labels": [
       { "text": "ARCHIV", "x": 4, "y": 1 },
       { "text": "SERVERRAUM", "x": 12, "y": 1 },
@@ -118,7 +127,8 @@
       "durationSec": 45,
       "penaltySec": 60,
       "windowSec": 15,
-      "required": 6
+      "required": 6,
+      "afterSolved": 3
     },
     "drones": [
       {
@@ -131,7 +141,7 @@
         "range": 4.5,
         "halfAngleDeg": 26,
         "penaltySec": 15,
-        "activeAfterSolved": 2,
+        "activeAfterSolved": 3,
         "frozenByPlate": "kameraplatte"
       },
       {
@@ -144,11 +154,21 @@
         "range": 4,
         "halfAngleDeg": 30,
         "penaltySec": 15,
-        "activeAfterSolved": 3
+        "activeAfterSolved": 4
       }
     ]
   },
   "puzzles": [
+    {
+      "type": "button-sync",
+      "id": "notlicht",
+      "title": "Notlicht",
+      "style": "lever",
+      "windowMs": 2000,
+      "hints": ["Beide an den Hebel. Dann gleichzeitig E."],
+      "lights": ["FLUR"],
+      "onSolved": "Notstrom: Kasten Maschinenraum, Prüfpult Flur, Handbuch Archiv."
+    },
     {
       "type": "circuit",
       "id": "notstrom",
@@ -173,7 +193,7 @@
       "hints": [
         "Die Legende am Klemmbrett nennt je Pult die Zeile einer Farbe; ab Stufe 3 laufen die Zeichen durch."
       ],
-      "lights": ["FLUR"],
+      "lights": ["SERVERRAUM"],
       "onSolved": "Schott offen. Drohne wach – Kameraplatte vor dem Serverraum."
     },
     {
@@ -184,7 +204,7 @@
       "hints": [
         "Der Schaltplan zeigt die Wände, das Navigationspult Marker und Ziel. Der Weg lässt sich vom Ziel rückwärts finden."
       ],
-      "lights": ["SERVERRAUM"],
+      "lights": ["LABOR"],
       "onSolved": "Labortür offen, Drohne drin. Aktenschrank braucht den Schlüssel."
     },
     {
@@ -194,14 +214,13 @@
       "hints": [
         "Nach der langen Pause beginnt das Wort. Die Morsetafel gibt die ersten 3 Buchstaben, die Frequenztabelle die Frequenz."
       ],
-      "lights": ["LABOR"],
+      "lights": ["REAKTOR"],
       "onSolved": "Reaktor offen. Ohne Ersatzsicherung bleibt er tot."
     },
     {
       "type": "button-sync",
       "id": "reaktorstart",
       "title": "Reaktor-Neustart",
-      "lights": ["REAKTOR"],
       "windowMs": 2000
     }
   ]

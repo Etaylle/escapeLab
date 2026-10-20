@@ -153,6 +153,8 @@ export interface DraftMap {
   items: DraftItem[];
   drones: DraftDrone[];
   sabotage?: DraftSabotage;
+  /** emergency lamps, kept as they came: the editor places none */
+  lamps?: Tile[];
 }
 
 export interface Draft {
@@ -332,6 +334,7 @@ function mapJson(map: DraftMap): Record<string, unknown> {
     })),
     drones: map.drones.map((d) => ({ id: d.id, waypoints: d.waypoints.map(tileJson), ...d.extra })),
     ...(map.sabotage === undefined ? {} : { sabotage: sabotageJson(map.sabotage) }),
+    ...(map.lamps === undefined ? {} : { lamps: map.lamps.map(tileJson) }),
   };
 }
 
@@ -416,6 +419,7 @@ interface LooseMap {
     | undefined;
   drones?: { id: string; waypoints: LooseTile[] }[] | undefined;
   sabotage?: { panels?: { id: string; x: number; y: number }[] | undefined } | undefined;
+  lamps?: LooseTile[] | undefined;
 }
 
 interface LooseMission {
@@ -525,6 +529,7 @@ function mapOf(map: LooseMap): DraftMap {
     ...(map.edgeworkSign === undefined ? {} : { edgeworkSign: tile(map.edgeworkSign) }),
     ...(map.exit === undefined ? {} : { exit: tile(map.exit) }),
     ...(map.sabotage === undefined ? {} : { sabotage: sabotageOf(map.sabotage) }),
+    ...(map.lamps === undefined || map.lamps.length === 0 ? {} : { lamps: map.lamps.map(tile) }),
   };
 }
 

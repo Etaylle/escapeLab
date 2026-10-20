@@ -86,10 +86,48 @@ const CLANK_PARTIALS = [
 const DRAIN_DETUNE = [1, 1.012] as const;
 const UNLOCK_EVENTS = ['pointerdown', 'pointerup', 'keydown', 'touchend'] as const;
 
+/** The lab with its power on: the mains' 50 Hz and the transformers' 100 Hz with overtones. */
+const POWER_VOICES = [
+  [50, 0.35],
+  [100, 0.5],
+  [200, 0.22],
+  [300, 0.1],
+] as const;
+const POWER_LEVEL = 0.03;
+const POWER_FADE_IN = 0.8;
+const POWER_FADE_OUT = 0.3;
+/** How long the hum takes to die once the power goes, and how far its pitch falls meanwhile. */
+const POWER_DIE_SECONDS = 1.4;
+const POWER_FALL = 0.25;
+/** How deep the hum sags in each drop of the flicker. */
+const POWER_SAG = 0.3;
+const ARC_LEVEL = 0.03;
+const BANG_LEVEL = 0.07;
+const CLICK_LEVEL = 0.04;
+const LEVER_LEVEL = 0.06;
+
+/** The power hum's nodes: its voices, the stage that fades and sags it, and its outlet. */
+interface PowerHum {
+  readonly sources: OscillatorNode[];
+  readonly level: GainNode;
+  readonly out: GainNode;
+}
+
+/**
+ * The moments of the lights failing, in seconds from when they are asked for:
+ * the flicker's drops (from, to), the bang and the emergency relay's click.
+ */
+export interface BlackoutCue {
+  readonly drops: readonly (readonly [number, number])[];
+  readonly bang: number;
+  readonly click: number;
+}
+
 let engine: Engine | null = null;
 let engineUnavailable = false;
 let noise: AudioBuffer | null = null;
 let ambience: Ambience | null = null;
+let powerHum: PowerHum | null = null;
 let distantTimer: ReturnType<typeof setTimeout> | undefined;
 /** Current tension level, so repeated calls do not re-ramp the same value. */
 let tension = 0;
@@ -500,14 +538,15 @@ export function radioChirp(): void {
 
 /**
  * Deep red-alert swell for penalties (~0.8 s): detuned saws sagging in pitch behind a closing
- * lowpass, so it reads as power draining away rather than as a klaxon.
+ * lowpass, so it reads as power draining away rather than as a klaxon. `delaySec` puts it later
+ * on the audio clock, for the lights failing (`blackoutSounds`).
  */
-export function powerDrain(): void {
+export function powerDrain(delaySec = 0): void {
   try {
     const audio = runningEngine();
     if (audio === null) return;
     const { ctx } = audio;
-    const t = ctx.currentTime + LOOKAHEAD;
+    const t = ctx.currentTime + LOOKAHEAD + delaySec;
     const end = t + DRAIN_SECONDS;
     const out = outlet(ctx, audio.master, DRAIN_LEVEL);
     const lowpass = biquad(ctx, 'lowpass', 1400, 4);
@@ -533,6 +572,214 @@ export function powerDrain(): void {
   } catch {
     // Deliberately silent: the penalty is shown visually as well.
   }
+}
+
+/**
+ * Idempotent. The lab with its power on (the cold open, coldOpen.ts): a low mains hum under
+ * everything, fading in over ~0.8 s, until the lights fail or `stopPowerHum` ends it.
+ */
+export function startPowerHum(): void {
+  try {
+    if (powerHum !== null) return;
+    const audio = getEngine();
+    if (audio === null || audio.ctx.state === 'closed') return;
+    unlock();
+    powerHum = buildPowerHum(audio);
+  } catch {
+    // Deliberately silent: the lit lab still looks lit.
+  }
+}
+
+/** Fades the power hum out in ~0.3 s and stops it. Safe when none plays. */
+export function stopPowerHum(): void {
+  try {
+    const hum = powerHum;
+    powerHum = null;
+    if (hum !== null && engine !== null) {
+      const now = engine.ctx.currentTime;
+      const level = hum.level.gain.value;
+      hum.level.gain.cancelScheduledValues(now);
+      windDown(hum, now, POWER_FADE_OUT, 1, level);
+    }
+  } catch {
+    // Deliberately silent: the hum's nodes are released with the context at the latest.
+  }
+}
+
+/**
+ * The lights failing, scheduled at once on the audio clock: contacts arcing in every drop of
+ * the flicker while the power hum sags with it, then a bang, the hum dying with its pitch
+ * falling and the power draining away, and the emergency relay's click.
+ */
+export function blackoutSounds(cue: BlackoutCue): void {
+  try {
+    const hum = powerHum;
+    powerHum = null;
+    const audio = runningEngine();
+    if (audio === null) {
+      if (hum !== null && engine !== null) windDown(hum, engine.ctx.currentTime, 0.05, 1);
+      return;
+    }
+    const { ctx, master } = audio;
+    const t = ctx.currentTime + LOOKAHEAD;
+    if (hum !== null) {
+      sag(hum.level.gain, t, cue.drops);
+      windDown(hum, t + cue.bang, POWER_DIE_SECONDS, POWER_FALL);
+    }
+    arcing(ctx, master, t, cue.drops);
+    bang(ctx, master, t + cue.bang);
+    powerDrain(cue.bang);
+    relayClick(ctx, master, t + cue.click);
+  } catch {
+    // Deliberately silent: the lights fail on screen as well.
+  }
+}
+
+/**
+ * A heavy main switch thrown home, ~0.4 s: the latch letting go ("ka"), then the lever
+ * dropping into its stop with a thud and the ring of its steel ("chunk").
+ */
+export function leverChunk(): void {
+  try {
+    const audio = runningEngine();
+    if (audio === null) return;
+    const { ctx } = audio;
+    const t = ctx.currentTime + LOOKAHEAD;
+    const out = outlet(ctx, audio.master, LEVER_LEVEL);
+    const latch = tick(ctx, out, t, 1900, 0.8);
+    const thud = tone(ctx, out, {
+      type: 'sine',
+      at: t + 0.12,
+      from: 120,
+      to: 48,
+      peak: 1,
+      attack: 0.002,
+      hold: 0.02,
+      decay: 0.28,
+    });
+    const knock = lowNoise(ctx, out, t + 0.12, 0.09, 700);
+    onAllEnded([latch, thud, knock], () => out.disconnect());
+    strike(ctx, audio.master, t + 0.12, 150, LEVER_LEVEL * 0.5);
+  } catch {
+    // Deliberately silent: the lever drops on screen as well.
+  }
+}
+
+function buildPowerHum(audio: Engine): PowerHum {
+  const { ctx } = audio;
+  const t = ctx.currentTime;
+  const out = outlet(ctx, audio.master, POWER_LEVEL);
+  const level = gain(ctx, 0);
+  level.gain.setValueAtTime(0, t);
+  level.gain.linearRampToValueAtTime(1, t + POWER_FADE_IN);
+  const lowpass = biquad(ctx, 'lowpass', 700, 0);
+  chain(lowpass, level, out);
+  const sources = POWER_VOICES.map(([frequency, voiceLevel]) => {
+    const osc = ctx.createOscillator();
+    osc.frequency.value = frequency;
+    chain(osc, gain(ctx, voiceLevel), lowpass);
+    osc.start(t);
+    return osc;
+  });
+  return { sources, level, out };
+}
+
+/** The hum sags in every drop of the flicker, `drops` in seconds from `at`. */
+function sag(param: AudioParam, at: number, drops: BlackoutCue['drops']): void {
+  for (const [from, to] of drops) {
+    param.setValueAtTime(1, at + from);
+    param.linearRampToValueAtTime(POWER_SAG, at + from + 0.02);
+    param.setValueAtTime(POWER_SAG, at + to);
+    param.linearRampToValueAtTime(1, at + to + 0.03);
+  }
+}
+
+/**
+ * The hum dies from `at` over `seconds`, from `level` down to silence, its pitch falling to
+ * `fall` times, and stops.
+ */
+function windDown(hum: PowerHum, at: number, seconds: number, fall: number, level = 1): void {
+  const end = at + seconds;
+  hum.level.gain.setValueAtTime(Math.max(SILENCE, level), at);
+  hum.level.gain.exponentialRampToValueAtTime(SILENCE, end);
+  for (const osc of hum.sources) {
+    const frequency = osc.frequency.value;
+    osc.frequency.setValueAtTime(frequency, at);
+    osc.frequency.exponentialRampToValueAtTime(frequency * fall, end);
+    osc.stop(end + 0.02);
+  }
+  onAllEnded(hum.sources, () => hum.out.disconnect());
+}
+
+/** Contacts arcing: a rasping buzz and a crackle in every drop, `drops` in seconds from `at`. */
+function arcing(ctx: AudioContext, dest: AudioNode, at: number, drops: BlackoutCue['drops']): void {
+  const last = drops.at(-1);
+  if (last === undefined) return;
+  const out = outlet(ctx, dest, ARC_LEVEL);
+  const rasp = ctx.createOscillator();
+  rasp.type = 'sawtooth';
+  rasp.frequency.value = 110;
+  const level = gain(ctx, 0);
+  chain(rasp, biquad(ctx, 'bandpass', 2400, 2), level, out);
+  const crackles = drops.map(([from, to]) => {
+    level.gain.setValueAtTime(0, at + from);
+    level.gain.linearRampToValueAtTime(0.7, at + from + 0.005);
+    level.gain.setValueAtTime(0.7, at + to);
+    level.gain.linearRampToValueAtTime(0, at + to + 0.03);
+    return tick(ctx, out, at + from, 3500, 0.9);
+  });
+  rasp.start(at);
+  rasp.stop(at + last[1] + 0.05);
+  onAllEnded([rasp, ...crackles], () => out.disconnect());
+}
+
+/** The breaker going: a low thump with a burst of muffled noise. */
+function bang(ctx: AudioContext, dest: AudioNode, at: number): void {
+  const out = outlet(ctx, dest, BANG_LEVEL);
+  const thump = tone(ctx, out, {
+    type: 'sine',
+    at,
+    from: 95,
+    to: 32,
+    peak: 1,
+    attack: 0.003,
+    hold: 0.04,
+    decay: 0.6,
+  });
+  const burst = lowNoise(ctx, out, at, 0.18, 900);
+  onAllEnded([thump, burst], () => out.disconnect());
+}
+
+/** The emergency relay pulling in: a dry click with a short knock under it. */
+function relayClick(ctx: AudioContext, dest: AudioNode, at: number): void {
+  const out = outlet(ctx, dest, CLICK_LEVEL);
+  const click = tick(ctx, out, at, 2600, 0.9);
+  const knock = tone(ctx, out, {
+    type: 'sine',
+    at,
+    from: 160,
+    to: 110,
+    peak: 0.5,
+    attack: 0.002,
+    hold: 0,
+    decay: 0.05,
+  });
+  onAllEnded([click, knock], () => out.disconnect());
+}
+
+/** A burst of noise behind a lowpass at `cutoff`, `duration` long from `at`. */
+function lowNoise(
+  ctx: AudioContext,
+  dest: AudioNode,
+  at: number,
+  duration: number,
+  cutoff: number,
+): AudioBufferSourceNode {
+  const burst = noiseBurst(ctx, at, duration);
+  const level = gain(ctx, 0);
+  applyEnvelope(level.gain, at, { peak: 0.9, attack: 0.002, hold: 0, decay: duration - 0.002 });
+  chain(burst, biquad(ctx, 'lowpass', cutoff, 0), level, dest);
+  return burst;
 }
 
 function getEngine(): Engine | null {

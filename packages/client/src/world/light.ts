@@ -88,6 +88,64 @@ export const DRONE_BEAM_STOPS: Stops = [
   [1, 0],
 ];
 
+/** An emergency lamp's glow: dim even in its middle, fading out well before its rim. */
+export const EMERGENCY_STOPS: Stops = [
+  [0, 0.55],
+  [0.45, 0.3],
+  [1, 0],
+];
+/** How far an emergency lamp's glow reaches, in tiles. */
+export const EMERGENCY_GLOW = 1.5;
+/** How far over the floor a lamp on a wall hangs its light, past the wall's face, in tiles. */
+const FACE_INSET = 0.05;
+/**
+ * The faces of a wall a lamp may hang on, by the floor beside each, in the
+ * order one is taken: south first — the face the view looks at — then
+ * north, east and west; with the way the lamp shines from each.
+ */
+const FACES = [
+  { dx: 0, dy: 1, facing: Math.PI / 2 },
+  { dx: 0, dy: -1, facing: -Math.PI / 2 },
+  { dx: 1, dy: 0, facing: 0 },
+  { dx: -1, dy: 0, facing: Math.PI },
+] as const;
+
+/** Where an emergency lamp hangs: the point its light comes from, and which way it shines. */
+export interface LampMount {
+  x: number;
+  y: number;
+  /** on a wall, the way it shines in radians (0 east, π/2 south); null on the floor */
+  facing: number | null;
+}
+
+/**
+ * Where the emergency lamp on tile `lamp` hangs: one on the floor in its
+ * tile's middle, one on a wall on that wall's face toward the floor beside
+ * it, just over the floor — so that the wall stops its light like any
+ * other, and nothing behind the wall is lit. Null for a lamp with no floor
+ * beside it, which the mission's validation turns away.
+ */
+export function lampMount(map: Pick<MapView, 'tiles'>, lamp: Spot): LampMount | null {
+  const floor = (x: number, y: number): boolean => map.tiles[y]?.charAt(x) === '.';
+  if (floor(lamp.x, lamp.y)) {
+    return { x: lamp.x + 0.5, y: lamp.y + 0.5, facing: null };
+  }
+  const face = FACES.find(({ dx, dy }) => floor(lamp.x + dx, lamp.y + dy));
+  if (face === undefined) {
+    return null;
+  }
+  return {
+    x: lamp.x + 0.5 + face.dx * (0.5 + FACE_INSET),
+    y: lamp.y + 0.5 + face.dy * (0.5 + FACE_INSET),
+    facing: face.facing,
+  };
+}
+
+/** An emergency lamp's light: a dim glow all round where it hangs, and no beam. */
+export function emergencyLamp(mount: LampMount): Lamp {
+  return { x: mount.x, y: mount.y, glow: EMERGENCY_GLOW, beam: null };
+}
+
 /** The glow an object gives off on its own, `strength` deep in its middle. */
 export function objectGlowStops(strength: number): Stops {
   return [

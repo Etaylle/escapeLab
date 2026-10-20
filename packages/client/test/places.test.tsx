@@ -566,9 +566,11 @@ describe('the station frame', () => {
   it('says nothing about it where the whole crew presses, nor over a book', () => {
     const reactor: PuzzleView = {
       kind: 'button-sync',
+      style: 'button',
       youPressed: false,
       pressedCount: 1,
       requiredCount: 2,
+      here: 2,
       attempts: 0,
       lastResult: null,
       index: 4,
@@ -667,6 +669,7 @@ function justStarted(parts: Partial<PlayerView> = {}): PlayerView {
     palette: [],
     deadlineAt: now + 600_000,
     startedAt: now,
+    lights: { out: true, outAt: now },
     finishedAt: null,
     timeLimitSec: 600,
     currentPuzzleIndex: 0,

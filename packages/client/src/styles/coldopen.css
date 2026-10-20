@@ -1,0 +1,257 @@
+/* ══ the cold open: the lab with its power on, then the Notlicht's lever ═══
+ * Game.tsx's objective bar while the lab still has its power — the mission's
+ * name where the goal will be, NORMALBETRIEB where the clock will be — and
+ * the clock's start; LeverPanel.tsx, the main switch the whole crew throws.
+ */
+
+/* ── the objective bar with the power on ───────────────────────────────── */
+
+/* The mission's name in the warm white of the lit lab; the start room under it. */
+.stage-goal--power h1 {
+  color: #f1e4cf;
+  letter-spacing: 0.5px;
+}
+
+.stage-goal--power .stage-sub {
+  color: #c9b79b;
+}
+
+/* Where the clock will be: the plant's state, muted, its dot breathing. */
+.power-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 12px;
+  border: 1px solid #3a3528;
+  border-radius: 10px;
+  background: rgba(18, 16, 11, 0.82);
+  color: #b9ad98;
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 3px;
+}
+
+.power-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #86efac;
+  box-shadow: 0 0 8px rgba(134, 239, 172, 0.7);
+  animation: power-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes power-breathe {
+  50% {
+    opacity: 0.35;
+    box-shadow: 0 0 2px rgba(134, 239, 172, 0.3);
+  }
+}
+
+/* The clock starts: its digits flash red once. */
+.countdown.countdown--start {
+  animation: countdown-start 0.9s ease-out 1;
+}
+
+@keyframes countdown-start {
+  0%,
+  35% {
+    color: #fff;
+    background: var(--danger);
+    border-color: var(--danger);
+    text-shadow: 0 0 14px rgba(248, 113, 113, 0.9);
+  }
+}
+
+/* ── the main switch ───────────────────────────────────────────────────── */
+
+.lever {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 4px 0 6px;
+}
+
+.lever p {
+  margin: 0;
+}
+
+/* The cabinet's plate: black on safety yellow, riveted at either end. */
+.lever-plate {
+  position: relative;
+  max-width: 100%;
+  padding: 6px 22px;
+  border: 2px solid #17120a;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #f6c94a, #d9a520);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 2px 3px rgba(0, 0, 0, 0.7);
+  color: #17120a;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-align: center;
+}
+
+.lever-plate::before,
+.lever-plate::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #f4f6f8, #6e6a5f);
+}
+
+.lever-plate::before {
+  left: 7px;
+}
+
+.lever-plate::after {
+  right: 7px;
+}
+
+.lever-handles {
+  display: flex;
+  justify-content: center;
+  gap: 34px;
+}
+
+.lever-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.lever-unit .device-lamp {
+  width: 16px;
+  height: 16px;
+}
+
+/* The track a lever runs in: a dark slot let into the cabinet, AUS at its top, EIN at its foot. */
+.lever-slot {
+  position: relative;
+  width: 70px;
+  height: 156px;
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, transparent 44%, #020304 44% 56%, transparent 56%),
+    #090d11;
+  box-shadow:
+    inset 0 3px 10px rgba(0, 0, 0, 0.9),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.8),
+    0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.lever-mark {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 9px;
+}
+
+.lever-mark--on {
+  top: auto;
+  bottom: 6px;
+}
+
+/* The grip: a red T-bar on its rod, up at AUS; it drops to EIN once thrown. */
+.lever .lever-grip {
+  --drop: 0px;
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  display: block;
+  width: 88px;
+  height: 30px;
+  margin-left: -44px;
+  padding: 0;
+  border: none;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #8a3b2e 0%, #5b241b 55%, #3f1812 100%);
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, 0.18),
+    inset 0 -3px 4px rgba(0, 0, 0, 0.45),
+    0 6px 10px rgba(0, 0, 0, 0.7);
+  transform: translateY(var(--drop));
+  transition: transform 0.16s cubic-bezier(0.55, 0, 1, 0.45);
+  touch-action: manipulation;
+}
+
+/* The rod, from the grip down into the slot. */
+.lever .lever-grip::after {
+  content: '';
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  width: 10px;
+  height: 22px;
+  margin-left: -5px;
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(90deg, #4a5560, #c9d1d8 45%, #59636c);
+}
+
+/* Somebody stands at it: the grip lit, glowing amber. */
+.lever .lever-unit--lit .lever-grip {
+  background: linear-gradient(180deg, #ff9b6a 0%, #e4572e 50%, #a8321a 100%);
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, 0.4),
+    inset 0 -3px 4px rgba(0, 0, 0, 0.35),
+    0 0 18px rgba(255, 140, 70, 0.6),
+    0 6px 10px rgba(0, 0, 0, 0.7);
+}
+
+.lever .lever-unit--down .lever-grip {
+  --drop: 92px;
+}
+
+button.lever-grip:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+button.lever-grip:focus-visible {
+  outline: 2px solid #ffb547;
+  outline-offset: 5px;
+}
+
+/* Thrown: down at EIN, no longer to be pulled — and not greyed out either. */
+button.lever-grip:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+/* Every lever home: the slots glow where the levers rest. */
+.lever--thrown .lever-slot {
+  box-shadow:
+    inset 0 3px 10px rgba(0, 0, 0, 0.9),
+    inset 0 -14px 18px -8px rgba(255, 140, 70, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+/* A phone held sideways: as small as its clock (pwa.css). */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .power-status {
+    padding: 3px 8px;
+    font-size: 12px;
+    letter-spacing: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .power-dot,
+  .countdown.countdown--start {
+    animation: none;
+  }
+
+  .lever .lever-grip {
+    transition: none;
+  }
+}

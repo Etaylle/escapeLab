@@ -1,6 +1,7 @@
 import {
   canSee,
   operatorsOf,
+  patrollingDrones,
   platePressed,
   readersOf,
   shutDoors,
@@ -49,8 +50,9 @@ function headsDown(state: GameState): Set<string> {
  * lamps light by — and a cooldown so one sighting costs time exactly once.
  * Players heads-down at the open puzzle — working its station or reading its
  * rules — are not spotted: the console counts as cover, which keeps the
- * penalty fair. A drone with `activeAfterSolved` sleeps at its first waypoint
- * until the crew has solved that many puzzles: until then it neither moves,
+ * penalty fair. Every drone sleeps at its first waypoint while the lights
+ * are on, and one with `activeAfterSolved` until the crew has solved that
+ * many puzzles too (core's `patrollingDrones`): until then it neither moves,
  * nor sees, nor shows up. One with `frozenByPlate` stands still and sees
  * nothing while somebody holds that plate.
  */
@@ -178,7 +180,7 @@ export class DronePatrol {
   }
 
   private awake(state: GameState): MapDef['drones'] {
-    return this.map.drones.filter((drone) => drone.activeAfterSolved <= state.currentPuzzleIndex);
+    return patrollingDrones(this.map, state);
   }
 
   /** Awake and not held still by its plate: these move and see. */

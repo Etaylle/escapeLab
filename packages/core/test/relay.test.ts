@@ -93,7 +93,7 @@ const ctx = (at: number): PuzzleContext => ({
 });
 
 function viewsOf(def: RelayDef, state: RelayState): Record<string, RelayView> {
-  const viewCtx = { edgework, alarms: 0, crew: [] };
+  const viewCtx = { edgework, alarms: 0, crew: [], operators: [] };
   return Object.fromEntries(
     def.players.map((player) => [player.id, relayModule.view(def, state, player.id, viewCtx)]),
   );

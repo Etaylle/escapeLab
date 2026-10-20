@@ -4,6 +4,10 @@ import {
   CREW_GLOW_STOPS,
   DRONE_BEAM_STOPS,
   doorsShut,
+  EMERGENCY_GLOW,
+  EMERGENCY_STOPS,
+  emergencyLamp,
+  lampMount,
   lightClip,
   litTiles,
   objectGlowStops,
@@ -179,5 +183,50 @@ describe('the lamps’ gradients', () => {
       [0.55, 0.8 * 0.55],
       [1, 0],
     ]);
+  });
+});
+
+describe('emergency lamps — where they hang and what they light', () => {
+  it('hang a lamp on the floor in its tile’s middle', () => {
+    expect(lampMount(map, { x: 2, y: 2 })).toEqual({ x: 2.5, y: 2.5, facing: null });
+  });
+
+  it('hang a lamp on a wall on its face toward the floor, south first, just over the floor', () => {
+    // The north wall above (2,1): it shines south, into the room.
+    expect(lampMount(map, { x: 2, y: 0 })).toEqual({ x: 2.5, y: 1.05, facing: Math.PI / 2 });
+    // The west wall beside (1,2): it shines east.
+    expect(lampMount(map, { x: 0, y: 2 })).toEqual({ x: 1.05, y: 2.5, facing: 0 });
+  });
+
+  it('hang nowhere without floor beside the wall, nor off the map', () => {
+    expect(lampMount(map, { x: 0, y: 0 })).toBeNull();
+    expect(lampMount(map, { x: 12, y: 2 })).toBeNull();
+  });
+
+  it('light round where they hang, their own tile included, and nothing behind the wall', () => {
+    // Two cells either side of one wall: the lamp on it hangs on its east face.
+    const cells = { tiles: ['#####', '#.#.#', '#####'] };
+    const mount = lampMount(cells, { x: 2, y: 1 });
+    expect(mount).toEqual({ x: 3.05, y: 1.5, facing: 0 });
+    if (mount === null) {
+      return;
+    }
+    const lamp = emergencyLamp(mount);
+    expect(lamp).toEqual({ x: 3.05, y: 1.5, glow: EMERGENCY_GLOW, beam: null });
+    const lit = litTiles(lamp, sightFrom(cells, lamp, reachOf(lamp), new Set()));
+    expect(lit).toEqual(expect.arrayContaining(['2,1', '3,1']));
+    expect(lit).not.toContain('1,1');
+    const onFloor = emergencyLamp({ x: 2.5, y: 2.5, facing: null });
+    expect(litTiles(onFloor, sightFrom(map, onFloor, reachOf(onFloor), shut))).toContain('2,2');
+  });
+
+  it('glow dimmer than any lamp of the crew, out to nothing at their reach', () => {
+    for (const offset of OFFSETS) {
+      const crew = depthAt(CREW_GLOW_STOPS, offset);
+      expect(depthAt(EMERGENCY_STOPS, offset)).toBeLessThan(crew + 1e-9);
+    }
+    expect(depthAt(EMERGENCY_STOPS, 0)).toBeLessThan(0.6);
+    expect(EMERGENCY_STOPS.at(-1)).toEqual([1, 0]);
+    expect(EMERGENCY_GLOW).toBe(1.5);
   });
 });

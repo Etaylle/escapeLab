@@ -6,8 +6,9 @@ import { walkTo, type Walker } from './walk.js';
 
 /**
  * Blackout: the Flurschott (9,6) between the west and the east Flur opens
- * with station 2; the Maschinenraum door (4,7) while the Flur plate (7,6) is
+ * with station 3; the Maschinenraum door (4,7) while the Flur plate (7,6) is
  * held. Of its spawns, (6,5) lies in the west Flur and (3,2) in the Archiv.
+ * Its clock starts once the lights have gone out, `intro.lightsSec` in.
  */
 const blackout: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
@@ -102,7 +103,7 @@ describe('Room movement', () => {
     const { room, anna, ben } = started();
     walkTo(room, anna, BY_THE_SCHOTT.x, BY_THE_SCHOTT.y);
     const lastRun = runOf(anna);
-    vi.advanceTimersByTime(blackout.timeLimitSec * 1000 + 1);
+    vi.advanceTimersByTime(((blackout.intro?.lightsSec ?? 0) + blackout.timeLimitSec) * 1000 + 1);
     expect(lastView(anna).phase).toBe('lost');
 
     room.act(ben.playerId, { kind: 'set-ready', ready: true });

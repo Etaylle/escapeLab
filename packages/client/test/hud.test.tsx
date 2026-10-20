@@ -25,6 +25,7 @@ function hud(events: RunEvent[], onAir = false, parts: string | null = null): st
     startedAt: null,
     finishedAt: null,
     timeLimitSec: 600,
+    lights: { out: true, outAt: 0 },
     currentPuzzleIndex: 0,
     puzzleCount: 1,
     pausedFor: null,

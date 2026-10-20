@@ -30,6 +30,8 @@ import {
 
 const SEEDS = 300;
 const CREW = ['op', 'rd'];
+/** The operator stands at the station. */
+const OP = ['op'];
 const LEGENDS = ['kennung', 'einfach'] as const;
 
 /** The colors as the printed page names them. */
@@ -66,7 +68,7 @@ const ctx = (edgework: Edgework, alarms: number): PuzzleContext => ({
 const press = (color: SimonColor) => ({ kind: 'press', color }) as const;
 
 function operatorView(def: SimonDef, state: SimonState, edgework: Edgework, alarms: number) {
-  return simonModule.view(def, state, AT_STATION, { edgework, alarms, crew: CREW });
+  return simonModule.view(def, state, AT_STATION, { edgework, alarms, crew: CREW, operators: OP });
 }
 
 type TableBlock = Extract<ManualBlock, { kind: 'table' }>;
@@ -145,7 +147,7 @@ describe('simon stages', () => {
     expect(slip.penalty).not.toBeNull();
     expect(slip.solved).toBe(false);
     expect(slip.state).toMatchObject({ stage: 3, progress: 0, lastWrong: true });
-    const afterAlarm = { edgework: WITHOUT_VOWEL, alarms: 1, crew: CREW };
+    const afterAlarm = { edgework: WITHOUT_VOWEL, alarms: 1, crew: CREW, operators: OP };
     for (const viewer of [AT_STATION, AT_BOOK]) {
       const view = simonModule.view(def, slip.state, viewer, afterAlarm);
       expect(view).toMatchObject({ stage: 3, progress: 0, lastWrong: true, alarms: 1 });
@@ -250,9 +252,10 @@ function playWithSlips(seed: number, legend: SimonDef['legend']): boolean {
   let state = simonModule.init(def, rng, ctx(edgework, alarms));
   for (let moves = 0; moves < 200; moves++) {
     const operator = operatorView(def, state, edgework, alarms);
+    const viewCtx = { edgework, alarms, crew: CREW, operators: OP };
     const views: Perspectives<SimonView> = {
       operator,
-      reader: simonModule.view(def, state, AT_BOOK, { edgework, alarms, crew: CREW }),
+      reader: simonModule.view(def, state, AT_BOOK, viewCtx),
     };
     const [move, ...more] = simonModule.solve(def, views, edgework);
     const flashed = operator.flashes?.[operator.progress];

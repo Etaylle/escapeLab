@@ -45,7 +45,7 @@ import { playInstance } from './solveModule.js';
 const SEEDS = 300;
 const CREW = ['op', 'pt', 'rd'];
 const edgework = generateEdgework(mulberry32(1));
-const viewCtx = { edgework, alarms: 0, crew: CREW };
+const viewCtx = { edgework, alarms: 0, crew: CREW, operators: ['op', 'pt'] };
 
 function defOf(fields: Partial<SignalDef> = {}): SignalDef {
   return signalModule.defSchema.parse({

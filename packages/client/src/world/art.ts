@@ -587,6 +587,37 @@ const TEX_SIZE = 64;
 /** Height in px of the wall's lit top cap. */
 const WALL_CAP = 10;
 
+/** The colours the floor and the walls are made in. */
+interface TexturePalette {
+  floor: string;
+  /** the groove between two floor panels */
+  seam: string;
+  /** the light catching a panel's top and left edge */
+  edge: string;
+  /** a wall's face, top to bottom */
+  face: readonly [string, string];
+  /** a wall's lit top cap, top to bottom */
+  cap: readonly [string, string];
+}
+
+/** The lab in the dark: very dark blue-grey metal, made to be lit by lamps. */
+const DARK_PALETTE: TexturePalette = {
+  floor: '#0f151c',
+  seam: '#080b10',
+  edge: 'rgba(255, 255, 255, 0.035)',
+  face: ['#131a22', '#080b10'],
+  cap: ['#26303c', '#19212a'],
+};
+
+/** The lab with its power on: warm grey panels under the ceiling lights, the walls' caps lit. */
+const POWERED_PALETTE: TexturePalette = {
+  floor: '#4b463e',
+  seam: '#28241f',
+  edge: 'rgba(255, 244, 226, 0.08)',
+  face: ['#2f2b26', '#1b1916'],
+  cap: ['#6f685c', '#534d43'],
+};
+
 function createTextureCanvas(): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const canvas = document.createElement('canvas');
   canvas.width = TEX_SIZE;
@@ -629,14 +660,15 @@ function drawFloorPanel(
   y: number,
   size: number,
   rand: () => number,
+  palette: TexturePalette,
 ): void {
   const v = (rand() - 0.5) * 0.03;
   ctx.fillStyle = v >= 0 ? `rgba(255, 255, 255, ${v})` : `rgba(0, 0, 0, ${-2 * v})`;
   ctx.fillRect(x, y, size, size);
-  ctx.fillStyle = '#080b10';
+  ctx.fillStyle = palette.seam;
   ctx.fillRect(x, y, size, 1);
   ctx.fillRect(x, y, 1, size);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.035)';
+  ctx.fillStyle = palette.edge;
   ctx.fillRect(x + 1, y + 1, size - 1, 1);
   ctx.fillRect(x + 1, y + 1, 1, size - 1);
   ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
@@ -650,15 +682,19 @@ function drawFloorPanel(
   drawRivet(ctx, x + far, y + far);
 }
 
-/** 64x64 px tile texture for lab floor: very dark blue-grey panels, subtle seams/variation. */
-export function makeFloorTile(): HTMLCanvasElement {
+/**
+ * 64x64 px tile texture for lab floor: very dark blue-grey panels, subtle seams/variation —
+ * or, `powered`, the same panels in the warm grey of the lab with its lights on.
+ */
+export function makeFloorTile(powered = false): HTMLCanvasElement {
+  const palette = powered ? POWERED_PALETTE : DARK_PALETTE;
   const [canvas, ctx] = createTextureCanvas();
   const rand = seededRandom(0xf1004);
-  ctx.fillStyle = '#0f151c';
+  ctx.fillStyle = palette.floor;
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
   const half = TEX_SIZE / 2;
   for (let y = 0; y < TEX_SIZE; y += half) {
-    for (let x = 0; x < TEX_SIZE; x += half) drawFloorPanel(ctx, x, y, half, rand);
+    for (let x = 0; x < TEX_SIZE; x += half) drawFloorPanel(ctx, x, y, half, rand, palette);
   }
   addNoise(ctx, rand, 2.2);
   return canvas;
@@ -675,10 +711,10 @@ function drawBrushedStreaks(ctx: CanvasRenderingContext2D, rand: () => number): 
 }
 
 /** Lit top cap of the wall (the pseudo-3D hint) and the lip shadow below it. */
-function drawWallCap(ctx: CanvasRenderingContext2D): void {
+function drawWallCap(ctx: CanvasRenderingContext2D, palette: TexturePalette): void {
   const cap = ctx.createLinearGradient(0, 0, 0, WALL_CAP);
-  cap.addColorStop(0, '#26303c');
-  cap.addColorStop(1, '#19212a');
+  cap.addColorStop(0, palette.cap[0]);
+  cap.addColorStop(1, palette.cap[1]);
   ctx.fillStyle = cap;
   ctx.fillRect(0, 0, TEX_SIZE, WALL_CAP);
   ctx.fillStyle = 'rgba(255, 255, 255, 0.09)';
@@ -689,13 +725,17 @@ function drawWallCap(ctx: CanvasRenderingContext2D): void {
   ctx.fillRect(0, WALL_CAP + 1, TEX_SIZE, 2);
 }
 
-/** 64x64 px wall texture: darker metallic with a lighter top edge (pseudo-3D hint). */
-export function makeWallTile(): HTMLCanvasElement {
+/**
+ * 64x64 px wall texture: darker metallic with a lighter top edge (pseudo-3D hint) — or,
+ * `powered`, in the warm greys of the lab with its lights on, the cap catching the light.
+ */
+export function makeWallTile(powered = false): HTMLCanvasElement {
+  const palette = powered ? POWERED_PALETTE : DARK_PALETTE;
   const [canvas, ctx] = createTextureCanvas();
   const rand = seededRandom(0x3a115eed);
   const face = ctx.createLinearGradient(0, 0, 0, TEX_SIZE);
-  face.addColorStop(0, '#131a22');
-  face.addColorStop(1, '#080b10');
+  face.addColorStop(0, palette.face[0]);
+  face.addColorStop(1, palette.face[1]);
   ctx.fillStyle = face;
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
   drawBrushedStreaks(ctx, rand);
@@ -713,7 +753,7 @@ export function makeWallTile(): HTMLCanvasElement {
   // Dark foot where the wall meets the floor.
   ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
   ctx.fillRect(0, TEX_SIZE - 2, TEX_SIZE, 2);
-  drawWallCap(ctx);
+  drawWallCap(ctx, palette);
   addNoise(ctx, rand, 1.6);
   return canvas;
 }
@@ -981,6 +1021,83 @@ export function drawStation(ctx: CanvasRenderingContext2D, o: StationOpts): void
     drawStationMonitor(ctx, look);
     drawStationScreen(ctx, o.status, wave);
     if (o.console !== null) drawConsoleBadge(ctx, look, o.console);
+  } finally {
+    ctx.restore();
+  }
+}
+
+// ---- Main switch ---------------------------------------------------------------------
+
+export interface LeverBoxOpts {
+  status: StationStatus;
+  /** 0..1 looping pulse driven by the caller */
+  pulse: number;
+  /** how many levers it has: one for each member of the crew, two at least */
+  levers: number;
+}
+
+const LEVER_RED = '#b8402b';
+const LEVER_RED_LIT = '#ef6a45';
+const PLATE_YELLOW = '#d9a92e';
+
+/** One lever in its slot at `x`: up at AUS, or thrown down to EIN. */
+function drawLeverInSlot(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  down: boolean,
+  lit: boolean,
+): void {
+  ctx.fillStyle = '#07090c';
+  ctx.beginPath();
+  roundRectPath(ctx, x - 0.035, -0.27, 0.07, 0.36, 0.03);
+  ctx.fill();
+  const y = down ? 0.04 : -0.24;
+  ctx.fillStyle = '#9aa4ad';
+  ctx.fillRect(x - 0.016, y, 0.032, 0.07);
+  ctx.beginPath();
+  roundRectPath(ctx, x - 0.1, y - 0.04, 0.2, 0.075, 0.025);
+  ctx.fillStyle = lit ? LEVER_RED_LIT : LEVER_RED;
+  ctx.fill();
+  ctx.lineWidth = 0.018;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+  ctx.fillRect(x - 0.08, y - 0.032, 0.16, 0.012);
+}
+
+/** Anchor: TILE CENTER. A main switch on the wall: a steel cabinet with a yellow plate and a
+ * lever for each of the crew, side by side in their slots — up while it waits, thrown down once
+ * done; armed, it glows teal like every station that is up, its levers lit. */
+export function drawLeverBox(ctx: CanvasRenderingContext2D, o: LeverBoxOpts): void {
+  const look = STATION_LOOKS[o.status];
+  const wave = pulseWave(o.pulse);
+  const armed = o.status === 'armed';
+  ctx.save();
+  try {
+    softEllipse(ctx, 0, 0.3, 0.44, 0.12, SHADOW_RGB, 0.45, 'source-over');
+    drawStationGlow(ctx, o.status, wave);
+    ctx.beginPath();
+    roundRectPath(ctx, -0.38, -0.46, 0.76, 0.66, 0.05);
+    ctx.fillStyle = '#2a313a';
+    ctx.fill();
+    ctx.lineWidth = 0.025;
+    ctx.strokeStyle = PROP_EDGE;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.fillRect(-0.33, -0.445, 0.66, 0.012);
+    ctx.fillStyle = PLATE_YELLOW;
+    ctx.fillRect(-0.3, -0.4, 0.6, 0.07);
+    ctx.fillStyle = 'rgba(23, 18, 10, 0.75)';
+    for (let i = 0; i < 4; i++) ctx.fillRect(-0.24 + i * 0.13, -0.373, 0.09, 0.016);
+    const n = Math.max(2, o.levers);
+    for (let i = 0; i < n; i++) {
+      drawLeverInSlot(ctx, -0.22 + (0.44 * i) / (n - 1), o.status === 'done', armed);
+    }
+    ctx.globalAlpha *= armed ? 0.35 + 0.65 * wave : 0.85;
+    ctx.fillStyle = look.led;
+    ctx.beginPath();
+    addCircle(ctx, 0.3, 0.13, 0.025);
+    ctx.fill();
   } finally {
     ctx.restore();
   }
@@ -1894,6 +2011,72 @@ export function drawSign(ctx: CanvasRenderingContext2D, o: SignOpts): void {
     if (o.seen) drawSeenTick(ctx);
     const color = o.seen ? IDLE_LABEL : '#fcd34d';
     drawHaloText(ctx, o.label, 0, 0.36, (o.text ?? TILE_TEXT).label, color, 'top');
+  } finally {
+    ctx.restore();
+  }
+}
+
+// ---- Emergency lamp ------------------------------------------------------------------
+
+export interface EmergencyLampOpts {
+  /** how far it burns, 0 (the power still on: dark glass) to 1 */
+  glow: number;
+  /** on a wall, the way it shines in radians (0 east, π/2 south); null on the ceiling */
+  facing: number | null;
+}
+
+const LAMP_RED_RGB = '255, 52, 52';
+const LAMP_HOUSING = '#2a2f36';
+const LAMP_GLASS_DARK = '#4a1416';
+
+/** The lens: dark red glass, or burning red with a white-hot core. */
+function drawLampLens(ctx: CanvasRenderingContext2D, cy: number, r: number, glow: number): void {
+  ctx.beginPath();
+  ctx.ellipse(0, cy, r, r * 0.7, 0, 0, TAU);
+  ctx.fillStyle = glow > 0 ? `rgba(${LAMP_RED_RGB}, ${0.45 + 0.55 * glow})` : LAMP_GLASS_DARK;
+  ctx.fill();
+  ctx.lineWidth = 0.014;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+  if (glow > 0) {
+    softEllipse(ctx, 0, cy, r * 0.55, r * 0.4, '255, 214, 204', 0.8 * glow, 'lighter');
+    softEllipse(ctx, 0, cy, r * 3, r * 2.4, LAMP_RED_RGB, 0.35 * glow, 'lighter');
+  }
+}
+
+/**
+ * Anchor: WHERE ITS LIGHT COMES FROM (light.ts `lampMount`). A small emergency lamp: on a
+ * wall, a housing on the wall's face with its lens toward the floor; on the ceiling, a round
+ * housing seen from below with the lens in its middle. Dark red glass while the power is on,
+ * burning red once the lights are out; the light it throws is the light pass's.
+ */
+export function drawEmergencyLamp(ctx: CanvasRenderingContext2D, o: EmergencyLampOpts): void {
+  const glow = clamp01(o.glow);
+  ctx.save();
+  try {
+    if (o.facing === null) {
+      ctx.beginPath();
+      addCircle(ctx, 0, 0, 0.17);
+      ctx.fillStyle = LAMP_HOUSING;
+      ctx.fill();
+      ctx.lineWidth = 0.02;
+      ctx.strokeStyle = PROP_EDGE;
+      ctx.stroke();
+      drawLampLens(ctx, 0, 0.11, glow);
+      return;
+    }
+    // Local +y points the way it shines; the housing sits on the wall behind the anchor.
+    ctx.rotate(o.facing - Math.PI / 2);
+    ctx.beginPath();
+    roundRectPath(ctx, -0.18, -0.22, 0.36, 0.17, 0.04);
+    ctx.fillStyle = LAMP_HOUSING;
+    ctx.fill();
+    ctx.lineWidth = 0.02;
+    ctx.strokeStyle = PROP_EDGE;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.fillRect(-0.15, -0.205, 0.3, 0.012);
+    drawLampLens(ctx, -0.06, 0.12, glow);
   } finally {
     ctx.restore();
   }

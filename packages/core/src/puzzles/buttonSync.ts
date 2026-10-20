@@ -14,6 +14,8 @@ const defSchema = z.strictObject({
   windowMs: z.number().int().positive().optional(),
   /** carried like on every module, but no rule here charges it: a missed window costs an attempt */
   penaltySec: z.number().int().positive().default(20),
+  /** what the panel looks like: one mushroom button, or a main switch with a lever for each */
+  style: z.enum(['button', 'lever']).default('button'),
 });
 export type ButtonSyncDef = z.infer<typeof defSchema>;
 
@@ -31,10 +33,14 @@ export type ButtonSyncInput = z.infer<typeof inputSchema>;
 
 export interface ButtonSyncView {
   kind: 'button-sync';
+  /** the panel's look, from the def */
+  style: ButtonSyncDef['style'];
   youPressed: boolean;
   pressedCount: number;
   /** every connected player has to press */
   requiredCount: number;
+  /** how many of them stand at the station right now, the viewer among them where they do */
+  here: number;
   attempts: number;
   lastResult: 'missed-window' | null;
 }
@@ -131,12 +137,14 @@ export const buttonSyncModule: PuzzleModule<
     return { ...press(def, state, playerId, ctx.at, ctx.crew), penalty: null };
   },
 
-  view(_def, state, viewer, ctx) {
+  view(def, state, viewer, ctx) {
     return {
       kind: 'button-sync',
+      style: def.style,
       youPressed: viewer.playerId !== null && state.pressed[viewer.playerId] !== undefined,
       pressedCount: Object.keys(state.pressed).length,
       requiredCount: ctx.crew.length,
+      here: ctx.operators.filter((id) => ctx.crew.includes(id)).length,
       attempts: state.attempts,
       lastResult: state.lastResult,
     };

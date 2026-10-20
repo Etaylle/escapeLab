@@ -12,8 +12,11 @@ import { walkTo } from './walk.js';
 
 /**
  * Blackout: spawns in the Archiv (3,2), the Maschinenraum (3,10) and the Flur
- * (6,5); console A of the Notstrom-Kasten stands in the Maschinenraum at
- * (1,9). Seeds 1 and 28 both start Anna there and Ben in the Archiv.
+ * (6,5); the lights go out three seconds in, and the crew turns the lever of
+ * the Notlicht (7,5) above the Flur plate (7,6), which holds the
+ * Maschinenraum door; console A of the Notstrom-Kasten stands in the
+ * Maschinenraum at (1,9). Seeds 1 and 28 both start Anna there and Ben in the
+ * Archiv.
  */
 const blackout: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
@@ -56,13 +59,21 @@ function startedIn(manager: RoomManager, seed: number | null) {
  * What the seed of a room's first run decided, as the room hands it out:
  * where Anna and Ben start, where the audience sees the sources lie, the
  * edgework, and the fuse box Anna switches on beside console A, as the
- * audience sees all of it.
+ * audience sees all of it. Before that the lights go out and the two turn
+ * the lever: Ben from the plate beside it, which lets Anna out to it and back.
  */
 function firstRunOf(manager: RoomManager, seed: number) {
   const { room, anna, ben } = startedIn(manager, seed);
   const audience = collector();
   room.attachSpectator(audience.listen);
   const start = lastSpectatorView(audience.messages);
+  vi.advanceTimersByTime((blackout.intro?.lightsSec ?? 0) * 1000);
+  walkTo(room, ben, 7.5, 6.5);
+  walkTo(room, anna, 7.5, 5.5);
+  room.act(anna.playerId, { kind: 'interact' });
+  for (const player of [anna, ben]) {
+    room.act(player.playerId, { kind: 'puzzle-input', input: { press: true } });
+  }
   walkTo(room, anna, 2.5, 9.5);
   room.act(anna.playerId, { kind: 'interact' });
   const box = lastSpectatorView(audience.messages).puzzle;

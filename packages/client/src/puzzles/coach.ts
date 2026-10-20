@@ -23,6 +23,10 @@ type Line = string | Readonly<Record<Pointer, string>>;
 /** Every device's line, by device: a module, or at a station with two consoles a console's part. */
 const LINES = {
   'button-sync': 'Alle drücken zugleich — ein Druck allein verfällt.',
+  lever: {
+    touch: 'Beide Hebel gleichzeitig antippen, wenn der Partner da ist.',
+    mouse: 'Beide Hebel gleichzeitig: E drücken, wenn der Partner da ist.',
+  },
   wiring: {
     touch: 'Ein Tipp auf ein Kabel trennt es sofort.',
     mouse: 'Ein Klick auf ein Kabel trennt es sofort.',
@@ -49,12 +53,15 @@ const LINES = {
 type Device = keyof typeof LINES;
 
 /**
- * The device in front of the player: the module, or at a station with two
- * consoles this console's part. None for the relay, which is no station,
- * nor at a console nobody stands at.
+ * The device in front of the player: the module — a sync station drawn as
+ * a main switch is one of its own — or at a station with two consoles this
+ * console's part. None for the relay, which is no station, nor at a console
+ * nobody stands at.
  */
 function deviceOf(puzzle: PuzzleView): Device | null {
   switch (puzzle.kind) {
+    case 'button-sync':
+      return puzzle.style === 'lever' ? 'lever' : 'button-sync';
     case 'circuit':
       return puzzle.role === null ? null : `circuit-${puzzle.role}`;
     case 'signal':

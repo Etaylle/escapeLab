@@ -20,6 +20,9 @@ import {
 const coord = z.number().int().nonnegative();
 const tile = z.object({ x: coord, y: coord });
 
+/** How many emergency lamps a map may have: each is a light the clients draw on every frame. */
+export const MAX_LAMPS = 16;
+
 export const MANUAL_KINDS = [
   'book',
   'terminal',
@@ -133,8 +136,19 @@ export const mapDefSchema = z.object({
       required: z.number().int().positive().optional(),
       /** valves: two at least, each manned by a different player */
       panels: z.array(z.object({ id: z.string().min(1), x: coord, y: coord })).default([]),
+      /**
+       * puzzles the crew must have solved before emergencies start — until
+       * then it may still be locked in its separate starting rooms; with as
+       * many as the mission has, none ever comes
+       */
+      afterSolved: z.number().int().nonnegative().default(2),
     })
     .optional(),
+  /**
+   * Emergency lamps, on the floor or on a wall beside the floor: once the
+   * lights are out, each glows red. Up to MAX_LAMPS.
+   */
+  lamps: z.array(tile).max(MAX_LAMPS).default([]),
   /**
    * Objects that have to be carried across the lab by hand. A station whose
    * puzzle is named in `requiredFor` stays inert until its item arrives; a
@@ -203,7 +217,13 @@ export const missionSchema = z
      * for no limit; left out, `scaleMission` sets it from the difficulty
      */
     maxAlarms: z.number().int().positive().nullable().optional(),
-    /** mission control's lines for the start of the run and the unlocked exit */
+    /**
+     * The run opens with the power on: the lab lit, the clock standing still
+     * and no station armed, until the lights fail `lightsSec` seconds in.
+     * Left out, the lights are out from the start.
+     */
+    intro: z.object({ lightsSec: z.number().min(1).max(10) }).optional(),
+    /** mission control's lines for the moment the clock starts and for the unlocked exit */
     radio: z
       .object({
         start: z.string().min(1).optional(),
@@ -273,6 +293,7 @@ function validateMap(mission: MissionParts, ctx: z.RefinementCtx): void {
   checkSabotage(check, mission.players.min);
   checkItems(check);
   checkDrones(check, mission.puzzles.length);
+  checkLamps(check);
   checkLights(check, stations);
   checkManuals(check, stations);
   checkSpots(check);
@@ -484,6 +505,28 @@ function checkFlightPath({ issue, floor }: MapCheck, drone: MapDef['drones'][num
         break;
       }
     }
+  }
+}
+
+/**
+ * Every emergency lamp hangs on the floor or on a wall with floor right
+ * beside it, where its light can fall; no two share a tile.
+ */
+function checkLamps({ map, issue, floor }: MapCheck): void {
+  const hung = new Set<string>();
+  for (const { x, y } of map.lamps) {
+    const beside = [floor(x, y - 1), floor(x, y + 1), floor(x - 1, y), floor(x + 1, y)];
+    const onWall = map.tiles[y]?.charAt(x) === '#';
+    if (!floor(x, y) && !(onWall && beside.some(Boolean))) {
+      issue(
+        `map: the lamp at ${x},${y} lights nothing — hang it on the floor or on a wall ` +
+          'beside the floor',
+      );
+    }
+    if (hung.has(tileKey(x, y))) {
+      issue(`map: two lamps hang at ${x},${y}`);
+    }
+    hung.add(tileKey(x, y));
   }
 }
 

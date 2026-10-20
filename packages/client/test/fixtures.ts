@@ -12,6 +12,7 @@ export function mapWith(parts: Partial<MapView>): MapView {
     stations: [],
     manuals: [],
     edgeworkSign: null,
+    lamps: [],
     labels: [],
     litRooms: [],
     exit: null,

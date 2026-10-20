@@ -112,9 +112,10 @@ function apply(state: ButtonState, kind: ButtonInput['kind'], lab: Edgework, rem
 
 /** The button seen from the station and from the book. */
 function viewsOf(state: ButtonState, edgework: Edgework): Perspectives<ButtonView> {
+  const ctx = { edgework, alarms: 0, crew: CREW, operators: ['op'] };
   return {
-    operator: buttonModule.view(def, state, AT_STATION, { edgework, alarms: 0, crew: CREW }),
-    reader: buttonModule.view(def, state, AT_BOOK, { edgework, alarms: 0, crew: CREW }),
+    operator: buttonModule.view(def, state, AT_STATION, ctx),
+    reader: buttonModule.view(def, state, AT_BOOK, ctx),
   };
 }
 
@@ -345,7 +346,7 @@ describe('button: inputs, views and solver', () => {
     const edgework = lab(0);
     const idle = button('gelb', 'START', 'weiß');
     const hidden = { colour: null, label: null, strip: null, lastResult: null };
-    const ctxView = { edgework, alarms: 0, crew: CREW };
+    const ctxView = { edgework, alarms: 0, crew: CREW, operators: ['op'] };
     expect(viewsOf(idle, edgework)).toEqual({
       operator: { kind: 'button', holding: false, ...hidden, colour: 'gelb', label: 'START' },
       reader: { kind: 'button', holding: false, ...hidden },

@@ -5,7 +5,16 @@ import { CREW_COLORS, type Credits, type GameState, type Phase, type RunEvent } 
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
 import type { ConsoleId, ManualSection, Viewer, ViewContext } from './puzzles/module.js';
 import { relayDefFor, relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
-import { backupsOf, consoleOf, doorOpen, platePressed, readersOf, sourceOpen } from './map.js';
+import {
+  backupsOf,
+  consoleOf,
+  doorOpen,
+  lightsAreOut,
+  operatorsOf,
+  platePressed,
+  readersOf,
+  sourceOpen,
+} from './map.js';
 
 /**
  * What a single player is allowed to see. Asymmetric information is enforced
@@ -43,6 +52,8 @@ export interface PlayerView {
   startedAt: number | null;
   finishedAt: number | null;
   timeLimitSec: number;
+  /** whether the lights are out, and since when (epoch ms); see `Lights` */
+  lights: Lights;
   /** solved puzzles so far (== index of the current one); independent of station activation */
   currentPuzzleIndex: number;
   puzzleCount: number;
@@ -82,6 +93,17 @@ export interface PlayerView {
    * gives every instance away.
    */
   seed?: { room: number; run: number | null };
+}
+
+/**
+ * The lab's power. A mission with an intro starts with it on — lit, the
+ * clock standing still, no station armed — until the lights fail; one
+ * without is out from the start. Out stays out for the rest of the run.
+ */
+export interface Lights {
+  out: boolean;
+  /** epoch ms the lights went out; null while they are on */
+  outAt: number | null;
 }
 
 export interface PlayerPresence {
@@ -162,6 +184,8 @@ export interface MapView {
     status: 'done' | 'armed' | 'locked';
     /** which console the spot is; left out where the station has one */
     console?: ConsoleId;
+    /** a main switch with a lever for each of the crew, not a console; left out for a console */
+    look?: 'lever';
   }[];
   /**
    * the manual objects the crew has come across so far (the audience sees
@@ -182,6 +206,8 @@ export interface MapView {
   }[];
   /** the wall sign with the Laborkennung; null on a map without one */
   edgeworkSign: { x: number; y: number } | null;
+  /** the emergency lamps, on the floor or on a wall beside it; they glow once the lights are out */
+  lamps: { x: number; y: number }[];
   labels: { text: string; x: number; y: number }[];
   /** labels of the rooms whose lights the solved stations have switched on, first lit first */
   litRooms: string[];
@@ -259,8 +285,11 @@ function storyText(state: GameState): string {
   }
 }
 
-/** Views are rebuilt on every change; this is what a module's view may read. */
-function viewContext(state: GameState): ViewContext {
+/**
+ * Views are rebuilt on every change; this is what a module's view may read
+ * — about the open station `puzzleId`, or about none for an emergency.
+ */
+function viewContext(state: GameState, puzzleId: string | null): ViewContext {
   if (state.edgework === null) {
     throw new Error('view: this run has no edgework — was start-mission skipped?');
   }
@@ -268,7 +297,13 @@ function viewContext(state: GameState): ViewContext {
     edgework: state.edgework,
     alarms: state.penaltySeq,
     crew: state.players.filter((p) => p.connected).map((p) => p.id),
+    operators: puzzleId === null ? [] : operatorsOf(state, puzzleId),
   };
+}
+
+/** The lab's power as every viewer sees it. */
+function lightsOf(state: GameState): Lights {
+  return { out: state.lightsOutAt !== null, outAt: state.lightsOutAt };
 }
 
 /** The manual objects `playerId` stands at, in map order. */
@@ -359,7 +394,7 @@ function puzzleViewFor(state: GameState, playerId: string | null): PuzzleView | 
   const puzzleModule = moduleFor(def.type);
   const viewer = viewerOf(state, def.id, playerId);
   return {
-    ...puzzleModule.view(def, state.puzzleState, viewer, viewContext(state)),
+    ...puzzleModule.view(def, state.puzzleState, viewer, viewContext(state, def.id)),
     index: state.currentPuzzleIndex,
     total: state.mission.puzzles.length,
     title: def.title,
@@ -412,7 +447,7 @@ function relayViewFor(
     return null;
   }
   const def = relayDefFor(state.players, sabotage);
-  return { def, view: relayModule.view(def, emergency, playerId, viewContext(state)) };
+  return { def, view: relayModule.view(def, emergency, playerId, viewContext(state, null)) };
 }
 
 /** Relay mode adds the player's console and the printed drill to the sabotage view. */
@@ -427,18 +462,27 @@ function relayPartFor(
 /** Who a map view is for: a player, or the audience (null), which sees every manual object. */
 type MapViewer = string | null;
 
+/** A station's state on the map: solved, up now — once the lights are out — or still to come. */
+function stationStatus(state: GameState, index: number): MapView['stations'][number]['status'] {
+  if (index < state.currentPuzzleIndex) {
+    return 'done';
+  }
+  return index === state.currentPuzzleIndex && lightsAreOut(state) ? 'armed' : 'locked';
+}
+
 function stationsOnMap(state: GameState): MapView['stations'] {
   return state.mission.map.stations.map((s) => {
     const index = state.mission.puzzles.findIndex((p) => p.id === s.puzzleId);
-    const status =
-      index < state.currentPuzzleIndex ? 'done' : index === state.currentPuzzleIndex ? 'armed' : 'locked';
+    const def = state.mission.puzzles[index];
+    const lever = def?.type === 'button-sync' && def.style === 'lever';
     return {
       puzzleId: s.puzzleId,
       x: s.x,
       y: s.y,
-      title: state.mission.puzzles[index]?.title ?? s.puzzleId,
-      status,
+      title: def?.title ?? s.puzzleId,
+      status: stationStatus(state, index),
       ...(s.console === undefined ? {} : { console: s.console }),
+      ...(lever ? { look: 'lever' as const } : {}),
     };
   });
 }
@@ -521,6 +565,7 @@ function mapViewFor(state: GameState, viewer: MapViewer): MapView | null {
     stations: stationsOnMap(state),
     manuals: manualsOnMap(state, viewer),
     edgeworkSign: map.edgeworkSign === undefined ? null : { ...map.edgeworkSign },
+    lamps: map.lamps.map((lamp) => ({ x: lamp.x, y: lamp.y })),
     labels: map.labels.map((l) => ({ text: l.text, x: l.x, y: l.y })),
     litRooms: litRoomsOf(state),
     exit:
@@ -565,6 +610,8 @@ export interface SpectatorView {
   startedAt: number | null;
   finishedAt: number | null;
   timeLimitSec: number;
+  /** the lab's power, as the players see it */
+  lights: Lights;
   currentPuzzleIndex: number;
   puzzleCount: number;
   penaltySeq: number;
@@ -606,6 +653,7 @@ export function viewForSpectator(state: GameState): SpectatorView {
     startedAt: state.startedAt,
     finishedAt: state.finishedAt,
     timeLimitSec: state.mission.timeLimitSec,
+    lights: lightsOf(state),
     currentPuzzleIndex: state.currentPuzzleIndex,
     puzzleCount: state.mission.puzzles.length,
     penaltySeq: state.penaltySeq,
@@ -676,6 +724,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     startedAt: state.startedAt,
     finishedAt: state.finishedAt,
     timeLimitSec: state.mission.timeLimitSec,
+    lights: lightsOf(state),
     currentPuzzleIndex: state.currentPuzzleIndex,
     puzzleCount: state.mission.puzzles.length,
     pausedFor:

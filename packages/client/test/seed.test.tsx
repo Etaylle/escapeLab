@@ -22,6 +22,7 @@ function lostRun(parts: Partial<PlayerView> = {}): PlayerView {
     palette: [],
     deadlineAt: 481_000,
     startedAt: 1_000,
+    lights: { out: true, outAt: 1_000 },
     finishedAt: 481_000,
     timeLimitSec: 480,
     currentPuzzleIndex: 0,

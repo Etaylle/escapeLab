@@ -12,6 +12,7 @@ import { airIcon, bannerFrom, noticeMs, radioNews, withNews, type Notice } from 
 import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { play } from '../sounds.js';
 import { radioChirp } from '../world/audio.js';
+import { opensLit, REVEAL_MS, useDarkSince, useRevealed } from '../world/coldOpen.js';
 import { consoleName } from '../world/consoles.js';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
 import { toBring } from '../world/markers.js';
@@ -126,11 +127,29 @@ function RelayAlert({
   );
 }
 
-function Countdown({ deadlineAt }: { deadlineAt: number }) {
+/**
+ * The mission clock. Until `flashUntil` (epoch ms) — where it has just
+ * started on this screen — its digits flash red, once.
+ */
+function Countdown({ deadlineAt, flashUntil }: { deadlineAt: number; flashUntil: number | null }) {
   const now = useNow(200);
   const left = deadlineAt - now;
   const stage = left < 10_000 ? 'final' : left < 60_000 ? 'critical' : '';
-  return <div className={`countdown ${stage}`}>{formatRemaining(deadlineAt, now)}</div>;
+  const start = flashUntil !== null && now < flashUntil ? ' countdown--start' : '';
+  return <div className={`countdown ${stage}${start}`}>{formatRemaining(deadlineAt, now)}</div>;
+}
+
+/** How long the clock's digits flash red as it starts: its animation in coldopen.css. */
+const START_FLASH_MS = 900;
+
+/** Where the clock will be while the lab still has its power: the plant's state, a dot. */
+export function PowerStatus() {
+  return (
+    <div className="power-status" role="status">
+      <span className="power-dot" aria-hidden="true" />
+      NORMALBETRIEB
+    </div>
+  );
 }
 
 /**
@@ -249,14 +268,25 @@ function useFeedback(view: PlayerView): { shaking: boolean; alarmVisible: boolea
 }
 
 /**
+ * From when the objective bar may carry a note that the sign was read and a
+ * line on the air, epoch ms; null for not yet. After the briefing, or in a
+ * run that opens with the power on — which has no briefing — the note at
+ * once and the lines from the click of the cold open on.
+ */
+export interface NoticeGates {
+  sign: number;
+  line: number | null;
+}
+
+/**
  * What the objective bar carries under the goal right now, one notice at a
  * time so they never stack: the lines on the air as they come in, each with
  * a chirp (see `withNews` for a fresh batch), and the note once this player
- * has walked up to the Laborkennung. Nothing shows while the briefing still
- * covers the screen. A player who spawns at the sign gets the note too; one
- * who reconnects later does not, they read it before.
+ * has walked up to the Laborkennung. Nothing shows before its gate opens. A
+ * player who spawns at the sign gets the note too; one who reconnects later
+ * does not, they read it before.
  */
-function useNotices(view: PlayerView): Notice | null {
+function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
   const seen = useRef(0);
   const [queue, setQueue] = useState<Notice[]>([]);
   const [shown, setShown] = useState<Notice | null>(null);
@@ -281,12 +311,13 @@ function useNotices(view: PlayerView): Notice | null {
   }, [signSeen]);
 
   const next = queue[0] ?? null;
+  const gate = next === null ? null : next.kind === 'sign' ? gates.sign : gates.line;
   useEffect(() => {
-    if (next === null) {
+    if (next === null || gate === null) {
       setShown(null);
       return undefined;
     }
-    const wait = Math.max(0, briefingEnds - Date.now());
+    const wait = Math.max(0, gate - Date.now());
     const up = noticeMs(next, window.matchMedia('(pointer: coarse)').matches);
     const on = setTimeout(() => {
       if (next.kind === 'line') {
@@ -299,9 +330,59 @@ function useNotices(view: PlayerView): Notice | null {
       clearTimeout(on);
       clearTimeout(off);
     };
-  }, [next, briefingEnds]);
+  }, [next, gate]);
 
   return shown;
+}
+
+/** How long a main switch thrown home stays in view: its levers drop, then it closes itself. */
+const LEVER_CLOSE_MS = 600;
+
+/**
+ * The main switch `last` showed, thrown home: every lever down — where the
+ * panel this player had open was a main switch and the crew has solved it
+ * by now (`solved` stations); null for any other panel, and for one only
+ * closed or walked away from.
+ */
+export function droppedLever(last: PuzzleView, solved: number): PuzzleView | null {
+  if (last.kind !== 'button-sync' || last.style !== 'lever' || solved <= last.index) {
+    return null;
+  }
+  return { ...last, youPressed: true, pressedCount: last.requiredCount };
+}
+
+/**
+ * The open station's panel — and for LEVER_CLOSE_MS after a main switch was
+ * thrown home under this player's hands, that switch with every lever down.
+ * The solve takes the station off the map at once, so the drop is shown
+ * from the last view of it.
+ */
+function useLeverDrop(station: PuzzleView | null, solved: number): PuzzleView | null {
+  const kept = useRef<{ last: PuzzleView | null; drop: PuzzleView | null; until: number }>({
+    last: null,
+    drop: null,
+    until: 0,
+  });
+  const now = Date.now();
+  const k = kept.current;
+  if (station !== null) {
+    k.last = station;
+    k.drop = null;
+  } else if (k.last !== null) {
+    k.drop = droppedLever(k.last, solved);
+    k.last = null;
+    k.until = now + LEVER_CLOSE_MS;
+  }
+  const [, setTick] = useState(0);
+  const until = k.drop === null ? null : k.until;
+  useEffect(() => {
+    if (until === null) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setTick((t) => t + 1), Math.max(0, until - Date.now()));
+    return () => clearTimeout(timer);
+  }, [until]);
+  return station ?? (k.drop !== null && now < k.until ? k.drop : null);
 }
 
 /** What this player has open over the world. */
@@ -449,6 +530,179 @@ function useEscape(onEscape: () => void): void {
   }, []);
 }
 
+/** The cold open (world/coldOpen.ts) as this screen lives it. */
+export interface ColdOpen {
+  /** when the lights went out on this screen; null while the power is on */
+  darkSince: number | null;
+  /** the click has come: the clock runs and the goal is up */
+  dark: boolean;
+  /** this run opened with the power on: no briefing covers it */
+  intro: boolean;
+  /**
+   * until when the clock's digits flash as it starts, epoch ms: where this
+   * screen showed the power on this run; null where it landed in the dark
+   */
+  flashUntil: number | null;
+  gates: NoticeGates;
+}
+
+function useColdOpen(view: PlayerView): ColdOpen {
+  const darkSince = useDarkSince(view.lights, view.startedAt);
+  const dark = useRevealed(darkSince);
+  const intro = opensLit(view.lights, view.startedAt);
+  const saw = useRef<number | null>(null);
+  if (!dark) {
+    saw.current = view.startedAt;
+  }
+  const briefingEnds = (view.startedAt ?? 0) + BRIEFING_MS;
+  const gates = intro
+    ? { sign: view.startedAt ?? 0, line: darkSince === null ? null : darkSince + REVEAL_MS }
+    : { sign: briefingEnds, line: briefingEnds };
+  const sawPower = saw.current === view.startedAt && darkSince !== null;
+  const flashUntil = sawPower ? darkSince + REVEAL_MS + START_FLASH_MS : null;
+  return { darkSince, dark, intro, flashUntil, gates };
+}
+
+/** The goal line: the station up, the way out, what the crew still has to bring. */
+interface Goal {
+  title: string;
+  exitCall: boolean;
+  missing: string | null;
+}
+
+function goalOf(view: PlayerView, map: MapView): Goal {
+  const armedTitle = map.stations.find((s) => s.status === 'armed')?.title ?? null;
+  const escaping = map.exit?.open === true;
+  // What the station in front of the crew lacks, and what a later one will — hands are
+  // free to carry it now.
+  const parts = toBring(map);
+  const forNow = parts.filter(
+    (i) => i.requiredForTitle === null || i.requiredForTitle === armedTitle,
+  );
+  const forLater = parts.filter((i) => !forNow.includes(i));
+  const errands = [
+    forNow.length === 0 ? null : `${forNow.map((i) => i.label).join(', ')} fehlt noch`,
+    forLater.length === 0 ? null : `${forLater.map((i) => i.label).join(', ')} mitnehmen`,
+  ].filter((line): line is string => line !== null);
+  return {
+    title:
+      view.puzzle !== null
+        ? view.puzzle.title
+        : escaping
+          ? 'NOTAUSGANG — alle raus, JETZT!'
+          : (armedTitle ?? 'Alle Stationen erledigt'),
+    exitCall: view.puzzle === null && escaping,
+    missing: escaping || errands.length === 0 ? null : errands.join(' · '),
+  };
+}
+
+/**
+ * While the lab still has its power: the mission's name where the goal will
+ * be, and where this player starts.
+ */
+function PowerGoal({ view, map }: { view: PlayerView; map: MapView }) {
+  const room = startRoom(map);
+  return (
+    <div className="stage-goal stage-goal--power">
+      <h1>{view.missionTitle}</h1>
+      {room !== null && <span className="stage-sub">Du startest im {room}</span>}
+    </div>
+  );
+}
+
+/** The run's progress and what to do now: a LED a station, the goal line under it. */
+function StageGoal({ view, goal }: { view: PlayerView; goal: Goal }) {
+  return (
+    <div className="stage-goal">
+      <div
+        className="led-strip"
+        aria-label={`Station ${view.currentPuzzleIndex + 1} von ${view.puzzleCount}`}
+      >
+        {Array.from({ length: view.puzzleCount }, (_, i) => (
+          <span
+            key={i}
+            className={`led ${i < view.currentPuzzleIndex ? 'led-done' : ''} ${
+              i === view.currentPuzzleIndex ? 'led-active' : ''
+            }`}
+          />
+        ))}
+      </div>
+      <h1>
+        {goal.exitCall && (
+          <>
+            <Icon name="exit" />{' '}
+          </>
+        )}
+        {goal.title}
+      </h1>
+      {goal.missing !== null && <span className="stage-sub">{goal.missing}</span>}
+    </div>
+  );
+}
+
+/**
+ * The objective bar over the world: the goal and the clock — while the lab
+ * still has its power, its name and NORMALBETRIEB instead — then whatever
+ * is on the air, the emergency and the alarm.
+ */
+export function StageTop({
+  view,
+  map,
+  coldOpen,
+  notice,
+  alarmVisible,
+}: {
+  view: PlayerView;
+  map: MapView;
+  coldOpen: ColdOpen;
+  notice: Notice | null;
+  alarmVisible: boolean;
+}) {
+  const relay = map.sabotage?.relay;
+  return (
+    <div className="stage-top">
+      {coldOpen.dark ? (
+        <StageGoal view={view} goal={goalOf(view, map)} />
+      ) : (
+        <PowerGoal view={view} map={map} />
+      )}
+      <div className="stage-clock">
+        {!coldOpen.dark ? (
+          <PowerStatus />
+        ) : (
+          view.deadlineAt !== null && (
+            <Countdown deadlineAt={view.deadlineAt} flashUntil={coldOpen.flashUntil} />
+          )
+        )}
+        <AlarmMarks alarms={view.alarms} />
+      </div>
+      {notice?.kind === 'line' && (
+        <div
+          key={`${notice.event.at}-${notice.event.label}`}
+          className="radio-banner"
+          role="status"
+        >
+          <span className="radio-banner-from">
+            <Icon name={airIcon(notice.event)} /> {bannerFrom(notice.event)}
+          </span>{' '}
+          — {notice.event.label}
+        </div>
+      )}
+      {notice?.kind === 'sign' && (
+        <div className="toast" role="status">
+          ✓ Laborkennung notiert
+        </div>
+      )}
+      {relay === undefined && <SabotageAlert sabotage={map.sabotage} />}
+      {alarmVisible && view.lastPenaltySec !== null && (
+        <div key={view.penaltySeq} className="alarm" role="alert">
+          <Icon name="siren" /> ALARM — Fehlversuch! −{view.lastPenaltySec} Sekunden
+        </div>
+      )}
+    </div>
+  );
+}
+
 // --- screen ------------------------------------------------------------------
 
 export function GameScreen({
@@ -461,8 +715,10 @@ export function GameScreen({
   send,
 }: Props) {
   const { shaking, alarmVisible, stamp } = useFeedback(view);
-  const notice = useNotices(view);
+  const coldOpen = useColdOpen(view);
+  const notice = useNotices(view, coldOpen.gates);
   const open = useOpened(view);
+  const station = useLeverDrop(open.station, view.currentPuzzleIndex);
   const notes = useNotes(roomCode, view.you.id);
   const closeModal = (): void => open.set({ operating: false, readingId: null });
   useKeys(['n'], open.toggleNotes);
@@ -480,29 +736,12 @@ export function GameScreen({
     return <p className="muted">Lade Mission …</p>;
   }
   const relay = map.sabotage?.relay;
-  const armedTitle = map.stations.find((s) => s.status === 'armed')?.title ?? null;
-  const escaping = map.exit?.open === true;
-  // What the station in front of the crew lacks, and what a later one will — hands are free to carry it now.
-  const parts = toBring(map);
-  const forNow = parts.filter((i) => i.requiredForTitle === null || i.requiredForTitle === armedTitle);
-  const forLater = parts.filter((i) => !forNow.includes(i));
-  const errands = [
-    forNow.length === 0 ? null : `${forNow.map((i) => i.label).join(', ')} fehlt noch`,
-    forLater.length === 0 ? null : `${forLater.map((i) => i.label).join(', ')} mitnehmen`,
-  ].filter((line): line is string => line !== null);
-  const missingLabel = escaping || errands.length === 0 ? null : errands.join(' · ');
-  const exitCall = view.puzzle === null && escaping;
-  const title =
-    view.puzzle !== null
-      ? view.puzzle.title
-      : escaping
-        ? 'NOTAUSGANG — alle raus, JETZT!'
-        : (armedTitle ?? 'Alle Stationen erledigt');
+  const missingLabel = coldOpen.dark ? goalOf(view, map).missing : null;
 
   return (
     <div className={`game ${shaking ? 'shake' : ''}`}>
       {view.deadlineAt !== null && <CriticalVignette deadlineAt={view.deadlineAt} />}
-      <Briefing view={view} />
+      {!coldOpen.intro && <Briefing view={view} />}
       {stamp && (
         <div className="overlay stamp" aria-hidden="true">
           <span>✔ SYSTEM ONLINE</span>
@@ -531,59 +770,13 @@ export function GameScreen({
       )}
 
       <div className="stage">
-        <div className="stage-top">
-          <div className="stage-goal">
-            <div
-              className="led-strip"
-              aria-label={`Station ${view.currentPuzzleIndex + 1} von ${view.puzzleCount}`}
-            >
-              {Array.from({ length: view.puzzleCount }, (_, i) => (
-                <span
-                  key={i}
-                  className={`led ${i < view.currentPuzzleIndex ? 'led-done' : ''} ${
-                    i === view.currentPuzzleIndex ? 'led-active' : ''
-                  }`}
-                />
-              ))}
-            </div>
-            <h1>
-              {exitCall && (
-                <>
-                  <Icon name="exit" />{' '}
-                </>
-              )}
-              {title}
-            </h1>
-            {missingLabel !== null && <span className="stage-sub">{missingLabel}</span>}
-          </div>
-          <div className="stage-clock">
-            {view.deadlineAt !== null && <Countdown deadlineAt={view.deadlineAt} />}
-            <AlarmMarks alarms={view.alarms} />
-          </div>
-          {notice?.kind === 'line' && (
-            <div
-              key={`${notice.event.at}-${notice.event.label}`}
-              className="radio-banner"
-              role="status"
-            >
-              <span className="radio-banner-from">
-                <Icon name={airIcon(notice.event)} /> {bannerFrom(notice.event)}
-              </span>{' '}
-              — {notice.event.label}
-            </div>
-          )}
-          {notice?.kind === 'sign' && (
-            <div className="toast" role="status">
-              ✓ Laborkennung notiert
-            </div>
-          )}
-          {relay === undefined && <SabotageAlert sabotage={map.sabotage} />}
-          {alarmVisible && view.lastPenaltySec !== null && (
-            <div key={view.penaltySeq} className="alarm" role="alert">
-              <Icon name="siren" /> ALARM — Fehlversuch! −{view.lastPenaltySec} Sekunden
-            </div>
-          )}
-        </div>
+        <StageTop
+          view={view}
+          map={map}
+          coldOpen={coldOpen}
+          notice={notice}
+          alarmVisible={alarmVisible}
+        />
         <GameWorld
           view={view}
           positionsRef={positionsRef}
@@ -591,10 +784,11 @@ export function GameScreen({
           pingsRef={pingsRef}
           chatsRef={chatsRef}
           spectator={false}
-          station={open.station}
+          darkSince={coldOpen.darkSince}
+          station={station}
           holdTips={notice !== null}
           inputLocked={
-            open.station !== null ||
+            station !== null ||
             open.reading !== null ||
             view.pausedFor !== null ||
             relay !== undefined
@@ -613,9 +807,9 @@ export function GameScreen({
         )}
       </div>
 
-      {open.station !== null && (
+      {station !== null && (
         <StationModal
-          puzzle={open.station}
+          puzzle={station}
           map={map}
           edgework={view.edgework}
           deadlineAt={view.deadlineAt}
@@ -641,7 +835,8 @@ export function GameScreen({
         view={view}
         positionsRef={positionsRef}
         chatsRef={chatsRef}
-        onAir={notice?.kind === 'line'}
+        // Until the click of the cold open the strip keeps quiet: the opener comes with the banner.
+        onAir={notice?.kind === 'line' || !coldOpen.dark}
         parts={missingLabel}
         notesOpen={open.notes}
         onToggleNotes={open.toggleNotes}

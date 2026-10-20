@@ -61,7 +61,8 @@ function seen(
   };
   const state = station.init(def, rng, setup);
   const viewer = { playerId: who, operating, reading: false, console: seat };
-  const view = station.view(def, state, viewer, { edgework, alarms: 0, crew });
+  const operators = operating && who !== null ? [who] : [];
+  const view = station.view(def, state, viewer, { edgework, alarms: 0, crew, operators });
   const common = { index: 0, total: 1, title: def.title, manual: null, console: seat };
   return { ...view, ...common, backup: null };
 }
@@ -135,6 +136,11 @@ function operatorViews(): [string, PuzzleView][] {
   if (sync.kind === 'button-sync') {
     views.push(['button-sync missed', { ...sync, lastResult: 'missed-window', attempts: 2 }]);
     views.push(['button-sync pressed', { ...sync, youPressed: true }]);
+  }
+  const lever = seen('button-sync', true, { style: 'lever' });
+  if (lever.kind === 'button-sync') {
+    views.push(['the main switch', lever]);
+    views.push(['the main switch thrown', { ...lever, youPressed: true, pressedCount: 2 }]);
   }
   return views;
 }
@@ -228,6 +234,7 @@ describe('coach marks', () => {
     ...STATIONS.map((type) => seen(type)),
     seen('circuit', true, {}, 'b'),
     seen('signal', true, {}, 'b'),
+    seen('button-sync', true, { style: 'lever' }),
   ];
 
   it.each(['touch', 'mouse'] as const)('give every device a line of its own, by %s', (pointer) => {

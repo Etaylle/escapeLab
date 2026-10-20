@@ -3,8 +3,11 @@
  * real WebSocket clients through the full Blackout mission on its tile map.
  * The server draws two of the three spawns and a spot for every source, so
  * the walkthrough plans as it goes, each client holding the other's plate
- * doors open on the way. The Notstrom-Kasten and the Signalkette are worked
- * at two consoles at once, Anna at console A and Ben at console B: Ben reads
+ * doors open on the way. The run opens with the power on — no clock, no
+ * station armed — until the lights go out on the real clock; then both
+ * throw the Notlicht's main switch in the Flur together, whoever is locked
+ * in let out over its plate first. The Notstrom-Kasten and the Signalkette
+ * are worked at two consoles at once, Anna at console A and Ben at console B: Ben reads
  * the Handbuch and walks past the Laborkennung first, then lets Anna into
  * the Maschinenraum to the fuse box and measures at the meter in the Flur —
  * once the box is safe, the Maschinenraum door stays open for good. At a
@@ -34,6 +37,7 @@ import {
   moduleFor,
   NO_CREDITS,
   parseMission,
+  POWER_OUT,
   TOKENS,
   type ConsoleId,
   type Credits,
@@ -71,11 +75,20 @@ type Tile = [number, number];
 
 const key = (x: number, y: number): string => `${x},${y}`;
 
+/** Blackout's stations, by their index in the mission. */
+const NOTLICHT = 0;
+const NOTSTROM = 1;
+const SIGNALKETTE = 2;
+const SUBSYSTEME = 3;
+const FREQUENZ = 4;
+const REAKTOR = 5;
+
 /**
  * Where each station is worked from: a floor tile within reach of it — of
  * console A, where it has two.
  */
 const STAND: Tile[] = [
+  [7, 5], // at the Notlicht's lever, in the Flur above its plate
   [2, 9], // in front of the fuse box, console A of the Notstrom-Kasten, in the Maschinenraum
   [7, 5], // beside console A of the Signalkette, in the Flur
   [13, 6], // below the navigation panel
@@ -84,8 +97,8 @@ const STAND: Tile[] = [
 ];
 /** Beside console B of the stations worked at two consoles, by station index. */
 const CONSOLE_B = new Map<number, Tile>([
-  [0, [5, 5]], // north of the meter, in the Flur by the Maschinenraum door
-  [1, [3, 9]], // beside console B of the Signalkette, in the Maschinenraum
+  [NOTSTROM, [5, 5]], // north of the meter, in the Flur by the Maschinenraum door
+  [SIGNALKETTE, [3, 9]], // beside console B of the Signalkette, in the Maschinenraum
 ]);
 /** Beside the Laborkennung, in the Archiv. */
 const BY_THE_SIGN: Tile = [3, 3];
@@ -119,11 +132,11 @@ const EXIT: Tile = [exitAt.x, exitAt.y];
 const fuseSlot =
   mission.map.items.find((i) => i.id === FUSE_ID)?.deliverTo ?? fail('the fuse goes nowhere');
 const FUSE_SLOT: Tile = [fuseSlot.x, fuseSlot.y];
-/** The Maschinenraum door: its plate holds it until the first station is solved, then it stays. */
+/** The Maschinenraum door: held by its plate until the Notstrom-Kasten is solved, then open. */
 const lastingDoor =
   mission.map.doors.find(
-    (d) => d.opensBy.kind === 'plate' && d.opensBy.untilSolved === mission.puzzles[0]?.id,
-  ) ?? fail('Blackout has no plate door that the first station opens for good');
+    (d) => d.opensBy.kind === 'plate' && d.opensBy.untilSolved === mission.puzzles[NOTSTROM]?.id,
+  ) ?? fail('Blackout has no plate door that the Notstrom-Kasten opens for good');
 const lastingPlate =
   lastingDoor.opensBy.kind === 'plate' ? lastingDoor.opensBy.plateId : fail('no plate door');
 
@@ -138,12 +151,12 @@ function sourceOf(index: number): { id: string; label: string } {
 
 /**
  * What only the station shows, and a line only its printed rules hold, for
- * the stations one player works and another reads: 3 and 4. (The stations
+ * the stations one player works and another reads: 4 and 5. (The stations
  * worked at two consoles keep them apart in `runCircuit` and `runSignal`.)
  */
 const SECRETS = [
-  { index: 2, instance: '"pos":{', rules: 'Andernfalls bleibt der Marker stehen' },
-  { index: 3, instance: '"pattern":"', rules: 'keine 2 Wörter der Frequenztabelle' },
+  { index: SUBSYSTEME, instance: '"pos":{', rules: 'Andernfalls bleibt der Marker stehen' },
+  { index: FREQUENZ, instance: '"pattern":"', rules: 'keine 2 Wörter der Frequenztabelle' },
 ];
 
 function fail(message: string): never {
@@ -564,7 +577,7 @@ async function takeConsoles(index: number, a: TestClient, b: TestClient): Promis
  * Handbuch and walks past the Laborkennung, whose serial the rules read.
  */
 async function readUp(reader: TestClient, helper: TestClient): Promise<void> {
-  const book = sourceOf(0);
+  const book = sourceOf(NOTSTROM);
   await bring(reader, placeOf(book.id), helper);
   const covers = (m: PlayerView['manualsHere'][number]): boolean =>
     m.id === book.id && m.sections.some((s) => s.puzzleId === CIRCUIT.id);
@@ -615,7 +628,7 @@ async function openSource(client: TestClient, manualId: string, find: string): P
  * cabinet and unlocks it there.
  */
 async function unlockCabinet(): Promise<void> {
-  const cabinet = sourceOf(3);
+  const cabinet = sourceOf(FREQUENZ);
   const keyAt = itemTile(KEY_ID);
   const [carrier, helper] = closerTo(keyAt);
   await bring(carrier, keyAt, helper);
@@ -642,23 +655,26 @@ async function fetchFuse(): Promise<void> {
   await walkTo(carrier, FUSE_SLOT);
   await install(carrier, FUSE_ID);
   credit(carrier, 'delivered');
-  await walkTo(helper, STAND[4] ?? fail('no spot at the reactor'));
+  await walkTo(helper, STAND[REAKTOR] ?? fail('no spot at the reactor'));
 }
 
 // --- puzzle solvers ----------------------------------------------------------
 
-const circuitDef = mission.puzzles[0];
-const signalDef = mission.puzzles[1];
-const mazeDef = mission.puzzles[2];
-const morseDef = mission.puzzles[3];
+const leverDef = mission.puzzles[NOTLICHT];
+const circuitDef = mission.puzzles[NOTSTROM];
+const signalDef = mission.puzzles[SIGNALKETTE];
+const mazeDef = mission.puzzles[SUBSYSTEME];
+const morseDef = mission.puzzles[FREQUENZ];
 if (
+  leverDef?.type !== 'button-sync' ||
+  leverDef.style !== 'lever' ||
   circuitDef?.type !== 'circuit' ||
   signalDef?.type !== 'signal' ||
   !signalDef.legend ||
   mazeDef?.type !== 'maze' ||
   morseDef?.type !== 'morse'
 ) {
-  fail('blackout.json should run circuit, signal with its legend, maze, morse, sync');
+  fail('blackout.json should run the lever, circuit, signal with its legend, maze, morse, sync');
 }
 // Narrowed re-bindings: closures below keep the precise puzzle types.
 const CIRCUIT = circuitDef;
@@ -819,6 +835,30 @@ async function solveStation(index: number): Promise<void> {
   fail(`station ${index + 1} is still open after 100 rounds`);
 }
 
+/**
+ * Station 1, the Notlicht: the main switch in the Flur, where the whole crew
+ * throws a lever at once — nothing to read, so nobody needs a partner at a
+ * source. Whoever the draw locked in the Maschinenraum is let out over the
+ * Flur plate beside it. Each sees a lever lit for everybody who stands
+ * there; then both throw theirs together, and the Flur lights up.
+ */
+async function runLever(): Promise<void> {
+  const lever = STAND[NOTLICHT] ?? fail('no spot at the lever');
+  const [first, second] = closerTo(lever);
+  await bring(first, lever, second);
+  await bring(second, lever, first);
+  await switchOn(first, NOTLICHT);
+  for (const client of crew) {
+    await client.expectView('sees the main switch, a lever lit for each of the crew at it', (v) =>
+      v.puzzle?.kind === 'button-sync' &&
+      v.puzzle.style === 'lever' &&
+      v.puzzle.here === crew.length &&
+      v.puzzle.requiredCount === crew.length);
+  }
+  await solveStation(NOTLICHT);
+  await backOnTheMap(NOTLICHT + 1);
+}
+
 type CircuitView = Extract<PuzzleView, { kind: 'circuit' }>;
 
 /** The Notstrom-Kasten as `view` shows it; null where it is not open. */
@@ -828,10 +868,10 @@ function circuitOf(view: PlayerView | null): CircuitView | null {
 
 /** The solver's next moves at the Notstrom-Kasten, every one of them from the side `by`. */
 async function playCircuit(by: Move<PuzzleInput>['by'], what: string): Promise<void> {
-  const moves = nextMoves(0);
+  const moves = nextMoves(NOTSTROM);
   assert(moves.length > 0 && moves.every((move) => move.by === by),
     `${what}: ${moves.length} move(s), all from the ${by === 'partner' ? 'meter' : 'box'}`);
-  await play(moves, 0);
+  await play(moves, NOTSTROM);
 }
 
 /**
@@ -841,7 +881,7 @@ async function playCircuit(by: Move<PuzzleInput>['by'], what: string): Promise<v
  * meter's readings are gone.
  */
 async function shortTheBox(box: TestClient, meter: TestClient): Promise<void> {
-  const [right] = nextMoves(0);
+  const [right] = nextMoves(NOTSTROM);
   const named = right?.by === 'operator' && 'cut' in right.input ? right.input.cut : null;
   const wires = circuitOf(box.view)?.wires ?? fail(`${box.label}: the box shows no wires`);
   const wrong = wires.findIndex((wire, i) => !wire.cut && i !== named);
@@ -879,7 +919,7 @@ async function solveCircuit(box: TestClient, meter: TestClient): Promise<void> {
   await playCircuit('operator', 'the box cuts the wire the rules name');
   await playCircuit('partner', 'the meter measures again after the cut');
   await shortTheBox(box, meter);
-  await solveStation(0);
+  await solveStation(NOTSTROM);
 }
 
 /**
@@ -908,7 +948,7 @@ function assertBoxAndMeterApart(
  */
 async function runCircuit(box: TestClient, meter: TestClient): Promise<void> {
   const from = { box: box.raw.length, meter: meter.raw.length };
-  await switchOn(meter, 0);
+  await switchOn(meter, NOTSTROM);
   const boxView = await box.expectView('console A shows the box: wires, no voltage, no rules',
     (v) => {
       const circuit = circuitOf(v);
@@ -937,7 +977,7 @@ async function runCircuit(box: TestClient, meter: TestClient): Promise<void> {
   // The Notstrom-Kasten counts for both consoles, whichever cut last.
   credit(box, 'operated');
   credit(meter, 'operated');
-  await backOnTheMap(1);
+  await backOnTheMap(NOTSTROM + 1);
 }
 
 type SignalView = Extract<PuzzleView, { kind: 'signal' }>;
@@ -960,7 +1000,7 @@ function keyAtB(move: Move<PuzzleInput> | undefined): { row: number; shape: stri
  * over.
  */
 async function signalMissteps(a: TestClient, b: TestClient): Promise<void> {
-  const [first, second] = nextMoves(1).map(keyAtB);
+  const [first, second] = nextMoves(SIGNALKETTE).map(keyAtB);
   if (first == null || second == null) {
     fail('the solver presses no two keys at console B in stage 1');
   }
@@ -1047,7 +1087,7 @@ function assertFleeting(consoles: { client: TestClient; from: number }[]): void 
  */
 async function runSignal(a: TestClient, b: TestClient): Promise<void> {
   const from = { a: a.raw.length, b: b.raw.length };
-  await switchOn(b, 1);
+  await switchOn(b, SIGNALKETTE);
   const atA = await a.expectView('console A sends stage 1, all signs at once, no rules', (v) =>
     signalOf(v)?.role === 'sender' && signalOf(v)?.fleeting === false && v.puzzle?.manual === null);
   const atB = await b.expectView('console B takes it: twelve keys, no sequence, no rules', (v) =>
@@ -1062,12 +1102,12 @@ async function runSignal(a: TestClient, b: TestClient): Promise<void> {
   await signalMissteps(a, b);
 
   // Stage 1 from the views alone, pressed at console B; then the direction swaps.
-  await play(nextMoves(1), 1);
+  await play(nextMoves(SIGNALKETTE), SIGNALKETTE);
   await b.expectView('stage 2: console B sends now', (v) =>
     signalOf(v)?.stage === 2 && signalOf(v)?.role === 'sender');
   await a.expectView('stage 2: console A takes now', (v) =>
     signalOf(v)?.stage === 2 && signalOf(v)?.role === 'receiver');
-  await solveStation(1);
+  await solveStation(SIGNALKETTE);
   assertConsolesApart(b, from.b, { sends, takes });
   assertFleeting([
     { client: a, from: from.a },
@@ -1076,12 +1116,12 @@ async function runSignal(a: TestClient, b: TestClient): Promise<void> {
   // The Signalkette counts for both consoles, whichever pressed last.
   credit(a, 'operated');
   credit(b, 'operated');
-  await backOnTheMap(2);
+  await backOnTheMap(SIGNALKETTE + 1);
 }
 
 /** The maze, with the mid-game reconnect of the reader, who takes the Laborkennung along. */
 async function solveMaze(op: TestClient, rd: TestClient): Promise<void> {
-  const locker = sourceOf(2).id;
+  const locker = sourceOf(SUBSYSTEME).id;
   const joined = rd.joined ?? fail(`${rd.label}: never joined`);
   const name = rd.view?.you.name ?? fail(`${rd.label}: no view yet`);
   await rd.expectView('reads the plan with the walls, Laborkennung picked up', (v) =>
@@ -1122,7 +1162,7 @@ async function solveMaze(op: TestClient, rd: TestClient): Promise<void> {
   );
   assert(!op.raw.some((r) => r.includes(JSON.stringify(walls))),
     'the walls never reached the panel');
-  await solveStation(2);
+  await solveStation(SUBSYSTEME);
 }
 
 async function solveMorse(op: TestClient, rd: TestClient): Promise<void> {
@@ -1131,7 +1171,7 @@ async function solveMorse(op: TestClient, rd: TestClient): Promise<void> {
   await op.expectView('stands at the blinking lamp', (v) =>
     v.puzzle?.kind === 'morse' && v.puzzle.pattern !== null && v.puzzle.manual === null);
   await readerStepsAway(op, rd);
-  await solveStation(3);
+  await solveStation(FREQUENZ);
 }
 
 /**
@@ -1151,12 +1191,12 @@ const ALONE = 'Allein geht das nicht — jemand muss am anderen Pult oder bei de
  * operator up again.
  */
 async function readerStepsAway(op: TestClient, rd: TestClient): Promise<void> {
-  const cabinet = sourceOf(3);
+  const cabinet = sourceOf(FREQUENZ);
   const name = rd.view?.you.name ?? fail(`${rd.label}: no view yet`);
   const backedBy = (v: PlayerView): boolean =>
     v.puzzle?.backup?.name === name && v.puzzle.backup.where === cabinet.label;
   await op.expectView(`names ${name} at the ${cabinet.label} as backup`, backedBy);
-  const [move] = nextMoves(3);
+  const [move] = nextMoves(FREQUENZ);
   if (move === undefined) {
     fail('the solver has no first move at the radio panel');
   }
@@ -1179,7 +1219,7 @@ async function solveSync(): Promise<void> {
     await client.expectView('stands at the reactor with the crew', (v) =>
       v.puzzle?.kind === 'button-sync' && v.presence.stationId === 'reaktorstart');
   }
-  await solveStation(4);
+  await solveStation(REAKTOR);
 }
 
 /**
@@ -1332,6 +1372,17 @@ assert(
   drawn.every((at) => spawns.includes(at)) && new Set(drawn).size === crew.length,
   `the draw put Anna at ${drawn[0] ?? '?'} and Ben at ${drawn[1] ?? '?'}, two spawns of three`,
 );
+// The run opens with the power on: no clock yet, no station armed, mission control still quiet.
+const intro = mission.intro ?? fail('Blackout opens without an intro');
+for (const client of crew) {
+  const powered = client.view ?? fail(`${client.label}: no view of the run`);
+  assert(
+    !powered.lights.out && powered.deadlineAt === null && powered.events.length === 0,
+    `${client.label}: the run opens with the power on — no clock, no radio line yet`,
+  );
+  assert(powered.map?.stations.every((s) => s.status === 'locked') === true,
+    `${client.label}: while the power is on, no station is armed`);
+}
 // The room plays on normal, where the fifth alarm ends the run; the walkthrough sets off two.
 assert(
   crew.every((client) => client.view?.alarms.count === 0 && client.view?.alarms.limit === 5),
@@ -1474,8 +1525,8 @@ const litAfter = (solvedCount: number): string =>
 
 /**
  * After station `solved`: back on the map with one more room lit, and
- * security waking up in stages — the Flur drone after station 2, the Labor
- * drone after 3.
+ * security waking up in stages — the Flur drone after station 3, the Labor
+ * drone after 4.
  */
 async function backOnTheMap(solved: number): Promise<void> {
   const [watcher] = crew;
@@ -1488,53 +1539,70 @@ async function backOnTheMap(solved: number): Promise<void> {
       `station ${solved} lit another room: ${litAfter(solved)}`,
     );
   }
-  if (solved === 1) {
+  if (solved <= SIGNALKETTE) {
     // Any positions message arriving after the view above was sent after the solve.
     const stale = watcher.positions;
     await watcher.untilPositions('a fresh positions message', (p) => p !== stale);
-    assert(streamedDrones(watcher) === '', 'no drone patrols before the second station');
-  } else if (solved === 2) {
+    assert(streamedDrones(watcher) === '', `no drone patrols after station ${solved}`);
+  } else if (solved === SIGNALKETTE + 1) {
     await watcher.untilPositions('only the Flur drone patrols', () =>
       streamedDrones(watcher) === 'flurwache');
-    console.log('✓ only the Flur drone patrols after the second station');
-  } else if (solved === 3) {
+    console.log('✓ only the Flur drone patrols after the Signalkette');
+  } else if (solved === SUBSYSTEME + 1) {
     await watcher.untilPositions('both drones patrol', () =>
       streamedDrones(watcher) === 'flurwache,laborwache');
-    console.log('✓ both drones patrol after the third station');
+    console.log('✓ both drones patrol after the Leitungsnetz');
   }
 }
 
-// Station 1: the Notstrom-Kasten, the fuse box in the Maschinenraum and the meter in the Flur,
+// The lights go out a few seconds in: the clock starts with the whole limit from then on,
+// the first station is armed and mission control speaks.
+const dark = await crew[0].expectView('the lights go out', (v) => v.lights.out);
+const outAt = dark.lights.outAt ?? fail('the lights went out at no moment');
+assert(outAt - (dark.startedAt ?? outAt) >= intro.lightsSec * 1000,
+  `the lights went out ${intro.lightsSec} s into the run, not before`);
+assert(dark.deadlineAt === outAt + mission.timeLimitSec * 1000,
+  'the clock started when the lights went out, with the whole limit');
+assert(dark.events.map((e) => e.label).join(' | ') === `${POWER_OUT} | ${mission.radio.start}`,
+  'the run report has the blackout, then mission control\'s opener');
+assert(dark.map?.stations.find((s) => s.puzzleId === leverDef.id)?.status === 'armed',
+  'the lever is armed once the lights are out');
+
+// Station 1: the Notlicht's main switch in the Flur, a lever for each of the crew. Whoever is
+// locked in is let out over the Flur plate, then both throw it together.
+await runLever();
+
+// Station 2: the Notstrom-Kasten, the fuse box in the Maschinenraum and the meter in the Flur,
 // its rules in the book in the Archiv. Ben reads them and the Laborkennung, then lets Anna in.
 const [atBox, atMeter] = crew;
 await readUp(atMeter, atBox);
-await takeConsoles(0, atBox, atMeter);
+await takeConsoles(NOTSTROM, atBox, atMeter);
 await runCircuit(atBox, atMeter);
 // Its plate held the Maschinenraum door so far; from now on the door stands open by itself.
 await crew[0].expectView(`"${lastingDoor.id}" stays open with nobody on its plate`, (v) =>
   v.map?.doors.find((d) => d.id === lastingDoor.id)?.open === true &&
   v.map.plates.find((p) => p.id === lastingPlate)?.pressed === false);
 
-// Station 2: the Signalkette, console A in the Flur and console B in the Maschinenraum.
+// Station 3: the Signalkette, console A in the Flur and console B in the Maschinenraum.
 const [atA, atB] = crew;
-await takeConsoles(1, atA, atB);
+await takeConsoles(SIGNALKETTE, atA, atB);
 await runSignal(atA, atB);
 
-// Station 3: the maze's panel in the Flur, its plan in the locker, which has to be searched.
+// Station 4: the maze's panel in the Flur, its plan in the locker, which has to be searched.
 // Ben walked past the Laborkennung before the Notstrom-Kasten, and reads here.
-const atMaze = await takePlaces(2, atMeter);
-const locker = sourceOf(2);
+const atMaze = await takePlaces(SUBSYSTEME, atMeter);
+const locker = sourceOf(SUBSYSTEME);
 await openSource(atMaze.rd, locker.id, `Spind durchsucht: ${locker.label}`);
-await runStation(2, atMaze, () => solveMaze(atMaze.op, atMaze.rd));
+await runStation(SUBSYSTEME, atMaze, () => solveMaze(atMaze.op, atMaze.rd));
 
-// Station 4: the radio panel in the Labor, its tables in the cabinet the Serverraum key opens.
+// Station 5: the radio panel in the Labor, its tables in the cabinet the Serverraum key opens.
 await unlockCabinet();
-const atRadio = await takePlaces(3);
-await runStation(3, atRadio, () => solveMorse(atRadio.op, atRadio.rd));
+const atRadio = await takePlaces(FREQUENZ);
+await runStation(FREQUENZ, atRadio, () => solveMorse(atRadio.op, atRadio.rd));
 
-// Station 5: the reactor, dead until the spare fuse is in; the whole crew presses.
+// Station 6: the reactor, dead until the spare fuse is in; the whole crew presses.
 await fetchFuse();
-await switchOn(crew[0], 4);
+await switchOn(crew[0], REAKTOR);
 await solveSync();
 await backOnTheMap(mission.puzzles.length);
 
@@ -1558,7 +1626,7 @@ assert(/erwachen die Systeme/.test(won.storyText), 'win story is shown');
 assert(won.penaltySeq >= 2, 'both deliberate penalties were counted');
 assert(
   won.events.filter((e) => e.kind === 'find').map((e) => e.label).join(' · ') ===
-    `Spind durchsucht: ${locker.label} · Schrank aufgeschlossen: ${sourceOf(3).label}`,
+    `Spind durchsucht: ${locker.label} · Schrank aufgeschlossen: ${sourceOf(FREQUENZ).label}`,
   'the run report holds the searched locker and the unlocked cabinet',
 );
 assertKeptApart(openWindows);
@@ -1576,9 +1644,11 @@ for (const client of crew) {
     `${client.label} is credited with reading ${did.read}, finding ${did.found} and ` +
       `delivering ${did.delivered}`,
   );
-  // The reactor counts for whichever press completed it.
-  assert(got.operated - did.operated === 0 || got.operated - did.operated === 1,
-    `${client.label} is credited with the ${did.operated} stations it worked, maybe the reactor`);
+  // The lever and the reactor count for whichever press completed them.
+  const presses = got.operated - did.operated;
+  assert(presses >= 0 && presses <= 2,
+    `${client.label} is credited with the ${did.operated} stations it worked, maybe the lever ` +
+      'and the reactor');
   assert(got.alarms >= did.alarms && got.hints === 0,
     `${client.label} carries its ${did.alarms} deliberate alarms and asked for no note`);
 }
@@ -1607,6 +1677,8 @@ assert(
   report.startedAt === won.startedAt && report.finishedAt === won.finishedAt,
   'the run report has the start and the finish the end screen shows',
 );
+assert(report.lightsOutAt === outAt && outAt > report.startedAt,
+  'the run report has when the lights went out, after the start every time counts from');
 assert(
   report.crewSize === 2 &&
     Object.keys(report.spawns).join() === 'p1,p2' &&
@@ -1679,13 +1751,14 @@ const afterOneYes = first.view?.phase;
 assert(afterOneYes === 'won', 'one confirmation alone does not restart the mission');
 first.send({ kind: 'set-ready', ready: true });
 const replay = await first.expectView('is playing again', (v) => v.phase === 'playing');
-// The fresh report holds nothing but mission control's opener.
+// The fresh report holds nothing yet: the rematch opens with the power on again.
 assert(
   replay.currentPuzzleIndex === 0 &&
     replay.penaltySeq === 0 &&
-    replay.events.length === 1 &&
-    replay.events[0]?.label === mission.radio.start,
-  'the rematch starts from a clean slate',
+    replay.events.length === 0 &&
+    !replay.lights.out &&
+    replay.deadlineAt === null,
+  'the rematch starts from a clean slate, the power on',
 );
 const redrawn = replay.map?.yourSpawn;
 assert(
@@ -1729,8 +1802,9 @@ for (const client of crew) {
 }
 rmSync(runsDir, { recursive: true, force: true });
 console.log(
-  '\nSmoke test passed: Blackout with drawn spawns and sources, streamed movement, plates, ' +
-    'a door that stays open, the Notstrom-Kasten and the Signalkette at two consoles, the ' +
-    'locker, the key, the camera plate, reconnect, penalties and credits. 🎉',
+  '\nSmoke test passed: Blackout with its power on until the lights went out, the ' +
+    'Notlicht\'s lever, drawn spawns and sources, streamed movement, plates, a door that ' +
+    'stays open, the Notstrom-Kasten and the Signalkette at two consoles, the locker, the ' +
+    'key, the camera plate, reconnect, penalties and credits. 🎉',
 );
 process.exit(0);

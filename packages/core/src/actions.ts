@@ -49,6 +49,8 @@ export type Action =
   | { type: 'switch-mission'; playerId: string; mission: Mission; difficulty: Difficulty }
   /** the players connected right now are the crew, each drawn a spawn; the rest leave */
   | { type: 'start-mission'; playerId: string; at: number; seed: number }
+  /** the end of a mission's intro, once `lightsDueAt` has come: the clock starts */
+  | { type: 'lights-out'; at: number }
   /** a move at the open puzzle; `input` is checked against that puzzle's module */
   | { type: 'puzzle-input'; playerId: string; at: number; input: unknown }
   /** a note of the last crew, asked for at a manual object that covers the open puzzle */
@@ -112,6 +114,8 @@ export function applyAction(state: GameState, action: Action): GameState {
       return switchMission(state, action);
     case 'start-mission':
       return startMission(state, action);
+    case 'lights-out':
+      return lightsOut(state, action.at);
     case 'puzzle-input':
       return handlePuzzleInput(state, action);
     case 'request-hint':
@@ -303,7 +307,11 @@ function puzzleContext(state: GameState, at: number, from: ConsoleId | null): Pu
   return {
     edgework: state.edgework,
     alarms: state.penaltySeq,
-    remainingSec: Math.max(0, Math.ceil(((state.deadlineAt ?? at) - at) / 1000)),
+    // Before the lights go out the clock stands still at the full limit.
+    remainingSec:
+      state.deadlineAt === null
+        ? state.mission.timeLimitSec
+        : Math.max(0, Math.ceil((state.deadlineAt - at) / 1000)),
     at,
     crew: state.players.filter((p) => p.connected).map((p) => p.id),
     console: from,
@@ -446,7 +454,7 @@ function startMission(
   }
   requireHost(state, action.playerId);
   const crew = crewToStart(state);
-  const map = state.mission.map;
+  const { map, intro } = state.mission;
   const seed = runSeed(state, action.seed);
   const started: GameState = {
     ...state,
@@ -475,7 +483,9 @@ function startMission(
     ),
     events: [],
     startedAt: action.at,
-    deadlineAt: action.at + state.mission.timeLimitSec * 1000,
+    lightsOutAt: null,
+    lightsDueAt: intro === undefined ? null : action.at + intro.lightsSec * 1000,
+    deadlineAt: null,
     finishedAt: null,
     penaltySeq: 0,
     lastPenaltySec: null,
@@ -483,7 +493,34 @@ function startMission(
     hintsRevealed: 0,
     hintReadyAt: null,
   };
-  return logRadio(started, state.mission.radio.start, action.at);
+  // Without an intro the lights are out from the start, and nobody sees them fail.
+  return intro === undefined ? clockStarts(started, action.at) : started;
+}
+
+/** What the run report calls the lights failing at the end of an intro. */
+export const POWER_OUT = 'Stromausfall';
+
+/**
+ * The end of the intro: the lights fail, the clock starts, the first
+ * station is armed and mission control speaks up. The room dispatches it
+ * once `lightsDueAt` has come; it waits out a pause like every deadline.
+ */
+function lightsOut(state: GameState, at: number): GameState {
+  if (state.phase !== 'playing' || state.lightsOutAt !== null || state.paused !== null) {
+    return state;
+  }
+  return clockStarts(logEvent(state, 'power', POWER_OUT, at), at);
+}
+
+/** From `at` on the lights are out and the clock runs; mission control opens the run. */
+function clockStarts(state: GameState, at: number): GameState {
+  const running: GameState = {
+    ...state,
+    lightsOutAt: at,
+    lightsDueAt: null,
+    deadlineAt: at + state.mission.timeLimitSec * 1000,
+  };
+  return logRadio(running, state.mission.radio.start, at);
 }
 
 /** Common guards for in-game actions; returns the acting player's current puzzle. */
@@ -766,10 +803,16 @@ function setPaused(state: GameState, action: { paused: boolean; at: number }): G
   return {
     ...state,
     paused: null,
-    deadlineAt: state.deadlineAt === null ? null : state.deadlineAt + frozen,
+    lightsDueAt: later(state.lightsDueAt, frozen),
+    deadlineAt: later(state.deadlineAt, frozen),
     sabotage: state.sabotage === null ? null : shiftSabotage(state.sabotage, frozen),
-    hintReadyAt: state.hintReadyAt === null ? null : state.hintReadyAt + frozen,
+    hintReadyAt: later(state.hintReadyAt, frozen),
   };
+}
+
+/** A moment of the run (epoch ms) moved on by `ms`, as a pause moves it; none stays none. */
+function later(at: number | null, ms: number): number | null {
+  return at === null ? null : at + ms;
 }
 
 function expireSabotage(state: GameState, action: { at: number }): GameState {
@@ -1121,6 +1164,8 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     items: {},
     events: [],
     startedAt: null,
+    lightsOutAt: null,
+    lightsDueAt: null,
     deadlineAt: null,
     finishedAt: null,
     penaltySeq: 0,

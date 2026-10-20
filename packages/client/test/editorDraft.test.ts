@@ -95,17 +95,30 @@ describe('draft ↔ JSON', () => {
     const blackout = shipped.find(({ name }) => name === 'blackout.json')?.data;
     const json = draftToJson(loaded(blackout)) as {
       listOrder: number;
+      intro: unknown;
       puzzles: Record<string, unknown>[];
-      map: { drones: Record<string, unknown>[]; sabotage: Record<string, unknown> };
+      map: {
+        drones: Record<string, unknown>[];
+        sabotage: Record<string, unknown>;
+        lamps: unknown[];
+      };
     };
     expect(json.listOrder).toBe(10);
-    expect(json.puzzles[0]).toMatchObject({
+    expect(json.intro).toEqual({ lightsSec: 3 });
+    expect(json.puzzles.find((p) => p['id'] === 'notstrom')).toMatchObject({
       type: 'circuit',
       wires: { min: 4, max: 6 },
       shorts: 3,
     });
+    expect(json.puzzles[0]).toMatchObject({ type: 'button-sync', style: 'lever' });
     expect(json.map.drones[0]).toMatchObject({ speed: 1.7, frozenByPlate: 'kameraplatte' });
-    expect(json.map.sabotage).toMatchObject({ mode: 'relay', required: 6, panels: [] });
+    expect(json.map.sabotage).toMatchObject({
+      mode: 'relay',
+      required: 6,
+      afterSolved: 3,
+      panels: [],
+    });
+    expect(json.map.lamps).toHaveLength(5);
   });
 
   it('leaves out of the file what the draft leaves empty', () => {

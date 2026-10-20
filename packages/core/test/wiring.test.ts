@@ -84,7 +84,8 @@ function stateOf(colors: WireColor[]): WiringState {
 }
 
 function viewOf(state: WiringState, viewer: Viewer = AT_STATION): WiringView {
-  return wiringModule.view(def, state, viewer, { edgework: QUIET, alarms: 0, crew: ['op', 'rd'] });
+  const ctx = { edgework: QUIET, alarms: 0, crew: ['op', 'rd'], operators: ['op'] };
+  return wiringModule.view(def, state, viewer, ctx);
 }
 
 /** The crew's next move, from the views at the station and at the book. */

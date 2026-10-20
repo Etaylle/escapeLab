@@ -19,7 +19,9 @@ export interface RunEvent {
     | 'finish'
     | 'hint'
     | 'radio'
-    | 'find';
+    | 'find'
+    /** the lights failing at the end of a mission's intro */
+    | 'power';
   label: string;
   /** seconds lost, for penalty and hint lines */
   seconds: number | null;
@@ -160,7 +162,19 @@ export interface GameState {
   events: RunEvent[];
   /** epoch ms; set when the mission starts */
   startedAt: number | null;
-  /** epoch ms; shrinks when penalties strike */
+  /**
+   * epoch ms the lights went out and the clock started: the start itself
+   * for a mission without an intro. Null while the power is still on — no
+   * clock, no armed station, no patrol, no emergency — and outside a run.
+   */
+  lightsOutAt: number | null;
+  /**
+   * epoch ms the lights are due to fail while the power is still on: the
+   * start plus the intro's `lightsSec`, moved on by a pause like every
+   * deadline. Null otherwise.
+   */
+  lightsDueAt: number | null;
+  /** epoch ms; set once the lights are out, shrinks when penalties strike */
   deadlineAt: number | null;
   /** epoch ms; set when the mission ends (won or lost) */
   finishedAt: number | null;
@@ -201,6 +215,8 @@ export function initialState(mission: Mission, roomSeed: number | null = null): 
     items: {},
     events: [],
     startedAt: null,
+    lightsOutAt: null,
+    lightsDueAt: null,
     deadlineAt: null,
     finishedAt: null,
     penaltySeq: 0,

@@ -4,8 +4,10 @@ import {
   applyAction,
   armedStations,
   canSee,
+  emergenciesDue,
   inEscapePhase,
   initialState,
+  lightsAreOut,
   runReport,
   shutDoors,
   stationKey,
@@ -83,11 +85,6 @@ const DRONE_TICK_MS = 80;
 const PANEL_RADIUS = 0.8;
 /** Reach for picking up and dropping off carryable objects. */
 const ITEM_RADIUS = 0.95;
-/**
- * Emergencies only start once this many stations are done: before that the
- * crew may still be locked in its separate starting rooms.
- */
-const SABOTAGE_AFTER_PUZZLES = 2;
 /** A relay emergency's instructions are aged this often. */
 const RELAY_TICK_MS = 1000;
 
@@ -116,6 +113,8 @@ export class Room {
   private lastDroneTick = 0;
   private sabotageTimer: NodeJS.Timeout | null = null;
   private relayTimer: NodeJS.Timeout | null = null;
+  /** ends a mission's intro: the lights go out when the state says they are due */
+  private lightsTimer: NodeJS.Timeout | null = null;
   private timer: NodeJS.Timeout | null = null;
   private positionsTimer: NodeJS.Timeout | null = null;
   private positionsDirty = false;
@@ -710,13 +709,13 @@ export class Room {
       }, delay);
       return;
     }
-    // Not before the crew is out of its starting rooms (two stations done),
-    // and not once they are already running for the hatch.
-    const solved = this.state.currentPuzzleIndex;
-    if (solved < SABOTAGE_AFTER_PUZZLES || solved >= this.state.mission.puzzles.length) {
+    // Not before the crew is out of its starting rooms (`afterSolved` stations
+    // done), and not once they are already running for the hatch; the schedule
+    // runs on the clock, which starts when the lights go out.
+    if (!emergenciesDue(this.state)) {
       return;
     }
-    const sinceStart = Date.now() - (this.state.startedAt ?? Date.now());
+    const sinceStart = Date.now() - (this.state.lightsOutAt ?? Date.now());
     const first = sabotage.firstAfterSec * 1000;
     const every = sabotage.everySec * 1000;
     const nextAt = sinceStart < first ? first : Math.ceil((sinceStart - first) / every) * every + first;
@@ -830,11 +829,34 @@ export class Room {
     };
   }
 
-  /** Fixed-rate patrol simulation; only runs while a mission with drones is live. */
+  /**
+   * A mission's intro ends on its own: once the lights are due, they go out.
+   * A pause moves that moment on, like every deadline, so the timer is armed
+   * afresh from the state after every dispatch, and none runs while paused.
+   */
+  private reconcileLights(): void {
+    if (this.lightsTimer !== null) {
+      clearTimeout(this.lightsTimer);
+      this.lightsTimer = null;
+    }
+    const due = this.state.lightsDueAt;
+    if (this.state.phase !== 'playing' || this.state.paused !== null || due === null) {
+      return;
+    }
+    this.lightsTimer = setTimeout(
+      () => {
+        this.lightsTimer = null;
+        this.dispatch({ type: 'lights-out', at: Date.now() });
+      },
+      Math.max(0, due - Date.now()),
+    );
+  }
+
+  /** Fixed-rate patrol simulation; only runs while a mission with drones is live in the dark. */
   private reconcileDroneTimer(): void {
     const map = this.state.mission.map;
     const live =
-      this.state.phase === 'playing' && this.state.paused === null && map.drones.length > 0;
+      lightsAreOut(this.state) && this.state.paused === null && map.drones.length > 0;
     if (live && this.droneTimer === null) {
       this.drones = new DronePatrol(map);
       this.lastDroneTick = Date.now();
@@ -879,6 +901,7 @@ export class Room {
       this.onRunFinished(runReport(this.state, this.code));
     }
     this.reconcileTimer();
+    this.reconcileLights();
     this.reconcileDroneTimer();
     this.reconcileSabotage();
     this.reconcileRelayTick();
@@ -928,6 +951,10 @@ export class Room {
     if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;
+    }
+    if (this.lightsTimer !== null) {
+      clearTimeout(this.lightsTimer);
+      this.lightsTimer = null;
     }
     if (this.positionsTimer !== null) {
       clearTimeout(this.positionsTimer);

@@ -17,6 +17,20 @@
  * to console A where needed, then both consoles are captured and the meter
  * measures every wire once; nothing is cut.
  *
+ * Cold open: a mission with an intro, as Blackout, opens with the power on.
+ * While NORMALBETRIEB shows, the host's window grows to 1440×1000, the host
+ * looks round its room and the guest walks three tiles towards it — the
+ * host's frames meanwhile are the sample of the lit scene — and
+ * cold-open.png catches both in the lit lab; a player spawned at the
+ * Laborkennung gets its note at once (sign.png). Two seconds after the clock
+ * starts counting comes blackout.png, the emergency lamps red. Then both go
+ * to the first station, a main switch — whoever is locked in let out over a
+ * plate first — and E opens its panel for each (lever.png, every lever lit);
+ * both throw together, the run fails unless the lights come up, and
+ * lit-flur.png shows the room it lit, the panel closed by itself. The log
+ * says how long the lever took from the blackout. A mission without an
+ * intro skips all of this.
+ *
  * On the way, both open the Bestenliste from the join screen (history.png,
  * history-phone.png): measured like the join screen, at 1280×720 too, and on
  * the phone for running out sideways.
@@ -28,7 +42,8 @@
  * times the run resets them and samples two quiet seconds, with no
  * screenshot, resize or click in them: the host pacing inside its tile after
  * the game screenshots, idle at an open station panel, and pacing again after
- * the station step. Each sample logs p50 and p95; a p95 above
+ * the station step — and in a mission with an intro once more, shorter, in
+ * the lit lab before the blackout. Each sample logs p50 and p95; a p95 above
  * SHOTS_FRAME_P95_MS (default 40) fails the run, as does any step that
  * throws. A capture the draw leaves out is logged as `skipped:` with why, and
  * fails nothing. The last line counts the captures taken, skipped and failed;
@@ -68,13 +83,15 @@ const FRAME_P95_MS = frameBudget(process.env.SHOTS_FRAME_P95_MS);
  * what its draw left out. Found by printing the core's draw of a crew of two
  * for seeds 1…50 and replaying the steps below that depend on it, in a room:
  *
- * - Blackout 5: Ben starts in the Maschinenraum and works console A of the
- *   Notstrom-Kasten, no plate held; Anna starts in the Archiv by the sign
- *   (sign.png), and her pacing for the first frame sample brings the book at
- *   (2,1) into sight, so she reads it, works console B and asks for the notes
- *   (reading, console-*, hint-*). Not the host by console A: the Archiv's
- *   pillars hide every source from its spawn, and the guest takes no step
- *   before reading, so reading.png would be skipped.
+ * - Blackout 5: Anna starts in the Archiv by the sign (sign.png, at once with
+ *   the power on), Ben in the Maschinenraum. With the power on, Anna's step
+ *   into the Archiv brings the book at (2,1) into sight, and Ben walks up to
+ *   the Maschinenraum door, into the shot (cold-open.png). At the lever Anna
+ *   holds the Flur plate and Ben comes out (lever.png). Then Ben reads the
+ *   book (reading), holds the plate for Anna on her way to console A of the
+ *   Notstrom-Kasten, works console B and asks for the notes (console-*,
+ *   hint-*). The lever put no new spawn in the draw: the spawns come from the
+ *   seed alone, so Anna and Ben start where they did before it.
  * - Systemcheck 1: the usual, Ben by the first station and the sign works it,
  *   Anna by the locker reads it.
  */
@@ -83,6 +100,12 @@ const SEEDS = new Map([
   ['systemcheck', 1],
 ]);
 const SEED = seedFor(process.env.SHOTS_SEED, SEEDS.get(MISSION.toLowerCase()));
+
+/**
+ * The host's window for cold-open.png: as wide as a laptop's, a little
+ * taller, so that both starts of Blackout's draw fit in it.
+ */
+const COLD_OPEN = { width: 1440, height: 1000 };
 
 const SIZES = [
   { name: 'laptop-13', width: 1440, height: 820 },
@@ -678,6 +701,279 @@ async function captureBothAtStation(reader, operator, station, sync) {
     `station-both       ${reader.name}: ` +
       (returned ? `back near ${back.x},${back.y}` : '!! could not walk back'),
   );
+}
+
+/**
+ * Walks `player` up to `tiles` tiles along the shortest way to `target`,
+ * planned as if every door stood open, and stops in front of one that is
+ * shut. Returns how many tiles it walked.
+ */
+async function approach(player, target, tiles) {
+  const map = player.seen.view.map;
+  const from = tileOf(player.seen);
+  // A map without doors: the way is planned as if every door stood open.
+  const path = from === null ? null : route({ ...map, doors: [] }, from, target);
+  const shut = new Set(map.doors.filter((d) => !d.open).map((d) => `${d.x},${d.y}`));
+  let walked = 0;
+  for (const tile of (path ?? []).slice(1, tiles + 1)) {
+    if (shut.has(`${tile.x},${tile.y}`)) {
+      break;
+    }
+    if (!(await stepTo(player.page, player.seen, tile.x + 0.5, tile.y + 0.5))) {
+      break;
+    }
+    walked += 1;
+  }
+  return walked;
+}
+
+/**
+ * One step from where `player` stands into the room — north, east, south or
+ * west, the first that is floor — and back: looking round it, as a player
+ * does first, which brings what lies there into sight.
+ */
+async function lookAround(player) {
+  const home = tileOf(player.seen);
+  const map = player.seen.view.map;
+  const step = [
+    [0, -1],
+    [1, 0],
+    [0, 1],
+    [-1, 0],
+  ].find(([dx, dy]) => home !== null && map.tiles[home.y + dy]?.[home.x + dx] === '.');
+  if (home === null || step === undefined) {
+    return;
+  }
+  await stepTo(player.page, player.seen, home.x + step[0] + 0.5, home.y + step[1] + 0.5);
+  await stepTo(player.page, player.seen, home.x + 0.5, home.y + 0.5);
+}
+
+/**
+ * cold-open.png: a mission with an intro opens with the power on — the lab
+ * lit and warm, NORMALBETRIEB where the clock will be. The host's window
+ * grows to COLD_OPEN; while the power is on, the host looks round its room
+ * and the guest walks a few steps towards the host, so that both stand in
+ * the window, and the host's frames meanwhile are the sample of the lit
+ * scene. Throws when NORMALBETRIEB never shows or the lights are out before
+ * the shot.
+ */
+async function captureColdOpen(host, guest) {
+  if (!(await attached(host.page.locator('.stage-clock .power-status'), 5000))) {
+    throw new Error('the run opened with the power on, but no NORMALBETRIEB shows');
+  }
+  await host.page.setViewportSize(COLD_OPEN);
+  await sleep(250);
+  const toward = tileOf(host.seen);
+  let walked = 0;
+  await sampleFrames(host.page, 'in the lit lab, the power still on', async () => {
+    const [steps] = await Promise.all([
+      toward === null ? 0 : approach(guest, toward, 3),
+      lookAround(host),
+    ]);
+    walked = steps;
+  });
+  if (host.seen.view.lights.out) {
+    throw new Error('the lights went out before cold-open.png');
+  }
+  await capture(host.page, 'cold-open.png');
+  const status = await textOf(host.page.locator('.stage-clock .power-status'));
+  console.log(
+    `cold-open.png      ${host.name} @ ${COLD_OPEN.width}x${COLD_OPEN.height}: "${status}", ` +
+      `the lab lit; ${guest.name} walked ${walked} tile(s) towards ${host.name}`,
+  );
+  await host.page.setViewportSize(SIZES[0]);
+}
+
+/**
+ * blackout.png: two seconds after the clock has started counting on the
+ * host's page — the flashlight on, the emergency lamps red in the dark.
+ */
+async function captureBlackout(host) {
+  const clock = host.page.locator('.stage-clock .countdown');
+  if (!(await attached(clock, 8000))) {
+    throw new Error('the lights went out, but no clock ever counted');
+  }
+  await sleep(2000);
+  await capture(host.page, 'blackout.png');
+  const { lights, startedAt, map } = host.seen.view;
+  console.log(
+    `blackout.png       ${host.name}: the lights went out ` +
+      `${seconds(lights.outAt - startedAt)} into the run, clock "${await textOf(clock)}", ` +
+      `${map.lamps.length} emergency lamp(s) on the map`,
+  );
+}
+
+/**
+ * Lets `walker` through a plate door to `target`: `holder` stands on the
+ * nearest plate it reaches that opens the way. False when none does.
+ */
+async function letThrough(walker, holder, target) {
+  const plates = holder.seen.view.map.plates
+    .filter((plate) => !plate.freezesDrone && stepsTo(holder.seen, plate) !== Infinity)
+    .sort((one, other) => stepsTo(holder.seen, one) - stepsTo(holder.seen, other));
+  for (const plate of plates) {
+    await holdPlate(holder, plate);
+    if (await until(() => stepsTo(walker.seen, target) !== Infinity, 3000)) {
+      console.log(
+        `plate              ${holder.name} holds "${plate.label}" at ${plate.x},${plate.y}, ` +
+          `${walker.name} walks out`,
+      );
+      return walkNear(walker.page, walker.seen, target);
+    }
+  }
+  return false;
+}
+
+/**
+ * Tiles beside `station` for `count` players to stand on, one each: floor
+ * within reach of it, neither a plate nor another station, nearest first.
+ */
+function spotsBy(station, map, count) {
+  const taken = new Set([
+    ...map.plates.map((p) => `${p.x},${p.y}`),
+    ...map.stations.map((s) => `${s.x},${s.y}`),
+  ]);
+  const spots = [];
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const spot = { x: station.x + dx, y: station.y + dy };
+      if (map.tiles[spot.y]?.[spot.x] === '.' && !taken.has(`${spot.x},${spot.y}`)) {
+        spots.push(spot);
+      }
+    }
+  }
+  const away = (spot) => Math.hypot(spot.x - station.x, spot.y - station.y);
+  return spots.sort((a, b) => away(a) - away(b) || a.x - b.x).slice(0, count);
+}
+
+/**
+ * Brings the whole crew to `station`: whoever cannot reach it is let through
+ * a plate door by somebody who can, then each stands on a spot of its own
+ * beside it, so that whoever held a plate steps off it and its door shuts,
+ * as the steps after expect. Throws where somebody cannot get there.
+ */
+async function gatherAt(station, players) {
+  const free = players.filter((player) => stepsTo(player.seen, station) !== Infinity);
+  if (free.length === 0) {
+    throw new Error(`nobody reaches the station at ${station.x},${station.y}`);
+  }
+  for (const walker of players.filter((player) => !free.includes(player))) {
+    if (!(await letThrough(walker, free[0], station))) {
+      throw new Error(`${walker.name} found no way to the station at ${station.x},${station.y}`);
+    }
+  }
+  const spots = spotsBy(station, players[0].seen.view.map, players.length);
+  for (const [i, player] of players.entries()) {
+    const spot = spots[i] ?? station;
+    const there =
+      (await walkNear(player.page, player.seen, spot)) &&
+      (await stepTo(player.page, player.seen, spot.x + 0.5, spot.y + 0.5));
+    if (!there) {
+      throw new Error(`${player.name} got stuck on the way to ${spot.x},${spot.y} by the station`);
+    }
+  }
+}
+
+/**
+ * lever.png, lit-flur.png: the whole crew at the main switch the first
+ * station is (gatherAt). E opens its panel on both pages, a lever lit for
+ * each of them; both throw theirs together, the panel closes itself and the
+ * room the station lights comes up warm. Logs how long the lever took from
+ * the lights going out.
+ */
+async function throwLever(players) {
+  const [first] = players;
+  const lever = first.seen.view.map.stations.find((s) => s.status === 'armed');
+  if (lever === undefined || lever.look !== 'lever') {
+    skip('lever.png', 'the first station is no main switch');
+    return;
+  }
+  await gatherAt(lever, players);
+  for (const player of players) {
+    if (!(await interactUntil(player.page, player.page.locator('.station-modal')))) {
+      throw new Error(`${player.name} stands at the lever, but no .station-modal after 3 tries`);
+    }
+  }
+  await sleep(500); // past the panel's fade-in
+  await captureLeverPanel(first, players.length);
+  await pressTogether(players, lever);
+  await captureLitFlur(first, lever);
+}
+
+/** lever.png: the main switch's panel, a lever lit for everybody at the station. */
+async function captureLeverPanel(player, crew) {
+  const lit = await player.page.locator('.station-modal .lever-unit--lit').count();
+  const plate = await textOf(player.page.locator('.station-modal .lever-plate'));
+  await capture(player.page, 'lever.png');
+  console.log(`lever.png          ${player.name}: "${plate}", ${lit} of ${crew} levers lit`);
+  if (lit !== crew) {
+    fail(`lever.png: ${lit} of ${crew} levers lit with the whole crew at the station`);
+  }
+}
+
+/** lit-flur.png: the panel closed itself, the room the lever lit is up. */
+async function captureLitFlur(player, lever) {
+  const closed = await player.page
+    .locator('.station-modal')
+    .waitFor({ state: 'hidden', timeout: 3000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  await sleep(1200); // past the lights coming up
+  await capture(player.page, 'lit-flur.png');
+  const { events, lights, map } = player.seen.view;
+  const solved = events.find((e) => e.kind === 'puzzle' && e.label.startsWith(lever.title));
+  const took = solved === undefined ? '!! no solve logged' : seconds(solved.at - lights.outAt);
+  console.log(
+    `lit-flur.png       ${player.name}: ${map.litRooms.join(', ')} lit, the panel ` +
+      `${closed ? 'closed itself' : '!! stayed open'}; the lever took ${took} from the blackout`,
+  );
+  if (!closed) {
+    fail('the lever\'s panel did not close itself after the levers dropped');
+  }
+}
+
+/**
+ * sign.png for a player spawned within sight of the Laborkennung: its note
+ * is up at once. Returns that player, if any.
+ */
+async function signAtSpawn(players) {
+  const atSign = players.find((p) => p.seen.view.presence.signSeen);
+  if (atSign !== undefined) {
+    await captureSign(atSign.page, atSign.name);
+  }
+  return atSign;
+}
+
+/**
+ * A mission's intro, the power on, then the lights failing: cold-open.png,
+ * sign.png for a player spawned at the Laborkennung (signAtSpawn),
+ * blackout.png, and the lever the first station is (lever.png,
+ * lit-flur.png). Returns the player sign.png caught, if any.
+ */
+async function coldOpen(host, guest) {
+  await captureColdOpen(host, guest);
+  const atSign = await signAtSpawn([host, guest]);
+  await captureBlackout(host);
+  await throwLever([host, guest]);
+  return atSign;
+}
+
+/**
+ * The run's first moments. A mission with an intro opens with the power on:
+ * the cold open comes first. Then the draw — who works the first station,
+ * who reads — and, without an intro, sign.png for a player spawned at the
+ * Laborkennung, whose note is up as soon as the briefing is gone. Returns
+ * both and the player sign.png caught, if any.
+ */
+async function firstMoments(anna, ben) {
+  const intro = anna.seen.view.lights.out === false;
+  const signedEarly = intro ? await coldOpen(anna, ben) : undefined;
+  const [operator, reader] = operatorFirst([anna, ben]);
+  console.log(`the draw:          ${operator.name} works the first station, ${reader.name} reads`);
+  const atSign = intro ? signedEarly : await signAtSpawn([reader, operator]);
+  return { operator, reader, atSign };
 }
 
 /** Resolves true once `locator` is in the page, false after `ms`. */
@@ -1714,15 +2010,7 @@ async function run() {
   }
   const anna = { name: 'Anna', page: host, seen: hostSeen, traced: true };
   const ben = { name: 'Ben', page: guest, seen: guestSeen };
-  const [operator, reader] = operatorFirst([anna, ben]);
-  console.log(`the draw:          ${operator.name} works the first station, ${reader.name} reads`);
-
-  // Spawned within sight of the Laborkennung, a player gets the note as soon
-  // as the briefing is gone: that is the moment for sign.png.
-  const atSign = [reader, operator].find((p) => p.seen.view.presence.signSeen);
-  if (atSign !== undefined) {
-    await captureSign(atSign.page, atSign.name);
-  }
+  const { operator, reader, atSign } = await firstMoments(anna, ben);
   // Let the briefing countdown finish; server and browsers share this clock.
   await sleep(Math.max(0, guestSeen.view.startedAt + 4200 - Date.now()));
   // The world's zoom follows the canvas height: nothing the run brings up in

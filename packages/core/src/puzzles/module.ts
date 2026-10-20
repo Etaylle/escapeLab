@@ -59,7 +59,14 @@ export interface PuzzleContext {
 }
 
 /** Views are rebuilt on every change, not on every tick, so they get no clock. */
-export type ViewContext = Pick<PuzzleContext, 'edgework' | 'alarms' | 'crew'>;
+export type ViewContext = Pick<PuzzleContext, 'edgework' | 'alarms' | 'crew'> & {
+  /**
+   * ids of the players standing at the open station, at either console,
+   * from presence — where the whole crew presses, who is there to; empty
+   * for an emergency, which stands at no station
+   */
+  operators: string[];
+};
 
 /** Who looks at the open puzzle, and from where. */
 export interface Viewer {

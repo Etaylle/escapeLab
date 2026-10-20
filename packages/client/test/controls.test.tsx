@@ -37,6 +37,7 @@ function viewWith(items: Item[]): PlayerView {
     palette: [],
     deadlineAt: null,
     startedAt: 1,
+    lights: { out: true, outAt: 1 },
     finishedAt: null,
     timeLimitSec: 600,
     currentPuzzleIndex: 0,
@@ -68,6 +69,7 @@ function world(items: Item[], spectator = false): string {
       pingsRef={{ current: [] }}
       chatsRef={{ current: [] }}
       inputLocked={false}
+      darkSince={0}
       spectator={spectator}
       holdTips={false}
       onToggleInfo={() => undefined}

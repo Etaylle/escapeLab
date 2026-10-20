@@ -97,7 +97,7 @@ function press(bank: SwitchesDef, state: SwitchesState, input: SwitchesInput, ed
 function settled(bank: SwitchesDef, from: SwitchesState, edgework: Edgework): SwitchesState {
   let state = from;
   for (let guard = 0; guard <= 6; guard++) {
-    const viewCtx = { edgework, alarms: 0, crew: ['op', 'rd'] };
+    const viewCtx = { edgework, alarms: 0, crew: ['op', 'rd'], operators: ['op'] };
     const views = {
       operator: switchesModule.view(bank, state, AT_STATION, viewCtx),
       reader: switchesModule.view(bank, state, AT_BOOK, viewCtx),
@@ -360,7 +360,7 @@ describe.each(FEATURES)('switches with %i features: a run', (n) => {
       const edgework = generateEdgework(mulberry32(seed + 1));
       const state = switchesModule.init(bankDef, mulberry32(seed), ctx(edgework));
       stars += state.switches.filter((sw) => sw.star).length;
-      const viewCtx = { edgework, alarms: 0, crew: ['op', 'rd'] };
+      const viewCtx = { edgework, alarms: 0, crew: ['op', 'rd'], operators: ['op'] };
       const view = switchesModule.view(bankDef, state, AT_STATION, viewCtx);
       expect(view.features).toBe(n);
       expect(view.switches?.every((sw) => 'star' in sw === (n === 3))).toBe(true);

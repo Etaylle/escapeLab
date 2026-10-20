@@ -55,6 +55,7 @@ function annaSees(phase: PlayerView['phase']): PlayerView {
     palette: [],
     deadlineAt: null,
     startedAt: phase === 'lobby' ? null : 1,
+    lights: phase === 'lobby' ? { out: false, outAt: null } : { out: true, outAt: 1 },
     finishedAt: null,
     timeLimitSec: 600,
     currentPuzzleIndex: 0,
@@ -102,6 +103,7 @@ function world(voice: VoiceMesh | null, spectator = false): string {
       pingsRef={{ current: [] }}
       chatsRef={{ current: [] }}
       inputLocked={false}
+      darkSince={0}
       spectator={spectator}
       holdTips={false}
       onToggleInfo={noop}

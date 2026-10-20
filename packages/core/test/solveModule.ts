@@ -64,7 +64,8 @@ export function playInstance(def: PuzzleDef, seed: number): number {
     atConsoles: from === null ? { a: [], b: [] } : atConsoles,
     readers: from === null ? [] : [READER],
   });
-  const viewCtx: ViewContext = { edgework, alarms: 0, crew };
+  const operators = twoConsoles ? [OPERATOR, PARTNER] : [OPERATOR];
+  const viewCtx: ViewContext = { edgework, alarms: 0, crew, operators };
   let state = puzzleModule.init(def, mulberry32(seed), ctx(T0, null));
   const transcript: SolveAid<PuzzleInput, View>['transcript'] = [];
   /** Who sends a move, each from the console they stand at. */

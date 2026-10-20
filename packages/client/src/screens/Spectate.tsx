@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { PlayerPosition, DronePosition, SpectatorView } from '@escapelab/core';
 import { useVoice } from '../voice/useVoice.js';
+import { useDarkSince } from '../world/coldOpen.js';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
 import type { KnownPositions } from '../world/movement.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
@@ -58,6 +59,8 @@ export function SpectateScreen({
     return () => clearInterval(timer);
   }, []);
   const speaking = useVoice()?.state.speaking;
+  // The audience sees the lights fail too, unless it came in after.
+  const darkSince = useDarkSince(view.lights, view.startedAt);
 
   const noop = (): void => undefined;
   const feed = view.events.slice(-14).reverse();
@@ -104,6 +107,7 @@ export function SpectateScreen({
               pingsRef={pingsRef}
               chatsRef={chatsRef}
               spectator
+              darkSince={darkSince}
               inputLocked
               holdTips={false}
               onToggleInfo={noop}
@@ -225,6 +229,7 @@ function spectatorAsPlayerView(view: SpectatorView): Parameters<typeof GameWorld
     startedAt: view.startedAt,
     finishedAt: view.finishedAt,
     timeLimitSec: view.timeLimitSec,
+    lights: view.lights,
     currentPuzzleIndex: view.currentPuzzleIndex,
     puzzleCount: view.puzzleCount,
     pausedFor: view.pausedFor,

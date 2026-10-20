@@ -3,6 +3,7 @@ export {
   checkMission,
   missionSchema,
   MANUAL_KINDS,
+  MAX_LAMPS,
   type ManualKind,
   type Mission,
   type MissionCheck,
@@ -19,7 +20,13 @@ export {
   type Presence,
   type RunEvent,
 } from './state.js';
-export { applyAction, inEscapePhase, missingItemsFor, type Action } from './actions.js';
+export {
+  applyAction,
+  inEscapePhase,
+  missingItemsFor,
+  POWER_OUT,
+  type Action,
+} from './actions.js';
 export { runReport, type RunOutcome, type RunReport, type StationReport } from './report.js';
 export type {
   DifficultyStats,
@@ -34,6 +41,7 @@ export {
   viewForSpectator,
   type SpectatorView,
   type PlayerView,
+  type Lights,
   type PlayerPresence,
   type ManualHere,
   type SourceHere,
@@ -83,6 +91,9 @@ export {
   shutDoors,
   stepAllowed,
   armedStations,
+  lightsAreOut,
+  patrollingDrones,
+  emergenciesDue,
   consoleOf,
   operatorsOf,
   readersOf,

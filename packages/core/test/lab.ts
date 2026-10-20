@@ -105,6 +105,15 @@ export function started(mission: Mission, seed = 7, at = T0): GameState {
   return actions.reduce(applyAction, initialState(mission));
 }
 
+/**
+ * The end of the mission's intro, as the room dispatches it once the
+ * lights are due: they go out at `at` and the clock starts. Nothing changes
+ * for a mission without an intro, whose lights are out from the start.
+ */
+export function lightsOut(state: GameState, at = T0): GameState {
+  return applyAction(state, { type: 'lights-out', at });
+}
+
 /** Who stands where, the way the server reports it from positions. */
 export function standing(
   state: GameState,

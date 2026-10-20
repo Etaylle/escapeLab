@@ -50,7 +50,13 @@ export interface RunReport {
   spawns: Record<string, { x: number; y: number }>;
   /** the seed the run played, only where a tester pinned the room: `?seed=` plays it again */
   seed?: number;
+  /** the start of the run: every time of the report counts from here */
   startedAt: number;
+  /**
+   * when the lights went out and the clock started: `startedAt` itself for a
+   * mission without an intro; left out by reports written before intros
+   */
+  lightsOutAt?: number;
   finishedAt: number;
   outcome: RunOutcome;
   /** every station of the mission, in mission order */
@@ -84,6 +90,7 @@ export function runReport(state: GameState, roomCode: string): RunReport {
     spawns: Object.fromEntries(crew.map(({ player, alias }) => [alias, spawnOf(player, alias)])),
     ...(state.roomSeed === null || state.seed === null ? {} : { seed: state.seed }),
     startedAt,
+    ...(state.lightsOutAt === null ? {} : { lightsOutAt: state.lightsOutAt }),
     finishedAt,
     outcome: outcomeOf(state, alarmLimit),
     stations: stationsOf(state, startedAt),

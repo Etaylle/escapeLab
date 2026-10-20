@@ -23,7 +23,7 @@ import type {
   SolveAid,
 } from '../src/index.js';
 import { startsClosed, type ManualDef } from '../src/mission.js';
-import { consoleLab, started, standing, T0 } from './lab.js';
+import { consoleLab, lightsOut, started, standing, T0 } from './lab.js';
 import { MAX_IDLE_SEC, playInstance } from './solveModule.js';
 
 const SEEDS = 200;
@@ -237,7 +237,7 @@ function inputsFor(moves: Move<PuzzleInput>[], roles: Roles, crew: string[], at:
  */
 function playMission(mission: Mission, seed: number): GameState {
   const transcripts = mission.puzzles.map((): Transcript => []);
-  let state = started(mission, seed);
+  let state = lightsOut(started(mission, seed));
   const crew = state.players.map((p) => p.id);
   state = standing(state, { signSeen: crew });
   let idle = 0;
@@ -286,7 +286,7 @@ describe.each(played)('mission %s', (_id, mission) => {
     if (def === undefined) {
       throw new Error(`${mission.id} has no puzzles`);
     }
-    const state = openStation(started(mission, 1), def, T0 + 1000);
+    const state = openStation(lightsOut(started(mission, 1)), def, T0 + 1000);
     const { reader } = rolesAt(def, state.players.map((p) => p.id));
     for (const { id } of state.players) {
       const manual = viewFor(state, id).puzzle?.manual ?? null;

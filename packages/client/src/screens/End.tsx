@@ -21,6 +21,7 @@ const EVENT_ICON: Record<RunEvent['kind'], string> = {
   hint: '💡',
   radio: '📻',
   find: '🔎',
+  power: '⚡',
 };
 
 /** Milliseconds as m:ss. */

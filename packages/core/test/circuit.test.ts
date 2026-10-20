@@ -111,8 +111,10 @@ const cut = (def: CircuitDef, state: CircuitState, index: number, edgework = EVE
 const probe = (def: CircuitDef, state: CircuitState, index: number) =>
   send(def, state, { probe: index }, 'b');
 
+/** The operator stands at the station. */
+const OP = ['op'];
 const seenFrom = (def: CircuitDef, state: CircuitState, viewer: Viewer): CircuitView =>
-  circuitModule.view(def, state, viewer, { edgework: EVEN, alarms: 0, crew: CREW });
+  circuitModule.view(def, state, viewer, { edgework: EVEN, alarms: 0, crew: CREW, operators: OP });
 
 /** The crew's screens: the box at console a, the meter at console b, the book. */
 const views = (def: CircuitDef, state: CircuitState): Perspectives<CircuitView> => ({

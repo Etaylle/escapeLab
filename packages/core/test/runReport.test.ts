@@ -165,6 +165,7 @@ describe('runReport', () => {
       crew: ['Anna', 'Ben'],
       spawns: { p1: spawnOf(ANNA), p2: spawnOf(BEN) },
       startedAt: T0,
+      lightsOutAt: T0,
       finishedAt: T0 + 140_000,
       outcome: 'won',
       stations: [

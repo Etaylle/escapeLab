@@ -121,7 +121,8 @@ describe('where a finding points', () => {
     const apart =
       'map: consoles a and b of station "notstrom" at 1,9 and 5,6 stand 4.0 tiles apart';
     const both = locate(draft, apart);
-    expect(both.target).toEqual({ kind: 'station', index: 0 });
+    // Console a of the Notstrom-Kasten, after the Notlicht's lever in the list of stations.
+    expect(both.target).toEqual({ kind: 'station', index: 1 });
     expect(both.spots).toEqual([
       { x: 1, y: 9 },
       { x: 5, y: 6 },

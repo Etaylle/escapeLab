@@ -58,6 +58,9 @@ const ctx: PuzzleContext = {
   readers: [],
 };
 
+/** What the views read: the operator stands at the station. */
+const viewCtx = { ...ctx, operators: ['op'] };
+
 const init = (seed: number): MemoryState => memoryModule.init(def, mulberry32(seed), ctx);
 
 type Views = Perspectives<MemoryView>;
@@ -70,8 +73,8 @@ function wire(view: MemoryView): MemoryView {
 /** The bank seen from the station and from the book. */
 function viewsOf(state: MemoryState): Views {
   return {
-    operator: wire(memoryModule.view(def, state, AT_STATION, ctx)),
-    reader: wire(memoryModule.view(def, state, AT_BOOK, ctx)),
+    operator: wire(memoryModule.view(def, state, AT_STATION, viewCtx)),
+    reader: wire(memoryModule.view(def, state, AT_BOOK, viewCtx)),
   };
 }
 
@@ -251,7 +254,7 @@ describe('memory module', () => {
       /stage 3 needs the crew's notes of the 2 stage\(s\) before it/,
     );
     // One kept at the book never saw the buttons.
-    const atBook = memoryModule.view(def, state, AT_BOOK, ctx);
+    const atBook = memoryModule.view(def, state, AT_BOOK, viewCtx);
     const blindViews = { operator: atBook, reader: atBook };
     const blind = transcript.map((pressed) => ({ ...pressed, before: blindViews }));
     expect(() => memoryModule.solve(def, third, null, kept(blind))).toThrow(
@@ -341,8 +344,8 @@ describe('memory module', () => {
     });
     expect([...(views.operator.labels ?? [])].sort()).toEqual([1, 2, 3, 4]);
     expect(views.reader).toEqual(blind);
-    expect(memoryModule.view(def, state, ELSEWHERE, ctx)).toEqual(blind);
-    expect(memoryModule.view(def, state, AUDIENCE, ctx)).toEqual(views.operator);
+    expect(memoryModule.view(def, state, ELSEWHERE, viewCtx)).toEqual(blind);
+    expect(memoryModule.view(def, state, AUDIENCE, viewCtx)).toEqual(views.operator);
     for (const view of Object.values(views)) {
       const wire = JSON.stringify(view);
       expect(wire).not.toContain('history');

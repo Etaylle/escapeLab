@@ -58,7 +58,7 @@ const ctx: PuzzleContext = {
 const deal = (seed: number): KeypadState => keypadModule.init(def, mulberry32(seed), ctx);
 
 const viewAs = (state: KeypadState, viewer: Viewer): KeypadView =>
-  keypadModule.view(def, state, viewer, { edgework, alarms: 0, crew });
+  keypadModule.view(def, state, viewer, { edgework, alarms: 0, crew, operators: ['op'] });
 
 /** Every way to pick `size` of `items`, keeping their order. */
 function subsets<T>(items: readonly T[], size: number): T[][] {

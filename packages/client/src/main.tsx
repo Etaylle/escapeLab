@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 import { registerServiceWorker, watchInstallOffer } from './pwa.js';
 import './ui.css';
+import './styles/coldopen.css';
 import './styles/editor.css';
 import './styles/voice.css';
 import './styles/world.css';

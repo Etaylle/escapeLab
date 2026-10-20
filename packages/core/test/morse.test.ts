@@ -43,7 +43,7 @@ const ctx: PuzzleContext = {
 const fresh = (seed: number): MorseState => morseModule.init(def, mulberry32(seed), ctx);
 /** The radio desk as the player standing at it sees it. */
 const panelOf = (state: MorseState) =>
-  morseModule.view(def, state, AT_STATION, { edgework, alarms: 0, crew });
+  morseModule.view(def, state, AT_STATION, { edgework, alarms: 0, crew, operators: ['op'] });
 const press = (state: MorseState, input: MorseInput) =>
   morseModule.apply(def, state, input, 'op', ctx);
 

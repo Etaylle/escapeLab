@@ -93,21 +93,57 @@ export function stepAllowed(map: MapDef, state: GameState, from: Spot, to: Spot)
 }
 
 /**
- * The spots of the current puzzle's station while the mission is running —
- * one, or one per console — with the console each is (null where the
- * station has one); empty otherwise.
+ * Whether the run is on with its lights out: the clock runs, and security —
+ * the armed station, the patrols, the emergencies — is on duty.
+ */
+export function lightsAreOut(state: GameState): boolean {
+  return state.phase === 'playing' && state.lightsOutAt !== null;
+}
+
+/**
+ * The spots of the current puzzle's station while the mission is running
+ * with its lights out — one, or one per console — with the console each is
+ * (null where the station has one); empty otherwise.
  */
 export function armedStations(
   map: MapDef,
   state: GameState,
 ): { x: number; y: number; console: ConsoleId | null }[] {
   const current = state.mission.puzzles[state.currentPuzzleIndex];
-  if (state.phase !== 'playing' || current === undefined) {
+  if (!lightsAreOut(state) || current === undefined) {
     return [];
   }
   return map.stations
     .filter((s) => s.puzzleId === current.id)
     .map((s) => ({ x: s.x, y: s.y, console: s.console ?? null }));
+}
+
+/**
+ * The drones on patrol once the lights are out: those whose
+ * `activeAfterSolved` puzzles the crew has solved. The rest sleep at their
+ * first waypoint — neither moving, nor seeing, nor showing up.
+ */
+export function patrollingDrones(map: MapDef, state: GameState): MapDef['drones'] {
+  if (!lightsAreOut(state)) {
+    return [];
+  }
+  return map.drones.filter((drone) => drone.activeAfterSolved <= state.currentPuzzleIndex);
+}
+
+/**
+ * Whether the next emergency may be scheduled: the lights are out, the crew
+ * has solved the sabotage's `afterSolved` puzzles — before that it may still
+ * be locked in its starting rooms — and is not yet running for the hatch.
+ */
+export function emergenciesDue(state: GameState): boolean {
+  const sabotage = state.mission.map.sabotage;
+  const solved = state.currentPuzzleIndex;
+  return (
+    lightsAreOut(state) &&
+    sabotage !== undefined &&
+    solved >= sabotage.afterSolved &&
+    solved < state.mission.puzzles.length
+  );
 }
 
 /** Players at the station of `puzzleId`, at either console: while it is open, they work it. */
