@@ -844,8 +844,8 @@ button.link:hover {
   align-items: center;
   justify-content: center;
   padding: 18px;
-  background: rgba(4, 7, 10, 0.72);
-  backdrop-filter: blur(3px);
+  /* A plain dim, no backdrop-filter: a blur over the live canvas is redone on every frame. */
+  background: rgba(4, 7, 10, 0.78);
   animation: fadein 0.18s;
   overflow-y: auto;
 }
