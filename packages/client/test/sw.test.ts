@@ -43,6 +43,10 @@ describe('the service worker routes', () => {
     expect(route('/favicon.ico')).toBeNull();
   });
 
+  it('never keeps the run log, which only a token may read', () => {
+    expect(route('/runs.jsonl')).toBeNull();
+  });
+
   it('reads a path as a path: /wsx and /missionsfoo are not under /ws or /missions', () => {
     expect(route('/wsx')).toBeNull();
     expect(route('/missionsfoo')).toBeNull();

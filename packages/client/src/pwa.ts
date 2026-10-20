@@ -6,9 +6,24 @@ import type { WorkerNews } from './sw/news.js';
  * home screen, held back for the join screen's line (screens/Install.tsx),
  * and the service worker (sw/worker.ts), registered in production builds,
  * whose word that a new version took over becomes the reload line once this
- * page turns out to be older. Both need a secure origin — localhost or https;
- * over plain http on a LAN address the browser offers neither.
+ * page turns out to be older.
+ *
+ * Both need a secure origin, localhost or https. The game is usually played
+ * over plain http on a LAN address, where neither exists: then nothing is
+ * watched or registered, no line shows and the console stays quiet. Where a
+ * secure browser refuses them all the same (a private window, blocked
+ * storage), that stays quiet too: they are extras, the game plays the same.
  */
+
+/** What a refusal leaves behind: nothing, see above. */
+function refused(): undefined {
+  return undefined;
+}
+
+/** Whether the page has what an install offer and a service worker need. */
+function secureOrigin(): boolean {
+  return window.isSecureContext === true;
+}
 
 /** Chromium's install offer; lib.dom does not declare it, other browsers make none. */
 interface BeforeInstallPromptEvent extends Event {
@@ -55,6 +70,9 @@ export function usePwa(): Pwa {
  * screen's line. Call once, before the first render: the offer comes early.
  */
 export function watchInstallOffer(): void {
+  if (!secureOrigin()) {
+    return;
+  }
   window.addEventListener('beforeinstallprompt', (event) => {
     event.preventDefault();
     offer = event as BeforeInstallPromptEvent;
@@ -71,9 +89,7 @@ export function install(): void {
   const used = offer;
   offer = null;
   change({ installable: false });
-  used?.prompt().catch((error: unknown) => {
-    console.warn('[escapelab] the install dialog did not open:', error);
-  });
+  used?.prompt().catch(refused);
 }
 
 /** Closes the update line; the next reload brings the new version all the same. */
@@ -125,7 +141,7 @@ function ownAssets(): string[] {
  * whenever the page comes back into view.
  */
 export function registerServiceWorker(): void {
-  if (!('serviceWorker' in navigator)) {
+  if (!secureOrigin() || !('serviceWorker' in navigator)) {
     return;
   }
   const workers = navigator.serviceWorker;
@@ -136,19 +152,14 @@ export function registerServiceWorker(): void {
   });
   workers.startMessages();
   const register = (): void => {
-    workers.register('/sw.js').then(
-      (registration) => {
-        document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible') {
-            // Offline it fails; the next time the page shows, it asks again.
-            registration.update().catch(() => undefined);
-          }
-        });
-      },
-      (error: unknown) => {
-        console.warn('[escapelab] the service worker did not register:', error);
-      },
-    );
+    workers.register('/sw.js').then((registration) => {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          // Offline it fails; the next time the page shows, it asks again.
+          registration.update().catch(refused);
+        }
+      });
+    }, refused);
   };
   if (document.readyState === 'complete') {
     register();

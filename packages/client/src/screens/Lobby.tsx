@@ -6,6 +6,7 @@ import {
   type MissionInfo,
   type PlayerView,
 } from '@escapelab/core';
+import { fullscreenForRun } from '../runScreen.js';
 import { crewSizeText } from './Crew.js';
 import { CrewRoom } from './CrewRoom.js';
 import { Icon } from './Icon.js';
@@ -170,7 +171,8 @@ function HostSetup({ view, send, missions }: HostSetupProps) {
 /**
  * The host's start, locked with the reason while it is; everyone else's
  * ready switch, with what the start still waits for once they are ready.
- * On a phone this bar sticks to the bottom of the window (lobby.css).
+ * On a phone this bar sticks to the bottom of the window (lobby.css), and
+ * the press that leads into the run takes the page fullscreen (runScreen.ts).
  */
 function StartArea({ view, send }: { view: PlayerView; send: Send }) {
   const blocker = startBlocker(view);
@@ -180,7 +182,10 @@ function StartArea({ view, send }: { view: PlayerView; send: Send }) {
         <button
           className="primary lobby-start"
           disabled={blocker !== null}
-          onClick={() => send({ kind: 'start-mission' })}
+          onClick={(event) => {
+            fullscreenForRun(event.nativeEvent);
+            send({ kind: 'start-mission' });
+          }}
         >
           {blocker ?? (
             <>
@@ -196,7 +201,12 @@ function StartArea({ view, send }: { view: PlayerView; send: Send }) {
     <div className="lobby-go">
       <button
         className={ready ? 'lobby-start' : 'primary lobby-start'}
-        onClick={() => send({ kind: 'set-ready', ready: !ready })}
+        onClick={(event) => {
+          if (!ready) {
+            fullscreenForRun(event.nativeEvent);
+          }
+          send({ kind: 'set-ready', ready: !ready });
+        }}
       >
         {ready ? (
           <>

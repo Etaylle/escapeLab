@@ -166,6 +166,15 @@ Beim Start schreibt der Server alle Netzwerk-Adressen in die Konsole
 mit Laptop oder Handy beitreten, ohne irgendetwas zu installieren. Port über `PORT=8080`
 änderbar.
 
+**Auf dem Handy:** Ein Lauf geht in den Vollbildmodus (beim Bereitmelden oder Starten, sonst
+beim ersten Antippen) und dreht sich ins Querformat — auch über `http://<LAN-IP>:3001`, in den
+Browsern von Android; das iPhone kennt beides nicht. Die PWA-Teile brauchen dagegen eine sichere
+Adresse, also HTTPS oder `localhost`: die App auf den Startbildschirm legen, der Service Worker
+(Zwischenspeicher, Zeile „Neue Version — neu laden“) und ein Bildschirm, der wach bleibt. Über
+die LAN-Adresse per http fehlen sie still, ohne Fehlermeldung. Im LAN gibt es sie später mit
+einem selbstsignierten Zertifikat, dem die Handys vertrauen (der Server spricht bisher nur
+http).
+
 **Laufprotokoll (ohne Datenbank):** Jeder beendete Lauf, gewonnen oder verloren, hängt seinen
 Bericht als eine Zeile JSON an eine Datei an; jede Revanche bekommt ihre eigene Zeile. Darin
 stehen Mission, Schwierigkeit, Zeitlimit und Alarmgrenze, Crew-Größe und gezogene Startplätze,
