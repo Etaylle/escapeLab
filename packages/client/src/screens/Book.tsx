@@ -1,17 +1,21 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import type { ManualHere, PuzzleView } from '@escapelab/core';
-import { useKeys, useNow, useSwipe } from '../hooks.js';
+import { useKeys, useMedia, useNow, useSwipe } from '../hooks.js';
 import {
   firstPageOf,
+  leafFor,
+  openingPage,
   paginate,
   pagesInView,
   turnFrom,
   type BookPage,
   type Fragment,
+  type Leaf,
 } from '../pages.js';
 import { READERS } from '../puzzles/index.js';
 import { Block } from './Manual.js';
 import { ReaderPanel } from './PuzzlePanel.js';
+import { Seal } from './Seal.js';
 
 /** One station's rules as read at a source, the last crew's notes beside them. */
 export type ReadSection = ManualHere['sections'][number];
@@ -78,6 +82,17 @@ export function MarginNotes({ section, onAsk }: { section: ReadSection; onAsk: (
   );
 }
 
+/** What a book's cover prints besides the source's own label. */
+export interface Imprint {
+  /** the mission's title, round the lab's seal */
+  mission: string;
+  /** the room the source lies in; null where no label on the map names it */
+  room: string | null;
+}
+
+/** How the sheets are held: bound as a book, or clipped to a board one at a time. */
+export type Binding = 'bound' | 'clip';
+
 /** Everything a page needs to know about the book it is part of. */
 interface BookContext {
   manual: ManualHere;
@@ -85,22 +100,32 @@ interface BookContext {
   /** index of the station that is up now; earlier ones are done */
   current: number;
   pages: BookPage[];
-  /** opens the book at a page, from the contents */
+  imprint: Imprint;
+  /** opens the book at a page, from the contents or a thumb tab */
   onOpen: (page: number) => void;
   onAskNote: () => void;
 }
 
 /** Which way a page faces: left or right in a spread, or alone. */
-type Side = 'left' | 'right' | 'single';
+export type Side = 'left' | 'right' | 'single';
 
-/** The line a printed manual carries at the foot of every page. */
+/** The line a printed manual carries at the foot of every page but the cover. */
 const FOOTER = 'ESCAPELAB · HANDBUCH · REV. 3';
 
+/** How long a leaf takes to turn over, in ms; styles/book.css times the motion by it. */
+const LEAF_MS = 450;
+
+/** Readers who asked for less motion see the page change without a leaf turning. */
+const STILL_QUERY = '(prefers-reduced-motion: reduce)';
+
+/** A label longer than this is set smaller on the cover, so it stays on one line. */
+const LONG_LABEL = 9;
+
+/** The stations the book covers, each with the page it starts on. */
 function Contents({ book }: { book: BookContext }) {
   return (
     <nav className="contents" aria-label="Inhalt">
       <span className="contents-kicker">Inhalt</span>
-      <h2 className="contents-title">{book.manual.label}</h2>
       <ol className="contents-list">
         {book.manual.sections.map((section, i) => {
           const page = firstPageOf(book.pages, i) ?? 1;
@@ -124,10 +149,47 @@ function Contents({ book }: { book: BookContext }) {
   );
 }
 
-function FragmentView({ fragment, puzzle }: { fragment: Fragment; puzzle: PuzzleView | null }) {
+/**
+ * Page 1: the source's label, the lab's seal round the mission's title, the
+ * revision and where the source lies — and, where the book covers more than
+ * one station, the contents under them.
+ */
+function Cover({ book }: { book: BookContext }) {
+  const { manual, imprint } = book;
+  const many = manual.sections.length > 1;
+  return (
+    <div className={`cover${many ? ' cover-contents' : ''}`}>
+      <h2 className={`cover-title${manual.label.length > LONG_LABEL ? ' cover-title-long' : ''}`}>
+        {manual.label}
+      </h2>
+      <Seal mission={imprint.mission} />
+      <p className="cover-imprint">
+        <span>Rev. 3</span>
+        {imprint.room !== null && <span>{`Liegt aus: ${imprint.room}`}</span>}
+      </p>
+      {many && <Contents book={book} />}
+    </div>
+  );
+}
+
+function FragmentView({
+  fragment,
+  section,
+  puzzle,
+}: {
+  fragment: Fragment;
+  section: ReadSection;
+  puzzle: PuzzleView | null;
+}) {
   switch (fragment.kind) {
     case 'title':
-      return <h2 className="page-title">{fragment.text}</h2>;
+      // pages.ts counts the whole „§n — Titel"; the number as a badge takes less room.
+      return (
+        <h2 className="page-title">
+          <span className="page-badge">{`§${section.index + 1}`}</span>
+          {` ${section.title}`}
+        </h2>
+      );
     case 'heading':
       return <h3 className="page-heading">{fragment.text}</h3>;
     case 'rules':
@@ -156,17 +218,14 @@ function Sheet({
 }: {
   number: number;
   side: Side;
-  progress: Progress | null;
+  progress: Progress;
   opener: boolean;
   head: string | null;
   margin: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <article
-      className={`page page-${side}${progress === null ? '' : ` page-${progress}`}`}
-      aria-label={`Seite ${number}`}
-    >
+    <article className={`page page-${side} page-${progress}`} aria-label={`Seite ${number}`}>
       <div className="page-in">
         {head !== null && <header className="page-head">{head}</header>}
         <div className="page-text">{children}</div>
@@ -186,17 +245,26 @@ function Sheet({
   );
 }
 
+/** The cover: no running head, no page number, no foot line, the whole sheet for itself. */
+function CoverSheet({ side, book }: { side: Side; book: BookContext }) {
+  return (
+    <article className={`page page-${side} page-cover`} aria-label="Seite 1">
+      <div className="page-in">
+        <div className="page-text">
+          <Cover book={book} />
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function PageView({ number, side, book }: { number: number; side: Side; book: BookContext }) {
   const page = book.pages[number - 1];
   if (page === undefined) {
     return <article className={`page page-${side} page-blank`} aria-hidden="true" />;
   }
   if (page.section === null) {
-    return (
-      <Sheet number={number} side={side} progress={null} opener head={null} margin={null}>
-        <Contents book={book} />
-      </Sheet>
-    );
+    return <CoverSheet side={side} book={book} />;
   }
   const section = book.manual.sections[page.section];
   if (section === undefined) {
@@ -212,31 +280,130 @@ function PageView({ number, side, book }: { number: number; side: Side; book: Bo
       margin={page.first ? <MarginNotes section={section} onAsk={book.onAskNote} /> : null}
     >
       {page.fragments.map((fragment, i) => (
-        <FragmentView key={i} fragment={fragment} puzzle={book.puzzle} />
+        <FragmentView key={i} fragment={fragment} section={section} puzzle={book.puzzle} />
       ))}
     </Sheet>
   );
 }
 
-function whereIn(shown: readonly number[], total: number): string {
-  const [first = total, second] = shown.filter((n) => n <= total);
-  return second === undefined
-    ? `Seite ${first} von ${total}`
-    : `Seite ${first}–${second} von ${total}`;
+/**
+ * Thumb tabs on the fore-edge: one per station the book covers, coloured by
+ * how far the run has come, the tab of a station in view pulled out a
+ * little; a tab turns to the first page of its station.
+ */
+function Tabs({ book, shown }: { book: BookContext; shown: readonly number[] }) {
+  const inView = new Set(shown.map((number) => book.pages[number - 1]?.section));
+  return (
+    <nav className="book-tabs" aria-label="Register">
+      {book.manual.sections.map((section, i) => {
+        const page = firstPageOf(book.pages, i) ?? 1;
+        const progress = progressOf(section, book.current);
+        return (
+          <button
+            key={section.puzzleId}
+            className={`book-tab book-tab-${progress}${inView.has(i) ? ' book-tab-open' : ''}`}
+            aria-label={`${stationTitle(section)}, Seite ${page}`}
+            aria-current={progress === 'now' ? 'step' : undefined}
+            title={`${stationTitle(section)} · Seite ${page}`}
+            onClick={() => book.onOpen(page)}
+          >
+            {`§${section.index + 1}`}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+/** The sides a leaf's two faces show on: in a spread, from right to left going forwards. */
+function leafSides(leaf: Leaf, spread: boolean): [Side, Side] {
+  if (!spread) {
+    return ['single', 'single'];
+  }
+  return leaf.dir === 1 ? ['right', 'left'] : ['left', 'right'];
 }
 
 /**
- * Paper sources read as a book: the contents first, every station from a
- * page of its own, two pages side by side where the window is wide enough.
- * It opens where the bookmark lies — at the station that is up now, if this
- * book covers it — and turns with the arrow keys, the arrows below it or a
- * swipe.
+ * A copy of the sheet that turns, its faces back to back, over the pages it
+ * uncovers; styles/book.css swings it round its spine — or, on a clipboard,
+ * up over the clip — and shades it as it goes. Only for the eye: nothing on
+ * it is read out or reached by the keyboard.
+ */
+export function TurningLeaf({
+  leaf,
+  spread,
+  face,
+}: {
+  leaf: Leaf;
+  spread: boolean;
+  /** draws a page of the book as it faces */
+  face: (page: number, side: Side) => ReactNode;
+}) {
+  const [frontSide, backSide] = leafSides(leaf, spread);
+  const timing = { '--leaf-ms': `${LEAF_MS}ms` } as CSSProperties;
+  return (
+    <div
+      className={`book-leaf book-leaf-${leaf.dir === 1 ? 'next' : 'back'}`}
+      style={timing}
+      aria-hidden="true"
+      inert
+    >
+      <div className={`leaf-face leaf-front leaf-${frontSide}`}>{face(leaf.front, frontSide)}</div>
+      {leaf.back !== null && (
+        <div className={`leaf-face leaf-back leaf-${backSide}`}>{face(leaf.back, backSide)}</div>
+      )}
+    </div>
+  );
+}
+
+/** A leaf on its way over, the view it turns in, and its count, which restarts the motion. */
+interface Turning {
+  leaf: Leaf;
+  spread: boolean;
+  count: number;
+}
+
+/**
+ * The page the book lies open at and the leaf turning over to it: `go`
+ * opens another page, a leaf turning there unless the reader asked for less
+ * motion; it lies still after LEAF_MS. A leaf of a view the window has just
+ * left behind is dropped.
+ */
+function usePage(opening: number, total: number, spread: boolean) {
+  const [page, setPage] = useState(opening);
+  const [turning, setTurning] = useState<Turning | null>(null);
+  const still = useMedia(STILL_QUERY);
+  useEffect(() => {
+    if (turning === null) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setTurning(null), LEAF_MS + 40);
+    return () => clearTimeout(timer);
+  }, [turning]);
+  const at = Math.min(page, total);
+  const go = (to: number): void => {
+    const leaf = still ? null : leafFor(at, to, spread);
+    setTurning((last) => (leaf === null ? null : { leaf, spread, count: (last?.count ?? 0) + 1 }));
+    setPage(to);
+  };
+  return { at, go, turning: turning?.spread === spread ? turning : null };
+}
+
+/**
+ * Paper sources read as a book: the cover first, every station from a page
+ * of its own, two pages side by side where the window is wide enough — or,
+ * clipped to a board, one sheet at a time. It opens where the bookmark lies:
+ * at the station that is up now, if this book covers it, at its only
+ * station, or on the cover. It turns with the arrow keys, the arrows below
+ * it, a swipe, the contents or a thumb tab, a leaf turning over each time.
  */
 export function Book({
   manual,
   puzzle,
   current,
   spread,
+  binding,
+  imprint,
   onAskNote,
 }: {
   manual: ManualHere;
@@ -245,6 +412,8 @@ export function Book({
   current: number;
   /** two pages side by side, or one at a time */
   spread: boolean;
+  binding: Binding;
+  imprint: Imprint;
   onAskNote: () => void;
 }) {
   const pages = paginate(
@@ -255,13 +424,11 @@ export function Book({
     })),
   );
   const marked = manual.sections.findIndex((section) => section.index === current);
-  const [page, setPage] = useState(() => (marked < 0 ? null : firstPageOf(pages, marked)) ?? 1);
-  const [dir, setDir] = useState<1 | -1>(1);
-  const at = Math.min(page, pages.length);
-  const go = (to: number): void => {
-    setDir(to < at ? -1 : 1);
-    setPage(to);
-  };
+  const { at, go, turning } = usePage(
+    openingPage(pages, marked < 0 ? null : marked),
+    pages.length,
+    spread,
+  );
   const turn = (to: 1 | -1): void => {
     const next = turnFrom(at, pages.length, spread, to);
     if (next !== null) {
@@ -271,19 +438,25 @@ export function Book({
   useKeys(['arrowleft', 'arrowright'], (key) => turn(key === 'arrowright' ? 1 : -1));
   const swipe = useSwipe(turn);
   const shown = pagesInView(at, spread);
-  const book: BookContext = { manual, puzzle, current, pages, onOpen: go, onAskNote };
+  const book: BookContext = { manual, puzzle, current, pages, imprint, onOpen: go, onAskNote };
+  const sideOf = (i: number): Side => (spread ? (i === 0 ? 'left' : 'right') : 'single');
+  const look = `book book-${spread ? 'spread' : 'single'}${binding === 'clip' ? ' book-clip' : ''}`;
   return (
-    <div className={`book ${spread ? 'book-spread' : 'book-single'}`}>
+    <div className={look}>
       <div className="book-pages" {...swipe}>
-        <div key={shown[0]} className={`book-leaves book-leaves-${dir === 1 ? 'next' : 'back'}`}>
-          {shown.map((number, i) => (
-            <PageView
-              key={number}
-              number={number}
-              side={spread ? (i === 0 ? 'left' : 'right') : 'single'}
-              book={book}
-            />
+        <div className="book-leaves">
+          {(turning?.leaf.under ?? shown).map((number, i) => (
+            <PageView key={number} number={number} side={sideOf(i)} book={book} />
           ))}
+          {turning !== null && (
+            <TurningLeaf
+              key={turning.count}
+              leaf={turning.leaf}
+              spread={spread}
+              face={(number, side) => <PageView number={number} side={side} book={book} />}
+            />
+          )}
+          <Tabs book={book} shown={shown} />
         </div>
       </div>
       <nav className="book-nav" aria-label="Blättern">
@@ -309,4 +482,11 @@ export function Book({
       </nav>
     </div>
   );
+}
+
+function whereIn(shown: readonly number[], total: number): string {
+  const [first = total, second] = shown.filter((n) => n <= total);
+  return second === undefined
+    ? `Seite ${first} von ${total}`
+    : `Seite ${first}–${second} von ${total}`;
 }

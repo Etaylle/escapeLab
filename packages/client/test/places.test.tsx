@@ -1,10 +1,17 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { Edgework, ManualHere, PlayerView, PuzzleView } from '@escapelab/core';
-import { Book } from '../src/screens/Book.js';
-import { AlarmMarks, GameScreen, StationModal, stationLabel } from '../src/screens/Game.js';
+import { leafFor, type Leaf } from '../src/pages.js';
+import { Book, TurningLeaf, type Binding, type Imprint } from '../src/screens/Book.js';
+import {
+  AlarmMarks,
+  GameScreen,
+  StationModal,
+  stationLabel,
+} from '../src/screens/Game.js';
 import { InfoPanel, Legend } from '../src/screens/InfoPanel.js';
-import { ReadingOverlay } from '../src/screens/Reading.js';
+import { ReadingOverlay, roomOf } from '../src/screens/Reading.js';
+import { titleSize } from '../src/screens/Seal.js';
 import { WorldModal } from '../src/screens/WorldModal.js';
 import { mapWith, type Item, type Manual, type Plate } from './fixtures.js';
 
@@ -76,6 +83,18 @@ function maze(index: number, cells: number[] | null): PuzzleView {
   };
 }
 
+/** A source of each kind where the tests put them: two rooms, a door between, one named. */
+function source(id: string, kind: Manual['kind'], x: number, y: number): Manual {
+  return { id, kind, x, y, label: id, puzzleIds: ['kabel', 'netz'], opened: true, needsKey: null };
+}
+
+const lab = mapWith({
+  tiles: ['#######', '#..#..#', '#.....#', '#######'],
+  doors: [{ id: 'tuer', x: 3, y: 2, open: false }],
+  labels: [{ text: 'ARCHIV', x: 1, y: 1 }],
+  manuals: [source('buch', 'book', 2, 2), source('plan', 'terminal', 5, 1)],
+});
+
 function read(
   puzzle: PuzzleView | null,
   current = 2,
@@ -87,6 +106,8 @@ function read(
       manual={manual}
       puzzle={puzzle}
       current={current}
+      mission="Blackout im Labor"
+      map={lab}
       edgework={seen}
       onAskNote={noop}
       onClose={noop}
@@ -94,9 +115,25 @@ function read(
   );
 }
 
-function leaf(manual: ManualHere, current: number, spread = false): string {
+const imprint: Imprint = { mission: 'Blackout im Labor', room: 'ARCHIV' };
+
+/** The book as it opens, at whichever page it opens at. */
+function opened(
+  manual: ManualHere,
+  current: number,
+  spread = false,
+  binding: Binding = 'bound',
+): string {
   return renderToStaticMarkup(
-    <Book manual={manual} puzzle={null} current={current} spread={spread} onAskNote={noop} />,
+    <Book
+      manual={manual}
+      puzzle={null}
+      current={current}
+      spread={spread}
+      binding={binding}
+      imprint={imprint}
+      onAskNote={noop}
+    />,
   );
 }
 
@@ -136,16 +173,23 @@ describe('reading at a terminal', () => {
 
 describe('reading a book', () => {
   it('opens at the bookmark: the first page of the station that is up', () => {
-    const html = leaf(bound(), 2);
-    expect(html).toContain('<h2 class="page-title">§3 — Leitungsnetz</h2>');
+    const html = opened(bound(), 2);
+    expect(html).toContain(
+      '<h2 class="page-title"><span class="page-badge">§3</span> Leitungsnetz</h2>',
+    );
     expect(html).toContain('class="page-ribbon"');
     expect(html).toContain('Seite 3 von 3');
     expect(html).not.toContain('Rot zuerst.');
-    expect(html).not.toContain('Inhalt');
+    expect(html).not.toContain('page-cover');
   });
 
-  it('opens at the contents where the station that is up lies elsewhere', () => {
-    const html = leaf(bound(), 1);
+  it('opens on the cover where the station that is up lies elsewhere, its contents on it', () => {
+    const html = opened(bound(), 1);
+    expect(html).toContain(
+      '<article class="page page-single page-cover" aria-label="Seite 1"><div class="page-in">' +
+        '<div class="page-text"><div class="cover cover-contents">' +
+        '<h2 class="cover-title">HANDBUCH</h2><svg class="seal"',
+    );
     expect(html).toContain('<span class="contents-kicker">Inhalt</span>');
     expect(html).toContain(
       '<li class="contents-done"><button class="contents-entry"><span class="contents-name">' +
@@ -157,20 +201,103 @@ describe('reading a book', () => {
     expect(html).not.toContain('page-ribbon');
   });
 
+  it('prints the source, the seal round the mission, the revision and the room on it', () => {
+    const html = opened(bound(), 1);
+    expect(html).toContain('role="img" aria-label="Laborsiegel: Blackout im Labor"');
+    expect(html).toMatch(/<textPath href="#[^"]+-top" startOffset="50%">LABOR<\/textPath>/);
+    expect(html).toMatch(/<textPath [^>]*>BLACKOUT IM LABOR<\/textPath>/);
+    expect(html).toContain(
+      '<p class="cover-imprint"><span>Rev. 3</span><span>Liegt aus: ARCHIV</span></p>',
+    );
+    // A cover has no page number, no foot line, no running head.
+    expect(html).not.toContain('page-folio');
+    expect(html).not.toContain('page-foot');
+    expect(html).not.toContain('page-head');
+    const nowhere = renderToStaticMarkup(
+      <Book
+        manual={bound()}
+        puzzle={null}
+        current={1}
+        spread={false}
+        binding="bound"
+        imprint={{ mission: 'Blackout im Labor', room: null }}
+        onAskNote={noop}
+      />,
+    );
+    expect(nowhere).toContain('<p class="cover-imprint"><span>Rev. 3</span></p>');
+  });
+
+  it('sets a long label smaller on the cover, and a long mission smaller round the seal', () => {
+    expect(opened({ ...bound(), label: 'AKTENSCHRANK' }, 1)).toContain(
+      '<h2 class="cover-title cover-title-long">AKTENSCHRANK</h2>',
+    );
+    expect(opened(bound(), 1)).toContain('<h2 class="cover-title">HANDBUCH</h2>');
+    expect(titleSize('BLACKOUT IM LABOR')).toBe(8.5);
+    const long = 'TUTORIAL: SYSTEMCHECK UND NOCH VIEL MEHR';
+    expect(titleSize(long)).toBeLessThan(8.5);
+    // 136 degrees of the circle of radius 51.5 hold it, at 0.78 em a capital.
+    expect(long.length * 0.78 * titleSize(long)).toBeLessThanOrEqual(122.3);
+  });
+
+  it('gives a book of one station a cover without contents, and opens it on the station', () => {
+    const single: ManualHere = { ...bound(), sections: bound().sections.slice(0, 1) };
+    // The station is done: no bookmark here, and still the book opens on its rules.
+    const html = opened(single, 3);
+    expect(html).toContain(
+      '<h2 class="page-title"><span class="page-badge">§1</span> Kabel</h2>',
+    );
+    expect(html).toContain('Seite 2 von 2');
+    expect(html).not.toContain('page-cover');
+    const spread = opened(single, 3, true);
+    expect(spread).toContain('<div class="cover"><h2 class="cover-title">HANDBUCH</h2>');
+    expect(spread).not.toContain('class="contents"');
+    expect(spread).toContain('<span class="page-badge">§1</span>');
+  });
+
   it('shows two pages side by side where there is room, one where there is not', () => {
-    const spread = leaf(bound(), 0, true);
+    const spread = opened(bound(), 0, true);
     expect(spread).toContain('class="book book-spread"');
-    expect(spread).toContain('Inhalt');
-    expect(spread).toContain('<h2 class="page-title">§1 — Kabel</h2>');
+    expect(spread).toContain('class="page page-left page-cover"');
+    expect(spread).toContain('<span class="page-badge">§1</span> Kabel</h2>');
     expect(spread).toContain('Seite 1–2 von 3');
-    const single = leaf(bound(), 0);
-    expect(single).not.toContain('Inhalt');
-    expect(single).toContain('<h2 class="page-title">§1 — Kabel</h2>');
+    const single = opened(bound(), 0);
+    expect(single).toContain('class="book book-single"');
+    expect(single).not.toContain('page-cover');
+    expect(single).toContain('<span class="page-badge">§1</span> Kabel</h2>');
     expect(single).toMatch(/<button class="turn-next"[^>]*>›<\/button>/);
   });
 
+  it('puts a thumb tab per station on the fore-edge, coloured by how far the run is', () => {
+    const html = opened(bound(), 2);
+    expect(html).toContain(
+      '<nav class="book-tabs" aria-label="Register">' +
+        '<button class="book-tab book-tab-done" aria-label="§1 — Kabel, Seite 2" ' +
+        'title="§1 — Kabel · Seite 2">§1</button>' +
+        '<button class="book-tab book-tab-now book-tab-open" ' +
+        'aria-label="§3 — Leitungsnetz, Seite 3" aria-current="step" ' +
+        'title="§3 — Leitungsnetz · Seite 3">§3</button></nav>',
+    );
+    // Before the run reaches them both lie ahead; on the cover neither is pulled out.
+    const early = opened(bound(), 0, true);
+    expect(early).toContain('class="book-tab book-tab-now book-tab-open"');
+    expect(early).toContain('class="book-tab book-tab-ahead"');
+    const cover = opened(bound(), 1);
+    expect(cover.match(/class="book-tab [^"]*"/g)).toEqual([
+      'class="book-tab book-tab-done"',
+      'class="book-tab book-tab-ahead"',
+    ]);
+  });
+
+  it('clips a clipboard to a board, a sheet at a time however wide the window', () => {
+    const html = read(null, 2, null, bound({}, 'clipboard'));
+    expect(html).toContain('class="puzzle-modal reading-modal reading-clipboard"');
+    expect(html).toContain('<div class="book book-single book-clip">');
+    expect(html).toContain('Seite 3 von 3');
+    expect(read(null, 2, null, bound())).toContain('<div class="book book-single">');
+  });
+
   it('writes the revealed notes beside the open station, with the way to ask for the next', () => {
-    const html = leaf(
+    const html = opened(
       bound({ notes: ['Erst die Farben ansagen.'], notesLeft: 2, noteReadyAt: Date.now() - 1000 }),
       2,
     );
@@ -182,29 +309,92 @@ describe('reading a book', () => {
   });
 
   it('counts down to the next note, and offers none once all are out', () => {
-    const waiting = leaf(bound({ notesLeft: 1, noteReadyAt: Date.now() + 30_000 }), 2);
+    const waiting = opened(bound({ notesLeft: 1, noteReadyAt: Date.now() + 30_000 }), 2);
     expect(waiting).toMatch(/<button class="note-ask" disabled="">Notiz in (29|30) s<\/button>/);
-    const done = leaf(bound({ notes: ['Eins.', 'Zwei.'], notesLeft: 0 }), 2);
+    const done = opened(bound({ notes: ['Eins.', 'Zwei.'], notesLeft: 0 }), 2);
     expect(done.match(/class="margin-note"/g)).toHaveLength(2);
     expect(done).not.toContain('note-ask');
   });
 
   it('keeps the margin clean beside a station that is not open', () => {
-    expect(leaf(bound({ notes: ['Nur hier.'], notesLeft: 1 }), 0)).not.toContain('class="margin"');
+    const elsewhere = opened(bound({ notes: ['Nur hier.'], notesLeft: 1 }), 0);
+    expect(elsewhere).not.toContain('class="margin"');
   });
 
-  it('prints the manual’s line at the foot of every page, the contents too', () => {
+  it('prints the manual’s line at the foot of every page but the cover', () => {
     const foot =
       '<footer class="page-foot" aria-hidden="true">ESCAPELAB · HANDBUCH · REV. 3</footer>';
-    const contents = leaf(bound(), 1);
-    expect(contents).toContain('<span class="contents-kicker">Inhalt</span>');
-    expect(contents).toContain(`<span class="page-folio">1</span>${foot}`);
-    const spread = leaf(bound(), 0, true);
-    expect(spread.split(foot)).toHaveLength(3);
+    expect(opened(bound(), 2)).toContain(`<span class="page-folio">3</span>${foot}`);
+    // The cover beside the first station's page: one foot line, under the page.
+    const spread = opened(bound(), 0, true);
+    expect(spread.split(foot)).toHaveLength(2);
+    expect(spread).toContain(`<span class="page-folio">2</span>${foot}`);
     // The blank leaf after the last page is no page of the book.
-    const last = leaf(bound(), 2, true);
+    const last = opened(bound(), 2, true);
     expect(last).toContain('page-blank');
     expect(last.split(foot)).toHaveLength(2);
+  });
+});
+
+/** A leaf as drawn, each face naming the page and side it shows. */
+function turned(leaf: Leaf, spread: boolean): string {
+  return renderToStaticMarkup(
+    <TurningLeaf leaf={leaf} spread={spread} face={(page, side) => <i>{`${page} ${side}`}</i>} />,
+  );
+}
+
+describe('a leaf turning over', () => {
+  it('turns the right page of a spread over to the left, its back the new left page', () => {
+    const leaf = leafFor(2, 3, true);
+    expect(leaf).not.toBeNull();
+    expect(turned(leaf!, true)).toBe(
+      '<div class="book-leaf book-leaf-next" style="--leaf-ms:450ms" aria-hidden="true" ' +
+        'inert=""><div class="leaf-face leaf-front leaf-right"><i>2 right</i></div>' +
+        '<div class="leaf-face leaf-back leaf-left"><i>3 left</i></div></div>',
+    );
+  });
+
+  it('turns the left page back over to the right, its back the new right page', () => {
+    const html = turned(leafFor(3, 1, true)!, true);
+    expect(html).toContain('class="book-leaf book-leaf-back"');
+    expect(html).toContain(
+      '<div class="leaf-face leaf-front leaf-left"><i>3 left</i></div>' +
+        '<div class="leaf-face leaf-back leaf-right"><i>2 right</i></div>',
+    );
+  });
+
+  it('lifts a single page with one face, and lays the one before down the same way', () => {
+    expect(turned(leafFor(2, 3, false)!, false)).toContain(
+      '<div class="leaf-face leaf-front leaf-single"><i>2 single</i></div></div>',
+    );
+    const back = turned(leafFor(3, 2, false)!, false);
+    expect(back).toContain('class="book-leaf book-leaf-back"');
+    expect(back).toContain('<i>2 single</i>');
+    expect(back.match(/class="leaf-face/g)).toHaveLength(1);
+  });
+
+  it('lays no copy of a page over the book while nothing turns', () => {
+    expect(opened(bound(), 2)).not.toContain('book-leaf');
+    expect(opened(bound(), 0, true)).not.toContain('book-leaf');
+  });
+});
+
+describe('where a source lies', () => {
+  it('names the room by the label on its floor, behind no door', () => {
+    expect(roomOf(lab, 'buch')).toBe('ARCHIV');
+  });
+
+  it('names nothing where no label is in the room, or the source is not on the map', () => {
+    expect(roomOf(lab, 'plan')).toBeNull();
+    expect(roomOf(lab, 'nirgends')).toBeNull();
+  });
+
+  it('prints the room on the cover of a book read there, and none where there is none', () => {
+    expect(read(null, 1, null, bound())).toContain('<span>Liegt aus: ARCHIV</span>');
+    const elsewhere = { ...bound(), id: 'plan' };
+    expect(read(null, 1, null, elsewhere)).toContain(
+      '<p class="cover-imprint"><span>Rev. 3</span></p>',
+    );
   });
 });
 

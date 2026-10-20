@@ -4,6 +4,7 @@ import { App } from './App.js';
 import './ui.css';
 import './styles/lobby.css';
 import './styles/devices.css';
+import './styles/book.css';
 
 const root = document.getElementById('root');
 if (root === null) {
