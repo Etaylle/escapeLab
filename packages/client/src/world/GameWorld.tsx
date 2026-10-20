@@ -29,6 +29,7 @@ import {
   worldText,
   type WorldText,
 } from './art.js';
+import { drawsFrame } from './drawRate.js';
 import { frameTrace, traceRequested } from './frameTrace.js';
 import { carriedItem, contextAction, promptText } from './interact.js';
 import {
@@ -675,6 +676,8 @@ export function GameWorld({
 
     let raf = 0;
     let prev = performance.now();
+    /** Animation frames since the loop started: under a panel only some are drawn. */
+    let frames = 0;
     // `?trace=1`: the walkthrough reads the last frame durations off the page.
     const trace = traceRequested(location.search) ? frameTrace() : null;
     if (trace !== null) {
@@ -1699,10 +1702,14 @@ export function GameWorld({
       trace?.record(now - prev);
       const dt = Math.min(0.05, (now - prev) / 1000);
       prev = now;
+      frames += 1;
       const map = viewRef.current.map;
       if (map !== null) {
+        // The simulation runs on every frame; the canvas is redrawn less under a panel.
         step(dt, map);
-        render(map);
+        if (drawsFrame(frames, { locked: lockedRef.current, spectator })) {
+          render(map);
+        }
       }
       raf = requestAnimationFrame(frame);
     }

@@ -689,7 +689,7 @@ async function captureConsoles(operator, reader) {
       await page.setViewportSize(sizes[i]);
     }
   }
-  // The blur behind an open panel is the game's own cost: it keeps the budget too.
+  // The world under an open panel is the game's own cost: it keeps the budget too.
   const watched = crew.find((player) => player.traced);
   if (watched !== undefined) {
     await sleep(300); // past the resize
