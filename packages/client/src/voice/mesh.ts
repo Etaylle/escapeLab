@@ -50,6 +50,11 @@ export interface VoiceState {
 /** What the walkthrough reads off a traced page (probes.ts). */
 export interface VoiceProbe {
   readonly mic: MicState;
+  /**
+   * How long the browser took to hand out the microphone the last time it
+   * was asked, in ms; null before that and while it is still asked
+   */
+  readonly micWaitMs: number | null;
   readonly held: boolean;
   /** the peers this page has a link with */
   readonly links: string[];
@@ -215,6 +220,8 @@ export class VoiceMesh {
   private room: { map: MapView; shut: ReadonlySet<string>; run: number | null } | null = null;
   private positions: Positions = { run: null, players: {} };
   private mic: MediaStreamTrack | null = null;
+  /** how long getUserMedia took the last time, in ms (VoiceProbe) */
+  private micWaitMs: number | null = null;
   /** this player's own voice, metered: a speaking ring of their own */
   private own: { source: MediaStreamAudioSourceNode; meter: AnalyserNode } | null = null;
   private readonly speech = new Map<string, Speech>();
@@ -327,12 +334,17 @@ export class VoiceMesh {
       this.update({ mic: blocked });
       return;
     }
-    this.update({ mic: 'asking' });
-    // The click that asks wakes the shared context, which then plays the crew too.
-    sharedAudio();
+    this.micWaitMs = null;
+    const asked = performance.now();
     try {
-      const input = { audio: VOICE_INPUT, video: false };
-      const [track] = (await navigator.mediaDevices.getUserMedia(input)).getAudioTracks();
+      // The browser is asked before anything else happens here. The page says so
+      // next, and the shared context wakes last — still inside the click, so that
+      // the crew's voices play through it. All the waiting is the browser's.
+      const granting = navigator.mediaDevices.getUserMedia({ audio: VOICE_INPUT, video: false });
+      this.update({ mic: 'asking' });
+      sharedAudio();
+      const [track] = (await granting).getAudioTracks();
+      this.micWaitMs = performance.now() - asked;
       if (track === undefined) {
         throw new DOMException('the stream has no audio track', 'NotFoundError');
       }
@@ -344,6 +356,7 @@ export class VoiceMesh {
       remember(MIC_KEY, '1');
       this.update({ mic: 'on' });
     } catch (err) {
+      this.micWaitMs = performance.now() - asked;
       this.update({ mic: troubleOf(err) });
     }
   }
@@ -388,6 +401,7 @@ export class VoiceMesh {
     const links = [...this.links.values()];
     return {
       mic: this.state.mic,
+      micWaitMs: this.micWaitMs,
       held: this.state.held,
       links: links.map((link) => link.peer),
       states: Object.fromEntries(links.map((link) => [link.peer, link.pc.connectionState])),

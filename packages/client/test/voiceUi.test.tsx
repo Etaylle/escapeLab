@@ -158,8 +158,11 @@ describe('the microphone in the lobby', () => {
     expect(html).toContain('Kopfhörer empfohlen');
   });
 
-  it('waits on the browser while it asks', () => {
-    expect(setup({ mic: 'asking' })).toContain('<button class="voice-ask" disabled="">');
+  it('waits on the browser while it asks, and says so', () => {
+    const html = setup({ mic: 'asking' });
+    expect(html).toContain('<button class="voice-ask" disabled="">');
+    expect(html).toContain('Mikrofon wird geöffnet …');
+    expect(html).not.toContain('Kopfhörer empfohlen');
   });
 
   it('says once on how to talk, and how to switch it off', () => {

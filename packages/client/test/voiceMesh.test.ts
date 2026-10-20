@@ -16,7 +16,8 @@ interface Description {
 
 interface Transceiver {
   direction: string;
-  sender: { replaceTrack: (track: unknown) => Promise<void> };
+  /** what goes out on it: every track put on, in order */
+  sender: { sent: unknown[]; replaceTrack: (track: unknown) => Promise<void> };
 }
 
 class FakeConnection {
@@ -37,7 +38,11 @@ class FakeConnection {
   }
 
   addTransceiver(_kind: string, init: { direction: string }): Transceiver {
-    const transceiver = { direction: init.direction, sender: { replaceTrack: async () => {} } };
+    const sent: unknown[] = [];
+    const replaceTrack = async (track: unknown): Promise<void> => {
+      sent.push(track);
+    };
+    const transceiver = { direction: init.direction, sender: { sent, replaceTrack } };
     this.transceivers.push(transceiver);
     return transceiver;
   }
@@ -381,5 +386,74 @@ describe('the voice links between the pages', () => {
     zoe.receive({ kind: 'rtc', from: 'a', signal: { type: 'offer', sdp: 'sendrecv' } });
     await wire.settle();
     expect(zoe.probe().links).toEqual([]);
+  });
+});
+
+describe('the microphone, switched on from a click', () => {
+  let wire: Wire;
+
+  beforeEach(() => {
+    vi.stubGlobal('RTCPeerConnection', FakeConnection);
+    vi.stubGlobal('window', { isSecureContext: true });
+    FakeConnection.made = [];
+    wire = new Wire();
+  });
+
+  afterEach(() => {
+    for (const page of wire.pages.values()) {
+      page.detach();
+    }
+    vi.unstubAllGlobals();
+  });
+
+  /** A browser that takes its time handing out the microphone. */
+  interface SlowBrowser {
+    getUserMedia: () => Promise<object>;
+    /** answers the request: a stream, or an error to refuse it with */
+    answer: (stream: object) => void;
+  }
+
+  /** The browser's getUserMedia, standing for one that takes its time: it answers when told. */
+  function browserAsked(): SlowBrowser {
+    let answer: (stream: object) => void = () => undefined;
+    const getUserMedia = vi.fn(
+      () =>
+        new Promise<object>((resolve, reject) => {
+          answer = (stream) => (stream instanceof Error ? reject(stream) : resolve(stream));
+        }),
+    );
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
+    return { getUserMedia, answer: (stream) => answer(stream) };
+  }
+
+  it('asks the browser first, then says so, and is on once the browser hands it out', async () => {
+    const browser = browserAsked();
+    const anna = wire.join('a');
+    anna.receive(crewView('a', BOTH));
+    await wire.settle();
+
+    const switching = anna.switchMicOn();
+    expect(browser.getUserMedia).toHaveBeenCalledTimes(1);
+    expect(anna.probe()).toMatchObject({ mic: 'asking', micWaitMs: null });
+    const track = { enabled: true, onended: null, stop: vi.fn() };
+    browser.answer({ getAudioTracks: () => [track] });
+    await switching;
+    expect(anna.probe().mic).toBe('on');
+    expect(anna.probe().micWaitMs).toBeGreaterThanOrEqual(0);
+    // It goes out on the link that was there before it, silent until V is held.
+    expect(FakeConnection.made[0]?.transceivers[0]?.sender.sent).toEqual([track]);
+    expect(track.enabled).toBe(false);
+    anna.setHeld(true);
+    expect(track.enabled).toBe(true);
+  });
+
+  it('says why when the browser refuses, and how long that took', async () => {
+    const browser = browserAsked();
+    const anna = wire.join('a');
+    const switching = anna.switchMicOn();
+    browser.answer(Object.assign(new Error('refused'), { name: 'NotAllowedError' }));
+    await switching;
+    expect(anna.probe().mic).toBe('denied');
+    expect(anna.probe().micWaitMs).toBeGreaterThanOrEqual(0);
   });
 });

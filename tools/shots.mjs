@@ -78,6 +78,10 @@ const VOICE_FLAGS = [
 ];
 /** How long the voice links get to come up, in ms. */
 const LINK_MS = 15_000;
+/** How long a page gets to switch its microphone on, in ms. */
+const MIC_MS = 15_000;
+/** How long a started run gets to show on both pages, in ms. */
+const START_MS = 20_000;
 /** How long the host holds V, in ms. */
 const TALK_MS = 2000;
 
@@ -1204,31 +1208,106 @@ async function linksUp(pages) {
   }
 }
 
+/** Seconds, one decimal, for a log line: „1.3 s". */
+const seconds = (ms) => `${(ms / 1000).toFixed(1)} s`;
+
 /**
  * In the lobby both players switch their microphone on as a player would:
  * the button, then „Mikro an". The launch flags make it a fake one, handed
- * out without a prompt; the contexts are allowed to use it.
+ * out without a prompt; the contexts are allowed to use it. Each page's voice
+ * has MIC_MS to say `on`. The log gives how long each took from the click,
+ * and how much of that the browser spent handing the microphone out.
  */
 async function micsOn(players) {
   const origin = new URL(BASE).origin;
+  const asked = [];
   for (const { page } of players) {
     await page.context().grantPermissions(['microphone'], { origin });
+    asked.push(Date.now());
     await clickText(page, 'Mikrofon aktivieren');
   }
-  const on = await Promise.all(
-    players.map(({ page }) => attached(page.locator('.voice-on'), 5000)),
+  const settled = (voice) => voice !== null && voice.mic !== 'off' && voice.mic !== 'asking';
+  const outcomes = await Promise.all(
+    players.map(async ({ page }, i) => {
+      let voice = await voiceOf(page);
+      while (!settled(voice) && Date.now() - asked[i] < MIC_MS) {
+        await sleep(100);
+        voice = await voiceOf(page);
+      }
+      const shown = voice?.mic === 'on' && (await page.locator('.voice-on').count()) > 0;
+      return { voice, ms: Date.now() - asked[i], shown };
+    }),
   );
-  const off = players.filter((_, i) => !on[i]);
-  const why = await Promise.all(off.map(({ page }) => textOf(page.locator('.voice-line'))));
-  console.log(
-    `voice              microphones in the lobby: ` +
-      (off.length === 0
-        ? 'on for both'
-        : `!! off for ${off.map(({ name }, i) => `${name} ("${why[i]}")`).join(' and ')}`),
-  );
+  const lines = players.map(({ name }, i) => {
+    const { voice, ms, shown } = outcomes[i];
+    const wait = voice?.micWaitMs;
+    const browser = wait == null ? '' : `, ${seconds(wait)} of it in the browser`;
+    if (voice?.mic !== 'on') {
+      return `!! ${name} ${voice?.mic ?? 'has no voice probe'} after ${seconds(ms)}${browser}`;
+    }
+    return `${name} on after ${seconds(ms)}${browser}` + (shown ? '' : ', !! no „Mikro an" shown');
+  });
+  console.log(`voice              microphones in the lobby: ${lines.join('; ')}`);
+  const off = players.filter((_, i) => !outcomes[i].shown);
   if (off.length > 0) {
-    fail(`no microphone in the lobby for ${off.map(({ name }) => name).join(' and ')}`);
+    const who = off.map(({ name }) => name).join(' and ');
+    fail(`no microphone in the lobby for ${who} within ${seconds(MIC_MS)}`);
   }
+}
+
+/**
+ * The guest says it is ready, and the host starts once its own page has the
+ * guest ready and its start button enabled; the run then has START_MS to
+ * show on both pages. A start the server did not take is pressed once more,
+ * logged with what the host's page said. Throws, with what both pages show,
+ * when the run does not come up.
+ */
+async function startRun(host, guest) {
+  const from = Date.now();
+  const readyOnHost = () =>
+    host.seen.view?.players?.some((p) => p.name === guest.name && p.ready && p.connected) === true;
+  const started = () => host.seen.view?.phase === 'playing';
+  for (let attempt = 1; attempt <= 2 && !started(); attempt++) {
+    if (guest.seen.view?.you?.ready !== true) {
+      await clickText(guest.page, 'Ich bin bereit');
+    }
+    if (!(await until(readyOnHost, 5000))) {
+      console.log(`start              !! ${host.name}'s page has no ready ${guest.name} after 5 s`);
+      continue;
+    }
+    // The start reads „Mission starten" only once nothing blocks it.
+    const start = host.page.locator('button.lobby-start:enabled', { hasText: 'Mission starten' });
+    await start.waitFor({ state: 'visible', timeout: 10_000 });
+    await start.click();
+    if (!(await until(started, 5000))) {
+      const banner = await textOf(host.page.locator('.banner.error'));
+      console.log(
+        `start              !! press ${attempt} did not start the run` +
+          (banner === null ? '' : `: "${banner}"`),
+      );
+    }
+  }
+  const up = await Promise.all(
+    [host, guest].map(({ page }) =>
+      page.locator('.stage').waitFor({ timeout: START_MS }).then(
+        () => true,
+        () => false,
+      ),
+    ),
+  );
+  if (!up.every(Boolean)) {
+    const shows = await Promise.all(
+      [host, guest].map(async ({ name, page, seen }) => {
+        const banner = await textOf(page.locator('.banner.error'));
+        return `${name} ${seen.view?.phase ?? 'without a view'}` + (banner ? `, "${banner}"` : '');
+      }),
+    );
+    throw new Error(`the run did not come up within ${seconds(START_MS)}: ${shows.join('; ')}`);
+  }
+  console.log(
+    `start              ${guest.name} ready, the run up on both pages ` +
+      `${seconds(Date.now() - from)} after the ready press`,
+  );
 }
 
 /**
@@ -1389,11 +1468,10 @@ async function run() {
     { name: 'Anna', page: host },
     { name: 'Ben', page: guest },
   ]);
-  await clickText(guest, 'Ich bin bereit');
-  await sleep(300);
-  await clickText(host, 'Mission starten');
-  await host.locator('.stage').waitFor({ timeout: 10_000 });
-  await guest.locator('.stage').waitFor({ timeout: 10_000 });
+  await startRun(
+    { name: 'Anna', page: host, seen: hostSeen },
+    { name: 'Ben', page: guest, seen: guestSeen },
+  );
   await sleep(500); // presence follows the start within a tick
   if (guestSeen.view?.map == null || hostSeen.view?.map == null) {
     throw new Error('no running view on the sockets — does the client still talk on /ws?');

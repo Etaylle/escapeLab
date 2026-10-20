@@ -84,20 +84,21 @@ export function MicSetup() {
   }
   // Where asking cannot work, the line says so and no button pretends otherwise.
   const askable = state.mic !== 'unsupported' && state.mic !== 'insecure';
-  const trouble = state.mic === 'off' || state.mic === 'asking' ? null : state.mic;
+  const asking = state.mic === 'asking';
+  const trouble = state.mic === 'off' || asking ? null : state.mic;
   return (
     <div className="voice-setup">
       {askable && (
-        <button
-          className="voice-ask"
-          disabled={state.mic === 'asking'}
-          onClick={() => void mesh.switchMicOn()}
-        >
+        <button className="voice-ask" disabled={asking} onClick={() => void mesh.switchMicOn()}>
           <Icon name="mic" /> Mikrofon aktivieren
         </button>
       )}
       <span className="voice-line" role="status">
-        {trouble === null ? 'Kopfhörer empfohlen' : MIC_TROUBLE[trouble]}
+        {trouble !== null
+          ? MIC_TROUBLE[trouble]
+          : asking
+            ? 'Mikrofon wird geöffnet …'
+            : 'Kopfhörer empfohlen'}
       </span>
     </div>
   );
