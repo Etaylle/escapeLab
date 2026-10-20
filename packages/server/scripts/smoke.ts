@@ -19,9 +19,10 @@
  * off from the radio panel's rules, and survives a mid-game reconnect. A fake
  * voice offer, answer and candidate go between Anna and Ben through the
  * server, and one for a player in another room goes nowhere. The
- * won run leaves its report in a run log in a temporary folder. After the
- * rematch everybody stands on the spawn just drawn, and a position from the
- * run before is dropped. No answer is written down here.
+ * won run leaves its report in a run log in a temporary folder, and
+ * GET /stats ranks it with the crew's names. After the rematch everybody
+ * stands on the spawn just drawn, and a position from the run before is
+ * dropped. No answer is written down here.
  * Run with: pnpm --filter @escapelab/server smoke
  */
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -38,6 +39,8 @@ import {
   type Credits,
   type DronePosition,
   type Edgework,
+  type MissionStanding,
+  type MissionStats,
   type Move,
   type Perspectives,
   type PlayerPosition,
@@ -1586,13 +1589,13 @@ assert(summed('operated') === mission.puzzles.reduce((sum, def) => sum + workedA
   'every station is credited to whoever worked it, the Signalkette to both consoles');
 assert(summed('alarms') === won.penaltySeq, 'every alarm is credited to whoever set it off');
 
-// The won run left one line in the run log: its report, which names nobody.
+// The won run left one line in the run log: its report, which names the crew and nobody's id.
 const logged = readFileSync(RUNS_LOG, 'utf8').trimEnd().split('\n');
 assert(logged.length === 1, `the won run left one line in ${RUNS_LOG}`);
 const line = logged[0] ?? '';
 const report = JSON.parse(line) as RunReport;
 assert(
-  report.version === 1 &&
+  report.version === 2 &&
     report.missionId === mission.id &&
     report.difficulty === 'normal' &&
     report.outcome === 'won' &&
@@ -1626,9 +1629,41 @@ assert(
     report.stations.reduce((sum, s) => sum + s.alarms, 0) >= 2,
   'the run report has every alarm by its cause, the two deliberate ones at their stations',
 );
+const crewNames = won.players.map((p) => p.name);
 assert(
-  won.players.every((p) => !line.includes(p.name) && !line.includes(p.id)),
-  'the run report holds no name and no player id',
+  report.crew.join() === 'Anna,Ben' && crewNames.join() === 'Anna,Ben',
+  'the run report names the crew as it played, Anna and Ben in the order they joined',
+);
+assert(report.roomCode === annaJoined.code, `the run report names the room, ${annaJoined.code}`);
+assert(won.players.every((p) => !line.includes(p.id)), 'the run report holds no player id');
+
+// The Bestenliste counts the won run, by the crew's names and nothing else of anybody's.
+const getJson = async <T>(path: string): Promise<T> => {
+  const res = await fetch(`http://localhost:${PORT}${path}`);
+  assert(res.ok, `GET ${path} answers ${res.status}`);
+  return (await res.json()) as T;
+};
+const board = await getJson<MissionStats[]>('/stats');
+const onBlackout = board
+  .find((m) => m.missionId === mission.id)
+  ?.difficulties.find((d) => d.difficulty === 'normal');
+assert(
+  onBlackout !== undefined && onBlackout.runs >= 1 && onBlackout.wins >= 1,
+  `GET /stats lists Blackout on normal: ${onBlackout?.runs ?? 0} run(s), the won one among them`,
+);
+assert(
+  onBlackout.top.some((entry) => entry.crew.join() === crewNames.join()),
+  `GET /stats names the crew: ${crewNames.join(', ')}`,
+);
+const boardText = JSON.stringify(board);
+assert(
+  won.players.every((p) => !boardText.includes(p.id)) && !boardText.includes(annaJoined.code),
+  'GET /stats holds no player id and no room',
+);
+const standing = await getJson<MissionStanding>(`/stats/${mission.id}?run=${won.finishedAt}`);
+assert(
+  standing.place?.difficulty === 'normal' && standing.place.place === 1,
+  'GET /stats/blackout?run= puts the won run first on normal',
 );
 
 // The next run starts by itself once the whole crew confirms on the end screen.

@@ -39,7 +39,15 @@ describe('a page without https', () => {
     const join = (isSecureContext: boolean): string => {
       vi.stubGlobal('window', { location: { search: '' }, isSecureContext });
       return renderToStaticMarkup(
-        <JoinScreen send={noop} connected missions={[]} rooms={[]} openHandbook={noop} />,
+        <JoinScreen
+          send={noop}
+          connected
+          missions={[]}
+          rooms={[]}
+          stats={[]}
+          openHandbook={noop}
+          openHistory={noop}
+        />,
       );
     };
     expect(join(false)).toContain(`Rücken an Rücken, los.</p>${LINE}<label>Dein Name`);

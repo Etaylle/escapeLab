@@ -1,10 +1,17 @@
 import { Activity, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { isMuted, setMuted } from './world/audio.js';
-import { difficultyInfos, type Difficulty, type MissionInfo } from '@escapelab/core';
+import {
+  difficultyInfos,
+  type Difficulty,
+  type MissionInfo,
+  type MissionStats,
+} from '@escapelab/core';
+import { STATS_PATH, useJson } from './runStats.js';
 import { useRunScreen } from './runScreen.js';
 import { useVoiceMesh, VoiceContext } from './voice/useVoice.js';
 import { useGameConnection } from './ws.js';
 import { HandbookScreen } from './screens/Handbook.js';
+import { HistoryScreen } from './screens/History.js';
 import { Icon, type IconName } from './screens/Icon.js';
 import { UpdateNotice } from './screens/Install.js';
 import { JoinScreen } from './screens/Join.js';
@@ -84,6 +91,10 @@ export function App() {
   // The handbook is a page of its own off the join screen: the mission whose
   // booklet is open, or null.
   const [handbook, setHandbook] = useState<string | null>(null);
+  // So is the Bestenliste: the mission whose tab is open, or null.
+  const [history, setHistory] = useState<string | null>(null);
+  // The join screen's cards say each mission's record; without it they say nothing.
+  const stats = useJson<MissionStats[]>(STATS_PATH);
   const contentRef = useRef<HTMLElement>(null);
   // This player is in a run: on a phone that is fullscreen, sideways and awake.
   const playing = conn.view?.phase === 'playing' && conn.view.map !== null;
@@ -113,7 +124,7 @@ export function App() {
   const screen = screenOf(conn);
   useLayoutEffect(() => {
     contentRef.current?.scrollTo(0, 0);
-  }, [handbook, screen]);
+  }, [handbook, history, screen]);
 
   return (
     <div className="app">
@@ -177,17 +188,19 @@ export function App() {
       );
     }
     if (conn.view === null) {
-      // The join screen stays mounted behind the booklet, so a typed name and
-      // the picked mission are still there on the way back.
+      // The join screen stays mounted behind the booklet and the Bestenliste,
+      // so a typed name and the picked mission are still there on the way back.
       return (
         <>
-          <Activity mode={handbook === null ? 'visible' : 'hidden'}>
+          <Activity mode={handbook === null && history === null ? 'visible' : 'hidden'}>
             <JoinScreen
               send={conn.send}
               connected={conn.status === 'open'}
               missions={missions}
               rooms={conn.rooms}
+              stats={stats.status === 'ready' ? stats.value : []}
               openHandbook={setHandbook}
+              openHistory={setHistory}
             />
           </Activity>
           {handbook !== null && (
@@ -196,6 +209,14 @@ export function App() {
               missionId={handbook}
               selectMission={setHandbook}
               back={() => setHandbook(null)}
+            />
+          )}
+          {history !== null && (
+            <HistoryScreen
+              missions={missions}
+              missionId={history}
+              selectMission={setHistory}
+              back={() => setHistory(null)}
             />
           )}
         </>

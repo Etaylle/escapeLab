@@ -17,6 +17,10 @@
  * to console A where needed, then both consoles are captured and the meter
  * measures every wire once; nothing is cut.
  *
+ * On the way, both open the Bestenliste from the join screen (history.png,
+ * history-phone.png): measured like the join screen, at 1280×720 too, and on
+ * the phone for running out sideways.
+ *
  * The base URL is the Vite dev server by default (`pnpm dev`), or the
  * production server (`pnpm build && pnpm start`, http://localhost:3001) as in
  * CI. The host's page opens with `?trace=1`, so the world keeps its frame
@@ -221,6 +225,33 @@ async function sideways(page, selector) {
     const panel = document.querySelector(sel);
     return panel === null ? 0 : panel.scrollWidth - panel.clientWidth;
   }, selector);
+}
+
+/**
+ * The Bestenliste off the join screen, captured as `name` once it is loaded:
+ * measured like the join screen — at 1280×720 too where the window is a
+ * laptop's, sideways on a phone — and left the way a player goes back.
+ */
+async function captureHistory(page, name) {
+  await clickText(page, 'Bestenliste');
+  const loaded = page.locator('.history-board, .history [role="alert"]').first();
+  await loaded.waitFor({ timeout: 10_000 });
+  await sleep(300);
+  await capture(page, `${name}.png`);
+  const { width, height } = page.viewportSize();
+  await overflow(page, `${name} @ ${width}x${height}`);
+  if (width >= 1280) {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await sleep(400);
+    await overflow(page, `${name} @ 1280x720`);
+    await page.setViewportSize({ width, height });
+    await sleep(300);
+  } else {
+    const over = await sideways(page, '.content');
+    console.log(`${name}.png`.padEnd(19) + (over > 0 ? `!! +${over}px sideways` : 'fits sideways'));
+  }
+  await clickText(page, 'Zurück');
+  await page.locator('.mission').first().waitFor({ timeout: 10_000 });
 }
 
 /** Click a button whose visible text contains `text`. */
@@ -1418,6 +1449,7 @@ async function run() {
   await capture(host, 'join-1280.png');
   await host.setViewportSize(SIZES[0]);
   await sleep(300);
+  await captureHistory(host, 'history');
   const card = host.locator('.mission', { hasText: MISSION }).first();
   if ((await card.count()) === 0) {
     throw new Error(`no mission card reads "${MISSION}" — SHOTS_MISSION has to name one`);
@@ -1441,6 +1473,7 @@ async function run() {
   // On a phone the join screen stacks and scrolls; this shows its top.
   await guest.locator('.mission').first().waitFor({ timeout: 10_000 });
   await capture(guest, 'join-phone.png');
+  await captureHistory(guest, 'history-phone');
   await guest.getByLabel('Raumcode').fill(code);
   await clickText(guest, 'Beitreten');
   await guest.locator('.lobby').waitFor({ timeout: 10_000 });

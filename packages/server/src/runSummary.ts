@@ -1,4 +1,5 @@
-import { DIFFICULTIES, type Difficulty, type RunReport } from '@escapelab/core';
+import { DIFFICULTIES, type Difficulty } from '@escapelab/core';
+import type { LoggedRun } from './runLog.js';
 
 /** One station across the runs of a mission at one difficulty. */
 export interface StationSummary {
@@ -32,11 +33,14 @@ export interface RunsSummary {
 interface Group {
   missionId: string;
   difficulty: Difficulty;
-  runs: RunReport[];
+  runs: LoggedRun[];
 }
 
-/** The runs grouped by mission and difficulty: missions by id, difficulties easiest first. */
-export function summarize(runs: readonly RunReport[]): RunsSummary[] {
+/**
+ * The runs grouped by mission and difficulty: missions by id, difficulties
+ * easiest first. Reports of either version, which agree on what is summed.
+ */
+export function summarize(runs: readonly LoggedRun[]): RunsSummary[] {
   const groups = new Map<string, Group>();
   for (const run of runs) {
     const { missionId, difficulty } = run;
@@ -54,7 +58,7 @@ export function summarize(runs: readonly RunReport[]): RunsSummary[] {
 }
 
 function summarizeGroup({ missionId, difficulty, runs }: Group): RunsSummary {
-  const ended = (outcome: RunReport['outcome']): number =>
+  const ended = (outcome: LoggedRun['outcome']): number =>
     runs.filter((run) => run.outcome === outcome).length;
   const stations = stationsOf(runs);
   return {
@@ -74,7 +78,7 @@ function summarizeGroup({ missionId, difficulty, runs }: Group): RunsSummary {
 }
 
 /** Every station any of the runs lists, in the order the runs list them. */
-function stationsOf(runs: readonly RunReport[]): StationSummary[] {
+function stationsOf(runs: readonly LoggedRun[]): StationSummary[] {
   const ids = [...new Set(runs.flatMap((run) => run.stations.map((s) => s.puzzleId)))];
   return ids.map((puzzleId) => {
     const all = runs.flatMap((run) => run.stations.filter((s) => s.puzzleId === puzzleId));
@@ -90,7 +94,8 @@ function stationsOf(runs: readonly RunReport[]): StationSummary[] {
   });
 }
 
-function median(values: readonly number[]): number | null {
+/** The middle of the values, or the mean of the middle two; null for none. */
+export function median(values: readonly number[]): number | null {
   if (values.length === 0) {
     return null;
   }

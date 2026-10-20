@@ -69,15 +69,24 @@ const mission: Mission = parseMission({ ...LAB, maxAlarms: 5 });
 /** The lab as written, whose alarm limit comes from the difficulty. */
 const unlimited: Mission = parseMission(LAB);
 
-/** Server-style ids and real names: neither may end up in a report. */
+/** Server-style ids: the names go into a report, the ids never. */
 const ANNA = 'id-anna-7f3a';
 const BEN = 'id-ben-91c2';
+/** The room the runs are played in. */
+const ROOM = 'QXT4';
 
-/** Anna (host) and Ben start the lab at `difficulty`, the way the lobby scales it. */
-function playing(fixture: Mission = mission, difficulty: Difficulty = 'normal'): GameState {
+/**
+ * The host and a second player — Anna and Ben unless named otherwise — start
+ * the lab at `difficulty`, the way the lobby scales it.
+ */
+function playing(
+  fixture: Mission = mission,
+  difficulty: Difficulty = 'normal',
+  names: [string, string] = ['Anna', 'Ben'],
+): GameState {
   const actions: Action[] = [
-    { type: 'player-join', playerId: ANNA, name: 'Anna' },
-    { type: 'player-join', playerId: BEN, name: 'Ben' },
+    { type: 'player-join', playerId: ANNA, name: names[0] },
+    { type: 'player-join', playerId: BEN, name: names[1] },
     {
       type: 'switch-mission',
       playerId: ANNA,
@@ -145,13 +154,15 @@ describe('runReport', () => {
     );
     const spawnOf = (id: string) => state.players.find((p) => p.id === id)?.spawn;
 
-    expect(runReport(state)).toEqual({
-      version: 1,
+    expect(runReport(state, ROOM)).toEqual({
+      version: 2,
       missionId: 'protokoll',
+      roomCode: ROOM,
       difficulty: 'normal',
       timeLimitSec: 600,
       alarmLimit: 5,
       crewSize: 2,
+      crew: ['Anna', 'Ben'],
       spawns: { p1: spawnOf(ANNA), p2: spawnOf(BEN) },
       startedAt: T0,
       finishedAt: T0 + 140_000,
@@ -182,24 +193,37 @@ describe('runReport', () => {
     expect(mission.map.spawns).toContainEqual(spawnOf(BEN));
   });
 
-  it('names nobody: the crew is p1…pn in join order, without names or ids', () => {
-    const open = boxOpen(playing(), T0 + 100);
-    const report = runReport(applyAction(open, { type: 'time-expired', at: T0 + 600_000 }));
+  it('names the crew as it played, in the order it joined, and the room — never an id', () => {
+    const open = boxOpen(playing(mission, 'normal', ['Zoë', 'Anna']), T0 + 100);
+    const report = runReport(applyAction(open, { type: 'time-expired', at: T0 + 600_000 }), ROOM);
+    expect(report).toMatchObject({ version: 2, roomCode: ROOM, crew: ['Zoë', 'Anna'] });
     expect(Object.keys(report.credits)).toEqual(['p1', 'p2']);
     expect(Object.keys(report.spawns)).toEqual(['p1', 'p2']);
-    expect(JSON.stringify(report)).not.toMatch(/Anna|Ben|id-anna|id-ben/);
+    expect(JSON.stringify(report)).not.toMatch(/id-anna|id-ben/);
+  });
+
+  it('cuts a name to 24 characters, whole ones, and drops the space it may end on', () => {
+    const fox = `${'x'.repeat(23)}🦊🦊`;
+    const spaced = `Anna${' '.repeat(20)}Lisa`;
+    const lost = applyAction(playing(mission, 'normal', [fox, spaced]), {
+      type: 'time-expired',
+      at: T0 + 600_000,
+    });
+    const { crew } = runReport(lost, ROOM);
+    expect(crew).toEqual([`${'x'.repeat(23)}🦊`, 'Anna']);
+    expect([...(crew[0] ?? '')]).toHaveLength(24);
   });
 
   it('is plain JSON', () => {
     const lost = applyAction(playing(), { type: 'time-expired', at: T0 + 600_000 });
-    const report = runReport(lost);
+    const report = runReport(lost, ROOM);
     expect(JSON.parse(JSON.stringify(report))).toEqual(report);
   });
 
   it('leaves a run lost on time at the station it got stuck at', () => {
     let state = cut(boxOpen(playing(), T0 + 100), T0 + 1_000, false);
     state = applyAction(state, { type: 'time-expired', at: T0 + 570_000 });
-    const report = runReport(state);
+    const report = runReport(state, ROOM);
     expect(report).toMatchObject({ outcome: 'lost:time', finishedAt: T0 + 570_000 });
     expect(report.stations).toEqual([
       { puzzleId: 'erst', openedAt: T0, solvedAt: null, seconds: null, alarms: 1, hints: 0 },
@@ -212,7 +236,7 @@ describe('runReport', () => {
     for (const at of [T0 + 1_000, T0 + 2_000, T0 + 3_000]) {
       state = cut(state, at, false);
     }
-    const report = runReport(state);
+    const report = runReport(state, ROOM);
     const penaltySec = scaleMission(unlimited, 'hart').puzzles[0]?.penaltySec ?? 0;
     expect(report).toMatchObject({
       difficulty: 'hart',
@@ -231,7 +255,7 @@ describe('runReport', () => {
       state = cut(state, at, false);
     }
     state = applyAction(state, { type: 'time-expired', at: state.deadlineAt ?? T0 });
-    expect(runReport(state)).toMatchObject({
+    expect(runReport(state, ROOM)).toMatchObject({
       difficulty: 'entspannt',
       timeLimitSec: 810,
       alarmLimit: null,
@@ -256,7 +280,7 @@ describe('runReport', () => {
       at: T0 + 45_000,
       input: move?.input,
     });
-    expect(runReport(won)).toMatchObject({
+    expect(runReport(won, ROOM)).toMatchObject({
       outcome: 'won',
       finishedAt: T0 + 45_000,
       stations: [{ puzzleId: 'nur', openedAt: T0, solvedAt: T0 + 45_000, seconds: 45 }],
@@ -264,7 +288,7 @@ describe('runReport', () => {
   });
 
   it('refuses a run that is not over', () => {
-    expect(() => runReport(initialState(mission))).toThrow(/not over \(phase "lobby"\)/);
-    expect(() => runReport(playing())).toThrow(/not over \(phase "playing"\)/);
+    expect(() => runReport(initialState(mission), ROOM)).toThrow(/not over \(phase "lobby"\)/);
+    expect(() => runReport(playing(), ROOM)).toThrow(/not over \(phase "playing"\)/);
   });
 });

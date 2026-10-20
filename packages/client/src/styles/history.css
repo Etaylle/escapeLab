@@ -1,0 +1,280 @@
+/* ══ the Bestenliste ════════════════════════════════════════════════════════
+ * runStats.ts, screens/History.tsx and screens/Standing.tsx: a line on each
+ * mission card of the join screen, the place on the end screen and the
+ * Bestenliste page off the join screen. It replaces the record the end
+ * screen kept per device, whose rules left ui.css with it: .stat-best,
+ * .record-banner and .history.
+ */
+
+/* ── the mission card's record line ─────────────────────────────────────── */
+
+/*
+ * A card is as tall as its 64px map. Its title, facts and — picked — its
+ * subtitle take 51px at the font's own line height; with the record they are
+ * four lines, set at fixed heights without gaps, 18 + 3 × 15 = 63px. So the
+ * card stays 90px tall with the record as without.
+ */
+.mission-text:has(.mission-record) {
+  gap: 0;
+}
+
+.mission-text:has(.mission-record) > .mission-title {
+  line-height: 18px;
+}
+
+.mission-text:has(.mission-record) > .mission-meta,
+.mission-text:has(.mission-record) > .mission-sub,
+.mission-record {
+  line-height: 15px;
+}
+
+.mission-record {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ── the fastest crews: on the end screen and the page ──────────────────── */
+
+.leaders {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.leaders th,
+.leaders td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.leaders thead th {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* The crew's names may wrap; the numbers never do. */
+.leaders tbody th {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.leader-place,
+.leader-time,
+.leader-alarms,
+.leader-date {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.leader-place {
+  width: 3em;
+  color: var(--muted);
+}
+
+.leader-time {
+  color: var(--accent);
+}
+
+/* A run logged before names were kept. */
+.leaders tbody th.leader-nameless {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--muted);
+}
+
+/* The crew looking at the list: lit like its own row of the credits. */
+.leader-you {
+  background: rgba(45, 212, 191, 0.12);
+}
+
+.leader-you th,
+.leader-you .leader-place {
+  color: var(--accent);
+}
+
+/* A place that does not follow on from the row above: a gap before it. */
+.leader-apart th,
+.leader-apart td {
+  border-top: 3px double var(--line-2);
+}
+
+/* ── the end screen ─────────────────────────────────────────────────────── */
+
+.standing-line {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+/* ── the page ───────────────────────────────────────────────────────────── */
+
+/*
+ * Ten crews, the totals, a tab per mission and the difficulty fit a
+ * 1280×720 window: the rows are kept low and the totals in one row.
+ */
+.card.history {
+  max-width: 760px;
+}
+
+.history-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.history-head h1 {
+  flex: 1;
+  margin: 0;
+}
+
+.history-tabs,
+.history-levels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.history-tabs {
+  margin-top: 14px;
+}
+
+.history-levels {
+  margin-top: 8px;
+}
+
+.history-tab {
+  padding: 7px 12px;
+  font-size: 14px;
+}
+
+.history-level {
+  padding: 5px 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.history-tab[aria-pressed='true'],
+.history-level[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.history-board {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.history-board h2 {
+  margin: 0 0 8px;
+}
+
+.history-totals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.history-totals > div {
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+
+.history-totals dt {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.history-totals dd {
+  margin: 4px 0 0;
+  font-family: var(--mono);
+  font-size: 20px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* A phone keeps the four totals in a row, smaller, and drops the day of each run. */
+@media (max-width: 560px) {
+  .card.history {
+    padding: 20px 16px;
+  }
+
+  .history-head h1 {
+    font-size: 22px;
+  }
+
+  .history-totals {
+    gap: 6px;
+  }
+
+  .history-totals > div {
+    padding: 6px 8px;
+  }
+
+  .history-totals dt {
+    font-size: 10px;
+    letter-spacing: 0;
+  }
+
+  .history-totals dd {
+    font-size: 15px;
+  }
+
+  .leaders .leader-date {
+    display: none;
+  }
+}
+
+/* On paper the list of the open tab remains, under its mission and difficulty. */
+@media print {
+  .history-back,
+  .history-print,
+  .history-tabs,
+  .history-levels {
+    display: none;
+  }
+
+  .card.history {
+    max-width: none;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    font-size: 11pt;
+  }
+
+  .history-board {
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
+
+  .history-totals > div {
+    background: none;
+  }
+
+  .leaders tr {
+    break-inside: avoid;
+  }
+}

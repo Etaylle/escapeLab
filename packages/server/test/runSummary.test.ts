@@ -9,7 +9,7 @@ import { formatSummary, summarize } from '../src/runSummary.js';
  * Seven runs: Systemcheck on normal four times (two won, one out of time
  * stuck at the wiring, one stopped by the alarm limit at the Signalprobe),
  * once on entspannt; Blackout on hart twice (one won, one stopped at the
- * Signalkette).
+ * Signalkette). Two of the won runs were logged as version 2, with names.
  */
 const FIXTURE = fileURLToPath(new URL('./fixtures/runs.jsonl', import.meta.url));
 const runs = parseRuns(readFileSync(FIXTURE, 'utf8'), FIXTURE);
