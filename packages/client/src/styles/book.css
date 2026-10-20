@@ -173,16 +173,18 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
     0.4em 0.9em 1.6em rgba(0, 0, 0, 0.5);
 }
 
-/* Text column 18.8 × 37 em, the outer margin beside it (pages.ts: BOOK_PAGE). */
+/*
+ * Text column 25.2 × 37 em in a book's usual margins: 1.8 em at the gutter,
+ * 3 em on the outside (pages.ts: BOOK_PAGE counts it 0.6 em narrower).
+ */
 .page-in {
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-columns: 18.8em 7.2em;
+  grid-template-columns: 25.2em;
   grid-template-rows: minmax(0, 1fr);
-  grid-template-areas: 'text margin';
-  column-gap: 0.8em;
-  padding: 2.4em 1.4em 2.6em 1.8em;
+  grid-template-areas: 'text';
+  padding: 2.4em 3em 2.6em 1.8em;
   border-radius: inherit;
   background: linear-gradient(
     to right,
@@ -196,9 +198,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
 }
 
 .page-left .page-in {
-  grid-template-columns: 7.2em 18.8em;
-  grid-template-areas: 'margin text';
-  padding: 2.4em 1.8em 2.6em 1.4em;
+  padding: 2.4em 1.8em 2.6em 3em;
   background: linear-gradient(
     to left,
     rgba(80, 56, 22, 0.2),
@@ -378,12 +378,16 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   stroke: var(--ribbon);
 }
 
-/* Running head on the pages after a station's first; positions in its own, smaller em. */
+/*
+ * Running head on the pages after a station's first, over the text column:
+ * positions in its own em, 0.72 of the page's — 2.5 and 4.17 of them are the
+ * 1.8 and 3 em beside the column.
+ */
 .page-head {
   position: absolute;
   top: 1.45em;
   left: 2.5em;
-  right: 1.95em;
+  right: 4.17em;
   overflow: hidden;
   color: var(--ink-soft);
   font-size: 0.72em;
@@ -395,7 +399,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
 }
 
 .page-left .page-head {
-  left: 1.95em;
+  left: 4.17em;
   right: 2.5em;
   text-align: left;
 }
@@ -454,18 +458,11 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   left: 1.6em;
 }
 
-.page-margin {
-  grid-area: margin;
-  min-height: 0;
-  overflow-y: auto;
-}
-
 /* ── the cover ──────────────────────────────────────────────────────────── */
 
 /* The cover has the sheet to itself, centred inside a printed double rule. */
 .page-cover .page-in {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: 'text';
   padding: 3.2em 2.8em;
 }
 
@@ -863,12 +860,160 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   }
 }
 
-/* ── margin notes: the last crew's hand beside the open station ─────────── */
+/* ── the last crew's note, stuck on the source ──────────────────────────── */
 
-.margin {
+/*
+ * Book.tsx NoteSlip: what the last crew wrote on the open station, in their
+ * hand, and the way to ask for more — on a piece of paper that belongs to
+ * the source, not to a page: a slip tucked into a book at its front, a
+ * Post-it on a clipboard's board, a sticky label on a terminal's bezel or
+ * on the board by a wall chart. In a book it is set in em of the sheet.
+ */
+.note-slip {
   display: flex;
   flex-direction: column;
-  gap: 0.9em;
+  gap: 0.7em;
+  overflow-y: auto;
+  color: var(--ink-blue);
+}
+
+/* „zu §3": the station the note is for, as the last crew headed it. */
+.note-slip-for {
+  margin: 0;
+  font-family: var(--hand);
+  font-size: 1.1em;
+  font-weight: 600;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+/* A sticky note: yellow paper, darker where it is glued, its foot lifting off. */
+.book-clip .note-slip,
+.terminal .note-slip,
+.chart .note-slip {
+  border-radius: 2px;
+  background:
+    linear-gradient(180deg, rgba(150, 110, 10, 0.12), transparent 1.6em),
+    linear-gradient(180deg, #fbe7a1, #f2d36c);
+  box-shadow:
+    0 0.1em 0.15em rgba(0, 0, 0, 0.25),
+    0 0.8em 1.2em -0.5em rgba(0, 0, 0, 0.55);
+}
+
+/* In a book or on a clipboard it lies under the sheets, placed by the binding. */
+.book .note-slip {
+  position: absolute;
+  z-index: 0;
+}
+
+/*
+ * In a bound book: a ruled slip tucked in at the front, under the pages.
+ * Beside a spread it sticks out to the left of the book, the room for it
+ * kept there (`.book-noted`, 11 em, so the spread spans 73.2 em: 57.3 cqw).
+ */
+.book:not(.book-clip) .note-slip {
+  padding: 0.9em 1em 1.2em;
+  border-radius: 2px;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 1.3em,
+      rgba(35, 63, 120, 0.14) 1.3em calc(1.3em + 1px)
+    ),
+    var(--paper-fibre),
+    #fbf8ef;
+  box-shadow:
+    0 0.1em 0.2em rgba(0, 0, 0, 0.3),
+    0 0.6em 1.4em rgba(0, 0, 0, 0.45);
+}
+
+.book-spread .note-slip {
+  top: 2.6em;
+  right: 100%;
+  width: 11em;
+  max-height: 34em;
+  margin-right: -0.4em;
+  transform: rotate(-2.5deg);
+  transform-origin: right top;
+}
+
+.book-spread.book-noted .book-pages {
+  --sheet-h: min(100cqh - 16px, 57.3cqw, 800px);
+}
+
+.book-spread.book-noted .book-leaves {
+  margin-left: 11em;
+}
+
+/*
+ * A page at a time, the slip sticks out over the page's head instead, its
+ * foot under the page; 8.6 em kept above for it (50.6 em tall in all).
+ */
+.book-single:not(.book-clip) .note-slip {
+  bottom: calc(100% - 0.5em);
+  left: 2.2em;
+  right: 3.8em;
+  max-height: 8.6em;
+  transform: rotate(-1deg);
+}
+
+.book-single.book-noted:not(.book-clip) .book-pages {
+  --sheet-h: min((100cqh - 16px) * 0.83, 128cqw, 800px);
+}
+
+.book-single.book-noted:not(.book-clip) .book-leaves {
+  margin-top: 8.6em;
+}
+
+/*
+ * On a clipboard: a Post-it on the board, never on the sheet — under the
+ * sheet, the board reaching 9.6 em further down for it (55 em tall in all)…
+ */
+.book-clip .note-slip {
+  top: calc(100% + 1em);
+  left: 1.2em;
+  right: 1.2em;
+  max-height: 7.8em;
+  padding: 0.8em 1em 0.9em;
+  transform: rotate(0.8deg);
+}
+
+.book-clip.book-noted .book-pages {
+  --sheet-h: min((100cqh - 16px) * 0.763, 126cqw, 800px);
+}
+
+.book-clip.book-noted .book-leaves {
+  margin-bottom: 9.6em;
+}
+
+.book-clip.book-noted .book-leaves::before {
+  bottom: -9.6em;
+}
+
+/* …or, where the window is wide, beside it on the left (45.8 em across: 91.7 cqw). */
+@media (min-width: 900px) {
+  .book-clip .note-slip {
+    top: 2em;
+    right: calc(100% + 0.9em);
+    left: auto;
+    width: 11.4em;
+    max-height: 34em;
+    transform: rotate(-1.5deg);
+  }
+
+  .book-clip.book-noted .book-pages {
+    --sheet-h: min((100cqh - 16px) * 0.905, 91.7cqw, 800px);
+  }
+
+  .book-clip.book-noted .book-leaves {
+    margin-bottom: 1em;
+    margin-left: 13.6em;
+  }
+
+  .book-clip.book-noted .book-leaves::before {
+    bottom: -1em;
+    left: -13.6em;
+  }
 }
 
 .margin-notes {
@@ -1197,18 +1342,19 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   box-shadow: 0 0 10px rgba(141, 240, 180, 0.35);
 }
 
-/* The last crew's notes on a slip stuck to the case. */
-.terminal .margin {
+/*
+ * The last crew's note on a sticky label stuck to the case: over the bezel's
+ * right edge, clear of the glass, whichever screen is up.
+ */
+.terminal .note-slip {
+  position: relative;
+  z-index: 1;
   flex: 0 0 15em;
   align-self: flex-start;
-  max-height: 100%;
-  overflow-y: auto;
-  margin-top: 28px;
+  max-height: calc(100% - 46px);
+  margin: 46px 0 0 -30px;
   padding: 14px 14px 16px;
-  border-radius: 2px;
-  background: linear-gradient(180deg, #fbe7a1, #f4d673);
   font-size: 15px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
   transform: rotate(1.6deg);
 }
 
@@ -1229,12 +1375,13 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
     bottom: 6px;
   }
 
-  .terminal .margin {
+  /* Under the screen, the label sits on the case's chin, left of the lamp. */
+  .terminal .note-slip {
     flex: none;
     align-self: stretch;
     max-height: 32vh;
-    margin-top: 0;
-    transform: none;
+    margin: -26px 44px 0 16px;
+    transform: rotate(-0.8deg);
   }
 }
 
@@ -1247,12 +1394,13 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   display: flex;
   justify-content: center;
   align-items: flex-start;
+  gap: 24px;
 }
 
 .chart-sheet {
   position: relative;
-  width: 100%;
-  max-width: 900px;
+  flex: 0 1 900px;
+  min-width: 0;
   padding: 22px 26px 26px;
   border-top: 16px solid #b42318;
   border-radius: 2px;
@@ -1296,11 +1444,20 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
 }
 
 .chart-section {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 12em;
-  gap: 18px;
   padding: 16px 0;
   border-top: 2px solid #1c2229;
+}
+
+/* The last crew's note, a label stuck on the board by the chart; it stays in view as it scrolls. */
+.chart .note-slip {
+  position: sticky;
+  top: 18px;
+  flex: 0 0 14em;
+  max-height: calc(100% - 36px);
+  margin-top: 18px;
+  padding: 14px 14px 16px;
+  font-size: 15px;
+  transform: rotate(1.8deg);
 }
 
 .chart-heading {
@@ -1355,13 +1512,25 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   stroke: #1c2229;
 }
 
+/* Narrow: the label above the chart, where the reading starts. */
 @media (max-width: 640px) {
+  .chart {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .chart-sheet {
+    flex: none;
     padding: 16px;
   }
 
-  .chart-section {
-    grid-template-columns: 1fr;
+  .chart .note-slip {
+    position: static;
+    order: -1;
+    flex: none;
+    max-height: none;
+    margin: 0 8px;
+    transform: rotate(-0.8deg);
   }
 }
 
@@ -1453,7 +1622,9 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   opacity: 1;
 }
 
+/* A drawing keeps its printed width, centred in the wider column (pages.ts: FIGURE_WIDTH). */
 .page .manual-figure svg {
+  max-width: 18.8em;
   outline-color: var(--ink-line);
 }
 
@@ -1464,13 +1635,13 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
 /*
  * The manual's line at every page's foot, level with the page number and
  * centred under the text column. Positions in its own em, 0.6 of the page's:
- * 3 and 15.67 of them are the 1.8 and 9.4 em beside the column.
+ * 3 and 5 of them are the 1.8 and 3 em beside the column.
  */
 .page-foot {
   position: absolute;
   bottom: 1.85em;
   left: 3em;
-  right: 15.67em;
+  right: 5em;
   overflow: hidden;
   color: var(--ink-soft);
   font-family: var(--mono);
@@ -1481,7 +1652,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
 }
 
 .page-left .page-foot {
-  left: 15.67em;
+  left: 5em;
   right: 3em;
 }
 

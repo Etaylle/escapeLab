@@ -7,9 +7,10 @@ import type { ManualBlock, ManualSection } from '@escapelab/core';
  * list repeats its heading „(Fortsetzung)" where it goes on, the table its
  * head on every page it spans — everything else moves on whole, and a heading
  * never ends a page.
- * Heights are estimates in em of the page's body text. ui.css draws the page
- * to the same measure at whatever size it is shown, so the same pages come
- * out on every screen — and every player's page 3 is the same page 3.
+ * Heights are estimates in em of the page's body text. styles/book.css draws
+ * the page to the same measure at whatever size it is shown, so the same
+ * pages come out on every screen — and every player's page 3 is the same
+ * page 3.
  */
 
 /** One station's part of the book. */
@@ -48,8 +49,19 @@ export interface PageSize {
   height: number;
 }
 
-/** The text column as ui.css draws it (`.page-text` on a 30 × 42 em sheet). */
-export const BOOK_PAGE: PageSize = { width: 18.8, height: 37 };
+/**
+ * The text column as styles/book.css draws it — `.page-text`, 25.2 × 37 em
+ * on a 30 × 42 em sheet, within a book's usual margins — counted 0.6 em
+ * narrower: a line that only just fits in print is counted as wrapping, so
+ * an estimate errs toward a fuller page rather than one that runs over.
+ */
+export const BOOK_PAGE: PageSize = { width: 24.6, height: 37 };
+
+/**
+ * A device drawing keeps its printed width on the page, centred in the
+ * column: Figure.tsx draws 376 × 140 units across it, 7 em tall.
+ */
+export const FIGURE_WIDTH = 18.8;
 
 /** A typeface as set on the page: mean advance of a character and line height, in body em. */
 interface Face {
@@ -89,10 +101,7 @@ const READER = 13;
 const EXAMPLE_SIDES = 1.4;
 const EXAMPLE_ENDS = 1.05;
 const EXAMPLE_GAP = 0.2;
-/**
- * A device drawing spans the column and stands 7 em tall (Figure.tsx draws
- * 376 × 140 units on its 18.8 em); its caption follows 0.2 em below.
- */
+/** A device drawing stands 7 em tall (FIGURE_WIDTH); its caption follows 0.2 em below. */
 const FIGURE = 7.2;
 /** A station's last lines may run this far into the foot of its page rather than open one. */
 const OVERRUN = 1.5;
