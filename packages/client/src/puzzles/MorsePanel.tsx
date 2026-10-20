@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
-import { play } from '../sounds.js';
+import type { Change } from './feel.js';
 import type { PanelProps } from './index.js';
+import { dialDetent } from './sounds.js';
 import './morse.css';
+
+type MorsePuzzle = PanelProps<'morse'>['puzzle'];
 
 /** One Morse unit: a short blink lasts one, a long blink three. */
 const UNIT_MS = 250;
@@ -35,7 +38,22 @@ export function lampRuns(pattern: string): LampRun[] {
   return runs;
 }
 
-/** Plays the loop. It starts dark, so the first blink anyone sees opens the word. */
+/** Whether a change turned the dial, a step or more. */
+export function turnedWith(change: Change<MorsePuzzle> | null): boolean {
+  return change !== null && change.after.dial !== change.before.dial;
+}
+
+/** What a change sounds like: the dial's detent catching as it turns. */
+export function morseSounds(change: Change<MorsePuzzle>): void {
+  if (turnedWith(change)) {
+    dialDetent();
+  }
+}
+
+/**
+ * Plays the loop, the lamp blooming as each blink comes on (CSS). It starts dark, so the
+ * first blink anyone sees opens the word.
+ */
 function Lamp({ pattern }: { pattern: string }) {
   const [lit, setLit] = useState(false);
   useEffect(() => {
@@ -60,14 +78,59 @@ function Lamp({ pattern }: { pattern: string }) {
   );
 }
 
+/** How far the knob turns either side of upright over the band, in degrees. */
+const KNOB_SWEEP = 135;
+
+/** The knob's angle at step `dial` of `steps`: −135° at the band's bottom, +135° at its top. */
+export function knobAngle(dial: number, steps: number): number {
+  if (steps <= 1) {
+    return 0;
+  }
+  return Math.round((-KNOB_SWEEP + (2 * KNOB_SWEEP * dial) / (steps - 1)) * 10) / 10;
+}
+
+/** A point `r` out from the knob's middle at the angle of step `i`, to a tenth. */
+function aroundKnob(i: number, steps: number, r: number): [number, number] {
+  const turn = (knobAngle(i, steps) * Math.PI) / 180;
+  const tenth = (n: number): number => Math.round(n * 10) / 10;
+  return [tenth(50 + r * Math.sin(turn)), tenth(50 - r * Math.cos(turn))];
+}
+
+/**
+ * The tuning knob: a tick for every step of the band round it, the one it points at lit,
+ * and the knob turning smoothly to it a step at a time (CSS), a detent catching each.
+ */
+function Knob({ dial, steps }: { dial: number; steps: number }) {
+  return (
+    <svg className="morse-knob" viewBox="0 0 100 100" aria-hidden="true">
+      {Array.from({ length: steps }, (_, i) => {
+        const [x1, y1] = aroundKnob(i, steps, 39);
+        const [x2, y2] = aroundKnob(i, steps, 47);
+        return (
+          <line
+            key={i}
+            className={i === dial ? 'morse-tick morse-tick-on' : 'morse-tick'}
+            x1={x1}
+            y1={y1}
+            x2={x2}
+            y2={y2}
+          />
+        );
+      })}
+      <g className="morse-knob-cap" style={{ transform: `rotate(${knobAngle(dial, steps)}deg)` }}>
+        <circle className="morse-knob-grip" cx={50} cy={50} r={32} />
+        <circle className="morse-knob-face" cx={50} cy={50} r={24} />
+        <line className="morse-knob-mark" x1={50} y1={22} x2={50} y2={36} />
+      </g>
+    </svg>
+  );
+}
+
 export function MorsePanel({ puzzle, send }: PanelProps<'morse'>) {
   if (puzzle.pattern === null) {
     return <div className="progress-line">Regler: {puzzle.frequency}</div>;
   }
-  const tune = (step: -1 | 1): void => {
-    play('click');
-    send({ tune: step });
-  };
+  const tune = (step: -1 | 1): void => send({ tune: step });
   return (
     <div>
       {/* A new word restarts the loop from its long pause. */}
@@ -76,9 +139,12 @@ export function MorsePanel({ puzzle, send }: PanelProps<'morse'>) {
         <button aria-label="Frequenz runter" disabled={puzzle.dial <= 0} onClick={() => tune(-1)}>
           ◀
         </button>
-        <output className="morse-freq" aria-live="polite">
-          {puzzle.frequency}
-        </output>
+        <div className="morse-tuner">
+          <Knob dial={puzzle.dial} steps={puzzle.steps} />
+          <output className="morse-freq" aria-live="polite">
+            {puzzle.frequency}
+          </output>
+        </div>
         <button
           aria-label="Frequenz hoch"
           disabled={puzzle.dial >= puzzle.steps - 1}
@@ -87,17 +153,10 @@ export function MorsePanel({ puzzle, send }: PanelProps<'morse'>) {
           ▶
         </button>
       </div>
-      <div className="morse-scale" aria-hidden="true">
-        {Array.from({ length: puzzle.steps }, (_, i) => (
-          <span key={i} className={`morse-tick ${i === puzzle.dial ? 'morse-tick-on' : ''}`} />
-        ))}
-      </div>
       <button
-        className="big-button"
-        onClick={() => {
-          play('click');
-          send({ transmit: true });
-        }}
+        className="big-button morse-send"
+        data-feel="thunk"
+        onClick={() => send({ transmit: true })}
       >
         SENDEN
       </button>

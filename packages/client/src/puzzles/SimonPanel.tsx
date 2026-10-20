@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { SIMON_COLORS, type SimonColor } from '@escapelab/core';
+import type { SimonColor } from '@escapelab/core';
 import { Icon } from '../screens/Icon.js';
-import { play, simonTone } from '../sounds.js';
 import { Dots } from './Dots.js';
 import type { PanelProps } from './index.js';
+import { simonTone } from './sounds.js';
 import './simon.css';
 
 type SimonPuzzle = PanelProps<'simon'>['puzzle'];
@@ -23,9 +23,9 @@ const STEP_MS = 800;
 const LOOP_PAUSE_MS = 1800;
 
 /**
- * The signal lamp: plays its colors on a loop from the moment it mounts.
- * Remount it (new `key`) to start over. Only the first pass beeps, so the
- * loop does not drone on.
+ * The signal lamp: plays its colors on a loop from the moment it mounts,
+ * each flash pulsing with its colour's tone. Remount it (new `key`) to start
+ * over. Only the first pass sounds, so the loop does not drone on.
  */
 function SignalLamp({ flashes }: { flashes: SimonColor[] }) {
   const [colors] = useState(flashes);
@@ -42,7 +42,7 @@ function SignalLamp({ flashes }: { flashes: SimonColor[] }) {
       }
       setLit(i);
       if (firstPass) {
-        simonTone(SIMON_COLORS.indexOf(color));
+        simonTone(color, FLASH_MS / 1000);
       }
       timer = setTimeout(() => {
         setLit(null);
@@ -55,7 +55,10 @@ function SignalLamp({ flashes }: { flashes: SimonColor[] }) {
 
   const color = lit === null ? undefined : colors[lit];
   return (
-    <div className={`simon-signal ${color === undefined ? '' : `simon-${color}`}`} role="status">
+    <div
+      className={`simon-signal ${color === undefined ? '' : `simon-signal--lit simon-${color}`}`}
+      role="status"
+    >
       {lit !== null && color !== undefined && `${LABELS[color]} · ${lit + 1}/${colors.length}`}
     </div>
   );
@@ -85,6 +88,10 @@ function WrongKey() {
   );
 }
 
+/**
+ * The Frequenz-Abgleich: the lamp flashing the stage's colours, each with its tone, and the
+ * four colour keys, each sounding its tone and glowing as it goes down.
+ */
 export function SimonPanel({ puzzle, send }: PanelProps<'simon'>) {
   const [replays, setReplays] = useState(0);
   if (puzzle.flashes === null || puzzle.buttons === null) {
@@ -108,10 +115,9 @@ export function SimonPanel({ puzzle, send }: PanelProps<'simon'>) {
           <button
             key={color}
             className={`simon-key simon-${color}`}
-            onClick={() => {
-              play('click');
-              send({ kind: 'press', color });
-            }}
+            data-feel="tone"
+            data-tone={color}
+            onClick={() => send({ kind: 'press', color })}
           >
             {LABELS[color]}
           </button>

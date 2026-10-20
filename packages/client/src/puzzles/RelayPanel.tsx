@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { PuzzleInputOf, RelayView } from '@escapelab/core';
-import { play } from '../sounds.js';
+import { usePressFeel } from './feel.js';
 import type { PanelProps } from './index.js';
 import './relay.css';
 
@@ -10,6 +10,8 @@ type Control = RelayView['controls'][number];
 
 /** A dial's levels — exactly what the core accepts. */
 const LEVELS = [1, 2, 3, 4, 5] as const;
+/** From this many seconds left, an instruction's countdown pulses red. */
+export const FINAL_SECONDS = 5;
 
 function useNow(intervalMs: number): number {
   const [now, setNow] = useState(() => Date.now());
@@ -31,10 +33,19 @@ function spoken(control: string, value: RelayInput['value']): string {
   return `${control} ${value ? 'AN' : 'AUS'}`;
 }
 
-/** The highlighted box: what to read out, for whose console, and how long it still counts. */
+/** The whole seconds an instruction still counts at `now`, never below 0. */
+export function secondsLeft(expiresAt: number, now: number): number {
+  return Math.max(0, Math.ceil((expiresAt - now) / 1000));
+}
+
+/**
+ * The highlighted box: what to read out, for whose console, and how long it still counts —
+ * a bar running down and its seconds in digits, pulsing red over the last FINAL_SECONDS.
+ */
 function Order({ instruction, windowSec }: { instruction: Instruction; windowSec: number }) {
   const now = useNow(200);
   const share = Math.min(1, Math.max(0, instruction.expiresAt - now) / (windowSec * 1000));
+  const left = secondsLeft(instruction.expiresAt, now);
   return (
     <section
       className={`relay-order ${share < 0.34 ? 'relay-order--late' : ''}`}
@@ -44,16 +55,25 @@ function Order({ instruction, windowSec }: { instruction: Instruction; windowSec
       <strong className="relay-order-text">
         „{spoken(instruction.control, instruction.value)}"
       </strong>
-      <div className="relay-bar" aria-hidden="true">
-        <span style={{ width: `${share * 100}%` }} />
+      <div className="relay-clock">
+        <div className="relay-bar" aria-hidden="true">
+          <span style={{ width: `${share * 100}%` }} />
+        </div>
+        <span
+          className={left <= FINAL_SECONDS ? 'relay-count relay-count--final' : 'relay-count'}
+          role="timer"
+          aria-label={`noch ${left} Sekunden`}
+        >
+          {String(left).padStart(2, '0')}
+        </span>
       </div>
     </section>
   );
 }
 
+/** One control of the console: a switch that clacks over, a dial that catches, a button. */
 function ControlCard({ control, send }: { control: Control; send: (input: RelayInput) => void }) {
   const set = (value: RelayInput['value']): void => {
-    play('click');
     send({ kind: 'set', control: control.id, value });
   };
   return (
@@ -62,6 +82,7 @@ function ControlCard({ control, send }: { control: Control; send: (input: RelayI
       {control.kind === 'switch' && (
         <button
           className={`relay-switch ${control.value ? 'relay-on' : ''}`}
+          data-feel="clack"
           aria-pressed={control.value}
           onClick={() => set(!control.value)}
         >
@@ -74,6 +95,7 @@ function ControlCard({ control, send }: { control: Control; send: (input: RelayI
             <button
               key={level}
               className={level === control.value ? 'relay-on' : ''}
+              data-feel="detent"
               aria-pressed={level === control.value}
               onClick={() => set(level)}
             >
@@ -93,7 +115,8 @@ function ControlCard({ control, send }: { control: Control; send: (input: RelayI
 
 /**
  * One player's side of the relay emergency: the instruction to read out on
- * top, the crew's progress, and the four controls of their console.
+ * top, the crew's progress, and the four controls of their console, each
+ * with the kit's feel — switches clack, dials catch, the button clicks.
  */
 export function RelayConsole({
   relay,
@@ -102,8 +125,9 @@ export function RelayConsole({
   relay: RelayView;
   send: (input: RelayInput) => void;
 }) {
+  const { handlers } = usePressFeel(false, true);
   return (
-    <div className="relay">
+    <div className="relay" {...handlers}>
       {relay.instruction !== null && (
         <Order instruction={relay.instruction} windowSec={relay.windowSec} />
       )}

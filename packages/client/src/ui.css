@@ -670,14 +670,6 @@ button.link:hover {
   box-shadow: 0 0 9px var(--accent-glow);
 }
 
-@keyframes keywrong {
-  50% {
-    border-color: var(--danger);
-    color: var(--danger);
-    box-shadow: 0 0 14px rgba(248, 113, 113, 0.5);
-  }
-}
-
 /* --- sync & end --------------------------------------------------------------------------------------- */
 
 .big-button {
@@ -1004,17 +996,6 @@ button.link:hover {
   fill: var(--accent);
   filter: drop-shadow(0 0 5px var(--accent-glow));
   transition: cx 0.12s ease, cy 0.12s ease;
-}
-
-.maze-marker-bump {
-  fill: var(--danger);
-  animation: maze-bump 0.4s 2;
-}
-
-@keyframes maze-bump {
-  50% {
-    r: 11;
-  }
 }
 
 .maze-pad {
@@ -2734,20 +2715,6 @@ button.link:hover {
 
 .signal-key .signal-word {
   font-size: 12px;
-}
-
-.signal-grid--wrong {
-  animation: shake 0.5s;
-}
-
-.signal-grid--wrong .signal-key {
-  animation: keywrong 0.5s;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .signal-grid--wrong {
-    animation: none;
-  }
 }
 
 /* Each console's keys under its name, for the audience. */

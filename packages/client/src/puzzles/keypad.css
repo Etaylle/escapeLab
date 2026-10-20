@@ -1,28 +1,114 @@
-/* --- keypad: four big symbol keys in a 2×2 grid; a correct press lights its key for good --- */
+/* --- keypad: a display over four big symbol keys; a correct press lights its key for good --- */
+
+.keypad {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* A reflective LCD over the keys, a cell for every key of the code: the
+   glyphs typed so far in their order, or a mark per key where the glyphs
+   are not shown. */
+.keypad-display {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  max-width: 300px;
+  margin: 0 auto;
+  padding: 7px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #a3b89e, #8aa385);
+  box-shadow:
+    inset 0 1px 4px rgba(0, 0, 0, 0.6),
+    0 0 0 3px #0b0f13,
+    0 1px 0 3px rgba(255, 255, 255, 0.06);
+}
+
+.keypad-cell {
+  display: grid;
+  place-items: center;
+  height: 42px;
+  border-radius: 4px;
+  background: rgba(20, 35, 20, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(20, 35, 20, 0.12);
+  color: #1b2a1a;
+  font-size: 28px;
+  line-height: 1;
+}
+
+/* A key in without its glyph: a block, as a display shows a hidden entry. */
+.keypad-cell--in:empty::after {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: #1b2a1a;
+}
+
+/* Just typed: the cell blinks dark and back, 60 ms. */
+.keypad-cell--typed {
+  animation: keypad-type 60ms step-end;
+}
+
+@keyframes keypad-type {
+  0% {
+    background: #1b2a1a;
+    color: #a3b89e;
+  }
+  50% {
+    background: rgba(20, 35, 20, 0.07);
+    color: transparent;
+  }
+}
 
 .keypad-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
+  width: 100%;
   max-width: 300px;
-  margin: 4px auto 0;
+  margin: 0 auto;
 }
 
 .keypad-key {
   aspect-ratio: 1;
   padding: 0;
   border-radius: 14px;
-  background: #0b1117;
+  background: linear-gradient(180deg, #16202a, #0b1117);
   font-size: 56px;
   line-height: 1;
 }
 
-/* Lit keys are disabled, but must read as lit, not as greyed out. */
+/* Lit keys are disabled, but must read as lit, not as greyed out — and they stay in. */
 .keypad-key--lit:disabled {
   opacity: 1;
   cursor: default;
+  translate: 0 2px;
   border-color: var(--accent);
   color: var(--accent);
   background: rgba(45, 212, 191, 0.08);
-  box-shadow: 0 0 14px var(--accent-glow);
+  box-shadow:
+    0 1px 0 #04070a,
+    0 0 14px var(--accent-glow);
+}
+
+/* A key just lit flares up bright before it settles. */
+.keypad-key--fresh:disabled {
+  animation: keypad-lit 420ms ease-out;
+}
+
+@keyframes keypad-lit {
+  0% {
+    background: rgba(45, 212, 191, 0.45);
+    box-shadow:
+      0 1px 0 #04070a,
+      0 0 34px 6px var(--accent-glow);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .keypad-key--fresh:disabled {
+    animation-duration: 120ms;
+  }
 }

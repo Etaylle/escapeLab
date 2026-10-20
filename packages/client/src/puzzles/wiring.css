@@ -106,12 +106,12 @@
   transition: transform 0.25s ease-out;
 }
 
-.wiring-half:first-child {
+.wiring-half--left {
   border-radius: 5px 0 0 5px;
   transform-origin: left center;
 }
 
-.wiring-half:last-child {
+.wiring-half--right {
   margin-left: -1px;
   border-radius: 0 5px 5px 0;
   transform-origin: right center;
@@ -121,12 +121,75 @@
   filter: brightness(1.25);
 }
 
+/* The pliers over the middle of a whole wire, where a tap or a click cuts it. */
+.wiring-cutter {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  border-radius: 50%;
+  background: rgba(17, 22, 27, 0.88);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+
+.wiring-wire:hover:not(:disabled) .wiring-cutter,
+.wiring-wire:focus-visible .wiring-cutter {
+  opacity: 1;
+}
+
 /* severed: a gap in the middle, both ends drooping, bare copper at the cut */
 .wiring-cut .wiring-line {
   gap: 22px;
 }
 
-.wiring-cut .wiring-half:first-child {
+/* As it is cut, each half falls from straight about its post, swings past and sways back. */
+.wiring-snapped .wiring-half--left {
+  animation: wiring-fall-left 520ms cubic-bezier(0.3, 0.6, 0.4, 1);
+}
+
+.wiring-snapped .wiring-half--right {
+  animation: wiring-fall-right 520ms cubic-bezier(0.3, 0.6, 0.4, 1);
+}
+
+@keyframes wiring-fall-left {
+  0% {
+    transform: rotate(0deg);
+  }
+  45% {
+    transform: rotate(8.5deg);
+  }
+  75% {
+    transform: rotate(5deg);
+  }
+}
+
+@keyframes wiring-fall-right {
+  0% {
+    transform: rotate(0deg);
+  }
+  45% {
+    transform: rotate(-8.5deg);
+  }
+  75% {
+    transform: rotate(-5deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wiring-snapped .wiring-half--left,
+  .wiring-snapped .wiring-half--right {
+    animation-duration: 120ms;
+  }
+}
+
+.wiring-cut .wiring-half--left {
   transform: rotate(6deg);
   box-shadow:
     inset -4px 0 0 #c2410c,
@@ -136,7 +199,7 @@
     0 1px 0 var(--wire-edge);
 }
 
-.wiring-cut .wiring-half:last-child {
+.wiring-cut .wiring-half--right {
   transform: rotate(-6deg);
   box-shadow:
     inset 4px 0 0 #c2410c,

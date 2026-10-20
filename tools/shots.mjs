@@ -9,13 +9,18 @@
  *
  * SHOTS_MISSION names the mission card to start (default Blackout); the
  * crew is two players. Where the first station is a sync station, both
- * press it together, and the run fails unless it solves. Where the station
- * after it has two consoles, each takes one and both panels are captured;
- * a Signalkette, as in the Systemcheck, they work from both sides until it
- * solves too. Where the first station has two consoles, as Blackout's
- * Notstrom-Kasten, the guest holds the plate door for the host on the way
- * to console A where needed, then both consoles are captured and the meter
- * measures every wire once; nothing is cut.
+ * press it together, and the run fails unless it solves; right after the
+ * presses device-solved.png catches the solved device, its status strip
+ * sweeping green, before it closes itself — the run fails where it never
+ * shows solved or is gone before the shot. Where the station after it has
+ * two consoles, each takes one and both panels are captured; a Signalkette,
+ * as in the Systemcheck, they work from both sides until it solves too.
+ * Where the first station has two consoles, as Blackout's Notstrom-Kasten,
+ * the guest holds the plate door for the host on the way to console A where
+ * needed, then both consoles are captured and the meter measures every wire
+ * once; nothing is cut. The first reading that moves the needle is shot
+ * within 250 ms of its probe, the needle still swinging (meter-swing.png),
+ * or the run fails.
  *
  * Cold open: a mission with an intro, as Blackout, opens with the power on.
  * While NORMALBETRIEB shows, the host's window grows to 1440×1000, the host
@@ -644,6 +649,9 @@ async function pressTogether(players, station) {
   const done = (page) => page.locator('.led-strip .led-done');
   const doneBefore = await Promise.all(players.map(({ page }) => done(page).count()));
   await Promise.all(players.map(({ page }) => page.locator('.station-modal .big-button').click()));
+  if (station.look !== 'lever') {
+    await captureSolved(first, station);
+  }
   const lit = await until(() => first.seen.view.map.litRooms.length > litBefore, 5000);
   const moved = await Promise.all(
     players.map(({ page }, i) =>
@@ -668,6 +676,47 @@ async function pressTogether(players, station) {
     `sync               ${players.map(({ name }) => name).join(' and ')} pressed ` +
       `"${station.title}" together: solved, ${first.seen.view.map.litRooms.join(', ')} lit`,
   );
+}
+
+/** How long after a solve a device closes itself, as puzzles/Device.tsx says (SOLVED_CLOSE_MS). */
+const SOLVED_CLOSE_MS = 800;
+
+/**
+ * device-solved.png: a sync station right after the crew's presses — solved,
+ * its status strip sweeping green along the bezel's foot and its plate
+ * dimmed — before it closes itself. Fails where the device never shows solved
+ * or has closed before the shot.
+ */
+async function captureSolved(player, station) {
+  const solved = player.page.locator('.station-modal .device--solved');
+  const since = Date.now();
+  if (!(await attached(solved, 3000))) {
+    console.log(`device-solved.png  !! "${station.title}" never showed solved for ${player.name}`);
+    fail(`device-solved.png: "${station.title}" never showed solved`);
+    return;
+  }
+  const seen = Date.now();
+  await sleep(180); // the sweep under way along the strip
+  await capture(player.page, 'device-solved.png');
+  const shot = Date.now();
+  const open = await solved.isVisible();
+  const leds = await player.page.evaluate(() => {
+    const strip = [...document.querySelectorAll('.station-modal .device-strip-led')];
+    const green = (led) => {
+      const colour = document.defaultView.getComputedStyle(led).backgroundColor;
+      const [r, g] = (colour.match(/\d+/g) ?? []).map(Number);
+      return g > 150 && g > r;
+    };
+    return { lit: strip.filter(green).length, all: strip.length };
+  });
+  console.log(
+    `device-solved.png  ${player.name}: "${station.title}" solved ${seen - since} ms after the ` +
+      `presses, shot ${shot - seen} ms into it — ${leds.lit} of ${leds.all} strip LEDs green ` +
+      `then, the device ${open ? 'still open' : '!! closed already'}`,
+  );
+  if (!open || shot - seen >= SOLVED_CLOSE_MS) {
+    fail(`device-solved.png: the device closed before the shot (${shot - seen} ms in)`);
+  }
 }
 
 /**
@@ -1175,9 +1224,84 @@ async function captureConsoles(operator, reader) {
   }
 }
 
+/** The angle the meter's needle stands at on the page right now, transition and all, in °. */
+function needleOnPage(page) {
+  return page.evaluate(() => {
+    const needle = document.querySelector('.station-modal .gauge-needle');
+    const turn = needle === null ? 'none' : document.defaultView.getComputedStyle(needle).transform;
+    // matrix(cos, sin, −sin, cos, x, y): the angle is atan2(sin, cos).
+    const [a = 1, b = 0] = (turn.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi) ?? []).map(Number);
+    return Math.round((Math.atan2(b, a) * 180 * 10) / Math.PI) / 10;
+  });
+}
+
+/** The needle's angle for a reading, as CircuitPanel's needleAngle: −90° at 0 V, +90° at 250 V. */
+const needleFor = (volts) => -90 + (Math.min(250, Math.max(0, volts)) / 250) * 180;
+
+/** Wire `i`'s reading on the meter's socket as soon as it comes in, every 5 ms; null by `end`. */
+async function readingIn(meter, i, end) {
+  const reading = () => meter.seen.view.puzzle?.readings?.[i] ?? null;
+  while (reading() === null && Date.now() < end) {
+    await sleep(5);
+  }
+  return reading();
+}
+
+/**
+ * The needle's angle once it has come a third of its way from `from` to
+ * `target`, or where it stands at `end` (epoch ms), whichever is first.
+ */
+async function swungAThird(page, from, target, end) {
+  let at = await needleOnPage(page);
+  while ((at - from) / (target - from) < 1 / 3 && Date.now() < end) {
+    await sleep(8);
+    at = await needleOnPage(page);
+  }
+  return at;
+}
+
+/** How soon after its probe meter-swing.png is shot, at the latest, in ms. */
+const SWING_MS = 250;
+/** How far a reading has to move the needle for meter-swing.png to show it, in °. */
+const SWING_DEG = 35;
+/** What the screenshot itself takes, kept free of SWING_MS, in ms. */
+const SHOT_MS = 90;
+
+/**
+ * meter-swing.png: the wire just probed (`i`, its key pressed at `pressed`,
+ * the needle standing at `from`) comes in, and where its reading swings the
+ * needle SWING_DEG or more, the meter is shot as soon as the needle has come
+ * a third of its way — within SWING_MS of the probe, the needle still on its
+ * way to the reading or swinging past it. True once shot; false where the
+ * reading moves the needle less, for the next probe to try.
+ */
+async function captureSwing(meter, i, pressed, from) {
+  const volts = await readingIn(meter, i, pressed + 3000);
+  const target = volts === null ? from : needleFor(volts);
+  if (Math.abs(target - from) < SWING_DEG) {
+    return false;
+  }
+  const at = await swungAThird(meter.page, from, target, pressed + SWING_MS - SHOT_MS);
+  const ms = Date.now() - pressed;
+  await capture(meter.page, 'meter-swing.png');
+  const after = await needleOnPage(meter.page);
+  const swinging = Math.abs(at - target) > 1 && Math.abs(at - from) > 1;
+  console.log(
+    `meter-swing.png    ${meter.name} probed wire ${i + 1}: ${volts} V; shot ${ms} ms after ` +
+      `the probe, the needle at ${at}° on its way from ${from}° to ${target.toFixed(1)}° ` +
+      `(${after}° once shot)` +
+      (swinging ? '' : ' — !! not swinging'),
+  );
+  if (ms > SWING_MS || !swinging) {
+    fail(`meter-swing.png: ${ms} ms after the probe, needle at ${at}° for ${target}°`);
+  }
+  return true;
+}
+
 /**
  * At a fuse box's meter: every probe key pressed once, its wire's reading
- * in the meter's view before the next key. Nothing is cut. Throws at the
+ * in the meter's view before the next key — the first reading that moves
+ * the needle shot mid-swing (captureSwing). Nothing is cut. Throws at the
  * key whose reading stays empty.
  */
 async function measureEveryWire(meter, title) {
@@ -1186,22 +1310,44 @@ async function measureEveryWire(meter, title) {
   if (count === 0 || keys !== count) {
     throw new Error(`"${title}": the meter shows ${keys} probe keys for ${count} wires`);
   }
+  let swung = false;
   for (let i = 0; i < count; i++) {
-    const key = meter.page.locator(`.station-modal .circuit-probe[data-index="${i}"]`);
-    await key.click({ timeout: 3000 });
-    if (!(await until(() => meter.seen.view.puzzle?.readings?.[i] != null, 3000))) {
-      throw new Error(
-        `${meter.name} measured wire ${i + 1} of "${title}", but its reading stayed empty`,
-      );
-    }
-    await sleep(150);
+    swung = (await probeWire(meter, title, i, swung)) || swung;
   }
+  reportMeasured(meter, count, swung);
+}
+
+/** The meter's round in the log: every reading taken, and whether one was shot mid-swing. */
+function reportMeasured(meter, count, swung) {
   const readings = meter.seen.view.puzzle?.readings ?? [];
   const volts = readings.map((reading) => `${reading} V`).join(', ');
   console.log(
     `circuit            ${meter.name} at ${seatOf(meter)} measured all ${count} wires: ` +
       `${volts}; nothing cut`,
   );
+  if (!swung) {
+    skip('meter-swing.png', 'no reading moved the needle far enough to see it swing');
+  }
+}
+
+/**
+ * Presses wire `i`'s probe key at the meter and waits for its reading; until
+ * one has been shot mid-swing (`swung`), tries meter-swing.png on this one.
+ * Returns whether this one was shot. Throws where the reading stays empty.
+ */
+async function probeWire(meter, title, i, swung) {
+  const key = meter.page.locator(`.station-modal .circuit-probe[data-index="${i}"]`);
+  const from = swung ? 0 : await needleOnPage(meter.page);
+  const pressed = Date.now();
+  await key.click({ timeout: 3000 });
+  const shot = !swung && (await captureSwing(meter, i, pressed, from));
+  if (!(await until(() => meter.seen.view.puzzle?.readings?.[i] != null, 3000))) {
+    throw new Error(
+      `${meter.name} measured wire ${i + 1} of "${title}", but its reading stayed empty`,
+    );
+  }
+  await sleep(150);
+  return shot;
 }
 
 /** Steps onto a plate's tile and stays there; throws unless the view counts the plate held. */

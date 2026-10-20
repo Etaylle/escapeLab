@@ -10,7 +10,6 @@ export type IconName =
   | 'copy'
   | 'crew'
   | 'cross'
-  | 'cut'
   | 'exit'
   | 'eye'
   | 'flag'
@@ -86,13 +85,6 @@ const GLYPHS: Record<IconName, ReactNode> = {
     </>
   ),
   cross: <path d="m3.5 3.5 9 9m0-9-9 9" />,
-  cut: (
-    <>
-      <circle cx="4.5" cy="11.5" r="2.25" />
-      <circle cx="11.5" cy="11.5" r="2.25" />
-      <path d="M6.1 9.9 12.5 2M9.9 9.9 3.5 2" />
-    </>
-  ),
   exit: <path d="M9.5 2.5h-6v11h6M7 8h7.25m-2.5-2.5L14.25 8l-2.5 2.5" />,
   eye: (
     <>

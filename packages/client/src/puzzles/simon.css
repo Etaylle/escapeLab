@@ -73,24 +73,52 @@
   filter: none;
 }
 
-.simon-key:active {
-  filter: brightness(1.2);
-  transform: scale(0.98);
+/* Under the finger a key goes in and lights up in its colour. */
+.simon-key:active:not(:disabled),
+.simon-key.feel-pressed:not(:disabled) {
+  translate: 0 2px;
+  filter: brightness(1.25) saturate(1.1);
+  box-shadow: 0 0 24px 4px var(--glow);
+}
+
+/* Each flash of the lamp pulses: bright and wide as it comes, settling. */
+.simon-signal--lit {
+  animation: simon-pulse 520ms ease-out;
+}
+
+@keyframes simon-pulse {
+  0% {
+    filter: brightness(1.45);
+    box-shadow: 0 0 46px 10px var(--glow);
+  }
+  100% {
+    box-shadow: 0 0 14px 2px var(--glow);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .simon-signal--lit {
+    animation-duration: 120ms;
+  }
 }
 
 /* After .simon-signal, so a lit lamp takes the color. */
 .simon-rot {
+  --glow: rgba(239, 68, 68, 0.7);
   background: #ef4444;
 }
 
 .simon-blau {
+  --glow: rgba(59, 130, 246, 0.7);
   background: #3b82f6;
 }
 
 .simon-gruen {
+  --glow: rgba(34, 197, 94, 0.7);
   background: #22c55e;
 }
 
 .simon-gelb {
+  --glow: rgba(234, 179, 8, 0.7);
   background: #eab308;
 }

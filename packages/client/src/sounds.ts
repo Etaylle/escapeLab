@@ -18,7 +18,7 @@ function tone(freq: number, startIn: number, duration: number, volume: number): 
   osc.stop(t + duration);
 }
 
-export function play(kind: 'alarm' | 'solved' | 'won' | 'lost' | 'click' | 'start'): void {
+export function play(kind: 'alarm' | 'solved' | 'won' | 'lost' | 'start'): void {
   try {
     ctx ??= new AudioContext();
     switch (kind) {
@@ -39,9 +39,6 @@ export function play(kind: 'alarm' | 'solved' | 'won' | 'lost' | 'click' | 'star
         tone(330, 0, 0.3, 0.07);
         tone(220, 0.32, 0.5, 0.07);
         break;
-      case 'click':
-        tone(900, 0, 0.03, 0.03);
-        break;
       case 'start':
         tone(440, 0, 0.1, 0.05);
         tone(440, 0.9, 0.1, 0.05);
@@ -51,16 +48,5 @@ export function play(kind: 'alarm' | 'solved' | 'won' | 'lost' | 'click' | 'star
     }
   } catch {
     // Audio blocked or unsupported — the game stays fully playable.
-  }
-}
-
-/** Distinct tone per simon color, synced with the flash animation. */
-export function simonTone(colorIndex: number): void {
-  try {
-    ctx ??= new AudioContext();
-    const freqs = [392, 494, 587, 330];
-    tone(freqs[colorIndex] ?? 440, 0, 0.35, 0.05);
-  } catch {
-    // Audio optional.
   }
 }

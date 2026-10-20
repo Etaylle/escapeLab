@@ -39,11 +39,60 @@
   overflow-wrap: anywhere;
 }
 
+/* How long the instruction still counts: the bar and its seconds beside it. */
+.relay-clock {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .relay-bar {
+  flex: 1;
   height: 8px;
   border-radius: 4px;
   background: var(--panel-2);
   overflow: hidden;
+}
+
+.relay-count {
+  min-width: 2ch;
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--warn);
+}
+
+/* The last five seconds: the digits go red and pulse. */
+.relay-count--final {
+  color: var(--danger);
+  animation: relay-count-pulse 1s ease-in-out infinite;
+}
+
+@keyframes relay-count-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    text-shadow: 0 0 12px rgba(248, 113, 113, 0.85);
+  }
+  50% {
+    opacity: 0.5;
+    text-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .relay-count--final {
+    animation: none;
+  }
+}
+
+/* A control under the finger goes in. */
+.relay button:active:not(:disabled),
+.relay button.feel-pressed {
+  translate: 0 2px;
 }
 
 .relay-bar span {

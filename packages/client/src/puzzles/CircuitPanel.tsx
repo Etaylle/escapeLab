@@ -1,10 +1,13 @@
-import { Icon } from '../screens/Icon.js';
-import { play } from '../sounds.js';
+import { useEffect, useState, type ReactNode } from 'react';
 import { consoleName } from '../world/consoles.js';
+import { cutBetween, Pliers, Spark } from './cutter.js';
 import { DeviceLamp } from './Device.js';
+import { motionMs, type Change } from './feel.js';
 import type { PanelProps } from './index.js';
+import { pliersSnip, shortArc, sparkCrackle, voltageHum } from './sounds.js';
 
 type CircuitPuzzle = PanelProps<'circuit'>['puzzle'];
+type CircuitChange = Change<CircuitPuzzle>;
 type Wire = NonNullable<CircuitPuzzle['wires']>[number];
 type Send = PanelProps<'circuit'>['send'];
 
@@ -25,60 +28,128 @@ function volts(reading: number | null | undefined): string {
   return reading === null || reading === undefined ? '—' : `${reading} V`;
 }
 
-/** A wire's row on the board, in its cable's colour, hanging loose once cut. */
-const wireClass = (wire: Wire): string =>
-  `circuit-wire ${TONE[wire.colour]}${wire.cut ? ' circuit-wire--cut' : ''}`;
+/** A wire's row on the board, in its cable's colour; falling and hanging loose once cut. */
+function wireClass(wire: Wire, snapped: boolean): string {
+  const fall = snapped ? ' circuit-wire--snapped' : '';
+  return `circuit-wire ${TONE[wire.colour]}${fall}${wire.cut ? ' circuit-wire--cut' : ''}`;
+}
+
+/** The box shorted with this change: rewired, every cable whole again. */
+export function shortedWith(change: CircuitChange | null): boolean {
+  return change !== null && (change.after.shorts ?? 0) > (change.before.shorts ?? 0);
+}
+
+/** The wire this change cut at the box, by its place; none for a short, which cuts nothing. */
+export function cutWith(change: CircuitChange | null): number | null {
+  if (change === null || change.after.shorts !== change.before.shorts) {
+    return null;
+  }
+  return cutBetween(change.before.wires, change.after.wires);
+}
+
+/** What a view's meter read on `wire` this round; none for no wire, or none read. */
+function readingOf(view: CircuitPuzzle, wire: number | null): number | null {
+  return wire === null ? null : (view.readings?.[wire] ?? null);
+}
+
+/** The wire this change measured at the meter and what it read; none where nothing new came. */
+export function probedWith(change: CircuitChange | null): { wire: number; volts: number } | null {
+  if (change === null) {
+    return null;
+  }
+  const { before, after } = change;
+  const wire = after.probed;
+  const reading = readingOf(after, wire);
+  if (wire === null || reading === null) {
+    return null;
+  }
+  const was = before.probed === wire ? readingOf(before, wire) : null;
+  return was === reading ? null : { wire, volts: reading };
+}
+
+/**
+ * What a change sounds like at either console: a short arcs — the alarm after it — a cut
+ * throws sparks, and a measurement hums at a pitch that follows its voltage, none at 0 V.
+ */
+export function circuitSounds(change: CircuitChange): void {
+  if (shortedWith(change)) {
+    shortArc();
+  } else if (cutWith(change) !== null) {
+    sparkCrackle();
+  }
+  const probe = probedWith(change);
+  if (probe !== null) {
+    voltageHum(probe.volts);
+  }
+}
 
 /*
  * A cable's run in its row's 100 × 44 units, stretched to the row's width
  * while every stroke keeps its own: whole, it sags between the terminals;
- * cut, each half hangs from its terminal, the copper bare at the cut.
+ * cut, each half hangs from its terminal, the copper bare at the cut — and
+ * as it is cut, falls about its terminal and sways (CSS).
  */
-const WHOLE = ['M0 12Q50 36 100 12'];
-const HALVES = ['M0 12Q22 26 40 38', 'M100 12Q78 26 60 38'];
-const BARE = ['M35 34.6 40 38', 'M65 34.6 60 38'];
+const WHOLE = 'M0 12Q50 36 100 12';
+const HALVES = [
+  { side: 'left', run: 'M0 12Q22 26 40 38', bare: 'M35 34.6 40 38' },
+  { side: 'right', run: 'M100 12Q78 26 60 38', bare: 'M65 34.6 60 38' },
+] as const;
 const stroke = { vectorEffect: 'non-scaling-stroke' } as const;
 
 /**
- * The cable between its terminals: its shadow on the board, the insulation
- * with a sheen along it and, on a black one, a grey tracer stripe so that it
- * shows on anything dark.
+ * A length of cable: its shadow on the board, the insulation with a sheen
+ * along it and, on a black one, a grey tracer stripe so that it shows on
+ * anything dark.
  */
+function Run({ d, black }: { d: string; black: boolean }) {
+  return (
+    <>
+      <path className="cable-shadow" d={d} transform="translate(0 3)" {...stroke} />
+      <path className="cable-edge" d={d} {...stroke} />
+      <path className="cable-core" d={d} {...stroke} />
+      {black && <path className="cable-tracer" d={d} {...stroke} />}
+      <path className="cable-sheen" d={d} transform="translate(0 -1.5)" {...stroke} />
+    </>
+  );
+}
+
+/** The cable between its terminals: whole, or in two halves hanging from them. */
 function Cable({ wire }: { wire: Wire }) {
-  const runs = wire.cut ? HALVES : WHOLE;
+  const black = wire.colour === 'schwarz';
   return (
     <svg className="cable" viewBox="0 0 100 44" preserveAspectRatio="none" aria-hidden="true">
-      {runs.map((d) => (
-        <g key={d}>
-          <path className="cable-shadow" d={d} transform="translate(0 3)" {...stroke} />
-          <path className="cable-edge" d={d} {...stroke} />
-          <path className="cable-core" d={d} {...stroke} />
-          {wire.colour === 'schwarz' && <path className="cable-tracer" d={d} {...stroke} />}
-          <path className="cable-sheen" d={d} transform="translate(0 -1.5)" {...stroke} />
-        </g>
-      ))}
-      {wire.cut && BARE.map((d) => <path key={d} className="cable-bare" d={d} {...stroke} />)}
+      {wire.cut ? (
+        HALVES.map(({ side, run, bare }) => (
+          <g key={side} className={`cable-half cable-half--${side}`}>
+            <Run d={run} black={black} />
+            <path className="cable-bare" d={bare} {...stroke} />
+          </g>
+        ))
+      ) : (
+        <Run d={WHOLE} black={black} />
+      )}
     </svg>
   );
 }
 
 /**
  * A wire's row: its number printed on the board, a terminal either side and
- * the cable between them; with `cutter`, the cutter that shows over the
- * cable where a tap or a click goes in.
+ * the cable between them; with `cutter`, the pliers that show over the cable
+ * where a tap or a click goes in; `snapped`, the sparks off the cut it just got.
  */
-function WireRun({ wire, number, cutter }: { wire: Wire; number: number; cutter: boolean }) {
+function WireRun(props: { wire: Wire; number: number; cutter: boolean; snapped: boolean }) {
   return (
     <>
-      <span className="circuit-number">{number}</span>
+      <span className="circuit-number">{props.number}</span>
       <span className="circuit-terminal" />
       <span className="circuit-run">
-        <Cable wire={wire} />
-        {cutter && (
+        <Cable wire={props.wire} />
+        {props.cutter && (
           <span className="circuit-cutter">
-            <Icon name="cut" />
+            <Pliers />
           </span>
         )}
+        {props.snapped && <Spark />}
       </span>
       <span className="circuit-terminal" />
     </>
@@ -144,26 +215,61 @@ function Segments({ text, width }: { text: string; width: number }) {
   );
 }
 
+/** How long a new reading's digits run wild before they settle, in ms. */
+export const SETTLE_MS = 150;
+/** How often they change meanwhile, in ms. */
+const SETTLE_STEP_MS = 30;
+
+/**
+ * The digits a display shows `frame` steps into settling on `text`: every digit another,
+ * changing from frame to frame; whatever is not a digit as it is.
+ */
+export function scrambled(text: string, frame: number): string {
+  const wild = (digit: string, i: number): string =>
+    String((Number(digit) + 3 + frame * 7 + i * 5) % 10);
+  return [...text].map((char, i) => (/\d/.test(char) ? wild(char, i) : char)).join('');
+}
+
+/** `text` on seven segments once SETTLE_MS of wild digits have run, from the first frame on. */
+function Settling({ text, width }: { text: string; width: number }) {
+  const [frame, setFrame] = useState(0);
+  const frames = Math.round(motionMs(SETTLE_MS) / SETTLE_STEP_MS);
+  useEffect(() => {
+    if (frame >= frames) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setFrame((n) => n + 1), SETTLE_STEP_MS);
+    return () => clearTimeout(timer);
+  }, [frame, frames]);
+  return <Segments text={frame >= frames ? text : scrambled(text, frame)} width={width} />;
+}
+
 /**
  * The box at console a: the board behind the glass door, a button per wire
  * numbered from the top. Its colour is the cable's; a screen reader hears it.
+ * The pliers snip as a wire is pressed; the cut itself is the server's to say.
  */
-function Box({ wires, send }: { wires: Wire[]; send: Send }) {
+function Box(props: { wires: Wire[]; snapped: number | null; rewired: boolean; send: Send }) {
+  const { wires, snapped, rewired, send } = props;
   return (
-    <ol className="circuit-board" aria-label="Kabel, von oben gezählt">
+    <ol
+      className={rewired ? 'circuit-board circuit-board--rewired' : 'circuit-board'}
+      aria-label="Kabel, von oben gezählt"
+    >
       {wires.map((wire, i) => (
         <li key={i}>
           <button
-            className={wireClass(wire)}
+            className={wireClass(wire, i === snapped)}
             data-index={i}
             disabled={wire.cut}
+            data-feel="none"
             aria-label={`Kabel ${i + 1}, ${wire.colour}${wire.cut ? ', getrennt' : ''}`}
             onClick={() => {
-              play('click');
+              pliersSnip();
               send({ cut: i });
             }}
           >
-            <WireRun wire={wire} number={i + 1} cutter={!wire.cut} />
+            <WireRun wire={wire} number={i + 1} cutter={!wire.cut} snapped={i === snapped} />
           </button>
         </li>
       ))}
@@ -172,15 +278,13 @@ function Box({ wires, send }: { wires: Wire[]; send: Send }) {
 }
 
 /** The box for the audience: each wire with its voltage now, the dead one marked; nothing to cut. */
-function WatchedBox({
-  wires,
-  voltages,
-  dead,
-}: {
+function WatchedBox(props: {
   wires: Wire[];
   voltages: number[];
   dead: boolean[];
+  snapped: number | null;
 }) {
+  const { wires, voltages, dead, snapped } = props;
   return (
     <ol className="circuit-board" aria-label="Kabel, von oben gezählt">
       {wires.map((wire, i) => {
@@ -188,12 +292,12 @@ function WatchedBox({
         return (
           <li key={i}>
             <span
-              className={`${wireClass(wire)} circuit-wire--watched`}
+              className={`${wireClass(wire, i === snapped)} circuit-wire--watched`}
               data-index={i}
               role="img"
               aria-label={`Kabel ${i + 1}, ${wire.colour}${wire.cut ? ', getrennt' : ''}: ${now}`}
             >
-              <WireRun wire={wire} number={i + 1} cutter={false} />
+              <WireRun wire={wire} number={i + 1} cutter={false} snapped={i === snapped} />
               <span className="circuit-volts">{now}</span>
             </span>
           </li>
@@ -234,8 +338,8 @@ const TICKS = Array.from({ length: SCALE_MAX / 10 + 1 }, (_, i) => i * 10);
 
 /**
  * The meter's dial behind its glass: 0 to 250 V over a half circle, the top
- * of the scale marked red. The needle swings to the reading on the display,
- * and rests at 0 before one.
+ * of the scale marked red. The needle swings to the reading on the display
+ * with a needle's inertia, past it once and back (CSS), and rests at 0 before one.
  */
 function Gauge({ reading }: { reading: number | null }) {
   return (
@@ -278,9 +382,18 @@ function Gauge({ reading }: { reading: number | null }) {
   );
 }
 
-/** The meter's display: the wire measured last in this round and its voltage; dashes before. */
-function Readout({ probed, readings }: { probed: number | null; readings: (number | null)[] }) {
+/**
+ * The meter's display: the wire measured last in this round and its voltage; dashes before.
+ * A reading just come in runs through wild digits first (`settling`, the change's number).
+ */
+function Readout(props: {
+  probed: number | null;
+  readings: (number | null)[];
+  settling: number | null;
+}) {
+  const { probed, readings, settling } = props;
   const reading = probed === null ? null : (readings[probed] ?? null);
+  const text = reading === null ? '---' : String(reading);
   return (
     <output className="circuit-readout" aria-live="polite">
       <span className="device-sr">
@@ -292,7 +405,11 @@ function Readout({ probed, readings }: { probed: number | null; readings: (numbe
       </span>
       <span className="circuit-readout-field" aria-hidden="true">
         <span className="device-engraving">SPANNUNG</span>
-        <Segments text={reading === null ? '---' : String(reading)} width={3} />
+        {settling === null ? (
+          <Segments text={text} width={3} />
+        ) : (
+          <Settling key={settling} text={text} width={3} />
+        )}
         <span className="circuit-unit">V</span>
       </span>
     </output>
@@ -310,11 +427,9 @@ function Keys({ count, probed, send }: { count: number; probed: number | null; s
             key={i}
             className={i === probed ? 'circuit-probe circuit-probe--last' : 'circuit-probe'}
             data-index={i}
+            data-feel="probe"
             aria-label={`Kabel ${i + 1} messen`}
-            onClick={() => {
-              play('click');
-              send({ probe: i });
-            }}
+            onClick={() => send({ probe: i })}
           >
             {i + 1}
           </button>
@@ -324,14 +439,17 @@ function Keys({ count, probed, send }: { count: number; probed: number | null; s
   );
 }
 
-/** This round's readings on the meter's paper strip, wire by wire; a dash where none was taken. */
-function Log({ readings }: { readings: (number | null)[] }) {
+/**
+ * This round's readings on the meter's paper strip, wire by wire; a dash where none was
+ * taken. The line of a reading just come in (`fresh`) slides in.
+ */
+function Log({ readings, fresh }: { readings: (number | null)[]; fresh: number | null }) {
   return (
     <figure className="circuit-log">
       <figcaption className="circuit-log-head">MESSPROTOKOLL</figcaption>
       <ol className="circuit-readings" aria-label="Messungen dieser Runde">
         {readings.map((reading, i) => (
-          <li key={i}>
+          <li key={i} className={i === fresh ? 'circuit-log-new' : undefined}>
             <span>{`Kabel ${i + 1}`}</span>
             <span className="circuit-reading">{volts(reading)}</span>
           </li>
@@ -369,15 +487,28 @@ function Alarm({ puzzle }: { puzzle: CircuitPuzzle }) {
 }
 
 /**
- * Console a: the wires behind the box's glass door, the cutter over them;
+ * Console a: the wires behind the box's glass door, the pliers over them;
  * beside the door the KURZSCHLUSS lamp, lit after a wrong cut until the
- * next right one, and the counter of live wires.
+ * next right one, and the counter of live wires. A short rewires the board,
+ * which redraws with a flicker — a board of its own for every short.
  */
-function FuseBox({ puzzle, wires, send }: { puzzle: CircuitPuzzle; wires: Wire[]; send: Send }) {
+function FuseBox(props: {
+  puzzle: CircuitPuzzle;
+  wires: Wire[];
+  change: CircuitChange | null;
+  send: Send;
+}) {
+  const { puzzle, wires, change, send } = props;
   return (
     <div className="circuit-cabinet">
       <div className="circuit-door">
-        <Box wires={wires} send={send} />
+        <Box
+          key={puzzle.shorts ?? 0}
+          wires={wires}
+          snapped={cutWith(change)}
+          rewired={shortedWith(change)}
+          send={send}
+        />
       </div>
       <div className="circuit-side">
         <div className="circuit-short">
@@ -395,29 +526,81 @@ function FuseBox({ puzzle, wires, send }: { puzzle: CircuitPuzzle; wires: Wire[]
  * strip of this round's readings and the counter of live wires beside them,
  * and under them a key per wire.
  */
-function Meter({
-  puzzle,
-  count,
-  readings,
-  send,
-}: {
+function Meter(props: {
   puzzle: CircuitPuzzle;
   count: number;
   readings: (number | null)[];
+  change: CircuitChange | null;
   send: Send;
 }) {
+  const { puzzle, count, readings, change, send } = props;
   const { probed } = puzzle;
+  const fresh = probedWith(change);
   return (
     <div className="circuit-meter">
       <div className="circuit-dial">
         <Gauge reading={probed === null ? null : (readings[probed] ?? null)} />
-        <Readout probed={probed} readings={readings} />
+        <Readout
+          probed={probed}
+          readings={readings}
+          settling={fresh === null || change === null ? null : change.seq}
+        />
       </div>
       <div className="circuit-paper">
         <LiveCounter left={puzzle.liveLeft ?? 0} />
-        <Log readings={readings} />
+        <Log readings={readings} fresh={fresh?.wire ?? null} />
       </div>
       <Keys count={count} probed={probed} send={send} />
+    </div>
+  );
+}
+
+/** A short's white flash over the console, one for every short. */
+function ShortFlash({ change }: { change: CircuitChange | null }) {
+  return change !== null && shortedWith(change) ? (
+    <span key={change.seq} className="circuit-flash" aria-hidden="true" />
+  ) : null;
+}
+
+/** A console's face: a short's flash over it, its instrument, what the last wrong cut did. */
+function Console(props: {
+  puzzle: CircuitPuzzle;
+  change: CircuitChange | null;
+  children: ReactNode;
+}) {
+  return (
+    <div className="circuit">
+      <ShortFlash change={props.change} />
+      {props.children}
+      <Alarm puzzle={props.puzzle} />
+    </div>
+  );
+}
+
+/**
+ * Both consoles as the audience sees them: every wire with its voltage now
+ * and the dead one marked, the meter's display and strip; nothing to press.
+ * A console nobody stands at says it is not connected.
+ */
+function Watched({ puzzle, change }: { puzzle: CircuitPuzzle; change: CircuitChange | null }) {
+  const { wires, readings, voltages, dead, probed } = puzzle;
+  if (wires === null || readings === null || voltages === null || dead === null) {
+    return <p className="muted">Dieses Pult ist nicht angeschlossen.</p>;
+  }
+  return (
+    <div className="circuit">
+      <ShortFlash change={change} />
+      <LiveCounter left={puzzle.liveLeft ?? 0} />
+      <Alarm puzzle={puzzle} />
+      <section className="circuit-console" aria-label={consoleName('a')}>
+        <h4 className="circuit-console-name">{consoleName('a')}</h4>
+        <WatchedBox wires={wires} voltages={voltages} dead={dead} snapped={cutWith(change)} />
+      </section>
+      <section className="circuit-console" aria-label={consoleName('b')}>
+        <h4 className="circuit-console-name">{consoleName('b')}</h4>
+        <Readout probed={probed} readings={readings} settling={null} />
+        <Log readings={readings} fresh={probedWith(change)?.wire ?? null} />
+      </section>
     </div>
   );
 }
@@ -425,46 +608,25 @@ function Meter({
 /**
  * Sicherungskasten + Prüfpult at one console. Console a has the wires and
  * cuts them, console b measures them by number; after every cut the
- * voltages change, so b measures again. A short shakes the console — keyed
- * by the shorts so far, so that every new one shakes it again. The audience
- * sees both consoles, with every voltage.
+ * voltages change, so b measures again. A short flashes the console white
+ * and arcs before the device's alarm. The audience sees both consoles, with
+ * every voltage.
  */
-export function CircuitPanel({ puzzle, send }: PanelProps<'circuit'>) {
-  const shaken = puzzle.lastResult === null ? 'circuit' : 'circuit circuit--short';
-  if (puzzle.role === 'box' && puzzle.wires !== null) {
+export function CircuitPanel({ puzzle, change, send }: PanelProps<'circuit'>) {
+  const { wires, count, readings } = puzzle;
+  if (puzzle.role === 'box' && wires !== null) {
     return (
-      <div key={puzzle.shorts} className={shaken}>
-        <FuseBox puzzle={puzzle} wires={puzzle.wires} send={send} />
-        <Alarm puzzle={puzzle} />
-      </div>
+      <Console puzzle={puzzle} change={change}>
+        <FuseBox puzzle={puzzle} wires={wires} change={change} send={send} />
+      </Console>
     );
   }
-  const { count, readings, probed } = puzzle;
   if (puzzle.role === 'meter' && count !== null && readings !== null) {
     return (
-      <div key={puzzle.shorts} className={shaken}>
-        <Meter puzzle={puzzle} count={count} readings={readings} send={send} />
-        <Alarm puzzle={puzzle} />
-      </div>
+      <Console puzzle={puzzle} change={change}>
+        <Meter puzzle={puzzle} count={count} readings={readings} change={change} send={send} />
+      </Console>
     );
   }
-  const { wires, voltages, dead } = puzzle;
-  if (wires !== null && readings !== null && voltages !== null && dead !== null) {
-    return (
-      <div className="circuit">
-        <LiveCounter left={puzzle.liveLeft ?? 0} />
-        <Alarm puzzle={puzzle} />
-        <section className="circuit-console" aria-label={consoleName('a')}>
-          <h4 className="circuit-console-name">{consoleName('a')}</h4>
-          <WatchedBox wires={wires} voltages={voltages} dead={dead} />
-        </section>
-        <section className="circuit-console" aria-label={consoleName('b')}>
-          <h4 className="circuit-console-name">{consoleName('b')}</h4>
-          <Readout probed={probed} readings={readings} />
-          <Log readings={readings} />
-        </section>
-      </div>
-    );
-  }
-  return <p className="muted">Dieses Pult ist nicht angeschlossen.</p>;
+  return <Watched puzzle={puzzle} change={change} />;
 }

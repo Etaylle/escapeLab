@@ -7,20 +7,17 @@
   gap: 14px;
 }
 
+/* The stage LEDs, „STUFE" engraved beside them. */
 .memory-stage {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  font-family: var(--mono);
-  font-size: 13px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--accent);
 }
 
-.memory-stage .code-dots {
-  margin: 0;
+.memory-stage-lamps {
+  display: flex;
+  gap: 11px;
+  padding-left: 2px;
 }
 
 .memory-display {
@@ -48,7 +45,7 @@
   min-height: 76px;
   padding: 0;
   border-radius: 12px;
-  background: #0b1117;
+  background: linear-gradient(180deg, #16202a, #0b1117);
   font-family: var(--mono);
   font-size: 34px;
   font-weight: 700;

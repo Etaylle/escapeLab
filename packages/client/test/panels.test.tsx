@@ -69,7 +69,12 @@ function seen(
 
 function panel(puzzle: PuzzleView): string {
   return renderToStaticMarkup(
-    <PuzzlePanel puzzle={puzzle} send={() => undefined} deadlineAt={null} />,
+    <PuzzlePanel
+      puzzle={puzzle}
+      run={{ alarms: 0, solved: 0 }}
+      send={() => undefined}
+      deadlineAt={null}
+    />,
   );
 }
 
@@ -577,7 +582,9 @@ describe('the signal chain', () => {
   function pressEvery(puzzle: SignalSeen): unknown[] {
     const sent: unknown[] = [];
     const Panel = PANELS.signal;
-    const tree = <Panel puzzle={puzzle} send={(input) => sent.push(input)} deadlineAt={null} />;
+    const tree = (
+      <Panel puzzle={puzzle} change={null} send={(input) => sent.push(input)} deadlineAt={null} />
+    );
     const keys = elementsOf(tree).filter((element) => element.type === 'button');
     expect(keys).toHaveLength(12);
     for (const key of keys) {
@@ -600,19 +607,18 @@ describe('the signal chain', () => {
     expect(lit(panel(at('b', { done: 3 })))).toBe(3);
   });
 
-  it('says a wrong sign starts the stage again, and shakes the keys', () => {
+  it('says a wrong sign starts the stage again, at both consoles', () => {
     const message =
       '<p class="warn" role="status">[warning] Falsches Zeichen — Stufe von vorn.</p>';
     const wrong = iconsAsWords(panel(at('b', { lastResult: 'wrong' })));
     expect(wrong).toContain(message);
-    expect(wrong).toContain('class="signal-grid signal-grid--wrong"');
+    // The wrong key itself shakes, as the kit rejects it; the keys stay put.
+    expect(wrong).toContain('<div class="signal-grid">');
     expect(iconsAsWords(panel(at('a', { lastResult: 'wrong' })))).toContain(message);
-    const right = panel(at('b'));
-    expect(right).not.toContain('Falsches Zeichen');
-    expect(right).not.toContain('signal-grid--wrong');
+    expect(panel(at('b'))).not.toContain('Falsches Zeichen');
     const rows = iconsAsWords(panel({ ...signalAt('b', { legend: true }), lastResult: 'wrong' }));
     expect(rows).toContain(message);
-    expect(rows).toContain('class="signal-grid signal-grid--rows signal-grid--wrong"');
+    expect(rows).toContain('<div class="signal-grid signal-grid--rows">');
   });
 
   /** The texture over each sign drawn in `html`, by the sign. */
@@ -872,10 +878,10 @@ describe('the fuse box and the meter', () => {
     rows(html).forEach((row, i) => {
       expect(row.match(/<span class="circuit-terminal"><\/span>/g)).toHaveLength(2);
       expect(row).toContain('<svg class="cable" viewBox="0 0 100 44" preserveAspectRatio="none"');
-      // One whole run that sags, a cutter over it; only the black one carries a tracer.
+      // One whole run that sags, the pliers over it; only the black one carries a tracer.
       expect(drawn(row, 'core')).toBe(1);
       expect(row).toContain('d="M0 12Q50 36 100 12"');
-      expect(row).toContain('<span class="circuit-cutter"><svg class="icon icon-cut"');
+      expect(row).toContain('<span class="circuit-cutter"><svg class="pliers"');
       expect(drawn(row, 'tracer')).toBe(wires[i]?.colour === 'schwarz' ? 1 : 0);
       expect(drawn(row, 'bare')).toBe(0);
     });
@@ -959,13 +965,13 @@ describe('the fuse box and the meter', () => {
     expect(html.match(/<line class="gauge-tick gauge-tick--major"/g)).toHaveLength(6);
   });
 
-  it('says a short rewired the box and shakes it, and what a burnout costs', () => {
+  it('says a short rewired the box, and what a burnout costs', () => {
     const shorted = panel(at('a', { lastResult: 'short', shorts: 1 }));
-    expect(shorted).toContain('<div class="circuit circuit--short">');
     expect(shorted).toContain('<p class="warn" role="status">Kurzschluss — neu verdrahtet.</p>');
     const burnt = panel(at('b', { lastResult: 'burnout', shorts: 3, burnoutSec: 75 }));
-    expect(burnt).toContain('<div class="circuit circuit--short">');
     expect(burnt).toContain('<p class="warn" role="status">Kasten durchgebrannt — −75 s.</p>');
+    // Opened on a box that shorted before, it shows the short and plays nothing of it.
+    expect(shorted).not.toMatch(/circuit-flash|circuit-board--rewired/);
     for (const calm of [panel(at('a')), panel(at('b'))]) {
       expect(calm).toContain('<div class="circuit">');
       expect(calm).not.toMatch(/Kurzschluss —|durchgebrannt/);
@@ -1022,8 +1028,8 @@ describe('the sync button', () => {
   it('is one mushroom button in its collar, under a dark lamp per crew member, and no word', () => {
     const html = panel(sync());
     expect(html).toContain(
-      '<div class="sync-collar"><button class="big-button sync-button" aria-label="Drücken">' +
-        '</button></div>',
+      '<div class="sync-collar"><button class="big-button sync-button" data-feel="stomp" ' +
+        'aria-label="Drücken"></button></div>',
     );
     expect(lamps(html)).toEqual(['off', 'off']);
     expect(html).toContain('<div class="sync-lamps" role="img" aria-label="0 von 2 gedrückt">');
@@ -1036,7 +1042,8 @@ describe('the sync button', () => {
     expect(lamps(pressed)).toEqual(['green', 'off']);
     expect(pressed).toContain('aria-label="1 von 2 gedrückt"');
     expect(pressed).toContain(
-      '<button class="big-button sync-button" disabled="" aria-label="Gedrückt"></button>',
+      '<button class="big-button sync-button" disabled="" data-feel="stomp" ' +
+        'aria-label="Gedrückt"></button>',
     );
     expect(lamps(panel(sync({ pressedCount: 2, requiredCount: 3 })))).toEqual([
       'green',

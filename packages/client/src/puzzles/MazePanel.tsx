@@ -1,12 +1,53 @@
 import { Icon } from '../screens/Icon.js';
-import { play } from '../sounds.js';
+import type { Change } from './feel.js';
 import type { PanelProps, ReaderProps } from './index.js';
+import { stepTick, wallThud } from './sounds.js';
+
+type MazePuzzle = PanelProps<'maze'>['puzzle'];
+type MazeChange = Change<MazePuzzle>;
 
 const COLS = 'ABCDEFGH';
 const CELL = 34;
 
-/** Shared grid chrome for both maze views: labels, goal flag, optional walls. */
-function MazeGrid({ puzzle }: { puzzle: PanelProps<'maze'>['puzzle'] }) {
+/** Whether a change moved the marker a field on. */
+export function steppedWith(change: MazeChange | null): boolean {
+  const before = change?.before.pos ?? null;
+  const after = change?.after.pos ?? null;
+  return before !== null && after !== null && (before.x !== after.x || before.y !== after.y);
+}
+
+/**
+ * Whether a change ran the marker into a wall: an alarm with the marker against one. Two
+ * bumps in a row change nothing on the grid, so it is the alarm that tells them apart.
+ */
+export function bumpedWith(change: MazeChange | null): boolean {
+  return change !== null && change.alarm && change.after.lastResult === 'wall';
+}
+
+/** What a change sounds like: a tick for every step, a dull thud against a wall. */
+export function mazeSounds(change: MazeChange): void {
+  if (bumpedWith(change)) {
+    wallThud();
+  } else if (steppedWith(change)) {
+    stepTick();
+  }
+}
+
+/**
+ * The marker's classes: flashing red and shaking with a bump — every other bump named
+ * apart (`bump`, the change's number), so that each starts it over.
+ */
+function markerClass(bump: number | null): string {
+  return bump === null
+    ? 'maze-marker'
+    : `maze-marker maze-marker--bump maze-marker--bump-${bump % 2 === 1 ? 'odd' : 'even'}`;
+}
+
+/**
+ * Shared grid chrome for both maze views: labels, goal flag, optional walls; the marker
+ * where the operator sees it, gliding a field on with every step.
+ */
+function MazeGrid({ puzzle, bump }: { puzzle: MazePuzzle; bump: number | null }) {
   const n = puzzle.size;
   const pad = 18;
   const span = n * CELL;
@@ -53,7 +94,7 @@ function MazeGrid({ puzzle }: { puzzle: PanelProps<'maze'>['puzzle'] }) {
       </g>
       {puzzle.pos !== null && (
         <circle
-          className={`maze-marker ${puzzle.lastResult === 'wall' ? 'maze-marker-bump' : ''}`}
+          className={markerClass(bump)}
           cx={pad + puzzle.pos.x * CELL + CELL / 2}
           cy={pad + puzzle.pos.y * CELL + CELL / 2}
           r={9}
@@ -65,10 +106,10 @@ function MazeGrid({ puzzle }: { puzzle: PanelProps<'maze'>['puzzle'] }) {
 
 /** The wiring plan at a manual object: the walls and the goal, never the marker. */
 export function MazePlan({ puzzle }: ReaderProps<'maze'>) {
-  return puzzle.cells === null ? null : <MazeGrid puzzle={puzzle} />;
+  return puzzle.cells === null ? null : <MazeGrid puzzle={puzzle} bump={null} />;
 }
 
-export function MazePanel({ puzzle, send }: PanelProps<'maze'>) {
+export function MazePanel({ puzzle, change, send }: PanelProps<'maze'>) {
   if (puzzle.pos === null) {
     return <MazePlan puzzle={puzzle} />;
   }
@@ -82,7 +123,7 @@ export function MazePanel({ puzzle, send }: PanelProps<'maze'>) {
         <span className="device-engraving">ZIEL</span>
         <span className="maze-lcd">{goalName}</span>
       </p>
-      <MazeGrid puzzle={puzzle} />
+      <MazeGrid puzzle={puzzle} bump={change !== null && bumpedWith(change) ? change.seq : null} />
       {puzzle.lastResult === 'wall' && (
         <p className="warn">
           <Icon name="warning" /> Gegen die Wand gelaufen!
@@ -100,10 +141,7 @@ export function MazePanel({ puzzle, send }: PanelProps<'maze'>) {
           <button
             key={area}
             className={`maze-btn maze-btn--${area}`}
-            onClick={() => {
-              play('click');
-              send({ dir });
-            }}
+            onClick={() => send({ dir })}
             aria-label={area}
           >
             {glyph}

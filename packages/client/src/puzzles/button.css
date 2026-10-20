@@ -78,9 +78,10 @@
     0 calc(var(--lift) + 4px) 20px rgba(0, 0, 0, 0.5);
 }
 
+/* While pressed or held the cap sinks 4 px into its collar. */
 .button-face:active,
 .button-face[aria-pressed='true'] {
-  --lift: 2px;
+  --lift: 4px;
 }
 
 .button-face:focus-visible {
@@ -109,12 +110,49 @@
 }
 
 .button-strip-bar {
+  position: relative;
   width: 26px;
   height: 168px;
   border: 1px solid var(--line-2);
   border-radius: 6px;
   background: #0b1117;
   transition: background 0.1s, box-shadow 0.1s;
+}
+
+/* While the button is held, ticks light up the strip from the foot, one a second. */
+.button-ticks {
+  position: absolute;
+  inset: 8px 5px;
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: space-between;
+}
+
+.button-tick {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.button-tick--lit {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 0 6px rgba(255, 255, 255, 0.8);
+  animation: button-tick-on 180ms ease-out;
+}
+
+@keyframes button-tick-on {
+  0% {
+    transform: scaleX(0.3);
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button-tick--lit {
+    animation-duration: 80ms;
+  }
 }
 
 .button-strip--red .button-strip-bar {

@@ -1,9 +1,25 @@
 import { Icon } from '../screens/Icon.js';
-import { play } from '../sounds.js';
+import { cssVars, type Change } from './feel.js';
 import type { PanelProps } from './index.js';
+import { toggleClack } from './sounds.js';
 import './switches.css';
 
-type Switch = NonNullable<PanelProps<'switches'>['puzzle']['switches']>[number];
+type SwitchesPuzzle = PanelProps<'switches'>['puzzle'];
+type Switch = NonNullable<SwitchesPuzzle['switches']>[number];
+
+/** Whether a change flipped a switch of the bank, up or down. */
+export function flippedWith(change: Change<SwitchesPuzzle> | null): boolean {
+  const before = change?.before.switches ?? null;
+  const after = change?.after.switches ?? null;
+  return before !== null && after !== null && after.some((sw, i) => before[i]?.up !== sw.up);
+}
+
+/** What a change sounds like: a toggle snapping over as the bank shows it flipped. */
+export function switchesSounds(change: Change<SwitchesPuzzle>): void {
+  if (flippedWith(change)) {
+    toggleClack();
+  }
+}
 
 function markingWord(sw: Switch): string {
   if (sw.red && sw.blue) {
@@ -29,12 +45,17 @@ interface SwitchItemProps {
   onToggle: () => void;
 }
 
+/**
+ * One toggle with its features above it: the bat flips over about its nut as the view says
+ * it stands (CSS); its LED, where it has one, glows on as the bank opens, left to right.
+ */
 function SwitchItem({ sw, number, stars, onToggle }: SwitchItemProps) {
   const words = featureWords(sw, stars);
   const position = sw.up ? 'OBEN' : 'unten';
   return (
     <button
       className={`switches-item ${sw.up ? 'switches-up' : ''}`}
+      style={cssVars({ '--i': number - 1 })}
       aria-pressed={sw.up}
       aria-label={`Schalter ${number}: ${words.join(', ')}; steht ${position}`}
       onClick={onToggle}
@@ -77,17 +98,14 @@ export function SwitchesPanel({ puzzle, send }: PanelProps<'switches'>) {
             sw={sw}
             number={i + 1}
             stars={stars}
-            onToggle={() => {
-              play('click');
-              send({ switchIndex: i });
-            }}
+            onToggle={() => send({ switchIndex: i })}
           />
         ))}
       </div>
       <div className="switches-foot">
         <span className="muted">{upCount} von 6 oben</span>
         {failed}
-        <button className="primary" onClick={() => send({ check: true })}>
+        <button className="primary switches-check" onClick={() => send({ check: true })}>
           <Icon name="power" /> PRÜFEN
         </button>
       </div>

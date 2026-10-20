@@ -9,13 +9,30 @@
   background: radial-gradient(circle at 38% 32%, #1c2a35, #0b1117 72%);
 }
 
-/* No transition: a fade would smear the short blinks into the long ones. */
+/* No fade out: a fade would smear the short blinks into the long ones. Each
+   blink blooms as it comes on — a flare of glow that settles at once. */
 .morse-lamp-on {
   border-color: var(--accent);
   background: radial-gradient(circle at 38% 32%, #e6fffb, var(--accent) 48%, var(--accent-dark));
   box-shadow:
     0 0 26px var(--accent-glow),
     0 0 64px var(--accent-glow);
+  animation: morse-bloom 220ms ease-out;
+}
+
+@keyframes morse-bloom {
+  0% {
+    filter: brightness(1.35);
+    box-shadow:
+      0 0 46px 14px var(--accent-glow),
+      0 0 110px 30px var(--accent-glow);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .morse-lamp-on {
+    animation-duration: 100ms;
+  }
 }
 
 .morse-dial {
@@ -25,11 +42,72 @@
   gap: 10px;
 }
 
-.morse-dial button {
+.morse-dial > button {
   height: 56px;
   padding: 0;
   font-size: 22px;
   border-radius: 10px;
+}
+
+/* The tuning knob over the frequency it stands at. */
+.morse-tuner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.morse-knob {
+  display: block;
+  width: 104px;
+  height: 104px;
+  overflow: visible;
+}
+
+/* A tick round the knob for every step of the band, the one it points at lit. */
+.morse-tick {
+  stroke: #3a4752;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.morse-tick-on {
+  stroke: var(--accent);
+  filter: drop-shadow(0 0 3px var(--accent-glow));
+}
+
+/* The knob turns smoothly to its step; its rim knurled, a white mark on it. */
+.morse-knob-cap {
+  transform-box: view-box;
+  transform-origin: 50px 50px;
+  transition: transform 160ms cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+
+.morse-knob-grip {
+  fill: #20282f;
+  stroke: #4a5560;
+  stroke-width: 3;
+  stroke-dasharray: 2 2.2;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.6));
+}
+
+.morse-knob-face {
+  fill: #2c363f;
+  stroke: #11171c;
+  stroke-width: 1;
+}
+
+.morse-knob-mark {
+  stroke: #f1f5f9;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .morse-knob-cap {
+    transition-duration: 60ms;
+  }
 }
 
 /* Shrinks on narrow phones before "3,545 MHz" would overflow between the arrows. */
@@ -43,22 +121,6 @@
   text-shadow: 0 0 12px var(--accent-glow);
 }
 
-.morse-scale {
-  display: flex;
-  gap: 3px;
-  margin: 10px 0 16px;
-}
-
-.morse-tick {
-  flex: 1;
-  height: 8px;
-  border-radius: 2px;
-  border: 1px solid var(--line-2);
-  background: var(--panel-2);
-}
-
-.morse-tick-on {
-  border-color: var(--accent);
-  background: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow);
+.morse-send {
+  margin-top: 16px;
 }

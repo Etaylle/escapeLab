@@ -9,6 +9,7 @@ import type {
 } from '@escapelab/core';
 import { useKeys, useNow } from '../hooks.js';
 import { airIcon, bannerFrom, noticeMs, radioNews, withNews, type Notice } from '../radio.js';
+import { useSolvedHold, type DeviceRun } from '../puzzles/Device.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { play } from '../sounds.js';
 import { radioChirp } from '../world/audio.js';
@@ -335,56 +336,6 @@ function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
   return shown;
 }
 
-/** How long a main switch thrown home stays in view: its levers drop, then it closes itself. */
-const LEVER_CLOSE_MS = 600;
-
-/**
- * The main switch `last` showed, thrown home: every lever down — where the
- * panel this player had open was a main switch and the crew has solved it
- * by now (`solved` stations); null for any other panel, and for one only
- * closed or walked away from.
- */
-export function droppedLever(last: PuzzleView, solved: number): PuzzleView | null {
-  if (last.kind !== 'button-sync' || last.style !== 'lever' || solved <= last.index) {
-    return null;
-  }
-  return { ...last, youPressed: true, pressedCount: last.requiredCount };
-}
-
-/**
- * The open station's panel — and for LEVER_CLOSE_MS after a main switch was
- * thrown home under this player's hands, that switch with every lever down.
- * The solve takes the station off the map at once, so the drop is shown
- * from the last view of it.
- */
-function useLeverDrop(station: PuzzleView | null, solved: number): PuzzleView | null {
-  const kept = useRef<{ last: PuzzleView | null; drop: PuzzleView | null; until: number }>({
-    last: null,
-    drop: null,
-    until: 0,
-  });
-  const now = Date.now();
-  const k = kept.current;
-  if (station !== null) {
-    k.last = station;
-    k.drop = null;
-  } else if (k.last !== null) {
-    k.drop = droppedLever(k.last, solved);
-    k.last = null;
-    k.until = now + LEVER_CLOSE_MS;
-  }
-  const [, setTick] = useState(0);
-  const until = k.drop === null ? null : k.until;
-  useEffect(() => {
-    if (until === null) {
-      return undefined;
-    }
-    const timer = setTimeout(() => setTick((t) => t + 1), Math.max(0, until - Date.now()));
-    return () => clearTimeout(timer);
-  }, [until]);
-  return station ?? (k.drop !== null && now < k.until ? k.drop : null);
-}
-
 /** What this player has open over the world. */
 export interface Opened {
   /** the open station's panel, asked for at the station */
@@ -490,6 +441,7 @@ export function stationLabel(puzzle: PuzzleView, map: MapView): string {
  */
 export function StationModal({
   puzzle,
+  run,
   map,
   edgework,
   deadlineAt,
@@ -497,6 +449,8 @@ export function StationModal({
   onClose,
 }: {
   puzzle: PuzzleView;
+  /** the run around the device: its alarms and the stations solved */
+  run: DeviceRun;
   map: MapView;
   edgework: PlayerView['edgework'];
   deadlineAt: number | null;
@@ -510,7 +464,7 @@ export function StationModal({
       edgework={edgework}
       onClose={onClose}
     >
-      <PuzzlePanel puzzle={puzzle} send={send} deadlineAt={deadlineAt} />
+      <PuzzlePanel puzzle={puzzle} run={run} send={send} deadlineAt={deadlineAt} />
     </WorldModal>
   );
 }
@@ -718,7 +672,7 @@ export function GameScreen({
   const coldOpen = useColdOpen(view);
   const notice = useNotices(view, coldOpen.gates);
   const open = useOpened(view);
-  const station = useLeverDrop(open.station, view.currentPuzzleIndex);
+  const station = useSolvedHold(open.station, view.currentPuzzleIndex);
   const notes = useNotes(roomCode, view.you.id);
   const closeModal = (): void => open.set({ operating: false, readingId: null });
   useKeys(['n'], open.toggleNotes);
@@ -810,6 +764,7 @@ export function GameScreen({
       {station !== null && (
         <StationModal
           puzzle={station}
+          run={{ alarms: view.penaltySeq, solved: view.currentPuzzleIndex }}
           map={map}
           edgework={view.edgework}
           deadlineAt={view.deadlineAt}

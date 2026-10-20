@@ -24,7 +24,9 @@ function view(pattern: string | null, dial: number): MorseView {
 }
 
 function render(puzzle: MorseView): string {
-  return renderToStaticMarkup(<MorsePanel puzzle={puzzle} send={noop} deadlineAt={null} />);
+  return renderToStaticMarkup(
+    <MorsePanel puzzle={puzzle} change={null} send={noop} deadlineAt={null} />,
+  );
 }
 
 /** The opening tag of the button with this label. */

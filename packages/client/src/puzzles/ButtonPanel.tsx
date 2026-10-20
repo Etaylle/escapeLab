@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../screens/Icon.js';
-import { play } from '../sounds.js';
 import type { PanelProps } from './index.js';
+import { buttonThunk, holdTick, keyClick } from './sounds.js';
 import './button.css';
 
 /** On the button longer than this and the touch is a hold, not a press. */
 const HOLD_AFTER_MS = 250;
+/** The ticks the strip lights while the button is held: one a second, from the foot up. */
+export const HOLD_TICKS = 8;
 
 type ButtonPuzzle = PanelProps<'button'>['puzzle'];
 type Colour = NonNullable<ButtonPuzzle['colour'] | ButtonPuzzle['strip']>;
@@ -50,10 +52,33 @@ function MissionClock({ deadlineAt }: { deadlineAt: number | null }) {
 }
 
 /**
+ * The seconds the button has been held, on ticks up the strip, each with a faint tick of
+ * its own; mounted for as long as the view says it is held.
+ */
+function HoldTicks() {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSeconds((n) => n + 1);
+      holdTick();
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <span className="button-ticks" aria-hidden="true">
+      {Array.from({ length: HOLD_TICKS }, (_, i) => (
+        <span key={i} className={i < seconds ? 'button-tick button-tick--lit' : 'button-tick'} />
+      ))}
+    </span>
+  );
+}
+
+/**
  * Touch and keys on the big button: let go within HOLD_AFTER_MS and it was a
  * press; stay longer and it becomes a hold, and letting go then is the
  * release. A button the server still holds — the touch was cancelled, the
- * page reloaded — is let go by the next touch.
+ * page reloaded — is let go by the next touch. It thunks going down and
+ * clicks coming up.
  */
 function useHoldButton(holding: boolean, send: PanelProps<'button'>['send']) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -74,7 +99,7 @@ function useHoldButton(holding: boolean, send: PanelProps<'button'>['send']) {
     }
     down.current = true;
     releaseOnEnd.current = holding;
-    play('click');
+    buttonThunk();
     if (!holding) {
       timer.current = setTimeout(() => {
         timer.current = null;
@@ -97,6 +122,7 @@ function useHoldButton(holding: boolean, send: PanelProps<'button'>['send']) {
     if (!down.current) {
       return;
     }
+    keyClick();
     if (stop()) {
       send({ kind: 'press' });
     } else if (releaseOnEnd.current) {
@@ -130,6 +156,7 @@ function Console({
           <button
             type="button"
             className={`button-face button-face--${COLOURS[colour].css}`}
+            data-feel="none"
             aria-pressed={puzzle.holding}
             aria-label={`Knopf ${COLOURS[colour].word}, Aufschrift ${label}`}
             onPointerDown={(event) => {
@@ -163,7 +190,7 @@ function Console({
           <span className="button-caption">{COLOURS[colour].word}</span>
         </div>
         <div className={`button-strip ${strip === null ? '' : `button-strip--${strip.css}`}`}>
-          <span className="button-strip-bar" />
+          <span className="button-strip-bar">{puzzle.holding && <HoldTicks />}</span>
           <span className="button-caption">{strip === null ? 'AUS' : strip.word}</span>
         </div>
       </div>

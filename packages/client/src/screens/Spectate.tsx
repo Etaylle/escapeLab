@@ -148,7 +148,12 @@ export function SpectateScreen({
                 <>
                   {view.puzzle.manual !== null && <Manual sections={view.puzzle.manual} />}
                   <div className="read-only">
-                    <PuzzlePanel puzzle={view.puzzle} send={noop} deadlineAt={view.deadlineAt} />
+                    <PuzzlePanel
+                      puzzle={view.puzzle}
+                      run={{ alarms: view.penaltySeq, solved: view.currentPuzzleIndex }}
+                      send={noop}
+                      deadlineAt={view.deadlineAt}
+                    />
                   </div>
                 </>
               )}

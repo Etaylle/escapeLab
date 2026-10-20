@@ -2,8 +2,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { PuzzleView } from '@escapelab/core';
 import { deviceCoach, firstSight } from '../src/puzzles/coach.js';
+import { heldView } from '../src/puzzles/Device.js';
 import { handlesOf, togetherWord } from '../src/puzzles/LeverPanel.js';
-import { droppedLever } from '../src/screens/Game.js';
 import { PuzzlePanel } from '../src/screens/PuzzlePanel.js';
 
 type SyncView = Extract<PuzzleView, { kind: 'button-sync' }>;
@@ -34,7 +34,12 @@ function lever(fields: Partial<SyncView> = {}): SyncView {
 
 function panel(puzzle: PuzzleView): string {
   return renderToStaticMarkup(
-    <PuzzlePanel puzzle={puzzle} send={() => undefined} deadlineAt={null} />,
+    <PuzzlePanel
+      puzzle={puzzle}
+      run={{ alarms: 0, solved: 0 }}
+      send={() => undefined}
+      deadlineAt={null}
+    />,
   );
 }
 
@@ -136,15 +141,15 @@ describe('the coach line at the main switch', () => {
 
 describe('the main switch thrown home', () => {
   it('stays in view with every lever down once the crew has solved it', () => {
-    expect(droppedLever(lever({ here: 2, youPressed: true, pressedCount: 1 }), 1)).toMatchObject({
+    expect(heldView(lever({ here: 2, youPressed: true, pressedCount: 1 }), 1)).toMatchObject({
       youPressed: true,
       pressedCount: 2,
       requiredCount: 2,
     });
   });
 
-  it('goes at once where it was only closed, and for every other panel', () => {
-    expect(droppedLever(lever(), 0)).toBeNull();
-    expect(droppedLever(lever({ style: 'button' }), 1)).toBeNull();
+  it('goes at once where it was only closed or walked away from', () => {
+    expect(heldView(lever(), 0)).toBeNull();
+    expect(heldView(lever({ index: 3 }), 3)).toBeNull();
   });
 });

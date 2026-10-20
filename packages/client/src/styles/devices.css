@@ -43,6 +43,15 @@
     inset -1px 0 0 rgba(0, 0, 0, 0.4),
     0 0 0 1px #05080b,
     0 18px 30px -10px rgba(0, 0, 0, 0.8);
+  /* It comes up out of the dim, a little small at first. */
+  animation: device-open 150ms cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+@keyframes device-open {
+  from {
+    transform: scale(0.94);
+    opacity: 0.35;
+  }
 }
 
 /* A groove machined round the inside of the edge. */
@@ -343,10 +352,286 @@
     0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
+/* ── the feel: what every device does with a press, an alarm, a solve ── */
+
+/* The status strip along the bezel's foot, between the lower screws: dark
+   glass while the device works. */
+.device-strip {
+  position: absolute;
+  left: 34px;
+  right: 34px;
+  bottom: 8px;
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  pointer-events: none;
+}
+
+.device-strip-led {
+  --led: #232b31;
+  flex: 0 1 14px;
+  min-width: 5px;
+  height: 5px;
+  border-radius: 2px;
+  background: var(--led);
+  box-shadow:
+    inset 0 1px 1px rgba(0, 0, 0, 0.85),
+    0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* A red rim round the bezel, dark until an alarm flashes it. */
+.device::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 21px;
+  box-shadow:
+    0 0 0 2px rgba(248, 113, 113, 0.9),
+    0 0 28px 4px rgba(248, 113, 113, 0.45);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* An alarm: the chassis jolts, strip and rim flash red three times. Every
+   other alarm is named apart, so that each starts it all over. */
+.device--alarm-odd {
+  animation: device-jolt-odd 240ms ease-out;
+}
+
+.device--alarm-even {
+  animation: device-jolt-even 240ms ease-out;
+}
+
+.device--alarm-odd .device-strip-led {
+  animation: strip-alarm-odd 540ms step-end;
+}
+
+.device--alarm-even .device-strip-led {
+  animation: strip-alarm-even 540ms step-end;
+}
+
+.device--alarm-odd::after {
+  animation: rim-alarm-odd 540ms step-end;
+}
+
+.device--alarm-even::after {
+  animation: rim-alarm-even 540ms step-end;
+}
+
+@keyframes device-jolt-odd {
+  20% {
+    transform: translate(-5px, 2px) rotate(-0.5deg);
+  }
+  45% {
+    transform: translate(4px, -2px) rotate(0.4deg);
+  }
+  70% {
+    transform: translate(-2px, 1px) rotate(-0.15deg);
+  }
+}
+
+@keyframes device-jolt-even {
+  20% {
+    transform: translate(-5px, 2px) rotate(-0.5deg);
+  }
+  45% {
+    transform: translate(4px, -2px) rotate(0.4deg);
+  }
+  70% {
+    transform: translate(-2px, 1px) rotate(-0.15deg);
+  }
+}
+
+@keyframes strip-alarm-odd {
+  0%,
+  33.3%,
+  66.6% {
+    background: #ff5a4f;
+    box-shadow: 0 0 8px 2px rgba(248, 113, 113, 0.75);
+  }
+  16.6%,
+  50%,
+  83.3% {
+    background: #3a1a1a;
+  }
+}
+
+@keyframes strip-alarm-even {
+  0%,
+  33.3%,
+  66.6% {
+    background: #ff5a4f;
+    box-shadow: 0 0 8px 2px rgba(248, 113, 113, 0.75);
+  }
+  16.6%,
+  50%,
+  83.3% {
+    background: #3a1a1a;
+  }
+}
+
+@keyframes rim-alarm-odd {
+  0%,
+  33.3%,
+  66.6% {
+    opacity: 1;
+  }
+  16.6%,
+  50%,
+  83.3% {
+    opacity: 0;
+  }
+}
+
+@keyframes rim-alarm-even {
+  0%,
+  33.3%,
+  66.6% {
+    opacity: 1;
+  }
+  16.6%,
+  50%,
+  83.3% {
+    opacity: 0;
+  }
+}
+
+/* Solved: green sweeps along the strip from the left in 400 ms and stays,
+   the plate dims, and the face takes no more presses until it closes. */
+.device--solved .device-strip-led {
+  animation: strip-sweep 140ms ease-out forwards;
+  animation-delay: calc(var(--i) * 22ms);
+}
+
+@keyframes strip-sweep {
+  to {
+    background: #4ade80;
+    box-shadow:
+      0 0 9px 2px rgba(74, 222, 128, 0.7),
+      inset 0 1px 1px rgba(255, 255, 255, 0.55);
+  }
+}
+
+.device-plate {
+  transition: filter 300ms ease-out;
+}
+
+.device--solved .device-plate {
+  filter: brightness(0.62) saturate(0.7);
+}
+
+.device--solved .device-face {
+  pointer-events: none;
+}
+
+/* A lamp just come on pops, a touch too bright at first. */
+.device-lamp--fresh,
+.signal-lamp--fresh {
+  animation: lamp-pop 260ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+@keyframes lamp-pop {
+  0% {
+    transform: scale(0.6);
+    filter: brightness(2.2);
+  }
+  60% {
+    transform: scale(1.25);
+    filter: brightness(1.5);
+  }
+}
+
+/* A refused control shakes 2 px, edged red, for 160 ms. */
+button.feel-reject {
+  outline: 2px solid rgba(248, 113, 113, 0.9);
+  outline-offset: 2px;
+  animation: feel-shake 160ms linear;
+}
+
+@keyframes feel-shake {
+  20% {
+    translate: -2px 0;
+  }
+  40% {
+    translate: 2px 0;
+  }
+  60% {
+    translate: -2px 0;
+  }
+  80% {
+    translate: 2px 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .device-led--red .device-lamp,
   .circuit-short .device-lamp--red {
     animation: none;
+  }
+
+  /* Nothing shakes or jolts; an alarm is one red flash, a solve a quick sweep. */
+  .device {
+    animation-duration: 100ms;
+  }
+
+  .device--alarm-odd,
+  .device--alarm-even,
+  button.feel-reject {
+    animation: none;
+  }
+
+  .device--alarm-odd .device-strip-led {
+    animation: strip-calm-odd 120ms step-end;
+  }
+
+  .device--alarm-even .device-strip-led {
+    animation: strip-calm-even 120ms step-end;
+  }
+
+  .device--alarm-odd::after {
+    animation: rim-calm-odd 120ms step-end;
+  }
+
+  .device--alarm-even::after {
+    animation: rim-calm-even 120ms step-end;
+  }
+
+  .device--solved .device-strip-led {
+    animation: strip-sweep 60ms ease-out forwards;
+    animation-delay: calc(var(--i) * 5ms);
+  }
+
+  .device-plate {
+    transition-duration: 100ms;
+  }
+
+  .device-lamp--fresh,
+  .signal-lamp--fresh {
+    animation-duration: 100ms;
+  }
+}
+
+@keyframes strip-calm-odd {
+  0% {
+    background: #ff5a4f;
+  }
+}
+
+@keyframes strip-calm-even {
+  0% {
+    background: #ff5a4f;
+  }
+}
+
+@keyframes rim-calm-odd {
+  0% {
+    opacity: 1;
+  }
+}
+
+@keyframes rim-calm-even {
+  0% {
+    opacity: 1;
   }
 }
 
@@ -390,12 +675,141 @@
   text-align: center;
 }
 
+/* The marker against a wall flashes red and shakes 2 px; every other bump
+   is named apart, so that each starts over. */
+.maze-marker--bump-odd {
+  animation: marker-bump-odd 420ms ease-out;
+}
+
+.maze-marker--bump-even {
+  animation: marker-bump-even 420ms ease-out;
+}
+
+@keyframes marker-bump-odd {
+  0% {
+    fill: var(--danger);
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-2px);
+  }
+  35% {
+    transform: translateX(2px);
+  }
+  55% {
+    fill: var(--danger);
+    transform: translateX(-2px);
+  }
+  75% {
+    transform: translateX(1px);
+  }
+}
+
+@keyframes marker-bump-even {
+  0% {
+    fill: var(--danger);
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-2px);
+  }
+  35% {
+    transform: translateX(2px);
+  }
+  55% {
+    fill: var(--danger);
+    transform: translateX(-2px);
+  }
+  75% {
+    transform: translateX(1px);
+  }
+}
+
+@keyframes marker-calm {
+  0% {
+    fill: var(--danger);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maze-marker--bump-odd,
+  .maze-marker--bump-even {
+    animation: marker-calm 120ms step-end;
+  }
+}
+
+/* ── plain keys: a cap that stands proud and goes down under the finger ── */
+
+/* The keypad's and memory bank's keys, the maze's arrows, the morse dial's
+   arrows and a few others: a dark cap on a 3 px skirt that drops 2 px while
+   pressed — and for 80 ms when a key on the keyboard presses it. */
+.keypad-key,
+.memory-key,
+.maze-btn,
+.morse-dial > button,
+.simon-replay,
+.switches-check {
+  border-color: #2c3a46;
+  box-shadow:
+    0 3px 0 #04070a,
+    0 5px 8px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition:
+    translate 60ms ease-out,
+    box-shadow 60ms ease-out,
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.keypad-key:hover:not(:disabled),
+.memory-key:hover:not(:disabled),
+.maze-btn:hover:not(:disabled),
+.morse-dial > button:hover:not(:disabled),
+.simon-replay:hover:not(:disabled),
+.switches-check:hover:not(:disabled) {
+  box-shadow:
+    0 3px 0 #04070a,
+    0 5px 8px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 10px var(--accent-glow);
+}
+
+.keypad-key:active:not(:disabled),
+.memory-key:active:not(:disabled),
+.maze-btn:active:not(:disabled),
+.morse-dial > button:active:not(:disabled),
+.simon-replay:active:not(:disabled),
+.switches-check:active:not(:disabled),
+.keypad-key.feel-pressed,
+.memory-key.feel-pressed,
+.maze-btn.feel-pressed,
+.morse-dial > button.feel-pressed,
+.simon-replay.feel-pressed,
+.switches-check.feel-pressed {
+  translate: 0 2px;
+  box-shadow:
+    0 1px 0 #04070a,
+    0 2px 3px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .keypad-key,
+  .memory-key,
+  .maze-btn,
+  .morse-dial > button,
+  .simon-replay,
+  .switches-check {
+    transition-duration: 0ms;
+  }
+}
+
 /* ══ Synchronschaltung: one mushroom button for the whole crew ═════════════
  * ButtonSyncPanel.tsx, after the printed figure: a lamp per crew member in a
- * dark strip, lit while their press counts, and under it a domed cap in a
- * steel collar that sinks while pressed and stays down, lit, once pressed.
- * The cap is a `.big-button` for the screenshot harness; these rules take
- * over its look from ui.css.
+ * dark strip, popping on as their press counts, and under it a domed cap in
+ * a steel collar that sinks while pressed and stays down, lit, once pressed;
+ * a missed window shakes the collar. The cap is a `.big-button` for the
+ * screenshot harness; these rules take over its look from ui.css.
  */
 
 .sync {
@@ -488,8 +902,14 @@
     inset 0 3px 3px rgba(255, 255, 255, 0.35);
 }
 
-.big-button.sync-button:active:not(:disabled) {
+.big-button.sync-button:active:not(:disabled),
+.big-button.sync-button.feel-pressed:not(:disabled) {
   --press: 6px;
+}
+
+/* A missed window: the collar shakes as a refused press does. */
+.sync-collar--missed {
+  animation: feel-shake 160ms linear;
 }
 
 /* Pressed: down in its collar and glowing until the press runs out. */
@@ -518,23 +938,30 @@
   .big-button.sync-button {
     transition: none;
   }
+
+  .sync-collar--missed {
+    animation: none;
+  }
 }
 
 /* ══ Sicherungskasten + Prüfpult: one console cuts, the other measures ═════
  * CircuitPanel.tsx. Console a: behind a glass door a pale board with a
  * terminal strip down either side and the cables sagging between them, as
  * the printed figure draws it — their colour the only thing that tells them
- * apart, a grey tracer on the black one; a cutter shows over the cable under
- * the pointer, and a cut one hangs from its terminals, copper bare. Beside
- * the door the KURZSCHLUSS lamp and the counter of live wires. Console b: an
- * analog dial whose needle swings to the last reading, the reading in seven
- * segments, a pushbutton per wire under it, and beside them the counter and
- * the paper strip of this round's readings. A short shakes either console.
- * The audience gets both: the cables with their voltages now, the dead one
+ * apart, a grey tracer on the black one; pliers show over the cable under
+ * the pointer and shut as it is pressed, and a cable just cut falls apart
+ * in sparks and hangs from its terminals, copper bare. Beside the door the
+ * KURZSCHLUSS lamp and the counter of live wires. Console b: an analog dial
+ * whose needle swings to the last reading on a spring, the reading in seven
+ * segments that run wild before they settle, a pushbutton per wire under it,
+ * and beside them the counter and the paper strip of this round's readings,
+ * the newest line sliding in. A short flashes either console white. The
+ * audience gets both: the cables with their voltages now, the dead one
  * marked, and the meter's display and strip.
  */
 
 .circuit {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -544,17 +971,64 @@
   margin: 0;
 }
 
-.circuit--short {
-  animation: shake 0.5s;
+/* A short: the console flashes white over the face, and the rewired board
+   comes back flickering. */
+.circuit-flash {
+  position: absolute;
+  inset: -16px;
+  z-index: 3;
+  border-radius: 12px;
+  background: radial-gradient(
+    ellipse at 40% 35%,
+    rgba(255, 255, 255, 0.96),
+    rgba(214, 236, 255, 0.82) 60%,
+    rgba(190, 220, 255, 0.7)
+  );
+  opacity: 0;
+  pointer-events: none;
+  animation: circuit-flash 280ms linear;
+}
+
+/* Full white for the first 60 ms, then gone. */
+@keyframes circuit-flash {
+  0% {
+    opacity: 1;
+  }
+  22% {
+    opacity: 0.9;
+  }
+}
+
+.circuit-board--rewired {
+  animation: board-flicker 200ms step-end;
+}
+
+@keyframes board-flicker {
+  0% {
+    opacity: 0.2;
+  }
+  25% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+  75% {
+    opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .circuit--short {
-    animation: none;
+  .circuit-flash {
+    animation-duration: 120ms;
+  }
+
+  .circuit-board--rewired {
+    animation-duration: 100ms;
   }
 
   .gauge-needle {
-    transition: none;
+    transition: transform 120ms ease-out;
   }
 }
 
@@ -722,7 +1196,144 @@
   --cable-edge: #020304;
 }
 
-/* The cutter over the middle of the cable, shown where a tap or a click would cut. */
+/* A cut cable's halves fall about their terminals as it parts: the free
+   ends drop 6 px from where the cable ran, swing past and sway back once.
+   In the run's own units a skew drops each end in proportion to how far it
+   hangs from its terminal, and the row's stretch leaves that a drop. */
+.cable-half {
+  transform-box: view-box;
+}
+
+.cable-half--left {
+  transform-origin: 0 12px;
+}
+
+.cable-half--right {
+  transform-origin: 100px 12px;
+}
+
+.circuit-wire--snapped .cable-half--left {
+  animation: cable-fall-left 560ms cubic-bezier(0.3, 0.6, 0.4, 1);
+}
+
+.circuit-wire--snapped .cable-half--right {
+  animation: cable-fall-right 560ms cubic-bezier(0.3, 0.6, 0.4, 1);
+}
+
+@keyframes cable-fall-left {
+  0% {
+    transform: skewY(-8.5deg);
+  }
+  45% {
+    transform: skewY(2.6deg);
+  }
+  75% {
+    transform: skewY(-1deg);
+  }
+}
+
+@keyframes cable-fall-right {
+  0% {
+    transform: skewY(8.5deg);
+  }
+  45% {
+    transform: skewY(-2.6deg);
+  }
+  75% {
+    transform: skewY(1deg);
+  }
+}
+
+/* Sparks off a cut: a hot flash at the cut and seven sparks flying out,
+   the heavy ones dropping, all gone in 300 ms. */
+.spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.circuit-run .spark {
+  top: 24px;
+}
+
+/* White-hot at the core and orange round it, so that it shows on the pale
+   board as well as in the dark box. */
+.spark-flash {
+  position: absolute;
+  left: -14px;
+  top: -14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    #ffffff 0%,
+    #fff1a8 22%,
+    rgba(255, 150, 30, 0.8) 45%,
+    rgba(255, 110, 0, 0) 70%
+  );
+  opacity: 0;
+  animation: spark-flash 180ms ease-out;
+}
+
+/* A spark is a short streak along the way it flies (`--a`). */
+.spark-bit {
+  position: absolute;
+  left: -5px;
+  top: -1.5px;
+  width: 10px;
+  height: 3px;
+  border-radius: 1.5px;
+  background: linear-gradient(90deg, rgba(255, 110, 0, 0), #ff8a1a 35%, #ffd36b 70%, #ffffff);
+  box-shadow:
+    0 0 3px 1px rgba(255, 120, 10, 0.95),
+    0 0 8px 2px rgba(230, 70, 0, 0.7);
+  opacity: 0;
+  animation: spark-fly 300ms cubic-bezier(0.2, 0.7, 0.4, 1);
+}
+
+@keyframes spark-flash {
+  0% {
+    transform: scale(0.3);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+
+@keyframes spark-fly {
+  0% {
+    transform: translate(0, 0) rotate(var(--a)) scaleX(0.4);
+    opacity: 1;
+  }
+  55% {
+    transform: translate(calc(var(--x) * 0.75), calc(var(--y) * 0.75)) rotate(var(--a));
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--x), calc(var(--y) + 10px)) rotate(var(--a)) scaleX(0.5);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .circuit-wire--snapped .cable-half--left,
+  .circuit-wire--snapped .cable-half--right {
+    animation-duration: 120ms;
+  }
+
+  .spark-flash,
+  .spark-bit {
+    animation-duration: 120ms;
+  }
+}
+
+/* The pliers over the middle of the cable, shown where a tap or a click would cut. */
 .circuit-cutter {
   position: absolute;
   top: 2px;
@@ -735,8 +1346,6 @@
   border-radius: 50%;
   background: rgba(17, 22, 27, 0.88);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-  color: #f1f5f9;
-  font-size: 15px;
   opacity: 0;
   transition: opacity 0.12s;
   pointer-events: none;
@@ -745,6 +1354,62 @@
 .circuit-wire:hover:not(:disabled) .circuit-cutter,
 .circuit-wire:focus-visible .circuit-cutter {
   opacity: 1;
+}
+
+/* Side cutters, jaws down over the cable and open; each arm turns about
+   the pivot, and they snap shut while the cable is pressed. */
+.pliers {
+  display: block;
+  width: 18px;
+  height: 18px;
+  overflow: visible;
+  transform: rotate(180deg);
+}
+
+.pliers-arm {
+  transform-box: view-box;
+  transform-origin: 12px 11px;
+  transition: transform 70ms ease-out;
+}
+
+.pliers-arm--a {
+  transform: rotate(13deg);
+}
+
+.pliers-arm--b {
+  transform: rotate(-13deg);
+}
+
+button:active .pliers-arm,
+button.feel-pressed .pliers-arm {
+  transform: none;
+}
+
+.pliers-neck {
+  fill: none;
+  stroke: #cfd6dc;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.pliers-grip {
+  fill: none;
+  stroke: #e2552b;
+  stroke-width: 2.8;
+  stroke-linecap: round;
+}
+
+.pliers-jaw {
+  fill: #f1f5f9;
+  stroke: #05080b;
+  stroke-width: 0.9;
+  stroke-linejoin: round;
+}
+
+.pliers-pivot {
+  fill: #9aa5ae;
+  stroke: #05080b;
+  stroke-width: 0.8;
 }
 
 .circuit-volts {
@@ -810,18 +1475,53 @@
   pointer-events: none;
 }
 
-/* A cutter for a cursor over every wire still whole: a pair of open
-   scissors, white with a dark rim, the hot spot between the blades. The
-   URL goes on over several lines, each ending in a backslash. */
-button.circuit-wire:not(:disabled) {
+/* Pliers for a cursor over every wire still whole, at the box and at the
+   wiring alike: side cutters, white jaws with a dark rim and red grips, the
+   hot spot between the jaws — open, and shut while the wire is pressed. The
+   URLs go on over several lines, each ending in a backslash. */
+button.circuit-wire:not(:disabled),
+.wiring-wire:not(:disabled) {
   cursor:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' \
-viewBox='0 0 24 24'%3E%3Cg fill='none' stroke-linecap='round'%3E%3Cg stroke='%2305080b' \
-stroke-width='3.6'%3E%3Cpath d='M7.9 2.5 13.5 17.7M2.5 7.9 17.7 13.5'/%3E%3Ccircle cx='14.5' \
-cy='20.5' r='2.8'/%3E%3Ccircle cx='20.5' cy='14.5' r='2.8'/%3E%3C/g%3E%3Cg stroke='%23f1f5f9' \
-stroke-width='1.6'%3E%3Cpath d='M7.9 2.5 13.5 17.7M2.5 7.9 17.7 13.5'/%3E%3Ccircle cx='14.5' \
-cy='20.5' r='2.8'/%3E%3Ccircle cx='20.5' cy='14.5' r='2.8'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")
-      5 5,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' view\
+Box='0 0 24 24'%3E%3Cg transform='translate(12 12) scale(0.86) rotate(-45) translate(-12\
+ -12)' fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg transform='rota\
+te(13 12 11)'%3E%3Cpath d='M12 11 11.2 13.6' stroke='%2305080b' stroke-width='3.4'/%3E%3\
+Cpath d='M11.2 13.6Q9.6 17.5 7.6 22.2' stroke='%2305080b' stroke-width='4.6'/%3E%3Cpath \
+d='M12 11 13.9 7.5Q13.6 4.5 12 2.4Z' fill='%2305080b' stroke='%2305080b' stroke-width='2\
+.2'/%3E%3Cpath d='M12 11 11.2 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='\
+M11.2 13.6Q9.6 17.5 7.6 22.2' stroke='%23e2552b' stroke-width='2.8'/%3E%3Cpath d='M12 11\
+ 13.9 7.5Q13.6 4.5 12 2.4Z' fill='%23f1f5f9'/%3E%3C/g%3E%3Cg transform='rotate(-13 12 11\
+)'%3E%3Cpath d='M12 11 12.8 13.6' stroke='%2305080b' stroke-width='3.4'/%3E%3Cpath d='M1\
+2.8 13.6Q14.4 17.5 16.4 22.2' stroke='%2305080b' stroke-width='4.6'/%3E%3Cpath d='M12 11\
+ 10.1 7.5Q10.4 4.5 12 2.4Z' fill='%2305080b' stroke='%2305080b' stroke-width='2.2'/%3E%3\
+Cpath d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.8 13.\
+6Q14.4 17.5 16.4 22.2' stroke='%23e2552b' stroke-width='2.8'/%3E%3Cpath d='M12 11 10.1 7\
+.5Q10.4 4.5 12 2.4Z' fill='%23f1f5f9'/%3E%3C/g%3E%3Ccircle cx='12' cy='11' r='1.3' fill=\
+'%239aa5ae' stroke='%2305080b' stroke-width='0.8'/%3E%3C/g%3E%3C/svg%3E")
+      6 6,
+    crosshair;
+}
+
+button.circuit-wire:not(:disabled):active,
+.wiring-wire:not(:disabled):active {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' view\
+Box='0 0 24 24'%3E%3Cg transform='translate(12 12) scale(0.86) rotate(-45) translate(-12\
+ -12)' fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg transform='rota\
+te(0 12 11)'%3E%3Cpath d='M12 11 11.2 13.6' stroke='%2305080b' stroke-width='3.4'/%3E%3C\
+path d='M11.2 13.6Q9.6 17.5 7.6 22.2' stroke='%2305080b' stroke-width='4.6'/%3E%3Cpath d\
+='M12 11 13.9 7.5Q13.6 4.5 12 2.4Z' fill='%2305080b' stroke='%2305080b' stroke-width='2.\
+2'/%3E%3Cpath d='M12 11 11.2 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M\
+11.2 13.6Q9.6 17.5 7.6 22.2' stroke='%23e2552b' stroke-width='2.8'/%3E%3Cpath d='M12 11 \
+13.9 7.5Q13.6 4.5 12 2.4Z' fill='%23f1f5f9'/%3E%3C/g%3E%3Cg transform='rotate(0 12 11)'%\
+3E%3Cpath d='M12 11 12.8 13.6' stroke='%2305080b' stroke-width='3.4'/%3E%3Cpath d='M12.8\
+ 13.6Q14.4 17.5 16.4 22.2' stroke='%2305080b' stroke-width='4.6'/%3E%3Cpath d='M12 11 10\
+.1 7.5Q10.4 4.5 12 2.4Z' fill='%2305080b' stroke='%2305080b' stroke-width='2.2'/%3E%3Cpa\
+th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.8 13.6Q1\
+4.4 17.5 16.4 22.2' stroke='%23e2552b' stroke-width='2.8'/%3E%3Cpath d='M12 11 10.1 7.5Q\
+10.4 4.5 12 2.4Z' fill='%23f1f5f9'/%3E%3C/g%3E%3Ccircle cx='12' cy='11' r='1.3' fill='%2\
+39aa5ae' stroke='%2305080b' stroke-width='0.8'/%3E%3C/g%3E%3C/svg%3E")
+      6 6,
     crosshair;
 }
 
@@ -950,11 +1650,12 @@ cy='20.5' r='2.8'/%3E%3Ccircle cx='20.5' cy='14.5' r='2.8'/%3E%3C/g%3E%3C/g%3E%3
   font-weight: 700;
 }
 
-/* The needle turns about the pivot and overshoots a little, as a needle does. */
+/* The needle turns about the pivot with its inertia: a spring that runs
+   past the reading once and settles back, ~600 ms. */
 .gauge-needle {
   transform-box: view-box;
   transform-origin: 110px 112px;
-  transition: transform 0.9s cubic-bezier(0.3, 1.45, 0.55, 1);
+  transition: transform 600ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .gauge-needle line {
@@ -1068,7 +1769,8 @@ cy='20.5' r='2.8'/%3E%3Ccircle cx='20.5' cy='14.5' r='2.8'/%3E%3C/g%3E%3C/g%3E%3
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
-.circuit-probe:active {
+.circuit-probe:active,
+.circuit-probe.feel-pressed {
   --press: 3px;
 }
 
@@ -1155,6 +1857,30 @@ cy='20.5' r='2.8'/%3E%3Ccircle cx='20.5' cy='14.5' r='2.8'/%3E%3C/g%3E%3C/g%3E%3
   font-weight: 700;
 }
 
+/* A reading just taken slides in from the printer's side, ink still fresh. */
+.circuit-log-new {
+  animation: log-line-in 260ms ease-out;
+}
+
+@keyframes log-line-in {
+  0% {
+    translate: -14px 0;
+    opacity: 0;
+    background: rgba(255, 196, 80, 0.45);
+  }
+  60% {
+    translate: 0 0;
+    opacity: 1;
+    background: rgba(255, 196, 80, 0.3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .circuit-log-new {
+    animation-duration: 100ms;
+  }
+}
+
 /* Each console under its name, for the audience. */
 .circuit-console {
   display: flex;
@@ -1177,10 +1903,11 @@ cy='20.5' r='2.8'/%3E%3Ccircle cx='20.5' cy='14.5' r='2.8'/%3E%3C/g%3E%3C/g%3E%3
  * texture printed over it (SignalPanel draws it) and a done lamp below — no
  * word anywhere; the receiving console has the done lamps behind glass and
  * twelve backlit pushbuttons, three rows of four — or, with the legend,
- * grey engraved buttons in four rows numbered on plates. A wrong sign shakes
- * the keys and flashes them red. A fleeting strip shows one sign at a time,
- * the other lamps dark. The audience gets the strip and, under it, the keys
- * of both consoles, which nobody can press there.
+ * grey engraved buttons in four rows numbered on plates. A wrong key shakes,
+ * as the device rejects it. The signs flare on as a stage starts; a fleeting
+ * strip shows one sign at a time, each fading as the next comes, the other
+ * lamps dark; a done lamp pops on with every sign in. The audience gets the
+ * strip and, under it, the keys of both consoles, which nobody can press there.
  */
 
 .signal {
@@ -1381,7 +2108,8 @@ cy='20.5' r='2.8'/%3E%3Ccircle cx='20.5' cy='14.5' r='2.8'/%3E%3C/g%3E%3C/g%3E%3
     inset 0 -2px 4px var(--cap-shade);
 }
 
-button.signal-key:active {
+button.signal-key:active,
+button.signal-key.feel-pressed {
   --press: 3px;
 }
 
@@ -1395,17 +2123,75 @@ button.signal-key:active {
   height: 40px;
 }
 
-.signal-grid--wrong {
-  animation: shake 0.5s;
+/* A sign comes on behind the glass with a flare of its colour: the strip's
+   one after the other from the left as a stage starts, a fleeting strip's
+   each as it shows; a fleeting sign fades out over its dark glass as the
+   next comes. */
+.signal-strip .signal-sign > .signal-glyph:not(.signal-glyph--dark) {
+  animation: sign-on 360ms ease-out backwards;
 }
 
-.signal-grid--wrong .signal-key {
-  animation: keywrong 0.5s;
+.signal-strip:not(.signal-strip--fleeting) .signal-sign:nth-child(2) > .signal-glyph {
+  animation-delay: 70ms;
+}
+
+.signal-strip:not(.signal-strip--fleeting) .signal-sign:nth-child(3) > .signal-glyph {
+  animation-delay: 140ms;
+}
+
+.signal-strip:not(.signal-strip--fleeting) .signal-sign:nth-child(4) > .signal-glyph {
+  animation-delay: 210ms;
+}
+
+.signal-strip:not(.signal-strip--fleeting) .signal-sign:nth-child(5) > .signal-glyph {
+  animation-delay: 280ms;
+}
+
+.signal-strip:not(.signal-strip--fleeting) .signal-sign:nth-child(n + 6) > .signal-glyph {
+  animation-delay: 350ms;
+}
+
+@keyframes sign-on {
+  0% {
+    opacity: 0.12;
+    filter: brightness(0.5) drop-shadow(0 0 0 currentColor);
+  }
+  55% {
+    opacity: 1;
+    filter: brightness(1.45) drop-shadow(0 0 14px currentColor);
+  }
+}
+
+.signal-glyph-stack {
+  position: relative;
+  display: block;
+}
+
+.signal-glyph--fading {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: sign-off 450ms ease-in;
+}
+
+@keyframes sign-off {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    filter: brightness(0.5) drop-shadow(0 0 0 currentColor);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .signal-grid--wrong {
-    animation: none;
+  .signal-strip .signal-sign > .signal-glyph:not(.signal-glyph--dark),
+  .signal-glyph--fading {
+    animation-duration: 100ms;
+  }
+
+  .signal-strip:not(.signal-strip--fleeting) .signal-sign:nth-child(n) > .signal-glyph {
+    animation-delay: 0ms;
   }
 }
 
@@ -1506,6 +2292,13 @@ button.signal-key:active {
   .device-face {
     margin-top: 12px;
     padding: 10px;
+  }
+
+  .device-strip {
+    left: 24px;
+    right: 24px;
+    bottom: 5px;
+    gap: 4px;
   }
 
   .circuit-cabinet {
