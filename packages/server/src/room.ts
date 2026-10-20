@@ -124,13 +124,15 @@ export class Room {
   /** epoch ms since the room has had no connected players, null while occupied */
   emptySince: number | null = null;
 
+  /** `seed` pins the room's runs for a repeatable test: run n plays seed + n. */
   constructor(
     code: string,
     mission: Mission,
     private readonly onRunFinished: RunListener = () => undefined,
+    seed: number | null = null,
   ) {
     this.code = code;
-    this.state = initialState(mission);
+    this.state = initialState(mission, seed);
   }
 
   /** Add a new player (lobby only). Returns credentials for later resume. */

@@ -1,0 +1,22 @@
+/* ══ a room pinned to a seed, for testers (App.tsx RoomCode, screens/End.tsx) ══
+ * The lobby names the seed beside the room's code, the end screen the run's
+ * under everything else: small and muted, never more than a footnote.
+ */
+
+/* On a narrow bar the seed gives way first, cut short rather than pushing
+   the bar wider than the window. */
+.room-seed {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.run-seed {
+  margin-top: 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 1px;
+}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { ClientMessage, MissionInfo, RoomSummary } from '@escapelab/core';
+import { SEED_MAX, type ClientMessage, type MissionInfo, type RoomSummary } from '@escapelab/core';
 import { crewSizeText } from './Crew.js';
 import { HttpsHint } from './HttpsHint.js';
 import { Icon } from './Icon.js';
@@ -15,6 +15,28 @@ interface Props {
 }
 
 const REFRESH_MS = 2500;
+
+/**
+ * The message that opens a room for `missionId`, or for the server's first
+ * mission where none is picked. A tester pins the room to a seed with
+ * `?seed=<n>` in the page's address (`search`), so that its runs repeat; a
+ * value that is no whole number from 0 to SEED_MAX is left out, and the
+ * lobby then shows no seed.
+ */
+export function createRoomMessage(
+  name: string,
+  missionId: string | null,
+  search: string,
+): ClientMessage {
+  const asked = new URLSearchParams(search).get('seed') ?? '';
+  const seed = /^\d{1,10}$/.test(asked) && Number(asked) <= SEED_MAX ? Number(asked) : null;
+  return {
+    kind: 'create-room',
+    name,
+    ...(missionId === null ? {} : { missionId }),
+    ...(seed === null ? {} : { seed }),
+  };
+}
 
 /** One open or running room in the browser. */
 function RoomRow({
@@ -193,11 +215,7 @@ export function JoinScreen({ send, connected, missions, rooms, openHandbook }: P
               className="primary"
               disabled={!connected || !nameOk}
               onClick={() =>
-                send(
-                  selected === null
-                    ? { kind: 'create-room', name: name.trim() }
-                    : { kind: 'create-room', name: name.trim(), missionId: selected },
-                )
+                send(createRoomMessage(name.trim(), selected, window.location.search))
               }
             >
               Runde eröffnen

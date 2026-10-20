@@ -38,11 +38,19 @@ export const rtcSignalSchema = z
 
 export type RtcSignal = z.infer<typeof rtcSignalSchema>;
 
+/** The largest seed a room can be pinned to: a seed is 32 bits wide, as the PRNG takes it. */
+export const SEED_MAX = 0xffff_ffff;
+
 export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('create-room'),
     name: z.string().min(1).max(40),
     missionId: z.string().min(1).optional(),
+    /**
+     * pins the room for a repeatable test: its run n (from 0) plays seed + n;
+     * the server takes it only with ALLOW_SEED=1
+     */
+    seed: z.number().int().min(0).max(SEED_MAX).optional(),
   }),
   z.object({
     kind: z.literal('join-room'),

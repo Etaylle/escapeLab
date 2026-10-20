@@ -163,6 +163,14 @@ da ist, startet derselbe Einsatz von selbst — ohne Umweg über die Lobby und o
 der Startknopf-Mensch sein muss. Fehlt jemand (Verbindung weg), wartet der Neustart auf die
 Rückkehr. Über die Lobby geht es weiterhin, wenn Mission oder Schwierigkeit sich ändern sollen.
 
+**Einen Lauf wiederholen (Seed):** Mit `?seed=<n>` in der Adresse eröffnet die Startseite einen
+Raum mit festem Seed: Sein Lauf k (ab 0) spielt Seed n + k, Startplätze, Orte der Quellen und
+jede Station wiederholen sich. Die Lobby zeigt „Seed n“ neben dem Code, der Endbildschirm und
+das Laufprotokoll den Seed des Laufs — `?seed=` mit diesem Wert spielt genau diesen Lauf noch
+einmal. Der Server nimmt einen Seed nur mit `ALLOW_SEED=1` an (`pnpm dev` und die CI setzen
+es); ohne bleibt es beim Zufall, mit einer Zeile im Server-Log. Der Rundgang
+(`tools/shots.mjs`) legt je Mission einen Seed fest, `SHOTS_SEED=<n>` wählt einen anderen.
+
 ## Für den Demo Day (ein Prozess, eine URL)
 
 ```sh

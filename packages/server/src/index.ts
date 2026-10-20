@@ -9,7 +9,7 @@ import {
 } from '@escapelab/core';
 import { apiResponse, serveRuns, type RunsExport } from './api.js';
 import { MissionCatalog } from './missions.js';
-import { RoomManager } from './roomManager.js';
+import { RoomManager, seedsAllowed } from './roomManager.js';
 import { appendRun, DEFAULT_RUNS_LOG } from './runLog.js';
 import { StaticSite } from './static.js';
 import { createWebServer, lanUrls, tlsLogLine, tlsSetup } from './tls.js';
@@ -26,7 +26,11 @@ const tls = tlsSetup(process.env);
 
 const catalog = new MissionCatalog(MISSIONS_DIR);
 const site = new StaticSite(fileURLToPath(new URL('../../client/dist', import.meta.url)));
-const manager = new RoomManager((report) => appendRun(RUNS_LOG, report));
+// A room pinned to a seed repeats its runs: for the walkthrough and bug reports, not for play.
+const manager = new RoomManager(
+  (report) => appendRun(RUNS_LOG, report),
+  seedsAllowed(process.env),
+);
 setInterval(() => manager.sweep(), 60_000).unref();
 
 /** Per-connection session, set once the socket joins or resumes into a room. */
@@ -73,6 +77,7 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
                 msg.missionId !== undefined ? catalog.get(msg.missionId) : catalog.default,
                 'normal',
               ),
+              msg.seed ?? null,
             )
           : manager.get(msg.code);
       const { playerId, token } = room.join(msg.name);

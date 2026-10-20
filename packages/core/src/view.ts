@@ -75,6 +75,13 @@ export interface PlayerView {
   puzzle: PuzzleView | null;
   /** tile map while a mission is running; null otherwise */
   map: MapView | null;
+  /**
+   * Only in a room a tester pinned to a seed: that seed, and the one this run
+   * plays (null before the first run and back in the lobby), which `?seed=`
+   * plays again. A room that rolls its own keeps them to itself: a run's seed
+   * gives every instance away.
+   */
+  seed?: { room: number; run: number | null };
 }
 
 export interface PlayerPresence {
@@ -688,5 +695,6 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     manualsHere: manualsHereFor(state, playerId),
     puzzle: puzzleViewFor(state, playerId),
     map: mapViewFor(state, playerId),
+    ...(state.roomSeed === null ? {} : { seed: { room: state.roomSeed, run: state.seed } }),
   };
 }

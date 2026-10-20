@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "TLS=off tsx watch src/index.ts",
+    "dev": "TLS=off ALLOW_SEED=1 tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "smoke": "tsx scripts/smoke.ts",
     "runs": "tsx scripts/runs.ts",

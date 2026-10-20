@@ -86,6 +86,7 @@ export {
   clientMessageSchema,
   rtcSignalSchema,
   RTC_SIGNAL_MAX,
+  SEED_MAX,
   type RtcSignal,
   type ClientMessage,
   type ServerMessage,
