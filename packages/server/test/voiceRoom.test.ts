@@ -83,20 +83,57 @@ describe('voice signals in a room', () => {
     expect([anna, ben].flatMap(signals)).toEqual([]);
   });
 
-  it('let a spectator and the players reach each other to listen in, never two spectators', () => {
+  it('let a spectator reach the players of its room to listen in, and them answer it', () => {
     const room = new Room('TEST', mission);
     const anna = player(room, 'Anna');
-    const [zoe, yann] = [spectator(room), spectator(room)];
-    expect(zoe.id).not.toBe(yann.id);
+    const zoe = spectator(room);
     expect(room.relaySignal(zoe.id, anna.id, offer)).toBe(true);
     expect(room.relaySignal(anna.id, zoe.id, ice)).toBe(true);
-    expect(room.relaySignal(zoe.id, yann.id, offer)).toBe(false);
     expect(signals(anna)).toEqual([{ kind: 'rtc', from: zoe.id, signal: offer }]);
     expect(signals(zoe)).toEqual([{ kind: 'rtc', from: anna.id, signal: ice }]);
-    expect(signals(yann)).toEqual([]);
     zoe.detach();
     expect(room.relaySignal(zoe.id, anna.id, offer)).toBe(false);
     expect(room.relaySignal(anna.id, zoe.id, ice)).toBe(false);
+  });
+
+  it('refuse a spectator’s signal for another spectator, or for a player of another room', () => {
+    const room = new Room('TEST', mission);
+    const other = new Room('ELSE', mission);
+    const [zoe, yann] = [spectator(room), spectator(room)];
+    const dora = player(other, 'Dora');
+    expect(zoe.id).not.toBe(yann.id);
+    expect(room.relaySignal(zoe.id, yann.id, offer)).toBe(false);
+    expect(room.relaySignal(zoe.id, dora.id, offer)).toBe(false);
+    expect(other.relaySignal(zoe.id, dora.id, offer)).toBe(false);
+    expect([zoe, yann, dora].flatMap(signals)).toEqual([]);
+  });
+
+  it('never let a spectator pass for a talk source: it goes by an id the server stamps', () => {
+    const room = new Room('TEST', mission);
+    const [anna, ben] = [player(room, 'Anna'), player(room, 'Ben')];
+    const zoe = spectator(room);
+    // No player has its id: a player's page plays the links of the crew, an audience's never.
+    expect(zoe.id).toMatch(/^audience-/);
+    expect([anna.id, ben.id]).not.toContain(zoe.id);
+    // A sender a spectator names itself does not survive the wire; the server stamps its own.
+    const forged = parseClientMessage(
+      JSON.stringify({ kind: 'rtc', to: anna.id, from: ben.id, signal: offer }),
+    );
+    expect(forged).toEqual({ kind: 'rtc', to: anna.id, signal: offer });
+    if (forged.kind !== 'rtc') {
+      throw new Error('expected a voice signal');
+    }
+    room.relaySignal(zoe.id, forged.to, forged.signal);
+    expect(signals(anna)).toEqual([{ kind: 'rtc', from: zoe.id, signal: offer }]);
+  });
+
+  it('hold a spectator to the same allowance as a player', () => {
+    const room = new Room('TEST', mission);
+    const anna = player(room, 'Anna');
+    const zoe = spectator(room);
+    const burst = Array.from({ length: 61 }, () => room.relaySignal(zoe.id, anna.id, ice));
+    expect(burst.filter(Boolean)).toHaveLength(60);
+    expect(burst.at(-1)).toBe(false);
   });
 
   it('come 60 at once from one member, then 10 a second, like chat dropping what is over', () => {
