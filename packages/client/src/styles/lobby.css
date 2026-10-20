@@ -1,0 +1,583 @@
+/* ══ the lobby: the crew's room before the run ═════════════════════════════
+ * Lobby.tsx, CrewRoom.tsx, CrewFigure.tsx. The window is the stage, as during
+ * a run: the crew room fills it and the mission sits in a panel on the right.
+ * In the room everybody stands as the game draws them, on the lab's floor in
+ * front of its wall, you in the middle and a step nearer, the crew colours at
+ * your feet. Under 860px the panel goes below the room and the page scrolls;
+ * the row of seats scrolls sideways wherever it runs out of room.
+ */
+
+/* Unlike a run, the lobby may scroll where a phone has to. */
+.content--stage:has(> .lobby) {
+  overflow-y: auto;
+}
+
+.lobby {
+  /* Height of a crew member's canvas; yours is 1.15 times that. */
+  --fig: clamp(150px, min(32vh, 16vw), 240px);
+  /*
+   * How far the row reaches into the floor. A canvas runs 0.15 of its height
+   * on below the feet, for the shadow; with the others a step back, this puts
+   * their feet about a sixth of --fig in front of the wall and yours a quarter.
+   */
+  --floor-depth: calc(var(--fig) * 0.42);
+  flex: 1;
+  align-self: flex-start;
+  min-width: 0;
+  min-height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 25vw, 380px);
+  gap: 12px;
+}
+
+/* ── the crew room ──────────────────────────────────────────────────────── */
+
+/* The wall under a ceiling lamp; the corners fall off into the dark. */
+.crew-room {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background-color: #0b1016;
+  background-image:
+    linear-gradient(180deg, rgba(3, 6, 10, 0.92) 0, rgba(3, 6, 10, 0) 26%),
+    radial-gradient(ellipse 34% 80% at 50% 0, rgba(45, 212, 191, 0.16), rgba(45, 212, 191, 0) 72%),
+    linear-gradient(
+      90deg,
+      rgba(3, 6, 10, 0.75),
+      rgba(3, 6, 10, 0) 22%,
+      rgba(3, 6, 10, 0) 78%,
+      rgba(3, 6, 10, 0.75)
+    ),
+    var(--wall-tile, none);
+  background-size: auto, auto, auto, 128px 128px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+
+/* The lamp itself, over the middle of the row. */
+.crew-room::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 160px;
+  height: 5px;
+  transform: translateX(-50%);
+  border-radius: 0 0 6px 6px;
+  background: #c8fff6;
+  box-shadow: 0 0 18px 4px rgba(45, 212, 191, 0.55);
+}
+
+/* A plate on the wall: what the start does with the places. */
+.crew-room-sign {
+  position: relative;
+  align-self: flex-start;
+  margin: 14px 16px 0;
+  padding: 6px 10px;
+  border: 1px solid #26303c;
+  border-radius: 6px;
+  background: rgba(5, 8, 11, 0.82);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/*
+ * The row stands on the floor: it reaches --floor-depth into it and is drawn
+ * over it. It never shrinks below its seats, so a window too short for them
+ * makes the page longer rather than cutting heads off.
+ */
+.seats {
+  position: relative;
+  z-index: 1;
+  flex: 1 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(14px, 3vw, 48px);
+  margin: 0 0 calc(-1 * var(--floor-depth));
+  padding: 16px 20px 0;
+  list-style: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* Centred while the row fits, from its start once it scrolls. */
+.seats > :first-child {
+  margin-left: auto;
+}
+
+.seats > :last-child {
+  margin-right: auto;
+}
+
+/* A name tag over a badge over the figure; the others stand a step further back. */
+.seat {
+  --fig-scale: 1;
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  /* The canvas's proportions: 0.9 tiles wide to 1.06 high. */
+  width: calc(var(--fig) * var(--fig-scale) * 0.85);
+  margin-bottom: calc(var(--fig) * 0.1);
+}
+
+.seat-you {
+  --fig-scale: 1.15;
+  z-index: 1;
+  margin-bottom: 0;
+}
+
+/* The lamp's light where you stand. */
+.seat-you::before {
+  content: '';
+  position: absolute;
+  left: -20%;
+  right: -20%;
+  bottom: 0;
+  height: 30%;
+  z-index: -1;
+  background: radial-gradient(closest-side, rgba(45, 212, 191, 0.22), rgba(45, 212, 191, 0));
+  pointer-events: none;
+}
+
+.seat-figure {
+  display: block;
+  width: 100%;
+  height: calc(var(--fig) * var(--fig-scale));
+}
+
+.seat-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: #e8eef4;
+  text-shadow:
+    0 1px 0 #000,
+    0 0 8px rgba(0, 0, 0, 0.95);
+}
+
+.seat-you .seat-name {
+  font-size: 17px;
+  color: var(--accent);
+}
+
+.seat-gone .seat-name {
+  opacity: 0.6;
+}
+
+.seat-badge {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 9px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: rgba(5, 8, 11, 0.85);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.seat-badge-ready {
+  border-color: var(--accent-dark);
+  color: var(--accent);
+}
+
+.seat-badge-host {
+  border-color: rgba(251, 191, 36, 0.5);
+  color: var(--warn);
+}
+
+.seat-badge-gone {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.seat-badge-need {
+  border-style: dashed;
+  border-color: rgba(251, 191, 36, 0.6);
+  color: var(--warn);
+}
+
+/* A free place: its words wrap, its figure is a dashed outline. */
+.seat-open .seat-name {
+  white-space: normal;
+  text-align: center;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--muted);
+}
+
+.seat-outline {
+  fill: rgba(148, 163, 178, 0.04);
+  stroke: rgba(148, 163, 178, 0.5);
+  stroke-width: 1.4;
+  stroke-dasharray: 4 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/*
+ * The floor: its far edge meets the wall in a lit skirting, the colours lie
+ * at its front. It takes at least two fifths of the room, which puts the
+ * crew across the middle of it.
+ */
+.crew-room-floor {
+  flex: 0 0 auto;
+  min-height: 40%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: calc(var(--floor-depth) + 14px) 16px 16px;
+  border-top: 3px solid #05080b;
+  background-color: #0d131a;
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(3, 6, 10, 0.6),
+      rgba(3, 6, 10, 0) 30%,
+      rgba(3, 6, 10, 0) 70%,
+      rgba(3, 6, 10, 0.55)
+    ),
+    radial-gradient(ellipse 36% 90% at 50% 0, rgba(45, 212, 191, 0.12), rgba(45, 212, 191, 0) 70%),
+    var(--floor-tile, none);
+  background-size: auto, auto, 128px 128px;
+  box-shadow:
+    0 -1px 0 rgba(45, 212, 191, 0.4),
+    0 -12px 28px rgba(45, 212, 191, 0.07);
+}
+
+/* ── the colours ────────────────────────────────────────────────────────── */
+
+.palette {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.palette-caption {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.palette-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* A round key in its colour, lit from above and standing on its own shadow. */
+.chip {
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 3px solid rgba(3, 6, 10, 0.9);
+  border-radius: 50%;
+  background: var(--chip);
+  box-shadow:
+    inset 0 3px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -5px 0 rgba(0, 0, 0, 0.22),
+    0 3px 0 rgba(0, 0, 0, 0.55);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+  color: rgba(4, 7, 10, 0.85);
+  transition:
+    transform 0.12s,
+    box-shadow 0.12s;
+}
+
+.chip:hover:not(:disabled) {
+  border-color: rgba(3, 6, 10, 0.9);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 3px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -5px 0 rgba(0, 0, 0, 0.22),
+    0 5px 0 rgba(0, 0, 0, 0.55),
+    0 0 16px var(--chip);
+}
+
+/* Yours, ringed in white and staying put; after the hover rule, so it holds. */
+.chip-mine,
+.chip-mine:hover:not(:disabled) {
+  cursor: default;
+  transform: none;
+  border-color: #ffffff;
+  box-shadow:
+    inset 0 3px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -5px 0 rgba(0, 0, 0, 0.22),
+    0 0 0 3px rgba(255, 255, 255, 0.18),
+    0 0 20px var(--chip);
+}
+
+/* Worn by somebody else: darkened, their initial in white. */
+.chip:disabled {
+  opacity: 1;
+  background: linear-gradient(rgba(3, 6, 10, 0.55), rgba(3, 6, 10, 0.55)), var(--chip);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  color: #f1f5f9;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.chip:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
+}
+
+/* ── the mission panel ──────────────────────────────────────────────────── */
+
+.lobby-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--bg-2) 100%);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+
+.lobby-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lobby-head h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+/* The floor plan on a dark plate as wide as the panel. */
+.lobby-map {
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #070b0f;
+}
+
+.lobby-map .map-thumb {
+  border: none;
+  border-radius: 4px;
+}
+
+.lobby-facts {
+  margin: 0;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.lobby-story .story {
+  max-width: 68ch;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Two lines until „mehr"; opened, it scrolls past seven. */
+.lobby-story .story-short {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.lobby-story .story:not(.story-short) {
+  max-height: 10.5em;
+  overflow-y: auto;
+}
+
+.lobby-story .link {
+  padding: 2px 0;
+  font-size: 13px;
+}
+
+.lobby-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* The panel's captions in plain words, quieter than the form labels elsewhere. */
+.lobby-switch,
+.lobby-caption {
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted);
+}
+
+.lobby-switch {
+  margin: 0;
+}
+
+.lobby-switch select {
+  min-width: 0;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.lobby-caption {
+  margin: 0 0 6px;
+}
+
+.level-chips {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.level-chip {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 8px 4px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--panel-2);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--text);
+}
+
+.level-chip-on {
+  border-color: var(--accent);
+  background: var(--accent-dark);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+/* Shown, not picked: the host's choice stands out, the rest steps back. */
+.level-chips-shown .level-chip:not(.level-chip-on) {
+  color: var(--muted);
+}
+
+.lobby-level-note {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+/* The start sits at the panel's foot, below whatever room is left. */
+.lobby-go {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lobby-start {
+  width: 100%;
+  min-height: 52px;
+  font-size: 17px;
+}
+
+.lobby-go-note {
+  margin: 0;
+  font-size: 13px;
+  text-align: center;
+}
+
+.lobby-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.lobby-invite {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.lobby-invite-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.lobby-code {
+  font-family: var(--mono);
+  font-size: 19px;
+  letter-spacing: 3px;
+  color: var(--accent);
+}
+
+.lobby-copy {
+  padding: 5px 10px;
+  font-size: 13px;
+}
+
+/* ── narrow windows: the panel below the room ──────────────────────────── */
+
+@media (max-width: 860px) {
+  .lobby {
+    --fig: clamp(124px, 30vw, 200px);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .seats {
+    gap: 8px;
+    padding: 14px 8px 0;
+  }
+
+  .seat-name {
+    font-size: 13px;
+  }
+
+  .seat-you .seat-name {
+    font-size: 14px;
+  }
+
+  .seat-badge {
+    padding: 2px 7px;
+    font-size: 11px;
+  }
+
+  .crew-room-floor {
+    min-height: 0;
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+}
+
+/* Eight keys of 44px do not fit a phone's row: two rows of four. */
+@media (max-width: 480px) {
+  .palette-chips {
+    display: grid;
+    grid-template-columns: repeat(4, 44px);
+    gap: 10px 14px;
+  }
+
+  .chip {
+    width: 44px;
+    height: 44px;
+  }
+}

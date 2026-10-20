@@ -53,8 +53,10 @@ export function App() {
   const [handbook, setHandbook] = useState<string | null>(null);
   const contentRef = useRef<HTMLElement>(null);
   // A running mission takes over the whole window, for players and for the
-  // audience alike — the latter matters on a projector.
+  // audience alike — the latter matters on a projector. So does the lobby,
+  // the crew's room before the run.
   const immersive =
+    conn.view?.phase === 'lobby' ||
     (conn.view?.phase === 'playing' && conn.view.map !== null) ||
     (conn.spectatorView !== null && conn.spectatorView.map !== null);
   // Which mission is running, for the header. The lobby already has it as its
@@ -161,6 +163,7 @@ export function App() {
         return (
           <LobbyScreen
             view={conn.view}
+            roomCode={conn.roomCode}
             send={conn.send}
             leaveRoom={conn.leaveRoom}
             missions={missions}

@@ -1041,6 +1041,13 @@ async function run() {
   await sleep(300);
   await host.screenshot({ path: join(OUT, 'lobby-filled.png') });
   await guest.screenshot({ path: join(OUT, 'lobby-phone.png') });
+  // A phone scrolls the lobby down and the crew's row sideways, but nothing
+  // else may run out past the window's edge.
+  const phoneOver = await sideways(guest, '.content');
+  console.log(
+    `lobby-phone.png    Ben's lobby @ 420x760 ` +
+      (phoneOver > 0 ? `!! +${phoneOver}px sideways` : 'fits sideways'),
+  );
   await overflow(host, 'lobby @ 1440x820');
   await host.setViewportSize({ width: 1280, height: 720 });
   await sleep(400);

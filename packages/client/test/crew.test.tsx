@@ -9,6 +9,7 @@ import type {
   SpectatorView,
 } from '@escapelab/core';
 import { crewSizeText, crewTags, presenceNear } from '../src/screens/Crew.js';
+import { lineup, type Place } from '../src/screens/CrewRoom.js';
 import { EndScreen } from '../src/screens/End.js';
 import { JoinScreen } from '../src/screens/Join.js';
 import { LobbyScreen, startBlocker } from '../src/screens/Lobby.js';
@@ -64,11 +65,40 @@ function annaSees(players: Seat[], parts: Partial<PlayerView> = {}): PlayerView 
   };
 }
 
-function lobby(view: PlayerView): string {
+/** Ben's view, as a guest, of the same room. */
+function benSees(players: Seat[], ready: boolean): PlayerView {
+  return annaSees(players, {
+    you: { id: 'p2', name: 'Ben', color: '#f472b6', ready, isHost: false },
+  });
+}
+
+const blackout: MissionInfo = {
+  id: 'blackout',
+  title: 'Blackout im Labor',
+  subtitle: 'Für zwei oder drei.',
+  players: { min: 2, max: 3 },
+  timeLimitSec: 480,
+  puzzleCount: 5,
+  tiles: [],
+};
+const tutorial: MissionInfo = {
+  id: 'systemcheck',
+  title: 'Tutorial: Systemcheck',
+  subtitle: 'Zum Warmwerden.',
+  players: { min: 2, max: 2 },
+  timeLimitSec: 420,
+  puzzleCount: 3,
+  tiles: [],
+};
+
+function lobby(view: PlayerView, missions: MissionInfo[] = []): string {
   return renderToStaticMarkup(
-    <LobbyScreen view={view} send={noop} leaveRoom={noop} missions={[]} />,
+    <LobbyScreen view={view} roomCode="QXT4" send={noop} leaveRoom={noop} missions={missions} />,
   );
 }
+
+/** The places in the row, left to right. */
+const seatsOf = (html: string): string[] => html.match(/<li class="seat[ "].*?<\/li>/g) ?? [];
 
 describe('how many play', () => {
   it('reads as one count where the mission takes exactly that many, else as a range', () => {
@@ -100,30 +130,165 @@ describe('starting from the lobby', () => {
   });
 });
 
-describe('the lobby', () => {
-  it('seats the crew and leaves an open row per place, marking those the mission needs', () => {
-    const html = lobby(annaSees([anna]));
-    expect(html).toContain('★ Anna');
-    expect(html.match(/class="seat seat-open"/g)).toHaveLength(2);
-    expect(html.match(/ready-tag-need/g)).toHaveLength(1);
-    expect(html).toContain('frei — Code oben teilen');
-    expect(html).toContain('Startplätze werden beim Start verlost.');
+describe('the row in the crew room', () => {
+  /** A place as words: who stands there and which way they look. */
+  const word = (place: Place): string => {
+    if (place.kind === 'free') {
+      return place.needed ? 'frei (nötig)' : 'frei';
+    }
+    const name = place.member.name;
+    return { right: `${name} →`, left: `← ${name}`, front: name }[place.facing];
+  };
+
+  it('puts you in the middle, the others turned toward you', () => {
+    expect(lineup(annaSees([anna, ben, carla])).map(word)).toEqual(['Ben →', 'Anna', '← Carla']);
+    expect(lineup(benSees([anna, ben, carla], false)).map(word)).toEqual([
+      'Anna →',
+      'Ben',
+      '← Carla',
+    ]);
   });
 
-  it('shows the ready tags and who is gone', () => {
-    const html = lobby(annaSees([anna, { ...ben, ready: true }, { ...carla, connected: false }]));
-    expect(html).toContain('✓ bereit');
-    expect(html).toMatch(/class="seat +seat-gone"><span class="crew-dot".*?Carla/);
-    expect(html).toContain('getrennt');
-    expect(html).not.toContain('seat-open');
+  it('fills the places the mission has left, marking those it cannot start without', () => {
+    const alone = lineup(annaSees([anna], { crewSize: { min: 2, max: 2 } }));
+    expect(alone.map(word)).toEqual(['Anna', 'frei (nötig)']);
+    const four = lineup(annaSees([anna, ben], { crewSize: { min: 4, max: 4 } }));
+    expect(four.map(word)).toEqual(['Ben →', 'Anna', 'frei (nötig)', 'frei (nötig)']);
+    // Only the first free place asks for the code to be shared.
+    expect(four.filter((place) => place.kind === 'free' && place.first)).toHaveLength(1);
+  });
+
+  it('keeps who is gone in the row, and counts them as missing', () => {
+    const gone = { ...ben, connected: false };
+    expect(lineup(annaSees([anna, gone])).map(word)).toEqual(['Ben →', 'Anna', 'frei (nötig)']);
+  });
+});
+
+describe('the lobby', () => {
+  it('stands every player in the room with a name tag over a badge over the figure', () => {
+    const seats = seatsOf(lobby(annaSees([anna, { ...ben, ready: true }, carla])));
+    expect(seats).toHaveLength(3);
+    expect(seats[0]).toBe(
+      '<li class="seat"><span class="seat-name">Ben</span>' +
+        '<span class="seat-badge seat-badge-ready">✓ bereit</span>' +
+        '<canvas class="seat-figure" aria-hidden="true"></canvas></li>',
+    );
+    expect(seats[1]).toContain('<li class="seat seat-you"><span class="seat-name">Anna</span>');
+    expect(seats[1]).toContain('<span class="seat-badge seat-badge-host">★ Host</span><canvas');
+    expect(seats[2]).toContain('<span class="seat-badge seat-badge-wait">noch nicht bereit</span>');
+    expect(lobby(annaSees([anna]))).toContain('Startplätze werden beim Start verlost.');
+  });
+
+  it('draws a free place as a dashed outline, the first asking for the code to be shared', () => {
+    const seats = seatsOf(lobby(annaSees([anna])));
+    expect(seats.map((s) => s.match(/^<li class="([^"]*)"/)?.[1])).toEqual([
+      'seat seat-open',
+      'seat seat-you',
+      'seat seat-open',
+    ]);
+    expect(seats[0]).toContain('<span class="seat-name">frei — Code oben teilen</span>');
+    expect(seats[0]).toContain('<span class="seat-badge seat-badge-need">nötig</span>');
+    expect(seats[0]).toContain('<svg class="seat-figure seat-outline"');
+    expect(seats[2]).toContain('<span class="seat-name">frei</span><svg');
+  });
+
+  it('dims who is gone under „getrennt", host or not', () => {
+    const view = annaSees([anna, { ...ben, ready: true }, { ...carla, connected: false }]);
+    const seats = seatsOf(lobby(view));
+    expect(seats[2]).toContain('<li class="seat seat-gone"><span class="seat-name">Carla</span>');
+    expect(seats[2]).toContain('seat-badge-gone">getrennt<');
+    const goneHost = seatsOf(lobby(benSees([{ ...anna, connected: false }, ben], false)));
+    expect(goneHost[0]).toContain('seat-badge-gone">getrennt<');
+    expect(goneHost[0]).not.toContain('Host');
+  });
+
+  it('lays the colours out as keys: yours ticked, others locked under their initial', () => {
+    const palette = [
+      { color: '#2dd4bf', takenByName: 'Anna' },
+      { color: '#f472b6', takenByName: 'Ben' },
+      { color: '#fbbf24', takenByName: null },
+    ];
+    const html = lobby(annaSees([anna, ben], { palette }));
+    const chips = html.match(/<button class="chip[ "].*?<\/button>/g) ?? [];
+    expect(chips).toHaveLength(3);
+    expect(chips[0]).toBe(
+      '<button class="chip chip-mine" style="--chip:#2dd4bf" aria-pressed="true" ' +
+        'aria-label="Türkis — deine Farbe" title="Türkis — deine Farbe">✓</button>',
+    );
+    expect(chips[1]).toBe(
+      '<button class="chip" style="--chip:#f472b6" disabled="" aria-pressed="false" ' +
+        'aria-label="Pink — trägt Ben" title="Pink — trägt Ben">B</button>',
+    );
+    expect(chips[2]).toBe(
+      '<button class="chip" style="--chip:#fbbf24" aria-pressed="false" ' +
+        'aria-label="Gelb" title="Gelb"></button>',
+    );
   });
 
   it('keeps the start locked with the reason on it, and has no roles to pick', () => {
     const html = lobby(annaSees([anna]));
-    expect(html).toContain('<button class="primary" disabled="">Noch 1 Person nötig</button>');
+    expect(html).toContain(
+      '<button class="primary lobby-start" disabled="">Noch 1 Person nötig</button>',
+    );
     expect(html).not.toMatch(/Rolle/);
+    const waiting = lobby(annaSees([anna, ben, { ...carla, ready: true }]));
+    expect(waiting).toContain('disabled="">Warten auf Ben …</button>');
     const ready = lobby(annaSees([anna, { ...ben, ready: true }]));
-    expect(ready).toContain('<button class="primary">▶ Mission starten</button>');
+    expect(ready).toContain('<button class="primary lobby-start">▶ Mission starten</button>');
+  });
+
+  it('lets a guest say ready and tells them what the start still waits for', () => {
+    const unready = lobby(benSees([anna, ben, carla], false));
+    expect(unready).toContain('<button class="primary lobby-start">Ich bin bereit</button>');
+    expect(unready).toContain('Lies die Mission — dann melde dich bereit.');
+    expect(unready).not.toContain('Mission starten');
+    const waiting = lobby(benSees([anna, { ...ben, ready: true }, carla], true));
+    expect(waiting).toContain('<button class="lobby-start">✓ Bereit — doch nicht?</button>');
+    expect(waiting).toContain('Warten auf Carla …');
+    expect(lobby(benSees([anna, { ...ben, ready: true }], true))).toContain(
+      'Alle bereit — der Host startet.',
+    );
+  });
+
+  it('gives the host the mission switch and the difficulty to pick, the others only to see', () => {
+    const host = lobby(annaSees([anna, ben]), [blackout, tutorial]);
+    expect(host).toContain('Mission wechseln<select');
+    expect(host.match(/<button class="level-chip[ "]/g)).toHaveLength(3);
+    expect(host).toContain('aria-pressed="true">Normal</button>');
+    const guest = lobby(benSees([anna, ben], false), [blackout, tutorial]);
+    expect(guest).not.toContain('<select');
+    expect(guest).toContain('Schwierigkeit (wählt der Host)');
+    expect(guest).toContain('<div class="level-chips level-chips-shown">');
+    expect(guest.match(/<span class="level-chip[ "]/g)).toHaveLength(3);
+    expect(guest).toContain('<span class="level-chip level-chip-on"');
+  });
+
+  it('names the mission with its map and one line of facts', () => {
+    const withMap = { ...blackout, tiles: ['###', '#.#', '###'] };
+    const html = lobby(annaSees([anna]), [withMap, tutorial]);
+    expect(html).toContain(
+      '<h1>Blackout im Labor</h1><div class="lobby-map"><svg class="map-thumb"',
+    );
+    expect(html).toContain('<p class="lobby-facts">⏱ 8 min · 👥 2–3 Spieler · 🧩 5 Stationen</p>');
+  });
+
+  it('cuts a long story to two lines with „mehr", and leaves a short one whole', () => {
+    const story =
+      '23:47 Uhr: ein Knall, dann Dunkelheit — nur die Notbeleuchtung glimmt rot. ' +
+      'Ihr seid quer durchs Labor verstreut.';
+    const long = lobby(annaSees([anna], { storyText: story }));
+    expect(long).toContain('<p class="story story-short">23:47 Uhr');
+    expect(long).toContain('<button class="link" aria-expanded="false">mehr</button>');
+    const short = lobby(annaSees([anna]));
+    expect(short).toContain('<p class="story">Stromausfall.</p>');
+    expect(short).not.toContain('aria-expanded');
+  });
+
+  it('hands out the room code with a link to copy, and the way out', () => {
+    const html = lobby(annaSees([anna]));
+    expect(html).toContain('<strong class="lobby-code">QXT4</strong>');
+    expect(html).toContain('<button class="lobby-copy">⧉ Link kopieren</button>');
+    expect(html).toContain('<button class="link">Raum verlassen</button>');
   });
 });
 
@@ -131,25 +296,6 @@ describe('the join screen', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
-
-  const blackout: MissionInfo = {
-    id: 'blackout',
-    title: 'Blackout im Labor',
-    subtitle: 'Für zwei oder drei.',
-    players: { min: 2, max: 3 },
-    timeLimitSec: 480,
-    puzzleCount: 5,
-    tiles: [],
-  };
-  const tutorial: MissionInfo = {
-    id: 'systemcheck',
-    title: 'Tutorial: Systemcheck',
-    subtitle: 'Zum Warmwerden.',
-    players: { min: 2, max: 2 },
-    timeLimitSec: 420,
-    puzzleCount: 3,
-    tiles: [],
-  };
 
   function joinScreen(missions: MissionInfo[], rooms: RoomSummary[] = []): string {
     vi.stubGlobal('window', { location: { search: '' } });

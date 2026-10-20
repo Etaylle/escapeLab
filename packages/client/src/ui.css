@@ -367,45 +367,7 @@ button.link:hover {
   text-align: center;
 }
 
-/* --- lobby ------------------------------------------------------------------ */
-
-/*
- * The lobby is the one screen everyone stares at while waiting, so it gets
- * the window instead of a 680px column: briefing on the left, the crew you
- * are assembling on the right. Below 920px the two stack.
- */
-.card.lobby {
-  max-width: 1120px;
-}
-
-.lobby-cols {
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: 10px 34px;
-  align-items: start;
-}
-
-.lobby-cols > section {
-  min-width: 0;
-}
-
-@media (max-width: 920px) {
-  .lobby-cols {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.lobby-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 14px;
-}
-
-.lobby-facts {
-  display: inline-block;
-  margin-top: 6px;
-}
+/* --- crew lists and action rows ---------------------------------------------- */
 
 .players {
   list-style: none;
@@ -928,56 +890,7 @@ button.link:hover {
   line-height: 1;
 }
 
-/* ── crew picker (lobby) ────────────────────────────────────────────────── */
-
-/* The figure above its colours, so it can stand beside the crew list. */
-.crew-picker {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 12px;
-}
-
-.crew-preview {
-  width: 92px;
-  height: 92px;
-  flex: none;
-}
-
-.swatches {
-  display: grid;
-  grid-template-columns: repeat(4, 38px);
-  gap: 8px;
-}
-
-.swatch {
-  width: 38px;
-  height: 38px;
-  padding: 0;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  color: rgba(4, 7, 10, 0.75);
-  font-weight: 800;
-  font-size: 15px;
-}
-
-.swatch:hover:not(:disabled) {
-  transform: scale(1.08);
-  box-shadow: 0 0 10px currentColor;
-}
-
-.swatch-mine {
-  border-color: #ffffff;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
-}
-
-.swatch:disabled {
-  opacity: 0.3;
-}
+/* ── a crew member's colour as a dot ────────────────────────────────────── */
 
 .crew-dot {
   display: inline-block;
@@ -1151,52 +1064,6 @@ button.link:hover {
 .overlay.pause p {
   max-width: 420px;
   line-height: 1.5;
-}
-
-/* ── host controls (lobby) ──────────────────────────────────────────────── */
-
-.host-controls {
-  margin-top: 16px;
-  padding: 14px 18px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--bg-2);
-}
-
-.host-controls label {
-  margin-top: 0;
-}
-
-.difficulty-caption {
-  font-family: var(--mono);
-  font-size: 13px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.difficulty-row {
-  display: flex;
-  gap: 8px;
-  margin: 8px 0;
-  flex-wrap: wrap;
-}
-
-.difficulty-btn {
-  flex: 1 1 110px;
-  font-weight: 600;
-}
-
-.difficulty-btn-on {
-  border-color: var(--accent);
-  background: var(--accent-dark);
-  box-shadow: 0 0 12px var(--accent-glow);
-}
-
-.difficulty-desc {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.45;
 }
 
 /* ── quick chat ─────────────────────────────────────────────────────────── */
@@ -1612,21 +1479,6 @@ button.link:hover {
     flex-direction: column;
     align-items: stretch;
   }
-}
-
-.ready-tag {
-  margin-left: 10px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--line-2);
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.ready-tag-on {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 /* ── controls overlay ───────────────────────────────────────────────────── */
@@ -2485,109 +2337,7 @@ button.link:hover {
   }
 }
 
-/* ── crew: lobby seats, presence tags, credits ──────────────────────────── */
-
-/* The crew list and the figure side by side; in a narrow column the figure goes below. */
-.lobby-crew-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 14px 26px;
-}
-
-.lobby-roster {
-  flex: 1 1 240px;
-  min-width: 0;
-}
-
-.lobby-look {
-  flex: none;
-}
-
-/* The column headings already have the gap above them. */
-.lobby-roster > h2,
-.lobby-look > h2 {
-  margin-top: 0;
-}
-
-.seats {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.seat {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 5px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--bg-2);
-  font-size: 14px;
-}
-
-.seat .crew-dot {
-  flex: none;
-  margin-right: 0;
-}
-
-.seat-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.seat-you .seat-name {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.seat .ready-tag {
-  flex: none;
-  margin-left: auto;
-}
-
-.seat-gone,
-.seat-gone .ready-tag {
-  border-color: var(--warn);
-  color: var(--warn);
-}
-
-/* A seat nobody has taken yet; its text lines up with the names above. */
-.seat-open {
-  padding-left: 28px;
-  border-style: dashed;
-  background: none;
-  color: var(--muted);
-}
-
-.ready-tag-need {
-  border-color: var(--warn);
-  color: var(--warn);
-}
-
-.lobby-draw {
-  margin: 8px 0 0;
-  font-size: 13px;
-}
-
-/* On a phone the figure goes below the crew list and stands beside its colours again. */
-@media (max-width: 560px) {
-  .lobby-look {
-    flex: 1 1 100%;
-  }
-
-  .crew-picker {
-    flex-direction: row;
-    justify-content: center;
-  }
-}
+/* ── crew: presence tags, credits ───────────────────────────────────────── */
 
 .crew-tags {
   display: inline-flex;
