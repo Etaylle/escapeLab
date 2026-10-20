@@ -306,17 +306,10 @@ function given<K extends string, V>(key: K, value: V | '' | undefined): { [P in 
   return value === '' || value === undefined ? {} : ({ [key]: value } as { [P in K]: V });
 }
 
-/** A list of words as the file keeps it: trimmed, the blank lines left out. */
-function wordsJson(words: unknown): unknown {
-  return Array.isArray(words)
-    ? words.map((word) => String(word).trim()).filter((word) => word !== '')
-    : words;
-}
-
 /**
  * A puzzle's own fields as the file has them: those `specs` list, nothing
  * else. An empty field that can be off is written the way its module says,
- * as null or as no key at all; a list of words without its blank lines.
+ * as null or as no key at all.
  */
 export function fieldsToJson(
   specs: readonly FieldSpec[],
@@ -328,7 +321,7 @@ export function fieldsToJson(
     if (value === undefined || (value === null && spec.kind === 'int' && spec.off === 'omit')) {
       continue;
     }
-    json[spec.key] = spec.kind === 'words' ? wordsJson(value) : structuredClone(value);
+    json[spec.key] = structuredClone(value);
   }
   return json;
 }

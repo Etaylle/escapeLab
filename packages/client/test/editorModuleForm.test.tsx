@@ -10,8 +10,8 @@ import {
   type Draft,
   type StationType,
 } from '../src/editor/draft.js';
-import { AreaField, focusField } from '../src/editor/fields.js';
-import { inputFor, ModuleForm } from '../src/editor/ModuleForm.js';
+import { focusField } from '../src/editor/fields.js';
+import { ModuleForm } from '../src/editor/ModuleForm.js';
 import { PuzzleList, RETYPE_NOTE } from '../src/editor/PuzzleList.js';
 import { validateDraft, type Validation } from '../src/editor/validate.js';
 import { ValidatorPanel } from '../src/editor/ValidatorPanel.js';
@@ -53,8 +53,6 @@ function another(spec: FieldSpec): unknown {
       return !spec.default;
     case 'choice':
       return spec.options.find((option) => option.value !== spec.default)?.value;
-    case 'words':
-      return ['neu'];
     case 'range':
       return { min: spec.max, max: spec.max };
   }
@@ -147,30 +145,6 @@ describe('the puzzle form', () => {
     const penalty = /<input id="editor-puzzles-0-penaltySec"[^>]* placeholder="15"[^>]* value=""/;
     expect(html).toMatch(penalty);
     expect(html).toContain('Fehlgriff in Sekunden');
-  });
-});
-
-describe('a list of words', () => {
-  const spec: FieldSpec = {
-    key: 'words',
-    label: 'Wörter',
-    help: 'Eins je Zeile.',
-    kind: 'words',
-    min: 1,
-    max: 3,
-    maxLen: 10,
-    default: ['eins'],
-  };
-
-  it('is a text area with one word a line, and hands on the lines as typed', () => {
-    const set = vi.fn();
-    const path = 'puzzles.0.words';
-    const input = inputFor(spec, { value: ['eins', 'zwei'], set, path, issues: [] });
-    expect(isValidElement(input) && input.type).toBe(AreaField);
-    const [area] = inputsOf(input);
-    expect(area?.props.value).toBe('eins\nzwei');
-    area?.props.onChange('eins\nzwei\n');
-    expect(set).toHaveBeenCalledWith(['eins', 'zwei', '']);
   });
 });
 

@@ -166,7 +166,6 @@ export type DefSchema<Def> = z.ZodType<Def> & z.core.$ZodTypeDiscriminable;
  *   (`'null'`) or no key at all (`'omit'`). A file without the key is off.
  * - `bool`: ticked or not.
  * - `choice`: one of the options, by value.
- * - `words`: a list of min to max strings, one per line, each up to maxLen.
  * - `range`: a `{ min, max }` pair of whole numbers, both from min to max.
  *
  * Every field's default is what a new puzzle of the module starts with;
@@ -181,7 +180,6 @@ export type FieldSpec = { key: string; label: string; help: string } & (
       options: readonly { value: string; label: string }[];
       default: string;
     }
-  | { kind: 'words'; min: number; max: number; maxLen: number; default: readonly string[] }
   | {
       kind: 'range';
       min: number;

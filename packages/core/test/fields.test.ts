@@ -37,12 +37,6 @@ function offered(field: FieldSpec): boolean {
       );
     case 'choice':
       return field.options.some((option) => option.value === field.default);
-    case 'words':
-      return (
-        field.default.length >= field.min &&
-        field.default.length <= field.max &&
-        field.default.every((word) => word.length <= field.maxLen)
-      );
     case 'bool':
       return true;
   }

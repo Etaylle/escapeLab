@@ -2,7 +2,6 @@ import { Fragment, type ReactNode } from 'react';
 import type { FieldSpec } from '@escapelab/core';
 import { fieldSpecs, type Draft } from './draft.js';
 import {
-  AreaField,
   CheckField,
   inputId,
   NumberField,
@@ -22,7 +21,7 @@ interface Props {
 }
 
 /** What the input of one field gets: the value the draft holds, and where a new one goes. */
-export interface SpecInput {
+interface SpecInput {
   value: unknown;
   set: (value: unknown) => void;
   /** the field's dotted path in the mission file */
@@ -36,9 +35,6 @@ const asNumber = (value: unknown): number | null => (typeof value === 'number' ?
 
 const asText = (value: unknown, fallback: string): string =>
   typeof value === 'string' ? value : fallback;
-
-/** A list of words as the textarea shows it: one a line. */
-const asLines = (value: unknown): string => (Array.isArray(value) ? value.join('\n') : '');
 
 /** A `{ min, max }` pair as the draft holds it, or the fallback where it holds none. */
 function asRange(
@@ -68,7 +64,7 @@ function intInput(spec: IntSpec, { value, set, path, issues }: SpecInput): React
 }
 
 /** The input of a field's kind, with the field's label, its help line and its issues. */
-export function inputFor(spec: FieldSpec, input: SpecInput): ReactNode {
+function inputFor(spec: FieldSpec, input: SpecInput): ReactNode {
   const { value, set, path, issues } = input;
   const common = { label: spec.label, note: spec.help, id: inputId(path), issues };
   switch (spec.kind) {
@@ -84,10 +80,6 @@ export function inputFor(spec: FieldSpec, input: SpecInput): ReactNode {
           choices={spec.options}
           onChange={set}
         />
-      );
-    case 'words':
-      return (
-        <AreaField {...common} value={asLines(value)} onChange={(text) => set(text.split('\n'))} />
       );
     case 'range':
       return (

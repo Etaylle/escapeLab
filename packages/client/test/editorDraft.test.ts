@@ -326,16 +326,6 @@ describe('a module’s own fields in the file', () => {
       default: 'a',
     },
     {
-      key: 'words',
-      label: 'Wörter',
-      help: 'h.',
-      kind: 'words',
-      min: 1,
-      max: 4,
-      maxLen: 8,
-      default: ['eins'],
-    },
-    {
       key: 'wires',
       label: 'Drähte',
       help: 'h.',
@@ -353,19 +343,17 @@ describe('a module’s own fields in the file', () => {
       from: null,
       legend: true,
       mode: 'a',
-      words: ['eins'],
       wires: { min: 3, max: 6 },
     });
   });
 
-  it('writes the listed fields only: off as null or no key, words without blank lines', () => {
+  it('writes the listed fields only, and an empty one that can be off as null or no key', () => {
     const fields = {
       size: 5,
       window: null,
       from: null,
       legend: false,
       mode: 'b',
-      words: [' alpha ', '', 'beta', '  '],
       wires: { min: 4, max: 5 },
       stray: 1,
     };
@@ -374,7 +362,6 @@ describe('a module’s own fields in the file', () => {
       from: null,
       legend: false,
       mode: 'b',
-      words: ['alpha', 'beta'],
       wires: { min: 4, max: 5 },
     });
     expect(fieldsToJson(specs, { ...fields, window: 4, from: 2 })).toMatchObject({
@@ -383,11 +370,11 @@ describe('a module’s own fields in the file', () => {
     });
   });
 
-  it('copies what it reads and writes, so the draft and the file never share a list', () => {
-    const file = { wires: { min: 4, max: 6 }, words: ['eins'] };
+  it('copies what it reads and writes, so the draft and the file never share an object', () => {
+    const file = { wires: { min: 4, max: 6 } };
     const fields = fieldsFromJson(specs, file);
     expect(fields['wires']).toEqual(file.wires);
     expect(fields['wires']).not.toBe(file.wires);
-    expect(fieldsToJson(specs, fields)['words']).not.toBe(fields['words']);
+    expect(fieldsToJson(specs, fields)['wires']).not.toBe(fields['wires']);
   });
 });
