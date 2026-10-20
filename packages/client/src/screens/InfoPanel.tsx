@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ManualKind, MapView, PlayerView } from '@escapelab/core';
 import { toBring } from '../world/markers.js';
+import { Icon, type IconName } from './Icon.js';
 
 interface Props {
   view: PlayerView;
@@ -34,25 +35,25 @@ const KIND_NAMES: Record<ManualKind, string> = {
 /** What the things in the lab are for, one line each; only what this map has. */
 export function Legend({ map }: { map: MapView }) {
   const kinds = [...new Set(map.manuals.map((m) => KIND_NAMES[m.kind]))];
-  const rows: [string, string, string][] = [];
+  const rows: [IconName, string, string][] = [];
   if (kinds.length > 0) {
-    rows.push(['📖', kinds.join(' · '), 'Regeln der Stationen']);
+    rows.push(['book', kinds.join(' · '), 'Regeln der Stationen']);
   }
   if (map.edgeworkSign !== null) {
-    rows.push(['🪧', 'Schild', 'Laborkennung']);
+    rows.push(['sign', 'Schild', 'Laborkennung']);
   }
   if (map.plates.some((p) => p.freezesDrone)) {
-    rows.push(['📷', 'Kamera-Platte', 'hält die Drohne an']);
+    rows.push(['camera', 'Kamera-Platte', 'hält die Drohne an']);
   }
   if (map.plates.some((p) => !p.freezesDrone)) {
-    rows.push(['◉', 'HALTEN-Platte', 'hält eine Tür offen']);
+    rows.push(['plate', 'HALTEN-Platte', 'hält eine Tür offen']);
   }
   return (
     <dl className="legend">
-      {rows.map(([glyph, what, meaning]) => (
+      {rows.map(([icon, what, meaning]) => (
         <div key={what} className="legend-row">
           <dt>
-            <span aria-hidden="true">{glyph}</span> {what}
+            <Icon name={icon} /> {what}
           </dt>
           <dd>{meaning}</dd>
         </div>

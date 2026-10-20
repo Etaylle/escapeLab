@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Icon } from '../screens/Icon.js';
 import { play } from '../sounds.js';
 import type { PanelProps } from './index.js';
 import './button.css';
@@ -18,9 +19,9 @@ const COLOURS: Record<Colour, { word: string; css: string }> = {
 };
 
 const MISTAKES: Record<NonNullable<ButtonPuzzle['lastResult']>, string> = {
-  early: '⚠ Kurz gedrückt — falsch!',
-  held: '⚠ Gehalten — falsch!',
-  'wrong-time': '⚠ Zur falschen Zeit losgelassen!',
+  early: 'Kurz gedrückt — falsch!',
+  held: 'Gehalten — falsch!',
+  'wrong-time': 'Zur falschen Zeit losgelassen!',
 };
 
 function useNow(intervalMs: number): number {
@@ -167,7 +168,11 @@ function Console({
         </div>
       </div>
       <p className="button-status warn" role="status">
-        {puzzle.lastResult === null ? '' : MISTAKES[puzzle.lastResult]}
+        {puzzle.lastResult !== null && (
+          <>
+            <Icon name="warning" /> {MISTAKES[puzzle.lastResult]}
+          </>
+        )}
       </p>
     </div>
   );

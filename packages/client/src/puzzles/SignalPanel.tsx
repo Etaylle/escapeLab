@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { tokenLabel, type SignalToken } from '@escapelab/core';
+import { Icon } from '../screens/Icon.js';
 import { play } from '../sounds.js';
 import { consoleName } from '../world/consoles.js';
 import { DeviceLamp, type LampTone } from './Device.js';
@@ -11,8 +12,9 @@ type SignalSend = PanelProps<'signal'>['send'];
 type RowKey = NonNullable<SignalPuzzle['keys']>[number];
 type Colour = SignalToken extends `${infer C}-${string}` ? C : never;
 type Form = SignalToken extends `${string}-${infer F}` ? F : never;
+type Point = readonly [number, number];
 
-/** The four colours as the Simon keys show them; form and words tell a sign without them. */
+/** The four colours as the Simon keys show them; form and texture tell a sign without them. */
 const COLOURS: Record<Colour, string> = {
   rot: '#ef4444',
   blau: '#3b82f6',
@@ -27,12 +29,154 @@ const FORMS: Record<Form, (fill: string) => ReactNode> = {
   quadrat: (fill) => <rect x={3.5} y={3.5} width={17} height={17} rx={1.5} fill={fill} />,
 };
 
-/** The forms' names, as a key of shapes prints them under its form. */
+/** The forms' names, for a screen reader: the keys of shapes show none. */
 const FORM_NAMES: Record<Form, string> = {
   kreis: 'Kreis',
   dreieck: 'Dreieck',
   quadrat: 'Quadrat',
 };
+
+/** How a sign's colour shows without its hue: printed over the form, darker. */
+export type Texture = 'plain' | 'dots' | 'stripes' | 'ring';
+
+/**
+ * The texture each colour carries, so that nobody has to tell the colours
+ * apart: red plain, blue dotted, green striped, yellow with a ring.
+ */
+const TEXTURES: Record<Colour, Texture> = {
+  rot: 'plain',
+  blau: 'dots',
+  gruen: 'stripes',
+  gelb: 'ring',
+};
+
+/** The texture a sign carries, by its colour. */
+export function textureOf(token: SignalToken): Texture {
+  return TEXTURES[partsOf(token)[0]];
+}
+
+/** The polygons' corners, clockwise on screen; the circle has none. */
+const CORNERS: Record<Exclude<Form, 'kreis'>, readonly Point[]> = {
+  dreieck: [
+    [12, 2.5],
+    [22, 20],
+    [2, 20],
+  ],
+  quadrat: [
+    [3.5, 3.5],
+    [20.5, 3.5],
+    [20.5, 20.5],
+    [3.5, 20.5],
+  ],
+};
+
+/** How far `p` lies inside a form, in units: negative outside. */
+function depthIn(form: Form, [x, y]: Point): number {
+  if (form === 'kreis') {
+    return 9 - Math.hypot(x - 12, y - 12);
+  }
+  const corners = CORNERS[form];
+  return Math.min(
+    ...corners.map(([ax, ay], i) => {
+      const [bx, by] = corners[(i + 1) % corners.length] ?? [ax, ay];
+      return ((bx - ax) * (y - ay) - (by - ay) * (x - ax)) / Math.hypot(bx - ax, by - ay);
+    }),
+  );
+}
+
+const tenth = (n: number): number => Math.round(n * 10) / 10;
+
+/** Fine dots in rows, each row shifted half a step, that keep clear of the form's edge. */
+function dotsIn(form: Form): Point[] {
+  const step = 2.9;
+  const dots: Point[] = [];
+  for (let row = 0; row < 9; row++) {
+    for (let col = -1; col < 9; col++) {
+      const at: Point = [tenth(col * step + (row % 2) * (step / 2)), tenth(1.4 + row * step)];
+      if (depthIn(form, at) >= 1.7) {
+        dots.push(at);
+      }
+    }
+  }
+  return dots;
+}
+
+/** Stripes rising to the right, 3.4 units apart, cut off where they come near the form's edge. */
+function stripesIn(form: Form): [Point, Point][] {
+  const stripes: [Point, Point][] = [];
+  // Stripe k lies on the line x + y = 4.8 k, walked across the square in tenths.
+  for (let k = 1; k <= 9; k++) {
+    const inside = Array.from({ length: 241 }, (_, i): Point => [i / 10, tenth(4.8 * k - i / 10)])
+      .filter((at) => depthIn(form, at) >= 1);
+    const first = inside[0];
+    const last = inside.at(-1);
+    if (first !== undefined && last !== undefined && last[0] - first[0] >= 1) {
+      stripes.push([first, last]);
+    }
+  }
+  return stripes;
+}
+
+/** Where a ring sits in each form: the middle of the circle and square, the triangle's incentre. */
+const RING_AT: Record<Form, Point> = {
+  kreis: [12, 12],
+  dreieck: [12, 14.2],
+  quadrat: [12, 12],
+};
+
+const DOTS: Record<Form, Point[]> = {
+  kreis: dotsIn('kreis'),
+  dreieck: dotsIn('dreieck'),
+  quadrat: dotsIn('quadrat'),
+};
+
+const STRIPES: Record<Form, [Point, Point][]> = {
+  kreis: stripesIn('kreis'),
+  dreieck: stripesIn('dreieck'),
+  quadrat: stripesIn('quadrat'),
+};
+
+/** The texture's ink: the sign's own colour, darkened. */
+const INK = 'rgba(6, 9, 12, 0.42)';
+
+/** A sign's texture over its form, by the texture its colour carries. */
+function TextureOver({ texture, form }: { texture: Texture; form: Form }) {
+  const className = `signal-texture signal-texture--${texture}`;
+  switch (texture) {
+    case 'plain':
+      return null;
+    case 'dots':
+      return (
+        <g className={className} fill={INK}>
+          {DOTS[form].map(([x, y]) => (
+            <circle key={`${x} ${y}`} cx={x} cy={y} r={0.9} />
+          ))}
+        </g>
+      );
+    case 'stripes':
+      return (
+        <g className={className} stroke={INK} strokeWidth={1.3} strokeLinecap="round">
+          {STRIPES[form].map(([[x1, y1], [x2, y2]]) => (
+            <line key={`${x1} ${y1}`} x1={x1} y1={y1} x2={x2} y2={y2} />
+          ))}
+        </g>
+      );
+    case 'ring': {
+      const [cx, cy] = RING_AT[form];
+      return (
+        <circle
+          className={className}
+          cx={cx}
+          cy={cy}
+          r={3.4}
+          fill="none"
+          stroke={INK}
+          strokeWidth={1.7}
+        />
+      );
+    }
+  }
+}
 
 /** How long each sign of a fleeting strip shows, one after the other. */
 export const FLEETING_SIGN_MS = 1200;
@@ -85,35 +229,31 @@ function partsOf(token: SignalToken): [Colour, Form] {
 
 /**
  * A sign as both consoles show it: its form in its colour, glowing in it
- * like a lamp, and under it the words both players say for it, „rotes
- * Dreieck".
+ * like a lamp, its colour's texture printed over it — and no word: what it
+ * is, the players say. A screen reader gets the words, „rotes Dreieck".
  */
 function Sign({ token }: { token: SignalToken }) {
   const [colour, form] = partsOf(token);
   return (
-    <>
-      <svg
-        className="signal-glyph"
-        viewBox="0 0 24 24"
-        style={{ color: COLOURS[colour] }}
-        aria-hidden="true"
-      >
-        {FORMS[form](COLOURS[colour])}
-      </svg>
-      <span className="signal-word">{tokenLabel(token)}</span>
-    </>
+    <svg
+      className="signal-glyph"
+      viewBox="0 0 24 24"
+      style={{ color: COLOURS[colour] }}
+      role="img"
+      aria-label={tokenLabel(token)}
+    >
+      {FORMS[form](COLOURS[colour])}
+      <TextureOver texture={TEXTURES[colour]} form={form} />
+    </svg>
   );
 }
 
-/** A key of shapes: its form in the key's own grey, its name under it, no colour at all. */
+/** A key of shapes: its form in the key's own grey, no colour and no word. */
 function Shape({ form }: { form: Form }) {
   return (
-    <>
-      <svg className="signal-glyph" viewBox="0 0 24 24" aria-hidden="true">
-        {FORMS[form]('currentColor')}
-      </svg>
-      <span className="signal-word">{FORM_NAMES[form]}</span>
-    </>
+    <svg className="signal-glyph" viewBox="0 0 24 24" aria-hidden="true">
+      {FORMS[form]('currentColor')}
+    </svg>
   );
 }
 
@@ -153,10 +293,7 @@ function FleetingStrip({ sequence, done }: { sequence: SignalToken[]; done: numb
           {i === shown ? (
             <Sign token={token} />
           ) : (
-            <>
-              <span className="signal-glyph signal-glyph--dark" aria-hidden="true" />
-              <span className="signal-word" aria-hidden="true" />
-            </>
+            <span className="signal-glyph signal-glyph--dark" aria-hidden="true" />
           )}
           <Lamp lit={i < done} />
         </li>
@@ -232,9 +369,16 @@ interface RowKeyProps {
 
 /** One key of shapes: pressed at the receiving console, only shown to the audience. */
 function RowKeyCap({ row, form, send }: RowKeyProps) {
+  const name = `Zeile ${row}, ${FORM_NAMES[form]}`;
   if (send === null) {
     return (
-      <span className="signal-key signal-key--shape" data-row={row} data-shape={form}>
+      <span
+        className="signal-key signal-key--shape"
+        data-row={row}
+        data-shape={form}
+        role="img"
+        aria-label={name}
+      >
         <Shape form={form} />
       </span>
     );
@@ -244,7 +388,7 @@ function RowKeyCap({ row, form, send }: RowKeyProps) {
       className="signal-key signal-key--shape"
       data-row={row}
       data-shape={form}
-      aria-label={`Zeile ${row}, ${FORM_NAMES[form]}`}
+      aria-label={name}
       onClick={() => {
         play('click');
         send({ key: { row, shape: form } });
@@ -290,7 +434,7 @@ function Warning({ puzzle }: { puzzle: SignalPuzzle }) {
   }
   return (
     <p className="warn" role="status">
-      ⚠ Falsches Zeichen — Stufe von vorn.
+      <Icon name="warning" /> Falsches Zeichen — Stufe von vorn.
     </p>
   );
 }

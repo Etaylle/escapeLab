@@ -3,8 +3,10 @@
  * a run: the crew room fills it and the mission sits in a panel on the right.
  * In the room everybody stands as the game draws them, on the lab's floor in
  * front of its wall, you in the middle and a step nearer, the crew colours at
- * your feet. Under 860px the panel goes below the room and the page scrolls;
- * the row of seats scrolls sideways wherever it runs out of room.
+ * your feet. Under 860px the panel goes below the room and the page scrolls,
+ * the start sticking to the window's foot; on a phone the map and the story
+ * wait behind „mehr". The row of seats scrolls sideways wherever it runs out
+ * of room.
  */
 
 /* Unlike a run, the lobby may scroll where a phone has to. */
@@ -326,13 +328,28 @@
     0 0 20px var(--chip);
 }
 
-/* Worn by somebody else: darkened, their initial in white. */
-.chip:disabled {
+/*
+ * Worn by somebody else: the colour stays whole, so the crew can still tell
+ * who is who by it; a dark slash across it and their initial on top say it
+ * is taken. Sunk flat into the floor, it no longer stands on a shadow.
+ */
+.chip-taken:disabled {
   opacity: 1;
-  background: linear-gradient(rgba(3, 6, 10, 0.55), rgba(3, 6, 10, 0.55)), var(--chip);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-  color: #f1f5f9;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  background:
+    linear-gradient(
+      135deg,
+      transparent 0 44%,
+      rgba(4, 7, 10, 0.72) 44% 56%,
+      transparent 56%
+    ),
+    var(--chip);
+  box-shadow:
+    inset 0 3px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+  color: rgba(4, 7, 10, 0.9);
+  text-shadow:
+    0 0 3px rgba(255, 255, 255, 0.85),
+    0 0 1px rgba(255, 255, 255, 0.9);
 }
 
 .chip:focus-visible {
@@ -381,10 +398,18 @@
   border-radius: 4px;
 }
 
+/* The mission's facts in one row, each behind its icon. */
 .lobby-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
   margin: 0;
   font-size: 13px;
   color: var(--accent);
+}
+
+.lobby-facts > span {
+  white-space: nowrap;
 }
 
 .lobby-story .story {
@@ -411,6 +436,11 @@
 .lobby-story .link {
   padding: 2px 0;
   font-size: 13px;
+}
+
+/* „mehr" under a story that fits only matters on a phone, where it shows the map too. */
+.lobby-more-phone {
+  display: none;
 }
 
 .lobby-setup {
@@ -505,34 +535,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px 12px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
-}
-
-.lobby-invite {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.lobby-invite-label {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.lobby-code {
-  font-family: var(--mono);
-  font-size: 19px;
-  letter-spacing: 3px;
-  color: var(--accent);
-}
-
-.lobby-copy {
-  padding: 5px 10px;
-  font-size: 13px;
 }
 
 /* ── narrow windows: the panel below the room ──────────────────────────── */
@@ -541,6 +547,22 @@
   .lobby {
     --fig: clamp(124px, 30vw, 200px);
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /*
+   * The start stays at the window's foot while the page scrolls, over the
+   * room as long as the panel is below it, so the crew is in view with it.
+   * It reaches to the panel's edges; the fade on top lets the page run out.
+   */
+  .lobby-go {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin: auto -18px 0;
+    padding: 12px 18px 14px;
+    border-top: 1px solid var(--line);
+    background: #0e151c;
+    box-shadow: 0 -14px 20px -6px rgba(5, 8, 11, 0.9);
   }
 
   .seats {
@@ -568,8 +590,8 @@
   }
 }
 
-/* Eight keys of 44px do not fit a phone's row: two rows of four. */
 @media (max-width: 480px) {
+  /* Eight keys of 44px do not fit a phone's row: two rows of four. */
   .palette-chips {
     display: grid;
     grid-template-columns: repeat(4, 44px);
@@ -579,5 +601,19 @@
   .chip {
     width: 44px;
     height: 44px;
+  }
+
+  /* The map and the story wait behind „mehr", so the panel starts short. */
+  .lobby-panel:not(.lobby-panel-more) .lobby-map,
+  .lobby-panel:not(.lobby-panel-more) .lobby-story .story {
+    display: none;
+  }
+
+  .lobby-more-phone {
+    display: inline-block;
+  }
+
+  .lobby-story {
+    margin-top: -8px;
   }
 }

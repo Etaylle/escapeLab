@@ -1,3 +1,4 @@
+import { Icon } from '../screens/Icon.js';
 import { play } from '../sounds.js';
 import type { PanelProps, ReaderProps } from './index.js';
 
@@ -82,7 +83,11 @@ export function MazePanel({ puzzle, send }: PanelProps<'maze'>) {
         <span className="maze-lcd">{goalName}</span>
       </p>
       <MazeGrid puzzle={puzzle} />
-      {puzzle.lastResult === 'wall' && <p className="warn">⚠ Gegen die Wand gelaufen!</p>}
+      {puzzle.lastResult === 'wall' && (
+        <p className="warn">
+          <Icon name="warning" /> Gegen die Wand gelaufen!
+        </p>
+      )}
       <div className="maze-pad">
         {(
           [

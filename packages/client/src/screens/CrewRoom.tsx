@@ -2,6 +2,7 @@ import { useId, type CSSProperties } from 'react';
 import type { ClientMessage, PlayerView } from '@escapelab/core';
 import { makeFloorTile, makeWallTile } from '../world/art.js';
 import { CrewFigure, type Facing } from './CrewFigure.js';
+import { Icon, type IconName } from './Icon.js';
 
 type Member = PlayerView['players'][number];
 
@@ -39,20 +40,22 @@ export function lineup(view: Pick<PlayerView, 'players' | 'you' | 'crewSize'>): 
 
 interface Badge {
   text: string;
+  /** the icon before the words, if any */
+  icon: IconName | null;
   tone: 'ready' | 'wait' | 'host' | 'gone';
 }
 
 /** What the badge over a crew member says: gone, host, ready or not yet. */
 function badgeOf(member: Member): Badge {
   if (!member.connected) {
-    return { text: 'getrennt', tone: 'gone' };
+    return { text: 'getrennt', icon: null, tone: 'gone' };
   }
   if (member.isHost) {
-    return { text: '★ Host', tone: 'host' };
+    return { text: 'Host', icon: 'star', tone: 'host' };
   }
   return member.ready
-    ? { text: '✓ bereit', tone: 'ready' }
-    : { text: 'noch nicht bereit', tone: 'wait' };
+    ? { text: 'bereit', icon: 'check', tone: 'ready' }
+    : { text: 'noch nicht bereit', icon: null, tone: 'wait' };
 }
 
 interface SeatProps {
@@ -68,7 +71,14 @@ function CrewSeat({ member, facing, isYou, phase }: SeatProps) {
   return (
     <li className={marks}>
       <span className="seat-name">{member.name}</span>
-      <span className={`seat-badge seat-badge-${badge.tone}`}>{badge.text}</span>
+      <span className={`seat-badge seat-badge-${badge.tone}`}>
+        {badge.icon !== null && (
+          <>
+            <Icon name={badge.icon} />{' '}
+          </>
+        )}
+        {badge.text}
+      </span>
       <CrewFigure
         color={member.color}
         facing={facing}
@@ -139,15 +149,23 @@ function chipLabel({ color, owner, mine }: Omit<ChipProps, 'pick'>): string {
   return owner === null ? name : `${name} — trägt ${owner}`;
 }
 
+/** A chip's look: yours, somebody else's, or free to pick. */
+function chipClass(owner: string | null, mine: boolean): string {
+  if (mine) {
+    return 'chip chip-mine';
+  }
+  return owner === null ? 'chip' : 'chip chip-taken';
+}
+
 /**
- * One crew colour as a round key: yours ticked, one that somebody else wears
- * locked under their initial.
+ * One crew colour as a round key in its full hue: yours ticked, one that
+ * somebody else wears struck through under their initial (lobby.css).
  */
 function ColorChip({ color, owner, mine, pick }: ChipProps) {
   const label = chipLabel({ color, owner, mine });
   return (
     <button
-      className={mine ? 'chip chip-mine' : 'chip'}
+      className={chipClass(owner, mine)}
       style={{ '--chip': color } as CSSProperties}
       disabled={owner !== null}
       aria-pressed={mine}
@@ -155,7 +173,7 @@ function ColorChip({ color, owner, mine, pick }: ChipProps) {
       title={label}
       onClick={mine ? undefined : pick}
     >
-      {owner !== null ? initialOf(owner) : mine ? '✓' : ''}
+      {owner !== null ? initialOf(owner) : mine && <Icon name="check" />}
     </button>
   );
 }

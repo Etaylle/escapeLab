@@ -694,9 +694,11 @@ describe('the start of a run', () => {
 
   it('offers the notepad in the HUD and keeps it closed until asked for', () => {
     const html = game(justStarted());
-    expect(html).toContain(
-      '<button class="hud-info hud-notes" aria-pressed="false">✎ Notizen [N]</button>',
+    const notes = new RegExp(
+      '<button class="hud-info hud-notes" aria-pressed="false">' +
+        '<svg class="icon icon-pencil"[^>]*>.*?</svg> Notizen \\[N\\]</button>',
     );
+    expect(html).toMatch(notes);
     expect(html).not.toContain('class="notepad"');
   });
 });

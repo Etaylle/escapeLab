@@ -84,11 +84,11 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
 /*
  * What is left of the window. A sheet is 30 × 42 em, as tall as the room
  * allows and never taller than print: --sheet-h. Beside the open pages the
- * stack of sheets keeps 0.6 of its em and the thumb tabs 1.7, so a spread
- * spans 62.3 em and a single page 32.3; that decides how much width it takes.
+ * stack of sheets keeps 0.6 of its em and the thumb tabs 2.2, so a spread
+ * spans 62.8 em and a single page 32.8; that decides how much width it takes.
  */
 .book-pages {
-  --sheet-h: min(100cqh - 16px, 130cqw, 800px);
+  --sheet-h: min(100cqh - 16px, 128cqw, 800px);
   flex: 1;
   min-height: 0;
   container-type: size;
@@ -99,7 +99,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
 }
 
 .book-spread .book-pages {
-  --sheet-h: min(100cqh - 16px, 67.4cqw, 800px);
+  --sheet-h: min(100cqh - 16px, 66.8cqw, 800px);
 }
 
 /* The open pages side by side, in em of the sheet; the leaf turns in their perspective. */
@@ -107,7 +107,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   position: relative;
   z-index: 0;
   display: flex;
-  margin: 0 1.7em 0 0.6em;
+  margin: 0 2.2em 0 0.6em;
   font-size: calc(var(--sheet-h) / 42);
   perspective: calc(var(--sheet-h) * 4);
 }
@@ -569,14 +569,17 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
 }
 
 /*
- * 1.5 em of a tab stand out past the page and 0.7 em lie under it, the label
- * at 0.7 em; pulled out, it stands 1.68 em out, inside the 1.7 em kept for it.
+ * In em of the sheet: 2 em of a tab stand out past the page and 0.7 em lie
+ * under it; the stack of sheets and the board cover its first 0.54 em out,
+ * so the label, at 0.7 em, is centred on the 1.46 em beyond them. Pulled
+ * out, a tab stands 2.17 em out, inside the 2.2 em kept for it. The tab's
+ * own em is 0.7 of the sheet's.
  */
 .book-tab {
-  width: 3.15em;
+  width: 3.85em;
   height: 3.85em;
   margin-left: -1em;
-  padding: 0 0 0 0.9em;
+  padding: 0 0 0 1.77em;
   border: none;
   border-radius: 0 0.7em 0.7em 0;
   background: linear-gradient(90deg, var(--tab-edge), var(--tab) 45%);
@@ -762,14 +765,14 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
 /*
  * The sheet as tall as the board allows: the board keeps 3.4 em above it for
  * the clip and 1 em below (46.4 em in all), 0.9 em to its left; the tabs keep
- * 1.7 em to its right (32.6 em across).
+ * 2.2 em to its right (33.1 em across).
  */
 .book-clip .book-pages {
-  --sheet-h: min((100cqh - 16px) * 0.905, 128cqw, 800px);
+  --sheet-h: min((100cqh - 16px) * 0.905, 126cqw, 800px);
 }
 
 .book-clip .book-leaves {
-  margin: 3.4em 1.7em 1em 0.9em;
+  margin: 3.4em 2.2em 1em 0.9em;
 }
 
 /* The board: pressed wood with rounded corners, its shadow on the desk. */

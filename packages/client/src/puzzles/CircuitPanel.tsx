@@ -1,8 +1,8 @@
+import { Icon } from '../screens/Icon.js';
 import { play } from '../sounds.js';
 import { consoleName } from '../world/consoles.js';
 import { DeviceLamp } from './Device.js';
 import type { PanelProps } from './index.js';
-import './wiring.css';
 
 type CircuitPuzzle = PanelProps<'circuit'>['puzzle'];
 type Wire = NonNullable<CircuitPuzzle['wires']>[number];
@@ -11,13 +11,13 @@ type Send = PanelProps<'circuit'>['send'];
 /** The meter's scale runs from 0 to this many volts over a half circle. */
 export const SCALE_MAX = 250;
 
-/** Stroke colour per wire, as the wiring box draws it; the name stands beside it as well. */
+/** A cable's colour on the board, as styles/devices.css paints it; no word names it. */
 const TONE: Record<Wire['colour'], string> = {
-  rot: 'wiring-red',
-  blau: 'wiring-blue',
-  gelb: 'wiring-yellow',
-  weiß: 'wiring-white',
-  schwarz: 'wiring-black',
+  rot: 'cable--red',
+  blau: 'cable--blue',
+  gelb: 'cable--yellow',
+  weiß: 'cable--white',
+  schwarz: 'cable--black',
 };
 
 /** A measurement in words; a dash where none was taken. */
@@ -25,17 +25,63 @@ function volts(reading: number | null | undefined): string {
   return reading === null || reading === undefined ? '—' : `${reading} V`;
 }
 
-/** A wire's row in the box: the wiring box's look, drooping once cut. */
+/** A wire's row on the board, in its cable's colour, hanging loose once cut. */
 const wireClass = (wire: Wire): string =>
-  `circuit-wire wiring-wire ${TONE[wire.colour]}${wire.cut ? ' wiring-cut' : ''}`;
+  `circuit-wire ${TONE[wire.colour]}${wire.cut ? ' circuit-wire--cut' : ''}`;
 
-/** The wire between its two posts. */
-function Line() {
+/*
+ * A cable's run in its row's 100 × 44 units, stretched to the row's width
+ * while every stroke keeps its own: whole, it sags between the terminals;
+ * cut, each half hangs from its terminal, the copper bare at the cut.
+ */
+const WHOLE = ['M0 12Q50 36 100 12'];
+const HALVES = ['M0 12Q22 26 40 38', 'M100 12Q78 26 60 38'];
+const BARE = ['M35 34.6 40 38', 'M65 34.6 60 38'];
+const stroke = { vectorEffect: 'non-scaling-stroke' } as const;
+
+/**
+ * The cable between its terminals: its shadow on the board, the insulation
+ * with a sheen along it and, on a black one, a grey tracer stripe so that it
+ * shows on anything dark.
+ */
+function Cable({ wire }: { wire: Wire }) {
+  const runs = wire.cut ? HALVES : WHOLE;
   return (
-    <span className="wiring-line" aria-hidden="true">
-      <span className="wiring-half" />
-      <span className="wiring-half" />
-    </span>
+    <svg className="cable" viewBox="0 0 100 44" preserveAspectRatio="none" aria-hidden="true">
+      {runs.map((d) => (
+        <g key={d}>
+          <path className="cable-shadow" d={d} transform="translate(0 3)" {...stroke} />
+          <path className="cable-edge" d={d} {...stroke} />
+          <path className="cable-core" d={d} {...stroke} />
+          {wire.colour === 'schwarz' && <path className="cable-tracer" d={d} {...stroke} />}
+          <path className="cable-sheen" d={d} transform="translate(0 -1.5)" {...stroke} />
+        </g>
+      ))}
+      {wire.cut && BARE.map((d) => <path key={d} className="cable-bare" d={d} {...stroke} />)}
+    </svg>
+  );
+}
+
+/**
+ * A wire's row: its number printed on the board, a terminal either side and
+ * the cable between them; with `cutter`, the cutter that shows over the
+ * cable where a tap or a click goes in.
+ */
+function WireRun({ wire, number, cutter }: { wire: Wire; number: number; cutter: boolean }) {
+  return (
+    <>
+      <span className="circuit-number">{number}</span>
+      <span className="circuit-terminal" />
+      <span className="circuit-run">
+        <Cable wire={wire} />
+        {cutter && (
+          <span className="circuit-cutter">
+            <Icon name="cut" />
+          </span>
+        )}
+      </span>
+      <span className="circuit-terminal" />
+    </>
   );
 }
 
@@ -98,10 +144,13 @@ function Segments({ text, width }: { text: string; width: number }) {
   );
 }
 
-/** The box at console a: a button per wire behind the glass door, numbered from the top. */
+/**
+ * The box at console a: the board behind the glass door, a button per wire
+ * numbered from the top. Its colour is the cable's; a screen reader hears it.
+ */
 function Box({ wires, send }: { wires: Wire[]; send: Send }) {
   return (
-    <ol className="wiring-box" aria-label="Kabel, von oben gezählt">
+    <ol className="circuit-board" aria-label="Kabel, von oben gezählt">
       {wires.map((wire, i) => (
         <li key={i}>
           <button
@@ -114,9 +163,7 @@ function Box({ wires, send }: { wires: Wire[]; send: Send }) {
               send({ cut: i });
             }}
           >
-            <span className="wiring-pos">{i + 1}</span>
-            <Line />
-            <span className="wiring-name">{wire.colour}</span>
+            <WireRun wire={wire} number={i + 1} cutter={!wire.cut} />
           </button>
         </li>
       ))}
@@ -135,17 +182,23 @@ function WatchedBox({
   dead: boolean[];
 }) {
   return (
-    <ol className="wiring-box" aria-label="Kabel, von oben gezählt">
-      {wires.map((wire, i) => (
-        <li key={i}>
-          <span className={`${wireClass(wire)} circuit-wire--watched`} data-index={i}>
-            <span className="wiring-pos">{i + 1}</span>
-            <Line />
-            <span className="wiring-name">{wire.colour}</span>
-            <span className="circuit-volts">{dead[i] === true ? 'tot' : volts(voltages[i])}</span>
-          </span>
-        </li>
-      ))}
+    <ol className="circuit-board" aria-label="Kabel, von oben gezählt">
+      {wires.map((wire, i) => {
+        const now = dead[i] === true ? 'tot' : volts(voltages[i]);
+        return (
+          <li key={i}>
+            <span
+              className={`${wireClass(wire)} circuit-wire--watched`}
+              data-index={i}
+              role="img"
+              aria-label={`Kabel ${i + 1}, ${wire.colour}${wire.cut ? ', getrennt' : ''}: ${now}`}
+            >
+              <WireRun wire={wire} number={i + 1} cutter={false} />
+              <span className="circuit-volts">{now}</span>
+            </span>
+          </li>
+        );
+      })}
     </ol>
   );
 }

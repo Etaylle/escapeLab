@@ -1,24 +1,27 @@
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   generateEdgework,
   moduleFor,
   puzzleDefSchema,
   tokenLabel,
+  TOKENS,
   type ConsoleId,
   type PuzzleView,
 } from '@escapelab/core';
 import { needleAngle, SCALE_MAX } from '../src/puzzles/CircuitPanel.js';
-import { deviceCoach, firstSight } from '../src/puzzles/coach.js';
+import { deviceCoach, firstSight, pointerNow, type Pointer } from '../src/puzzles/coach.js';
 import { partnerLed } from '../src/puzzles/Device.js';
 import { PANELS } from '../src/puzzles/index.js';
 import {
   FLEETING_PAUSE_MS,
   FLEETING_SIGN_MS,
   fleetingAt,
+  textureOf,
 } from '../src/puzzles/SignalPanel.js';
 import { PuzzlePanel, ReaderPanel } from '../src/screens/PuzzlePanel.js';
+import { iconsAsWords, PICTOGRAPH } from './fixtures.js';
 
 /** A small deterministic generator, enough to set an instance up. */
 function lcg(seed: number): () => number {
@@ -227,25 +230,61 @@ describe('coach marks', () => {
     seen('signal', true, {}, 'b'),
   ];
 
-  it('give every device one line of its own', () => {
-    const marks = devices().map(deviceCoach);
+  it.each(['touch', 'mouse'] as const)('give every device a line of its own, by %s', (pointer) => {
+    const marks = devices().map((view) => deviceCoach(view, pointer));
     for (const mark of marks) {
       expect(mark?.text).toMatch(/^[^\n]{12,64}\.$/);
     }
     expect(new Set(marks.map((mark) => mark?.id)).size).toBe(marks.length);
     expect(new Set(marks.map((mark) => mark?.text)).size).toBe(marks.length);
-    expect(deviceCoach(seen('circuit'))?.text).toBe('Antippen trennt das Kabel sofort.');
-    expect(deviceCoach(seen('circuit', true, {}, 'b'))?.text).toBe('Nummer wählen, Wert ablesen.');
-    expect(deviceCoach(seen('signal', true, {}, 'b'))?.text).toBe(
+    expect(deviceCoach(seen('circuit', true, {}, 'b'), pointer)?.text).toBe(
+      'Nummer wählen, Wert ablesen.',
+    );
+    expect(deviceCoach(seen('signal', true, {}, 'b'), pointer)?.text).toBe(
       'Tasten in der angesagten Folge drücken.',
     );
   });
 
+  it('say tap on a touch screen and click with a mouse, the same mark either way', () => {
+    const lines = (pointer: Pointer) =>
+      ['circuit', 'wiring', 'button'].map((type) => deviceCoach(seen(type), pointer));
+    expect(lines('touch').map((mark) => mark?.text)).toEqual([
+      'Antippen trennt das Kabel sofort.',
+      'Ein Tipp auf ein Kabel trennt es sofort.',
+      'Kurz tippen drückt, länger halten hält den Knopf.',
+    ]);
+    expect(lines('mouse').map((mark) => mark?.text)).toEqual([
+      'Anklicken trennt das Kabel sofort.',
+      'Ein Klick auf ein Kabel trennt es sofort.',
+      'Kurz klicken drückt, länger halten hält den Knopf.',
+    ]);
+    // Whatever works it, a device is one device: its line shows once.
+    expect(lines('mouse').map((mark) => mark?.id)).toEqual(lines('touch').map((mark) => mark?.id));
+    for (const view of devices()) {
+      expect(deviceCoach(view, 'mouse')?.text).not.toMatch(/tipp|antipp/i);
+    }
+  });
+
+  describe('without being told the pointer', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('ask the window, as the stylesheets do, and take a mouse where there is none', () => {
+      expect(pointerNow()).toBe('mouse');
+      expect(deviceCoach(seen('circuit'))?.text).toBe('Anklicken trennt das Kabel sofort.');
+      const coarse = (query: string) => ({ matches: query === '(pointer: coarse)' });
+      vi.stubGlobal('window', { matchMedia: coarse });
+      expect(pointerNow()).toBe('touch');
+      expect(deviceCoach(seen('circuit'))?.text).toBe('Antippen trennt das Kabel sofort.');
+    });
+  });
+
   it('fire once per device type in a session, and never again after', () => {
     const shown = new Set<string>();
-    /** Opens a station's panel: the line it gets, if any. */
+    /** Opens a station's panel on a touch screen: the line it gets, if any. */
     const open = (view: PuzzleView): string | null => {
-      const mark = firstSight(deviceCoach(view), shown);
+      const mark = firstSight(deviceCoach(view, 'touch'), shown);
       if (mark !== null) {
         shown.add(mark.id);
       }
@@ -361,9 +400,14 @@ describe('the signal chain', () => {
     ...change,
   });
 
-  /** What the panel prints under each sign, in the order it shows them. */
-  const words = (html: string): string[] =>
-    [...html.matchAll(/<span class="signal-word">([^<]*)<\/span>/g)].map((m) => m[1] ?? '');
+  /** What each sign is, as its glyph tells a screen reader, in the order the panel shows them. */
+  const signs = (html: string): string[] =>
+    [...html.matchAll(/<svg class="signal-glyph"[^>]*aria-label="([^"]*)"/g)].map(
+      (m) => m[1] ?? '',
+    );
+
+  /** A sign or a key of shapes said in words: a colour, or a form. */
+  const SAID = /(?<!\p{L})(rot|blau|grün|gruen|gelb)|Kreis|Dreieck|Quadrat/iu;
 
   const lit = (html: string): number => html.match(/signal-lamp--lit/g)?.length ?? 0;
 
@@ -396,20 +440,33 @@ describe('the signal chain', () => {
   const rowNumbers = (html: string): string[] =>
     [...html.matchAll(/<span class="signal-row-number">(\d)<\/span>/g)].map((m) => m[1] ?? '');
 
-  /** The names under the keys of shapes, row by row. */
-  const FORMS_BY_ROW = Array.from({ length: 4 }, () => ['Kreis', 'Dreieck', 'Quadrat']).flat();
+  /** The keys of shapes as a screen reader names them, row by row. */
+  function shapeNames(html: string): string[] {
+    const key = /<(?:button|span) class="signal-key signal-key--shape"[^>]*aria-label="([^"]*)"/g;
+    return [...html.matchAll(key)].map((m) => m[1] ?? '');
+  }
+
+  /** The names of the keys of shapes in their rows, as the view deals them. */
+  const named = (keys: SignalSeen['keys']): string[] =>
+    (keys ?? []).map(({ row, shape }) => {
+      const form = `${shape.charAt(0).toUpperCase()}${shape.slice(1)}`;
+      return `Zeile ${row}, ${form}`;
+    });
 
   /** A colour anywhere: drawn, or named. */
   const COLOURED = /fill="#|\b(rot|blau|grün|gruen|gelb)/i;
 
-  it('shows the sending console the sequence in words, a lamp under each sign, no key', () => {
+  it('shows the sending console the sequence as signs with no word, a lamp under each', () => {
     const sending = at('a');
     const sequence = sending.sequence ?? [];
     expect(sequence).toHaveLength(4);
     const html = panel(sending);
     expect(stageOf(html)).toBe('Stufe 1 von 4');
     expect(litLegends(html)).toEqual(['SENDEN']);
-    expect(words(html)).toEqual(sequence.map(tokenLabel));
+    // What each sign is, a screen reader hears; on the device it is form and colour only.
+    expect(signs(html)).toEqual(sequence.map(tokenLabel));
+    expect(textOf(html)).not.toMatch(SAID);
+    expect(html).not.toContain('signal-word');
     expect(html.match(/class="signal-lamp/g)).toHaveLength(4);
     expect(lit(html)).toBe(0);
     expect(html).not.toContain('<button');
@@ -434,7 +491,8 @@ describe('the signal chain', () => {
       'signal-sign',
       'signal-sign',
     ]);
-    expect(words(html)).toEqual([tokenLabel(first ?? 'rot-kreis')]);
+    expect(signs(html)).toEqual([tokenLabel(first ?? 'rot-kreis')]);
+    expect(textOf(html)).not.toMatch(SAID);
     expect(html.match(/signal-glyph--dark/g)).toHaveLength(3);
     expect(html.match(/class="signal-lamp/g)).toHaveLength(4);
     expect(lit(html)).toBe(1);
@@ -445,18 +503,19 @@ describe('the signal chain', () => {
     const sending = signalAt('a', { fleetingFrom: 2 });
     expect(sending.fleeting).toBe(false);
     const html = panel(sending);
-    expect(words(html)).toEqual((sending.sequence ?? []).map(tokenLabel));
+    expect(signs(html)).toEqual((sending.sequence ?? []).map(tokenLabel));
     expect(html).not.toContain('signal-strip--fleeting');
   });
 
-  it('gives the receiving console its twelve signs as keys, and no sequence', () => {
+  it('gives the receiving console its twelve signs as keys with no word, and no sequence', () => {
     const receiving = at('b');
     const html = panel(receiving);
     expect(stageOf(html)).toBe('Stufe 1 von 4');
     expect(litLegends(html)).toEqual(['EINGABE']);
     const key = /<button class="signal-key" data-token="([a-z]+-[a-z]+)">/g;
     expect([...html.matchAll(key)].map((m) => m[1])).toEqual(receiving.grid);
-    expect(words(html)).toEqual((receiving.grid ?? []).map(tokenLabel));
+    expect(signs(html)).toEqual((receiving.grid ?? []).map(tokenLabel));
+    expect(textOf(html)).not.toMatch(SAID);
     expect(html).not.toContain('signal-strip');
     expect(html).not.toMatch(/signal-key--shape|signal-row-number|Legende/);
   });
@@ -469,7 +528,11 @@ describe('the signal chain', () => {
     expect(rowKeys(html, 'button')).toEqual(receiving.keys);
     expect(rowKeys(html, 'button')).toHaveLength(12);
     expect(rowNumbers(html)).toEqual(['1', '2', '3', '4']);
-    expect(words(html)).toEqual(FORMS_BY_ROW);
+    // Forms only: their names go to a screen reader, none stands on a key.
+    expect(shapeNames(html)).toEqual(named(receiving.keys));
+    expect(textOf(html)).not.toMatch(SAID);
+    expect(signs(html)).toEqual([]);
+    expect(html).not.toContain('signal-texture');
     expect(html.match(/fill="currentColor"/g)).toHaveLength(12);
     expect(html).not.toMatch(COLOURED);
     expect(html).not.toContain('data-token');
@@ -531,17 +594,80 @@ describe('the signal chain', () => {
   });
 
   it('says a wrong sign starts the stage again, and shakes the keys', () => {
-    const message = '⚠ Falsches Zeichen — Stufe von vorn.';
-    const wrong = panel(at('b', { lastResult: 'wrong' }));
-    expect(wrong).toContain(`<p class="warn" role="status">${message}</p>`);
+    const message =
+      '<p class="warn" role="status">[warning] Falsches Zeichen — Stufe von vorn.</p>';
+    const wrong = iconsAsWords(panel(at('b', { lastResult: 'wrong' })));
+    expect(wrong).toContain(message);
     expect(wrong).toContain('class="signal-grid signal-grid--wrong"');
-    expect(panel(at('a', { lastResult: 'wrong' }))).toContain(message);
+    expect(iconsAsWords(panel(at('a', { lastResult: 'wrong' })))).toContain(message);
     const right = panel(at('b'));
     expect(right).not.toContain('Falsches Zeichen');
     expect(right).not.toContain('signal-grid--wrong');
-    const rows = panel({ ...signalAt('b', { legend: true }), lastResult: 'wrong' });
-    expect(rows).toContain(`<p class="warn" role="status">${message}</p>`);
+    const rows = iconsAsWords(panel({ ...signalAt('b', { legend: true }), lastResult: 'wrong' }));
+    expect(rows).toContain(message);
     expect(rows).toContain('class="signal-grid signal-grid--rows signal-grid--wrong"');
+  });
+
+  /** The texture over each sign drawn in `html`, by the sign. */
+  function texturesIn(html: string): Map<string, string> {
+    const glyphs = /<svg class="signal-glyph"[^>]*aria-label="([^"]*)">(.*?)<\/svg>/g;
+    return new Map(
+      [...html.matchAll(glyphs)].map((m) => [
+        m[1] ?? '',
+        /signal-texture--([a-z]+)/.exec(m[2] ?? '')?.[1] ?? 'plain',
+      ]),
+    );
+  }
+
+  it('prints a texture over every colour but red, so that no colour has to be told by hue', () => {
+    const byColour = (colour: string): Set<string> =>
+      new Set(TOKENS.filter((token) => token.startsWith(`${colour}-`)).map(textureOf));
+    expect(byColour('rot')).toEqual(new Set(['plain']));
+    expect(byColour('blau')).toEqual(new Set(['dots']));
+    expect(byColour('gruen')).toEqual(new Set(['stripes']));
+    expect(byColour('gelb')).toEqual(new Set(['ring']));
+    // Both consoles print the same: the keys carry their sign's texture, red none.
+    const receiving = at('b');
+    const drawn = texturesIn(panel(receiving));
+    expect(drawn.size).toBe(12);
+    for (const token of receiving.grid ?? []) {
+      expect(drawn.get(tokenLabel(token))).toBe(textureOf(token));
+    }
+    const sending = at('a');
+    const strip = texturesIn(panel(sending));
+    for (const token of sending.sequence ?? []) {
+      expect(strip.get(tokenLabel(token))).toBe(textureOf(token));
+    }
+  });
+
+  /** The dots and the ends of the stripes and the ring's centre over a sign, in its units. */
+  function marksOver(html: string, label: string): [number, number][] {
+    const glyph = new RegExp(`aria-label="${label}">(.*?)</svg>`).exec(html)?.[1] ?? '';
+    const texture = glyph.slice(glyph.indexOf('signal-texture'));
+    const points = [
+      ...texture.matchAll(/c[xy]="([\d.]+)" c[xy]="([\d.]+)"/g),
+      ...texture.matchAll(/x[12]="([\d.]+)" y[12]="([\d.]+)"/g),
+    ];
+    return points.map((m): [number, number] => [Number(m[1]), Number(m[2])]);
+  }
+
+  it('keeps every texture mark inside its form, clear of the edge', () => {
+    const html = panel(at('b'));
+    // A unit in from the edge at least, give or take the tenth the marks are rounded to.
+    const inside: Record<string, (x: number, y: number) => boolean> = {
+      kreis: (x, y) => Math.hypot(x - 12, y - 12) <= 8.1,
+      quadrat: (x, y) => Math.min(x - 3.5, 20.5 - x, y - 3.5, 20.5 - y) >= 0.9,
+      // Above the base, and between the legs, which run 10 units out over 17.5 down.
+      dreieck: (x, y) => y <= 19.1 && Math.abs(x - 12) <= ((y - 2.5) / 17.5) * 10 - 0.9,
+    };
+    for (const token of TOKENS.filter((t) => textureOf(t) !== 'plain')) {
+      const form = token.split('-')[1] ?? '';
+      const marks = marksOver(html, tokenLabel(token));
+      expect(marks.length, token).toBeGreaterThan(0);
+      for (const [x, y] of marks) {
+        expect(inside[form]?.(x, y), `${token} at ${x},${y}`).toBe(true);
+      }
+    }
   });
 
   it('tells a console nobody stands at that it is not connected', () => {
@@ -561,7 +687,8 @@ describe('the signal chain', () => {
     expect(names.map((m) => m[1])).toEqual(['Pult A', 'Pult B']);
     const key = /<span class="signal-key" data-token="([a-z]+-[a-z]+)">/g;
     expect([...html.matchAll(key)].map((m) => m[1])).toEqual([...grids.a, ...grids.b]);
-    expect(words(html)).toEqual([...sequence, ...grids.a, ...grids.b].map(tokenLabel));
+    expect(signs(html)).toEqual([...sequence, ...grids.a, ...grids.b].map(tokenLabel));
+    expect(textOf(html)).not.toMatch(SAID);
     expect(lit(html)).toBe(1);
     expect(html).not.toContain('<button');
   });
@@ -579,7 +706,9 @@ describe('the signal chain', () => {
     expect(names.map((m) => m[1])).toEqual(['Pult A und Pult B']);
     expect(rowKeys(html, 'span')).toEqual(watched.keys);
     expect(rowNumbers(html)).toEqual(['1', '2', '3', '4']);
-    expect(words(html)).toEqual([...sequence.map(tokenLabel), ...FORMS_BY_ROW]);
+    expect(signs(html)).toEqual(sequence.map(tokenLabel));
+    expect(shapeNames(html)).toEqual(named(watched.keys));
+    expect(textOf(html)).not.toMatch(SAID);
     expect(html).not.toContain('<button');
   });
 });
@@ -688,17 +817,32 @@ describe('the fuse box and the meter', () => {
   const needle = (html: string): number =>
     Number(/<g class="gauge-needle" style="transform:rotate\((-?[\d.]+)deg\)">/.exec(html)?.[1]);
 
+  /** The cable's look by the wire's colour, as styles/devices.css paints it. */
+  const CABLE: Record<string, string> = {
+    rot: 'red',
+    blau: 'blue',
+    gelb: 'yellow',
+    weiß: 'white',
+    schwarz: 'black',
+  };
+
+  /** Every wire's row on the board, a button at the box: its markup, top to bottom. */
+  const rows = (html: string): string[] =>
+    html.match(/<button class="circuit-wire [^"]*" data-index="\d".*?<\/button>/g) ?? [];
+
+  /** How often `part` of a cable is drawn in `row`: its core per run, its tracer, its bare ends. */
+  const drawn = (row: string, part: string): number =>
+    row.match(new RegExp(`<path class="cable-${part}"`, 'g'))?.length ?? 0;
+
   it('gives the box a button per wire behind its door, numbered from the top, and no voltage', () => {
     const box = at('a');
     const wires = box.wires ?? [];
     expect(wires).toHaveLength(5);
     const html = panel(box);
-    expect(html).toContain('<div class="circuit-door"><ol class="wiring-box"');
+    expect(html).toContain('<div class="circuit-door"><ol class="circuit-board"');
     const buttons = [...html.matchAll(/<button class="circuit-wire [^"]*" data-index="(\d)"/g)];
     expect(buttons.map((m) => Number(m[1]))).toEqual([0, 1, 2, 3, 4]);
-    const names = [...html.matchAll(/<span class="wiring-name">([^<]*)<\/span>/g)];
-    expect(names.map((m) => m[1])).toEqual(wires.map((wire) => wire.colour));
-    expect(html.match(/<span class="wiring-pos">\d<\/span>/g)).toHaveLength(5);
+    expect(html.match(/<span class="circuit-number">\d<\/span>/g)).toHaveLength(5);
     // The counter of live wires: a dead one among the five.
     expect(displays(html)).toEqual(['4']);
     expect(html).toContain('<span class="device-sr">Noch unter Spannung: 4</span>');
@@ -706,13 +850,45 @@ describe('the fuse box and the meter', () => {
     expect(html).not.toMatch(/circuit-(probe|readout|reading|gauge)/);
   });
 
+  it('draws every wire as a cable sagging between its terminals, its colour in no word', () => {
+    const box = at('a');
+    const wires = box.wires ?? [];
+    const html = panel(box);
+    // The colour is the cable's; the words are only for a screen reader.
+    expect(textOf(html)).not.toMatch(COLOUR_NAMED);
+    const looks = [...html.matchAll(/<button class="circuit-wire cable--([a-z]+)"/g)];
+    expect(looks.map((m) => m[1])).toEqual(wires.map((wire) => CABLE[wire.colour]));
+    const label = /<button class="circuit-wire [^"]*"[^>]*aria-label="([^"]*)"/g;
+    expect([...html.matchAll(label)].map((m) => m[1])).toEqual(
+      wires.map((wire, i) => `Kabel ${i + 1}, ${wire.colour}`),
+    );
+    rows(html).forEach((row, i) => {
+      expect(row.match(/<span class="circuit-terminal"><\/span>/g)).toHaveLength(2);
+      expect(row).toContain('<svg class="cable" viewBox="0 0 100 44" preserveAspectRatio="none"');
+      // One whole run that sags, a cutter over it; only the black one carries a tracer.
+      expect(drawn(row, 'core')).toBe(1);
+      expect(row).toContain('d="M0 12Q50 36 100 12"');
+      expect(row).toContain('<span class="circuit-cutter"><svg class="icon icon-cut"');
+      expect(drawn(row, 'tracer')).toBe(wires[i]?.colour === 'schwarz' ? 1 : 0);
+      expect(drawn(row, 'bare')).toBe(0);
+    });
+  });
+
   it('shows a cut wire cut, and lets nobody cut it again', () => {
     const box = at('a');
     const wires = (box.wires ?? []).map((wire, i) => ({ ...wire, cut: i === 2 }));
     const html = panel({ ...box, wires, liveLeft: 3 });
-    const cut = /<button class="circuit-wire [^"]*wiring-cut" data-index="(\d)" disabled=""/g;
+    const cut = /<button class="circuit-wire [^"]*--cut" data-index="(\d)" disabled=""/g;
     expect([...html.matchAll(cut)].map((m) => m[1])).toEqual(['2']);
     expect(displays(html)).toEqual(['3']);
+    // Cut, the cable hangs in two halves from its terminals, copper bare: a gap, no cutter.
+    const severed = rows(html)[2] ?? '';
+    expect(drawn(severed, 'core')).toBe(2);
+    expect(drawn(severed, 'bare')).toBe(2);
+    expect(severed).not.toContain('M0 12Q50 36 100 12');
+    expect(severed).not.toContain('circuit-cutter');
+    expect(severed).toContain('aria-label="Kabel 3, ');
+    expect(severed).toContain(', getrennt"');
   });
 
   it('lights the KURZSCHLUSS lamp after a wrong cut, until the next right one', () => {
@@ -807,9 +983,102 @@ describe('the fuse box and the meter', () => {
     const shown = [...html.matchAll(/<span class="circuit-volts">([^<]*)<\/span>/g)];
     expect(shown.map((m) => m[1])).toEqual(voltages.map((v, i) => (dead[i] ? 'tot' : `${v} V`)));
     expect(dead.filter(Boolean)).toHaveLength(1);
-    const rows = /<span class="circuit-wire [^"]*circuit-wire--watched" data-index/g;
-    expect(html.match(rows)).toHaveLength(5);
+    const watchedRows = /<span class="circuit-wire [^"]*circuit-wire--watched" data-index/g;
+    expect(html.match(watchedRows)).toHaveLength(5);
+    // The same cables, their colour in no word, and nothing to cut them with.
+    expect(html.match(/<svg class="cable"/g)).toHaveLength(5);
+    expect(textOf(html)).not.toMatch(COLOUR_NAMED);
+    expect(html).not.toContain('circuit-cutter');
     expect(readout(html)).toBe('—');
     expect(html).not.toContain('<button');
+  });
+});
+
+describe('the sync button', () => {
+  type SyncSeen = Extract<PuzzleView, { kind: 'button-sync' }>;
+
+  /** The sync station for a crew of two, with what `change` says happened since. */
+  function sync(change: Partial<SyncSeen> = {}): SyncSeen {
+    const view = seen('button-sync');
+    if (view.kind !== 'button-sync') {
+      throw new Error(`expected the sync station, got ${view.kind}`);
+    }
+    return { ...view, ...change };
+  }
+
+  /** The crew lamps over the button as they burn, left to right. */
+  function lamps(html: string): string[] {
+    const strip = /<div class="sync-lamps" role="img" aria-label="[^"]*">(.*?)<\/div>/.exec(html);
+    return [...(strip?.[1] ?? '').matchAll(/device-lamp--([a-z]+)/g)].map((m) => m[1] ?? '');
+  }
+
+  it('is one mushroom button in its collar, under a dark lamp per crew member, and no word', () => {
+    const html = panel(sync());
+    expect(html).toContain(
+      '<div class="sync-collar"><button class="big-button sync-button" aria-label="Drücken">' +
+        '</button></div>',
+    );
+    expect(lamps(html)).toEqual(['off', 'off']);
+    expect(html).toContain('<div class="sync-lamps" role="img" aria-label="0 von 2 gedrückt">');
+    // Beside the plate's paragraph and name the device says nothing: no count, no caption.
+    expect(textOf(html).trim()).toBe('§1 Station');
+  });
+
+  it('lights a lamp for every press that counts, and keeps a pressed button down', () => {
+    const pressed = panel(sync({ pressedCount: 1, youPressed: true }));
+    expect(lamps(pressed)).toEqual(['green', 'off']);
+    expect(pressed).toContain('aria-label="1 von 2 gedrückt"');
+    expect(pressed).toContain(
+      '<button class="big-button sync-button" disabled="" aria-label="Gedrückt"></button>',
+    );
+    expect(lamps(panel(sync({ pressedCount: 2, requiredCount: 3 })))).toEqual([
+      'green',
+      'green',
+      'off',
+    ]);
+  });
+
+  it('says a missed window cost the attempt', () => {
+    const html = iconsAsWords(panel(sync({ lastResult: 'missed-window', attempts: 2 })));
+    expect(html).toContain(
+      '<p class="warn" role="status">[warning] Zeitfenster verpasst — Versuch 2</p>',
+    );
+    expect(panel(sync())).not.toContain('Zeitfenster');
+  });
+});
+
+describe('the panels’ icons', () => {
+  /** What a module prints as part of its puzzle: a keypad's note, the morse arrows, a star. */
+  const CONTENT = /[♪◀▶★]/gu;
+
+  /** Every operator view, and each with the warning its module can give. */
+  function warned(): [string, PuzzleView][] {
+    const views = operatorViews();
+    for (const [, view] of operatorViews()) {
+      if (view.kind === 'maze') {
+        views.push(['maze against a wall', { ...view, lastResult: 'wall' }]);
+      } else if (view.kind === 'simon') {
+        views.push(['simon after a wrong key', { ...view, lastWrong: true }]);
+      } else if (view.kind === 'button') {
+        views.push(['button pressed short', { ...view, lastResult: 'early' }]);
+      } else if (view.kind === 'signal') {
+        views.push([`signal wrong at ${view.console ?? '-'}`, { ...view, lastResult: 'wrong' }]);
+      }
+    }
+    return views;
+  }
+
+  it.each(warned())('%s draws its icons, never the platform’s emoji', (_, view) => {
+    expect(panel(view).replace(CONTENT, '')).not.toMatch(PICTOGRAPH);
+  });
+
+  it('warns with the warning icon and the words after it', () => {
+    const lines = warned()
+      .map(([, view]) => iconsAsWords(panel(view)))
+      .flatMap((html) => html.match(/<p class="[^"]*warn"[^>]*>[^<]+<\/p>/g) ?? []);
+    expect(lines.length).toBeGreaterThanOrEqual(5);
+    for (const line of lines) {
+      expect(line).toMatch(/>\[warning\] [A-ZÄÖÜ]/);
+    }
   });
 });

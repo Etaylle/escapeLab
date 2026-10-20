@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RunEvent } from '@escapelab/core';
 import {
+  airIcon,
   bannerFrom,
   NEWS_MS,
   noticeMs,
@@ -59,8 +60,15 @@ describe('radioNews — which lines get a banner', () => {
   });
 
   it('names mission control on its lines and the last crew on a revealed note', () => {
-    expect(bannerFrom(event('radio', 0))).toBe('📻 LEITSTELLE');
-    expect(bannerFrom(event('hint', 0))).toBe('📝 Notiz der letzten Crew');
+    expect(bannerFrom(event('radio', 0))).toBe('LEITSTELLE');
+    expect(bannerFrom(event('hint', 0))).toBe('Notiz der letzten Crew');
+  });
+
+  it('puts the last crew’s note beside a revealed note and the radio beside the rest', () => {
+    expect(airIcon(event('hint', 0))).toBe('note');
+    for (const kind of ['radio', 'find', 'puzzle', 'penalty'] as const) {
+      expect(airIcon(event(kind, 0))).toBe('radio');
+    }
   });
 });
 
