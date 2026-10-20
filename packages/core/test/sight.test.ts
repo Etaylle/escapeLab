@@ -269,13 +269,15 @@ describe('sight in Blackout', () => {
     }
   });
 
-  it('looks from every floor tile in well under 2 ms on average', () => {
+  // A look costs about 0.1 ms here; the budget is loose enough for a loaded
+  // machine or a small CI runner and still catches a regression of 100×.
+  it('looks from every floor tile in well under 10 ms on average', () => {
     const floor = floorOf(blackout);
     const started = performance.now();
     for (const from of floor) {
       visibleTiles(blackout, from, 7.5, blackoutDoors);
     }
     const perLook = (performance.now() - started) / floor.length;
-    expect(perLook).toBeLessThan(2);
+    expect(perLook).toBeLessThan(10);
   });
 });
