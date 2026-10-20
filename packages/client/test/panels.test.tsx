@@ -71,7 +71,7 @@ function panel(puzzle: PuzzleView): string {
   return renderToStaticMarkup(
     <PuzzlePanel
       puzzle={puzzle}
-      run={{ alarms: 0, solved: 0 }}
+      run={{ alarms: 0, solved: 0, refusals: 0 }}
       send={() => undefined}
       deadlineAt={null}
     />,

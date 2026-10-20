@@ -25,6 +25,7 @@ const {
   pressSound,
   PRESS_MS,
   reducedMotion,
+  refusedSince,
   reject,
   REJECT_MS,
   seeing,
@@ -107,7 +108,7 @@ describe('a flash on a control', () => {
 });
 
 describe('a press', () => {
-  const way = { keyboard: false, refused: false, audible: true };
+  const way = { keyboard: false, audible: true };
 
   it('from a key shows the control down for 80 ms and sounds it; a pointer’s does not', () => {
     vi.useFakeTimers();
@@ -122,38 +123,54 @@ describe('a press', () => {
     expect(key.classes.has('feel-pressed')).toBe(false);
   });
 
-  it('at a device that refuses it shakes the control with a dull buzz', () => {
-    vi.useFakeTimers();
+  it('shows nothing it has not heard from the server: no shake of its own', () => {
     const key = control();
-    pressed(key, { ...way, refused: true }, 0);
-    expect(key.classes.has('feel-reject')).toBe(true);
-    expect(sounds.rejectBuzz).toHaveBeenCalledTimes(1);
-    vi.advanceTimersByTime(REJECT_MS);
+    pressed(key, way, 0);
     expect(key.classes.has('feel-reject')).toBe(false);
+    expect(sounds.rejectBuzz).not.toHaveBeenCalled();
   });
 
-  it('is kept with its time, for an alarm right after it', () => {
+  it('is kept with its time, for a refusal or an alarm right after it', () => {
     const key = control();
     expect(pressed(key, way, 1234)).toEqual({ control: key, at: 1234 });
   });
 
   it('makes no sound where the device is not heard', () => {
     const key = control();
-    pressed(key, { keyboard: true, refused: true, audible: false }, 0);
-    expect(key.classes).toEqual(new Set(['feel-pressed', 'feel-reject']));
+    pressed(key, { keyboard: true, audible: false }, 0);
+    expect(key.classes).toEqual(new Set(['feel-pressed']));
     expect(sounds.keyClick).not.toHaveBeenCalled();
-    expect(sounds.rejectBuzz).not.toHaveBeenCalled();
   });
 });
 
 describe('a reject', () => {
-  it('shakes the control, with a buzz where the device is heard', () => {
+  it('shakes the control for 160 ms, with a buzz where the device is heard', () => {
+    vi.useFakeTimers();
     const key = control();
     reject(key, true);
     expect(key.classes.has('feel-reject')).toBe(true);
     expect(sounds.rejectBuzz).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(REJECT_MS);
+    expect(key.classes.has('feel-reject')).toBe(false);
     reject(control(), false);
     expect(sounds.rejectBuzz).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('a refusal from the server', () => {
+  it('is due where the server’s count of them has gone up since the device looked', () => {
+    expect(refusedSince(0, 1)).toBe(true);
+    expect(refusedSince(3, 5)).toBe(true);
+    // The count as the device opened, or a reconnect's fresh count, refuses nothing.
+    expect(refusedSince(2, 2)).toBe(false);
+    expect(refusedSince(4, 0)).toBe(false);
+  });
+
+  it('blames the press just before it, as an alarm does, and none older', () => {
+    const key = control();
+    const press = pressed(key, { keyboard: false, audible: true }, 5000);
+    expect(blamed(press, 5040)).toBe(key);
+    expect(blamed(press, 5000 + BLAME_MS + 1)).toBeNull();
   });
 });
 

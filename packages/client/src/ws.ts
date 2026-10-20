@@ -29,6 +29,12 @@ export interface Connection {
   roomCode: string | null;
   error: string | null;
   /**
+   * How many of this connection's messages the server has refused so far
+   * (an `error` each), counted up: an open device shakes the press that a
+   * new one refused, while the banner shows `error`.
+   */
+  refusals: number;
+  /**
    * Live avatar positions with the run they belong to, written on every
    * positions broadcast WITHOUT a React re-render — the canvas render loop
    * reads this ref directly.
@@ -97,6 +103,7 @@ export function useGameConnection(): Connection {
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [roomCode, setRoomCode] = useState<string | null>(loadCredentials()?.code ?? null);
   const [error, setError] = useState<string | null>(null);
+  const [refusals, setRefusals] = useState(0);
   const socketRef = useRef<WebSocket | null>(null);
   const resumingRef = useRef(false);
   const positionsRef = useRef<KnownPositions>({ run: null, players: {} });
@@ -208,6 +215,7 @@ export function useGameConnection(): Connection {
             setView(null);
           }
           setError(msg.message);
+          setRefusals((count) => count + 1);
           break;
       }
     }
@@ -227,6 +235,7 @@ export function useGameConnection(): Connection {
     rooms,
     roomCode,
     error,
+    refusals,
     positions: positionsRef,
     drones: dronesRef,
     pings: pingsRef,

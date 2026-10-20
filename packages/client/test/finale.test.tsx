@@ -471,6 +471,7 @@ describe('the game screen while the world plays the end', () => {
         pingsRef={{ current: [] }}
         chatsRef={{ current: [] }}
         send={noop}
+        refusals={0}
         finale={finale}
       />,
     );

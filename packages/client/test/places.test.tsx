@@ -519,7 +519,7 @@ describe('the station frame', () => {
     return renderToStaticMarkup(
       <StationModal
         puzzle={puzzle}
-        run={{ alarms: 0, solved: 0 }}
+        run={{ alarms: 0, solved: 0, refusals: 0 }}
         map={single}
         edgework={null}
         deadlineAt={null}
@@ -708,6 +708,7 @@ function game(view: PlayerView): string {
       pingsRef={{ current: [] }}
       chatsRef={{ current: [] }}
       send={noop}
+      refusals={0}
       finale={null}
     />,
   );

@@ -39,6 +39,11 @@ interface Props {
   pingsRef: React.MutableRefObject<MapPing[]>;
   chatsRef: React.MutableRefObject<ChatLine[]>;
   send: (msg: ClientMessage) => void;
+  /**
+   * what the server has refused of this player's inputs so far (ws.ts): the
+   * open device or relay console shakes the press a new refusal answers
+   */
+  refusals: number;
   /** the run's end, while the world still plays it on this screen (finale.ts); none before */
   finale: Finale | null;
 }
@@ -93,10 +98,12 @@ function RelayAlert({
   sabotage,
   relay,
   send,
+  refusals,
 }: {
   sabotage: Sabotage;
   relay: NonNullable<Sabotage['relay']>;
   send: (msg: ClientMessage) => void;
+  refusals: number;
 }) {
   const now = useNow(200);
   const frame = useRef<HTMLDivElement>(null);
@@ -122,7 +129,11 @@ function RelayAlert({
           <span className="sabotage-clock">{left}s</span>
         </div>
         {sabotage.hint !== '' && <p className="sabotage-hint">{sabotage.hint}</p>}
-        <RelayConsole relay={relay} send={(input) => send({ kind: 'puzzle-input', input })} />
+        <RelayConsole
+          relay={relay}
+          send={(input) => send({ kind: 'puzzle-input', input })}
+          refusals={refusals}
+        />
         <details className="relay-manual">
           <summary>ABLAUF NACHLESEN</summary>
           <Manual sections={relay.manual} />
@@ -749,13 +760,18 @@ function useEscapeCloses(open: ReturnType<typeof useOpened>, closeModal: () => v
   });
 }
 
-/** The station's panel or a source's pages over the world, as this player opened them. */
+/**
+ * The station's panel or a source's pages over the world, as this player
+ * opened them; the panel hears of the run's alarms and solves and of what
+ * the server refused (`refusals`).
+ */
 function OverTheWorld({
   view,
   map,
   station,
   reading,
   send,
+  refusals,
   onClose,
 }: {
   view: PlayerView;
@@ -763,14 +779,16 @@ function OverTheWorld({
   station: PuzzleView | null;
   reading: ManualHere | null;
   send: (msg: ClientMessage) => void;
+  refusals: number;
   onClose: () => void;
 }) {
+  const run = { alarms: view.penaltySeq, solved: view.currentPuzzleIndex, refusals };
   return (
     <>
       {station !== null && (
         <StationModal
           puzzle={station}
-          run={{ alarms: view.penaltySeq, solved: view.currentPuzzleIndex }}
+          run={run}
           map={map}
           edgework={view.edgework}
           deadlineAt={view.deadlineAt}
@@ -808,6 +826,7 @@ export function GameScreen({
   pingsRef,
   chatsRef,
   send,
+  refusals,
   finale,
 }: Props) {
   const { alarmVisible } = useFeedback(view);
@@ -832,7 +851,7 @@ export function GameScreen({
     <div className={ending}>
       {live && <RunOverlays view={view} map={map} coldOpen={coldOpen} />}
       {live && map.sabotage !== null && relay !== undefined && (
-        <RelayAlert sabotage={map.sabotage} relay={relay} send={send} />
+        <RelayAlert sabotage={map.sabotage} relay={relay} send={send} refusals={refusals} />
       )}
 
       <div className="stage">
@@ -878,6 +897,7 @@ export function GameScreen({
           station={station}
           reading={open.reading}
           send={send}
+          refusals={refusals}
           onClose={closeModal}
         />
       )}

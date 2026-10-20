@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { PuzzleInputOf, RelayView } from '@escapelab/core';
-import { usePressFeel } from './feel.js';
+import { usePressFeel, useRefusalBlame } from './feel.js';
 import type { PanelProps } from './index.js';
 import './relay.css';
 
@@ -116,16 +116,21 @@ function ControlCard({ control, send }: { control: Control; send: (input: RelayI
 /**
  * One player's side of the relay emergency: the instruction to read out on
  * top, the crew's progress, and the four controls of their console, each
- * with the kit's feel — switches clack, dials catch, the button clicks.
+ * with the kit's feel — switches clack, dials catch, the button clicks, and
+ * a control whose press the server refuses (`refusals`, ws.ts) shakes.
  */
 export function RelayConsole({
   relay,
   send,
+  refusals,
 }: {
   relay: RelayView;
   send: (input: RelayInput) => void;
+  /** what the server has refused of this player's inputs so far; 0 for the audience */
+  refusals: number;
 }) {
-  const { handlers } = usePressFeel(false, true);
+  const { handlers, blame } = usePressFeel(true);
+  useRefusalBlame(refusals, blame);
   return (
     <div className="relay" {...handlers}>
       {relay.instruction !== null && (
@@ -143,7 +148,10 @@ export function RelayConsole({
   );
 }
 
-/** The registry's entry; the emergency overlay renders RelayConsole itself. */
+/**
+ * The registry's entry; the emergency overlay renders RelayConsole itself,
+ * with the refusals it hears of — a relay never stands at a station's device.
+ */
 export function RelayPanel({ puzzle, send }: PanelProps<'relay'>) {
-  return <RelayConsole relay={puzzle} send={send} />;
+  return <RelayConsole relay={puzzle} send={send} refusals={0} />;
 }

@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { moduleFor, type ConsoleId, type PuzzleView } from '@escapelab/core';
 import { consoleName } from '../world/consoles.js';
-import { cssVars, useChange, usePressFeel, type Change, type PressHandlers } from './feel.js';
+import {
+  cssVars,
+  useChange,
+  usePressFeel,
+  useRefusalBlame,
+  type Change,
+  type PressHandlers,
+} from './feel.js';
 import { alarmKlaxon, relayClick, solvedChord, solvedChunk, startHum } from './sounds.js';
 
 /** How a lamp burns: dark, or lit in its colour. */
@@ -16,12 +23,14 @@ export interface DeviceLed {
   detail: string | null;
 }
 
-/** The run around an open device, as the player's view counts it. */
+/** The run around an open device, as the player's view and connection count it. */
 export interface DeviceRun {
   /** the run's alarms so far (`penaltySeq`) */
   alarms: number;
   /** stations solved so far (`currentPuzzleIndex`): a device further up the list is done */
   solved: number;
+  /** what the server has refused of this player's inputs so far (ws.ts); 0 for the audience */
+  refusals: number;
 }
 
 export interface DeviceProps {
@@ -148,14 +157,6 @@ export function partnerLed(puzzle: PuzzleView): DeviceLed | null {
 }
 
 /**
- * Whether the device refuses every press right now: its station takes nobody alone, and
- * nobody backs this player up — the server says no to whatever goes out from here.
- */
-export function refusesPresses(puzzle: PuzzleView): boolean {
-  return partnerLed(puzzle)?.tone === 'red';
-}
-
-/**
  * The frame for the open puzzle: its paragraph and title on the plate, the
  * console this player works where the station has two — the view names
  * console a at a station with one as well, the module tells them apart —
@@ -198,8 +199,9 @@ export interface DeviceFeel {
 /**
  * The kit at an open device. It opens with a relay click and hums until it closes; every
  * change plays once — the module's own `sounds`, and an alarm's klaxon after a buzz for the
- * control pressed just before it; solved, it drops home with a ka-chunk and a major chord.
- * The audience, at no console, sees all of it and hears none of it.
+ * control pressed just before it; a press the server refuses shakes with a buzz as the
+ * refusal comes in; solved, it drops home with a ka-chunk and a major chord. The audience,
+ * at no console, sees all of it and hears none of it.
  */
 export function useDeviceFeel(
   puzzle: PuzzleView,
@@ -210,7 +212,8 @@ export function useDeviceFeel(
   const solved = run.solved > puzzle.index;
   const [alarmsAtOpen] = useState(run.alarms);
   const change = useChange(puzzle, run.alarms);
-  const { handlers, blame } = usePressFeel(refusesPresses(puzzle), operating && !solved);
+  const { handlers, blame } = usePressFeel(operating && !solved);
+  useRefusalBlame(run.refusals, blame);
   useEffect(() => {
     if (!operating) {
       return undefined;

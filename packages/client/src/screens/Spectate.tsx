@@ -82,7 +82,7 @@ function SpectatePanels({ view }: { view: SpectatorView }) {
               <div className="read-only">
                 <PuzzlePanel
                   puzzle={view.puzzle}
-                  run={{ alarms: view.penaltySeq, solved: view.currentPuzzleIndex }}
+                  run={{ alarms: view.penaltySeq, solved: view.currentPuzzleIndex, refusals: 0 }}
                   send={noop}
                   deadlineAt={view.deadlineAt}
                 />
@@ -105,7 +105,7 @@ function SpectatePanels({ view }: { view: SpectatorView }) {
                 {panel.name}
               </div>
               <div className="read-only">
-                <RelayConsole relay={panel.emergency} send={noop} />
+                <RelayConsole relay={panel.emergency} send={noop} refusals={0} />
               </div>
             </section>
           ),

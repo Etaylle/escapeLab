@@ -3,12 +3,19 @@
  * change is told from a mere new copy of the view.
  *
  * A control goes down under the pointer (its CSS) with its sound; a key's press shows the
- * same 80 ms; a press the device refuses shakes with a dull buzz, and so does the control
- * pressed just before an alarm. The view stays the truth: nothing here holds an input back
- * or shows anything the server has not said — a change plays once it has come in, compared
- * with the view before it (`useChange`).
+ * same 80 ms; a press the server refuses shakes with a dull buzz as its refusal comes in,
+ * and so does the control pressed just before an alarm. The server stays the truth: nothing
+ * here holds an input back or shows anything it has not said — a change plays once it has
+ * come in, compared with the view before it (`useChange`).
  */
-import { useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+  type PointerEvent,
+} from 'react';
 import { SIMON_COLORS, type PuzzleView, type SimonColor } from '@escapelab/core';
 import {
   buttonThunk,
@@ -121,17 +128,16 @@ export interface Press {
   at: number;
 }
 
-/** How a click came: from a key rather than a pointer, at a device that refuses it, heard. */
+/** How a click came: from a key rather than a pointer, and whether the device is heard. */
 export interface PressWay {
   keyboard: boolean;
-  refused: boolean;
   audible: boolean;
 }
 
 /**
  * A control's click — the press that goes out. One from a key shows the control down for
- * PRESS_MS and sounds as a pointer's did going down; at a device that refuses presses the
- * control shakes with a buzz. Returns the press, for an alarm right after it.
+ * PRESS_MS and sounds as a pointer's did going down. Returns the press, for a refusal or an
+ * alarm that comes in right after it.
  */
 export function pressed(control: Control, way: PressWay, at: number): Press {
   if (way.keyboard) {
@@ -140,15 +146,37 @@ export function pressed(control: Control, way: PressWay, at: number): Press {
       pressSound(control);
     }
   }
-  if (way.refused) {
-    reject(control, way.audible);
-  }
   return { control, at };
 }
 
-/** The control an alarm at `now` (ms) blames: one pressed within BLAME_MS before it, if any. */
+/**
+ * The control a refusal or an alarm at `now` (ms) blames: one pressed within BLAME_MS
+ * before it, if any.
+ */
 export function blamed(last: Press | null, now: number): Control | null {
   return last !== null && now - last.at <= BLAME_MS ? last.control : null;
+}
+
+/**
+ * Whether more refusals have come in (`now`) than a device has answered (`seen`): the
+ * server said no to something since — the last press, as `blamed` tells.
+ */
+export function refusedSince(seen: number, now: number): boolean {
+  return now > seen;
+}
+
+/**
+ * Blames the press a refusal answers, every time the server's count of them (`refusals`,
+ * ws.ts) goes up while the device is open — those from before it opened excepted.
+ */
+export function useRefusalBlame(refusals: number, blame: () => void): void {
+  const seen = useRef(refusals);
+  useEffect(() => {
+    if (refusedSince(seen.current, refusals)) {
+      blame();
+    }
+    seen.current = refusals;
+  }, [refusals, blame]);
 }
 
 /** The working button an event landed on, or inside of; none for anything else. */
@@ -168,16 +196,13 @@ export interface PressHandlers {
 
 /**
  * The kit's press feel for every control inside an element: the sound as it goes down, a
- * key's PRESS_MS, the shake where the device `refused` presses, nothing heard unless
- * `audible`. `blame` shakes the control pressed last, if that was BLAME_MS ago at most: an
- * alarm right after a press is that press's fault. Both stay the same for the element's life.
+ * key's PRESS_MS, nothing heard unless `audible`. `blame` shakes the control pressed last,
+ * if that was BLAME_MS ago at most: a refusal or an alarm right after a press is that
+ * press's fault. Both stay the same for the element's life.
  */
-export function usePressFeel(
-  refused: boolean,
-  audible: boolean,
-): { handlers: PressHandlers; blame: () => void } {
-  const now = useRef({ refused, audible });
-  now.current = { refused, audible };
+export function usePressFeel(audible: boolean): { handlers: PressHandlers; blame: () => void } {
+  const now = useRef({ audible });
+  now.current = { audible };
   const last = useRef<Press | null>(null);
   const [kit] = useState(() => ({
     handlers: {

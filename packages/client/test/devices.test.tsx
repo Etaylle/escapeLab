@@ -22,14 +22,9 @@ vi.mock('../src/puzzles/sounds.js', async (importOriginal) => {
 
 const sounds = await import('../src/puzzles/sounds.js');
 const { needleAngle, probedWith, scrambled } = await import('../src/puzzles/CircuitPanel.js');
-const {
-  closeAfterSolved,
-  Device,
-  heldView,
-  refusesPresses,
-  SOLVED_CLOSE_MS,
-  STRIP_LEDS,
-} = await import('../src/puzzles/Device.js');
+const { closeAfterSolved, Device, heldView, SOLVED_CLOSE_MS, STRIP_LEDS } = await import(
+  '../src/puzzles/Device.js'
+);
 const { PANELS, SOUNDS } = await import('../src/puzzles/index.js');
 const { typedOrder } = await import('../src/puzzles/KeypadPanel.js');
 const { knobAngle } = await import('../src/puzzles/MorsePanel.js');
@@ -153,15 +148,6 @@ describe('the device', () => {
     const html = device(0, true);
     expect(html.startsWith('<div class="device device--keypad device--solved">')).toBe(true);
     expect(html).toContain('<div class="device-face" inert="">');
-  });
-
-  it('refuses every press where nobody backs this player up at a station for two', () => {
-    const maze = seen('maze');
-    expect(refusesPresses(maze)).toBe(true);
-    expect(refusesPresses({ ...maze, backup: { name: 'Ben', where: 'SPIND' } })).toBe(false);
-    // The whole crew presses the sync button; the audience presses nothing.
-    expect(refusesPresses(seen('button-sync'))).toBe(false);
-    expect(refusesPresses({ ...maze, console: null })).toBe(false);
   });
 });
 
@@ -559,19 +545,25 @@ describe('the relay console', () => {
   it('counts the instruction down in digits, red and pulsing over its last five seconds', () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000_000);
-    const calm = renderToStaticMarkup(<RelayConsole relay={relay(12_000)} send={noop} />);
+    const calm = renderToStaticMarkup(
+      <RelayConsole relay={relay(12_000)} send={noop} refusals={0} />,
+    );
     expect(calm).toContain(
       '<span class="relay-count" role="timer" aria-label="noch 12 Sekunden">12',
     );
     const lastSeconds = relay(FINAL_SECONDS * 1000);
-    const late = renderToStaticMarkup(<RelayConsole relay={lastSeconds} send={noop} />);
+    const late = renderToStaticMarkup(
+      <RelayConsole relay={lastSeconds} send={noop} refusals={0} />,
+    );
     expect(late).toContain('<span class="relay-count relay-count--final" role="timer"');
     expect(late).toContain('>05</span>');
   });
 
   it('clacks its switches and catches its dials, as their data-feel says', () => {
     vi.useFakeTimers();
-    const html = renderToStaticMarkup(<RelayConsole relay={relay(12_000)} send={noop} />);
+    const html = renderToStaticMarkup(
+      <RelayConsole relay={relay(12_000)} send={noop} refusals={0} />,
+    );
     expect(html).toContain('<button class="relay-switch " data-feel="clack"');
     expect(html.match(/data-feel="detent"/g)).toHaveLength(5);
   });
