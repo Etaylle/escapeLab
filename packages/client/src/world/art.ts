@@ -25,7 +25,9 @@ import type { ConsoleId, ManualKind } from '@escapelab/core';
 //
 // Text: sub-pixel font sizes such as '0.26px' render unreliably (engines may round, clamp
 // or hint the size before the transform applies). All text is therefore drawn TEXT_SCALE
-// times larger inside ctx.scale(1 / TEXT_SCALE, 1 / TEXT_SCALE).
+// times larger inside ctx.scale(1 / TEXT_SCALE, 1 / TEXT_SCALE). Name tags and the labels
+// under props follow the zoom only within a range of CSS pixels: the caller hands in
+// worldText() for its zoom as `text`; without it they are drawn at their size in tiles.
 
 const TAU = Math.PI * 2;
 
@@ -45,17 +47,75 @@ const PROP_EDGE = '#05080b';
 const MONO = 'ui-monospace, Menlo, monospace';
 /** Text is drawn this many times larger inside a matching down-scale (see header). */
 const TEXT_SCALE = 32;
-/** 0.26 tile: name tags and station titles. */
-const FONT_HEADING = `bold ${0.26 * TEXT_SCALE}px ${MONO}`;
-/** 0.2 tile: labels of plates, manual objects and the sign. */
-const FONT_LABEL = `bold ${0.2 * TEXT_SCALE}px ${MONO}`;
-/** 0.17 tile: a console's letter on its station. */
+/** 0.17 tile: a console's letter on its station; it grows and shrinks with its disc. */
 const FONT_BADGE = `bold ${0.17 * TEXT_SCALE}px ${MONO}`;
 /** Label of a prop that is not calling for anybody right now. */
 const IDLE_LABEL = '#8a96a5';
 const HALO_COLOR = 'rgba(3, 6, 10, 0.88)';
-/** Halo stroke width in text space; the halo reaches half of it past each glyph edge. */
-const HALO_WIDTH = 0.075 * TEXT_SCALE;
+
+// ---- World text ----------------------------------------------------------------------
+
+/** A style of world text: its height in tiles, and its font and halo width in text space. */
+export interface TextStyle {
+  size: number;
+  font: string;
+  /** stroke width of the dark halo; it reaches half of it past each glyph edge */
+  halo: number;
+}
+
+/** The world's text at one zoom: the labels under props and the name tags over the crew. */
+export interface WorldText {
+  label: TextStyle;
+  name: TextStyle;
+}
+
+/** A prop's label and a name tag at an ordinary zoom, in tiles, and the halo round both. */
+const LABEL_TILES = 0.2;
+const NAME_TILES = 0.26;
+const HALO_TILES = 0.075;
+/**
+ * How large they may come out on screen, CSS pixels: never too small to read on a phone,
+ * never giant on a wide window, and below the room names (viewport.ts's ROOM_NAME_PX).
+ */
+const LABEL_PX = [10, 12] as const;
+const NAME_PX = [11, 14] as const;
+
+/** Text `size` tiles high, its halo grown or shrunk with it from its size at `natural`. */
+function textStyle(size: number, natural: number): TextStyle {
+  return {
+    size,
+    font: `bold ${size * TEXT_SCALE}px ${MONO}`,
+    halo: HALO_TILES * (size / natural) * TEXT_SCALE,
+  };
+}
+
+/** `natural` tiles of text at `tilePx` device pixels per tile, held within `px` CSS pixels. */
+function heldWithin(
+  natural: number,
+  tilePx: number,
+  dpr: number,
+  [min, max]: readonly [number, number],
+): number {
+  return (Math.min(max, Math.max(min, (natural * tilePx) / dpr)) * dpr) / tilePx;
+}
+
+/**
+ * The world's text at a zoom of `tilePx` device pixels per tile: labels and name tags
+ * follow the zoom, but only so far — no giant letters on a wide window, none too small to
+ * read on a phone.
+ */
+export function worldText(tilePx: number, dpr: number): WorldText {
+  return {
+    label: textStyle(heldWithin(LABEL_TILES, tilePx, dpr, LABEL_PX), LABEL_TILES),
+    name: textStyle(heldWithin(NAME_TILES, tilePx, dpr, NAME_PX), NAME_TILES),
+  };
+}
+
+/** The world's text at its size in tiles, for a caller that names no zoom. */
+const TILE_TEXT: WorldText = {
+  label: textStyle(LABEL_TILES, LABEL_TILES),
+  name: textStyle(NAME_TILES, NAME_TILES),
+};
 
 // ---- Shared helpers ------------------------------------------------------------------
 
@@ -187,23 +247,42 @@ function drawHaloText(
   text: string,
   x: number,
   y: number,
-  font: string,
+  style: TextStyle,
   fill: string,
   baseline: CanvasTextBaseline,
 ): void {
   if (text === '') return;
   ctx.scale(1 / TEXT_SCALE, 1 / TEXT_SCALE);
-  ctx.font = font;
+  ctx.font = style.font;
   ctx.textAlign = 'center';
   ctx.textBaseline = baseline;
   ctx.lineJoin = 'round';
-  ctx.lineWidth = HALO_WIDTH;
+  ctx.lineWidth = style.halo;
   ctx.strokeStyle = HALO_COLOR;
   ctx.strokeText(text, x * TEXT_SCALE, y * TEXT_SCALE);
   ctx.fillStyle = fill;
   ctx.fillText(text, x * TEXT_SCALE, y * TEXT_SCALE);
   // TEXT_SCALE is a power of two, so this undoes the down-scale exactly.
   ctx.scale(TEXT_SCALE, TEXT_SCALE);
+}
+
+/**
+ * Anchor: the prop's own. A label `y` tiles below it, top-aligned, as plates, manual
+ * objects and the sign carry theirs: for props drawn elsewhere, such as carryables.
+ */
+export function drawPropLabel(
+  ctx: CanvasRenderingContext2D,
+  label: string,
+  y: number,
+  color: string,
+  text: WorldText = TILE_TEXT,
+): void {
+  ctx.save();
+  try {
+    drawHaloText(ctx, label, 0, y, text.label, color, 'top');
+  } finally {
+    ctx.restore();
+  }
 }
 
 // ---- Scientist -----------------------------------------------------------------------
@@ -221,6 +300,8 @@ export interface ScientistOpts {
   isYou: boolean;
   /** dim to ~45% alpha when false */
   connected: boolean;
+  /** the world's text at this zoom (worldText); the name in plain tiles when left out */
+  text?: WorldText;
 }
 
 // Geometry in tile units, drawn facing right with the origin at the feet center.
@@ -470,7 +551,7 @@ export function drawScientist(ctx: CanvasRenderingContext2D, o: ScientistOpts): 
     ctx.save();
     drawScientistFigure(ctx, o, colors, theta, bob);
     ctx.restore();
-    drawHaloText(ctx, o.name, 0, NAME_Y, FONT_HEADING, NAME_COLOR, 'bottom');
+    drawHaloText(ctx, o.name, 0, NAME_Y, (o.text ?? TILE_TEXT).name, NAME_COLOR, 'bottom');
   } finally {
     ctx.restore();
   }
@@ -619,8 +700,6 @@ export interface StationOpts {
   status: 'done' | 'armed' | 'locked';
   /** 0..1 looping pulse driven by the caller */
   pulse: number;
-  /** drawn over an armed station; over a console of a two-console station it names the console */
-  title: string;
   /** which console of a two-console station this is, lettered on it; null at a station with one */
   console: ConsoleId | null;
 }
@@ -863,22 +942,21 @@ function drawConsoleBadge(ctx: CanvasRenderingContext2D, look: StationLook, id: 
 }
 
 /** Anchor: TILE CENTER. A small console/terminal with glowing screen; armed = teal glow
- * (strength follows pulse) + title text above (0.26 tile mono, dark halo); done = dim
- * green check on screen; locked = grey, small lock glyph. A console of a two-console
- * station carries its letter on a disc, whatever its status. */
+ * (strength follows pulse) and terminal lines; done = dim green check on screen; locked =
+ * grey, small lock glyph. A console of a two-console station carries its letter on a
+ * disc, whatever its status. No title: the operator stands right above the console, and
+ * the objective bar names the station. */
 export function drawStation(ctx: CanvasRenderingContext2D, o: StationOpts): void {
   const look = STATION_LOOKS[o.status];
-  const armed = o.status === 'armed';
   const wave = pulseWave(o.pulse);
   ctx.save();
   try {
     softEllipse(ctx, 0, 0.37, 0.46, 0.13, SHADOW_RGB, 0.45, 'source-over');
     drawStationGlow(ctx, o.status, wave);
-    drawStationCabinet(ctx, look, armed ? 0.35 + 0.65 * wave : 0.85);
+    drawStationCabinet(ctx, look, o.status === 'armed' ? 0.35 + 0.65 * wave : 0.85);
     drawStationMonitor(ctx, look);
     drawStationScreen(ctx, o.status, wave);
     if (o.console !== null) drawConsoleBadge(ctx, look, o.console);
-    if (armed) drawHaloText(ctx, o.title, 0, -0.5, FONT_HEADING, '#99f6e4', 'bottom');
   } finally {
     ctx.restore();
   }
@@ -891,6 +969,8 @@ export interface PlateOpts {
   label: string;
   /** holding it freezes a drone: a camera glyph replaces the center indicator */
   camera: boolean;
+  /** the world's text at this zoom (worldText); the label in plain tiles when left out */
+  text?: WorldText;
 }
 
 const PLATE_SOCKET_R = 0.38;
@@ -1007,7 +1087,7 @@ function drawPlateDisc(ctx: CanvasRenderingContext2D, pressed: boolean, camera: 
 }
 
 /** Anchor: TILE CENTER. Floor pressure plate: inset metal disc, pressed = sunk + teal rim
- * glow, label under it (0.2 tile mono, dark halo, uppercase); a camera plate shows a camera
+ * glow, label under it (world text, dark halo, uppercase); a camera plate shows a camera
  * glyph in the middle. */
 export function drawPlate(ctx: CanvasRenderingContext2D, o: PlateOpts): void {
   ctx.save();
@@ -1023,7 +1103,7 @@ export function drawPlate(ctx: CanvasRenderingContext2D, o: PlateOpts): void {
       ctx.stroke();
     }
     const color = o.pressed ? '#5eead4' : IDLE_LABEL;
-    drawHaloText(ctx, o.label.toUpperCase(), 0, 0.41, FONT_LABEL, color, 'top');
+    drawHaloText(ctx, o.label.toUpperCase(), 0, 0.41, (o.text ?? TILE_TEXT).label, color, 'top');
   } finally {
     ctx.restore();
   }
@@ -1152,6 +1232,8 @@ export interface ManualObjectOpts {
   opened: boolean;
   /** 0..1 looping pulse driven by the caller */
   pulse: number;
+  /** the world's text at this zoom (worldText); the label in plain tiles when left out */
+  text?: WorldText;
 }
 
 const READ_LABEL = '#93c5fd';
@@ -1656,7 +1738,7 @@ function drawCabinet(ctx: CanvasRenderingContext2D, active: boolean, opened: boo
  * showing a plan, a chart on an easel, a clipboard on a hook in the wall above, a grey locker
  * (ajar once searched, the rules inside) or a filing cabinet under a padlock (gone once
  * unlocked, the top drawer pulled out). Covering the armed station = blue glow (strength
- * follows pulse) and lit paper or screen; label under it (0.2 tile mono, dark halo). */
+ * follows pulse) and lit paper or screen; label under it (world text, dark halo). */
 export function drawManualObject(ctx: CanvasRenderingContext2D, o: ManualObjectOpts): void {
   const wave = pulseWave(o.pulse);
   ctx.save();
@@ -1687,7 +1769,8 @@ export function drawManualObject(ctx: CanvasRenderingContext2D, o: ManualObjectO
         break;
     }
     ctx.restore();
-    drawHaloText(ctx, o.label, 0, 0.41, FONT_LABEL, o.active ? READ_LABEL : IDLE_LABEL, 'top');
+    const color = o.active ? READ_LABEL : IDLE_LABEL;
+    drawHaloText(ctx, o.label, 0, 0.41, (o.text ?? TILE_TEXT).label, color, 'top');
   } finally {
     ctx.restore();
   }
@@ -1701,6 +1784,8 @@ export interface SignOpts {
   seen: boolean;
   /** 0..1 looping pulse driven by the caller */
   pulse: number;
+  /** the world's text at this zoom (worldText); the label in plain tiles when left out */
+  text?: WorldText;
 }
 
 /** Brushed brass, lit from the top. */
@@ -1755,7 +1840,7 @@ function drawSeenTick(ctx: CanvasRenderingContext2D): void {
 
 /** Anchor: TILE CENTER. The Laborkennung: a brass plaque on two posts, a serial's outline
  * and three lamps engraved; amber glow (strength follows pulse) until this player has read
- * it, then a teal tick. Label under it (0.2 tile mono, dark halo). */
+ * it, then a teal tick. Label under it (world text, dark halo). */
 export function drawSign(ctx: CanvasRenderingContext2D, o: SignOpts): void {
   const wave = pulseWave(o.pulse);
   ctx.save();
@@ -1783,7 +1868,8 @@ export function drawSign(ctx: CanvasRenderingContext2D, o: SignOpts): void {
     ctx.fill();
     drawEngraving(ctx);
     if (o.seen) drawSeenTick(ctx);
-    drawHaloText(ctx, o.label, 0, 0.36, FONT_LABEL, o.seen ? IDLE_LABEL : '#fcd34d', 'top');
+    const color = o.seen ? IDLE_LABEL : '#fcd34d';
+    drawHaloText(ctx, o.label, 0, 0.36, (o.text ?? TILE_TEXT).label, color, 'top');
   } finally {
     ctx.restore();
   }

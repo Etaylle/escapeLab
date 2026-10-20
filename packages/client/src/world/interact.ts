@@ -5,12 +5,24 @@ export const INTERACT_RADIUS = 1.5;
 /** Pick-up and drop-off reach; the server allows 0.95. */
 export const ITEM_RADIUS = 0.9;
 
-/** What pressing E does where the player stands, its prompt and where the prompt goes. */
+/**
+ * What pressing E does where the player stands, the words of its prompt —
+ * „Bedienen", no key; promptText adds that — and where the prompt goes.
+ */
 export type ContextAction =
   | { kind: 'deliver' | 'pick' | 'operate'; label: string; x: number; y: number }
   | { kind: 'read' | 'open'; manualId: string; label: string; x: number; y: number }
   /** a locked cabinet without its key in hand: the prompt names what is missing, E does nothing */
   | { kind: 'locked'; label: string; x: number; y: number };
+
+/**
+ * The prompt over the world for `action`: with a keyboard the key comes
+ * first, „[E] Bedienen"; a touch screen has no keys, so it gets the verb
+ * alone. A locked cabinet only names what is missing, either way.
+ */
+export function promptText(action: ContextAction, keyboard: boolean): string {
+  return keyboard && action.kind !== 'locked' ? `[E] ${action.label}` : action.label;
+}
 
 type Source = Pick<SourceHere, 'id' | 'kind' | 'opened' | 'needsKey'>;
 type Manual = MapView['manuals'][number];
@@ -23,13 +35,13 @@ type Item = MapView['items'][number];
 function sourceAction(map: MapView, manual: Manual, source: Source, mine?: Item): ContextAction {
   const at = { x: manual.x + 0.5, y: manual.y - 0.55 };
   if (source.opened) {
-    return { kind: 'read', manualId: manual.id, label: '[E] Lesen', ...at };
+    return { kind: 'read', manualId: manual.id, label: 'Lesen', ...at };
   }
   if (source.kind !== 'cabinet') {
-    return { kind: 'open', manualId: manual.id, label: '[E] Durchsuchen', ...at };
+    return { kind: 'open', manualId: manual.id, label: 'Durchsuchen', ...at };
   }
   if (mine !== undefined && mine.id === source.needsKey) {
-    return { kind: 'open', manualId: manual.id, label: '[E] Aufschließen', ...at };
+    return { kind: 'open', manualId: manual.id, label: 'Aufschließen', ...at };
   }
   const key = map.items.find((item) => item.id === source.needsKey);
   return { kind: 'locked', label: `🔒 ${key?.label ?? 'Schlüssel'} fehlt`, ...at };
@@ -62,7 +74,7 @@ export function contextAction(
   if (mine !== undefined && goal !== null && dist(goal.x + 0.5, goal.y + 0.5) <= ITEM_RADIUS) {
     return {
       kind: 'deliver',
-      label: `[E] ${mine.label} einsetzen`,
+      label: `${mine.label} einsetzen`,
       x: goal.x + 0.5,
       y: goal.y - 0.45,
     };
@@ -88,7 +100,7 @@ export function contextAction(
         ];
   });
   if (mine === undefined && loose !== undefined) {
-    const label = `[E] ${loose.label} aufnehmen`;
+    const label = `${loose.label} aufnehmen`;
     candidates.push({
       action: { kind: 'pick', label, x: loose.x, y: loose.y - 0.95 },
       d: dist(loose.x, loose.y),
@@ -96,7 +108,7 @@ export function contextAction(
   }
   for (const station of stations) {
     candidates.push({
-      action: { kind: 'operate', label: '[E] Bedienen', x: station.x + 0.5, y: station.y - 0.55 },
+      action: { kind: 'operate', label: 'Bedienen', x: station.x + 0.5, y: station.y - 0.55 },
       d: dist(station.x + 0.5, station.y + 0.5),
     });
   }

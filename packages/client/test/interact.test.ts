@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MapView } from '@escapelab/core';
-import { contextAction } from '../src/world/interact.js';
+import { contextAction, promptText } from '../src/world/interact.js';
 import { mapWith, type Manual } from './fixtures.js';
 
 const YOU = 'p1';
@@ -63,7 +63,7 @@ describe('contextAction — what E does where the player stands', () => {
     expect(contextAction(map, { x: 2.5, y: 6.4 }, YOU, AT_BOOK, SHUT)).toMatchObject({
       kind: 'read',
       manualId: 'buch',
-      label: '[E] Lesen',
+      label: 'Lesen',
     });
   });
 
@@ -77,7 +77,7 @@ describe('contextAction — what E does where the player stands', () => {
     for (const open of [SHUT, OPEN]) {
       expect(contextAction(mapWith({ stations: [station] }), at, YOU, [], open)).toMatchObject({
         kind: 'operate',
-        label: '[E] Bedienen',
+        label: 'Bedienen',
       });
     }
     for (const status of ['locked', 'done'] as const) {
@@ -98,7 +98,7 @@ describe('contextAction — what E does where the player stands', () => {
     const map = mapWith({ stations: [station], manuals: [book], items: [part({})] });
     expect(contextAction(map, { x: 3.5, y: 6.2 }, YOU, AT_BOOK, SHUT)).toMatchObject({
       kind: 'pick',
-      label: '[E] Sicherung aufnehmen',
+      label: 'Sicherung aufnehmen',
     });
     // The book beside the part: whoever stands nearer the book reads it.
     expect(contextAction(map, { x: 2.9, y: 6 }, YOU, AT_BOOK, SHUT)?.kind).toBe('read');
@@ -120,7 +120,7 @@ describe('contextAction — what E does where the player stands', () => {
     for (const open of [SHUT, OPEN]) {
       expect(contextAction(map, { x: 5.5, y: 6.4 }, YOU, [], open)).toMatchObject({
         kind: 'operate',
-        label: '[E] Bedienen',
+        label: 'Bedienen',
       });
     }
   });
@@ -153,13 +153,13 @@ describe('contextAction — a station with two consoles', () => {
     for (const open of [SHUT, OPEN]) {
       expect(contextAction(map, { x: 5.5, y: 6.4 }, YOU, [], open)).toEqual({
         kind: 'operate',
-        label: '[E] Bedienen',
+        label: 'Bedienen',
         x: 5.5,
         y: 4.45,
       });
       expect(contextAction(map, { x: 12.5, y: 6.4 }, YOU, [], open)).toEqual({
         kind: 'operate',
-        label: '[E] Bedienen',
+        label: 'Bedienen',
         x: 12.5,
         y: 4.45,
       });
@@ -186,7 +186,7 @@ describe('contextAction — lockers and cabinets', () => {
     expect(contextAction(map, { x: 2.5, y: 6.4 }, YOU, AT_LOCKER, SHUT)).toMatchObject({
       kind: 'open',
       manualId: 'spind',
-      label: '[E] Durchsuchen',
+      label: 'Durchsuchen',
     });
     const carrying = mapWith({ manuals: [locker], items: [part({ carriedBy: YOU })] });
     expect(contextAction(carrying, { x: 2.5, y: 6.4 }, YOU, AT_LOCKER, SHUT)?.kind).toBe('open');
@@ -195,7 +195,7 @@ describe('contextAction — lockers and cabinets', () => {
     expect(contextAction(open, { x: 2.5, y: 6.4 }, YOU, searched, SHUT)).toMatchObject({
       kind: 'read',
       manualId: 'spind',
-      label: '[E] Lesen',
+      label: 'Lesen',
     });
   });
 
@@ -204,7 +204,7 @@ describe('contextAction — lockers and cabinets', () => {
     expect(contextAction(map, { x: 8.5, y: 5.6 }, YOU, AT_CABINET, SHUT)).toMatchObject({
       kind: 'open',
       manualId: 'schrank',
-      label: '[E] Aufschließen',
+      label: 'Aufschließen',
     });
     expect(contextAction(map, { x: 8.5, y: 5.6 }, YOU, [], SHUT)).toBeNull();
   });
@@ -227,5 +227,45 @@ describe('contextAction — lockers and cabinets', () => {
   it('lets a missing key hide nothing that can be done', () => {
     const map = mapWith({ stations: [station], manuals: [{ ...cabinet, x: 5, y: 6 }] });
     expect(contextAction(map, { x: 5.5, y: 6.4 }, YOU, AT_CABINET, SHUT)?.kind).toBe('operate');
+  });
+});
+
+describe('promptText — the prompt over the world', () => {
+  const KEYBOARD = true;
+  const TOUCH = false;
+  /** The armed station at (5,5), a closed locker at (2,5), the fuse at (3.5,6.5). */
+  const map = mapWith({ stations: [station], manuals: [locker], items: [part({})] });
+  /** The prompt where the player stands, the server counting them at what `here` lists. */
+  const prompt = (x: number, y: number, keyboard: boolean, here = AT_LOCKER) => {
+    const action = contextAction(map, { x, y }, YOU, here, SHUT);
+    return action === null ? null : promptText(action, keyboard);
+  };
+
+  it('puts the key before the verb on a keyboard', () => {
+    expect(prompt(5.5, 6.4, KEYBOARD)).toBe('[E] Bedienen');
+    expect(prompt(2.5, 6.4, KEYBOARD)).toBe('[E] Durchsuchen');
+    expect(prompt(3.5, 6.6, KEYBOARD)).toBe('[E] Sicherung aufnehmen');
+  });
+
+  it('names no key on a touch screen: the verb alone', () => {
+    expect(prompt(5.5, 6.4, TOUCH)).toBe('Bedienen');
+    expect(prompt(2.5, 6.4, TOUCH)).toBe('Durchsuchen');
+    expect(prompt(3.5, 6.6, TOUCH)).toBe('Sicherung aufnehmen');
+  });
+
+  it('names only what is missing at a locked cabinet, keyboard or touch', () => {
+    const key = part({ id: 'key', label: 'SCHLÜSSEL', x: 4.5, y: 9.5, deliverTo: { x: 8, y: 5 } });
+    const locked = contextAction(
+      mapWith({ manuals: [cabinet], items: [key] }),
+      { x: 8.5, y: 6.4 },
+      YOU,
+      AT_CABINET,
+      SHUT,
+    );
+    expect(locked?.kind).toBe('locked');
+    if (locked !== null) {
+      expect(promptText(locked, KEYBOARD)).toBe('🔒 SCHLÜSSEL fehlt');
+      expect(promptText(locked, TOUCH)).toBe('🔒 SCHLÜSSEL fehlt');
+    }
   });
 });

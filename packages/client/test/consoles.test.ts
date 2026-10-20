@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { MapView } from '@escapelab/core';
 import { drawStation, type StationOpts } from '../src/world/art.js';
-import { consoleName, spotTitle } from '../src/world/consoles.js';
-
-type Spot = MapView['stations'][number];
+import { consoleName } from '../src/world/consoles.js';
 
 /**
  * A 2D context that draws nothing and keeps the text it is asked to fill:
@@ -32,40 +29,22 @@ function textOf(opts: StationOpts): string[] {
   return filled;
 }
 
-describe('a station with two consoles in the world', () => {
-  const spot = (parts: Partial<Spot> = {}): Spot => ({
-    puzzleId: 'signalprobe',
-    x: 8,
-    y: 5,
-    title: 'Signalprobe',
-    status: 'armed',
-    ...parts,
-  });
-
-  it('names a console by its letter, and titles each of its spots with it', () => {
+describe('a station in the world', () => {
+  it('names a console by its letter', () => {
     expect(consoleName('a')).toBe('Pult A');
-    expect(spotTitle(spot({ console: 'a' }))).toBe('Signalprobe · Pult A');
-    expect(spotTitle(spot({ console: 'b' }))).toBe('Signalprobe · Pult B');
-    expect(spotTitle(spot())).toBe('Signalprobe');
+    expect(consoleName('b')).toBe('Pult B');
   });
 
-  it('letters each console on the glyph, armed or not, under the armed one’s title', () => {
-    const armed = { status: 'armed', pulse: 0.5 } as const;
-    expect(textOf({ ...armed, title: 'Signalprobe · Pult A', console: 'a' })).toEqual([
-      'A',
-      'Signalprobe · Pult A',
-    ]);
-    for (const status of ['locked', 'done'] as const) {
-      expect(textOf({ status, pulse: 0.5, title: 'Signalprobe · Pult B', console: 'b' })).toEqual([
-        'B',
-      ]);
+  it('letters each console of a station with two, armed or not, and prints no title', () => {
+    for (const status of ['armed', 'locked', 'done'] as const) {
+      expect(textOf({ status, pulse: 0.5, console: 'a' })).toEqual(['A']);
+      expect(textOf({ status, pulse: 0.5, console: 'b' })).toEqual(['B']);
     }
   });
 
-  it('draws a station with one console as before: no letter, the title when armed', () => {
-    expect(textOf({ status: 'armed', pulse: 0.5, title: 'Notstrom', console: null })).toEqual([
-      'Notstrom',
-    ]);
-    expect(textOf({ status: 'locked', pulse: 0.5, title: 'Notstrom', console: null })).toEqual([]);
+  it('prints nothing on a station with one console: the operator stands right above it', () => {
+    for (const status of ['armed', 'locked', 'done'] as const) {
+      expect(textOf({ status, pulse: 0.5, console: null })).toEqual([]);
+    }
   });
 });

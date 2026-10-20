@@ -26,10 +26,17 @@ import {
   drawStation,
   makeFloorTile,
   makeWallTile,
+  worldText,
+  type WorldText,
 } from './art.js';
-import { spotTitle } from './consoles.js';
-import { contextAction } from './interact.js';
-import { markerTargets, placeMarkers } from './markers.js';
+import { contextAction, promptText } from './interact.js';
+import {
+  markerBoxes,
+  markerTargets,
+  placeMarkers,
+  type MarkerPlacement,
+  type MarkerTarget,
+} from './markers.js';
 import {
   correction,
   ECHO_MS,
@@ -55,15 +62,28 @@ import {
   stopAmbience,
 } from './audio.js';
 import {
+  CREW_GLOW_STOPS,
+  DRONE_BEAM_STOPS,
   doorsShut,
   lightClip,
   lightMemory,
   litTiles,
+  objectGlowStops,
+  OWN_BEAM_STOPS,
+  OWN_GLOW_STOPS,
   reachOf,
   type Lamp,
   type LightMemory,
   type Lit,
+  type Stops,
 } from './light.js';
+import {
+  clampCamera,
+  placeRoomNames,
+  ROOM_NAME_PX,
+  type Box,
+  type Viewport,
+} from './viewport.js';
 
 const FALLBACK_COLOR = '#2dd4bf';
 const SPEED = 4.2; // tiles per second
@@ -82,6 +102,12 @@ const CONE_REACH = 7.5;
 const CONE_HALF_ANGLE = 0.5;
 /** The glow of the lamp everybody else of the crew carries, in tiles. */
 const CREW_GLOW = 2.8;
+/** On a touch screen the pad would sit on the avatar: it is lifted this far, CSS pixels. */
+const PAD_LIFT = 60;
+/** Air between the control cluster and a first-time tip above it, CSS pixels. */
+const TIP_GAP = 12;
+/** The primary pointer is a finger: no keys to name, the on-screen pad shows (as ui.css has it). */
+const TOUCH = '(pointer: coarse)';
 
 const SOURCE_NAMES: Record<ManualKind, string> = {
   book: 'Buch',
@@ -150,6 +176,8 @@ interface Sim {
   walkPhase: number;
   stepAcc: number;
   cam: { x: number; y: number };
+  /** how far the objective bar reaches down, CSS pixels, eased: the camera glides as it grows */
+  topCss: number;
   /** `cam` clamped to the map bounds; everything on screen uses this one */
   draw: { x: number; y: number };
   /** device pixels per tile, as the last frame drew it */
@@ -173,8 +201,28 @@ interface Sim {
   light: LightMemory;
 }
 
-/** Cuts a radial glow of `radius` tiles into the darkness at (wx, wy), `strength` deep in its middle. */
-type Punch = (wx: number, wy: number, radius: number, strength: number) => void;
+/** Cuts a radial glow of `radius` tiles into the darkness at (wx, wy), as its `stops` say. */
+type Punch = (wx: number, wy: number, radius: number, stops: Stops) => void;
+
+/** Where the minimap sits on the canvas, device pixels: its corner, cell and size. */
+interface MinimapLayout {
+  ox: number;
+  oy: number;
+  cell: number;
+  mw: number;
+  mh: number;
+}
+
+/** The dark frame round the minimap's map, CSS pixels. */
+const MINIMAP_FRAME = 5;
+
+/** An arrow at the screen's edge: what it points at, its caption and where it sits. */
+interface EdgeMarker {
+  target: MarkerTarget;
+  caption: string;
+  captionWidth: number;
+  at: MarkerPlacement;
+}
 
 /** This frame's light, worked out before anything is drawn. */
 interface FrameLight {
@@ -229,13 +277,15 @@ const TIP_MS = 6500;
 
 /**
  * The one sentence a newcomer needs right now. Over an open station that is
- * its device's line, and nothing about the world the panel covers.
+ * its device's line, and nothing about the world the panel covers. On a
+ * touch screen, which has no keys, a tip names the ⚡ button instead.
  */
 function coachTip(
   map: WorldMap,
   youId: string,
   carried: WorldMap['items'][number] | undefined,
   station: PuzzleView | null,
+  keyboard: boolean,
 ): CoachMark | null {
   if (station !== null) {
     return deviceCoach(station);
@@ -245,15 +295,15 @@ function coachTip(
   }
   // A key has no marked spot: it goes into a cabinet, found or not yet.
   if (carried !== undefined && (carried.deliverTo === null || opensCabinet(map, carried.id))) {
-    return {
-      id: 'key',
-      text: 'Ein Schlüssel: Er schließt einen Aktenschrank auf — dort E drücken.',
-    };
+    const there = keyboard ? 'dort E drücken' : 'dort ⚡ tippen';
+    return { id: 'key', text: `Ein Schlüssel: Er schließt einen Aktenschrank auf — ${there}.` };
   }
   if (carried !== undefined) {
     return {
       id: 'carry',
-      text: 'Du trägst etwas: Bring es zur markierten Fläche und drücke E. Mit Q legst du es ab.',
+      text: keyboard
+        ? 'Du trägst etwas: Bring es zur markierten Fläche und drücke E. Mit Q legst du es ab.'
+        : 'Du trägst etwas: Bring es zur markierten Fläche und tippe ⚡.',
     };
   }
   if (map.exit !== null && map.exit.open) {
@@ -347,6 +397,8 @@ export function GameWorld({
   const [wheelOpen, setWheelOpen] = useState(false);
   /** the tip up now, and whether it lies over a station's panel rather than over the world */
   const [tip, setTip] = useState<(CoachMark & { overPanel: boolean }) | null>(null);
+  /** how far the control cluster reaches up from the world's bottom edge, CSS pixels */
+  const [controlsReach, setControlsReach] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const controlsRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef(view);
@@ -383,7 +435,8 @@ export function GameWorld({
     const carried = view.map.items.find(
       (item) => item.carriedBy === view.you.id && !item.delivered,
     );
-    const next = coachTip(view.map, view.you.id, carried, station);
+    const keyboard = !window.matchMedia(TOUCH).matches;
+    const next = coachTip(view.map, view.you.id, carried, station, keyboard);
     const fresh = firstSight(next, SEEN_TIPS);
     if (fresh !== null) {
       SEEN_TIPS.add(fresh.id);
@@ -416,22 +469,27 @@ export function GameWorld({
     const floorTex = makeFloorTile();
     const wallTex = makeWallTile();
     // Same condition the stylesheet uses to show the on-screen pad.
-    const touchPad = window.matchMedia('(pointer: coarse)');
+    const touchPad = window.matchMedia(TOUCH);
 
     // The objective bar and the control cluster are HTML overlays lying on the
     // canvas, and both change height with their contents. Anything the canvas
     // draws near those edges has to keep clear, so we track them instead of
-    // assuming a height.
+    // assuming a height: how far the bar reaches down from the top edge, and
+    // how far the cluster reaches up from the bottom one.
     const stageTop = canvas.closest('.stage')?.querySelector('.stage-top') ?? null;
+    const wrap = canvas.parentElement;
     const controls = controlsRef.current;
     let safeTopCss = 0;
     let safeBottomCss = 0;
-    const height = (el: Element | null): number => (el instanceof HTMLElement ? el.offsetHeight : 0);
-    const overlayObserver = new ResizeObserver(() => {
-      safeTopCss = height(stageTop);
-      safeBottomCss = height(controls);
-    });
-    for (const el of [stageTop, controls]) {
+    const measure = (): void => {
+      safeTopCss = stageTop instanceof HTMLElement ? stageTop.offsetHeight : 0;
+      const reach = controls === null || wrap === null ? 0 : wrap.clientHeight - controls.offsetTop;
+      safeBottomCss = Math.max(0, reach);
+      setControlsReach(safeBottomCss);
+    };
+    measure();
+    const overlayObserver = new ResizeObserver(measure);
+    for (const el of [stageTop, controls, wrap]) {
       if (el !== null) {
         overlayObserver.observe(el);
       }
@@ -447,6 +505,7 @@ export function GameWorld({
       walkPhase: 0,
       stepAcc: 0,
       cam: { x: 0, y: 0 },
+      topCss: safeTopCss,
       draw: { x: 0, y: 0 },
       scale: 48,
       flash: 0,
@@ -756,11 +815,13 @@ export function GameWorld({
       }
       sim.flash = Math.max(0, sim.flash - dt / 0.9);
 
-      // camera: follow your avatar, or sit still over the whole lab
+      // camera: follow your avatar, or sit still over the whole lab; a radio
+      // line growing the objective bar moves it as gently
       if (!spectator) {
         const ck = 1 - Math.exp(-dt * 6);
         sim.cam.x += (sim.self.x - sim.cam.x) * ck;
         sim.cam.y += (sim.self.y - sim.cam.y) * ck;
+        sim.topCss += (safeTopCss - sim.topCss) * ck;
       }
       sim.time += dt;
     }
@@ -798,26 +859,6 @@ export function GameWorld({
 
     function worldToScreen(s: number, w: number, h: number, x: number, y: number): [number, number] {
       return [w / 2 + (x - sim.draw.x) * s, h / 2 + (y - sim.draw.y) * s];
-    }
-
-    /**
-     * Keep the view inside the map; centre it when the map is the smaller one.
-     * `biasY` pushes the camera down in device pixels, which lifts the
-     * character that much higher in the frame — on a phone the on-screen pad
-     * would otherwise sit right on top of them.
-     */
-    function clampCamera(map: WorldMap, s: number, w: number, h: number, biasY: number): void {
-      const halfW = w / 2 / s;
-      const halfH = h / 2 / s;
-      const bias = biasY / s;
-      sim.draw.x =
-        map.width <= halfW * 2 ? map.width / 2 : Math.min(map.width - halfW, Math.max(halfW, sim.cam.x));
-      // The lower bound travels with the bias, so the lift still works down at
-      // the bottom wall — at the cost of a strip of void below the lab.
-      sim.draw.y =
-        map.height <= halfH * 2
-          ? map.height / 2 + bias
-          : Math.min(map.height - halfH + bias, Math.max(halfH, sim.cam.y + bias));
     }
 
     /**
@@ -881,6 +922,26 @@ export function GameWorld({
       return path;
     }
 
+    /** Device pixels per tile: the audience sees the whole lab, a player what covers the canvas. */
+    function zoomFor(map: WorldMap, w: number, h: number): number {
+      if (spectator) {
+        return Math.max(14, Math.min(w / (map.width + 0.5), h / (map.height + 0.5)));
+      }
+      // Zoom so the lab always covers the canvas: no black bars beside it — but
+      // stop before the lab turns into giant tiles on very wide windows.
+      const cover = Math.max(w / map.width, h / map.height);
+      return Math.min(170, Math.max(cover, Math.min(88, h / 10.5)));
+    }
+
+    /** The world's text at the zoom it was last worked out for; the zoom seldom changes. */
+    const texts = { s: 0, dpr: 0, styles: worldText(48, 1) };
+    function textAt(s: number, dpr: number): WorldText {
+      if (texts.s !== s || texts.dpr !== dpr) {
+        Object.assign(texts, { s, dpr, styles: worldText(s, dpr) });
+      }
+      return texts.styles;
+    }
+
     function render(map: WorldMap): void {
       if (canvas == null || ctx == null || octx == null) {
         return;
@@ -896,22 +957,51 @@ export function GameWorld({
       }
       const w = canvas.width;
       const h = canvas.height;
-      // Zoom so the lab always covers the canvas: no black bars beside it.
-      const cover = Math.max(w / map.width, h / map.height);
-      const s = spectator
-        ? Math.max(14, Math.min(w / (map.width + 0.5), h / (map.height + 0.5)))
-        : // Cover the canvas, but stop before the lab turns into giant tiles
-          // on very wide windows.
-          Math.min(170, Math.max(cover, Math.min(88, h / 10.5)));
-      clampCamera(map, s, w, h, touchPad.matches && !spectator ? 60 * dpr : 0);
+      const s = zoomFor(map, w, h);
+      sim.draw = clampCamera(map, sim.cam, {
+        scale: s,
+        w,
+        h,
+        top: sim.topCss * dpr,
+        lift: touchPad.matches && !spectator ? PAD_LIFT * dpr : 0,
+      });
       sim.scale = s;
       const light = lightUp(map);
+      const text = textAt(s, dpr);
 
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = '#04070a';
       ctx.fillRect(0, 0, w, h);
       ctx.setTransform(s, 0, 0, s, w / 2 - sim.draw.x * s, h / 2 - sim.draw.y * s);
+      drawTiles(map, s, w, h);
+      const pulse = (Math.sin(sim.time * 4) + 1) / 2;
+      drawProps(map, light, pulse, text);
+      drawFigures(map, light, pulse, text);
 
+      const minimap = spectator || !sim.minimap ? null : minimapLayout(map, w, h, dpr);
+      const view: Viewport = {
+        w,
+        h,
+        dpr,
+        top: safeTopCss * dpr,
+        bottom: safeBottomCss * dpr,
+        boxes: minimap === null ? [] : [minimapBox(minimap, dpr)],
+      };
+      if (!spectator) {
+        renderLighting(map, s, w, h, light);
+      }
+      if (minimap !== null) {
+        renderMinimap(map, minimap, dpr);
+      }
+      renderPings(s, w, h, dpr);
+      renderScreenText(map, s, view);
+    }
+
+    /** Floor and walls, as far as the canvas shows them; tile space. */
+    function drawTiles(map: WorldMap, s: number, w: number, h: number): void {
+      if (ctx == null) {
+        return;
+      }
       const x0 = Math.max(0, Math.floor(sim.draw.x - w / 2 / s) - 1);
       const x1 = Math.min(map.width - 1, Math.ceil(sim.draw.x + w / 2 / s) + 1);
       const y0 = Math.max(0, Math.floor(sim.draw.y - h / 2 / s) - 1);
@@ -927,87 +1017,77 @@ export function GameWorld({
           }
         }
       }
+    }
 
-      // Objects show only where some light has fallen — a cabinet behind a wall stays
-      // unseen. Sources reach this map once found; a station that is up or done, the
-      // sign, the hatch and the valves always show.
-      for (const plate of map.plates.filter((p) => light.shown(p.x, p.y))) {
+    /**
+     * The lab's things, in tile space. Objects show only where some light has
+     * fallen — a cabinet behind a wall stays unseen. Sources reach this map once
+     * found; a station that is up or done, the sign, the hatch and the valves
+     * always show.
+     */
+    function drawProps(map: WorldMap, light: FrameLight, pulse: number, text: WorldText): void {
+      if (ctx == null) {
+        return;
+      }
+      const drawAt = (x: number, y: number, draw: () => void): void => {
         ctx.save();
-        ctx.translate(plate.x + 0.5, plate.y + 0.5);
-        drawPlate(ctx, { pressed: plate.pressed, label: plate.label, camera: plate.freezesDrone });
+        ctx.translate(x, y);
+        draw();
         ctx.restore();
+      };
+      for (const plate of map.plates.filter((p) => light.shown(p.x, p.y))) {
+        const { pressed, label, freezesDrone: camera } = plate;
+        const look = { pressed, label, camera, text };
+        drawAt(plate.x + 0.5, plate.y + 0.5, () => drawPlate(ctx, look));
       }
       for (const door of map.doors) {
-        ctx.save();
-        ctx.translate(door.x + 0.5, door.y + 0.5);
-        drawDoor(ctx, {
-          openT: sim.doors.get(door.id)?.t ?? (door.open ? 1 : 0),
-          horizontal: isHorizontalDoor(map, door.x, door.y),
-        });
-        ctx.restore();
+        const openT = sim.doors.get(door.id)?.t ?? (door.open ? 1 : 0);
+        const horizontal = isHorizontalDoor(map, door.x, door.y);
+        drawAt(door.x + 0.5, door.y + 0.5, () => drawDoor(ctx, { openT, horizontal }));
       }
-      const pulse = (Math.sin(sim.time * 4) + 1) / 2;
       // Every spot: a station with two consoles stands twice, both lit while it is armed.
       for (const station of map.stations) {
-        if (station.status === 'locked' && !light.shown(station.x, station.y)) {
-          continue;
+        if (station.status !== 'locked' || light.shown(station.x, station.y)) {
+          const look = { status: station.status, pulse, console: station.console ?? null };
+          drawAt(station.x + 0.5, station.y + 0.5, () => drawStation(ctx, look));
         }
-        ctx.save();
-        ctx.translate(station.x + 0.5, station.y + 0.5);
-        drawStation(ctx, {
-          status: station.status,
-          pulse,
-          title: spotTitle(station),
-          console: station.console ?? null,
-        });
-        ctx.restore();
       }
       for (const manual of map.manuals) {
-        ctx.save();
-        ctx.translate(manual.x + 0.5, manual.y + 0.5);
-        drawManualObject(ctx, {
-          kind: manual.kind,
-          label: manual.label,
-          active: coversArmed(map, manual),
-          opened: manual.opened,
-          pulse,
-        });
-        ctx.restore();
+        const active = coversArmed(map, manual);
+        const { kind, label, opened } = manual;
+        const look = { kind, label, active, opened, pulse, text };
+        drawAt(manual.x + 0.5, manual.y + 0.5, () => drawManualObject(ctx, look));
       }
-      if (map.edgeworkSign !== null) {
-        ctx.save();
-        ctx.translate(map.edgeworkSign.x + 0.5, map.edgeworkSign.y + 0.5);
-        drawSign(ctx, { label: 'LABORKENNUNG', seen: viewRef.current.presence.signSeen, pulse });
-        ctx.restore();
+      const sign = map.edgeworkSign;
+      if (sign !== null) {
+        const seen = viewRef.current.presence.signSeen;
+        const look = { label: 'LABORKENNUNG', seen, pulse, text };
+        drawAt(sign.x + 0.5, sign.y + 0.5, () => drawSign(ctx, look));
       }
-      if (map.exit !== null) {
-        ctx.save();
-        ctx.translate(map.exit.x + 0.5, map.exit.y + 0.5);
-        drawExit(ctx, map.exit.open, pulse);
-        ctx.restore();
+      const exit = map.exit;
+      if (exit !== null) {
+        drawAt(exit.x + 0.5, exit.y + 0.5, () => drawExit(ctx, exit.open, pulse));
       }
       for (const panel of map.sabotage?.panels ?? []) {
-        ctx.save();
-        ctx.translate(panel.x + 0.5, panel.y + 0.5);
-        drawSabotagePanel(ctx, panel.occupied, pulse);
-        ctx.restore();
+        drawAt(panel.x + 0.5, panel.y + 0.5, () => drawSabotagePanel(ctx, panel.occupied, pulse));
       }
       for (const item of map.items) {
         const zone = item.deliverTo;
         if (zone !== null && !opensCabinet(map, item.id) && light.shown(zone.x, zone.y)) {
-          ctx.save();
-          ctx.translate(zone.x + 0.5, zone.y + 0.5);
-          drawDropZone(ctx, item.delivered, pulse);
-          ctx.restore();
+          drawAt(zone.x + 0.5, zone.y + 0.5, () => drawDropZone(ctx, item.delivered, pulse));
         }
         if (!item.delivered && item.carriedBy === null && light.shown(item.x, item.y)) {
-          ctx.save();
-          ctx.translate(item.x, item.y);
-          drawCarryable(ctx, pulse, false);
-          ctx.restore();
+          const look = { label: item.label, pulse, carried: false, text };
+          drawAt(item.x, item.y, () => drawCarryable(ctx, look));
         }
       }
+    }
 
+    /** Drones and the crew, in tile space; what somebody carries rides above their head. */
+    function drawFigures(map: WorldMap, light: FrameLight, pulse: number, text: WorldText): void {
+      if (ctx == null) {
+        return;
+      }
       // drone cones go under the avatars so figures stay readable inside them; a cone
       // ends at the walls, like the drone's sight on the server
       for (const [id, drone] of Object.entries(dronesRef.current)) {
@@ -1022,37 +1102,37 @@ export function GameWorld({
       }
 
       // avatars: remote first, local on top
-      const colorOf = new Map(
-        viewRef.current.players.map((p) => [p.id, p.color]),
-      );
+      const youId = viewRef.current.you.id;
       const metaOf = new Map(viewRef.current.players.map((p) => [p.id, p]));
       for (const [id, other] of sim.others) {
         const meta = metaOf.get(id);
         ctx.save();
         ctx.translate(other.rx, other.ry + 0.3);
         drawScientist(ctx, {
-          color: colorOf.get(id) ?? FALLBACK_COLOR,
+          color: meta?.color ?? FALLBACK_COLOR,
           name: meta?.name ?? '???',
           facing: other.facing,
           moving: other.moving,
           walkPhase: other.phase,
           isYou: false,
           connected: meta?.connected ?? true,
+          text,
         });
         ctx.restore();
       }
       if (!spectator) {
-        const you = metaOf.get(viewRef.current.you.id);
+        const you = metaOf.get(youId);
         ctx.save();
         ctx.translate(sim.self.x, sim.self.y + 0.3);
         drawScientist(ctx, {
-          color: colorOf.get(viewRef.current.you.id) ?? FALLBACK_COLOR,
+          color: you?.color ?? FALLBACK_COLOR,
           name: you?.name ?? 'DU',
           facing: sim.self.facing,
           moving: sim.self.moving,
           walkPhase: sim.walkPhase,
           isYou: true,
           connected: true,
+          text,
         });
         ctx.restore();
       }
@@ -1064,30 +1144,25 @@ export function GameWorld({
         ctx.restore();
       }
 
-      // carried objects ride above their carrier's head
       for (const item of map.items) {
-        if (item.delivered || item.carriedBy === null) {
-          continue;
-        }
         const carrier =
-          item.carriedBy === viewRef.current.you.id
-            ? { x: sim.self.x, y: sim.self.y }
-            : sim.others.get(item.carriedBy);
-        if (carrier === undefined) {
-          continue;
+          item.delivered || item.carriedBy === null ? undefined : drawnAt(item.carriedBy);
+        if (carrier !== undefined) {
+          ctx.save();
+          ctx.translate(carrier.x, carrier.y - 0.75);
+          drawCarryable(ctx, { label: item.label, pulse, carried: true });
+          ctx.restore();
         }
-        ctx.save();
-        ctx.translate('rx' in carrier ? carrier.rx : carrier.x, ('ry' in carrier ? carrier.ry : carrier.y) - 0.75);
-        drawCarryable(ctx, pulse, true);
-        ctx.restore();
       }
+    }
 
-      if (!spectator) {
-        renderLighting(map, s, w, h, light);
-        renderMinimap(map, w, h, dpr);
+    /** Where a crew member is drawn now: you where you stand, the rest where they ease to. */
+    function drawnAt(playerId: string): { x: number; y: number } | undefined {
+      if (playerId === viewRef.current.you.id) {
+        return sim.self;
       }
-      renderPings(s, w, h, dpr);
-      renderScreenText(map, s, w, h, dpr);
+      const other = sim.others.get(playerId);
+      return other === undefined ? undefined : { x: other.rx, y: other.ry };
     }
 
     /** Expanding rings for recent pings, plus an edge arrow for off-screen ones. */
@@ -1224,32 +1299,45 @@ export function GameWorld({
       }
     }
 
-    /** Corner minimap: layout, doors, objective, exit and everyone's dot. */
-    function renderMinimap(map: WorldMap, w: number, h: number, dpr: number): void {
-      if (ctx == null || !sim.minimap) {
-        return;
-      }
-      // Scales with the window, but never so small it stops being readable
-      // or so large it eats a phone screen.
+    /**
+     * Where the corner minimap goes: top right, below the objective bar — the
+     * clock, and a radio line while one is up. It scales with the window, but
+     * never so small it stops being readable or so large it eats a phone
+     * screen.
+     */
+    function minimapLayout(map: WorldMap, w: number, h: number, dpr: number): MinimapLayout {
       const targetCss = Math.min(190, Math.max(110, (w / dpr) * 0.16));
-      // Top right, below the objective bar — the clock, and a radio line
-      // while one is up — and clear of the edge markers and room signage
-      // along the bottom.
       const oy = Math.max(84, safeTopCss) * dpr;
       // A short window has less room below the clock than beside it, and both
       // the minimap and the control cluster hug the right edge.
-      const roomBelow = (h - oy - (safeBottomCss + 14) * dpr) / map.height;
-      const cell = Math.max(3, Math.min(Math.round((targetCss * dpr) / map.width), Math.floor(roomBelow)));
+      const roomBelow = (h - oy - (safeBottomCss + 2 * MINIMAP_FRAME) * dpr) / map.height;
+      const fit = Math.round((targetCss * dpr) / map.width);
+      const cell = Math.max(3, Math.min(fit, Math.floor(roomBelow)));
       const mw = map.width * cell;
       const mh = map.height * cell;
-      const ox = w - mw - 14 * dpr;
+      return { ox: w - mw - 14 * dpr, oy, cell, mw, mh };
+    }
+
+    /** What the minimap covers, its frame included: the arrows and room names keep off it. */
+    function minimapBox({ ox, oy, mw, mh }: MinimapLayout, dpr: number): Box {
+      const frame = MINIMAP_FRAME * dpr;
+      return { left: ox - frame, top: oy - frame, right: ox + mw + frame, bottom: oy + mh + frame };
+    }
+
+    /** Corner minimap: layout, doors, objective, exit and everyone's dot. */
+    function renderMinimap(map: WorldMap, layout: MinimapLayout, dpr: number): void {
+      if (ctx == null) {
+        return;
+      }
+      const { ox, oy, cell } = layout;
+      const { left, top, right, bottom } = minimapBox(layout, dpr);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = 0.86;
       ctx.fillStyle = '#070b0f';
       ctx.strokeStyle = '#24323f';
       ctx.lineWidth = dpr;
       ctx.beginPath();
-      ctx.roundRect(ox - 5 * dpr, oy - 5 * dpr, mw + 10 * dpr, mh + 10 * dpr, 6 * dpr);
+      ctx.roundRect(left, top, right - left, bottom - top, 6 * dpr);
       ctx.fill();
       ctx.stroke();
 
@@ -1322,39 +1410,41 @@ export function GameWorld({
      * on tiles light has fallen on, plates worth finding, crates and drop-offs.
      */
     function glowObjects(map: WorldMap, light: FrameLight, punch: Punch): void {
+      const glow = (wx: number, wy: number, radius: number, strength: number): void =>
+        punch(wx, wy, radius, objectGlowStops(strength));
       for (const station of map.stations) {
         if (station.status === 'armed') {
-          punch(station.x + 0.5, station.y + 0.5, 2.4, 0.85);
+          glow(station.x + 0.5, station.y + 0.5, 2.4, 0.85);
         } else if (station.status === 'done') {
-          punch(station.x + 0.5, station.y + 0.5, 1.1, 0.4);
+          glow(station.x + 0.5, station.y + 0.5, 1.1, 0.4);
         }
       }
       for (const manual of map.manuals) {
         const active = coversArmed(map, manual);
-        punch(manual.x + 0.5, manual.y + 0.5, active ? 2.1 : 1.3, active ? 0.8 : 0.5);
+        glow(manual.x + 0.5, manual.y + 0.5, active ? 2.1 : 1.3, active ? 0.8 : 0.5);
       }
       if (map.edgeworkSign !== null) {
-        punch(map.edgeworkSign.x + 0.5, map.edgeworkSign.y + 0.5, 1.4, 0.6);
+        glow(map.edgeworkSign.x + 0.5, map.edgeworkSign.y + 0.5, 1.4, 0.6);
       }
       // A camera plate is worth finding before anybody stands on it.
       for (const plate of map.plates.filter((p) => light.shown(p.x, p.y))) {
         if (plate.pressed || plate.freezesDrone) {
-          punch(plate.x + 0.5, plate.y + 0.5, 1.0, 0.5);
+          glow(plate.x + 0.5, plate.y + 0.5, 1.0, 0.5);
         }
       }
       if (map.exit !== null && map.exit.open) {
-        punch(map.exit.x + 0.5, map.exit.y + 0.5, 2.6, 0.9);
+        glow(map.exit.x + 0.5, map.exit.y + 0.5, 2.6, 0.9);
       }
       for (const panel of map.sabotage?.panels ?? []) {
-        punch(panel.x + 0.5, panel.y + 0.5, 2.4, 0.9);
+        glow(panel.x + 0.5, panel.y + 0.5, 2.4, 0.9);
       }
       for (const item of map.items) {
         if (!item.delivered && item.carriedBy === null && light.shown(item.x, item.y)) {
-          punch(item.x, item.y, 1.6, 0.7);
+          glow(item.x, item.y, 1.6, 0.7);
         }
         const zone = item.deliverTo;
         if (zone !== null && light.shown(zone.x, zone.y)) {
-          punch(zone.x + 0.5, zone.y + 0.5, 1.4, 0.6);
+          glow(zone.x + 0.5, zone.y + 0.5, 1.4, 0.6);
         }
       }
     }
@@ -1375,18 +1465,18 @@ export function GameWorld({
       octx.fillRect(0, 0, w, h);
       octx.globalCompositeOperation = 'destination-out';
 
-      const punch: Punch = (wx, wy, radius, strength) => {
+      const punch: Punch = (wx, wy, radius, stops) => {
         const [sx, sy] = worldToScreen(s, w, h, wx, wy);
         const r = radius * s;
         const g = octx.createRadialGradient(sx, sy, 0, sx, sy, r);
-        g.addColorStop(0, `rgba(0,0,0,${strength})`);
-        g.addColorStop(0.55, `rgba(0,0,0,${strength * 0.55})`);
-        g.addColorStop(1, 'rgba(0,0,0,0)');
+        for (const [offset, depth] of stops) {
+          g.addColorStop(offset, `rgba(0,0,0,${depth})`);
+        }
         octx.fillStyle = g;
         octx.fillRect(sx - r, sy - r, r * 2, r * 2);
       };
-      /** A beam from `lamp`: its cone, fading out along the gradient `stops` (offset, depth). */
-      const beam = ({ lamp }: Lit, stops: readonly (readonly [number, number])[]): void => {
+      /** A beam from `lamp`: its cone, fading out along the gradient `stops`. */
+      const beam = ({ lamp }: Lit, stops: Stops): void => {
         if (lamp.beam === null) {
           return;
         }
@@ -1417,17 +1507,18 @@ export function GameWorld({
         octx.restore();
       };
 
-      // Your lamp: a close radial glow plus a flashlight cone in facing direction;
-      // everybody else's glow. Each lights what it can see, and nothing behind a wall.
+      // Your lamp: a lit circle round you plus a flashlight cone in facing direction;
+      // everybody else's softer glow. Each lights what it can see, and nothing behind
+      // a wall — so the walls cut a clean edge into the circle.
       const own = light.own;
       if (own !== null) {
         within(own, () => {
-          punch(own.lamp.x, own.lamp.y, OWN_GLOW, 1);
-          beam(own, [[0, 0.95], [0.6, 0.6], [1, 0]]);
+          punch(own.lamp.x, own.lamp.y, OWN_GLOW, OWN_GLOW_STOPS);
+          beam(own, OWN_BEAM_STOPS);
         });
       }
       for (const lit of light.crew) {
-        within(lit, () => punch(lit.lamp.x, lit.lamp.y, CREW_GLOW, 0.9));
+        within(lit, () => punch(lit.lamp.x, lit.lamp.y, CREW_GLOW, CREW_GLOW_STOPS));
       }
       glowObjects(map, light, punch);
       // Drone cones light their own path as far as the drone sees, which is what
@@ -1435,11 +1526,11 @@ export function GameWorld({
       for (const [id, drone] of Object.entries(dronesRef.current)) {
         const eye = light.eyes.get(id);
         if (eye === undefined) {
-          punch(drone.x, drone.y, 0.9, 0.5);
+          punch(drone.x, drone.y, 0.9, objectGlowStops(0.5));
           continue;
         }
-        within(eye, () => beam(eye, [[0, 0.9], [1, 0]]));
-        punch(drone.x, drone.y, 1.1, 0.75);
+        within(eye, () => beam(eye, DRONE_BEAM_STOPS));
+        punch(drone.x, drone.y, 1.1, objectGlowStops(0.75));
       }
       // A lit room keeps no darkness at all, walls and doors included; one
       // path per room, so its tiles meet without seams.
@@ -1461,51 +1552,59 @@ export function GameWorld({
       }
     }
 
-    function renderScreenText(map: WorldMap, s: number, w: number, h: number, dpr: number): void {
+    function renderScreenText(map: WorldMap, s: number, view: Viewport): void {
       if (ctx == null) {
         return;
       }
+      const { w, h, dpr } = view;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.textAlign = 'center';
-      ctx.font = `600 ${11 * dpr}px ui-monospace, Menlo, monospace`;
-      for (const label of map.labels) {
-        const [sx, sy] = worldToScreen(s, w, h, label.x + 0.5, label.y + 0.5);
-        // Room names are signage, not world objects: keep them readable by
-        // nudging them inside the frame instead of letting them be cut off.
-        const half = ctx.measureText(label.text).width / 2 + 10 * dpr;
-        if (sy < -20 || sy > h + 20) {
-          continue;
-        }
-        ctx.fillStyle = 'rgba(125,143,158,0.5)';
-        ctx.fillText(label.text, Math.min(w - half, Math.max(half, sx)), sy);
-      }
+      // Anything you need to walk to gets an arrow at the screen edge while
+      // it is out of sight — in the dark that is the only way to find it. The
+      // room names keep off the arrows, as off the minimap.
+      const markers = edgeMarkers(map, s, view);
+      const arrows = markers.flatMap(({ at, captionWidth }) => markerBoxes(at, captionWidth, dpr));
+      renderRoomNames(map, s, { ...view, boxes: [...view.boxes, ...arrows] });
       if (map.exit !== null && map.exit.open) {
         const [ex, ey] = worldToScreen(s, w, h, map.exit.x + 0.5, map.exit.y - 0.45);
         ctx.font = `700 ${12 * dpr}px ui-monospace, Menlo, monospace`;
         ctx.fillStyle = '#4ade80';
         ctx.fillText('NOTAUSGANG → ALLE HIERHER!', ex, ey);
       }
-      // Anything you need to walk to gets an arrow at the screen edge while
-      // it is out of sight — in the dark that is the only way to find it.
+      renderEdgeMarkers(markers, dpr);
+      renderPrompt(map, s, view);
+      renderCaptions(s, w, h, dpr);
+      renderChatBubbles(s, w, h, dpr);
+      renderCarrying(map, view);
+    }
+
+    /** The arrows due at the screen's edge this frame, each with its caption, placed. */
+    function edgeMarkers(map: WorldMap, s: number, view: Viewport): EdgeMarker[] {
+      if (ctx == null) {
+        return [];
+      }
+      const { w, h, dpr } = view;
       ctx.font = `700 ${11 * dpr}px ui-monospace, Menlo, monospace`;
-      ctx.textAlign = 'center';
-      const marks = markerTargets(
-        map,
-        viewRef.current.you.id,
-        sim.self,
-        positionsOf(positionsRef.current, sim.run),
-      ).map((target) => {
+      const crew = positionsOf(positionsRef.current, sim.run);
+      const marks = markerTargets(map, viewRef.current.you.id, sim.self, crew).map((target) => {
         const [px, py] = worldToScreen(s, w, h, target.x, target.y);
         const tiles = Math.round(Math.hypot(target.x - sim.self.x, target.y - sim.self.y));
         const caption = `${target.label} ${tiles}m`;
         return { target, caption, px, py, captionWidth: ctx.measureText(caption).width };
       });
-      const placements = placeMarkers(marks, w, h, safeTopCss, dpr);
-      marks.forEach(({ target, caption }, i) => {
+      const placements = placeMarkers(marks, view);
+      return marks.flatMap(({ target, caption, captionWidth }, i) => {
         const at = placements[i];
-        if (at == null) {
-          return;
-        }
+        return at == null ? [] : [{ target, caption, captionWidth, at }];
+      });
+    }
+
+    function renderEdgeMarkers(markers: readonly EdgeMarker[], dpr: number): void {
+      if (ctx == null) {
+        return;
+      }
+      ctx.font = `700 ${11 * dpr}px ui-monospace, Menlo, monospace`;
+      for (const { target, caption, at } of markers) {
         ctx.save();
         ctx.translate(at.x, at.y);
         ctx.rotate(at.angle);
@@ -1519,29 +1618,67 @@ export function GameWorld({
         ctx.restore();
         ctx.fillStyle = target.color;
         ctx.fillText(caption, at.x, at.captionY);
+      }
+    }
+
+    /**
+     * Room names are signage, not world objects: a fixed size above every
+     * prop's label, nudged in rather than cut off at a side, and left out
+     * where they would lie off screen or under something else.
+     */
+    function renderRoomNames(map: WorldMap, s: number, view: Viewport): void {
+      if (ctx == null) {
+        return;
+      }
+      const { w, h, dpr } = view;
+      ctx.save();
+      ctx.font = `700 ${ROOM_NAME_PX * dpr}px ui-monospace, Menlo, monospace`;
+      const names = map.labels.map((label) => {
+        const [x, y] = worldToScreen(s, w, h, label.x + 0.5, label.y + 0.5);
+        return { text: label.text, x, y, width: ctx.measureText(label.text).width };
       });
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 3 * dpr;
+      ctx.strokeStyle = 'rgba(3,6,10,0.85)';
+      ctx.fillStyle = 'rgba(160,174,190,0.8)';
+      for (const name of placeRoomNames(names, view)) {
+        ctx.strokeText(name.text, name.x, name.y);
+        ctx.fillText(name.text, name.x, name.y);
+      }
+      ctx.restore();
+    }
+
+    /** What E does here, over the thing it works on; amber where E does nothing yet. */
+    function renderPrompt(map: WorldMap, s: number, view: Viewport): void {
       const { you, sourcesHere, puzzle } = viewRef.current;
       const action = lockedRef.current
         ? null
         : contextAction(map, sim.self, you.id, sourcesHere, puzzle !== null);
-      if (action !== null) {
-        const [sx, rawY] = worldToScreen(s, w, h, action.x, action.y);
-        // Like the edge arrows: the prompt must stay below the objective bar.
-        const sy = Math.max(rawY, (safeTopCss + 24) * dpr);
-        // Amber where E does nothing yet: something is missing.
-        drawTag(action.label, sx, sy, action.kind === 'locked' ? '#fbbf24' : '#2dd4bf', dpr);
+      if (action === null) {
+        return;
       }
-      renderCaptions(s, w, h, dpr);
-      renderChatBubbles(s, w, h, dpr);
+      const { w, h, dpr } = view;
+      const [sx, rawY] = worldToScreen(s, w, h, action.x, action.y);
+      // Like the edge arrows: the prompt must stay below the objective bar.
+      const sy = Math.max(rawY, view.top + 24 * dpr);
+      const tint = action.kind === 'locked' ? '#fbbf24' : '#2dd4bf';
+      drawTag(promptText(action, !touchPad.matches), sx, sy, tint, dpr);
+    }
 
-      // A standing reminder while hands are full.
-      const carrying = map.items.find(
-        (item) => item.carriedBy === viewRef.current.you.id && !item.delivered,
-      );
+    /**
+     * A standing reminder of the Q key while hands are full. A touch screen has
+     * no key to put things down with, and its crew strip says what you carry.
+     */
+    function renderCarrying(map: WorldMap, view: Viewport): void {
+      if (ctx == null || touchPad.matches) {
+        return;
+      }
+      const youId = viewRef.current.you.id;
+      const carrying = map.items.find((item) => item.carriedBy === youId && !item.delivered);
       if (carrying !== undefined) {
-        ctx.font = `700 ${12 * dpr}px ui-monospace, Menlo, monospace`;
+        ctx.font = `700 ${12 * view.dpr}px ui-monospace, Menlo, monospace`;
         ctx.fillStyle = '#60a5fa';
-        ctx.fillText(`📦 ${carrying.label} — [Q] ablegen`, w / 2, h - 16 * dpr);
+        ctx.fillText(`📦 ${carrying.label} — [Q] ablegen`, view.w / 2, view.h - 16 * view.dpr);
       }
     }
 
@@ -1588,9 +1725,16 @@ export function GameWorld({
   return (
     <div className="world-wrap">
       <canvas ref={canvasRef} className={`world-canvas ${spectator ? 'world-canvas--wide' : ''}`} />
-      {tip !== null && (
-        <div className={tip.overPanel ? 'coach coach--panel' : 'coach'}>{tip.text}</div>
-      )}
+      {tip !== null &&
+        (tip.overPanel ? (
+          <div className="coach coach--panel">{tip.text}</div>
+        ) : (
+          // Just above the control cluster, wherever it reaches: never on the
+          // avatar under the objective bar, nor on the minimap.
+          <div className="coach" style={{ bottom: controlsReach + TIP_GAP }}>
+            {tip.text}
+          </div>
+        ))}
       {!spectator && (
       <div className="world-controls" ref={controlsRef}>
         <div className="world-dpad" role="group" aria-label="Steuerkreuz">
@@ -1617,15 +1761,21 @@ export function GameWorld({
             </button>
           ))}
         </div>
-        <button className="world-interact" onClick={() => interactRef.current?.()}>
-          ⚡ [E]
+        {/* The key on a button shows only where there are keys (world.css). */}
+        <button
+          className="world-interact"
+          aria-label="Benutzen"
+          onClick={() => interactRef.current?.()}
+        >
+          ⚡<span className="world-key"> [E]</span>
         </button>
         <button
           className="world-chat-toggle"
+          aria-label="Schnellchat"
           onClick={() => setWheelOpen((open) => !open)}
           aria-expanded={wheelOpen}
         >
-          💬 [C]
+          💬<span className="world-key"> [C]</span>
         </button>
       </div>
       )}

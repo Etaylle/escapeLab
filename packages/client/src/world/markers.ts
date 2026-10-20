@@ -1,5 +1,6 @@
 import type { MapView } from '@escapelab/core';
 import { consoleName } from './consoles.js';
+import { overlaps, type Box, type Viewport } from './viewport.js';
 
 /** A thing worth walking to, and how its arrow should look. */
 export interface MarkerTarget {
@@ -105,7 +106,7 @@ export function markerTargets(
 
 /** All in CSS pixels; the canvas works in device pixels, hence the `dpr`. */
 const MARGIN = 34;
-/** gap between the objective bar and an arrow pinned to the top edge */
+/** gap between an overlay along an edge — the objective bar, the controls — and an arrow there */
 const BAR_GAP = 16;
 const CAPTION_BELOW = 26;
 const CAPTION_ABOVE = 20;
@@ -114,32 +115,34 @@ const ARROW_REACH = 13;
 /** how far a caption's letters rise above and drop below its baseline */
 const CAPTION_RISE = 8;
 const CAPTION_DROP = 3;
-/** air left between two markers on one edge */
+/** air left between two markers on one edge, and between a marker and a box */
 const MARKER_AIR = 4;
 
+/** How high and how low an arrow may sit: clear of the objective bar and of the controls. */
+function heights(view: Viewport): [number, number] {
+  const margin = MARGIN * view.dpr;
+  const gap = BAR_GAP * view.dpr;
+  return [Math.max(margin, view.top + gap), view.h - Math.max(margin, view.bottom + gap)];
+}
+
 /**
- * Pins an off-screen target to the inside of the frame. `safeTopCss` is the
- * measured height of the objective bar lying on the canvas: an arrow at the
- * top edge has to clear it, or it is drawn on the mission title.
+ * Pins an off-screen target to the inside of the frame, clear of what lies
+ * over its top and bottom edges: an arrow at the top has to clear the
+ * objective bar, or it is drawn on the mission title, and one at the bottom
+ * the control cluster.
  *
  * Returns null while the target is on screen — everything an arrow points at
  * lights its own patch of the darkness, so the arrow would only cover it up.
  */
-export function placeMarker(
-  px: number,
-  py: number,
-  w: number,
-  h: number,
-  safeTopCss: number,
-  dpr: number,
-): MarkerPlacement | null {
+export function placeMarker(px: number, py: number, view: Viewport): MarkerPlacement | null {
+  const { w, h, dpr } = view;
   if (px >= 0 && px <= w && py >= 0 && py <= h) {
     return null;
   }
   const margin = MARGIN * dpr;
-  const top = Math.max(margin, (safeTopCss + BAR_GAP) * dpr);
+  const [top, bottom] = heights(view);
   const x = Math.min(w - margin, Math.max(margin, px));
-  const y = Math.min(h - margin, Math.max(top, py));
+  const y = Math.min(bottom, Math.max(top, py));
   return {
     x,
     y,
@@ -148,6 +151,20 @@ export function placeMarker(
     // off the frame.
     captionY: py > h / 2 ? y - CAPTION_ABOVE * dpr : y + CAPTION_BELOW * dpr,
   };
+}
+
+/** What a placed marker covers: its arrow, and its caption `captionWidth` wide. */
+export function markerBoxes(at: MarkerPlacement, captionWidth: number, dpr: number): Box[] {
+  const reach = ARROW_REACH * dpr;
+  return [
+    { left: at.x - reach, top: at.y - reach, right: at.x + reach, bottom: at.y + reach },
+    {
+      left: at.x - captionWidth / 2,
+      top: at.captionY - CAPTION_RISE * dpr,
+      right: at.x + captionWidth / 2,
+      bottom: at.captionY + CAPTION_DROP * dpr,
+    },
+  ];
 }
 
 /** A target where it lies on screen, and how wide its caption is drawn; device pixels. */
@@ -161,26 +178,26 @@ type Edge = 'left' | 'right' | 'top' | 'bottom';
 
 const onSide = (edge: Edge): boolean => edge === 'left' || edge === 'right';
 
-/** A pinned marker on its edge: where along it, and the room it takes before and after that. */
+/**
+ * A pinned marker on its edge: where along it, the room it takes before and
+ * after that, and how far it reaches across the edge from its arrow's line.
+ */
 interface Slot {
   index: number;
   edge: Edge;
   at: number;
   before: number;
   after: number;
+  across: number;
 }
 
 /**
  * On a side the arrow and its caption stack, so a marker takes room up and
  * down; along the top and the bottom the caption is the wider of the two.
  */
-function slotOf(
-  index: number,
-  at: MarkerPlacement,
-  point: MarkerPoint,
-  w: number,
-  dpr: number,
-): Slot {
+function slotOf(index: number, at: MarkerPlacement, point: MarkerPoint, view: Viewport): Slot {
+  const { w, dpr } = view;
+  const half = Math.max(ARROW_REACH * dpr, point.captionWidth / 2);
   if (point.px < 0 || point.px > w) {
     const below = at.captionY > at.y;
     return {
@@ -189,20 +206,108 @@ function slotOf(
       at: at.y,
       before: (below ? ARROW_REACH : CAPTION_ABOVE + CAPTION_RISE) * dpr,
       after: (below ? CAPTION_BELOW + CAPTION_DROP : ARROW_REACH) * dpr,
+      across: half,
     };
   }
-  const half = Math.max(ARROW_REACH * dpr, point.captionWidth / 2);
-  return { index, edge: point.py < 0 ? 'top' : 'bottom', at: at.x, before: half, after: half };
+  const top = point.py < 0;
+  return {
+    index,
+    edge: top ? 'top' : 'bottom',
+    at: at.x,
+    before: half,
+    after: half,
+    across: (top ? CAPTION_BELOW + CAPTION_DROP : CAPTION_ABOVE + CAPTION_RISE) * dpr,
+  };
 }
 
-/** Moves the slots of one edge apart in their order along it, backing up from its end `hi`. */
+/** A stretch along an edge, from one end to the other. */
+type Span = readonly [number, number];
+
+/** The strip along `edge` that its markers' arrows and captions cover. */
+function laneOf(edge: Edge, slots: readonly Slot[], view: Viewport): Box {
+  const { w, h } = view;
+  const margin = MARGIN * view.dpr;
+  const [top, bottom] = heights(view);
+  const across = Math.max(...slots.map((slot) => slot.across));
+  switch (edge) {
+    case 'left':
+      return { left: 0, top: 0, right: margin + across, bottom: h };
+    case 'right':
+      return { left: w - margin - across, top: 0, right: w, bottom: h };
+    case 'top':
+      return { left: 0, top: 0, right: w, bottom: top + across };
+    case 'bottom':
+      return { left: 0, top: bottom - across, right: w, bottom: h };
+  }
+}
+
+/** `[lo, hi]` with the cuts taken out, their ends still usable; all of it where nothing is left. */
+function freeSpans(lo: number, hi: number, cuts: readonly Span[]): Span[] {
+  let spans: Span[] = [[lo, hi]];
+  for (const [a, b] of cuts) {
+    spans = spans.flatMap(([from, to]): Span[] => {
+      if (b < from || a > to) {
+        return [[from, to]];
+      }
+      const kept: Span[] = [];
+      if (a >= from) {
+        kept.push([from, a]);
+      }
+      if (b <= to) {
+        kept.push([b, to]);
+      }
+      return kept;
+    });
+  }
+  return spans.length > 0 ? spans : [[lo, hi]];
+}
+
+/**
+ * Where along `edge` its markers may sit: inside the frame, clear of the bars,
+ * and off every box lying in their lane — the minimap — by the room a marker
+ * takes before and after its middle.
+ */
+function spansOf(edge: Edge, slots: readonly Slot[], view: Viewport): Span[] {
+  const margin = MARGIN * view.dpr;
+  const air = MARKER_AIR * view.dpr;
+  const [lo, hi] = onSide(edge) ? heights(view) : [margin, view.w - margin];
+  const lane = laneOf(edge, slots, view);
+  const before = Math.max(...slots.map((slot) => slot.before));
+  const after = Math.max(...slots.map((slot) => slot.after));
+  const cuts = view.boxes
+    .filter((box) => overlaps(box, lane))
+    .map((box): Span => {
+      const [a, b] = onSide(edge) ? [box.top, box.bottom] : [box.left, box.right];
+      return [a - after - air, b + before + air];
+    });
+  return freeSpans(lo, hi, cuts);
+}
+
+/** Which of `spans` lies nearest to `at`: the one holding it, else the closest. */
+function nearestSpan(at: number, spans: readonly Span[]): number {
+  let nearest = 0;
+  let least = Infinity;
+  spans.forEach(([from, to], i) => {
+    const off = Math.max(from - at, at - to, 0);
+    if (off < least) {
+      nearest = i;
+      least = off;
+    }
+  });
+  return nearest;
+}
+
+/**
+ * Moves the slots of a stretch apart in their order along it, from its start
+ * `lo` on — a slot may lie before it, cut off by a box — backing up from its
+ * end `hi`.
+ */
 function spread(slots: Slot[], lo: number, hi: number, air: number): void {
   slots.sort((a, b) => a.at - b.at);
   let prev: Slot | null = null;
   for (const slot of slots) {
-    if (prev !== null) {
-      slot.at = Math.max(slot.at, prev.at + prev.after + slot.before + air);
-    }
+    const first = prev === null ? lo : prev.at + prev.after + slot.before + air;
+    slot.at = Math.max(slot.at, first);
     prev = slot;
   }
   let next: Slot | null = null;
@@ -215,27 +320,32 @@ function spread(slots: Slot[], lo: number, hi: number, air: number): void {
 
 /**
  * Every target pinned as by placeMarker, then the markers sharing an edge
- * moved along it until none covers another: on a side they stack, each arrow
- * clear of its neighbour's caption; along the top and the bottom the captions
- * stand side by side. A stack that would run off its edge backs up.
+ * moved along it until none covers another or a box such as the minimap: on
+ * a side they stack, each arrow clear of its neighbour's caption; along the
+ * top and the bottom the captions stand side by side. A box cuts its edge in
+ * stretches, and each marker keeps to the stretch nearest it; a stack that
+ * would run off its stretch backs up.
  */
 export function placeMarkers(
   points: readonly MarkerPoint[],
-  w: number,
-  h: number,
-  safeTopCss: number,
-  dpr: number,
+  view: Viewport,
 ): (MarkerPlacement | null)[] {
-  const placed = points.map((point) => placeMarker(point.px, point.py, w, h, safeTopCss, dpr));
+  const placed = points.map((point) => placeMarker(point.px, point.py, view));
   const slots = points.flatMap((point, index) => {
     const at = placed[index];
-    return at == null ? [] : [slotOf(index, at, point, w, dpr)];
+    return at == null ? [] : [slotOf(index, at, point, view)];
   });
-  const margin = MARGIN * dpr;
-  const top = Math.max(margin, (safeTopCss + BAR_GAP) * dpr);
   for (const edge of ['left', 'right', 'top', 'bottom'] as const) {
-    const [lo, hi] = onSide(edge) ? [top, h - margin] : [margin, w - margin];
-    spread(slots.filter((slot) => slot.edge === edge), lo, hi, MARKER_AIR * dpr);
+    const mine = slots.filter((slot) => slot.edge === edge);
+    if (mine.length === 0) {
+      continue;
+    }
+    const spans = spansOf(edge, mine, view);
+    const groups = spans.map((): Slot[] => []);
+    for (const slot of mine) {
+      groups[nearestSpan(slot.at, spans)]?.push(slot);
+    }
+    spans.forEach(([lo, hi], i) => spread(groups[i] ?? [], lo, hi, MARKER_AIR * view.dpr));
   }
   for (const slot of slots) {
     const at = placed[slot.index];

@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { sightFrom } from '@escapelab/core';
 import {
+  CREW_GLOW_STOPS,
+  DRONE_BEAM_STOPS,
   doorsShut,
   lightClip,
   litTiles,
+  objectGlowStops,
+  OWN_BEAM_STOPS,
+  OWN_GLOW_STOPS,
   reachOf,
   sightCache,
   type Lamp,
+  type Stops,
 } from '../src/world/light.js';
 
 /**
@@ -113,5 +119,65 @@ describe('sightCache', () => {
     look(map, { x: 2.5, y: 1.5 }, 3, open);
     look(map, { x: 3.5, y: 1.5 }, 3, open);
     expect(look(map, { x: 1.5, y: 1.5 }, 3, open)).not.toBe(first);
+  });
+});
+
+/** How deep a gradient with these stops cuts at `offset`: straight lines between them, as drawn. */
+function depthAt(stops: Stops, offset: number): number {
+  const after = stops.findIndex(([at]) => at >= offset);
+  const [hiAt, hiDepth] = stops[after] ?? stops[stops.length - 1] ?? [1, 0];
+  const [loAt, loDepth] = stops[after - 1] ?? [hiAt, hiDepth];
+  if (hiAt === loAt) {
+    return hiDepth;
+  }
+  return loDepth + ((offset - loAt) / (hiAt - loAt)) * (hiDepth - loDepth);
+}
+
+/** Offsets from a glow's middle out to its rim, a twentieth apart. */
+const OFFSETS = Array.from({ length: 21 }, (_, i) => i / 20);
+
+describe('the lamps’ gradients', () => {
+  it('clear the darkness through 70 % of your lamp’s radius, fading only at the rim', () => {
+    for (const offset of OFFSETS.filter((t) => t <= 0.7)) {
+      expect(depthAt(OWN_GLOW_STOPS, offset)).toBe(1);
+    }
+    const rim = OFFSETS.filter((t) => t > 0.7).map((t) => depthAt(OWN_GLOW_STOPS, t));
+    rim.forEach((depth, i) => expect(depth).toBeLessThan(i === 0 ? 1 : (rim[i - 1] ?? 0)));
+    expect(depthAt(OWN_GLOW_STOPS, 1)).toBe(0);
+  });
+
+  it('light the crew’s lamps a little softer than yours, but still as lamps', () => {
+    for (const offset of OFFSETS) {
+      expect(depthAt(CREW_GLOW_STOPS, offset)).toBeLessThanOrEqual(depthAt(OWN_GLOW_STOPS, offset));
+    }
+    expect(depthAt(CREW_GLOW_STOPS, 0)).toBeLessThan(1);
+    expect(depthAt(CREW_GLOW_STOPS, 0.5)).toBeGreaterThanOrEqual(0.75);
+  });
+
+  it('cut deeper with your lamp than the old glow did, all the way to its rim', () => {
+    const before = objectGlowStops(1);
+    for (const offset of OFFSETS.slice(1, -1)) {
+      expect(depthAt(OWN_GLOW_STOPS, offset)).toBeGreaterThan(depthAt(before, offset));
+    }
+  });
+
+  it('fade every glow and beam out to nothing at its rim, inward to outward', () => {
+    for (const stops of [OWN_GLOW_STOPS, OWN_BEAM_STOPS, CREW_GLOW_STOPS, DRONE_BEAM_STOPS]) {
+      expect(stops[0]?.[0]).toBe(0);
+      expect(stops.at(-1)).toEqual([1, 0]);
+      stops.slice(1).forEach(([at, depth], i) => {
+        expect(at).toBeGreaterThan(stops[i]?.[0] ?? 1);
+        expect(depth).toBeLessThanOrEqual(stops[i]?.[1] ?? 0);
+        expect(depth).toBeGreaterThanOrEqual(0);
+      });
+    }
+  });
+
+  it('keep the objects’ own glow as it was: half its depth past the middle', () => {
+    expect(objectGlowStops(0.8)).toEqual([
+      [0, 0.8],
+      [0.55, 0.8 * 0.55],
+      [1, 0],
+    ]);
   });
 });

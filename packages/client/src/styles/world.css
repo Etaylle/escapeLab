@@ -1,0 +1,45 @@
+/*
+ * The world's HTML over its canvas (world/GameWorld.tsx): the first-time
+ * coach marks, and the keys named on the touch buttons.
+ */
+
+/* ── first-time coach marks (moved here from ui.css) ──────────────────── */
+
+/*
+ * A tip over the world sits just above the control cluster: GameWorld
+ * measures how far that reaches and sets the tip's `bottom` inline, so it is
+ * clear of the avatar under the objective bar and of the minimap. A device's
+ * tip lies over the station's frame instead (.coach--panel, devices.css).
+ * Taps go through to the world under it.
+ */
+.coach {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  max-width: min(520px, calc(100% - 28px));
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--accent-dark);
+  background: rgba(7, 11, 15, 0.94);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  animation: fadein 0.25s;
+}
+
+.coach strong {
+  color: var(--accent);
+}
+
+/* ── keys on the buttons ──────────────────────────────────────────────── */
+
+/* A touch screen has no keys to name: the buttons keep their icons. */
+@media (pointer: coarse) {
+  .world-key {
+    display: none;
+  }
+}

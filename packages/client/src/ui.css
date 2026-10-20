@@ -1519,31 +1519,6 @@ button.link:hover {
   }
 }
 
-/* ── first-time coach marks ─────────────────────────────────────────────── */
-
-.coach {
-  position: absolute;
-  left: 50%;
-  top: 92px;
-  transform: translateX(-50%);
-  z-index: 4;
-  max-width: min(520px, calc(100% - 28px));
-  padding: 10px 16px;
-  border-radius: 10px;
-  border: 1px solid var(--accent-dark);
-  background: rgba(7, 11, 15, 0.94);
-  color: var(--text);
-  font-size: 14px;
-  line-height: 1.45;
-  text-align: center;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  animation: fadein 0.25s;
-}
-
-.coach strong {
-  color: var(--accent);
-}
-
 /* The last ten seconds: bigger, redder, faster. */
 .countdown.final {
   color: #fff;

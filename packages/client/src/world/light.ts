@@ -53,6 +53,50 @@ export interface LightMemory {
   look: Look;
 }
 
+/**
+ * How deep a light cuts into the darkness from its middle (offset 0) out to
+ * its rim (offset 1): a radial gradient's stops as [offset, depth], depth 1
+ * clearing the darkness entirely; straight lines join them.
+ */
+export type Stops = readonly (readonly [offset: number, depth: number])[];
+
+/**
+ * Your lamp's glow: the darkness cleared through 70 % of its radius and
+ * fading out only at the rim — a lit circle the walls cut, not a haze round
+ * a point.
+ */
+export const OWN_GLOW_STOPS: Stops = [
+  [0, 1],
+  [0.7, 1],
+  [1, 0],
+];
+/** Your flashlight's cone along its reach: bright near you, fading out far ahead. */
+export const OWN_BEAM_STOPS: Stops = [
+  [0, 1],
+  [0.45, 0.8],
+  [1, 0],
+];
+/** The glow of a lamp somebody else of the crew carries: a little softer than yours. */
+export const CREW_GLOW_STOPS: Stops = [
+  [0, 0.9],
+  [0.5, 0.8],
+  [1, 0],
+];
+/** A drone's eye along its reach. */
+export const DRONE_BEAM_STOPS: Stops = [
+  [0, 0.9],
+  [1, 0],
+];
+
+/** The glow an object gives off on its own, `strength` deep in its middle. */
+export function objectGlowStops(strength: number): Stops {
+  return [
+    [0, strength],
+    [0.55, strength * 0.55],
+    [1, 0],
+  ];
+}
+
 /** Half a tile's diagonal: a light reaching this far past a tile's middle still touches the tile. */
 const HALF_DIAGONAL = Math.SQRT1_2;
 
