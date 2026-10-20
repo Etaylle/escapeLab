@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 /** The icons, by what they show. */
 export type IconName =
   | 'book'
+  | 'box'
   | 'camera'
   | 'check'
   | 'clock'
@@ -12,6 +13,7 @@ export type IconName =
   | 'cut'
   | 'exit'
   | 'eye'
+  | 'flag'
   | 'hex'
   | 'info'
   | 'mic'
@@ -22,7 +24,10 @@ export type IconName =
   | 'play'
   | 'podium'
   | 'power'
+  | 'printer'
   | 'radio'
+  | 'replay'
+  | 'search'
   | 'sign'
   | 'siren'
   | 'speaker'
@@ -44,6 +49,13 @@ const GLYPHS: Record<IconName, ReactNode> = {
     <>
       <path d="M8 4.5C6.5 3.2 4.3 2.8 1.75 3v9.5c2.55-.2 4.75.2 6.25 1.5Z" />
       <path d="M8 4.5c1.5-1.3 3.7-1.7 6.25-1.5v9.5c-2.55-.2-4.75.2-6.25 1.5Z" />
+    </>
+  ),
+  // A parcel seen from above one corner: its lid's edges meet at the near one.
+  box: (
+    <>
+      <path d="M8 1.75 14 4.75v6.5l-6 3-6-3v-6.5Z" />
+      <path d="M2 4.75 8 7.75l6-3M8 7.75v6.5" />
     </>
   ),
   camera: (
@@ -88,7 +100,14 @@ const GLYPHS: Record<IconName, ReactNode> = {
       <circle cx="8" cy="8" r="2" />
     </>
   ),
-  hex: <path d="M8 1.5 13.6 4.75v6.5L8 14.5l-5.6-3.25v-6.5Z" {...SOLID} />,
+  // The chequered flag that ends a race: on its pole, three of its squares filled.
+  flag: (
+    <>
+      <path d="M3.25 14.5V1.75M3.25 2.5h10V9h-10" />
+      <path d="M3.25 2.5h3.3v3.25h-3.3Zm6.7 0h3.3v3.25h-3.3ZM6.55 5.75h3.4V9h-3.4Z" {...SOLID} />
+    </>
+  ),
+  hex:<path d="M8 1.5 13.6 4.75v6.5L8 14.5l-5.6-3.25v-6.5Z" {...SOLID} />,
   info: (
     <>
       <circle cx="8" cy="8" r="6.25" />
@@ -122,12 +141,28 @@ const GLYPHS: Record<IconName, ReactNode> = {
   podium: <path d="M1.75 14V8.5h4V4.5h4.5V10h4V14ZM5.75 8.5V14m4.5-4V14" />,
   // The standby symbol printed on a power switch.
   power: <path d="M4.6 4.75a5.25 5.25 0 1 0 6.8 0M8 2v6" />,
+  // A printer: the paper going in at the top, the body, the printed sheet in front.
+  printer: (
+    <>
+      <path d="M4.5 6V2h7v4M4.5 11.5H2V6h12v5.5h-2.5" />
+      <path d="M4.5 9.5h7V14h-7Z" />
+    </>
+  ),
   radio: (
     <>
       <path d="m4.5 5.5 7-3.5" />
       <rect x="1.75" y="5.5" width="12.5" height="8.5" rx="1.5" />
       <circle cx="5.75" cy="9.75" r="2" />
       <path d="M10 8.25h2.25M10 11.25h2.25" />
+    </>
+  ),
+  // Once more round: a circle nearly closed, its arrow going on clockwise.
+  replay: <path d="M14.6 3.2v3.6H11m2.1 3a5.4 5.4 0 1 1-1.27-5.62l2.77 2.62" />,
+  // A magnifying glass: the lens, the handle down to the right.
+  search: (
+    <>
+      <circle cx="7" cy="7" r="4.75" />
+      <path d="m10.5 10.5 3.75 3.75" />
     </>
   ),
   sign: (

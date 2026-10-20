@@ -1,6 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { MODULES, moduleFor, puzzleDefSchema } from '@escapelab/core';
+import {
+  MODULES,
+  moduleFor,
+  PATTERN_FIGURE,
+  puzzleDefSchema,
+  SIGNAL_PATTERNS,
+  type ManualBlock,
+} from '@escapelab/core';
 import { Figure } from '../src/screens/Figure.js';
 
 /** What each drawing says it shows, in German: every module the core knows. */
@@ -67,6 +74,44 @@ describe('Figure', () => {
     const { html } = drawing('morse');
     expect(html).toContain('>SENDEN</text>');
     expect(html).not.toContain('>TX</text>');
+  });
+
+  it('draws the Signalkette’s key: each colour in its pattern, lettered as the legend prints it', () => {
+    const def = puzzleDefSchema.parse({ type: 'signal', id: 'k', title: 'K', legend: true });
+    const blocks = moduleFor(def.type)
+      .manual(def)
+      .flatMap((section) => section.blocks);
+    expect(blocks.filter((block) => block.kind === 'figure').map((block) => block.of)).toEqual([
+      'signal',
+      PATTERN_FIGURE,
+    ]);
+    const { html, label } = drawing(PATTERN_FIGURE);
+    expect(html).toMatch(/^<svg class="figure" viewBox="0 0 376 140" role="img" aria-label="/);
+    expect(label).toBe(
+      'Vier runde Zeichen nebeneinander, jedes im Muster seiner Farbe: rot glatt, ' +
+        'blau mit Punkten, grün mit Streifen, gelb mit Ring',
+    );
+    expect(html).not.toContain(`>${PATTERN_FIGURE}</text>`);
+    expect(html).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i);
+    // Under each sign its colour, then its pattern, in the legend's words and in its order.
+    const lettering = [...html.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
+    expect(lettering).toEqual(['ROT', 'glatt', 'BLAU', 'Punkte', 'GRÜN', 'Streifen', 'GELB', 'Ring']);
+    const table = blocks.find(
+      (block): block is Extract<ManualBlock, { kind: 'table' }> => block.kind === 'table',
+    );
+    const printed = new Map(table?.rows.map((cells) => [cells[1]?.toUpperCase(), cells[2]]));
+    for (let i = 0; i < lettering.length; i += 2) {
+      expect(printed.get(lettering[i]), lettering[i]).toBe(lettering[i + 1]);
+    }
+    // Each sign carries the pattern the consoles draw for its colour: one sign each.
+    const signs = html.split('<g>').slice(1);
+    expect(signs).toHaveLength(4);
+    expect(SIGNAL_PATTERNS).toEqual({ rot: 'plain', blau: 'dots', gruen: 'stripes', gelb: 'ring' });
+    const [plain = '', dots = '', stripes = '', ring = ''] = signs;
+    expect(plain.match(/<(circle|path)\b/g)).toHaveLength(1);
+    expect(dots.match(/<circle [^>]*r="1.5"/g)?.length).toBeGreaterThan(12);
+    expect(stripes.match(/M[\d.]+ [\d.]+L/g)).toHaveLength(5);
+    expect(ring).toMatch(/<circle cx="317" cy="52" r="8" stroke-width="2.6"><\/circle>/);
   });
 
   it('frames a device it has no drawing for, naming its type, and never throws', () => {

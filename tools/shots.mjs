@@ -19,7 +19,12 @@
  *
  * On the way, both open the Bestenliste from the join screen (history.png,
  * history-phone.png): measured like the join screen, at 1280×720 too, and on
- * the phone for running out sideways.
+ * the phone for running out sideways. The host's lobby, with its strip of
+ * mission cards, is captured on a phone held sideways as well
+ * (lobby-landscape.png). Once the sign is read, the guest's phone is turned
+ * sideways and the HUD's Info button has to lie whole inside the window —
+ * where the host read the sign, in the host's window at that size too — or
+ * the run fails: the Laborkennung's chip may never push it off the screen.
  *
  * The base URL is the Vite dev server by default (`pnpm dev`), or the
  * production server (`pnpm build && pnpm start`, http://localhost:3001) as in
@@ -1196,6 +1201,73 @@ async function captureSign(page, who) {
 }
 
 /**
+ * Turns `player`'s page to `size` and back, and fails the run unless the
+ * HUD's Info button lies whole inside the window there: once the sign is
+ * read, the Laborkennung's chip may never push it off the screen. Logs
+ * whether the chip was up on that page, so a check without it says so.
+ */
+async function infoInView(player, size, how) {
+  const { page, name } = player;
+  const before = page.viewportSize();
+  await page.setViewportSize({ width: size.width, height: size.height });
+  await sleep(700);
+  const box = await page.locator('.hud button', { hasText: 'Info' }).boundingBox();
+  const chip = (await page.locator('.hud .edgework').count()) > 0;
+  const inside =
+    box !== null &&
+    box.x >= 0 &&
+    box.y >= 0 &&
+    box.x + box.width <= size.width + 0.5 &&
+    box.y + box.height <= size.height + 0.5;
+  const edge = box === null ? 'no Info button' : `right edge ${Math.round(box.x + box.width)}`;
+  const where = `${name} @ ${size.width}x${size.height} ${how}, chip ${chip ? 'up' : 'not read'}`;
+  console.log(
+    `${inside ? 'ok  in view' : '!! cut off '} info button, ${where}: ${edge}/${size.width}`,
+  );
+  if (!inside) {
+    fail(`the Info button is cut off @ ${size.width}x${size.height} for ${name} (${edge})`);
+  }
+  await page.setViewportSize(before);
+  await sleep(400);
+}
+
+/**
+ * After the sign step: the Info button on the guest's phone held sideways —
+ * and where the host read the sign, in the host's window at the same size,
+ * so that the chip is checked at that width in every mission.
+ */
+async function infoAfterSign(reader, guest) {
+  const turned = SIZES[3];
+  await infoInView(guest, turned, '(phone sideways)');
+  if (reader !== undefined && reader.page !== guest.page) {
+    await infoInView(reader, turned, '(window, no touch)');
+  }
+}
+
+/**
+ * lobby-landscape.png: the host's lobby on a phone held sideways, scrolled
+ * to the mission panel's top, so that its strip of mission cards stands
+ * clear of the start bar at the window's foot. The lobby may scroll down
+ * there, but nothing may run out sideways: the strip scrolls in its own box.
+ */
+async function captureLobbySideways(page) {
+  const { width, height } = SIZES[3];
+  await page.setViewportSize({ width, height });
+  await sleep(400);
+  const shown = (await page.locator('.lobby-missions').count()) > 0;
+  await page.locator('.lobby-panel').evaluate((el) => el.scrollIntoView({ block: 'start' }));
+  await sleep(200);
+  await capture(page, 'lobby-landscape.png');
+  const over = await sideways(page, '.content');
+  const cards = await page.locator('.lobby-mission').count();
+  console.log(
+    `lobby-landscape.png Anna's lobby @ ${width}x${height}: ` +
+      (shown ? `${cards} mission cards, ` : '!! no mission strip, ') +
+      (over > 0 ? `!! +${over}px sideways` : 'fits sideways'),
+  );
+}
+
+/**
  * locker.png: the guest stands before the nearest locker it can walk to,
  * „Durchsuchen" on offer, then searches it — the find has to reach the HUD
  * line. Lockers lie undiscovered at first, so where they are comes from the
@@ -1820,6 +1892,7 @@ async function run() {
   await sleep(400);
   await overflow(host, 'lobby @ 1280x720');
   await capture(host, 'lobby-1280.png');
+  await captureLobbySideways(host);
   await host.setViewportSize(SIZES[0]);
   await sleep(300);
   await micsOn([
@@ -1844,6 +1917,7 @@ async function run() {
   const atSign = [reader, operator].find((p) => p.seen.view.presence.signSeen);
   if (atSign !== undefined) {
     await captureSign(atSign.page, atSign.name);
+    await infoAfterSign(atSign, ben);
   }
   // Let the briefing countdown finish; server and browsers share this clock.
   await sleep(Math.max(0, guestSeen.view.startedAt + 4200 - Date.now()));
@@ -1922,6 +1996,7 @@ async function run() {
       skip('sign.png', 'this map has no Laborkennung');
     } else if (await walkNear(reader.page, reader.seen, sign)) {
       await captureSign(reader.page, reader.name);
+      await infoAfterSign(reader, ben);
     } else {
       skip(
         'sign.png',

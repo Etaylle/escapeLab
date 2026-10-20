@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { MissionInfo, MissionManual, MissionManualStation } from '@escapelab/core';
 import { Handbook, HandbookScreen } from '../src/screens/Handbook.js';
+import { iconsAsWords } from './fixtures.js';
 
 const keypad: MissionManualStation = {
   index: 0,
@@ -120,7 +121,9 @@ describe('HandbookScreen', () => {
     expect(html).toContain('<option value="systemcheck">Tutorial: Systemcheck</option>');
     expect(html).toContain('<option value="blackout" selected="">Blackout im Labor</option>');
     expect(html).toContain('← Zurück');
-    expect(html).toMatch(/<button class="primary handbook-print" disabled="">🖨 Drucken<\/button>/);
+    expect(iconsAsWords(html)).toContain(
+      '<button class="primary handbook-print" disabled="">[printer] Drucken</button>',
+    );
     expect(html).toContain('Lade Handbuch …');
   });
 });

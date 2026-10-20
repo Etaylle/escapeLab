@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import {
   difficultyInfos,
   type ClientMessage,
   type Difficulty,
   type MissionInfo,
+  type MissionStats,
   type PlayerView,
 } from '@escapelab/core';
 import { fullscreenForRun } from '../runScreen.js';
+import { recordParts, STATS_PATH, useJson } from '../runStats.js';
 import { crewSizeText } from './Crew.js';
 import { CrewRoom } from './CrewRoom.js';
 import { Icon } from './Icon.js';
@@ -43,15 +45,23 @@ export function startBlocker(view: Pick<PlayerView, 'crewSize' | 'players'>): st
 /** A story up to this many characters fits the two lines the panel shows of it. */
 const STORY_FITS = 70;
 
-function MissionHead({ view, info }: { view: PlayerView; info: MissionInfo | undefined }) {
+interface HeadProps {
+  view: PlayerView;
+  info: MissionInfo | undefined;
+  /** the host's strip of missions, in the map's place — each card has a map of its own */
+  picker: ReactNode;
+}
+
+function MissionHead({ view, info, picker }: HeadProps) {
   return (
     <header className="lobby-head">
       <h1>{view.missionTitle}</h1>
-      {info !== undefined && info.tiles.length > 0 && (
-        <div className="lobby-map">
-          <MapThumb tiles={info.tiles} height={80} />
-        </div>
-      )}
+      {picker ??
+        (info !== undefined && info.tiles.length > 0 && (
+          <div className="lobby-map">
+            <MapThumb tiles={info.tiles} height={80} />
+          </div>
+        ))}
       <p className="lobby-facts">
         <span>
           <Icon name="clock" /> {Math.round(view.timeLimitSec / 60)} min
@@ -137,35 +147,168 @@ function Levels({ current, pick }: LevelsProps) {
   );
 }
 
-interface HostSetupProps {
+/**
+ * Where a key moves the pick from card `at` of `count` in the mission strip:
+ * an arrow one card on, round from the last to the first and back, Home and
+ * End to the ends; null for any other key.
+ */
+export function stepTo(at: number, key: string, count: number): number | null {
+  switch (key) {
+    case 'ArrowRight':
+    case 'ArrowDown':
+      return (at + 1) % count;
+    case 'ArrowLeft':
+    case 'ArrowUp':
+      return (at - 1 + count) % count;
+    case 'Home':
+      return 0;
+    case 'End':
+      return count - 1;
+    default:
+      return null;
+  }
+}
+
+/** Scrolls the strip sideways, and nothing else, until `card` stands whole within its padding. */
+function reveal(strip: HTMLElement, card: HTMLElement): void {
+  const pad = parseFloat(getComputedStyle(strip).paddingLeft) || 0;
+  const start = card.offsetLeft - pad;
+  const end = card.offsetLeft + card.offsetWidth + pad - strip.clientWidth;
+  if (start < strip.scrollLeft) {
+    strip.scrollLeft = start;
+  } else if (end > strip.scrollLeft) {
+    strip.scrollLeft = end;
+  }
+}
+
+interface CardProps {
+  mission: MissionInfo;
+  /** the record's two lines, as the join screen's card says them in one; null before a run */
+  record: [string, string] | null;
+  checked: boolean;
+  /** the card Tab stops at in the strip: the ticked one */
+  focusable: boolean;
+  cardRef: (card: HTMLButtonElement | null) => void;
+  onPick: () => void;
+  onKey: (event: KeyboardEvent<HTMLButtonElement>) => void;
+}
+
+/** One mission in the strip: its map, its name, how many play it, its record; the room's ticked. */
+function MissionCard({ mission, record, checked, focusable, cardRef, onPick, onKey }: CardProps) {
+  return (
+    <button
+      ref={cardRef}
+      className={checked ? 'lobby-mission lobby-mission-on' : 'lobby-mission'}
+      role="radio"
+      aria-checked={checked}
+      tabIndex={focusable ? 0 : -1}
+      title={mission.subtitle}
+      onClick={onPick}
+      onKeyDown={onKey}
+    >
+      <span className="lobby-mission-map" aria-hidden="true">
+        <MapThumb tiles={mission.tiles} height={40} />
+        {checked && (
+          <span className="lobby-mission-mark">
+            <Icon name="check" />
+          </span>
+        )}
+      </span>
+      <span className="lobby-mission-title">{mission.title}</span>
+      <span className="lobby-mission-meta">
+        <Icon name="crew" /> {crewSizeText(mission.players)}
+      </span>
+      {record !== null && (
+        <span className="lobby-mission-record">
+          <span>{record[0]}</span>
+          <span>{record[1]}</span>
+        </span>
+      )}
+    </button>
+  );
+}
+
+interface StripProps {
+  missions: MissionInfo[];
+  /** the Bestenliste's runs, by mission: each card says its mission's record */
+  stats: MissionStats[];
+  /** the room's mission, by id */
+  current: string;
+  pick: (missionId: string) => void;
+}
+
+/**
+ * The host's pick of the mission: every mission as a compact card — its
+ * map, its name, how many play it and its record, as the join screen's card
+ * says it — in a strip that scrolls sideways, the room's mission ticked.
+ * One radio group: Tab stops at the ticked card, an arrow key picks the
+ * next, and the strip scrolls to whichever card is picked.
+ */
+export function MissionStrip({ missions, stats, current, pick }: StripProps) {
+  const strip = useRef<HTMLDivElement>(null);
+  const cards = useRef<(HTMLButtonElement | null)[]>([]);
+  const index = missions.findIndex((mission) => mission.id === current);
+  useEffect(() => {
+    const card = cards.current[index];
+    if (strip.current !== null && card != null) {
+      reveal(strip.current, card);
+    }
+  }, [index]);
+  const choose = (missionId: string): void => {
+    if (missionId !== current) {
+      pick(missionId);
+    }
+  };
+  const onKey = (at: number, event: KeyboardEvent<HTMLButtonElement>): void => {
+    const next = stepTo(at, event.key, missions.length);
+    const mission = next === null ? undefined : missions[next];
+    if (next === null || mission === undefined) {
+      return;
+    }
+    event.preventDefault();
+    choose(mission.id);
+    const card = cards.current[next];
+    if (card != null && strip.current !== null) {
+      card.focus({ preventScroll: true });
+      reveal(strip.current, card);
+    }
+  };
+  return (
+    <div ref={strip} className="lobby-missions" role="radiogroup" aria-label="Mission wechseln">
+      {missions.map((mission, i) => (
+        <MissionCard
+          key={mission.id}
+          mission={mission}
+          record={recordParts(stats.find((s) => s.missionId === mission.id)?.difficulties ?? [])}
+          checked={i === index}
+          focusable={i === Math.max(0, index)}
+          cardRef={(card) => {
+            cards.current[i] = card;
+          }}
+          onPick={() => choose(mission.id)}
+          onKey={(event) => onKey(i, event)}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface HostMissionsProps {
   view: PlayerView;
   send: Send;
   missions: MissionInfo[];
 }
 
-function HostSetup({ view, send, missions }: HostSetupProps) {
+/** The host's strip, each card with its mission's record from the server's run log. */
+function HostMissions({ view, send, missions }: HostMissionsProps) {
+  const stats = useJson<MissionStats[]>(STATS_PATH);
   return (
-    <div className="lobby-setup">
-      {missions.length > 1 && (
-        <label className="lobby-switch">
-          Mission wechseln
-          <select
-            value={view.missionId}
-            onChange={(e) => send({ kind: 'switch-mission', missionId: e.target.value })}
-          >
-            {missions.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.title} ({crewSizeText(m.players)})
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      <Levels
-        current={view.difficulty}
-        pick={(difficulty) => send({ kind: 'select-difficulty', difficulty })}
-      />
-    </div>
+    <MissionStrip
+      missions={missions}
+      stats={stats.status === 'ready' ? stats.value : []}
+      current={view.missionId}
+      pick={(missionId) => send({ kind: 'switch-mission', missionId })}
+    />
   );
 }
 
@@ -234,6 +377,12 @@ function StartArea({ view, send }: { view: PlayerView; send: Send }) {
 export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
   const info = missions.find((m) => m.id === view.missionId);
   const [more, setMore] = useState(false);
+  const host = view.you.isHost;
+  // The host picks among the missions where everyone else sees the map.
+  const picker =
+    host && missions.length > 1 ? (
+      <HostMissions view={view} send={send} missions={missions} />
+    ) : null;
   return (
     <div className="lobby">
       <CrewRoom view={view} send={send} />
@@ -241,13 +390,12 @@ export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
         className={more ? 'lobby-panel lobby-panel-more' : 'lobby-panel'}
         aria-label="Mission"
       >
-        <MissionHead view={view} info={info} />
+        <MissionHead view={view} info={info} picker={picker} />
         <Story text={view.storyText} open={more} toggle={() => setMore(!more)} />
-        {view.you.isHost ? (
-          <HostSetup view={view} send={send} missions={missions} />
-        ) : (
-          <Levels current={view.difficulty} pick={null} />
-        )}
+        <Levels
+          current={view.difficulty}
+          pick={host ? (difficulty) => send({ kind: 'select-difficulty', difficulty }) : null}
+        />
         <MicSetup />
         <StartArea view={view} send={send} />
         <div className="lobby-foot">

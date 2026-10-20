@@ -1,0 +1,74 @@
+/* ══ polish: the Laborkennung on a narrow HUD strip, the run report's icons ══
+ * EdgeworkChip.tsx in MissionHud.tsx, and End.tsx. The HUD strip's layouts
+ * are ui.css's (one row from 820 px up, a grid under it) and pwa.css's (a
+ * phone held sideways); this sheet only decides what of the chip shows in
+ * them, and lets the strip give way before a button leaves the screen.
+ */
+
+/* ── the Laborkennung on a narrow HUD strip ─────────────────────────────── */
+
+/* The chip's value alone: kept for a strip with no room for the whole chip. */
+.edgework-value {
+  display: none;
+}
+
+/*
+ * One row under 1180 px, and a phone held sideways, where the chip shares
+ * the buttons' row: the whole chip would push the Info button off the
+ * screen. There it shows the Laborkennung alone — lamps and cells are in its
+ * tooltip, and in the frame of every station — and whatever has words to
+ * spare gives way before a button does: the radio line cuts itself short,
+ * then the crew scrolls, down to nothing if they must. The chip keeps its value
+ * whole (ui.css: never squeezed in a row); in the sideways grid its column
+ * gives way only once the crew's has none left. A portrait phone keeps the
+ * whole chip in a row of its own.
+ */
+@media (820px < width < 1180px),
+  (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .hud .edgework-part {
+    display: none;
+  }
+
+  .hud .edgework-value {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  .hud-crew,
+  .hud-radio,
+  .hud .edgework {
+    min-width: 0;
+  }
+
+  /* The radio line gives way before the crew: its words were on the banner already. */
+  .hud-radio {
+    flex-shrink: 4;
+  }
+}
+
+/* ── the run report on the end screen: each icon in its line's colour ───── */
+
+.report-icon {
+  color: var(--muted);
+}
+
+.report-puzzle .report-icon {
+  color: var(--accent);
+}
+
+.report-penalty .report-icon {
+  color: var(--danger);
+}
+
+.report-hint .report-icon {
+  color: #60a5fa;
+}
+
+.report-radio .report-icon {
+  color: #5ab4ac;
+}

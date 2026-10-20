@@ -109,7 +109,14 @@ export {
   type DronePosition,
 } from './protocol.js';
 export { SIMON_COLORS, type SimonColor } from './puzzles/simon.js';
-export { TOKENS, tokenLabel, type SignalToken } from './puzzles/signal.js';
+export {
+  PATTERN_FIGURE,
+  SIGNAL_PATTERNS,
+  TOKENS,
+  tokenLabel,
+  type SignalPattern,
+  type SignalToken,
+} from './puzzles/signal.js';
 export type { RelayView } from './puzzles/relay.js';
 export { CHAT_PHRASES, CHAT_PHRASE_IDS, chatText, type ChatPhrase } from './chat.js';
 export {

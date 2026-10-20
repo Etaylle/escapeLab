@@ -8,6 +8,7 @@ import { PuzzlePanel } from './PuzzlePanel.js';
 import { Manual } from './Manual.js';
 import { EdgeworkChip } from './EdgeworkChip.js';
 import { CreditsTable, crewTags, CrewTags, type CrewTag } from './Crew.js';
+import { Icon } from './Icon.js';
 import { ListenToggle, SpeakingMark } from './Voice.js';
 
 interface Props {
@@ -85,13 +86,24 @@ export function SpectateScreen({
       {view.phase !== 'playing' && (
         <div className={`banner-result ${view.phase === 'won' ? 'won' : ''}`}>
           {view.phase === 'lobby' && 'Die Crew ist noch in der Lobby …'}
-          {view.phase === 'won' && `✔ Geschafft${view.grade === null ? '' : ` — Rang ${view.grade.rank}`}`}
-          {view.phase === 'lost' && '✖ Gescheitert'}
+          {view.phase === 'won' && (
+            <>
+              <Icon name="check" /> Geschafft
+              {view.grade === null ? '' : ` — Rang ${view.grade.rank}`}
+            </>
+          )}
+          {view.phase === 'lost' && (
+            <>
+              <Icon name="cross" /> Gescheitert
+            </>
+          )}
         </div>
       )}
 
       {view.pausedFor !== null && (
-        <div className="banner-result">⏸ Pausiert — warten auf {view.pausedFor.join(', ')}</div>
+        <div className="banner-result">
+          <Icon name="pause" /> Pausiert — warten auf {view.pausedFor.join(', ')}
+        </div>
       )}
 
       <div className="spectate-body">
