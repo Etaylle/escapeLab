@@ -8,7 +8,7 @@ import {
   type PlayerView,
 } from '@escapelab/core';
 import { fullscreenForRun } from '../runScreen.js';
-import { recordParts, STATS_PATH, useJson } from '../runStats.js';
+import { recordParts } from '../runStats.js';
 import { crewSizeText } from './Crew.js';
 import { CrewRoom } from './CrewRoom.js';
 import { Icon } from './Icon.js';
@@ -22,6 +22,8 @@ interface Props {
   send: Send;
   leaveRoom: () => void;
   missions: MissionInfo[];
+  /** the Bestenliste's runs, by mission: the host's strip says each mission's record */
+  stats: MissionStats[];
 }
 
 /**
@@ -293,25 +295,6 @@ export function MissionStrip({ missions, stats, current, pick }: StripProps) {
   );
 }
 
-interface HostMissionsProps {
-  view: PlayerView;
-  send: Send;
-  missions: MissionInfo[];
-}
-
-/** The host's strip, each card with its mission's record from the server's run log. */
-function HostMissions({ view, send, missions }: HostMissionsProps) {
-  const stats = useJson<MissionStats[]>(STATS_PATH);
-  return (
-    <MissionStrip
-      missions={missions}
-      stats={stats.status === 'ready' ? stats.value : []}
-      current={view.missionId}
-      pick={(missionId) => send({ kind: 'switch-mission', missionId })}
-    />
-  );
-}
-
 /**
  * The host's start, locked with the reason while it is; everyone else's
  * ready switch, with what the start still waits for once they are ready.
@@ -374,14 +357,19 @@ function StartArea({ view, send }: { view: PlayerView; send: Send }) {
  * the mission beside them with its settings, the microphone and the start.
  * The room's code stands once, in the header, where the free places point.
  */
-export function LobbyScreen({ view, send, leaveRoom, missions }: Props) {
+export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
   const info = missions.find((m) => m.id === view.missionId);
   const [more, setMore] = useState(false);
   const host = view.you.isHost;
   // The host picks among the missions where everyone else sees the map.
   const picker =
     host && missions.length > 1 ? (
-      <HostMissions view={view} send={send} missions={missions} />
+      <MissionStrip
+        missions={missions}
+        stats={stats}
+        current={view.missionId}
+        pick={(missionId) => send({ kind: 'switch-mission', missionId })}
+      />
     ) : null;
   return (
     <div className="lobby">

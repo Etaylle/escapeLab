@@ -331,6 +331,7 @@ function Screens(props: ScreenProps) {
           send={conn.send}
           leaveRoom={conn.leaveRoom}
           missions={props.missions}
+          stats={props.stats}
         />
       );
     case 'playing':
@@ -365,7 +366,8 @@ export function App({ boot }: { boot: EditorBoot }) {
   const [handbook, setHandbook] = useState<string | null>(null);
   // So is the Bestenliste: the mission whose tab is open, or null.
   const [history, setHistory] = useState<string | null>(null);
-  // The join screen's cards say each mission's record; without it they say nothing.
+  // The join screen's cards and the host's mission strip in the lobby say each
+  // mission's record; without it they say nothing.
   const stats = useJson<MissionStats[]>(STATS_PATH);
   // The mission editor, another page off the join screen; the booklet opens over it.
   const editor = useEditorPage(boot);

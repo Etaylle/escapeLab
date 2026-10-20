@@ -112,10 +112,15 @@ function blockOf(sheet: string, head: string): string {
   throw new Error(`"${head}" is never closed`);
 }
 
-function lobby(view: PlayerView, missions: MissionInfo[] = []): string {
+/** The lobby as `view` draws it, with the missions and their records the app hands it. */
+function lobby(
+  view: PlayerView,
+  missions: MissionInfo[] = [],
+  stats: MissionStats[] = [],
+): string {
   return iconsAsWords(
     renderToStaticMarkup(
-      <LobbyScreen view={view} send={noop} leaveRoom={noop} missions={missions} />,
+      <LobbyScreen view={view} send={noop} leaveRoom={noop} missions={missions} stats={stats} />,
     ),
   );
 }
@@ -323,6 +328,17 @@ describe('the lobby', () => {
     expect(lobby(annaSees([anna]), [withMap])).toContain('<div class="lobby-map">');
   });
 
+  /** Blackout as the Bestenliste counts it: eight runs on normal, five won, the best in 7:42. */
+  const played: MissionStats = {
+    missionId: 'blackout',
+    difficulties: [
+      { difficulty: 'normal', runs: 8, wins: 5, bestSeconds: 462, medianSeconds: 480, top: [] },
+    ],
+  };
+  const PLAYED_RECORD =
+    '<span class="lobby-mission-record"><span>Beste Zeit 7:42</span>' +
+    '<span>63\u00a0% gewonnen</span></span>';
+
   /** The host's strip as drawn, its icons by name. */
   function strip(current: string, stats: MissionStats[] = []): string[] {
     const html = renderToStaticMarkup(
@@ -332,20 +348,12 @@ describe('the lobby', () => {
   }
 
   it('lays every mission out as a card in one radio group, the room’s ticked and Tab’s stop', () => {
-    const played: MissionStats = {
-      missionId: 'blackout',
-      difficulties: [
-        { difficulty: 'normal', runs: 8, wins: 5, bestSeconds: 462, medianSeconds: 480, top: [] },
-      ],
-    };
     const [first, second] = strip('systemcheck', [played]);
     expect(first).toBe(
       '<button class="lobby-mission" role="radio" aria-checked="false" tabindex="-1" ' +
         'title="Für zwei oder drei."><span class="lobby-mission-map" aria-hidden="true"></span>' +
         '<span class="lobby-mission-title">Blackout im Labor</span>' +
-        '<span class="lobby-mission-meta">[crew] 2–3 Spieler</span>' +
-        '<span class="lobby-mission-record"><span>Beste Zeit 7:42</span>' +
-        '<span>63\u00a0% gewonnen</span></span></button>',
+        `<span class="lobby-mission-meta">[crew] 2–3 Spieler</span>${PLAYED_RECORD}</button>`,
     );
     // Not played yet: no record, as on the join screen's card.
     expect(second).toBe(
@@ -355,6 +363,16 @@ describe('the lobby', () => {
         '<span class="lobby-mission-title">Tutorial: Systemcheck</span>' +
         '<span class="lobby-mission-meta">[crew] 2 Spieler</span></button>',
     );
+  });
+
+  it('puts the records the app hands the lobby on the host’s cards, fetching none', () => {
+    const missions = [blackout, tutorial];
+    expect(lobby(annaSees([anna, ben]), missions, [played])).toContain(PLAYED_RECORD);
+    expect(lobby(annaSees([anna, ben]), missions, [])).not.toContain('lobby-mission-record');
+    // Only the host picks, so a guest's lobby says no record either.
+    expect(lobby(benSees([anna, ben], false), missions, [played])).not.toContain('Beste Zeit');
+    const source = readFileSync(new URL('../src/screens/Lobby.tsx', import.meta.url), 'utf8');
+    expect(source).not.toMatch(/useJson|STATS_PATH|fetch\(/);
   });
 
   it('keeps one card reachable by Tab even while the room’s mission is not among them', () => {
@@ -434,7 +452,13 @@ describe('the lobby', () => {
     ];
     for (const view of views) {
       const html = renderToStaticMarkup(
-        <LobbyScreen view={view} send={noop} leaveRoom={noop} missions={[blackout, tutorial]} />,
+        <LobbyScreen
+          view={view}
+          send={noop}
+          leaveRoom={noop}
+          missions={[blackout, tutorial]}
+          stats={[played]}
+        />,
       );
       expect(html).toContain('class="icon icon-');
       expect(html).not.toMatch(PICTOGRAPH);
