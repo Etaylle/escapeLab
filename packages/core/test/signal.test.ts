@@ -20,7 +20,7 @@ import type {
   SignalToken,
   Viewer,
 } from '../src/index.js';
-import { LEGEND, signalModule } from '../src/puzzles/signal.js';
+import { LEGEND, PATTERN_FIGURE, SIGNAL_PATTERNS, signalModule } from '../src/puzzles/signal.js';
 import type {
   LegendRow,
   SignalDef,
@@ -743,6 +743,20 @@ const PRINTED_COLOURS: Record<string, string> = {
   gelb: 'gelb',
 };
 
+/** A pattern as the legend prints it, back to the pattern the consoles draw. */
+const PRINTED_PATTERNS: Record<string, string> = {
+  glatt: 'plain',
+  Punkte: 'dots',
+  Streifen: 'stripes',
+  Ring: 'ring',
+};
+
+/** The legend's colour columns, each with the console it is printed for; its pattern follows. */
+const COLOUR_COLUMNS = [
+  [1, 'a'],
+  [3, 'b'],
+] as const;
+
 /** A shape as the rules name it, back to the key's shape. */
 const PRINTED_SHAPES: Record<string, Shape> = {
   Kreis: 'kreis',
@@ -813,7 +827,12 @@ describe('signal manual', () => {
         'in 4 nummerierten Zeilen',
     );
     expect(legend?.heading).toBe('Legende');
-    expect(legend?.blocks.map((block) => block.kind)).toEqual(['table', 'example', 'p']);
+    expect(legend?.blocks.map((block) => block.kind)).toEqual(['figure', 'table', 'example', 'p']);
+    expect(legend?.blocks[0]).toEqual({
+      kind: 'figure',
+      of: PATTERN_FIGURE,
+      caption: 'Abb. 2 — Farben und Muster',
+    });
     expect(legend?.blocks.at(-1)).toEqual({ kind: 'p', text: 'Fehlgriff: Alarm, −25 s.' });
     expect(rulesOf(def)).toContain(
       'Wenn ein Zeichen gesendet wird, wird am empfangenden Pult die Taste seiner Form in der ' +
@@ -827,22 +846,16 @@ describe('signal manual', () => {
 
   it('prints the legend the consoles press by, row for row', () => {
     const table = legendOf(defOf({ legend: true }));
-    expect(table.head).toEqual(['Zeile', 'Pult A', 'Pult B']);
+    expect(table.head).toEqual(['Zeile', 'Pult A', 'Muster', 'Pult B', 'Muster']);
     expect(table.rows.map(([row]) => row)).toEqual(['1', '2', '3', '4']);
-    for (const [column, side] of [
-      [1, 'a'],
-      [2, 'b'],
-    ] as const) {
+    for (const [column, side] of COLOUR_COLUMNS) {
       const printed = table.rows.map((cells) => PRINTED_COLOURS[cells[column] ?? '']);
       expect(printed, `Pult ${side.toUpperCase()}`).toEqual(ROWS.map((row) => LEGEND[side][row]));
     }
     // Each printed row is the row whose keys the console takes for that colour.
     const def = defOf({ legend: true });
     const dealt = deal(def, 2);
-    for (const [column, side] of [
-      [1, 'a'],
-      [2, 'b'],
-    ] as const) {
+    for (const [column, side] of COLOUR_COLUMNS) {
       for (const cells of table.rows) {
         const row = Number(cells[0]) as LegendRow;
         const token = `${PRINTED_COLOURS[cells[column] ?? '']}-dreieck` as SignalToken;
@@ -851,6 +864,30 @@ describe('signal manual', () => {
         expect(pressKey(def, state, { row, shape: 'dreieck' }, side).penalty).toBeNull();
       }
     }
+  });
+
+  it('names all four patterns in the legend, each beside its colour as the consoles draw it', () => {
+    const manual = signalModule.manual(defOf({ legend: true }));
+    const table = legendOf(defOf({ legend: true }));
+    for (const [column] of COLOUR_COLUMNS) {
+      expect(table.head[column + 1]).toBe('Muster');
+      for (const cells of table.rows) {
+        const colour = PRINTED_COLOURS[cells[column] ?? ''] as keyof typeof SIGNAL_PATTERNS;
+        expect(PRINTED_PATTERNS[cells[column + 1] ?? ''], cells.join(' ')).toBe(
+          SIGNAL_PATTERNS[colour],
+        );
+      }
+    }
+    // Four colours, four patterns: a row is found by either alone.
+    const printed = new Set(table.rows.flatMap((cells) => [cells[2], cells[4]]));
+    expect(printed).toEqual(new Set(Object.keys(PRINTED_PATTERNS)));
+    expect(new Set(Object.values(SIGNAL_PATTERNS)).size).toBe(4);
+    // The key is drawn too, beside the table, and like the table holds no answer.
+    const figures = manual.flatMap((section) => section.blocks).filter((b) => b.kind === 'figure');
+    expect(figures.map((figure) => figure.kind === 'figure' && figure.of)).toEqual([
+      'signal',
+      PATTERN_FIGURE,
+    ]);
   });
 
   it('says from which stage on the sending console shows the signs one at a time', () => {
@@ -877,7 +914,11 @@ describe('signal manual', () => {
     expect(figure).toMatchObject({ kind: 'figure', of: 'signal' });
     const text = description?.kind === 'p' ? description.text : '';
     expect(text.split(/(?<=\.) (?=[A-ZÄÖÜ„])/).length, text).toBeLessThanOrEqual(3);
-    expect(blocks.filter((block) => block.kind === 'figure')).toHaveLength(1);
+    // The device's drawing, and with the legend its key of colours and patterns.
+    const figures = blocks.filter((block) => block.kind === 'figure');
+    expect(figures.map((block) => block.caption.slice(0, 7))).toEqual(
+      'legend' in variant ? ['Abb. 1 ', 'Abb. 2 '] : ['Abb. 1 '],
+    );
     const [example, penalty] = blocks.slice(-2);
     expect(example?.kind).toBe('example');
     const lines = example?.kind === 'example' ? example.lines : [];
@@ -959,7 +1000,7 @@ describe('signal manual', () => {
     const [colourOfFirst, shapeOfFirst] = partsOf(first);
     expect(said.toLowerCase()).toBe(tokenLabel(first).toLowerCase());
     expect(PRINTED_COLOURS[colour]).toBe(colourOfFirst);
-    expect(legendOf(def).rows[Number(row) - 1]?.[2]).toBe(colour);
+    expect(legendOf(def).rows[Number(row) - 1]?.[3]).toBe(colour);
     expect(again).toBe(row);
     expect(PRINTED_SHAPES[noun]).toBe(shapeOfFirst);
     expect(article).toBe(noun === 'Kreis' ? 'der' : 'das');

@@ -1,8 +1,14 @@
 import type { ReactNode } from 'react';
-import type { PuzzleDef } from '@escapelab/core';
+import {
+  PATTERN_FIGURE,
+  SIGNAL_PATTERNS,
+  type PuzzleDef,
+  type SignalPattern,
+} from '@escapelab/core';
 
 /**
- * Line drawings of the devices for the printed rules, one per module type.
+ * Line drawings of the devices for the printed rules, one per module type,
+ * and the Signalkette's key of colours and patterns (PATTERN_FIGURE).
  * Thin strokes in the colour of the text around them; a surface is only ever
  * hatched or lightly tinted, so a drawing reads the same on paper, on the
  * terminal's glass and from a printer. Drawn 376 units across and 140 down:
@@ -476,6 +482,98 @@ function Signal() {
   );
 }
 
+/** The Signalkette's colours as the legend names them, left to right, each with its pattern. */
+const PATTERN_KEY = [
+  { colour: 'rot', name: 'ROT', pattern: 'glatt' },
+  { colour: 'blau', name: 'BLAU', pattern: 'Punkte' },
+  { colour: 'gruen', name: 'GRÜN', pattern: 'Streifen' },
+  { colour: 'gelb', name: 'GELB', pattern: 'Ring' },
+] as const;
+
+/** Where the key's discs stand: the first one's centre, the step between them, their radius. */
+const DISC = { x: 59, y: 52, step: 86, r: 21 };
+/** How far in from a disc's edge its pattern stays. */
+const PATTERN_MARGIN = 4;
+
+/** A staggered grid of dot centres, 6 units apart, that keeps clear of the disc's edge. */
+function dotsOn(cx: number, cy: number): [number, number][] {
+  const dots: [number, number][] = [];
+  for (let row = -3; row <= 3; row++) {
+    for (let col = -3; col <= 3; col++) {
+      const x = cx + col * 6 + (row % 2 === 0 ? 0 : 3);
+      const y = cy + row * 5.2;
+      if (Math.hypot(x - cx, y - cy) <= DISC.r - PATTERN_MARGIN - 1.5) {
+        dots.push([round(x), round(y)]);
+      }
+    }
+  }
+  return dots;
+}
+
+/** Stripes rising to the right, 7 units apart, cut off short of the disc's edge, as one path. */
+function stripesOn(cx: number, cy: number): string {
+  const inner = DISC.r - PATTERN_MARGIN;
+  const half = Math.SQRT1_2;
+  return [-2, -1, 0, 1, 2]
+    .map((k) => {
+      const offset = k * 7;
+      const reach = Math.sqrt(inner * inner - offset * offset);
+      const [mx, my] = [cx + offset * half, cy + offset * half];
+      return (
+        `M${round(mx - reach * half)} ${round(my + reach * half)}` +
+        `L${round(mx + reach * half)} ${round(my - reach * half)}`
+      );
+    })
+    .join('');
+}
+
+/** The pattern a colour carries, over its disc around (cx, cy); a plain one has none. */
+function PatternMarks({ pattern, cx, cy }: { pattern: SignalPattern; cx: number; cy: number }) {
+  switch (pattern) {
+    case 'plain':
+      return null;
+    case 'dots':
+      return (
+        <g fill="currentColor" stroke="none">
+          {dotsOn(cx, cy).map(([x, y]) => (
+            <circle key={`${x} ${y}`} cx={x} cy={y} r={1.5} />
+          ))}
+        </g>
+      );
+    case 'stripes':
+      return <path d={stripesOn(cx, cy)} strokeWidth={1.8} />;
+    case 'ring':
+      return <circle cx={cx} cy={cy} r={8} strokeWidth={2.6} />;
+  }
+}
+
+/**
+ * The Signalkette's four colours as round signs side by side, each in the
+ * pattern it carries at the consoles, with the colour and the pattern
+ * lettered under it: the legend's key for whoever cannot tell the colours.
+ */
+function SignalPatterns() {
+  return (
+    <>
+      {PATTERN_KEY.map(({ colour, name, pattern }, i) => {
+        const cx = DISC.x + i * DISC.step;
+        return (
+          <g key={colour}>
+            <circle cx={cx} cy={DISC.y} r={DISC.r} strokeWidth={1.6} {...TINT} />
+            <PatternMarks pattern={SIGNAL_PATTERNS[colour]} cx={cx} cy={DISC.y} />
+            <Mark x={cx} y={96} size={11}>
+              {name}
+            </Mark>
+            <Mark x={cx} y={112} size={10}>
+              {pattern}
+            </Mark>
+          </g>
+        );
+      })}
+    </>
+  );
+}
+
 /** The meter's pivot and the radius of its scale. */
 const DIAL = { x: 281, y: 76, r: 44 };
 
@@ -562,8 +660,8 @@ interface Drawing {
   draw: () => ReactNode;
 }
 
-/** Every module the core knows has its drawing. */
-const DRAWINGS: Record<PuzzleDef['type'], Drawing> = {
+/** Every module the core knows has its drawing, and so has the Signalkette's key of patterns. */
+const DRAWINGS: Record<PuzzleDef['type'] | typeof PATTERN_FIGURE, Drawing> = {
   wiring: {
     label: 'Sicherungskasten: 4 Kabel übereinander, oben eine Kontrolllampe, ein Kabel durchtrennt',
     draw: Wiring,
@@ -617,6 +715,12 @@ const DRAWINGS: Record<PuzzleDef['type'], Drawing> = {
       'Zwei Pulte nebeneinander: links eine Reihe aus 4 Formen, rechts ein Raster aus 3 × 4 ' +
       'Formen, dazwischen ein Pfeil',
     draw: Signal,
+  },
+  [PATTERN_FIGURE]: {
+    label:
+      'Vier runde Zeichen nebeneinander, jedes im Muster seiner Farbe: rot glatt, ' +
+      'blau mit Punkten, grün mit Streifen, gelb mit Ring',
+    draw: SignalPatterns,
   },
   circuit: {
     label:

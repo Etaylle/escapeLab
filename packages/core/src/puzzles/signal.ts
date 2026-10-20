@@ -27,6 +27,33 @@ const COLOUR_WORDS: Record<Colour, string> = {
   gruen: 'grün',
   gelb: 'gelb',
 };
+
+/** How a sign's colour shows without its hue: printed over its form at both consoles. */
+export type SignalPattern = 'plain' | 'dots' | 'stripes' | 'ring';
+
+/**
+ * The pattern each colour carries, so that nobody has to tell the colours
+ * apart: red plain, blue dotted, green striped, yellow with a ring. The
+ * consoles draw it, the legend names it.
+ */
+export const SIGNAL_PATTERNS: Readonly<Record<Colour, SignalPattern>> = {
+  rot: 'plain',
+  blau: 'dots',
+  gruen: 'stripes',
+  gelb: 'ring',
+};
+
+/** A pattern as the printed legend names it. */
+const PATTERN_WORDS: Record<SignalPattern, string> = {
+  plain: 'glatt',
+  dots: 'Punkte',
+  stripes: 'Streifen',
+  ring: 'Ring',
+};
+
+/** The drawing of the four colours with their patterns; the client draws it under this name. */
+export const PATTERN_FIGURE = 'signal-patterns';
+
 /** A shape's noun, its article and the ending its colour takes: der Kreis, das Dreieck. */
 const SHAPE_WORDS: Record<Shape, { noun: string; article: string; ending: string }> = {
   kreis: { noun: 'Kreis', article: 'der', ending: 'er' },
@@ -96,12 +123,13 @@ const keyLabel = ({ row, shape }: SignalKey): string =>
  * twelve signs, laid out differently at either console. With it they are
  * four numbered rows of the three shapes, the same at both and without a
  * colour, and the printed legend says which colour a row stands for at
- * which console. From stage `fleetingFrom` on, the sending console shows
- * the signs one at a time — the view says so, the client cycles them. A
- * wrong sign costs time and starts the stage's input again; a key pressed
- * at the sending console is turned away, without an alarm, and so is one
- * pressed at the receiving console while nobody else stands at the sending
- * one: a single player cannot read there and press here.
+ * which console, each colour with the pattern its signs carry, so that a
+ * row is found by the pattern too. From stage `fleetingFrom` on, the
+ * sending console shows the signs one at a time — the view says so, the
+ * client cycles them. A wrong sign costs time and starts the stage's input
+ * again; a key pressed at the sending console is turned away, without an
+ * alarm, and so is one pressed at the receiving console while nobody else
+ * stands at the sending one: a single player cannot read there and press here.
  */
 const defSchema = z
   .strictObject({
@@ -328,17 +356,26 @@ function exampleLines(def: SignalDef): string[] {
   return [shown, sends, lookedUp(first), `An Pult B gedrückt: ${keys.join(', ')}.`];
 }
 
-/** The printed legend: each row of keys, and the colour it stands for at either console. */
+/**
+ * The printed legend: each row of keys, and the colour it stands for at
+ * either console, each colour with its pattern beside it — so that a row is
+ * found by the pattern alone.
+ */
 function legendTable(): ManualBlock {
+  const colourAt = (side: ConsoleId, row: LegendRow): string[] => {
+    const colour = LEGEND[side][row];
+    return [COLOUR_WORDS[colour], PATTERN_WORDS[SIGNAL_PATTERNS[colour]]];
+  };
   return {
     kind: 'table',
-    head: ['Zeile', 'Pult A', 'Pult B'],
-    rows: ROWS.map((row) => [
-      String(row),
-      COLOUR_WORDS[LEGEND.a[row]],
-      COLOUR_WORDS[LEGEND.b[row]],
-    ]),
+    head: ['Zeile', 'Pult A', 'Muster', 'Pult B', 'Muster'],
+    rows: ROWS.map((row) => [String(row), ...colourAt('a', row), ...colourAt('b', row)]),
   };
+}
+
+/** The drawing of the four signs' colours, each in its pattern and named with it. */
+function patternFigure(): ManualBlock {
+  return { kind: 'figure', of: PATTERN_FIGURE, caption: 'Abb. 2 — Farben und Muster' };
 }
 
 /** The device and the task, in three sentences; with the legend the receiver has shapes only. */
@@ -475,7 +512,7 @@ export const signalModule: PuzzleModule<SignalDef, SignalState, SignalInput, Sig
     }
     return [
       { heading: 'Signalkette', blocks: device },
-      { heading: 'Legende', blocks: [legendTable(), ...close] },
+      { heading: 'Legende', blocks: [patternFigure(), legendTable(), ...close] },
     ];
   },
 

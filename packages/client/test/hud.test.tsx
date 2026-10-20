@@ -1,15 +1,21 @@
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { PlayerView, RunEvent } from '@escapelab/core';
+import type { Edgework, PlayerView, RunEvent } from '@escapelab/core';
 import { MissionHud, tickerLine, withKey } from '../src/screens/MissionHud.js';
 import { iconsAsWords, mapWith, PICTOGRAPH } from './fixtures.js';
 
 /**
  * The HUD strip of a running mission whose report reads `events`; `onAir`
- * while a banner is up, `parts` what the objective bar says is still to bring.
+ * while a banner is up, `parts` what the objective bar says is still to bring,
+ * `edgework` what the sign said, once it is read.
  */
-function hud(events: RunEvent[], onAir = false, parts: string | null = null): string {
+function hud(
+  events: RunEvent[],
+  onAir = false,
+  parts: string | null = null,
+  edgework: Edgework | null = null,
+): string {
   const ben = { id: 'p2', name: 'Ben', color: '#f472b6', ready: true, isHost: false };
   const view: PlayerView = {
     phase: 'playing',
@@ -35,8 +41,8 @@ function hud(events: RunEvent[], onAir = false, parts: string | null = null): st
     alarms: { count: 0, limit: 5 },
     hintsUsed: 0,
     credits: {},
-    edgework: null,
-    presence: { stationId: null, console: null, manualId: null, signSeen: false },
+    edgework,
+    presence: { stationId: null, console: null, manualId: null, signSeen: edgework !== null },
     sourcesHere: [],
     manualsHere: [],
     puzzle: null,
@@ -164,6 +170,48 @@ describe('what the crew still has to bring, on a phone held sideways', () => {
     // ui.css pushes the first thing after the crew to the right: hidden, it hands that on.
     expect(everywhere).toMatch(/\n\.hud-radio--parts:first-child \+ \* \{\s*margin-left: auto;/);
     expect(sideways).toMatch(/\n {2}\.hud-radio--parts:first-child \+ \* \{\s*margin-left: 0;/);
+  });
+});
+
+describe('the Laborkennung in a narrow strip', () => {
+  const POLISH_CSS = readFileSync(new URL('../src/styles/polish.css', import.meta.url), 'utf8');
+  const NARROW =
+    '@media (820px < width < 1180px),\n' +
+    '  (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {';
+  const from = POLISH_CSS.indexOf(NARROW);
+  const narrow = POLISH_CSS.slice(from, POLISH_CSS.indexOf('\n}\n', from));
+  const edgework: Edgework = {
+    serial: 'K7G3A-2',
+    indicators: [
+      { id: 'FRQ', lit: true },
+      { id: 'SIG', lit: false },
+      { id: 'CAR', lit: true },
+    ],
+    cells: 3,
+  };
+
+  it('stands before the buttons, the Info button last, and carries its value ready', () => {
+    const html = hud([radio('Strom weg.')], false, null, edgework);
+    const chip = html.indexOf('<div class="edgework"');
+    expect(chip).toBeGreaterThan(html.indexOf('</ul>'));
+    expect(html.indexOf('class="hud-info hud-notes"')).toBeGreaterThan(chip);
+    expect(html).toMatch(/<button class="hud-info">.*?Info \[I\]<\/button><\/div><\/section>$/);
+    expect(html).toContain('<span class="edgework-value" title="Laborkennung K7G3A-2; ');
+  });
+
+  it('shows the value alone under 1180 px and sideways, and the strip gives way before a button', () => {
+    expect(from).toBeGreaterThan(0);
+    // Everywhere else the whole chip, and its value hidden.
+    expect(POLISH_CSS.slice(0, from)).toMatch(/\n\.edgework-value \{\s*display: none;\s*\}/);
+    expect(narrow).toMatch(/\n {2}\.hud \.edgework-part \{\s*display: none;\s*\}/);
+    expect(narrow).toMatch(/\n {2}\.hud \.edgework-value \{\s*display: block;/);
+    const givesWay = /\n {2}\.hud-crew,\n {2}\.hud-radio,\n {2}\.hud \.edgework \{\s*min-width: 0;/;
+    expect(narrow).toMatch(givesWay);
+    // The radio line first, then the crew; the chip's value stays whole, nothing lets it shrink.
+    expect(narrow).toMatch(/\n {2}\.hud-radio \{\s*flex-shrink: 4;\s*\}/);
+    expect(narrow).not.toMatch(/\.edgework[^{]*\{[^}]*flex/);
+    // Nothing in it touches the buttons: they keep their size and stay on the screen.
+    expect(narrow).not.toMatch(/hud-info|hud-notes|hud-mic/);
   });
 });
 

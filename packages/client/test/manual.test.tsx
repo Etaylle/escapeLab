@@ -82,4 +82,21 @@ describe('EdgeworkChip', () => {
     expect(html.match(/edgework-cell on/g)).toHaveLength(3);
     expect(html.match(/class="edgework-cell"/g)).toHaveLength(1);
   });
+
+  it('keeps the serial alone at hand for a narrow strip, everything else in its tooltip', () => {
+    const edgework: Edgework = {
+      serial: '4F7QX-1',
+      indicators: [{ id: 'NSA', lit: false }],
+      cells: 0,
+    };
+    const html = renderToStaticMarkup(<EdgeworkChip edgework={edgework} />);
+    const words = 'Laborkennung 4F7QX-1; Kontrollleuchten NSA aus; Notstromzellen 0';
+    expect(html).toMatch(
+      new RegExp(
+        `^<div class="edgework" role="group" aria-label="${words}">` +
+          `<span class="edgework-value" title="${words}" aria-hidden="true">4F7QX-1</span>` +
+          '<div class="edgework-part" aria-hidden="true">',
+      ),
+    );
+  });
 });

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   MapView,
   MissionInfo,
+  MissionStats,
   PlayerPosition,
   PlayerView,
   RoomSummary,
@@ -14,7 +15,7 @@ import { crewSizeText, crewTags, presenceNear } from '../src/screens/Crew.js';
 import { lineup, type Place } from '../src/screens/CrewRoom.js';
 import { EndScreen } from '../src/screens/End.js';
 import { JoinScreen } from '../src/screens/Join.js';
-import { LobbyScreen, startBlocker } from '../src/screens/Lobby.js';
+import { LobbyScreen, MissionStrip, startBlocker, stepTo } from '../src/screens/Lobby.js';
 import { MissionHud } from '../src/screens/MissionHud.js';
 import { audienceTags, SpectateScreen } from '../src/screens/Spectate.js';
 import { iconsAsWords, mapWith, PICTOGRAPH } from './fixtures.js';
@@ -291,13 +292,14 @@ describe('the lobby', () => {
     );
   });
 
-  it('gives the host the mission switch and the difficulty to pick, the others only to see', () => {
+  it('gives the host the mission strip and the difficulty to pick, the others only to see', () => {
     const host = lobby(annaSees([anna, ben]), [blackout, tutorial]);
-    expect(host).toContain('Mission wechseln<select');
+    expect(host).toContain('<div class="lobby-missions" role="radiogroup" aria-label="Mission wechseln">');
+    expect(host).not.toContain('<select');
     expect(host.match(/<button class="level-chip[ "]/g)).toHaveLength(3);
     expect(host).toContain('aria-pressed="true">Normal</button>');
     const guest = lobby(benSees([anna, ben], false), [blackout, tutorial]);
-    expect(guest).not.toContain('<select');
+    expect(guest).not.toMatch(/radiogroup|lobby-mission|<select/);
     expect(guest).toContain('Schwierigkeit (wählt der Host)');
     expect(guest).toContain('<div class="level-chips level-chips-shown">');
     expect(guest.match(/<span class="level-chip[ "]/g)).toHaveLength(3);
@@ -306,14 +308,81 @@ describe('the lobby', () => {
 
   it('names the mission with its map and one line of facts', () => {
     const withMap = { ...blackout, tiles: ['###', '#.#', '###'] };
-    const html = lobby(annaSees([anna]), [withMap, tutorial]);
-    expect(html).toContain(
-      '<h1>Blackout im Labor</h1><div class="lobby-map"><svg class="map-thumb"',
-    );
-    expect(html).toContain(
+    const facts =
       '<p class="lobby-facts"><span>[clock] 8 min</span><span>[crew] 2–3 Spieler</span>' +
-        '<span>[station] 5 Stationen</span></p>',
+      '<span>[station] 5 Stationen</span></p>';
+    const guest = lobby(benSees([anna, ben], false), [withMap, tutorial]);
+    expect(guest).toContain('<h1>Blackout im Labor</h1><div class="lobby-map"><svg class="map-thumb"');
+    expect(guest).toContain(facts);
+    // The host's strip stands in the map's place, every card with a map of its own.
+    const host = lobby(annaSees([anna]), [withMap, tutorial]);
+    expect(host).toContain('<h1>Blackout im Labor</h1><div class="lobby-missions" role="radiogroup"');
+    expect(host).not.toContain('class="lobby-map"');
+    expect(host).toContain(`</div>${facts}`);
+    // With one mission there is nothing to pick: the host sees the map like everyone.
+    expect(lobby(annaSees([anna]), [withMap])).toContain('<div class="lobby-map">');
+  });
+
+  /** The host's strip as drawn, its icons by name. */
+  function strip(current: string, stats: MissionStats[] = []): string[] {
+    const html = renderToStaticMarkup(
+      <MissionStrip missions={[blackout, tutorial]} stats={stats} current={current} pick={noop} />,
     );
+    return iconsAsWords(html).match(/<button class="lobby-mission[ "].*?<\/button>/g) ?? [];
+  }
+
+  it('lays every mission out as a card in one radio group, the room’s ticked and Tab’s stop', () => {
+    const played: MissionStats = {
+      missionId: 'blackout',
+      difficulties: [
+        { difficulty: 'normal', runs: 8, wins: 5, bestSeconds: 462, medianSeconds: 480, top: [] },
+      ],
+    };
+    const [first, second] = strip('systemcheck', [played]);
+    expect(first).toBe(
+      '<button class="lobby-mission" role="radio" aria-checked="false" tabindex="-1" ' +
+        'title="Für zwei oder drei."><span class="lobby-mission-map" aria-hidden="true"></span>' +
+        '<span class="lobby-mission-title">Blackout im Labor</span>' +
+        '<span class="lobby-mission-meta">[crew] 2–3 Spieler</span>' +
+        '<span class="lobby-mission-record"><span>Beste Zeit 7:42</span>' +
+        '<span>63\u00a0% gewonnen</span></span></button>',
+    );
+    // Not played yet: no record, as on the join screen's card.
+    expect(second).toBe(
+      '<button class="lobby-mission lobby-mission-on" role="radio" aria-checked="true" ' +
+        'tabindex="0" title="Zum Warmwerden."><span class="lobby-mission-map" aria-hidden="true">' +
+        '<span class="lobby-mission-mark">[check]</span></span>' +
+        '<span class="lobby-mission-title">Tutorial: Systemcheck</span>' +
+        '<span class="lobby-mission-meta">[crew] 2 Spieler</span></button>',
+    );
+  });
+
+  it('keeps one card reachable by Tab even while the room’s mission is not among them', () => {
+    const cards = strip('custom-gone');
+    expect(cards.map((card) => /tabindex="(-?\d)"/.exec(card)?.[1])).toEqual(['0', '-1']);
+    expect(cards.join('')).not.toContain('aria-checked="true"');
+  });
+
+  it('steps the pick with the arrow keys, round at the ends, Home and End to the ends', () => {
+    expect(stepTo(0, 'ArrowRight', 4)).toBe(1);
+    expect(stepTo(0, 'ArrowDown', 4)).toBe(1);
+    expect(stepTo(3, 'ArrowRight', 4)).toBe(0);
+    expect(stepTo(0, 'ArrowLeft', 4)).toBe(3);
+    expect(stepTo(2, 'ArrowUp', 4)).toBe(1);
+    expect(stepTo(2, 'Home', 4)).toBe(0);
+    expect(stepTo(1, 'End', 4)).toBe(3);
+    for (const key of ['Enter', ' ', 'Tab', 'a']) {
+      expect(stepTo(1, key, 4)).toBeNull();
+    }
+  });
+
+  it('keeps the strip inside the panel: it scrolls sideways in its own box, cards snapping', () => {
+    const missions = blockOf(LOBBY_CSS, '.lobby-missions {');
+    expect(missions).toContain('overflow-x: auto;');
+    expect(missions).toContain('scroll-snap-type: x proximity;');
+    expect(blockOf(LOBBY_CSS, '.lobby-mission {')).toContain('flex: 0 0 128px;');
+    // The select it replaces left no rule behind.
+    expect(LOBBY_CSS).not.toMatch(/lobby-switch|lobby-setup/);
   });
 
   it('cuts a long story to two lines with „mehr", and leaves a short one whole', () => {
@@ -687,13 +756,16 @@ describe('the end screen', () => {
         { at: 181_000, kind: 'finish', label: reason, seconds: null },
       ],
     });
-    const html = renderToStaticMarkup(<EndScreen view={view} send={noop} leaveRoom={noop} />);
-    expect(html).toContain('✖ GESCHEITERT');
+    const html = iconsAsWords(
+      renderToStaticMarkup(<EndScreen view={view} send={noop} leaveRoom={noop} />),
+    );
+    expect(html).toContain('<h1>[cross] GESCHEITERT</h1>');
     const lines = html.match(/<li class="report-[a-z]+">.*?<\/li>/g) ?? [];
     expect(lines).toHaveLength(4);
+    expect(lines[0]).toContain('<span class="report-icon">[siren]</span>');
     expect(lines.at(-1)).toBe(
       '<li class="report-finish"><span class="report-time">3:00</span>' +
-        `<span class="report-icon">🏁</span><span class="report-text">${reason}</span></li>`,
+        `<span class="report-icon">[flag]</span><span class="report-text">${reason}</span></li>`,
     );
   });
 });
