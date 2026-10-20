@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { PlayerPosition, DronePosition, SpectatorView } from '@escapelab/core';
 import { useVoice } from '../voice/useVoice.js';
 import { useDarkSince } from '../world/coldOpen.js';
+import type { Finale } from '../world/finale.js';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
 import type { KnownPositions } from '../world/movement.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
@@ -9,11 +10,15 @@ import { PuzzlePanel } from './PuzzlePanel.js';
 import { Manual } from './Manual.js';
 import { EdgeworkChip } from './EdgeworkChip.js';
 import { CreditsTable, crewTags, CrewTags, type CrewTag } from './Crew.js';
+import { TitleCard, titleCardOf } from './End.js';
+import { FinaleVeil } from './Game.js';
 import { Icon } from './Icon.js';
 import { ListenToggle, SpeakingMark } from './Voice.js';
 
 interface Props {
   view: SpectatorView;
+  /** the end of the run on this screen (world/finale.ts): the world plays it, then its card */
+  finale: Finale | null;
   positionsRef: React.MutableRefObject<KnownPositions>;
   dronesRef: React.MutableRefObject<Record<string, DronePosition>>;
   pingsRef: React.MutableRefObject<MapPing[]>;
@@ -45,9 +50,119 @@ export function audienceTags(
   return player.presence.signSeen ? [...tags, { text: 'Kennung', tone: 'sign' }] : tags;
 }
 
-/** Audience view: the whole lab revealed, plus the open station from every side. */
+/**
+ * The audience's column beside the world: the open station from every side —
+ * once the run is over, who did what — any relay consoles in an emergency,
+ * and the run report as it grows.
+ */
+function SpectatePanels({ view }: { view: SpectatorView }) {
+  const noop = (): void => undefined;
+  const feed = view.events.slice(-14).reverse();
+  const over = view.phase === 'won' || view.phase === 'lost';
+  const colorOf = (playerId: string): string | undefined =>
+    view.players.find((p) => p.id === playerId)?.color;
+  return (
+    <div className="spectate-panels">
+      {over ? (
+        <section className="panel">
+          <div className="panel-label">// Beiträge</div>
+          <CreditsTable players={view.players} credits={view.credits} />
+        </section>
+      ) : (
+        <section className="panel">
+          <div className="panel-head">
+            <div className="panel-label">// {view.puzzle?.title ?? 'Station'}</div>
+            {view.edgework !== null && <EdgeworkChip edgework={view.edgework} />}
+          </div>
+          {view.puzzle === null ? (
+            <p className="muted">Unterwegs — gerade keine Station offen.</p>
+          ) : (
+            <>
+              {view.puzzle.manual !== null && <Manual sections={view.puzzle.manual} />}
+              <div className="read-only">
+                <PuzzlePanel puzzle={view.puzzle} send={noop} deadlineAt={view.deadlineAt} />
+              </div>
+            </>
+          )}
+        </section>
+      )}
+      {view.panels.map(
+        (panel) =>
+          panel.emergency !== undefined && (
+            <section key={panel.playerId} className="panel">
+              <div className="panel-label">
+                //{' '}
+                <span
+                  className="crew-dot"
+                  style={{ background: colorOf(panel.playerId) }}
+                  aria-hidden="true"
+                />
+                {panel.name}
+              </div>
+              <div className="read-only">
+                <RelayConsole relay={panel.emergency} send={noop} />
+              </div>
+            </section>
+          ),
+      )}
+
+      <section className="panel spectate-log">
+        <div className="panel-label">// Einsatzprotokoll</div>
+        {feed.length === 0 ? (
+          <p className="muted">Noch nichts passiert.</p>
+        ) : (
+          <ul className="ticker">
+            {feed.map((event, i) => (
+              <li key={`${event.at}-${i}`} className={`ticker-${event.kind}`}>
+                <span className="ticker-time">{elapsed(view.startedAt, event.at)}</span>
+                {event.label}
+                {event.seconds !== null ? ` (−${event.seconds}s)` : ''}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+/** The crew along the foot, what each is doing, the voice and the way out. */
+function SpectateFoot({
+  view,
+  positionsRef,
+  leaveRoom,
+}: Pick<Props, 'view' | 'positionsRef' | 'leaveRoom'>) {
+  const speaking = useVoice()?.state.speaking;
+  return (
+    <div className="spectate-foot">
+      <ul className="players inline">
+        {view.players.map((p) => (
+          <li key={p.id} className={p.connected ? '' : 'offline'}>
+            <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
+            {p.name}
+            {speaking?.has(p.id) === true && <SpeakingMark />}
+            {view.phase === 'playing' && (
+              <CrewTags tags={audienceTags(view, p, positionsRef.current.players[p.id])} />
+            )}
+          </li>
+        ))}
+      </ul>
+      <ListenToggle />
+      <button className="link" onClick={leaveRoom}>
+        Zuschauen beenden
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Audience view: the whole lab revealed, plus the open station from every
+ * side. The run's end plays in the world as for the crew, and its title card
+ * takes the world's place after.
+ */
 export function SpectateScreen({
   view,
+  finale,
   positionsRef,
   dronesRef,
   pingsRef,
@@ -59,15 +174,14 @@ export function SpectateScreen({
     const timer = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(timer);
   }, []);
-  const speaking = useVoice()?.state.speaking;
   // The audience sees the lights fail too, unless it came in after.
   const darkSince = useDarkSince(view.lights, view.startedAt);
 
   const noop = (): void => undefined;
-  const feed = view.events.slice(-14).reverse();
   const over = view.phase === 'won' || view.phase === 'lost';
-  const colorOf = (playerId: string): string | undefined =>
-    view.players.find((p) => p.id === playerId)?.color;
+  // While the end plays, the world goes on with the last map of the run.
+  const ending = finale?.running === true ? finale : null;
+  const map = view.map ?? ending?.map ?? null;
 
   return (
     <div className="spectate">
@@ -86,21 +200,8 @@ export function SpectateScreen({
         </div>
       </div>
 
-      {view.phase !== 'playing' && (
-        <div className={`banner-result ${view.phase === 'won' ? 'won' : ''}`}>
-          {view.phase === 'lobby' && 'Die Crew ist noch in der Lobby …'}
-          {view.phase === 'won' && (
-            <>
-              <Icon name="check" /> Geschafft
-              {view.grade === null ? '' : ` — Rang ${view.grade.rank}`}
-            </>
-          )}
-          {view.phase === 'lost' && (
-            <>
-              <Icon name="cross" /> Gescheitert
-            </>
-          )}
-        </div>
+      {view.phase === 'lobby' && (
+        <div className="banner-result">Die Crew ist noch in der Lobby …</div>
       )}
 
       {view.pausedFor !== null && (
@@ -111,106 +212,35 @@ export function SpectateScreen({
 
       <div className="spectate-body">
         <div className="spectate-world">
-          {view.map !== null && (
-            <GameWorld
-              view={spectatorAsPlayerView(view)}
-              positionsRef={positionsRef}
-              dronesRef={dronesRef}
-              pingsRef={pingsRef}
-              chatsRef={chatsRef}
-              spectator
-              darkSince={darkSince}
-              inputLocked
-              holdTips={false}
-              onToggleInfo={noop}
-              onRead={noop}
-              onOperate={noop}
-              send={noop}
-            />
-          )}
-        </div>
-
-        <div className="spectate-panels">
-          {over ? (
-            <section className="panel">
-              <div className="panel-label">// Beiträge</div>
-              <CreditsTable players={view.players} credits={view.credits} />
-            </section>
+          {over && ending === null ? (
+            <TitleCard {...titleCardOf(view, null, finale?.played === true)} />
           ) : (
-            <section className="panel">
-              <div className="panel-head">
-                <div className="panel-label">// {view.puzzle?.title ?? 'Station'}</div>
-                {view.edgework !== null && <EdgeworkChip edgework={view.edgework} />}
-              </div>
-              {view.puzzle === null ? (
-                <p className="muted">Unterwegs — gerade keine Station offen.</p>
-              ) : (
-                <>
-                  {view.puzzle.manual !== null && <Manual sections={view.puzzle.manual} />}
-                  <div className="read-only">
-                    <PuzzlePanel puzzle={view.puzzle} send={noop} deadlineAt={view.deadlineAt} />
-                  </div>
-                </>
-              )}
-            </section>
+            map !== null && (
+              <GameWorld
+                view={spectatorAsPlayerView({ ...view, map })}
+                positionsRef={positionsRef}
+                dronesRef={dronesRef}
+                pingsRef={pingsRef}
+                chatsRef={chatsRef}
+                spectator
+                darkSince={darkSince}
+                finale={ending === null ? null : { ending: ending.ending, since: ending.since }}
+                inputLocked
+                holdTips={false}
+                onToggleInfo={noop}
+                onRead={noop}
+                onOperate={noop}
+                send={noop}
+              />
+            )
           )}
-          {view.panels.map(
-            (panel) =>
-              panel.emergency !== undefined && (
-                <section key={panel.playerId} className="panel">
-                  <div className="panel-label">
-                    //{' '}
-                    <span
-                      className="crew-dot"
-                      style={{ background: colorOf(panel.playerId) }}
-                      aria-hidden="true"
-                    />
-                    {panel.name}
-                  </div>
-                  <div className="read-only">
-                    <RelayConsole relay={panel.emergency} send={noop} />
-                  </div>
-                </section>
-              ),
-          )}
-
-          <section className="panel spectate-log">
-            <div className="panel-label">// Einsatzprotokoll</div>
-            {feed.length === 0 ? (
-              <p className="muted">Noch nichts passiert.</p>
-            ) : (
-              <ul className="ticker">
-                {feed.map((event, i) => (
-                  <li key={`${event.at}-${i}`} className={`ticker-${event.kind}`}>
-                    <span className="ticker-time">{elapsed(view.startedAt, event.at)}</span>
-                    {event.label}
-                    {event.seconds !== null ? ` (−${event.seconds}s)` : ''}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
         </div>
+
+        <SpectatePanels view={view} />
       </div>
 
-      <div className="spectate-foot">
-        <ul className="players inline">
-          {view.players.map((p) => (
-            <li key={p.id} className={p.connected ? '' : 'offline'}>
-              <span className="crew-dot" style={{ background: p.color }} aria-hidden="true" />
-              {p.name}
-              {speaking?.has(p.id) === true && <SpeakingMark />}
-              {view.phase === 'playing' && (
-                <CrewTags tags={audienceTags(view, p, positionsRef.current.players[p.id])} />
-              )}
-            </li>
-          ))}
-        </ul>
-        <ListenToggle />
-        <button className="link" onClick={leaveRoom}>
-          Zuschauen beenden
-        </button>
-      </div>
+      <SpectateFoot view={view} positionsRef={positionsRef} leaveRoom={leaveRoom} />
+      {ending !== null && <FinaleVeil ending={ending.ending} since={ending.since} />}
     </div>
   );
 }

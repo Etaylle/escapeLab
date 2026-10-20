@@ -42,6 +42,19 @@
  * where the host read the sign, in the host's window at that size too — or
  * the run fails: the Laborkennung's chip may never push it off the screen.
  *
+ * The Systemcheck on its pinned seed is played to the end: after the
+ * Signalprobe the guest holds the Kontrolle's plate beside the locker — the
+ * rules — while the host cuts the wiring box's wire; the seed pins the box,
+ * so the walkthrough carries its answer (PINNED_WIRING) and fails, naming the
+ * seed, where the box shows other wires. Both press the Synchronkalibrierung
+ * together, the hatch opens and the siren sounds: the guest steps onto the
+ * hatch, the host's frames are sampled on the way to it, and escape.png
+ * shows the red light, the open hatch and the checklist with the guest
+ * ticked off. The host steps on, the run is won: pullback.png catches the
+ * world lit and the camera pulling back, won.png the title card with the
+ * crew outside, end.png the whole end screen, won-phone.png the guest's card
+ * on a phone; the audience's page has to show the same card (won-audience.png).
+ *
  * The base URL is the Vite dev server by default (`pnpm dev`), or the
  * production server (`pnpm build && pnpm start`, http://localhost:3001) as in
  * CI. The host's page opens with `?trace=1`, so the world keeps its frame
@@ -113,6 +126,15 @@ const SEEDS = new Map([
   ['systemcheck', 1],
 ]);
 const SEED = seedFor(process.env.SHOTS_SEED, SEEDS.get(MISSION.toLowerCase()));
+/**
+ * The Systemcheck's wiring box (Kabelprüfung) as its pinned seed draws it:
+ * the wires' colours from the top, and the one the printed list for three
+ * wires says to cut, counted from the top — gelb, gelb, gelb: rule 2, the
+ * last wire is yellow, cut the first. Found by drawing the box from the
+ * seed with the core's own module; a seed that draws another box fails the
+ * run by name.
+ */
+const PINNED_WIRING = new Map([[1, { colors: ['gelb', 'gelb', 'gelb'], cut: 1 }]]);
 
 /**
  * The host's window for cold-open.png: as wide as a laptop's, a little
@@ -2146,6 +2168,240 @@ async function captureEditor() {
   await context.close();
 }
 
+/** Holds the keys towards (tx, ty) as long as the avatar takes to walk there in a line. */
+async function walkStraight(player, tx, ty) {
+  const at = whereIs(player.seen);
+  const dx = tx - at.x;
+  const dy = ty - at.y;
+  const keys = [
+    ...(Math.abs(dx) >= STEP_TOLERANCE ? [dx > 0 ? 'd' : 'a'] : []),
+    ...(Math.abs(dy) >= STEP_TOLERANCE ? [dy > 0 ? 's' : 'w'] : []),
+  ];
+  for (const key of keys) await player.page.keyboard.down(key);
+  await sleep((Math.hypot(dx, dy) / SPEED) * 1000);
+  for (const key of keys) await player.page.keyboard.up(key);
+}
+
+/** Walks `player` onto `tile` and stops in its middle; false where no open way leads there. */
+async function standOn(player, tile) {
+  return (
+    (await walkNear(player.page, player.seen, tile)) &&
+    (await stepTo(player.page, player.seen, tile.x + 0.5, tile.y + 0.5))
+  );
+}
+
+/**
+ * The Kabelprüfung as the pinned seed draws it: `holder` stands on the
+ * Kontrolle's plate, beside the locker whose rules make it the backup, while
+ * `cutter` walks through to the box, opens it and cuts the pinned wire.
+ * Throws, naming the seed, where the box shows other wires than pinned.
+ */
+async function cutPinnedWire(cutter, holder, pinned) {
+  const map = cutter.seen.view.map;
+  const box = map.stations.find((s) => s.status === 'armed');
+  const plate = map.plates.find((p) => !p.freezesDrone);
+  if (box === undefined || plate === undefined) {
+    throw new Error('the Kabelprüfung is not armed, or there is no plate to hold its door');
+  }
+  await holdPlate(holder, plate);
+  const through = await until(() => stepsTo(cutter.seen, box) !== Infinity, 3000);
+  if (!through || !(await walkNear(cutter.page, cutter.seen, box))) {
+    throw new Error(`${holder.name} holds the plate, but ${cutter.name} found no way to "${box.title}"`);
+  }
+  const modal = cutter.page.locator('.station-modal');
+  if (!(await interactUntil(cutter.page, modal))) {
+    throw new Error(`${cutter.name} stands at "${box.title}", but no .station-modal after 3 tries`);
+  }
+  await until(() => cutter.seen.view.puzzle?.wires != null, 3000);
+  const colors = (cutter.seen.view.puzzle?.wires ?? []).map((wire) => wire.color);
+  if (colors.join(',') !== pinned.colors.join(',')) {
+    throw new Error(
+      `Systemcheck seed ${SEED} no longer draws the pinned wiring box: ` +
+        `${colors.join(', ') || 'no wires'} instead of ${pinned.colors.join(', ')} — ` +
+        'draw the box for the seed anew and update PINNED_WIRING',
+    );
+  }
+  const backed = await until(() => cutter.seen.view.puzzle?.backup != null, 3000);
+  const index = cutter.seen.view.currentPuzzleIndex;
+  await modal.locator(`button[aria-label^="Kabel ${pinned.cut},"]`).click({ timeout: 3000 });
+  if (!(await until(() => cutter.seen.view.currentPuzzleIndex > index, 5000))) {
+    const alarms = cutter.seen.view.alarms.count;
+    throw new Error(
+      `${cutter.name} cut wire ${pinned.cut} of "${box.title}", but it did not solve ` +
+        `(${backed ? 'backed up' : `no backup at ${holder.name}'s plate`}, ${alarms} alarm(s))`,
+    );
+  }
+  console.log(
+    `wiring             ${holder.name} holds the plate by the locker, ${cutter.name} cuts wire ` +
+      `${pinned.cut} of ${colors.join(', ')} (seed ${SEED}): "${box.title}" solved`,
+  );
+}
+
+/** The last station, a sync for the whole crew: all gather at it, open it and press together. */
+async function pressLastSync(players) {
+  const station = players[0].seen.view.map.stations.find((s) => s.status === 'armed');
+  if (station === undefined) {
+    throw new Error('no station is armed after the Kabelprüfung');
+  }
+  // In this order: whoever holds a plate door open steps off it last.
+  await gatherAt(station, players);
+  for (const player of players) {
+    if (!(await interactUntil(player.page, player.page.locator('.station-modal')))) {
+      throw new Error(`${player.name} stands at "${station.title}", but no .station-modal`);
+    }
+  }
+  await sleep(400); // past the panel's fade-in
+  await pressTogether(players, station);
+}
+
+/** What the host's page says of the escape: the goal, the checklist, the clock. */
+async function escapeHud(page) {
+  return page.evaluate(() => {
+    const text = (selector) => document.querySelector(selector)?.textContent?.trim() ?? null;
+    const mates = [...document.querySelectorAll('.escape-mate')].map(
+      (li) => `${li.textContent.trim()}${li.classList.contains('escape-mate--out') ? ' ✓' : ' …'}`,
+    );
+    return {
+      goal: text('.stage-goal--escape h1'),
+      mates,
+      clock: document.querySelector('.stage-clock .countdown')?.className ?? 'no clock',
+    };
+  });
+}
+
+/**
+ * escape.png: the hatch open and the siren on — the light turned red, the
+ * clock pulsing, the checklist under the goal. The host walks up beside the
+ * hatch and its frames are sampled there (the escape's quiet window); the
+ * guest steps onto it and is ticked off. The shot waits until the hatch has
+ * ground open. Fails unless the goal, the checklist and the clock say so.
+ */
+async function captureEscape(host, guest) {
+  const open = () => host.seen.view.map?.exit?.open === true;
+  if (!(await until(open, 5000))) {
+    throw new Error('every station is solved, but the hatch did not open');
+  }
+  const exit = host.seen.view.map.exit;
+  const openedAt = Date.now();
+  const beside = { x: exit.x + 1, y: exit.y + 1 };
+  if (!(await standOn(host, beside))) {
+    throw new Error(`${host.name} found no way to ${beside.x},${beside.y} beside the hatch`);
+  }
+  await sampleFrames(host.page, 'in the escape, the siren on', () => pace(host, SAMPLE_MS));
+  const guestId = guest.seen.view.you.id;
+  const ticked = () => host.seen.view.map?.exit?.atExit.includes(guestId) === true;
+  if (!(await standOn(guest, exit)) || !(await until(ticked, 3000))) {
+    throw new Error(`${guest.name} did not get onto the hatch, or the checklist never ticked`);
+  }
+  await sleep(Math.max(600, openedAt + 2400 - Date.now())); // the hatch ground open, the light red
+  await capture(host.page, 'escape.png');
+  const hud = await escapeHud(host.page);
+  console.log(
+    `escape.png         ${host.name}: "${hud.goal}", checklist ${hud.mates.join(', ')}, ` +
+      `clock "${hud.clock}"`,
+  );
+  const tickedOff = hud.mates.some((mate) => mate.startsWith(guest.name) && mate.endsWith('✓'));
+  if (hud.goal !== 'ALLE ZUM NOTAUSGANG' || !tickedOff || !hud.clock.includes('critical')) {
+    fail(`escape.png: goal "${hud.goal}", checklist ${hud.mates.join(', ')}, clock ${hud.clock}`);
+  }
+}
+
+/** The end screen whole: the window as tall as the screen runs, then back. */
+async function captureWholeEnd(page) {
+  await page.locator('.standing, .standing-line').first().waitFor({ timeout: 5000 }).catch(() => {});
+  const before = page.viewportSize();
+  const height = await page.evaluate(() => {
+    const content = document.querySelector('.content');
+    return Math.ceil(content.getBoundingClientRect().top + content.scrollHeight + 4);
+  });
+  await page.setViewportSize({ width: before.width, height: Math.max(before.height, height) });
+  await sleep(500);
+  await capture(page, 'end.png');
+  await page.setViewportSize(before);
+  return height;
+}
+
+/**
+ * won-phone.png: the guest's title card on a phone held upright; the card
+ * may not run out sideways there.
+ */
+async function capturePhoneCard(guest) {
+  const { page } = guest;
+  await page.setViewportSize({ width: SIZES[2].width, height: SIZES[2].height });
+  if (!(await attached(page.locator('.end-title'), 6000))) {
+    throw new Error(`${guest.name}'s page never showed the title card`);
+  }
+  await sleep(1700); // past the card's way out of the white
+  await capture(page, 'won-phone.png');
+  const over = await sideways(page, '.content');
+  console.log(
+    `won-phone.png      ${guest.name} @ 420x760: ` +
+      (over > 0 ? `!! +${over}px sideways` : 'the card fits sideways'),
+  );
+  if (over > 0) {
+    fail(`won-phone.png: the end screen runs out ${over}px sideways on a phone`);
+  }
+}
+
+/**
+ * pullback.png, won.png, end.png: the host steps onto the hatch beside the
+ * guest and the run is won. The world plays its end — pullback.png in the
+ * middle of it — then the end screen opens on its title card (won.png), and
+ * end.png has all of it. The audience's page has to show the same card
+ * (won-audience.png).
+ */
+async function captureEnd(host, watcher) {
+  const exit = host.seen.view.map.exit;
+  // One straight walk: once the run is won the world takes no keys, so no step corrects it.
+  const won = () => host.seen.view?.phase === 'won';
+  const walk = walkStraight(host, exit.x + 0.5, exit.y + 0.5);
+  if (!(await until(won, 5000))) {
+    throw new Error('both stand on the hatch, but the run was not won');
+  }
+  const wonAt = Date.now();
+  await walk;
+  await sleep(700);
+  await capture(host.page, 'pullback.png');
+  const card = host.page.locator('.end-title');
+  if (!(await attached(card, 6000))) {
+    throw new Error('the run was won, but no title card came up');
+  }
+  const cardAt = Date.now() - wonAt;
+  await sleep(1700); // past the card's way out of the white
+  await capture(host.page, 'won.png');
+  const says = await textOf(card.locator('.end-title-word'));
+  const figures = await card.locator('.end-mate canvas').count();
+  const facts = (await textOf(card.locator('.end-facts')))?.replace(/\s+/g, ' ') ?? 'none';
+  const tall = await captureWholeEnd(host.page);
+  const watched = watcher.locator('.spectate .end-title-word');
+  const audience = (await attached(watched, 6000)) ? await textOf(watched) : null;
+  if (audience !== null) {
+    await sleep(1700); // past the card's way out of the white there too
+    await capture(watcher, 'won-audience.png');
+  }
+  console.log(
+    `won.png            ${host.name}: the card after ${seconds(cardAt)}, "${says}", ` +
+      `${figures} figures outside, "${facts}"; end.png ${tall}px tall; ` +
+      `the audience's card "${audience ?? '!! none'}"`,
+  );
+  if (says !== 'GESCHAFFT' || figures !== 2 || audience !== 'GESCHAFFT') {
+    fail(`won.png: "${says}", ${figures} figures, the audience's card "${audience}"`);
+  }
+}
+
+/**
+ * The Systemcheck on its pinned seed to the end: the Kabelprüfung, the
+ * Synchronkalibrierung, the escape and the win (escape.png, pullback.png,
+ * won.png, end.png, won-phone.png).
+ */
+async function playToTheEnd(host, guest, watcher, pinned) {
+  await cutPinnedWire(host, guest, pinned);
+  await pressLastSync([host, guest]);
+  await captureEscape(host, guest);
+  await captureEnd(host, watcher);
+  await capturePhoneCard(guest);
+}
+
 async function run() {
   mkdirSync(OUT, { recursive: true });
   browser = await chromium.launch({ args: VOICE_FLAGS });
@@ -2425,6 +2681,12 @@ async function run() {
           ? ', the world zoom held'
           : ` — !! the world zoom moved (HUD ${start.hud} → ${end.hud}px${banners})`),
     );
+  }
+
+  // The Systemcheck's seed pins its wiring box: there the walkthrough plays the run out.
+  const pinned = MISSION.toLowerCase() === 'systemcheck' ? PINNED_WIRING.get(SEED) : undefined;
+  if (pinned !== undefined) {
+    await playToTheEnd(anna, ben, watcher, pinned);
   }
 
   await browser.close();

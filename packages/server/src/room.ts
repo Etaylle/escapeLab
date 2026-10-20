@@ -626,10 +626,24 @@ export class Room {
   }
 
   /**
+   * Who stands on the exit hatch, sorted: everybody connected within
+   * EXIT_RADIUS of it once it is open — the escape's own measure — and
+   * nobody before.
+   */
+  private onTheHatch(): string[] {
+    const exit = this.state.mission.map.exit;
+    if (exit === undefined || !inEscapePhase(this.state)) {
+      return [];
+    }
+    return this.occupantsOf(exit.x, exit.y, EXIT_RADIUS).sort();
+  }
+
+  /**
    * Translate live positions into who stands at which station spot — each
    * console of a station on its own, keyed by `stationKey` — and manual
-   * object, who has walked up to the sign and which manual objects somebody
-   * has come close to and seen for the first time; dispatch only on change.
+   * object, who has walked up to the sign, which manual objects somebody has
+   * come close to and seen for the first time, and who stands on the open
+   * hatch; dispatch only on change.
    */
   private reconcilePresence(): void {
     const map = this.state.mission.map;
@@ -664,15 +678,16 @@ export class Room {
     const seen = sources
       .filter((s) => !discovered.includes(s.id) && this.sighted(s, shut))
       .map((s) => s.id);
-    const same = (a: Record<string, string[]>, b: Record<string, string[]>): boolean =>
-      JSON.stringify(a) === JSON.stringify(b);
+    const exit = this.onTheHatch();
+    const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
     if (
       !same(stations, presence.stations) ||
       !same(manuals, presence.manuals) ||
       signSeen.length !== presence.signSeen.length ||
-      seen.length > 0
+      seen.length > 0 ||
+      !same(exit, presence.exit)
     ) {
-      this.dispatch({ type: 'set-presence', stations, manuals, signSeen, seen });
+      this.dispatch({ type: 'set-presence', stations, manuals, signSeen, seen, exit });
     }
   }
 
@@ -777,23 +792,17 @@ export class Room {
     this.reconcilePause();
   }
 
-  /** Won once every connected player stands in the exit zone. */
+  /**
+   * Won once every connected player stands on the hatch: by the presence the
+   * views carry, so that the crew's checklist and the escape never disagree.
+   */
   private checkEscape(): void {
-    const exit = this.state.mission.map.exit;
-    if (exit === undefined || !inEscapePhase(this.state)) {
+    if (!inEscapePhase(this.state)) {
       return;
     }
+    const onIt = this.state.presence.exit;
     const connected = this.state.players.filter((p) => p.connected);
-    const everyoneOut =
-      connected.length > 0 &&
-      connected.every((player) => {
-        const pos = this.positions.get(player.id);
-        return (
-          pos !== undefined &&
-          Math.hypot(pos.x - (exit.x + 0.5), pos.y - (exit.y + 0.5)) <= EXIT_RADIUS
-        );
-      });
-    if (everyoneOut) {
+    if (connected.length > 0 && connected.every((player) => onIt.includes(player.id))) {
       this.dispatch({ type: 'escaped', at: Date.now() });
     }
   }

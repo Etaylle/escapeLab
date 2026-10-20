@@ -212,7 +212,15 @@ export interface MapView {
   /** labels of the rooms whose lights the solved stations have switched on, first lit first */
   litRooms: string[];
   /** escape hatch; open once every puzzle is solved */
-  exit: { x: number; y: number; open: boolean } | null;
+  exit: {
+    x: number;
+    y: number;
+    open: boolean;
+    /** epoch ms the hatch was unlocked, with the last station's solve; null while locked */
+    openedAt: number | null;
+    /** who stands on the open hatch right now, by player id; the run is won once it is everybody */
+    atExit: string[];
+  } | null;
   /** carryable objects and where they have to go */
   items: {
     id: string;
@@ -535,6 +543,27 @@ function itemsOnMap(state: GameState, viewer: MapViewer): MapView['items'] {
   });
 }
 
+/**
+ * The hatch as every viewer sees it: open once the last station is solved,
+ * since the moment the run report logged it unlocked, and who of the crew
+ * stands on it — as the server counts them from their positions.
+ */
+function exitOf(state: GameState): MapView['exit'] {
+  const exit = state.mission.map.exit;
+  if (exit === undefined) {
+    return null;
+  }
+  const open = state.currentPuzzleIndex >= state.mission.puzzles.length;
+  const unlocked = state.events.find((event) => event.kind === 'escape');
+  return {
+    x: exit.x,
+    y: exit.y,
+    open,
+    openedAt: open ? (unlocked?.at ?? null) : null,
+    atExit: open ? [...state.presence.exit] : [],
+  };
+}
+
 /** The rooms the solved stations have lit, each once, in the order they lit up. */
 function litRoomsOf(state: GameState): string[] {
   const solved = state.mission.puzzles.slice(0, state.currentPuzzleIndex);
@@ -568,14 +597,7 @@ function mapViewFor(state: GameState, viewer: MapViewer): MapView | null {
     lamps: map.lamps.map((lamp) => ({ x: lamp.x, y: lamp.y })),
     labels: map.labels.map((l) => ({ text: l.text, x: l.x, y: l.y })),
     litRooms: litRoomsOf(state),
-    exit:
-      map.exit === undefined
-        ? null
-        : {
-            x: map.exit.x,
-            y: map.exit.y,
-            open: state.currentPuzzleIndex >= state.mission.puzzles.length,
-          },
+    exit: exitOf(state),
     items: itemsOnMap(state, viewer),
     sabotage:
       map.sabotage === undefined || state.sabotage === null

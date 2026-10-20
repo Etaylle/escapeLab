@@ -751,7 +751,9 @@ describe('the end screen', () => {
         p2: { operated: 2, read: 4, found: 1, delivered: 0, alarms: 2, hints: 1 },
       },
     });
-    const html = renderToStaticMarkup(<EndScreen view={view} send={noop} leaveRoom={noop} />);
+    const html = renderToStaticMarkup(
+      <EndScreen view={view} fresh={false} send={noop} leaveRoom={noop} />,
+    );
     const grade = html.indexOf('class="grade grade-a"');
     const table = html.indexOf('<table>');
     expect(grade).toBeGreaterThan(-1);
@@ -788,9 +790,9 @@ describe('the end screen', () => {
       ],
     });
     const html = iconsAsWords(
-      renderToStaticMarkup(<EndScreen view={view} send={noop} leaveRoom={noop} />),
+      renderToStaticMarkup(<EndScreen view={view} fresh={false} send={noop} leaveRoom={noop} />),
     );
-    expect(html).toContain('<h1>[cross] GESCHEITERT</h1>');
+    expect(html).toContain('<h1 class="end-title-word">NOTVERSORGUNG ABGESCHALTET</h1>');
     const lines = html.match(/<li class="report-[a-z]+">.*?<\/li>/g) ?? [];
     expect(lines).toHaveLength(4);
     expect(lines[0]).toContain('<span class="report-icon">[siren]</span>');
@@ -861,6 +863,7 @@ describe('the audience', () => {
     const html = renderToStaticMarkup(
       <SpectateScreen
         view={finished()}
+        finale={null}
         positionsRef={{ current: { run: null, players: {} } }}
         dronesRef={{ current: {} }}
         pingsRef={{ current: [] }}

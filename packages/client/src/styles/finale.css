@@ -1,0 +1,614 @@
+/* ══ the finale: the world answering alarms, the escape, the end of a run ══
+ * world/alarm.ts's strobe and shake over GameWorld.tsx; Game.tsx's goal line
+ * in the escape and the veil the end of a run closes with (world/finale.ts);
+ * End.tsx's title card, which the end screen opens with.
+ */
+
+/* ── an alarm: the world strobes red twice and the camera shakes ─────────── */
+
+/* Two flashes of 120 ms with as long between them: each keyframe holds until the next. */
+.world-wrap.alarm-strobe::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: 14px;
+  pointer-events: none;
+  background: rgba(255, 34, 22, 0.42);
+  opacity: 0;
+  animation: alarm-strobe 360ms steps(1, end) 1;
+}
+
+@keyframes alarm-strobe {
+  0% {
+    opacity: 1;
+  }
+  33.333% {
+    opacity: 0;
+  }
+  66.667% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The camera knocked about, 3 px at most, for 300 ms. */
+.world-wrap.alarm-shake .world-canvas {
+  animation: alarm-shake 300ms linear 1;
+}
+
+@keyframes alarm-shake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  15% {
+    transform: translate(-3px, 1px);
+  }
+  30% {
+    transform: translate(3px, -2px);
+  }
+  45% {
+    transform: translate(-2px, 2px);
+  }
+  60% {
+    transform: translate(3px, 1px);
+  }
+  75% {
+    transform: translate(-1px, -2px);
+  }
+  90% {
+    transform: translate(1px, 1px);
+  }
+}
+
+/* ── the escape: everybody to the hatch ───────────────────────────────────── */
+
+/*
+ * The red edge of the clock's last minute, and of the whole escape. It
+ * breathes by its opacity alone, which the compositor does without painting
+ * the shadow anew every frame (moved here from ui.css, which pulsed the
+ * shadow itself).
+ */
+.vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  box-shadow: inset 0 0 160px 50px rgba(248, 60, 60, 0.34);
+  will-change: opacity;
+  animation: vignette-breathe 1.1s ease-in-out infinite;
+}
+
+@keyframes vignette-breathe {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.stage-goal--escape h1 {
+  color: #fecaca;
+  letter-spacing: 2px;
+  text-shadow:
+    0 0 14px rgba(248, 60, 60, 0.55),
+    0 2px 10px rgba(0, 0, 0, 0.9);
+}
+
+.stage-goal--escape .icon {
+  color: #4ade80;
+}
+
+/* The crew by name, each ticked off green on the hatch. */
+.escape-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.escape-mate {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  border-radius: 999px;
+  background: rgba(38, 7, 7, 0.82);
+  color: #fecaca;
+}
+
+.escape-mate--out {
+  border-color: #4ade80;
+  background: rgba(7, 38, 20, 0.85);
+  color: #dcfce7;
+}
+
+.escape-mate--out .icon {
+  color: #4ade80;
+}
+
+/* ── the end of a run in the world: the controls go, the veil closes ───────── */
+
+.game--finale .stage-top,
+.game--finale .hud,
+.game--finale .world-controls,
+.game--finale .coach {
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  pointer-events: none;
+}
+
+/* Delay and length come from finale.ts, inline: white for a run won, black for one lost. */
+.finale-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  pointer-events: none;
+  opacity: 0;
+  animation-name: finale-veil;
+  animation-timing-function: ease-in;
+  animation-fill-mode: forwards;
+}
+
+.finale-veil--white {
+  background: #f4fbf7;
+}
+
+.finale-veil--black {
+  background: #000;
+}
+
+@keyframes finale-veil {
+  to {
+    opacity: 1;
+  }
+}
+
+/* ── the end screen: the title card over the report ──────────────────────── */
+
+.end-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+}
+
+.end-title {
+  position: relative;
+  width: 100%;
+  max-width: 980px;
+  padding: 26px 28px 24px;
+  border-radius: 18px;
+  overflow: hidden;
+  isolation: isolate;
+  text-align: center;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+.end-title--won {
+  border: 1px solid rgba(134, 239, 172, 0.22);
+  background: linear-gradient(180deg, #08112a 0%, #0f2242 55%, #10202c 100%);
+}
+
+.end-title--time,
+.end-title--alarms {
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  background: radial-gradient(ellipse at 50% 0%, #2c0b0b 0%, #130405 58%, #060102 100%);
+}
+
+.end-title-mission {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  color: #9fb4c8;
+}
+
+.end-title-word {
+  margin: 6px 0 0;
+  font-family: var(--mono);
+  font-size: clamp(36px, 7.4vw, 88px);
+  font-weight: 800;
+  letter-spacing: clamp(4px, 1.1vw, 16px);
+  line-height: 1.02;
+}
+
+.end-title--won .end-title-word {
+  color: #f4fff8;
+  text-shadow:
+    0 0 34px rgba(134, 239, 172, 0.6),
+    0 0 2px #fff;
+}
+
+.end-title--time .end-title-word,
+.end-title--alarms .end-title-word {
+  color: #f87171;
+  text-shadow: 0 0 30px rgba(248, 50, 50, 0.65);
+}
+
+/* Two long words: smaller, and free to stand on two lines. */
+.end-title--alarms .end-title-word {
+  font-size: clamp(26px, 5vw, 60px);
+  letter-spacing: clamp(2px, 0.6vw, 9px);
+}
+
+/* The crew's shot, across the card's whole width. */
+.end-scene {
+  position: relative;
+  height: clamp(200px, 29vw, 300px);
+  margin: 18px -28px 0;
+  overflow: hidden;
+}
+
+.end-sky {
+  position: absolute;
+  inset: 0;
+}
+
+.end-scene--out .end-sky {
+  background-image:
+    radial-gradient(1.2px 1.2px at 22px 18px, #fff, transparent),
+    radial-gradient(1px 1px at 96px 64px, rgba(255, 255, 255, 0.75), transparent),
+    radial-gradient(1.4px 1.4px at 168px 30px, #fff, transparent),
+    radial-gradient(1px 1px at 214px 86px, rgba(255, 255, 255, 0.6), transparent),
+    linear-gradient(180deg, #050b1c 0%, #0d1d3a 70%, #183252 100%);
+  background-size:
+    260px 120px,
+    260px 120px,
+    260px 120px,
+    260px 120px,
+    100% 100%;
+}
+
+.end-scene--in .end-sky {
+  background: radial-gradient(ellipse at 50% -10%, rgba(255, 40, 30, 0.38) 0%, transparent 60%),
+    #0a0607;
+}
+
+/* A moon over the lab. */
+.end-scene--out .end-sky::after {
+  content: '';
+  position: absolute;
+  top: 11%;
+  right: 11%;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 36%, #fffdf3 0%, #f1ead2 55%, #cfc6a8 100%);
+  box-shadow: 0 0 28px 8px rgba(255, 248, 220, 0.22);
+}
+
+/* The lab's front, the door in its middle. */
+.end-wall {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 34%;
+  bottom: 18%;
+  border-top: 3px solid #2c3742;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 2px, transparent 2px 72px),
+    linear-gradient(180deg, #1a232c, #0f151b);
+  box-shadow: inset 0 14px 30px rgba(0, 0, 0, 0.55);
+}
+
+.end-scene--in .end-wall {
+  top: 0;
+  border-top: none;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 72px),
+    linear-gradient(180deg, #160c0d, #0b0708);
+}
+
+.end-door {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: clamp(92px, 16%, 150px);
+  height: 74%;
+  transform: translateX(-50%);
+  border: 4px solid #2f3a45;
+  border-bottom: none;
+  background: #090c10;
+}
+
+/* Its windows, lit again — the power is back — but where the door stands. */
+.end-scene--out .end-wall::before {
+  content: '';
+  position: absolute;
+  left: 3%;
+  right: 3%;
+  top: 10%;
+  height: 15%;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 25px,
+    rgba(255, 214, 150, 0.82) 25px 47px,
+    transparent 47px 72px
+  );
+  mask-image: linear-gradient(90deg, #000 0 37%, transparent 37% 63%, #000 63% 100%);
+}
+
+/* Inside, one red emergency lamp over the shut door. */
+.end-scene--in .end-wall::before {
+  content: '';
+  position: absolute;
+  top: 7%;
+  left: 50%;
+  width: 24px;
+  height: 10px;
+  margin-left: -12px;
+  border-radius: 3px;
+  background: #ff4b3a;
+  box-shadow:
+    0 0 26px 10px rgba(255, 50, 40, 0.45),
+    0 0 90px 40px rgba(255, 40, 30, 0.16);
+}
+
+.end-scene--in .end-door-gap {
+  background: linear-gradient(90deg, #161a1f 0 49%, #040506 49% 51%, #161a1f 51%);
+}
+
+/* Open: the green-white light outside the lab pours out of it. */
+.end-door-gap {
+  position: absolute;
+  inset: 0;
+}
+
+.end-scene--out .end-door-gap {
+  background: linear-gradient(180deg, #f2fff7 0%, #bff7d4 55%, #6ee7a0 100%);
+  box-shadow: 0 0 60px 22px rgba(134, 239, 172, 0.5);
+}
+
+.end-door-sign {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  background: #14532d;
+  color: #dcfce7;
+  box-shadow: 0 0 16px rgba(74, 222, 128, 0.65);
+}
+
+.end-scene--in .end-door-sign {
+  background: #2a1414;
+  color: #7f5b5b;
+  box-shadow: none;
+}
+
+/* The pavement outside, the door's light spilling across it; inside, the lab's floor. */
+.end-ground {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 18%;
+  border-top: 2px solid #4b525b;
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.28) 0 2px, transparent 2px 96px),
+    linear-gradient(180deg, #3a4048 0%, #22272c 100%);
+}
+
+.end-scene--out .end-ground::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(43% 0, 57% 0, 74% 100%, 26% 100%);
+  background: linear-gradient(180deg, rgba(190, 247, 212, 0.75), rgba(110, 231, 160, 0.08));
+}
+
+.end-scene--in .end-ground {
+  border-top-color: #2a1d1e;
+  background: linear-gradient(180deg, #1b1112, #0d0809);
+}
+
+/* The crew, side by side before the door: backlit outside, dim in the dark. */
+.end-crew {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: clamp(4px, 1.6vw, 18px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.end-mate {
+  --fig: clamp(84px, 14vw, 150px);
+  --fig-scale: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: clamp(58px, 9vw, 104px);
+}
+
+.end-mate-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: #e2e8f0;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.end-scene--in .end-mate-name {
+  color: #a89393;
+}
+
+/* In the dark the crew stands in the red lamp's shadow. */
+.end-scene--in .seat-figure {
+  filter: brightness(0.5) saturate(0.65);
+}
+
+/* Up in the sky's corner, clear of the crew and their names at any width. */
+.end-scene-caption {
+  position: absolute;
+  top: 12px;
+  left: 18px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.7);
+}
+
+/* The time and the rank, large; a run lost gives the stations it got through instead. */
+.end-facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 14px clamp(16px, 4vw, 48px);
+  margin-top: 20px;
+}
+
+.end-fact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.end-fact-value {
+  font-family: var(--mono);
+  font-size: clamp(32px, 5vw, 54px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 2px;
+  color: #f1f5f9;
+}
+
+.end-fact-label {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.end-title .grade {
+  max-width: 380px;
+  margin: 0;
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(4, 9, 15, 0.6);
+  text-align: left;
+}
+
+.end-title .grade-rank {
+  width: clamp(54px, 7vw, 78px);
+  height: clamp(54px, 7vw, 78px);
+  font-size: clamp(32px, 4.6vw, 50px);
+}
+
+/* Where this screen played the end, the card comes up out of its veil. */
+.end-title--fresh::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  pointer-events: none;
+  animation: end-out-of-veil 0.8s ease-out forwards;
+}
+
+.end-title--won.end-title--fresh::after {
+  background: #f4fbf7;
+}
+
+.end-title--time.end-title--fresh::after,
+.end-title--alarms.end-title--fresh::after {
+  background: #000;
+}
+
+@keyframes end-out-of-veil {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+.end-title--fresh .end-title-word {
+  animation: end-word 1.4s ease-out both;
+}
+
+@keyframes end-word {
+  from {
+    opacity: 0;
+    letter-spacing: clamp(10px, 2.4vw, 30px);
+  }
+}
+
+.end-title--fresh .end-facts {
+  animation: end-facts 1s ease-out 0.7s both;
+}
+
+@keyframes end-facts {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* The audience's world gives its place to the card. */
+.spectate-world > .end-title {
+  max-width: none;
+  align-self: flex-start;
+}
+
+/* A phone: the card's words in less room. */
+@media (max-width: 560px) {
+  .end-title {
+    padding: 20px 16px 18px;
+  }
+
+  .end-title-mission {
+    letter-spacing: 3px;
+  }
+
+  .end-scene {
+    margin: 14px -16px 0;
+  }
+}
+
+/* No strobe, no shake; the fades shorter, the card without its flourish. */
+@media (prefers-reduced-motion: reduce) {
+  .vignette,
+  .world-wrap.alarm-strobe::after,
+  .world-wrap.alarm-shake .world-canvas,
+  .end-title--fresh .end-title-word,
+  .end-title--fresh .end-facts {
+    animation: none;
+  }
+
+  .game--finale .stage-top,
+  .game--finale .hud,
+  .game--finale .world-controls,
+  .game--finale .coach {
+    transition-duration: 0.15s;
+  }
+
+  .end-title--fresh::after {
+    animation-duration: 0.27s;
+  }
+}

@@ -19,7 +19,9 @@
  * every station with its module's solver on the views of whoever stands at
  * it — at either console — and whoever reads its rules (plus one deliberate
  * short and one wrong key), has an input turned away while the reader steps
- * off from the radio panel's rules, and survives a mid-game reconnect. A fake
+ * off from the radio panel's rules, and survives a mid-game reconnect. On the
+ * way out the hatch says when it opened, and the views of the crew and the
+ * audience tick off whoever stands on it. A fake
  * voice offer, answer and candidate go between Anna and Ben through the
  * server, and one for a player in another room goes nowhere. The
  * won run leaves its report in a run log in a temporary folder, and
@@ -1614,8 +1616,19 @@ assert(unlocked.map?.manuals.length === mission.map.manuals.length,
   'the crew has found every source on the way');
 assert(unlocked.map?.litRooms.join(',') === litAfter(mission.puzzles.length),
   `the reactor lit the last room: ${litAfter(mission.puzzles.length)}`);
+const unlockedAt = unlocked.events.find((e) => e.kind === 'escape')?.at;
+assert(unlockedAt !== undefined && unlocked.map?.exit?.openedAt === unlockedAt,
+  'the hatch says when it opened: the moment the run report logged it unlocked');
+assert(unlocked.map?.exit?.atExit.length === 0, 'nobody stands on the hatch yet');
 const [first, last] = crew;
 await walkTo(first, EXIT);
+const firstOut = JSON.stringify([first.playerId]);
+for (const client of crew) {
+  await client.expectView(`the checklist ticks ${first.label} off at the hatch`, (v) =>
+    JSON.stringify(v.map?.exit?.atExit) === firstOut);
+}
+await zoe.untilSpectator(`sees ${first.label} on the hatch and ${last.label} still on the way`,
+  (v) => JSON.stringify(v.map?.exit?.atExit) === firstOut);
 const halfwayOut = last.view?.phase;
 assert(halfwayOut === 'playing', 'one player at the hatch is not enough to escape');
 await walkTo(last, EXIT);
@@ -1806,6 +1819,6 @@ console.log(
   '\nSmoke test passed: Blackout with its power on until the lights went out, the ' +
     'Notlicht\'s lever, drawn spawns and sources, streamed movement, plates, a door that ' +
     'stays open, the Notstrom-Kasten and the Signalkette at two consoles, the locker, the ' +
-    'key, the camera plate, reconnect, penalties and credits. 🎉',
+    'key, the camera plate, reconnect, the hatch\'s checklist, penalties and credits. 🎉',
 );
 process.exit(0);

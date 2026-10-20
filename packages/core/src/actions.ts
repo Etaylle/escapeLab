@@ -58,8 +58,8 @@ export type Action =
   | { type: 'set-occupancy'; plates: string[]; panels: string[] }
   /**
    * who stands at which station spot (by `stationKey`) and manual object, who
-   * has seen the sign (stays seen) and which manual objects somebody has
-   * come close to and has in sight (stay found)
+   * has seen the sign (stays seen), which manual objects somebody has come
+   * close to and has in sight (stay found) and who stands on the exit hatch
    */
   | {
       type: 'set-presence';
@@ -67,6 +67,7 @@ export type Action =
       manuals: Record<string, string[]>;
       signSeen: string[];
       seen: string[];
+      exit: string[];
     }
   /** a locker searched or a cabinet unlocked by a player standing at it */
   | { type: 'open-source'; playerId: string; manualId: string; at: number }
@@ -339,7 +340,8 @@ function presentAtConsoles(state: GameState, from: ConsoleId | null): PuzzleCont
 /**
  * Who stands where, as the server sees it. Lists are kept sorted and empty
  * ones dropped, so equal presence compares equal; whoever has seen the sign
- * keeps it, and a manual object once found stays on the crew's map.
+ * keeps it, and a manual object once found stays on the crew's map. Nobody
+ * stands on the hatch before it opens.
  */
 function setPresence(
   state: GameState,
@@ -357,6 +359,7 @@ function setPresence(
       stations: tidy(action.stations),
       manuals: tidy(action.manuals),
       signSeen: [...new Set([...state.presence.signSeen, ...action.signSeen])].sort(),
+      exit: inEscapePhase(state) ? [...new Set(action.exit)].sort() : [],
     },
     discovered: [...new Set([...state.discovered, ...action.seen])].sort(),
   });

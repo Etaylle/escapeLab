@@ -39,9 +39,11 @@ export interface Presence {
   manuals: Record<string, string[]>;
   /** players who have walked up to the edgework sign; kept for the rest of the run */
   signSeen: string[];
+  /** players standing on the open exit hatch right now; nobody before the escape */
+  exit: string[];
 }
 
-export const NOBODY_PRESENT: Presence = { stations: {}, manuals: {}, signSeen: [] };
+export const NOBODY_PRESENT: Presence = { stations: {}, manuals: {}, signSeen: [], exit: [] };
 
 export interface ItemState {
   /** tile-space position while lying on the floor */

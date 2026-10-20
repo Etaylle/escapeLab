@@ -707,6 +707,7 @@ function game(view: PlayerView): string {
       pingsRef={{ current: [] }}
       chatsRef={{ current: [] }}
       send={noop}
+      finale={null}
     />,
   );
 }

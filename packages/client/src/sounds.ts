@@ -18,7 +18,7 @@ function tone(freq: number, startIn: number, duration: number, volume: number): 
   osc.stop(t + duration);
 }
 
-export function play(kind: 'alarm' | 'solved' | 'won' | 'lost' | 'click' | 'start'): void {
+export function play(kind: 'alarm' | 'solved' | 'click' | 'start'): void {
   try {
     ctx ??= new AudioContext();
     switch (kind) {
@@ -29,15 +29,6 @@ export function play(kind: 'alarm' | 'solved' | 'won' | 'lost' | 'click' | 'star
       case 'solved':
         tone(520, 0, 0.09, 0.05);
         tone(780, 0.1, 0.14, 0.05);
-        break;
-      case 'won':
-        tone(520, 0, 0.12, 0.06);
-        tone(660, 0.13, 0.12, 0.06);
-        tone(880, 0.26, 0.3, 0.06);
-        break;
-      case 'lost':
-        tone(330, 0, 0.3, 0.07);
-        tone(220, 0.32, 0.5, 0.07);
         break;
       case 'click':
         tone(900, 0, 0.03, 0.03);

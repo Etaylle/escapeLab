@@ -122,6 +122,7 @@ export function standing(
     manuals?: Record<string, string[]>;
     signSeen?: string[];
     seen?: string[];
+    exit?: string[];
   },
 ): GameState {
   return applyAction(state, {
@@ -130,6 +131,7 @@ export function standing(
     manuals: where.manuals ?? {},
     signSeen: where.signSeen ?? [],
     seen: where.seen ?? [],
+    exit: where.exit ?? [],
   });
 }
 

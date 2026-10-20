@@ -9,11 +9,14 @@ import {
   type PlayerView,
   type PuzzleView,
 } from '@escapelab/core';
+import { useMedia } from '../hooks.js';
 import { addProbes } from '../probes.js';
 import { deviceCoach, firstSight, type CoachMark } from '../puzzles/coach.js';
 import { TalkButton } from '../screens/Voice.js';
 import { VoiceContext } from '../voice/useVoice.js';
+import { DRONE_MARK_MS, useAlarm, useAlarmClasses, type Alarm } from './alarm.js';
 import {
+  drawAlarmMark,
   drawCarryable,
   drawDropZone,
   drawDroneBody,
@@ -23,6 +26,7 @@ import {
 import {
   drawDoor,
   drawEmergencyLamp,
+  drawExitHatch,
   drawLeverBox,
   drawManualObject,
   drawPlate,
@@ -36,7 +40,24 @@ import {
   type WorldText,
 } from './art.js';
 import { blackoutCue, coldOpenFrame, SEQUENCE_MS, type ColdOpenFrame } from './coldOpen.js';
+import {
+  doorOpenness,
+  doorTurned,
+  isHorizontalDoor,
+  spillThrough,
+  SPILL_HALF_ANGLE,
+  SPILL_REACH,
+  type DoorMotion,
+} from './doors.js';
 import { drawsFrame } from './drawRate.js';
+import { exitOpening, redShift, useEscapeSince, useEscapeSounds } from './escape.js';
+import {
+  finaleFrame,
+  REDUCED_MOTION,
+  useFinaleSounds,
+  type Ending,
+  type FinaleFrame,
+} from './finale.js';
 import { frameTrace, traceRequested } from './frameTrace.js';
 import { carriedItem, contextAction, promptText } from './interact.js';
 import {
@@ -55,7 +76,7 @@ import {
   type Streamed,
 } from './movement.js';
 import { worldNews } from './news.js';
-import { roomArea } from './rooms.js';
+import { roomArea, warmUp } from './rooms.js';
 import {
   blackoutSounds,
   cabinetUnlock,
@@ -63,6 +84,8 @@ import {
   discoveryBlip,
   doorSlide,
   footstep,
+  klaxon,
+  lightsOnClick,
   lockerOpen,
   pingBlip,
   setTension,
@@ -89,13 +112,14 @@ import {
   OWN_GLOW_STOPS,
   powerLamp,
   reachOf,
+  SPILL_STOPS,
   type Lamp,
   type LampMount,
   type LightMemory,
   type Lit,
   type Stops,
 } from './light.js';
-import { warmLayer } from './power.js';
+import { ALARM_RED, ceilingLayer, mixTint, WARM, type CeilingLight } from './power.js';
 import {
   clampCamera,
   placeRoomNames,
@@ -121,6 +145,16 @@ const CONE_REACH = 7.5;
 const CONE_HALF_ANGLE = 0.5;
 /** The glow of the lamp everybody else of the crew carries, in tiles. */
 const CREW_GLOW = 2.8;
+/** How far the green-white light out of the open hatch reaches, in tiles. */
+const EXIT_GLOW = 3.2;
+/** How long one turn of the escape's siren takes, s: the red light swells with it. */
+const SIREN_TURN = 1.25;
+/**
+ * How much of a lit room's light the escape takes back, at most and at
+ * least as the siren turns: the lab on its alarm lighting, your lamp cutting
+ * through again.
+ */
+const ALARM_DIM = [0.62, 0.42] as const;
 /** On a touch screen the pad would sit on the avatar: it is lifted this far, CSS pixels. */
 const PAD_LIFT = 60;
 /** Air between the control cluster and a first-time tip above it, CSS pixels. */
@@ -150,6 +184,12 @@ export interface ChatLine {
   at: number;
 }
 
+/** The end of the run playing on this screen (finale.ts): how it ended, since when (epoch ms). */
+export interface FinaleCue {
+  ending: Ending;
+  since: number;
+}
+
 interface Props {
   view: PlayerView;
   positionsRef: React.MutableRefObject<KnownPositions>;
@@ -164,6 +204,8 @@ interface Props {
    * `useDarkSince`): the cold open runs from there; null while the power is on
    */
   darkSince: number | null;
+  /** the run's ending, while it plays on this screen; none while the run goes on */
+  finale?: FinaleCue | null;
   /** the station whose panel lies over the world, for its device's coach mark; none by default */
   station?: PuzzleView | null;
   /** first-time tips wait while the objective bar carries a notice, so the two never stack */
@@ -196,7 +238,8 @@ interface Sim {
   streamed: Streamed[];
   others: Map<string, OtherAvatar>;
   keys: Set<string>;
-  doors: Map<string, { t: number; target: number }>;
+  /** each door's slide, by door id (doors.ts) */
+  doors: Map<string, DoorMotion>;
   walkPhase: number;
   stepAcc: number;
   cam: { x: number; y: number };
@@ -206,8 +249,6 @@ interface Sim {
   draw: { x: number; y: number };
   /** device pixels per tile, as the last frame drew it */
   scale: number;
-  flash: number;
-  lastPenaltySeq: number;
   time: number;
   /** pings already sounded, so the blip fires once per ping */
   seenPings: WeakSet<MapPing>;
@@ -273,6 +314,10 @@ interface FrameLight {
   eyes: Map<string, Lit>;
   /** the emergency lamps, where they hang and what they light; none while the power is on */
   lamps: { mount: LampMount; lit: Lit }[];
+  /** the open hatch's green-white light, as far as it stands open (0 to 1); null while shut */
+  exit: { lit: Lit; open: number } | null;
+  /** a lit room's light falling through an open door into the dark, as far as it stands open */
+  spills: { lit: Lit; open: number }[];
   /**
    * whether the world shows what lies at (x, y): what some light falls on
    * now or did this run — everything, for the audience
@@ -293,7 +338,7 @@ interface FrameLight {
 }
 
 /** A frame's lights, before what they show is worked out. */
-type FrameLamps = Pick<FrameLight, 'own' | 'crew' | 'eyes' | 'lamps'>;
+type FrameLamps = Pick<FrameLight, 'own' | 'crew' | 'eyes' | 'lamps' | 'exit' | 'spills'>;
 
 const MOVE_KEYS: Record<string, [number, number]> = {
   arrowup: [0, -1],
@@ -378,35 +423,6 @@ function coachTip(
   return null;
 }
 
-/** Escape hatch: dim grey while locked, pulsing green once it opens. */
-export function drawExit(ctx: CanvasRenderingContext2D, open: boolean, pulse: number): void {
-  ctx.save();
-  const glow = open ? 0.35 + 0.3 * pulse : 0;
-  if (open) {
-    ctx.fillStyle = `rgba(74,222,128,${0.12 + 0.1 * pulse})`;
-    ctx.beginPath();
-    ctx.arc(0, 0, 0.75, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.fillStyle = open ? '#14532d' : '#111a22';
-  ctx.strokeStyle = open ? `rgba(74,222,128,${Math.min(1, 0.7 + glow)})` : '#2a3947';
-  ctx.lineWidth = 0.05;
-  ctx.beginPath();
-  ctx.roundRect(-0.38, -0.38, 0.76, 0.76, 0.1);
-  ctx.fill();
-  ctx.stroke();
-  // hazard stripes
-  ctx.strokeStyle = open ? 'rgba(74,222,128,0.8)' : 'rgba(125,143,158,0.35)';
-  ctx.lineWidth = 0.07;
-  for (const offset of [-0.18, 0, 0.18]) {
-    ctx.beginPath();
-    ctx.moveTo(-0.26, offset + 0.09);
-    ctx.lineTo(0.26, offset - 0.09);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
 /** The manual object prints the rules of the station that is armed now. */
 function coversArmed(map: WorldMap, manual: WorldMap['manuals'][number]): boolean {
   const armed = map.stations.find((s) => s.status === 'armed');
@@ -418,26 +434,6 @@ function opensCabinet(map: WorldMap, itemId: string): boolean {
   return map.manuals.some((manual) => manual.needsKey === itemId);
 }
 
-/**
- * How far a room's lights are up `t` seconds after they came on: strip lights
- * that stutter for a moment, then rise to full within the second.
- */
-function lightsUp(t: number): number {
-  if (t >= 1) {
-    return 1;
-  }
-  const rise = t * (2 - t);
-  return t < 0.35 && Math.sin(t * 60) < 0 ? rise * 0.3 : rise;
-}
-
-/** A door bar is horizontal when its left/right neighbors are barriers. */
-function isHorizontalDoor(map: WorldMap, x: number, y: number): boolean {
-  const doorCells = new Set(map.doors.map((d) => `${d.x},${d.y}`));
-  const barrier = (bx: number, by: number): boolean =>
-    map.tiles[by]?.charAt(bx) === '#' || doorCells.has(`${bx},${by}`);
-  return barrier(x - 1, y) && barrier(x + 1, y);
-}
-
 export function GameWorld({
   view,
   positionsRef,
@@ -447,6 +443,7 @@ export function GameWorld({
   inputLocked,
   spectator,
   darkSince,
+  finale = null,
   station = null,
   holdTips,
   onToggleInfo,
@@ -498,7 +495,7 @@ export function GameWorld({
   // TIP_MS at most. The world's tips wait while the objective bar carries a
   // notice, so the two never stack; a station's panel covers that bar.
   useEffect(() => {
-    if (spectator || view.map === null || (holdTips && station === null)) {
+    if (spectator || view.map === null || finale !== null || (holdTips && station === null)) {
       setTip(null);
       return;
     }
@@ -512,7 +509,7 @@ export function GameWorld({
     } else if (next?.id !== tip?.id) {
       setTip(null);
     }
-  }, [view, station, spectator, holdTips, tip]);
+  }, [view, station, spectator, holdTips, tip, finale]);
 
   useEffect(() => {
     if (tip === null) {
@@ -537,6 +534,27 @@ export function GameWorld({
     }
   }, [darkSince]);
 
+  // The world answers an alarm (alarm.ts): the klaxon while the run goes on — the alarm that
+  // ends it has the ending's own sound — the strobe and the shake, the drones' marks.
+  const reduced = useMedia(REDUCED_MOTION);
+  const reducedRef = useRef(reduced);
+  reducedRef.current = reduced;
+  const alarm = useAlarm(view.penaltySeq, () => {
+    if (viewRef.current.phase === 'playing') {
+      klaxon();
+    }
+  });
+  const alarmRef = useRef<Alarm | null>(alarm);
+  alarmRef.current = alarm;
+  const alarmClass = useAlarmClasses(alarm, reduced);
+  // The escape (escape.ts) and the ending (finale.ts), as this screen lives them.
+  const escapeSince = useEscapeSince(view.map?.exit ?? null, view.startedAt);
+  const escapeRef = useRef(escapeSince);
+  escapeRef.current = escapeSince;
+  useEscapeSounds(escapeSince, view.phase === 'playing' && finale === null);
+  const finaleRef = useRef(finale);
+  finaleRef.current = finale;
+  useFinaleSounds(finale);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -593,8 +611,6 @@ export function GameWorld({
       topCss: safeTopCss,
       draw: { x: 0, y: 0 },
       scale: 48,
-      flash: 0,
-      lastPenaltySeq: viewRef.current.penaltySeq,
       time: 0,
       seenPings: new WeakSet<MapPing>(),
       minimap: true,
@@ -869,56 +885,19 @@ export function GameWorld({
         }
       }
 
-      // door animation + sound
+      // a door the view turned slides open or shut, with the hiss (doors.ts)
+      const now = Date.now();
       for (const door of map.doors) {
-        const target = door.open ? 1 : 0;
-        const anim = sim.doors.get(door.id);
-        if (anim === undefined) {
-          sim.doors.set(door.id, { t: target, target });
-        } else {
-          if (anim.target !== target) {
-            anim.target = target;
-            doorSlide();
-          }
-          anim.t += (target - anim.t) * (1 - Math.exp(-dt * 7));
+        const { motion, moved } = doorTurned(sim.doors.get(door.id), door.open, now);
+        sim.doors.set(door.id, motion);
+        if (moved) {
+          doorSlide();
         }
       }
       if (map !== sim.seen) {
         look(map);
       }
-
-      // The lab gets louder as the clock runs out, and counts the last ten
-      // seconds out loud.
-      const deadline = viewRef.current.deadlineAt;
-      if (deadline !== null && !spectator) {
-        const left = (deadline - Date.now()) / 1000;
-        const budget = Math.max(1, viewRef.current.timeLimitSec);
-        setTension(Math.min(1, Math.max(0, 1 - left / (budget * 0.5))));
-        const whole = Math.ceil(left);
-        if (whole <= 10 && whole >= 0 && whole < sim.lastBeepAt) {
-          sim.lastBeepAt = whole;
-          countdownBeep(whole);
-        }
-      }
-
-      // emergency siren on the rising edge of a sabotage
-      const sabotageOn = map.sabotage !== null;
-      if (sabotageOn !== sim.sabotageWasOn) {
-        sim.sabotageWasOn = sabotageOn;
-        if (sabotageOn) {
-          powerDrain();
-        } else {
-          stationChirp();
-        }
-      }
-
-      // penalty feedback
-      if (viewRef.current.penaltySeq > sim.lastPenaltySeq) {
-        sim.lastPenaltySeq = viewRef.current.penaltySeq;
-        sim.flash = 1;
-        powerDrain();
-      }
-      sim.flash = Math.max(0, sim.flash - dt / 0.9);
+      hearTheClock(map);
 
       // camera: follow your avatar, or sit still over the whole lab; a radio
       // line growing the objective bar moves it as gently
@@ -932,10 +911,39 @@ export function GameWorld({
     }
 
     /**
+     * The lab getting louder as the clock runs out, the last ten seconds
+     * counted out loud; and an emergency's siren as it starts, a chirp as it
+     * is over.
+     */
+    function hearTheClock(map: WorldMap): void {
+      const deadline = viewRef.current.deadlineAt;
+      if (deadline !== null && !spectator) {
+        const left = (deadline - Date.now()) / 1000;
+        const budget = Math.max(1, viewRef.current.timeLimitSec);
+        setTension(Math.min(1, Math.max(0, 1 - left / (budget * 0.5))));
+        const whole = Math.ceil(left);
+        if (whole <= 10 && whole >= 0 && whole < sim.lastBeepAt) {
+          sim.lastBeepAt = whole;
+          countdownBeep(whole);
+        }
+      }
+      const sabotageOn = map.sabotage !== null;
+      if (sabotageOn !== sim.sabotageWasOn) {
+        sim.sabotageWasOn = sabotageOn;
+        if (sabotageOn) {
+          powerDrain();
+        } else {
+          stationChirp();
+        }
+      }
+    }
+
+    /**
      * The lab answering the crew: a source somebody came across gets a blip
      * and a caption, a locker or cabinet opening within earshot its sound, a
-     * room whose lights came on the door sound and a fade-in. Whatever this
-     * client finds on its first look was there before it came in.
+     * room whose lights came on a relay's click and its warm-up (rooms.ts).
+     * Whatever this client finds on its first look was there before it came
+     * in.
      */
     function look(map: WorldMap): void {
       const news = worldNews(sim.seen, map);
@@ -957,7 +965,7 @@ export function GameWorld({
         lightRoom(map, room, news.lit.includes(room) ? sim.time : -Infinity);
       }
       if (news.lit.length > 0) {
-        doorSlide();
+        lightsOnClick();
       }
     }
 
@@ -978,13 +986,15 @@ export function GameWorld({
 
     /**
      * This frame's light, each cut off by walls and shut doors: in the dark
-     * your lamp, the crew's lamps, the drones' eyes and the emergency lamps;
-     * while the lab has its power (`powered`), the room's own light round
-     * you instead. And what the world shows — whatever lies where light
-     * falls now, in a lit room, or fell earlier this run. The audience sees
-     * the whole lab, and the drones' cones only.
+     * your lamp, the crew's lamps, the drones' eyes, the emergency lamps, the
+     * open hatch and lit rooms through open doors; while the lab has its
+     * power (`powered`), the room's own light round you instead. And what the
+     * world shows — whatever lies where light falls now, in a lit room, or
+     * fell earlier this run. The audience sees the whole lab, and the drones'
+     * cones only; so does everybody once the lab is lit `whole` again, as at
+     * the end of a run won.
      */
-    function lightUp(map: WorldMap, powered: boolean): FrameLight {
+    function lightUp(map: WorldMap, powered: boolean, whole: boolean): FrameLight {
       const memory = runLight();
       const shut = doorsShut(map);
       const lit = (lamp: Lamp): Lit => ({
@@ -993,12 +1003,13 @@ export function GameWorld({
       });
       const lamps = powered ? powerLights(lit) : darkLights(map, lit);
       const falling = remember(memory.seen, lamps);
+      const everything = spectator || whole;
       const shown = (x: number, y: number): boolean =>
-        spectator || memory.seen.has(`${Math.floor(x)},${Math.floor(y)}`);
+        everything || memory.seen.has(`${Math.floor(x)},${Math.floor(y)}`);
       const inPower = (x: number, y: number): boolean =>
-        powered && (spectator || falling.has(`${x},${y}`));
+        whole || (powered && (spectator || falling.has(`${x},${y}`)));
       const crewShown = (x: number, y: number): boolean =>
-        !powered || spectator || falling.has(`${Math.floor(x)},${Math.floor(y)}`);
+        everything || !powered || falling.has(`${Math.floor(x)},${Math.floor(y)}`);
       return { ...lamps, shown, powered: inPower, crewShown };
     }
 
@@ -1022,17 +1033,62 @@ export function GameWorld({
         crew: [],
         eyes: new Map(),
         lamps: [],
+        exit: null,
+        spills: [],
       };
     }
 
-    /** The lights of the dark: your flashlight, the crew's lamps, the drones' eyes, the lamps. */
+    /**
+     * The lights of the dark: your flashlight, the crew's lamps, the drones'
+     * eyes, the emergency lamps, the open hatch and the lit rooms' light
+     * through open doors.
+     */
     function darkLights(map: WorldMap, lit: (lamp: Lamp) => Lit): FrameLamps {
       const cone = { facing: sim.self.facing, halfAngle: CONE_HALF_ANGLE, reach: CONE_REACH };
       const own = spectator ? null : lit({ x: sim.self.x, y: sim.self.y, glow: OWN_GLOW, beam: cone });
       const crew = spectator
         ? []
         : [...sim.others.values()].map((o) => lit({ x: o.rx, y: o.ry, glow: CREW_GLOW, beam: null }));
-      return { own, crew, eyes: droneEyes(lit), lamps: burningLamps(map, lit) };
+      return {
+        own,
+        crew,
+        eyes: droneEyes(lit),
+        lamps: burningLamps(map, lit),
+        exit: exitLight(map, lit),
+        spills: doorSpills(map, lit),
+      };
+    }
+
+    /** How far the hatch stands open on this screen now: it grinds open from the escape's start. */
+    function hatchOpen(map: WorldMap): number {
+      const since = escapeRef.current;
+      return map.exit?.open === true && since !== null ? exitOpening(Date.now() - since) : 0;
+    }
+
+    /** The open hatch's green-white light, as far as it has ground open; null while it is shut. */
+    function exitLight(map: WorldMap, lit: (lamp: Lamp) => Lit): FrameLight['exit'] {
+      const exit = map.exit;
+      const open = hatchOpen(map);
+      if (exit === null || open <= 0) {
+        return null;
+      }
+      return { lit: lit({ x: exit.x + 0.5, y: exit.y + 0.5, glow: EXIT_GLOW, beam: null }), open };
+    }
+
+    /** Each lit room's light falling through an open door into the dark: a wedge (doors.ts). */
+    function doorSpills(map: WorldMap, lit: (lamp: Lamp) => Lit): FrameLight['spills'] {
+      const now = Date.now();
+      const inLight = (x: number, y: number): boolean => sim.litTiles.has(`${x},${y}`);
+      return map.doors.flatMap((door) => {
+        const motion = sim.doors.get(door.id);
+        const open = motion === undefined ? Number(door.open) : doorOpenness(motion, now);
+        const spill = spillThrough(map, door, open, inLight);
+        if (spill === null) {
+          return [];
+        }
+        const beam = { facing: spill.facing, halfAngle: SPILL_HALF_ANGLE, reach: SPILL_REACH };
+        return [{ lit: lit({ x: spill.x, y: spill.y, glow: 0, beam }), open }];
+      });
     }
 
     /** The drones' eyes, by drone id: a frozen drone looks nowhere. */
@@ -1053,10 +1109,18 @@ export function GameWorld({
      * Marks the tiles `lamps` light now as seen, and the lit rooms whole:
      * whatever lies there stays drawn this run. Returns the tiles lit now.
      */
-    function remember(seen: Set<string>, { own, crew, eyes, lamps }: FrameLamps): Set<string> {
+    function remember(seen: Set<string>, lamps: FrameLamps): Set<string> {
       const falling = new Set<string>();
-      const lights = [...(own === null ? [] : [own]), ...crew, ...eyes.values()];
-      for (const { lamp, sight } of [...lights, ...lamps.map((l) => l.lit)]) {
+      const { own, crew, eyes, exit, spills } = lamps;
+      const lights = [
+        ...(own === null ? [] : [own]),
+        ...crew,
+        ...eyes.values(),
+        ...lamps.lamps.map((l) => l.lit),
+        ...(exit === null ? [] : [exit.lit]),
+        ...spills.map((spill) => spill.lit),
+      ];
+      for (const { lamp, sight } of lights) {
         for (const key of litTiles(lamp, sight)) {
           falling.add(key);
           seen.add(key);
@@ -1095,13 +1159,16 @@ export function GameWorld({
       });
     }
 
-    /** The lab's warm light with the power on, baked for the map it was last asked for. */
-    let warm: { tiles: readonly string[]; layer: HTMLCanvasElement } | null = null;
-    function warmOf(map: WorldMap): HTMLCanvasElement {
-      if (warm === null || warm.tiles.join('\n') !== map.tiles.join('\n')) {
-        warm = { tiles: map.tiles, layer: warmLayer(map) };
+    /** The lab's ceiling lights baked in each colour asked for, for the map last asked for. */
+    let layers: { tiles: string; byLight: Map<CeilingLight, HTMLCanvasElement> } | null = null;
+    function layerOf(map: WorldMap, light: CeilingLight): HTMLCanvasElement {
+      const tiles = map.tiles.join('\n');
+      if (layers === null || layers.tiles !== tiles) {
+        layers = { tiles, byLight: new Map() };
       }
-      return warm.layer;
+      const baked = layers.byLight.get(light) ?? ceilingLayer(map, light);
+      layers.byLight.set(light, baked);
+      return baked;
     }
 
     /** Clip paths in tiles, by the sight they were made from: a lamp standing still reuses its own. */
@@ -1124,10 +1191,15 @@ export function GameWorld({
       return path;
     }
 
+    /** Device pixels per tile with the whole lab in the picture. */
+    function wholeZoom(map: WorldMap, w: number, h: number): number {
+      return Math.max(14, Math.min(w / (map.width + 0.5), h / (map.height + 0.5)));
+    }
+
     /** Device pixels per tile: the audience sees the whole lab, a player what covers the canvas. */
     function zoomFor(map: WorldMap, w: number, h: number): number {
       if (spectator) {
-        return Math.max(14, Math.min(w / (map.width + 0.5), h / (map.height + 0.5)));
+        return wholeZoom(map, w, h);
       }
       // Zoom so the lab always covers the canvas: no black bars beside it — but
       // stop before the lab turns into giant tiles on very wide windows.
@@ -1159,17 +1231,21 @@ export function GameWorld({
       }
       const w = canvas.width;
       const h = canvas.height;
-      const s = zoomFor(map, w, h);
-      sim.draw = clampCamera(map, sim.cam, {
+      const ending = finaleNow();
+      const pull = ending?.pull ?? 0;
+      const near = zoomFor(map, w, h);
+      const s = near + (wholeZoom(map, w, h) - near) * pull;
+      sim.draw = clampCamera(map, pulledBack(map, pull), {
         scale: s,
         w,
         h,
-        top: sim.topCss * dpr,
-        lift: touchPad.matches && !spectator ? PAD_LIFT * dpr : 0,
+        top: sim.topCss * dpr * (1 - pull),
+        lift: touchPad.matches && !spectator ? PAD_LIFT * dpr * (1 - pull) : 0,
       });
       sim.scale = s;
       const scene = sceneNow();
-      const light = lightUp(map, scene.lit);
+      const whole = (ending?.lit ?? 0) > 0;
+      const light = lightUp(map, scene.lit, whole);
       const text = textAt(s, dpr);
 
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1179,7 +1255,7 @@ export function GameWorld({
       drawTiles(map, s, w, h, light.powered);
       const pulse = (Math.sin(sim.time * 4) + 1) / 2;
       drawProps(map, light, pulse, text);
-      drawLamps(map, scene.lit);
+      drawLamps(map, scene.lit || whole);
       drawFigures(map, light, pulse, text);
 
       const minimap = spectator || !sim.minimap ? null : minimapLayout(map, w, h, dpr);
@@ -1191,13 +1267,13 @@ export function GameWorld({
         bottom: safeBottomCss * dpr,
         boxes: minimap === null ? [] : [minimapBox(minimap, dpr)],
       };
-      renderLight(map, s, w, h, light, scene.lit);
-      if (minimap !== null) {
+      renderLight(map, s, w, h, light, scene.lit, ending?.lit ?? 0);
+      if (minimap !== null && ending === null) {
         renderMinimap(map, minimap, dpr);
       }
       renderPings(s, w, h, dpr);
-      renderScreenText(map, s, view);
-      renderCover(scene.cover, w, h);
+      renderScreenText(map, s, view, ending !== null);
+      renderCover(Math.max(scene.cover, ending?.dark ?? 0), w, h);
     }
 
     /** Where the cold open stands on this screen now: the power on, the light failing, or out. */
@@ -1206,10 +1282,26 @@ export function GameWorld({
       return coldOpenFrame(since === null ? null : Date.now() - since);
     }
 
+    /** Where the ending stands on this screen now (finale.ts); null while the run goes on. */
+    function finaleNow(): FinaleFrame | null {
+      const cue = finaleRef.current;
+      return cue === null ? null : finaleFrame(cue.ending, Date.now() - cue.since, reducedRef.current);
+    }
+
+    /** Where the camera looks as it pulls back from the avatar to the middle of the lab. */
+    function pulledBack(map: WorldMap, pull: number): { x: number; y: number } {
+      return {
+        x: sim.cam.x + (map.width / 2 - sim.cam.x) * pull,
+        y: sim.cam.y + (map.height / 2 - sim.cam.y) * pull,
+      };
+    }
+
     /**
      * The light over the picture: the darkness, and what cuts it open — the
      * lab's own warm light where you see while it has its power. The
-     * audience sees the lab whole, warm all over while the power is on.
+     * audience sees the lab whole, warm all over while the power is on; and
+     * so does everybody as every room's light comes on at the end of a run
+     * won (`whole`, 0 to 1), the darkness lifting as it does.
      */
     function renderLight(
       map: WorldMap,
@@ -1218,12 +1310,15 @@ export function GameWorld({
       h: number,
       light: FrameLight,
       powered: boolean,
+      whole: number,
     ): void {
-      if (powered) {
-        renderPowerOn(map, s, w, h, light.own);
+      if (whole > 0) {
+        renderPowerOn(map, s, w, h, null, whole);
+      } else if (powered) {
+        renderPowerOn(map, s, w, h, light.own, 1);
       }
-      if (!spectator) {
-        renderLighting(map, s, w, h, light);
+      if (!spectator && whole < 1) {
+        renderLighting(map, s, w, h, light, 1 - whole);
       }
     }
 
@@ -1264,9 +1359,17 @@ export function GameWorld({
      * The lab with its power on: the ceiling lights' warm pools and a warm lift
      * over the picture, as far as `own` light falls — a player sees what is in
      * sight, nothing behind a wall; the audience, with no light of its own,
-     * the whole lab. The darkness goes over it after.
+     * and everybody at the end of a run won, the whole lab — `strength` up.
+     * The darkness goes over it after.
      */
-    function renderPowerOn(map: WorldMap, s: number, w: number, h: number, own: Lit | null): void {
+    function renderPowerOn(
+      map: WorldMap,
+      s: number,
+      w: number,
+      h: number,
+      own: Lit | null,
+      strength: number,
+    ): void {
       if (ctx == null) {
         return;
       }
@@ -1276,7 +1379,8 @@ export function GameWorld({
         ctx.clip(clipPath(own));
       }
       ctx.globalCompositeOperation = 'lighter';
-      ctx.drawImage(warmOf(map), 0, 0, map.width, map.height);
+      ctx.globalAlpha = strength;
+      ctx.drawImage(layerOf(map, WARM), 0, 0, map.width, map.height);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalCompositeOperation = 'screen';
       ctx.fillStyle = 'rgba(255, 186, 128, 0.05)';
@@ -1350,9 +1454,11 @@ export function GameWorld({
         const look = { pressed, label, camera, text };
         drawAt(plate.x + 0.5, plate.y + 0.5, () => drawPlate(ctx, look));
       }
+      const now = Date.now();
       for (const door of map.doors) {
-        const openT = sim.doors.get(door.id)?.t ?? (door.open ? 1 : 0);
-        const horizontal = isHorizontalDoor(map, door.x, door.y);
+        const motion = sim.doors.get(door.id);
+        const openT = motion === undefined ? Number(door.open) : doorOpenness(motion, now);
+        const horizontal = isHorizontalDoor(map, door);
         drawAt(door.x + 0.5, door.y + 0.5, () => drawDoor(ctx, { openT, horizontal }));
       }
       // Every spot: a station with two consoles stands twice, both lit while it is armed.
@@ -1382,7 +1488,8 @@ export function GameWorld({
       }
       const exit = map.exit;
       if (exit !== null) {
-        drawAt(exit.x + 0.5, exit.y + 0.5, () => drawExit(ctx, exit.open, pulse));
+        const look = { open: hatchOpen(map), pulse };
+        drawAt(exit.x + 0.5, exit.y + 0.5, () => drawExitHatch(ctx, look));
       }
       for (const panel of map.sabotage?.panels ?? []) {
         drawAt(panel.x + 0.5, panel.y + 0.5, () => drawSabotagePanel(ctx, panel.occupied, pulse));
@@ -1460,10 +1567,14 @@ export function GameWorld({
         ctx.restore();
       }
 
+      // For a second after an alarm every drone wears a „!" (alarm.ts).
+      const alarm = alarmRef.current;
+      const marked = alarm === null ? 1 : (Date.now() - alarm.at) / DRONE_MARK_MS;
       for (const drone of Object.values(dronesRef.current)) {
         ctx.save();
         ctx.translate(drone.x, drone.y);
         drawDroneBody(ctx, drone, pulse);
+        drawAlarmMark(ctx, marked);
         ctx.restore();
       }
 
@@ -1755,9 +1866,6 @@ export function GameWorld({
           glow(plate.x + 0.5, plate.y + 0.5, 1.0, 0.5);
         }
       }
-      if (map.exit !== null && map.exit.open) {
-        glow(map.exit.x + 0.5, map.exit.y + 0.5, 2.6, 0.9);
-      }
       for (const panel of map.sabotage?.panels ?? []) {
         glow(panel.x + 0.5, panel.y + 0.5, 2.4, 0.9);
       }
@@ -1821,23 +1929,56 @@ export function GameWorld({
       return { punch, beam, within };
     }
 
+    /**
+     * The darkness over the picture, `veil` strong, with every light cut into
+     * it where its lamp can see; then the colours of the lights over it.
+     */
     function renderLighting(
       map: WorldMap,
       s: number,
       w: number,
       h: number,
       light: FrameLight,
+      veil: number,
     ): void {
-      if (octx == null || ctx == null) {
+      if (ctx == null) {
+        return;
+      }
+      const burn = lampPulse();
+      cutDarkness(map, s, w, h, light, burn);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = veil;
+      ctx.drawImage(overlay, 0, 0);
+      ctx.globalAlpha = 1;
+      const red = escapeRed();
+      renderCeilingLights(map, s, w, h, red);
+      renderLampLight(light, burn, s, w, h);
+      renderExitLight(light.exit, s, w, h);
+      renderSpillLight(light.spills, red, s, w, h);
+      renderEscapeTint(red, w, h);
+    }
+
+    /**
+     * The darkness of the overlay — deeper in the last minute and all through
+     * the escape — and the light every lamp cuts into it where it can see.
+     */
+    function cutDarkness(
+      map: WorldMap,
+      s: number,
+      w: number,
+      h: number,
+      light: FrameLight,
+      burn: number,
+    ): void {
+      if (octx == null) {
         return;
       }
       octx.setTransform(1, 0, 0, 1, 0, 0);
       octx.globalCompositeOperation = 'source-over';
       const deadlineAt = viewRef.current.deadlineAt;
-      const lowTime = deadlineAt !== null && deadlineAt - Date.now() < 60_000;
-      // The lab dims further during the final minute.
-      const base =
-        (lowTime ? 0.945 : 0.92) + 0.02 * Math.sin(sim.time * (lowTime ? 3.2 : 1.7));
+      const pressed =
+        escapeRef.current !== null || (deadlineAt !== null && deadlineAt - Date.now() < 60_000);
+      const base = (pressed ? 0.945 : 0.92) + 0.02 * Math.sin(sim.time * (pressed ? 3.2 : 1.7));
       octx.clearRect(0, 0, w, h);
       octx.fillStyle = `rgba(3,5,9,${base})`;
       octx.fillRect(0, 0, w, h);
@@ -1859,7 +2000,6 @@ export function GameWorld({
         within(lit, () => punch(lit.lamp.x, lit.lamp.y, CREW_GLOW, CREW_GLOW_STOPS));
       }
       // The emergency lamps open the dark a little round them; their red comes after.
-      const burn = lampPulse();
       const dim: Stops = EMERGENCY_STOPS.map(([offset, depth]) => [offset, depth * burn]);
       for (const { mount, lit } of light.lamps) {
         within(lit, () => punch(mount.x, mount.y, EMERGENCY_GLOW, dim));
@@ -1876,42 +2016,102 @@ export function GameWorld({
         within(eye, () => beam(eye, DRONE_BEAM_STOPS));
         punch(drone.x, drone.y, 1.1, objectGlowStops(0.75));
       }
-      // A lit room keeps no darkness at all, walls and doors included; one
-      // path per room, so its tiles meet without seams.
+      // The open hatch, and a lit room through an open door, as far as each stands open.
+      if (light.exit !== null) {
+        const { lit, open } = light.exit;
+        within(lit, () => punch(lit.lamp.x, lit.lamp.y, EXIT_GLOW, objectGlowStops(0.95 * open)));
+      }
+      for (const { lit, open } of light.spills) {
+        within(lit, () => beam(lit, SPILL_STOPS.map(([offset, depth]) => [offset, depth * open])));
+      }
+      // A lit room keeps no darkness at all, walls and doors included — but on
+      // the escape's alarm lighting some; one path per room, so its tiles meet
+      // without seams.
+      const [most, least] = ALARM_DIM;
+      const alarmDim = escapeRed() * (most + (least - most) * sirenSwell());
       for (const room of sim.lit.values()) {
         octx.save();
         octx.setTransform(s, 0, 0, s, w / 2 - sim.draw.x * s, h / 2 - sim.draw.y * s);
-        octx.fillStyle = `rgba(0,0,0,${lightsUp(sim.time - room.since)})`;
+        octx.fillStyle = `rgba(0,0,0,${roomUp(room.since) * (1 - alarmDim)})`;
         octx.fill(room.path);
         octx.restore();
       }
-
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.drawImage(overlay, 0, 0);
-      renderWarmRooms(map, s, w, h);
-      renderLampLight(light, burn, s, w, h);
-      if (sim.flash > 0) {
-        ctx.fillStyle = `rgba(248,60,60,${0.26 * sim.flash})`;
-        ctx.fillRect(0, 0, w, h);
-      }
     }
 
-    /** A room a solved station lit glows warm again, as the whole lab did with the power on. */
-    function renderWarmRooms(map: WorldMap, s: number, w: number, h: number): void {
+    /** The escape's siren turning, 0 to 1 and back: what the red light swells with. */
+    function sirenSwell(): number {
+      return reducedRef.current ? 0.5 : 0.5 + 0.5 * Math.sin((sim.time / SIREN_TURN) * Math.PI * 2);
+    }
+
+    /** How far the lights of a room that came on at `since` (sim time) are up now. */
+    function roomUp(since: number): number {
+      return warmUp((sim.time - since) * 1000, reducedRef.current);
+    }
+
+    /** How far the light has turned red on this screen: from the escape's start; warm once won. */
+    function escapeRed(): number {
+      const since = escapeRef.current;
+      if (since === null || finaleRef.current?.ending === 'won') {
+        return 0;
+      }
+      return redShift(Date.now() - since);
+    }
+
+    /**
+     * A room a solved station lit glows warm again, as the whole lab did with
+     * the power on — and turns red, `red` of the way, as the escape's siren
+     * sounds.
+     */
+    function renderCeilingLights(map: WorldMap, s: number, w: number, h: number, red: number): void {
       if (ctx == null || sim.lit.size === 0) {
         return;
       }
-      const layer = warmOf(map);
+      const tints = [
+        { layer: layerOf(map, WARM), share: 1 - red },
+        { layer: layerOf(map, ALARM_RED), share: red },
+      ].filter(({ share }) => share > 0);
       ctx.save();
       ctx.setTransform(s, 0, 0, s, w / 2 - sim.draw.x * s, h / 2 - sim.draw.y * s);
       ctx.globalCompositeOperation = 'lighter';
       for (const room of sim.lit.values()) {
+        const up = roomUp(room.since);
         ctx.save();
         ctx.clip(room.path);
-        ctx.globalAlpha = lightsUp(sim.time - room.since);
-        ctx.drawImage(layer, 0, 0, map.width, map.height);
+        for (const { layer, share } of tints) {
+          ctx.globalAlpha = up * share;
+          ctx.drawImage(layer, 0, 0, map.width, map.height);
+        }
         ctx.restore();
       }
+      ctx.restore();
+    }
+
+    /**
+     * Adds `fill` over the square `r` round (sx, sy) where `lit`'s lamp can
+     * see — and within its beam, where it has one: lit, as the darkness was
+     * cut, only where its light falls.
+     */
+    function addLight(lit: Lit, fill: CanvasGradient, sx: number, sy: number, r: number): void {
+      if (ctx == null || canvas == null) {
+        return;
+      }
+      const { width: w, height: h } = canvas;
+      const s = sim.scale;
+      ctx.save();
+      ctx.setTransform(s, 0, 0, s, w / 2 - sim.draw.x * s, h / 2 - sim.draw.y * s);
+      ctx.clip(clipPath(lit));
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const cone = lit.lamp.beam;
+      if (cone !== null) {
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.arc(sx, sy, r, cone.facing - cone.halfAngle, cone.facing + cone.halfAngle);
+        ctx.closePath();
+        ctx.clip();
+      }
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = fill;
+      ctx.fillRect(sx - r, sy - r, r * 2, r * 2);
       ctx.restore();
     }
 
@@ -1938,24 +2138,79 @@ export function GameWorld({
         red.addColorStop(0.12, `rgba(255, 50, 42, ${0.42 * burn})`);
         red.addColorStop(0.5, `rgba(255, 38, 32, ${0.16 * burn})`);
         red.addColorStop(1, 'rgba(255, 38, 32, 0)');
-        ctx.save();
-        ctx.setTransform(s, 0, 0, s, w / 2 - sim.draw.x * s, h / 2 - sim.draw.y * s);
-        ctx.clip(clipPath(lit));
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.fillStyle = red;
-        ctx.fillRect(sx - r, sy - r, r * 2, r * 2);
-        ctx.restore();
+        addLight(lit, red, sx, sy, r);
       }
     }
 
-    function renderScreenText(map: WorldMap, s: number, view: Viewport): void {
+    /** The green-white light out of the open hatch, as far as it has ground open. */
+    function renderExitLight(exit: FrameLight['exit'], s: number, w: number, h: number): void {
+      if (ctx == null || exit === null) {
+        return;
+      }
+      const { lit, open } = exit;
+      const [sx, sy] = worldToScreen(s, w, h, lit.lamp.x, lit.lamp.y);
+      const r = EXIT_GLOW * s;
+      const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
+      glow.addColorStop(0, `rgba(240, 255, 246, ${0.8 * open})`);
+      glow.addColorStop(0.16, `rgba(160, 245, 196, ${0.5 * open})`);
+      glow.addColorStop(0.5, `rgba(74, 222, 128, ${0.18 * open})`);
+      glow.addColorStop(1, 'rgba(74, 222, 128, 0)');
+      addLight(lit, glow, sx, sy, r);
+    }
+
+    /** A lit room's light through an open door: a wedge of its colour falling into the dark. */
+    function renderSpillLight(
+      spills: FrameLight['spills'],
+      red: number,
+      s: number,
+      w: number,
+      h: number,
+    ): void {
+      if (ctx == null) {
+        return;
+      }
+      const [r, g, b] = mixTint(WARM.tint, ALARM_RED.tint, red);
+      for (const { lit, open } of spills) {
+        const [sx, sy] = worldToScreen(s, w, h, lit.lamp.x, lit.lamp.y);
+        const reach = SPILL_REACH * s;
+        const wedge = ctx.createRadialGradient(sx, sy, 0, sx, sy, reach);
+        wedge.addColorStop(0, `rgba(${r},${g},${b},${0.3 * open})`);
+        wedge.addColorStop(0.6, `rgba(${r},${g},${b},${0.1 * open})`);
+        wedge.addColorStop(1, `rgba(${r},${g},${b},0)`);
+        addLight(lit, wedge, sx, sy, reach);
+      }
+    }
+
+    /** The red the escape bathes the world in, `red` of the way, swelling with the siren. */
+    function renderEscapeTint(red: number, w: number, h: number): void {
+      if (ctx == null || red <= 0) {
+        return;
+      }
+      const swell = sirenSwell();
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = `rgba(255, 34, 22, ${(0.06 + 0.05 * swell) * red})`;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+    }
+
+    /**
+     * The screen's own text over the world: room names, the arrows to what
+     * to walk to, the hatch's sign, the E prompt, captions and chat. While the
+     * run ends on screen (`ending`) only the room names stay: the lab is all
+     * there is to see.
+     */
+    function renderScreenText(map: WorldMap, s: number, view: Viewport, ending: boolean): void {
       if (ctx == null) {
         return;
       }
       const { w, h, dpr } = view;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.textAlign = 'center';
+      if (ending) {
+        renderRoomNames(map, s, view);
+        return;
+      }
       // Anything you need to walk to gets an arrow at the screen edge while
       // it is out of sight — in the dark that is the only way to find it. The
       // room names keep off the arrows, as off the minimap.
@@ -1963,10 +2218,10 @@ export function GameWorld({
       const arrows = markers.flatMap(({ at, captionWidth }) => markerBoxes(at, captionWidth, dpr));
       renderRoomNames(map, s, { ...view, boxes: [...view.boxes, ...arrows] });
       if (map.exit !== null && map.exit.open) {
-        const [ex, ey] = worldToScreen(s, w, h, map.exit.x + 0.5, map.exit.y - 0.45);
+        const [ex, ey] = worldToScreen(s, w, h, map.exit.x + 0.5, map.exit.y - 0.5);
         ctx.font = `700 ${12 * dpr}px ui-monospace, Menlo, monospace`;
         ctx.fillStyle = '#4ade80';
-        ctx.fillText('NOTAUSGANG → ALLE HIERHER!', ex, ey);
+        ctx.fillText('NOTAUSGANG', ex, ey);
       }
       renderEdgeMarkers(markers, dpr);
       renderPrompt(map, s, view);
@@ -2127,7 +2382,8 @@ export function GameWorld({
   };
 
   return (
-    <div className="world-wrap">
+    // An alarm strobes over the world and shakes the camera (alarm.ts, finale.css).
+    <div className={alarmClass === '' ? 'world-wrap' : `world-wrap ${alarmClass}`}>
       <canvas ref={canvasRef} className={`world-canvas ${spectator ? 'world-canvas--wide' : ''}`} />
       {tip !== null &&
         (tip.overPanel ? (

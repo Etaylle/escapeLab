@@ -10,6 +10,7 @@ import { STATS_PATH, useJson } from './runStats.js';
 import { useRunScreen } from './runScreen.js';
 import { useVoiceMesh, VoiceContext } from './voice/useVoice.js';
 import { useGameConnection, type Connection } from './ws.js';
+import { useFinale, type Finale } from './world/finale.js';
 import { EditorScreen } from './editor/EditorScreen.js';
 import {
   mirrorRun,
@@ -246,6 +247,8 @@ interface ScreenProps {
   setHistory: (missionId: string | null) => void;
   editor: EditorPage;
   startTestRun: (name: string, missionId: string) => void;
+  /** the end of the run on this screen: while the world plays it, the end screen waits */
+  finale: Finale | null;
 }
 
 /**
@@ -305,13 +308,19 @@ function OffRoom(props: ScreenProps) {
   );
 }
 
-/** The screen for where this connection is: watching, off any room, or in one by its phase. */
+/**
+ * The screen for where this connection is: watching, off any room, or in one
+ * by its phase. A run that is over stays on the game screen while the world
+ * plays its end (world/finale.ts) — the same screen, so that the world goes on
+ * — and opens the end screen after.
+ */
 function Screens(props: ScreenProps) {
-  const { conn } = props;
+  const { conn, finale } = props;
   if (conn.spectatorView !== null) {
     return (
       <SpectateScreen
         view={conn.spectatorView}
+        finale={finale}
         positionsRef={conn.positions}
         dronesRef={conn.drones}
         pingsRef={conn.pings}
@@ -344,12 +353,50 @@ function Screens(props: ScreenProps) {
           pingsRef={conn.pings}
           chatsRef={conn.chats}
           send={conn.send}
+          finale={null}
         />
       );
     case 'won':
     case 'lost':
-      return <EndScreen view={conn.view} send={conn.send} leaveRoom={conn.leaveRoom} />;
+      return finale?.running === true && finale.map !== null ? (
+        <GameScreen
+          view={{ ...conn.view, map: finale.map }}
+          roomCode={conn.roomCode}
+          positionsRef={conn.positions}
+          dronesRef={conn.drones}
+          pingsRef={conn.pings}
+          chatsRef={conn.chats}
+          send={conn.send}
+          finale={finale}
+        />
+      ) : (
+        <EndScreen
+          view={conn.view}
+          fresh={finale?.played === true}
+          send={conn.send}
+          leaveRoom={conn.leaveRoom}
+        />
+      );
   }
+}
+
+/**
+ * Whether the window belongs to the room: a running mission — its end still
+ * playing in the world included — takes it over, for players and for the
+ * audience alike (the latter matters on a projector), and so does the lobby,
+ * the crew's room before the run. A player in a run, or watching its end, is
+ * on a phone fullscreen, sideways and awake.
+ */
+function useStage(conn: Connection, finale: Finale | null): boolean {
+  const ending = finale?.running === true && finale.map !== null;
+  const playing =
+    (conn.view?.phase === 'playing' && conn.view.map !== null) || (conn.view !== null && ending);
+  useRunScreen(playing);
+  return (
+    conn.view?.phase === 'lobby' ||
+    playing ||
+    (conn.spectatorView !== null && (conn.spectatorView.map !== null || ending))
+  );
 }
 
 /**
@@ -373,16 +420,9 @@ export function App({ boot }: { boot: EditorBoot }) {
   const editor = useEditorPage(boot);
   const testRun = useTestRun(conn);
   const contentRef = useRef<HTMLElement>(null);
-  // This player is in a run: on a phone that is fullscreen, sideways and awake.
-  const playing = conn.view?.phase === 'playing' && conn.view.map !== null;
-  useRunScreen(playing);
-  // A running mission takes over the whole window, for players and for the
-  // audience alike — the latter matters on a projector. So does the lobby,
-  // the crew's room before the run.
-  const immersive =
-    conn.view?.phase === 'lobby' ||
-    playing ||
-    (conn.spectatorView !== null && conn.spectatorView.map !== null);
+  // How the run ended, on this screen: the world plays it before the end screen opens.
+  const finale = useFinale(conn.view ?? conn.spectatorView);
+  const immersive = useStage(conn, finale);
   // Which mission is running, for the header. The lobby already has it as its
   // headline, so naming it twice there would be noise.
   const running =
@@ -448,6 +488,7 @@ export function App({ boot }: { boot: EditorBoot }) {
             setHistory={setHistory}
             editor={editor}
             startTestRun={testRun.start}
+            finale={finale}
           />
         </VoiceContext>
       </main>
