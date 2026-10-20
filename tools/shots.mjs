@@ -44,7 +44,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function overflow(page, label) {
   const { scroll, client, parts } = await page.evaluate(() => {
     const el = document.querySelector('.content');
-    const name = (n) => `${n.tagName.toLowerCase()}.${n.className.split(' ')[0] || '-'}`;
+    // An SVG icon's className is an SVGAnimatedString, so read the attribute.
+    const name = (n) =>
+      `${n.tagName.toLowerCase()}.${(n.getAttribute('class') ?? '').split(' ')[0] || '-'}`;
     const measure = (node, depth) =>
       depth === 0
         ? []
