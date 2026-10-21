@@ -6,6 +6,7 @@ import type {
   MapView,
   PlayerView,
   PuzzleView,
+  RunEvent,
 } from '@escapelab/core';
 import { useKeys, useMedia, useNow } from '../hooks.js';
 import {
@@ -15,6 +16,7 @@ import {
   followsSolve,
   noticeMs,
   radioNews,
+  voiced,
   withNews,
   type Notice,
 } from '../radio.js';
@@ -35,6 +37,7 @@ import { REDUCED_MOTION, veilOf, type Ending, type Finale } from '../world/final
 import { GameWorld } from '../world/GameWorld.js';
 import { dueParts } from '../world/markers.js';
 import { startingSpot, type KnownPositions } from '../world/movement.js';
+import { preloadLines, preloadVoice, sayLine, stopVoice } from '../world/radioVoice.js';
 import type { ChatLine, MapPing } from '../world/render/frame.js';
 import { startRoom } from '../world/rooms.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
@@ -316,13 +319,25 @@ export interface NoticeGates {
 }
 
 /**
+ * A line goes on the air as it shows: mission control's spoken over the radio where it has a
+ * recording (world/radioVoice.ts), every other keyed with the radio's chirp.
+ */
+function airLine(event: RunEvent): void {
+  if (!(voiced(event) && sayLine(event.label))) {
+    radioChirp();
+  }
+}
+
+/**
  * What the objective bar carries under the goal right now, one notice at a
- * time so they never stack: the lines on the air as they come in, each with
- * a chirp (see `withNews` for a fresh batch) — a line that comes with a solve
- * AFTER_SOLVE_MS later, so that the win is seen first — and the note once
- * this player has walked up to the Laborkennung. Nothing shows before its
- * gate opens. A player who spawns at the sign gets the note too; one who
- * reconnects later does not, they read it before.
+ * time so they never stack: the lines on the air as they come in, each
+ * spoken or keyed as it shows (`airLine`; see `withNews` for a fresh batch)
+ * — a line that comes with a solve AFTER_SOLVE_MS later, so that the win is
+ * seen first — and the note once this player has walked up to the
+ * Laborkennung. Nothing shows before its gate opens. A player who spawns at
+ * the sign gets the note too; one who reconnects later does not, they read
+ * it before. The run's recorded lines are fetched as it starts, a line that
+ * comes in as it comes, and one still speaking stops with the screen.
  */
 function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
   const seen = useRef(0);
@@ -331,11 +346,17 @@ function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
   const briefingEnds = (view.startedAt ?? 0) + BRIEFING_MS;
 
   useEffect(() => {
+    preloadVoice(view.missionId);
+  }, [view.missionId, view.startedAt]);
+  useEffect(() => stopVoice, []);
+
+  useEffect(() => {
     const now = Date.now();
     const news = radioNews(view.events, seen.current, now);
     const notBefore = followsSolve(view.events, seen.current) ? now + AFTER_SOLVE_MS : 0;
     seen.current = view.events.length;
     if (news.length > 0) {
+      preloadLines(news.filter(voiced).map((event) => event.label));
       setQueue((queued) => withNews(queued, news, notBefore));
     }
   }, [view.events]);
@@ -362,7 +383,7 @@ function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
     const up = noticeMs(next, window.matchMedia('(pointer: coarse)').matches);
     const on = setTimeout(() => {
       if (next.kind === 'line') {
-        radioChirp();
+        airLine(next.event);
       }
       setShown(next);
     }, wait);

@@ -162,13 +162,6 @@ export interface FigureProbe {
   glance: number;
 }
 
-declare module '../probes.js' {
-  interface Probes {
-    /** the crew figures in the lobby or on a title card, each with its last pose */
-    readonly figures?: FigureProbe[];
-  }
-}
-
 /** The figures painted on this page, for the probe; the probe while there are any. */
 const painted = new Set<FigureProbe>();
 let dropProbe: (() => void) | null = null;

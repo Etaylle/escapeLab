@@ -21,6 +21,14 @@ function onAir(event: RunEvent): boolean {
   return event.kind === 'radio' || event.kind === 'hint';
 }
 
+/**
+ * Whether a line on the air is spoken: mission control's are (world/radioVoice.ts, where a
+ * recording of it exists), a note of the last crew is read, never heard.
+ */
+export function voiced(event: RunEvent): boolean {
+  return event.kind === 'radio';
+}
+
 /** Who a line on the air is from, as the banner names them. */
 export function bannerFrom(event: RunEvent): string {
   return event.kind === 'hint' ? LAST_CREW : 'LEITSTELLE';

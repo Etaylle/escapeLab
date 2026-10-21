@@ -1,0 +1,191 @@
+{
+  "1c32b49724ca": {
+    "text": "Notausgang offen, Schleusenmitte. Alle vier hin.",
+    "ms": 3021,
+    "missions": [
+      "doppelschicht"
+    ]
+  },
+  "22f2d6d8fa13": {
+    "text": "Alle in den Kern. Flurplatte öffnet das Messlabor.",
+    "ms": 2950,
+    "missions": [
+      "kettenreaktion"
+    ]
+  },
+  "254093cbcc07": {
+    "text": "Schleuse offen. Alle vier zum Not-Aus, Westwand.",
+    "ms": 3113,
+    "missions": [
+      "doppelschicht"
+    ]
+  },
+  "328274ea0a25": {
+    "text": "Schott offen. Drohne wach – Kameraplatte vor dem Serverraum.",
+    "ms": 3543,
+    "missions": [
+      "blackout"
+    ]
+  },
+  "32d801aaddba": {
+    "text": "Erst Handbuch im Archiv, dann Kasten und Prüfpult.",
+    "ms": 3261,
+    "missions": [
+      "blackout"
+    ]
+  },
+  "337030d21e78": {
+    "text": "Leitungsnetz am Westende vom Flur, Kühlmittel zum Kern.",
+    "ms": 3342,
+    "missions": [
+      "kettenreaktion"
+    ]
+  },
+  "399852f490ca": {
+    "text": "Notausgang offen, Südostecke. Alle raus.",
+    "ms": 2975,
+    "missions": [
+      "blackout"
+    ]
+  },
+  "3d87fba381b2": {
+    "text": "Notausgang offen, Westende vom Flur. Alle drei hin.",
+    "ms": 3451,
+    "missions": [
+      "kettenreaktion"
+    ]
+  },
+  "4023cbdb4ba6": {
+    "text": "Notausgang offen. Beide hin.",
+    "ms": 1999,
+    "missions": [
+      "systemcheck"
+    ]
+  },
+  "554fb3da99be": {
+    "text": "Signal steht. Platte hält die Kontrolltür, Spind daneben durchsuchen.",
+    "ms": 4112,
+    "missions": [
+      "systemcheck"
+    ]
+  },
+  "569586ea30e9": {
+    "text": "Reaktor offen. Ohne Ersatzsicherung bleibt er tot.",
+    "ms": 3125,
+    "missions": [
+      "blackout"
+    ]
+  },
+  "5a3d8ef8e235": {
+    "text": "Spulen offen. Platte halten, dann beide nach Osten.",
+    "ms": 3113,
+    "missions": [
+      "systemcheck"
+    ]
+  },
+  "63b85185d3f6": {
+    "text": "Tastenfeld im Westflügel, Südostecke. Regeln im Nordosten.",
+    "ms": 4108,
+    "missions": [
+      "doppelschicht"
+    ]
+  },
+  "6b1eb79786bd": {
+    "text": "Notstrom zuerst: Kasten im Ostflügel, Regeln im Südwesten.",
+    "ms": 4159,
+    "missions": [
+      "doppelschicht"
+    ]
+  },
+  "7c8343fceedc": {
+    "text": "Leitstand offen. Freigabecode dort, Regeln im Messlabor.",
+    "ms": 3807,
+    "missions": [
+      "kettenreaktion"
+    ]
+  },
+  "817d23810d00": {
+    "text": "Resonator offen. Station dahinter, durch die Westtür.",
+    "ms": 3543,
+    "missions": [
+      "kettenreaktion"
+    ]
+  },
+  "8990f23b556b": {
+    "text": "Strom weg. Notlicht: Hebel im Flur, zu zweit.",
+    "ms": 3438,
+    "missions": [
+      "blackout"
+    ]
+  },
+  "98a1c7721011": {
+    "text": "Notstrom steht, die Tür bleibt offen. Zwei Pulte: Flur und Maschinenraum.",
+    "ms": 4809,
+    "missions": [
+      "blackout"
+    ]
+  },
+  "9f5039973bf5": {
+    "text": "Kühlbank im Westflügel, Westwand. Regeln im Südosten.",
+    "ms": 3691,
+    "missions": [
+      "doppelschicht"
+    ]
+  },
+  "a242523a34e9": {
+    "text": "Speicherkern an die Schleusenwand, Schaltplan im Nordwesten.",
+    "ms": 3474,
+    "missions": [
+      "doppelschicht"
+    ]
+  },
+  "a7a4fd0abde0": {
+    "text": "Funkpult im Ostflügel, Ostwand. Regeln im Südwesten.",
+    "ms": 3705,
+    "missions": [
+      "doppelschicht"
+    ]
+  },
+  "d58fe355c8dc": {
+    "text": "Labortür offen, Drohne drin. Aktenschrank braucht den Schlüssel.",
+    "ms": 3737,
+    "missions": [
+      "blackout"
+    ]
+  },
+  "e036051a6037": {
+    "text": "Druckknopf im Westflügel, Nordseite. Regeln im Nordosten.",
+    "ms": 3794,
+    "missions": [
+      "doppelschicht"
+    ]
+  },
+  "e1d3987483fe": {
+    "text": "Zwei Pulte: eins zeigt, eins drückt. Beide hin.",
+    "ms": 3398,
+    "missions": [
+      "systemcheck"
+    ]
+  },
+  "e291391e6b9b": {
+    "text": "Platten in Archiv und Messlabor öffnen die Schleuse. Erste Station im Flur.",
+    "ms": 4308,
+    "missions": [
+      "kettenreaktion"
+    ]
+  },
+  "e753b688f370": {
+    "text": "Weiter im Pumpenraum, Südost. Regeln wieder im Archiv.",
+    "ms": 3774,
+    "missions": [
+      "kettenreaktion"
+    ]
+  },
+  "f942e07ef042": {
+    "text": "Beide zur Initialisierung, Hebel zugleich umlegen.",
+    "ms": 3202,
+    "missions": [
+      "systemcheck"
+    ]
+  }
+}

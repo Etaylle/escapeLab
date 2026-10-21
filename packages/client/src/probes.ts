@@ -1,5 +1,23 @@
+import type { FigureProbe } from './screens/CrewFigure.js';
 import type { VoiceProbe } from './voice/mesh.js';
+import type { BedProbe } from './world/ambience.js';
 import type { LightProbe } from './world/gl/path.js';
+import type { MusicProbe } from './world/music.js';
+import type { RadioRender, VoiceProbe as RadioProbe } from './world/radioVoice.js';
+import type { SpatialProbe } from './world/spatial.js';
+
+/**
+ * What the lab sounds like now: the beds of the rooms round the player (world/ambience.ts),
+ * the music's layers and pressure (music.ts), mission control's voice (radioVoice.ts) and
+ * where the nearest partner sounds from (spatial.ts) — and the radio's chain rendered offline.
+ */
+export interface AudioProbe extends BedProbe {
+  readonly music: MusicProbe;
+  readonly voice: RadioProbe;
+  readonly spatial: SpatialProbe;
+  /** renders the radio's chain once on white noise: what went in and what came out */
+  readonly renderRadio: () => Promise<RadioRender>;
+}
 
 /**
  * Where the world's camera looks as its last frame drew it: the world point at the canvas's
@@ -15,7 +33,8 @@ export interface CameraProbe {
  * The page's probes for the walkthrough harness (`tools/shots.mjs`), there
  * only when the URL asks for them with `?trace=1` (world/frameTrace.ts): the
  * world's last frame durations and its camera while a world is up, the voice
- * links while the page is in a room. Each part comes and goes on its own.
+ * links while the page is in a room, the crew figures while any are painted.
+ * Each part comes and goes on its own.
  */
 export interface Probes {
   /** the world's last frame durations, oldest first (world/frameTrace.ts) */
@@ -28,6 +47,10 @@ export interface Probes {
   readonly voice?: VoiceProbe;
   /** the way the world's light takes, WebGL or Canvas, and the picture's luma (world/gl/path.ts) */
   readonly light?: LightProbe;
+  /** what the lab sounds like, while a world is up */
+  readonly audio?: AudioProbe;
+  /** the crew figures in the lobby or on a title card, each with its last pose (CrewFigure.tsx) */
+  readonly figures?: FigureProbe[];
 }
 
 declare global {

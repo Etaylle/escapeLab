@@ -13,8 +13,12 @@
  * press it together, and the run fails unless it solves; right after the
  * presses device-solved.png catches the solved device, its status strip
  * sweeping green, before it closes itself — the run fails where any sync
- * station never shows solved, lies under an overlay, or does not close
- * itself. Where the station after it has two consoles, each takes one and
+ * station never shows solved, is gone before it is looked at, lies under an
+ * overlay, or does not close itself. A shot that lands only after the device
+ * closed itself — the machine under load — fails nothing: the next sync
+ * station of the run is shot instead, and where that one is late too, or
+ * none follows, device-solved.png is skipped with the times measured.
+ * Where the station after it has two consoles, each takes one and
  * both panels are captured; a Signalkette, as in the Systemcheck, they work
  * from both sides until it solves too.
  * Where the first station has two consoles, as Blackout's Notstrom-Kasten,
@@ -116,6 +120,24 @@
  * the guest's reload the link has to come up again. Any of these that fails,
  * fails the run.
  *
+ * Sound: the pages' audio probe (`window.__escapelab.audio`, client
+ * world/ambience.ts, music.ts, radioVoice.ts, spatial.ts) is read as the run
+ * goes. After the blackout — in a mission without an intro, once the briefing
+ * is over — the bed of the host's room has to be dead, its powered layer
+ * down; once the lever or a sync station has lit the room its player stands
+ * in, that bed has to be alive again. The line that comes over the radio with
+ * each of those solves has to be spoken by a recording from the manifest the
+ * server hands out, saying the banner's line, for a second at least. In the
+ * escape the music's pressure has to stand at 0.8 or more, its pressure layer
+ * up and the pad gone under the siren. Wherever the partner stands half a tile
+ * or more to one side (after the blackout, at the hatch — and after the lever,
+ * where the guest walks three to five tiles along the corridor for it and
+ * back) the probe's pan has to point there, and that has to be checked once a
+ * run at least. Once a run the radio's chain is rendered offline in the page on
+ * white noise: above 4 kHz it has to come out at least 10 dB under the band
+ * from 300 Hz to 3.4 kHz, and 15 dB further down than the noise was
+ * (spectrum.mjs). Any of these that fails, fails the run.
+ *
  * Editor: before the walkthrough a page of its own opens the editor from the
  * join screen, paints a 7 × 5 room, places a start and a station and
  * captures what the validator says (editor.png, and the layout at
@@ -158,6 +180,7 @@ import { join } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { chromium, request } from 'playwright';
 import { percentile } from './percentile.mjs';
+import { bandPowers, decibels } from './spectrum.mjs';
 
 const BASE = process.argv[2] ?? 'http://localhost:5173';
 const OUT = process.argv[3] ?? '/tmp/escapelab-shots';
@@ -842,6 +865,8 @@ async function pressTogether(players, station) {
   const done = (page) => page.locator('.led-strip .led-done');
   const doneBefore = await Promise.all(players.map(({ page }) => done(page).count()));
   await Promise.all(players.map(({ page }) => page.locator('.station-modal .big-button').click()));
+  // The line that comes with the solve speaks a second after it: listen from the presses on.
+  const listening = hearRadio(first, 9000);
   if (station.look !== 'lever') {
     await captureSolved(first, station);
   }
@@ -869,13 +894,49 @@ async function pressTogether(players, station) {
     `sync               ${players.map(({ name }) => name).join(' and ')} pressed ` +
       `"${station.title}" together: solved, ${first.seen.view.map.litRooms.join(', ')} lit`,
   );
+  return { listening, lit: first.seen.view.map.litRooms.slice(litBefore) };
 }
 
 /** How long after a solve a device closes itself, as puzzles/Device.tsx says (SOLVED_CLOSE_MS). */
 const SOLVED_CLOSE_MS = 500;
 
-/** Whether device-solved.png is taken: the first sync station the run solves takes it. */
-let solvedShot = false;
+/**
+ * device-solved.png as the run takes it: whether a shot landed while the
+ * device still showed solved, and when those that landed after its close did,
+ * ms after it showed solved. The first sync station the run solves is shot; a
+ * late shot is taken again at the next one, and one late there too is skipped.
+ */
+const solvedShot = { taken: false, late: [] };
+
+/** Whether device-solved.png is still to be shot: none in time yet, no second chance spent. */
+function shootingSolved() {
+  return !solvedShot.taken && solvedShot.late.length < 2;
+}
+
+/**
+ * Counts the shot of a solved device, `shot` ms after it showed solved (null
+ * where none was taken): in time before its close; after it, late — and the
+ * second late one is skipped at once.
+ */
+function noteShot(shot) {
+  if (shot === null) {
+    return;
+  }
+  if (shot < SOLVED_CLOSE_MS) {
+    solvedShot.taken = true;
+  } else {
+    solvedShot.late.push(shot);
+    if (solvedShot.late.length === 2) {
+      skipLateShot();
+    }
+  }
+}
+
+/** Logs device-solved.png as skipped: its shots landed after the device's close, at these times. */
+function skipLateShot() {
+  const times = solvedShot.late.map((ms) => `${ms} ms`).join(', ');
+  skip('device-solved.png', `the solved-device shot landed late under load (${times})`);
+}
 
 /**
  * What a solved device shows at its shot: the status strip's LEDs gone green
@@ -908,8 +969,10 @@ function solvedLook(page) {
  * A sync station right after the crew's presses: it has to show solved — its
  * status strip sweeping green along the bezel's foot, its plate dimmed — with
  * nothing over it, and close itself SOLVED_CLOSE_MS later. The first one the
- * run solves is shot as it sweeps (device-solved.png). Fails where it never
- * shows solved, lies covered, or does not close itself.
+ * run solves is shot as it sweeps (device-solved.png), the next one again
+ * where that shot landed after the close (noteShot). Fails where it never
+ * shows solved, is gone before it is looked at, lies covered, or does not
+ * close itself.
  */
 async function captureSolved(player, station) {
   const solved = player.page.locator('.station-modal .device--solved');
@@ -922,34 +985,46 @@ async function captureSolved(player, station) {
   const seen = Date.now();
   await sleep(120); // the sweep under way along the strip
   const look = await solvedLook(player.page);
-  const first = !solvedShot;
-  if (first) {
+  const looked = Date.now() - seen;
+  const shooting = shootingSolved();
+  if (shooting) {
     await capture(player.page, 'device-solved.png');
-    solvedShot = true;
   }
-  const shot = Date.now() - seen;
+  const shot = shooting ? Date.now() - seen : null;
   const gone = await solved.waitFor({ state: 'detached', timeout: SOLVED_CLOSE_MS + 1500 }).then(
     () => Date.now() - seen,
     () => null,
   );
-  const timing = { since: seen - since, shot, gone };
-  reportSolved(`${player.name}: "${station.title}"`, first, look, timing);
+  noteShot(shot);
+  const timing = { since: seen - since, looked, shot, gone };
+  reportSolved(`${player.name}: "${station.title}"`, look, timing);
 }
 
 /**
  * A solved sync station in the log — when it showed solved after the presses,
- * when it was looked at, what lay over it, when it closed itself — and in the
- * failures where it was covered, looked at too late or never closed itself.
+ * when it was looked at and shot, what lay over it, when it closed itself —
+ * and in the failures where it was gone before it was looked at, covered, or
+ * never closed itself. A shot after its close is no failure (noteShot).
  */
-function reportSolved(what, first, look, { since, shot, gone }) {
+function reportSolved(what, look, { since, looked, shot, gone }) {
+  const late = shot !== null && shot >= SOLVED_CLOSE_MS;
+  const lateSaid = late ? ' (late: after its close)' : '';
+  const shotSaid = shot === null ? '' : `, shot ${shot} ms${lateSaid}`;
+  const covered = look.covers.length > 0;
+  const strip = `${look.lit} of ${look.all} strip LEDs green`;
   console.log(
-    `${first ? 'device-solved.png ' : 'device-solved     '} ${what} solved ${since} ms after the ` +
-      `presses, shot ${shot} ms into it — ${look.lit} of ${look.all} strip LEDs green, ` +
-      `${look.covers.length === 0 ? 'nothing over it' : `!! under ${look.covers.join(', ')}`}; ` +
+    `${shot === null ? 'device-solved     ' : 'device-solved.png '} ${what} solved ${since} ms ` +
+      `after the presses, looked at ${looked} ms into it${shotSaid} — ${strip}, ` +
+      `${covered ? `!! under ${look.covers.join(', ')}` : 'nothing over it'}; ` +
       (gone === null ? '!! it stayed open' : `it closed itself after ${gone} ms`),
   );
-  if (look.covers.length > 0 || gone === null || shot >= SOLVED_CLOSE_MS) {
-    fail(`device-solved: ${what} covered, looked at too late, or never closed itself`);
+  const why = [
+    ...(look.all === 0 ? ['was gone before it was looked at'] : []),
+    ...(covered ? ['lay covered'] : []),
+    ...(gone === null ? ['stayed open'] : []),
+  ];
+  if (why.length > 0) {
+    fail(`device-solved: ${what} ${why.join(', ')}`);
   }
 }
 
@@ -987,7 +1062,9 @@ async function captureBothAtStation(reader, operator, station, sync) {
       const who = missing.join(' and ');
       throw new Error(`"${station.title}" wants both presses, but ${who} has no panel`);
     }
-    await pressTogether([operator, reader], station);
+    const solved = await pressTogether([operator, reader], station);
+    await bedAlive(operator, solved.lit, `after "${station.title}"`);
+    await checkRadioVoice(operator, solved.listening, `"${station.title}"`);
   }
   // Whatever E opened instead of the panel locks the avatar too.
   await reader.page.keyboard.press('Escape');
@@ -1293,6 +1370,239 @@ async function lightPair(page, shot) {
   return () => lightThrough(page, null);
 }
 
+// --- sound (client world/ambience.ts, music.ts, radioVoice.ts, spatial.ts) ---
+
+/** What a traced page's world sounds like, as its audio probe reads it; null without one. */
+function soundOf(page) {
+  return page.evaluate(() => {
+    const audio = globalThis.__escapelab?.audio;
+    if (audio === undefined) {
+      return null;
+    }
+    const { room, kind, beds, power, music, voice, spatial } = audio;
+    return { room, kind, beds, power, music, voice, spatial };
+  });
+}
+
+/** Levels by name as text: "archive 1.00, corridor 0.25". */
+function levelsOf(record) {
+  const named = Object.entries(record ?? {}).map(([name, level]) => `${name} ${level.toFixed(2)}`);
+  return named.join(', ') || 'none';
+}
+
+/**
+ * The bed of the room `player` stands in has collapsed to its dead variant
+ * (`when`: after the blackout, or with the lights out from the start): its
+ * powered layer — fans, hums, whines — is down. Fails otherwise.
+ */
+async function bedDead(player, when) {
+  const sound = await soundOf(player.page);
+  const kind = sound?.kind ?? null;
+  const power = kind === null ? null : (sound.power[kind] ?? null);
+  const dead = power !== null && power <= 0.05;
+  const state = `${dead ? 'dead' : '!! not dead'} (power ${power?.toFixed(2) ?? 'none'})`;
+  console.log(
+    `sound              ${player.name} in ${sound?.room ?? '!! no room'} ${when}: the ` +
+      `${kind ?? '?'} bed ${state}; beds ${levelsOf(sound?.beds)}`,
+  );
+  if (!dead) {
+    fail(`sound ${when}: the bed of ${player.name}'s room is not dead (${kind}: ${power})`);
+  }
+}
+
+/**
+ * Once a station has lit rooms (`lit`), the bed of the one `player` stands
+ * in is alive again, warmed up with the lights: waits up to 3 s for it. Fails
+ * otherwise.
+ */
+async function bedAlive(player, lit, when) {
+  let sound = null;
+  const alive = () => {
+    const kind = sound?.kind ?? null;
+    return kind !== null && lit.includes(sound.room) && (sound.power[kind] ?? 0) >= 0.95;
+  };
+  for (const end = Date.now() + 3000; ; await sleep(100)) {
+    sound = await soundOf(player.page);
+    if (alive() || Date.now() >= end) {
+      break;
+    }
+  }
+  const kind = sound?.kind ?? '?';
+  console.log(
+    `sound              ${player.name} in ${sound?.room ?? '!! no room'} ${when}: the ${kind} ` +
+      `bed ${alive() ? 'alive' : '!! not alive'} (power ${levelsOf(sound?.power)})`,
+  );
+  if (!alive()) {
+    fail(`sound ${when}: the bed of ${player.name}'s lit room is not alive`);
+  }
+}
+
+/**
+ * Listens to `player`'s radio for up to `ms` from now: the first line that
+ * speaks, by its recording's id, and from when to when it was heard speaking
+ * (polled every 100 ms). Null where none spoke.
+ */
+async function hearRadio(player, ms) {
+  const end = Date.now() + ms;
+  let heard = null;
+  while (Date.now() < end) {
+    const voice = (await soundOf(player.page))?.voice;
+    if (voice?.playing === true && (heard === null || voice.lastId === heard.id)) {
+      heard ??= { id: voice.lastId, from: Date.now(), to: Date.now() };
+      heard.to = Date.now();
+    } else if (heard !== null) {
+      break;
+    }
+    await sleep(100);
+  }
+  return heard;
+}
+
+/**
+ * The line that came over the radio with a solve (`listening`, from
+ * hearRadio): a recording from the manifest the server hands out has to have
+ * spoken it — what the banner says, the view's last radio line — for a second
+ * at least. Fails otherwise.
+ */
+async function checkRadioVoice(player, listening, after) {
+  const heard = await listening;
+  const manifest = await player.page.evaluate(() =>
+    globalThis.fetch('/voice/manifest.json').then((res) => res.json()),
+  );
+  const events = player.seen.view.events;
+  const line = [...events].reverse().find((event) => event.kind === 'radio')?.label ?? null;
+  const entry = heard === null ? undefined : manifest[heard.id];
+  const spoke = heard === null ? 0 : heard.to - heard.from;
+  const said = heard === null
+    ? '!! no line spoke'
+    : `${heard.id} „${entry?.text ?? '!! not in the manifest'}" speaking ${seconds(spoke)}`;
+  console.log(`radio voice        ${player.name} after ${after}: ${said}; the banner: „${line}"`);
+  if (entry === undefined || entry.text !== line || spoke < 1000) {
+    fail(`radio voice after ${after}: ${heard?.id ?? 'nothing'} spoke ${spoke} ms for „${line}"`);
+  }
+}
+
+/** How many times the partner's side was told apart, of the checks that could. */
+const sides = { checked: 0 };
+
+/**
+ * Where `player` hears `partner`: the probe's pan has to point to the side
+ * the partner stands on, wherever they stand half a tile or more apart
+ * sideways (`where`: the moment). Fails on the wrong side.
+ */
+async function partnerSide(player, partner, where) {
+  await sleep(300); // a placing round or two after the last step
+  const at = whereIs(player.seen);
+  const them = whereIs(partner.seen);
+  const pan = (await soundOf(player.page))?.spatial?.partnerPan ?? null;
+  const dx = them.x - at.x;
+  if (Math.abs(dx) < 0.5) {
+    console.log(`partner            ${where}: ${partner.name} stands in line with ${player.name}`);
+    return;
+  }
+  sides.checked += 1;
+  const right = pan !== null && Math.sign(pan) === Math.sign(dx);
+  const side = dx > 0 ? 'right' : 'left';
+  const heard = `${pan?.toFixed(2) ?? '!! none'}${right ? '' : ' !! wrong side'}`;
+  console.log(
+    `partner            ${where}: ${partner.name} ${Math.abs(dx).toFixed(1)} tiles to the ` +
+      `${side} of ${player.name}, heard at pan ${heard}`,
+  );
+  if (!right) {
+    fail(`partner ${where}: ${partner.name} stands ${side}, but pans ${pan}`);
+  }
+}
+
+/**
+ * The partner across the room from `player`: `partner` walks to bare floor
+ * — no plate, station or furniture — three to five tiles to its side in its
+ * row, is heard there on that side (partnerSide), and walks back. Throws
+ * where the walk breaks off.
+ */
+async function partnerAcross(player, partner, where) {
+  const map = player.seen.view.map;
+  const at = tileOf(player.seen);
+  const back = tileOf(partner.seen);
+  const taken = new Set([
+    ...map.plates.map((p) => `${p.x},${p.y}`),
+    ...map.stations.map((s) => `${s.x},${s.y}`),
+    ...furniture(map),
+  ]);
+  const away = (tile) => Math.abs(tile.x - at.x);
+  const spot = roomFloorOf(map, at)
+    .filter((tile) => tile.y === at.y && away(tile) >= 3 && away(tile) <= 5)
+    .filter((tile) => !taken.has(`${tile.x},${tile.y}`))
+    .sort((a, b) => away(a) - away(b))
+    .find((tile) => stepsTo(partner.seen, tile) !== Infinity);
+  if (spot === undefined) {
+    skip('partner', `no bare floor three to five tiles beside ${player.name} in its row`);
+    return;
+  }
+  if (!(await standOn(partner, spot))) {
+    throw new Error(`${partner.name} found no way to ${spot.x},${spot.y} ${where}`);
+  }
+  await partnerSide(player, partner, where);
+  if (back !== null && !(await standOn(partner, back))) {
+    throw new Error(`${partner.name} found no way back to ${back.x},${back.y}`);
+  }
+}
+
+/**
+ * The radio's chain rendered once offline in the page, white noise in: its
+ * band-pass has to show in the spectrum — the power above 4 kHz at least 10 dB
+ * under the power from 300 Hz to 3.4 kHz, and 15 dB further down against it
+ * than in the noise that went in. Fails otherwise.
+ */
+async function checkRadioBand(page) {
+  const render = await page.evaluate(() => globalThis.__escapelab?.audio?.renderRadio() ?? null);
+  if (render === null) {
+    fail('radio band: the page has no audio probe to render the chain with');
+    return;
+  }
+  const bands = [
+    [300, 3400],
+    [4000, render.rate / 2],
+  ];
+  const [inBand, inAbove] = bandPowers(render.input, render.rate, bands);
+  const [outBand, outAbove] = bandPowers(render.output, render.rate, bands);
+  const before = decibels(inAbove, inBand);
+  const after = decibels(outAbove, outBand);
+  const passes = after <= -10 && before - after >= 15;
+  console.log(
+    `radio band         above 4 kHz against 300–3400 Hz: ${before.toFixed(1)} dB in the noise, ` +
+      `${after.toFixed(1)} dB out of the chain${passes ? '' : ' !! no band-pass'}`,
+  );
+  if (!passes) {
+    fail(`radio band: ${after.toFixed(1)} dB above 4 kHz out, ${before.toFixed(1)} dB in`);
+  }
+}
+
+/**
+ * In the escape the music's pressure is 0.8 or more, its pressure layer up
+ * and the siren has taken the pad away: waits up to 4 s for the crossfade.
+ * Fails otherwise.
+ */
+async function escapeMusic(player) {
+  let music = null;
+  const pressed = () =>
+    music !== null && music.level >= 0.8 && music.pressure >= 0.8 && music.calm <= 0.05;
+  for (const end = Date.now() + 4000; ; await sleep(100)) {
+    music = (await soundOf(player.page))?.music ?? null;
+    if (pressed() || Date.now() >= end) {
+      break;
+    }
+  }
+  const level = music?.level.toFixed(2) ?? '!! none';
+  console.log(
+    `music              ${player.name} in the escape: pressure ${level}, layers calm ` +
+      `${music?.calm.toFixed(2)}, pressure ${music?.pressure.toFixed(2)}, last ` +
+      `${music?.last.toFixed(2)}${pressed() ? '' : ' !! not under pressure'}`,
+  );
+  if (!pressed()) {
+    fail(`music in the escape: pressure ${music?.level}, layers ${JSON.stringify(music)}`);
+  }
+}
+
 /**
  * blackout.png: two seconds after the clock has started counting on the
  * host's page — the flashlight on, the emergency lamps red in the dark.
@@ -1410,8 +1720,11 @@ async function throwLever(players) {
   await sleep(500); // past the panel's fade-in
   await captureLeverPanel(first, players.length);
   await captureLeverRing(first);
-  await pressTogether(players, lever);
+  const solved = await pressTogether(players, lever);
   await captureLitFlur(first, lever);
+  await bedAlive(first, solved.lit, 'after the lever');
+  await checkRadioVoice(first, solved.listening, 'the lever');
+  await partnerAcross(first, players[1], 'across the corridor');
 }
 
 /**
@@ -1572,6 +1885,8 @@ async function coldOpen(host, guest) {
   await captureColdOpen(host, guest);
   const atSign = await signAtSpawn([host, guest]);
   await captureBlackout(host);
+  await bedDead(host, 'after the blackout');
+  await partnerSide(host, guest, 'after the blackout');
   await throwLever([host, guest]);
   return atSign;
 }
@@ -3183,7 +3498,8 @@ async function pressLastSync(players) {
     }
   }
   await sleep(400); // past the panel's fade-in
-  await pressTogether(players, station);
+  const solved = await pressTogether(players, station);
+  await checkRadioVoice(players[0], solved.listening, `"${station.title}"`);
 }
 
 /** What the host's page says of the escape: the goal, the checklist, the clock. */
@@ -3220,11 +3536,13 @@ async function captureEscape(host, guest) {
     throw new Error(`${host.name} found no way to ${beside.x},${beside.y} beside the hatch`);
   }
   await sampleFrames(host.page, 'in the escape, the siren on', () => pace(host, SAMPLE_MS));
+  await escapeMusic(host);
   const guestId = guest.seen.view.you.id;
   const ticked = () => host.seen.view.map?.exit?.atExit.includes(guestId) === true;
   if (!(await standOn(guest, exit)) || !(await until(ticked, 3000))) {
     throw new Error(`${guest.name} did not get onto the hatch, or the checklist never ticked`);
   }
+  await partnerSide(host, guest, 'at the hatch');
   await sleep(Math.max(600, openedAt + 2400 - Date.now())); // the hatch ground open, the light red
   await capture(host.page, 'escape.png');
   const hud = await escapeHud(host.page);
@@ -3578,6 +3896,10 @@ async function run() {
   }
   // Let the briefing countdown finish; server and browsers share this clock.
   await sleep(Math.max(0, guestSeen.view.startedAt + 4200 - Date.now()));
+  if (anna.seen.view.lights.outAt === anna.seen.view.startedAt) {
+    await bedDead(anna, 'with the lights out from the start');
+  }
+  await checkRadioBand(host);
   // The world's zoom follows the canvas height: nothing the run brings up in
   // the HUD — the sign's chip, a long radio line, the notes — may change it.
   const steady = [
@@ -3764,6 +4086,12 @@ async function run() {
     skip('figure-celebrate.png', 'the walkthrough does not play this mission to a won card');
   }
 
+  if (sides.checked === 0) {
+    fail("the partner's side was never told apart: the crew never stood apart sideways");
+  }
+  if (!solvedShot.taken && solvedShot.late.length === 1) {
+    skipLateShot(); // late, and no sync station came after it to shoot again
+  }
   await browser.close();
   console.log('screenshots in', OUT);
 }

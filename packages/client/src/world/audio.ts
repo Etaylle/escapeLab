@@ -1,28 +1,35 @@
 /**
- * audio.ts: procedural ambience and sound effects for EscapeLab.
+ * audio.ts: the lab's one audio path, and its sound effects.
  *
  * Everything is synthesised at runtime from oscillators, filters and one shared noise buffer;
- * there are no audio files. All levels are deliberately quiet because this plays under the
- * players' voice chat, and every sound passes through a single master gain, so the whole
- * module can be muted or scaled in one place.
+ * the only recordings in the game are mission control's lines (radioVoice.ts). All levels are
+ * deliberately quiet because this plays under the players' voice chat, and every sound passes
+ * through a single master gain, so the whole lab can be muted or scaled in one place. The
+ * rooms' beds (ambience.ts) and the music (music.ts) go in through the duck bus in front of
+ * it, which mission control's voice pulls down while it speaks. The partners' steps and the
+ * drones (spatial.ts) and the voice go straight into the master gain. This module also lends
+ * those modules its small builders (gain stages, filters, envelopes, noise).
  *
  * Audio is decorative, so no public function ever throws: errors are swallowed on purpose.
  * The one shared AudioContext is created lazily on first use. While browser autoplay policy
  * keeps it suspended, one-shot effects are skipped (so they cannot queue up and all fire at
- * once later) and the next user gesture resumes it. Ambience started while suspended is
- * built anyway and becomes audible as soon as the context resumes.
+ * once later) and the next user gesture resumes it. Loops started while suspended — the
+ * beds, the music, a drone's buzz — are built anyway and become audible once it resumes.
  */
 
 type AudioContextCtor = new () => AudioContext;
 
-interface Engine {
+/** The shared context and the two gain stages every sound of the lab ends in. */
+export interface Engine {
   readonly ctx: AudioContext;
   /** Every sound in the module passes through this gain: the single mute/volume point. */
   readonly master: GainNode;
+  /** The beds and the music, in front of the master gain: ducked while mission control speaks. */
+  readonly duck: GainNode;
 }
 
 /** Gain envelope: linear attack to `peak`, flat hold, then exponential decay to silence. */
-interface Envelope {
+export interface Envelope {
   readonly peak: number;
   readonly attack: number;
   readonly hold: number;
@@ -30,52 +37,36 @@ interface Envelope {
 }
 
 /** An enveloped oscillator whose pitch glides exponentially from `from` to `to`. */
-interface ToneSpec extends Envelope {
+export interface ToneSpec extends Envelope {
   readonly type: OscillatorType;
   readonly at: number;
   readonly from: number;
   readonly to: number;
 }
 
-/** All nodes of one ambience run, so it can be faded, stopped and disconnected as a unit. */
-interface Ambience {
-  readonly nodes: AudioNode[];
-  readonly sources: AudioScheduledSourceNode[];
-  /** Fade-out stage, separate from the fade-in so stopping never has to cancel a ramp. */
-  readonly fade: GainNode;
-  /** Input for the distant clanks and creaks, which get muffled and echoed. */
-  readonly distant: GainNode;
-}
-
 const MASTER_LEVEL = 1;
 const MUTE_STORAGE_KEY = 'escapelab-muted';
-const AMBIENCE_LEVEL = 0.025;
-const FOOTSTEP_LEVEL = 0.02;
+/** The own footstep's level; a partner's comes in at the same level, placed (spatial.ts). */
+export const FOOTSTEP_LEVEL = 0.02;
 const DOOR_LEVEL = 0.04;
 const CHIRP_LEVEL = 0.03;
 const FIND_LEVEL = 0.035;
 const DRAIN_LEVEL = 0.05;
+/**
+ * Where the effects sit, as one level: the middle of their outlets (a door, a find, the
+ * klaxon, the chord). The music is set against it (music.ts).
+ */
+export const EFFECTS_LEVEL = 0.04;
 
 /** Exponential ramps cannot reach zero; this is -80 dB. */
-const SILENCE = 0.0001;
+export const SILENCE = 0.0001;
 /** Scheduling headroom so main-thread jitter never clips the start of an envelope. */
-const LOOKAHEAD = 0.01;
+export const LOOKAHEAD = 0.01;
 const NOISE_SECONDS = 2;
 
-const AMBIENCE_FADE_IN = 3;
-const AMBIENCE_FADE_OUT = 0.5;
-const AIR_LEVEL = 0.5;
-const DISTANT_MIN_MS = 7000;
-const DISTANT_MAX_MS = 15000;
-const CREAK_CHANCE = 0.35;
 const DOOR_SLIDE_SECONDS = 0.25;
 const DRAIN_SECONDS = 0.8;
 
-/** [frequency in Hz, level]: unequal levels keep the slow beat a swell rather than a dropout. */
-const HUM_VOICES = [
-  [55, 0.5],
-  [55.4, 0.3],
-] as const;
 /** [frequency ratio, level, decay in s] of the partials of a struck free metal bar. */
 const CLANK_PARTIALS = [
   [1, 0.4, 1.1],
@@ -178,46 +169,10 @@ export interface BlackoutCue {
 let engine: Engine | null = null;
 let engineUnavailable = false;
 let noise: AudioBuffer | null = null;
-let ambience: Ambience | null = null;
 let powerHum: Loop | null = null;
 let siren: Loop | null = null;
-let distantTimer: ReturnType<typeof setTimeout> | undefined;
-/** Current tension level, so repeated calls do not re-ramp the same value. */
-let tension = 0;
 let muted = readStoredMute();
 let unlockArmed = false;
-
-/**
- * Idempotent. Starts a very quiet lab ambience: a low detuned hum, a whisper of ventilation
- * noise and, every 7-15 s, a faint distant metallic clank or creak.
- */
-export function startAmbience(): void {
-  try {
-    if (ambience !== null) return;
-    const audio = getEngine();
-    if (audio === null || audio.ctx.state === 'closed') return;
-    unlock();
-    ambience = buildAmbience(audio);
-    scheduleDistantSound(audio.ctx, ambience);
-  } catch {
-    // Deliberately silent: a quiet lab is better than a broken game.
-  }
-}
-
-/** Fades the ambience out over ~0.5 s and stops its nodes. Safe when not running. */
-export function stopAmbience(): void {
-  try {
-    clearTimeout(distantTimer);
-    distantTimer = undefined;
-    const current = ambience;
-    ambience = null;
-    tension = 0;
-    if (current !== null && engine !== null) releaseAmbience(engine.ctx, current);
-  } catch {
-    // Deliberately silent: the clank scheduler is already cancelled at this point.
-  }
-}
-
 
 /**
  * The one shared AudioContext, for the crew's voice (voice/mesh.ts): made on
@@ -226,13 +181,36 @@ export function stopAmbience(): void {
  * lab's sound off leaves the crew audible. Null where there is no Web Audio.
  */
 export function sharedAudio(): AudioContext | null {
+  return audioEngine()?.ctx ?? null;
+}
+
+/**
+ * The engine for a sound that lasts — a bed, the music, a drone's buzz: made on first use and
+ * nudged to resume, playing or not yet (it sounds once a gesture wakes the context). Null
+ * where there is no Web Audio, or once the context is closed.
+ */
+export function audioEngine(): Engine | null {
   try {
     const audio = getEngine();
     if (audio === null || audio.ctx.state === 'closed') return null;
     unlock();
-    return audio.ctx;
+    return audio;
   } catch {
-    // Deliberately silent: without Web Audio the crew is simply not heard.
+    // Deliberately silent: without Web Audio the lab is simply not heard.
+    return null;
+  }
+}
+
+/**
+ * The engine for a sound that happens now — a step, a chirp, a line on the radio: only while
+ * the context runs, so that nothing queues up behind the autoplay lock to burst out later.
+ * Null otherwise, after nudging a resume.
+ */
+export function playingEngine(): Engine | null {
+  try {
+    return runningEngine();
+  } catch {
+    // Deliberately silent: a missed sound is harmless.
     return null;
   }
 }
@@ -267,26 +245,6 @@ export function setMuted(next: boolean): void {
     }
   } catch {
     // Deliberately silent: muting must never break the game.
-  }
-}
-
-/**
- * How tense the lab sounds, 0 (calm) to 1 (clock nearly out). Ramps the
- * ambience up so the last minute is audibly heavier than the first. Safe to
- * call often; only a real change is ramped.
- */
-export function setTension(level: number): void {
-  try {
-    const amb = ambience;
-    if (amb === null || engine === null) return;
-    const clamped = Math.min(1, Math.max(0, level));
-    if (Math.abs(clamped - tension) < 0.02) return;
-    tension = clamped;
-    const { ctx } = engine;
-    amb.fade.gain.cancelScheduledValues(ctx.currentTime);
-    amb.fade.gain.setTargetAtTime(1 + clamped * 2.2, ctx.currentTime, 0.4);
-  } catch {
-    // Deliberately silent: tension is flavour, never required.
   }
 }
 
@@ -360,28 +318,38 @@ export function footstep(): void {
     const audio = runningEngine();
     if (audio === null) return;
     const { ctx } = audio;
-    const t = ctx.currentTime + LOOKAHEAD;
-    const pitch = rand(0.9, 1.1);
     const out = outlet(ctx, audio.master, FOOTSTEP_LEVEL);
-    // A sine falling an octave reads as a soft heel thump rather than as a pitched tone.
-    const thump = tone(ctx, out, {
-      type: 'sine',
-      at: t,
-      from: 150 * pitch,
-      to: 70 * pitch,
-      peak: 0.7,
-      attack: 0.004,
-      hold: 0,
-      decay: 0.075,
-    });
-    const scuff = noiseBurst(ctx, t, 0.025);
-    const scuffLevel = gain(ctx, 0);
-    applyEnvelope(scuffLevel.gain, t, { peak: 0.45, attack: 0.001, hold: 0, decay: 0.02 });
-    chain(scuff, biquad(ctx, 'bandpass', 2500 * pitch, 0.9), scuffLevel, out);
-    onAllEnded([thump, scuff], () => out.disconnect());
+    onAllEnded(stepInto(ctx, out, ctx.currentTime + LOOKAHEAD), () => out.disconnect());
   } catch {
     // Deliberately silent: a missed footstep is harmless.
   }
+}
+
+/**
+ * One footstep into `out` from `at`, ±10 % in pitch: a sine falling an octave — a soft heel
+ * thump rather than a pitched tone — and the scuff of a sole. Returns its sources.
+ */
+export function stepInto(
+  ctx: BaseAudioContext,
+  out: AudioNode,
+  at: number,
+): AudioScheduledSourceNode[] {
+  const pitch = rand(0.9, 1.1);
+  const thump = tone(ctx, out, {
+    type: 'sine',
+    at,
+    from: 150 * pitch,
+    to: 70 * pitch,
+    peak: 0.7,
+    attack: 0.004,
+    hold: 0,
+    decay: 0.075,
+  });
+  const scuff = noiseBurst(ctx, at, 0.025);
+  const scuffLevel = gain(ctx, 0);
+  applyEnvelope(scuffLevel.gain, at, { peak: 0.45, attack: 0.001, hold: 0, decay: 0.02 });
+  chain(scuff, biquad(ctx, 'bandpass', 2500 * pitch, 0.9), scuffLevel, out);
+  return [thump, scuff];
 }
 
 /** Pneumatic door slide: a ~0.25 s filtered-noise whoosh ending in a soft metallic click. */
@@ -584,7 +552,9 @@ export function cabinetUnlock(): void {
 /**
  * Mission control keying the radio, ~0.2 s: a crackle of static, then the press-to-talk key's
  * click going down and up, squeezed into a handset's narrow band. No tone in it: a line that
- * follows a solve comes over the solve's chord, and nothing pitched may clash with that.
+ * follows a solve comes over the solve's chord, and nothing pitched may clash with that. Only
+ * for a line no recording speaks — a custom mission's, a note of the last crew: a recorded line
+ * keys its own squelch (radioVoice.ts).
  */
 export function radioChirp(): void {
   try {
@@ -1117,8 +1087,8 @@ function relayClick(ctx: AudioContext, dest: AudioNode, at: number): void {
  * A heavy hit's mid layer: a burst of noise in the band MID_BAND/MID_Q spans, about 300 to
  * 900 Hz, `duration` long from `at`, falling from `peak`.
  */
-function midKnock(
-  ctx: AudioContext,
+export function midKnock(
+  ctx: BaseAudioContext,
   dest: AudioNode,
   at: number,
   duration: number,
@@ -1133,7 +1103,7 @@ function midKnock(
 
 /** A burst of noise behind a lowpass at `cutoff`, `duration` long from `at`. */
 function lowNoise(
-  ctx: AudioContext,
+  ctx: BaseAudioContext,
   dest: AudioNode,
   at: number,
   duration: number,
@@ -1163,7 +1133,8 @@ function createEngine(): Engine | null {
     if (Ctor === undefined) return null;
     const ctx = new Ctor();
     ctx.onstatechange = syncUnlockListeners;
-    return { ctx, master: outlet(ctx, ctx.destination, muted ? 0 : MASTER_LEVEL) };
+    const master = outlet(ctx, ctx.destination, muted ? 0 : MASTER_LEVEL);
+    return { ctx, master, duck: outlet(ctx, master, 1) };
   } catch {
     return null;
   }
@@ -1206,113 +1177,14 @@ function syncUnlockListeners(): void {
   }
 }
 
-function buildAmbience(audio: Engine): Ambience {
-  const { ctx } = audio;
-  const t = ctx.currentTime;
-  const amb: Ambience = { nodes: [], sources: [], fade: gain(ctx, 1), distant: gain(ctx, 1) };
-  const level = gain(ctx, 0);
-  level.gain.setValueAtTime(0, t);
-  level.gain.linearRampToValueAtTime(AMBIENCE_LEVEL, t + AMBIENCE_FADE_IN);
-  chain(level, amb.fade, audio.master);
-  amb.nodes.push(level, amb.fade, amb.distant);
-  addHum(ctx, amb, level);
-  addAir(ctx, amb, level);
-  addDistance(ctx, amb, level);
-  for (const source of amb.sources) source.start(t);
-  return amb;
-}
-
-/** Two slightly detuned sines beating slowly against each other, like a mains hum. */
-function addHum(ctx: AudioContext, amb: Ambience, dest: AudioNode): void {
-  const lowpass = biquad(ctx, 'lowpass', 120, 0);
-  lowpass.connect(dest);
-  amb.nodes.push(lowpass);
-  for (const [frequency, level] of HUM_VOICES) {
-    const osc = ctx.createOscillator();
-    osc.frequency.value = frequency;
-    const voice = gain(ctx, level);
-    chain(osc, voice, lowpass);
-    amb.nodes.push(osc, voice);
-    amb.sources.push(osc);
-  }
-}
-
-/** Ventilation whisper: looped noise in a wide band whose centre drifts very slowly. */
-function addAir(ctx: AudioContext, amb: Ambience, dest: AudioNode): void {
-  const air = ctx.createBufferSource();
-  air.buffer = noiseBuffer(ctx);
-  air.loop = true;
-  const band = biquad(ctx, 'bandpass', 600, 0.7);
-  const level = gain(ctx, AIR_LEVEL);
-  chain(air, band, level, dest);
-  const drift = ctx.createOscillator();
-  drift.frequency.value = 0.06;
-  // Modulation depth in Hz applied to the band centre, not an audio level.
-  const depth = gain(ctx, 200);
-  drift.connect(depth);
-  depth.connect(band.frequency);
-  amb.nodes.push(air, band, level, drift, depth);
-  amb.sources.push(air, drift);
-}
-
-/** Distant sounds lose their highs and pick up a dark, decaying echo from the corridors. */
-function addDistance(ctx: AudioContext, amb: Ambience, dest: AudioNode): void {
-  const muffle = biquad(ctx, 'lowpass', 1800, 0);
-  const delay = ctx.createDelay(1);
-  delay.delayTime.value = 0.23;
-  const darken = biquad(ctx, 'lowpass', 1100, 0);
-  const feedback = gain(ctx, 0.35);
-  const wet = gain(ctx, 0.4);
-  chain(amb.distant, muffle, dest);
-  chain(amb.distant, delay, darken, feedback, delay);
-  chain(darken, wet, dest);
-  amb.nodes.push(muffle, delay, darken, feedback, wet);
-}
-
-function releaseAmbience(ctx: AudioContext, amb: Ambience): void {
-  const disconnectAll = (): void => {
-    for (const node of amb.nodes) node.disconnect();
-  };
-  if (ctx.state !== 'running') {
-    // Nothing is audible, so tear down now instead of fading out after a later resume.
-    for (const source of amb.sources) source.stop();
-    disconnectAll();
-    return;
-  }
-  const t = ctx.currentTime;
-  amb.fade.gain.setValueAtTime(1, t);
-  amb.fade.gain.linearRampToValueAtTime(0, t + AMBIENCE_FADE_OUT);
-  for (const source of amb.sources) source.stop(t + AMBIENCE_FADE_OUT + 0.05);
-  onAllEnded(amb.sources, disconnectAll);
-}
-
-/** One link of the clank/creak timer chain; stopAmbience() cancels the pending link. */
-function scheduleDistantSound(ctx: AudioContext, amb: Ambience): void {
-  distantTimer = setTimeout(() => {
-    try {
-      if (ambience !== amb) return;
-      scheduleDistantSound(ctx, amb);
-      if (ctx.state !== 'running') return;
-      if (Math.random() < CREAK_CHANCE) creak(ctx, amb.distant);
-      else clank(ctx, amb.distant);
-    } catch {
-      // Deliberately silent: only this one sound is lost, the next is already scheduled.
-    }
-  }, rand(DISTANT_MIN_MS, DISTANT_MAX_MS));
-}
-
-/** Struck metal, sometimes followed by a softer rebound. */
-function clank(ctx: AudioContext, dest: AudioNode): void {
-  const t = ctx.currentTime + LOOKAHEAD;
-  const base = rand(170, 320);
-  const level = rand(0.3, 0.5);
-  strike(ctx, dest, t, base, level);
-  if (Math.random() < 0.5) {
-    strike(ctx, dest, t + rand(0.08, 0.2), base * rand(0.97, 1.03), level * 0.4);
-  }
-}
-
-function strike(ctx: AudioContext, dest: AudioNode, at: number, base: number, level: number): void {
+/** Struck metal: the partials of a free bar at `base` Hz with the knock of the blow, from `at`. */
+export function strike(
+  ctx: BaseAudioContext,
+  dest: AudioNode,
+  at: number,
+  base: number,
+  level: number,
+): void {
   const out = outlet(ctx, dest, level);
   const sources: AudioScheduledSourceNode[] = CLANK_PARTIALS.map(([ratio, peak, decay]) =>
     tone(ctx, out, {
@@ -1335,8 +1207,8 @@ function strike(ctx: AudioContext, dest: AudioNode, at: number, base: number, le
 }
 
 /** A dry mechanical tick, ~30 ms: a sliver of noise through a narrow band. */
-function tick(
-  ctx: AudioContext,
+export function tick(
+  ctx: BaseAudioContext,
   dest: AudioNode,
   at: number,
   frequency: number,
@@ -1349,58 +1221,28 @@ function tick(
   return burst;
 }
 
-/** Strained metal: a tone chopped into irregular stick-slip friction pulses. */
-function creak(ctx: AudioContext, dest: AudioNode): void {
-  const t = ctx.currentTime + LOOKAHEAD;
-  const length = rand(0.8, 1.5);
-  const end = t + length;
-  const pitch = rand(380, 560);
-  const voice = ctx.createOscillator();
-  voice.type = 'triangle';
-  voice.frequency.setValueAtTime(pitch, t);
-  voice.frequency.linearRampToValueAtTime(pitch * 0.92, end);
-  // Gain 0.5 - 0.5 * saw jumps to 1 and decays linearly each cycle: one pulse per 'slip'.
-  const slip = ctx.createOscillator();
-  slip.type = 'sawtooth';
-  slip.frequency.setValueAtTime(rand(12, 20), t);
-  slip.frequency.linearRampToValueAtTime(rand(24, 34), t + length * 0.4);
-  slip.frequency.linearRampToValueAtTime(rand(9, 16), end);
-  const depth = gain(ctx, -0.5);
-  const chopper = gain(ctx, 0.5);
-  slip.connect(depth);
-  depth.connect(chopper.gain);
-  const swell = gain(ctx, 0);
-  swell.gain.setValueAtTime(0, t);
-  swell.gain.linearRampToValueAtTime(rand(0.2, 0.35), t + length * 0.3);
-  swell.gain.linearRampToValueAtTime(0, end);
-  chain(voice, chopper, swell, dest);
-  for (const osc of [voice, slip]) {
-    osc.start(t);
-    osc.stop(end + 0.02);
-  }
-  onAllEnded([voice, slip], () => swell.disconnect());
-}
-
-function rand(min: number, max: number): number {
+/** A number from `min` to `max`, at random: what keeps repeats from sounding alike. */
+export function rand(min: number, max: number): number {
   return min + Math.random() * (max - min);
 }
 
-function gain(ctx: AudioContext, value: number): GainNode {
+/** A gain stage at `value`, wired to nothing yet. */
+export function gain(ctx: BaseAudioContext, value: number): GainNode {
   const node = ctx.createGain();
   node.gain.value = value;
   return node;
 }
 
 /** A gain stage at `level` feeding `dest`; a sound's outlet level is its ceiling. */
-function outlet(ctx: AudioContext, dest: AudioNode, level: number): GainNode {
+export function outlet(ctx: BaseAudioContext, dest: AudioNode, level: number): GainNode {
   const node = gain(ctx, level);
   node.connect(dest);
   return node;
 }
 
 /** `q` is a linear Q for bandpass but a resonance in dB for lowpass (a Web Audio quirk). */
-function biquad(
-  ctx: AudioContext,
+export function biquad(
+  ctx: BaseAudioContext,
   type: BiquadFilterType,
   frequency: number,
   q: number,
@@ -1412,7 +1254,8 @@ function biquad(
   return filter;
 }
 
-function chain(first: AudioNode, ...rest: AudioNode[]): void {
+/** Wires the nodes one into the next, in order. */
+export function chain(first: AudioNode, ...rest: AudioNode[]): void {
   let previous = first;
   for (const node of rest) {
     previous.connect(node);
@@ -1420,8 +1263,23 @@ function chain(first: AudioNode, ...rest: AudioNode[]): void {
   }
 }
 
+/**
+ * Moves `param` with `source` scaled by `depth` — a slow oscillator wandering a filter's
+ * centre in Hz, a fast one fluttering a gain: modulation, not an audio level.
+ */
+export function modulate(
+  ctx: BaseAudioContext,
+  source: AudioNode,
+  depth: number,
+  param: AudioParam,
+): void {
+  const scale = gain(ctx, depth);
+  source.connect(scale);
+  scale.connect(param);
+}
+
 /** Schedules `env` on `param` starting at `at` and returns the time it reaches silence. */
-function applyEnvelope(param: AudioParam, at: number, env: Envelope): number {
+export function applyEnvelope(param: AudioParam, at: number, env: Envelope): number {
   const peakAt = at + env.attack;
   const end = peakAt + env.hold + env.decay;
   param.setValueAtTime(0, at);
@@ -1431,7 +1289,8 @@ function applyEnvelope(param: AudioParam, at: number, env: Envelope): number {
   return end;
 }
 
-function tone(ctx: AudioContext, dest: AudioNode, spec: ToneSpec): OscillatorNode {
+/** An enveloped oscillator into `dest` (ToneSpec), started and stopped on its own. */
+export function tone(ctx: BaseAudioContext, dest: AudioNode, spec: ToneSpec): OscillatorNode {
   const osc = ctx.createOscillator();
   osc.type = spec.type;
   const level = gain(ctx, 0);
@@ -1444,7 +1303,8 @@ function tone(ctx: AudioContext, dest: AudioNode, spec: ToneSpec): OscillatorNod
   return osc;
 }
 
-function noiseBuffer(ctx: AudioContext): AudioBuffer {
+/** Two seconds of white noise, made once and shared by every sound cut from it. */
+export function noiseBuffer(ctx: BaseAudioContext): AudioBuffer {
   if (noise === null) {
     const length = Math.floor(ctx.sampleRate * NOISE_SECONDS);
     const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
@@ -1455,8 +1315,21 @@ function noiseBuffer(ctx: AudioContext): AudioBuffer {
   return noise;
 }
 
+/** The shared noise looped, started at `at`: the stuff of air, fans and static. */
+export function noiseLoop(ctx: BaseAudioContext, at: number): AudioBufferSourceNode {
+  const source = ctx.createBufferSource();
+  source.buffer = noiseBuffer(ctx);
+  source.loop = true;
+  source.start(at);
+  return source;
+}
+
 /** A one-shot slice of the shared noise; the random offset keeps repeats from sounding alike. */
-function noiseBurst(ctx: AudioContext, at: number, duration: number): AudioBufferSourceNode {
+export function noiseBurst(
+  ctx: BaseAudioContext,
+  at: number,
+  duration: number,
+): AudioBufferSourceNode {
   const source = ctx.createBufferSource();
   const buffer = noiseBuffer(ctx);
   source.buffer = buffer;
@@ -1464,7 +1337,57 @@ function noiseBurst(ctx: AudioContext, at: number, duration: number): AudioBuffe
   return source;
 }
 
-function onAllEnded(sources: readonly AudioScheduledSourceNode[], done: () => void): void {
+/**
+ * A level moving in a straight line from `from` at `start` to `to` at `end`, audio time: what
+ * a bed's or a layer's gain was last told to do, so that it can be read back without asking
+ * the audio thread.
+ */
+export interface Fade {
+  readonly from: number;
+  readonly to: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+/** A level that stays at `level`. */
+export function still(level: number): Fade {
+  return { from: level, to: level, start: 0, end: 0 };
+}
+
+/** Where `fade` stands at audio time `t`: `from` before it starts, `to` once it is over. */
+export function levelAt(fade: Fade, t: number): number {
+  if (t <= fade.start) return fade.from;
+  if (t >= fade.end) return fade.to;
+  return fade.from + ((fade.to - fade.from) * (t - fade.start)) / (fade.end - fade.start);
+}
+
+/**
+ * Moves `param`, which follows `fade`, on to `to` in a straight line from `start` to `end`;
+ * until `start` it keeps to the way `fade` set it — whatever was scheduled after `now` goes.
+ * Returns the new fade.
+ */
+export function fadeTo(
+  param: AudioParam,
+  fade: Fade,
+  now: number,
+  [start, end]: readonly [number, number],
+  to: number,
+): Fade {
+  param.cancelScheduledValues(now);
+  param.setValueAtTime(levelAt(fade, now), now);
+  if (fade.end > now && fade.end < start) {
+    param.linearRampToValueAtTime(fade.to, fade.end);
+  }
+  const from = levelAt(fade, start);
+  if (start > now) {
+    param.linearRampToValueAtTime(from, start);
+  }
+  param.linearRampToValueAtTime(to, Math.max(end, start + 0.001));
+  return { from, to, start, end: Math.max(end, start + 0.001) };
+}
+
+/** Calls `done` once every one of `sources` has ended. */
+export function onAllEnded(sources: readonly AudioScheduledSourceNode[], done: () => void): void {
   let pending = sources.length;
   for (const source of sources) {
     source.onended = () => {
