@@ -5,6 +5,7 @@ import { artKit, type ArtKit } from '../artKit.js';
 import type { Baked } from '../baked.js';
 import type { ColdOpenFrame } from '../coldOpen.js';
 import type { DoorMotion } from '../doors.js';
+import type { FigureMood } from '../figure.js';
 import type { FinaleFrame } from '../finale.js';
 import type { LightPath } from '../gl/path.js';
 import type { ContextAction } from '../interact.js';
@@ -154,6 +155,11 @@ export interface RenderKit {
   light: LightPath | null;
   /** the art's: the map's dressing, the sprite atlas, the particles, the faint lights' glow */
   art: ArtKit;
+  /**
+   * since when each of the crew has stood still, by player id, sim ms — kept
+   * from frame to frame by assemble.ts; nobody walking is in it
+   */
+  still: Map<string, number>;
 }
 
 /** A fresh kit drawing the darkness into `overlay`: nothing baked yet. */
@@ -167,6 +173,7 @@ export function renderKit(overlay: CanvasRenderingContext2D): RenderKit {
     vignette: { canvas: document.createElement('canvas'), w: 0, h: 0, dpr: 0 },
     light: null,
     art: artKit(),
+    still: new Map(),
   };
 }
 
@@ -247,6 +254,12 @@ export interface Frame {
   missionId: string;
   /** a wrong cut shorting the armed fuse box: its sparks fly from (x, y), once for `seq` */
   short: { x: number; y: number; seq: number } | null;
+  /** what each of the crew carries, by player id: the item's label, which tells its kind */
+  carrying: ReadonlyMap<string, string>;
+  /** since when each of the crew has stood still, by player id, sim ms; nobody walking is in it */
+  stillSince: ReadonlyMap<string, number>;
+  /** how the crew stands while the run ends on screen: celebrating it won, slumped it lost */
+  mood: FigureMood;
 }
 
 /** Sets `ctx` to draw in tiles, as the camera of `frame` looks. */

@@ -112,8 +112,8 @@ export function alarmsCause({ count, limit }: PlayerView['alarms']): string | nu
 /**
  * The crew on the card, side by side in their colours: won, outside on a
  * strip of pavement before the lab's open door, the light spilling out of
- * it; lost, inside in the dark, the door shut, a red lamp over them — their
- * figures in its shadow (finale.css).
+ * it, jumping for joy; lost, inside in the dark, the door shut, a red lamp
+ * over them — their figures slumped in its shadow (finale.css).
  */
 function EndScene({ won, crew, youId }: { won: boolean; crew: CardMate[]; youId: string | null }) {
   const names = crew.map((mate) => mate.name).join(', ');
@@ -133,14 +133,15 @@ function EndScene({ won, crew, youId }: { won: boolean; crew: CardMate[]; youId:
       </div>
       <div className="end-ground" />
       <ul className="end-crew">
-        {crew.map((mate, i) => (
+        {crew.map((mate) => (
           <li key={mate.id} className="end-mate">
             <CrewFigure
+              id={mate.id}
               color={mate.color}
               facing="front"
               isYou={mate.id === youId}
               connected
-              phase={i * 1.9}
+              mood={won ? 'celebrate' : 'slump'}
             />
             <span className="end-mate-name">{mate.name}</span>
           </li>

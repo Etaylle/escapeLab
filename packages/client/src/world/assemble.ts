@@ -4,6 +4,7 @@ import type { Alarm } from './alarm.js';
 import { worldText, type WorldText } from './art.js';
 import { coldOpenFrame } from './coldOpen.js';
 import { exitOpening, redShift } from './escape.js';
+import type { FigureMood } from './figure.js';
 import { finaleFrame, type FinaleCue, type FinaleFrame } from './finale.js';
 import { frameLight, mountedLamps } from './frameLight.js';
 import { contextAction } from './interact.js';
@@ -98,6 +99,7 @@ export function assembleFrame(
     kit: source.kit,
     missionId: live.view.missionId,
     short: shortOf(live.view, source.alarm.current),
+    ...figuresOf(source, map),
   };
 }
 
@@ -282,4 +284,42 @@ function overlaysOf(
     ? null
     : contextAction(map, sim.self, view.you.id, view.sourcesHere, view.puzzle !== null);
   return { perf, chats, captions: sim.captions, markers, action };
+}
+
+/** How the crew stands for an ending on screen: celebrating a run won, slumped over one lost. */
+function moodOf(finale: FinaleCue | null): FigureMood {
+  if (finale === null) {
+    return 'play';
+  }
+  return finale.ending === 'won' ? 'celebrate' : 'slump';
+}
+
+/**
+ * What the crew's figures stand by this frame (figure.ts): what each of the
+ * crew carries, by the view's items; since when each has stood still, kept
+ * in the kit from frame to frame — you as you steer yourself, the rest as
+ * they stream in; and the mood the run's end puts them in.
+ */
+function figuresOf(
+  source: FrameSource,
+  map: WorldMap,
+): Pick<Frame, 'carrying' | 'stillSince' | 'mood'> {
+  const { sim, kit } = source;
+  const { view, finale } = source.live.current;
+  const now = sim.time * 1000;
+  for (const { id } of view.players) {
+    const walking = id === view.you.id ? sim.self.moving : sim.others.get(id)?.moving === true;
+    if (walking) {
+      kit.still.delete(id);
+    } else if (!kit.still.has(id)) {
+      kit.still.set(id, now);
+    }
+  }
+  const carrying = new Map<string, string>();
+  for (const item of map.items) {
+    if (item.carriedBy !== null && !item.delivered) {
+      carrying.set(item.carriedBy, item.label);
+    }
+  }
+  return { carrying, stillSince: kit.still, mood: moodOf(finale) };
 }

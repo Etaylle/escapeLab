@@ -138,6 +138,20 @@
  * art-dark.png the Maschinenraum two seconds into the dark, its standby glows
  * and the flashlight. The copy is deleted again whatever happened. Every walk
  * goes round the map's furniture (map.decor), which nobody walks through.
+ *
+ * Figures: the crew stands as client world/figure.ts poses it, and four shots
+ * at 1440×1000 show it. lobby-idle.png catches a lobby figure turned in a
+ * glance round the room, when the figures' probe (`?trace=1`,
+ * `window.__escapelab.figures`) says one is. After Blackout's lever the host
+ * picks up the fuse lying in the Archiv, is shot holding it before the chest
+ * (figure-carry.png) and puts it down again with Q. At the Systemcheck's
+ * Signalkette the sending side closes its panel and the pressing side presses
+ * one wrong sign on purpose — the one alarm the run spends — and the sender's
+ * world is shot within 150 ms of the press, the crew mid-flinch
+ * (figure-flinch.png). The won card is shot with a figure high in its jump
+ * (figure-celebrate.png), and the audience's card has to show its crew
+ * celebrating too. A mission the walkthrough does not take that far skips
+ * what it leaves out.
  */
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -1479,6 +1493,63 @@ async function captureLitFlur(player, lever) {
   }
 }
 
+/** The fuse lying loose for figure-carry.png, or any part lying loose where there is none. */
+function looseItem(map) {
+  const loose = map.items.filter((item) => item.carriedBy === null && !item.delivered);
+  return loose.find((item) => /sicherung/i.test(item.label)) ?? loose[0];
+}
+
+/**
+ * figure-carry.png: after the lever the host walks to the fuse lying in the
+ * Archiv — any part lying loose, where a map has no fuse — picks it up with
+ * E and is shot at 1440×1000 holding it before the chest. Then it puts it
+ * down with Q and walks back to where it stood, so that the walkthrough
+ * goes on with free hands. Skipped where nothing lies loose or no way leads
+ * to it; fails where E picks nothing up or Q puts nothing down.
+ */
+async function captureCarry(player) {
+  const item = looseItem(player.seen.view.map);
+  if (item === undefined) {
+    skip('figure-carry.png', 'nothing lies loose to carry on this map');
+    return;
+  }
+  const home = tileOf(player.seen);
+  const spot = { x: Math.floor(item.x), y: Math.floor(item.y) };
+  if (home === null || !(await standOn(player, spot))) {
+    skip('figure-carry.png', `no open way to "${item.label}" at ${spot.x},${spot.y}`);
+    return;
+  }
+  const you = player.seen.view.you.id;
+  const held = () =>
+    player.seen.view.map.items.some((one) => one.id === item.id && one.carriedBy === you);
+  for (let i = 0; i < 3 && !held(); i++) {
+    await player.page.keyboard.press('e');
+    await until(held, 1500);
+  }
+  if (!held()) {
+    fail(`figure-carry.png: ${player.name} stood on "${item.label}", but E picked nothing up`);
+    return;
+  }
+  await player.page.setViewportSize(COLD_OPEN);
+  await sleep(600);
+  await capture(player.page, 'figure-carry.png');
+  await player.page.keyboard.press('q');
+  const down = await until(() => !held(), 3000);
+  console.log(
+    `figure-carry.png   ${player.name} @ ${COLD_OPEN.width}x${COLD_OPEN.height} holds ` +
+      `"${item.label}", picked up at ${spot.x},${spot.y}; ` +
+      (down ? 'put down again with Q' : '!! Q put nothing down'),
+  );
+  if (!down) {
+    fail(`figure-carry.png: ${player.name} pressed Q, but still carries "${item.label}"`);
+  }
+  await player.page.setViewportSize(SIZES[0]);
+  await sleep(300);
+  if (!(await standOn(player, home))) {
+    throw new Error(`${player.name} found no way back to ${home.x},${home.y} from "${item.label}"`);
+  }
+}
+
 /**
  * sign.png for a player spawned within sight of the Laborkennung: its note
  * is up at once. Returns that player, if any.
@@ -1507,14 +1578,16 @@ async function coldOpen(host, guest) {
 
 /**
  * The run's first moments. A mission with an intro opens with the power on:
- * the cold open comes first. Then the draw — who works the first station,
- * who reads — and, without an intro, sign.png for a player spawned at the
- * Laborkennung, whose note is up as soon as the briefing is gone. Returns
- * both and the player sign.png caught, if any.
+ * the cold open comes first, the lever with it. Then Anna carries what lies
+ * loose for a moment (figure-carry.png), the draw — who works the first
+ * station, who reads — and, without an intro, sign.png for a player spawned
+ * at the Laborkennung, whose note is up as soon as the briefing is gone.
+ * Returns both and the player sign.png caught, if any.
  */
 async function firstMoments(anna, ben) {
   const intro = anna.seen.view.lights.out === false;
   const signedEarly = intro ? await coldOpen(anna, ben) : undefined;
+  await captureCarry(anna);
   const [operator, reader] = operatorFirst([anna, ben]);
   console.log(`the draw:          ${operator.name} works the first station, ${reader.name} reads`);
   const atSign = intro ? signedEarly : await signAtSpawn([reader, operator]);
@@ -1897,6 +1970,10 @@ async function solveSignal(crew, title) {
   const solved = () => crew.every((p) => p.seen.view.currentPuzzleIndex > index);
   let [sending, pressing] = [sender, receiver];
   for (let stage = 1; stage <= stages; stage++) {
+    // The run's one deliberate alarm: where the traced host sends, or at the last stage.
+    if (!flinchShot && (sending.traced === true || stage === stages)) {
+      await captureFlinch(sending, pressing);
+    }
     const count = await pressStage(sending, pressing);
     const line =
       `signal             ${sending.name} sends, ${pressing.name} presses: ` +
@@ -1922,6 +1999,75 @@ async function solveSignal(crew, title) {
     console.log(`${line} through, roles swapped`);
     [sending, pressing] = [pressing, sending];
   }
+}
+
+/** How soon after the wrong press figure-flinch.png has to be shot, ms: mid-flinch. */
+const FLINCH_SHOT_MS = 150;
+/** Whether figure-flinch.png was taken: a run meets one Signalkette at most for it. */
+let flinchShot = false;
+
+/** The token of a key on `presser`'s panel the sequence `sender` sends does not start with. */
+async function wrongKey(sender, presser) {
+  const first = sender.seen.view.puzzle?.sequence?.[0];
+  const tokens = await presser.page
+    .locator('.station-modal .signal-key[data-token]')
+    .evaluateAll((keys) => keys.map((key) => key.getAttribute('data-token')));
+  const wrong = tokens.find((token) => token !== first);
+  if (wrong === undefined) {
+    throw new Error(`${presser.name}'s Signalkette panel has no key but "${first}" to get wrong`);
+  }
+  return wrong;
+}
+
+/**
+ * figure-flinch.png: a deliberate wrong sign at the Signalkette, the one
+ * alarm the run spends on it. The sender closes its panel and its window
+ * grows to 1440×1000, so that its world shows both figures; the presser
+ * clicks a key the sequence does not start with, and the sender's page is
+ * shot the moment the alarm comes in — within FLINCH_SHOT_MS of the press,
+ * the crew mid-flinch. Then the window shrinks back and the sender opens its
+ * panel again for the stage. Fails where no alarm comes in or the shot comes
+ * too late; throws where the panel does not open again.
+ */
+async function captureFlinch(sender, presser) {
+  flinchShot = true;
+  const modal = sender.page.locator('.station-modal');
+  await sender.page.keyboard.press('Escape');
+  await modal.waitFor({ state: 'hidden', timeout: 3000 });
+  const size = sender.page.viewportSize();
+  await sender.page.setViewportSize(COLD_OPEN);
+  await sleep(700); // the layout settles, the panel past its fade-out
+  const wrong = await wrongKey(sender, presser);
+  const count = sender.seen.view.alarms.count;
+  const pressed = Date.now();
+  await presser.page.locator(`.station-modal .signal-key[data-token="${wrong}"]`).click();
+  const clicked = Date.now() - pressed;
+  while (sender.seen.view.alarms.count === count && Date.now() - pressed < 2000) {
+    await sleep(5);
+  }
+  const came = sender.seen.view.alarms.count > count ? Date.now() - pressed : null;
+  const shot = Date.now() - pressed;
+  await capture(sender.page, 'figure-flinch.png');
+  console.log(
+    `figure-flinch.png  ${presser.name} pressed "${wrong}" (${clicked} ms), the alarm ` +
+      (came === null ? '!! never came in' : `in ${came} ms`) +
+      `; ${sender.name}'s world @ ${COLD_OPEN.width}x${COLD_OPEN.height} shot ${shot} ms ` +
+      `after the press${shot > FLINCH_SHOT_MS ? ` — !! later than ${FLINCH_SHOT_MS} ms` : ''}`,
+  );
+  if (came === null || shot > FLINCH_SHOT_MS) {
+    const alarm = came === null ? 'missing' : `in ${came} ms`;
+    fail(`figure-flinch.png: the alarm ${alarm}, the shot ${shot} ms after the press`);
+  }
+  if (size !== null) {
+    await sender.page.setViewportSize(size);
+  }
+  await sleep(300);
+  if (!(await interactUntil(sender.page, modal))) {
+    throw new Error(
+      `${sender.name} closed the Signalkette for figure-flinch.png, but it did not open again`,
+    );
+  }
+  await sleep(300); // past the panel's fade-in
 }
 
 /**
@@ -2192,6 +2338,64 @@ async function captureLobbySideways(page) {
       (shown ? `${cards} mission cards, ` : '!! no mission strip, ') +
       (over > 0 ? `!! +${over}px sideways` : 'fits sideways'),
   );
+}
+
+/**
+ * The crew figures a traced page paints in its lobby or on its title card
+ * (client screens/CrewFigure.tsx, `window.__escapelab.figures`), each with
+ * its last pose: colour, mood, how far off the ground (`rise`, tiles) and
+ * how far a glance has turned its look (`glance`, radians); null without the
+ * probe.
+ */
+function figuresOn(page) {
+  return page.evaluate(() => globalThis.__escapelab?.figures ?? null);
+}
+
+/**
+ * Polls the figures `page` paints every 20 ms until `pick` takes one, or
+ * until `ms` have passed: that figure, or null.
+ */
+async function figureWhen(page, pick, ms) {
+  const end = Date.now() + ms;
+  for (;;) {
+    const found = ((await figuresOn(page)) ?? []).find(pick);
+    if (found !== undefined || Date.now() >= end) {
+      return found ?? null;
+    }
+    await sleep(20);
+  }
+}
+
+/** A figure counts as mid look-around turned this far from its way, radians (it turns 1.1). */
+const GLANCE_SHOWN = 0.9;
+/** How long the lobby gets for one of its figures to look round: each does every 4 to 7 s. */
+const GLANCE_WAIT_MS = 15_000;
+
+/**
+ * lobby-idle.png: the host's lobby at 1440×1000, shot while a figure of the
+ * crew stands turned in a glance round the room — the figures' probe says
+ * when. Fails where no figure looks round within GLANCE_WAIT_MS.
+ */
+async function captureLobbyIdle(page) {
+  await page.setViewportSize(COLD_OPEN);
+  await sleep(400);
+  const glancing = (figure) => figure.mood === 'play' && Math.abs(figure.glance) >= GLANCE_SHOWN;
+  const turned = await figureWhen(page, glancing, GLANCE_WAIT_MS);
+  await capture(page, 'lobby-idle.png');
+  const shot = (await figuresOn(page)) ?? [];
+  console.log(
+    `lobby-idle.png     Anna's lobby @ ${COLD_OPEN.width}x${COLD_OPEN.height}: ` +
+      (turned === null
+        ? `!! no figure looked round within ${seconds(GLANCE_WAIT_MS)}`
+        : `${turned.color} turned ${turned.glance.toFixed(2)} rad in a glance`) +
+      `; at the shot ${shot.length} figures, glances ` +
+      (shot.map((figure) => figure.glance.toFixed(2)).join(', ') || 'none'),
+  );
+  if (turned === null) {
+    fail(`lobby-idle.png: no lobby figure looked round within ${seconds(GLANCE_WAIT_MS)}`);
+  }
+  await page.setViewportSize(SIZES[0]);
+  await sleep(300);
 }
 
 /**
@@ -3113,11 +3317,52 @@ async function captureLandscapeCard(guest) {
   }
 }
 
+/** A won card's figure counts as mid-jump this far off the ground, tiles (it jumps 10/64). */
+const JUMP_SHOWN = 0.12;
+/** How long the card gets for one of its figures to be caught mid-jump: each jumps every 1.6 s. */
+const JUMP_WAIT_MS = 5000;
+/** Whether figure-celebrate.png was taken: only a run played to its end has a won card. */
+let celebrateShot = false;
+
+/**
+ * figure-celebrate.png: the host's won card at 1440×1000, shot while a
+ * figure of the crew is high in its jump — the figures' probe says when.
+ * Fails where a figure on the card does not celebrate, or none is caught in
+ * the air within JUMP_WAIT_MS.
+ */
+async function captureCelebrate(page) {
+  celebrateShot = true;
+  const before = page.viewportSize();
+  await page.setViewportSize(COLD_OPEN);
+  await sleep(500);
+  const jumping = (figure) => figure.mood === 'celebrate' && figure.rise >= JUMP_SHOWN;
+  const high = await figureWhen(page, jumping, JUMP_WAIT_MS);
+  await capture(page, 'figure-celebrate.png');
+  const shot = (await figuresOn(page)) ?? [];
+  const cheering = shot.filter((figure) => figure.mood === 'celebrate').length;
+  console.log(
+    `figure-celebrate.png Anna's card @ ${COLD_OPEN.width}x${COLD_OPEN.height}: ` +
+      (high === null
+        ? '!! no figure caught in the air'
+        : `${high.color} ${high.rise.toFixed(3)} tiles up`) +
+      `; at the shot ${cheering} of ${shot.length} figures celebrating, off the ground ` +
+      (shot.map((figure) => figure.rise.toFixed(3)).join(', ') || 'none'),
+  );
+  if (high === null || shot.length === 0 || cheering !== shot.length) {
+    fail(`figure-celebrate.png: ${cheering} of ${shot.length} figures celebrate, none in the air`);
+  }
+  if (before !== null) {
+    await page.setViewportSize(before);
+  }
+  await sleep(300);
+}
+
 /**
  * pullback.png, won.png, end.png: the host steps onto the hatch beside the
  * guest and the run is won. The world plays its end — pullback.png in the
- * middle of it — then the end screen opens on its title card (won.png), and
- * end.png has all of it. The audience's page has to show the same card
+ * middle of it — then the end screen opens on its title card (won.png),
+ * its crew jumping (figure-celebrate.png), and end.png has all of it. The
+ * audience's page has to show the same card, its crew jumping too
  * (won-audience.png).
  */
 async function captureEnd(host, watcher) {
@@ -3142,6 +3387,7 @@ async function captureEnd(host, watcher) {
   const says = await textOf(card.locator('.end-title-word'));
   const figures = await card.locator('.end-mate canvas').count();
   const facts = (await textOf(card.locator('.end-facts')))?.replace(/\s+/g, ' ') ?? 'none';
+  await captureCelebrate(host.page);
   const tall = await captureWholeEnd(host.page);
   const watched = watcher.locator('.spectate .end-title-word');
   const audience = (await attached(watched, 6000)) ? await textOf(watched) : null;
@@ -3149,13 +3395,14 @@ async function captureEnd(host, watcher) {
     await sleep(1700); // past the card's way out of the white there too
     await capture(watcher, 'won-audience.png');
   }
+  const crowd = ((await figuresOn(watcher)) ?? []).filter((f) => f.mood === 'celebrate').length;
   console.log(
     `won.png            ${host.name}: the card after ${seconds(cardAt)}, "${says}", ` +
       `${figures} figures outside, "${facts}"; end.png ${tall}px tall; ` +
-      `the audience's card "${audience ?? '!! none'}"`,
+      `the audience's card "${audience ?? '!! none'}", ${crowd} figures celebrating on it`,
   );
-  if (says !== 'GESCHAFFT' || figures !== 2 || audience !== 'GESCHAFFT') {
-    fail(`won.png: "${says}", ${figures} figures, the audience's card "${audience}"`);
+  if (says !== 'GESCHAFFT' || figures !== 2 || audience !== 'GESCHAFFT' || crowd !== 2) {
+    fail(`won.png: "${says}", ${figures} figures, the audience's card "${audience}" (${crowd})`);
   }
 }
 
@@ -3294,6 +3541,7 @@ async function run() {
   await host.locator('.seat .seat-name', { hasText: /^Ben$/ }).waitFor({ timeout: 10_000 });
   await sleep(300);
   await capture(host, 'lobby-filled.png');
+  await captureLobbyIdle(host);
   await capture(guest, 'lobby-phone.png');
   // A phone scrolls the lobby down and the crew's row sideways, but nothing
   // else may run out past the window's edge.
@@ -3508,6 +3756,12 @@ async function run() {
   const pinned = MISSION.toLowerCase() === 'systemcheck' ? PINNED_WIRING.get(SEED) : undefined;
   if (pinned !== undefined) {
     await playToTheEnd(anna, ben, watcher, pinned);
+  }
+  if (!flinchShot) {
+    skip('figure-flinch.png', 'the walkthrough works no Signalkette in this mission');
+  }
+  if (!celebrateShot) {
+    skip('figure-celebrate.png', 'the walkthrough does not play this mission to a won card');
   }
 
   await browser.close();

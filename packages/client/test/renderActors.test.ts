@@ -1,22 +1,22 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { DronePosition } from '@escapelab/core';
+import { drawScientist, drawVoiceRing, HELD_SCALE, type ScientistOpts } from '../src/world/art.js';
 import {
-  drawScientist,
-  drawVoiceRing,
-  type ScientistOpts,
-  type WorldText,
-} from '../src/world/art.js';
+  figurePhase,
+  figurePose,
+  type FigurePose,
+  type FigureState,
+} from '../src/world/figure.js';
 import {
   drawAlarmMark,
   drawCarryable,
   drawDroneBody,
   drawDroneCone,
 } from '../src/world/hazards.js';
-import { draw } from '../src/world/render/actors.js';
-import { FALLBACK_COLOR, type OtherAvatar } from '../src/world/render/frame.js';
+import { crewPose, draw, heldItem } from '../src/world/render/actors.js';
+import { FALLBACK_COLOR, type Frame, type OtherAvatar } from '../src/world/render/frame.js';
 import { callsOf, drawnAt, fakeCanvas, FakePath2D, recording, strip } from './fakeCanvas.js';
-import { frameWith, lightWith, lit, player, TILES } from './frames.js';
-import { mapWith, type Item } from './fixtures.js';
+import { frameWith, lightWith, lit, player } from './frames.js';
 
 const drone = (parts: Partial<DronePosition>): DronePosition => ({
   x: 3,
@@ -40,8 +40,26 @@ function drawn(frame: ReturnType<typeof frameWith>) {
   return log;
 }
 
-/** Ben as the view names him, as the frame eases him. */
-function benLook(text: WorldText): ScientistOpts {
+/** A crew member as figure.ts poses them in `frame`: walking or not, nothing else going on. */
+function poseIn(frame: Frame, id: string, parts: Partial<FigureState>): FigurePose {
+  return figurePose({
+    moving: false,
+    facing: 0,
+    carrying: null,
+    speaking: false,
+    alarmAgoMs: null,
+    readyAgoMs: null,
+    mood: 'play',
+    t: frame.time * 1000,
+    idleMs: 0,
+    phase: figurePhase(id),
+    reduced: false,
+    ...parts,
+  });
+}
+
+/** Ben as the view names him, as the frame eases him and poses him as `id`. */
+function benLook(frame: Frame, parts: Partial<FigureState> = {}, id = 'p2'): ScientistOpts {
   return {
     color: '#f472b6',
     name: 'Ben',
@@ -50,7 +68,8 @@ function benLook(text: WorldText): ScientistOpts {
     walkPhase: 0.4,
     isYou: false,
     connected: true,
-    text,
+    text: frame.text,
+    pose: poseIn(frame, id, { moving: true, facing: 1, ...parts }),
   };
 }
 
@@ -90,7 +109,7 @@ describe('actors — drones and the crew, in tile space', () => {
     const frame = frameWith({ others, players, light, walkPhase: 0.7 });
     const log = drawn(frame);
     expect(strip(drawnAt(log, 4.2, 2.1 + 0.3))).toEqual(
-      recording((c) => drawScientist(c, benLook(frame.text))),
+      recording((c) => drawScientist(c, benLook(frame))),
     );
     expect(drawnAt(log, 8, 4 + 0.3)).toEqual([]);
     const you: ScientistOpts = {
@@ -102,6 +121,7 @@ describe('actors — drones and the crew, in tile space', () => {
       isYou: true,
       connected: true,
       text: frame.text,
+      pose: poseIn(frame, 'p1', {}),
     };
     expect(strip(drawnAt(log, 2.5, 2.5 + 0.3))).toEqual(recording((c) => drawScientist(c, you)));
     const order = callsOf(log, 'translate').map(([x]) => x);
@@ -120,7 +140,7 @@ describe('actors — drones and the crew, in tile space', () => {
     expect(strip(drawnAt(log, 4.2, 2.1 + 0.3))).toEqual(
       recording((c) => {
         drawVoiceRing(c, '#f472b6', 3.2);
-        drawScientist(c, benLook(frame.text));
+        drawScientist(c, benLook(frame, { speaking: true }));
       }),
     );
   });
@@ -128,7 +148,7 @@ describe('actors — drones and the crew, in tile space', () => {
   it('names somebody the view does not list „???", in the crew’s fallback colour', () => {
     const frame = frameWith({ others: new Map([['p9', ben]]) });
     const log = drawn(frame);
-    const stranger = { ...benLook(frame.text), color: FALLBACK_COLOR, name: '???' };
+    const stranger = { ...benLook(frame, {}, 'p9'), color: FALLBACK_COLOR, name: '???' };
     expect(strip(drawnAt(log, 4.2, 2.1 + 0.3))).toEqual(
       recording((c) => drawScientist(c, stranger)),
     );
@@ -153,29 +173,93 @@ describe('actors — drones and the crew, in tile space', () => {
     );
   });
 
-  it('lifts what somebody carries above their head, where the frame draws them', () => {
-    const crate: Item = {
-      id: 'crate',
-      label: 'KISTE',
-      x: 0,
-      y: 0,
-      carriedBy: 'p2',
-      delivered: false,
-      deliverTo: null,
-      requiredForTitle: null,
-    };
-    const items = [crate, { ...crate, id: 'mine', label: 'SICHERUNG', carriedBy: 'p1' }];
-    const map = mapWith({ width: 10, height: 6, tiles: TILES, items });
-    const log = drawn(frameWith({ map, others: new Map([['p2', ben]]) }));
-    expect(strip(drawnAt(log, 4.2, 2.1 - 0.75))).toEqual(
-      recording((c) => drawCarryable(c, { label: 'KISTE', pulse: 0.5, carried: true })),
-    );
-    expect(strip(drawnAt(log, 2.5, 2.5 - 0.75))).toEqual(
+  it('puts what somebody carries in their hands, and nothing over their head', () => {
+    const others = new Map([['p2', ben]]);
+    const carrying = new Map([
+      ['p2', 'KISTE'],
+      ['p1', 'SICHERUNG'],
+    ]);
+    const frame = frameWith({ players, others, carrying });
+    const log = drawn(frame);
+    const carrier = { ...benLook(frame, { carrying: 'crate' }), held: heldItem('KISTE', 0.5) };
+    const drawnBen = strip(drawnAt(log, 4.2, 2.1 + 0.3));
+    expect(drawnBen).toEqual(recording((c) => drawScientist(c, carrier)));
+    const you = drawnAt(log, 2.5, 2.5 + 0.3);
+    expect(strip(you)).toContainEqual(['scale', [HELD_SCALE, HELD_SCALE]]);
+    expect(drawnAt(log, 4.2, 2.1 - 0.75)).toEqual([]);
+    expect(drawnAt(log, 2.5, 2.5 - 0.75)).toEqual([]);
+    const emptyHanded = drawn(frameWith({ players, others }));
+    expect(strip(drawnAt(emptyHanded, 4.2, 2.1 + 0.3))).not.toContainEqual([
+      'scale',
+      [HELD_SCALE, HELD_SCALE],
+    ]);
+  });
+});
+
+describe('heldItem — what the hands hold', () => {
+  it('draws the item as carried at its size on the floor: no shadow, glow or label', () => {
+    const { ctx, log } = fakeCanvas();
+    heldItem('SICHERUNG', 0.5)(ctx);
+    const size = callsOf(log, 'scale').reduce((product, [x]) => product * Number(x), 1);
+    expect(size).toBeCloseTo(1, 9);
+    expect(strip(log).slice(1)).toEqual(
       recording((c) => drawCarryable(c, { label: 'SICHERUNG', pulse: 0.5, carried: true })),
     );
-    const delivered = [{ ...crate, delivered: true }];
-    const done = mapWith({ width: 10, height: 6, tiles: TILES, items: delivered });
-    const after = drawn(frameWith({ map: done, others: new Map([['p2', ben]]) }));
-    expect(drawnAt(after, 4.2, 2.1 - 0.75)).toEqual([]);
+    expect(callsOf(log, 'fillText')).toEqual([]);
+    expect(callsOf(log, 'ellipse')).toEqual([]);
+  });
+});
+
+describe('crewPose — the frame says how each of the crew stands', () => {
+  it('poses a crew member by what the frame says of them, at their own offset', () => {
+    const frame = frameWith({
+      time: 12.5,
+      now: 1_000_000,
+      alarm: { seq: 2, at: 1_000_000 - 120 },
+      carrying: new Map([['p2', 'SCHLÜSSEL']]),
+      speaking: new Set(['p2']),
+      stillSince: new Map([['p2', 9000]]),
+      mood: 'play',
+    });
+    expect(crewPose(frame, 'p2', { moving: false, facing: 2 })).toEqual(
+      figurePose({
+        moving: false,
+        facing: 2,
+        carrying: 'key',
+        speaking: true,
+        alarmAgoMs: 120,
+        readyAgoMs: null,
+        mood: 'play',
+        t: 12_500,
+        idleMs: 3500,
+        phase: figurePhase('p2'),
+        reduced: false,
+      }),
+    );
+  });
+
+  it('flinches the crew at an alarm, and stands nobody walking still', () => {
+    const now = 1_000_000;
+    const frame = frameWith({ now, alarm: { seq: 1, at: now - 125 }, time: 40 });
+    const flinch = crewPose(frame, 'p1', { moving: true, facing: 0 });
+    expect(flinch.rise).toBeGreaterThan(0);
+    expect(flinch.arms).not.toBeNull();
+    const calm = crewPose(frameWith({ now, alarm: { seq: 1, at: now - 5000 }, time: 40 }), 'p1', {
+      moving: true,
+      facing: 0,
+    });
+    expect(calm.rise).toBe(0);
+    expect(calm.arms).toBeNull();
+  });
+
+  it('celebrates a run won and slumps over one lost, under reduced motion too', () => {
+    const won = crewPose(frameWith({ mood: 'celebrate', reduced: true }), 'p1', {
+      moving: false,
+      facing: 0,
+    });
+    expect(won.arms?.front).toBeGreaterThan(Math.PI / 2);
+    const lost = crewPose(frameWith({ mood: 'slump' }), 'p1', { moving: false, facing: 0 });
+    expect(lost.dim).toBeGreaterThan(0);
+    expect(lost.bob).toBeLessThan(0);
   });
 });

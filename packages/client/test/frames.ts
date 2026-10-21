@@ -79,6 +79,7 @@ export function kitWith(overlay: FakeCanvas = fakeCanvas(800, 600, 'overlay')): 
     vignette: { canvas: fakeCanvas(0, 0, 'vignette').canvas, w: 0, h: 0, dpr: 0 },
     light: canvasLight(),
     art: artKit(fakeSprites),
+    still: new Map(),
   };
 }
 
@@ -138,6 +139,9 @@ export function frameWith(parts: Partial<Frame> = {}): Frame {
     kit: kitWith(),
     missionId: 'probe',
     short: null,
+    carrying: new Map(),
+    stillSince: new Map(),
+    mood: 'play',
     ...parts,
   };
 }

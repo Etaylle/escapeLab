@@ -63,12 +63,15 @@ interface SeatProps {
   member: Member;
   facing: Facing;
   isYou: boolean;
-  phase: number;
-  /** they talk right now: their figure glows (voice.css) */
+  /** they talk right now: their figure glows (voice.css), a light across its visor */
   speaking: boolean;
 }
 
-function CrewSeat({ member, facing, isYou, phase, speaking }: SeatProps) {
+/**
+ * A crew member's place in the row: their name, their badge, and their
+ * figure breathing and looking round — waving as they say they are ready.
+ */
+function CrewSeat({ member, facing, isYou, speaking }: SeatProps) {
   const badge = badgeOf(member);
   const marks =
     `seat${isYou ? ' seat-you' : ''}${member.connected ? '' : ' seat-gone'}` +
@@ -85,11 +88,14 @@ function CrewSeat({ member, facing, isYou, phase, speaking }: SeatProps) {
         {badge.text}
       </span>
       <CrewFigure
+        id={member.id}
         color={member.color}
         facing={facing}
         isYou={isYou}
         connected={member.connected}
-        phase={phase}
+        mood="play"
+        speaking={speaking}
+        ready={member.ready}
       />
     </li>
   );
@@ -242,7 +248,6 @@ export function CrewRoom({ view, send }: { view: PlayerView; send: (msg: ClientM
               member={place.member}
               facing={place.facing}
               isYou={place.member.id === view.you.id}
-              phase={i * 1.9}
               speaking={speaking?.has(place.member.id) === true}
             />
           ) : (

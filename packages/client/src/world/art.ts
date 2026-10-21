@@ -10,6 +10,7 @@ import {
   softEllipse,
   TAU,
 } from './brush.js';
+import { restingPose, type Arms, type FigurePose } from './figure.js';
 import {
   ALARM,
   AMBER,
@@ -196,7 +197,7 @@ export interface ScientistOpts {
   /** body color, one of the crew's: '#rgb' or '#rrggbb' */
   color: string;
   name: string;
-  /** facing angle in radians (0 = right, PI/2 = down) — flip/tilt the visor side */
+  /** facing angle in radians (0 = right, PI/2 = down): the way the figure walks */
   facing: number;
   moving: boolean;
   /** walk cycle 0..1, advances only while moving */
@@ -207,6 +208,13 @@ export interface ScientistOpts {
   connected: boolean;
   /** the world's text at this zoom (worldText); the name in plain tiles when left out */
   text?: WorldText;
+  /** how the figure stands this frame (figure.ts); at rest, facing `facing`, when left out */
+  pose?: FigurePose;
+  /**
+   * what the hands hold while the pose holds something, drawn at its size on the floor round
+   * its own anchor, in tiles — the figure puts it before its chest at HELD_SCALE
+   */
+  held?: (ctx: CanvasRenderingContext2D) => void;
 }
 
 // Geometry in tile units, drawn facing right with the origin at the feet center.
@@ -221,8 +229,25 @@ const LEG_X = 0.12;
 const OUTLINE_W = 0.035;
 const VISOR_FRONT = 0.285;
 const VISOR_H = 0.19;
+/** How far the visor slides back across the dome as the figure glances away from its way. */
+const VISOR_SLIDE = 0.06;
 const NAME_Y = BODY_TOP - 0.1;
 const NAME_COLOR = css(lift(LABEL, 0.82));
+// The arms: a capsule from the shoulder, a mitten at its end, behind the body — hanging,
+// they stay inside its outline; raised, the hands come up beside the head.
+const ARM_LENGTH = 0.28;
+const ARM_WIDTH = 0.09;
+const HAND_R = 0.055;
+/** The shoulders at the dome's widest, toward its front and its back. */
+const FRONT_SHOULDER: readonly [number, number] = [0.15, -0.62];
+const BACK_SHOULDER: readonly [number, number] = [-0.15, -0.62];
+/** Holding, both arms reach forward from the chest under the visor, the back one higher. */
+const HOLD_FRONT: readonly [number, number] = [0.12, -0.44];
+const HOLD_BACK: readonly [number, number] = [0.06, -0.5];
+/** Where a held item sits, before the chest in the hands, and its share of its floor size. */
+const HELD_X = 0.43;
+const HELD_Y = -0.44;
+export const HELD_SCALE = 0.6;
 // Animation amplitudes (tile units, radians for LEAN).
 const STRIDE = 0.06;
 const STEP_LIFT = 0.025;
@@ -231,6 +256,15 @@ const LEAN = 0.06;
 const DISCONNECTED_ALPHA = 0.45;
 /** Visor glass: steel with a cold sheen. */
 const VISOR_GLASS = mix(STEEL, GLASS, 0.3);
+/** The teal lab light along the visor's lower rim, and the glints on its glass. */
+const VISOR_RIM = rgba(TEAL, 0.3);
+const VISOR_GLINT = rgba(WHITE, 0.8);
+/** A dimmed visor: the glass sunk this far toward black at the full dim. */
+const VISOR_DIM = rgba(BLACK, 0.7);
+/** The light sweeping across the visor of somebody speaking: its width, slant and glow. */
+const SHIMMER_W = 0.07;
+const SHIMMER_SLANT = 0.05;
+const SHIMMER_LIGHT = rgba(WHITE, 0.55);
 
 interface BodyColors {
   /** Lit front-top of the body. */
@@ -270,6 +304,10 @@ interface ScientistPaths {
   /** Centered on x = 0, standing on y = 0. */
   leg: Path2D;
   pack: Path2D;
+  /** Hanging from its shoulder at the origin down +y, the hand at its end. */
+  arm: Path2D;
+  /** A hand alone, centered on the origin: over what the hands hold. */
+  hand: Path2D;
 }
 
 let scientistPaths: ScientistPaths | null = null;
@@ -290,7 +328,12 @@ function getScientistPaths(): ScientistPaths {
   roundRectPath(leg, -LEG_W / 2, LEG_TOP, LEG_W, -LEG_TOP, 0.06);
   const pack = new Path2D();
   roundRectPath(pack, -0.285, -0.62, 0.13, 0.32, 0.05);
-  scientistPaths = { body, leg, pack };
+  const arm = new Path2D();
+  roundRectPath(arm, -ARM_WIDTH / 2, -ARM_WIDTH / 2, ARM_WIDTH, ARM_LENGTH, ARM_WIDTH / 2);
+  addCircle(arm, 0, ARM_LENGTH, HAND_R);
+  const hand = new Path2D();
+  addCircle(hand, 0, 0, HAND_R);
+  scientistPaths = { body, leg, pack, arm, hand };
   return scientistPaths;
 }
 
@@ -336,16 +379,68 @@ function drawBodyHighlight(ctx: CanvasRenderingContext2D): void {
 }
 
 /**
- * Visor on the facing (+x) side. Facing the camera (down) widens and lowers it; facing
- * away (up) narrows and raises it, hinting at the vertical part of `facing`.
+ * A light sweeping across the visor of somebody speaking, `at` of its way from
+ * the visor's back (0) past its front (1): a slanted band, clipped to the glass.
+ * Visor-local space: front edge at x = 0, vertical center at y = 0, `w` wide.
  */
-function drawVisor(ctx: CanvasRenderingContext2D, facing: number, outline: string): void {
-  const s = Math.sin(facing);
+function drawShimmer(ctx: CanvasRenderingContext2D, w: number, at: number): void {
+  const r = VISOR_H / 2;
+  const x = -w - SHIMMER_W + (w + 2 * SHIMMER_W) * at;
+  ctx.save();
+  ctx.beginPath();
+  roundRectPath(ctx, -w, -r, w, VISOR_H, r);
+  ctx.clip();
+  ctx.beginPath();
+  ctx.moveTo(x - SHIMMER_W / 2 + SHIMMER_SLANT, -r);
+  ctx.lineTo(x + SHIMMER_W / 2 + SHIMMER_SLANT, -r);
+  ctx.lineTo(x + SHIMMER_W / 2 - SHIMMER_SLANT, r);
+  ctx.lineTo(x - SHIMMER_W / 2 - SHIMMER_SLANT, r);
+  ctx.closePath();
+  ctx.fillStyle = SHIMMER_LIGHT;
+  ctx.fill();
+  ctx.restore();
+}
+
+/** The visor's teal rim and white glints, `light` of their strength (a dimmed visor's less). */
+function drawVisorGlints(ctx: CanvasRenderingContext2D, w: number, light: number): void {
+  const r = VISOR_H / 2;
+  const alpha = ctx.globalAlpha;
+  ctx.globalAlpha = alpha * light;
+  ctx.beginPath();
+  ctx.moveTo(-w + r, r - 0.04);
+  ctx.lineTo(-r, r - 0.04);
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 0.018;
+  ctx.strokeStyle = VISOR_RIM;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(-0.09, -0.042, 0.06, 0.024, -0.12, 0, TAU);
+  addCircle(ctx, -0.165, -0.045, 0.013);
+  ctx.fillStyle = VISOR_GLINT;
+  ctx.fill();
+  ctx.globalAlpha = alpha;
+}
+
+/**
+ * Visor on the side the figure looks to. Looking toward the camera (down)
+ * widens and lowers it; away (up) narrows and raises it — the vertical part
+ * of the look. A glance away from the figure's way (`facing`) slides it back
+ * across the dome; a dimmed visor loses its glints; while the figure speaks
+ * a light sweeps across it.
+ */
+function drawVisor(
+  ctx: CanvasRenderingContext2D,
+  pose: FigurePose,
+  facing: number,
+  outline: string,
+): void {
+  const s = Math.sin(pose.look);
   const w = 0.3 + 0.05 * Math.max(0, s) - 0.1 * Math.max(0, -s);
+  const x = VISOR_FRONT - VISOR_SLIDE * (1 - Math.cos(pose.look - facing));
   const cy = DOME_Y + 0.02 + 0.025 * s;
   const r = VISOR_H / 2;
   // Visor-local space: front edge at x = 0, vertical center at y = 0.
-  ctx.translate(VISOR_FRONT, cy);
+  ctx.translate(x, cy);
   ctx.beginPath();
   roundRectPath(ctx, -w, -r, w, VISOR_H, r);
   ctx.lineWidth = OUTLINE_W * 2;
@@ -353,25 +448,91 @@ function drawVisor(ctx: CanvasRenderingContext2D, facing: number, outline: strin
   ctx.stroke();
   ctx.fillStyle = cachedGradient(ctx, buildVisorGradient, '');
   ctx.fill();
-  // Teal lab light reflected along the lower rim.
-  ctx.beginPath();
-  ctx.moveTo(-w + r, r - 0.04);
-  ctx.lineTo(-r, r - 0.04);
-  ctx.lineCap = 'round';
-  ctx.lineWidth = 0.018;
-  ctx.strokeStyle = rgba(TEAL, 0.3);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.ellipse(-0.09, -0.042, 0.06, 0.024, -0.12, 0, TAU);
-  addCircle(ctx, -0.165, -0.045, 0.013);
-  ctx.fillStyle = rgba(WHITE, 0.8);
-  ctx.fill();
-  ctx.translate(-VISOR_FRONT, -cy);
+  if (pose.dim > 0) {
+    const alpha = ctx.globalAlpha;
+    ctx.globalAlpha = alpha * pose.dim;
+    ctx.fillStyle = VISOR_DIM;
+    ctx.fill();
+    ctx.globalAlpha = alpha;
+  }
+  drawVisorGlints(ctx, w, 1 - pose.dim);
+  if (pose.shimmer !== null) {
+    drawShimmer(ctx, w, pose.shimmer);
+  }
+  ctx.translate(-x, -cy);
+}
+
+/** Where an arm hangs from, body space: at the dome's widest, or at the chest to hold. */
+function shoulderOf(front: boolean, holding: boolean): readonly [number, number] {
+  if (holding) {
+    return front ? HOLD_FRONT : HOLD_BACK;
+  }
+  return front ? FRONT_SHOULDER : BACK_SHOULDER;
 }
 
 /**
- * Legs, backpack, body and visor. Mirrors the figure for left-facing and leans it while
- * moving; leaves the transform changed, so callers wrap it in save/restore.
+ * Both arms, stroked (the outline pass) or filled — the back arm in the
+ * pack's tone, the front one in the shade — body space, from the shoulders
+ * they reach from, `holding` or not. An angle turns the arm from hanging
+ * toward the front: the canvas turns the other way.
+ */
+function drawArms(
+  ctx: CanvasRenderingContext2D,
+  arms: Arms,
+  holding: boolean,
+  colors: BodyColors | null,
+): void {
+  const { arm } = getScientistPaths();
+  for (const front of [false, true]) {
+    const [x, y] = shoulderOf(front, holding);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(-(front ? arms.front : arms.back));
+    if (colors === null) {
+      ctx.stroke(arm);
+    } else {
+      ctx.fillStyle = front ? colors.shade : colors.pack;
+      ctx.fill(arm);
+    }
+    ctx.restore();
+  }
+}
+
+/**
+ * What the hands hold, before the chest at HELD_SCALE: over the back hand,
+ * which the arms' pass drew already, and under the front one, so that the
+ * two grip it. Body space.
+ */
+function drawHeld(
+  ctx: CanvasRenderingContext2D,
+  held: (ctx: CanvasRenderingContext2D) => void,
+  pose: FigurePose,
+  colors: BodyColors,
+): void {
+  ctx.save();
+  ctx.translate(HELD_X, HELD_Y);
+  ctx.scale(HELD_SCALE, HELD_SCALE);
+  held(ctx);
+  ctx.restore();
+  const { hand } = getScientistPaths();
+  const [sx, sy] = shoulderOf(true, true);
+  const angle = pose.arms?.front ?? 0;
+  const x = sx + ARM_LENGTH * Math.sin(angle);
+  const y = sy + ARM_LENGTH * Math.cos(angle);
+  ctx.translate(x, y);
+  ctx.lineWidth = OUTLINE_W;
+  ctx.strokeStyle = colors.outline;
+  ctx.stroke(hand);
+  ctx.fillStyle = colors.shade;
+  ctx.fill(hand);
+  ctx.translate(-x, -y);
+}
+
+/**
+ * Arms, legs, backpack, body and visor, and what the hands hold. Turns the
+ * figure to the side it looks to, bows it as the pose says and leans it
+ * while moving; leaves the transform changed, so callers wrap it in
+ * save/restore. `bob` raises the body over the legs (negative is up).
  */
 function drawScientistFigure(
   ctx: CanvasRenderingContext2D,
@@ -379,6 +540,7 @@ function drawScientistFigure(
   colors: BodyColors,
   theta: number,
   bob: number,
+  pose: FigurePose,
 ): void {
   const paths = getScientistPaths();
   const swing = o.moving ? Math.sin(theta) * STRIDE : 0;
@@ -388,13 +550,18 @@ function drawScientistFigure(
   const frontY = -Math.max(0, raise);
   const backX = -LEG_X - swing;
   const backY = -Math.max(0, -raise);
-  ctx.scale(Math.cos(o.facing) < 0 ? -1 : 1, 1);
-  if (o.moving) ctx.rotate(LEAN);
+  ctx.scale(Math.cos(pose.look) < 0 ? -1 : 1, 1);
+  ctx.rotate((o.moving ? LEAN : 0) + pose.bow);
   ctx.lineJoin = 'round';
   // Outline pass at twice the outline width; the fill pass covers the inner half, leaving
-  // one continuous outline around the union of legs, backpack and body.
+  // one continuous outline around the union of arms, legs, backpack and body.
   ctx.lineWidth = OUTLINE_W * 2;
   ctx.strokeStyle = colors.outline;
+  if (pose.arms !== null) {
+    ctx.translate(0, bob);
+    drawArms(ctx, pose.arms, pose.holding, null);
+    ctx.translate(0, -bob);
+  }
   strokePathAt(ctx, paths.leg, backX, backY);
   strokePathAt(ctx, paths.leg, frontX, frontY);
   strokePathAt(ctx, paths.pack, 0, bob);
@@ -404,12 +571,18 @@ function drawScientistFigure(
   ctx.fillStyle = o.color;
   fillPathAt(ctx, paths.leg, frontX, frontY);
   ctx.translate(0, bob);
+  if (pose.arms !== null) {
+    drawArms(ctx, pose.arms, pose.holding, colors);
+  }
   ctx.fillStyle = colors.pack;
   ctx.fill(paths.pack);
   ctx.fillStyle = cachedGradient(ctx, buildBodyGradient, o.color);
   ctx.fill(paths.body);
   drawBodyHighlight(ctx);
-  drawVisor(ctx, o.facing, colors.outline);
+  drawVisor(ctx, pose, o.facing, colors.outline);
+  if (pose.holding && o.held !== undefined) {
+    drawHeld(ctx, o.held, pose, colors);
+  }
 }
 
 function drawYouRing(ctx: CanvasRenderingContext2D): void {
@@ -444,21 +617,30 @@ export function drawVoiceRing(ctx: CanvasRenderingContext2D, color: string, time
   ctx.restore();
 }
 
-/** Anchor: FEET CENTER. Body ~0.62 tile wide, ~0.85 tile tall. */
+/**
+ * Anchor: FEET CENTER. Body ~0.62 tile wide, ~0.85 tile tall. Stands as
+ * `o.pose` says (figure.ts) — off the ground and squashed or stretched about
+ * its feet, its shadow shrinking under it as it rises — at rest without one.
+ */
 export function drawScientist(ctx: CanvasRenderingContext2D, o: ScientistOpts): void {
   // Resolved first so an invalid color throws before anything is drawn.
   const colors = bodyColors(o.color);
+  const pose = o.pose ?? restingPose(o.facing);
   ctx.save();
   try {
     if (!o.connected) ctx.globalAlpha *= DISCONNECTED_ALPHA;
     const theta = o.walkPhase * TAU;
     // The body is highest while the legs pass each other and back down at full stride.
     const bob = o.moving ? -Math.abs(Math.cos(theta)) * BOB : 0;
-    // bob <= 0: a raised body casts a slightly smaller shadow.
-    softEllipse(ctx, 0, 0, 0.3 + bob, 0.1 + bob / 3, BLACK, 0.35, 'source-over');
+    // bob <= 0: a raised body casts a slightly smaller shadow, a figure in the air a smaller one.
+    const rx = (0.3 + bob) * pose.shadow;
+    const ry = (0.1 + bob / 3) * pose.shadow;
+    softEllipse(ctx, 0, 0, rx, ry, BLACK, 0.35, 'source-over');
     if (o.isYou) drawYouRing(ctx);
     ctx.save();
-    drawScientistFigure(ctx, o, colors, theta, bob);
+    ctx.translate(0, -pose.rise);
+    ctx.scale(1 / pose.stretch, pose.stretch);
+    drawScientistFigure(ctx, o, colors, theta, bob - pose.bob, pose);
     ctx.restore();
     drawHaloText(ctx, o.name, 0, NAME_Y, (o.text ?? TILE_TEXT).name, NAME_COLOR, 'bottom');
   } finally {
