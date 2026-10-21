@@ -13,8 +13,12 @@
  * press it together, and the run fails unless it solves; right after the
  * presses device-solved.png catches the solved device, its status strip
  * sweeping green, before it closes itself — the run fails where any sync
- * station never shows solved, lies under an overlay, or does not close
- * itself. Where the station after it has two consoles, each takes one and
+ * station never shows solved, is gone before it is looked at, lies under an
+ * overlay, or does not close itself. A shot that lands only after the device
+ * closed itself — the machine under load — fails nothing: the next sync
+ * station of the run is shot instead, and where that one is late too, or
+ * none follows, device-solved.png is skipped with the times measured.
+ * Where the station after it has two consoles, each takes one and
  * both panels are captured; a Signalkette, as in the Systemcheck, they work
  * from both sides until it solves too.
  * Where the first station has two consoles, as Blackout's Notstrom-Kasten,
@@ -882,8 +886,43 @@ async function pressTogether(players, station) {
 /** How long after a solve a device closes itself, as puzzles/Device.tsx says (SOLVED_CLOSE_MS). */
 const SOLVED_CLOSE_MS = 500;
 
-/** Whether device-solved.png is taken: the first sync station the run solves takes it. */
-let solvedShot = false;
+/**
+ * device-solved.png as the run takes it: whether a shot landed while the
+ * device still showed solved, and when those that landed after its close did,
+ * ms after it showed solved. The first sync station the run solves is shot; a
+ * late shot is taken again at the next one, and one late there too is skipped.
+ */
+const solvedShot = { taken: false, late: [] };
+
+/** Whether device-solved.png is still to be shot: none in time yet, no second chance spent. */
+function shootingSolved() {
+  return !solvedShot.taken && solvedShot.late.length < 2;
+}
+
+/**
+ * Counts the shot of a solved device, `shot` ms after it showed solved (null
+ * where none was taken): in time before its close; after it, late — and the
+ * second late one is skipped at once.
+ */
+function noteShot(shot) {
+  if (shot === null) {
+    return;
+  }
+  if (shot < SOLVED_CLOSE_MS) {
+    solvedShot.taken = true;
+  } else {
+    solvedShot.late.push(shot);
+    if (solvedShot.late.length === 2) {
+      skipLateShot();
+    }
+  }
+}
+
+/** Logs device-solved.png as skipped: its shots landed after the device's close, at these times. */
+function skipLateShot() {
+  const times = solvedShot.late.map((ms) => `${ms} ms`).join(', ');
+  skip('device-solved.png', `the solved-device shot landed late under load (${times})`);
+}
 
 /**
  * What a solved device shows at its shot: the status strip's LEDs gone green
@@ -916,8 +955,10 @@ function solvedLook(page) {
  * A sync station right after the crew's presses: it has to show solved — its
  * status strip sweeping green along the bezel's foot, its plate dimmed — with
  * nothing over it, and close itself SOLVED_CLOSE_MS later. The first one the
- * run solves is shot as it sweeps (device-solved.png). Fails where it never
- * shows solved, lies covered, or does not close itself.
+ * run solves is shot as it sweeps (device-solved.png), the next one again
+ * where that shot landed after the close (noteShot). Fails where it never
+ * shows solved, is gone before it is looked at, lies covered, or does not
+ * close itself.
  */
 async function captureSolved(player, station) {
   const solved = player.page.locator('.station-modal .device--solved');
@@ -930,34 +971,46 @@ async function captureSolved(player, station) {
   const seen = Date.now();
   await sleep(120); // the sweep under way along the strip
   const look = await solvedLook(player.page);
-  const first = !solvedShot;
-  if (first) {
+  const looked = Date.now() - seen;
+  const shooting = shootingSolved();
+  if (shooting) {
     await capture(player.page, 'device-solved.png');
-    solvedShot = true;
   }
-  const shot = Date.now() - seen;
+  const shot = shooting ? Date.now() - seen : null;
   const gone = await solved.waitFor({ state: 'detached', timeout: SOLVED_CLOSE_MS + 1500 }).then(
     () => Date.now() - seen,
     () => null,
   );
-  const timing = { since: seen - since, shot, gone };
-  reportSolved(`${player.name}: "${station.title}"`, first, look, timing);
+  noteShot(shot);
+  const timing = { since: seen - since, looked, shot, gone };
+  reportSolved(`${player.name}: "${station.title}"`, look, timing);
 }
 
 /**
  * A solved sync station in the log — when it showed solved after the presses,
- * when it was looked at, what lay over it, when it closed itself — and in the
- * failures where it was covered, looked at too late or never closed itself.
+ * when it was looked at and shot, what lay over it, when it closed itself —
+ * and in the failures where it was gone before it was looked at, covered, or
+ * never closed itself. A shot after its close is no failure (noteShot).
  */
-function reportSolved(what, first, look, { since, shot, gone }) {
+function reportSolved(what, look, { since, looked, shot, gone }) {
+  const late = shot !== null && shot >= SOLVED_CLOSE_MS;
+  const lateSaid = late ? ' (late: after its close)' : '';
+  const shotSaid = shot === null ? '' : `, shot ${shot} ms${lateSaid}`;
+  const covered = look.covers.length > 0;
+  const strip = `${look.lit} of ${look.all} strip LEDs green`;
   console.log(
-    `${first ? 'device-solved.png ' : 'device-solved     '} ${what} solved ${since} ms after the ` +
-      `presses, shot ${shot} ms into it — ${look.lit} of ${look.all} strip LEDs green, ` +
-      `${look.covers.length === 0 ? 'nothing over it' : `!! under ${look.covers.join(', ')}`}; ` +
+    `${shot === null ? 'device-solved     ' : 'device-solved.png '} ${what} solved ${since} ms ` +
+      `after the presses, looked at ${looked} ms into it${shotSaid} — ${strip}, ` +
+      `${covered ? `!! under ${look.covers.join(', ')}` : 'nothing over it'}; ` +
       (gone === null ? '!! it stayed open' : `it closed itself after ${gone} ms`),
   );
-  if (look.covers.length > 0 || gone === null || shot >= SOLVED_CLOSE_MS) {
-    fail(`device-solved: ${what} covered, looked at too late, or never closed itself`);
+  const why = [
+    ...(look.all === 0 ? ['was gone before it was looked at'] : []),
+    ...(covered ? ['lay covered'] : []),
+    ...(gone === null ? ['stayed open'] : []),
+  ];
+  if (why.length > 0) {
+    fail(`device-solved: ${what} ${why.join(', ')}`);
   }
 }
 
@@ -3781,6 +3834,9 @@ async function run() {
 
   if (sides.checked === 0) {
     fail("the partner's side was never told apart: the crew never stood apart sideways");
+  }
+  if (!solvedShot.taken && solvedShot.late.length === 1) {
+    skipLateShot(); // late, and no sync station came after it to shoot again
   }
   await browser.close();
   console.log('screenshots in', OUT);
