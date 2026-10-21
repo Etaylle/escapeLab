@@ -6,7 +6,7 @@ import { EditorScreen, TOOLS } from '../src/editor/EditorScreen.js';
 import { newDraft, type Draft } from '../src/editor/draft.js';
 import { ID_TAKEN_NOTE } from '../src/editor/MissionForm.js';
 import { workOf, type EditorWork } from '../src/editor/session.js';
-import { lineBetween, paint, place, type PlacingTool } from '../src/editor/tools.js';
+import { lineBetween, NO_CHOICE, paint, place, type PlacingTool } from '../src/editor/tools.js';
 import { validateDraft, type Finding, type Validation } from '../src/editor/validate.js';
 import { ValidatorPanel } from '../src/editor/ValidatorPanel.js';
 import { MapThumb } from '../src/screens/MapThumb.js';
@@ -20,7 +20,7 @@ function probe(...steps: [PlacingTool, { x: number; y: number }][]): Draft {
     draft = paint(draft, lineBetween({ x: 2, y }, { x: 8, y }), '.');
   }
   for (const [tool, at] of steps) {
-    draft = place(draft, tool, at, null, { puzzleId: null, console: null }).draft;
+    draft = place(draft, tool, at, null, NO_CHOICE).draft;
   }
   return draft;
 }

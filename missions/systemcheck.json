@@ -54,9 +54,20 @@
     ],
     "edgeworkSign": { "x": 13, "y": 3 },
     "labels": [
-      { "text": "KONTROLLE", "x": 3, "y": 3 },
-      { "text": "LEITSTAND", "x": 10, "y": 3 },
-      { "text": "SPULEN", "x": 16, "y": 5 }
+      { "text": "KONTROLLE", "x": 3, "y": 3, "kind": "lab" },
+      { "text": "LEITSTAND", "x": 10, "y": 3, "kind": "control" },
+      { "text": "SPULEN", "x": 16, "y": 5, "kind": "reactor" }
+    ],
+    "decor": [
+      { "kind": "hood", "x": 1, "y": 5 },
+      { "kind": "bench", "x": 4, "y": 5, "variant": 2 },
+      { "kind": "bench", "x": 5, "y": 5, "variant": 3 },
+      { "kind": "desk", "x": 9, "y": 4, "variant": 0 },
+      { "kind": "desk", "x": 10, "y": 4, "variant": 2 },
+      { "kind": "desk", "x": 11, "y": 4, "variant": 3 },
+      { "kind": "cables", "x": 15, "y": 1, "variant": 2 },
+      { "kind": "core", "x": 16, "y": 1 },
+      { "kind": "desk", "x": 17, "y": 5, "variant": 1 }
     ],
     "exit": { "x": 10, "y": 1 }
   },

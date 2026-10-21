@@ -98,13 +98,32 @@
       { "x": 12, "y": 4 }
     ],
     "labels": [
-      { "text": "ARCHIV", "x": 4, "y": 1 },
-      { "text": "SERVERRAUM", "x": 12, "y": 1 },
-      { "text": "FLUR", "x": 5, "y": 5 },
-      { "text": "FLUR", "x": 15, "y": 5 },
-      { "text": "MASCHINENRAUM", "x": 3, "y": 8 },
-      { "text": "LABOR", "x": 9, "y": 8 },
-      { "text": "REAKTOR", "x": 15, "y": 8 }
+      { "text": "ARCHIV", "x": 4, "y": 1, "kind": "archive" },
+      { "text": "SERVERRAUM", "x": 12, "y": 1, "kind": "server" },
+      { "text": "FLUR", "x": 5, "y": 5, "kind": "corridor" },
+      { "text": "FLUR", "x": 15, "y": 5, "kind": "corridor" },
+      { "text": "MASCHINENRAUM", "x": 3, "y": 8, "kind": "machine" },
+      { "text": "LABOR", "x": 9, "y": 8, "kind": "lab" },
+      { "text": "REAKTOR", "x": 15, "y": 8, "kind": "reactor" }
+    ],
+    "decor": [
+      { "kind": "cart", "x": 1, "y": 3 },
+      { "kind": "shelf", "x": 5, "y": 3, "variant": 1 },
+      { "kind": "rack", "x": 8, "y": 1, "variant": 0 },
+      { "kind": "rack", "x": 10, "y": 1, "variant": 1 },
+      { "kind": "rack", "x": 12, "y": 1, "variant": 2 },
+      { "kind": "rack", "x": 14, "y": 1, "variant": 3 },
+      { "kind": "barrel", "x": 5, "y": 8, "variant": 0 },
+      { "kind": "generator", "x": 1, "y": 11 },
+      { "kind": "pipes", "x": 3, "y": 11 },
+      { "kind": "barrel", "x": 5, "y": 11, "variant": 2 },
+      { "kind": "hood", "x": 9, "y": 11 },
+      { "kind": "bench", "x": 7, "y": 11, "variant": 0 },
+      { "kind": "bench", "x": 8, "y": 11, "variant": 1 },
+      { "kind": "cables", "x": 14, "y": 8, "variant": 0 },
+      { "kind": "core", "x": 15, "y": 8 },
+      { "kind": "cables", "x": 16, "y": 8, "variant": 1 },
+      { "kind": "desk", "x": 13, "y": 11, "variant": 1 }
     ],
     "exit": { "x": 17, "y": 11 },
     "items": [

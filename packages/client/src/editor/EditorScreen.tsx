@@ -29,6 +29,7 @@ import { shareLink } from './share.js';
 import {
   MATERIAL,
   move,
+  NO_CHOICE,
   paint,
   place,
   placePending,
@@ -38,8 +39,8 @@ import {
   type Pending,
   type Placement,
   type Ref,
-  type StationChoice,
   type Tool,
+  type ToolChoice,
 } from './tools.js';
 import { validateDraft, type Finding, type Validation } from './validate.js';
 
@@ -128,7 +129,7 @@ function useMapEditing(
   const [tool, setTool] = useState<Tool>('floor');
   const [selection, setSelection] = useState<Ref | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
-  const [choice, setChoice] = useState<StationChoice>({ puzzleId: null, console: null });
+  const [choice, setChoice] = useState<ToolChoice>(NO_CHOICE);
   const [tab, setTab] = useState<Tab>('mission');
 
   const select = (ref: Ref | null): void => {

@@ -10,13 +10,19 @@ import {
   worldText,
   type WorldText,
 } from '../world/art.js';
+import { atlasLevel, sprite, type Atlas, type WallSpec } from '../world/atlas.js';
+import { decorVariant, drawDecor } from '../world/decor.js';
+import { dressMap, seedOf, type DressMap, type Dressing } from '../world/dress.js';
 import { drawCarryable, drawDropZone, drawDroneBody, drawSabotagePanel } from '../world/hazards.js';
-import type { Draft, DraftDrone, Tile } from './draft.js';
+import { hasFace, type FloorKind } from '../world/surfaces.js';
+import { customIdOf, type Draft, type DraftDrone, type Tile } from './draft.js';
 import { mapSize, tilesOf, type Pending, type Ref, type Tool } from './tools.js';
 
 /**
- * The editor's map, drawn with the game's own art: its floor and wall
- * textures and its props, a start as a member of the crew in their colour.
+ * The editor's map, drawn with the game's own art: its rooms dressed as the
+ * game dresses them — each kind of room its floor, its walls and what hangs
+ * on them — its furniture and props, a start as a member of the crew in
+ * their colour, all in the lit lab's colours.
  * On top the editor's own marks: a faint grid, drone routes, the line from
  * an item to its drop-off, the selection (teal), the tiles a finding points
  * at (red) and the tile under the pointer. A frame is drawn whole whenever
@@ -35,8 +41,11 @@ export interface Scene {
 }
 
 export interface Textures {
+  /** a plain floor and wall: the brushes' glyphs */
   floor: CanvasImageSource;
   wall: CanvasImageSource;
+  /** the game's sprites: the dressed floors, walls and wall props */
+  atlas: Atlas;
 }
 
 const MONO = 'ui-monospace, Menlo, monospace';
@@ -100,22 +109,74 @@ function nearFloor(tiles: readonly string[], x: number, y: number): boolean {
   return false;
 }
 
-/** Floor and the walls round it in the game's textures; deeper wall as rock; the void dark. */
-function paintTiles(ctx: Ctx, draft: Draft, textures: Textures): void {
+/** The draft's map as the dressing reads it: its doors shut, its lamps, its furniture. */
+function dressMapOf(draft: Draft): DressMap {
+  const { width, height } = mapSize(draft);
+  const map = draft.map;
+  return {
+    width,
+    height,
+    tiles: map.tiles,
+    labels: map.labels.map((l) => ({
+      text: l.text,
+      x: l.x,
+      y: l.y,
+      ...(l.kind === '' ? {} : { kind: l.kind }),
+    })),
+    doors: map.doors.map((d) => ({ id: d.id, x: d.x, y: d.y, open: false })),
+    lamps: map.lamps ?? [],
+    decor: map.decor.map((d) => ({
+      kind: d.kind,
+      x: d.x,
+      y: d.y,
+      ...(d.variant === null ? {} : { variant: d.variant }),
+    })),
+  };
+}
+
+/** The draft dressed as the game will dress it, seeded by the id it is saved under. */
+function dressingOf(draft: Draft): Dressing {
+  return dressMap(dressMapOf(draft), seedOf(customIdOf(draft.title)));
+}
+
+/**
+ * Floor and the walls round it as the game dresses them, from its sprites;
+ * deeper wall as rock; the void dark. Floors first, then the walls with their
+ * shadows over the floor below, then what hangs on the walls.
+ */
+function paintTiles(ctx: Ctx, draft: Draft, textures: Textures, zoom: Zoom): void {
   const tiles = draft.map.tiles;
+  const dressing = dressingOf(draft);
+  const level = atlasLevel(zoom.scale);
+  const { atlas } = textures;
   ctx.fillStyle = ROCK;
-  tiles.forEach((row, y) => {
-    for (let x = 0; x < row.length; x++) {
-      const tile = row.charAt(x);
-      if (tile === '.') {
-        ctx.drawImage(textures.floor, x, y, 1, 1);
-      } else if (tile === '#' && nearFloor(tiles, x, y)) {
-        ctx.drawImage(textures.wall, x, y, 1, 1);
-      } else if (tile === '#') {
-        ctx.fillRect(x, y, 1, 1);
+  for (const walls of [false, true]) {
+    tiles.forEach((row, y) => {
+      for (let x = 0; x < row.length; x++) {
+        const i = y * dressing.width + x;
+        const kind = dressing.kinds[i] ?? 'plain';
+        const tile = row.charAt(x);
+        if (!walls && tile === '.') {
+          const variant = dressing.floor[i] ?? 0;
+          const floor = sprite(atlas, level, { floor: kind, variant, lit: true });
+          ctx.drawImage(floor.canvas, x, y, 1, 1);
+        } else if (walls && tile === '#' && nearFloor(tiles, x, y)) {
+          const wall = sprite(atlas, level, wallSpec(dressing, kind, i));
+          ctx.drawImage(wall.canvas, x, y, 1, wall.tall);
+        } else if (walls && tile === '#') {
+          ctx.fillRect(x, y, 1, 1);
+        }
       }
-    }
-  });
+    });
+  }
+}
+
+/** The sprite of the wall at `i`: its crown, its face in its room's kind, what hangs on it. */
+function wallSpec(dressing: Dressing, kind: FloorKind, i: number): WallSpec {
+  const mask = dressing.walls[i] ?? 0;
+  const hung = dressing.props.find((p) => p.y * dressing.width + p.x === i);
+  const wall = { wall: hasFace(mask) ? kind : 'plain', mask, lit: true, faceLit: true } as const;
+  return hung === undefined ? wall : { ...wall, prop: { kind: hung.kind, variant: hung.variant } };
 }
 
 function paintGrid(ctx: Ctx, width: number, height: number, scale: number): void {
@@ -145,6 +206,10 @@ function horizontal(draft: Draft, x: number, y: number): boolean {
 
 function paintFixtures(ctx: Ctx, draft: Draft, text: WorldText): void {
   const map = draft.map;
+  for (const piece of map.decor) {
+    const variant = piece.variant ?? decorVariant({ x: piece.x, y: piece.y });
+    at(ctx, piece.x + 0.5, piece.y + 0.5, () => drawDecor(ctx, piece.kind, variant, true));
+  }
   for (const plate of map.plates) {
     const camera = map.drones.some((d) => d.extra['frozenByPlate'] === plate.id);
     const look = { pressed: false, label: plate.label, camera, text };
@@ -324,11 +389,11 @@ export function paintScene(
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.imageSmoothingEnabled = true;
   const text = worldText(scale, dpr);
-  paintTiles(ctx, scene.draft, textures);
+  const zoom = { scale, dpr };
+  paintTiles(ctx, scene.draft, textures, zoom);
   paintGrid(ctx, width, height, scale);
   paintFixtures(ctx, scene.draft, text);
   paintMarks(ctx, scene.draft, text);
-  const zoom = { scale, dpr };
   for (const drone of scene.draft.map.drones) {
     paintDrone(ctx, drone, zoom);
   }
@@ -392,6 +457,7 @@ const GLYPHS: Readonly<Record<Tool, Glyph>> = {
   exit: centred((ctx) => drawExitHatch(ctx, { open: 1, pulse: STILL })),
   item: centred((ctx) => drawCarryable(ctx, { label: '', pulse: STILL, carried: false })),
   drone: centred((ctx) => drawDroneBody(ctx, STILL_DRONE, STILL)),
+  decor: centred((ctx) => drawDecor(ctx, 'shelf', 0, true)),
 };
 
 /** A tool's picture on its button: the prop it places, as the map shows it. */

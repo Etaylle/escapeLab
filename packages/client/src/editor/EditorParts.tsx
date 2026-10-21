@@ -1,7 +1,7 @@
 import { useRef, useState, type ChangeEvent } from 'react';
-import type { MissionInfo } from '@escapelab/core';
+import { DECOR_KINDS, DECOR_VARIANTS, type MissionInfo } from '@escapelab/core';
 import { MapThumb } from '../screens/MapThumb.js';
-import { twoConsoles, type Draft } from './draft.js';
+import { DECOR_NAMES, twoConsoles, type Draft } from './draft.js';
 import { ToolGlyph } from './EditorCanvas.js';
 import { SelectField } from './fields.js';
 import { MissionForm } from './MissionForm.js';
@@ -12,8 +12,8 @@ import {
   stationTarget,
   type Pending,
   type Ref,
-  type StationChoice,
   type Tool,
+  type ToolChoice,
 } from './tools.js';
 import type { Finding, Validation } from './validate.js';
 import { ValidatorPanel } from './ValidatorPanel.js';
@@ -34,6 +34,7 @@ export const TOOLS: readonly { tool: Tool; label: string; help: string }[] = [
   { tool: 'exit', label: 'Ausgang', help: 'Der Notausgang: Am Ende müssen alle dorthin.' },
   { tool: 'item', label: 'Teil', help: 'Zum Tragen: zu seinem Ablageort, oder ein Schlüssel.' },
   { tool: 'drone', label: 'Drohne', help: 'Jeder Klick ein Wegpunkt; Esc beendet den Weg.' },
+  { tool: 'decor', label: 'Möbel', help: 'Ein Möbelstück: Niemand geht hindurch, wie bei Wand.' },
 ];
 
 export interface Status {
@@ -320,8 +321,8 @@ function StationOptions({
   onChoice,
 }: {
   draft: Draft;
-  choice: StationChoice;
-  onChoice: (choice: StationChoice) => void;
+  choice: ToolChoice;
+  onChoice: (choice: ToolChoice) => void;
 }) {
   const target = stationTarget(draft, choice.puzzleId);
   return (
@@ -353,6 +354,41 @@ function StationOptions({
   );
 }
 
+/** The look a piece of furniture can be given, „auto" leaving it to its tile. */
+const VARIANT_CHOICES = [
+  { value: '', label: 'auto' },
+  ...Array.from({ length: DECOR_VARIANTS }, (_, i) => ({ value: String(i), label: String(i + 1) })),
+];
+
+/** The furniture tool's choice: which piece, and in which look. */
+function DecorOptions({
+  choice,
+  onChoice,
+}: {
+  choice: ToolChoice;
+  onChoice: (choice: ToolChoice) => void;
+}) {
+  return (
+    <div className="editor-tool-options">
+      <SelectField
+        label="Möbelstück"
+        value={choice.decor}
+        choices={DECOR_KINDS.map((kind) => ({ value: kind, label: DECOR_NAMES[kind] }))}
+        onChange={(kind) => {
+          const decor = DECOR_KINDS.find((k) => k === kind);
+          if (decor !== undefined) onChoice({ ...choice, decor });
+        }}
+      />
+      <SelectField
+        label="Ausführung"
+        value={choice.variant === null ? '' : String(choice.variant)}
+        choices={VARIANT_CHOICES}
+        onChange={(value) => onChoice({ ...choice, variant: value === '' ? null : Number(value) })}
+      />
+    </div>
+  );
+}
+
 export function ToolBox({
   draft,
   tool,
@@ -362,9 +398,9 @@ export function ToolBox({
 }: {
   draft: Draft;
   tool: Tool;
-  choice: StationChoice;
+  choice: ToolChoice;
   onTool: (tool: Tool) => void;
-  onChoice: (choice: StationChoice) => void;
+  onChoice: (choice: ToolChoice) => void;
 }) {
   return (
     <nav className="editor-tools" aria-label="Werkzeuge">
@@ -385,6 +421,7 @@ export function ToolBox({
       </div>
       <p className="editor-tool-help">{TOOLS.find((t) => t.tool === tool)?.help}</p>
       {tool === 'station' && <StationOptions draft={draft} choice={choice} onChoice={onChoice} />}
+      {tool === 'decor' && <DecorOptions choice={choice} onChoice={onChoice} />}
     </nav>
   );
 }

@@ -1,6 +1,6 @@
 import { startsClosed, type ManualDef, type MapDef } from './mission.js';
 import type { ConsoleId } from './puzzles/module.js';
-import { tileKey, type Spot } from './reach.js';
+import { tileKey, walkable, type Spot } from './reach.js';
 import type { GameState } from './state.js';
 
 /**
@@ -67,9 +67,9 @@ const STEP_SAMPLE = 0.2;
 /**
  * Whether an avatar can get from `from` to `to` between two position
  * updates: at most MAX_STEP tiles, and every point along the way, sampled
- * every STEP_SAMPLE tiles, on floor that is no door shut right now. The tile
- * the step starts on never stops it — a door may have shut on whoever
- * stands in it.
+ * every STEP_SAMPLE tiles, on floor that no furniture takes and that is no
+ * door shut right now. The tile the step starts on never stops it — a door
+ * may have shut on whoever stands in it.
  */
 export function stepAllowed(map: MapDef, state: GameState, from: Spot, to: Spot): boolean {
   const dx = to.x - from.x;
@@ -85,7 +85,7 @@ export function stepAllowed(map: MapDef, state: GameState, from: Spot, to: Spot)
     const x = Math.floor(from.x + (dx * i) / samples);
     const y = Math.floor(from.y + (dy * i) / samples);
     const tile = tileKey(x, y);
-    if (tile !== start && (map.tiles[y]?.charAt(x) !== '.' || shut.has(tile))) {
+    if (tile !== start && (!walkable(map, x, y) || shut.has(tile))) {
       return false;
     }
   }

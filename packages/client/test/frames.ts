@@ -1,5 +1,7 @@
 import type { PlayerView, Sight } from '@escapelab/core';
 import { worldText } from '../src/world/art.js';
+import { artKit } from '../src/world/artKit.js';
+import type { CanvasMaker } from '../src/world/atlas.js';
 import type { Lamp } from '../src/world/light.js';
 import type { Frame, FrameLight, FrameLit, RenderKit } from '../src/world/render/frame.js';
 import { fakeCanvas, type FakeCanvas } from './fakeCanvas.js';
@@ -61,6 +63,10 @@ export function lightWith(parts: Partial<FrameLight> = {}): FrameLight {
   };
 }
 
+/** Fake canvases for the atlas's sprites, each named after its size. */
+export const fakeSprites: CanvasMaker = (width, height) =>
+  fakeCanvas(width, height, `sprite ${width}x${height}`).canvas;
+
 /** A kit of fake canvases, the darkness cut into `overlay`. */
 export function kitWith(overlay: FakeCanvas = fakeCanvas(800, 600, 'overlay')): RenderKit {
   return {
@@ -76,6 +82,7 @@ export function kitWith(overlay: FakeCanvas = fakeCanvas(800, 600, 'overlay')): 
     roomLight: null,
     hatchCut: null,
     vignette: { canvas: fakeCanvas(0, 0, 'vignette').canvas, w: 0, h: 0, dpr: 0 },
+    art: artKit(fakeSprites),
   };
 }
 
@@ -121,6 +128,8 @@ export function frameWith(parts: Partial<Frame> = {}): Frame {
     reduced: false,
     touch: false,
     kit: kitWith(),
+    missionId: 'probe',
+    short: null,
     ...parts,
   };
 }

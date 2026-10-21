@@ -7,6 +7,18 @@ import {
   type MarkerPlacement,
   type MarkerTarget,
 } from '../markers.js';
+import {
+  AMBER,
+  css,
+  DONE_GREEN,
+  INK,
+  LABEL,
+  lift,
+  NIGHT,
+  READ_BLUE,
+  rgba,
+  TEAL,
+} from '../palette.js';
 import { placeRoomNames, ROOM_NAME_PX, shiftClear, type Box, type Viewport } from '../viewport.js';
 import { bakeVignette, vignetteBreath, vignetteShown } from '../vignette.js';
 import { FALLBACK_COLOR, toScreen, type ChatLine, type Frame } from './frame.js';
@@ -35,6 +47,19 @@ export const CAPTION_SECONDS = 2;
 const KEEP_OUT_TILES = 1.5;
 /** Air between two tags on the screen — a caption and the E prompt — CSS pixels. */
 const TAG_AIR = 4;
+
+const C = {
+  tag: rgba(INK, 0.88),
+  exit: css(DONE_GREEN),
+  nameHalo: rgba(NIGHT, 0.85),
+  name: rgba(lift(LABEL, 0.15), 0.8),
+  locked: css(AMBER),
+  action: css(TEAL),
+  caption: css(lift(READ_BLUE, 0.3)),
+  bubble: rgba(lift(LABEL, 0.82), 0.95),
+  bubbleInk: css(INK),
+  carrying: css(READ_BLUE),
+} as const;
 
 /** An arrow at the screen's edge: what it points at, its caption and where it sits. */
 interface EdgeMarker {
@@ -117,7 +142,7 @@ function drawTag(
   dpr: number,
 ): void {
   ctx.font = `700 ${12 * dpr}px ui-monospace, Menlo, monospace`;
-  ctx.fillStyle = 'rgba(7,11,15,0.88)';
+  ctx.fillStyle = C.tag;
   ctx.strokeStyle = tint;
   ctx.lineWidth = dpr;
   ctx.beginPath();
@@ -169,7 +194,7 @@ function drawExitSign(ctx: CanvasRenderingContext2D, frame: Frame): void {
   if (exit !== null && exit.open) {
     const [ex, ey] = toScreen(frame, exit.x + 0.5, exit.y - 0.5);
     ctx.font = `700 ${12 * frame.viewport.dpr}px ui-monospace, Menlo, monospace`;
-    ctx.fillStyle = '#4ade80';
+    ctx.fillStyle = C.exit;
     ctx.fillText('NOTAUSGANG', ex, ey);
   }
 }
@@ -249,8 +274,8 @@ function drawRoomNames(ctx: CanvasRenderingContext2D, frame: Frame, view: Viewpo
   });
   ctx.lineJoin = 'round';
   ctx.lineWidth = 3 * dpr;
-  ctx.strokeStyle = 'rgba(3,6,10,0.85)';
-  ctx.fillStyle = 'rgba(160,174,190,0.8)';
+  ctx.strokeStyle = C.nameHalo;
+  ctx.fillStyle = C.name;
   for (const name of placeRoomNames(names, view)) {
     ctx.strokeText(name.text, name.x, name.y);
     ctx.fillText(name.text, name.x, name.y);
@@ -277,7 +302,7 @@ function drawPrompt(ctx: CanvasRenderingContext2D, frame: Frame, figure: Box | n
   const box = tagBox(ctx, text, sx, Math.max(rawY, view.top + 24 * dpr), dpr);
   const ceiling = view.top + 13 * dpr;
   const at = moved(box, figure === null ? 0 : shiftClear(box, figure, TAG_AIR * dpr, ceiling));
-  drawTag(ctx, text, at, action.kind === 'locked' ? '#fbbf24' : '#2dd4bf', dpr);
+  drawTag(ctx, text, at, action.kind === 'locked' ? C.locked : C.action, dpr);
   return at;
 }
 
@@ -295,7 +320,7 @@ function drawCaptions(ctx: CanvasRenderingContext2D, frame: Frame, prompt: Box |
     const ceiling = view.top + 13 * dpr;
     const dy = prompt === null ? 0 : shiftClear(box, prompt, TAG_AIR * dpr, ceiling);
     ctx.globalAlpha = Math.min(1, age * 10, (1 - age) * 4);
-    drawTag(ctx, caption.text, moved(box, dy), '#93c5fd', dpr);
+    drawTag(ctx, caption.text, moved(box, dy), C.caption, dpr);
   }
   ctx.globalAlpha = 1;
 }
@@ -345,7 +370,7 @@ function drawBubble(
   const tw = ctx.measureText(text).width + 18 * dpr;
   const age = (frame.perf - line.at) / CHAT_LIFETIME_MS;
   ctx.globalAlpha = age > 0.8 ? (1 - age) / 0.2 : 1;
-  ctx.fillStyle = 'rgba(232,240,247,0.95)';
+  ctx.fillStyle = C.bubble;
   ctx.beginPath();
   ctx.roundRect(sx - tw / 2, sy - 12 * dpr, tw, 22 * dpr, 7 * dpr);
   ctx.fill();
@@ -355,7 +380,7 @@ function drawBubble(
   ctx.lineTo(sx, sy + 16 * dpr);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = '#0a0f14';
+  ctx.fillStyle = C.bubbleInk;
   ctx.fillText(text, sx, sy + 4 * dpr);
   ctx.globalAlpha = 1;
 }
@@ -372,7 +397,7 @@ function drawCarrying(ctx: CanvasRenderingContext2D, frame: Frame): void {
   if (carrying !== undefined) {
     const view = frame.viewport;
     ctx.font = `700 ${12 * view.dpr}px ui-monospace, Menlo, monospace`;
-    ctx.fillStyle = '#60a5fa';
+    ctx.fillStyle = C.carrying;
     ctx.fillText(`📦 ${carrying.label} — [Q] ablegen`, view.w / 2, view.h - 16 * view.dpr);
   }
 }
@@ -385,7 +410,7 @@ function drawCover(ctx: CanvasRenderingContext2D, frame: Frame): void {
   }
   const { w, h } = frame.viewport;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = `rgba(1, 2, 4, ${cover})`;
+  ctx.fillStyle = rgba(NIGHT, cover);
   ctx.fillRect(0, 0, w, h);
 }
 

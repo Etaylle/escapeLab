@@ -78,7 +78,7 @@ describe('bakeVignette — the edge as CSS drew its inset shadow', () => {
     bakeVignette(canvas, 2828, 1338, 2);
     expect([canvas.width, canvas.height]).toEqual([2828, 1338]);
     expect(state.shadowBlur).toBe(320);
-    expect(state.shadowColor).toBe('rgba(248, 60, 60, 0.34)');
+    expect(state.shadowColor).toBe('rgba(253, 70, 70, 0.34)');
   });
 
   it('lets only the shadow fall on the canvas: a frame round it, solid to the spread', () => {

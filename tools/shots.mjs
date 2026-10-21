@@ -110,11 +110,21 @@
  * off the clipboard, or out of the box the editor marks it in — has to open
  * the same mission in a page of its own (editor-shared.png). custom-probe is
  * deleted again through the API whatever happened before.
+ *
+ * Art (a Blackout run only): before the walkthrough, a scratch copy of
+ * Blackout — custom-blackout, ten seconds of power before the lights fail,
+ * its two starts in the Archiv and the Maschinenraum — is saved through the
+ * editor's route and played by two, the audience watching from the lobby on:
+ * art-overview.png catches the audience's whole lab lit, room-archive.png and
+ * room-machine.png each player in the room it starts in, lit (1440×1000), and
+ * art-dark.png the Maschinenraum two seconds into the dark, its standby glows
+ * and the flashlight. The copy is deleted again whatever happened. Every walk
+ * goes round the map's furniture (map.decor), which nobody walks through.
  */
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
-import { chromium } from 'playwright';
+import { chromium, request } from 'playwright';
 import { percentile } from './percentile.mjs';
 
 const BASE = process.argv[2] ?? 'http://localhost:5173';
@@ -510,11 +520,21 @@ function whereIs(seen) {
   return seen.pos ?? (spawn === undefined ? null : { x: spawn.x + 0.5, y: spawn.y + 0.5 });
 }
 
-/** Shortest walk over floor and open doors, as tiles from `from` to `to`; null if none. */
+/** The tiles the map's furniture stands on, by key: solid for every step, as walls are. */
+function furniture(map) {
+  return new Set((map.decor ?? []).map((piece) => `${piece.x},${piece.y}`));
+}
+
+/**
+ * Shortest walk over floor and open doors, round the furniture, as tiles from
+ * `from` to `to`; null if none.
+ */
 function route(map, from, to) {
   const key = (x, y) => `${x},${y}`;
   const closed = new Set(map.doors.filter((d) => !d.open).map((d) => key(d.x, d.y)));
-  const walkable = (x, y) => map.tiles[y]?.[x] === '.' && !closed.has(key(x, y));
+  const solid = furniture(map);
+  const walkable = (x, y) =>
+    map.tiles[y]?.[x] === '.' && !closed.has(key(x, y)) && !solid.has(key(x, y));
   const cameFrom = new Map([[key(from.x, from.y), null]]);
   const queue = [from];
   for (let i = 0; i < queue.length; i++) {
@@ -957,12 +977,18 @@ async function approach(player, target, tiles) {
 async function stepIntoRoom(player) {
   const home = tileOf(player.seen);
   const map = player.seen.view.map;
+  const solid = furniture(map);
   const step = [
     [0, -1],
     [1, 0],
     [0, 1],
     [-1, 0],
-  ].find(([dx, dy]) => home !== null && map.tiles[home.y + dy]?.[home.x + dx] === '.');
+  ].find(
+    ([dx, dy]) =>
+      home !== null &&
+      map.tiles[home.y + dy]?.[home.x + dx] === '.' &&
+      !solid.has(`${home.x + dx},${home.y + dy}`),
+  );
   if (home === null || step === undefined) {
     return;
   }
@@ -1050,11 +1076,15 @@ async function checkPowerRooms(host) {
   const map = host.seen.view.map;
   const own = roomFloorOf(map, tileOf(host.seen));
   const named = (text) => map.labels.find((label) => label.text === text);
+  // The furniture's tiles show its sprites, not the floor: only bare floor is measured.
+  const solid = furniture(map);
+  const bare = (floor) => floor.filter((tile) => !solid.has(`${tile.x},${tile.y}`));
   const rooms = [
-    { name: 'own room', floor: own, lit: true },
+    { name: 'own room', floor: bare(own), lit: true },
     ...['SERVERRAUM', 'LABOR'].map((text) => {
       const label = named(text);
-      return { name: text, floor: label === undefined ? [] : roomFloorOf(map, label), lit: false };
+      const floor = label === undefined ? [] : bare(roomFloorOf(map, label));
+      return { name: text, floor, lit: false };
     }),
   ];
   const said = [];
@@ -1159,12 +1189,14 @@ async function letThrough(walker, holder, target) {
 
 /**
  * Tiles beside `station` for `count` players to stand on, one each: floor
- * within reach of it, neither a plate nor another station, nearest first.
+ * within reach of it, neither a plate, another station nor furniture,
+ * nearest first.
  */
 function spotsBy(station, map, count) {
   const taken = new Set([
     ...map.plates.map((p) => `${p.x},${p.y}`),
     ...map.stations.map((s) => `${s.x},${s.y}`),
+    ...furniture(map),
   ]);
   const spots = [];
   for (let dy = -1; dy <= 1; dy++) {
@@ -2566,6 +2598,166 @@ async function captureEditor() {
   await context.close();
 }
 
+/**
+ * The art tour's scratch copy of Blackout, by its id and title: saved as
+ * custom-blackout, it keeps Blackout's dressing (the client seeds a custom
+ * mission's looks by its id without „custom-").
+ */
+const ART_MISSION = { id: 'custom-blackout', title: 'Kunstprobe' };
+/** The art tour's windows: as large as cold-open.png's. */
+const ART_SIZE = COLD_OPEN;
+
+/**
+ * Blackout as the art tour plays it: ten seconds of power before the lights
+ * fail, for two, starting in the Archiv and in the Maschinenraum — a copy
+ * the server checks as it checks every mission.
+ */
+function artMission() {
+  const blackout = JSON.parse(
+    readFileSync(fileURLToPath(new URL('../missions/blackout.json', import.meta.url)), 'utf8'),
+  );
+  // Where a won run leads on to is the shipped mission's business.
+  delete blackout.next;
+  return {
+    ...blackout,
+    ...ART_MISSION,
+    listOrder: 99,
+    players: { min: 2, max: 2 },
+    intro: { lightsSec: 10 },
+    map: {
+      ...blackout.map,
+      spawns: [
+        { x: 3, y: 2 },
+        { x: 3, y: 9 },
+      ],
+    },
+  };
+}
+
+/** A page for the art tour in a context of its own, its errors logged under `name`. */
+async function artPage(name, size = ART_SIZE) {
+  const context = await browser.newContext({ viewport: size });
+  const page = await openPage(context);
+  page.on('pageerror', (e) => console.log(`[${name} error]`, e.message));
+  return { name, page, seen: eavesdrop(page), context };
+}
+
+/** The art tour's crew in the lobby of the scratch mission, the audience watching. */
+async function artLobby() {
+  const host = await artPage('art host');
+  await host.page.goto(traced(BASE));
+  await host.page.getByPlaceholder('z. B. Anna').fill('Anna');
+  await host.page.locator('.mission', { hasText: ART_MISSION.title }).first().click();
+  await clickText(host.page, 'Runde eröffnen');
+  await host.page.locator('.room-code strong').waitFor({ timeout: 10_000 });
+  const code = (await host.page.locator('.room-code strong').innerText()).trim();
+  const guest = await artPage('art guest');
+  await guest.page.goto(BASE);
+  await guest.page.getByPlaceholder('z. B. Anna').fill('Ben');
+  await guest.page.getByLabel('Raumcode').fill(code);
+  await clickText(guest.page, 'Beitreten');
+  await guest.page.locator('.lobby').waitFor({ timeout: 10_000 });
+  const watcher = await artPage('art audience');
+  await watcher.page.goto(BASE);
+  await watcher.page.getByLabel('Raumcode').fill(code);
+  await clickText(watcher.page, 'Mit Code zuschauen');
+  await watcher.page.locator('.spectate').waitFor({ timeout: 10_000 });
+  return { host, guest, watcher };
+}
+
+/** Who of `players` started on the tile (x, y). */
+const startedAt = (players, x, y) =>
+  players.find(({ seen }) => {
+    const spawn = seen.view?.map?.yourSpawn;
+    return spawn?.x === x && spawn?.y === y;
+  });
+
+/**
+ * The art captures, while the scratch mission's power is on: the audience's
+ * whole lab lit (art-overview.png), each player's room round it lit
+ * (room-archive.png, room-machine.png); then, two seconds into the dark, the
+ * Maschinenraum with only the flashlight and its standby glows
+ * (art-dark.png). Fails where the run does not open with the power on, or a
+ * start is not where the copy put it.
+ */
+async function artCaptures({ host, guest, watcher }) {
+  await sleep(1200); // past the stage's fade-in, the lights at full
+  if (host.seen.view?.lights?.out !== false) {
+    throw new Error('the art tour’s mission did not open with the power on');
+  }
+  const crew = [host, guest];
+  const archive = startedAt(crew, 3, 2);
+  const machine = startedAt(crew, 3, 9);
+  if (archive === undefined || machine === undefined) {
+    throw new Error('the art tour’s starts are not the Archiv’s and the Maschinenraum’s');
+  }
+  await capture(watcher.page, 'art-overview.png');
+  await capture(archive.page, 'room-archive.png');
+  await capture(machine.page, 'room-machine.png');
+  const map = watcher.seen.view?.map;
+  const kinds = (map?.labels ?? []).map((label) => `${label.text} ${label.kind ?? 'plain'}`);
+  console.log(
+    `art-overview.png   the audience, the power on: ${new Set(kinds).size} rooms by kind ` +
+      `(${[...new Set(kinds)].join(', ')}), ${map?.decor?.length ?? 0} pieces of furniture; ` +
+      `room-archive.png ${archive.name}, room-machine.png ${machine.name}`,
+  );
+  if (!(await until(() => machine.seen.view?.lights?.out === true, 12_000))) {
+    throw new Error('the art tour’s lights never went out');
+  }
+  await sleep(2000);
+  await capture(machine.page, 'art-dark.png');
+  console.log(`art-dark.png       ${machine.name} in the Maschinenraum, two seconds into the dark`);
+}
+
+/**
+ * The art tour, for Blackout only: its scratch copy saved through the
+ * editor's route, played by two and watched by one through the captures of
+ * `artCaptures`, then deleted again whatever happened.
+ */
+async function captureArtTour() {
+  if (MISSION.toLowerCase() !== 'blackout') {
+    skip('art-*.png', `the art tour plays Blackout's copy; this run plays ${MISSION}`);
+    return;
+  }
+  const api = await request.newContext({ baseURL: BASE });
+  const catalog = await (await api.get('/missions')).json();
+  if (catalog.some((info) => info.id === ART_MISSION.id)) {
+    skip('art-*.png', `this server has its own ${ART_MISSION.id}: the tour leaves it be`);
+    await api.dispose();
+    return;
+  }
+  const saved = await api.post('/missions/custom', { data: artMission() });
+  if (saved.status() !== 201) {
+    fail(`art tour: the scratch copy was not taken (${saved.status()}): ${await saved.text()}`);
+    await api.dispose();
+    return;
+  }
+  const pages = [];
+  try {
+    const lobby = await artLobby();
+    pages.push(lobby.host, lobby.guest, lobby.watcher);
+    await clickText(lobby.guest.page, 'Ich bin bereit');
+    const start = lobby.host.page.locator('button.lobby-start:enabled', {
+      hasText: 'Mission starten',
+    });
+    await start.waitFor({ state: 'visible', timeout: 10_000 });
+    await start.click();
+    await lobby.host.page.locator('.stage').waitFor({ timeout: START_MS });
+    await lobby.guest.page.locator('.stage').waitFor({ timeout: START_MS });
+    await artCaptures(lobby);
+  } catch (err) {
+    console.log(`art tour           !! ${firstLine(err)}`);
+    fail(`art tour: ${firstLine(err)}`);
+  } finally {
+    for (const { context } of pages) {
+      await context.close();
+    }
+    const gone = await api.delete(`/missions/custom/${ART_MISSION.id}`);
+    console.log(`art tour           ${ART_MISSION.id} deleted again: ${gone.status()}`);
+    await api.dispose();
+  }
+}
+
 /** Holds the keys towards (tx, ty) as long as the avatar takes to walk there in a line. */
 async function walkStraight(player, tx, ty) {
   const at = whereIs(player.seen);
@@ -2894,6 +3086,7 @@ async function run() {
   });
   await logRendering();
   await captureEditor();
+  await captureArtTour();
 
   // --- host: create a room and grab the code ---------------------------
   const hostCtx = await browser.newContext({ viewport: SIZES[0] });

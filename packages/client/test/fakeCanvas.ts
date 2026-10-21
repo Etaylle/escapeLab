@@ -110,6 +110,10 @@ export function fakeCanvas(width = 0, height = 0, name = 'canvas'): FakeCanvas {
       const data = new Uint8ClampedArray(Number(w) * Number(h) * 4);
       return { width: w, height: h, data };
     },
+    getImageData: (_x, _y, w, h) => {
+      const data = new Uint8ClampedArray(Number(w) * Number(h) * 4);
+      return { width: w, height: h, data };
+    },
   };
   const ctx = new Proxy(
     {},

@@ -1,3 +1,4 @@
+import type { DecorKind } from '@escapelab/core';
 import {
   defaultFields,
   freeId,
@@ -20,7 +21,8 @@ import {
  * - Things stand on floor. A press on a wall or the void places nothing and
  *   says why.
  * - One solid thing a tile — start, door, plate, station, source, sign, exit,
- *   item, valve. A press on a tile that has one selects it instead.
+ *   item, valve, a piece of furniture. A press on a tile that has one selects
+ *   it instead.
  *   Marks — room names, drop-offs, drone waypoints — may lie on anything.
  * - The sign and the exit exist once: placing them again moves them; so does
  *   placing a station whose puzzle (or, at two consoles, whose console)
@@ -43,7 +45,8 @@ export type Tool =
   | 'label'
   | 'exit'
   | 'item'
-  | 'drone';
+  | 'drone'
+  | 'decor';
 
 /** The tools that put a thing on the map, as against selecting and painting. */
 export type PlacingTool = Exclude<Tool, 'select' | 'floor' | 'wall'>;
@@ -62,16 +65,31 @@ export type Ref =
   | { kind: 'dropoff'; index: number }
   | { kind: 'drone'; index: number; waypoint: number }
   | { kind: 'panel'; index: number }
+  | { kind: 'decor'; index: number }
   | { kind: 'puzzle'; index: number };
 
 /** A press the side form armed: the next tile pressed is a source's spot or an item's drop-off. */
 export type Pending = { kind: 'spot'; source: number } | { kind: 'dropoff'; item: number };
 
-/** What the station tool places: for which puzzle and at which console; null picks itself. */
-export interface StationChoice {
+/**
+ * What the placing tools are set to: the station tool, for which puzzle and
+ * at which console (null picks itself); the furniture tool, which piece and
+ * in which look (null leaves it to the tile).
+ */
+export interface ToolChoice {
   puzzleId: string | null;
   console: 'a' | 'b' | null;
+  decor: DecorKind;
+  variant: number | null;
 }
+
+/** The tools as a new editor sets them. */
+export const NO_CHOICE: ToolChoice = {
+  puzzleId: null,
+  console: null,
+  decor: 'shelf',
+  variant: null,
+};
 
 /** A press's outcome: the draft, what is selected now, and a word for the status line. */
 export interface Placement {
@@ -93,6 +111,7 @@ const SOLID_KINDS: ReadonlySet<Ref['kind']> = new Set([
   'exit',
   'item',
   'panel',
+  'decor',
 ]);
 
 const SOLID_TOOLS: ReadonlySet<Tool> = new Set([
@@ -104,6 +123,7 @@ const SOLID_TOOLS: ReadonlySet<Tool> = new Set([
   'sign',
   'exit',
   'item',
+  'decor',
 ]);
 
 export const isSolid = (ref: Ref): boolean => SOLID_KINDS.has(ref.kind);
@@ -145,6 +165,7 @@ export function placedRefs(draft: Draft): { ref: Ref; at: Tile }[] {
       ref: { kind: 'panel', index } as Ref,
       at,
     })),
+    ...map.decor.map((at, index) => ({ ref: { kind: 'decor', index } as Ref, at })),
     ...map.labels.map((at, index) => ({ ref: { kind: 'label', index } as Ref, at })),
     ...map.items.flatMap((item, index) =>
       item.deliverTo === undefined
@@ -275,7 +296,7 @@ export function stationConsole(
   return has('a') && !has('b') ? 'b' : 'a';
 }
 
-function placeStation(draft: Draft, at: Tile, choice: StationChoice): Placement {
+function placeStation(draft: Draft, at: Tile, choice: ToolChoice): Placement {
   const puzzle = stationTarget(draft, choice.puzzleId);
   if (puzzle === undefined) {
     return { draft, selection: null, note: 'Erst ein Rätsel anlegen (Reiter „Rätsel").' };
@@ -365,7 +386,7 @@ function placeDrone(draft: Draft, at: Tile, selection: Ref | null): Placement {
   });
 }
 
-type Placer = (draft: Draft, at: Tile, selection: Ref | null, choice: StationChoice) => Placement;
+type Placer = (draft: Draft, at: Tile, selection: Ref | null, choice: ToolChoice) => Placement;
 
 const PLACERS: Readonly<Record<PlacingTool, Placer>> = {
   spawn: (draft, at) =>
@@ -383,7 +404,7 @@ const PLACERS: Readonly<Record<PlacingTool, Placer>> = {
   source: (draft, at) => placeSource(draft, at),
   sign: (draft, at) => placed(withMap(draft, { edgeworkSign: at }), { kind: 'sign' }),
   label: (draft, at) => {
-    const labels = [...draft.map.labels, { text: 'RAUM', x: at.x, y: at.y }];
+    const labels = [...draft.map.labels, { text: 'RAUM', x: at.x, y: at.y, kind: '' as const }];
     return placed(withMap(draft, { labels }), { kind: 'label', index: labels.length - 1 });
   },
   exit: (draft, at) => placed(withMap(draft, { exit: at }), { kind: 'exit' }),
@@ -393,6 +414,11 @@ const PLACERS: Readonly<Record<PlacingTool, Placer>> = {
     return placed(withMap(draft, { items }), { kind: 'item', index: items.length - 1 });
   },
   drone: (draft, at, selection) => placeDrone(draft, at, selection),
+  decor: (draft, at, _selection, choice) => {
+    const piece = { kind: choice.decor, x: at.x, y: at.y, variant: choice.variant };
+    const decor = [...draft.map.decor, piece];
+    return placed(withMap(draft, { decor }), { kind: 'decor', index: decor.length - 1 });
+  },
 };
 
 export const ON_FLOOR_ONLY = 'Nur auf Boden — erst mit dem Boden-Pinsel Fläche malen.';
@@ -408,7 +434,7 @@ export function place(
   tool: PlacingTool,
   at: Tile,
   selection: Ref | null,
-  choice: StationChoice,
+  choice: ToolChoice,
 ): Placement {
   if (!inside(draft, at)) {
     return { draft, selection, note: null };
@@ -465,6 +491,7 @@ const LISTS = {
   station: 'stations',
   label: 'labels',
   item: 'items',
+  decor: 'decor',
 } as const;
 
 type ListRef = Extract<Ref, { kind: keyof typeof LISTS }>;

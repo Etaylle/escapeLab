@@ -14,6 +14,7 @@ import { minimapBox, minimapLayout } from './render/hud.js';
 import { CAPTION_SECONDS, CHAT_LIFETIME_MS } from './render/overlays.js';
 import type { Sim } from './sim.js';
 import { clampCamera, type Viewport } from './viewport.js';
+import { shortOf } from './particles.js';
 
 /**
  * One frame of the world, assembled before anything is drawn (GameWorld.tsx
@@ -95,6 +96,8 @@ export function assembleFrame(
     reduced: live.reduced,
     touch: source.touchPad.matches,
     kit: source.kit,
+    missionId: live.view.missionId,
+    short: shortOf(live.view, source.alarm.current),
   };
 }
 

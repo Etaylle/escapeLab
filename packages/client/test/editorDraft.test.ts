@@ -225,6 +225,51 @@ describe('a puzzle’s own fields and penalty, draft ↔ JSON', () => {
   });
 });
 
+describe('draft ↔ JSON: rooms’ kinds and furniture', () => {
+  it('reads each room’s kind and every piece of furniture, and writes them back', () => {
+    const blackout = shipped.find(({ name }) => name === 'blackout.json')?.data as {
+      map: { labels: unknown[]; decor: unknown[] };
+    };
+    const draft = loaded(blackout);
+    expect(draft.map.labels[0]).toEqual({ text: 'ARCHIV', x: 4, y: 1, kind: 'archive' });
+    expect(draft.map.decor[0]).toEqual({ kind: 'cart', x: 1, y: 3, variant: null });
+    expect(draft.map.decor[1]).toEqual({ kind: 'shelf', x: 5, y: 3, variant: 1 });
+    const json = draftToJson(draft) as { map: { labels: unknown[]; decor: unknown[] } };
+    expect(json.map.labels).toEqual(blackout.map.labels);
+    expect(json.map.decor).toEqual(blackout.map.decor);
+  });
+
+  it('leaves out a plain room’s kind and a look left to the tile, and reads them back so', () => {
+    const blank = newDraft();
+    const draft: Draft = {
+      ...blank,
+      map: {
+        ...blank.map,
+        labels: [{ text: 'LAGER', x: 2, y: 2, kind: '' }],
+        decor: [
+          { kind: 'barrel', x: 3, y: 3, variant: null },
+          { kind: 'rack', x: 4, y: 3, variant: 2 },
+        ],
+      },
+    };
+    const json = draftToJson(draft) as { map: { labels: unknown[]; decor: unknown[] } };
+    expect(json.map.labels).toEqual([{ text: 'LAGER', x: 2, y: 2 }]);
+    expect(json.map.decor).toEqual([
+      { kind: 'barrel', x: 3, y: 3 },
+      { kind: 'rack', x: 4, y: 3, variant: 2 },
+    ]);
+    expect(loaded(json).map).toEqual(draft.map);
+  });
+
+  it('starts a new draft with no furniture, and reads a file without any as none', () => {
+    expect(newDraft().map.decor).toEqual([]);
+    const json = draftToJson(newDraft()) as { map: Record<string, unknown> };
+    const map = Object.fromEntries(Object.entries(json.map).filter(([key]) => key !== 'decor'));
+    expect(map).not.toHaveProperty('decor');
+    expect(loaded({ ...json, map }).map.decor).toEqual([]);
+  });
+});
+
 describe('draft ↔ JSON, unsound and broken', () => {
   it('leaves out of the file what the draft leaves empty', () => {
     const draft = newDraft();

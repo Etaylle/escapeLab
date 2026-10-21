@@ -2,6 +2,7 @@ import { canSee, type MapView } from '@escapelab/core';
 import { consoleName } from './consoles.js';
 import { carriedItem } from './interact.js';
 import { doorsShut } from './light.js';
+import { ALARM, css, DONE_GREEN, READ_BLUE, TEAL as TEAL_RGB } from './palette.js';
 import { overlaps, type Box, type Viewport } from './viewport.js';
 
 /** A thing worth walking to, and how its arrow should look. */
@@ -22,10 +23,10 @@ export interface MarkerPlacement {
   captionY: number;
 }
 
-const TEAL = '#2dd4bf';
-const RED = '#f87171';
-const BLUE = '#60a5fa';
-const GREEN = '#4ade80';
+const TEAL = css(TEAL_RGB);
+const RED = css(ALARM);
+const BLUE = css(READ_BLUE);
+const GREEN = css(DONE_GREEN);
 
 /**
  * What the crew knows it still has to bring. A key's target stays unknown

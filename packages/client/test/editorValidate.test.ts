@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { draftFromJson, newDraft, type Draft, type Tile } from '../src/editor/draft.js';
-import { lineBetween, paint, place, type PlacingTool } from '../src/editor/tools.js';
+import { lineBetween, NO_CHOICE, paint, place, type PlacingTool } from '../src/editor/tools.js';
 import { locate, messagesAt, refOfPath, validateDraft } from '../src/editor/validate.js';
 
-const AUTO = { puzzleId: null, console: null };
+const AUTO = NO_CHOICE;
 
 function blackout(): Draft {
   const data = JSON.parse(
@@ -116,6 +116,28 @@ describe('where a finding points', () => {
     expect(refOfPath(['puzzles', 0, 'title'])).toEqual({ kind: 'puzzle', index: 0 });
     expect(refOfPath(['title'])).toBeNull();
     expect(refOfPath(['map', 'tiles'])).toBeNull();
+  });
+
+  it('selects the piece of furniture a rule names, and lights what it stands in the way of', () => {
+    const draft = blackout();
+    const message =
+      'map: decor "rack" at 8,1 stands on station "notlicht" — furniture goes on free floor';
+    const found = locate(draft, message);
+    // The second rack of the map's furniture stands at 8,1.
+    expect(found.target).toEqual({ kind: 'decor', index: 2 });
+    expect(found.spots).toContainEqual({ x: 8, y: 1 });
+    expect(found.spots).toContainEqual({ x: 7, y: 5 });
+    expect(refOfPath(['map', 'decor', 4, 'kind'])).toEqual({ kind: 'decor', index: 4 });
+  });
+
+  it('reports furniture in the way, at its tile, as the server would', () => {
+    const at = { x: 5, y: 4 };
+    const draft = place(probe(['spawn', { x: 3, y: 4 }]), 'decor', at, null, AUTO).draft;
+    const blocking = { ...draft, map: { ...draft.map, spawns: [...draft.map.spawns, at] } };
+    const findings = validateDraft(blocking).findings;
+    const finding = findings.find((f) => f.message.includes('decor "shelf"'));
+    expect(finding?.target).toEqual({ kind: 'decor', index: 0 });
+    expect(finding?.spots).toContainEqual({ x: 5, y: 4 });
   });
 
   it('reads the things and tiles a map rule names out of its words', () => {

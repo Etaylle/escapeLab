@@ -2,12 +2,18 @@ export {
   parseMission,
   checkMission,
   missionSchema,
+  DECOR_KINDS,
+  DECOR_VARIANTS,
   MANUAL_KINDS,
   MAX_LAMPS,
+  ROOM_KINDS,
+  type DecorKind,
   type ManualKind,
   type Mission,
   type MissionCheck,
+  type RoomKind,
 } from './mission.js';
+export { decorTiles, walkable } from './reach.js';
 export {
   initialState,
   CREW_COLORS,

@@ -1,12 +1,13 @@
-import type { MapView, PlayerView, ServerMessage } from '@escapelab/core';
+import { walkable, type MapView, type PlayerView, type ServerMessage } from '@escapelab/core';
 import type { Room } from '../src/room.js';
 
 /**
  * Walking as a client does. The room takes only steps an avatar can walk,
  * so the tests do not teleport: a walk goes from tile centre to tile centre
- * along a shortest path over floor and open doors — as the walker's latest
- * view shows them — and ends on the exact spot asked for. Every step stays
- * inside one tile or runs between the middles of two neighbouring ones.
+ * along a shortest path over floor and open doors, round the furniture — as
+ * the walker's latest view shows them — and ends on the exact spot asked
+ * for. Every step stays inside one tile or runs between the middles of two
+ * neighbouring ones.
  */
 
 /** A player as the tests drive one: its id and everything the room sent it. */
@@ -36,11 +37,9 @@ function latestView(walker: Walker): PlayerView {
 const key = ([x, y]: Tile): string => `${x},${y}`;
 const tileOf = (spot: Spot): Tile => [Math.floor(spot.x), Math.floor(spot.y)];
 
-/** Floor, and no door shut on it. */
+/** Floor that no furniture takes, and no door shut on it. */
 function passable(map: MapView, [x, y]: Tile): boolean {
-  return (
-    map.tiles[y]?.charAt(x) === '.' && !map.doors.some((d) => d.x === x && d.y === y && !d.open)
-  );
+  return walkable(map, x, y) && !map.doors.some((d) => d.x === x && d.y === y && !d.open);
 }
 
 /** The tiles after `from` on a shortest way to `to`; throws where none leads there. */

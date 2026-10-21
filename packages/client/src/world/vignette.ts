@@ -1,4 +1,5 @@
 import { smooth } from './ease.js';
+import { ALARM, BLACK, css, EMERGENCY, mix, rgba } from './palette.js';
 
 /**
  * The red edge of the clock's last minute and of the whole escape, drawn
@@ -17,7 +18,7 @@ const LAST_MINUTE_MS = 60_000;
 export const BREATH_MS = 1100;
 const BREATH_LOW = 0.55;
 /** The edge's red, and how it reaches in, CSS pixels: solid as far as SPREAD, then blurred. */
-const EDGE = 'rgba(248, 60, 60, 0.34)';
+const EDGE = rgba(mix(EMERGENCY, ALARM, 0.3), 0.34);
 const SPREAD_PX = 50;
 const BLUR_PX = 160;
 
@@ -74,7 +75,7 @@ export function bakeVignette(
   g.shadowColor = EDGE;
   g.shadowBlur = blur;
   g.shadowOffsetX = -away;
-  g.fillStyle = '#000';
+  g.fillStyle = css(BLACK);
   g.beginPath();
   g.rect(away - reach, -reach, width + 2 * reach, height + 2 * reach);
   g.rect(away + spread, spread, Math.max(0, width - 2 * spread), Math.max(0, height - 2 * spread));

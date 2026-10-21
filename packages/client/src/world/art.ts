@@ -1,48 +1,68 @@
 import type { ConsoleId, ManualKind } from '@escapelab/core';
+import {
+  addCircle,
+  cachedGradient,
+  clamp01,
+  footShadow,
+  OUTLINE,
+  pulseWave,
+  roundRectPath,
+  softEllipse,
+  TAU,
+} from './brush.js';
+import {
+  ALARM,
+  AMBER,
+  BLACK,
+  BRASS,
+  css,
+  DONE_GREEN,
+  EMERGENCY,
+  GLASS,
+  INK,
+  LABEL,
+  lift,
+  LINO,
+  mix,
+  NIGHT,
+  PAPER,
+  parseHex,
+  READ_BLUE,
+  REACTOR,
+  rgba,
+  sink,
+  STEEL,
+  TEAL,
+  WHITE,
+  WOOD,
+  type Rgb,
+} from './palette.js';
+import { surfaceTile } from './surfaces.js';
 
-// art.ts — pure Canvas2D drawing for EscapeLab: cute capsule scientists in a moody lab.
+// art.ts — the props and the crew: capsule scientists in a dark 1980s lab, drawn in Canvas2D
+// after the art bible (docs/art-bible.md): colours from palette.ts only, a 2 px outline at
+// 64 px a tile (brush.ts's OUTLINE), lit from the top left, a soft foot shadow under every
+// standing prop.
 //
-// No imports, no DOM queries, and nothing touches the DOM at import time. All draw
-// functions assume the ctx is already transformed so that THE ORIGIN IS THE OBJECT'S
-// ANCHOR and 1.0 === one map tile. Every public draw function saves and restores
+// Nothing touches the DOM at import time. Every draw function assumes the ctx is transformed
+// so that THE ORIGIN IS THE OBJECT'S ANCHOR and 1.0 === one map tile, saves and restores
 // (try/finally) all ctx state it changes, and allocates nothing per call beyond what the
-// canvas API itself allocates (drawPlate's uppercase label is the one exception).
+// canvas API itself allocates (drawPlate's uppercase label is the one exception). Module
+// state is limited to memo caches never invalidated: gradients (brush.ts), the shading
+// colours per scientist body colour, and the scientist outlines as Path2D objects.
 //
-// Module state is limited to these lazily filled memo caches, never invalidated:
-// - Gradients. A CanvasGradient's coordinates are resolved in the user space active when
-//   it is used for a fill or stroke, not when it is created, so a gradient built once in
-//   object-local tile units stays correct under whatever transform a later call sets up.
-//   Gradients belong to the context that created them, hence a WeakMap keyed by context
-//   (entries die with their canvas), then by builder function, then by a color key string
-//   ('' for color-independent gradients). Builders are module-level functions, so a
-//   lookup allocates nothing. Keys come from small fixed sets (player colors, status
-//   tints), so the caches stay tiny.
-// - Derived shading colors per scientist body color.
-// - The static scientist outlines as Path2D objects.
-// makeFloorTile() and makeWallTile() return a fresh canvas per call for the caller to keep
-// (e.g. as a CanvasPattern); their noise comes from a seeded PRNG, so every call yields the
-// identical texture.
-//
-// Text: sub-pixel font sizes such as '0.26px' render unreliably (engines may round, clamp
-// or hint the size before the transform applies). All text is therefore drawn TEXT_SCALE
-// times larger inside ctx.scale(1 / TEXT_SCALE, 1 / TEXT_SCALE). Name tags and the labels
-// under props follow the zoom only within a range of CSS pixels: the caller hands in
-// worldText() for its zoom as `text`; without it they are drawn at their size in tiles.
+// Text: sub-pixel font sizes such as '0.26px' render unreliably (engines may round, clamp or
+// hint the size before the transform applies). All text is therefore drawn TEXT_SCALE times
+// larger inside ctx.scale(1 / TEXT_SCALE, 1 / TEXT_SCALE). Name tags and the labels under
+// props follow the zoom only within a range of CSS pixels: the caller hands in worldText()
+// for its zoom as `text`; without it they are drawn at their size in tiles.
 
-const TAU = Math.PI * 2;
-
-const TEAL = '#2dd4bf';
-const AMBER = '#fbbf24';
+const C_TEAL = css(TEAL);
+const C_AMBER = css(AMBER);
 /** Reading: manual objects, like their edge marker. */
-const BLUE = '#60a5fa';
-// 'r, g, b' triples: glow and shadow colors, also their gradient cache keys.
-const TEAL_RGB = '45, 212, 191';
-const AMBER_RGB = '251, 191, 36';
-const GREEN_RGB = '74, 222, 128';
-const BLUE_RGB = '96, 165, 250';
-const SHADOW_RGB = '0, 0, 0';
-/** Near-black edge line for consoles, doors and other props. */
-const PROP_EDGE = '#05080b';
+const C_BLUE = css(READ_BLUE);
+/** The outline round consoles, doors and every other prop. */
+const PROP_EDGE = css(INK);
 
 const MONO = 'ui-monospace, Menlo, monospace';
 /** Text is drawn this many times larger inside a matching down-scale (see header). */
@@ -50,8 +70,14 @@ const TEXT_SCALE = 32;
 /** 0.17 tile: a console's letter on its station; it grows and shrinks with its disc. */
 const FONT_BADGE = `bold ${0.17 * TEXT_SCALE}px ${MONO}`;
 /** Label of a prop that is not calling for anybody right now. */
-const IDLE_LABEL = '#8a96a5';
-const HALO_COLOR = 'rgba(3, 6, 10, 0.88)';
+const IDLE_LABEL = css(LABEL);
+const HALO_COLOR = rgba(NIGHT, 0.88);
+/** Light catching a prop's top edge: the key light comes from the top left. */
+const EDGE_LIGHT = rgba(WHITE, 0.07);
+const VENT = rgba(BLACK, 0.45);
+
+/** Steel `t` of the way into shadow: a prop's front, a recess. */
+const steel = (t: number): string => css(sink(STEEL, t));
 
 // ---- World text ----------------------------------------------------------------------
 
@@ -117,127 +143,6 @@ const TILE_TEXT: WorldText = {
   name: textStyle(NAME_TILES, NAME_TILES),
 };
 
-// ---- Shared helpers ------------------------------------------------------------------
-
-type Rgb = readonly [number, number, number];
-type GradientBuilder = (ctx: CanvasRenderingContext2D, key: string) => CanvasGradient;
-type GradientsByKey = Map<string, CanvasGradient>;
-type GradientsByBuilder = Map<GradientBuilder, GradientsByKey>;
-
-/** Gradient memo: context -> builder -> key -> gradient (see the header comment). */
-const gradientCache = new WeakMap<CanvasRenderingContext2D, GradientsByBuilder>();
-
-/** Returns the gradient `build` makes for `key` on `ctx`, building it on first use. */
-function cachedGradient(
-  ctx: CanvasRenderingContext2D,
-  build: GradientBuilder,
-  key: string,
-): CanvasGradient {
-  let byBuilder = gradientCache.get(ctx);
-  if (byBuilder === undefined) {
-    byBuilder = new Map<GradientBuilder, GradientsByKey>();
-    gradientCache.set(ctx, byBuilder);
-  }
-  let byKey = byBuilder.get(build);
-  if (byKey === undefined) {
-    byKey = new Map<string, CanvasGradient>();
-    byBuilder.set(build, byKey);
-  }
-  let gradient = byKey.get(key);
-  if (gradient === undefined) {
-    gradient = build(ctx, key);
-    byKey.set(key, gradient);
-  }
-  return gradient;
-}
-
-function clamp01(v: number): number {
-  return Math.min(1, Math.max(0, v));
-}
-
-/** Maps a 0..1 looping phase to a smooth 0..1..0 wave with no jump at the wrap. */
-function pulseWave(phase: number): number {
-  return 0.5 - 0.5 * Math.cos(phase * TAU);
-}
-
-/** mulberry32: tiny seeded PRNG for deterministic texture noise; floats in [0, 1). */
-function seededRandom(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/**
- * Adds a rounded-rect subpath. `r` rounds the top corners and `rBottom` the bottom ones;
- * both are clamped to half the rect's shorter side.
- */
-function roundRectPath(
-  p: CanvasPath,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-  rBottom = r,
-): void {
-  const limit = Math.max(0, Math.min(w, h) / 2);
-  const rt = Math.min(r, limit);
-  const rb = Math.min(rBottom, limit);
-  p.moveTo(x + rt, y);
-  p.arcTo(x + w, y, x + w, y + h, rt);
-  p.arcTo(x + w, y + h, x, y + h, rb);
-  p.arcTo(x, y + h, x, y, rb);
-  p.arcTo(x, y, x + w, y, rt);
-  p.closePath();
-}
-
-/** Adds a circle subpath that is not connected to the previous subpath. */
-function addCircle(p: CanvasPath, x: number, y: number, r: number): void {
-  p.moveTo(x + r, y);
-  p.arc(x, y, r, 0, TAU);
-}
-
-/** Unit-radius radial falloff used by softEllipse; `rgb` is an 'r, g, b' triple. */
-function buildSoftGradient(ctx: CanvasRenderingContext2D, rgb: string): CanvasGradient {
-  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
-  g.addColorStop(0, `rgba(${rgb}, 1)`);
-  g.addColorStop(0.45, `rgba(${rgb}, 0.6)`);
-  g.addColorStop(1, `rgba(${rgb}, 0)`);
-  return g;
-}
-
-/**
- * Fills an ellipse with a soft radial falloff of `rgb` ('r, g, b') that peaks at `alpha`
- * in the center: ground shadows with 'source-over', light glows with 'lighter'.
- */
-function softEllipse(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  rx: number,
-  ry: number,
-  rgb: string,
-  alpha: number,
-  op: GlobalCompositeOperation,
-): void {
-  if (alpha <= 0) return;
-  ctx.save();
-  ctx.globalCompositeOperation = op;
-  ctx.globalAlpha *= alpha;
-  ctx.translate(cx, cy);
-  ctx.scale(rx, ry);
-  ctx.fillStyle = cachedGradient(ctx, buildSoftGradient, rgb);
-  ctx.beginPath();
-  ctx.arc(0, 0, 1, 0, TAU);
-  ctx.fill();
-  ctx.restore();
-}
-
 /**
  * Draws centered text with a dark halo (stroke first, then fill) at tile position (x, y).
  * Changes text, stroke and fill state; callers own the surrounding save/restore.
@@ -288,7 +193,7 @@ export function drawPropLabel(
 // ---- Scientist -----------------------------------------------------------------------
 
 export interface ScientistOpts {
-  /** body color, e.g. '#2dd4bf' */
+  /** body color, one of the crew's: '#rgb' or '#rrggbb' */
   color: string;
   name: string;
   /** facing angle in radians (0 = right, PI/2 = down) — flip/tilt the visor side */
@@ -317,13 +222,15 @@ const OUTLINE_W = 0.035;
 const VISOR_FRONT = 0.285;
 const VISOR_H = 0.19;
 const NAME_Y = BODY_TOP - 0.1;
-const NAME_COLOR = '#e8eef4';
+const NAME_COLOR = css(lift(LABEL, 0.82));
 // Animation amplitudes (tile units, radians for LEAN).
 const STRIDE = 0.06;
 const STEP_LIFT = 0.025;
 const BOB = 0.025;
 const LEAN = 0.06;
 const DISCONNECTED_ALPHA = 0.45;
+/** Visor glass: steel with a cold sheen. */
+const VISOR_GLASS = mix(STEEL, GLASS, 0.3);
 
 interface BodyColors {
   /** Lit front-top of the body. */
@@ -338,46 +245,24 @@ interface BodyColors {
 
 const bodyColorCache = new Map<string, BodyColors>();
 
-/** Derives (once per color) the shading colors for a scientist body color. */
+/**
+ * Derives (once per color) the shading colors for a scientist body color.
+ *
+ * @throws Error for a colour that is no '#rgb' or '#rrggbb'.
+ */
 function bodyColors(color: string): BodyColors {
   let colors = bodyColorCache.get(color);
   if (colors === undefined) {
-    const rgb = parseHexColor(color);
+    const rgb = parseHex(color);
     colors = {
-      light: mixRgb(rgb, 255, 0.3),
-      shade: mixRgb(rgb, 0, 0.3),
-      pack: mixRgb(rgb, 0, 0.42),
-      outline: mixRgb(rgb, 0, 0.62),
+      light: css(lift(rgb, 0.3)),
+      shade: css(sink(rgb, 0.3)),
+      pack: css(sink(rgb, 0.42)),
+      outline: css(sink(rgb, 0.62)),
     };
     bodyColorCache.set(color, colors);
   }
   return colors;
-}
-
-/**
- * Parses '#rgb' or '#rrggbb'.
- *
- * @throws Error for any other format, naming the accepted ones.
- */
-function parseHexColor(color: string): Rgb {
-  if (!/^#(?:[0-9a-f]{3}){1,2}$/i.test(color)) {
-    throw new Error(
-      `art: scientist color "${color}" must be '#rgb' or '#rrggbb', e.g. '#2dd4bf'.`,
-    );
-  }
-  // '#abc' -> '#aabbcc'
-  const hex = color.length === 4 ? color.replace(/[0-9a-f]/gi, '$&$&') : color;
-  const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-
-/** Mixes `rgb` toward the grey `level` (0 black .. 255 white) by `t`; returns '#rrggbb'. */
-function mixRgb(rgb: Rgb, level: number, t: number): string {
-  let hex = '#';
-  for (const c of rgb) {
-    hex += Math.round(c + (level - c) * t).toString(16).padStart(2, '0');
-  }
-  return hex;
 }
 
 interface ScientistPaths {
@@ -422,9 +307,9 @@ function buildBodyGradient(ctx: CanvasRenderingContext2D, color: string): Canvas
 /** Dark glass, slightly lighter at the top where it reflects the ceiling. */
 function buildVisorGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
   const g = ctx.createLinearGradient(0, -VISOR_H / 2, 0, VISOR_H / 2);
-  g.addColorStop(0, '#3f5c6e');
-  g.addColorStop(0.45, '#1a2a35');
-  g.addColorStop(1, '#0a1218');
+  g.addColorStop(0, css(sink(VISOR_GLASS, 0.42)));
+  g.addColorStop(0.45, css(sink(VISOR_GLASS, 0.78)));
+  g.addColorStop(1, css(sink(VISOR_GLASS, 0.9)));
   return g;
 }
 
@@ -446,7 +331,7 @@ function drawBodyHighlight(ctx: CanvasRenderingContext2D): void {
   ctx.arc(0, DOME_Y, BODY_HALF_W - 0.065, -2.25, -1.25);
   ctx.lineCap = 'round';
   ctx.lineWidth = 0.035;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.24)';
+  ctx.strokeStyle = rgba(WHITE, 0.24);
   ctx.stroke();
 }
 
@@ -474,12 +359,12 @@ function drawVisor(ctx: CanvasRenderingContext2D, facing: number, outline: strin
   ctx.lineTo(-r, r - 0.04);
   ctx.lineCap = 'round';
   ctx.lineWidth = 0.018;
-  ctx.strokeStyle = 'rgba(45, 212, 191, 0.3)';
+  ctx.strokeStyle = rgba(TEAL, 0.3);
   ctx.stroke();
   ctx.beginPath();
   ctx.ellipse(-0.09, -0.042, 0.06, 0.024, -0.12, 0, TAU);
   addCircle(ctx, -0.165, -0.045, 0.013);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+  ctx.fillStyle = rgba(WHITE, 0.8);
   ctx.fill();
   ctx.translate(-VISOR_FRONT, -cy);
 }
@@ -498,11 +383,11 @@ function drawScientistFigure(
   const paths = getScientistPaths();
   const swing = o.moving ? Math.sin(theta) * STRIDE : 0;
   // Positive while the front leg swings forward (lifted), negative while the rear one does.
-  const lift = o.moving ? Math.cos(theta) * STEP_LIFT : 0;
+  const raise = o.moving ? Math.cos(theta) * STEP_LIFT : 0;
   const frontX = LEG_X + swing;
-  const frontY = -Math.max(0, lift);
+  const frontY = -Math.max(0, raise);
   const backX = -LEG_X - swing;
-  const backY = -Math.max(0, -lift);
+  const backY = -Math.max(0, -raise);
   ctx.scale(Math.cos(o.facing) < 0 ? -1 : 1, 1);
   if (o.moving) ctx.rotate(LEAN);
   ctx.lineJoin = 'round';
@@ -531,7 +416,7 @@ function drawYouRing(ctx: CanvasRenderingContext2D): void {
   ctx.beginPath();
   ctx.ellipse(0, 0, 0.37, 0.135, 0, 0, TAU);
   ctx.lineWidth = 0.025;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.strokeStyle = rgba(WHITE, 0.55);
   ctx.stroke();
 }
 
@@ -570,7 +455,7 @@ export function drawScientist(ctx: CanvasRenderingContext2D, o: ScientistOpts): 
     // The body is highest while the legs pass each other and back down at full stride.
     const bob = o.moving ? -Math.abs(Math.cos(theta)) * BOB : 0;
     // bob <= 0: a raised body casts a slightly smaller shadow.
-    softEllipse(ctx, 0, 0, 0.3 + bob, 0.1 + bob / 3, SHADOW_RGB, 0.35, 'source-over');
+    softEllipse(ctx, 0, 0, 0.3 + bob, 0.1 + bob / 3, BLACK, 0.35, 'source-over');
     if (o.isYou) drawYouRing(ctx);
     ctx.save();
     drawScientistFigure(ctx, o, colors, theta, bob);
@@ -583,179 +468,20 @@ export function drawScientist(ctx: CanvasRenderingContext2D, o: ScientistOpts): 
 
 // ---- Floor and wall textures ---------------------------------------------------------
 
+/** The size of the floor and wall textures the editor's brushes show, in pixels. */
 const TEX_SIZE = 64;
-/** Height in px of the wall's lit top cap. */
-const WALL_CAP = 10;
-
-/** The colours the floor and the walls are made in. */
-interface TexturePalette {
-  floor: string;
-  /** the groove between two floor panels */
-  seam: string;
-  /** the light catching a panel's top and left edge */
-  edge: string;
-  /** a wall's face, top to bottom */
-  face: readonly [string, string];
-  /** a wall's lit top cap, top to bottom */
-  cap: readonly [string, string];
-}
-
-/** The lab in the dark: very dark blue-grey metal, made to be lit by lamps. */
-const DARK_PALETTE: TexturePalette = {
-  floor: '#0f151c',
-  seam: '#080b10',
-  edge: 'rgba(255, 255, 255, 0.035)',
-  face: ['#131a22', '#080b10'],
-  cap: ['#26303c', '#19212a'],
-};
-
-/** The lab with its power on: warm grey panels under the ceiling lights, the walls' caps lit. */
-const POWERED_PALETTE: TexturePalette = {
-  floor: '#4b463e',
-  seam: '#28241f',
-  edge: 'rgba(255, 244, 226, 0.08)',
-  face: ['#2f2b26', '#1b1916'],
-  cap: ['#6f685c', '#534d43'],
-};
-
-function createTextureCanvas(): [HTMLCanvasElement, CanvasRenderingContext2D] {
-  const canvas = document.createElement('canvas');
-  canvas.width = TEX_SIZE;
-  canvas.height = TEX_SIZE;
-  const ctx = canvas.getContext('2d');
-  if (ctx === null) {
-    throw new Error('art: canvas.getContext("2d") returned null; cannot build a texture.');
-  }
-  return [canvas, ctx];
-}
-
-/** Adds grey noise of +-amp levels (slightly stronger on blue) to the whole texture. */
-function addNoise(ctx: CanvasRenderingContext2D, rand: () => number, amp: number): void {
-  const image = ctx.getImageData(0, 0, TEX_SIZE, TEX_SIZE);
-  const d = image.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const n = (rand() * 2 - 1) * amp;
-    d[i] = (d[i] ?? 0) + n;
-    d[i + 1] = (d[i + 1] ?? 0) + n;
-    d[i + 2] = (d[i + 2] ?? 0) + n * 1.2;
-  }
-  ctx.putImageData(image, 0, 0);
-}
-
-/** 2x2 px rivet with a light top-left and a dark bottom-right edge. */
-function drawRivet(ctx: CanvasRenderingContext2D, x: number, y: number): void {
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-  ctx.fillRect(x + 1, y + 1, 2, 2);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
-  ctx.fillRect(x, y, 2, 2);
-}
 
 /**
- * One square floor panel. Its seam groove sits on the top and left edges and its shadow
- * on the bottom and right, so tiled panels form continuous bevelled seams.
- */
-function drawFloorPanel(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  size: number,
-  rand: () => number,
-  palette: TexturePalette,
-): void {
-  const v = (rand() - 0.5) * 0.03;
-  ctx.fillStyle = v >= 0 ? `rgba(255, 255, 255, ${v})` : `rgba(0, 0, 0, ${-2 * v})`;
-  ctx.fillRect(x, y, size, size);
-  ctx.fillStyle = palette.seam;
-  ctx.fillRect(x, y, size, 1);
-  ctx.fillRect(x, y, 1, size);
-  ctx.fillStyle = palette.edge;
-  ctx.fillRect(x + 1, y + 1, size - 1, 1);
-  ctx.fillRect(x + 1, y + 1, 1, size - 1);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
-  ctx.fillRect(x + 1, y + size - 1, size - 1, 1);
-  ctx.fillRect(x + size - 1, y + 1, 1, size - 1);
-  const near = 4;
-  const far = size - 7;
-  drawRivet(ctx, x + near, y + near);
-  drawRivet(ctx, x + far, y + near);
-  drawRivet(ctx, x + near, y + far);
-  drawRivet(ctx, x + far, y + far);
-}
-
-/**
- * 64x64 px tile texture for lab floor: very dark blue-grey panels, subtle seams/variation —
- * or, `powered`, the same panels in the warm grey of the lab with its lights on.
+ * A plain room's floor as a 64 × 64 px texture: steel panels in the dark — or, `powered`,
+ * under the ceiling lights (surfaces.ts draws every room kind's).
  */
 export function makeFloorTile(powered = false): HTMLCanvasElement {
-  const palette = powered ? POWERED_PALETTE : DARK_PALETTE;
-  const [canvas, ctx] = createTextureCanvas();
-  const rand = seededRandom(0xf1004);
-  ctx.fillStyle = palette.floor;
-  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  const half = TEX_SIZE / 2;
-  for (let y = 0; y < TEX_SIZE; y += half) {
-    for (let x = 0; x < TEX_SIZE; x += half) drawFloorPanel(ctx, x, y, half, rand, palette);
-  }
-  addNoise(ctx, rand, 2.2);
-  return canvas;
+  return surfaceTile(TEX_SIZE, { floor: 'plain', variant: 0, lit: powered });
 }
 
-/** Full-width horizontal streaks, so the brushed look tiles seamlessly left-right. */
-function drawBrushedStreaks(ctx: CanvasRenderingContext2D, rand: () => number): void {
-  for (let i = 0; i < 22; i++) {
-    const y = Math.floor(rand() * TEX_SIZE);
-    const a = (0.015 + rand() * 0.03).toFixed(3);
-    ctx.fillStyle = rand() < 0.5 ? `rgba(255, 255, 255, ${a})` : `rgba(0, 0, 0, ${a})`;
-    ctx.fillRect(0, y, TEX_SIZE, 1);
-  }
-}
-
-/** Lit top cap of the wall (the pseudo-3D hint) and the lip shadow below it. */
-function drawWallCap(ctx: CanvasRenderingContext2D, palette: TexturePalette): void {
-  const cap = ctx.createLinearGradient(0, 0, 0, WALL_CAP);
-  cap.addColorStop(0, palette.cap[0]);
-  cap.addColorStop(1, palette.cap[1]);
-  ctx.fillStyle = cap;
-  ctx.fillRect(0, 0, TEX_SIZE, WALL_CAP);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.09)';
-  ctx.fillRect(0, 0, TEX_SIZE, 1);
-  ctx.fillStyle = '#05070a';
-  ctx.fillRect(0, WALL_CAP, TEX_SIZE, 1);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-  ctx.fillRect(0, WALL_CAP + 1, TEX_SIZE, 2);
-}
-
-/**
- * 64x64 px wall texture: darker metallic with a lighter top edge (pseudo-3D hint) — or,
- * `powered`, in the warm greys of the lab with its lights on, the cap catching the light.
- */
+/** A plain room's wall seen from the room south of it, as a 64 × 64 px texture. */
 export function makeWallTile(powered = false): HTMLCanvasElement {
-  const palette = powered ? POWERED_PALETTE : DARK_PALETTE;
-  const [canvas, ctx] = createTextureCanvas();
-  const rand = seededRandom(0x3a115eed);
-  const face = ctx.createLinearGradient(0, 0, 0, TEX_SIZE);
-  face.addColorStop(0, palette.face[0]);
-  face.addColorStop(1, palette.face[1]);
-  ctx.fillStyle = face;
-  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  drawBrushedStreaks(ctx, rand);
-  // Seams: a vertical one on the tile edge and a horizontal one across the face.
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-  ctx.fillRect(0, WALL_CAP, 1, TEX_SIZE - WALL_CAP);
-  ctx.fillRect(0, 38, TEX_SIZE, 1);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
-  ctx.fillRect(1, WALL_CAP, 1, TEX_SIZE - WALL_CAP);
-  ctx.fillRect(0, 39, TEX_SIZE, 1);
-  drawRivet(ctx, 5, 17);
-  drawRivet(ctx, 56, 17);
-  drawRivet(ctx, 5, 45);
-  drawRivet(ctx, 56, 45);
-  // Dark foot where the wall meets the floor.
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-  ctx.fillRect(0, TEX_SIZE - 2, TEX_SIZE, 2);
-  drawWallCap(ctx, palette);
-  addNoise(ctx, rand, 1.6);
-  return canvas;
+  return surfaceTile(TEX_SIZE, { wall: 'plain', mask: 4, lit: powered, faceLit: powered });
 }
 
 // ---- Station -------------------------------------------------------------------------
@@ -785,30 +511,30 @@ interface StationLook {
 
 const STATION_LOOKS: Readonly<Record<StationStatus, StationLook>> = {
   armed: {
-    deskTop: '#1e2630',
-    deskFront: '#131920',
-    bezel: '#0f141a',
-    screen: '#0e4943',
-    keys: 'rgba(45, 212, 191, 0.32)',
-    led: TEAL,
+    deskTop: steel(0.68),
+    deskFront: steel(0.8),
+    bezel: steel(0.85),
+    screen: css(sink(TEAL, 0.7)),
+    keys: rgba(TEAL, 0.32),
+    led: C_TEAL,
     badgeInk: PROP_EDGE,
   },
   done: {
-    deskTop: '#1e2630',
-    deskFront: '#131920',
-    bezel: '#0f141a',
-    screen: '#0d2c1b',
-    keys: 'rgba(74, 222, 128, 0.16)',
-    led: '#4ade80',
+    deskTop: steel(0.68),
+    deskFront: steel(0.8),
+    bezel: steel(0.85),
+    screen: css(sink(DONE_GREEN, 0.82)),
+    keys: rgba(DONE_GREEN, 0.16),
+    led: css(DONE_GREEN),
     badgeInk: PROP_EDGE,
   },
   locked: {
-    deskTop: '#202328',
-    deskFront: '#15171b',
-    bezel: '#111316',
-    screen: '#181b1f',
-    keys: 'rgba(255, 255, 255, 0.06)',
-    led: '#3f444b',
+    deskTop: css(sink(LABEL, 0.78)),
+    deskFront: css(sink(LABEL, 0.85)),
+    bezel: css(sink(LABEL, 0.88)),
+    screen: css(sink(LABEL, 0.83)),
+    keys: rgba(WHITE, 0.06),
+    led: css(sink(LABEL, 0.6)),
     badgeInk: IDLE_LABEL,
   },
 };
@@ -825,12 +551,12 @@ const SCREEN_W = 0.54;
 const SCREEN_H = 0.32;
 const SCREEN_R = 0.03;
 const SCREEN_CY = SCREEN_Y + SCREEN_H / 2;
-const LOCK_GREY = '#6b7280';
+const LOCK_GREY = css(sink(LABEL, 0.25));
 
 function buildScreenGradient(ctx: CanvasRenderingContext2D, top: string): CanvasGradient {
   const g = ctx.createLinearGradient(0, SCREEN_Y, 0, SCREEN_Y + SCREEN_H);
   g.addColorStop(0, top);
-  g.addColorStop(1, '#05080b');
+  g.addColorStop(1, PROP_EDGE);
   return g;
 }
 
@@ -840,14 +566,14 @@ function drawStationGlow(
   wave: number,
 ): void {
   if (status === 'armed') {
-    softEllipse(ctx, 0, SCREEN_CY, 0.9, 0.8, TEAL_RGB, 0.18 + 0.32 * wave, 'lighter');
+    softEllipse(ctx, 0, SCREEN_CY, 0.9, 0.8, TEAL, 0.18 + 0.32 * wave, 'lighter');
   } else if (status === 'done') {
-    softEllipse(ctx, 0, SCREEN_CY, 0.6, 0.55, GREEN_RGB, 0.1, 'lighter');
+    softEllipse(ctx, 0, SCREEN_CY, 0.6, 0.55, DONE_GREEN, 0.1, 'lighter');
   }
 }
 
 function drawStationKeyboard(ctx: CanvasRenderingContext2D, keys: string): void {
-  ctx.fillStyle = '#0a0e13';
+  ctx.fillStyle = steel(0.9);
   ctx.beginPath();
   roundRectPath(ctx, -0.26, 0.03, 0.52, 0.11, 0.02);
   ctx.fill();
@@ -875,11 +601,11 @@ function drawStationCabinet(
   ctx.fill();
   ctx.beginPath();
   roundRectPath(ctx, -0.38, -0.12, 0.76, 0.52, 0.06);
-  ctx.lineWidth = 0.025;
+  ctx.lineWidth = OUTLINE;
   ctx.strokeStyle = PROP_EDGE;
   ctx.stroke();
   // Light catching the desk's back edge and its front crease.
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+  ctx.fillStyle = EDGE_LIGHT;
   ctx.fillRect(-0.32, -0.105, 0.64, 0.012);
   ctx.fillRect(-0.36, 0.17, 0.72, 0.012);
   drawStationKeyboard(ctx, look.keys);
@@ -892,21 +618,21 @@ function drawStationCabinet(
   addCircle(ctx, -0.13, 0.29, 0.022);
   ctx.fill();
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.fillStyle = VENT;
   for (let i = 0; i < 3; i++) ctx.fillRect(0.06, 0.245 + i * 0.04, 0.24, 0.016);
 }
 
 function drawStationMonitor(ctx: CanvasRenderingContext2D, look: StationLook): void {
-  ctx.fillStyle = '#0a0d11';
+  ctx.fillStyle = steel(0.9);
   ctx.fillRect(-0.06, -0.02, 0.12, 0.06);
   ctx.beginPath();
   roundRectPath(ctx, -0.33, -0.45, 0.66, 0.44, 0.05);
   ctx.fillStyle = look.bezel;
   ctx.fill();
-  ctx.lineWidth = 0.025;
+  ctx.lineWidth = OUTLINE;
   ctx.strokeStyle = PROP_EDGE;
   ctx.stroke();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+  ctx.fillStyle = EDGE_LIGHT;
   ctx.fillRect(-0.28, -0.44, 0.56, 0.012);
   ctx.beginPath();
   roundRectPath(ctx, SCREEN_X, SCREEN_Y, SCREEN_W, SCREEN_H, SCREEN_R);
@@ -919,8 +645,8 @@ function drawArmedScreen(ctx: CanvasRenderingContext2D, wave: number): void {
   const alpha = ctx.globalAlpha;
   ctx.beginPath();
   roundRectPath(ctx, SCREEN_X, SCREEN_Y, SCREEN_W, SCREEN_H, SCREEN_R);
-  ctx.fillStyle = TEAL;
-  ctx.strokeStyle = TEAL;
+  ctx.fillStyle = C_TEAL;
+  ctx.strokeStyle = C_TEAL;
   ctx.lineWidth = 0.016;
   ctx.globalAlpha = alpha * (0.06 + 0.1 * wave);
   ctx.fill();
@@ -945,7 +671,7 @@ function drawCheckGlyph(ctx: CanvasRenderingContext2D): void {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.lineWidth = 0.045;
-  ctx.strokeStyle = 'rgba(74, 222, 128, 0.7)';
+  ctx.strokeStyle = rgba(DONE_GREEN, 0.7);
   ctx.stroke();
 }
 
@@ -965,7 +691,7 @@ function drawLockGlyph(ctx: CanvasRenderingContext2D): void {
   ctx.beginPath();
   addCircle(ctx, 0, cy + 0.035, 0.016);
   ctx.rect(-0.007, cy + 0.04, 0.014, 0.032);
-  ctx.fillStyle = '#16191d';
+  ctx.fillStyle = css(sink(LABEL, 0.85));
   ctx.fill();
 }
 
@@ -983,7 +709,7 @@ function drawStationScreen(
   ctx.lineTo(SCREEN_X + 0.26, SCREEN_Y + 0.015);
   ctx.lineTo(SCREEN_X + 0.03, SCREEN_Y + 0.21);
   ctx.closePath();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+  ctx.fillStyle = rgba(WHITE, 0.04);
   ctx.fill();
 }
 
@@ -993,7 +719,7 @@ function drawConsoleBadge(ctx: CanvasRenderingContext2D, look: StationLook, id: 
   addCircle(ctx, BADGE_X, BADGE_Y, BADGE_R);
   ctx.fillStyle = look.led;
   ctx.fill();
-  ctx.lineWidth = 0.025;
+  ctx.lineWidth = OUTLINE;
   ctx.strokeStyle = PROP_EDGE;
   ctx.stroke();
   ctx.scale(1 / TEXT_SCALE, 1 / TEXT_SCALE);
@@ -1015,11 +741,93 @@ export function drawStation(ctx: CanvasRenderingContext2D, o: StationOpts): void
   const wave = pulseWave(o.pulse);
   ctx.save();
   try {
-    softEllipse(ctx, 0, 0.37, 0.46, 0.13, SHADOW_RGB, 0.45, 'source-over');
+    footShadow(ctx, 0, 0.37, 0.46, 0.13);
     drawStationGlow(ctx, o.status, wave);
     drawStationCabinet(ctx, look, o.status === 'armed' ? 0.35 + 0.65 * wave : 0.85);
     drawStationMonitor(ctx, look);
     drawStationScreen(ctx, o.status, wave);
+    if (o.console !== null) drawConsoleBadge(ctx, look, o.console);
+  } finally {
+    ctx.restore();
+  }
+}
+
+// ---- Fuse box ------------------------------------------------------------------------
+
+const FUSE_BODY = steel(0.52);
+const FUSE_DOOR = steel(0.4);
+const WARNING_YELLOW = css(sink(AMBER, 0.08));
+
+/** Two rows of fuses behind the box's window, their caps in the status colour. */
+function drawFuseRows(ctx: CanvasRenderingContext2D, led: string, ledAlpha: number): void {
+  ctx.fillStyle = steel(0.88);
+  ctx.fillRect(-0.24, -0.2, 0.36, 0.3);
+  for (let row = 0; row < 2; row++) {
+    for (let i = 0; i < 4; i++) {
+      const x = -0.215 + i * 0.085;
+      const y = -0.17 + row * 0.15;
+      ctx.fillStyle = css(PAPER);
+      ctx.fillRect(x, y, 0.05, 0.1);
+      ctx.fillStyle = steel(0.2);
+      ctx.fillRect(x, y, 0.05, 0.022);
+      ctx.fillRect(x, y + 0.078, 0.05, 0.022);
+    }
+  }
+  const alpha = ctx.globalAlpha;
+  ctx.globalAlpha = alpha * ledAlpha;
+  ctx.fillStyle = led;
+  ctx.beginPath();
+  addCircle(ctx, 0.23, -0.15, 0.028);
+  ctx.fill();
+  ctx.globalAlpha = alpha;
+}
+
+/** The warning triangle on the box's door: amber with a black bolt. */
+function drawBoltSign(ctx: CanvasRenderingContext2D): void {
+  ctx.beginPath();
+  ctx.moveTo(0.23, -0.06);
+  ctx.lineTo(0.3, 0.07);
+  ctx.lineTo(0.16, 0.07);
+  ctx.closePath();
+  ctx.fillStyle = WARNING_YELLOW;
+  ctx.fill();
+  ctx.lineWidth = 0.012;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0.235, -0.025);
+  ctx.lineTo(0.215, 0.02);
+  ctx.lineTo(0.235, 0.02);
+  ctx.lineTo(0.22, 0.055);
+  ctx.lineWidth = 0.012;
+  ctx.stroke();
+}
+
+/** Anchor: TILE CENTER. The fuse box a circuit is worked at: a steel cabinet on the wall, its
+ * fuses behind a window, a warning triangle and a status lamp; armed, it glows teal like every
+ * station that is up. A short throws the world's sparks out of it (particles.ts). */
+export function drawFusebox(ctx: CanvasRenderingContext2D, o: StationOpts): void {
+  const look = STATION_LOOKS[o.status];
+  const wave = pulseWave(o.pulse);
+  ctx.save();
+  try {
+    footShadow(ctx, 0, 0.3, 0.42, 0.11);
+    drawStationGlow(ctx, o.status, wave);
+    ctx.beginPath();
+    roundRectPath(ctx, -0.36, -0.42, 0.72, 0.64, 0.04);
+    ctx.fillStyle = FUSE_BODY;
+    ctx.fill();
+    ctx.lineWidth = OUTLINE;
+    ctx.strokeStyle = PROP_EDGE;
+    ctx.stroke();
+    ctx.fillStyle = FUSE_DOOR;
+    ctx.fillRect(-0.3, -0.36, 0.6, 0.52);
+    ctx.fillStyle = rgba(WHITE, 0.1);
+    ctx.fillRect(-0.3, -0.36, 0.6, 0.014);
+    drawFuseRows(ctx, look.led, o.status === 'armed' ? 0.35 + 0.65 * wave : 0.85);
+    drawBoltSign(ctx);
+    ctx.fillStyle = VENT;
+    for (let i = 0; i < 3; i++) ctx.fillRect(-0.24, -0.33 + i * 0.03, 0.2, 0.012);
     if (o.console !== null) drawConsoleBadge(ctx, look, o.console);
   } finally {
     ctx.restore();
@@ -1036,9 +844,11 @@ export interface LeverBoxOpts {
   levers: number;
 }
 
-const LEVER_RED = '#b8402b';
-const LEVER_RED_LIT = '#ef6a45';
-const PLATE_YELLOW = '#d9a92e';
+/** The lever's red: emergency red leaning to orange, as such handles are painted. */
+const LEVER_HANDLE = mix(EMERGENCY, REACTOR, 0.3);
+const LEVER_RED = css(sink(LEVER_HANDLE, 0.28));
+const LEVER_RED_LIT = css(lift(LEVER_HANDLE, 0.15));
+const PLATE_YELLOW = css(sink(AMBER, 0.14));
 
 /** One lever in its slot at `x`: up at AUS, or thrown down to EIN. */
 function drawLeverInSlot(
@@ -1047,12 +857,12 @@ function drawLeverInSlot(
   down: boolean,
   lit: boolean,
 ): void {
-  ctx.fillStyle = '#07090c';
+  ctx.fillStyle = PROP_EDGE;
   ctx.beginPath();
   roundRectPath(ctx, x - 0.035, -0.27, 0.07, 0.36, 0.03);
   ctx.fill();
   const y = down ? 0.04 : -0.24;
-  ctx.fillStyle = '#9aa4ad';
+  ctx.fillStyle = css(lift(STEEL, 0.35));
   ctx.fillRect(x - 0.016, y, 0.032, 0.07);
   ctx.beginPath();
   roundRectPath(ctx, x - 0.1, y - 0.04, 0.2, 0.075, 0.025);
@@ -1061,7 +871,7 @@ function drawLeverInSlot(
   ctx.lineWidth = 0.018;
   ctx.strokeStyle = PROP_EDGE;
   ctx.stroke();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+  ctx.fillStyle = rgba(WHITE, 0.25);
   ctx.fillRect(x - 0.08, y - 0.032, 0.16, 0.012);
 }
 
@@ -1074,20 +884,20 @@ export function drawLeverBox(ctx: CanvasRenderingContext2D, o: LeverBoxOpts): vo
   const armed = o.status === 'armed';
   ctx.save();
   try {
-    softEllipse(ctx, 0, 0.3, 0.44, 0.12, SHADOW_RGB, 0.45, 'source-over');
+    footShadow(ctx, 0, 0.3, 0.44, 0.12);
     drawStationGlow(ctx, o.status, wave);
     ctx.beginPath();
     roundRectPath(ctx, -0.38, -0.46, 0.76, 0.66, 0.05);
-    ctx.fillStyle = '#2a313a';
+    ctx.fillStyle = steel(0.55);
     ctx.fill();
-    ctx.lineWidth = 0.025;
+    ctx.lineWidth = OUTLINE;
     ctx.strokeStyle = PROP_EDGE;
     ctx.stroke();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.fillStyle = rgba(WHITE, 0.1);
     ctx.fillRect(-0.33, -0.445, 0.66, 0.012);
     ctx.fillStyle = PLATE_YELLOW;
     ctx.fillRect(-0.3, -0.4, 0.6, 0.07);
-    ctx.fillStyle = 'rgba(23, 18, 10, 0.75)';
+    ctx.fillStyle = rgba(sink(BRASS, 0.88), 0.75);
     for (let i = 0; i < 4; i++) ctx.fillRect(-0.24 + i * 0.13, -0.373, 0.09, 0.016);
     const n = Math.max(2, o.levers);
     for (let i = 0; i < n; i++) {
@@ -1117,21 +927,22 @@ export interface PlateOpts {
 const PLATE_SOCKET_R = 0.38;
 const PLATE_RIM_R = 0.335;
 const PLATE_BOLT = 0.18;
+const PLATE_DARK = steel(0.82);
 
 /** Recess walls: shadowed at the top, catching light at the bottom. */
 function buildSocketGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
   const g = ctx.createLinearGradient(0, -PLATE_SOCKET_R, 0, PLATE_SOCKET_R);
-  g.addColorStop(0, '#030508');
-  g.addColorStop(1, '#131a22');
+  g.addColorStop(0, css(NIGHT));
+  g.addColorStop(1, steel(0.8));
   return g;
 }
 
 /** Metal top face lit from the upper left; coordinates relative to the disc center. */
 function buildDiscGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
   const g = ctx.createRadialGradient(-0.1, -0.12, 0.02, 0, 0, 0.32);
-  g.addColorStop(0, '#46525f');
-  g.addColorStop(0.5, '#2a333e');
-  g.addColorStop(1, '#1a2029');
+  g.addColorStop(0, steel(0.25));
+  g.addColorStop(0.5, steel(0.55));
+  g.addColorStop(1, steel(0.72));
   return g;
 }
 
@@ -1141,24 +952,24 @@ function drawPlateSocket(ctx: CanvasRenderingContext2D): void {
   ctx.fillStyle = cachedGradient(ctx, buildSocketGradient, '');
   ctx.fill();
   ctx.lineWidth = 0.02;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+  ctx.strokeStyle = rgba(WHITE, 0.06);
   ctx.stroke();
 }
 
 /** Camera body with viewfinder bump and lens, lit teal while pressed. */
 function drawCameraGlyph(ctx: CanvasRenderingContext2D, pressed: boolean): void {
-  const color = pressed ? TEAL : IDLE_LABEL;
+  const color = pressed ? C_TEAL : IDLE_LABEL;
   ctx.beginPath();
   roundRectPath(ctx, -0.095, -0.05, 0.19, 0.115, 0.022);
   ctx.rect(-0.04, -0.078, 0.08, 0.03);
   ctx.fillStyle = color;
   ctx.fill();
   ctx.lineWidth = 0.012;
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.strokeStyle = rgba(BLACK, 0.55);
   ctx.stroke();
   ctx.beginPath();
   ctx.arc(0, 0.008, 0.036, 0, TAU);
-  ctx.fillStyle = '#151b22';
+  ctx.fillStyle = PLATE_DARK;
   ctx.fill();
   ctx.beginPath();
   ctx.arc(0, 0.008, 0.016, 0, TAU);
@@ -1175,19 +986,19 @@ function drawPlateEngraving(
   ctx.beginPath();
   ctx.arc(0, 0, 0.2, 0, TAU);
   ctx.lineWidth = 0.018;
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.strokeStyle = rgba(BLACK, 0.45);
   ctx.stroke();
   ctx.beginPath();
   ctx.arc(0, 0.009, 0.2, 0.15 * Math.PI, 0.85 * Math.PI);
   ctx.lineWidth = 0.008;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
+  ctx.strokeStyle = EDGE_LIGHT;
   ctx.stroke();
   ctx.beginPath();
   addCircle(ctx, -PLATE_BOLT, -PLATE_BOLT, 0.018);
   addCircle(ctx, PLATE_BOLT, -PLATE_BOLT, 0.018);
   addCircle(ctx, -PLATE_BOLT, PLATE_BOLT, 0.018);
   addCircle(ctx, PLATE_BOLT, PLATE_BOLT, 0.018);
-  ctx.fillStyle = '#4a5562';
+  ctx.fillStyle = steel(0.45);
   ctx.fill();
   if (camera) {
     drawCameraGlyph(ctx, pressed);
@@ -1195,10 +1006,10 @@ function drawPlateEngraving(
   }
   ctx.beginPath();
   ctx.arc(0, 0, 0.065, 0, TAU);
-  ctx.fillStyle = pressed ? TEAL : '#151b22';
+  ctx.fillStyle = pressed ? C_TEAL : PLATE_DARK;
   ctx.fill();
   ctx.lineWidth = 0.014;
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.strokeStyle = rgba(BLACK, 0.55);
   ctx.stroke();
 }
 
@@ -1209,7 +1020,7 @@ function drawPlateDisc(ctx: CanvasRenderingContext2D, pressed: boolean, camera: 
   const side = pressed ? 0.008 : 0.03;
   ctx.beginPath();
   ctx.arc(0, cy + side, r, 0, TAU);
-  ctx.fillStyle = '#0a0e13';
+  ctx.fillStyle = steel(0.9);
   ctx.fill();
   ctx.translate(0, cy);
   ctx.beginPath();
@@ -1217,11 +1028,11 @@ function drawPlateDisc(ctx: CanvasRenderingContext2D, pressed: boolean, camera: 
   ctx.fillStyle = cachedGradient(ctx, buildDiscGradient, '');
   ctx.fill();
   if (pressed) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.fillStyle = rgba(BLACK, 0.25);
     ctx.fill();
   }
   ctx.lineWidth = 0.014;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+  ctx.strokeStyle = rgba(WHITE, 0.1);
   ctx.stroke();
   drawPlateEngraving(ctx, pressed, camera);
   ctx.translate(0, -cy);
@@ -1243,16 +1054,16 @@ export function drawPlate(ctx: CanvasRenderingContext2D, o: PlateOpts): void {
   ctx.save();
   try {
     drawPlateSocket(ctx);
-    if (o.pressed) softEllipse(ctx, 0, 0, 0.6, 0.6, TEAL_RGB, 0.45, 'lighter');
+    if (o.pressed) softEllipse(ctx, 0, 0, 0.6, 0.6, TEAL, 0.45, 'lighter');
     drawPlateDisc(ctx, o.pressed, o.camera);
     if (o.pressed) {
       ctx.beginPath();
       ctx.arc(0, 0.006, PLATE_RIM_R, 0, TAU);
       ctx.lineWidth = 0.024;
-      ctx.strokeStyle = 'rgba(45, 212, 191, 0.9)';
+      ctx.strokeStyle = rgba(TEAL, 0.9);
       ctx.stroke();
     }
-    const color = o.pressed ? '#5eead4' : IDLE_LABEL;
+    const color = o.pressed ? css(lift(TEAL, 0.25)) : IDLE_LABEL;
     drawHaloText(ctx, o.label.toUpperCase(), 0, 0.41, (o.text ?? TILE_TEXT).label, color, 'top');
   } finally {
     ctx.restore();
@@ -1276,27 +1087,27 @@ const JAMB_W = 0.07;
 /** Panel metal: lit top edge (pseudo-3D) fading to a dark bottom. */
 function buildDoorPanelGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
   const g = ctx.createLinearGradient(0, -DOOR_HALF_T, 0, DOOR_HALF_T);
-  g.addColorStop(0, '#36404c');
-  g.addColorStop(0.12, '#252d37');
-  g.addColorStop(1, '#141920');
+  g.addColorStop(0, steel(0.45));
+  g.addColorStop(0.12, steel(0.62));
+  g.addColorStop(1, steel(0.8));
   return g;
 }
 
 function buildJambGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
   const g = ctx.createLinearGradient(0, -0.24, 0, 0.24);
-  g.addColorStop(0, '#3a4553');
-  g.addColorStop(0.08, '#222a34');
-  g.addColorStop(1, '#10151b');
+  g.addColorStop(0, steel(0.42));
+  g.addColorStop(0.08, steel(0.65));
+  g.addColorStop(1, steel(0.84));
   return g;
 }
 
 /** Dark floor slot the panels run in; stays visible when the door is open. */
 function drawDoorTrack(ctx: CanvasRenderingContext2D): void {
-  ctx.fillStyle = '#05070a';
+  ctx.fillStyle = PROP_EDGE;
   ctx.fillRect(-0.5, -0.2, 1, 0.4);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+  ctx.fillStyle = rgba(WHITE, 0.05);
   ctx.fillRect(-0.5, 0.188, 1, 0.012);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+  ctx.fillStyle = rgba(BLACK, 0.6);
   ctx.fillRect(-0.5, -0.02, 1, 0.04);
 }
 
@@ -1313,19 +1124,19 @@ function drawDoorPanel(ctx: CanvasRenderingContext2D, slide: number): void {
   const x0 = edge - DOOR_PANEL_W;
   ctx.fillStyle = cachedGradient(ctx, buildDoorPanelGradient, '');
   ctx.fillRect(x0, -DOOR_HALF_T, DOOR_PANEL_W, 2 * DOOR_HALF_T);
-  ctx.lineWidth = 0.02;
+  ctx.lineWidth = OUTLINE;
   ctx.strokeStyle = PROP_EDGE;
   ctx.strokeRect(x0, -DOOR_HALF_T, DOOR_PANEL_W, 2 * DOOR_HALF_T);
   ctx.beginPath();
   addChevron(ctx, edge - 0.31);
   addChevron(ctx, edge - 0.21);
   ctx.lineWidth = 0.03;
-  ctx.strokeStyle = 'rgba(251, 191, 36, 0.5)';
+  ctx.strokeStyle = rgba(AMBER, 0.5);
   ctx.stroke();
   // Amber light strip along the leading edge, with a faint halo.
-  ctx.fillStyle = 'rgba(251, 191, 36, 0.16)';
+  ctx.fillStyle = rgba(AMBER, 0.16);
   ctx.fillRect(edge - 0.12, -0.135, 0.09, 0.27);
-  ctx.fillStyle = AMBER;
+  ctx.fillStyle = C_AMBER;
   ctx.fillRect(edge - 0.09, -0.115, 0.03, 0.23);
 }
 
@@ -1362,7 +1173,7 @@ export function drawDoor(ctx: CanvasRenderingContext2D, o: DoorOpts): void {
     // (x <-> y), which turns the panels' lit top edge into a lit left edge.
     if (!o.horizontal) ctx.transform(0, 1, 1, 0, 0, 0);
     drawDoorTrack(ctx);
-    softEllipse(ctx, 0, 0, 0.62, 0.48, AMBER_RGB, 0.26 * (1 - t), 'lighter');
+    softEllipse(ctx, 0, 0, 0.62, 0.48, AMBER, 0.26 * (1 - t), 'lighter');
     if (t < 1) drawDoorPanels(ctx, t * DOOR_PANEL_W);
     drawDoorJamb(ctx, -0.5);
     drawDoorJamb(ctx, 0.5 - JAMB_W);
@@ -1383,14 +1194,13 @@ export interface ExitHatchOpts {
 /** Half the hatch's frame, and half the opening its leaves close, in tiles. */
 const HATCH_HALF = 0.42;
 const SHAFT_HALF = 0.31;
-const HATCH_GREEN = '#4ade80';
 
 /** The way out under the leaves: green-white light, brightest in the middle of the gap. */
 function buildShaftGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
   const g = ctx.createLinearGradient(-SHAFT_HALF, 0, SHAFT_HALF, 0);
-  g.addColorStop(0, '#2fbf6a');
-  g.addColorStop(0.5, '#f4fff8');
-  g.addColorStop(1, '#2fbf6a');
+  g.addColorStop(0, css(sink(DONE_GREEN, 0.15)));
+  g.addColorStop(0.5, css(lift(DONE_GREEN, 0.92)));
+  g.addColorStop(1, css(sink(DONE_GREEN, 0.15)));
   return g;
 }
 
@@ -1399,9 +1209,10 @@ function drawHatchStripes(ctx: CanvasRenderingContext2D, lit: boolean): void {
   ctx.save();
   ctx.beginPath();
   roundRectPath(ctx, -HATCH_HALF, -HATCH_HALF, HATCH_HALF * 2, HATCH_HALF * 2, 0.06);
-  ctx.rect(SHAFT_HALF + 0.03, -SHAFT_HALF - 0.03, -2 * (SHAFT_HALF + 0.03), 2 * (SHAFT_HALF + 0.03));
+  const rim = SHAFT_HALF + 0.03;
+  ctx.rect(rim, -rim, -2 * rim, 2 * rim);
   ctx.clip('evenodd');
-  ctx.fillStyle = lit ? AMBER : 'rgba(251, 191, 36, 0.35)';
+  ctx.fillStyle = lit ? C_AMBER : rgba(AMBER, 0.35);
   for (let x = -0.9; x < 0.9; x += 0.16) {
     ctx.beginPath();
     ctx.moveTo(x, -HATCH_HALF);
@@ -1418,9 +1229,9 @@ function drawHatchStripes(ctx: CanvasRenderingContext2D, lit: boolean): void {
 function drawHatchLeaf(ctx: CanvasRenderingContext2D, outer: number, inner: number): void {
   const [x0, x1] = outer < inner ? [outer, inner] : [inner, outer];
   if (x1 - x0 <= 0.005) return;
-  ctx.fillStyle = '#3a444f';
+  ctx.fillStyle = steel(0.4);
   ctx.fillRect(x0, -SHAFT_HALF, x1 - x0, SHAFT_HALF * 2);
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.strokeStyle = rgba(BLACK, 0.45);
   ctx.lineWidth = 0.02;
   ctx.beginPath();
   for (let y = -SHAFT_HALF + 0.1; y < SHAFT_HALF; y += 0.1) {
@@ -1444,12 +1255,12 @@ export function drawExitHatch(ctx: CanvasRenderingContext2D, o: ExitHatchOpts): 
   const wave = pulseWave(o.pulse);
   ctx.save();
   try {
-    softEllipse(ctx, 0, 0.05, 0.55, 0.5, SHADOW_RGB, 0.35, 'source-over');
+    footShadow(ctx, 0, 0.05, 0.55, 0.5);
     ctx.beginPath();
     roundRectPath(ctx, -HATCH_HALF, -HATCH_HALF, HATCH_HALF * 2, HATCH_HALF * 2, 0.06);
-    ctx.fillStyle = '#161c22';
+    ctx.fillStyle = steel(0.82);
     ctx.fill();
-    ctx.lineWidth = 0.03;
+    ctx.lineWidth = OUTLINE;
     ctx.strokeStyle = PROP_EDGE;
     ctx.stroke();
     drawHatchStripes(ctx, t > 0);
@@ -1457,13 +1268,13 @@ export function drawExitHatch(ctx: CanvasRenderingContext2D, o: ExitHatchOpts): 
     if (gap > 0) {
       ctx.fillStyle = cachedGradient(ctx, buildShaftGradient, '');
       ctx.fillRect(-gap, -SHAFT_HALF, gap * 2, SHAFT_HALF * 2);
-      softEllipse(ctx, 0, 0, 0.5, 0.5, GREEN_RGB, 0.35 * t * (0.75 + 0.25 * wave), 'lighter');
+      softEllipse(ctx, 0, 0, 0.5, 0.5, DONE_GREEN, 0.35 * t * (0.75 + 0.25 * wave), 'lighter');
     }
     drawHatchLeaf(ctx, -SHAFT_HALF, -gap);
     drawHatchLeaf(ctx, SHAFT_HALF, gap);
     ctx.beginPath();
     addCircle(ctx, 0, -HATCH_HALF + 0.045, 0.035);
-    ctx.fillStyle = t > 0 ? HATCH_GREEN : '#b91c1c';
+    ctx.fillStyle = t > 0 ? css(DONE_GREEN) : css(sink(EMERGENCY, 0.3));
     ctx.globalAlpha *= t > 0 ? 0.55 + 0.45 * wave : 0.8;
     ctx.fill();
   } finally {
@@ -1486,13 +1297,17 @@ export interface ManualObjectOpts {
   text?: WorldText;
 }
 
-const READ_LABEL = '#93c5fd';
+const READ_LABEL = css(lift(READ_BLUE, 0.3));
 /** Lengths of the lines of print on a page, top to bottom. */
 const PRINT = [0.2, 0.17, 0.21, 0.12, 0.19] as const;
-const PAPER = '#d6cdb4';
-const PAPER_PRINT = 'rgba(52, 44, 30, 0.5)';
+const C_PAPER = css(PAPER);
+const PAPER_PRINT = rgba(sink(WOOD, 0.6), 0.5);
 /** Laid over the paper of a manual object that is not needed right now. */
-const PAPER_DIM = 'rgba(0, 0, 0, 0.3)';
+const PAPER_DIM = rgba(BLACK, 0.3);
+/** The ink of a printed heading, and the blue of a book's cover. */
+const PRINT_BLUE = sink(READ_BLUE, 0.65);
+/** A ribbon, a pin: an orange-red accent. */
+const RIBBON = css(sink(REACTOR, 0.25));
 const PLAN_X = -0.21;
 const PLAN_Y = -0.35;
 const PLAN_W = 0.42;
@@ -1517,18 +1332,18 @@ function drawOpenBook(ctx: CanvasRenderingContext2D, active: boolean): void {
   ctx.lineTo(0.34, 0.045);
   ctx.lineTo(-0.34, 0.045);
   ctx.closePath();
-  ctx.fillStyle = '#1e3a5f';
+  ctx.fillStyle = css(PRINT_BLUE);
   ctx.fill();
   ctx.beginPath();
   addPage(ctx, -1);
   addPage(ctx, 1);
-  ctx.fillStyle = PAPER;
+  ctx.fillStyle = C_PAPER;
   ctx.fill();
   if (!active) {
     ctx.fillStyle = PAPER_DIM;
     ctx.fill();
   }
-  ctx.fillStyle = 'rgba(60, 50, 30, 0.22)';
+  ctx.fillStyle = rgba(sink(WOOD, 0.55), 0.22);
   ctx.fillRect(-0.04, -0.24, 0.08, 0.255);
   ctx.beginPath();
   for (let i = 0; i < PRINT.length; i++) {
@@ -1550,7 +1365,7 @@ function drawOpenBook(ctx: CanvasRenderingContext2D, active: boolean): void {
   ctx.lineTo(0.085, 0.105);
   ctx.lineTo(0.07, 0.125);
   ctx.closePath();
-  ctx.fillStyle = '#c2410c';
+  ctx.fillStyle = RIBBON;
   ctx.fill();
 }
 
@@ -1558,11 +1373,11 @@ function drawOpenBook(ctx: CanvasRenderingContext2D, active: boolean): void {
 function drawLectern(ctx: CanvasRenderingContext2D, active: boolean): void {
   ctx.beginPath();
   roundRectPath(ctx, -0.17, 0.27, 0.34, 0.09, 0.04);
-  ctx.fillStyle = '#141a21';
+  ctx.fillStyle = steel(0.82);
   ctx.fill();
-  ctx.fillStyle = '#1b232c';
+  ctx.fillStyle = steel(0.75);
   ctx.fillRect(-0.05, 0.04, 0.1, 0.25);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+  ctx.fillStyle = rgba(WHITE, 0.06);
   ctx.fillRect(-0.05, 0.04, 0.018, 0.25);
   ctx.beginPath();
   ctx.moveTo(-0.33, -0.3);
@@ -1570,20 +1385,20 @@ function drawLectern(ctx: CanvasRenderingContext2D, active: boolean): void {
   ctx.lineTo(0.39, 0.07);
   ctx.lineTo(-0.39, 0.07);
   ctx.closePath();
-  ctx.fillStyle = '#26303b';
+  ctx.fillStyle = steel(0.62);
   ctx.fill();
-  ctx.lineWidth = 0.025;
+  ctx.lineWidth = OUTLINE;
   ctx.strokeStyle = PROP_EDGE;
   ctx.stroke();
-  ctx.fillStyle = '#1a2129';
+  ctx.fillStyle = steel(0.78);
   ctx.fillRect(-0.39, 0.05, 0.78, 0.05);
   drawOpenBook(ctx, active);
 }
 
 function buildPlanGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
   const g = ctx.createLinearGradient(0, PLAN_Y, 0, PLAN_Y + PLAN_H);
-  g.addColorStop(0, '#0f2a4a');
-  g.addColorStop(1, '#05080b');
+  g.addColorStop(0, css(sink(READ_BLUE, 0.75)));
+  g.addColorStop(1, PROP_EDGE);
   return g;
 }
 
@@ -1603,7 +1418,7 @@ function drawPlan(ctx: CanvasRenderingContext2D, active: boolean, wave: number):
     ctx.lineTo(PLAN_X + PLAN_W - 0.02, y);
   }
   ctx.lineWidth = 0.008;
-  ctx.strokeStyle = 'rgba(96, 165, 250, 0.3)';
+  ctx.strokeStyle = rgba(READ_BLUE, 0.3);
   ctx.stroke();
   ctx.beginPath();
   ctx.moveTo(PLAN_ROUTE[0], PLAN_ROUTE[1]);
@@ -1619,7 +1434,7 @@ function drawPlan(ctx: CanvasRenderingContext2D, active: boolean, wave: number):
     ctx.beginPath();
     roundRectPath(ctx, PLAN_X, PLAN_Y, PLAN_W, PLAN_H, 0.02);
     ctx.lineWidth = 0.016;
-    ctx.strokeStyle = BLUE;
+    ctx.strokeStyle = C_BLUE;
     ctx.globalAlpha = alpha * (0.35 + 0.45 * wave);
     ctx.stroke();
   }
@@ -1630,16 +1445,16 @@ function drawPlan(ctx: CanvasRenderingContext2D, active: boolean, wave: number):
 function drawTerminal(ctx: CanvasRenderingContext2D, active: boolean, wave: number): void {
   ctx.beginPath();
   roundRectPath(ctx, -0.29, -0.44, 0.58, 0.8, 0.05);
-  ctx.fillStyle = '#18202a';
+  ctx.fillStyle = steel(0.76);
   ctx.fill();
-  ctx.lineWidth = 0.025;
+  ctx.lineWidth = OUTLINE;
   ctx.strokeStyle = PROP_EDGE;
   ctx.stroke();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+  ctx.fillStyle = EDGE_LIGHT;
   ctx.fillRect(-0.24, -0.43, 0.48, 0.012);
   ctx.beginPath();
   roundRectPath(ctx, -0.25, -0.39, 0.5, 0.36, 0.03);
-  ctx.fillStyle = '#0b0f14';
+  ctx.fillStyle = steel(0.9);
   ctx.fill();
   ctx.beginPath();
   roundRectPath(ctx, PLAN_X, PLAN_Y, PLAN_W, PLAN_H, 0.02);
@@ -1648,28 +1463,28 @@ function drawTerminal(ctx: CanvasRenderingContext2D, active: boolean, wave: numb
   drawPlan(ctx, active, wave);
   ctx.beginPath();
   roundRectPath(ctx, -0.33, 0.01, 0.66, 0.1, 0.03);
-  ctx.fillStyle = '#222b35';
+  ctx.fillStyle = steel(0.66);
   ctx.fill();
   ctx.lineWidth = 0.02;
   ctx.strokeStyle = PROP_EDGE;
   ctx.stroke();
-  ctx.fillStyle = 'rgba(96, 165, 250, 0.22)';
+  ctx.fillStyle = rgba(READ_BLUE, 0.22);
   for (let i = 0; i < 6; i++) ctx.fillRect(-0.27 + i * 0.09, 0.035, 0.07, 0.025);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.fillStyle = VENT;
   for (let i = 0; i < 3; i++) ctx.fillRect(-0.18, 0.18 + i * 0.045, 0.36, 0.016);
 }
 
 /** A ruled table with a column of colour swatches, as printed on the chart. */
 function drawChartTable(ctx: CanvasRenderingContext2D): void {
-  ctx.fillStyle = 'rgba(30, 58, 95, 0.75)';
+  ctx.fillStyle = rgba(PRINT_BLUE, 0.75);
   ctx.fillRect(-0.34, -0.42, 0.68, 0.075);
-  ctx.fillStyle = '#f87171';
+  ctx.fillStyle = css(ALARM);
   ctx.fillRect(-0.3, -0.31, 0.12, 0.045);
-  ctx.fillStyle = AMBER;
+  ctx.fillStyle = C_AMBER;
   ctx.fillRect(-0.3, -0.23, 0.12, 0.045);
-  ctx.fillStyle = TEAL;
+  ctx.fillStyle = C_TEAL;
   ctx.fillRect(-0.3, -0.15, 0.12, 0.045);
-  ctx.fillStyle = BLUE;
+  ctx.fillStyle = C_BLUE;
   ctx.fillRect(-0.3, -0.07, 0.12, 0.045);
   ctx.beginPath();
   for (let i = 0; i < 4; i++) {
@@ -1682,9 +1497,9 @@ function drawChartTable(ctx: CanvasRenderingContext2D): void {
   ctx.moveTo(0.12, -0.345);
   ctx.lineTo(0.12, 0.06);
   ctx.lineWidth = 0.009;
-  ctx.strokeStyle = 'rgba(30, 41, 59, 0.5)';
+  ctx.strokeStyle = rgba(sink(STEEL, 0.6), 0.5);
   ctx.stroke();
-  ctx.fillStyle = 'rgba(30, 41, 59, 0.55)';
+  ctx.fillStyle = rgba(sink(STEEL, 0.6), 0.55);
   for (let i = 0; i < 4; i++) {
     const y = -0.3 + i * 0.08;
     ctx.fillRect(-0.1, y, 0.16, 0.022);
@@ -1701,23 +1516,23 @@ function drawChart(ctx: CanvasRenderingContext2D, active: boolean): void {
   ctx.lineTo(0.3, 0.37);
   ctx.lineCap = 'round';
   ctx.lineWidth = 0.045;
-  ctx.strokeStyle = '#2b3540';
+  ctx.strokeStyle = steel(0.58);
   ctx.stroke();
   ctx.beginPath();
   roundRectPath(ctx, -0.38, -0.46, 0.76, 0.56, 0.03);
-  ctx.fillStyle = '#2b3540';
+  ctx.fillStyle = steel(0.58);
   ctx.fill();
-  ctx.lineWidth = 0.025;
+  ctx.lineWidth = OUTLINE;
   ctx.strokeStyle = PROP_EDGE;
   ctx.stroke();
-  ctx.fillStyle = '#c3cad3';
+  ctx.fillStyle = css(lift(LABEL, 0.45));
   ctx.fillRect(-0.34, -0.42, 0.68, 0.48);
   drawChartTable(ctx);
   if (!active) {
     ctx.fillStyle = PAPER_DIM;
     ctx.fillRect(-0.34, -0.42, 0.68, 0.48);
   }
-  ctx.fillStyle = '#3b4654';
+  ctx.fillStyle = steel(0.45);
   ctx.fillRect(-0.07, -0.5, 0.14, 0.06);
 }
 
@@ -1732,13 +1547,13 @@ function drawSheet(
 ): void {
   ctx.beginPath();
   ctx.rect(x, y, w, h);
-  ctx.fillStyle = PAPER;
+  ctx.fillStyle = C_PAPER;
   ctx.fill();
   if (!active) {
     ctx.fillStyle = PAPER_DIM;
     ctx.fill();
   }
-  ctx.fillStyle = 'rgba(30, 58, 95, 0.75)';
+  ctx.fillStyle = rgba(PRINT_BLUE, 0.75);
   ctx.fillRect(x + w * 0.14, y + h * 0.1, w * 0.45, h * 0.06);
   ctx.beginPath();
   const lines = Math.floor((h * 0.68) / 0.05);
@@ -1759,35 +1574,35 @@ const HOOK_Y = -0.52;
 function drawClipboard(ctx: CanvasRenderingContext2D, active: boolean): void {
   ctx.beginPath();
   addCircle(ctx, 0, HOOK_Y, 0.03);
-  ctx.fillStyle = '#2b3540';
+  ctx.fillStyle = steel(0.58);
   ctx.fill();
   ctx.translate(0, HOOK_Y);
   ctx.rotate(-0.05);
   ctx.translate(0, -HOOK_Y);
   ctx.beginPath();
   roundRectPath(ctx, -0.17, -0.41, 0.4, 0.6, 0.035);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.fillStyle = rgba(BLACK, 0.4);
   ctx.fill();
   ctx.beginPath();
   roundRectPath(ctx, -0.2, -0.44, 0.4, 0.6, 0.035);
-  ctx.fillStyle = '#6b4f33';
+  ctx.fillStyle = css(sink(WOOD, 0.2));
   ctx.fill();
   ctx.lineWidth = 0.02;
-  ctx.strokeStyle = '#3a2a1a';
+  ctx.strokeStyle = css(sink(WOOD, 0.6));
   ctx.stroke();
   drawSheet(ctx, -0.16, -0.35, 0.32, 0.46, active);
   ctx.beginPath();
   roundRectPath(ctx, -0.05, -0.5, 0.1, 0.05, 0.018);
-  ctx.fillStyle = '#7b8794';
+  ctx.fillStyle = css(sink(LABEL, 0.1));
   ctx.fill();
   ctx.beginPath();
   roundRectPath(ctx, -0.11, -0.47, 0.22, 0.09, 0.025);
-  ctx.fillStyle = '#9aa5b1';
+  ctx.fillStyle = css(lift(STEEL, 0.33));
   ctx.fill();
   ctx.lineWidth = 0.012;
-  ctx.strokeStyle = '#3f4954';
+  ctx.strokeStyle = steel(0.55);
   ctx.stroke();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+  ctx.fillStyle = rgba(WHITE, 0.35);
   ctx.fillRect(-0.08, -0.455, 0.16, 0.012);
 }
 
@@ -1799,9 +1614,9 @@ const LOCKER_H = 0.72;
 /** Four slits pressed into a locker door from `y` down, each with a lit lower lip. */
 function drawLouvres(ctx: CanvasRenderingContext2D, y: number): void {
   for (let i = 0; i < 4; i++) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.fillStyle = rgba(BLACK, 0.55);
     ctx.fillRect(-0.13, y + i * 0.04, 0.26, 0.016);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+    ctx.fillStyle = EDGE_LIGHT;
     ctx.fillRect(-0.13, y + i * 0.04 + 0.016, 0.26, 0.008);
   }
 }
@@ -1810,20 +1625,20 @@ function drawLouvres(ctx: CanvasRenderingContext2D, y: number): void {
 function drawLockerDoor(ctx: CanvasRenderingContext2D): void {
   ctx.beginPath();
   roundRectPath(ctx, LOCKER_X, LOCKER_TOP, LOCKER_W, LOCKER_H, 0.025);
-  ctx.fillStyle = '#434c57';
+  ctx.fillStyle = steel(0.27);
   ctx.fill();
   ctx.lineWidth = 0.014;
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.strokeStyle = rgba(BLACK, 0.55);
   ctx.stroke();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.fillStyle = rgba(WHITE, 0.08);
   ctx.fillRect(LOCKER_X + 0.02, LOCKER_TOP + 0.012, LOCKER_W - 0.04, 0.012);
   drawLouvres(ctx, -0.35);
   drawLouvres(ctx, 0.13);
-  ctx.fillStyle = '#b5ae98';
+  ctx.fillStyle = css(sink(PAPER, 0.15));
   ctx.fillRect(-0.08, -0.16, 0.16, 0.06);
   ctx.beginPath();
   roundRectPath(ctx, 0.12, -0.08, 0.045, 0.17, 0.018);
-  ctx.fillStyle = '#9aa4b1';
+  ctx.fillStyle = css(lift(STEEL, 0.33));
   ctx.fill();
   ctx.lineWidth = 0.012;
   ctx.strokeStyle = PROP_EDGE;
@@ -1834,11 +1649,11 @@ function drawLockerDoor(ctx: CanvasRenderingContext2D): void {
 function drawLockerOpen(ctx: CanvasRenderingContext2D, active: boolean): void {
   ctx.beginPath();
   roundRectPath(ctx, LOCKER_X, LOCKER_TOP, LOCKER_W, LOCKER_H, 0.025);
-  ctx.fillStyle = '#0c1015';
+  ctx.fillStyle = steel(0.88);
   ctx.fill();
-  ctx.fillStyle = '#39424c';
+  ctx.fillStyle = steel(0.4);
   ctx.fillRect(LOCKER_X, -0.27, LOCKER_W, 0.03);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.fillStyle = rgba(WHITE, 0.08);
   ctx.fillRect(LOCKER_X, -0.27, LOCKER_W, 0.008);
   ctx.save();
   ctx.rotate(0.05);
@@ -1846,7 +1661,7 @@ function drawLockerOpen(ctx: CanvasRenderingContext2D, active: boolean): void {
   ctx.restore();
   ctx.beginPath();
   addCircle(ctx, 0.008, -0.155, 0.018);
-  ctx.fillStyle = '#c2410c';
+  ctx.fillStyle = RIBBON;
   ctx.fill();
   ctx.beginPath();
   ctx.moveTo(LOCKER_X, LOCKER_TOP);
@@ -1854,7 +1669,7 @@ function drawLockerOpen(ctx: CanvasRenderingContext2D, active: boolean): void {
   ctx.lineTo(LOCKER_X - 0.16, LOCKER_TOP + LOCKER_H + 0.05);
   ctx.lineTo(LOCKER_X, LOCKER_TOP + LOCKER_H);
   ctx.closePath();
-  ctx.fillStyle = '#353d47';
+  ctx.fillStyle = steel(0.42);
   ctx.fill();
   ctx.lineWidth = 0.014;
   ctx.strokeStyle = PROP_EDGE;
@@ -1867,7 +1682,7 @@ function drawLockerOpen(ctx: CanvasRenderingContext2D, active: boolean): void {
     ctx.lineTo(LOCKER_X - 0.125, 0.16 + i * 0.04);
   }
   ctx.lineWidth = 0.014;
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.strokeStyle = rgba(BLACK, 0.5);
   ctx.stroke();
 }
 
@@ -1875,12 +1690,12 @@ function drawLockerOpen(ctx: CanvasRenderingContext2D, active: boolean): void {
 function drawLocker(ctx: CanvasRenderingContext2D, active: boolean, opened: boolean): void {
   ctx.beginPath();
   roundRectPath(ctx, -0.27, -0.47, 0.54, 0.84, 0.04);
-  ctx.fillStyle = '#272e36';
+  ctx.fillStyle = steel(0.58);
   ctx.fill();
-  ctx.lineWidth = 0.025;
+  ctx.lineWidth = OUTLINE;
   ctx.strokeStyle = PROP_EDGE;
   ctx.stroke();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+  ctx.fillStyle = EDGE_LIGHT;
   ctx.fillRect(-0.23, -0.46, 0.46, 0.012);
   if (opened) drawLockerOpen(ctx, active);
   else drawLockerDoor(ctx);
@@ -1891,11 +1706,13 @@ const DRAWER_W = 0.52;
 const DRAWER_H = 0.22;
 /** Tops of the cabinet's three drawers, top to bottom. */
 const DRAWER_TOPS = [-0.38, -0.13, 0.12] as const;
-const DRAWER_FRONT = '#3a4336';
+const DRAWER_FRONT = css(sink(LINO, 0.55));
 /** A drawer pulled out catches more of the light. */
-const DRAWER_FRONT_OUT = '#46513f';
+const DRAWER_FRONT_OUT = css(sink(LINO, 0.45));
 /** Tabs of the hanging files in the open drawer. */
-const FILE_TABS = ['#f87171', BLUE, AMBER, '#4ade80', TEAL] as const;
+const FILE_TABS = [css(ALARM), C_BLUE, C_AMBER, css(DONE_GREEN), C_TEAL] as const;
+/** The brass of a padlock, warmer than a plaque's. */
+const PADLOCK_BRASS = mix(BRASS, AMBER, 0.3);
 
 /** A drawer front with its label card and pull handle, `top` its upper edge. */
 function drawDrawer(ctx: CanvasRenderingContext2D, top: number, front: string): void {
@@ -1904,15 +1721,15 @@ function drawDrawer(ctx: CanvasRenderingContext2D, top: number, front: string): 
   ctx.fillStyle = front;
   ctx.fill();
   ctx.lineWidth = 0.012;
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.strokeStyle = rgba(BLACK, 0.55);
   ctx.stroke();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+  ctx.fillStyle = EDGE_LIGHT;
   ctx.fillRect(DRAWER_X + 0.02, top + 0.01, DRAWER_W - 0.04, 0.01);
-  ctx.fillStyle = '#b9b29a';
+  ctx.fillStyle = css(sink(PAPER, 0.13));
   ctx.fillRect(-0.07, top + 0.04, 0.14, 0.05);
   ctx.beginPath();
   roundRectPath(ctx, -0.1, top + 0.125, 0.2, 0.04, 0.016);
-  ctx.fillStyle = '#a3ab9c';
+  ctx.fillStyle = css(lift(LINO, 0.25));
   ctx.fill();
   ctx.lineWidth = 0.01;
   ctx.strokeStyle = PROP_EDGE;
@@ -1923,7 +1740,7 @@ function drawDrawer(ctx: CanvasRenderingContext2D, top: number, front: string): 
 function drawPadlock(ctx: CanvasRenderingContext2D): void {
   ctx.beginPath();
   roundRectPath(ctx, 0.15, -0.43, 0.05, 0.17, 0.015);
-  ctx.fillStyle = '#59605c';
+  ctx.fillStyle = css(sink(LINO, 0.3));
   ctx.fill();
   ctx.lineWidth = 0.012;
   ctx.strokeStyle = PROP_EDGE;
@@ -1933,21 +1750,21 @@ function drawPadlock(ctx: CanvasRenderingContext2D): void {
   ctx.arc(0.175, -0.25, 0.05, Math.PI, 0);
   ctx.lineTo(0.225, -0.21);
   ctx.lineWidth = 0.024;
-  ctx.strokeStyle = '#b6bec7';
+  ctx.strokeStyle = css(lift(LABEL, 0.35));
   ctx.stroke();
   ctx.beginPath();
   roundRectPath(ctx, 0.095, -0.225, 0.16, 0.13, 0.03);
-  ctx.fillStyle = '#c9a54a';
+  ctx.fillStyle = css(PADLOCK_BRASS);
   ctx.fill();
   ctx.lineWidth = 0.014;
-  ctx.strokeStyle = '#5c4718';
+  ctx.strokeStyle = css(sink(BRASS, 0.65));
   ctx.stroke();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+  ctx.fillStyle = rgba(WHITE, 0.3);
   ctx.fillRect(0.115, -0.212, 0.12, 0.014);
   ctx.beginPath();
   addCircle(ctx, 0.175, -0.17, 0.017);
   ctx.rect(0.168, -0.165, 0.014, 0.035);
-  ctx.fillStyle = '#3d2f12';
+  ctx.fillStyle = css(sink(BRASS, 0.75));
   ctx.fill();
 }
 
@@ -1955,13 +1772,13 @@ function drawPadlock(ctx: CanvasRenderingContext2D): void {
 function drawOpenDrawer(ctx: CanvasRenderingContext2D, active: boolean): void {
   const top = DRAWER_TOPS[0];
   const front = top + 0.15;
-  ctx.fillStyle = '#0b0e0b';
+  ctx.fillStyle = css(sink(LINO, 0.92));
   ctx.fillRect(DRAWER_X, top, DRAWER_W, DRAWER_H);
   for (let i = 0; i < FILE_TABS.length; i++) {
     const x = DRAWER_X + 0.04 + i * 0.09;
-    ctx.fillStyle = i % 2 === 0 ? '#b8975a' : '#9c7f48';
+    ctx.fillStyle = i % 2 === 0 ? css(mix(BRASS, PAPER, 0.3)) : css(sink(BRASS, 0.15));
     ctx.fillRect(x, top + 0.03, 0.08, front - top);
-    ctx.fillStyle = FILE_TABS[i] ?? AMBER;
+    ctx.fillStyle = FILE_TABS[i] ?? C_AMBER;
     ctx.fillRect(x + 0.012, top + 0.005, 0.035, 0.03);
   }
   drawSheet(ctx, -0.09, top - 0.1, 0.18, 0.24, active);
@@ -1972,12 +1789,12 @@ function drawOpenDrawer(ctx: CanvasRenderingContext2D, active: boolean): void {
 function drawCabinet(ctx: CanvasRenderingContext2D, active: boolean, opened: boolean): void {
   ctx.beginPath();
   roundRectPath(ctx, -0.3, -0.43, 0.6, 0.8, 0.035);
-  ctx.fillStyle = '#262c25';
+  ctx.fillStyle = css(sink(LINO, 0.75));
   ctx.fill();
-  ctx.lineWidth = 0.025;
+  ctx.lineWidth = OUTLINE;
   ctx.strokeStyle = PROP_EDGE;
   ctx.stroke();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+  ctx.fillStyle = EDGE_LIGHT;
   ctx.fillRect(-0.26, -0.42, 0.52, 0.012);
   for (const top of opened ? DRAWER_TOPS.slice(1) : DRAWER_TOPS) drawDrawer(ctx, top, DRAWER_FRONT);
   if (opened) drawOpenDrawer(ctx, active);
@@ -1994,9 +1811,8 @@ export function drawManualObject(ctx: CanvasRenderingContext2D, o: ManualObjectO
   ctx.save();
   try {
     // A clipboard hangs on the wall and casts its shadow there.
-    const shadow = o.kind === 'clipboard' ? 0 : 0.45;
-    softEllipse(ctx, 0, 0.36, 0.42, 0.12, SHADOW_RGB, shadow, 'source-over');
-    if (o.active) softEllipse(ctx, 0, -0.12, 0.85, 0.75, BLUE_RGB, 0.14 + 0.26 * wave, 'lighter');
+    if (o.kind !== 'clipboard') footShadow(ctx, 0, 0.36, 0.42, 0.12);
+    if (o.active) softEllipse(ctx, 0, -0.12, 0.85, 0.75, READ_BLUE, 0.14 + 0.26 * wave, 'lighter');
     ctx.save();
     switch (o.kind) {
       case 'book':
@@ -2041,8 +1857,8 @@ export interface SignOpts {
 /** Brushed brass, lit from the top. */
 function buildPlaqueGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
   const g = ctx.createLinearGradient(0, -0.31, 0, 0.07);
-  g.addColorStop(0, '#b39552');
-  g.addColorStop(1, '#6b5428');
+  g.addColorStop(0, css(BRASS));
+  g.addColorStop(1, css(sink(BRASS, 0.42)));
   return g;
 }
 
@@ -2057,7 +1873,7 @@ function addSerial(p: CanvasPath, dy: number): void {
 function drawEngraving(ctx: CanvasRenderingContext2D): void {
   ctx.beginPath();
   addSerial(ctx, 0.008);
-  ctx.fillStyle = 'rgba(255, 238, 200, 0.28)';
+  ctx.fillStyle = rgba(lift(BRASS, 0.75), 0.28);
   ctx.fill();
   ctx.beginPath();
   addSerial(ctx, 0);
@@ -2065,14 +1881,14 @@ function drawEngraving(ctx: CanvasRenderingContext2D): void {
   addCircle(ctx, -0.1, -0.025, 0.022);
   addCircle(ctx, 0, -0.025, 0.022);
   addCircle(ctx, 0.1, -0.025, 0.022);
-  ctx.fillStyle = 'rgba(40, 28, 10, 0.8)';
+  ctx.fillStyle = rgba(sink(BRASS, 0.8), 0.8);
   ctx.fill();
 }
 
 function drawSeenTick(ctx: CanvasRenderingContext2D): void {
   ctx.beginPath();
   ctx.arc(0.3, -0.3, 0.07, 0, TAU);
-  ctx.fillStyle = TEAL;
+  ctx.fillStyle = C_TEAL;
   ctx.fill();
   ctx.lineWidth = 0.016;
   ctx.strokeStyle = PROP_EDGE;
@@ -2084,7 +1900,7 @@ function drawSeenTick(ctx: CanvasRenderingContext2D): void {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.lineWidth = 0.02;
-  ctx.strokeStyle = '#042f2a';
+  ctx.strokeStyle = css(sink(TEAL, 0.85));
   ctx.stroke();
 }
 
@@ -2095,30 +1911,30 @@ export function drawSign(ctx: CanvasRenderingContext2D, o: SignOpts): void {
   const wave = pulseWave(o.pulse);
   ctx.save();
   try {
-    softEllipse(ctx, 0, 0.33, 0.3, 0.09, SHADOW_RGB, 0.4, 'source-over');
-    softEllipse(ctx, 0, -0.12, 0.75, 0.6, AMBER_RGB, o.seen ? 0.06 : 0.12 + 0.22 * wave, 'lighter');
-    ctx.fillStyle = '#1b232c';
+    footShadow(ctx, 0, 0.33, 0.3, 0.09);
+    softEllipse(ctx, 0, -0.12, 0.75, 0.6, AMBER, o.seen ? 0.06 : 0.12 + 0.22 * wave, 'lighter');
+    ctx.fillStyle = steel(0.75);
     ctx.fillRect(-0.2, 0.04, 0.05, 0.28);
     ctx.fillRect(0.15, 0.04, 0.05, 0.28);
     ctx.beginPath();
     roundRectPath(ctx, -0.32, -0.31, 0.64, 0.38, 0.04);
     ctx.fillStyle = cachedGradient(ctx, buildPlaqueGradient, '');
     ctx.fill();
-    ctx.lineWidth = 0.022;
+    ctx.lineWidth = OUTLINE;
     ctx.strokeStyle = PROP_EDGE;
     ctx.stroke();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+    ctx.fillStyle = rgba(WHITE, 0.22);
     ctx.fillRect(-0.28, -0.3, 0.56, 0.012);
     ctx.beginPath();
     addCircle(ctx, -0.27, -0.26, 0.016);
     addCircle(ctx, 0.27, -0.26, 0.016);
     addCircle(ctx, -0.27, 0.02, 0.016);
     addCircle(ctx, 0.27, 0.02, 0.016);
-    ctx.fillStyle = '#3d3020';
+    ctx.fillStyle = css(sink(BRASS, 0.75));
     ctx.fill();
     drawEngraving(ctx);
     if (o.seen) drawSeenTick(ctx);
-    const color = o.seen ? IDLE_LABEL : '#fcd34d';
+    const color = o.seen ? IDLE_LABEL : css(lift(AMBER, 0.2));
     drawHaloText(ctx, o.label, 0, 0.36, (o.text ?? TILE_TEXT).label, color, 'top');
   } finally {
     ctx.restore();
@@ -2134,22 +1950,23 @@ export interface EmergencyLampOpts {
   facing: number | null;
 }
 
-const LAMP_RED_RGB = '255, 52, 52';
-const LAMP_HOUSING = '#2a2f36';
-const LAMP_GLASS_DARK = '#4a1416';
+const LAMP_HOUSING = steel(0.58);
+const LAMP_GLASS_DARK = css(sink(EMERGENCY, 0.72));
+/** The white-hot middle of a burning lens. */
+const LAMP_CORE: Rgb = lift(EMERGENCY, 0.78);
 
 /** The lens: dark red glass, or burning red with a white-hot core. */
 function drawLampLens(ctx: CanvasRenderingContext2D, cy: number, r: number, glow: number): void {
   ctx.beginPath();
   ctx.ellipse(0, cy, r, r * 0.7, 0, 0, TAU);
-  ctx.fillStyle = glow > 0 ? `rgba(${LAMP_RED_RGB}, ${0.45 + 0.55 * glow})` : LAMP_GLASS_DARK;
+  ctx.fillStyle = glow > 0 ? rgba(EMERGENCY, 0.45 + 0.55 * glow) : LAMP_GLASS_DARK;
   ctx.fill();
   ctx.lineWidth = 0.014;
   ctx.strokeStyle = PROP_EDGE;
   ctx.stroke();
   if (glow > 0) {
-    softEllipse(ctx, 0, cy, r * 0.55, r * 0.4, '255, 214, 204', 0.8 * glow, 'lighter');
-    softEllipse(ctx, 0, cy, r * 3, r * 2.4, LAMP_RED_RGB, 0.35 * glow, 'lighter');
+    softEllipse(ctx, 0, cy, r * 0.55, r * 0.4, LAMP_CORE, 0.8 * glow, 'lighter');
+    softEllipse(ctx, 0, cy, r * 3, r * 2.4, EMERGENCY, 0.35 * glow, 'lighter');
   }
 }
 
@@ -2183,7 +2000,7 @@ export function drawEmergencyLamp(ctx: CanvasRenderingContext2D, o: EmergencyLam
     ctx.lineWidth = 0.02;
     ctx.strokeStyle = PROP_EDGE;
     ctx.stroke();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.fillStyle = rgba(WHITE, 0.12);
     ctx.fillRect(-0.15, -0.205, 0.3, 0.012);
     drawLampLens(ctx, -0.06, 0.12, glow);
   } finally {

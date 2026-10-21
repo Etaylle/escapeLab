@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { decorIssues } from './decor.js';
 import { moduleFor, puzzleDefSchema, type PuzzleDef } from './puzzles/index.js';
 import { RELAY_MAX_PLAYERS } from './puzzles/relay.js';
 import {
@@ -37,6 +38,45 @@ export type ManualKind = (typeof MANUAL_KINDS)[number];
 export function startsClosed(kind: ManualKind): boolean {
   return kind === 'locker' || kind === 'cabinet';
 }
+
+/**
+ * What a room is, by its label: the clients dress it after its kind — its
+ * floor, what hangs on its walls. A label without one is a plain lab room.
+ */
+export const ROOM_KINDS = [
+  'archive',
+  'corridor',
+  'machine',
+  'server',
+  'lab',
+  'reactor',
+  'control',
+] as const;
+export type RoomKind = (typeof ROOM_KINDS)[number];
+
+/**
+ * The lab's furniture: solid props standing on floor tiles, which nobody
+ * walks through — shelves and a cart (archive), benches and a fume hood
+ * (lab), racks (server), a generator, pipes and barrels (machine room), the
+ * core and its cables (reactor), console desks (control room, reactor).
+ */
+export const DECOR_KINDS = [
+  'shelf',
+  'cart',
+  'bench',
+  'hood',
+  'rack',
+  'generator',
+  'pipes',
+  'barrel',
+  'core',
+  'cables',
+  'desk',
+] as const;
+export type DecorKind = (typeof DECOR_KINDS)[number];
+
+/** How many looks every piece of decor comes in: `variant` 0 to DECOR_VARIANTS − 1. */
+export const DECOR_VARIANTS = 4;
 
 /**
  * The tile map: players walk a grid, puzzle stations must be activated in
@@ -85,7 +125,37 @@ export const mapDefSchema = z.object({
       }),
     )
     .min(1),
-  labels: z.array(z.object({ text: z.string().min(1), x: coord, y: coord })).default([]),
+  /** room names: a solved station lights a room by its name; `kind` says how it is dressed */
+  labels: z
+    .array(
+      z.object({
+        text: z.string().min(1),
+        x: coord,
+        y: coord,
+        kind: z.enum(ROOM_KINDS).optional(),
+      }),
+    )
+    .default([]),
+  /**
+   * Furniture on floor tiles, solid like walls for everybody's steps: never
+   * where anything else of the map stands or a drone flies, and every proof
+   * of reach holds with it in the way.
+   */
+  decor: z
+    .array(
+      z.object({
+        kind: z.enum(DECOR_KINDS),
+        x: coord,
+        y: coord,
+        variant: z
+          .number()
+          .int()
+          .min(0)
+          .max(DECOR_VARIANTS - 1)
+          .optional(),
+      }),
+    )
+    .default([]),
   /**
    * Where the printed rules lie — a book, a terminal, a wall chart, a
    * clipboard, or a locker or cabinet that has to be opened first: whoever
@@ -304,6 +374,7 @@ function validateMap(mission: MissionParts, ctx: z.RefinementCtx): void {
   checkSpots(check);
   checkKeys(check);
   checkSign(check, stations);
+  decorIssues(map, floor).forEach(issue);
   checkSolvable(check, mission.players, stations);
 }
 

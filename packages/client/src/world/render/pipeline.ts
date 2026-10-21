@@ -5,6 +5,7 @@ import * as light from './light.js';
 import * as objects from './objects.js';
 import * as overlays from './overlays.js';
 import * as tiles from './tiles.js';
+import * as glow from './glow.js';
 
 /**
  * The world's picture, pass by pass, each over what the one before left:
@@ -16,6 +17,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, frame: Frame): void {
   objects.draw(ctx, frame);
   actors.draw(ctx, frame);
   light.draw(ctx, frame);
+  glow.draw(ctx, frame);
   hud.draw(ctx, frame);
   overlays.draw(ctx, frame);
 }

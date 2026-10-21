@@ -4,6 +4,7 @@ import {
   addPuzzle,
   lineBetween,
   move,
+  NO_CHOICE,
   ON_FLOOR_ONLY,
   paint,
   place,
@@ -19,7 +20,7 @@ import {
   type Ref,
 } from '../src/editor/tools.js';
 
-const AUTO = { puzzleId: null, console: null };
+const AUTO = NO_CHOICE;
 
 /** A new draft with a 7 × 5 room carved out at 2,2 – 8,6. */
 function room(): Draft {
@@ -79,6 +80,38 @@ describe('painting', () => {
   });
 });
 
+describe('the furniture tool', () => {
+  it('places the piece and the look the tool is set to', () => {
+    const choice = { ...NO_CHOICE, decor: 'rack' as const, variant: 2 };
+    const result = place(room(), 'decor', { x: 4, y: 4 }, null, choice);
+    expect(result.draft.map.decor).toEqual([{ kind: 'rack', x: 4, y: 4, variant: 2 }]);
+    expect(result.selection).toEqual({ kind: 'decor', index: 0 });
+    const auto = put(room(), 'decor', { x: 3, y: 3 });
+    expect(auto.map.decor).toEqual([{ kind: 'shelf', x: 3, y: 3, variant: null }]);
+  });
+
+  it('keeps furniture solid: one thing a tile, either way round', () => {
+    const spawned = put(room(), 'spawn', { x: 3, y: 4 });
+    expect(place(spawned, 'decor', { x: 3, y: 4 }, null, AUTO).selection).toEqual({
+      kind: 'spawn',
+      index: 0,
+    });
+    const furnished = put(room(), 'decor', { x: 3, y: 4 });
+    const press = place(furnished, 'station', { x: 3, y: 4 }, null, AUTO);
+    expect(press.draft).toBe(furnished);
+    expect(press.selection).toEqual({ kind: 'decor', index: 0 });
+    expect(place(room(), 'decor', { x: 0, y: 0 }, null, AUTO).note).toBe(ON_FLOOR_ONLY);
+  });
+
+  it('moves and removes a piece like any solid thing', () => {
+    const furnished = put(room(), 'decor', { x: 3, y: 4 });
+    const moved = move(furnished, { kind: 'decor', index: 0 }, { x: 6, y: 5 });
+    expect(moved.draft.map.decor).toEqual([{ kind: 'shelf', x: 6, y: 5, variant: null }]);
+    expect(remove(moved.draft, { kind: 'decor', index: 0 }).map.decor).toEqual([]);
+    expect(tilesOf(furnished, { kind: 'decor', index: 0 })).toEqual([{ x: 3, y: 4 }]);
+  });
+});
+
 describe('placing', () => {
   it('puts things on floor only, and says why not on a wall', () => {
     const result = place(room(), 'spawn', { x: 0, y: 0 }, null, AUTO);
@@ -97,7 +130,7 @@ describe('placing', () => {
     let draft = put(room(), 'plate', { x: 4, y: 4 });
     draft = put(draft, 'label', { x: 4, y: 4 });
     draft = put(draft, 'drone', { x: 4, y: 4 });
-    expect(draft.map.labels).toEqual([{ text: 'RAUM', x: 4, y: 4 }]);
+    expect(draft.map.labels).toEqual([{ text: 'RAUM', x: 4, y: 4, kind: '' }]);
     expect(draft.map.drones[0]?.waypoints).toEqual([{ x: 4, y: 4 }]);
   });
 
@@ -130,7 +163,7 @@ describe('placing', () => {
       { puzzleId: 'sicherungskasten', x: 3, y: 6, console: 'a' },
       { puzzleId: 'sicherungskasten', x: 8, y: 6, console: 'b' },
     ]);
-    const choice = { puzzleId: 'sicherungskasten', console: 'a' as const };
+    const choice = { ...NO_CHOICE, puzzleId: 'sicherungskasten', console: 'a' as const };
     const chosen = place(draft, 'station', { x: 8, y: 2 }, null, choice);
     expect(chosen.draft.map.stations[1]).toEqual({
       puzzleId: 'sicherungskasten',

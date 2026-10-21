@@ -1,4 +1,4 @@
-import type { PlayerPosition } from '@escapelab/core';
+import { walkable, type PlayerPosition } from '@escapelab/core';
 import type { DoorMotion } from './doors.js';
 import { lightMemory, type LightMemory } from './light.js';
 import {
@@ -140,12 +140,13 @@ export function followServer(
   }
 }
 
+/** Whether an avatar at (x, y) would stand in a wall, a shut door or a piece of furniture. */
 function blocked(map: WorldMap, closedDoors: Set<string>, x: number, y: number): boolean {
   for (const dx of [-RADIUS, RADIUS]) {
     for (const dy of [-RADIUS, RADIUS]) {
       const tx = Math.floor(x + dx);
       const ty = Math.floor(y + dy);
-      if (map.tiles[ty]?.charAt(tx) !== '.' || closedDoors.has(`${tx},${ty}`)) {
+      if (!walkable(map, tx, ty) || closedDoors.has(`${tx},${ty}`)) {
         return true;
       }
     }
@@ -170,8 +171,8 @@ function heading(keys: ReadonlySet<string>, locked: boolean): [number, number] {
 
 /**
  * One frame's walk from the keys held (input → velocity): the facing, the
- * step as far as no wall or shut door stands in the way, and the gait.
- * Returns whether a footstep falls in it.
+ * step as far as no wall, shut door or furniture stands in the way, and the
+ * gait. Returns whether a footstep falls in it.
  */
 export function walk(sim: Sim, map: WorldMap, dt: number, locked: boolean): boolean {
   let [dx, dy] = heading(sim.keys, locked);

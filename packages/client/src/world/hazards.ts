@@ -1,5 +1,25 @@
 import type { DronePosition } from '@escapelab/core';
 import { drawPropLabel, type WorldText } from './art.js';
+import {
+  ALARM,
+  AMBER,
+  BLACK,
+  BRASS,
+  css,
+  DONE_GREEN,
+  EMERGENCY,
+  INK,
+  LABEL,
+  lift,
+  mix,
+  PAPER,
+  READ_BLUE,
+  rgba,
+  sink,
+  STEEL,
+  TEAL,
+  WHITE,
+} from './palette.js';
 
 /**
  * Security drone: a hovering scanner whose cone of vision is drawn into the
@@ -20,10 +40,10 @@ export function drawDroneCone(
     return;
   }
   const half = (drone.halfAngleDeg * Math.PI) / 180;
-  const tint = drone.alerted ? '248,113,113' : '251,191,36';
+  const tint = drone.alerted ? ALARM : AMBER;
   const gradient = ctx.createRadialGradient(0, 0, 0.2, 0, 0, drone.range);
-  gradient.addColorStop(0, `rgba(${tint},${drone.alerted ? 0.4 : 0.26})`);
-  gradient.addColorStop(1, `rgba(${tint},0)`);
+  gradient.addColorStop(0, rgba(tint, drone.alerted ? 0.4 : 0.26));
+  gradient.addColorStop(1, rgba(tint, 0));
   ctx.save();
   ctx.rotate(drone.facing);
   ctx.fillStyle = gradient;
@@ -32,7 +52,7 @@ export function drawDroneCone(
   ctx.arc(0, 0, drone.range, -half, half);
   ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = `rgba(${tint},${0.3 + 0.25 * pulse})`;
+  ctx.strokeStyle = rgba(tint, 0.3 + 0.25 * pulse);
   ctx.lineWidth = 0.035;
   ctx.stroke();
   ctx.restore();
@@ -66,16 +86,17 @@ export interface CarryableOpts {
 /** A carried item against one on the floor. */
 const IN_HAND = 0.82;
 /** A carryable's label, in the blue of its glow and its edge marker. */
-const ITEM_LABEL = '#93c5fd';
-const ITEM_EDGE = '#05080b';
+const ITEM_LABEL = css(lift(READ_BLUE, 0.3));
+const ITEM_EDGE = css(INK);
+const C_BLUE = css(READ_BLUE);
 
 /** The shadow under an item on the floor, and its blue glow. */
 function drawItemGround(ctx: CanvasRenderingContext2D, pulse: number): void {
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillStyle = rgba(BLACK, 0.45);
   ctx.beginPath();
   ctx.ellipse(0, 0.29, 0.32, 0.13, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = `rgba(96,165,250,${0.1 + 0.08 * pulse})`;
+  ctx.fillStyle = rgba(READ_BLUE, 0.1 + 0.08 * pulse);
   ctx.beginPath();
   ctx.arc(0, 0, 0.8, 0, Math.PI * 2);
   ctx.fill();
@@ -84,14 +105,14 @@ function drawItemGround(ctx: CanvasRenderingContext2D, pulse: number): void {
 /** A crate with a lit cross on its lid. */
 function drawCrate(ctx: CanvasRenderingContext2D, pulse: number): void {
   const s = 0.36;
-  ctx.fillStyle = '#243447';
-  ctx.strokeStyle = '#60a5fa';
+  ctx.fillStyle = css(sink(mix(STEEL, READ_BLUE, 0.4), 0.6));
+  ctx.strokeStyle = C_BLUE;
   ctx.lineWidth = 0.05;
   ctx.beginPath();
   ctx.roundRect(-s, -s, s * 2, s * 2, 0.07);
   ctx.fill();
   ctx.stroke();
-  ctx.strokeStyle = `rgba(96,165,250,${0.6 + 0.3 * pulse})`;
+  ctx.strokeStyle = rgba(READ_BLUE, 0.6 + 0.3 * pulse);
   ctx.lineWidth = 0.055;
   ctx.beginPath();
   ctx.moveTo(-s, 0);
@@ -106,22 +127,22 @@ function drawFuse(ctx: CanvasRenderingContext2D, pulse: number): void {
   ctx.rotate(-0.4);
   ctx.strokeStyle = ITEM_EDGE;
   ctx.lineWidth = 0.022;
-  ctx.fillStyle = '#a7b1bc';
+  ctx.fillStyle = css(lift(STEEL, 0.4));
   ctx.beginPath();
   ctx.roundRect(-0.31, -0.1, 0.12, 0.2, 0.025);
   ctx.roundRect(0.19, -0.1, 0.12, 0.2, 0.025);
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = '#e4dccb';
+  ctx.fillStyle = css(lift(PAPER, 0.3));
   ctx.beginPath();
   ctx.rect(-0.2, -0.08, 0.4, 0.16);
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = 'rgba(0,0,0,0.16)';
+  ctx.fillStyle = rgba(BLACK, 0.16);
   ctx.fillRect(-0.2, 0.015, 0.4, 0.065);
-  ctx.fillStyle = `rgba(96,165,250,${0.65 + 0.3 * pulse})`;
+  ctx.fillStyle = rgba(READ_BLUE, 0.65 + 0.3 * pulse);
   ctx.fillRect(-0.04, -0.08, 0.08, 0.16);
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillStyle = rgba(WHITE, 0.4);
   ctx.fillRect(-0.3, -0.085, 0.1, 0.018);
   ctx.fillRect(0.2, -0.085, 0.1, 0.018);
 }
@@ -129,8 +150,8 @@ function drawFuse(ctx: CanvasRenderingContext2D, pulse: number): void {
 /** A brass key lying aslant: a ring for a bow, a shaft with two bits, a glint on the bow. */
 function drawKey(ctx: CanvasRenderingContext2D, pulse: number): void {
   ctx.rotate(-0.55);
-  ctx.fillStyle = '#d4a63a';
-  ctx.strokeStyle = '#3d2c0a';
+  ctx.fillStyle = css(mix(BRASS, AMBER, 0.45));
+  ctx.strokeStyle = css(sink(BRASS, 0.75));
   ctx.lineWidth = 0.02;
   ctx.beginPath();
   ctx.moveTo(-0.07, -0.032);
@@ -156,7 +177,7 @@ function drawKey(ctx: CanvasRenderingContext2D, pulse: number): void {
   ctx.arc(-0.17, 0, 0.05, 0, Math.PI * 2);
   ctx.fill('evenodd');
   ctx.stroke();
-  ctx.fillStyle = `rgba(255,255,255,${0.35 + 0.4 * pulse})`;
+  ctx.fillStyle = rgba(WHITE, 0.35 + 0.4 * pulse);
   ctx.beginPath();
   ctx.arc(-0.21, -0.06, 0.02, 0, Math.PI * 2);
   ctx.fill();
@@ -197,16 +218,16 @@ export function drawDropZone(
   filled: boolean,
   pulse: number,
 ): void {
-  const accent = filled ? '#4ade80' : '#60a5fa';
+  const accent = filled ? DONE_GREEN : READ_BLUE;
   ctx.save();
-  ctx.strokeStyle = `rgba(${filled ? '74,222,128' : '96,165,250'},${0.5 + 0.35 * pulse})`;
+  ctx.strokeStyle = rgba(accent, 0.5 + 0.35 * pulse);
   ctx.lineWidth = 0.07;
   ctx.setLineDash([0.14, 0.1]);
   ctx.beginPath();
   ctx.roundRect(-0.42, -0.42, 0.84, 0.84, 0.08);
   ctx.stroke();
   ctx.setLineDash([]);
-  ctx.fillStyle = accent;
+  ctx.fillStyle = css(accent);
   ctx.globalAlpha = filled ? 0.25 : 0.12 + 0.08 * pulse;
   ctx.fill();
   ctx.restore();
@@ -221,16 +242,14 @@ export function drawSabotagePanel(
   occupied: boolean,
   pulse: number,
 ): void {
-  const accent = occupied ? '#2dd4bf' : '#f87171';
+  const accent = css(occupied ? TEAL : ALARM);
   ctx.save();
-  ctx.fillStyle = occupied
-    ? `rgba(45,212,191,${0.14 + 0.08 * pulse})`
-    : `rgba(248,113,113,${0.16 + 0.16 * pulse})`;
+  ctx.fillStyle = occupied ? rgba(TEAL, 0.14 + 0.08 * pulse) : rgba(ALARM, 0.16 + 0.16 * pulse);
   ctx.beginPath();
   ctx.arc(0, 0, 0.85, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = '#131d26';
+  ctx.fillStyle = css(sink(STEEL, 0.82));
   ctx.strokeStyle = accent;
   ctx.lineWidth = 0.06;
   ctx.beginPath();
@@ -252,22 +271,27 @@ export function drawSabotagePanel(
   ctx.restore();
 }
 
+/** A drone's chassis, its rim, and the steel of the padlock over a frozen one. */
+const CHASSIS = css(sink(STEEL, 0.75));
+const CHASSIS_RIM = css(sink(mix(STEEL, READ_BLUE, 0.3), 0.45));
+const LOCK = css(lift(LABEL, 0.55));
+
 /** A padlock hanging over a frozen drone, upright whichever way the drone faces. */
 function drawFrozenLock(ctx: CanvasRenderingContext2D): void {
   ctx.save();
   ctx.translate(0, -0.44);
-  ctx.strokeStyle = '#cbd5e1';
+  ctx.strokeStyle = LOCK;
   ctx.lineWidth = 0.035;
   ctx.beginPath();
   ctx.moveTo(-0.055, 0.01);
   ctx.arc(0, -0.03, 0.055, Math.PI, 0);
   ctx.lineTo(0.055, 0.01);
   ctx.stroke();
-  ctx.fillStyle = '#cbd5e1';
+  ctx.fillStyle = LOCK;
   ctx.beginPath();
   ctx.roundRect(-0.085, 0, 0.17, 0.12, 0.025);
   ctx.fill();
-  ctx.fillStyle = '#1b2733';
+  ctx.fillStyle = CHASSIS;
   ctx.beginPath();
   ctx.arc(0, 0.05, 0.018, 0, Math.PI * 2);
   ctx.fill();
@@ -289,8 +313,8 @@ export function drawAlarmMark(ctx: CanvasRenderingContext2D, age: number): void 
   ctx.globalAlpha *= Math.min(1, (1 - age) * 4);
   ctx.translate(0, -0.66);
   ctx.scale(pop, pop);
-  ctx.fillStyle = '#ef4444';
-  ctx.strokeStyle = '#2a0707';
+  ctx.fillStyle = css(EMERGENCY);
+  ctx.strokeStyle = css(sink(EMERGENCY, 0.85));
   ctx.lineWidth = 0.035;
   ctx.beginPath();
   ctx.moveTo(-0.07, 0.15);
@@ -300,7 +324,7 @@ export function drawAlarmMark(ctx: CanvasRenderingContext2D, age: number): void 
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = '#fff7f7';
+  ctx.fillStyle = css(lift(EMERGENCY, 0.96));
   ctx.beginPath();
   ctx.roundRect(-0.032, -0.125, 0.064, 0.15, 0.02);
   ctx.moveTo(0.036, 0.085);
@@ -318,18 +342,18 @@ export function drawDroneBody(
   drone: DronePosition,
   pulse: number,
 ): void {
-  const accent = drone.frozen ? '#7d8f9e' : drone.alerted ? '#f87171' : '#fbbf24';
+  const accent = css(drone.frozen ? sink(LABEL, 0.1) : drone.alerted ? ALARM : AMBER);
   const alpha = drone.frozen ? 0.5 : 1;
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillStyle = rgba(BLACK, 0.4);
   ctx.beginPath();
   ctx.ellipse(0, 0.26, 0.3, 0.12, 0, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.rotate(drone.facing);
-  ctx.fillStyle = '#1b2733';
-  ctx.strokeStyle = '#3b4c5e';
+  ctx.fillStyle = CHASSIS;
+  ctx.strokeStyle = CHASSIS_RIM;
   ctx.lineWidth = 0.035;
   ctx.beginPath();
   ctx.ellipse(0, 0, 0.3, 0.22, 0, 0, Math.PI * 2);

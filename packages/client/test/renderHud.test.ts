@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ALARM, AMBER, css, READ_BLUE, TEAL, WHITE } from '../src/world/palette.js';
 import { draw, minimapBox, minimapLayout } from '../src/world/render/hud.js';
 import { callEntries, callsOf, fakeCanvas, setsOf } from './fakeCanvas.js';
 import { frameWith, player, TILES } from './frames.js';
@@ -94,10 +95,12 @@ describe('hud — the corner minimap on the canvas', () => {
         ? [[entry.value, ...next.args.slice(0, 2)]]
         : [];
     });
-    expect(fills).toContainEqual(['#fbbf24', 650, 110]);
-    expect(fills).toContainEqual(['#1f3b32', 650, 120]);
-    expect(fills).toContainEqual(['#2dd4bf', 670, 110]);
-    expect(fills).toContainEqual(['#60a5fa', 620, 110]);
+    // Shut amber, open a dim shade of the floor's teal; the armed station teal, its rules blue.
+    expect(fills).toContainEqual([css(AMBER), 650, 110]);
+    const open = fills.find(([, x, y]) => x === 650 && y === 120)?.[0];
+    expect(open).not.toBe(css(AMBER));
+    expect(fills).toContainEqual([css(TEAL), 670, 110]);
+    expect(fills).toContainEqual([css(READ_BLUE), 620, 110]);
   });
 
   it('dots the drones by their state and the crew in their colours, yours ringed in white', () => {
@@ -116,8 +119,18 @@ describe('hud — the corner minimap on the canvas', () => {
     expect(arcs).toContainEqual([675, 145, dot, 0, Math.PI * 2]);
     expect(arcs.at(-1)).toEqual([625, 125, dot, 0, Math.PI * 2]);
     const fills = setsOf(log, 'fillStyle');
-    expect(fills).toEqual(expect.arrayContaining(['#7d8f9e', '#f87171', '#f472b6', '#2dd4bf']));
-    expect(setsOf(log, 'strokeStyle').at(-1)).toBe('#ffffff');
+    expect(fills).toEqual(expect.arrayContaining([css(ALARM), '#f472b6', '#2dd4bf']));
+    // A frozen drone is grey: neither its patrol's amber nor the alarm's red.
+    const fillBefore = (x: number, y: number): unknown => {
+      const at = log.findIndex(
+        (e) => e.kind === 'call' && e.name === 'arc' && e.args[0] === x && e.args[1] === y,
+      );
+      return log.slice(0, at).reverse().find((e) => e.kind === 'set' && e.name === 'fillStyle');
+    };
+    const frozen = fillBefore(630, 130);
+    expect(frozen).toMatchObject({ value: expect.any(String) });
+    expect([css(AMBER), css(ALARM)]).not.toContain((frozen as { value: string }).value);
+    expect(setsOf(log, 'strokeStyle').at(-1)).toBe(css(WHITE));
     expect(callsOf(log, 'stroke')).toHaveLength(2);
   });
 });

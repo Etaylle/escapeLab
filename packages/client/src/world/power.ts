@@ -1,4 +1,5 @@
 import { canSee, type MapView } from '@escapelab/core';
+import { EMERGENCY, TUNGSTEN } from './palette.js';
 
 /**
  * The lab with its power on, as the cold open shows the whole of it before
@@ -22,10 +23,10 @@ export interface CeilingLight {
   tint: Tint;
   strength: number;
 }
-/** The warm light of the lamps with the power on … */
-export const WARM: CeilingLight = { tint: [255, 214, 168], strength: 1 };
+/** The warm light of the lamps with the power on: tungsten … */
+export const WARM: CeilingLight = { tint: TUNGSTEN, strength: 1 };
 /** … and the red they burn in once the escape's siren sounds: stronger, a red you notice. */
-export const ALARM_RED: CeilingLight = { tint: [255, 64, 46], strength: 1.8 };
+export const ALARM_RED: CeilingLight = { tint: EMERGENCY, strength: 1.8 };
 /** The tint `t` of the way from `from` to `to`, each part rounded. */
 export function mixTint(from: Tint, to: Tint, t: number): Tint {
   const mix = (a: number, b: number): number => Math.round(a + (b - a) * t);

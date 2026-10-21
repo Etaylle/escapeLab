@@ -1,6 +1,20 @@
 import type { ComponentType, ReactNode } from 'react';
-import { MANUAL_KINDS, type ManualKind } from '@escapelab/core';
-import { SOURCE_NAMES, twoConsoles, type Draft, type DraftSource, type Tile } from './draft.js';
+import {
+  DECOR_KINDS,
+  DECOR_VARIANTS,
+  MANUAL_KINDS,
+  ROOM_KINDS,
+  type ManualKind,
+} from '@escapelab/core';
+import {
+  DECOR_NAMES,
+  ROOM_KIND_NAMES,
+  SOURCE_NAMES,
+  twoConsoles,
+  type Draft,
+  type DraftSource,
+  type Tile,
+} from './draft.js';
 import { ChecksField, FormHead, IdField, SelectField, TextField, type Choice } from './fields.js';
 import { rename, replaceAt, sameThing, tileOf, withMap, type Pending, type Ref } from './tools.js';
 import { messagesAt, type Validation } from './validate.js';
@@ -403,24 +417,69 @@ function DroneForm({ index, props }: { index: number; props: ThingProps }) {
   );
 }
 
+/** A room's kinds to pick from, „ohne" for a plain lab room. */
+const ROOM_CHOICES: Choice[] = [
+  { value: '', label: 'ohne' },
+  ...ROOM_KINDS.map((kind) => ({ value: kind, label: ROOM_KIND_NAMES[kind] })),
+];
+
 function LabelForm({ index, props }: { index: number; props: ThingProps }) {
   const { draft, validation, onChange } = props;
   const label = draft.map.labels[index];
   if (label === undefined) {
     return null;
   }
+  const set = (next: typeof label): void =>
+    onChange(withMap(draft, { labels: replaceAt(draft.map.labels, index, next) }));
   return (
     <Shell title="Raumname" props={props}>
       <TextField
         label="Name — Rätsel schalten hier das Licht an"
         value={label.text}
-        onChange={(text) =>
-          onChange(
-            withMap(draft, { labels: replaceAt(draft.map.labels, index, { ...label, text }) }),
-          )
-        }
+        onChange={(text) => set({ ...label, text })}
         issues={messagesAt(validation, `map.labels.${index}.text`)}
       />
+      <SelectField
+        label="Raumart — Boden und Wände danach"
+        value={label.kind}
+        choices={ROOM_CHOICES}
+        onChange={(value) => set({ ...label, kind: ROOM_KINDS.find((k) => k === value) ?? '' })}
+      />
+    </Shell>
+  );
+}
+
+/** The looks a piece of furniture comes in, „auto" leaving it to its tile. */
+const VARIANTS: Choice[] = [
+  { value: '', label: 'auto' },
+  ...Array.from({ length: DECOR_VARIANTS }, (_, i) => ({ value: String(i), label: String(i + 1) })),
+];
+
+function DecorForm({ index, props }: { index: number; props: ThingProps }) {
+  const { draft, onChange } = props;
+  const piece = draft.map.decor[index];
+  if (piece === undefined) {
+    return null;
+  }
+  const set = (next: typeof piece): void =>
+    onChange(withMap(draft, { decor: replaceAt(draft.map.decor, index, next) }));
+  return (
+    <Shell title={`Möbel: ${DECOR_NAMES[piece.kind]}`} props={props}>
+      <SelectField
+        label="Möbelstück"
+        value={piece.kind}
+        choices={DECOR_KINDS.map((kind) => ({ value: kind, label: DECOR_NAMES[kind] }))}
+        onChange={(value) =>
+          set({ ...piece, kind: DECOR_KINDS.find((k) => k === value) ?? piece.kind })
+        }
+      />
+      <SelectField
+        label="Ausführung"
+        value={piece.variant === null ? '' : String(piece.variant)}
+        choices={VARIANTS}
+        onChange={(value) => set({ ...piece, variant: value === '' ? null : Number(value) })}
+      />
+      <p className="editor-note">Steht im Weg wie eine Wand; das Licht fällt darüber hinweg.</p>
     </Shell>
   );
 }
@@ -457,6 +516,7 @@ const FORMS: Readonly<
   dropoff: ItemForm,
   drone: DroneForm,
   label: LabelForm,
+  decor: DecorForm,
 };
 
 export function ThingForm(props: ThingProps) {

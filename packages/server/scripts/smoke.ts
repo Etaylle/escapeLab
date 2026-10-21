@@ -46,6 +46,7 @@ import {
   parseMission,
   POWER_OUT,
   TOKENS,
+  walkable as floorFree,
   type ConsoleId,
   type Credits,
   type DronePosition,
@@ -365,9 +366,9 @@ const isJoined = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'joined
 type MapData = NonNullable<PlayerView['map']>;
 
 /**
- * BFS path on the view's map; successive tiles excluding the start, null if
- * blocked. A closed door blocks, unless it is a plate door whose plate
- * `holdable` says somebody can stand on.
+ * BFS path on the view's map, round its furniture; successive tiles
+ * excluding the start, null if blocked. A closed door blocks, unless it is a
+ * plate door whose plate `holdable` says somebody can stand on.
  */
 function bfsPath(
   map: MapData,
@@ -377,7 +378,7 @@ function bfsPath(
 ): Tile[] | null {
   const closed = new Set(map.doors.filter((d) => !d.open).map((d) => key(d.x, d.y)));
   const walkable = (x: number, y: number): boolean => {
-    if (map.tiles[y]?.charAt(x) !== '.') {
+    if (!floorFree(map, x, y)) {
       return false;
     }
     const plate = closed.has(key(x, y)) ? PLATE_OF.get(key(x, y)) : null;

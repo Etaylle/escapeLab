@@ -1,10 +1,10 @@
 import type { MapDef } from './mission.js';
 
 /**
- * Where the crew can walk, for mission validation: puzzle doors open for
- * good once their puzzle is solved, plate doors only while someone stands
- * on the plate — or for good, too, once the puzzle they name in
- * `untilSolved` is solved. Tiles are keyed "x,y".
+ * Where the crew can walk, for mission validation: over floor that no
+ * furniture takes; puzzle doors open for good once their puzzle is solved,
+ * plate doors only while someone stands on the plate — or for good, too,
+ * once the puzzle they name in `untilSolved` is solved. Tiles are keyed "x,y".
  */
 
 export interface Spot {
@@ -23,6 +23,28 @@ const STEPS = [
   [-1, 0],
 ] as const;
 
+/** The decor tiles of each map's decor list, worked out once per list. */
+const solidByDecor = new WeakMap<readonly Spot[], ReadonlySet<string>>();
+
+/**
+ * The tiles a map's furniture stands on, by key: solid like walls for every
+ * step — the avatars', the reach proofs', the harness's route — though light
+ * and sight pass over it.
+ */
+export function decorTiles(decor: readonly Spot[]): ReadonlySet<string> {
+  let tiles = solidByDecor.get(decor);
+  if (tiles === undefined) {
+    tiles = new Set(decor.map((piece) => tileKey(piece.x, piece.y)));
+    solidByDecor.set(decor, tiles);
+  }
+  return tiles;
+}
+
+/** Whether somebody can stand on the tile (x, y): floor that no furniture takes. */
+export function walkable(map: Pick<MapDef, 'tiles' | 'decor'>, x: number, y: number): boolean {
+  return map.tiles[y]?.charAt(x) === '.' && !decorTiles(map.decor).has(tileKey(x, y));
+}
+
 /** Tiles reachable from `start`, treating doors as walls unless `isOpen` says otherwise. */
 function flood(map: MapDef, start: Spot, isOpen: (door: Door) => boolean): Set<string> {
   const doorAt = new Map(map.doors.map((d) => [tileKey(d.x, d.y), d]));
@@ -33,7 +55,7 @@ function flood(map: MapDef, start: Spot, isOpen: (door: Door) => boolean): Set<s
     for (const [dx, dy] of STEPS) {
       const next = { x: current.x + dx, y: current.y + dy };
       const k = tileKey(next.x, next.y);
-      if (seen.has(k) || map.tiles[next.y]?.charAt(next.x) !== '.') {
+      if (seen.has(k) || !walkable(map, next.x, next.y)) {
         continue;
       }
       const door = doorAt.get(k);

@@ -44,7 +44,12 @@ describe('drawFrame — the passes in their order', () => {
     drawFrame(ctx, frame);
     const steps = [
       firstCall(log, (c) => c.name === 'fillRect' && c.args.join() === '0,0,800,600'),
-      firstCall(log, (c) => c.name === 'drawImage' && c.args[0] === kit.textures.wall),
+      firstCall(
+        log,
+        (c) =>
+          c.name === 'drawImage' &&
+          String((c.args[0] as { name?: string }).name).startsWith('sprite'),
+      ),
       firstCall(log, (c) => c.name === 'translate' && c.args.join() === '7.5,1.5'),
       firstCall(log, (c) => c.name === 'translate' && c.args.join() === '2.5,2.8'),
       firstCall(log, (c) => c.name === 'drawImage' && c.args[0] === overlay.canvas),

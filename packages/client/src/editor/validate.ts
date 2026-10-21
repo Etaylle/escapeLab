@@ -64,6 +64,7 @@ const MAP_REFS: Readonly<Record<string, (index: number, rest: readonly Segment[]
     index,
     waypoint: rest[0] === 'waypoints' && typeof rest[1] === 'number' ? rest[1] : 0,
   }),
+  decor: (index) => ({ kind: 'decor', index }),
 };
 
 /** The things of the map there is one of, by their field. */
@@ -117,6 +118,19 @@ function refsNamed(draft: Draft, id: string): Ref[] {
 
 const QUOTED = /"([^"]+)"/g;
 const COORDINATES = /\b(\d+),(\d+)\b/g;
+/** A rule about furniture names it by its kind and tile: „decor "shelf" at 3,2". */
+const DECOR_AT = /decor "[^"]+" at (\d+),(\d+)/;
+
+/** The piece of furniture a rule's message is about, by the tile it names; null for none. */
+function decorNamed(draft: Draft, message: string): Ref | null {
+  const match = DECOR_AT.exec(message);
+  if (match === null) {
+    return null;
+  }
+  const [x, y] = [Number(match[1]), Number(match[2])];
+  const index = draft.map.decor.findIndex((piece) => piece.x === x && piece.y === y);
+  return index < 0 ? null : { kind: 'decor', index };
+}
 
 /**
  * Where a map rule's message points: the things it names in quotes and the
@@ -131,7 +145,7 @@ export function locate(draft: Draft, message: string): { target: Ref | null; spo
     y: Number(match[2]),
   }));
   const spots = [...named.flatMap((ref) => tilesOf(draft, ref)), ...tiles];
-  return { target: named[0] ?? null, spots: unique(spots) };
+  return { target: decorNamed(draft, message) ?? named[0] ?? null, spots: unique(spots) };
 }
 
 function unique(tiles: readonly Tile[]): Tile[] {

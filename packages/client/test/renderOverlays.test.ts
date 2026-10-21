@@ -148,11 +148,11 @@ describe('overlays — what lies over the world and its light', () => {
   it('covers the picture as far as the light has failed: the cold open’s, or the ending’s', () => {
     const cover = (parts: Partial<Frame>): unknown[] =>
       setsOf(drawn(frameWith(parts)), 'fillStyle').filter(
-        (fill) => typeof fill === 'string' && fill.startsWith('rgba(1, 2, 4'),
+        (fill) => typeof fill === 'string' && fill.startsWith('rgba(3, 5, 9'),
       );
-    expect(cover({ scene: { lit: true, cover: 0.6 } })).toEqual(['rgba(1, 2, 4, 0.6)']);
+    expect(cover({ scene: { lit: true, cover: 0.6 } })).toEqual(['rgba(3, 5, 9, 0.6)']);
     const ending = { lit: 0, pull: 0, dark: 0.8 };
-    expect(cover({ scene: { lit: false, cover: 0.6 }, ending })).toEqual(['rgba(1, 2, 4, 0.8)']);
+    expect(cover({ scene: { lit: false, cover: 0.6 }, ending })).toEqual(['rgba(3, 5, 9, 0.8)']);
     expect(cover({})).toEqual([]);
   });
 

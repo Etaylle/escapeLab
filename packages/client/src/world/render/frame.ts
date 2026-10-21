@@ -11,6 +11,7 @@ import type { MarkerTarget } from '../markers.js';
 import type { CeilingLight } from '../power.js';
 import type { LitGroup, RoomLight } from '../rooms.js';
 import type { Viewport } from '../viewport.js';
+import { artKit, type ArtKit } from '../artKit.js';
 
 /**
  * One frame of the world as the passes draw it (pipeline.ts): a plain object
@@ -151,6 +152,8 @@ export interface RenderKit {
   hatchCut: { sight: Sight; baked: Baked | null } | null;
   /** the red edge as last baked (vignette.ts), and for which canvas: baked anew for another */
   vignette: { canvas: HTMLCanvasElement; w: number; h: number; dpr: number };
+  /** the art's: the map's dressing, the sprite atlas, the particles, the faint lights' glow */
+  art: ArtKit;
 }
 
 /** A fresh kit drawing the darkness into `overlay`: the textures made, nothing baked yet. */
@@ -167,6 +170,7 @@ export function renderKit(overlay: CanvasRenderingContext2D): RenderKit {
     roomLight: null,
     hatchCut: null,
     vignette: { canvas: document.createElement('canvas'), w: 0, h: 0, dpr: 0 },
+    art: artKit(),
   };
 }
 
@@ -243,6 +247,10 @@ export interface Frame {
   /** the primary pointer is a finger: no keys to name, the on-screen pad shows */
   touch: boolean;
   kit: RenderKit;
+  /** the mission on show, by id: the seed its rooms are dressed from (dress.ts) */
+  missionId: string;
+  /** a wrong cut shorting the armed fuse box: its sparks fly from (x, y), once for `seq` */
+  short: { x: number; y: number; seq: number } | null;
 }
 
 /** Sets `ctx` to draw in tiles, as the camera of `frame` looks. */

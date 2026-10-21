@@ -27,6 +27,7 @@ export function mapWith(parts: Partial<MapView>): MapView {
     edgeworkSign: null,
     lamps: [],
     labels: [],
+    decor: [],
     litRooms: [],
     exit: null,
     items: [],

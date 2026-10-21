@@ -1,6 +1,6 @@
 import type { Difficulty } from './difficulty.js';
 import type { Edgework } from './edgework.js';
-import type { ManualDef, ManualKind } from './mission.js';
+import type { DecorKind, ManualDef, ManualKind, RoomKind } from './mission.js';
 import { CREW_COLORS, type Credits, type GameState, type Phase, type RunEvent } from './state.js';
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
 import type { ConsoleId, ManualSection, Viewer, ViewContext } from './puzzles/module.js';
@@ -189,8 +189,11 @@ export interface MapView {
     status: 'done' | 'armed' | 'locked';
     /** which console the spot is; left out where the station has one */
     console?: ConsoleId;
-    /** a main switch with a lever for each of the crew, not a console; left out for a console */
-    look?: 'lever';
+    /**
+     * a main switch with a lever for each of the crew, or a fuse box — where
+     * a wrong cut shorts it out, the world's sparks fly; left out for a console
+     */
+    look?: 'lever' | 'fusebox';
   }[];
   /**
    * the manual objects the crew has come across so far (the audience sees
@@ -213,7 +216,10 @@ export interface MapView {
   edgeworkSign: { x: number; y: number } | null;
   /** the emergency lamps, on the floor or on a wall beside it; they glow once the lights are out */
   lamps: { x: number; y: number }[];
-  labels: { text: string; x: number; y: number }[];
+  /** room names, each with the kind of room it names, where the mission gives one */
+  labels: { text: string; x: number; y: number; kind?: RoomKind }[];
+  /** the furniture on the floor: solid for every step, as walls are */
+  decor: { kind: DecorKind; x: number; y: number; variant?: number }[];
   /** labels of the rooms whose lights the solved stations have switched on, first lit first */
   litRooms: string[];
   /** escape hatch; open once every puzzle is solved */
@@ -488,6 +494,9 @@ function stationsOnMap(state: GameState): MapView['stations'] {
     const index = state.mission.puzzles.findIndex((p) => p.id === s.puzzleId);
     const def = state.mission.puzzles[index];
     const lever = def?.type === 'button-sync' && def.style === 'lever';
+    // The fuse box is where the wires are cut: console a, the meter stands at b.
+    const fusebox = def?.type === 'circuit' && s.console !== 'b';
+    const look = lever ? 'lever' : fusebox ? 'fusebox' : null;
     return {
       puzzleId: s.puzzleId,
       x: s.x,
@@ -495,7 +504,7 @@ function stationsOnMap(state: GameState): MapView['stations'] {
       title: def?.title ?? s.puzzleId,
       status: stationStatus(state, index),
       ...(s.console === undefined ? {} : { console: s.console }),
-      ...(lever ? { look: 'lever' as const } : {}),
+      ...(look === null ? {} : { look }),
     };
   });
 }
@@ -600,7 +609,18 @@ function mapViewFor(state: GameState, viewer: MapViewer): MapView | null {
     manuals: manualsOnMap(state, viewer),
     edgeworkSign: map.edgeworkSign === undefined ? null : { ...map.edgeworkSign },
     lamps: map.lamps.map((lamp) => ({ x: lamp.x, y: lamp.y })),
-    labels: map.labels.map((l) => ({ text: l.text, x: l.x, y: l.y })),
+    labels: map.labels.map((l) => ({
+      text: l.text,
+      x: l.x,
+      y: l.y,
+      ...(l.kind === undefined ? {} : { kind: l.kind }),
+    })),
+    decor: map.decor.map((piece) => ({
+      kind: piece.kind,
+      x: piece.x,
+      y: piece.y,
+      ...(piece.variant === undefined ? {} : { variant: piece.variant }),
+    })),
     litRooms: litRoomsOf(state),
     exit: exitOf(state),
     items: itemsOnMap(state, viewer),

@@ -7,6 +7,7 @@ import {
   type PointerEvent,
 } from 'react';
 import { makeFloorTile, makeWallTile } from '../world/art.js';
+import { newAtlas } from '../world/atlas.js';
 import type { Tile } from './draft.js';
 import { paintScene, paintToolGlyph, type Scene, type Textures } from './paint.js';
 import { lineBetween, mapSize, refsAt, sameTile, type Ref, type Tool } from './tools.js';
@@ -20,9 +21,9 @@ import { lineBetween, mapSize, refsAt, sameTile, type Ref, type Tool } from './t
 
 let textures: Textures | null = null;
 
-/** The game's floor and wall textures, made once, on first use in a browser. */
+/** The game's floor and wall textures and its sprites, made once, on first use in a browser. */
 function sharedTextures(): Textures {
-  textures ??= { floor: makeFloorTile(), wall: makeWallTile() };
+  textures ??= { floor: makeFloorTile(true), wall: makeWallTile(true), atlas: newAtlas() };
   return textures;
 }
 

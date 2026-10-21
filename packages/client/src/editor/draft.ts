@@ -2,9 +2,11 @@ import {
   MODULES,
   missionSchema,
   moduleFor,
+  type DecorKind,
   type FieldSpec,
   type ManualKind,
   type PuzzleDef,
+  type RoomKind,
 } from '@escapelab/core';
 
 /**
@@ -56,6 +58,32 @@ export const SOURCE_NAMES: Readonly<Record<ManualKind, { name: string; label: st
   cabinet: { name: 'Aktenschrank', label: 'AKTENSCHRANK' },
 };
 
+/** What each kind of room is called in the editor. */
+export const ROOM_KIND_NAMES: Readonly<Record<RoomKind, string>> = {
+  archive: 'Archiv',
+  corridor: 'Flur',
+  machine: 'Maschinenraum',
+  server: 'Serverraum',
+  lab: 'Labor',
+  reactor: 'Reaktor',
+  control: 'Leitstand',
+};
+
+/** What each piece of furniture is called in the editor. */
+export const DECOR_NAMES: Readonly<Record<DecorKind, string>> = {
+  shelf: 'Regal',
+  cart: 'Aktenwagen',
+  bench: 'Labortisch',
+  hood: 'Abzug',
+  rack: 'Serverschrank',
+  generator: 'Generator',
+  pipes: 'Rohrleitung',
+  barrel: 'Fass',
+  core: 'Reaktorkern',
+  cables: 'Kabelstrang',
+  desk: 'Schaltpult',
+};
+
 export interface DraftPuzzle {
   type: StationType;
   id: string;
@@ -104,6 +132,17 @@ export interface DraftLabel {
   text: string;
   x: number;
   y: number;
+  /** the kind of room it names; '' for a plain one */
+  kind: RoomKind | '';
+}
+
+/** A piece of furniture: solid, on a floor tile of its own. */
+export interface DraftDecor {
+  kind: DecorKind;
+  x: number;
+  y: number;
+  /** its look, 0 to 3; null leaves it to the tile */
+  variant: number | null;
 }
 
 /** A manual object, „Quelle" in the editor: where a puzzle's rules lie. */
@@ -154,6 +193,7 @@ export interface DraftMap {
   plates: DraftPlate[];
   stations: DraftStation[];
   labels: DraftLabel[];
+  decor: DraftDecor[];
   manuals: DraftSource[];
   edgeworkSign?: Tile;
   exit?: Tile;
@@ -283,6 +323,7 @@ export function newDraft(): Draft {
       plates: [],
       stations: [],
       labels: [],
+      decor: [],
       manuals: [],
       items: [],
       drones: [],
@@ -361,7 +402,13 @@ function mapJson(map: DraftMap): Record<string, unknown> {
       y: s.y,
       ...given('console', s.console),
     })),
-    labels: map.labels.map((l) => ({ ...l })),
+    labels: map.labels.map((l) => ({ text: l.text, x: l.x, y: l.y, ...given('kind', l.kind) })),
+    decor: map.decor.map((d) => ({
+      kind: d.kind,
+      x: d.x,
+      y: d.y,
+      ...(d.variant === null ? {} : { variant: d.variant }),
+    })),
     manuals: map.manuals.map((m) => ({
       id: m.id,
       kind: m.kind,
@@ -445,7 +492,8 @@ interface LooseMap {
     | undefined;
   plates?: { id: string; x: number; y: number; label?: string | undefined }[] | undefined;
   stations: { puzzleId: string; x: number; y: number; console?: 'a' | 'b' | undefined }[];
-  labels?: { text: string; x: number; y: number }[] | undefined;
+  labels?: { text: string; x: number; y: number; kind?: RoomKind | undefined }[] | undefined;
+  decor?: { kind: DecorKind; x: number; y: number; variant?: number | undefined }[] | undefined;
   manuals?:
     | {
         id: string;
@@ -597,13 +645,22 @@ function stationOf(station: LooseMap['stations'][number]): DraftStation {
 }
 
 /** The lists a mission file may leave out, there in the draft even when empty. */
-type DraftLists = Pick<DraftMap, 'doors' | 'plates' | 'labels' | 'manuals' | 'items' | 'drones'>;
+type DraftLists = Pick<
+  DraftMap,
+  'doors' | 'plates' | 'labels' | 'decor' | 'manuals' | 'items' | 'drones'
+>;
 
 function listsOf(map: LooseMap): DraftLists {
   return {
     doors: (map.doors ?? []).map(doorOf),
     plates: (map.plates ?? []).map((p) => ({ id: p.id, x: p.x, y: p.y, label: p.label ?? '' })),
-    labels: (map.labels ?? []).map((l) => ({ text: l.text, x: l.x, y: l.y })),
+    labels: (map.labels ?? []).map((l) => ({ text: l.text, x: l.x, y: l.y, kind: l.kind ?? '' })),
+    decor: (map.decor ?? []).map((d) => ({
+      kind: d.kind,
+      x: d.x,
+      y: d.y,
+      variant: d.variant ?? null,
+    })),
     manuals: (map.manuals ?? []).map(sourceOf),
     items: (map.items ?? []).map(itemOf),
     drones: (map.drones ?? []).map((d) => ({

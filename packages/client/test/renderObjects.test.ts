@@ -3,6 +3,7 @@ import {
   drawDoor,
   drawEmergencyLamp,
   drawExitHatch,
+  drawFusebox,
   drawLeverBox,
   drawManualObject,
   drawPlate,
@@ -13,7 +14,7 @@ import {
 import { doorOpenness, type DoorMotion } from '../src/world/doors.js';
 import { drawCarryable, drawDropZone, drawSabotagePanel } from '../src/world/hazards.js';
 import { draw } from '../src/world/render/objects.js';
-import { drawnAt, fakeCanvas, recording, strip } from './fakeCanvas.js';
+import { callsOf, drawnAt, fakeCanvas, recording, strip } from './fakeCanvas.js';
 import { frameWith, lightWith, player, TILES } from './frames.js';
 import { mapWith, type Item, type Manual, type Plate } from './fixtures.js';
 
@@ -188,6 +189,39 @@ describe('objects — the lab’s things, in tile space', () => {
     // The cabinet itself is drawn at (4, 1); its key's drop-off is not drawn over it.
     expect(drawnAt(log, 4.5, 1.5)).not.toEqual([]);
     expect(drawnAt(log, 4.5, 1.5, 1)).toEqual([]);
+  });
+
+  it('draws a circuit’s box as a fuse box', () => {
+    type Station = Parameters<typeof lab>[0]['stations'];
+    const stations: Station = [
+      {
+        puzzleId: 'kasten',
+        x: 2,
+        y: 1,
+        title: 'Kasten',
+        status: 'armed',
+        console: 'a',
+        look: 'fusebox',
+      },
+    ];
+    const log = drawn(frameWith({ map: lab({ stations }), pulse: 0.3 }));
+    expect(strip(drawnAt(log, 2.5, 1.5))).toEqual(
+      recording((c) => drawFusebox(c, { status: 'armed', pulse: 0.3, console: 'a' })),
+    );
+  });
+
+  it('stands the furniture where light has fallen, from the atlas, lit where its tile is', () => {
+    const decor = [
+      { kind: 'shelf' as const, x: 1, y: 1, variant: 2 },
+      { kind: 'barrel' as const, x: 7, y: 3 },
+    ];
+    const light = lightWith({ shown: (x) => x < 5, powered: (x, y) => x === 1 && y === 1 });
+    const frame = frameWith({ map: lab({ decor }), light });
+    const log = drawn(frame);
+    const sprites = [...(frame.kit.art.atlas.levels.get(96) ?? new Map()).entries()];
+    const shelf = sprites.find(([key]) => key === 'decor:shelf:2:lit')?.[1];
+    expect(shelf).toBeDefined();
+    expect(callsOf(log, 'drawImage')).toEqual([[shelf?.canvas, 1, 1, 1, 1]]);
   });
 
   it('burns an emergency lamp in a dark room — dark with the power on or the room lit', () => {
