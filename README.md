@@ -181,6 +181,17 @@ einmal. Der Server nimmt einen Seed nur mit `ALLOW_SEED=1` an (`pnpm dev` und di
 es); ohne bleibt es beim Zufall, mit einer Zeile im Server-Log. Der Rundgang
 (`tools/shots.mjs`) legt je Mission einen Seed fest, `SHOTS_SEED=<n>` wählt einen anderen.
 
+**Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
+dort, wo er steht, und die Musik zieht mit dem Druck an — alles zur Laufzeit erzeugt
+([`docs/sound.md`](docs/sound.md)). Nur die Funksprüche der Leitstelle sind Aufnahmen
+(`packages/client/public/voice/`). Wer einen Funktext in `missions/*.json` ändert oder neu
+schreibt, nimmt ihn auf einem Mac neu auf — der Test, der jede Zeile prüft, nennt den Befehl:
+
+```sh
+pnpm --filter @escapelab/client voice            # nur fehlende Zeilen (macOS: say, afconvert)
+pnpm --filter @escapelab/client voice --fresh    # alle neu, etwa für eine andere Stimme
+```
+
 ## Für den Demo Day (ein Prozess, eine URL)
 
 ```sh

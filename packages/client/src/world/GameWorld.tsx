@@ -15,7 +15,9 @@ import type { CoachMark } from '../puzzles/coach.js';
 import { TalkButton } from '../screens/Voice.js';
 import { VoiceContext } from '../voice/useVoice.js';
 import { useAlarm, useAlarmClasses, worldHornDue, type Alarm } from './alarm.js';
+import { bedProbe, hearRooms, startAmbience, stopAmbience } from './ambience.js';
 import { worldText } from './art.js';
+import { dressedFor } from './artKit.js';
 import { assembleFrame, type FrameSource, type Latest } from './assemble.js';
 import {
   blackoutSounds,
@@ -28,18 +30,15 @@ import {
   lightsOnClick,
   lockerOpen,
   pingBlip,
-  setTension,
   powerDrain,
-  startAmbience,
   startPowerHum,
   stationChirp,
-  stopAmbience,
   stopPowerHum,
 } from './audio.js';
-import { blackoutCue, SEQUENCE_MS } from './coldOpen.js';
+import { blackoutCue, FLICKER_MS, REVEAL_MS, SEQUENCE_MS } from './coldOpen.js';
 import { doorTurned } from './doors.js';
 import { drawsFrame } from './drawRate.js';
-import { useEscapeSince, useEscapeSounds } from './escape.js';
+import { escaping, useEscapeSince, useEscapeSounds } from './escape.js';
 import { REDUCED_MOTION, useFinaleSounds, type FinaleCue } from './finale.js';
 import { runLight } from './frameLight.js';
 import { frameTrace, traceRequested, type FrameTrace } from './frameTrace.js';
@@ -47,13 +46,16 @@ import { watchInsets, type Insets } from './insets.js';
 import { carriedItem, contextAction, TOUCH, type ContextAction } from './interact.js';
 import { runsOf } from './light.js';
 import { positionsOf, type KnownPositions } from './movement.js';
+import { MUSIC_AFTER_CLICK_MS, musicProbe, setTension, stopMusic, type Tension } from './music.js';
 import { worldNews } from './news.js';
+import { renderRadio, voiceProbe } from './radioVoice.js';
 import { renderKit, type ChatLine, type MapPing, type WorldMap } from './render/frame.js';
 import { dropLight } from './render/light.js';
 import { PING_LIFETIME_MS } from './render/overlays.js';
 import { drawFrame } from './render/pipeline.js';
 import { roomArea, roomsComingOn } from './rooms.js';
 import { easeOthers, follow, followServer, MOVE_KEYS, newSim, walk, type Sim } from './sim.js';
+import { hearCrew, spatialProbe, stopSpatial } from './spatial.js';
 import { streamPositions } from './stream.js';
 import { useWorldTip } from './useWorldTip.js';
 
@@ -343,7 +345,11 @@ function listen(loop: Loop, setWheelOpen: SetWheel): () => void {
   };
 }
 
-/** `?trace=1`: the walkthrough reads the last frame durations off the page, and the camera. */
+/**
+ * `?trace=1`: the walkthrough reads the last frame durations off the page, the camera, and
+ * what the lab sounds like — the beds, the music, the radio's voice, the partner's place — and
+ * can render the radio's chain offline.
+ */
 function traceFrames(sim: Sim): { trace: FrameTrace; drop: () => void } | null {
   if (!traceRequested(location.search)) {
     return null;
@@ -356,6 +362,10 @@ function traceFrames(sim: Sim): { trace: FrameTrace; drop: () => void } | null {
     resetFrames: () => trace.resetFrames(),
     get camera() {
       return { x: sim.draw.x, y: sim.draw.y, scale: sim.scale };
+    },
+    get audio() {
+      const sound = { music: musicProbe(), voice: voiceProbe(), spatial: spatialProbe() };
+      return { ...bedProbe(), ...sound, renderRadio };
     },
   });
   return { trace, drop };
@@ -405,6 +415,7 @@ function step(loop: Loop, dt: number, map: WorldMap): void {
     footstep();
   }
   easeOthers(sim, positionsOf(loop.positions.current, run), youId, dt);
+  hearTheLab(loop, map);
   slideDoors(sim, map);
   if (map !== sim.seen) {
     look(loop, map);
@@ -432,19 +443,59 @@ function slideDoors(sim: Sim, map: WorldMap): void {
 }
 
 /**
- * The lab getting louder as the clock runs out, the last ten seconds
- * counted out loud; and an emergency's siren as it starts, a chirp as it
- * is over.
+ * The lab heard from where this player stands (the audience stands nowhere): the beds of the
+ * rooms round it, as the power and the lights have them (ambience.ts), and — for a player only
+ * — the crew's steps and the drones, placed (spatial.ts).
+ */
+function hearTheLab(loop: Loop, map: WorldMap): void {
+  const { sim, spectator } = loop;
+  const { view, darkSince, finale } = loop.live.current;
+  const outAt = darkSince === null ? null : darkSince + FLICKER_MS;
+  hearRooms({
+    map,
+    dressing: dressedFor(loop.kit.art, map, view.missionId).dressing,
+    at: spectator ? null : sim.self,
+    power: { outAt, lit: sim.lit, won: finale?.ending === 'won' },
+    time: sim.time,
+  });
+  if (!spectator) {
+    const drones = loop.drones.current;
+    hearCrew({ map, self: sim.self, others: sim.others, drones, now: performance.now() });
+  }
+}
+
+/**
+ * What the music follows (music.ts): the run, from 2 s after the blackout's click, the clock,
+ * the alarms, the escape, the end.
+ */
+function tensionOf(loop: Loop, map: WorldMap): Tension {
+  const { view, darkSince, finale } = loop.live.current;
+  const deadline = view.deadlineAt;
+  return {
+    run: view.startedAt,
+    startAt: darkSince === null ? null : darkSince + REVEAL_MS + MUSIC_AFTER_CLICK_MS,
+    left: deadline === null ? Infinity : (deadline - Date.now()) / 1000,
+    budget: view.timeLimitSec,
+    alarms: view.penaltySeq,
+    escaping: escaping(map),
+    ending: finale === null ? null : finale.ending === 'won' ? 'won' : 'lost',
+  };
+}
+
+/**
+ * The music under the run as the clock runs out, the last ten seconds
+ * counted out loud — for a player — and an emergency's siren as it starts,
+ * a chirp as it is over.
  */
 function hearTheClock(loop: Loop, map: WorldMap): void {
   const { sim } = loop;
   const view = loop.live.current.view;
   const deadline = view.deadlineAt;
+  if (!loop.spectator) {
+    setTension(tensionOf(loop, map));
+  }
   if (deadline !== null && !loop.spectator) {
-    const left = (deadline - Date.now()) / 1000;
-    const budget = Math.max(1, view.timeLimitSec);
-    setTension(Math.min(1, Math.max(0, 1 - left / (budget * 0.5))));
-    const whole = Math.ceil(left);
+    const whole = Math.ceil((deadline - Date.now()) / 1000);
     if (whole <= 10 && whole >= 0 && whole < sim.lastBeepAt) {
       sim.lastBeepAt = whole;
       countdownBeep(whole);
@@ -594,7 +645,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
     const insets = watchInsets(canvas, refs.controlsRef.current, setControlsReach);
     const sim = newSim(insets.top);
     refs.simRef.current = sim;
-    startAmbience();
+    startAmbience(() => sim.time);
     const loop: Loop = {
       canvas,
       ctx,
@@ -625,6 +676,8 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
       insets.disconnect();
       unlisten?.();
       stopAmbience();
+      stopMusic();
+      stopSpatial();
       stopPowerHum();
       traced?.drop();
       dropLight(kit);

@@ -1,13 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { MapView, Phase, RunOutcome } from '@escapelab/core';
 import { useMedia } from '../hooks.js';
-import {
-  klaxonFade,
-  lightsOnClick,
-  powerDrain,
-  startPowerHum,
-  stopAmbience,
-} from './audio.js';
+import { stopAmbience } from './ambience.js';
+import { klaxonFade, lightsOnClick, powerDrain, startPowerHum } from './audio.js';
 import { STALE_MS } from './coldOpen.js';
 import { smooth } from './ease.js';
 import { warmUp } from './rooms.js';

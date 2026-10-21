@@ -1,5 +1,22 @@
 import type { VoiceProbe } from './voice/mesh.js';
+import type { BedProbe } from './world/ambience.js';
 import type { LightProbe } from './world/gl/path.js';
+import type { MusicProbe } from './world/music.js';
+import type { RadioRender, VoiceProbe as RadioProbe } from './world/radioVoice.js';
+import type { SpatialProbe } from './world/spatial.js';
+
+/**
+ * What the lab sounds like now: the beds of the rooms round the player (world/ambience.ts),
+ * the music's layers and pressure (music.ts), mission control's voice (radioVoice.ts) and
+ * where the nearest partner sounds from (spatial.ts) — and the radio's chain rendered offline.
+ */
+export interface AudioProbe extends BedProbe {
+  readonly music: MusicProbe;
+  readonly voice: RadioProbe;
+  readonly spatial: SpatialProbe;
+  /** renders the radio's chain once on white noise: what went in and what came out */
+  readonly renderRadio: () => Promise<RadioRender>;
+}
 
 /**
  * Where the world's camera looks as its last frame drew it: the world point at the canvas's
@@ -28,6 +45,8 @@ export interface Probes {
   readonly voice?: VoiceProbe;
   /** the way the world's light takes, WebGL or Canvas, and the picture's luma (world/gl/path.ts) */
   readonly light?: LightProbe;
+  /** what the lab sounds like, while a world is up */
+  readonly audio?: AudioProbe;
 }
 
 declare global {
