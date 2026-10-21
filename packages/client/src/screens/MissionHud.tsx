@@ -3,8 +3,8 @@ import { chatText, type PlayerPosition, type PlayerView, type RunEvent } from '@
 import { useMedia } from '../hooks.js';
 import { airIcon, LAST_CREW } from '../radio.js';
 import { useVoice, type Voice } from '../voice/useVoice.js';
-import type { ChatLine } from '../world/GameWorld.js';
 import type { KnownPositions } from '../world/movement.js';
+import type { ChatLine } from '../world/render/frame.js';
 import { crewTags, CrewTags, presenceNear, type CrewTag } from './Crew.js';
 import { EdgeworkChip } from './EdgeworkChip.js';
 import { Icon } from './Icon.js';

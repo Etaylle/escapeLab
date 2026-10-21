@@ -32,9 +32,10 @@ import { opensLit, REVEAL_MS, useDarkSince, useRevealed } from '../world/coldOpe
 import { consoleName } from '../world/consoles.js';
 import { escapeChecklist, escaping, type Mate } from '../world/escape.js';
 import { REDUCED_MOTION, veilOf, type Ending, type Finale } from '../world/finale.js';
-import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
+import { GameWorld } from '../world/GameWorld.js';
 import { dueParts } from '../world/markers.js';
 import { startingSpot, type KnownPositions } from '../world/movement.js';
+import type { ChatLine, MapPing } from '../world/render/frame.js';
 import { startRoom } from '../world/rooms.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
 import { Icon } from './Icon.js';

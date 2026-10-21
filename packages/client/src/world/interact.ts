@@ -4,6 +4,8 @@ import type { MapView, SourceHere } from '@escapelab/core';
 export const INTERACT_RADIUS = 1.5;
 /** Pick-up and drop-off reach; the server allows 0.95. */
 export const ITEM_RADIUS = 0.9;
+/** The primary pointer is a finger: no keys to name, the on-screen pad shows (as ui.css has it). */
+export const TOUCH = '(pointer: coarse)';
 
 /**
  * What pressing E does where the player stands, the words of its prompt —
@@ -31,6 +33,17 @@ type Item = MapView['items'][number];
 /** What `playerId` carries right now: an item in their hands, not yet set in its place. */
 export function carriedItem(map: Pick<MapView, 'items'>, playerId: string): Item | undefined {
   return map.items.find((item) => item.carriedBy === playerId && !item.delivered);
+}
+
+/** The manual object prints the rules of the station that is armed now. */
+export function coversArmed(map: Pick<MapView, 'stations'>, manual: Manual): boolean {
+  const armed = map.stations.find((s) => s.status === 'armed');
+  return armed !== undefined && manual.puzzleIds.includes(armed.puzzleId);
+}
+
+/** A cabinet's key goes into its padlock: the cabinet is the drop-off, no zone needed. */
+export function opensCabinet(map: Pick<MapView, 'manuals'>, itemId: string): boolean {
+  return map.manuals.some((manual) => manual.needsKey === itemId);
 }
 
 /**

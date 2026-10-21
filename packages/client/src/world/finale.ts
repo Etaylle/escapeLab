@@ -35,6 +35,12 @@ import { warmUp } from './rooms.js';
 /** How a run ended, as the end screen tells it; the run report's outcome. */
 export type Ending = RunOutcome;
 
+/** The end of the run playing on this screen: how it ended, since when (epoch ms). */
+export interface FinaleCue {
+  ending: Ending;
+  since: number;
+}
+
 /** Won: the camera pulls back over the lab this long, ms … */
 export const PULLBACK_MS = 1200;
 /** … then the picture fades to white over this long. */
