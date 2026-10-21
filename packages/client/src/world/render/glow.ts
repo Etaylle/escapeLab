@@ -3,6 +3,7 @@ import { animTime } from '../anim.js';
 import { dressedFor } from '../artKit.js';
 import { bake, bakeBox, drawBaked, type Baked } from '../baked.js';
 import { decorGlows, decorSteams, decorVariant, drawDecorGlow } from '../decor.js';
+import { strengthAt } from '../gl/pack.js';
 import { doorsShut, lightClip } from '../light.js';
 import { AMBER, lift, rgba, TUNGSTEN, WHITE, type Rgb } from '../palette.js';
 import {
@@ -12,25 +13,52 @@ import {
   type Emitters,
   type Particle,
 } from '../particles.js';
-import { glowSources, lightShown, powerAt, strengthAt, type LightSource } from '../sources.js';
+import { glowSources, lightShown, powerAt, type LightSource } from '../sources.js';
 import { drawWallPropGlow, glows, STEAM_SPOT } from '../wallProps.js';
 import { inTiles, type Frame } from './frame.js';
+import { onLayer } from './light.js';
 
 /**
- * Light over the darkness, after the light pass (light.ts, which draws the
- * emergency lamps): the coloured lights of sources.ts, each where its light
- * can see — the faint screens and racks baked together for the doors as they
- * stand; the pulsing core, the beacon and a screen striking up each baked
- * once at full strength and laid on at the strength of the moment — then
- * what glows on the walls and the furniture, the beacon's beams, and the
- * particles. Tile space.
+ * What glows and moves in the lab — the glowing marks on the walls and the
+ * furniture, the beacon's beams, the particles — drawn as the world's light
+ * takes its way (light.ts `onLayer`). On the WebGL light layer `under` draws
+ * it before the light, so that the layer's light map shades it like
+ * everything else; the layer lights the coloured lights of sources.ts
+ * itself, glow, shadows and bloom. On the Canvas pass `draw` lays it over
+ * the darkness after the light pass, which draws the emergency lamps, and
+ * the other coloured lights' glow under it. Tile space.
  */
+export function under(ctx: CanvasRenderingContext2D, frame: Frame): void {
+  if (onLayer(ctx, frame)) {
+    drawGlowing(ctx, frame, null);
+  }
+}
+
+/** Over the Canvas pass's darkness: the coloured lights' glow, then what glows and moves. */
 export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
-  const sources = glowSources(frame);
+  if (!onLayer(ctx, frame)) {
+    drawGlowing(ctx, frame, glowSources(frame));
+  }
+}
+
+/**
+ * The glow of `pools` where given — each where its light can see: the faint
+ * screens and racks baked together for the doors as they stand; the pulsing
+ * core, the beacon and a screen striking up each baked once at full strength
+ * and laid on at the strength of the moment — then the beacon's beams, the
+ * glowing marks and the particles.
+ */
+function drawGlowing(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  pools: readonly LightSource[] | null,
+): void {
   ctx.save();
   inTiles(ctx, frame);
   ctx.globalCompositeOperation = 'lighter';
-  drawPools(ctx, frame, sources);
+  if (pools !== null) {
+    drawPools(ctx, frame, pools);
+  }
   drawBeacon(ctx, frame);
   ctx.globalCompositeOperation = 'source-over';
   drawEmissive(ctx, frame);

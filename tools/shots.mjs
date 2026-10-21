@@ -2788,13 +2788,13 @@ async function artLobby() {
   await host.page.locator('.room-code strong').waitFor({ timeout: 10_000 });
   const code = (await host.page.locator('.room-code strong').innerText()).trim();
   const guest = await artPage('art guest');
-  await guest.page.goto(BASE);
+  await guest.page.goto(traced(BASE));
   await guest.page.getByPlaceholder('z. B. Anna').fill('Ben');
   await guest.page.getByLabel('Raumcode').fill(code);
   await clickText(guest.page, 'Beitreten');
   await guest.page.locator('.lobby').waitFor({ timeout: 10_000 });
   const watcher = await artPage('art audience');
-  await watcher.page.goto(BASE);
+  await watcher.page.goto(paged(BASE));
   await watcher.page.getByLabel('Raumcode').fill(code);
   await clickText(watcher.page, 'Mit Code zuschauen');
   await watcher.page.locator('.spectate').waitFor({ timeout: 10_000 });
@@ -2813,8 +2813,9 @@ const startedAt = (players, x, y) =>
  * whole lab lit (art-overview.png), each player's room round it lit
  * (room-archive.png, room-machine.png); then, two seconds into the dark, the
  * Maschinenraum with only the flashlight and its standby glows
- * (art-dark.png). Fails where the run does not open with the power on, or a
- * start is not where the copy put it.
+ * (art-dark.png), its player's light probe read first (`checkLight`: under
+ * SHOTS_WEBGL on the light layer). Fails where the run does not open with
+ * the power on, or a start is not where the copy put it.
  */
 async function artCaptures({ host, guest, watcher }) {
   await sleep(1200); // past the stage's fade-in, the lights at full
@@ -2841,6 +2842,7 @@ async function artCaptures({ host, guest, watcher }) {
     throw new Error('the art tour’s lights never went out');
   }
   await sleep(2000);
+  await checkLight(machine);
   await capture(machine.page, 'art-dark.png');
   console.log(`art-dark.png       ${machine.name} in the Maschinenraum, two seconds into the dark`);
 }

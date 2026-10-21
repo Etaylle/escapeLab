@@ -697,30 +697,52 @@ function drawWall(
 
 // ── baking ─────────────────────────────────────────────────────────────────
 
-/** Adds grey noise of ±`amp` levels to the top `rows` pixel rows of `g`'s canvas. */
-function addNoise(
-  g: CanvasRenderingContext2D,
-  rows: number,
-  rand: () => number,
-  amp: number,
-): void {
-  const { width } = g.canvas;
-  const image = g.getImageData(0, 0, width, rows);
+/** How opaque the grain's strongest specks are: a level or two lighter or darker. */
+const GRAIN_ALPHA = 0.018;
+/** How strong the grain lies on a wall, against a floor's: a wall's paint is smoother. */
+const WALL_GRAIN = 1.6 / 2.2;
+
+/**
+ * Fine grain for a tile `px` pixels square, on a canvas from `make`: faint
+ * specks of white and of black, the same for every tile of that size. Made
+ * from its pixels — an upload, never a read back from a canvas the GPU
+ * draws, which would stall a frame — and laid over each tile in one draw.
+ */
+export function makeGrain(
+  px: number,
+  make: (width: number, height: number) => HTMLCanvasElement,
+): HTMLCanvasElement {
+  const canvas = make(px, px);
+  const g = canvas.getContext('2d');
+  if (g === null) {
+    throw new Error('surfaces: canvas.getContext("2d") returned null; cannot make the grain.');
+  }
+  const image = g.createImageData(px, px);
   const d = image.data;
+  const rand = seededRandom(0x3a115eed ^ px);
   for (let i = 0; i < d.length; i += 4) {
-    const n = (rand() * 2 - 1) * amp;
-    d[i] = (d[i] ?? 0) + n;
-    d[i + 1] = (d[i + 1] ?? 0) + n;
-    d[i + 2] = (d[i + 2] ?? 0) + n * 1.2;
+    const n = rand() * 2 - 1;
+    const shade = n > 0 ? 255 : 0;
+    d[i] = shade;
+    d[i + 1] = shade;
+    d[i + 2] = shade;
+    d[i + 3] = Math.round(Math.abs(n) * GRAIN_ALPHA * 255);
   }
   g.putImageData(image, 0, 0);
+  return canvas;
 }
 
 /**
  * Draws the surface `spec` into `g`, its canvas sized for it at `px` pixels a
- * tile (spriteHeight tiles tall), with fine noise over the tile itself.
+ * tile (spriteHeight tiles tall), with `grain` (makeGrain, `px` square) over
+ * the tile itself.
  */
-export function paintSurface(g: CanvasRenderingContext2D, spec: SurfaceSpec, px: number): void {
+export function paintSurface(
+  g: CanvasRenderingContext2D,
+  spec: SurfaceSpec,
+  px: number,
+  grain: CanvasImageSource,
+): void {
   g.save();
   g.setTransform(px, 0, 0, px, 0, 0);
   if ('floor' in spec) {
@@ -728,8 +750,10 @@ export function paintSurface(g: CanvasRenderingContext2D, spec: SurfaceSpec, px:
   } else {
     drawWall(g, spec, px);
   }
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalAlpha = 'floor' in spec ? 1 : WALL_GRAIN;
+  g.drawImage(grain, 0, 0);
   g.restore();
-  addNoise(g, px, seededRandom(0x3a115eed ^ px), 'floor' in spec ? 2.2 : 1.6);
 }
 
 /** A canvas of `width` × `height` pixels with its 2D context. */
@@ -750,6 +774,6 @@ function canvasOf(
 /** The tile of `spec` alone, `px` pixels square: a wall without its shadow below. */
 export function surfaceTile(px: number, spec: SurfaceSpec): HTMLCanvasElement {
   const [canvas, g] = canvasOf(px, px);
-  paintSurface(g, spec, px);
+  paintSurface(g, spec, px, makeGrain(px, (width, height) => canvasOf(width, height)[0]));
   return canvas;
 }

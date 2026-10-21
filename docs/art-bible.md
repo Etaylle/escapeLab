@@ -82,17 +82,24 @@ Every face beside a door gets warning stripes. Furniture is solid for every step
 server's `stepAllowed`, the reach proofs, the client's walk, the harness's route — and is
 validated like a wall: never on a spawn, a console, a plate, a door, a source's spot, an item
 or its drop-off, the sign, the exit, a lamp, an emergency's panel, a drone's waypoint or its
-flight path. Light and sight pass over it.
+flight path. Sight passes over it; on the WebGL light layer it throws a shadow.
 
 ## Light with colour
 
 `sources.ts` lists every coloured light of a frame (`sourcesOf`): the emergency lamps, the
 screens' phosphor green and the racks' blue (faint, in the dark too), the core's pulsing
-orange, the beacon turning over the hatch through the escape. Both light layers draw from
-this one list. A light shows where the world shows its spot, as objects do.
+orange, the beacon turning over the hatch through the escape. Both ways of the light draw from
+this one list. A light shows where the world shows its spot, as objects do. The WebGL light
+layer lights every source with soft shadows (walls, shut doors, furniture) and blooms the
+strong ones; what glows and moves — screen text, LEDs, the beacon's beams, particles — is drawn
+under its light map and shaded like everything else. The Canvas pass, its fallback, draws the
+emergency lamps itself and lays the other sources' glow, the glowing marks and the particles
+over its darkness.
 
 ## Cost
 
 Floors, walls, wall props and furniture are sprites baked once per zoom level and light
 (`atlas.ts`) and blitted, one per tile, as the floor always was; the faint steady lights are
-baked together and laid over the picture in one go.
+baked together and laid over the picture in one go. A bake never reads pixels back from a
+canvas: on a GPU that stalls the frame. The grain is one canvas per tile size, laid over each
+tile in one draw.

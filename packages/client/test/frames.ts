@@ -71,12 +71,6 @@ export const fakeSprites: CanvasMaker = (width, height) =>
 /** A kit of fake canvases, the darkness cut into `overlay`. */
 export function kitWith(overlay: FakeCanvas = fakeCanvas(800, 600, 'overlay')): RenderKit {
   return {
-    textures: {
-      floor: fakeCanvas(64, 64, 'floor').canvas,
-      wall: fakeCanvas(64, 64, 'wall').canvas,
-      floorLit: fakeCanvas(64, 64, 'floorLit').canvas,
-      wallLit: fakeCanvas(64, 64, 'wallLit').canvas,
-    },
     overlay: overlay.ctx,
     ceiling: null,
     groups: null,

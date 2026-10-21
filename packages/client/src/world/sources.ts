@@ -1,5 +1,4 @@
 import { dressedFor } from './artKit.js';
-import { burning } from './frameLight.js';
 import { EMERGENCY_GLOW } from './light.js';
 import { AMBER, EMERGENCY, PHOSPHOR, REACTOR, SERVER_BLUE, type Rgb } from './palette.js';
 import type { Frame } from './render/frame.js';
@@ -7,12 +6,16 @@ import { warmUp } from './rooms.js';
 
 /**
  * Every coloured light in the lab this frame, as one list — the single
- * truth both light layers draw from: the emergency lamps' pulsing red while
- * their rooms are dark; the wall screens' phosphor green and the racks'
- * cold blue, faint, in the dark too; the reactor core's pulsing orange; and
- * the amber beacon turning over the hatch through the escape. A light shows
- * where the world shows its spot — seen this run, and while the lab has its
- * power only in the room it lights round you — as objects do.
+ * truth both ways of the light draw from: the WebGL light layer lights
+ * every one of them (gl/sources.ts), the Canvas pass the emergency lamps
+ * (render/light.ts) and the rest over its darkness (render/glow.ts). The
+ * emergency lamps' pulsing red while their rooms are dark; the wall
+ * screens' phosphor green and the racks' cold blue, faint, in the dark too;
+ * the reactor core's pulsing orange; and the amber beacon turning over the
+ * hatch through the escape. A light shows where the world shows its spot —
+ * seen this run, and while the lab has its power only in the room it
+ * lights round you — as objects do. How strongly each burns at a moment,
+ * pulse and flicker worked out, is gl/pack.ts's `strengthAt`.
  */
 
 export interface LightSource {
@@ -70,21 +73,20 @@ export function lightShown(frame: Frame, x: number, y: number): boolean {
   return light.shown(x, y) && (!frame.scene.lit || frame.spectator || light.powered(x, y));
 }
 
-/** The emergency lamps burning now: their rooms dark, the lab without its power. */
+/**
+ * The emergency lamps burning now, as the Canvas pass burns them (the
+ * frame's light, frameLight.ts): their rooms dark, the lab without its
+ * power, none for the audience — at full strength at the top of their pulse.
+ */
 export function lampSources(frame: Frame): LightSource[] {
-  if (powered(frame)) {
-    return [];
-  }
-  return frame.mounts
-    .filter((mount) => burning(mount, frame.litTiles))
-    .map((mount) => ({
-      x: mount.x,
-      y: mount.y,
-      colour: colourOf(EMERGENCY),
-      reach: EMERGENCY_GLOW,
-      strength: 0.85,
-      pulse: { ...LAMP_PULSE },
-    }));
+  return frame.light.lamps.map(({ mount }) => ({
+    x: mount.x,
+    y: mount.y,
+    colour: colourOf(EMERGENCY),
+    reach: EMERGENCY_GLOW,
+    strength: 1,
+    pulse: { ...LAMP_PULSE },
+  }));
 }
 
 /** A screen's light: phosphor green, brighter once its room is lit, flickering as it strikes. */
@@ -170,14 +172,4 @@ export function glowSources(frame: Frame): LightSource[] {
 /** Every coloured light of this frame: the emergency lamps, then the rest. */
 export function sourcesOf(frame: Frame): LightSource[] {
   return [...lampSources(frame), ...glowSources(frame)];
-}
-
-/** How bright `source` burns at `ms` (the sim's clock): its strength, swelling with its pulse. */
-export function strengthAt(source: LightSource, ms: number): number {
-  const { pulse } = source;
-  if (pulse === undefined) {
-    return source.strength;
-  }
-  const wave = 0.5 + 0.5 * Math.sin((ms / pulse.periodMs) * Math.PI * 2);
-  return source.strength * (1 - pulse.depth * (1 - wave));
 }

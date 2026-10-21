@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ambientOf,
   occupancy,
+  occupancyKey,
   poolsOfPixels,
   wallFaces,
   type Pools,
@@ -36,6 +37,11 @@ function pools(alpha: (light: typeof WARM) => number): Pools {
 
 const flatPools = pools(() => 0.2);
 
+/** The lab with a shelf at (x, 3). */
+function furnished(x: number) {
+  return mapWith({ width: 10, height: 6, tiles: TILES, decor: [{ kind: 'shelf', x, y: 3 }] });
+}
+
 /** A lit room of `tiles`, its lights on since `since`. */
 function room(tiles: { x: number; y: number }[], since: number): LitRoom {
   return { tiles, path: { path: 'room' } as unknown as Path2D, since };
@@ -60,6 +66,23 @@ describe('occupancy — the tiles that stop light, a byte a tile', () => {
   it('stops light at anything that is not floor, as sight does — the void, a short row', () => {
     const odd = mapWith({ width: 3, height: 2, tiles: ['. x', '.'] });
     expect([...occupancy(odd, new Set())]).toEqual([0, 255, 255, 0, 255, 255]);
+  });
+
+  it('stops light at furniture, which sight sees past: a shelf throws a shadow', () => {
+    const data = occupancy(furnished(2), new Set());
+    expect(data[at(2, 3)]).toBe(255);
+    expect(data[at(3, 3)]).toBe(0);
+    expect(occupancy(map, new Set())[at(2, 3)]).toBe(0);
+  });
+});
+
+describe('occupancyKey — what the occupancy texture is made for', () => {
+  it('changes as a door opens or shuts or the furniture stands elsewhere, else not', () => {
+    const key = occupancyKey(furnished(2), new Set(['5,2']));
+    expect(occupancyKey(furnished(2), new Set(['5,2']))).toBe(key);
+    expect(occupancyKey(furnished(3), new Set(['5,2']))).not.toBe(key);
+    expect(occupancyKey(furnished(2), new Set())).not.toBe(key);
+    expect(occupancyKey(map, new Set(['5,2']))).not.toBe(key);
   });
 });
 

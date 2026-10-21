@@ -64,9 +64,29 @@ describe('the sprite atlas — every kind in every variant, baked once per zoom 
     const first = sprite(atlas, 64, spec);
     const again = sprite(atlas, 64, spec);
     expect(again).toBe(first);
-    expect(made).toHaveLength(1);
+    // The sprite, and the grain for tiles of its size.
+    expect(made).toHaveLength(2);
     expect([first.canvas.width, first.canvas.height]).toEqual([64, 64]);
     expect(sprite(atlas, 64, { ...spec, lit: false }).canvas).not.toBe(first.canvas);
+    expect(made).toHaveLength(3);
+  });
+
+  it('grains every tile of a size with one grain, never reading a sprite’s pixels back', () => {
+    const { atlas, made } = recordingAtlas();
+    sprite(atlas, 32, { floor: 'lab', variant: 0, lit: true });
+    sprite(atlas, 32, { wall: 'plain', mask: FLOOR_S, lit: false, faceLit: false });
+    sprite(atlas, 48, { floor: 'lab', variant: 0, lit: true });
+    expect([...atlas.grains.keys()]).toEqual([32, 48]);
+    const grains = new Set<HTMLCanvasElement>(atlas.grains.values());
+    const sprites = made.filter((fake) => !grains.has(fake.canvas));
+    expect(sprites).toHaveLength(3);
+    for (const fake of sprites) {
+      const grain = atlas.grains.get(fake.canvas.width);
+      expect(callsOf(fake.log, 'drawImage').map(([source]) => source)).toContain(grain);
+    }
+    const grainLogs = made.filter((fake) => grains.has(fake.canvas)).map((fake) => fake.log);
+    expect(grainLogs.every((log) => callsOf(log, 'putImageData').length === 1)).toBe(true);
+    expect(made.flatMap((fake) => callsOf(fake.log, 'getImageData'))).toEqual([]);
   });
 
   it('bakes a wall with a face two tiles tall, its shadow under it', () => {
@@ -84,7 +104,9 @@ describe('the sprite atlas — every kind in every variant, baked once per zoom 
     sprite(atlas, 32, { ...wall, prop: { kind: 'clock', variant: 0 } });
     expect(callsOf(made[0]?.log ?? [], 'setTransform')[0]).toEqual([32, 0, 0, 32, 16, 16]);
     const log = made[1]?.log ?? [];
-    const grain = log.findIndex((e) => e.kind === 'call' && e.name === 'putImageData');
+    const grain = log.findIndex(
+      (e) => e.kind === 'call' && e.name === 'drawImage' && e.args[0] === atlas.grains.get(32),
+    );
     const hung = log.findIndex(
       (e, i) => i > grain && e.kind === 'call' && e.name === 'setTransform',
     );

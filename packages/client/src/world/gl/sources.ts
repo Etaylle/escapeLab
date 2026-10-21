@@ -1,7 +1,6 @@
 import {
   CREW_GLOW_STOPS,
   DRONE_BEAM_STOPS,
-  EMERGENCY_GLOW,
   EMERGENCY_STOPS,
   EMERGENCY_TINT,
   HATCH_TINT,
@@ -18,33 +17,19 @@ import {
 import { ALARM_RED, mixTint, WARM } from '../power.js';
 import { objectGlows } from '../render/darkness.js';
 import type { Frame } from '../render/frame.js';
+import { sourcesOf, type LightSource } from '../sources.js';
 
 /**
  * What the light layer lights, worked out from a frame: the lamps the
  * frame's light names (frameLight.ts) — your flashlight, the crew's lamps,
  * the drones' eyes, the open hatch, a lit room through an open door — the
- * glow of the lab's objects, and the coloured lights of the world in the
- * shape world/sources.ts gives them (`LightSource`). Every falloff is the
- * Canvas pass's own (light.ts's stops), so that both paths light a scene
- * alike. The lit rooms, the powered room and the escape's red are no
+ * glow of the lab's objects, and the coloured lights of the world as
+ * world/sources.ts lists them (`sourcesOf`): the emergency lamps, the
+ * screens, racks, the reactor's core and the escape's beacon. Every falloff
+ * is the Canvas pass's own (light.ts's stops), so that both paths light a
+ * scene alike. The lit rooms, the powered room and the escape's red are no
  * lights here but the layer's ambient terms (maps.ts, render/darkness.ts).
  */
-
-/**
- * A coloured light in the world, as world/sources.ts lists them: where it
- * hangs, its colour, how far it reaches, how strong it burns, and whether
- * it pulses (its strength dipping by `depth` and back over `periodMs`) or
- * flickers.
- */
-export interface LightSource {
-  x: number;
-  y: number;
-  colour: [number, number, number];
-  reach: number;
-  strength: number;
-  pulse?: { periodMs: number; depth: number };
-  flicker?: boolean;
-}
 
 /** One light as the layer draws it. */
 export interface Light {
@@ -91,8 +76,6 @@ const LAMP_WHITE: Rgb = [255, 244, 228];
 const DRONE_WHITE: Rgb = [214, 232, 255];
 /** The colour a gradient of coloured light runs out in: its last stop's. */
 const tailOf = (stops: TintStops): Rgb => stops.at(-1)?.[1] ?? [255, 255, 255];
-/** How the emergency lamps burn (assemble.ts `burn`): 0.7 + 0.3·sin(2.4·t), t in seconds. */
-const BURN_PULSE = { periodMs: ((2 * Math.PI) / 2.4) * 1000, depth: 0.6 };
 
 /** How wide each kind of light is, in tiles: the softness of its shadows. */
 const SIZE = { lamp: 0.1, drone: 0.08, emergency: 0.15, hatch: 0.45, spill: 0.35 } as const;
@@ -102,27 +85,10 @@ export function lightsOf(frame: Frame): Light[] {
   return [
     ...lampLights(frame),
     ...droneLights(frame),
-    ...colouredSources(frame).map(fromSource),
+    ...sourcesOf(frame).map(fromSource),
     ...hatchAndSpills(frame),
     ...glowLights(frame),
   ];
-}
-
-/**
- * The coloured lights of the world in world/sources.ts's shape: until the
- * art pass lands, the emergency lamps burning this frame, red, pulsing as
- * the Canvas pass burns them. Once world/sources.ts exists this is its
- * `sourcesOf(frame)`.
- */
-export function colouredSources(frame: Frame): LightSource[] {
-  return frame.light.lamps.map(({ mount }) => ({
-    x: mount.x,
-    y: mount.y,
-    colour: [...tailOf(EMERGENCY_TINT)],
-    reach: EMERGENCY_GLOW,
-    strength: 1,
-    pulse: BURN_PULSE,
-  }));
 }
 
 /**

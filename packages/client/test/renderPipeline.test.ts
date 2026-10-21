@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { LightLayer } from '../src/world/gl/lightLayer.js';
 import { drawFrame } from '../src/world/render/pipeline.js';
 import { fakeCanvas, FakePath2D, type Entry } from './fakeCanvas.js';
-import { frameWith, kitWith, TILES } from './frames.js';
+import { canvasLight, frameWith, kitWith, TILES } from './frames.js';
 import { mapWith } from './fixtures.js';
 
 type Call = Extract<Entry, { kind: 'call' }>;
@@ -62,5 +63,33 @@ describe('drawFrame — the passes in their order', () => {
     // The red edge is the last thing on the canvas.
     expect(log.at(-2)).toMatchObject({ name: 'drawImage', args: [edge.canvas, 0, 0] });
     expect(log.at(-1)).toMatchObject({ name: 'globalAlpha', value: 1 });
+  });
+
+  it('draws what glows under the WebGL layer’s light map, over the Canvas pass’s darkness', () => {
+    const decor = [{ kind: 'core' as const, x: 7, y: 3 }];
+    const map = mapWith({ width: 10, height: 6, tiles: TILES, decor });
+    const core = (c: Call): boolean => c.name === 'translate' && c.args.join() === '7.5,3.5';
+    const overlay = fakeCanvas(800, 600, 'overlay');
+    const canvas = fakeCanvas(800, 600);
+    drawFrame(canvas.ctx, frameWith({ kit: kitWith(overlay), map }));
+    const darkness = firstCall(
+      canvas.log,
+      (c) => c.name === 'drawImage' && c.args[0] === overlay.canvas,
+    );
+    expect(darkness).toBeGreaterThanOrEqual(0);
+    expect(firstCall(canvas.log, core)).toBeGreaterThan(darkness);
+
+    const layerCanvas = fakeCanvas(600, 900, 'layer').canvas;
+    const layer: LightLayer = {
+      render: () => ({ canvas: layerCanvas, w: 600, h: 450 }),
+      dispose: () => undefined,
+    };
+    const kit = kitWith(fakeCanvas(800, 600, 'overlay'));
+    kit.light = { ...canvasLight(), choice: { path: 'gl', reason: 'a test' }, layer };
+    const gl = fakeCanvas(800, 600);
+    drawFrame(gl.ctx, frameWith({ kit, map }));
+    const lightMap = firstCall(gl.log, (c) => c.name === 'drawImage' && c.args[0] === layerCanvas);
+    expect(firstCall(gl.log, core)).toBeGreaterThanOrEqual(0);
+    expect(firstCall(gl.log, core)).toBeLessThan(lightMap);
   });
 });

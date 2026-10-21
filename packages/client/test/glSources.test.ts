@@ -13,15 +13,10 @@ import {
   spillTint,
 } from '../src/world/light.js';
 import { strengthAt } from '../src/world/gl/pack.js';
-import {
-  colouredSources,
-  fromSource,
-  lightsOf,
-  tintOf,
-  type Light,
-  type LightSource,
-} from '../src/world/gl/sources.js';
+import { fromSource, lightsOf, tintOf, type Light } from '../src/world/gl/sources.js';
+import { EMERGENCY, REACTOR } from '../src/world/palette.js';
 import { objectGlows } from '../src/world/render/darkness.js';
+import { sourcesOf, type LightSource } from '../src/world/sources.js';
 import { mapWith } from './fixtures.js';
 import { frameWith, lightWith, lit, TILES } from './frames.js';
 
@@ -78,7 +73,7 @@ describe('lightsOf — what the light layer lights in a frame', () => {
       const frame = frameWith({ light: lightWith({ lamps }), time, burn });
       const [lamp] = at(lightsOf(frame), 1.5, 1.5);
       expect(lamp?.glow).toEqual({ reach: EMERGENCY_GLOW, stops: EMERGENCY_STOPS });
-      expect(lamp?.colour).toEqual([255, 38, 32]);
+      expect(lamp?.colour).toEqual([...EMERGENCY]);
       expect(lamp?.tint).toEqual(tintOf(EMERGENCY_TINT));
       expect(lamp === undefined ? 0 : strengthAt(lamp, time * 1000)).toBeCloseTo(frame.burn, 9);
     }
@@ -122,19 +117,22 @@ describe('lightsOf — what the light layer lights in a frame', () => {
   });
 });
 
-describe('the coloured lights, in world/sources.ts’s shape', () => {
-  it('names the burning emergency lamps as LightSource: place, colour, reach, pulse', () => {
+describe('the coloured lights, as world/sources.ts lists them', () => {
+  it('lights every coloured light of sourcesOf: the emergency lamps and the art’s', () => {
     const mount = { x: 4.5, y: 2.05, facing: Math.PI / 2 };
     const lamps = [{ mount, lit: lit({ x: 4.5, y: 2.05, glow: EMERGENCY_GLOW }) }];
-    const [source] = colouredSources(frameWith({ light: lightWith({ lamps }) }));
-    expect(source).toEqual({
-      x: 4.5,
-      y: 2.05,
-      colour: [255, 38, 32],
-      reach: EMERGENCY_GLOW,
-      strength: 1,
-      pulse: { periodMs: expect.closeTo((2 * Math.PI * 1000) / 2.4), depth: 0.6 },
-    });
+    const decor = [{ kind: 'core' as const, x: 7, y: 3 }];
+    const map = mapWith({ width: 10, height: 6, tiles: TILES, decor });
+    const frame = frameWith({ map, light: lightWith({ lamps }) });
+    const sources = sourcesOf(frame);
+    const colours = sources.map(({ colour }) => colour.join(','));
+    expect(colours).toEqual(expect.arrayContaining([EMERGENCY.join(','), REACTOR.join(',')]));
+    const lights = lightsOf(frame);
+    for (const source of sources) {
+      expect(lights).toContainEqual(fromSource(source));
+    }
+    const [lamp] = at(lights, 4.5, 2.05);
+    expect(lamp && strengthAt(lamp, 1300)).toBeCloseTo(0.7 + 0.3 * Math.sin(2.4 * 1.3), 9);
   });
 
   it('lights any LightSource as an emergency lamp is lit, in its colour, flickering', () => {

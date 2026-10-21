@@ -8,9 +8,15 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        // Libraries in a chunk of their own: it outlives a release in the cache, and
-        // neither chunk reaches the 500 kB at which Vite warns.
-        manualChunks: (id) => (id.includes('/node_modules/') ? 'vendor' : undefined),
+        // Libraries in a chunk of their own, and the game's pure core in another: each
+        // outlives a release in the cache that leaves it be, and no chunk reaches the
+        // 500 kB at which Vite warns. The core imports nothing of the client's.
+        manualChunks: (id) => {
+          if (id.includes('/node_modules/')) {
+            return 'vendor';
+          }
+          return id.includes('/packages/core/') ? 'core' : undefined;
+        },
       },
     },
   },

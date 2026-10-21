@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { MapView } from '@escapelab/core';
+import type { LightLayer } from '../src/world/gl/lightLayer.js';
 import { AMBER, REACTOR, rgba } from '../src/world/palette.js';
-import { BEAM_ALPHA, draw } from '../src/world/render/glow.js';
+import { BEAM_ALPHA, draw, under } from '../src/world/render/glow.js';
 import type { Frame } from '../src/world/render/frame.js';
 import {
   callEntries,
@@ -12,7 +13,7 @@ import {
   setsOf,
 } from './fakeCanvas.js';
 import { mapWith } from './fixtures.js';
-import { frameWith, lightWith } from './frames.js';
+import { canvasLight, frameWith, lightWith } from './frames.js';
 
 /**
  * A reactor room with its core, a server room with racks on its walls:
@@ -113,5 +114,63 @@ describe('glow — the coloured light over the darkness', () => {
     const frame = frameWith({ map: lab(), time: 2 });
     drawn(frame);
     expect(frame.kit.art.particles.tick).toBe(30);
+  });
+});
+
+describe('glow — as the world’s light takes its way', () => {
+  beforeAll(() => {
+    vi.stubGlobal('Path2D', FakePath2D);
+  });
+  afterAll(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** `frame`, its light taking a stand-in WebGL light layer. */
+  function onGl(frame: Frame): Frame {
+    const layer: LightLayer = { render: vi.fn(), dispose: vi.fn() };
+    frame.kit.light = { ...canvasLight(), choice: { path: 'gl', reason: 'a test' }, layer };
+    return frame;
+  }
+
+  /** What `pass` draws of `frame` on a canvas of its own. */
+  function logOf(pass: typeof draw, frame: Frame) {
+    const canvas = fakeCanvas(800, 600);
+    pass(canvas.ctx, frame);
+    return canvas.log;
+  }
+
+  it('on the layer: what glows and moves under the light, no coloured glow of its own', () => {
+    const frame = onGl(frameWith({ map: lab(), time: 1.8 }));
+    expect(logOf(draw, frame)).toEqual([]);
+    const below = logOf(under, frame);
+    // The core's heart and the racks' lights, but no pool: the layer lights the sources.
+    expect(callsOf(below, 'ellipse').length).toBeGreaterThan(0);
+    expect(callsOf(below, 'drawImage')).toEqual([]);
+    expect(frame.kit.art.pools).toBeNull();
+    expect(frame.kit.art.livePools.size).toBe(0);
+    expect(frame.kit.art.particles.tick).toBe(27);
+  });
+
+  it('on the Canvas pass: the coloured glow and all over the darkness, nothing under it', () => {
+    const frame = frameWith({ map: lab(), time: 1.8 });
+    expect(logOf(under, frame)).toEqual([]);
+    const over = logOf(draw, frame);
+    expect(callsOf(over, 'drawImage').length).toBeGreaterThan(0);
+    expect(callsOf(over, 'ellipse').length).toBeGreaterThan(0);
+  });
+
+  it('glows over the audience’s lab on the Canvas pass: the layer lights no darkness there', () => {
+    const frame = onGl(frameWith({ map: lab(), spectator: true }));
+    expect(logOf(under, frame)).toEqual([]);
+    expect(callsOf(logOf(draw, frame), 'drawImage').length).toBeGreaterThan(0);
+  });
+
+  it('follows the probe that takes the light the Canvas way for a comparison', () => {
+    const frame = onGl(frameWith({ map: lab() }));
+    if (frame.kit.light !== null) {
+      frame.kit.light.forced = 'canvas';
+    }
+    expect(logOf(under, frame)).toEqual([]);
+    expect(callsOf(logOf(draw, frame), 'drawImage').length).toBeGreaterThan(0);
   });
 });

@@ -1,7 +1,13 @@
 import type { DecorKind } from '@escapelab/core';
 import { drawDecor } from './decor.js';
 import type { WallPropKind } from './dress.js';
-import { paintSurface, spriteHeight, type FloorKind, type SurfaceSpec } from './surfaces.js';
+import {
+  makeGrain,
+  paintSurface,
+  spriteHeight,
+  type FloorKind,
+  type SurfaceSpec,
+} from './surfaces.js';
 import { drawWallProp } from './wallProps.js';
 
 /**
@@ -50,6 +56,8 @@ export interface Atlas {
   /** the level asked for last and its sprites: a frame asks for one level, tile after tile */
   last: { level: number; sprites: Map<string, Sprite> } | null;
   make: CanvasMaker;
+  /** the grain laid over a floor or wall tile, by its size in pixels: made once a size */
+  grains: Map<number, HTMLCanvasElement>;
 }
 
 /** A canvas from the document. */
@@ -62,7 +70,7 @@ const domCanvas: CanvasMaker = (width, height) => {
 
 /** An empty atlas baking on canvases from `make`. */
 export function newAtlas(make: CanvasMaker = domCanvas): Atlas {
-  return { levels: new Map(), last: null, make };
+  return { levels: new Map(), last: null, make, grains: new Map() };
 }
 
 /** The level a zoom of `scale` device pixels a tile draws from: the first not much smaller. */
@@ -87,10 +95,20 @@ function tallOf(spec: SpriteSpec): number {
   return 'decor' in spec ? 1 : spriteHeight(spec);
 }
 
-/** Bakes `spec` at `px` pixels a tile. */
-function bakeSprite(make: CanvasMaker, spec: SpriteSpec, px: number): Sprite {
+/** The grain over a tile `px` pixels square, made on the first tile of that size. */
+function grainOf(atlas: Atlas, px: number): HTMLCanvasElement {
+  let grain = atlas.grains.get(px);
+  if (grain === undefined) {
+    grain = makeGrain(px, atlas.make);
+    atlas.grains.set(px, grain);
+  }
+  return grain;
+}
+
+/** Bakes `spec` at `px` pixels a tile, on a canvas of `atlas`'s. */
+function bakeSprite(atlas: Atlas, spec: SpriteSpec, px: number): Sprite {
   const tall = tallOf(spec);
-  const canvas = make(px, px * tall);
+  const canvas = atlas.make(px, px * tall);
   const g = canvas.getContext('2d');
   if (g === null) {
     throw new Error('atlas: canvas.getContext("2d") returned null; cannot bake a sprite.');
@@ -99,7 +117,7 @@ function bakeSprite(make: CanvasMaker, spec: SpriteSpec, px: number): Sprite {
     g.setTransform(px, 0, 0, px, px / 2, px / 2);
     drawDecor(g, spec.decor, spec.variant, spec.lit);
   } else {
-    paintSurface(g, spec, px);
+    paintSurface(g, spec, px, grainOf(atlas, px));
     if ('wall' in spec && spec.prop !== undefined) {
       g.setTransform(px, 0, 0, px, 0, 0);
       drawWallProp(g, spec.prop.kind, spec.prop.variant, spec.faceLit);
@@ -133,7 +151,7 @@ export function spriteAt(atlas: Atlas, level: number, key: string, spec: SpriteS
   const sprites = levelOf(atlas, level);
   let sprite = sprites.get(key);
   if (sprite === undefined) {
-    sprite = bakeSprite(atlas.make, spec, level);
+    sprite = bakeSprite(atlas, spec, level);
     sprites.set(key, sprite);
   }
   return sprite;

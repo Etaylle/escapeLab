@@ -1,17 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { MapView } from '@escapelab/core';
 import { dressedFor } from '../src/world/artKit.js';
+import { strengthAt } from '../src/world/gl/pack.js';
 import { AMBER, EMERGENCY, PHOSPHOR, REACTOR, SERVER_BLUE } from '../src/world/palette.js';
-import {
-  glowSources,
-  lampSources,
-  sourcesOf,
-  strengthAt,
-  type LightSource,
-} from '../src/world/sources.js';
 import type { Frame } from '../src/world/render/frame.js';
+import { glowSources, lampSources, sourcesOf, type LightSource } from '../src/world/sources.js';
 import { mapWith } from './fixtures.js';
-import { frameWith, lightWith } from './frames.js';
+import { frameWith, lightWith, lit } from './frames.js';
 
 /**
  * A server room with a desk and the reactor's core, side by side:
@@ -90,23 +85,26 @@ describe('sourcesOf — every coloured light of the frame, one list for both lig
     expect(colours(glowSources(power))).toContain(PHOSPHOR.join(','));
   });
 
-  it('burns the emergency lamps red in the dark, out of a lit room and with the power on', () => {
-    const mounts = [{ x: 2.5, y: 1.05, facing: Math.PI / 2 }];
-    const dark = frameWith({ map: lab(), mounts });
+  it('burns red the emergency lamps the light pass burns, as brightly as it burns them', () => {
+    const mount = { x: 2.5, y: 1.05, facing: Math.PI / 2 };
+    const lamps = [{ mount, lit: lit({ x: 2.5, y: 1.05, glow: 1.5 }) }];
+    const dark = frameWith({ map: lab(), mounts: [mount], light: lightWith({ lamps }) });
     expect(lampSources(dark)).toEqual([
       {
         x: 2.5,
         y: 1.05,
         colour: [...EMERGENCY],
         reach: 1.5,
-        strength: 0.85,
+        strength: 1,
         pulse: { periodMs: (2 * Math.PI * 1000) / 2.4, depth: 0.6 },
       },
     ]);
-    expect(lampSources(frameWith({ map: lab(), mounts, litTiles: new Set(['2,1']) }))).toEqual([]);
-    expect(lampSources(frameWith({ map: lab(), mounts, scene: { lit: true, cover: 0 } }))).toEqual(
-      [],
-    );
+    const [lamp] = lampSources(dark);
+    for (const t of [0, 0.4, 1.3, 2.9]) {
+      expect(lamp && strengthAt(lamp, t * 1000)).toBeCloseTo(0.7 + 0.3 * Math.sin(2.4 * t), 9);
+    }
+    // A lamp the light pass leaves dark — its room lit, the power on, the audience's — is none.
+    expect(lampSources(frameWith({ map: lab(), mounts: [mount] }))).toEqual([]);
     expect(sourcesOf(dark).slice(0, 1)).toEqual(lampSources(dark));
   });
 
@@ -120,9 +118,9 @@ describe('sourcesOf — every coloured light of the frame, one list for both lig
     expect(colours(glowSources(shut))).not.toContain(AMBER.join(','));
   });
 
-  it('swells a pulsing light between its strength and its depth below it', () => {
+  it('swells a pulsing light between its strength and its depth, as the layer does', () => {
     const colour: [number, number, number] = [1, 2, 3];
-    const source = { x: 0, y: 0, colour, reach: 1, strength: 1 };
+    const source: LightSource = { x: 0, y: 0, colour, reach: 1, strength: 1 };
     expect(strengthAt(source, 123)).toBe(1);
     const pulsing = { ...source, pulse: { periodMs: 1000, depth: 0.4 } };
     const samples = Array.from({ length: 20 }, (_, i) => strengthAt(pulsing, i * 50));

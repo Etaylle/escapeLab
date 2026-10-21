@@ -1,6 +1,7 @@
 import type { ChatPhrase, DronePosition, PlayerView, Sight } from '@escapelab/core';
 import type { Alarm } from '../alarm.js';
-import { makeFloorTile, makeWallTile, type WorldText } from '../art.js';
+import type { WorldText } from '../art.js';
+import { artKit, type ArtKit } from '../artKit.js';
 import type { Baked } from '../baked.js';
 import type { ColdOpenFrame } from '../coldOpen.js';
 import type { DoorMotion } from '../doors.js';
@@ -12,13 +13,12 @@ import type { MarkerTarget } from '../markers.js';
 import type { CeilingLight } from '../power.js';
 import type { LitGroup, RoomLight } from '../rooms.js';
 import type { Viewport } from '../viewport.js';
-import { artKit, type ArtKit } from '../artKit.js';
 
 /**
  * One frame of the world as the passes draw it (pipeline.ts): a plain object
  * GameWorld.tsx assembles once per drawn frame from its simulation, its refs
  * and the view — the camera, the clocks, the crew, the light worked out for
- * this frame, what lies over the picture — and the kit of textures, canvases
+ * this frame, what lies over the picture — and the kit of canvases, sprites
  * and caches that outlives the frame. A pass reads the frame and draws; it
  * keeps nothing of its own.
  */
@@ -129,18 +129,12 @@ export interface MinimapLayout {
 }
 
 /**
- * What the passes draw with that outlives a frame: the tile textures, the
- * canvas the darkness is cut in, and what the light and the red edge keep
- * baked between frames, each with what it was made for.
+ * What the passes draw with that outlives a frame: the canvas the darkness
+ * is cut in, what the light and the red edge keep baked between frames,
+ * each with what it was made for, the way the light takes, and the art's
+ * sprites and caches.
  */
 export interface RenderKit {
-  /** floor and wall, dark and in the colours of the lab with its power on */
-  textures: {
-    floor: HTMLCanvasElement;
-    wall: HTMLCanvasElement;
-    floorLit: HTMLCanvasElement;
-    wallLit: HTMLCanvasElement;
-  };
   /** the darkness, cut anew every frame and laid over the picture (render/darkness.ts) */
   overlay: CanvasRenderingContext2D;
   /** the lab's ceiling lights baked in each colour asked for, for the map last asked for */
@@ -162,14 +156,9 @@ export interface RenderKit {
   art: ArtKit;
 }
 
-/** A fresh kit drawing the darkness into `overlay`: the textures made, nothing baked yet. */
+/** A fresh kit drawing the darkness into `overlay`: nothing baked yet. */
 export function renderKit(overlay: CanvasRenderingContext2D): RenderKit {
-  const floor = makeFloorTile();
-  const wall = makeWallTile();
-  const floorLit = makeFloorTile(true);
-  const wallLit = makeWallTile(true);
   return {
-    textures: { floor, wall, floorLit, wallLit },
     overlay,
     ceiling: null,
     groups: null,

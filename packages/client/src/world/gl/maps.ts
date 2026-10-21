@@ -1,3 +1,4 @@
+import { decorTiles } from '@escapelab/core';
 import type { CeilingLight } from '../power.js';
 import { ALARM_RED, WARM } from '../power.js';
 import { roomKeep, roomUp } from '../render/darkness.js';
@@ -5,10 +6,11 @@ import type { Frame, WorldMap } from '../render/frame.js';
 
 /**
  * The map as the light layer's textures hold it, a texel a tile, row by
- * row from the top: which tiles stop light (walls, and doors while shut),
- * which faces of each wall look onto the floor, and the light that is no
- * lamp's — the lit rooms', and the lab's own while it has its power — as
- * the Canvas pass lays it (render/light.ts, render/darkness.ts). Pure.
+ * row from the top: which tiles stop light (walls, furniture, and doors
+ * while shut), which faces of each wall look onto the floor, and the light
+ * that is no lamp's — the lit rooms', and the lab's own while it has its
+ * power — as the Canvas pass lays it (render/light.ts, render/darkness.ts).
+ * Pure.
  */
 
 type TileMap = Pick<WorldMap, 'width' | 'height' | 'tiles'>;
@@ -35,17 +37,37 @@ function floorAt(map: TileMap, x: number, y: number): boolean {
 
 /**
  * One byte a tile: 255 where the tile stops light — anything but floor, as
- * sight has it (core's sight.ts), or a door shut now (`shut`, by tile key)
- * — else 0.
+ * sight has it (core's sight.ts), a piece of furniture (`map.decor`), which
+ * throws a shadow though sight sees past it, or a door shut now (`shut`, by
+ * tile key) — else 0.
  */
-export function occupancy(map: TileMap, shut: ReadonlySet<string>): Uint8Array {
+export function occupancy(
+  map: Pick<WorldMap, 'width' | 'height' | 'tiles' | 'decor'>,
+  shut: ReadonlySet<string>,
+): Uint8Array {
+  const furniture = decorTiles(map.decor);
   const data = new Uint8Array(map.width * map.height);
   for (let y = 0; y < map.height; y++) {
     for (let x = 0; x < map.width; x++) {
-      data[y * map.width + x] = !floorAt(map, x, y) || shut.has(`${x},${y}`) ? 255 : 0;
+      const key = `${x},${y}`;
+      const stops = !floorAt(map, x, y) || furniture.has(key) || shut.has(key);
+      data[y * map.width + x] = stops ? 255 : 0;
     }
   }
   return data;
+}
+
+/**
+ * What the occupancy texture of `map` is made for, as text: its rows, the
+ * tiles its furniture stands on and the doors shut (`shut`) — the texture
+ * is made anew only as one of them changes.
+ */
+export function occupancyKey(
+  map: Pick<WorldMap, 'tiles' | 'decor'>,
+  shut: ReadonlySet<string>,
+): string {
+  const furniture = [...decorTiles(map.decor)].join(';');
+  return `${map.tiles.join('\n')}|${furniture}|${[...shut].sort().join(';')}`;
 }
 
 /**

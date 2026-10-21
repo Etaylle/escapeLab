@@ -1,7 +1,7 @@
 import { doorsShut } from '../light.js';
 import { darknessDepth, ESCAPE_RED, escapeTint } from '../render/darkness.js';
 import type { Frame, WorldMap } from '../render/frame.js';
-import { ambientOf, occupancy, wallFaces, type Pools } from './maps.js';
+import { ambientOf, occupancy, occupancyKey, wallFaces, type Pools } from './maps.js';
 import { FLOATS_PER_SOURCE, packLights, viewOf } from './pack.js';
 import {
   dropTarget,
@@ -23,8 +23,9 @@ import { lightsOf } from './sources.js';
  * passes (shaders.ts) — the light map in the upper half of its canvas,
  * glow and bloom in the lower — for render/light.ts to lay over the
  * picture. The map's textures are made again only as the map changes:
- * the faces of its walls once per map, which tiles stop light as doors
- * open and shut; the light that is no lamp's every frame, a texel a tile.
+ * the faces of its walls once per map, which tiles stop light — walls,
+ * furniture, shut doors — as the map's furniture or its doors change; the
+ * light that is no lamp's every frame, a texel a tile.
  */
 
 /** The layer draws at most this many pixels a CSS pixel, whatever the screen's density. */
@@ -71,7 +72,7 @@ interface Targets {
 interface Kept {
   /** the map whose wall faces the texture holds, by its rows */
   tiles: string;
-  /** the tiles stopping light the occupancy texture holds, by map and doors shut */
+  /** the tiles stopping light the occupancy texture holds, by map, furniture and doors shut */
   occupancy: string;
 }
 
@@ -182,7 +183,8 @@ function sized(
 
 /**
  * The map's textures: the faces of its walls once per map, which tiles stop
- * light again whenever a door has opened or shut since.
+ * light again whenever a door has opened or shut since, or the furniture
+ * stands elsewhere (another map).
  */
 function mapTextures(
   gl: WebGL2RenderingContext,
@@ -197,7 +199,7 @@ function mapTextures(
     kept.tiles = tiles;
   }
   const shut = doorsShut(map);
-  const occupied = `${tiles}|${[...shut].sort().join(';')}`;
+  const occupied = occupancyKey(map, shut);
   if (kept.occupancy !== occupied) {
     fillTexture(gl, textures.occupancy, size, 'r8', occupancy(map, shut));
     kept.occupancy = occupied;

@@ -32,14 +32,29 @@ import {
 export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const whole = frame.ending?.lit ?? 0;
   const path = lightPathOf(frame.kit, ctx.canvas);
-  const dark = !frame.spectator && whole < 1;
-  if (dark && pathNow(path) === 'gl' && drawLayer(ctx, frame, path)) {
+  if (onLayer(ctx, frame) && drawLayer(ctx, frame, path)) {
     return;
   }
   drawPower(ctx, frame, whole);
-  if (dark) {
+  if (inTheDark(frame)) {
     drawLighting(ctx, frame, 1 - whole);
   }
+}
+
+/** Whether the world lies in the dark: not the audience's, nor lit whole by a run won. */
+function inTheDark(frame: Frame): boolean {
+  return !frame.spectator && (frame.ending?.lit ?? 0) < 1;
+}
+
+/**
+ * Whether the WebGL light layer lights this frame of the world drawn on
+ * `ctx`: a world in the dark whose light takes the GL way (gl/path.ts),
+ * opened on the first frame that asks. The art's glow pass asks too
+ * (render/glow.ts): on the layer what glows and moves goes under the light
+ * map, on the Canvas pass over the darkness with the coloured lights' glow.
+ */
+export function onLayer(ctx: CanvasRenderingContext2D, frame: Frame): boolean {
+  return inTheDark(frame) && pathNow(lightPathOf(frame.kit, ctx.canvas)) === 'gl';
 }
 
 /** The way for the light of the world drawn on `world`, opened on its first frame (gl/path.ts). */

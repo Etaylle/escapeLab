@@ -97,13 +97,20 @@ export function flickerAt(seed: number, ms: number): number {
   return noise(step + seed * 0.618) < 0.1 ? 0.3 : 0.85 + 0.15 * noise(step * 1.7 + seed);
 }
 
+/**
+ * What says how strongly a light burns at a moment: a light of the layer's,
+ * or a coloured light as world/sources.ts lists it, which the Canvas pass
+ * burns alike (render/glow.ts).
+ */
+export type Burning = Pick<Light, 'x' | 'y' | 'strength' | 'pulse' | 'flicker'>;
+
 /** A light's own number, from where it hangs: its flicker does not keep step with another's. */
-function seedOf(light: Light): number {
+function seedOf(light: Burning): number {
   return Math.round(light.x * 97) * 31 + Math.round(light.y * 89);
 }
 
 /** How strongly `light` burns `ms` into the run: its strength, pulse and flicker. */
-export function strengthAt(light: Light, ms: number): number {
+export function strengthAt(light: Burning, ms: number): number {
   const flicker = light.flicker === true ? flickerAt(seedOf(light), ms) : 1;
   return light.strength * pulseAt(light.pulse, ms) * flicker;
 }
