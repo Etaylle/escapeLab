@@ -5,6 +5,7 @@ import type { Baked } from '../baked.js';
 import type { ColdOpenFrame } from '../coldOpen.js';
 import type { DoorMotion } from '../doors.js';
 import type { FinaleFrame } from '../finale.js';
+import type { LightPath } from '../gl/path.js';
 import type { ContextAction } from '../interact.js';
 import type { LampMount, Lit } from '../light.js';
 import type { MarkerTarget } from '../markers.js';
@@ -151,6 +152,11 @@ export interface RenderKit {
   hatchCut: { sight: Sight; baked: Baked | null } | null;
   /** the red edge as last baked (vignette.ts), and for which canvas: baked anew for another */
   vignette: { canvas: HTMLCanvasElement; w: number; h: number; dpr: number };
+  /**
+   * the way the light reaches the picture — the WebGL light layer or the
+   * Canvas pass — opened on the first frame (gl/path.ts); null before
+   */
+  light: LightPath | null;
 }
 
 /** A fresh kit drawing the darkness into `overlay`: the textures made, nothing baked yet. */
@@ -167,6 +173,7 @@ export function renderKit(overlay: CanvasRenderingContext2D): RenderKit {
     roomLight: null,
     hatchCut: null,
     vignette: { canvas: document.createElement('canvas'), w: 0, h: 0, dpr: 0 },
+    light: null,
   };
 }
 

@@ -1,8 +1,16 @@
 import { bake, bakeBox, bakeStep, drawBaked, type Baked } from '../baked.js';
 import { SPILL_REACH } from '../doors.js';
-import { EMERGENCY_GLOW } from '../light.js';
+import { poolsOfPixels } from '../gl/maps.js';
+import { openLightPath, pathNow, type LightPath } from '../gl/path.js';
+import {
+  EMERGENCY_GLOW,
+  EMERGENCY_TINT,
+  HATCH_TINT,
+  spillTint,
+  type TintStops,
+} from '../light.js';
 import { ALARM_RED, ceilingLayer, mixTint, WARM, type CeilingLight } from '../power.js';
-import { cutDarkness, roomUp, sirenSwell } from './darkness.js';
+import { cutDarkness, ESCAPE_RED, escapeTint, roomUp } from './darkness.js';
 import {
   inTiles,
   toScreen,
@@ -17,14 +25,76 @@ import {
  * lab's own warm light in your room while it has its power. The audience
  * sees the lab whole, warm all over while the power is on; and so does
  * everybody as every room's light comes on at the end of a run won
- * (`ending.lit`, 0 to 1), the darkness lifting as it does.
+ * (`ending.lit`, 0 to 1), the darkness lifting as it does. Where there is
+ * darkness, the WebGL light layer draws it all where the world's way for
+ * its light says so (gl/path.ts); else, and as its fallback, this pass.
  */
 export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const whole = frame.ending?.lit ?? 0;
+  const path = lightPathOf(frame.kit, ctx.canvas);
+  const dark = !frame.spectator && whole < 1;
+  if (dark && pathNow(path) === 'gl' && drawLayer(ctx, frame, path)) {
+    return;
+  }
   drawPower(ctx, frame, whole);
-  if (!frame.spectator && whole < 1) {
+  if (dark) {
     drawLighting(ctx, frame, 1 - whole);
   }
+}
+
+/** The way for the light of the world drawn on `world`, opened on its first frame (gl/path.ts). */
+function lightPathOf(kit: RenderKit, world: HTMLCanvasElement): LightPath {
+  kit.light ??= openLightPath(world, location.search);
+  return kit.light;
+}
+
+/** Takes the light of a world down as the world goes: its layer, its context, its probe. */
+export function dropLight(kit: RenderKit): void {
+  kit.light?.dispose();
+  kit.light = null;
+}
+
+/**
+ * The light layer's frame over the picture: its light map multiplied in,
+ * keeping of the picture what the light leaves — remembered tiles dim,
+ * never black — then its glow and bloom added. False where it has no layer.
+ */
+function drawLayer(ctx: CanvasRenderingContext2D, frame: Frame, path: LightPath): boolean {
+  const { layer } = path;
+  if (layer === null) {
+    return false;
+  }
+  const { canvas, w, h } = layer.render(frame, (light) => poolsOf(frame.kit, frame.map, light));
+  const { w: vw, h: vh } = frame.viewport;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.drawImage(canvas, 0, 0, w, h, 0, 0, vw, vh);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.drawImage(canvas, 0, h, w, h, 0, 0, vw, vh);
+  ctx.restore();
+  return true;
+}
+
+/** The ceiling lights' pools read off their baked layers, by layer: once per map and colour. */
+const pools = new WeakMap<HTMLCanvasElement, Float32Array>();
+
+/** The pools of the ceiling `light` over `map`, a tile at a time (gl/maps.ts), off its layer. */
+function poolsOf(kit: RenderKit, map: WorldMap, light: CeilingLight): Float32Array {
+  const layer = layerOf(kit, map, light);
+  const known = pools.get(layer);
+  if (known !== undefined) {
+    return known;
+  }
+  const g = layer.getContext('2d');
+  if (g === null) {
+    throw new Error('light: the ceiling layer has no 2D context to read its pools from.');
+  }
+  const pixels = g.getImageData(0, 0, layer.width, layer.height).data;
+  const read = poolsOfPixels(pixels, map.width * map.height);
+  pools.set(layer, read);
+  return read;
 }
 
 /** The lab's own light: all of it at the end of a run won, else your room while it has power. */
@@ -186,14 +256,24 @@ function bakeRoomLight(
   return bake(box, draw, into);
 }
 
+/** A radial gradient of `stops` round (x, y) out to `r`, in `g`'s space, each `share` strong. */
+function tintGradient(
+  g: CanvasRenderingContext2D,
+  [x, y, r]: readonly [number, number, number],
+  stops: TintStops,
+  share: number,
+): CanvasGradient {
+  const gradient = g.createRadialGradient(x, y, 0, x, y, r);
+  for (const [offset, [red, green, blue], alpha] of stops) {
+    gradient.addColorStop(offset, `rgba(${red}, ${green}, ${blue}, ${alpha * share})`);
+  }
+  return gradient;
+}
+
 /** The open hatch's green-white light, `open` (0 to 1) of its full, where `lit` sees; tiles. */
 function bakeHatchGlow(g: CanvasRenderingContext2D, lit: FrameLit, open: number): void {
   const { x, y, glow: r } = lit.lamp;
-  const glow = g.createRadialGradient(x, y, 0, x, y, r);
-  glow.addColorStop(0, `rgba(240, 255, 246, ${0.8 * open})`);
-  glow.addColorStop(0.16, `rgba(160, 245, 196, ${0.5 * open})`);
-  glow.addColorStop(0.5, `rgba(74, 222, 128, ${0.18 * open})`);
-  glow.addColorStop(1, 'rgba(74, 222, 128, 0)');
+  const glow = tintGradient(g, [x, y, r], HATCH_TINT, open);
   g.save();
   g.clip(lit.clip);
   g.fillStyle = glow;
@@ -241,40 +321,33 @@ function drawLampLight(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const r = EMERGENCY_GLOW * frame.camera.scale;
   for (const { mount, lit } of frame.light.lamps) {
     const [sx, sy] = toScreen(frame, mount.x, mount.y);
-    const red = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
-    red.addColorStop(0, `rgba(255, 112, 98, ${0.85 * burn})`);
-    red.addColorStop(0.12, `rgba(255, 50, 42, ${0.42 * burn})`);
-    red.addColorStop(0.5, `rgba(255, 38, 32, ${0.16 * burn})`);
-    red.addColorStop(1, 'rgba(255, 38, 32, 0)');
+    const red = tintGradient(ctx, [sx, sy, r], EMERGENCY_TINT, burn);
     addLight(ctx, frame, lit, red, [sx, sy, r]);
   }
 }
 
 /** A lit room's light through an open door: a wedge of its colour falling into the dark. */
 function drawSpillLight(ctx: CanvasRenderingContext2D, frame: Frame): void {
-  const [r, g, b] = mixTint(WARM.tint, ALARM_RED.tint, frame.red);
+  const stops = spillTint(mixTint(WARM.tint, ALARM_RED.tint, frame.red));
   for (const { lit, open } of frame.light.spills) {
     const [sx, sy] = toScreen(frame, lit.lamp.x, lit.lamp.y);
     const reach = SPILL_REACH * frame.camera.scale;
-    const wedge = ctx.createRadialGradient(sx, sy, 0, sx, sy, reach);
-    wedge.addColorStop(0, `rgba(${r},${g},${b},${0.3 * open})`);
-    wedge.addColorStop(0.6, `rgba(${r},${g},${b},${0.1 * open})`);
-    wedge.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    const wedge = tintGradient(ctx, [sx, sy, reach], stops, open);
     addLight(ctx, frame, lit, wedge, [sx, sy, reach]);
   }
 }
 
 /** The red the escape bathes the world in, as far as it has turned, swelling with the siren. */
 function drawEscapeTint(ctx: CanvasRenderingContext2D, frame: Frame): void {
-  const { red } = frame;
-  if (red <= 0) {
+  const share = escapeTint(frame);
+  if (share <= 0) {
     return;
   }
   const { w, h } = frame.viewport;
-  const swell = sirenSwell(frame);
+  const [r, g, b] = ESCAPE_RED;
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = `rgba(255, 34, 22, ${(0.06 + 0.05 * swell) * red})`;
+  ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${share})`;
   ctx.fillRect(0, 0, w, h);
   ctx.restore();
 }

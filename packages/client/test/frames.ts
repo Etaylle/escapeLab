@@ -1,5 +1,6 @@
 import type { PlayerView, Sight } from '@escapelab/core';
 import { worldText } from '../src/world/art.js';
+import type { LightPath } from '../src/world/gl/path.js';
 import type { Lamp } from '../src/world/light.js';
 import type { Frame, FrameLight, FrameLit, RenderKit } from '../src/world/render/frame.js';
 import { fakeCanvas, type FakeCanvas } from './fakeCanvas.js';
@@ -76,6 +77,19 @@ export function kitWith(overlay: FakeCanvas = fakeCanvas(800, 600, 'overlay')): 
     roomLight: null,
     hatchCut: null,
     vignette: { canvas: fakeCanvas(0, 0, 'vignette').canvas, w: 0, h: 0, dpr: 0 },
+    light: canvasLight(),
+  };
+}
+
+/** The Canvas pass's way for the light, decided already: no WebGL in a test. */
+export function canvasLight(): LightPath {
+  return {
+    asked: null,
+    renderer: null,
+    choice: { path: 'canvas', reason: 'a test' },
+    forced: null,
+    layer: null,
+    dispose: () => undefined,
   };
 }
 
