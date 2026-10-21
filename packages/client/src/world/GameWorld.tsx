@@ -49,6 +49,7 @@ import { runsOf } from './light.js';
 import { positionsOf, type KnownPositions } from './movement.js';
 import { worldNews } from './news.js';
 import { renderKit, type ChatLine, type MapPing, type WorldMap } from './render/frame.js';
+import { dropLight } from './render/light.js';
 import { PING_LIFETIME_MS } from './render/overlays.js';
 import { drawFrame } from './render/pipeline.js';
 import { roomArea, roomsComingOn } from './rooms.js';
@@ -626,6 +627,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
       stopAmbience();
       stopPowerHum();
       traced?.drop();
+      dropLight(kit);
       refs.simRef.current = null;
       refs.interactRef.current = null;
       refs.dropRef.current = null;

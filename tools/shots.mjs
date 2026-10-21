@@ -5,7 +5,8 @@
  *
  *   PLAYWRIGHT_BROWSERS_PATH=$PWD/.playwright-browsers \
  *     [SHOTS_MISSION=Systemcheck] [SHOTS_FRAME_P95_MS=40] [SHOTS_CPU_SLOWDOWN=4] \
- *     [SHOTS_SOFTWARE_GL=1] node tools/shots.mjs [baseUrl] [outDir]
+ *     [SHOTS_SOFTWARE_GL=1] [SHOTS_WEBGL=1] [SHOTS_HEADED=1] \
+ *     node tools/shots.mjs [baseUrl] [outDir]
  *
  * SHOTS_MISSION names the mission card to start (default Blackout); the
  * crew is two players. Where the first station is a sync station, both
@@ -89,6 +90,23 @@
  * `skipped:` with why, and fails nothing. The last line counts the captures
  * taken, skipped and failed; the exit code is 1 when any failed.
  *
+ * Light: every world's light takes the WebGL light layer or the Canvas pass
+ * (client world/gl/path.ts): a software renderer — headless Chromium's
+ * SwiftShader, as on CI — keeps the Canvas pass. Before the frame sample
+ * after the game screenshots the host's light probe is read and logged; under
+ * SHOTS_SOFTWARE_GL anything but the Canvas pass fails the run. SHOTS_WEBGL=1
+ * adds ?gl=1 to every page, which forces the layer on, software renderer or
+ * not: the probe then has to report it, or the run fails. At the blackout.png
+ * and lit-flur.png moments the host's world is measured both ways — the mean
+ * luma of its canvas on the layer and, three frames later, on the Canvas pass,
+ * which may lie at most 10 % apart, or the run fails — and light-gl.png and
+ * light-gl-flur.png are shot on the layer, right before blackout.png and
+ * lit-flur.png, which under SHOTS_WEBGL are shot on the Canvas pass: each pair
+ * shows the same moment both ways. On SwiftShader the layer's frames may well
+ * pass the budget (raise SHOTS_FRAME_P95_MS to log them without failing);
+ * SHOTS_HEADED=1 opens real windows instead, drawn on the machine's GPU, to
+ * measure the same frame windows there.
+ *
  * Voice: Chromium runs with a fake microphone that needs no prompt (its beeps
  * are the voice), and both players switch theirs on in the lobby. Both pages
  * open with `?trace=1`, so their voice links can be read off
@@ -153,6 +171,16 @@ const SOFTWARE_GL_FLAGS = [
   '--disable-accelerated-2d-canvas',
   '--disable-gpu-rasterization',
 ];
+/**
+ * Whether every page asks for the WebGL light layer, SHOTS_WEBGL=1: ?gl=1
+ * forces it on even on a software renderer, so that its look and its frames
+ * can be told apart from the Canvas pass's.
+ */
+const WEBGL = switchedOn('SHOTS_WEBGL', process.env.SHOTS_WEBGL);
+/** Whether the browser opens real windows, SHOTS_HEADED=1: drawn on this machine's GPU. */
+const HEADED = switchedOn('SHOTS_HEADED', process.env.SHOTS_HEADED);
+/** How far a frame's mean luma on the light layer may lie from the Canvas pass's, as a share. */
+const LUMA_TOLERANCE = 0.1;
 /**
  * The seed the host's room is pinned to (`?seed=`, taken by a server with
  * ALLOW_SEED=1 as `pnpm dev` and CI set it), so that who starts where, where
@@ -285,7 +313,9 @@ async function logRendering() {
   console.log(
     `gpu                ${renderer}: compositing ${compositing}, ` +
       `2d canvas ${status['2d_canvas'] ?? 'unknown'}` +
-      (SOFTWARE_GL ? ' (SHOTS_SOFTWARE_GL)' : ''),
+      (SOFTWARE_GL ? ' (SHOTS_SOFTWARE_GL)' : '') +
+      (WEBGL ? ' (SHOTS_WEBGL: ?gl=1 on every page)' : '') +
+      (HEADED ? ' (SHOTS_HEADED: real windows)' : ''),
   );
   if (SOFTWARE_GL && (!/SwiftShader/.test(renderer) || compositing !== 'enabled')) {
     throw new Error(
@@ -360,7 +390,17 @@ function fail(what) {
 function traced(url) {
   const withFlag = new URL(url);
   withFlag.searchParams.set('trace', '1');
-  return withFlag.href;
+  return paged(withFlag.href);
+}
+
+/** `url` as every page of this run opens it: with `?gl=1` under SHOTS_WEBGL. */
+function paged(url) {
+  if (!WEBGL) {
+    return url;
+  }
+  const withGl = new URL(url);
+  withGl.searchParams.set('gl', '1');
+  return withGl.href;
 }
 
 /**
@@ -1147,6 +1187,98 @@ async function captureColdOpen(host, guest) {
   await host.page.setViewportSize(SIZES[0]);
 }
 
+/** The light probe of a traced page (client world/gl/path.ts), or null where it has none. */
+function lightOf(page) {
+  return page.evaluate(() => {
+    const light = globalThis.__escapelab?.light;
+    return light === undefined
+      ? null
+      : { path: light.path, renderer: light.renderer, reason: light.reason };
+  });
+}
+
+/** Resolves after `count` more animation frames of `page`: the world has drawn as many. */
+function framesOf(page, count) {
+  return page.evaluate(
+    (n) =>
+      new Promise((resolve) => {
+        let left = n;
+        const next = () => (--left <= 0 ? resolve() : globalThis.requestAnimationFrame(next));
+        globalThis.requestAnimationFrame(next);
+      }),
+    count,
+  );
+}
+
+/** Takes the light of `page` the way `path` says ('gl', 'canvas'), or back (null); waits it out. */
+async function lightThrough(page, path) {
+  await page.evaluate((way) => globalThis.__escapelab?.light?.use(way), path);
+  await framesOf(page, 3);
+}
+
+/** The mean luma of `page`'s world canvas as its light probe reads it, 0–255; null without one. */
+function canvasLuma(page) {
+  return page.evaluate(() => globalThis.__escapelab?.light?.luma() ?? null);
+}
+
+/**
+ * Logs which way the world's light takes on `player`'s page and why. Fails
+ * the run where SHOTS_WEBGL asked for the light layer and it does not draw,
+ * or where SHOTS_SOFTWARE_GL renders in software and it does.
+ */
+async function checkLight({ name, page }) {
+  const light = await lightOf(page);
+  const said = light === null ? '!! no light probe' : `${light.path} (${light.reason})`;
+  console.log(`light              ${name}: ${said}, renderer ${light?.renderer ?? 'none'}`);
+  if (WEBGL && light?.path !== 'gl') {
+    const way = light?.path ?? 'no way';
+    fail(`SHOTS_WEBGL asked for the light layer, but ${name}'s light takes ${way}`);
+  } else if (SOFTWARE_GL && !WEBGL && light?.path !== 'canvas') {
+    fail(`a software renderer keeps the Canvas pass, but ${name}'s light takes ${light?.path}`);
+  }
+}
+
+/**
+ * Under SHOTS_WEBGL, the moment about to be shot both ways on `page`: its
+ * world's mean luma on the light layer and on the Canvas pass, which may lie
+ * at most LUMA_TOLERANCE apart; `shot` taken on the layer, then the light
+ * left on the Canvas pass for the shot the caller takes. Returns what takes
+ * the light back to the layer. Without SHOTS_WEBGL, nothing.
+ */
+async function lightPair(page, shot) {
+  if (!WEBGL) {
+    return async () => undefined;
+  }
+  const light = await lightOf(page);
+  if (light?.path !== 'gl') {
+    console.log(`${shot.padEnd(18)} !! the light takes ${light?.path ?? 'no way'}, not the layer`);
+    fail(`${shot}: the light probe reports ${light?.path ?? 'nothing'}, not gl`);
+    return async () => undefined;
+  }
+  const onLayer = await canvasLuma(page);
+  await lightThrough(page, 'canvas');
+  const onCanvas = await canvasLuma(page);
+  await lightThrough(page, null);
+  await capture(page, shot);
+  await lightThrough(page, 'canvas');
+  if (onLayer === null || onCanvas === null) {
+    console.log(`${shot.padEnd(18)} !! the world's canvas gave no luma to compare`);
+    fail(`${shot}: no luma off the world's canvas`);
+    return () => lightThrough(page, null);
+  }
+  const gap = onCanvas > 0 ? Math.abs(onLayer - onCanvas) / onCanvas : Infinity;
+  const match = gap <= LUMA_TOLERANCE;
+  console.log(
+    `${shot.padEnd(18)} on the light layer (${light.renderer}): mean luma ${onLayer.toFixed(1)}, ` +
+      `the Canvas pass ${onCanvas.toFixed(1)} — ${(gap * 100).toFixed(1)} % apart` +
+      (match ? '' : ` !! more than ${LUMA_TOLERANCE * 100} %`),
+  );
+  if (!match) {
+    fail(`${shot}: mean luma ${onLayer.toFixed(1)} on the layer, ${onCanvas.toFixed(1)} on Canvas`);
+  }
+  return () => lightThrough(page, null);
+}
+
 /**
  * blackout.png: two seconds after the clock has started counting on the
  * host's page — the flashlight on, the emergency lamps red in the dark.
@@ -1157,7 +1289,9 @@ async function captureBlackout(host) {
     throw new Error('the lights went out, but no clock ever counted');
   }
   await sleep(2000);
+  const back = await lightPair(host.page, 'light-gl.png');
   await capture(host.page, 'blackout.png');
+  await back();
   const { lights, startedAt, map } = host.seen.view;
   console.log(
     `blackout.png       ${host.name}: the lights went out ` +
@@ -1330,7 +1464,9 @@ async function captureLitFlur(player, lever) {
       () => false,
     );
   await sleep(1200); // past the lights coming up
+  const back = await lightPair(player.page, 'light-gl-flur.png');
   await capture(player.page, 'lit-flur.png');
+  await back();
   const { events, lights, map } = player.seen.view;
   const solved = events.find((e) => e.kind === 'puzzle' && e.label.startsWith(lever.title));
   const took = solved === undefined ? '!! no solve logged' : seconds(solved.at - lights.outAt);
@@ -2379,7 +2515,7 @@ const firstLine = (err) => String(err instanceof Error ? err.message : err).spli
  * floor brush into its blank lab of wall, a start and the keypad's station.
  */
 async function paintProbe(page) {
-  await page.goto(BASE);
+  await page.goto(paged(BASE));
   await page.locator('.mission').first().waitFor({ timeout: 10_000 });
   await clickText(page, 'Editor');
   await page.locator('.editor-canvas').waitFor({ timeout: 5000 });
@@ -2458,7 +2594,7 @@ const PROBE_FILE = fileURLToPath(new URL('fixtures/probe-mission.json', import.m
  * asks.
  */
 async function importProbe(page) {
-  await page.goto(new URL('/editor', BASE).href);
+  await page.goto(paged(new URL('/editor', BASE).href));
   await page.locator('.editor-canvas').waitFor({ timeout: 10_000 });
   await page.locator('.editor-actions input[type="file"]').setInputFiles(PROBE_FILE);
   const imported = page.locator('.editor-status', { hasText: 'importiert' });
@@ -2535,7 +2671,7 @@ async function openShared(context, link, card) {
   const page = await openPage(context);
   page.on('pageerror', (e) => console.log('[shared error]', e.message));
   try {
-    await page.goto(link);
+    await page.goto(paged(link));
     await page.locator('.editor-name strong', { hasText: 'Probe' }).waitFor({ timeout: 10_000 });
     await page.locator('.editor-shared').waitFor({ timeout: 5000 });
     const seen = await page.locator('.editor-card-meta').innerText();
@@ -3082,6 +3218,7 @@ async function run() {
     console.log(`cpu                every page slowed down ${CPU_SLOWDOWN}× (SHOTS_CPU_SLOWDOWN)`);
   }
   browser = await chromium.launch({
+    headless: !HEADED,
     args: [...VOICE_FLAGS, ...(SOFTWARE_GL ? SOFTWARE_GL_FLAGS : [])],
   });
   await logRendering();
@@ -3221,6 +3358,7 @@ async function run() {
   // info panel and spectator view at laptop size
   await host.setViewportSize(SIZES[0]);
   await sleep(400);
+  await checkLight(anna);
   await sampleFrames(host, 'pacing, after the game screenshots', () => pace(anna, SAMPLE_MS));
   await host.keyboard.press('i');
   await sleep(400);

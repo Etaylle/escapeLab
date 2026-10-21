@@ -45,6 +45,17 @@ interface Cutters {
   within: (lit: FrameLit, draw: () => void) => void;
 }
 
+/** The escape's red over the picture, red, green and blue: the Canvas fill and the GL tint. */
+export const ESCAPE_RED = [255, 34, 22] as const;
+
+/** A glow an object gives off on its own: `radius` tiles round (x, y), `strength` deep. */
+export interface Glow {
+  x: number;
+  y: number;
+  radius: number;
+  strength: number;
+}
+
 /** The escape's siren turning, 0 to 1 and back: what the red light swells with. */
 export function sirenSwell(frame: Frame): number {
   return frame.reduced ? 0.5 : 0.5 + 0.5 * Math.sin((frame.time / SIREN_TURN) * Math.PI * 2);
@@ -53,6 +64,36 @@ export function sirenSwell(frame: Frame): number {
 /** How far the lights of a room that came on at `since` (sim time) are up now. */
 export function roomUp(frame: Frame, since: number): number {
   return warmUp((frame.time - since) * 1000, frame.reduced);
+}
+
+/**
+ * How deep the darkness is this frame, 0 to 1 — deeper in the last minute
+ * and all through the escape — breathing: the Canvas pass fills it, the
+ * light layer starts from it.
+ */
+export function darknessDepth(frame: Frame): number {
+  const { deadlineAt } = frame;
+  const pressed =
+    frame.escapeSince !== null || (deadlineAt !== null && deadlineAt - frame.now < 60_000);
+  return (pressed ? 0.945 : 0.92) + 0.02 * Math.sin(frame.time * (pressed ? 3.2 : 1.7));
+}
+
+/**
+ * How much of the darkness a tile of a lit room keeps, by the room's
+ * label: none once its lights are up, some while they are still coming on,
+ * and some again on the escape's alarm lighting. A tile two rooms light
+ * keeps what both leave.
+ */
+export function roomKeep(frame: Frame): (room: string) => number {
+  const [most, least] = ALARM_DIM;
+  const alarmDim = frame.red * (most + (least - most) * sirenSwell(frame));
+  return (room) =>
+    1 - roomUp(frame, frame.lit.get(room)?.since ?? -Infinity) * (1 - alarmDim);
+}
+
+/** How strongly the escape's red lies over the picture, 0 to 1: as far as it turned, swelling. */
+export function escapeTint(frame: Frame): number {
+  return frame.red <= 0 ? 0 : (0.06 + 0.05 * sirenSwell(frame)) * frame.red;
 }
 
 /** A radial gradient cutting darkness `stops` deep round (x, y) out to `r`, in `g`'s space. */
@@ -99,10 +140,7 @@ function fillDarkness(cut: CanvasRenderingContext2D, frame: Frame): number {
   const { w, h } = frame.viewport;
   cut.setTransform(1, 0, 0, 1, 0, 0);
   cut.globalCompositeOperation = 'source-over';
-  const { deadlineAt } = frame;
-  const pressed =
-    frame.escapeSince !== null || (deadlineAt !== null && deadlineAt - frame.now < 60_000);
-  const base = (pressed ? 0.945 : 0.92) + 0.02 * Math.sin(frame.time * (pressed ? 3.2 : 1.7));
+  const base = darknessDepth(frame);
   cut.clearRect(0, 0, w, h);
   cut.fillStyle = `rgba(3,5,9,${base})`;
   cut.fillRect(0, 0, w, h);
@@ -191,72 +229,83 @@ function lightCutters(cut: CanvasRenderingContext2D, frame: Frame): Cutters {
   return { punch, beam, within };
 }
 
-/** A glow an object gives off on its own: `radius` tiles round (wx, wy), `strength` deep. */
-type Glow = (wx: number, wy: number, radius: number, strength: number) => void;
-
 /**
  * The glow the lab's objects give off on their own: the armed station's
  * beacon, the sources found, the sign, the open hatch, the valves — and,
  * on tiles light has fallen on, plates worth finding, crates and drop-offs.
  */
 function glowObjects(frame: Frame, punch: Punch): void {
-  const glow: Glow = (wx, wy, radius, strength) =>
-    punch(wx, wy, radius, objectGlowStops(strength));
-  glowStations(frame, glow);
-  glowSources(frame, glow);
-  glowPlatesAndValves(frame, glow);
-  glowItems(frame, glow);
+  for (const { x, y, radius, strength } of objectGlows(frame)) {
+    punch(x, y, radius, objectGlowStops(strength));
+  }
+}
+
+/**
+ * The glows of the lab's objects this frame, in the order they are cut:
+ * the stations, the sources and the sign, plates and valves, the items.
+ * Walls do not stop them: a beacon shows through.
+ */
+export function objectGlows(frame: Frame): Glow[] {
+  return [
+    ...stationGlows(frame),
+    ...sourceGlows(frame),
+    ...plateAndValveGlows(frame),
+    ...itemGlows(frame),
+  ];
 }
 
 /** The armed station's beacon, and a faint one where a station is done. */
-function glowStations(frame: Frame, glow: Glow): void {
-  for (const station of frame.map.stations) {
+function stationGlows(frame: Frame): Glow[] {
+  return frame.map.stations.flatMap((station): Glow[] => {
+    const at = { x: station.x + 0.5, y: station.y + 0.5 };
     if (station.status === 'armed') {
-      glow(station.x + 0.5, station.y + 0.5, 2.4, 0.85);
-    } else if (station.status === 'done') {
-      glow(station.x + 0.5, station.y + 0.5, 1.1, 0.4);
+      return [{ ...at, radius: 2.4, strength: 0.85 }];
     }
-  }
+    return station.status === 'done' ? [{ ...at, radius: 1.1, strength: 0.4 }] : [];
+  });
 }
 
 /** The sources found, brighter where they print the armed station's rules, and the sign. */
-function glowSources(frame: Frame, glow: Glow): void {
+function sourceGlows(frame: Frame): Glow[] {
   const { map } = frame;
-  for (const manual of map.manuals) {
+  const glows = map.manuals.map((manual): Glow => {
     const active = coversArmed(map, manual);
-    glow(manual.x + 0.5, manual.y + 0.5, active ? 2.1 : 1.3, active ? 0.8 : 0.5);
-  }
-  if (map.edgeworkSign !== null) {
-    glow(map.edgeworkSign.x + 0.5, map.edgeworkSign.y + 0.5, 1.4, 0.6);
-  }
+    const at = { x: manual.x + 0.5, y: manual.y + 0.5 };
+    return { ...at, radius: active ? 2.1 : 1.3, strength: active ? 0.8 : 0.5 };
+  });
+  const sign = map.edgeworkSign;
+  return sign === null
+    ? glows
+    : [...glows, { x: sign.x + 0.5, y: sign.y + 0.5, radius: 1.4, strength: 0.6 }];
 }
 
 /** A plate pressed or worth finding where light has fallen, and an emergency's valves. */
-function glowPlatesAndValves(frame: Frame, glow: Glow): void {
+function plateAndValveGlows(frame: Frame): Glow[] {
   const { map, light } = frame;
   // A camera plate is worth finding before anybody stands on it.
-  for (const plate of map.plates.filter((p) => light.shown(p.x, p.y))) {
-    if (plate.pressed || plate.freezesDrone) {
-      glow(plate.x + 0.5, plate.y + 0.5, 1.0, 0.5);
-    }
-  }
-  for (const panel of map.sabotage?.panels ?? []) {
-    glow(panel.x + 0.5, panel.y + 0.5, 2.4, 0.9);
-  }
+  const plates = map.plates
+    .filter((p) => light.shown(p.x, p.y) && (p.pressed || p.freezesDrone))
+    .map((p): Glow => ({ x: p.x + 0.5, y: p.y + 0.5, radius: 1.0, strength: 0.5 }));
+  const valves = (map.sabotage?.panels ?? []).map(
+    (panel): Glow => ({ x: panel.x + 0.5, y: panel.y + 0.5, radius: 2.4, strength: 0.9 }),
+  );
+  return [...plates, ...valves];
 }
 
 /** Crates lying about and drop-offs, where light has fallen on them. */
-function glowItems(frame: Frame, glow: Glow): void {
+function itemGlows(frame: Frame): Glow[] {
   const { light } = frame;
-  for (const item of frame.map.items) {
+  return frame.map.items.flatMap((item): Glow[] => {
+    const glows: Glow[] = [];
     if (!item.delivered && item.carriedBy === null && light.shown(item.x, item.y)) {
-      glow(item.x, item.y, 1.6, 0.7);
+      glows.push({ x: item.x, y: item.y, radius: 1.6, strength: 0.7 });
     }
     const zone = item.deliverTo;
     if (zone !== null && light.shown(zone.x, zone.y)) {
-      glow(zone.x + 0.5, zone.y + 0.5, 1.4, 0.6);
+      glows.push({ x: zone.x + 0.5, y: zone.y + 0.5, radius: 1.4, strength: 0.6 });
     }
-  }
+    return glows;
+  });
 }
 
 /** The lit rooms' tiles grouped by the rooms lighting them, worked out again as rooms come on. */
@@ -280,10 +329,7 @@ function litTileGroups(frame: Frame): LitGroup[] {
  */
 function litDarkness(cut: CanvasRenderingContext2D, frame: Frame, base: number): void {
   const groups = litTileGroups(frame);
-  const [most, least] = ALARM_DIM;
-  const alarmDim = frame.red * (most + (least - most) * sirenSwell(frame));
-  const left = (room: string): number =>
-    1 - roomUp(frame, frame.lit.get(room)?.since ?? -Infinity) * (1 - alarmDim);
+  const left = roomKeep(frame);
   for (const { rooms, runs } of groups) {
     const keep = rooms.reduce((dark, room) => dark * left(room), 1);
     cut.fillStyle = `rgba(3,5,9,${base * keep})`;

@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { LightLayer } from '../src/world/gl/lightLayer.js';
+import type { Pools } from '../src/world/gl/maps.js';
 import { warmUp } from '../src/world/rooms.js';
-import { WARM } from '../src/world/power.js';
-import { draw } from '../src/world/render/light.js';
+import { ALARM_RED, WARM } from '../src/world/power.js';
+import { draw, dropLight } from '../src/world/render/light.js';
 import type { Frame } from '../src/world/render/frame.js';
 import {
   callEntries,
@@ -11,7 +13,7 @@ import {
   type FakeCanvas,
   type FakeGradient,
 } from './fakeCanvas.js';
-import { frameWith, kitWith, lightWith, lit } from './frames.js';
+import { canvasLight, frameWith, kitWith, lightWith, lit } from './frames.js';
 
 /** A frame drawing its darkness into `overlay`, the warm ceiling layer baked as `warm`. */
 function withKit(overlay: FakeCanvas, warm: FakeCanvas, parts: Partial<Frame> = {}): Frame {
@@ -144,7 +146,7 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
     const log = drawn(withKit(overlay, warm, { light }));
     const [r, g, b] = WARM.tint;
     const wedge = gradients(log).at(-1);
-    expect(wedge?.stops[0]).toEqual([0, `rgba(${r},${g},${b},${0.3 * 0.5})`]);
+    expect(wedge?.stops[0]).toEqual([0, `rgba(${r}, ${g}, ${b}, ${0.3 * 0.5})`]);
     const sx = 400 + (5.9 - 5) * 100;
     expect(callsOf(log, 'arc').at(-1)).toEqual([sx, 250, 3.2 * 100, -0.62, 0.62]);
   });
@@ -191,5 +193,107 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
     expect(fills(-Infinity)).toEqual([]);
     expect(fills(10 - 0.25)).toEqual([[500, 200, 100, 100]]);
     expect(1 - warmUp(250)).toBeGreaterThan(0);
+  });
+});
+
+describe('light — through the WebGL light layer where the world’s way says so', () => {
+  let overlay: FakeCanvas;
+  let warm: FakeCanvas;
+  beforeEach(() => {
+    overlay = fakeCanvas(800, 600, 'overlay');
+    warm = fakeCanvas(10, 6, 'warm');
+  });
+
+  /** A frame whose light takes a stand-in layer, its halves 600 × 450 drawn into `layerCanvas`. */
+  function onLayer(parts: Partial<Frame> = {}) {
+    const layerCanvas = fakeCanvas(600, 900, 'layer').canvas;
+    const pools: Pools[] = [];
+    const layer: LightLayer = {
+      render: vi.fn((_: Frame, read: Pools) => {
+        pools.push(read);
+        return { canvas: layerCanvas, w: 600, h: 450 };
+      }),
+      dispose: vi.fn(),
+    };
+    const frame = withKit(overlay, warm, parts);
+    frame.kit.light = { ...canvasLight(), choice: { path: 'gl', reason: 'a test' }, layer };
+    return { frame, layer, layerCanvas, pools };
+  }
+
+  it('multiplies the light map over the picture, then adds glow and bloom: no darkness', () => {
+    const { frame, layer, layerCanvas } = onLayer();
+    const log = drawn(frame);
+    expect(layer.render).toHaveBeenCalledOnce();
+    const images = callEntries(log, 'drawImage');
+    expect(images).toMatchObject([
+      { args: [layerCanvas, 0, 0, 600, 450, 0, 0, 800, 600], op: 'multiply', alpha: 1 },
+      { args: [layerCanvas, 0, 450, 600, 450, 0, 0, 800, 600], op: 'lighter', alpha: 1 },
+    ]);
+    expect(overlay.log).toEqual([]);
+    expect(callsOf(log, 'fillRect')).toEqual([]);
+  });
+
+  it('lifts the darkness of a run won on the layer, and draws the lab lit whole on Canvas', () => {
+    const lifting = onLayer({ ending: { lit: 0.5, pull: 0.2, dark: 0 } });
+    drawn(lifting.frame);
+    expect(lifting.layer.render).toHaveBeenCalledOnce();
+    const whole = onLayer({ ending: { lit: 1, pull: 1, dark: 0 } });
+    const log = drawn(whole.frame);
+    expect(whole.layer.render).not.toHaveBeenCalled();
+    expect(callsOf(log, 'drawImage')).toEqual([[warm.canvas, 0, 0, 10, 6]]);
+  });
+
+  it('leaves the audience’s light, which has no darkness, to the Canvas pass', () => {
+    const { frame, layer } = onLayer({ spectator: true, scene: { lit: true, cover: 0 } });
+    expect(callsOf(drawn(frame), 'drawImage')).toEqual([[warm.canvas, 0, 0, 10, 6]]);
+    expect(layer.render).not.toHaveBeenCalled();
+  });
+
+  it('takes the Canvas pass where the probe forces it, and the layer again once let go', () => {
+    const { frame, layer } = onLayer();
+    if (frame.kit.light !== null) {
+      frame.kit.light.forced = 'canvas';
+    }
+    drawn(frame);
+    expect(layer.render).not.toHaveBeenCalled();
+    expect(overlay.log.length).toBeGreaterThan(0);
+    if (frame.kit.light !== null) {
+      frame.kit.light.forced = null;
+    }
+    drawn(frame);
+    expect(layer.render).toHaveBeenCalledOnce();
+  });
+
+  it('reads the ceiling lights’ pools off their baked layer, once per layer', () => {
+    const { frame, pools } = onLayer();
+    const pixels = new Uint8ClampedArray(10 * 6 * 4).fill(0);
+    pixels.set([255, 214, 168, 51], 0);
+    const read = vi.fn(() => ({ data: pixels }));
+    const baked = { width: 10, height: 6, getContext: () => ({ getImageData: read }) };
+    frame.kit.ceiling = {
+      tiles: frame.map.tiles.join('\n'),
+      byLight: new Map([
+        [WARM, baked as unknown as HTMLCanvasElement],
+        [ALARM_RED, baked as unknown as HTMLCanvasElement],
+      ]),
+    };
+    drawn(frame);
+    const warmPools = pools[0]?.(WARM);
+    expect(warmPools?.[0]).toBeCloseTo(0.2);
+    expect(pools[0]?.(WARM)).toBe(warmPools);
+    expect(read).toHaveBeenCalledOnce();
+  });
+
+  it('takes a world’s light down as the world goes', () => {
+    const { frame, layer } = onLayer();
+    const path = frame.kit.light;
+    const dispose = vi.fn();
+    if (path !== null) {
+      path.dispose = dispose;
+    }
+    dropLight(frame.kit);
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(frame.kit.light).toBeNull();
+    expect(layer.dispose).not.toHaveBeenCalled();
   });
 });

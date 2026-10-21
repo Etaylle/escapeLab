@@ -1,4 +1,5 @@
 import type { VoiceProbe } from './voice/mesh.js';
+import type { LightProbe } from './world/gl/path.js';
 
 /**
  * Where the world's camera looks as its last frame drew it: the world point at the canvas's
@@ -25,6 +26,8 @@ export interface Probes {
   readonly camera?: CameraProbe;
   /** the voice links, their states and who speaks (voice/mesh.ts) */
   readonly voice?: VoiceProbe;
+  /** the way the world's light takes, WebGL or Canvas, and the picture's luma (world/gl/path.ts) */
+  readonly light?: LightProbe;
 }
 
 declare global {

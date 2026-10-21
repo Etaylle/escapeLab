@@ -108,6 +108,42 @@ export const EMERGENCY_STOPS: Stops = [
 ];
 /** How far an emergency lamp's glow reaches, in tiles. */
 export const EMERGENCY_GLOW = 1.5;
+
+/** A colour as a light adds it: red, green and blue, 0 to 255. */
+export type Rgb = readonly [number, number, number];
+
+/**
+ * A light's colour added over the darkness, from its middle (offset 0) out
+ * to its rim (offset 1): a radial gradient's stops as [offset, colour, how
+ * strongly it is added]; straight lines join them.
+ */
+export type TintStops = readonly (readonly [offset: number, rgb: Rgb, alpha: number])[];
+
+/** An emergency lamp's red: a hot, whiter spot where it hangs, dimming out to its reach. */
+export const EMERGENCY_TINT: TintStops = [
+  [0, [255, 112, 98], 0.85],
+  [0.12, [255, 50, 42], 0.42],
+  [0.5, [255, 38, 32], 0.16],
+  [1, [255, 38, 32], 0],
+];
+
+/** The open hatch's light: green-white in the hatch, green out to its reach. */
+export const HATCH_TINT: TintStops = [
+  [0, [240, 255, 246], 0.8],
+  [0.16, [160, 245, 196], 0.5],
+  [0.5, [74, 222, 128], 0.18],
+  [1, [74, 222, 128], 0],
+];
+
+/** A lit room's light through an open door, in the room's colour: bright in the doorway, fading. */
+export function spillTint(rgb: Rgb): TintStops {
+  return [
+    [0, rgb, 0.3],
+    [0.6, rgb, 0.1],
+    [1, rgb, 0],
+  ];
+}
+
 /** How far over the floor a lamp on a wall hangs its light, past the wall's face, in tiles. */
 const FACE_INSET = 0.05;
 /**
