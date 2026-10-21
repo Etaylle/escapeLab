@@ -12,6 +12,7 @@ import { ButtonPanel } from './ButtonPanel.js';
 import { RelayPanel } from './RelayPanel.js';
 import { SignalPanel, signalSounds } from './SignalPanel.js';
 import { CircuitPanel, circuitSounds } from './CircuitPanel.js';
+import type { DeviceCrew } from './Device.js';
 import type { Change } from './feel.js';
 
 export type PuzzleKind = PuzzleView['kind'];
@@ -31,6 +32,8 @@ export interface PanelProps<K extends PuzzleKind> {
   send: (input: PuzzleInputOf<K>) => void;
   /** the mission clock's end, for modules whose rules read the clock; null when it is not running */
   deadlineAt: number | null;
+  /** the crew at the device, for a device that names them — the main switch's levers */
+  crew?: DeviceCrew;
 }
 
 export type Panel<K extends PuzzleKind> = ComponentType<PanelProps<K>>;

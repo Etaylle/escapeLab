@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { moduleFor, type ConsoleId, type PuzzleView } from '@escapelab/core';
+import { ALARM_NOTICE_MS, type AlarmNotice } from '../world/alarm.js';
 import { consoleName } from '../world/consoles.js';
 import {
   cssVars,
   useChange,
   usePressFeel,
   useRefusalBlame,
+  type Blame,
   type Change,
   type PressHandlers,
 } from './feel.js';
@@ -23,6 +25,20 @@ export interface DeviceLed {
   detail: string | null;
 }
 
+/** A member of the crew as a device names them: under a lever of the main switch, in colour. */
+export interface DeviceMate {
+  id: string;
+  name: string;
+  color: string;
+}
+
+/** The crew at an open device: who is in the run, connected, in order — and who this player is. */
+export interface DeviceCrew {
+  /** this player's id; null for the audience, which stands at no console */
+  you: string | null;
+  mates: readonly DeviceMate[];
+}
+
 /** The run around an open device, as the player's view and connection count it. */
 export interface DeviceRun {
   /** the run's alarms so far (`penaltySeq`) */
@@ -31,6 +47,9 @@ export interface DeviceRun {
   solved: number;
   /** what the server has refused of this player's inputs so far (ws.ts); 0 for the audience */
   refusals: number;
+  crew: DeviceCrew;
+  /** what the run's latest alarm says (world/alarm.ts); null before the first */
+  alarm: AlarmNotice | null;
 }
 
 export interface DeviceProps {
@@ -53,6 +72,11 @@ export interface DeviceProps {
   solved: boolean;
   /** what the face does with a press (`usePressFeel`); null where nobody works it */
   press: PressHandlers | null;
+  /**
+   * an alarm that came in while it was open, as long as it is fresh (`useFreshAlarm`): its
+   * cause and cost in the head — the banner over the world would lie half under the device
+   */
+  notice?: AlarmNotice | null;
   /** the face: the module's controls and displays */
   children: ReactNode;
 }
@@ -88,14 +112,30 @@ export function deviceClass(kind: PuzzleView['kind'], alarms: number, solved: bo
 }
 
 /**
+ * An alarm in the device's head, on its red display: what set it off and what it cost —
+ * „ALARM · Fehlversuch · −20 s" — and, with the run's first, how many more it takes.
+ */
+function AlarmDisplay({ notice }: { notice: AlarmNotice }) {
+  const cost = notice.seconds === null ? '' : ` · −${notice.seconds} s`;
+  return (
+    <div className="device-alarm" role="alert">
+      <span className="device-alarm-line">{`ALARM · ${notice.cause}${cost}`}</span>
+      {notice.warning !== null && <span className="device-alarm-warning">{notice.warning}</span>}
+    </div>
+  );
+}
+
+/**
  * The physical frame every station's panel sits in, after Keep Talking's
  * modules: a metal bezel with a screw in each corner, a label plate naming
  * the station, an LED strip, the face with the controls — and not one word
  * of instruction on it — and along its foot the status strip that flashes
- * red on an alarm and sweeps green once the station is solved.
+ * red on an alarm and sweeps green once the station is solved. An alarm that
+ * comes in while it is open shows its cause and cost in its head.
  */
 export function Device(props: DeviceProps) {
   const { kind, paragraph, title, tag, leds, alarms, solved, press, children } = props;
+  const notice = props.notice ?? null;
   return (
     <div className={deviceClass(kind, alarms, solved)}>
       {(['tl', 'tr', 'bl', 'br'] as const).map((corner) => (
@@ -118,6 +158,7 @@ export function Device(props: DeviceProps) {
             ))}
           </ul>
         )}
+        {notice !== null && <AlarmDisplay key={notice.seq} notice={notice} />}
       </div>
       <div className="device-face" inert={solved} {...(press ?? {})}>
         {children}
@@ -185,6 +226,23 @@ function chunksItself(puzzle: PuzzleView): boolean {
 /** What a module's device sounds like at a change, beyond the kit; see `SOUNDS`. */
 export type ChangeSounds = (change: Change<PuzzleView>) => void;
 
+/**
+ * A change at a device worked at a console: its module's `sounds`, and for an alarm the
+ * device's horn, the control pressed just before it shaking without a buzz — one alarm, one
+ * sound; the buzz is a refusal's.
+ */
+export function feelChange(
+  change: Change<PuzzleView>,
+  sounds: ChangeSounds | null,
+  blame: Blame,
+): void {
+  sounds?.(change);
+  if (change.alarm) {
+    blame(false);
+    alarmKlaxon();
+  }
+}
+
 /** What the kit makes of an open device beyond its view: see `useDeviceFeel`. */
 export interface DeviceFeel {
   /** the latest change while it was open; null before any */
@@ -198,10 +256,11 @@ export interface DeviceFeel {
 
 /**
  * The kit at an open device. It opens with a relay click and hums until it closes; every
- * change plays once — the module's own `sounds`, and an alarm's klaxon after a buzz for the
- * control pressed just before it; a press the server refuses shakes with a buzz as the
- * refusal comes in; solved, it drops home with a ka-chunk and a major chord. The audience,
- * at no console, sees all of it and hears none of it.
+ * change plays once — the module's own `sounds`, and an alarm's klaxon, the control pressed
+ * just before it shaking without a buzz: one alarm, one sound, and the world's horn keeps
+ * quiet while a device is open (GameWorld). A press the server refuses shakes with a buzz as
+ * the refusal comes in; solved, it drops home with a ka-chunk and a major chord. The
+ * audience, at no console, sees all of it and hears none of it.
  */
 export function useDeviceFeel(
   puzzle: PuzzleView,
@@ -223,13 +282,8 @@ export function useDeviceFeel(
     return () => hum.stop();
   }, [operating]);
   useEffect(() => {
-    if (change === null || !operating) {
-      return;
-    }
-    sounds?.(change);
-    if (change.alarm) {
-      blame();
-      alarmKlaxon();
+    if (change !== null && operating) {
+      feelChange(change, sounds, blame);
     }
   }, [change, operating, sounds, blame]);
   const ownChunk = chunksItself(puzzle);
@@ -244,8 +298,30 @@ export function useDeviceFeel(
   return { change, alarms: run.alarms - alarmsAtOpen, solved, press: operating ? handlers : null };
 }
 
-/** How long a solved device stays in view: its strip sweeps green, then it closes itself. */
-export const SOLVED_CLOSE_MS = 800;
+/**
+ * The run's latest alarm (`alarm`) for the device's head while it is fresh: one that came in
+ * while the device was open (`sinceOpen`, the alarms since), for ALARM_NOTICE_MS after it
+ * did; null otherwise.
+ */
+export function useFreshAlarm(alarm: AlarmNotice | null, sinceOpen: number): AlarmNotice | null {
+  const seq = sinceOpen > 0 && alarm !== null ? alarm.seq : null;
+  const [stale, setStale] = useState<number | null>(null);
+  useEffect(() => {
+    if (seq === null) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setStale(seq), ALARM_NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [seq]);
+  return seq === null || stale === seq ? null : alarm;
+}
+
+/**
+ * How long a solved device stays in view: its ka-chunk sounds and its strip sweeps green in
+ * 400 ms, then it closes itself — so that the room it lights warms up in plain sight
+ * (GameWorld holds the warm-up while a panel is open).
+ */
+export const SOLVED_CLOSE_MS = 500;
 
 /** Calls `close` once SOLVED_CLOSE_MS have passed; returns what calls it off. */
 export function closeAfterSolved(close: () => void): () => void {
@@ -255,9 +331,9 @@ export function closeAfterSolved(close: () => void): () => void {
 
 /**
  * The station `last` showed, solved by now (`solved` stations), as it stands done: a sync
- * station with every press in — a main switch with every lever down — a keypad with every
- * key lit, the Signalkette with every sign of its stage in; any other as last seen. Null
- * where it is not solved: only closed, or walked away from.
+ * station with every press in and no word of an earlier miss — a main switch with every
+ * lever down — a keypad with every key lit, the Signalkette with every sign of its stage
+ * in; any other as last seen. Null where it is not solved: only closed, or walked away from.
  */
 export function heldView(last: PuzzleView, solved: number): PuzzleView | null {
   if (solved <= last.index) {
@@ -265,7 +341,13 @@ export function heldView(last: PuzzleView, solved: number): PuzzleView | null {
   }
   switch (last.kind) {
     case 'button-sync':
-      return { ...last, youPressed: true, pressedCount: last.requiredCount };
+      return {
+        ...last,
+        youPressed: true,
+        partnerPressed: true,
+        pressedCount: last.requiredCount,
+        lastResult: null,
+      };
     case 'keypad':
       return last.keys === null
         ? last

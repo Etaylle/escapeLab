@@ -9,8 +9,8 @@
  * A tip over the world sits just above the control cluster: GameWorld
  * measures how far that reaches and sets the tip's `bottom` inline, so it is
  * clear of the avatar under the objective bar and of the minimap. A device's
- * tip lies over the station's frame instead (.coach--panel, devices.css).
- * Taps go through to the world under it.
+ * line sits in the station's frame instead, under the Laborkennung's row
+ * (.station-coach, ux2.css). Taps go through to the world under it.
  */
 .coach {
   position: absolute;

@@ -21,7 +21,7 @@ import {
   textureOf,
 } from '../src/puzzles/SignalPanel.js';
 import { PuzzlePanel, ReaderPanel } from '../src/screens/PuzzlePanel.js';
-import { iconsAsWords, PICTOGRAPH } from './fixtures.js';
+import { deviceRun, iconsAsWords, PICTOGRAPH } from './fixtures.js';
 
 /** A small deterministic generator, enough to set an instance up. */
 function lcg(seed: number): () => number {
@@ -71,7 +71,7 @@ function panel(puzzle: PuzzleView): string {
   return renderToStaticMarkup(
     <PuzzlePanel
       puzzle={puzzle}
-      run={{ alarms: 0, solved: 0, refusals: 0 }}
+      run={deviceRun()}
       send={() => undefined}
       deadlineAt={null}
     />,

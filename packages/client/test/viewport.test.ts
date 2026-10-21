@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   clampCamera,
   placeRoomNames,
+  shiftClear,
   type Box,
   type Lens,
   type RoomName,
@@ -127,5 +128,27 @@ describe('placeRoomNames — which room names are drawn, and where', () => {
     const dense: Viewport = { ...VIEW, w: 2000, h: 1200, dpr: 2, top: 160, bottom: 136, boxes: [] };
     expect(placed([name(1000, 185)], dense)).toEqual([]);
     expect(placed([name(1000, 195)], dense)).toEqual(['LABOR@1000,195']);
+  });
+});
+
+describe('shiftClear — a tag moved off what it would cover', () => {
+  // A prompt's pill over the own figure's name: 100 px wide, 20 high.
+  const figure: Box = { left: 180, top: 140, right: 240, bottom: 230 };
+  const pill = (top: number): Box => ({ left: 160, top, right: 260, bottom: top + 20 });
+
+  it('leaves a tag that covers nothing where it is', () => {
+    expect(shiftClear(pill(100), figure, 4, 50)).toBe(0);
+  });
+
+  it('lifts a tag up over what it would cover, air between them', () => {
+    const dy = shiftClear(pill(150), figure, 4, 50);
+    expect(dy).toBe(140 - 4 - 170);
+    const moved = { ...pill(150), top: 150 + dy, bottom: 170 + dy };
+    expect(moved.bottom).toBe(figure.top - 4);
+  });
+
+  it('drops it below instead where up would take it under the bar', () => {
+    const dy = shiftClear(pill(150), figure, 4, 130);
+    expect(150 + dy).toBe(figure.bottom + 4);
   });
 });

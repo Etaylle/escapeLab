@@ -32,6 +32,19 @@ export function overlaps(a: Box, b: Box): boolean {
   return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 }
 
+/**
+ * How far down `box` has to move to lie clear of `avoid`, `gap` between them: negative to go
+ * up over it — the way a tag goes, above what it would cover — or, where that would take it
+ * above `ceiling`, down below it. 0 where the two do not meet.
+ */
+export function shiftClear(box: Box, avoid: Box, gap: number, ceiling: number): number {
+  if (!overlaps(box, avoid)) {
+    return 0;
+  }
+  const up = avoid.top - gap - box.bottom;
+  return box.top + up >= ceiling ? up : avoid.bottom + gap - box.top;
+}
+
 /** What the camera works with for one frame, in device pixels. */
 export interface Lens {
   /** device pixels per tile */

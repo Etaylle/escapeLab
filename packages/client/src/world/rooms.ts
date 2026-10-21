@@ -63,6 +63,27 @@ export function roomArea(map: RoomMap, from: Spot): Spot[] {
   return [...area.values()];
 }
 
+/** A room lit whole: its tiles by key, and as runs along their rows. */
+export interface RoomLight {
+  keys: ReadonlySet<string>;
+  runs: Run[];
+}
+
+/**
+ * The room the power lights round a player standing at `at` while the lab still has it (the
+ * cold open): the floor reachable from their tile without crossing a door, open or not, with
+ * the walls and doors round it — lit whole, as a room a solved station lit. None where the
+ * tile is no room's floor, as on a door.
+ */
+export function powerRoom(map: RoomMap, at: Spot): RoomLight | null {
+  const tiles = roomArea(map, { x: Math.floor(at.x), y: Math.floor(at.y) });
+  if (tiles.length === 0) {
+    return null;
+  }
+  const keys = new Set(tiles.map((tile) => key(tile.x, tile.y)));
+  return { keys, runs: runsOf(keys) };
+}
+
 /** Tiles of lit rooms that the same rooms light, as runs along their rows. */
 export interface LitGroup {
   /** the rooms whose light reaches these tiles, by name: two for a wall or door between them */
@@ -95,6 +116,35 @@ export function litGroups(rooms: ReadonlyMap<string, readonly Spot[]>): LitGroup
     rooms: names,
     runs: runsOf(tiles),
   }));
+}
+
+/** The lit rooms a screen takes in, by label: long lit, warming up now, or waiting. */
+export interface RoomsComingOn {
+  /** lit before this screen looked: up at once, no warm-up */
+  long: string[];
+  /** lit just now: warming up from now on */
+  now: string[];
+  /** lit just now while something lies over the world: they wait for it to go */
+  waiting: string[];
+}
+
+/**
+ * How the rooms of `litRooms` come on at a screen that has lit `known` already: one lit before
+ * it looked comes on whole at once; one just lit (`news`) warms up — but not behind a panel or
+ * pages (`covered`): it waits, with those `waiting` already, until nothing lies over the
+ * world, so that a solved device closes first and its room lights up in plain sight.
+ */
+export function roomsComingOn(
+  litRooms: readonly string[],
+  known: ReadonlySet<string>,
+  news: readonly string[],
+  waiting: readonly string[],
+  covered: boolean,
+): RoomsComingOn {
+  const fresh = litRooms.filter((room) => !known.has(room) && !waiting.includes(room));
+  const long = fresh.filter((room) => !news.includes(room));
+  const due = [...waiting, ...fresh.filter((room) => news.includes(room))];
+  return covered ? { long, now: [], waiting: due } : { long, now: due, waiting: [] };
 }
 
 /** A room's lights come on over this long, ms: the Notlicht moment, and every station after. */

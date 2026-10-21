@@ -22,9 +22,8 @@ vi.mock('../src/puzzles/sounds.js', async (importOriginal) => {
 
 const sounds = await import('../src/puzzles/sounds.js');
 const { needleAngle, probedWith, scrambled } = await import('../src/puzzles/CircuitPanel.js');
-const { closeAfterSolved, Device, heldView, SOLVED_CLOSE_MS, STRIP_LEDS } = await import(
-  '../src/puzzles/Device.js'
-);
+const { closeAfterSolved, Device, feelChange, heldView, SOLVED_CLOSE_MS, STRIP_LEDS } =
+  await import('../src/puzzles/Device.js');
 const { PANELS, SOUNDS } = await import('../src/puzzles/index.js');
 const { typedOrder } = await import('../src/puzzles/KeypadPanel.js');
 const { knobAngle } = await import('../src/puzzles/MorsePanel.js');
@@ -184,7 +183,59 @@ describe('a solved device', () => {
     closeAfterSolved(kept)();
     vi.advanceTimersByTime(2 * SOLVED_CLOSE_MS);
     expect(kept).not.toHaveBeenCalled();
-    expect(SOLVED_CLOSE_MS).toBe(800);
+    // The ka-chunk sounds and the 400 ms sweep runs, then the device goes and the room shows.
+    expect(SOLVED_CLOSE_MS).toBe(500);
+  });
+});
+
+describe('an alarm at an open device', () => {
+  /** A keypad's change, with or without an alarm. */
+  const keypadChange = (alarm: boolean) => {
+    const keypad = seen('keypad');
+    return { before: keypad, after: keypad, alarm, seq: 1 };
+  };
+
+  it('sounds the device’s horn and shakes the control pressed before it without a buzz', () => {
+    const blame = vi.fn();
+    const own = vi.fn();
+    feelChange(keypadChange(true), own, blame);
+    expect(own).toHaveBeenCalledTimes(1);
+    expect(blame).toHaveBeenCalledWith(false);
+    expect(sounds.alarmKlaxon).toHaveBeenCalledTimes(1);
+    expect(sounds.rejectBuzz).not.toHaveBeenCalled();
+  });
+
+  it('plays only the module’s sounds for a change without one', () => {
+    const blame = vi.fn();
+    feelChange(keypadChange(false), null, blame);
+    expect(blame).not.toHaveBeenCalled();
+    expect(sounds.alarmKlaxon).not.toHaveBeenCalled();
+  });
+
+  it('shows its cause and cost in the device’s head, and the run’s first how many are left', () => {
+    const notice = { seq: 1, cause: 'Fehlversuch', seconds: 20, warning: 'Noch 4 bis zur Abschaltung' };
+    const html = renderToStaticMarkup(
+      <Device
+        kind="keypad"
+        paragraph="§1"
+        title="Tastenfeld"
+        tag={null}
+        leds={[]}
+        alarms={1}
+        solved={false}
+        press={null}
+        notice={notice}
+      >
+        <p>Gesicht</p>
+      </Device>,
+    );
+    expect(html).toContain(
+      '<div class="device-alarm" role="alert"><span class="device-alarm-line">' +
+        'ALARM · Fehlversuch · −20 s</span><span class="device-alarm-warning">' +
+        'Noch 4 bis zur Abschaltung</span></div>',
+    );
+    // In the head, before the face: nothing of it lies over the controls.
+    expect(html.indexOf('device-alarm')).toBeLessThan(html.indexOf('device-face'));
   });
 });
 
@@ -491,6 +542,18 @@ describe('the sync button', () => {
     );
     soundsOf('button-sync', sync({ pressedCount: 1 }), missed);
     expect(sounds.rejectBuzz).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets this player press again the moment their press ran out, before the server says so', () => {
+    const at = 1_000_000;
+    vi.useFakeTimers();
+    vi.setSystemTime(at + 1999);
+    const pressed = sync({ pressedCount: 1, youPressed: true, press: { at, expiresAt: at + 2000 } });
+    expect(panelAfter('button-sync', pressed, pressed)).toContain('aria-label="Gedrückt"');
+    vi.setSystemTime(at + 2000);
+    const html = panelAfter('button-sync', pressed, pressed);
+    expect(html).toContain('aria-label="Drücken"');
+    expect(html).toContain('Druck verfallen — nochmal alle zusammen');
   });
 
   it('leaves the main switch as built: it sounds nothing of its own at a change', () => {

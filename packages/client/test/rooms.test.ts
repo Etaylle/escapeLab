@@ -1,5 +1,13 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { litGroups, roomArea, roomFloor, startRoom } from '../src/world/rooms.js';
+import {
+  litGroups,
+  powerRoom,
+  roomArea,
+  roomFloor,
+  roomsComingOn,
+  startRoom,
+} from '../src/world/rooms.js';
 
 /**
  * Two rooms, west (x 1–3) and east (x 5–7), joined by a door at (4,2).
@@ -121,5 +129,78 @@ describe('litGroups — the lit rooms’ tiles by the rooms that light them', ()
     expect(groups).toHaveLength(1);
     expect(tilesOf(groups[0]?.runs ?? [])).toHaveLength(west.length);
     expect(litGroups(new Map())).toEqual([]);
+  });
+});
+
+describe('powerRoom — the room the power lights round you before the blackout', () => {
+  it('lights your room whole, to its walls and its door, from anywhere on its floor', () => {
+    const lit = powerRoom({ tiles, doors }, { x: 1.4, y: 3.7 });
+    expect([...(lit?.keys ?? [])].sort()).toEqual(keys(roomArea({ tiles, doors }, { x: 2, y: 1 })));
+    expect(lit?.runs[0]).toEqual({ x: 0, y: 0, length: 5 });
+  });
+
+  it('stops at a door, open or not, and lights nothing from a door or off the floor', () => {
+    const lit = powerRoom({ tiles, doors }, { x: 6.5, y: 2.5 });
+    expect([...(lit?.keys ?? [])].filter((key) => Number(key.split(',')[0]) < 4)).toEqual([]);
+    expect(powerRoom({ tiles, doors }, { x: 4.5, y: 2.5 })).toBeNull();
+    expect(powerRoom({ tiles, doors }, { x: 0.5, y: 0.5 })).toBeNull();
+  });
+
+  it('shows Blackout’s Archiv and the Flur it opens on, the lever in it — the rest of the lab dark', () => {
+    const { map: lab } = JSON.parse(
+      readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8'),
+    ) as { map: { tiles: string[]; doors: { id: string; x: number; y: number }[] } };
+    const doorsShut = lab.doors.map((door) => ({ ...door, open: false }));
+    const lit = powerRoom({ tiles: lab.tiles, doors: doorsShut }, { x: 3.5, y: 2.5 });
+    const shown = lit?.keys ?? new Set<string>();
+    // The book at 2,1, the fuse at 5,1, the sign at 4,3; through the open passage at 3,4 the
+    // Flur with the lever at 7,5 and its plate at 7,6 — the crew sees the lever once in light.
+    for (const tile of ['2,1', '5,1', '4,3', '3,4', '3,6', '7,5', '7,6']) {
+      expect(shown.has(tile)).toBe(true);
+    }
+    // The key in the Serverraum at 7,3 and the Serverraum itself, the Labor, the Maschinenraum
+    // behind its door, the Flur beyond the bulkhead: dark.
+    for (const tile of ['7,3', '12,1', '9,8', '3,9', '12,6']) {
+      expect(shown.has(tile)).toBe(false);
+    }
+  });
+});
+
+describe('roomsComingOn — a room just lit warms up in plain sight', () => {
+  it('lights a room lit before the screen looked at once, with no warm-up', () => {
+    expect(roomsComingOn(['FLUR'], new Set(), [], [], false)).toEqual({
+      long: ['FLUR'],
+      now: [],
+      waiting: [],
+    });
+  });
+
+  it('warms a room just lit up now, where nothing lies over the world', () => {
+    expect(roomsComingOn(['FLUR'], new Set(), ['FLUR'], [], false)).toEqual({
+      long: [],
+      now: ['FLUR'],
+      waiting: [],
+    });
+  });
+
+  it('holds it while a panel lies over the world, and warms it up once that is gone', () => {
+    const held = roomsComingOn(['FLUR', 'ARCHIV'], new Set(), ['FLUR', 'ARCHIV'], [], true);
+    expect(held).toEqual({ long: [], now: [], waiting: ['FLUR', 'ARCHIV'] });
+    // The next view while the panel is still up adds nothing twice.
+    const still = roomsComingOn(['FLUR', 'ARCHIV'], new Set(), [], held.waiting, true);
+    expect(still.waiting).toEqual(['FLUR', 'ARCHIV']);
+    expect(roomsComingOn([], new Set(), [], still.waiting, false)).toEqual({
+      long: [],
+      now: ['FLUR', 'ARCHIV'],
+      waiting: [],
+    });
+  });
+
+  it('leaves a room already lit as it is', () => {
+    expect(roomsComingOn(['FLUR'], new Set(['FLUR']), ['FLUR'], [], false)).toEqual({
+      long: [],
+      now: [],
+      waiting: [],
+    });
   });
 });

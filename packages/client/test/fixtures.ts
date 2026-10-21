@@ -1,4 +1,17 @@
 import type { MapView } from '@escapelab/core';
+import type { DeviceRun } from '../src/puzzles/Device.js';
+
+/** The run around an open device before anything happened: no alarm, nothing solved, no crew. */
+export function deviceRun(parts: Partial<DeviceRun> = {}): DeviceRun {
+  return {
+    alarms: 0,
+    solved: 0,
+    refusals: 0,
+    crew: { you: 'p1', mates: [] },
+    alarm: null,
+    ...parts,
+  };
+}
 
 /** An empty 20×13 lab; every test adds what it needs. */
 export function mapWith(parts: Partial<MapView>): MapView {

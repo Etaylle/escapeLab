@@ -3,10 +3,11 @@
  * change is told from a mere new copy of the view.
  *
  * A control goes down under the pointer (its CSS) with its sound; a key's press shows the
- * same 80 ms; a press the server refuses shakes with a dull buzz as its refusal comes in,
- * and so does the control pressed just before an alarm. The server stays the truth: nothing
- * here holds an input back or shows anything it has not said — a change plays once it has
- * come in, compared with the view before it (`useChange`).
+ * same 80 ms; a press the server refuses shakes with a dull buzz as its refusal comes in;
+ * the control pressed just before an alarm shakes too, without the buzz — the alarm has its
+ * own sound. The server stays the truth: nothing here holds an input back or shows anything
+ * it has not said — a change plays once it has come in, compared with the view before it
+ * (`useChange`).
  */
 import {
   useEffect,
@@ -21,6 +22,7 @@ import {
   buttonThunk,
   dialDetent,
   keyClick,
+  leverPull,
   mushroomStomp,
   probeClick,
   rejectBuzz,
@@ -74,6 +76,7 @@ const PRESS_SOUNDS: Readonly<Record<string, () => void>> = {
   clack: toggleClack,
   thunk: buttonThunk,
   stomp: mushroomStomp,
+  pull: leverPull,
   probe: probeClick,
   detent: dialDetent,
   none: () => undefined,
@@ -81,9 +84,9 @@ const PRESS_SOUNDS: Readonly<Record<string, () => void>> = {
 
 /**
  * What a control sounds like going down, as its `data-feel` says: `clack` a toggle, `thunk`
- * a big button, `stomp` the mushroom, `probe` a meter's key, `detent` a dial's step, `tone` a
- * colour key with its colour in `data-tone`, `none` where the device makes its own sound; a
- * click for every other control.
+ * a big button, `stomp` the mushroom, `pull` the main switch's lever, `probe` a meter's key,
+ * `detent` a dial's step, `tone` a colour key with its colour in `data-tone`, `none` where the
+ * device makes its own sound; a click for every other control.
  */
 export function pressSound(control: Control): void {
   const { feel, tone } = control.dataset;
@@ -194,13 +197,17 @@ export interface PressHandlers {
   onClick: (event: MouseEvent<HTMLElement>) => void;
 }
 
+/** Shakes the control a refusal or an alarm blames; with the buzz unless `buzz` is false. */
+export type Blame = (buzz?: boolean) => void;
+
 /**
  * The kit's press feel for every control inside an element: the sound as it goes down, a
  * key's PRESS_MS, nothing heard unless `audible`. `blame` shakes the control pressed last,
  * if that was BLAME_MS ago at most: a refusal or an alarm right after a press is that
- * press's fault. Both stay the same for the element's life.
+ * press's fault — a refusal with the buzz, an alarm without it, since one alarm makes one
+ * sound. Both stay the same for the element's life.
  */
-export function usePressFeel(audible: boolean): { handlers: PressHandlers; blame: () => void } {
+export function usePressFeel(audible: boolean): { handlers: PressHandlers; blame: Blame } {
   const now = useRef({ audible });
   now.current = { audible };
   const last = useRef<Press | null>(null);
@@ -220,11 +227,11 @@ export function usePressFeel(audible: boolean): { handlers: PressHandlers; blame
         }
       },
     },
-    blame: () => {
+    blame: (buzz = true) => {
       const control = blamed(last.current, performance.now());
       last.current = null;
       if (control !== null) {
-        reject(control, now.current.audible);
+        reject(control, now.current.audible && buzz);
       }
     },
   }));

@@ -137,6 +137,23 @@ const CHORD_LEVEL = 0.045;
 const CHORD_NOTES = [261.63, 329.63, 392, 523.25] as const;
 const WIND_LEVEL = 0.03;
 const WIND_SECONDS = 3.6;
+/**
+ * The mid band every heavy hit carries beside its thud, Hz and Q: noise centred at 520 Hz, about
+ * 300 to 900 Hz wide — what a phone's or a laptop's small speaker still plays of a blow whose
+ * body lies under 150 Hz.
+ */
+export const MID_BAND = 520;
+const MID_Q = 0.9;
+/**
+ * The briefing's count (Game.tsx): a beep at each of its numbers, s into it, and the higher one
+ * as it lifts — [s, Hz, how long].
+ */
+const BRIEFING_BEEPS = [
+  [0, 440, 0.1],
+  [1.2, 440, 0.1],
+  [2.4, 440, 0.1],
+  [3.6, 660, 0.4],
+] as const;
 
 /**
  * A sound that runs until it is stopped — the power hum, the siren: its
@@ -299,6 +316,41 @@ export function countdownBeep(secondsLeft: number): void {
     onAllEnded([beep], () => out.disconnect());
   } catch {
     // Deliberately silent: the countdown is on screen as well.
+  }
+}
+
+/**
+ * The briefing's count, `elapsedMs` into it: a beep at each number it shows, the last higher as
+ * it lifts — only those still ahead. A run that opens with the power on has no briefing, so
+ * it never counts down to its surprise.
+ */
+export function briefingCountdown(elapsedMs = 0): void {
+  try {
+    const audio = runningEngine();
+    if (audio === null) return;
+    const { ctx } = audio;
+    const t = ctx.currentTime + LOOKAHEAD - elapsedMs / 1000;
+    const out = outlet(ctx, audio.master, CHIRP_LEVEL);
+    const beeps = BRIEFING_BEEPS.filter(([at]) => t + at >= ctx.currentTime).map(
+      ([at, frequency, length]) =>
+        tone(ctx, out, {
+          type: 'square',
+          at: t + at,
+          from: frequency,
+          to: frequency,
+          peak: 0.7,
+          attack: 0.004,
+          hold: length * 0.4,
+          decay: length * 0.6,
+        }),
+    );
+    if (beeps.length === 0) {
+      out.disconnect();
+      return;
+    }
+    onAllEnded(beeps, () => out.disconnect());
+  } catch {
+    // Deliberately silent: the briefing counts on screen as well.
   }
 }
 
@@ -530,8 +582,9 @@ export function cabinetUnlock(): void {
 }
 
 /**
- * Mission control keying the radio, ~0.25 s: a crackle of static, then a falling two-tone call,
- * all squeezed into a handset's narrow band so it reads as a voice channel, not as a station.
+ * Mission control keying the radio, ~0.2 s: a crackle of static, then the press-to-talk key's
+ * click going down and up, squeezed into a handset's narrow band. No tone in it: a line that
+ * follows a solve comes over the solve's chord, and nothing pitched may clash with that.
  */
 export function radioChirp(): void {
   try {
@@ -546,27 +599,9 @@ export function radioChirp(): void {
     const crackleLevel = gain(ctx, 0);
     applyEnvelope(crackleLevel.gain, t, { peak: 0.6, attack: 0.002, hold: 0.02, decay: 0.035 });
     chain(crackle, crackleLevel, handset);
-    const high = tone(ctx, handset, {
-      type: 'square',
-      at: t + 0.07,
-      from: 1480,
-      to: 1480,
-      peak: 0.5,
-      attack: 0.004,
-      hold: 0.04,
-      decay: 0.03,
-    });
-    const low = tone(ctx, handset, {
-      type: 'square',
-      at: t + 0.15,
-      from: 1110,
-      to: 1110,
-      peak: 0.5,
-      attack: 0.004,
-      hold: 0.05,
-      decay: 0.04,
-    });
-    onAllEnded([crackle, high, low], () => out.disconnect());
+    const down = tick(ctx, handset, t + 0.07, 2200, 0.9);
+    const up = tick(ctx, handset, t + 0.14, 1700, 0.7);
+    onAllEnded([crackle, down, up], () => out.disconnect());
   } catch {
     // Deliberately silent: the line is on screen as well.
   }
@@ -694,7 +729,8 @@ export function leverChunk(): void {
       decay: 0.28,
     });
     const knock = lowNoise(ctx, out, t + 0.12, 0.09, 700);
-    onAllEnded([latch, thud, knock], () => out.disconnect());
+    const body = midKnock(ctx, out, t + 0.12, 0.13, 0.75);
+    onAllEnded([latch, thud, knock, body], () => out.disconnect());
     strike(ctx, audio.master, t + 0.12, 150, LEVER_LEVEL * 0.5);
   } catch {
     // Deliberately silent: the lever drops on screen as well.
@@ -807,6 +843,7 @@ export function exitGrind(): void {
         hold: 0.03,
         decay: 0.45,
       }),
+      midKnock(ctx, out, end, 0.16, 0.8),
     );
     onAllEnded(sources, () => out.disconnect());
     strike(ctx, audio.master, end, 110, GRIND_LEVEL * 0.6);
@@ -901,7 +938,10 @@ function scrape(ctx: AudioContext, dest: AudioNode, at: number): AudioScheduledS
   return [drag, slip];
 }
 
-/** The motor straining under the hatch: a low saw climbing as the leaves give way. */
+/**
+ * The motor straining under the hatch: a low saw climbing as the leaves give way, its
+ * overtones up to the mid band left in, so that a small speaker hears it strain as well.
+ */
 function motor(ctx: AudioContext, dest: AudioNode, at: number): OscillatorNode {
   const end = at + GRIND_SECONDS;
   const saw = ctx.createOscillator();
@@ -912,7 +952,7 @@ function motor(ctx: AudioContext, dest: AudioNode, at: number): OscillatorNode {
   level.gain.setValueAtTime(0, at);
   level.gain.linearRampToValueAtTime(0.5, at + 0.3);
   level.gain.linearRampToValueAtTime(0, end);
-  chain(saw, biquad(ctx, 'lowpass', 260, 0), level, dest);
+  chain(saw, biquad(ctx, 'lowpass', 620, 0), level, dest);
   saw.start(at);
   saw.stop(end + 0.02);
   return saw;
@@ -1052,7 +1092,8 @@ function bang(ctx: AudioContext, dest: AudioNode, at: number): void {
     decay: 0.6,
   });
   const burst = lowNoise(ctx, out, at, 0.18, 900);
-  onAllEnded([thump, burst], () => out.disconnect());
+  const body = midKnock(ctx, out, at, 0.22, 0.85);
+  onAllEnded([thump, burst, body], () => out.disconnect());
 }
 
 /** The emergency relay pulling in: a dry click with a short knock under it. */
@@ -1070,6 +1111,24 @@ function relayClick(ctx: AudioContext, dest: AudioNode, at: number): void {
     decay: 0.05,
   });
   onAllEnded([click, knock], () => out.disconnect());
+}
+
+/**
+ * A heavy hit's mid layer: a burst of noise in the band MID_BAND/MID_Q spans, about 300 to
+ * 900 Hz, `duration` long from `at`, falling from `peak`.
+ */
+function midKnock(
+  ctx: AudioContext,
+  dest: AudioNode,
+  at: number,
+  duration: number,
+  peak: number,
+): AudioBufferSourceNode {
+  const burst = noiseBurst(ctx, at, duration);
+  const level = gain(ctx, 0);
+  applyEnvelope(level.gain, at, { peak, attack: 0.002, hold: 0, decay: duration - 0.002 });
+  chain(burst, biquad(ctx, 'bandpass', MID_BAND, MID_Q), level, dest);
+  return burst;
 }
 
 /** A burst of noise behind a lowpass at `cutoff`, `duration` long from `at`. */

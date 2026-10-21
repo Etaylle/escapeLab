@@ -216,6 +216,19 @@ function knock(at: number, duration: number, frequency: number, peak: number): H
   return { at, duration, filter: 'lowpass', frequency, q: 0, peak };
 }
 
+/** The middle of a heavy hit's mid band, Hz, and how wide: Q 0.9 spans about 300 to 900 Hz. */
+export const MID_BAND = 520;
+const MID_Q = 0.9;
+
+/**
+ * A heavy hit's mid layer from `at`: noise in the band from about 300 to 900 Hz, `duration`
+ * long, falling from `peak` — what a phone's or a laptop's small speaker still plays of a
+ * blow whose thud lies under 150 Hz.
+ */
+function body(at: number, duration: number, peak: number): Hiss {
+  return { at, duration, filter: 'bandpass', frequency: MID_BAND, q: MID_Q, peak };
+}
+
 // --- the kit: every device ------------------------------------------------------------------
 
 /** A key going down: a dry tick with a bright edge, ~25 ms. */
@@ -226,16 +239,31 @@ export function keyClick(): void {
   ]);
 }
 
+/** The buzzer's pitch, Hz: a square an octave over its old 92, that small speakers still play. */
+export const BUZZ_HZ = 184;
+/** What the buzzer's square is rounded off by, Hz: a lowpass that keeps its buzz in the mids. */
+export const BUZZ_LOWPASS_HZ = 1200;
+
 /** A refused input: a dull buzz, 160 ms. An alarm after it waits until it is over. */
 export function rejectBuzz(): void {
   sound(0.05, (ctx, out, at) => {
-    const lowpass = filter(ctx, 'lowpass', 520, 1);
+    const lowpass = filter(ctx, 'lowpass', BUZZ_LOWPASS_HZ, 1);
     lowpass.connect(out);
-    const env = { attack: 0.004, hold: 0.12, decay: 0.035 };
     alarmFrom = Math.max(alarmFrom, at + 0.16);
+    // The square sagging a little, a fifth over it for its rasp.
+    const buzz = (pitch: number, peak: number): Voice => ({
+      type: 'square',
+      at,
+      from: pitch,
+      to: pitch * 0.96,
+      peak,
+      attack: 0.004,
+      hold: 0.12,
+      decay: 0.035,
+    });
     return [
-      voice(ctx, lowpass, { type: 'sawtooth', at, from: 92, to: 88, peak: 0.9, ...env }),
-      voice(ctx, lowpass, { type: 'square', at, from: 138, to: 132, peak: 0.35, ...env }),
+      voice(ctx, lowpass, buzz(BUZZ_HZ, 0.8)),
+      voice(ctx, lowpass, buzz(BUZZ_HZ * 1.5, 0.25)),
     ];
   });
 }
@@ -268,6 +296,7 @@ export function solvedChunk(): void {
       tick(ctx, out, at, 1900, 0.8),
       voice(ctx, out, { type: 'sine', at: home, from: 125, to: 46, ...long(1, 0.02, 0.3) }),
       hiss(ctx, out, knock(home, 0.09, 750, 0.8)),
+      hiss(ctx, out, body(home, 0.13, 0.7)),
       ...ring(ctx, out, home, 170, 0.45),
     ];
   });
@@ -413,6 +442,7 @@ export function buttonThunk(): void {
   sound(0.075, (ctx, out, at) => [
     voice(ctx, out, { type: 'sine', at, from: 160, to: 55, ...long(1, 0.01, 0.12) }),
     hiss(ctx, out, { at, duration: 0.06, filter: 'lowpass', frequency: 700, q: 0, peak: 0.5 }),
+    hiss(ctx, out, body(at, 0.09, 0.6)),
     tick(ctx, out, at, 1300, 0.35),
   ]);
 }
@@ -425,8 +455,34 @@ export function mushroomStomp(): void {
       tick(ctx, out, at, 1100, 0.6),
       voice(ctx, out, { type: 'sine', at: down, from: 120, to: 38, ...long(1, 0.03, 0.2) }),
       hiss(ctx, out, knock(down, 0.1, 900, 0.7)),
+      hiss(ctx, out, body(down, 0.12, 0.7)),
     ];
   });
+}
+
+/** The main switch's own lever pulled down into its catch: a ratchet's tick, then its clunk. */
+export function leverPull(): void {
+  sound(0.07, (ctx, out, at) => {
+    const caught = at + 0.05;
+    return [
+      tick(ctx, out, at, 1600, 0.7),
+      voice(ctx, out, { type: 'sine', at: caught, from: 150, to: 70, ...long(0.9, 0.01, 0.14) }),
+      hiss(ctx, out, body(caught, 0.1, 0.65)),
+    ];
+  });
+}
+
+/**
+ * The lever springing back up, its press run out: the catch letting go with a bright clack,
+ * the spring's twang ringing after it.
+ */
+export function leverSpring(): void {
+  sound(0.065, (ctx, out, at) => [
+    tick(ctx, out, at, 2600, 0.9),
+    voice(ctx, out, { type: 'triangle', at, from: 320, to: 180, ...short(0.7, 0.06) }),
+    voice(ctx, out, { type: 'sine', at: at + 0.02, from: 640, to: 560, ...bell(0.28, 0.2) }),
+    hiss(ctx, out, body(at, 0.06, 0.5)),
+  ]);
 }
 
 /** Pliers through a cable: a sharp hiss, the blades' ring and the jaws meeting, ~80 ms. */
@@ -556,6 +612,7 @@ export function wallThud(): void {
   sound(0.08, (ctx, out, at) => [
     voice(ctx, out, { type: 'sine', at, from: 95, to: 42, ...long(1, 0.01, 0.17) }),
     hiss(ctx, out, { at, duration: 0.08, filter: 'lowpass', frequency: 320, q: 0, peak: 0.8 }),
+    hiss(ctx, out, body(at, 0.1, 0.6)),
   ]);
 }
 

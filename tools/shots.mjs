@@ -27,16 +27,20 @@
  * While NORMALBETRIEB shows, the host's window grows to 1440×1000, the host
  * steps into its room and the guest walks three tiles towards it — the
  * host's frames meanwhile are the sample of the lit scene — and
- * cold-open.png catches the host's room lit and warm: the power lights what
- * the host sees, nothing behind a wall, and the run fails unless most of the
- * world stays dark. A player spawned at the Laborkennung gets its note at
+ * cold-open.png catches the host's room lit whole and warm: the run fails
+ * unless the floor of the host's own room comes out bright on the canvas and
+ * the Serverraum's and the Labor's dark, tile by tile through the camera the
+ * traced page reports. A player spawned at the Laborkennung gets its note at
  * once (sign.png). Two seconds after the clock starts counting comes
  * blackout.png, the emergency lamps red. Then both go to the first station,
  * a main switch — whoever is locked in let out over a plate first — and E
- * opens its panel for each (lever.png, every lever lit); both throw
- * together, the run fails unless the lights come up, and lit-flur.png shows
- * the room it lit, the panel closed by itself. The log says how long the
- * lever took from the blackout. A mission without an intro skips all of
+ * opens its panel for each (lever.png, every lamp lit, DU under the own
+ * lever). Where the view gives a press its expiry, the host throws alone:
+ * lever-ring.png catches the ring round its grip draining, and the lever has
+ * to spring back once the window shuts, the device saying so. Then both
+ * throw together, the run fails unless the lights come up, and lit-flur.png
+ * shows the room it lit, the panel closed by itself. The log says how long
+ * the lever took from the blackout. A mission without an intro skips all of
  * this.
  *
  * On the way, both open the Bestenliste from the join screen (history.png,
@@ -55,11 +59,13 @@
  * seed, where the box shows other wires. Both press the Synchronkalibrierung
  * together, the hatch opens and the siren sounds: the guest steps onto the
  * hatch, the host's frames are sampled on the way to it, and escape.png
- * shows the red light, the open hatch and the checklist with the guest
- * ticked off. The host steps on, the run is won: pullback.png catches the
- * world lit and the camera pulling back, won.png the title card with the
- * crew outside, end.png the whole end screen, won-phone.png the guest's card
- * on a phone; the audience's page has to show the same card (won-audience.png).
+ * shows the red light, the open hatch, the clock amber and the checklist
+ * with the guest ticked off. The host steps on, the run is won: pullback.png
+ * catches the world lit and the camera pulling back, won.png the title card
+ * with the crew outside, end.png the whole end screen, won-phone.png the
+ * guest's card on a phone, won-landscape.png on the phone held sideways — in
+ * two columns, the facts in the window, the top bar on one line; the
+ * audience's page has to show the same card (won-audience.png).
  * The won tutorial leads on to Blackout: next-mission.png shows the end
  * screen's „Weiter: Blackout im Labor" beside „Nochmal", both click it — the
  * guest first, the host's click naming the mission — and the run fails
@@ -792,7 +798,7 @@ async function pressTogether(players, station) {
 }
 
 /** How long after a solve a device closes itself, as puzzles/Device.tsx says (SOLVED_CLOSE_MS). */
-const SOLVED_CLOSE_MS = 800;
+const SOLVED_CLOSE_MS = 500;
 
 /** Whether device-solved.png is taken: the first sync station the run solves takes it. */
 let solvedShot = false;
@@ -840,7 +846,7 @@ async function captureSolved(player, station) {
     return;
   }
   const seen = Date.now();
-  await sleep(180); // the sweep under way along the strip
+  await sleep(120); // the sweep under way along the strip
   const look = await solvedLook(player.page);
   const first = !solvedShot;
   if (first) {
@@ -964,44 +970,121 @@ async function stepIntoRoom(player) {
 }
 
 /**
- * How much of the world canvas the light shows and how much lies in the
- * dark, as shares of its pixels by brightness: a lit tile is far brighter
- * than the darkness, which leaves an unlit one a shadow.
+ * The floor of the room round `from`, as tiles: every floor tile reachable
+ * without crossing a door, open or not — the room the power lights whole.
  */
-async function worldShares(page) {
-  return page.evaluate(() => {
-    const canvas = document.querySelector('.world-canvas');
-    const data = canvas?.getContext('2d')?.getImageData(0, 0, canvas.width, canvas.height).data;
-    if (data === undefined) {
-      return { lit: 0, dark: 0 };
-    }
-    let lit = 0;
-    let dark = 0;
-    let all = 0;
-    // Every seventh pixel is plenty, and the stride does not line up with the rows.
-    for (let i = 0; i < data.length; i += 4 * 7) {
-      const luma = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
-      all += 1;
-      if (luma >= 48) {
-        lit += 1;
-      } else if (luma < 24) {
-        dark += 1;
+function roomFloorOf(map, from) {
+  const key = (x, y) => `${x},${y}`;
+  const doors = new Set(map.doors.map((d) => key(d.x, d.y)));
+  const inside = (x, y) => map.tiles[y]?.[x] === '.' && !doors.has(key(x, y));
+  if (!inside(from.x, from.y)) {
+    return [];
+  }
+  const seen = new Set([key(from.x, from.y)]);
+  const room = [{ x: from.x, y: from.y }];
+  for (let i = 0; i < room.length; i++) {
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
+      const next = { x: room[i].x + dx, y: room[i].y + dy };
+      if (inside(next.x, next.y) && !seen.has(key(next.x, next.y))) {
+        seen.add(key(next.x, next.y));
+        room.push(next);
       }
     }
-    return { lit: lit / all, dark: dark / all };
-  });
+  }
+  return room;
+}
+
+/**
+ * How bright the floor of a room comes out on a traced page's world canvas: the
+ * mean luma, 0 to 255, of a few pixels at the middle of each of its tiles on
+ * the canvas — mapped by the camera the page reports — and how many tiles
+ * that was; a mean of null where none of them is on the canvas.
+ */
+async function roomBrightness(page, tiles) {
+  return page.evaluate((spots) => {
+    const camera = globalThis.__escapelab?.camera;
+    const canvas = document.querySelector('.world-canvas');
+    const g = canvas?.getContext('2d');
+    if (camera === undefined || g == null) {
+      return { mean: null, tiles: 0 };
+    }
+    const { width: w, height: h } = canvas;
+    let sum = 0;
+    let pixels = 0;
+    let counted = 0;
+    for (const { x, y } of spots) {
+      const px = Math.round(w / 2 + (x + 0.5 - camera.x) * camera.scale);
+      const py = Math.round(h / 2 + (y + 0.5 - camera.y) * camera.scale);
+      if (px < 3 || py < 3 || px > w - 4 || py > h - 4) {
+        continue;
+      }
+      counted += 1;
+      const data = g.getImageData(px - 2, py - 2, 5, 5).data;
+      for (let i = 0; i < data.length; i += 4) {
+        sum += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+        pixels += 1;
+      }
+    }
+    return { mean: pixels === 0 ? null : sum / pixels, tiles: counted };
+  }, tiles);
+}
+
+/** The floor of a lit room comes out at least this bright with the power on, mean luma 0–255. */
+const ROOM_LIT_LUMA = 45;
+/** A room left in the dark comes out at most this bright. */
+const ROOM_DARK_LUMA = 20;
+
+/**
+ * With the power on the host's own room is lit whole and warm, and the
+ * Serverraum and the Labor — rooms of its map it is not in — stay dark: each
+ * by the brightness of its floor on the host's canvas. Fails where one is
+ * not; a room of these the map lacks, or the canvas does not show, is left
+ * out of the check with a word.
+ */
+async function checkPowerRooms(host) {
+  const map = host.seen.view.map;
+  const own = roomFloorOf(map, tileOf(host.seen));
+  const named = (text) => map.labels.find((label) => label.text === text);
+  const rooms = [
+    { name: 'own room', floor: own, lit: true },
+    ...['SERVERRAUM', 'LABOR'].map((text) => {
+      const label = named(text);
+      return { name: text, floor: label === undefined ? [] : roomFloorOf(map, label), lit: false };
+    }),
+  ];
+  const said = [];
+  for (const room of rooms) {
+    const { mean, tiles } = await roomBrightness(host.page, room.floor);
+    if (mean === null) {
+      said.push(`${room.name} not on the canvas`);
+      continue;
+    }
+    const ok = room.lit ? mean >= ROOM_LIT_LUMA : mean <= ROOM_DARK_LUMA;
+    const luma = mean.toFixed(0);
+    said.push(`${room.name} ${room.lit ? 'lit' : 'dark'} ${ok ? '' : '!! '}${luma} (${tiles} tiles)`);
+    if (!ok) {
+      const should = room.lit ? `be lit (≥ ${ROOM_LIT_LUMA})` : `be dark (≤ ${ROOM_DARK_LUMA})`;
+      fail(`cold-open.png: the ${room.name} comes out at luma ${luma} with the power on — should ${should}`);
+    }
+  }
+  return said.join(', ');
 }
 
 /**
  * cold-open.png: a mission with an intro opens with the power on —
- * NORMALBETRIEB where the clock will be, and the lab lit and warm as far as
- * the player sees, nothing behind a wall. The host's window grows to
+ * NORMALBETRIEB where the clock will be, and the room each player stands in
+ * lit whole and warm, the rest of the lab dark. The host's window grows to
  * COLD_OPEN; while the power is on, the host steps into its room and the
- * guest walks a few steps towards the host — showing only where the host
- * can see it — and the host's frames meanwhile are the sample of the lit
- * scene. Fails unless the shot shows the host's sight lit and most of the
- * world dark; throws when NORMALBETRIEB never shows or the lights are out
- * before the shot.
+ * guest walks a few steps towards the host, and the host's frames meanwhile
+ * are the sample of the lit scene. Fails unless the shot shows the host's
+ * own room lit and the Serverraum and the Labor dark (`checkPowerRooms`);
+ * throws when NORMALBETRIEB never shows or the lights are out before the
+ * shot.
  */
 async function captureColdOpen(host, guest) {
   if (!(await attached(host.page.locator('.stage-clock .power-status'), 5000))) {
@@ -1024,20 +1107,13 @@ async function captureColdOpen(host, guest) {
   await capture(host.page, 'cold-open.png');
   const status = await textOf(host.page.locator('.stage-clock .power-status'));
   const room = await textOf(host.page.locator('.stage-goal--power .stage-sub'));
-  const { lit, dark } = await worldShares(host.page);
-  const share = (part) => `${Math.round(part * 100)} %`;
+  const rooms = await checkPowerRooms(host);
   const found = host.seen.view.map.manuals.map((manual) => manual.kind).join(', ') || 'none';
   console.log(
     `cold-open.png      ${host.name} @ ${COLD_OPEN.width}x${COLD_OPEN.height}: "${status}", ` +
-      `"${room}"; ${share(lit)} of the world lit, ${share(dark)} dark; sources found: ` +
-      `${found}; ${guest.name} walked ${walked} tile(s) towards ${host.name}`,
+      `"${room}"; ${rooms}; sources found: ${found}; ` +
+      `${guest.name} walked ${walked} tile(s) towards ${host.name}`,
   );
-  if (lit < 0.02 || dark < 0.5) {
-    fail(
-      `cold-open.png: ${share(lit)} lit and ${share(dark)} dark — with the power on, ` +
-        `${host.name} should see the lab lit as far as it sees, and the rest dark`,
-    );
-  }
   await host.page.setViewportSize(SIZES[0]);
 }
 
@@ -1153,18 +1229,62 @@ async function throwLever(players) {
   }
   await sleep(500); // past the panel's fade-in
   await captureLeverPanel(first, players.length);
+  await captureLeverRing(first);
   await pressTogether(players, lever);
   await captureLitFlur(first, lever);
 }
 
-/** lever.png: the main switch's panel, a lever lit for everybody at the station. */
+/**
+ * lever.png: the main switch's panel, the lamp over every lever burning with
+ * the whole crew at the station, the names under the levers.
+ */
 async function captureLeverPanel(player, crew) {
-  const lit = await player.page.locator('.station-modal .lever-unit--lit').count();
+  const here = await player.page.locator('.station-modal .lever-unit--here').count();
   const plate = await textOf(player.page.locator('.station-modal .lever-plate'));
+  const names = await player.page.locator('.station-modal .lever-name').allInnerTexts();
   await capture(player.page, 'lever.png');
-  console.log(`lever.png          ${player.name}: "${plate}", ${lit} of ${crew} levers lit`);
-  if (lit !== crew) {
-    fail(`lever.png: ${lit} of ${crew} levers lit with the whole crew at the station`);
+  console.log(
+    `lever.png          ${player.name}: "${plate}", ${here} of ${crew} lamps lit, ` +
+      `names ${names.join(', ') || '!! none'}`,
+  );
+  if (here !== crew || names[0] !== 'DU') {
+    fail(`lever.png: ${here} of ${crew} lamps lit, names ${names.join(', ')}`);
+  }
+}
+
+/**
+ * lever-ring.png: the host throws its lever alone, and the shot catches the
+ * ring round its grip draining while the press counts; then its window
+ * shuts: the lever has to spring back up and the device say so. A main
+ * switch without a window has nothing to drain — every press counts
+ * whenever it comes — and is skipped.
+ */
+async function captureLeverRing(player) {
+  if (player.seen.view.puzzle?.windowMs == null) {
+    skip('lever-ring.png', 'this main switch has no window: a press never runs out');
+    return;
+  }
+  const modal = player.page.locator('.station-modal');
+  await modal.locator('button.lever-grip').click();
+  if (!(await until(() => player.seen.view.puzzle?.press?.expiresAt != null, 3000))) {
+    fail(`lever-ring.png: ${player.name} threw the lever, but the view gives no press running out`);
+    return;
+  }
+  const { at, expiresAt } = player.seen.view.puzzle.press;
+  await sleep(Math.max(0, at + 600 - Date.now())); // the ring a third drained
+  const ring = await modal.locator('.lever-ring').count();
+  await capture(player.page, 'lever-ring.png');
+  await sleep(Math.max(0, expiresAt + 400 - Date.now()));
+  const down = await modal.locator('.lever-unit').first().getAttribute('class');
+  const says = await textOf(modal.locator('.warn'));
+  const sprang = !(down ?? '').includes('lever-unit--down');
+  console.log(
+    `lever-ring.png     ${player.name} alone: ring ${ring > 0 ? 'draining' : '!! missing'} over ` +
+      `${seconds(expiresAt - at)}; then ${sprang ? 'sprang back' : '!! stayed down'}, ` +
+      `"${says ?? '!! no word of it'}"`,
+  );
+  if (ring === 0 || !sprang || says?.includes('Zug verfallen') !== true) {
+    fail(`lever-ring.png: ring ${ring}, sprang back ${sprang}, says "${says}"`);
   }
 }
 
@@ -2579,7 +2699,9 @@ async function captureEscape(host, guest) {
       `clock "${hud.clock}"`,
   );
   const tickedOff = hud.mates.some((mate) => mate.startsWith(guest.name) && mate.endsWith('✓'));
-  if (hud.goal !== 'ALLE ZUM NOTAUSGANG' || !tickedOff || !hud.clock.includes('critical')) {
+  // Amber with minutes left: red is the clock's last minute only.
+  const amber = hud.clock.includes('countdown--escape') && !hud.clock.includes('critical');
+  if (hud.goal !== 'ALLE ZUM NOTAUSGANG' || !tickedOff || !amber) {
     fail(`escape.png: goal "${hud.goal}", checklist ${hud.mates.join(', ')}, clock ${hud.clock}`);
   }
 }
@@ -2601,7 +2723,8 @@ async function captureWholeEnd(page) {
 
 /**
  * won-phone.png: the guest's title card on a phone held upright; the card
- * may not run out sideways there.
+ * may not run out sideways there. Then won-landscape.png: the phone turned
+ * sideways (`captureLandscapeCard`).
  */
 async function capturePhoneCard(guest) {
   const { page } = guest;
@@ -2618,6 +2741,45 @@ async function capturePhoneCard(guest) {
   );
   if (over > 0) {
     fail(`won-phone.png: the end screen runs out ${over}px sideways on a phone`);
+  }
+  await captureLandscapeCard(guest);
+}
+
+/**
+ * won-landscape.png: the title card on a phone held sideways, 844×390, in two
+ * columns — the crew's shot left; the word, the time and the rank right, all
+ * of them in the window, and the top bar on one line. Fails where the scene
+ * is not beside the words, or the facts lie below the window's foot.
+ */
+async function captureLandscapeCard(guest) {
+  const { page } = guest;
+  const turned = SIZES[3];
+  await page.setViewportSize({ width: turned.width, height: turned.height });
+  await sleep(500);
+  await capture(page, 'won-landscape.png');
+  const layout = await page.evaluate(() => {
+    const box = (selector) => document.querySelector(selector)?.getBoundingClientRect() ?? null;
+    const [scene, word, facts] = ['.end-scene', '.end-title-word', '.end-facts'].map((selector) =>
+      box(`.end-title ${selector}`),
+    );
+    const bar = document.querySelector('.topbar');
+    // One line: the bar no higher than twice its tallest item — a second row would be.
+    const tallest = Math.max(0, ...[...(bar?.children ?? [])].map((c) => c.offsetHeight));
+    const oneLine = bar !== null && bar.offsetHeight < 2 * tallest;
+    return { scene, word, facts, oneLine, barHeight: bar?.offsetHeight ?? 0 };
+  });
+  const { scene, word, facts, oneLine, barHeight } = layout;
+  const columns = scene !== null && word !== null && facts !== null &&
+    scene.right <= word.left && scene.right <= facts.left;
+  const inView = facts !== null && facts.bottom <= turned.height;
+  console.log(
+    `won-landscape.png  ${guest.name} @ ${turned.width}x${turned.height}: ` +
+      `${columns ? 'two columns' : '!! not two columns'}, ` +
+      `the facts ${inView ? 'in the window' : '!! below its foot'}, ` +
+      `the top bar ${oneLine ? 'one line' : '!! wrapped'} (${barHeight}px)`,
+  );
+  if (!columns || !inView || !oneLine) {
+    fail(`won-landscape.png: two columns ${columns}, facts in view ${inView}, bar ${oneLine}`);
   }
 }
 

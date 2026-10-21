@@ -165,7 +165,7 @@ describe('draft ↔ JSON', () => {
       };
     };
     expect(json.listOrder).toBe(10);
-    expect(json.intro).toEqual({ lightsSec: 3 });
+    expect(json.intro).toEqual({ lightsSec: 5 });
     expect(json.map.drones[0]).toMatchObject({ speed: 1.7, frozenByPlate: 'kameraplatte' });
     expect(json.map.sabotage).toMatchObject({
       mode: 'relay',

@@ -27,10 +27,6 @@
     env(safe-area-inset-left, 0px);
 }
 
-.coach.coach--panel {
-  margin-top: env(safe-area-inset-top, 0px);
-}
-
 /* ── a thumb on the stage ───────────────────────────────────────────────── */
 
 /* iOS enlarges text when a phone turns sideways; every size here is meant. */

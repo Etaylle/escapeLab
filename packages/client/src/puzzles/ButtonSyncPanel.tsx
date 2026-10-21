@@ -4,6 +4,7 @@ import type { Change } from './feel.js';
 import type { PanelProps } from './index.js';
 import { LeverPanel } from './LeverPanel.js';
 import { lampPop, mushroomStomp, rejectBuzz } from './sounds.js';
+import { ownPressAt, syncPress, useNowUntil } from './syncPress.js';
 
 type SyncPuzzle = PanelProps<'button-sync'>['puzzle'];
 type SyncChange = Change<SyncPuzzle>;
@@ -25,8 +26,8 @@ export function partnersPressedWith(change: SyncChange): number {
 
 /**
  * What a change sounds like at the mushroom button: a partner's press stamped down, a lamp
- * popping on for every press that counts, a dull buzz for an own press that ran out. The
- * main switch stays as built: it has its own sounds (LeverPanel).
+ * popping on for every press that counts, a dull buzz for an own press that ran out — a
+ * refusal, no alarm. The main switch stays as built: it has its own sounds (LeverPanel).
  */
 export function syncSounds(change: SyncChange): void {
   if (change.after.style === 'lever') {
@@ -47,16 +48,21 @@ export function syncSounds(change: SyncChange): void {
  * The Synchronschaltung, as the printed figure draws it: one mushroom
  * button in a steel collar for the whole crew, under a lamp for each crew
  * member that pops on as their press comes in and goes dark again where it
- * expired. Every press stomps; pressed, the button stays down; an own press
- * that ran out shakes the collar. A station whose mission draws it as a lever is
+ * expired. Every press stomps; pressed, the button stays down until the
+ * press runs out of its window — then it is up again, and an own press that
+ * ran out shakes the collar. A station whose mission draws it as a lever is
  * the main switch instead (LeverPanel). `.big-button` is what the
  * screenshot harness presses.
  */
-export function ButtonSyncPanel({ puzzle, change, send, deadlineAt }: PanelProps<'button-sync'>) {
+export function ButtonSyncPanel(props: PanelProps<'button-sync'>) {
+  const { puzzle, change, send } = props;
+  const sync = syncPress(puzzle);
+  const now = useNowUntil(sync.press?.expiresAt ?? null);
   if (puzzle.style === 'lever') {
-    return <LeverPanel puzzle={puzzle} change={change} send={send} deadlineAt={deadlineAt} />;
+    return <LeverPanel {...props} />;
   }
-  const { pressedCount, requiredCount, youPressed } = puzzle;
+  const { pressedCount, requiredCount } = puzzle;
+  const own = ownPressAt(puzzle, sync, now);
   const before = change === null ? pressedCount : change.before.pressedCount;
   return (
     <div className="sync">
@@ -76,13 +82,13 @@ export function ButtonSyncPanel({ puzzle, change, send, deadlineAt }: PanelProps
       <div className={expiredWith(change) ? 'sync-collar sync-collar--missed' : 'sync-collar'}>
         <button
           className="big-button sync-button"
-          disabled={youPressed}
+          disabled={own.down}
           data-feel="stomp"
-          aria-label={youPressed ? 'Gedrückt' : 'Drücken'}
+          aria-label={own.down ? 'Gedrückt' : 'Drücken'}
           onClick={() => send({ press: true })}
         />
       </div>
-      {puzzle.lastResult === 'expired' && (
+      {own.expired && (
         <p className="warn" role="status">
           <Icon name="warning" /> Druck verfallen — nochmal alle zusammen
         </p>

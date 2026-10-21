@@ -10,7 +10,7 @@
     "lose": "Ein letztes Flackern, dann ist es still. Die Notversorgung fällt aus, die Proben sind verloren. Das Labor bleibt dunkel … bis zum nächsten Versuch."
   },
   "timeLimitSec": 660,
-  "intro": { "lightsSec": 3 },
+  "intro": { "lightsSec": 5 },
   "radio": {
     "start": "Strom weg. Notlicht: Hebel im Flur, zu zweit.",
     "escape": "Notausgang offen, Südostecke. Alle raus."

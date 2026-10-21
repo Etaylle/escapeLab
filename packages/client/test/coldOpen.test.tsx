@@ -1,11 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MapView, PlayerView } from '@escapelab/core';
-import { StageTop, type ColdOpen } from '../src/screens/Game.js';
+import { GameScreen, StageTop, type ColdOpen } from '../src/screens/Game.js';
 import {
   blackoutCue,
   coldOpenFrame,
   darkSince,
+  FADE_MS,
   FLICKER_MS,
   opensLit,
   REVEAL_MS,
@@ -18,9 +19,11 @@ import {
   BrokenContext,
   fakeAudio,
   freshAudio,
+  midBand,
   ramps,
   started,
   startedAt,
+  toOutput,
 } from './fakeAudio.js';
 import { mapWith } from './fixtures.js';
 
@@ -93,6 +96,25 @@ describe('the lights failing, frame by frame', () => {
     expect(late.drops).toHaveLength(1);
     expect(late.bang).toBeCloseTo(0.2);
     expect(blackoutCue(2000)).toEqual({ drops: [], bang: 0, click: 0 });
+  });
+});
+
+describe('the lights failing under reduced motion', () => {
+  const covers = Array.from({ length: FLICKER_MS / 5 }, (_, i) => coldOpenFrame(i * 5, true).cover);
+
+  it('fade out once over the last 300 ms before the bang, no flicker at all', () => {
+    expect(FADE_MS).toBe(300);
+    // Never down and up again: the cover only grows.
+    expect(covers.every((cover, i) => i === 0 || cover >= (covers[i - 1] ?? 0))).toBe(true);
+    expect(coldOpenFrame(FLICKER_MS - FADE_MS, true).cover).toBe(0);
+    expect(coldOpenFrame(FLICKER_MS - FADE_MS / 2, true).cover).toBeCloseTo(0.5);
+    expect(coldOpenFrame(FLICKER_MS, true)).toEqual({ lit: false, cover: 1 });
+    // The same dark from the bang to the click, and the same lamps after it.
+    expect(coldOpenFrame(REVEAL_MS + 150, true)).toEqual(coldOpenFrame(REVEAL_MS + 150));
+  });
+
+  it('keeps the bang and the click, with no drop to arc in', () => {
+    expect(blackoutCue(0, true)).toEqual({ drops: [], bang: 0.9, click: 1.3 });
   });
 });
 
@@ -211,6 +233,31 @@ describe('the objective bar in the cold open', () => {
   });
 });
 
+describe('the start of a run with the power on', () => {
+  function game(view: PlayerView): string {
+    return renderToStaticMarkup(
+      <GameScreen
+        view={view}
+        roomCode="KX4P"
+        positionsRef={{ current: { run: null, players: {} } }}
+        dronesRef={{ current: {} }}
+        pingsRef={{ current: [] }}
+        chatsRef={{ current: [] }}
+        send={() => undefined}
+        refusals={0}
+        finale={null}
+      />,
+    );
+  }
+
+  it('counts nothing down to its surprise: no briefing, so no countdown beeps either', () => {
+    expect(game(viewOf({ startedAt: Date.now() }))).not.toContain('briefing');
+    // A run that opens in the dark briefs — and counts its briefing down.
+    const dark = viewOf({ startedAt: Date.now(), lights: { out: true, outAt: Date.now() } });
+    expect(game(dark)).toContain('<div class="overlay briefing">');
+  });
+});
+
 describe('the ceiling lights of the lab with its power on', () => {
   /**
    * A room of two rows over a corridor, joined by a gap at (3,3).
@@ -294,6 +341,57 @@ describe('the sounds of the cold open', () => {
     audio.leverChunk();
     expect(startedAt('noise', 10.01)).toBe(true);
     expect(startedAt('tone', 10.13)).toBe(true);
+  });
+
+  it('give the ka-chunk and the bang a mid band, for a phone’s small speaker', async () => {
+    const audio = await freshAudio();
+    audio.leverChunk();
+    expect(midBand(audio.MID_BAND)).toBe(true);
+    fakeAudio();
+    const again = await freshAudio();
+    again.blackoutSounds(blackoutCue(0, true));
+    expect(midBand(again.MID_BAND)).toBe(true);
+  });
+
+  it('count a briefing down by the lab’s one sound switch: a beep a number, the last higher', async () => {
+    vi.stubGlobal('localStorage', { getItem: () => '1', setItem: () => undefined });
+    const audio = await freshAudio();
+    audio.briefingCountdown(0);
+    const beeps = started.filter((s) => s.kind === 'tone').map((s) => s.at);
+    expect(beeps).toEqual([10.01, 11.21, 12.41, 13.61].map((at) => expect.closeTo(at, 3)));
+    // Through the master gain, at 0 with the sound off: nothing reaches the output past it.
+    expect(toOutput).toHaveLength(1);
+    expect(toOutput[0]?.gain?.value).toBe(0);
+    expect(audio.isMuted()).toBe(true);
+  });
+
+  it('beep only the numbers still ahead for a briefing come to late', async () => {
+    const audio = await freshAudio();
+    audio.briefingCountdown(2500);
+    const beeps = started.filter((s) => s.kind === 'tone').map((s) => s.at);
+    expect(beeps).toEqual([expect.closeTo(11.11, 3)]);
+    started.length = 0;
+    audio.briefingCountdown(4000);
+    expect(started).toEqual([]);
+  });
+
+  it('key the radio with a crackle and two clicks — no tone to clash with a solve’s chord', async () => {
+    const audio = await freshAudio();
+    audio.radioChirp();
+    expect(started.filter((s) => s.kind === 'tone')).toEqual([]);
+    expect(startedAt('noise', 10.01)).toBe(true);
+    expect(startedAt('noise', 10.08)).toBe(true);
+    expect(startedAt('noise', 10.15)).toBe(true);
+  });
+
+  it('arc in no drop under reduced motion, but bang and click as ever', async () => {
+    const audio = await freshAudio();
+    audio.blackoutSounds(blackoutCue(0, true));
+    const t = 10.01;
+    expect(startedAt('noise', t + 0.1)).toBe(false); // no crackle
+    expect(startedAt('tone', t)).toBe(false); // no rasp
+    expect(startedAt('tone', t + 0.9)).toBe(true); // the bang
+    expect(startedAt('noise', t + 1.3)).toBe(true); // the click
   });
 
   it('never throw, with no audio at all or with one that breaks', async () => {

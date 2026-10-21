@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { worldText, type TextStyle } from '../src/world/art.js';
+import { plateCaption, worldText, type TextStyle } from '../src/world/art.js';
 import { ROOM_NAME_PX } from '../src/world/viewport.js';
 
 /** How many CSS pixels high text `size` tiles high comes out at `tilePx` device pixels a tile. */
@@ -48,5 +48,14 @@ describe('worldText — how large the world’s labels and names come out', () =
         pick(small).halo / fontPx(pick(small)),
       );
     }
+  });
+});
+
+describe('plateCaption — what a plate says it does', () => {
+  it('names the door a plate holds open, and leaves the camera plate as it reads', () => {
+    expect(plateCaption({ label: 'HALTEN', freezesDrone: false })).toBe('HALTEN · TÜR');
+    expect(plateCaption({ label: 'KAMERA HALTEN', freezesDrone: true })).toBe('KAMERA HALTEN');
+    // A label a mission wrote otherwise stays as written.
+    expect(plateCaption({ label: 'SCHLEUSE', freezesDrone: false })).toBe('SCHLEUSE');
   });
 });

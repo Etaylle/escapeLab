@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { Edgework, ManualHere, PlayerView, PuzzleView } from '@escapelab/core';
+import type { Edgework, ManualHere, MapView, PlayerView, PuzzleView } from '@escapelab/core';
 import { leafFor, type Leaf } from '../src/pages.js';
 import { Book, TurningLeaf, type Binding, type Imprint } from '../src/screens/Book.js';
 import {
@@ -13,7 +13,7 @@ import { InfoPanel, Legend } from '../src/screens/InfoPanel.js';
 import { ReadingOverlay, roomOf } from '../src/screens/Reading.js';
 import { titleSize } from '../src/screens/Seal.js';
 import { WorldModal } from '../src/screens/WorldModal.js';
-import { mapWith, type Item, type Manual, type Plate } from './fixtures.js';
+import { deviceRun, mapWith, type Item, type Manual, type Plate } from './fixtures.js';
 
 const noop = (): void => undefined;
 
@@ -519,7 +519,7 @@ describe('the station frame', () => {
     return renderToStaticMarkup(
       <StationModal
         puzzle={puzzle}
-        run={{ alarms: 0, solved: 0, refusals: 0 }}
+        run={deviceRun()}
         map={single}
         edgework={null}
         deadlineAt={null}
@@ -589,6 +589,32 @@ describe('the station frame', () => {
     );
     expect(stationFrame(reactor)).not.toContain('device-led');
     expect(read(null)).not.toContain('device-led');
+  });
+
+  it('puts the device’s first-time line under the Laborkennung’s row, never over the serial', () => {
+    const single = mapWith({
+      stations: [{ puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed' }],
+    });
+    const html = renderToStaticMarkup(
+      <StationModal
+        puzzle={{ ...maze(2, null), console: 'a' }}
+        run={deviceRun()}
+        map={single}
+        edgework={edgework}
+        deadlineAt={null}
+        send={noop}
+        onClose={noop}
+      />,
+    );
+    const coach = '<p class="station-coach" role="note">Jeder Pfeil geht ein Feld; ';
+    expect(html).toContain(coach);
+    // In the frame's flow after its head, where the serial is, and before the device.
+    const at = (part: string): number => html.indexOf(part);
+    expect(at('K7G3A-2')).toBeGreaterThan(-1);
+    expect(at('K7G3A-2')).toBeLessThan(at(coach));
+    expect(at('✕</button></div>' + coach)).toBeGreaterThan(-1);
+    expect(at(coach)).toBeLessThan(at('<div class="device device--maze">'));
+    expect(html).not.toContain('coach--panel');
   });
 });
 
@@ -804,6 +830,46 @@ describe('what the crew still has to bring', () => {
     );
   });
 
+  describe('one goal at a time', () => {
+    type Station = MapView['stations'][number];
+    /** The lab's stations in their order: the box, the network, the reactor that wants the fuse. */
+    function stations(done: number): Station[] {
+      const order = [
+        { puzzleId: 'kabel', x: 4, y: 1, title: 'Notstrom' },
+        { puzzleId: 'netz', x: 5, y: 1, title: 'Leitungsnetz' },
+        { puzzleId: 'reaktor', x: 5, y: 2, title: 'Reaktor-Neustart' },
+      ];
+      return order.map((station, i) => ({
+        ...station,
+        status: i < done ? 'done' : i === done ? 'armed' : 'locked',
+      }));
+    }
+    /** The fuse for the reactor, out of sight of the spawn at 1,2: four tiles off. */
+    const away = { ...fuse, x: 5.5, y: 1.5, requiredForTitle: 'Reaktor-Neustart' };
+    function lab(done: number, part: Item): PlayerView {
+      const view = justStarted();
+      return view.map === null
+        ? view
+        : { ...view, map: { ...view.map, stations: stations(done), items: [part] } };
+    }
+
+    it('keeps the goal line to the station while the part’s station is two or more ahead', () => {
+      const html = game(lab(0, away));
+      expect(html).toContain('<h1>Notstrom</h1>');
+      expect(html).not.toContain('mitnehmen');
+      expect(html).not.toContain('hud-parts');
+    });
+
+    it('names the part once its station is the next one', () => {
+      expect(game(lab(1, away))).toContain('<span class="stage-sub">SICHERUNG mitnehmen</span>');
+    });
+
+    it('names it at once while it lies in sight of the player', () => {
+      const near = { ...away, x: 2.5, y: 2.5 };
+      expect(game(lab(0, near))).toContain('<span class="stage-sub">SICHERUNG mitnehmen</span>');
+    });
+  });
+
   it('says nothing is missing while only an unfound key is left', () => {
     const view = lying([{ ...fuse, delivered: true }, key]);
     expect(game(view)).not.toContain('stage-sub');
@@ -824,11 +890,12 @@ describe('the alarm limit', () => {
   const LIT = '<span class="alarm-mark alarm-mark-lit">✕</span>';
   const FREE = '<span class="alarm-mark">○</span>';
   const LAST_FREE = '<span class="alarm-mark alarm-mark-warn">○</span>';
+  const LABEL = '<span class="alarm-marks-label">ALARME</span>';
 
-  it('marks every alarm the limit allows, all free before the first', () => {
+  it('marks every alarm the limit allows under the word ALARME, all free before the first', () => {
     expect(marks(0, 5)).toBe(
       '<div class="alarm-marks" role="img" aria-label="Alarme: 0 von höchstens 5">' +
-        `${FREE.repeat(5)}</div>`,
+        `${LABEL}${FREE.repeat(5)}</div>`,
     );
   });
 
@@ -854,7 +921,7 @@ describe('the alarm limit', () => {
     expect(html).toMatch(
       new RegExp(
         '<div class="stage-clock"><div class="countdown [^"]*">\\d\\d:\\d\\d</div>' +
-          `<div class="alarm-marks"[^>]*>${LIT}${FREE.repeat(2)}</div></div>`,
+          `<div class="alarm-marks"[^>]*>${LABEL}${LIT}${FREE.repeat(2)}</div></div>`,
       ),
     );
   });

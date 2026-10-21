@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { RunEvent } from '@escapelab/core';
 import {
+  AFTER_SOLVE_MS,
   airIcon,
   bannerFrom,
+  followsSolve,
   NEWS_MS,
   noticeMs,
   radioNews,
@@ -74,7 +76,11 @@ describe('radioNews — which lines get a banner', () => {
 
 describe('the objective bar, one notice at a time', () => {
   const sign: Notice = { kind: 'sign' };
-  const line = (label: string): Notice => ({ kind: 'line', event: event('radio', 0, label) });
+  const line = (label: string): Notice => ({
+    kind: 'line',
+    event: event('radio', 0, label),
+    notBefore: 0,
+  });
   const shown = (queue: Notice[]): string[] =>
     queue.map((notice) => (notice.kind === 'sign' ? 'sign' : notice.event.label));
 
@@ -83,6 +89,18 @@ describe('the objective bar, one notice at a time', () => {
     expect(shown(queued)).toEqual(['sign', 'new']);
     expect(queued[0]).toBe(sign);
     expect(shown(withNews([sign], [event('hint', 0, 'tip')]))).toEqual(['sign', 'tip']);
+  });
+
+  it('holds a line that comes with a solve a second, so the win is seen and heard first', () => {
+    const solved = [event('radio', 9000, 'start'), event('puzzle', 0), event('radio', 0, 'next')];
+    expect(followsSolve(solved, 1)).toBe(true);
+    // A line on its own, or a solve seen before, holds nothing.
+    expect(followsSolve(solved, 2)).toBe(false);
+    expect(followsSolve([event('radio', 0), event('hint', 0)], 0)).toBe(false);
+    expect(AFTER_SOLVE_MS).toBe(1000);
+    const held = withNews([], [event('radio', 0, 'next')], NOW + AFTER_SOLVE_MS);
+    expect(held).toEqual([{ kind: 'line', event: event('radio', 0, 'next'), notBefore: NOW + 1000 }]);
+    expect(withNews([], [event('radio', 0)])[0]).toMatchObject({ notBefore: 0 });
   });
 
   it('keeps a line up 7 s, 4 s on a touch screen, and the note 3.5 s anywhere', () => {

@@ -60,6 +60,8 @@ export interface TitleCardProps {
   crew: CardMate[];
   /** stations solved, and how many the mission has */
   stations: { solved: number; total: number };
+  /** the run's alarms against the limit: a run lost on them says so */
+  alarms: PlayerView['alarms'];
   /** whose screen it is: their figure stands in its ring; null for the audience */
   youId: string | null;
   /** this screen played the run's end: the card comes up out of its fade */
@@ -92,9 +94,19 @@ export function TitleCard(props: TitleCardProps) {
       <span className="end-title-mission">{props.missionTitle}</span>
       <h1 className="end-title-word">{title}</h1>
       <EndScene won={won} crew={props.crew} youId={props.youId} />
-      <EndFacts usedMs={props.usedMs} grade={props.grade} stations={props.stations} />
+      <EndFacts
+        usedMs={props.usedMs}
+        grade={props.grade}
+        stations={props.stations}
+        cause={ending === 'lost:alarms' ? alarmsCause(props.alarms) : null}
+      />
     </section>
   );
+}
+
+/** Why a run lost on its alarms ended: „5 von 5 Alarmen"; null where no limit counted them. */
+export function alarmsCause({ count, limit }: PlayerView['alarms']): string | null {
+  return limit === null ? null : `${count} von ${limit} Alarmen`;
 }
 
 /**
@@ -139,14 +151,19 @@ function EndScene({ won, crew, youId }: { won: boolean; crew: CardMate[]; youId:
   );
 }
 
-/** The time large, and the rank beside it — for a run lost, the stations it got through. */
+/**
+ * The time large, and the rank beside it — for a run lost, the stations it got through, and
+ * for one lost on its alarms (`cause`) how many it took.
+ */
 function EndFacts({
   usedMs,
   grade,
   stations,
-}: Pick<TitleCardProps, 'usedMs' | 'grade' | 'stations'>) {
+  cause,
+}: Pick<TitleCardProps, 'usedMs' | 'grade' | 'stations'> & { cause: string | null }) {
   return (
     <div className="end-facts">
+      {cause !== null && <span className="end-cause">{cause}</span>}
       {usedMs !== null && (
         <div className="end-fact">
           <span className="end-fact-value">{fmt(usedMs)}</span>
@@ -197,6 +214,7 @@ export function titleCardOf(
     grade: view.grade,
     crew: view.players.map(({ id, name, color }) => ({ id, name, color })),
     stations: { solved: view.currentPuzzleIndex, total: view.puzzleCount },
+    alarms: view.alarms,
     youId,
     fresh,
   };

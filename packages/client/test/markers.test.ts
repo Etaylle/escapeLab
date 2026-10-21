@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { MapView } from '@escapelab/core';
 import {
+  dueParts,
   markerBoxes,
   markerTargets,
+  PART_SIGHT,
   placeMarker,
   placeMarkers,
+  stationsAhead,
   type MarkerPlacement,
   type MarkerPoint,
 } from '../src/world/markers.js';
@@ -130,9 +133,55 @@ describe('markerTargets — what the player is pointed at', () => {
     expect(markerTargets(map, YOU, HERE)).toEqual([]);
   });
 
-  it('shows a loose part and the station together — two legs of one trip', () => {
+  it('shows a loose part and the station together — two legs of one trip, the station first', () => {
     const map = mapWith({ stations: [station(5, 9, 'armed')], items: [item({ x: 3, y: 4 })] });
-    expect(markerTargets(map, YOU, HERE).map((t) => t.label)).toEqual(['TEIL', 'STATION']);
+    expect(markerTargets(map, YOU, HERE).map((t) => t.label)).toEqual(['STATION', 'TEIL']);
+  });
+
+  describe('one goal at a time: a part for a later station', () => {
+    /** Blackout's order: the lever, the box, three more, the reactor — the fuse is the reactor's. */
+    const order = ['notlicht', 'notstrom', 'signal', 'netz', 'frequenz', 'reaktor'];
+    function lab(done: number, partAt = { x: 3, y: 4 }): MapView {
+      const stations = order.map((puzzleId, i) => ({
+        puzzleId,
+        x: 1 + i * 3,
+        y: 11,
+        title: puzzleId === 'reaktor' ? 'Reaktor-Neustart' : puzzleId,
+        status: i < done ? ('done' as const) : i === done ? ('armed' as const) : ('locked' as const),
+      }));
+      const fuse = item({ ...partAt, requiredForTitle: 'Reaktor-Neustart' });
+      return mapWith({ tiles: openLab, stations, items: [fuse] });
+    }
+    /** An open lab of 20 × 13 tiles, walls round it only. */
+    const openLab = Array.from({ length: 13 }, (_, y) =>
+      y === 0 || y === 12 ? '#'.repeat(20) : `#${'.'.repeat(18)}#`,
+    );
+
+    it('waits while its station is two or more ahead of the one in front of the crew', () => {
+      expect(stationsAhead(lab(0), 'Reaktor-Neustart')).toBe(5);
+      expect(markerTargets(lab(0), YOU, HERE).map((t) => t.label)).toEqual(['STATION']);
+      expect(markerTargets(lab(3), YOU, HERE).map((t) => t.label)).toEqual(['STATION']);
+    });
+
+    it('comes once its station is the next one, or the one in front of the crew', () => {
+      expect(stationsAhead(lab(4), 'Reaktor-Neustart')).toBe(1);
+      expect(markerTargets(lab(4), YOU, HERE).map((t) => t.label)).toEqual(['STATION', 'TEIL']);
+      expect(markerTargets(lab(5), YOU, HERE).map((t) => t.label)).toEqual(['STATION', 'TEIL']);
+    });
+
+    it('comes at once while the part lies in sight, near enough and no wall between', () => {
+      const near = { x: HERE.x + 2, y: HERE.y };
+      expect(dueParts(lab(0, near), HERE)).toHaveLength(1);
+      expect(markerTargets(lab(0, near), YOU, HERE).map((t) => t.label)).toEqual([
+        'STATION',
+        'TEIL',
+      ]);
+      const far = { x: HERE.x + PART_SIGHT + 1, y: HERE.y };
+      expect(dueParts(lab(0, far), HERE)).toEqual([]);
+      // Behind a wall it is out of sight, however near.
+      const walled = { ...lab(0, near), tiles: openLab.map((row) => `${row.slice(0, 11)}#${row.slice(12)}`) };
+      expect(dueParts(walled, HERE)).toEqual([]);
+    });
   });
 
   it('points at every manual object printing the armed station, blue like a part', () => {
@@ -204,7 +253,7 @@ describe('markerTargets — what the player is pointed at', () => {
       stations: [station(5, 9, 'armed')],
       items: [{ ...key, deliverTo: { x: 8, y: 5 } }],
     });
-    expect(markerTargets(found, YOU, HERE).map((t) => t.label)).toEqual(['TEIL', 'STATION']);
+    expect(markerTargets(found, YOU, HERE).map((t) => t.label)).toEqual(['STATION', 'TEIL']);
   });
 
   it('ignores a part that has already been delivered', () => {
@@ -470,5 +519,31 @@ describe('placeMarkers — clear of the minimap and the controls', () => {
     const wall: Box = { left: 900, top: 0, right: W, bottom: H };
     const [right] = placeMarkers([at(W + 50, 300)], frame(W, H, 80, 1, { boxes: [wall] }));
     expect(right).toEqual(placeMarker(W + 50, 300, frame(W, H, 80, 1)));
+  });
+});
+
+describe('placeMarkers — clear of the own figure on a phone held sideways', () => {
+  // 844×390 sideways, the canvas some 250 px low at 44 px a tile: the figure, near the bottom
+  // edge above the pad, and the 1.5 tiles round it that GameWorld hands in as a box.
+  const W = 844;
+  const H = 250;
+  const TILE = 44;
+  const figure = { x: 420, y: 170 };
+  const KEEP_OUT: Box = {
+    left: figure.x - 1.5 * TILE,
+    top: figure.y - 1.5 * TILE,
+    right: figure.x + 1.5 * TILE,
+    bottom: figure.y + 1.5 * TILE,
+  };
+  const at = (px: number, py: number): MarkerPoint => ({ px, py, captionWidth: 70 });
+
+  it('moves an arrow along the bottom edge off the figure, its caption too', () => {
+    const view = frame(W, H, 40, 1, { bottom: 20 });
+    const [plain] = placeMarkers([at(430, 600)], view);
+    expect(plain != null && markerBoxes(plain, 70, 1).some((b) => overlaps(b, KEEP_OUT))).toBe(true);
+    const [clear] = placeMarkers([at(430, 600)], { ...view, boxes: [KEEP_OUT] });
+    expect(clear != null && markerBoxes(clear, 70, 1).some((b) => overlaps(b, KEEP_OUT))).toBe(
+      false,
+    );
   });
 });

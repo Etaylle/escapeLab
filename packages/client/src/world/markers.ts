@@ -1,6 +1,7 @@
-import type { MapView } from '@escapelab/core';
+import { canSee, type MapView } from '@escapelab/core';
 import { consoleName } from './consoles.js';
 import { carriedItem } from './interact.js';
+import { doorsShut } from './light.js';
 import { overlaps, type Box, type Viewport } from './viewport.js';
 
 /** A thing worth walking to, and how its arrow should look. */
@@ -37,6 +38,44 @@ export function toBring(map: MapView): MapView['items'] {
 
 type Spot = MapView['stations'][number];
 type Point = { x: number; y: number };
+type Item = MapView['items'][number];
+
+/** How far a player sees a part lying about, in tiles: as far as the crew comes across a source. */
+export const PART_SIGHT = 3.5;
+
+/**
+ * How many stations after the one in front of the crew the station titled `title` comes — 0
+ * for that one, 1 for the next — by the map's list, which keeps the mission's order. Null
+ * where no station has that title.
+ */
+export function stationsAhead(map: Pick<MapView, 'stations'>, title: string): number | null {
+  const order = [...new Set(map.stations.map((station) => station.puzzleId))];
+  const done = new Set(map.stations.filter((s) => s.status === 'done').map((s) => s.puzzleId));
+  const target = map.stations.find((station) => station.title === title);
+  return target === undefined ? null : order.indexOf(target.puzzleId) - done.size;
+}
+
+/** Whether a part lies in sight of a player standing at `self`: near enough, no wall between. */
+function inSight(map: MapView, self: Point, item: Item): boolean {
+  const near = Math.hypot(item.x - self.x, item.y - self.y) <= PART_SIGHT;
+  return near && canSee(map, self, { x: item.x, y: item.y }, doorsShut(map));
+}
+
+/**
+ * What the crew has to bring that matters now, one goal at a time: a part for the station in
+ * front of the crew or the one after it, a part in somebody's hands, a key, and any part
+ * lying in sight of the player at `self`. A part for a station further on waits — until then
+ * the goal is the station.
+ */
+export function dueParts(map: MapView, self: Point): MapView['items'] {
+  return toBring(map).filter((item) => {
+    if (item.carriedBy !== null || item.requiredForTitle === null) {
+      return true;
+    }
+    const ahead = stationsAhead(map, item.requiredForTitle);
+    return ahead === null || ahead <= 1 || inSight(map, self, item);
+  });
+}
 
 /** A crew member this close to a console stands at it, in tiles — as the server counts it. */
 const AT_CONSOLE = 1.6;
@@ -59,11 +98,11 @@ function armedSpotFor(map: MapView, self: Point, others: readonly Point[]): Spot
  * urgent first; `crew` holds the live positions of the crew by player id.
  *
  * An emergency overrides everything and needs every valve at once, since the
- * crew has to split up. Otherwise there is one errand at a time, except that a
- * loose part, the station waiting for it and the manual objects printing its
- * rules are shown together — the crew splits up between them. Of a station
- * with two consoles, the one nobody else stands at is shown, else the nearer
- * one, named by its console.
+ * crew has to split up. Otherwise there is one errand at a time, except that
+ * the station, the manual objects printing its rules and a loose part that is
+ * due (`dueParts`) are shown together — the crew splits up between them, the
+ * station first. Of a station with two consoles, the one nobody else stands
+ * at is shown, else the nearer one, named by its console.
  */
 export function markerTargets(
   map: MapView,
@@ -88,10 +127,6 @@ export function markerTargets(
     return [{ x: map.exit.x + 0.5, y: map.exit.y + 0.5, color: GREEN, label: 'AUSGANG' }];
   }
   const out: MarkerTarget[] = [];
-  const loose = toBring(map).find((item) => item.carriedBy === null);
-  if (loose !== undefined) {
-    out.push({ x: loose.x, y: loose.y, color: BLUE, label: 'TEIL' });
-  }
   const others = Object.entries(crew).flatMap(([id, at]) => (id === youId ? [] : [at]));
   const armed = armedSpotFor(map, self, others);
   if (armed !== undefined) {
@@ -101,6 +136,10 @@ export function markerTargets(
     for (const manual of map.manuals.filter((m) => m.puzzleIds.includes(armed.puzzleId))) {
       out.push({ x: manual.x + 0.5, y: manual.y + 0.5, color: BLUE, label: 'LESEN' });
     }
+  }
+  const loose = dueParts(map, self).find((item) => item.carriedBy === null);
+  if (loose !== undefined) {
+    out.push({ x: loose.x, y: loose.y, color: BLUE, label: 'TEIL' });
   }
   return out;
 }

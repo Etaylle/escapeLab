@@ -10,12 +10,17 @@ vi.mock('../src/world/audio.js', () => ({
 
 const {
   alarmKlaxon,
+  BUZZ_HZ,
+  BUZZ_LOWPASS_HZ,
   buttonThunk,
   dialDetent,
   HUM_LEVEL,
   holdTick,
   keyClick,
   lampPop,
+  leverPull,
+  leverSpring,
+  MID_BAND,
   mushroomStomp,
   pliersSnip,
   probeClick,
@@ -206,6 +211,8 @@ const ONE_SHOTS: [string, () => void][] = [
   ['toggleClack', toggleClack],
   ['buttonThunk', buttonThunk],
   ['mushroomStomp', mushroomStomp],
+  ['leverPull', leverPull],
+  ['leverSpring', leverSpring],
   ['pliersSnip', pliersSnip],
   ['sparkCrackle', sparkCrackle],
   ['shortArc', shortArc],
@@ -282,6 +289,41 @@ describe('the sounds of a mistake', () => {
   it('sound an alarm at once where nothing came before it', () => {
     alarmKlaxon();
     expect(firstStart(0)).toBeLessThan(ctx.currentTime + 0.05);
+  });
+});
+
+describe('weight on a small speaker', () => {
+  /** Whether the sound just made carries a band of noise in the mids, at MID_BAND. */
+  const midLayer = (): boolean =>
+    ctx.nodes.some(
+      (node) =>
+        node instanceof FakeFilter && node.type === 'bandpass' && node.frequency.value === MID_BAND,
+    );
+
+  it.each([
+    ['solvedChunk', solvedChunk],
+    ['mushroomStomp', mushroomStomp],
+    ['buttonThunk', buttonThunk],
+    ['wallThud', wallThud],
+    ['leverPull', leverPull],
+  ])('gives %s a mid layer between 300 and 900 Hz beside its thud', (_, hit) => {
+    hit();
+    expect(midLayer()).toBe(true);
+    expect(MID_BAND).toBeGreaterThanOrEqual(300);
+    expect(MID_BAND).toBeLessThanOrEqual(900);
+  });
+
+  it('pitches the buzzer an octave up, a square through a 1.2 kHz lowpass', () => {
+    rejectBuzz();
+    const filters = ctx.nodes.filter((node): node is FakeFilter => node instanceof FakeFilter);
+    expect(filters.map((f) => [f.type, f.frequency.value])).toEqual([['lowpass', BUZZ_LOWPASS_HZ]]);
+    expect(BUZZ_LOWPASS_HZ).toBe(1200);
+    const pitches = ctx.nodes
+      .filter((node): node is FakeOscillator => node instanceof FakeOscillator)
+      .map((osc) => [osc.type, osc.frequency.events[0]?.[1]]);
+    expect(pitches).toContainEqual(['square', BUZZ_HZ]);
+    expect(BUZZ_HZ).toBe(184);
+    expect(pitches.every(([, pitch]) => (pitch as number) >= 180)).toBe(true);
   });
 });
 

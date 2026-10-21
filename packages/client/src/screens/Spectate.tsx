@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { PlayerPosition, DronePosition, SpectatorView } from '@escapelab/core';
+import type { DeviceRun } from '../puzzles/Device.js';
 import { useVoice } from '../voice/useVoice.js';
+import { alarmNotice } from '../world/alarm.js';
 import { useDarkSince } from '../world/coldOpen.js';
 import type { Finale } from '../world/finale.js';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
@@ -51,6 +53,25 @@ export function audienceTags(
 }
 
 /**
+ * The run around the open device as the audience has it: the crew's alarms and solves, the
+ * crew — of which the audience is none — and the latest alarm; it refuses nobody anything.
+ */
+function audienceRunOf(view: SpectatorView): DeviceRun {
+  return {
+    alarms: view.penaltySeq,
+    solved: view.currentPuzzleIndex,
+    refusals: 0,
+    crew: {
+      you: null,
+      mates: view.players
+        .filter((player) => player.connected)
+        .map(({ id, name, color }) => ({ id, name, color })),
+    },
+    alarm: alarmNotice(view.events, view.alarms),
+  };
+}
+
+/**
  * The audience's column beside the world: the open station from every side —
  * once the run is over, who did what — any relay consoles in an emergency,
  * and the run report as it grows.
@@ -82,7 +103,7 @@ function SpectatePanels({ view }: { view: SpectatorView }) {
               <div className="read-only">
                 <PuzzlePanel
                   puzzle={view.puzzle}
-                  run={{ alarms: view.penaltySeq, solved: view.currentPuzzleIndex, refusals: 0 }}
+                  run={audienceRunOf(view)}
                   send={noop}
                   deadlineAt={view.deadlineAt}
                 />

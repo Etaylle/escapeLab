@@ -1,3 +1,5 @@
+import { createElement, type MouseEvent } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PuzzleView } from '@escapelab/core';
 
@@ -5,6 +7,7 @@ vi.mock('../src/puzzles/sounds.js', () => ({
   buttonThunk: vi.fn(),
   dialDetent: vi.fn(),
   keyClick: vi.fn(),
+  leverPull: vi.fn(),
   mushroomStomp: vi.fn(),
   probeClick: vi.fn(),
   rejectBuzz: vi.fn(),
@@ -29,6 +32,7 @@ const {
   reject,
   REJECT_MS,
   seeing,
+  usePressFeel,
 } = await import('../src/puzzles/feel.js');
 
 /** A control as the kit sees it, its classes kept in a set. */
@@ -62,6 +66,7 @@ describe('a control going down', () => {
       ['clack', sounds.toggleClack],
       ['thunk', sounds.buttonThunk],
       ['stomp', sounds.mushroomStomp],
+      ['pull', sounds.leverPull],
       ['probe', sounds.probeClick],
       ['detent', sounds.dialDetent],
     ] as const;
@@ -153,6 +158,52 @@ describe('a reject', () => {
     vi.advanceTimersByTime(REJECT_MS);
     expect(key.classes.has('feel-reject')).toBe(false);
     reject(control(), false);
+    expect(sounds.rejectBuzz).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the control pressed before an alarm or a refusal', () => {
+  /** An element the kit takes a click on: inside a working button, the control it finds. */
+  class FakeElement {
+    constructor(private readonly button: unknown) {}
+    closest(): unknown {
+      return this.button;
+    }
+  }
+
+  /** The kit a device's face takes its presses with, `audible` or not. */
+  function kit(audible: boolean): ReturnType<typeof usePressFeel> {
+    let made: ReturnType<typeof usePressFeel> | null = null;
+    function Face(): null {
+      made = usePressFeel(audible);
+      return null;
+    }
+    renderToStaticMarkup(createElement(Face));
+    if (made === null) {
+      throw new Error('the face rendered without its kit');
+    }
+    return made;
+  }
+
+  /** Clicks a working button through the kit, as a pointer does; returns that button. */
+  function click(on: ReturnType<typeof usePressFeel>) {
+    const button = { ...control(), disabled: false };
+    vi.stubGlobal('Element', FakeElement);
+    const event = { target: new FakeElement(button), detail: 1 };
+    on.handlers.onClick(event as unknown as MouseEvent<HTMLElement>);
+    return button;
+  }
+
+  it('shakes without a buzz for an alarm — the alarm has its own sound — and with one for a refusal', () => {
+    vi.useFakeTimers();
+    const face = kit(true);
+    const alarmed = click(face);
+    face.blame(false);
+    expect(alarmed.classes.has('feel-reject')).toBe(true);
+    expect(sounds.rejectBuzz).not.toHaveBeenCalled();
+    const refused = click(face);
+    face.blame();
+    expect(refused.classes.has('feel-reject')).toBe(true);
     expect(sounds.rejectBuzz).toHaveBeenCalledTimes(1);
   });
 });

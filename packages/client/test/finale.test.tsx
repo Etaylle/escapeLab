@@ -2,8 +2,14 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MapView, PlayerView, SpectatorView } from '@escapelab/core';
-import { EndScreen, TitleCard, titleCardOf } from '../src/screens/End.js';
-import { FinaleVeil, GameScreen, StageTop, type ColdOpen } from '../src/screens/Game.js';
+import { alarmsCause, EndScreen, TitleCard, titleCardOf } from '../src/screens/End.js';
+import {
+  clockStage,
+  FinaleVeil,
+  GameScreen,
+  StageTop,
+  type ColdOpen,
+} from '../src/screens/Game.js';
 import { SpectateScreen } from '../src/screens/Spectate.js';
 import {
   alarmClasses,
@@ -40,7 +46,7 @@ import {
   WHITE_MS,
 } from '../src/world/finale.js';
 import { WARM_UP_MS, warmUp } from '../src/world/rooms.js';
-import { BrokenContext, fakeAudio, freshAudio, started, startedAt } from './fakeAudio.js';
+import { BrokenContext, fakeAudio, freshAudio, midBand, started, startedAt } from './fakeAudio.js';
 import { mapWith } from './fixtures.js';
 
 const noop = (): void => undefined;
@@ -269,7 +275,7 @@ describe('the escape', () => {
     ]);
   });
 
-  it('calls everybody to the hatch over the checklist, the clock pulsing with minutes left', () => {
+  it('calls everybody to the hatch over the checklist, the clock amber with minutes left', () => {
     const html = bar(viewOf());
     expect(html).toContain('<div class="stage-goal stage-goal--escape">');
     expect(html).toMatch(/<h1><svg class="icon icon-exit"[^>]*>.*?<\/svg> ALLE ZUM NOTAUSGANG<\/h1>/);
@@ -278,7 +284,15 @@ describe('the escape', () => {
     expect(mates[0]).toMatch(/^<li class="escape-mate">.*Anna<\/li>$/);
     expect(mates[1]).toMatch(/^<li class="escape-mate escape-mate--out">.*Ben<svg class="icon icon-check"/);
     expect(html).toContain('aria-label="Am Notausgang: 1 von 2"');
-    expect(html).toMatch(/<div class="countdown critical">0[45]:\d\d<\/div>/);
+    expect(html).toMatch(/<div class="countdown countdown--escape">0[45]:\d\d<\/div>/);
+  });
+
+  it('turns the clock red only in its last minute, the escape or not', () => {
+    expect(clockStage(300_000, true)).toBe('countdown--escape');
+    expect(clockStage(300_000, false)).toBe('');
+    expect(clockStage(59_999, true)).toBe('critical');
+    expect(clockStage(59_999, false)).toBe('critical');
+    expect(clockStage(9_999, true)).toBe('final');
   });
 
   it('says nothing of it while the hatch is shut', () => {
@@ -383,11 +397,19 @@ describe('the title card', () => {
     expect(html).not.toContain('grade-rank');
   });
 
-  it('ends a run lost on its alarms on NOTVERSORGUNG ABGESCHALTET', () => {
+  it('ends a run lost on its alarms on NOTVERSORGUNG ABGESCHALTET, and says how many', () => {
     const lost = over({ phase: 'lost', grade: null, alarms: { count: 5, limit: 5 } });
     const html = card(lost);
     expect(html).toMatch(/^<section class="end-title end-title--alarms"/);
     expect(html).toContain('<h1 class="end-title-word">NOTVERSORGUNG ABGESCHALTET</h1>');
+    expect(html).toContain('<div class="end-facts"><span class="end-cause">5 von 5 Alarmen</span>');
+    // Lost on time, or won, the card has no word of alarms.
+    expect(card(over({ phase: 'lost', grade: null, alarms: { count: 2, limit: 5 } }))).not.toContain(
+      'end-cause',
+    );
+    expect(card(over({}))).not.toContain('end-cause');
+    expect(alarmsCause({ count: 3, limit: 3 })).toBe('3 von 3 Alarmen');
+    expect(alarmsCause({ count: 3, limit: null })).toBeNull();
   });
 
   it('comes up out of the end’s fade only where this screen played it', () => {
@@ -538,6 +560,9 @@ describe('the sounds of the alarm, the escape and the end', () => {
     audio.exitGrind();
     expect(startedAt('noise', 10.01)).toBe(true);
     expect(startedAt('tone', 12.01)).toBe(true);
+    // The clunk carries its mid band, as every heavy hit does: a phone still hears it land.
+    expect(midBand(audio.MID_BAND)).toBe(true);
+    expect(startedAt('noise', 12.01)).toBe(true);
     started.length = 0;
     audio.victoryChord();
     // Four notes, each with its overtone, 50 ms apart, and the wind under them.

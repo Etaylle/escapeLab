@@ -3,6 +3,7 @@ import {
   Device,
   deviceOf,
   useDeviceFeel,
+  useFreshAlarm,
   type ChangeSounds,
   type DeviceRun,
 } from '../puzzles/Device.js';
@@ -10,7 +11,7 @@ import { PANELS, READERS, SOUNDS, type Panel, type Reader } from '../puzzles/ind
 
 interface PuzzlePanelProps {
   puzzle: PuzzleView;
-  /** the run around the device: its alarms and the stations solved, as the view counts them */
+  /** the run around the device: its alarms, the stations solved, the crew — as the view has it */
   run: DeviceRun;
   send: (msg: ClientMessage) => void;
   deadlineAt: number | null;
@@ -31,13 +32,21 @@ function StationDevice({ puzzle, run, send, deadlineAt }: PuzzlePanelProps) {
   const ModulePanel = PANELS[puzzle.kind] as Panel<PuzzleView['kind']>;
   const sounds = (SOUNDS[puzzle.kind] ?? null) as ChangeSounds | null;
   const feel = useDeviceFeel(puzzle, run, sounds);
+  const notice = useFreshAlarm(run.alarm, feel.alarms);
   return (
-    <Device {...deviceOf(puzzle)} alarms={feel.alarms} solved={feel.solved} press={feel.press}>
+    <Device
+      {...deviceOf(puzzle)}
+      alarms={feel.alarms}
+      solved={feel.solved}
+      press={feel.press}
+      notice={notice}
+    >
       <ModulePanel
         puzzle={puzzle}
         change={feel.change}
         send={(input) => send({ kind: 'puzzle-input', input })}
         deadlineAt={deadlineAt}
+        crew={run.crew}
       />
     </Device>
   );

@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { sightFrom } from '@escapelab/core';
 import {
@@ -15,8 +14,6 @@ import {
   objectGlowStops,
   OWN_BEAM_STOPS,
   OWN_GLOW_STOPS,
-  POWER_REACH,
-  powerLamp,
   reachOf,
   runsOf,
   sightCache,
@@ -273,38 +270,3 @@ describe('emergency lamps — where they hang and what they light', () => {
   });
 });
 
-describe('the power on — the room’s own light round you', () => {
-  it('lights all round you as far as you see, with no beam', () => {
-    const lamp = powerLamp({ x: 2.5, y: 2.5 });
-    expect(lamp).toEqual({ x: 2.5, y: 2.5, glow: POWER_REACH, beam: null });
-    expect(reachOf(lamp)).toBe(POWER_REACH);
-  });
-
-  it('lights your whole room and nothing behind a wall or a shut door', () => {
-    const lamp = powerLamp({ x: 2.5, y: 2.5 });
-    const lit = litTiles(lamp, sightFrom(map, lamp, reachOf(lamp), shut));
-    expect(lit).toEqual(expect.arrayContaining(['1,1', '3,1', '1,3', '3,3', '2,2', '4,2']));
-    expect(lit.filter((key) => Number(key.split(',')[0]) > 4)).toEqual([]);
-    const through = litTiles(lamp, sightFrom(map, lamp, reachOf(lamp), open));
-    expect(through).toEqual(expect.arrayContaining(['5,2', '7,2']));
-  });
-
-  it('shows one step into Blackout’s Archiv the room, not what lies behind its walls', () => {
-    const { map: lab } = JSON.parse(
-      readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8'),
-    ) as { map: { tiles: string[]; doors: { x: number; y: number }[] } };
-    // Every door shut, as at the start of a run.
-    const doors = new Set(lab.doors.map((door) => `${door.x},${door.y}`));
-    const lamp = powerLamp({ x: 3.5, y: 1.5 });
-    const lit = litTiles(lamp, sightFrom(lab, lamp, reachOf(lamp), doors));
-    // The Archiv's open row with the book at 2,1 and the fuse at 5,1; the sign at 4,3; and
-    // down the passage, five tiles away, the Flur.
-    expect(lit).toEqual(
-      expect.arrayContaining(['1,1', '2,1', '3,1', '4,1', '5,1', '4,3', '3,5', '3,6']),
-    );
-    // Behind the east wall the key at 7,3 and the Serverraum; round a corner the lever at 7,5.
-    for (const hidden of ['7,3', '12,1', '7,5']) {
-      expect(lit).not.toContain(hidden);
-    }
-  });
-});

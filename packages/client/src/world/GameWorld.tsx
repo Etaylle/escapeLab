@@ -11,10 +11,10 @@ import {
 } from '@escapelab/core';
 import { useMedia } from '../hooks.js';
 import { addProbes } from '../probes.js';
-import { deviceCoach, firstSight, type CoachMark } from '../puzzles/coach.js';
+import { firstSight, SHOWN_MARKS, type CoachMark } from '../puzzles/coach.js';
 import { TalkButton } from '../screens/Voice.js';
 import { VoiceContext } from '../voice/useVoice.js';
-import { DRONE_MARK_MS, useAlarm, useAlarmClasses, type Alarm } from './alarm.js';
+import { DRONE_MARK_MS, useAlarm, useAlarmClasses, worldHornDue, type Alarm } from './alarm.js';
 import {
   drawAlarmMark,
   drawCarryable,
@@ -36,6 +36,7 @@ import {
   drawVoiceRing,
   makeFloorTile,
   makeWallTile,
+  plateCaption,
   worldText,
   type WorldText,
 } from './art.js';
@@ -77,7 +78,15 @@ import {
   type Streamed,
 } from './movement.js';
 import { worldNews } from './news.js';
-import { litGroups, roomArea, warmUp, type LitGroup } from './rooms.js';
+import {
+  litGroups,
+  powerRoom,
+  roomArea,
+  roomsComingOn,
+  warmUp,
+  type LitGroup,
+  type RoomLight,
+} from './rooms.js';
 import {
   blackoutSounds,
   cabinetUnlock,
@@ -110,7 +119,6 @@ import {
   objectGlowStops,
   OWN_BEAM_STOPS,
   OWN_GLOW_STOPS,
-  powerLamp,
   reachOf,
   runsOf,
   SPILL_STOPS,
@@ -118,6 +126,7 @@ import {
   type LampMount,
   type LightMemory,
   type Lit,
+  type Run,
   type Stops,
 } from './light.js';
 import { ALARM_RED, ceilingLayer, mixTint, WARM, type CeilingLight } from './power.js';
@@ -125,6 +134,7 @@ import {
   clampCamera,
   placeRoomNames,
   ROOM_NAME_PX,
+  shiftClear,
   type Box,
   type Viewport,
 } from './viewport.js';
@@ -159,6 +169,10 @@ const SIREN_TURN = 1.25;
 const ALARM_DIM = [0.62, 0.42] as const;
 /** On a touch screen the pad would sit on the avatar: it is lifted this far, CSS pixels. */
 const PAD_LIFT = 60;
+/** How far round your figure the edge arrows keep off, in tiles. */
+const KEEP_OUT_TILES = 1.5;
+/** Air between two tags on the screen — a caption and the E prompt — CSS pixels. */
+const TAG_AIR = 4;
 /** Air between the control cluster and a first-time tip above it, CSS pixels. */
 const TIP_GAP = 12;
 /** The primary pointer is a finger: no keys to name, the on-screen pad shows (as ui.css has it). */
@@ -208,7 +222,11 @@ interface Props {
   darkSince: number | null;
   /** the run's ending, while it plays on this screen; none while the run goes on */
   finale?: FinaleCue | null;
-  /** the station whose panel lies over the world, for its device's coach mark; none by default */
+  /**
+   * the station whose panel lies over the world; none by default. While it is up the world's
+   * tips wait — the device's own line is in its frame — and an alarm sounds the device's horn,
+   * not the world's
+   */
   station?: PuzzleView | null;
   /** first-time tips wait while the objective bar carries a notice, so the two never stack */
   holdTips: boolean;
@@ -267,6 +285,10 @@ interface Sim {
    * and the sim time they came on
    */
   lit: Map<string, { tiles: { x: number; y: number }[]; path: Path2D; since: number }>;
+  /** rooms lit while something lay over the world: they come on once it is gone */
+  pendingLit: string[];
+  /** the room the power lights round you while the lab has it, with its tiles as a path */
+  room: { light: RoomLight; path: Path2D } | null;
   /** the tiles of every lit room, by key: drawn in the colours of the lab with its power on */
   litTiles: Set<string>;
   /** what this run's lamps and drones have lit so far, and their sights */
@@ -308,8 +330,13 @@ interface EdgeMarker {
 
 /** This frame's light, worked out before anything is drawn. */
 interface FrameLight {
-  /** your lamp — while the lab has its power, the room's light round you; null for the audience */
+  /** your lamp in the dark; null while the lab has its power, and for the audience */
   own: Lit | null;
+  /**
+   * while the lab has its power, the room it lights round you, whole, to its walls and doors;
+   * null in the dark and for the audience
+   */
+  room: Sim['room'];
   /** the lamps the rest of the crew carry; none while the power is on */
   crew: Lit[];
   /** the drones' eyes, by drone id; a frozen drone looks nowhere */
@@ -327,20 +354,20 @@ interface FrameLight {
   shown: (x: number, y: number) => boolean;
   /**
    * whether the tile at (x, y) is in the colours of the lab with its power
-   * on: where your light falls while the lab has it — all of the lab, for
-   * the audience — and nowhere in the dark
+   * on: in your room while the lab has it — all of the lab, for the
+   * audience — and nowhere in the dark
    */
   powered: (x: number, y: number) => boolean;
   /**
    * whether somebody of the crew standing at (x, y) shows: anywhere in the
    * dark, where the lamp they carry lights them up; while the lab has its
-   * power, nobody carries one, so only where your light falls
+   * power, nobody carries one, so only in your room
    */
   crewShown: (x: number, y: number) => boolean;
 }
 
 /** A frame's lights, before what they show is worked out. */
-type FrameLamps = Pick<FrameLight, 'own' | 'crew' | 'eyes' | 'lamps' | 'exit' | 'spills'>;
+type FrameLamps = Pick<FrameLight, 'own' | 'room' | 'crew' | 'eyes' | 'lamps' | 'exit' | 'spills'>;
 
 const MOVE_KEYS: Record<string, [number, number]> = {
   arrowup: [0, -1],
@@ -387,19 +414,15 @@ function blocked(map: WorldMap, closedDoors: Set<string>, x: number, y: number):
   return false;
 }
 
-/**
- * The tips this page has shown. Each is shown once per session — across
- * runs, so a second run is not cluttered with things you already know.
- */
-const SEEN_TIPS = new Set<string>();
-
 /** How long a tip stays up at most. */
 const TIP_MS = 6500;
 
 /**
- * The one sentence a newcomer needs right now. Over an open station that is
- * its device's line, and nothing about the world the panel covers. On a
- * touch screen, which has no keys, a tip names the ⚡ button instead.
+ * The one sentence a newcomer needs right now, about the world. Over an open
+ * station nothing: the device's line lies in its own frame (Game.tsx), and
+ * the world the panel covers can wait. On a touch screen, which has no keys,
+ * a tip names the ⚡ button instead. The escape needs none: its checklist
+ * calls everybody to the hatch.
  */
 function coachTip(
   map: WorldMap,
@@ -409,7 +432,7 @@ function coachTip(
   keyboard: boolean,
 ): CoachMark | null {
   if (station !== null) {
-    return deviceCoach(station);
+    return null;
   }
   if (map.sabotage !== null) {
     return { id: 'sabotage', text: 'Notfall! Jede Person an ein eigenes Ventil — sofort losrennen.' };
@@ -426,9 +449,6 @@ function coachTip(
         ? 'Du trägst etwas: Bring es zur markierten Fläche und drücke E. Mit Q legst du es ab.'
         : 'Du trägst etwas: Bring es zur markierten Fläche und tippe ⚡. Mit 📦 legst du es ab.',
     };
-  }
-  if (map.exit !== null && map.exit.open) {
-    return { id: 'exit', text: 'Der Notausgang ist offen — ihr müsst alle gemeinsam dort ankommen.' };
   }
   if (map.plates.some((plate) => plate.pressed && !plate.freezesDrone)) {
     return {
@@ -469,8 +489,8 @@ export function GameWorld({
   send,
 }: Props) {
   const [wheelOpen, setWheelOpen] = useState(false);
-  /** the tip up now, and whether it lies over a station's panel rather than over the world */
-  const [tip, setTip] = useState<(CoachMark & { overPanel: boolean }) | null>(null);
+  /** the world's tip up now */
+  const [tip, setTip] = useState<CoachMark | null>(null);
   /** how far the control cluster reaches up from the world's bottom edge, CSS pixels */
   const [controlsReach, setControlsReach] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -489,6 +509,8 @@ export function GameWorld({
   readRef.current = onRead;
   const operateRef = useRef(onOperate);
   operateRef.current = onOperate;
+  const stationRef = useRef(station);
+  stationRef.current = station;
   /** the crew's voice, read on every frame for who speaks; none outside the app */
   const voice = useContext(VoiceContext);
   const voiceRef = useRef(voice);
@@ -510,19 +532,19 @@ export function GameWorld({
   // Coach marks react to the view, not to the render loop: a new view comes
   // with every move anyone makes, so a tip stays up while it still fits, for
   // TIP_MS at most. The world's tips wait while the objective bar carries a
-  // notice, so the two never stack; a station's panel covers that bar.
+  // notice, so the two never stack, and while a station's panel is up.
   useEffect(() => {
-    if (spectator || view.map === null || finale !== null || (holdTips && station === null)) {
+    if (spectator || view.map === null || finale !== null || holdTips) {
       setTip(null);
       return;
     }
     const keyboard = !window.matchMedia(TOUCH).matches;
     const carried = carriedItem(view.map, view.you.id);
     const next = coachTip(view.map, view.you.id, carried, station, keyboard);
-    const fresh = firstSight(next, SEEN_TIPS);
+    const fresh = firstSight(next, SHOWN_MARKS);
     if (fresh !== null) {
-      SEEN_TIPS.add(fresh.id);
-      setTip({ ...fresh, overPanel: station !== null });
+      SHOWN_MARKS.add(fresh.id);
+      setTip(fresh);
     } else if (next?.id !== tip?.id) {
       setTip(null);
     }
@@ -536,8 +558,13 @@ export function GameWorld({
     return () => clearTimeout(timer);
   }, [tip]);
 
+  const reduced = useMedia(REDUCED_MOTION);
+  const reducedRef = useRef(reduced);
+  reducedRef.current = reduced;
+
   // The power hums while the lights are on; where this screen sees them fail, it hears them
-  // fail with the picture (coldOpen.ts), and where it lands in the dark, the hum just ends.
+  // fail with the picture (coldOpen.ts) — under reduced motion with no flicker to arc in —
+  // and where it lands in the dark, the hum just ends.
   useEffect(() => {
     if (darkSince === null) {
       startPowerHum();
@@ -545,19 +572,17 @@ export function GameWorld({
     }
     const elapsed = Date.now() - darkSince;
     if (elapsed < SEQUENCE_MS) {
-      blackoutSounds(blackoutCue(elapsed));
+      blackoutSounds(blackoutCue(elapsed, reducedRef.current));
     } else {
       stopPowerHum();
     }
   }, [darkSince]);
 
   // The world answers an alarm (alarm.ts): the klaxon while the run goes on — the alarm that
-  // ends it has the ending's own sound — the strobe and the shake, the drones' marks.
-  const reduced = useMedia(REDUCED_MOTION);
-  const reducedRef = useRef(reduced);
-  reducedRef.current = reduced;
+  // ends it has the ending's own sound, and an open device sounds its own horn instead — the
+  // strobe and the shake, the drones' marks.
   const alarm = useAlarm(view.penaltySeq, () => {
-    if (viewRef.current.phase === 'playing') {
+    if (worldHornDue(viewRef.current.phase, stationRef.current != null)) {
       klaxon();
     }
   });
@@ -636,6 +661,8 @@ export function GameWorld({
       seen: null,
       captions: [],
       lit: new Map(),
+      pendingLit: [],
+      room: null,
       litTiles: new Set(),
       light: lightMemory(null),
     };
@@ -803,6 +830,9 @@ export function GameWorld({
               return trace.frames;
             },
             resetFrames: () => trace.resetFrames(),
+            get camera() {
+              return { x: sim.draw.x, y: sim.draw.y, scale: sim.scale };
+            },
           });
 
     /**
@@ -819,6 +849,7 @@ export function GameWorld({
         sim.cam.y = start.y;
         sim.run = run;
         sim.streamed = [];
+        sim.room = null;
         return;
       }
       const back = correction(known, youId, run, sim.self, sim.streamed, performance.now());
@@ -914,6 +945,7 @@ export function GameWorld({
       if (map !== sim.seen) {
         look(map);
       }
+      lightWhenClear(map);
       hearTheClock(map);
 
       // camera: follow your avatar, or sit still over the whole lab; a radio
@@ -958,7 +990,8 @@ export function GameWorld({
     /**
      * The lab answering the crew: a source somebody came across gets a blip
      * and a caption, a locker or cabinet opening within earshot its sound, a
-     * room whose lights came on a relay's click and its warm-up (rooms.ts).
+     * room whose lights came on a relay's click and its warm-up (rooms.ts) —
+     * in plain sight, once nothing lies over the world (`lightWhenClear`).
      * Whatever this client finds on its first look was there before it came
      * in.
      */
@@ -978,12 +1011,38 @@ export function GameWorld({
           (manual.kind === 'cabinet' ? cabinetUnlock : lockerOpen)();
         }
       }
-      for (const room of map.litRooms.filter((text) => !sim.lit.has(text))) {
-        lightRoom(map, room, news.lit.includes(room) ? sim.time : -Infinity);
+      const known = new Set(sim.lit.keys());
+      const lit = roomsComingOn(map.litRooms, known, news.lit, sim.pendingLit, covered());
+      for (const room of lit.long) {
+        lightRoom(map, room, -Infinity);
       }
-      if (news.lit.length > 0) {
-        lightsOnClick();
+      sim.pendingLit = lit.waiting;
+      warmUpRooms(map, lit.now);
+    }
+
+    /** Whether something lies over the world on this screen: a panel, pages, the pause. */
+    function covered(): boolean {
+      return !spectator && lockedRef.current;
+    }
+
+    /** The rooms that waited behind a panel or pages come on once nothing lies over the world. */
+    function lightWhenClear(map: WorldMap): void {
+      if (sim.pendingLit.length > 0) {
+        const lit = roomsComingOn([], new Set(), [], sim.pendingLit, covered());
+        sim.pendingLit = lit.waiting;
+        warmUpRooms(map, lit.now);
       }
+    }
+
+    /** Rooms coming on now: the relay's click, and their lights warming up from this moment. */
+    function warmUpRooms(map: WorldMap, rooms: readonly string[]): void {
+      if (rooms.length === 0) {
+        return;
+      }
+      for (const room of rooms) {
+        lightRoom(map, room, sim.time);
+      }
+      lightsOnClick();
     }
 
     /**
@@ -1014,11 +1073,11 @@ export function GameWorld({
      * This frame's light, each cut off by walls and shut doors: in the dark
      * your lamp, the crew's lamps, the drones' eyes, the emergency lamps, the
      * open hatch and lit rooms through open doors; while the lab has its
-     * power (`powered`), the room's own light round you instead. And what the
-     * world shows — whatever lies where light falls now, in a lit room, or
-     * fell earlier this run. The audience sees the whole lab, and the drones'
-     * cones only; so does everybody once the lab is lit `whole` again, as at
-     * the end of a run won.
+     * power (`powered`), your room lit whole instead — the rest of the lab
+     * dark. And what the world shows — whatever lies where light falls now, in
+     * a lit room, or fell earlier this run. The audience sees the whole lab,
+     * and the drones' cones only; so does everybody once the lab is lit
+     * `whole` again, as at the end of a run won.
      */
     function lightUp(map: WorldMap, powered: boolean, whole: boolean): FrameLight {
       const memory = runLight();
@@ -1027,7 +1086,7 @@ export function GameWorld({
         lamp,
         sight: memory.look(map, lamp, reachOf(lamp), shut),
       });
-      const lamps = powered ? powerLights(lit) : darkLights(map, lit);
+      const lamps = powered ? powerLights(map) : darkLights(map, lit);
       const falling = remember(memory, lamps);
       const everything = spectator || whole;
       const shown = (x: number, y: number): boolean =>
@@ -1055,19 +1114,41 @@ export function GameWorld({
     }
 
     /**
-     * The light while the lab has its power: the room's own round you, all
-     * round as far as you see. Nobody needs a lamp, and the emergency lamps
-     * are dark glass.
+     * The light while the lab has its power: your room's own, whole, to its
+     * walls and doors (`ownRoom`) — nothing behind them. Nobody needs a lamp,
+     * and the emergency lamps are dark glass. The audience sees the lab whole.
      */
-    function powerLights(lit: (lamp: Lamp) => Lit): FrameLamps {
+    function powerLights(map: WorldMap): FrameLamps {
       return {
-        own: spectator ? null : lit(powerLamp(sim.self)),
+        own: null,
+        room: spectator ? null : ownRoom(map),
         crew: [],
         eyes: new Map(),
         lamps: [],
         exit: null,
         spills: [],
       };
+    }
+
+    /**
+     * The room the power lights round you: the one whose floor you stand on,
+     * kept while you stand on a door between two — worked out anew only as
+     * you step onto another room's floor.
+     */
+    function ownRoom(map: WorldMap): Sim['room'] {
+      const here = `${Math.floor(sim.self.x)},${Math.floor(sim.self.y)}`;
+      if (sim.room?.light.keys.has(here) === true) {
+        return sim.room;
+      }
+      const light = powerRoom(map, sim.self);
+      if (light !== null) {
+        const path = new Path2D();
+        for (const run of light.runs) {
+          path.rect(run.x, run.y, run.length, 1);
+        }
+        sim.room = { light, path };
+      }
+      return sim.room;
     }
 
     /**
@@ -1083,6 +1164,7 @@ export function GameWorld({
         : [...sim.others.values()].map((o) => lit({ x: o.rx, y: o.ry, glow: CREW_GLOW, beam: null }));
       return {
         own,
+        room: null,
         crew,
         eyes: droneEyes(lit),
         lamps: burningLamps(map, lit),
@@ -1140,10 +1222,11 @@ export function GameWorld({
     /**
      * Marks the tiles `lamps` light now as seen in `memory`, as a lit room's
      * are from the moment its lights come on (`lightRoom`): whatever lies
-     * there stays drawn this run. Returns the tiles lit now.
+     * there stays drawn this run. Returns the tiles lit now — with the power
+     * on, your room's.
      */
     function remember(memory: LightMemory, lamps: FrameLamps): Set<string> {
-      const falling = new Set<string>();
+      const falling = new Set<string>(lamps.room?.light.keys);
       const { own, crew, eyes, exit, spills } = lamps;
       const lights = [
         ...(own === null ? [] : [own]),
@@ -1156,8 +1239,10 @@ export function GameWorld({
       for (const { lamp, sight } of lights) {
         for (const key of memory.lights(lamp, sight)) {
           falling.add(key);
-          memory.seen.add(key);
         }
+      }
+      for (const key of falling) {
+        memory.seen.add(key);
       }
       return falling;
     }
@@ -1307,10 +1392,13 @@ export function GameWorld({
       renderVignette(map, w, h, dpr, ending !== null);
     }
 
-    /** Where the cold open stands on this screen now: the power on, the light failing, or out. */
+    /**
+     * Where the cold open stands on this screen now: the power on, the light failing — one fade
+     * under reduced motion — or out.
+     */
     function sceneNow(): ColdOpenFrame {
       const since = darkRef.current;
-      return coldOpenFrame(since === null ? null : Date.now() - since);
+      return coldOpenFrame(since === null ? null : Date.now() - since, reducedRef.current);
     }
 
     /** Where the ending stands on this screen now (finale.ts); null while the run goes on. */
@@ -1329,10 +1417,10 @@ export function GameWorld({
 
     /**
      * The light over the picture: the darkness, and what cuts it open — the
-     * lab's own warm light where you see while it has its power. The
-     * audience sees the lab whole, warm all over while the power is on; and
-     * so does everybody as every room's light comes on at the end of a run
-     * won (`whole`, 0 to 1), the darkness lifting as it does.
+     * lab's own warm light in your room while it has its power. The audience
+     * sees the lab whole, warm all over while the power is on; and so does
+     * everybody as every room's light comes on at the end of a run won
+     * (`whole`, 0 to 1), the darkness lifting as it does.
      */
     function renderLight(
       map: WorldMap,
@@ -1345,8 +1433,8 @@ export function GameWorld({
     ): void {
       if (whole > 0) {
         renderPowerOn(map, s, w, h, null, whole);
-      } else if (powered) {
-        renderPowerOn(map, s, w, h, light.own, 1);
+      } else if (powered && (spectator || light.room !== null)) {
+        renderPowerOn(map, s, w, h, light.room?.path ?? null, 1);
       }
       if (!spectator && whole < 1) {
         renderLighting(map, s, w, h, light, 1 - whole);
@@ -1417,17 +1505,17 @@ export function GameWorld({
 
     /**
      * The lab with its power on: the ceiling lights' warm pools and a warm lift
-     * over the picture, as far as `own` light falls — a player sees what is in
-     * sight, nothing behind a wall; the audience, with no light of its own,
-     * and everybody at the end of a run won, the whole lab — `strength` up.
-     * The darkness goes over it after.
+     * over the picture, within `clip` (a path in tiles) — a player's room,
+     * whole, nothing beyond its walls; the audience, and everybody at the end
+     * of a run won, the whole lab (null) — `strength` up. The darkness goes
+     * over it after.
      */
     function renderPowerOn(
       map: WorldMap,
       s: number,
       w: number,
       h: number,
-      own: Lit | null,
+      clip: Path2D | null,
       strength: number,
     ): void {
       if (ctx == null) {
@@ -1435,8 +1523,8 @@ export function GameWorld({
       }
       ctx.save();
       ctx.setTransform(s, 0, 0, s, w / 2 - sim.draw.x * s, h / 2 - sim.draw.y * s);
-      if (own !== null) {
-        ctx.clip(clipPath(own));
+      if (clip !== null) {
+        ctx.clip(clip);
       }
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = strength;
@@ -1510,8 +1598,12 @@ export function GameWorld({
         ctx.restore();
       };
       for (const plate of map.plates.filter((p) => light.shown(p.x, p.y))) {
-        const { pressed, label, freezesDrone: camera } = plate;
-        const look = { pressed, label, camera, text };
+        const look = {
+          pressed: plate.pressed,
+          label: plateCaption(plate),
+          camera: plate.freezesDrone,
+          text,
+        };
         drawAt(plate.x + 0.5, plate.y + 0.5, () => drawPlate(ctx, look));
       }
       const now = Date.now();
@@ -1711,35 +1803,56 @@ export function GameWorld({
       ctx.globalAlpha = 1;
     }
 
-    /** A tag on the screen like the E prompt: a dark pill with rim and text in `tint`. */
-    function drawTag(text: string, sx: number, sy: number, tint: string, dpr: number): void {
+    /** The box a tag like the E prompt covers with `text` centred on (sx, sy); device pixels. */
+    function tagBox(text: string, sx: number, sy: number, dpr: number): Box {
+      if (ctx == null) {
+        return { left: sx, top: sy, right: sx, bottom: sy };
+      }
+      ctx.font = `700 ${12 * dpr}px ui-monospace, Menlo, monospace`;
+      const half = (ctx.measureText(text).width + 16 * dpr) / 2;
+      return { left: sx - half, top: sy - 11 * dpr, right: sx + half, bottom: sy + 9 * dpr };
+    }
+
+    /** A tag on the screen like the E prompt: a dark pill with rim and text in `tint`, in `box`. */
+    function drawTag(text: string, box: Box, tint: string, dpr: number): void {
       if (ctx == null) {
         return;
       }
       ctx.font = `700 ${12 * dpr}px ui-monospace, Menlo, monospace`;
-      const tw = ctx.measureText(text).width + 16 * dpr;
       ctx.fillStyle = 'rgba(7,11,15,0.88)';
       ctx.strokeStyle = tint;
       ctx.lineWidth = dpr;
       ctx.beginPath();
-      ctx.roundRect(sx - tw / 2, sy - 11 * dpr, tw, 20 * dpr, 5 * dpr);
+      ctx.roundRect(box.left, box.top, box.right - box.left, box.bottom - box.top, 5 * dpr);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = tint;
-      ctx.fillText(text, sx, sy + 4 * dpr);
+      ctx.fillText(text, (box.left + box.right) / 2, box.top + 15 * dpr);
     }
 
-    /** „Spind entdeckt" over a source the crew has just come across, rising as it fades. */
-    function renderCaptions(s: number, w: number, h: number, dpr: number): void {
+    /** `box` moved down by `dy`, device pixels. */
+    function moved(box: Box, dy: number): Box {
+      return { ...box, top: box.top + dy, bottom: box.bottom + dy };
+    }
+
+    /**
+     * „Spind entdeckt" over a source the crew has just come across, rising as
+     * it fades — above the E prompt (`prompt`, its box), never on it.
+     */
+    function renderCaptions(s: number, view: Viewport, prompt: Box | null): void {
       if (ctx == null) {
         return;
       }
+      const { w, h, dpr } = view;
       sim.captions = sim.captions.filter((c) => sim.time - c.at < CAPTION_SECONDS);
       for (const caption of sim.captions) {
         const age = (sim.time - caption.at) / CAPTION_SECONDS;
         const [sx, rawY] = worldToScreen(s, w, h, caption.x, caption.y - 1 - 0.3 * age);
+        const box = tagBox(caption.text, sx, Math.max(rawY, view.top + 24 * dpr), dpr);
+        const ceiling = view.top + 13 * dpr;
+        const dy = prompt === null ? 0 : shiftClear(box, prompt, TAG_AIR * dpr, ceiling);
         ctx.globalAlpha = Math.min(1, age * 10, (1 - age) * 4);
-        drawTag(caption.text, sx, Math.max(rawY, (safeTopCss + 24) * dpr), '#93c5fd', dpr);
+        drawTag(caption.text, moved(box, dy), '#93c5fd', dpr);
       }
       ctx.globalAlpha = 1;
     }
@@ -2011,7 +2124,8 @@ export function GameWorld({
 
     /**
      * The darkness of the overlay — deeper in the last minute and all through
-     * the escape — and the light every lamp cuts into it where it can see.
+     * the escape — none over the lit rooms and, with the power on, over your
+     * room, and the light every lamp cuts into it where it can see.
      */
     function cutDarkness(
       map: WorldMap,
@@ -2034,13 +2148,16 @@ export function GameWorld({
       octx.fillStyle = `rgba(3,5,9,${base})`;
       octx.fillRect(0, 0, w, h);
       litDarkness(base, s, w, h);
+      for (const run of light.room?.light.runs ?? []) {
+        clearRun(run, s, w, h);
+      }
       octx.globalCompositeOperation = 'destination-out';
       const { punch, beam, within } = lightCutters(octx, s, w, h);
 
-      // Your light: a lit circle round you — the room's own, as far as you see,
-      // while the lab has its power — and in the dark a flashlight cone in facing
-      // direction; everybody else's softer glow. Each lights what it can see, and
-      // nothing behind a wall — so the walls cut a clean edge into the circle.
+      // Your light in the dark: a lit circle round you and a flashlight cone in
+      // facing direction; everybody else's softer glow. Each lights what it can
+      // see, and nothing behind a wall — so the walls cut a clean edge into the
+      // circle. With the power on, your room was cleared whole above.
       const own = light.own;
       if (own !== null) {
         within(own, () => {
@@ -2099,22 +2216,32 @@ export function GameWorld({
       const alarmDim = escapeRed() * (most + (least - most) * sirenSwell());
       const left = (room: string): number =>
         1 - roomUp(sim.lit.get(room)?.since ?? -Infinity) * (1 - alarmDim);
-      const pixel = (x: number, y: number): [number, number] => {
-        const [sx, sy] = worldToScreen(s, w, h, x, y);
-        return [Math.round(sx), Math.round(sy)];
-      };
       for (const { rooms, runs } of litTileGroups.groups) {
         const keep = rooms.reduce((dark, room) => dark * left(room), 1);
         octx.fillStyle = `rgba(3,5,9,${base * keep})`;
         for (const run of runs) {
-          const [x0, y0] = pixel(run.x, run.y);
-          const [x1, y1] = pixel(run.x + run.length, run.y + 1);
-          octx.clearRect(x0, y0, x1 - x0, y1 - y0);
+          const [x0, y0, x1, y1] = clearRun(run, s, w, h);
           if (keep > 0) {
             octx.fillRect(x0, y0, x1 - x0, y1 - y0);
           }
         }
       }
+    }
+
+    /**
+     * Clears the darkness of the overlay over a run of tiles, whole pixels, so
+     * that neighbouring runs meet without seams; returns the pixels cleared,
+     * left, top, right and bottom.
+     */
+    function clearRun(run: Run, s: number, w: number, h: number): [number, number, number, number] {
+      const [sx0, sy0] = worldToScreen(s, w, h, run.x, run.y);
+      const [sx1, sy1] = worldToScreen(s, w, h, run.x + run.length, run.y + 1);
+      const x0 = Math.round(sx0);
+      const y0 = Math.round(sy0);
+      const x1 = Math.round(sx1);
+      const y1 = Math.round(sy1);
+      octx?.clearRect(x0, y0, x1 - x0, y1 - y0);
+      return [x0, y0, x1, y1];
     }
 
     /** The escape's siren turning, 0 to 1 and back: what the red light swells with. */
@@ -2389,8 +2516,11 @@ export function GameWorld({
       }
       // Anything you need to walk to gets an arrow at the screen edge while
       // it is out of sight — in the dark that is the only way to find it. The
-      // room names keep off the arrows, as off the minimap.
-      const markers = edgeMarkers(map, s, view);
+      // arrows keep off your figure, and the room names off the arrows, as
+      // off the minimap.
+      const figure = spectator ? null : figureOn(s, view);
+      const shunned = figure === null ? view.boxes : [...view.boxes, figure.keepOut];
+      const markers = edgeMarkers(map, s, { ...view, boxes: shunned });
       const arrows = markers.flatMap(({ at, captionWidth }) => markerBoxes(at, captionWidth, dpr));
       renderRoomNames(map, s, { ...view, boxes: [...view.boxes, ...arrows] });
       if (map.exit !== null && map.exit.open) {
@@ -2400,10 +2530,29 @@ export function GameWorld({
         ctx.fillText('NOTAUSGANG', ex, ey);
       }
       renderEdgeMarkers(markers, dpr);
-      renderPrompt(map, s, view);
-      renderCaptions(s, w, h, dpr);
+      const prompt = renderPrompt(map, s, view, figure?.body ?? null);
+      renderCaptions(s, view, prompt);
       renderChatBubbles(s, w, h, dpr);
       renderCarrying(map, view);
+    }
+
+    /**
+     * Your figure on the canvas, device pixels: what it covers, from its name
+     * tag over its head down to its feet (`body`), and the stretch of about a
+     * tile and a half round it the edge arrows keep off (`keepOut`) — on a
+     * phone held sideways the canvas is low, and an arrow would lie on you.
+     */
+    function figureOn(s: number, view: Viewport): { body: Box; keepOut: Box } {
+      const [sx, sy] = worldToScreen(s, view.w, view.h, sim.self.x, sim.self.y);
+      const half = Math.max(0.6 * s, 30 * view.dpr);
+      const body = {
+        left: sx - half,
+        top: sy - 0.62 * s - 16 * view.dpr,
+        right: sx + half,
+        bottom: sy + 0.5 * s,
+      };
+      const r = KEEP_OUT_TILES * s;
+      return { body, keepOut: { left: sx - r, top: sy - r, right: sx + r, bottom: sy + r } };
     }
 
     /** The arrows due at the screen's edge this frame, each with its caption, placed. */
@@ -2476,21 +2625,34 @@ export function GameWorld({
       ctx.restore();
     }
 
-    /** What E does here, over the thing it works on; amber where E does nothing yet. */
-    function renderPrompt(map: WorldMap, s: number, view: Viewport): void {
+    /**
+     * What E does here, over the thing it works on — amber where E does
+     * nothing yet — and clear of your figure (`figure`), above it where there
+     * is room: standing beside a station, its prompt would lie on your name.
+     * Returns where it went, or null for none.
+     */
+    function renderPrompt(
+      map: WorldMap,
+      s: number,
+      view: Viewport,
+      figure: Box | null,
+    ): Box | null {
       const { you, sourcesHere, puzzle } = viewRef.current;
       const action = lockedRef.current
         ? null
         : contextAction(map, sim.self, you.id, sourcesHere, puzzle !== null);
       if (action === null) {
-        return;
+        return null;
       }
       const { w, h, dpr } = view;
       const [sx, rawY] = worldToScreen(s, w, h, action.x, action.y);
       // Like the edge arrows: the prompt must stay below the objective bar.
-      const sy = Math.max(rawY, view.top + 24 * dpr);
-      const tint = action.kind === 'locked' ? '#fbbf24' : '#2dd4bf';
-      drawTag(promptText(action, !touchPad.matches), sx, sy, tint, dpr);
+      const text = promptText(action, !touchPad.matches);
+      const box = tagBox(text, sx, Math.max(rawY, view.top + 24 * dpr), dpr);
+      const ceiling = view.top + 13 * dpr;
+      const at = moved(box, figure === null ? 0 : shiftClear(box, figure, TAG_AIR * dpr, ceiling));
+      drawTag(text, at, action.kind === 'locked' ? '#fbbf24' : '#2dd4bf', dpr);
+      return at;
     }
 
     /**
@@ -2561,16 +2723,13 @@ export function GameWorld({
     // An alarm strobes over the world and shakes the camera (alarm.ts, finale.css).
     <div className={alarmClass === '' ? 'world-wrap' : `world-wrap ${alarmClass}`}>
       <canvas ref={canvasRef} className={`world-canvas ${spectator ? 'world-canvas--wide' : ''}`} />
-      {tip !== null &&
-        (tip.overPanel ? (
-          <div className="coach coach--panel">{tip.text}</div>
-        ) : (
-          // Just above the control cluster, wherever it reaches: never on the
-          // avatar under the objective bar, nor on the minimap.
-          <div className="coach" style={{ bottom: controlsReach + TIP_GAP }}>
-            {tip.text}
-          </div>
-        ))}
+      {tip !== null && (
+        // Just above the control cluster, wherever it reaches: never on the
+        // avatar under the objective bar, nor on the minimap.
+        <div className="coach" style={{ bottom: controlsReach + TIP_GAP }}>
+          {tip.text}
+        </div>
+      )}
       {!spectator && (
       <div className="world-controls" ref={controlsRef}>
         <div className="world-dpad" role="group" aria-label="Steuerkreuz">

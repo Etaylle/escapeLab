@@ -56,6 +56,24 @@ function spawnOf(walker: Walker): { x: number; y: number } {
   return { x: spawn.x + 0.5, y: spawn.y + 0.5 };
 }
 
+/**
+ * A first step off a spawn: half a tile towards the first neighbouring tile that is floor —
+ * south, east, north or west. The rematch draws its spawns at random, and from (1,6) at the
+ * Flur's west end the way south runs into the wall.
+ */
+function stepOff(spot: { x: number; y: number }): { x: number; y: number } {
+  const floor = (x: number, y: number): boolean =>
+    blackout.map.tiles[Math.floor(y)]?.charAt(Math.floor(x)) === '.';
+  const ways = [
+    [0, 0.5],
+    [0.5, 0],
+    [0, -0.5],
+    [-0.5, 0],
+  ] as const;
+  const [dx, dy] = ways.find(([wx, wy]) => floor(spot.x + 2 * wx, spot.y + 2 * wy)) ?? [0, 0];
+  return { x: spot.x + dx, y: spot.y + dy };
+}
+
 /** One position update, as a client streams it. */
 function send(room: Room, walker: Walker, run: number, x: number, y: number): void {
   room.updatePosition(walker.playerId, run, { x, y, facing: 0, moving: true });
@@ -126,9 +144,11 @@ describe('Room movement', () => {
     send(room, anna, run, BY_THE_SCHOTT.x, BY_THE_SCHOTT.y);
     expect(broadcastSpot(ben, anna)).toEqual(spawn);
     expect(warn).toHaveBeenCalledTimes(1);
-    // The first step of the run sets out from the spawn.
-    send(room, anna, run, spawn.x, spawn.y + 0.5);
-    expect(broadcastSpot(ben, anna)).toEqual({ x: spawn.x, y: spawn.y + 0.5 });
+    // The first step of the run sets out from the spawn, onto open floor.
+    const first = stepOff(spawn);
+    expect(first).not.toEqual(spawn);
+    send(room, anna, run, first.x, first.y);
+    expect(broadcastSpot(ben, anna)).toEqual(first);
     room.dispose();
   });
 

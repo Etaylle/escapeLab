@@ -1,10 +1,18 @@
 import type { PuzzleView } from '@escapelab/core';
+import { secondsText, syncPress } from './syncPress.js';
 
 /** A line for a newcomer; its `id` says which, so that a session shows it once. */
 export interface CoachMark {
   id: string;
   text: string;
 }
+
+/**
+ * The coach marks this page has shown, by id. Each is shown once per session — across runs,
+ * so a second run is not cluttered with things you already know: the world's tips
+ * (GameWorld) and the devices' lines (the station's frame in Game.tsx) alike.
+ */
+export const SHOWN_MARKS = new Set<string>();
 
 /** What a newcomer works the devices with: a finger on a touch screen, else a mouse. */
 export type Pointer = 'touch' | 'mouse';
@@ -20,12 +28,14 @@ export function pointerNow(): Pointer {
 /** A device's line: one for every pointer, or a tap and a click worded apart. */
 type Line = string | Readonly<Record<Pointer, string>>;
 
-/** Every device's line, by device: a module, or at a station with two consoles a console's part. */
+/**
+ * Every device's line but the sync button's, which its window words (`syncMark`): by module,
+ * or at a station with two consoles by a console's part.
+ */
 const LINES = {
-  'button-sync': 'Alle drücken zugleich — ein Druck allein verfällt.',
   lever: {
-    touch: 'Beide Hebel gleichzeitig antippen, wenn der Partner da ist.',
-    mouse: 'Beide Hebel gleichzeitig: E drücken, wenn der Partner da ist.',
+    touch: 'Jeder seinen Hebel — gleichzeitig antippen.',
+    mouse: 'Jeder seinen Hebel — gleichzeitig E drücken.',
   },
   wiring: {
     touch: 'Ein Tipp auf ein Kabel trennt es sofort.',
@@ -53,15 +63,15 @@ const LINES = {
 type Device = keyof typeof LINES;
 
 /**
- * The device in front of the player: the module — a sync station drawn as
- * a main switch is one of its own — or at a station with two consoles this
- * console's part. None for the relay, which is no station, nor at a console
- * nobody stands at.
+ * The device in front of the player: the module — a sync station drawn as a main switch is
+ * one of its own — or at a station with two consoles this console's part. None for the relay,
+ * which is no station, nor at a console nobody stands at, nor for the sync button, whose line
+ * is its window's.
  */
 function deviceOf(puzzle: PuzzleView): Device | null {
   switch (puzzle.kind) {
     case 'button-sync':
-      return puzzle.style === 'lever' ? 'lever' : 'button-sync';
+      return puzzle.style === 'lever' ? 'lever' : null;
     case 'circuit':
       return puzzle.role === null ? null : `circuit-${puzzle.role}`;
     case 'signal':
@@ -74,12 +84,29 @@ function deviceOf(puzzle: PuzzleView): Device | null {
 }
 
 /**
+ * The sync button's line, as its window has it: every press within so many seconds, or any
+ * order at all — each a mark of its own, since they teach different rules.
+ */
+function syncMark(puzzle: Extract<PuzzleView, { kind: 'button-sync' }>): CoachMark {
+  const { windowMs } = syncPress(puzzle);
+  return windowMs === null
+    ? { id: 'device:button-sync', text: 'Alle drücken — Reihenfolge egal.' }
+    : {
+        id: 'device:button-sync:window',
+        text: `Alle innerhalb von ${secondsText(windowMs)} s drücken.`,
+      };
+}
+
+/**
  * The one line a newcomer needs at the device in front of them: what its
  * controls do, since the device itself says nothing. One per device; where
  * it names the gesture, the one `pointer` makes — a tap on a touch screen,
  * a click with a mouse.
  */
 export function deviceCoach(puzzle: PuzzleView, pointer: Pointer = pointerNow()): CoachMark | null {
+  if (puzzle.kind === 'button-sync' && puzzle.style !== 'lever') {
+    return syncMark(puzzle);
+  }
   const device = deviceOf(puzzle);
   if (device === null) {
     return null;

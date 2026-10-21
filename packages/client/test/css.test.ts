@@ -65,3 +65,52 @@ describe('the bar over a stage', () => {
     expect(rule?.[1]).toMatch(/backdrop-filter:\s*none;/);
   });
 });
+
+/** What the block opened by `header` holds, up to its matching brace; null where there is none. */
+function blockAfter(source: string, header: string): string | null {
+  const start = source.indexOf(header);
+  if (start === -1) {
+    return null;
+  }
+  const open = source.indexOf('{', start);
+  let depth = 0;
+  for (let i = open; i < source.length; i++) {
+    if (source.charAt(i) === '{') {
+      depth += 1;
+    } else if (source.charAt(i) === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(open + 1, i);
+      }
+    }
+  }
+  return null;
+}
+
+describe('a phone held sideways', () => {
+  const ux2 = readFileSync(new URL('styles/ux2.css', SRC), 'utf8');
+  const sideways = blockAfter(ux2, '@media (orientation: landscape) and (max-height: 500px)') ?? '';
+
+  it('sets the end card in two columns: the crew’s shot left, word, time and rank right', () => {
+    const card = blockAfter(sideways, '.end-title {') ?? '';
+    expect(card).toMatch(/display:\s*grid;/);
+    expect(card).toMatch(/grid-template-columns:/);
+    expect(card).toMatch(/'scene mission'\s*'scene word'\s*'scene facts'/);
+    expect(blockAfter(sideways, '.end-scene {')).toMatch(/grid-area:\s*scene;/);
+    expect(blockAfter(sideways, '.end-facts {')).toMatch(/grid-area:\s*facts;/);
+  });
+
+  it('keeps the top bar on one line', () => {
+    expect(blockAfter(sideways, '.topbar {')).toMatch(/flex-wrap:\s*nowrap;/);
+  });
+});
+
+describe('the main switch under reduced motion', () => {
+  it('moves no grip, down or springing back up', () => {
+    const coldopen = readFileSync(new URL('styles/coldopen.css', SRC), 'utf8');
+    const calm = blockAfter(coldopen, '@media (prefers-reduced-motion: reduce)') ?? '';
+    expect(calm).toMatch(
+      /\.lever \.lever-grip,\s*\.lever \.lever-unit--down \.lever-grip \{\s*transition:\s*none;/,
+    );
+  });
+});

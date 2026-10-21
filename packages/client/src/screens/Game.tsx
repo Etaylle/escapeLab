@@ -8,18 +8,33 @@ import type {
   PuzzleView,
 } from '@escapelab/core';
 import { useKeys, useMedia, useNow } from '../hooks.js';
-import { airIcon, bannerFrom, noticeMs, radioNews, withNews, type Notice } from '../radio.js';
+import {
+  AFTER_SOLVE_MS,
+  airIcon,
+  bannerFrom,
+  followsSolve,
+  noticeMs,
+  radioNews,
+  withNews,
+  type Notice,
+} from '../radio.js';
+import { deviceCoach, firstSight, SHOWN_MARKS, type CoachMark } from '../puzzles/coach.js';
 import { useSolvedHold, type DeviceRun } from '../puzzles/Device.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
-import { play } from '../sounds.js';
-import { radioChirp } from '../world/audio.js';
+import {
+  ALARM_NOTICE_MS,
+  alarmLine,
+  alarmNotice,
+  type AlarmNotice,
+} from '../world/alarm.js';
+import { briefingCountdown, radioChirp } from '../world/audio.js';
 import { opensLit, REVEAL_MS, useDarkSince, useRevealed } from '../world/coldOpen.js';
 import { consoleName } from '../world/consoles.js';
 import { escapeChecklist, escaping, type Mate } from '../world/escape.js';
 import { REDUCED_MOTION, veilOf, type Ending, type Finale } from '../world/finale.js';
 import { GameWorld, type ChatLine, type MapPing } from '../world/GameWorld.js';
-import { toBring } from '../world/markers.js';
-import type { KnownPositions } from '../world/movement.js';
+import { dueParts } from '../world/markers.js';
+import { startingSpot, type KnownPositions } from '../world/movement.js';
 import { startRoom } from '../world/rooms.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
 import { Icon } from './Icon.js';
@@ -144,9 +159,24 @@ function RelayAlert({
 }
 
 /**
+ * How the clock looks with `left` ms on it: big and red in the last ten seconds, pulsing red
+ * in the last minute — and amber all through the escape until then, the hatch open and the
+ * time still enough.
+ */
+export function clockStage(left: number, escaping: boolean): string {
+  if (left < 10_000) {
+    return 'final';
+  }
+  if (left < 60_000) {
+    return 'critical';
+  }
+  return escaping ? 'countdown--escape' : '';
+}
+
+/**
  * The mission clock. Until `flashUntil` (epoch ms) — where it has just
- * started on this screen — its digits flash red, once. It pulses red in the
- * last minute, and all through the escape (`escaping`).
+ * started on this screen — its digits flash red, once; then as `clockStage`
+ * has it.
  */
 function Countdown({
   deadlineAt,
@@ -158,8 +188,7 @@ function Countdown({
   escaping: boolean;
 }) {
   const now = useNow(200);
-  const left = deadlineAt - now;
-  const stage = left < 10_000 ? 'final' : left < 60_000 || escaping ? 'critical' : '';
+  const stage = clockStage(deadlineAt - now, escaping);
   const start = flashUntil !== null && now < flashUntil ? ' countdown--start' : '';
   return <div className={`countdown ${stage}${start}`}>{formatRemaining(deadlineAt, now)}</div>;
 }
@@ -178,9 +207,10 @@ export function PowerStatus() {
 }
 
 /**
- * The alarms against the limit, under the clock: a mark for every alarm the
- * limit allows, ✕ once charged, ○ while free. The last free one turns the
- * warning colour — the next alarm ends the run. Nothing without a limit.
+ * The alarms against the limit, under the clock, under the word ALARME: a
+ * mark for every alarm the limit allows, ✕ once charged, ○ while free. The
+ * last free one turns the warning colour — the next alarm ends the run.
+ * Nothing without a limit.
  */
 export function AlarmMarks({ alarms }: { alarms: PlayerView['alarms'] }) {
   const { count, limit } = alarms;
@@ -190,6 +220,7 @@ export function AlarmMarks({ alarms }: { alarms: PlayerView['alarms'] }) {
   const lastFree = count === limit - 1;
   return (
     <div className="alarm-marks" role="img" aria-label={`Alarme: ${count} von höchstens ${limit}`}>
+      <span className="alarm-marks-label">ALARME</span>
       {Array.from({ length: limit }, (_, i) => {
         const lit = i < count;
         const tone = lit ? ' alarm-mark-lit' : lastFree ? ' alarm-mark-warn' : '';
@@ -208,12 +239,26 @@ const BRIEFING_MS = 3600;
 
 /**
  * Mission briefing shown for the first seconds after launch: the mission,
- * where you are and how many alarms the run takes.
+ * where you are and how many alarms the run takes, counted down with a beep
+ * at each number — heard only where it shows, so never in a run that opens
+ * with the power on.
  */
 function Briefing({ view }: { view: PlayerView }) {
   const now = useNow(200);
   const startedAt = view.startedAt ?? now;
   const msIn = now - startedAt;
+  const run = view.startedAt;
+  const counted = useRef<number | null>(null);
+  useEffect(() => {
+    if (run === null || counted.current === run) {
+      return;
+    }
+    counted.current = run;
+    const elapsed = Date.now() - run;
+    if (elapsed < BRIEFING_MS) {
+      briefingCountdown(elapsed);
+    }
+  }, [run]);
   if (msIn > BRIEFING_MS) {
     return null;
   }
@@ -236,27 +281,19 @@ function Briefing({ view }: { view: PlayerView }) {
 }
 
 /**
- * The start's sound and the alarm banner; the world strobes and shakes at an
- * alarm on its own (world/alarm.ts), and a solved station's device sweeps,
- * sounds and closes itself (puzzles/Device.tsx).
+ * The alarm banner, up for ALARM_NOTICE_MS after each alarm; the world strobes
+ * and shakes at an alarm on its own (world/alarm.ts), and a solved station's
+ * device sweeps, sounds and closes itself (puzzles/Device.tsx).
  */
 function useFeedback(view: PlayerView): { alarmVisible: boolean } {
   const [alarmVisible, setAlarmVisible] = useState(false);
   const prevPenalty = useRef(view.penaltySeq);
-  const started = useRef(false);
-
-  useEffect(() => {
-    if (!started.current) {
-      started.current = true;
-      play('start');
-    }
-  }, []);
 
   useEffect(() => {
     if (view.penaltySeq > prevPenalty.current) {
       prevPenalty.current = view.penaltySeq;
       setAlarmVisible(true);
-      const alarmTimer = setTimeout(() => setAlarmVisible(false), 4000);
+      const alarmTimer = setTimeout(() => setAlarmVisible(false), ALARM_NOTICE_MS);
       return () => clearTimeout(alarmTimer);
     }
     prevPenalty.current = view.penaltySeq;
@@ -280,10 +317,11 @@ export interface NoticeGates {
 /**
  * What the objective bar carries under the goal right now, one notice at a
  * time so they never stack: the lines on the air as they come in, each with
- * a chirp (see `withNews` for a fresh batch), and the note once this player
- * has walked up to the Laborkennung. Nothing shows before its gate opens. A
- * player who spawns at the sign gets the note too; one who reconnects later
- * does not, they read it before.
+ * a chirp (see `withNews` for a fresh batch) — a line that comes with a solve
+ * AFTER_SOLVE_MS later, so that the win is seen first — and the note once
+ * this player has walked up to the Laborkennung. Nothing shows before its
+ * gate opens. A player who spawns at the sign gets the note too; one who
+ * reconnects later does not, they read it before.
  */
 function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
   const seen = useRef(0);
@@ -292,10 +330,12 @@ function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
   const briefingEnds = (view.startedAt ?? 0) + BRIEFING_MS;
 
   useEffect(() => {
-    const news = radioNews(view.events, seen.current, Date.now());
+    const now = Date.now();
+    const news = radioNews(view.events, seen.current, now);
+    const notBefore = followsSolve(view.events, seen.current) ? now + AFTER_SOLVE_MS : 0;
     seen.current = view.events.length;
     if (news.length > 0) {
-      setQueue((queued) => withNews(queued, news));
+      setQueue((queued) => withNews(queued, news, notBefore));
     }
   }, [view.events]);
 
@@ -316,7 +356,8 @@ function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
       setShown(null);
       return undefined;
     }
-    const wait = Math.max(0, gate - Date.now());
+    const from = next.kind === 'line' ? Math.max(gate, next.notBefore) : gate;
+    const wait = Math.max(0, from - Date.now());
     const up = noticeMs(next, window.matchMedia('(pointer: coarse)').matches);
     const on = setTimeout(() => {
       if (next.kind === 'line') {
@@ -434,8 +475,32 @@ export function stationLabel(puzzle: PuzzleView, map: MapView): string {
 }
 
 /**
+ * The newcomer's line for the device in front of them (puzzles/coach.ts), the first time this
+ * session meets it: kept for as long as the device stays open, so that nothing jumps under
+ * the player's hands.
+ */
+function useDeviceCoach(puzzle: PuzzleView): CoachMark | null {
+  const next = deviceCoach(puzzle);
+  const id = next?.id ?? null;
+  const [kept, setKept] = useState(() => ({ id, mark: firstSight(next, SHOWN_MARKS) }));
+  if (kept.id !== id) {
+    // Another device in the same frame: its own first sight.
+    setKept({ id, mark: firstSight(next, SHOWN_MARKS) });
+  }
+  const mark = kept.id === id ? kept.mark : null;
+  useEffect(() => {
+    if (mark !== null) {
+      SHOWN_MARKS.add(mark.id);
+    }
+  }, [mark]);
+  return mark;
+}
+
+/**
  * The open station over the world: its device, which names it on its plate
- * and says on its LED strip who backs this player up.
+ * and says on its LED strip who backs this player up — and, the first time,
+ * the line that says what its controls do, under the Laborkennung's row,
+ * where it covers neither the serial nor the device.
  */
 export function StationModal({
   puzzle,
@@ -447,7 +512,7 @@ export function StationModal({
   onClose,
 }: {
   puzzle: PuzzleView;
-  /** the run around the device: its alarms and the stations solved */
+  /** the run around the device: its alarms, the stations solved, the crew */
   run: DeviceRun;
   map: MapView;
   edgework: PlayerView['edgework'];
@@ -455,6 +520,7 @@ export function StationModal({
   send: (msg: ClientMessage) => void;
   onClose: () => void;
 }) {
+  const coach = useDeviceCoach(puzzle);
   return (
     <WorldModal
       kind="station"
@@ -462,6 +528,11 @@ export function StationModal({
       edgework={edgework}
       onClose={onClose}
     >
+      {coach !== null && (
+        <p className="station-coach" role="note">
+          {coach.text}
+        </p>
+      )}
       <PuzzlePanel puzzle={puzzle} run={run} send={send} deadlineAt={deadlineAt} />
     </WorldModal>
   );
@@ -522,12 +593,18 @@ interface Goal {
   missing: string | null;
 }
 
-function goalOf(view: PlayerView, map: MapView): Goal {
+/** Where a player stands, in tiles. */
+type Point = { x: number; y: number };
+
+/**
+ * The goal line for a player standing at `self`: the station, or the way out — and under it
+ * what the station in front of the crew lacks, and what the one after it will (hands are free
+ * to carry it now) or what lies in sight; a part for a station further on waits (`dueParts`).
+ */
+function goalOf(view: PlayerView, map: MapView, self: Point): Goal {
   const armedTitle = map.stations.find((s) => s.status === 'armed')?.title ?? null;
   const out = escaping(map);
-  // What the station in front of the crew lacks, and what a later one will — hands are
-  // free to carry it now.
-  const parts = toBring(map);
+  const parts = dueParts(map, self);
   const forNow = parts.filter(
     (i) => i.requiredForTitle === null || i.requiredForTitle === armedTitle,
   );
@@ -615,9 +692,29 @@ function StageGoal({ view, map, goal }: { view: PlayerView; map: MapView; goal: 
 }
 
 /**
+ * The alarm on the objective bar: what set it off and what it cost — „ALARM — Drohne! −20
+ * Sekunden" — and with the run's first, how many more it takes.
+ */
+function AlarmBanner({ notice }: { notice: AlarmNotice }) {
+  return (
+    <div className="alarm" role="alert">
+      <Icon name="siren" /> {alarmLine(notice)}
+      {notice.warning !== null && <span className="alarm-warning">{notice.warning}</span>}
+    </div>
+  );
+}
+
+/** A player on their spawn: where the bar takes them to stand when it is told nothing else. */
+function spawnOf(map: MapView): Point {
+  return { x: map.yourSpawn.x + 0.5, y: map.yourSpawn.y + 0.5 };
+}
+
+/**
  * The objective bar over the world: the goal and the clock — while the lab
  * still has its power, its name and NORMALBETRIEB instead — then whatever
- * is on the air, the emergency and the alarm.
+ * is on the air, the emergency and the alarm. While a device is open
+ * (`deviceOpen`) the alarm shows in its head instead: here it would lie half
+ * under it.
  */
 export function StageTop({
   view,
@@ -625,18 +722,24 @@ export function StageTop({
   coldOpen,
   notice,
   alarmVisible,
+  deviceOpen = false,
+  self = spawnOf(map),
 }: {
   view: PlayerView;
   map: MapView;
   coldOpen: ColdOpen;
   notice: Notice | null;
   alarmVisible: boolean;
+  deviceOpen?: boolean;
+  /** where this player stands, for what lies in their sight; their spawn by default */
+  self?: Point;
 }) {
   const relay = map.sabotage?.relay;
+  const alarm = alarmVisible && !deviceOpen ? alarmNotice(view.events, view.alarms) : null;
   return (
     <div className="stage-top">
       {coldOpen.dark ? (
-        <StageGoal view={view} map={map} goal={goalOf(view, map)} />
+        <StageGoal view={view} map={map} goal={goalOf(view, map, self)} />
       ) : (
         <PowerGoal view={view} map={map} />
       )}
@@ -672,11 +775,7 @@ export function StageTop({
         </div>
       )}
       {relay === undefined && <SabotageAlert sabotage={map.sabotage} />}
-      {alarmVisible && view.lastPenaltySec !== null && (
-        <div key={view.penaltySeq} className="alarm" role="alert">
-          <Icon name="siren" /> ALARM — Fehlversuch! −{view.lastPenaltySec} Sekunden
-        </div>
-      )}
+      {alarm !== null && <AlarmBanner key={alarm.seq} notice={alarm} />}
     </div>
   );
 }
@@ -744,9 +843,29 @@ function useEscapeCloses(open: ReturnType<typeof useOpened>, closeModal: () => v
 }
 
 /**
+ * The run around an open device as this player's view has it: its alarms — the latest one's
+ * notice for the device's head — the stations solved, what the server refused, and the crew,
+ * connected, in order, for the levers' names.
+ */
+export function deviceRunOf(view: PlayerView, refusals: number): DeviceRun {
+  return {
+    alarms: view.penaltySeq,
+    solved: view.currentPuzzleIndex,
+    refusals,
+    crew: {
+      you: view.you.id,
+      mates: view.players
+        .filter((player) => player.connected)
+        .map(({ id, name, color }) => ({ id, name, color })),
+    },
+    alarm: alarmNotice(view.events, view.alarms),
+  };
+}
+
+/**
  * The station's panel or a source's pages over the world, as this player
- * opened them; the panel hears of the run's alarms and solves and of what
- * the server refused (`refusals`).
+ * opened them; the panel hears of the run's alarms and solves, of the crew
+ * and of what the server refused (`refusals`).
  */
 function OverTheWorld({
   view,
@@ -765,7 +884,7 @@ function OverTheWorld({
   refusals: number;
   onClose: () => void;
 }) {
-  const run = { alarms: view.penaltySeq, solved: view.currentPuzzleIndex, refusals };
+  const run = deviceRunOf(view, refusals);
   return (
     <>
       {station !== null && (
@@ -826,7 +945,8 @@ export function GameScreen({
     return <p className="muted">Lade Mission …</p>;
   }
   const relay = map.sabotage?.relay;
-  const missingLabel = coldOpen.dark ? goalOf(view, map).missing : null;
+  const self = startingSpot(positionsRef.current, view.you.id, map, view.startedAt);
+  const missingLabel = coldOpen.dark ? goalOf(view, map, self).missing : null;
   const live = finale === null;
   const ending = finale === null ? 'game' : `game game--finale game--${finale.ending.split(':')[0]}`;
 
@@ -844,6 +964,8 @@ export function GameScreen({
           coldOpen={coldOpen}
           notice={notice}
           alarmVisible={alarmVisible}
+          deviceOpen={live && station !== null}
+          self={self}
         />
         <GameWorld
           view={view}

@@ -1227,6 +1227,15 @@ function drawPlateDisc(ctx: CanvasRenderingContext2D, pressed: boolean, camera: 
   ctx.translate(0, -cy);
 }
 
+/**
+ * What a plate's label says it does: a plate that holds a door open reads „HALTEN · TÜR" —
+ * HALTEN alone left open what for; the camera plate keeps its „KAMERA HALTEN", and a label a
+ * mission wrote otherwise stays as written.
+ */
+export function plateCaption(plate: { label: string; freezesDrone: boolean }): string {
+  return !plate.freezesDrone && plate.label === 'HALTEN' ? 'HALTEN · TÜR' : plate.label;
+}
+
 /** Anchor: TILE CENTER. Floor pressure plate: inset metal disc, pressed = sunk + teal rim
  * glow, label under it (world text, dark halo, uppercase); a camera plate shows a camera
  * glyph in the middle. */
