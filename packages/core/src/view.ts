@@ -93,6 +93,11 @@ export interface PlayerView {
    * gives every instance away.
    */
   seed?: { room: number; run: number | null };
+  /**
+   * The mission a won run of this one leads on to, by its catalog id — the
+   * end screen offers it; left out where none follows.
+   */
+  nextMissionId?: string;
 }
 
 /**
@@ -767,5 +772,6 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     puzzle: puzzleViewFor(state, playerId),
     map: mapViewFor(state, playerId),
     ...(state.roomSeed === null ? {} : { seed: { room: state.roomSeed, run: state.seed } }),
+    ...(state.mission.next === undefined ? {} : { nextMissionId: state.mission.next }),
   };
 }

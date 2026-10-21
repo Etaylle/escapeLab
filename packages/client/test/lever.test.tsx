@@ -16,11 +16,13 @@ function lever(fields: Partial<SyncView> = {}): SyncView {
   return {
     kind: 'button-sync',
     style: 'lever',
+    windowMs: 2000,
+    press: null,
     youPressed: false,
+    partnerPressed: false,
     pressedCount: 0,
     requiredCount: 2,
     here: 1,
-    attempts: 0,
     lastResult: null,
     index: 0,
     total: 6,
@@ -89,9 +91,10 @@ describe('the main switch’s panel', () => {
     expect(html).toContain('<div class="lever lever--thrown">');
   });
 
-  it('says when the throws came too far apart, as the sync button does', () => {
-    const html = panel(lever({ lastResult: 'missed-window', attempts: 1 }));
-    expect(html).toContain('Zeitfenster verpasst — Versuch 1');
+  it('says when the own throw ran out, as the sync button does', () => {
+    const html = panel(lever({ lastResult: 'expired' }));
+    expect(html).toContain('Zug verfallen — nochmal zu zweit');
+    expect(panel(lever())).not.toContain('verfallen');
   });
 
   it('has a lever and a word for every crew, three as well', () => {

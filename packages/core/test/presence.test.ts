@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, moduleFor, parseMission, viewFor, viewForSpectator } from '../src/index.js';
+import {
+  applyAction,
+  moduleFor,
+  parseMission,
+  puzzleDueAt,
+  viewFor,
+  viewForSpectator,
+} from '../src/index.js';
 import type { Action, GameState, Mission, PuzzleView } from '../src/index.js';
 import { labMission, openLab, standing, started, T0 } from './lab.js';
 
@@ -269,6 +276,8 @@ describe('button-sync by players', () => {
     'sync',
     3,
   );
+  /** The same lab with a station that has no window. */
+  const noWindow = labMission([{ type: 'button-sync', id: 'sync', title: 'Sync' }], 'sync', 3);
   const press = (playerId: string, at: number): Action => input(playerId, { press: true }, at);
 
   function syncOpen(at = T0 + 500): GameState {
@@ -303,12 +312,61 @@ describe('button-sync by players', () => {
     expect(viewFor(state, 'p2').puzzle).toMatchObject({ pressedCount: 1 });
   });
 
-  it('lets the presses expire outside the window', () => {
+  it('lets the presses expire outside the window, telling their owners and nobody else', () => {
     let state = syncOpen();
     state = applyAction(state, press('p1', T0 + 1000));
     state = applyAction(state, press('p2', T0 + 1500));
     state = applyAction(state, press('p3', T0 + 4000));
     expect(state.currentPuzzleIndex).toBe(0);
-    expect(viewFor(state, 'p1').puzzle).toMatchObject({ attempts: 1, lastResult: 'missed-window' });
+    expect(state.penaltySeq).toBe(0);
+    for (const id of ['p1', 'p2']) {
+      expect(viewFor(state, id).puzzle).toMatchObject({ press: null, lastResult: 'expired' });
+    }
+    expect(viewFor(state, 'p3').puzzle).toMatchObject({
+      press: { at: T0 + 4000, expiresAt: T0 + 6000 },
+      partnerPressed: false,
+      lastResult: null,
+    });
+    expect(viewForSpectator(state).puzzle).toMatchObject({ press: null, lastResult: null });
+  });
+
+  it('runs a press out on the clock: the tick at its expiry drops it, never before', () => {
+    const pressed = applyAction(syncOpen(), press('p1', T0 + 1000));
+    expect(puzzleDueAt(pressed)).toBe(T0 + 1000 + 2000 + 1);
+    // Exactly as old as the window, the press still lives: nothing changes.
+    const early = applyAction(pressed, { type: 'puzzle-tick', at: T0 + 3000 });
+    expect(early).toBe(pressed);
+    const ran = applyAction(pressed, { type: 'puzzle-tick', at: T0 + 3001 });
+    expect(viewFor(ran, 'p1').puzzle).toMatchObject({ press: null, lastResult: 'expired' });
+    expect(viewFor(ran, 'p2').puzzle).toMatchObject({ partnerPressed: false, lastResult: null });
+    expect([ran.penaltySeq, ran.events.length]).toEqual([0, pressed.events.length]);
+    expect(puzzleDueAt(ran)).toBeNull();
+    // A press of their own again, and the word is gone from their device.
+    const back = applyAction(ran, press('p1', T0 + 5000));
+    expect(viewFor(back, 'p1').puzzle).toMatchObject({ lastResult: null, youPressed: true });
+  });
+
+  it('keeps the presses of a paused run, with nothing due', () => {
+    const pressed = applyAction(syncOpen(), press('p1', T0 + 1000));
+    const paused = applyAction(pressed, { type: 'set-paused', paused: true, at: T0 + 1500 });
+    expect(puzzleDueAt(paused)).toBeNull();
+    expect(applyAction(paused, { type: 'puzzle-tick', at: T0 + 10_000 })).toBe(paused);
+  });
+
+  it('lets no press run out where the station has no window', () => {
+    const open = (): GameState => {
+      const here = standing(started(noWindow), { stations: { sync: ['p1', 'p2', 'p3'] } });
+      return applyAction(here, { type: 'interact', playerId: 'p1', at: T0 + 500 });
+    };
+    const pressed = applyAction(open(), press('p1', T0 + 1000));
+    expect(puzzleDueAt(pressed)).toBeNull();
+    expect(applyAction(pressed, { type: 'puzzle-tick', at: T0 + 3_600_000 })).toBe(pressed);
+    expect(viewFor(pressed, 'p1').puzzle).toMatchObject({
+      windowMs: null,
+      press: { at: T0 + 1000, expiresAt: null },
+    });
+    const second = applyAction(pressed, press('p2', T0 + 60_000));
+    // Minutes apart, well within the clock, every press still counts.
+    expect(applyAction(second, press('p3', T0 + 300_000)).phase).toBe('won');
   });
 });

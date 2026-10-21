@@ -11,12 +11,12 @@ import { RoomManager, seedsAllowed } from '../src/roomManager.js';
 import { walkTo } from './walk.js';
 
 /**
- * Blackout: spawns in the Archiv (3,2), the Maschinenraum (3,10) and the Flur
- * (6,5); the lights go out three seconds in, and the crew turns the lever of
- * the Notlicht (7,5) above the Flur plate (7,6), which holds the
+ * Blackout: spawns in the Archiv (3,2), at the west end of the Flur (1,6) and
+ * by the lever (6,5); the lights go out three seconds in, and the crew turns
+ * the lever of the Notlicht (7,5) above the Flur plate (7,6), which holds the
  * Maschinenraum door; console A of the Notstrom-Kasten stands in the
- * Maschinenraum at (1,9). Seeds 1 and 28 both start Anna there and Ben in the
- * Archiv.
+ * Maschinenraum at (1,9). Seeds 1 and 28 both start Anna at the west end of
+ * the Flur and Ben in the Archiv.
  */
 const blackout: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
@@ -50,7 +50,7 @@ function startedIn(manager: RoomManager, seed: number | null) {
   const ben = { ...room.join('Ben'), ...collector() };
   room.attach(anna.playerId, anna.listen);
   room.attach(ben.playerId, ben.listen);
-  room.act(ben.playerId, { kind: 'set-ready', ready: true });
+  room.setReady(ben.playerId, true);
   room.act(anna.playerId, { kind: 'start-mission' });
   return { room, anna, ben };
 }
@@ -60,7 +60,8 @@ function startedIn(manager: RoomManager, seed: number | null) {
  * where Anna and Ben start, where the audience sees the sources lie, the
  * edgework, and the fuse box Anna switches on beside console A, as the
  * audience sees all of it. Before that the lights go out and the two turn
- * the lever: Ben from the plate beside it, which lets Anna out to it and back.
+ * the lever, Ben from the plate beside it, which then holds the Maschinenraum
+ * door for Anna on her way to the fuse box.
  */
 function firstRunOf(manager: RoomManager, seed: number) {
   const { room, anna, ben } = startedIn(manager, seed);

@@ -196,6 +196,11 @@ export const missionSchema = z
     subtitle: z.string().default(''),
     /** sort key in the mission picker, ascending */
     listOrder: z.number().int().default(50),
+    /**
+     * the mission a won run leads on to, by its id in the catalog: the end
+     * screen offers it to the crew; the server checks that it exists
+     */
+    next: z.string().min(1).optional(),
     /** how many play it: a run starts with any count from min to max */
     players: z.object({
       min: z.number().int().min(2).max(4),

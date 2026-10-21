@@ -3,6 +3,7 @@
   "title": "Tutorial: Systemcheck",
   "subtitle": "Zum Warmwerden: laufen, Stationen aktivieren, Türen halten, Spinde durchsuchen.",
   "listOrder": 20,
+  "next": "blackout",
   "players": { "min": 2, "max": 2 },
   "story": {
     "intro": "Übungslauf im Schulungslabor. Laufen mit WASD oder den Pfeiltasten, E an einer leuchtenden Station oder am Spind. Ein Pult sieht nur, wer davorsteht, und eine Station hat zwei Pulte; die Regeln liegen im Spind. Klick auf die Karte setzt einen Ping, M zeigt die Minikarte. Redet miteinander!",
@@ -11,7 +12,7 @@
   },
   "timeLimitSec": 420,
   "radio": {
-    "start": "Beide zur Initialisierung, dort E drücken.",
+    "start": "Beide zur Initialisierung, Hebel zugleich umlegen.",
     "escape": "Notausgang offen. Beide hin."
   },
   "map": {
@@ -64,6 +65,8 @@
       "type": "button-sync",
       "id": "init",
       "title": "Initialisierung",
+      "style": "lever",
+      "windowMs": 3000,
       "lights": ["LEITSTAND"],
       "onSolved": "Zwei Pulte: eins zeigt, eins drückt. Beide hin."
     },

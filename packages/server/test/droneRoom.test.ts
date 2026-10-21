@@ -79,7 +79,7 @@ describe('Room with a sleeping drone', () => {
     const ben = { ...room.join('Ben'), ...collector() };
     room.attach(anna.playerId, anna.listen);
     room.attach(ben.playerId, ben.listen);
-    room.act(ben.playerId, { kind: 'set-ready', ready: true });
+    room.setReady(ben.playerId, true);
     room.act(anna.playerId, { kind: 'start-mission' });
 
     // Anna loiters right in front of it while the patrol simulation keeps ticking.

@@ -95,7 +95,7 @@ describe('a room whose mission opens with the power on', () => {
     const room = new Room('TEST', mission(afterSolved));
     const anna = join(room, 'Anna');
     const ben = join(room, 'Ben');
-    room.act(ben.playerId, { kind: 'set-ready', ready: true });
+    room.setReady(ben.playerId, true);
     room.act(anna.playerId, { kind: 'start-mission' });
     return { room, anna, ben, startedAt: Date.now() };
   }

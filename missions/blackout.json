@@ -13,7 +13,7 @@
   "intro": { "lightsSec": 3 },
   "radio": {
     "start": "Strom weg. Notlicht: Hebel im Flur, zu zweit.",
-    "escape": "Licht ist da. Notausgang offen, Südostecke."
+    "escape": "Notausgang offen, Südostecke. Alle raus."
   },
   "map": {
     "tiles": [
@@ -33,7 +33,7 @@
     ],
     "spawns": [
       { "x": 3, "y": 2 },
-      { "x": 3, "y": 10 },
+      { "x": 1, "y": 6 },
       { "x": 6, "y": 5 }
     ],
     "doors": [
@@ -165,9 +165,8 @@
       "title": "Notlicht",
       "style": "lever",
       "windowMs": 2000,
-      "hints": ["Beide an den Hebel. Dann gleichzeitig E."],
       "lights": ["FLUR", "ARCHIV"],
-      "onSolved": "Notstrom: Kasten Maschinenraum, Prüfpult Flur, Handbuch Archiv."
+      "onSolved": "Erst Handbuch im Archiv, dann Kasten und Prüfpult."
     },
     {
       "type": "circuit",

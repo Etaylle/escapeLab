@@ -102,7 +102,7 @@ describe('Room relay emergencies', () => {
     const ben = { ...room.join('Ben'), ...collector() };
     room.attach(anna.playerId, anna.listen);
     room.attach(ben.playerId, ben.listen);
-    room.act(ben.playerId, { kind: 'set-ready', ready: true });
+    room.setReady(ben.playerId, true);
     room.act(anna.playerId, { kind: 'start-mission' });
     for (const x of [2, 4]) {
       moveTo(room, ben, x, 1);

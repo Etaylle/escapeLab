@@ -114,7 +114,7 @@ describe('Room with sources to find and open', () => {
     const ben = { ...room.join('Ben'), ...collector() };
     room.attach(anna.playerId, anna.listen);
     room.attach(ben.playerId, ben.listen);
-    room.act(ben.playerId, { kind: 'set-ready', ready: true });
+    room.setReady(ben.playerId, true);
     room.act(anna.playerId, { kind: 'start-mission' });
     return { room, anna, ben };
   }
@@ -206,7 +206,7 @@ describe('Room with sources to find and open', () => {
     room.attach(cleo.playerId, () => undefined);
     expect(room.summary()).toMatchObject({ capacity: 3, free: 0 });
     room.detach(cleo.playerId);
-    room.act(ben.playerId, { kind: 'set-ready', ready: true });
+    room.setReady(ben.playerId, true);
     room.act(anna.playerId, { kind: 'start-mission' });
     const view = lastView(anna.messages);
     expect(view.phase).toBe('playing');

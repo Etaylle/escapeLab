@@ -8,6 +8,7 @@ import {
   inEscapePhase,
   initialState,
   lightsAreOut,
+  puzzleDueAt,
   runReport,
   shutDoors,
   stationKey,
@@ -33,13 +34,16 @@ type Listener = (msg: ServerMessage) => void;
 /** Hears of every run that ends in a room, won or lost, with the run's report. */
 export type RunListener = (report: RunReport) => void;
 
-/** The subset of client messages that map 1:1 onto game actions. */
+/**
+ * The subset of client messages that map 1:1 onto game actions. A yes to
+ * the next run may name a mission from the catalog: that one goes through
+ * `setReady`, which takes the mission already found.
+ */
 export type GameMessage = Extract<
   ClientMessage,
   {
     kind:
       | 'select-color'
-      | 'set-ready'
       | 'start-mission'
       | 'puzzle-input'
       | 'request-hint'
@@ -115,6 +119,10 @@ export class Room {
   private relayTimer: NodeJS.Timeout | null = null;
   /** ends a mission's intro: the lights go out when the state says they are due */
   private lightsTimer: NodeJS.Timeout | null = null;
+  /** ticks the open puzzle when something of it runs out on the clock: a sync press */
+  private puzzleTimer: NodeJS.Timeout | null = null;
+  /** the mission the host's yes on the end screen named for the next run; null: the same again */
+  private next: Mission | null = null;
   private timer: NodeJS.Timeout | null = null;
   private positionsTimer: NodeJS.Timeout | null = null;
   private positionsDirty = false;
@@ -256,15 +264,29 @@ export class Room {
     this.schedulePositionsBroadcast();
   }
 
+  /**
+   * A player says yes or no to the next run. Between runs the host's yes
+   * may name the mission it plays — found in the catalog and scaled by the
+   * caller — and every other answer of the host's takes that back: then the
+   * same mission runs again. Once the whole crew has said yes, it starts.
+   */
+  setReady(playerId: string, ready: boolean, next: Mission | null = null): void {
+    const isHost = this.state.players.some((p) => p.id === playerId && p.isHost);
+    if (next !== null && !isHost) {
+      throw new Error('Den nächsten Einsatz wählt der Host.');
+    }
+    this.dispatch({ type: 'set-ready', playerId, ready });
+    if (isHost) {
+      this.next = ready ? next : null;
+    }
+    this.checkRematch();
+  }
+
   /** Player-triggered game actions coming in from the transport layer. */
   act(playerId: string, msg: GameMessage): void {
     switch (msg.kind) {
       case 'select-color':
         this.dispatch({ type: 'select-color', playerId, color: msg.color });
-        break;
-      case 'set-ready':
-        this.dispatch({ type: 'set-ready', playerId, ready: msg.ready });
-        this.checkRematch();
         break;
       case 'start-mission':
         this.dispatch({
@@ -273,6 +295,7 @@ export class Room {
           at: Date.now(),
           seed: randomInt(2 ** 31),
         });
+        this.next = null;
         this.seedPositions();
         break;
       case 'puzzle-input':
@@ -293,18 +316,27 @@ export class Room {
       case 'back-to-lobby':
         this.positions.clear();
         this.dispatch({ type: 'back-to-lobby', playerId });
+        this.next = null;
         break;
       case 'rematch':
-        this.positions.clear();
-        this.dispatch({
-          type: 'rematch',
-          playerId,
-          at: Date.now(),
-          seed: randomInt(2 ** 31),
-        });
-        this.seedPositions();
+        this.startRematch(playerId);
         break;
     }
+  }
+
+  /** The next run, started by `playerId`: of the mission the host's yes named, if it named one. */
+  private startRematch(playerId: string): void {
+    this.positions.clear();
+    const next = this.next;
+    this.dispatch({
+      type: 'rematch',
+      playerId,
+      at: Date.now(),
+      seed: randomInt(2 ** 31),
+      ...(next === null ? {} : { mission: next }),
+    });
+    this.next = null;
+    this.seedPositions();
   }
 
   /** Map ping: fan out to everyone, rate-limited per player. */
@@ -765,7 +797,8 @@ export class Room {
 
   /**
    * After a run, the next one starts by itself as soon as the whole crew has
-   * said yes — nobody has to be the one who presses go.
+   * said yes — nobody has to be the one who presses go. It plays the mission
+   * the host's yes named, or the same again.
    */
   private checkRematch(): void {
     if (this.state.phase !== 'won' && this.state.phase !== 'lost') {
@@ -781,14 +814,7 @@ export class Room {
     if (!crew.every((p) => p.connected && p.ready)) {
       return;
     }
-    this.positions.clear();
-    this.dispatch({
-      type: 'rematch',
-      playerId: host.id,
-      at: Date.now(),
-      seed: randomInt(2 ** 31),
-    });
-    this.seedPositions();
+    this.startRematch(host.id);
     this.reconcilePause();
   }
 
@@ -861,6 +887,30 @@ export class Room {
     );
   }
 
+  /**
+   * Presses at a sync station run out on the clock: the open puzzle is
+   * ticked once the next of them is due, so that everybody's view says so
+   * then and not only at the next press. Armed afresh after every dispatch,
+   * like the lights; none runs while paused.
+   */
+  private reconcilePuzzleClock(): void {
+    if (this.puzzleTimer !== null) {
+      clearTimeout(this.puzzleTimer);
+      this.puzzleTimer = null;
+    }
+    const due = puzzleDueAt(this.state);
+    if (due === null) {
+      return;
+    }
+    this.puzzleTimer = setTimeout(
+      () => {
+        this.puzzleTimer = null;
+        this.dispatch({ type: 'puzzle-tick', at: Date.now() });
+      },
+      Math.max(0, due - Date.now()),
+    );
+  }
+
   /** Fixed-rate patrol simulation; only runs while a mission with drones is live in the dark. */
   private reconcileDroneTimer(): void {
     const map = this.state.mission.map;
@@ -911,6 +961,7 @@ export class Room {
     }
     this.reconcileTimer();
     this.reconcileLights();
+    this.reconcilePuzzleClock();
     this.reconcileDroneTimer();
     this.reconcileSabotage();
     this.reconcileRelayTick();
@@ -964,6 +1015,10 @@ export class Room {
     if (this.lightsTimer !== null) {
       clearTimeout(this.lightsTimer);
       this.lightsTimer = null;
+    }
+    if (this.puzzleTimer !== null) {
+      clearTimeout(this.puzzleTimer);
+      this.puzzleTimer = null;
     }
     if (this.positionsTimer !== null) {
       clearTimeout(this.positionsTimer);

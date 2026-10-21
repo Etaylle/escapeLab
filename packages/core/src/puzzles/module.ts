@@ -268,6 +268,15 @@ export interface PuzzleModule<
     playerId: string,
     ctx: PuzzleContext,
   ): ApplyResult<State>;
+  /**
+   * For a module whose state runs out on the clock alone — presses that
+   * expire — the first moment (epoch ms) at which `expire` changes it; null
+   * while nothing is due. The room ticks the open puzzle then. Left out
+   * where nothing runs out.
+   */
+  dueAt?(def: Def, state: State): number | null;
+  /** The state at `at`, with whatever ran out by then gone; `state` itself where nothing did. */
+  expire?(def: Def, state: State, at: number): State;
   /** place-filtered projection — THE place where asymmetry is enforced for this module */
   view(def: Def, state: State, viewer: Viewer, ctx: ViewContext): View;
   /**

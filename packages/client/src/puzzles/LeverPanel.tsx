@@ -101,9 +101,9 @@ export function LeverPanel({ puzzle, send }: PanelProps<'button-sync'>) {
           </div>
         ))}
       </div>
-      {puzzle.lastResult === 'missed-window' && (
+      {puzzle.lastResult === 'expired' && (
         <p className="warn" role="status">
-          <Icon name="warning" /> Zeitfenster verpasst — Versuch {puzzle.attempts}
+          <Icon name="warning" /> Zug verfallen — nochmal zu zweit
         </p>
       )}
     </div>

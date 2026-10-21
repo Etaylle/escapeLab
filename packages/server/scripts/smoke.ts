@@ -5,8 +5,8 @@
  * the walkthrough plans as it goes, each client holding the other's plate
  * doors open on the way. The run opens with the power on — no clock, no
  * station armed — until the lights go out on the real clock; then both
- * throw the Notlicht's main switch in the Flur together, whoever is locked
- * in let out over its plate first. The Notstrom-Kasten and the Signalkette
+ * throw the Notlicht's main switch in the Flur together: every spawn has an
+ * open way to it. The Notstrom-Kasten and the Signalkette
  * are worked at two consoles at once, Anna at console A and Ben at console B: Ben reads
  * the Handbuch and walks past the Laborkennung first, then lets Anna into
  * the Maschinenraum to the fuse box and measures at the meter in the Flur —
@@ -27,7 +27,12 @@
  * won run leaves its report in a run log in a temporary folder, and
  * GET /stats ranks it with the crew's names. After the rematch everybody
  * stands on the spawn just drawn, and a position from the run before is
- * dropped. No answer is written down here.
+ * dropped. Then a second crew plays the tutorial to its end: a lever thrown
+ * alone springs back on the room's clock, its owner told and nothing
+ * charged, before both throw theirs within the window; on the end screen a
+ * guest's or an unknown choice of the next mission is refused, and the
+ * host's yes naming Blackout opens it, with the power on. No answer is
+ * written down here.
  * Run with: pnpm --filter @escapelab/server smoke
  */
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -45,6 +50,7 @@ import {
   type Credits,
   type DronePosition,
   type Edgework,
+  type Mission,
   type MissionStanding,
   type MissionStats,
   type Move,
@@ -698,6 +704,15 @@ async function waitFor(desc: string, cond: () => boolean): Promise<void> {
   }
 }
 
+/** A mission the walkthrough plays and the two clients playing it. */
+interface Lab {
+  mission: Mission;
+  crew: [TestClient, TestClient];
+}
+
+/** Blackout and the crew playing it right now: whoever resumed a dropped client included. */
+const blackoutLab = (): Lab => ({ mission, crew });
+
 /**
  * Who works station `index` and who reads its rules, by where the clients
  * stand: the operator at the station (at console a where it has two), the
@@ -705,12 +720,16 @@ async function waitFor(desc: string, cond: () => boolean): Promise<void> {
  * nobody there, whoever is not the operator. Where the whole crew presses,
  * everyone stands at the station.
  */
-function sidesOf(index: number): {
+function sidesOf(
+  index: number,
+  lab: Lab = blackoutLab(),
+): {
   operator: TestClient;
   partner: TestClient | null;
   reader: TestClient;
 } {
-  const def = mission.puzzles[index] ?? fail(`blackout has no station ${index + 1}`);
+  const { crew } = lab;
+  const def = lab.mission.puzzles[index] ?? fail(`${lab.mission.id} has no station ${index + 1}`);
   const consoleOf = (client: TestClient): ConsoleId | null =>
     client.view?.presence.stationId === def.id ? client.view.presence.console : null;
   const operator =
@@ -733,8 +752,9 @@ function sidesOf(index: number): {
  */
 function crewSees(
   index: number,
+  lab: Lab = blackoutLab(),
 ): { views: Perspectives<PuzzleView>; edgework: Edgework | null; remainingSec: number | null } {
-  const { operator, partner, reader } = sidesOf(index);
+  const { operator, partner, reader } = sidesOf(index, lab);
   const atStation = operator.view ?? fail(`${operator.label}: no view yet`);
   const atB = partner === null ? null : (partner.view ?? fail(`${partner.label}: no view yet`));
   const atSource = reader.view ?? fail(`${reader.label}: no view yet`);
@@ -774,9 +794,14 @@ function holdingDown(views: Perspectives<PuzzleView>): boolean {
  * broadcast to each client, and each acting client's station has changed or
  * closed.
  */
-async function play(moves: Move<PuzzleInput>[], index: number): Promise<void> {
+async function play(
+  moves: Move<PuzzleInput>[],
+  index: number,
+  lab: Lab = blackoutLab(),
+): Promise<void> {
+  const { crew } = lab;
   const counts = crew.map((client) => client.viewCount);
-  const { operator, partner } = sidesOf(index);
+  const { operator, partner } = sidesOf(index, lab);
   const sendersOf = (by: Move<PuzzleInput>['by']): TestClient[] => {
     if (by === 'everyone') {
       return crew;
@@ -806,8 +831,9 @@ async function play(moves: Move<PuzzleInput>[], index: number): Promise<void> {
  * played here so far, until the station is done. A held button may wait for
  * the clock: the solver is asked again every second, for up to MAX_WAIT_SEC.
  */
-async function solveStation(index: number): Promise<void> {
-  const def = mission.puzzles[index] ?? fail(`blackout has no station ${index + 1}`);
+async function solveStation(index: number, lab: Lab = blackoutLab()): Promise<void> {
+  const { crew } = lab;
+  const def = lab.mission.puzzles[index] ?? fail(`${lab.mission.id} has no station ${index + 1}`);
   await waitFor(`both clients at station ${index + 1}`, () =>
     crew.every((client) => client.view?.puzzle?.index === index),
   );
@@ -818,7 +844,7 @@ async function solveStation(index: number): Promise<void> {
       console.log(`✓ the solver cleared station ${index + 1} from the views alone`);
       return;
     }
-    const { views, edgework, remainingSec } = crewSees(index);
+    const { views, edgework, remainingSec } = crewSees(index, lab);
     const moves = moduleFor(def.type).solve(def, views, edgework, { transcript, remainingSec });
     if (moves.length === 0) {
       if (!holdingDown(views)) {
@@ -833,7 +859,7 @@ async function solveStation(index: number): Promise<void> {
     }
     waited = 0;
     transcript.push(...moves.map((move) => ({ ...move, before: views })));
-    await play(moves, index);
+    await play(moves, index, lab);
   }
   fail(`station ${index + 1} is still open after 100 rounds`);
 }
@@ -841,16 +867,19 @@ async function solveStation(index: number): Promise<void> {
 /**
  * Station 1, the Notlicht: the main switch in the Flur, where the whole crew
  * throws a lever at once — nothing to read, so nobody needs a partner at a
- * source. Whoever the draw locked in the Maschinenraum is let out over the
- * Flur plate beside it. Each sees a lever lit for everybody who stands
- * there; then both throw theirs together, and the Flur lights up.
+ * source. Nobody starts behind a door: both walk up to it on their own. Each
+ * sees a lever lit for everybody who stands there; then both throw theirs
+ * together, and the Flur lights up.
  */
 async function runLever(): Promise<void> {
   const lever = STAND[NOTLICHT] ?? fail('no spot at the lever');
-  const [first, second] = closerTo(lever);
-  await bring(first, lever, second);
-  await bring(second, lever, first);
-  await switchOn(first, NOTLICHT);
+  for (const client of crew) {
+    assert(canReach(client, lever), `${client.label} walks to the lever without a plate held`);
+  }
+  for (const client of crew) {
+    await walkTo(client, lever);
+  }
+  await switchOn(crew[0], NOTLICHT);
   for (const client of crew) {
     await client.expectView('sees the main switch, a lever lit for each of the crew at it', (v) =>
       v.puzzle?.kind === 'button-sync' &&
@@ -1571,8 +1600,8 @@ assert(dark.events.map((e) => e.label).join(' | ') === `${POWER_OUT} | ${mission
 assert(dark.map?.stations.find((s) => s.puzzleId === leverDef.id)?.status === 'armed',
   'the lever is armed once the lights are out');
 
-// Station 1: the Notlicht's main switch in the Flur, a lever for each of the crew. Whoever is
-// locked in is let out over the Flur plate, then both throw it together.
+// Station 1: the Notlicht's main switch in the Flur, a lever for each of the crew. Both walk up
+// to it, then throw it together.
 await runLever();
 
 // Station 2: the Notstrom-Kasten, the fuse box in the Maschinenraum and the meter in the Flur,
@@ -1797,10 +1826,10 @@ for (const client of crew) {
     client.positionsRun === newRun && crew.every((member) => onSpawn(p, member)));
 }
 console.log('✓ after the rematch, both clients see everybody on the spawn just drawn');
-// One step south of the spawn, on floor for every spawn: the new run would take it.
+// A step inside the spawn's own tile, floor for every spawn: the new run would take it.
 const fresh = spawnOf(first);
-const southward = { x: fresh.x + 0.5, y: fresh.y + 1, facing: 0, moving: true };
-first.send({ kind: 'pos', run: lastRun, ...southward });
+const aside = { x: fresh.x + 0.5, y: fresh.y + 0.8, facing: 0, moving: true };
+first.send({ kind: 'pos', run: lastRun, ...aside });
 // The server answers in order: once the room list is back, it has handled the position.
 first.send({ kind: 'list-rooms' });
 await first.expect(
@@ -1814,11 +1843,187 @@ assert(onSpawn(first.positions, first), 'a position stamped with the run before 
 for (const client of crew) {
   client.close();
 }
+
+// --- the tutorial, and on into Blackout through the end screen's „Weiter" -----
+
+const tutorial = parseMission(
+  JSON.parse(readFileSync(new URL('../../../missions/systemcheck.json', import.meta.url), 'utf8')),
+);
+
+/**
+ * A room for the tutorial: Cleo opens it, Dan joins and says yes, Cleo
+ * starts. The tutorial has no intro: its lights are out and its first
+ * station is armed from the start.
+ */
+async function openTutorial(): Promise<Lab> {
+  const cleo = new TestClient('cleo');
+  const dan = new TestClient('dan');
+  await cleo.open();
+  await dan.open();
+  cleo.send({ kind: 'create-room', name: 'Cleo', missionId: tutorial.id });
+  const cleoJoined = await cleo.expect('joined', isJoined);
+  cleo.playerId = cleoJoined.playerId;
+  cleo.joined = cleoJoined;
+  dan.send({ kind: 'join-room', code: cleoJoined.code, name: 'Dan' });
+  const danJoined = await dan.expect('joined', isJoined);
+  dan.playerId = danJoined.playerId;
+  dan.joined = danJoined;
+  dan.send({ kind: 'set-ready', ready: true });
+  await cleo.until('Dan says yes', (v) => v.players.some((p) => p.name === 'Dan' && p.ready));
+  cleo.send({ kind: 'start-mission' });
+  for (const client of [cleo, dan]) {
+    await client.until('the tutorial under way', (v) => v.phase === 'playing' && v.map !== null);
+    await client.ensureSelf();
+  }
+  return { mission: tutorial, crew: [cleo, dan] };
+}
+
+/**
+ * The Initialisierung, a main switch with a window: Cleo throws hers alone,
+ * and once the window is over the room's own clock springs it back — her
+ * device says so, Dan's does not, and it costs nothing. Then both throw
+ * theirs within the window, worked out by the solver.
+ */
+async function initLever(lab: Lab): Promise<void> {
+  const [cleo, dan] = lab.crew;
+  const def = tutorial.puzzles[0];
+  if (def?.type !== 'button-sync' || def.style !== 'lever' || def.windowMs === undefined) {
+    fail('the tutorial should open on a main switch with a window');
+  }
+  const windowMs = def.windowMs;
+  await walkTo(cleo, [11, 1]); // beside the Initialisierung at (12,1), west
+  await walkTo(dan, [13, 1]); // and east
+  await switchOn(cleo, 0);
+  for (const client of lab.crew) {
+    await client.expectView(`sees the main switch: a lever each, ${windowMs} ms to throw both`,
+      (v) => v.puzzle?.kind === 'button-sync' && v.puzzle.style === 'lever' &&
+        v.puzzle.windowMs === windowMs && v.puzzle.here === 2);
+  }
+  cleo.send({ kind: 'puzzle-input', input: { press: true } });
+  const thrown = await cleo.expectView('her lever down, running out after the window', (v) => {
+    const press = v.puzzle?.kind === 'button-sync' ? v.puzzle.press : null;
+    return press !== null && press.expiresAt === press.at + windowMs;
+  });
+  await dan.expectView('sees her lever down', (v) =>
+    v.puzzle?.kind === 'button-sync' && v.puzzle.partnerPressed && v.puzzle.press === null);
+  const sprang = await cleo.expectView('her lever sprang back on the room\'s clock, she is told',
+    (v) => v.puzzle?.kind === 'button-sync' && v.puzzle.press === null &&
+      v.puzzle.lastResult === 'expired');
+  await dan.expectView('sees it up again and is told nothing', (v) =>
+    v.puzzle?.kind === 'button-sync' && !v.puzzle.partnerPressed && v.puzzle.lastResult === null);
+  assert(sprang.alarms.count === 0 && sprang.deadlineAt === thrown.deadlineAt,
+    'the lever that sprang back cost no alarm and no time');
+  await solveStation(0, lab);
+}
+
+/** The Signalprobe from its two consoles in the Leitstand: Cleo at A, Dan at B. */
+async function signalProbe(lab: Lab): Promise<void> {
+  const [cleo, dan] = lab.crew;
+  await walkTo(cleo, [8, 5]); // console A
+  await walkTo(dan, [13, 5]); // console B
+  await switchOn(dan, 1);
+  await solveStation(1, lab);
+}
+
+/**
+ * The Kabelprüfung in the Kontrolle: Dan holds the plate of its door, Cleo
+ * walks through to the box, and Dan searches the locker beside the plate and
+ * reads the box's rules there, still on the plate.
+ */
+async function wiringBox(lab: Lab): Promise<void> {
+  const [cleo, dan] = lab.crew;
+  const plate = tutorial.map.plates[0] ?? fail('the tutorial has no plate');
+  const locker = tutorial.map.manuals[0] ?? fail('the tutorial has no locker');
+  await walkTo(dan, [plate.x, plate.y]);
+  await cleo.until('the Kontrolle\'s door held open', (v) =>
+    v.map?.doors.find((d) => d.id === 'kontrolltuer')?.open === true);
+  await walkTo(cleo, [3, 4]); // beside the box at (2,4)
+  await openSource(dan, locker.id, `Spind durchsucht: ${locker.label}`);
+  await switchOn(cleo, 2);
+  await solveStation(2, lab);
+}
+
+/**
+ * The Synchronkalibrierung in the Spulen, open since the box: Cleo comes out
+ * through the door Dan still holds, both walk east and press within the
+ * window, and both get out by the hatch.
+ */
+async function finale(lab: Lab): Promise<void> {
+  const [cleo, dan] = lab.crew;
+  await walkTo(cleo, [15, 4]); // west of the Synchronkalibrierung at (16,4)
+  await walkTo(dan, [17, 4]); // and east
+  await switchOn(cleo, 3);
+  await solveStation(3, lab);
+  const hatch = tutorial.map.exit ?? fail('the tutorial has no hatch');
+  for (const client of lab.crew) {
+    await walkTo(client, [hatch.x, hatch.y]);
+  }
+  for (const client of lab.crew) {
+    await client.expectView('won the tutorial', (v) => v.phase === 'won');
+  }
+}
+
+/**
+ * The tutorial's end screen leads on to Blackout. A yes naming the mission
+ * that comes next is the host's alone, and names one the catalog has; Dan
+ * says yes, Cleo says yes naming Blackout, and Blackout opens with the power
+ * on — the same crew, the same difficulty.
+ */
+async function onIntoBlackout(lab: Lab): Promise<void> {
+  const [cleo, dan] = lab.crew;
+  const over = cleo.view ?? fail('cleo: no view of the end screen');
+  assert(over.phase === 'won' && over.nextMissionId === mission.id,
+    `the won tutorial leads on to ${mission.title}`);
+  dan.send({ kind: 'set-ready', ready: true, missionId: mission.id });
+  const guest = await dan.expect('refusal of a guest naming the next mission', isError);
+  assert(guest.message === 'Den nächsten Einsatz wählt der Host.',
+    'only the host names the mission that comes next');
+  cleo.send({ kind: 'set-ready', ready: true, missionId: 'gibt-es-nicht' });
+  const unknown = await cleo.expect('refusal of a mission the catalog lacks', isError);
+  assert(/gibt es nicht/.test(unknown.message), 'a mission the catalog lacks is refused');
+  dan.send({ kind: 'set-ready', ready: true });
+  await cleo.until('Dan says yes', (v) => v.players.some((p) => p.name === 'Dan' && p.ready));
+  assert(cleo.view?.phase === 'won', 'a yes from Dan alone starts nothing');
+  cleo.send({ kind: 'set-ready', ready: true, missionId: mission.id });
+  for (const client of lab.crew) {
+    const next = await client.expectView(`in ${mission.title}: Normalbetrieb, the power still on`,
+      (v) => v.phase === 'playing' && v.missionId === mission.id && !v.lights.out &&
+        v.deadlineAt === null);
+    const spawn = next.map?.yourSpawn;
+    assert(
+      next.difficulty === over.difficulty &&
+        next.events.length === 0 &&
+        mission.map.spawns.some((s) => s.x === spawn?.x && s.y === spawn.y),
+      `${client.label} starts ${mission.title} on a spawn of its own, at the same difficulty`,
+    );
+  }
+  cleo.send({ kind: 'list-rooms' });
+  const rooms = await cleo.expect('room list', isRooms);
+  const room = rooms.rooms.find((r) => r.code === cleo.joined?.code);
+  assert(room?.missionId === mission.id && room.phase === 'playing',
+    `the lobby browser lists the room with ${mission.title} under way`);
+  const lines = readFileSync(RUNS_LOG, 'utf8').trimEnd().split('\n');
+  const tutorialRun = JSON.parse(lines.at(-1) ?? '{}') as Partial<RunReport>;
+  assert(tutorialRun.missionId === tutorial.id && tutorialRun.outcome === 'won',
+    'the won tutorial left its line in the run log');
+}
+
+const tutorialLab = await openTutorial();
+await initLever(tutorialLab);
+await signalProbe(tutorialLab);
+await wiringBox(tutorialLab);
+await finale(tutorialLab);
+await onIntoBlackout(tutorialLab);
+for (const client of tutorialLab.crew) {
+  client.close();
+}
+
 rmSync(runsDir, { recursive: true, force: true });
 console.log(
   '\nSmoke test passed: Blackout with its power on until the lights went out, the ' +
     'Notlicht\'s lever, drawn spawns and sources, streamed movement, plates, a door that ' +
     'stays open, the Notstrom-Kasten and the Signalkette at two consoles, the locker, the ' +
-    'key, the camera plate, reconnect, the hatch\'s checklist, penalties and credits. 🎉',
+    'key, the camera plate, reconnect, the hatch\'s checklist, penalties and credits; then ' +
+    'the tutorial, its lever springing back on the clock, and on into Blackout. 🎉',
 );
 process.exit(0);

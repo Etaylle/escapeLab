@@ -1,6 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { moduleFor, parseMission, type Mission, type ServerMessage } from '@escapelab/core';
+import {
+  moduleFor,
+  parseMission,
+  scaleMission,
+  type Mission,
+  type ServerMessage,
+} from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { RoomManager } from '../src/roomManager.js';
 import { walkTo, type Walker } from './walk.js';
@@ -8,7 +14,7 @@ import { walkTo, type Walker } from './walk.js';
 /** The host's start now requires everyone else to have confirmed. */
 function ready(room: Room, ...players: { playerId: string }[]): void {
   for (const player of players) {
-    room.act(player.playerId, { kind: 'set-ready', ready: true });
+    room.setReady(player.playerId, true);
   }
 }
 
@@ -376,9 +382,9 @@ describe('Room', () => {
     // Finishing cleared the confirmations from the first start.
     expect(lastView(anna.messages).players.every((p) => !p.ready)).toBe(true);
 
-    room.act(ben.playerId, { kind: 'set-ready', ready: true });
+    room.setReady(ben.playerId, true);
     expect(lastView(anna.messages).phase).toBe('lost');
-    room.act(anna.playerId, { kind: 'set-ready', ready: true });
+    room.setReady(anna.playerId, true);
 
     const restarted = lastView(anna.messages);
     expect(restarted.phase).toBe('playing');
@@ -395,10 +401,80 @@ describe('Room', () => {
     const { room, anna, ben } = startedRoom();
     vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 1);
 
-    room.act(ben.playerId, { kind: 'set-ready', ready: true });
+    room.setReady(ben.playerId, true);
     room.detach(ben.playerId);
-    room.act(anna.playerId, { kind: 'set-ready', ready: true });
+    room.setReady(anna.playerId, true);
     expect(lastView(anna.messages).phase).toBe('lost');
+    room.dispose();
+  });
+
+  it('goes on to the mission the host named, at the room\'s difficulty, once all agree', () => {
+    // The tutorial on „hart", over: the server finds Blackout in the catalog and scales it so.
+    const room = new Room('TEST', mission);
+    const { anna, ben } = fullLobby(room);
+    room.switchMission(anna.playerId, scaleMission(mission, 'hart'), 'hart');
+    ready(room, ben);
+    room.act(anna.playerId, { kind: 'start-mission' });
+    vi.advanceTimersByTime(scaleMission(mission, 'hart').timeLimitSec * 1000 + 1);
+    expect(lastView(anna.messages)).toMatchObject({ phase: 'lost', nextMissionId: 'blackout' });
+    const blackout = scaleMission(load('blackout'), room.difficulty);
+
+    room.setReady(anna.playerId, true, blackout);
+    expect(lastView(ben.messages).phase).toBe('lost');
+    room.setReady(ben.playerId, true);
+    const next = lastView(ben.messages);
+    expect(next).toMatchObject({ phase: 'playing', missionId: 'blackout', difficulty: 'hart' });
+    expect(next.timeLimitSec).toBe(blackout.timeLimitSec);
+    expect(blackout.timeLimitSec).not.toBe(load('blackout').timeLimitSec);
+    expect(blackout.map.spawns).toContainEqual(next.map?.yourSpawn);
+    expect(room.summary()).toMatchObject({ missionId: 'blackout', phase: 'playing' });
+    room.dispose();
+  });
+
+  it('takes the next mission from the host only, and plays the same again once taken back', () => {
+    const { room, anna, ben } = startedRoom();
+    vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 1);
+    const blackout = load('blackout');
+    expect(() => room.setReady(ben.playerId, true, blackout)).toThrow(
+      'Den nächsten Einsatz wählt der Host.',
+    );
+    expect(lastView(anna.messages).players.every((p) => !p.ready)).toBe(true);
+
+    // „Weiter", then the yes taken back, then „Nochmal": the tutorial again.
+    room.setReady(anna.playerId, true, blackout);
+    room.setReady(anna.playerId, false);
+    room.setReady(anna.playerId, true);
+    room.setReady(ben.playerId, true);
+    expect(lastView(anna.messages)).toMatchObject({ phase: 'playing', missionId: mission.id });
+    room.dispose();
+  });
+
+  it('runs a lone press out on the room\'s clock and tells its owner, nobody else', () => {
+    const { room, anna, ben } = startedRoom();
+    moveTo(room, ben, 12, 2);
+    moveTo(room, anna, 11, 1);
+    room.act(ben.playerId, { kind: 'interact' });
+    room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
+    const pressedAt = Date.now();
+    expect(lastView(anna.messages).puzzle).toMatchObject({
+      style: 'lever',
+      press: { at: pressedAt, expiresAt: pressedAt + 3000 },
+    });
+    expect(lastView(ben.messages).puzzle).toMatchObject({ partnerPressed: true, press: null });
+
+    // Exactly three seconds old the press still lives; a moment later the room drops it.
+    vi.advanceTimersByTime(3000);
+    expect(lastView(anna.messages).puzzle).toMatchObject({ lastResult: null, youPressed: true });
+    vi.advanceTimersByTime(1);
+    expect(lastView(anna.messages).puzzle).toMatchObject({ press: null, lastResult: 'expired' });
+    const benSees = lastView(ben.messages).puzzle;
+    expect(benSees).toMatchObject({ partnerPressed: false, lastResult: null });
+    expect(lastView(anna.messages).alarms.count).toBe(0);
+
+    // Both together this time: the station solves.
+    room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
+    room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
+    expect(lastView(ben.messages).currentPuzzleIndex).toBe(1);
     room.dispose();
   });
 

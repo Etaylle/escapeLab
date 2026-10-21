@@ -213,6 +213,37 @@ describe('mission blackout by design', () => {
     expect(canStandAt(alone, box), 'the fuse box lies open without the plate').toBe(false);
   });
 
+  it('starts nobody behind a door: from every spawn the lever lies in reach alone', () => {
+    const lever = blackout.map.stations.find((s) => s.puzzleId === blackout.puzzles[0]?.id);
+    if (lever === undefined) {
+      throw new Error('Blackout has no station for its first puzzle');
+    }
+    for (const spawn of blackout.map.spawns) {
+      const [alone = new Set<string>()] = reachability(blackout.map, [spawn], new Set());
+      expect(
+        canStandAt(alone, lever),
+        `the player starting at ${tileKey(spawn.x, spawn.y)} is shut off from the lever`,
+      ).toBe(true);
+    }
+  });
+
+  it('lets nobody to the fuse box without the plate: every spawn lies outside it', () => {
+    // Every crew still mans box and meter at once (the check above for every mission): one of
+    // it holds the plate for the other, then walks on to the meter.
+    const box = blackout.map.stations.find((s) => s.puzzleId === 'notstrom' && s.console === 'a');
+    if (box === undefined) {
+      throw new Error('Blackout has no console A for the Notstrom-Kasten');
+    }
+    const solved = solvedBefore(blackout, 'notstrom');
+    for (const spawn of blackout.map.spawns) {
+      const [alone = new Set<string>()] = reachability(blackout.map, [spawn], solved);
+      expect(
+        canStandAt(alone, box),
+        `the player starting at ${tileKey(spawn.x, spawn.y)} reaches the fuse box alone`,
+      ).toBe(false);
+    }
+  });
+
   it('lets each player reach both consoles of the Signalkette on their own', () => {
     const consoles = blackout.map.stations.filter((s) => s.puzzleId === 'signalkette');
     expect(consoles.map((s) => s.console)).toEqual(['a', 'b']);

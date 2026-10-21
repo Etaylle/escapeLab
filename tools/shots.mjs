@@ -60,6 +60,10 @@
  * world lit and the camera pulling back, won.png the title card with the
  * crew outside, end.png the whole end screen, won-phone.png the guest's card
  * on a phone; the audience's page has to show the same card (won-audience.png).
+ * The won tutorial leads on to Blackout: next-mission.png shows the end
+ * screen's „Weiter: Blackout im Labor" beside „Nochmal", both click it — the
+ * guest first, the host's click naming the mission — and the run fails
+ * unless Blackout opens on both pages with the power on.
  *
  * The base URL is the Vite dev server by default (`pnpm dev`), or the
  * production server (`pnpm build && pnpm start`, http://localhost:3001) as in
@@ -142,14 +146,15 @@ const SOFTWARE_GL_FLAGS = [
  * for seeds 1…50 and replaying the steps below that depend on it, in a room:
  *
  * - Blackout 5: Anna starts in the Archiv by the sign (sign.png, at once with
- *   the power on), Ben in the Maschinenraum. With the power on, Anna's step
- *   into the Archiv brings the book at (2,1) into sight, and Ben walks up to
- *   the Maschinenraum door, into the shot (cold-open.png). At the lever Anna
- *   holds the Flur plate and Ben comes out (lever.png). Then Ben reads the
+ *   the power on), Ben at the west end of the Flur beside the Klemmbrett.
+ *   With the power on, Anna's step into the Archiv brings the book at (2,1)
+ *   into sight, and Ben walks towards her (cold-open.png). Nobody starts
+ *   behind a door: both walk up to the lever (lever.png). Then Ben reads the
  *   book (reading), holds the plate for Anna on her way to console A of the
  *   Notstrom-Kasten, works console B and asks for the notes (console-*,
- *   hint-*). The lever put no new spawn in the draw: the spawns come from the
- *   seed alone, so Anna and Ben start where they did before it.
+ *   hint-*). Ben's start replaced the Maschinenraum's in the mission's list
+ *   of spawns, so the seed draws as it did before: Anna in the Archiv, Ben
+ *   on the spawn that took the Maschinenraum's place.
  * - Systemcheck 1: the usual, Ben by the first station and the sign works it,
  *   Anna by the locker reads it.
  */
@@ -2663,9 +2668,50 @@ async function captureEnd(host, watcher) {
 }
 
 /**
+ * next-mission.png: the end screen of a won run whose mission leads on to
+ * another offers it as the main button, „Nochmal" beside it. The guest
+ * clicks it, then the host, whose click names the mission; it has to open
+ * on both pages, with the power on where it has an intro. Throws where the
+ * button is missing, fails where the next run does not come up.
+ */
+async function captureNextMission(host, guest) {
+  const onward = (page) =>
+    page.locator('.end-screen .actions button.primary', { hasText: 'Weiter:' });
+  if (!(await attached(onward(host.page), 5000))) {
+    throw new Error('the won run leads on to another mission, but no „Weiter" on its end screen');
+  }
+  await host.page.locator('.end-screen .actions').scrollIntoViewIfNeeded();
+  await sleep(400);
+  await capture(host.page, 'next-mission.png');
+  const label = await textOf(onward(host.page));
+  const again = host.page.locator('.end-screen .actions button', { hasText: 'Nochmal' });
+  const beside = await textOf(again);
+  const next = host.seen.view.nextMissionId;
+  const guestReady = () => host.seen.view.players.some((p) => p.name === guest.name && p.ready);
+  await onward(guest.page).click();
+  const confirmed = await until(guestReady, 3000);
+  await onward(host.page).click();
+  const there = ({ seen }) => seen.view?.phase === 'playing' && seen.view.missionId === next;
+  const opened = await until(() => [host, guest].every(there), START_MS);
+  const lit = opened && host.seen.view.lights.out === false;
+  const yes = confirmed ? 'said yes' : '!! no yes from the guest';
+  const outcome = opened
+    ? `${next} opened on both pages, ${lit ? 'the power on' : '!! the lights out'}`
+    : `!! ${next} never opened`;
+  console.log(
+    `next-mission.png   ${host.name}: "${label}", beside it "${beside}"; ` +
+      `${guest.name} ${yes}, then ${host.name}: ${outcome}`,
+  );
+  if (!label?.startsWith('Weiter: ') || beside !== 'Nochmal' || !confirmed || !opened || !lit) {
+    fail(`next-mission.png: "${label}" beside "${beside}", ${next} opened ${opened}, lit ${lit}`);
+  }
+}
+
+/**
  * The Systemcheck on its pinned seed to the end: the Kabelprüfung, the
  * Synchronkalibrierung, the escape and the win (escape.png, pullback.png,
- * won.png, end.png, won-phone.png).
+ * won.png, end.png, won-phone.png), then on into the mission it leads on to
+ * (next-mission.png).
  */
 async function playToTheEnd(host, guest, watcher, pinned) {
   await cutPinnedWire(host, guest, pinned);
@@ -2673,6 +2719,7 @@ async function playToTheEnd(host, guest, watcher, pinned) {
   await captureEscape(host, guest);
   await captureEnd(host, watcher);
   await capturePhoneCard(guest);
+  await captureNextMission(host, guest);
 }
 
 async function run() {

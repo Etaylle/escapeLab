@@ -315,7 +315,7 @@ describe('playing a full mission', () => {
     expect(applyAction(state, { type: 'escaped', at: T0 + 80_000 }).phase).toBe('won');
   });
 
-  it('expires a press outside the sync window and counts the attempt', () => {
+  it('lets a press outside the window run out, charges nothing and tells only its owner', () => {
     let state = run(
       [press('p1', T0 + 1000), press('p2', T0 + 1000)],
       bothAtStation(started(), T0 + 500),
@@ -324,19 +324,25 @@ describe('playing a full mission', () => {
     state = cutRightWire(wiringOpen(state, T0 + 1500), T0 + 2000);
     state = run(
       [
-        // Window puzzle: first press at +10s, partner misses the 3s window.
+        // The finale's 3 s window: Anna presses at +10 s, Ben only at +20 s.
         press('p1', T0 + 10_000),
         press('p2', T0 + 20_000),
       ],
       bothAtStation(state, T0 + 9000),
     );
     expect(state.currentPuzzleIndex).toBe(3);
-    if (state.puzzleState?.type !== 'button-sync') {
-      throw new Error('expected button-sync puzzle state');
-    }
-    expect(state.puzzleState.attempts).toBe(1);
-    expect(state.puzzleState.lastResult).toBe('missed-window');
-    // The late press is still valid as the start of the next attempt.
+    expect(state.penaltySeq).toBe(0);
+    expect(viewFor(state, 'p1').puzzle).toMatchObject({
+      press: null,
+      partnerPressed: true,
+      lastResult: 'expired',
+    });
+    expect(viewFor(state, 'p2').puzzle).toMatchObject({
+      press: { at: T0 + 20_000, expiresAt: T0 + 23_000 },
+      partnerPressed: false,
+      lastResult: null,
+    });
+    // Ben's late press opened a new window: Anna's press within it solves the station.
     state = applyAction(state, press('p1', T0 + 21_000));
     expect(state.currentPuzzleIndex).toBe(4);
   });
@@ -412,5 +418,76 @@ describe('asymmetric information in views', () => {
     const state = applyAction(started(), { type: 'player-disconnected', playerId: 'p2' });
     const anna = viewFor(state, 'p1');
     expect(anna.players.find((p) => p.id === 'p2')?.connected).toBe(false);
+  });
+});
+
+const blackout: Mission = parseMission(
+  JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
+);
+
+describe('on to the next mission', () => {
+  /** The tutorial played to the end and won, Ben's yes to the next run already in. */
+  function wonAndConfirmed(): GameState {
+    let state = bothAtStation(started(), T0 + 500);
+    state = run([press('p1', T0 + 1000), press('p2', T0 + 1200)], state);
+    state = signalSent(state, T0 + 2000);
+    state = cutRightWire(wiringOpen(state, T0 + 4000), T0 + 5000);
+    state = run(
+      [press('p1', T0 + 70_000), press('p2', T0 + 72_000)],
+      bothAtStation(state, T0 + 60_000),
+    );
+    state = applyAction(state, { type: 'escaped', at: T0 + 80_000 });
+    expect(state.phase).toBe('won');
+    return applyAction(state, { type: 'set-ready', playerId: 'p2', ready: true });
+  }
+
+  const onTo = (state: GameState, next: Mission, playerId = 'p1'): GameState =>
+    applyAction(state, { type: 'rematch', playerId, at: T0 + 100_000, seed: 3, mission: next });
+
+  it('names the mission a run leads on to in every view, and none where none follows', () => {
+    expect(mission.next).toBe('blackout');
+    for (const playerId of ['p1', 'p2']) {
+      expect(viewFor(wonAndConfirmed(), playerId).nextMissionId).toBe('blackout');
+    }
+    expect(blackout.next).toBeUndefined();
+    expect(viewFor(onTo(wonAndConfirmed(), blackout), 'p1')).not.toHaveProperty('nextMissionId');
+  });
+
+  it('starts the mission the host names, with the same crew, difficulty and seed count', () => {
+    const over = wonAndConfirmed();
+    const next = onTo(over, blackout);
+    expect(next.phase).toBe('playing');
+    expect(next.mission).toBe(blackout);
+    expect([next.difficulty, next.runs]).toEqual([over.difficulty, over.runs + 1]);
+    expect(next.players.map((p) => p.id)).toEqual(['p1', 'p2']);
+    const onASpawn = (p: GameState['players'][number]): boolean =>
+      blackout.map.spawns.some((s) => s.x === p.spawn?.x && s.y === p.spawn.y);
+    expect(next.players.every(onASpawn)).toBe(true);
+    // Blackout opens with the power on: no clock, no radio line, the lights due to fail.
+    expect(next.deadlineAt).toBeNull();
+    expect(next.events).toEqual([]);
+    expect(next.lightsDueAt).toBe(T0 + 100_000 + (blackout.intro?.lightsSec ?? 0) * 1000);
+    expect(viewFor(next, 'p2').missionTitle).toBe(blackout.title);
+  });
+
+  it('runs the same mission again where the host names none', () => {
+    const again = applyAction(wonAndConfirmed(), {
+      type: 'rematch',
+      playerId: 'p1',
+      at: T0 + 100_000,
+      seed: 3,
+    });
+    expect(again.mission).toBe(mission);
+    expect(again.phase).toBe('playing');
+  });
+
+  it('keeps the guards of a start: the host starts it, and the crew has to fit', () => {
+    expect(() => onTo(wonAndConfirmed(), blackout, 'p2')).toThrow(/Host/);
+    const forThree = parseMission({
+      ...JSON.parse(JSON.stringify(blackout)),
+      id: 'blackout-drei',
+      players: { min: 3, max: 3 },
+    });
+    expect(() => onTo(wonAndConfirmed(), forThree)).toThrow(/mindestens 3/);
   });
 });

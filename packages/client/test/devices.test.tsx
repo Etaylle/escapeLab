@@ -484,8 +484,8 @@ describe('the sync button', () => {
     expect(sounds.lampPop).toHaveBeenCalledTimes(1);
   });
 
-  it('shakes its collar with a buzz when the window ran out', () => {
-    const missed = sync({ attempts: 1, lastResult: 'missed-window' });
+  it('shakes its collar with a buzz when the own press ran out', () => {
+    const missed = sync({ lastResult: 'expired' });
     expect(panelAfter('button-sync', sync({ pressedCount: 1 }), missed)).toContain(
       '<div class="sync-collar sync-collar--missed">',
     );

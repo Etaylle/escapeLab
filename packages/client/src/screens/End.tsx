@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { ClientMessage, Grade, PlayerView, RunEvent } from '@escapelab/core';
+import type { ClientMessage, Grade, MissionInfo, PlayerView, RunEvent } from '@escapelab/core';
 import { clock } from '../runStats.js';
 import { victoryChord } from '../world/audio.js';
 import { endingOf, type Ending } from '../world/finale.js';
@@ -14,6 +14,8 @@ interface Props {
   fresh: boolean;
   send: (msg: ClientMessage) => void;
   leaveRoom: () => void;
+  /** the mission catalog, for the title of the mission a won run leads on to; without it, none */
+  missions?: MissionInfo[];
 }
 
 /** Each line of the run report under the icon of what happened; notes and radio as on the HUD. */
@@ -246,24 +248,80 @@ function RunLog({ events, startedAt }: { events: RunEvent[]; startedAt: number }
   );
 }
 
-/** Once more with the same crew — once all agree — or back to the lobby, or out. */
-function Rematch({ view, send, leaveRoom }: Omit<Props, 'fresh'>) {
+/** What the buttons under the report work with: the catalog given, possibly empty. */
+type RematchProps = Omit<Props, 'fresh' | 'missions'> & { missions: MissionInfo[] };
+
+/** The mission a won run leads on to, by id, where the run was won and its mission has one. */
+function nextOf(view: PlayerView): string | undefined {
+  return view.phase === 'won' ? view.nextMissionId : undefined;
+}
+
+/**
+ * The yes to the next run. After a won run of a mission that leads on to
+ * another, the main button goes on to that one and „Nochmal" plays the same
+ * again: either click is a yes, and the host's also says which of the two
+ * starts. Otherwise one button says yes to the same again. A yes given can
+ * be taken back.
+ */
+export function NextRun({
+  view,
+  missions,
+  send,
+}: Pick<RematchProps, 'view' | 'missions' | 'send'>) {
+  const ready = view.you.ready;
+  const next = nextOf(view);
+  if (next === undefined) {
+    const toggle = (): void => send({ kind: 'set-ready', ready: !ready });
+    return (
+      <button className={ready ? '' : 'primary'} onClick={toggle}>
+        <Icon name={ready ? 'check' : 'replay'} />{' '}
+        {ready ? 'Bereit für nochmal' : 'Nochmal — ich bin dabei'}
+      </button>
+    );
+  }
+  if (ready) {
+    return (
+      <button onClick={() => send({ kind: 'set-ready', ready: false })}>
+        <Icon name="check" /> Bereit
+      </button>
+    );
+  }
+  const title = missions.find((mission) => mission.id === next)?.title ?? 'nächster Einsatz';
+  const pick = view.you.isHost ? { missionId: next } : {};
+  return (
+    <>
+      <button className="primary" onClick={() => send({ kind: 'set-ready', ready: true, ...pick })}>
+        <Icon name="play" /> Weiter: {title}
+      </button>
+      <button onClick={() => send({ kind: 'set-ready', ready: true })}>
+        <Icon name="replay" /> Nochmal
+      </button>
+    </>
+  );
+}
+
+/** What starts once everybody has said yes: the same again, or what the host's yes chose. */
+function startsLine(view: PlayerView): string {
+  if (nextOf(view) === undefined) {
+    return 'Sobald alle zugestimmt haben, startet derselbe Einsatz von selbst.';
+  }
+  return view.you.isHost
+    ? 'Sobald alle zugestimmt haben, startet der Einsatz, den du wählst.'
+    : 'Sobald alle zugestimmt haben, startet der Einsatz, den der Host wählt.';
+}
+
+/** Once more with the same crew, or on — once all agree — or back to the lobby, or out. */
+function Rematch({ view, missions, send, leaveRoom }: RematchProps) {
   const crew = view.players.filter((p) => p.connected);
   const waiting = crew.filter((p) => !p.ready);
   const confirmed = crew.length - waiting.length;
   return (
     <div className="actions">
-      <button
-        className={view.you.ready ? '' : 'primary'}
-        onClick={() => send({ kind: 'set-ready', ready: !view.you.ready })}
-      >
-        <Icon name={view.you.ready ? 'check' : 'replay'} />{' '}
-        {view.you.ready ? 'Bereit für nochmal' : 'Nochmal — ich bin dabei'}
-      </button>
+      <NextRun view={view} missions={missions} send={send} />
       <p className="muted">
         {confirmed}/{crew.length} bereit
         {waiting.length > 0 ? ` — fehlen noch: ${waiting.map((p) => p.name).join(', ')}` : ''}
-        . Sobald alle zugestimmt haben, startet derselbe Einsatz von selbst.
+        . {startsLine(view)}
       </p>
       {view.you.isHost && (
         <button onClick={() => send({ kind: 'back-to-lobby' })}>
@@ -281,7 +339,7 @@ function Rematch({ view, send, leaveRoom }: Omit<Props, 'fresh'>) {
  * The end of a run: its title card on top, then the story, the numbers,
  * where it stands, who did what, the run report and the rematch.
  */
-export function EndScreen({ view, fresh, send, leaveRoom }: Props) {
+export function EndScreen({ view, fresh, send, leaveRoom, missions = [] }: Props) {
   const card = titleCardOf(view, view.you.id, fresh);
   const won = card.ending === 'won';
   const { startedAt, finishedAt } = view;
@@ -314,7 +372,7 @@ export function EndScreen({ view, fresh, send, leaveRoom }: Props) {
         {view.events.length > 0 && startedAt !== null && (
           <RunLog events={view.events} startedAt={startedAt} />
         )}
-        <Rematch view={view} send={send} leaveRoom={leaveRoom} />
+        <Rematch view={view} missions={missions} send={send} leaveRoom={leaveRoom} />
 
         {/* A pinned room's run, for a bug report: ?seed= with it plays this run again. */}
         {view.seed?.run != null && <p className="muted run-seed">Seed {view.seed.run}</p>}

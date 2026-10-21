@@ -176,7 +176,7 @@ describe('a room', () => {
     const room = new RoomManager((report) => appendRun(file, report)).create(mission);
     const anna = seat(room, 'Anna');
     const ben = seat(room, 'Ben');
-    room.act(ben.playerId, { kind: 'set-ready', ready: true });
+    room.setReady(ben.playerId, true);
     room.act(anna.playerId, { kind: 'start-mission' });
     return { room, anna, ben };
   }
@@ -192,8 +192,8 @@ describe('a room', () => {
     expect(linesOf(file)).toHaveLength(1);
 
     // Both confirm, the rematch starts by itself, and this time the crew gets out.
-    room.act(ben.playerId, { kind: 'set-ready', ready: true });
-    room.act(anna.playerId, { kind: 'set-ready', ready: true });
+    room.setReady(ben.playerId, true);
+    room.setReady(anna.playerId, true);
     vi.advanceTimersByTime(10_000);
     solveAt(room, 2, anna, ben);
     vi.advanceTimersByTime(20_000);

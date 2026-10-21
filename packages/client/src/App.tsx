@@ -377,6 +377,7 @@ function Screens(props: ScreenProps) {
           fresh={finale?.played === true}
           send={conn.send}
           leaveRoom={conn.leaveRoom}
+          missions={props.missions}
         />
       );
   }

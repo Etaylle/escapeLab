@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { MODULES, parseMission } from '../src/index.js';
+import { LEVER_FIGURE, MODULES, parseMission } from '../src/index.js';
 import type { ManualSection, Mission } from '../src/index.js';
 import { relayDefFor } from '../src/puzzles/relay.js';
 
@@ -25,7 +25,12 @@ const NOTE_MAX_CHARS = 120;
 
 /** Each module's variants beyond its defaults: every field its printed rules read. */
 const VARIANTS: Record<string, object[]> = {
-  'button-sync': [{ windowMs: 1000 }, { windowMs: 2500 }],
+  'button-sync': [
+    { windowMs: 1000 },
+    { windowMs: 2500 },
+    { style: 'lever' },
+    { style: 'lever', windowMs: 3000 },
+  ],
   wiring: [
     { wires: { min: 3, max: 3 } },
     { wires: { min: 3, max: 5 } },
@@ -57,7 +62,17 @@ const OWN_DEFS: Record<string, Record<string, object>> = {
   ),
 };
 
-type Case = readonly [label: string, type: string, manual: ManualSection[], penaltySec: number];
+type Case = readonly [
+  label: string,
+  type: string,
+  manual: ManualSection[],
+  penaltySec: number,
+  figure: string,
+];
+
+/** The drawing a def's manual opens on: its module's, or the main switch for a lever. */
+const figureOf = (type: string, def: object): string =>
+  'style' in def && def.style === 'lever' ? LEVER_FIGURE : type;
 
 const cases: Case[] = MODULES.flatMap((module): Case[] => {
   const variants = [{}, ...(VARIANTS[module.type] ?? [])];
@@ -75,7 +90,8 @@ const cases: Case[] = MODULES.flatMap((module): Case[] => {
     // Printed from the def alone: the same pages for a copy of it.
     expect(module.manual(structuredClone(def) as never)).toEqual(manual);
     const { penaltySec } = def as { penaltySec: number };
-    return [`${module.type} ${variant}`, module.type, manual, penaltySec];
+    const figure = figureOf(module.type, def);
+    return [`${module.type} ${variant}`, module.type, manual, penaltySec, figure];
   });
 });
 
@@ -97,14 +113,14 @@ describe('the printed rules', () => {
   });
 });
 
-describe.each(cases)('%s', (_label, type, manual, penaltySec) => {
+describe.each(cases)('%s', (_label, type, manual, penaltySec, drawing) => {
   const blocks = manual.flatMap((section) => section.blocks);
 
   it('open on a drawing of the device, then its description', () => {
     const [figure, description] = manual[0]?.blocks ?? [];
     expect(figure).toEqual({
       kind: 'figure',
-      of: type,
+      of: drawing,
       caption: expect.stringMatching(/^Abb\. 1 — \S+( \S+){1,2}$/),
     });
     const text = description?.kind === 'p' ? description.text : '';
@@ -158,5 +174,15 @@ describe.each(missions.map((m) => [m.id, m] as const))('the notes in mission %s'
         [...note].length > NOTE_MAX_CHARS || OFF_REGISTER.some((pattern) => pattern.test(note)),
     );
     expect(off).toEqual([]);
+  });
+
+  it('can each be asked for: a station with notes has its rules lying somewhere', () => {
+    // Notes are asked for at a source covering the open station; a station the whole crew
+    // presses needs no source, and then it has no notes either.
+    const unreachable = mission.puzzles
+      .filter((puzzle) => puzzle.hints.length > 0)
+      .filter((puzzle) => !mission.map.manuals.some((m) => m.puzzleIds.includes(puzzle.id)))
+      .map((puzzle) => puzzle.id);
+    expect(unreachable).toEqual([]);
   });
 });

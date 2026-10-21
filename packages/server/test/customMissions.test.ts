@@ -138,12 +138,44 @@ describe('the catalog with custom missions', () => {
     expect(said.find((line) => line.includes('custom-falsch.json'))).toContain('custom-anders');
   });
 
+  it('leaves out, with a warning, a custom mission leading on to one the catalog lacks', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mkdirSync(customDir);
+    const leading = (id: string, next: string): void =>
+      writeFileSync(join(customDir, `${id}.json`), JSON.stringify({ ...probe(id), next }));
+    leading('custom-weiter', 'blackout');
+    leading('custom-kette', 'custom-probe');
+    leading('custom-irrweg', 'nirgendwo');
+    writeFileSync(join(customDir, 'custom-probe.json'), JSON.stringify(probe()));
+    const catalog = new MissionCatalog(SHIPPED, customDir);
+    const custom = catalog.all.filter((m) => catalog.isCustom(m.id)).map((m) => m.id);
+    expect(custom.sort()).toEqual(['custom-kette', 'custom-probe', 'custom-weiter']);
+    expect(catalog.get('custom-weiter').next).toBe('blackout');
+    const said = warn.mock.calls.map(([line]) => String(line));
+    expect(said).toEqual([expect.stringMatching(/custom-irrweg\.json left out: .*"nirgendwo"/)]);
+  });
+
   it('starts without the custom directory and keeps none without one', () => {
     expect(existsSync(customDir)).toBe(false);
     expect(editing.catalog.all.some((m) => editing.catalog.isCustom(m.id))).toBe(false);
     expect(() => new MissionCatalog(SHIPPED).saveCustom(parseMission(probe()))).toThrow(
       /without a customDir/,
     );
+  });
+});
+
+describe('the mission a won run leads on to', () => {
+  it('is one the shipped catalog has: the tutorial leads on to Blackout', () => {
+    const catalog = new MissionCatalog(SHIPPED);
+    expect(catalog.get('systemcheck').next).toBe('blackout');
+    expect(catalog.get(catalog.get('systemcheck').next ?? '').title).toBe('Blackout im Labor');
+  });
+
+  it('stops the server at the start where a shipped mission leads on to nothing', () => {
+    const shipped = join(dir, 'shipped');
+    mkdirSync(shipped);
+    writeFileSync(join(shipped, 'probe.json'), JSON.stringify({ ...probe('probe'), next: 'weg' }));
+    expect(() => new MissionCatalog(shipped)).toThrow(/"probe" leads on to "weg", which is no/);
   });
 });
 

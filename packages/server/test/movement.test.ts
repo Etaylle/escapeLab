@@ -79,7 +79,7 @@ describe('Room movement', () => {
       const room = new Room('TEST', blackout);
       const anna = join(room, 'Anna');
       const ben = join(room, 'Ben');
-      room.act(ben.playerId, { kind: 'set-ready', ready: true });
+      room.setReady(ben.playerId, true);
       room.act(anna.playerId, { kind: 'start-mission' });
       const drew = (walker: Walker, spot: { x: number; y: number }): boolean =>
         JSON.stringify(lastView(walker).map?.yourSpawn) === JSON.stringify(spot);
@@ -106,8 +106,8 @@ describe('Room movement', () => {
     vi.advanceTimersByTime(((blackout.intro?.lightsSec ?? 0) + blackout.timeLimitSec) * 1000 + 1);
     expect(lastView(anna).phase).toBe('lost');
 
-    room.act(ben.playerId, { kind: 'set-ready', ready: true });
-    room.act(anna.playerId, { kind: 'set-ready', ready: true });
+    room.setReady(ben.playerId, true);
+    room.setReady(anna.playerId, true);
     const run = runOf(anna);
     expect(lastView(anna).phase).toBe('playing');
     expect(run).not.toBe(lastRun);

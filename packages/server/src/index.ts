@@ -155,8 +155,18 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
       });
       return s;
     }
+    case 'set-ready': {
+      const s = requireSession(session);
+      // The host's yes may name the mission the next run plays: from the catalog, at the
+      // room's difficulty. A name the catalog does not know is refused right here.
+      const next =
+        msg.missionId === undefined
+          ? null
+          : scaleMission(catalog.get(msg.missionId), s.room.difficulty);
+      s.room.setReady(s.playerId, msg.ready, next);
+      return s;
+    }
     case 'select-color':
-    case 'set-ready':
     case 'start-mission':
     case 'puzzle-input':
     case 'request-hint':

@@ -25,6 +25,7 @@ export {
   inEscapePhase,
   missingItemsFor,
   POWER_OUT,
+  puzzleDueAt,
   type Action,
 } from './actions.js';
 export { runReport, type RunOutcome, type RunReport, type StationReport } from './report.js';

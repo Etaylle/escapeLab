@@ -139,7 +139,7 @@ function operatorViews(): [string, PuzzleView][] {
   }
   const sync = seen('button-sync');
   if (sync.kind === 'button-sync') {
-    views.push(['button-sync missed', { ...sync, lastResult: 'missed-window', attempts: 2 }]);
+    views.push(['button-sync expired', { ...sync, lastResult: 'expired' }]);
     views.push(['button-sync pressed', { ...sync, youPressed: true }]);
   }
   const lever = seen('button-sync', true, { style: 'lever' });
@@ -1052,12 +1052,12 @@ describe('the sync button', () => {
     ]);
   });
 
-  it('says a missed window cost the attempt', () => {
-    const html = iconsAsWords(panel(sync({ lastResult: 'missed-window', attempts: 2 })));
+  it('says an own press ran out, to be made again with everybody', () => {
+    const html = iconsAsWords(panel(sync({ lastResult: 'expired' })));
     expect(html).toContain(
-      '<p class="warn" role="status">[warning] Zeitfenster verpasst — Versuch 2</p>',
+      '<p class="warn" role="status">[warning] Druck verfallen — nochmal alle zusammen</p>',
     );
-    expect(panel(sync())).not.toContain('Zeitfenster');
+    expect(panel(sync())).not.toContain('verfallen');
   });
 });
 

@@ -6,7 +6,7 @@ import { walkTo, type Walker } from './walk.js';
 /** The host's start now requires everyone else to have confirmed. */
 function ready(room: Room, ...players: { playerId: string }[]): void {
   for (const player of players) {
-    room.act(player.playerId, { kind: 'set-ready', ready: true });
+    room.setReady(player.playerId, true);
   }
 }
 

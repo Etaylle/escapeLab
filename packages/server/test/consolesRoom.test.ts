@@ -76,8 +76,8 @@ describe('Room with a station of two consoles', () => {
     if (anna === undefined || ben === undefined || cleo === undefined) {
       throw new Error('expected three players');
     }
-    room.act(ben.playerId, { kind: 'set-ready', ready: true });
-    room.act(cleo.playerId, { kind: 'set-ready', ready: true });
+    room.setReady(ben.playerId, true);
+    room.setReady(cleo.playerId, true);
     room.act(anna.playerId, { kind: 'start-mission' });
     return { room, anna, ben, cleo };
   }

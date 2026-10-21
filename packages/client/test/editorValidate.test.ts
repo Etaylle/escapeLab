@@ -82,10 +82,12 @@ describe('the validator', () => {
     const findings = validateDraft(draft).findings;
     const stuck = findings.filter((f) => f.text.includes('crew of 2 starting'));
     expect(stuck.length).toBeGreaterThan(0);
+    // The proof names the first crew that gets stuck: the one on the first two starts.
+    const [first, second] = draft.map.spawns;
     for (const finding of stuck) {
       expect(finding.target).not.toBeNull();
-      expect(finding.spots).toContainEqual({ x: 3, y: 2 });
-      expect(finding.spots).toContainEqual({ x: 3, y: 10 });
+      expect(finding.spots).toContainEqual(first);
+      expect(finding.spots).toContainEqual(second);
     }
   });
 

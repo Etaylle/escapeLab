@@ -65,7 +65,7 @@ describe('Room: nobody works a station alone', () => {
     if (anna === undefined || ben === undefined) {
       throw new Error('expected two players');
     }
-    room.act(ben.playerId, { kind: 'set-ready', ready: true });
+    room.setReady(ben.playerId, true);
     room.act(anna.playerId, { kind: 'start-mission' });
     walkTo(room, anna, 4.5, 1.5);
     walkTo(room, ben, 10.5, 2.5);

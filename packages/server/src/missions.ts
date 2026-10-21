@@ -52,6 +52,14 @@ export class MissionCatalog {
       }
       this.builtIn.set(mission.id, mission);
     }
+    for (const mission of this.builtIn.values()) {
+      if (mission.next !== undefined && !this.builtIn.has(mission.next)) {
+        throw new Error(
+          `Mission "${mission.id}" leads on to "${mission.next}", which is no mission in ` +
+            `${dir} — name a shipped mission in "next", or leave it out`,
+        );
+      }
+    }
     this.reloadCustom();
   }
 
@@ -140,6 +148,16 @@ export class MissionCatalog {
         } else {
           custom.set(loaded.id, loaded);
         }
+      }
+    }
+    const known = (id: string): boolean => this.builtIn.has(id) || custom.has(id);
+    for (const [id, mission] of custom) {
+      if (mission.next !== undefined && !known(mission.next)) {
+        console.warn(
+          `[escapelab] custom mission ${id}.json left out: it leads on to "${mission.next}", ` +
+            'which the catalog does not have',
+        );
+        custom.delete(id);
       }
     }
     this.custom = custom;

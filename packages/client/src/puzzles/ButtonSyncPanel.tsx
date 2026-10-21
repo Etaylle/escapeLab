@@ -8,12 +8,12 @@ import { lampPop, mushroomStomp, rejectBuzz } from './sounds.js';
 type SyncPuzzle = PanelProps<'button-sync'>['puzzle'];
 type SyncChange = Change<SyncPuzzle>;
 
-/** Whether a change let the crew's window run out: the presses so far dropped, an attempt more. */
-export function missedWith(change: SyncChange | null): boolean {
+/** Whether a change told this player that their press ran out: dropped, to be made again. */
+export function expiredWith(change: SyncChange | null): boolean {
   return (
     change !== null &&
-    change.after.attempts > change.before.attempts &&
-    change.after.lastResult === 'missed-window'
+    change.after.lastResult === 'expired' &&
+    change.before.lastResult !== 'expired'
   );
 }
 
@@ -25,8 +25,8 @@ export function partnersPressedWith(change: SyncChange): number {
 
 /**
  * What a change sounds like at the mushroom button: a partner's press stamped down, a lamp
- * popping on for every press that counts, a dull buzz for a missed window. The main switch
- * stays as built: it has its own sounds (LeverPanel).
+ * popping on for every press that counts, a dull buzz for an own press that ran out. The
+ * main switch stays as built: it has its own sounds (LeverPanel).
  */
 export function syncSounds(change: SyncChange): void {
   if (change.after.style === 'lever') {
@@ -38,7 +38,7 @@ export function syncSounds(change: SyncChange): void {
   if (change.after.pressedCount > change.before.pressedCount) {
     lampPop();
   }
-  if (missedWith(change)) {
+  if (expiredWith(change)) {
     rejectBuzz();
   }
 }
@@ -47,8 +47,8 @@ export function syncSounds(change: SyncChange): void {
  * The Synchronschaltung, as the printed figure draws it: one mushroom
  * button in a steel collar for the whole crew, under a lamp for each crew
  * member that pops on as their press comes in and goes dark again where it
- * expired. Every press stomps; pressed, the button stays down; a missed
- * window shakes the collar. A station whose mission draws it as a lever is
+ * expired. Every press stomps; pressed, the button stays down; an own press
+ * that ran out shakes the collar. A station whose mission draws it as a lever is
  * the main switch instead (LeverPanel). `.big-button` is what the
  * screenshot harness presses.
  */
@@ -73,7 +73,7 @@ export function ButtonSyncPanel({ puzzle, change, send, deadlineAt }: PanelProps
           />
         ))}
       </div>
-      <div className={missedWith(change) ? 'sync-collar sync-collar--missed' : 'sync-collar'}>
+      <div className={expiredWith(change) ? 'sync-collar sync-collar--missed' : 'sync-collar'}>
         <button
           className="big-button sync-button"
           disabled={youPressed}
@@ -82,9 +82,9 @@ export function ButtonSyncPanel({ puzzle, change, send, deadlineAt }: PanelProps
           onClick={() => send({ press: true })}
         />
       </div>
-      {puzzle.lastResult === 'missed-window' && (
+      {puzzle.lastResult === 'expired' && (
         <p className="warn" role="status">
-          <Icon name="warning" /> Zeitfenster verpasst — Versuch {puzzle.attempts}
+          <Icon name="warning" /> Druck verfallen — nochmal alle zusammen
         </p>
       )}
     </div>

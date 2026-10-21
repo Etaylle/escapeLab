@@ -53,6 +53,8 @@ export type Action =
   | { type: 'lights-out'; at: number }
   /** a move at the open puzzle; `input` is checked against that puzzle's module */
   | { type: 'puzzle-input'; playerId: string; at: number; input: unknown }
+  /** once `puzzleDueAt` has come: whatever ran out at the open puzzle by `at` is dropped */
+  | { type: 'puzzle-tick'; at: number }
   /** a note of the last crew, asked for at a manual object that covers the open puzzle */
   | { type: 'request-hint'; playerId: string; at: number }
   | { type: 'set-occupancy'; plates: string[]; panels: string[] }
@@ -86,7 +88,8 @@ export type Action =
   | { type: 'escaped'; at: number }
   | { type: 'time-expired'; at: number }
   | { type: 'back-to-lobby'; playerId: string }
-  | { type: 'rematch'; playerId: string; at: number; seed: number };
+  /** another run with the same crew: of `mission` where the host chose one, else the same again */
+  | { type: 'rematch'; playerId: string; at: number; seed: number; mission?: Mission };
 
 function findPlayer(state: GameState, playerId: string): Player {
   const player = state.players.find((p) => p.id === playerId);
@@ -119,6 +122,8 @@ export function applyAction(state: GameState, action: Action): GameState {
       return lightsOut(state, action.at);
     case 'puzzle-input':
       return handlePuzzleInput(state, action);
+    case 'puzzle-tick':
+      return tickPuzzle(state, action.at);
     case 'request-hint':
       return requestHint(state, action);
     case 'set-occupancy':
@@ -878,6 +883,44 @@ function handlePuzzleInput(
   return result.solved ? advance(creditWorkers(next, def, player.id), action.at) : next;
 }
 
+/** The open puzzle and its def while a run is on and not paused; null otherwise. */
+function openPuzzleOf(state: GameState): { def: PuzzleDef; puzzleState: PuzzleState } | null {
+  const def = state.mission.puzzles[state.currentPuzzleIndex];
+  if (
+    state.phase !== 'playing' ||
+    state.paused !== null ||
+    state.puzzleState === null ||
+    def === undefined
+  ) {
+    return null;
+  }
+  return { def, puzzleState: state.puzzleState };
+}
+
+/**
+ * When the open puzzle next changes on the clock alone — a sync press
+ * running out — so that the room can tick it then (`puzzle-tick`); null
+ * while nothing is due, between stations, in an emergency, while paused and
+ * outside a run.
+ */
+export function puzzleDueAt(state: GameState): number | null {
+  const open = openPuzzleOf(state);
+  if (open === null) {
+    return null;
+  }
+  return moduleFor(open.def.type).dueAt?.(open.def, open.puzzleState) ?? null;
+}
+
+/** The open puzzle at `at`, whatever ran out by then gone; the same state where nothing did. */
+function tickPuzzle(state: GameState, at: number): GameState {
+  const open = openPuzzleOf(state);
+  if (open === null) {
+    return state;
+  }
+  const aged = moduleFor(open.def.type).expire?.(open.def, open.puzzleState, at);
+  return aged === undefined || aged === open.puzzleState ? state : { ...state, puzzleState: aged };
+}
+
 /**
  * A solved station counts for whoever worked it: the player whose input
  * solved it — at a station with two consoles everybody at either console,
@@ -1127,18 +1170,21 @@ function handleInteract(state: GameState, action: { playerId: string; at: number
 
 
 /**
- * Straight into another run of the same mission with the same crew: it
- * confirms on the end screen, the host presses once. Same guards as a
- * normal start, just without the detour through the lobby.
+ * Straight into another run with the same crew: it confirms on the end
+ * screen, and the host's yes may name the mission it plays — found in the
+ * catalog and scaled to the room's difficulty by the server, `mission` here;
+ * without one the same mission runs again. Same guards as a normal start,
+ * the crew's size included, just without the detour through the lobby.
  */
 function rematch(
   state: GameState,
-  action: { playerId: string; at: number; seed: number },
+  action: { playerId: string; at: number; seed: number; mission?: Mission },
 ): GameState {
   if (state.phase !== 'won' && state.phase !== 'lost') {
     fail('Ein neuer Lauf geht erst nach Missionsende.');
   }
-  return startMission({ ...state, phase: 'lobby' }, action);
+  const mission = action.mission ?? state.mission;
+  return startMission({ ...state, phase: 'lobby', mission }, action);
 }
 
 function backToLobby(state: GameState, action: { playerId: string }): GameState {
