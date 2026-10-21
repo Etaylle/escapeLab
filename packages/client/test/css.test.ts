@@ -57,3 +57,11 @@ describe('the stylesheets', () => {
     expect(unclosedBlocks('.a {\n  color: red;\n/* } */\n.b {\n}\n')).toEqual(['line 1']);
   });
 });
+
+describe('the bar over a stage', () => {
+  it('blurs nothing behind it: the world drawing under it would redo the blur every frame', () => {
+    const ui = readFileSync(new URL('ui.css', SRC), 'utf8');
+    const rule = /\.app:has\(> \.content--stage\) > \.topbar \{([^}]*)\}/.exec(ui);
+    expect(rule?.[1]).toMatch(/backdrop-filter:\s*none;/);
+  });
+});

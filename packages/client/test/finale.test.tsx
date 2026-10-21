@@ -483,14 +483,14 @@ describe('the game screen while the world plays the end', () => {
     expect(html).toMatch(/^<div class="game game--finale game--won">/);
     expect(html).toMatch(/<div class="finale-veil finale-veil--white" style="animation-delay:\d+ms;animation-duration:600ms"/);
     expect(html).not.toContain('overlay pause');
-    expect(html).not.toContain('class="vignette"');
   });
 
-  it('shows none of it while the run goes on', () => {
+  it('shows none of it while the run goes on, and leaves the red edge to the world', () => {
     const html = game(viewOf({ map }), null);
     expect(html).toMatch(/^<div class="game">/);
     expect(html).not.toContain('finale-veil');
-    expect(html).toContain('class="vignette"');
+    // An element breathing over the whole page made every frame recompose the window.
+    expect(html).not.toContain('vignette');
   });
 
   it('times the veil from when the end started on this screen, to black for a run lost', () => {

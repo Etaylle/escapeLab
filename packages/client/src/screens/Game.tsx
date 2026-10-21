@@ -203,15 +203,6 @@ export function AlarmMarks({ alarms }: { alarms: PlayerView['alarms'] }) {
   );
 }
 
-/** Red edge glow while the clock runs out, and all through the escape. */
-function CriticalVignette({ deadlineAt, escaping }: { deadlineAt: number; escaping: boolean }) {
-  const now = useNow(500);
-  if (deadlineAt - now >= 60_000 && !escaping) {
-    return null;
-  }
-  return <div className="vignette" aria-hidden="true" />;
-}
-
 /** How long the launch briefing covers the screen. */
 const BRIEFING_MS = 3600;
 
@@ -726,21 +717,13 @@ function PauseOverlay({ pausedFor }: { pausedFor: string[] }) {
   );
 }
 
-/** What comes and goes over a run: the clock's red edge, the briefing, the pause. */
-function RunOverlays({
-  view,
-  map,
-  coldOpen,
-}: {
-  view: PlayerView;
-  map: MapView;
-  coldOpen: ColdOpen;
-}) {
+/**
+ * What comes and goes over a run: the briefing, the pause. The clock's red
+ * edge is the world's to draw (world/vignette.ts).
+ */
+function RunOverlays({ view, coldOpen }: { view: PlayerView; coldOpen: ColdOpen }) {
   return (
     <>
-      {view.deadlineAt !== null && (
-        <CriticalVignette deadlineAt={view.deadlineAt} escaping={escaping(map)} />
-      )}
       {!coldOpen.intro && <Briefing view={view} />}
       {view.pausedFor !== null && <PauseOverlay pausedFor={view.pausedFor} />}
     </>
@@ -849,7 +832,7 @@ export function GameScreen({
 
   return (
     <div className={ending}>
-      {live && <RunOverlays view={view} map={map} coldOpen={coldOpen} />}
+      {live && <RunOverlays view={view} coldOpen={coldOpen} />}
       {live && map.sabotage !== null && relay !== undefined && (
         <RelayAlert sabotage={map.sabotage} relay={relay} send={send} refusals={refusals} />
       )}

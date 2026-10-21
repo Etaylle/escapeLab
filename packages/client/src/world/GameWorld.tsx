@@ -51,7 +51,7 @@ import {
   type DoorMotion,
 } from './doors.js';
 import { drawsFrame } from './drawRate.js';
-import { exitOpening, redShift, useEscapeSince, useEscapeSounds } from './escape.js';
+import { escaping, exitOpening, redShift, useEscapeSince, useEscapeSounds } from './escape.js';
 import {
   finaleFrame,
   REDUCED_MOTION,
@@ -128,6 +128,7 @@ import {
   type Box,
   type Viewport,
 } from './viewport.js';
+import { bakeVignette, vignetteBreath, vignetteShown } from './vignette.js';
 
 const FALLBACK_COLOR = '#2dd4bf';
 const SPEED = 4.2; // tiles per second
@@ -1303,6 +1304,7 @@ export function GameWorld({
       renderPings(s, w, h, dpr);
       renderScreenText(map, s, view, ending !== null);
       renderCover(Math.max(scene.cover, ending?.dark ?? 0), w, h);
+      renderVignette(map, w, h, dpr, ending !== null);
     }
 
     /** Where the cold open stands on this screen now: the power on, the light failing, or out. */
@@ -1359,6 +1361,35 @@ export function GameWorld({
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = `rgba(1, 2, 4, ${cover})`;
       ctx.fillRect(0, 0, w, h);
+    }
+
+    /** The red edge as last baked (vignette.ts), and for which canvas: baked anew for another. */
+    const edge = { canvas: document.createElement('canvas'), w: 0, h: 0, dpr: 0 };
+
+    /**
+     * The red edge round the world in the clock's last minute and all through
+     * the escape, breathing: drawn last, over everything on the canvas. Not
+     * for the audience, and gone once the run ends on this screen.
+     */
+    function renderVignette(
+      map: WorldMap,
+      w: number,
+      h: number,
+      dpr: number,
+      ending: boolean,
+    ): void {
+      const shown = vignetteShown(viewRef.current.deadlineAt, Date.now(), escaping(map), ending);
+      if (ctx == null || spectator || !shown) {
+        return;
+      }
+      if (edge.w !== w || edge.h !== h || edge.dpr !== dpr) {
+        bakeVignette(edge.canvas, w, h, dpr);
+        Object.assign(edge, { w, h, dpr });
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = vignetteBreath(performance.now(), reducedRef.current);
+      ctx.drawImage(edge.canvas, 0, 0);
+      ctx.globalAlpha = 1;
     }
 
     /** How brightly the emergency lamps burn now: a slow pulse that never goes out. */

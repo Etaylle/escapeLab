@@ -70,6 +70,16 @@ body {
   font-family: var(--mono);
 }
 
+/*
+ * No blur behind the bar over a stage, where the world's canvas starts just
+ * under it: the blur was redone on every frame the world drew, and composed
+ * without a GPU that alone held the world to 20–30 frames a second. The bar
+ * is near opaque; nothing shows the difference.
+ */
+.app:has(> .content--stage) > .topbar {
+  backdrop-filter: none;
+}
+
 .logo {
   font-weight: 700;
   letter-spacing: 3px;

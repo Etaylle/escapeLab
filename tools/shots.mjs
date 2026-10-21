@@ -5,7 +5,7 @@
  *
  *   PLAYWRIGHT_BROWSERS_PATH=$PWD/.playwright-browsers \
  *     [SHOTS_MISSION=Systemcheck] [SHOTS_FRAME_P95_MS=40] [SHOTS_CPU_SLOWDOWN=4] \
- *     node tools/shots.mjs [baseUrl] [outDir]
+ *     [SHOTS_SOFTWARE_GL=1] node tools/shots.mjs [baseUrl] [outDir]
  *
  * SHOTS_MISSION names the mission card to start (default Blackout); the
  * crew is two players. Where the first station is a sync station, both
@@ -73,9 +73,11 @@
  * SHOTS_FRAME_P95_MS (default 40) fails the run, as does any step that
  * throws. SHOTS_CPU_SLOWDOWN (default 1) slows every page's main thread that
  * many times (Chromium's CPU throttling), so a fast machine measures the
- * frames as a CI runner without a GPU would. A capture the draw leaves out is
- * logged as `skipped:` with why, and fails nothing. The last line counts the
- * captures taken, skipped and failed; the exit code is 1 when any failed.
+ * frames as a CI runner without a GPU would; SHOTS_SOFTWARE_GL=1 composes the
+ * pages on SwiftShader, so that the compositor's share shows too. The first
+ * line says what draws the pages. A capture the draw leaves out is logged as
+ * `skipped:` with why, and fails nothing. The last line counts the captures
+ * taken, skipped and failed; the exit code is 1 when any failed.
  *
  * Voice: Chromium runs with a fake microphone that needs no prompt (its beeps
  * are the voice), and both players switch theirs on in the lobby. Both pages
@@ -116,6 +118,21 @@ const FRAME_P95_MS = frameBudget(process.env.SHOTS_FRAME_P95_MS);
  * as a CI runner, with no GPU and little CPU, would.
  */
 const CPU_SLOWDOWN = cpuSlowdown(process.env.SHOTS_CPU_SLOWDOWN);
+/**
+ * Whether the pages are composed without a GPU, SHOTS_SOFTWARE_GL=1: on
+ * SwiftShader, ANGLE's GPU in the CPU, so that what composing costs — off the
+ * page's main thread, where SHOTS_CPU_SLOWDOWN does not reach — shows here as
+ * on a CI runner. The canvas and the tiles are still drawn in software, as
+ * there: a canvas on SwiftShader makes every frame of the world take some
+ * 120 ms on this kind of machine, while CI's runner keeps the world at 60 fps.
+ */
+const SOFTWARE_GL = switchedOn('SHOTS_SOFTWARE_GL', process.env.SHOTS_SOFTWARE_GL);
+const SOFTWARE_GL_FLAGS = [
+  '--use-gl=angle',
+  '--use-angle=swiftshader',
+  '--disable-accelerated-2d-canvas',
+  '--disable-gpu-rasterization',
+];
 /**
  * The seed the host's room is pinned to (`?seed=`, taken by a server with
  * ALLOW_SEED=1 as `pnpm dev` and CI set it), so that who starts where, where
@@ -219,6 +236,43 @@ function cpuSlowdown(text) {
     throw new Error(`SHOTS_CPU_SLOWDOWN has to be a factor of 1 or more, not "${text}"`);
   }
   return rate;
+}
+
+/** Whether the switch `name` (`text`, its value) is on: 1 is on, 0 or unset off. */
+function switchedOn(name, text) {
+  if (text === undefined || text === '' || text === '0') {
+    return false;
+  }
+  if (text !== '1') {
+    throw new Error(`${name} has to be 1 (on) or 0 (off), not "${text}"`);
+  }
+  return true;
+}
+
+/**
+ * Logs what draws the pages — the GL renderer, and whether compositing and the
+ * 2D canvas run on it or in software. Under SOFTWARE_GL anything but pages
+ * composed on SwiftShader stops the run: its frames would not measure that.
+ */
+async function logRendering() {
+  const cdp = await browser.newBrowserCDPSession();
+  const { gpu } = await cdp.send('SystemInfo.getInfo');
+  await cdp.detach();
+  const renderer = gpu.auxAttributes?.glRenderer ?? gpu.devices?.[0]?.deviceString ?? 'unknown';
+  const status = gpu.featureStatus ?? {};
+  const compositing = status.gpu_compositing ?? 'unknown';
+  console.log(
+    `gpu                ${renderer}: compositing ${compositing}, ` +
+      `2d canvas ${status['2d_canvas'] ?? 'unknown'}` +
+      (SOFTWARE_GL ? ' (SHOTS_SOFTWARE_GL)' : ''),
+  );
+  if (SOFTWARE_GL && (!/SwiftShader/.test(renderer) || compositing !== 'enabled')) {
+    throw new Error(
+      `SHOTS_SOFTWARE_GL=1, but the pages are not composed on SwiftShader (renderer ` +
+        `"${renderer}", compositing ${compositing}): check that ` +
+        `${SOFTWARE_GL_FLAGS.join(' ')} still selects it in this Playwright build`,
+    );
+  }
 }
 
 /** A new page in `context`, its main thread slowed down CPU_SLOWDOWN times before it loads. */
@@ -2626,7 +2680,10 @@ async function run() {
   if (CPU_SLOWDOWN > 1) {
     console.log(`cpu                every page slowed down ${CPU_SLOWDOWN}× (SHOTS_CPU_SLOWDOWN)`);
   }
-  browser = await chromium.launch({ args: VOICE_FLAGS });
+  browser = await chromium.launch({
+    args: [...VOICE_FLAGS, ...(SOFTWARE_GL ? SOFTWARE_GL_FLAGS : [])],
+  });
+  await logRendering();
   await captureEditor();
 
   // --- host: create a room and grab the code ---------------------------
