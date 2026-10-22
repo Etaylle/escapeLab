@@ -282,7 +282,14 @@ function overlaysOf(
   const markers = markerTargets(map, view.you.id, sim.self, crew);
   const action = locked
     ? null
-    : contextAction(map, sim.self, view.you.id, view.sourcesHere, view.puzzle !== null);
+    : contextAction(
+        map,
+        sim.self,
+        view.you.id,
+        view.sourcesHere,
+        view.puzzle !== null,
+        view.noteHere,
+      );
   return { perf, chats, captions: sim.captions, markers, action };
 }
 

@@ -46,6 +46,7 @@ function hud(
     presence: { stationId: null, console: null, manualId: null, signSeen: edgework !== null },
     sourcesHere: [],
     manualsHere: [],
+    noteHere: null,
     puzzle: null,
     map: mapWith({}),
   };
@@ -130,6 +131,11 @@ describe('the radio strip while a line is on the air', () => {
     });
     expect(tickerLine(radio('Strom weg.', 9), chat, false)?.text).toBe('Leitstelle: Strom weg.');
     expect(tickerLine(undefined, undefined, false)).toBeNull();
+  });
+
+  it('says a note of the last crew was read under the note, never on the air', () => {
+    const read = { at: 9, kind: 'note' as const, label: 'Notiz gelesen', seconds: null };
+    expect(tickerLine(read, undefined, false)).toEqual({ icon: 'note', text: 'Notiz gelesen' });
   });
 });
 

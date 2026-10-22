@@ -6,6 +6,7 @@ import {
   drawFusebox,
   drawLeverBox,
   drawManualObject,
+  drawPinnedNote,
   drawPlate,
   drawSign,
   drawStation,
@@ -13,6 +14,7 @@ import {
 } from '../src/world/art.js';
 import { doorOpenness, type DoorMotion } from '../src/world/doors.js';
 import { drawCarryable, drawDropZone, drawSabotagePanel } from '../src/world/hazards.js';
+import { objectGlows } from '../src/world/render/darkness.js';
 import { draw } from '../src/world/render/objects.js';
 import { callsOf, drawnAt, fakeCanvas, recording, strip } from './fakeCanvas.js';
 import { frameWith, lightWith, player, TILES } from './frames.js';
@@ -144,6 +146,44 @@ describe('objects — the lab’s things, in tile space', () => {
     const locker = { ...look, kind: 'locker' as const, active: false, opened: false };
     expect(strip(drawnAt(log, 3.5, 1.5))).toEqual(recording((c) => drawManualObject(c, look)));
     expect(strip(drawnAt(log, 8.5, 4.5))).toEqual(recording((c) => drawManualObject(c, locker)));
+  });
+
+  it('pins a found note to its wall’s face, or lays it on the floor, unread ones calling', () => {
+    // (2,0) is wall over the floor at (2,1); (7,2) is floor; (5,5) wall with no floor beside.
+    const notes = [
+      { index: 0, x: 2, y: 0, read: false },
+      { index: 1, x: 7, y: 2, read: true },
+      { index: 2, x: 5, y: 5, read: false },
+    ];
+    const frame = frameWith({ map: lab({ notes }), light: lightWith({ shown: () => false }) });
+    const log = drawn(frame);
+    const { pulse } = frame;
+    expect(strip(drawnAt(log, 2.5, 1))).toEqual(
+      recording((c) => drawPinnedNote(c, { facing: Math.PI / 2, read: false, pulse })),
+    );
+    expect(strip(drawnAt(log, 7.5, 2.5))).toEqual(
+      recording((c) => drawPinnedNote(c, { facing: null, read: true, pulse })),
+    );
+    expect(drawnAt(log, 5.5, 5.5)).toEqual([]);
+    // Read or not is told apart: the call for attention goes once somebody has read it.
+    const unread = recording((c) => drawPinnedNote(c, { facing: null, read: false, pulse: 0.5 }));
+    const read = recording((c) => drawPinnedNote(c, { facing: null, read: true, pulse: 0.5 }));
+    expect(unread).not.toEqual(read);
+    expect(callsOf(log, 'save').length).toBe(callsOf(log, 'restore').length);
+  });
+
+  it('lets a found note glow in the dark, on its wall’s face, fainter once read', () => {
+    const notes = [
+      { index: 0, x: 2, y: 0, read: false },
+      { index: 1, x: 7, y: 2, read: true },
+    ];
+    const glows = objectGlows(frameWith({ map: lab({ notes }) }));
+    expect(glows).toEqual(
+      expect.arrayContaining([
+        { x: 2.5, y: 1 - 0.35, radius: 0.9, strength: 0.5 },
+        { x: 7.5, y: 2.5, radius: 0.9, strength: 0.3 },
+      ]),
+    );
   });
 
   it('always shows the sign, the hatch as far open as the frame says, and the valves', () => {

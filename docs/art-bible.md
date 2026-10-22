@@ -53,6 +53,9 @@ a darker front.
 Props fit the tile grid: one tile each, standing props never taller than their tile, so a
 crew member in front always overlaps them correctly. Labels sit under props in the world's
 text, as they always have. Wall props hang on the face of a wall tile, never on a floor tile.
+A note of the last crew (`map.notes`, art.ts `drawPinnedNote`) is a sheet of `PAPER` in blue
+ballpoint with a dog-ear: pinned with a red pin to the face that looks into the floor it is read
+from, or lying turned on the floor; until somebody reads it, a faint `READ_BLUE` glow calls.
 
 ## Motion rule
 

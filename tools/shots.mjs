@@ -76,6 +76,38 @@
  * guest first, the host's click naming the mission — and the run fails
  * unless Blackout opens on both pages with the power on.
  *
+ * Blackout on its pinned seed is played to the won card too, with the
+ * answers tools/fixtures/blackout-plan.json carries (core's
+ * test/blackoutPlan.ts keeps them the solvers' own), each instance checked
+ * against them first — the run fails naming the seed where one differs: the
+ * Notstrom-Kasten's wires, serial and readings round by round and its cuts,
+ * every stage of the Signalkette at consoles with the legend (a key a row
+ * and a shape; the deliberate wrong one gives figure-flinch.png), the
+ * Serverraum's table and moves (servers-manual.png from its locker,
+ * servers-a.png and servers-b.png from its consoles, servers-solved.png),
+ * the radio panel's lamp and dial, the spare fuse carried from the Archiv to
+ * the reactor and the reactor pressed together. From the Signalkette on the
+ * drones are awake: every walk goes from haven to haven past them — the
+ * tiles no drone ever looks at — as a crew times its run past a patrol:
+ * their flights foretold from the positions stream as the server steps them
+ * (tools/patrol.mjs), each stretch run in one go once no cone would meet it,
+ * and every sighting logged as it comes. A relay
+ * emergency is weathered from both pages, each instruction carried out at
+ * the console it names, and a station that has to stay open is opened only
+ * once the next emergency will not cut it short. Then both run for the
+ * hatch round the loop, and escape.png, pullback.png, won.png, end.png and
+ * won-phone.png come from Blackout as they do from the Systemcheck; the log
+ * says how long the win took from the blackout, what was left on the clock
+ * and how many alarms it cost. Blackout leads on to no other mission. In a
+ * Blackout run the Serverraum's scratch mission below is left to the
+ * Systemcheck's: Blackout's own Serverraum takes its captures.
+ *
+ * Notes of the last crew: after the lever, the host walks up to the nearest
+ * note the crew has found and presses E; note.png shows its slip, which has
+ * to carry the words the view gives the reader there, and the run report
+ * has to log it read for nothing, or the run fails. A map without notes
+ * skips it.
+ *
  * The base URL is the Vite dev server by default (`pnpm dev`), or the
  * production server (`pnpm build && pnpm start`, http://localhost:3001) as in
  * CI. The host's page opens with `?trace=1`, so the world keeps its frame
@@ -153,8 +185,10 @@
  * Editor: before the walkthrough a page of its own opens the editor from the
  * join screen, paints a 7 × 5 room, places a start and a station and
  * captures what the validator says (editor.png, and the layout at
- * 1280×720 and on a phone); a second start and a book make the mission
- * sound, it is saved as custom-probe and has to show on the join screen.
+ * 1280×720 and on a phone); the „Notiz" tool is refused deep in the rock,
+ * with the status line's word why, and pins a note to the wall over the room;
+ * a second start and a book make the mission sound, it is saved as
+ * custom-probe and has to show on the join screen.
  * Then the editor, opened at /editor, imports tools/fixtures/probe-mission.json
  * („Probe", custom-probe) and starts a test run from it: the lobby has to
  * show the probe (editor-play.png), „Zurück zum Editor" in the top bar has
@@ -163,7 +197,7 @@
  * the same mission in a page of its own (editor-shared.png). custom-probe is
  * deleted again through the API whatever happened before.
  *
- * Serverraum: the editor, opened at /editor?seed=4, imports
+ * Serverraum (a Systemcheck run): the editor, opened at /editor?seed=4, imports
  * tools/fixtures/servers-probe.json („Serverprobe", custom-serverprobe) and
  * starts its test run, pinned to that seed; a second page joins by code.
  * The player nearer the terminal searches the locker and reads the rules
@@ -206,6 +240,15 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { chromium, request } from 'playwright';
+import {
+  arrivals,
+  cornersOf,
+  flights,
+  havens,
+  RUN,
+  spottedOn,
+  stretchOf,
+} from './patrol.mjs';
 import { percentile } from './percentile.mjs';
 import { bandPowers, decibels } from './spectrum.mjs';
 
@@ -727,14 +770,15 @@ async function clickText(page, text) {
 }
 
 /**
- * Listens in on one player's socket: the newest view the server sent it and
- * where its avatar last reported itself. The walks below steer by these, so
- * they depend neither on the map's layout nor on how fast the page renders.
- * On the audience's socket it keeps the spectator view, which places every
- * source before the crew has come across it.
+ * Listens in on one player's socket: the newest view the server sent it,
+ * where its avatar last reported itself and where the drones awake fly, and
+ * when it heard that. The walks below steer by these, so they depend neither
+ * on the map's layout nor on how fast the page renders. On the audience's
+ * socket it keeps the spectator view, which places every source before the
+ * crew has come across it.
  */
 function eavesdrop(page) {
-  const seen = { view: null, pos: null };
+  const seen = { view: null, pos: null, drones: {}, dronesAt: null };
   page.on('websocket', (socket) => {
     if (!socket.url().endsWith('/ws')) {
       return;
@@ -743,6 +787,10 @@ function eavesdrop(page) {
       const msg = JSON.parse(String(payload));
       if (msg.kind === 'view' || msg.kind === 'spectator-view') {
         seen.view = msg.view;
+      }
+      if (msg.kind === 'positions') {
+        seen.drones = msg.drones;
+        seen.dronesAt = Date.now();
       }
     });
     socket.on('framesent', ({ payload }) => {
@@ -767,15 +815,19 @@ function furniture(map) {
 }
 
 /**
- * Shortest walk over floor and open doors, round the furniture, as tiles from
- * `from` to `to`; null if none.
+ * Shortest walk over floor and open doors, round the furniture — and round
+ * the tiles of `avoid` (keys), but onto `to` — as tiles from `from` to `to`;
+ * null if none.
  */
-function route(map, from, to) {
+function route(map, from, to, avoid = new Set()) {
   const key = (x, y) => `${x},${y}`;
   const closed = new Set(map.doors.filter((d) => !d.open).map((d) => key(d.x, d.y)));
   const solid = furniture(map);
   const walkable = (x, y) =>
-    map.tiles[y]?.[x] === '.' && !closed.has(key(x, y)) && !solid.has(key(x, y));
+    map.tiles[y]?.[x] === '.' &&
+    !closed.has(key(x, y)) &&
+    !solid.has(key(x, y)) &&
+    (!avoid.has(key(x, y)) || (x === to.x && y === to.y));
   const cameFrom = new Map([[key(from.x, from.y), null]]);
   const queue = [from];
   for (let i = 0; i < queue.length; i++) {
@@ -827,9 +879,15 @@ function reportWalking() {
   console.log(`walking            ${walks.join(', ')} of the ${seconds(total)} since the start`);
 }
 
-/** Steers the avatar onto a tile centre with short key presses, checking each result. */
+/**
+ * Steers the avatar onto a tile centre with short key presses, checking each
+ * result. An emergency that locks the world meanwhile is weathered first.
+ */
 async function stepTo(page, seen, tx, ty) {
   for (let i = 0; i < 30; i++) {
+    if (relayCrew.length > 0 && emergencyOn(seen)) {
+      await weather();
+    }
     const at = whereIs(seen);
     const dx = tx - at.x;
     const dy = ty - at.y;
@@ -906,9 +964,13 @@ async function until(check, ms) {
   return check();
 }
 
-/** Presses E until `locator` shows: the server takes a moment to count the avatar as there. */
+/**
+ * Presses E until `locator` shows: the server takes a moment to count the
+ * avatar as there. An emergency on meanwhile is weathered first.
+ */
 async function interactUntil(page, locator) {
   for (let i = 0; i < 3 && !(await locator.isVisible()); i++) {
+    await weather();
     await sleep(300);
     await page.keyboard.press('e');
     await locator.waitFor({ state: 'visible', timeout: 2000 }).catch(() => undefined);
@@ -1039,12 +1101,14 @@ async function captureReading(page, seen, who) {
 
 /**
  * A sync station takes every press within its window: both players click
- * its button at the same moment, and the station has to solve — the lit
- * rooms grow, and the LED strip moves on for both. Throws when it does not.
+ * its button at the same moment, and the station has to solve — the run
+ * moves on past it, and the LED strip moves on for both; the rooms it lights,
+ * if any, come up. Throws when it does not.
  */
 async function pressTogether(players, station) {
   const [first] = players;
   const litBefore = first.seen.view.map.litRooms.length;
+  const index = first.seen.view.currentPuzzleIndex;
   const done = (page) => page.locator('.led-strip .led-done');
   const doneBefore = await Promise.all(players.map(({ page }) => done(page).count()));
   await Promise.all(players.map(({ page }) => page.locator('.station-modal .big-button').click()));
@@ -1053,7 +1117,7 @@ async function pressTogether(players, station) {
   if (station.look !== 'lever') {
     await captureSolved(first, station);
   }
-  const lit = await until(() => first.seen.view.map.litRooms.length > litBefore, 5000);
+  const solved = await until(() => first.seen.view.currentPuzzleIndex > index, 5000);
   const moved = await Promise.all(
     players.map(({ page }, i) =>
       done(page)
@@ -1066,16 +1130,17 @@ async function pressTogether(players, station) {
     ),
   );
   const stuck = players.filter((_, i) => !moved[i]).map(({ name }) => name);
-  if (!lit || stuck.length > 0) {
+  if (!solved || stuck.length > 0) {
     const why = [
-      ...(lit ? [] : ['no room lit up']),
+      ...(solved ? [] : ['the run did not move on']),
       ...(stuck.length === 0 ? [] : [`the LED strip stood still for ${stuck.join(' and ')}`]),
     ];
     throw new Error(`both pressed "${station.title}", but it did not solve: ${why.join(', ')}`);
   }
   console.log(
     `sync               ${players.map(({ name }) => name).join(' and ')} pressed ` +
-      `"${station.title}" together: solved, ${first.seen.view.map.litRooms.join(', ')} lit`,
+      `"${station.title}" together: solved, ` +
+      `${first.seen.view.map.litRooms.join(', ') || 'no room'} lit`,
   );
   return { listening, lit: first.seen.view.map.litRooms.slice(litBefore) };
 }
@@ -2056,6 +2121,74 @@ async function captureCarry(player) {
 }
 
 /**
+ * The floor tile a note of the last crew is read from: its own on the floor;
+ * on a wall, the floor its face looks into — south first, then north, east
+ * and west (core's noteSpot); null where there is none.
+ */
+function readFrom(map, note) {
+  const floor = (x, y) => map.tiles[y]?.[x] === '.';
+  if (floor(note.x, note.y)) {
+    return { x: note.x, y: note.y };
+  }
+  const face = [
+    [0, 1],
+    [0, -1],
+    [1, 0],
+    [-1, 0],
+  ].find(([dx, dy]) => floor(note.x + dx, note.y + dy));
+  return face === undefined ? null : { x: note.x + face[0], y: note.y + face[1] };
+}
+
+/**
+ * note.png: `player` walks up to the nearest note of the last crew the crew
+ * has come across and presses E — its slip has to come up with the words
+ * the view gives whoever stands there, and the run report has to log it
+ * read, for nothing: no time, no alarm. Then the slip goes and the player
+ * walks back. Skipped where the crew has found no note it can walk to.
+ */
+async function captureNote(player) {
+  const map = player.seen.view.map;
+  const home = tileOf(player.seen);
+  const [found] = map.notes
+    .map((note) => ({ note, spot: readFrom(map, note) }))
+    .filter(({ spot }) => spot !== null && stepsTo(player.seen, spot) !== Infinity)
+    .sort((a, b) => stepsTo(player.seen, a.spot) - stepsTo(player.seen, b.spot));
+  if (found === undefined) {
+    skip('note.png', 'the crew has found no note of the last crew it can walk to');
+    return;
+  }
+  const { note, spot } = found;
+  const at = (await standOn(player, spot)) &&
+    (await until(() => player.seen.view.noteHere?.index === note.index, 3000));
+  const { deadlineAt, alarms } = player.seen.view;
+  const slip = player.page.locator('.note-modal');
+  if (!at || !(await interactUntil(player.page, slip))) {
+    throw new Error(`${player.name} stands at the note at ${note.x},${note.y}, but no .note-modal`);
+  }
+  await sleep(400); // past its fade-in
+  await capture(player.page, 'note.png');
+  const shown = await textOf(slip.locator('.pinned-note-text'));
+  const logged = await until(() => player.seen.view.events.some((e) => e.kind === 'note'), 3000);
+  const free =
+    player.seen.view.deadlineAt === deadlineAt && player.seen.view.alarms.count === alarms.count;
+  const right = shown !== null && shown === player.seen.view.noteHere?.text;
+  console.log(
+    `note.png           ${player.name} at the note on ${note.x},${note.y}: ` +
+      `${right ? `„${shown}"` : `!! the slip says „${shown}"`}; ` +
+      `${logged ? 'the run report says „Notiz gelesen"' : '!! not in the run report'}, ` +
+      `${free ? 'for nothing' : '!! it cost time or an alarm'}`,
+  );
+  if (!right || !logged || !free) {
+    fail(`note.png: slip „${shown}", logged ${logged}, free ${free}`);
+  }
+  await player.page.keyboard.press('Escape');
+  await slip.waitFor({ state: 'hidden', timeout: 3000 });
+  if (home !== null && !(await standOn(player, home))) {
+    throw new Error(`${player.name} found no way back to ${home.x},${home.y} from the note`);
+  }
+}
+
+/**
  * sign.png for a player spawned within sight of the Laborkennung: its note
  * is up at once. Returns that player, if any.
  */
@@ -2086,7 +2219,8 @@ async function coldOpen(host, guest) {
 /**
  * The run's first moments. A mission with an intro opens with the power on:
  * the cold open comes first, the lever with it. Then Anna carries what lies
- * loose for a moment (figure-carry.png), the draw — who works the first
+ * loose for a moment (figure-carry.png) and reads the nearest note of the
+ * last crew found (note.png), the draw — who works the first
  * station, who reads — and, without an intro, sign.png for a player spawned
  * at the Laborkennung, whose note is up as soon as the briefing is gone.
  * Returns both and the player sign.png caught, if any.
@@ -2095,6 +2229,7 @@ async function firstMoments(anna, ben) {
   const intro = anna.seen.view.lights.out === false;
   const signedEarly = intro ? await coldOpen(anna, ben) : undefined;
   await captureCarry(anna);
+  await captureNote(anna);
   const [operator, reader] = operatorFirst([anna, ben]);
   console.log(`the draw:          ${operator.name} works the first station, ${reader.name} reads`);
   const atSign = intro ? signedEarly : await signAtSpawn([reader, operator]);
@@ -2117,14 +2252,19 @@ function seatOf(player) {
 /**
  * One stage of the Signalkette: `presser` clicks the keys of the sequence the
  * sender's view shows, in its order and ~150 ms apart, each press counted
- * before the next and its done-lamp lit on both panels. The last press moves
- * the stage on, or solves the station. Throws at the press that fails; returns
- * how many signs went in.
+ * before the next and its done-lamp lit on both panels — by the sign on it,
+ * or, at consoles with the legend, by the row and shape `pinned` gives each
+ * sign. The last press moves the stage on, or solves the station. Throws at
+ * the press that fails; returns how many signs went in.
  */
-async function pressStage(sender, presser) {
+async function pressStage(sender, presser, pinned = null) {
   const { puzzle, currentPuzzleIndex } = sender.seen.view;
   const { stage, sequence } = puzzle;
   const keys = '.station-modal .signal-key';
+  const keyFor = (i, token) =>
+    pinned === null
+      ? `${keys}[data-token="${token}"]`
+      : `${keys}[data-row="${pinned[i]?.row}"][data-shape="${pinned[i]?.shape}"]`;
   // `waitFor` wants one element: the first key stands for the twelve.
   if (!(await attached(presser.page.locator(keys).first(), 3000))) {
     throw new Error(`${presser.name} is to press stage ${stage}, but the panel has no ${keys}`);
@@ -2135,7 +2275,7 @@ async function pressStage(sender, presser) {
   };
   const lamp = (page, i) => page.locator('.station-modal .signal-lamp--lit').nth(i);
   for (const [i, token] of sequence.entries()) {
-    await presser.page.locator(`${keys}[data-token="${token}"]`).click({ timeout: 3000 });
+    await presser.page.locator(keyFor(i, token)).click({ timeout: 3000 });
     const last = i === sequence.length - 1;
     const counted = await until(
       () => (last ? through() : presser.seen.view.puzzle?.done === i + 1),
@@ -2448,9 +2588,13 @@ async function manBothConsoles(players) {
 /**
  * A Signalkette with both consoles open: the receiving side clicks what the
  * sending side's view shows, and the direction swaps after each stage, until
- * it solves. Throws with the step that failed.
+ * it solves. With `pinned` — the stages a pinned seed deals — every stage's
+ * sending console and sequence have to be the pinned ones, and the keys
+ * pressed are the pinned ones: at consoles with the legend a key is a row and
+ * a shape, which only the printed legend ties to a sign. Throws with the step
+ * that failed, naming the seed where a stage differs from its pin.
  */
-async function solveSignal(crew, title) {
+async function solveSignal(crew, title, pinned = null) {
   const roleOf = (player) => player.seen.view.puzzle?.role ?? null;
   const roles = () => crew.map((p) => `${p.name} ${roleOf(p)}`).join(', ');
   await until(() => crew.every((p) => roleOf(p) !== null), 3000);
@@ -2460,7 +2604,7 @@ async function solveSignal(crew, title) {
     throw new Error(`both stand at "${title}", but the Signalkette has no roles: ${roles()}`);
   }
   const signs = await sender.page.locator('.station-modal .signal-strip .signal-sign').count();
-  const keys = await receiver.page.locator('.station-modal .signal-key[data-token]').count();
+  const keys = await receiver.page.locator('.station-modal .signal-key').count();
   console.log(
     `signal             ${sender.name} at ${seatOf(sender)} sends ${signs} signs, ` +
       `${receiver.name} at ${seatOf(receiver)} has ${keys} keys`,
@@ -2477,11 +2621,15 @@ async function solveSignal(crew, title) {
   const solved = () => crew.every((p) => p.seen.view.currentPuzzleIndex > index);
   let [sending, pressing] = [sender, receiver];
   for (let stage = 1; stage <= stages; stage++) {
+    const pin = pinned?.[stage - 1] ?? null;
+    if (pin !== null) {
+      checkStage(sending, pin, stage);
+    }
     // The run's one deliberate alarm: where the traced host sends, or at the last stage.
     if (!flinchShot && (sending.traced === true || stage === stages)) {
-      await captureFlinch(sending, pressing);
+      await captureFlinch(sending, pressing, pin?.keys[0] ?? null);
     }
-    const count = await pressStage(sending, pressing);
+    const count = await pressStage(sending, pressing, pin?.keys ?? null);
     const line =
       `signal             ${sending.name} sends, ${pressing.name} presses: ` +
       `${count}/${count}, stage ${stage} of ${stages}`;
@@ -2508,13 +2656,44 @@ async function solveSignal(crew, title) {
   }
 }
 
+/** A stage of the pinned Signalkette: sent from the pinned console, the pinned sequence. */
+function checkStage(sending, pin, stage) {
+  const { sends, sequence } = sending.seen.view.puzzle;
+  if (sends !== pin.sends || (sequence ?? []).join(' ') !== pin.sequence.join(' ')) {
+    differs(
+      `Signalkette, stage ${stage}`,
+      `${(sequence ?? []).join(' ')} from console ${sends}`,
+      `${pin.sequence.join(' ')} from console ${pin.sends}`,
+    );
+  }
+}
+
 /** How soon after the wrong press figure-flinch.png has to be shot, ms: mid-flinch. */
 const FLINCH_SHOT_MS = 150;
 /** Whether figure-flinch.png was taken: a run meets one Signalkette at most for it. */
 let flinchShot = false;
 
-/** The token of a key on `presser`'s panel the sequence `sender` sends does not start with. */
-async function wrongKey(sender, presser) {
+/**
+ * A key on `presser`'s panel that is not the first one the stage asks for:
+ * by its sign where the keys show signs, else by its row and shape — not
+ * `firstKey`, the one the pinned stage presses first. Its selector, and how
+ * the log names it.
+ */
+async function wrongKey(sender, presser, firstKey) {
+  if (firstKey !== null) {
+    const keys = await presser.page
+      .locator('.station-modal .signal-key[data-row]')
+      .evaluateAll((all) => all.map((key) => [key.dataset.row, key.dataset.shape]));
+    const other = keys.find(
+      ([row, shape]) => row !== String(firstKey.row) || shape !== firstKey.shape,
+    );
+    if (other === undefined) {
+      throw new Error(`${presser.name}'s Signalkette panel has no key to get wrong`);
+    }
+    const [row, shape] = other;
+    const selector = `.station-modal .signal-key[data-row="${row}"][data-shape="${shape}"]`;
+    return { selector, said: `${shape} in row ${row}` };
+  }
   const first = sender.seen.view.puzzle?.sequence?.[0];
   const tokens = await presser.page
     .locator('.station-modal .signal-key[data-token]')
@@ -2523,7 +2702,7 @@ async function wrongKey(sender, presser) {
   if (wrong === undefined) {
     throw new Error(`${presser.name}'s Signalkette panel has no key but "${first}" to get wrong`);
   }
-  return wrong;
+  return { selector: `.station-modal .signal-key[data-token="${wrong}"]`, said: wrong };
 }
 
 /**
@@ -2536,7 +2715,7 @@ async function wrongKey(sender, presser) {
  * panel again for the stage. Fails where no alarm comes in or the shot comes
  * too late; throws where the panel does not open again.
  */
-async function captureFlinch(sender, presser) {
+async function captureFlinch(sender, presser, firstKey = null) {
   flinchShot = true;
   const modal = sender.page.locator('.station-modal');
   await sender.page.keyboard.press('Escape');
@@ -2544,10 +2723,10 @@ async function captureFlinch(sender, presser) {
   const size = sender.page.viewportSize();
   await sender.page.setViewportSize(COLD_OPEN);
   await sleep(700); // the layout settles, the panel past its fade-out
-  const wrong = await wrongKey(sender, presser);
+  const wrong = await wrongKey(sender, presser, firstKey);
   const count = sender.seen.view.alarms.count;
   const pressed = Date.now();
-  await presser.page.locator(`.station-modal .signal-key[data-token="${wrong}"]`).click();
+  await presser.page.locator(wrong.selector).click();
   const clicked = Date.now() - pressed;
   while (sender.seen.view.alarms.count === count && Date.now() - pressed < 2000) {
     await sleep(5);
@@ -2556,7 +2735,7 @@ async function captureFlinch(sender, presser) {
   const shot = Date.now() - pressed;
   await capture(sender.page, 'figure-flinch.png');
   console.log(
-    `figure-flinch.png  ${presser.name} pressed "${wrong}" (${clicked} ms), the alarm ` +
+    `figure-flinch.png  ${presser.name} pressed "${wrong.said}" (${clicked} ms), the alarm ` +
       (came === null ? '!! never came in' : `in ${came} ms`) +
       `; ${sender.name}'s world @ ${COLD_OPEN.width}x${COLD_OPEN.height} shot ${shot} ms ` +
       `after the press${shot > FLINCH_SHOT_MS ? ` — !! later than ${FLINCH_SHOT_MS} ms` : ''}`,
@@ -3278,6 +3457,34 @@ async function editorLayouts(page) {
   await sleep(400);
 }
 
+/**
+ * The „Notiz" tool: pressed deep in the rock it places nothing and the
+ * status line says where a note may go; pressed on the wall over the probe's
+ * room it pins one there, its form comes up, and the validator finds
+ * nothing more to say than before. Fails otherwise.
+ */
+async function pinProbeNote(page) {
+  const before = (await editorErrors(page)).length;
+  await placeWith(page, 'note', 15, 9);
+  const refused = await textOf(page.locator('.editor-status-note'));
+  await placeWith(page, 'note', 5, 1);
+  const form = page.locator('.editor-thing', { hasText: 'Notiz der letzten Crew' });
+  const pinned = await form.waitFor({ timeout: 3000 }).then(
+    () => true,
+    () => false,
+  );
+  await sleep(700); // past the pause the validator waits for
+  const after = (await editorErrors(page)).length;
+  console.log(
+    `editor             „Notiz": in the rock „${refused ?? '!! no word'}"; on the wall over the ` +
+      `room ${pinned ? 'pinned, its form up' : '!! not pinned'}, ` +
+      `${after} error(s) as before ${before}`,
+  );
+  if (refused === null || !pinned || after !== before) {
+    fail(`editor: the note tool said „${refused}", pinned ${pinned}, errors ${before} → ${after}`);
+  }
+}
+
 /** A second start and a book make the probe sound; saved, its card has to be on the join screen. */
 async function saveProbe(page) {
   await placeWith(page, 'spawn', 4, 4);
@@ -3417,6 +3624,7 @@ async function captureEditor() {
     await paintProbe(page);
     await captureValidator(page);
     await editorLayouts(page);
+    await pinProbeNote(page);
     await saveProbe(page);
   } catch (err) {
     console.log(`editor             !! ${firstLine(err)}`);
@@ -3455,15 +3663,18 @@ const ART_MISSION = { id: 'custom-blackout', title: 'Kunstprobe' };
 /** The art tour's windows: as large as cold-open.png's. */
 const ART_SIZE = COLD_OPEN;
 
+/** Blackout as its mission file has it: its drones' beats and its emergencies' schedule. */
+const BLACKOUT = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../missions/blackout.json', import.meta.url)), 'utf8'),
+);
+
 /**
  * Blackout as the art tour plays it: ten seconds of power before the lights
  * fail, for two, starting in the Archiv and in the Maschinenraum — a copy
  * the server checks as it checks every mission.
  */
 function artMission() {
-  const blackout = JSON.parse(
-    readFileSync(fileURLToPath(new URL('../missions/blackout.json', import.meta.url)), 'utf8'),
-  );
+  const blackout = structuredClone(BLACKOUT);
   // Where a won run leads on to is the shipped mission's business.
   delete blackout.next;
   return {
@@ -3836,20 +4047,20 @@ async function captureServersSolved(player) {
 }
 
 /**
- * The plan played at both consoles, move by move, ~150 ms apart — the first
- * command typed at the prompt, the rest put together on the keys — and the
- * station solved by the last move, without an alarm.
+ * A plan's moves played at both consoles, move by move, ~150 ms apart — the
+ * first command typed at the prompt, the rest put together on the keys — and
+ * the station solved by the last move, without an alarm.
  */
-async function playServers(crew) {
+async function playServers(crew, moves = SERVERS_PLAN.moves) {
   const { terminal } = crew;
   const index = terminal.seen.view.currentPuzzleIndex;
   const alarms = terminal.seen.view.alarms.count;
   const from = Date.now();
   const said = [];
-  for (const move of SERVERS_PLAN.moves) {
+  for (const move of moves) {
     const typed = move.by === 'operator' && !said.some((line) => line.startsWith('A '));
     said.push(await serversMove(crew, move, typed));
-    if (said.length < SERVERS_PLAN.moves.length) {
+    if (said.length < moves.length) {
       await sleep(150);
     }
   }
@@ -3883,6 +4094,13 @@ async function playServers(crew) {
  * long it took. The mission is deleted again whatever happened.
  */
 async function captureServers() {
+  if (MISSION.toLowerCase() === 'blackout') {
+    skip(
+      'servers (probe)',
+      'Blackout plays its own Serverraum: its servers-*.png come from the run',
+    );
+    return;
+  }
   const crew = [];
   try {
     const host = await serversPlayer('Anna');
@@ -3943,6 +4161,832 @@ async function standOn(player, tile) {
     (await walkNear(player.page, player.seen, tile)) &&
     (await stepTo(player.page, player.seen, tile.x + 0.5, tile.y + 0.5))
   );
+}
+
+// --- Blackout to the won card: past the drones, through the emergencies ------
+
+/**
+ * Blackout on its pinned seed as core's test/blackoutPlan.ts plays it
+ * through the reducer: who starts where, where the sources lie, and every
+ * station's answer. Node cannot load core's TypeScript, so the plan is
+ * carried; the walkthrough checks each instance in the browser against it
+ * before it plays the answer, and fails naming the seed where one differs.
+ */
+const BLACKOUT_PLAN = JSON.parse(
+  readFileSync(fileURLToPath(new URL('fixtures/blackout-plan.json', import.meta.url)), 'utf8'),
+);
+
+/** How long a walk past the drones waits for a gap before it runs anyway, in ms. */
+const SNEAK_GIVE_UP_MS = 45_000;
+/** How soon after a look the avatar sets off at the latest, in s: the keys' way to the page. */
+const REACTION_S = 0.05;
+/** How long a run stands at a haven before it looks again, in s. */
+const SETTLE_S = 0.3;
+/** How far a walker caught out in the open looks round for a haven to run to, in tiles. */
+const REFUGE_TILES = 8;
+/** How far short of a turn a run lets go of its key, in ms of running: inside STEP_TOLERANCE. */
+const RUN_SHORT_MS = 30;
+/** How long a run waits once it lets go, for the avatar to report where it stopped, in ms. */
+const REPORT_MS = 100;
+
+/** The doors shut on `map`, by tile key. */
+const shutOn = (map) => new Set(map.doors.filter((d) => !d.open).map((d) => `${d.x},${d.y}`));
+
+/** The tiles of `map`'s camera plates, by key: a walk past the patrols steps round them. */
+const cameraPlates = (map) =>
+  new Set(map.plates.filter((p) => p.freezesDrone).map((p) => `${p.x},${p.y}`));
+
+/**
+ * Every drone awake on `seen`'s stream as patrol.mjs takes it — its beat
+ * from Blackout's file — and how old that look is, in s. A drone held still
+ * by its plate flies on in the forecast: the plate may be let go any moment.
+ */
+function dronesOn(seen) {
+  const drones = Object.entries(seen.drones ?? {}).flatMap(([id, at]) => {
+    const def = BLACKOUT.map.drones.find((d) => d.id === id);
+    if (def === undefined) {
+      return [];
+    }
+    const beat = { waypoints: def.waypoints, speed: def.speed ?? 1.5 };
+    return [{ id, beat, range: at.range, halfAngleDeg: at.halfAngleDeg, at }];
+  });
+  return { drones, age: (Date.now() - (seen.dronesAt ?? Date.now())) / 1000 };
+}
+
+/** The havens worked out so far, by the doors shut and the drones awake that decide them. */
+const havensBy = new Map();
+
+/** The havens of `sight` from `drones` (patrol.mjs `havens`), worked out once for each state. */
+function havensOn(drones, sight) {
+  const key = `${[...sight.shut].sort().join(';')}|${drones.map((d) => d.id).sort().join(',')}`;
+  if (!havensBy.has(key)) {
+    havensBy.set(key, havens(drones, sight));
+  }
+  return havensBy.get(key);
+}
+
+/**
+ * How the runs went against the pace patrol.mjs RUN allows, for the log's
+ * line at the end: how many ran outside it and by how much at most, and the
+ * least and most a stop took beyond the running, in s.
+ */
+const running = { runs: 0, outside: 0, worstS: 0, stopS: [Infinity, 0] };
+
+/** Holds a run of `path` that took `ms` against the fastest and the slowest RUN allows. */
+function timeRun(path, ms) {
+  const fast = arrivals(path, RUN.tile[0], RUN.corner[0]).at(-1);
+  const slow = arrivals(path, RUN.tile[1], RUN.corner[1]).at(-1) + RUN.corner[1];
+  const took = ms / 1000;
+  const stop = (took - (path.length - 1) / SPEED) / cornersOf(path).length;
+  running.runs += 1;
+  running.stopS = [Math.min(running.stopS[0], stop), Math.max(running.stopS[1], stop)];
+  if (took < fast || took > slow) {
+    running.outside += 1;
+    running.worstS = Math.max(running.worstS, took < fast ? fast - took : took - slow);
+  }
+}
+
+/**
+ * Runs `player` along `path` as a player runs: the key held down along each
+ * straight, then stepped onto the turn — and the end — exactly; patrol.mjs
+ * RUN times it so, and each run is held against it (`timeRun`). Stops at the
+ * turn where an emergency came meanwhile — the drones flew on through it —
+ * for the walk to look again. False where it stopped short.
+ */
+async function runPath(player, path) {
+  const started = Date.now();
+  const emergencyCount = () => emergencies.weathered + emergencies.missed;
+  const before = emergencyCount();
+  for (const i of cornersOf(path)) {
+    const at = whereIs(player.seen);
+    const [tx, ty] = [path[i].x + 0.5, path[i].y + 0.5];
+    const dx = tx - at.x;
+    const dy = ty - at.y;
+    const key = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'd' : 'a') : dy > 0 ? 's' : 'w';
+    const ms = (Math.hypot(dx, dy) / SPEED) * 1000 - RUN_SHORT_MS;
+    if (ms > 0) {
+      await player.page.keyboard.down(key);
+      await sleep(ms);
+      await player.page.keyboard.up(key);
+      walking.ms.set(player.page, (walking.ms.get(player.page) ?? 0) + ms);
+      await sleep(REPORT_MS);
+    }
+    if (!(await stepTo(player.page, player.seen, tx, ty)) || emergencyCount() !== before) {
+      return false;
+    }
+  }
+  timeRun(path, Date.now() - started);
+  return true;
+}
+
+/**
+ * The way from `here` to the nearest haven within REFUGE_TILES that `unseen`
+ * lets a walker run, else to a tile beside it where it may stand a moment
+ * unseen; null for neither.
+ */
+function refugeFrom(map, here, safe, unseen) {
+  const ways = [...safe]
+    .map((key) => key.split(',').map(Number))
+    .filter(([x, y]) => Math.abs(x - here.x) + Math.abs(y - here.y) <= REFUGE_TILES)
+    .map(([x, y]) => route(map, here, { x, y }))
+    .filter((way) => way !== null && way.length - 1 <= REFUGE_TILES * 2)
+    .sort((a, b) => a.length - b.length);
+  const aside = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ]
+    .map(([dx, dy]) => route(map, here, { x: here.x + dx, y: here.y + dy }))
+    .filter((way) => way !== null && way.length === 2);
+  return ways.find((way) => unseen(way, SETTLE_S)) ?? aside.find((way) => unseen(way, 1.5)) ?? null;
+}
+
+/**
+ * What `player` runs next on its way along `path` past the drones: the
+ * stretch to the next haven (patrol.mjs `stretchOf`) once no drone's flight,
+ * foretold from the stream, would spot it on the way — nor at the end of
+ * `path` for `hold` s; or, caught out in the open with that stretch watched,
+ * the way to a haven it can reach unseen (`refugeFrom`); null to wait where
+ * it is. `late`, it runs the stretch whatever the drones do.
+ */
+function nextRun(player, map, path, hold, late) {
+  const sight = { tiles: map.tiles, shut: shutOn(map) };
+  const { drones, age } = dronesOn(player.seen);
+  const safe = havensOn(drones, sight);
+  const stretch = stretchOf(path, safe);
+  if (late) {
+    return stretch;
+  }
+  const unseen = (way, stand) => {
+    const run = arrivals(way, RUN.tile[1], RUN.corner[1]).at(-1) + RUN.corner[1];
+    const delay = age + REACTION_S;
+    const flying = flights(drones, delay + run + stand + 0.5);
+    return spottedOn(way, flying, sight, { delay, hold: stand }) === null;
+  };
+  const arrives = stretch.length === path.length;
+  if (unseen(stretch, arrives ? hold : SETTLE_S)) {
+    return stretch;
+  }
+  const [here] = path;
+  return safe.has(`${here.x},${here.y}`) ? null : refugeFrom(map, here, safe, unseen);
+}
+
+/** What the walks past the drones came to, for the log's line at the end. */
+const sneaking = { walks: 0, waitedMs: 0, ranAnyway: 0 };
+
+/** `player`'s map; throws, saying how the run stands, where its view has none. */
+function mapOf(player) {
+  const view = player.seen.view;
+  if (view?.map == null) {
+    const alarms = view?.alarms?.count ?? '?';
+    throw new Error(
+      `${player.name} has no map to walk on: the run is ${view?.phase}, ${alarms} alarm(s)`,
+    );
+  }
+  return view.map;
+}
+
+/**
+ * `player` walks onto `target` past the awake drones, as a crew times its
+ * run past a patrol: from haven to haven — the tiles no drone ever looks at
+ * — each stretch run in one go once no drone would spot it on the way, nor
+ * at `target` for `hold` s once there (`nextRun`), round the camera plates.
+ * An emergency is weathered first. After SNEAK_GIVE_UP_MS without a gap it
+ * runs anyway, and the log says so. Throws where no open way leads there.
+ */
+async function sneakTo(player, target, hold = 1.2) {
+  const since = Date.now();
+  let late = false;
+  sneaking.walks += 1;
+  for (;;) {
+    await weather();
+    const from = tileOf(player.seen);
+    if (from.x === target.x && from.y === target.y) {
+      await stepTo(player.page, player.seen, target.x + 0.5, target.y + 0.5);
+      return;
+    }
+    const map = mapOf(player);
+    const path = route(map, from, target, cameraPlates(map)) ?? route(map, from, target);
+    if (path === null) {
+      throw new Error(
+        `${player.name} found no way from ${from.x},${from.y} to ${target.x},${target.y}`,
+      );
+    }
+    if (!late && Date.now() - since > SNEAK_GIVE_UP_MS) {
+      late = true;
+      sneaking.ranAnyway += 1;
+      console.log(
+        `sneak              !! ${player.name} found no gap in the patrols to ` +
+          `${target.x},${target.y}`,
+      );
+    }
+    const run = nextRun(player, map, path, hold, late);
+    if (run === null) {
+      await sleep(60);
+      sneaking.waitedMs += 60;
+      continue;
+    }
+    await runPath(player, run);
+  }
+}
+
+/**
+ * Before a step that leaves `player` out in the open where it stands once
+ * done — a station solved stops hiding whoever works it: waits until no
+ * drone's flight, foretold from the stream, will look there for the next
+ * `seconds`. After SNEAK_GIVE_UP_MS it goes on anyway, and the log says so.
+ */
+async function clearOfDrones(player, seconds) {
+  const since = Date.now();
+  for (;;) {
+    const map = mapOf(player);
+    const sight = { tiles: map.tiles, shut: shutOn(map) };
+    const { drones, age } = dronesOn(player.seen);
+    const flying = flights(drones, age + seconds + RUN.corner[1] + 0.5);
+    const here = [tileOf(player.seen)];
+    if (spottedOn(here, flying, sight, { delay: age, hold: seconds }) === null) {
+      return;
+    }
+    if (Date.now() - since > SNEAK_GIVE_UP_MS) {
+      console.log(`sneak              !! no moment ${player.name}'s spot stays out of sight`);
+      return;
+    }
+    await sleep(60);
+    sneaking.waitedMs += 60;
+  }
+}
+
+/** The run report's line for a drone's sighting (core actions.ts DRONE_ALARM). */
+const DRONE_SIGHTING = 'Von einer Drohne erfasst';
+
+/** The drone sightings of the walkthrough, for the log's line at the end. */
+const sightings = { count: 0 };
+
+/** Where `seen`'s drones fly and look, for the log. */
+function dronesSaid(seen) {
+  const drones = Object.entries(seen.drones ?? {}).map(
+    ([id, d]) =>
+      `${id} at ${d.x.toFixed(1)},${d.y.toFixed(1)} looking ` +
+      `${Math.round((d.facing * 180) / Math.PI)}°${d.frozen ? ' (held)' : ''}`,
+  );
+  return drones.join(', ') || 'no drone awake';
+}
+
+/**
+ * Logs each drone sighting the moment the first of `crew` hears of it: how
+ * long after the blackout, where each of the crew stood and where each drone
+ * flew. Returns the function that stops listening.
+ */
+function watchSightings(crew) {
+  const [first] = crew;
+  const keyOf = (event) => `${event.at}|${event.kind}|${event.label}`;
+  const heard = new Set(first.seen.view.events.map(keyOf));
+  const timer = setInterval(() => {
+    const view = first.seen.view;
+    for (const event of view?.events ?? []) {
+      if (heard.has(keyOf(event))) {
+        continue;
+      }
+      heard.add(keyOf(event));
+      if (event.kind === 'penalty' && event.label === DRONE_SIGHTING) {
+        sightings.count += 1;
+        const where = crew.map((p) => {
+          const at = whereIs(p.seen);
+          return `${p.name} at ${at.x.toFixed(1)},${at.y.toFixed(1)}`;
+        });
+        console.log(
+          `sighting           !! ${seconds(event.at - view.lights.outAt)} after the blackout: ` +
+            `${where.join(', ')}; ${dronesSaid(first.seen)}`,
+        );
+      }
+    }
+  }, 50);
+  return () => clearInterval(timer);
+}
+
+/**
+ * The crew whose pages weather a relay emergency together: filled while
+ * Blackout is played through, empty elsewhere — then `weather` does nothing.
+ */
+const relayCrew = [];
+
+/** Whether `seen`'s view has an emergency on. */
+const emergencyOn = (seen) => seen.view?.map?.sabotage != null;
+
+/** A control's name as a pattern that matches it whole. */
+const wholeName = (name) => new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+
+/**
+ * `owner` carries out the instruction `holder` reads out, on the relay
+ * console the emergency put up on owner's page — a switch thrown, a dial
+ * set, a button pressed — and waits for holder's instruction to move on.
+ * False where the console does not show the control yet.
+ */
+async function carryOut(owner, holder, order) {
+  const card = owner.page
+    .locator('.relay-modal .relay-control')
+    .filter({ has: owner.page.locator('.relay-name', { hasText: wholeName(order.control) }) });
+  if ((await card.count()) === 0) {
+    return false;
+  }
+  const before = JSON.stringify(order);
+  if (typeof order.value === 'boolean') {
+    const toggle = card.locator('.relay-switch');
+    if ((await toggle.getAttribute('aria-pressed')) !== String(order.value)) {
+      await toggle.click({ timeout: 2000 });
+    }
+  } else if (typeof order.value === 'number') {
+    await card.locator('.relay-dial button', { hasText: wholeName(String(order.value)) }).click();
+  } else {
+    await card.locator('.relay-press').click({ timeout: 2000 });
+  }
+  const moved = () =>
+    JSON.stringify(holder.seen.view.map?.sabotage?.relay?.instruction ?? null) !== before;
+  await until(moved, 2000);
+  return true;
+}
+
+/** The emergencies the walkthrough weathered, for the log's line at the end. */
+const emergencies = { weathered: 0, missed: 0 };
+
+/**
+ * A relay emergency weathered from both pages: each player's instruction is
+ * carried out at the console of the player it names, round after round,
+ * until it is over. Nothing while none is on, or outside Blackout's
+ * walkthrough. Logs how it went.
+ */
+async function weather() {
+  if (relayCrew.length === 0 || !relayCrew.some((p) => emergencyOn(p.seen))) {
+    return;
+  }
+  const from = Date.now();
+  const label = relayCrew.find((p) => emergencyOn(p.seen))?.seen.view.map.sabotage.label;
+  while (relayCrew.some((p) => emergencyOn(p.seen)) && Date.now() - from < 70_000) {
+    let acted = false;
+    for (const holder of relayCrew) {
+      const order = holder.seen.view.map?.sabotage?.relay?.instruction ?? null;
+      const owner = relayCrew.find((p) => p.seen.view.you.name === order?.playerName);
+      if (order !== null && owner !== undefined) {
+        acted = (await carryOut(owner, holder, order)) || acted;
+      }
+    }
+    if (!acted) {
+      await sleep(100);
+    }
+  }
+  const last = [...relayCrew[0].seen.view.events].reverse().find((e) => e.kind !== 'radio');
+  const cleared = last?.label === 'Notfall behoben';
+  emergencies[cleared ? 'weathered' : 'missed'] += 1;
+  console.log(
+    `emergency          "${label}" at both relay consoles for ${seconds(Date.now() - from)}: ` +
+      (cleared ? 'cleared' : `!! ${last?.label ?? 'no word of it'}`),
+  );
+  if (!cleared) {
+    fail(`emergency "${label}" was not cleared at the relay consoles`);
+  }
+}
+
+/**
+ * Seconds until the next emergency of Blackout's schedule, as its file has
+ * it: once its `afterSolved` stations are done and until the last one is,
+ * the first `firstAfterSec` after the lights went out, then every
+ * `everySec`; Infinity while none can come, or one is on.
+ */
+function nextEmergencyIn(seen) {
+  const sabotage = BLACKOUT.map.sabotage;
+  const view = seen.view;
+  const solved = view.currentPuzzleIndex;
+  if (emergencyOn(seen) || solved < sabotage.afterSolved || solved >= view.puzzleCount) {
+    return Infinity;
+  }
+  const since = (Date.now() - view.lights.outAt) / 1000;
+  const first = sabotage.firstAfterSec;
+  const every = sabotage.everySec;
+  const next = since < first ? first : Math.ceil((since - first) / every) * every + first;
+  return next - since;
+}
+
+/**
+ * Before a step of about `seconds` that an emergency must not cut short:
+ * where the next one is due before it would be done, wait for it and
+ * weather it first.
+ */
+async function clearOfEmergencies(player, seconds) {
+  const due = nextEmergencyIn(player.seen);
+  if (due > seconds) {
+    return;
+  }
+  console.log(`emergency          due in ${due.toFixed(1)} s: waited for it before the next step`);
+  await until(() => emergencyOn(player.seen), (due + 6) * 1000);
+  await weather();
+}
+
+/**
+ * Where the crew stands to work Blackout's stations from the Signalkette on,
+ * by station: within reach of each console or source, on a haven — a tile no
+ * drone ever looks at (patrol.mjs) — where the room has one. A station hides
+ * whoever works it or reads its rules only once its panel is open (server
+ * drones.ts): before that, and once it is solved, a spot in the open is in
+ * the drones' eye.
+ */
+const BLACKOUT_SPOTS = {
+  /** east of console A of the Signalkette, out of the Flur drone's sight as it wakes */
+  signalA: { x: 20, y: 7 },
+  /** above console B, in the Maschinenraum */
+  signalB: { x: 7, y: 14 },
+  /** below the terminal, a haven */
+  terminal: { x: 9, y: 4 },
+  /** above the rack, at the edge of the cone the Flur drone casts up the room */
+  rack: { x: 17, y: 2 },
+  /** west of the locker, a haven */
+  locker: { x: 12, y: 1 },
+  /** beside the radio panel, off the Labor drone's line */
+  radio: { x: 10, y: 15 },
+  /** east of the cabinet behind the pillar, a haven */
+  cabinet: { x: 13, y: 11 },
+  /** at the reactor, across from the fuse slot, a haven */
+  reactor: { x: 25, y: 14 },
+};
+
+/**
+ * Blackout's source of `kind` and where the pinned seed lays it: the crew
+ * comes across it only once somebody is near, so the plan says where.
+ */
+function pinnedSource(kind) {
+  const source = BLACKOUT.map.manuals.find((m) => m.kind === kind);
+  const at = source === undefined ? undefined : BLACKOUT_PLAN.places[source.id];
+  if (source === undefined || at === undefined) {
+    throw new Error(`Blackout has no ${kind}, or its plan lays none`);
+  }
+  return { id: source.id, label: source.label, ...at };
+}
+
+/** Once `player` has come near, the crew's map shows `source` where the plan lays it. */
+async function foundWherePinned(player, source) {
+  const shown = () => player.seen.view.map.manuals.find((m) => m.id === source.id);
+  await until(() => shown() !== undefined, 3000);
+  const found = shown();
+  if (found?.x !== source.x || found.y !== source.y) {
+    const shown = found === undefined ? 'nowhere in sight' : `at ${found.x},${found.y}`;
+    differs(source.label, shown, `at ${source.x},${source.y}`);
+  }
+}
+
+/** Fails the walkthrough where an instance differs from what Blackout's pinned plan holds. */
+function differs(what, shown, pinned) {
+  throw new Error(
+    `Blackout seed ${SEED} no longer deals the pinned ${what}: ${shown} instead of ${pinned} — ` +
+      'regenerate tools/fixtures/blackout-plan.json from core test/blackoutPlan.ts',
+  );
+}
+
+/** The armed station's spot at console `side` ('a', 'b'), or its only one (null). */
+function armedAt(player, side) {
+  const spots = player.seen.view.map.stations.filter((s) => s.status === 'armed');
+  const spot = spots.find((s) => (s.console ?? null) === side);
+  if (spot === undefined) {
+    throw new Error(`no armed station${side === null ? '' : ` with a console ${side}`}`);
+  }
+  return spot;
+}
+
+/** `player` opens the armed station's panel with E where it stands; throws where none comes. */
+async function openPanel(player) {
+  if (!(await interactUntil(player.page, player.page.locator('.station-modal')))) {
+    const title = player.seen.view.map.stations.find((s) => s.status === 'armed')?.title;
+    throw new Error(`${player.name} stands at "${title}", but no .station-modal after 3 tries`);
+  }
+  await sleep(300); // past its fade-in
+}
+
+/** Whether the station `index` is solved on `player`'s view. */
+const solvedPast = (player, index) => player.seen.view.currentPuzzleIndex > index;
+
+/**
+ * The meter at console B reads every wire still whole that it has no reading
+ * of this round, and the readings have to be the plan's for this round.
+ */
+async function measureRound(meter, round, r) {
+  const wires = meter.seen.view.puzzle?.readings ?? [];
+  for (const [i, pinned] of round.readings.entries()) {
+    if (pinned !== null && wires[i] == null) {
+      await meter.page.locator(`.station-modal .circuit-probe[data-index="${i}"]`).click();
+      await until(() => meter.seen.view.puzzle?.readings?.[i] != null, 3000);
+      await sleep(120);
+    }
+  }
+  const read = JSON.stringify(meter.seen.view.puzzle?.readings ?? null);
+  if (read !== JSON.stringify(round.readings)) {
+    differs(`readings of round ${r + 1}`, read, JSON.stringify(round.readings));
+  }
+}
+
+/**
+ * The Notstrom-Kasten to the end, as the pinned seed wires it: the meter at
+ * console B reads every wire still live and the box at console A cuts the
+ * one the rules name — round after round, the readings and the cuts the
+ * plan pins. Fails naming the seed where the box's wires, the serial or a
+ * round's readings differ.
+ */
+async function finishNotstrom(box, meter) {
+  const pin = BLACKOUT_PLAN.notstrom;
+  const index = box.seen.view.currentPuzzleIndex;
+  for (const [player, side] of [
+    [box, 'a'],
+    [meter, 'b'],
+  ]) {
+    if (!(await walkNear(player.page, player.seen, armedAt(player, side)))) {
+      throw new Error(`${player.name} found no way back to console ${side} of the fuse box`);
+    }
+    await openPanel(player);
+  }
+  const wires = (box.seen.view.puzzle?.wires ?? []).map((wire) => wire.colour).join(', ');
+  if (wires !== pin.wires.join(', ')) {
+    differs('fuse box', wires, pin.wires.join(', '));
+  }
+  const serial = box.seen.view.edgework?.serial ?? meter.seen.view.edgework?.serial;
+  if (serial !== BLACKOUT_PLAN.serial) {
+    differs('Laborkennung', serial, BLACKOUT_PLAN.serial);
+  }
+  for (const [r, round] of pin.rounds.entries()) {
+    await measureRound(meter, round, r);
+    const cut = box.page.locator(`.station-modal .circuit-board [data-index="${round.cut}"]`);
+    await cut.click({ timeout: 3000 });
+    const done = () => solvedPast(box, index) || box.seen.view.puzzle?.wires?.[round.cut]?.cut;
+    if (!(await until(done, 3000))) {
+      throw new Error(`${box.name} cut wire ${round.cut + 1} of round ${r + 1}, but it held`);
+    }
+  }
+  if (!(await until(() => solvedPast(box, index), 5000))) {
+    throw new Error('every pinned wire is cut, but the Notstrom-Kasten did not solve');
+  }
+  console.log(
+    `notstrom           ${meter.name} measured, ${box.name} cut wires ` +
+      `${pin.rounds.map((round) => round.cut + 1).join(', ')} of ${wires} (serial ` +
+      `${serial}, seed ${SEED}): solved`,
+  );
+}
+
+/**
+ * Both walk to their console of the Signalkette — the guest east of console
+ * A, where the Flur drone does not look as it wakes, the host above console
+ * B in the Maschinenraum — open their panels and work it as the plan pins
+ * it (`solveSignal`).
+ */
+async function playSignalkette(host, guest) {
+  const title = armedAt(host, 'a').title;
+  if (!(await standOn(guest, BLACKOUT_SPOTS.signalA))) {
+    throw new Error(`${guest.name} found no way to console A of "${title}"`);
+  }
+  if (!(await standOn(host, BLACKOUT_SPOTS.signalB))) {
+    throw new Error(`${host.name} found no way to console B of "${title}"`);
+  }
+  await openPanel(guest);
+  await openPanel(host);
+  await solveSignal([host, guest], title, BLACKOUT_PLAN.signalkette.stages);
+}
+
+/**
+ * The Serverraum's rules in its locker: `reader` searches it with E, reads
+ * them (servers-manual.png) and puts them down again. Throws where it cannot.
+ */
+async function readLocker(reader, locker) {
+  await until(() => reader.seen.view.sourcesHere?.some((s) => s.id === locker.id), 3000);
+  await reader.page.keyboard.press('e');
+  const opened = () => reader.seen.view.map.manuals.some((m) => m.id === locker.id && m.opened);
+  if (!(await until(opened, 3000))) {
+    throw new Error(`${reader.name} pressed E at the ${locker.label}, but it stayed shut`);
+  }
+  const overlay = reader.page.locator('.reading-modal');
+  if (!(await interactUntil(reader.page, overlay))) {
+    throw new Error(`${reader.name} searched the ${locker.label}, but no .reading-modal opened`);
+  }
+  await sleep(500); // past the page's fade-in
+  await capture(reader.page, 'servers-manual.png');
+  const where = await textOf(overlay.locator('.book-where, .terminal-status'));
+  console.log(`servers-manual.png ${reader.name} at the ${locker.label}: ${where ?? 'one sheet'}`);
+  await reader.page.keyboard.press('Escape');
+  await overlay.waitFor({ state: 'hidden', timeout: 3000 });
+}
+
+/**
+ * The Serverraum on the pinned seed: the host walks past the patrol to the
+ * terminal, the guest to the locker; it searches it and reads the rules
+ * (servers-manual.png). Clear of the next emergency the guest takes the rack
+ * — out in the open until the panels are up — and both open their panels at
+ * once (servers-a.png, servers-b.png), the terminal has to open on the plan's
+ * table, and the plan's moves are played at both consoles (`playServers`) —
+ * at a moment no drone will look at the rack for a while: solved, the
+ * station hides nobody, and the guest stands there until the next walk. An
+ * emergency that drops the station anyway is weathered, and it is opened and
+ * played again.
+ */
+async function playServerraum(host, guest) {
+  const locker = pinnedSource('locker');
+  await sneakTo(host, BLACKOUT_SPOTS.terminal);
+  await sneakTo(guest, BLACKOUT_SPOTS.locker);
+  await foundWherePinned(guest, locker);
+  await readLocker(guest, locker);
+  await clearOfEmergencies(host, 55);
+  await sneakTo(guest, BLACKOUT_SPOTS.rack, 3);
+  const crew = { terminal: host, rack: guest };
+  const role = (player) => player.seen.view.puzzle?.role ?? null;
+  await pastEmergencies(async () => {
+    await openPanel(host);
+    await openPanel(guest);
+    if (!(await until(() => role(host) === 'terminal' && role(guest) === 'rack', 3000))) {
+      throw new Error(`the Serverraum's panels say ${role(host)} and ${role(guest)}`);
+    }
+    const rows = host.seen.view.puzzle?.rows ?? null;
+    await captureServersConsoles(crew);
+    if (JSON.stringify(rows) !== JSON.stringify(BLACKOUT_PLAN.subsysteme.rows)) {
+      differs('terminal table', tableSaid(rows), tableSaid(BLACKOUT_PLAN.subsysteme.rows));
+    }
+    await clearOfDrones(guest, 9);
+    await playServers(crew, BLACKOUT_PLAN.subsysteme.moves);
+  });
+}
+
+/**
+ * A step of a station that an emergency may drop: run once more after the
+ * emergency is weathered — the station opens on the same instance again.
+ * Throws what the second try throws, or the first where no emergency came.
+ */
+async function pastEmergencies(step) {
+  const sabotages = (p) => p.seen.view.events.filter((e) => e.kind === 'sabotage').length;
+  const before = sabotages(relayCrew[0]);
+  try {
+    await step();
+  } catch (err) {
+    if (sabotages(relayCrew[0]) === before && !relayCrew.some((p) => emergencyOn(p.seen))) {
+      throw err;
+    }
+    console.log(`emergency          cut a station short (${firstLine(err)}): once more after it`);
+    await weather();
+    await step();
+  }
+}
+
+/** E at a loose part or a drop-off where `player` stands, until `done` holds; throws otherwise. */
+async function handle(player, what, done) {
+  for (let i = 0; i < 3 && !done(); i++) {
+    await player.page.keyboard.press('e');
+    await until(done, 1500);
+  }
+  if (!done()) {
+    throw new Error(`${player.name} pressed E for ${what}, but nothing happened`);
+  }
+}
+
+/**
+ * The radio panel in the Labor on the pinned seed: the guest, left at the
+ * rack in the open, takes the key there round to the cabinet past the
+ * patrols and unlocks it from the haven behind the pillar, while the host
+ * waits by the terminal, where no drone looks either; then the host walks to
+ * the panel, switches it on — from then on the panel hides them both — and
+ * tunes and sends as the plan pins it. Fails naming the seed where the lamp
+ * or the dial differ.
+ */
+async function playFrequenz(host, guest) {
+  const pin = BLACKOUT_PLAN.frequenz;
+  const key = guest.seen.view.map.items.find((item) => /schl/i.test(item.label));
+  if (key === undefined) {
+    throw new Error('the cabinet’s key lies nowhere on the map');
+  }
+  await sneakTo(guest, { x: Math.floor(key.x), y: Math.floor(key.y) }, 2.5);
+  const you = guest.seen.view.you.id;
+  await handle(guest, 'the key', () => guest.seen.view.map.items.some((i) => i.carriedBy === you));
+  await sneakTo(guest, BLACKOUT_SPOTS.cabinet, 2.5);
+  const cabinet = pinnedSource('cabinet');
+  await foundWherePinned(guest, cabinet);
+  await handle(guest, 'the cabinet', () =>
+    guest.seen.view.map.manuals.some((m) => m.id === cabinet.id && m.opened));
+  await sneakTo(host, BLACKOUT_SPOTS.radio);
+  await clearOfEmergencies(host, 25);
+  const index = host.seen.view.currentPuzzleIndex;
+  await pastEmergencies(async () => {
+    await openPanel(host);
+    const lamp = host.seen.view.puzzle;
+    if (lamp?.pattern !== pin.pattern || lamp?.dial !== pin.dial) {
+      const shown = `${lamp?.pattern} at step ${lamp?.dial}`;
+      differs('radio panel', shown, `${pin.pattern} at ${pin.dial}`);
+    }
+    const knob = pin.turns < 0 ? 'Frequenz runter' : 'Frequenz hoch';
+    for (let i = 0; i < Math.abs(pin.turns); i++) {
+      const button = host.page.locator(`.station-modal button[aria-label="${knob}"]`);
+      await button.click({ timeout: 3000 });
+      await sleep(150);
+    }
+    const tuned = () => host.seen.view.puzzle?.dial === pin.dial + pin.turns;
+    if (!(await until(tuned, 3000))) {
+      const dial = host.seen.view.puzzle?.dial;
+      throw new Error(`${host.name} turned the dial, but it stands at ${dial}`);
+    }
+    await host.page.locator('.station-modal .morse-send').click({ timeout: 3000 });
+    if (!(await until(() => solvedPast(host, index), 5000))) {
+      const step = pin.dial + pin.turns;
+      throw new Error(`${host.name} sent at step ${step}, but the radio panel held`);
+    }
+  });
+  console.log(
+    `frequenz           ${guest.name} unlocked the cabinet, ${host.name} turned the dial ` +
+      `${pin.turns} from step ${pin.dial} and sent (seed ${SEED}): solved`,
+  );
+}
+
+/**
+ * The spare fuse to the reactor and the restart, on the pinned seed: the
+ * guest, out in the open at the cabinet once the radio panel is done, goes
+ * round to the reactor first; the host fetches the fuse from where it lies
+ * and puts it in at its drop-off — both past the patrols — and both press
+ * the reactor together (`pressLastSync`). Fails naming the seed where the
+ * fuse or its drop-off lie elsewhere than pinned.
+ */
+async function playReaktor(host, guest) {
+  const pin = BLACKOUT_PLAN.ersatzsicherung;
+  const fuse = host.seen.view.map.items.find((item) => item.requiredForTitle !== null);
+  if (fuse?.deliverTo?.x !== pin.to.x || fuse.deliverTo.y !== pin.to.y) {
+    differs('fuse drop-off', JSON.stringify(fuse?.deliverTo), JSON.stringify(pin.to));
+  }
+  const lies = { x: Math.floor(fuse.x), y: Math.floor(fuse.y) };
+  if (lies.x !== pin.from.x || lies.y !== pin.from.y) {
+    differs('spare fuse', `at ${lies.x},${lies.y}`, `at ${pin.from.x},${pin.from.y}`);
+  }
+  await sneakTo(guest, BLACKOUT_SPOTS.reactor);
+  await sneakTo(host, lies);
+  const you = host.seen.view.you.id;
+  await handle(host, 'the fuse', () => host.seen.view.map.items.some((i) => i.carriedBy === you));
+  await sneakTo(host, pin.to);
+  await handle(host, 'its drop-off', () =>
+    host.seen.view.map.items.some((i) => i.id === fuse.id && i.delivered));
+  console.log(
+    `fuse               ${host.name} carried the fuse from ${lies.x},${lies.y} to ` +
+      `${pin.to.x},${pin.to.y} and put it in`,
+  );
+  await clearOfEmergencies(host, 25);
+  await pastEmergencies(() => pressLastSync([host, guest]));
+}
+
+/**
+ * Both make for the hatch in the Archiv's corner the moment it opens — the
+ * escape on the loop, each by the shortest way past the patrols — up to the
+ * tiles beside it, from where the escape's captures go on (`captureEscape`).
+ */
+async function runForTheHatch(host, guest) {
+  const exit = host.seen.view.map.exit;
+  if (!(await until(() => host.seen.view.map.exit?.open === true, 5000))) {
+    throw new Error('every station is solved, but the hatch did not open');
+  }
+  const [beside, other] = besideTheHatch(host.seen.view.map, exit);
+  const from = Date.now();
+  await sneakTo(guest, other);
+  await sneakTo(host, beside);
+  console.log(
+    `escape             ${host.name} and ${guest.name} ran from the reactor to the hatch in ` +
+      `${seconds(Date.now() - from)}`,
+  );
+}
+
+/**
+ * Blackout from the end of the station step to the won card, on its pinned
+ * seed: the Notstrom-Kasten finished, the Signalkette, the Serverraum, the
+ * radio panel, the spare fuse and the reactor — each instance checked
+ * against the plan before its answer is played — past the patrols and
+ * through the emergencies; then the escape round the loop and the win
+ * (escape.png, pullback.png, won.png, end.png, won-phone.png). Logs each
+ * drone sighting as it comes (`watchSightings`), and how long the run took
+ * from the blackout to the win.
+ */
+async function playBlackoutToTheEnd(host, guest, watcher) {
+  relayCrew.push(host, guest);
+  const stopWatching = watchSightings([host, guest]);
+  try {
+    await guest.page.setViewportSize(SIZES[2]);
+    const pair = { box: host, meter: guest };
+    await finishNotstrom(pair.box, pair.meter);
+    await playSignalkette(host, guest);
+    await playServerraum(host, guest);
+    await playFrequenz(host, guest);
+    await playReaktor(host, guest);
+    await runForTheHatch(host, guest);
+    await captureEscape(host, guest);
+    await captureEnd(host, watcher);
+  } finally {
+    stopWatching();
+  }
+  const { lights, finishedAt, deadlineAt, penaltySeq } = host.seen.view;
+  console.log(
+    `blackout           won ${seconds(finishedAt - lights.outAt)} after the lights went out, ` +
+      `${seconds(deadlineAt - finishedAt)} left on the clock, ${penaltySeq} alarm(s), ` +
+      `${sightings.count} of them drones; ${sneaking.walks} walks past the drones, ` +
+      `${seconds(sneaking.waitedMs)} waited for a gap, ${sneaking.ranAnyway} run without one; ` +
+      `${running.runs} runs, ${running.outside} outside the pace foretold ` +
+      `(by up to ${seconds(running.worstS * 1000)}), a stop ` +
+      `${running.stopS.map((s) => s.toFixed(2)).join('–')} s; ` +
+      `${emergencies.weathered} emergencies cleared, ${emergencies.missed} missed`,
+  );
+  await capturePhoneCard(guest);
 }
 
 /**
@@ -4010,6 +5054,34 @@ async function pressLastSync(players) {
   await checkRadioVoice(players[0], solved.listening, `"${station.title}"`);
 }
 
+/**
+ * The two tiles beside the hatch the crew runs for: diagonally below it to
+ * the right where that is free floor — as the Systemcheck has it — else the
+ * nearest free floor round it; the first for the host, the second for the
+ * guest. Throws where fewer than two are free.
+ */
+function besideTheHatch(map, exit) {
+  const solid = furniture(map);
+  const free = ({ x, y }) =>
+    map.tiles[y]?.[x] === '.' && !solid.has(`${x},${y}`) && !(x === exit.x && y === exit.y);
+  const round = [
+    [1, 1],
+    [1, 0],
+    [0, 1],
+    [-1, 0],
+    [0, -1],
+    [1, -1],
+    [-1, 1],
+    [-1, -1],
+  ]
+    .map(([dx, dy]) => ({ x: exit.x + dx, y: exit.y + dy }))
+    .filter(free);
+  if (round.length < 2) {
+    throw new Error(`fewer than two free tiles beside the hatch at ${exit.x},${exit.y}`);
+  }
+  return round.slice(0, 2);
+}
+
 /** What the host's page says of the escape: the goal, the checklist, the clock. */
 async function escapeHud(page) {
   return page.evaluate(() => {
@@ -4039,7 +5111,7 @@ async function captureEscape(host, guest) {
   }
   const exit = host.seen.view.map.exit;
   const openedAt = Date.now();
-  const beside = { x: exit.x + 1, y: exit.y + 1 };
+  const [beside] = besideTheHatch(host.seen.view.map, exit);
   if (!(await standOn(host, beside))) {
     throw new Error(`${host.name} found no way to ${beside.x},${beside.y} beside the hatch`);
   }
@@ -4285,6 +5357,24 @@ async function playToTheEnd(host, guest, watcher, pinned) {
   await captureEnd(host, watcher);
   await capturePhoneCard(guest);
   await captureNextMission(host, guest);
+}
+
+/**
+ * Where the mission's seed is pinned — the Systemcheck's wiring box,
+ * Blackout's every station — the walkthrough plays the run out to the card;
+ * elsewhere the captures of the end are skipped, saying why.
+ */
+async function playPinnedOut(anna, ben, watcher) {
+  const mission = MISSION.toLowerCase();
+  const pinned = mission === 'systemcheck' ? PINNED_WIRING.get(SEED) : undefined;
+  if (pinned !== undefined) {
+    await playToTheEnd(anna, ben, watcher, pinned);
+  } else if (mission === 'blackout' && SEED === BLACKOUT_PLAN.seed) {
+    await playBlackoutToTheEnd(anna, ben, watcher);
+    skip('next-mission.png', 'Blackout leads on to no other mission');
+  } else if (mission === 'blackout') {
+    skip('escape.png', `seed ${SEED} is not the one tools/fixtures/blackout-plan.json pins`);
+  }
 }
 
 async function run() {
@@ -4583,11 +5673,7 @@ async function run() {
     );
   }
 
-  // The Systemcheck's seed pins its wiring box: there the walkthrough plays the run out.
-  const pinned = MISSION.toLowerCase() === 'systemcheck' ? PINNED_WIRING.get(SEED) : undefined;
-  if (pinned !== undefined) {
-    await playToTheEnd(anna, ben, watcher, pinned);
-  }
+  await playPinnedOut(anna, ben, watcher);
   if (!flinchShot) {
     skip('figure-flinch.png', 'the walkthrough works no Signalkette in this mission');
   }

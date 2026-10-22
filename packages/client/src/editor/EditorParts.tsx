@@ -35,6 +35,13 @@ export const TOOLS: readonly { tool: Tool; label: string; help: string }[] = [
   { tool: 'item', label: 'Teil', help: 'Zum Tragen: zu seinem Ablageort, oder ein Schlüssel.' },
   { tool: 'drone', label: 'Drohne', help: 'Jeder Klick ein Wegpunkt; Esc beendet den Weg.' },
   { tool: 'decor', label: 'Möbel', help: 'Ein Möbelstück: Niemand geht hindurch, wie bei Wand.' },
+  {
+    tool: 'note',
+    label: 'Notiz',
+    help:
+      'Ein Zettel der letzten Crew, frei zu lesen: an eine Wand neben dem Boden oder auf den ' +
+      'Boden.',
+  },
 ];
 
 export interface Status {

@@ -65,6 +65,7 @@ const MAP_REFS: Readonly<Record<string, (index: number, rest: readonly Segment[]
     waypoint: rest[0] === 'waypoints' && typeof rest[1] === 'number' ? rest[1] : 0,
   }),
   decor: (index) => ({ kind: 'decor', index }),
+  notes: (index) => ({ kind: 'note', index }),
 };
 
 /** The things of the map there is one of, by their field. */

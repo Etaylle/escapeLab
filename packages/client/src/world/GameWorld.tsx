@@ -53,6 +53,7 @@ import { runsOf } from './light.js';
 import { positionsOf, type KnownPositions } from './movement.js';
 import { MUSIC_AFTER_CLICK_MS, musicProbe, setTension, stopMusic, type Tension } from './music.js';
 import { worldNews } from './news.js';
+import { noteMount } from './notes.js';
 import { renderRadio, voiceProbe } from './radioVoice.js';
 import { renderKit, type ChatLine, type MapPing, type WorldMap } from './render/frame.js';
 import { dropLight } from './render/light.js';
@@ -114,6 +115,8 @@ interface Props {
   onToggleInfo: () => void;
   /** E at a manual object the server counts this player at: reading needs no message */
   onRead: (manualId: string) => void;
+  /** E at a note of the last crew the server counts this player at: its slip comes up */
+  onReadNote: (index: number) => void;
   /** E at the armed station: show its panel once it is open */
   onOperate: () => void;
   send: (msg: ClientMessage) => void;
@@ -125,6 +128,7 @@ interface Live extends Latest {
   send: (msg: ClientMessage) => void;
   onToggleInfo: () => void;
   onRead: (manualId: string) => void;
+  onReadNote: (index: number) => void;
   onOperate: () => void;
 }
 
@@ -194,8 +198,9 @@ function usePowerHum(darkSince: number | null, live: React.MutableRefObject<Live
 
 /**
  * Fires the one context action. Reading and working an open station stay
- * on this client; everything else the server decides. A locked cabinet
- * only says what is missing.
+ * on this client; everything else the server decides. A note of the last
+ * crew comes up here at once, and the server hears of the read for the run
+ * report. A locked cabinet only says what is missing.
  */
 function tryInteract(loop: Loop): void {
   const current = loop.live.current.view;
@@ -208,6 +213,7 @@ function tryInteract(loop: Loop): void {
     current.you.id,
     current.sourcesHere,
     current.puzzle !== null,
+    current.noteHere,
   );
   if (action === null || action.kind === 'locked') {
     return;
@@ -220,10 +226,18 @@ function tryInteract(loop: Loop): void {
   workOn(loop, action, current);
 }
 
-/** E at a source that is open, or at the armed station: read it, work it, or ask the server. */
+/**
+ * E at a source that is open, a note, or the armed station: read it, work
+ * it, or ask the server.
+ */
 function workOn(loop: Loop, action: ContextAction, current: PlayerView): void {
   if (action.kind === 'read') {
     loop.live.current.onRead(action.manualId);
+    return;
+  }
+  if (action.kind === 'note') {
+    loop.live.current.onReadNote(action.index);
+    loop.live.current.send({ kind: 'read-note', note: action.index });
     return;
   }
   if (action.kind === 'operate') {
@@ -529,8 +543,9 @@ function hearTheClock(loop: Loop, map: WorldMap): void {
 }
 
 /**
- * The lab answering the crew: a source somebody came across gets a blip
- * and a caption, a locker or cabinet opening within earshot its sound, a
+ * The lab answering the crew: a source or a note of the last crew somebody
+ * came across gets a blip and a caption, a locker or cabinet opening within
+ * earshot its sound, a
  * room whose lights came on a relay's click and its warm-up (rooms.ts) —
  * in plain sight, once nothing lies over the world (`lightWhenClear`).
  * Whatever this client finds on its first look was there before it came
@@ -544,7 +559,13 @@ function look(loop: Loop, map: WorldMap): void {
     const text = `${SOURCE_NAMES[manual.kind]} entdeckt`;
     sim.captions.push({ x: manual.x + 0.5, y: manual.y, text, at: sim.time });
   }
-  if (news.found.length > 0) {
+  for (const note of news.notes) {
+    const mount = noteMount(map, note);
+    if (mount !== null) {
+      sim.captions.push({ x: mount.x, y: mount.y - 0.6, text: 'Notiz entdeckt', at: sim.time });
+    }
+  }
+  if (news.found.length + news.notes.length > 0) {
     discoveryBlip();
   }
   for (const manual of news.opened) {
@@ -859,6 +880,7 @@ function useWorld(props: Props): WorldState {
     send: props.send,
     onToggleInfo: props.onToggleInfo,
     onRead: props.onRead,
+    onReadNote: props.onReadNote,
     onOperate: props.onOperate,
   });
   useEffect(() => {

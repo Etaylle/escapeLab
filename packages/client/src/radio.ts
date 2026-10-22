@@ -34,9 +34,12 @@ export function bannerFrom(event: RunEvent): string {
   return event.kind === 'hint' ? LAST_CREW : 'LEITSTELLE';
 }
 
-/** The icon beside a line of the run: the last crew's note for theirs, the radio for the rest. */
+/**
+ * The icon beside a line of the run: the last crew's note for theirs — one
+ * asked for, or one found on a wall and read — the radio for the rest.
+ */
 export function airIcon(event: RunEvent): 'note' | 'radio' {
-  return event.kind === 'hint' ? 'note' : 'radio';
+  return event.kind === 'hint' || event.kind === 'note' ? 'note' : 'radio';
 }
 
 /**

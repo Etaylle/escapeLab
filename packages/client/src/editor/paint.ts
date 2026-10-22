@@ -3,6 +3,7 @@ import {
   drawDoor,
   drawExitHatch,
   drawManualObject,
+  drawPinnedNote,
   drawPlate,
   drawScientist,
   drawSign,
@@ -14,6 +15,7 @@ import { atlasLevel, sprite, type Atlas, type WallSpec } from '../world/atlas.js
 import { decorVariant, drawDecor } from '../world/decor.js';
 import { dressMap, seedOf, type DressMap, type Dressing } from '../world/dress.js';
 import { drawCarryable, drawDropZone, drawDroneBody, drawSabotagePanel } from '../world/hazards.js';
+import { noteMount } from '../world/notes.js';
 import { hasFace, type FloorKind } from '../world/surfaces.js';
 import { customIdOf, type Draft, type DraftDrone, type Tile } from './draft.js';
 import { mapSize, tilesOf, type Pending, type Ref, type Tool } from './tools.js';
@@ -249,6 +251,12 @@ function paintMarks(ctx: Ctx, draft: Draft, text: WorldText): void {
   for (const panel of map.sabotage?.panels ?? []) {
     at(ctx, panel.x + 0.5, panel.y + 0.5, () => drawSabotagePanel(ctx, false, STILL));
   }
+  for (const note of map.notes) {
+    // Where nobody could read it, it lies in its tile's middle for the validator to point at.
+    const mount = noteMount(map, note) ?? { x: note.x + 0.5, y: note.y + 0.5, facing: null };
+    const look = { facing: mount.facing, read: true, pulse: STILL };
+    at(ctx, mount.x, mount.y, () => drawPinnedNote(ctx, look));
+  }
   for (const item of map.items) {
     const zone = item.deliverTo;
     if (zone !== undefined) {
@@ -410,6 +418,7 @@ const GLYPH_ZOOM: Readonly<Partial<Record<Tool, number>>> = {
   item: 1.35,
   drone: 1.7,
   exit: 1.15,
+  note: 1.6,
 };
 
 type Glyph = (ctx: Ctx, textures: Textures) => void;
@@ -458,6 +467,10 @@ const GLYPHS: Readonly<Record<Tool, Glyph>> = {
   item: centred((ctx) => drawCarryable(ctx, { label: '', pulse: STILL, carried: false })),
   drone: centred((ctx) => drawDroneBody(ctx, STILL_DRONE, STILL)),
   decor: centred((ctx) => drawDecor(ctx, 'shelf', 0, true)),
+  note: (ctx) =>
+    at(ctx, 0.5, 0.92, () =>
+      drawPinnedNote(ctx, { facing: Math.PI / 2, read: true, pulse: STILL }),
+    ),
 };
 
 /** A tool's picture on its button: the prop it places, as the map shows it. */

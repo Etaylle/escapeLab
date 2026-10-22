@@ -4,6 +4,7 @@ import type {
   DronePosition,
   ManualHere,
   MapView,
+  NoteHere,
   PlayerView,
   PuzzleView,
   RunEvent,
@@ -46,6 +47,7 @@ import { MissionHud } from './MissionHud.js';
 import { InfoPanel } from './InfoPanel.js';
 import { Manual } from './Manual.js';
 import { Notepad, useNotes } from './Notepad.js';
+import { PinnedNote } from './PinnedNote.js';
 import { ReadingOverlay } from './Reading.js';
 import { WorldModal } from './WorldModal.js';
 
@@ -403,11 +405,19 @@ export interface Opened {
   operating: boolean;
   /** the source being read, by manual id */
   readingId: string | null;
+  /** the note of the last crew being read, by its index among the map's notes */
+  noteIndex: number | null;
   notes: boolean;
   info: boolean;
 }
 
-const NOTHING_OPEN: Opened = { operating: false, readingId: null, notes: false, info: false };
+const NOTHING_OPEN: Opened = {
+  operating: false,
+  readingId: null,
+  noteIndex: null,
+  notes: false,
+  info: false,
+};
 
 /**
  * What stays open as an emergency comes and goes. The moment one starts,
@@ -421,16 +431,18 @@ export function stillOpen(opened: Opened, wasEmergency: boolean, emergency: bool
 
 /**
  * What lies over the world: the open station's panel while this player
- * stands at it and asked for it, a manual object's pages while they stand
- * there, the notepad, the info panel. Panel and pages follow the server's
- * word on where the player stands; once that drops, they go and stay gone
- * until asked for again. An emergency closes all of it (`stillOpen`), and
- * while the relay console is up it keeps the keys: the notepad does not
- * open under it, nor the info panel over it.
+ * stands at it and asked for it, a manual object's pages or a note of the
+ * last crew while they stand there, the notepad, the info panel. Panel,
+ * pages and note follow the server's word on where the player stands; once
+ * that drops, they go and stay gone until asked for again. An emergency
+ * closes all of it (`stillOpen`), and while the relay console is up it
+ * keeps the keys: the notepad does not open under it, nor the info panel
+ * over it.
  */
 function useOpened(view: PlayerView): {
   station: PuzzleView | null;
   reading: ManualHere | null;
+  note: NoteHere | null;
   notes: boolean;
   info: boolean;
   /** opens or closes what it names, the rest stays as it is */
@@ -455,6 +467,13 @@ function useOpened(view: PlayerView): {
       setOpened((now) => ({ ...now, readingId: null }));
     }
   }, [readingId, reading]);
+  const noteIndex = opened.noteIndex;
+  const note = view.noteHere?.index === noteIndex ? view.noteHere : null;
+  useEffect(() => {
+    if (noteIndex !== null && note === null) {
+      setOpened((now) => ({ ...now, noteIndex: null }));
+    }
+  }, [noteIndex, note]);
   const emergency = view.map !== null && view.map.sabotage !== null;
   const wasEmergency = useRef(emergency);
   useEffect(() => {
@@ -466,6 +485,7 @@ function useOpened(view: PlayerView): {
   return {
     station: opened.operating && atStation ? view.puzzle : null,
     reading,
+    note,
     notes: opened.notes,
     info: opened.info,
     set: (parts) => setOpened((now) => ({ ...now, ...parts })),
@@ -851,12 +871,12 @@ function RunOverlays({ view, coldOpen }: { view: PlayerView; coldOpen: ColdOpen 
   );
 }
 
-/** Escape closes what lies on top: the info panel, a panel or pages, then the notepad. */
+/** Escape closes what lies on top: the info panel, a panel, pages or a note, then the notepad. */
 function useEscapeCloses(open: ReturnType<typeof useOpened>, closeModal: () => void): void {
   useEscape(() => {
     if (open.info) {
       open.set({ info: false });
-    } else if (open.station !== null || open.reading !== null) {
+    } else if (open.station !== null || open.reading !== null || open.note !== null) {
       closeModal();
     } else {
       open.set({ notes: false });
@@ -885,15 +905,16 @@ export function deviceRunOf(view: PlayerView, refusals: number): DeviceRun {
 }
 
 /**
- * The station's panel or a source's pages over the world, as this player
- * opened them; the panel hears of the run's alarms and solves, of the crew
- * and of what the server refused (`refusals`).
+ * The station's panel, a source's pages or a note of the last crew over the
+ * world, as this player opened them; the panel hears of the run's alarms and
+ * solves, of the crew and of what the server refused (`refusals`).
  */
 function OverTheWorld({
   view,
   map,
   station,
   reading,
+  note,
   send,
   refusals,
   onClose,
@@ -902,6 +923,7 @@ function OverTheWorld({
   map: MapView;
   station: PuzzleView | null;
   reading: ManualHere | null;
+  note: NoteHere | null;
   send: (msg: ClientMessage) => void;
   refusals: number;
   onClose: () => void;
@@ -933,6 +955,7 @@ function OverTheWorld({
           onClose={onClose}
         />
       )}
+      {note !== null && <PinnedNote note={note} edgework={view.edgework} onClose={onClose} />}
     </>
   );
 }
@@ -959,7 +982,7 @@ export function GameScreen({
   const open = useOpened(view);
   const station = useSolvedHold(open.station, view.currentPuzzleIndex);
   const notes = useNotes(roomCode, view.you.id);
-  const closeModal = (): void => open.set({ operating: false, readingId: null });
+  const closeModal = (): void => open.set({ operating: false, readingId: null, noteIndex: null });
   useKeys(['n'], open.toggleNotes);
   useEscapeCloses(open, closeModal);
   const map = view.map;
@@ -1004,11 +1027,13 @@ export function GameScreen({
             !live ||
             station !== null ||
             open.reading !== null ||
+            open.note !== null ||
             view.pausedFor !== null ||
             relay !== undefined
           }
           onToggleInfo={open.toggleInfo}
           onRead={(manualId) => open.set({ readingId: manualId })}
+          onReadNote={(index) => open.set({ noteIndex: index })}
           onOperate={() => open.set({ operating: true })}
           send={send}
         />
@@ -1023,6 +1048,7 @@ export function GameScreen({
           map={map}
           station={station}
           reading={open.reading}
+          note={open.note}
           send={send}
           refusals={refusals}
           onClose={closeModal}

@@ -1,0 +1,85 @@
+{
+  "mission": "blackout",
+  "seed": 5,
+  "spawns": {"host": {"x": 3, "y": 3}, "guest": {"x": 1, "y": 8}},
+  "places": {"buch-archiv": {"x": 6, "y": 1}, "klemmbrett": {"x": 8, "y": 9}, "spind": {"x": 13, "y": 1}, "aktenschrank": {"x": 12, "y": 11}},
+  "serial": "UZKM9-8",
+  "notstrom": {
+    "wires": ["blau", "rot", "gelb", "gelb"],
+    "rounds": [
+      {"readings": [12, 48, 110, 230], "cut": 3},
+      {"readings": [12, 110, 230, null], "cut": 2},
+      {"readings": [230, 24, null, null], "cut": 0},
+      {"readings": [null, 48, null, null], "cut": 1}
+    ]
+  },
+  "signalkette": {
+    "stages": [
+      {
+        "sends": "a",
+        "sequence": ["blau-quadrat", "gruen-quadrat", "rot-quadrat", "rot-kreis"],
+        "keys": [
+          {"row": 4, "shape": "quadrat"},
+          {"row": 2, "shape": "quadrat"},
+          {"row": 3, "shape": "quadrat"},
+          {"row": 3, "shape": "kreis"}
+        ]
+      },
+      {
+        "sends": "b",
+        "sequence": ["gelb-kreis", "gelb-quadrat", "blau-quadrat", "blau-dreieck"],
+        "keys": [
+          {"row": 4, "shape": "kreis"},
+          {"row": 4, "shape": "quadrat"},
+          {"row": 2, "shape": "quadrat"},
+          {"row": 2, "shape": "dreieck"}
+        ]
+      },
+      {
+        "sends": "a",
+        "sequence": ["gruen-kreis", "rot-kreis", "blau-kreis", "gruen-dreieck"],
+        "keys": [
+          {"row": 2, "shape": "kreis"},
+          {"row": 3, "shape": "kreis"},
+          {"row": 4, "shape": "kreis"},
+          {"row": 2, "shape": "dreieck"}
+        ]
+      },
+      {
+        "sends": "b",
+        "sequence": ["gelb-quadrat", "gelb-dreieck", "gelb-quadrat", "gelb-kreis"],
+        "keys": [
+          {"row": 4, "shape": "quadrat"},
+          {"row": 4, "shape": "dreieck"},
+          {"row": 4, "shape": "quadrat"},
+          {"row": 4, "shape": "kreis"}
+        ]
+      }
+    ]
+  },
+  "subsysteme": {
+    "rows": [
+      {"service": "netz", "running": true, "code": null, "power": true},
+      {"service": "dns", "running": true, "code": null, "power": true},
+      {"service": "db", "running": false, "code": "E23", "power": true},
+      {"service": "auth", "running": false, "code": "E11", "power": false},
+      {"service": "web", "running": false, "code": "E42", "power": false},
+      {"service": "mail", "running": false, "code": "E50", "power": true}
+    ],
+    "moves": [
+      {"by": "partner", "input": {"power": "mail", "on": false}},
+      {"by": "partner", "input": {"power": "db", "on": false}},
+      {"by": "partner", "input": {"power": "db", "on": true}},
+      {"by": "operator", "input": {"cmd": "start", "service": "db"}},
+      {"by": "partner", "input": {"power": "auth", "on": true}},
+      {"by": "operator", "input": {"cmd": "start", "service": "auth"}},
+      {"by": "partner", "input": {"power": "web", "on": true}},
+      {"by": "operator", "input": {"cmd": "restart", "service": "db"}},
+      {"by": "operator", "input": {"cmd": "restart", "service": "auth"}},
+      {"by": "operator", "input": {"cmd": "start", "service": "web"}}
+    ]
+  },
+  "frequenz": {"pattern": "... - .-. --- --", "dial": 6, "turns": -2},
+  "ersatzsicherung": {"from": {"x": 7, "y": 5}, "to": {"x": 25, "y": 12}},
+  "reaktorstart": {"presses": 2, "windowMs": 2000}
+}

@@ -5,6 +5,7 @@ import {
   drawFusebox,
   drawLeverBox,
   drawManualObject,
+  drawPinnedNote,
   drawPlate,
   drawSign,
   drawStation,
@@ -16,14 +17,15 @@ import { doorOpenness, isHorizontalDoor } from '../doors.js';
 import { burning } from '../frameLight.js';
 import { drawCarryable, drawDropZone, drawSabotagePanel } from '../hazards.js';
 import { coversArmed, opensCabinet } from '../interact.js';
+import { noteMount } from '../notes.js';
 import { inTiles, type Frame } from './frame.js';
 
 /**
  * The lab's things, in tile space. Objects show only where some light has
  * fallen — a cabinet behind a wall stays unseen. The furniture stands where
- * it was seen; sources reach the map once found; a station that is up or
- * done, the sign, the hatch and the valves always show. Then the emergency
- * lamps on their walls and ceilings.
+ * it was seen; sources and the notes of the last crew reach the map once
+ * found; a station that is up or done, the sign, the hatch and the valves
+ * always show. Then the emergency lamps on their walls and ceilings.
  */
 export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   inTiles(ctx, frame);
@@ -32,6 +34,7 @@ export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   drawDoors(ctx, frame);
   drawStations(ctx, frame);
   drawManuals(ctx, frame);
+  drawNotes(ctx, frame);
   drawFixtures(ctx, frame);
   drawItems(ctx, frame);
   drawLamps(ctx, frame);
@@ -114,6 +117,18 @@ function drawManuals(ctx: CanvasRenderingContext2D, frame: Frame): void {
     const { kind, label, opened } = manual;
     const look = { kind, label, active, opened, pulse, text };
     at(ctx, manual.x + 0.5, manual.y + 0.5, () => drawManualObject(ctx, look));
+  }
+}
+
+/** The notes of the last crew found so far, on their walls or the floor, unread ones calling. */
+function drawNotes(ctx: CanvasRenderingContext2D, frame: Frame): void {
+  const { map, pulse } = frame;
+  for (const note of map.notes) {
+    const mount = noteMount(map, note);
+    if (mount !== null) {
+      const look = { facing: mount.facing, read: note.read, pulse };
+      at(ctx, mount.x, mount.y, () => drawPinnedNote(ctx, look));
+    }
   }
 }
 

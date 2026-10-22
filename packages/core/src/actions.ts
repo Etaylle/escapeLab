@@ -12,6 +12,7 @@ import type { Difficulty } from './difficulty.js';
 import { generateEdgework } from './edgework.js';
 import { fail } from './errors.js';
 import type { ManualDef, Mission } from './mission.js';
+import { noteKey } from './notes.js';
 import { mulberry32, shuffle } from './rng.js';
 import { moduleFor, type PuzzleDef, type PuzzleState } from './puzzles/index.js';
 import type { ConsoleId, PuzzleContext } from './puzzles/module.js';
@@ -59,20 +60,25 @@ export type Action =
   | { type: 'request-hint'; playerId: string; at: number }
   | { type: 'set-occupancy'; plates: string[]; panels: string[] }
   /**
-   * who stands at which station spot (by `stationKey`) and manual object, who
-   * has seen the sign (stays seen), which manual objects somebody has come
-   * close to and has in sight (stay found) and who stands on the exit hatch
+   * who stands at which station spot (by `stationKey`), manual object and
+   * note (by `noteKey`), who has seen the sign (stays seen), which manual
+   * objects and notes somebody has come close to and has in sight (stay
+   * found) and who stands on the exit hatch
    */
   | {
       type: 'set-presence';
       stations: Record<string, string[]>;
       manuals: Record<string, string[]>;
+      notes: Record<string, string[]>;
       signSeen: string[];
       seen: string[];
+      notesSeen: number[];
       exit: string[];
     }
   /** a locker searched or a cabinet unlocked by a player standing at it */
   | { type: 'open-source'; playerId: string; manualId: string; at: number }
+  /** a note of the last crew read by a player standing at it, by its index */
+  | { type: 'read-note'; playerId: string; note: number; at: number }
   /** `playerId` is the one the drone caught */
   | { type: 'drone-spotted'; at: number; penaltySec: number; playerId: string }
   | { type: 'sabotage-start'; at: number }
@@ -138,6 +144,8 @@ export function applyAction(state: GameState, action: Action): GameState {
       return state.phase === 'playing' ? setPresence(state, action) : state;
     case 'open-source':
       return openSource(state, action);
+    case 'read-note':
+      return readNote(state, action);
     case 'sabotage-start':
       return startSabotage(state, action);
     case 'sabotage-cleared':
@@ -345,8 +353,8 @@ function presentAtConsoles(state: GameState, from: ConsoleId | null): PuzzleCont
 /**
  * Who stands where, as the server sees it. Lists are kept sorted and empty
  * ones dropped, so equal presence compares equal; whoever has seen the sign
- * keeps it, and a manual object once found stays on the crew's map. Nobody
- * stands on the hatch before it opens.
+ * keeps it, and a manual object or a note once found stays on the crew's
+ * map. Nobody stands on the hatch before it opens.
  */
 function setPresence(
   state: GameState,
@@ -363,10 +371,12 @@ function setPresence(
     presence: {
       stations: tidy(action.stations),
       manuals: tidy(action.manuals),
+      notes: tidy(action.notes),
       signSeen: [...new Set([...state.presence.signSeen, ...action.signSeen])].sort(),
       exit: inEscapePhase(state) ? [...new Set(action.exit)].sort() : [],
     },
     discovered: [...new Set([...state.discovered, ...action.seen])].sort(),
+    notesFound: [...new Set([...state.notesFound, ...action.notesSeen])].sort((a, b) => a - b),
   });
 }
 
@@ -479,6 +489,8 @@ function startMission(
     places: placeSources(map.manuals, seed),
     opened: [],
     discovered: [],
+    notesFound: [],
+    notesRead: [],
     credits: Object.fromEntries(crew.map((player) => [player.id, NO_CREDITS])),
     readersCredited: [],
     sabotage: null,
@@ -1136,6 +1148,42 @@ function openSource(
   );
 }
 
+/** What the run report says the first time a note of the last crew is read. */
+export const NOTE_READ = 'Notiz gelesen';
+
+/**
+ * A player standing at a note of the last crew reads it, for nothing: no
+ * time, no alarm, no hint counted. The first read of a note goes into the
+ * run report; reading it again changes nothing. Proximity is the presence
+ * the server derived.
+ */
+function readNote(
+  state: GameState,
+  action: { playerId: string; note: number; at: number },
+): GameState {
+  if (state.phase !== 'playing') {
+    fail('Dafür muss die Mission laufen.');
+  }
+  if (state.deadlineAt !== null && action.at >= state.deadlineAt) {
+    return lostNow(state, action.at);
+  }
+  if (state.paused !== null) {
+    fail('Die Mission ist pausiert — es fehlt jemand aus der Crew.');
+  }
+  findPlayer(state, action.playerId);
+  if (state.mission.map.notes[action.note] === undefined) {
+    fail('Diese Notiz gibt es hier nicht.');
+  }
+  if (!(state.presence.notes[noteKey(action.note)] ?? []).includes(action.playerId)) {
+    fail('Dafür musst du direkt davor stehen.');
+  }
+  if (state.notesRead.includes(action.note)) {
+    return state;
+  }
+  const notesRead = [...state.notesRead, action.note].sort((a, b) => a - b);
+  return logEvent({ ...state, notesRead }, 'note', NOTE_READ, action.at);
+}
+
 /**
  * Spatial proximity to the station is validated by the server (it owns the
  * live positions); the reducer enforces everything else.
@@ -1206,6 +1254,8 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     places: {},
     opened: [],
     discovered: [],
+    notesFound: [],
+    notesRead: [],
     credits: {},
     readersCredited: [],
     sabotage: null,

@@ -66,8 +66,9 @@ describe('radioNews — which lines get a banner', () => {
     expect(bannerFrom(event('hint', 0))).toBe('Notiz der letzten Crew');
   });
 
-  it('puts the last crew’s note beside a revealed note and the radio beside the rest', () => {
+  it('puts the last crew’s note beside a note asked for or read, the radio beside the rest', () => {
     expect(airIcon(event('hint', 0))).toBe('note');
+    expect(airIcon(event('note', 0))).toBe('note');
     for (const kind of ['radio', 'find', 'puzzle', 'penalty'] as const) {
       expect(airIcon(event(kind, 0))).toBe('radio');
     }

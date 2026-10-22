@@ -1,0 +1,59 @@
+/* ══ a note of the last crew, read where it hangs ═══════════════════════════
+ * PinnedNote.tsx: a small slip over the world — ruled paper in the last
+ * crew's hand, held to its wall by a pin — the look of the notes in a
+ * source's margin (book.css .note-slip, .margin-note), on a sheet of its
+ * own. Set in em of the slip, so it reads the same on a phone.
+ */
+
+.puzzle-modal.note-modal .panel {
+  max-width: 420px;
+  border: none;
+  background: none;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.note-modal .panel-label {
+  color: var(--paper);
+}
+
+.note-modal .pinned-note {
+  position: relative;
+  width: min(100%, 340px);
+  margin: 14px auto 6px;
+  padding: 1.7em 1.3em 1.5em;
+  font-size: 17px;
+  border-radius: 2px;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 1.3em,
+      rgba(35, 63, 120, 0.14) 1.3em calc(1.3em + 1px)
+    ),
+    var(--paper-fibre),
+    #fbf8ef;
+  box-shadow:
+    0 0.1em 0.2em rgba(0, 0, 0, 0.3),
+    0 0.8em 1.6em rgba(0, 0, 0, 0.5);
+  transform: rotate(-1.6deg);
+}
+
+/* The pin: a red head over the slip's top, its shadow on the paper. */
+.note-modal .pinned-note-pin {
+  position: absolute;
+  top: 0.45em;
+  left: 50%;
+  width: 0.75em;
+  height: 0.75em;
+  margin-left: -0.375em;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #f5a8a2, #b3261e 62%, #6b1410);
+  box-shadow: 0.08em 0.14em 0.2em rgba(0, 0, 0, 0.45);
+}
+
+.note-modal .pinned-note-text {
+  margin: 0;
+  font-size: 1.3em;
+  line-height: 1.3em;
+  transform: none;
+}

@@ -29,6 +29,7 @@ const KINDS: Record<RunEvent['kind'], string> = {
   radio: 'Strom weg.',
   find: 'Spind durchsucht: SPIND',
   power: 'Stromausfall',
+  note: 'Notiz gelesen',
 };
 
 /** One line of every kind, a minute apart. */
@@ -76,6 +77,7 @@ function over(parts: Partial<PlayerView>): PlayerView {
     presence: { stationId: null, console: null, manualId: null, signSeen: false },
     sourcesHere: [],
     manualsHere: [],
+    noteHere: null,
     puzzle: null,
     map: null,
     ...parts,
@@ -179,6 +181,7 @@ describe('the screens around a run', () => {
       'radio',
       'search',
       'power',
+      'note',
     ]);
     expect(iconsAsWords(won)).toContain('>[replay] Nochmal — ich bin dabei</button>');
     expect(iconsAsWords(lost)).toContain('>[check] Bereit für nochmal</button>');

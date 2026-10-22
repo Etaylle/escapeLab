@@ -77,11 +77,13 @@ describe('presence from the server', () => {
     const state = standing(started(twoBooks), {
       stations: { kabel: ['p2', 'p1'], code: [] },
       manuals: { terminal: ['p3'] },
+      notes: { '0': ['p3', 'p1', 'p3'], '1': [] },
       signSeen: ['p2'],
     });
     expect(state.presence).toEqual({
       stations: { kabel: ['p1', 'p2'] },
       manuals: { terminal: ['p3'] },
+      notes: { '0': ['p1', 'p3'] },
       signSeen: ['p2'],
       exit: [],
     });
@@ -98,7 +100,7 @@ describe('presence from the server', () => {
       { type: 'rematch', playerId: 'p1', at: T0 + 700_000, seed: 3 },
     ];
     const again = rematch.reduce(applyAction, lost);
-    const empty = { stations: {}, manuals: {}, signSeen: [], exit: [] };
+    const empty = { stations: {}, manuals: {}, notes: {}, signSeen: [], exit: [] };
     expect(again.presence).toEqual(empty);
     expect(applyAction(lost, { type: 'back-to-lobby', playerId: 'p1' }).presence).toEqual(empty);
   });

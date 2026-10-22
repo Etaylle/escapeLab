@@ -26,21 +26,25 @@ Reihenfolge:
    jedem Schnitt wird neu gemessen, ein Fehlschnitt verdrahtet den Kasten neu.
 2. *Signalkette* (`signal` mit Legende): Pult A im Flur, Pult B im Maschinenraum, die Legende
    auf dem Klemmbrett; ab Stufe 3 zeigt das sendende Pult die Zeichen nacheinander.
-3. *Leitungsnetz* (`maze`): Navigationspult im Serverraum hinter dem Schott, der Wandplan im
-   Spind dort.
+3. *Serverraum* (`servers`): Terminal und Rack an zwei Pulten im Raum hinter dem Schott, die
+   Regeln im Spind dort.
 4. *Frequenz-Abgleich* (`morse`): Pult im Labor, die Tabellen im Aktenschrank, dessen Schlüssel
    im Serverraum liegt.
 5. *Reaktor-Neustart* (`button-sync`): erst mit der Ersatzsicherung aus dem Archiv; die ganze
    Crew drückt gemeinsam. Dann öffnet die Luke im Archiv, und es geht einmal quer durchs Labor
    hinaus — durchs Labor oder am Serverraum vorbei, beide Wege gleich lang.
 
-**Serverraum** (`servers`, noch in keiner Mission): Pult A ist ein Terminal mit Statustabelle,
+Drei **Notizen der letzten Crew** hängen frei lesbar im Labor — am Hebel, im Serverraum und an
+der Luke (`map.notes`): Sie erzählen, was in der Nacht geschah, und lösen nichts.
+
+**Serverraum** (`servers`): Pult A ist ein Terminal mit Statustabelle,
 Fehlercodes, Protokoll und Befehlszeile (`start`, `restart`, `status` — tippen oder antippen),
 Pult B ein Rack mit Stromschalter und LED je Dienst, ohne einen Code. Sechs Dienste mit festen
 Abhängigkeiten kommen nach ihrem Code wieder hoch (E11 start, E23 Strom aus und an, E42 erst die
 Abhängigkeiten per restart); E50 ist Quarantäne: Strom aus, nie starten, sonst infiziert er einen
-weiteren Dienst. Bewiesen im Kerntest und in der Probemission `tools/fixtures/servers-probe.json`,
-die der Rundgang über den Editor mit festem Seed importiert und bis zur Lösung spielt.
+weiteren Dienst. Bewiesen im Kerntest, in Blackout und in der Probemission
+`tools/fixtures/servers-probe.json`, die der Systemcheck-Rundgang über den Editor mit festem Seed
+importiert und bis zur Lösung spielt.
 
 Keine Station lässt sich allein bedienen (siehe *Nie allein*), und auf *Normal* beendet der
 fünfte Alarm den Lauf — auf *Hart* der dritte, auf *Entspannt* gibt es keine Grenze.
@@ -85,7 +89,10 @@ Stufe wechselt die Richtung. Die Regeln liegen anderswo — Buch, Terminal, Tafe
 Spind, Aktenschrank —, manche je Runde woanders.
 Auf der Karte erscheint eine Quelle erst, wenn jemand nahe kommt; Spinde werden durchsucht,
 Schränke mit ihrem Schlüssel aufgeschlossen. Gelesen wird Seite für Seite (`E` *Lesen*; beim
-Labyrinth samt Wandplan), am Rand steht auf Wunsch eine **Notiz der letzten Crew** (kostet Zeit).
+Labyrinth samt Wandplan), am Rand steht auf Wunsch eine **Notiz der letzten Crew** mit einem
+Hinweis (kostet Zeit). Andere ihrer Notizen hängen frei im Labor, an Wänden oder auf dem Boden:
+Man findet sie wie eine Quelle, `E` *Lesen* öffnet den Zettel, umsonst und ohne Hinweis; das
+Protokoll vermerkt „Notiz gelesen“.
 Die Laborkennung hängt als Schild im Labor: Wer daran vorbeikommt, hat sie ab dann in der Leiste
 und übernimmt sie per Knopf in den Notizblock.
 
@@ -140,7 +147,8 @@ zugleich an beiden stehen können.
 
 **Missions-Editor:** „Editor" auf der Startseite öffnet eine Werkbank: das Labor mit den Kacheln
 des Spiels auf eine Leinwand malen, Startplätze, Türen, Platten, Stationen, Quellen, Schild,
-Raumnamen, Ausgang, Teile und Drohnenwege setzen und in Seitenformularen bearbeiten. Die Prüfung
+Raumnamen, Ausgang, Teile, Drohnenwege und Notizen der letzten Crew (an eine Wand neben dem Boden
+oder auf den Boden) setzen und in Seitenformularen bearbeiten. Die Prüfung
 läuft bei jeder Änderung mit — dieselbe wie `parseMission`, Erreichbarkeitsbeweise inklusive —
 und zeigt jeden Fehler auf der Karte. Gespeichert wird als eigene Mission `custom-…` nach
 `missions/custom/` (nicht im Repo, Ort per `CUSTOM_MISSIONS_DIR`): `POST /missions/custom`
@@ -194,7 +202,14 @@ jede Station wiederholen sich. Die Lobby zeigt „Seed n“ neben dem Code, der 
 das Laufprotokoll den Seed des Laufs — `?seed=` mit diesem Wert spielt genau diesen Lauf noch
 einmal. Der Server nimmt einen Seed nur mit `ALLOW_SEED=1` an (`pnpm dev` und die CI setzen
 es); ohne bleibt es beim Zufall, mit einer Zeile im Server-Log. Der Rundgang
-(`tools/shots.mjs`) legt je Mission einen Seed fest, `SHOTS_SEED=<n>` wählt einen anderen.
+(`tools/shots.mjs`) legt je Mission einen Seed fest, `SHOTS_SEED=<n>` wählt einen anderen. Auf
+dem Seed von Blackout spielt er die Mission bis zur Siegerkarte: mit den Antworten aus
+`tools/fixtures/blackout-plan.json`, die ein Kerntest aus den Lösern der Module gewinnt und
+festhält, an den Drohnen vorbei und durch die Notfälle; weicht eine Station vom Plan ab, schlägt
+der Lauf mit dem Seed fehl. An den Drohnen vorbei läuft er von Versteck zu Versteck — Feldern,
+auf die keine Drohne je blickt —, jede Strecke erst, wenn kein Kegel sie trifft: Die Flüge sagt
+`tools/patrol.mjs` aus dem Positionsstrom voraus, wie der Server sie fliegt; jede Entdeckung
+steht im Log.
 
 **Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
 dort, wo er steht, und die Musik zieht mit dem Druck an — alles zur Laufzeit erzeugt

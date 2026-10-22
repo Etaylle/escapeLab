@@ -14,6 +14,7 @@ export {
   type RoomKind,
 } from './mission.js';
 export { decorTiles, walkable } from './reach.js';
+export { MAX_NOTES, NOTE_TEXT_MAX, noteKey, noteSpot } from './notes.js';
 export {
   initialState,
   CREW_COLORS,
@@ -30,6 +31,7 @@ export {
   applyAction,
   inEscapePhase,
   missingItemsFor,
+  NOTE_READ,
   POWER_OUT,
   puzzleDueAt,
   type Action,
@@ -51,6 +53,7 @@ export {
   type Lights,
   type PlayerPresence,
   type ManualHere,
+  type NoteHere,
   type SourceHere,
   type MapView,
   type Grade,

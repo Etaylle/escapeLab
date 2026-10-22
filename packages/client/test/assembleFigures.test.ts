@@ -59,6 +59,7 @@ function viewWith(items: Item[]): PlayerView {
     presence: { stationId: null, console: null, manualId: null, signSeen: false },
     sourcesHere: [],
     manualsHere: [],
+    noteHere: null,
     puzzle: null,
     map: mapWith({ width: 10, height: 6, tiles: TILES, items }),
   };

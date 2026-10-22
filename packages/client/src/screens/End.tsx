@@ -30,6 +30,7 @@ const EVENT_ICON: Record<RunEvent['kind'], IconName> = {
   radio: 'radio',
   find: 'search',
   power: 'power',
+  note: 'note',
 };
 
 /** What the title card says a run came to. */

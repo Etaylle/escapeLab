@@ -17,7 +17,17 @@ const locker: Manual = { ...book, id: 'spind', kind: 'locker', x: 6, opened: fal
 describe('worldNews — what the lab shows that it did not before', () => {
   it('has nothing on the first look: that was all there already', () => {
     const now = mapWith({ manuals: [book, { ...locker, opened: true }], litRooms: ['ARCHIV'] });
-    expect(worldNews(null, now)).toEqual({ found: [], opened: [], lit: [] });
+    expect(worldNews(null, now)).toEqual({ found: [], notes: [], opened: [], lit: [] });
+  });
+
+  it('finds a note of the last crew the moment the view carries it, read or not', () => {
+    const lever = { index: 0, x: 12, y: 6, read: false };
+    const hatch = { index: 2, x: 2, y: 0, read: true };
+    const before = mapWith({ notes: [lever] });
+    const now = mapWith({ notes: [lever, hatch] });
+    expect(worldNews(before, now).notes).toEqual([hatch]);
+    expect(worldNews(now, now).notes).toEqual([]);
+    expect(worldNews(null, now).notes).toEqual([]);
   });
 
   it('finds a source the moment the view carries it, and only then', () => {

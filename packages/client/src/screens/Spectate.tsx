@@ -256,6 +256,7 @@ export function SpectateScreen({
                 holdTips={false}
                 onToggleInfo={noop}
                 onRead={noop}
+                onReadNote={noop}
                 onOperate={noop}
                 send={noop}
               />
@@ -313,6 +314,7 @@ function spectatorAsPlayerView(view: SpectatorView): Parameters<typeof GameWorld
     presence: { stationId: null, console: null, manualId: null, signSeen: false },
     sourcesHere: [],
     manualsHere: [],
+    noteHere: null,
     puzzle: null,
     map: view.map,
   };
