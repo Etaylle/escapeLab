@@ -125,7 +125,11 @@
  * line says what draws the pages. A capture the draw leaves out is logged as
  * `skipped:` with why, and fails nothing. A line `walking` says how long each
  * avatar walked, keys held down, against the time since the run came up: the
- * walking share a mission's time limit is weighed by. The last line counts
+ * walking share a mission's time limit is weighed by. A walk whose way is
+ * shut on its page waits up to 10 s for a door the server opened — after a
+ * solve, a plate or a key — to open there too, and a line `door` says how
+ * long it waited; where no way comes, the walk fails naming the doors as the
+ * page shows them. The last line counts
  * the captures taken, skipped and failed; the exit code is 1 when any failed.
  *
  * Light: every world's light takes the WebGL light layer or the Canvas pass
@@ -930,15 +934,66 @@ async function pace(player, ms) {
 }
 
 /**
+ * How long a step waits for a change the server made to reach a page, in
+ * ms: a door opened after a solve, a plate or a key, a wire cut at the other
+ * console — a moment later, on a slow machine a long one.
+ */
+const CATCH_UP_MS = 10_000;
+
+/** The doors as `seen`'s page shows them, for a walk that found no way. */
+function doorsSaid(seen) {
+  const doors = (seen.view?.map?.doors ?? []).map(
+    (d) => `${d.id} ${d.x},${d.y} ${d.open ? 'open' : 'shut'}`,
+  );
+  const whose = seen.view?.you?.name ?? 'the';
+  return `doors as ${whose}'s page sees them: ${doors.join(', ') || 'none'}`;
+}
+
+/**
+ * The way from where `seen`'s avatar stands to `target` (`route`, round
+ * `avoid` where it can), once the page's map shows one: where none leads
+ * there yet, it looks again every 100 ms for up to CATCH_UP_MS — a door
+ * opened on the server may not have reached the page — and logs how long it
+ * waited for the door. Null where no way comes.
+ */
+async function wayThere(seen, target, avoid = new Set()) {
+  const since = Date.now();
+  for (let looks = 0; ; looks++) {
+    const from = tileOf(seen);
+    const map = seen.view?.map;
+    const path =
+      from === null || map == null
+        ? null
+        : (route(map, from, target, avoid) ?? (avoid.size > 0 ? route(map, from, target) : null));
+    const waited = Date.now() - since;
+    if (path !== null && looks > 0) {
+      console.log(
+        `door               ${seen.view?.you?.name ?? 'the walker'} waited ${waited} ms for ` +
+          `the door on the way to ${target.x},${target.y}`,
+      );
+    }
+    if (path !== null || waited >= CATCH_UP_MS) {
+      return path;
+    }
+    await sleep(100);
+  }
+}
+
+/**
  * Walks the avatar to the tile before `target` on the way there, or leaves it
- * where it is when it already stands next to it. False when no open way
- * leads there or the avatar gets stuck.
+ * where it is when it already stands next to it — once a way leads there on
+ * the page (`wayThere`). False when none does, with the doors as the page
+ * shows them in the log, or when the avatar gets stuck.
  */
 async function walkNear(page, seen, target) {
   for (let attempt = 0; attempt < 3; attempt++) {
-    const from = tileOf(seen);
-    const path = from === null ? null : route(seen.view.map, from, target);
+    const path = await wayThere(seen, target);
     if (path === null) {
+      const from = tileOf(seen);
+      console.log(
+        `door               no way from ${from?.x},${from?.y} to ${target.x},${target.y} ` +
+          `after ${seconds(CATCH_UP_MS)} — ${doorsSaid(seen)}`,
+      );
       return false;
     }
     let arrived = true;
@@ -1891,7 +1946,7 @@ async function letThrough(walker, holder, target) {
     .sort((one, other) => stepsTo(holder.seen, one) - stepsTo(holder.seen, other));
   for (const plate of plates) {
     await holdPlate(holder, plate);
-    if (await until(() => stepsTo(walker.seen, target) !== Infinity, 3000)) {
+    if ((await wayThere(walker.seen, target)) !== null) {
       console.log(
         `plate              ${holder.name} holds "${plate.label}" at ${plate.x},${plate.y}, ` +
           `${walker.name} walks out`,
@@ -2569,8 +2624,7 @@ async function manBothConsoles(players) {
   const { box, meter, plate } = plan;
   if (plate !== null) {
     await holdPlate(meter, plate);
-    const open = await until(() => stepsTo(box.seen, consoleA) !== Infinity, 3000);
-    if (!open || !(await walkNear(box.page, box.seen, consoleA))) {
+    if (!(await walkNear(box.page, box.seen, consoleA))) {
       throw new Error(
         `${meter.name} holds the plate at ${plate.x},${plate.y}, but ${box.name} found no ` +
           `way through to console A of "${consoleA.title}"`,
@@ -4366,13 +4420,14 @@ async function sneakTo(player, target, hold = 1.2) {
       await stepTo(player.page, player.seen, target.x + 0.5, target.y + 0.5);
       return;
     }
-    const map = mapOf(player);
-    const path = route(map, from, target, cameraPlates(map)) ?? route(map, from, target);
+    const path = await wayThere(player.seen, target, cameraPlates(mapOf(player)));
     if (path === null) {
       throw new Error(
-        `${player.name} found no way from ${from.x},${from.y} to ${target.x},${target.y}`,
+        `${player.name} found no way from ${from.x},${from.y} to ${target.x},${target.y} — ` +
+          doorsSaid(player.seen),
       );
     }
+    const map = mapOf(player);
     if (!late && Date.now() - since > SNEAK_GIVE_UP_MS) {
       late = true;
       sneaking.ranAnyway += 1;
@@ -4510,6 +4565,25 @@ async function carryOut(owner, holder, order) {
 /** The emergencies the walkthrough weathered, for the log's line at the end. */
 const emergencies = { weathered: 0, missed: 0 };
 
+/** The run report's lines for how an emergency ended (core actions.ts EMERGENCY_*). */
+const EMERGENCY_CLEARED = 'Notfall behoben';
+const EMERGENCY_MISSED = 'Notfall nicht rechtzeitig behoben';
+
+/**
+ * How the newest emergency on `seen`'s run report ended: the first line
+ * after its start that clears or misses it — a sighting or a radio line may
+ * follow it at once — or undefined while none has.
+ */
+function emergencyEnd(seen) {
+  const events = seen.view.events;
+  const start = events.findLastIndex(
+    (e) => e.kind === 'sabotage' && e.label !== EMERGENCY_CLEARED,
+  );
+  return events
+    .slice(start + 1)
+    .find((e) => e.label === EMERGENCY_CLEARED || e.label === EMERGENCY_MISSED);
+}
+
 /**
  * A relay emergency weathered from both pages: each player's instruction is
  * carried out at the console of the player it names, round after round,
@@ -4535,12 +4609,12 @@ async function weather() {
       await sleep(100);
     }
   }
-  const last = [...relayCrew[0].seen.view.events].reverse().find((e) => e.kind !== 'radio');
-  const cleared = last?.label === 'Notfall behoben';
+  const end = emergencyEnd(relayCrew[0].seen);
+  const cleared = end?.label === EMERGENCY_CLEARED;
   emergencies[cleared ? 'weathered' : 'missed'] += 1;
   console.log(
     `emergency          "${label}" at both relay consoles for ${seconds(Date.now() - from)}: ` +
-      (cleared ? 'cleared' : `!! ${last?.label ?? 'no word of it'}`),
+      (cleared ? 'cleared' : `!! ${end?.label ?? 'no word of it'}`),
   );
   if (!cleared) {
     fail(`emergency "${label}" was not cleared at the relay consoles`);
@@ -4665,9 +4739,24 @@ const solvedPast = (player, index) => player.seen.view.currentPuzzleIndex > inde
 
 /**
  * The meter at console B reads every wire still whole that it has no reading
- * of this round, and the readings have to be the plan's for this round.
+ * of this round — once its page has heard of the cut before, which `box`'s
+ * page shows first — and the readings have to be the plan's for this round.
  */
-async function measureRound(meter, round, r) {
+async function measureRound(meter, box, round, r) {
+  const left = (player) => player.seen.view.puzzle?.liveLeft;
+  const since = Date.now();
+  if (!(await until(() => left(meter) === left(box), CATCH_UP_MS))) {
+    throw new Error(
+      `${meter.name}'s meter shows ${left(meter)} live wire(s) after ${seconds(CATCH_UP_MS)}, ` +
+        `${box.name}'s box ${left(box)}`,
+    );
+  }
+  const waited = Date.now() - since;
+  if (waited >= 100) {
+    console.log(
+      `circuit            ${meter.name}'s meter caught up with the cut after ${waited} ms`,
+    );
+  }
   const wires = meter.seen.view.puzzle?.readings ?? [];
   for (const [i, pinned] of round.readings.entries()) {
     if (pinned !== null && wires[i] == null) {
@@ -4710,7 +4799,7 @@ async function finishNotstrom(box, meter) {
     differs('Laborkennung', serial, BLACKOUT_PLAN.serial);
   }
   for (const [r, round] of pin.rounds.entries()) {
-    await measureRound(meter, round, r);
+    await measureRound(meter, box, round, r);
     const cut = box.page.locator(`.station-modal .circuit-board [data-index="${round.cut}"]`);
     await cut.click({ timeout: 3000 });
     const done = () => solvedPast(box, index) || box.seen.view.puzzle?.wires?.[round.cut]?.cut;
@@ -5003,8 +5092,7 @@ async function cutPinnedWire(cutter, holder, pinned) {
     throw new Error('the Kabelprüfung is not armed, or there is no plate to hold its door');
   }
   await holdPlate(holder, plate);
-  const through = await until(() => stepsTo(cutter.seen, box) !== Infinity, 3000);
-  if (!through || !(await walkNear(cutter.page, cutter.seen, box))) {
+  if (!(await walkNear(cutter.page, cutter.seen, box))) {
     throw new Error(`${holder.name} holds the plate, but ${cutter.name} found no way to "${box.title}"`);
   }
   const modal = cutter.page.locator('.station-modal');
