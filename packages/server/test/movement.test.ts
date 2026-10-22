@@ -1,22 +1,22 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
+import { parseMission, walkable, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { walkTo, type Walker } from './walk.js';
 
 /**
- * Blackout: the Flurschott (9,6) between the west and the east Flur opens
- * with station 3; the Maschinenraum door (4,7) while the Flur plate (7,6) is
- * held. Of its spawns, (6,5) lies in the west Flur and (3,2) in the Archiv.
- * Its clock starts once the lights have gone out, `intro.lightsSec` in.
+ * Blackout: the Serverschott (15,6) between the Flur and the Serverraum opens
+ * with station 3; the Maschinenraum door (4,10) while the Flur plate (6,9) is
+ * held. Of its spawns, (1,8) lies at the Flur's west end and (3,3) in the
+ * Archiv. Its clock starts once the lights have gone out, `intro.lightsSec` in.
  */
 const blackout: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
 );
-const FLUR = { x: 6, y: 5 };
-const ARCHIV = { x: 3, y: 2 };
-/** In front of the Flurschott, on the west side. */
-const BY_THE_SCHOTT = { x: 8.5, y: 6.5 };
+const FLUR = { x: 1, y: 8 };
+const ARCHIV = { x: 3, y: 3 };
+/** In front of the Serverschott, in the Flur. */
+const BY_THE_SCHOTT = { x: 15.5, y: 7.5 };
 
 type Player = Walker & { token: string; listen: (m: ServerMessage) => void };
 
@@ -57,13 +57,13 @@ function spawnOf(walker: Walker): { x: number; y: number } {
 }
 
 /**
- * A first step off a spawn: half a tile towards the first neighbouring tile that is floor —
- * south, east, north or west. The rematch draws its spawns at random, and from (1,6) at the
- * Flur's west end the way south runs into the wall.
+ * A first step off a spawn: half a tile towards the first neighbouring tile that is floor no
+ * furniture takes — south, east, north or west. The rematch draws its spawns at random, and
+ * from (3,3) in the Archiv the way south runs into a shelf.
  */
 function stepOff(spot: { x: number; y: number }): { x: number; y: number } {
   const floor = (x: number, y: number): boolean =>
-    blackout.map.tiles[Math.floor(y)]?.charAt(Math.floor(x)) === '.';
+    walkable(blackout.map, Math.floor(x), Math.floor(y));
   const ways = [
     [0, 0.5],
     [0.5, 0],
@@ -152,17 +152,17 @@ describe('Room movement', () => {
     room.dispose();
   });
 
-  it('refuses a step through the shut Flurschott, keeps the old spot and logs it', () => {
+  it('refuses a step through the shut Serverschott, keeps the old spot and logs it', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { room, anna, ben } = started();
     walkTo(room, anna, BY_THE_SCHOTT.x, BY_THE_SCHOTT.y);
-    expect(lastView(anna).map?.doors.find((d) => d.id === 'flurschott')?.open).toBe(false);
-    send(room, anna, runOf(anna), 10.0, 6.5);
+    expect(lastView(anna).map?.doors.find((d) => d.id === 'serverschott')?.open).toBe(false);
+    send(room, anna, runOf(anna), 15.5, 6.0);
     expect(broadcastSpot(ben, anna)).toEqual(BY_THE_SCHOTT);
     expect(broadcastSpot(anna, anna)).toEqual(BY_THE_SCHOTT);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn.mock.calls[0]?.[0]).toMatch(
-      /refused Anna's step from 8\.50,6\.50 to 10\.00,6\.50 \(1 refused here so far\)/,
+      /refused Anna's step from 15\.50,7\.50 to 15\.50,6\.00 \(1 refused here so far\)/,
     );
     room.dispose();
   });
@@ -170,21 +170,21 @@ describe('Room movement', () => {
   it('takes a normal step', () => {
     const { room, anna, ben } = started();
     walkTo(room, anna, BY_THE_SCHOTT.x, BY_THE_SCHOTT.y);
-    send(room, anna, runOf(anna), 8.5, 5.9);
-    expect(broadcastSpot(ben, anna)).toEqual({ x: 8.5, y: 5.9 });
+    send(room, anna, runOf(anna), 14.9, 7.5);
+    expect(broadcastSpot(ben, anna)).toEqual({ x: 14.9, y: 7.5 });
     room.dispose();
   });
 
   it('takes a step through the Maschinenraum door only while its plate is held', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { room, anna, ben } = started();
-    walkTo(room, anna, 4.5, 6.6);
-    send(room, anna, runOf(anna), 4.5, 8.05);
-    expect(broadcastSpot(ben, anna)).toEqual({ x: 4.5, y: 6.6 });
-    walkTo(room, ben, 7.5, 6.5);
+    walkTo(room, anna, 4.5, 9.6);
+    send(room, anna, runOf(anna), 4.5, 11.05);
+    expect(broadcastSpot(ben, anna)).toEqual({ x: 4.5, y: 9.6 });
+    walkTo(room, ben, 6.5, 9.5);
     expect(lastView(anna).map?.doors.find((d) => d.id === 'maschinentuer')?.open).toBe(true);
-    send(room, anna, runOf(anna), 4.5, 8.05);
-    expect(broadcastSpot(ben, anna)).toEqual({ x: 4.5, y: 8.05 });
+    send(room, anna, runOf(anna), 4.5, 11.05);
+    expect(broadcastSpot(ben, anna)).toEqual({ x: 4.5, y: 11.05 });
     room.dispose();
   });
 
@@ -203,8 +203,8 @@ describe('Room movement', () => {
     expect(kept.run).toBe(runOf(back));
     expect(kept.players[anna.playerId]).toMatchObject(BY_THE_SCHOTT);
 
-    walkTo(room, back, 7.5, 6.5);
-    expect(broadcastSpot(ben, back)).toEqual({ x: 7.5, y: 6.5 });
+    walkTo(room, back, 6.5, 9.5);
+    expect(broadcastSpot(ben, back)).toEqual({ x: 6.5, y: 9.5 });
     expect(lastView(ben).map?.plates.find((p) => p.id === 'flurplatte')?.pressed).toBe(true);
     expect(warn).not.toHaveBeenCalled();
     room.dispose();

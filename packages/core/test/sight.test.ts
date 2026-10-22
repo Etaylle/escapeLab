@@ -242,11 +242,11 @@ const CABINET_SPOTS = (cabinet?.spots ?? []).map((spot) => tileKey(spot.x, spot.
 
 describe('sight in Blackout', () => {
   it('has the cabinet spots in the Labor this test is about', () => {
-    expect(CABINET_SPOTS).toEqual(['7,8', '8,8', '7,10']);
+    expect(CABINET_SPOTS).toEqual(['14,11', '14,15', '12,11']);
   });
 
   it('hides the Labor cabinet from console B in the Maschinenraum, doors shut or open', () => {
-    const consoleB = middle(4, 9);
+    const consoleB = middle(7, 15);
     for (const shut of [blackoutDoors, OPEN]) {
       const seen = visibleTiles(blackout, consoleB, 7.5, shut);
       expect(CABINET_SPOTS.filter((key) => seen.has(key))).toEqual([]);
@@ -256,17 +256,16 @@ describe('sight in Blackout', () => {
     }
   });
 
-  it('shows the Labor from its door: a wedge from the doorway, every cabinet spot one step in', () => {
-    const labor = new Set([...blackoutDoors].filter((key) => key !== '10,7'));
-    const fromDoor = visibleTiles(blackout, middle(10, 7), 7.5, labor);
-    expect(fromDoor.has('7,10')).toBe(true);
-    // The wall beside the door hides the spots along it until one steps in.
-    expect(fromDoor.has('7,8') || fromDoor.has('8,8')).toBe(false);
-    const inside = visibleTiles(blackout, middle(10, 8), 7.5, labor);
-    expect(CABINET_SPOTS.filter((key) => inside.has(key))).toEqual(CABINET_SPOTS);
-    for (const spot of cabinet?.spots ?? []) {
-      expect(canSee(blackout, middle(10, 8), middle(spot.x, spot.y), labor)).toBe(true);
-    }
+  it('shows the Labor from its door, and its pillar hides the cabinet from beside it', () => {
+    const labor = new Set([...blackoutDoors].filter((key) => key !== '8,13'));
+    const fromDoor = visibleTiles(blackout, middle(8, 13), 7.5, labor);
+    expect(CABINET_SPOTS.filter((key) => fromDoor.has(key))).toEqual(CABINET_SPOTS);
+    // The pillar (13,12) stands in the line to the middle of the north-east spot.
+    expect(canSee(blackout, middle(8, 13), middle(14, 11), labor)).toBe(false);
+    expect(canSee(blackout, middle(8, 13), middle(12, 11), labor)).toBe(true);
+    // Right below it, it hides both north spots; the one by the south wall still shows.
+    const belowPillar = visibleTiles(blackout, middle(13, 13), 7.5, labor);
+    expect(CABINET_SPOTS.filter((key) => belowPillar.has(key))).toEqual(['14,15']);
   });
 
   // A look costs about 0.1 ms here; the budget is loose enough for a loaded

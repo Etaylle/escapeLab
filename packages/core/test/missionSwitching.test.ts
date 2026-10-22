@@ -71,12 +71,13 @@ describe('mission switching & stats', () => {
   });
 
   it('records start and finish times for the end-screen stats', () => {
-    const lost = applyAction(started(), { type: 'time-expired', at: T0 + 660_000 });
-    expect(lost.finishedAt).toBe(T0 + 660_000);
+    const end = T0 + blackout.timeLimitSec * 1000;
+    const lost = applyAction(started(), { type: 'time-expired', at: end });
+    expect(lost.finishedAt).toBe(end);
     const view = viewFor(lost, 'p1');
     expect(view.startedAt).toBe(T0);
-    expect(view.finishedAt).toBe(T0 + 660_000);
-    expect(view.timeLimitSec).toBe(660);
+    expect(view.finishedAt).toBe(end);
+    expect(view.timeLimitSec).toBe(blackout.timeLimitSec);
   });
 
   it('validates the three shipped missions', () => {

@@ -13,15 +13,18 @@
  * once the box is safe, the Maschinenraum door stays open for good. At a
  * station with one console whoever is fewer steps from it works it and the
  * other reads at the source that covers it. It streams client-authoritative
- * positions along BFS paths, searches the locker, carries the key from the
- * Serverraum to the cabinet and the spare fuse from the Archiv to the
- * reactor (across the Flur while the camera plate holds its drone), solves
- * every station with its module's solver on the views of whoever stands at
- * it — at either console — and whoever reads its rules (plus one deliberate
- * short and one wrong key), has an input turned away while the reader steps
- * off from the radio panel's rules, and survives a mid-game reconnect. On the
- * way out the hatch says when it opened, and the views of the crew and the
- * audience tick off whoever stands on it. A fake
+ * positions along BFS paths, each walk once no drone watches its way, as a
+ * crew times its run past a patrol; searches the locker, carries the key from
+ * the Serverraum round to the cabinet in the Labor and the spare fuse from the
+ * Archiv to the reactor (across the Flur while the camera plate holds its
+ * drone, taken while that drone patrols the Ost-Flur), solves every station
+ * with its module's solver on the views of whoever stands at it — at either
+ * console — and whoever reads its rules (plus one deliberate short and one
+ * wrong key), has an input turned away while the reader steps off from the
+ * radio panel's rules, and survives a mid-game reconnect. On the way out —
+ * by the Labor's way across the lab to the hatch in the Archiv — the hatch
+ * says when it opened, and the views of the crew and the audience tick off
+ * whoever stands on it; the log then says how far each of the crew walked. A fake
  * voice offer, answer and candidate go between Anna and Ben through the
  * server, and one for a player in another room goes nowhere. The
  * won run leaves its report in a run log in a temporary folder, and
@@ -98,22 +101,22 @@ const REAKTOR = 5;
  * console A, where it has two.
  */
 const STAND: Tile[] = [
-  [7, 5], // at the Notlicht's lever, in the Flur above its plate
-  [2, 9], // in front of the fuse box, console A of the Notstrom-Kasten, in the Maschinenraum
-  [7, 5], // beside console A of the Signalkette, in the Flur
-  [13, 6], // below the navigation panel
-  [10, 11], // beside the radio panel, off the Labor drone's line
-  [14, 9], // at the reactor, across from the fuse slot
+  [11, 7], // at the Notlicht's lever, in the middle of the Flur
+  [2, 12], // in front of the fuse box, console A of the Notstrom-Kasten, in the Maschinenraum
+  [20, 7], // beside console A of the Signalkette, out of the Flur drone's sight as it wakes
+  [9, 4], // below the navigation panel, in the Serverraum
+  [10, 15], // beside the radio panel, off the Labor drone's line
+  [25, 14], // at the reactor, across from the fuse slot
 ];
 /** Beside console B of the stations worked at two consoles, by station index. */
 const CONSOLE_B = new Map<number, Tile>([
-  [NOTSTROM, [5, 5]], // north of the meter, in the Flur by the Maschinenraum door
-  [SIGNALKETTE, [3, 9]], // beside console B of the Signalkette, in the Maschinenraum
+  [NOTSTROM, [3, 7]], // beside the meter, at the Flur's west end
+  [SIGNALKETTE, [7, 14]], // above console B of the Signalkette, in the Maschinenraum
 ]);
 /** Beside the Laborkennung, in the Archiv. */
-const BY_THE_SIGN: Tile = [3, 3];
-/** In front of the Labor's door: out of the Labor drone's sight. */
-const OUT_OF_THE_LABOR: Tile = [10, 6];
+const BY_THE_SIGN: Tile = [1, 3];
+/** In the Maschinenraum below its door to the Flur: out of the Labor drone's sight. */
+const OUT_OF_THE_LABOR: Tile = [4, 11];
 
 const KEY_ID = 'schluessel';
 const FUSE_ID = 'ersatzsicherung';
@@ -234,7 +237,11 @@ class TestClient {
     });
   }
 
+  /** Resolves once the socket is open: at once where it opened before anybody asked. */
   async open(): Promise<void> {
+    if (this.socket.readyState === WebSocket.OPEN) {
+      return;
+    }
     await new Promise<void>((resolve, reject) => {
       this.socket.once('open', resolve);
       this.socket.once('error', reject);
@@ -410,10 +417,86 @@ function bfsPath(
   return null;
 }
 
+/** How fast an avatar walks, tiles a second, as the client steers it (client world/sim.ts). */
+const WALK_TILES_PER_SEC = 4.2;
+/** Tiles each player has walked so far, by player id, as `walkTo` streamed them. */
+const walked = new Map<string, number>();
+
 /**
- * Stream positions along a BFS path to the target tile, then wait for the
- * server's positions echo (which also proves plate evaluation has run).
- * A transiently missing path means a door update is still in flight — retry.
+ * How far each of the crew walked in Blackout, and how long that takes at the
+ * avatar's pace: what the map's size asks of a crew, for its time limit.
+ */
+function reportWalks(): void {
+  const walks = crew.map((client) => {
+    const tiles = walked.get(client.playerId ?? '') ?? 0;
+    const name = client.view?.you.name ?? client.label;
+    return `${name} ${tiles} tiles (${Math.round(tiles / WALK_TILES_PER_SEC)} s)`;
+  });
+  console.log(`  walked: ${walks.join(', ')} at ${WALK_TILES_PER_SEC} tiles a second`);
+}
+
+/** How near a waypoint a drone counts as turning there: it may face any way a moment later. */
+const TURNING_TILES = 0.75;
+
+/**
+ * Whether drone `id`, as the positions stream shows it, could catch somebody
+ * at `spot` in the next moment: awake and not frozen, within its range and the
+ * half-angle of its cone — a tile and 15° more of each, for the way it moves
+ * on meanwhile, and any way at all where it is about to turn at a waypoint —
+ * and in its line of sight.
+ */
+function watches(
+  id: string,
+  drone: DronePosition,
+  spot: { x: number; y: number },
+  map: MapData,
+): boolean {
+  const dx = spot.x - drone.x;
+  const dy = spot.y - drone.y;
+  if (drone.frozen || Math.hypot(dx, dy) > drone.range + 1) {
+    return false;
+  }
+  const turning = mission.map.drones.some((d) => d.id === id && d.waypoints.some((w) =>
+    Math.hypot(w.x + 0.5 - drone.x, w.y + 0.5 - drone.y) < TURNING_TILES));
+  const turn = Math.atan2(dy, dx) - drone.facing;
+  const off = Math.abs(((turn + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+  const shut = new Set(map.doors.filter((d) => !d.open).map((d) => key(d.x, d.y)));
+  const inCone = turning || off <= ((drone.halfAngleDeg + 15) * Math.PI) / 180;
+  return inCone && canSee(map, drone, spot, shut);
+}
+
+/**
+ * Waits until no drone watches the way `path` takes, as a crew times its run
+ * past a patrol: the walk itself then takes a fraction of a second, in which a
+ * drone moves a fraction of a tile. Gives up after a minute.
+ */
+async function pastTheDrones(client: TestClient, map: MapData, path: Tile[]): Promise<void> {
+  const spots = path.map(([x, y]) => ({ x: x + 0.5, y: y + 0.5 }));
+  const [atX, atY] = tileOf(client);
+  const underfoot = map.plates.find((plate) => plate.x === atX && plate.y === atY)?.id;
+  // A drone the walker holds still from its plate wakes as the walker steps off it.
+  const wakes = (id: string): boolean =>
+    underfoot !== undefined &&
+    mission.map.drones.some((d) => d.id === id && d.frozenByPlate === underfoot);
+  const watched = (): boolean =>
+    Object.entries(client.drones).some(([id, drone]) => {
+      const looking = wakes(id) ? { ...drone, frozen: false } : drone;
+      return spots.some((spot) => watches(id, looking, spot, map));
+    });
+  const deadline = Date.now() + 60_000;
+  while (watched()) {
+    if (Date.now() > deadline) {
+      fail(`${client.label}: a drone watched the way to ${path.at(-1)?.join(',')} for a minute`);
+    }
+    await sleep(50);
+  }
+}
+
+/**
+ * Stream positions along a BFS path to the target tile once no drone watches
+ * it, then wait for the server's positions echo (which also proves plate
+ * evaluation has run). A transiently missing path means a door update is
+ * still in flight — retry.
  */
 async function walkTo(client: TestClient, to: Tile): Promise<void> {
   const self = await client.ensureSelf();
@@ -443,12 +526,15 @@ async function walkTo(client: TestClient, to: Tile): Promise<void> {
       await sleep(100);
       continue;
     }
+    await pastTheDrones(client, map, path);
     for (const [x, y] of path) {
       client.sendPos(x + 0.5, y + 0.5, true);
       self.x = x + 0.5;
       self.y = y + 0.5;
       await sleep(8);
     }
+    const walker = client.playerId ?? '';
+    walked.set(walker, (walked.get(walker) ?? 0) + path.length);
   }
   client.sendPos(to[0] + 0.5, to[1] + 0.5, false);
   const id = client.playerId ?? '';
@@ -634,8 +720,8 @@ async function openSource(client: TestClient, manualId: string, find: string): P
 
 /**
  * The cabinet's key lies in the Serverraum: whoever is fewer steps from it
- * fetches it while the other holds the Serverraum's plate, carries it to the
- * cabinet and unlocks it there.
+ * fetches it, carries it round to the cabinet in the Labor and unlocks it
+ * there.
  */
 async function unlockCabinet(): Promise<void> {
   const cabinet = sourceOf(FREQUENZ);
@@ -650,22 +736,44 @@ async function unlockCabinet(): Promise<void> {
   credit(carrier, 'delivered');
 }
 
+/** Where the Flur drone's patrol runs in the Ost-Flur, past the Serverraum's way out: x from here. */
+const OST_FLUR_X = 20;
+
+/**
+ * Waits until the Flur drone patrols the Ost-Flur, out of sight of the Flur
+ * and the Serverraum: a camera plate taken now holds it still out there.
+ */
+async function droneOutEast(client: TestClient): Promise<void> {
+  const deadline = Date.now() + 30_000;
+  while ((client.drones[flurDrone.id]?.x ?? 0) < OST_FLUR_X) {
+    if (Date.now() > deadline) {
+      fail(`${client.label}: the Flur drone never came round to the Ost-Flur in 30 s`);
+    }
+    await sleep(50);
+  }
+}
+
 /**
  * The reactor stays dead without the spare fuse from the Archiv: one fetches
- * it while the other holds the camera plate, so the Flur drone stands still
- * on the way out; then both meet at the reactor.
+ * it while the other holds the camera plate, taken while the Flur drone
+ * patrols the Ost-Flur, so it stands still out there while the fuse crosses
+ * the Flur; then both meet at the reactor, the plate holder by the Labor's
+ * way, which the drone woken by its steps off the plate does not watch.
  */
 async function fetchFuse(): Promise<void> {
   const fuseAt = itemTile(FUSE_ID);
   const [carrier, helper] = closerTo(fuseAt);
   await walkTo(carrier, OUT_OF_THE_LABOR);
+  await droneOutEast(helper);
   await walkTo(helper, CAMERA);
   await crossFrozen(carrier, fuseAt, flurDrone.id);
   await pickUp(carrier, FUSE_ID);
   await walkTo(carrier, FUSE_SLOT);
   await install(carrier, FUSE_ID);
   credit(carrier, 'delivered');
-  await walkTo(helper, STAND[REAKTOR] ?? fail('no spot at the reactor'));
+  for (const to of [OUT_OF_THE_LABOR, STAND[REAKTOR] ?? fail('no spot at the reactor')]) {
+    await walkTo(helper, to);
+  }
 }
 
 // --- puzzle solvers ----------------------------------------------------------
@@ -1208,13 +1316,16 @@ async function solveMorse(op: TestClient, rd: TestClient): Promise<void> {
 }
 
 /**
- * The Labor's north-west corner, by every spot of the cabinet: from here the
- * way to the north-east corner runs along the north wall, far from the radio
- * panel, so the reader never comes close enough to see the lamp.
+ * The Labor's east side by its archway, a step or two from every spot of the
+ * cabinet: from here the way to the door runs north of the bench row, far
+ * from the radio panel, so the reader never comes close enough to see the lamp.
  */
-const LABOR_CORNER: Tile = [7, 8];
-/** The Labor's north-east corner: out of reach of every spot of the cabinet and of the panel. */
-const AWAY_FROM_THE_CABINET: Tile = [11, 8];
+const LABOR_CORNER: Tile = [14, 13];
+/**
+ * In the Maschinenraum past the Labor's door: out of reach of every spot of
+ * the cabinet and of the panel, and out of the Labor drone's sight.
+ */
+const AWAY_FROM_THE_CABINET: Tile = [7, 12];
 const ALONE = 'Allein geht das nicht — jemand muss am anderen Pult oder bei den Regeln stehen.';
 
 /**
@@ -1476,14 +1587,14 @@ for (const client of crew) {
 }
 
 // Map pings fan out to the whole crew and are rate limited per player.
-anna.send({ kind: 'ping', x: 9, y: 6 });
+anna.send({ kind: 'ping', x: 12, y: 8 });
 anna.send({ kind: 'ping', x: 3, y: 3 }); // swallowed by the cooldown
 const pinged = await ben.expect(
   'ping arrives',
   (m): m is Extract<ServerMessage, { kind: 'ping' }> => m.kind === 'ping',
 );
 assert(
-  pinged.playerId === annaJoined.playerId && pinged.x === 9 && pinged.y === 6,
+  pinged.playerId === annaJoined.playerId && pinged.x === 12 && pinged.y === 8,
   'ping is broadcast to the other player with its origin',
 );
 await sleep(200);
@@ -1621,7 +1732,8 @@ const [atA, atB] = crew;
 await takeConsoles(SIGNALKETTE, atA, atB);
 await runSignal(atA, atB);
 
-// Station 4: the maze's panel in the Flur, its plan in the locker, which has to be searched.
+// Station 4: the maze's panel in the Serverraum, its plan in the locker there, which has to be
+// searched.
 // Ben walked past the Laborkennung before the Notstrom-Kasten, and reads here.
 const atMaze = await takePlaces(SUBSYSTEME, atMeter);
 const locker = sourceOf(SUBSYSTEME);
@@ -1651,7 +1763,10 @@ assert(unlockedAt !== undefined && unlocked.map?.exit?.openedAt === unlockedAt,
   'the hatch says when it opened: the moment the run report logged it unlocked');
 assert(unlocked.map?.exit?.atExit.length === 0, 'nobody stands on the hatch yet');
 const [first, last] = crew;
-await walkTo(first, EXIT);
+// Out by the Labor's way and the Flur to the hatch in the Archiv's corner.
+for (const to of [OUT_OF_THE_LABOR, EXIT]) {
+  await walkTo(first, to);
+}
 const firstOut = JSON.stringify([first.playerId]);
 for (const client of crew) {
   await client.expectView(`the checklist ticks ${first.label} off at the hatch`, (v) =>
@@ -1661,19 +1776,23 @@ await zoe.untilSpectator(`sees ${first.label} on the hatch and ${last.label} sti
   (v) => JSON.stringify(v.map?.exit?.atExit) === firstOut);
 const halfwayOut = last.view?.phase;
 assert(halfwayOut === 'playing', 'one player at the hatch is not enough to escape');
-await walkTo(last, EXIT);
+for (const to of [OUT_OF_THE_LABOR, EXIT]) {
+  await walkTo(last, to);
+}
 
 const won = await first.expectView('won the mission', (v) => v.phase === 'won');
 await last.expectView('won the mission', (v) => v.phase === 'won');
 assert(/erwachen die Systeme/.test(won.storyText), 'win story is shown');
 // At least the wrong cut and the wrong sign; patrolling drones may add more.
-assert(won.penaltySeq >= 2, 'both deliberate penalties were counted');
+assert(won.penaltySeq >= 2,
+  `both deliberate penalties were counted, ${won.penaltySeq} alarms in all`);
 assert(
   won.events.filter((e) => e.kind === 'find').map((e) => e.label).join(' · ') ===
     `Spind durchsucht: ${locker.label} · Schrank aufgeschlossen: ${sourceOf(FREQUENZ).label}`,
   'the run report holds the searched locker and the unlocked cabinet',
 );
 assertKeptApart(openWindows);
+reportWalks();
 
 // The end screen credits each player with what they did.
 const creditOf = (client: TestClient): Credits =>
@@ -1837,7 +1956,11 @@ await first.expect(
   'room list after the stale position',
   (m): m is Extract<ServerMessage, { kind: 'rooms' }> => m.kind === 'rooms',
 );
+// Still in the intro nothing moves; a step of the other's onto its own spawn has the room
+// broadcast where everybody stands now.
 const handled = first.positions;
+const stays = spawnOf(last);
+last.sendPos(stays.x + 0.5, stays.y + 0.5, false);
 await first.untilPositions('a broadcast after the stale position', (p) => p !== handled);
 assert(onSpawn(first.positions, first), 'a position stamped with the run before is dropped');
 

@@ -232,9 +232,9 @@ describe('draft ↔ JSON: rooms’ kinds and furniture', () => {
       map: { labels: unknown[]; decor: unknown[] };
     };
     const draft = loaded(blackout);
-    expect(draft.map.labels[0]).toEqual({ text: 'ARCHIV', x: 4, y: 1, kind: 'archive' });
-    expect(draft.map.decor[0]).toEqual({ kind: 'cart', x: 1, y: 3, variant: null });
-    expect(draft.map.decor[1]).toEqual({ kind: 'shelf', x: 5, y: 3, variant: 1 });
+    expect(draft.map.labels[0]).toEqual({ text: 'ARCHIV', x: 4, y: 2, kind: 'archive' });
+    expect(draft.map.decor[0]).toEqual({ kind: 'cart', x: 1, y: 5, variant: null });
+    expect(draft.map.decor[1]).toEqual({ kind: 'shelf', x: 2, y: 2, variant: 0 });
     const json = draftToJson(draft) as { map: { labels: unknown[]; decor: unknown[] } };
     expect(json.map.labels).toEqual(blackout.map.labels);
     expect(json.map.decor).toEqual(blackout.map.decor);

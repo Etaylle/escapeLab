@@ -539,9 +539,9 @@ describe('Room', () => {
   });
 
   it('releases a plate when its holder disconnects', () => {
-    // Blackout: the Flur plate at (7,6) holds the Maschinenraum door.
+    // Blackout: the Flur plate at (6,9) holds the Maschinenraum door.
     const { room, anna, ben } = startedRoom(load('blackout'));
-    moveTo(room, anna, 7, 6);
+    moveTo(room, anna, 6, 9);
     expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(true);
     room.detach(anna.playerId);
     expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(false);

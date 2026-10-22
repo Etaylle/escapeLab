@@ -15,18 +15,24 @@ Kettenreaktion (3 Spieler, jeder startet in einem anderen verschlossenen Raum un
 Hilfe heraus) und Doppelschicht (4 Spieler in **zwei getrennten Flügeln** — die Regeln jeder
 Station liegen im anderen Flügel, und erst der Druckausgleich öffnet die Schleuse dazwischen).
 
-**Blackout im Labor** (2–3 Spieler, 11 Minuten auf *Normal*), die Stationen in Reihenfolge:
+**Blackout im Labor** (2–3 Spieler, 13 Minuten auf *Normal*): ein Labor von 27 × 17 Feldern, die
+Räume als Ring — Archiv, Flur, Serverraum, Ost-Flur, Reaktor, Süd-Flur, Labor, Maschinenraum und
+zurück in den Flur. Die Crew startet getrennt und außer Sicht (Archiv, beide Enden des Flurs) und
+wirft zuerst gemeinsam den Notlicht-Hebel in der Mitte des Flurs, dann die Stationen in
+Reihenfolge:
 
 1. *Notstrom-Kasten* (`circuit`): Sicherungskasten im Maschinenraum hinter der Plattentür,
    Prüfpult im Flur davor; die Regeln im Handbuch im Archiv, die Laborkennung daneben. Nach
    jedem Schnitt wird neu gemessen, ein Fehlschnitt verdrahtet den Kasten neu.
 2. *Signalkette* (`signal` mit Legende): Pult A im Flur, Pult B im Maschinenraum, die Legende
    auf dem Klemmbrett; ab Stufe 3 zeigt das sendende Pult die Zeichen nacheinander.
-3. *Leitungsnetz* (`maze`): Navigationspult im Flur hinter dem Schott, der Wandplan im Spind.
+3. *Leitungsnetz* (`maze`): Navigationspult im Serverraum hinter dem Schott, der Wandplan im
+   Spind dort.
 4. *Frequenz-Abgleich* (`morse`): Pult im Labor, die Tabellen im Aktenschrank, dessen Schlüssel
    im Serverraum liegt.
 5. *Reaktor-Neustart* (`button-sync`): erst mit der Ersatzsicherung aus dem Archiv; die ganze
-   Crew drückt gemeinsam.
+   Crew drückt gemeinsam. Dann öffnet die Luke im Archiv, und es geht einmal quer durchs Labor
+   hinaus — durchs Labor oder am Serverraum vorbei, beide Wege gleich lang.
 
 **Serverraum** (`servers`, noch in keiner Mission): Pult A ist ein Terminal mit Statustabelle,
 Fehlercodes, Protokoll und Befehlszeile (`start`, `restart`, `status` — tippen oder antippen),

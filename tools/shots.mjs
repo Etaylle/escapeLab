@@ -91,8 +91,10 @@
  * frames as a CI runner without a GPU would; SHOTS_SOFTWARE_GL=1 composes the
  * pages on SwiftShader, so that the compositor's share shows too. The first
  * line says what draws the pages. A capture the draw leaves out is logged as
- * `skipped:` with why, and fails nothing. The last line counts the captures
- * taken, skipped and failed; the exit code is 1 when any failed.
+ * `skipped:` with why, and fails nothing. A line `walking` says how long each
+ * avatar walked, keys held down, against the time since the run came up: the
+ * walking share a mission's time limit is weighed by. The last line counts
+ * the captures taken, skipped and failed; the exit code is 1 when any failed.
  *
  * Light: every world's light takes the WebGL light layer or the Canvas pass
  * (client world/gl/path.ts): a software renderer — headless Chromium's
@@ -257,16 +259,20 @@ const LUMA_TOLERANCE = 0.1;
  * what its draw left out. Found by printing the core's draw of a crew of two
  * for seeds 1…50 and replaying the steps below that depend on it, in a room:
  *
- * - Blackout 5: Anna starts in the Archiv by the sign (sign.png, at once with
- *   the power on), Ben at the west end of the Flur beside the Klemmbrett.
- *   With the power on, Anna's step into the Archiv brings the book at (2,1)
- *   into sight, and Ben walks towards her (cold-open.png). Nobody starts
- *   behind a door: both walk up to the lever (lever.png). Then Ben reads the
- *   book (reading), holds the plate for Anna on her way to console A of the
- *   Notstrom-Kasten, works console B and asks for the notes (console-*,
- *   hint-*). Ben's start replaced the Maschinenraum's in the mission's list
- *   of spawns, so the seed draws as it did before: Anna in the Archiv, Ben
- *   on the spawn that took the Maschinenraum's place.
+ * - Blackout 5: Anna starts in the Archiv by the sign (3,3; sign.png, at once
+ *   with the power on), Ben at the Flur's west end (1,8); the book lies at
+ *   (6,1), the Klemmbrett at (8,9) by the lever, the locker at (13,1), the
+ *   cabinet at (12,11). With the power on, Anna's step into the Archiv brings
+ *   the book into sight, and Ben walks towards her (cold-open.png). Nobody
+ *   starts behind a door: both walk up to the lever in the middle of the Flur
+ *   (lever.png). Then Ben reads the book (reading), holds the plate for Anna
+ *   on her way to console A of the Notstrom-Kasten, works console B and asks
+ *   for the notes (console-*, hint-*). The map that grew to 27×17 kept three
+ *   spawns in this order — Archiv, the Flur's west end, its east end (21,8) —
+ *   and as many spots for every source, so seeds draw as before. Anna and Ben
+ *   by seed: 1 Flur west and Archiv, 3 Flur east and Archiv, 5 Archiv and
+ *   Flur west, 7 Flur west and Flur east, 8 Archiv and Flur east, 9 Flur east
+ *   and Flur west.
  * - Systemcheck 1: the usual, Ben by the first station and the sign works it,
  *   Anna by the locker reads it.
  */
@@ -803,6 +809,24 @@ function tileOf(seen) {
   return at === null ? null : { x: Math.floor(at.x), y: Math.floor(at.y) };
 }
 
+/**
+ * How long each page's avatar has walked in the run, ms with its keys down,
+ * and when the run came up: the walking share the log ends on.
+ */
+const walking = { since: null, ms: new Map() };
+
+/** The walking share in the log: each player's walk against the time since the run came up. */
+function reportWalking() {
+  if (walking.since === null) {
+    return;
+  }
+  const total = Date.now() - walking.since;
+  const walks = [...walking.ms].map(
+    ([page, ms]) => `${named.get(page)} ${seconds(ms)} (${Math.round((ms / total) * 100)} %)`,
+  );
+  console.log(`walking            ${walks.join(', ')} of the ${seconds(total)} since the start`);
+}
+
 /** Steers the avatar onto a tile centre with short key presses, checking each result. */
 async function stepTo(page, seen, tx, ty) {
   for (let i = 0; i < 30; i++) {
@@ -820,6 +844,7 @@ async function stepTo(page, seen, tx, ty) {
     for (const key of keys) await page.keyboard.down(key);
     await sleep(ms);
     for (const key of keys) await page.keyboard.up(key);
+    walking.ms.set(page, (walking.ms.get(page) ?? 0) + ms);
     await sleep(140); // the avatar reports itself every 80 ms
   }
   return false;
@@ -3080,6 +3105,7 @@ async function startRun(host, guest) {
     );
     throw new Error(`the run did not come up within ${seconds(START_MS)}: ${shows.join('; ')}`);
   }
+  walking.since = Date.now();
   console.log(
     `start              ${guest.name} ready, the run up on both pages ` +
       `${seconds(Date.now() - from)} after the ready press`,
@@ -3449,8 +3475,8 @@ function artMission() {
     map: {
       ...blackout.map,
       spawns: [
-        { x: 3, y: 2 },
-        { x: 3, y: 9 },
+        { x: 3, y: 3 },
+        { x: 3, y: 12 },
       ],
     },
   };
@@ -3509,8 +3535,8 @@ async function artCaptures({ host, guest, watcher }) {
     throw new Error('the art tour’s mission did not open with the power on');
   }
   const crew = [host, guest];
-  const archive = startedAt(crew, 3, 2);
-  const machine = startedAt(crew, 3, 9);
+  const archive = startedAt(crew, 3, 3);
+  const machine = startedAt(crew, 3, 12);
   if (archive === undefined || machine === undefined) {
     throw new Error('the art tour’s starts are not the Archiv’s and the Maschinenraum’s');
   }
@@ -4575,6 +4601,7 @@ async function run() {
   if (!solvedShot.taken && solvedShot.late.length === 1) {
     skipLateShot(); // late, and no sync station came after it to shoot again
   }
+  reportWalking();
   await browser.close();
   console.log('screenshots in', OUT);
 }
