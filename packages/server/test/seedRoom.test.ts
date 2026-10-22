@@ -11,11 +11,11 @@ import { RoomManager, seedsAllowed } from '../src/roomManager.js';
 import { walkTo } from './walk.js';
 
 /**
- * Blackout: spawns in the Archiv (3,2), at the west end of the Flur (1,6) and
- * by the lever (6,5); the lights go out three seconds in, and the crew turns
- * the lever of the Notlicht (7,5) above the Flur plate (7,6), which holds the
- * Maschinenraum door; console A of the Notstrom-Kasten stands in the
- * Maschinenraum at (1,9). Seeds 1 and 28 both start Anna at the west end of
+ * Blackout: spawns in the Archiv (3,3) and at either end of the Flur, (1,8)
+ * and (21,8); the lights go out five seconds in, and the crew throws the lever
+ * of the Notlicht (11,7) in the middle of the Flur. The Flur plate (6,9) holds
+ * the Maschinenraum door; console A of the Notstrom-Kasten stands in the
+ * Maschinenraum at (1,12). Seeds 1 and 28 both start Anna at the west end of
  * the Flur and Ben in the Archiv.
  */
 const blackout: Mission = parseMission(
@@ -59,8 +59,8 @@ function startedIn(manager: RoomManager, seed: number | null) {
  * What the seed of a room's first run decided, as the room hands it out:
  * where Anna and Ben start, where the audience sees the sources lie, the
  * edgework, and the fuse box Anna switches on beside console A, as the
- * audience sees all of it. Before that the lights go out and the two turn
- * the lever, Ben from the plate beside it, which then holds the Maschinenraum
+ * audience sees all of it. Before that the lights go out and the two throw
+ * the lever; then Ben stands on the Flur plate, which holds the Maschinenraum
  * door for Anna on her way to the fuse box.
  */
 function firstRunOf(manager: RoomManager, seed: number) {
@@ -69,13 +69,14 @@ function firstRunOf(manager: RoomManager, seed: number) {
   room.attachSpectator(audience.listen);
   const start = lastSpectatorView(audience.messages);
   vi.advanceTimersByTime((blackout.intro?.lightsSec ?? 0) * 1000);
-  walkTo(room, ben, 7.5, 6.5);
-  walkTo(room, anna, 7.5, 5.5);
+  walkTo(room, ben, 11.5, 8.5);
+  walkTo(room, anna, 11.5, 7.5);
   room.act(anna.playerId, { kind: 'interact' });
   for (const player of [anna, ben]) {
     room.act(player.playerId, { kind: 'puzzle-input', input: { press: true } });
   }
-  walkTo(room, anna, 2.5, 9.5);
+  walkTo(room, ben, 6.5, 9.5);
+  walkTo(room, anna, 2.5, 12.5);
   room.act(anna.playerId, { kind: 'interact' });
   const box = lastSpectatorView(audience.messages).puzzle;
   room.dispose();

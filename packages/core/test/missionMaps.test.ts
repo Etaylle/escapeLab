@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { parseMission } from '../src/index.js';
+import { canSee, parseMission } from '../src/index.js';
 import type { Mission } from '../src/index.js';
 import {
   canStandAt,
@@ -8,6 +8,7 @@ import {
   reachability,
   tileKey,
   twoAtOnce,
+  walkable,
   type Spot,
 } from '../src/reach.js';
 
@@ -181,12 +182,61 @@ describe.each(missions.map((m) => [m.id, m] as const))('mission %s', (_id, missi
   });
 });
 
+const STEPS = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+] as const;
+
+/**
+ * Each floor tile's room, as the clients dress it: the floor no door cuts
+ * off, shared out to the label nearest by walking — by the label's name.
+ */
+function roomsOf(map: Mission['map']): Map<string, string> {
+  const doors = new Set(map.doors.map((d) => tileKey(d.x, d.y)));
+  const rooms = new Map<string, string>();
+  const queue: (Spot & { room: string })[] = [];
+  const claim = (x: number, y: number, room: string): void => {
+    const key = tileKey(x, y);
+    if (map.tiles[y]?.charAt(x) === '.' && !doors.has(key) && !rooms.has(key)) {
+      rooms.set(key, room);
+      queue.push({ x, y, room });
+    }
+  };
+  map.labels.forEach((label) => claim(label.x, label.y, label.text));
+  for (const at of queue) {
+    STEPS.forEach(([dx, dy]) => claim(at.x + dx, at.y + dy, at.room));
+  }
+  return rooms;
+}
+
+/** Steps from `from` to every tile it reaches, every door open, round `blocked` and furniture. */
+function stepsFrom(map: Mission['map'], from: Spot, blocked: ReadonlySet<string>): Map<string, number> {
+  const steps = new Map([[tileKey(from.x, from.y), 0]]);
+  const queue = [from];
+  for (const at of queue) {
+    for (const [dx, dy] of STEPS) {
+      const next = { x: at.x + dx, y: at.y + dy };
+      const key = tileKey(next.x, next.y);
+      if (!steps.has(key) && !blocked.has(key) && walkable(map, next.x, next.y)) {
+        steps.set(key, (steps.get(tileKey(at.x, at.y)) ?? 0) + 1);
+        queue.push(next);
+      }
+    }
+  }
+  return steps;
+}
+
 /**
  * Blackout's own design, beyond what every mission keeps: the fuse box of
  * the Notstrom-Kasten lies behind the Maschinenraum door, its meter outside
  * where whoever holds the door's plate walks on to it. The plate holds the
  * door only until the box is safe, so from the Signalkette on everybody
- * walks to either console without anyone on it.
+ * walks to either console without anyone on it. Its rooms run in a loop, the
+ * crew starts out of each other's sight, the escape is a run across the lab,
+ * every room is furnished and the emergency lamps mark the lever and the
+ * corridors' doors.
  */
 describe('mission blackout by design', () => {
   const blackout = missions.find((m) => m.id === 'blackout');
@@ -241,6 +291,84 @@ describe('mission blackout by design', () => {
         canStandAt(alone, box),
         `the player starting at ${tileKey(spawn.x, spawn.y)} reaches the fuse box alone`,
       ).toBe(false);
+    }
+  });
+
+  it('starts nobody in sight of another: the crew has to find each other', () => {
+    const map = blackout.map;
+    const shut = new Set(map.doors.map((d) => tileKey(d.x, d.y)));
+    const middle = (spot: Spot): Spot => ({ x: spot.x + 0.5, y: spot.y + 0.5 });
+    for (const [i, one] of map.spawns.entries()) {
+      for (const other of map.spawns.slice(i + 1)) {
+        expect(
+          canSee(map, middle(one), middle(other), shut),
+          `the spawns ${tileKey(one.x, one.y)} and ${tileKey(other.x, other.y)} see each other`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  it('runs its rooms in a loop: the reactor lies both ways round, by the Serverraum or the Labor', () => {
+    const map = blackout.map;
+    const rooms = roomsOf(map);
+    const floorOf = (room: string): Set<string> =>
+      new Set([...rooms].filter(([, name]) => name === room).map(([key]) => key));
+    const flur = map.labels.find((label) => label.text === 'FLUR');
+    const reactor = map.stations.find((s) => s.puzzleId === 'reaktorstart');
+    if (flur === undefined || reactor === undefined) {
+      throw new Error('Blackout needs its FLUR and the reactor');
+    }
+    for (const room of ['SERVERRAUM', 'LABOR']) {
+      expect(
+        stepsFrom(map, flur, floorOf(room)).has(tileKey(reactor.x, reactor.y)),
+        `no way from the Flur to the reactor that keeps out of the ${room}`,
+      ).toBe(true);
+    }
+  });
+
+  it('makes the escape a run across the lab, both ways round as long, as the last crew noted', () => {
+    const map = blackout.map;
+    const rooms = roomsOf(map);
+    const floorOf = (room: string): Set<string> =>
+      new Set([...rooms].filter(([, name]) => name === room).map(([key]) => key));
+    const reactor = map.stations.find((s) => s.puzzleId === 'reaktorstart');
+    const exit = map.exit;
+    if (reactor === undefined || exit === undefined) {
+      throw new Error('Blackout needs the reactor and the hatch');
+    }
+    const way = (round: string): number | undefined =>
+      stepsFrom(map, reactor, floorOf(round)).get(tileKey(exit.x, exit.y));
+    // Round the Labor means by the Serverraum, and the other way round.
+    expect(way('LABOR')).toBeGreaterThanOrEqual(30);
+    expect(way('SERVERRAUM')).toBe(way('LABOR'));
+  });
+
+  it('furnishes every room with six pieces at least', () => {
+    const map = blackout.map;
+    const rooms = roomsOf(map);
+    for (const label of map.labels.filter((l) => l.kind !== 'corridor')) {
+      const pieces = map.decor.filter((d) => rooms.get(tileKey(d.x, d.y)) === label.text);
+      expect(pieces.length, `${label.text} has ${pieces.length} pieces`).toBeGreaterThanOrEqual(6);
+    }
+  });
+
+  it('hangs an emergency lamp by the lever and by every door off a corridor', () => {
+    const map = blackout.map;
+    const rooms = roomsOf(map);
+    const kinds = new Map(map.labels.map((label) => [label.text, label.kind]));
+    const lampBy = (spot: Spot): boolean =>
+      map.lamps.some((lamp) => Math.max(Math.abs(lamp.x - spot.x), Math.abs(lamp.y - spot.y)) <= 1);
+    const lever = map.stations.find((s) => s.puzzleId === blackout.puzzles[0]?.id);
+    expect(lever !== undefined && lampBy(lever), 'no lamp by the lever').toBe(true);
+    const offCorridor = map.doors.filter((door) =>
+      STEPS.some(([dx, dy]) => {
+        const room = rooms.get(tileKey(door.x + dx, door.y + dy));
+        return room !== undefined && kinds.get(room) === 'corridor';
+      }),
+    );
+    expect(offCorridor.length).toBeGreaterThan(0);
+    for (const door of offCorridor) {
+      expect(lampBy(door), `no lamp by "${door.id}"`).toBe(true);
     }
   });
 

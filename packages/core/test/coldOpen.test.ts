@@ -397,7 +397,7 @@ describe('Blackout opens on its lever', () => {
   it('keeps the power on for five seconds, then the lever is station one', () => {
     expect(blackout.intro).toEqual({ lightsSec: 5 });
     expect(first).toMatchObject({ type: 'button-sync', style: 'lever', id: 'notlicht' });
-    expect(lever).toEqual({ puzzleId: 'notlicht', x: 7, y: 5 });
+    expect(lever).toEqual({ puzzleId: 'notlicht', x: 11, y: 7 });
     expect(blackout.map.manuals.some((m) => m.puzzleIds.includes('notlicht'))).toBe(false);
   });
 

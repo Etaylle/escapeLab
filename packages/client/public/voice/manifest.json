@@ -41,13 +41,6 @@
       "kettenreaktion"
     ]
   },
-  "399852f490ca": {
-    "text": "Notausgang offen, Südostecke. Alle raus.",
-    "ms": 2975,
-    "missions": [
-      "blackout"
-    ]
-  },
   "3d87fba381b2": {
     "text": "Notausgang offen, Westende vom Flur. Alle drei hin.",
     "ms": 3451,
@@ -95,6 +88,13 @@
     "ms": 4159,
     "missions": [
       "doppelschicht"
+    ]
+  },
+  "6f47408843fc": {
+    "text": "Notausgang offen, Nordwestecke. Alle raus.",
+    "ms": 2998,
+    "missions": [
+      "blackout"
     ]
   },
   "7c8343fceedc": {

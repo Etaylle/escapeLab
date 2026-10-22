@@ -9,54 +9,57 @@
     "win": "Mit einem tiefen Brummen erwachen die Systeme, Licht flutet das Labor — und hinter euch fällt die Luke des Notausgangs ins Schloss. Alle draußen, die Zentrifugen laufen wieder. Ihr habt es geschafft.",
     "lose": "Ein letztes Flackern, dann ist es still. Die Notversorgung fällt aus, die Proben sind verloren. Das Labor bleibt dunkel … bis zum nächsten Versuch."
   },
-  "timeLimitSec": 660,
+  "timeLimitSec": 780,
   "intro": { "lightsSec": 5 },
   "radio": {
     "start": "Strom weg. Notlicht: Hebel im Flur, zu zweit.",
-    "escape": "Notausgang offen, Südostecke. Alle raus."
+    "escape": "Notausgang offen, Nordwestecke. Alle raus."
   },
   "map": {
     "tiles": [
-      "###################",
-      "#.....#...........#",
-      "#.#.#.#.#.#.#.#...#",
-      "#.....#...........#",
-      "###.#######.#######",
-      "#........#........#",
-      "#.................#",
-      "####.#####.########",
-      "#.....#.....#.....#",
-      "#.....#...........#",
-      "#.#.#.#.....#.###.#",
-      "#.....#.....#.....#",
-      "###################"
+      "###################        ",
+      "#.......#.........#        ",
+      "#.......#....#....#########",
+      "#.......#.........#.......#",
+      "#.......#....#....#.......#",
+      "#.......#.................#",
+      "####.##########.#######...#",
+      "#.....................#...#",
+      "#.........#...........#...#",
+      "#.....................#...#",
+      "####.###################.##",
+      "#.......#......#...#......#",
+      "#.......#....#.#...#......#",
+      "#....#....................#",
+      "#.......#......#...#......#",
+      "#.......#......#...#......#",
+      "###########################"
     ],
     "spawns": [
-      { "x": 3, "y": 2 },
-      { "x": 1, "y": 6 },
-      { "x": 6, "y": 5 }
+      { "x": 3, "y": 3 },
+      { "x": 1, "y": 8 },
+      { "x": 21, "y": 8 }
     ],
     "doors": [
-      { "id": "maschinentuer", "x": 4, "y": 7, "opensBy": { "kind": "plate", "plateId": "flurplatte", "untilSolved": "notstrom" } },
-      { "id": "flurschott", "x": 9, "y": 6, "opensBy": { "kind": "puzzle", "puzzleId": "signalkette" } },
-      { "id": "servertuer", "x": 11, "y": 4, "opensBy": { "kind": "plate", "plateId": "serverplatte" } },
-      { "id": "labortuer", "x": 10, "y": 7, "opensBy": { "kind": "puzzle", "puzzleId": "subsysteme" } },
-      { "id": "reaktortuer", "x": 12, "y": 9, "opensBy": { "kind": "puzzle", "puzzleId": "frequenz" } }
+      { "id": "maschinentuer", "x": 4, "y": 10, "opensBy": { "kind": "plate", "plateId": "flurplatte", "untilSolved": "notstrom" } },
+      { "id": "serverschott", "x": 15, "y": 6, "opensBy": { "kind": "puzzle", "puzzleId": "signalkette" } },
+      { "id": "labortuer", "x": 8, "y": 13, "opensBy": { "kind": "puzzle", "puzzleId": "subsysteme" } },
+      { "id": "reaktortuer", "x": 19, "y": 13, "opensBy": { "kind": "puzzle", "puzzleId": "frequenz" } },
+      { "id": "reaktorschott", "x": 24, "y": 10, "opensBy": { "kind": "puzzle", "puzzleId": "frequenz" } }
     ],
     "plates": [
-      { "id": "flurplatte", "x": 7, "y": 6, "label": "HALTEN" },
-      { "id": "serverplatte", "x": 16, "y": 6, "label": "HALTEN" },
-      { "id": "kameraplatte", "x": 11, "y": 5, "label": "KAMERA HALTEN" }
+      { "id": "flurplatte", "x": 6, "y": 9, "label": "HALTEN" },
+      { "id": "kameraplatte", "x": 16, "y": 7, "label": "KAMERA HALTEN" }
     ],
     "stations": [
-      { "puzzleId": "notlicht", "x": 7, "y": 5 },
-      { "puzzleId": "notstrom", "x": 1, "y": 9, "console": "a" },
-      { "puzzleId": "notstrom", "x": 5, "y": 6, "console": "b" },
-      { "puzzleId": "signalkette", "x": 8, "y": 5, "console": "a" },
-      { "puzzleId": "signalkette", "x": 4, "y": 9, "console": "b" },
-      { "puzzleId": "subsysteme", "x": 13, "y": 5 },
-      { "puzzleId": "frequenz", "x": 11, "y": 11 },
-      { "puzzleId": "reaktorstart", "x": 15, "y": 9 }
+      { "puzzleId": "notlicht", "x": 11, "y": 7 },
+      { "puzzleId": "notstrom", "x": 1, "y": 12, "console": "a" },
+      { "puzzleId": "notstrom", "x": 2, "y": 7, "console": "b" },
+      { "puzzleId": "signalkette", "x": 19, "y": 7, "console": "a" },
+      { "puzzleId": "signalkette", "x": 7, "y": 15, "console": "b" },
+      { "puzzleId": "subsysteme", "x": 9, "y": 3 },
+      { "puzzleId": "frequenz", "x": 9, "y": 15 },
+      { "puzzleId": "reaktorstart", "x": 25, "y": 13 }
     ],
     "manuals": [
       {
@@ -64,78 +67,103 @@
         "kind": "book",
         "label": "HANDBUCH",
         "puzzleIds": ["notstrom"],
-        "spots": [{ "x": 2, "y": 1 }, { "x": 1, "y": 2 }]
+        "spots": [{ "x": 6, "y": 1 }, { "x": 7, "y": 3 }]
       },
       {
         "id": "klemmbrett",
         "kind": "clipboard",
         "label": "KLEMMBRETT",
         "puzzleIds": ["signalkette"],
-        "spots": [{ "x": 1, "y": 5 }, { "x": 5, "y": 2 }]
+        "spots": [{ "x": 8, "y": 9 }, { "x": 14, "y": 9 }]
       },
       {
         "id": "spind",
         "kind": "locker",
         "label": "SPIND",
         "puzzleIds": ["subsysteme"],
-        "spots": [{ "x": 17, "y": 6 }, { "x": 17, "y": 2 }]
+        "spots": [{ "x": 13, "y": 1 }, { "x": 13, "y": 5 }]
       },
       {
         "id": "aktenschrank",
         "kind": "cabinet",
         "label": "AKTENSCHRANK",
         "puzzleIds": ["frequenz"],
-        "spots": [{ "x": 7, "y": 8 }, { "x": 8, "y": 8 }, { "x": 7, "y": 10 }],
+        "spots": [{ "x": 14, "y": 11 }, { "x": 14, "y": 15 }, { "x": 12, "y": 11 }],
         "needsKey": "schluessel"
       }
     ],
-    "edgeworkSign": { "x": 4, "y": 3 },
+    "edgeworkSign": { "x": 2, "y": 3 },
     "lamps": [
-      { "x": 7, "y": 4 },
-      { "x": 4, "y": 6 },
-      { "x": 8, "y": 6 },
-      { "x": 10, "y": 6 },
-      { "x": 12, "y": 4 }
+      { "x": 11, "y": 6 },
+      { "x": 5, "y": 10 },
+      { "x": 14, "y": 6 },
+      { "x": 25, "y": 10 },
+      { "x": 19, "y": 12 }
     ],
     "labels": [
-      { "text": "ARCHIV", "x": 4, "y": 1, "kind": "archive" },
-      { "text": "SERVERRAUM", "x": 12, "y": 1, "kind": "server" },
-      { "text": "FLUR", "x": 5, "y": 5, "kind": "corridor" },
-      { "text": "FLUR", "x": 15, "y": 5, "kind": "corridor" },
-      { "text": "MASCHINENRAUM", "x": 3, "y": 8, "kind": "machine" },
-      { "text": "LABOR", "x": 9, "y": 8, "kind": "lab" },
-      { "text": "REAKTOR", "x": 15, "y": 8, "kind": "reactor" }
+      { "text": "ARCHIV", "x": 4, "y": 2, "kind": "archive" },
+      { "text": "SERVERRAUM", "x": 13, "y": 3, "kind": "server" },
+      { "text": "FLUR", "x": 5, "y": 8, "kind": "corridor" },
+      { "text": "FLUR", "x": 17, "y": 8, "kind": "corridor" },
+      { "text": "OST-FLUR", "x": 21, "y": 4, "kind": "corridor" },
+      { "text": "MASCHINENRAUM", "x": 4, "y": 12, "kind": "machine" },
+      { "text": "LABOR", "x": 11, "y": 13, "kind": "lab" },
+      { "text": "SÜD-FLUR", "x": 17, "y": 13, "kind": "corridor" },
+      { "text": "REAKTOR", "x": 21, "y": 12, "kind": "reactor" }
     ],
     "decor": [
-      { "kind": "cart", "x": 1, "y": 3 },
-      { "kind": "shelf", "x": 5, "y": 3, "variant": 1 },
-      { "kind": "rack", "x": 8, "y": 1, "variant": 0 },
-      { "kind": "rack", "x": 10, "y": 1, "variant": 1 },
-      { "kind": "rack", "x": 12, "y": 1, "variant": 2 },
-      { "kind": "rack", "x": 14, "y": 1, "variant": 3 },
-      { "kind": "barrel", "x": 5, "y": 8, "variant": 0 },
-      { "kind": "generator", "x": 1, "y": 11 },
-      { "kind": "pipes", "x": 3, "y": 11 },
-      { "kind": "barrel", "x": 5, "y": 11, "variant": 2 },
+      { "kind": "cart", "x": 1, "y": 5 },
+      { "kind": "shelf", "x": 2, "y": 2, "variant": 0 },
+      { "kind": "shelf", "x": 3, "y": 2, "variant": 1 },
+      { "kind": "shelf", "x": 5, "y": 2, "variant": 2 },
+      { "kind": "shelf", "x": 6, "y": 2, "variant": 3 },
+      { "kind": "shelf", "x": 2, "y": 4, "variant": 1 },
+      { "kind": "shelf", "x": 3, "y": 4, "variant": 2 },
+      { "kind": "shelf", "x": 5, "y": 4, "variant": 3 },
+      { "kind": "shelf", "x": 6, "y": 4, "variant": 0 },
+      { "kind": "rack", "x": 10, "y": 2, "variant": 0 },
+      { "kind": "rack", "x": 11, "y": 2, "variant": 1 },
+      { "kind": "rack", "x": 12, "y": 2, "variant": 2 },
+      { "kind": "rack", "x": 14, "y": 2, "variant": 3 },
+      { "kind": "rack", "x": 15, "y": 2, "variant": 0 },
+      { "kind": "rack", "x": 16, "y": 2, "variant": 1 },
+      { "kind": "rack", "x": 10, "y": 4, "variant": 2 },
+      { "kind": "rack", "x": 11, "y": 4, "variant": 3 },
+      { "kind": "rack", "x": 12, "y": 4, "variant": 0 },
+      { "kind": "rack", "x": 14, "y": 4, "variant": 1 },
+      { "kind": "rack", "x": 15, "y": 4, "variant": 2 },
+      { "kind": "rack", "x": 16, "y": 4, "variant": 3 },
+      { "kind": "generator", "x": 2, "y": 14, "variant": 0 },
+      { "kind": "generator", "x": 3, "y": 14, "variant": 1 },
+      { "kind": "pipes", "x": 6, "y": 11, "variant": 0 },
+      { "kind": "pipes", "x": 7, "y": 11, "variant": 1 },
+      { "kind": "barrel", "x": 1, "y": 15, "variant": 0 },
+      { "kind": "barrel", "x": 5, "y": 15, "variant": 2 },
       { "kind": "hood", "x": 9, "y": 11 },
-      { "kind": "bench", "x": 7, "y": 11, "variant": 0 },
-      { "kind": "bench", "x": 8, "y": 11, "variant": 1 },
-      { "kind": "cables", "x": 14, "y": 8, "variant": 0 },
-      { "kind": "core", "x": 15, "y": 8 },
-      { "kind": "cables", "x": 16, "y": 8, "variant": 1 },
-      { "kind": "desk", "x": 13, "y": 11, "variant": 1 }
+      { "kind": "bench", "x": 10, "y": 11, "variant": 0 },
+      { "kind": "bench", "x": 11, "y": 11, "variant": 1 },
+      { "kind": "bench", "x": 10, "y": 14, "variant": 2 },
+      { "kind": "bench", "x": 11, "y": 14, "variant": 3 },
+      { "kind": "bench", "x": 12, "y": 14, "variant": 0 },
+      { "kind": "core", "x": 22, "y": 13 },
+      { "kind": "cables", "x": 21, "y": 13, "variant": 0 },
+      { "kind": "cables", "x": 23, "y": 13, "variant": 1 },
+      { "kind": "cables", "x": 22, "y": 12, "variant": 2 },
+      { "kind": "cables", "x": 22, "y": 14, "variant": 3 },
+      { "kind": "desk", "x": 20, "y": 15, "variant": 0 },
+      { "kind": "desk", "x": 25, "y": 15, "variant": 1 }
     ],
-    "exit": { "x": 17, "y": 11 },
+    "exit": { "x": 1, "y": 1 },
     "items": [
       {
         "id": "ersatzsicherung",
         "label": "SICHERUNG",
-        "x": 5,
-        "y": 1,
-        "deliverTo": { "x": 16, "y": 9 },
+        "x": 7,
+        "y": 5,
+        "deliverTo": { "x": 25, "y": 12 },
         "requiredFor": "reaktorstart"
       },
-      { "id": "schluessel", "label": "SCHLÜSSEL", "x": 7, "y": 3 }
+      { "id": "schluessel", "label": "SCHLÜSSEL", "x": 17, "y": 1 }
     ],
     "sabotage": {
       "mode": "relay",
@@ -153,8 +181,16 @@
       {
         "id": "flurwache",
         "waypoints": [
-          { "x": 2, "y": 6 },
-          { "x": 16, "y": 6 }
+          { "x": 24, "y": 7 },
+          { "x": 24, "y": 5 },
+          { "x": 17, "y": 5 },
+          { "x": 15, "y": 5 },
+          { "x": 15, "y": 8 },
+          { "x": 13, "y": 8 },
+          { "x": 15, "y": 8 },
+          { "x": 15, "y": 5 },
+          { "x": 17, "y": 5 },
+          { "x": 24, "y": 5 }
         ],
         "speed": 1.7,
         "range": 4.5,
@@ -166,8 +202,13 @@
       {
         "id": "laborwache",
         "waypoints": [
-          { "x": 7, "y": 9 },
-          { "x": 11, "y": 9 }
+          { "x": 17, "y": 11 },
+          { "x": 17, "y": 15 },
+          { "x": 17, "y": 13 },
+          { "x": 13, "y": 13 },
+          { "x": 13, "y": 15 },
+          { "x": 13, "y": 13 },
+          { "x": 17, "y": 13 }
         ],
         "speed": 1.3,
         "range": 4,
@@ -209,7 +250,8 @@
       "legend": true,
       "fleetingFrom": 3,
       "hints": [
-        "Die Legende am Klemmbrett nennt je Pult die Zeile einer Farbe; ab Stufe 3 laufen die Zeichen durch."
+        "Die Legende am Klemmbrett nennt je Pult die Zeile einer Farbe; ab Stufe 3 laufen die Zeichen durch.",
+        "Kein Zufall: Die Nachtschicht hat die Kühlung überbrückt, damit die Zentrifugen durchlaufen. Um 23:47 kam der Knall."
       ],
       "lights": ["SERVERRAUM"],
       "onSolved": "Schott offen. Drohne wach – Kameraplatte vor dem Serverraum."
@@ -220,7 +262,8 @@
       "title": "Leitungsnetz",
       "size": 6,
       "hints": [
-        "Der Schaltplan zeigt die Wände, das Navigationspult Marker und Ziel. Der Weg lässt sich vom Ziel rückwärts finden."
+        "Der Schaltplan zeigt die Wände, das Navigationspult Marker und Ziel. Der Weg lässt sich vom Ziel rückwärts finden.",
+        "Drei Tickets wegen der Lüfter, keins bearbeitet. Brennt hier nachts ein Rack durch: gemeldet war es. – Admin"
       ],
       "lights": ["LABOR"],
       "onSolved": "Labortür offen, Drohne drin. Aktenschrank braucht den Schlüssel."
@@ -230,7 +273,8 @@
       "id": "frequenz",
       "title": "Frequenz-Abgleich",
       "hints": [
-        "Nach der langen Pause beginnt das Wort. Die Morsetafel gibt die ersten 3 Buchstaben, die Frequenztabelle die Frequenz."
+        "Nach der langen Pause beginnt das Wort. Die Morsetafel gibt die ersten 3 Buchstaben, die Frequenztabelle die Frequenz.",
+        "Wir sind vom Reaktor zur Luke im Archiv gerannt. Beide Wege sind gleich weit: durchs Labor oder am Serverraum vorbei."
       ],
       "lights": ["REAKTOR"],
       "onSolved": "Reaktor offen. Ohne Ersatzsicherung bleibt er tot."

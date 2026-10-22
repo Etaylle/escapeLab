@@ -151,16 +151,16 @@ describe('powerRoom — the room the power lights round you before the blackout'
       readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8'),
     ) as { map: { tiles: string[]; doors: { id: string; x: number; y: number }[] } };
     const doorsShut = lab.doors.map((door) => ({ ...door, open: false }));
-    const lit = powerRoom({ tiles: lab.tiles, doors: doorsShut }, { x: 3.5, y: 2.5 });
+    const lit = powerRoom({ tiles: lab.tiles, doors: doorsShut }, { x: 3.5, y: 3.5 });
     const shown = lit?.keys ?? new Set<string>();
-    // The book at 2,1, the fuse at 5,1, the sign at 4,3; through the open passage at 3,4 the
-    // Flur with the lever at 7,5 and its plate at 7,6 — the crew sees the lever once in light.
-    for (const tile of ['2,1', '5,1', '4,3', '3,4', '3,6', '7,5', '7,6']) {
+    // The book at 6,1 or 7,3, the fuse at 7,5, the sign at 2,3; through the archway at 4,6 the
+    // Flur with the lever at 11,7 and the plate at 6,9 — the crew sees the lever once in light.
+    for (const tile of ['6,1', '7,3', '7,5', '2,3', '4,6', '11,7', '6,9', '21,8']) {
       expect(shown.has(tile)).toBe(true);
     }
-    // The key in the Serverraum at 7,3 and the Serverraum itself, the Labor, the Maschinenraum
-    // behind its door, the Flur beyond the bulkhead: dark.
-    for (const tile of ['7,3', '12,1', '9,8', '3,9', '12,6']) {
+    // The key in the Serverraum at 17,1 and the Serverraum itself behind its bulkhead, the
+    // Ost-Flur beyond it, the Maschinenraum behind its door, the Labor, the Reaktor: dark.
+    for (const tile of ['17,1', '13,3', '21,4', '3,12', '11,13', '22,11']) {
       expect(shown.has(tile)).toBe(false);
     }
   });

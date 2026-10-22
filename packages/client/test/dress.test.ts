@@ -62,20 +62,22 @@ describe('dressMap — every room dressed after its kind, the same every run', (
       rooms[y * width + x],
       kinds[y * width + x],
     ];
-    expect(at(3, 2)).toEqual(['ARCHIV', 'archive']);
-    expect(at(3, 5)).toEqual(['FLUR', 'corridor']);
-    expect(at(13, 2)).toEqual(['SERVERRAUM', 'server']);
-    expect(at(2, 9)).toEqual(['MASCHINENRAUM', 'machine']);
-    expect(at(15, 9)).toEqual(['REAKTOR', 'reactor']);
+    expect(at(3, 3)).toEqual(['ARCHIV', 'archive']);
+    expect(at(4, 7)).toEqual(['FLUR', 'corridor']);
+    expect(at(13, 3)).toEqual(['SERVERRAUM', 'server']);
+    expect(at(3, 12)).toEqual(['MASCHINENRAUM', 'machine']);
+    expect(at(23, 12)).toEqual(['REAKTOR', 'reactor']);
+    // The Ost-Flur opens on the Serverraum through an archway, and keeps its own floor too.
+    expect(at(19, 4)).toEqual(['OST-FLUR', 'corridor']);
   });
 
   it('shows a wall with a face in the kind of the room it looks into, plain without one', () => {
     const { kinds, walls, width } = dressMap(blackout, seedOf('blackout'));
-    // (8,2) is a pillar in the server room: floor east, west and south of it.
-    expect(walls[2 * width + 8]).toBe(FLOOR_E | FLOOR_S | FLOOR_W | 1);
-    expect(kinds[2 * width + 8]).toBe('server');
-    // (0,5) is the outer wall west of the corridor: no face.
-    expect(kinds[5 * width + 0]).toBe('plain');
+    // (13,2) is a pillar in the server room: floor on all four sides of it.
+    expect(walls[2 * width + 13]).toBe(FLOOR_E | FLOOR_S | FLOOR_W | 1);
+    expect(kinds[2 * width + 13]).toBe('server');
+    // (0,8) is the outer wall west of the corridor: no face.
+    expect(kinds[8 * width + 0]).toBe('plain');
   });
 
   it('dusts the corners, wears a band along a room’s length, stripes the core’s floor', () => {
@@ -84,21 +86,22 @@ describe('dressMap — every room dressed after its kind, the same every run', (
     expect(variants).toContain(CORNER_NW);
     // The corridor runs east–west: its wear runs across.
     expect(variants.filter((v) => v === WORN_ACROSS).length).toBeGreaterThan(4);
-    // The floor round the reactor's core at (15,8).
-    expect(floor[9 * width + 14]).toBe(3);
-    expect(floor[9 * width + 16]).toBe(3);
+    // The floor round the reactor's core at (22,13).
+    expect(floor[13 * width + 21]).toBe(3);
+    expect(floor[12 * width + 23]).toBe(3);
   });
 
   it('puts rack fronts on the server room’s pillars, warning stripes beside its doors', () => {
     const { props } = dressMap(blackout, seedOf('blackout'));
     const prop = (x: number, y: number): string | undefined =>
       props.find((p) => p.x === x && p.y === y)?.kind;
-    for (const x of [8, 10, 12, 14]) {
-      expect(prop(x, 2)).toBe('rack');
+    for (const y of [2, 4]) {
+      expect(prop(13, y)).toBe('rack');
     }
-    // The walls beside the Labor's door at (10,7) look into the Labor below.
-    expect(prop(9, 7)).toBe('stripes');
-    expect(prop(11, 7)).toBe('stripes');
+    // Beside the Serverschott at (15,6) and the Maschinenraum's door at (4,10) the walls look
+    // down on the floor below them; on their other sides hang emergency lamps.
+    expect(prop(16, 6)).toBe('stripes');
+    expect(prop(3, 10)).toBe('stripes');
   });
 
   it('hangs nothing on a wall an emergency lamp hangs on, and a clock once a room at most', () => {
