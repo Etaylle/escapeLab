@@ -6,7 +6,10 @@ import {
   puzzleDefSchema,
   type ConsoleId,
   type PuzzleView,
+  type RackUnit,
   type RelayView,
+  type ServerLogLine,
+  type ServerRow,
 } from '@escapelab/core';
 import type { Panel as PanelOf } from '../src/puzzles/index.js';
 
@@ -629,5 +632,127 @@ describe('the relay console', () => {
     );
     expect(html).toContain('<button class="relay-switch " data-feel="clack"');
     expect(html.match(/data-feel="detent"/g)).toHaveLength(5);
+  });
+});
+
+describe('the Serverraum', () => {
+  type Servers = ViewOf<'servers'>;
+  const at = (seat: ConsoleId, change: Partial<Servers> = {}): Servers => ({
+    ...seen('servers', {}, seat),
+    ...change,
+  });
+  const line = (n: number, tag: ServerLogLine['tag'], text: string): ServerLogLine => ({
+    n,
+    tag,
+    text,
+  });
+  const ROWS: ServerRow[] = [
+    { service: 'netz', running: true, code: null, power: true },
+    { service: 'dns', running: true, code: null, power: true },
+    { service: 'db', running: false, code: 'E23', power: true },
+    { service: 'auth', running: false, code: 'E42', power: false },
+    { service: 'web', running: false, code: 'E11', power: false },
+    { service: 'mail', running: false, code: 'E50', power: true },
+  ];
+  const RACK: RackUnit[] = ROWS.map(({ service, running, power }) => ({
+    service,
+    power,
+    led: !power ? 'off' : running ? 'green' : 'red',
+  }));
+  const terminal = (log: ServerLogLine[], rows = ROWS): Servers => at('a', { rows, log });
+  const rack = (units = RACK): Servers => at('b', { rack: units });
+  const turnedOn = (service: string, led: RackUnit['led']) =>
+    RACK.map((unit) => (unit.service === service ? { ...unit, power: true, led } : unit));
+
+  it('chimes for a line come up OK and types it in, the line alone', () => {
+    const before = terminal([line(1, 'info', 'db: Strom an')]);
+    const after = terminal([...(before.log ?? []), line(2, 'ok', 'db läuft')]);
+    soundsOf('servers', before, after);
+    expect(sounds.okChime).toHaveBeenCalledTimes(1);
+    expect(sounds.rejectBuzz).not.toHaveBeenCalled();
+    const html = panelAfter('servers', before, after);
+    expect(html).toContain(
+      '<li class="servers-line servers-line--ok servers-line--new" data-n="2"',
+    );
+    expect(html.match(/servers-line--new/g)).toHaveLength(1);
+  });
+
+  it('buzzes for a failed line, the device’s klaxon after it, one of each', () => {
+    const before = terminal([line(1, 'ok', 'netz läuft')]);
+    const after = terminal([...(before.log ?? []), line(2, 'fail', 'db: Fehler bleibt: E23')]);
+    feelChange(changed(before, after, true), SOUNDS.servers as never, vi.fn());
+    expect(sounds.rejectBuzz).toHaveBeenCalledTimes(1);
+    expect(sounds.alarmKlaxon).toHaveBeenCalledTimes(1);
+    expect(sounds.okChime).not.toHaveBeenCalled();
+    const html = panelAfter('servers', before, after, true);
+    expect(html).toContain('servers-line servers-line--fail servers-line--new');
+  });
+
+  it('keeps quiet for the rack’s switches at the terminal, and for a new copy of the view', () => {
+    const before = terminal([line(1, 'ok', 'netz läuft')]);
+    const told = terminal([...(before.log ?? []), line(2, 'info', 'web: Strom an')]);
+    soundsOf('servers', before, told);
+    soundsOf('servers', told, told);
+    soundsOf('servers', rack(), rack());
+    for (const sound of [sounds.okChime, sounds.rejectBuzz, sounds.spinUp, sounds.lampPop]) {
+      expect(sound).not.toHaveBeenCalled();
+    }
+  });
+
+  it('spins a server up as its LED goes green at the rack, pops an LED on red', () => {
+    soundsOf('servers', rack(), rack(turnedOn('db', 'green')));
+    expect(sounds.spinUp).toHaveBeenCalledTimes(1);
+    expect(sounds.lampPop).not.toHaveBeenCalled();
+    soundsOf('servers', rack(), rack(turnedOn('auth', 'red')));
+    expect(sounds.lampPop).toHaveBeenCalledTimes(1);
+    const html = panelAfter('servers', rack(), rack(turnedOn('auth', 'red')));
+    expect(html.match(/device-lamp--fresh/g)).toHaveLength(1);
+    expect(html).toMatch(/data-service="auth">.*?device-lamp device-lamp--red device-lamp--fresh/);
+  });
+
+  it('scrolls the screen in as the terminal opens, and only what a change brought after', () => {
+    const opened = renderToStaticMarkup(
+      <PANELS.servers puzzle={terminal([])} change={null} send={noop} deadlineAt={null} />,
+    );
+    expect(opened).toContain('<div class="servers-crt servers-crt--boot">');
+    const after = panelAfter('servers', terminal([]), terminal([line(1, 'ok', 'db läuft')]));
+    expect(after).toContain('<div class="servers-crt">');
+  });
+
+  it('flashes the rows a change turned: up, down, switched', () => {
+    const up = ROWS.map((row) =>
+      row.service === 'db' ? { ...row, running: true, code: null } : row,
+    );
+    const html = panelAfter('servers', terminal([]), terminal([], up));
+    expect(html.match(/servers-row--turned/g)).toHaveLength(1);
+    expect(html).toContain(
+      '<tr class="servers-row servers-row--running servers-row--turned" data-service="db"',
+    );
+  });
+
+  it('stands done for its solved hold where it shows the codes, and as seen at the rack', () => {
+    const held = heldView(terminal([]), 1);
+    expect(held?.kind === 'servers' ? held.rows : null).toEqual(
+      ROWS.map((row) =>
+        row.code === 'E50'
+          ? { ...row, power: false }
+          : { ...row, running: true, code: null, power: true },
+      ),
+    );
+    // The rack cannot tell the quarantined unit from the last one started.
+    const atRack = rack();
+    expect(heldView(atRack, 1)).toBe(atRack);
+    // The audience sees the codes, and so the rack done as well.
+    const watched = { ...terminal([]), console: null, role: null, rack: RACK };
+    const done = heldView(watched, 1);
+    expect(done?.kind === 'servers' ? done.rack?.map((unit) => unit.led) : null).toEqual([
+      'green',
+      'green',
+      'green',
+      'green',
+      'green',
+      'off',
+    ]);
+    expect(heldView(terminal([]), 0)).toBeNull();
   });
 });

@@ -1,0 +1,63 @@
+{
+  "id": "custom-serverprobe",
+  "title": "Serverprobe",
+  "subtitle": "Terminal im Leitstand, Rack im Serverraum, die Regeln im Spind.",
+  "players": { "min": 2, "max": 2 },
+  "timeLimitSec": 600,
+  "story": {
+    "intro": "Das Leitnetz ist ausgefallen. Codes am Terminal, Schalter am Rack, Regeln im Spind.",
+    "win": "Alle Dienste laufen, die Crew ist draußen.",
+    "lose": "Die Zeit ist um."
+  },
+  "puzzles": [
+    {
+      "type": "servers",
+      "id": "serverraum",
+      "title": "Serverraum",
+      "crashed": 4,
+      "trap": true,
+      "hints": ["Zuerst E50 vom Strom, dann die Dienste der Reihe nach von NETZ aus."],
+      "lights": ["SERVERRAUM"],
+      "onSolved": "Leitnetz steht. Beide zum Ausgang."
+    }
+  ],
+  "map": {
+    "tiles": [
+      "###################",
+      "#........#........#",
+      "#........#........#",
+      "#.................#",
+      "#........#........#",
+      "#........#........#",
+      "###################"
+    ],
+    "spawns": [
+      { "x": 2, "y": 3 },
+      { "x": 16, "y": 3 }
+    ],
+    "stations": [
+      { "puzzleId": "serverraum", "x": 4, "y": 1, "console": "a" },
+      { "puzzleId": "serverraum", "x": 13, "y": 1, "console": "b" }
+    ],
+    "manuals": [
+      {
+        "id": "spind",
+        "kind": "locker",
+        "label": "SPIND",
+        "puzzleIds": ["serverraum"],
+        "spots": [{ "x": 7, "y": 5 }]
+      }
+    ],
+    "labels": [
+      { "text": "LEITSTAND", "x": 4, "y": 4, "kind": "control" },
+      { "text": "SERVERRAUM", "x": 13, "y": 4, "kind": "server" }
+    ],
+    "decor": [
+      { "kind": "desk", "x": 6, "y": 1, "variant": 0 },
+      { "kind": "rack", "x": 15, "y": 1 },
+      { "kind": "rack", "x": 16, "y": 1 },
+      { "kind": "rack", "x": 17, "y": 1 }
+    ],
+    "exit": { "x": 17, "y": 5 }
+  }
+}

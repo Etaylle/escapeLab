@@ -651,6 +651,38 @@ export function typeBlip(): void {
   sound(0.03, (ctx, out, at) => [voice(ctx, out, steady('sine', at, 1760, beep))]);
 }
 
+/** [delay in s, pitch in Hz] of a terminal's OK: two short beeps a fourth apart, E6 then A6. */
+const OK_BEEPS = [
+  [0, 1318.5],
+  [0.09, 1760],
+] as const;
+
+/** A terminal's line coming up OK: two soft, short beeps rising a fourth, ~0.25 s. */
+export function okChime(): void {
+  const beep = { peak: 0.7, attack: 0.003, hold: 0.045, decay: 0.06 };
+  sound(0.03, (ctx, out, at) =>
+    OK_BEEPS.map(([delay, pitch]) => voice(ctx, out, steady('sine', at + delay, pitch, beep))),
+  );
+}
+
+/**
+ * A server in the rack spinning up, ~0.7 s: its drive's whine gliding up an octave and more,
+ * over a breath of its fans through a band that opens as they come up to speed.
+ */
+export function spinUp(): void {
+  sound(0.035, (ctx, out, at) => {
+    const fans = filter(ctx, 'bandpass', 500, 0.8);
+    fans.frequency.setValueAtTime(500, at);
+    fans.frequency.exponentialRampToValueAtTime(2400, at + 0.6);
+    fans.connect(out);
+    const fan: Hiss = { at, duration: 0.7, filter: 'highpass', frequency: 240, q: 0.5, peak: 0.6 };
+    return [
+      hiss(ctx, fans, fan),
+      voice(ctx, out, { type: 'triangle', at, from: 160, to: 540, ...long(0.4, 0.25, 0.3) }),
+    ];
+  });
+}
+
 /** A second held on the big button: a faint tick. */
 export function holdTick(): void {
   sound(0.025, (ctx, out, at) => [tick(ctx, out, at, 3200, 0.5)]);

@@ -330,10 +330,37 @@ export function closeAfterSolved(close: () => void): () => void {
 }
 
 /**
+ * The Serverraum as it stands done, where the view shows the codes: every service running
+ * but a quarantined one, which stands without power — on the rack too, for the audience. The
+ * rack alone cannot tell the quarantined unit from the last one started: it stays as seen.
+ */
+function serversDone(last: Extract<PuzzleView, { kind: 'servers' }>): PuzzleView {
+  const { rows } = last;
+  if (rows === null) {
+    return last;
+  }
+  const done = rows.map((row) =>
+    row.code === 'E50'
+      ? { ...row, power: false }
+      : { ...row, running: true, code: null, power: true },
+  );
+  const rack =
+    last.rack === null
+      ? null
+      : done.map(({ service, running }) => ({
+          service,
+          power: running,
+          led: running ? ('green' as const) : ('off' as const),
+        }));
+  return { ...last, rows: done, rack };
+}
+
+/**
  * The station `last` showed, solved by now (`solved` stations), as it stands done: a sync
  * station with every press in and no word of an earlier miss — a main switch with every
  * lever down — a keypad with every key lit, the Signalkette with every sign of its stage
- * in; any other as last seen. Null where it is not solved: only closed, or walked away from.
+ * in, the Serverraum's table up (`serversDone`); any other as last seen. Null where it is
+ * not solved: only closed, or walked away from.
  */
 export function heldView(last: PuzzleView, solved: number): PuzzleView | null {
   if (solved <= last.index) {
@@ -358,6 +385,8 @@ export function heldView(last: PuzzleView, solved: number): PuzzleView | null {
           };
     case 'signal':
       return { ...last, done: last.length };
+    case 'servers':
+      return serversDone(last);
     default:
       return last;
   }

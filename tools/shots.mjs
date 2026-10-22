@@ -161,6 +161,21 @@
  * the same mission in a page of its own (editor-shared.png). custom-probe is
  * deleted again through the API whatever happened before.
  *
+ * Serverraum: the editor, opened at /editor?seed=4, imports
+ * tools/fixtures/servers-probe.json („Serverprobe", custom-serverprobe) and
+ * starts its test run, pinned to that seed; a second page joins by code.
+ * The player nearer the terminal searches the locker and reads the rules
+ * (servers-manual.png), both man their console (servers-a.png, the
+ * terminal; servers-b.png, the rack — each has to fit sideways at
+ * 1440×820, 1280×720 and 420×760), and the terminal has to open on the
+ * table tools/fixtures/servers-plan.json was made for, or the run fails,
+ * naming the seed. Then the plan — core's solver's own, as core's test of
+ * the module keeps it — is played to the solve, the first command typed at
+ * the prompt and the rest put together on the keys; the run fails unless it
+ * solves without an alarm, and servers-solved.png catches the device as it
+ * stands done. The log says how long the moves took. The mission is deleted
+ * again whatever happened.
+ *
  * Art (a Blackout run only): before the walkthrough, a scratch copy of
  * Blackout — custom-blackout, ten seconds of power before the lights fail,
  * its two starts in the Archiv and the Maschinenraum — is saved through the
@@ -3260,14 +3275,14 @@ async function saveProbe(page) {
 const PROBE_FILE = fileURLToPath(new URL('fixtures/probe-mission.json', import.meta.url));
 
 /**
- * The editor at its own address, the probe mission imported through
- * „Importieren"; a draft left unsaved there is discarded when the editor
- * asks.
+ * The editor at its own address (`path`), a mission file imported through
+ * „Importieren" — the probe's, „Probe", unless told otherwise; a draft left
+ * unsaved there is discarded when the editor asks.
  */
-async function importProbe(page) {
-  await page.goto(paged(new URL('/editor', BASE).href));
+async function importProbe(page, file = PROBE_FILE, title = 'Probe', path = '/editor') {
+  await page.goto(paged(new URL(path, BASE).href));
   await page.locator('.editor-canvas').waitFor({ timeout: 10_000 });
-  await page.locator('.editor-actions input[type="file"]').setInputFiles(PROBE_FILE);
+  await page.locator('.editor-actions input[type="file"]').setInputFiles(file);
   const imported = page.locator('.editor-status', { hasText: 'importiert' });
   const asked = page.locator('.editor-confirm button', { hasText: 'Verwerfen' });
   await imported.or(asked).first().waitFor({ timeout: 5000 });
@@ -3275,7 +3290,7 @@ async function importProbe(page) {
     await asked.click();
     await imported.waitFor({ timeout: 5000 });
   }
-  await page.locator('.editor-name strong', { hasText: 'Probe' }).waitFor({ timeout: 5000 });
+  await page.locator('.editor-name strong', { hasText: title }).waitFor({ timeout: 5000 });
 }
 
 /**
@@ -3563,6 +3578,321 @@ async function captureArtTour() {
     }
     const gone = await api.delete(`/missions/custom/${ART_MISSION.id}`);
     console.log(`art tour           ${ART_MISSION.id} deleted again: ${gone.status()}`);
+    await api.dispose();
+  }
+}
+
+/**
+ * The Serverraum's scratch mission (tools/fixtures/servers-probe.json,
+ * „Serverprobe", custom-serverprobe) and the walkthrough of its pinned seed
+ * (servers-plan.json): the seed, the table the terminal opens on, and the
+ * moves core's solver plans for it from the two consoles' views. Node cannot
+ * load core's TypeScript, so the plan is carried; core's test of the module
+ * keeps it the solver's own, and the step below fails where the terminal
+ * opens on another table.
+ */
+const SERVERS_FILE = fileURLToPath(new URL('fixtures/servers-probe.json', import.meta.url));
+const SERVERS_MISSION = JSON.parse(readFileSync(SERVERS_FILE, 'utf8'));
+const SERVERS_PLAN = JSON.parse(
+  readFileSync(fileURLToPath(new URL('fixtures/servers-plan.json', import.meta.url)), 'utf8'),
+);
+
+/** A player of the Serverraum step, in a context of its own at laptop size. */
+async function serversPlayer(name) {
+  const context = await browser.newContext({ viewport: SIZES[0] });
+  const page = await openPage(context, `servers ${name}`);
+  page.on('pageerror', (e) => console.log(`[servers ${name} error]`, e.message));
+  return { name, page, seen: eavesdrop(page), context };
+}
+
+/**
+ * The editor at /editor?seed=<the plan's seed>, the scratch mission imported
+ * and started as its test run under `host`'s name: the room is pinned to the
+ * seed, as its lobby has to say. Returns the room's code.
+ */
+async function openServersRoom(host) {
+  const { title } = SERVERS_MISSION;
+  await importProbe(host.page, SERVERS_FILE, title, `/editor?seed=${SERVERS_PLAN.seed}`);
+  const play = host.page.locator('.editor-actions button:not([disabled])', {
+    hasText: 'Probespiel',
+  });
+  if (!(await attached(play, 3000))) {
+    throw new Error(`„${title}" stays unsound: ${(await editorErrors(host.page)).join(' | ')}`);
+  }
+  await play.click();
+  await host.page.locator('.editor-play input').fill(host.name);
+  await host.page.locator('.editor-play button[type="submit"]').click();
+  await host.page.locator('.lobby', { hasText: title }).waitFor({ timeout: 10_000 });
+  const code = (await host.page.locator('.room-code strong').innerText()).trim();
+  await host.page.locator('.room-seed').waitFor({ timeout: 3000 }).catch(() => undefined);
+  const seed = await textOf(host.page.locator('.room-seed'));
+  const pinned = seed === `Seed ${SERVERS_PLAN.seed}`;
+  console.log(
+    `servers            „${title}" imported at /editor, its test run in room ${code}, ` +
+      (pinned ? `pinned to seed ${SERVERS_PLAN.seed}` : `!! not pinned (${seed ?? 'no seed'})`),
+  );
+  if (!pinned) {
+    fail(`servers: the test run is not pinned to seed ${SERVERS_PLAN.seed} — ALLOW_SEED=1?`);
+  }
+  return code;
+}
+
+/** `guest` joins the room `code` from the join screen. */
+async function joinServersRoom(guest, code) {
+  await guest.page.goto(paged(BASE));
+  await guest.page.getByPlaceholder('z. B. Anna').fill(guest.name);
+  await guest.page.getByLabel('Raumcode').fill(code);
+  await clickText(guest.page, 'Beitreten');
+  await guest.page.locator('.lobby').waitFor({ timeout: 10_000 });
+}
+
+/**
+ * servers-manual.png: `reader` walks to the locker that holds the rules,
+ * searches it and reads them, the first page open. Throws where it cannot.
+ */
+async function readServersManual(reader) {
+  const [locker] = SERVERS_MISSION.map.manuals;
+  const [spot] = locker.spots;
+  if (!(await walkNear(reader.page, reader.seen, spot))) {
+    throw new Error(`${reader.name} found no way to the ${locker.label} at ${spot.x},${spot.y}`);
+  }
+  await until(() => reader.seen.view.sourcesHere?.some((s) => s.id === locker.id), 3000);
+  await reader.page.keyboard.press('e');
+  const opened = () => reader.seen.view.map.manuals.some((m) => m.id === locker.id && m.opened);
+  if (!(await until(opened, 3000))) {
+    throw new Error(`${reader.name} pressed E at the ${locker.label}, but it stayed shut`);
+  }
+  const overlay = reader.page.locator('.reading-modal');
+  if (!(await interactUntil(reader.page, overlay))) {
+    throw new Error(`${reader.name} searched the ${locker.label}, but no .reading-modal opened`);
+  }
+  await sleep(500); // past the page's fade-in
+  await capture(reader.page, 'servers-manual.png');
+  const where = await textOf(overlay.locator('.book-where, .terminal-status'));
+  const over = await sideways(reader.page, '.reading-modal .panel');
+  console.log(
+    `servers-manual.png ${reader.name} at the ${locker.label}: ${where ?? 'one sheet'}, ` +
+      `${await pagesRunningOver(reader.page)} page(s) run over, ` +
+      `panel ${over > 0 ? `!! +${over}px sideways` : 'fits sideways'}`,
+  );
+  await reader.page.keyboard.press('Escape');
+  await overlay.waitFor({ state: 'hidden', timeout: 3000 });
+}
+
+/**
+ * Whoever the draw put nearer console A works the terminal, the other one
+ * the rack. Returns them in that order.
+ */
+function serversSeats(players) {
+  const consoleA = players[0].seen.view.map.stations.find((s) => s.console === 'a');
+  return [...players].sort((p, q) => stepsTo(p.seen, consoleA) - stepsTo(q.seen, consoleA));
+}
+
+/**
+ * Both walk to their console and open its panel with E — the first E
+ * switches the station on. Throws unless the terminal and the rack show.
+ */
+async function manServers({ terminal, rack }) {
+  const stations = terminal.seen.view.map.stations;
+  const seats = [
+    [terminal, stations.find((s) => s.console === 'a')],
+    [rack, stations.find((s) => s.console === 'b')],
+  ];
+  for (const [player, spot] of seats) {
+    if (!(await walkNear(player.page, player.seen, spot))) {
+      const where = `console ${spot.console} at ${spot.x},${spot.y}`;
+      throw new Error(`${player.name} found no way to ${where}`);
+    }
+  }
+  for (const [player, spot] of seats) {
+    if (!(await interactUntil(player.page, player.page.locator('.station-modal')))) {
+      throw new Error(`${player.name} stands at console ${spot.console}, but no .station-modal`);
+    }
+  }
+  const role = (player) => player.seen.view.puzzle?.role ?? null;
+  if (!(await until(() => role(terminal) === 'terminal' && role(rack) === 'rack', 3000))) {
+    throw new Error(`the Serverraum's panels say ${role(terminal)} and ${role(rack)}`);
+  }
+}
+
+/** A table as one line of the log: „netz up, db E23, auth E42 off". */
+function tableSaid(rows) {
+  return (rows ?? [])
+    .map((row) => `${row.service} ${row.running ? 'up' : row.code}${row.power ? '' : ' off'}`)
+    .join(', ');
+}
+
+/**
+ * servers-a.png, servers-b.png: both panels at laptop size, the terminal's
+ * screen scrolled in; each has to fit sideways at 1440×820, 1280×720 and on
+ * a phone (420×760).
+ */
+async function captureServersConsoles({ terminal, rack }) {
+  await sleep(1400); // past the panels' fade-in and the terminal's boot scroll
+  await capture(terminal.page, 'servers-a.png');
+  await capture(rack.page, 'servers-b.png');
+  const sizes = [SIZES[0], { width: 1280, height: 720 }, SIZES[2]];
+  const over = [];
+  for (const player of [terminal, rack]) {
+    for (const { width, height } of sizes) {
+      await player.page.setViewportSize({ width, height });
+      await sleep(250);
+      const px = await sideways(player.page, '.station-modal .panel');
+      if (px > 0) {
+        over.push(`${player.name} @ ${width}x${height} +${px}px`);
+      }
+    }
+    await player.page.setViewportSize(SIZES[0]);
+  }
+  const table = tableSaid(terminal.seen.view.puzzle?.rows);
+  console.log(
+    `servers-a.png      ${terminal.name} at ${seatOf(terminal)}: ${table}; ` +
+      `servers-b.png ${rack.name} at ${seatOf(rack)}; ` +
+      (over.length === 0 ? 'both fit sideways at all three sizes' : `!! ${over.join(', ')}`),
+  );
+  if (over.length > 0) {
+    fail(`servers: a panel runs out sideways (${over.join(', ')})`);
+  }
+  await sleep(300);
+}
+
+/**
+ * One move of the plan at its console — a switch at the rack; a command at
+ * the terminal, typed at the prompt where `typed`, else put together on the
+ * keys and sent with ⏎ — and its effect in that console's view, or the
+ * solve. Returns the move as the log says it; throws where nothing shows.
+ */
+async function serversMove({ terminal, rack }, move, typed) {
+  const index = terminal.seen.view.currentPuzzleIndex;
+  const solved = () => terminal.seen.view.currentPuzzleIndex > index;
+  if (move.by === 'partner') {
+    const { power: service, on } = move.input;
+    await rack.page.locator(`.station-modal .servers-switch[data-service="${service}"]`).click();
+    const unit = () => rack.seen.view.puzzle?.rack?.find((u) => u.service === service);
+    if (!(await until(() => solved() || unit()?.power === on, 3000))) {
+      throw new Error(`${rack.name} switched ${service} ${on ? 'on' : 'off'}, but it stayed`);
+    }
+    return `B ${service} ${on ? 'an' : 'aus'}`;
+  }
+  const { cmd, service } = move.input;
+  const modal = terminal.page.locator('.station-modal');
+  const last = terminal.seen.view.puzzle?.log?.at(-1)?.n ?? 0;
+  if (typed) {
+    await modal.locator('.servers-input').click();
+    await terminal.page.keyboard.type(`${cmd} ${service}`, { delay: 40 });
+    await terminal.page.keyboard.press('Enter');
+  } else {
+    await modal.locator(`.servers-key[data-cmd="${cmd}"]`).click();
+    await modal.locator(`.servers-key[data-service="${service}"]`).click();
+    await modal.locator('.servers-key--enter').click();
+  }
+  const logged = () => (terminal.seen.view.puzzle?.log?.at(-1)?.n ?? 0) > last;
+  if (!(await until(() => solved() || logged(), 3000))) {
+    throw new Error(`${terminal.name} sent "${cmd} ${service}", but the log took no line`);
+  }
+  return `A ${cmd} ${service}${typed ? ' (getippt)' : ''}`;
+}
+
+/**
+ * servers-solved.png: the device right after the last move, solved — the
+ * terminal's table up, the status strip sweeping green — before it closes
+ * itself SOLVED_CLOSE_MS later. Returns when the shot came, ms after the
+ * device showed solved; null where it never did.
+ */
+async function captureServersSolved(player) {
+  const solved = player.page.locator('.station-modal .device--solved');
+  if (!(await attached(solved, 3000))) {
+    return null;
+  }
+  const seen = Date.now();
+  await capture(player.page, 'servers-solved.png');
+  return Date.now() - seen;
+}
+
+/**
+ * The plan played at both consoles, move by move, ~150 ms apart — the first
+ * command typed at the prompt, the rest put together on the keys — and the
+ * station solved by the last move, without an alarm.
+ */
+async function playServers(crew) {
+  const { terminal } = crew;
+  const index = terminal.seen.view.currentPuzzleIndex;
+  const alarms = terminal.seen.view.alarms.count;
+  const from = Date.now();
+  const said = [];
+  for (const move of SERVERS_PLAN.moves) {
+    const typed = move.by === 'operator' && !said.some((line) => line.startsWith('A '));
+    said.push(await serversMove(crew, move, typed));
+    if (said.length < SERVERS_PLAN.moves.length) {
+      await sleep(150);
+    }
+  }
+  const shot = await captureServersSolved(terminal);
+  const took = Date.now() - from;
+  const solved = await until(() => terminal.seen.view.currentPuzzleIndex > index, 3000);
+  const raised = terminal.seen.view.alarms.count - alarms;
+  const alarmed = raised === 0 ? 'no alarm' : `!! ${raised} alarm(s)`;
+  console.log(
+    `servers            ${said.length} moves in ${seconds(took)} (${said.join(', ')}): ` +
+      `${solved ? 'solved' : '!! not solved'}, ${alarmed}`,
+  );
+  console.log(
+    `servers-solved.png ${terminal.name}: ` +
+      (shot === null
+        ? '!! the device never showed solved'
+        : `shot ${shot} ms after it showed solved${shot >= SOLVED_CLOSE_MS ? ' (late)' : ''}`),
+  );
+  if (!solved || raised > 0 || shot === null) {
+    fail(`servers: the plan ended ${solved ? 'solved' : 'unsolved'} with ${raised} alarm(s)`);
+  }
+}
+
+/**
+ * The Serverraum, proven in a scratch mission of its own: imported through
+ * the editor at a pinned seed and started as its test run, the second player
+ * joining by code. The player nearer the terminal reads the rules at the
+ * locker first (servers-manual.png); both man their console (servers-a.png,
+ * servers-b.png); the terminal's table has to be the one the plan was made
+ * for, and the plan is played to the solve (servers-solved.png), logging how
+ * long it took. The mission is deleted again whatever happened.
+ */
+async function captureServers() {
+  const crew = [];
+  try {
+    const host = await serversPlayer('Anna');
+    crew.push(host);
+    const code = await openServersRoom(host);
+    const guest = await serversPlayer('Ben');
+    crew.push(guest);
+    await joinServersRoom(guest, code);
+    await startRun(host, guest);
+    // Past the briefing's countdown, as in the walkthrough.
+    await sleep(Math.max(0, host.seen.view.startedAt + 4200 - Date.now()));
+    const [terminal, rack] = serversSeats([host, guest]);
+    await readServersManual(terminal);
+    await manServers({ terminal, rack });
+    const rows = terminal.seen.view.puzzle?.rows ?? null;
+    await captureServersConsoles({ terminal, rack });
+    if (JSON.stringify(rows) !== JSON.stringify(SERVERS_PLAN.rows)) {
+      console.log(`servers            !! seed ${SERVERS_PLAN.seed} opened on ${tableSaid(rows)}`);
+      fail(
+        `servers: seed ${SERVERS_PLAN.seed} deals another table than tools/fixtures/` +
+          'servers-plan.json was made for — regenerate it from the core test',
+      );
+      return;
+    }
+    await playServers({ terminal, rack });
+  } catch (err) {
+    console.log(`servers            !! ${firstLine(err)}`);
+    fail(`servers: ${firstLine(err)}`);
+  } finally {
+    for (const { context } of crew) {
+      await context.close();
+    }
+    const api = await request.newContext({ baseURL: BASE });
+    const gone = await api.delete(`/missions/custom/${SERVERS_MISSION.id}`).catch(() => null);
+    const status = gone?.status() ?? 'no answer';
+    console.log(`servers            ${SERVERS_MISSION.id} deleted again: ${status}`);
     await api.dispose();
   }
 }
@@ -3942,6 +4272,7 @@ async function run() {
   });
   await logRendering();
   await captureEditor();
+  await captureServers();
   await captureArtTour();
 
   // --- host: create a room and grab the code ---------------------------

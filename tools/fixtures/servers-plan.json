@@ -1,0 +1,24 @@
+{
+  "seed": 4,
+  "rows": [
+    {"service": "netz", "running": true, "code": null, "power": true},
+    {"service": "dns", "running": true, "code": null, "power": true},
+    {"service": "db", "running": false, "code": "E23", "power": true},
+    {"service": "auth", "running": false, "code": "E42", "power": false},
+    {"service": "web", "running": false, "code": "E11", "power": false},
+    {"service": "mail", "running": false, "code": "E50", "power": true}
+  ],
+  "moves": [
+    {"by": "partner", "input": {"power": "mail", "on": false}},
+    {"by": "partner", "input": {"power": "db", "on": false}},
+    {"by": "partner", "input": {"power": "db", "on": true}},
+    {"by": "operator", "input": {"cmd": "start", "service": "db"}},
+    {"by": "partner", "input": {"power": "auth", "on": true}},
+    {"by": "operator", "input": {"cmd": "restart", "service": "netz"}},
+    {"by": "operator", "input": {"cmd": "restart", "service": "dns"}},
+    {"by": "operator", "input": {"cmd": "start", "service": "auth"}},
+    {"by": "operator", "input": {"cmd": "start", "service": "db"}},
+    {"by": "partner", "input": {"power": "web", "on": true}},
+    {"by": "operator", "input": {"cmd": "start", "service": "web"}}
+  ]
+}

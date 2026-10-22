@@ -6,6 +6,7 @@ import { newDraft } from './editor/draft.js';
 import { bootEditor, sessionStore, workOf, type EditorBoot } from './editor/session.js';
 import { registerServiceWorker, watchInstallOffer } from './pwa.js';
 import './ui.css';
+import './styles/servers.css';
 import './styles/finale.css';
 import './styles/coldopen.css';
 import './styles/editor.css';

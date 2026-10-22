@@ -1,11 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
+  DEPENDS_ON,
   LEVER_FIGURE,
   MODULES,
   moduleFor,
   PATTERN_FIGURE,
   puzzleDefSchema,
+  SERVICES,
+  serviceName,
   SIGNAL_PATTERNS,
   type ManualBlock,
 } from '@escapelab/core';
@@ -25,6 +28,7 @@ const SAYS: Record<string, RegExp> = {
   relay: /^Schaltpult: 2 Schalter, ein Drehregler und ein Taster, beschriftet/,
   signal: /^Zwei Pulte nebeneinander/,
   circuit: /^Sicherungskasten und Prüfpult: links 5 Kabel.*Zeigerinstrument über 5 Zifferntasten/,
+  servers: /^Dienste und Rack: 6 Kästen .*Pfeil von jeder Abhängigkeit.*Rack mit 6 Einschüben/,
 };
 
 function drawing(of: string): { html: string; label: string } {
@@ -134,6 +138,25 @@ describe('Figure', () => {
     expect(lettering).toEqual(['AUS', 'EIN', 'AUS', 'EIN']);
     // Two handles, each a bar across its slot.
     expect(html.match(/<rect [^>]*width="34" height="10"/g)).toHaveLength(2);
+  });
+
+  it('draws the Serverraum as its caption names it: the services’ graph and the rack', () => {
+    const def = puzzleDefSchema.parse({ type: 'servers', id: 's', title: 'S' });
+    const [figure] = moduleFor(def.type)
+      .manual(def)
+      .flatMap((section) => section.blocks)
+      .filter((block) => block.kind === 'figure');
+    expect(figure).toMatchObject({ of: 'servers', caption: 'Abb. 1 — Dienste und Rack' });
+    const { html } = drawing('servers');
+    const lettering = [...html.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
+    // The graph's six boxes, then the rack's six units, each lettered with its service.
+    expect(lettering.slice(0, 6).sort()).toEqual(SERVICES.map(serviceName).sort());
+    expect(lettering.slice(6)).toEqual(SERVICES.map(serviceName));
+    // One arrow for every dependency the printed table lists: a shaft and an open head each.
+    const dependencies = SERVICES.flatMap((service) => DEPENDS_ON[service]).length;
+    const arrows = /<path d="([^"]*)"><\/path>/.exec(html)?.[1] ?? '';
+    expect(arrows.match(/M/g)).toHaveLength(2 * dependencies);
+    expect(html.match(/<rect x="284"/g)).toHaveLength(6);
   });
 
   it('frames a device it has no drawing for, naming its type, and never throws', () => {

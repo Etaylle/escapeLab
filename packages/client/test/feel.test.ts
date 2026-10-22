@@ -13,6 +13,7 @@ vi.mock('../src/puzzles/sounds.js', () => ({
   rejectBuzz: vi.fn(),
   simonTone: vi.fn(),
   toggleClack: vi.fn(),
+  typeBlip: vi.fn(),
 }));
 
 const sounds = await import('../src/puzzles/sounds.js');
@@ -69,6 +70,7 @@ describe('a control going down', () => {
       ['pull', sounds.leverPull],
       ['probe', sounds.probeClick],
       ['detent', sounds.dialDetent],
+      ['blip', sounds.typeBlip],
     ] as const;
     for (const [feel, sound] of feels) {
       pressSound(control({ feel }));

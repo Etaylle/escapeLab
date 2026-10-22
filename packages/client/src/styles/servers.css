@@ -1,0 +1,620 @@
+/* ══ Serverraum: a terminal and a rack ════════════════════════════════════
+ * ServersPanel.tsx. Console a is a green-phosphor terminal: the status table
+ * and the log behind curved glass with scanlines over it, a prompt with a
+ * blinking block, and on the bezel under it a key for every command and
+ * every service. Console b is a 19-inch rack: a unit for every service with
+ * its plate, its vents, its LED and its power switch. The audience sees both
+ * side by side. Nothing on either says what to do.
+ */
+
+.servers {
+  --phosphor: #7cff9b;
+  --phosphor-dim: rgba(124, 255, 155, 0.52);
+  --phosphor-faint: rgba(124, 255, 155, 0.26);
+  --phosphor-glow: rgba(64, 255, 120, 0.55);
+  --crt-ink: #03100a;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* ── the terminal's screen ──────────────────────────────────────────── */
+
+/* Curved glass in a black surround, the picture glowing green on it. */
+.servers-crt {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 16px 12px;
+  border-radius: 14px / 18px;
+  background: radial-gradient(
+    ellipse 120% 100% at 50% 40%,
+    #0c2b14 0%,
+    #061a0c 55%,
+    #020905 100%
+  );
+  box-shadow:
+    inset 0 0 0 2px #020403,
+    inset 0 0 30px rgba(0, 0, 0, 0.85),
+    0 0 0 5px #11171c,
+    0 0 0 6px #2a343d,
+    0 6px 14px rgba(0, 0, 0, 0.6);
+  color: var(--phosphor);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.35;
+  text-shadow: 0 0 5px var(--phosphor-glow);
+  overflow: hidden;
+}
+
+/* Scanlines and the glass's sheen over the picture; every tap goes through. */
+.servers-crt::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse 90% 50% at 50% 0%, rgba(255, 255, 255, 0.07), transparent 70%);
+  pointer-events: none;
+}
+
+/* ── the status table ── */
+
+.servers-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.servers-table th,
+.servers-table td {
+  padding: 1px 6px 1px 0;
+  font-weight: 400;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.servers-table thead th {
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--phosphor-faint);
+  color: var(--phosphor-dim);
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+.servers-table th:nth-child(1) {
+  width: 28%;
+}
+
+.servers-table th:nth-child(2) {
+  width: 48%;
+}
+
+/* A service down stands out in inverse video, its code with it. */
+.servers-row--down .servers-status > span {
+  padding: 0 4px;
+  background: var(--phosphor);
+  color: var(--crt-ink);
+  text-shadow: none;
+  box-shadow: 0 0 8px var(--phosphor-glow);
+}
+
+.servers-power--off {
+  color: var(--phosphor-dim);
+}
+
+/* A row that just turned — up, down, switched — glows up for a moment. */
+.servers-row--turned > * {
+  animation: servers-turned 700ms ease-out;
+}
+
+@keyframes servers-turned {
+  from {
+    background-color: rgba(124, 255, 155, 0.38);
+  }
+}
+
+/* ── the log ── */
+
+/* Room for every line it keeps, so that the prompt stays put as lines come in. */
+.servers-log {
+  min-height: calc(8 * 1.35em);
+  margin: 0;
+  padding: 6px 0 0;
+  border-top: 1px dashed var(--phosphor-faint);
+  font-size: 12px;
+  list-style: none;
+}
+
+.servers-line {
+  overflow-wrap: anywhere;
+}
+
+.servers-tag {
+  white-space: pre;
+}
+
+.servers-line--fail .servers-tag {
+  background: var(--phosphor);
+  color: var(--crt-ink);
+  text-shadow: none;
+}
+
+.servers-line--warn {
+  font-weight: 700;
+}
+
+.servers-line--info {
+  color: var(--phosphor-dim);
+}
+
+/* A line just printed types itself in from the left; a failed one flashes inverse first. */
+.servers-line--new {
+  animation: servers-type-in 300ms steps(8) backwards;
+}
+
+.servers-line--fail.servers-line--new {
+  animation:
+    servers-type-in 300ms steps(8) backwards,
+    servers-fail 900ms ease-out;
+}
+
+@keyframes servers-type-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+
+@keyframes servers-fail {
+  0%,
+  35% {
+    background: var(--phosphor);
+    color: var(--crt-ink);
+  }
+}
+
+/* As the terminal comes up, the table and the log scroll in line by line; `status`
+   prints the table anew the same way. */
+.servers-crt--boot .servers-table tbody tr > *,
+.servers-table--printed tbody tr > *,
+.servers-crt--boot .servers-line {
+  animation: servers-type-in 220ms steps(6) backwards;
+  animation-delay: calc(120ms + var(--i) * 70ms);
+}
+
+/* ── the prompt ── */
+
+/* A label, but none of a form's: one line, the screen's own type. */
+.servers-prompt {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding-top: 6px;
+  border-top: 1px dashed var(--phosphor-faint);
+  color: inherit;
+  font: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+  cursor: text;
+}
+
+.servers-prompt:focus-within {
+  border-top-color: var(--phosphor-dim);
+}
+
+.servers-ps {
+  flex: none;
+}
+
+.servers-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+/* The field takes the keys; what it holds shows in the echo beneath it. */
+.servers-input {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  font: inherit;
+  letter-spacing: inherit;
+  text-shadow: none;
+  border-radius: 0;
+}
+
+.servers-input:focus {
+  outline: 0;
+}
+
+.servers-input::selection {
+  background: rgba(124, 255, 155, 0.35);
+}
+
+.servers-echo {
+  position: absolute;
+  inset: 0;
+  white-space: pre;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* The block cursor, blinking after the last character. */
+.servers-cursor {
+  display: inline-block;
+  width: 0.62em;
+  height: 1.05em;
+  margin-left: 1px;
+  vertical-align: -0.18em;
+  background: var(--phosphor);
+  box-shadow: 0 0 6px var(--phosphor-glow);
+  animation: servers-blink 1.06s steps(1) infinite;
+}
+
+@keyframes servers-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* The terminal's own answer to a line it cannot read. */
+.servers-reply {
+  margin: 0;
+}
+
+/* ── the bezel under the screen: the keys, the lamp ─────────────────── */
+
+.servers-bezel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.servers-keyboard {
+  display: flex;
+  flex: 1 1 300px;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.servers-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* A keycap of dark plastic, its legend printed light; it goes down 2 px under the finger. */
+.servers-key {
+  min-width: 52px;
+  min-height: 34px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #2b343c, #1a2127);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.5),
+    0 2px 0 #06090b,
+    0 3px 4px rgba(0, 0, 0, 0.5);
+  color: #cfe9d6;
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+
+.servers-key:hover:not(:disabled) {
+  background: linear-gradient(180deg, #34404a, #1f272e);
+}
+
+.servers-key:active,
+.servers-key.feel-pressed {
+  translate: 0 2px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    0 0 0 #06090b;
+}
+
+.servers-key:focus-visible {
+  outline: 2px solid var(--phosphor);
+  outline-offset: 2px;
+}
+
+.servers-key--cmd {
+  color: #eef7f1;
+  font-weight: 700;
+}
+
+.servers-key--enter {
+  min-width: 64px;
+  background: linear-gradient(180deg, #1d4a2c, #12301c);
+  color: var(--phosphor);
+  font-size: 16px;
+}
+
+.servers-key--enter:hover:not(:disabled) {
+  background: linear-gradient(180deg, #25603a, #173a23);
+}
+
+/* The lamp that burns while somebody stands at the other console. */
+.servers-link {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 6px;
+}
+
+/* ── the rack ───────────────────────────────────────────────────────── */
+
+/* The cabinet: dark steel, its units between two rails of square holes. */
+.servers-cabinet {
+  padding: 10px 8px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #1b2228, #10151a);
+  box-shadow:
+    inset 0 0 0 1px #050709,
+    inset 0 2px 8px rgba(0, 0, 0, 0.7);
+}
+
+.servers-rack {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0 16px;
+  list-style: none;
+}
+
+.servers-rack::before,
+.servers-rack::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  border-radius: 1px;
+  background: repeating-linear-gradient(180deg, #2c353d 0 6px, #07090b 6px 10px);
+}
+
+.servers-rack::before {
+  left: 2px;
+}
+
+.servers-rack::after {
+  right: 2px;
+}
+
+/* A unit: brushed metal, its plate, its vents, its LED, its switch. */
+.servers-unit {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+  padding: 4px 10px;
+  border-radius: 3px;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #39444e, #232b33);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+/* The service's name on a label of its own, as an engraved plate. */
+.servers-plate {
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #d5dce2, #a7b1ba);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 1px 1px rgba(0, 0, 0, 0.5);
+  color: #1d252d;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+.servers-vents {
+  height: 14px;
+  border-radius: 2px;
+  background: repeating-linear-gradient(90deg, #0b0f12 0 3px, transparent 3px 7px);
+  opacity: 0.85;
+}
+
+.servers-led {
+  display: flex;
+  align-items: center;
+}
+
+/* The power switch: a dark plate with a steel nut, the bat pointing up at I or down at O; it
+   flips over about the nut in 120 ms. */
+.servers-switch {
+  position: relative;
+  width: 36px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #2a343d, #161d23);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.6),
+    0 1px 2px rgba(0, 0, 0, 0.6);
+  perspective: 120px;
+  cursor: pointer;
+}
+
+.servers-switch::before {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #c9d1d8, #6b7682 70%, #3a434b);
+  box-shadow: 0 0 0 2px #0b0f13;
+}
+
+.servers-bat {
+  position: absolute;
+  left: 15.5px;
+  bottom: 50%;
+  width: 7px;
+  height: 14px;
+  border-radius: 3.5px 3.5px 2px 2px;
+  background: linear-gradient(90deg, #6b7682, #eef2f5 45%, #8a96a1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  transform-origin: 50% 100%;
+  transform: rotateX(180deg);
+  transition: transform 120ms cubic-bezier(0.5, 0, 0.3, 1);
+}
+
+.servers-switch--on .servers-bat {
+  transform: rotateX(0deg);
+}
+
+.servers-marks {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  bottom: 3px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: var(--engrave);
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.servers-switch:hover:not(:disabled) {
+  background: linear-gradient(180deg, #33404a, #1a2229);
+}
+
+.servers-switch:active,
+.servers-switch.feel-pressed {
+  translate: 0 1px;
+}
+
+.servers-switch:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+/* ── the audience: both consoles side by side ───────────────────────── */
+
+/* Side by side where the column is wide enough for two screens, else one under the other —
+   the spectator's column beside the lab is a narrow one. */
+.servers-watch {
+  container-type: inline-size;
+}
+
+.servers--watched {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+@container (min-width: 560px) {
+  .servers--watched {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.servers-console {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.servers-console-name {
+  margin: 0;
+  color: var(--engrave);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.servers--watched .servers-crt {
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.servers--watched .servers-unit {
+  grid-template-columns: 52px minmax(0, 1fr) auto auto;
+  gap: 8px;
+  min-height: 36px;
+  padding: 3px 8px;
+}
+
+/* ── calm, and narrow windows ───────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .servers-line--new,
+  .servers-line--fail.servers-line--new,
+  .servers-crt--boot .servers-table tbody tr > *,
+  .servers-table--printed tbody tr > *,
+  .servers-crt--boot .servers-line {
+    animation: none;
+  }
+
+  .servers-cursor {
+    animation: none;
+  }
+
+  .servers-row--turned > * {
+    animation-duration: 120ms;
+  }
+
+  .servers-bat {
+    transition-duration: 60ms;
+  }
+}
+
+@media (max-width: 560px) {
+  .servers-crt {
+    padding: 10px;
+    font-size: 12px;
+  }
+
+  .servers-key {
+    min-width: 44px;
+    padding: 4px 7px;
+    font-size: 12px;
+  }
+
+  .servers-unit {
+    grid-template-columns: 52px minmax(0, 1fr) auto auto;
+    gap: 8px;
+  }
+}

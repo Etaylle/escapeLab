@@ -58,6 +58,10 @@ const LINES = {
   'circuit-meter': 'Nummer wählen, Wert ablesen.',
   'signal-sender': 'Zeichen von links nach rechts ansagen.',
   'signal-receiver': 'Tasten in der angesagten Folge drücken.',
+  'servers-terminal': {
+    touch: 'Tippe oder tippe an: start, restart, status — Codes nur hier.',
+    mouse: 'Schreibe oder klicke: start, restart, status — Codes nur hier.',
+  },
 } as const satisfies Record<string, Line>;
 
 type Device = keyof typeof LINES;
@@ -66,7 +70,7 @@ type Device = keyof typeof LINES;
  * The device in front of the player: the module — a sync station drawn as a main switch is
  * one of its own — or at a station with two consoles this console's part. None for the relay,
  * which is no station, nor at a console nobody stands at, nor for the sync button, whose line
- * is its window's.
+ * is its window's, nor for the Serverraum's rack, whose switches and LEDs say it all.
  */
 function deviceOf(puzzle: PuzzleView): Device | null {
   switch (puzzle.kind) {
@@ -76,6 +80,8 @@ function deviceOf(puzzle: PuzzleView): Device | null {
       return puzzle.role === null ? null : `circuit-${puzzle.role}`;
     case 'signal':
       return puzzle.role === null ? null : `signal-${puzzle.role}`;
+    case 'servers':
+      return puzzle.role === 'terminal' ? 'servers-terminal' : null;
     case 'relay':
       return null;
     default:

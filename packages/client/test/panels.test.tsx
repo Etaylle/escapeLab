@@ -5,10 +5,14 @@ import {
   generateEdgework,
   moduleFor,
   puzzleDefSchema,
+  SERVICES,
   tokenLabel,
   TOKENS,
   type ConsoleId,
   type PuzzleView,
+  type RackUnit,
+  type ServerLogLine,
+  type ServerRow,
 } from '@escapelab/core';
 import { needleAngle, SCALE_MAX } from '../src/puzzles/CircuitPanel.js';
 import { deviceCoach, firstSight, pointerNow, type Pointer } from '../src/puzzles/coach.js';
@@ -20,6 +24,7 @@ import {
   fleetingAt,
   textureOf,
 } from '../src/puzzles/SignalPanel.js';
+import { commandOf, COMMANDS, Keys, withWord } from '../src/puzzles/ServersPanel.js';
 import { PuzzlePanel, ReaderPanel } from '../src/screens/PuzzlePanel.js';
 import { deviceRun, iconsAsWords, PICTOGRAPH } from './fixtures.js';
 
@@ -125,7 +130,7 @@ const COACHING = [
  */
 function operatorViews(): [string, PuzzleView][] {
   const views: [string, PuzzleView][] = STATIONS.map((type) => [type, seen(type)]);
-  for (const type of ['circuit', 'signal']) {
+  for (const type of ['circuit', 'signal', 'servers']) {
     views.push([`${type} at Pult B`, seen(type, true, {}, 'b')]);
   }
   views.push(
@@ -1094,5 +1099,264 @@ describe('the panels’ icons', () => {
     for (const line of lines) {
       expect(line).toMatch(/>\[warning\] [A-ZÄÖÜ]/);
     }
+  });
+});
+
+describe('the Serverraum', () => {
+  type ServersSeen = Extract<PuzzleView, { kind: 'servers' }>;
+
+  /** The Serverraum at console `seat`, or as the audience sees it with `seat` null. */
+  function at(seat: ConsoleId | null, change: Partial<ServersSeen> = {}): ServersSeen {
+    const view = seen('servers', true, {}, seat, seat === null ? null : 'p1');
+    if (view.kind !== 'servers') {
+      throw new Error(`expected the Serverraum, got ${view.kind}`);
+    }
+    return { ...view, ...change };
+  }
+
+  const ROWS: ServerRow[] = [
+    { service: 'netz', running: true, code: null, power: true },
+    { service: 'dns', running: false, code: 'E23', power: true },
+    { service: 'db', running: false, code: 'E11', power: false },
+    { service: 'auth', running: true, code: null, power: true },
+    { service: 'web', running: false, code: 'E50', power: true },
+    { service: 'mail', running: true, code: null, power: true },
+  ];
+  const LOG: ServerLogLine[] = [
+    { n: 1, tag: 'info', text: 'db: Strom aus' },
+    { n: 2, tag: 'warn', text: 'db abgestürzt: E11' },
+    { n: 3, tag: 'fail', text: 'web: auth läuft nicht' },
+    { n: 4, tag: 'ok', text: 'auth läuft' },
+  ];
+  const RACK: RackUnit[] = ROWS.map(({ service, running, power }) => ({
+    service,
+    power,
+    led: !power ? 'off' : running ? 'green' : 'red',
+  }));
+
+  /** The table's rows as printed: the service, its name, its status and its power. */
+  const tableOf = (html: string): string[] =>
+    [
+      ...html.matchAll(
+        /<tr class="servers-row[^"]*" data-service="([a-z]+)"[^>]*><th scope="row">([A-Z]+)<\/th>/g,
+      ),
+    ].map((m) => `${m[1]} ${m[2]}`);
+  const cellsOf = (html: string, cls: string): string[] => {
+    const cell = new RegExp(`<td class="${cls}[^"]*">(?:<span>)?([^<]*)(?:</span>)?</td>`, 'g');
+    return [...html.matchAll(cell)].map((m) => m[1] ?? '');
+  };
+
+  /** The log's lines as printed: the tag, then the line. */
+  const linesOf = (html: string): string[] => {
+    const tag = /<li class="servers-line servers-line--[a-z]+[^"]*"[^>]*>/.source;
+    const said = /<span class="servers-tag">([^<]*)<\/span> ([^<]*)<\/li>/.source;
+    return [...html.matchAll(new RegExp(tag + said, 'g'))].map((m) => `${m[1]} ${m[2]}`);
+  };
+
+  /** The lamp beside the engraved `name` on a bezel: its tone. */
+  const lampBy = (html: string, name: string): string | undefined =>
+    new RegExp(
+      `device-lamp--([a-z]+)" aria-hidden="true"></span><span class="device-engraving">${name}<`,
+    ).exec(html)?.[1];
+
+  it('shows the terminal every service with its status, code and power, and the log', () => {
+    const html = panel(at('a', { rows: ROWS, log: LOG }));
+    expect(tableOf(html)).toEqual([
+      'netz NETZ',
+      'dns DNS',
+      'db DB',
+      'auth AUTH',
+      'web WEB',
+      'mail MAIL',
+    ]);
+    expect(cellsOf(html, 'servers-status')).toEqual([
+      'RUNNING',
+      'FEHLER E23',
+      'FEHLER E11',
+      'RUNNING',
+      'FEHLER E50',
+      'RUNNING',
+    ]);
+    expect(cellsOf(html, 'servers-power')).toEqual(['AN', 'AN', 'AUS', 'AN', 'AN', 'AN']);
+    expect(linesOf(html)).toEqual([
+      '[INFO] db: Strom aus',
+      '[WARN] db abgestürzt: E11',
+      '[FEHL] web: auth läuft nicht',
+      '[ OK ] auth läuft',
+    ]);
+    // The terminal shows nothing of the rack's: no unit, no switch, no LED of a service.
+    expect(html).not.toMatch(/servers-unit|servers-switch|servers-led/);
+  });
+
+  it('offers a key for every command and every service, one that sends, and the prompt', () => {
+    const html = panel(at('a'));
+    expect([...html.matchAll(/data-cmd="([a-z]+)"/g)].map((m) => m[1])).toEqual([...COMMANDS]);
+    const services = /<button type="button" class="servers-key" data-service="([a-z]+)"/g;
+    expect([...html.matchAll(services)].map((m) => m[1])).toEqual([...SERVICES]);
+    expect(html).toContain(
+      '<button type="submit" class="servers-key servers-key--enter" data-enter="" ' +
+        'data-feel="blip" aria-label="Senden">⏎</button>',
+    );
+    expect(html.match(/data-feel="blip"/g)).toHaveLength(10);
+    expect(html).toMatch(/<input class="servers-input"[^>]*aria-label="Befehl"/);
+    expect(html).toContain('<span class="servers-cursor"></span>');
+  });
+
+  it('reads a typed line as a command: status, or start and restart with one service', () => {
+    expect(commandOf('start dns')).toEqual({ cmd: 'start', service: 'dns' });
+    expect(commandOf('  RESTART   Netz ')).toEqual({ cmd: 'restart', service: 'netz' });
+    expect(commandOf('status')).toEqual({ cmd: 'status' });
+    const unread = ['', 'start', 'start ftp', 'status dns', 'stop dns', 'start dns db'];
+    for (const line of [...unread, 'dns start']) {
+      expect(commandOf(line), line).toBeNull();
+    }
+  });
+
+  it('puts a key’s word into the line, keeping the other, so that the line always sends', () => {
+    expect(withWord('', { cmd: 'start' })).toBe('start');
+    expect(withWord('start', { service: 'dns' })).toBe('start dns');
+    expect(withWord('start dns', { service: 'web' })).toBe('start web');
+    expect(withWord('start dns', { cmd: 'restart' })).toBe('restart dns');
+    expect(withWord('dns', { cmd: 'start' })).toBe('start dns');
+    expect(withWord('sta', { service: 'db' })).toBe('db');
+    expect(withWord('restart auth', { cmd: 'status' })).toBe('status');
+    expect(withWord('status', { service: 'mail' })).toBe('status');
+    for (const cmd of ['start', 'restart'] as const) {
+      for (const service of SERVICES) {
+        const typed = withWord(withWord('', { service }), { cmd });
+        expect(commandOf(typed)).toEqual({ cmd, service });
+      }
+    }
+    expect(commandOf(withWord('restart web', { cmd: 'status' }))).toEqual({ cmd: 'status' });
+  });
+
+  /**
+   * Every element `node` renders to, its function components called through:
+   * enough to press keys without a DOM, for parts that use no hooks.
+   */
+  function elementsIn(node: ReactNode): ReactElement<Record<string, unknown>>[] {
+    if (Array.isArray(node)) {
+      return node.flatMap((child: ReactNode) => elementsIn(child));
+    }
+    if (!isValidElement<Record<string, unknown>>(node)) {
+      return [];
+    }
+    if (typeof node.type === 'function') {
+      return elementsIn((node.type as (props: unknown) => ReactNode)(node.props));
+    }
+    return [node, ...elementsIn(node.props['children'] as ReactNode)];
+  }
+
+  /** Every button `node` renders, pressed in turn. */
+  function pressAll(node: ReactNode): number {
+    const buttons = elementsIn(node).filter(
+      (element) => element.type === 'button' && element.props['type'] !== 'submit',
+    );
+    for (const button of buttons) {
+      (button.props['onClick'] as () => void)();
+    }
+    return buttons.length;
+  }
+
+  it('puts each key’s word into the line as it is pressed', () => {
+    const put: unknown[] = [];
+    expect(pressAll(<Keys put={(word) => put.push(word)} />)).toBe(9);
+    expect(put).toEqual([
+      ...COMMANDS.map((cmd) => ({ cmd })),
+      ...SERVICES.map((service) => ({ service })),
+    ]);
+  });
+
+  it('shows the rack a unit for every service, its plate, its LED and its switch — no code', () => {
+    const html = panel(at('b', { rack: RACK }));
+    const unit = new RegExp(
+      /<li class="servers-unit" data-service="([a-z]+)">/.source +
+        /<span class="servers-plate">([A-Z]+)</.source,
+      'g',
+    );
+    expect([...html.matchAll(unit)].map((m) => `${m[1]} ${m[2]}`)).toEqual([
+      'netz NETZ',
+      'dns DNS',
+      'db DB',
+      'auth AUTH',
+      'web WEB',
+      'mail MAIL',
+    ]);
+    const leds = /<span class="servers-led"><span class="device-lamp device-lamp--([a-z]+)"/g;
+    expect([...html.matchAll(leds)].map((m) => m[1])).toEqual([
+      'green',
+      'red',
+      'off',
+      'green',
+      'red',
+      'green',
+    ]);
+    const switches = new RegExp(
+      /<button class="servers-switch( servers-switch--on)?" data-service="([a-z]+)" /.source +
+        /data-feel="clack" aria-pressed="(true|false)"/.source,
+      'g',
+    );
+    expect([...html.matchAll(switches)].map((m) => `${m[2]} ${m[3]}`)).toEqual([
+      'netz true',
+      'dns true',
+      'db false',
+      'auth true',
+      'web true',
+      'mail true',
+    ]);
+    expect(html).not.toMatch(/E(11|23|42|50)|servers-table|servers-log|servers-input|FEHLER/);
+  });
+
+  it('switches a unit’s power the other way, and sends nothing else', () => {
+    const sent: unknown[] = [];
+    const tree = (
+      <PANELS.servers
+        puzzle={at('b', { rack: RACK })}
+        change={null}
+        send={(input) => sent.push(input)}
+        deadlineAt={null}
+      />
+    );
+    expect(pressAll(tree)).toBe(6);
+    expect(sent).toEqual(RACK.map((unit) => ({ power: unit.service, on: !unit.power })));
+  });
+
+  it('lights RACK at the terminal and TERMINAL at the rack while somebody stands there', () => {
+    expect(lampBy(panel(at('a')), 'RACK')).toBe('off');
+    const atRack = { name: 'Ben', where: 'Pult B' };
+    expect(lampBy(panel({ ...at('a'), backup: atRack }), 'RACK')).toBe('green');
+    // Somebody at the rules lets the inputs count, but stands at no console.
+    const reading = { name: 'Ben', where: 'SPIND' };
+    expect(lampBy(panel({ ...at('a'), backup: reading }), 'RACK')).toBe('off');
+    const atTerminal = { name: 'Anna', where: 'Pult A' };
+    expect(lampBy(panel({ ...at('b'), backup: atTerminal }), 'TERMINAL')).toBe('green');
+    expect(lampBy(panel({ ...at('b'), backup: reading }), 'TERMINAL')).toBe('off');
+  });
+
+  it('shows the audience the terminal’s screen and the rack side by side, nothing to press', () => {
+    const html = panel(at(null, { rows: ROWS, log: LOG, rack: RACK }));
+    const names = [...html.matchAll(/<h4 class="servers-console-name">([^<]*)<\/h4>/g)];
+    expect(names.map((m) => m[1])).toEqual(['Pult A', 'Pult B']);
+    expect(cellsOf(html, 'servers-status')).toContain('FEHLER E23');
+    expect(linesOf(html)).toHaveLength(4);
+    expect(html.match(/class="servers-unit"/g)).toHaveLength(6);
+    expect(html).not.toMatch(/<button|servers-input|servers-key/);
+  });
+
+  it('tells a console nobody stands at that it is not connected', () => {
+    expect(panel(seen('servers', false))).toContain('Dieses Pult ist nicht angeschlossen.');
+  });
+
+  it('gives the terminal its line, tapped or clicked, and the rack none', () => {
+    expect(deviceCoach(at('a'), 'touch')).toEqual({
+      id: 'device:servers-terminal',
+      text: 'Tippe oder tippe an: start, restart, status — Codes nur hier.',
+    });
+    expect(deviceCoach(at('a'), 'mouse')).toEqual({
+      id: 'device:servers-terminal',
+      text: 'Schreibe oder klicke: start, restart, status — Codes nur hier.',
+    });
+    expect(deviceCoach(at('b'), 'touch')).toBeNull();
+    expect(deviceCoach(at(null), 'mouse')).toBeNull();
   });
 });

@@ -28,6 +28,7 @@ import {
   rejectBuzz,
   simonTone,
   toggleClack,
+  typeBlip,
 } from './sounds.js';
 
 /** How long a key's press shows: the 80 ms a finger's would. */
@@ -79,14 +80,15 @@ const PRESS_SOUNDS: Readonly<Record<string, () => void>> = {
   pull: leverPull,
   probe: probeClick,
   detent: dialDetent,
+  blip: typeBlip,
   none: () => undefined,
 };
 
 /**
  * What a control sounds like going down, as its `data-feel` says: `clack` a toggle, `thunk`
  * a big button, `stomp` the mushroom, `pull` the main switch's lever, `probe` a meter's key,
- * `detent` a dial's step, `tone` a colour key with its colour in `data-tone`, `none` where the
- * device makes its own sound; a click for every other control.
+ * `detent` a dial's step, `blip` a terminal's key, `tone` a colour key with its colour in
+ * `data-tone`, `none` where the device makes its own sound; a click for every other control.
  */
 export function pressSound(control: Control): void {
   const { feel, tone } = control.dataset;

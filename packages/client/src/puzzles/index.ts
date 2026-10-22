@@ -12,6 +12,7 @@ import { ButtonPanel } from './ButtonPanel.js';
 import { RelayPanel } from './RelayPanel.js';
 import { SignalPanel, signalSounds } from './SignalPanel.js';
 import { CircuitPanel, circuitSounds } from './CircuitPanel.js';
+import { ServersPanel, serversSounds } from './ServersPanel.js';
 import type { DeviceCrew } from './Device.js';
 import type { Change } from './feel.js';
 
@@ -55,6 +56,7 @@ export const PANELS: { [K in PuzzleKind]: Panel<K> } = {
   signal: SignalPanel,
   relay: RelayPanel,
   circuit: CircuitPanel,
+  servers: ServersPanel,
 };
 
 /** What a change at a module's device sounds like, beyond the kit's press, alarm and solve. */
@@ -76,6 +78,7 @@ export const SOUNDS: { [K in PuzzleKind]?: ChangeSoundsOf<K> } = {
   morse: morseSounds,
   signal: signalSounds,
   circuit: circuitSounds,
+  servers: serversSounds,
 };
 
 /** What a reader panel gets: the open puzzle as seen at a manual object covering it. */

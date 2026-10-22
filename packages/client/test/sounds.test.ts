@@ -22,6 +22,7 @@ const {
   leverSpring,
   MID_BAND,
   mushroomStomp,
+  okChime,
   pliersSnip,
   probeClick,
   rejectBuzz,
@@ -32,6 +33,7 @@ const {
   solvedChord,
   solvedChunk,
   sparkCrackle,
+  spinUp,
   stageChime,
   startHum,
   stepTick,
@@ -226,6 +228,8 @@ const ONE_SHOTS: [string, () => void][] = [
   ['lampPop', lampPop],
   ['typeBlip', typeBlip],
   ['holdTick', holdTick],
+  ['okChime', okChime],
+  ['spinUp', spinUp],
 ];
 
 describe.each(ONE_SHOTS)('%s', (_, sound) => {

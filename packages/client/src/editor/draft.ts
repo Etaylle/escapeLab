@@ -45,6 +45,7 @@ export const MODULE_NAMES: Readonly<Record<StationType, { title: string; kind: s
   button: { title: 'Der Knopf', kind: 'Knopf' },
   signal: { title: 'Signalkette', kind: 'Signalkette' },
   circuit: { title: 'Sicherungskasten', kind: 'Sicherungskasten' },
+  servers: { title: 'Serverraum', kind: 'Serverraum' },
   'button-sync': { title: 'Synchronschaltung', kind: 'Synchronschaltung' },
 };
 

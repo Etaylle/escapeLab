@@ -137,6 +137,17 @@ export {
   type SignalToken,
 } from './puzzles/signal.js';
 export type { RelayView } from './puzzles/relay.js';
+export {
+  DEPENDS_ON,
+  SERVICES,
+  serviceName,
+  type RackUnit,
+  type ServerCode,
+  type ServerLed,
+  type ServerLogLine,
+  type ServerRow,
+  type Service,
+} from './puzzles/servers.js';
 export { CHAT_PHRASES, CHAT_PHRASE_IDS, chatText, type ChatPhrase } from './chat.js';
 export {
   scaleMission,

@@ -7,7 +7,8 @@ neue Missionen brauchen keinen Code.
 **Rätseltypen:** Kabel trennen (`wiring`), Symbol-Keypad (`keypad`), Schalterbank mit Prüf-Commit
 (`switches`), Speicherbank (`memory`), Frequenz-Abgleich mit Farblegende (`simon`), Morsefunk
 (`morse`), der Knopf (`button`), unsichtbares Labyrinth (`maze`), Synchron-Knöpfe (`button-sync`),
-Signalkette an zwei Pulten (`signal`), Sicherungskasten und Prüfpult an zwei Pulten (`circuit`).
+Signalkette an zwei Pulten (`signal`), Sicherungskasten und Prüfpult an zwei Pulten (`circuit`),
+Serverraum mit Terminal und Rack an zwei Pulten (`servers`).
 Layouts/Codes sind pro Partie zufällig (seeded, deterministisch replaybar), Fehler kosten
 Countdown-Zeit. **Missionen:** Tutorial (2 Spieler), Blackout im Labor (2–3 Spieler, 5 Rätsel),
 Kettenreaktion (3 Spieler, jeder startet in einem anderen verschlossenen Raum und kommt nur mit
@@ -26,6 +27,14 @@ Station liegen im anderen Flügel, und erst der Druckausgleich öffnet die Schle
    im Serverraum liegt.
 5. *Reaktor-Neustart* (`button-sync`): erst mit der Ersatzsicherung aus dem Archiv; die ganze
    Crew drückt gemeinsam.
+
+**Serverraum** (`servers`, noch in keiner Mission): Pult A ist ein Terminal mit Statustabelle,
+Fehlercodes, Protokoll und Befehlszeile (`start`, `restart`, `status` — tippen oder antippen),
+Pult B ein Rack mit Stromschalter und LED je Dienst, ohne einen Code. Sechs Dienste mit festen
+Abhängigkeiten kommen nach ihrem Code wieder hoch (E11 start, E23 Strom aus und an, E42 erst die
+Abhängigkeiten per restart); E50 ist Quarantäne: Strom aus, nie starten, sonst infiziert er einen
+weiteren Dienst. Bewiesen im Kerntest und in der Probemission `tools/fixtures/servers-probe.json`,
+die der Rundgang über den Editor mit festem Seed importiert und bis zur Lösung spielt.
 
 Keine Station lässt sich allein bedienen (siehe *Nie allein*), und auf *Normal* beendet der
 fünfte Alarm den Lauf — auf *Hart* der dritte, auf *Entspannt* gibt es keine Grenze.
@@ -114,12 +123,12 @@ Simulation/Rendering, art = prozedurale Grafik, audio = prozedurale Sounds).
 
 **Neue Missionen** sind reine JSON-Dateien in `missions/`. `packages/core/test/missionMaps.test.ts`
 prüft jede davon automatisch: gleiche Zeilenlängen, alles auf Bodenfeldern, eine Station pro
-Rätsel — bei einem Rätsel mit zwei Pulten (Notstrom-Kasten, Signalkette) je eine für Pult A und
-Pult B, mehr als vier Felder auseinander — und per Flutfüllung mit den echten Tür-Regeln, dass
-die Stationen in Reihenfolge erreichbar sind und am Ende **alle** den Notausgang erreichen
-können. Eine Plattentür kann mit `untilSolved` ein Rätsel nennen: Ist es gelöst, bleibt sie auch
-ohne Platte offen (Blackout: die Maschinenraumtür nach dem Notstrom). An jeder Station mit einem
-Pult muss außerdem — wohin ihre Regeln auch ausgelost werden — einer am Pult stehen können,
+Rätsel — bei einem Rätsel mit zwei Pulten (Notstrom-Kasten, Signalkette, Serverraum) je eine für
+Pult A und Pult B, mehr als vier Felder auseinander — und per Flutfüllung mit den echten
+Tür-Regeln, dass die Stationen in Reihenfolge erreichbar sind und am Ende **alle** den Notausgang
+erreichen können. Eine Plattentür kann mit `untilSolved` ein Rätsel nennen: Ist es gelöst, bleibt
+sie auch ohne Platte offen (Blackout: die Maschinenraumtür nach dem Notstrom). An jeder Station mit
+einem Pult muss außerdem — wohin ihre Regeln auch ausgelost werden — einer am Pult stehen können,
 während ein anderer sie zugleich liest, und an jeder mit zwei Pulten müssen zwei Verschiedene
 zugleich an beiden stehen können.
 

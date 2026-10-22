@@ -47,6 +47,7 @@ const VARIANTS: Record<string, object[]> = {
     { stages: 2, length: 3 },
     { stages: 6, length: 6 },
   ],
+  servers: [{ penaltySec: 45 }, { crashed: 5, trap: false }],
 };
 
 /** Defs, by a label, for the modules that need more than a type, an id and a title. */
