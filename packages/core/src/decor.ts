@@ -6,7 +6,7 @@ import { tileKey, type Spot } from './reach.js';
  * already walk round it: every piece on a floor tile of its own, and never
  * where anything else of the map stands — a spawn, a station's console, a
  * plate, a door, a source's spot, an item or its drop-off, the sign, the
- * exit, a lamp, an emergency's panel — nor where a drone flies, at its
+ * exit, a lamp, a note, an emergency's panel — nor where a drone flies, at its
  * waypoints or on the straight lines between them. Each message names the
  * piece, its tile and what it is in the way of.
  */
@@ -50,6 +50,7 @@ function occupantsOf(map: MapDef): Occupants {
     note(occupants, map.exit, 'the exit');
   }
   map.lamps.forEach((lamp) => note(occupants, lamp, 'an emergency lamp'));
+  map.notes.forEach((pinned) => note(occupants, pinned, 'a note of the last crew'));
   for (const panel of map.sabotage?.panels ?? []) {
     note(occupants, panel, `sabotage panel "${panel.id}"`);
   }

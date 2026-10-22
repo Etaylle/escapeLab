@@ -4,7 +4,9 @@ import {
   addPuzzle,
   lineBetween,
   move,
+  NEW_NOTE,
   NO_CHOICE,
+  NOTE_SPOT,
   ON_FLOOR_ONLY,
   paint,
   place,
@@ -109,6 +111,45 @@ describe('the furniture tool', () => {
     expect(moved.draft.map.decor).toEqual([{ kind: 'shelf', x: 6, y: 5, variant: null }]);
     expect(remove(moved.draft, { kind: 'decor', index: 0 }).map.decor).toEqual([]);
     expect(tilesOf(furnished, { kind: 'decor', index: 0 })).toEqual([{ x: 3, y: 4 }]);
+  });
+});
+
+describe('the note tool', () => {
+  it('pins a note to a wall beside the floor, or lays it on the floor', () => {
+    // (4,1) is the wall above the room's top row; (5,4) the room's floor.
+    const draft = put(put(room(), 'note', { x: 4, y: 1 }), 'note', { x: 5, y: 4 });
+    expect(draft.map.notes).toEqual([
+      { x: 4, y: 1, text: NEW_NOTE },
+      { x: 5, y: 4, text: NEW_NOTE },
+    ]);
+    expect(place(draft, 'note', { x: 5, y: 4 }, null, AUTO).selection).toEqual({
+      kind: 'note',
+      index: 1,
+    });
+  });
+
+  it('says why not in the rock, nor on a tile something solid takes', () => {
+    // (12,4) is wall with no floor anywhere beside it.
+    const rock = place(room(), 'note', { x: 12, y: 4 }, null, AUTO);
+    expect([rock.note, rock.draft.map.notes]).toEqual([NOTE_SPOT, []]);
+    const started = put(room(), 'spawn', { x: 3, y: 3 });
+    expect(place(started, 'note', { x: 3, y: 3 }, null, AUTO).selection).toEqual({
+      kind: 'spawn',
+      index: 0,
+    });
+    // Nothing else may hang on a wall: the floor's word for every other tool.
+    expect(place(room(), 'plate', { x: 4, y: 1 }, null, AUTO).note).toBe(ON_FLOOR_ONLY);
+  });
+
+  it('moves a note to another wall or the floor, never into the rock, and removes it', () => {
+    const draft = put(room(), 'note', { x: 4, y: 1 });
+    const ref: Ref = { kind: 'note', index: 0 };
+    expect(move(draft, ref, { x: 1, y: 4 }).draft.map.notes[0]).toMatchObject({ x: 1, y: 4 });
+    expect(move(draft, ref, { x: 6, y: 5 }).draft.map.notes[0]).toMatchObject({ x: 6, y: 5 });
+    const stuck = move(draft, ref, { x: 15, y: 9 });
+    expect([stuck.note, stuck.draft]).toEqual([NOTE_SPOT, draft]);
+    expect(remove(draft, ref).map.notes).toEqual([]);
+    expect(tilesOf(draft, ref)).toEqual([{ x: 4, y: 1 }]);
   });
 });
 

@@ -57,7 +57,8 @@
       { "puzzleId": "notstrom", "x": 2, "y": 7, "console": "b" },
       { "puzzleId": "signalkette", "x": 19, "y": 7, "console": "a" },
       { "puzzleId": "signalkette", "x": 7, "y": 15, "console": "b" },
-      { "puzzleId": "subsysteme", "x": 9, "y": 3 },
+      { "puzzleId": "subsysteme", "x": 9, "y": 3, "console": "a" },
+      { "puzzleId": "subsysteme", "x": 17, "y": 3, "console": "b" },
       { "puzzleId": "frequenz", "x": 9, "y": 15 },
       { "puzzleId": "reaktorstart", "x": 25, "y": 13 }
     ],
@@ -152,6 +153,23 @@
       { "kind": "cables", "x": 22, "y": 14, "variant": 3 },
       { "kind": "desk", "x": 20, "y": 15, "variant": 0 },
       { "kind": "desk", "x": 25, "y": 15, "variant": 1 }
+    ],
+    "notes": [
+      {
+        "x": 12,
+        "y": 6,
+        "text": "Kein Zufall: Die Nachtschicht hat die Kühlung überbrückt, damit die Zentrifugen durchlaufen. Um 23:47 kam der Knall."
+      },
+      {
+        "x": 13,
+        "y": 2,
+        "text": "Drei Tickets wegen der Lüfter, keins bearbeitet. Brennt hier nachts ein Rack durch: gemeldet war es. – Admin"
+      },
+      {
+        "x": 2,
+        "y": 0,
+        "text": "Wir sind vom Reaktor zur Luke im Archiv gerannt. Beide Wege sind gleich weit: durchs Labor oder am Serverraum vorbei."
+      }
     ],
     "exit": { "x": 1, "y": 1 },
     "items": [
@@ -250,20 +268,21 @@
       "legend": true,
       "fleetingFrom": 3,
       "hints": [
-        "Die Legende am Klemmbrett nennt je Pult die Zeile einer Farbe; ab Stufe 3 laufen die Zeichen durch.",
-        "Kein Zufall: Die Nachtschicht hat die Kühlung überbrückt, damit die Zentrifugen durchlaufen. Um 23:47 kam der Knall."
+        "Die Legende am Klemmbrett nennt je Pult die Zeile einer Farbe; ab Stufe 3 laufen die Zeichen durch."
       ],
       "lights": ["SERVERRAUM"],
-      "onSolved": "Schott offen. Drohne wach – Kameraplatte vor dem Serverraum."
+      "onSolved": "Schott offen: Terminal und Rack im Serverraum. Drohne wach – Kameraplatte davor."
     },
     {
-      "type": "maze",
+      "type": "servers",
       "id": "subsysteme",
-      "title": "Leitungsnetz",
-      "size": 6,
+      "title": "Serverraum",
+      "crashed": 4,
+      "trap": true,
       "hints": [
-        "Der Schaltplan zeigt die Wände, das Navigationspult Marker und Ziel. Der Weg lässt sich vom Ziel rückwärts finden.",
-        "Drei Tickets wegen der Lüfter, keins bearbeitet. Brennt hier nachts ein Rack durch: gemeldet war es. – Admin"
+        "Codes stehen nur am Terminal, Schalter nur am Rack: Das Terminal liest jeden Code vor, das Rack schaltet.",
+        "Erst den Dienst mit E50 vom Strom. Dann der Reihe nach: Ein Dienst startet erst, wenn alles läuft, wovon er abhängt.",
+        "E23 will am Rack einmal aus und an vor dem Start, E42 erst einen restart jeder Abhängigkeit."
       ],
       "lights": ["LABOR"],
       "onSolved": "Labortür offen, Drohne drin. Aktenschrank braucht den Schlüssel."
@@ -273,8 +292,7 @@
       "id": "frequenz",
       "title": "Frequenz-Abgleich",
       "hints": [
-        "Nach der langen Pause beginnt das Wort. Die Morsetafel gibt die ersten 3 Buchstaben, die Frequenztabelle die Frequenz.",
-        "Wir sind vom Reaktor zur Luke im Archiv gerannt. Beide Wege sind gleich weit: durchs Labor oder am Serverraum vorbei."
+        "Nach der langen Pause beginnt das Wort. Die Morsetafel gibt die ersten 3 Buchstaben, die Frequenztabelle die Frequenz."
       ],
       "lights": ["REAKTOR"],
       "onSolved": "Reaktor offen. Ohne Ersatzsicherung bleibt er tot."

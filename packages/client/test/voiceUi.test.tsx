@@ -72,6 +72,7 @@ function annaSees(phase: PlayerView['phase']): PlayerView {
     presence: { stationId: null, console: null, manualId: null, signSeen: false },
     sourcesHere: [],
     manualsHere: [],
+    noteHere: null,
     puzzle: null,
     map: phase === 'lobby' ? null : mapWith({}),
   };
@@ -108,6 +109,7 @@ function world(voice: VoiceMesh | null, spectator = false): string {
       holdTips={false}
       onToggleInfo={noop}
       onRead={noop}
+      onReadNote={noop}
       onOperate={noop}
       send={noop}
     />,

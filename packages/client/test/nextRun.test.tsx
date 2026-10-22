@@ -42,6 +42,7 @@ function wonTutorial(parts: Partial<PlayerView> = {}): PlayerView {
     presence: { stationId: null, console: null, manualId: null, signSeen: true },
     sourcesHere: [],
     manualsHere: [],
+    noteHere: null,
     puzzle: null,
     map: null,
     ...parts,

@@ -1,5 +1,6 @@
 import { bake, bakeBox, drawBaked } from '../baked.js';
 import { coversArmed } from '../interact.js';
+import { noteMount } from '../notes.js';
 import {
   CREW_GLOW_STOPS,
   DRONE_BEAM_STOPS,
@@ -249,6 +250,7 @@ export function objectGlows(frame: Frame): Glow[] {
   return [
     ...stationGlows(frame),
     ...sourceGlows(frame),
+    ...noteGlows(frame),
     ...plateAndValveGlows(frame),
     ...itemGlows(frame),
   ];
@@ -277,6 +279,20 @@ function sourceGlows(frame: Frame): Glow[] {
   return sign === null
     ? glows
     : [...glows, { x: sign.x + 0.5, y: sign.y + 0.5, radius: 1.4, strength: 0.6 }];
+}
+
+/** The notes of the last crew found so far: faint, and fainter once somebody has read one. */
+function noteGlows(frame: Frame): Glow[] {
+  const { map } = frame;
+  return map.notes.flatMap((note): Glow[] => {
+    const mount = noteMount(map, note);
+    if (mount === null) {
+      return [];
+    }
+    // A sheet on a wall hangs on its face, above the point it is read from.
+    const y = mount.facing === null ? mount.y : mount.y - 0.35;
+    return [{ x: mount.x, y, radius: 0.9, strength: note.read ? 0.3 : 0.5 }];
+  });
 }
 
 /** A plate pressed or worth finding where light has fallen, and an emergency's valves. */

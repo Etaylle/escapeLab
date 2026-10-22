@@ -3,6 +3,8 @@ import {
   DECOR_KINDS,
   DECOR_VARIANTS,
   MANUAL_KINDS,
+  NOTE_TEXT_MAX,
+  noteSpot,
   ROOM_KINDS,
   type ManualKind,
 } from '@escapelab/core';
@@ -15,7 +17,15 @@ import {
   type DraftSource,
   type Tile,
 } from './draft.js';
-import { ChecksField, FormHead, IdField, SelectField, TextField, type Choice } from './fields.js';
+import {
+  AreaField,
+  ChecksField,
+  FormHead,
+  IdField,
+  SelectField,
+  TextField,
+  type Choice,
+} from './fields.js';
 import { rename, replaceAt, sameThing, tileOf, withMap, type Pending, type Ref } from './tools.js';
 import { messagesAt, type Validation } from './validate.js';
 
@@ -484,6 +494,42 @@ function DecorForm({ index, props }: { index: number; props: ThingProps }) {
   );
 }
 
+/** Where a note hangs, in words: on which side of its wall, or on the floor. */
+function noteWhere(draft: Draft, note: Tile): string {
+  const spot = noteSpot(draft.map, note);
+  if (spot === null) {
+    return 'Hier liest sie niemand: an eine Wand neben dem Boden oder auf den Boden damit.';
+  }
+  if (spot.x === note.x && spot.y === note.y) {
+    return 'Liegt auf dem Boden; gelesen wird sie im Stehen davor.';
+  }
+  const across = spot.x > note.x ? 'rechts' : 'links';
+  const side = spot.y > note.y ? 'unten' : spot.y < note.y ? 'oben' : across;
+  return `Hängt an der Wand, gelesen vom Boden ${side} davor.`;
+}
+
+function NoteForm({ index, props }: { index: number; props: ThingProps }) {
+  const { draft, validation, onChange } = props;
+  const note = draft.map.notes[index];
+  if (note === undefined) {
+    return null;
+  }
+  const set = (text: string): void =>
+    onChange(withMap(draft, { notes: replaceAt(draft.map.notes, index, { ...note, text }) }));
+  return (
+    <Shell title="Notiz der letzten Crew" props={props}>
+      <AreaField
+        label={`Text — ${note.text.length} von ${NOTE_TEXT_MAX} Zeichen`}
+        value={note.text}
+        onChange={set}
+        issues={messagesAt(validation, `map.notes.${index}.text`)}
+        note="Frei zu lesen, kostet nichts: Geschichte des Labors, nie eine Lösung."
+      />
+      <p className="editor-note">{noteWhere(draft, note)}</p>
+    </Shell>
+  );
+}
+
 /** Things with nothing to set but where they stand. */
 const PLAIN: Readonly<Partial<Record<Ref['kind'], { title: string; note: string }>>> = {
   spawn: {
@@ -517,6 +563,7 @@ const FORMS: Readonly<
   drone: DroneForm,
   label: LabelForm,
   decor: DecorForm,
+  note: NoteForm,
 };
 
 export function ThingForm(props: ThingProps) {

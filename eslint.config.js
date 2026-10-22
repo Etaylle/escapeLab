@@ -20,6 +20,9 @@ export default tseslint.config(
         console: 'readonly',
         process: 'readonly',
         setTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        structuredClone: 'readonly',
         // page.evaluate() bodies run in the browser.
         document: 'readonly',
       },

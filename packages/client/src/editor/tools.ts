@@ -1,4 +1,4 @@
-import type { DecorKind } from '@escapelab/core';
+import { noteSpot, type DecorKind } from '@escapelab/core';
 import {
   defaultFields,
   freeId,
@@ -19,10 +19,11 @@ import {
  * selecting, moving, deleting, painting and renaming. The rules:
  *
  * - Things stand on floor. A press on a wall or the void places nothing and
- *   says why.
+ *   says why — but a note of the last crew may also hang on a wall with
+ *   floor beside it.
  * - One solid thing a tile — start, door, plate, station, source, sign, exit,
- *   item, valve, a piece of furniture. A press on a tile that has one selects
- *   it instead.
+ *   item, valve, a piece of furniture, a note. A press on a tile that has one
+ *   selects it instead.
  *   Marks — room names, drop-offs, drone waypoints — may lie on anything.
  * - The sign and the exit exist once: placing them again moves them; so does
  *   placing a station whose puzzle (or, at two consoles, whose console)
@@ -46,7 +47,8 @@ export type Tool =
   | 'exit'
   | 'item'
   | 'drone'
-  | 'decor';
+  | 'decor'
+  | 'note';
 
 /** The tools that put a thing on the map, as against selecting and painting. */
 export type PlacingTool = Exclude<Tool, 'select' | 'floor' | 'wall'>;
@@ -66,6 +68,7 @@ export type Ref =
   | { kind: 'drone'; index: number; waypoint: number }
   | { kind: 'panel'; index: number }
   | { kind: 'decor'; index: number }
+  | { kind: 'note'; index: number }
   | { kind: 'puzzle'; index: number };
 
 /** A press the side form armed: the next tile pressed is a source's spot or an item's drop-off. */
@@ -112,6 +115,7 @@ const SOLID_KINDS: ReadonlySet<Ref['kind']> = new Set([
   'item',
   'panel',
   'decor',
+  'note',
 ]);
 
 const SOLID_TOOLS: ReadonlySet<Tool> = new Set([
@@ -124,6 +128,7 @@ const SOLID_TOOLS: ReadonlySet<Tool> = new Set([
   'exit',
   'item',
   'decor',
+  'note',
 ]);
 
 export const isSolid = (ref: Ref): boolean => SOLID_KINDS.has(ref.kind);
@@ -136,6 +141,11 @@ export function mapSize(draft: Draft): { width: number; height: number } {
 
 export function isFloor(draft: Draft, at: Tile): boolean {
   return draft.map.tiles[at.y]?.charAt(at.x) === '.';
+}
+
+/** Where a thing may go: on floor — a note also on a wall with floor beside it. */
+function fits(draft: Draft, kind: Tool | Ref['kind'], at: Tile): boolean {
+  return kind === 'note' ? noteSpot(draft.map, at) !== null : isFloor(draft, at);
 }
 
 function inside(draft: Draft, at: Tile): boolean {
@@ -166,6 +176,7 @@ export function placedRefs(draft: Draft): { ref: Ref; at: Tile }[] {
       at,
     })),
     ...map.decor.map((at, index) => ({ ref: { kind: 'decor', index } as Ref, at })),
+    ...map.notes.map((at, index) => ({ ref: { kind: 'note', index } as Ref, at })),
     ...map.labels.map((at, index) => ({ ref: { kind: 'label', index } as Ref, at })),
     ...map.items.flatMap((item, index) =>
       item.deliverTo === undefined
@@ -419,10 +430,21 @@ const PLACERS: Readonly<Record<PlacingTool, Placer>> = {
     const decor = [...draft.map.decor, piece];
     return placed(withMap(draft, { decor }), { kind: 'decor', index: decor.length - 1 });
   },
+  note: (draft, at) => {
+    const notes = [...draft.map.notes, { x: at.x, y: at.y, text: NEW_NOTE }];
+    return placed(withMap(draft, { notes }), { kind: 'note', index: notes.length - 1 });
+  },
 };
 
+/** What a new note of the last crew says until its author writes it. */
+export const NEW_NOTE = 'Wer das liest, ist nicht der Erste hier.';
 export const ON_FLOOR_ONLY = 'Nur auf Boden — erst mit dem Boden-Pinsel Fläche malen.';
+export const NOTE_SPOT = 'Eine Notiz hängt an einer Wand neben dem Boden oder liegt auf dem Boden.';
 export const TAKEN = 'Dort steht schon etwas.';
+
+/** Why a thing may not go to `at`: the note's own word, or the floor's. */
+const notThere = (kind: Tool | Ref['kind']): string =>
+  kind === 'note' ? NOTE_SPOT : ON_FLOOR_ONLY;
 
 /**
  * A press with a placing tool. On a tile with a solid thing, a tool that
@@ -446,8 +468,8 @@ export function place(
   if (occupant !== undefined) {
     return { draft, selection: occupant, note: null };
   }
-  if (!isFloor(draft, at)) {
-    return { draft, selection, note: ON_FLOOR_ONLY };
+  if (!fits(draft, tool, at)) {
+    return { draft, selection, note: notThere(tool) };
   }
   return PLACERS[tool](draft, at, selection, choice);
 }
@@ -492,6 +514,7 @@ const LISTS = {
   label: 'labels',
   item: 'items',
   decor: 'decor',
+  note: 'notes',
 } as const;
 
 type ListRef = Extract<Ref, { kind: keyof typeof LISTS }>;
@@ -554,8 +577,8 @@ function editPanels(draft: Draft, change: (panels: readonly DraftPanel[]) => Dra
 
 /** Drags a thing to another tile, by the same floor and one-solid-a-tile rules as placing. */
 export function move(draft: Draft, ref: Ref, to: Tile): Placement {
-  if (!inside(draft, to) || !isFloor(draft, to)) {
-    return { draft, selection: ref, note: ON_FLOOR_ONLY };
+  if (!inside(draft, to) || !fits(draft, ref.kind, to)) {
+    return { draft, selection: ref, note: notThere(ref.kind) };
   }
   if (isSolid(ref) && refsAt(draft, to).some((other) => isSolid(other) && !sameRef(other, ref))) {
     return { draft, selection: ref, note: TAKEN };

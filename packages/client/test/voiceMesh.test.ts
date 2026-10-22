@@ -191,6 +191,7 @@ function crewView(you: string, crew: [string, boolean][]): ServerMessage {
     presence: { stationId: null, console: null, manualId: null, signSeen: false },
     sourcesHere: [],
     manualsHere: [],
+    noteHere: null,
     puzzle: null,
     map: null,
   };

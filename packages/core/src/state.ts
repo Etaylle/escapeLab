@@ -21,7 +21,9 @@ export interface RunEvent {
     | 'radio'
     | 'find'
     /** the lights failing at the end of a mission's intro */
-    | 'power';
+    | 'power'
+    /** a note of the last crew read for the first time this run */
+    | 'note';
   label: string;
   /** seconds lost, for penalty and hint lines */
   seconds: number | null;
@@ -37,13 +39,21 @@ export interface Presence {
   stations: Record<string, string[]>;
   /** players at each manual object, by its id */
   manuals: Record<string, string[]>;
+  /** players at each note of the last crew, by its index as text (`noteKey`) */
+  notes: Record<string, string[]>;
   /** players who have walked up to the edgework sign; kept for the rest of the run */
   signSeen: string[];
   /** players standing on the open exit hatch right now; nobody before the escape */
   exit: string[];
 }
 
-export const NOBODY_PRESENT: Presence = { stations: {}, manuals: {}, signSeen: [], exit: [] };
+export const NOBODY_PRESENT: Presence = {
+  stations: {},
+  manuals: {},
+  notes: {},
+  signSeen: [],
+  exit: [],
+};
 
 export interface ItemState {
   /** tile-space position while lying on the floor */
@@ -144,6 +154,13 @@ export interface GameState {
   opened: string[];
   /** manual objects somebody has come close to this run; the crew's map shows only these */
   discovered: string[];
+  /**
+   * notes of the last crew somebody has come across this run, by index; the
+   * crew's map shows only these
+   */
+  notesFound: number[];
+  /** notes somebody has read this run, by index: the run report logs each once */
+  notesRead: number[];
   /** who did what this run, by player id */
   credits: Record<string, Credits>;
   /** players already credited with reading the current station's rules */
@@ -210,6 +227,8 @@ export function initialState(mission: Mission, roomSeed: number | null = null): 
     places: {},
     opened: [],
     discovered: [],
+    notesFound: [],
+    notesRead: [],
     credits: {},
     readersCredited: [],
     sabotage: null,

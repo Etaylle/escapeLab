@@ -171,6 +171,7 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
     case 'puzzle-input':
     case 'request-hint':
     case 'open-source':
+    case 'read-note':
     case 'interact':
     case 'drop-item':
     case 'rematch':

@@ -1,6 +1,7 @@
 import type { Difficulty } from './difficulty.js';
 import type { Edgework } from './edgework.js';
 import type { DecorKind, ManualDef, ManualKind, RoomKind } from './mission.js';
+import { noteKey } from './notes.js';
 import { CREW_COLORS, type Credits, type GameState, type Phase, type RunEvent } from './state.js';
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
 import type { ConsoleId, ManualSection, Viewer, ViewContext } from './puzzles/module.js';
@@ -83,6 +84,8 @@ export interface PlayerView {
   sourcesHere: SourceHere[];
   /** the open manual objects this player stands at, with the rules of every puzzle they cover */
   manualsHere: ManualHere[];
+  /** the note of the last crew this player stands at, with its words; null away from every one */
+  noteHere: NoteHere | null;
   puzzle: PuzzleView | null;
   /** tile map while a mission is running; null otherwise */
   map: MapView | null;
@@ -159,6 +162,13 @@ export interface ManualHere {
   }[];
 }
 
+/** A note of the last crew as read on the spot: which of the map's it is, and what it says. */
+export interface NoteHere {
+  /** its index among the map's notes: what a read names */
+  index: number;
+  text: string;
+}
+
 /**
  * Static world + authoritative door/plate/station state. Live avatar
  * positions travel separately (client-authoritative, streamed as
@@ -212,6 +222,12 @@ export interface MapView {
     /** a cabinet's key, by item id; null for everything else */
     needsKey: string | null;
   }[];
+  /**
+   * the notes of the last crew the crew has come across so far (the audience
+   * sees all of them), where each lies — on a wall or the floor — and
+   * whether somebody has read it; never what it says
+   */
+  notes: { index: number; x: number; y: number; read: boolean }[];
   /** the wall sign with the Laborkennung; null on a map without one */
   edgeworkSign: { x: number; y: number } | null;
   /** the emergency lamps, on the floor or on a wall beside it; they glow once the lights are out */
@@ -398,6 +414,18 @@ function manualsHereFor(state: GameState, playerId: string): ManualHere[] {
     .map((m) => ({ id: m.id, label: m.label, kind: m.kind, sections: sectionsOf(state, m) }));
 }
 
+/** The first note of the map, in map order, that `playerId` stands at; null at none. */
+function noteHereFor(state: GameState, playerId: string): NoteHere | null {
+  if (state.phase !== 'playing') {
+    return null;
+  }
+  const index = state.mission.map.notes.findIndex(
+    (_, i) => state.presence.notes[noteKey(i)]?.includes(playerId) === true,
+  );
+  const note = state.mission.map.notes[index];
+  return note === undefined ? null : { index, text: note.text };
+}
+
 /**
  * The open puzzle as one player sees it from where they stand, or as the
  * audience sees it (`playerId` null): instance, rules and the reader's side.
@@ -535,6 +563,15 @@ function manualsOnMap(state: GameState, viewer: MapViewer): MapView['manuals'] {
   });
 }
 
+/** The notes the crew has come across, or every one for the audience — where, and whether read. */
+function notesOnMap(state: GameState, viewer: MapViewer): MapView['notes'] {
+  return state.mission.map.notes.flatMap((note, index) =>
+    viewer === null || state.notesFound.includes(index)
+      ? [{ index, x: note.x, y: note.y, read: state.notesRead.includes(index) }]
+      : [],
+  );
+}
+
 function itemsOnMap(state: GameState, viewer: MapViewer): MapView['items'] {
   const map = state.mission.map;
   const found = foundBy(state, viewer);
@@ -607,6 +644,7 @@ function mapViewFor(state: GameState, viewer: MapViewer): MapView | null {
     })),
     stations: stationsOnMap(state),
     manuals: manualsOnMap(state, viewer),
+    notes: notesOnMap(state, viewer),
     edgeworkSign: map.edgeworkSign === undefined ? null : { ...map.edgeworkSign },
     lamps: map.lamps.map((lamp) => ({ x: lamp.x, y: lamp.y })),
     labels: map.labels.map((l) => ({
@@ -789,6 +827,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     presence,
     sourcesHere: sourcesHereFor(state, playerId),
     manualsHere: manualsHereFor(state, playerId),
+    noteHere: noteHereFor(state, playerId),
     puzzle: puzzleViewFor(state, playerId),
     map: mapViewFor(state, playerId),
     ...(state.roomSeed === null ? {} : { seed: { room: state.roomSeed, run: state.seed } }),

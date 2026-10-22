@@ -120,8 +120,10 @@ export function standing(
   where: {
     stations?: Record<string, string[]>;
     manuals?: Record<string, string[]>;
+    notes?: Record<string, string[]>;
     signSeen?: string[];
     seen?: string[];
+    notesSeen?: number[];
     exit?: string[];
   },
 ): GameState {
@@ -129,8 +131,10 @@ export function standing(
     type: 'set-presence',
     stations: where.stations ?? {},
     manuals: where.manuals ?? {},
+    notes: where.notes ?? {},
     signSeen: where.signSeen ?? [],
     seen: where.seen ?? [],
+    notesSeen: where.notesSeen ?? [],
     exit: where.exit ?? [],
   });
 }

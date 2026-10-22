@@ -1,13 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { stillOpen, type Opened } from '../src/screens/Game.js';
 
-const nothing: Opened = { operating: false, readingId: null, notes: false, info: false };
-const everything: Opened = { operating: true, readingId: 'handbuch', notes: true, info: true };
+const nothing: Opened = {
+  operating: false,
+  readingId: null,
+  noteIndex: null,
+  notes: false,
+  info: false,
+};
+const everything: Opened = {
+  operating: true,
+  readingId: 'handbuch',
+  noteIndex: 1,
+  notes: true,
+  info: true,
+};
 
 describe('an emergency and what is open', () => {
-  it('closes the station, the pages, the notepad and the info panel the moment it starts', () => {
+  it('closes the station, the pages, a note, the notepad and the info panel as it starts', () => {
     expect(stillOpen(everything, false, true)).toEqual(nothing);
     expect(stillOpen({ ...nothing, readingId: 'handbuch' }, false, true)).toEqual(nothing);
+    expect(stillOpen({ ...nothing, noteIndex: 0 }, false, true)).toEqual(nothing);
   });
 
   it('lets the player open things again while it runs', () => {

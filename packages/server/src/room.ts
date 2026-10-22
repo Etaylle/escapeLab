@@ -8,6 +8,8 @@ import {
   inEscapePhase,
   initialState,
   lightsAreOut,
+  noteKey,
+  noteSpot,
   puzzleDueAt,
   runReport,
   shutDoors,
@@ -48,6 +50,7 @@ export type GameMessage = Extract<
       | 'puzzle-input'
       | 'request-hint'
       | 'open-source'
+      | 'read-note'
       | 'interact'
       | 'drop-item'
       | 'back-to-lobby'
@@ -306,6 +309,9 @@ export class Room {
         break;
       case 'open-source':
         this.dispatch({ type: 'open-source', playerId, manualId: msg.manualId, at: Date.now() });
+        break;
+      case 'read-note':
+        this.dispatch({ type: 'read-note', playerId, note: msg.note, at: Date.now() });
         break;
       case 'interact':
         this.resolveInteract(playerId);
@@ -670,29 +676,44 @@ export class Room {
     return this.occupantsOf(exit.x, exit.y, EXIT_RADIUS).sort();
   }
 
+  /** Connected players in presence range of each spot, by its id; empty spots left out. */
+  private atEach(
+    spots: readonly { id: string; x: number; y: number }[],
+    was: Record<string, string[]>,
+  ): Record<string, string[]> {
+    return Object.fromEntries(
+      spots
+        .map((spot) => [spot.id, this.presentAt(spot.x, spot.y, was[spot.id] ?? [])] as const)
+        .filter(([, players]) => players.length > 0),
+    );
+  }
+
+  /**
+   * Where each note of the last crew is read, by `noteKey`: the floor tile
+   * it lies on, or the one its wall's face looks into (core's `noteSpot`).
+   */
+  private noteSpots(): { id: string; index: number; x: number; y: number }[] {
+    const map = this.state.mission.map;
+    return map.notes.flatMap((note, index) => {
+      const spot = noteSpot(map, note);
+      return spot === null ? [] : [{ id: noteKey(index), index, ...spot }];
+    });
+  }
+
   /**
    * Translate live positions into who stands at which station spot — each
-   * console of a station on its own, keyed by `stationKey` — and manual
-   * object, who has walked up to the sign, which manual objects somebody has
-   * come close to and seen for the first time, and who stands on the open
-   * hatch; dispatch only on change.
+   * console of a station on its own, keyed by `stationKey` — manual object
+   * and note, who has walked up to the sign, which manual objects and notes
+   * somebody has come close to and seen for the first time, and who stands on
+   * the open hatch; dispatch only on change.
    */
   private reconcilePresence(): void {
     const map = this.state.mission.map;
     if (this.state.phase !== 'playing') {
       return;
     }
-    const { presence, places, discovered } = this.state;
-    const atEach = (
-      spots: readonly { id: string; x: number; y: number }[],
-      was: Record<string, string[]>,
-    ): Record<string, string[]> =>
-      Object.fromEntries(
-        spots
-          .map((spot) => [spot.id, this.presentAt(spot.x, spot.y, was[spot.id] ?? [])] as const)
-          .filter(([, players]) => players.length > 0),
-      );
-    const stations = atEach(
+    const { presence, places, discovered, notesFound } = this.state;
+    const stations = this.atEach(
       map.stations.map((s) => ({ id: stationKey(s), x: s.x, y: s.y })),
       presence.stations,
     );
@@ -700,7 +721,9 @@ export class Room {
       const at = places[m.id];
       return at === undefined ? [] : [{ id: m.id, x: at.x, y: at.y }];
     });
-    const manuals = atEach(sources, presence.manuals);
+    const manuals = this.atEach(sources, presence.manuals);
+    const pinned = this.noteSpots();
+    const notes = this.atEach(pinned, presence.notes);
     const sign = map.edgeworkSign;
     const signSeen =
       sign === undefined
@@ -710,16 +733,21 @@ export class Room {
     const seen = sources
       .filter((s) => !discovered.includes(s.id) && this.sighted(s, shut))
       .map((s) => s.id);
+    const notesSeen = pinned
+      .filter((n) => !notesFound.includes(n.index) && this.sighted(n, shut))
+      .map((n) => n.index);
     const exit = this.onTheHatch();
     const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
     if (
       !same(stations, presence.stations) ||
       !same(manuals, presence.manuals) ||
+      !same(notes, presence.notes) ||
       signSeen.length !== presence.signSeen.length ||
-      seen.length > 0 ||
+      seen.length + notesSeen.length > 0 ||
       !same(exit, presence.exit)
     ) {
-      this.dispatch({ type: 'set-presence', stations, manuals, signSeen, seen, exit });
+      const action = { stations, manuals, notes, signSeen, seen, notesSeen, exit };
+      this.dispatch({ type: 'set-presence', ...action });
     }
   }
 

@@ -63,6 +63,7 @@ function annaSees(players: Seat[], parts: Partial<PlayerView> = {}): PlayerView 
     presence: { stationId: null, console: null, manualId: null, signSeen: false },
     sourcesHere: [],
     manualsHere: [],
+    noteHere: null,
     puzzle: null,
     map: null,
     ...parts,

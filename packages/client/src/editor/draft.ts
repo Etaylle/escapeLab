@@ -157,6 +157,13 @@ export interface DraftSource {
   needsKey: string;
 }
 
+/** A note of the last crew: on a wall beside the floor, or on the floor; free to read. */
+export interface DraftNote {
+  x: number;
+  y: number;
+  text: string;
+}
+
 export interface DraftItem {
   id: string;
   label: string;
@@ -196,6 +203,7 @@ export interface DraftMap {
   labels: DraftLabel[];
   decor: DraftDecor[];
   manuals: DraftSource[];
+  notes: DraftNote[];
   edgeworkSign?: Tile;
   exit?: Tile;
   items: DraftItem[];
@@ -326,6 +334,7 @@ export function newDraft(): Draft {
       labels: [],
       decor: [],
       manuals: [],
+      notes: [],
       items: [],
       drones: [],
     },
@@ -418,6 +427,9 @@ function mapJson(map: DraftMap): Record<string, unknown> {
       spots: m.spots.map(tileJson),
       ...given('needsKey', m.needsKey),
     })),
+    ...(map.notes.length === 0
+      ? {}
+      : { notes: map.notes.map((n) => ({ x: n.x, y: n.y, text: n.text })) }),
     ...given('edgeworkSign', map.edgeworkSign),
     ...given('exit', map.exit),
     items: map.items.map((i) => ({
@@ -505,6 +517,7 @@ interface LooseMap {
         needsKey?: string | undefined;
       }[]
     | undefined;
+  notes?: { x: number; y: number; text: string }[] | undefined;
   edgeworkSign?: LooseTile | undefined;
   exit?: LooseTile | undefined;
   items?:
@@ -648,7 +661,7 @@ function stationOf(station: LooseMap['stations'][number]): DraftStation {
 /** The lists a mission file may leave out, there in the draft even when empty. */
 type DraftLists = Pick<
   DraftMap,
-  'doors' | 'plates' | 'labels' | 'decor' | 'manuals' | 'items' | 'drones'
+  'doors' | 'plates' | 'labels' | 'decor' | 'manuals' | 'notes' | 'items' | 'drones'
 >;
 
 function listsOf(map: LooseMap): DraftLists {
@@ -663,6 +676,7 @@ function listsOf(map: LooseMap): DraftLists {
       variant: d.variant ?? null,
     })),
     manuals: (map.manuals ?? []).map(sourceOf),
+    notes: (map.notes ?? []).map((n) => ({ x: n.x, y: n.y, text: n.text })),
     items: (map.items ?? []).map(itemOf),
     drones: (map.drones ?? []).map((d) => ({
       id: d.id,

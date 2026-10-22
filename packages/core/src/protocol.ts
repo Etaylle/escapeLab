@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CHAT_PHRASE_IDS, type ChatPhrase } from './chat.js';
 import { DIFFICULTIES, type Difficulty } from './difficulty.js';
+import { MAX_NOTES } from './notes.js';
 import type { ManualSection } from './puzzles/module.js';
 import type { Phase } from './state.js';
 import type { PlayerView, SpectatorView } from './view.js';
@@ -83,6 +84,15 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('request-hint') }),
   /** search the locker or unlock the cabinet the player stands at */
   z.object({ kind: z.literal('open-source'), manualId: z.string().min(1) }),
+  /** read the note of the last crew the player stands at, by its index among the map's notes */
+  z.object({
+    kind: z.literal('read-note'),
+    note: z
+      .number()
+      .int()
+      .min(0)
+      .max(MAX_NOTES - 1),
+  }),
   z.object({
     kind: z.literal('pos'),
     /** the run the client plays, by its `startedAt`: a position from another run is dropped */

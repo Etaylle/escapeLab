@@ -2189,3 +2189,111 @@ export function drawEmergencyLamp(ctx: CanvasRenderingContext2D, o: EmergencyLam
     ctx.restore();
   }
 }
+
+// ---- A note of the last crew ---------------------------------------------------------
+
+export interface PinnedNoteOpts {
+  /** on a wall, the way its face looks in radians (0 east, π/2 south); null on the floor */
+  facing: number | null;
+  /** somebody of the crew has read it: no call for attention any more */
+  read: boolean;
+  /** 0..1 looping pulse driven by the caller */
+  pulse: number;
+}
+
+/** The sheet's paper, a shade warmer than a printed page: it was torn off a pad. */
+const NOTE_PAPER = css(mix(PAPER, WHITE, 0.35));
+/** The last crew's ballpoint. */
+const NOTE_INK = rgba(sink(READ_BLUE, 0.55), 0.85);
+/** The pin's head: the lab's alarm red, a highlight on its top left. */
+const PIN_HEAD = css(sink(ALARM, 0.2));
+const PIN_SHINE = rgba(WHITE, 0.6);
+/** Lines of handwriting, as fractions of the sheet's width; the last one short. */
+const SCRAWL = [0.82, 0.7, 0.86, 0.48] as const;
+
+/** A sheet of `w` × `h` tiles round the origin's top, with its lines of handwriting. */
+function drawNoteSheet(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  ctx.fillStyle = rgba(BLACK, 0.35);
+  ctx.fillRect(-w / 2 + 0.025, 0.03, w, h);
+  ctx.beginPath();
+  ctx.moveTo(-w / 2, 0);
+  ctx.lineTo(w / 2, 0);
+  ctx.lineTo(w / 2, h - 0.07);
+  ctx.lineTo(w / 2 - 0.07, h);
+  ctx.lineTo(-w / 2, h);
+  ctx.closePath();
+  ctx.fillStyle = NOTE_PAPER;
+  ctx.fill();
+  ctx.lineWidth = OUTLINE * 0.7;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+  // The dog-ear at the foot, folded back.
+  ctx.beginPath();
+  ctx.moveTo(w / 2, h - 0.07);
+  ctx.lineTo(w / 2 - 0.07, h - 0.07);
+  ctx.lineTo(w / 2 - 0.07, h);
+  ctx.closePath();
+  ctx.fillStyle = css(sink(PAPER, 0.2));
+  ctx.fill();
+  ctx.beginPath();
+  SCRAWL.forEach((length, i) => {
+    const y = 0.09 + i * ((h - 0.14) / SCRAWL.length);
+    const x = -w / 2 + 0.05;
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(x + (w - 0.1) * length * 0.5, y - 0.012, x + (w - 0.1) * length, y);
+  });
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 0.014;
+  ctx.strokeStyle = NOTE_INK;
+  ctx.stroke();
+}
+
+/** The pin at the origin: a red head with its shine, its shadow down and right. */
+function drawPin(ctx: CanvasRenderingContext2D): void {
+  ctx.beginPath();
+  addCircle(ctx, 0.018, 0.022, 0.034);
+  ctx.fillStyle = rgba(BLACK, 0.4);
+  ctx.fill();
+  ctx.beginPath();
+  addCircle(ctx, 0, 0, 0.034);
+  ctx.fillStyle = PIN_HEAD;
+  ctx.fill();
+  ctx.lineWidth = 0.01;
+  ctx.strokeStyle = PROP_EDGE;
+  ctx.stroke();
+  ctx.beginPath();
+  addCircle(ctx, -0.01, -0.011, 0.011);
+  ctx.fillStyle = PIN_SHINE;
+  ctx.fill();
+}
+
+/**
+ * Anchor: WHERE IT HANGS (notes.ts `noteMount`). A note of the last crew: on
+ * a wall, a sheet pinned to the face that looks into the floor it is read
+ * from, its pin at the top, a little askew; on the floor, the sheet lying
+ * there, turned. Handwriting in blue ballpoint, a dog-ear. Until somebody of
+ * the crew has read it, a faint reading-blue glow (strength follows pulse)
+ * calls for attention.
+ */
+export function drawPinnedNote(ctx: CanvasRenderingContext2D, o: PinnedNoteOpts): void {
+  const call = o.read ? 0 : 0.08 + 0.14 * pulseWave(o.pulse);
+  ctx.save();
+  try {
+    if (o.facing === null) {
+      ctx.rotate(-0.32);
+      softEllipse(ctx, 0, 0, 0.42, 0.34, READ_BLUE, call, 'lighter');
+      ctx.translate(0, -0.16);
+      drawNoteSheet(ctx, 0.36, 0.3);
+      return;
+    }
+    // Local +y points away from the wall, toward the floor; the sheet hangs on the face.
+    ctx.rotate(o.facing - Math.PI / 2);
+    softEllipse(ctx, 0, -0.36, 0.4, 0.34, READ_BLUE, call, 'lighter');
+    ctx.translate(0, -0.56);
+    ctx.rotate(-0.07);
+    drawNoteSheet(ctx, 0.3, 0.38);
+    drawPin(ctx);
+  } finally {
+    ctx.restore();
+  }
+}

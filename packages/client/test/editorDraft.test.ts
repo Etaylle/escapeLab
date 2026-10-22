@@ -186,7 +186,7 @@ describe('a puzzle’s own fields and penalty, draft ↔ JSON', () => {
       ['button-sync', null, { windowMs: 2000, style: 'lever' }],
       ['circuit', 30, { wires: { min: 4, max: 6 }, shorts: 3, burnoutSec: 60 }],
       ['signal', null, { stages: 4, length: 4, legend: true, fleetingFrom: 3 }],
-      ['maze', null, { size: 6 }],
+      ['servers', null, { crashed: 4, trap: true }],
       ['morse', null, {}],
       ['button-sync', null, { windowMs: 2000, style: 'button' }],
     ]);
@@ -194,8 +194,9 @@ describe('a puzzle’s own fields and penalty, draft ↔ JSON', () => {
     expect(json.puzzles[0]).toMatchObject({ type: 'button-sync', style: 'lever' });
     expect(json.puzzles[1]).toMatchObject({ wires: { min: 4, max: 6 }, penaltySec: 30 });
     // Left out of the file, the penalty is left to the module: no key, no number.
-    expect(json.puzzles[3]).toMatchObject({ type: 'maze', size: 6 });
+    expect(json.puzzles[3]).toMatchObject({ type: 'servers', crashed: 4, trap: true });
     expect(json.puzzles[3]).not.toHaveProperty('penaltySec');
+    expect(defaultPenalty('servers')).toBe(20);
     expect(defaultPenalty('maze')).toBe(15);
   });
 
@@ -268,6 +269,26 @@ describe('draft ↔ JSON: rooms’ kinds and furniture', () => {
     const map = Object.fromEntries(Object.entries(json.map).filter(([key]) => key !== 'decor'));
     expect(map).not.toHaveProperty('decor');
     expect(loaded({ ...json, map }).map.decor).toEqual([]);
+  });
+});
+
+describe('draft ↔ JSON: notes of the last crew', () => {
+  it('reads every note with its words, and writes them back as they came', () => {
+    const blackout = shipped.find(({ name }) => name === 'blackout.json')?.data as {
+      map: { notes: unknown[] };
+    };
+    const draft = loaded(blackout);
+    expect(draft.map.notes).toHaveLength(3);
+    expect(draft.map.notes[0]).toEqual({ x: 12, y: 6, text: expect.stringMatching(/23:47/) });
+    const json = draftToJson(draft) as { map: { notes: unknown[] } };
+    expect(json.map.notes).toEqual(blackout.map.notes);
+  });
+
+  it('starts a new draft with no notes, and leaves them out of the file then', () => {
+    expect(newDraft().map.notes).toEqual([]);
+    const json = draftToJson(newDraft()) as { map: Record<string, unknown> };
+    expect(json.map).not.toHaveProperty('notes');
+    expect(loaded(json).map.notes).toEqual([]);
   });
 });
 

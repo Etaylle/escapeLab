@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { decorIssues } from './decor.js';
+import { MAX_NOTES, NOTE_TEXT_MAX, noteSpot } from './notes.js';
 import { moduleFor, puzzleDefSchema, type PuzzleDef } from './puzzles/index.js';
 import { RELAY_MAX_PLAYERS } from './puzzles/relay.js';
 import {
@@ -236,6 +237,16 @@ export const mapDefSchema = z.object({
       }),
     )
     .default([]),
+  /**
+   * Notes of the last crew, free to read: a sheet pinned to a wall beside
+   * the floor, or lying on the floor. The crew comes across them as it does
+   * the manual objects, and whoever stands at one reads it, at no cost — the
+   * lab's story, never a rule. Up to MAX_NOTES, one a tile.
+   */
+  notes: z
+    .array(z.object({ x: coord, y: coord, text: z.string().min(1).max(NOTE_TEXT_MAX) }))
+    .max(MAX_NOTES)
+    .default([]),
   /** Security drones patrolling their waypoint loop; their cone costs time. */
   drones: z
     .array(
@@ -325,11 +336,16 @@ export const missionSchema = z
     validateMap(mission, ctx);
   });
 
-/** What every map check gets: the map, the mission's puzzles and a way to report. */
+/**
+ * What every map check gets: the map, the mission's puzzles and a way to
+ * report — about the map at large, or about the entry of the mission file at
+ * `path`, which an editor can point at.
+ */
 interface MapCheck {
   map: MapDef;
   puzzleIds: Set<string>;
   issue: (message: string) => void;
+  issueAt: (path: (string | number)[], message: string) => void;
   floor: (x: number, y: number) => boolean;
   requireFloor: (what: string, x: number, y: number) => void;
 }
@@ -350,6 +366,7 @@ function validateMap(mission: MissionParts, ctx: z.RefinementCtx): void {
     map,
     puzzleIds: new Set(mission.puzzles.map((p) => p.id)),
     issue,
+    issueAt: (path, message) => ctx.addIssue({ code: 'custom', message, path }),
     floor,
     requireFloor: (what, x, y) => {
       if (!floor(x, y)) {
@@ -369,6 +386,7 @@ function validateMap(mission: MissionParts, ctx: z.RefinementCtx): void {
   checkItems(check);
   checkDrones(check, mission.puzzles.length);
   checkLamps(check);
+  checkNotes(check);
   checkLights(check, stations);
   checkManuals(check, stations);
   checkSpots(check);
@@ -604,6 +622,29 @@ function checkLamps({ map, issue, floor }: MapCheck): void {
     }
     hung.add(tileKey(x, y));
   }
+}
+
+/**
+ * Every note lies where somebody can read it — on the floor, or on a wall
+ * with floor beside it — and no two share a tile. Each issue names the note
+ * by its place in the file.
+ */
+function checkNotes({ map, issueAt }: MapCheck): void {
+  const pinned = new Set<string>();
+  map.notes.forEach((note, i) => {
+    const at = `${note.x},${note.y}`;
+    if (noteSpot(map, note) === null) {
+      issueAt(
+        ['map', 'notes', i],
+        `the note at ${at} lies where nobody can read it — pin it to a wall beside the floor ` +
+          'or lay it on the floor',
+      );
+    }
+    if (pinned.has(tileKey(note.x, note.y))) {
+      issueAt(['map', 'notes', i], `two notes at ${at} — one a tile`);
+    }
+    pinned.add(tileKey(note.x, note.y));
+  });
 }
 
 /** A solved station lights rooms by the names their labels give them. */

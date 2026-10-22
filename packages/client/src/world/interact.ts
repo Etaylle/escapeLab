@@ -1,4 +1,5 @@
-import type { MapView, SourceHere } from '@escapelab/core';
+import type { MapView, NoteHere, SourceHere } from '@escapelab/core';
+import { noteMount } from './notes.js';
 
 /** Prompt and client-side gate for stations and manual objects; the server counts 1.6. */
 export const INTERACT_RADIUS = 1.5;
@@ -14,6 +15,8 @@ export const TOUCH = '(pointer: coarse)';
 export type ContextAction =
   | { kind: 'deliver' | 'pick' | 'operate'; label: string; x: number; y: number }
   | { kind: 'read' | 'open'; manualId: string; label: string; x: number; y: number }
+  /** a note of the last crew the server counts this player at: E reads it, for nothing */
+  | { kind: 'note'; index: number; label: string; x: number; y: number }
   /** a locked cabinet without its key in hand: the prompt names what is missing, E does nothing */
   | { kind: 'locked'; label: string; x: number; y: number };
 
@@ -66,10 +69,33 @@ function sourceAction(map: MapView, manual: Manual, source: Source, mine?: Item)
 }
 
 /**
+ * E at the note of the last crew the server counts this player at, by its
+ * spot on the map; none where the crew has not come across it yet.
+ */
+function noteAction(
+  map: MapView,
+  noteHere: Pick<NoteHere, 'index'> | null,
+  dist: (x: number, y: number) => number,
+): { action: ContextAction; d: number }[] {
+  const note = map.notes.find((n) => n.index === noteHere?.index);
+  const mount = note === undefined ? null : noteMount(map, note);
+  if (note === undefined || mount === null) {
+    return [];
+  }
+  const at = { x: mount.x, y: mount.facing === null ? mount.y - 0.55 : mount.y - 0.85 };
+  return [
+    {
+      action: { kind: 'note', index: note.index, label: 'Lesen', ...at },
+      d: dist(mount.spot.x + 0.5, mount.spot.y + 0.5),
+    },
+  ];
+}
+
+/**
  * What pressing E would do where the player stands. A carried part goes in
  * first at its drop-off; otherwise the nearest of a loose part, the armed
- * station and a manual object the server already counts this player at —
- * so the prompt names what E does, and never promises what it cannot do. A
+ * station, a manual object and a note the server already counts this player
+ * at — so the prompt names what E does, and never promises what it cannot do. A
  * station with two consoles is armed at both, and E works the nearer. Full
  * hands work a station like empty ones, open (`stationOpen`) or shut; only
  * with free hands does a loose part at the player's feet come before
@@ -83,6 +109,7 @@ export function contextAction(
   youId: string,
   sourcesHere: readonly Source[],
   stationOpen: boolean,
+  noteHere: Pick<NoteHere, 'index'> | null,
 ): ContextAction | null {
   const dist = (x: number, y: number): number => Math.hypot(self.x - x, self.y - y);
 
@@ -117,6 +144,7 @@ export function contextAction(
           },
         ];
   });
+  candidates.push(...noteAction(map, noteHere, dist));
   if (mine === undefined && loose !== undefined) {
     const label = `${loose.label} aufnehmen`;
     candidates.push({

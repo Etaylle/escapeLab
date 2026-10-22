@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { canSee, parseMission } from '../src/index.js';
+import { canSee, noteSpot, parseMission } from '../src/index.js';
 import type { Mission } from '../src/index.js';
 import {
   canStandAt,
@@ -370,6 +370,73 @@ describe('mission blackout by design', () => {
     for (const door of offCorridor) {
       expect(lampBy(door), `no lamp by "${door.id}"`).toBe(true);
     }
+  });
+
+  it('works the Serverraum at a terminal and a rack in its room, its rules in the locker', () => {
+    const def = blackout.puzzles.find((p) => p.id === 'subsysteme');
+    expect(def).toMatchObject({ type: 'servers', title: 'Serverraum', crashed: 4, trap: true });
+    expect(def?.lights).toEqual(['LABOR']);
+    expect(def?.hints.length).toBeGreaterThan(0);
+    const consoles = blackout.map.stations.filter((s) => s.puzzleId === 'subsysteme');
+    expect(consoles).toEqual([
+      { puzzleId: 'subsysteme', x: 9, y: 3, console: 'a' },
+      { puzzleId: 'subsysteme', x: 17, y: 3, console: 'b' },
+    ]);
+    const rooms = roomsOf(blackout.map);
+    for (const spot of consoles) {
+      expect(rooms.get(tileKey(spot.x, spot.y)), `console ${spot.console}`).toBe('SERVERRAUM');
+    }
+    const locker = blackout.map.manuals.find((m) => m.puzzleIds.includes('subsysteme'));
+    expect(locker?.kind).toBe('locker');
+    for (const spot of locker?.spots ?? []) {
+      expect(rooms.get(tileKey(spot.x, spot.y)), `locker at ${tileKey(spot.x, spot.y)}`).toBe(
+        'SERVERRAUM',
+      );
+    }
+  });
+
+  it('pins the lab’s story to free notes by the lever, in the Serverraum and by the hatch', () => {
+    const map = blackout.map;
+    const rooms = roomsOf(map);
+    const lever = map.stations.find((s) => s.puzzleId === blackout.puzzles[0]?.id);
+    const exit = map.exit;
+    const spots = map.notes.map((note) => noteSpot(map, note));
+    if (lever === undefined || exit === undefined || spots.some((spot) => spot === null)) {
+      throw new Error('Blackout needs its lever, its hatch and notes somebody can read');
+    }
+    const [byLever, inServers, byHatch] = spots;
+    const near = (a: Spot | null | undefined, b: Spot): number =>
+      a == null ? Infinity : Math.hypot(a.x - b.x, a.y - b.y);
+    expect(map.notes).toHaveLength(3);
+    expect(near(byLever, lever)).toBeLessThanOrEqual(2);
+    expect(rooms.get(tileKey(inServers?.x ?? -1, inServers?.y ?? -1))).toBe('SERVERRAUM');
+    expect(near(byHatch, exit)).toBeLessThanOrEqual(2);
+    // Every crew can walk up to every note once the lab is open.
+    const solved = new Set(blackout.puzzles.map((p) => p.id));
+    for (const crew of crews(blackout)) {
+      const reach = reachability(map, crew, solved);
+      for (const spot of spots) {
+        expect(
+          spot !== null && reach.some((tiles) => canStandAt(tiles, spot)),
+          `nobody of the crew at ${crew.map((s) => tileKey(s.x, s.y)).join(' · ')} reads a note`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('keeps its hints to the stations: no note of the lab’s story among them', () => {
+    const story = blackout.map.notes.map((note) => note.text);
+    for (const puzzle of blackout.puzzles) {
+      expect(puzzle.hints.length, puzzle.id).toBeLessThanOrEqual(3);
+      for (const hint of puzzle.hints) {
+        expect(story, `${puzzle.id}: „${hint}"`).not.toContain(hint);
+      }
+    }
+    expect(blackout.map.notes.map((note) => note.text)).toEqual([
+      expect.stringMatching(/23:47/),
+      expect.stringMatching(/Admin$/),
+      expect.stringMatching(/durchs Labor oder am Serverraum vorbei/),
+    ]);
   });
 
   it('lets each player reach both consoles of the Signalkette on their own', () => {

@@ -24,6 +24,7 @@ export function mapWith(parts: Partial<MapView>): MapView {
     plates: [],
     stations: [],
     manuals: [],
+    notes: [],
     edgeworkSign: null,
     lamps: [],
     labels: [],

@@ -168,6 +168,49 @@ describe('where a finding points', () => {
   });
 });
 
+describe('a note of the last crew', () => {
+  const sound = (): Draft =>
+    probe(
+      ['spawn', { x: 3, y: 4 }],
+      ['station', { x: 7, y: 3 }],
+      ['spawn', { x: 4, y: 4 }],
+      ['source', { x: 7, y: 5 }],
+      ['note', { x: 5, y: 1 }],
+    );
+
+  it('passes on a wall beside the floor', () => {
+    expect(sound().map.notes).toHaveLength(1);
+    expect(validateDraft(sound()).errors).toBe(0);
+  });
+
+  it('is pointed at where nobody can read it any more, the note selected, its tile lit', () => {
+    // The floor below the note painted over: its wall has no floor beside it.
+    const walled = paint(sound(), lineBetween({ x: 4, y: 2 }, { x: 6, y: 2 }), '#');
+    const finding = validateDraft(walled).findings.find((f) => f.path === 'map.notes.0');
+    expect(finding).toMatchObject({
+      severity: 'error',
+      target: { kind: 'note', index: 0 },
+      spots: [{ x: 5, y: 1 }],
+    });
+    expect(finding?.text).toBe(
+      'map.notes.0: the note at 5,1 lies where nobody can read it — pin it to a wall beside the ' +
+        'floor or lay it on the floor',
+    );
+    expect(refOfPath(['map', 'notes', 0, 'text'])).toEqual({ kind: 'note', index: 0 });
+  });
+
+  it('names a note too long by its field', () => {
+    const draft = sound();
+    const long: Draft = {
+      ...draft,
+      map: { ...draft.map, notes: [{ x: 5, y: 1, text: 'x'.repeat(161) }] },
+    };
+    expect(messagesAt(validateDraft(long), 'map.notes.0.text')).toEqual([
+      expect.stringMatching(/^Too big/),
+    ]);
+  });
+});
+
 describe('warnings and notes', () => {
   it('warns of a door anyone can walk round and a plate that does nothing', () => {
     const draft = probe(['door', { x: 5, y: 4 }], ['plate', { x: 3, y: 3 }]);

@@ -54,6 +54,7 @@ function viewWith(items: Item[]): PlayerView {
     presence: { stationId: null, console: null, manualId: null, signSeen: false },
     sourcesHere: [],
     manualsHere: [],
+    noteHere: null,
     puzzle: null,
     map: mapWith({ items }),
   };
@@ -74,6 +75,7 @@ function world(items: Item[], spectator = false): string {
       holdTips={false}
       onToggleInfo={() => undefined}
       onRead={() => undefined}
+      onReadNote={() => undefined}
       onOperate={() => undefined}
       send={() => undefined}
     />,
