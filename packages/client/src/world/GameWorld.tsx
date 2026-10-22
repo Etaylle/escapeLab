@@ -15,7 +15,7 @@ import type { CoachMark } from '../puzzles/coach.js';
 import { TalkButton } from '../screens/Voice.js';
 import { VoiceContext } from '../voice/useVoice.js';
 import { useAlarm, useAlarmClasses, worldHornDue, type Alarm } from './alarm.js';
-import { bedProbe, hearRooms, startAmbience, stopAmbience } from './ambience.js';
+import { bedCount, bedProbe, hearRooms, startAmbience, stopAmbience } from './ambience.js';
 import { worldText } from './art.js';
 import { dressedFor } from './artKit.js';
 import { assembleFrame, type FrameSource, type Latest } from './assemble.js';
@@ -26,6 +26,7 @@ import {
   discoveryBlip,
   doorSlide,
   footstep,
+  graphCensus,
   klaxon,
   lightsOnClick,
   lockerOpen,
@@ -34,6 +35,10 @@ import {
   startPowerHum,
   stationChirp,
   stopPowerHum,
+  systemsOff,
+  timed,
+  timeSpent,
+  type SoundSystem,
 } from './audio.js';
 import { blackoutCue, FLICKER_MS, REVEAL_MS, SEQUENCE_MS } from './coldOpen.js';
 import { doorTurned } from './doors.js';
@@ -55,7 +60,7 @@ import { PING_LIFETIME_MS } from './render/overlays.js';
 import { drawFrame } from './render/pipeline.js';
 import { roomArea, roomsComingOn } from './rooms.js';
 import { easeOthers, follow, followServer, MOVE_KEYS, newSim, walk, type Sim } from './sim.js';
-import { hearCrew, spatialProbe, stopSpatial } from './spatial.js';
+import { HEAR_EVERY_S, hearCrew, spatialProbe, stopSpatial } from './spatial.js';
 import { streamPositions } from './stream.js';
 import { useWorldTip } from './useWorldTip.js';
 
@@ -129,6 +134,8 @@ interface Loop extends FrameSource {
   insets: Insets;
   live: React.MutableRefObject<Live>;
   pings: React.MutableRefObject<MapPing[]>;
+  /** the sound systems this page's query switched off (`?audio-off=`) */
+  soundOff: ReadonlySet<SoundSystem>;
 }
 
 /** The component's handles on its canvas, its controls, its simulation and its E and Q jobs. */
@@ -365,7 +372,8 @@ function traceFrames(sim: Sim): { trace: FrameTrace; drop: () => void } | null {
     },
     get audio() {
       const sound = { music: musicProbe(), voice: voiceProbe(), spatial: spatialProbe() };
-      return { ...bedProbe(), ...sound, renderRadio };
+      const nodes = { ...graphCensus(), beds: bedCount() };
+      return { ...bedProbe(), ...sound, nodes, spent: timeSpent(), renderRadio };
     },
   });
   return { trace, drop };
@@ -415,7 +423,6 @@ function step(loop: Loop, dt: number, map: WorldMap): void {
     footstep();
   }
   easeOthers(sim, positionsOf(loop.positions.current, run), youId, dt);
-  hearTheLab(loop, map);
   slideDoors(sim, map);
   if (map !== sim.seen) {
     look(loop, map);
@@ -442,25 +449,38 @@ function slideDoors(sim: Sim, map: WorldMap): void {
   }
 }
 
+/** How often the lab is listened to, ms: the beds, the crew and the music move no oftener. */
+const HEAR_MS = HEAR_EVERY_S * 1000;
+
 /**
- * The lab heard from where this player stands (the audience stands nowhere): the beds of the
- * rooms round it, as the power and the lights have them (ambience.ts), and — for a player only
- * — the crew's steps and the drones, placed (spatial.ts).
+ * The lab heard from where this player stands, ten times a second from a timer of its own —
+ * never in the frame loop: the beds of the rooms round it, as the power and the lights have
+ * them (ambience.ts), the crew's steps and the drones, placed (spatial.ts), and the music
+ * under the run (music.ts). The audience stands nowhere and hears none of it.
  */
-function hearTheLab(loop: Loop, map: WorldMap): void {
-  const { sim, spectator } = loop;
+function hearTheLab(loop: Loop): void {
+  const map = loop.live.current.view.map;
+  if (map === null || loop.spectator) {
+    return;
+  }
+  const { sim, soundOff } = loop;
   const { view, darkSince, finale } = loop.live.current;
   const outAt = darkSince === null ? null : darkSince + FLICKER_MS;
-  hearRooms({
-    map,
-    dressing: dressedFor(loop.kit.art, map, view.missionId).dressing,
-    at: spectator ? null : sim.self,
-    power: { outAt, lit: sim.lit, won: finale?.ending === 'won' },
-    time: sim.time,
-  });
-  if (!spectator) {
-    const drones = loop.drones.current;
-    hearCrew({ map, self: sim.self, others: sim.others, drones, now: performance.now() });
+  timed('beds', () =>
+    hearRooms({
+      map,
+      dressing: dressedFor(loop.kit.art, map, view.missionId).dressing,
+      at: sim.self,
+      power: { outAt, lit: sim.lit, won: finale?.ending === 'won' },
+      time: sim.time,
+    }),
+  );
+  if (!soundOff.has('spatial')) {
+    const crew = { map, self: sim.self, others: sim.others, drones: loop.drones.current };
+    timed('spatial', () => hearCrew(crew));
+  }
+  if (!soundOff.has('music')) {
+    timed('music', () => setTension(tensionOf(loop, map)));
   }
 }
 
@@ -483,17 +503,13 @@ function tensionOf(loop: Loop, map: WorldMap): Tension {
 }
 
 /**
- * The music under the run as the clock runs out, the last ten seconds
- * counted out loud — for a player — and an emergency's siren as it starts,
- * a chirp as it is over.
+ * The last ten seconds counted out loud — for a player — and an emergency's
+ * siren as it starts, a chirp as it is over.
  */
 function hearTheClock(loop: Loop, map: WorldMap): void {
   const { sim } = loop;
   const view = loop.live.current.view;
   const deadline = view.deadlineAt;
-  if (!loop.spectator) {
-    setTension(tensionOf(loop, map));
-  }
   if (deadline !== null && !loop.spectator) {
     const whole = Math.ceil((deadline - Date.now()) / 1000);
     if (whole <= 10 && whole >= 0 && whole < sim.lastBeepAt) {
@@ -645,7 +661,10 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
     const insets = watchInsets(canvas, refs.controlsRef.current, setControlsReach);
     const sim = newSim(insets.top);
     refs.simRef.current = sim;
-    startAmbience(() => sim.time);
+    const soundOff = systemsOff(location.search);
+    if (!soundOff.has('beds') && !props.spectator) {
+      startAmbience(() => sim.time);
+    }
     const loop: Loop = {
       canvas,
       ctx,
@@ -662,6 +681,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
       chats: props.chatsRef,
       clips: new WeakMap(),
       texts: { s: 0, dpr: 0, styles: worldText(48, 1) },
+      soundOff,
     };
     refs.interactRef.current = () => tryInteract(loop);
     refs.dropRef.current = () => dropItem(loop);
@@ -670,8 +690,10 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
     const posTimer = streamPositions(sim, props.spectator, (msg) => live.current.send(msg));
     const traced = traceFrames(sim);
     const stop = runFrames(loop, traced?.trace ?? null);
+    const ears = setInterval(() => hearTheLab(loop), HEAR_MS);
     return () => {
       stop();
+      clearInterval(ears);
       clearInterval(posTimer);
       insets.disconnect();
       unlisten?.();

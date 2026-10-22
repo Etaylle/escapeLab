@@ -68,6 +68,10 @@ export class FakeNode {
   ) {
     ctx.nodes.push(this);
   }
+  /** The context the node belongs to, as a real node names it. */
+  get context(): FakeContext {
+    return this.ctx;
+  }
   connect<T extends FakeNode | FakeParam>(next: T): T {
     this.outputs.push(next);
     return next;
@@ -97,11 +101,20 @@ export class FakeSource extends FakeNode {
   onended: (() => void) | null = null;
   startedAt: number | null = null;
   stoppedAt: number | null = null;
+  private readonly listeners: (() => void)[] = [];
   start(at = 0): void {
     this.startedAt = when(at);
   }
   stop(at = 0): void {
     this.stoppedAt = when(at);
+  }
+  addEventListener(type: string, listener: () => void): void {
+    if (type === 'ended') this.listeners.push(listener);
+  }
+  /** The source has played out: what the audio thread would tell it. */
+  end(): void {
+    this.onended?.();
+    for (const listener of this.listeners.splice(0)) listener();
   }
 }
 
@@ -116,6 +129,7 @@ export class FakeOscillator extends FakeSource {
 export class FakeBufferSource extends FakeSource {
   buffer: FakeBuffer | null = null;
   loop = false;
+  readonly playbackRate = new FakeParam(1);
   constructor(ctx: FakeContext) {
     super('buffer', ctx);
   }
@@ -138,6 +152,8 @@ export class FakeShaper extends FakeNode {
 
 export class FakeBuffer {
   readonly data: Float32Array;
+  /** the offline context it was rendered on, whose graph tells what it holds */
+  renderedBy: FakeOfflineContext | null = null;
   constructor(
     length: number,
     readonly sampleRate: number,
@@ -146,6 +162,9 @@ export class FakeBuffer {
   }
   get duration(): number {
     return this.data.length / this.sampleRate;
+  }
+  get length(): number {
+    return this.data.length;
   }
   getChannelData(): Float32Array {
     return this.data;
@@ -204,6 +223,44 @@ export class FakeContext {
   }
 }
 
+/** An offline context: what is built on it renders into a buffer of its length, all zeros. */
+export class FakeOfflineContext extends FakeContext {
+  /** every offline context made, the newest last */
+  static rendered: FakeOfflineContext[] = [];
+  constructor(
+    readonly channels: number,
+    readonly length: number,
+    rate: number,
+  ) {
+    super();
+    FakeContext.made.pop();
+    this.sampleRate = rate;
+    FakeOfflineContext.rendered.push(this);
+  }
+  startRendering(): Promise<FakeBuffer> {
+    const rendered = new FakeBuffer(this.length, this.sampleRate);
+    rendered.renderedBy = this;
+    return Promise.resolve(rendered);
+  }
+}
+
+/** Ends every source of `ctx` that was started: as if they had all played out. */
+export function endAll(ctx: FakeContext): void {
+  for (const node of ctx.nodes) {
+    if (node instanceof FakeSource && node.startedAt !== null) node.end();
+  }
+}
+
+/** Lets the renders and the fetches settle (a timer's turn: not under fake timers). */
+export function settle(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** Lets promises already settled run on: the offline renders, under fake timers too. */
+export async function flush(): Promise<void> {
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+}
+
 /** The context the audio modules made last. */
 export function lastContext(): FakeContext {
   const ctx = FakeContext.made.at(-1);
@@ -246,6 +303,8 @@ export function chainFrom(from: FakeNode): FakeNode[] {
 /** Hands the next audio module a fresh fake context class, and forgets the contexts made. */
 export function fakeGraph(): void {
   FakeContext.made = [];
+  FakeOfflineContext.rendered = [];
   vi.stubGlobal('AudioContext', FakeContext);
+  vi.stubGlobal('OfflineAudioContext', FakeOfflineContext);
   vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined });
 }
