@@ -1,5 +1,7 @@
 import type { VoiceProbe } from './voice/mesh.js';
 import type { BedProbe } from './world/ambience.js';
+import type { SoundSystem } from './world/audio.js';
+import type { GraphCensus } from './world/audioCount.js';
 import type { LightProbe } from './world/gl/path.js';
 import type { MusicProbe } from './world/music.js';
 import type { RadioRender, VoiceProbe as RadioProbe } from './world/radioVoice.js';
@@ -14,6 +16,10 @@ export interface AudioProbe extends BedProbe {
   readonly music: MusicProbe;
   readonly voice: RadioProbe;
   readonly spatial: SpatialProbe;
+  /** what the audio thread renders now (world/audioCount.ts), and the beds built */
+  readonly nodes: Partial<GraphCensus> & { beds: number };
+  /** the main thread's time each sound system has taken so far, ms (world/audio.ts `timed`) */
+  readonly spent: Partial<Record<SoundSystem, number>>;
   /** renders the radio's chain once on white noise: what went in and what came out */
   readonly renderRadio: () => Promise<RadioRender>;
 }

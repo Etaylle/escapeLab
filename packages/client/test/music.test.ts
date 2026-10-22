@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EFFECTS_LEVEL } from '../src/world/audio.js';
+import { CAPS, EFFECTS_LEVEL } from '../src/world/audio.js';
 import {
   ALARM_HOLD_MS,
   clockTension,
@@ -11,18 +11,22 @@ import {
   nextBeat,
   pressureOf,
   PULSE_BPM,
+  sweepHz,
   type Layers,
   type Tension,
 } from '../src/world/music.js';
-import type {
-  FakeGain,
-  FakeOscillator} from './fakeGraph.js';
 import {
+  endAll,
   fakeGraph,
+  FakeOfflineContext,
+  flush,
   lastContext,
+  type FakeBufferSource,
   type FakeContext,
   type FakeFilter,
+  type FakeGain,
   type FakeNode,
+  type FakeOscillator,
   type FakeParam,
 } from './fakeGraph.js';
 
@@ -120,7 +124,8 @@ describe('the music as it plays', () => {
   async function music() {
     vi.resetModules();
     const module = await import('../src/world/music.js');
-    return module;
+    const audio = await import('../src/world/audio.js');
+    return { ...module, inUse: audio.inUse, claim: audio.claim };
   }
 
   const tension = (over: Partial<Tension> = {}): Tension => ({
@@ -134,6 +139,20 @@ describe('the music as it plays', () => {
     ...over,
   });
 
+  /** The pad's loop: the looping buffer source the music made. */
+  const padOf = (ctx: FakeContext): FakeBufferSource | undefined =>
+    ctx.all<FakeBufferSource>('buffer').find((b) => b.loop);
+
+  /** The notes played on `ctx`: the sources of its samples, each with its sample's first tone. */
+  const notesOf = (ctx: FakeContext): { source: FakeBufferSource; tone?: FakeOscillator }[] =>
+    ctx
+      .all<FakeBufferSource>('buffer')
+      .filter((source) => source.buffer?.renderedBy != null)
+      .map((source) => {
+        const tone = source.buffer?.renderedBy?.all<FakeOscillator>('oscillator')[0];
+        return tone === undefined ? { source } : { source, tone };
+      });
+
   it('plays nothing while the lab has its power, then starts 18 dB under the effects', async () => {
     const m = await music();
     m.setTension(tension({ startAt: null }));
@@ -141,17 +160,34 @@ describe('the music as it plays', () => {
     m.setTension(tension());
     const ctx = lastContext();
     expect(20 * Math.log10(MUSIC_LEVEL / EFFECTS_LEVEL)).toBeCloseTo(-18, 9);
-    const out = ctx.all<FakeGain>('gain').find((g) => g.gain.value === MUSIC_LEVEL);
-    expect(out).toBeDefined();
-    const pad = ctx.all<FakeOscillator>('oscillator').map((osc) => osc.frequency.value);
-    expect(pad).toEqual([220, 221, 1 / 20]);
+    expect(ctx.all<FakeGain>('gain').some((g) => g.gain.value === MUSIC_LEVEL)).toBe(true);
   });
 
-  it('starts at the moment it is given: 2 s after the click, on the audio clock', async () => {
+  it('plays the pad as a loop rendered once — two sines beating once a second', async () => {
     const m = await music();
     m.setTension(tension({ startAt: Date.now() + 1500 }));
-    const pad = lastContext().all<FakeOscillator>('oscillator');
-    expect(pad.map((osc) => osc.startedAt)).toEqual(Array(3).fill(expect.closeTo(11.51, 9)));
+    await flush();
+    m.setTension(tension({ startAt: Date.now() + 1500 }));
+    const ctx = lastContext();
+    const pad = padOf(ctx);
+    expect(pad?.buffer?.duration).toBe(1);
+    expect(pad?.startedAt).toBeCloseTo(11.51, 9); // 2 s after the click: where it was told
+    expect(ctx.all<FakeOscillator>('oscillator')).toHaveLength(0);
+    expect(m.inUse().loop).toBe(1);
+  });
+
+  it('steps the pad’s lowpass along its 20 s sweep, ahead of the clock', async () => {
+    const m = await music();
+    m.setTension(tension());
+    const ctx = lastContext();
+    const lowpass = ctx.all<FakeFilter>('biquad').find((f) => f.Q.value === 6);
+    const steps = lowpass?.frequency.events.filter((e) => e[0] === 'set') ?? [];
+    expect(steps.length).toBeGreaterThan(0);
+    for (const [, hz, at] of steps as (readonly ['set', number, number])[]) {
+      expect(hz).toBeCloseTo(sweepHz(at - 10.01), 6);
+    }
+    expect(sweepHz(5)).toBeCloseTo(690, 6);
+    expect(sweepHz(15)).toBeCloseTo(150, 6);
   });
 
   it('fades the pad in on the first beat, the pressure layer as the clock runs down', async () => {
@@ -167,9 +203,8 @@ describe('the music as it plays', () => {
     ctx.currentTime = 15.3;
     m.setTension(tension({ left: 200 })); // 1 − 200/330: pressure ≈ 0.39
     const fade = lastFade((pulse as FakeGain).gain);
-    const beat = 60 / PULSE_BPM;
     expect(fade.to).toBe(1);
-    expect(fade.end - fade.start).toBeCloseTo(3 * beat, 9);
+    expect(fade.end - fade.start).toBeCloseTo((3 * 60) / PULSE_BPM, 9);
     expect(offBeat(fade.start, 10.01, PULSE_BPM)).toBeCloseTo(0, 6); // on the beat
     expect(fade.start).toBeGreaterThanOrEqual(15.3);
     ctx.currentTime = fade.end;
@@ -177,8 +212,10 @@ describe('the music as it plays', () => {
     expect(m.musicProbe()).toEqual({ calm: 1, pressure: 1, last: 0, level });
   });
 
-  it('brings the last minute in at 120 bpm, a heart in it; the siren takes the pad', async () => {
+  it('brings the last minute in at 120 bpm; the siren takes the pad, then stops it', async () => {
     const m = await music();
+    m.setTension(tension({ left: 100 }));
+    await flush();
     m.setTension(tension({ left: 100 }));
     const ctx = lastContext();
     ctx.currentTime = 20;
@@ -189,12 +226,14 @@ describe('the music as it plays', () => {
     ctx.currentTime = 30;
     m.setTension(tension({ left: 40, escaping: true }));
     ctx.currentTime = 40;
+    m.setTension(tension({ left: 39, escaping: true }));
     const probe = m.musicProbe();
     expect(probe).toEqual({ calm: 0, pressure: 1, last: 1, level: expect.any(Number) });
     expect(probe.level).toBeGreaterThanOrEqual(0.8);
     const [, , arp, double] = buses(ctx);
     expect(lastFade((arp as FakeGain).gain).to).toBe(0); // the siren keeps the pulse and the heart
     expect(lastFade((double as FakeGain).gain).to).toBe(0);
+    expect(padOf(ctx)?.stoppedAt).toBeCloseTo(40.05, 9); // its layer silent: the pad stops
   });
 
   it('pushes the pressure for 20 s with each alarm', async () => {
@@ -208,27 +247,66 @@ describe('the music as it plays', () => {
     expect(m.musicProbe().level).toBe(0);
   });
 
-  it('schedules ahead on the audio clock: a pulse a beat, the arpeggio every other', async () => {
+  it('schedules ahead on each call: a pulse a beat, the arpeggio every other', async () => {
     const m = await music();
-    m.setTension(tension({ left: 200 }));
-    const ctx = lastContext();
+    const ctx = lastContextAfter(() => m.setTension(tension({ left: 200 })));
+    await flush(); // the notes' samples, rendered as the music starts
+    const renders = FakeOfflineContext.rendered.length;
     for (let t = 10; t < 16; t += 0.1) {
       ctx.currentTime = t;
-      vi.advanceTimersByTime(100);
+      m.setTension(tension({ left: 200 }));
+      endAll(ctx); // every note played out: its budget back
     }
     const started = (type: string, hz: number): number[] =>
-      ctx
-        .all<FakeOscillator>('oscillator')
-        .filter((osc) => osc.type === type && osc.frequency.events[0]?.[1] === hz)
-        .map((osc) => osc.startedAt as number);
-    const beat = 60 / PULSE_BPM;
+      notesOf(ctx)
+        .filter(({ tone }) => tone?.type === type && tone.frequency.events[0]?.[1] === hz)
+        .map(({ source }) => source.startedAt as number);
     const bass = started('triangle', 55);
     expect(bass.length).toBeGreaterThan(3);
     for (const at of bass) expect(offBeat(at, 10.01, PULSE_BPM)).toBeCloseTo(0, 6);
     const arpeggio = started('triangle', 440);
     expect(arpeggio.length).toBeGreaterThan(0);
-    for (const at of arpeggio) expect(Math.round((at - 10.01) / beat) % 2).toBe(0);
+    for (const at of arpeggio) expect(Math.round((at - 10.01) / (60 / PULSE_BPM)) % 2).toBe(0);
     expect(started('sine', 62)).toEqual([]); // no heartbeat before the last minute
+    expect(FakeOfflineContext.rendered).toHaveLength(renders); // each sample rendered once
+    expect(ctx.all<FakeOscillator>('oscillator')).toHaveLength(0); // no live tones
+  });
+
+  it('breathes a swell 8 s long, its noise looped, and the heartbeat in the last minute', async () => {
+    const m = await music();
+    const ctx = lastContextAfter(() => m.setTension(tension({ left: 50 })));
+    await flush();
+    for (let t = 10; t < 26; t += 0.1) {
+      ctx.currentTime = t;
+      m.setTension(tension({ left: 50 }));
+      endAll(ctx);
+    }
+    const breaths = notesOf(ctx).filter(({ source }) => source.buffer?.duration === 8);
+    expect(breaths.length).toBeGreaterThan(0);
+    const air = breaths[0]?.source.buffer?.renderedBy?.all<FakeBufferSource>('buffer')[0];
+    expect(air?.loop).toBe(true); // the shared noise's 2 s, round and round
+    expect(air?.stoppedAt).toBe(8);
+    const thumps = notesOf(ctx).filter(({ tone }) => tone?.frequency.events[0]?.[1] === 62);
+    expect(thumps.length).toBeGreaterThan(1); // lub and dub
+  });
+
+  it('lets every note go once played, and plays none the budget has no room for', async () => {
+    const m = await music();
+    m.setTension(tension({ left: 200 }));
+    await flush();
+    const ctx = lastContext();
+    ctx.currentTime = 12.5;
+    m.setTension(tension({ left: 200 }));
+    const notes = notesOf(ctx).map(({ source }) => source);
+    expect(notes.length).toBeGreaterThan(0);
+    expect(m.inUse().voice).toBe(notes.length);
+    endAll(ctx);
+    expect(m.inUse().voice).toBe(0);
+    for (const note of notes) expect(note.disconnected).toBe(true);
+    expect(m.claim({ voice: CAPS.voice })).toBe(true);
+    ctx.currentTime = 14;
+    m.setTension(tension({ left: 200 }));
+    expect(notesOf(ctx)).toHaveLength(notes.length); // none new
   });
 
   it('fades out for a run won, and drains for a run lost', async () => {
@@ -238,17 +316,18 @@ describe('the music as it plays', () => {
     const ctx = lastContext();
     const out = ctx.all<FakeGain>('gain').find((g) => g.gain.value === MUSIC_LEVEL) as FakeGain;
     expect(lastFade(out.gain)).toEqual({ start: 10, end: 11.5, to: 0 });
-    const stops = ctx.all<FakeOscillator>('oscillator').map((osc) => osc.stoppedAt);
-    expect(stops).toEqual(Array(3).fill(expect.closeTo(11.55, 9)));
     fakeGraph();
     const lost = await music();
+    lost.setTension(tension());
+    await flush();
     lost.setTension(tension());
     lost.setTension(tension({ ending: 'lost' }));
     const drained = lastContext();
     const drain = drained.all<FakeFilter>('biquad').find((f) => f.frequency.value === 20000);
     expect(drain?.frequency.ramps()).toEqual([[120, 11.5]]);
-    const [low] = drained.all<FakeOscillator>('oscillator');
-    expect(low?.frequency.ramps()).toEqual([[110, 11.5]]);
+    const pad = padOf(drained);
+    expect(pad?.playbackRate.ramps()).toEqual([[0.5, 11.5]]);
+    expect(pad?.stoppedAt).toBeCloseTo(11.55, 9);
   });
 
   it('starts over for a new run, and never throws without audio', async () => {
@@ -256,9 +335,9 @@ describe('the music as it plays', () => {
     m.setTension(tension());
     m.setTension(tension({ run: 2 }));
     const ctx = lastContext();
-    const pads = ctx.all<FakeOscillator>('oscillator').filter((osc) => osc.frequency.value === 220);
-    expect(pads).toHaveLength(2);
-    expect(pads[0]?.stoppedAt).toBeCloseTo(10.35, 9);
+    const outs = ctx.all<FakeGain>('gain').filter((g) => g.gain.value === MUSIC_LEVEL);
+    expect(outs).toHaveLength(2);
+    expect(lastFade((outs[0] as FakeGain).gain)).toEqual({ start: 10, end: 10.3, to: 0 });
     vi.stubGlobal('AudioContext', undefined);
     const none = await music();
     expect(() => {
@@ -268,3 +347,9 @@ describe('the music as it plays', () => {
     }).not.toThrow();
   });
 });
+
+/** Runs `make` and returns the context it made. */
+function lastContextAfter(make: () => void): FakeContext {
+  make();
+  return lastContext();
+}

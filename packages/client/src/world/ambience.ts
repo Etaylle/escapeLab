@@ -1,22 +1,29 @@
 import {
   audioEngine,
   biquad,
+  capped,
   chain,
+  claim,
   fadeTo,
   gain,
   levelAt,
   LOOKAHEAD,
+  LOOP_S,
+  loopOf,
   midKnock,
   modulate,
+  noiseBuffer,
   noiseBurst,
   noiseLoop,
-  onAllEnded,
   outlet,
+  playLoop,
   rand,
+  release,
   still,
-  strike,
+  strikeInto,
   tick,
   tone,
+  type Cost,
   type Engine,
   type Fade,
   type ToneSpec,
@@ -28,15 +35,18 @@ import type { FloorKind } from './surfaces.js';
 /**
  * Rooms you can hear. Every room plays a bed after its kind (its label's, as the art bible
  * dresses it; a label without one is a plain lab room), in two layers: what runs on the lab's
- * power — fans, hums, whines, a machine's thump, a console's tick — and what lives without
- * it — drips, rumble, creaks, a clank down the corridor, the core's beat. The room the player
- * stands in plays at full, the rooms behind an open door or an opening 12 dB under it and the
- * rest not at all; a change crossfades over 1.2 s. The audience, standing nowhere, hears every
- * room 12 dB under. While the lab has its power every powered layer runs, under the power hum
- * (audio.ts); when the lights fail they spin down with it, and a room whose lights come back
- * warms its layer up as they do (rooms.ts `warmUp`). A bed is built when it becomes audible
- * and torn down once it has faded out; its sporadic sounds are scheduled ahead on the audio
- * clock by a timer of their own, never by the frame loop. Pure up to `startAmbience`.
+ * power — fans, hums, whines — and what lives without it — the rumble of a machine room or a
+ * reactor. Each layer is a loop rendered once for its kind (audio.ts `loopOf`) and played
+ * round and round, so a bed costs the audio thread a source or two, not a stack of oscillators
+ * and live filters. The room the player stands in plays both its layers at full and its
+ * sporadic sounds — drips, creaks, strokes, a clank down the corridor, the core's beat, a
+ * console's tick; the two nearest rooms behind an open door or an opening play their main
+ * layer 12 dB under it; the rest nothing, stopped. A change crossfades over 1.2 s. While the
+ * lab has its power every powered layer runs, under the power hum (audio.ts); when the lights
+ * fail they spin down with it, slowing as they fade, and a room whose lights come back warms
+ * its layer up as they do (rooms.ts `warmUp`). The audience, standing nowhere, hears no beds.
+ * Everything here keeps within the budget of audio.ts (`CAPS`), and it moves only when
+ * `hearRooms` is called, ten times a second, never per frame. Pure up to `startAmbience`.
  */
 
 /** What a bed is made for: a room's kind, or a plain lab room. */
@@ -46,18 +56,25 @@ export type BedKind = FloorKind;
 export const ROOM_FADE_S = 1.2;
 /** A room behind an open door or an opening plays this far under the player's own: −12 dB. */
 export const NEIGHBOUR_LEVEL = 10 ** (-12 / 20);
+/** How many rooms behind open ways are heard: the nearest. */
+export const MAX_NEIGHBOURS = 2;
 /** A bed at full, at the master gain: under the effects (audio.ts EFFECTS_LEVEL). */
 export const BED_LEVEL = 0.02;
-/** The powered layers spin down over this long once the lights fail, s; the hums fall with it. */
+/** The powered layers spin down over this long once the lights fail, s. */
 export const POWER_DIE_S = 1.4;
-/** How far a dying hum's pitch falls: as the power hum's does (audio.ts). */
+/** How far a dying layer slows — its hums fall in pitch as the power hum's do (audio.ts). */
 const HUM_FALL = 0.25;
 
-/** A way between two rooms: through the door `door`, or an opening (null), always open. */
+/**
+ * A way between two rooms: through the door `door`, or an opening (null), always open; at
+ * (x, y), tiles, where it is.
+ */
 export interface RoomLink {
   readonly a: string;
   readonly b: string;
   readonly door: string | null;
+  readonly x: number;
+  readonly y: number;
 }
 
 /** The rooms of a map as the beds hear them: by tile, their kinds and the ways between them. */
@@ -86,7 +103,7 @@ const SIDES = [
 /**
  * The rooms of a dressed map (dress.ts: the floor shared out to its labels) and the ways
  * between them: every door with a room on two of its sides, and every opening where the floor
- * of one room meets another's with no door between.
+ * of one room meets another's with no door between — at the first place they meet.
  */
 export function roomPlan(
   dressing: Pick<Dressing, 'width' | 'rooms' | 'kinds'>,
@@ -97,23 +114,27 @@ export function roomPlan(
     x < 0 || x >= width ? null : (rooms[y * width + x] ?? null);
   const kinds = new Map<string, BedKind>();
   const links = new Map<string, RoomLink>();
-  const link = (a: string, b: string, door: string | null): void => {
+  const link = (a: string, b: string, door: string | null, x: number, y: number): void => {
     const [first, second] = a < b ? [a, b] : [b, a];
-    links.set(`${first}\n${second}\n${door ?? ''}`, { a: first, b: second, door });
+    const key = `${first}\n${second}\n${door ?? ''}`;
+    if (!links.has(key)) links.set(key, { a: first, b: second, door, x, y });
   };
   rooms.forEach((room, i) => {
     if (room === null) return;
     if (!kinds.has(room)) kinds.set(room, dressing.kinds[i] ?? 'plain');
     const x = i % width;
     const y = Math.floor(i / width);
-    for (const other of [roomOf(x + 1, y), roomOf(x, y + 1)]) {
-      if (other !== null && other !== room) link(room, other, null);
-    }
+    const east = roomOf(x + 1, y);
+    const south = roomOf(x, y + 1);
+    if (east !== null && east !== room) link(room, east, null, x + 1, y + 0.5);
+    if (south !== null && south !== room) link(room, south, null, x + 0.5, y + 1);
   });
   for (const door of doors) {
     const beside = [...new Set(SIDES.map(([dx, dy]) => roomOf(door.x + dx, door.y + dy)))];
     const named = beside.filter((room): room is string => room !== null);
-    named.forEach((a, i) => named.slice(i + 1).forEach((b) => link(a, b, door.id)));
+    named.forEach((a, i) =>
+      named.slice(i + 1).forEach((b) => link(a, b, door.id, door.x + 0.5, door.y + 0.5)),
+    );
   }
   return { width, rooms, kinds, links: [...links.values()] };
 }
@@ -133,26 +154,28 @@ export function roomAt(
 }
 
 /**
- * How loud each room's bed plays for a player in `room`, by room: their own at full, those a
- * door in `open` or an opening joins to it at NEIGHBOUR_LEVEL, the rest not at all (left out).
- * For the audience (`room` null) every room at NEIGHBOUR_LEVEL.
+ * How loud each room's bed plays for a player at `at` in `room`, by room: their own at full,
+ * the MAX_NEIGHBOURS nearest rooms an opening or a door in `open` joins to it — by how far the
+ * player stands from the way — at NEIGHBOUR_LEVEL, the rest not at all (left out). Nothing
+ * where the player is in no room, as the audience is.
  */
 export function bedLevels(
   plan: RoomPlan,
   room: string | null,
   open: ReadonlySet<string>,
+  at: { readonly x: number; readonly y: number },
 ): Map<string, number> {
-  if (room === null) {
-    return new Map([...plan.kinds.keys()].map((name) => [name, NEIGHBOUR_LEVEL]));
-  }
-  const levels = new Map<string, number>([[room, 1]]);
-  for (const { a, b, door } of plan.links) {
+  if (room === null) return new Map();
+  const nearest = new Map<string, number>();
+  for (const { a, b, door, x, y } of plan.links) {
     const other = a === room ? b : b === room ? a : null;
-    if (other !== null && (door === null || open.has(door)) && !levels.has(other)) {
-      levels.set(other, NEIGHBOUR_LEVEL);
+    if (other !== null && (door === null || open.has(door))) {
+      const away = Math.hypot(x - at.x, y - at.y);
+      nearest.set(other, Math.min(away, nearest.get(other) ?? Infinity));
     }
   }
-  return levels;
+  const heard = [...nearest].sort(([, p], [, q]) => p - q).slice(0, MAX_NEIGHBOURS);
+  return new Map([[room, 1], ...heard.map(([name]): [string, number] => [name, NEIGHBOUR_LEVEL])]);
 }
 
 /** Whether the lab has its power, as the beds follow it. */
@@ -185,119 +208,110 @@ export function bedPower(
   return { alive: false, from: power.outAt };
 }
 
-// --- the beds' sounds ----------------------------------------------------------------------
+// --- the beds' layers, rendered once into loops -----------------------------------------
 
-/** The lasting sources of a layer; its hums fall in pitch as it dies. */
-interface Layer {
-  readonly sources: AudioScheduledSourceNode[];
-  readonly hums: OscillatorNode[];
-}
+/** What a recipe builds into an offline context, from 0. */
+type Build = (ctx: BaseAudioContext, dest: AudioNode) => void;
 
-const NO_LAYER: Layer = { sources: [], hums: [] };
-
-/** Sines at [Hz, level] through a lowpass at `cutoff` into `dest`, from `at`. */
+/** Sines at [Hz, level] through a lowpass at `cutoff` into `dest`. */
 function hum(
   ctx: BaseAudioContext,
   dest: AudioNode,
-  at: number,
   voices: readonly (readonly [number, number])[],
   cutoff: number,
-): Layer {
+): void {
   const lowpass = biquad(ctx, 'lowpass', cutoff, 0);
   lowpass.connect(dest);
-  const hums = voices.map(([frequency, level]) => {
+  for (const [frequency, level] of voices) {
     const osc = ctx.createOscillator();
     osc.frequency.value = frequency;
     chain(osc, gain(ctx, level), lowpass);
-    osc.start(at);
-    return osc;
-  });
-  return { sources: hums, hums };
+    osc.start(0);
+  }
 }
 
+/** One turn of the air's wander a loop: it repeats with it. */
+const WANDER_HZ = 0.25;
+
 /**
- * Air moving: looped noise through a band at `centre` Hz into `dest` at `level`; with a
- * `drift` ([Hz, depth in Hz]) its centre wanders like a fan's or a duct's.
+ * Air moving: the shared noise through a band at `centre` Hz into `dest` at `level`; with a
+ * `wander` (depth in Hz) its centre drifts like a fan's or a duct's, once round a loop.
  */
 function air(
   ctx: BaseAudioContext,
   dest: AudioNode,
-  at: number,
   [centre, q, level]: readonly [number, number, number],
-  drift?: readonly [number, number],
-): Layer {
+  wander = 0,
+): void {
   const band = biquad(ctx, 'bandpass', centre, q);
-  const noise = noiseLoop(ctx, at);
-  chain(noise, band, gain(ctx, level), dest);
-  const sources: AudioScheduledSourceNode[] = [noise];
-  if (drift !== undefined) {
-    const wander = ctx.createOscillator();
-    wander.frequency.value = drift[0];
-    modulate(ctx, wander, drift[1], band.frequency);
-    wander.start(at);
-    sources.push(wander);
+  chain(noiseLoop(ctx, 0), band, gain(ctx, level), dest);
+  if (wander > 0) {
+    const drift = ctx.createOscillator();
+    drift.frequency.value = WANDER_HZ;
+    modulate(ctx, drift, wander, band.frequency);
+    drift.start(0);
   }
-  return { sources, hums: [] };
 }
 
 /** A low rumble: a sine at `hz` and noise under 90 Hz, felt more than heard. */
 function rumble(
   ctx: BaseAudioContext,
   dest: AudioNode,
-  at: number,
   [hz, level]: readonly [number, number],
-): Layer {
+): void {
   const out = outlet(ctx, dest, level);
-  const low = hum(ctx, out, at, [[hz, 0.6]], 120);
-  const floor = noiseLoop(ctx, at);
-  chain(floor, biquad(ctx, 'lowpass', 90, 0), gain(ctx, 0.8), out);
-  return { sources: [...low.sources, floor], hums: [] };
+  hum(ctx, out, [[hz, 0.6]], 120);
+  chain(noiseLoop(ctx, 0), biquad(ctx, 'lowpass', 90, 0), gain(ctx, 0.8), out);
 }
 
-/** A layer of several. */
-function both(...layers: Layer[]): Layer {
-  return {
-    sources: layers.flatMap((layer) => layer.sources),
-    hums: layers.flatMap((layer) => layer.hums),
-  };
+/**
+ * What each kind of room runs on the lab's power, as a loop: every tone a whole number of
+ * cycles in LOOP_S (a plain room's slow beat 55 against 55.5 Hz), every wander once round.
+ */
+export const POWERED: Readonly<Partial<Record<BedKind, Build>>> = {
+  server: (ctx, dest) => {
+    air(ctx, dest, [1100, 0.5, 0.5], 150);
+    hum(ctx, dest, [[120, 0.35], [240, 0.08]], 600);
+    hum(ctx, dest, [[8000, 0.012]], 12000);
+  },
+  archive: (ctx, dest) => air(ctx, dest, [500, 0.7, 0.18], 120),
+  corridor: (ctx, dest) => {
+    air(ctx, dest, [320, 0.9, 0.4], 60);
+    hum(ctx, dest, [[100, 0.12], [200, 0.05]], 400);
+  },
+  lab: (ctx, dest) => hum(ctx, dest, [[50, 0.3], [100, 0.22], [150, 0.08]], 400),
+  reactor: (ctx, dest) => hum(ctx, dest, [[110, 0.12], [220, 0.06]], 500),
+  control: (ctx, dest) => {
+    hum(ctx, dest, [[60, 0.15], [180, 0.08]], 800);
+    air(ctx, dest, [2400, 4, 0.03]);
+  },
+  plain: (ctx, dest) => {
+    air(ctx, dest, [600, 0.7, 0.4], 200);
+    hum(ctx, dest, [[55, 0.5], [55.5, 0.3]], 120);
+  },
+};
+
+/** What each kind of room keeps without it, as a loop. */
+export const IDLE: Readonly<Partial<Record<BedKind, Build>>> = {
+  machine: (ctx, dest) => rumble(ctx, dest, [38, 0.5]),
+  reactor: (ctx, dest) => rumble(ctx, dest, [30, 0.6]),
+};
+
+/** A bed's loops: its powered layer, its unpowered one. */
+type Layer = 'power' | 'idle';
+
+/**
+ * Which loops a bed plays: the player's own room each layer it has — the powered one while
+ * alive; a room behind a door its main layer only, the powered one while alive, else the
+ * unpowered one.
+ */
+export function loopsOf(kind: BedKind, alive: boolean, neighbour: boolean): Record<Layer, boolean> {
+  const power = alive && POWERED[kind] !== undefined;
+  const idle = IDLE[kind] !== undefined && !(neighbour && power);
+  return { power, idle };
 }
 
-type Build = (ctx: BaseAudioContext, dest: AudioNode, at: number) => Layer;
-
-/** What each kind of room runs on the lab's power. */
-const POWERED: Readonly<Record<BedKind, Build>> = {
-  server: (ctx, dest, at) =>
-    both(
-      air(ctx, dest, at, [1100, 0.5, 0.5], [0.25, 150]),
-      hum(ctx, dest, at, [[120, 0.35], [240, 0.08]], 600),
-      hum(ctx, dest, at, [[8000, 0.012]], 12000),
-    ),
-  machine: () => NO_LAYER,
-  archive: (ctx, dest, at) => air(ctx, dest, at, [500, 0.7, 0.18], [0.07, 120]),
-  corridor: (ctx, dest, at) =>
-    both(
-      air(ctx, dest, at, [320, 0.9, 0.4], [0.05, 60]),
-      hum(ctx, dest, at, [[100, 0.12], [200, 0.05]], 400),
-    ),
-  lab: (ctx, dest, at) => hum(ctx, dest, at, [[50, 0.3], [100, 0.22], [150, 0.08]], 400),
-  reactor: (ctx, dest, at) => hum(ctx, dest, at, [[110, 0.12], [220, 0.06]], 500),
-  control: (ctx, dest, at) =>
-    both(
-      hum(ctx, dest, at, [[60, 0.15], [180, 0.08]], 800),
-      air(ctx, dest, at, [2400, 4, 0.03]),
-    ),
-  plain: (ctx, dest, at) =>
-    both(
-      air(ctx, dest, at, [600, 0.7, 0.4], [0.06, 200]),
-      hum(ctx, dest, at, [[55, 0.5], [55.4, 0.3]], 120),
-    ),
-};
-
-/** What each kind of room keeps without it. */
-const IDLE: Readonly<Partial<Record<BedKind, Build>>> = {
-  machine: (ctx, dest, at) => rumble(ctx, dest, at, [38, 0.5]),
-  reactor: (ctx, dest, at) => rumble(ctx, dest, at, [30, 0.6]),
-};
+// --- the own room's sporadic sounds -----------------------------------------------------
 
 /** A sine from `at`, gliding from `from` to `to` Hz: struck — no hold, a sharp attack. */
 function ping(
@@ -348,20 +362,25 @@ function creak(ctx: BaseAudioContext, dest: AudioNode, at: number): AudioSchedul
   return [voice, slip];
 }
 
-/** Struck metal far off, sometimes with a softer rebound. */
-function clank(ctx: BaseAudioContext, dest: AudioNode, at: number): AudioScheduledSourceNode[] {
+/**
+ * Metal struck far down a corridor: its highs gone, and the echo coming back off the walls
+ * twice, each time fainter and plainer.
+ */
+function farClank(ctx: BaseAudioContext, dest: AudioNode, at: number): AudioScheduledSourceNode[] {
   const base = rand(170, 320);
-  const level = rand(0.3, 0.5);
-  strike(ctx, dest, at, base, level);
-  if (Math.random() < 0.5) {
-    strike(ctx, dest, at + rand(0.08, 0.2), base * rand(0.97, 1.03), level * 0.4);
-  }
-  return [];
+  const far = biquad(ctx, 'lowpass', 1800, 0);
+  far.connect(dest);
+  const echo = (level: number): GainNode => outlet(ctx, far, level);
+  return [
+    ...strikeInto(ctx, echo(rand(0.3, 0.5)), at, base, { partials: 2, impact: true }),
+    ...strikeInto(ctx, echo(0.14), at + 0.23, base, { partials: 1, impact: false }),
+    ...strikeInto(ctx, echo(0.05), at + 0.46, base, { partials: 1, impact: false }),
+  ];
 }
 
 /** Far off in a plain lab: mostly a clank, a creak about every third time. */
 function distant(ctx: BaseAudioContext, dest: AudioNode, at: number): AudioScheduledSourceNode[] {
-  return Math.random() < 0.35 ? creak(ctx, dest, at) : clank(ctx, dest, at);
+  return Math.random() < 0.35 ? creak(ctx, dest, at) : farClank(ctx, dest, at);
 }
 
 /** A machine's slow stroke: a low thud with its mid layer, for a small speaker too. */
@@ -381,11 +400,14 @@ function hiss(ctx: BaseAudioContext, dest: AudioNode, at: number): AudioSchedule
   return [steam];
 }
 
+/** How many blips a flask bubbles in a run. */
+const BUBBLES = 4;
+
 /** A flask on its heater: a run of small rising blips. */
 function bubbling(ctx: BaseAudioContext, dest: AudioNode, at: number): AudioScheduledSourceNode[] {
   const blips: AudioScheduledSourceNode[] = [];
   let t = at;
-  for (let i = Math.floor(rand(5, 10)); i > 0; i--) {
+  for (let i = 0; i < BUBBLES; i++) {
     const from = rand(300, 520);
     blips.push(ping(ctx, dest, t, [from, from * 1.9, 0.25, 0.04]));
     t += rand(0.05, 0.14);
@@ -424,33 +446,36 @@ export function nextCorePeak(time: number): number {
 type Sound = (ctx: BaseAudioContext, dest: AudioNode, at: number) => AudioScheduledSourceNode[];
 
 /**
- * A sporadic sound of a bed: on its powered layer, its unpowered one or — far off — through
- * the corridors' echo; every [min, max] seconds, or on the core's beat.
+ * A sporadic sound of the own room's bed: on its powered layer or its unpowered one, every
+ * [min, max] seconds or on the core's beat, and what it takes from the budget while it plays.
  */
 interface Occasion {
-  readonly layer: 'power' | 'idle' | 'far';
+  readonly layer: Layer;
   readonly every: readonly [number, number] | 'core';
   readonly sound: Sound;
+  readonly cost: Cost;
 }
 
-const OCCASIONS: Readonly<Record<BedKind, readonly Occasion[]>> = {
-  server: [{ layer: 'idle', every: [15, 35], sound: creak }],
+const CREAK: Occasion = { layer: 'idle', every: [20, 40], sound: creak, cost: { voice: 2 } };
+
+/** The sporadic sounds of each kind of room. */
+export const OCCASIONS: Readonly<Record<BedKind, readonly Occasion[]>> = {
+  server: [{ ...CREAK, every: [15, 35] }],
   machine: [
-    { layer: 'power', every: [1.6, 1.6], sound: thump },
-    { layer: 'power', every: [8, 20], sound: hiss },
+    { layer: 'power', every: [1.6, 1.6], sound: thump, cost: { voice: 1, noise: 1 } },
+    { layer: 'power', every: [8, 20], sound: hiss, cost: { noise: 1 } },
   ],
-  archive: [{ layer: 'idle', every: [7, 12], sound: drip }],
-  corridor: [{ layer: 'far', every: [20, 40], sound: clank }],
+  archive: [{ layer: 'idle', every: [7, 12], sound: drip, cost: { voice: 2 } }],
+  corridor: [
+    { layer: 'idle', every: [20, 40], sound: farClank, cost: { voice: 4, noise: 1 } },
+  ],
   lab: [
-    { layer: 'power', every: [10, 25], sound: bubbling },
-    { layer: 'idle', every: [20, 40], sound: creak },
+    { layer: 'power', every: [10, 25], sound: bubbling, cost: { voice: BUBBLES } },
+    CREAK,
   ],
-  reactor: [{ layer: 'idle', every: 'core', sound: coreThrob }],
-  control: [
-    { layer: 'power', every: [1, 1], sound: softTick },
-    { layer: 'idle', every: [20, 40], sound: creak },
-  ],
-  plain: [{ layer: 'far', every: [7, 15], sound: distant }],
+  reactor: [{ layer: 'idle', every: 'core', sound: coreThrob, cost: { voice: 2 } }],
+  control: [{ layer: 'power', every: [1, 1], sound: softTick, cost: { noise: 1 } }, CREAK],
+  plain: [{ layer: 'idle', every: [7, 15], sound: distant, cost: { voice: 4, noise: 1 } }],
 };
 
 // --- the runtime -------------------------------------------------------------------------
@@ -461,16 +486,15 @@ interface Bed {
   readonly kind: BedKind;
   /** the room's level, BED_LEVEL at full */
   readonly out: GainNode;
-  /** the powered layer, 0 (dead) to 1 */
-  readonly power: GainNode;
-  readonly idle: GainNode;
-  /** the input for sounds far off: muffled and echoed down the corridors */
-  readonly far: GainNode;
+  /** each layer's stage: the powered one 0 (dead) to 1, the unpowered one 1 */
+  readonly stages: Record<Layer, GainNode>;
   level: Fade;
   powerFade: Fade;
   alive: boolean;
-  powered: Layer;
-  readonly lasting: Layer;
+  /** heard behind a door: its main layer only, none of its sporadic sounds */
+  neighbour: boolean;
+  /** the loops playing, by layer: each takes a loop of the budget while it plays */
+  readonly playing: Record<Layer, AudioBufferSourceNode | null>;
   /** the audio time each of its occasions comes next */
   readonly next: number[];
   /** the last top of the core's beat it throbbed to, sim time */
@@ -494,12 +518,10 @@ interface Ambience {
   readonly plans: WeakMap<object, RoomPlan>;
   room: string | null;
   heard: Heard | null;
-  readonly timer: ReturnType<typeof setInterval>;
 }
 
-/** How often the sporadic sounds are looked ahead for, ms, and how far ahead, s. */
-const TICK_MS = 250;
-const AHEAD_S = 0.8;
+/** How far ahead the own room's sporadic sounds are scheduled, s: past the next update. */
+const AHEAD_S = 0.4;
 
 let ambience: Ambience | null = null;
 
@@ -509,9 +531,11 @@ export function startAmbience(clock: () => number): void {
     if (ambience !== null) return;
     const engine = audioEngine();
     if (engine === null) return;
-    const timer = setInterval(occasions, TICK_MS);
+    // The shared noise at the live context's rate, before any loop is rendered from it.
+    noiseBuffer(engine.ctx);
     const beds = new Map<string, Bed>();
-    ambience = { engine, clock, beds, plans: new WeakMap(), room: null, heard: null, timer };
+    const plans = new WeakMap<object, RoomPlan>();
+    ambience = { engine, clock, beds, plans, room: null, heard: null };
   } catch {
     // Deliberately silent: a quiet lab is better than a broken game.
   }
@@ -523,64 +547,72 @@ export function stopAmbience(): void {
     const amb = ambience;
     ambience = null;
     if (amb === null) return;
-    clearInterval(amb.timer);
     const now = amb.engine.ctx.currentTime;
     for (const bed of amb.beds.values()) {
       bed.level = fadeTo(bed.out.gain, bed.level, now, [now, now + 0.5], 0);
-      release(bed, now + 0.55);
+      letGo(bed, now + 0.55);
     }
   } catch {
     // Deliberately silent: the beds' nodes are released with the context at the latest.
   }
 }
 
-/** Where the beds are heard from this frame. */
+/** Where the beds are heard from: the player's room, the doors, the power. */
 export interface RoomScene {
   /** the view's map: its doors, and a new object for every view */
   readonly map: { readonly doors: readonly (DoorSpot & { readonly open: boolean })[] };
   /** its dressing (dress.ts), which shares the floor out to the rooms */
   readonly dressing: Pick<Dressing, 'width' | 'rooms' | 'kinds'>;
-  /** where the player stands, tiles; null for the audience */
-  readonly at: { readonly x: number; readonly y: number } | null;
+  /** where the player stands, tiles */
+  readonly at: { readonly x: number; readonly y: number };
   readonly power: Power;
   /** the simulation's clock now, s */
   readonly time: number;
 }
 
 /**
- * The beds follow the player, the doors and the power: called every frame, it does nothing
- * unless the tile, the view, the rooms lit or the power changed since — then each bed heard
- * crossfades to its level, beds come and go, and powered layers die or warm up.
+ * The beds follow the player, the doors and the power: called ten times a second. Where the
+ * tile, the view, the rooms lit or the power changed, each bed heard crossfades to its level,
+ * beds come and go and powered layers die or warm up; every call the loops due start, those
+ * done stop, and the own room's sporadic sounds are scheduled on the audio clock.
  */
 export function hearRooms(scene: RoomScene): void {
   try {
     const amb = ambience;
     if (amb === null) return;
     const heard = heardOf(scene);
-    if (amb.heard !== null && sameHeard(amb.heard, heard)) return;
-    amb.heard = heard;
-    const plan = planOf(amb, scene);
-    const { at } = scene;
-    const room = at === null ? null : roomAt(plan, Math.floor(at.x), Math.floor(at.y), amb.room);
-    amb.room = room;
-    const open = new Set(scene.map.doors.filter((door) => door.open).map((door) => door.id));
-    const levels = bedLevels(plan, room, open);
     const now = amb.engine.ctx.currentTime;
-    for (const [name, level] of levels) {
-      const bed = amb.beds.get(name) ?? addBed(amb, name, plan.kinds.get(name) ?? 'plain', now);
-      setLevel(bed, level, now);
+    if (amb.heard === null || !sameHeard(amb.heard, heard)) {
+      amb.heard = heard;
+      follow(amb, scene, now);
     }
-    for (const bed of amb.beds.values()) {
-      if (!levels.has(bed.room)) setLevel(bed, 0, now);
-      setPower(amb, bed, bedPower(bed.room, scene.power, scene.time), now);
-    }
+    tend(amb, now);
   } catch {
     // Deliberately silent: the room still looks like itself.
   }
 }
 
+/** The beds take in a changed scene: their levels, who is a neighbour, their power. */
+function follow(amb: Ambience, scene: RoomScene, now: number): void {
+  const plan = planOf(amb, scene);
+  const { at } = scene;
+  const room = roomAt(plan, Math.floor(at.x), Math.floor(at.y), amb.room);
+  amb.room = room;
+  const open = new Set(scene.map.doors.filter((door) => door.open).map((door) => door.id));
+  const levels = bedLevels(plan, room, open, at);
+  for (const [name, level] of levels) {
+    const bed = amb.beds.get(name) ?? addBed(amb, name, plan.kinds.get(name) ?? 'plain', now);
+    bed.neighbour = name !== room;
+    setLevel(bed, level, now);
+  }
+  for (const bed of amb.beds.values()) {
+    if (!levels.has(bed.room)) setLevel(bed, 0, now);
+    setPower(bed, bedPower(bed.room, scene.power, scene.time), now);
+  }
+}
+
 function heardOf(scene: RoomScene): Heard {
-  const tile = scene.at === null ? null : `${Math.floor(scene.at.x)},${Math.floor(scene.at.y)}`;
+  const tile = `${Math.floor(scene.at.x)},${Math.floor(scene.at.y)}`;
   const { lit, outAt, won } = scene.power;
   return { map: scene.map, tile, lit: lit.size, outAt, won };
 }
@@ -590,36 +622,45 @@ function sameHeard(a: Heard, b: Heard): boolean {
   return same && a.outAt === b.outAt && a.won === b.won;
 }
 
-/** The plan of the scene's dressing, worked out once for it. */
+/** The plan of the scene's dressing, worked out once for it; its kinds' loops set rendering. */
 function planOf(amb: Ambience, scene: RoomScene): RoomPlan {
   const known = amb.plans.get(scene.dressing);
   if (known !== undefined) return known;
   const plan = roomPlan(scene.dressing, scene.map.doors);
   amb.plans.set(scene.dressing, plan);
+  for (const kind of new Set(plan.kinds.values())) {
+    bedLoop(amb, kind, 'power');
+    bedLoop(amb, kind, 'idle');
+  }
   return plan;
 }
 
-/** A new bed for `room`, silent, its unpowered layer running and its powered one not yet. */
+/**
+ * The loop of `kind`'s `layer`: rendered once, at half the live context's rate — enough for
+ * what the beds hold — and kept; null while it renders, or where the kind has no such layer.
+ */
+function bedLoop(amb: Ambience, kind: BedKind, layer: Layer): AudioBuffer | null {
+  const build = (layer === 'power' ? POWERED : IDLE)[kind];
+  if (build === undefined) return null;
+  return loopOf(`ambience/${kind}/${layer}`, build, LOOP_S, amb.engine.ctx.sampleRate / 2);
+}
+
+/** A new bed for `room`, silent, its loops to start as they are due. */
 function addBed(amb: Ambience, room: string, kind: BedKind, now: number): Bed {
   const { ctx, duck } = amb.engine;
   const out = outlet(ctx, duck, 0);
-  const power = outlet(ctx, out, 0);
-  const idle = outlet(ctx, out, 1);
-  const far = farOff(ctx, idle);
-  const lasting = IDLE[kind]?.(ctx, idle, now) ?? NO_LAYER;
+  const stages = { power: outlet(ctx, out, 0), idle: outlet(ctx, out, 1) };
   const next = OCCASIONS[kind].map((occasion) => firstAt(occasion, now));
   const bed: Bed = {
     room,
     kind,
     out,
-    power,
-    idle,
-    far,
+    stages,
     level: still(0),
     powerFade: still(0),
     alive: false,
-    powered: NO_LAYER,
-    lasting,
+    neighbour: false,
+    playing: { power: null, idle: null },
     next,
     corePeak: -Infinity,
   };
@@ -632,34 +673,20 @@ function firstAt(occasion: Occasion, now: number): number {
   return occasion.every === 'core' ? now : now + rand(0, occasion.every[1]);
 }
 
-/** Sounds far off lose their highs and pick up a dark, decaying echo from the corridors. */
-function farOff(ctx: BaseAudioContext, dest: AudioNode): GainNode {
-  const input = gain(ctx, 1);
-  const delay = ctx.createDelay(1);
-  delay.delayTime.value = 0.23;
-  const darken = biquad(ctx, 'lowpass', 1100, 0);
-  chain(input, biquad(ctx, 'lowpass', 1800, 0), dest);
-  chain(input, delay, darken, gain(ctx, 0.35), delay);
-  chain(darken, gain(ctx, 0.4), dest);
-  return input;
-}
-
 /** The bed crossfades to `level` (0, NEIGHBOUR_LEVEL, 1) over ROOM_FADE_S, unless headed there. */
 function setLevel(bed: Bed, level: number, now: number): void {
   if (bed.level.to === level * BED_LEVEL) return;
   bed.level = fadeTo(bed.out.gain, bed.level, now, [now, now + ROOM_FADE_S], level * BED_LEVEL);
 }
 
-/** The bed's powered layer as `state` says: built and warmed up, or spun down from its moment. */
-function setPower(amb: Ambience, bed: Bed, state: ReturnType<typeof bedPower>, now: number): void {
+/** The bed's powered layer as `state` says: warmed up, or spun down from its moment. */
+function setPower(bed: Bed, state: ReturnType<typeof bedPower>, now: number): void {
   if (state.alive && !bed.alive) {
     bed.alive = true;
-    bed.powered = POWERED[bed.kind](amb.engine.ctx, bed.power, now);
     warmUpLayer(bed, state.warm, now);
   } else if (!state.alive && bed.alive) {
     bed.alive = false;
-    const at = Math.max(now, now + (state.from - Date.now()) / 1000);
-    dieDown(bed, at);
+    dieDown(bed, Math.max(now, now + (state.from - Date.now()) / 1000));
   }
 }
 
@@ -668,7 +695,7 @@ const WARM_STEPS = 26;
 
 /** The powered layer comes up with the room's lights: along their warm-up, `warm` s into it. */
 function warmUpLayer(bed: Bed, warm: number, now: number): void {
-  const param = bed.power.gain;
+  const param = bed.stages.power.gain;
   const left = WARM_UP_MS / 1000 - warm;
   param.cancelScheduledValues(now);
   if (!(left > 0.05)) {
@@ -684,81 +711,111 @@ function warmUpLayer(bed: Bed, warm: number, now: number): void {
   bed.powerFade = { from: curve[0] ?? 0, to: 1, start: now, end: now + left };
 }
 
-/** The powered layer spins down from `at`: its level falls, its hums sag, its sources stop. */
+/** The powered layer spins down from `at`: it fades and slows — its hums fall — then stops. */
 function dieDown(bed: Bed, at: number): void {
   const end = at + POWER_DIE_S;
-  bed.powerFade = fadeTo(bed.power.gain, bed.powerFade, at, [at, end], 0);
-  for (const osc of bed.powered.hums) {
-    const frequency = osc.frequency.value;
-    osc.frequency.setValueAtTime(frequency, at);
-    osc.frequency.exponentialRampToValueAtTime(frequency * HUM_FALL, end);
+  bed.powerFade = fadeTo(bed.stages.power.gain, bed.powerFade, at, [at, end], 0);
+  const loop = bed.playing.power;
+  bed.playing.power = null;
+  if (loop !== null) {
+    loop.playbackRate.setValueAtTime(1, at);
+    loop.playbackRate.exponentialRampToValueAtTime(HUM_FALL, end);
+    loop.stop(end + 0.05);
   }
-  for (const source of bed.powered.sources) source.stop(end + 0.05);
-  bed.powered = NO_LAYER;
 }
 
-/** Stops every source of the bed at `at` and lets its nodes go once they have. */
-function release(bed: Bed, at: number): void {
-  const sources = [...bed.powered.sources, ...bed.lasting.sources];
-  for (const source of sources) source.stop(at);
-  const done = (): void => bed.out.disconnect();
-  if (sources.length === 0) done();
-  else onAllEnded(sources, done);
+/** Every round: beds faded out go, the loops due start or stop, the own room's sounds come. */
+function tend(amb: Ambience, now: number): void {
+  for (const bed of [...amb.beds.values()]) {
+    if (bed.level.to === 0 && now > bed.level.end + 0.1) {
+      amb.beds.delete(bed.room);
+      letGo(bed, now);
+      continue;
+    }
+    syncLoops(amb, bed, now);
+    if (bed.room === amb.room && amb.engine.ctx.state === 'running') {
+      scheduleOccasions(amb, bed, now);
+    }
+  }
 }
 
 /**
- * The timer's round: each bed heard schedules the sounds it has coming within AHEAD_S on the
- * audio clock, and a bed faded out for good is torn down.
+ * The bed's loops as `loopsOf` has them: one due starts once its loop is rendered and the
+ * budget has a loop left — else it is tried again next round — and one no longer due stops.
  */
-function occasions(): void {
-  try {
-    const amb = ambience;
-    if (amb === null) return;
-    const now = amb.engine.ctx.currentTime;
-    for (const bed of [...amb.beds.values()]) {
-      if (bed.level.to === 0 && now > bed.level.end + 0.1) {
-        amb.beds.delete(bed.room);
-        release(bed, now);
-      } else if (amb.engine.ctx.state === 'running') {
-        scheduleOccasions(amb, bed, now);
+function syncLoops(amb: Ambience, bed: Bed, now: number): void {
+  const due = loopsOf(bed.kind, bed.alive, bed.neighbour);
+  for (const layer of ['power', 'idle'] as const) {
+    const playing = bed.playing[layer];
+    if (!due[layer] && playing !== null) {
+      bed.playing[layer] = null;
+      playing.stop(now + 0.05);
+    } else if (due[layer] && playing === null) {
+      const loop = bedLoop(amb, bed.kind, layer);
+      if (loop !== null && claim({ loop: 1 })) {
+        const source = playLoop(amb.engine.ctx, loop, bed.stages[layer], now + LOOKAHEAD);
+        source.onended = () => release({ loop: 1 });
+        bed.playing[layer] = source;
       }
     }
-  } catch {
-    // Deliberately silent: only this round's sounds are lost.
   }
 }
 
-/** The bed's sounds due before now + AHEAD_S, each on its own layer, while that layer is up. */
+/**
+ * Stops every loop of the bed at `at` — each gives its loop back to the budget as it ends
+ * (syncLoops) — and lets the bed's nodes go once they all have.
+ */
+function letGo(bed: Bed, at: number): void {
+  const loops = [bed.playing.power, bed.playing.idle].filter(
+    (loop): loop is AudioBufferSourceNode => loop !== null,
+  );
+  bed.playing.power = null;
+  bed.playing.idle = null;
+  let left = loops.length;
+  const ended = (): void => {
+    left -= 1;
+    if (left <= 0) bed.out.disconnect();
+  };
+  if (left === 0) ended();
+  for (const loop of loops) {
+    loop.addEventListener('ended', ended, { once: true });
+    loop.stop(at);
+  }
+}
+
+/** The own room's sounds due before now + AHEAD_S, each on its layer while that layer is up. */
 function scheduleOccasions(amb: Ambience, bed: Bed, now: number): void {
   OCCASIONS[bed.kind].forEach((occasion, i) => {
     if (occasion.every === 'core') {
-      throbOnTheBeat(amb, bed, occasion.sound, now);
+      throbOnTheBeat(amb, bed, occasion, now);
       return;
     }
     const due = bed.next[i] ?? now;
     if (due > now + AHEAD_S) return;
     const at = Math.max(due, now + LOOKAHEAD);
-    if (occasion.layer !== 'power' || bed.alive) {
-      occasion.sound(amb.engine.ctx, layerOf(bed, occasion.layer), at);
+    if (occasion.layer === 'idle' || bed.alive) {
+      const { ctx } = amb.engine;
+      capped(ctx, bed.stages[occasion.layer], occasion.cost, (out) => occasion.sound(ctx, out, at));
     }
     bed.next[i] = at + rand(occasion.every[0], occasion.every[1]);
   });
 }
 
-/** Where a sound of the bed goes in. */
-function layerOf(bed: Bed, layer: Occasion['layer']): AudioNode {
-  if (layer === 'power') return bed.power;
-  return layer === 'far' ? bed.far : bed.idle;
-}
-
 /** The core's throb, once a beat, rising so that it peaks with the core's light. */
-function throbOnTheBeat(amb: Ambience, bed: Bed, sound: Sound, now: number): void {
+function throbOnTheBeat(amb: Ambience, bed: Bed, occasion: Occasion, now: number): void {
   const time = amb.clock();
   const peak = nextCorePeak(time);
   const at = now + (peak - time) - CORE_LEAD_S;
   if (peak <= bed.corePeak || at > now + AHEAD_S) return;
   bed.corePeak = peak;
-  sound(amb.engine.ctx, bed.idle, Math.max(at, now + LOOKAHEAD));
+  const { ctx } = amb.engine;
+  const when = Math.max(at, now + LOOKAHEAD);
+  capped(ctx, bed.stages[occasion.layer], occasion.cost, (out) => occasion.sound(ctx, out, when));
+}
+
+/** How many beds are built now. */
+export function bedCount(): number {
+  return ambience?.beds.size ?? 0;
 }
 
 /** What the beds play now: the room, each kind heard and how far its powered layer is up. */
@@ -787,3 +844,4 @@ export function bedProbe(): BedProbe {
   probe.kind = amb.room === null ? null : (amb.beds.get(amb.room)?.kind ?? null);
   return probe;
 }
+

@@ -17,6 +17,9 @@
  * beds, the music, a drone's buzz — are built anyway and become audible once it resumes.
  */
 
+import { censusOf, countGraph, type GraphCensus } from './audioCount.js';
+import { traceRequested } from './frameTrace.js';
+
 type AudioContextCtor = new () => AudioContext;
 
 /** The shared context and the two gain stages every sound of the lab ends in. */
@@ -42,6 +45,46 @@ export interface ToneSpec extends Envelope {
   readonly at: number;
   readonly from: number;
   readonly to: number;
+}
+
+/** The lab's sound systems a page's query can switch off: `?audio-off=beds,music,spatial`. */
+export type SoundSystem = 'beds' | 'music' | 'spatial';
+const SOUND_SYSTEMS: readonly SoundSystem[] = ['beds', 'music', 'spatial'];
+
+/**
+ * The sound systems the query string `search` switches off (`?audio-off=beds,music`): for
+ * telling apart what the sound costs a slow machine, system by system. None by default.
+ */
+export function systemsOff(search: string): ReadonlySet<SoundSystem> {
+  const named = (new URLSearchParams(search).get('audio-off') ?? '').split(',');
+  return new Set(SOUND_SYSTEMS.filter((system) => named.includes(system)));
+}
+
+/** The main thread's time each sound system has taken so far, ms, on a page that counts it. */
+const spent: Partial<Record<SoundSystem, number>> = {};
+
+/**
+ * Runs `work` for the sound system `system`, and on a page that counts it (`?trace=1`) adds
+ * the time it took to the system's account: what the sound costs the main thread.
+ */
+export function timed<T>(system: SoundSystem, work: () => T): T {
+  if (!counted) return work();
+  const from = performance.now();
+  try {
+    return work();
+  } finally {
+    spent[system] = (spent[system] ?? 0) + performance.now() - from;
+  }
+}
+
+/** The main thread's time each sound system has taken so far, ms (`timed`). */
+export function timeSpent(): Partial<Record<SoundSystem, number>> {
+  return { ...spent };
+}
+
+/** What the audio thread renders now (audioCount.ts): only on a page that counts it. */
+export function graphCensus(): GraphCensus | null {
+  return counted && engine !== null ? censusOf(engine.ctx.destination) : null;
 }
 
 const MASTER_LEVEL = 1;
@@ -172,6 +215,8 @@ let noise: AudioBuffer | null = null;
 let powerHum: Loop | null = null;
 let siren: Loop | null = null;
 let muted = readStoredMute();
+/** Whether the engine's graph is counted for the walkthrough's probe (audioCount.ts). */
+let counted = false;
 let unlockArmed = false;
 
 /**
@@ -326,15 +371,16 @@ export function footstep(): void {
 }
 
 /**
- * One footstep into `out` from `at`, ±10 % in pitch: a sine falling an octave — a soft heel
- * thump rather than a pitched tone — and the scuff of a sole. Returns its sources.
+ * One footstep into `out` from `at`, at `pitch` (±10 % unless given): a sine falling an
+ * octave — a soft heel thump rather than a pitched tone — and the scuff of a sole. Returns its
+ * sources.
  */
 export function stepInto(
   ctx: BaseAudioContext,
   out: AudioNode,
   at: number,
+  pitch = rand(0.9, 1.1),
 ): AudioScheduledSourceNode[] {
-  const pitch = rand(0.9, 1.1);
   const thump = tone(ctx, out, {
     type: 'sine',
     at,
@@ -1133,6 +1179,10 @@ function createEngine(): Engine | null {
     if (Ctor === undefined) return null;
     const ctx = new Ctor();
     ctx.onstatechange = syncUnlockListeners;
+    counted = typeof location !== 'undefined' && traceRequested(location.search);
+    if (counted) {
+      countGraph(ctx);
+    }
     const master = outlet(ctx, ctx.destination, muted ? 0 : MASTER_LEVEL);
     return { ctx, master, duck: outlet(ctx, master, 1) };
   } catch {
@@ -1186,24 +1236,42 @@ export function strike(
   level: number,
 ): void {
   const out = outlet(ctx, dest, level);
-  const sources: AudioScheduledSourceNode[] = CLANK_PARTIALS.map(([ratio, peak, decay]) =>
-    tone(ctx, out, {
-      type: 'sine',
-      at,
-      from: base * ratio,
-      to: base * ratio,
-      peak,
-      attack: 0.002,
-      hold: 0,
-      decay,
-    }),
-  );
-  const impact = noiseBurst(ctx, at, 0.04);
-  const impactLevel = gain(ctx, 0);
-  applyEnvelope(impactLevel.gain, at, { peak: 0.3, attack: 0.001, hold: 0, decay: 0.03 });
-  chain(impact, biquad(ctx, 'bandpass', base * 6, 1.2), impactLevel, out);
-  sources.push(impact);
+  const sources = strikeInto(ctx, out, at, base, { partials: CLANK_PARTIALS.length, impact: true });
   onAllEnded(sources, () => out.disconnect());
+}
+
+/**
+ * Struck metal into `dest`, from `at`: the strongest `partials` of a free bar at `base` Hz
+ * and, with `impact`, the knock of the blow. Returns its sources; the caller lets it go.
+ */
+export function strikeInto(
+  ctx: BaseAudioContext,
+  dest: AudioNode,
+  at: number,
+  base: number,
+  { partials, impact }: { partials: number; impact: boolean },
+): AudioScheduledSourceNode[] {
+  const sources: AudioScheduledSourceNode[] = CLANK_PARTIALS.slice(0, partials).map(
+    ([ratio, peak, decay]) =>
+      tone(ctx, dest, {
+        type: 'sine',
+        at,
+        from: base * ratio,
+        to: base * ratio,
+        peak,
+        attack: 0.002,
+        hold: 0,
+        decay,
+      }),
+  );
+  if (impact) {
+    const knock = noiseBurst(ctx, at, 0.04);
+    const knockLevel = gain(ctx, 0);
+    applyEnvelope(knockLevel.gain, at, { peak: 0.3, attack: 0.001, hold: 0, decay: 0.03 });
+    chain(knock, biquad(ctx, 'bandpass', base * 6, 1.2), knockLevel, dest);
+    sources.push(knock);
+  }
+  return sources;
 }
 
 /** A dry mechanical tick, ~30 ms: a sliver of noise through a narrow band. */
@@ -1384,6 +1452,184 @@ export function fadeTo(
   }
   param.linearRampToValueAtTime(to, Math.max(end, start + 0.001));
   return { from, to, start, end: Math.max(end, start + 0.001) };
+}
+
+// --- what the beds, the music and the placed sounds may keep alive -----------------------
+
+/**
+ * The most sources the beds, the music and the placed sounds (ambience.ts, music.ts,
+ * spatial.ts) keep alive at once: voices — the sources of short sounds, live oscillators or
+ * samples rendered once — live noise, the shared noise through live filters, and prerendered
+ * loops. A sound with no room left is not played; a loop that was refused is tried again on
+ * the next round. Mission control's voice and the effects are not counted: they were the
+ * lab's before, and are short.
+ */
+export const CAPS = { voice: 12, noise: 4, loop: 6 } as const;
+
+/** What a sound takes from the budget while it plays. */
+export type Cost = Partial<Record<keyof typeof CAPS, number>>;
+
+const used: Record<keyof typeof CAPS, number> = { voice: 0, noise: 0, loop: 0 };
+
+/** Takes `cost` from the budget, or refuses (false) where it would go over a cap. */
+export function claim(cost: Cost): boolean {
+  const kinds = Object.keys(CAPS) as (keyof typeof CAPS)[];
+  if (kinds.some((kind) => used[kind] + (cost[kind] ?? 0) > CAPS[kind])) {
+    return false;
+  }
+  for (const kind of kinds) used[kind] += cost[kind] ?? 0;
+  return true;
+}
+
+/** Gives `cost` back to the budget. */
+export function release(cost: Cost): void {
+  for (const kind of Object.keys(CAPS) as (keyof typeof CAPS)[]) {
+    used[kind] = Math.max(0, used[kind] - (cost[kind] ?? 0));
+  }
+}
+
+/** What the budget has given out now. */
+export function inUse(): Record<keyof typeof CAPS, number> {
+  return { ...used };
+}
+
+/**
+ * A short sound within the budget: `build` makes it into an outlet of its own on `dest` and
+ * returns its sources; once they have all ended the outlet is let go — nothing of the sound
+ * stays wired — and `cost` goes back. False, and nothing made, where the budget has no room.
+ */
+export function capped(
+  ctx: BaseAudioContext,
+  dest: AudioNode,
+  cost: Cost,
+  build: (out: GainNode) => AudioScheduledSourceNode[],
+): boolean {
+  if (!claim(cost)) {
+    return false;
+  }
+  const out = outlet(ctx, dest, 1);
+  const done = (): void => {
+    out.disconnect();
+    release(cost);
+  };
+  try {
+    const sources = build(out);
+    if (sources.length === 0) done();
+    else onAllEnded(sources, done);
+    return true;
+  } catch (error) {
+    done();
+    throw error;
+  }
+}
+
+/** How long a prerendered loop runs before it repeats, s. */
+export const LOOP_S = 4;
+
+/**
+ * Renders `build` once on an offline context into a loop `seconds` long at `rate`: two
+ * periods are rendered and the second kept, so that the filters have settled. Everything a
+ * loop is built from has to repeat within the period — whole cycles of every tone and of
+ * every slow wander, and the shared noise's two seconds — and then the loop has no seam.
+ */
+export async function renderLoop(
+  build: (ctx: BaseAudioContext, dest: AudioNode) => void,
+  rate: number,
+  seconds = LOOP_S,
+): Promise<AudioBuffer> {
+  const length = Math.round(rate * seconds);
+  const ctx = new OfflineAudioContext(1, length * 2, rate);
+  build(ctx, ctx.destination);
+  const rendered = await ctx.startRendering();
+  const loop = ctx.createBuffer(1, length, rate);
+  loop.getChannelData(0).set(rendered.getChannelData(0).subarray(length, length * 2));
+  return loop;
+}
+
+/** Renders `build` once on an offline context: a short sound, `seconds` long at `rate`. */
+export async function renderOnce(
+  build: (ctx: BaseAudioContext, dest: AudioNode) => void,
+  rate: number,
+  seconds: number,
+): Promise<AudioBuffer> {
+  const ctx = new OfflineAudioContext(1, Math.round(rate * seconds), rate);
+  build(ctx, ctx.destination);
+  return ctx.startRendering();
+}
+
+/** The sounds rendered so far, by name: null while one renders, or where it could not be. */
+const rendered = new Map<string, AudioBuffer | null>();
+
+/**
+ * What `render` makes, rendered once and kept by `name` for the page's life; null while it
+ * renders — it is asked for again next time — and for good where it could not be rendered, so
+ * that a failing render is not tried ten times a second.
+ */
+function renderedOnce(name: string, render: () => Promise<AudioBuffer>): AudioBuffer | null {
+  const known = rendered.get(name);
+  if (known !== undefined) return known;
+  rendered.set(name, null);
+  render()
+    .then((sound) => rendered.set(name, sound))
+    .catch(() => undefined); // Deliberately silent: the sound is flavour, and stays unplayed.
+  return null;
+}
+
+type Build = (ctx: BaseAudioContext, dest: AudioNode) => void;
+
+/** The sample `name` that `build` makes, `seconds` long at `rate`; null while it renders. */
+export function sampleOf(
+  name: string,
+  build: Build,
+  seconds: number,
+  rate: number,
+): AudioBuffer | null {
+  return renderedOnce(`sample ${name}`, () => renderOnce(build, rate, seconds));
+}
+
+/** The loop `name` that `build` makes, `seconds` long at `rate`; null while it renders. */
+export function loopOf(name: string, build: Build, seconds: number, rate: number): AudioBuffer | null {
+  return renderedOnce(`loop ${name}`, () => renderLoop(build, rate, seconds));
+}
+
+/**
+ * Plays `sample` once into `dest` from `at`, `speed` times as fast, within the budget (a
+ * voice): one source, unwired and given back as it ends. False where there is no room, or
+ * no sample yet.
+ */
+export function playSample(
+  ctx: BaseAudioContext,
+  sample: AudioBuffer | null,
+  dest: AudioNode,
+  at: number,
+  speed = 1,
+): boolean {
+  if (sample === null || !claim({ voice: 1 })) return false;
+  const source = ctx.createBufferSource();
+  source.buffer = sample;
+  source.playbackRate.value = speed;
+  source.connect(dest);
+  source.onended = () => {
+    source.disconnect();
+    release({ voice: 1 });
+  };
+  source.start(at);
+  return true;
+}
+
+/** A prerendered `loop` playing round and round into `dest` from `at`. */
+export function playLoop(
+  ctx: BaseAudioContext,
+  loop: AudioBuffer,
+  dest: AudioNode,
+  at: number,
+): AudioBufferSourceNode {
+  const source = ctx.createBufferSource();
+  source.buffer = loop;
+  source.loop = true;
+  source.connect(dest);
+  source.start(at);
+  return source;
 }
 
 /** Calls `done` once every one of `sources` has ended. */

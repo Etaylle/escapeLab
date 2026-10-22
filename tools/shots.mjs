@@ -5,7 +5,7 @@
  *
  *   PLAYWRIGHT_BROWSERS_PATH=$PWD/.playwright-browsers \
  *     [SHOTS_MISSION=Systemcheck] [SHOTS_FRAME_P95_MS=40] [SHOTS_CPU_SLOWDOWN=4] \
- *     [SHOTS_SOFTWARE_GL=1] [SHOTS_WEBGL=1] [SHOTS_HEADED=1] \
+ *     [SHOTS_SOFTWARE_GL=1] [SHOTS_WEBGL=1] [SHOTS_HEADED=1] [SHOTS_AUDIO_OFF=beds,music] \
  *     node tools/shots.mjs [baseUrl] [outDir]
  *
  * SHOTS_MISSION names the mission card to start (default Blackout); the
@@ -138,6 +138,16 @@
  * from 300 Hz to 3.4 kHz, and 15 dB further down than the noise was
  * (spectrum.mjs). Any of these that fails, fails the run.
  *
+ * What the sound costs: after every frame sample a line `cpu` gives the cores
+ * each kind of the browser's processes kept busy meanwhile (CDP SystemInfo)
+ * and what the host's audio thread renders (the probe's census: sources
+ * playing, nodes wired into the output, beds built); a line `pages` gives each
+ * page's renderer CPU, its main thread's task time, Chrome's count of its live
+ * audio nodes (wired, or waiting to be collected) and its heap; a line `sound
+ * js` the main thread's milliseconds a second each sound system took. With
+ * SHOTS_AUDIO_OFF=beds,music,spatial those systems stay off on every page
+ * (`?audio-off=`), to tell their cost apart — their sound checks then fail.
+ *
  * Editor: before the walkthrough a page of its own opens the editor from the
  * join screen, paints a 7 × 5 room, places a start and a station and
  * captures what the validator says (editor.png, and the layout at
@@ -202,6 +212,12 @@ const SOFTWARE_GL_FLAGS = [
 const WEBGL = switchedOn('SHOTS_WEBGL', process.env.SHOTS_WEBGL);
 /** Whether the browser opens real windows, SHOTS_HEADED=1: drawn on this machine's GPU. */
 const HEADED = switchedOn('SHOTS_HEADED', process.env.SHOTS_HEADED);
+/**
+ * The client's sound systems switched off on every page, SHOTS_AUDIO_OFF=beds,music,spatial
+ * (`?audio-off=`, client world/audio.ts): to tell what each costs the frames. None when unset;
+ * the sound checks fail for a system switched off.
+ */
+const AUDIO_OFF = audioOff(process.env.SHOTS_AUDIO_OFF);
 /** How far a frame's mean luma on the light layer may lie from the Canvas pass's, as a share. */
 const LUMA_TOLERANCE = 0.1;
 /**
@@ -310,6 +326,16 @@ function cpuSlowdown(text) {
   return rate;
 }
 
+/** The sound systems SHOTS_AUDIO_OFF names, comma-separated; throws for one it does not know. */
+function audioOff(text) {
+  const named = (text ?? '').split(',').filter((name) => name !== '');
+  const unknown = named.find((name) => !['beds', 'music', 'spatial'].includes(name));
+  if (unknown !== undefined) {
+    throw new Error(`SHOTS_AUDIO_OFF names beds, music and spatial, not "${unknown}"`);
+  }
+  return named;
+}
+
 /** Whether the switch `name` (`text`, its value) is on: 1 is on, 0 or unset off. */
 function switchedOn(name, text) {
   if (text === undefined || text === '' || text === '0') {
@@ -350,8 +376,9 @@ async function logRendering() {
 }
 
 /** A new page in `context`, its main thread slowed down CPU_SLOWDOWN times before it loads. */
-async function openPage(context) {
+async function openPage(context, name = 'page') {
   const page = await context.newPage();
+  named.set(page, name);
   if (CPU_SLOWDOWN > 1) {
     const cdp = await context.newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU_SLOWDOWN });
@@ -416,14 +443,94 @@ function traced(url) {
   return paged(withFlag.href);
 }
 
-/** `url` as every page of this run opens it: with `?gl=1` under SHOTS_WEBGL. */
+/**
+ * `url` as every page of this run opens it: with `?gl=1` under SHOTS_WEBGL, and the sound
+ * systems SHOTS_AUDIO_OFF names switched off.
+ */
 function paged(url) {
-  if (!WEBGL) {
+  if (!WEBGL && AUDIO_OFF.length === 0) {
     return url;
   }
-  const withGl = new URL(url);
-  withGl.searchParams.set('gl', '1');
-  return withGl.href;
+  const withFlags = new URL(url);
+  if (WEBGL) {
+    withFlags.searchParams.set('gl', '1');
+  }
+  if (AUDIO_OFF.length > 0) {
+    withFlags.searchParams.set('audio-off', AUDIO_OFF.join(','));
+  }
+  return withFlags.href;
+}
+
+/** The run's pages by the name they were opened under: the per-page cost is logged by it. */
+const named = new Map();
+
+/** Each page's CDP session for its performance metrics, opened once: they count from then on. */
+const metricSessions = new WeakMap();
+
+/**
+ * A page's renderer as Chrome counts it: CPU seconds, main-thread task seconds, live audio
+ * nodes (wired or awaiting collection) and the JS heap in use, MB.
+ */
+async function pageCost(page) {
+  let cdp = metricSessions.get(page);
+  if (cdp === undefined) {
+    cdp = await page.context().newCDPSession(page);
+    await cdp.send('Performance.enable');
+    metricSessions.set(page, cdp);
+  }
+  const { metrics } = await cdp.send('Performance.getMetrics');
+  const value = (name) => metrics.find((metric) => metric.name === name)?.value ?? 0;
+  return {
+    cpu: value('ProcessTime'),
+    main: value('TaskDuration'),
+    audio: value('AudioHandlers'),
+    heap: value('JSHeapUsedSize') / 1e6,
+  };
+}
+
+/** Every open page of the run, with its cost so far. */
+async function pageCosts() {
+  const open = [...named.keys()].filter((page) => !page.isClosed());
+  return new Map(await Promise.all(open.map(async (page) => [page, await pageCost(page)])));
+}
+
+/** Each page's cores busy between two readings `seconds` apart, and its audio nodes, as text. */
+function pageCostText(before, after, seconds) {
+  return [...after]
+    .map(([page, now]) => {
+      const was = before.get(page) ?? now;
+      const cores = ((now.cpu - was.cpu) / seconds).toFixed(2);
+      const main = ((now.main - was.main) / seconds).toFixed(2);
+      const heap = now.heap.toFixed(0);
+      return `${named.get(page)} ${cores} (main ${main}), ${now.audio} audio nodes, ${heap} MB`;
+    })
+    .join('; ');
+}
+
+/** CPU seconds the browser's processes have used so far, summed by their type (CDP SystemInfo). */
+async function processCpu() {
+  const cdp = await browser.newBrowserCDPSession();
+  try {
+    const { processInfo } = await cdp.send('SystemInfo.getProcessInfo');
+    const byType = {};
+    for (const { type, cpuTime } of processInfo) {
+      byType[type] = (byType[type] ?? 0) + cpuTime;
+    }
+    return byType;
+  } finally {
+    await cdp.detach();
+  }
+}
+
+/** The cores each type of process kept busy between two readings `seconds` apart, as text. */
+function busyCores(before, after, seconds) {
+  return Object.keys(after)
+    .sort()
+    .map((type) => {
+      const busy = (after[type] - (before[type] ?? 0)) / seconds;
+      return `${type.replace(/\.mojom\./, ' ')} ${busy.toFixed(2)}`;
+    })
+    .join(', ');
 }
 
 /**
@@ -448,8 +555,17 @@ async function sampleFrames(page, when, quiet) {
     fail(`no frame trace ${when}`);
     return;
   }
+  const cpuBefore = await processCpu();
+  const pagesBefore = await pageCosts();
+  const spentBefore = await page.evaluate(() => globalThis.__escapelab?.audio?.spent ?? null);
+  const quietSince = Date.now();
   await quiet();
+  const seconds = (Date.now() - quietSince) / 1000;
+  const cores = busyCores(cpuBefore, await processCpu(), seconds);
+  const perPage = pageCostText(pagesBefore, await pageCosts(), seconds);
   const frames = await page.evaluate(() => globalThis.__escapelab?.frames ?? []);
+  const nodes = await page.evaluate(() => globalThis.__escapelab?.audio?.nodes ?? null);
+  const spentAfter = await page.evaluate(() => globalThis.__escapelab?.audio?.spent ?? null);
   if (frames.length === 0) {
     console.log(`frames             !! no frames recorded ${when}`);
     fail(`no frames recorded ${when}`);
@@ -462,9 +578,36 @@ async function sampleFrames(page, when, quiet) {
       `(${frames.length}) ${when}: ` +
       (over ? `!! over the budget of ${FRAME_P95_MS} ms` : `within ${FRAME_P95_MS} ms`),
   );
+  console.log(`cpu                cores busy: ${cores}; sound: ${soundSources(nodes)}`);
+  console.log(`pages              ${perPage}`);
+  const js = soundJs(spentBefore, spentAfter, seconds);
+  console.log(`sound js           ms a second on the host's main thread: ${js}`);
   if (over) {
     fail(`frame p95 ${p95.toFixed(1)} ms ${when}, over ${FRAME_P95_MS} ms`);
   }
+}
+
+/** What the host's audio thread renders, from the probe's census (`audio.nodes`), as text. */
+function soundSources(nodes) {
+  if (nodes?.playing === undefined) {
+    return 'no audio probe';
+  }
+  const { playing, total, wired, beds } = nodes;
+  return (
+    `playing ${playing.oscillator} oscillators, ${playing.buffer} buffer sources; ` +
+    `${total} nodes wired (${countsOf(wired)}); ${beds} beds`
+  );
+}
+
+/** The main thread's ms a second each sound system took between two readings of `audio.spent`. */
+function soundJs(before, after, seconds) {
+  if (after === null) {
+    return 'none';
+  }
+  return Object.keys(after)
+    .sort()
+    .map((name) => `${name} ${((after[name] - (before?.[name] ?? 0)) / seconds).toFixed(2)}`)
+    .join(', ');
 }
 
 /** The run's last line: captures taken, skipped and failed, and what failed. */
@@ -1370,6 +1513,11 @@ function soundOf(page) {
   });
 }
 
+/** Counts by name as text: "gain 12, filter 4". */
+function countsOf(record) {
+  return Object.entries(record ?? {}).map(([name, count]) => `${name} ${count}`).join(', ');
+}
+
 /** Levels by name as text: "archive 1.00, corridor 0.25". */
 function levelsOf(record) {
   const named = Object.entries(record ?? {}).map(([name, level]) => `${name} ${level.toFixed(2)}`);
@@ -1452,8 +1600,12 @@ async function hearRadio(player, ms) {
  */
 async function checkRadioVoice(player, listening, after) {
   const heard = await listening;
+  // A page without the recordings answers with something else: no manifest, and the check fails.
   const manifest = await player.page.evaluate(() =>
-    globalThis.fetch('/voice/manifest.json').then((res) => res.json()),
+    globalThis
+      .fetch('/voice/manifest.json')
+      .then((res) => res.json())
+      .catch(() => ({})),
   );
   const events = player.seen.view.events;
   const line = [...events].reverse().find((event) => event.kind === 'radio')?.label ?? null;
@@ -3547,7 +3699,7 @@ async function run() {
 
   // --- host: create a room and grab the code ---------------------------
   const hostCtx = await browser.newContext({ viewport: SIZES[0] });
-  const host = await openPage(hostCtx);
+  const host = await openPage(hostCtx, 'host');
   const hostSeen = eavesdrop(host);
   host.on('console', (m) => {
     if (m.type() === 'error') console.log('[host console]', m.text());
@@ -3595,7 +3747,7 @@ async function run() {
   // Touch-capable on purpose: the on-screen D-pad is hidden for `pointer:
   // fine`, so a default context would never show it.
   const guestCtx = await browser.newContext({ viewport: SIZES[2], hasTouch: true });
-  const guest = await openPage(guestCtx);
+  const guest = await openPage(guestCtx, 'guest');
   const guestSeen = eavesdrop(guest);
   // Traced for its voice links; its frames are never sampled.
   await guest.goto(traced(BASE));
@@ -3690,7 +3842,7 @@ async function run() {
   await host.keyboard.press('Escape');
 
   const watcherCtx = await browser.newContext({ viewport: SIZES[0] });
-  const watcher = await openPage(watcherCtx);
+  const watcher = await openPage(watcherCtx, 'audience');
   const watcherSeen = eavesdrop(watcher);
   // Traced for its voice links; its frames are never sampled.
   await watcher.goto(traced(BASE));

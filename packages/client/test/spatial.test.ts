@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DronePosition, MapView } from '@escapelab/core';
 import {
   distanceGain,
+  HEAR_EVERY_S,
   MUFFLE_HZ,
   panOf,
   PAN_SPAN,
@@ -10,16 +11,17 @@ import {
   type CrewScene,
 } from '../src/world/spatial.js';
 import { WALL_SHARE } from '../src/voice/rules.js';
-import type {
-  FakeGain,
-  FakeOscillator,
-  FakePanner} from './fakeGraph.js';
 import {
-  downstream,
+  endAll,
   fakeGraph,
+  FakeOfflineContext,
+  flush,
   lastContext,
+  type FakeBufferSource,
   type FakeFilter,
   type FakeNode,
+  type FakeOscillator,
+  type FakePanner,
 } from './fakeGraph.js';
 
 /**
@@ -83,96 +85,122 @@ describe('the crew and the drones, heard', () => {
   async function spatial() {
     vi.resetModules();
     const module = await import('../src/world/spatial.js');
-    // The engine, made on first use: the partner's first step makes it.
-    (await import('../src/world/audio.js')).sharedAudio();
-    return { module, ctx: lastContext() };
+    const audio = await import('../src/world/audio.js');
+    audio.sharedAudio(); // the engine, made on first use
+    return { module, audio, ctx: lastContext() };
   }
+
+  const drone = (x: number, alerted = false, frozen = false): DronePosition => ({
+    x,
+    y: 2.5,
+    facing: 0,
+    range: 4,
+    halfAngleDeg: 30,
+    alerted,
+    frozen,
+  });
 
   const crew = (
     map: Pick<MapView, 'tiles' | 'doors'>,
     rx: number,
     moving: boolean,
-    now: number,
     drones: Record<string, DronePosition> = {},
   ): CrewScene => ({
     map,
     self: { x: 4.5, y: 2.5 },
     others: new Map([['ben', { rx, ry: 2.5, moving }]]),
     drones,
-    now,
   });
 
-  /** The panners made, by the pan they were set to. */
-  const pans = (ctx: ReturnType<typeof lastContext>): number[] =>
-    ctx.all<FakePanner>('panner').map((panner) => panner.pan.value);
+  /** The steps played: the sources of the step's rendered takes. */
+  const stepsOf = (ctx: ReturnType<typeof lastContext>): FakeBufferSource[] =>
+    ctx.all<FakeBufferSource>('buffer').filter((source) => source.buffer?.renderedBy != null);
 
-  it('steps for a partner every half tile they walk, placed where they are', async () => {
+  it('steps for a partner every half tile they walk, spread over the tenth to come', async () => {
     const { module, ctx } = await spatial();
-    module.hearCrew(crew(OPEN, 8.5, true, 0));
-    expect(pans(ctx)).toEqual([]);
-    module.hearCrew(crew(OPEN, 8.5 + STEP_TILES * 0.6, true, 16));
-    expect(pans(ctx)).toEqual([]); // not half a tile yet
-    module.hearCrew(crew(OPEN, 8.5 + STEP_TILES * 1.2, true, 32));
-    expect(pans(ctx)).toEqual([(8.5 + STEP_TILES * 1.2 - 4.5) / PAN_SPAN]);
-    const [panner] = ctx.all<FakePanner>('panner');
-    // The thump's sine and the scuff come through the placing chain into the master gain.
-    const into = ctx.all<FakeOscillator>('oscillator').filter((osc) =>
-      downstream(osc).has(panner as FakeNode),
-    );
-    expect(into).toHaveLength(1);
+    module.hearCrew(crew(OPEN, 8.5, true));
+    await flush(); // the step's takes, rendered as the crew is first heard
+    const renders = FakeOfflineContext.rendered.length;
+    module.hearCrew(crew(OPEN, 8.5 + STEP_TILES * 0.6, true));
+    expect(stepsOf(ctx)).toEqual([]); // not half a tile yet
+    module.hearCrew(crew(OPEN, 8.5 + STEP_TILES * 3.2, true)); // 1.6 walked: three steps
+    const steps = stepsOf(ctx).map((source) => source.startedAt as number);
+    const gap = HEAR_EVERY_S / 3;
+    expect(steps).toEqual([10.01, 10.01 + gap, 10.01 + 2 * gap].map((at) => expect.closeTo(at, 9)));
+    module.hearCrew(crew(OPEN, 8.5 + STEP_TILES * 4.1, true)); // the 0.1 left and 0.45 more
+    expect(stepsOf(ctx)).toHaveLength(4);
+    expect(ctx.all<FakePanner>('panner')).toHaveLength(1); // one placing for the partner's feet
+    expect(FakeOfflineContext.rendered).toHaveLength(renders); // no step rendered anew
+    expect(ctx.all<FakeOscillator>('oscillator')).toHaveLength(0); // no live tones
   });
 
   it('muffles a partner’s steps behind a shut door; nobody standing still steps', async () => {
     const { module, ctx } = await spatial();
-    module.hearCrew(crew(MAP, 8.5, true, 0));
-    module.hearCrew(crew(MAP, 9.1, true, 16));
+    module.hearCrew(crew(MAP, 8.5, true));
+    module.hearCrew(crew(MAP, 9.1, true));
     const [panner] = ctx.all<FakePanner>('panner');
-    const lowpass = ctx
-      .all<FakeFilter>('biquad')
-      .find((filter) => filter.outputs.includes(panner as FakeNode));
+    const filters = ctx.all<FakeFilter>('biquad');
+    const lowpass = filters.find((filter) => filter.outputs.includes(panner as FakeNode));
     expect(lowpass?.frequency.value).toBe(MUFFLE_HZ);
-    module.hearCrew(crew(MAP, 9.8, false, 32)); // carried along by the stream, not walking
+    module.hearCrew(crew(MAP, 9.8, false)); // carried along by the stream, not walking
     expect(ctx.all<FakePanner>('panner')).toHaveLength(1);
+  });
+
+  it('lets a step go once played, and a partner’s feet as they leave earshot', async () => {
+    const { module, audio, ctx } = await spatial();
+    module.hearCrew(crew(OPEN, 8.5, true));
+    await flush();
+    module.hearCrew(crew(OPEN, 9.1, true));
+    expect(audio.inUse()).toMatchObject({ voice: 1, noise: 0 });
+    const [step] = stepsOf(ctx);
+    const [feet] = ctx.all<FakePanner>('panner');
+    expect(step?.outputs).toHaveLength(1);
+    endAll(ctx);
+    expect(step?.disconnected).toBe(true);
+    expect(audio.inUse()).toMatchObject({ voice: 0, noise: 0 });
+    module.hearCrew(crew(OPEN, 9.1, false));
+    expect(feet?.disconnected).toBe(false); // still within earshot: kept
+    module.hearCrew(crew(OPEN, 14.6, true)); // ten tiles off and more: no step, feet let go
+    expect(feet?.disconnected).toBe(true);
+    expect(stepsOf(ctx)).toHaveLength(1);
   });
 
   it('places the nearest partner for the probe: the side, the distance’s gain', async () => {
     const { module } = await spatial();
     expect(module.spatialProbe()).toEqual({ partnerPan: null, partnerGain: null });
-    module.hearCrew(crew(OPEN, 1.5, false, 0));
+    module.hearCrew(crew(OPEN, 1.5, false));
     expect(module.spatialProbe()).toEqual({ partnerPan: -0.5, partnerGain: 0.875 });
-    module.hearCrew(crew(OPEN, 10.5, false, 50)); // within the placing interval: kept
-    expect(module.spatialProbe().partnerPan).toBe(-0.5);
-    module.hearCrew(crew(OPEN, 10.5, false, 150));
+    module.hearCrew(crew(OPEN, 10.5, false));
     expect(module.spatialProbe()).toEqual({ partnerPan: 1, partnerGain: 0.5 });
   });
 
-  it('buzzes a drone where it flies, quiet frozen, chirping once as it catches one', async () => {
+  it('buzzes the nearest drone in earshot as one loop, and stops it beyond', async () => {
+    const { module, audio, ctx } = await spatial();
+    module.hearCrew(crew(OPEN, 1.5, false, { d: drone(10.5) }));
+    await flush();
+    module.hearCrew(crew(OPEN, 1.5, false, { d: drone(10.5) }));
+    const rotor = ctx.all<FakeBufferSource>('buffer').find((b) => b.loop);
+    expect(rotor?.buffer?.duration).toBe(2);
+    expect(audio.inUse().loop).toBe(1);
+    const [pan] = ctx.all<FakePanner>('panner');
+    expect(pan?.pan.events.at(-1)).toEqual(['target', 1, 10, 0.08]);
+    expect(ctx.all<FakeOscillator>('oscillator')).toHaveLength(0); // no live saws
+    module.hearCrew(crew(OPEN, 1.5, false, { d: drone(14.6) })); // ten tiles off and more
+    expect(rotor?.stoppedAt).toBeCloseTo(10.4, 9);
+    rotor?.end();
+    expect(audio.inUse().loop).toBe(0);
+  });
+
+  it('keeps a frozen drone silent, and chirps once as a drone catches somebody', async () => {
     const { module, ctx } = await spatial();
-    const drone = (x: number, alerted: boolean, frozen = false): DronePosition => ({
-      x,
-      y: 2.5,
-      facing: 0,
-      range: 4,
-      halfAngleDeg: 30,
-      alerted,
-      frozen,
-    });
-    module.hearCrew(crew(OPEN, 1.5, false, 0, { d: drone(10.5, false) }));
-    const [rotorPan] = ctx.all<FakePanner>('panner');
-    expect(rotorPan?.pan.events).toEqual([['target', 1, 10, 0.08]]);
-    const saws = ctx.all<FakeOscillator>('oscillator').filter((osc) => osc.type === 'sawtooth');
-    expect(saws.map((saw) => saw.frequency.value)).toEqual([118, 121.5]);
-    module.hearCrew(crew(OPEN, 1.5, false, 200, { d: drone(10.5, true) }));
-    module.hearCrew(crew(OPEN, 1.5, false, 400, { d: drone(10.5, true) }));
+    module.hearCrew(crew(OPEN, 1.5, false, { d: drone(8.5, false, true) }));
+    await flush();
+    module.hearCrew(crew(OPEN, 1.5, false, { d: drone(8.5, false, true) }));
+    expect(ctx.all<FakeBufferSource>('buffer').filter((b) => b.loop)).toHaveLength(0);
+    module.hearCrew(crew(OPEN, 1.5, false, { d: drone(8.5, true) }));
+    module.hearCrew(crew(OPEN, 1.5, false, { d: drone(8.5, true) }));
     const chirps = ctx.all<FakeOscillator>('oscillator').filter((osc) => osc.type === 'square');
     expect(chirps).toHaveLength(2); // two blips, once
-    module.hearCrew(crew(OPEN, 1.5, false, 600, { d: drone(10.5, false, true) }));
-    const filters = ctx.all<FakeFilter>('biquad');
-    const muffle = filters.find((f) => f.outputs.includes(rotorPan as FakeNode));
-    const level = ctx.all<FakeGain>('gain').find((g) => g.outputs.includes(muffle as FakeNode));
-    expect(level?.gain.events.at(-1)).toEqual(['target', 0, 10, 0.08]); // frozen: quiet
-    module.hearCrew(crew(OPEN, 1.5, false, 800, {}));
-    expect(saws.every((saw) => saw.stoppedAt === 10.4)).toBe(true); // gone: silent
   });
 
   it('never throws, with no audio at all', async () => {
@@ -180,8 +208,8 @@ describe('the crew and the drones, heard', () => {
     vi.resetModules();
     const module = await import('../src/world/spatial.js');
     expect(() => {
-      module.hearCrew(crew(OPEN, 1.5, true, 0));
-      module.hearCrew(crew(OPEN, 2.5, true, 200));
+      module.hearCrew(crew(OPEN, 1.5, true, { d: drone(8.5, true) }));
+      module.hearCrew(crew(OPEN, 2.5, true));
       module.stopSpatial();
     }).not.toThrow();
   });
