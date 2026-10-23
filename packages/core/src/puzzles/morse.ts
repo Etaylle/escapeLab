@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { commonDefShape, type ManualBlock, type Move, type PuzzleModule } from './module.js';
-import { deviceFigure, penaltyLine, workedExample } from './printed.js';
+import { costOf, labDocument, spelled, type TypePlate } from './printed.js';
 
 /**
  * morse puzzle („Funkfeuer"): the operator's lamp blinks one word in Morse
@@ -124,14 +124,44 @@ function wordKhz(word: string): number {
 const printed = (code: string): string =>
   [...code].map((signal) => (signal === '.' ? '·' : '−')).join('\u00a0');
 
+// --- the printed document --------------------------------------------------------------
+
+const PLATE: TypePlate = { name: 'Funkfeuer', type: 'FF-16', year: 1974 };
+
+const PURPOSE =
+  'Das Funkfeuer meldet das Labor bei der Leitstelle, wenn das Netz ausfällt: Gesendet wird ' +
+  'auf der Frequenz des Kennworts, das die Signallampe morst.';
+
+const BUILD =
+  `Am Funkpult sitzen die Signallampe, ein Regler mit ◀ ▶ für ${spelled(DIAL_STEPS)} ` +
+  `Frequenzen von ${megahertz(BASE_KHZ)} bis ${megahertz(dialKhz(DIAL_STEPS - 1))} und die ` +
+  'Taste SENDEN.';
+
+/** Betrieb: the lamp's code, three letters for the word, the wrong frequency and its cost. */
+function operationText(def: MorseDef): string {
+  return (
+    'Die Lampe morst ein Wort der Frequenztabelle in Dauerschleife: kurzes Aufleuchten ist ·, ' +
+    'langes −, zwischen zwei Buchstaben bleibt sie kurz dunkel, vor jeder Wiederholung lange. ' +
+    'Die ersten drei Buchstaben bestimmen das Wort; keine zwei Wörter der Tabelle beginnen ' +
+    'gleich. Wird auf einer anderen Frequenz gesendet, meldet die Überwachung Alarm und zieht ' +
+    `${costOf(def.penaltySec)} ab; die Lampe morst weiter.`
+  );
+}
+
 /**
- * The worked example: KABEL's first three letters as the lamp shows them —
- * two letters leave KABEL and KANAL, the third settles it.
+ * The printed log: KABEL's first three letters as the lamp showed them —
+ * two letters left KABEL and KANAL, the third settled it.
  */
-const EXAMPLE: readonly string[] = [
-  `Gesehen nach der langen Pause: ${['-.-', '.-', '-...'].map(printed).join(', ')}.`,
-  'Morsetafel: K, A, B. KA passt auf KABEL und KANAL, KAB nur auf KABEL.',
-  'Frequenztabelle: KABEL, 3,530 MHz. Mit ◀ ▶ eingestellt, dann SENDEN.',
+const LOG: readonly string[] = [
+  `04:10 Nach der langen Pause: ${['-.-', '.-', '-...'].map(printed).join(', ')}.`,
+  '04:11 Morsetafel: K, A, B. KA passt auf KABEL und KANAL, KAB nur auf KABEL.',
+  '04:11 Frequenztabelle: KABEL, 3,530 MHz; eingestellt und gesendet, die Leitstelle ' +
+    'bestätigt.',
+];
+
+const WORKSHOP: readonly string[] = [
+  'Passt kein Wort der Tabelle, ist ein Zeichen verlesen: nach der nächsten langen Pause von ' +
+    'vorn mitschreiben.',
 ];
 
 /** A–M on the left, N–Z on the right. */
@@ -182,44 +212,28 @@ export const morseModule: PuzzleModule<MorseDef, MorseState, MorseInput, MorseVi
   },
 
   manual(def) {
-    return [
-      {
-        heading: 'Funkfeuer',
-        blocks: [
-          deviceFigure('morse', 'Funkpult mit Signallampe'),
-          {
-            kind: 'p',
-            text:
-              'Die Signallampe am Funkpult morst in Dauerschleife ein Wort der ' +
-              'Frequenztabelle. Kurzes Aufleuchten ist ·, langes −; zwischen 2 Buchstaben ' +
-              'bleibt die Lampe länger dunkel, vor jeder Wiederholung lange. Das Funkpult ' +
-              'wird mit ◀ ▶ auf die Frequenz des Wortes gestellt, dann wird SENDEN gedrückt.',
-          },
-          {
-            kind: 'rules',
-            items: [
-              'Wenn die ersten 3 Buchstaben entziffert sind, steht das Wort fest; keine 2 ' +
-                'Wörter der Frequenztabelle beginnen mit denselben 3 Buchstaben.',
-              'Wenn kein Wort der Frequenztabelle so beginnt, ist ein Zeichen verlesen; nach ' +
-                'der nächsten langen Pause beginnt das Wort von vorn.',
-            ],
-          },
-        ],
-      },
-      { heading: 'Morsetafel', blocks: [alphabetTable()] },
-      {
-        heading: 'Frequenztabelle',
-        blocks: [
-          {
-            kind: 'table',
-            head: ['Wort', 'Frequenz'],
-            rows: WORDS.map(({ word, khz }) => [word, megahertz(khz)]),
-          },
-          workedExample(EXAMPLE),
-          penaltyLine(def.penaltySec, 'Die Lampe morst weiter.'),
-        ],
-      },
-    ];
+    return labDocument({
+      plate: PLATE,
+      purpose: PURPOSE,
+      figure: { of: 'morse', device: 'Funkpult mit Signallampe' },
+      build: BUILD,
+      operation: operationText(def),
+      law: [
+        { heading: 'Morsetafel', blocks: [alphabetTable()] },
+        {
+          heading: 'Frequenztabelle',
+          blocks: [
+            {
+              kind: 'table',
+              head: ['Wort', 'Frequenz'],
+              rows: WORDS.map(({ word, khz }) => [word, megahertz(khz)]),
+            },
+          ],
+        },
+      ],
+      log: LOG,
+      workshop: WORKSHOP,
+    });
   },
 
   /** Decodes the operator's lamp with the printed tables, then tunes and sends. */

@@ -193,33 +193,42 @@ describe('keypad puzzle', () => {
     expect(viewOf(other ?? first, 'p2')).toEqual(viewOf(first, 'p2'));
   });
 
-  it('prints the six columns and the procedure, for the reader only', () => {
+  it('prints the six columns, the order and what a wrong key costs, for the reader only', () => {
     const state = started();
     const printed = keypadModule.manual(def);
     expect(viewOf(state, 'p2').manual).toEqual(printed);
     expect(viewOf(state, 'p1').manual).toBeNull();
-    const blocks = printed.flatMap((section) => section.blocks);
-    expect(blocks).toContainEqual({ kind: 'columns', columns: KEYPAD_COLUMNS });
-    expect(blocks.at(-1)).toEqual({
-      kind: 'p',
-      text: 'Fehlgriff: Alarm, −15 s. Leuchtende Tasten bleiben an.',
-    });
+    expect(printed.map(({ heading }) => heading)).toEqual([
+      'Zeichentastenfeld, Typ ZT-4 (Baujahr 1991)',
+      'Aufbau',
+      'Betrieb',
+      'Zeichentafel',
+      'Aus der Werkstatt',
+    ]);
+    const table = printed.find(({ heading }) => heading === 'Zeichentafel')?.blocks[0];
+    expect(table).toEqual({ kind: 'columns', columns: KEYPAD_COLUMNS });
+    const operation = printed.find(({ heading }) => heading === 'Betrieb')?.blocks[0];
+    const text = operation?.kind === 'p' ? operation.text : '';
+    expect(text).toContain('in der ihre Zeichen in dieser Spalte von oben nach unten stehen');
+    expect(text).toMatch(/zieht 15 Sekunden Einsatzzeit ab; leuchtende Tasten bleiben an\.$/);
   });
 
-  it('prints an example that the table and the solver bear out', () => {
-    const example = keypadModule
+  it('prints a log that the table and the solver bear out', () => {
+    const log = keypadModule
       .manual(def)
       .flatMap((section) => section.blocks)
       .find((block) => block.kind === 'example');
-    const [seen = '', found = '', pressed = ''] = example?.kind === 'example' ? example.lines : [];
-    const glyphs = /^Gesehen, oben links bis unten rechts: (.+)\.$/.exec(seen)?.[1]?.split(', ');
-    const nth = /^Nur die (\S+) Spalte enthält alle vier\.$/.exec(found)?.[1] ?? '';
-    const column = ['erste', 'zweite', 'dritte', 'vierte', 'fünfte', 'sechste'].indexOf(nth);
-    const order = /^Gedrückt, wie sie dort von oben stehen: (.+)\.$/
+    const [seen = '', found = '', pressed = ''] = log?.kind === 'example' ? log.lines : [];
+    const glyphs = /^\d\d:\d\d Feld zeigt, oben links bis unten rechts: (.+)\.$/
+      .exec(seen)?.[1]
+      ?.split(', ');
+    const named = /^\d\d:\d\d Alle vier stehen nur in Spalte ([1-6])\.$/.exec(found)?.[1];
+    const column = Number(named) - 1;
+    const order = /^\d\d:\d\d Angenommen in der Folge dieser Spalte: (.+)\.$/
       .exec(pressed)?.[1]
       ?.split(', ');
-    if (glyphs?.length !== 4 || column < 0 || order === undefined) {
-      throw new Error(`unreadable example: ${JSON.stringify([seen, found, pressed])}`);
+    if (glyphs?.length !== 4 || !(column >= 0) || order === undefined) {
+      throw new Error(`unreadable log: ${JSON.stringify([seen, found, pressed])}`);
     }
     // The column named holds all four, and no other does.
     const holders = KEYPAD_COLUMNS.flatMap((c, i) =>

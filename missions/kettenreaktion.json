@@ -141,7 +141,7 @@
       "wires": { "min": 4, "max": 6 },
       "penaltySec": 30,
       "hints": [
-        "Die Kabel zählen von oben. Es gilt nur die Liste zur Kabelzahl, und die erste zutreffende Regel entscheidet."
+        "Werkstatt: Die Kabel zählen von oben. Es gilt nur die Liste zur Kabelzahl und darin die erste Regel, die zutrifft."
       ],
       "onSolved": "Weiter im Pumpenraum, Südost. Regeln wieder im Archiv."
     },
@@ -150,7 +150,7 @@
       "id": "kuehlkreislauf",
       "title": "Kühlkreislauf",
       "hints": [
-        "LED, Markierung und Stern geben die Zeile, bei „wenn“ gilt das Schild. Sind alle gestellt, wird einmal PRÜFEN gedrückt."
+        "Kältetechnik: LED, Markierung und Stern geben die Zeile, bei „wenn“ gilt das Schild. PRÜFEN erst, wenn alle stehen."
       ],
       "onSolved": "Leitstand offen. Freigabecode dort, Regeln im Messlabor."
     },
@@ -159,7 +159,7 @@
       "id": "freigabecode",
       "title": "Freigabecode",
       "hints": [
-        "Spätere Stufen fragen nach Position und Beschriftung früherer Tasten; der Notizblock liegt auf N."
+        "Messlabor: Spätere Stufen fragen nach Platz und Ziffer früherer Tasten. Zu jeder Stufe beides notieren."
       ],
       "onSolved": "Resonator offen. Station dahinter, durch die Westtür."
     },
@@ -169,7 +169,7 @@
       "title": "Resonanz-Dämpfung",
       "sequenceLength": 6,
       "hints": [
-        "Jede Stufe beginnt wieder bei der ersten Farbe. Die Kennung wählt die Tabelle, der Alarmstand die Zeile."
+        "Messlabor: Jede Stufe beginnt wieder bei der ersten Farbe. Die Kennung wählt die Tabelle, der Alarmstand die Zeile."
       ],
       "onSolved": "Leitungsnetz am Westende vom Flur, Kühlmittel zum Kern."
     },
@@ -180,7 +180,7 @@
       "size": 6,
       "penaltySec": 12,
       "hints": [
-        "Zellen heißen nach Spalte und Zeile, etwa C4. Der Weg lässt sich auf dem Schaltplan vom Ziel rückwärts finden."
+        "Leitstand: Zellen heißen nach Spalte und Zeile, etwa C4. Den Weg auf dem Schaltplan vom Ziel rückwärts suchen."
       ],
       "onSolved": "Alle in den Kern. Flurplatte öffnet das Messlabor."
     },

@@ -12,6 +12,7 @@ import type {
   Edgework,
   GameState,
   ManualBlock,
+  ManualSection,
   Mission,
   Perspectives,
   PuzzleContext,
@@ -76,6 +77,16 @@ const isTable = (block: ManualBlock): block is TableBlock => block.kind === 'tab
 
 function printedTables(def: SimonDef): TableBlock[] {
   return simonModule.manual(def).flatMap((section) => section.blocks.filter(isTable));
+}
+
+/** The one paragraph of the section under `heading`. */
+function paragraphUnder(manual: readonly ManualSection[], heading: string): string {
+  const blocks = manual.find((section) => section.heading === heading)?.blocks ?? [];
+  const [text, ...more] = blocks.flatMap((block) => (block.kind === 'p' ? [block.text] : []));
+  if (text === undefined || more.length > 0) {
+    throw new Error(`expected one paragraph under „${heading}"`);
+  }
+  return text;
 }
 
 /**
@@ -289,39 +300,36 @@ function playWithSlips(seed: number, legend: SimonDef['legend']): boolean {
   throw new Error(`seed ${seed}: not solved within 200 moves`);
 }
 
-describe('simon manual', () => {
+describe('simon manual: the document', () => {
   it('prints the stages, the choice of table and both translation tables', () => {
-    const [section, ...more] = simonModule.manual(defOf({ sequenceLength: 6, penaltySec: 25 }));
-    expect(more).toEqual([]);
-    expect(section?.heading).toBe('Frequenz-Abgleich');
-    const blocks = section?.blocks ?? [];
-    expect(blocks.map((block) => block.kind)).toEqual([
-      'figure',
-      'p',
-      'rules',
-      'table',
-      'table',
-      'example',
-      'p',
+    const manual = simonModule.manual(defOf({ sequenceLength: 6, penaltySec: 25 }));
+    expect(manual.map(({ heading }) => heading)).toEqual([
+      'Abgleichpanel, Typ FA-4 (Baujahr 1989)',
+      'Aufbau',
+      'Betrieb',
+      'Übersetzung',
+      'Aus der Werkstatt',
     ]);
-    expect(blocks[1]).toMatchObject({
-      kind: 'p',
-      text: expect.stringMatching(/bis Stufe 6\..*Alarmstand am Panel die Zeile/),
-    });
-    expect(blocks[2]).toEqual({
+    const build = paragraphUnder(manual, 'Aufbau');
+    const operation = paragraphUnder(manual, 'Betrieb');
+    expect(build).toMatch(/Stufe 1 zeigt die erste Farbe, .* bis Stufe 6\.$/);
+    expect(operation).toContain('In der geltenden Tabelle gibt der Alarmstand am Panel die Zeile');
+    expect(operation).toMatch(
+      new RegExp(
+        'zieht 25 Sekunden Einsatzzeit ab; die Stufe beginnt von vorn, mit der Zeile für den ' +
+          'neuen Alarmstand\\.$',
+      ),
+    );
+    const blocks = manual[3]?.blocks ?? [];
+    expect(blocks.map((block) => block.kind)).toEqual(['rules', 'table', 'table', 'example']);
+    expect(blocks[0]).toEqual({
       kind: 'rules',
       items: [
         'Wenn die Laborkennung ein A, E oder U enthält, gilt die Tabelle „Mit Vokal“.',
         'Andernfalls gilt die Tabelle „Ohne Vokal“.',
       ],
     });
-    expect(blocks.at(-1)).toEqual({
-      kind: 'p',
-      text:
-        'Fehlgriff: Alarm, −25 s. Die Stufe beginnt von vorn, mit der Zeile für den neuen ' +
-        'Alarmstand.',
-    });
-    expect(blocks.slice(3, 5)).toEqual([
+    expect(blocks.slice(1, 3)).toEqual([
       {
         kind: 'table',
         head: ['Mit Vokal', 'rot', 'blau', 'grün', 'gelb'],
@@ -345,20 +353,16 @@ describe('simon manual', () => {
 
   it('prints one table of two rows and nothing of the Kennung for the einfach legend', () => {
     const def = defOf({ legend: 'einfach', sequenceLength: 4, penaltySec: 25 });
-    const [section, ...more] = simonModule.manual(def);
-    expect(more).toEqual([]);
-    expect(section?.heading).toBe('Frequenz-Abgleich');
-    const blocks = section?.blocks ?? [];
-    expect(blocks.map((block) => block.kind)).toEqual(['figure', 'p', 'table', 'example', 'p']);
-    expect(JSON.stringify(blocks)).not.toMatch(/Vokal|Kennung/);
-    expect(blocks[1]).toMatchObject({
-      kind: 'p',
-      text: expect.stringMatching(/bis Stufe 4\..*Alarmstand am Panel die Zeile/),
-    });
-    expect(blocks.at(-1)).toMatchObject({
-      text: expect.stringMatching(/^Fehlgriff: Alarm, −25 s\./),
-    });
-    expect(blocks[2]).toEqual({
+    const manual = simonModule.manual(def);
+    expect(JSON.stringify(manual)).not.toMatch(/Vokal|Kennung/);
+    expect(paragraphUnder(manual, 'Aufbau')).toMatch(/ bis Stufe 4\.$/);
+    expect(paragraphUnder(manual, 'Betrieb')).toContain(
+      'In der Tabelle gibt der Alarmstand am Panel die Zeile',
+    );
+    expect(paragraphUnder(manual, 'Betrieb')).toContain('zieht 25 Sekunden Einsatzzeit ab;');
+    const blocks = manual.find(({ heading }) => heading === 'Übersetzung')?.blocks ?? [];
+    expect(blocks.map((block) => block.kind)).toEqual(['table', 'example']);
+    expect(blocks[0]).toEqual({
       kind: 'table',
       head: ['Blinkt', 'rot', 'blau', 'grün', 'gelb'],
       rows: [
@@ -368,21 +372,25 @@ describe('simon manual', () => {
     });
   });
 
-  /** The lab and alarm count an example may state; a legend that ignores the Kennung, any lab. */
+});
+
+describe('simon manual: the log and the tables', () => {
+  /** The lab and alarm count a log may state; a legend that ignores the Kennung, any lab. */
   const STATED: Record<string, { labs: Edgework[]; alarms: number }> = {
-    'Kennung ohne A, E und U; 1 Alarm am Panel.': { labs: [WITHOUT_VOWEL], alarms: 1 },
-    '0 Alarme am Panel.': { labs: [WITH_VOWEL, WITHOUT_VOWEL], alarms: 0 },
+    'Kennung ohne A, E und U, 1 Alarm am Panel': { labs: [WITHOUT_VOWEL], alarms: 1 },
+    '0 Alarme am Panel': { labs: [WITH_VOWEL, WITHOUT_VOWEL], alarms: 0 },
   };
 
-  it.each(LEGENDS)('prints an example that the page and the panel bear out: %s', (legend) => {
+  it.each(LEGENDS)('prints a log that the page and the panel bear out: %s', (legend) => {
     const def = defOf({ legend });
-    const example = simonModule
+    const log = simonModule
       .manual(def)
       .flatMap((section) => section.blocks)
       .find((block) => block.kind === 'example');
-    const [seen = '', read = '', pressed = ''] = example?.kind === 'example' ? example.lines : [];
-    const flashed = /^Gesehen: Stufe 2 blinkt (\S+), dann (\S+?)[.;] (.+)$/.exec(seen);
-    const answered = /^Gedrückt: (\S+), dann (\S+)\.$/.exec(pressed);
+    const [seen = '', entry = '', pressed = ''] = log?.kind === 'example' ? log.lines : [];
+    const flashed = /^\d\d:\d\d Stufe 2 blinkt (\S+), dann (\S+?); (.+)\.$/.exec(seen);
+    const answered = /^\d\d:\d\d Eingegeben: (\S+), dann (\S+); Stufe 3 läuft\.$/.exec(pressed);
+    const read = entry.replace(/^\d\d:\d\d /, '');
     const stated = STATED[flashed?.[3] ?? ''];
     const colour = (name = ''): SimonColor => {
       const found = SIMON_COLORS.find((c) => PRINTED[c] === name);
@@ -392,7 +400,7 @@ describe('simon manual', () => {
       return found;
     };
     if (flashed === null || answered === null || stated === undefined) {
-      throw new Error(`unreadable example: ${JSON.stringify([seen, read, pressed])}`);
+      throw new Error(`unreadable log: ${JSON.stringify([seen, entry, pressed])}`);
     }
     const flashes = [colour(flashed[1]), colour(flashed[2])];
     const presses = [colour(answered[1]), colour(answered[2])];

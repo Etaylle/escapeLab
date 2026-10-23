@@ -88,7 +88,7 @@
       "stages": 2,
       "length": 3,
       "hints": [
-        "Das sendende Pult zeigt Farbe und Form; das andere drückt in derselben Folge. Nach jeder Stufe wechselt die Richtung."
+        "Einweisung: Ein Pult zeigt Farbe und Form, das Gegenpult quittiert in derselben Folge. Danach wechselt die Richtung."
       ],
       "lights": [],
       "onSolved": "Signal steht. Platte hält die Kontrolltür, Spind daneben durchsuchen."
@@ -99,7 +99,7 @@
       "title": "Kabelprüfung",
       "wires": { "min": 3, "max": 3 },
       "hints": [
-        "Kabel von oben gezählt; nur die Liste für 3 Kabel gilt, die erste zutreffende Regel entscheidet."
+        "Einweisung: Kabel von oben gezählt. Nur die Liste für 3 Kabel gilt, und die erste Regel, die zutrifft, entscheidet."
       ],
       "lights": ["KONTROLLE"],
       "onSolved": "Spulen offen. Platte halten, dann beide nach Osten."

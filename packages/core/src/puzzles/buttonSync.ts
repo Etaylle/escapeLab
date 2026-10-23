@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { commonDefShape, type PuzzleModule } from './module.js';
-import { deviceFigure, workedExample } from './printed.js';
+import { labDocument, type TypePlate } from './printed.js';
 
 /**
  * button-sync puzzle: every connected player must press, standing at the
@@ -115,102 +115,146 @@ function dueAt(def: ButtonSyncDef, state: ButtonSyncState): number | null {
 }
 
 /**
- * The drawing a main switch's manual opens on — a plate over a lever for each
- * of the crew — by the figure id the client draws it for. The button's is
- * the module type, as every module's.
+ * The drawing over a main switch's Aufbau — a plate over a lever for each of
+ * the crew — by the figure id the client draws it for. The button's is the
+ * module type, as every module's.
  */
 export const LEVER_FIGURE = 'button-sync-lever';
 
-/** What the manual's opening says the device is, and how the crew works it, by its look. */
-const DEVICE: Record<ButtonSyncDef['style'], { figure: string; caption: string; text: string }> = {
+/**
+ * What the document says of the device, by its look: its type plate, the
+ * drawing it opens on, what it is for and how it is built. The levers and
+ * the presses go by the badges logged into the lab — one for every member
+ * of the crew — so the page names a badge where the game counts a player.
+ */
+const DEVICE: Record<
+  ButtonSyncDef['style'],
+  { plate: TypePlate; figure: string; caption: string; purpose: string; build: string }
+> = {
   button: {
+    plate: { name: 'Synchrontaster', type: 'ST-2', year: 1981 },
     figure: 'button-sync',
     caption: 'Pult mit Synchrontaste',
-    text:
-      'Eine Taste für die ganze Crew: Jedes Crewmitglied steht dabei am Pult und drückt sie ' +
-      'einmal.',
+    purpose:
+      'Der Synchrontaster sichert Schaltungen, die das ganze Labor betreffen, etwa einen ' +
+      'Neustart oder den Not-Aus: Eine solche Schaltung schließt nur, wenn alle im Labor ' +
+      'angemeldeten Dienstausweise sie bestätigen.',
+    build:
+      'Ein Pult mit einem Pilztaster, der jeden Druck dem Ausweis zuordnet, von dem er kommt; ' +
+      'gezählt werden nur Drücke am Pult selbst.',
   },
   lever: {
+    plate: { name: 'Hauptschalter', type: 'HS-3', year: 1976 },
     figure: LEVER_FIGURE,
     caption: 'Hauptschalter mit Hebeln',
-    text:
-      'Ein Hebel je Crewmitglied: Jedes Crewmitglied steht dabei am Schalter und legt seinen ' +
-      'Hebel einmal um.',
+    purpose:
+      'Der Hauptschalter schaltet nach einem Ausfall Licht und Grundversorgung wieder zu. Für ' +
+      'jeden im Labor angemeldeten Dienstausweis hat er einen Hebel, und er schließt erst, wenn ' +
+      'alle Hebel umgelegt sind.',
+    build:
+      'Ein Schild über einer Reihe Hebel, einem je angemeldetem Ausweis, über jedem Hebel eine ' +
+      'Lampe; umgelegt wird am Schalter selbst.',
   },
 };
 
-/** „2,5 s" for 2500 ms: German decimal comma, the unit as the penalty lines print it. */
-const seconds = (ms: number): string => `${String(ms / 1000).replace('.', ',')} s`;
+/** „2,5 Sekunden" for 2500 ms: German decimal comma. */
+const seconds = (ms: number): string => {
+  const said = String(ms / 1000).replace('.', ',');
+  return `${said} ${said === '1' ? 'Sekunde' : 'Sekunden'}`;
+};
 
-/** The rules and the worked example of a panel whose presses count whenever they come. */
-function anyPace(style: ButtonSyncDef['style']): { rules: string[]; example: string[] } {
+/** What a document sets out beyond its plate: how the device runs, its law, its log, its notes. */
+interface Printed {
+  operation: string;
+  rules: string[];
+  log: string[];
+  workshop: string[];
+}
+
+/** Nothing here costs time, whatever the look, and Betrieb says so last. */
+const NO_COST: Record<ButtonSyncDef['style'], string> = {
+  button: 'Die Überwachung meldet hier nichts: Kein Druck kostet Einsatzzeit.',
+  lever: 'Die Überwachung meldet hier nichts: Kein Hebel kostet Einsatzzeit.',
+};
+
+/** The document's own parts for a device whose presses count whenever they come. */
+function anyPace(style: ButtonSyncDef['style']): Printed {
   if (style === 'lever') {
     return {
+      operation:
+        `Ein umgelegter Hebel bleibt liegen, bis der Hauptschalter schließt. ${NO_COST.lever}`,
       rules: [
-        'Wenn jedes Crewmitglied seinen Hebel einmal umgelegt hat, schließt der Hauptschalter; ' +
-          'Reihenfolge und Abstand zählen nicht.',
+        'Wenn jeder Hebel einmal umgelegt ist, schließt der Hauptschalter; Reihenfolge und ' +
+          'Abstand zählen nicht.',
       ],
-      example: [
-        'Crew aus 3 Personen.',
-        'Umgelegt: der erste Hebel sofort, der zweite 10 Sekunden später, der dritte nach ' +
-          '1 Minute.',
-        'Alle 3 Hebel unten: Der Hauptschalter schließt.',
+      log: [
+        '00:31 Angemeldet: 3 Ausweise, 3 Hebel.',
+        '00:31 Hebel 1 umgelegt; Hebel 2 nach 10 Sekunden, Hebel 3 nach einer Minute.',
+        '00:32 Alle 3 Hebel umgelegt: Hauptschalter geschlossen.',
+      ],
+      workshop: [
+        'Der Schalter wartet beliebig lange; ein früh umgelegter Hebel springt nicht zurück.',
       ],
     };
   }
   return {
+    operation: `Ein Druck gilt, bis die Schaltung schließt. ${NO_COST.button}`,
     rules: [
-      'Wenn jedes Crewmitglied einmal gedrückt hat, schließt die Schaltung; Reihenfolge ' +
-        'und Abstand zählen nicht.',
+      'Wenn von jedem angemeldeten Ausweis ein Druck vorliegt, schließt die Schaltung; ' +
+        'Reihenfolge und Abstand zählen nicht.',
     ],
-    example: [
-      'Crew aus 3 Personen.',
-      'Gedrückt: die erste sofort, die zweite 10 Sekunden später, die dritte nach 1 Minute.',
-      'Alle 3 haben gedrückt: Die Schaltung schließt.',
+    log: [
+      '00:31 Angemeldet: 3 Ausweise.',
+      '00:31 Druck von Ausweis 1; Ausweis 2 nach 10 Sekunden, Ausweis 3 nach einer Minute.',
+      '00:32 Alle 3 Ausweise gedrückt: Schaltung geschlossen.',
     ],
+    workshop: ['Die Schaltung wartet beliebig lange; ein früher Druck verfällt nicht.'],
   };
 }
 
-/** The rules and the worked example of a panel whose presses live `windowMs` each. */
-function withinWindow(
-  style: ButtonSyncDef['style'],
-  windowMs: number,
-): { rules: string[]; example: string[] } {
+/** The document's own parts for a device whose presses live `windowMs` each. */
+function withinWindow(style: ButtonSyncDef['style'], windowMs: number): Printed {
   const span = seconds(windowMs);
   const late = seconds(windowMs + 1000);
   const again = seconds(windowMs / 2);
   if (style === 'lever') {
     return {
+      operation:
+        `Ein umgelegter Hebel hält ${span} und springt dann zurück; ein zurückgesprungener ` +
+        `wird neu umgelegt. ${NO_COST.lever}`,
       rules: [
-        `Wenn alle Crewmitglieder ihren Hebel innerhalb von ${span} umgelegt haben, ` +
-          'schließt der Hauptschalter.',
+        `Wenn alle Hebel innerhalb von ${span} umgelegt sind, schließt der Hauptschalter.`,
         `Andernfalls springt jeder Hebel ${span} nach dem Umlegen zurück und zählt nicht mehr.`,
       ],
-      example: [
-        'Crew aus 2 Personen.',
-        `Die zweite Person legt ihren Hebel ${late} nach der ersten um: Der erste Hebel ist ` +
-          'zurückgesprungen.',
-        `Die erste legt ihren Hebel erneut um, ${again} später: Beide liegen innerhalb von ` +
-          `${span}, der Hauptschalter schließt.`,
+      log: [
+        '00:31 Angemeldet: 2 Ausweise, 2 Hebel.',
+        `00:31 Hebel 2 umgelegt, ${late} nach Hebel 1: Hebel 1 zurückgesprungen.`,
+        `00:31 Hebel 1 erneut umgelegt, ${again} später: beide liegen zugleich, Hauptschalter ` +
+          'geschlossen.',
+      ],
+      workshop: [
+        'Die Frist ist kurz; bewährt hat sich ein gemeinsamer Griff im selben Augenblick.',
       ],
     };
   }
   return {
+    operation: `Ein Druck gilt ${span}; ein verfallener wird wiederholt. ${NO_COST.button}`,
     rules: [
-      `Wenn alle Crewmitglieder innerhalb von ${span} gedrückt haben, schließt die Schaltung.`,
+      `Wenn von allen angemeldeten Ausweisen innerhalb von ${span} ein Druck vorliegt, ` +
+        'schließt die Schaltung.',
       `Andernfalls verfällt jeder Druck ${span} nach dem Drücken und zählt nicht mehr.`,
     ],
-    example: [
-      'Crew aus 2 Personen.',
-      `Die zweite drückt ${late} nach der ersten: Der erste Druck ist verfallen.`,
-      `Die erste drückt erneut, ${again} später: Beide liegen innerhalb von ${span}, die ` +
-        'Schaltung schließt.',
+    log: [
+      '00:31 Angemeldet: 2 Ausweise.',
+      `00:31 Druck von Ausweis 2, ${late} nach Ausweis 1: Druck 1 verfallen.`,
+      `00:31 Druck von Ausweis 1, ${again} später: beide gelten zugleich, Schaltung geschlossen.`,
     ],
+    workshop: ['Die Frist ist kurz; bewährt hat sich ein gemeinsamer Druck im selben Augenblick.'],
   };
 }
 
-/** The rules and the worked example, by the def's look and window. */
-function printedRules({ style, windowMs }: ButtonSyncDef): { rules: string[]; example: string[] } {
+/** The document's own parts, by the def's look and window. */
+function printedParts({ style, windowMs }: ButtonSyncDef): Printed {
   return windowMs === undefined ? anyPace(style) : withinWindow(style, windowMs);
 }
 
@@ -284,21 +328,18 @@ export const buttonSyncModule: PuzzleModule<
   },
 
   manual(def) {
-    const { rules, example } = printedRules(def);
     const device = DEVICE[def.style];
-    return [
-      {
-        heading: 'Synchronschaltung',
-        blocks: [
-          deviceFigure(device.figure, device.caption),
-          { kind: 'p', text: device.text },
-          { kind: 'rules', items: rules },
-          workedExample(example),
-          // Nothing here raises an alarm — a press that runs out is just made again.
-          { kind: 'p', text: 'Fehlgriff: kein Alarm, keine Zeitstrafe.' },
-        ],
-      },
-    ];
+    const { operation, rules, log, workshop } = printedParts(def);
+    return labDocument({
+      plate: device.plate,
+      purpose: device.purpose,
+      figure: { of: device.figure, device: device.caption },
+      build: device.build,
+      operation,
+      law: [{ heading: 'Schaltregel', blocks: [{ kind: 'rules', items: rules }] }],
+      log,
+      workshop,
+    });
   },
 
   solve: () => [{ by: 'everyone', input: { press: true } }],

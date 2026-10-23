@@ -220,44 +220,58 @@ describe('relay moves', () => {
 describe('the relay drill', () => {
   const def = defOf(relayMission(2));
 
-  it('prints the same for every run, with numbered rules that end in a catch-all', () => {
+  it('prints the same for every run: the consoles, the lapse, the count and the expiry', () => {
     const manual = relayModule.manual(def);
     expect(relayModule.manual(structuredClone(def))).toEqual(manual);
-    expect(manual.map((section) => section.heading)).toEqual(['Notfall-Relais']);
-    const rules = manual[0]?.blocks.find((block) => block.kind === 'rules');
-    expect(rules?.kind === 'rules' ? rules.items.at(-1) : null).toMatch(/^Andernfalls /);
-    expect(JSON.stringify(manual)).toContain('12 Sekunden');
-    expect(JSON.stringify(manual)).toContain('6 ausgeführte Anweisungen');
-    expect(manual[0]?.blocks.at(-1)).toEqual({
-      kind: 'p',
-      text: 'Notfallzeit abgelaufen, bevor 6 Anweisungen ausgeführt sind: Alarm, −60 s.',
-    });
+    expect(manual.map((section) => section.heading)).toEqual([
+      'Notfall-Relais, Typ NR-24 (Baujahr 1983)',
+      'Aufbau',
+      'Betrieb',
+      'Handgriffe',
+      'Aus der Werkstatt',
+    ]);
+    const [operation] = manual[2]?.blocks ?? [];
+    const text = operation?.kind === 'p' ? operation.text : '';
+    expect(text).toContain('Unerledigt verfällt sie nach 12 Sekunden, und eine neue erscheint.');
+    expect(text).toMatch(
+      new RegExp(
+        'Nach 6 ausgeführten Anweisungen ist der Störfall behoben; läuft vorher die ' +
+          'Notfallzeit ab, meldet die Überwachung Alarm und zieht 60 Sekunden Einsatzzeit ab\\.$',
+      ),
+    );
+    expect(JSON.stringify(manual[1])).toContain('ein Pult beim Namen auf seinem Schild');
   });
 
-  it('prints an example that the consoles bear out', () => {
-    const blocks = relayModule.manual(def)[0]?.blocks ?? [];
-    const example = blocks.find((block) => block.kind === 'example');
-    const rules = blocks.find((block) => block.kind === 'rules');
-    const lines = example?.kind === 'example' ? example.lines : [];
-    const [shown, sits, done] = [
-      /^(\S+)s Pult zeigt: Pult (\S+), „(.+) auf (\d)“\.$/,
-      /^Der (.+) sitzt an (\S+)s Pult: Für (\S+) gilt Regel (\d), für (\S+) Regel (\d)\.$/,
-      /^(\S+) stellt den (.+) auf (\d); die Anweisung zählt, (\S+)s Pult zeigt die nächste\.$/,
+  /** A drill run by the lab staff the printed log names, a console each. */
+  const drillOf = (names: readonly string[]) =>
+    relayDefFor(
+      names.map((name, i) => ({ id: `p${i}`, name })),
+      { label: 'Alarm', hint: 'h', durationSec: 45, penaltySec: 60, windowSec: 12 },
+    );
+
+  it('prints a log that the consoles bear out', () => {
+    const blocks = relayModule.manual(def).flatMap((section) => section.blocks);
+    const log = blocks.find((block) => block.kind === 'example');
+    const lines = log?.kind === 'example' ? log.lines : [];
+    const [shown, done, next] = [
+      /^\d\d:\d\d Pult (\S+) zeigt: Pult (\S+), „(.+) auf (\d)“\.$/,
+      /^\d\d:\d\d Pult (\S+): (.+) auf (\d) gestellt, die Anweisung zählt\.$/,
+      /^\d\d:\d\d Pult (\S+) zeigt die nächste Anweisung\.$/,
     ].map((pattern, i) => pattern.exec(lines[i] ?? ''));
-    const holder = def.players.find((player) => player.name === shown?.[1]);
-    const owner = def.players.find((player) => player.name === shown?.[2]);
-    if (!shown || !sits || !done || !holder || !owner || rules?.kind !== 'rules') {
-      throw new Error(`unreadable example: ${JSON.stringify(lines)}`);
+    if (!shown || !done || !next) {
+      throw new Error(`unreadable log: ${JSON.stringify(lines)}`);
+    }
+    // The drill of the staff the log names: the holder's console, the owner's, the dial.
+    const drill = drillOf([shown[1] ?? '', shown[2] ?? '']);
+    const [holder, owner] = drill.players;
+    if (holder === undefined || owner === undefined) {
+      throw new Error('the drill needs two consoles');
     }
     const [name, level] = [shown[3] ?? '', Number(shown[4])];
-    // Line 2 names the dial, its owner and both players; line 3 the owner setting it.
-    expect([...sits.slice(1, 4), sits[5]]).toEqual([name, owner.name, holder.name, owner.name]);
-    expect(done.slice(1, 5)).toEqual([owner.name, name, String(level), holder.name]);
-    // The holder's rule is the one for another console's element, the owner's for its own.
-    expect(rules.items[Number(sits[4]) - 1]).toMatch(/ein Element eines anderen Pults nennt/);
-    expect(rules.items[Number(sits[6]) - 1]).toMatch(/ein Element dieses Pults nennt/);
+    expect(done.slice(1, 4)).toEqual([owner.name, name, String(level)]);
+    expect(next[1]).toBe(holder.name);
     // A dial of that name on the owner's console, set elsewhere; the holder asks for the level.
-    const base = relayModule.init(def, mulberry32(1), ctx(T0));
+    const base = relayModule.init(drill, mulberry32(1), ctx(T0));
     const setting = { kind: 'dial' as const, value: 1 };
     const dial = { id: 'kx', ownerId: owner.id, name, setting };
     const state: RelayState = {
@@ -268,16 +282,16 @@ describe('the relay drill', () => {
       ),
     };
     expect(level).not.toBe(dial.setting.value);
-    const before = viewsOf(def, state);
+    const before = viewsOf(drill, state);
     expect(before[holder.id]?.instruction).toMatchObject({ playerName: owner.name, control: name });
     expect(before[owner.id]?.controls.map((control) => control.name)).toContain(name);
     const set = { kind: 'set' as const, control: dial.id, value: level };
-    expect(() => relayModule.apply(def, state, set, holder.id, ctx(T0 + 1000))).toThrow(
+    expect(() => relayModule.apply(drill, state, set, holder.id, ctx(T0 + 1000))).toThrow(
       /anderen Pult/,
     );
-    const after = relayModule.apply(def, state, set, owner.id, ctx(T0 + 1000));
+    const after = relayModule.apply(drill, state, set, owner.id, ctx(T0 + 1000));
     expect(after).toMatchObject({ penalty: null, state: { completed: base.completed + 1 } });
-    expect(viewsOf(def, after.state)[holder.id]?.instruction).not.toEqual(
+    expect(viewsOf(drill, after.state)[holder.id]?.instruction).not.toEqual(
       before[holder.id]?.instruction,
     );
   });

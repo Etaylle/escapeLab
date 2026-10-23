@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { indicatorLit, type Edgework } from '../edgework.js';
 import type { Rng } from '../rng.js';
 import { commonDefShape, type ApplyResult, type PuzzleModule } from './module.js';
-import { deviceFigure, penaltyLine, workedExample } from './printed.js';
+import { costOf, labDocument, type TypePlate } from './printed.js';
 
 /**
  * button puzzle (Keep Talking's button): the operator sees one big button
@@ -60,9 +60,10 @@ export interface ButtonView {
 type Move = 'press' | 'hold';
 type Face = Pick<ButtonState, 'colour' | 'label'>;
 
+/** What the first list's lines say the button takes, as the machine's law. */
 const MOVE_WORDS: Record<Move, string> = {
-  press: 'drücke den Knopf kurz',
-  hold: 'halte den Knopf',
+  press: 'genügt ein kurzer Druck',
+  hold: 'wird er gehalten',
 };
 
 /** One line of the first list. Its printed condition sits next to its test. */
@@ -125,13 +126,42 @@ const releaseDigit = (strip: StripColour): number =>
   RELEASE_RULES.find((rule) => rule.strip === strip)?.digit ?? RELEASE_OTHERWISE;
 
 const releaseWords = (digit: number): string =>
-  `lass den Knopf los, sobald die Missionsuhr eine ${digit} zeigt`;
+  `wird losgelassen, sobald die Einsatzuhr eine ${digit} zeigt`;
+
+// --- the printed document --------------------------------------------------------------
+
+const PLATE: TypePlate = { name: 'Druckknopf mit Leuchtstreifen', type: 'DK-1', year: 1977 };
+
+const PURPOSE =
+  'Der Knopf löst den Druckausgleich zwischen den Flügeln des Labors aus. Ob ein kurzer Druck ' +
+  'genügt oder der Knopf bis zum richtigen Augenblick gehalten wird, hängt vom Knopf selbst ' +
+  'und vom Kennungsschild ab.';
+
+const BUILD =
+  'Ein Knopf mit Farbe und Aufschrift; daneben ein Leuchtstreifen, der nur leuchtet, solange ' +
+  'der Knopf gehalten wird.';
+
+/** Betrieb: press or hold by the first list, the release by the strip, and what a fault costs. */
+function operationText(def: ButtonDef): string {
+  return (
+    'Die erste zutreffende Regel der Liste „Druck“ entscheidet: kurzer Druck, also drücken und ' +
+    'sofort loslassen, oder halten. Ein gehaltener Knopf wird losgelassen, sobald die ' +
+    'Einsatzuhr (mm:ss) an irgendeiner Stelle die Ziffer zeigt, die die Liste „Loslassen“ der ' +
+    'Streifenfarbe gibt. Bei jedem anderen Griff meldet die Überwachung Alarm und zieht ' +
+    `${costOf(def.penaltySec)} ab; der Knopf springt zurück.`
+  );
+}
 
 /** A button held under rule 5, its strip blue, let go on a second that shows a 4. */
-const EXAMPLE: readonly string[] = [
-  'Gesehen: gelber Knopf, Aufschrift START; 1 Notstromzelle eingesetzt.',
-  '„Der Knopf“, Regel 5 trifft als erste zu: halten. Der Streifen leuchtet blau.',
-  '„Loslassen“, Regel 1: losgelassen bei 03:41, die Uhr zeigt eine 4.',
+const LOG: readonly string[] = [
+  '16:02 Knopf gelb, Aufschrift START; 1 Notstromzelle eingesetzt.',
+  '16:02 Liste „Druck“, Regel 5 trifft als erste zu: gehalten; der Streifen leuchtet blau.',
+  '16:03 Liste „Loslassen“, Regel 1: losgelassen bei 03:41, die Uhr zeigt eine 4.',
+];
+
+const WORKSHOP: readonly string[] = [
+  'Die gesuchte Ziffer kommt spätestens nach zehn Sekunden an der letzten Stelle der Uhr: ' +
+    'ruhig halten.',
 ];
 
 /** The mission clock as every screen shows it: mm:ss, minutes padded to two digits. */
@@ -249,48 +279,27 @@ export const buttonModule: PuzzleModule<ButtonDef, ButtonState, ButtonInput, But
   },
 
   manual(def) {
-    return [
-      {
-        heading: 'Der Knopf',
-        blocks: [
-          deviceFigure('button', 'Knopf mit Leuchtstreifen'),
-          {
-            kind: 'p',
-            text:
-              'Ein Knopf mit Farbe und Aufschrift; daneben ein Streifen, der nur leuchtet, ' +
-              'solange der Knopf gehalten wird. Kurz drücken heißt drücken und sofort ' +
-              'loslassen, halten heißt gedrückt lassen. Die erste zutreffende Regel entscheidet.',
-          },
-          {
-            kind: 'rules',
-            items: [
-              ...MOVE_RULES.map((rule) => `Wenn ${rule.when}, ${MOVE_WORDS[rule.move]}.`),
-              `Andernfalls ${MOVE_WORDS[MOVE_OTHERWISE]}.`,
-            ],
-          },
-        ],
-      },
-      {
-        heading: 'Loslassen',
-        blocks: [
-          {
-            kind: 'p',
-            text:
-              'Ein gehaltener Knopf wird nach der Farbe des Streifens losgelassen. Die Ziffer ' +
-              'darf an jeder Stelle der Missionsuhr (mm:ss) stehen.',
-          },
-          {
-            kind: 'rules',
-            items: [
-              ...RELEASE_RULES.map((rule) => `Wenn ${rule.when}, ${releaseWords(rule.digit)}.`),
-              `Andernfalls ${releaseWords(RELEASE_OTHERWISE)}.`,
-            ],
-          },
-          workedExample(EXAMPLE),
-          penaltyLine(def.penaltySec, 'Der Knopf springt zurück.'),
-        ],
-      },
+    const press = [
+      ...MOVE_RULES.map((rule) => `Wenn ${rule.when}, ${MOVE_WORDS[rule.move]}.`),
+      `Andernfalls ${MOVE_WORDS[MOVE_OTHERWISE]}.`,
     ];
+    const release = [
+      ...RELEASE_RULES.map((rule) => `Wenn ${rule.when}, ${releaseWords(rule.digit)}.`),
+      `Andernfalls ${releaseWords(RELEASE_OTHERWISE)}.`,
+    ];
+    return labDocument({
+      plate: PLATE,
+      purpose: PURPOSE,
+      figure: { of: 'button', device: 'Knopf mit Leuchtstreifen' },
+      build: BUILD,
+      operation: operationText(def),
+      law: [
+        { heading: 'Druck', blocks: [{ kind: 'rules', items: press }] },
+        { heading: 'Loslassen', blocks: [{ kind: 'rules', items: release }] },
+      ],
+      log: LOG,
+      workshop: WORKSHOP,
+    });
   },
 
   /**

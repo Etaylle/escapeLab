@@ -254,7 +254,8 @@
       "shorts": 3,
       "penaltySec": 30,
       "hints": [
-        "Das Prüfpult misst je Kabel, nach jedem Schnitt neu. Die Laborkennung entscheidet: höchste oder niedrigste Spannung."
+        "Werkstatt: Der Kasten zeigt nur Farben, das Prüfpult nur Spannungen. Nach jedem Schnitt alle Kabel neu messen.",
+        "Nachtschicht: Bei ungerader Kennung immer das Kabel mit der kleinsten Spannung über 0 V, das hat Haller so eingestellt."
       ],
       "lights": ["MASCHINENRAUM"],
       "onSolved": "Notstrom steht, die Tür bleibt offen. Zwei Pulte: Flur und Maschinenraum."
@@ -268,7 +269,8 @@
       "legend": true,
       "fleetingFrom": 3,
       "hints": [
-        "Die Legende am Klemmbrett nennt je Pult die Zeile einer Farbe; ab Stufe 3 laufen die Zeichen durch."
+        "Frühschicht: Jedes Pult quittiert nach seiner eigenen Spalte der Legende. Verwechselt gibt es Alarm.",
+        "Haller: Ab Stufe 3 zeigt die Anzeige jedes Zeichen nur kurz. Erst mitschreiben, dann quittieren."
       ],
       "lights": ["SERVERRAUM"],
       "onSolved": "Schott offen: Terminal und Rack im Serverraum. Drohne wach – Kameraplatte davor."
@@ -280,9 +282,9 @@
       "crashed": 4,
       "trap": true,
       "hints": [
-        "Codes stehen nur am Terminal, Schalter nur am Rack: Das Terminal liest jeden Code vor, das Rack schaltet.",
-        "Erst den Dienst mit E50 vom Strom. Dann der Reihe nach: Ein Dienst startet erst, wenn alles läuft, wovon er abhängt.",
-        "E23 will am Rack einmal aus und an vor dem Start, E42 erst einen restart jeder Abhängigkeit."
+        "Admin: Codes zeigt nur das Terminal, Strom schaltet nur das Rack. Ein Pult allein startet hier nichts.",
+        "Admin: Erst den Dienst mit E50 vom Strom, dann der Reihe nach von NETZ aus, wie der Netzplan sie listet.",
+        "Admin: E23 will am Rack einmal aus und an vor dem Start, E42 erst einen restart jeder Abhängigkeit."
       ],
       "lights": ["LABOR"],
       "onSolved": "Labortür offen, Drohne drin. Aktenschrank braucht den Schlüssel."
@@ -292,7 +294,7 @@
       "id": "frequenz",
       "title": "Frequenz-Abgleich",
       "hints": [
-        "Nach der langen Pause beginnt das Wort. Die Morsetafel gibt die ersten 3 Buchstaben, die Frequenztabelle die Frequenz."
+        "Funkraum: Das Wort beginnt nach der langen Pause. Drei Buchstaben genügen, dann steht die Frequenz in der Tabelle."
       ],
       "lights": ["REAKTOR"],
       "onSolved": "Reaktor offen. Ohne Ersatzsicherung bleibt er tot."

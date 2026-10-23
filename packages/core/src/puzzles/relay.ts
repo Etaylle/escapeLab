@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { fail } from '../errors.js';
 import { mulberry32, shuffle, type Rng } from '../rng.js';
 import { commonDefShape, type EmergencyModule } from './module.js';
-import { deviceFigure, workedExample } from './printed.js';
+import { costOf, labDocument, type TypePlate } from './printed.js';
 
 /**
  * Notfall-Relais, a Spaceteam-style emergency. Every player gets a console
@@ -291,11 +291,49 @@ export function shiftRelay(state: RelayState, ms: number): RelayState {
   };
 }
 
-/** The worked example: Anna holds an instruction for a dial at Ben's console, Ben sets it. */
-const EXAMPLE: readonly string[] = [
-  'Annas Pult zeigt: Pult Ben, „Kryo-Puffer auf 3“.',
-  'Der Kryo-Puffer sitzt an Bens Pult: Für Anna gilt Regel 2, für Ben Regel 1.',
-  'Ben stellt den Kryo-Puffer auf 3; die Anweisung zählt, Annas Pult zeigt die nächste.',
+// --- the printed document --------------------------------------------------------------
+
+const PLATE: TypePlate = { name: 'Notfall-Relais', type: 'NR-24', year: 1983 };
+
+const PURPOSE =
+  'Das Notfall-Relais hält die Anlage bei einem Störfall, bis die Leitstelle übernimmt. Es ' +
+  'verteilt die Handgriffe über alle besetzten Pulte, sodass kein Pult die Anlage allein fährt.';
+
+const BUILD =
+  'Jedes besetzte Pult hat vier Bedienelemente, Schalter, Drehregler mit den Stufen 1 bis 5 ' +
+  'und Taster, und eine Anzeige. Die Anzeige zeigt stets eine Anweisung: ein Pult beim Namen ' +
+  'auf seinem Schild, ein Element und einen Wert, immer für ein anderes Pult.';
+
+/** Betrieb: what completes an instruction, when it lapses, what clears the emergency. */
+function operationText(def: RelayDef): string {
+  const lapse = def.windowSec === 1 ? 'einer Sekunde' : `${def.windowSec} Sekunden`;
+  const done =
+    def.required === 1
+      ? 'einer ausgeführten Anweisung'
+      : `${def.required} ausgeführten Anweisungen`;
+  return (
+    'Eine Anweisung zählt, sobald das genannte Element am genannten Pult so steht; dann folgt ' +
+    `die nächste. Unerledigt verfällt sie nach ${lapse}, und eine neue erscheint. Nach ${done} ` +
+    'ist der Störfall behoben; läuft vorher die Notfallzeit ab, meldet die Überwachung Alarm ' +
+    `und zieht ${costOf(def.penaltySec)} ab.`
+  );
+}
+
+/**
+ * The printed log: Haller's console holds an instruction for a dial at
+ * Brandt's, Brandt's console sets it, and Haller's shows the next.
+ */
+const LOG: readonly string[] = [
+  '02:14 Pult Haller zeigt: Pult Brandt, „Kryo-Puffer auf 3“.',
+  '02:14 Pult Brandt: Kryo-Puffer auf 3 gestellt, die Anweisung zählt.',
+  '02:14 Pult Haller zeigt die nächste Anweisung.',
+];
+
+const WORKSHOP: readonly string[] = [
+  'Kein Pult zeigt eine Anweisung für die eigenen Elemente: Was es anzeigt, gehört immer an ' +
+    'ein anderes Pult.',
+  'Die Namen der Elemente stammen aus der Gründerzeit und bedeuten nichts; jeder kommt im ' +
+    'Störfall nur einmal vor.',
 ];
 
 /** An instruction the way its holder reads it out. */
@@ -386,49 +424,31 @@ export const relayModule: EmergencyModule<RelayDef, RelayState, RelayInput, Rela
   },
 
   manual(def) {
-    return [
-      {
-        heading: 'Notfall-Relais',
-        blocks: [
-          deviceFigure('relay', 'Pult mit Bedienelementen'),
-          {
-            kind: 'p',
-            text:
-              'Jedes Pult hat 4 Bedienelemente und zeigt stets eine Anweisung: Pult, Element ' +
-              'und Wert, immer für ein Element an einem anderen Pult. ' +
-              `${def.required} ausgeführte Anweisungen beheben den Notfall.`,
-          },
-          {
-            kind: 'rules',
-            items: [
-              'Wenn eine Anweisung ein Element dieses Pults nennt, stelle es wie angewiesen.',
-              'Wenn eine Anweisung ein Element eines anderen Pults nennt, wird sie dort ' +
-                'ausgeführt, nicht hier.',
-              `Wenn eine Anweisung ${def.windowSec} Sekunden lang nicht ausgeführt ist, ` +
-                'verfällt sie; die nächste folgt sofort.',
-              'Andernfalls bleibt jedes Element, wie es steht.',
-            ],
-          },
-          {
-            kind: 'table',
-            head: ['Element', 'Anweisung', 'Handgriff'],
-            rows: [
-              ['Schalter', '„… AN“ oder „… AUS“', 'umlegen'],
-              ['Drehregler', '„… auf 1“ bis „… auf 5“', 'auf die Stufe stellen'],
-              ['Taster', '„… drücken“', 'einmal drücken'],
-            ],
-          },
-          workedExample(EXAMPLE),
-          // The emergency charges its expiry, never a move: no „Fehlgriff" to print.
-          {
-            kind: 'p',
-            text:
-              `Notfallzeit abgelaufen, bevor ${def.required} Anweisungen ausgeführt sind: ` +
-              `Alarm, −${def.penaltySec} s.`,
-          },
-        ],
-      },
-    ];
+    return labDocument({
+      plate: PLATE,
+      purpose: PURPOSE,
+      figure: { of: 'relay', device: 'Pult mit Bedienelementen' },
+      build: BUILD,
+      operation: operationText(def),
+      law: [
+        {
+          heading: 'Handgriffe',
+          blocks: [
+            {
+              kind: 'table',
+              head: ['Element', 'Anweisung', 'Handgriff'],
+              rows: [
+                ['Schalter', '„… AN“ oder „… AUS“', 'umlegen'],
+                ['Drehregler', '„… auf 1“ bis „… auf 5“', 'auf die Stufe stellen'],
+                ['Taster', '„… drücken“', 'einmal drücken'],
+              ],
+            },
+          ],
+        },
+      ],
+      log: LOG,
+      workshop: WORKSHOP,
+    });
   },
 
   solve(def, views) {

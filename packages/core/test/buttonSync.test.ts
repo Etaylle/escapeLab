@@ -57,55 +57,53 @@ function play(def: ButtonSyncDef, crew: string[], presses: { by: string; at: num
   });
 }
 
-/** Matches the lines of an example against their patterns, or fails naming the lines. */
+/** Matches the lines of a log against their patterns, or fails naming the lines. */
 function read(lines: string[], patterns: RegExp[]): RegExpExecArray[] {
   const found = patterns.map((pattern, i) => pattern.exec(lines[i] ?? ''));
   if (found.some((match) => match === null)) {
-    throw new Error(`unreadable example: ${JSON.stringify(lines)}`);
+    throw new Error(`unreadable log: ${JSON.stringify(lines)}`);
   }
   return found as RegExpExecArray[];
 }
 
-const SIZE = /^Crew aus (\d) Personen\.$/;
+/** A count of minutes as the log writes it: „einer Minute", „2 Minuten". */
+const minutes = (said = ''): number => (said === 'einer' ? 1 : Number(said));
 
-/** What each look's examples say, line by line: without a window, and with one. */
+/** What each look's logs say, line by line: without a window, and with one. */
 const PATTERNS: Record<Look, { anyPace: RegExp[]; window: RegExp[] }> = {
   button: {
     anyPace: [
-      SIZE,
+      /^00:31 Angemeldet: (\d) Ausweise\.$/,
       new RegExp(
-        '^Gedrückt: die erste sofort, die zweite (\\d+) Sekunden später, die dritte nach ' +
-          '(\\d+) Minuten?\\.$',
+        '^00:31 Druck von Ausweis 1; Ausweis 2 nach (\\d+) Sekunden, Ausweis 3 nach ' +
+          '(\\d+|einer) Minuten?\\.$',
       ),
-      /^Alle (\d) haben gedrückt: Die Schaltung schließt\.$/,
+      /^00:32 Alle (\d) Ausweise gedrückt: Schaltung geschlossen\.$/,
     ],
     window: [
-      SIZE,
-      /^Die zweite drückt ([\d,]+) s nach der ersten: Der erste Druck ist verfallen\.$/,
+      /^00:31 Angemeldet: (\d) Ausweise\.$/,
+      /^00:31 Druck von Ausweis 2, ([\d,]+) Sekunden? nach Ausweis 1: Druck 1 verfallen\.$/,
       new RegExp(
-        '^Die erste drückt erneut, ([\\d,]+) s später: Beide liegen innerhalb von ([\\d,]+) s, ' +
-          'die Schaltung schließt\\.$',
+        '^00:31 Druck von Ausweis 1, ([\\d,]+) Sekunden? später: beide gelten zugleich, ' +
+          'Schaltung geschlossen\\.$',
       ),
     ],
   },
   lever: {
     anyPace: [
-      SIZE,
+      /^00:31 Angemeldet: (\d) Ausweise, \1 Hebel\.$/,
       new RegExp(
-        '^Umgelegt: der erste Hebel sofort, der zweite (\\d+) Sekunden später, der dritte ' +
-          'nach (\\d+) Minuten?\\.$',
+        '^00:31 Hebel 1 umgelegt; Hebel 2 nach (\\d+) Sekunden, Hebel 3 nach (\\d+|einer) ' +
+          'Minuten?\\.$',
       ),
-      /^Alle (\d) Hebel unten: Der Hauptschalter schließt\.$/,
+      /^00:32 Alle (\d) Hebel umgelegt: Hauptschalter geschlossen\.$/,
     ],
     window: [
-      SIZE,
+      /^00:31 Angemeldet: (\d) Ausweise, \1 Hebel\.$/,
+      /^00:31 Hebel 2 umgelegt, ([\d,]+) Sekunden? nach Hebel 1: Hebel 1 zurückgesprungen\.$/,
       new RegExp(
-        '^Die zweite Person legt ihren Hebel ([\\d,]+) s nach der ersten um: Der erste Hebel ' +
-          'ist zurückgesprungen\\.$',
-      ),
-      new RegExp(
-        '^Die erste legt ihren Hebel erneut um, ([\\d,]+) s später: Beide liegen innerhalb ' +
-          'von ([\\d,]+) s, der Hauptschalter schließt\\.$',
+        '^00:31 Hebel 1 erneut umgelegt, ([\\d,]+) Sekunden? später: beide liegen zugleich, ' +
+          'Hauptschalter geschlossen\\.$',
       ),
     ],
   },
@@ -113,15 +111,15 @@ const PATTERNS: Record<Look, { anyPace: RegExp[]; window: RegExp[] }> = {
 
 const LOOKS = ['button', 'lever'] as const;
 
-describe.each(LOOKS)('button-sync drawn as a %s: the printed example', (look) => {
-  it('without a window: everyone once, at any pace, closes the switch', () => {
+describe.each(LOOKS)('button-sync drawn as a %s: the printed log', (look) => {
+  it('without a window: every badge once, at any pace, closes the switch', () => {
     const def = defOf(undefined, look);
     const [size, paced, closed] = read(printed(def).example, PATTERNS[look].anyPace);
     expect([Number(size?.[1]), Number(closed?.[1])]).toEqual([3, 3]);
     const results = play(def, ['a', 'b', 'c'], [
       { by: 'a', at: T0 },
       { by: 'b', at: T0 + Number(paced?.[1]) * 1000 },
-      { by: 'c', at: T0 + Number(paced?.[2]) * 60_000 },
+      { by: 'c', at: T0 + minutes(paced?.[2]) * 60_000 },
     ]);
     expect(results.map((result) => result.solved)).toEqual([false, false, true]);
     expect(results.every((result) => result.penalty === null)).toBe(true);
@@ -133,8 +131,9 @@ describe.each(LOOKS)('button-sync drawn as a %s: the printed example', (look) =>
     const def = defOf(span, look);
     const { rules, example } = printed(def);
     const [size, late, again] = read(example, PATTERNS[look].window);
-    expect([Number(size?.[1]), ms(again?.[2])]).toEqual([2, span]);
-    expect(rules[0]).toContain(`innerhalb von ${String(span / 1000).replace('.', ',')} s`);
+    expect(Number(size?.[1])).toBe(2);
+    const said = String(span / 1000).replace('.', ',');
+    expect(rules[0]).toContain(`innerhalb von ${said} ${said === '1' ? 'Sekunde' : 'Sekunden'}`);
     const lateAt = T0 + ms(late?.[1]);
     const [first, second, third] = play(def, ['a', 'b'], [
       { by: 'a', at: T0 },
@@ -150,12 +149,27 @@ describe.each(LOOKS)('button-sync drawn as a %s: the printed example', (look) =>
 });
 
 describe('button-sync: the printed rules', () => {
-  it('say „innerhalb von 3 s" for the tutorial\'s main switch', () => {
+  it('say „innerhalb von 3 Sekunden" for the tutorial\'s main switch', () => {
     expect(printed(defOf(3000, 'lever')).rules).toEqual([
-      'Wenn alle Crewmitglieder ihren Hebel innerhalb von 3 s umgelegt haben, schließt der ' +
-        'Hauptschalter.',
-      'Andernfalls springt jeder Hebel 3 s nach dem Umlegen zurück und zählt nicht mehr.',
+      'Wenn alle Hebel innerhalb von 3 Sekunden umgelegt sind, schließt der Hauptschalter.',
+      'Andernfalls springt jeder Hebel 3 Sekunden nach dem Umlegen zurück und zählt nicht mehr.',
     ]);
+  });
+
+  it('count the badges logged into the lab, and say that nothing here costs time', () => {
+    for (const look of LOOKS) {
+      for (const span of [undefined, 2000]) {
+        const text = JSON.stringify(buttonSyncModule.manual(defOf(span, look)));
+        expect(text).toContain('im Labor angemeldeten Dienstausweis');
+        expect(text).toContain('Die Überwachung meldet hier nichts');
+      }
+    }
+    expect(buttonSyncModule.manual(defOf(undefined, 'lever'))[0]?.heading).toBe(
+      'Hauptschalter, Typ HS-3 (Baujahr 1976)',
+    );
+    expect(buttonSyncModule.manual(defOf())[0]?.heading).toBe(
+      'Synchrontaster, Typ ST-2 (Baujahr 1981)',
+    );
   });
 
   it('follow the look and the window, the same for every copy of a def', () => {

@@ -2,12 +2,12 @@ import { z } from 'zod';
 import { mulberry32, shuffle, type Rng } from '../rng.js';
 import {
   commonDefShape,
-  type ManualSection,
+  type ManualBlock,
   type Perspectives,
   type PuzzleModule,
   type SolveAid,
 } from './module.js';
-import { deviceFigure, penaltyLine, workedExample } from './printed.js';
+import { costOf, labDocument, spelled, type TypePlate } from './printed.js';
 
 /**
  * Memory bank: five stages, each a display digit 1–4 over four buttons
@@ -90,8 +90,6 @@ const RULES: readonly [Row, Row, Row, Row, Row] = [
 ];
 const STAGES = RULES.length;
 
-const ORDINALS: Record<Digit, string> = { 1: 'erste', 2: 'zweite', 3: 'dritte', 4: 'vierte' };
-
 function pressIn(presses: readonly MemoryPress[], stage: number): MemoryPress {
   const press = presses[stage - 1];
   if (press === undefined) {
@@ -149,29 +147,68 @@ function notesFrom(
   return notes;
 }
 
-/** What a rule line tells the crew to press, as the manual prints it. */
-function pressText(target: Target): string {
+// --- the printed document --------------------------------------------------------------
+
+const PLATE: TypePlate = { name: 'Speicherbank', type: 'SB-5', year: 1988 };
+
+const PURPOSE =
+  `Die Speicherbank prüft eine Freigabe in ${spelled(STAGES)} Stufen, von denen jede auf die ` +
+  'vorigen zurückgreift; ohne die früheren Eingaben kommt keine Freigabe zustande.';
+
+const BUILD =
+  'Ein Display zeigt eine Ziffer von 1 bis 4; darunter liegen vier Tasten, beschriftet mit 1 ' +
+  'bis 4 in wechselnder Folge. Platz heißt die Lage einer Taste von links, Ziffer ihre ' +
+  'Beschriftung.';
+
+/** Betrieb: the table names the key, the bank forgets, and a wrong key throws it back. */
+function operationText(def: MemoryDef): string {
+  return (
+    'Stufe und Display bestimmen in der Tabelle die Taste, die die Bank annimmt; jede richtige ' +
+    `schaltet eine Stufe weiter, bis Stufe ${STAGES}. „Platz wie Stufe k“ ist der Platz, ` +
+    '„Ziffer wie Stufe k“ die Ziffer der Taste, die in Stufe k angenommen wurde; frühere ' +
+    'Stufen zeigt die Bank nicht mehr. Bei einer falschen Taste meldet die Überwachung Alarm ' +
+    `und zieht ${costOf(def.penaltySec)} ab, und die Bank fällt auf Stufe 1 zurück, alle ` +
+    'Stufen neu belegt.'
+  );
+}
+
+/** A rule's key as its cell in the table names it. */
+function cellText(target: Target): string {
   switch (target.by) {
     case 'position':
-      return `drücke die ${ORDINALS[target.nth]} Taste`;
+      return `Platz ${target.nth}`;
     case 'label':
-      return `drücke die Taste mit der Beschriftung ${target.label}`;
+      return `Ziffer ${target.label}`;
     case 'samePosition':
-      return `drücke die Taste an derselben Position wie in Stufe ${target.stage}`;
+      return `Platz wie Stufe ${target.stage}`;
     case 'sameLabel':
-      return `drücke die Taste mit derselben Beschriftung wie in Stufe ${target.stage}`;
+      return `Ziffer wie Stufe ${target.stage}`;
   }
 }
 
+/** The printed table: a row for every stage, a column for every display digit. */
+function keyTable(): ManualBlock {
+  return {
+    kind: 'table',
+    head: ['Stufe', ...DIGITS.map((digit) => `Display ${digit}`)],
+    rows: RULES.map((row, i) => [String(i + 1), ...row.map(cellText)]),
+  };
+}
+
 /**
- * The worked example: stage 1 by position, then stage 2 by the label noted
- * in stage 1, on a layout that has moved that label to another key.
+ * The printed log: stage 1 by place, then stage 2 by the digit noted in
+ * stage 1, on a layout that has moved that digit to another key.
  */
-const EXAMPLE: readonly string[] = [
-  'Stufe 1: Display 3; gedrückt die erste Taste, Beschriftung 4.',
-  'Stufe 2: Display 1; Tasten von links 2, 4, 1, 3.',
-  'Stufe 2, Display 1: die Taste mit derselben Beschriftung wie in Stufe 1, also die 4.',
-  'Gedrückt: die zweite Taste.',
+const LOG: readonly string[] = [
+  '07:20 Stufe 1, Display 3: Platz 1 angenommen, Ziffer 4.',
+  '07:21 Stufe 2, Display 1; Tasten von links 2, 4, 1, 3.',
+  '07:21 Tabelle: Ziffer wie Stufe 1, also die 4.',
+  '07:21 Platz 2 angenommen; Stufe 3.',
+];
+
+const WORKSHOP: readonly string[] = [
+  'Die Bank vergisst jede Stufe, sobald sie weiterschaltet: zu jeder Stufe Platz und Ziffer ' +
+    'der angenommenen Taste notieren. Nach einem Alarm gelten diese Notizen nicht mehr.',
 ];
 
 /** A fresh layout for one stage, and the seed the next one is drawn from. */
@@ -228,46 +265,16 @@ export const memoryModule: PuzzleModule<MemoryDef, MemoryState, MemoryInput, Mem
   },
 
   manual(def) {
-    const closing = [
-      workedExample(EXAMPLE),
-      penaltyLine(
-        def.penaltySec,
-        'Die Bank fällt auf Stufe 1 zurück und belegt alle Stufen neu; was davor gedrückt ' +
-          'wurde, zählt nicht mehr.',
-      ),
-    ];
-    return [
-      {
-        heading: 'Speicherbank',
-        blocks: [
-          deviceFigure('memory', 'Display über Tasten'),
-          {
-            kind: 'p',
-            text:
-              'Ein Display zeigt eine Ziffer von 1 bis 4; darunter liegen 4 Tasten, ' +
-              'beschriftet mit 1 bis 4 in wechselnder Reihenfolge. Die Position zählt von ' +
-              'links (erste bis vierte Taste), die Beschriftung ist die Ziffer auf der Taste; ' +
-              '„wie in Stufe k“ meint die in Stufe k gedrückte Taste. Die Bank hat 5 Stufen: ' +
-              'Jede richtige Taste schaltet eine weiter, frühere zeigt sie nicht mehr an.',
-          },
-        ],
-      },
-      ...RULES.map(
-        (row, i): ManualSection => ({
-          heading: `Stufe ${i + 1}`,
-          blocks: [
-            {
-              kind: 'rules',
-              items: row.map(
-                (target, j) => `Wenn das Display ${j + 1} zeigt, ${pressText(target)}.`,
-              ),
-            },
-            // The example and the penalty close the manual, under the last stage.
-            ...(i === RULES.length - 1 ? closing : []),
-          ],
-        }),
-      ),
-    ];
+    return labDocument({
+      plate: PLATE,
+      purpose: PURPOSE,
+      figure: { of: 'memory', device: 'Display über Tasten' },
+      build: BUILD,
+      operation: operationText(def),
+      law: [{ heading: 'Tastentabelle', blocks: [keyTable()] }],
+      log: LOG,
+      workshop: WORKSHOP,
+    });
   },
 
   /**

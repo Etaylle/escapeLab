@@ -563,6 +563,16 @@ function blocksOf(def: CircuitDef): ManualBlock[] {
   return circuitModule.manual(def).flatMap((section) => section.blocks);
 }
 
+/** The running text of the section under `heading`: its one paragraph. */
+function paragraphUnder(def: CircuitDef, heading: string): string {
+  const section = circuitModule.manual(def).find((s) => s.heading === heading);
+  const [text, ...more] = (section?.blocks ?? []).flatMap((b) => (b.kind === 'p' ? [b.text] : []));
+  if (text === undefined || more.length > 0) {
+    throw new Error(`expected one paragraph under „${heading}"`);
+  }
+  return text;
+}
+
 /** The numbers a phrase lists: „1, 2, 4 und 5" or „1 bis 5", „48, 0, 230, 12 und 110". */
 function listed(phrase: string): number[] {
   const range = /^(\d+) bis (\d+)$/.exec(phrase.trim());
@@ -591,70 +601,95 @@ function cutIn(line: string): number {
   return Number(said[1]);
 }
 
-describe('circuit manual', () => {
-  it('prints the drawing, the device, the rules, the example and the penalty in order', () => {
+describe('circuit manual: the document', () => {
+  it('prints the plate, Aufbau, Betrieb with the shorts, the cut order and the log', () => {
     const def = defOf({ penaltySec: 25, burnoutSec: 75, shorts: 4 });
-    const [section, ...more] = circuitModule.manual(def);
-    expect(more).toEqual([]);
-    expect(section?.heading).toBe('Sicherungskasten und Prüfpult');
-    const blocks = section?.blocks ?? [];
-    expect(blocks.map((block) => block.kind)).toEqual(['figure', 'p', 'rules', 'example', 'p']);
-    expect(blocks[0]).toEqual({
+    const manual = circuitModule.manual(def);
+    expect(manual.map(({ heading }) => heading)).toEqual([
+      'Sicherungskasten mit Prüfpult, Typ SP-12 (Baujahr 1982)',
+      'Aufbau',
+      'Betrieb',
+      'Schnittfolge',
+      'Aus der Werkstatt',
+    ]);
+    expect(manual.map(({ blocks }) => blocks.map((block) => block.kind))).toEqual([
+      ['p'],
+      ['figure', 'p'],
+      ['p'],
+      ['rules', 'example'],
+      ['p', 'p'],
+    ]);
+    expect(manual[1]?.blocks[0]).toEqual({
       kind: 'figure',
       of: 'circuit',
       caption: 'Abb. 1 — Sicherungskasten und Prüfpult',
     });
-    const device = blocks[1]?.kind === 'p' ? blocks[1].text : '';
-    expect(device).toMatch(/^Pult A ist ein Sicherungskasten mit 4 bis 6 Kabeln, von oben /);
-    expect(device).toMatch(/; Pult B ist ein Prüfpult, das die Spannung eines Kabels/);
-    expect(device).toMatch(/ Nach jedem Schnitt verteilen sich die Spannungen neu\.$/);
-    expect(blocks[2]).toEqual({
+    const build = paragraphUnder(def, 'Aufbau');
+    expect(build).toMatch(/^Pult A ist der Kasten mit vier bis sechs Kabeln, von oben nach /);
+    expect(build).toContain('Pult B ist das Prüfpult, das die Spannung eines Kabels nach seiner');
+    expect(build).toMatch(/ Der Kasten zeigt keine Spannung, das Prüfpult keine Farbe\.$/);
+    const operation = paragraphUnder(def, 'Betrieb');
+    expect(operation).toContain('nur neue Messungen gelten');
+    expect(operation).toContain(
+      'Jeder andere Schnitt ist ein Kurzschluss: Die Überwachung meldet Alarm und zieht 25 ' +
+        'Sekunden Einsatzzeit ab, und der Kasten wird neu verdrahtet, alle Kabel wieder ganz.',
+    );
+    expect(operation).toMatch(
+      new RegExp(
+        ' Ab dem vierten Kurzschluss brennt er durch: Dieser und jeder weitere kostet 75 ' +
+          'Sekunden Einsatzzeit\\.$',
+      ),
+    );
+    expect(manual[3]?.blocks[0]).toEqual({
       kind: 'rules',
       items: [
-        'Wenn die Laborkennung gerade endet, trenne jeweils das Kabel mit der höchsten ' +
-          'gemessenen Spannung.',
-        'Wenn die Laborkennung ungerade endet, trenne jeweils das Kabel mit der niedrigsten ' +
-          'gemessenen Spannung über 0 V.',
-        'Wenn ein Kabel 0 V zeigt, bleibt es ganz.',
-        'Wenn ein Kabel getrennt wurde, gelten nur neue Messungen.',
+        'Wenn die Laborkennung gerade endet, wird jeweils das Kabel mit der höchsten ' +
+          'gemessenen Spannung getrennt.',
+        'Wenn die Laborkennung ungerade endet, wird jeweils das Kabel mit der niedrigsten ' +
+          'gemessenen Spannung über 0 V getrennt.',
         'Wenn kein Kabel mehr Spannung zeigt, ist der Kasten gesichert.',
       ],
     });
-    expect(blocks.at(-1)).toEqual({
-      kind: 'p',
-      text:
-        'Fehlgriff: Alarm, −25 s. Jeder Fehlgriff ist ein Kurzschluss: Der Kasten wird neu ' +
-        'verdrahtet, alle Kabel sind wieder ganz, die Spannungen neu. Ab dem 4. Kurzschluss ' +
-        'ist der Kasten durchgebrannt: −75 s je Fehlgriff.',
-    });
   });
 
-  it('counts the wires of the def, and hangs on the def alone', () => {
-    const exactly = (def: CircuitDef) => blocksOf(def)[1];
-    expect(exactly(defOf({ wires: { min: 5, max: 5 } }))).toMatchObject({
-      text: expect.stringContaining('Sicherungskasten mit 5 Kabeln,'),
-    });
-    expect(exactly(defOf({ wires: { min: 4, max: 5 } }))).toMatchObject({
-      text: expect.stringContaining('Sicherungskasten mit 4 bis 5 Kabeln,'),
-    });
+  it('counts the wires and the shorts of the def, and hangs on the def alone', () => {
+    expect(paragraphUnder(defOf({ wires: { min: 5, max: 5 } }), 'Aufbau')).toContain(
+      'der Kasten mit fünf Kabeln,',
+    );
+    expect(paragraphUnder(defOf({ wires: { min: 4, max: 5 } }), 'Aufbau')).toContain(
+      'der Kasten mit vier bis fünf Kabeln,',
+    );
+    const ordinals = [2, 3, 4, 5].map((shorts) => /Ab dem (\S+) Kurzschluss/.exec(
+      paragraphUnder(defOf({ shorts }), 'Betrieb'),
+    )?.[1]);
+    expect(ordinals).toEqual(['zweiten', 'dritten', 'vierten', 'fünften']);
+    // A box of four has no dead wire, and its page says nothing of one.
+    const four = circuitModule.manual(defOf({ wires: { min: 4, max: 4 } }));
+    expect(four.at(-1)?.blocks).toHaveLength(1);
+    expect(JSON.stringify(four.at(-1))).not.toContain('tot');
     const def = defOf();
     expect(circuitModule.manual(structuredClone(def))).toEqual(circuitModule.manual(def));
     expect(circuitModule.manual(defOf({ shorts: 2 }))).not.toEqual(circuitModule.manual(def));
   });
 
-  it('works its example the way the station does: two rounds, highest voltage first', () => {
+});
+
+describe('circuit manual: the log', () => {
+  it('logs two rounds the way the station runs them: highest voltage first', () => {
     const def = defOf();
     const boxes = blocksOf(def).filter((block): block is ExampleBlock => block.kind === 'example');
     expect(boxes).toHaveLength(1);
-    const [seen, done, again, last] = boxes[0]?.lines ?? [];
-    const digit = Number(/^Kennung endet auf (\d)\./.exec(seen ?? '')?.[1]);
+    const [seen, done, again, last, ...more] = boxes[0]?.lines ?? [];
+    expect(more).toEqual([]);
+    const digit = Number(/^\d\d:\d\d Kennung endet auf (\d)\./.exec(seen ?? '')?.[1]);
     const first = measuredIn(seen ?? '');
     const second = measuredIn(again ?? '');
     expect(first.wires).toEqual([1, 2, 3, 4, 5]);
     expect(first.volts).toHaveLength(5);
-    expect(done).toMatch(/^Kennung gerade, höchste Spannung: Kabel \d getrennt; /);
+    expect(done).toMatch(/^\d\d:\d\d Kennung gerade, höchste Spannung: Kabel \d getrennt; /);
     expect(done).toMatch(/; Kabel \d bleibt mit 0 V ganz\.$/);
-    expect(last).toMatch(/^Höchste Spannung nun \d+ V: Kabel \d getrennt\.$/);
+    expect(again).toMatch(/^\d\d:\d\d Neu gemessen: /);
+    expect(last).toMatch(/^\d\d:\d\d Höchste Spannung nun \d+ V: Kabel \d getrennt\.$/);
     // The box the example shows: its first round as printed, the wire at 0 V dead;
     // in the second round the wire cut in the first no longer reads anything.
     const lab: Edgework = { ...EVEN, serial: `K7G3B-${digit}` };

@@ -8,7 +8,7 @@ import {
   type PuzzleContext,
   type PuzzleModule,
 } from './module.js';
-import { deviceFigure, penaltyLine, workedExample } from './printed.js';
+import { costOf, labDocument, type TypePlate } from './printed.js';
 
 /**
  * Serverraum: a station with two consoles in different places. Console a is
@@ -46,7 +46,7 @@ export const DEPENDS_ON: Readonly<Record<Service, readonly Service[]>> = {
 export const SERVER_CODES = ['E11', 'E23', 'E42', 'E50'] as const;
 export type ServerCode = (typeof SERVER_CODES)[number];
 
-/** The printed code table: what each code asks of the crew. */
+/** The printed code table: the procedure each code calls for. */
 export const CODE_MEANINGS: Readonly<Record<ServerCode, string>> = {
   E11: 'Neustart genügt: start',
   E23: 'Strom aus, dann an, dann start',
@@ -411,7 +411,43 @@ function ledOf(it: ServiceState): ServerLed {
   return it.running ? 'green' : 'red';
 }
 
-// --- the printed rules ---------------------------------------------------------------------
+// --- the printed document ------------------------------------------------------------------
+
+const PLATE: TypePlate = { name: 'Rechnernetz', type: 'RN-6', year: 1998 };
+
+const PURPOSE =
+  'Das Rechnernetz kam mit dem Umbau: Türsteuerung, Messdaten und Post laufen seither über ' +
+  'sechs Dienste im Serverraum. Steht es still, bleiben die Türen, die es steuert, zu, bis ' +
+  'jeder Dienst wieder läuft.';
+
+const BUILD =
+  'Pult A ist das Terminal: Es zeigt jeden Dienst mit Zustand, Fehlercode und Strom, führt ein ' +
+  'Protokoll und nimmt Befehle an. Pult B ist das Rack mit einem Stromschalter und einer LED ' +
+  'je Dienst: grün läuft, rot Fehler, dunkel kein Strom.';
+
+/** Betrieb: the order and the procedures, a failed start and what it costs, quarantine. */
+function operationText(def: ServersDef): string {
+  return (
+    'Ein Dienst startet erst, wenn alles läuft, wovon er abhängt (Abb. 1: der Pfeil führt von ' +
+    'der Abhängigkeit zum Dienst), und nach dem Verfahren seines Codes. Gelingt ein Start ' +
+    `nicht, meldet die Überwachung Alarm und zieht ${costOf(def.penaltySec)} ab; der Dienst ` +
+    'bleibt stehen. Ein Start mit E50 infiziert dazu einen laufenden Dienst.'
+  );
+}
+
+/** Aus der Werkstatt: quarantine first, where the def deals it, then the plan's order. */
+function workshopNotes(def: ServersDef): string[] {
+  const order =
+    'Der Netzplan listet die Dienste in einer Reihenfolge, in der sie starten können: von oben ' +
+    'nach unten hochfahren.';
+  return def.trap
+    ? [
+        'Vor allem anderen den Dienst mit E50 vom Strom nehmen: Ein Start steckt einen zweiten ' +
+          'Dienst an.',
+        order,
+      ]
+    : [order];
+}
 
 /** The dependency table beside the figure: each service and what it needs. */
 function dependencyTable(): ManualBlock {
@@ -441,7 +477,7 @@ const COMMANDS: ManualBlock = {
 
 const CODES: ManualBlock = {
   kind: 'table',
-  head: ['Code', 'Bedeutung'],
+  head: ['Code', 'Verfahren'],
   rows: SERVER_CODES.map((code) => [code, CODE_MEANINGS[code]]),
 };
 
@@ -459,12 +495,14 @@ const RULES: ManualBlock = {
   ],
 };
 
-/** The printed example: a power cycle for E23, then the restarts E42 asks for. */
-export const EXAMPLE: readonly string[] = [
-  'Terminal: NETZ läuft; DNS FEHLER E23 und AUTH FEHLER E42, beide mit Strom; der Rest ohne Strom.',
-  'E23: Am Rack DNS aus und wieder an, dann start dns: [ OK ] dns läuft.',
-  'E42: restart netz, dabei stürzt DNS ab (E11); restart dns startet DNS wieder.',
-  'Dann start auth: [ OK ] auth läuft.',
+/** The printed log: a power cycle for E23, then the restarts E42 calls for. */
+export const LOG: readonly string[] = [
+  '01:02 status: NETZ RUNNING; DNS FEHLER E23 und AUTH FEHLER E42, beide mit Strom; der Rest ' +
+    'ohne Strom.',
+  '01:03 Rack: DNS aus und wieder an; start dns: [ OK ] dns läuft.',
+  '01:04 restart netz: [WARN] dns abgestürzt: E11; [ OK ] netz neu gestartet.',
+  '01:04 restart dns: [ OK ] dns läuft.',
+  '01:05 start auth: [ OK ] auth läuft.',
 ];
 
 // --- the solver ----------------------------------------------------------------------------
@@ -604,29 +642,19 @@ export const serversModule: PuzzleModule<ServersDef, ServersState, ServersInput,
   },
 
   manual(def) {
-    return [
-      {
-        heading: 'Serverraum',
-        blocks: [
-          deviceFigure('servers', 'Dienste und Rack'),
-          {
-            kind: 'p',
-            text:
-              'Pult A ist ein Terminal: Es zeigt jeden der sechs Dienste mit Zustand, ' +
-              'Fehlercode und Strom und nimmt Befehle an. Pult B ist ein Rack mit einem ' +
-              'Stromschalter und einer LED je Dienst; grün heißt läuft, rot Fehler, dunkel kein ' +
-              'Strom. Jeder Dienst ist wieder zu starten, nach seinen Abhängigkeiten (Abb. 1: ' +
-              'ein Pfeil führt von der Abhängigkeit zum Dienst, der sie braucht).',
-          },
-          dependencyTable(),
-          COMMANDS,
-          CODES,
-          RULES,
-          workedExample(EXAMPLE),
-          penaltyLine(def.penaltySec, 'Ein Start mit E50 infiziert dazu einen laufenden Dienst.'),
-        ],
-      },
-    ];
+    return labDocument({
+      plate: PLATE,
+      purpose: PURPOSE,
+      figure: { of: 'servers', device: 'Dienste und Rack' },
+      build: BUILD,
+      operation: operationText(def),
+      law: [
+        { heading: 'Netzplan', blocks: [dependencyTable()] },
+        { heading: 'Befehle und Codes', blocks: [COMMANDS, CODES, RULES] },
+      ],
+      log: LOG,
+      workshop: workshopNotes(def),
+    });
   },
 
   /**

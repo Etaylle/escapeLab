@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { indicatorLit, serialLastDigitIsOdd, type Edgework } from '../edgework.js';
 import type { Rng } from '../rng.js';
-import { commonDefShape, type PuzzleModule } from './module.js';
-import { deviceFigure, penaltyLine, workedExample } from './printed.js';
+import { commonDefShape, type ManualBlock, type PuzzleModule } from './module.js';
+import { costOf, labDocument, type TypePlate } from './printed.js';
 
 /**
  * Switch bank (Keep Talking's complicated wires as toggles): the operator
@@ -120,30 +120,85 @@ const TABLES: Record<SwitchesDef['features'], readonly Row[]> = {
   ],
 };
 
-/**
- * The worked example by feature count: one switch whose row asks the
- * edgework, the lab it is seen in and where the switch ends.
- */
-const EXAMPLES: Record<SwitchesDef['features'], readonly string[]> = {
-  2: [
-    'Gesehen: Schalter 4 mit LED aus, Markierung blau. Kennung endet auf 7.',
-    'Zeile aus, blau: hoch, wenn die Kennung gerade endet (0, 2, 4, 6, 8).',
-    '7 ist ungerade: Schalter 4 bleibt unten. Die übrigen nach ihren Zeilen, dann PRÜFEN.',
-  ],
-  3: [
-    'Gesehen: Schalter 2 mit LED an, Markierung rot, ohne Stern. 3 Notstromzellen eingesetzt.',
-    'Zeile an, rot, nein: hoch, wenn mindestens 2 Zellen.',
-    'Gestellt: Schalter 2 hoch. Die übrigen nach ihren Zeilen, dann PRÜFEN.',
-  ],
-};
+// --- the printed document --------------------------------------------------------------
 
-/** What a switch carries, by feature count, as the device paragraph names it. */
+const PLATE: TypePlate = { name: 'Kippschalterbank', type: 'KS-6', year: 1984 };
+
+const PURPOSE =
+  'Die Schalterbank legt nach einem Ausfall fest, welche Kreise eines Teilsystems wieder ' +
+  'zugeschaltet werden. Jeder Schalter steht für einen Kreis; seine Stellung folgt aus seinen ' +
+  'Kennzeichen und dem Kennungsschild des Labors.';
+
+/** What a switch carries, by feature count, as Aufbau names it. */
 const FEATURE_WORDS: Record<SwitchesDef['features'], string> = {
   2: 'eine LED (an oder aus) und eine Markierung (keine, rot, blau oder beides)',
   3:
     'eine LED (an oder aus), eine Markierung (keine, rot, blau oder beides) und einen ' +
     'Stern oder keinen',
 };
+
+/** The features that pick a switch's row, by feature count, as Betrieb names them. */
+const ROW_WORDS: Record<SwitchesDef['features'], string> = {
+  2: 'LED und Markierung bestimmen',
+  3: 'LED, Markierung und Stern bestimmen',
+};
+
+/** Betrieb: row and end position from the table, PRÜFEN alone counts, and what a fault costs. */
+function operationText(def: SwitchesDef): string {
+  return (
+    `${ROW_WORDS[def.features]} die Zeile eines Schalters, die Spalte Stellung seine ` +
+    'Endstellung. Umgelegt werden darf beliebig oft; gewertet wird erst PRÜFEN. Steht dann ' +
+    `ein Schalter falsch, meldet die Überwachung Alarm und zieht ${costOf(def.penaltySec)} ` +
+    'ab; alle Schalter bleiben, wie sie stehen.'
+  );
+}
+
+/** The printed table: a row for every combination of the features, and its end position. */
+function positionTable(def: SwitchesDef): ManualBlock {
+  const stars = def.features === 3;
+  return {
+    kind: 'table',
+    head: ['LED', 'Markierung', ...(stars ? ['Stern'] : []), 'Stellung'],
+    rows: TABLES[def.features].map(([led, marking, star, rule]) => [
+      led ? 'an' : 'aus',
+      marking,
+      ...(stars ? [star ? 'ja' : 'nein'] : []),
+      rule.text,
+    ]),
+  };
+}
+
+/**
+ * The printed log by feature count: one switch whose row asks the sign,
+ * the lab it was seen in, and where the switch ended.
+ */
+const LOGS: Record<SwitchesDef['features'], readonly string[]> = {
+  2: [
+    '05:31 Schalter 4: LED aus, Markierung blau; Kennung endet auf 7.',
+    '05:31 Zeile aus, blau: hoch, wenn die Kennung gerade endet (0, 2, 4, 6, 8).',
+    '05:32 7 ist ungerade: Schalter 4 bleibt unten, die übrigen nach ihren Zeilen; PRÜFEN ' +
+      'angenommen.',
+  ],
+  3: [
+    '05:31 Schalter 2: LED an, Markierung rot, ohne Stern; 3 Notstromzellen eingesetzt.',
+    '05:31 Zeile an, rot, nein: hoch, wenn mindestens 2 Zellen.',
+    '05:32 Schalter 2 hoch, die übrigen nach ihren Zeilen; PRÜFEN angenommen.',
+  ],
+};
+
+/** What the rows with „wenn" read off the lab's sign, by feature count. */
+const SIGN_WORDS: Record<SwitchesDef['features'], string> = {
+  2: 'die Endziffer der Kennung',
+  3: 'Endziffer der Kennung, eingesetzte Zellen, Leuchte SIG',
+};
+
+/** Aus der Werkstatt: the sign the rows ask, and what „beides" is. */
+function workshopNotes(def: SwitchesDef): string[] {
+  return [
+    `Für die Zeilen mit „wenn“ das Kennungsschild bereithalten: ${SIGN_WORDS[def.features]}.`,
+    'Die Markierung „beides“ trägt Rot und Blau zugleich, als zwei Bänder.',
+  ];
+}
 
 function markingOf(sw: SwitchView): Marking {
   if (sw.red && sw.blue) {
@@ -250,35 +305,18 @@ export const switchesModule: PuzzleModule<
   },
 
   manual(def) {
-    const stars = def.features === 3;
-    return [
-      {
-        heading: 'Subsysteme',
-        blocks: [
-          deviceFigure('switches', 'Bank mit Kippschaltern'),
-          {
-            kind: 'p',
-            text:
-              'Eine Bank aus 6 Kippschaltern, von links gezählt, alle zu Beginn unten. Jeder ' +
-              `Schalter hat ${FEATURE_WORDS[def.features]}; diese Merkmale bestimmen seine ` +
-              'Zeile, die Spalte Stellung seine Endstellung. Sind alle 6 gestellt, wird einmal ' +
-              'PRÜFEN gedrückt; nur PRÜFEN wird gewertet.',
-          },
-          {
-            kind: 'table',
-            head: ['LED', 'Markierung', ...(stars ? ['Stern'] : []), 'Stellung'],
-            rows: TABLES[def.features].map(([led, marking, star, rule]) => [
-              led ? 'an' : 'aus',
-              marking,
-              ...(stars ? [star ? 'ja' : 'nein'] : []),
-              rule.text,
-            ]),
-          },
-          workedExample(EXAMPLES[def.features]),
-          penaltyLine(def.penaltySec, 'Die Schalter bleiben, wie sie stehen.'),
-        ],
-      },
-    ];
+    return labDocument({
+      plate: PLATE,
+      purpose: PURPOSE,
+      figure: { of: 'switches', device: 'Bank mit Kippschaltern' },
+      build:
+        'Sechs Kippschalter, von links gezählt, alle zu Beginn unten, daneben die Taste PRÜFEN. ' +
+        `Jeder Schalter trägt ${FEATURE_WORDS[def.features]}.`,
+      operation: operationText(def),
+      law: [{ heading: 'Stellungstabelle', blocks: [positionTable(def)] }],
+      log: LOGS[def.features],
+      workshop: workshopNotes(def),
+    });
   },
 
   solve(def, { operator }, edgework) {

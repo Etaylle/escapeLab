@@ -142,7 +142,7 @@
       "wires": { "min": 4, "max": 6 },
       "penaltySec": 30,
       "hints": [
-        "Es gilt nur die Liste zur Kabelzahl, von oben gezählt. Kennung, Leuchten und Zellen stehen am Schild im Westflügel."
+        "Werkstatt: Nur die Liste zur Kabelzahl gilt, von oben gezählt. Kennung, Leuchten und Zellen: am Schild im Westflügel."
       ],
       "onSolved": "Tastenfeld im Westflügel, Südostecke. Regeln im Nordosten."
     },
@@ -151,7 +151,7 @@
       "id": "zugangscode",
       "title": "Freigabecode",
       "hints": [
-        "Genau eine Spalte enthält alle 4 Zeichen; gedrückt wird in ihrer Reihenfolge, von oben."
+        "Haller: Genau eine Spalte der Tafel hat alle vier Zeichen. Angenommen wird in ihrer Reihenfolge, von oben nach unten."
       ],
       "onSolved": "Kühlbank im Westflügel, Westwand. Regeln im Südosten."
     },
@@ -160,7 +160,7 @@
       "id": "kuehlung",
       "title": "Kühlkreislauf",
       "hints": [
-        "LED, Markierung und Stern geben die Zeile, bei „wenn“ gilt das Schild. Sind alle gestellt, wird einmal PRÜFEN gedrückt."
+        "Kältetechnik: LED, Markierung und Stern geben die Zeile, bei „wenn“ gilt das Schild. PRÜFEN erst, wenn alle stehen."
       ],
       "onSolved": "Funkpult im Ostflügel, Ostwand. Regeln im Südwesten."
     },
@@ -169,7 +169,7 @@
       "id": "funkfeuer",
       "title": "Funkfeuer",
       "hints": [
-        "Nach der langen Pause beginnt das Wort. Die Morsetafel gibt die ersten 3 Buchstaben, die Frequenztabelle die Frequenz."
+        "Funkraum: Das Wort beginnt nach der langen Pause. Drei Buchstaben genügen, dann steht die Frequenz in der Tabelle."
       ],
       "onSolved": "Speicherkern an die Schleusenwand, Schaltplan im Nordwesten."
     },
@@ -180,7 +180,7 @@
       "size": 6,
       "penaltySec": 12,
       "hints": [
-        "Zellen heißen nach Spalte und Zeile, etwa C4. Der Weg lässt sich auf dem Schaltplan vom Ziel rückwärts finden."
+        "Leitstand: Zellen heißen nach Spalte und Zeile, etwa C4. Den Weg auf dem Schaltplan vom Ziel rückwärts suchen."
       ],
       "onSolved": "Druckknopf im Westflügel, Nordseite. Regeln im Nordosten."
     },
@@ -189,7 +189,7 @@
       "id": "druckausgleich",
       "title": "Druckausgleich",
       "hints": [
-        "Beim Halten zählt die Farbe des Streifens; losgelassen wird, sobald ihre Ziffer irgendwo auf der Missionsuhr steht."
+        "Druckwarte: Beim Halten zählt die Farbe des Streifens. Losgelassen wird, sobald ihre Ziffer irgendwo auf der Uhr steht."
       ],
       "onSolved": "Schleuse offen. Alle vier zum Not-Aus, Westwand."
     },

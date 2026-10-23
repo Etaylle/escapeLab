@@ -240,38 +240,37 @@ describe('morse puzzle', () => {
     expect(malformed.filter(accepts)).toEqual([]);
   });
 
-  it('prints the desk and its rules, both tables, and the penalty, the same for every run', () => {
+  it('prints the desk, how it runs, both tables, the log and the workshop, for every run', () => {
     const manual = morseModule.manual(def);
     expect(manual.map((section) => section.heading)).toEqual([
-      'Funkfeuer',
+      'Funkfeuer, Typ FF-16 (Baujahr 1974)',
+      'Aufbau',
+      'Betrieb',
       'Morsetafel',
       'Frequenztabelle',
+      'Aus der Werkstatt',
     ]);
-    const rules = blocks.find((b) => b.kind === 'rules');
-    if (rules?.kind !== 'rules') {
-      throw new Error('expected a rule list');
-    }
-    expect(rules.items.filter((item) => !/^Wenn .+\.$/.test(item))).toEqual([]);
-    expect(blocks.at(-1)).toEqual({
-      kind: 'p',
-      text: 'Fehlgriff: Alarm, −25 s. Die Lampe morst weiter.',
-    });
+    const text = JSON.stringify(manual);
+    expect(text).toContain('ein Regler mit ◀ ▶ für 16 Frequenzen von 3,505 MHz bis 3,580 MHz');
+    expect(text).toContain('Die ersten drei Buchstaben bestimmen das Wort');
+    expect(text).toContain('zieht 25 Sekunden Einsatzzeit ab; die Lampe morst weiter.');
+    expect(text).toContain('Passt kein Wort der Tabelle, ist ein Zeichen verlesen');
     expect(morseModule.manual(structuredClone(def))).toEqual(manual);
   });
 
-  it('prints an example that the lamp and both tables bear out', () => {
-    const example = blocks.find((b) => b.kind === 'example');
-    const lines = example?.kind === 'example' ? example.lines : [];
+  it('prints a log that the lamp and both tables bear out', () => {
+    const log = blocks.find((b) => b.kind === 'example');
+    const lines = log?.kind === 'example' ? log.lines : [];
     const [seen, read, sent] = [
-      /^Gesehen nach der langen Pause: (.+)\.$/,
+      /^\d\d:\d\d Nach der langen Pause: (.+)\.$/,
       new RegExp(
-        '^Morsetafel: ([A-Z]), ([A-Z]), ([A-Z])\\. ([A-Z]+) passt auf ([A-Z]+) und ([A-Z]+), ' +
-          '([A-Z]+) nur auf ([A-Z]+)\\.$',
+        '^\\d\\d:\\d\\d Morsetafel: ([A-Z]), ([A-Z]), ([A-Z])\\. ([A-Z]+) passt auf ([A-Z]+) ' +
+          'und ([A-Z]+), ([A-Z]+) nur auf ([A-Z]+)\\.$',
       ),
-      /^Frequenztabelle: ([A-Z]+), (\d,\d{3} MHz)\. /,
+      /^\d\d:\d\d Frequenztabelle: ([A-Z]+), (\d,\d{3} MHz); eingestellt und gesendet/,
     ].map((pattern, i) => pattern.exec(lines[i] ?? ''));
     if (!seen || !read || !sent) {
-      throw new Error(`unreadable example: ${JSON.stringify(lines)}`);
+      throw new Error(`unreadable log: ${JSON.stringify(lines)}`);
     }
     // The signals spell the letters named, by international Morse code and by the printed table.
     const codes = (seen[1] ?? '')
