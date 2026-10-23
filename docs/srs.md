@@ -61,7 +61,6 @@ den Referenz Level „Blackout im Labor" und die Plattform, auf der er läuft.
 | ID | Anforderung |
 |---|---|
 | C-1 | Weitere Level in der Qualität des Referenz-Levels. |
-
 | C-2 | Wiedergabe gespielter Runden. |
 | C-3 | Weitere Rätselmodule, auch mit IT- und Technik-Themen. |
 | C-4 | Schwierigkeit, die sich aus der Telemetrie echter Crews abstimmt. |
