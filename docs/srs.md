@@ -26,16 +26,13 @@ den Referenz Level „Blackout im Labor" und die Plattform, auf der er läuft.
 |---|---|
 | M-1 | Eine Runde braucht mindestens zwei Personen. |
 | M-2 | Die Level sind nicht allein spielbar. |
-| M-3 | Jede Station ist nur gemeinsam lösbar. |
-| M-4 | Die nötigen Informationen sind auf die Spielenden verteilt. |
-| M-5 | Die Regeln der Stationen stehen in einem Handbuch im Spiel. |
-| M-6 | Das Handbuch enthält keine Antworten. |
-| M-7 | Eine Runde ist gewonnen, wenn alle Stationen gelöst sind und die Crew den Ausgang erreicht. |
-| M-8 | Eine Runde ist verloren, wenn die Zeit abläuft. |
-| M-9 | Das Spiel läuft im Browser über das lokale Netz. |
-| M-10 | Es braucht weder Konto noch Installation. |
-| M-11 | Spielende können miteinander sprechen, über das Spiel oder nebeneinander. |
-| M-12 | Ein Verbindungsabbruch beendet die Runde nicht. |
+| M-3 | Die nötigen Informationen sind auf die Spielenden verteilt. |
+| M-4 | Eine Runde ist gewonnen, wenn alle Stationen gelöst sind und die Crew den Ausgang erreicht. |
+| M-5 | Eine Runde ist verloren, wenn die Zeit abläuft. |
+| M-6 | Das Spiel ist im Browser spielbar. |
+| M-7 | Es braucht weder Konto noch Installation. |
+| M-8 | Spielende können miteinander sprechen, über das Spiel oder nebeneinander. |
+| M-9 | Ein Verbindungsabbruch beendet die Runde nicht. |
 
 ### Should — das, was das Spiel gut macht
 
@@ -44,7 +41,7 @@ den Referenz Level „Blackout im Labor" und die Plattform, auf der er läuft.
 | S-1 | Ein Tutorial übt die Mechaniken und führt in den Hauptlevel. |
 | S-2 | Der Einstieg erklärt sich im Spiel statt in einem Text. |
 | S-3 | Ein erster Erfolg zu zweit kommt vor dem ersten Handbuchrätsel. |
-| S-4 | Jeder Raum hat eine eigene Identität in Möblierung, Licht und Klang. |
+| S-4 | Räume unterscheiden sich sichtbar voneinander. |
 | S-5 | Figuren zeigen, was sie tun: tragen, sprechen, erschrecken, feiern. |
 | S-6 | Funksprüche haben eine Stimme. |
 | S-7 | Musik und Raumklang wachsen mit dem Druck. |
@@ -63,19 +60,15 @@ den Referenz Level „Blackout im Labor" und die Plattform, auf der er läuft.
 | C-1 | Weitere Level in der Qualität des Referenz-Levels. |
 | C-2 | Wiedergabe gespielter Runden. |
 | C-3 | Weitere Rätselmodule, auch mit IT- und Technik-Themen. |
-| C-4 | Schwierigkeit, die sich aus der Telemetrie echter Crews abstimmt. |
-| C-5 | Barrierefreiheit über Muster und Kontraste hinaus. |
-| C-6 | Teilen von Missionen und Bestenlisten über das lokale Netz hinaus. |
-| C-7 | Level für drei oder mehr Personen. |
+| C-4 | Level für drei oder mehr Personen. |
 
 ### Won't — bewusst nicht, in dieser Version
 
 | ID | Ausschluss |
 |---|---|
 | W-1 | Konten, Login, Cloud-Hosting, bezahlte Dienste. |
-| W-2 | Native Apps. |
-| W-3 | Ein Solo-Modus oder Gegeneinander. |
-| W-4 | Monetarisierung. |
+| W-2 | Ein Solo-Modus oder Gegeneinander. |
+| W-3 | Monetarisierung. |
 
 ## 4. Rahmenbedingungen
 
