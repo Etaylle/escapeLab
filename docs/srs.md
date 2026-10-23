@@ -24,38 +24,50 @@ den Referenz Level „Blackout im Labor" und die Plattform, auf der er läuft.
 
 | ID | Anforderung |
 |---|---|
-| M-1 | Eine Runde braucht mindestens zwei Personen; die Level sind nicht allein spielbar. |
-| M-2 | Jede Station ist nur gemeinsam lösbar; die nötigen Informationen sind auf die Spielenden verteilt. |
-| M-3 | Die Regeln der Stationen stehen in einem Handbuch im Spiel, das keine Antworten enthält. |
-| M-4 | Eine Runde endet mit Sieg oder Verlust: alle Stationen gelöst und die Crew am Ausgang, oder die Zeit abgelaufen. |
-| M-5 | Das Spiel läuft im Browser über das lokale Netz, ohne Konto und ohne Installation. |
-| M-6 | Spielende können miteinander sprechen, über das Spiel oder nebeneinander. |
-| M-7 | Der Spielzustand liegt auf dem Server; ein Verbindungsabbruch beendet die Runde nicht. |
+| M-1 | Eine Runde braucht mindestens zwei Personen. |
+| M-2 | Die Level sind nicht allein spielbar. |
+| M-3 | Jede Station ist nur gemeinsam lösbar. |
+| M-4 | Die nötigen Informationen sind auf die Spielenden verteilt. |
+| M-5 | Die Regeln der Stationen stehen in einem Handbuch im Spiel. |
+| M-6 | Das Handbuch enthält keine Antworten. |
+| M-7 | Eine Runde ist gewonnen, wenn alle Stationen gelöst sind und die Crew den Ausgang erreicht. |
+| M-8 | Eine Runde ist verloren, wenn die Zeit abläuft. |
+| M-9 | Das Spiel läuft im Browser über das lokale Netz. |
+| M-10 | Es braucht weder Konto noch Installation. |
+| M-11 | Spielende können miteinander sprechen, über das Spiel oder nebeneinander. |
+| M-12 | Ein Verbindungsabbruch beendet die Runde nicht. |
 
 ### Should — das, was das Spiel gut macht
 
 | ID | Anforderung |
 |---|---|
 | S-1 | Ein Tutorial übt die Mechaniken und führt in den Hauptlevel. |
-| S-2 | Der Einstieg erklärt sich im Spiel: der Stromausfall passiert auf dem Bildschirm, ein erster Erfolg zu zweit kommt vor dem ersten Handbuchrätsel. |
-| S-3 | Räume mit eigener Identität: Möblierung, Licht, Klang und Figuren mit Ausdruck. |
-| S-4 | Funksprüche mit Stimme, Raumklang und Musik, die mit dem Druck wächst. |
-| S-5 | Handbuchtexte sind Dokumente aus der Welt, keine Anweisungen an Spieler. |
-| S-6 | Notizen im Spiel, auch während man liest oder ein Gerät bedient. |
-| S-7 | Drei Schwierigkeitsgrade; eine Leitstelle hilft, wenn nichts passiert. |
-| S-8 | Zuschauermodus, Rundenhistorie und Bestenliste. |
-| S-9 | Ein Missionseditor im Browser mit Validierung. |
+| S-2 | Der Einstieg erklärt sich im Spiel statt in einem Text. |
+| S-3 | Ein erster Erfolg zu zweit kommt vor dem ersten Handbuchrätsel. |
+| S-4 | Jeder Raum hat eine eigene Identität in Möblierung, Licht und Klang. |
+| S-5 | Figuren zeigen, was sie tun: tragen, sprechen, erschrecken, feiern. |
+| S-6 | Funksprüche haben eine Stimme. |
+| S-7 | Musik und Raumklang wachsen mit dem Druck. |
+| S-8 | Handbuchtexte sind Dokumente aus der Welt, keine Anweisungen an Spieler. |
+| S-9 | Notizen sind im Spiel möglich, auch während man liest oder ein Gerät bedient. |
+| S-10 | Es gibt drei Schwierigkeitsgrade. |
+| S-11 | Eine Leitstelle meldet sich, wenn länger nichts passiert. |
+| S-12 | Zuschauende sehen die Runde mit. |
+| S-13 | Rundenhistorie und Bestenliste je Level. |
+| S-14 | Ein Missionseditor im Browser mit Validierung. |
 
 ### Could — ambitioniert
 
 | ID | Anforderung |
 |---|---|
-| C-1 | Weitere Level in der Qualität des Referenz-Levels, auch für drei oder mehr Personen. |
+| C-1 | Weitere Level in der Qualität des Referenz-Levels. |
+
 | C-2 | Wiedergabe gespielter Runden. |
 | C-3 | Weitere Rätselmodule, auch mit IT- und Technik-Themen. |
 | C-4 | Schwierigkeit, die sich aus der Telemetrie echter Crews abstimmt. |
 | C-5 | Barrierefreiheit über Muster und Kontraste hinaus. |
 | C-6 | Teilen von Missionen und Bestenlisten über das lokale Netz hinaus. |
+| C-7 | Level für drei oder mehr Personen. |
 
 ### Won't — bewusst nicht, in dieser Version
 
