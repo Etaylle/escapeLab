@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { moduleFor, type ConsoleId, type PuzzleView } from '@escapelab/core';
+import { NotepadContext } from '../noting.js';
 import { ALARM_NOTICE_MS, type AlarmNotice } from '../world/alarm.js';
 import { consoleName } from '../world/consoles.js';
 import {
@@ -77,6 +78,11 @@ export interface DeviceProps {
    * cause and cost in the head — the banner over the world would lie half under the device
    */
   notice?: AlarmNotice | null;
+  /**
+   * the way back from the device — „[Esc] Zurücktreten" in its chassis' foot, a tab on a
+   * touch screen; none by default, as for the audience, which stands at no console
+   */
+  onStepBack?: (() => void) | null;
   /** the face: the module's controls and displays */
   children: ReactNode;
 }
@@ -126,16 +132,44 @@ function AlarmDisplay({ notice }: { notice: AlarmNotice }) {
 }
 
 /**
+ * The way back from a device, on its chassis: „[Esc] Zurücktreten" engraved in its foot where
+ * there are keys, a tab under its edge on a touch screen (styles/putdown.css shows one of
+ * them) — and beside the tab the notepad's, where no N key is.
+ */
+function StepBack({ onStepBack }: { onStepBack: () => void }) {
+  const hand = useContext(NotepadContext);
+  return (
+    <div className="device-foot">
+      <button type="button" className="device-step-back" onClick={onStepBack}>
+        [Esc] Zurücktreten
+      </button>
+      <div className="device-tabs">
+        <button type="button" className="device-tab" onClick={onStepBack}>
+          Zurücktreten
+        </button>
+        {hand !== null && (
+          <button type="button" className="device-tab device-tab--notes" onClick={hand.toggle}>
+            Notizen
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * The physical frame every station's panel sits in, after Keep Talking's
  * modules: a metal bezel with a screw in each corner, a label plate naming
  * the station, an LED strip, the face with the controls — and not one word
  * of instruction on it — and along its foot the status strip that flashes
- * red on an alarm and sweeps green once the station is solved. An alarm that
- * comes in while it is open shows its cause and cost in its head.
+ * red on an alarm and sweeps green once the station is solved, and the way
+ * back from it. An alarm that comes in while it is open shows its cause and
+ * cost in its head.
  */
 export function Device(props: DeviceProps) {
   const { kind, paragraph, title, tag, leds, alarms, solved, press, children } = props;
   const notice = props.notice ?? null;
+  const onStepBack = props.onStepBack ?? null;
   return (
     <div className={deviceClass(kind, alarms, solved)}>
       {(['tl', 'tr', 'bl', 'br'] as const).map((corner) => (
@@ -164,6 +198,7 @@ export function Device(props: DeviceProps) {
         {children}
       </div>
       <StatusStrip />
+      {onStepBack !== null && <StepBack onStepBack={onStepBack} />}
     </div>
   );
 }

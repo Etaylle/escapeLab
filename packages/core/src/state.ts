@@ -23,7 +23,12 @@ export interface RunEvent {
     /** the lights failing at the end of a mission's intro */
     | 'power'
     /** a note of the last crew read for the first time this run */
-    | 'note';
+    | 'note'
+    /**
+     * mission control naming the next place, the station that is up having stayed quiet
+     * (actions.ts `nudge`): on the air like a radio line, its line the label
+     */
+    | 'nudge';
   label: string;
   /** seconds lost, for penalty and hint lines */
   seconds: number | null;
@@ -206,14 +211,29 @@ export interface GameState {
   hintsRevealed: number;
   /** epoch ms; earliest moment the next note may be asked for */
   hintReadyAt: number | null;
+  /**
+   * epoch ms since when the station that is up has had no input: from when it came up, was
+   * switched on or last worked, an emergency ended or mission control last spoke about it;
+   * moved on by a pause like every deadline. Null while no station is up.
+   */
+  quietSince: number | null;
+  /** lines mission control has sent about the station that is up; back to 0 with the next */
+  nudgesGiven: number;
 }
 
-/** A fresh room for `mission`, its runs pinned to `roomSeed` where a tester asked for one. */
-export function initialState(mission: Mission, roomSeed: number | null = null): GameState {
+/**
+ * A fresh room for `mission` — already scaled to `difficulty` — its runs pinned to `roomSeed`
+ * where a tester asked for one.
+ */
+export function initialState(
+  mission: Mission,
+  roomSeed: number | null = null,
+  difficulty: Difficulty = 'normal',
+): GameState {
   return {
     phase: 'lobby',
     mission,
-    difficulty: 'normal',
+    difficulty,
     players: [],
     currentPuzzleIndex: 0,
     puzzleState: null,
@@ -245,5 +265,7 @@ export function initialState(mission: Mission, roomSeed: number | null = null): 
     hintsUsed: 0,
     hintsRevealed: 0,
     hintReadyAt: null,
+    quietSince: null,
+    nudgesGiven: 0,
   };
 }

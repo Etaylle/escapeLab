@@ -1,4 +1,4 @@
-import type { RunEvent } from '@escapelab/core';
+import { NUDGED, type RunEvent } from '@escapelab/core';
 
 /** How long a line stays on the air; ui.css fades the banner to match. */
 export const BANNER_MS = 7000;
@@ -16,9 +16,17 @@ export const NEWS_MS = 10_000;
 /** A revealed note goes on the air under the last crew's name, not mission control's. */
 export const LAST_CREW = 'Notiz der letzten Crew';
 
-/** What goes on the air: mission control's scripted lines and the notes the crew revealed. */
+/**
+ * Whether a line is mission control's: a scripted one, or one it sent unasked because the
+ * station that is up stayed quiet (a nudge).
+ */
+export function fromControl(event: RunEvent): boolean {
+  return event.kind === 'radio' || event.kind === 'nudge';
+}
+
+/** What goes on the air: mission control's lines and the notes the crew revealed. */
 function onAir(event: RunEvent): boolean {
-  return event.kind === 'radio' || event.kind === 'hint';
+  return fromControl(event) || event.kind === 'hint';
 }
 
 /**
@@ -26,7 +34,15 @@ function onAir(event: RunEvent): boolean {
  * recording of it exists), a note of the last crew is read, never heard.
  */
 export function voiced(event: RunEvent): boolean {
-  return event.kind === 'radio';
+  return fromControl(event);
+}
+
+/**
+ * A line of the run report as the Einsatzprotokoll prints it: a nudge says that mission
+ * control spoke up — „Leitstelle meldet sich: …" — every other line its own words.
+ */
+export function reportLine(event: RunEvent): string {
+  return event.kind === 'nudge' ? `${NUDGED}: ${event.label}` : event.label;
 }
 
 /** Who a line on the air is from, as the banner names them. */

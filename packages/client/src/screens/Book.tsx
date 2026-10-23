@@ -12,6 +12,7 @@ import {
   type Fragment,
   type Leaf,
 } from '../pages.js';
+import { notedPart } from '../noting.js';
 import { READERS } from '../puzzles/index.js';
 import { Block } from './Manual.js';
 import { ReaderPanel } from './PuzzlePanel.js';
@@ -195,6 +196,10 @@ function Cover({ book }: { book: BookContext }) {
   );
 }
 
+/**
+ * What a page holds, set: a rules list or a table — or the part of one this page holds — with
+ * the whole of it for the notepad (noting.ts), however many pages it runs over.
+ */
 function FragmentView({
   fragment,
   section,
@@ -216,7 +221,15 @@ function FragmentView({
     case 'heading':
       return <h3 className="page-heading">{fragment.text}</h3>;
     case 'rules':
-      return <Block block={{ kind: 'rules', items: fragment.items }} start={fragment.start} />;
+      return (
+        <Block
+          block={{ kind: 'rules', items: fragment.items }}
+          start={fragment.start}
+          noted={notedPart(section, fragment)}
+        />
+      );
+    case 'table':
+      return <Block block={fragment} noted={notedPart(section, fragment)} />;
     case 'reader':
       return puzzle === null ? null : <ReaderPanel puzzle={puzzle} />;
     default:

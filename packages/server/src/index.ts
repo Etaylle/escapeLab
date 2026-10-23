@@ -6,6 +6,7 @@ import {
   parseClientMessage,
   scaleMission,
   type ClientMessage,
+  type Mission,
   type ServerMessage,
 } from '@escapelab/core';
 import { apiResponse, serveRuns, statsResponse, type RunsExport } from './api.js';
@@ -78,17 +79,9 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
   switch (msg.kind) {
     case 'create-room':
     case 'join-room': {
-      // A new room plays on normal, which has its own alarm limit: scaled from the start.
-      const room =
-        msg.kind === 'create-room'
-          ? manager.create(
-              scaleMission(
-                msg.missionId !== undefined ? catalog.get(msg.missionId) : catalog.default,
-                'normal',
-              ),
-              msg.seed ?? null,
-            )
-          : manager.get(msg.code);
+      // A new room plays on the difficulty its host's device asked for — normal unless that
+      // device has won no run yet — with its alarm limit: scaled from the start.
+      const room = msg.kind === 'create-room' ? createRoom(msg) : manager.get(msg.code);
       const { playerId, token } = room.join(msg.name);
       send(socket, { kind: 'joined', code: room.code, playerId, token });
       room.attach(playerId, (m) => send(socket, m));
@@ -157,13 +150,7 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
     }
     case 'set-ready': {
       const s = requireSession(session);
-      // The host's yes may name the mission the next run plays: from the catalog, at the
-      // room's difficulty. A name the catalog does not know is refused right here.
-      const next =
-        msg.missionId === undefined
-          ? null
-          : scaleMission(catalog.get(msg.missionId), s.room.difficulty);
-      s.room.setReady(s.playerId, msg.ready, next);
+      s.room.setReady(s.playerId, msg.ready, nextMission(s.room, msg.missionId));
       return s;
     }
     case 'select-color':
@@ -181,6 +168,21 @@ function handleMessage(socket: WebSocket, session: Session | null, msg: ClientMe
       return s;
     }
   }
+}
+
+/**
+ * The mission the host's yes to the next run names: from the catalog, at the room's
+ * difficulty; null where it names none. A name the catalog does not know is refused here.
+ */
+function nextMission(room: Room, missionId: string | undefined): Mission | null {
+  return missionId === undefined ? null : scaleMission(catalog.get(missionId), room.difficulty);
+}
+
+/** The room a create-room message opens: its mission from the catalog, at its difficulty. */
+function createRoom(msg: Extract<ClientMessage, { kind: 'create-room' }>): Room {
+  const difficulty = msg.difficulty ?? 'normal';
+  const mission = msg.missionId !== undefined ? catalog.get(msg.missionId) : catalog.default;
+  return manager.create(scaleMission(mission, difficulty), msg.seed ?? null, difficulty);
 }
 
 function requireSession(session: Session | null): Session {

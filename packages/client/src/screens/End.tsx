@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import type { ClientMessage, Grade, MissionInfo, PlayerView, RunEvent } from '@escapelab/core';
+import { reportLine } from '../radio.js';
 import { clock } from '../runStats.js';
 import { victoryChord } from '../world/audio.js';
 import { endingOf, type Ending } from '../world/finale.js';
@@ -31,6 +32,7 @@ const EVENT_ICON: Record<RunEvent['kind'], IconName> = {
   find: 'search',
   power: 'power',
   note: 'note',
+  nudge: 'radio',
 };
 
 /** What the title card says a run came to. */
@@ -259,7 +261,7 @@ function RunLog({ events, startedAt }: { events: RunEvent[]; startedAt: number }
             <span className="report-icon">
               <Icon name={EVENT_ICON[event.kind]} />
             </span>
-            <span className="report-text">{event.label}</span>
+            <span className="report-text">{reportLine(event)}</span>
             {event.seconds !== null && <span className="report-cost">−{event.seconds}s</span>}
           </li>
         ))}

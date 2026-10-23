@@ -164,6 +164,7 @@ export function relayDefFor(
     id: 'notfall-relais',
     title: sabotage.label,
     hints: [],
+    nudges: [],
     lights: [],
     players: players.map((player) => ({ id: player.id, name: player.name })),
     windowSec: sabotage.windowSec,

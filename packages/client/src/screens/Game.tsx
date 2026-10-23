@@ -10,6 +10,8 @@ import type {
   RunEvent,
 } from '@escapelab/core';
 import { useKeys, useMedia, useNow } from '../hooks.js';
+import { appendBlock } from '../notes.js';
+import { NotepadContext, type NotepadHand } from '../noting.js';
 import {
   AFTER_SOLVE_MS,
   airIcon,
@@ -30,7 +32,13 @@ import {
   alarmNotice,
   type AlarmNotice,
 } from '../world/alarm.js';
-import { briefingCountdown, radioChirp } from '../world/audio.js';
+import {
+  briefingCountdown,
+  coverShut,
+  pencilScratch,
+  radioChirp,
+  sheetDown,
+} from '../world/audio.js';
 import { opensLit, REVEAL_MS, useDarkSince, useRevealed } from '../world/coldOpen.js';
 import { consoleName } from '../world/consoles.js';
 import { escapeChecklist, escaping, type Mate } from '../world/escape.js';
@@ -48,7 +56,8 @@ import { InfoPanel } from './InfoPanel.js';
 import { Manual } from './Manual.js';
 import { Notepad, useNotes } from './Notepad.js';
 import { PinnedNote } from './PinnedNote.js';
-import { ReadingOverlay } from './Reading.js';
+import { putDownKeys, usePutDown, type Over, type Shown } from './PutDown.js';
+import { lookOf, ReadingOverlay } from './Reading.js';
 import { WorldModal } from './WorldModal.js';
 
 interface Props {
@@ -420,6 +429,12 @@ const NOTHING_OPEN: Opened = {
 };
 
 /**
+ * What putting away what lies over the world closes: the station's panel, a source's pages, a
+ * note — never the notepad, which stays open beside the next source or device until hidden.
+ */
+export const NOTHING_OVER: Partial<Opened> = { operating: false, readingId: null, noteIndex: null };
+
+/**
  * What stays open as an emergency comes and goes. The moment one starts,
  * relay or valves, everything over the world closes: a book or a panel left
  * open would hide the alarm and keep the keys. When it ends, nothing comes
@@ -540,9 +555,10 @@ function useDeviceCoach(puzzle: PuzzleView): CoachMark | null {
 
 /**
  * The open station over the world: its device, which names it on its plate
- * and says on its LED strip who backs this player up — and, the first time,
- * the line that says what its controls do, under the Laborkennung's row,
- * where it covers neither the serial nor the device.
+ * and says on its LED strip who backs this player up and on its chassis how
+ * to step back — and, the first time, the line that says what its controls
+ * do, under the Laborkennung's row, where it covers neither the serial nor
+ * the device.
  */
 export function StationModal({
   puzzle,
@@ -551,7 +567,7 @@ export function StationModal({
   edgework,
   deadlineAt,
   send,
-  onClose,
+  onStepBack,
 }: {
   puzzle: PuzzleView;
   /** the run around the device: its alarms, the stations solved, the crew */
@@ -560,22 +576,23 @@ export function StationModal({
   edgework: PlayerView['edgework'];
   deadlineAt: number | null;
   send: (msg: ClientMessage) => void;
-  onClose: () => void;
+  onStepBack: () => void;
 }) {
   const coach = useDeviceCoach(puzzle);
   return (
-    <WorldModal
-      kind="station"
-      label={stationLabel(puzzle, map)}
-      edgework={edgework}
-      onClose={onClose}
-    >
+    <WorldModal kind="station" label={stationLabel(puzzle, map)} edgework={edgework}>
       {coach !== null && (
         <p className="station-coach" role="note">
           {coach.text}
         </p>
       )}
-      <PuzzlePanel puzzle={puzzle} run={run} send={send} deadlineAt={deadlineAt} />
+      <PuzzlePanel
+        puzzle={puzzle}
+        run={run}
+        send={send}
+        deadlineAt={deadlineAt}
+        onStepBack={onStepBack}
+      />
     </WorldModal>
   );
 }
@@ -871,8 +888,11 @@ function RunOverlays({ view, coldOpen }: { view: PlayerView; coldOpen: ColdOpen 
   );
 }
 
+/** What this player has open, as the screen keeps it (`useOpened`). */
+type OpenNow = ReturnType<typeof useOpened>;
+
 /** Escape closes what lies on top: the info panel, a panel, pages or a note, then the notepad. */
-function useEscapeCloses(open: ReturnType<typeof useOpened>, closeModal: () => void): void {
+function useEscapeCloses(open: OpenNow, closeModal: () => void): void {
   useEscape(() => {
     if (open.info) {
       open.set({ info: false });
@@ -882,6 +902,64 @@ function useEscapeCloses(open: ReturnType<typeof useOpened>, closeModal: () => v
       open.set({ notes: false });
     }
   });
+}
+
+/** What lies over the world: the station's device, a source's pages, a note; null for nothing. */
+function overOf(open: OpenNow): Over | null {
+  if (open.station !== null) {
+    return 'station';
+  }
+  if (open.reading !== null) {
+    return 'reading';
+  }
+  return open.note === null ? null : 'note';
+}
+
+/** A source's pages put down: a book's cover shuts, any other sheet clacks down. */
+function readingDown(manual: ManualHere): void {
+  if (lookOf(manual.kind) === 'book') {
+    coverShut();
+  } else {
+    sheetDown();
+  }
+}
+
+/**
+ * The source's pages and the note of the last crew over the world as they are put down: held
+ * a moment on their way out of view (PutDown.tsx), with the sound of it.
+ */
+function useSheets(open: OpenNow): {
+  reading: Shown<ManualHere> | null;
+  note: Shown<NoteHere> | null;
+} {
+  return { reading: usePutDown(open.reading, readingDown), note: usePutDown(open.note, sheetDown) };
+}
+
+/**
+ * The notepad as the game screen keeps it: the text (`useNotes`), whether N or a tab opened it
+ * — then it takes the keys — and the hand it holds out to a source or a device (noting.ts): a
+ * block taken down goes below the text with a pencil's scratch, the pad opening where it was
+ * shut without taking the keys from the page, and scrolling down to it.
+ */
+function useNotepad(roomCode: string | null, playerId: string, open: OpenNow) {
+  const notes = useNotes(roomCode, playerId);
+  const [focus, setFocus] = useState(true);
+  const [jump, setJump] = useState(0);
+  const toggle = (): void => {
+    setFocus(true);
+    open.toggleNotes();
+  };
+  const hand: NotepadHand = {
+    noteDown: (text) => {
+      notes.change(appendBlock(notes.text, text));
+      setFocus(false);
+      setJump((n) => n + 1);
+      open.set({ notes: true });
+      pencilScratch();
+    },
+    toggle,
+  };
+  return { notes, focus, jump, toggle, hand };
 }
 
 /**
@@ -906,8 +984,9 @@ export function deviceRunOf(view: PlayerView, refusals: number): DeviceRun {
 
 /**
  * The station's panel, a source's pages or a note of the last crew over the
- * world, as this player opened them; the panel hears of the run's alarms and
- * solves, of the crew and of what the server refused (`refusals`).
+ * world, as this player opened them — pages and note on their way down too,
+ * once put down; the panel hears of the run's alarms and solves, of the crew
+ * and of what the server refused (`refusals`).
  */
 function OverTheWorld({
   view,
@@ -922,8 +1001,8 @@ function OverTheWorld({
   view: PlayerView;
   map: MapView;
   station: PuzzleView | null;
-  reading: ManualHere | null;
-  note: NoteHere | null;
+  reading: Shown<ManualHere> | null;
+  note: Shown<NoteHere> | null;
   send: (msg: ClientMessage) => void;
   refusals: number;
   onClose: () => void;
@@ -939,51 +1018,116 @@ function OverTheWorld({
           edgework={view.edgework}
           deadlineAt={view.deadlineAt}
           send={send}
-          onClose={onClose}
+          onStepBack={onClose}
         />
       )}
       {reading !== null && (
         <ReadingOverlay
-          key={reading.id}
-          manual={reading}
+          key={reading.item.id}
+          manual={reading.item}
           puzzle={view.puzzle}
           current={view.currentPuzzleIndex}
           mission={view.missionTitle}
           map={map}
           edgework={view.edgework}
           onAskNote={() => send({ kind: 'request-hint' })}
-          onClose={onClose}
+          onPutDown={onClose}
+          leaving={reading.leaving}
         />
       )}
-      {note !== null && <PinnedNote note={note} edgework={view.edgework} onClose={onClose} />}
+      {note !== null && (
+        <PinnedNote
+          note={note.item}
+          edgework={view.edgework}
+          onPutDown={onClose}
+          leaving={note.leaving}
+        />
+      )}
     </>
+  );
+}
+
+/**
+ * The game's classes: while its end plays, the finale's; while the notepad stands beside
+ * something over the world, `game--noting`, which sets it as a strip of its own
+ * (styles/putdown.css).
+ */
+export function gameClass(finale: Finale | null, noting: boolean): string {
+  const ending = finale === null ? [] : ['game--finale', `game--${finale.ending.split(':')[0]}`];
+  return ['game', ...ending, ...(noting ? ['game--noting'] : [])].join(' ');
+}
+
+/**
+ * Whether the world takes no keys: while the end plays, the station's panel, pages or a note
+ * lie over it, the run is paused or the relay console holds them. Pages on their way down hold
+ * nothing: the player walks off at once.
+ */
+function worldLocked(view: PlayerView, open: OpenNow, station: PuzzleView | null, live: boolean) {
+  const relayUp = view.map?.sabotage?.relay !== undefined;
+  const over = station !== null || open.reading !== null || open.note !== null;
+  return !live || over || view.pausedFor !== null || relayUp;
+}
+
+/**
+ * The world as the running mission shows it to this player: the cold open, the end, the open
+ * station — and E at a source, a note or the station opens it over the world.
+ */
+function RunWorld({
+  game,
+  coldOpen,
+  station,
+  open,
+  holdTips,
+}: {
+  game: Props;
+  coldOpen: ColdOpen;
+  station: PuzzleView | null;
+  open: OpenNow;
+  holdTips: boolean;
+}) {
+  const { view, finale } = game;
+  return (
+    <GameWorld
+      view={view}
+      positionsRef={game.positionsRef}
+      dronesRef={game.dronesRef}
+      pingsRef={game.pingsRef}
+      chatsRef={game.chatsRef}
+      spectator={false}
+      darkSince={coldOpen.darkSince}
+      finale={finale === null ? null : { ending: finale.ending, since: finale.since }}
+      station={station}
+      holdTips={holdTips}
+      inputLocked={worldLocked(view, open, station, finale === null)}
+      onToggleInfo={open.toggleInfo}
+      onRead={(manualId) => open.set({ readingId: manualId })}
+      onReadNote={(index) => open.set({ noteIndex: index })}
+      onOperate={() => open.set({ operating: true })}
+      send={game.send}
+    />
   );
 }
 
 /**
  * The running mission. While its end plays in the world (`finale`), nothing
  * lies over the world any more, the controls are gone and the HUD fades,
- * until the veil closes over the screen.
+ * until the veil closes over the screen. The notepad stands beside whatever
+ * lies over the world, as a strip of its own (`gameClass`), and a source or
+ * a device hands it what is taken down (noting.ts); E, Esc or a step put a
+ * sheet down (PutDown.tsx).
  */
-export function GameScreen({
-  view,
-  roomCode,
-  positionsRef,
-  dronesRef,
-  pingsRef,
-  chatsRef,
-  send,
-  refusals,
-  finale,
-}: Props) {
+export function GameScreen(props: Props) {
+  const { view, roomCode, positionsRef, chatsRef, send, refusals, finale } = props;
   const { alarmVisible } = useFeedback(view);
   const coldOpen = useColdOpen(view);
   const notice = useNotices(view, coldOpen.gates);
   const open = useOpened(view);
   const station = useSolvedHold(open.station, view.currentPuzzleIndex);
-  const notes = useNotes(roomCode, view.you.id);
-  const closeModal = (): void => open.set({ operating: false, readingId: null, noteIndex: null });
-  useKeys(['n'], open.toggleNotes);
+  const sheets = useSheets(open);
+  const pad = useNotepad(roomCode, view.you.id, open);
+  const closeModal = (): void => open.set(NOTHING_OVER);
+  useKeys(['n'], pad.toggle);
+  useKeys(putDownKeys(overOf(open)), closeModal);
   useEscapeCloses(open, closeModal);
   const map = view.map;
   if (map === null) {
@@ -991,17 +1135,14 @@ export function GameScreen({
   }
   const relay = map.sabotage?.relay;
   const self = startingSpot(positionsRef.current, view.you.id, map, view.startedAt);
-  const missingLabel = coldOpen.dark ? goalOf(view, map, self).missing : null;
   const live = finale === null;
-  const ending = finale === null ? 'game' : `game game--finale game--${finale.ending.split(':')[0]}`;
-
+  const over = station !== null || sheets.reading !== null || sheets.note !== null;
   return (
-    <div className={ending}>
+    <div className={gameClass(finale, live && open.notes && over)}>
       {live && <RunOverlays view={view} coldOpen={coldOpen} />}
       {live && map.sabotage !== null && relay !== undefined && (
         <RelayAlert sabotage={map.sabotage} relay={relay} send={send} refusals={refusals} />
       )}
-
       <div className="stage">
         <StageTop
           view={view}
@@ -1012,61 +1153,48 @@ export function GameScreen({
           deviceOpen={live && station !== null}
           self={self}
         />
-        <GameWorld
-          view={view}
-          positionsRef={positionsRef}
-          dronesRef={dronesRef}
-          pingsRef={pingsRef}
-          chatsRef={chatsRef}
-          spectator={false}
-          darkSince={coldOpen.darkSince}
-          finale={finale === null ? null : { ending: finale.ending, since: finale.since }}
+        <RunWorld
+          game={props}
+          coldOpen={coldOpen}
           station={station}
+          open={open}
           holdTips={notice !== null}
-          inputLocked={
-            !live ||
-            station !== null ||
-            open.reading !== null ||
-            open.note !== null ||
-            view.pausedFor !== null ||
-            relay !== undefined
-          }
-          onToggleInfo={open.toggleInfo}
-          onRead={(manualId) => open.set({ readingId: manualId })}
-          onReadNote={(index) => open.set({ noteIndex: index })}
-          onOperate={() => open.set({ operating: true })}
-          send={send}
         />
         {live && open.notes && (
-          <Notepad notes={notes} edgework={view.edgework} onClose={() => open.set({ notes: false })} />
+          <Notepad
+            notes={pad.notes}
+            edgework={view.edgework}
+            focus={pad.focus}
+            jump={pad.jump}
+            onClose={() => open.set({ notes: false })}
+          />
         )}
       </div>
-
       {live && (
-        <OverTheWorld
-          view={view}
-          map={map}
-          station={station}
-          reading={open.reading}
-          note={open.note}
-          send={send}
-          refusals={refusals}
-          onClose={closeModal}
-        />
+        <NotepadContext value={pad.hand}>
+          <OverTheWorld
+            view={view}
+            map={map}
+            station={station}
+            reading={sheets.reading}
+            note={sheets.note}
+            send={send}
+            refusals={refusals}
+            onClose={closeModal}
+          />
+        </NotepadContext>
       )}
-
       <MissionHud
         view={view}
         positionsRef={positionsRef}
         chatsRef={chatsRef}
         // Until the click of the cold open the strip keeps quiet: the opener comes with the banner.
         onAir={notice?.kind === 'line' || !coldOpen.dark}
-        parts={missingLabel}
+        parts={coldOpen.dark ? goalOf(view, map, self).missing : null}
         notesOpen={open.notes}
-        onToggleNotes={open.toggleNotes}
+        onToggleNotes={pad.toggle}
         onOpenInfo={() => open.set({ info: true })}
       />
-
       {live && open.info && <InfoPanel view={view} onClose={() => open.set({ info: false })} />}
       {finale !== null && <FinaleVeil ending={finale.ending} since={finale.since} />}
     </div>

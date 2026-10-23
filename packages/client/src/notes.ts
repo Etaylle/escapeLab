@@ -61,3 +61,9 @@ export function appendLines(text: string, lines: string): string {
   }
   return `${text}\n${lines}`;
 }
+
+/** `text` with a noted block (noting.ts) below it, an empty line between the two. */
+export function appendBlock(text: string, block: string): string {
+  const kept = text.replace(/\s+$/, '');
+  return kept === '' ? block : `${kept}\n\n${block}`;
+}

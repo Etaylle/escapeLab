@@ -10,6 +10,7 @@ import {
   lightsAreOut,
   noteKey,
   noteSpot,
+  nudgeDueAt,
   puzzleDueAt,
   runReport,
   shutDoors,
@@ -124,6 +125,8 @@ export class Room {
   private lightsTimer: NodeJS.Timeout | null = null;
   /** ticks the open puzzle when something of it runs out on the clock: a sync press */
   private puzzleTimer: NodeJS.Timeout | null = null;
+  /** lets mission control speak up once the station that is up has stayed quiet */
+  private nudgeTimer: NodeJS.Timeout | null = null;
   /** the mission the host's yes on the end screen named for the next run; null: the same again */
   private next: Mission | null = null;
   private timer: NodeJS.Timeout | null = null;
@@ -134,15 +137,19 @@ export class Room {
   /** epoch ms since the room has had no connected players, null while occupied */
   emptySince: number | null = null;
 
-  /** `seed` pins the room's runs for a repeatable test: run n plays seed + n. */
+  /**
+   * `seed` pins the room's runs for a repeatable test: run n plays seed + n. `mission` comes
+   * scaled to `difficulty`, the one the room opens on.
+   */
   constructor(
     code: string,
     mission: Mission,
     private readonly onRunFinished: RunListener = () => undefined,
     seed: number | null = null,
+    difficulty: Difficulty = 'normal',
   ) {
     this.code = code;
-    this.state = initialState(mission, seed);
+    this.state = initialState(mission, seed, difficulty);
   }
 
   /** Add a new player (lobby only). Returns credentials for later resume. */
@@ -939,6 +946,30 @@ export class Room {
     );
   }
 
+  /**
+   * Mission control speaks up about a station left quiet: the room asks once `nudgeDueAt` has
+   * come — no input at either console for NUDGE_QUIET_MS — and the reducer puts the station's
+   * next line on the air. Armed afresh after every dispatch, so any input moves it on; none
+   * runs while paused, in an emergency or once the station's lines are said.
+   */
+  private reconcileNudge(): void {
+    if (this.nudgeTimer !== null) {
+      clearTimeout(this.nudgeTimer);
+      this.nudgeTimer = null;
+    }
+    const due = nudgeDueAt(this.state);
+    if (due === null) {
+      return;
+    }
+    this.nudgeTimer = setTimeout(
+      () => {
+        this.nudgeTimer = null;
+        this.dispatch({ type: 'nudge', at: Date.now() });
+      },
+      Math.max(0, due - Date.now()),
+    );
+  }
+
   /** Fixed-rate patrol simulation; only runs while a mission with drones is live in the dark. */
   private reconcileDroneTimer(): void {
     const map = this.state.mission.map;
@@ -990,6 +1021,7 @@ export class Room {
     this.reconcileTimer();
     this.reconcileLights();
     this.reconcilePuzzleClock();
+    this.reconcileNudge();
     this.reconcileDroneTimer();
     this.reconcileSabotage();
     this.reconcileRelayTick();
@@ -1047,6 +1079,10 @@ export class Room {
     if (this.puzzleTimer !== null) {
       clearTimeout(this.puzzleTimer);
       this.puzzleTimer = null;
+    }
+    if (this.nudgeTimer !== null) {
+      clearTimeout(this.nudgeTimer);
+      this.nudgeTimer = null;
     }
     if (this.positionsTimer !== null) {
       clearTimeout(this.positionsTimer);

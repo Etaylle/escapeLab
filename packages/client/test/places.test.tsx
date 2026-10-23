@@ -110,7 +110,7 @@ function read(
       map={lab}
       edgework={seen}
       onAskNote={noop}
-      onClose={noop}
+      onPutDown={noop}
     />,
   );
 }
@@ -459,9 +459,9 @@ describe('reading a wall chart', () => {
 });
 
 describe('the station frame', () => {
-  it('names the station to the dialog only, has a way out and no chip before the sign', () => {
+  it('names the station to the dialog only, has no window’s ✕ and no chip before the sign', () => {
     const html = renderToStaticMarkup(
-      <WorldModal kind="station" label="§1 — Notstrom" edgework={null} onClose={noop}>
+      <WorldModal kind="station" label="§1 — Notstrom" edgework={null}>
         <p>Pult</p>
       </WorldModal>,
     );
@@ -470,7 +470,9 @@ describe('the station frame', () => {
     );
     // The device's plate prints the name; the frame does not say it twice.
     expect(html).not.toContain('panel-label');
-    expect(html).toContain('aria-label="Schließen"');
+    // The device says on its chassis how to step back: the frame has no button of its own.
+    expect(html).not.toContain('<button');
+    expect(html).not.toContain('modal-head');
     expect(html).toContain('<p>Pult</p>');
     expect(html).not.toContain('edgework');
   });
@@ -524,7 +526,7 @@ describe('the station frame', () => {
         edgework={null}
         deadlineAt={null}
         send={noop}
-        onClose={noop}
+        onStepBack={noop}
       />,
     );
   }
@@ -603,7 +605,7 @@ describe('the station frame', () => {
         edgework={edgework}
         deadlineAt={null}
         send={noop}
-        onClose={noop}
+        onStepBack={noop}
       />,
     );
     const coach = '<p class="station-coach" role="note">Jeder Pfeil geht ein Feld; ';
@@ -612,7 +614,7 @@ describe('the station frame', () => {
     const at = (part: string): number => html.indexOf(part);
     expect(at('K7G3A-2')).toBeGreaterThan(-1);
     expect(at('K7G3A-2')).toBeLessThan(at(coach));
-    expect(at('✕</button></div>' + coach)).toBeGreaterThan(-1);
+    expect(at('</div></div>' + coach)).toBeGreaterThan(-1);
     expect(at(coach)).toBeLessThan(at('<div class="device device--maze">'));
     expect(html).not.toContain('coach--panel');
   });

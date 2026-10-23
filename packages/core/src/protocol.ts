@@ -52,6 +52,11 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
      * the server takes it only with ALLOW_SEED=1
      */
     seed: z.number().int().min(0).max(SEED_MAX).optional(),
+    /**
+     * the difficulty the room opens on: „entspannt" from a device that has seen no run won
+     * yet (client firstRun.ts); normal where left out
+     */
+    difficulty: z.enum(DIFFICULTIES).optional(),
   }),
   z.object({
     kind: z.literal('join-room'),

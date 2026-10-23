@@ -11,13 +11,17 @@ import {
   type ReadSection,
 } from './Book.js';
 import { Manual } from './Manual.js';
+import { PutDown, type PutDownVerb } from './PutDown.js';
 import { WorldModal } from './WorldModal.js';
+
+/** How a source reads: paper bound as a book or clipped to a board, a terminal, a wall chart. */
+export type Look = 'book' | 'clipboard' | 'terminal' | 'chart';
 
 /**
  * How a source reads: paper bound as a book or clipped to a board, a
  * terminal screen by screen, a wall chart all at once.
  */
-const LOOKS: Record<ManualKind, 'book' | 'clipboard' | 'terminal' | 'chart'> = {
+const LOOKS: Record<ManualKind, Look> = {
   book: 'book',
   clipboard: 'clipboard',
   locker: 'book',
@@ -25,6 +29,16 @@ const LOOKS: Record<ManualKind, 'book' | 'clipboard' | 'terminal' | 'chart'> = {
   terminal: 'terminal',
   chart: 'chart',
 };
+
+/** How a source of `kind` reads; a locker's and a cabinet's pages are bound as a book. */
+export function lookOf(kind: ManualKind): Look {
+  return LOOKS[kind];
+}
+
+/** How a source is put down: a book is shut, everything else laid down. */
+export function verbOf(look: Look): PutDownVerb {
+  return look === 'book' ? 'Zuklappen' : 'Weglegen';
+}
 
 /** Two pages side by side from this window width on. */
 const SPREAD_QUERY = '(min-width: 900px)';
@@ -86,7 +100,7 @@ function Terminal({ manual, puzzle, current, onAskNote }: SourceProps) {
             className={`terminal-body terminal-${progressOf(section, current)}`}
           >
             <SectionReader puzzle={puzzle} section={section} />
-            <Manual sections={section.manual} />
+            <Manual sections={section.manual} station={section} />
             <span className="terminal-cursor" aria-hidden="true" />
           </div>
           <nav className="terminal-nav" aria-label="Bildschirme">
@@ -115,7 +129,7 @@ function ChartSection({
       <div className="chart-text">
         <h3 className="chart-heading">{stationTitle(section)}</h3>
         <SectionReader puzzle={puzzle} section={section} />
-        <Manual sections={section.manual} />
+        <Manual sections={section.manual} station={section} />
       </div>
     </section>
   );
@@ -149,7 +163,9 @@ function Chart({ manual, puzzle, current, onAskNote }: SourceProps) {
  * set as the source is made — paper, screen or chart — with whatever the
  * open puzzle shows a reader on top of them (the maze's wall plan) and,
  * beside the open station's rules, the notes of the last crew. Paper opens
- * on a cover naming the mission and the room the source lies in.
+ * on a cover naming the mission and the room the source lies in. Its foot
+ * says how it is put down (PutDown.tsx), and once it is, it slides out of
+ * view (`leaving`).
  */
 export function ReadingOverlay({
   manual,
@@ -159,13 +175,16 @@ export function ReadingOverlay({
   map,
   edgework,
   onAskNote,
-  onClose,
+  onPutDown,
+  leaving = false,
 }: SourceProps & {
   /** the mission's title, for the seal on a cover */
   mission: string;
   map: Whereabouts;
   edgework: Edgework | null;
-  onClose: () => void;
+  onPutDown: () => void;
+  /** put down and on its way out of view */
+  leaving?: boolean;
 }) {
   const spread = useMedia(SPREAD_QUERY);
   const look = LOOKS[manual.kind];
@@ -177,7 +196,8 @@ export function ReadingOverlay({
       look={`reading-${look}`}
       label={manual.label}
       edgework={edgework}
-      onClose={onClose}
+      leaving={leaving}
+      foot={<PutDown verb={verbOf(look)} onPutDown={onPutDown} />}
     >
       {look === 'book' && <Book {...source} spread={spread} binding="bound" imprint={imprint} />}
       {look === 'clipboard' && (

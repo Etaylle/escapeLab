@@ -9,8 +9,11 @@ import { moduleFor, MODULES, type FieldSpec } from '../src/index.js';
  * disagrees with would change a mission the moment it is opened.
  */
 
-/** Keys every def carries, whatever its module: the editor's puzzle form has its own inputs. */
-const COMMON = ['type', 'id', 'title', 'hints', 'lights', 'onSolved', 'penaltySec'];
+/**
+ * Keys every def carries, whatever its module: the editor's puzzle form has its own inputs —
+ * and keeps `nudges` as the file has them.
+ */
+const COMMON = ['type', 'id', 'title', 'hints', 'nudges', 'lights', 'onSolved', 'penaltySec'];
 
 const stations = MODULES.flatMap((m) => (m.type === 'relay' ? [] : [moduleFor(m.type)]));
 

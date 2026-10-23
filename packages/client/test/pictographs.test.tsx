@@ -30,6 +30,7 @@ const KINDS: Record<RunEvent['kind'], string> = {
   find: 'Spind durchsucht: SPIND',
   power: 'Stromausfall',
   note: 'Notiz gelesen',
+  nudge: 'Die Betriebsanleitung liegt im Archiv.',
 };
 
 /** One line of every kind, a minute apart. */
@@ -182,7 +183,13 @@ describe('the screens around a run', () => {
       'search',
       'power',
       'note',
+      'radio',
     ]);
+    // Mission control speaking up unasked says so in the report, its line after it.
+    expect(won).toContain(
+      '<span class="report-text">Leitstelle meldet sich: ' +
+        'Die Betriebsanleitung liegt im Archiv.</span>',
+    );
     expect(iconsAsWords(won)).toContain('>[replay] Nochmal — ich bin dabei</button>');
     expect(iconsAsWords(lost)).toContain('>[check] Bereit für nochmal</button>');
   });

@@ -596,6 +596,82 @@ export function cabinetUnlock(): void {
 }
 
 /**
+ * A sheet put down, ~0.25 s: the paper's swish as it slides off, then the soft clack of the
+ * board or the stack meeting the table, with a mid layer a phone's small speaker still plays.
+ */
+export function sheetDown(): void {
+  try {
+    const audio = runningEngine();
+    if (audio === null) return;
+    const { ctx } = audio;
+    const t = ctx.currentTime + LOOKAHEAD;
+    const out = outlet(ctx, audio.master, FIND_LEVEL);
+    const swish = noiseBurst(ctx, t, 0.16);
+    const band = biquad(ctx, 'bandpass', 3200, 0.7);
+    band.frequency.setValueAtTime(3200, t);
+    band.frequency.exponentialRampToValueAtTime(1400, t + 0.16);
+    const swishLevel = gain(ctx, 0);
+    applyEnvelope(swishLevel.gain, t, { peak: 0.35, attack: 0.03, hold: 0.04, decay: 0.09 });
+    chain(swish, band, swishLevel, out);
+    const clack = tick(ctx, out, t + 0.16, 1300, 0.9);
+    const body = midKnock(ctx, out, t + 0.16, 0.07, 0.6);
+    onAllEnded([swish, clack, body], () => out.disconnect());
+  } catch {
+    // Deliberately silent: the sheet goes down on screen as well.
+  }
+}
+
+/**
+ * A book shut, ~0.3 s: the rush of air as the cover swings over the pages, then the dull clap
+ * of cover on block — a low thump and its mid layer.
+ */
+export function coverShut(): void {
+  try {
+    const audio = runningEngine();
+    if (audio === null) return;
+    const { ctx } = audio;
+    const t = ctx.currentTime + LOOKAHEAD;
+    const out = outlet(ctx, audio.master, FIND_LEVEL);
+    const rush = lowNoise(ctx, out, t, 0.18, 900);
+    const clap = tone(ctx, out, {
+      type: 'sine',
+      at: t + 0.18,
+      from: 150,
+      to: 70,
+      peak: 0.8,
+      attack: 0.002,
+      hold: 0,
+      decay: 0.12,
+    });
+    const body = midKnock(ctx, out, t + 0.18, 0.08, 0.7);
+    onAllEnded([rush, clap, body], () => out.disconnect());
+  } catch {
+    // Deliberately silent: the book shuts on screen as well.
+  }
+}
+
+/** A pencil taking a block down, ~0.3 s: three quick strokes of graphite on paper. */
+export function pencilScratch(): void {
+  try {
+    const audio = runningEngine();
+    if (audio === null) return;
+    const { ctx } = audio;
+    const t = ctx.currentTime + LOOKAHEAD;
+    const out = outlet(ctx, audio.master, CHIRP_LEVEL);
+    const strokes = [0, 0.09, 0.19].map((after) => {
+      const stroke = noiseBurst(ctx, t + after, 0.07);
+      const level = gain(ctx, 0);
+      applyEnvelope(level.gain, t + after, { peak: 0.5, attack: 0.008, hold: 0.03, decay: 0.03 });
+      chain(stroke, biquad(ctx, 'bandpass', rand(3800, 5200), 2), level, out);
+      return stroke;
+    });
+    onAllEnded(strokes, () => out.disconnect());
+  } catch {
+    // Deliberately silent: the notepad shows the lines as well.
+  }
+}
+
+/**
  * Mission control keying the radio, ~0.2 s: a crackle of static, then the press-to-talk key's
  * click going down and up, squeezed into a handset's narrow band. No tone in it: a line that
  * follows a solve comes over the solve's chord, and nothing pitched may clash with that. Only

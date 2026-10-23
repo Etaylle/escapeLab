@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import {
   SEED_MAX,
   type ClientMessage,
+  type Difficulty,
   type MissionInfo,
   type MissionStats,
   type RoomSummary,
 } from '@escapelab/core';
+import { FIRST_RUN_HINT, firstDifficulty, isTutorial, useWon } from '../firstRun.js';
 import { localStore } from '../notes.js';
 import { recordLine } from '../runStats.js';
 import { crewSizeText } from './Crew.js';
@@ -70,15 +72,17 @@ function useKeptName(): [string, (name: string) => void] {
 
 /**
  * The message that opens a room for `missionId`, or for the server's first
- * mission where none is picked. A tester pins the room to a seed with
- * `?seed=<n>` in the page's address (`search`), so that its runs repeat; a
- * value that is no whole number from 0 to SEED_MAX is left out, and the
- * lobby then shows no seed.
+ * mission where none is picked, on `difficulty` where one is given — a first
+ * run's „entspannt" (firstRun.ts) — and on normal where not. A tester pins the
+ * room to a seed with `?seed=<n>` in the page's address (`search`), so that
+ * its runs repeat; a value that is no whole number from 0 to SEED_MAX is left
+ * out, and the lobby then shows no seed.
  */
 export function createRoomMessage(
   name: string,
   missionId: string | null,
   search: string,
+  difficulty: Difficulty | null = null,
 ): ClientMessage {
   const asked = new URLSearchParams(search).get('seed') ?? '';
   const seed = /^\d{1,10}$/.test(asked) && Number(asked) <= SEED_MAX ? Number(asked) : null;
@@ -87,6 +91,7 @@ export function createRoomMessage(
     name,
     ...(missionId === null ? {} : { missionId }),
     ...(seed === null ? {} : { seed }),
+    ...(difficulty === null ? {} : { difficulty }),
   };
 }
 
@@ -145,17 +150,21 @@ function RoomRow({
 /**
  * One mission to pick: its map, its name and one line of facts. The picked
  * one also spells out its subtitle; on the others it is the tooltip. Once
- * the mission has been played, a line says its best time and win rate.
+ * the mission has been played, a line says its best time and win rate. The
+ * tutorial's card carries a label stuck on its edge while this device has
+ * seen no run won (`first`): „Erster Einsatz? Hier starten".
  */
-function MissionCard({
+export function MissionCard({
   mission,
   stats,
   selected,
+  first = false,
   onSelect,
 }: {
   mission: MissionInfo;
   stats: MissionStats | undefined;
   selected: boolean;
+  first?: boolean;
   onSelect: () => void;
 }) {
   const record = recordLine(stats?.difficulties ?? []);
@@ -166,6 +175,7 @@ function MissionCard({
       title={mission.subtitle}
       onClick={onSelect}
     >
+      {first && <span className="mission-first">{FIRST_RUN_HINT}</span>}
       <MapThumb tiles={mission.tiles} height={64} />
       <span className="mission-text">
         <span className="mission-title">{mission.title}</span>
@@ -180,6 +190,126 @@ function MissionCard({
   );
 }
 
+/** What the two sections under the room list need of the join screen. */
+interface SectionProps {
+  send: Props['send'];
+  connected: boolean;
+  /** the name as typed, trimmed: nothing goes out under an empty one */
+  name: string;
+}
+
+/**
+ * „Neue Runde eröffnen": every mission as a card — the tutorial's pointing a first crew at it
+ * — the button that opens a room for the picked one, on the first-run difficulty where this
+ * device has won no run yet (firstRun.ts), and the ways to its booklet, its Bestenliste and
+ * the editor.
+ */
+function NewRound({
+  send,
+  connected,
+  name,
+  missions,
+  stats,
+  openHandbook,
+  openHistory,
+  openEditor,
+}: SectionProps &
+  Pick<Props, 'missions' | 'stats' | 'openHandbook' | 'openHistory' | 'openEditor'>) {
+  const [missionId, setMissionId] = useState<string | null>(null);
+  const won = useWon();
+  const selected = missionId ?? missions[0]?.id ?? null;
+  const open = (): void =>
+    send(createRoomMessage(name, selected, window.location.search, firstDifficulty(won)));
+  return (
+    <section className="join-create">
+      <h2>Neue Runde eröffnen</h2>
+      {missions.length > 0 ? (
+        <div className="mission-grid">
+          {missions.map((m) => (
+            <MissionCard
+              key={m.id}
+              mission={m}
+              stats={stats.find((s) => s.missionId === m.id)}
+              selected={selected === m.id}
+              first={!won && isTutorial(m)}
+              onSelect={() => setMissionId(m.id)}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="muted">Lade Missionen …</p>
+      )}
+      <div className="join-create-actions">
+        <button className="primary" disabled={!connected || name === ''} onClick={open}>
+          Runde eröffnen
+        </button>
+        {selected !== null && (
+          <button
+            title="Die Regeln dieser Mission lesen und ausdrucken"
+            onClick={() => openHandbook(selected)}
+          >
+            <Icon name="book" /> Handbuch
+          </button>
+        )}
+        {selected !== null && (
+          <button
+            title="Die schnellsten Crews jeder Mission, zum Ansehen und Ausdrucken"
+            onClick={() => openHistory(selected)}
+          >
+            <Icon name="podium" /> Bestenliste
+          </button>
+        )}
+        {openEditor !== undefined && (
+          <button
+            title="Eine eigene Mission bauen oder eine vorhandene abwandeln"
+            onClick={openEditor}
+          >
+            <Icon name="pencil" /> Editor
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * „Mit Code": a room's code to join or watch it by. An invite link carries the room in
+ * ?room=, so the field is already filled and all that is left to do is type a name.
+ */
+function WithCode({ send, connected, name }: SectionProps) {
+  const [code, setCode] = useState(
+    () => new URLSearchParams(window.location.search).get('room')?.toUpperCase() ?? '',
+  );
+  return (
+    <section className="join-join">
+      <h2>Mit Code</h2>
+      <p className="muted">Wenn ihr euch direkt verabredet habt:</p>
+      <div className="join-with-code">
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          maxLength={10}
+          placeholder="CODE"
+          aria-label="Raumcode"
+        />
+        <button
+          disabled={!connected || name === '' || code.trim().length === 0}
+          onClick={() => send({ kind: 'join-room', code: code.trim(), name })}
+        >
+          Beitreten
+        </button>
+      </div>
+      <button
+        className="link"
+        disabled={!connected || code.trim().length === 0}
+        onClick={() => send({ kind: 'spectate', code: code.trim() })}
+      >
+        <Icon name="eye" /> Mit Code zuschauen
+      </button>
+    </section>
+  );
+}
+
 export function JoinScreen({
   send,
   connected,
@@ -191,14 +321,7 @@ export function JoinScreen({
   openEditor,
 }: Props) {
   const [name, setName] = useKeptName();
-  // An invite link carries the room in ?room=, so the code field is already
-  // filled and all that is left to do is type a name.
-  const [code, setCode] = useState(
-    () => new URLSearchParams(window.location.search).get('room')?.toUpperCase() ?? '',
-  );
-  const [missionId, setMissionId] = useState<string | null>(null);
   const nameOk = name.trim().length > 0;
-  const selected = missionId ?? missions[0]?.id ?? null;
 
   // Keep the room browser fresh while nobody has joined anything yet.
   useEffect(() => {
@@ -212,6 +335,7 @@ export function JoinScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected]);
 
+  const section = { send, connected, name: name.trim() };
   return (
     <div className="card join">
       <h1>
@@ -260,86 +384,15 @@ export function JoinScreen({
       )}
 
       <div className="join-grid">
-        <section className="join-create">
-          <h2>Neue Runde eröffnen</h2>
-          {missions.length > 0 ? (
-            <div className="mission-grid">
-              {missions.map((m) => (
-                <MissionCard
-                  key={m.id}
-                  mission={m}
-                  stats={stats.find((s) => s.missionId === m.id)}
-                  selected={selected === m.id}
-                  onSelect={() => setMissionId(m.id)}
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="muted">Lade Missionen …</p>
-          )}
-          <div className="join-create-actions">
-            <button
-              className="primary"
-              disabled={!connected || !nameOk}
-              onClick={() =>
-                send(createRoomMessage(name.trim(), selected, window.location.search))
-              }
-            >
-              Runde eröffnen
-            </button>
-            {selected !== null && (
-              <button
-                title="Die Regeln dieser Mission lesen und ausdrucken"
-                onClick={() => openHandbook(selected)}
-              >
-                <Icon name="book" /> Handbuch
-              </button>
-            )}
-            {selected !== null && (
-              <button
-                title="Die schnellsten Crews jeder Mission, zum Ansehen und Ausdrucken"
-                onClick={() => openHistory(selected)}
-              >
-                <Icon name="podium" /> Bestenliste
-              </button>
-            )}
-            {openEditor !== undefined && (
-              <button
-                title="Eine eigene Mission bauen oder eine vorhandene abwandeln"
-                onClick={openEditor}
-              >
-                <Icon name="pencil" /> Editor
-              </button>
-            )}
-          </div>
-        </section>
-
-        <section className="join-join">
-          <h2>Mit Code</h2>
-          <p className="muted">Wenn ihr euch direkt verabredet habt:</p>
-          <div className="join-with-code">
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              maxLength={10}
-              placeholder="CODE"
-              aria-label="Raumcode"
-            />
-            <button
-              disabled={!connected || !nameOk || code.trim().length === 0}
-              onClick={() => send({ kind: 'join-room', code: code.trim(), name: name.trim() })}
-            >
-              Beitreten
-            </button>
-          </div>
-          <button
-            className="link"
-            disabled={!connected || code.trim().length === 0}
-            onClick={() => send({ kind: 'spectate', code: code.trim() })}
-          >
-            <Icon name="eye" /> Mit Code zuschauen
-          </button>
-        </section>
+        <NewRound
+          {...section}
+          missions={missions}
+          stats={stats}
+          openHandbook={openHandbook}
+          openHistory={openHistory}
+          {...(openEditor === undefined ? {} : { openEditor })}
+        />
+        <WithCode {...section} />
       </div>
     </div>
   );

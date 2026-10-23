@@ -1,9 +1,23 @@
 {
+  "0f5fc55560ac": {
+    "text": "Der Hebel hängt im Leitstand an der Nordwand, rechts.",
+    "ms": 2923,
+    "missions": [
+      "systemcheck"
+    ]
+  },
   "1c32b49724ca": {
     "text": "Notausgang offen, Schleusenmitte. Alle vier hin.",
     "ms": 3021,
     "missions": [
       "doppelschicht"
+    ]
+  },
+  "22e3445b4e0f": {
+    "text": "Der Hebel hängt mitten im Flur, unter der roten Lampe.",
+    "ms": 2865,
+    "missions": [
+      "blackout"
     ]
   },
   "22f2d6d8fa13": {
@@ -41,6 +55,13 @@
       "kettenreaktion"
     ]
   },
+  "39bb2dd90a32": {
+    "text": "Die Kabelprüfung steht in der Kontrolle, hinter der Tür im Westen.",
+    "ms": 3609,
+    "missions": [
+      "systemcheck"
+    ]
+  },
   "3d87fba381b2": {
     "text": "Notausgang offen, Westende vom Flur. Alle drei hin.",
     "ms": 3451,
@@ -53,6 +74,27 @@
     "ms": 1999,
     "missions": [
       "systemcheck"
+    ]
+  },
+  "410fa7b4f1db": {
+    "text": "Das Funkpult steht im Labor in der Südwestecke, der Aktenschrank im selben Raum.",
+    "ms": 4572,
+    "missions": [
+      "blackout"
+    ]
+  },
+  "514882928eec": {
+    "text": "Der Schlüssel zum Aktenschrank liegt im Serverraum, Nordostecke.",
+    "ms": 3748,
+    "missions": [
+      "blackout"
+    ]
+  },
+  "541974721b5f": {
+    "text": "Pult A steht im Flur Richtung Osten, Pult B im Maschinenraum in der Südostecke.",
+    "ms": 4563,
+    "missions": [
+      "blackout"
     ]
   },
   "554fb3da99be": {
@@ -69,6 +111,13 @@
       "blackout"
     ]
   },
+  "57d12207b63b": {
+    "text": "Rechts oben im Leitstand: das Pult mit den zwei Griffen.",
+    "ms": 3299,
+    "missions": [
+      "systemcheck"
+    ]
+  },
   "5a3d8ef8e235": {
     "text": "Spulen offen. Platte halten, dann beide nach Osten.",
     "ms": 3113,
@@ -83,6 +132,13 @@
       "doppelschicht"
     ]
   },
+  "63cdf4675bd4": {
+    "text": "Terminal an der Westwand, Rack an der Ostwand des Serverraums.",
+    "ms": 3527,
+    "missions": [
+      "blackout"
+    ]
+  },
   "6b1eb79786bd": {
     "text": "Notstrom zuerst: Kasten im Ostflügel, Regeln im Südwesten.",
     "ms": 4159,
@@ -95,6 +151,27 @@
     "ms": 2998,
     "missions": [
       "blackout"
+    ]
+  },
+  "703a8c5dbbc4": {
+    "text": "Die Kontrolltür hält die Platte im Leitstand, gleich davor.",
+    "ms": 3296,
+    "missions": [
+      "systemcheck"
+    ]
+  },
+  "71afff6e7ceb": {
+    "text": "Aus dem Archiv führt die Tür im Süden in den Flur.",
+    "ms": 2533,
+    "missions": [
+      "blackout"
+    ]
+  },
+  "73933c60c0d5": {
+    "text": "Beide Pulte stehen im Leitstand an der Südwand, links und rechts.",
+    "ms": 3819,
+    "missions": [
+      "systemcheck"
     ]
   },
   "7c8343fceedc": {
@@ -118,11 +195,25 @@
       "blackout"
     ]
   },
+  "922917db41dc": {
+    "text": "Das Klemmbrett zur Signalkette liegt im Flur, an der Südwand.",
+    "ms": 3445,
+    "missions": [
+      "blackout"
+    ]
+  },
   "98a1c7721011": {
     "text": "Notstrom steht, die Tür bleibt offen. Zwei Pulte: Flur und Maschinenraum.",
     "ms": 4809,
     "missions": [
       "blackout"
+    ]
+  },
+  "99a657bba489": {
+    "text": "Die Spulen liegen ganz im Osten, hinter dem offenen Schott.",
+    "ms": 3214,
+    "missions": [
+      "systemcheck"
     ]
   },
   "9f5039973bf5": {
@@ -132,6 +223,13 @@
       "doppelschicht"
     ]
   },
+  "a0c512e51c63": {
+    "text": "Die Unterlagen liegen im Spind neben der Kontrolltür.",
+    "ms": 2843,
+    "missions": [
+      "systemcheck"
+    ]
+  },
   "a242523a34e9": {
     "text": "Speicherkern an die Schleusenwand, Schaltplan im Nordwesten.",
     "ms": 3474,
@@ -139,11 +237,46 @@
       "doppelschicht"
     ]
   },
+  "a6a1432b2ce3": {
+    "text": "Die Unterlagen zum Serverraum liegen im Spind dort, zwischen Terminal und Rack.",
+    "ms": 4341,
+    "missions": [
+      "blackout"
+    ]
+  },
   "a7a4fd0abde0": {
     "text": "Funkpult im Ostflügel, Ostwand. Regeln im Südwesten.",
     "ms": 3705,
     "missions": [
       "doppelschicht"
+    ]
+  },
+  "a99fbbce28e5": {
+    "text": "Die Unterlagen liegen im Spind, oben links im Leitstand.",
+    "ms": 3306,
+    "missions": [
+      "systemcheck"
+    ]
+  },
+  "b3dcc40d5ffc": {
+    "text": "Prüfpult im Flur ganz im Westen, Kasten hinter der Plattentür im Maschinenraum.",
+    "ms": 4471,
+    "missions": [
+      "blackout"
+    ]
+  },
+  "b4d59a86c9ea": {
+    "text": "Schalter und Sicherungsplatz sitzen im Reaktor an der Ostwand.",
+    "ms": 3381,
+    "missions": [
+      "blackout"
+    ]
+  },
+  "cf0ece1c4bd9": {
+    "text": "Die Betriebsanleitung für den Notstrom liegt im Archiv.",
+    "ms": 3133,
+    "missions": [
+      "blackout"
     ]
   },
   "d58fe355c8dc": {
@@ -158,6 +291,13 @@
     "ms": 3794,
     "missions": [
       "doppelschicht"
+    ]
+  },
+  "e113af9b437d": {
+    "text": "Die Ersatzsicherung liegt im Archiv, in der Südostecke.",
+    "ms": 3272,
+    "missions": [
+      "blackout"
     ]
   },
   "e1d3987483fe": {

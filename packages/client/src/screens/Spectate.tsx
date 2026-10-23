@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { PlayerPosition, DronePosition, SpectatorView } from '@escapelab/core';
 import type { DeviceRun } from '../puzzles/Device.js';
+import { reportLine } from '../radio.js';
 import { useVoice } from '../voice/useVoice.js';
 import { alarmNotice } from '../world/alarm.js';
 import { useDarkSince } from '../world/coldOpen.js';
@@ -142,7 +143,7 @@ function SpectatePanels({ view }: { view: SpectatorView }) {
             {feed.map((event, i) => (
               <li key={`${event.at}-${i}`} className={`ticker-${event.kind}`}>
                 <span className="ticker-time">{elapsed(view.startedAt, event.at)}</span>
-                {event.label}
+                {reportLine(event)}
                 {event.seconds !== null ? ` (−${event.seconds}s)` : ''}
               </li>
             ))}

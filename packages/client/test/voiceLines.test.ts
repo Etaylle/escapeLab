@@ -82,6 +82,24 @@ describe('the lines the script reads', () => {
     expect(radioTexts({ id: 'quiet', puzzles: [{}] })).toEqual([]);
   });
 
+  it('takes every line a nudge sends, the station’s own, before the line of its solve', () => {
+    // The reducer's other source of mission control's lines: `nudge` logs a station's nudges.
+    const actions = readFileSync(new URL('../../core/src/actions.ts', import.meta.url), 'utf8');
+    expect(actions).toMatch(/\.nudges\[state\.nudgesGiven\]/);
+    expect(actions).toMatch(/logEvent\(spoken, 'nudge', line, at\)/);
+    const mission = {
+      id: 'probe',
+      puzzles: [{ nudges: ['Hier.', 'Dort.'], onSolved: 'Eins.' }, { nudges: ['Weiter.'] }],
+    };
+    expect(radioTexts(mission)).toEqual(['Hier.', 'Dort.', 'Eins.', 'Weiter.']);
+    const blackout = shippedMissions().find((m) => m.id === 'blackout');
+    const nudges = (blackout?.puzzles ?? []).flatMap((p) => p.nudges ?? []);
+    expect(nudges).toHaveLength(12);
+    for (const line of nudges) {
+      expect(shippedLines().get(line), line).toEqual(['blackout']);
+    }
+  });
+
   it('reads every shipped mission', () => {
     const ids = shippedMissions().map((mission) => mission.id);
     expect(ids).toEqual(

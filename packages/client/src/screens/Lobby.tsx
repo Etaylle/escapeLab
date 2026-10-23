@@ -7,6 +7,7 @@ import {
   type MissionStats,
   type PlayerView,
 } from '@escapelab/core';
+import { FIRST_RUN_LINE, useWon } from '../firstRun.js';
 import { fullscreenForRun } from '../runScreen.js';
 import { recordParts } from '../runStats.js';
 import { crewSizeText } from './Crew.js';
@@ -113,10 +114,18 @@ interface LevelsProps {
   current: Difficulty;
   /** the host's pick; null for everyone else, who only sees it */
   pick: ((id: Difficulty) => void) | null;
+  /**
+   * the host's device has seen no run won yet: the room opened on „entspannt" for a first
+   * crew (firstRun.ts), and while it stays on it, a muted line says so
+   */
+  firstRun?: boolean;
 }
 
-/** The difficulty as three chips: the host picks one, everyone else sees which. */
-function Levels({ current, pick }: LevelsProps) {
+/**
+ * The difficulty as three chips: the host picks one, everyone else sees which. A host on a
+ * first run is told why „entspannt" stands picked.
+ */
+export function Levels({ current, pick, firstRun = false }: LevelsProps) {
   const levels = difficultyInfos();
   return (
     <div className="lobby-levels">
@@ -145,6 +154,9 @@ function Levels({ current, pick }: LevelsProps) {
       <p className="muted lobby-level-note">
         {levels.find((level) => level.id === current)?.description}
       </p>
+      {firstRun && current === 'entspannt' && (
+        <p className="muted lobby-first-run">{FIRST_RUN_LINE}</p>
+      )}
     </div>
   );
 }
@@ -361,6 +373,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
   const info = missions.find((m) => m.id === view.missionId);
   const [more, setMore] = useState(false);
   const host = view.you.isHost;
+  const won = useWon();
   // The host picks among the missions where everyone else sees the map.
   const picker =
     host && missions.length > 1 ? (
@@ -383,6 +396,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
         <Levels
           current={view.difficulty}
           pick={host ? (difficulty) => send({ kind: 'select-difficulty', difficulty }) : null}
+          firstRun={host && !won}
         />
         <MicSetup />
         <StartArea view={view} send={send} />

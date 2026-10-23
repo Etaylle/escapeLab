@@ -1,0 +1,398 @@
+/* ══ putting things down, writing while reading, a first crew ═══════════════
+ * PutDown.tsx, NoteButton.tsx, Notepad.tsx in its strip, the device's foot in
+ * puzzles/Device.tsx, the first-run lines of Lobby.tsx and Join.tsx. Nothing
+ * read on the spot has a window's ✕: its foot says how it is put down, a tab
+ * at the board's edge does it on a touch screen, and once put down it slides
+ * out of view in 220 ms (PutDown.tsx PUT_DOWN_MS) — a book shuts as it goes.
+ * The notepad stands beside a source or a device as a strip of its own, the
+ * right third of the window, on a phone a drawer from the bottom.
+ */
+
+:root {
+  --note-strip: clamp(260px, 33.333vw, 520px);
+  --note-drawer: 42vh;
+}
+
+/* ── the foot of a sheet: „[E] Weglegen", or a tab on a touch screen ────── */
+
+.put-down {
+  flex: none;
+  display: flex;
+  justify-content: center;
+}
+
+.put-down-caption {
+  padding: 2px 12px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: rgba(243, 234, 211, 0.72);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+}
+
+.put-down-caption:hover:not(:disabled) {
+  box-shadow: none;
+  color: var(--paper);
+}
+
+.put-down-tabs {
+  display: none;
+  gap: 12px;
+}
+
+/* A card tab sticking up at the board's edge, a thumb wide. */
+.put-down-tab {
+  min-width: 132px;
+  min-height: 42px;
+  padding: 9px 18px 7px;
+  border: none;
+  border-radius: 12px 12px 4px 4px;
+  background: linear-gradient(180deg, #ecdfbd, #cdb88a);
+  color: #3b2f1c;
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -2px 0 rgba(90, 64, 26, 0.35),
+    0 6px 14px rgba(0, 0, 0, 0.55);
+}
+
+.put-down-tab--notes {
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 9px, rgba(35, 63, 120, 0.2) 9px 10px),
+    #faf4e2;
+  color: var(--ink-blue);
+}
+
+/* ── the way back from a device, on its chassis ──────────────────────────── */
+
+/* Engraved in the foot, between the face and the status strip. */
+.device-foot {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.device-step-back {
+  min-height: 0;
+  padding: 0 8px;
+  border: none;
+  background: none;
+  color: var(--engrave);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.6);
+}
+
+.device-step-back:hover:not(:disabled) {
+  box-shadow: none;
+  color: #c9d2da;
+}
+
+/* On a touch screen: a steel tab hanging under the chassis' lower edge. */
+.device-tabs {
+  display: none;
+  position: absolute;
+  left: 50%;
+  bottom: -20px;
+  gap: 10px;
+  transform: translateX(-50%);
+}
+
+.device-tab {
+  min-width: 132px;
+  min-height: 36px;
+  padding: 10px 16px 6px;
+  border: none;
+  border-radius: 0 0 10px 10px;
+  background: linear-gradient(180deg, #161d24, #3a4754);
+  color: #d5dce2;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  box-shadow:
+    inset 0 -1px 0 rgba(255, 255, 255, 0.14),
+    0 0 0 1px #05080b,
+    0 8px 14px rgba(0, 0, 0, 0.6);
+}
+
+.device-tab--notes {
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 9px, rgba(35, 63, 120, 0.2) 9px 10px),
+    #faf4e2;
+  color: var(--ink-blue);
+}
+
+/* Keys or a finger: the caption where there are keys, the tabs under a thumb. */
+@media (pointer: coarse) {
+  .put-down-caption,
+  .device-step-back {
+    display: none;
+  }
+
+  .put-down-tabs,
+  .device-tabs {
+    display: flex;
+  }
+
+  .device-foot {
+    margin-top: 0;
+  }
+
+  /* Room under the chassis for its tab, inside the box that scrolls. */
+  .puzzle-modal.station-modal .panel {
+    padding-bottom: 32px;
+  }
+}
+
+/* ── put down: the sheet slides out of view, a book shuts ────────────────── */
+
+.puzzle-modal.puzzle-modal--leaving {
+  overflow: hidden;
+  animation: put-down-dim 220ms ease-in forwards;
+}
+
+.puzzle-modal--leaving .panel {
+  animation: put-down-slide 220ms cubic-bezier(0.5, 0, 0.9, 0.6) forwards;
+}
+
+.reading-book.puzzle-modal--leaving .book-leaves {
+  transform-origin: 50% 50%;
+  animation: put-down-shut 220ms ease-in forwards;
+}
+
+@keyframes put-down-dim {
+  to {
+    background-color: rgba(4, 7, 10, 0);
+  }
+}
+
+@keyframes put-down-slide {
+  to {
+    transform: translateY(105%);
+  }
+}
+
+/* The cover swings over the pages: the open spread folds to the spine. */
+@keyframes put-down-shut {
+  to {
+    transform: scaleX(0.5);
+  }
+}
+
+/* Less motion: nothing slides or shuts (PutDown.tsx holds nothing then either). */
+@media (prefers-reduced-motion: reduce) {
+  .puzzle-modal.puzzle-modal--leaving,
+  .puzzle-modal--leaving .panel,
+  .reading-book.puzzle-modal--leaving .book-leaves {
+    animation: none;
+  }
+}
+
+/* ── the notepad beside a source or a device: a strip of its own ─────────── */
+
+/* What lies over the world keeps the left two thirds; the relay console keeps the window. */
+.game--noting .puzzle-modal:not(.relay-modal) {
+  right: var(--note-strip);
+}
+
+.game--noting .notepad {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: auto;
+  width: var(--note-strip);
+  margin: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) 0;
+  border-radius: 0;
+  box-shadow:
+    -14px 0 30px rgba(0, 0, 0, 0.55),
+    inset 1px 0 0 rgba(0, 0, 0, 0.35);
+}
+
+.game--noting .notepad-text {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+/* A phone: the pad comes up from the bottom as a drawer, the page above it. */
+@media (max-width: 560px) {
+  .game--noting .puzzle-modal:not(.relay-modal) {
+    right: 0;
+    bottom: var(--note-drawer);
+  }
+
+  .game--noting .notepad {
+    top: auto;
+    left: 0;
+    width: auto;
+    height: var(--note-drawer);
+    margin: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)
+      env(safe-area-inset-left, 0px);
+    border-radius: 12px 12px 0 0;
+    box-shadow:
+      0 -14px 30px rgba(0, 0, 0, 0.55),
+      inset 0 1px 0 rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* ── „Notieren": a rules list or a table into the notepad ────────────────── */
+
+.note-down {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 0;
+  padding: 3px 9px;
+  border: 1px solid rgba(35, 63, 120, 0.4);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.4);
+  color: var(--ink-blue);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.note-down:hover:not(:disabled) {
+  border-color: var(--ink-blue);
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.note-down--done {
+  border-color: rgba(21, 128, 61, 0.55);
+  color: #15803d;
+}
+
+.note-down .icon {
+  flex: none;
+  font-size: 1.15em;
+}
+
+/* Off a book's page: the control stands over the block, at its right. */
+.noted {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+/* The block keeps the room it had without the control: no margin of its own in the wrapper. */
+.noted > * {
+  margin: 0;
+}
+
+.noted > :not(.note-down) {
+  align-self: stretch;
+}
+
+/*
+ * On a book's page it takes no room the pagination counts (pages.ts): out of
+ * the flow, level with the top of its block, in the outer margin — the page's
+ * 3 em beside the text column — a pencil mark with the word set upright.
+ */
+.page .noted {
+  display: block;
+}
+
+.page .note-down {
+  position: absolute;
+  right: 0.4em;
+  flex-direction: column;
+  gap: 0.25em;
+  width: 3.2em;
+  padding: 0.45em 0 0.55em;
+  border-radius: 0.5em;
+  font-size: 0.62em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.page-left .note-down {
+  right: auto;
+  left: 0.4em;
+}
+
+.page .note-down-word {
+  writing-mode: vertical-rl;
+}
+
+/* On the terminal's glass, in its phosphor. */
+.terminal .note-down {
+  border-color: rgba(141, 240, 180, 0.5);
+  background: transparent;
+  color: #8df0b4;
+  font-family: var(--mono);
+}
+
+.terminal .note-down:hover:not(:disabled) {
+  border-color: #8df0b4;
+  background: rgba(141, 240, 180, 0.08);
+}
+
+/* On the Serverraum terminal's bezel: a key among its keys. */
+.servers-bezel .note-down {
+  min-height: 34px;
+  border: 0;
+  background: linear-gradient(180deg, #2b343c, #1a2127);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.5),
+    0 2px 0 #06090b,
+    0 3px 4px rgba(0, 0, 0, 0.5);
+  color: #cfe9d6;
+  font-family: var(--mono);
+  font-weight: 400;
+}
+
+.servers-bezel .note-down--done {
+  color: #86efac;
+}
+
+/* ── the run report: mission control speaking up unasked ─────────────────── */
+
+.report-nudge .report-text,
+.report-nudge .report-icon,
+.spectate-log .ticker li.ticker-nudge {
+  color: #5ab4ac;
+}
+
+/* ── a first crew: the lobby's default, the tutorial's card ──────────────── */
+
+.lobby-first-run {
+  margin: 6px 0 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--accent-dark);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+/* A label stuck on the tutorial's card, over its top edge. */
+.mission {
+  position: relative;
+}
+
+.mission-first {
+  position: absolute;
+  top: -9px;
+  right: 12px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: #fde68a;
+  color: #2a2006;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  transform: rotate(1.5deg);
+}

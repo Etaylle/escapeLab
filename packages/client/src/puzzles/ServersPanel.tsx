@@ -10,6 +10,8 @@ import {
   type ServerRow,
   type Service,
 } from '@escapelab/core';
+import { notedHead, notedText, type NotableBlock } from '../noting.js';
+import { NoteButton } from '../screens/NoteButton.js';
 import { consoleName } from '../world/consoles.js';
 import { DeviceLamp } from './Device.js';
 import { cssVars, reject, type Change } from './feel.js';
@@ -154,6 +156,15 @@ function Link({ name, manned }: { name: string; manned: boolean }) {
 
 /** A row's status as the table prints it: RUNNING, or FEHLER and its code. */
 const statusOf = (row: ServerRow): string => (row.running ? 'RUNNING' : `FEHLER ${row.code ?? ''}`);
+
+/** The terminal's status table as the notepad takes it down: a row a service, as printed. */
+export function terminalTable(rows: readonly ServerRow[]): NotableBlock {
+  return {
+    kind: 'table',
+    head: ['Dienst', 'Status', 'Strom'],
+    rows: rows.map((row) => [serviceName(row.service), statusOf(row), row.power ? 'AN' : 'AUS']),
+  };
+}
 
 /**
  * The status table: every service with its status and its power, as the
@@ -300,7 +311,8 @@ function blipOn(event: KeyboardEvent<HTMLInputElement>): void {
  * and sends it with ⏎. A line it cannot read it answers itself — the prompt
  * shakes — and sends nothing; `status` prints the table anew. The prompt never takes the
  * keyboard by itself and lets go of it once a line is sent, so that V
- * talks. The RACK lamp on its bezel burns while somebody stands at the rack.
+ * talks. The RACK lamp on its bezel burns while somebody stands at the rack, and beside it
+ * „Notieren" takes the table down into the notepad as it stands.
  */
 function Terminal(props: {
   puzzle: ServersPuzzle;
@@ -375,6 +387,7 @@ function Terminal(props: {
       <div className="servers-bezel">
         <Keys put={(word) => setLine((now) => withWord(now, word))} />
         <Link name="RACK" manned={otherManned(puzzle)} />
+        <NoteButton text={notedText(notedHead(puzzle, 'Terminal'), terminalTable(rows))} />
       </div>
     </form>
   );

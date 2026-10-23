@@ -6,6 +6,8 @@ import {
   type MissionInfo,
   type MissionStats,
 } from '@escapelab/core';
+import { firstDifficulty, hasWon, useWonMark } from './firstRun.js';
+import { localStore } from './notes.js';
 import { STATS_PATH, useJson } from './runStats.js';
 import { useRunScreen } from './runScreen.js';
 import { useVoiceMesh, VoiceContext } from './voice/useVoice.js';
@@ -226,7 +228,8 @@ function useTestRun(conn: Connection) {
       setRun({ code: null });
       // The lobby's invite link is made from the address: the plain one, not the editor's.
       replacePath('/');
-      conn.send(createRoomMessage(name, missionId, window.location.search));
+      const difficulty = firstDifficulty(hasWon(localStore()));
+      conn.send(createRoomMessage(name, missionId, window.location.search, difficulty));
     },
     back: (): void => {
       mirrorRun(sessionStore(), null);
@@ -425,6 +428,8 @@ export function App({ boot }: { boot: EditorBoot }) {
   const contentRef = useRef<HTMLElement>(null);
   // How the run ended, on this screen: the world plays it before the end screen opens.
   const finale = useFinale(conn.view ?? conn.spectatorView);
+  // A run won on this device ends its first-run default (firstRun.ts).
+  useWonMark(conn.view?.phase ?? null);
   const immersive = useStage(conn, finale);
   // Which mission is running, for the header. The lobby already has it as its
   // headline, so naming it twice there would be noise.

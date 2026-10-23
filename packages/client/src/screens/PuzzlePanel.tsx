@@ -15,6 +15,8 @@ interface PuzzlePanelProps {
   run: DeviceRun;
   send: (msg: ClientMessage) => void;
   deadlineAt: number | null;
+  /** steps back from the device, as its chassis offers; none for the audience */
+  onStepBack?: (() => void) | null;
 }
 
 /**
@@ -27,7 +29,7 @@ export function PuzzlePanel(props: PuzzlePanelProps) {
   return <StationDevice key={props.puzzle.index} {...props} />;
 }
 
-function StationDevice({ puzzle, run, send, deadlineAt }: PuzzlePanelProps) {
+function StationDevice({ puzzle, run, send, deadlineAt, onStepBack = null }: PuzzlePanelProps) {
   // PANELS and SOUNDS are keyed by kind, so the entries for this kind take exactly this puzzle.
   const ModulePanel = PANELS[puzzle.kind] as Panel<PuzzleView['kind']>;
   const sounds = (SOUNDS[puzzle.kind] ?? null) as ChangeSounds | null;
@@ -40,6 +42,7 @@ function StationDevice({ puzzle, run, send, deadlineAt }: PuzzlePanelProps) {
       solved={feel.solved}
       press={feel.press}
       notice={notice}
+      onStepBack={onStepBack}
     >
       <ModulePanel
         puzzle={puzzle}

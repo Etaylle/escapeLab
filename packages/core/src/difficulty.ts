@@ -22,6 +22,8 @@ interface Scaling {
   sabotageDuration: number;
   /** alarms that end the run where the mission sets no limit of its own; null for none */
   maxAlarms: number | null;
+  /** mission control names the next place when a station stays quiet (`puzzles[].nudges`) */
+  nudges: boolean;
 }
 
 const SCALING: Record<Difficulty, Scaling> = {
@@ -35,6 +37,7 @@ const SCALING: Record<Difficulty, Scaling> = {
     sabotageGap: 1.5,
     sabotageDuration: 1.3,
     maxAlarms: null,
+    nudges: true,
   },
   normal: {
     label: 'Normal',
@@ -46,6 +49,7 @@ const SCALING: Record<Difficulty, Scaling> = {
     sabotageGap: 1,
     sabotageDuration: 1,
     maxAlarms: 5,
+    nudges: true,
   },
   hart: {
     label: 'Hart',
@@ -57,6 +61,7 @@ const SCALING: Record<Difficulty, Scaling> = {
     sabotageGap: 0.7,
     sabotageDuration: 0.85,
     maxAlarms: 3,
+    nudges: false,
   },
 };
 
@@ -70,8 +75,13 @@ export function difficultyInfos(): { id: Difficulty; label: string; description:
 
 const atLeast = (value: number, min = 1): number => Math.max(min, Math.round(value));
 
-function scalePuzzle(puzzle: PuzzleDef, factor: number): PuzzleDef {
-  const scaled = { ...puzzle, penaltySec: atLeast(puzzle.penaltySec * factor, 5) };
+function scalePuzzle(puzzle: PuzzleDef, s: Scaling): PuzzleDef {
+  const factor = s.penalty;
+  const scaled = {
+    ...puzzle,
+    penaltySec: atLeast(puzzle.penaltySec * factor, 5),
+    nudges: s.nudges ? puzzle.nudges : [],
+  };
   // A burnt-out box costs its own price, and that is a penalty like any other.
   if ('burnoutSec' in scaled) {
     return { ...scaled, burnoutSec: atLeast(scaled.burnoutSec * factor, 5) };
@@ -80,8 +90,8 @@ function scalePuzzle(puzzle: PuzzleDef, factor: number): PuzzleDef {
 }
 
 /**
- * Returns a copy of `mission` with every difficulty-dependent number scaled
- * and its alarm limit set.
+ * Returns a copy of `mission` with every difficulty-dependent number scaled,
+ * its alarm limit set — and, on „hart", mission control's nudges taken away.
  */
 export function scaleMission(mission: Mission, difficulty: Difficulty): Mission {
   const s = SCALING[difficulty];
@@ -96,7 +106,7 @@ export function scaleMission(mission: Mission, difficulty: Difficulty): Mission 
     maxAlarms,
     timeLimitSec: atLeast(mission.timeLimitSec * s.time, 60),
     hintCostSec: atLeast(mission.hintCostSec * s.penalty, 5),
-    puzzles: mission.puzzles.map((puzzle) => scalePuzzle(puzzle, s.penalty)),
+    puzzles: mission.puzzles.map((puzzle) => scalePuzzle(puzzle, s)),
     map: {
       ...map,
       drones: map.drones.map((drone) => ({

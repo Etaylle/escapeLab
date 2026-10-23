@@ -22,18 +22,36 @@ export interface BookSection {
   reader: boolean;
 }
 
-/** What a page holds, in reading order. */
+/**
+ * What a page holds, in reading order: a station's title, a heading, the printed blocks — a
+ * rules list or a table perhaps only in part — and the open puzzle's plan. A block of a kind
+ * core adds later comes along as it is, measured and set as a paragraph.
+ */
 export type Fragment =
   | { kind: 'title'; text: string }
   | { kind: 'heading'; text: string }
-  | { kind: 'p'; text: string }
   // `start` numbers the first item as counted over the whole list
   | { kind: 'rules'; items: string[]; start: number }
-  | { kind: 'table'; head: string[]; rows: string[][] }
-  | { kind: 'columns'; columns: string[][] }
-  | { kind: 'example'; title: string; lines: string[] }
-  | { kind: 'figure'; of: string; caption: string }
+  | Exclude<ManualBlock, { kind: 'rules' }>
   | { kind: 'reader' };
+
+/** What a block of a kind this client does not know says, as one paragraph: its words in order. */
+export function blockText(block: object): string {
+  const words: string[] = [];
+  const collect = (value: unknown): void => {
+    if (typeof value === 'string') {
+      words.push(value);
+    } else if (Array.isArray(value)) {
+      value.forEach(collect);
+    }
+  };
+  for (const [key, value] of Object.entries(block)) {
+    if (key !== 'kind') {
+      collect(value);
+    }
+  }
+  return words.join(' ');
+}
 
 export interface BookPage {
   /** the station the page belongs to, by index into the sections; null for the cover */
@@ -195,6 +213,8 @@ function heightOf(fragment: Fragment, width: number): number {
       return FIGURE + textHeight(fragment.caption, width, CAPTION);
     case 'reader':
       return READER;
+    default:
+      return textHeight(blockText(fragment), width, BODY);
   }
 }
 

@@ -58,6 +58,8 @@ export type Action =
   | { type: 'puzzle-tick'; at: number }
   /** a note of the last crew, asked for at a manual object that covers the open puzzle */
   | { type: 'request-hint'; playerId: string; at: number }
+  /** once `nudgeDueAt` has come: mission control names the next place for the station up */
+  | { type: 'nudge'; at: number }
   | { type: 'set-occupancy'; plates: string[]; panels: string[] }
   /**
    * who stands at which station spot (by `stationKey`), manual object and
@@ -132,6 +134,8 @@ export function applyAction(state: GameState, action: Action): GameState {
       return tickPuzzle(state, action.at);
     case 'request-hint':
       return requestHint(state, action);
+    case 'nudge':
+      return nudge(state, action.at);
     case 'set-occupancy':
       return state.phase === 'playing'
         ? {
@@ -390,12 +394,16 @@ function initPuzzleState(state: GameState, index: number, at: number): PuzzleSta
   return moduleFor(def.type).init(def, rng, puzzleContext(state, at, null));
 }
 
-/** Put a puzzle on the consoles; its first note is held back for a while. */
+/**
+ * Put a puzzle on the consoles; its first note is held back for a while, and switching it on
+ * is the station's first input: mission control's quiet clock starts over.
+ */
 function openPuzzle(state: GameState, index: number, at: number): GameState {
   return creditReaders({
     ...state,
     puzzleState: initPuzzleState(state, index, at),
     hintReadyAt: at + state.mission.hintDelaySec * 1000,
+    quietSince: at,
   });
 }
 
@@ -512,6 +520,8 @@ function startMission(
     hintsUsed: 0,
     hintsRevealed: 0,
     hintReadyAt: null,
+    quietSince: null,
+    nudgesGiven: 0,
   };
   // Without an intro the lights are out from the start, and nobody sees them fail.
   return intro === undefined ? clockStarts(started, action.at) : started;
@@ -532,13 +542,18 @@ function lightsOut(state: GameState, at: number): GameState {
   return clockStarts(logEvent(state, 'power', POWER_OUT, at), at);
 }
 
-/** From `at` on the lights are out and the clock runs; mission control opens the run. */
+/**
+ * From `at` on the lights are out and the clock runs; mission control opens the run, and the
+ * first station, up from now, is quiet from now.
+ */
 function clockStarts(state: GameState, at: number): GameState {
   const running: GameState = {
     ...state,
     lightsOutAt: at,
     lightsDueAt: null,
     deadlineAt: at + state.mission.timeLimitSec * 1000,
+    quietSince: at,
+    nudgesGiven: 0,
   };
   return logRadio(running, state.mission.radio.start, at);
 }
@@ -577,7 +592,14 @@ export function inEscapePhase(state: GameState): boolean {
 function advance(state: GameState, at: number): GameState {
   const solved = state.mission.puzzles[state.currentPuzzleIndex];
   const reported = logEvent(
-    { ...state, hintsRevealed: 0, hintReadyAt: null, readersCredited: [] },
+    {
+      ...state,
+      hintsRevealed: 0,
+      hintReadyAt: null,
+      readersCredited: [],
+      quietSince: null,
+      nudgesGiven: 0,
+    },
     'puzzle',
     `${solved?.title ?? 'Station'} gelöst`,
     at,
@@ -608,8 +630,8 @@ function advance(state: GameState, at: number): GameState {
       at,
     );
   }
-  // The next puzzle waits at its station.
-  return { ...logged, currentPuzzleIndex: nextIndex, puzzleState: null };
+  // The next puzzle waits at its station, quiet from now.
+  return { ...logged, currentPuzzleIndex: nextIndex, puzzleState: null, quietSince: at };
 }
 
 /** Dispatched by the server once every connected player stands in the exit zone. */
@@ -719,11 +741,24 @@ function startSabotage(state: GameState, action: { at: number }): GameState {
   );
 }
 
+/**
+ * Mission control's quiet clock once an emergency is over, at `at`: the crew comes back to the
+ * station that is up, which is quiet from then on — none where no station is up.
+ */
+function quietAfterEmergency(state: GameState, at: number): number | null {
+  return state.quietSince === null ? null : at;
+}
+
 /** The emergency is over in time: the crew can get back to the stations. */
 function clearSabotage(state: GameState, at: number): GameState {
   return state.sabotage === null
     ? state
-    : logEvent({ ...state, sabotage: null }, 'sabotage', EMERGENCY_CLEARED, at);
+    : logEvent(
+        { ...state, sabotage: null, quietSince: quietAfterEmergency(state, at) },
+        'sabotage',
+        EMERGENCY_CLEARED,
+        at,
+      );
 }
 
 /** The relay emergency's def; rebuilt from the game whenever needed, never stored. */
@@ -827,6 +862,7 @@ function setPaused(state: GameState, action: { paused: boolean; at: number }): G
     deadlineAt: later(state.deadlineAt, frozen),
     sabotage: state.sabotage === null ? null : shiftSabotage(state.sabotage, frozen),
     hintReadyAt: later(state.hintReadyAt, frozen),
+    quietSince: later(state.quietSince, frozen),
   };
 }
 
@@ -841,7 +877,7 @@ function expireSabotage(state: GameState, action: { at: number }): GameState {
     return state;
   }
   return applyPenalty(
-    { ...state, sabotage: null },
+    { ...state, sabotage: null, quietSince: quietAfterEmergency(state, action.at) },
     sabotage.penaltySec,
     action.at,
     EMERGENCY_MISSED,
@@ -887,7 +923,8 @@ function handlePuzzleInput(
     player.id,
     puzzleContext(state, action.at, from),
   );
-  const next = { ...state, puzzleState: result.state };
+  // Any move the station takes, right or wrong, starts mission control's quiet clock over.
+  const next = { ...state, puzzleState: result.state, quietSince: action.at };
   if (result.penalty !== null) {
     const blamed = credited(next, player.id, 'alarms');
     return applyPenalty(blamed, result.penaltySec ?? def.penaltySec, action.at, result.penalty);
@@ -980,6 +1017,52 @@ function requestHint(state: GameState, action: { playerId: string; at: number })
     hintCostSec,
   );
   return action.at >= deadlineAt ? lostNow(helped, action.at) : helped;
+}
+
+/**
+ * How long the station that is up may stay quiet before mission control names the next place,
+ * in ms: no input at either console, from when it came up, was switched on or last worked.
+ */
+export const NUDGE_QUIET_MS = 90_000;
+
+/** What the run report calls mission control speaking up unasked; its line follows. */
+export const NUDGED = 'Leitstelle meldet sich';
+
+/**
+ * When mission control next speaks up about the station that is up, epoch ms: NUDGE_QUIET_MS
+ * after it went quiet, while the mission has a line left for it — the second only after
+ * another quiet spell. Null between stations, in an emergency, while paused, outside a run,
+ * once its lines are said and where the mission has none (on „hart" `scaleMission` takes them
+ * away).
+ */
+export function nudgeDueAt(state: GameState): number | null {
+  const def = state.mission.puzzles[state.currentPuzzleIndex];
+  if (
+    state.phase !== 'playing' ||
+    state.paused !== null ||
+    state.sabotage !== null ||
+    state.quietSince === null ||
+    def === undefined ||
+    state.nudgesGiven >= def.nudges.length
+  ) {
+    return null;
+  }
+  return state.quietSince + NUDGE_QUIET_MS;
+}
+
+/**
+ * Mission control speaks up once `nudgeDueAt` has come: the station's next line goes on the
+ * air, logged as a `nudge`, and the quiet clock starts over for the one after it. Nothing
+ * before it is due — the room only asks then.
+ */
+function nudge(state: GameState, at: number): GameState {
+  const due = nudgeDueAt(state);
+  const line = state.mission.puzzles[state.currentPuzzleIndex]?.nudges[state.nudgesGiven];
+  if (due === null || at < due || line === undefined) {
+    return state;
+  }
+  const spoken = { ...state, nudgesGiven: state.nudgesGiven + 1, quietSince: at };
+  return logEvent(spoken, 'nudge', line, at);
 }
 
 /** Guards shared by all three item actions; proximity is the server's job. */
@@ -1272,5 +1355,7 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     hintsUsed: 0,
     hintsRevealed: 0,
     hintReadyAt: null,
+    quietSince: null,
+    nudgesGiven: 0,
   };
 }

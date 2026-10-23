@@ -1,4 +1,4 @@
-import type { Mission, RoomSummary } from '@escapelab/core';
+import type { Difficulty, Mission, RoomSummary } from '@escapelab/core';
 import { Room, type RunListener } from './room.js';
 
 /** Room codes avoid ambiguous characters (0/O, 1/I/L). */
@@ -38,11 +38,11 @@ export class RoomManager {
   ) {}
 
   /**
-   * A new room for `mission`. Where seeds are allowed, `seed` pins its runs
-   * (run n plays seed + n); elsewhere the room rolls every run anew, and the
-   * log says the seed went unused.
+   * A new room for `mission`, already scaled to `difficulty`, which it opens on. Where seeds
+   * are allowed, `seed` pins its runs (run n plays seed + n); elsewhere the room rolls every
+   * run anew, and the log says the seed went unused.
    */
-  create(mission: Mission, seed: number | null = null): Room {
+  create(mission: Mission, seed: number | null = null, difficulty: Difficulty = 'normal'): Room {
     const code = this.freshCode();
     const pinned = this.allowSeed ? seed : null;
     if (seed !== null && pinned === null) {
@@ -52,7 +52,7 @@ export class RoomManager {
     } else if (pinned !== null) {
       console.log(`[escapelab] room ${code}: pinned to seed ${pinned}, run n plays seed + n`);
     }
-    const room = new Room(code, mission, this.onRunFinished, pinned);
+    const room = new Room(code, mission, this.onRunFinished, pinned, difficulty);
     this.rooms.set(code, room);
     return room;
   }

@@ -13,13 +13,14 @@ type Tab = 'auftrag' | 'karte' | 'steuerung';
 const CONTROLS: readonly (readonly [string, string])[] = [
   ['W A S D / Pfeile', 'Laufen'],
   ['E', 'Bedienen, lesen, durchsuchen, aufschließen, aufnehmen oder einsetzen'],
-  ['Esc', 'Pult, Lesen oder Notizblock verlassen'],
+  ['E oder ein Schritt beim Lesen', 'Weglegen, ein Buch zuklappen'],
+  ['Esc', 'Zurücktreten, weglegen, Notizblock einstecken'],
   ['← → beim Lesen', 'Blättern'],
   ['Q', 'Getragenes Objekt ablegen — so sind Übergaben möglich'],
   ['Klick auf die Welt', 'Ping für alle setzen'],
   ['C, dann 1–8', 'Schnellchat'],
   ['V halten', 'Sprechen — das Mikrofon wird in der Lobby aktiviert'],
-  ['N', 'Notizblock — bleibt für diesen Raum gespeichert'],
+  ['N', 'Notizblock — auch neben Buch und Pult, bleibt für diesen Raum gespeichert'],
   ['M', 'Minikarte ein- und ausblenden'],
   ['I oder H', 'Dieses Info-Fenster'],
 ];

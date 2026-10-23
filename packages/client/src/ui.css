@@ -780,7 +780,7 @@ button.link:hover {
   box-shadow: 0 0 0 1px var(--accent-dark), 0 30px 80px rgba(0, 0, 0, 0.7);
 }
 
-/* Label and edgework on the left, wrapping where narrow; the way out stays top right. */
+/* Label and edgework, wrapping where narrow; the way out is at the foot (styles/putdown.css). */
 .modal-head {
   display: flex;
   align-items: flex-start;
@@ -791,15 +791,6 @@ button.link:hover {
   flex: 1;
   min-width: 0;
   min-height: 36px;
-}
-
-.modal-close {
-  flex: none;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  font-size: 16px;
-  line-height: 1;
 }
 
 /* ── a crew member's colour as a dot ────────────────────────────────────── */
@@ -2339,11 +2330,6 @@ button.link:hover {
 .notepad-head button:hover:not(:disabled) {
   border-color: var(--ink);
   box-shadow: none;
-}
-
-.notepad-head .notepad-close {
-  width: 28px;
-  padding: 4px 0;
 }
 
 /* Ruled paper; the lines scroll along with the text. */

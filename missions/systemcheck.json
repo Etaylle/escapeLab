@@ -76,6 +76,10 @@
       "type": "button-sync",
       "id": "init",
       "title": "Initialisierung",
+      "nudges": [
+        "Der Hebel hängt im Leitstand an der Nordwand, rechts.",
+        "Rechts oben im Leitstand: das Pult mit den zwei Griffen."
+      ],
       "style": "lever",
       "windowMs": 3000,
       "lights": ["LEITSTAND"],
@@ -85,6 +89,10 @@
       "type": "signal",
       "id": "signalprobe",
       "title": "Signalprobe",
+      "nudges": [
+        "Beide Pulte stehen im Leitstand an der Südwand, links und rechts.",
+        "Die Unterlagen liegen im Spind, oben links im Leitstand."
+      ],
       "stages": 2,
       "length": 3,
       "hints": [
@@ -97,6 +105,10 @@
       "type": "wiring",
       "id": "doppelbestaetigung",
       "title": "Kabelprüfung",
+      "nudges": [
+        "Die Kabelprüfung steht in der Kontrolle, hinter der Tür im Westen.",
+        "Die Unterlagen liegen im Spind neben der Kontrolltür."
+      ],
       "wires": { "min": 3, "max": 3 },
       "hints": [
         "Kabel von oben gezählt; nur die Liste für 3 Kabel gilt, die erste zutreffende Regel entscheidet."
@@ -108,6 +120,10 @@
       "type": "button-sync",
       "id": "synchronkalibrierung",
       "title": "Synchronkalibrierung",
+      "nudges": [
+        "Die Spulen liegen ganz im Osten, hinter dem offenen Schott.",
+        "Die Kontrolltür hält die Platte im Leitstand, gleich davor."
+      ],
       "lights": ["SPULEN"],
       "windowMs": 3000
     }

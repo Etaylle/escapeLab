@@ -5,12 +5,16 @@ import {
   airIcon,
   bannerFrom,
   followsSolve,
+  fromControl,
   NEWS_MS,
   noticeMs,
   radioNews,
+  reportLine,
+  voiced,
   withNews,
   type Notice,
 } from '../src/radio.js';
+import { tickerLine } from '../src/screens/MissionHud.js';
 
 const NOW = 1_700_000_000_000;
 
@@ -69,9 +73,35 @@ describe('radioNews — which lines get a banner', () => {
   it('puts the last crew’s note beside a note asked for or read, the radio beside the rest', () => {
     expect(airIcon(event('hint', 0))).toBe('note');
     expect(airIcon(event('note', 0))).toBe('note');
-    for (const kind of ['radio', 'find', 'puzzle', 'penalty'] as const) {
+    for (const kind of ['radio', 'nudge', 'find', 'puzzle', 'penalty'] as const) {
       expect(airIcon(event(kind, 0))).toBe('radio');
     }
+  });
+});
+
+describe('mission control speaking up unasked (a nudge)', () => {
+  const nudge = event('nudge', 500, 'Die Betriebsanleitung liegt im Archiv.');
+
+  it('goes on the air like any of its lines: a banner from the Leitstelle, spoken', () => {
+    expect(labels(radioNews([event('puzzle', 900), nudge], 0, NOW))).toEqual([nudge.label]);
+    expect(bannerFrom(nudge)).toBe('LEITSTELLE');
+    expect(fromControl(nudge)).toBe(true);
+    expect(voiced(nudge)).toBe(true);
+    expect(voiced(event('hint', 0))).toBe(false);
+    // Unasked, it holds nothing back: it follows no solve.
+    expect(followsSolve([nudge], 0)).toBe(false);
+  });
+
+  it('says in the run report that the Leitstelle spoke up, its line after it', () => {
+    expect(reportLine(nudge)).toBe(`Leitstelle meldet sich: ${nudge.label}`);
+    expect(reportLine(event('radio', 0, 'Strom weg.'))).toBe('Strom weg.');
+  });
+
+  it('reads on the HUD’s radio strip as the Leitstelle’s', () => {
+    expect(tickerLine(nudge, undefined, false)).toEqual({
+      icon: 'radio',
+      text: 'Leitstelle: Die Betriebsanleitung liegt im Archiv.',
+    });
   });
 });
 

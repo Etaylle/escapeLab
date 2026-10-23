@@ -91,6 +91,11 @@ export interface DraftPuzzle {
   title: string;
   /** up to three; empty ones are left out of the file */
   hints: string[];
+  /**
+   * mission control's lines for a station left quiet, up to two; the form shows none, and
+   * the file keeps what it had
+   */
+  nudges: string[];
   lights: string[];
   /** '' for none */
   onSolved: string;
@@ -305,6 +310,7 @@ export function newPuzzle(type: StationType, taken: Iterable<string>): DraftPuzz
     id: freeId(slugOf(title), taken),
     title,
     hints: [],
+    nudges: [],
     lights: [],
     onSolved: '',
     penaltySec: null,
@@ -387,6 +393,7 @@ function puzzleJson(puzzle: DraftPuzzle): Record<string, unknown> {
     ...fieldsToJson(fieldSpecs(puzzle.type), puzzle.fields),
     ...(puzzle.penaltySec === null ? {} : { penaltySec: puzzle.penaltySec }),
     hints: puzzle.hints.filter((hint) => hint.trim() !== ''),
+    ...(puzzle.nudges.length === 0 ? {} : { nudges: [...puzzle.nudges] }),
     lights: [...puzzle.lights],
     ...given('onSolved', puzzle.onSolved),
   };
@@ -485,6 +492,7 @@ interface LoosePuzzle {
   id: string;
   title: string;
   hints?: string[] | undefined;
+  nudges?: string[] | undefined;
   lights?: string[] | undefined;
   onSolved?: string | undefined;
   penaltySec?: number | undefined;
@@ -559,6 +567,7 @@ const COMMON_KEYS: ReadonlySet<string> = new Set([
   'id',
   'title',
   'hints',
+  'nudges',
   'lights',
   'onSolved',
   'penaltySec',
@@ -602,6 +611,7 @@ function puzzleOf(puzzle: LoosePuzzle): DraftPuzzle {
     id: puzzle.id,
     title: puzzle.title,
     hints: [...(puzzle.hints ?? [])],
+    nudges: [...(puzzle.nudges ?? [])],
     lights: [...(puzzle.lights ?? [])],
     onSolved: puzzle.onSolved ?? '',
     penaltySec: puzzle.penaltySec ?? null,

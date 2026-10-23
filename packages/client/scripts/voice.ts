@@ -6,7 +6,8 @@
  *
  * Every line a shipped mission (missions/*.json) can put on the air: all core's `logRadio`
  * (core/src/actions.ts) is ever handed — `radio.start` as the clock starts, every
- * `puzzles[].onSolved` as its station is solved, `radio.escape` as the hatch unlocks. Each is
+ * `puzzles[].onSolved` as its station is solved, `radio.escape` as the hatch unlocks — and
+ * every `puzzles[].nudges` line its `nudge` sends while a station stays quiet. Each is
  * read by the Mac's voice VOICE at RATE words a minute (`say`), the pauses its dashes, middle
  * dots and colons ask for put in (`speechText`), squeezed to AAC at BITRATE (`afconvert`) into
  * public/voice/<the first 12 hex digits of the line's SHA-1>.m4a, and listed in
@@ -52,7 +53,7 @@ export const MANIFEST_FILE = join(VOICE_DIR, 'manifest.json');
 export interface MissionLines {
   readonly id: string;
   readonly radio?: { readonly start?: string; readonly escape?: string };
-  readonly puzzles: readonly { readonly onSolved?: string }[];
+  readonly puzzles: readonly { readonly onSolved?: string; readonly nudges?: readonly string[] }[];
 }
 
 /** One recorded line: what it says, how long it speaks, ms, and the missions that say it. */
@@ -62,11 +63,14 @@ export interface Entry {
   missions: string[];
 }
 
-/** Every line `mission` can put on the air, in the order a run hears them. */
+/**
+ * Every line `mission` can put on the air, in the order a run hears them: the start, then for
+ * each station the nudges it may get while it is up and the line its solve brings, the escape.
+ */
 export function radioTexts(mission: MissionLines): string[] {
   const lines = [
     mission.radio?.start,
-    ...mission.puzzles.map((puzzle) => puzzle.onSolved),
+    ...mission.puzzles.flatMap((puzzle) => [...(puzzle.nudges ?? []), puzzle.onSolved]),
     mission.radio?.escape,
   ];
   return lines.filter((line): line is string => line !== undefined && line.trim() !== '');

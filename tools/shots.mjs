@@ -108,6 +108,24 @@
  * has to log it read for nothing, or the run fails. A map without notes
  * skips it.
  *
+ * A first crew: the host's device has won no run, so the join screen labels
+ * the tutorial's card „Erster Einsatz? Hier starten" and the room it opens
+ * stands on „entspannt", the lobby saying why (lobby-first.png); the host
+ * picks „Normal", which the walkthrough plays. The editor's, the Serverraum's
+ * and the art tour's pages stand for devices that have won a run before.
+ *
+ * Writing while reading: each player reads an open source — a clipboard
+ * first — brings the notepad up beside it (N, or its tab on the guest's
+ * phone) and takes a block down with „Notieren" (reading-notepad.png,
+ * reading-notepad-phone.png); at the first station with two consoles the pad
+ * comes up beside each open device (device-notepad.png,
+ * device-notepad-phone.png). The pad has to stand beside the page — a strip
+ * down the right edge, a drawer along a phone's foot — the block has to come
+ * in under its station's line, and E has to put the source down again, or
+ * the run fails. After the station step the crew leaves the station that is
+ * up quiet until the Leitstelle names the next place (nudge.png,
+ * nudge-phone.png): its line in both banners, spoken by its recording.
+ *
  * The base URL is the Vite dev server by default (`pnpm dev`), or the
  * production server (`pnpm build && pnpm start`, http://localhost:3001) as in
  * CI. The host's page opens with `?trace=1`, so the world keeps its frame
@@ -455,6 +473,15 @@ async function logRendering() {
         `${SOFTWARE_GL_FLAGS.join(' ')} still selects it in this Playwright build`,
     );
   }
+}
+
+/**
+ * A device that has won a run before (client firstRun.ts): a room it opens starts on normal,
+ * as the scratch runs of the editor, the Serverraum and the art tour are counted. Only the
+ * walkthrough's own host plays a first run, and picks normal in its lobby (`captureFirstRun`).
+ */
+async function wonBefore(context) {
+  await context.addInitScript(() => globalThis.localStorage.setItem('escapelab.won', '1'));
 }
 
 /** A new page in `context`, its main thread slowed down CPU_SLOWDOWN times before it loads. */
@@ -1769,10 +1796,10 @@ async function hearRadio(player, ms) {
 /**
  * The line that came over the radio with a solve (`listening`, from
  * hearRadio): a recording from the manifest the server hands out has to have
- * spoken it — what the banner says, the view's last radio line — for a second
- * at least. Fails otherwise.
+ * spoken it — what the banner says, the view's last radio line, or `expected`
+ * where given — for a second at least. Fails otherwise.
  */
-async function checkRadioVoice(player, listening, after) {
+async function checkRadioVoice(player, listening, after, expected = null) {
   const heard = await listening;
   // A page without the recordings answers with something else: no manifest, and the check fails.
   const manifest = await player.page.evaluate(() =>
@@ -1782,7 +1809,8 @@ async function checkRadioVoice(player, listening, after) {
       .catch(() => ({})),
   );
   const events = player.seen.view.events;
-  const line = [...events].reverse().find((event) => event.kind === 'radio')?.label ?? null;
+  const line =
+    expected ?? [...events].reverse().find((event) => event.kind === 'radio')?.label ?? null;
   const entry = heard === null ? undefined : manifest[heard.id];
   const spoke = heard === null ? 0 : heard.to - heard.from;
   const said = heard === null
@@ -2425,6 +2453,11 @@ async function captureConsoles(operator, reader) {
       await page.setViewportSize(sizes[i]);
     }
   }
+  await sleep(300); // past the resize
+  for (const player of crew) {
+    const phone = (player.page.viewportSize()?.width ?? 0) <= 560;
+    await captureDeviceNoting(player, phone ? 'device-notepad-phone.png' : 'device-notepad.png');
+  }
   // The world under an open panel is the game's own cost: it keeps the budget too.
   const watched = crew.find((player) => player.traced);
   if (watched !== undefined) {
@@ -2885,6 +2918,248 @@ async function captureNotepad(page, seen) {
 }
 
 /**
+ * Brings the notepad up beside what lies over the world (`over`, its frame's selector): by N
+ * where there are keys, by the notepad's tab where a finger is. True for the tab.
+ */
+async function padUp(page, over) {
+  const touch = await page.evaluate(() => globalThis.matchMedia('(pointer: coarse)').matches);
+  if (touch) {
+    await page.locator(`${over} .put-down-tab--notes, ${over} .device-tab--notes`).first().click();
+  } else {
+    await page.keyboard.press('n');
+  }
+  await page.locator('.game--noting .notepad').waitFor({ state: 'visible', timeout: 3000 });
+  return touch;
+}
+
+/** Puts the notepad away again, by its word. */
+async function padAway(page) {
+  const pad = page.locator('.notepad');
+  await pad.locator('.notepad-close').click();
+  await pad.waitFor({ state: 'hidden', timeout: 3000 });
+}
+
+/**
+ * Where the notepad stands beside what lies over the world: a strip down the right edge with
+ * the page left of it, or on a phone a drawer along the foot with the page above it. `ok`
+ * where it is either, and the log's words for it.
+ */
+async function notingSide(page) {
+  const { pad, over, width, height } = await page.evaluate(() => {
+    const box = (selector) => {
+      const element = document.querySelector(selector);
+      if (element === null) {
+        return null;
+      }
+      const r = element.getBoundingClientRect();
+      return { x: r.x, y: r.y, w: r.width, h: r.height };
+    };
+    return {
+      pad: box('.notepad'),
+      over: box('.puzzle-modal'),
+      width: globalThis.innerWidth,
+      height: globalThis.innerHeight,
+    };
+  });
+  if (pad === null || over === null) {
+    return { ok: false, said: '!! no pad, or nothing over the world' };
+  }
+  const near = (a, b) => Math.abs(a - b) <= 1;
+  const strip = near(pad.x + pad.w, width) && near(pad.y, 0) && pad.x >= over.x + over.w - 1;
+  const drawer = near(pad.y + pad.h, height) && near(pad.x, 0) && pad.y >= over.y + over.h - 1;
+  const size = `${Math.round(pad.w)}×${Math.round(pad.h)}`;
+  if (strip) {
+    return { ok: true, said: `a strip ${size} down the right edge, the page beside it` };
+  }
+  if (drawer) {
+    return { ok: true, said: `a drawer ${size} along the foot, the page above it` };
+  }
+  return { ok: false, said: `!! ${size} at ${Math.round(pad.x)},${Math.round(pad.y)}, over the page` };
+}
+
+/**
+ * The open source a player takes notes at: a clipboard first, else the nearest — where it
+ * lies from the audience's view (`audience`), which places a source before the crew has come
+ * across it; null where none is open within the player's reach.
+ */
+function sourceToNote(seen, audience) {
+  const map = seen.view.map;
+  const everything = audience.view?.map ?? map;
+  const from = tileOf(seen);
+  const options = everything.manuals
+    .filter((manual) => manual.opened)
+    .map((manual) => ({ manual, path: from === null ? null : route(map, from, manual) }))
+    .filter((option) => option.path !== null)
+    .sort(
+      (a, b) =>
+        Number(b.manual.kind === 'clipboard') - Number(a.manual.kind === 'clipboard') ||
+        a.path.length - b.path.length,
+    );
+  return options[0]?.manual ?? null;
+}
+
+/**
+ * Turns the pages of an open source forwards until a „Notieren" stands on one in view: a
+ * source of several stations opens on its cover while none of them is up. Whether one does.
+ */
+async function turnToNotable(overlay) {
+  const notable = overlay.locator('.note-down').first();
+  for (let turns = 0; turns < 8 && !(await notable.isVisible()); turns++) {
+    const next = overlay.locator('.turn-next');
+    if ((await next.count()) === 0 || (await next.isDisabled())) {
+      break;
+    }
+    await next.click();
+    await sleep(500); // past the leaf turning over
+  }
+  return notable.isVisible();
+}
+
+/**
+ * Puts a source down again as the player has it: by E where there are keys, by its tab under
+ * a finger. It has to go, or the run fails; then the pad goes away by its word.
+ */
+async function putSourceDown(page, overlay, touch, shot, label) {
+  if (touch) {
+    await overlay.locator('.put-down-tab:not(.put-down-tab--notes)').click();
+  } else {
+    await page.keyboard.press('e');
+  }
+  const down = await overlay.waitFor({ state: 'hidden', timeout: 3000 }).then(
+    () => true,
+    () => false,
+  );
+  if (!down) {
+    console.log(`${`${shot} `.padEnd(19)}!! ${touch ? 'its tab' : 'E'} did not put "${label}" down`);
+    fail(`${shot}: ${touch ? 'the tab' : 'E'} did not put the source down`);
+    // The first Escape hands the keys back from the pad, the second steps back from the source.
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await overlay.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => undefined);
+  }
+  await padAway(page);
+}
+
+/**
+ * reading-notepad.png (reading-notepad-phone.png on the guest's phone): a player reads an open
+ * source — a clipboard where one is open — brings the notepad up beside it and takes the
+ * first rules list or table in view down with „Notieren". The pad has to stand beside the
+ * page and hold the block under the station's line („§3 Signalkette · Legende"), or the run
+ * fails. Then the source is put down again (`putSourceDown`).
+ */
+async function captureNoting(player, shot, audience) {
+  const { page, seen, name } = player;
+  const source = sourceToNote(seen, audience);
+  if (source === null || !(await walkNear(page, seen, source))) {
+    skip(shot, `no open source within ${name}'s reach`);
+    return;
+  }
+  const overlay = page.locator('.reading-modal');
+  if (!(await interactUntil(page, overlay))) {
+    throw new Error(`${name} stands at "${source.id}", but no .reading-modal opened after 3 tries`);
+  }
+  await sleep(400); // past the page's fade-in
+  const touch = await padUp(page, '.reading-modal');
+  const offered = await turnToNotable(overlay);
+  if (offered) {
+    await overlay.locator('.note-down').first().click();
+  }
+  await sleep(500); // the pad scrolled down to it, the control says it took it
+  await capture(page, shot);
+  const text = await page.locator('.notepad textarea').inputValue();
+  const block = text.split('\n\n').at(-1) ?? '';
+  const side = await notingSide(page);
+  console.log(
+    `${`${shot} `.padEnd(19)}${name}: "${source.label}" (${source.kind}), ` +
+      (offered ? `noted „${block.split('\n')[0]}", ${block.split('\n').length} lines` : '!! no „Notieren"') +
+      `; the pad ${side.said}${touch ? ', up by its tab' : ', up by N'}`,
+  );
+  if (!offered || !/^§\d+ \S/.test(block) || !side.ok) {
+    fail(`${shot}: ${offered ? 'the noted block or the pad is not as it should be' : 'no „Notieren"'}`);
+  }
+  await putSourceDown(page, overlay, touch, shot, source.label);
+}
+
+/**
+ * device-notepad.png (device-notepad-phone.png on the guest's phone): at an open device the
+ * notepad comes up beside it — N, or the tab on the chassis where a finger is — and has to
+ * stand beside it, the device left in view; then it goes again.
+ */
+async function captureDeviceNoting(player, shot) {
+  const { page, name } = player;
+  const touch = await padUp(page, '.station-modal');
+  await sleep(300); // the device's frame settled in the room left to it
+  await capture(page, shot);
+  const side = await notingSide(page);
+  const over = await sideways(page, '.station-modal .panel');
+  console.log(
+    `${`${shot} `.padEnd(19)}${name}: the pad ${side.said}${touch ? ', up by the tab' : ', up by N'}; ` +
+      `the device ${over > 0 ? `!! runs out ${over}px sideways` : 'fits sideways'}`,
+  );
+  if (!side.ok || over > 0) {
+    fail(`${shot}: the notepad does not stand beside the device`);
+  }
+  await padAway(page);
+}
+
+/** How long the walkthrough waits for mission control to speak up at a quiet station, ms. */
+const NUDGE_WAIT_MS = 110_000;
+
+/** The lines mission control sent unasked so far, as a page's view has them. */
+const nudgesOf = (seen) => (seen.view?.events ?? []).filter((event) => event.kind === 'nudge');
+
+/**
+ * nudge.png (nudge-phone.png on the guest's phone): with nothing open over the world, the
+ * crew lets the station that is up stand quiet until the Leitstelle names the next place —
+ * within its 90 s of quiet. Its line has to show in both banners and be spoken by a recording
+ * from the manifest, or the run fails.
+ */
+async function captureNudge(players) {
+  const [first] = players;
+  for (const { page } of players) {
+    const onTop = page.locator('.station-modal, .reading-modal').first();
+    if (await onTop.isVisible()) {
+      await page.keyboard.press('Escape');
+      await onTop.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => undefined);
+    }
+  }
+  const before = nudgesOf(first.seen).length;
+  const armed = first.seen.view.map.stations.find((s) => s.status === 'armed')?.title ?? 'none';
+  const from = Date.now();
+  if (!(await until(() => nudgesOf(first.seen).length > before, NUDGE_WAIT_MS))) {
+    console.log(`nudge.png          !! no word from the Leitstelle at "${armed}" within ${seconds(NUDGE_WAIT_MS)}`);
+    fail(`nudge.png: no word from the Leitstelle within ${seconds(NUDGE_WAIT_MS)}`);
+    return;
+  }
+  const line = nudgesOf(first.seen).at(-1).label;
+  const listening = hearRadio(first, 6000);
+  const banners = await Promise.all(
+    players.map(({ page }) =>
+      page
+        .locator('.radio-banner', { hasText: line })
+        .waitFor({ state: 'visible', timeout: 3000 })
+        .then(
+          () => true,
+          () => false,
+        ),
+    ),
+  );
+  await sleep(400); // past the banner's fade-in
+  await Promise.all(
+    players.map(({ page }, i) => capture(page, i === 0 ? 'nudge.png' : 'nudge-phone.png')),
+  );
+  const shown = players.map(({ name }, i) => `${name} ${banners[i] ? 'up' : '!! missing'}`);
+  console.log(
+    `nudge.png          the Leitstelle at "${armed}" after ${seconds(Date.now() - from)} of ` +
+      `quiet waited for: „${line}"; banner ${shown.join(', ')}`,
+  );
+  if (!banners.every(Boolean)) {
+    fail('nudge.png: the Leitstelle\'s line is not in every banner');
+  }
+  await checkRadioVoice(first, listening, `the Leitstelle's nudge at "${armed}"`, line);
+}
+
+/**
  * An emergency closes whatever a player has open, and nothing reopens by
  * itself. The walkthrough works no console and mans no valve, so it waits
  * the emergency out and presses E again. Returns how long that took, in ms;
@@ -3011,6 +3286,51 @@ async function captureSign(page, who) {
     `sign.png           ${who}: note ${note ? 'up' : '!! missing'}, ` +
       `chip in the HUD ${chip ? 'shown' : '!! missing'}`,
   );
+}
+
+/**
+ * join.png on a device that has won no run: the tutorial's card — and no other — carries the
+ * label „Erster Einsatz? Hier starten", or the run fails.
+ */
+async function checkFirstRunCard(page) {
+  const label = await textOf(
+    page.locator('.mission', { hasText: 'Tutorial' }).locator('.mission-first'),
+  );
+  const labels = await page.locator('.mission-first').count();
+  console.log(
+    `join.png           a first run: ${label === null ? '!! no label on the tutorial' : `„${label}" on the tutorial`}` +
+      (labels === 1 ? '' : `, !! ${labels} labels in all`),
+  );
+  if (label === null || labels !== 1) {
+    fail('join.png: the tutorial\'s card does not say „Erster Einsatz? Hier starten" alone');
+  }
+}
+
+/**
+ * lobby-first.png: the host's device has won no run, so the room it opened stands on
+ * „entspannt", the lobby saying why under the levels. Then the host picks „Normal", which the
+ * walkthrough plays: its drones' flights, clocks and alarm marks are counted at that level.
+ */
+async function captureFirstRun(page, seen) {
+  const line = page.locator('.lobby-first-run');
+  const shown = await line.waitFor({ state: 'visible', timeout: 3000 }).then(
+    () => true,
+    () => false,
+  );
+  await capture(page, 'lobby-first.png');
+  const level = seen.view?.difficulty ?? 'no view';
+  console.log(
+    `lobby-first.png    the host's first room on "${level}", ` +
+      (shown ? `„${await textOf(line)}"` : '!! no word why'),
+  );
+  if (level !== 'entspannt' || !shown) {
+    fail(`lobby-first.png: a first room on "${level}"${shown ? '' : ', no word why'}`);
+  }
+  await page.locator('.level-chip', { hasText: 'Normal' }).click();
+  if (!(await until(() => seen.view?.difficulty === 'normal', 5000))) {
+    throw new Error(`the host picked „Normal", but the room stays on "${seen.view?.difficulty}"`);
+  }
+  await sleep(300);
 }
 
 /**
@@ -3672,6 +3992,7 @@ async function captureEditor() {
   // The link „Teilen" makes is read off the clipboard where the page may write it.
   const permissions = ['clipboard-read', 'clipboard-write'];
   const context = await browser.newContext({ viewport: SIZES[0], permissions });
+  await wonBefore(context);
   const page = await openPage(context);
   page.on('pageerror', (e) => console.log('[editor error]', e.message));
   try {
@@ -3750,6 +4071,7 @@ function artMission() {
 /** A page for the art tour in a context of its own, its errors logged under `name`. */
 async function artPage(name, size = ART_SIZE) {
   const context = await browser.newContext({ viewport: size });
+  await wonBefore(context);
   const page = await openPage(context);
   page.on('pageerror', (e) => console.log(`[${name} error]`, e.message));
   return { name, page, seen: eavesdrop(page), context };
@@ -3891,6 +4213,7 @@ const SERVERS_PLAN = JSON.parse(
 /** A player of the Serverraum step, in a context of its own at laptop size. */
 async function serversPlayer(name) {
   const context = await browser.newContext({ viewport: SIZES[0] });
+  await wonBefore(context);
   const page = await openPage(context, `servers ${name}`);
   page.on('pageerror', (e) => console.log(`[servers ${name} error]`, e.message));
   return { name, page, seen: eavesdrop(page), context };
@@ -5493,6 +5816,7 @@ async function run() {
   await host.locator('.mission').first().waitFor({ timeout: 10_000 });
   // The join screen, every mission in view, has to fit a laptop window too.
   await capture(host, 'join.png');
+  await checkFirstRunCard(host);
   await overflow(host, 'join @ 1440x820');
   await host.setViewportSize({ width: 1280, height: 720 });
   await sleep(400);
@@ -5523,6 +5847,7 @@ async function run() {
             'the server takes one only with ALLOW_SEED=1, so the draw is chance'),
     );
   }
+  await captureFirstRun(host, hostSeen);
   await capture(host, 'lobby-host.png');
 
   // --- guest: join by code ---------------------------------------------
@@ -5675,6 +6000,8 @@ async function run() {
     }
   }
   await captureNotepad(guest, guestSeen);
+  await captureNoting(anna, 'reading-notepad.png', watcherSeen);
+  await captureNoting(ben, 'reading-notepad-phone.png', watcherSeen);
   await voiceAfterReload(anna, ben);
 
   const firstSpots = operator.seen.view.map.stations.filter((s) => s.status === 'armed');
@@ -5741,6 +6068,7 @@ async function run() {
     await onTop.waitFor({ state: 'hidden', timeout: 3000 });
   }
   await sampleFrames(host, 'pacing, after the station step', () => pace(anna, SAMPLE_MS));
+  await captureNudge([anna, ben]);
   if (!panelSampled) {
     skip('frames', 'no station panel was open on the host page, so none was sampled with one');
   }

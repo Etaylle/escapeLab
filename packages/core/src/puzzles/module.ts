@@ -142,6 +142,11 @@ export interface PuzzleDefCommon {
    * asked for one at a time at a manual object that covers the station
    */
   hints: string[];
+  /**
+   * up to two lines mission control sends, one after the other, while the station stays
+   * quiet (actions.ts `nudgeDueAt`): each names the next place to go, never a rule or an answer
+   */
+  nudges: string[];
   /** labels of the rooms whose lights come on once the puzzle is solved */
   lights: string[];
   /** mission control's radio line once the puzzle is solved */
@@ -156,6 +161,7 @@ export const commonDefShape = {
   id: z.string().min(1),
   title: z.string().min(1),
   hints: z.array(z.string().min(1)).max(3).default([]),
+  nudges: z.array(z.string().min(1)).max(2).default([]),
   lights: z.array(z.string().min(1)).default([]),
   onSolved: z.string().min(1).optional(),
 };
