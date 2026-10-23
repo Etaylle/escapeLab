@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { serialHasVowel, type Edgework } from '../edgework.js';
 import { commonDefShape, type ManualBlock, type PuzzleModule } from './module.js';
-import { deviceFigure, penaltyLine, workedExample } from './printed.js';
+import { costOf, labDocument, type TypePlate } from './printed.js';
 
 export const SIMON_COLORS = ['rot', 'blau', 'gruen', 'gelb'] as const;
 export type SimonColor = (typeof SIMON_COLORS)[number];
@@ -99,17 +99,17 @@ const ROW_LABELS: Record<SimonDef['legend'], readonly string[]> = {
   einfach: ['0 Alarme', '1 oder mehr Alarme'],
 };
 
-/** The worked example by legend: stage 2's two flashes, translated by the printed row. */
-const EXAMPLES: Record<SimonDef['legend'], readonly string[]> = {
+/** The printed log by legend: stage 2's two flashes, translated by the printed row. */
+const LOGS: Record<SimonDef['legend'], readonly string[]> = {
   kennung: [
-    'Gesehen: Stufe 2 blinkt rot, dann grün. Kennung ohne A, E und U; 1 Alarm am Panel.',
-    'Tabelle „Ohne Vokal“, Zeile „1 Alarm“: rot ergibt gelb, grün ergibt blau.',
-    'Gedrückt: gelb, dann blau.',
+    '21:14 Stufe 2 blinkt rot, dann grün; Kennung ohne A, E und U, 1 Alarm am Panel.',
+    '21:14 Tabelle „Ohne Vokal“, Zeile „1 Alarm“: rot ergibt gelb, grün ergibt blau.',
+    '21:15 Eingegeben: gelb, dann blau; Stufe 3 läuft.',
   ],
   einfach: [
-    'Gesehen: Stufe 2 blinkt rot, dann grün; 0 Alarme am Panel.',
-    'Zeile „0 Alarme“: rot ergibt blau, grün ergibt gelb.',
-    'Gedrückt: blau, dann gelb.',
+    '21:14 Stufe 2 blinkt rot, dann grün; 0 Alarme am Panel.',
+    '21:14 Zeile „0 Alarme“: rot ergibt blau, grün ergibt gelb.',
+    '21:15 Eingegeben: blau, dann gelb; Stufe 3 läuft.',
   ],
 };
 
@@ -151,7 +151,42 @@ function tableBlock(
   };
 }
 
-/** What the legend prints between the device paragraph and the example: its tables. */
+// --- the printed document --------------------------------------------------------------
+
+const PLATE: TypePlate = { name: 'Abgleichpanel', type: 'FA-4', year: 1989 };
+
+const PURPOSE =
+  'Das Abgleichpanel stimmt die Resonanz der Anlage nach. Es arbeitet verschlüsselt, damit ' +
+  'kein Störsignal einen Abgleich auslöst: Welche Taste zu einer blinkenden Farbe gehört, ' +
+  'steht in der Übersetzung unten.';
+
+/** Aufbau: the four keys, the alarm display, and the stages the sequence flashes in. */
+function buildText(def: SimonDef): string {
+  return (
+    'Ein Panel mit vier Farbtasten, rot, blau, grün und gelb, und einer Alarmanzeige. Es blinkt ' +
+    'eine Farbfolge in Stufen: Stufe 1 zeigt die erste Farbe, Stufe 2 die ersten zwei und so ' +
+    `fort bis Stufe ${def.sequenceLength}.`
+  );
+}
+
+/** Betrieb: each stage entered in full and translated, the wrong key and what it costs. */
+function operationText(def: SimonDef): string {
+  const table = def.legend === 'kennung' ? 'In der geltenden Tabelle' : 'In der Tabelle';
+  return (
+    'Jede Stufe wird ganz eingegeben, in der gezeigten Reihenfolge und jede Farbe übersetzt: ' +
+    `${table} gibt der Alarmstand am Panel die Zeile, die blinkende Farbe die Spalte, das Feld ` +
+    'die Taste. Bei einer falschen Taste meldet die Überwachung Alarm und zieht ' +
+    `${costOf(def.penaltySec)} ab; die Stufe beginnt von vorn, mit der Zeile für den neuen ` +
+    'Alarmstand.'
+  );
+}
+
+const WORKSHOP: readonly string[] = [
+  'Jede Stufe wiederholt die vorige und hängt eine Farbe an: Die Folge wächst, sie wechselt ' +
+    'nicht.',
+];
+
+/** The tables the panel translates by, with the rule that picks one where there are two. */
 function legendBlocks(legend: SimonDef['legend']): ManualBlock[] {
   if (legend === 'einfach') {
     return [tableBlock('Blinkt', SIMPLE, ROW_LABELS.einfach)];
@@ -252,31 +287,16 @@ export const simonModule: PuzzleModule<SimonDef, SimonState, SimonInput, SimonVi
   },
 
   manual(def) {
-    const table = def.legend === 'kennung' ? 'In der geltenden Tabelle' : 'In der Tabelle';
-    return [
-      {
-        heading: 'Frequenz-Abgleich',
-        blocks: [
-          deviceFigure('simon', 'Panel mit Farbtasten'),
-          {
-            kind: 'p',
-            text:
-              'Ein Panel mit 4 Farbtasten blinkt eine Farbfolge in Stufen: Stufe 1 zeigt die ' +
-              'erste Farbe, Stufe 2 die ersten 2 und so fort bis Stufe ' +
-              `${def.sequenceLength}. Jede Stufe wird ganz eingegeben, in der gezeigten ` +
-              'Reihenfolge, jede Farbe übersetzt. ' +
-              `${table} bestimmt der Alarmstand am Panel die Zeile und die blinkende Farbe ` +
-              'die Spalte; das Feld nennt die Taste.',
-          },
-          ...legendBlocks(def.legend),
-          workedExample(EXAMPLES[def.legend]),
-          penaltyLine(
-            def.penaltySec,
-            'Die Stufe beginnt von vorn, mit der Zeile für den neuen Alarmstand.',
-          ),
-        ],
-      },
-    ];
+    return labDocument({
+      plate: PLATE,
+      purpose: PURPOSE,
+      figure: { of: 'simon', device: 'Panel mit Farbtasten' },
+      build: buildText(def),
+      operation: operationText(def),
+      law: [{ heading: 'Übersetzung', blocks: legendBlocks(def.legend) }],
+      log: LOGS[def.legend],
+      workshop: WORKSHOP,
+    });
   },
 
   solve(def, { operator }, edgework) {

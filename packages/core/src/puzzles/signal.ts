@@ -8,7 +8,7 @@ import {
   type Move,
   type PuzzleModule,
 } from './module.js';
-import { deviceFigure, penaltyLine, workedExample } from './printed.js';
+import { costOf, labDocument, spelled, type TypePlate } from './printed.js';
 
 const COLOURS = ['rot', 'blau', 'gruen', 'gelb'] as const;
 const SHAPES = ['kreis', 'dreieck', 'quadrat'] as const;
@@ -54,11 +54,11 @@ const PATTERN_WORDS: Record<SignalPattern, string> = {
 /** The drawing of the four colours with their patterns; the client draws it under this name. */
 export const PATTERN_FIGURE = 'signal-patterns';
 
-/** A shape's noun, its article and the ending its colour takes: der Kreis, das Dreieck. */
-const SHAPE_WORDS: Record<Shape, { noun: string; article: string; ending: string }> = {
-  kreis: { noun: 'Kreis', article: 'der', ending: 'er' },
-  dreieck: { noun: 'Dreieck', article: 'das', ending: 'es' },
-  quadrat: { noun: 'Quadrat', article: 'das', ending: 'es' },
+/** A shape's noun and the ending its colour takes: blauer Kreis, rotes Dreieck. */
+const SHAPE_WORDS: Record<Shape, { noun: string; ending: string }> = {
+  kreis: { noun: 'Kreis', ending: 'er' },
+  dreieck: { noun: 'Dreieck', ending: 'es' },
+  quadrat: { noun: 'Quadrat', ending: 'es' },
 };
 
 /** A sign's colour and shape, read off its id. */
@@ -309,51 +309,44 @@ function signPressed(def: SignalDef, input: SignalInput, at: ConsoleId): SignalT
   return 'key' in input ? `${LEGEND[at][input.key.row]}-${input.key.shape}` : input.press;
 }
 
-/** The printed example's sequence: one sign comes again, none twice in a row. */
-const EXAMPLE: readonly SignalToken[] = [
-  'rot-dreieck',
-  'blau-kreis',
-  'gelb-quadrat',
-  'rot-dreieck',
-  'gruen-kreis',
-  'blau-quadrat',
-];
+// --- the printed document --------------------------------------------------------------
 
-/** One sign of the example looked up in console b's column of the legend. */
-function lookedUp(token: SignalToken): string {
-  const { colour, shape } = partsOf(token);
-  const { row } = keyFor(token, 'b');
-  const said = tokenLabel(token);
-  const { article, noun } = SHAPE_WORDS[shape];
+const PLATE: TypePlate = { name: 'Signalkette', type: 'SK-4', year: 1986 };
+
+const PURPOSE =
+  'Die Signalkette ist die Quittungsanlage des Labors aus der Zeit vor dem Rechnernetz: Was ' +
+  'ein Pult meldet, bestätigt das Gegenpult Zeichen für Zeichen. Seit dem Umbau hängt das ' +
+  'Flurschott an der Kette.';
+
+/** Aufbau: the two consoles, their display and their keys — with the legend, rows of shapes. */
+function buildText(def: SignalDef): string {
+  const consoles = 'Zwei Pulte, A und B, an verschiedenen Orten, jedes mit einer Anzeige';
+  if (def.legend) {
+    return (
+      `${consoles} für Zeichen in vier Farben und zwölf grauen Tasten in vier nummerierten ` +
+      'Zeilen, je Kreis, Dreieck und Quadrat. Die Farbe einer Zeile nennt die Legende des ' +
+      'Pults; A und B haben verschiedene, ein alter Verwechslungsschutz.'
+    );
+  }
   return (
-    `${said.charAt(0).toUpperCase()}${said.slice(1)}: In der Legende steht ` +
-    `${COLOUR_WORDS[colour]} bei Pult B in Zeile ${row}; gedrückt wird ${article} ${noun} ` +
-    `in Zeile ${row}.`
+    `${consoles} und zwölf Tasten, eine für jedes Zeichen: vier Farben, jede als Kreis, ` +
+    'Dreieck und Quadrat. Jede Farbe trägt ein eigenes Muster, damit sie auch im Notlicht ' +
+    'kenntlich bleibt.'
   );
 }
 
-/**
- * The worked example: stage 1 as console a shows it and console b presses
- * it — with the legend, its first sign looked up in console b's column.
- */
-function exampleLines(def: SignalDef): string[] {
-  const signs = EXAMPLE.slice(0, def.length);
-  const [first] = signs;
-  if (first === undefined) {
-    throw new Error(`signal: the printed example has no sign for a length of ${def.length}`);
-  }
-  const shown = `Stufe 1, Pult A zeigt: ${signs.map(tokenLabel).join(', ')}.`;
-  const sends = 'Stufe 1 ist ungerade: Pult A sendet, Pult B empfängt.';
-  if (!def.legend) {
-    return [
-      shown,
-      sends,
-      `An Pult B gedrückt: ${signs.map(tokenLabel).join(', ')}.`,
-      'Stufe 2 beginnt; nun sendet Pult B.',
-    ];
-  }
-  const keys = signs.map((token) => keyLabel(keyFor(token, 'b')));
-  return [shown, sends, lookedUp(first), `An Pult B gedrückt: ${keys.join(', ')}.`];
+/** Betrieb: the stages and their direction, the acknowledgement, the fault and its cost. */
+function operationText(def: SignalDef): string {
+  const acknowledged = def.legend
+    ? 'jedes mit der Taste gleicher Form in der Zeile, die seine Legende der Farbe gibt'
+    : 'jedes auf seiner Taste';
+  return (
+    `Die Kette hat ${spelled(def.stages)} Stufen; in den ungeraden zeigt Pult A eine Folge von ` +
+    `${spelled(def.length)} Zeichen, in den geraden Pult B. Das Gegenpult quittiert sie Zeichen ` +
+    `für Zeichen, ${acknowledged}. Eine falsche Taste ist eine Fehlquittierung: Die Stufe ` +
+    'fällt in die Grundstellung, ihre Folge bleibt, und die Überwachung meldet Alarm und ' +
+    `zieht ${costOf(def.penaltySec)} ab.`
+  );
 }
 
 /**
@@ -378,45 +371,57 @@ function patternFigure(): ManualBlock {
   return { kind: 'figure', of: PATTERN_FIGURE, caption: 'Abb. 2 — Farben und Muster' };
 }
 
-/** The device and the task, in three sentences; with the legend the receiver has shapes only. */
-function deviceText(def: SignalDef): string {
-  const keys = def.legend
-    ? `Das sendende Pult zeigt eine Folge von ${def.length} farbigen Zeichen; das ` +
-      'empfangende Pult zeigt nur Formen: 12 graue Tasten in 4 nummerierten Zeilen, jede mit ' +
-      'Kreis, Dreieck und Quadrat.'
-    : `Das sendende Pult zeigt eine Folge von ${def.length} Zeichen, das empfangende Pult ` +
-      'trägt die zwölf Zeichen als Tasten.';
-  return (
-    `Zwei Pulte, A und B. ${keys} Die Folge wird am empfangenden Pult in ihrer Reihenfolge ` +
-    'gedrückt; nach jeder Stufe wechselt die Richtung.'
-  );
+/** The logged stage's sequence: one sign comes again, none twice in a row. */
+const LOGGED: readonly SignalToken[] = [
+  'rot-dreieck',
+  'blau-kreis',
+  'gelb-quadrat',
+  'rot-dreieck',
+  'gruen-kreis',
+  'blau-quadrat',
+];
+
+/**
+ * The log of a stage 1 that console a showed and console b acknowledged.
+ * With the legend its first key was looked up in console a's column — the
+ * mix-up the two legends guard against — and the stage went back to its
+ * start before console b acknowledged it in full.
+ */
+function logLines(def: SignalDef): string[] {
+  const signs = LOGGED.slice(0, def.length);
+  const [first] = signs;
+  if (first === undefined) {
+    throw new Error(`signal: the printed log has no sign for a length of ${def.length}`);
+  }
+  const shown = `06:12 Stufe 1, Pult A zeigt: ${signs.map(tokenLabel).join(', ')}.`;
+  const turned = '06:13 Stufe 1 vollständig, Richtung gewechselt: Pult B zeigt Stufe 2.';
+  if (!def.legend) {
+    return [shown, `06:13 Pult B quittiert: ${signs.map(tokenLabel).join(', ')}.`, turned];
+  }
+  const keys = signs.map((token) => keyLabel(keyFor(token, 'b')));
+  return [
+    shown,
+    `06:12 Pult B quittiert ${keyLabel(keyFor(first, 'a'))} (Spalte A gelesen): ` +
+      'Fehlquittierung, Alarm, Stufe 1 in Grundstellung.',
+    `06:13 Pult B quittiert: ${keys.join(', ')}.`,
+    turned,
+  ];
 }
 
-/** The rules, one sentence each; the legend and the fleeting display add theirs. */
-function ruleLines(def: SignalDef): string[] {
+/** Aus der Werkstatt: the display's capacitor, and without the legend the keys' places. */
+function workshopNotes(def: SignalDef): string[] {
+  const display =
+    def.fleetingFrom === null
+      ? 'Kondensator 1994 erneuert: Die Anzeige hält die Folge, bis die Stufe quittiert ist.'
+      : `Seit dem Umbau zeigt die Anzeige ab Stufe ${def.fleetingFrom} die Zeichen nur ` +
+        'einzeln und kurz (Kondensator, nie ersetzt): merken oder notieren.';
+  if (def.legend) {
+    return [display];
+  }
   return [
-    'Wenn die Nummer der Stufe ungerade ist, sendet Pult A, und Pult B empfängt.',
-    'Wenn die Nummer der Stufe gerade ist, sendet Pult B, und Pult A empfängt.',
-    ...(def.legend
-      ? [
-          'Wenn ein Zeichen gesendet wird, wird am empfangenden Pult die Taste seiner Form in ' +
-            'der Zeile gedrückt, die die Legende diesem Pult für seine Farbe nennt.',
-        ]
-      : []),
-    ...(def.fleetingFrom === null
-      ? []
-      : [
-          `Wenn die Stufe ${def.fleetingFrom} erreicht ist, zeigt das sendende Pult die ` +
-            'Zeichen nacheinander.',
-        ]),
-    `Wenn alle ${def.length} Zeichen einer Stufe gedrückt sind, beginnt die nächste Stufe.`,
-    `Wenn Stufe ${def.stages} vollständig gedrückt ist, ist die Signalkette geschlossen.`,
-    def.legend
-      ? 'Wenn eine Taste gedrückt wird, die nicht für das nächste Zeichen der Folge steht, ' +
-        'beginnt die Stufe von vorn; die Folge bleibt dieselbe.'
-      : 'Wenn ein Zeichen gedrückt wird, das nicht das nächste der Folge ist, beginnt die ' +
-        'Stufe von vorn; die Folge bleibt dieselbe.',
-    'Wenn am sendenden Pult gedrückt wird, geschieht nichts.',
+    display,
+    'A und B sind verschieden bestückt: Am Gegenpult gelten Farbe und Form einer Taste, nie ' +
+      'ihre Lage.',
   ];
 }
 
@@ -540,19 +545,16 @@ export const signalModule: PuzzleModule<SignalDef, SignalState, SignalInput, Sig
   },
 
   manual(def) {
-    const close = [workedExample(exampleLines(def)), penaltyLine(def.penaltySec)];
-    const device: ManualBlock[] = [
-      deviceFigure('signal', 'Zwei Signalpulte'),
-      { kind: 'p', text: deviceText(def) },
-      { kind: 'rules', items: ruleLines(def) },
-    ];
-    if (!def.legend) {
-      return [{ heading: 'Signalkette', blocks: [...device, ...close] }];
-    }
-    return [
-      { heading: 'Signalkette', blocks: device },
-      { heading: 'Legende', blocks: [patternFigure(), legendTable(), ...close] },
-    ];
+    return labDocument({
+      plate: PLATE,
+      purpose: PURPOSE,
+      figure: { of: 'signal', device: 'Zwei Signalpulte' },
+      build: buildText(def),
+      operation: operationText(def),
+      law: def.legend ? [{ heading: 'Legende', blocks: [patternFigure(), legendTable()] }] : [],
+      log: logLines(def),
+      workshop: workshopNotes(def),
+    });
   },
 
   /**

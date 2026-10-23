@@ -135,8 +135,6 @@ function clearStage(state: MemoryState, transcript: Transcript): MemoryState {
   return result.state;
 }
 
-const ORDINALS = ['erste', 'zweite', 'dritte', 'vierte'];
-
 /** Every order of `items`. */
 function permutations(items: number[]): number[][] {
   if (items.length <= 1) {
@@ -147,51 +145,59 @@ function permutations(items: number[]): number[][] {
   );
 }
 
-/** One printed rule, carried out with the bank in view and the crew's notes at hand. */
-function carryOut(rule: string, labels: number[], notes: MemoryPress[]): number {
+/** One cell of the printed table, carried out with the bank in view and the crew's notes. */
+function carryOut(cell: string, labels: number[], notes: MemoryPress[]): number {
   const noted = (stage: string | undefined): MemoryPress => {
     const entry = notes[Number(stage) - 1];
     if (entry === undefined) {
-      throw new Error(`the rule "${rule}" asks for stage ${stage}, which is not noted`);
+      throw new Error(`the cell "${cell}" asks for stage ${stage}, which is not noted`);
     }
     return entry;
   };
-  const byPosition = /^die (erste|zweite|dritte|vierte) Taste$/.exec(rule);
-  if (byPosition !== null) {
-    return ORDINALS.indexOf(byPosition[1] ?? '');
+  const byPlace = /^Platz ([1-4])$/.exec(cell);
+  if (byPlace !== null) {
+    return Number(byPlace[1]) - 1;
   }
-  const byLabel = /^die Taste mit der Beschriftung ([1-4])$/.exec(rule);
-  if (byLabel !== null) {
-    return labels.indexOf(Number(byLabel[1]));
+  const byDigit = /^Ziffer ([1-4])$/.exec(cell);
+  if (byDigit !== null) {
+    return labels.indexOf(Number(byDigit[1]));
   }
-  const samePosition = /^die Taste an derselben Position wie in Stufe ([1-5])$/.exec(rule);
-  if (samePosition !== null) {
-    return noted(samePosition[1]).position;
+  const samePlace = /^Platz wie Stufe ([1-5])$/.exec(cell);
+  if (samePlace !== null) {
+    return noted(samePlace[1]).position;
   }
-  const sameLabel = /^die Taste mit derselben Beschriftung wie in Stufe ([1-5])$/.exec(rule);
-  if (sameLabel !== null) {
-    return labels.indexOf(noted(sameLabel[1]).label);
+  const sameDigit = /^Ziffer wie Stufe ([1-5])$/.exec(cell);
+  if (sameDigit !== null) {
+    return labels.indexOf(noted(sameDigit[1]).label);
   }
-  throw new Error(`unreadable rule: "${rule}"`);
+  throw new Error(`unreadable cell: "${cell}"`);
 }
 
-/** The key a stage's printed line names for a display digit, as it stands after „drücke". */
+type TableBlock = Extract<ManualSection['blocks'][number], { kind: 'table' }>;
+
+/** The printed table the bank keeps to: a row per stage, a column per display digit. */
+function keyTable(manual: ManualSection[]): TableBlock {
+  const [table] = manual.find((section) => section.heading === 'Tastentabelle')?.blocks ?? [];
+  if (table?.kind !== 'table') {
+    throw new Error('the manual has no key table');
+  }
+  return table;
+}
+
+/** The key the printed table names for a stage and a display digit. */
 function printedTarget(manual: ManualSection[], stage: number, display: number): string {
-  const list = manual.find((section) => section.heading === `Stufe ${stage}`)?.blocks[0];
-  if (list?.kind !== 'rules') {
-    throw new Error(`the manual has no rule list for stage ${stage}`);
+  const table = keyTable(manual);
+  const row = table.rows.find(([first]) => first === String(stage));
+  const cell = row?.[table.head.indexOf(`Display ${display}`)];
+  if (cell === undefined) {
+    throw new Error(`the table has no cell for stage ${stage} and display ${display}`);
   }
-  const head = `Wenn das Display ${display} zeigt, drücke `;
-  const line = list.items.find((item) => item.startsWith(head));
-  if (line === undefined || !line.endsWith('.')) {
-    throw new Error(`stage ${stage} has no line for display ${display}`);
-  }
-  return line.slice(head.length, -1);
+  return cell;
 }
 
 /**
- * A crew with the printed page and nothing else: the section „Stufe k", the
- * line for the display digit, and what it says.
+ * A crew with the printed page and nothing else: the table's row for the
+ * stage, its column for the display digit, and what the cell says.
  */
 function readManual(
   manual: ManualSection[],
@@ -388,61 +394,69 @@ describe('memory module', () => {
 describe('the printed memory manual', () => {
   const manual = memoryModule.manual(def);
   const blocks = manual.flatMap((section) => section.blocks);
-  const lists = blocks.flatMap((block) => (block.kind === 'rules' ? [block.items] : []));
+  const table = keyTable(manual);
 
-  it('has a section per stage, „Stufe k", with a line for each display digit', () => {
+  it('has a table with a row for each stage and a column for each display digit', () => {
     expect(manual.map((section) => section.heading)).toEqual([
-      'Speicherbank',
-      ...Array.from({ length: STAGES }, (_, i) => `Stufe ${i + 1}`),
+      'Speicherbank, Typ SB-5 (Baujahr 1988)',
+      'Aufbau',
+      'Betrieb',
+      'Tastentabelle',
+      'Aus der Werkstatt',
     ]);
-    expect(lists).toHaveLength(STAGES);
-    for (const section of manual.slice(1)) {
-      const [list] = section.blocks;
-      const items = list?.kind === 'rules' ? list.items : [];
-      expect(items, section.heading).toHaveLength(4);
-      for (const [d, item] of items.entries()) {
-        const head = `Wenn das Display ${d + 1} zeigt, drücke `;
-        expect(item.startsWith(head), item).toBe(true);
-      }
-    }
+    expect(table.head).toEqual(['Stufe', 'Display 1', 'Display 2', 'Display 3', 'Display 4']);
+    expect(table.rows.map(([stage]) => stage)).toEqual(
+      Array.from({ length: STAGES }, (_, i) => String(i + 1)),
+    );
+    const cell = /^(Platz|Ziffer) ([1-4]|wie Stufe [1-5])$/;
+    expect(table.rows.flatMap((row) => row.slice(1)).filter((c) => !cell.test(c))).toEqual([]);
   });
 
-  it('only looks back, and asks for both the position and the label of stages 1–4', () => {
-    for (const [i, items] of lists.entries()) {
-      for (const item of items) {
-        const ref = /Stufe (\d)/.exec(item);
+  it('only looks back, and asks for both the place and the digit of stages 1–4', () => {
+    for (const [i, row] of table.rows.entries()) {
+      for (const cell of row.slice(1)) {
+        const ref = /wie Stufe (\d)/.exec(cell);
         if (ref !== null) {
-          expect(Number(ref[1]), item).toBeLessThan(i + 1);
+          expect(Number(ref[1]), cell).toBeLessThan(i + 1);
         }
       }
     }
-    const rules = lists.flat().join('\n');
+    const cells = table.rows.flatMap((row) => row.slice(1));
     for (let stage = 1; stage < STAGES; stage++) {
-      expect(rules).toContain(`an derselben Position wie in Stufe ${stage}.`);
-      expect(rules).toContain(`mit derselben Beschriftung wie in Stufe ${stage}.`);
+      expect(cells).toContain(`Platz wie Stufe ${stage}`);
+      expect(cells).toContain(`Ziffer wie Stufe ${stage}`);
     }
   });
 
-  it('prints an example that the page and the bank bear out', () => {
-    const example = blocks.find((block) => block.kind === 'example');
-    const lines = example?.kind === 'example' ? example.lines : [];
+  it('says what a place, a digit and „wie Stufe k" are, and what a wrong key costs', () => {
+    const text = JSON.stringify(manual);
+    expect(text).toContain('Platz heißt die Lage einer Taste von links, Ziffer ihre Beschriftung.');
+    expect(text).toContain(
+      '„Platz wie Stufe k“ ist der Platz, „Ziffer wie Stufe k“ die Ziffer der Taste, die in ' +
+        'Stufe k angenommen wurde',
+    );
+    expect(text).toContain('zieht 12 Sekunden Einsatzzeit ab, und die Bank fällt auf Stufe 1');
+  });
+
+  it('prints a log that the page and the bank bear out', () => {
+    const log = blocks.find((block) => block.kind === 'example');
+    const lines = log?.kind === 'example' ? log.lines : [];
     const [first, second, rule, pressed] = [
-      /^Stufe 1: Display (\d); gedrückt die (\S+) Taste, Beschriftung (\d)\.$/,
-      /^Stufe 2: Display (\d); Tasten von links (\d), (\d), (\d), (\d)\.$/,
-      /^Stufe 2, Display (\d): (.+), also die (\d)\.$/,
-      /^Gedrückt: die (\S+) Taste\.$/,
+      /^\d\d:\d\d Stufe 1, Display (\d): Platz (\d) angenommen, Ziffer (\d)\.$/,
+      /^\d\d:\d\d Stufe 2, Display (\d); Tasten von links (\d), (\d), (\d), (\d)\.$/,
+      /^\d\d:\d\d Tabelle: (.+), also die (\d)\.$/,
+      /^\d\d:\d\d Platz (\d) angenommen; Stufe 3\.$/,
     ].map((pattern, i) => pattern.exec(lines[i] ?? ''));
     if (!first || !second || !rule || !pressed) {
-      throw new Error(`unreadable example: ${JSON.stringify(lines)}`);
+      throw new Error(`unreadable log: ${JSON.stringify(lines)}`);
     }
     const [display1, display2] = [Number(first[1]), Number(second[1])];
-    const [position1, label1] = [ORDINALS.indexOf(first[2] ?? ''), Number(first[3])];
+    const [position1, label1] = [Number(first[2]) - 1, Number(first[3])];
     const labels2 = second.slice(2, 6).map(Number);
-    const position2 = ORDINALS.indexOf(pressed[1] ?? '');
-    // Line 3 quotes stage 2's printed line for its display, and the label it leads to.
-    expect(Number(rule[1])).toBe(display2);
-    expect(printedTarget(manual, 2, display2)).toBe(rule[2]);
-    expect(labels2[position2]).toBe(Number(rule[3]));
+    const position2 = Number(pressed[1]) - 1;
+    // Line 3 quotes the table's cell for stage 2 and its display, and the digit it leads to.
+    expect(printedTarget(manual, 2, display2)).toBe(rule[1]);
+    expect(labels2[position2]).toBe(Number(rule[2]));
     // Stage 1 shows only the pressed key's label; the other three may sit in any order.
     const layouts = permutations([1, 2, 3, 4]).filter((labels) => labels[position1] === label1);
     expect(layouts).toHaveLength(6);
@@ -469,13 +483,11 @@ describe('the printed memory manual', () => {
     }
   });
 
-  it('prints the same rules for every def; only the penalty is the def’s own', () => {
+  it('prints the same table for every def; only the penalty is the def’s own', () => {
     expect(memoryModule.manual(structuredClone(def))).toEqual(manual);
     const dearer = memoryModule.manual({ ...def, id: 'andere', penaltySec: 30 });
-    expect(JSON.stringify(dearer)).toContain('−30 s');
-    expect(dearer.flatMap((s) => s.blocks).filter((b) => b.kind === 'rules')).toEqual(
-      blocks.filter((b) => b.kind === 'rules'),
-    );
+    expect(JSON.stringify(dearer)).toContain('zieht 30 Sekunden Einsatzzeit ab');
+    expect(keyTable(dearer)).toEqual(table);
   });
 });
 

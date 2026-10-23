@@ -219,45 +219,58 @@ describe('switches: the printed rules', () => {
     }
   });
 
-  it.each(FEATURES)('need no legend: the paragraph names the columns, with %i features', (n) => {
-    const blocks = switchesModule.manual(defOf(n)).flatMap((section) => section.blocks);
-    expect(blocks.map((block) => block.kind)).toEqual(['figure', 'p', 'table', 'example', 'p']);
-    const [intro = '', penalty = ''] = blocks.flatMap((block) =>
-      block.kind === 'p' ? [block.text] : [],
-    );
-    const named = ['LED', 'Markierung', 'Stern', 'Stellung'].filter((word) => intro.includes(word));
+  it.each(FEATURES)('need no legend: Aufbau and Betrieb name the columns, %i features', (n) => {
+    const manual = switchesModule.manual(defOf(n));
+    expect(manual.map(({ heading }) => heading)).toEqual([
+      'Kippschalterbank, Typ KS-6 (Baujahr 1984)',
+      'Aufbau',
+      'Betrieb',
+      'Stellungstabelle',
+      'Aus der Werkstatt',
+    ]);
+    const paragraph = (heading: string): string =>
+      (manual.find((section) => section.heading === heading)?.blocks ?? [])
+        .flatMap((block) => (block.kind === 'p' ? [block.text] : []))
+        .join(' ');
+    const [build, operation] = [paragraph('Aufbau'), paragraph('Betrieb')];
+    const text = `${build} ${operation}`;
+    const named = ['LED', 'Markierung', 'Stern', 'Stellung'].filter((word) => text.includes(word));
     expect(named).toEqual(printedTable(defOf(n)).head);
-    expect(intro).toContain('PRÜFEN');
-    expect(intro.split(/(?<=\.) /).length).toBeLessThanOrEqual(3);
-    expect(penalty).toBe('Fehlgriff: Alarm, −12 s. Die Schalter bleiben, wie sie stehen.');
+    expect(build).toContain('daneben die Taste PRÜFEN');
+    expect(operation).toContain('gewertet wird erst PRÜFEN');
+    expect(operation).toMatch(
+      /zieht 12 Sekunden Einsatzzeit ab; alle Schalter bleiben, wie sie stehen\.$/,
+    );
   });
 
-  /** The sign values an example may state, as the labs they leave: the rest stays free. */
+  /** The sign values a log may state, as the labs they leave: the rest stays free. */
   const STATED: Record<string, Edgework[]> = {
-    '3 Notstromzellen eingesetzt.': ['2', '7'].flatMap((digit) =>
+    '3 Notstromzellen eingesetzt': ['2', '7'].flatMap((digit) =>
       (['lit', 'dark', 'absent'] as const).map((sig) => lab(digit, 3, sig)),
     ),
-    'Kennung endet auf 7.': [0, 1, 2, 4].flatMap((cells) =>
+    'Kennung endet auf 7': [0, 1, 2, 4].flatMap((cells) =>
       (['lit', 'dark', 'absent'] as const).map((sig) => lab('7', cells, sig)),
     ),
   };
 
-  it.each(FEATURES)('print an example that the table and PRÜFEN bear out, %i features', (n) => {
+  it.each(FEATURES)('print a log that the table and PRÜFEN bear out, %i features', (n) => {
     const bankDef = defOf(n);
-    const example = switchesModule
+    const log = switchesModule
       .manual(bankDef)
       .flatMap((section) => section.blocks)
       .find((block) => block.kind === 'example');
-    const [seen = '', row = '', set = ''] = example?.kind === 'example' ? example.lines : [];
+    const [seen = '', row = '', set = ''] = log?.kind === 'example' ? log.lines : [];
     const sw = new RegExp(
-      '^Gesehen: Schalter (\\d) mit LED (an|aus), Markierung (\\S+?)' +
-        '(?:, (ohne|mit) Stern)?\\. (.+)$',
+      '^\\d\\d:\\d\\d Schalter (\\d): LED (an|aus), Markierung (\\S+?)' +
+        '(?:, (ohne|mit) Stern)?; (.+)\\.$',
     ).exec(seen);
-    const cells = /^Zeile (an|aus), ([a-z]+)(?:, (ja|nein))?: (.+)\.$/.exec(row);
-    const end = /Schalter (\d) (hoch|bleibt unten)\./.exec(set);
+    const cells = /^\d\d:\d\d Zeile (an|aus), ([a-z]+)(?:, (ja|nein))?: (.+)\.$/.exec(row);
+    const end = /Schalter (\d) (hoch|bleibt unten), die übrigen nach ihren Zeilen; PRÜFEN/.exec(
+      set,
+    );
     const labs = STATED[sw?.[5] ?? ''];
     if (sw === null || cells === null || end === null || labs === undefined) {
-      throw new Error(`unreadable example: ${JSON.stringify([seen, row, set])}`);
+      throw new Error(`unreadable log: ${JSON.stringify([seen, row, set])}`);
     }
     // The row is the switch's own; the table prints the stated position in it.
     const star = sw[4] === undefined ? [] : [sw[4] === 'mit' ? 'ja' : 'nein'];

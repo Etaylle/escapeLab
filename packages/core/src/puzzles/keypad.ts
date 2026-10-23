@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { shuffle } from '../rng.js';
 import { commonDefShape, type PuzzleModule } from './module.js';
-import { deviceFigure, penaltyLine, workedExample } from './printed.js';
+import { costOf, labDocument, type TypePlate } from './printed.js';
 
 /**
  * Symbol keypad: four glyphs on a 2×2 keypad, all from one column of a fixed
@@ -29,14 +29,42 @@ export const KEYPAD_COLUMNS: readonly (readonly string[])[] = [
 
 const KEY_COUNT = 4;
 
+// --- the printed document --------------------------------------------------------------
+
+const PLATE: TypePlate = { name: 'Zeichentastenfeld', type: 'ZT-4', year: 1991 };
+
+const PURPOSE =
+  'Das Tastenfeld gibt Türen und Schränke frei, ohne dass ein Code auf Papier steht: Die ' +
+  'Zeichen wechseln mit jeder Neubelegung, die Reihenfolge ergibt allein die Zeichentafel ' +
+  'unten.';
+
+const BUILD =
+  'Vier Tasten, zwei über zwei, jede mit einem Zeichen der Tafel. Die Tafel hat sechs ' +
+  'Spalten; genau eine enthält alle vier Zeichen eines Feldes.';
+
+/** Betrieb: the order the pad takes its keys in, the lit keys, the wrong key and its cost. */
+function operationText(def: KeypadDef): string {
+  return (
+    'Das Feld nimmt die Tasten in der Reihenfolge an, in der ihre Zeichen in dieser Spalte ' +
+    'von oben nach unten stehen; jede richtige leuchtet und bleibt an. Bei einer falschen ' +
+    `meldet die Überwachung Alarm und zieht ${costOf(def.penaltySec)} ab; leuchtende Tasten ` +
+    'bleiben an.'
+  );
+}
+
 /**
- * The worked example: four keys from the third column, in grid order, and
- * the order that column gives them. No other column holds all four.
+ * The printed log: four keys from the third column, in grid order, and the
+ * order that column gives them. No other column holds all four.
  */
-const EXAMPLE: readonly string[] = [
-  'Gesehen, oben links bis unten rechts: ¶, Ψ, ♪, ⌘.',
-  'Nur die dritte Spalte enthält alle vier.',
-  'Gedrückt, wie sie dort von oben stehen: ♪, Ψ, ⌘, ¶.',
+const LOG: readonly string[] = [
+  '10:05 Feld zeigt, oben links bis unten rechts: ¶, Ψ, ♪, ⌘.',
+  '10:05 Alle vier stehen nur in Spalte 3.',
+  '10:06 Angenommen in der Folge dieser Spalte: ♪, Ψ, ⌘, ¶.',
+];
+
+const WORKSHOP: readonly string[] = [
+  'Im Labor heißen die Zeichen nach ihrer Form: Dreizack, Hufeisen, Note, liegende Acht.',
+  'Die Tafel gilt nur spaltenweise, von oben nach unten; ihre Zeilen bedeuten nichts.',
 ];
 
 const defSchema = z.strictObject({
@@ -114,24 +142,21 @@ export const keypadModule: PuzzleModule<KeypadDef, KeypadState, KeypadInput, Key
   },
 
   manual(def) {
-    return [
-      {
-        heading: 'Tastenfeld',
-        blocks: [
-          deviceFigure('keypad', 'Tastenfeld mit Zeichen'),
-          {
-            kind: 'p',
-            text:
-              'Vier Tasten tragen je ein Zeichen. Genau eine Spalte enthält alle vier. Die ' +
-              'Tasten werden in der Reihenfolge gedrückt, in der ihre Zeichen in dieser Spalte ' +
-              'stehen, von oben.',
-          },
-          { kind: 'columns', columns: KEYPAD_COLUMNS.map((column) => [...column]) },
-          workedExample(EXAMPLE),
-          penaltyLine(def.penaltySec, 'Leuchtende Tasten bleiben an.'),
-        ],
-      },
-    ];
+    return labDocument({
+      plate: PLATE,
+      purpose: PURPOSE,
+      figure: { of: 'keypad', device: 'Tastenfeld mit Zeichen' },
+      build: BUILD,
+      operation: operationText(def),
+      law: [
+        {
+          heading: 'Zeichentafel',
+          blocks: [{ kind: 'columns', columns: KEYPAD_COLUMNS.map((column) => [...column]) }],
+        },
+      ],
+      log: LOG,
+      workshop: WORKSHOP,
+    });
   },
 
   /** The reader's printed table is this module's own, so the solver reads that. */

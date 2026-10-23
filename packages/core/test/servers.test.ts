@@ -13,6 +13,7 @@ import type {
   ConsoleId,
   GameState,
   ManualBlock,
+  ManualSection,
   Mission,
   Move,
   Perspectives,
@@ -22,7 +23,7 @@ import type {
 import {
   CODE_MEANINGS,
   DEPENDS_ON,
-  EXAMPLE,
+  LOG,
   LOG_LINES,
   SERVER_CODES,
   SERVICES,
@@ -718,34 +719,52 @@ type TableBlock = Extract<ManualBlock, { kind: 'table' }>;
 const blocksOf = (def: ServersDef): ManualBlock[] =>
   serversModule.manual(def).flatMap((section) => section.blocks);
 
-describe('servers manual', () => {
-  it('prints the drawing, the device, three tables, the rules, the example and the penalty', () => {
-    const [section, ...more] = serversModule.manual(defOf({ penaltySec: 25 }));
-    expect(more).toEqual([]);
-    expect(section?.heading).toBe('Serverraum');
-    const blocks = section?.blocks ?? [];
-    expect(blocks.map((block) => block.kind)).toEqual([
-      'figure',
-      'p',
-      'table',
-      'table',
-      'table',
-      'rules',
-      'example',
-      'p',
+describe('servers manual: the document', () => {
+  it('prints the plate, Aufbau, Betrieb, the plan with the log, and the workshop', () => {
+    const manual = serversModule.manual(defOf({ penaltySec: 25 }));
+    expect(manual.map(({ heading }) => heading)).toEqual([
+      'Rechnernetz, Typ RN-6 (Baujahr 1998)',
+      'Aufbau',
+      'Betrieb',
+      'Netzplan',
+      'Befehle und Codes',
+      'Aus der Werkstatt',
     ]);
-    expect(blocks[0]).toEqual({
-      kind: 'figure',
-      of: 'servers',
-      caption: 'Abb. 1 — Dienste und Rack',
-    });
-    const device = blocks[1]?.kind === 'p' ? blocks[1].text : '';
-    expect(device).toMatch(/^Pult A ist ein Terminal: Es zeigt jeden der sechs Dienste mit /);
-    expect(device).toMatch(/ Pult B ist ein Rack mit einem Stromschalter und einer LED je Dienst;/);
-    expect(blocks.at(-1)).toEqual({
-      kind: 'p',
-      text: 'Fehlgriff: Alarm, −25 s. Ein Start mit E50 infiziert dazu einen laufenden Dienst.',
-    });
+    expect(manual.map(({ blocks }) => blocks.map((block) => block.kind))).toEqual([
+      ['p'],
+      ['figure', 'p'],
+      ['p'],
+      ['table'],
+      ['table', 'table', 'rules', 'example'],
+      ['p', 'p'],
+    ]);
+    const [figure, build] = manual[1]?.blocks ?? [];
+    expect(figure).toEqual({ kind: 'figure', of: 'servers', caption: 'Abb. 1 — Dienste und Rack' });
+    const device = build?.kind === 'p' ? build.text : '';
+    expect(device).toMatch(/^Pult A ist das Terminal: Es zeigt jeden Dienst mit Zustand, /);
+    expect(device).toMatch(/ Pult B ist das Rack mit einem Stromschalter und einer LED je Dienst:/);
+    const [operation] = manual[2]?.blocks ?? [];
+    const text = operation?.kind === 'p' ? operation.text : '';
+    expect(text).toContain('zieht 25 Sekunden Einsatzzeit ab; der Dienst bleibt stehen.');
+    expect(text).toMatch(/ Ein Start mit E50 infiziert dazu einen laufenden Dienst\.$/);
+  });
+
+  it('notes quarantine first where the def deals it, the plan’s order always', () => {
+    const notes = (def: ServersDef): string[] =>
+      (serversModule.manual(def).at(-1)?.blocks ?? []).flatMap((b) =>
+        b.kind === 'p' ? [b.text] : [],
+      );
+    expect(notes(defOf())).toEqual([
+      'Vor allem anderen den Dienst mit E50 vom Strom nehmen: Ein Start steckt einen zweiten ' +
+        'Dienst an.',
+      'Der Netzplan listet die Dienste in einer Reihenfolge, in der sie starten können: von oben ' +
+        'nach unten hochfahren.',
+    ]);
+    expect(notes(defOf({ trap: false }))).toEqual(notes(defOf()).slice(1));
+    // The plan's order is one the services can start in: every dependency listed above.
+    for (const [i, service] of SERVICES.entries()) {
+      expect(DEPENDS_ON[service].every((dep) => SERVICES.indexOf(dep) < i), service).toBe(true);
+    }
   });
 
   it('prints the dependencies, the commands and the codes as the station knows them', () => {
@@ -770,7 +789,7 @@ describe('servers manual', () => {
     ]);
     expect(codes).toEqual({
       kind: 'table',
-      head: ['Code', 'Bedeutung'],
+      head: ['Code', 'Verfahren'],
       rows: [
         ['E11', 'Neustart genügt: start'],
         ['E23', 'Strom aus, dann an, dann start'],
@@ -782,6 +801,9 @@ describe('servers manual', () => {
     expect(SERVER_CODES.map((code) => CODE_MEANINGS[code])).toEqual(meanings);
   });
 
+});
+
+describe('servers manual: the law', () => {
   it('sets out the order, the rack and the restart as rules, and when the room is online', () => {
     const rules = blocksOf(defOf()).find((block) => block.kind === 'rules');
     expect(rules).toEqual({
@@ -799,24 +821,27 @@ describe('servers manual', () => {
     });
   });
 
+});
+
+describe('servers manual: the def and the log', () => {
   it('hangs on the def alone: the same pages for a copy, another price for another penalty', () => {
     const def = defOf();
     expect(serversModule.manual(structuredClone(def))).toEqual(serversModule.manual(def));
-    expect(serversModule.manual(defOf({ crashed: 5, trap: false }))).toEqual(
-      serversModule.manual(def),
+    expect(serversModule.manual(defOf({ crashed: 5 }))).toEqual(serversModule.manual(def));
+    const dearer = serversModule.manual(defOf({ penaltySec: 45 }));
+    const operation = (manual: ManualSection[]) => manual.find((s) => s.heading === 'Betrieb');
+    expect(dearer.filter((s) => s.heading !== 'Betrieb')).toEqual(
+      serversModule.manual(def).filter((s) => s.heading !== 'Betrieb'),
     );
-    const dearer = blocksOf(defOf({ penaltySec: 45 }));
-    expect(dearer.slice(0, -1)).toEqual(blocksOf(def).slice(0, -1));
-    expect(dearer.at(-1)).toMatchObject({
-      text: expect.stringMatching(/^Fehlgriff: Alarm, −45 s\./),
-    });
+    expect(JSON.stringify(operation(dearer))).toContain('zieht 45 Sekunden Einsatzzeit ab');
   });
 
-  it('works its example the way the station does: a power cycle, then the restarts of E42', () => {
+  it('logs a power cycle, then the restarts of E42, the way the station runs them', () => {
     const boxes = blocksOf(defOf()).filter(
       (block): block is ExampleBlock => block.kind === 'example',
     );
-    expect(boxes.map((box) => box.lines)).toEqual([[...EXAMPLE]]);
+    expect(boxes.map((box) => box.lines)).toEqual([[...LOG]]);
+    const lines = LOG.map((line) => line.replace(/^\d\d:\d\d /, ''));
     // What line 1 saw: NETZ running, DNS E23 and AUTH E42 with power, the rest without.
     const seen = lab({
       dns: DOWN('E23'),
@@ -825,9 +850,9 @@ describe('servers manual', () => {
       web: DOWN('E11', false),
       mail: DOWN('E11', false),
     });
-    expect(EXAMPLE[0]).toBe(
-      'Terminal: NETZ läuft; DNS FEHLER E23 und AUTH FEHLER E42, beide mit Strom; der Rest ohne ' +
-        'Strom.',
+    expect(lines[0]).toBe(
+      'status: NETZ RUNNING; DNS FEHLER E23 und AUTH FEHLER E42, beide mit Strom; der Rest ' +
+        'ohne Strom.',
     );
     // Line 2: the cycle at the rack, then the start — the solver plans the same.
     expect(serversModule.solve(defOf(), views(seen), null).map(said)).toEqual([
@@ -841,8 +866,8 @@ describe('servers manual', () => {
       [{ cmd: 'start', service: 'dns' }, 'a'],
     ]);
     expect(printed(cycled).at(-1)).toBe('[ok] dns läuft');
-    expect(EXAMPLE[1]).toContain('[ OK ] dns läuft');
-    // Line 3: the restart of NETZ takes DNS down, and only DNS; the restart of DNS starts it.
+    expect(lines[1]).toBe('Rack: DNS aus und wieder an; start dns: [ OK ] dns läuft.');
+    // Line 3: the restart of NETZ takes DNS down, and only DNS.
     const restarted = type(cycled, 'restart', 'netz').state;
     expect(downOf(restarted)).toEqual(['dns', 'db', 'auth', 'web', 'mail']);
     expect(restarted.services.dns.code).toBe('E11');
@@ -850,14 +875,19 @@ describe('servers manual', () => {
       '[warn] dns abgestürzt: E11',
       '[ok] netz neu gestartet',
     ]);
+    expect(lines[2]).toBe(
+      'restart netz: [WARN] dns abgestürzt: E11; [ OK ] netz neu gestartet.',
+    );
+    // Line 4: the restart of DNS, which is down, starts it.
     const again = type(restarted, 'restart', 'dns');
     expect(again.penalty).toBeNull();
     expect(printed(again.state).at(-1)).toBe('[ok] dns läuft');
-    // Line 4: AUTH starts, both its dependencies up since its crash.
+    expect(lines[3]).toBe('restart dns: [ OK ] dns läuft.');
+    // Line 5: AUTH starts, both its dependencies up since its crash.
     const auth = type(again.state, 'start', 'auth');
     expect(auth.penalty).toBeNull();
     expect(printed(auth.state).at(-1)).toBe('[ok] auth läuft');
-    expect(EXAMPLE[3]).toBe('Dann start auth: [ OK ] auth läuft.');
+    expect(lines[4]).toBe('start auth: [ OK ] auth läuft.');
     // Without the restarts the start would have failed.
     expect(type(cycled, 'start', 'auth').penalty).toBe('Serverraum: Fehler bleibt');
   });

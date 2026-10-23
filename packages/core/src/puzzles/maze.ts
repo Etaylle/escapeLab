@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Rng } from '../rng.js';
 import { commonDefShape, type PuzzleModule } from './module.js';
-import { deviceFigure, penaltyLine, workedExample } from './printed.js';
+import { costOf, labDocument, type TypePlate } from './printed.js';
 
 /**
  * Invisible maze: the operator (navigator) at the station sees the marker
@@ -27,11 +27,44 @@ export const MAZE_DIRS = [
 
 const OPPOSITE = [2, 3, 0, 1] as const;
 
-/** The worked example: one step, on cells that every grid from 4 × 4 up has. */
-const EXAMPLE: readonly string[] = [
-  'Gesehen am Navigationspult: Marker auf B2, Ziel auf D4.',
-  'Schaltplan: von B2 nach rechts eine Wand, nach unten frei.',
-  'Ein Schritt nach unten: Marker auf B3.',
+// --- the printed document --------------------------------------------------------------
+
+const PLATE: TypePlate = { name: 'Leitungsnetz mit Navigationspult', type: 'LN-8', year: 1993 };
+
+const PURPOSE =
+  'Ein Prüfkopf fährt durch die Kabelschächte des Leitungsnetzes zur Störstelle. Gesteuert ' +
+  'wird er vom Navigationspult aus; wo die Schächte verlaufen, zeigt nur der Schaltplan.';
+
+/** Aufbau: the grid the def sets out, how its cells are named, and who shows what. */
+function buildText(def: MazeDef): string {
+  const lastColumn = 'ABCDEFGH'.charAt(def.size - 1);
+  return (
+    `Ein Raster aus ${def.size} × ${def.size} Zellen, Spalten A bis ${lastColumn} von links, ` +
+    `Zeilen 1 bis ${def.size} von oben; eine Zelle heißt nach Spalte und Zeile, etwa C4. Das ` +
+    'Navigationspult zeigt den Prüfkopf als Marker und das Ziel, der Schaltplan die Wände und ' +
+    'das Ziel.'
+  );
+}
+
+/** Betrieb: a step at a time, and what a wall costs. */
+function operationText(def: MazeDef): string {
+  return (
+    'Der Prüfkopf fährt Schritt für Schritt nach oben, unten, links oder rechts, bis er im ' +
+    'Ziel steht. Steht zwischen ihm und der Nachbarzelle eine Wand, bleibt er stehen, und die ' +
+    `Überwachung meldet Alarm und zieht ${costOf(def.penaltySec)} ab.`
+  );
+}
+
+/** The printed log: one step, on cells that every grid from 4 × 4 up has. */
+const LOG: readonly string[] = [
+  '11:52 Prüfkopf auf B2, Ziel auf D4.',
+  '11:52 Schaltplan: von B2 nach rechts eine Wand, nach unten frei.',
+  '11:53 Ein Schritt nach unten: Prüfkopf auf B3.',
+];
+
+const WORKSHOP: readonly string[] = [
+  'Der Weg lässt sich auf dem Schaltplan am leichtesten vom Ziel rückwärts finden.',
+  'Das Pult kennt keine Wände: Der Marker zeigt nur, wo der Prüfkopf steht.',
 ];
 
 export interface MazeState {
@@ -210,34 +243,16 @@ export const mazeModule: PuzzleModule<MazeDef, MazeState, MazeInput, MazeView> =
   },
 
   manual(def) {
-    const lastColumn = 'ABCDEFGH'.charAt(def.size - 1);
-    return [
-      {
-        heading: 'Leitungsnetz',
-        blocks: [
-          deviceFigure('maze', 'Navigationspult mit Raster'),
-          {
-            kind: 'p',
-            text:
-              `Ein Raster aus ${def.size} × ${def.size} Zellen, Spalten A bis ${lastColumn} ` +
-              `von links, Zeilen 1 bis ${def.size} von oben; eine Zelle heißt nach Spalte und ` +
-              'Zeile, etwa C4. Das Navigationspult zeigt den Marker und das Ziel, der ' +
-              'Schaltplan die Wände und das Ziel. Der Marker muss ins Ziel, Schritt für ' +
-              'Schritt nach oben, unten, links oder rechts.',
-          },
-          {
-            kind: 'rules',
-            items: [
-              'Wenn zwischen Marker und Nachbarzelle keine Wand steht, rückt der Marker mit ' +
-                'einem Schritt dorthin.',
-              'Andernfalls bleibt der Marker stehen; der Schritt ist ein Fehlgriff.',
-            ],
-          },
-          workedExample(EXAMPLE),
-          penaltyLine(def.penaltySec),
-        ],
-      },
-    ];
+    return labDocument({
+      plate: PLATE,
+      purpose: PURPOSE,
+      figure: { of: 'maze', device: 'Navigationspult mit Raster' },
+      build: buildText(def),
+      operation: operationText(def),
+      law: [],
+      log: LOG,
+      workshop: WORKSHOP,
+    });
   },
 
   solve(def, { operator, reader }) {

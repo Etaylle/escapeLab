@@ -96,6 +96,16 @@ Protokoll vermerkt „Notiz gelesen“.
 Die Laborkennung hängt als Schild im Labor: Wer daran vorbeikommt, hat sie ab dann in der Leiste
 und übernimmt sie per Knopf in den Notizblock.
 
+**Die Papiere des Labors:** Jede Handbuchseite ist ein Dokument, das das Labor für die eigenen
+Leute geschrieben hat, keine Anleitung an Spielende — Titelzeile mit Typ und Baujahr („Signalkette,
+Typ SK-4 (Baujahr 1986)“), Zweck, Aufbau unter der Zeichnung, Betrieb (was als Fehler gilt und was
+die Überwachung dann abzieht), die Tabellen der Maschine, ein Protokollauszug als durchgerechneter
+Fall und Notizen aus der Werkstatt, höchstens 170 Wörter Fließtext je Seite. Die Randnotizen sind
+Zettel von Leuten aus dem Labor („Nachtschicht: …“, „Admin: …“), nie die Lösung der Runde.
+`core/test/manuals.test.ts` hält Aufbau, Länge und Ton aller Module und Hinweise fest: kein du, ihr
+oder Sie, keine Spieler, Crew oder Partner, keine Imperative und Regieanweisungen; ein Verstoß nennt
+den Satz.
+
 **Nie allein:** Eine Eingabe am Pult zählt nur, solange noch jemand am anderen Pult oder bei den
 Regeln dieser Station steht — sonst wird sie ohne Alarm abgewiesen. Der Kopf des Pults nennt die
 zweite Person („Mit Ben bei: SPIND“, „Mit Ben an Pult B“) oder warnt, dass sie fehlt. Ausgenommen

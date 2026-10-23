@@ -14,12 +14,12 @@ import type {
   ConsoleId,
   GameState,
   ManualBlock,
-  ManualSection,
   Mission,
   PuzzleContext,
   SignalToken,
   Viewer,
 } from '../src/index.js';
+import { WORKSHOP } from '../src/puzzles/printed.js';
 import { LEGEND, PATTERN_FIGURE, SIGNAL_PATTERNS, signalModule } from '../src/puzzles/signal.js';
 import type {
   LegendRow,
@@ -693,8 +693,8 @@ describe('signal solver', () => {
 type ExampleBlock = Extract<ManualBlock, { kind: 'example' }>;
 type TableBlock = Extract<ManualBlock, { kind: 'table' }>;
 
-/** The example box's lines; the manual has exactly one. */
-function exampleOf(def: SignalDef): string[] {
+/** The log's lines; the page prints exactly one log. */
+function logOf(def: SignalDef): string[] {
   const boxes = signalModule
     .manual(def)
     .flatMap((section) => section.blocks)
@@ -703,14 +703,13 @@ function exampleOf(def: SignalDef): string[] {
   return boxes[0]?.lines ?? [];
 }
 
-/** The rules as printed, in order. */
-const rulesOf = (def: SignalDef): string[] =>
-  signalModule
-    .manual(def)
-    .flatMap((section) => section.blocks)
-    .flatMap((block) => (block.kind === 'rules' ? block.items : []));
+/** The running text of the section under `heading`, paragraph by paragraph. */
+const paragraphsUnder = (def: SignalDef, heading: string): string[] =>
+  (signalModule.manual(def).find((section) => section.heading === heading)?.blocks ?? []).flatMap(
+    (block) => (block.kind === 'p' ? [block.text] : []),
+  );
 
-/** The table of the section „Legende"; the manual has one with the legend. */
+/** The table of the section „Legende"; the page has one with the legend. */
 function legendOf(def: SignalDef): TableBlock {
   const section = signalModule.manual(def).find(({ heading }) => heading === 'Legende');
   const tables = (section?.blocks ?? []).filter(
@@ -725,7 +724,7 @@ function legendOf(def: SignalDef): TableBlock {
 
 /** The signs a line lists after its colon, read back the way a player would. */
 function signsIn(line: string): SignalToken[] {
-  const listed = line.slice(line.indexOf(':') + 1).replace(/\.$/, '');
+  const listed = line.slice(line.indexOf(':', 6) + 1).replace(/\.$/, '');
   return listed.split(',').map((label) => {
     const token = TOKENS.find((t) => tokenLabel(t) === label.trim());
     if (token === undefined) {
@@ -757,14 +756,14 @@ const COLOUR_COLUMNS = [
   [3, 'b'],
 ] as const;
 
-/** A shape as the rules name it, back to the key's shape. */
+/** A shape as the page names it, back to the key's shape. */
 const PRINTED_SHAPES: Record<string, Shape> = {
   Kreis: 'kreis',
   Dreieck: 'dreieck',
   Quadrat: 'quadrat',
 };
 
-/** One key as the rules name it, „Dreieck in Zeile 3", read back. */
+/** One key as the page names it, „Dreieck in Zeile 3", read back. */
 function keyNamed(name: string): SignalKey {
   const [, noun = '', row = ''] = /^(\S+) in Zeile ([1-4])$/.exec(name.trim()) ?? [];
   const shape = PRINTED_SHAPES[noun];
@@ -777,73 +776,75 @@ function keyNamed(name: string): SignalKey {
 /** The keys a line lists after its colon. */
 const keysIn = (line: string): SignalKey[] =>
   line
-    .slice(line.indexOf(':') + 1)
+    .slice(line.indexOf(':', 6) + 1)
     .replace(/\.$/, '')
     .split(',')
     .map(keyNamed);
 
-/** What a technical document leaves out: exclamations, a reader addressed, coaching on talk. */
-const OFF_REGISTER = [
-  /!/,
-  /\b(du|dich|dir|dein\w*)\b/i,
-  /ansag|beschreib|gefahrlos|redet|vorles|zurückruf|einzähl|notier/i,
-  /\bSonst\b/,
-];
-
-describe('signal manual', () => {
-  it('prints the drawing, the device, the rules, the example and the penalty in order', () => {
+describe('signal manual: the document', () => {
+  it('prints its document: the plate, Zweck, Aufbau, Betrieb, the log and the workshop', () => {
     const def = defOf({ stages: 5, length: 3, penaltySec: 25 });
-    const [section, ...more] = signalModule.manual(def);
-    expect(more).toEqual([]);
-    expect(section?.heading).toBe('Signalkette');
-    const blocks = section?.blocks ?? [];
-    expect(blocks.map((block) => block.kind)).toEqual(['figure', 'p', 'rules', 'example', 'p']);
-    expect(blocks[0]).toEqual({
+    const manual = signalModule.manual(def);
+    expect(manual.map(({ heading }) => heading)).toEqual([
+      'Signalkette, Typ SK-4 (Baujahr 1986)',
+      'Aufbau',
+      'Betrieb',
+      'Aus der Werkstatt',
+    ]);
+    expect(manual.map(({ blocks }) => blocks.map((block) => block.kind))).toEqual([
+      ['p'],
+      ['figure', 'p'],
+      ['p', 'example'],
+      ['p', 'p'],
+    ]);
+    expect(manual[1]?.blocks[0]).toEqual({
       kind: 'figure',
       of: 'signal',
       caption: 'Abb. 1 — Zwei Signalpulte',
     });
-    expect(blocks[1]).toMatchObject({
-      kind: 'p',
-      text: expect.stringMatching(/^Zwei Pulte, A und B\. .*Folge von 3 Zeichen.*Richtung\.$/),
-    });
-    expect(blocks.at(-1)).toEqual({ kind: 'p', text: 'Fehlgriff: Alarm, −25 s.' });
-    const rules = blocks[2]?.kind === 'rules' ? blocks[2].items : [];
-    expect(rules.join(' ')).toContain('Wenn Stufe 5 vollständig gedrückt ist');
-    expect(rules.join(' ')).toContain('Wenn alle 3 Zeichen einer Stufe gedrückt sind');
-    expect(rules.join(' ')).not.toMatch(/Legende|nacheinander/);
+    const [purpose] = paragraphsUnder(def, 'Signalkette, Typ SK-4 (Baujahr 1986)');
+    expect(purpose).toContain('Seit dem Umbau hängt das Flurschott an der Kette.');
+    const [build] = paragraphsUnder(def, 'Aufbau');
+    expect(build).toContain('zwölf Tasten, eine für jedes Zeichen');
+    const [operation] = paragraphsUnder(def, 'Betrieb');
+    expect(operation).toMatch(/^Die Kette hat fünf Stufen; .* eine Folge von drei Zeichen, /);
+    expect(operation).toContain('jedes auf seiner Taste');
+    expect(operation).toContain('Fehlquittierung: Die Stufe fällt in die Grundstellung');
+    expect(operation).toContain('zieht 25 Sekunden Einsatzzeit ab.');
+    expect(JSON.stringify(manual)).not.toMatch(/Legende|nacheinander/);
   });
 
-  it('with the legend: shapes only at the receiving console, the legend in a section', () => {
+  it('with the legend: rows of shapes at both consoles, the legend in a section of its own', () => {
     const def = defOf({ stages: 5, length: 3, penaltySec: 25, legend: true });
-    const [device, legend, ...more] = signalModule.manual(def);
-    expect(more).toEqual([]);
-    expect(device?.heading).toBe('Signalkette');
-    expect(device?.blocks.map((block) => block.kind)).toEqual(['figure', 'p', 'rules']);
-    const text = device?.blocks[1]?.kind === 'p' ? device.blocks[1].text : '';
-    expect(text).toMatch(/^Zwei Pulte, A und B\. .*Richtung\.$/);
-    expect(text).toContain(
-      'Folge von 3 farbigen Zeichen; das empfangende Pult zeigt nur Formen: 12 graue Tasten ' +
-        'in 4 nummerierten Zeilen',
-    );
-    expect(legend?.heading).toBe('Legende');
-    expect(legend?.blocks.map((block) => block.kind)).toEqual(['figure', 'table', 'example', 'p']);
-    expect(legend?.blocks[0]).toEqual({
+    const manual = signalModule.manual(def);
+    expect(manual.map(({ heading }) => heading)).toEqual([
+      'Signalkette, Typ SK-4 (Baujahr 1986)',
+      'Aufbau',
+      'Betrieb',
+      'Legende',
+      'Aus der Werkstatt',
+    ]);
+    const legend = manual[3]?.blocks ?? [];
+    expect(legend.map((block) => block.kind)).toEqual(['figure', 'table', 'example']);
+    expect(legend[0]).toEqual({
       kind: 'figure',
       of: PATTERN_FIGURE,
       caption: 'Abb. 2 — Farben und Muster',
     });
-    expect(legend?.blocks.at(-1)).toEqual({ kind: 'p', text: 'Fehlgriff: Alarm, −25 s.' });
-    expect(rulesOf(def)).toContain(
-      'Wenn ein Zeichen gesendet wird, wird am empfangenden Pult die Taste seiner Form in der ' +
-        'Zeile gedrückt, die die Legende diesem Pult für seine Farbe nennt.',
+    const [build] = paragraphsUnder(def, 'Aufbau');
+    expect(build).toContain(
+      'zwölf grauen Tasten in vier nummerierten Zeilen, je Kreis, Dreieck und Quadrat',
     );
-    expect(rulesOf(def)).toContain(
-      'Wenn eine Taste gedrückt wird, die nicht für das nächste Zeichen der Folge steht, ' +
-        'beginnt die Stufe von vorn; die Folge bleibt dieselbe.',
+    expect(build).toContain('A und B haben verschiedene, ein alter Verwechslungsschutz.');
+    const [operation] = paragraphsUnder(def, 'Betrieb');
+    expect(operation).toContain(
+      'jedes mit der Taste gleicher Form in der Zeile, die seine Legende der Farbe gibt',
     );
   });
 
+});
+
+describe('signal manual: the legend', () => {
   it('prints the legend the consoles press by, row for row', () => {
     const table = legendOf(defOf({ legend: true }));
     expect(table.head).toEqual(['Zeile', 'Pult A', 'Muster', 'Pult B', 'Muster']);
@@ -890,49 +891,31 @@ describe('signal manual', () => {
     ]);
   });
 
-  it('says from which stage on the sending console shows the signs one at a time', () => {
+});
+
+describe('signal manual: the workshop and the def', () => {
+  it('notes from which stage on the display shows the signs one at a time', () => {
     for (const fleetingFrom of [1, 3, 5]) {
-      const rules = rulesOf(defOf({ stages: 5, fleetingFrom }));
-      expect(rules.filter((rule) => rule.includes('nacheinander'))).toEqual([
-        `Wenn die Stufe ${fleetingFrom} erreicht ist, zeigt das sendende Pult die Zeichen ` +
-          'nacheinander.',
-      ]);
+      for (const legend of [false, true]) {
+        const [display] = paragraphsUnder(defOf({ stages: 5, fleetingFrom, legend }), WORKSHOP);
+        expect(display).toBe(
+          `Seit dem Umbau zeigt die Anzeige ab Stufe ${fleetingFrom} die Zeichen nur einzeln ` +
+            'und kurz (Kondensator, nie ersetzt): merken oder notieren.',
+        );
+      }
     }
-    expect(rulesOf(defOf({ stages: 5 })).join(' ')).not.toContain('nacheinander');
+    const [steady] = paragraphsUnder(defOf({ stages: 5 }), WORKSHOP);
+    expect(steady).toBe(
+      'Kondensator 1994 erneuert: Die Anzeige hält die Folge, bis die Stufe quittiert ist.',
+    );
   });
 
-  it.each([
-    {},
-    { legend: true },
-    { fleetingFrom: 2 },
-    { legend: true, fleetingFrom: 1, stages: 6, length: 6, penaltySec: 45 },
-    { legend: true, stages: 2, length: 3 },
-  ])('keeps the frame and the voice of a technical document: %j', (variant) => {
-    const manual: ManualSection[] = signalModule.manual(defOf(variant));
-    const blocks = manual.flatMap((section) => section.blocks);
-    const [figure, description] = manual[0]?.blocks ?? [];
-    expect(figure).toMatchObject({ kind: 'figure', of: 'signal' });
-    const text = description?.kind === 'p' ? description.text : '';
-    expect(text.split(/(?<=\.) (?=[A-ZÄÖÜ„])/).length, text).toBeLessThanOrEqual(3);
-    // The device's drawing, and with the legend its key of colours and patterns.
-    const figures = blocks.filter((block) => block.kind === 'figure');
-    expect(figures.map((block) => block.caption.slice(0, 7))).toEqual(
-      'legend' in variant ? ['Abb. 1 ', 'Abb. 2 '] : ['Abb. 1 '],
+  it('notes without the legend that a key’s place says nothing at the other console', () => {
+    expect(paragraphsUnder(defOf(), WORKSHOP)[1]).toBe(
+      'A und B sind verschieden bestückt: Am Gegenpult gelten Farbe und Form einer Taste, nie ' +
+        'ihre Lage.',
     );
-    const [example, penalty] = blocks.slice(-2);
-    expect(example?.kind).toBe('example');
-    const lines = example?.kind === 'example' ? example.lines : [];
-    expect(lines.length).toBeGreaterThanOrEqual(2);
-    expect(lines.length).toBeLessThanOrEqual(4);
-    expect(lines.filter((line) => !/\.$/.test(line))).toEqual([]);
-    expect(penalty?.kind === 'p' ? penalty.text : '').toMatch(/^Fehlgriff: Alarm, −\d+ s\.$/);
-    const rules = blocks.flatMap((block) => (block.kind === 'rules' ? block.items : []));
-    expect(rules.length).toBeGreaterThan(3);
-    expect(rules.filter((rule) => !/^Wenn .+, .+\.$/.test(rule))).toEqual([]);
-    const printed = JSON.stringify(manual);
-    for (const pattern of OFF_REGISTER) {
-      expect(printed).not.toMatch(pattern);
-    }
+    expect(paragraphsUnder(defOf({ legend: true }), WORKSHOP)).toHaveLength(1);
   });
 
   it('is the same for every run: it hangs on the def alone', () => {
@@ -947,17 +930,20 @@ describe('signal manual', () => {
     }
   });
 
-  it.each([3, 4, 5, 6])('works its example the way the station does (%i signs)', (length) => {
+});
+
+describe('signal manual: the log', () => {
+  it.each([3, 4, 5, 6])('logs a stage the way the station runs it (%i signs)', (length) => {
     const def = defOf({ length });
-    const [shown, rule, pressed, next] = exampleOf(def);
+    const [shown, acknowledged, turned, ...more] = logOf(def);
+    expect(more).toEqual([]);
     const signs = signsIn(shown ?? '');
     expect(signs).toHaveLength(length);
-    expect(signsIn(pressed ?? '')).toEqual(signs);
-    expect(shown).toMatch(/^Stufe 1, Pult A zeigt:/);
-    expect(rule).toBe('Stufe 1 ist ungerade: Pult A sendet, Pult B empfängt.');
-    expect(pressed).toMatch(/^An Pult B gedrückt:/);
-    expect(next).toBe('Stufe 2 beginnt; nun sendet Pult B.');
-    // The station at stage 1 with the example's sequence: A shows it, B presses it.
+    expect(shown).toMatch(/^06:12 Stufe 1, Pult A zeigt:/);
+    expect(acknowledged).toMatch(/^06:13 Pult B quittiert:/);
+    expect(signsIn(acknowledged ?? '')).toEqual(signs);
+    expect(turned).toBe('06:13 Stufe 1 vollständig, Richtung gewechselt: Pult B zeigt Stufe 2.');
+    // The station at stage 1 with the logged sequence: A shows it, B acknowledges it.
     const dealt = deal(def, 1);
     let state: SignalState = { ...dealt, sequences: [signs, ...dealt.sequences.slice(1)] };
     expect(seenFrom(def, state, AT_STATION)).toMatchObject({
@@ -980,37 +966,38 @@ describe('signal manual', () => {
     });
   });
 
-  it.each([3, 4, 5, 6])('walks its example through the legend as the station does (%i)', (n) => {
+  it.each([3, 4, 5, 6])('logs a legend mix-up and its cure, as the station does (%i)', (n) => {
     const def = defOf({ length: n, legend: true });
-    const [shown, rule, lookedUp, pressed] = exampleOf(def);
+    const [shown, mixedUp, acknowledged, turned, ...more] = logOf(def);
+    expect(more).toEqual([]);
     const signs = signsIn(shown ?? '');
     expect(signs).toHaveLength(n);
-    expect(shown).toMatch(/^Stufe 1, Pult A zeigt:/);
-    expect(rule).toBe('Stufe 1 ist ungerade: Pult A sendet, Pult B empfängt.');
-    // One sign walked through the printed legend: Pult B's column, the row of its colour.
-    const walk = new RegExp(
-      '^(.+): In der Legende steht (\\S+) bei Pult B in Zeile ([1-4]); ' +
-        'gedrückt wird (der|das) (\\S+) in Zeile ([1-4])\\.$',
-    ).exec(lookedUp ?? '');
-    if (walk === null) {
-      throw new Error(`the example walks no sign through the legend: "${lookedUp}"`);
+    expect(shown).toMatch(/^06:12 Stufe 1, Pult A zeigt:/);
+    expect(turned).toBe('06:13 Stufe 1 vollständig, Richtung gewechselt: Pult B zeigt Stufe 2.');
+    // Line 2: the first sign's key looked up in console a's column, pressed at console b.
+    const fault = new RegExp(
+      '^06:12 Pult B quittiert (\\S+ in Zeile [1-4]) \\(Spalte A gelesen\\): ' +
+        'Fehlquittierung, Alarm, Stufe 1 in Grundstellung\\.$',
+    ).exec(mixedUp ?? '');
+    if (fault === null) {
+      throw new Error(`the log shows no mix-up of the legends: "${mixedUp}"`);
     }
-    const [, said = '', colour = '', row = '', article = '', noun = '', again = ''] = walk;
+    const wrong = keyNamed(fault[1] ?? '');
     const [first = 'rot-kreis'] = signs;
     const [colourOfFirst, shapeOfFirst] = partsOf(first);
-    expect(said.toLowerCase()).toBe(tokenLabel(first).toLowerCase());
-    expect(PRINTED_COLOURS[colour]).toBe(colourOfFirst);
-    expect(legendOf(def).rows[Number(row) - 1]?.[3]).toBe(colour);
-    expect(again).toBe(row);
-    expect(PRINTED_SHAPES[noun]).toBe(shapeOfFirst);
-    expect(article).toBe(noun === 'Kreis' ? 'der' : 'das');
-    // The keys pressed at B: the first is the one walked through, and the station takes them all.
-    expect(pressed).toMatch(/^An Pult B gedrückt:/);
-    const keys = keysIn(pressed ?? '');
-    expect(keys).toHaveLength(n);
-    expect(keys[0]).toEqual({ row: Number(row), shape: shapeOfFirst });
+    expect(wrong.shape).toBe(shapeOfFirst);
+    expect(PRINTED_COLOURS[legendOf(def).rows[wrong.row - 1]?.[1] ?? '']).toBe(colourOfFirst);
+    // At console b that key is a wrong one: an alarm, and the stage back to its start.
     const dealt = deal(def, 1);
     let state: SignalState = { ...dealt, sequences: [signs, ...dealt.sequences.slice(1)] };
+    const slip = pressKey(def, state, wrong, 'b');
+    expect(slip.penalty).toBe('Signalkette: falsches Zeichen');
+    expect(slip.state).toMatchObject({ stage: 0, done: 0, lastResult: 'wrong' });
+    // Line 3: the keys console b's column gives, and the station takes them all.
+    expect(acknowledged).toMatch(/^06:13 Pult B quittiert:/);
+    const keys = keysIn(acknowledged ?? '');
+    expect(keys).toHaveLength(n);
+    state = slip.state;
     for (const key of keys) {
       expect(() => pressKey(def, state, key, 'a')).toThrow(GameError);
       const result = pressKey(def, state, key, 'b');
@@ -1179,8 +1166,11 @@ describe('signal in a run', () => {
     expect(signalOf(state, 'p2')).toMatchObject({ role: 'receiver', keys: ROW_KEYS, grid: null });
     expect(JSON.stringify(signalOf(state, 'p2'))).not.toMatch(COLOUR_WORD);
     expect(signalOf(state, 'p3').manual?.map(({ heading }) => heading)).toEqual([
-      'Signalkette',
+      'Signalkette, Typ SK-4 (Baujahr 1986)',
+      'Aufbau',
+      'Betrieb',
       'Legende',
+      'Aus der Werkstatt',
     ]);
     const audience = viewForSpectator(state).puzzle;
     expect(audience).toMatchObject({ sequence, grids: null, keys: ROW_KEYS });

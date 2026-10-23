@@ -341,20 +341,22 @@ describe('the lever: a sync station drawn as a main switch', () => {
     expect(viewFor(gone, 'p1').puzzle).toMatchObject({ here: 1, requiredCount: 1 });
   });
 
-  it('prints its rules under a drawing of the main switch, the button under the button', () => {
+  it('prints its Aufbau under a drawing of the main switch, the button under the button', () => {
     const def = { type: 'button-sync', id: 's', title: 'S' };
-    const opening = (raw: object) =>
-      buttonSyncModule.manual(buttonSyncModule.defSchema.parse(raw))[0]?.blocks.slice(0, 2);
-    expect(opening({ ...def, style: 'lever' })).toEqual([
+    const build = (raw: object) =>
+      buttonSyncModule
+        .manual(buttonSyncModule.defSchema.parse(raw))
+        .find((section) => section.heading === 'Aufbau')?.blocks;
+    expect(build({ ...def, style: 'lever' })).toEqual([
       { kind: 'figure', of: LEVER_FIGURE, caption: 'Abb. 1 — Hauptschalter mit Hebeln' },
       {
         kind: 'p',
         text:
-          'Ein Hebel je Crewmitglied: Jedes Crewmitglied steht dabei am Schalter und legt ' +
-          'seinen Hebel einmal um.',
+          'Ein Schild über einer Reihe Hebel, einem je angemeldetem Ausweis, über jedem Hebel ' +
+          'eine Lampe; umgelegt wird am Schalter selbst.',
       },
     ]);
-    expect(opening(def)?.[0]).toEqual({
+    expect(build(def)?.[0]).toEqual({
       kind: 'figure',
       of: 'button-sync',
       caption: 'Abb. 1 — Pult mit Synchrontaste',

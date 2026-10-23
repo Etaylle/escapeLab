@@ -166,27 +166,36 @@ describe('the printed maze rules', () => {
   const blocksOf = (size: number) =>
     mazeModule.manual(defOf(size)).flatMap((section) => section.blocks);
 
-  it.each([4, 6, 8])('name the columns and rows of a grid of %i, and the penalty', (size) => {
-    const blocks = blocksOf(size);
+  it.each([4, 6, 8])('name the columns and rows of a grid of %i, and what a wall costs', (size) => {
+    const manual = mazeModule.manual(defOf(size));
+    expect(manual.map(({ heading }) => heading)).toEqual([
+      'Leitungsnetz mit Navigationspult, Typ LN-8 (Baujahr 1993)',
+      'Aufbau',
+      'Betrieb',
+      'Aus der Werkstatt',
+    ]);
     const grid =
       `${size} × ${size} Zellen, Spalten A bis ${COLUMNS.charAt(size - 1)} von links, ` +
       `Zeilen 1 bis ${size} von oben`;
-    expect(blocks[1]).toMatchObject({ kind: 'p', text: expect.stringContaining(grid) });
-    expect(blocks.at(-1)).toEqual({ kind: 'p', text: 'Fehlgriff: Alarm, −12 s.' });
+    expect(manual[1]?.blocks[1]).toMatchObject({ kind: 'p', text: expect.stringContaining(grid) });
+    expect(manual[2]?.blocks[0]).toMatchObject({
+      kind: 'p',
+      text: expect.stringMatching(/eine Wand, .* zieht 12 Sekunden Einsatzzeit ab\.$/),
+    });
   });
 
-  it.each([4, 6, 8])('print an example that the walls and the marker bear out, size %i', (size) => {
-    const example = blocksOf(size).find((block) => block.kind === 'example');
-    const lines = example?.kind === 'example' ? example.lines : [];
+  it.each([4, 6, 8])('print a log that the walls and the probe bear out, size %i', (size) => {
+    const log = blocksOf(size).find((block) => block.kind === 'example');
+    const lines = log?.kind === 'example' ? log.lines : [];
     const [seen, plan, step] = [
-      /^Gesehen am Navigationspult: Marker auf ([A-H]\d), Ziel auf ([A-H]\d)\.$/,
-      /^Schaltplan: von ([A-H]\d) nach (\S+) eine Wand, nach (\S+) frei\.$/,
-      /^Ein Schritt nach (\S+): Marker auf ([A-H]\d)\.$/,
+      /^\d\d:\d\d Prüfkopf auf ([A-H]\d), Ziel auf ([A-H]\d)\.$/,
+      /^\d\d:\d\d Schaltplan: von ([A-H]\d) nach (\S+) eine Wand, nach (\S+) frei\.$/,
+      /^\d\d:\d\d Ein Schritt nach (\S+): Prüfkopf auf ([A-H]\d)\.$/,
     ].map((pattern, i) => pattern.exec(lines[i] ?? ''));
     const wall = DIRECTIONS[plan?.[2] ?? ''];
     const open = DIRECTIONS[plan?.[3] ?? ''];
     if (!seen || !plan || !step || wall === undefined || open === undefined) {
-      throw new Error(`unreadable example: ${JSON.stringify(lines)}`);
+      throw new Error(`unreadable log: ${JSON.stringify(lines)}`);
     }
     expect([plan[1], DIRECTIONS[step[1] ?? '']]).toEqual([seen[1], open]);
     // A grid whose one opening is the one the plan names, between the marker and its neighbour.

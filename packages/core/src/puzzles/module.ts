@@ -21,7 +21,7 @@ export type ManualBlock =
   | { kind: 'table'; head: string[]; rows: string[][] }
   // keypad's symbol columns
   | { kind: 'columns'; columns: string[][] }
-  // a worked example in a box: what was seen, which rule applied, what was done
+  // a box of lines: the Protokollauszug, a past operation worked through entry by entry
   | { kind: 'example'; title: string; lines: string[] }
   // a line drawing of the device; the client draws it for the module's type (`of`)
   | { kind: 'figure'; of: string; caption: string };

@@ -3,7 +3,7 @@ import { serialLastDigitIsOdd, type Edgework } from '../edgework.js';
 import { fail } from '../errors.js';
 import { shuffle, type Rng } from '../rng.js';
 import { commonDefShape, type Move, type PuzzleModule } from './module.js';
-import { deviceFigure, penaltyLine, workedExample } from './printed.js';
+import { costOf, labDocument, spelled, type TypePlate } from './printed.js';
 import { WIRE_COLORS, type WireColor } from './wiring.js';
 
 /**
@@ -223,13 +223,72 @@ const untouched = (count: number): Pick<CircuitState, 'cuts' | 'readings' | 'pro
   probed: null,
 });
 
-/** The printed example: a box of five, the serial ending even, two rounds. */
-const EXAMPLE: readonly string[] = [
-  'Kennung endet auf 4. Kabel 1 bis 5 zeigen 48, 0, 230, 12 und 110 V.',
-  'Kennung gerade, höchste Spannung: Kabel 3 getrennt; Kabel 2 bleibt mit 0 V ganz.',
-  'Neu gemessen: Kabel 1, 2, 4 und 5 zeigen 24, 0, 110 und 48 V.',
-  'Höchste Spannung nun 110 V: Kabel 4 getrennt.',
+// --- the printed document --------------------------------------------------------------
+
+const PLATE: TypePlate = { name: 'Sicherungskasten mit Prüfpult', type: 'SP-12', year: 1982 };
+
+const PURPOSE =
+  'Der Kasten trennt nach einem Ausfall die Hauptleitungen, bevor der Notstrom zuschaltet; ' +
+  'sonst speist die Notversorgung zurück ins Netz und brennt durch.';
+
+/** The short from which on the box burns out, as Betrieb counts it: „dritten". */
+const ORDINALS: Readonly<Record<number, string>> = {
+  2: 'zweiten',
+  3: 'dritten',
+  4: 'vierten',
+  5: 'fünften',
+};
+
+/** Aufbau: the box with its wires at console a, the meter at console b. */
+function buildText(def: CircuitDef): string {
+  const { min, max } = def.wires;
+  const wires = min === max ? spelled(min) : `${spelled(min)} bis ${spelled(max)}`;
+  return (
+    `Pult A ist der Kasten mit ${wires} Kabeln, von oben nach unten nummeriert, und der Zange; ` +
+    'Pult B ist das Prüfpult, das die Spannung eines Kabels nach seiner Nummer misst. Der ' +
+    'Kasten zeigt keine Spannung, das Prüfpult keine Farbe.'
+  );
+}
+
+/** Betrieb: a live wire at a time, measured anew after each cut; a short, and the burnout. */
+function operationText(def: CircuitDef): string {
+  const from = ORDINALS[def.shorts] ?? `${def.shorts}.`;
+  return (
+    'Getrennt wird je ein Kabel unter Spannung, in der Schnittfolge unten; danach verteilen ' +
+    'sich die Spannungen neu, und nur neue Messungen gelten. Jeder andere Schnitt ist ein ' +
+    `Kurzschluss: Die Überwachung meldet Alarm und zieht ${costOf(def.penaltySec)} ab, und ` +
+    'der Kasten wird neu verdrahtet, alle Kabel wieder ganz. Ab dem ' +
+    `${from} Kurzschluss brennt er durch: Dieser und jeder weitere kostet ` +
+    `${costOf(def.burnoutSec)}.`
+  );
+}
+
+/** The order of the cuts, by the lab's serial; and when the box is safe. */
+const CUT_ORDER: readonly string[] = [
+  'Wenn die Laborkennung gerade endet, wird jeweils das Kabel mit der höchsten gemessenen ' +
+    'Spannung getrennt.',
+  'Wenn die Laborkennung ungerade endet, wird jeweils das Kabel mit der niedrigsten ' +
+    'gemessenen Spannung über 0 V getrennt.',
+  'Wenn kein Kabel mehr Spannung zeigt, ist der Kasten gesichert.',
 ];
+
+/** The printed log: a box of five, the serial ending even, two rounds. */
+const LOG: readonly string[] = [
+  '02:40 Kennung endet auf 4. Kabel 1 bis 5 zeigen 48, 0, 230, 12 und 110 V.',
+  '02:41 Kennung gerade, höchste Spannung: Kabel 3 getrennt; Kabel 2 bleibt mit 0 V ganz.',
+  '02:41 Neu gemessen: Kabel 1, 2, 4 und 5 zeigen 24, 0, 110 und 48 V.',
+  '02:42 Höchste Spannung nun 110 V: Kabel 4 getrennt.',
+];
+
+/** Aus der Werkstatt: the meter forgets at every cut, and a box of five or six has a dead wire. */
+function workshopNotes(def: CircuitDef): string[] {
+  const forgets =
+    'Nach jedem Schnitt löscht das Prüfpult seine Messungen: vor dem nächsten Schnitt alle ' +
+    'ganzen Kabel neu messen.';
+  return def.wires.max >= 5
+    ? [forgets, 'Ab fünf Kabeln liegt immer eines tot; es zeigt 0 V und bleibt ganz.']
+    : [forgets];
+}
 
 export const circuitModule: PuzzleModule<CircuitDef, CircuitState, CircuitInput, CircuitView> = {
   type: 'circuit',
@@ -368,43 +427,16 @@ export const circuitModule: PuzzleModule<CircuitDef, CircuitState, CircuitInput,
   },
 
   manual(def) {
-    const { min, max } = def.wires;
-    const wires = min === max ? `${min}` : `${min} bis ${max}`;
-    return [
-      {
-        heading: 'Sicherungskasten und Prüfpult',
-        blocks: [
-          deviceFigure('circuit', 'Sicherungskasten und Prüfpult'),
-          {
-            kind: 'p',
-            text:
-              `Pult A ist ein Sicherungskasten mit ${wires} Kabeln, von oben nach unten ` +
-              'gezählt; Pult B ist ein Prüfpult, das die Spannung eines Kabels nach seiner ' +
-              'Nummer misst. Alle Kabel unter Spannung sind zu trennen, eines nach dem ' +
-              'anderen. Nach jedem Schnitt verteilen sich die Spannungen neu.',
-          },
-          {
-            kind: 'rules',
-            items: [
-              'Wenn die Laborkennung gerade endet, trenne jeweils das Kabel mit der höchsten ' +
-                'gemessenen Spannung.',
-              'Wenn die Laborkennung ungerade endet, trenne jeweils das Kabel mit der ' +
-                'niedrigsten gemessenen Spannung über 0 V.',
-              'Wenn ein Kabel 0 V zeigt, bleibt es ganz.',
-              'Wenn ein Kabel getrennt wurde, gelten nur neue Messungen.',
-              'Wenn kein Kabel mehr Spannung zeigt, ist der Kasten gesichert.',
-            ],
-          },
-          workedExample(EXAMPLE),
-          penaltyLine(
-            def.penaltySec,
-            'Jeder Fehlgriff ist ein Kurzschluss: Der Kasten wird neu verdrahtet, alle Kabel ' +
-              `sind wieder ganz, die Spannungen neu. Ab dem ${def.shorts}. Kurzschluss ist der ` +
-              `Kasten durchgebrannt: −${def.burnoutSec} s je Fehlgriff.`,
-          ),
-        ],
-      },
-    ];
+    return labDocument({
+      plate: PLATE,
+      purpose: PURPOSE,
+      figure: { of: 'circuit', device: 'Sicherungskasten und Prüfpult' },
+      build: buildText(def),
+      operation: operationText(def),
+      law: [{ heading: 'Schnittfolge', blocks: [{ kind: 'rules', items: [...CUT_ORDER] }] }],
+      log: LOG,
+      workshop: workshopNotes(def),
+    });
   },
 
   /**
