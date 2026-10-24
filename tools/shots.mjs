@@ -182,8 +182,11 @@
  * is over — the bed of the host's room has to be dead, its powered layer
  * down; once the lever or a sync station has lit the room its player stands
  * in, that bed has to be alive again. The line that comes over the radio with
- * each of those solves has to be spoken by a recording from the manifest the
- * server hands out, saying the banner's line, for a second at least. In the
+ * each of those solves — and the Leitstelle's first line, heard on the guest's
+ * page from the blackout or the briefing's end on — has to be spoken by a
+ * recording from the manifest the server hands out, saying the banner's line,
+ * for 200 ms a word at least and a second at the least; the first line after
+ * the Leitstelle's opening squelch, and no other line. In the
  * escape the music's pressure has to stand at 0.8 or more, its pressure layer
  * up and the pad gone under the siren. Wherever the partner stands half a tile
  * or more to one side (after the blackout, at the hatch — and after the lever,
@@ -192,7 +195,9 @@
  * run at least. Once a run the radio's chain is rendered offline in the page on
  * white noise: above 4 kHz it has to come out at least 10 dB under the band
  * from 300 Hz to 3.4 kHz, and 15 dB further down than the noise was
- * (spectrum.mjs). Any of these that fails, fails the run.
+ * (spectrum.mjs); and on the mission's opening line, its first three seconds:
+ * above 4 kHz and below 300 Hz each at least 10 dB further down against that
+ * band than in the recording. Any of these that fails, fails the run.
  *
  * What the sound costs: after every frame sample a line `cpu` gives the cores
  * each kind of the browser's processes kept busy meanwhile (CDP SystemInfo)
@@ -1195,7 +1200,7 @@ async function pressTogether(players, station) {
   const doneBefore = await Promise.all(players.map(({ page }) => done(page).count()));
   await Promise.all(players.map(({ page }) => page.locator('.station-modal .big-button').click()));
   // The line that comes with the solve speaks a second after it: listen from the presses on.
-  const listening = hearRadio(first, 9000);
+  const listening = hearRadio(first, RADIO_LISTEN_MS);
   if (station.look !== 'lever') {
     await captureSolved(first, station);
   }
@@ -1773,9 +1778,22 @@ async function bedAlive(player, lit, when) {
 }
 
 /**
+ * How long the walkthrough listens for a line on the radio, ms: the longest line speaks some
+ * ten seconds, and a line that comes with a solve begins a second after it.
+ */
+const RADIO_LISTEN_MS = 20_000;
+
+/** The least a spoken word takes, ms: a line of twenty words speaks four seconds at least. */
+const MS_PER_WORD = 200;
+
+/** A line's words, as the radio-line test counts them (core test/radioLines.test.ts). */
+const wordsOf = (line) => line.split(/\s+/).filter((word) => /[\p{L}\p{N}]/u.test(word)).length;
+
+/**
  * Listens to `player`'s radio for up to `ms` from now: the first line that
- * speaks, by its recording's id, and from when to when it was heard speaking
- * (polled every 100 ms). Null where none spoke.
+ * speaks, by its recording's id, from when to when it was heard speaking
+ * (polled every 100 ms), and whether the Leitstelle opened the channel for
+ * it. Null where none spoke.
  */
 async function hearRadio(player, ms) {
   const end = Date.now() + ms;
@@ -1783,7 +1801,7 @@ async function hearRadio(player, ms) {
   while (Date.now() < end) {
     const voice = (await soundOf(player.page))?.voice;
     if (voice?.playing === true && (heard === null || voice.lastId === heard.id)) {
-      heard ??= { id: voice.lastId, from: Date.now(), to: Date.now() };
+      heard ??= { id: voice.lastId, from: Date.now(), to: Date.now(), opened: voice.opened };
       heard.to = Date.now();
     } else if (heard !== null) {
       break;
@@ -1794,10 +1812,12 @@ async function hearRadio(player, ms) {
 }
 
 /**
- * The line that came over the radio with a solve (`listening`, from
- * hearRadio): a recording from the manifest the server hands out has to have
- * spoken it — what the banner says, the view's last radio line, or `expected`
- * where given — for a second at least. Fails otherwise.
+ * The line that came over the radio (`listening`, from hearRadio): a
+ * recording from the manifest the server hands out has to have spoken it —
+ * what the banner says, the view's last radio line, or `expected` where given
+ * — for MS_PER_WORD a word at least, a second at the least; the line that
+ * opens a run after the Leitstelle's opening squelch, and no other line.
+ * Fails otherwise.
  */
 async function checkRadioVoice(player, listening, after, expected = null) {
   const heard = await listening;
@@ -1813,14 +1833,25 @@ async function checkRadioVoice(player, listening, after, expected = null) {
     expected ?? [...events].reverse().find((event) => event.kind === 'radio')?.label ?? null;
   const entry = heard === null ? undefined : manifest[heard.id];
   const spoke = heard === null ? 0 : heard.to - heard.from;
+  const words = line === null ? 0 : wordsOf(line);
+  const opens = entry?.opens === true;
+  const keyedRight = heard !== null && heard.opened === opens;
+  const keyed = opens ? ', opened by the Leitstelle' : '';
   const said = heard === null
     ? '!! no line spoke'
-    : `${heard.id} „${entry?.text ?? '!! not in the manifest'}" speaking ${seconds(spoke)}`;
+    : `${heard.id} „${entry?.text ?? '!! not in the manifest'}" speaking ${seconds(spoke)} ` +
+      `of its ${seconds(entry?.ms ?? 0)}, ${words} words${keyed}` +
+      `${keyedRight ? '' : ` !! ${heard.opened ? 'opened' : 'not opened'}`}`;
   console.log(`radio voice        ${player.name} after ${after}: ${said}; the banner: „${line}"`);
-  if (entry === undefined || entry.text !== line || spoke < 1000) {
+  const plausible = spoke >= Math.max(1000, words * MS_PER_WORD);
+  if (entry === undefined || entry.text !== line || !plausible || !keyedRight) {
     fail(`radio voice after ${after}: ${heard?.id ?? 'nothing'} spoke ${spoke} ms for „${line}"`);
   }
 }
+
+/** The run's first line on the radio, as `player`'s view has it; null before it came. */
+const startLineOf = (player) =>
+  player.seen.view.events.find((event) => event.kind === 'radio')?.label ?? null;
 
 /** How many times the partner's side was told apart, of the checks that could. */
 const sides = { checked: 0 };
@@ -1914,6 +1945,56 @@ async function checkRadioBand(page) {
   );
   if (!passes) {
     fail(`radio band: ${after.toFixed(1)} dB above 4 kHz out, ${before.toFixed(1)} dB in`);
+  }
+}
+
+/** How much of a recorded line the page hands back from its offline render, s. */
+const LINE_RENDER_S = 3;
+
+/**
+ * One recorded line rendered through the radio's chain offline in the page — the opening line
+ * of `missionId`, as the manifest marks it, its first LINE_RENDER_S: its spectrum has to show
+ * the band-pass too — above 4 kHz and below 300 Hz each at least 10 dB further down against
+ * the band from 300 Hz to 3.4 kHz than in the recording. Fails otherwise.
+ */
+async function checkRadioLine(page, missionId) {
+  const render = await page.evaluate(
+    async ([mission, seconds]) => {
+      const manifest = await globalThis.fetch('/voice/manifest.json').then((res) => res.json());
+      const id = Object.keys(manifest).find(
+        (key) => manifest[key].opens === true && manifest[key].missions.includes(mission),
+      );
+      const audio = globalThis.__escapelab?.audio;
+      if (id === undefined || audio === undefined) {
+        return null;
+      }
+      const { rate, input, output } = await audio.renderRadio(id);
+      const length = Math.min(input.length, rate * seconds);
+      return { id, rate, input: input.slice(0, length), output: output.slice(0, length) };
+    },
+    [missionId, LINE_RENDER_S],
+  );
+  if (render === null) {
+    fail(`radio line: no opening line of ${missionId} in the manifest, or no audio probe`);
+    return;
+  }
+  const bands = [
+    [20, 300],
+    [300, 3400],
+    [4000, render.rate / 2],
+  ];
+  const [inLow, inBand, inHigh] = bandPowers(render.input, render.rate, bands);
+  const [outLow, outBand, outHigh] = bandPowers(render.output, render.rate, bands);
+  const high = [decibels(inHigh, inBand), decibels(outHigh, outBand)];
+  const low = [decibels(inLow, inBand), decibels(outLow, outBand)];
+  const passes = high[0] - high[1] >= 10 && low[0] - low[1] >= 10;
+  console.log(
+    `radio line         ${render.id} through the chain, against 300–3400 Hz: above 4 kHz ` +
+      `${high[0].toFixed(1)} dB in the recording, ${high[1].toFixed(1)} dB out; below 300 Hz ` +
+      `${low[0].toFixed(1)} dB in, ${low[1].toFixed(1)} dB out${passes ? '' : ' !! no band-pass'}`,
+  );
+  if (!passes) {
+    fail(`radio line: ${high[1].toFixed(1)} dB above 4 kHz, ${low[1].toFixed(1)} dB below 300 Hz`);
   }
 }
 
@@ -2286,15 +2367,19 @@ async function signAtSpawn(players) {
 /**
  * A mission's intro, the power on, then the lights failing: cold-open.png,
  * sign.png for a player spawned at the Laborkennung (signAtSpawn),
- * blackout.png, and the lever the first station is (lever.png,
- * lit-flur.png). Returns the player sign.png caught, if any.
+ * blackout.png, the Leitstelle's first line heard on the guest's radio from
+ * its opening squelch on — the guest's page, so that the host's frame sample
+ * in the lit lab is left alone — and the lever the first station is
+ * (lever.png, lit-flur.png). Returns the player sign.png caught, if any.
  */
 async function coldOpen(host, guest) {
+  const opening = hearRadio(guest, 40_000);
   await captureColdOpen(host, guest);
   const atSign = await signAtSpawn([host, guest]);
   await captureBlackout(host);
   await bedDead(host, 'after the blackout');
   await partnerSide(host, guest, 'after the blackout');
+  await checkRadioVoice(guest, opening, 'the blackout', startLineOf(guest));
   await throwLever([host, guest]);
   return atSign;
 }
@@ -2305,17 +2390,22 @@ async function coldOpen(host, guest) {
  * loose for a moment (figure-carry.png) and reads the nearest note of the
  * last crew found (note.png), the draw — who works the first
  * station, who reads — and, without an intro, sign.png for a player spawned
- * at the Laborkennung, whose note is up as soon as the briefing is gone.
+ * at the Laborkennung, whose note is up as soon as the briefing is gone, and
+ * the Leitstelle's first line, heard on Ben's radio as the briefing ends.
  * Returns both and the player sign.png caught, if any.
  */
 async function firstMoments(anna, ben) {
   const intro = anna.seen.view.lights.out === false;
+  const opening = intro ? null : hearRadio(ben, 40_000);
   const signedEarly = intro ? await coldOpen(anna, ben) : undefined;
   await captureCarry(anna);
   await captureNote(anna);
   const [operator, reader] = operatorFirst([anna, ben]);
   console.log(`the draw:          ${operator.name} works the first station, ${reader.name} reads`);
   const atSign = intro ? signedEarly : await signAtSpawn([reader, operator]);
+  if (opening !== null) {
+    await checkRadioVoice(ben, opening, 'the briefing', startLineOf(ben));
+  }
   return { operator, reader, atSign };
 }
 
@@ -3132,7 +3222,7 @@ async function captureNudge(players) {
     return;
   }
   const line = nudgesOf(first.seen).at(-1).label;
-  const listening = hearRadio(first, 6000);
+  const listening = hearRadio(first, RADIO_LISTEN_MS);
   const banners = await Promise.all(
     players.map(({ page }) =>
       page
@@ -5912,6 +6002,7 @@ async function run() {
     await bedDead(anna, 'with the lights out from the start');
   }
   await checkRadioBand(host);
+  await checkRadioLine(host, anna.seen.view.missionId);
   // The world's zoom follows the canvas height: nothing the run brings up in
   // the HUD — the sign's chip, a long radio line, the notes — may change it.
   const steady = [

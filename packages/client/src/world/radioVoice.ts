@@ -14,29 +14,36 @@ import {
   still,
   tick,
   type Engine,
+  type Envelope,
   type Fade,
 } from './audio.js';
 
 /**
- * A voice on the radio: mission control's lines, recorded once on a Mac (scripts/voice.ts,
- * public/voice/) and played as a handset hears them — band-limited to 300 Hz–3.4 kHz, gently
- * saturated, over a faint bed of static, keyed with a squelch at either end — while the beds
- * and the music duck 6 dB under it (audio.ts, the duck bus). The banner shows the line as it
- * always did; a line without a recording, as a custom mission's, still only chirps (audio.ts
+ * A voice on the radio: mission control's lines, recorded once on a Mac with a neural voice
+ * (scripts/voice.ts, public/voice/) and played as a handset hears them — band-limited to
+ * 300 Hz–3.4 kHz, lightly saturated, over a faint bed of static, keyed with a squelch at either
+ * end, the run's first line opened with the Leitstelle's own squelch — while the beds and the
+ * music duck 6 dB under it (audio.ts, the duck bus). The banner shows the line while it speaks;
+ * a line without a recording, as a custom mission's, still only chirps (audio.ts
  * `radioChirp`). At a run's start the mission's lines are fetched and decoded, so that a line
  * plays the moment it is shown; a line that comes over the air is fetched then too, where it
- * was not yet. Nothing here throws, and nothing plays while the context is held back.
+ * was not yet. Nothing that plays throws — only the harness's offline render may reject — and
+ * nothing plays while the context is held back.
  */
 
-/** Where the recordings lie, and their list: { [id]: { text, ms, missions } }. */
+/** Where the recordings lie, and their list: { [id]: { text, ms, missions, opens? } }. */
 export const VOICE_BASE = '/voice/';
 export const MANIFEST_URL = `${VOICE_BASE}manifest.json`;
 
-/** One recorded line: what it says, how long it speaks, ms, and the missions that say it. */
+/**
+ * One recorded line: what it says, how long it speaks, ms, the missions that say it, and
+ * whether it opens a run (a mission's `radio.start`).
+ */
 export interface VoiceEntry {
   readonly text: string;
   readonly ms: number;
   readonly missions: readonly string[];
+  readonly opens?: true;
 }
 
 export type VoiceManifest = Readonly<Record<string, VoiceEntry>>;
@@ -46,19 +53,28 @@ export const BAND_LOW = 300;
 export const BAND_HIGH = 3400;
 /** The two stages' Q of a fourth-order Butterworth, linear. */
 const BUTTERWORTH = [0.5412, 1.3066] as const;
-/** How hard the shaper bends: tanh(k·x)/tanh(k) — rounded peaks, no hard clip. */
-export const SHAPER_DRIVE = 2.2;
+/**
+ * How hard the shaper bends: tanh(k·x)/tanh(k) — rounded peaks, no hard clip. Light, so that
+ * the consonants stay clear: a 1 kHz tone at the speech's peak comes out with 8 % distortion
+ * (it was 17 % at 2.2), and the quiet parts are lifted 3 dB against the peaks (it was 7).
+ */
+export const SHAPER_DRIVE = 1.2;
 /** A line's peak going into the chain. */
-const SPEECH_PEAK = 0.9;
-/** The static under the speech, against the speech's peak: −30 dB. */
-export const NOISE_BED = 10 ** (-30 / 20);
+export const SPEECH_PEAK = 0.9;
+/** The static under the speech, against the speech's peak: −33 dB. */
+export const NOISE_BED = 10 ** (-33 / 20);
 /** The voice at the master gain: over the beds and the music, under the crew's own voices. */
 const VOICE_LEVEL = 0.12;
 /** The beds and the music while it speaks: −6 dB. */
 export const DUCK_LEVEL = 10 ** (-6 / 20);
 /** The squelch before the speech, s; the tail after it. */
-const KEY_S = 0.07;
-const TAIL_S = 0.16;
+export const KEY_S = 0.07;
+export const TAIL_S = 0.16;
+/**
+ * The Leitstelle opening the channel before a run's first line, s: static swelling up and
+ * snapping shut, then the key's squelch as before every line.
+ */
+export const OPEN_S = 0.4;
 
 /** The radio's chain: in at `input`, out of `out` at its level. */
 export interface RadioChain {
@@ -105,6 +121,11 @@ export function idsOf(manifest: VoiceManifest): Map<string, string> {
   return new Map(Object.entries(manifest).map(([id, entry]) => [entry.text, id]));
 }
 
+/** The recordings that open a run, by id: the radio keys them with the Leitstelle's opening. */
+export function openersOf(manifest: VoiceManifest): Set<string> {
+  return new Set(Object.keys(manifest).filter((id) => manifest[id]?.opens === true));
+}
+
 /** A decoded recording, and its peak, which the chain is fed at SPEECH_PEAK. */
 interface Clip {
   readonly buffer: AudioBuffer;
@@ -119,16 +140,18 @@ interface Speaking {
   readonly cut: (at: number) => void;
 }
 
-/** What the voice has loaded: the manifest by line, the recordings by id. */
+/** What the voice has loaded: the manifest by line, the openers, the recordings by id. */
 const store: {
   manifest: Promise<VoiceManifest | null> | null;
   ids: Map<string, string>;
+  openers: Set<string>;
   loading: Map<string, Promise<void>>;
   clips: Map<string, Clip>;
-} = { manifest: null, ids: new Map(), loading: new Map(), clips: new Map() };
+} = { manifest: null, ids: new Map(), openers: new Set(), loading: new Map(), clips: new Map() };
 
 let speaking: Speaking | null = null;
 let lastId: string | null = null;
+let lastOpened = false;
 let duck: Fade = still(1);
 
 /** The manifest, fetched once; null where there is none to be had (it is tried again later). */
@@ -136,8 +159,12 @@ function manifest(): Promise<VoiceManifest | null> {
   store.manifest ??= fetch(MANIFEST_URL)
     .then((res) => (res.ok ? (res.json() as Promise<VoiceManifest>) : null))
     .then((loaded) => {
-      if (loaded === null) store.manifest = null;
-      else store.ids = idsOf(loaded);
+      if (loaded === null) {
+        store.manifest = null;
+      } else {
+        store.ids = idsOf(loaded);
+        store.openers = openersOf(loaded);
+      }
       return loaded;
     })
     .catch(() => {
@@ -202,8 +229,9 @@ export function preloadLines(texts: readonly string[]): void {
 }
 
 /**
- * Speaks the line `text` over the radio, now, cutting short one still on the air. True where
- * it does; false where it has no recording ready or nothing can play — the caller chirps then.
+ * Speaks the line `text` over the radio, now, cutting short one still on the air: a line that
+ * opens a run after the Leitstelle's opening squelch. True where it does; false where it has
+ * no recording ready or nothing can play — the caller chirps then.
  */
 export function sayLine(text: string): boolean {
   try {
@@ -212,9 +240,11 @@ export function sayLine(text: string): boolean {
     const engine = playingEngine();
     if (id === undefined || clip === undefined || engine === null) return false;
     const now = engine.ctx.currentTime;
+    const opens = store.openers.has(id);
     speaking?.cut(now);
-    speaking = speak(engine, id, clip, now + LOOKAHEAD);
+    speaking = speak(engine, id, clip, now + LOOKAHEAD, opens);
     lastId = id;
+    lastOpened = opens;
     return true;
   } catch {
     // Deliberately silent: the banner shows the line as well.
@@ -222,11 +252,27 @@ export function sayLine(text: string): boolean {
   }
 }
 
-/** The line `id` keyed at `at`: squelch, speech over its static, the tail; the lab ducks. */
-function speak(engine: Engine, id: string, clip: Clip, at: number): Speaking {
+/**
+ * How long the line `text` keeps the air when it is spoken, ms: the Leitstelle's opening where
+ * it opens a run, the key, its recording, the tail. Null where it has no recording ready.
+ */
+export function airtimeMs(text: string): number | null {
+  const id = store.ids.get(text);
+  const clip = id === undefined ? undefined : store.clips.get(id);
+  if (id === undefined || clip === undefined) return null;
+  const lead = (store.openers.has(id) ? OPEN_S : 0) + KEY_S;
+  return Math.round((lead + clip.buffer.duration + TAIL_S) * 1000);
+}
+
+/**
+ * The line `id` keyed at `at`: the opening where it `opens` a run, the squelch, speech over its
+ * static, the tail; the lab ducks.
+ */
+function speak(engine: Engine, id: string, clip: Clip, at: number, opens: boolean): Speaking {
   const { ctx } = engine;
   const radio = radioChain(ctx, engine.master, VOICE_LEVEL);
-  const start = at + KEY_S;
+  const keyed = opens ? at + OPEN_S : at;
+  const start = keyed + KEY_S;
   const end = start + clip.buffer.duration;
   const speech = ctx.createBufferSource();
   speech.buffer = clip.buffer;
@@ -235,15 +281,30 @@ function speak(engine: Engine, id: string, clip: Clip, at: number): Speaking {
   const bed = noiseLoop(ctx, start);
   chain(bed, gain(ctx, NOISE_BED), radio.input);
   bed.stop(end);
-  const sources = [speech, bed, ...squelch(ctx, radio.input, at, end)];
+  const opening = opens ? openChannel(ctx, radio.input, at) : [];
+  const sources = [speech, bed, ...opening, ...squelch(ctx, radio.input, keyed, end)];
   onAllEnded(sources, () => radio.out.disconnect());
-  duckUnder(engine, start, end);
+  duckUnder(engine, opens ? at : start, end);
   const cut = (when: number): void => {
     radio.out.gain.setTargetAtTime(0, when, 0.02);
     for (const source of sources) source.stop(when + 0.1);
     unduck(engine, when);
   };
   return { id, start, end, cut };
+}
+
+/** A slice of the shared noise into `dest`, enveloped: the stuff of every squelch. */
+function staticBurst(
+  ctx: BaseAudioContext,
+  dest: AudioNode,
+  from: number,
+  envelope: Envelope,
+): AudioBufferSourceNode {
+  const noise = noiseBurst(ctx, from, envelope.attack + envelope.hold + envelope.decay);
+  const level = gain(ctx, 0);
+  applyEnvelope(level.gain, from, envelope);
+  chain(noise, level, dest);
+  return noise;
 }
 
 /** The press-to-talk key: static and a click as it goes down, a longer tail as it comes up. */
@@ -253,20 +314,23 @@ function squelch(
   at: number,
   end: number,
 ): AudioScheduledSourceNode[] {
-  const burst = (from: number, seconds: number, peak: number): AudioBufferSourceNode => {
-    const noise = noiseBurst(ctx, from, seconds);
-    const level = gain(ctx, 0);
-    const envelope = { peak, attack: 0.002, hold: seconds * 0.3, decay: seconds * 0.7 };
-    applyEnvelope(level.gain, from, envelope);
-    chain(noise, level, dest);
-    return noise;
-  };
+  const burst = (from: number, seconds: number, peak: number): AudioBufferSourceNode =>
+    staticBurst(ctx, dest, from, { peak, attack: 0.002, hold: seconds * 0.3, decay: seconds * 0.7 });
   return [
     burst(at, KEY_S * 0.6, 0.5),
     tick(ctx, dest, at + KEY_S * 0.5, 2000, 0.8),
     burst(end + 0.02, TAIL_S, 0.45),
     tick(ctx, dest, end + 0.02 + TAIL_S, 1600, 0.6),
   ];
+}
+
+/**
+ * The Leitstelle opening the channel at `at`, before a run's first line: static swells up for a
+ * third of a second and snaps shut on the squelch gate's click, a beat before the key.
+ */
+function openChannel(ctx: BaseAudioContext, dest: AudioNode, at: number): AudioScheduledSourceNode[] {
+  const swell = { peak: 0.55, attack: 0.12, hold: 0.14, decay: 0.04 };
+  return [staticBurst(ctx, dest, at, swell), tick(ctx, dest, at + 0.3, 2400, 0.9)];
 }
 
 /** The beds and the music go down 6 dB for the speech from `start` and come back after `end`. */
@@ -295,37 +359,66 @@ export function stopVoice(): void {
   speaking = null;
 }
 
-/** Whether a line speaks now, and the recording that spoke last, by id; null before any. */
+/**
+ * Whether a line speaks now, the recording that spoke last, by id (null before any), and
+ * whether that one came with the Leitstelle's opening squelch.
+ */
 export interface VoiceProbe {
   playing: boolean;
   lastId: string | null;
+  opened: boolean;
 }
 
 export function voiceProbe(): VoiceProbe {
   const now = audioEngine()?.ctx.currentTime ?? 0;
   const playing = speaking !== null && now >= speaking.start && now < speaking.end;
-  return { playing, lastId };
+  return { playing, lastId, opened: lastOpened };
 }
 
-/** The radio chain measured: white noise in, and what came out, at `rate`. */
+/** The radio chain measured: what went in — white noise, or a line — and what came out. */
 export interface RadioRender {
   rate: number;
   input: number[];
   output: number[];
 }
 
-/** Renders the radio chain once on an OfflineAudioContext, white noise in: for the harness. */
-export async function renderRadio(): Promise<RadioRender> {
-  const rate = 44100;
-  const length = 32768;
-  const ctx = new OfflineAudioContext(1, length, rate);
-  const noise = ctx.createBuffer(1, length, rate);
-  const input = noise.getChannelData(0);
-  for (let i = 0; i < length; i++) input[i] = Math.random() - 0.5;
+/** The rate the harness's renders run at, Hz. */
+const RENDER_RATE = 44100;
+
+/**
+ * Renders the radio chain once on an OfflineAudioContext, for the harness: white noise in, or
+ * the recording `id` at the speech's peak, as a line goes in. Rejects where that recording
+ * cannot be fetched or decoded.
+ */
+export async function renderRadio(id?: string): Promise<RadioRender> {
+  const input = id === undefined ? whiteNoise(32768) : await lineAt(id, RENDER_RATE);
+  const ctx = new OfflineAudioContext(1, input.length, RENDER_RATE);
+  const buffer = ctx.createBuffer(1, input.length, RENDER_RATE);
+  buffer.getChannelData(0).set(input);
   const source = ctx.createBufferSource();
-  source.buffer = noise;
+  source.buffer = buffer;
   source.connect(radioChain(ctx, ctx.destination, 1).input);
   source.start(0);
   const rendered = await ctx.startRendering();
-  return { rate, input: Array.from(input), output: Array.from(rendered.getChannelData(0)) };
+  const output = Array.from(rendered.getChannelData(0));
+  return { rate: RENDER_RATE, input: Array.from(input), output };
+}
+
+/** `length` samples of white noise from −0.5 to 0.5. */
+function whiteNoise(length: number): Float32Array {
+  const noise = new Float32Array(length);
+  for (let i = 0; i < length; i++) noise[i] = Math.random() - 0.5;
+  return noise;
+}
+
+/** The recording `id` decoded at `rate`, its peak at SPEECH_PEAK as `speak` feeds it in. */
+async function lineAt(id: string, rate: number): Promise<Float32Array> {
+  const res = await fetch(`${VOICE_BASE}${id}.m4a`);
+  if (!res.ok) {
+    throw new Error(`voice ${id}: ${res.status}`);
+  }
+  const bytes = await res.arrayBuffer();
+  const decoded = await new OfflineAudioContext(1, 1, rate).decodeAudioData(bytes);
+  const scale = SPEECH_PEAK / peakOf(decoded);
+  return Float32Array.from(decoded.getChannelData(0), (sample) => sample * scale);
 }

@@ -11,7 +11,8 @@ import type { SpatialProbe } from './world/spatial.js';
 /**
  * What the lab sounds like now: the beds of the rooms round the player (world/ambience.ts),
  * the music's layers and pressure (music.ts), mission control's voice (radioVoice.ts) and
- * where the nearest partner sounds from (spatial.ts) — and the radio's chain rendered offline.
+ * where the nearest partner sounds from (spatial.ts) — and the radio's chain rendered offline,
+ * on white noise or on a recorded line.
  */
 export interface AudioProbe extends BedProbe {
   readonly music: MusicProbe;
@@ -21,8 +22,11 @@ export interface AudioProbe extends BedProbe {
   readonly nodes: Partial<GraphCensus> & { beds: number };
   /** the main thread's time each sound system has taken so far, ms (world/audio.ts `timed`) */
   readonly spent: Partial<Record<SoundSystem, number>>;
-  /** renders the radio's chain once on white noise: what went in and what came out */
-  readonly renderRadio: () => Promise<RadioRender>;
+  /**
+   * renders the radio's chain once on white noise — or on the recording `id`: what went in and
+   * what came out
+   */
+  readonly renderRadio: (id?: string) => Promise<RadioRender>;
 }
 
 /**

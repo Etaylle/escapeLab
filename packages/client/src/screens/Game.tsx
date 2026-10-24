@@ -46,7 +46,13 @@ import { REDUCED_MOTION, veilOf, type Ending, type Finale } from '../world/final
 import { GameWorld } from '../world/GameWorld.js';
 import { dueParts } from '../world/markers.js';
 import { startingSpot, type KnownPositions } from '../world/movement.js';
-import { preloadLines, preloadVoice, sayLine, stopVoice } from '../world/radioVoice.js';
+import {
+  airtimeMs,
+  preloadLines,
+  preloadVoice,
+  sayLine,
+  stopVoice,
+} from '../world/radioVoice.js';
 import type { ChatLine, MapPing } from '../world/render/frame.js';
 import { startRoom } from '../world/rooms.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
@@ -331,24 +337,28 @@ export interface NoticeGates {
 
 /**
  * A line goes on the air as it shows: mission control's spoken over the radio where it has a
- * recording (world/radioVoice.ts), every other keyed with the radio's chirp.
+ * recording (world/radioVoice.ts), every other keyed with the radio's chirp. Returns how long
+ * a spoken line keeps the air, ms; null for a chirp.
  */
-function airLine(event: RunEvent): void {
-  if (!(voiced(event) && sayLine(event.label))) {
-    radioChirp();
+function airLine(event: RunEvent): number | null {
+  if (voiced(event) && sayLine(event.label)) {
+    return airtimeMs(event.label);
   }
+  radioChirp();
+  return null;
 }
 
 /**
  * What the objective bar carries under the goal right now, one notice at a
  * time so they never stack: the lines on the air as they come in, each
  * spoken or keyed as it shows (`airLine`; see `withNews` for a fresh batch)
- * — a line that comes with a solve AFTER_SOLVE_MS later, so that the win is
- * seen first — and the note once this player has walked up to the
- * Laborkennung. Nothing shows before its gate opens. A player who spawns at
- * the sign gets the note too; one who reconnects later does not, they read
- * it before. The run's recorded lines are fetched as it starts, a line that
- * comes in as it comes, and one still speaking stops with the screen.
+ * and up while it speaks — a line that comes with a solve AFTER_SOLVE_MS
+ * later, so that the win is seen first — and the note once this player has
+ * walked up to the Laborkennung. Nothing shows before its gate opens. A
+ * player who spawns at the sign gets the note too; one who reconnects later
+ * does not, they read it before. The run's recorded lines are fetched as it
+ * starts, a line that comes in as it comes, and one still speaking stops
+ * with the screen.
  */
 function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
   const seen = useRef(0);
@@ -391,14 +401,13 @@ function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
     }
     const from = next.kind === 'line' ? Math.max(gate, next.notBefore) : gate;
     const wait = Math.max(0, from - Date.now());
-    const up = noticeMs(next, window.matchMedia('(pointer: coarse)').matches);
+    let off: ReturnType<typeof setTimeout> | undefined;
     const on = setTimeout(() => {
-      if (next.kind === 'line') {
-        airLine(next.event);
-      }
-      setShown(next);
+      const air = next.kind === 'line' ? airLine(next.event) : null;
+      const up = noticeMs(next, window.matchMedia('(pointer: coarse)').matches, air);
+      setShown(next.kind === 'line' ? { ...next, upMs: up } : next);
+      off = setTimeout(() => setQueue((queued) => queued.slice(1)), up);
     }, wait);
-    const off = setTimeout(() => setQueue((queued) => queued.slice(1)), wait + up);
     return () => {
       clearTimeout(on);
       clearTimeout(off);
@@ -821,6 +830,7 @@ export function StageTop({
           key={`${notice.event.at}-${notice.event.label}`}
           className="radio-banner"
           role="status"
+          style={notice.upMs === undefined ? undefined : { animationDuration: `${notice.upMs}ms` }}
         >
           <span className="radio-banner-from">
             <Icon name={airIcon(notice.event)} /> {bannerFrom(notice.event)}

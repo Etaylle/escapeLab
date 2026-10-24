@@ -224,12 +224,15 @@ steht im Log.
 **Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
 dort, wo er steht, und die Musik zieht mit dem Druck an — alles zur Laufzeit erzeugt
 ([`docs/sound.md`](docs/sound.md)). Nur die Funksprüche der Leitstelle sind Aufnahmen
-(`packages/client/public/voice/`). Wer einen Funktext in `missions/*.json` ändert oder neu
-schreibt, nimmt ihn auf einem Mac neu auf — der Test, der jede Zeile prüft, nennt den Befehl:
+(`packages/client/public/voice/`), gesprochen von einer neuronalen Stimme, die offline läuft
+(Piper, Stimme „Thorsten"). Wer einen Funktext in `missions/*.json` ändert oder neu schreibt,
+nimmt ihn auf einem Mac mit `uv` neu auf — der Test, der jede Zeile prüft, nennt den Befehl;
+das Stimmmodell lädt der erste Lauf einmal nach `~/.cache/escapelab-piper/`:
 
 ```sh
-pnpm --filter @escapelab/client voice            # nur fehlende Zeilen (macOS: say, afconvert)
+pnpm --filter @escapelab/client voice            # nur fehlende Zeilen (Piper über uv, afconvert)
 pnpm --filter @escapelab/client voice --fresh    # alle neu, etwa für eine andere Stimme
+VOICE_ENGINE=say pnpm --filter @escapelab/client voice --fresh   # ohne Netz: die Mac-Stimme Anna
 ```
 
 ## Für den Demo Day (ein Prozess, eine URL)

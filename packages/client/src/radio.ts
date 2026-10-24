@@ -1,6 +1,9 @@
 import { NUDGED, type RunEvent } from '@escapelab/core';
 
-/** How long a line stays on the air; ui.css fades the banner to match. */
+/**
+ * How long a line stays on the air at least — a line spoken longer stays while it speaks
+ * (`noticeMs`); the banner's fade is set to match (ui.css, Game.tsx).
+ */
 export const BANNER_MS = 7000;
 /** The same on a touch screen, where the bar covers more of a small world. */
 export const BANNER_MS_COARSE = 4000;
@@ -70,9 +73,12 @@ export function radioNews(events: readonly RunEvent[], seen: number, now: number
 
 /**
  * What the objective bar carries under the goal, one at a time: a line on the air — not
- * before `notBefore`, epoch ms by this client's clock — or the note that the sign was read.
+ * before `notBefore`, epoch ms by this client's clock, and once up for `upMs` — or the note
+ * that the sign was read.
  */
-export type Notice = { kind: 'line'; event: RunEvent; notBefore: number } | { kind: 'sign' };
+export type Notice =
+  | { kind: 'line'; event: RunEvent; notBefore: number; upMs?: number }
+  | { kind: 'sign' };
 
 /** How long a line on the air waits after the solve it comes with, ms: the win is seen first. */
 export const AFTER_SOLVE_MS = 1000;
@@ -101,10 +107,13 @@ export function withNews(
   ];
 }
 
-/** How long a notice stays up; `coarse` for a touch screen. */
-export function noticeMs(notice: Notice, coarse: boolean): number {
+/**
+ * How long a notice stays up; `coarse` for a touch screen. A line spoken over the radio for
+ * `airMs` (radioVoice.ts `airtimeMs`) stays while it speaks, however long that is.
+ */
+export function noticeMs(notice: Notice, coarse: boolean, airMs: number | null = null): number {
   if (notice.kind === 'sign') {
     return SIGN_NOTE_MS;
   }
-  return coarse ? BANNER_MS_COARSE : BANNER_MS;
+  return Math.max(coarse ? BANNER_MS_COARSE : BANNER_MS, airMs ?? 0);
 }

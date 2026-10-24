@@ -109,41 +109,94 @@ hears none of this.
 
 Mission control speaks every line a shipped mission can put on the air: everything core's
 `logRadio` is handed — `radio.start` as the clock starts, each `puzzles[].onSolved` as its
-station is solved, `radio.escape` as the hatch unlocks. Notes of the last crew and the
-devices' texts are read, not heard. A line without a recording — a custom mission's — keeps
-the radio's chirp.
+station is solved, `radio.escape` as the hatch unlocks — and each station's `nudges` while
+it stays quiet. Emergencies and lost runs go into the run report, not on the air. Notes of
+the last crew and the devices' texts are read, not heard. A line without a recording — a
+custom mission's — keeps the radio's chirp.
+
+**Who speaks.** The Leitstelle is one person: the night-shift operator at the lab's control
+desk, calm, a little worn, who knows the building and talks to the crew as colleagues. A line
+is one or two spoken sentences of 28 words at most; it says where something is the way a
+person would („mitten im Flur, unter der roten Lampe"), may carry a little worry or relief,
+and never gives an answer; „Leitstelle hier" and „Hört ihr mich?" come seldom.
+`core/test/radioLines.test.ts` holds every shipped line to that — words, sentences, no
+„Spieler", „Crew-Mitglied" or „Bediener", nothing from the manuals' code tables (E23,
+„Legende", „Zeile"), a line for every station — and Blackout and the Systemcheck to a start, a
+nudge for every station, a line after every solve but the last, and the escape.
 
 ```sh
 pnpm --filter @escapelab/client voice            # record the lines that have no recording yet
 pnpm --filter @escapelab/client voice --fresh    # record every line anew
+VOICE_MODEL=de_DE-thorsten-medium pnpm --filter @escapelab/client voice --fresh  # another Piper voice
+VOICE_ENGINE=say pnpm --filter @escapelab/client voice --fresh   # the Mac's own voice (Anna)
 ```
 
-macOS only. The script reads `missions/*.json`, turns a dash, a middle dot or a colon into a
-short pause (a colon between digits stays), reads each line with `say -v Anna -r 190`,
-converts it with `afconvert -f m4af -d aac -b 48000` to
-`packages/client/public/voice/<first 12 hex of the line's SHA-1>.m4a`, and writes
-`manifest.json` as `{ [id]: { text, ms, missions } }`. A recording no line needs any more is
-deleted. The files are committed (27 lines, 707 kB); `test/voiceLines.test.ts` fails, naming
-the command, when a shipped line has no recording, and when a file is over 150 kB or the
-folder over 3 MB.
+On a Mac, with `uv` (`brew install uv`). The script reads `missions/*.json` and has Piper read
+each line: `uv run --with piper-tts==1.8.0` on Python 3.13, so nothing is installed for good.
+Piper is a build tool here and never ships — only its recordings do; the Piper of today
+(piper1-gpl) is GPL-3.0, the MIT original is archived. The model is the one `VOICE_MODEL`
+names, `de_DE-thorsten-high` by default, fetched once from the Piper voices on Hugging Face
+(`rhasspy/piper-voices`, pinned to one revision) into `~/.cache/escapelab-piper/`, outside the
+repo; its voice is Thorsten Müller's, whose dataset is CC0. Piper reads at `length_scale` 1.05
+(a little slower than the model's own pace, some 3.5 words a second) and leaves 0.25 s
+between two sentences. Before it sees a line, `piperText` makes a dash or a middle dot a pause
+as long as a semicolon's, says a time once („23 Uhr 47"), and gives Piper the words espeak-ng —
+whose phonemes Piper speaks — gets wrong in the shipped lines the way it reads them right
+(`SPOKEN_AS`): a compound split where its parts come out right on their own („Notstrom" came
+out „Nots-trom", „Maschinenraum" and „Serverraum" stressed on their first syllable, „Kabel"
+short), Piper's own phonemes where no spelling helps („Labor" stressed as „LA-bor",
+„Unterlagen" on its third syllable). Single letters need nothing: espeak-ng reads „Pult A" and
+„Pult B" as „Pult Ah" and „Pult Beh". Every word of every line was phonemized to find these.
+Each WAV goes to AAC with `afconvert -f m4af -d aac -b 48000` into
+`packages/client/public/voice/<first 12 hex of the line's SHA-1>.m4a`, and `manifest.json`
+lists `{ [id]: { text, ms, missions } }`, with `opens: true` on a run's first line. A recording
+no line needs any more is deleted. The files are committed (47 lines, 1.9 MB; the longest
+speaks 9.4 s in 62 kB); `test/voiceLines.test.ts` fails, naming the command, when a shipped line
+has no recording, when a file is over 150 kB or the folder over 3 MB, and when a recording
+takes less than 200 ms or more than 700 ms a word.
+
+Where the model cannot be fetched — no network — the script says what to run once by hand,
+and VOICE_ENGINE=say still reads the lines with the Mac's Anna (`say -v Anna -r 190`, a dash, a
+middle dot or a colon a 250 ms pause):
+
+```sh
+mkdir -p ~/.cache/escapelab-piper
+curl -L -o ~/.cache/escapelab-piper/de_DE-thorsten-high.onnx \
+  https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/de/de_DE/thorsten/high/de_DE-thorsten-high.onnx
+curl -L -o ~/.cache/escapelab-piper/de_DE-thorsten-high.onnx.json \
+  https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/de/de_DE/thorsten/high/de_DE-thorsten-high.onnx.json
+```
 
 At a run's start the mission's lines are fetched and decoded; a line that comes over the air
 is fetched then, where it was not yet. When the banner shows a line, its recording plays as a
-handset hears it: high-pass 300 Hz and low-pass 3.4 kHz, each fourth order, a gentle
-waveshaper (tanh), a bed of static 30 dB under the speech, a squelch as the key goes down
-and a longer one as it comes up; the beds and the music duck 6 dB meanwhile. A newer line
-cuts an older one short. The banner itself is unchanged.
+handset hears it: high-pass 300 Hz and low-pass 3.4 kHz, each fourth order, a light waveshaper
+(tanh at a drive of 1.2: a 1 kHz tone at the speech's peak comes out with 8 % distortion,
+where the drive of 2.2 the Mac's voice had gave 17 %, and the quiet parts come up 3 dB against
+the peaks instead of 7, so that the consonants stay clear), a bed of static 33 dB under the
+speech, a squelch as the key goes down and a longer one as it comes up; the beds and the music
+duck 6 dB meanwhile. The run's first line comes after the Leitstelle opening the channel:
+static swells up for 0.3 s and snaps shut on the squelch gate's click, 0.4 s before the key —
+on that line alone. A newer line cuts an older one short. The banner stays up while its line
+speaks: 7 s at least (4 s on a touch screen), and as long as the recording, its opening and its
+squelch take for a longer line (`radio.ts` `noticeMs`, `radioVoice.ts` `airtimeMs`).
 
-**The voice.** The Mac offers German voices of two kinds: Anna, a recorded (unit-selection)
-voice, and the Eloquence formant synthesizers Eddy, Flo, Reed, Rocko, Sandy, Shelley,
-Grandma and Grandpa. They were compared on the first line of Blackout at 190 words a minute,
-by measurement rather than by ear: Anna speaks it in 3.6 s with her pitch ranging from 77 to
-200 Hz (10th to 90th percentile); Reed takes 4.5 s over 77 to 124 Hz, Rocko 79 to 102 Hz,
-and each Eloquence voice adds half a second of silence. Anna is the only one that sounds like
-a person: a calm, low, slightly soft female voice whose phrasing carries an order such as
-„Erst Handbuch im Archiv, dann Kasten und Prüfpult."; through the radio's band she stays
-clear. The formant voices read flat and buzzy — a computer announcing, not a person at a
-desk — and take longer. Anna it is.
+**The voice.** Three German Piper voices were compared by measurement on the same three
+Blackout lines — the start, the Signalkette's places, the escape — each at `length_scale` 1.05
+with 0.25 s between sentences: how long it speaks, how far its pitch moves (10th to 90th
+percentile by autocorrelation over 40 ms frames, checked with YIN) and the share of 20 ms
+frames 40 dB under the loudest.
+
+| Voice | Speaks | Pitch, 10th–90th percentile | Spread | Silence |
+| --- | --- | --- | --- | --- |
+| de_DE-thorsten-high (22 kHz) | 8.0 / 6.6 / 8.4 s | 104–176 / 100–188 / 105–162 Hz | 9.1 / 10.9 / 7.4 semitones | 20 / 25 / 20 % |
+| de_DE-kerstin-low (16 kHz) | 8.5 / 7.2 / 9.7 s | 145–180 / 152–186 / 138–184 Hz | 3.7 / 3.5 / 5.0 semitones | 20 / 17 / 21 % |
+| de_DE-eva_k-x_low (16 kHz) | 10.7 / 6.8 / 9.5 s | 168–222 / 154–211 / 163–211 Hz | 4.8 / 5.4 / 4.4 semitones | 22 / 9 / 14 % |
+
+Thorsten's pitch moves two to three times as far as the others' — a person stressing what
+matters, where Kerstin and Eva read flat — he speaks the lines in the least time at the same
+pace, and his pauses fall where the commas are, a fifth of the line, as in speech; Eva drags
+the first line out to 10.7 s and runs the second together with 9 % of pauses. Thorsten it is:
+a calm, low male voice (his pitch round 120 Hz), the night shift at the desk.
 
 ## Music that breathes (`music.ts`)
 
@@ -193,16 +246,20 @@ thumps, the swell — is a sample rendered once as the music starts.
 Unit tests run every module against a fake AudioContext that keeps the graph:
 `test/ambience.test.ts` (rooms, levels, power, the beds' loops, dead and alive variants,
 crossfades, sounds let go), `test/spatial.test.ts` (pan, gain, muffle, steps, the rotor, the
-chirp), `test/radioVoice.test.ts` (the chain, the speech, ducking, preloading),
-`test/voiceLines.test.ts` (the recordings against the missions), `test/music.test.ts`
-(pressure, layers, beats, the pad, the samples, endings) and `test/audioKit.test.ts` (the
-budget, the loops, the samples, the census).
+chirp), `test/radioVoice.test.ts` (the chain, the shaper's distortion, the static's level, the
+speech, the Leitstelle's opening, ducking, preloading, a line's airtime, the offline renders),
+`test/voiceLines.test.ts` (the recordings against the missions, their pace and sizes, the
+voice's choice, what Piper and `say` are given to read), `test/music.test.ts` (pressure,
+layers, beats, the pad, the samples, endings) and `test/audioKit.test.ts` (the budget, the
+loops, the samples, the census); `core/test/radioLines.test.ts` checks the lines themselves.
 
 With `?trace=1` the page exposes `window.__escapelab.audio`: `room`, `kind`, `beds` and
 `power` by kind, `music` (`calm`, `pressure`, `last`, the pressure as `level`), `voice`
-(`playing`, `lastId`), `spatial` (`partnerPan`, `partnerGain`), `nodes` and `spent` (see
-above) and `renderRadio()`, which renders the radio's chain offline on white noise. The
-walkthrough (`tools/shots.mjs`) checks the start room's bed dead after the blackout, the room
-the lever lights alive again, every solve's line spoken from the manifest, the pressure in the
-escape, the partner's side across the corridor, and the chain's band-pass in the offline
-render (`tools/spectrum.mjs`).
+(`playing`, `lastId`, and `opened` where the Leitstelle opened the channel for it), `spatial`
+(`partnerPan`, `partnerGain`), `nodes` and `spent` (see above) and `renderRadio(id?)`, which
+renders the radio's chain offline on white noise or on the recording `id`. The walkthrough
+(`tools/shots.mjs`) checks the start room's bed dead after the blackout, the room the lever
+lights alive again, the run's first line and every solve's line spoken from the manifest — for
+200 ms a word at least, the first after the Leitstelle's opening and no other — the pressure in
+the escape, the partner's side across the corridor, and the chain's band-pass in the offline
+renders (`tools/spectrum.mjs`), on white noise and on the mission's opening line.

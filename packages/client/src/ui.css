@@ -1483,7 +1483,9 @@ button.link:hover {
  * Mission control on the air: a row of the objective bar rather than an
  * overlay of its own, so the edge arrows and the minimap — which keep clear
  * of the bar's measured height — keep clear of it too. Solid, because the
- * bar's gradient has faded out by this depth. Its 7 s match BANNER_MS.
+ * bar's gradient has faded out by this depth. Its 7 s match BANNER_MS; a
+ * line spoken longer stays while it speaks, its duration set inline
+ * (Game.tsx, radio.ts `noticeMs`).
  */
 .radio-banner {
   flex: 0 0 100%;
@@ -2491,7 +2493,7 @@ button.link:hover {
   }
 }
 
-/* On a touch screen a line stays on the air 4 s, not 7 (BANNER_MS_COARSE). */
+/* On a touch screen a line stays on the air 4 s, not 7, or while it speaks (BANNER_MS_COARSE). */
 @media (pointer: coarse) {
   .radio-banner {
     animation-duration: 4s;

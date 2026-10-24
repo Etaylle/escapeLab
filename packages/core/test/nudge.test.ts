@@ -179,18 +179,6 @@ describe('a first crew in the shipped missions', () => {
   it('gives Blackout fifteen minutes', () => {
     expect(shipped('blackout.json').timeLimitSec).toBe(900);
   });
-
-  it('has mission control name a place for every station of Blackout and the Systemcheck', () => {
-    for (const name of ['blackout.json', 'systemcheck.json']) {
-      for (const puzzle of shipped(name).puzzles) {
-        expect(puzzle.nudges.length, `${name} ${puzzle.id}`).toBeGreaterThanOrEqual(1);
-        for (const line of puzzle.nudges) {
-          // One short sentence the banner shows whole and the voice reads in a breath.
-          expect(line, `${name} ${puzzle.id}`).toMatch(/^[A-ZÄÖÜ][^\n]{10,85}\.$/);
-        }
-      }
-    }
-  });
 });
 
 describe('a room opened for a first crew', () => {

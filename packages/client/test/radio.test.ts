@@ -140,4 +140,13 @@ describe('the objective bar, one notice at a time', () => {
     expect(noticeMs(sign, false)).toBe(3500);
     expect(noticeMs(sign, true)).toBe(3500);
   });
+
+  it('keeps a line spoken longer up while it speaks, on any screen; a short one as long', () => {
+    expect(noticeMs(line('x'), false, 9400)).toBe(9400);
+    expect(noticeMs(line('x'), true, 9400)).toBe(9400);
+    expect(noticeMs(line('x'), false, 3100)).toBe(7000);
+    expect(noticeMs(line('x'), true, 3100)).toBe(4000);
+    expect(noticeMs(line('x'), true, null)).toBe(4000);
+    expect(noticeMs(sign, false, 9400)).toBe(3500);
+  });
 });
