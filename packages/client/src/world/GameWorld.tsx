@@ -55,10 +55,18 @@ import { MUSIC_AFTER_CLICK_MS, musicProbe, setTension, stopMusic, type Tension }
 import { worldNews } from './news.js';
 import { noteMount } from './notes.js';
 import { renderRadio, voiceProbe } from './radioVoice.js';
-import { renderKit, type ChatLine, type MapPing, type WorldMap } from './render/frame.js';
+import {
+  profiled,
+  renderKit,
+  type ChatLine,
+  type MapPing,
+  type RenderKit,
+  type WorldMap,
+} from './render/frame.js';
 import { dropLight } from './render/light.js';
 import { PING_LIFETIME_MS } from './render/overlays.js';
 import { drawFrame } from './render/pipeline.js';
+import { passProfile, profileRequested } from './render/profile.js';
 import { roomArea, roomsComingOn } from './rooms.js';
 import { easeOthers, follow, followServer, MOVE_KEYS, newSim, walk, type Sim } from './sim.js';
 import { HEAR_EVERY_S, hearCrew, spatialProbe, stopSpatial } from './spatial.js';
@@ -659,7 +667,28 @@ function render(loop: Loop, map: WorldMap): void {
     kit.overlay.canvas.height = canvas.height;
   }
   const perf = performance.now();
-  drawFrame(loop.ctx, assembleFrame(loop, map, dpr, perf, livePings(loop, perf)));
+  const pings = livePings(loop, perf);
+  const frame = profiled(kit, 'assemble', null, () => assembleFrame(loop, map, dpr, perf, pings));
+  drawFrame(loop.ctx, frame);
+  kit.profile?.endFrame();
+}
+
+/**
+ * `?profile=1`: what each pass costs, kept in the kit (render/profile.ts) and read off the
+ * page by the walkthrough (`window.__escapelab.passes`). Returns what takes the probe off.
+ */
+function profilePasses(kit: RenderKit): (() => void) | null {
+  if (!profileRequested(location.search)) {
+    return null;
+  }
+  const profile = passProfile();
+  kit.profile = profile;
+  return addProbes({
+    get passes() {
+      return profile.stats;
+    },
+    resetPasses: () => profile.reset(),
+  });
 }
 
 /**
@@ -710,6 +739,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
     const unlisten = props.spectator ? null : listen(loop, setWheelOpen);
     const posTimer = streamPositions(sim, props.spectator, (msg) => live.current.send(msg));
     const traced = traceFrames(sim);
+    const profiled = profilePasses(kit);
     const stop = runFrames(loop, traced?.trace ?? null);
     const ears = setInterval(() => hearTheLab(loop), HEAR_MS);
     return () => {
@@ -723,6 +753,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
       stopSpatial();
       stopPowerHum();
       traced?.drop();
+      profiled?.();
       dropLight(kit);
       refs.simRef.current = null;
       refs.interactRef.current = null;

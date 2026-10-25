@@ -1,19 +1,20 @@
 import { animTime } from '../anim.js';
-import { dressedFor, spriteFor, type TileSprites } from '../artKit.js';
-import { atlasLevel, spriteAt } from '../atlas.js';
+import { dressedFor } from '../artKit.js';
 import { css, VOID } from '../palette.js';
 import { powerAt } from '../sources.js';
+import { cachedTiles, drawTiles, type TileLight, type TileRange } from '../tileCache.js';
 import { drawWallPropMotion, moves } from '../wallProps.js';
 import { inTiles, type Frame } from './frame.js';
 
 /**
  * The first pass: the void's black over the whole canvas, then the dressed
- * floor and walls (dress.ts), as far as the camera shows them, from the
- * sprite atlas (atlas.ts) — what hangs on a wall's face baked into its
- * sprite — in the colours of the lab with its power on where the frame's
- * light says so, or in a room whose lights are back; the walls' soft
- * shadows over the floor below them; then what moves on the walls — a fan
- * turning, a needle twitching, a clock's hands; tile space.
+ * floor and walls (dress.ts) — what hangs on a wall's face baked into its
+ * sprite, the walls' soft shadows over the floor below them — and the
+ * furniture light has fallen on, as far as the camera shows them: in one
+ * draw from the map baked whole (tileCache.ts), each tile in the colours of
+ * the lab with its power on where the frame's light says so, or in a room
+ * whose lights are back; then what moves on the walls — a fan turning, a
+ * needle twitching, a clock's hands; tile space.
  */
 
 const VOID_COLOUR = css(VOID);
@@ -30,14 +31,7 @@ export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
 }
 
 /** The tiles the camera shows, a tile's margin kept: columns x0 to x1, rows y0 to y1. */
-interface TileView {
-  x0: number;
-  x1: number;
-  y0: number;
-  y1: number;
-}
-
-function viewOf({ map, camera, viewport }: Frame): TileView {
+function viewOf({ map, camera, viewport }: Frame): TileRange {
   const s = camera.scale;
   return {
     x0: Math.max(0, Math.floor(camera.x - viewport.w / 2 / s) - 1),
@@ -53,33 +47,22 @@ function litAt(frame: Frame, x: number, y: number): boolean {
 }
 
 /**
- * Floor and walls: every floor tile first, then every wall over them, so a
- * wall's shadow falls on the floor below it; nothing for the void.
+ * Floor, walls and furniture as far as the camera shows them, copied in one
+ * go from the map baked whole on this frame's grid, brought up to date first.
  */
-function drawSurfaces(ctx: CanvasRenderingContext2D, frame: Frame, view: TileView): void {
-  const { tiles } = dressedFor(frame.kit.art, frame.map, frame.missionId);
-  const { atlas } = frame.kit.art;
-  const level = atlasLevel(frame.camera.scale);
-  const width = frame.map.width;
-  for (const walls of [false, true]) {
-    for (let ty = view.y0; ty <= view.y1; ty++) {
-      const row = frame.map.tiles[ty] ?? '';
-      for (let tx = view.x0; tx <= view.x1; tx++) {
-        const sprites: TileSprites | null | undefined = tiles[ty * width + tx];
-        if (sprites == null || (row.charAt(tx) === '#') !== walls) {
-          continue;
-        }
-        const below = sprites.face && litAt(frame, tx, ty + 1);
-        const { key, spec } = spriteFor(sprites, litAt(frame, tx, ty), below);
-        const drawn = spriteAt(atlas, level, key, spec);
-        ctx.drawImage(drawn.canvas, tx, ty, 1, drawn.tall);
-      }
-    }
-  }
+function drawSurfaces(ctx: CanvasRenderingContext2D, frame: Frame, view: TileRange): void {
+  const { art } = frame.kit;
+  const dressed = dressedFor(art, frame.map, frame.missionId);
+  const light: TileLight = {
+    lit: (x, y) => litAt(frame, x, y),
+    shown: (x, y) => frame.light.shown(x, y),
+  };
+  const cache = cachedTiles(art, dressed, frame.map, frame, light, view);
+  drawTiles(ctx, cache, frame.grid, view);
 }
 
 /** What moves on the walls' faces in view; the still part is in the wall's sprite. */
-function drawWallMotion(ctx: CanvasRenderingContext2D, frame: Frame, view: TileView): void {
+function drawWallMotion(ctx: CanvasRenderingContext2D, frame: Frame, view: TileRange): void {
   const { dressing } = dressedFor(frame.kit.art, frame.map, frame.missionId);
   const t = animTime(frame.time);
   for (const prop of dressing.props) {

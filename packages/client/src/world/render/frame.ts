@@ -1,8 +1,7 @@
-import type { ChatPhrase, DronePosition, PlayerView, Sight } from '@escapelab/core';
+import type { ChatPhrase, DronePosition, PlayerView } from '@escapelab/core';
 import type { Alarm } from '../alarm.js';
 import type { WorldText } from '../art.js';
 import { artKit, type ArtKit } from '../artKit.js';
-import type { Baked } from '../baked.js';
 import type { ColdOpenFrame } from '../coldOpen.js';
 import type { DoorMotion } from '../doors.js';
 import type { FigureMood } from '../figure.js';
@@ -14,6 +13,11 @@ import type { MarkerTarget } from '../markers.js';
 import type { CeilingLight } from '../power.js';
 import type { LitGroup, RoomLight } from '../rooms.js';
 import type { Viewport } from '../viewport.js';
+import type { BakeStore } from './bakes.js';
+import { frameCache } from './frameCache.js';
+import type { PixelGrid } from './grid.js';
+import type { PassName, PassProfile } from './profile.js';
+import { radialSprites, type RadialSprites } from './radial.js';
 
 /**
  * One frame of the world as the passes draw it (pipeline.ts): a plain object
@@ -142,10 +146,10 @@ export interface RenderKit {
   ceiling: { tiles: string; byLight: Map<CeilingLight, HTMLCanvasElement> } | null;
   /** the lit rooms' tiles grouped by the rooms lighting them (rooms.ts), for the rooms lit */
   groups: { lit: string; groups: LitGroup[] } | null;
-  /** the light of the lit rooms and the open hatch as last baked, and what it was baked for */
-  roomLight: { key: string; sight: Sight | null; baked: Baked | null } | null;
-  /** the open hatch's light cut into the darkness as last baked, and the sight it was cut to */
-  hatchCut: { sight: Sight; baked: Baked | null } | null;
+  /** the light's bakes on the frame's grid, by name, each with what it was baked of (bakes.ts) */
+  bakes: BakeStore;
+  /** the glows' sprites, by gradient and radius (radial.ts) */
+  radials: RadialSprites;
   /** the red edge as last baked (vignette.ts), and for which canvas: baked anew for another */
   vignette: { canvas: HTMLCanvasElement; w: number; h: number; dpr: number };
   /**
@@ -160,20 +164,27 @@ export interface RenderKit {
    * from frame to frame by assemble.ts; nobody walking is in it
    */
   still: Map<string, number>;
+  /** what each pass costs, where the page asked for it (`?profile=1`, profile.ts); null else */
+  profile: PassProfile | null;
+  /** the pixel grid the frame before was drawn on (grid.ts); null before the first */
+  grid: PixelGrid | null;
 }
 
-/** A fresh kit drawing the darkness into `overlay`: nothing baked yet. */
+/** A fresh kit drawing the darkness into `overlay`: nothing baked yet, nothing timed. */
 export function renderKit(overlay: CanvasRenderingContext2D): RenderKit {
+  const art = artKit();
   return {
     overlay,
     ceiling: null,
     groups: null,
-    roomLight: null,
-    hatchCut: null,
+    bakes: frameCache(),
+    radials: radialSprites(art.atlas.make),
     vignette: { canvas: document.createElement('canvas'), w: 0, h: 0, dpr: 0 },
     light: null,
-    art: artKit(),
+    art,
     still: new Map(),
+    profile: null,
+    grid: null,
   };
 }
 
@@ -182,6 +193,10 @@ export interface Frame {
   viewport: Viewport;
   /** the world point the camera puts at the canvas's middle, in tiles, and device pixels a tile */
   camera: { x: number; y: number; scale: number };
+  /** how the world lies on the canvas's pixels (grid.ts): what is baked is copied onto it */
+  grid: PixelGrid;
+  /** whether the grid is the frame before's: the zoom and the camera's fraction hold still */
+  steady: boolean;
   /** the simulation's clock, s: what pulses, warms up and swells runs on it */
   time: number;
   /** the wall clock, epoch ms: doors sliding, the hatch, an alarm, the deadline */
@@ -260,6 +275,20 @@ export interface Frame {
   stillSince: ReadonlyMap<string, number>;
   /** how the crew stands while the run ends on screen: celebrating it won, slumped it lost */
   mood: FigureMood;
+}
+
+/**
+ * Draws with `draw` as the part `name` of a frame, and returns what it
+ * returns: timed, the canvas of `ctx` flushed, where the kit keeps a profile
+ * (profile.ts); else just drawn.
+ */
+export function profiled<T>(
+  kit: RenderKit,
+  name: PassName,
+  ctx: CanvasRenderingContext2D | null,
+  draw: () => T,
+): T {
+  return kit.profile === null ? draw() : kit.profile.time(name, ctx, draw);
 }
 
 /** Sets `ctx` to draw in tiles, as the camera of `frame` looks. */

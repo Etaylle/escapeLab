@@ -1,14 +1,15 @@
 import { newAtlas, spriteKey, type Atlas, type CanvasMaker, type SpriteSpec } from './atlas.js';
-import type { Baked } from './baked.js';
 import { dressMap, seedOf, type DressMap, type Dressing } from './dress.js';
 import { newParticles, type Particles } from './particles.js';
 import { hasFace } from './surfaces.js';
+import type { TileCache } from './tileCache.js';
 
 /**
  * What the art keeps between frames for one world (RenderKit.art): the
  * dressing of the map on show and the sprites its tiles are drawn with,
- * the atlas they are baked into, the particles, and the faint lights' glow
- * as last baked. Worked out anew only when the map or the mission changes.
+ * the atlas they are baked into, the map baked whole from them, the
+ * particles, and where each coloured light may fall. Worked out anew only
+ * when the map or the mission changes.
  */
 
 /** A sprite to draw, and its key in the atlas, worked out once. */
@@ -38,11 +39,9 @@ export interface ArtKit {
   /** the map last dressed, what it was dressed for, and its dressing */
   dressed: { map: DressMap; key: string; dressed: Dressed } | null;
   atlas: Atlas;
+  /** the map's floor, walls and furniture baked on the grid last drawn on (tileCache.ts) */
+  tiles: TileCache | null;
   particles: Particles;
-  /** the faint lights' glow as last baked, and what it was baked for */
-  pools: { key: string; baked: Baked | null } | null;
-  /** each pulsing light's glow at full strength, by the light and the doors shut */
-  livePools: Map<string, Baked | null>;
   /** where each light may fall, as a path in tiles, by its spot, its reach and the doors shut */
   clips: Map<string, Path2D>;
 }
@@ -52,9 +51,8 @@ export function artKit(make?: CanvasMaker): ArtKit {
   return {
     dressed: null,
     atlas: newAtlas(make),
+    tiles: null,
     particles: newParticles(),
-    pools: null,
-    livePools: new Map(),
     clips: new Map(),
   };
 }

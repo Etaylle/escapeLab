@@ -17,7 +17,9 @@ import {
 import { ALARM_RED, mixTint, WARM } from '../power.js';
 import { objectGlows } from '../render/darkness.js';
 import type { Frame } from '../render/frame.js';
+import { STANDBY_BREATH } from '../render/standby.js';
 import { sourcesOf, type LightSource } from '../sources.js';
+import { BLOOM_THRESHOLD } from './shaders.js';
 
 /**
  * What the light layer lights, worked out from a frame: the lamps the
@@ -91,13 +93,30 @@ export function lightsOf(frame: Frame): Light[] {
   ];
 }
 
+/** How far above the bloom's threshold a standby light's colour lies at the top of its breath. */
+const STANDBY_OVER = 1.25;
+/**
+ * How strongly a standby light burns on the layer: its colour — a channel
+ * of it full, the tint's middle EMERGENCY_TINT's — just above the bloom's
+ * threshold, so that it blooms a little in the dark.
+ */
+export const STANDBY_STRENGTH = (BLOOM_THRESHOLD * STANDBY_OVER) / (EMERGENCY_TINT[0]?.[2] ?? 1);
+/**
+ * Its slow breath, in step with the glow the Canvas pass lays round it
+ * (render/standby.ts), never dipping below the threshold.
+ */
+export const STANDBY_PULSE = { periodMs: STANDBY_BREATH.periodMs, depth: 0.15 } as const;
+
 /**
  * A coloured light as the layer draws it: lit as the Canvas pass lights an
  * emergency lamp — a dim glow cut into the darkness, its colour added over
- * it, whiter in the middle — `strength` strong.
+ * it, whiter in the middle — `strength` strong; a light asleep just above
+ * the bloom's threshold, breathing.
  */
 export function fromSource(source: LightSource): Light {
-  const { x, y, colour, reach, strength } = source;
+  const { x, y, colour, reach } = source;
+  const asleep = source.standby !== undefined;
+  const pulse = asleep ? STANDBY_PULSE : source.pulse;
   return {
     x,
     y,
@@ -106,8 +125,8 @@ export function fromSource(source: LightSource): Light {
     beam: null,
     tint: tintOf(EMERGENCY_TINT),
     size: SIZE.emergency,
-    strength,
-    ...(source.pulse === undefined ? {} : { pulse: source.pulse }),
+    strength: asleep ? STANDBY_STRENGTH : source.strength,
+    ...(pulse === undefined ? {} : { pulse: { ...pulse } }),
     ...(source.flicker === undefined ? {} : { flicker: source.flicker }),
   };
 }

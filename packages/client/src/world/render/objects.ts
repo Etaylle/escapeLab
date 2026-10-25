@@ -11,8 +11,6 @@ import {
   drawStation,
   plateCaption,
 } from '../art.js';
-import { atlasLevel, sprite } from '../atlas.js';
-import { decorVariant } from '../decor.js';
 import { doorOpenness, isHorizontalDoor } from '../doors.js';
 import { burning } from '../frameLight.js';
 import { drawCarryable, drawDropZone, drawSabotagePanel } from '../hazards.js';
@@ -22,15 +20,15 @@ import { inTiles, type Frame } from './frame.js';
 
 /**
  * The lab's things, in tile space. Objects show only where some light has
- * fallen — a cabinet behind a wall stays unseen. The furniture stands where
- * it was seen; sources and the notes of the last crew reach the map once
- * found; a station that is up or done, the sign, the hatch and the valves
- * always show. Then the emergency lamps on their walls and ceilings.
+ * fallen — a cabinet behind a wall stays unseen. Sources and the notes of
+ * the last crew reach the map once found; a station that is up or done, the
+ * sign, the hatch and the valves always show. Then the emergency lamps on
+ * their walls and ceilings. The furniture is baked with the floor it stands
+ * on (render/tiles.ts).
  */
 export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   inTiles(ctx, frame);
   drawPlates(ctx, frame);
-  drawDecor(ctx, frame);
   drawDoors(ctx, frame);
   drawStations(ctx, frame);
   drawManuals(ctx, frame);
@@ -59,20 +57,6 @@ function drawPlates(ctx: CanvasRenderingContext2D, frame: Frame): void {
       text,
     };
     at(ctx, plate.x + 0.5, plate.y + 0.5, () => drawPlate(ctx, look));
-  }
-}
-
-/**
- * The furniture light has fallen on, from the sprite atlas: in the colours of
- * the lab with its power on where its tile is, as the floor under it is.
- */
-function drawDecor(ctx: CanvasRenderingContext2D, frame: Frame): void {
-  const { map, light, litTiles } = frame;
-  const level = atlasLevel(frame.camera.scale);
-  for (const piece of map.decor.filter((d) => light.shown(d.x, d.y))) {
-    const lit = light.powered(piece.x, piece.y) || litTiles.has(`${piece.x},${piece.y}`);
-    const spec = { decor: piece.kind, variant: decorVariant(piece), lit };
-    ctx.drawImage(sprite(frame.kit.art.atlas, level, spec).canvas, piece.x, piece.y, 1, 1);
   }
 }
 

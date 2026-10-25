@@ -6,7 +6,7 @@
  *   PLAYWRIGHT_BROWSERS_PATH=$PWD/.playwright-browsers \
  *     [SHOTS_MISSION=Systemcheck] [SHOTS_FRAME_P95_MS=40] [SHOTS_CPU_SLOWDOWN=4] \
  *     [SHOTS_SOFTWARE_GL=1] [SHOTS_WEBGL=1] [SHOTS_HEADED=1] [SHOTS_AUDIO_OFF=beds,music] \
- *     node tools/shots.mjs [baseUrl] [outDir]
+ *     [SHOTS_PROFILE=1] node tools/shots.mjs [baseUrl] [outDir]
  *
  * SHOTS_MISSION names the mission card to start (default Blackout); the
  * crew is two players. Where the first station is a sync station, both
@@ -139,7 +139,10 @@
  * throws. SHOTS_CPU_SLOWDOWN (default 1) slows every page's main thread that
  * many times (Chromium's CPU throttling), so a fast machine measures the
  * frames as a CI runner without a GPU would; SHOTS_SOFTWARE_GL=1 composes the
- * pages on SwiftShader, so that the compositor's share shows too. The first
+ * pages on SwiftShader, so that the compositor's share shows too.
+ * SHOTS_PROFILE=1 opens the traced pages with `?profile=1` as well: every
+ * sample then logs a line `passes` with what each pass of the world's picture
+ * cost a frame, p50 and p95 (client world/render/profile.ts). The first
  * line says what draws the pages. A capture the draw leaves out is logged as
  * `skipped:` with why, and fails nothing. A line `walking` says how long each
  * avatar walked, keys held down, against the time since the run came up: the
@@ -246,7 +249,9 @@
  * art-overview.png catches the audience's whole lab lit, room-archive.png and
  * room-machine.png each player in the room it starts in, lit (1440×1000), and
  * art-dark.png the Maschinenraum two seconds into the dark, its standby glows
- * and the flashlight. The copy is deleted again whatever happened. Every walk
+ * and the flashlight; then its player walks to the room's east end and
+ * standby-dark.png shows the generators asleep behind them, out of the lamp's
+ * reach, glowing in the dark. The copy is deleted again whatever happened. Every walk
  * goes round the map's furniture (map.decor), which nobody walks through.
  *
  * Figures: the crew stands as client world/figure.ts poses it, and four shots
@@ -313,6 +318,13 @@ const SOFTWARE_GL_FLAGS = [
 const WEBGL = switchedOn('SHOTS_WEBGL', process.env.SHOTS_WEBGL);
 /** Whether the browser opens real windows, SHOTS_HEADED=1: drawn on this machine's GPU. */
 const HEADED = switchedOn('SHOTS_HEADED', process.env.SHOTS_HEADED);
+/**
+ * Whether the traced pages time each pass of the world's picture, SHOTS_PROFILE=1: ?profile=1
+ * (client world/render/profile.ts), and every frame sample logs a line `passes` with each
+ * pass's p50 and p95 per frame. A profiled frame reads a pixel back after every pass, which
+ * costs a little of its own: its frame windows run a little slower than without.
+ */
+const PROFILE = switchedOn('SHOTS_PROFILE', process.env.SHOTS_PROFILE);
 /**
  * The client's sound systems switched off on every page, SHOTS_AUDIO_OFF=beds,music,spatial
  * (`?audio-off=`, client world/audio.ts): to tell what each costs the frames. None when unset;
@@ -550,10 +562,16 @@ function fail(what) {
   tally.failures.push(what);
 }
 
-/** `url` with `?trace=1` added: the world then keeps its frame durations for `sampleFrames`. */
+/**
+ * `url` with `?trace=1` added: the world then keeps its frame durations for `sampleFrames` —
+ * and under SHOTS_PROFILE with `?profile=1`, what each of its passes costs.
+ */
 function traced(url) {
   const withFlag = new URL(url);
   withFlag.searchParams.set('trace', '1');
+  if (PROFILE) {
+    withFlag.searchParams.set('profile', '1');
+  }
   return paged(withFlag.href);
 }
 
@@ -662,6 +680,7 @@ async function sampleFrames(page, when, quiet) {
       return false;
     }
     probe.resetFrames();
+    probe.resetPasses?.();
     return true;
   });
   if (!found) {
@@ -696,9 +715,30 @@ async function sampleFrames(page, when, quiet) {
   console.log(`pages              ${perPage}`);
   const js = soundJs(spentBefore, spentAfter, seconds);
   console.log(`sound js           ms a second on the host's main thread: ${js}`);
+  if (PROFILE) {
+    await logPasses(page, when);
+  }
   if (over) {
     fail(`frame p95 ${p95.toFixed(1)} ms ${when}, over ${FRAME_P95_MS} ms`);
   }
+}
+
+/**
+ * Under SHOTS_PROFILE, what each pass of the world's picture cost a frame over the window
+ * just sampled (`window.__escapelab.passes`), p50/p95 in ms; a page without the probe fails.
+ */
+async function logPasses(page, when) {
+  const passes = await page.evaluate(() => globalThis.__escapelab?.passes ?? null);
+  if (passes === null) {
+    const why = `no pass profile ${when}: the page keeps none under ?profile=1`;
+    console.log(`passes             !! ${why}`);
+    fail(`no pass profile ${when}`);
+    return;
+  }
+  const parts = Object.entries(passes).map(
+    ([name, { p50, p95 }]) => `${name} ${p50.toFixed(2)}/${p95.toFixed(2)}`,
+  );
+  console.log(`passes             ms a frame, p50/p95, ${when}: ${parts.join(' · ')}`);
 }
 
 /** What the host's audio thread renders, from the probe's census (`audio.nodes`), as text. */
@@ -4234,6 +4274,25 @@ async function artCaptures({ host, guest, watcher }) {
   await checkLight(machine);
   await capture(machine.page, 'art-dark.png');
   console.log(`art-dark.png       ${machine.name} in the Maschinenraum, two seconds into the dark`);
+  await captureStandby(machine);
+}
+
+/**
+ * standby-dark.png: the player in the Maschinenraum walks to its east end, towards the door
+ * to the Labor, so that the generators sleep behind them out of their lamp's reach — only
+ * their standby lamps and the wall screen glowing in the dark (client render/standby.ts).
+ */
+async function captureStandby(machine) {
+  if (!(await walkNear(machine.page, machine.seen, { x: 7, y: 13 }))) {
+    fail('standby-dark.png: the walk to the Maschinenraum’s east end found no way');
+    return;
+  }
+  await sleep(1500); // the camera settles behind the walk
+  await capture(machine.page, 'standby-dark.png');
+  const at = tileOf(machine.seen);
+  console.log(
+    `standby-dark.png   ${machine.name} at ${at?.x},${at?.y}, the generators asleep behind them`,
+  );
 }
 
 /**
