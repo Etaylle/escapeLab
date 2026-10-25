@@ -12,7 +12,6 @@ import { serveSockets } from './sockets.js';
 import { StaticSite } from './static.js';
 import { createWebServer, lanUrls, tlsLogLine, tlsSetup } from './tls.js';
 import { recordingAllowed, serveVoiceRecording, VoiceDesk } from './voiceRecording.js';
-import type { Room } from './room.js';
 
 const PORT = Number(process.env['PORT'] ?? 3001);
 const MISSIONS_DIR =
