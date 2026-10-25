@@ -29,6 +29,12 @@ export default defineConfig({
       '/ws': { target: 'ws://localhost:3001', ws: true },
       '/missions': { target: 'http://localhost:3001' },
       '/stats': { target: 'http://localhost:3001' },
+      // A take from the /record page goes to the server (ALLOW_RECORD=1); the recordings and
+      // their manifest are public/'s, which Vite serves itself.
+      '/voice': {
+        target: 'http://localhost:3001',
+        bypass: (req) => (req.method === 'POST' ? undefined : req.url),
+      },
     },
   },
 });

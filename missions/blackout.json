@@ -12,8 +12,8 @@
   "timeLimitSec": 900,
   "intro": { "lightsSec": 5 },
   "radio": {
-    "start": "Leitstelle hier, bei euch ist der Strom weg, bei mir blinkt alles rot. Zuerst das Notlicht: Der Hebel hängt im Flur, den legt ihr zu zweit um.",
-    "escape": "Der Reaktor läuft, der Notausgang ist offen, in der Nordwestecke vom Archiv. Raus da, alle, durchs Labor oder am Serverraum vorbei!"
+    "start": "Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt, ich sehe nur noch die Notzellen. Geht zuerst ans Notlicht, der Hauptschalter im Flur braucht zwei Leute.",
+    "escape": "Reaktor läuft. Der Notausgang ist entriegelt, Nordwestecke beim Archiv. Alle raus, jetzt."
   },
   "map": {
     "tiles": [
@@ -242,21 +242,21 @@
       "id": "notlicht",
       "title": "Notlicht",
       "nudges": [
-        "Bei mir tut sich am Notlicht noch nichts. Der Hebel hängt mitten im Flur, unter der roten Lampe.",
-        "Falls einer von euch noch im Archiv steckt: Die Tür im Süden führt in den Flur, dann ein Stück nach Osten bis zum Hebel."
+        "Der Hauptschalter fürs Notlicht hängt mitten im Flur, unter der roten Lampe.",
+        "Wer noch im Archiv ist: durch die Südtür in den Flur, dann ein Stück nach Osten zum Hauptschalter."
       ],
       "style": "lever",
       "windowMs": 2000,
       "lights": ["FLUR", "ARCHIV"],
-      "onSolved": "Gut gemacht, Flur und Archiv haben wieder Licht. Für den Notstrom lest ihr erst das Handbuch im Archiv, dann geht es an Kasten und Prüfpult."
+      "onSolved": "Notlicht steht, danke. Jetzt der Notstrom: Die Anleitung dafür hängt im Archiv, der Kasten ist im Maschinenraum, das Prüfpult im Flur."
     },
     {
       "type": "circuit",
       "id": "notstrom",
       "title": "Notstrom-Kasten",
       "nudges": [
-        "Hört ihr mich? Der Notstrom steht bei mir noch auf Rot, die Betriebsanleitung dafür liegt im Archiv.",
-        "Das Prüfpult steht ganz am Westende vom Flur, der Kasten im Maschinenraum. Da kommt ihr nur durch die Plattentür, einer hält die Platte, einer geht rein."
+        "Die Anleitung zum Notstrom hängt im Archiv, auf der Ostseite.",
+        "Das Prüfpult steht am Westende vom Flur, der Kasten im Maschinenraum hinter der Plattentür, einer bleibt auf der Platte."
       ],
       "wires": { "min": 4, "max": 6 },
       "shorts": 3,
@@ -266,15 +266,15 @@
         "Nachtschicht: Bei ungerader Kennung immer das Kabel mit der kleinsten Spannung über 0 V, das hat Haller so eingestellt."
       ],
       "lights": ["MASCHINENRAUM"],
-      "onSolved": "Der Notstrom läuft, sehr gut, und die Tür zum Maschinenraum bleibt jetzt offen. Als Nächstes die Signalkette, ein Pult im Flur und eins im Maschinenraum."
+      "onSolved": "Notstrom läuft, die Tür zum Maschinenraum bleibt offen. Als Nächstes die Signalkette: ein Pult im Flur, eins im Maschinenraum."
     },
     {
       "type": "signal",
       "id": "signalkette",
       "title": "Signalkette",
       "nudges": [
-        "Die Signalkette wartet noch auf euch. Das Klemmbrett dazu liegt im Flur an der Südwand, da steht alles drauf.",
-        "Zur Signalkette: Pult A steht im Flur, ein gutes Stück Richtung Osten, Pult B im Maschinenraum, hinten in der Südostecke."
+        "Das Klemmbrett zur Signalkette liegt im Flur, an der Südwand.",
+        "Pult A der Signalkette steht am Ostende vom Flur, Pult B im Maschinenraum in der Südostecke."
       ],
       "stages": 4,
       "length": 4,
@@ -285,15 +285,15 @@
         "Haller: Ab Stufe 3 zeigt die Anzeige jedes Zeichen nur kurz. Erst mitschreiben, dann quittieren."
       ],
       "lights": ["SERVERRAUM"],
-      "onSolved": "Geschafft, das Schott zum Serverraum ist offen, drinnen warten Terminal und Rack. Vorsicht, die Drohne ist wach – die Kameraplatte vor dem Schott legt sie still."
+      "onSolved": "Schott zum Serverraum ist offen, drinnen Terminal und Rack. Die Drohne ist wach, die Kameraplatte davor legt sie still."
     },
     {
       "type": "servers",
       "id": "subsysteme",
       "title": "Serverraum",
       "nudges": [
-        "Auf meinem Pult laufen die Server noch nicht an. Die Unterlagen dazu liegen im Spind, mitten zwischen Terminal und Rack.",
-        "Das Terminal steht an der Westwand vom Serverraum, das Rack genau gegenüber an der Ostwand. Einer an jedes."
+        "Die Unterlagen für Terminal und Rack liegen im Spind, mitten zwischen den beiden.",
+        "Das Terminal steht an der Westwand vom Serverraum, das Rack gegenüber an der Ostwand, je einer an jedes."
       ],
       "crashed": 4,
       "trap": true,
@@ -303,29 +303,29 @@
         "Admin: E23 will am Rack einmal aus und an vor dem Start, E42 erst einen restart jeder Abhängigkeit."
       ],
       "lights": ["LABOR"],
-      "onSolved": "Gut, die Server laufen und die Labortür ist offen, aber drinnen fliegt eine Drohne. Den Aktenschrank im Labor kriegt ihr nur mit dem Schlüssel auf."
+      "onSolved": "Server laufen, die Labortür ist offen, drinnen fliegt eine Drohne. Den Aktenschrank im Labor öffnet nur der Schlüssel."
     },
     {
       "type": "morse",
       "id": "frequenz",
       "title": "Frequenz-Abgleich",
       "nudges": [
-        "Habt ihr den Schlüssel für den Aktenschrank schon? Der liegt im Serverraum, in der Nordostecke gleich über dem Rack.",
-        "Ich hab noch keine Frequenz von euch. Das Funkpult steht im Labor in der Südwestecke, der Aktenschrank im selben Raum."
+        "Der Schlüssel zum Aktenschrank liegt im Serverraum, in der Nordostecke über dem Rack.",
+        "Das Funkpult steht im Labor in der Südwestecke, der Aktenschrank im selben Raum."
       ],
       "hints": [
         "Funkraum: Das Wort beginnt nach der langen Pause. Drei Buchstaben genügen, dann steht die Frequenz in der Tabelle."
       ],
       "lights": ["REAKTOR"],
-      "onSolved": "Jetzt höre ich euch klar, die Frequenz steht, und der Reaktor ist offen. Aber ohne Ersatzsicherung bleibt er tot."
+      "onSolved": "Frequenz steht, ich höre euch klar. Der Reaktor ist offen, ohne Ersatzsicherung bleibt er aber tot."
     },
     {
       "type": "button-sync",
       "id": "reaktorstart",
       "title": "Reaktor-Neustart",
       "nudges": [
-        "Der Reaktor wartet auf die Ersatzsicherung. Die liegt im Archiv, unten in der Südostecke, ein ganzes Stück zu laufen.",
-        "Im Reaktor sitzen Schalter und Sicherungsplatz an der Ostwand, ganz hinten. Da muss die Sicherung rein, sonst bleibt alles tot."
+        "Die Ersatzsicherung für den Reaktor liegt im Archiv, in der Südostecke.",
+        "Schalter und Sicherungsplatz sitzen im Reaktor ganz hinten an der Ostwand, dort kommt die Sicherung rein."
       ],
       "windowMs": 2000
     }

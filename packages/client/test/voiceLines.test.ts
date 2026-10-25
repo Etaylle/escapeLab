@@ -3,6 +3,9 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   engineOf,
+  entryOf,
+  freshOf,
+  keeps,
   MANIFEST_FILE,
   modelUrl,
   PAUSE_MS,
@@ -72,7 +75,7 @@ describe('mission control’s recorded lines', () => {
     const ids = idsOf(manifest);
     const blackout = shippedMissions().find((mission) => mission.id === 'blackout');
     const start = blackout?.radio?.start ?? '';
-    expect(start).toMatch(/^Leitstelle hier/);
+    expect(start).toMatch(/^Leitstelle an Nachtschicht\./);
     expect(ids.get(start)).toBe(voiceId(start));
   });
 
@@ -216,6 +219,61 @@ describe('a line as Piper reads it', () => {
       expect(spoken.split('[[').length, spoken).toBe(spoken.split(']]').length);
       expect(spoken, line).not.toMatch(/\[\[[^\]]*\[\[/);
     }
+  });
+
+  it('ends no sentence on a phoneme block: Piper would run on into the next sentence', () => {
+    expect(piperText('Leitstelle an Schulungslabor. Nur eine Übung.')).toMatch(/\]\]\. Nur/);
+    const runOn = [...shippedLines().keys()].filter((line) => /\]\][.!?]\s/.test(piperText(line)));
+    expect(runOn).toEqual([]);
+  });
+});
+
+describe('a person’s recordings, as the script meets them', () => {
+  const line = { missions: ['blackout'], opens: false };
+  const synthetic: Entry = { text: 'Reaktor läuft.', ms: 1400, missions: ['blackout'] };
+  const human: Entry = { ...synthetic, source: 'human' };
+
+  it('keeps every recording that says its line without --fresh, a synthetic one too', () => {
+    expect(keeps(synthetic, 'Reaktor läuft.', true, 'none')).toBe(true);
+    expect(keeps(human, 'Reaktor läuft.', true, 'none')).toBe(true);
+  });
+
+  it('makes the synthetic ones anew under --fresh and leaves a person’s be', () => {
+    expect(keeps(synthetic, 'Reaktor läuft.', true, 'synthetic')).toBe(false);
+    expect(keeps(human, 'Reaktor läuft.', true, 'synthetic')).toBe(true);
+  });
+
+  it('makes a person’s anew only under --fresh=all', () => {
+    expect(keeps(human, 'Reaktor läuft.', true, 'all')).toBe(false);
+    expect(keeps(synthetic, 'Reaktor läuft.', true, 'all')).toBe(false);
+  });
+
+  it('keeps nothing whose file is gone or whose line now says something else', () => {
+    expect(keeps(human, 'Reaktor läuft.', false, 'none')).toBe(false);
+    expect(keeps(human, 'Reaktor steht.', true, 'synthetic')).toBe(false);
+    expect(keeps(undefined, 'Reaktor läuft.', true, 'none')).toBe(false);
+  });
+
+  it('marks a kept recording of a person as one in the list it writes, and no other', () => {
+    expect(entryOf('Reaktor läuft.', 1400, line, true)).toEqual(human);
+    expect(entryOf('Reaktor läuft.', 1400, line, false)).toEqual(synthetic);
+    const opening = entryOf('Los.', 900, { missions: ['b', 'a'], opens: true }, true);
+    expect(opening).toEqual({
+      text: 'Los.',
+      ms: 900,
+      missions: ['a', 'b'],
+      opens: true,
+      source: 'human',
+    });
+    expect(Object.keys(opening)).toEqual(['text', 'ms', 'missions', 'opens', 'source']);
+  });
+
+  it('reads --fresh and --fresh=all from the command line, and refuses another --fresh', () => {
+    expect(freshOf([])).toBe('none');
+    expect(freshOf(['--fresh'])).toBe('synthetic');
+    expect(freshOf(['--fresh=all'])).toBe('all');
+    expect(freshOf(['--fresh=all', '--fresh'])).toBe('all');
+    expect(() => freshOf(['--fresh=human'])).toThrow(/--fresh=human.*--fresh=all/);
   });
 });
 

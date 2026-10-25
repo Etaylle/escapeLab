@@ -39,6 +39,7 @@ export {
   puzzleDueAt,
   type Action,
 } from './actions.js';
+export { radioLines, type RadioLine, type RadioMoment } from './radio.js';
 export { runReport, type RunOutcome, type RunReport, type StationReport } from './report.js';
 export type {
   DifficultyStats,

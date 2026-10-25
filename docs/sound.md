@@ -114,19 +114,24 @@ it stays quiet. Emergencies and lost runs go into the run report, not on the air
 the last crew and the devices' texts are read, not heard. A line without a recording — a
 custom mission's — keeps the radio's chirp.
 
-**Who speaks.** The Leitstelle is one person: the night-shift operator at the lab's control
-desk, calm, a little worn, who knows the building and talks to the crew as colleagues. A line
-is one or two spoken sentences of 28 words at most; it says where something is the way a
-person would („mitten im Flur, unter der roten Lampe"), may carry a little worry or relief,
-and never gives an answer; „Leitstelle hier" and „Hört ihr mich?" come seldom.
-`core/test/radioLines.test.ts` holds every shipped line to that — words, sentences, no
-„Spieler", „Crew-Mitglied" or „Bediener", nothing from the manuals' code tables (E23,
-„Legende", „Zeile"), a line for every station — and Blackout and the Systemcheck to a start, a
-nudge for every station, a line after every solve but the last, and the escape.
+**Who speaks.** The Leitstelle talks as a control room does on the radio: short, factual and
+still human — what it sees, what is next, the place in the words a person would use („mitten
+im Flur, unter der roten Lampe"), never an answer, no praise, no feelings spelled out. The call
+sign opens a run („Leitstelle an Nachtschicht.", in the Systemcheck „… an Schulungsgruppe.")
+and no other line, and a nudge names the next place in one sentence. A line says 22 words at
+most beside its call sign, in two sentences at most; a short call of three words or fewer
+(„Reaktor läuft.", „Alle raus, jetzt.") may stand beside them, three pieces in all.
+`core/test/radioLines.test.ts` holds every shipped line to that — words, sentences and pieces,
+no praise („gut gemacht", „super", „toll" …), the call sign in `radio.start` alone, nudges of
+one sentence, no „Spieler", „Crew-Mitglied" or „Bediener", nothing from the manuals' code
+tables (E23, „Legende", „Zeile"), a line for every station — and Blackout and the Systemcheck
+to a start with the call sign, a nudge for every station, a line after every solve but the
+last, and the escape.
 
 ```sh
-pnpm --filter @escapelab/client voice            # record the lines that have no recording yet
-pnpm --filter @escapelab/client voice --fresh    # record every line anew
+pnpm --filter @escapelab/client voice              # record the lines that have no recording yet
+pnpm --filter @escapelab/client voice --fresh      # every synthetic line anew, a person's stay
+pnpm --filter @escapelab/client voice --fresh=all  # every line anew, a person's recordings too
 VOICE_MODEL=de_DE-thorsten-medium pnpm --filter @escapelab/client voice --fresh  # another Piper voice
 VOICE_ENGINE=say pnpm --filter @escapelab/client voice --fresh   # the Mac's own voice (Anna)
 ```
@@ -143,17 +148,30 @@ between two sentences. Before it sees a line, `piperText` makes a dash or a midd
 as long as a semicolon's, says a time once („23 Uhr 47"), and gives Piper the words espeak-ng —
 whose phonemes Piper speaks — gets wrong in the shipped lines the way it reads them right
 (`SPOKEN_AS`): a compound split where its parts come out right on their own („Notstrom" came
-out „Nots-trom", „Maschinenraum" and „Serverraum" stressed on their first syllable, „Kabel"
-short), Piper's own phonemes where no spelling helps („Labor" stressed as „LA-bor",
-„Unterlagen" on its third syllable). Single letters need nothing: espeak-ng reads „Pult A" and
-„Pult B" as „Pult Ah" and „Pult Beh". Every word of every line was phonemized to find these.
+out „Nots-trom", „Notzellen" stressed on „zel", „Maschinenraum" and „Serverraum" stressed on
+their first syllable, „Südtür" with a short ü, „Westende" as „Wes-tende", „Kabel" short),
+Piper's own phonemes where no spelling helps („Labor" stressed as „LA-bor", „Unterlagen" on its
+third syllable). Such a block never ends a sentence that another follows: Piper runs the next
+sentence into it, stop and pause lost — so the Systemcheck calls „Schulungsgruppe", not
+„Schulungslabor" — and `test/voiceLines.test.ts` checks every line for it. Single letters need
+nothing: espeak-ng reads „Pult A" and „Pult B" as „Pult Ah" and „Pult Beh". Every word of every
+line was phonemized to find these.
 Each WAV goes to AAC with `afconvert -f m4af -d aac -b 48000` into
 `packages/client/public/voice/<first 12 hex of the line's SHA-1>.m4a`, and `manifest.json`
 lists `{ [id]: { text, ms, missions } }`, with `opens: true` on a run's first line. A recording
-no line needs any more is deleted. The files are committed (47 lines, 1.9 MB; the longest
-speaks 9.4 s in 62 kB); `test/voiceLines.test.ts` fails, naming the command, when a shipped line
+no line needs any more is deleted. The files are committed (47 lines, 1.6 MB; the longest
+speaks 9.5 s in 62 kB); `test/voiceLines.test.ts` fails, naming the command, when a shipped line
 has no recording, when a file is over 150 kB or the folder over 3 MB, and when a recording
 takes less than 200 ms or more than 700 ms a word.
+
+**A person's voice.** The page `/record`, which no menu links to, shows one line at a time in
+large type, records it from the microphone, trims the silence at both ends to 120 ms in the
+browser and plays the take back for a retake or „Speichern". Saving sends it as a 44.1 kHz mono
+WAV to the server's `POST /voice/:id` — there only with `ALLOW_RECORD=1`, as `pnpm dev` sets
+it, 404 otherwise, 8 MB at most — which converts it with `afconvert` into `public/voice/<id>.m4a`
+and marks the line's manifest entry `source: 'human'` with its new length. The game plays
+whatever the manifest names, so a person's recordings replace the synthetic ones line by line,
+and the voice script keeps them — under `--fresh` too — until `--fresh=all` replaces them.
 
 Where the model cannot be fetched — no network — the script says what to run once by hand,
 and VOICE_ENGINE=say still reads the lines with the Mac's Anna (`say -v Anna -r 190`, a dash, a
@@ -197,6 +215,16 @@ matters, where Kerstin and Eva read flat — he speaks the lines in the least ti
 pace, and his pauses fall where the commas are, a fifth of the line, as in speech; Eva drags
 the first line out to 10.7 s and runs the second together with 9 % of pauses. Thorsten it is:
 a calm, low male voice (his pitch round 120 Hz), the night shift at the desk.
+
+**Tried next: Chatterbox.** Chatterbox Multilingual (Resemble AI, code and weights MIT,
+`chatterbox-tts` 0.1.7) runs on the M4 through `uv run --python 3.11 --with
+chatterbox-tts==0.1.7 --with "setuptools<81"` — its watermarker imports `pkg_resources` — with
+3.2 GB of weights: loaded in 12 s on the CPU (27 s on MPS), each of the three approved Blackout
+lines took 32–53 s on the CPU (89–181 s on MPS) for 6–9 s of speech. Its default speaker talks
+faster than Thorsten with fewer pauses (12–21 % silence against 20–25 %) and a higher, livelier
+pitch (median 136–174 Hz against 117–130 Hz), but Whisper could not make out its escape line in
+either take, and every output carries Resemble's inaudible PerTh watermark; the game stays
+with Piper.
 
 ## Music that breathes (`music.ts`)
 
@@ -249,7 +277,10 @@ crossfades, sounds let go), `test/spatial.test.ts` (pan, gain, muffle, steps, th
 chirp), `test/radioVoice.test.ts` (the chain, the shaper's distortion, the static's level, the
 speech, the Leitstelle's opening, ducking, preloading, a line's airtime, the offline renders),
 `test/voiceLines.test.ts` (the recordings against the missions, their pace and sizes, the
-voice's choice, what Piper and `say` are given to read), `test/music.test.ts` (pressure,
+voice's choice, what Piper and `say` are given to read, a person's recordings kept),
+`test/record.test.tsx` and `test/recordWav.test.ts` (the /record page's lines, its states, its
+buttons, the trim and the WAV), `server/test/voiceRecording.test.ts` (the switch, the size limit,
+a WAV converted, the manifest), `test/music.test.ts` (pressure,
 layers, beats, the pad, the samples, endings) and `test/audioKit.test.ts` (the budget, the
 loops, the samples, the census); `core/test/radioLines.test.ts` checks the lines themselves.
 

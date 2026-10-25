@@ -1,8 +1,12 @@
 /**
  * Mission control's lines as recordings, made on a Mac:
  *
- *   pnpm --filter @escapelab/client voice            the lines that have no recording yet
- *   pnpm --filter @escapelab/client voice --fresh    every line anew (another voice, say)
+ *   pnpm --filter @escapelab/client voice              the lines that have no recording yet
+ *   pnpm --filter @escapelab/client voice --fresh      every synthetic line anew (another voice)
+ *   pnpm --filter @escapelab/client voice --fresh=all  every line anew, a person's recordings too
+ *
+ * A line a person recorded on the client's /record page is marked `source: 'human'` in the
+ * manifest, and the script leaves it be — under --fresh as well — unless --fresh=all says so.
  *
  * Every line a shipped mission (missions/*.json) can put on the air: all core's `logRadio`
  * (core/src/actions.ts) is ever handed — `radio.start` as the clock starts, every
@@ -85,15 +89,22 @@ export interface MissionLines {
 }
 
 /**
- * One recorded line: what it says, how long it speaks, ms, the missions that say it, and
- * whether it opens a run.
+ * One recorded line: what it says, how long it speaks, ms, the missions that say it, whether it
+ * opens a run, and whether a person speaks it (the /record page) rather than a synthetic voice.
  */
 export interface Entry {
   text: string;
   ms: number;
   missions: string[];
   opens?: true;
+  source?: 'human';
 }
+
+/**
+ * Which recordings a run of the script makes anew, beside the lines that have none: none,
+ * every synthetic one (`--fresh`: a person's recordings stay), or every one (`--fresh=all`).
+ */
+export type Fresh = 'none' | 'synthetic' | 'all';
 
 /** A line the shipped missions can put on the air: who says it, and whether it opens a run. */
 export interface ShippedLine {
@@ -165,15 +176,19 @@ export function sayText(text: string): string {
 /**
  * Words of the shipped lines that espeak-ng — whose phonemes Piper speaks — gets wrong, and
  * how Piper is given them instead: a compound split where its parts come out right on their
- * own („Notstrom" read as „Nots-trom", „Maschinenraum" stressed on its first syllable, „Kabel"
- * short), and Piper's own phonemes in [[ ]] where no spelling helps („Labor" stressed on its
- * first syllable, „Unterlagen" on its third) — „im Labor" whole, or espeak stresses the „im"
- * left on its own before the phonemes. Found by phonemizing every word of every line
- * (docs/sound.md); single letters need nothing: „Pult A" is read „Pult Ah", „Pult B" „Pult Beh".
+ * own („Notstrom" read as „Nots-trom", „Notzellen" stressed on „zel", „Maschinenraum" stressed
+ * on its first syllable, „Südtür" with a short ü, „Westende" as „Wes-tende", „Kabel" short),
+ * and Piper's own phonemes in [[ ]] where no spelling helps („Labor" stressed on its first
+ * syllable, „Unterlagen" on its third) — „im Labor" whole, or espeak stresses the „im" left on
+ * its own before the phonemes. A block never ends a sentence that another follows: Piper runs
+ * the next sentence into it, stop and pause lost. Found by phonemizing every word of every
+ * line (docs/sound.md); single letters need nothing: „Pult A" is read „Pult Ah", „Pult B"
+ * „Pult Beh".
  */
 export const SPOKEN_AS: readonly (readonly [RegExp, string])[] = [
   [/Notstrom/g, 'Not-Strom'],
   [/Notlicht/g, 'Not-Licht'],
+  [/Notzellen/g, 'Not-Zellen'],
   [/Maschinenraum/g, 'Maschinen-Raum'],
   [/Serverraum/g, 'Server-Raum'],
   [/Signalkette/g, 'Signal-Kette'],
@@ -181,8 +196,11 @@ export const SPOKEN_AS: readonly (readonly [RegExp, string])[] = [
   [/Klemmbrett/g, 'Klemm-Brett'],
   [/Ersatzsicherung/g, 'Ersatz-Sicherung'],
   [/Sicherungsplatz/g, 'Sicherungs-Platz'],
-  [/Betriebsanleitung/g, 'Betriebs-Anleitung'],
   [/Plattentür/g, 'Platten-Tür'],
+  [/Südtür/g, 'Süd-Tür'],
+  [/Westtür/g, 'West-Tür'],
+  [/Westende/g, 'West-Ende'],
+  [/Ostende/g, 'Ost-Ende'],
   [/Speicherkern/g, 'Speicher-Kern'],
   [/Schaltplan/g, 'Schalt-Plan'],
   [/Flurplatte/g, 'Flur-Platte'],
@@ -232,6 +250,50 @@ export function shippedLines(missions = shippedMissions()): Map<string, ShippedL
     }
   }
   return lines;
+}
+
+/** What the command line asks to be made anew: `--fresh`, `--fresh=all`, or neither. */
+export function freshOf(args: readonly string[]): Fresh {
+  const asked = args.filter((arg) => arg.startsWith('--fresh'));
+  const stray = asked.find((arg) => arg !== '--fresh' && arg !== '--fresh=all');
+  if (stray !== undefined) {
+    throw new Error(
+      `voice: ${stray} — it takes --fresh (every synthetic line anew) or --fresh=all ` +
+        "(a person's recordings too)",
+    );
+  }
+  if (asked.includes('--fresh=all')) {
+    return 'all';
+  }
+  return asked.length > 0 ? 'synthetic' : 'none';
+}
+
+/**
+ * Whether the recording `kept` of the line `text` stays as it is: it says the line, its file is
+ * there (`filed`), and `fresh` does not ask for it anew — a person's recording only --fresh=all
+ * makes anew.
+ */
+export function keeps(
+  kept: Entry | undefined,
+  text: string,
+  filed: boolean,
+  fresh: Fresh,
+): boolean {
+  if (kept === undefined || kept.text !== text || !filed) {
+    return false;
+  }
+  return fresh === 'none' || (fresh === 'synthetic' && kept.source === 'human');
+}
+
+/** The manifest's entry for a line: a person's recording stays marked as one. */
+export function entryOf(text: string, ms: number, line: ShippedLine, human: boolean): Entry {
+  return {
+    text,
+    ms,
+    missions: [...line.missions].sort(),
+    ...(line.opens ? { opens: true as const } : {}),
+    ...(human ? { source: 'human' as const } : {}),
+  };
 }
 
 /** Who reads, and with which Piper voice. */
@@ -347,8 +409,11 @@ async function chosenVoice(): Promise<Voice> {
   return { engine, model: await piperModel(model) };
 }
 
-/** Makes what is missing (everything with `fresh`), drops what is stale, writes the list. */
-async function main(fresh: boolean): Promise<void> {
+/**
+ * Makes what is missing and what `fresh` asks for anew, keeps a person's recordings unless it
+ * asks for every one, drops what is stale, writes the list.
+ */
+async function main(fresh: Fresh): Promise<void> {
   const voice = await chosenVoice();
   mkdirSync(VOICE_DIR, { recursive: true });
   const before = readManifest();
@@ -357,16 +422,15 @@ async function main(fresh: boolean): Promise<void> {
   let made = 0;
   try {
     const lines = [...shippedLines()].sort(([a], [b]) => (voiceId(a) < voiceId(b) ? -1 : 1));
-    for (const [text, { missions, opens }] of lines) {
+    for (const [text, line] of lines) {
       const id = voiceId(text);
       const file = join(VOICE_DIR, `${id}.m4a`);
       const kept = before[id];
-      const keep = !fresh && kept !== undefined && kept.text === text && existsSync(file);
+      const keep = kept !== undefined && keeps(kept, text, existsSync(file), fresh);
       const ms = keep ? kept.ms : record(text, file, scratch, voice);
       made += keep ? 0 : 1;
       if (!keep) console.log(`voice: ${id} ${(ms / 1000).toFixed(1)} s „${text}"`);
-      const opening = opens ? { opens: true as const } : {};
-      manifest[id] = { text, ms, missions: [...missions].sort(), ...opening };
+      manifest[id] = entryOf(text, ms, line, keep && kept.source === 'human');
     }
   } finally {
     rmSync(scratch, { recursive: true, force: true });
@@ -378,15 +442,18 @@ async function main(fresh: boolean): Promise<void> {
   writeFileSync(MANIFEST_FILE, `${JSON.stringify(manifest, null, 2)}\n`);
   const sizeOf = (id: string): number => statSync(join(VOICE_DIR, `${id}.m4a`)).size;
   const bytes = Object.keys(manifest).reduce((sum, id) => sum + sizeOf(id), 0);
+  const human = Object.values(manifest).filter((entry) => entry.source === 'human').length;
   console.log(
-    `voice: ${Object.keys(manifest).length} lines (${made} recorded, ${stale.length} dropped), ` +
-      `${(bytes / 1024).toFixed(0)} kB in ${VOICE_DIR}`,
+    `voice: ${Object.keys(manifest).length} lines (${made} recorded, ${human} spoken by a ` +
+      `person, ${stale.length} dropped), ${(bytes / 1024).toFixed(0)} kB in ${VOICE_DIR}`,
   );
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main(process.argv.includes('--fresh')).catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
-    process.exitCode = 1;
-  });
+  Promise.resolve()
+    .then(() => main(freshOf(process.argv.slice(2))))
+    .catch((error: unknown) => {
+      console.error(error instanceof Error ? error.message : error);
+      process.exitCode = 1;
+    });
 }

@@ -36,14 +36,16 @@ export const VOICE_BASE = '/voice/';
 export const MANIFEST_URL = `${VOICE_BASE}manifest.json`;
 
 /**
- * One recorded line: what it says, how long it speaks, ms, the missions that say it, and
- * whether it opens a run (a mission's `radio.start`).
+ * One recorded line: what it says, how long it speaks, ms, the missions that say it, whether
+ * it opens a run (a mission's `radio.start`), and whether a person speaks it — recorded on the
+ * /record page — rather than the synthetic voice. The radio plays either alike.
  */
 export interface VoiceEntry {
   readonly text: string;
   readonly ms: number;
   readonly missions: readonly string[];
   readonly opens?: true;
+  readonly source?: 'human';
 }
 
 export type VoiceManifest = Readonly<Record<string, VoiceEntry>>;

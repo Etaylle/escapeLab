@@ -17,6 +17,7 @@ import { DEFAULT_RUNS_LOG } from './runLog.js';
 import { loadRunStats, logRun } from './runStats.js';
 import { StaticSite } from './static.js';
 import { createWebServer, lanUrls, tlsLogLine, tlsSetup } from './tls.js';
+import { recordingAllowed, serveVoiceRecording, VoiceDesk } from './voiceRecording.js';
 import type { Room } from './room.js';
 
 const PORT = Number(process.env['PORT'] ?? 3001);
@@ -33,6 +34,11 @@ const CUSTOM_MISSIONS_DIR = process.env['CUSTOM_MISSIONS_DIR'] || join(MISSIONS_
 const catalog = new MissionCatalog(MISSIONS_DIR, CUSTOM_MISSIONS_DIR);
 const editing = customMissions(catalog);
 const site = new StaticSite(fileURLToPath(new URL('../../client/dist', import.meta.url)));
+// A person's recordings of the radio lines (the client's /record page): with ALLOW_RECORD=1 only.
+const VOICE_DIR = fileURLToPath(new URL('../../client/public/voice', import.meta.url));
+const voiceDesk = recordingAllowed(process.env)
+  ? new VoiceDesk(VOICE_DIR, () => catalog.all.filter((m) => !catalog.isCustom(m.id)))
+  : null;
 // The Bestenliste: read from the log once, then counted run by run as they are logged.
 const stats = loadRunStats(RUNS_LOG);
 // A room pinned to a seed repeats its runs: for the walkthrough and bug reports, not for play.
@@ -53,6 +59,9 @@ const httpServer = createWebServer(tls, (req, res) => {
     return;
   }
   if (serveCustomMissions(editing, req, res)) {
+    return;
+  }
+  if (serveVoiceRecording(voiceDesk, req, res)) {
     return;
   }
   const url = req.url ?? '/';
@@ -228,6 +237,9 @@ httpServer.listen(PORT, () => {
     : 'RUNS_TOKEN unset: no download';
   console.log(`[escapelab] finished runs go to ${RUNS_LOG} (${download})`);
   console.log(`[escapelab] GET /stats ranks the ${stats.runs} runs logged so far`);
+  if (voiceDesk !== null) {
+    console.log(`[escapelab] ALLOW_RECORD=1: POST /voice/:id saves recordings to ${VOICE_DIR}`);
+  }
   if (site.available) {
     for (const url of lanUrls(PORT, tls.on)) {
       console.log(`[escapelab] im Netzwerk erreichbar: ${url}`);

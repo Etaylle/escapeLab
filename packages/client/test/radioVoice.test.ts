@@ -29,11 +29,11 @@ import {
 } from './fakeGraph.js';
 
 const LEVER_LINE =
-  'Gut gemacht, Flur und Archiv haben wieder Licht. Für den Notstrom lest ihr erst das ' +
-  'Handbuch im Archiv, dann geht es an Kasten und Prüfpult.';
-const START_LINE = 'Leitstelle hier, bei euch ist der Strom weg, bei mir blinkt alles rot.';
+  'Notlicht steht, danke. Jetzt der Notstrom: Die Anleitung dafür hängt im Archiv, der ' +
+  'Kasten ist im Maschinenraum, das Prüfpult im Flur.';
+const START_LINE = 'Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt.';
 const MANIFEST: VoiceManifest = {
-  aaaaaaaaaaaa: { text: LEVER_LINE, ms: 2000, missions: ['blackout'] },
+  aaaaaaaaaaaa: { text: LEVER_LINE, ms: 2000, missions: ['blackout'], source: 'human' },
   bbbbbbbbbbbb: { text: 'Beide hin.', ms: 900, missions: ['systemcheck'] },
   cccccccccccc: { text: START_LINE, ms: 2500, missions: ['blackout'], opens: true },
 };

@@ -12,8 +12,8 @@
   },
   "timeLimitSec": 420,
   "radio": {
-    "start": "Leitstelle hier, das ist nur eine Übung, bei euch im Schulungslabor ist noch alles aus. Geht beide zur Initialisierung und legt eure Hebel gleichzeitig um.",
-    "escape": "Alles läuft, der Notausgang ist offen, oben im Leitstand an der Nordwand. Jetzt beide hin, bevor die Zeit abläuft!"
+    "start": "Leitstelle an Schulungsgruppe. Nur eine Übung, bei euch ist noch alles aus. Geht beide zur Initialisierung und legt die Hebel gleichzeitig um.",
+    "escape": "Systeme laufen. Der Notausgang ist entriegelt, oben im Leitstand an der Nordwand. Beide raus, jetzt."
   },
   "map": {
     "tiles": [
@@ -77,21 +77,21 @@
       "id": "init",
       "title": "Initialisierung",
       "nudges": [
-        "Bei mir ist die Initialisierung noch aus. Der Hebel hängt im Leitstand an der Nordwand, rechts.",
-        "Schaut mal rechts oben im Leitstand, das Pult mit den zwei Griffen, da stellt ihr euch beide hin."
+        "Der Hebel für die Initialisierung hängt im Leitstand an der Nordwand, rechts.",
+        "Stellt euch beide an das Pult mit den zwei Griffen, rechts oben im Leitstand."
       ],
       "style": "lever",
       "windowMs": 3000,
       "lights": ["LEITSTAND"],
-      "onSolved": "Gut gemacht, der Leitstand hat Licht. Jetzt kommt die Signalprobe: zwei Pulte, eins zeigt die Zeichen, am anderen drückt ihr sie nach – geht beide hin."
+      "onSolved": "Der Leitstand hat Licht. Jetzt die Signalprobe, zu zweit: Ein Pult zeigt die Zeichen, am anderen drückt ihr sie nach."
     },
     {
       "type": "signal",
       "id": "signalprobe",
       "title": "Signalprobe",
       "nudges": [
-        "Die Signalprobe wartet. Beide Pulte stehen im Leitstand an der Südwand, eins links, eins rechts.",
-        "Lest erst nach, was die Signalprobe will: Die Unterlagen liegen im Spind, oben links im Leitstand."
+        "Die Pulte der Signalprobe stehen im Leitstand an der Südwand, eins links, eins rechts.",
+        "Die Unterlagen zur Signalprobe liegen im Spind, oben links im Leitstand."
       ],
       "stages": 2,
       "length": 3,
@@ -99,30 +99,30 @@
         "Einweisung: Ein Pult zeigt Farbe und Form, das Gegenpult quittiert in derselben Folge. Danach wechselt die Richtung."
       ],
       "lights": [],
-      "onSolved": "Das Signal steht, sauber. Als Nächstes die Kontrolle: Die Platte hält die Tür offen, und im Spind daneben liegen die Unterlagen."
+      "onSolved": "Signal steht. Als Nächstes die Kontrolle: Die Platte hält die Tür offen, die Unterlagen liegen im Spind daneben."
     },
     {
       "type": "wiring",
       "id": "doppelbestaetigung",
       "title": "Kabelprüfung",
       "nudges": [
-        "Bei der Kabelprüfung rührt sich nichts. Die steht in der Kontrolle, hinter der Tür im Westen, einer hält die Platte, einer geht rein.",
-        "Die Unterlagen liegen im Spind direkt neben der Kontrolltür, lest sie dem vor, der drinnen an den Kabeln steht."
+        "Die Kabelprüfung steht in der Kontrolle hinter der Westtür, einer hält die Platte, einer geht rein.",
+        "Die Unterlagen liegen im Spind neben der Kontrolltür, lest sie dem vor, der drinnen an den Kabeln steht."
       ],
       "wires": { "min": 3, "max": 3 },
       "hints": [
         "Einweisung: Kabel von oben gezählt. Nur die Liste für 3 Kabel gilt, und die erste Regel, die zutrifft, entscheidet."
       ],
       "lights": ["KONTROLLE"],
-      "onSolved": "Die Kabel stimmen, das Schott zu den Spulen ist offen. Einer hält noch kurz die Platte, damit der andere rauskommt, dann beide nach Osten."
+      "onSolved": "Kabel stimmen, das Schott zu den Spulen ist offen. Einer hält die Platte, bis der andere draußen ist, dann nach Osten."
     },
     {
       "type": "button-sync",
       "id": "synchronkalibrierung",
       "title": "Synchronkalibrierung",
       "nudges": [
-        "Fast geschafft. Die Spulen liegen ganz im Osten, hinter dem offenen Schott, da wartet die Synchronkalibrierung.",
-        "Sitzt einer noch in der Kontrolle fest? Die Platte im Leitstand, gleich vor der Tür, hält sie auf."
+        "Die Synchronkalibrierung steht bei den Spulen, ganz im Osten hinter dem offenen Schott.",
+        "Wer noch in der Kontrolle steckt: Die Platte im Leitstand vor der Tür hält sie auf."
       ],
       "lights": ["SPULEN"],
       "windowMs": 3000

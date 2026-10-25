@@ -1,37 +1,31 @@
 {
-  "01d5f5a59295": {
-    "text": "Habt ihr den Schlüssel für den Aktenschrank schon? Der liegt im Serverraum, in der Nordostecke gleich über dem Rack.",
-    "ms": 5672,
+  "02ed4d6ee051": {
+    "text": "Server laufen, die Labortür ist offen, drinnen fliegt eine Drohne. Den Aktenschrank im Labor öffnet nur der Schlüssel.",
+    "ms": 6624,
     "missions": [
       "blackout"
     ]
   },
-  "0999718162a4": {
-    "text": "Schaut mal rechts oben im Leitstand, das Pult mit den zwei Griffen, da stellt ihr euch beide hin.",
-    "ms": 4841,
+  "06d3d209c3a1": {
+    "text": "Wer noch in der Kontrolle steckt: Die Platte im Leitstand vor der Tür hält sie auf.",
+    "ms": 3692,
     "missions": [
       "systemcheck"
     ]
   },
-  "14596f0b22b8": {
-    "text": "Falls einer von euch noch im Archiv steckt: Die Tür im Süden führt in den Flur, dann ein Stück nach Osten bis zum Hebel.",
-    "ms": 5515,
+  "075e89ba063b": {
+    "text": "Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt, ich sehe nur noch die Notzellen. Geht zuerst ans Notlicht, der Hauptschalter im Flur braucht zwei Leute.",
+    "ms": 9509,
     "missions": [
       "blackout"
-    ]
+    ],
+    "opens": true
   },
-  "15a4172baf60": {
-    "text": "Der Notstrom läuft, sehr gut, und die Tür zum Maschinenraum bleibt jetzt offen. Als Nächstes die Signalkette, ein Pult im Flur und eins im Maschinenraum.",
-    "ms": 9375,
+  "1776e2357724": {
+    "text": "Die Synchronkalibrierung steht bei den Spulen, ganz im Osten hinter dem offenen Schott.",
+    "ms": 4760,
     "missions": [
-      "blackout"
-    ]
-  },
-  "1b6ab3b1a8fc": {
-    "text": "Jetzt höre ich euch klar, die Frequenz steht, und der Reaktor ist offen. Aber ohne Ersatzsicherung bleibt er tot.",
-    "ms": 6136,
-    "missions": [
-      "blackout"
+      "systemcheck"
     ]
   },
   "1c32b49724ca": {
@@ -41,9 +35,16 @@
       "doppelschicht"
     ]
   },
-  "1d0bb6eb519c": {
-    "text": "Gut gemacht, der Leitstand hat Licht. Jetzt kommt die Signalprobe: zwei Pulte, eins zeigt die Zeichen, am anderen drückt ihr sie nach – geht beide hin.",
-    "ms": 8598,
+  "20844d2dafb4": {
+    "text": "Der Hauptschalter fürs Notlicht hängt mitten im Flur, unter der roten Lampe.",
+    "ms": 4389,
+    "missions": [
+      "blackout"
+    ]
+  },
+  "222d3f3a3601": {
+    "text": "Signal steht. Als Nächstes die Kontrolle: Die Platte hält die Tür offen, die Unterlagen liegen im Spind daneben.",
+    "ms": 6136,
     "missions": [
       "systemcheck"
     ]
@@ -69,18 +70,18 @@
       "kettenreaktion"
     ]
   },
-  "3575b5bcf184": {
-    "text": "Die Signalkette wartet noch auf euch. Das Klemmbrett dazu liegt im Flur an der Südwand, da steht alles drauf.",
-    "ms": 6589,
+  "35c25227f2f1": {
+    "text": "Die Unterlagen für Terminal und Rack liegen im Spind, mitten zwischen den beiden.",
+    "ms": 4272,
     "missions": [
       "blackout"
     ]
   },
-  "37a7c0fa16ba": {
-    "text": "Der Reaktor wartet auf die Ersatzsicherung. Die liegt im Archiv, unten in der Südostecke, ein ganzes Stück zu laufen.",
-    "ms": 6763,
+  "3818bbb52b0a": {
+    "text": "Der Leitstand hat Licht. Jetzt die Signalprobe, zu zweit: Ein Pult zeigt die Zeichen, am anderen drückt ihr sie nach.",
+    "ms": 6786,
     "missions": [
-      "blackout"
+      "systemcheck"
     ]
   },
   "3d87fba381b2": {
@@ -90,30 +91,37 @@
       "kettenreaktion"
     ]
   },
-  "40a574ef98e1": {
-    "text": "Bei mir tut sich am Notlicht noch nichts. Der Hebel hängt mitten im Flur, unter der roten Lampe.",
-    "ms": 5324,
+  "410fa7b4f1db": {
+    "text": "Das Funkpult steht im Labor in der Südwestecke, der Aktenschrank im selben Raum.",
+    "ms": 4389,
     "missions": [
       "blackout"
     ]
   },
-  "4dd1fb91ea5e": {
-    "text": "Alles läuft, der Notausgang ist offen, oben im Leitstand an der Nordwand. Jetzt beide hin, bevor die Zeit abläuft!",
-    "ms": 7448,
+  "4933b4ca1fd9": {
+    "text": "Stellt euch beide an das Pult mit den zwei Griffen, rechts oben im Leitstand.",
+    "ms": 3831,
     "missions": [
       "systemcheck"
     ]
   },
-  "52dbd1146c3f": {
-    "text": "Die Signalprobe wartet. Beide Pulte stehen im Leitstand an der Südwand, eins links, eins rechts.",
-    "ms": 6310,
+  "4b13203073f8": {
+    "text": "Die Unterlagen liegen im Spind neben der Kontrolltür, lest sie dem vor, der drinnen an den Kabeln steht.",
+    "ms": 5224,
     "missions": [
       "systemcheck"
     ]
   },
-  "543959a32fab": {
-    "text": "Zur Signalkette: Pult A steht im Flur, ein gutes Stück Richtung Osten, Pult B im Maschinenraum, hinten in der Südostecke.",
-    "ms": 7744,
+  "4f5494825480": {
+    "text": "Pult A der Signalkette steht am Ostende vom Flur, Pult B im Maschinenraum in der Südostecke.",
+    "ms": 5817,
+    "missions": [
+      "blackout"
+    ]
+  },
+  "5d1ab414fef4": {
+    "text": "Reaktor läuft. Der Notausgang ist entriegelt, Nordwestecke beim Archiv. Alle raus, jetzt.",
+    "ms": 6317,
     "missions": [
       "blackout"
     ]
@@ -125,6 +133,13 @@
       "doppelschicht"
     ]
   },
+  "6552b388f95a": {
+    "text": "Schalter und Sicherungsplatz sitzen im Reaktor ganz hinten an der Ostwand, dort kommt die Sicherung rein.",
+    "ms": 5526,
+    "missions": [
+      "blackout"
+    ]
+  },
   "6b1eb79786bd": {
     "text": "Notstrom zuerst: Kasten im Ostflügel, Regeln im Südwesten.",
     "ms": 4284,
@@ -133,16 +148,9 @@
     ],
     "opens": true
   },
-  "6f8aec8cb7bb": {
-    "text": "Bei der Kabelprüfung rührt sich nichts. Die steht in der Kontrolle, hinter der Tür im Westen, einer hält die Platte, einer geht rein.",
-    "ms": 7077,
-    "missions": [
-      "systemcheck"
-    ]
-  },
-  "71f93dd5db85": {
-    "text": "Gut gemacht, Flur und Archiv haben wieder Licht. Für den Notstrom lest ihr erst das Handbuch im Archiv, dann geht es an Kasten und Prüfpult.",
-    "ms": 8423,
+  "78885b2579ba": {
+    "text": "Frequenz steht, ich höre euch klar. Der Reaktor ist offen, ohne Ersatzsicherung bleibt er aber tot.",
+    "ms": 6310,
     "missions": [
       "blackout"
     ]
@@ -154,11 +162,11 @@
       "kettenreaktion"
     ]
   },
-  "7e025257bf9f": {
-    "text": "Lest erst nach, was die Signalprobe will: Die Unterlagen liegen im Spind, oben links im Leitstand.",
-    "ms": 5863,
+  "7cf7ab52533d": {
+    "text": "Das Prüfpult steht am Westende vom Flur, der Kasten im Maschinenraum hinter der Plattentür, einer bleibt auf der Platte.",
+    "ms": 6629,
     "missions": [
-      "systemcheck"
+      "blackout"
     ]
   },
   "817d23810d00": {
@@ -168,45 +176,52 @@
       "kettenreaktion"
     ]
   },
-  "819ab32d1e35": {
-    "text": "Gut, die Server laufen und die Labortür ist offen, aber drinnen fliegt eine Drohne. Den Aktenschrank im Labor kriegt ihr nur mit dem Schlüssel auf.",
-    "ms": 8098,
+  "8849fe962d54": {
+    "text": "Das Terminal steht an der Westwand vom Serverraum, das Rack gegenüber an der Ostwand, je einer an jedes.",
+    "ms": 5817,
     "missions": [
       "blackout"
     ]
   },
-  "875cd7e59c00": {
-    "text": "Leitstelle hier, bei euch ist der Strom weg, bei mir blinkt alles rot. Zuerst das Notlicht: Der Hebel hängt im Flur, den legt ihr zu zweit um.",
-    "ms": 7889,
+  "8b10933ddf2f": {
+    "text": "Schott zum Serverraum ist offen, drinnen Terminal und Rack. Die Drohne ist wach, die Kameraplatte davor legt sie still.",
+    "ms": 6485,
     "missions": [
       "blackout"
+    ]
+  },
+  "8f10dc1c71d9": {
+    "text": "Leitstelle an Schulungsgruppe. Nur eine Übung, bei euch ist noch alles aus. Geht beide zur Initialisierung und legt die Hebel gleichzeitig um.",
+    "ms": 8882,
+    "missions": [
+      "systemcheck"
     ],
     "opens": true
   },
-  "91eec72e3e79": {
-    "text": "Ich hab noch keine Frequenz von euch. Das Funkpult steht im Labor in der Südwestecke, der Aktenschrank im selben Raum.",
-    "ms": 6543,
+  "91aa63cd0d29": {
+    "text": "Notlicht steht, danke. Jetzt der Notstrom: Die Anleitung dafür hängt im Archiv, der Kasten ist im Maschinenraum, das Prüfpult im Flur.",
+    "ms": 7715,
     "missions": [
       "blackout"
     ]
   },
-  "987ff9c29b0b": {
-    "text": "Im Reaktor sitzen Schalter und Sicherungsplatz an der Ostwand, ganz hinten. Da muss die Sicherung rein, sonst bleibt alles tot.",
-    "ms": 7773,
+  "922917db41dc": {
+    "text": "Das Klemmbrett zur Signalkette liegt im Flur, an der Südwand.",
+    "ms": 3820,
     "missions": [
       "blackout"
     ]
   },
-  "9ab5818e745f": {
-    "text": "Das Prüfpult steht ganz am Westende vom Flur, der Kasten im Maschinenraum. Da kommt ihr nur durch die Plattentür, einer hält die Platte, einer geht rein.",
-    "ms": 8540,
+  "997eda98f143": {
+    "text": "Systeme laufen. Der Notausgang ist entriegelt, oben im Leitstand an der Nordwand. Beide raus, jetzt.",
+    "ms": 6502,
     "missions": [
-      "blackout"
+      "systemcheck"
     ]
   },
-  "9c2d80732fd5": {
-    "text": "Sitzt einer noch in der Kontrolle fest? Die Platte im Leitstand, gleich vor der Tür, hält sie auf.",
-    "ms": 5242,
+  "9dc804d5a806": {
+    "text": "Der Hebel für die Initialisierung hängt im Leitstand an der Nordwand, rechts.",
+    "ms": 4145,
     "missions": [
       "systemcheck"
     ]
@@ -218,9 +233,16 @@
       "doppelschicht"
     ]
   },
-  "9fda04939e60": {
-    "text": "Das Signal steht, sauber. Als Nächstes die Kontrolle: Die Platte hält die Tür offen, und im Spind daneben liegen die Unterlagen.",
-    "ms": 7193,
+  "9f756efbf1b6": {
+    "text": "Der Schlüssel zum Aktenschrank liegt im Serverraum, in der Nordostecke über dem Rack.",
+    "ms": 4122,
+    "missions": [
+      "blackout"
+    ]
+  },
+  "a05a06d81e0a": {
+    "text": "Die Unterlagen zur Signalprobe liegen im Spind, oben links im Leitstand.",
+    "ms": 4052,
     "missions": [
       "systemcheck"
     ]
@@ -232,6 +254,13 @@
       "doppelschicht"
     ]
   },
+  "a4926baec4a2": {
+    "text": "Wer noch im Archiv ist: durch die Südtür in den Flur, dann ein Stück nach Osten zum Hauptschalter.",
+    "ms": 4969,
+    "missions": [
+      "blackout"
+    ]
+  },
   "a7a4fd0abde0": {
     "text": "Funkpult im Ostflügel, Ostwand. Regeln im Südwesten.",
     "ms": 4035,
@@ -239,68 +268,32 @@
       "doppelschicht"
     ]
   },
-  "abe847ef73a5": {
-    "text": "Fast geschafft. Die Spulen liegen ganz im Osten, hinter dem offenen Schott, da wartet die Synchronkalibrierung.",
-    "ms": 6264,
-    "missions": [
-      "systemcheck"
-    ]
-  },
-  "b36198d8ffc3": {
-    "text": "Bei mir ist die Initialisierung noch aus. Der Hebel hängt im Leitstand an der Nordwand, rechts.",
-    "ms": 5463,
-    "missions": [
-      "systemcheck"
-    ]
-  },
-  "b6f484755469": {
-    "text": "Leitstelle hier, das ist nur eine Übung, bei euch im Schulungslabor ist noch alles aus. Geht beide zur Initialisierung und legt eure Hebel gleichzeitig um.",
-    "ms": 8992,
-    "missions": [
-      "systemcheck"
-    ],
-    "opens": true
-  },
-  "bf204c5ad754": {
-    "text": "Auf meinem Pult laufen die Server noch nicht an. Die Unterlagen dazu liegen im Spind, mitten zwischen Terminal und Rack.",
-    "ms": 6450,
+  "b026b38b6ad9": {
+    "text": "Die Anleitung zum Notstrom hängt im Archiv, auf der Ostseite.",
+    "ms": 3448,
     "missions": [
       "blackout"
     ]
   },
-  "c0ea28acb6a2": {
-    "text": "Das Terminal steht an der Westwand vom Serverraum, das Rack genau gegenüber an der Ostwand. Einer an jedes.",
-    "ms": 6194,
+  "cbfc00e89853": {
+    "text": "Die Ersatzsicherung für den Reaktor liegt im Archiv, in der Südostecke.",
+    "ms": 3913,
     "missions": [
       "blackout"
     ]
   },
-  "c3a16b756f5e": {
-    "text": "Die Kabel stimmen, das Schott zu den Spulen ist offen. Einer hält noch kurz die Platte, damit der andere rauskommt, dann beide nach Osten.",
-    "ms": 7309,
+  "ceb43276953b": {
+    "text": "Notstrom läuft, die Tür zum Maschinenraum bleibt offen. Als Nächstes die Signalkette: ein Pult im Flur, eins im Maschinenraum.",
+    "ms": 7866,
+    "missions": [
+      "blackout"
+    ]
+  },
+  "d6b1ce9ed9c7": {
+    "text": "Die Pulte der Signalprobe stehen im Leitstand an der Südwand, eins links, eins rechts.",
+    "ms": 4876,
     "missions": [
       "systemcheck"
-    ]
-  },
-  "d6ebd9dddd1b": {
-    "text": "Die Unterlagen liegen im Spind direkt neben der Kontrolltür, lest sie dem vor, der drinnen an den Kabeln steht.",
-    "ms": 5863,
-    "missions": [
-      "systemcheck"
-    ]
-  },
-  "d897d1d53b38": {
-    "text": "Der Reaktor läuft, der Notausgang ist offen, in der Nordwestecke vom Archiv. Raus da, alle, durchs Labor oder am Serverraum vorbei!",
-    "ms": 8540,
-    "missions": [
-      "blackout"
-    ]
-  },
-  "d95a135a6237": {
-    "text": "Geschafft, das Schott zum Serverraum ist offen, drinnen warten Terminal und Rack. Vorsicht, die Drohne ist wach – die Kameraplatte vor dem Schott legt sie still.",
-    "ms": 8609,
-    "missions": [
-      "blackout"
     ]
   },
   "e036051a6037": {
@@ -325,11 +318,18 @@
       "kettenreaktion"
     ]
   },
-  "ffd5f1ddde4a": {
-    "text": "Hört ihr mich? Der Notstrom steht bei mir noch auf Rot, die Betriebsanleitung dafür liegt im Archiv.",
-    "ms": 5776,
+  "e97199e31d42": {
+    "text": "Die Kabelprüfung steht in der Kontrolle hinter der Westtür, einer hält die Platte, einer geht rein.",
+    "ms": 5283,
     "missions": [
-      "blackout"
+      "systemcheck"
+    ]
+  },
+  "fc75d2ced4a6": {
+    "text": "Kabel stimmen, das Schott zu den Spulen ist offen. Einer hält die Platte, bis der andere draußen ist, dann nach Osten.",
+    "ms": 6543,
+    "missions": [
+      "systemcheck"
     ]
   }
 }
