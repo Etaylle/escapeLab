@@ -2,11 +2,10 @@
  * Mission control's lines as recordings, made on a Mac:
  *
  *   pnpm --filter @escapelab/client voice              the lines that have no recording yet
- *   pnpm --filter @escapelab/client voice --fresh      every synthetic line anew (another voice)
- *   pnpm --filter @escapelab/client voice --fresh=all  every line anew, a person's recordings too
- *
- * A line a person recorded on the client's /record page is marked `source: 'human'` in the
- * manifest, and the script leaves it be — under --fresh as well — unless --fresh=all says so.
+ *   pnpm --filter @escapelab/client voice --fresh      every synthetic line this voice did not make
+ *   pnpm --filter @escapelab/client voice --fresh=all  … and a person's recordings too
+ *   pnpm --filter @escapelab/client voice --list-voices            the ElevenLabs account's voices
+ *   pnpm --filter @escapelab/client voice --sample <voice> <text>  one line by an ElevenLabs voice
  *
  * Every line a shipped mission (missions/*.json) can put on the air: all core's `logRadio`
  * (core/src/actions.ts) is ever handed — `radio.start` as the clock starts, every
@@ -19,12 +18,20 @@
  * chatter, a pause at every sentence's end, the words espeak-ng would misread given to Piper
  * the way it reads them right (`piperText`). The model comes once from the Piper voices on
  * Hugging Face into ~/.cache/escapelab-piper/, outside the repo. VOICE_ENGINE=say reads the
- * lines with the Mac's own voice instead (`say`, `sayText`). Either way the line is squeezed
- * to AAC at BITRATE (`afconvert`) into public/voice/<the first 12 hex digits of the line's
- * SHA-1>.m4a and listed in public/voice/manifest.json as { [id]: { text, ms, missions } },
- * with `opens: true` on a line that opens a run (`radio.start`): the radio keys it with the
- * Leitstelle's opening squelch. A recording no line needs any more goes. The files are
- * committed; test/voiceLines.test.ts fails when a line has none.
+ * lines with the Mac's own voice instead (`say`, `sayText`); either is squeezed to AAC at
+ * BITRATE (`afconvert`) into public/voice/<id>.m4a, the id being the first 12 hex digits of the
+ * line's SHA-1. VOICE_ENGINE=elevenlabs has an ElevenLabs voice read them (elevenlabs.ts) into
+ * public/voice/<id>.mp3. public/voice/manifest.json lists every line as { [id]: { text, ms,
+ * missions, file } }, `file` naming its recording, with `opens: true` on a line that opens a
+ * run (`radio.start`): the radio keys it with the Leitstelle's opening squelch.
+ *
+ * A synthetic recording carries `render`, a hash of what made it — the engine, the voice, its
+ * settings and the words as that engine was given them — so --fresh makes anew only what the
+ * chosen voice would make differently: a render cut short goes on where it stopped and spends
+ * nothing twice. A recording a person made on the client's /record page carries `source`
+ * (`human`, `upload`) and stays under --fresh; --fresh=all replaces it too. A recording no line
+ * needs any more goes. The files are committed; test/voiceLines.test.ts fails when a line has
+ * none, or a file or the folder outgrows MAX_FILE_BYTES or MAX_FOLDER_BYTES.
  *
  * Runs on Node's own TypeScript (type stripping): it imports nothing of the app.
  */
@@ -45,9 +52,25 @@ import {
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  accountVoices,
+  ELEVEN_GAP_MS,
+  ELEVEN_MODEL,
+  ELEVEN_VOICE,
+  elevenClient,
+  loadApiKey,
+  oneByOne,
+  resolveVoice,
+  sampleFile,
+  samplesDir,
+  speakEleven,
+  speechRequest,
+  voiceRow,
+  type ElevenVoice,
+} from './elevenlabs.ts';
 
-/** Who reads the lines: Piper, or the Mac's own voice. */
-export type VoiceEngine = 'piper' | 'say';
+/** Who reads the lines: Piper, the Mac's own voice, or an ElevenLabs voice. */
+export type VoiceEngine = 'piper' | 'say' | 'elevenlabs';
 
 /** The Piper voice where VOICE_MODEL names none: Thorsten, high quality (docs/sound.md). */
 export const PIPER_MODEL = 'de_DE-thorsten-high';
@@ -73,6 +96,10 @@ export const SAY_RATE = 190;
 export const PAUSE_MS = 250;
 /** AAC's bit rate, bits a second: a handset's band needs no more. */
 export const BITRATE = 48000;
+/** The most one recording may take, bytes. */
+export const MAX_FILE_BYTES = 150 * 1024;
+/** The most the folder may take, bytes: 6 MB, room for every line as ElevenLabs' MP3. */
+export const MAX_FOLDER_BYTES = 6 * 1024 * 1024;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** The shipped missions. */
@@ -88,21 +115,35 @@ export interface MissionLines {
   readonly puzzles: readonly { readonly onSolved?: string; readonly nudges?: readonly string[] }[];
 }
 
+/** Who made a recording a person's: spoken on the /record page, or a file put there. */
+export type PersonSource = 'human' | 'upload';
+
 /**
  * One recorded line: what it says, how long it speaks, ms, the missions that say it, whether it
- * opens a run, and whether a person speaks it (the /record page) rather than a synthetic voice.
+ * opens a run, who made it — a person (`source`), or a voice's render (`render`, a hash of what
+ * made it) — and its file in the voice folder.
  */
 export interface Entry {
   text: string;
   ms: number;
   missions: string[];
   opens?: true;
-  source?: 'human';
+  source?: PersonSource;
+  render?: string;
+  file: string;
+}
+
+/** A recording, as an entry names it: its file, and a person who made it or a voice's render. */
+export interface Take {
+  readonly file: string;
+  readonly source?: PersonSource | undefined;
+  readonly render?: string | undefined;
 }
 
 /**
  * Which recordings a run of the script makes anew, beside the lines that have none: none,
- * every synthetic one (`--fresh`: a person's recordings stay), or every one (`--fresh=all`).
+ * every synthetic one the chosen voice did not make (`--fresh`: a person's recordings stay),
+ * or every one it did not make, a person's too (`--fresh=all`).
  */
 export type Fresh = 'none' | 'synthetic' | 'all';
 
@@ -135,10 +176,17 @@ export function engineOf(value: string | undefined): VoiceEngine {
   if (value === undefined || value === '' || value === 'piper') {
     return 'piper';
   }
-  if (value === 'say') {
-    return 'say';
+  if (value === 'say' || value === 'elevenlabs') {
+    return value;
   }
-  throw new Error(`voice: VOICE_ENGINE="${value}" — it takes "piper" (the default) or "say"`);
+  throw new Error(
+    `voice: VOICE_ENGINE="${value}" — it takes "piper" (the default), "say" or "elevenlabs"`,
+  );
+}
+
+/** The file an engine records the line `id` into: ElevenLabs' MP3, else AAC in an .m4a. */
+export function fileOf(engine: VoiceEngine, id: string): string {
+  return `${id}.${engine === 'elevenlabs' ? 'mp3' : 'm4a'}`;
 }
 
 /**
@@ -269,42 +317,79 @@ export function freshOf(args: readonly string[]): Fresh {
 }
 
 /**
- * Whether the recording `kept` of the line `text` stays as it is: it says the line, its file is
- * there (`filed`), and `fresh` does not ask for it anew — a person's recording only --fresh=all
- * makes anew.
+ * Whether the recording `kept` of the line `text` stays as it is: it says the line and its file
+ * is there (`filed`), and either it is what the chosen voice would make again (`render`), or
+ * `fresh` does not ask for it anew — a person's recording only --fresh=all makes anew.
  */
 export function keeps(
   kept: Entry | undefined,
   text: string,
   filed: boolean,
   fresh: Fresh,
+  render: string,
 ): boolean {
   if (kept === undefined || kept.text !== text || !filed) {
     return false;
   }
-  return fresh === 'none' || (fresh === 'synthetic' && kept.source === 'human');
+  if (kept.render === render) {
+    return true;
+  }
+  return fresh === 'none' || (fresh === 'synthetic' && kept.source !== undefined);
 }
 
-/** The manifest's entry for a line: a person's recording stays marked as one. */
-export function entryOf(text: string, ms: number, line: ShippedLine, human: boolean): Entry {
+/** The manifest's entry for a line and its recording: a person's stays marked as one. */
+export function entryOf(text: string, ms: number, line: ShippedLine, take: Take): Entry {
   return {
     text,
     ms,
     missions: [...line.missions].sort(),
     ...(line.opens ? { opens: true as const } : {}),
-    ...(human ? { source: 'human' as const } : {}),
+    ...(take.source === undefined ? {} : { source: take.source }),
+    ...(take.render === undefined ? {} : { render: take.render }),
+    file: take.file,
   };
 }
 
-/** Who reads, and with which Piper voice. */
-type Voice = { engine: 'say' } | { engine: 'piper'; model: string };
+/** Who reads: Piper with its voice's name and model file, the Mac, or an ElevenLabs voice. */
+export type Voice =
+  | { readonly engine: 'say' }
+  | { readonly engine: 'piper'; readonly name: string; readonly model: string }
+  | { readonly engine: 'elevenlabs'; readonly name: string; readonly voice: ElevenVoice };
+
+/** What makes a take, part by part: the engine, the voice and its settings, the words given. */
+function madeBy(voice: Voice, text: string): readonly (string | number)[] {
+  if (voice.engine === 'piper') {
+    return ['piper', voice.name, LENGTH_SCALE, SENTENCE_PAUSE_S, piperText(text)];
+  }
+  if (voice.engine === 'say') {
+    return ['say', SAY_VOICE, SAY_RATE, sayText(text)];
+  }
+  const request = speechRequest(text, voice.voice.model);
+  return ['elevenlabs', voice.voice.voiceId, JSON.stringify(request)];
+}
+
+/**
+ * The render of `text` by `voice`, as a hash of what makes it (`madeBy`): what that voice would
+ * make again, take for take.
+ */
+export function renderOf(voice: Voice, text: string): string {
+  const made = madeBy(voice, text).join('\n');
+  return createHash('sha1').update(made, 'utf8').digest('hex').slice(0, 12);
+}
+
+/** The tools each engine needs: ElevenLabs only afinfo, to know how long an MP3 speaks. */
+const TOOLS: Readonly<Record<VoiceEngine, readonly string[]>> = {
+  piper: ['afconvert', 'afinfo', 'uv'],
+  say: ['afconvert', 'afinfo', 'say'],
+  elevenlabs: ['afinfo'],
+};
 
 /** Fails with what to do where a tool the engine needs is not there. */
 function requireTools(engine: VoiceEngine): void {
   if (process.platform !== 'darwin') {
-    throw new Error('voice: the recordings are converted with macOS tools (afconvert); use a Mac');
+    throw new Error('voice: the recordings are measured with macOS tools (afinfo); use a Mac');
   }
-  for (const tool of ['afconvert', 'afinfo', engine === 'piper' ? 'uv' : 'say']) {
+  for (const tool of TOOLS[engine]) {
     try {
       execFileSync('/usr/bin/which', [tool], { stdio: 'ignore' });
     } catch {
@@ -363,8 +448,8 @@ async function piperModel(model: string): Promise<string> {
   return join(MODEL_DIR, `${model}.onnx`);
 }
 
-/** Reads `text` into `raw` (a WAV from Piper, an AIFF from `say`). */
-function read(text: string, raw: string, voice: Voice): void {
+/** Reads `text` into `raw`: a WAV from Piper, an AIFF from `say`. */
+function read(text: string, raw: string, voice: Exclude<Voice, { engine: 'elevenlabs' }>): void {
   if (voice.engine === 'say') {
     execFileSync('say', ['-v', SAY_VOICE, '-r', String(SAY_RATE), '-o', raw, sayText(text)]);
     return;
@@ -378,17 +463,33 @@ function read(text: string, raw: string, voice: Voice): void {
   });
 }
 
-/** Reads `text` into `file` (.m4a) and returns how long it speaks, ms. */
-function record(text: string, file: string, scratch: string, voice: Voice): number {
-  const raw = join(scratch, voice.engine === 'say' ? 'line.aiff' : 'line.wav');
-  read(text, raw, voice);
-  execFileSync('afconvert', ['-f', 'm4af', '-d', 'aac', '-b', String(BITRATE), raw, file]);
-  const info = execFileSync('afinfo', [raw], { encoding: 'utf8' });
+/** How long the recording at `path` speaks, ms, as afinfo estimates it. */
+function durationOf(path: string, text: string): number {
+  const info = execFileSync('afinfo', [path], { encoding: 'utf8' });
   const seconds = /estimated duration:\s*([\d.]+)/.exec(info)?.[1];
   if (seconds === undefined) {
     throw new Error(`voice: afinfo gave no duration for "${text}"`);
   }
   return Math.round(Number(seconds) * 1000);
+}
+
+/** Reads `text`, the line `id`, into the voice folder; returns its file and how long it speaks. */
+async function record(
+  text: string,
+  id: string,
+  scratch: string,
+  voice: Voice,
+): Promise<{ file: string; ms: number }> {
+  const file = fileOf(voice.engine, id);
+  const path = join(VOICE_DIR, file);
+  if (voice.engine === 'elevenlabs') {
+    writeFileSync(path, await speakEleven(voice.voice, text));
+    return { file, ms: durationOf(path, text) };
+  }
+  const raw = join(scratch, voice.engine === 'say' ? 'line.aiff' : 'line.wav');
+  read(text, raw, voice);
+  execFileSync('afconvert', ['-f', 'm4af', '-d', 'aac', '-b', String(BITRATE), raw, path]);
+  return { file, ms: durationOf(raw, text) };
 }
 
 /** The manifest as it stands; empty where there is none yet. */
@@ -398,6 +499,23 @@ function readManifest(): Record<string, Entry> {
     : {};
 }
 
+/** Writes the manifest, its entries in the order of their ids. */
+function writeManifest(manifest: Readonly<Record<string, Entry>>): void {
+  const sorted = Object.entries(manifest).sort(([a], [b]) => (a < b ? -1 : 1));
+  writeFileSync(MANIFEST_FILE, `${JSON.stringify(Object.fromEntries(sorted), null, 2)}\n`);
+}
+
+/** The ElevenLabs voice ELEVENLABS_VOICE names — Helmut where it names none — from the account. */
+async function elevenVoice(): Promise<Voice> {
+  loadApiKey();
+  const client = await elevenClient();
+  const wanted = process.env.ELEVENLABS_VOICE || ELEVEN_VOICE;
+  const found = resolveVoice(await accountVoices(client), wanted);
+  const model = process.env.ELEVENLABS_MODEL || ELEVEN_MODEL;
+  const name = `${found.name ?? found.voiceId} (${model})`;
+  return { engine: 'elevenlabs', name, voice: { client, voiceId: found.voiceId, model } };
+}
+
 /** The voice VOICE_ENGINE and VOICE_MODEL ask for, its Piper model fetched where needed. */
 async function chosenVoice(): Promise<Voice> {
   const engine = engineOf(process.env.VOICE_ENGINE);
@@ -405,53 +523,149 @@ async function chosenVoice(): Promise<Voice> {
   if (engine === 'say') {
     return { engine };
   }
-  const model = process.env.VOICE_MODEL || PIPER_MODEL;
-  return { engine, model: await piperModel(model) };
+  if (engine === 'elevenlabs') {
+    return elevenVoice();
+  }
+  const name = process.env.VOICE_MODEL || PIPER_MODEL;
+  return { engine, name, model: await piperModel(name) };
+}
+
+/** A shipped line as a run sees it: its id, the take it has, and the render it would get. */
+interface Planned {
+  readonly text: string;
+  readonly line: ShippedLine;
+  readonly id: string;
+  readonly kept: Entry | null;
+  readonly render: string;
+}
+
+/** Every shipped line, in the order of their ids, each with what it keeps of `before`. */
+function plan(before: Readonly<Record<string, Entry>>, fresh: Fresh, voice: Voice): Planned[] {
+  const lines = [...shippedLines()].sort(([a], [b]) => (voiceId(a) < voiceId(b) ? -1 : 1));
+  return lines.map(([text, line]) => {
+    const id = voiceId(text);
+    const render = renderOf(voice, text);
+    const was = before[id];
+    const filed = was !== undefined && existsSync(join(VOICE_DIR, was.file));
+    const kept = was !== undefined && keeps(was, text, filed, fresh, render) ? was : null;
+    return { text, line, id, kept, render };
+  });
+}
+
+/** The files over MAX_FILE_BYTES, and the folder where it is over MAX_FOLDER_BYTES, as warnings. */
+function overLimits(manifest: Readonly<Record<string, Entry>>): string[] {
+  const sizes = Object.values(manifest).map((entry) => {
+    return [entry.file, statSync(join(VOICE_DIR, entry.file)).size] as const;
+  });
+  const total = sizes.reduce((sum, [, size]) => sum + size, 0);
+  const files = sizes
+    .filter(([, size]) => size > MAX_FILE_BYTES)
+    .map(([file, size]) => `${file} takes ${(size / 1024).toFixed(0)} kB, over 150 kB`);
+  const folder = total > MAX_FOLDER_BYTES ? [`the folder takes ${total} bytes, over 6 MB`] : [];
+  return [...files, ...folder];
 }
 
 /**
- * Makes what is missing and what `fresh` asks for anew, keeps a person's recordings unless it
- * asks for every one, drops what is stale, writes the list.
+ * Makes what is missing and what `fresh` asks for anew, one line after the other and the list
+ * written after each, so that a run cut short keeps what it made; then drops what is stale.
  */
 async function main(fresh: Fresh): Promise<void> {
   const voice = await chosenVoice();
   mkdirSync(VOICE_DIR, { recursive: true });
   const before = readManifest();
+  const planned = plan(before, fresh, voice);
+  const todo = planned.filter((each) => each.kept === null);
+  const characters = todo.reduce((sum, each) => sum + each.text.length, 0);
+  const who = voice.engine === 'say' ? `say ${SAY_VOICE}` : `${voice.engine} ${voice.name}`;
+  console.log(
+    `voice: ${todo.length} of ${planned.length} lines to make, ${characters} characters, ${who}`,
+  );
+  const manifest: Record<string, Entry> = { ...before };
+  for (const { text, line, id, kept } of planned) {
+    if (kept !== null) manifest[id] = entryOf(text, kept.ms, line, kept);
+  }
   const scratch = mkdtempSync(join(tmpdir(), 'escapelab-voice-'));
-  const manifest: Record<string, Entry> = {};
-  let made = 0;
   try {
-    const lines = [...shippedLines()].sort(([a], [b]) => (voiceId(a) < voiceId(b) ? -1 : 1));
-    for (const [text, line] of lines) {
-      const id = voiceId(text);
-      const file = join(VOICE_DIR, `${id}.m4a`);
-      const kept = before[id];
-      const keep = kept !== undefined && keeps(kept, text, existsSync(file), fresh);
-      const ms = keep ? kept.ms : record(text, file, scratch, voice);
-      made += keep ? 0 : 1;
-      if (!keep) console.log(`voice: ${id} ${(ms / 1000).toFixed(1)} s „${text}"`);
-      manifest[id] = entryOf(text, ms, line, keep && kept.source === 'human');
-    }
+    const jobs = todo.map(({ text, line, id, render }) => async () => {
+      const { file, ms } = await record(text, id, scratch, voice);
+      manifest[id] = entryOf(text, ms, line, { file, render });
+      writeManifest(manifest);
+      console.log(`voice: ${id} ${(ms / 1000).toFixed(1)} s „${text}"`);
+    });
+    await oneByOne(jobs, voice.engine === 'elevenlabs' ? ELEVEN_GAP_MS : 0);
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
+  finish(Object.fromEntries(planned.map(({ id }) => [id, manifest[id] as Entry])), todo.length);
+}
+
+/** Writes the final list, drops every recording it does not name, says what it holds. */
+function finish(manifest: Readonly<Record<string, Entry>>, made: number): void {
+  writeManifest(manifest);
+  const named = new Set(Object.values(manifest).map((entry) => entry.file));
   const stale = readdirSync(VOICE_DIR).filter(
-    (name) => name.endsWith('.m4a') && manifest[name.slice(0, -4)] === undefined,
+    (name) => /\.(m4a|mp3)$/.test(name) && !named.has(name),
   );
   for (const name of stale) unlinkSync(join(VOICE_DIR, name));
-  writeFileSync(MANIFEST_FILE, `${JSON.stringify(manifest, null, 2)}\n`);
-  const sizeOf = (id: string): number => statSync(join(VOICE_DIR, `${id}.m4a`)).size;
-  const bytes = Object.keys(manifest).reduce((sum, id) => sum + sizeOf(id), 0);
-  const human = Object.values(manifest).filter((entry) => entry.source === 'human').length;
-  console.log(
-    `voice: ${Object.keys(manifest).length} lines (${made} recorded, ${human} spoken by a ` +
-      `person, ${stale.length} dropped), ${(bytes / 1024).toFixed(0)} kB in ${VOICE_DIR}`,
+  const persons = Object.values(manifest).filter((entry) => entry.source !== undefined).length;
+  const bytes = Object.values(manifest).reduce(
+    (sum, entry) => sum + statSync(join(VOICE_DIR, entry.file)).size,
+    0,
   );
+  console.log(
+    `voice: ${Object.keys(manifest).length} lines (${made} made, ${persons} by a person, ` +
+      `${stale.length} dropped), ${(bytes / 1024).toFixed(0)} kB in ${VOICE_DIR}`,
+  );
+  const over = overLimits(manifest);
+  for (const warning of over) {
+    console.error(`voice: ${warning} — test/voiceLines.test.ts refuses it`);
+  }
+  if (over.length > 0) process.exitCode = 1;
+}
+
+/** --list-voices: the ElevenLabs account's voices, one a line. */
+async function listVoices(): Promise<void> {
+  loadApiKey();
+  for (const voice of await accountVoices(await elevenClient())) {
+    console.log(voiceRow(voice));
+  }
+}
+
+/** --sample <voice> "<text>": one line read by an ElevenLabs voice, into samplesDir(). */
+async function sample(wanted: string | undefined, text: string | undefined): Promise<void> {
+  if (wanted === undefined || text === undefined || text.trim() === '') {
+    throw new Error(
+      'voice: --sample takes a voice and a line: --sample <voice id or name> "<text>"',
+    );
+  }
+  loadApiKey();
+  const client = await elevenClient();
+  const found = resolveVoice(await accountVoices(client), wanted);
+  const model = process.env.ELEVENLABS_MODEL || ELEVEN_MODEL;
+  const who = `${found.name ?? found.voiceId} (${model})`;
+  console.log(`voice: ${text.length} characters, read by ${who}`);
+  const dir = samplesDir();
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, sampleFile(wanted));
+  writeFileSync(file, await speakEleven({ client, voiceId: found.voiceId, model }, text));
+  console.log(`voice: ${file}`);
+}
+
+/** What the command line asks for: the account's voices, a sample, or the lines. */
+function run(args: readonly string[]): Promise<void> {
+  if (args.includes('--list-voices')) {
+    return listVoices();
+  }
+  const at = args.indexOf('--sample');
+  if (at >= 0) {
+    return sample(args[at + 1], args[at + 2]);
+  }
+  return main(freshOf(args));
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   Promise.resolve()
-    .then(() => main(freshOf(process.argv.slice(2))))
+    .then(() => run(process.argv.slice(2)))
     .catch((error: unknown) => {
       console.error(error instanceof Error ? error.message : error);
       process.exitCode = 1;

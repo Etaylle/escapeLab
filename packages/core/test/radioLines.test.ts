@@ -85,6 +85,15 @@ const longNudges = (mission: Mission): string[] =>
     .filter((line) => line.when === 'nudge' && piecesOf(line.text).length > 1)
     .map((line) => line.text);
 
+/**
+ * Every line of `mission` but its escape that calls out: the deep, trailer-like voice reads them
+ * plain, and only the way out may be urgent.
+ */
+const callingOut = (mission: Mission): string[] =>
+  radioLines(mission)
+    .filter((line) => line.when !== 'escape' && line.text.includes('!'))
+    .map((line) => line.text);
+
 const missionsDir = new URL('../../../missions/', import.meta.url);
 const missions: Mission[] = readdirSync(missionsDir)
   .filter((f) => f.endsWith('.json'))
@@ -129,6 +138,14 @@ describe('the radio-line guard', () => {
     expect(offAir(['Der Stollen ist frei.', 'Die Supermarktkasse piept.'])).toEqual([]);
   });
 
+  it('hears a call-out anywhere but in the escape', () => {
+    const loud = {
+      radio: { start: 'Los!', escape: 'Raus, jetzt!' },
+      puzzles: [{ id: 'p', nudges: ['Hier lang!'], onSolved: 'Gut.' }],
+    } as unknown as Mission;
+    expect(callingOut(loud)).toEqual(['Los!', 'Hier lang!']);
+  });
+
   it('passes the approved lines: the call sign aside, short calls beside the sentences', () => {
     expect(offAir(APPROVED)).toEqual([]);
     // The call sign is the address, not the message: without its stop it counts, 24 words.
@@ -155,6 +172,10 @@ describe.each(byId)('the radio in mission %s', (_id, mission) => {
 
   it('names the next place in one sentence where it nudges', () => {
     expect(longNudges(mission)).toEqual([]);
+  });
+
+  it('calls out in no line but the escape', () => {
+    expect(callingOut(mission)).toEqual([]);
   });
 
   it('has a line for every station: its own nudge, or the line that sends the crew there', () => {

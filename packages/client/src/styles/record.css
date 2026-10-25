@@ -109,10 +109,89 @@ button.record-rolling:hover:not(:disabled) {
   text-transform: uppercase;
 }
 
-.record-tag--human {
+.record-tag--human,
+.record-tag--upload {
   color: var(--accent);
 }
 
 .record-tag--missing {
   color: var(--warn);
+}
+
+.record-number {
+  flex: none;
+  width: 2em;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 20px;
+  text-align: right;
+}
+
+/* The line's text for another tool: copied, or marked in a field to copy by hand. */
+.record-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.record-copy-field {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.record-copy-field textarea {
+  width: 100%;
+  resize: vertical;
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text);
+  font: inherit;
+}
+
+/* A file for the line: dropped here, or picked by a click on the zone. */
+.record-drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 16px 0 0;
+  padding: 14px 16px;
+  border: 1px dashed var(--line-2);
+  border-radius: 10px;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.record-drop:hover {
+  border-color: var(--accent);
+}
+
+.record-drop input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.record-drop--off {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.record-drop-title {
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 15px;
+}
+
+.record-drop-hint {
+  font-size: 12px;
 }

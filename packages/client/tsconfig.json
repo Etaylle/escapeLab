@@ -9,7 +9,8 @@
       "DOM",
       "DOM.Iterable"
     ],
-    "useDefineForClassFields": true
+    "useDefineForClassFields": true,
+    "allowImportingTsExtensions": true
   },
   "include": [
     "src",

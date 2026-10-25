@@ -1,11 +1,27 @@
 import { radioLines, type Mission, type MissionInfo, type RadioMoment } from '@escapelab/core';
-import { MANIFEST_URL, VOICE_BASE, type VoiceManifest } from '../world/radioVoice.js';
+import {
+  MANIFEST_URL,
+  VOICE_BASE,
+  type PersonSource,
+  type VoiceManifest,
+} from '../world/radioVoice.js';
 
 /**
- * The radio lines the /record page offers a person to speak: every line a shipped mission can
- * put on the air (core's `radioLines`, from the missions the server hands out — not the ones
- * made in the editor), each with what the manifest says of its recording.
+ * The radio lines the /record page offers a person to speak or to replace with a file: every
+ * line a shipped mission can put on the air (core's `radioLines`, from the missions the server
+ * hands out — not the ones made in the editor), each with what the manifest says of its
+ * recording.
  */
+
+/** Who made a recording: a synthetic voice, a person at the page's microphone, or a file. */
+export type Source = 'synthetic' | PersonSource;
+
+/** A line's recording: how long it speaks, ms, who made it, its file under VOICE_BASE. */
+export interface Recording {
+  readonly ms: number;
+  readonly source: Source;
+  readonly file: string;
+}
 
 /** One line to speak, and the recording it has. */
 export interface RecordLine {
@@ -17,10 +33,8 @@ export interface RecordLine {
   readonly when: RadioMoment;
   /** the title of the station a nudge or a solve's line belongs to; null otherwise */
   readonly station: string | null;
-  /** how long its recording speaks, ms; null where it has none */
-  readonly ms: number | null;
-  /** whether a person speaks its recording, rather than the synthetic voice */
-  readonly human: boolean;
+  /** its recording; null where it has none */
+  readonly recording: Recording | null;
 }
 
 /**
@@ -48,14 +62,17 @@ export function recordLines(
       }
       const puzzle = mission.puzzles.find((p) => p.id === said.puzzleId);
       const entry = manifest[id];
+      const recording: Recording | null =
+        entry === undefined
+          ? null
+          : { ms: entry.ms, source: entry.source ?? 'synthetic', file: entry.file };
       lines.set(id, {
         id,
         text: said.text,
         missions: [mission.title],
         when: said.when,
         station: puzzle?.title ?? null,
-        ms: entry?.ms ?? null,
-        human: entry?.source === 'human',
+        recording,
       });
     }
   }
@@ -100,24 +117,76 @@ export async function loadLines(): Promise<RecordLine[]> {
   return recordLines(missions, manifest, ids);
 }
 
-/** Where the recording of `line` plays from, past any copy the browser kept. */
-export function recordingUrl(line: RecordLine, at: number): string {
-  return `${VOICE_BASE}${line.id}.m4a?t=${at}`;
+/** Where a recording plays from, past any copy the browser kept. */
+export function recordingUrl(recording: Recording, at: number): string {
+  return `${VOICE_BASE}${recording.file}?t=${at}`;
+}
+
+/** The most a file put on the page may weigh, bytes: what the server takes. */
+export const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+
+/** The kinds of file the page takes, by ending, with the type they are sent as. */
+export const UPLOAD_TYPES: Readonly<Record<string, string>> = {
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  wav: 'audio/wav',
+};
+
+/** What the file picker offers: the endings and types the page takes. */
+export const UPLOAD_ACCEPT = [
+  ...Object.keys(UPLOAD_TYPES).map((ending) => `.${ending}`),
+  ...Object.values(UPLOAD_TYPES),
+].join(',');
+
+/** A file as the page sees one dropped on it. */
+export interface Dropped {
+  readonly name: string;
+  readonly type: string;
+  readonly size: number;
+}
+
+/** The ending of a file's name, in small letters; '' for none. */
+const endingOf = (name: string): string => /\.([^.]+)$/.exec(name)?.[1]?.toLowerCase() ?? '';
+
+/**
+ * Why the page does not send `file` on, as a sentence — a WebM (afconvert cannot read it),
+ * another kind, too much — or null where it does.
+ */
+export function uploadProblem(file: Dropped): string | null {
+  const ending = endingOf(file.name);
+  if (ending === 'webm' || file.type.startsWith('audio/webm')) {
+    return 'WebM kann afconvert nicht lesen: Angenommen werden mp3, m4a oder wav.';
+  }
+  if (UPLOAD_TYPES[ending] === undefined) {
+    return `„${file.name}“ ist keine mp3-, m4a- oder wav-Datei.`;
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return `„${file.name}“ ist größer als ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`;
+  }
+  return file.size === 0 ? `„${file.name}“ ist leer.` : null;
+}
+
+/** The type a file goes to the server as: by its ending, which the page checked. */
+export function uploadType(file: Dropped): string {
+  return UPLOAD_TYPES[endingOf(file.name)] ?? 'application/octet-stream';
 }
 
 /**
- * Sends a person's take of the line `id` to the server (POST /voice/:id, ALLOW_RECORD=1) and
- * returns how long the saved recording speaks, ms; fails with the server's own words.
+ * Sends a recording of the line `id` to the server (POST /voice/:id, ALLOW_RECORD=1) — a take
+ * from the page's microphone, or a file put there (`upload`) — and returns the recording as
+ * the server keeps it; fails with the server's own words.
  */
-export async function saveTake(id: string, wav: Blob): Promise<number> {
-  const res = await fetch(`${VOICE_BASE}${id}`, {
-    method: 'POST',
-    headers: { 'content-type': 'audio/wav' },
-    body: wav,
-  });
-  const body = (await res.json().catch(() => ({}))) as { ms?: number; error?: string };
-  if (!res.ok || typeof body.ms !== 'number') {
-    throw new Error(body.error ?? `Speichern ging nicht (HTTP ${res.status}).`);
+export async function sendRecording(
+  id: string,
+  body: Blob,
+  type: string,
+  source: 'human' | 'upload',
+): Promise<Recording> {
+  const address = `${VOICE_BASE}${id}${source === 'upload' ? '?source=upload' : ''}`;
+  const res = await fetch(address, { method: 'POST', headers: { 'content-type': type }, body });
+  const kept = (await res.json().catch(() => ({}))) as Partial<Recording> & { error?: string };
+  if (!res.ok || typeof kept.ms !== 'number' || typeof kept.file !== 'string') {
+    throw new Error(kept.error ?? `Speichern ging nicht (HTTP ${res.status}).`);
   }
-  return body.ms;
+  return { ms: kept.ms, source, file: kept.file };
 }

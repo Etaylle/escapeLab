@@ -4,14 +4,16 @@
     "ms": 6624,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "02ed4d6ee051.m4a"
   },
   "06d3d209c3a1": {
     "text": "Wer noch in der Kontrolle steckt: Die Platte im Leitstand vor der Tür hält sie auf.",
     "ms": 3692,
     "missions": [
       "systemcheck"
-    ]
+    ],
+    "file": "06d3d209c3a1.m4a"
   },
   "075e89ba063b": {
     "text": "Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt, ich sehe nur noch die Notzellen. Geht zuerst ans Notlicht, der Hauptschalter im Flur braucht zwei Leute.",
@@ -19,126 +21,144 @@
     "missions": [
       "blackout"
     ],
-    "opens": true
+    "opens": true,
+    "file": "075e89ba063b.m4a"
   },
   "1776e2357724": {
     "text": "Die Synchronkalibrierung steht bei den Spulen, ganz im Osten hinter dem offenen Schott.",
     "ms": 4760,
     "missions": [
       "systemcheck"
-    ]
+    ],
+    "file": "1776e2357724.m4a"
   },
   "1c32b49724ca": {
     "text": "Notausgang offen, Schleusenmitte. Alle vier hin.",
     "ms": 3083,
     "missions": [
       "doppelschicht"
-    ]
+    ],
+    "file": "1c32b49724ca.m4a"
   },
   "20844d2dafb4": {
     "text": "Der Hauptschalter fürs Notlicht hängt mitten im Flur, unter der roten Lampe.",
     "ms": 4389,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "20844d2dafb4.m4a"
   },
   "222d3f3a3601": {
     "text": "Signal steht. Als Nächstes die Kontrolle: Die Platte hält die Tür offen, die Unterlagen liegen im Spind daneben.",
     "ms": 6136,
     "missions": [
       "systemcheck"
-    ]
+    ],
+    "file": "222d3f3a3601.m4a"
   },
   "22f2d6d8fa13": {
     "text": "Alle in den Kern. Flurplatte öffnet das Messlabor.",
     "ms": 3327,
     "missions": [
       "kettenreaktion"
-    ]
+    ],
+    "file": "22f2d6d8fa13.m4a"
   },
   "254093cbcc07": {
     "text": "Schleuse offen. Alle vier zum Not-Aus, Westwand.",
     "ms": 3118,
     "missions": [
       "doppelschicht"
-    ]
+    ],
+    "file": "254093cbcc07.m4a"
   },
   "337030d21e78": {
     "text": "Leitungsnetz am Westende vom Flur, Kühlmittel zum Kern.",
     "ms": 3379,
     "missions": [
       "kettenreaktion"
-    ]
+    ],
+    "file": "337030d21e78.m4a"
   },
   "35c25227f2f1": {
     "text": "Die Unterlagen für Terminal und Rack liegen im Spind, mitten zwischen den beiden.",
     "ms": 4272,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "35c25227f2f1.m4a"
   },
   "3818bbb52b0a": {
     "text": "Der Leitstand hat Licht. Jetzt die Signalprobe, zu zweit: Ein Pult zeigt die Zeichen, am anderen drückt ihr sie nach.",
     "ms": 6786,
     "missions": [
       "systemcheck"
-    ]
+    ],
+    "file": "3818bbb52b0a.m4a"
   },
   "3d87fba381b2": {
     "text": "Notausgang offen, Westende vom Flur. Alle drei hin.",
     "ms": 3605,
     "missions": [
       "kettenreaktion"
-    ]
+    ],
+    "file": "3d87fba381b2.m4a"
   },
   "410fa7b4f1db": {
     "text": "Das Funkpult steht im Labor in der Südwestecke, der Aktenschrank im selben Raum.",
     "ms": 4389,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "410fa7b4f1db.m4a"
   },
   "4933b4ca1fd9": {
     "text": "Stellt euch beide an das Pult mit den zwei Griffen, rechts oben im Leitstand.",
     "ms": 3831,
     "missions": [
       "systemcheck"
-    ]
+    ],
+    "file": "4933b4ca1fd9.m4a"
   },
   "4b13203073f8": {
     "text": "Die Unterlagen liegen im Spind neben der Kontrolltür, lest sie dem vor, der drinnen an den Kabeln steht.",
     "ms": 5224,
     "missions": [
       "systemcheck"
-    ]
+    ],
+    "file": "4b13203073f8.m4a"
   },
   "4f5494825480": {
     "text": "Pult A der Signalkette steht am Ostende vom Flur, Pult B im Maschinenraum in der Südostecke.",
     "ms": 5817,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "4f5494825480.m4a"
   },
   "5d1ab414fef4": {
     "text": "Reaktor läuft. Der Notausgang ist entriegelt, Nordwestecke beim Archiv. Alle raus, jetzt.",
     "ms": 6317,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "5d1ab414fef4.m4a"
   },
   "63b85185d3f6": {
     "text": "Tastenfeld im Westflügel, Südostecke. Regeln im Nordosten.",
     "ms": 4418,
     "missions": [
       "doppelschicht"
-    ]
+    ],
+    "file": "63b85185d3f6.m4a"
   },
   "6552b388f95a": {
     "text": "Schalter und Sicherungsplatz sitzen im Reaktor ganz hinten an der Ostwand, dort kommt die Sicherung rein.",
     "ms": 5526,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "6552b388f95a.m4a"
   },
   "6b1eb79786bd": {
     "text": "Notstrom zuerst: Kasten im Ostflügel, Regeln im Südwesten.",
@@ -146,49 +166,56 @@
     "missions": [
       "doppelschicht"
     ],
-    "opens": true
+    "opens": true,
+    "file": "6b1eb79786bd.m4a"
   },
   "78885b2579ba": {
     "text": "Frequenz steht, ich höre euch klar. Der Reaktor ist offen, ohne Ersatzsicherung bleibt er aber tot.",
     "ms": 6310,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "78885b2579ba.m4a"
   },
   "7c8343fceedc": {
     "text": "Leitstand offen. Freigabecode dort, Regeln im Messlabor.",
     "ms": 3919,
     "missions": [
       "kettenreaktion"
-    ]
+    ],
+    "file": "7c8343fceedc.m4a"
   },
   "7cf7ab52533d": {
     "text": "Das Prüfpult steht am Westende vom Flur, der Kasten im Maschinenraum hinter der Plattentür, einer bleibt auf der Platte.",
     "ms": 6629,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "7cf7ab52533d.m4a"
   },
   "817d23810d00": {
     "text": "Resonator offen. Station dahinter, durch die Westtür.",
     "ms": 3582,
     "missions": [
       "kettenreaktion"
-    ]
+    ],
+    "file": "817d23810d00.m4a"
   },
   "8849fe962d54": {
     "text": "Das Terminal steht an der Westwand vom Serverraum, das Rack gegenüber an der Ostwand, je einer an jedes.",
     "ms": 5817,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "8849fe962d54.m4a"
   },
   "8b10933ddf2f": {
     "text": "Schott zum Serverraum ist offen, drinnen Terminal und Rack. Die Drohne ist wach, die Kameraplatte davor legt sie still.",
     "ms": 6485,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "8b10933ddf2f.m4a"
   },
   "8f10dc1c71d9": {
     "text": "Leitstelle an Schulungsgruppe. Nur eine Übung, bei euch ist noch alles aus. Geht beide zur Initialisierung und legt die Hebel gleichzeitig um.",
@@ -196,112 +223,128 @@
     "missions": [
       "systemcheck"
     ],
-    "opens": true
+    "opens": true,
+    "file": "8f10dc1c71d9.m4a"
   },
   "91aa63cd0d29": {
     "text": "Notlicht steht, danke. Jetzt der Notstrom: Die Anleitung dafür hängt im Archiv, der Kasten ist im Maschinenraum, das Prüfpult im Flur.",
     "ms": 7715,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "91aa63cd0d29.m4a"
   },
   "922917db41dc": {
     "text": "Das Klemmbrett zur Signalkette liegt im Flur, an der Südwand.",
     "ms": 3820,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "922917db41dc.m4a"
   },
   "997eda98f143": {
     "text": "Systeme laufen. Der Notausgang ist entriegelt, oben im Leitstand an der Nordwand. Beide raus, jetzt.",
     "ms": 6502,
     "missions": [
       "systemcheck"
-    ]
+    ],
+    "file": "997eda98f143.m4a"
   },
   "9dc804d5a806": {
     "text": "Der Hebel für die Initialisierung hängt im Leitstand an der Nordwand, rechts.",
     "ms": 4145,
     "missions": [
       "systemcheck"
-    ]
+    ],
+    "file": "9dc804d5a806.m4a"
   },
   "9f5039973bf5": {
     "text": "Kühlbank im Westflügel, Westwand. Regeln im Südosten.",
     "ms": 3756,
     "missions": [
       "doppelschicht"
-    ]
+    ],
+    "file": "9f5039973bf5.m4a"
   },
   "9f756efbf1b6": {
     "text": "Der Schlüssel zum Aktenschrank liegt im Serverraum, in der Nordostecke über dem Rack.",
     "ms": 4122,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "9f756efbf1b6.m4a"
   },
   "a05a06d81e0a": {
     "text": "Die Unterlagen zur Signalprobe liegen im Spind, oben links im Leitstand.",
     "ms": 4052,
     "missions": [
       "systemcheck"
-    ]
+    ],
+    "file": "a05a06d81e0a.m4a"
   },
   "a242523a34e9": {
     "text": "Speicherkern an die Schleusenwand, Schaltplan im Nordwesten.",
     "ms": 3495,
     "missions": [
       "doppelschicht"
-    ]
+    ],
+    "file": "a242523a34e9.m4a"
   },
   "a4926baec4a2": {
     "text": "Wer noch im Archiv ist: durch die Südtür in den Flur, dann ein Stück nach Osten zum Hauptschalter.",
     "ms": 4969,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "a4926baec4a2.m4a"
   },
   "a7a4fd0abde0": {
     "text": "Funkpult im Ostflügel, Ostwand. Regeln im Südwesten.",
     "ms": 4035,
     "missions": [
       "doppelschicht"
-    ]
+    ],
+    "file": "a7a4fd0abde0.m4a"
   },
   "b026b38b6ad9": {
     "text": "Die Anleitung zum Notstrom hängt im Archiv, auf der Ostseite.",
     "ms": 3448,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "b026b38b6ad9.m4a"
   },
   "cbfc00e89853": {
     "text": "Die Ersatzsicherung für den Reaktor liegt im Archiv, in der Südostecke.",
     "ms": 3913,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "cbfc00e89853.m4a"
   },
   "ceb43276953b": {
     "text": "Notstrom läuft, die Tür zum Maschinenraum bleibt offen. Als Nächstes die Signalkette: ein Pult im Flur, eins im Maschinenraum.",
     "ms": 7866,
     "missions": [
       "blackout"
-    ]
+    ],
+    "file": "ceb43276953b.m4a"
   },
   "d6b1ce9ed9c7": {
     "text": "Die Pulte der Signalprobe stehen im Leitstand an der Südwand, eins links, eins rechts.",
     "ms": 4876,
     "missions": [
       "systemcheck"
-    ]
+    ],
+    "file": "d6b1ce9ed9c7.m4a"
   },
   "e036051a6037": {
     "text": "Druckknopf im Westflügel, Nordseite. Regeln im Nordosten.",
     "ms": 4255,
     "missions": [
       "doppelschicht"
-    ]
+    ],
+    "file": "e036051a6037.m4a"
   },
   "e291391e6b9b": {
     "text": "Platten in Archiv und Messlabor öffnen die Schleuse. Erste Station im Flur.",
@@ -309,27 +352,31 @@
     "missions": [
       "kettenreaktion"
     ],
-    "opens": true
+    "opens": true,
+    "file": "e291391e6b9b.m4a"
   },
   "e753b688f370": {
     "text": "Weiter im Pumpenraum, Südost. Regeln wieder im Archiv.",
     "ms": 4255,
     "missions": [
       "kettenreaktion"
-    ]
+    ],
+    "file": "e753b688f370.m4a"
   },
   "e97199e31d42": {
     "text": "Die Kabelprüfung steht in der Kontrolle hinter der Westtür, einer hält die Platte, einer geht rein.",
     "ms": 5283,
     "missions": [
       "systemcheck"
-    ]
+    ],
+    "file": "e97199e31d42.m4a"
   },
   "fc75d2ced4a6": {
     "text": "Kabel stimmen, das Schott zu den Spulen ist offen. Einer hält die Platte, bis der andere draußen ist, dann nach Osten.",
     "ms": 6543,
     "missions": [
       "systemcheck"
-    ]
+    ],
+    "file": "fc75d2ced4a6.m4a"
   }
 }

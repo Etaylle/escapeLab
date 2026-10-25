@@ -31,21 +31,27 @@ import {
  * nothing plays while the context is held back.
  */
 
-/** Where the recordings lie, and their list: { [id]: { text, ms, missions, opens? } }. */
+/** Where the recordings lie, and their list: { [id]: { text, ms, missions, opens?, file } }. */
 export const VOICE_BASE = '/voice/';
 export const MANIFEST_URL = `${VOICE_BASE}manifest.json`;
 
+/** Who made a recording a person's: spoken on the /record page, or a file put there. */
+export type PersonSource = 'human' | 'upload';
+
 /**
  * One recorded line: what it says, how long it speaks, ms, the missions that say it, whether
- * it opens a run (a mission's `radio.start`), and whether a person speaks it — recorded on the
- * /record page — rather than the synthetic voice. The radio plays either alike.
+ * it opens a run (a mission's `radio.start`), who made it — a person (`source`), or a synthetic
+ * voice's render (`render`) — and its file under VOICE_BASE, an .m4a or an .mp3. The radio plays
+ * whatever the entry names, alike.
  */
 export interface VoiceEntry {
   readonly text: string;
   readonly ms: number;
   readonly missions: readonly string[];
   readonly opens?: true;
-  readonly source?: 'human';
+  readonly source?: PersonSource;
+  readonly render?: string;
+  readonly file: string;
 }
 
 export type VoiceManifest = Readonly<Record<string, VoiceEntry>>;
@@ -142,14 +148,25 @@ interface Speaking {
   readonly cut: (at: number) => void;
 }
 
-/** What the voice has loaded: the manifest by line, the openers, the recordings by id. */
+/**
+ * What the voice has loaded: the manifest by line, the recordings' files by id, the openers,
+ * the recordings by id.
+ */
 const store: {
   manifest: Promise<VoiceManifest | null> | null;
   ids: Map<string, string>;
+  files: Map<string, string>;
   openers: Set<string>;
   loading: Map<string, Promise<void>>;
   clips: Map<string, Clip>;
-} = { manifest: null, ids: new Map(), openers: new Set(), loading: new Map(), clips: new Map() };
+} = {
+  manifest: null,
+  ids: new Map(),
+  files: new Map(),
+  openers: new Set(),
+  loading: new Map(),
+  clips: new Map(),
+};
 
 let speaking: Speaking | null = null;
 let lastId: string | null = null;
@@ -165,6 +182,7 @@ function manifest(): Promise<VoiceManifest | null> {
         store.manifest = null;
       } else {
         store.ids = idsOf(loaded);
+        store.files = new Map(Object.entries(loaded).map(([id, entry]) => [id, entry.file]));
         store.openers = openersOf(loaded);
       }
       return loaded;
@@ -176,13 +194,17 @@ function manifest(): Promise<VoiceManifest | null> {
   return store.manifest;
 }
 
-/** Fetches and decodes the recording `id`, once; a failure lets a later call try again. */
+/**
+ * Fetches and decodes the recording `id` from the file its entry names, once; a failure lets a
+ * later call try again.
+ */
 function load(id: string): Promise<void> {
   const known = store.loading.get(id);
   if (known !== undefined) return known;
   const engine = audioEngine();
-  if (engine === null) return Promise.resolve();
-  const loading = fetch(`${VOICE_BASE}${id}.m4a`)
+  const file = store.files.get(id);
+  if (engine === null || file === undefined) return Promise.resolve();
+  const loading = fetch(`${VOICE_BASE}${file}`)
     .then((res) => {
       if (!res.ok) throw new Error(`voice ${id}: ${res.status}`);
       return res.arrayBuffer();
@@ -413,9 +435,16 @@ function whiteNoise(length: number): Float32Array {
   return noise;
 }
 
-/** The recording `id` decoded at `rate`, its peak at SPEECH_PEAK as `speak` feeds it in. */
+/**
+ * The recording `id`, from the file its entry names, decoded at `rate`, its peak at SPEECH_PEAK
+ * as `speak` feeds it in.
+ */
 async function lineAt(id: string, rate: number): Promise<Float32Array> {
-  const res = await fetch(`${VOICE_BASE}${id}.m4a`);
+  const file = (await manifest())?.[id]?.file;
+  if (file === undefined) {
+    throw new Error(`voice ${id}: not in the manifest`);
+  }
+  const res = await fetch(`${VOICE_BASE}${file}`);
   if (!res.ok) {
     throw new Error(`voice ${id}: ${res.status}`);
   }
