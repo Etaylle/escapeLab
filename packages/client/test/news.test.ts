@@ -20,7 +20,7 @@ describe('worldNews — what the lab shows that it did not before', () => {
     expect(worldNews(null, now)).toEqual({ found: [], notes: [], opened: [], lit: [] });
   });
 
-  it('finds a note of the last crew the moment the view carries it, read or not', () => {
+  it('finds a note of the last shift the moment the view carries it, read or not', () => {
     const lever = { index: 0, x: 12, y: 6, read: false };
     const hatch = { index: 2, x: 2, y: 0, read: true };
     const before = mapWith({ notes: [lever] });

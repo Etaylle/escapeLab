@@ -168,7 +168,7 @@ describe('where a finding points', () => {
   });
 });
 
-describe('a note of the last crew', () => {
+describe('a note of the last shift', () => {
   const sound = (): Draft =>
     probe(
       ['spawn', { x: 3, y: 4 }],

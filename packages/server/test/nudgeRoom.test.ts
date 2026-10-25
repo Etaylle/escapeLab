@@ -41,13 +41,13 @@ const mission: Mission = parseMission({
 
 const QUIET_MS = 90_000;
 
-type Player = Walker & { token: string };
+/** A player of the room, with how to let go of their connection, as its socket closing does. */
+type Player = Walker & { token: string; detach: () => void };
 
 function join(room: Room, name: string): Player {
   const messages: Player['messages'] = [];
   const player = { ...room.join(name), messages };
-  room.attach(player.playerId, (m) => messages.push(m));
-  return player;
+  return { ...player, detach: room.attach(player.playerId, (m) => messages.push(m)) };
 }
 
 function lastView(walker: Walker) {
@@ -106,7 +106,7 @@ describe('mission control watching from the room', () => {
   it('stands still while the run is paused', () => {
     const { room, anna, ben } = started();
     vi.advanceTimersByTime(30_000);
-    room.detach(ben.playerId);
+    ben.detach();
     vi.advanceTimersByTime(120_000);
     expect(nudges(anna)).toEqual([]);
     room.resume(ben.playerId, ben.token);

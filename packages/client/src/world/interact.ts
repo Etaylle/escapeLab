@@ -15,7 +15,7 @@ export const TOUCH = '(pointer: coarse)';
 export type ContextAction =
   | { kind: 'deliver' | 'pick' | 'operate'; label: string; x: number; y: number }
   | { kind: 'read' | 'open'; manualId: string; label: string; x: number; y: number }
-  /** a note of the last crew the server counts this player at: E reads it, for nothing */
+  /** a note of the last shift the server counts this player at: E reads it, for nothing */
   | { kind: 'note'; index: number; label: string; x: number; y: number }
   /** a locked cabinet without its key in hand: the prompt names what is missing, E does nothing */
   | { kind: 'locked'; label: string; x: number; y: number };
@@ -69,7 +69,7 @@ function sourceAction(map: MapView, manual: Manual, source: Source, mine?: Item)
 }
 
 /**
- * E at the note of the last crew the server counts this player at, by its
+ * E at the note of the last shift the server counts this player at, by its
  * spot on the map; none where the crew has not come across it yet.
  */
 function noteAction(

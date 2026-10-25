@@ -14,7 +14,7 @@ import { standing } from './lab.js';
 /**
  * Three stations where the whole crew presses, a chart that covers them
  * all, and an exit hatch, with mission control on the radio. Beside the
- * rules lie the last crew's notes: two for the first station, one for the
+ * rules lie the last shift's notes: two for the first station, one for the
  * second, none for the third. Their price and delay are left at the
  * defaults.
  */
@@ -143,7 +143,7 @@ function askForHint(state: GameState, at: number): GameState {
 
 const kinds = (events: RunEvent[]): string[] => events.map((e) => e.kind);
 
-describe('notes of the last crew', () => {
+describe('notes of the last shift', () => {
   it('holds them back until the crew has spent a while at the open station', () => {
     expect(() => askForHint(playing(), T0 + DELAY_MS)).toThrow(/keine Station in Betrieb/);
     // The wait starts with the station, not with the mission.

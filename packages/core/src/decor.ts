@@ -50,7 +50,7 @@ function occupantsOf(map: MapDef): Occupants {
     note(occupants, map.exit, 'the exit');
   }
   map.lamps.forEach((lamp) => note(occupants, lamp, 'an emergency lamp'));
-  map.notes.forEach((pinned) => note(occupants, pinned, 'a note of the last crew'));
+  map.notes.forEach((pinned) => note(occupants, pinned, 'a note of the last shift'));
   for (const panel of map.sabotage?.panels ?? []) {
     note(occupants, panel, `sabotage panel "${panel.id}"`);
   }

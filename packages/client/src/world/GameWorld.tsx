@@ -9,7 +9,7 @@ import {
   type PlayerView,
   type PuzzleView,
 } from '@escapelab/core';
-import { useMedia } from '../hooks.js';
+import { useMedia, useNow } from '../hooks.js';
 import { addProbes } from '../probes.js';
 import type { CoachMark } from '../puzzles/coach.js';
 import { TalkButton } from '../screens/Voice.js';
@@ -72,6 +72,7 @@ import { easeOthers, follow, followServer, MOVE_KEYS, newSim, walk, type Sim } f
 import { HEAR_EVERY_S, hearCrew, spatialProbe, stopSpatial } from './spatial.js';
 import { streamPositions } from './stream.js';
 import { useWorldTip } from './useWorldTip.js';
+import { vignetteShown } from './vignette.js';
 
 /**
  * The world as one screen lives it: a canvas the lab is drawn on, frame by
@@ -123,7 +124,7 @@ interface Props {
   onToggleInfo: () => void;
   /** E at a manual object the server counts this player at: reading needs no message */
   onRead: (manualId: string) => void;
-  /** E at a note of the last crew the server counts this player at: its slip comes up */
+  /** E at a note of the last shift the server counts this player at: its slip comes up */
   onReadNote: (index: number) => void;
   /** E at the armed station: show its panel once it is open */
   onOperate: () => void;
@@ -551,7 +552,7 @@ function hearTheClock(loop: Loop, map: WorldMap): void {
 }
 
 /**
- * The lab answering the crew: a source or a note of the last crew somebody
+ * The lab answering the crew: a source or a note of the last shift somebody
  * came across gets a blip and a caption, a locker or cabinet opening within
  * earshot its sound, a
  * room whose lights came on a relay's click and its warm-up (rooms.ts) —
@@ -938,6 +939,18 @@ function useWorld(props: Props): WorldState {
   return { refs, live, tip, alarmClass, wheelOpen, setWheelOpen, controlsReach };
 }
 
+/**
+ * The red edge round the world in the clock's last minute and all through the escape
+ * (vignette.ts): an element right over the canvas and under everything else on it — the
+ * coach, the controls, the bar — breathing by its opacity alone (finale.css). Gone once the
+ * run's end plays on this screen.
+ */
+function RedEdge({ view, ending }: { view: PlayerView; ending: boolean }) {
+  const now = useNow(500);
+  const shown = vignetteShown(view.deadlineAt, now, escaping(view.map), ending);
+  return shown ? <div className="vignette" aria-hidden="true" /> : null;
+}
+
 export function GameWorld(props: Props) {
   const { spectator } = props;
   const { refs, live, tip, alarmClass, wheelOpen, setWheelOpen, controlsReach } = useWorld(props);
@@ -948,6 +961,7 @@ export function GameWorld(props: Props) {
         ref={refs.canvasRef}
         className={`world-canvas ${spectator ? 'world-canvas--wide' : ''}`}
       />
+      {!spectator && <RedEdge view={props.view} ending={props.finale != null} />}
       {tip !== null && (
         // Just above the control cluster, wherever it reaches: never on the
         // avatar under the objective bar, nor on the minimap.

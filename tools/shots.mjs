@@ -102,7 +102,7 @@
  * Blackout run the Serverraum's scratch mission below is left to the
  * Systemcheck's: Blackout's own Serverraum takes its captures.
  *
- * Notes of the last crew: after the lever, the host walks up to the nearest
+ * Notes of the last shift: after the lever, the host walks up to the nearest
  * note the crew has found and presses E; note.png shows its slip, which has
  * to carry the words the view gives the reader there, and the run report
  * has to log it read for nothing, or the run fails. A map without notes
@@ -2326,7 +2326,7 @@ async function captureCarry(player) {
 }
 
 /**
- * The floor tile a note of the last crew is read from: its own on the floor;
+ * The floor tile a note of the last shift is read from: its own on the floor;
  * on a wall, the floor its face looks into — south first, then north, east
  * and west (core's noteSpot); null where there is none.
  */
@@ -2345,7 +2345,7 @@ function readFrom(map, note) {
 }
 
 /**
- * note.png: `player` walks up to the nearest note of the last crew the crew
+ * note.png: `player` walks up to the nearest note of the last shift the crew
  * has come across and presses E — its slip has to come up with the words
  * the view gives whoever stands there, and the run report has to log it
  * read, for nothing: no time, no alarm. Then the slip goes and the player
@@ -2359,7 +2359,7 @@ async function captureNote(player) {
     .filter(({ spot }) => spot !== null && stepsTo(player.seen, spot) !== Infinity)
     .sort((a, b) => stepsTo(player.seen, a.spot) - stepsTo(player.seen, b.spot));
   if (found === undefined) {
-    skip('note.png', 'the crew has found no note of the last crew it can walk to');
+    skip('note.png', 'the crew has found no note of the last shift it can walk to');
     return;
   }
   const { note, spot } = found;
@@ -2429,7 +2429,7 @@ async function coldOpen(host, guest) {
  * The run's first moments. A mission with an intro opens with the power on:
  * the cold open comes first, the lever with it. Then Anna carries what lies
  * loose for a moment (figure-carry.png) and reads the nearest note of the
- * last crew found (note.png), the draw — who works the first
+ * last shift found (note.png), the draw — who works the first
  * station, who reads — and, without an intro, sign.png for a player spawned
  * at the Laborkennung, whose note is up as soon as the briefing is gone, and
  * the Leitstelle's first line, heard on Ben's radio as the briefing ends.
@@ -3348,7 +3348,7 @@ async function captureNotes(page, seen, who, other) {
   let label = (await ask.innerText()).trim();
   console.log(`hint-waiting.png   ${who}: "${label}"`);
 
-  // The last crew's notes are held back for 45 s after a station opens.
+  // The last shift's notes are held back for 45 s after a station opens.
   let readyBy = Date.now() + 60_000;
   while (!label.startsWith('Notiz der letzten Schicht') && Date.now() < readyBy) {
     await sleep(1000);
@@ -6163,7 +6163,7 @@ async function run() {
   if (firstSpots.some((s) => s.console === 'b')) {
     const pair = await manBothConsoles([anna, ben]);
     if (pair !== null) {
-      // The last crew's notes come only for an open station: leave it open, go read.
+      // The last shift's notes come only for an open station: leave it open, go read.
       for (const { page } of [pair.box, pair.meter]) {
         await page.keyboard.press('Escape');
         await page.locator('.station-modal').waitFor({ state: 'hidden', timeout: 3000 });
@@ -6197,7 +6197,7 @@ async function run() {
     // A sync station needs the whole crew's press: the walkthrough solves it.
     const sync = operator.seen.view.puzzle?.kind === 'button-sync';
     await captureBothAtStation(reader, operator, station, sync);
-    // The last crew's notes come only for an open station: leave it open, go read.
+    // The last shift's notes come only for an open station: leave it open, go read.
     await operator.page.keyboard.press('Escape');
     await modal.waitFor({ state: 'hidden', timeout: 3000 });
     if (sync) {

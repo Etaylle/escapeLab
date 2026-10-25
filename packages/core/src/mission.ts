@@ -238,7 +238,7 @@ export const mapDefSchema = z.object({
     )
     .default([]),
   /**
-   * Notes of the last crew, free to read: a sheet pinned to a wall beside
+   * Notes of the last shift, free to read: a sheet pinned to a wall beside
    * the floor, or lying on the floor. The crew comes across them as it does
    * the manual objects, and whoever stands at one reads it, at no cost — the
    * lab's story, never a rule. Up to MAX_NOTES, one a tile.
@@ -278,6 +278,12 @@ export const missionSchema = z
     /** sort key in the mission picker, ascending */
     listOrder: z.number().int().default(50),
     /**
+     * 'prototype' for an older map kept on, with neither a cold open (`intro`) nor furniture
+     * (`map.decor`): the join screen lists it last, behind a row of its own, and its lobby
+     * says so; left out for a current mission
+     */
+    stage: z.literal('prototype').optional(),
+    /**
      * the mission a won run leads on to, by its id in the catalog: the end
      * screen offers it to the crew; the server checks that it exists
      */
@@ -294,7 +300,7 @@ export const missionSchema = z
       lose: z.string(),
     }),
     timeLimitSec: z.number().int().positive(),
-    /** seconds every note of the last crew takes off the clock */
+    /** seconds every note of the last shift takes off the clock */
     hintCostSec: z.number().int().positive().default(20),
     /** seconds at an open puzzle before the first or next note may be asked for */
     hintDelaySec: z.number().int().positive().default(45),

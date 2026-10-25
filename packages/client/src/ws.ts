@@ -92,9 +92,144 @@ function wsUrl(): string {
   return `${proto}://${location.host}/ws`;
 }
 
+/** The pause before the first try to connect again, ms; it doubles with every try that fails. */
+const RETRY_FIRST_MS = 1000;
+/** The longest pause between two tries, ms. */
+const RETRY_MAX_MS = 10_000;
+
+/** What the socket `keepConnected` keeps open tells the app, and asks of it. */
+export interface SocketEvents {
+  /** a new socket was made: the one to send on from now */
+  made: (socket: WebSocket) => void;
+  status: (status: Connection['status']) => void;
+  /** the session a socket resumes as it opens; null where the page keeps none */
+  session: () => Credentials | null;
+  /** a resume went out: an error now means the stored session is dead */
+  resuming: () => void;
+  message: (msg: ServerMessage) => void;
+  closed: () => void;
+}
+
+/**
+ * Keeps a socket to the server open, each made by `open`: every socket that opens resumes
+ * the session the page keeps, and after every close — the server restarted, the line
+ * dropped, the server's heartbeat terminating a socket it heard nothing from — a new one is
+ * made after a pause that doubles from 1 s up to 10 s, and is back at 1 s once a socket
+ * opens. Returns how to stop for good.
+ */
+export function keepConnected(open: () => WebSocket, on: SocketEvents): () => void {
+  let stopped = false;
+  let retryDelay = RETRY_FIRST_MS;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
+  let current: WebSocket | null = null;
+
+  function connect(): void {
+    const socket = open();
+    current = socket;
+    on.made(socket);
+    on.status('connecting');
+
+    socket.onopen = () => {
+      on.status('open');
+      retryDelay = RETRY_FIRST_MS;
+      const creds = on.session();
+      if (creds !== null) {
+        on.resuming();
+        socket.send(JSON.stringify({ kind: 'resume', ...creds } satisfies ClientMessage));
+      }
+    };
+
+    socket.onmessage = (event) => {
+      on.message(JSON.parse(String(event.data)) as ServerMessage);
+    };
+
+    socket.onclose = () => {
+      if (stopped) {
+        return;
+      }
+      on.closed();
+      on.status('closed');
+      retryTimer = setTimeout(connect, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, RETRY_MAX_MS);
+    };
+  }
+
+  connect();
+  return () => {
+    stopped = true;
+    clearTimeout(retryTimer);
+    current?.close();
+  };
+}
+
+/** What the page keeps of what the server says: its state's setters, and the refs read live. */
+interface Page {
+  setRoomCode: (code: string | null) => void;
+  setView: (view: PlayerView | null) => void;
+  setSpectatorView: (view: SpectatorView) => void;
+  setRooms: (rooms: RoomSummary[]) => void;
+  setError: (message: string) => void;
+  countRefusal: () => void;
+  /** a resume is out: an error now means the stored session is dead */
+  resuming: MutableRefObject<boolean>;
+  positions: Connection['positions'];
+  drones: Connection['drones'];
+  pings: Connection['pings'];
+  chats: Connection['chats'];
+}
+
+/** Takes a server message in: the page's state, the session it stores, the live refs. */
+function takeIn(msg: ServerMessage, page: Page): void {
+  switch (msg.kind) {
+    case 'joined':
+      page.resuming.current = false;
+      sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ code: msg.code, playerId: msg.playerId, token: msg.token }),
+      );
+      page.setRoomCode(msg.code);
+      break;
+    case 'view':
+      page.setView(msg.view);
+      break;
+    case 'spectator-view':
+      page.setSpectatorView(msg.view);
+      page.setRoomCode(msg.code);
+      break;
+    case 'rooms':
+      page.setRooms(msg.rooms);
+      break;
+    case 'positions':
+      page.positions.current = { run: msg.run, players: msg.players };
+      page.drones.current = msg.drones;
+      break;
+    case 'ping': {
+      const { playerId, x, y } = msg;
+      page.pings.current.push({ playerId, x, y, at: performance.now() });
+      break;
+    }
+    case 'chat': {
+      const { playerId, phrase } = msg;
+      page.chats.current.push({ playerId, phrase, at: performance.now() });
+      break;
+    }
+    case 'error':
+      if (page.resuming.current) {
+        // Stored session is dead (room swept / token invalid): back to join.
+        page.resuming.current = false;
+        forgetRoom();
+        page.setRoomCode(null);
+        page.setView(null);
+      }
+      page.setError(msg.message);
+      page.countRefusal();
+      break;
+  }
+}
+
 /**
  * Owns the WebSocket for the whole app: connects, resumes a stored session
- * after reload or connection loss, and reconnects with backoff.
+ * after reload or connection loss, and reconnects with backoff (`keepConnected`).
  */
 export function useGameConnection(): Connection {
   const [status, setStatus] = useState<Connection['status']>('connecting');
@@ -127,105 +262,40 @@ export function useGameConnection(): Connection {
   }, []);
 
   useEffect(() => {
-    let disposed = false;
-    let retryDelay = 1000;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
-
-    function connect(): void {
-      const socket = new WebSocket(wsUrl());
-      socketRef.current = socket;
-      setStatus('connecting');
-
-      socket.onopen = () => {
-        setStatus('open');
-        retryDelay = 1000;
-        const creds = loadCredentials();
-        if (creds !== null) {
-          resumingRef.current = true;
-          socket.send(JSON.stringify({ kind: 'resume', ...creds } satisfies ClientMessage));
-        }
-      };
-
-      socket.onmessage = (event) => {
-        const msg = JSON.parse(String(event.data)) as ServerMessage;
-        handleServerMessage(msg);
+    const page: Page = {
+      setRoomCode,
+      setView,
+      setSpectatorView,
+      setRooms,
+      setError,
+      countRefusal: () => setRefusals((count) => count + 1),
+      resuming: resumingRef,
+      positions: positionsRef,
+      drones: dronesRef,
+      pings: pingsRef,
+      chats: chatsRef,
+    };
+    return keepConnected(() => new WebSocket(wsUrl()), {
+      made: (socket) => {
+        socketRef.current = socket;
+      },
+      status: setStatus,
+      session: loadCredentials,
+      resuming: () => {
+        resumingRef.current = true;
+      },
+      message: (msg) => {
+        takeIn(msg, page);
         for (const listener of listenersRef.current) {
           listener.message(msg);
         }
-      };
-
-      socket.onclose = () => {
-        if (disposed) {
-          return;
-        }
+      },
+      closed: () => {
         for (const listener of listenersRef.current) {
           listener.closed();
         }
-        setStatus('closed');
-        retryTimer = setTimeout(connect, retryDelay);
-        retryDelay = Math.min(retryDelay * 2, 10_000);
-      };
-    }
-
-    function handleServerMessage(msg: ServerMessage): void {
-      switch (msg.kind) {
-        case 'joined':
-          resumingRef.current = false;
-          sessionStorage.setItem(
-            STORAGE_KEY,
-            JSON.stringify({ code: msg.code, playerId: msg.playerId, token: msg.token }),
-          );
-          setRoomCode(msg.code);
-          break;
-        case 'view':
-          setView(msg.view);
-          break;
-        case 'spectator-view':
-          setSpectatorView(msg.view);
-          setRoomCode(msg.code);
-          break;
-        case 'rooms':
-          setRooms(msg.rooms);
-          break;
-        case 'positions':
-          positionsRef.current = { run: msg.run, players: msg.players };
-          dronesRef.current = msg.drones;
-          break;
-        case 'ping':
-          pingsRef.current.push({
-            playerId: msg.playerId,
-            x: msg.x,
-            y: msg.y,
-            at: performance.now(),
-          });
-          break;
-        case 'chat':
-          chatsRef.current.push({
-            playerId: msg.playerId,
-            phrase: msg.phrase,
-            at: performance.now(),
-          });
-          break;
-        case 'error':
-          if (resumingRef.current) {
-            // Stored session is dead (room swept / token invalid): back to join.
-            resumingRef.current = false;
-            forgetRoom();
-            setRoomCode(null);
-            setView(null);
-          }
-          setError(msg.message);
-          setRefusals((count) => count + 1);
-          break;
-      }
-    }
-
-    connect();
-    return () => {
-      disposed = true;
-      clearTimeout(retryTimer);
-      socketRef.current?.close();
-    };
+      },
+    });
   }, []);
 
   return {

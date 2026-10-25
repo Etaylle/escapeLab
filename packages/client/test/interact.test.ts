@@ -305,7 +305,7 @@ const noteRoom = mapWith({
   stations: [{ ...station, x: 5, y: 1 }],
 });
 
-describe('contextAction — a note of the last crew', () => {
+describe('contextAction — a note of the last shift', () => {
   it('reads the note the server counts this player at, the prompt over its sheet', () => {
     const action = contextAction(noteRoom, { x: 3.5, y: 1.6 }, YOU, [], SHUT, { index: 0 });
     expect(action).toEqual({ kind: 'note', index: 0, label: 'Lesen', x: 3.5, y: 1 - 0.85 });

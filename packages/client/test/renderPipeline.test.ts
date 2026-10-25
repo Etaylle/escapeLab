@@ -22,9 +22,7 @@ describe('drawFrame — the passes in their order', () => {
 
   it('draws void, tiles, things, crew, light, minimap and what lies over it, in this order', () => {
     const overlay = fakeCanvas(800, 600, 'overlay');
-    const edge = fakeCanvas(0, 0, 'edge');
     const kit = kitWith(overlay);
-    kit.vignette.canvas = edge.canvas;
     const now = 1_000_000;
     const map = mapWith({
       width: 10,
@@ -36,7 +34,6 @@ describe('drawFrame — the passes in their order', () => {
       kit,
       map,
       now,
-      deadlineAt: now + 30_000,
       minimap: { ox: 600, oy: 100, cell: 10, mw: 100, mh: 60 },
       pings: [{ playerId: 'p1', x: 3, y: 3, at: 0 }],
       perf: 100,
@@ -56,13 +53,9 @@ describe('drawFrame — the passes in their order', () => {
       firstCall(log, (c) => c.name === 'drawImage' && c.args[0] === overlay.canvas),
       firstCall(log, (c) => c.name === 'roundRect' && c.args[0] === 595),
       firstCall(log, (c) => c.name === 'arc' && c.args[0] === 200),
-      firstCall(log, (c) => c.name === 'drawImage' && c.args[0] === edge.canvas),
     ];
     expect(steps.every((at) => at >= 0)).toBe(true);
     expect([...steps].sort((a, b) => a - b)).toEqual(steps);
-    // The red edge is the last thing on the canvas.
-    expect(log.at(-2)).toMatchObject({ name: 'drawImage', args: [edge.canvas, 0, 0] });
-    expect(log.at(-1)).toMatchObject({ name: 'globalAlpha', value: 1 });
   });
 
   it('draws what glows under the WebGL layer’s light map, over the Canvas pass’s darkness', () => {

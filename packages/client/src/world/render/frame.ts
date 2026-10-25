@@ -135,9 +135,8 @@ export interface MinimapLayout {
 
 /**
  * What the passes draw with that outlives a frame: the canvas the darkness
- * is cut in, what the light and the red edge keep baked between frames,
- * each with what it was made for, the way the light takes, and the art's
- * sprites and caches.
+ * is cut in, what the light keeps baked between frames, each with what it
+ * was made for, the way the light takes, and the art's sprites and caches.
  */
 export interface RenderKit {
   /** the darkness, cut anew every frame and laid over the picture (render/darkness.ts) */
@@ -150,8 +149,6 @@ export interface RenderKit {
   bakes: BakeStore;
   /** the glows' sprites, by gradient and radius (radial.ts) */
   radials: RadialSprites;
-  /** the red edge as last baked (vignette.ts), and for which canvas: baked anew for another */
-  vignette: { canvas: HTMLCanvasElement; w: number; h: number; dpr: number };
   /**
    * the way the light reaches the picture — the WebGL light layer or the
    * Canvas pass — opened on the first frame (gl/path.ts); null before
@@ -179,7 +176,6 @@ export function renderKit(overlay: CanvasRenderingContext2D): RenderKit {
     groups: null,
     bakes: frameCache(),
     radials: radialSprites(art.atlas.make),
-    vignette: { canvas: document.createElement('canvas'), w: 0, h: 0, dpr: 0 },
     light: null,
     art,
     still: new Map(),
@@ -201,7 +197,7 @@ export interface Frame {
   time: number;
   /** the wall clock, epoch ms: doors sliding, the hatch, an alarm, the deadline */
   now: number;
-  /** the page's clock, ms (performance.now()): pings, chat lines, the red edge's breath */
+  /** the page's clock, ms (performance.now()): pings and chat lines */
   perf: number;
   /** the beat the lab's objects pulse with, 0 to 1 */
   pulse: number;
@@ -210,6 +206,8 @@ export interface Frame {
   map: WorldMap;
   /** this screen's player, as the view names it */
   youId: string;
+  /** this screen's player's own name, as the view gives it */
+  youName: string;
   players: PlayerView['players'];
   /** whether this player has seen the Laborkennung */
   signSeen: boolean;

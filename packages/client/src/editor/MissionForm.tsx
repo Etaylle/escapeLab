@@ -1,7 +1,8 @@
 import { crewSizeText } from '../screens/Crew.js';
+import { PROTOTYPES_ROW } from '../screens/Join.js';
 import { MapThumb } from '../screens/MapThumb.js';
 import { customIdOf, type Draft } from './draft.js';
-import { AreaField, FormHead, NumberField, TextField } from './fields.js';
+import { AreaField, CheckField, FormHead, NumberField, TextField } from './fields.js';
 import { mapSize, MAP_LIMITS, resize } from './tools.js';
 import { messagesAt, type Validation } from './validate.js';
 
@@ -55,6 +56,13 @@ export function MissionForm({ draft, validation, idTaken, onChange }: Props) {
         value={draft.subtitle}
         placeholder="Eine Zeile für die Auswahl"
         onChange={(subtitle) => onChange({ ...draft, subtitle })}
+      />
+      <CheckField
+        label="Prototyp"
+        value={draft.stage === 'prototype'}
+        note={`Ältere Karte: in der Auswahl hinten, unter „${PROTOTYPES_ROW}“.`}
+        onChange={(prototype) => onChange({ ...draft, stage: prototype ? 'prototype' : null })}
+        issues={at('stage')}
       />
       <div className="editor-row">
         <NumberField

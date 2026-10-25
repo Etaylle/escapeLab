@@ -7,7 +7,7 @@ type Note = MapView['notes'][number];
 export interface WorldNews {
   /** manual objects the crew has just come across */
   found: Manual[];
-  /** notes of the last crew the crew has just come across */
+  /** notes of the last shift the crew has just come across */
   notes: Note[];
   /** lockers just searched and cabinets just unlocked */
   opened: Manual[];

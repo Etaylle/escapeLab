@@ -19,7 +19,7 @@ import {
  * selecting, moving, deleting, painting and renaming. The rules:
  *
  * - Things stand on floor. A press on a wall or the void places nothing and
- *   says why — but a note of the last crew may also hang on a wall with
+ *   says why — but a note of the last shift may also hang on a wall with
  *   floor beside it.
  * - One solid thing a tile — start, door, plate, station, source, sign, exit,
  *   item, valve, a piece of furniture, a note. A press on a tile that has one

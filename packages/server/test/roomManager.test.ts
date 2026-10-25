@@ -19,11 +19,10 @@ const blackout: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
 );
 
-/** Join a room and keep the connection open, like a real player would. */
-function seat(room: Room, name: string): { playerId: string; token: string } {
+/** Join a room and keep the connection open, like a real player would; `detach` lets go of it. */
+function seat(room: Room, name: string): { playerId: string; token: string; detach: () => void } {
   const creds = room.join(name);
-  room.attach(creds.playerId, () => undefined);
-  return creds;
+  return { ...creds, detach: room.attach(creds.playerId, () => undefined) };
 }
 
 describe('lobby browser', () => {
@@ -98,7 +97,7 @@ describe('lobby browser', () => {
     const room = manager.create(tutorial);
     const anna = seat(room, 'Anna');
     expect(manager.list()).toHaveLength(1);
-    room.detach(anna.playerId);
+    anna.detach();
     expect(manager.list()).toEqual([]);
   });
 });

@@ -72,7 +72,7 @@ export interface PlayerView {
    * limit loses it; null where the mission has none
    */
   alarms: { count: number; limit: number | null };
-  /** notes of the last crew bought this run; they weigh on the grade */
+  /** notes of the last shift bought this run; they weigh on the grade */
   hintsUsed: number;
   /** who did what this run, by player id — for the end screen */
   credits: Record<string, Credits>;
@@ -84,7 +84,7 @@ export interface PlayerView {
   sourcesHere: SourceHere[];
   /** the open manual objects this player stands at, with the rules of every puzzle they cover */
   manualsHere: ManualHere[];
-  /** the note of the last crew this player stands at, with its words; null away from every one */
+  /** the note of the last shift this player stands at, with its words; null away from every one */
   noteHere: NoteHere | null;
   puzzle: PuzzleView | null;
   /** tile map while a mission is running; null otherwise */
@@ -139,7 +139,7 @@ export interface SourceHere {
 /**
  * An open manual object as read on the spot. Printed rules are no secret —
  * the Handbuch screen prints them all — so they come whole, in mission
- * order. Beside the open station's rules lie the notes of the last crew.
+ * order. Beside the open station's rules lie the notes of the last shift.
  */
 export interface ManualHere {
   id: string;
@@ -162,7 +162,7 @@ export interface ManualHere {
   }[];
 }
 
-/** A note of the last crew as read on the spot: which of the map's it is, and what it says. */
+/** A note of the last shift as read on the spot: which of the map's it is, and what it says. */
 export interface NoteHere {
   /** its index among the map's notes: what a read names */
   index: number;
@@ -223,7 +223,7 @@ export interface MapView {
     needsKey: string | null;
   }[];
   /**
-   * the notes of the last crew the crew has come across so far (the audience
+   * the notes of the last shift the crew has come across so far (the audience
    * sees all of them), where each lies — on a wall or the floor — and
    * whether somebody has read it; never what it says
    */

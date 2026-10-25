@@ -508,13 +508,74 @@ describe('the game screen while the world plays the end', () => {
     expect(html).toMatch(/^<div class="game game--finale game--won">/);
     expect(html).toMatch(/<div class="finale-veil finale-veil--white" style="animation-delay:\d+ms;animation-duration:600ms"/);
     expect(html).not.toContain('overlay pause');
+    expect(html).not.toContain('vignette');
   });
 
-  it('shows none of it while the run goes on, and leaves the red edge to the world', () => {
+  it('shows none of it while the run goes on, the red edge over the world alone', () => {
     const html = game(viewOf({ map }), null);
     expect(html).toMatch(/^<div class="game">/);
     expect(html).not.toContain('finale-veil');
-    // An element breathing over the whole page made every frame recompose the window.
+    // Right over the canvas, under the coach, the controls and the bar: never over the page.
+    expect(html).toContain(
+      '<div class="world-wrap"><canvas class="world-canvas "></canvas>' +
+        '<div class="vignette" aria-hidden="true"></div>',
+    );
+    expect(html.match(/vignette/g)).toHaveLength(1);
+  });
+
+  it('edges the world red only in the clock’s last minute outside the escape', () => {
+    const calm = mapWith({ exit: hatch(null) });
+    const edged = (deadlineAt: number | null): boolean =>
+      game(viewOf({ map: calm, deadlineAt }), null).includes('class="vignette"');
+    expect(edged(Date.now() + 30_000)).toBe(true);
+    expect(edged(Date.now() + 90_000)).toBe(false);
+    expect(edged(null)).toBe(false);
+  });
+
+  it('leaves the audience’s lab without it, in the escape too', () => {
+    const watched: SpectatorView = {
+      phase: 'playing',
+      missionTitle: 'Tutorial: Systemcheck',
+      difficulty: 'normal',
+      storyText: 'Alle raus.',
+      deadlineAt: Date.now() + 30_000,
+      startedAt: T0,
+      finishedAt: null,
+      timeLimitSec: 420,
+      lights: { out: true, outAt: T0 },
+      currentPuzzleIndex: 4,
+      puzzleCount: 4,
+      penaltySeq: 0,
+      alarms: { count: 0, limit: null },
+      hintsUsed: 0,
+      pausedFor: null,
+      events: [],
+      grade: null,
+      players: [anna, ben].map((p) => ({
+        id: p.id,
+        name: p.name,
+        color: p.color,
+        connected: true,
+        presence: { stationId: null, console: null, manualId: null, signSeen: false },
+      })),
+      credits: {},
+      map,
+      puzzle: null,
+      edgework: null,
+      panels: [],
+    };
+    const html = renderToStaticMarkup(
+      <SpectateScreen
+        view={watched}
+        finale={null}
+        positionsRef={{ current: { run: null, players: {} } }}
+        dronesRef={{ current: {} }}
+        pingsRef={{ current: [] }}
+        chatsRef={{ current: [] }}
+        leaveRoom={noop}
+      />,
+    );
+    expect(html).toContain('<canvas class="world-canvas world-canvas--wide"></canvas>');
     expect(html).not.toContain('vignette');
   });
 

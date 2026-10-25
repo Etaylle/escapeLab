@@ -423,7 +423,7 @@ export interface Opened {
   operating: boolean;
   /** the source being read, by manual id */
   readingId: string | null;
-  /** the note of the last crew being read, by its index among the map's notes */
+  /** the note of the last shift being read, by its index among the map's notes */
   noteIndex: number | null;
   notes: boolean;
   info: boolean;
@@ -456,7 +456,7 @@ export function stillOpen(opened: Opened, wasEmergency: boolean, emergency: bool
 /**
  * What lies over the world: the open station's panel while this player
  * stands at it and asked for it, a manual object's pages or a note of the
- * last crew while they stand there, the notepad, the info panel. Panel,
+ * last shift while they stand there, the notepad, the info panel. Panel,
  * pages and note follow the server's word on where the player stands; once
  * that drops, they go and stay gone until asked for again. An emergency
  * closes all of it (`stillOpen`), and while the relay console is up it
@@ -887,7 +887,7 @@ function PauseOverlay({ pausedFor }: { pausedFor: string[] }) {
 
 /**
  * What comes and goes over a run: the briefing, the pause. The clock's red
- * edge is the world's to draw (world/vignette.ts).
+ * edge lies over the world alone, under the HUD (GameWorld.tsx RedEdge).
  */
 function RunOverlays({ view, coldOpen }: { view: PlayerView; coldOpen: ColdOpen }) {
   return (
@@ -935,7 +935,7 @@ function readingDown(manual: ManualHere): void {
 }
 
 /**
- * The source's pages and the note of the last crew over the world as they are put down: held
+ * The source's pages and the note of the last shift over the world as they are put down: held
  * a moment on their way out of view (PutDown.tsx), with the sound of it.
  */
 function useSheets(open: OpenNow): {
@@ -993,7 +993,7 @@ export function deviceRunOf(view: PlayerView, refusals: number): DeviceRun {
 }
 
 /**
- * The station's panel, a source's pages or a note of the last crew over the
+ * The station's panel, a source's pages or a note of the last shift over the
  * world, as this player opened them — pages and note on their way down too,
  * once put down; the panel hears of the run's alarms and solves, of the crew
  * and of what the server refused (`refusals`).

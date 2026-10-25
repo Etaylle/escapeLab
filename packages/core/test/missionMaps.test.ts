@@ -326,7 +326,7 @@ describe('mission blackout by design', () => {
     }
   });
 
-  it('makes the escape a run across the lab, both ways round as long, as the last crew noted', () => {
+  it('makes the escape a run across the lab, as long both ways, as the last shift noted', () => {
     const map = blackout.map;
     const rooms = roomsOf(map);
     const floorOf = (room: string): Set<string> =>

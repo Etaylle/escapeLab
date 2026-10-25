@@ -66,6 +66,39 @@ describe('the bar over a stage', () => {
   });
 });
 
+/** Every backdrop-filter `source` sets, with the selector of its rule; comments left out. */
+function backdropFilters(source: string): { selector: string; value: string }[] {
+  const plain = source.replace(/\/\*[\s\S]*?\*\//g, '');
+  return [...plain.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap(([, selector = '', body = '']) =>
+    [...body.matchAll(/backdrop-filter:\s*([^;]+);/g)].map(([, value = '']) => ({
+      selector: selector.trim(),
+      value: value.trim(),
+    })),
+  );
+}
+
+describe('a stage screen', () => {
+  it('blurs nothing behind anything: the world under a blur would redo it every frame', () => {
+    const blurs = SHEETS.flatMap((sheet) =>
+      backdropFilters(readFileSync(new URL(sheet, SRC), 'utf8'))
+        .filter((rule) => rule.value !== 'none')
+        .map((rule) => `${sheet}: ${rule.selector}`),
+    );
+    // The bar's alone, off a stage: over one it blurs nothing (above).
+    expect(blurs).toEqual(['ui.css: .topbar']);
+  });
+
+  it('would notice a blur, inside a media block too, and leave one in a comment be', () => {
+    const sheet = [
+      '/* .x { backdrop-filter: blur(1px); } */',
+      '@media (x) {',
+      '  .a { backdrop-filter: blur(2px); }',
+      '}',
+    ].join('\n');
+    expect(backdropFilters(sheet)).toEqual([{ selector: '.a', value: 'blur(2px)' }]);
+  });
+});
+
 /** What the block opened by `header` holds, up to its matching brace; null where there is none. */
 function blockAfter(source: string, header: string): string | null {
   const start = source.indexOf(header);

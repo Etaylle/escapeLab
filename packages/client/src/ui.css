@@ -939,9 +939,9 @@ button.link:hover {
 .maze-btn--left { grid-area: left; }
 .maze-btn--right { grid-area: right; }
 
+/* A plain dim, no backdrop-filter: a blur over the live canvas is redone on every frame. */
 .overlay.pause {
-  background: rgba(7, 11, 15, 0.9);
-  backdrop-filter: blur(3px);
+  background: rgba(7, 11, 15, 0.92);
 }
 
 .overlay.pause h1 {
@@ -1353,12 +1353,6 @@ button.link:hover {
 
 /* ── controls overlay ───────────────────────────────────────────────────── */
 
-.overlay.help {
-  background: rgba(4, 7, 10, 0.85);
-  backdrop-filter: blur(3px);
-  cursor: pointer;
-}
-
 .keylist {
   margin: 10px 0 16px;
 }
@@ -1616,9 +1610,9 @@ button.link:hover {
 
 /* ── info panel ─────────────────────────────────────────────────────────── */
 
+/* A plain dim, no backdrop-filter: a blur over the live canvas is redone on every frame. */
 .overlay.info {
-  background: rgba(4, 7, 10, 0.86);
-  backdrop-filter: blur(4px);
+  background: rgba(4, 7, 10, 0.9);
   cursor: pointer;
 }
 
@@ -2755,6 +2749,51 @@ button.link:hover {
 .mission-sub {
   font-size: 12px;
   color: var(--muted);
+}
+
+/* The older maps, behind a collapsed row after the cards: one muted line each. */
+.mission-prototypes {
+  margin: 0 0 12px;
+  color: var(--muted);
+}
+
+.mission-prototypes summary {
+  width: fit-content;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.mission-prototypes ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mission-proto {
+  width: 100%;
+  padding: 6px 10px;
+  border-color: var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mission-proto-title {
+  font-weight: 700;
+}
+
+.mission-proto-selected {
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 /* ── the alarm limit: marks under the clock, a line in the briefing ────── */

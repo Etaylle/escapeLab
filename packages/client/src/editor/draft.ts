@@ -162,7 +162,7 @@ export interface DraftSource {
   needsKey: string;
 }
 
-/** A note of the last crew: on a wall beside the floor, or on the floor; free to read. */
+/** A note of the last shift: on a wall beside the floor, or on the floor; free to read. */
 export interface DraftNote {
   x: number;
   y: number;
@@ -221,6 +221,8 @@ export interface DraftMap {
 export interface Draft {
   title: string;
   subtitle: string;
+  /** 'prototype' for an older map kept on (`Mission['stage']`); null for a current one */
+  stage: 'prototype' | null;
   players: { min: number; max: number };
   timeLimitSec: number;
   story: { intro: string; win: string; lose: string };
@@ -326,6 +328,7 @@ export function newDraft(): Draft {
   return {
     title: 'Neue Mission',
     subtitle: '',
+    stage: null,
     players: { min: 2, max: 2 },
     timeLimitSec: 600,
     story: { intro: '', win: '', lose: '' },
@@ -463,6 +466,7 @@ export function draftToJson(draft: Draft): Record<string, unknown> {
     id: customIdOf(draft.title),
     title: draft.title,
     subtitle: draft.subtitle,
+    ...(draft.stage === null ? {} : { stage: draft.stage }),
     ...draft.extra,
     players: { ...draft.players },
     story: { ...draft.story },
@@ -546,6 +550,7 @@ interface LooseMap {
 interface LooseMission {
   title: string;
   subtitle?: string | undefined;
+  stage?: 'prototype' | undefined;
   players: { min: number; max: number };
   timeLimitSec: number;
   story: { intro: string; win: string; lose: string };
@@ -713,6 +718,7 @@ function draftOf(mission: LooseMission): Draft {
   return {
     title: mission.title,
     subtitle: mission.subtitle ?? '',
+    stage: mission.stage ?? null,
     players: { min: mission.players.min, max: mission.players.max },
     timeLimitSec: mission.timeLimitSec,
     story: { intro: mission.story.intro, win: mission.story.win, lose: mission.story.lose },
@@ -723,6 +729,7 @@ function draftOf(mission: LooseMission): Draft {
       'id',
       'title',
       'subtitle',
+      'stage',
       'players',
       'timeLimitSec',
       'story',

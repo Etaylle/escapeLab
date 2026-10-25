@@ -860,10 +860,10 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   }
 }
 
-/* ── the last crew's note, stuck on the source ──────────────────────────── */
+/* ── the last shift's note, stuck on the source ──────────────────────────── */
 
 /*
- * Book.tsx NoteSlip: what the last crew wrote on the open station, in their
+ * Book.tsx NoteSlip: what the last shift wrote on the open station, in their
  * hand, and the way to ask for more — on a piece of paper that belongs to
  * the source, not to a page: a slip tucked into a book at its front, a
  * Post-it on a clipboard's board, a sticky label on a terminal's bezel or
@@ -877,7 +877,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   color: var(--ink-blue);
 }
 
-/* „zu §3": the station the note is for, as the last crew headed it. */
+/* „zu §3": the station the note is for, as the last shift headed it. */
 .note-slip-for {
   margin: 0;
   font-family: var(--hand);
@@ -1343,7 +1343,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
 }
 
 /*
- * The last crew's note on a sticky label stuck to the case: over the bezel's
+ * The last shift's note on a sticky label stuck to the case: over the bezel's
  * right edge, clear of the glass, whichever screen is up.
  */
 .terminal .note-slip {
@@ -1448,7 +1448,10 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   border-top: 2px solid #1c2229;
 }
 
-/* The last crew's note, a label stuck on the board by the chart; it stays in view as it scrolls. */
+/*
+ * The last shift's note, a label stuck on the board by the chart; it stays in
+ * view as it scrolls.
+ */
 .chart .note-slip {
   position: sticky;
   top: 18px;

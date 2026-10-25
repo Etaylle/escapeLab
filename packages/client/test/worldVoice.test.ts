@@ -38,23 +38,6 @@ const INTERFACE: Record<string, string> = {
   'core/src/chat.ts': 'the quick chat: the crew’s own words, not the lab’s',
 };
 
-/** A string the world's rules would refuse that this package leaves where it is, and why. */
-interface Known {
-  file: string;
-  text: string;
-  why: string;
-}
-
-const KNOWN: readonly Known[] = [
-  {
-    file: 'client/src/world/render/actors.ts',
-    text: 'DU',
-    why:
-      'the name a figure falls back on where the view has no player for it, which a run ' +
-      'never shows; the rendering package owns the file',
-  },
-];
-
 /** The comment that marks a string of interface voice in a file of the world's. */
 const MARKER = 'voice: interface';
 
@@ -151,9 +134,6 @@ function interfaceOf(name: string): string | null {
   );
 }
 
-const known = (name: string, said: Said): boolean =>
-  KNOWN.some((entry) => entry.file === name && entry.text === said.text);
-
 /** Whether the world's rules would refuse a text. */
 const refused = (said: Said): boolean => offVoice([said.text], WORLD).length > 0;
 
@@ -199,7 +179,7 @@ describe('the world voice in the code', () => {
       interfaceOf(name) !== null
         ? []
         : source.texts
-            .filter((said) => !said.marked && !known(name, said))
+            .filter((said) => !said.marked)
             .flatMap((said) => breaches(name, said, WORLD)),
     );
     expect(off).toEqual([]);
@@ -208,7 +188,7 @@ describe('the world voice in the code', () => {
   it('keeps the interface plain: nobody addressed', () => {
     const off = [...SOURCES].flatMap(([name, source]) =>
       source.texts
-        .filter((said) => (interfaceOf(name) !== null || said.marked) && !known(name, said))
+        .filter((said) => interfaceOf(name) !== null || said.marked)
         .flatMap((said) => breaches(name, said, ADDRESS)),
     );
     expect(off).toEqual([]);
@@ -232,11 +212,5 @@ describe('the world voice in the code', () => {
         .map((line) => `${name}:${line}`),
     );
     expect(stale).toEqual([]);
-  });
-
-  it('knows only strings that are still there', () => {
-    const there = (entry: Known): boolean =>
-      SOURCES.get(entry.file)?.texts.some((said) => said.text === entry.text) ?? false;
-    expect(KNOWN.filter((entry) => !there(entry))).toEqual([]);
   });
 });

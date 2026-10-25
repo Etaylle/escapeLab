@@ -18,7 +18,7 @@ import { Block } from './Manual.js';
 import { ReaderPanel } from './PuzzlePanel.js';
 import { Seal } from './Seal.js';
 
-/** One station's rules as read at a source, the last crew's notes beside them. */
+/** One station's rules as read at a source, the last shift's notes beside them. */
 export type ReadSection = ManualHere['sections'][number];
 
 /** Where a station stands in the run. */
@@ -62,7 +62,7 @@ function AskNote({ section, onAsk }: { section: ReadSection; onAsk: () => void }
 }
 
 /**
- * The station the last crew left notes on among a source's: the open one,
+ * The station the last shift left notes on among a source's: the open one,
  * the only station the view gives notes or notes still to ask for; none
  * where the source does not cover it.
  */
@@ -71,7 +71,7 @@ function notedSection(sections: readonly ReadSection[]): ReadSection | null {
 }
 
 /**
- * The last crew's note, stuck on the source itself rather than on a page —
+ * The last shift's note, stuck on the source itself rather than on a page —
  * a slip tucked into a book, a Post-it on a clipboard's board, a sticky
  * label on a terminal's bezel or by a wall chart (styles/book.css) — so it
  * is there whichever page or screen is open. It names the station it is
@@ -442,7 +442,7 @@ function lookOf(spread: boolean, binding: Binding, noted: boolean): string {
  * at the station that is up now, if this book covers it, at its only
  * station, or on the cover. It turns with the arrow keys, the arrows below
  * it, a swipe, the contents or a thumb tab, a leaf turning over each time.
- * The last crew's note on the open station stays with the book as it turns:
+ * The last shift's note on the open station stays with the book as it turns:
  * a slip tucked in at the front, or a Post-it on the clipboard's board.
  */
 export function Book({

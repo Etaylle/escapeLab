@@ -19,7 +19,7 @@ export interface StationReport {
   seconds: number | null;
   /** wrong moves at it; drones and emergencies set their alarms off elsewhere */
   alarms: number;
-  /** notes of the last crew asked for while it was up */
+  /** notes of the last shift asked for while it was up */
   hints: number;
 }
 

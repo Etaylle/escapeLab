@@ -2190,7 +2190,7 @@ export function drawEmergencyLamp(ctx: CanvasRenderingContext2D, o: EmergencyLam
   }
 }
 
-// ---- A note of the last crew ---------------------------------------------------------
+// ---- A note of the last shift ---------------------------------------------------------
 
 export interface PinnedNoteOpts {
   /** on a wall, the way its face looks in radians (0 east, π/2 south); null on the floor */
@@ -2203,7 +2203,7 @@ export interface PinnedNoteOpts {
 
 /** The sheet's paper, a shade warmer than a printed page: it was torn off a pad. */
 const NOTE_PAPER = css(mix(PAPER, WHITE, 0.35));
-/** The last crew's ballpoint. */
+/** The last shift's ballpoint. */
 const NOTE_INK = rgba(sink(READ_BLUE, 0.55), 0.85);
 /** The pin's head: the lab's alarm red, a highlight on its top left. */
 const PIN_HEAD = css(sink(ALARM, 0.2));
@@ -2268,7 +2268,7 @@ function drawPin(ctx: CanvasRenderingContext2D): void {
 }
 
 /**
- * Anchor: WHERE IT HANGS (notes.ts `noteMount`). A note of the last crew: on
+ * Anchor: WHERE IT HANGS (notes.ts `noteMount`). A note of the last shift: on
  * a wall, a sheet pinned to the face that looks into the floor it is read
  * from, its pin at the top, a little askew; on the floor, the sheet lying
  * there, turned. Handwriting in blue ballpoint, a dog-ear. Until somebody of

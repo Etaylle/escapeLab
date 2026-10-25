@@ -314,7 +314,7 @@ function sourceGlows(frame: Frame): Glow[] {
     : [...glows, { x: sign.x + 0.5, y: sign.y + 0.5, radius: 1.4, strength: 0.6 }];
 }
 
-/** The notes of the last crew found so far: faint, and fainter once somebody has read one. */
+/** The notes of the last shift found so far: faint, and fainter once somebody has read one. */
 function noteGlows(frame: Frame): Glow[] {
   const { map } = frame;
   return map.notes.flatMap((note): Glow[] => {

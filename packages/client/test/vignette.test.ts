@@ -1,10 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import {
-  bakeVignette,
-  BREATH_MS,
-  vignetteBreath,
-  vignetteShown,
-} from '../src/world/vignette.js';
+import { ALARM, EMERGENCY, mix, rgba } from '../src/world/palette.js';
+import { vignetteShown } from '../src/world/vignette.js';
 
 const NOW = 1_700_000_000_000;
 
@@ -25,92 +22,57 @@ describe('vignetteShown — when the red edge is up', () => {
   });
 });
 
-describe('vignetteBreath — how strong the edge breathes', () => {
-  it('starts full, sinks to 0.55 halfway through a breath and comes back full', () => {
-    expect(vignetteBreath(0, false)).toBeCloseTo(1);
-    expect(vignetteBreath(BREATH_MS / 2, false)).toBeCloseTo(0.55);
-    expect(vignetteBreath(BREATH_MS, false)).toBeCloseTo(1);
-    expect(vignetteBreath(3 * BREATH_MS + BREATH_MS / 2, false)).toBeCloseTo(0.55);
-  });
+const FINALE = readFileSync(new URL('../src/styles/finale.css', import.meta.url), 'utf8');
 
-  it('eases: falls steadily through the first half, rises through the second', () => {
-    const steps = Array.from({ length: 11 }, (_, i) => vignetteBreath((i / 20) * BREATH_MS, false));
-    for (let i = 1; i < steps.length; i++) {
-      expect(steps[i]).toBeLessThan(steps[i - 1] ?? Infinity);
+/** What the block opened by `header` holds, up to its matching brace; '' where there is none. */
+function blockAfter(source: string, header: string): string {
+  const start = source.indexOf(header);
+  const open = source.indexOf('{', start);
+  if (start === -1 || open === -1) {
+    return '';
+  }
+  let depth = 0;
+  for (let i = open; i < source.length; i++) {
+    if (source.charAt(i) === '{') {
+      depth += 1;
+    } else if (source.charAt(i) === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(open + 1, i);
+      }
     }
-    expect(vignetteBreath(BREATH_MS / 4, false)).toBeCloseTo(0.775);
-    expect(vignetteBreath((3 * BREATH_MS) / 4, false)).toBeCloseTo(0.775);
-  });
-
-  it('holds still and full under reduced motion', () => {
-    for (const ms of [0, BREATH_MS / 4, BREATH_MS / 2, 12_345]) {
-      expect(vignetteBreath(ms, true)).toBe(1);
-    }
-  });
-});
-
-/** A canvas whose 2D context records what the bake does. */
-function recordingCanvas(): {
-  canvas: HTMLCanvasElement;
-  rects: number[][];
-  fills: unknown[];
-  state: { shadowBlur: number; shadowColor: string; shadowOffsetX: number };
-} {
-  const rects: number[][] = [];
-  const fills: unknown[] = [];
-  const state = { shadowBlur: 0, shadowColor: '', shadowOffsetX: 0 };
-  const g = Object.assign(state, {
-    fillStyle: '',
-    clearRect: () => undefined,
-    save: () => undefined,
-    restore: () => undefined,
-    beginPath: () => undefined,
-    rect: (...args: number[]) => rects.push(args),
-    fill: (rule: unknown) => fills.push(rule),
-  });
-  const canvas = { width: 0, height: 0, getContext: () => g } as unknown as HTMLCanvasElement;
-  return { canvas, rects, fills, state };
+  }
+  return '';
 }
 
-describe('bakeVignette — the edge as CSS drew its inset shadow', () => {
-  it('sizes the canvas and blurs as wide as the old shadow, in device pixels', () => {
-    const { canvas, state } = recordingCanvas();
-    bakeVignette(canvas, 2828, 1338, 2);
-    expect([canvas.width, canvas.height]).toEqual([2828, 1338]);
-    expect(state.shadowBlur).toBe(320);
-    expect(state.shadowColor).toBe('rgba(253, 70, 70, 0.34)');
+describe('the red edge as the stylesheet draws it', () => {
+  const edge = blockAfter(FINALE, '.vignette {');
+
+  it('lies over the world it frames, round its corners, and lets every press through', () => {
+    expect(edge).toMatch(/position:\s*absolute;/);
+    expect(edge).toMatch(/inset:\s*0;/);
+    expect(edge).toMatch(/border-radius:\s*14px;/);
+    expect(edge).toMatch(/pointer-events:\s*none;/);
+    // No z-index of its own: it keeps its place in the tree, right after the canvas, and so
+    // lies under the strobe, the coach and the controls after it, and under the bar.
+    expect(edge).not.toMatch(/z-index/);
   });
 
-  it('lets only the shadow fall on the canvas: a frame round it, solid to the spread', () => {
-    const { canvas, rects, fills, state } = recordingCanvas();
-    const [width, height] = [1414, 669];
-    bakeVignette(canvas, width, height, 1);
-    const [outer, inner] = rects;
-    if (outer === undefined || inner === undefined) {
-      throw new Error('the bake drew no frame');
-    }
-    expect(fills).toEqual(['evenodd']);
-    // The shape itself lies wholly right of the canvas …
-    expect(outer[0]).toBeGreaterThanOrEqual(width);
-    // … and its shadow lands on it: the hole inset by the spread, the frame past every edge.
-    const back = (x: number): number => x + state.shadowOffsetX;
-    const [ox = 0, oy = 0, ow = 0, oh = 0] = outer;
-    const [ix = 0, iy, iw, ih] = inner;
-    expect([back(ix), iy, iw, ih]).toEqual([50, 50, width - 100, height - 100]);
-    expect(back(ox)).toBeLessThanOrEqual(-state.shadowBlur);
-    expect(back(ox + ow)).toBeGreaterThanOrEqual(width + state.shadowBlur);
-    expect(oy).toBeLessThanOrEqual(-state.shadowBlur);
-    expect(oy + oh).toBeGreaterThanOrEqual(height + state.shadowBlur);
+  it('glows inwards in the palette’s emergency red, solid 50px in and blurred over 160px', () => {
+    const red = rgba(mix(EMERGENCY, ALARM, 0.3), 0.34);
+    expect(red).toBe('rgba(253, 70, 70, 0.34)');
+    expect(edge).toContain(`box-shadow: inset 0 0 160px 50px ${red};`);
   });
 
-  it('keeps the hole from turning inside out on a canvas smaller than the spread', () => {
-    const { canvas, rects } = recordingCanvas();
-    bakeVignette(canvas, 60, 40, 1);
-    expect(rects[1]?.slice(2)).toEqual([0, 0]);
+  it('breathes by its opacity alone, from full to 0.55 and back over 1.1 s', () => {
+    expect(edge).toMatch(/will-change:\s*opacity;/);
+    expect(edge).toMatch(/animation:\s*vignette-breathe 1\.1s ease-in-out infinite;/);
+    const breath = blockAfter(FINALE, '@keyframes vignette-breathe {');
+    expect(breath.replace(/\s+/g, ' ').trim()).toBe('50% { opacity: 0.55; }');
   });
 
-  it('says what is wrong where a canvas has no 2D context', () => {
-    const canvas = { width: 0, height: 0, getContext: () => null } as unknown as HTMLCanvasElement;
-    expect(() => bakeVignette(canvas, 10, 10, 1)).toThrow(/getContext\("2d"\) returned null/);
+  it('holds still under reduced motion', () => {
+    const calm = blockAfter(FINALE, '@media (prefers-reduced-motion: reduce)');
+    expect(calm).toMatch(/\.vignette,[^{]*\{\s*animation:\s*none;/);
   });
 });

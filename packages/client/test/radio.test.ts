@@ -65,12 +65,12 @@ describe('radioNews — which lines get a banner', () => {
     expect(radioNews([event('radio', -2000)], 0, NOW)).toHaveLength(1);
   });
 
-  it('names mission control on its lines and the last crew on a revealed note', () => {
+  it('names mission control on its lines and the last shift on a revealed note', () => {
     expect(bannerFrom(event('radio', 0))).toBe('LEITSTELLE');
     expect(bannerFrom(event('hint', 0))).toBe('Notiz der letzten Schicht');
   });
 
-  it('puts the last crew’s note beside a note asked for or read, the radio beside the rest', () => {
+  it('puts the last shift’s note by a note asked for or read, the radio beside the rest', () => {
     expect(airIcon(event('hint', 0))).toBe('note');
     expect(airIcon(event('note', 0))).toBe('note');
     for (const kind of ['radio', 'nudge', 'find', 'puzzle', 'penalty'] as const) {

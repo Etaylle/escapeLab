@@ -34,7 +34,7 @@ function onAir(event: RunEvent): boolean {
 
 /**
  * Whether a line on the air is spoken: mission control's are (world/radioVoice.ts, where a
- * recording of it exists), a note of the last crew is read, never heard.
+ * recording of it exists), a note of the last shift is read, never heard.
  */
 export function voiced(event: RunEvent): boolean {
   return fromControl(event);
@@ -54,7 +54,7 @@ export function bannerFrom(event: RunEvent): string {
 }
 
 /**
- * The icon beside a line of the run: the last crew's note for theirs — one
+ * The icon beside a line of the run: the last shift's note for theirs — one
  * asked for, or one found on a wall and read — the radio for the rest.
  */
 export function airIcon(event: RunEvent): 'note' | 'radio' {

@@ -21,7 +21,7 @@ import { inTiles, type Frame } from './frame.js';
 /**
  * The lab's things, in tile space. Objects show only where some light has
  * fallen — a cabinet behind a wall stays unseen. Sources and the notes of
- * the last crew reach the map once found; a station that is up or done, the
+ * the last shift reach the map once found; a station that is up or done, the
  * sign, the hatch and the valves always show. Then the emergency lamps on
  * their walls and ceilings. The furniture is baked with the floor it stands
  * on (render/tiles.ts).
@@ -104,7 +104,7 @@ function drawManuals(ctx: CanvasRenderingContext2D, frame: Frame): void {
   }
 }
 
-/** The notes of the last crew found so far, on their walls or the floor, unread ones calling. */
+/** The notes of the last shift found so far, on their walls or the floor, unread ones calling. */
 function drawNotes(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const { map, pulse } = frame;
   for (const note of map.notes) {
