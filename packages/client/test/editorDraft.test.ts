@@ -272,7 +272,7 @@ describe('draft ↔ JSON: rooms’ kinds and furniture', () => {
   });
 });
 
-describe('draft ↔ JSON: notes of the last crew', () => {
+describe('draft ↔ JSON: notes of the last shift', () => {
   it('reads every note with its words, and writes them back as they came', () => {
     const blackout = shipped.find(({ name }) => name === 'blackout.json')?.data as {
       map: { notes: unknown[] };

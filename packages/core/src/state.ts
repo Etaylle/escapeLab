@@ -22,7 +22,7 @@ export interface RunEvent {
     | 'find'
     /** the lights failing at the end of a mission's intro */
     | 'power'
-    /** a note of the last crew read for the first time this run */
+    /** a note of the last shift read for the first time this run */
     | 'note'
     /**
      * mission control naming the next place, the station that is up having stayed quiet
@@ -44,7 +44,7 @@ export interface Presence {
   stations: Record<string, string[]>;
   /** players at each manual object, by its id */
   manuals: Record<string, string[]>;
-  /** players at each note of the last crew, by its index as text (`noteKey`) */
+  /** players at each note of the last shift, by its index as text (`noteKey`) */
   notes: Record<string, string[]>;
   /** players who have walked up to the edgework sign; kept for the rest of the run */
   signSeen: string[];
@@ -109,7 +109,7 @@ export interface Credits {
   delivered: number;
   /** alarms they set off: a wrong move, a drone that caught them */
   alarms: number;
-  /** notes of the last crew they asked for */
+  /** notes of the last shift they asked for */
   hints: number;
 }
 
@@ -160,7 +160,7 @@ export interface GameState {
   /** manual objects somebody has come close to this run; the crew's map shows only these */
   discovered: string[];
   /**
-   * notes of the last crew somebody has come across this run, by index; the
+   * notes of the last shift somebody has come across this run, by index; the
    * crew's map shows only these
    */
   notesFound: number[];

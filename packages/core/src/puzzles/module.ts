@@ -138,7 +138,7 @@ export interface PuzzleDefCommon {
   /** what a wrong move costs; already scaled to the difficulty at runtime */
   penaltySec: number;
   /**
-   * up to three notes of the last crew (nudge → specific → near-answer),
+   * up to three notes of the last shift (nudge → specific → near-answer),
    * asked for one at a time at a manual object that covers the station
    */
   hints: string[];

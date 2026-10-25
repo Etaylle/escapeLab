@@ -1,7 +1,7 @@
 import type { Spot } from './reach.js';
 
 /**
- * The notes of the last crew on a map: sheets pinned to a wall's face or
+ * The notes of the last shift on a map: sheets pinned to a wall's face or
  * lying on the floor, free to read — lore, never a rule. Where a note is read
  * from is its spot: the floor tile it lies on, or, pinned to a wall, the
  * floor tile its face looks into — south first, the face the view looks at,

@@ -145,6 +145,23 @@ describe('actors — drones and the crew, in tile space', () => {
     );
   });
 
+  it('names you by your own name where the crew’s list has no entry for you', () => {
+    const frame = frameWith({ players: [], youName: 'Zoe' });
+    const log = drawn(frame);
+    const you: ScientistOpts = {
+      color: FALLBACK_COLOR,
+      name: 'Zoe',
+      facing: 0,
+      moving: false,
+      walkPhase: 0,
+      isYou: true,
+      connected: true,
+      text: frame.text,
+      pose: poseIn(frame, 'p1', {}),
+    };
+    expect(strip(drawnAt(log, 2.5, 2.5 + 0.3))).toEqual(recording((c) => drawScientist(c, you)));
+  });
+
   it('names somebody the view does not list „???", in the crew’s fallback colour', () => {
     const frame = frameWith({ others: new Map([['p9', ben]]) });
     const log = drawn(frame);

@@ -190,6 +190,56 @@ export function MissionCard({
   );
 }
 
+/** The row the older maps wait behind on the join screen. */
+export const PROTOTYPES_ROW = 'Prototypen (ältere Karten)';
+
+/** Whether a mission is an older map kept on (`Mission['stage']`). */
+function isPrototype(mission: Pick<MissionInfo, 'stage'>): boolean {
+  return mission.stage === 'prototype';
+}
+
+/**
+ * The older maps kept on, behind a row of their own after the mission cards, collapsed: one
+ * muted line each — its name and its facts — the picked one marked. Nothing without any.
+ */
+export function Prototypes({
+  missions,
+  selected,
+  onSelect,
+}: {
+  missions: MissionInfo[];
+  selected: string | null;
+  onSelect: (missionId: string) => void;
+}) {
+  if (missions.length === 0) {
+    return null;
+  }
+  return (
+    <details className="mission-prototypes">
+      <summary>{PROTOTYPES_ROW}</summary>
+      <ul>
+        {missions.map((m) => {
+          const picked = m.id === selected;
+          return (
+            <li key={m.id}>
+              <button
+                className={picked ? 'mission-proto mission-proto-selected' : 'mission-proto'}
+                aria-pressed={picked}
+                title={m.subtitle}
+                onClick={() => onSelect(m.id)}
+              >
+                <span className="mission-proto-title">{m.title}</span> ·{' '}
+                {crewSizeText(m.players)} · {Math.round(m.timeLimitSec / 60)} min ·{' '}
+                {m.puzzleCount} Stationen
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </details>
+  );
+}
+
 /** What the two sections under the room list need of the join screen. */
 interface SectionProps {
   send: Props['send'];
@@ -199,10 +249,11 @@ interface SectionProps {
 }
 
 /**
- * „Neue Runde eröffnen": every mission as a card — the tutorial's pointing a first crew at it
- * — the button that opens a room for the picked one, on the first-run difficulty where this
- * device has won no run yet (firstRun.ts), and the ways to its booklet, its Bestenliste and
- * the editor.
+ * „Neue Runde eröffnen": every current mission as a card — the tutorial's pointing a first
+ * crew at it — the prototypes in a collapsed row after them, the button that opens a room for
+ * the picked one (the first card until another is picked), on the first-run difficulty where
+ * this device has won no run yet (firstRun.ts), and the ways to its booklet, its Bestenliste
+ * and the editor.
  */
 function NewRound({
   send,
@@ -217,25 +268,33 @@ function NewRound({
   Pick<Props, 'missions' | 'stats' | 'openHandbook' | 'openHistory' | 'openEditor'>) {
   const [missionId, setMissionId] = useState<string | null>(null);
   const won = useWon();
-  const selected = missionId ?? missions[0]?.id ?? null;
+  const current = missions.filter((m) => !isPrototype(m));
+  const selected = missionId ?? current[0]?.id ?? missions[0]?.id ?? null;
   const open = (): void =>
     send(createRoomMessage(name, selected, window.location.search, firstDifficulty(won)));
   return (
     <section className="join-create">
       <h2>Neue Runde eröffnen</h2>
       {missions.length > 0 ? (
-        <div className="mission-grid">
-          {missions.map((m) => (
-            <MissionCard
-              key={m.id}
-              mission={m}
-              stats={stats.find((s) => s.missionId === m.id)}
-              selected={selected === m.id}
-              first={!won && isTutorial(m)}
-              onSelect={() => setMissionId(m.id)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="mission-grid">
+            {current.map((m) => (
+              <MissionCard
+                key={m.id}
+                mission={m}
+                stats={stats.find((s) => s.missionId === m.id)}
+                selected={selected === m.id}
+                first={!won && isTutorial(m)}
+                onSelect={() => setMissionId(m.id)}
+              />
+            ))}
+          </div>
+          <Prototypes
+            missions={missions.filter(isPrototype)}
+            selected={selected}
+            onSelect={setMissionId}
+          />
+        </>
       ) : (
         <p className="muted">Lade Missionen …</p>
       )}

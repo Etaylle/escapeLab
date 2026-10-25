@@ -89,7 +89,7 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('request-hint') }),
   /** search the locker or unlock the cabinet the player stands at */
   z.object({ kind: z.literal('open-source'), manualId: z.string().min(1) }),
-  /** read the note of the last crew the player stands at, by its index among the map's notes */
+  /** read the note of the last shift the player stands at, by its index among the map's notes */
   z.object({
     kind: z.literal('read-note'),
     note: z
@@ -152,6 +152,8 @@ export interface MissionInfo {
   tiles: string[];
   /** made in the editor and kept in missions/custom/; left out for the shipped missions */
   custom?: boolean;
+  /** an older map kept on (`Mission['stage']`); left out for a current mission */
+  stage?: 'prototype';
 }
 
 /**

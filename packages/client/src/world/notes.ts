@@ -1,7 +1,7 @@
 import { noteSpot, type MapView } from '@escapelab/core';
 
 /**
- * Where a note of the last crew shows in the world. On the floor it lies in
+ * Where a note of the last shift shows in the world. On the floor it lies in
  * its tile's middle; pinned to a wall it hangs on the face that looks into
  * the floor it is read from (core's `noteSpot`: south first, the face the
  * view looks at) — the sheet on the wall above the point, the point at the

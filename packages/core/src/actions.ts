@@ -56,7 +56,7 @@ export type Action =
   | { type: 'puzzle-input'; playerId: string; at: number; input: unknown }
   /** once `puzzleDueAt` has come: whatever ran out at the open puzzle by `at` is dropped */
   | { type: 'puzzle-tick'; at: number }
-  /** a note of the last crew, asked for at a manual object that covers the open puzzle */
+  /** a note of the last shift, asked for at a manual object that covers the open puzzle */
   | { type: 'request-hint'; playerId: string; at: number }
   /** once `nudgeDueAt` has come: mission control names the next place for the station up */
   | { type: 'nudge'; at: number }
@@ -79,7 +79,7 @@ export type Action =
     }
   /** a locker searched or a cabinet unlocked by a player standing at it */
   | { type: 'open-source'; playerId: string; manualId: string; at: number }
-  /** a note of the last crew read by a player standing at it, by its index */
+  /** a note of the last shift read by a player standing at it, by its index */
   | { type: 'read-note'; playerId: string; note: number; at: number }
   /** `playerId` is the one the drone caught */
   | { type: 'drone-spotted'; at: number; penaltySec: number; playerId: string }
@@ -1003,7 +1003,7 @@ function creditWorkers(state: GameState, def: PuzzleDef, playerId: string): Game
 }
 
 /**
- * The last crew left notes beside the rules: a player reading the open
+ * The last shift left notes beside the rules: a player reading the open
  * station's rules may ask for them, one at a time. A note costs time like a
  * penalty but is no alarm, so it leaves the alarm counter alone; the next
  * one only comes after another wait.
@@ -1253,11 +1253,11 @@ function openSource(
   );
 }
 
-/** What the run report says the first time a note of the last crew is read. */
+/** What the run report says the first time a note of the last shift is read. */
 export const NOTE_READ = 'Notiz gelesen';
 
 /**
- * A player standing at a note of the last crew reads it, for nothing: no
+ * A player standing at a note of the last shift reads it, for nothing: no
  * time, no alarm, no hint counted. The first read of a note goes into the
  * run report; reading it again changes nothing. Proximity is the presence
  * the server derived.

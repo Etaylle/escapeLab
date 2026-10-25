@@ -1017,7 +1017,7 @@ async function runLever(): Promise<void> {
 }
 
 /**
- * The note of the last crew pinned by the lever: the crew found it standing
+ * The note of the last shift pinned by the lever: the crew found it standing
  * there, the audience sees every note from the start, and its words reach
  * only who stands at it. Anna reads it for nothing — no time, no alarm, no
  * hint — and the run report says so once; Ben's read of it adds nothing.
@@ -1047,7 +1047,7 @@ async function readTheLeverNote(): Promise<void> {
   assert(ben.view?.events.filter((e) => e.kind === 'note').length === 1,
     'a note read again is logged once');
   assert(zoe.spectatorView?.map?.notes.length === mission.map.notes.length,
-    'the audience sees every note of the last crew as an object');
+    'the audience sees every note of the last shift as an object');
 }
 
 type CircuitView = Extract<PuzzleView, { kind: 'circuit' }>;
@@ -1819,7 +1819,7 @@ assert(dark.map?.stations.find((s) => s.puzzleId === leverDef.id)?.status === 'a
   'the lever is armed once the lights are out');
 
 // Station 1: the Notlicht's main switch in the Flur, a lever for each of the crew. Both walk up
-// to it, then throw it together; the note of the last crew pinned beside it is read there.
+// to it, then throw it together; the note of the last shift pinned beside it is read there.
 await runLever();
 await readTheLeverNote();
 
@@ -2252,7 +2252,7 @@ for (const client of tutorialLab.crew) {
 rmSync(runsDir, { recursive: true, force: true });
 console.log(
   '\nSmoke test passed: Blackout with its power on until the lights went out, the ' +
-    'Notlicht\'s lever, a note of the last crew, drawn spawns and sources, streamed movement, ' +
+    'Notlicht\'s lever, a note of the last shift, drawn spawns and sources, streamed movement, ' +
     'plates, a door that stays open, the Notstrom-Kasten, the Signalkette and the Serverraum ' +
     'at two consoles, the locker, the key, the camera plate, reconnect, the hatch\'s ' +
     'checklist, penalties and credits; then ' +

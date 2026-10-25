@@ -115,7 +115,7 @@ describe('the radio’s chain', () => {
     expect(20 * Math.log10(NOISE_BED)).toBeCloseTo(-33, 9);
   });
 
-  it('voices mission control’s lines, never a note of the last crew', () => {
+  it('voices mission control’s lines, never a note of the last shift', () => {
     const line = (kind: RunEvent['kind']): RunEvent => ({ at: 0, kind, label: 'x', seconds: null });
     expect(voiced(line('radio'))).toBe(true);
     expect(voiced(line('hint'))).toBe(false);

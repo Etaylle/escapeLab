@@ -3,6 +3,7 @@
   "title": "Kettenreaktion",
   "subtitle": "Für drei: Jeder startet eingeschlossen, keiner kommt allein heraus.",
   "listOrder": 30,
+  "stage": "prototype",
   "players": { "min": 3, "max": 3 },
   "story": {
     "intro": "Der Versuchsreaktor im Keller läuft heiß. Archiv, Leitstand und Messlabor sind verriegelt, und in jedem sitzt einer von der Schicht fest. Die Regeln stehen in den Büchern im Archiv und im Messlabor, die Laborkennung hängt im Leitstand. Ein Fehler zu viel, und »Kettenreaktion« ist wörtlich zu nehmen.",

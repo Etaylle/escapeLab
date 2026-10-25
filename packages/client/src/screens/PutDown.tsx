@@ -5,7 +5,7 @@ import { REDUCED_MOTION } from '../world/finale.js';
 
 /**
  * Putting things down instead of closing windows: a source read on the spot — a book, a
- * clipboard, a terminal, a wall chart, a locker's pages, a note of the last crew — has no
+ * clipboard, a terminal, a wall chart, a locker's pages, a note of the last shift — has no
  * window's ✕. Its foot says how to put it down, „[E] Weglegen" (a book: „[E] Zuklappen");
  * E, Esc or a step away (W A S D) do it, and on a touch screen a tab at the board's edge. The
  * sheet then slides down out of view in PUT_DOWN_MS — a book shuts as it goes — with a soft
@@ -18,7 +18,7 @@ export const PUT_DOWN_MS = 220;
 /** The keys that put a sheet down: E, as it was picked up, and a step, W A S D. */
 export const PUT_DOWN_KEYS = ['e', 'w', 'a', 's', 'd'] as const;
 
-/** What lies over the world: a station's device, a source's pages, a note of the last crew. */
+/** What lies over the world: a station's device, a source's pages, a note of the last shift. */
 export type Over = 'station' | 'reading' | 'note';
 
 /**

@@ -2,9 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { CHAT_PHRASE_IDS, chatText } from '@escapelab/core';
 import { FALLBACK_COLOR, type Frame } from '../src/world/render/frame.js';
 import { draw } from '../src/world/render/overlays.js';
-import { vignetteBreath } from '../src/world/vignette.js';
 import { callEntries, callsOf, fakeCanvas, setsOf } from './fakeCanvas.js';
-import { frameWith, kitWith, player, TILES } from './frames.js';
+import { frameWith, player, TILES } from './frames.js';
 import { mapWith, type Item } from './fixtures.js';
 
 /** What the pass drew for `frame`. */
@@ -154,28 +153,5 @@ describe('overlays — what lies over the world and its light', () => {
     const ending = { lit: 0, pull: 0, dark: 0.8 };
     expect(cover({ scene: { lit: false, cover: 0.6 }, ending })).toEqual(['rgba(3, 5, 9, 0.8)']);
     expect(cover({})).toEqual([]);
-  });
-
-  it('edges the picture red in the last minute and the escape, baked once per canvas', () => {
-    const now = 1_000_000;
-    const edge = fakeCanvas(0, 0, 'edge');
-    const kit = kitWith();
-    kit.vignette.canvas = edge.canvas;
-    const lastMinute = frameWith({ kit, now, deadlineAt: now + 30_000, perf: 300 });
-    const log = drawn(lastMinute);
-    const laid = callEntries(log, 'drawImage').find((call) => call.args[0] === edge.canvas);
-    expect(laid).toMatchObject({ args: [edge.canvas, 0, 0], alpha: vignetteBreath(300, false) });
-    expect(kit.vignette).toMatchObject({ w: 800, h: 600, dpr: 1 });
-    const baked = edge.log.length;
-    expect(baked).toBeGreaterThan(0);
-    drawn(lastMinute);
-    expect(edge.log).toHaveLength(baked);
-    const shown = (parts: Partial<Frame>): boolean =>
-      callsOf(drawn({ ...lastMinute, ...parts }), 'drawImage').length > 0;
-    expect(shown({ spectator: true })).toBe(false);
-    expect(shown({ ending: { lit: 0, pull: 0, dark: 0.2 } })).toBe(false);
-    expect(shown({ deadlineAt: now + 90_000 })).toBe(false);
-    const escape = lab({ exit: { x: 8, y: 4, open: true, openedAt: 1, atExit: [] } });
-    expect(shown({ deadlineAt: now + 90_000, map: escape })).toBe(true);
   });
 });

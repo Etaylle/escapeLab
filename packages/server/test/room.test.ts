@@ -56,12 +56,13 @@ describe('Room', () => {
     vi.useRealTimers();
   });
 
+  /** Anna and Ben connected, each with how to let go of their connection (`detach`). */
   function fullLobby(room: Room) {
-    const anna = { ...room.join('Anna'), ...collector() };
-    const ben = { ...room.join('Ben'), ...collector() };
-    room.attach(anna.playerId, anna.listen);
-    room.attach(ben.playerId, ben.listen);
-    return { anna, ben };
+    const seat = (name: string) => {
+      const player = { ...room.join(name), ...collector() };
+      return { ...player, detach: room.attach(player.playerId, player.listen) };
+    };
+    return { anna: seat('Anna'), ben: seat('Ben') };
   }
 
   /**
@@ -253,7 +254,7 @@ describe('Room', () => {
     const audience = collector();
     room.attachSpectator(audience.listen);
     moveTo(room, ben, 12, 2);
-    room.detach(ben.playerId);
+    ben.detach();
     expect(lastView(anna.messages).pausedFor).toEqual(['Ben']);
     const watched = audience.messages.filter((m) => m.kind === 'spectator-view').at(-1);
     const gone =
@@ -279,7 +280,7 @@ describe('Room', () => {
 
     // Anna is standing right at the first station when Ben drops out.
     moveTo(room, anna, 12, 2);
-    room.detach(ben.playerId);
+    ben.detach();
     const paused = lastView(anna.messages);
     expect(paused.pausedFor).toEqual(['Ben']);
     // Nothing can be done while the crew is short-handed.
@@ -301,7 +302,7 @@ describe('Room', () => {
 
   it('does not expire the mission timer while paused', () => {
     const { room, anna, ben } = startedRoom();
-    room.detach(ben.playerId);
+    ben.detach();
 
     vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 60_000);
     expect(lastView(anna.messages).phase).toBe('playing');
@@ -402,7 +403,7 @@ describe('Room', () => {
     vi.advanceTimersByTime(mission.timeLimitSec * 1000 + 1);
 
     room.setReady(ben.playerId, true);
-    room.detach(ben.playerId);
+    ben.detach();
     room.setReady(anna.playerId, true);
     expect(lastView(anna.messages).phase).toBe('lost');
     room.dispose();
@@ -543,7 +544,7 @@ describe('Room', () => {
     const { room, anna, ben } = startedRoom(load('blackout'));
     moveTo(room, anna, 6, 9);
     expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(true);
-    room.detach(anna.playerId);
+    anna.detach();
     expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(false);
     room.dispose();
   });
@@ -561,7 +562,7 @@ describe('Room', () => {
     const room = new Room('TEST', mission);
     const { anna, ben } = fullLobby(room);
 
-    room.detach(ben.playerId);
+    ben.detach();
     expect(
       lastView(anna.messages).players.find((p) => p.id === ben.playerId)?.connected,
     ).toBe(false);
@@ -573,6 +574,21 @@ describe('Room', () => {
     expect(
       lastView(anna.messages).players.find((p) => p.id === ben.playerId)?.connected,
     ).toBe(true);
+    room.dispose();
+  });
+
+  it('keeps a player who resumed on a new connection when the old one is found dead late', () => {
+    const { room, anna, ben } = startedRoom();
+    const benAgain = collector();
+    room.resume(ben.playerId, ben.token);
+    room.attach(ben.playerId, benAgain.listen);
+    // The old socket's end comes only now: the heartbeat terminating it, say.
+    ben.detach();
+    expect(lastView(anna.messages).pausedFor).toBeNull();
+    const benSeen = lastView(anna.messages).players.find((p) => p.id === ben.playerId);
+    expect(benSeen?.connected).toBe(true);
+    room.ping(anna.playerId, 3, 3);
+    expect(benAgain.messages.at(-1)).toEqual({ kind: 'ping', playerId: anna.playerId, x: 3, y: 3 });
     room.dispose();
   });
 
@@ -615,8 +631,8 @@ describe('RoomManager', () => {
     expect(manager.get(room.code.toLowerCase())).toBe(room);
 
     const player = { ...room.join('Anna'), ...collector() };
-    room.attach(player.playerId, player.listen);
-    room.detach(player.playerId);
+    const detach = room.attach(player.playerId, player.listen);
+    detach();
 
     manager.sweep(Date.now() + 11 * 60 * 1000);
     expect(() => manager.get(room.code)).toThrow(/existiert nicht/);

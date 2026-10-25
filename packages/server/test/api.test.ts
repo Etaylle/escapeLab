@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   moduleFor,
+  type MissionInfo,
   type MissionManual,
   type MissionStanding,
   type MissionStats,
@@ -64,6 +65,21 @@ const probe = {
     ],
   },
 };
+
+describe('GET /missions', () => {
+  it('marks the older maps as prototypes and leaves the current ones unmarked', () => {
+    const res = apiResponse(shipped, '/missions');
+    expect(res?.status).toBe(200);
+    const infos = res?.body as MissionInfo[];
+    expect(infos.map((info) => [info.id, info.stage])).toEqual([
+      ['blackout', undefined],
+      ['systemcheck', undefined],
+      ['kettenreaktion', 'prototype'],
+      ['doppelschicht', 'prototype'],
+    ]);
+    expect(Object.keys(infos[0] ?? {})).not.toContain('stage');
+  });
+});
 
 describe('GET /missions/:id/manual', () => {
   it('has one chapter per puzzle, in mission order, for every shipped mission', () => {

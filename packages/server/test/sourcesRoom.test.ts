@@ -203,9 +203,9 @@ describe('Room with sources to find and open', () => {
     const cleo = room.join('Cleo');
     room.attach(anna.playerId, anna.listen);
     room.attach(ben.playerId, ben.listen);
-    room.attach(cleo.playerId, () => undefined);
+    const cleoGone = room.attach(cleo.playerId, () => undefined);
     expect(room.summary()).toMatchObject({ capacity: 3, free: 0 });
-    room.detach(cleo.playerId);
+    cleoGone();
     room.setReady(ben.playerId, true);
     room.act(anna.playerId, { kind: 'start-mission' });
     const view = lastView(anna.messages);

@@ -177,14 +177,24 @@ export class Room {
     this.checkEscape();
   }
 
-  /** Register the live connection for a player; push the current view and positions. */
-  attach(playerId: string, listener: Listener): void {
+  /**
+   * Register the live connection for a player; push the current view and positions. Returns
+   * how to let go of this very connection once it is lost. A connection the player has
+   * replaced since — they resumed on a new socket before the old one was found dead — lets
+   * go of nothing: the player stays connected on the new one.
+   */
+  attach(playerId: string, listener: Listener): () => void {
     this.listeners.set(playerId, listener);
     this.emptySince = null;
     listener({ kind: 'view', view: viewFor(this.state, playerId) });
     if (this.positions.size > 0) {
       listener(this.positionsMessage());
     }
+    return () => {
+      if (this.listeners.get(playerId) === listener) {
+        this.detach(playerId);
+      }
+    };
   }
 
   /**
@@ -209,7 +219,7 @@ export class Room {
   }
 
   /** Connection lost: keep the player (they may resume), notify the others. */
-  detach(playerId: string): void {
+  private detach(playerId: string): void {
     if (!this.listeners.delete(playerId)) {
       return;
     }
@@ -696,7 +706,7 @@ export class Room {
   }
 
   /**
-   * Where each note of the last crew is read, by `noteKey`: the floor tile
+   * Where each note of the last shift is read, by `noteKey`: the floor tile
    * it lies on, or the one its wall's face looks into (core's `noteSpot`).
    */
   private noteSpots(): { id: string; index: number; x: number; y: number }[] {

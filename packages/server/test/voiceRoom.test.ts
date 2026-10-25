@@ -19,11 +19,11 @@ interface Member {
   messages: ServerMessage[];
 }
 
-function player(room: Room, name: string): Member {
+function player(room: Room, name: string): Member & { detach: () => void } {
   const { playerId } = room.join(name);
   const messages: ServerMessage[] = [];
-  room.attach(playerId, (m) => messages.push(m));
-  return { id: playerId, messages };
+  const detach = room.attach(playerId, (m) => messages.push(m));
+  return { id: playerId, messages, detach };
 }
 
 function spectator(room: Room): Member & { detach: () => void } {
@@ -77,7 +77,7 @@ describe('voice signals in a room', () => {
   it('go nowhere from or to a player whose connection is gone', () => {
     const room = new Room('TEST', mission);
     const [anna, ben] = [player(room, 'Anna'), player(room, 'Ben')];
-    room.detach(ben.id);
+    ben.detach();
     expect(room.relaySignal(anna.id, ben.id, offer)).toBe(false);
     expect(room.relaySignal(ben.id, anna.id, offer)).toBe(false);
     expect([anna, ben].flatMap(signals)).toEqual([]);

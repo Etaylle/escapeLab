@@ -5,7 +5,7 @@ import { walkTo, type Walker } from './walk.js';
 
 /**
  * Two rooms one above the other, a gap at the east end between them, and a
- * note of the last crew pinned to the wall between them at (5,2): it hangs
+ * note of the last shift pinned to the wall between them at (5,2): it hangs
  * on that wall's south face, so it is read from (5,3), in the south room.
  *
  *   0123456789
@@ -51,7 +51,7 @@ function lastView(walker: Walker) {
   return last.view;
 }
 
-describe('Room with a note of the last crew', () => {
+describe('Room with a note of the last shift', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 

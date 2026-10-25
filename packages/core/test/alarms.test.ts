@@ -22,7 +22,7 @@ const lab = labMission([
 ]);
 
 /**
- * A keypad whose wrong key sounds the alarm, its rules and the last crew's
+ * A keypad whose wrong key sounds the alarm, its rules and the last shift's
  * notes in the book, and an emergency that sounds it when it runs out. A
  * drone sighting is an action of its own (the patrols are the server's).
  * The mission sets no alarm limit: the difficulty does.

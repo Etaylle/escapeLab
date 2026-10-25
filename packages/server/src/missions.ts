@@ -103,6 +103,7 @@ export class MissionCatalog {
       puzzleCount: m.puzzles.length,
       tiles: m.map.tiles,
       ...(this.isCustom(m.id) ? { custom: true } : {}),
+      ...(m.stage === undefined ? {} : { stage: m.stage }),
     }));
   }
 

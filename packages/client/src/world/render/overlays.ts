@@ -1,5 +1,4 @@
 import { chatText } from '@escapelab/core';
-import { escaping } from '../escape.js';
 import { carriedItem, promptText } from '../interact.js';
 import {
   markerBoxes,
@@ -20,21 +19,20 @@ import {
   TEAL,
 } from '../palette.js';
 import { placeRoomNames, ROOM_NAME_PX, shiftClear, type Box, type Viewport } from '../viewport.js';
-import { bakeVignette, vignetteBreath, vignetteShown } from '../vignette.js';
 import { FALLBACK_COLOR, toScreen, type ChatLine, type Frame } from './frame.js';
 
 /**
  * What lies over the world and its light, screen space: the pings' rings
  * and edge arrows, the screen's own text — room names, the arrows to what to
- * walk to, the hatch's sign, the E prompt, captions, chat — the light
- * failing (the cold open, a run lost) and, drawn last, the red edge of the
- * clock's last minute and of the escape.
+ * walk to, the hatch's sign, the E prompt, captions, chat — and the light
+ * failing (the cold open, a run lost). The red edge of the clock's last
+ * minute and of the escape lies over the canvas as an element of its own
+ * (vignette.ts).
  */
 export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   drawPings(ctx, frame);
   drawScreenText(ctx, frame);
   drawCover(ctx, frame);
-  drawVignette(ctx, frame);
 }
 
 /** How long a ping shows, ms. */
@@ -412,28 +410,4 @@ function drawCover(ctx: CanvasRenderingContext2D, frame: Frame): void {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = rgba(NIGHT, cover);
   ctx.fillRect(0, 0, w, h);
-}
-
-/**
- * The red edge round the world in the clock's last minute and all through
- * the escape, breathing: drawn last, over everything on the canvas, baked
- * anew for another canvas. Not for the audience, and gone once the run ends
- * on this screen.
- */
-function drawVignette(ctx: CanvasRenderingContext2D, frame: Frame): void {
-  const { w, h, dpr } = frame.viewport;
-  const ending = frame.ending !== null;
-  const shown = vignetteShown(frame.deadlineAt, frame.now, escaping(frame.map), ending);
-  if (frame.spectator || !shown) {
-    return;
-  }
-  const edge = frame.kit.vignette;
-  if (edge.w !== w || edge.h !== h || edge.dpr !== dpr) {
-    bakeVignette(edge.canvas, w, h, dpr);
-    Object.assign(edge, { w, h, dpr });
-  }
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.globalAlpha = vignetteBreath(frame.perf, frame.reduced);
-  ctx.drawImage(edge.canvas, 0, 0);
-  ctx.globalAlpha = 1;
 }

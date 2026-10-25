@@ -5,7 +5,7 @@ import { NOTE_LABEL, PinnedNote } from '../src/screens/PinnedNote.js';
 const noop = (): void => undefined;
 const TEXT = 'Drei Tickets wegen der Lüfter, keins bearbeitet. – Admin';
 
-describe('a note of the last crew, read where it hangs', () => {
+describe('a note of the last shift, read where it hangs', () => {
   const html = renderToStaticMarkup(
     <PinnedNote note={{ index: 1, text: TEXT }} edgework={null} onPutDown={noop} />,
   );
@@ -28,7 +28,7 @@ describe('a note of the last crew, read where it hangs', () => {
     expect(leaving).toMatch(/role="dialog"[^>]*inert=""/);
   });
 
-  it('carries the words in the last crew’s hand, on a slip with its pin', () => {
+  it('carries the words in the last shift’s hand, on a slip with its pin', () => {
     expect(html).toContain('<aside class="note-slip pinned-note"');
     expect(html).toContain('<span class="pinned-note-pin" aria-hidden="true"></span>');
     expect(html).toContain(`<p class="margin-note pinned-note-text">${TEXT}</p>`);

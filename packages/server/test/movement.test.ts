@@ -18,13 +18,17 @@ const ARCHIV = { x: 3, y: 3 };
 /** In front of the Serverschott, in the Flur. */
 const BY_THE_SCHOTT = { x: 15.5, y: 7.5 };
 
-type Player = Walker & { token: string; listen: (m: ServerMessage) => void };
+type Player = Walker & {
+  token: string;
+  listen: (m: ServerMessage) => void;
+  /** lets go of the connection, as its socket closing does */
+  detach: () => void;
+};
 
 function join(room: Room, name: string): Player {
   const messages: ServerMessage[] = [];
   const player = { ...room.join(name), messages, listen: (m: ServerMessage) => messages.push(m) };
-  room.attach(player.playerId, player.listen);
-  return player;
+  return { ...player, detach: room.attach(player.playerId, player.listen) };
 }
 
 function lastView(walker: Walker) {
@@ -192,7 +196,7 @@ describe('Room movement', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { room, anna, ben } = started();
     walkTo(room, anna, BY_THE_SCHOTT.x, BY_THE_SCHOTT.y);
-    room.detach(anna.playerId);
+    anna.detach();
     expect(lastView(ben).pausedFor).toEqual(['Anna']);
 
     const back: Walker = { playerId: anna.playerId, messages: [] };

@@ -77,11 +77,11 @@ function otherLook(
   };
 }
 
-/** You, as the view names you. */
+/** You, as the view names you: by your own name where the crew's list has no entry for you. */
 function yourLook(you: Player | undefined, frame: Frame): ScientistOpts {
   return {
     color: you?.color ?? FALLBACK_COLOR,
-    name: you?.name ?? 'DU',
+    name: you?.name ?? frame.youName,
     facing: frame.self.facing,
     moving: frame.self.moving,
     walkPhase: frame.walkPhase,

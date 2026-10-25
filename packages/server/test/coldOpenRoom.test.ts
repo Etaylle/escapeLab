@@ -63,13 +63,13 @@ function mission(afterSolved = 2): Mission {
 const INTRO_MS = 3000;
 const LIMIT_MS = 600_000;
 
-type Player = Walker & { token: string };
+/** A player of the room, with how to let go of their connection, as its socket closing does. */
+type Player = Walker & { token: string; detach: () => void };
 
 function join(room: Room, name: string): Player {
   const messages: ServerMessage[] = [];
   const player = { ...room.join(name), messages };
-  room.attach(player.playerId, (m) => messages.push(m));
-  return player;
+  return { ...player, detach: room.attach(player.playerId, (m) => messages.push(m)) };
 }
 
 function lastView(walker: Walker) {
@@ -140,7 +140,7 @@ describe('a room whose mission opens with the power on', () => {
   it('waits out a pause during the intro: the lights go out that much later', () => {
     const { room, anna, ben } = started();
     vi.advanceTimersByTime(1000);
-    room.detach(ben.playerId);
+    ben.detach();
     expect(lastView(anna).pausedFor).toEqual(['Ben']);
     vi.advanceTimersByTime(10_000);
     expect(lastView(anna).lights.out).toBe(false);

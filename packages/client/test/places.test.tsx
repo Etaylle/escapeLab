@@ -170,7 +170,7 @@ describe('reading at a terminal', () => {
     expect(read(null, 2, edgework)).toContain('class="edgework"');
   });
 
-  it('wears the last crew’s note as a label on its case, whichever screen is up', () => {
+  it('wears the last shift’s note as a label on its case, whichever screen is up', () => {
     const [first, third] = terminal.sections as [Section, Section];
     const notes = { ...third, notes: ['Plan vom Ziel aus lesen.'], notesLeft: 1 };
     const noted: ManualHere = { ...terminal, sections: [first, notes] };
@@ -319,11 +319,11 @@ describe('reading a book', () => {
     noteReadyAt: Date.now() - 1000,
   });
 
-  /** The last crew's note as drawn, wherever it lies. */
+  /** The last shift's note as drawn, wherever it lies. */
   const slip = (html: string): string | undefined =>
     /<aside class="note-slip".*?<\/aside>/.exec(html)?.[0];
 
-  it('slips the last crew’s note into the book: the notes, and the way to ask for the next', () => {
+  it('slips the last shift’s note into the book: the notes, the way to ask for the next', () => {
     expect(slip(opened(bound(noted()), 2))).toBe(
       '<aside class="note-slip" aria-label="Notizen der letzten Schicht zu §3 — Leitungsnetz">' +
         '<p class="note-slip-for">zu §3</p><ol class="margin-notes">' +

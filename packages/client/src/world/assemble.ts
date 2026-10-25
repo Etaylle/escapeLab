@@ -242,6 +242,7 @@ function lighting(
 /** The view's people and the drones, as this frame draws them. */
 type Crew =
   | 'youId'
+  | 'youName'
   | 'players'
   | 'signSeen'
   | 'deadlineAt'
@@ -259,6 +260,7 @@ function crewOf(source: FrameSource): Pick<Frame, Crew> {
   const { view, voice } = source.live.current;
   return {
     youId: view.you.id,
+    youName: view.you.name,
     players: view.players,
     signSeen: view.presence.signSeen,
     deadlineAt: view.deadlineAt,

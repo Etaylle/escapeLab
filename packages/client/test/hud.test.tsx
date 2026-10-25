@@ -93,7 +93,7 @@ describe('the HUD radio line', () => {
     expect(strip(hud([radio('Strom weg.')]))).toBe('[radio] Leitstelle: Strom weg.');
   });
 
-  it('reads a revealed note as the last crew’s, not as mission control', () => {
+  it('reads a revealed note as the last shift’s, not as mission control', () => {
     const html = hud([{ at: 1, kind: 'hint', label: 'Erst die Sicherung.', seconds: 20 }]);
     expect(strip(html)).toBe('[note] Notiz der letzten Schicht — Erst die Sicherung. (−20s)');
     expect(html).not.toContain('Leitstelle');
@@ -133,7 +133,7 @@ describe('the radio strip while a line is on the air', () => {
     expect(tickerLine(undefined, undefined, false)).toBeNull();
   });
 
-  it('says a note of the last crew was read under the note, never on the air', () => {
+  it('says a note of the last shift was read under the note, never on the air', () => {
     const read = { at: 9, kind: 'note' as const, label: 'Notiz gelesen', seconds: null };
     expect(tickerLine(read, undefined, false)).toEqual({ icon: 'note', text: 'Notiz gelesen' });
   });

@@ -3,6 +3,7 @@
   "title": "Doppelschicht",
   "subtitle": "Für vier: zwei Flügel ohne Verbindung — bis die Schleuse aufgeht.",
   "listOrder": 40,
+  "stage": "prototype",
   "players": { "min": 4, "max": 4 },
   "story": {
     "intro": "Das Nordlabor ist in zwei Flügel geteilt, die Schleuse dazwischen ist verriegelt. Zwei von der Schicht sitzen im Westflügel, zwei im Ostflügel; von Flügel zu Flügel geht nur Funk. Neben jedem Arbeitsplatz liegt ein Handbuch, immer mit den Regeln für den Flügel gegenüber. Die Laborkennung hängt im Westflügel.",

@@ -513,6 +513,13 @@
   white-space: nowrap;
 }
 
+/* An older map kept on says so under its facts. */
+.lobby-prototype {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
 .lobby-story .story {
   max-width: 68ch;
   margin: 0;

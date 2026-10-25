@@ -4,7 +4,7 @@ import { EdgeworkChip } from './EdgeworkChip.js';
 
 /**
  * The frame a station's device, a manual object's pages and a note of the
- * last crew open in, over the world: what you are reading — a station's
+ * last shift open in, over the world: what you are reading — a station's
  * device carries its own label plate, so its name stays with the dialog —
  * and the Laborkennung once you have read it. No window's ✕: a sheet says at
  * its foot how it is put down (PutDown.tsx), a device on its chassis how to

@@ -18,7 +18,7 @@ import { lightsOut, standing, started, T0 } from './lab.js';
 
 /**
  * A corridor with a keypad at its east end and the book by the spawns, and
- * two notes of the last crew: one pinned to the north wall at (4,0), read
+ * two notes of the last shift: one pinned to the north wall at (4,0), read
  * from the floor below it, one lying on the floor at (7,2).
  *
  *   0123456789
@@ -139,7 +139,7 @@ describe('notes on the map', () => {
       map: { ...bare.map, decor: [{ kind: 'barrel', x: 7, y: 2 }] },
     });
     expect(checked.ok ? [] : checked.issues).toEqual([
-      '(root): map: decor "barrel" at 7,2 stands on a note of the last crew — furniture goes ' +
+      '(root): map: decor "barrel" at 7,2 stands on a note of the last shift — furniture goes ' +
         'on free floor',
     ]);
   });

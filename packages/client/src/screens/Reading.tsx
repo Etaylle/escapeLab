@@ -72,7 +72,7 @@ interface SourceProps {
 
 /**
  * A terminal shows one station per screen and starts at the one that is up
- * now, if it covers it. The last crew's note is a sticky label on its
+ * now, if it covers it. The last shift's note is a sticky label on its
  * bezel, there whichever screen is up.
  */
 function Terminal({ manual, puzzle, current, onAskNote }: SourceProps) {
@@ -137,7 +137,7 @@ function ChartSection({
 
 /**
  * A wall chart is one sheet pinned up: every station it covers at once. The
- * last crew's note is a label stuck on the board beside it.
+ * last shift's note is a label stuck on the board beside it.
  */
 function Chart({ manual, puzzle, current, onAskNote }: SourceProps) {
   return (
@@ -162,7 +162,7 @@ function Chart({ manual, puzzle, current, onAskNote }: SourceProps) {
  * A source read on the spot: the printed rules of every station it covers,
  * set as the source is made — paper, screen or chart — with whatever the
  * open puzzle shows a reader on top of them (the maze's wall plan) and,
- * beside the open station's rules, the notes of the last crew. Paper opens
+ * beside the open station's rules, the notes of the last shift. Paper opens
  * on a cover naming the mission and the room the source lies in. Its foot
  * says how it is put down (PutDown.tsx), and once it is, it slides out of
  * view (`leaving`).

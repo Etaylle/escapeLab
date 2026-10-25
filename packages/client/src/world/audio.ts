@@ -675,7 +675,7 @@ export function pencilScratch(): void {
  * Mission control keying the radio, ~0.2 s: a crackle of static, then the press-to-talk key's
  * click going down and up, squeezed into a handset's narrow band. No tone in it: a line that
  * follows a solve comes over the solve's chord, and nothing pitched may clash with that. Only
- * for a line no recording speaks — a custom mission's, a note of the last crew: a recorded line
+ * for a line no recording speaks — a custom mission's, a note of the last shift: a recorded line
  * keys its own squelch (radioVoice.ts).
  */
 export function radioChirp(): void {

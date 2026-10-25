@@ -48,6 +48,9 @@ export function startBlocker(view: Pick<PlayerView, 'crewSize' | 'players'>): st
 /** A story up to this many characters fits the two lines the panel shows of it. */
 const STORY_FITS = 70;
 
+/** What the panel says of an older map kept on (`Mission['stage']`), under its facts. */
+export const PROTOTYPE_LINE = 'Prototyp: ältere Karte ohne Kaltstart und Einrichtung.';
+
 interface HeadProps {
   view: PlayerView;
   info: MissionInfo | undefined;
@@ -78,6 +81,7 @@ function MissionHead({ view, info, picker }: HeadProps) {
           </span>
         )}
       </p>
+      {info?.stage === 'prototype' && <p className="muted lobby-prototype">{PROTOTYPE_LINE}</p>}
     </header>
   );
 }

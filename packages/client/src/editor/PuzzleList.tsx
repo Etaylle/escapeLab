@@ -58,7 +58,7 @@ interface FormProps {
   onRemove: () => void;
 }
 
-/** The last crew's three notes; empty ones at the end are no notes. */
+/** The last shift's three notes; empty ones at the end are no notes. */
 function HintFields({
   puzzle,
   path,
