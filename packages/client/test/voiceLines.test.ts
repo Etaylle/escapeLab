@@ -31,8 +31,12 @@ import { idsOf, openersOf } from '../src/world/radioVoice.js';
 
 /** What to do when a shipped line has no recording. */
 const REMEDY = 'record it on a Mac: pnpm --filter @escapelab/client voice';
-/** How long a recorded word takes, ms: no faster than a 20-word line in 4 s, none drawn out. */
-const MS_PER_WORD = { min: 200, max: 700 } as const;
+/**
+ * How long a recorded word takes, ms: no faster than a 20-word line in 4 s, and no slower
+ * than a deliberate operator with a pause at each full stop (a 7-word, two-sentence line
+ * runs about 750 ms a word in the ElevenLabs recording).
+ */
+const MS_PER_WORD = { min: 200, max: 900 } as const;
 
 const manifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8')) as Record<string, Entry>;
 const recordings = readdirSync(VOICE_DIR).filter((name) => /\.(m4a|mp3)$/.test(name));
