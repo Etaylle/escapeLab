@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { deflateSync } from 'node:zlib';
-import { compareDirs, decodePng, diffImages, TOLERANCE } from './pixeldiff.mjs';
+import { compareDirs, decodePng, diffImages, EDGE, edgesOf, TOLERANCE } from './pixeldiff.mjs';
 
 /** A PNG chunk: length, type, body and a CRC the decoder does not check. */
 function chunk(type, body) {
@@ -159,7 +159,15 @@ function image(pixel, at = 4) {
 describe('diffImages — which pixels changed', () => {
   it('counts nothing for the same pixels, nor for a step within the tolerance', () => {
     const same = diffImages(image([100, 100, 100, 100]), image([100, 100, 100, 100]));
-    assert.deepEqual(same, { sameSize: true, differing: 0, share: 0, box: null, maxStep: 0 });
+    assert.deepEqual(same, {
+      sameSize: true,
+      differing: 0,
+      share: 0,
+      box: null,
+      maxStep: 0,
+      meanAway: 0,
+      edgeShare: 0,
+    });
     const within = diffImages(image([100, 100, 100, 100]), image([100, 100 + TOLERANCE, 100, 100]));
     assert.equal(within.differing, 0);
     assert.equal(within.maxStep, TOLERANCE);
@@ -182,6 +190,36 @@ describe('diffImages — which pixels changed', () => {
   it('compares no images of two sizes', () => {
     const wide = { width: 6, height: 1, rgba: new Uint8Array(24) };
     assert.equal(diffImages(image([1, 1, 1, 1]), wide).sameSize, false);
+  });
+
+  it('averages red, green and blue over the pixels at no edge of either image', () => {
+    // Every pixel 100 but one 4 higher in red and green: a step of 4, no edge anywhere.
+    const moved = diffImages(image([100, 100, 100, 100]), image([104, 104, 100, 100]));
+    assert.equal(moved.edgeShare, 0);
+    assert.equal(moved.meanAway, (4 + 4) / 3 / 6);
+    // Alpha does not count towards the mean.
+    assert.equal(diffImages(image([100, 100, 100, 100]), image([100, 100, 100, 0])).meanAway, 0);
+  });
+
+  it('leaves the pixels at an edge of either image out of the mean', () => {
+    // A step past EDGE in the image after: that pixel and its neighbours lie at an edge.
+    const edged = diffImages(image([100, 100, 100, 100]), image([100 + EDGE + 1, 100, 100, 100]));
+    assert.equal(edged.edgeShare, 4 / 6);
+    assert.equal(edged.meanAway, 0);
+    // A step of EDGE is none.
+    const step = diffImages(image([100, 100, 100, 100]), image([100 + EDGE, 100, 100, 100]));
+    assert.equal(step.edgeShare, 0);
+  });
+});
+
+describe('edgesOf — where a picture changes steeply', () => {
+  it('marks both pixels of a steep step, across and down, and nothing else', () => {
+    const rgba = new Uint8Array(3 * 3 * 4).fill(50);
+    rgba.set([50 + EDGE + 1, 50, 50, 255], 4 * 4);
+    assert.deepEqual([...edgesOf({ width: 3, height: 3, rgba })], [0, 1, 0, 1, 1, 1, 0, 1, 0]);
+    assert.deepEqual([...edgesOf({ width: 3, height: 3, rgba: new Uint8Array(36) })], [
+      0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ]);
   });
 });
 
@@ -210,7 +248,7 @@ describe('compareDirs — two capture folders, file by file', () => {
       (line) => lines.push(line),
     );
     assert.equal(ok, true);
-    assert.match(lines[0], /^one\.png\s+2×1\s+0\.00 %$/);
+    assert.match(lines[0], /^one\.png\s+2×1\s+0\.00 %\s+mean 0\.00 off edges$/);
     assert.match(lines.at(-1), /1 compared, 0 failed/);
   });
 
@@ -219,9 +257,24 @@ describe('compareDirs — two capture folders, file by file', () => {
     const after = folder(root, 'b2', { 'one.png': changed });
     const lines = [];
     assert.equal(compareDirs(before, after, 0, (line) => lines.push(line)), false);
-    assert.match(lines[0], /^one\.png\s+!! 2×1\s+50\.00 %\s+1 px in x 1–1, y 0–0, max step 80$/);
+    assert.match(
+      lines[0],
+      /^one\.png\s+!! 2×1\s+50\.00 %\s+mean 0\.00 off edges\s+1 px in x 1–1, y 0–0, max step 80$/,
+    );
     assert.equal(compareDirs(before, after, 50, () => undefined), true);
     assert.equal(compareDirs(before, after, 49.9, () => undefined), false);
+  });
+
+  it('fails a file whose pixels away from edges lie too far apart on average', () => {
+    // Every pixel 6 brighter: no edge, a mean of 6 away from edges, every pixel changed.
+    const brighter = png([[16, 16, 16, 16, 16, 16]], { colour: 2, channels: 3 });
+    const before = folder(root, 'a4', { 'one.png': plain });
+    const after = folder(root, 'b4', { 'one.png': brighter });
+    const lines = [];
+    assert.equal(compareDirs(before, after, 100, (line) => lines.push(line), 5.9), false);
+    assert.match(lines[0], /^one\.png\s+!! 2×1\s+100\.00 %\s+mean 6\.00 off edges/);
+    assert.match(lines.at(-1), /over 100 % or a mean of 5\.9/);
+    assert.equal(compareDirs(before, after, 100, () => undefined, 6), true);
   });
 
   it('fails where a file is in one folder only', () => {

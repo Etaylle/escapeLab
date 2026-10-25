@@ -11,6 +11,7 @@ import { contextAction } from './interact.js';
 import { markerTargets } from './markers.js';
 import { positionsOf, type KnownPositions } from './movement.js';
 import type { ChatLine, Frame, MapPing, RenderKit, WorldMap } from './render/frame.js';
+import { gridOf, sameGrid, snapCamera } from './render/grid.js';
 import { minimapBox, minimapLayout } from './render/hud.js';
 import { CAPTION_SECONDS, CHAT_LIFETIME_MS } from './render/overlays.js';
 import type { Sim } from './sim.js';
@@ -158,13 +159,34 @@ function textAt(source: FrameSource, s: number, dpr: number): WorldText {
   return texts.styles;
 }
 
+/**
+ * The camera of this frame and the pixel grid it puts the world on
+ * (render/grid.ts): the camera following you on whole pixels, the audience's
+ * and the one pulling back at the end where it is; and whether the grid is
+ * the one the frame before was drawn on — kept in the kit for the next.
+ */
+function framing(
+  source: FrameSource,
+  scale: number,
+  pull: number,
+): Pick<Frame, 'camera' | 'grid' | 'steady'> {
+  const { sim, canvas, kit } = source;
+  const exact = { x: sim.draw.x, y: sim.draw.y, scale };
+  const follows = !source.spectator && pull === 0;
+  const camera = follows ? snapCamera(exact, canvas.width, canvas.height) : exact;
+  const grid = gridOf(camera, canvas.width, canvas.height);
+  const steady = kit.grid !== null && sameGrid(kit.grid, grid);
+  kit.grid = grid;
+  return { camera, grid, steady };
+}
+
 /** The canvas and what lies over it this frame, the camera, the minimap and the text's size. */
 function stage(
   source: FrameSource,
   map: WorldMap,
   dpr: number,
   pull: number,
-): Pick<Frame, 'viewport' | 'camera' | 'minimap' | 'text'> {
+): Pick<Frame, 'viewport' | 'camera' | 'grid' | 'steady' | 'minimap' | 'text'> {
   const { sim, canvas, insets } = source;
   const w = canvas.width;
   const h = canvas.height;
@@ -178,8 +200,8 @@ function stage(
     bottom: insets.bottom * dpr,
     boxes: minimap === null ? [] : [minimapBox(minimap, dpr)],
   };
-  const camera = { x: sim.draw.x, y: sim.draw.y, scale };
-  return { viewport, camera, minimap, text: textAt(source, scale, dpr) };
+  const text = textAt(source, scale, dpr);
+  return { viewport, ...framing(source, scale, pull), minimap, text };
 }
 
 /** How far the light has turned red on this screen: from the escape's start; warm once won. */

@@ -6,6 +6,7 @@ import type { GraphCensus } from './world/audioCount.js';
 import type { LightProbe } from './world/gl/path.js';
 import type { MusicProbe } from './world/music.js';
 import type { RadioRender, VoiceProbe as RadioProbe } from './world/radioVoice.js';
+import type { PassStats } from './world/render/profile.js';
 import type { SpatialProbe } from './world/spatial.js';
 
 /**
@@ -57,6 +58,13 @@ export interface Probes {
   readonly audio?: AudioProbe;
   /** the crew figures in the lobby or on a title card, each with its last pose (CrewFigure.tsx) */
   readonly figures?: FigureProbe[];
+  /**
+   * what each pass of the world's picture costs a frame, ms, p50 and p95 over the last frames
+   * — there only with `?profile=1` (world/render/profile.ts)
+   */
+  readonly passes?: PassStats;
+  /** forgets the frames the pass costs were taken over */
+  resetPasses?: () => void;
 }
 
 declare global {

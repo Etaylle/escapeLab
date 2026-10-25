@@ -250,18 +250,14 @@ describe('objects — the lab’s things, in tile space', () => {
     );
   });
 
-  it('stands the furniture where light has fallen, from the atlas, lit where its tile is', () => {
+  it('leaves the furniture to the floor it is baked with (render/tiles.ts)', () => {
     const decor = [
       { kind: 'shelf' as const, x: 1, y: 1, variant: 2 },
       { kind: 'barrel' as const, x: 7, y: 3 },
     ];
-    const light = lightWith({ shown: (x) => x < 5, powered: (x, y) => x === 1 && y === 1 });
-    const frame = frameWith({ map: lab({ decor }), light });
-    const log = drawn(frame);
-    const sprites = [...(frame.kit.art.atlas.levels.get(96) ?? new Map()).entries()];
-    const shelf = sprites.find(([key]) => key === 'decor:shelf:2:lit')?.[1];
-    expect(shelf).toBeDefined();
-    expect(callsOf(log, 'drawImage')).toEqual([[shelf?.canvas, 1, 1, 1, 1]]);
+    const frame = frameWith({ map: lab({ decor }) });
+    expect(callsOf(drawn(frame), 'drawImage')).toEqual([]);
+    expect(frame.kit.art.atlas.levels.size).toBe(0);
   });
 
   it('burns an emergency lamp in a dark room — dark with the power on or the room lit', () => {

@@ -1,15 +1,21 @@
 /**
  * Pixel comparison of two capture folders, PNG by PNG under the same names —
- * the proof that a refactoring of the world's drawing changed no pixel:
+ * the proof that a refactoring of the world's drawing changed no pixel, or
+ * that one meant to leave the look alone kept it:
  *
- *   node tools/pixeldiff.mjs <before-dir> <after-dir> <max-percent>
+ *   node tools/pixeldiff.mjs <before-dir> <after-dir> <max-percent> [max-mean]
  *
  * Prints, per file, the share of pixels that differ by more than TOLERANCE
  * (2 of 255) in any channel, with the box they lie in and the largest step,
- * and fails (exit code 1) where a file's share lies above <max-percent>, where
- * the two sizes differ, or where a file is in one folder only. No dependency:
- * PNG is decoded here, with zlib's inflate and the five scanline filters, for
- * 8-bit images without interlacing — what Chromium's screenshots are.
+ * and how far the pixels away from edges differ on average — red, green and
+ * blue, of 255; a pixel lies at an edge where, in either picture, one of its
+ * four neighbours differs from it by more than EDGE in a channel: a picture
+ * moved by a fraction of a pixel changes its edges, and little else. Fails
+ * (exit code 1) where a file's share lies above <max-percent>, where its mean
+ * away from edges lies above [max-mean] when given, where the two sizes
+ * differ, or where a file is in one folder only. No dependency: PNG is
+ * decoded here, with zlib's inflate and the five scanline filters, for 8-bit
+ * images without interlacing — what Chromium's screenshots are.
  */
 import { Buffer } from 'node:buffer';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -19,6 +25,8 @@ import { inflateSync } from 'node:zlib';
 
 /** How far a channel may move, of 255, before its pixel counts as changed. */
 export const TOLERANCE = 2;
+/** How far a neighbour may differ from a pixel in a channel, of 255, before it lies at an edge. */
+export const EDGE = 24;
 
 const SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
 /** Channels per pixel by PNG colour type: grey, RGB, palette, grey + alpha, RGBA. */
@@ -220,6 +228,62 @@ function grow(box, x, y) {
 }
 
 /**
+ * Whether pixel `p` of `image` differs from its neighbour `q` by more than
+ * EDGE in red, green or blue.
+ */
+function steep({ rgba }, p, q) {
+  for (let c = 0; c < 3; c++) {
+    if (Math.abs(rgba[p * 4 + c] - rgba[q * 4 + c]) > EDGE) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** By pixel, 1 where one of its four neighbours in `image` differs from it by more than EDGE. */
+export function edgesOf(image) {
+  const { width, height } = image;
+  const edges = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x;
+      const right = x + 1 < width && steep(image, p, p + 1);
+      const down = y + 1 < height && steep(image, p, p + width);
+      if (right) {
+        edges[p] = 1;
+        edges[p + 1] = 1;
+      }
+      if (down) {
+        edges[p] = 1;
+        edges[p + width] = 1;
+      }
+    }
+  }
+  return edges;
+}
+
+/**
+ * How far the pixels of `a` and `b` lying at no edge of either differ on average, red, green
+ * and blue, of 255, and the share of pixels at an edge.
+ */
+function awayFromEdges(a, b) {
+  const edgesA = edgesOf(a);
+  const edgesB = edgesOf(b);
+  let sum = 0;
+  let count = 0;
+  for (let p = 0; p < a.width * a.height; p++) {
+    if (edgesA[p] === 0 && edgesB[p] === 0) {
+      for (let c = 0; c < 3; c++) {
+        sum += Math.abs(a.rgba[p * 4 + c] - b.rgba[p * 4 + c]);
+      }
+      count += 1;
+    }
+  }
+  const pixels = a.width * a.height;
+  return { meanAway: count === 0 ? 0 : sum / (count * 3), edgeShare: (pixels - count) / pixels };
+}
+
+/**
  * How two decoded images differ.
  *
  * @param {{ width: number, height: number, rgba: Uint8Array }} a the one before
@@ -227,14 +291,17 @@ function grow(box, x, y) {
  * @param {number} [tolerance] how far a channel may move, of 255, and its pixel still count as
  *   the same
  * @returns {{ sameSize: boolean, differing: number, share: number,
- *   box: number[] | null, maxStep: number }} the pixels changed in any channel by more than
- *   `tolerance`, their share of the image, the box they lie in (left, top, right, bottom,
- *   inclusive; null for none) and the largest step of any channel; for two sizes `sameSize`
- *   is false and the counts 0
+ *   box: number[] | null, maxStep: number, meanAway: number, edgeShare: number }} the pixels
+ *   changed in any channel by more than `tolerance`, their share of the image, the box they lie
+ *   in (left, top, right, bottom, inclusive; null for none) and the largest step of any
+ *   channel; how far the pixels at no edge of either image differ on average, red, green and
+ *   blue, of 255, and the share of pixels at an edge; for two sizes `sameSize` is false and the
+ *   counts 0
  */
 export function diffImages(a, b, tolerance = TOLERANCE) {
   if (a.width !== b.width || a.height !== b.height) {
-    return { sameSize: false, differing: 0, share: 0, box: null, maxStep: 0 };
+    const none = { differing: 0, share: 0, box: null, maxStep: 0, meanAway: 0, edgeShare: 0 };
+    return { sameSize: false, ...none };
   }
   let differing = 0;
   let maxStep = 0;
@@ -250,7 +317,8 @@ export function diffImages(a, b, tolerance = TOLERANCE) {
       box = grow(box, (i / 4) % a.width, Math.floor(i / 4 / a.width));
     }
   }
-  return { sameSize: true, differing, share: differing / (a.width * a.height), box, maxStep };
+  const share = differing / (a.width * a.height);
+  return { sameSize: true, differing, share, box, maxStep, ...awayFromEdges(a, b) };
 }
 
 /** The PNG files of a folder, by name, sorted. */
@@ -260,8 +328,11 @@ function pngsIn(dir) {
     .sort();
 }
 
-/** One file's line of the report, and whether it passes `maxPercent`. */
-function compareFile(beforeDir, afterDir, name, maxPercent) {
+/**
+ * One file's line of the report, and whether it passes: at most `maxPercent` of its pixels
+ * changed, its pixels away from edges at most `maxMean` apart on average.
+ */
+function compareFile(beforeDir, afterDir, name, { maxPercent, maxMean }) {
   const a = decodePng(readFileSync(join(beforeDir, name)), join(beforeDir, name));
   const b = decodePng(readFileSync(join(afterDir, name)), join(afterDir, name));
   const diff = diffImages(a, b);
@@ -269,14 +340,15 @@ function compareFile(beforeDir, afterDir, name, maxPercent) {
     const sizes = `${a.width}×${a.height} before, ${b.width}×${b.height} after`;
     return { line: `${name.padEnd(24)} !! sizes differ: ${sizes}`, ok: false };
   }
-  const ok = diff.share * 100 <= maxPercent;
+  const ok = diff.share * 100 <= maxPercent && diff.meanAway <= maxMean;
   const share = `${(diff.share * 100).toFixed(2)} %`.padStart(8);
   const size = `${a.width}×${a.height}`.padEnd(10);
+  const mean = `mean ${diff.meanAway.toFixed(2)} off edges`;
   const [left, top, right, bottom] = diff.box ?? [];
   const box = `x ${left}–${right}, y ${top}–${bottom}`;
   const where =
     diff.box === null ? '' : `  ${diff.differing} px in ${box}, max step ${diff.maxStep}`;
-  return { line: `${name.padEnd(24)} ${ok ? '  ' : '!!'} ${size} ${share}${where}`, ok };
+  return { line: `${name.padEnd(24)} ${ok ? '  ' : '!!'} ${size} ${share}  ${mean}${where}`, ok };
 }
 
 /**
@@ -287,10 +359,18 @@ function compareFile(beforeDir, afterDir, name, maxPercent) {
  * @param {string} afterDir the captures after
  * @param {number} maxPercent the share of changed pixels a file may have, in percent
  * @param {(line: string) => void} [log] where the report goes
+ * @param {number} [maxMean] how far apart, of 255, a file's pixels away from edges may lie on
+ *   average; no limit by default
  * @returns {boolean} whether every file passes: in both folders, of one size, at most
- *   `maxPercent` of its pixels changed
+ *   `maxPercent` of its pixels changed and those away from edges at most `maxMean` apart
  */
-export function compareDirs(beforeDir, afterDir, maxPercent, log = console.log) {
+export function compareDirs(
+  beforeDir,
+  afterDir,
+  maxPercent,
+  log = console.log,
+  maxMean = Infinity,
+) {
   const before = pngsIn(beforeDir);
   const after = new Set(pngsIn(afterDir));
   let failed = 0;
@@ -300,7 +380,7 @@ export function compareDirs(beforeDir, afterDir, maxPercent, log = console.log) 
       failed += 1;
       continue;
     }
-    const { line, ok } = compareFile(beforeDir, afterDir, name, maxPercent);
+    const { line, ok } = compareFile(beforeDir, afterDir, name, { maxPercent, maxMean });
     log(line);
     failed += ok ? 0 : 1;
   }
@@ -309,24 +389,33 @@ export function compareDirs(beforeDir, afterDir, maxPercent, log = console.log) 
     failed += 1;
   }
   const compared = before.filter((name) => after.has(name)).length;
+  const limits =
+    maxMean === Infinity ? `${maxPercent} %` : `${maxPercent} % or a mean of ${maxMean}`;
   log(
     `${'summary'.padEnd(24)} ${compared} compared, ${failed} failed ` +
-      `(over ${maxPercent} %, of two sizes or in one folder only)`,
+      `(over ${limits}, of two sizes or in one folder only)`,
   );
   return failed === 0;
 }
 
-/** The command line: two folders and the share of changed pixels a file may have, in percent. */
+/**
+ * The command line: two folders, the share of changed pixels a file may have, in percent, and
+ * how far apart its pixels away from edges may lie on average, of 255, where given.
+ */
 function main(args) {
-  const [beforeDir, afterDir, max] = args;
+  const [beforeDir, afterDir, max, mean] = args;
   const maxPercent = Number(max);
-  if (beforeDir === undefined || afterDir === undefined || !(maxPercent >= 0)) {
-    console.error('usage: node tools/pixeldiff.mjs <before-dir> <after-dir> <max-percent>');
+  const maxMean = mean === undefined ? Infinity : Number(mean);
+  if (beforeDir === undefined || afterDir === undefined || !(maxPercent >= 0) || !(maxMean >= 0)) {
+    console.error(
+      'usage: node tools/pixeldiff.mjs <before-dir> <after-dir> <max-percent> [max-mean]',
+    );
     console.error('  e.g. node tools/pixeldiff.mjs shots-before shots-after 0');
+    console.error('       node tools/pixeldiff.mjs stills-before stills-after 100 1');
     process.exitCode = 2;
     return;
   }
-  process.exitCode = compareDirs(beforeDir, afterDir, maxPercent) ? 0 : 1;
+  process.exitCode = compareDirs(beforeDir, afterDir, maxPercent, console.log, maxMean) ? 0 : 1;
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {

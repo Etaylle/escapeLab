@@ -1,10 +1,8 @@
-import { sightFrom } from '@escapelab/core';
 import { animTime } from '../anim.js';
 import { dressedFor } from '../artKit.js';
-import { bake, bakeBox, drawBaked, type Baked } from '../baked.js';
+import { bakeBox } from '../baked.js';
 import { decorGlows, decorSteams, decorVariant, drawDecorGlow } from '../decor.js';
 import { strengthAt } from '../gl/pack.js';
-import { doorsShut, lightClip } from '../light.js';
 import { AMBER, lift, rgba, TUNGSTEN, WHITE, type Rgb } from '../palette.js';
 import {
   particleAlpha,
@@ -15,6 +13,8 @@ import {
 } from '../particles.js';
 import { glowSources, lightShown, powerAt, type LightSource } from '../sources.js';
 import { drawWallPropGlow, glows, STEAM_SPOT } from '../wallProps.js';
+import { layBake } from './bakes.js';
+import { clipOf, shutKey } from './clips.js';
 import { inTiles, type Frame } from './frame.js';
 import { onLayer } from './light.js';
 
@@ -84,86 +84,39 @@ function fillPool(g: CanvasRenderingContext2D, source: LightSource, strength: nu
   g.fillRect(x - reach, y - reach, reach * 2, reach * 2);
 }
 
-/** The doors shut right now, as text. */
-function shutKey(frame: Frame): string {
-  return [...doorsShut(frame.map)].sort().join(';');
-}
-
-/** Where a light may fall — what it sees, walls and shut doors stopping it — as a path in tiles. */
-function clipOf(frame: Frame, source: LightSource, shut: string): Path2D {
-  const { clips } = frame.kit.art;
-  const key = `${source.x.toFixed(2)},${source.y.toFixed(2)},${source.reach},${shut}`;
-  const known = clips.get(key);
-  if (known !== undefined) {
-    return known;
-  }
-  if (clips.size > 256) {
-    clips.clear();
-  }
-  const sight = sightFrom(frame.map, source, source.reach, doorsShut(frame.map));
-  const { outline, walls } = lightClip(sight);
-  const path = new Path2D();
-  outline.forEach((spot, i) =>
-    i === 0 ? path.moveTo(spot.x, spot.y) : path.lineTo(spot.x, spot.y),
-  );
-  path.closePath();
-  for (const run of walls) {
-    path.rect(run.x, run.y, run.length, 1);
-  }
-  clips.set(key, path);
-  return path;
-}
-
-/** The steady faint lights baked together for the doors as they stand, anew as they change. */
-function bakedPools(
+/** The steady faint lights, from one bake for them all and the doors as they stand. */
+function laySteady(
+  ctx: CanvasRenderingContext2D,
   frame: Frame,
   steady: readonly LightSource[],
   shut: string,
-): Baked | null {
-  const { art } = frame.kit;
+): void {
   const lights = steady.map((s) => [s.x, s.y, s.colour, s.reach, s.strength.toFixed(2)]);
-  const key = JSON.stringify([frame.missionId, shut, lights]);
-  if (art.pools === null || art.pools.key !== key) {
-    const rounds = steady.map((s) => ({ x: s.x, y: s.y, r: s.reach }));
-    const box = bakeBox(frame.map, [], rounds);
-    const draw = (g: CanvasRenderingContext2D): void => {
-      g.globalCompositeOperation = 'lighter';
-      for (const source of steady) {
-        g.save();
-        g.clip(clipOf(frame, source, shut));
-        fillPool(g, source, source.strength);
-        g.restore();
-      }
-    };
-    // Into the canvas baked before, or one from the kit's maker: the DOM's, or a test's.
-    const into = art.pools?.baked?.canvas ?? art.atlas.make(1, 1);
-    art.pools = { key, baked: box === null || steady.length === 0 ? null : bake(box, draw, into) };
-  }
-  return art.pools.baked;
+  const of = JSON.stringify([frame.missionId, shut, lights]);
+  const rounds = steady.map((s) => ({ x: s.x, y: s.y, r: s.reach }));
+  const box = steady.length === 0 ? null : bakeBox(frame.map, [], rounds);
+  layBake(ctx, frame, { name: 'pools', of, box }, (g) => {
+    g.globalCompositeOperation = 'lighter';
+    for (const source of steady) {
+      g.save();
+      g.clip(clipOf(frame, source, shut));
+      fillPool(g, source, source.strength);
+      g.restore();
+    }
+  });
 }
 
-/** A light's glow at full strength where it can see, baked once for the doors as they stand. */
-function livePool(frame: Frame, source: LightSource, shut: string): Baked | null {
-  const { art } = frame.kit;
-  const key = `${source.x},${source.y},${source.reach},${source.colour.join(',')},${shut}`;
-  const known = art.livePools.get(key);
-  if (known !== undefined || art.livePools.has(key)) {
-    return known ?? null;
-  }
-  if (art.livePools.size > 64) {
-    art.livePools.clear();
-  }
+/** A light's glow at full strength where it can see, from its bake for the doors as they stand. */
+function layLive(ctx: CanvasRenderingContext2D, frame: Frame, source: LightSource, shut: string) {
+  const of = `${source.x},${source.y},${source.reach},${source.colour.join(',')},${shut}`;
   const box = bakeBox(frame.map, [], [{ x: source.x, y: source.y, r: source.reach }]);
-  const draw = (g: CanvasRenderingContext2D): void => {
+  layBake(ctx, frame, { name: `pool:${source.x},${source.y}`, of, box }, (g) => {
     g.clip(clipOf(frame, source, shut));
     fillPool(g, { ...source, strength: 1 }, 1);
-  };
-  const baked = box === null ? null : bake(box, draw, art.atlas.make(1, 1));
-  art.livePools.set(key, baked);
-  return baked;
+  });
 }
 
-/** The lights' glow: the steady ones in one baked go, the rest each at its strength now. */
+/** The lights' glow: the steady ones in one go, the rest each at its strength now. */
 function drawPools(
   ctx: CanvasRenderingContext2D,
   frame: Frame,
@@ -171,16 +124,10 @@ function drawPools(
 ): void {
   const shut = shutKey(frame);
   const steady = sources.filter((s) => s.pulse === undefined && s.flicker !== true);
-  const baked = bakedPools(frame, steady, shut);
-  if (baked !== null) {
-    drawBaked(ctx, baked);
-  }
+  laySteady(ctx, frame, steady, shut);
   for (const source of sources.filter((s) => !steady.includes(s))) {
-    const pool = livePool(frame, source, shut);
-    if (pool !== null) {
-      ctx.globalAlpha = strengthAt(source, frame.time * 1000);
-      drawBaked(ctx, pool);
-    }
+    ctx.globalAlpha = strengthAt(source, frame.time * 1000);
+    layLive(ctx, frame, source, shut);
   }
   ctx.globalAlpha = 1;
 }

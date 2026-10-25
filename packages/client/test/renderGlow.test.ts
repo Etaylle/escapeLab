@@ -41,6 +41,13 @@ function lab(parts: Partial<MapView> = {}): MapView {
   });
 }
 
+/** The pulsing lights' bakes the frame keeps: name, what each was baked of, its canvas. */
+function poolsOf(frame: Frame): [string, unknown, unknown][] {
+  return [...frame.kit.bakes.entries]
+    .filter(([name]) => name.startsWith('pool:'))
+    .map(([name, kept]) => [name, kept.of, kept.baked?.canvas]);
+}
+
 /** The colours the glow's gradients were made of, as their middles say. */
 function gradientMiddles(log: ReturnType<typeof fakeCanvas>['log']): string[] {
   return setsOf(log, 'fillStyle').flatMap((fill) =>
@@ -65,37 +72,43 @@ describe('glow — the coloured light over the darkness', () => {
   it('bakes the core’s orange once where it can see, and lays it on as it pulses', () => {
     const frame = frameWith({ map: lab(), time: 1.8 });
     const { log } = drawn(frame);
-    const core = [...frame.kit.art.livePools].find(([key]) => key.includes(REACTOR.join(',')));
-    expect(core?.[1]).toBeTruthy();
-    const laid = callEntries(log, 'drawImage').find((call) => call.args[0] === core?.[1]?.canvas);
+    const core = poolsOf(frame).filter(([, of]) => String(of).includes(REACTOR.join(',')));
+    expect(core).toHaveLength(1);
+    const canvas = core[0]?.[2];
+    expect(canvas).toBeTruthy();
+    const laid = callEntries(log, 'drawImage').find((call) => call.args[0] === canvas);
     // Added over the dark at the bottom of its pulse, 1.8 s in: not its full strength.
     expect(laid?.op).toBe('lighter');
     expect(laid?.alpha).toBeGreaterThan(0.2);
     expect(laid?.alpha).toBeLessThan(0.7);
     const later = drawn({ ...frame, time: 0.6 });
-    const again = callEntries(later.log, 'drawImage').find((c) => c.args[0] === core?.[1]?.canvas);
+    const again = callEntries(later.log, 'drawImage').find((c) => c.args[0] === canvas);
     expect(again?.alpha).not.toBe(laid?.alpha);
-    const baked = [...frame.kit.art.livePools.keys()].filter((key) => key.includes('255,122,28'));
-    expect(baked).toHaveLength(1);
+    expect(poolsOf(frame).filter(([, of]) => String(of).includes('255,122,28'))).toHaveLength(1);
   });
 
   it('bakes the steady faint lights once, and lays the bake over the picture after', () => {
     const frame = frameWith({ map: lab() });
     drawn(frame);
-    const pools = frame.kit.art.pools;
+    const pools = frame.kit.bakes.entries.get('pools');
     // The server room's racks glow steadily: baked, not drawn anew every frame.
     expect(pools?.baked).toBeTruthy();
     const { log } = drawn(frame);
-    expect(frame.kit.art.pools).toBe(pools);
+    expect(frame.kit.bakes.entries.get('pools')?.baked).toBe(pools?.baked);
     expect(callsOf(log, 'drawImage').map(([canvas]) => canvas)).toContain(pools?.baked?.canvas);
+  });
+
+  it('draws the lights’ glow straight while the zoom moves, and bakes nothing for it', () => {
+    const frame = frameWith({ map: lab(), time: 1.8, steady: false });
+    const { log } = drawn(frame);
+    expect(frame.kit.bakes.entries.size).toBe(0);
+    expect(gradientMiddles(log).length).toBeGreaterThan(0);
   });
 
   it('shows the core’s glow only where the world shows its tile', () => {
     const unseen = frameWith({ map: lab(), light: lightWith({ shown: (x) => x < 5 }) });
     const hidden = drawn(unseen);
-    expect([...unseen.kit.art.livePools.keys()].some((key) => key.includes('255,122,28'))).toBe(
-      false,
-    );
+    expect(poolsOf(unseen).some(([, of]) => String(of).includes('255,122,28'))).toBe(false);
     expect(callsOf(hidden.log, 'ellipse')).toEqual([]);
     const shown = drawn(frameWith({ map: lab() }));
     expect(callsOf(shown.log, 'ellipse').length).toBeGreaterThan(0);
@@ -146,8 +159,7 @@ describe('glow — as the world’s light takes its way', () => {
     // The core's heart and the racks' lights, but no pool: the layer lights the sources.
     expect(callsOf(below, 'ellipse').length).toBeGreaterThan(0);
     expect(callsOf(below, 'drawImage')).toEqual([]);
-    expect(frame.kit.art.pools).toBeNull();
-    expect(frame.kit.art.livePools.size).toBe(0);
+    expect(poolsOf(frame)).toEqual([]);
     expect(frame.kit.art.particles.tick).toBe(27);
   });
 

@@ -14,7 +14,7 @@ import {
   type Program,
   type Target,
 } from './programs.js';
-import { MAX_SOURCES, PROGRAMS, type ProgramName } from './shaders.js';
+import { BLOOM_THRESHOLD, MAX_SOURCES, PROGRAMS, type ProgramName } from './shaders.js';
 import { lightsOf } from './sources.js';
 
 /**
@@ -30,8 +30,6 @@ import { lightsOf } from './sources.js';
 
 /** The layer draws at most this many pixels a CSS pixel, whatever the screen's density. */
 export const MAX_DPR = 1.5;
-/** The bloom's threshold: of what small lights add, what lies above it blooms (shaders.ts). */
-const BLOOM_THRESHOLD = 0.22;
 /** How far apart the blur's taps lie, in quarter-size pixels: its width. */
 const BLOOM_SPREAD = 1.6;
 /** How strongly the bloom is added back. */

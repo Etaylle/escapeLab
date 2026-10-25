@@ -5,6 +5,9 @@ import type { CanvasMaker } from '../src/world/atlas.js';
 import type { LightPath } from '../src/world/gl/path.js';
 import type { Lamp } from '../src/world/light.js';
 import type { Frame, FrameLight, FrameLit, RenderKit } from '../src/world/render/frame.js';
+import { frameCache } from '../src/world/render/frameCache.js';
+import { gridOf } from '../src/world/render/grid.js';
+import { radialSprites } from '../src/world/render/radial.js';
 import { fakeCanvas, type FakeCanvas } from './fakeCanvas.js';
 import { mapWith } from './fixtures.js';
 
@@ -74,12 +77,14 @@ export function kitWith(overlay: FakeCanvas = fakeCanvas(800, 600, 'overlay')): 
     overlay: overlay.ctx,
     ceiling: null,
     groups: null,
-    roomLight: null,
-    hatchCut: null,
+    bakes: frameCache(),
+    radials: radialSprites(fakeSprites),
     vignette: { canvas: fakeCanvas(0, 0, 'vignette').canvas, w: 0, h: 0, dpr: 0 },
     light: canvasLight(),
     art: artKit(fakeSprites),
     still: new Map(),
+    profile: null,
+    grid: null,
   };
 }
 
@@ -95,11 +100,23 @@ export function canvasLight(): LightPath {
   };
 }
 
-/** An 800×600 canvas at 100 device pixels a tile over the middle of the lab, and `parts`. */
+/**
+ * An 800×600 canvas at 100 device pixels a tile over the middle of the lab,
+ * and `parts`; the pixel grid the camera puts the world on, steady, unless
+ * `parts` names one.
+ */
 export function frameWith(parts: Partial<Frame> = {}): Frame {
+  const frame = frameParts(parts);
+  const { camera, viewport } = frame;
+  return { ...frame, grid: parts.grid ?? gridOf(camera, viewport.w, viewport.h) };
+}
+
+/** The frame of `frameWith` before its grid. */
+function frameParts(parts: Partial<Frame>): Omit<Frame, 'grid'> {
   return {
     viewport: { w: 800, h: 600, dpr: 1, top: 0, bottom: 0, boxes: [] },
     camera: { x: 5, y: 3, scale: 100 },
+    steady: true,
     time: 0,
     now: 1_000_000,
     perf: 0,

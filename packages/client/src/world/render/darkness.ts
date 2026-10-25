@@ -1,4 +1,4 @@
-import { bake, bakeBox, drawBaked } from '../baked.js';
+import { bakeBox } from '../baked.js';
 import { coversArmed } from '../interact.js';
 import { noteMount } from '../notes.js';
 import {
@@ -15,13 +15,18 @@ import {
   type Stops,
 } from '../light.js';
 import { litGroups, warmUp, type LitGroup } from '../rooms.js';
+import { layBake } from './bakes.js';
 import { inTiles, toScreen, type Frame, type FrameLit } from './frame.js';
+import { cutStops, drawRadial, type RadialStops } from './radial.js';
 
 /**
  * The darkness over the picture (render/light.ts lays it on): a canvas of
  * its own, filled dark every frame — deeper in the last minute and all
  * through the escape — kept clear over the lit rooms and, with the power on,
- * over your room, and cut open by every light where its lamp can see.
+ * over your room, and cut open by every light where its lamp can see. A
+ * glow is cut from its sprite (radial.ts), the lights that stand still — the
+ * emergency lamps, the open hatch, a lit room through an open door — from
+ * their bakes on the frame's grid (bakes.ts); a glow out of view is not cut.
  */
 
 /** How long one turn of the escape's siren takes, s: the red light swells with it. */
@@ -33,15 +38,24 @@ const SIREN_TURN = 1.25;
  */
 const ALARM_DIM = [0.62, 0.42] as const;
 
-/** Cuts a radial glow of `radius` tiles into the darkness at (wx, wy), as its `stops` say. */
-type Punch = (wx: number, wy: number, radius: number, stops: Stops) => void;
+/** The stops of every light that cuts the darkness, as their sprites are baked. */
+const CUT = {
+  own: cutStops(OWN_GLOW_STOPS),
+  beam: cutStops(OWN_BEAM_STOPS),
+  crew: cutStops(CREW_GLOW_STOPS),
+  drone: cutStops(DRONE_BEAM_STOPS),
+  object: cutStops(objectGlowStops(1)),
+} as const;
+
+/** Cuts a radial glow `radius` tiles round (wx, wy) into the darkness, `alpha` deep. */
+type Punch = (wx: number, wy: number, radius: number, stops: RadialStops, alpha?: number) => void;
 
 /** The three ways light is cut into the darkness. */
 interface Cutters {
   /** a radial glow round a point */
   punch: Punch;
   /** a lamp's beam, its cone fading out along `stops` */
-  beam: (lit: Lit, stops: Stops) => void;
+  beam: (lit: Lit, stops: RadialStops) => void;
   /** whatever `draw` cuts, only where the lamp of `lit` can see */
   within: (lit: FrameLit, draw: () => void) => void;
 }
@@ -100,9 +114,7 @@ export function escapeTint(frame: Frame): number {
 /** A radial gradient cutting darkness `stops` deep round (x, y) out to `r`, in `g`'s space. */
 function cutGradient(
   g: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  r: number,
+  [x, y, r]: readonly [number, number, number],
   stops: Stops,
 ): CanvasGradient {
   const gradient = g.createRadialGradient(x, y, 0, x, y, r);
@@ -126,25 +138,23 @@ export function cutDarkness(cut: CanvasRenderingContext2D, frame: Frame): void {
   cut.globalCompositeOperation = 'destination-out';
   const cutters = lightCutters(cut, frame);
   cutLamps(frame, cutters);
+  cutEmergency(cut, frame);
   glowObjects(frame, cutters.punch);
   cutDrones(frame, cutters);
   // The open hatch, and a lit room through an open door, as far as each stands open.
   cutHatch(cut, frame);
-  const { beam, within } = cutters;
-  for (const { lit, open } of frame.light.spills) {
-    within(lit, () => beam(lit, SPILL_STOPS.map(([offset, depth]) => [offset, depth * open])));
-  }
+  cutSpills(cut, frame);
 }
 
-/** Fills the overlay with the darkness, breathing; returns how deep it is this frame. */
+/** Fills the overlay with the darkness, breathing, in one go; returns how deep it is this frame. */
 function fillDarkness(cut: CanvasRenderingContext2D, frame: Frame): number {
   const { w, h } = frame.viewport;
   cut.setTransform(1, 0, 0, 1, 0, 0);
-  cut.globalCompositeOperation = 'source-over';
   const base = darknessDepth(frame);
-  cut.clearRect(0, 0, w, h);
+  cut.globalCompositeOperation = 'copy';
   cut.fillStyle = `rgba(3,5,9,${base})`;
   cut.fillRect(0, 0, w, h);
+  cut.globalCompositeOperation = 'source-over';
   return base;
 }
 
@@ -152,24 +162,37 @@ function fillDarkness(cut: CanvasRenderingContext2D, frame: Frame): number {
  * Your light in the dark: a lit circle round you and a flashlight cone in
  * facing direction; everybody else's softer glow. Each lights what it can
  * see, and nothing behind a wall — so the walls cut a clean edge into the
- * circle. With the power on, your room was cleared whole before. The
- * emergency lamps open the dark a little round them; their red comes after.
+ * circle. With the power on, your room was cleared whole before.
  */
 function cutLamps(frame: Frame, { punch, beam, within }: Cutters): void {
   const own = frame.light.own;
   if (own !== null) {
     within(own, () => {
-      punch(own.lamp.x, own.lamp.y, own.lamp.glow, OWN_GLOW_STOPS);
-      beam(own, OWN_BEAM_STOPS);
+      punch(own.lamp.x, own.lamp.y, own.lamp.glow, CUT.own);
+      beam(own, CUT.beam);
     });
   }
   for (const lit of frame.light.crew) {
-    within(lit, () => punch(lit.lamp.x, lit.lamp.y, lit.lamp.glow, CREW_GLOW_STOPS));
+    within(lit, () => punch(lit.lamp.x, lit.lamp.y, lit.lamp.glow, CUT.crew));
   }
-  const dim: Stops = EMERGENCY_STOPS.map(([offset, depth]) => [offset, depth * frame.burn]);
+}
+
+/**
+ * The emergency lamps open the dark a little round them, as brightly as
+ * they burn, where each can see: each baked once for its sight.
+ */
+function cutEmergency(cut: CanvasRenderingContext2D, frame: Frame): void {
+  cut.globalAlpha = frame.burn;
   for (const { mount, lit } of frame.light.lamps) {
-    within(lit, () => punch(mount.x, mount.y, EMERGENCY_GLOW, dim));
+    const { x, y } = mount;
+    const box = bakeBox(frame.map, [], [{ x, y, r: EMERGENCY_GLOW }]);
+    layBake(cut, frame, { name: `cut:lamp:${x},${y}`, of: lit.sight, box }, (g) => {
+      g.clip(lit.clip);
+      g.fillStyle = cutGradient(g, [x, y, EMERGENCY_GLOW], EMERGENCY_STOPS);
+      g.fillRect(x - EMERGENCY_GLOW, y - EMERGENCY_GLOW, EMERGENCY_GLOW * 2, EMERGENCY_GLOW * 2);
+    });
   }
+  cut.globalAlpha = 1;
 }
 
 /**
@@ -180,28 +203,39 @@ function cutDrones(frame: Frame, { punch, beam, within }: Cutters): void {
   for (const [id, drone] of Object.entries(frame.drones)) {
     const eye = frame.light.eyes.get(id);
     if (eye === undefined) {
-      punch(drone.x, drone.y, 0.9, objectGlowStops(0.5));
+      punch(drone.x, drone.y, 0.9, CUT.object, 0.5);
       continue;
     }
-    within(eye, () => beam(eye, DRONE_BEAM_STOPS));
-    punch(drone.x, drone.y, 1.1, objectGlowStops(0.75));
+    within(eye, () => beam(eye, CUT.drone));
+    punch(drone.x, drone.y, 1.1, CUT.object, 0.75);
   }
 }
 
+/** Whether a glow `r` px round (sx, sy) lies off the canvas of `frame` altogether. */
+function offCanvas(frame: Frame, sx: number, sy: number, r: number): boolean {
+  const { w, h } = frame.viewport;
+  return sx + r < 0 || sy + r < 0 || sx - r > w || sy - r > h;
+}
+
 /**
- * How light is cut into the darkness of `cut` at this frame's zoom: a glow,
- * a beam, and the clip to what a lamp can see.
+ * How light is cut into the darkness of `cut` at this frame's zoom: a glow
+ * from its sprite, nothing for one off the canvas; a beam, its sprite cut to
+ * its cone; and the clip to what a lamp can see.
  */
 function lightCutters(cut: CanvasRenderingContext2D, frame: Frame): Cutters {
   const s = frame.camera.scale;
-  const punch: Punch = (wx, wy, radius, stops) => {
+  const { radials } = frame.kit;
+  const punch: Punch = (wx, wy, radius, stops, alpha = 1) => {
     const [sx, sy] = toScreen(frame, wx, wy);
     const r = radius * s;
-    cut.fillStyle = cutGradient(cut, sx, sy, r, stops);
-    cut.fillRect(sx - r, sy - r, r * 2, r * 2);
+    if (alpha > 0 && !offCanvas(frame, sx, sy, r)) {
+      cut.globalAlpha = alpha;
+      drawRadial(cut, radials, stops, [sx, sy, r], frame);
+      cut.globalAlpha = 1;
+    }
   };
   /** A beam from `lamp`: its cone, fading out along the gradient `stops`. */
-  const beam = ({ lamp }: Lit, stops: Stops): void => {
+  const beam = ({ lamp }: Lit, stops: RadialStops): void => {
     if (lamp.beam === null) {
       return;
     }
@@ -214,8 +248,7 @@ function lightCutters(cut: CanvasRenderingContext2D, frame: Frame): Cutters {
     cut.arc(sx, sy, r, facing - halfAngle, facing + halfAngle);
     cut.closePath();
     cut.clip();
-    cut.fillStyle = cutGradient(cut, sx, sy, r, stops);
-    cut.fillRect(sx - r, sy - r, r * 2, r * 2);
+    drawRadial(cut, radials, stops, [sx, sy, r], frame);
     cut.restore();
   };
   /** Cuts light into the darkness only where `lit` can see: walls and shut doors stop it. */
@@ -237,7 +270,7 @@ function lightCutters(cut: CanvasRenderingContext2D, frame: Frame): Cutters {
  */
 function glowObjects(frame: Frame, punch: Punch): void {
   for (const { x, y, radius, strength } of objectGlows(frame)) {
-    punch(x, y, radius, objectGlowStops(strength));
+    punch(x, y, radius, CUT.object, strength);
   }
 }
 
@@ -380,33 +413,56 @@ function clearRun(
 
 /**
  * Cuts the open hatch's light into the darkness as far as it stands open,
- * where it can see — baked once for that sight (baked.ts), so a frame
- * cuts it in one go.
+ * where it can see — baked once for that sight, so a frame cuts it in one go.
  */
 function cutHatch(cut: CanvasRenderingContext2D, frame: Frame): void {
   const exit = frame.light.exit;
   if (exit === null) {
     return;
   }
-  const { kit } = frame;
   const { lit } = exit;
-  if (kit.hatchCut?.sight !== lit.sight) {
-    const { x, y, glow: r } = lit.lamp;
-    const box = bakeBox(frame.map, [], [{ x, y, r }]);
-    const draw = (g: CanvasRenderingContext2D): void => {
+  const { x, y, glow: r } = lit.lamp;
+  const box = bakeBox(frame.map, [], [{ x, y, r }]);
+  cut.globalAlpha = exit.open;
+  layBake(cut, frame, { name: 'cut:hatch', of: lit.sight, box }, (g) => {
+    g.clip(lit.clip);
+    g.fillStyle = cutGradient(g, [x, y, r], objectGlowStops(0.95));
+    g.fillRect(x - r, y - r, r * 2, r * 2);
+  });
+  cut.globalAlpha = 1;
+}
+
+/**
+ * A lit room's light through an open door, cut into the darkness as far as
+ * the door stands open: its wedge where it can see, baked once for its sight.
+ */
+function cutSpills(cut: CanvasRenderingContext2D, frame: Frame): void {
+  for (const { lit, open } of frame.light.spills) {
+    const { x, y, beam } = lit.lamp;
+    if (beam === null) {
+      continue;
+    }
+    const box = bakeBox(frame.map, [], [{ x, y, r: beam.reach }]);
+    cut.globalAlpha = open;
+    layBake(cut, frame, { name: `cut:spill:${x},${y}`, of: lit.sight, box }, (g) => {
       g.clip(lit.clip);
-      g.fillStyle = cutGradient(g, x, y, r, objectGlowStops(0.95));
-      g.fillRect(x - r, y - r, r * 2, r * 2);
-    };
-    const into = kit.hatchCut?.baked?.canvas;
-    kit.hatchCut = { sight: lit.sight, baked: box === null ? null : bake(box, draw, into) };
+      wedge(g, lit);
+      g.fillStyle = cutGradient(g, [x, y, beam.reach], SPILL_STOPS);
+      g.fillRect(x - beam.reach, y - beam.reach, beam.reach * 2, beam.reach * 2);
+    });
+    cut.globalAlpha = 1;
   }
-  if (kit.hatchCut.baked === null) {
+}
+
+/** Clips `g` to the cone of `lit`'s beam, in `g`'s space. */
+export function wedge(g: CanvasRenderingContext2D, { lamp }: Lit): void {
+  if (lamp.beam === null) {
     return;
   }
-  cut.save();
-  inTiles(cut, frame);
-  cut.globalAlpha = exit.open;
-  drawBaked(cut, kit.hatchCut.baked);
-  cut.restore();
+  const { facing, halfAngle, reach } = lamp.beam;
+  g.beginPath();
+  g.moveTo(lamp.x, lamp.y);
+  g.arc(lamp.x, lamp.y, reach, facing - halfAngle, facing + halfAngle);
+  g.closePath();
+  g.clip();
 }

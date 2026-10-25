@@ -28,6 +28,8 @@ export const SAMPLES = 4;
 export const MAX_STEPS = 24;
 /** The glow is kept at half its value in 8 bits: light up to twice white survives to bloom. */
 export const GLOW_SCALE = 0.5;
+/** The bloom's threshold: of what small lights add, what lies above it blooms (`bright`). */
+export const BLOOM_THRESHOLD = 0.22;
 /** The darkness's colour, as the Canvas pass fills it (render/darkness.ts). */
 const DARK_RGB = '3.0, 5.0, 9.0';
 

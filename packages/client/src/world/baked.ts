@@ -1,21 +1,21 @@
+import { phaseOf, sameGrid, type PixelGrid } from './render/grid.js';
+
 /**
- * Light that seldom changes, baked: drawn once into a canvas of its own,
- * BAKE_PX pixels to a tile, which every frame then lays over the picture in
- * one go and without smoothing — a third of what a smoothed draw of the
- * same size costs, and at this many pixels a tile it does not show. The lit
- * rooms' ceiling lights and the open hatch's glow are baked this way
- * (GameWorld.tsx): baked again only as they change, in the steps of
- * `bakeStep`.
+ * Light that seldom changes, baked: drawn once into a canvas of its own on
+ * the frame's pixel grid (render/grid.ts) — at the frame's scale, its pixels
+ * where the picture's pixels lie — which every frame then copies onto the
+ * picture pixel for pixel in one go: far cheaper than drawing it there, and
+ * than a scaled copy, which the canvas has to filter. The lit rooms' ceiling
+ * lights, the open hatch's light, the emergency lamps', the light through
+ * open doors and the faint lights' glow are baked this way (render/bakes.ts):
+ * again only as they change, or for another grid. A box too large for
+ * BAKE_MAX is baked at fewer pixels a tile and drawn scaled, filtered.
  */
 
 type Spot = { x: number; y: number };
 
-/** Pixels a tile a light is baked at; fewer only where the canvas would grow past BAKE_MAX. */
-export const BAKE_PX = 32;
-/** The longest side a baked canvas may have, in pixels. */
-export const BAKE_MAX = 2048;
-/** The steps a moving share is baked in: a room warming up, the red coming, the hatch opening. */
-const STEPS = 32;
+/** The longest side a baked canvas may have, px: a larger box is baked at fewer pixels. */
+export const BAKE_MAX = 4096;
 
 /** A box of whole tiles on the map: its corner and its size, in tiles. */
 export interface TileBox {
@@ -29,6 +29,11 @@ export interface TileBox {
 export interface Baked {
   canvas: HTMLCanvasElement;
   box: TileBox;
+  /** the grid it was baked on */
+  grid: PixelGrid;
+  /** where its top-left pixel lies, in whole pixels from the whole pixel the grid's origin is at */
+  left: number;
+  top: number;
 }
 
 /** A round light: its middle and its radius, in tiles. */
@@ -73,29 +78,34 @@ export function bakeBox(
   return w > 0 && h > 0 ? { x, y, w, h } : null;
 }
 
-/** Pixels a tile `box` is baked at: BAKE_PX, or fewer where its longer side would pass BAKE_MAX. */
-export function bakeScale(box: TileBox): number {
-  return Math.max(1, Math.min(BAKE_PX, Math.floor(BAKE_MAX / Math.max(box.w, box.h))));
-}
-
-/** `share` (0 to 1) rounded to the steps a bake follows: in between, the last bake stands. */
-export function bakeStep(share: number): number {
-  return Math.round(share * STEPS) / STEPS;
+/**
+ * The grid `box` is baked on for a frame on `grid`: that grid, or — where
+ * its longer side would pass BAKE_MAX pixels — fewer pixels a tile, on whole
+ * pixels; a bake like that is drawn scaled.
+ */
+export function bakeGrid(box: TileBox, grid: PixelGrid): PixelGrid {
+  const most = BAKE_MAX / Math.max(box.w, box.h);
+  return grid.scale <= most ? grid : { scale: Math.floor(most), ox: 0, oy: 0 };
 }
 
 /**
- * Bakes what `draw` draws in tile space over `box`: into `into` where
- * given — cleared first, its size set anew only where the box needs
+ * Bakes what `draw` draws in tile space over `box` on `grid`: into `into`
+ * where given — cleared first, its size set anew only where the box needs
  * another — else into a new canvas.
  */
 export function bake(
   box: TileBox,
+  grid: PixelGrid,
   draw: (g: CanvasRenderingContext2D) => void,
   into: HTMLCanvasElement = document.createElement('canvas'),
 ): Baked {
-  const scale = bakeScale(box);
-  const width = box.w * scale;
-  const height = box.h * scale;
+  const on = bakeGrid(box, grid);
+  const s = on.scale;
+  const [px, py] = phaseOf(on);
+  const left = Math.floor(box.x * s + px);
+  const top = Math.floor(box.y * s + py);
+  const width = Math.max(1, Math.ceil((box.x + box.w) * s + px) - left);
+  const height = Math.max(1, Math.ceil((box.y + box.h) * s + py) - top);
   if (into.width !== width || into.height !== height) {
     into.width = width;
     into.height = height;
@@ -107,19 +117,28 @@ export function bake(
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.clearRect(0, 0, width, height);
   g.save();
-  g.setTransform(scale, 0, 0, scale, -box.x * scale, -box.y * scale);
+  g.setTransform(s, 0, 0, s, px - left, py - top);
   draw(g);
   g.restore();
-  return { canvas: into, box };
+  return { canvas: into, box, grid: on, left, top };
 }
 
 /**
- * Lays `baked` over `g`, whose transform is in tiles, unsmoothed; how it
- * mixes in is `g`'s to say. `g` keeps its smoothing as it was.
+ * Lays `baked` over `g` for a frame on `grid`: copied pixel for pixel where
+ * it was baked on that grid, else scaled to it. How it mixes in is `g`'s to
+ * say; `g`'s transform is as it was after.
  */
-export function drawBaked(g: CanvasRenderingContext2D, { canvas, box }: Baked): void {
-  const smooth = g.imageSmoothingEnabled;
-  g.imageSmoothingEnabled = false;
-  g.drawImage(canvas, box.x, box.y, box.w, box.h);
-  g.imageSmoothingEnabled = smooth;
+export function drawBaked(g: CanvasRenderingContext2D, baked: Baked, grid: PixelGrid): void {
+  g.save();
+  if (sameGrid(baked.grid, grid)) {
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.drawImage(baked.canvas, Math.round(grid.ox) + baked.left, Math.round(grid.oy) + baked.top);
+  } else {
+    // A pixel of the bake lies at (left - phase + i) / scale tiles from the origin.
+    const k = grid.scale / baked.grid.scale;
+    const [px, py] = phaseOf(baked.grid);
+    g.setTransform(k, 0, 0, k, grid.ox + (baked.left - px) * k, grid.oy + (baked.top - py) * k);
+    g.drawImage(baked.canvas, 0, 0);
+  }
+  g.restore();
 }

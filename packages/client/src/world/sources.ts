@@ -1,6 +1,14 @@
 import { dressedFor } from './artKit.js';
 import { EMERGENCY_GLOW } from './light.js';
-import { AMBER, EMERGENCY, PHOSPHOR, REACTOR, SERVER_BLUE, type Rgb } from './palette.js';
+import {
+  AMBER,
+  DONE_GREEN,
+  EMERGENCY,
+  PHOSPHOR,
+  REACTOR,
+  SERVER_BLUE,
+  type Rgb,
+} from './palette.js';
 import type { Frame } from './render/frame.js';
 import { warmUp } from './rooms.js';
 
@@ -31,7 +39,23 @@ export interface LightSource {
   pulse?: { periodMs: number; depth: number };
   /** coming on now: it flickers as its room's lights strike */
   flicker?: boolean;
+  /**
+   * asleep in a room without power — a screen's standby dot, a rack's LEDs,
+   * a generator's standby lamp: how strongly it glows over the dark
+   * (render/standby.ts), 0 to 1; it breathes on the light layer too
+   * (gl/sources.ts). Left out for a light awake
+   */
+  standby?: number;
 }
+
+/** Up to how far a room's power is on for a light in it still to be asleep. */
+const ASLEEP = 0.02;
+/**
+ * How strongly a light asleep glows: a screen's standby dot and a
+ * generator's lamp in full, a rack's LEDs less — racks stand in rows, and a
+ * row should glow like one rack, not like a lit room.
+ */
+const SLEEP_GLOW = { single: 1, rack: 0.4 } as const;
 
 /** How the emergency lamps burn: frameLight's `burn`, 0.7 ± 0.3 at 2.4 rad/s, as a pulse. */
 const LAMP_PULSE = { periodMs: (2 * Math.PI * 1000) / 2.4, depth: 0.6 } as const;
@@ -98,7 +122,28 @@ function screenLight(x: number, y: number, on: number): LightSource {
     reach: 1.7,
     strength: 0.07 + 0.3 * on,
   };
-  return on > 0 && on < 1 ? { ...source, flicker: true } : source;
+  if (on <= ASLEEP) {
+    return { ...source, standby: SLEEP_GLOW.single };
+  }
+  return on < 1 ? { ...source, flicker: true } : source;
+}
+
+/** A rack's LEDs, running whatever the power: cold blue, asleep in a room without it. */
+function rackLight(
+  x: number,
+  y: number,
+  light: { reach: number; strength: number },
+  on: number,
+): LightSource {
+  const source: LightSource = { x, y, colour: colourOf(SERVER_BLUE), ...light };
+  return on <= ASLEEP ? { ...source, standby: SLEEP_GLOW.rack } : source;
+}
+
+/** A generator's lamp: green while it runs, its amber standby lamp in a room without power. */
+function generatorLight(x: number, y: number, on: number): LightSource {
+  const colour = colourOf(on > 0.5 ? DONE_GREEN : AMBER);
+  const source: LightSource = { x: x + 0.36, y: y - 0.02, colour, reach: 1.2, strength: 0.16 };
+  return on <= ASLEEP ? { ...source, standby: SLEEP_GLOW.single } : source;
 }
 
 /** The lights on the walls' faces: screens and rack fronts. */
@@ -112,14 +157,15 @@ function wallSources(frame: Frame): LightSource[] {
     }
     const x = prop.x + 0.5;
     const y = prop.y + 1 + FACE_INSET;
+    const on = powerAt(frame, fx, fy, prop.room);
     if (prop.kind === 'rack') {
-      return [{ x, y, colour: colourOf(SERVER_BLUE), reach: 1.4, strength: 0.24 }];
+      return [rackLight(x, y, { reach: 1.4, strength: 0.24 }, on)];
     }
-    return [screenLight(x, y, powerAt(frame, fx, fy, prop.room))];
+    return [screenLight(x, y, on)];
   });
 }
 
-/** The lights of the furniture: racks, desks' screens, the reactor's core. */
+/** The lights of the furniture: racks, desks' screens, generators' lamps, the reactor's core. */
 function decorSources(frame: Frame): LightSource[] {
   const { dressing } = dressedFor(frame.kit.art, frame.map, frame.missionId);
   return frame.map.decor.flatMap((piece): LightSource[] => {
@@ -132,14 +178,15 @@ function decorSources(frame: Frame): LightSource[] {
       const pulse = { ...CORE_PULSE };
       return [{ x, y: y - 0.1, colour: colourOf(REACTOR), reach: 3.4, strength: 0.7, pulse }];
     }
+    const room = dressing.rooms[piece.y * dressing.width + piece.x] ?? null;
+    const on = powerAt(frame, piece.x, piece.y, room);
     if (piece.kind === 'rack') {
-      return [{ x, y, colour: colourOf(SERVER_BLUE), reach: 1.5, strength: 0.28 }];
+      return [rackLight(x, y, { reach: 1.5, strength: 0.28 }, on)];
     }
     if (piece.kind === 'desk') {
-      const room = dressing.rooms[piece.y * dressing.width + piece.x] ?? null;
-      return [screenLight(x, y - 0.25, powerAt(frame, piece.x, piece.y, room))];
+      return [screenLight(x, y - 0.25, on)];
     }
-    return [];
+    return piece.kind === 'generator' ? [generatorLight(x, y, on)] : [];
   });
 }
 
@@ -172,4 +219,9 @@ export function glowSources(frame: Frame): LightSource[] {
 /** Every coloured light of this frame: the emergency lamps, then the rest. */
 export function sourcesOf(frame: Frame): LightSource[] {
   return [...lampSources(frame), ...glowSources(frame)];
+}
+
+/** The lights asleep in rooms without power this frame, where the world shows them. */
+export function standbySources(frame: Frame): LightSource[] {
+  return glowSources(frame).filter((source) => source.standby !== undefined);
 }
