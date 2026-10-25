@@ -8,7 +8,7 @@
     "build": "vite build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "voice": "node scripts/voice.ts"
+    "voice": "node --env-file-if-exists=../../.env.local scripts/voice.ts"
   },
   "dependencies": {
     "@escapelab/core": "workspace:*",
