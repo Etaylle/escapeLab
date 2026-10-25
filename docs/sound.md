@@ -120,18 +120,20 @@ im Flur, unter der roten Lampe"), never an answer, no praise, no feelings spelle
 sign opens a run („Leitstelle an Nachtschicht.", in the Systemcheck „… an Schulungsgruppe.")
 and no other line, and a nudge names the next place in one sentence. A line says 22 words at
 most beside its call sign, in two sentences at most; a short call of three words or fewer
-(„Reaktor läuft.", „Alle raus, jetzt.") may stand beside them, three pieces in all.
-`core/test/radioLines.test.ts` holds every shipped line to that — words, sentences and pieces,
-no praise („gut gemacht", „super", „toll" …), the call sign in `radio.start` alone, nudges of
-one sentence, no „Spieler", „Crew-Mitglied" or „Bediener", nothing from the manuals' code
-tables (E23, „Legende", „Zeile"), a line for every station — and Blackout and the Systemcheck
-to a start with the call sign, a nudge for every station, a line after every solve but the
-last, and the escape.
+(„Reaktor läuft.", „Alle raus, jetzt.") may stand beside them, three pieces in all. Read by a
+deep, trailer-like voice, the lines stay plain: only the escape may call out with an
+exclamation mark. `core/test/radioLines.test.ts` holds every shipped line to that — words,
+sentences and pieces, no praise („gut gemacht", „super", „toll" …), the call sign in
+`radio.start` alone, nudges of one sentence, no exclamation mark but on the way out, no
+„Spieler", „Crew-Mitglied" or „Bediener", nothing from the manuals' code tables (E23,
+„Legende", „Zeile"), a line for every station — and Blackout and the Systemcheck to a start
+with the call sign, a nudge for every station, a line after every solve but the last, and the
+escape.
 
 ```sh
 pnpm --filter @escapelab/client voice              # record the lines that have no recording yet
-pnpm --filter @escapelab/client voice --fresh      # every synthetic line anew, a person's stay
-pnpm --filter @escapelab/client voice --fresh=all  # every line anew, a person's recordings too
+pnpm --filter @escapelab/client voice --fresh      # every synthetic line this voice did not make
+pnpm --filter @escapelab/client voice --fresh=all  # … and a person's recordings too
 VOICE_MODEL=de_DE-thorsten-medium pnpm --filter @escapelab/client voice --fresh  # another Piper voice
 VOICE_ENGINE=say pnpm --filter @escapelab/client voice --fresh   # the Mac's own voice (Anna)
 ```
@@ -158,20 +160,57 @@ nothing: espeak-ng reads „Pult A" and „Pult B" as „Pult Ah" and „Pult Be
 line was phonemized to find these.
 Each WAV goes to AAC with `afconvert -f m4af -d aac -b 48000` into
 `packages/client/public/voice/<first 12 hex of the line's SHA-1>.m4a`, and `manifest.json`
-lists `{ [id]: { text, ms, missions } }`, with `opens: true` on a run's first line. A recording
-no line needs any more is deleted. The files are committed (47 lines, 1.6 MB; the longest
-speaks 9.5 s in 62 kB); `test/voiceLines.test.ts` fails, naming the command, when a shipped line
-has no recording, when a file is over 150 kB or the folder over 3 MB, and when a recording
-takes less than 200 ms or more than 700 ms a word.
+lists `{ [id]: { text, ms, missions, file } }`, `file` naming the recording the radio plays — an
+.m4a or an .mp3 — with `opens: true` on a run's first line. A synthetic recording carries
+`render`, a hash of what made it: the engine, the voice and its settings, the words as the engine
+was given them. `--fresh` makes anew only what the chosen voice would make differently, so a
+render cut short goes on where it stopped and spends nothing twice, and the list is written
+after every line. A recording no line needs any more is deleted. The files are committed (47
+lines, 1.6 MB; the longest speaks 9.5 s in 62 kB); `test/voiceLines.test.ts` fails, naming the
+command, when a shipped line has no recording, when a file is over 150 kB or the folder over
+6 MB — raised from 3 MB for ElevenLabs' MP3, some 12 kB a second — and when a recording takes
+less than 200 ms or more than 700 ms a word.
+
+**ElevenLabs.** `VOICE_ENGINE=elevenlabs` has an ElevenLabs voice read the lines through the
+official SDK, `@elevenlabs/elevenlabs-js`, a dev dependency of the client that never ships,
+written as ElevenLabs' text-to-speech skill shows it (`scripts/elevenlabs.ts`). The SDK reads
+`ELEVENLABS_API_KEY`: from the environment, or from the repo's `.env.local`, which the
+ElevenLabs CLI writes (`npx -y @elevenlabs/cli@latest onboard init`) and git ignores; the script
+puts that one value into its environment and prints it nowhere. The model is `eleven_v4`,
+ElevenLabs' newest and the skill's default, which speaks German among some 90 languages; it
+takes only stability (0.5) and similarity (0.75), so style and speaker boost are left out, and
+German is enforced with `language_code: de` (`ELEVENLABS_MODEL` names another model: style 0.2
+and speaker boost go to v2 and v3, and `eleven_multilingual_v2` takes no language code). The
+voice is „Helmut - German Epic Trailer Voice" (`g1jpii0iyvtRs8fqXsd1`) where `ELEVENLABS_VOICE`
+names none, by id or exact name. Each line comes as `mp3_44100_96` into
+`public/voice/<id>.mp3`; the requests go one after the other, 300 ms apart, and one turned away
+as too many (429) waits the seconds its `retry-after` asks before it goes again. Before it
+starts the script prints how many characters it will spend, and asks nothing.
+
+```sh
+pnpm --filter @escapelab/client voice --list-voices   # the account's voices: name, id, labels
+VOICE_SAMPLES_DIR=~/Desktop pnpm --filter @escapelab/client voice \
+  --sample g1jpii0iyvtRs8fqXsd1 "Reaktor läuft. Alle raus, jetzt."   # one line, to listen to
+VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice --fresh   # every line, by Helmut
+```
+
+The free plan gives 10,000 credits a month; every shipped line read once is 3,983 characters,
+some 4,000 of them, and a run that stops short spends nothing twice. On the free plan ElevenLabs
+asks for attribution: wherever the game is shown with these recordings, name ElevenLabs
+(elevenlabs.io) as the voice's source.
 
 **A person's voice.** The page `/record`, which no menu links to, shows one line at a time in
-large type, records it from the microphone, trims the silence at both ends to 120 ms in the
-browser and plays the take back for a retake or „Speichern". Saving sends it as a 44.1 kHz mono
-WAV to the server's `POST /voice/:id` — there only with `ALLOW_RECORD=1`, as `pnpm dev` sets
-it, 404 otherwise, 8 MB at most — which converts it with `afconvert` into `public/voice/<id>.m4a`
-and marks the line's manifest entry `source: 'human'` with its new length. The game plays
-whatever the manifest names, so a person's recordings replace the synthetic ones line by line,
-and the voice script keeps them — under `--fresh` too — until `--fresh=all` replaces them.
+large type with its number and its text to copy („Text kopieren", or marked in a field where
+the browser keeps the clipboard shut), records it from the microphone, trims the silence at both
+ends to 120 ms in the browser and plays the take back for a retake or „Speichern"; a file made
+elsewhere — in ElevenLabs' web app, say — can be dropped on the line's zone instead („Audiodatei
+ablegen": mp3, m4a or wav; WebM not, which afconvert cannot read). Either goes to the server's
+`POST /voice/:id` — there only with `ALLOW_RECORD=1`, as `pnpm dev` sets it, 404 otherwise, 8 MB
+at most — which keeps an MP3 or an M4A as it came and converts a WAV with `afconvert`, and marks
+the line's manifest entry with its file, its decoded length and `source: 'human'` or `'upload'`.
+The game plays whatever the manifest names, so a person's recordings replace the synthetic ones
+line by line, and the voice script keeps them — under `--fresh` too — until `--fresh=all`
+replaces them.
 
 Where the model cannot be fetched — no network — the script says what to run once by hand,
 and VOICE_ENGINE=say still reads the lines with the Mac's Anna (`say -v Anna -r 190`, a dash, a
@@ -277,10 +316,12 @@ crossfades, sounds let go), `test/spatial.test.ts` (pan, gain, muffle, steps, th
 chirp), `test/radioVoice.test.ts` (the chain, the shaper's distortion, the static's level, the
 speech, the Leitstelle's opening, ducking, preloading, a line's airtime, the offline renders),
 `test/voiceLines.test.ts` (the recordings against the missions, their pace and sizes, the
-voice's choice, what Piper and `say` are given to read, a person's recordings kept),
-`test/record.test.tsx` and `test/recordWav.test.ts` (the /record page's lines, its states, its
-buttons, the trim and the WAV), `server/test/voiceRecording.test.ts` (the switch, the size limit,
-a WAV converted, the manifest), `test/music.test.ts` (pressure,
+voice's choice, what Piper and `say` are given to read, what a run keeps and makes anew),
+`test/elevenlabs.test.ts` (the key, the voices, the request, the MP3, the retry on 429, the gap;
+with a client of its own, no request leaves), `test/record.test.tsx` and `test/recordWav.test.ts`
+(the /record page's lines, its states, its buttons, the files it takes, the trim and the WAV),
+`server/test/voiceRecording.test.ts` (the switch, the size limit, a WAV converted, an MP3 and an
+M4A kept, WebM turned away, the manifest), `test/music.test.ts` (pressure,
 layers, beats, the pad, the samples, endings) and `test/audioKit.test.ts` (the budget, the
 loops, the samples, the census); `core/test/radioLines.test.ts` checks the lines themselves.
 

@@ -77,6 +77,8 @@ describe('StaticSite', () => {
       'manifest.webmanifest': '{"name":"EscapeLab"}',
       'icon.svg': '<svg xmlns="http://www.w3.org/2000/svg"/>',
       'assets/index-1.js': 'export {};',
+      'voice/abc.m4a': 'ftyp',
+      'voice/abc.mp3': 'ID3',
     });
     const served = (url: string): Record<string, string> => {
       const { res, headers } = fakeResponse();
@@ -93,6 +95,8 @@ describe('StaticSite', () => {
       'cache-control': 'no-cache',
     });
     expect(served('/icon.svg')['content-type']).toBe('image/svg+xml');
+    expect(served('/voice/abc.m4a')['content-type']).toBe('audio/mp4');
+    expect(served('/voice/abc.mp3')['content-type']).toBe('audio/mpeg');
     expect(served('/assets/index-1.js')['cache-control']).toBe(
       'public, max-age=31536000, immutable',
     );

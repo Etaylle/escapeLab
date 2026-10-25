@@ -21,6 +21,9 @@ const MIME: Record<string, string> = {
   '.webp': 'image/webp',
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
+  // Mission control's recordings (public/voice/): an <audio> element plays only what it knows.
+  '.m4a': 'audio/mp4',
+  '.mp3': 'audio/mpeg',
 };
 
 export class StaticSite {

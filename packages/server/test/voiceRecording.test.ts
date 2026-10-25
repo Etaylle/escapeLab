@@ -16,6 +16,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission } from '@escapelab/core';
 import {
   afconvert,
+  audioKind,
+  decodedMs,
   MAX_RECORDING_BYTES,
   recordingAllowed,
   serveVoiceRecording,
@@ -23,6 +25,7 @@ import {
   VoiceDesk,
   wavLength,
   type Convert,
+  type Measure,
 } from '../src/voiceRecording.js';
 
 const SHIPPED = fileURLToPath(new URL('../../../missions', import.meta.url));
@@ -33,6 +36,9 @@ const blackout = missions.find((mission) => mission.id === 'blackout');
 const START = blackout?.radio.start ?? '';
 const NUDGE = blackout?.puzzles[0]?.nudges[0] ?? '';
 
+/** 0.75 s of a 440 Hz tone as an MP3 (64 kbit/s, made once with LAME): 0.784 s decoded. */
+const TONE_MP3 = readFileSync(new URL('fixtures/tone.mp3', import.meta.url));
+
 /** Whether this machine converts for real: afconvert comes with macOS, CI's Linux has none. */
 const HAS_AFCONVERT = existsSync('/usr/bin/afconvert');
 
@@ -41,6 +47,9 @@ const fakeConvert: Convert = (wav, m4a) => {
   writeFileSync(m4a, Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypM4A ')]));
   return Promise.resolve();
 };
+
+/** A stand-in for decoding where afconvert is missing: every file speaks 1234 ms. */
+const fakeMeasure: Measure = () => Promise.resolve(1234);
 
 /** A WAV of `seconds` of a 440 Hz tone: 16-bit PCM, one channel, at `rate`. */
 function toneWav(seconds: number, rate = 44100): Buffer {
@@ -104,6 +113,8 @@ async function ask(desk: VoiceDesk | null, req: IncomingMessage): Promise<Answer
 }
 
 const post = (id: string, wav: Buffer): IncomingMessage => request('POST', `/voice/${id}`, [wav]);
+const upload = (id: string, file: Buffer): IncomingMessage =>
+  request('POST', `/voice/${id}?source=upload`, [file]);
 
 let dir = '';
 const manifestFile = (): string => join(dir, 'manifest.json');
@@ -112,9 +123,15 @@ const manifest = (): Record<string, Record<string, unknown>> =>
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'escapelab-voice-test-'));
+  const start = voiceId(START);
   const entries = {
-    [voiceId(START)]: { text: START, ms: 9000, missions: ['blackout'], opens: true },
-    ffffffffffff: { text: 'Eine andere Zeile.', ms: 1200, missions: ['systemcheck'] },
+    [start]: { text: START, ms: 9000, missions: ['blackout'], opens: true, file: `${start}.m4a` },
+    ffffffffffff: {
+      text: 'Eine andere Zeile.',
+      ms: 1200,
+      missions: ['systemcheck'],
+      file: 'ffffffffffff.m4a',
+    },
   };
   writeFileSync(manifestFile(), `${JSON.stringify(entries, null, 2)}\n`);
 });
@@ -123,8 +140,10 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-const desk = (convert: Convert = HAS_AFCONVERT ? afconvert : fakeConvert): VoiceDesk =>
-  new VoiceDesk(dir, () => missions, convert);
+const desk = (
+  convert: Convert = HAS_AFCONVERT ? afconvert : fakeConvert,
+  measure: Measure = HAS_AFCONVERT ? decodedMs : fakeMeasure,
+): VoiceDesk => new VoiceDesk(dir, () => missions, convert, measure);
 
 describe('the switch for recordings', () => {
   it('is on with ALLOW_RECORD=1 alone, off unset or 0, and refuses anything else', () => {
@@ -135,10 +154,12 @@ describe('the switch for recordings', () => {
     expect(() => recordingAllowed({ ALLOW_RECORD: 'yes' })).toThrow(/ALLOW_RECORD=yes/);
   });
 
-  it('answers 404 to a recording while it is off, and leaves the folder be', async () => {
-    const answer = await ask(null, post(voiceId(START), toneWav(0.5)));
-    expect(answer?.status).toBe(404);
-    expect(String(answer?.body['error'])).toMatch(/ALLOW_RECORD=1/);
+  it('answers 404 to a recording or a file while it is off, and leaves the folder be', async () => {
+    for (const req of [post(voiceId(START), toneWav(0.5)), upload(voiceId(START), TONE_MP3)]) {
+      const answer = await ask(null, req);
+      expect(answer?.status).toBe(404);
+      expect(String(answer?.body['error'])).toMatch(/ALLOW_RECORD=1/);
+    }
     expect(readdirSync(dir)).toEqual(['manifest.json']);
   });
 
@@ -151,11 +172,14 @@ describe('the switch for recordings', () => {
   });
 });
 
-describe('a recording sent in', () => {
+describe('a take recorded on the page', () => {
   it('is converted into the folder under its line’s id, the manifest naming a person', async () => {
     const id = voiceId(START);
     const answer = await ask(desk(), post(id, toneWav(0.6)));
-    expect(answer).toEqual({ status: 200, body: { id, ms: 600, source: 'human' } });
+    expect(answer).toEqual({
+      status: 200,
+      body: { id, ms: 600, source: 'human', file: `${id}.m4a` },
+    });
     const m4a = readFileSync(join(dir, `${id}.m4a`));
     expect(m4a.toString('ascii', 4, 8)).toBe('ftyp');
     if (HAS_AFCONVERT) {
@@ -169,11 +193,13 @@ describe('a recording sent in', () => {
       missions: ['blackout'],
       opens: true,
       source: 'human',
+      file: `${id}.m4a`,
     });
     expect(manifest()['ffffffffffff']).toEqual({
       text: 'Eine andere Zeile.',
       ms: 1200,
       missions: ['systemcheck'],
+      file: 'ffffffffffff.m4a',
     });
     expect(readdirSync(dir).sort()).toEqual([`${id}.m4a`, 'manifest.json']);
   });
@@ -182,17 +208,26 @@ describe('a recording sent in', () => {
     const id = voiceId(NUDGE);
     const answer = await ask(desk(fakeConvert), post(id, toneWav(1.25)));
     expect(answer?.status).toBe(200);
-    const entry = { text: NUDGE, ms: 1250, missions: ['blackout'], source: 'human' };
-    expect(manifest()[id]).toEqual(entry);
+    expect(manifest()[id]).toEqual({
+      text: NUDGE,
+      ms: 1250,
+      missions: ['blackout'],
+      source: 'human',
+      file: `${id}.m4a`,
+    });
     const ids = Object.keys(manifest());
     expect(ids).toEqual([...ids].sort());
     expect(readFileSync(manifestFile(), 'utf8')).toMatch(/\n$/);
   });
 
-  it('refuses an id that is none, and a line no shipped mission says', async () => {
+  it('refuses an id or a source that is none, and a line no shipped mission says', async () => {
     for (const wrong of ['manifest.json', voiceId(START).toUpperCase(), '..']) {
       expect((await ask(desk(), post(wrong, toneWav(0.2))))?.status, wrong).toBe(400);
     }
+    const strange = request('POST', `/voice/${voiceId(START)}?source=robot`, [toneWav(0.2)]);
+    const refused = await ask(desk(), strange);
+    expect(refused?.status).toBe(400);
+    expect(String(refused?.body['error'])).toMatch(/source=robot.*source=upload/);
     const nobody = await ask(desk(), post('0123456789ab', toneWav(0.2)));
     expect(nobody?.status).toBe(404);
     expect(String(nobody?.body['error'])).toMatch(/0123456789ab/);
@@ -207,20 +242,19 @@ describe('a recording sent in', () => {
     const streamed = await ask(desk(), request('POST', `/voice/${id}`, halves, false));
     expect(streamed?.status).toBe(413);
     expect(String(streamed?.body['error'])).toMatch(/8 MB/);
+    const file = request('POST', `/voice/${id}?source=upload`, [big]);
+    expect((await ask(desk(), file))?.status).toBe(413);
     expect(manifest()[id]?.['source']).toBeUndefined();
   });
 
-  it('refuses what is no PCM WAV, saying what is wrong', async () => {
+  it('refuses a WAV that is no PCM, saying what is wrong', async () => {
     const id = voiceId(START);
     const float = toneWav(0.2);
     float.writeUInt16LE(3, 20);
     const empty = toneWav(0);
-    const answers = await Promise.all(
-      [Buffer.from('ID3 not a wave at all'), float, empty].map((wav) => ask(desk(), post(id, wav))),
-    );
-    expect(answers.map((answer) => answer?.status)).toEqual([400, 400, 400]);
+    const answers = await Promise.all([float, empty].map((wav) => ask(desk(), post(id, wav))));
+    expect(answers.map((answer) => answer?.status)).toEqual([400, 400]);
     expect(answers.map((answer) => answer?.body['error'])).toEqual([
-      'Keine WAV-Datei: Der RIFF-Kopf fehlt.',
       'Keine PCM-Aufnahme: Angenommen wird nur unkomprimiertes WAV.',
       'Die Aufnahme ist leer.',
     ]);
@@ -254,6 +288,98 @@ describe('a recording sent in', () => {
   });
 });
 
+describe('a file put on the page', () => {
+  it('keeps an MP3 as it came, its decoded length noted, the line’s earlier M4A gone', async () => {
+    const id = voiceId(START);
+    writeFileSync(join(dir, `${id}.m4a`), 'the synthetic voice');
+    const answer = await ask(desk(), upload(id, TONE_MP3));
+    const ms = HAS_AFCONVERT ? 784 : 1234;
+    expect(answer).toEqual({ status: 200, body: { id, ms, source: 'upload', file: `${id}.mp3` } });
+    expect(readFileSync(join(dir, `${id}.mp3`)).equals(TONE_MP3)).toBe(true);
+    expect(readdirSync(dir).sort()).toEqual([`${id}.mp3`, 'manifest.json']);
+    expect(manifest()[id]).toEqual({
+      text: START,
+      ms,
+      missions: ['blackout'],
+      opens: true,
+      source: 'upload',
+      file: `${id}.mp3`,
+    });
+  });
+
+  it('keeps an M4A as it came, and lets go of an MP3 the line had before', async () => {
+    const id = voiceId(NUDGE);
+    const work = mkdtempSync(join(tmpdir(), 'escapelab-m4a-'));
+    try {
+      const wav = join(work, 'tone.wav');
+      const m4a = join(work, 'tone.m4a');
+      writeFileSync(wav, toneWav(0.5));
+      await (HAS_AFCONVERT ? afconvert : fakeConvert)(wav, m4a);
+      writeFileSync(join(dir, `${id}.mp3`), 'an earlier file');
+      const sent = readFileSync(m4a);
+      const answer = await ask(desk(), upload(id, sent));
+      expect(answer?.status).toBe(200);
+      expect(answer?.body['file']).toBe(`${id}.m4a`);
+      expect(readFileSync(join(dir, `${id}.m4a`)).equals(sent)).toBe(true);
+      expect(existsSync(join(dir, `${id}.mp3`))).toBe(false);
+      const ms = Number(answer?.body['ms']);
+      expect(HAS_AFCONVERT ? Math.abs(ms - 500) <= 30 : ms === 1234, `${ms} ms`).toBe(true);
+      expect(manifest()[id]?.['source']).toBe('upload');
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+  });
+
+  it('converts a WAV, as a take, but names it a file put there', async () => {
+    const id = voiceId(START);
+    const answer = await ask(desk(fakeConvert), upload(id, toneWav(0.8)));
+    expect(answer?.body).toEqual({ id, ms: 800, source: 'upload', file: `${id}.m4a` });
+  });
+
+  it('turns away WebM, which afconvert cannot read, and whatever is no audio', async () => {
+    const id = voiceId(START);
+    const webm = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81]);
+    const answers = await Promise.all(
+      [webm, Buffer.from('not audio at all')].map((bytes) => ask(desk(), upload(id, bytes))),
+    );
+    expect(answers.map((answer) => answer?.status)).toEqual([415, 415]);
+    expect(answers.map((answer) => answer?.body['error'])).toEqual([
+      'WebM kann afconvert nicht lesen: Angenommen werden mp3, m4a oder wav.',
+      'Keine Audiodatei: Angenommen werden mp3, m4a oder wav.',
+    ]);
+    expect(readdirSync(dir)).toEqual(['manifest.json']);
+  });
+
+  it('turns away an MP3 that does not decode, and leaves nothing behind', async () => {
+    const before = readFileSync(manifestFile(), 'utf8');
+    const deaf: Measure = () => Promise.reject(new Error('Couldn’t open input file'));
+    const broken = Buffer.concat([Buffer.from('ID3'), Buffer.alloc(64)]);
+    const answer = await ask(desk(fakeConvert, deaf), upload(voiceId(START), broken));
+    expect(answer?.status).toBe(400);
+    expect(answer?.body['error']).toBe('Die Datei ließ sich nicht lesen: Couldn’t open input file');
+    expect(readdirSync(dir)).toEqual(['manifest.json']);
+    expect(readFileSync(manifestFile(), 'utf8')).toBe(before);
+  });
+});
+
+describe('the kind of a file', () => {
+  it('is told by its first bytes', () => {
+    expect(audioKind(toneWav(0.01))).toBe('wav');
+    expect(audioKind(TONE_MP3)).toBe('mp3');
+    expect(audioKind(Buffer.from('ID3\u0004\u0000'))).toBe('mp3');
+    expect(audioKind(Buffer.from([0, 0, 0, 32, ...Buffer.from('ftypM4A ')]))).toBe('m4a');
+    expect(audioKind(Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0]))).toBe('webm');
+  });
+
+  it('is none for AAC without a box, for text, and for too little', () => {
+    expect(audioKind(Buffer.from([0xff, 0xf1, 0x50, 0x80]))).toBeNull();
+    expect(audioKind(Buffer.from('RIFF....AVI LIST'))).toBeNull();
+    expect(audioKind(Buffer.from('hello'))).toBeNull();
+    expect(audioKind(Buffer.alloc(0))).toBeNull();
+  });
+});
+
+
 describe('a WAV’s length', () => {
   it('comes from its byte rate and its data, the chunks in any order', () => {
     expect(wavLength(toneWav(1.5))).toEqual({ ok: true, ms: 1500 });
@@ -265,6 +391,24 @@ describe('a WAV’s length', () => {
     const data = tone.subarray(36);
     const reordered = Buffer.concat([tone.subarray(0, 12), odd, data, fmt]);
     expect(wavLength(reordered)).toEqual({ ok: true, ms: 500 });
+  });
+
+  it('reads PCM in the extensible format, as afconvert writes a decoded AAC, and no float', () => {
+    /** The tone with a 40-byte fmt chunk: format 0xFFFE, the sub-format's first word `sub`. */
+    const extensible = (sub: number): Buffer => {
+      const tone = toneWav(0.5);
+      const fmt = Buffer.alloc(48);
+      fmt.write('fmt ', 0, 'ascii');
+      fmt.writeUInt32LE(40, 4);
+      tone.copy(fmt, 8, 20, 36);
+      fmt.writeUInt16LE(0xfffe, 8);
+      fmt.writeUInt16LE(22, 24);
+      fmt.writeUInt16LE(sub, 32);
+      const filler = Buffer.concat([Buffer.from('FLLR'), Buffer.from([4, 0, 0, 0, 0, 0, 0, 0])]);
+      return Buffer.concat([tone.subarray(0, 12), fmt, filler, tone.subarray(36)]);
+    };
+    expect(wavLength(extensible(1))).toEqual({ ok: true, ms: 500 });
+    expect(wavLength(extensible(3)).ok).toBe(false);
   });
 
   it('counts only the data that came, where the header promises more', () => {

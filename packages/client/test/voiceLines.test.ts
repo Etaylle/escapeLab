@@ -4,14 +4,18 @@ import { describe, expect, it } from 'vitest';
 import {
   engineOf,
   entryOf,
+  fileOf,
   freshOf,
   keeps,
   MANIFEST_FILE,
+  MAX_FILE_BYTES,
+  MAX_FOLDER_BYTES,
   modelUrl,
   PAUSE_MS,
   PIPER_MODEL,
   piperText,
   radioTexts,
+  renderOf,
   sayText,
   shippedLines,
   shippedMissions,
@@ -20,18 +24,18 @@ import {
   VOICES_URL,
   voiceId,
   type Entry,
+  type Fresh,
+  type Voice,
 } from '../scripts/voice.js';
 import { idsOf, openersOf } from '../src/world/radioVoice.js';
 
 /** What to do when a shipped line has no recording. */
 const REMEDY = 'record it on a Mac: pnpm --filter @escapelab/client voice';
-const MAX_FILE_BYTES = 150 * 1024;
-const MAX_FOLDER_BYTES = 3 * 1024 * 1024;
 /** How long a recorded word takes, ms: no faster than a 20-word line in 4 s, none drawn out. */
 const MS_PER_WORD = { min: 200, max: 700 } as const;
 
 const manifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8')) as Record<string, Entry>;
-const recordings = readdirSync(VOICE_DIR).filter((name) => name.endsWith('.m4a'));
+const recordings = readdirSync(VOICE_DIR).filter((name) => /\.(m4a|mp3)$/.test(name));
 
 const wordsIn = (line: string): number =>
   line.split(/\s+/).filter((word) => /[\p{L}\p{N}]/u.test(word)).length;
@@ -47,18 +51,21 @@ describe('mission control’s recorded lines', () => {
       expect(entry, `${said} has no recording — ${REMEDY}`).toBeDefined();
       expect(entry?.text, `the recording ${id} says something else — ${REMEDY}`).toBe(text);
       expect(entry?.missions).toEqual([...missions].sort());
-      const file = join(VOICE_DIR, `${id}.m4a`);
-      expect(existsSync(file), `${id}.m4a is missing for „${text}" — ${REMEDY}`).toBe(true);
+      expect([fileOf('piper', id), fileOf('elevenlabs', id)]).toContain(entry?.file);
+      const file = join(VOICE_DIR, entry?.file ?? '');
+      expect(existsSync(file), `${entry?.file} is missing for „${text}" — ${REMEDY}`).toBe(true);
     }
   });
 
   it('keeps no recording that no shipped line needs any more', () => {
     const needed = new Set([...shippedLines().keys()].map(voiceId));
     expect(Object.keys(manifest).filter((id) => !needed.has(id)), REMEDY).toEqual([]);
-    expect(recordings.filter((name) => !needed.has(name.slice(0, -4))), REMEDY).toEqual([]);
+    const named = new Set(Object.values(manifest).map((entry) => entry.file));
+    expect(recordings.filter((name) => !named.has(name)), REMEDY).toEqual([]);
   });
 
-  it('keeps every file under 150 kB and the folder under 3 MB', () => {
+  it('keeps every file under 150 kB and the folder under 6 MB, room for MP3', () => {
+    expect([MAX_FILE_BYTES, MAX_FOLDER_BYTES]).toEqual([150 * 1024, 6 * 1024 * 1024]);
     const sizes = recordings.map((name) => statSync(join(VOICE_DIR, name)).size);
     for (const [i, size] of sizes.entries()) {
       expect(size, `${recordings[i]} is ${size} bytes`).toBeLessThanOrEqual(MAX_FILE_BYTES);
@@ -142,12 +149,13 @@ describe('the lines the script reads', () => {
 });
 
 describe('the voice that reads them', () => {
-  it('is Piper unless VOICE_ENGINE asks for the Mac’s own, and refuses any other', () => {
+  it('is Piper unless VOICE_ENGINE asks for the Mac or ElevenLabs, and refuses any other', () => {
     expect(engineOf(undefined)).toBe('piper');
     expect(engineOf('')).toBe('piper');
     expect(engineOf('piper')).toBe('piper');
     expect(engineOf('say')).toBe('say');
-    expect(() => engineOf('espeak')).toThrow(/VOICE_ENGINE="espeak".*"piper".*"say"/);
+    expect(engineOf('elevenlabs')).toBe('elevenlabs');
+    expect(() => engineOf('espeak')).toThrow(/"espeak".*"piper".*"say".*"elevenlabs"/);
   });
 
   it('fetches a Piper voice from where the Piper voices keep it, and refuses a stray name', () => {
@@ -228,44 +236,96 @@ describe('a line as Piper reads it', () => {
   });
 });
 
-describe('a person’s recordings, as the script meets them', () => {
+describe('what a run keeps, and what it makes anew', () => {
+  const TEXT = 'Reaktor läuft.';
   const line = { missions: ['blackout'], opens: false };
-  const synthetic: Entry = { text: 'Reaktor läuft.', ms: 1400, missions: ['blackout'] };
-  const human: Entry = { ...synthetic, source: 'human' };
+  /** A client that must never be called: renderOf only reads the voice. */
+  const NO_CLIENT = {
+    voices: { getAll: () => Promise.reject(new Error('no call')) },
+    textToSpeech: { convert: () => Promise.reject(new Error('no call')) },
+  };
+  const piper: Voice = { engine: 'piper', name: PIPER_MODEL, model: '/cache/thorsten.onnx' };
+  const eleven = (model: string, voiceId = 'g1jpii0iyvtRs8fqXsd1'): Voice => ({
+    engine: 'elevenlabs',
+    name: 'Helmut',
+    voice: { client: NO_CLIENT, voiceId, model },
+  });
+  const render = renderOf(piper, TEXT);
+  const base = { text: TEXT, ms: 1400, missions: ['blackout'], file: 'aaaaaaaaaaaa.m4a' };
+  const made: Entry = { ...base, render };
+  const other: Entry = { ...base, render: 'ffffffffffff' };
+  const unmarked: Entry = { ...base };
+  const human: Entry = { ...base, source: 'human' };
+  const upload: Entry = { ...base, source: 'upload', file: 'aaaaaaaaaaaa.mp3' };
+  const kept = (entry: Entry | undefined, fresh: Fresh, text = TEXT, filed = true): boolean =>
+    keeps(entry, text, filed, fresh, render);
 
-  it('keeps every recording that says its line without --fresh, a synthetic one too', () => {
-    expect(keeps(synthetic, 'Reaktor läuft.', true, 'none')).toBe(true);
-    expect(keeps(human, 'Reaktor läuft.', true, 'none')).toBe(true);
+  it('keeps every recording that says its line where nothing is asked anew', () => {
+    for (const entry of [made, other, unmarked, human, upload]) {
+      expect(kept(entry, 'none'), JSON.stringify(entry)).toBe(true);
+    }
   });
 
-  it('makes the synthetic ones anew under --fresh and leaves a person’s be', () => {
-    expect(keeps(synthetic, 'Reaktor läuft.', true, 'synthetic')).toBe(false);
-    expect(keeps(human, 'Reaktor läuft.', true, 'synthetic')).toBe(true);
+  it('under --fresh makes anew what another voice made, keeps this voice’s and a person’s', () => {
+    expect(kept(other, 'synthetic')).toBe(false);
+    expect(kept(unmarked, 'synthetic')).toBe(false);
+    // A render cut short goes on where it stopped: nothing is spent twice.
+    expect(kept(made, 'synthetic')).toBe(true);
+    expect(kept(human, 'synthetic')).toBe(true);
+    expect(kept(upload, 'synthetic')).toBe(true);
   });
 
-  it('makes a person’s anew only under --fresh=all', () => {
-    expect(keeps(human, 'Reaktor läuft.', true, 'all')).toBe(false);
-    expect(keeps(synthetic, 'Reaktor läuft.', true, 'all')).toBe(false);
+  it('under --fresh=all makes a person’s anew too, and still keeps this voice’s', () => {
+    expect(kept(human, 'all')).toBe(false);
+    expect(kept(upload, 'all')).toBe(false);
+    expect(kept(other, 'all')).toBe(false);
+    expect(kept(made, 'all')).toBe(true);
   });
 
   it('keeps nothing whose file is gone or whose line now says something else', () => {
-    expect(keeps(human, 'Reaktor läuft.', false, 'none')).toBe(false);
-    expect(keeps(human, 'Reaktor steht.', true, 'synthetic')).toBe(false);
-    expect(keeps(undefined, 'Reaktor läuft.', true, 'none')).toBe(false);
+    expect(kept(made, 'none', TEXT, false)).toBe(false);
+    expect(kept(human, 'synthetic', 'Reaktor steht.')).toBe(false);
+    expect(kept(undefined, 'none')).toBe(false);
   });
 
-  it('marks a kept recording of a person as one in the list it writes, and no other', () => {
-    expect(entryOf('Reaktor läuft.', 1400, line, true)).toEqual(human);
-    expect(entryOf('Reaktor läuft.', 1400, line, false)).toEqual(synthetic);
-    const opening = entryOf('Los.', 900, { missions: ['b', 'a'], opens: true }, true);
+  it('tells renders apart by engine, voice, model and the words as the engine gets them', () => {
+    const renders = [
+      render,
+      renderOf({ ...piper, name: 'de_DE-thorsten-medium' }, TEXT),
+      renderOf({ engine: 'say' }, TEXT),
+      renderOf(eleven('eleven_v4'), TEXT),
+      renderOf(eleven('eleven_multilingual_v2'), TEXT),
+      renderOf(eleven('eleven_v4', 'JBFqnCBsd6RMkjVDRZzb'), TEXT),
+      renderOf(piper, 'Reaktor steht.'),
+    ];
+    expect(new Set(renders).size).toBe(renders.length);
+    expect(render).toMatch(/^[0-9a-f]{12}$/);
+    expect(renderOf(piper, TEXT)).toBe(render);
+    // Where the model file lies does not count: the same voice from another cache.
+    expect(renderOf({ ...piper, model: '/elsewhere/thorsten.onnx' }, TEXT)).toBe(render);
+  });
+
+  it('writes an entry with its file and a person or a render, in a fixed order', () => {
+    expect(entryOf(TEXT, 1400, line, { file: base.file, render })).toEqual(made);
+    expect(entryOf(TEXT, 1400, line, { file: base.file, source: 'human' })).toEqual(human);
+    const opening = entryOf('Los.', 900, { missions: ['b', 'a'], opens: true }, upload);
     expect(opening).toEqual({
       text: 'Los.',
       ms: 900,
       missions: ['a', 'b'],
       opens: true,
-      source: 'human',
+      source: 'upload',
+      file: 'aaaaaaaaaaaa.mp3',
     });
-    expect(Object.keys(opening)).toEqual(['text', 'ms', 'missions', 'opens', 'source']);
+    expect(Object.keys(opening)).toEqual(['text', 'ms', 'missions', 'opens', 'source', 'file']);
+    const synthetic = entryOf(TEXT, 1400, line, { file: base.file, render });
+    expect(Object.keys(synthetic)).toEqual(['text', 'ms', 'missions', 'render', 'file']);
+  });
+
+  it('names an ElevenLabs recording .mp3 and every other .m4a', () => {
+    expect(fileOf('elevenlabs', 'abc')).toBe('abc.mp3');
+    expect(fileOf('piper', 'abc')).toBe('abc.m4a');
+    expect(fileOf('say', 'abc')).toBe('abc.m4a');
   });
 
   it('reads --fresh and --fresh=all from the command line, and refuses another --fresh', () => {

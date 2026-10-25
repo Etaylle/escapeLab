@@ -33,9 +33,27 @@ const LEVER_LINE =
   'Kasten ist im Maschinenraum, das Prüfpult im Flur.';
 const START_LINE = 'Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt.';
 const MANIFEST: VoiceManifest = {
-  aaaaaaaaaaaa: { text: LEVER_LINE, ms: 2000, missions: ['blackout'], source: 'human' },
-  bbbbbbbbbbbb: { text: 'Beide hin.', ms: 900, missions: ['systemcheck'] },
-  cccccccccccc: { text: START_LINE, ms: 2500, missions: ['blackout'], opens: true },
+  // A file a person put on the /record page, an MP3: the radio plays whatever the entry names.
+  aaaaaaaaaaaa: {
+    text: LEVER_LINE,
+    ms: 2000,
+    missions: ['blackout'],
+    source: 'upload',
+    file: 'aaaaaaaaaaaa.mp3',
+  },
+  bbbbbbbbbbbb: {
+    text: 'Beide hin.',
+    ms: 900,
+    missions: ['systemcheck'],
+    file: 'bbbbbbbbbbbb.m4a',
+  },
+  cccccccccccc: {
+    text: START_LINE,
+    ms: 2500,
+    missions: ['blackout'],
+    opens: true,
+    file: 'cccccccccccc.m4a',
+  },
 };
 
 /** The share of a sine at `peak` that the shaper turns into its harmonics (THD), 0–1. */
@@ -151,13 +169,13 @@ describe('a line spoken over the radio', () => {
   /** Lets the fetches and the decoding settle. */
   const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-  it('fetches the run’s mission’s lines at its start, and no other mission’s', async () => {
+  it('fetches the run’s mission’s lines at its start, from the files they name', async () => {
     const radio = await voice();
     radio.preloadVoice('blackout');
     await settle();
     expect(fetched).toEqual([
       '/voice/manifest.json',
-      '/voice/aaaaaaaaaaaa.m4a',
+      '/voice/aaaaaaaaaaaa.mp3',
       '/voice/cccccccccccc.m4a',
     ]);
     radio.preloadLines(['Beide hin.', 'Etwas ohne Aufnahme.']);
@@ -306,7 +324,8 @@ describe('a line spoken over the radio', () => {
     vi.stubGlobal('OfflineAudioContext', Offline);
     const radio = await voice();
     const render = await radio.renderRadio('aaaaaaaaaaaa');
-    expect(fetched).toEqual(['/voice/aaaaaaaaaaaa.m4a']);
+    expect(fetched).toEqual(['/voice/manifest.json', '/voice/aaaaaaaaaaaa.mp3']);
+    await expect(radio.renderRadio('dddddddddddd')).rejects.toThrow(/not in the manifest/);
     // The fake decodes any recording to 1.5 s at 8 kHz, its peak 0.45.
     expect(render.input).toHaveLength(12000);
     expect(Math.max(...render.input.map(Math.abs))).toBeCloseTo(SPEECH_PEAK, 6);

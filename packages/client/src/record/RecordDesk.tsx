@@ -1,6 +1,6 @@
 import type { RadioMoment } from '@escapelab/core';
-import { busy, takeOf, type Desk, type Phase, type Take } from './desk.js';
-import type { RecordLine } from './lines.js';
+import { busy, takeOf, unreplaced, type Desk, type Phase, type Take } from './desk.js';
+import { UPLOAD_ACCEPT, type Recording, type RecordLine, type Source } from './lines.js';
 
 /** What the desk's buttons ask the page for. */
 export interface DeskActions {
@@ -9,7 +9,9 @@ export interface DeskActions {
   save(): void;
   go(index: number): void;
   playTake(take: Take): void;
-  playRecording(line: RecordLine): void;
+  playRecording(recording: Recording): void;
+  copy(): void;
+  upload(file: File): void;
 }
 
 /** A length in seconds as the page writes it: „4,2 s". */
@@ -28,12 +30,20 @@ const MOMENTS: Readonly<Record<RadioMoment, string>> = {
 const momentOf = (line: RecordLine): string =>
   [MOMENTS[line.when], line.station].filter((part) => part !== null).join(' · ');
 
+/** Who made a recording, as the page names it. */
+const SOURCES: Readonly<Record<Source, string>> = {
+  synthetic: 'synthetisch',
+  human: 'Mensch',
+  upload: 'Datei',
+};
+
 /** What the line has so far. */
 function sofar(line: RecordLine): string {
-  if (line.ms === null) {
+  const { recording } = line;
+  if (recording === null) {
     return 'Bisher keine Aufnahme';
   }
-  return `Bisher: ${line.human ? 'Mensch' : 'synthetisch'}, ${seconds(line.ms)}`;
+  return `Bisher: ${SOURCES[recording.source]}, ${seconds(recording.ms)}`;
 }
 
 type Said<K extends Phase['kind']> = (phase: Extract<Phase, { kind: K }>, now: number) => string;
@@ -46,6 +56,7 @@ const PHASE_TEXT: { readonly [K in Phase['kind']]: Said<K> } = {
   processing: () => 'Stille an den Enden wird geschnitten …',
   review: ({ take }) => `Neue Aufnahme · ${seconds(take.ms)}, Stille an beiden Enden geschnitten.`,
   saving: () => 'Wird gespeichert …',
+  uploading: ({ name }) => `„${name}“ wird übertragen …`,
   saved: () => 'Gespeichert: Das Spiel spielt ab jetzt diese Aufnahme.',
   failed: ({ error }) => error,
 };
@@ -61,10 +72,10 @@ function Controls({ desk, on }: { desk: Desk; on: DeskActions }) {
   const take = takeOf(phase);
   const working = busy(phase);
   const recording = phase.kind === 'recording';
-  const playable = take !== null || (line !== undefined && line.ms !== null);
+  const kept = line?.recording ?? null;
   const listen = (): void => {
     if (take !== null) on.playTake(take);
-    else if (line !== undefined) on.playRecording(line);
+    else if (kept !== null) on.playRecording(kept);
   };
   const looks = [take === null ? 'primary' : '', 'record-take', recording ? 'record-rolling' : ''];
   return (
@@ -74,9 +85,9 @@ function Controls({ desk, on }: { desk: Desk; on: DeskActions }) {
         disabled={working && !recording}
         onClick={recording ? on.stop : on.record}
       >
-        {recording ? 'Stopp' : line?.ms === null && take === null ? 'Aufnehmen' : 'Neu aufnehmen'}
+        {recording ? 'Stopp' : kept === null && take === null ? 'Aufnehmen' : 'Neu aufnehmen'}
       </button>
-      <button disabled={working || !playable} onClick={listen}>
+      <button disabled={working || (take === null && kept === null)} onClick={listen}>
         Anhören
       </button>
       <button className="primary" disabled={working || take === null} onClick={on.save}>
@@ -86,10 +97,67 @@ function Controls({ desk, on }: { desk: Desk; on: DeskActions }) {
   );
 }
 
-const TAGS = { human: 'Mensch', synthetic: 'synthetisch', missing: 'fehlt' } as const;
+/** The line's text for another tool: to the clipboard, or marked in a field to be copied. */
+function CopyText({ desk, on }: { desk: Desk; on: DeskActions }) {
+  const line = desk.lines[desk.index];
+  return (
+    <div className="record-copy">
+      <button className="link" onClick={on.copy}>
+        Text kopieren
+      </button>
+      {desk.copy === 'done' && <span className="muted">Text kopiert.</span>}
+      {desk.copy === 'manual' && line !== undefined && (
+        <label className="record-copy-field">
+          Kopieren ging nicht: Der Text ist markiert, ⌘C kopiert ihn.
+          <textarea
+            readOnly
+            autoFocus
+            rows={3}
+            value={line.text}
+            onFocus={(event) => event.currentTarget.select()}
+          />
+        </label>
+      )}
+    </div>
+  );
+}
 
-const tagOf = (line: RecordLine): keyof typeof TAGS =>
-  line.human ? 'human' : line.ms === null ? 'missing' : 'synthetic';
+/** A file for the line, dropped on the zone or picked from it: mp3, m4a or wav. */
+function DropZone({ desk, on }: { desk: Desk; on: DeskActions }) {
+  const off = busy(desk.phase);
+  const pick = (files: FileList | null): void => {
+    const file = files?.[0];
+    if (file !== undefined && !off) on.upload(file);
+  };
+  return (
+    <label
+      className={`record-drop${off ? ' record-drop--off' : ''}`}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => {
+        event.preventDefault();
+        pick(event.dataTransfer.files);
+      }}
+    >
+      <input
+        type="file"
+        accept={UPLOAD_ACCEPT}
+        disabled={off}
+        onChange={(event) => {
+          pick(event.currentTarget.files);
+          event.currentTarget.value = '';
+        }}
+      />
+      <span className="record-drop-title">Audiodatei ablegen</span>
+      <span className="record-drop-hint">
+        oder hier auswählen · mp3, m4a oder wav, bis 8 MB · WebM kann afconvert nicht lesen
+      </span>
+    </label>
+  );
+}
+
+const TAGS = { human: 'Mensch', upload: 'Datei', synthetic: 'synthetisch', missing: 'fehlt' };
+
+const tagOf = (line: RecordLine): keyof typeof TAGS => line.recording?.source ?? 'missing';
 
 /** The lines by the mission that says them first, in their order, each with its place. */
 function byMission(lines: readonly RecordLine[]): [string, [RecordLine, number][]][] {
@@ -104,8 +172,8 @@ function byMission(lines: readonly RecordLine[]): [string, [RecordLine, number][
 }
 
 /**
- * Every line under its mission, with what its recording is, the one on screen marked; a click
- * moves to it while nothing is under way.
+ * Every line under its mission, with its number and what its recording is, the one on screen
+ * marked; a click moves to it while nothing is under way.
  */
 function LineList({ desk, on }: { desk: Desk; on: DeskActions }) {
   const working = busy(desk.phase);
@@ -123,6 +191,7 @@ function LineList({ desk, on }: { desk: Desk; on: DeskActions }) {
                   aria-current={i === desk.index ? 'true' : undefined}
                   onClick={() => on.go(i)}
                 >
+                  <span className="record-number">{i + 1}</span>
                   <span className={`record-tag record-tag--${tagOf(line)}`}>
                     {TAGS[tagOf(line)]}
                   </span>
@@ -138,8 +207,9 @@ function LineList({ desk, on }: { desk: Desk; on: DeskActions }) {
 }
 
 /**
- * The desk: the line on screen big, where it comes over the air and what it has so far, what
- * is going on, the buttons, the way to the line before and after, and every line below.
+ * The desk: the line on screen big, where it comes over the air and what it has so far, its
+ * text to copy, what is going on, the buttons, a zone for a file, the way to the line before and
+ * after, and every line below.
  */
 export function RecordDesk({ desk, now, on }: { desk: Desk; now: number; on: DeskActions }) {
   const line = desk.lines[desk.index];
@@ -151,7 +221,7 @@ export function RecordDesk({ desk, now, on }: { desk: Desk; now: number; on: Des
     );
   }
   const working = busy(desk.phase);
-  const human = desk.lines.filter((each) => each.human).length;
+  const replaced = desk.lines.filter((each) => !unreplaced(each)).length;
   return (
     <section className="card record">
       <p className="kicker">
@@ -159,6 +229,7 @@ export function RecordDesk({ desk, now, on }: { desk: Desk; now: number; on: Des
       </p>
       <p className="record-moment">{momentOf(line)}</p>
       <blockquote className="record-line">{line.text}</blockquote>
+      <CopyText desk={desk} on={on} />
       <p className="record-sofar">
         {sofar(line)} · Kennung {line.id}
       </p>
@@ -166,12 +237,13 @@ export function RecordDesk({ desk, now, on }: { desk: Desk; now: number; on: Des
         {phaseText(desk.phase, now)}
       </p>
       <Controls desk={desk} on={on} />
+      <DropZone desk={desk} on={on} />
       <nav className="record-nav">
         <button disabled={working || desk.index === 0} onClick={() => on.go(desk.index - 1)}>
           Zurück
         </button>
         <span className="muted">
-          {human} von {desk.lines.length} von Menschen gesprochen
+          {replaced} von {desk.lines.length} ersetzt
         </span>
         <button
           disabled={working || desk.index === desk.lines.length - 1}

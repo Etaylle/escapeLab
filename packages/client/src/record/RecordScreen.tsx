@@ -1,14 +1,22 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { Icon } from '../screens/Icon.js';
 import { openDesk, step, takeOf, type Take } from './desk.js';
-import { loadLines, recordingUrl, saveTake, type RecordLine } from './lines.js';
+import {
+  loadLines,
+  recordingUrl,
+  sendRecording,
+  uploadProblem,
+  uploadType,
+  type RecordLine,
+} from './lines.js';
 import { RecordDesk, type DeskActions } from './RecordDesk.js';
 import { startRecording, type Rolling } from './recorder.js';
 import { encodeWav, RATE, trimSilence } from './wav.js';
 
 /**
  * The page at /record, reached by its address alone: a person speaks mission control's lines
- * one by one, and each one saved replaces the synthetic voice's recording of it in the game.
+ * one by one, or puts a file there for a line — made elsewhere, in ElevenLabs' web app, say —
+ * and each one saved replaces the synthetic voice's recording of it in the game.
  * The microphone, the playback and the server are its effects; what they do to the page is the
  * desk's (desk.ts), what it shows RecordDesk's. Saving takes a server with ALLOW_RECORD=1, as
  * `pnpm dev` runs it.
@@ -24,6 +32,18 @@ function takeFrom(samples: Float32Array): Take | null {
   }
   const wav = new Blob([encodeWav(trimmed, RATE)], { type: 'audio/wav' });
   return { wav, url: URL.createObjectURL(wav), ms: Math.round((trimmed.length / RATE) * 1000) };
+}
+
+/** Puts `text` on the clipboard; false where the browser does not let it. */
+function toClipboard(text: string): Promise<boolean> {
+  const clipboard = navigator.clipboard as Clipboard | undefined;
+  if (clipboard === undefined) {
+    return Promise.resolve(false);
+  }
+  return clipboard.writeText(text).then(
+    () => true,
+    () => false,
+  );
 }
 
 /** The page's clock while `running`, ms, read ten times a second; it stands still otherwise. */
@@ -88,17 +108,35 @@ function Recorder({ lines }: { lines: readonly RecordLine[] }) {
       const line = desk.lines[desk.index];
       if (take === null || line === undefined) return;
       dispatch({ kind: 'save' });
-      saveTake(line.id, take.wav).then(
-        (ms) => dispatch({ kind: 'saved', ms }),
+      sendRecording(line.id, take.wav, 'audio/wav', 'human').then(
+        (recording) => dispatch({ kind: 'saved', recording }),
         (err: unknown) => fail(reasonOf(err)),
       );
+    },
+    upload: (file) => {
+      const line = desk.lines[desk.index];
+      const problem = uploadProblem(file);
+      if (line === undefined || problem !== null) {
+        if (problem !== null) fail(problem);
+        return;
+      }
+      player.current?.pause();
+      dispatch({ kind: 'upload', name: file.name });
+      sendRecording(line.id, file, uploadType(file), 'upload').then(
+        (recording) => dispatch({ kind: 'saved', recording }),
+        (err: unknown) => fail(reasonOf(err)),
+      );
+    },
+    copy: () => {
+      const text = desk.lines[desk.index]?.text ?? '';
+      void toClipboard(text).then((done) => dispatch({ kind: 'copied', done }));
     },
     go: (index) => {
       player.current?.pause();
       dispatch({ kind: 'go', index });
     },
     playTake: (made) => play(made.url),
-    playRecording: (line) => play(recordingUrl(line, Date.now())),
+    playRecording: (recording) => play(recordingUrl(recording, Date.now())),
   };
   return <RecordDesk desk={desk} now={now} on={on} />;
 }
