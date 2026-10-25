@@ -551,12 +551,17 @@ describe('the sync button', () => {
     const at = 1_000_000;
     vi.useFakeTimers();
     vi.setSystemTime(at + 1999);
-    const pressed = sync({ pressedCount: 1, youPressed: true, press: { at, expiresAt: at + 2000 } });
+    const pressed = sync({
+      pressedCount: 1,
+      youPressed: true,
+      windowMs: 2000,
+      press: { at, expiresAt: at + 2000 },
+    });
     expect(panelAfter('button-sync', pressed, pressed)).toContain('aria-label="Gedrückt"');
     vi.setSystemTime(at + 2000);
     const html = panelAfter('button-sync', pressed, pressed);
     expect(html).toContain('aria-label="Drücken"');
-    expect(html).toContain('Druck verfallen — nochmal alle zusammen');
+    expect(html).toContain('Druck verfallen — alle Ausweise binnen 2 s');
   });
 
   it('leaves the main switch as built: it sounds nothing of its own at a change', () => {

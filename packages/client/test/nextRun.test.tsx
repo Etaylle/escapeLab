@@ -149,7 +149,7 @@ describe('the end screen after a won tutorial', () => {
       renderToStaticMarkup(
         <EndScreen view={view} fresh={false} send={noop} leaveRoom={noop} missions={CATALOG} />,
       );
-    expect(line(wonTutorial())).toContain('startet der Einsatz, den du wählst.');
+    expect(line(wonTutorial())).toContain('startet der gewählte Einsatz.');
     expect(line(wonTutorial({ you: BEN }))).toContain('startet der Einsatz, den der Host wählt.');
     expect(line(wonTutorial({ phase: 'lost', grade: null }))).toContain(
       'startet derselbe Einsatz von selbst.',

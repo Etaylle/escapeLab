@@ -101,7 +101,7 @@ describe('mission control watching a quiet station', () => {
         at: T0 + 50_000,
         input: { press: 0 },
       }),
-    ).toThrow(/Allein geht das nicht/);
+    ).toThrow(/Eingabe gesperrt/);
     expect(nudgeDueAt(alone)).toBe(T0 + 100_000);
   });
 

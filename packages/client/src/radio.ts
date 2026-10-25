@@ -16,8 +16,8 @@ export const SIGN_NOTE_MS = 3500;
  */
 export const NEWS_MS = 10_000;
 
-/** A revealed note goes on the air under the last crew's name, not mission control's. */
-export const LAST_CREW = 'Notiz der letzten Crew';
+/** A revealed note goes on the air under the last shift's name, not mission control's. */
+export const LAST_SHIFT = 'Notiz der letzten Schicht';
 
 /**
  * Whether a line is mission control's: a scripted one, or one it sent unasked because the
@@ -50,7 +50,7 @@ export function reportLine(event: RunEvent): string {
 
 /** Who a line on the air is from, as the banner names them. */
 export function bannerFrom(event: RunEvent): string {
-  return event.kind === 'hint' ? LAST_CREW : 'LEITSTELLE';
+  return event.kind === 'hint' ? LAST_SHIFT : 'LEITSTELLE';
 }
 
 /**

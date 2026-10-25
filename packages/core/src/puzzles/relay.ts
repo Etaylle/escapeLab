@@ -383,7 +383,7 @@ export const relayModule: EmergencyModule<RelayDef, RelayState, RelayInput, Rela
       fail('Dieses Bedienelement gibt es nicht.');
     }
     if (control.ownerId !== playerId) {
-      fail('Das Bedienelement sitzt an einem anderen Pult — sag die Anweisung laut an.');
+      fail('Das Bedienelement sitzt an einem anderen Pult — Anweisung laut durchgeben.');
     }
     const setting = settingFor(control.setting.kind, input.value);
     if (setting === null) {

@@ -360,7 +360,7 @@ describe('playing a full mission', () => {
       { type: 'interact', playerId: 'p2', at: T0 + 500 },
     );
     expect(() => applyAction(open, press('p1', T0 + 1000))).toThrow(
-      'Dafür musst du am Pult stehen.',
+      'Eingabe nur am Pult.',
     );
   });
 

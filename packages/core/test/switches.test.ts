@@ -447,7 +447,7 @@ describe('switches: a run', () => {
     for (const playerId of ['p2', 'p3']) {
       expect(() => applyAction(state, send(playerId, { switchIndex: 0 }))).toThrow(GameError);
       expect(() => applyAction(state, send(playerId, { check: true }))).toThrow(
-        'Dafür musst du am Pult stehen.',
+        'Eingabe nur am Pult.',
       );
     }
   });

@@ -39,8 +39,8 @@
  * once (sign.png). Two seconds after the clock starts counting comes
  * blackout.png, the emergency lamps red. Then both go to the first station,
  * a main switch — whoever is locked in let out over a plate first — and E
- * opens its panel for each (lever.png, every lamp lit, DU under the own
- * lever). Where the view gives a press its expiry, the host throws alone:
+ * opens its panel for each (lever.png, every lamp lit, the player's own name
+ * under the own lever). Where the view gives a press its expiry, the host throws alone:
  * lever-ring.png catches the ring round its grip draining, and the lever has
  * to spring back once the window shuts, the device saying so. Then both
  * throw together, the run fails unless the lights come up, and lit-flur.png
@@ -2190,7 +2190,8 @@ async function throwLever(players) {
 
 /**
  * lever.png: the main switch's panel, the lamp over every lever burning with
- * the whole crew at the station, the names under the levers.
+ * the whole crew at the station, the names under the levers — this player's
+ * own under the lever in front of them.
  */
 async function captureLeverPanel(player, crew) {
   const here = await player.page.locator('.station-modal .lever-unit--here').count();
@@ -2201,7 +2202,7 @@ async function captureLeverPanel(player, crew) {
     `lever.png          ${player.name}: "${plate}", ${here} of ${crew} lamps lit, ` +
       `names ${names.join(', ') || '!! none'}`,
   );
-  if (here !== crew || names[0] !== 'DU') {
+  if (here !== crew || names[0] !== player.name) {
     fail(`lever.png: ${here} of ${crew} lamps lit, names ${names.join(', ')}`);
   }
 }
@@ -3349,14 +3350,14 @@ async function captureNotes(page, seen, who, other) {
 
   // The last crew's notes are held back for 45 s after a station opens.
   let readyBy = Date.now() + 60_000;
-  while (!label.startsWith('Notiz der letzten Crew') && Date.now() < readyBy) {
+  while (!label.startsWith('Notiz der letzten Schicht') && Date.now() < readyBy) {
     await sleep(1000);
     if (!(await overlay.isVisible())) {
       readyBy += await reopenAfterEmergency(page, seen, overlay, who);
     }
     label = (await ask.innerText()).trim();
   }
-  if (!label.startsWith('Notiz der letzten Crew')) {
+  if (!label.startsWith('Notiz der letzten Schicht')) {
     throw new Error(`the ask button still reads "${label}" after 60 s`);
   }
   await capture(page, 'hint-ready.png');
@@ -3972,7 +3973,7 @@ async function pinProbeNote(page) {
   await placeWith(page, 'note', 15, 9);
   const refused = await textOf(page.locator('.editor-status-note'));
   await placeWith(page, 'note', 5, 1);
-  const form = page.locator('.editor-thing', { hasText: 'Notiz der letzten Crew' });
+  const form = page.locator('.editor-thing', { hasText: 'Notiz der letzten Schicht' });
   const pinned = await form.waitFor({ timeout: 3000 }).then(
     () => true,
     () => false,
@@ -5693,7 +5694,7 @@ async function captureEscape(host, guest) {
   const tickedOff = hud.mates.some((mate) => mate.startsWith(guest.name) && mate.endsWith('✓'));
   // Amber with minutes left: red is the clock's last minute only.
   const amber = hud.clock.includes('countdown--escape') && !hud.clock.includes('critical');
-  if (hud.goal !== 'ALLE ZUM NOTAUSGANG' || !tickedOff || !amber) {
+  if (hud.goal !== 'NOTAUSGANG ENTRIEGELT' || !tickedOff || !amber) {
     fail(`escape.png: goal "${hud.goal}", checklist ${hud.mates.join(', ')}, clock ${hud.clock}`);
   }
 }

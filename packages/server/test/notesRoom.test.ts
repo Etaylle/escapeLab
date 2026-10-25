@@ -90,7 +90,7 @@ describe('Room with a note of the last crew', () => {
     const { room, anna, ben } = started();
     walkTo(room, anna, 5.5, 3.5);
     expect(() => room.act(ben.playerId, { kind: 'read-note', note: 0 })).toThrow(
-      'Dafür musst du direkt davor stehen.',
+      'Nur direkt davor.',
     );
     const deadline = lastView(anna).deadlineAt;
     room.act(anna.playerId, { kind: 'read-note', note: 0 });

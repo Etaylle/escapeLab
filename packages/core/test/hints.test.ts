@@ -145,7 +145,7 @@ const kinds = (events: RunEvent[]): string[] => events.map((e) => e.kind);
 
 describe('notes of the last crew', () => {
   it('holds them back until the crew has spent a while at the open station', () => {
-    expect(() => askForHint(playing(), T0 + DELAY_MS)).toThrow(/kein Rätsel/);
+    expect(() => askForHint(playing(), T0 + DELAY_MS)).toThrow(/keine Station in Betrieb/);
     // The wait starts with the station, not with the mission.
     const state = open(playing(), T0 + 100_000);
     expect(() => askForHint(state, T0 + 100_000 + DELAY_MS - 1)).toThrow(/noch einen Moment/);
@@ -158,7 +158,7 @@ describe('notes of the last crew', () => {
     const state = open(playing(), T0);
     const ask = (playerId: string) => () =>
       applyAction(state, { type: 'request-hint', playerId, at: T0 + DELAY_MS });
-    expect(ask('p2')).toThrow('Dafür musst du bei den Regeln dieser Station stehen.');
+    expect(ask('p2')).toThrow('Notizen nur bei den Regeln dieser Station.');
     expect(ask('p1')).not.toThrow();
   });
 
@@ -216,7 +216,7 @@ describe('notes of the last crew', () => {
   it('adds the time spent paused to the wait', () => {
     let state = open(playing(), T0);
     state = applyAction(state, { type: 'set-paused', paused: true, at: T0 + 10_000 });
-    expect(() => askForHint(state, T0 + DELAY_MS)).toThrow(/pausiert/);
+    expect(() => askForHint(state, T0 + DELAY_MS)).toThrow(/Pausiert/);
     state = applyAction(state, { type: 'set-paused', paused: false, at: T0 + 40_000 });
     expect(state.hintReadyAt).toBe(T0 + DELAY_MS + 30_000);
     expect(() => askForHint(state, T0 + DELAY_MS + 29_999)).toThrow(/noch einen Moment/);

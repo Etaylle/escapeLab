@@ -101,11 +101,19 @@ export type Action =
 
 function findPlayer(state: GameState, playerId: string): Player {
   const player = state.players.find((p) => p.id === playerId);
+  // voice: interface — the room's refusals, not the lab's, may name the players
   return player ?? fail('Unbekannter Spieler — bitte Raum neu beitreten.');
 }
 
+/** What a run paused for a lost connection answers every move with. */
+const PAUSED = 'Pausiert — jemand ist nicht mehr verbunden.';
+
+/** What every move made outside a run is told. */
+const NO_RUN = 'Nur während des Einsatzes.';
+
 function requireHost(state: GameState, playerId: string): void {
   if (!findPlayer(state, playerId).isHost) {
+    // voice: interface
     fail('Nur der Host (erste Spieler im Raum) kann das.');
   }
 }
@@ -201,6 +209,7 @@ function switchMission(
   requireHost(state, action.playerId);
   const { max } = action.mission.players;
   if (state.players.length > max) {
+    // voice: interface
     fail(`Für "${action.mission.title}" sind zu viele Spieler im Raum (max. ${max}).`);
   }
   return {
@@ -220,6 +229,7 @@ function playerJoin(
   }
   const { max } = state.mission.players;
   if (state.players.length >= max) {
+    // voice: interface
     fail(`Der Raum ist voll (max. ${max} Spielende für diese Mission).`);
   }
   const name = action.name.trim();
@@ -449,9 +459,11 @@ function crewToStart(state: GameState): Player[] {
   const crew = state.players.filter((p) => p.connected);
   const { min, max } = state.mission.players;
   if (crew.length < min) {
+    // voice: interface
     fail(`Für diese Mission braucht es mindestens ${min} Spielende.`);
   }
   if (crew.length > max) {
+    // voice: interface
     fail(`Für diese Mission sind es zu viele — höchstens ${max} Spielende.`);
   }
   // The host starts by pressing start; everyone else confirms beforehand.
@@ -565,17 +577,17 @@ function requirePlaying(
   at: number,
 ): { player: Player; def: PuzzleDef; puzzleState: PuzzleState } | 'lost' {
   if (state.paused !== null) {
-    fail('Die Mission ist pausiert — es fehlt jemand aus der Crew.');
+    fail(PAUSED);
   }
   if (state.phase !== 'playing' || state.puzzleState === null) {
-    fail('Gerade läuft kein Rätsel.');
+    fail('Gerade ist keine Station in Betrieb.');
   }
   if (state.deadlineAt !== null && at >= state.deadlineAt) {
     return 'lost';
   }
   const def = state.mission.puzzles[state.currentPuzzleIndex];
   if (def === undefined) {
-    fail('Gerade läuft kein Rätsel.');
+    fail('Gerade ist keine Station in Betrieb.');
   }
   return { player: findPlayer(state, playerId), def, puzzleState: state.puzzleState };
 }
@@ -808,7 +820,7 @@ function handleEmergencyInput(
   emergency: RelayState,
 ): GameState {
   if (state.paused !== null) {
-    fail('Die Mission ist pausiert — es fehlt jemand aus der Crew.');
+    fail(PAUSED);
   }
   if (state.deadlineAt !== null && action.at >= state.deadlineAt) {
     return lostNow(state, action.at);
@@ -885,6 +897,16 @@ function expireSabotage(state: GameState, action: { at: number }): GameState {
 }
 
 /**
+ * What a station answers a move nobody backs up with: where it finds nobody — at the other
+ * console, where it has two (`consoles`), and at the rules.
+ */
+function unbacked(consoles: 2 | undefined): string {
+  return consoles === 2
+    ? 'Eingabe gesperrt: Am anderen Pult und bei den Regeln steht niemand.'
+    : 'Eingabe gesperrt: Bei den Regeln steht niemand.';
+}
+
+/**
  * One move at the open puzzle, interpreted by that puzzle's module, from the
  * console the player stands at. It counts only with a second person there:
  * another crew member at the station's other console or at the rules —
@@ -906,11 +928,11 @@ function handlePuzzleInput(
   const { player, def, puzzleState } = playing;
   const from = consoleOf(state, def.id, player.id);
   if (from === null) {
-    fail('Dafür musst du am Pult stehen.');
+    fail('Eingabe nur am Pult.');
   }
   const puzzleModule = moduleFor(def.type);
   if (!puzzleModule.wholeCrew && backupsOf(state, def.id, player.id).length === 0) {
-    fail('Allein geht das nicht — jemand muss am anderen Pult oder bei den Regeln stehen.');
+    fail(unbacked(puzzleModule.consoles));
   }
   const input = puzzleModule.inputSchema.safeParse(action.input);
   if (!input.success) {
@@ -992,7 +1014,7 @@ function requestHint(state: GameState, action: { playerId: string; at: number })
     return lostNow(state, action.at);
   }
   if (!readersOf(state, ctx.def.id).includes(ctx.player.id)) {
-    fail('Dafür musst du bei den Regeln dieser Station stehen.');
+    fail('Notizen nur bei den Regeln dieser Station.');
   }
   const hint = ctx.def.hints[state.hintsRevealed];
   if (hint === undefined) {
@@ -1072,10 +1094,10 @@ function requireCarryable(
   itemId: string,
 ): { item: ItemState } {
   if (state.phase !== 'playing') {
-    fail('Dafür muss die Mission laufen.');
+    fail(NO_RUN);
   }
   if (state.paused !== null) {
-    fail('Die Mission ist pausiert — es fehlt jemand aus der Crew.');
+    fail(PAUSED);
   }
   findPlayer(state, playerId);
   const item = state.items[itemId];
@@ -1094,10 +1116,10 @@ function pickItem(
 ): GameState {
   const { item } = requireCarryable(state, action.playerId, action.itemId);
   if (item.carriedBy !== null) {
-    fail(item.carriedBy === action.playerId ? 'Du trägst es schon.' : 'Das trägt jemand anderes.');
+    fail(item.carriedBy === action.playerId ? 'Schon in der Hand.' : 'Das trägt jemand anderes.');
   }
   if (Object.values(state.items).some((i) => i.carriedBy === action.playerId)) {
-    fail('Du hast schon die Hände voll — erst ablegen.');
+    fail('Die Hände sind schon voll — erst ablegen.');
   }
   return {
     ...state,
@@ -1111,7 +1133,7 @@ function dropItem(
 ): GameState {
   const { item } = requireCarryable(state, action.playerId, action.itemId);
   if (item.carriedBy !== action.playerId) {
-    fail('Das trägst du gar nicht.');
+    fail('Nicht in der Hand.');
   }
   return {
     ...state,
@@ -1143,7 +1165,7 @@ function deliverItem(
 ): GameState {
   const { item } = requireCarryable(state, action.playerId, action.itemId);
   if (item.carriedBy !== action.playerId) {
-    fail('Das trägst du gar nicht.');
+    fail('Nicht in der Hand.');
   }
   const def = state.mission.map.items.find((i) => i.id === action.itemId);
   if (def === undefined) {
@@ -1174,7 +1196,7 @@ function closedSourceAt(state: GameState, playerId: string, manualId: string): M
     fail(source === undefined ? 'Das gibt es hier nicht.' : 'Das ist schon offen.');
   }
   if (!(state.presence.manuals[source.id] ?? []).includes(playerId)) {
-    fail('Dafür musst du direkt davor stehen.');
+    fail('Nur direkt davor.');
   }
   return source;
 }
@@ -1206,13 +1228,13 @@ function openSource(
   action: { playerId: string; manualId: string; at: number },
 ): GameState {
   if (state.phase !== 'playing') {
-    fail('Dafür muss die Mission laufen.');
+    fail(NO_RUN);
   }
   if (state.deadlineAt !== null && action.at >= state.deadlineAt) {
     return lostNow(state, action.at);
   }
   if (state.paused !== null) {
-    fail('Die Mission ist pausiert — es fehlt jemand aus der Crew.');
+    fail(PAUSED);
   }
   findPlayer(state, action.playerId);
   const source = closedSourceAt(state, action.playerId, action.manualId);
@@ -1245,20 +1267,20 @@ function readNote(
   action: { playerId: string; note: number; at: number },
 ): GameState {
   if (state.phase !== 'playing') {
-    fail('Dafür muss die Mission laufen.');
+    fail(NO_RUN);
   }
   if (state.deadlineAt !== null && action.at >= state.deadlineAt) {
     return lostNow(state, action.at);
   }
   if (state.paused !== null) {
-    fail('Die Mission ist pausiert — es fehlt jemand aus der Crew.');
+    fail(PAUSED);
   }
   findPlayer(state, action.playerId);
   if (state.mission.map.notes[action.note] === undefined) {
     fail('Diese Notiz gibt es hier nicht.');
   }
   if (!(state.presence.notes[noteKey(action.note)] ?? []).includes(action.playerId)) {
-    fail('Dafür musst du direkt davor stehen.');
+    fail('Nur direkt davor.');
   }
   if (state.notesRead.includes(action.note)) {
     return state;
@@ -1273,19 +1295,19 @@ function readNote(
  */
 function handleInteract(state: GameState, action: { playerId: string; at: number }): GameState {
   if (state.phase !== 'playing') {
-    fail('Interagieren geht nur während der Mission.');
+    fail(NO_RUN);
   }
   if (state.deadlineAt !== null && action.at >= state.deadlineAt) {
     return lostNow(state, action.at);
   }
   if (state.paused !== null) {
-    fail('Die Mission ist pausiert — es fehlt jemand aus der Crew.');
+    fail(PAUSED);
   }
   if (state.sabotage !== null) {
-    fail('Erst den Notfall beheben — an die Panele!');
+    fail('Gesperrt, bis der Notfall behoben ist.');
   }
   if (state.puzzleState !== null) {
-    fail('Die Station läuft schon — löst erst das aktuelle Rätsel.');
+    fail('Die Station läuft schon.');
   }
   findPlayer(state, action.playerId);
   const current = state.mission.puzzles[state.currentPuzzleIndex];
@@ -1294,7 +1316,7 @@ function handleInteract(state: GameState, action: { playerId: string; at: number
   }
   const missing = missingItemsFor(state, current.id);
   if (missing.length > 0) {
-    fail(`Der Station fehlt noch: ${missing.join(', ')}. Bringt es her!`);
+    fail(`Der Station fehlt noch: ${missing.join(', ')}.`);
   }
   return openPuzzle(state, state.currentPuzzleIndex, action.at);
 }

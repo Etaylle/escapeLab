@@ -67,7 +67,7 @@ describe('radioNews — which lines get a banner', () => {
 
   it('names mission control on its lines and the last crew on a revealed note', () => {
     expect(bannerFrom(event('radio', 0))).toBe('LEITSTELLE');
-    expect(bannerFrom(event('hint', 0))).toBe('Notiz der letzten Crew');
+    expect(bannerFrom(event('hint', 0))).toBe('Notiz der letzten Schicht');
   });
 
   it('puts the last crew’s note beside a note asked for or read, the radio beside the rest', () => {

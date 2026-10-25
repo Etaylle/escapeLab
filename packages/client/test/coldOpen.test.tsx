@@ -188,7 +188,7 @@ describe('the objective bar in the cold open', () => {
         '</span>NORMALBETRIEB</div>',
     );
     expect(html).toContain('<div class="stage-goal stage-goal--power"><h1>Blackout im Labor</h1>');
-    expect(html).toContain('Du startest im ARCHIV');
+    expect(html).toContain('Start im ARCHIV');
     expect(html).not.toContain('countdown');
     expect(html).not.toContain('led-strip');
     expect(html).not.toContain('Notlicht');

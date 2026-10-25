@@ -471,7 +471,7 @@ describe('a relay emergency in the game', () => {
     state = applyAction(state, { type: 'set-paused', paused: true, at: ALARM_AT + 2000 });
     expect(applyAction(state, { type: 'sabotage-tick', at: ALARM_AT + 20_000 })).toBe(state);
     const reach = answers(mission, state, ALARM_AT + 3000)[0];
-    expect(() => applyAction(state, must(reach, 'an answer'))).toThrow(/pausiert/);
+    expect(() => applyAction(state, must(reach, 'an answer'))).toThrow(/Pausiert/);
 
     state = applyAction(state, { type: 'set-paused', paused: false, at: ALARM_AT + 32_000 });
     const after = emergencyOf(state);
@@ -536,7 +536,7 @@ describe('valves mode', () => {
     expect(applyAction(state, { type: 'sabotage-tick', at: ALARM_AT + 30_000 })).toBe(state);
     expect(() =>
       applyAction(state, { type: 'puzzle-input', playerId: 'p1', at: ALARM_AT + 2000, input: {} }),
-    ).toThrow(/kein Rätsel/);
+    ).toThrow(/keine Station in Betrieb/);
   });
 
   it('still needs two panels', () => {

@@ -50,7 +50,7 @@ describe('a page without https', () => {
         />,
       );
     };
-    expect(join(false)).toContain(`Rücken an Rücken, los.</p>${LINE}<label>Dein Name`);
+    expect(join(false)).toContain(`Rücken an Rücken, los.</p>${LINE}<label>Name`);
     expect(join(true)).not.toContain('https-hint');
   });
 });

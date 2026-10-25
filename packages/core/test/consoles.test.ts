@@ -260,7 +260,7 @@ describe('the open station at two consoles', () => {
 
   it('refuses a move from somebody at neither console', () => {
     expect(() => applyAction(open(), input('p3', 'rot-kreis'))).toThrow(
-      'Dafür musst du am Pult stehen.',
+      'Eingabe nur am Pult.',
     );
   });
 });

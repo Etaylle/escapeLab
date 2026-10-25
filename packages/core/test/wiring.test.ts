@@ -515,7 +515,7 @@ describe('wiring in a run', () => {
     const state = opened();
     const attempt = () => applyAction(state, cut('p2', bench(state).right, T0 + 1000));
     expect(attempt).toThrow(GameError);
-    expect(attempt).toThrow('Dafür musst du am Pult stehen.');
+    expect(attempt).toThrow('Eingabe nur am Pult.');
   });
 
   it('gives the wires to the box, the rules to the book, the edgework to who read the sign', () => {

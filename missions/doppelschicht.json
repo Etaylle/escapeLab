@@ -5,8 +5,8 @@
   "listOrder": 40,
   "players": { "min": 4, "max": 4 },
   "story": {
-    "intro": "Das Nordlabor ist in zwei Flügel geteilt, die Schleuse dazwischen ist verriegelt. Zwei von euch starten im Westflügel, zwei im Ostflügel; von Flügel zu Flügel geht nur Funk. Neben jedem Startplatz liegt ein Handbuch, immer mit Regeln für den anderen Flügel. Die Laborkennung hängt im Westflügel.",
-    "win": "Der Notausgang fährt auf, und ihr spaziert gemeinsam hinaus. Vier Köpfe, zwei Flügel, eine Schicht.",
+    "intro": "Das Nordlabor ist in zwei Flügel geteilt, die Schleuse dazwischen ist verriegelt. Zwei von der Schicht sitzen im Westflügel, zwei im Ostflügel; von Flügel zu Flügel geht nur Funk. Neben jedem Arbeitsplatz liegt ein Handbuch, immer mit den Regeln für den Flügel gegenüber. Die Laborkennung hängt im Westflügel.",
+    "win": "Der Notausgang fährt auf, und alle vier spazieren gemeinsam hinaus. Vier Köpfe, zwei Flügel, eine Schicht.",
     "lose": "Das Nordlabor fährt herunter. Zwei Flügel, vier Leute — und am Ende doch zu wenig geredet."
   },
   "timeLimitSec": 900,
@@ -99,7 +99,7 @@
     ],
     "sabotage": {
       "label": "DRUCKVERLUST IN BEIDEN FLÜGELN",
-      "hint": "Notventil West in der Nordwestecke, Notventil Ost in der Südostecke. Je einer pro Flügel, sofort hin.",
+      "hint": "Notventil West in der Nordwestecke, Notventil Ost in der Südostecke. Der Druck hält nur, wenn beide zugleich besetzt sind.",
       "firstAfterSec": 120,
       "everySec": 170,
       "durationSec": 50,

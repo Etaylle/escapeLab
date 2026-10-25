@@ -11,7 +11,9 @@ import type { Action, GameState, Mission } from '../src/index.js';
 import { decide, wiringModule } from '../src/puzzles/wiring.js';
 import { consoleLab, labMission, standing, T0 } from './lab.js';
 
-const ALONE = 'Allein geht das nicht — jemand muss am anderen Pult oder bei den Regeln stehen.';
+/** What a station turns a move away with that nobody backs up: where it finds nobody. */
+const ALONE = 'Eingabe gesperrt: Bei den Regeln steht niemand.';
+const ALONE_AT_TWO = 'Eingabe gesperrt: Am anderen Pult und bei den Regeln steht niemand.';
 
 /**
  * A corridor with the wiring box at its west end and two sources of its
@@ -164,7 +166,7 @@ describe('an input at a station', () => {
     const manned = chainOpen({ a: ['p1'], b: ['p2'], book: [] });
     expect(applyAction(manned.state, manned.press).puzzleState).toMatchObject({ done: 1 });
     const empty = chainOpen({ a: [], b: ['p2'], book: [] });
-    expect(() => applyAction(empty.state, empty.press)).toThrow(ALONE);
+    expect(() => applyAction(empty.state, empty.press)).toThrow(ALONE_AT_TWO);
     // A reader lets the press through to the Signalkette, which wants its sending console manned.
     const read = chainOpen({ a: [], b: ['p2'], book: ['p3'] });
     expect(() => applyAction(read.state, read.press)).toThrow('Am sendenden Pult steht niemand.');

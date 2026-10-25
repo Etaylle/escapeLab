@@ -74,7 +74,7 @@ function HintFields({
   return HINTS.map((n) => (
     <TextField
       key={n}
-      label={`Notiz ${n + 1} der letzten Crew`}
+      label={`Notiz ${n + 1} der letzten Schicht`}
       value={puzzle.hints[n] ?? ''}
       placeholder={n === 0 ? 'ein Schubs' : n === 1 ? 'genauer' : 'fast die Lösung'}
       id={inputId(`${path}.hints.${n}`)}

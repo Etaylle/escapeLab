@@ -334,7 +334,7 @@ function missionFiles({ json, reloadMissions, setBusy, say, markSaved, open, gua
         return;
       }
       const says: Status = { tone: 'note', text: `${file.name} importiert.` };
-      guard('importierst', () => open(loaded.draft, says));
+      guard('Importieren', () => open(loaded.draft, says));
     },
   };
 }
@@ -491,7 +491,7 @@ export function EditorScreen(props: Props) {
         playTitle={playTitleOf(validation.errors)}
         playing={play.open}
         loading={loading}
-        onNew={() => guard('neu anfängst', () => open(newDraft(), null))}
+        onNew={() => guard('Neuanfang', () => open(newDraft(), null))}
         onLoad={() => setLoading(!loading)}
         onImport={(file) => void files.importFile(file)}
         onExport={() => download(json)}
@@ -521,7 +521,7 @@ export function EditorScreen(props: Props) {
         <LoadList
           missions={missions}
           busy={busy}
-          onOpen={(info) => guard('eine andere Mission öffnest', () => void files.load(info))}
+          onOpen={(info) => guard('Öffnen einer anderen Mission', () => void files.load(info))}
           onDelete={(info) => void files.remove(info)}
         />
       )}

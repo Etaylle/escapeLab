@@ -39,7 +39,8 @@ const mission: Mission = parseMission({
   },
 });
 
-const ALONE = 'Allein geht das nicht — jemand muss am anderen Pult oder bei den Regeln stehen.';
+/** What the keypad, a station of one console, says to a move nobody backs up. */
+const ALONE = 'Eingabe gesperrt: Bei den Regeln steht niemand.';
 
 function lastView(walker: Walker) {
   const last = walker.messages.filter((m) => m.kind === 'view').at(-1);

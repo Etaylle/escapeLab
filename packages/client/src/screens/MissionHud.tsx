@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { chatText, type PlayerPosition, type PlayerView, type RunEvent } from '@escapelab/core';
 import { useMedia } from '../hooks.js';
-import { airIcon, fromControl, LAST_CREW } from '../radio.js';
+import { airIcon, fromControl, LAST_SHIFT } from '../radio.js';
 import { useVoice, type Voice } from '../voice/useVoice.js';
 import type { KnownPositions } from '../world/movement.js';
 import type { ChatLine } from '../world/render/frame.js';
@@ -52,12 +52,12 @@ export interface ChatHeard {
   text: string;
 }
 
-/** A run-report line as the radio strip reads it; mission control and the last crew are named. */
+/** A run-report line as the radio strip reads it; mission control and the last shift are named. */
 function eventLine(event: RunEvent): Ticker {
   const text = event.seconds === null ? event.label : `${event.label} (−${event.seconds}s)`;
   const icon = airIcon(event);
   if (event.kind === 'hint') {
-    return { icon, text: `${LAST_CREW} — ${text}` };
+    return { icon, text: `${LAST_SHIFT} — ${text}` };
   }
   return { icon, text: fromControl(event) ? `Leitstelle: ${text}` : text };
 }

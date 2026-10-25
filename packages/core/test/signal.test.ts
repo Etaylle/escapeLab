@@ -477,7 +477,7 @@ describe('signal presses', () => {
     const def = defOf();
     const state = deal(def, 2);
     expect(() => press(def, state, state.sequences[0]?.[0] ?? 'rot-kreis', null)).toThrow(
-      'Dafür musst du am Pult stehen.',
+      'Eingabe nur am Pult.',
     );
   });
 
@@ -1092,7 +1092,7 @@ describe('signal in a run', () => {
       'Dieses Pult sendet — das andere gibt ein.',
     );
     expect(() => applyAction(state, pressBy('p3', first))).toThrow(
-      'Dafür musst du am Pult stehen.',
+      'Eingabe nur am Pult.',
     );
     const taken = applyAction(state, pressBy('p2', first));
     expect(signalOf(taken, 'p1')).toMatchObject({ done: 1, lastResult: null });

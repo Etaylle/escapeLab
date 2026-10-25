@@ -54,7 +54,10 @@ describe('Handbook', () => {
     expect(html).toContain('<h2>§1 — Zugangscode</h2>');
     expect(html).toContain('Nachzulesen: HANDBUCH');
     expect(html).toContain('<h2>§2 — Reaktor-Neustart</h2>');
-    expect(html).toContain('<p class="handbook-crew">Die ganze Crew an die Station</p>');
+    expect(html).toContain(
+      '<p class="handbook-crew">' +
+        'Schaltet nur, wenn jeder angemeldete Ausweis vor Ort bestätigt.</p>',
+    );
     expect(html).toContain('<h3>Tastenfeld</h3>');
     expect(html).toContain('<p>Vier Tasten.</p>');
     expect(html).toContain('<ol class="manual-rules"><li>Erst A.</li><li>Dann B.</li></ol>');

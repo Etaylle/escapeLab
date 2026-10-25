@@ -319,7 +319,7 @@ describe('morse puzzle', () => {
   it('turns away input from away from the desk or meant for another station', () => {
     const away = () => applyAction(started(), send('p2', { transmit: true }));
     expect(away).toThrow(GameError);
-    expect(away).toThrow('Dafür musst du am Pult stehen.');
+    expect(away).toThrow('Eingabe nur am Pult.');
     expect(() => applyAction(started(), send('p1', { dir: 1 }))).toThrow(/Ungültige Eingabe/);
   });
 });

@@ -14,6 +14,7 @@ import {
   type ServerLogLine,
   type ServerRow,
 } from '@escapelab/core';
+import { missedLine } from '../src/puzzles/ButtonSyncPanel.js';
 import { needleAngle, SCALE_MAX } from '../src/puzzles/CircuitPanel.js';
 import { deviceCoach, firstSight, pointerNow, type Pointer } from '../src/puzzles/coach.js';
 import { partnerLed } from '../src/puzzles/Device.js';
@@ -222,11 +223,11 @@ describe('the partner LED', () => {
     expect(partnerLed(seen('maze'))).toEqual({
       tone: 'red',
       label: 'KEIN PARTNER',
-      detail: 'jemand zu den Regeln',
+      detail: 'niemand bei den Regeln',
     });
-    expect(partnerLed(seen('circuit'))?.detail).toBe('jemand an Pult B oder zu den Regeln');
+    expect(partnerLed(seen('circuit'))?.detail).toBe('niemand an Pult B oder bei den Regeln');
     expect(partnerLed(seen('signal', true, {}, 'b'))?.detail).toBe(
-      'jemand an Pult A oder zu den Regeln',
+      'niemand an Pult A oder bei den Regeln',
     );
     expect(panel(seen('maze'))).toContain('<li class="device-led device-led--red">');
   });
@@ -1057,11 +1058,13 @@ describe('the sync button', () => {
     ]);
   });
 
-  it('says an own press ran out, to be made again with everybody', () => {
-    const html = iconsAsWords(panel(sync({ lastResult: 'expired' })));
+  it('says an own press ran out, and the window every badge has to press within', () => {
+    const html = iconsAsWords(panel(sync({ lastResult: 'expired', windowMs: 2000 })));
     expect(html).toContain(
-      '<p class="warn" role="status">[warning] Druck verfallen — nochmal alle zusammen</p>',
+      '<p class="warn" role="status">[warning] Druck verfallen — alle Ausweise binnen 2 s</p>',
     );
+    expect(missedLine(2500)).toBe('Druck verfallen — alle Ausweise binnen 2,5 s');
+    expect(missedLine(null)).toBe('Druck verfallen');
     expect(panel(sync())).not.toContain('verfallen');
   });
 });
@@ -1350,11 +1353,11 @@ describe('the Serverraum', () => {
   it('gives the terminal its line, tapped or clicked, and the rack none', () => {
     expect(deviceCoach(at('a'), 'touch')).toEqual({
       id: 'device:servers-terminal',
-      text: 'Tippe oder tippe an: start, restart, status — Codes nur hier.',
+      text: 'Tippen oder antippen: start, restart, status — Codes nur hier.',
     });
     expect(deviceCoach(at('a'), 'mouse')).toEqual({
       id: 'device:servers-terminal',
-      text: 'Schreibe oder klicke: start, restart, status — Codes nur hier.',
+      text: 'Schreiben oder klicken: start, restart, status — Codes nur hier.',
     });
     expect(deviceCoach(at('b'), 'touch')).toBeNull();
     expect(deviceCoach(at(null), 'mouse')).toBeNull();

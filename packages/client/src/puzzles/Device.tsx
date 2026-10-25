@@ -213,8 +213,8 @@ function stationModule(puzzle: PuzzleView) {
 /**
  * The LED that says whether this player's inputs count: green with who
  * backs them up and where — „Ben · Pult B", „Ben · SPIND" — or red with
- * where somebody has to stand. None where the whole crew works the station,
- * and none for the audience, who stands at no console.
+ * where the station finds nobody. None where the whole crew works the
+ * station, and none for the audience, who stands at no console.
  */
 export function partnerLed(puzzle: PuzzleView): DeviceLed | null {
   const station = stationModule(puzzle);
@@ -227,9 +227,9 @@ export function partnerLed(puzzle: PuzzleView): DeviceLed | null {
   }
   const where =
     station.consoles === 2
-      ? `an ${consoleName(OTHER[puzzle.console])} oder zu den Regeln`
-      : 'zu den Regeln';
-  return { tone: 'red', label: 'KEIN PARTNER', detail: `jemand ${where}` };
+      ? `an ${consoleName(OTHER[puzzle.console])} oder bei den Regeln`
+      : 'bei den Regeln';
+  return { tone: 'red', label: 'KEIN PARTNER', detail: `niemand ${where}` };
 }
 
 /**

@@ -181,13 +181,13 @@ describe('the microphone in the lobby', () => {
 
   it('says in one quiet line why there is none, the crew still heard', () => {
     expect(setup({ mic: 'denied' })).toContain(
-      'Mikrofon nicht erlaubt — du hörst die Crew trotzdem.',
+      'Mikrofon nicht erlaubt — Mithören geht trotzdem.',
     );
     expect(setup({ mic: 'missing' })).toContain('Kein Mikrofon gefunden');
     // Asking again may work after a refusal, never without HTTPS or WebRTC.
     expect(setup({ mic: 'denied' })).toContain('Mikrofon aktivieren');
     const insecure = setup({ mic: 'insecure' });
-    expect(insecure).toContain('Mikrofon nur über HTTPS — du hörst die Crew trotzdem.');
+    expect(insecure).toContain('Mikrofon nur über HTTPS — Mithören geht trotzdem.');
     expect(insecure).not.toContain('<button');
     expect(setup({ mic: 'unsupported' })).toContain('Sprechen geht in diesem Browser nicht.');
   });

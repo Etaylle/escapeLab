@@ -3,10 +3,10 @@ import { PutDown } from './PutDown.js';
 import { WorldModal } from './WorldModal.js';
 
 /** What the slip is called, on its frame and to a screen reader. */
-export const NOTE_LABEL = 'Notiz der letzten Crew';
+export const NOTE_LABEL = 'Notiz der letzten Schicht';
 
 /**
- * A note of the last crew, read where it hangs: a slip of ruled paper in
+ * A note of the last shift, read where it hangs: a slip of ruled paper in
  * their hand, a pin at its head — the look of the notes in a source's margin
  * (Book.tsx NoteSlip, styles/notes.css), on a sheet of its own. Reading it
  * costs nothing; it is put down like a sheet (PutDown.tsx), and slides out of

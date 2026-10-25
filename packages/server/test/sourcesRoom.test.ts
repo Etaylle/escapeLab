@@ -164,7 +164,7 @@ describe('Room with sources to find and open', () => {
     const { room, anna, ben } = started();
     moveTo(room, anna, 12, 1);
     expect(() => room.act(anna.playerId, { kind: 'open-source', manualId: 'spind' })).toThrow(
-      'Dafür musst du direkt davor stehen.',
+      'Nur direkt davor.',
     );
     moveTo(room, anna, 13, 1); // beside the locker, and diagonally by the cabinet
     expect(lastView(anna.messages).sourcesHere.map((s) => [s.id, s.opened])).toEqual([
@@ -212,7 +212,7 @@ describe('Room with sources to find and open', () => {
     expect(view.phase).toBe('playing');
     expect(view.players.map((p) => p.name)).toEqual(['Anna', 'Ben']);
     expect(view.pausedFor).toBeNull();
-    expect(() => room.resume(cleo.playerId, cleo.token)).toThrow(/ohne dich gestartet/);
+    expect(() => room.resume(cleo.playerId, cleo.token)).toThrow(/ohne diese Verbindung begonnen/);
     expect(() => room.resume(cleo.playerId, cleo.token)).toThrow(/Wiederverbinden fehlgeschlagen/);
     room.dispose();
   });

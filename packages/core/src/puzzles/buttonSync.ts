@@ -272,6 +272,7 @@ export const buttonSyncModule: PuzzleModule<
       key: 'windowMs',
       label: 'Zeitfenster in ms',
       help:
+        // voice: interface — the editor's help, as every field's
         'So dicht nacheinander muss die ganze Crew drücken, sonst verfallen die Drücke; ' +
         'leer = ohne Frist.',
       kind: 'int',
@@ -284,6 +285,7 @@ export const buttonSyncModule: PuzzleModule<
       key: 'style',
       label: 'Bauform',
       help:
+        // voice: interface
         'Ein Pilztaster für alle oder ein Hauptschalter mit einem Hebel je Crewmitglied; ' +
         'gedrückt wird gleich.',
       kind: 'choice',

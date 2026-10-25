@@ -21,8 +21,8 @@ const EDGEWORK_NOTE =
   'deshalb nicht in diesem Handbuch. Die Laborkennung besteht aus fünf Zeichen, einem ' +
   'Bindestrich und einer Ziffer, etwa K7G3A-2. Die drei Kontrollleuchten tragen Kürzel wie FRQ ' +
   'oder SIG und sind an oder aus. Notstromzellen sind null bis vier eingesetzt. Alle drei ' +
-  'Angaben stehen auf einem Schild im Labor; wer es gelesen hat, sagt sie an, sobald eine ' +
-  'Regel danach fragt.';
+  'Angaben trägt das Kennungsschild an einer Wand des Labors; wo eine Regel nach ihnen fragt, ' +
+  'gilt, was das Schild zeigt.';
 
 async function fetchManual(missionId: string): Promise<MissionManual> {
   const res = await fetch(`/missions/${encodeURIComponent(missionId)}/manual`);
@@ -124,15 +124,19 @@ export function Handbook({ manual }: { manual: MissionManual }) {
   );
 }
 
+/**
+ * A station's chapter, under where its rules lie in the lab — or, for a station the whole
+ * crew works and no source covers, what it takes to switch.
+ */
 function Chapter({ station }: { station: MissionManualStation }) {
-  const crew =
+  const where =
     station.readAt.length === 0
-      ? 'Die ganze Crew an die Station'
+      ? 'Schaltet nur, wenn jeder angemeldete Ausweis vor Ort bestätigt.'
       : `Nachzulesen: ${station.readAt.join(', ')}`;
   return (
     <section className="handbook-chapter">
       <h2>{`§${station.index + 1} — ${station.title}`}</h2>
-      <p className="handbook-crew">{crew}</p>
+      <p className="handbook-crew">{where}</p>
       <Manual sections={station.manual} />
     </section>
   );

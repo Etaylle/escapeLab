@@ -279,7 +279,9 @@ describe('the escape', () => {
   it('calls everybody to the hatch over the checklist, the clock amber with minutes left', () => {
     const html = bar(viewOf());
     expect(html).toContain('<div class="stage-goal stage-goal--escape">');
-    expect(html).toMatch(/<h1><svg class="icon icon-exit"[^>]*>.*?<\/svg> ALLE ZUM NOTAUSGANG<\/h1>/);
+    expect(html).toMatch(
+      /<h1><svg class="icon icon-exit"[^>]*>.*?<\/svg> NOTAUSGANG ENTRIEGELT<\/h1>/,
+    );
     const mates = html.match(/<li class="escape-mate[^"]*">.*?<\/li>/g) ?? [];
     expect(mates).toHaveLength(2);
     expect(mates[0]).toMatch(/^<li class="escape-mate">.*Anna<\/li>$/);
@@ -376,7 +378,7 @@ describe('the title card', () => {
     expect(html).toContain('<h1 class="end-title-word">GESCHAFFT</h1>');
     expect(html).toContain(
       'class="end-scene end-scene--out" role="img" ' +
-        'aria-label="Die Crew draußen vor dem offenen Notausgang: Anna, Ben"',
+        'aria-label="Draußen vor dem offenen Notausgang: Anna, Ben"',
     );
     // Each of the crew a figure in their colour, side by side, named under it.
     const mates = html.match(/<li class="end-mate"><canvas class="seat-figure"[^>]*><\/canvas>/g);
@@ -392,7 +394,7 @@ describe('the title card', () => {
     const html = card(over({ phase: 'lost', grade: null, currentPuzzleIndex: 2 }));
     expect(html).toMatch(/^<section class="end-title end-title--time" aria-label="ZEIT ABGELAUFEN">/);
     expect(html).toContain('<h1 class="end-title-word">ZEIT ABGELAUFEN</h1>');
-    expect(html).toContain('aria-label="Die Crew im dunklen Labor: Anna, Ben"');
+    expect(html).toContain('aria-label="Im dunklen Labor: Anna, Ben"');
     expect(html).toContain('<span class="end-fact-value">2/4</span>');
     expect(html).not.toContain('draußen');
     expect(html).not.toContain('grade-rank');

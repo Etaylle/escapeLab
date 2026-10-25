@@ -178,7 +178,7 @@ describe('reading at a terminal', () => {
       const html = read(null, current, null, noted);
       expect(html).toContain('<span class="terminal-led" aria-hidden="true"></span></div>');
       expect(html).toContain(
-        '</div><aside class="note-slip" aria-label="Notizen der letzten Crew zu §3 — ' +
+        '</div><aside class="note-slip" aria-label="Notizen der letzten Schicht zu §3 — ' +
           'Leitungsnetz"><p class="note-slip-for">zu §3</p>',
       );
       expect(html.match(/class="margin-note"/g)).toHaveLength(1);
@@ -325,10 +325,10 @@ describe('reading a book', () => {
 
   it('slips the last crew’s note into the book: the notes, and the way to ask for the next', () => {
     expect(slip(opened(bound(noted()), 2))).toBe(
-      '<aside class="note-slip" aria-label="Notizen der letzten Crew zu §3 — Leitungsnetz">' +
+      '<aside class="note-slip" aria-label="Notizen der letzten Schicht zu §3 — Leitungsnetz">' +
         '<p class="note-slip-for">zu §3</p><ol class="margin-notes">' +
         '<li class="margin-note">Erst die Farben ansagen.</li></ol>' +
-        '<button class="note-ask">Notiz der letzten Crew erbitten · −20 s</button></aside>',
+        '<button class="note-ask">Notiz der letzten Schicht erbitten · −20 s</button></aside>',
     );
   });
 
@@ -562,7 +562,7 @@ describe('the station frame', () => {
       '<li class="device-led device-led--red">' +
         '<span class="device-lamp device-lamp--red" aria-hidden="true"></span>' +
         '<span class="device-led-label">KEIN PARTNER</span>' +
-        '<span class="device-led-detail">jemand zu den Regeln</span></li>',
+        '<span class="device-led-detail">niemand bei den Regeln</span></li>',
     );
   });
 
@@ -750,7 +750,7 @@ describe('the start of a run', () => {
     const html = game(justStarted());
     expect(html).toContain(
       '<div class="overlay briefing"><h1>Blackout im Labor</h1>' +
-        '<p>Du startest im <strong>MASCHINENRAUM</strong></p>' +
+        '<p>Start im <strong>MASCHINENRAUM</strong></p>' +
         '<p class="briefing-alarms">Alarme: höchstens 5</p><div class="briefing-count">',
     );
     expect(html).not.toContain('Du bist');

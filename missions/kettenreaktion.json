@@ -5,9 +5,9 @@
   "listOrder": 30,
   "players": { "min": 3, "max": 3 },
   "story": {
-    "intro": "Der Versuchsreaktor im Keller läuft heiß. Jeder von euch sitzt in einem anderen verschlossenen Raum: Archiv, Leitstand, Messlabor. Die Regeln stehen in den Büchern im Archiv und im Messlabor, die Laborkennung hängt im Leitstand. Ein Fehler zu viel — und ihr lernt, was »Kettenreaktion« wörtlich heißt.",
-    "win": "Die Kurve flacht ab, das Dröhnen verebbt — und ihr steht zu dritt am Notausgang, als die Luke hinter euch zufährt. Drei Räume, eine Mannschaft, alle draußen. Lehrbuchleistung.",
-    "lose": "Die Anzeigen springen auf Rot, dann auf Schwarz. Evakuierungssirenen. Immerhin: Simulationsende. Beim nächsten Mal redet ihr schneller — und präziser."
+    "intro": "Der Versuchsreaktor im Keller läuft heiß. Archiv, Leitstand und Messlabor sind verriegelt, und in jedem sitzt einer von der Schicht fest. Die Regeln stehen in den Büchern im Archiv und im Messlabor, die Laborkennung hängt im Leitstand. Ein Fehler zu viel, und »Kettenreaktion« ist wörtlich zu nehmen.",
+    "win": "Die Kurve flacht ab, das Dröhnen verebbt, und die Luke des Notausgangs fährt hinter allen dreien zu. Drei Räume, eine Schicht, alle draußen. Lehrbuchreif.",
+    "lose": "Die Anzeigen springen auf Rot, dann auf Schwarz. Evakuierungssirenen. Immerhin: Simulationsende. Vermerk für die nächste Schicht: schneller absprechen, und genauer."
   },
   "timeLimitSec": 600,
   "radio": {
@@ -97,7 +97,7 @@
     ],
     "sabotage": {
       "label": "DRUCKABFALL IM KÜHLKREIS",
-      "hint": "Drei Notventile im Flur: Westende, Mitte, Ostende. Jeder an eines, alle gleichzeitig — sofort aufteilen!",
+      "hint": "Drei Notventile im Flur: Westende, Mitte, Ostende. Der Kühlkreis hält nur, wenn alle drei zugleich besetzt sind.",
       "firstAfterSec": 110,
       "everySec": 160,
       "durationSec": 50,

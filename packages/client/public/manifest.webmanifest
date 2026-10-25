@@ -2,7 +2,7 @@
   "id": "/",
   "name": "EscapeLab",
   "short_name": "EscapeLab",
-  "description": "Kooperatives Escape-Spiel: lösen könnt ihr es nur gemeinsam, per Stimme.",
+  "description": "Kooperatives Escape-Spiel: lösen lässt es sich nur gemeinsam, per Stimme.",
   "lang": "de",
   "dir": "ltr",
   "start_url": "/",

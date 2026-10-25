@@ -436,8 +436,8 @@ const PLACERS: Readonly<Record<PlacingTool, Placer>> = {
   },
 };
 
-/** What a new note of the last crew says until its author writes it. */
-export const NEW_NOTE = 'Wer das liest, ist nicht der Erste hier.';
+/** What a new note of the last shift says until its author writes it: a note in the lab's voice. */
+export const NEW_NOTE = 'Nachtschicht: Hier war schon jemand, die Tür stand offen.';
 export const ON_FLOOR_ONLY = 'Nur auf Boden — erst mit dem Boden-Pinsel Fläche malen.';
 export const NOTE_SPOT = 'Eine Notiz hängt an einer Wand neben dem Boden oder liegt auf dem Boden.';
 export const TAKEN = 'Dort steht schon etwas.';

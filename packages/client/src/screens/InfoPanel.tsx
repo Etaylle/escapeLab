@@ -144,9 +144,9 @@ export function InfoPanel({ view, onClose }: Props) {
               )}
             </dl>
             <p className="muted">
-              Neben den Regeln der offenen Station hat die letzte Crew Notizen hinterlassen: Wer
-              dort liest, kann sie nach kurzer Wartezeit erbitten. Jede kostet Zeit — und schon
-              eine kostet den Rang S.
+              Neben den Regeln der offenen Station liegen Notizen der letzten Schicht; dort
+              lassen sie sich nach kurzer Wartezeit erbitten. Jede kostet Zeit — und schon eine
+              kostet den Rang S.
             </p>
           </div>
         )}
@@ -166,8 +166,8 @@ export function InfoPanel({ view, onClose }: Props) {
               ))}
             </dl>
             <p className="muted">
-              Im Dunkeln siehst du nur deinen Lichtkegel. Pfeile am Bildrand zeigen, wo das
-              nächste Ziel liegt.
+              Im Dunkeln reicht die Sicht nur so weit wie der eigene Lichtkegel. Pfeile am
+              Bildrand zeigen, wo das nächste Ziel liegt.
             </p>
           </div>
         )}

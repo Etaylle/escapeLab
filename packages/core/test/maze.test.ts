@@ -133,7 +133,7 @@ describe('maze puzzle', () => {
   it('only a player at the navigation desk may move the marker', () => {
     expect(() =>
       applyAction(started(), move('p2', 0, T0 + 1000)),
-    ).toThrow('Dafür musst du am Pult stehen.');
+    ).toThrow('Eingabe nur am Pult.');
   });
 
   it('needs a manual object somewhere that holds the plan', () => {

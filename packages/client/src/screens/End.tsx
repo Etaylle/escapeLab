@@ -120,9 +120,7 @@ export function alarmsCause({ count, limit }: PlayerView['alarms']): string | nu
  */
 function EndScene({ won, crew, youId }: { won: boolean; crew: CardMate[]; youId: string | null }) {
   const names = crew.map((mate) => mate.name).join(', ');
-  const says = won
-    ? `Die Crew draußen vor dem offenen Notausgang: ${names}`
-    : `Die Crew im dunklen Labor: ${names}`;
+  const says = won ? `Draußen vor dem offenen Notausgang: ${names}` : `Im dunklen Labor: ${names}`;
   return (
     <div className={`end-scene end-scene--${won ? 'out' : 'in'}`} role="img" aria-label={says}>
       <div className="end-sky" />
@@ -328,7 +326,7 @@ function startsLine(view: PlayerView): string {
     return 'Sobald alle zugestimmt haben, startet derselbe Einsatz von selbst.';
   }
   return view.you.isHost
-    ? 'Sobald alle zugestimmt haben, startet der Einsatz, den du wählst.'
+    ? 'Sobald alle zugestimmt haben, startet der gewählte Einsatz.'
     : 'Sobald alle zugestimmt haben, startet der Einsatz, den der Host wählt.';
 }
 

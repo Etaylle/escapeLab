@@ -54,7 +54,9 @@ function AskNote({ section, onAsk }: { section: ReadSection; onAsk: () => void }
   const wait = section.noteReadyAt === null ? 0 : Math.ceil((section.noteReadyAt - now) / 1000);
   return (
     <button className="note-ask" disabled={wait > 0} onClick={onAsk}>
-      {wait > 0 ? `Notiz in ${wait} s` : `Notiz der letzten Crew erbitten · −${section.costSec} s`}
+      {wait > 0
+        ? `Notiz in ${wait} s`
+        : `Notiz der letzten Schicht erbitten · −${section.costSec} s`}
     </button>
   );
 }
@@ -88,7 +90,7 @@ export function NoteSlip({
   if (section === null) {
     return null;
   }
-  const label = `Notizen der letzten Crew zu ${stationTitle(section)}`;
+  const label = `Notizen der letzten Schicht zu ${stationTitle(section)}`;
   return (
     <aside className="note-slip" aria-label={label}>
       <p className="note-slip-for">{`zu §${section.index + 1}`}</p>

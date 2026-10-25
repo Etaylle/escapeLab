@@ -20,10 +20,11 @@ const COLOURS: Record<Colour, { word: string; css: string }> = {
   weiß: { word: 'WEISS', css: 'white' },
 };
 
+/** What the button's display says of a wrong grip, as the run report logs it. */
 const MISTAKES: Record<NonNullable<ButtonPuzzle['lastResult']>, string> = {
-  early: 'Kurz gedrückt — falsch!',
-  held: 'Gehalten — falsch!',
-  'wrong-time': 'Zur falschen Zeit losgelassen!',
+  early: 'Fehlgriff: kurz gedrückt statt gehalten.',
+  held: 'Fehlgriff: gehalten statt kurz gedrückt.',
+  'wrong-time': 'Fehlgriff: zur falschen Zeit losgelassen.',
 };
 
 function useNow(intervalMs: number): number {

@@ -283,7 +283,7 @@ function WithCode({ send, connected, name }: SectionProps) {
   return (
     <section className="join-join">
       <h2>Mit Code</h2>
-      <p className="muted">Wenn ihr euch direkt verabredet habt:</p>
+      <p className="muted">Für eine verabredete Runde:</p>
       <div className="join-with-code">
         <input
           value={code}
@@ -343,14 +343,14 @@ export function JoinScreen({
       </h1>
       <p className="muted">
         Kooperatives Escape-Spiel für den Browser: Die Maschine sieht, wer am Pult steht, die
-        Regeln, wer am Buch steht — lösen könnt ihr es nur gemeinsam, per Stimme. Gerät pro
+        Regeln, wer am Buch steht — lösen lässt es sich nur gemeinsam, per Stimme. Gerät pro
         Person, Rücken an Rücken, los.
       </p>
       <InstallOffer />
       <HttpsHint />
 
       <label>
-        Dein Name
+        Name
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -363,7 +363,7 @@ export function JoinScreen({
       <h2>Offene Runden</h2>
       {rooms.length === 0 ? (
         <p className="muted">
-          Gerade läuft nichts — eröffne unten die erste Runde, dann taucht sie hier für alle auf.
+          Gerade läuft nichts — eine Runde, die unten eröffnet wird, taucht hier für alle auf.
         </p>
       ) : (
         <ul className="rooms">
@@ -380,7 +380,7 @@ export function JoinScreen({
         </ul>
       )}
       {rooms.length > 0 && !nameOk && (
-        <p className="muted">Trag oben deinen Namen ein, dann kannst du beitreten.</p>
+        <p className="muted">Zum Beitreten oben einen Namen eintragen.</p>
       )}
 
       <div className="join-grid">

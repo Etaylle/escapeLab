@@ -34,8 +34,8 @@ type Line = string | Readonly<Record<Pointer, string>>;
  */
 const LINES = {
   lever: {
-    touch: 'Jeder seinen Hebel — gleichzeitig antippen.',
-    mouse: 'Jeder seinen Hebel — gleichzeitig E drücken.',
+    touch: 'Ein Hebel je Ausweis, alle zugleich — antippen.',
+    mouse: 'Ein Hebel je Ausweis, alle zugleich — E drücken.',
   },
   wiring: {
     touch: 'Ein Tipp auf ein Kabel trennt es sofort.',
@@ -59,8 +59,8 @@ const LINES = {
   'signal-sender': 'Zeichen von links nach rechts ansagen.',
   'signal-receiver': 'Tasten in der angesagten Folge drücken.',
   'servers-terminal': {
-    touch: 'Tippe oder tippe an: start, restart, status — Codes nur hier.',
-    mouse: 'Schreibe oder klicke: start, restart, status — Codes nur hier.',
+    touch: 'Tippen oder antippen: start, restart, status — Codes nur hier.',
+    mouse: 'Schreiben oder klicken: start, restart, status — Codes nur hier.',
   },
 } as const satisfies Record<string, Line>;
 
@@ -96,10 +96,10 @@ function deviceOf(puzzle: PuzzleView): Device | null {
 function syncMark(puzzle: Extract<PuzzleView, { kind: 'button-sync' }>): CoachMark {
   const { windowMs } = syncPress(puzzle);
   return windowMs === null
-    ? { id: 'device:button-sync', text: 'Alle drücken — Reihenfolge egal.' }
+    ? { id: 'device:button-sync', text: 'Ein Druck je Ausweis — Reihenfolge egal.' }
     : {
         id: 'device:button-sync:window',
-        text: `Alle innerhalb von ${secondsText(windowMs)} s drücken.`,
+        text: `Ein Druck je Ausweis, alle binnen ${secondsText(windowMs)} s.`,
       };
 }
 

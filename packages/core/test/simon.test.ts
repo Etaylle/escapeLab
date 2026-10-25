@@ -547,7 +547,7 @@ describe('simon in a run', () => {
     ).toThrow(GameError);
     expect(() =>
       applyAction(started(), pressAction('p2', press('rot'), T0 + 1000)),
-    ).toThrow('Dafür musst du am Pult stehen.');
+    ).toThrow('Eingabe nur am Pult.');
   });
 
   it('takes nothing but one press of one of the four colors', () => {

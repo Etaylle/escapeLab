@@ -244,7 +244,7 @@ describe('Room', () => {
     expect(lastView(anna.messages).puzzle).not.toBeNull();
     expect(() =>
       room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } }),
-    ).toThrow('Dafür musst du am Pult stehen.');
+    ).toThrow('Eingabe nur am Pult.');
     room.dispose();
   });
 
@@ -283,7 +283,7 @@ describe('Room', () => {
     const paused = lastView(anna.messages);
     expect(paused.pausedFor).toEqual(['Ben']);
     // Nothing can be done while the crew is short-handed.
-    expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/pausiert/);
+    expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/Pausiert/);
 
     // The clock does not run during the pause …
     vi.advanceTimersByTime(30_000);

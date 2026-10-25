@@ -296,7 +296,7 @@ describe('keypad puzzle', () => {
   it('takes presses at the station only, and only on one of the four keys', () => {
     const state = started();
     expect(() => applyAction(state, press('p2', nextKey(state)))).toThrow(
-      'Dafür musst du am Pult stehen.',
+      'Eingabe nur am Pult.',
     );
     expect(() => applyAction(state, press('p1', 4))).toThrow('Ungültige Eingabe.');
     expect(() => applyAction(state, press('p1', -1))).toThrow('Ungültige Eingabe.');

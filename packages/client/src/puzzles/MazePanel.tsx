@@ -126,7 +126,7 @@ export function MazePanel({ puzzle, change, send }: PanelProps<'maze'>) {
       <MazeGrid puzzle={puzzle} bump={change !== null && bumpedWith(change) ? change.seq : null} />
       {puzzle.lastResult === 'wall' && (
         <p className="warn">
-          <Icon name="warning" /> Gegen die Wand gelaufen!
+          <Icon name="warning" /> Wand — der Prüfkopf bleibt stehen.
         </p>
       )}
       <div className="maze-pad">

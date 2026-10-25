@@ -561,7 +561,7 @@ describe('button: in a run', () => {
     };
     const away = () => applyAction(started(0), press);
     expect(away).toThrow(GameError);
-    expect(away).toThrow('Dafür musst du am Pult stehen.');
+    expect(away).toThrow('Eingabe nur am Pult.');
   });
 
   it('cannot be on a map without the edgework sign', () => {

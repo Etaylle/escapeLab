@@ -34,7 +34,7 @@ Reihenfolge:
    Crew drückt gemeinsam. Dann öffnet die Luke im Archiv, und es geht einmal quer durchs Labor
    hinaus — durchs Labor oder am Serverraum vorbei, beide Wege gleich lang.
 
-Drei **Notizen der letzten Crew** hängen frei lesbar im Labor — am Hebel, im Serverraum und an
+Drei **Notizen der letzten Schicht** hängen frei lesbar im Labor — am Hebel, im Serverraum und an
 der Luke (`map.notes`): Sie erzählen, was in der Nacht geschah, und lösen nichts.
 
 **Serverraum** (`servers`): Pult A ist ein Terminal mit Statustabelle,
@@ -89,7 +89,7 @@ Stufe wechselt die Richtung. Die Regeln liegen anderswo — Buch, Terminal, Tafe
 Spind, Aktenschrank —, manche je Runde woanders.
 Auf der Karte erscheint eine Quelle erst, wenn jemand nahe kommt; Spinde werden durchsucht,
 Schränke mit ihrem Schlüssel aufgeschlossen. Gelesen wird Seite für Seite (`E` *Lesen*; beim
-Labyrinth samt Wandplan), am Rand steht auf Wunsch eine **Notiz der letzten Crew** mit einem
+Labyrinth samt Wandplan), am Rand steht auf Wunsch eine **Notiz der letzten Schicht** mit einem
 Hinweis (kostet Zeit). Andere ihrer Notizen hängen frei im Labor, an Wänden oder auf dem Boden:
 Man findet sie wie eine Quelle, `E` *Lesen* öffnet den Zettel, umsonst und ohne Hinweis; das
 Protokoll vermerkt „Notiz gelesen“.
@@ -157,7 +157,7 @@ zugleich an beiden stehen können.
 
 **Missions-Editor:** „Editor" auf der Startseite öffnet eine Werkbank: das Labor mit den Kacheln
 des Spiels auf eine Leinwand malen, Startplätze, Türen, Platten, Stationen, Quellen, Schild,
-Raumnamen, Ausgang, Teile, Drohnenwege und Notizen der letzten Crew (an eine Wand neben dem Boden
+Raumnamen, Ausgang, Teile, Drohnenwege und Notizen der letzten Schicht (an eine Wand neben dem Boden
 oder auf den Boden) setzen und in Seitenformularen bearbeiten. Die Prüfung
 läuft bei jeder Änderung mit — dieselbe wie `parseMission`, Erreichbarkeitsbeweise inklusive —
 und zeigt jeden Fehler auf der Karte. Gespeichert wird als eigene Mission `custom-…` nach

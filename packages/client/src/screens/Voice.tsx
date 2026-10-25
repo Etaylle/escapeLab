@@ -14,11 +14,11 @@ const TOUCH = '(pointer: coarse)';
  */
 export const MIC_TROUBLE: Readonly<Record<MicTrouble, string>> = {
   unsupported: 'Sprechen geht in diesem Browser nicht.',
-  insecure: 'Mikrofon nur über HTTPS — du hörst die Crew trotzdem.',
-  denied: 'Mikrofon nicht erlaubt — du hörst die Crew trotzdem.',
-  missing: 'Kein Mikrofon gefunden — du hörst die Crew trotzdem.',
-  busy: 'Mikrofon belegt — du hörst die Crew trotzdem.',
-  broken: 'Mikrofon ausgefallen — du hörst die Crew trotzdem.',
+  insecure: 'Mikrofon nur über HTTPS — Mithören geht trotzdem.',
+  denied: 'Mikrofon nicht erlaubt — Mithören geht trotzdem.',
+  missing: 'Kein Mikrofon gefunden — Mithören geht trotzdem.',
+  busy: 'Mikrofon belegt — Mithören geht trotzdem.',
+  broken: 'Mikrofon ausgefallen — Mithören geht trotzdem.',
 };
 
 /**

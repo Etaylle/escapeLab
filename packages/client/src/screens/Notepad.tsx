@@ -98,7 +98,7 @@ export function Notepad({
         ref={area}
         className="notepad-text"
         aria-label="Notizen"
-        placeholder="Was ihr euch merken müsst …"
+        placeholder="Kennung, Werte, Folgen …"
         spellCheck={false}
         value={notes.text}
         onChange={(e) => notes.change(e.target.value)}

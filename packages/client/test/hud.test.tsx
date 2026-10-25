@@ -95,7 +95,7 @@ describe('the HUD radio line', () => {
 
   it('reads a revealed note as the last crew’s, not as mission control', () => {
     const html = hud([{ at: 1, kind: 'hint', label: 'Erst die Sicherung.', seconds: 20 }]);
-    expect(strip(html)).toBe('[note] Notiz der letzten Crew — Erst die Sicherung. (−20s)');
+    expect(strip(html)).toBe('[note] Notiz der letzten Schicht — Erst die Sicherung. (−20s)');
     expect(html).not.toContain('Leitstelle');
     expect(html).not.toContain('icon-radio');
   });

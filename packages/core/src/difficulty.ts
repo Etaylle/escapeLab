@@ -29,7 +29,8 @@ interface Scaling {
 const SCALING: Record<Difficulty, Scaling> = {
   entspannt: {
     label: 'Entspannt',
-    description: 'Mehr Zeit, milde Strafen, träge Drohnen — gut für den ersten Durchlauf.',
+    description:
+      'Überwachung nachsichtig, für die erste Schicht: mehr Zeit, milde Strafen, träge Drohnen.',
     time: 1.35,
     penalty: 0.6,
     droneSpeed: 0.75,
@@ -41,7 +42,7 @@ const SCALING: Record<Difficulty, Scaling> = {
   },
   normal: {
     label: 'Normal',
-    description: 'Die Mission so, wie sie gedacht ist.',
+    description: 'Überwachung nach Vorschrift: der Einsatz, wie er gedacht ist.',
     time: 1,
     penalty: 1,
     droneSpeed: 1,
@@ -53,7 +54,9 @@ const SCALING: Record<Difficulty, Scaling> = {
   },
   hart: {
     label: 'Hart',
-    description: 'Knappe Zeit, teure Fehler, schnelle Patrouillen, häufige Notfälle.',
+    description:
+      'Überwachung scharf gestellt: knappe Zeit, teure Fehler, schnelle Patrouillen, ' +
+      'häufige Notfälle.',
     time: 0.8,
     penalty: 1.4,
     droneSpeed: 1.2,

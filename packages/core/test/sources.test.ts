@@ -164,7 +164,7 @@ describe('a locker', () => {
   it('turns away a player who is not at it, a second search and what needs no opening', () => {
     const state = standing(started(mission), { manuals: { spind: ['p2'], tafel: ['p1'] } });
     expect(() => applyAction(state, open('p1', 'spind'))).toThrow(
-      'Dafür musst du direkt davor stehen.',
+      'Nur direkt davor.',
     );
     const searched = applyAction(state, open('p2', 'spind'));
     expect(() => applyAction(searched, open('p2', 'spind'))).toThrow('Das ist schon offen.');

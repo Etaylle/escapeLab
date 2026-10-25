@@ -74,7 +74,7 @@
 
 /* ── the main switch: presence on the lamp, the press on the grip ─────── */
 
-/* Whose lever it is, under its slot: DU, or the partner's name in their colour. */
+/* Whose lever it is, under its slot: the badge holder's name in their colour. */
 .lever-name {
   max-width: 96px;
   overflow: hidden;

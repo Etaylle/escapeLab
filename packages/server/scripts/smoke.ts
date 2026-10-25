@@ -1431,7 +1431,8 @@ const LABOR_CORNER: Tile = [14, 13];
  * the cabinet and of the panel, and out of the Labor drone's sight.
  */
 const AWAY_FROM_THE_CABINET: Tile = [7, 12];
-const ALONE = 'Allein geht das nicht — jemand muss am anderen Pult oder bei den Regeln stehen.';
+/** What the radio panel, a station of one console, says to a move nobody backs up. */
+const ALONE = 'Eingabe gesperrt: Bei den Regeln steht niemand.';
 
 /**
  * Nobody works a station alone: the operator's panel names the reader at

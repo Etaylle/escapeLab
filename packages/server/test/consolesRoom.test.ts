@@ -125,7 +125,7 @@ describe('Room with a station of two consoles', () => {
     }
     expect(() =>
       room.act(cleo.playerId, { kind: 'puzzle-input', input: { press: first } }),
-    ).toThrow('Dafür musst du am Pult stehen.');
+    ).toThrow('Eingabe nur am Pult.');
     expect(() =>
       room.act(anna.playerId, { kind: 'puzzle-input', input: { press: first } }),
     ).toThrow('Dieses Pult sendet — das andere gibt ein.');

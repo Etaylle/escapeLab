@@ -4,7 +4,7 @@ import type { Change } from './feel.js';
 import type { PanelProps } from './index.js';
 import { LeverPanel } from './LeverPanel.js';
 import { lampPop, mushroomStomp, rejectBuzz } from './sounds.js';
-import { ownPressAt, syncPress, useNowUntil } from './syncPress.js';
+import { ownPressAt, secondsText, syncPress, useNowUntil } from './syncPress.js';
 
 type SyncPuzzle = PanelProps<'button-sync'>['puzzle'];
 type SyncChange = Change<SyncPuzzle>;
@@ -16,6 +16,16 @@ export function expiredWith(change: SyncChange | null): boolean {
     change.after.lastResult === 'expired' &&
     change.before.lastResult !== 'expired'
   );
+}
+
+/**
+ * What the device says once this player's press ran out, its window again: „Druck verfallen —
+ * alle Ausweise binnen 2 s". Without a window no press runs out.
+ */
+export function missedLine(windowMs: number | null): string {
+  return windowMs === null
+    ? 'Druck verfallen'
+    : `Druck verfallen — alle Ausweise binnen ${secondsText(windowMs)} s`;
 }
 
 /** How many partners' presses a change brought in — this player's own is not among them. */
@@ -90,7 +100,7 @@ export function ButtonSyncPanel(props: PanelProps<'button-sync'>) {
       </div>
       {own.expired && (
         <p className="warn" role="status">
-          <Icon name="warning" /> Druck verfallen — nochmal alle zusammen
+          <Icon name="warning" /> {missedLine(sync.windowMs)}
         </p>
       )}
     </div>

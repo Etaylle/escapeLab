@@ -296,10 +296,10 @@ function gradeFor(state: GameState): Grade | null {
     return { rank: 'S', label: 'Makellos — kein einziger Alarm, massig Zeit übrig' };
   }
   if (alarms <= 1 && hints <= 1 && spare >= 0.15) {
-    return { rank: 'A', label: 'Starke Leistung — fast ohne Zwischenfälle' };
+    return { rank: 'A', label: 'Sauber — fast ohne Zwischenfälle' };
   }
   if (alarms <= 3) {
-    return { rank: 'B', label: 'Solide — es hat gewackelt, aber ihr seid raus' };
+    return { rank: 'B', label: 'Solide — es hat gewackelt, aber alle sind draußen' };
   }
   return { rank: 'C', label: 'Knapp vorbei an der Katastrophe' };
 }

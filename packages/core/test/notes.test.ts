@@ -185,13 +185,13 @@ describe('reading a note', () => {
 
   it('turns away a read away from the note, of a note the map lacks, and outside a run', () => {
     const state = atNotes({ [noteKey(0)]: ['p2'] });
-    expect(() => applyAction(state, read('p1', 0))).toThrow('Dafür musst du direkt davor stehen.');
+    expect(() => applyAction(state, read('p1', 0))).toThrow('Nur direkt davor.');
     expect(() => applyAction(state, read('p2', 5))).toThrow('Diese Notiz gibt es hier nicht.');
     expect(() => applyAction(initialState(mission), read('p2', 0))).toThrow(
-      'Dafür muss die Mission laufen.',
+      'Nur während des Einsatzes.',
     );
     const paused = applyAction(state, { type: 'set-paused', paused: true, at: T0 + 1500 });
-    expect(() => applyAction(paused, read('p2', 0))).toThrow(/pausiert/);
+    expect(() => applyAction(paused, read('p2', 0))).toThrow(/Pausiert/);
   });
 
   it('loses a run read after the clock ran out', () => {

@@ -142,7 +142,7 @@ describe('the operator gate', () => {
     const state = wiringOpen();
     const wireId = wiringOf(viewFor(state, 'p1').puzzle).wires?.[0]?.id ?? 'w0';
     expect(() => applyAction(state, input('p2', { wireId }))).toThrow(
-      'Dafür musst du am Pult stehen.',
+      'Eingabe nur am Pult.',
     );
     const there = standing(state, {
       stations: { kabel: ['p1', 'p2'] },
@@ -304,7 +304,7 @@ describe('button-sync by players', () => {
   it('refuses a press from a player away from the station', () => {
     const state = standing(syncOpen(), { stations: { sync: ['p1', 'p2'] } });
     expect(() => applyAction(state, press('p3', T0 + 1000))).toThrow(
-      'Dafür musst du am Pult stehen.',
+      'Eingabe nur am Pult.',
     );
   });
 

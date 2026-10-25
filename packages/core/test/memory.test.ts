@@ -575,7 +575,7 @@ describe('the memory bank in a mission', () => {
   it('lets only a player at the bank press, and only a button that exists', () => {
     for (const playerId of ['p2', 'p3']) {
       expect(() => applyAction(started(), pressBy(playerId, 0, T0 + 1000))).toThrow(
-        'Dafür musst du am Pult stehen.',
+        'Eingabe nur am Pult.',
       );
     }
     expect(() => applyAction(started(), pressBy('p1', 4, T0 + 1000))).toThrow(

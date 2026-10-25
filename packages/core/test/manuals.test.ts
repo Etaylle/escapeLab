@@ -5,6 +5,7 @@ import type { ManualBlock, ManualSection, Mission, PuzzleContext } from '../src/
 import { BUILD, LOG, OPERATION, WORKSHOP } from '../src/puzzles/printed.js';
 import { relayDefFor } from '../src/puzzles/relay.js';
 import { mulberry32 } from '../src/rng.js';
+import { offVoice, sentencesOf } from './voice.js';
 
 /**
  * Every module's printed page is a document the lab wrote for its own people
@@ -13,126 +14,11 @@ import { mulberry32 } from '../src/rng.js';
  * the device, Betrieb with what a fault costs, the tables the machine
  * follows, an excerpt from its log and the workshop's notes. That holds for
  * every variant a def can name, since the pages follow the def's variant
- * fields. The notes in the margins of every mission keep to the same voice.
+ * fields. The notes in the margins of every mission keep to the same voice:
+ * the papers' rules in voice.ts.
  */
 
 // --- the voice ---------------------------------------------------------------------------
-
-/** Imperatives to a person; a capitalised one counts only where it opens a sentence. */
-const IMPERATIVES = new Set([
-  'beachte',
-  'drehe',
-  'dreh',
-  'drück',
-  'drücke',
-  'finde',
-  'folge',
-  'frage',
-  'geh',
-  'gehe',
-  'gib',
-  'halte',
-  'lass',
-  'lasse',
-  'leg',
-  'lege',
-  'lies',
-  'melde',
-  'merk',
-  'merke',
-  'miss',
-  'nenn',
-  'nenne',
-  'nimm',
-  'notiere',
-  'öffne',
-  'prüfe',
-  'ruf',
-  'rufe',
-  'sag',
-  'sage',
-  'schalte',
-  'schau',
-  'schließe',
-  'schneid',
-  'schneide',
-  'schreib',
-  'schreibe',
-  'sende',
-  'sieh',
-  'stell',
-  'stelle',
-  'starte',
-  'such',
-  'suche',
-  'tipp',
-  'tippe',
-  'trenn',
-  'trenne',
-  'vergleiche',
-  'warte',
-  'wähle',
-  'wiederhole',
-  'zähl',
-  'zähle',
-]);
-
-/** Capitalised, these open a sentence as nouns: die Folge, die Stelle, der Tipp. */
-const NOUNS = new Set([
-  'Dreh',
-  'Folge',
-  'Frage',
-  'Miss',
-  'Ruf',
-  'Sage',
-  'Schau',
-  'Stelle',
-  'Suche',
-  'Tipp',
-  'Vergleiche',
-  'Warte',
-]);
-
-/** Whether a chunk of a sentence commands a person: an imperative anywhere, or opening it. */
-function commands(chunk: string): boolean {
-  const words = chunk.match(/[\p{L}]+/gu) ?? [];
-  return words.some((word, i) => {
-    const lower = word.charAt(0).toLowerCase() + word.slice(1);
-    const opens = i === 0 && !NOUNS.has(word);
-    return IMPERATIVES.has(word) || (opens && word !== lower && IMPERATIVES.has(lower));
-  });
-}
-
-/** What the lab's papers never do, and how to find it in a sentence. */
-const VOICE: readonly (readonly [string, (sentence: string) => boolean])[] = [
-  ['spricht mit du an', (s) => /\b(du|dich|dir|dein\w*)\b/i.test(s)],
-  ['spricht mit ihr an', (s) => /\b(ihr|euch|euer|eure[mnrs]?)\b/i.test(s)],
-  ['spricht mit Sie an', (s) => /\b(Sie|Ihnen|Ihre?[mnrs]?)\b/.test(s)],
-  ['nennt einen Spieler', (s) => /Spieler|Partner|Crew|Bediener|Leser|Team|Person/.test(s)],
-  [
-    'nennt einen Menschen',
-    (s) => /\b(jemand|niemand|[Mm]an)\b|\b(der|den|dem) [Aa]nderen?\b/.test(s),
-  ],
-  ['gibt eine Regieanweisung', (s) => /\b[Ww]er\b/.test(s)],
-  ['befiehlt', (s) => s.split(/(?<=[:;,])\s+/).some(commands)],
-  [
-    'coacht das Gespräch',
-    (s) => /an(ge)?sag|vor(ge)?les|zurück(ge)?ruf|ein(ge)?zähl|durch(ge)?(sag|geb)|redet/i.test(s),
-  ],
-  ['ruft aus', (s) => s.includes('!')],
-];
-
-/** A text cut into sentences: at a stop that a capital or an opening quote follows. */
-const sentencesOf = (text: string): string[] => text.split(/(?<=[.!?])\s+(?=[„A-ZÄÖÜ])/);
-
-/** Every sentence of `texts` that breaks the voice, with what it does. */
-function offVoice(texts: readonly string[]): string[] {
-  return texts.flatMap((text) =>
-    sentencesOf(text).flatMap((sentence) =>
-      VOICE.filter(([, breaks]) => breaks(sentence)).map(([what]) => `${what}: „${sentence}"`),
-    ),
-  );
-}
 
 /** Every string a page prints: headings, running text, rules, cells, captions, the log. */
 function printedTexts(manual: readonly ManualSection[]): string[] {

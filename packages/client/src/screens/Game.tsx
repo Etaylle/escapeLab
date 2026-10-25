@@ -290,7 +290,7 @@ function Briefing({ view }: { view: PlayerView }) {
       <h1>{view.missionTitle}</h1>
       {room !== null && (
         <p>
-          Du startest im <strong>{room}</strong>
+          Start im <strong>{room}</strong>
         </p>
       )}
       {view.alarms.limit !== null && (
@@ -686,7 +686,7 @@ function goalOf(view: PlayerView, map: MapView, self: Point): Goal {
       view.puzzle !== null
         ? view.puzzle.title
         : out
-          ? 'ALLE ZUM NOTAUSGANG'
+          ? 'NOTAUSGANG ENTRIEGELT'
           : (armedTitle ?? 'Alle Stationen erledigt'),
     exitCall: view.puzzle === null && out,
     missing: out || errands.length === 0 ? null : errands.join(' · '),
@@ -718,7 +718,7 @@ function PowerGoal({ view, map }: { view: PlayerView; map: MapView }) {
   return (
     <div className="stage-goal stage-goal--power">
       <h1>{view.missionTitle}</h1>
-      {room !== null && <span className="stage-sub">Du startest im {room}</span>}
+      {room !== null && <span className="stage-sub">Start im {room}</span>}
     </div>
   );
 }
@@ -878,9 +878,9 @@ function PauseOverlay({ pausedFor }: { pausedFor: string[] }) {
       <p>
         {pausedFor.length > 0
           ? `Warten auf ${pausedFor.join(', ')} — Uhr, Patrouillen und Notfälle stehen still.`
-          : 'Warten auf die Crew — Uhr, Patrouillen und Notfälle stehen still.'}
+          : 'Warten auf die Verbindung — Uhr, Patrouillen und Notfälle stehen still.'}
       </p>
-      <p className="muted">Wer getrennt wurde, lädt einfach die Seite neu und ist wieder dabei.</p>
+      <p className="muted">Getrennt? Die Seite neu laden genügt, um wieder dabei zu sein.</p>
     </div>
   );
 }

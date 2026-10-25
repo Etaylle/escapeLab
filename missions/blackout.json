@@ -5,9 +5,9 @@
   "listOrder": 10,
   "players": { "min": 2, "max": 3 },
   "story": {
-    "intro": "23:47 Uhr: ein Knall, dann Dunkelheit — nur die Notbeleuchtung glimmt rot. Ihr seid quer durchs Labor verstreut, die Regeln auch: Handbuch, Klemmbrett, Spind, Aktenschrank. Wer am Pult steht, sieht keine Regeln, und ein Pult wird zu zweit bedient, an zwei Orten zugleich. Allein bleibt das Labor dunkel.",
-    "win": "Mit einem tiefen Brummen erwachen die Systeme, Licht flutet das Labor — und hinter euch fällt die Luke des Notausgangs ins Schloss. Alle draußen, die Zentrifugen laufen wieder. Ihr habt es geschafft.",
-    "lose": "Ein letztes Flackern, dann ist es still. Die Notversorgung fällt aus, die Proben sind verloren. Das Labor bleibt dunkel … bis zum nächsten Versuch."
+    "intro": "Schichtbuch, 23:47 Uhr: ein Knall, dann Dunkelheit — nur die Notbeleuchtung glimmt rot. Die Nachtschicht ist quer durchs Labor verstreut, die Betriebsunterlagen auch: Handbuch, Klemmbrett, Spind, Aktenschrank. An den Pulten steht keine Regel, und jede Anlage wird zu zweit gefahren, an zwei Orten zugleich. Allein bleibt das Labor dunkel.",
+    "win": "Schichtbuch: Mit einem tiefen Brummen erwachen die Systeme, Licht flutet das Labor, die Zentrifugen laufen wieder. Die Luke des Notausgangs ist ins Schloss gefallen, die Nachtschicht vollzählig draußen.",
+    "lose": "Schichtbuch: Ein letztes Flackern, dann Stille. Die Notversorgung ist ausgefallen, die Proben sind verloren. Das Labor bleibt dunkel bis zur Frühschicht."
   },
   "timeLimitSec": 900,
   "intro": { "lightsSec": 5 },
@@ -186,7 +186,7 @@
     "sabotage": {
       "mode": "relay",
       "label": "KÜHLKREISLAUF — RELAIS VON HAND",
-      "hint": "Lest eure Anweisung sofort laut vor. Schalten darf nur, wer das Element am eigenen Pult hat. Danach laut bestätigen.",
+      "hint": "Notfallverfahren: Jede Anweisung sofort laut durchgeben; geschaltet wird nur an dem Pult, das sie nennt. Danach laut bestätigen.",
       "firstAfterSec": 100,
       "everySec": 150,
       "durationSec": 45,

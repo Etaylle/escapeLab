@@ -252,7 +252,7 @@ describe('the lobby', () => {
     expect(chips).toHaveLength(3);
     expect(chips[0]).toBe(
       '<button class="chip chip-mine" style="--chip:#2dd4bf" aria-pressed="true" ' +
-        'aria-label="Türkis — deine Farbe" title="Türkis — deine Farbe">[check]</button>',
+        'aria-label="Türkis — eigene Farbe" title="Türkis — eigene Farbe">[check]</button>',
     );
     expect(chips[1]).toBe(
       '<button class="chip chip-taken" style="--chip:#f472b6" disabled="" aria-pressed="false" ' +
@@ -289,7 +289,7 @@ describe('the lobby', () => {
   it('lets a guest say ready and tells them what the start still waits for', () => {
     const unready = lobby(benSees([anna, ben, carla], false));
     expect(unready).toContain('<button class="primary lobby-start">Ich bin bereit</button>');
-    expect(unready).toContain('Lies die Mission — dann melde dich bereit.');
+    expect(unready).toContain('Erst die Mission lesen, dann bereit melden.');
     expect(unready).not.toContain('Mission starten');
     const waiting = lobby(benSees([anna, { ...ben, ready: true }, carla], true));
     expect(waiting).toContain('<button class="lobby-start">[check] Bereit — doch nicht?</button>');

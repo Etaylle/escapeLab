@@ -109,7 +109,7 @@ describe('carryable items', () => {
   it('refuses a second item and someone else\'s item', () => {
     const carried = applyAction(playing(), pick('p1'));
     expect(() => applyAction(carried, pick('p2'))).toThrow(/jemand anderes/);
-    expect(() => applyAction(carried, pick('p1'))).toThrow(/trägst es schon/);
+    expect(() => applyAction(carried, pick('p1'))).toThrow(/Schon in der Hand/);
     expect(() =>
       applyAction(carried, {
         type: 'drop-item',
@@ -119,7 +119,7 @@ describe('carryable items', () => {
         y: 1,
         at: T0,
       }),
-    ).toThrow(/trägst du gar nicht/);
+    ).toThrow(/Nicht in der Hand/);
   });
 
   it('keeps the station inert until the item is delivered', () => {
@@ -156,7 +156,7 @@ describe('carryable items', () => {
     expect(() => applyAction(delivered, pick('p2'))).toThrow(/bereits abgeliefert/);
 
     const paused = applyAction(playing(), { type: 'set-paused', paused: true, at: T0 + 500 });
-    expect(() => applyAction(paused, pick('p1'))).toThrow(/pausiert/);
+    expect(() => applyAction(paused, pick('p1'))).toThrow(/Pausiert/);
   });
 
   it('rejects an item required for a puzzle that does not exist', () => {

@@ -155,7 +155,7 @@ interface ChipProps {
 function chipLabel({ color, owner, mine }: Omit<ChipProps, 'pick'>): string {
   const name = COLOR_NAMES[color] ?? color;
   if (mine) {
-    return `${name} — deine Farbe`;
+    return `${name} — eigene Farbe`;
   }
   return owner === null ? name : `${name} — trägt ${owner}`;
 }
@@ -194,7 +194,7 @@ function Palette({ view, send }: { view: PlayerView; send: (msg: ClientMessage) 
   return (
     <div className="palette">
       <p className="palette-caption" id={caption}>
-        Deine Farbe
+        Eigene Farbe
       </p>
       <div className="palette-chips" role="group" aria-labelledby={caption}>
         {view.palette.map(({ color, takenByName }) => {

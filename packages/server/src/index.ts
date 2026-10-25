@@ -187,7 +187,7 @@ function createRoom(msg: Extract<ClientMessage, { kind: 'create-room' }>): Room 
 
 function requireSession(session: Session | null): Session {
   if (session === null) {
-    throw new GameError('Du bist noch in keinem Raum.');
+    throw new GameError('Noch in keinem Raum.');
   }
   return session;
 }

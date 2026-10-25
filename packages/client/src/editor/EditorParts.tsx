@@ -39,7 +39,7 @@ export const TOOLS: readonly { tool: Tool; label: string; help: string }[] = [
     tool: 'note',
     label: 'Notiz',
     help:
-      'Ein Zettel der letzten Crew, frei zu lesen: an eine Wand neben dem Boden oder auf den ' +
+      'Ein Zettel der letzten Schicht, frei zu lesen: an eine Wand neben dem Boden oder auf den ' +
       'Boden.',
   },
 ];
@@ -52,7 +52,7 @@ export interface Status {
 
 /** A step that throws away unsaved changes, once the user agrees. */
 export interface Confirm {
-  /** „wenn du …": what the user is about to do */
+  /** „beim …": what the user is about to do, as a noun — „Importieren", „Neuanfang" */
   what: string;
   run: () => void;
 }
@@ -173,7 +173,7 @@ export function Notices({
     <>
       {confirm !== null && (
         <div className="editor-confirm" role="alertdialog" aria-label="Änderungen verwerfen?">
-          <span>Ungespeicherte Änderungen gehen verloren, wenn du {confirm.what}.</span>
+          <span>Ungespeicherte Änderungen gehen beim {confirm.what} verloren.</span>
           <button
             onClick={() => {
               confirm.run();
@@ -234,7 +234,7 @@ export function PlayForm({
       }}
     >
       <label className="editor-field">
-        Dein Name
+        Name
         <input
           value={name}
           maxLength={40}

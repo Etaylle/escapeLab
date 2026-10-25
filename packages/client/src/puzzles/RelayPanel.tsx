@@ -49,7 +49,7 @@ function Order({ instruction, windowSec }: { instruction: Instruction; windowSec
   return (
     <section
       className={`relay-order ${share < 0.34 ? 'relay-order--late' : ''}`}
-      aria-label="Deine Anweisung"
+      aria-label="Anweisung"
     >
       <span className="kicker">LAUT VORLESEN · PULT {instruction.playerName.toUpperCase()}</span>
       <strong className="relay-order-text">

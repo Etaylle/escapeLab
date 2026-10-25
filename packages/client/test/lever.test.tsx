@@ -86,10 +86,12 @@ describe('the main switch’s panel', () => {
     expect(secondsText(2500)).toBe('2,5');
   });
 
-  it('names the levers: DU under the own one, the partner’s name in the partner’s colour', () => {
-    expect(names(panel(lever({ here: 2 })))).toEqual(['DU', 'Ben #f472b6']);
+  it('names every lever for its badge, the own one first, each in its holder’s colour', () => {
+    expect(names(panel(lever({ here: 2 })))).toEqual(['Anna #2dd4bf', 'Ben #f472b6']);
     // Ben's screen: Ben's lever first, Anna's beside it.
-    expect(names(panel(lever({ here: 2 }), run('p2')))).toEqual(['DU', 'Anna #2dd4bf']);
+    expect(names(panel(lever({ here: 2 }), run('p2')))).toEqual(['Ben #f472b6', 'Anna #2dd4bf']);
+    // The plate says „du" to nobody.
+    expect(panel(lever({ here: 2 }))).not.toMatch(/>DU</);
   });
 
   it('burns the lamp over every lever somebody stands at, the own one always', () => {
@@ -113,7 +115,7 @@ describe('the main switch’s panel', () => {
     const press = { at: T0, expiresAt: T0 + 2000 };
     const html = panel(lever({ here: 2, youPressed: true, pressedCount: 1, press }));
     expect(levers(html)).toEqual(['Hv', 'H^']);
-    expect(html).toContain('disabled="" aria-label="Dein Hebel: unten"');
+    expect(html).toContain('disabled="" aria-label="Eigener Hebel: unten"');
     const ring = /<svg class="lever-ring"[^>]*>.*<circle class="lever-ring-left"[^>]*style="([^"]*)"/;
     expect(ring.exec(html)?.[1]).toBe('--ring-ms:2000ms;--ring-delay:-500ms');
   });
@@ -138,20 +140,20 @@ describe('the main switch’s panel', () => {
     expect(levers(html)).toEqual(['H^', '-^']);
     expect(html).not.toContain('lever-ring');
     expect(html).toContain('aria-label="Hebel umlegen"');
-    expect(html).toContain('Zug verfallen — nochmal zu zweit');
+    expect(html).toContain('Zug verfallen — nur zu zweit zugleich');
   });
 
   it('tells only the owner of a dropped press: the server’s word, „Zug verfallen"', () => {
     vi.useFakeTimers();
     vi.setSystemTime(T0 + 500);
     const dropped = panel(lever({ lastResult: 'expired', press: null }));
-    expect(dropped).toContain('Zug verfallen — nochmal zu zweit');
+    expect(dropped).toContain('Zug verfallen — nur zu zweit zugleich');
     // The partner whose late press opened a new window hears nothing of a miss.
     const press = { at: T0, expiresAt: T0 + 2000 };
     const presser = panel(lever({ youPressed: true, pressedCount: 1, press }));
     expect(presser).not.toContain('verfallen');
     expect(presser).not.toContain('Zeitfenster');
-    expect(expiredLine(3)).toBe('Zug verfallen — nochmal zu dritt');
+    expect(expiredLine(3)).toBe('Zug verfallen — nur zu dritt zugleich');
   });
 
   it('throws the partner’s lever while a partner’s press is in, and only then', () => {
@@ -206,12 +208,14 @@ describe('the main switch’s panel', () => {
 });
 
 describe('the coach line at a sync station', () => {
-  it('says at the main switch that each throws their own, by E or by a tap, once a session', () => {
+  it('says at the main switch: a lever a badge, all at once, by E or a tap, once', () => {
     expect(deviceCoach(lever(), 'mouse')).toEqual({
       id: 'device:lever',
-      text: 'Jeder seinen Hebel — gleichzeitig E drücken.',
+      text: 'Ein Hebel je Ausweis, alle zugleich — E drücken.',
     });
-    expect(deviceCoach(lever(), 'touch')?.text).toBe('Jeder seinen Hebel — gleichzeitig antippen.');
+    expect(deviceCoach(lever(), 'touch')?.text).toBe(
+      'Ein Hebel je Ausweis, alle zugleich — antippen.',
+    );
     const shown = new Set(['device:lever']);
     expect(firstSight(deviceCoach(lever(), 'mouse'), shown)).toBeNull();
   });
@@ -220,10 +224,13 @@ describe('the coach line at a sync station', () => {
     const timed = deviceCoach(lever({ style: 'button', windowMs: 2000 }), 'mouse');
     expect(timed).toEqual({
       id: 'device:button-sync:window',
-      text: 'Alle innerhalb von 2 s drücken.',
+      text: 'Ein Druck je Ausweis, alle binnen 2 s.',
     });
     const free = deviceCoach(lever({ style: 'button', windowMs: null }), 'touch');
-    expect(free).toEqual({ id: 'device:button-sync', text: 'Alle drücken — Reihenfolge egal.' });
+    expect(free).toEqual({
+      id: 'device:button-sync',
+      text: 'Ein Druck je Ausweis — Reihenfolge egal.',
+    });
     // Each rule its own mark: seeing the one does not hide the other.
     expect(firstSight(free, new Set([timed?.id ?? '']))).toEqual(free);
   });

@@ -358,7 +358,7 @@ function StartArea({ view, send }: { view: PlayerView; send: Send }) {
       <p className="muted lobby-go-note">
         {ready
           ? (blocker ?? 'Alle bereit — der Host startet.')
-          : 'Lies die Mission — dann melde dich bereit.'}
+          : 'Erst die Mission lesen, dann bereit melden.'}
       </p>
     </div>
   );

@@ -486,7 +486,7 @@ export const signalModule: PuzzleModule<SignalDef, SignalState, SignalInput, Sig
 
   apply(def, state, input, playerId, ctx) {
     if (ctx.console === null) {
-      fail('Dafür musst du am Pult stehen.');
+      fail('Eingabe nur am Pult.');
     }
     const sign = signPressed(def, input, ctx.console);
     const sends = sendingConsole(state.stage);

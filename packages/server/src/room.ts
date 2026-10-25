@@ -168,7 +168,7 @@ export class Room {
     }
     if (!this.state.players.some((p) => p.id === playerId)) {
       this.tokens.delete(playerId);
-      throw new Error('Die Crew ist ohne dich gestartet — Raum neu beitreten.');
+      throw new Error('Der Lauf hat ohne diese Verbindung begonnen — Raum neu beitreten.');
     }
     this.dispatch({ type: 'player-connected', playerId });
     this.reconcilePause();
@@ -490,7 +490,7 @@ export class Room {
 
     if (carried !== undefined && !this.stationInReach(playerId)) {
       throw new Error(
-        `Du trägst ${carried.label} — bring es zum markierten Platz (oder lege es mit Q ab).`,
+        `${carried.label} in der Hand: zum markierten Platz bringen oder mit Q ablegen.`,
       );
     }
     this.requireNearStation(playerId);
@@ -546,10 +546,10 @@ export class Room {
     const stations = armedStations(this.state.mission.map, this.state);
     const pos = this.positions.get(playerId);
     if (stations.length === 0 || pos === undefined) {
-      throw new Error('Hier gibt es nichts zu aktivieren — geht zur leuchtenden Station.');
+      throw new Error('Hier gibt es nichts zu aktivieren — nur die leuchtende Station.');
     }
     if (!this.stationInReach(playerId)) {
-      throw new Error('Zu weit weg — stell dich direkt an die leuchtende Station.');
+      throw new Error('Zu weit weg — nur direkt an der leuchtenden Station.');
     }
   }
 

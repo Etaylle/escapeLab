@@ -3,7 +3,7 @@ import type { PuzzleView } from '@escapelab/core';
 import { useKeys } from '../hooks.js';
 import { Icon } from '../screens/Icon.js';
 import { leverChunk } from '../world/audio.js';
-import { DeviceLamp, type DeviceCrew } from './Device.js';
+import { DeviceLamp, type DeviceCrew, type DeviceMate } from './Device.js';
 import { cssVars } from './feel.js';
 import type { PanelProps } from './index.js';
 import { leverSpring } from './sounds.js';
@@ -36,9 +36,12 @@ export function leverPlate(puzzle: SyncView, windowMs: number | null): string {
   return windowMs === null ? plate : `${plate} · ${secondsText(windowMs)} S`;
 }
 
-/** What the device says once this player's press ran out: „Zug verfallen — nochmal zu zweit". */
+/**
+ * What the device says once this player's press ran out, its plate's rule again: „Zug
+ * verfallen — nur zu zweit zugleich".
+ */
 export function expiredLine(requiredCount: number): string {
-  return `Zug verfallen — nochmal zu ${togetherWord(requiredCount).toLowerCase()}`;
+  return `Zug verfallen — nur zu ${togetherWord(requiredCount).toLowerCase()} zugleich`;
 }
 
 /** One lever of the main switch, as the panel draws it. */
@@ -48,17 +51,17 @@ export interface Handle {
   here: boolean;
   /** its press is in: thrown down, the grip glowing */
   down: boolean;
-  /** under it: „DU", or the partner's name in their colour; null where nobody is named */
+  /** under it: whose badge it answers to, by name in their colour; null where nobody is named */
   label: { text: string; color: string | null } | null;
 }
 
 /**
- * The levers, one for every member of the crew: at the station, this player's first, „DU"
- * under it, down as its press stands (`own`), then the partners' with their names in their
- * colours, each lamp burning while somebody stands there and each partner's lever down while
- * a partner's press is in — the view counts the partners' presses, not whose — and every
- * lever home once all presses are in. For the audience (`own` null), which stands at none,
- * none is its own and none named.
+ * The levers, one for every member of the crew: at the station, this player's first, under
+ * their own name, down as its press stands (`own`), then the partners' with their names in
+ * their colours, each lamp burning while somebody stands there and each partner's lever down
+ * while a partner's press is in — the view counts the partners' presses, not whose — and
+ * every lever home once all presses are in. For the audience (`own` null), which stands at
+ * none, none is its own and none named.
  */
 export function handlesOf(
   puzzle: SyncView,
@@ -76,13 +79,15 @@ export function handlesOf(
     }));
   }
   const { partners } = syncPress(puzzle);
+  const named = (mate: DeviceMate | undefined): Handle['label'] =>
+    mate === undefined ? null : { text: mate.name, color: mate.color };
+  const self = crew?.mates.find((mate) => mate.id === crew.you);
   const mates = (crew?.mates ?? []).filter((mate) => mate.id !== crew?.you);
   return Array.from({ length: count }, (_, i): Handle => {
     if (i === 0) {
-      return { own: true, here: true, down: own.down, label: { text: 'DU', color: null } };
+      return { own: true, here: true, down: own.down, label: named(self) };
     }
-    const mate = mates[i - 1];
-    const label = mate === undefined ? null : { text: mate.name, color: mate.color };
+    const label = named(mates[i - 1]);
     return { own: false, here: i < puzzle.here, down: thrown || i - 1 < partners, label };
   });
 }
@@ -156,7 +161,7 @@ function LeverUnit({ handle, grip }: { handle: Handle; grip: ReactNode }) {
 /**
  * The Notlicht's main switch, the whole crew's press as a cabinet with a lever for each, side
  * by side under the plate that says what it is and in how many seconds: this player's lever
- * in front of them, „DU" under it, the partners' named in their colours. E or a click throws
+ * in front of them, each lever named for its badge in its colour. E or a click throws
  * the own lever, with the kit's press feel; a ring round its grip drains while the press
  * counts, and as its window shuts the lever springs back with a clack — „Zug verfallen". A
  * partner's lever is down while a partner's press is in; once all are down, they drop home
@@ -183,7 +188,7 @@ export function LeverPanel({ puzzle, send, crew }: PanelProps<'button-sync'>) {
       className="big-button lever-grip"
       data-feel="pull"
       disabled={down}
-      aria-label={down ? 'Dein Hebel: unten' : 'Hebel umlegen'}
+      aria-label={down ? 'Eigener Hebel: unten' : 'Hebel umlegen'}
       onClick={pull}
     >
       {lever?.ring != null && <LeverRing key={lever.ring.at} press={lever.ring} />}

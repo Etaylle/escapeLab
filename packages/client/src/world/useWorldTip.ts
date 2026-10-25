@@ -28,7 +28,7 @@ function coachTip(
   if (map.sabotage !== null) {
     return {
       id: 'sabotage',
-      text: 'Notfall! Jede Person an ein eigenes Ventil — sofort losrennen.',
+      text: 'Notfall: Die Notventile schließen nur, wenn alle zugleich besetzt sind.',
     };
   }
   if (carried !== undefined) {
@@ -37,7 +37,7 @@ function coachTip(
   if (map.plates.some((plate) => plate.pressed && !plate.freezesDrone)) {
     return {
       id: 'plate',
-      text: 'Solange jemand auf der Platte steht, bleibt die Tür offen — nicht runtergehen!',
+      text: 'Die Tür bleibt nur offen, solange jemand auf der Platte steht.',
     };
   }
   void youId;
@@ -54,8 +54,8 @@ function carryTip(map: WorldMap, carried: WorldMap['items'][number], keyboard: b
   return {
     id: 'carry',
     text: keyboard
-      ? 'Du trägst etwas: Bring es zur markierten Fläche und drücke E. Mit Q legst du es ab.'
-      : 'Du trägst etwas: Bring es zur markierten Fläche und tippe ⚡. Mit 📦 legst du es ab.',
+      ? 'Getragen: an der markierten Fläche mit E einsetzen, mit Q ablegen.'
+      : 'Getragen: an der markierten Fläche mit ⚡ einsetzen, mit 📦 ablegen.',
   };
 }
 

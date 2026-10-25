@@ -517,7 +517,7 @@ function NoteForm({ index, props }: { index: number; props: ThingProps }) {
   const set = (text: string): void =>
     onChange(withMap(draft, { notes: replaceAt(draft.map.notes, index, { ...note, text }) }));
   return (
-    <Shell title="Notiz der letzten Crew" props={props}>
+    <Shell title="Notiz der letzten Schicht" props={props}>
       <AreaField
         label={`Text — ${note.text.length} von ${NOTE_TEXT_MAX} Zeichen`}
         value={note.text}
