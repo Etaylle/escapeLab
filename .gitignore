@@ -8,3 +8,6 @@ dist/
 packages/server/cert/
 # Missions saved from the editor: made on this server, not shipped.
 missions/custom/
+
+# local secrets (ElevenLabs key)
+.env.local
