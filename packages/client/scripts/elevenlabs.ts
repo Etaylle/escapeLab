@@ -4,7 +4,8 @@
  * that never ships — as ElevenLabs' text-to-speech skill shows it. The SDK reads the key from
  * ELEVENLABS_API_KEY: set in the environment, or kept in the repo's .env.local, which the
  * ElevenLabs CLI writes and git ignores. The script puts it from there into the environment and
- * nowhere else; it never prints it.
+ * nowhere else; it never prints it. The sound script (sfx.ts) makes its effects and music
+ * through the same client, the same retry on 429 (`elevenAudio`) and the same gap.
  *
  * Runs on Node's own TypeScript, as the voice script does. The SDK is imported only once a client
  * is made, so the tests, which hand in a client of their own, never load it and never call out.
@@ -53,6 +54,23 @@ export interface SpeechClient {
   };
 }
 
+/** What the sound script (sfx.ts) asks of the SDK's client: the credits left, effects, music. */
+export interface SoundClient {
+  readonly user: {
+    readonly subscription: {
+      get(): PromiseLike<{ readonly characterCount: number; readonly characterLimit: number }>;
+    };
+  };
+  readonly textToSoundEffects: {
+    convert(request: ElevenLabs.CreateSoundEffectRequest): PromiseLike<ReadableStream<Uint8Array>>;
+  };
+  readonly music: {
+    compose(
+      request: ElevenLabs.BodyComposeMusicV1MusicPost,
+    ): PromiseLike<ReadableStream<Uint8Array>>;
+  };
+}
+
 /** Who reads: the client, the voice by id, the model. */
 export interface ElevenVoice {
   readonly client: SpeechClient;
@@ -83,7 +101,7 @@ export function loadApiKey(env: NodeJS.ProcessEnv = process.env, file = ENV_FILE
 }
 
 /** The SDK's client, which takes the key from the environment and leaves retrying to us. */
-export async function elevenClient(): Promise<SpeechClient> {
+export async function elevenClient(): Promise<SpeechClient & SoundClient> {
   const { ElevenLabsClient } = await import('@elevenlabs/elevenlabs-js');
   return new ElevenLabsClient({ maxRetries: 0 });
 }
@@ -153,39 +171,56 @@ export function retryAfterMs(error: unknown): number | null {
   return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 1000;
 }
 
-/** What went wrong, in a sentence: the line, the status, what ElevenLabs said. */
-function refused(error: unknown, text: string): Error {
+/** Who asks ElevenLabs, and for what, as a message names it: `voice` and `read "Los."`. */
+export interface Asking {
+  readonly tag: string;
+  readonly what: string;
+}
+
+/** What went wrong, in a sentence: what was asked, the status, what ElevenLabs said. */
+function refused(error: unknown, asking: Asking): Error {
   const refusal = refusalOf(error);
   const said = refusal.body === undefined ? String(error) : JSON.stringify(refusal.body);
   const status = refusal.statusCode ?? 'no answer';
-  return new Error(`voice: ElevenLabs did not read "${text}" (${status}): ${said}`);
+  return new Error(`${asking.tag}: ElevenLabs did not ${asking.what} (${status}): ${said}`);
 }
 
 const pause = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms));
 
 /**
- * Has `voice` read `text` and returns the MP3. A request turned away as one too many (429)
- * waits the seconds its retry-after asks and goes again, ELEVEN_RETRIES times at most.
+ * Sends `request` and returns the audio it answers with. A request turned away as one too many
+ * (429) waits the seconds its retry-after asks and goes again, ELEVEN_RETRIES times at most;
+ * any other refusal fails at once, saying what was asked.
  */
-export async function speakEleven(
-  voice: ElevenVoice,
-  text: string,
+export async function elevenAudio(
+  request: () => PromiseLike<ReadableStream<Uint8Array>>,
+  asking: Asking,
   wait: (ms: number) => Promise<void> = pause,
 ): Promise<Buffer> {
   for (let attempt = 0; ; attempt++) {
     try {
-      const request = speechRequest(text, voice.model);
-      const audio = await voice.client.textToSpeech.convert(voice.voiceId, request);
-      return Buffer.from(await new Response(audio).arrayBuffer());
+      return Buffer.from(await new Response(await request()).arrayBuffer());
     } catch (error) {
       const delay = retryAfterMs(error);
       if (delay === null || attempt >= ELEVEN_RETRIES) {
-        throw refused(error, text);
+        throw refused(error, asking);
       }
-      console.log(`voice: ElevenLabs asks for a pause (429), going again in ${delay / 1000} s`);
+      const again = `going again in ${delay / 1000} s`;
+      console.log(`${asking.tag}: ElevenLabs asks for a pause (429), ${again}`);
       await wait(delay);
     }
   }
+}
+
+/** Has `voice` read `text` and returns the MP3, a 429 waited out (`elevenAudio`). */
+export function speakEleven(
+  voice: ElevenVoice,
+  text: string,
+  wait: (ms: number) => Promise<void> = pause,
+): Promise<Buffer> {
+  const request = speechRequest(text, voice.model);
+  const asking = { tag: 'voice', what: `read "${text}"` };
+  return elevenAudio(() => voice.client.textToSpeech.convert(voice.voiceId, request), asking, wait);
 }
 
 /**
