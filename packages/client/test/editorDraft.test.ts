@@ -166,7 +166,8 @@ describe('draft ↔ JSON', () => {
       };
     };
     expect(json.listOrder).toBe(10);
-    expect(json.intro).toEqual({ lightsSec: 5 });
+    expect(json.intro).toEqual((blackout as { intro?: unknown } | undefined)?.intro);
+    expect(json.intro).toMatchObject({ place: 'Trakt C', time: 'Nachtschicht · 23:47' });
     expect(json.map.drones[0]).toMatchObject({ speed: 1.7, frozenByPlate: 'kameraplatte' });
     expect(json.map.sabotage).toMatchObject({
       mode: 'relay',

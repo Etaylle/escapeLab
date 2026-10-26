@@ -28,6 +28,7 @@ import './styles/ux2.css';
 import './styles/putdown.css';
 import './styles/record.css';
 import './styles/settings.css';
+import './styles/intro.css';
 
 // The player's volumes, text size and motion apply before the first frame (settings.ts).
 startSettings();

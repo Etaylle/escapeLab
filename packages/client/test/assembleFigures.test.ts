@@ -3,6 +3,7 @@ import type { PlayerView } from '@escapelab/core';
 import { worldText } from '../src/world/art.js';
 import { assembleFrame, type FrameSource, type Latest } from '../src/world/assemble.js';
 import type { FinaleCue } from '../src/world/finale.js';
+import type { IntroCue } from '../src/world/intro/sequence.js';
 import { newSim } from '../src/world/sim.js';
 import { fakeCanvas, FakePath2D } from './fakeCanvas.js';
 import { kitWith, TILES } from './frames.js';
@@ -76,6 +77,7 @@ function sourceWith(items: Item[], finale: FinaleCue | null = null): FrameSource
     locked: false,
     finale,
     escapeSince: null,
+    intro: null,
     reduced: false,
     voice: null,
   };
@@ -144,5 +146,89 @@ describe('assembleFrame — what the crew’s figures stand by', () => {
     expect(frameAt(sourceWith([], { ending: 'won', since }), 1).mood).toBe('celebrate');
     expect(frameAt(sourceWith([], { ending: 'lost:time', since }), 1).mood).toBe('slump');
     expect(frameAt(sourceWith([], { ending: 'lost:alarms', since }), 1).mood).toBe('slump');
+  });
+});
+
+describe('assembleFrame — the opening’s shot', () => {
+  const SINCE = 2_000_000;
+  /** A lab larger than the screen: 30 × 20 tiles, walls round floor. */
+  const WIDE_TILES = Array.from({ length: 20 }, (_, y) =>
+    y === 0 || y === 19 ? '#'.repeat(30) : `#${'.'.repeat(28)}#`,
+  );
+
+  beforeAll(() => {
+    vi.stubGlobal('Path2D', FakePath2D);
+    vi.useFakeTimers();
+    vi.setSystemTime(SINCE + 5000);
+  });
+  afterAll(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  /** Anna's world in the wide lab, the power on, her opening as `cue` has it. */
+  function opening(cue: Partial<IntroCue>): FrameSource {
+    const source = sourceWith([]);
+    const view = source.live.current.view;
+    const map = mapWith({
+      width: 30,
+      height: 20,
+      tiles: WIDE_TILES,
+      yourSpawn: { x: 3, y: 3 },
+      // The reactor in the far corner: further than the camera can look.
+      labels: [{ text: 'REAKTOR', x: 28, y: 18, kind: 'reactor' }],
+    });
+    source.live.current = {
+      ...source.live.current,
+      view: { ...view, map, lights: { out: false, outAt: null } },
+      intro: {
+        since: SINCE,
+        lightsSec: 29.1,
+        skippedAt: null,
+        outAt: null,
+        closing: false,
+        ...cue,
+      },
+    };
+    return source;
+  }
+
+  it('shows the lab lit whole, a little wider than play, with no minimap and no marks', () => {
+    const shot = frameAt(opening({}), 5);
+    const free = frameAt(opening({ skippedAt: SINCE + 4000 }), 5);
+    expect(shot.whole).toBe(1);
+    expect(shot.minimap).toBeNull();
+    expect(shot.markers).toEqual([]);
+    expect(shot.action).toBeNull();
+    expect(free.whole).toBe(0);
+    expect(free.minimap).not.toBeNull();
+    expect(shot.camera.scale).toBeLessThan(free.camera.scale);
+    expect(shot.camera.scale / free.camera.scale).toBeCloseTo(0.9, 2);
+  });
+
+  it('moves from its first frame, its ends held where the camera can look', () => {
+    // The lab as wide as the screen shows it: the shot's ends lie beyond the camera's reach
+    // sideways, so they are held at its edge, and still the camera moves as the shot goes.
+    const at = (ms: number) => {
+      vi.setSystemTime(SINCE + ms);
+      return frameAt(opening({}), ms / 1000).camera;
+    };
+    const first = at(1600);
+    const later = at(2600);
+    vi.setSystemTime(SINCE + 5000);
+    expect(Math.hypot(later.x - first.x, later.y - first.y)).toBeGreaterThan(0);
+  });
+
+  it('looks along the shot, not at the avatar, until the player skips', () => {
+    const source = opening({});
+    source.sim.cam = { x: 3.5, y: 3.5 };
+    const shot = frameAt(source, 5);
+    expect(Math.hypot(shot.camera.x - 3.5, shot.camera.y - 3.5)).toBeGreaterThan(2);
+    const skipped = opening({ skippedAt: SINCE + 4000 });
+    skipped.sim.cam = { x: 3.5, y: 3.5 };
+    const free = frameAt(skipped, 5);
+    expect(Math.hypot(free.camera.x - 3.5, free.camera.y - 3.5)).toBeLessThan(
+      Math.hypot(shot.camera.x - 3.5, shot.camera.y - 3.5),
+    );
   });
 });

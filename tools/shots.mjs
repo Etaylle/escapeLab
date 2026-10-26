@@ -28,16 +28,29 @@
  * within 250 ms of its probe, the needle still swinging (meter-swing.png),
  * or the run fails.
  *
- * Cold open: a mission with an intro, as Blackout, opens with the power on.
- * While NORMALBETRIEB shows, the host's window grows to 1440×1000, the host
- * steps into its room and the guest walks three tiles towards it — the
- * host's frames meanwhile are the sample of the lit scene — and
- * cold-open.png catches the host's room lit whole and warm: the run fails
- * unless the floor of the host's own room comes out bright on the canvas and
- * the Serverraum's and the Labor's dark, tile by tile through the camera the
- * traced page reports. A player spawned at the Laborkennung gets its note at
- * once (sign.png). Two seconds after the clock starts counting comes
- * blackout.png, the emergency lamps red. Then both go to the first station,
+ * The opening: a title comes on as a phosphor screen does, once a page
+ * load — the game's on the start screen, the mission's in the lobby
+ * (lobby-title.png). Every run opens on a location card (intro-card.png): the
+ * plant, the wing and the shift for a mission with an intro, a mission's name
+ * without one. Blackout's intro shows the lab with its power on as a film:
+ * intro-pan.png once the loudspeakers' first line stands subtitled between the
+ * two black bars, the skip beside it, the camera running across the lab — the
+ * host's frames over the shot sampled for information alone. The host skips
+ * with Space and the guest's phone counts it (intro-skip.png, „(1/2)").
+ *
+ * Cold open: while NORMALBETRIEB shows, the host's window grows to 1440×1000
+ * and the host, free, steps into its room — its frames meanwhile the sample
+ * of the lit scene — and cold-open.png catches the host's room lit whole and
+ * warm: the run fails unless the floor of the host's own room comes out
+ * bright on the canvas and the Serverraum's and the Labor's dark, tile by
+ * tile through the camera the traced page reports. A player spawned at the
+ * Laborkennung gets its note once its opening no longer fills the screen
+ * (sign.png). Then the guest taps the opening away too: the whole crew done,
+ * the lights go out at once, long before the intro's own end, and the
+ * mission's title lands — on the guest's phone between the bars of the shot
+ * it cut (intro-title-phone.png), on the host's window at the bang after the
+ * flicker (intro-title.png). Two seconds after the clock starts counting
+ * comes blackout.png, the emergency lamps red. Then both go to the first station,
  * a main switch — whoever is locked in let out over a plate first — and E
  * opens its panel for each (lever.png, every lamp lit, the player's own name
  * under the own lever). Where the view gives a press its expiry, the host throws alone:
@@ -372,11 +385,11 @@ const LUMA_TOLERANCE = 0.1;
  * what its draw left out. Found by printing the core's draw of a crew of two
  * for seeds 1…50 and replaying the steps below that depend on it, in a room:
  *
- * - Blackout 5: Anna starts in the Archiv by the sign (3,3; sign.png, at once
- *   with the power on), Ben at the Flur's west end (1,8); the book lies at
+ * - Blackout 5: Anna starts in the Archiv by the sign (3,3; sign.png, once she
+ *   has skipped the opening), Ben at the Flur's west end (1,8); the book lies at
  *   (6,1), the Klemmbrett at (8,9) by the lever, the locker at (13,1), the
  *   cabinet at (12,11). With the power on, Anna's step into the Archiv brings
- *   the book into sight, and Ben walks towards her (cold-open.png). Nobody
+ *   the book into sight while Ben watches the opening on (cold-open.png). Nobody
  *   starts behind a door: both walk up to the lever in the middle of the Flur
  *   (lever.png). Then Ben reads the book (reading), holds the plate for Anna
  *   on her way to console A of the Notstrom-Kasten, works console B and asks
@@ -709,10 +722,11 @@ function busyCores(before, after, seconds) {
  * Samples a page opened with `traced`: resets its frame trace, lets `quiet`
  * fill the window and logs p50 and p95 of the durations recorded meanwhile.
  * Nothing in `quiet` may screenshot, resize or click: those stalls are the
- * harness's, not the game's. A p95 over the budget fails the run, as does a
- * page without a trace or a window without frames.
+ * harness's, not the game's. A p95 over the budget fails the run — unless the
+ * window is for information only (`gating` false), which logs it alone — as
+ * does a page without a trace or a window without frames.
  */
-async function sampleFrames(page, when, quiet) {
+async function sampleFrames(page, when, quiet, { gating = true } = {}) {
   // The probes hold the voice as well: the frames are there only while a world is up.
   const found = await page.evaluate(() => {
     const probe = globalThis.__escapelab;
@@ -745,11 +759,15 @@ async function sampleFrames(page, when, quiet) {
     return;
   }
   const p95 = percentile(frames, 95);
-  const over = p95 > FRAME_P95_MS;
+  const over = gating && p95 > FRAME_P95_MS;
+  const verdict = !gating
+    ? 'for information, gating nothing'
+    : over
+      ? `!! over the budget of ${FRAME_P95_MS} ms`
+      : `within ${FRAME_P95_MS} ms`;
   console.log(
     `frames             p50 ${percentile(frames, 50).toFixed(1)} ms · p95 ${p95.toFixed(1)} ms ` +
-      `(${frames.length}) ${when}: ` +
-      (over ? `!! over the budget of ${FRAME_P95_MS} ms` : `within ${FRAME_P95_MS} ms`),
+      `(${frames.length}) ${when}: ${verdict}`,
   );
   console.log(`cpu                cores busy: ${cores}; sound: ${soundSources(nodes)}`);
   console.log(`pages              ${perPage}`);
@@ -1493,30 +1511,6 @@ async function captureBothAtStation(reader, operator, station, sync) {
 }
 
 /**
- * Walks `player` up to `tiles` tiles along the shortest way to `target`,
- * planned as if every door stood open, and stops in front of one that is
- * shut. Returns how many tiles it walked.
- */
-async function approach(player, target, tiles) {
-  const map = player.seen.view.map;
-  const from = tileOf(player.seen);
-  // A map without doors: the way is planned as if every door stood open.
-  const path = from === null ? null : route({ ...map, doors: [] }, from, target);
-  const shut = new Set(map.doors.filter((d) => !d.open).map((d) => `${d.x},${d.y}`));
-  let walked = 0;
-  for (const tile of (path ?? []).slice(1, tiles + 1)) {
-    if (shut.has(`${tile.x},${tile.y}`)) {
-      break;
-    }
-    if (!(await stepTo(player.page, player.seen, tile.x + 0.5, tile.y + 0.5))) {
-      break;
-    }
-    walked += 1;
-  }
-  return walked;
-}
-
-/**
  * One step from where `player` stands into its room — north, east, south or
  * west, the first that is floor — as a player does first, which brings more
  * of the room into sight. The player stays there.
@@ -1653,31 +1647,23 @@ async function checkPowerRooms(host) {
 }
 
 /**
- * cold-open.png: a mission with an intro opens with the power on —
- * NORMALBETRIEB where the clock will be, and the room each player stands in
- * lit whole and warm, the rest of the lab dark. The host's window grows to
- * COLD_OPEN; while the power is on, the host steps into its room and the
- * guest walks a few steps towards the host, and the host's frames meanwhile
- * are the sample of the lit scene. Fails unless the shot shows the host's
- * own room lit and the Serverraum and the Labor dark (`checkPowerRooms`);
- * throws when NORMALBETRIEB never shows or the lights are out before the
- * shot.
+ * cold-open.png: a mission with an intro opens with the power on, and a
+ * player who has skipped its opening walks the lit lab — NORMALBETRIEB where
+ * the clock will be, the room the player stands in lit whole and warm, the
+ * rest of the lab dark. The host's window grows to COLD_OPEN; the host steps
+ * into its room, and the host's frames meanwhile are the sample of the lit
+ * scene, while the guest still watches the opening. Fails unless the shot
+ * shows the host's own room lit and the Serverraum and the Labor dark
+ * (`checkPowerRooms`); throws when NORMALBETRIEB never shows or the lights
+ * are out before the shot.
  */
-async function captureColdOpen(host, guest) {
+async function captureColdOpen(host) {
   if (!(await attached(host.page.locator('.stage-clock .power-status'), 5000))) {
     throw new Error('the run opened with the power on, but no NORMALBETRIEB shows');
   }
   await host.page.setViewportSize(COLD_OPEN);
   await sleep(250);
-  const toward = tileOf(host.seen);
-  let walked = 0;
-  await sampleFrames(host.page, 'in the lit lab, the power still on', async () => {
-    const [steps] = await Promise.all([
-      toward === null ? 0 : approach(guest, toward, 3),
-      stepIntoRoom(host),
-    ]);
-    walked = steps;
-  });
+  await sampleFrames(host.page, 'in the lit lab, the power still on', () => stepIntoRoom(host));
   if (host.seen.view.lights.out) {
     throw new Error('the lights went out before cold-open.png');
   }
@@ -1688,10 +1674,155 @@ async function captureColdOpen(host, guest) {
   const found = host.seen.view.map.manuals.map((manual) => manual.kind).join(', ') || 'none';
   console.log(
     `cold-open.png      ${host.name} @ ${COLD_OPEN.width}x${COLD_OPEN.height}: "${status}", ` +
-      `"${room}"; ${rooms}; sources found: ${found}; ` +
-      `${guest.name} walked ${walked} tile(s) towards ${host.name}`,
+      `"${room}"; ${rooms}; sources found: ${found}`,
   );
   await host.page.setViewportSize(SIZES[0]);
+}
+
+/** The run's opening as a traced page has it (client world/intro/useIntro.ts); null for none. */
+function introOf(page) {
+  return page.evaluate(() => globalThis.__escapelab?.intro ?? null);
+}
+
+/** Where a traced page's camera looks, tiles; null without one. */
+function cameraOf(page) {
+  return page.evaluate(() => {
+    const camera = globalThis.__escapelab?.camera;
+    return camera === undefined ? null : { x: camera.x, y: camera.y };
+  });
+}
+
+/** The black bars of the opening's shot standing in `page`'s picture. */
+function barsIn(page) {
+  return page.locator('.intro-bar:not(.intro-bar--out)').count();
+}
+
+/**
+ * intro-card.png: a run opens on the location card, on black — the plant, and for a mission
+ * with an intro its wing and the shift with its time; a mission without one names itself
+ * there. The card stands 1.5 s (2.5 s without an intro): waited for from before the run starts
+ * and shot as soon as it is up whole. Fails where none comes up.
+ */
+async function captureIntroCard(player) {
+  const up = await player.page
+    .waitForFunction(
+      () => {
+        const card = document.querySelector('.intro-card');
+        return card !== null && Number(globalThis.getComputedStyle(card).opacity) > 0.9;
+      },
+      null,
+      { timeout: START_MS + 2500 },
+    )
+    .then(
+      () => true,
+      () => false,
+    );
+  if (!up) {
+    console.log('intro-card.png     !! no location card came up as the run started');
+    fail('intro-card.png: no location card as the run started');
+    return;
+  }
+  await capture(player.page, 'intro-card.png');
+  const lines = await player.page.locator('.intro-card p, .intro-card h1').allInnerTexts();
+  console.log(`intro-card.png     ${player.name}: ${lines.join(' / ')}`);
+}
+
+/**
+ * intro-pan.png: the opening's shot once the lab has faded in, its power on, and the
+ * loudspeakers' first line stands subtitled in the lower bar between the two black bars, the
+ * skip beside it, nobody of the crew skipped yet. The camera runs from the reactor end towards
+ * the spawn meanwhile; the host's frames over the shot are sampled for information, gating
+ * nothing. Fails where the bars, the subtitle, the skip or the camera's run are missing.
+ */
+async function captureIntroShot(player) {
+  const subtitle = player.page.locator('.intro-subtitle');
+  const said = await attached(subtitle, 8000);
+  await capture(player.page, 'intro-pan.png');
+  const line = said ? await textOf(subtitle) : null;
+  const hint = await textOf(player.page.locator('.intro-skip'));
+  const bars = await barsIn(player.page);
+  const from = await cameraOf(player.page);
+  await sampleFrames(player.page, 'over the opening’s shot', () => sleep(SAMPLE_MS), {
+    gating: false,
+  });
+  const to = await cameraOf(player.page);
+  const intro = await introOf(player.page);
+  const ran = from === null || to === null ? 0 : Math.hypot(to.x - from.x, to.y - from.y);
+  console.log(
+    `intro-pan.png      ${player.name}: ${bars} bars, „${line ?? '!! no subtitle'}", ` +
+      `„${hint ?? '!! no skip'}"; the camera ran ${ran.toFixed(2)} tiles in ` +
+      `${SAMPLE_MS / 1000} s; ${intro?.pa?.played ?? 0} line(s) over the loudspeakers so far, ` +
+      `music ${intro?.cue?.playing ? 'playing' : 'none'}`,
+  );
+  const fine = bars === 2 && line !== null && hint === 'Überspringen · Leertaste (0/2)';
+  if (!fine || intro?.phase !== 'shot' || !(ran > 0.05)) {
+    fail(`intro-pan.png: ${bars} bars, subtitle ${line !== null}, „${hint}", ran ${ran} tiles`);
+  }
+}
+
+/**
+ * intro-skip.png: the host skips the opening with Space — the bars leave its picture, the lit
+ * lab is its to walk — and the guest's lower bar counts it, „(1/2)". Fails where the count
+ * does not come or the host's opening is not cut.
+ */
+async function captureIntroSkip(host, guest) {
+  await host.page.keyboard.press('Space');
+  const counted = await attached(guest.page.locator('.intro-skip', { hasText: '(1/2)' }), 5000);
+  await capture(guest.page, 'intro-skip.png');
+  const hint = await textOf(guest.page.locator('.intro-skip'));
+  await sleep(500); // the host's bars leave over 0.4 s
+  const intro = await introOf(host.page);
+  const bars = await barsIn(host.page);
+  console.log(
+    `intro-skip.png     ${host.name} skipped with Space (${intro?.phase}, ${bars} bars left), ` +
+      `${guest.name}'s lower bar: „${hint ?? '!! nothing'}"; the lights ` +
+      (host.seen.view.lights.out ? '!! went out' : 'still on'),
+  );
+  if (!counted || intro?.skipped !== true || bars !== 0 || host.seen.view.lights.out) {
+    fail(`intro-skip.png: counted ${counted}, ${host.name} ${intro?.phase} with ${bars} bars`);
+  }
+}
+
+/** Shoots `player`'s title as `name` once it has landed; what it said and the bars beside it. */
+async function titleShot(player, name) {
+  const title = player.page.locator('.intro-title');
+  const up = await attached(title, 6000);
+  if (up) {
+    await sleep(250); // past its landing
+    await capture(player.page, name);
+  }
+  return { up, text: up ? await textOf(title) : null, bars: await barsIn(player.page) };
+}
+
+/**
+ * intro-title.png, intro-title-phone.png: the guest presses the opening away too, and with the
+ * whole crew done the lights go out at once — on the guest's phone the shot cuts to its spawn
+ * and the mission's title lands on the dark frame between the bars; on the host's window, the
+ * host having skipped, it lands at the bang after the lights' flicker. Fails where a title does
+ * not come, the guest's beat stands without its bars, or the lights waited for the intro's end.
+ */
+async function captureIntroTitle(host, guest) {
+  const pressed = Date.now();
+  // A press, not a touch: the phone's first touch in a run takes its page fullscreen, as on a
+  // phone, and the walkthrough resizes that window later on.
+  await guest.page.locator('.intro').click();
+  const [phone, desk] = await Promise.all([
+    titleShot(guest, 'intro-title-phone.png'),
+    titleShot(host, 'intro-title.png'),
+  ]);
+  const { lights, startedAt, intro } = host.seen.view;
+  const outIn = lights.outAt === null ? null : lights.outAt - startedAt;
+  const early = outIn !== null && lights.outAt >= pressed - 50 && outIn < intro.lightsSec * 1000;
+  console.log(
+    `intro-title.png    ${host.name}: „${desk.text ?? '!! no title'}" at the bang; ` +
+      `intro-title-phone.png ${guest.name}: „${phone.text ?? '!! no title'}" between ` +
+      `${phone.bars} bars; the lights went out ${outIn === null ? '!! never' : seconds(outIn)} ` +
+      `into the run as ${guest.name} pressed, the intro's own end at ${intro.lightsSec} s`,
+  );
+  if (!desk.up || !phone.up || phone.bars !== 2 || !early) {
+    const said = `${host.name} ${desk.up}, ${guest.name} ${phone.up} with ${phone.bars} bars`;
+    fail(`intro titles: ${said}`);
+  }
 }
 
 /** The light probe of a traced page (client world/gl/path.ts), or null where it has none. */
@@ -2590,17 +2721,24 @@ async function signAtSpawn(players) {
 }
 
 /**
- * A mission's intro, the power on, then the lights failing: cold-open.png,
- * sign.png for a player spawned at the Laborkennung (signAtSpawn),
- * blackout.png, the Leitstelle's first line heard on the guest's radio from
- * its opening squelch on — the guest's page, so that the host's frame sample
- * in the lit lab is left alone — and the lever the first station is
- * (lever.png, lit-flur.png). Returns the player sign.png caught, if any.
+ * A mission's intro, the power on, then the lights failing: the opening's
+ * shot (intro-pan.png), the host's skip counted on the guest's phone
+ * (intro-skip.png), sign.png for a player spawned at the Laborkennung
+ * (signAtSpawn), the host in the lit lab (cold-open.png), the guest's skip and
+ * with it the blackout's beat on both (intro-title.png, intro-title-phone.png)
+ * — both pages skip, so that the pinned plan keeps its timing — blackout.png,
+ * the Leitstelle's first line heard on the guest's radio from its opening
+ * squelch on — the guest's page, so that the host's frame samples are left
+ * alone — and the lever the first station is (lever.png, lit-flur.png).
+ * Returns the player sign.png caught, if any.
  */
 async function coldOpen(host, guest) {
   const opening = hearRadio(guest, 40_000);
-  await captureColdOpen(host, guest);
+  await captureIntroShot(host);
+  await captureIntroSkip(host, guest);
   const atSign = await signAtSpawn([host, guest]);
+  await captureColdOpen(host);
+  await captureIntroTitle(host, guest);
   await captureBlackout(host);
   await bedDead(host, 'after the blackout');
   await partnerSide(host, guest, 'after the blackout');
@@ -3698,6 +3836,30 @@ async function checkFirstRunCard(page) {
 }
 
 /**
+ * lobby-title.png: a title comes on as a phosphor screen does, unsteady for a moment, once a
+ * page load — the game's on the start screen as the page loads (`joined` says whether it did),
+ * then the mission's the first time the lobby shows; shot once it has come on. Fails where
+ * either did not come on.
+ */
+async function captureLobbyTitle(page, joined) {
+  const title = page.locator('.lobby-head h1');
+  await title.waitFor({ timeout: 10_000 });
+  const comesOn = (await title.getAttribute('class'))?.includes('phosphor-title') === true;
+  const animation = await title.evaluate((el) => globalThis.getComputedStyle(el).animationName);
+  await sleep(1300); // past the 1.2 s it takes
+  await capture(page, 'lobby-title.png');
+  const start = joined ? 'as the page loaded' : '!! not';
+  console.log(
+    `lobby-title.png    the start screen's title came on ${start}` +
+      `; the lobby's „${await textOf(title)}" ` +
+      (comesOn ? `came on (${animation}) the first time it showed` : '!! did not come on'),
+  );
+  if (!joined || !comesOn) {
+    fail(`lobby-title.png: the start screen's title came on ${joined}, the lobby's ${comesOn}`);
+  }
+}
+
+/**
  * lobby-first.png: the host's device has won no run, so the room it opened stands on
  * „entspannt", the lobby saying why under the levels. Then the host picks „Normal", which the
  * walkthrough plays: its drones' flights, clocks and alarm marks are counted at that level.
@@ -4428,6 +4590,10 @@ async function captureEditor() {
 const ART_MISSION = { id: 'custom-blackout', title: 'Kunstprobe' };
 /** The art tour's windows: as large as cold-open.png's. */
 const ART_SIZE = COLD_OPEN;
+/** How long the art tour's copy keeps its power on, s: its intro, with no announcement. */
+const ART_LIGHTS_SEC = 10;
+/** How long before the lights are due the opening's shot comes to rest on a spawn (client). */
+const SHOT_HOLD_MS = 3000;
 
 /** Blackout as its mission file has it: its drones' beats and its emergencies' schedule. */
 const BLACKOUT = JSON.parse(
@@ -4436,8 +4602,8 @@ const BLACKOUT = JSON.parse(
 
 /**
  * Blackout as the art tour plays it: ten seconds of power before the lights
- * fail, for two, starting in the Archiv and in the Maschinenraum — a copy
- * the server checks as it checks every mission.
+ * fail (an intro with no announcement), for two, starting in the Archiv and in
+ * the Maschinenraum — a copy the server checks as it checks every mission.
  */
 function artMission() {
   const blackout = structuredClone(BLACKOUT);
@@ -4448,7 +4614,7 @@ function artMission() {
     ...ART_MISSION,
     listOrder: 99,
     players: { min: 2, max: 2 },
-    intro: { lightsSec: 10 },
+    intro: { lightsSec: ART_LIGHTS_SEC },
     map: {
       ...blackout.map,
       spawns: [
@@ -4508,7 +4674,7 @@ const startedAt = (players, x, y) =>
  * the power on, or a start is not where the copy put it.
  */
 async function artCaptures({ host, guest, watcher }) {
-  await sleep(1200); // past the stage's fade-in, the lights at full
+  await sleep(2700); // past the opening's card and the lab fading in, the lights at full
   if (host.seen.view?.lights?.out !== false) {
     throw new Error('the art tour’s mission did not open with the power on');
   }
@@ -4519,22 +4685,31 @@ async function artCaptures({ host, guest, watcher }) {
     throw new Error('the art tour’s starts are not the Archiv’s and the Maschinenraum’s');
   }
   await capture(watcher.page, 'art-overview.png');
+  // The Archiv's player skips the opening and stands in its own room lit, as the lab with its
+  // power on shows a player who walks it; the Maschinenraum's watches on, the shot at rest on
+  // its spawn with the lab lit whole, between the bars, until the lights fail by themselves.
+  await archive.page.keyboard.press('Space');
+  await sleep(600); // the bars gone
   await capture(archive.page, 'room-archive.png');
+  const rest = (machine.seen.view?.startedAt ?? Date.now()) + ART_LIGHTS_SEC * 1000 - SHOT_HOLD_MS;
+  await sleep(Math.max(0, rest + 500 - Date.now()));
   await capture(machine.page, 'room-machine.png');
   const map = watcher.seen.view?.map;
   const kinds = (map?.labels ?? []).map((label) => `${label.text} ${label.kind ?? 'plain'}`);
   console.log(
     `art-overview.png   the audience, the power on: ${new Set(kinds).size} rooms by kind ` +
       `(${[...new Set(kinds)].join(', ')}), ${map?.decor?.length ?? 0} pieces of furniture; ` +
-      `room-archive.png ${archive.name}, room-machine.png ${machine.name}`,
+      `room-archive.png ${archive.name}, skipped into the lit lab; room-machine.png ` +
+      `${machine.name}, the opening's shot at rest on its spawn`,
   );
   if (!(await until(() => machine.seen.view?.lights?.out === true, 12_000))) {
     throw new Error('the art tour’s lights never went out');
   }
-  await sleep(2000);
+  // Past the blackout's beat: the title and the bars of the shot it cut.
+  await sleep(2500);
   await checkLight(machine);
   await capture(machine.page, 'art-dark.png');
-  console.log(`art-dark.png       ${machine.name} in the Maschinenraum, two seconds into the dark`);
+  console.log(`art-dark.png       ${machine.name} in the Maschinenraum, 2.5 s into the dark`);
   await captureStandby(machine);
 }
 
@@ -6494,6 +6669,8 @@ async function run() {
   host.on('pageerror', (e) => console.log('[host error]', e.message));
   // Only the host's page keeps a frame trace: every frame sample reads it.
   await host.goto(seeded(traced(BASE)));
+  // The game's title comes on as a phosphor screen does as the page loads (lobby-title.png).
+  const titleCameOn = (await host.locator('.join h1.phosphor-title').count()) === 1;
   await host.getByPlaceholder('z. B. Anna').fill('Anna');
   await host.locator('.mission').first().waitFor({ timeout: 10_000 });
   // The join screen, every mission in view, has to fit a laptop window too.
@@ -6529,6 +6706,7 @@ async function run() {
             'the server takes one only with ALLOW_SEED=1, so the draw is chance'),
     );
   }
+  await captureLobbyTitle(host, titleCameOn);
   await captureFirstRun(host, hostSeen);
   await capture(host, 'lobby-host.png');
 
@@ -6574,10 +6752,13 @@ async function run() {
     { name: 'Anna', page: host },
     { name: 'Ben', page: guest },
   ]);
+  // The card stands 1.5 s at most: it is waited for from before the start, and shot as it comes.
+  const opening = captureIntroCard({ name: 'Anna', page: host });
   await startRun(
     { name: 'Anna', page: host, seen: hostSeen },
     { name: 'Ben', page: guest, seen: guestSeen },
   );
+  await opening;
   await sleep(500); // presence follows the start within a tick
   if (guestSeen.view?.map == null || hostSeen.view?.map == null) {
     throw new Error('no running view on the sockets — does the client still talk on /ws?');

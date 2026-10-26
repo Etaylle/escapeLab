@@ -27,6 +27,7 @@ import {
   type Fresh,
   type Voice,
 } from '../scripts/voice.js';
+import { lightsSecFor, paSchedule } from '../src/world/intro/sequence.js';
 import { idsOf, openersOf } from '../src/world/radioVoice.js';
 
 /** What to do when a shipped line has no recording. */
@@ -139,6 +140,23 @@ describe('the lines the script reads', () => {
     }
   });
 
+  it('takes the intro’s announcement over the loudspeakers first, as a run hears it', () => {
+    const mission = {
+      id: 'probe',
+      intro: { pa: ['Durchsage.', 'Zweite Durchsage.'] },
+      radio: { start: 'Los.' },
+      puzzles: [{ onSolved: 'Eins.' }],
+    };
+    expect(radioTexts(mission)).toEqual(['Durchsage.', 'Zweite Durchsage.', 'Los.', 'Eins.']);
+    const said = shippedLines([mission]).get('Durchsage.');
+    expect(said).toEqual({ missions: ['probe'], opens: false });
+    const blackout = shippedMissions().find((m) => m.id === 'blackout');
+    expect(blackout?.intro?.pa).toHaveLength(5);
+    for (const line of blackout?.intro?.pa ?? []) {
+      expect(shippedLines().get(line), line).toEqual({ missions: ['blackout'], opens: false });
+    }
+  });
+
   it('reads every shipped mission', () => {
     const ids = shippedMissions().map((mission) => mission.id);
     expect(ids).toEqual(
@@ -149,6 +167,29 @@ describe('the lines the script reads', () => {
   it('names a recording by the first 12 hex digits of the SHA-1 of its line', () => {
     expect(voiceId('abc')).toBe('a9993e364706');
     expect(voiceId('Beide hin.')).toMatch(/^[0-9a-f]{12}$/);
+  });
+});
+
+describe('the announcement over Blackout’s loudspeakers, as recorded', () => {
+  const blackout = shippedMissions().find((mission) => mission.id === 'blackout') as
+    | { intro?: { lightsSec?: number; pa?: string[] } }
+    | undefined;
+  const lines = blackout?.intro?.pa ?? [];
+  const ms = lines.map((text) => manifest[voiceId(text)]?.ms ?? Number.NaN);
+
+  it('speaks half a minute at most', () => {
+    expect(ms.every(Number.isFinite), REMEDY).toBe(true);
+    expect(ms.reduce((sum, each) => sum + each, 0)).toBeLessThanOrEqual(30_000);
+  });
+
+  it('lets the lights fail by themselves 4 s past its end, cutting its last line off', () => {
+    const due = lightsSecFor(ms);
+    expect(blackout?.intro?.lightsSec, `missions/blackout.json: intro.lightsSec ${due}`).toBe(due);
+    const last = paSchedule(lines.map((text, i) => ({ text, ms: ms[i] ?? null }))).at(-1);
+    const into = due * 1000 - (last?.at ?? 0);
+    // Well into the last line, the page said once, and well before its end.
+    expect(into).toBeGreaterThanOrEqual(1000);
+    expect(into).toBeLessThanOrEqual((last?.ms ?? 0) - 1000);
   });
 });
 

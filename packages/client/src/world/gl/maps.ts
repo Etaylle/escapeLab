@@ -187,14 +187,15 @@ function overOf(frame: Frame, pools: Pools): Float32Array {
 
 /**
  * The lab's own light under the darkness: while it has its power, your
- * room's ceiling lights and the faint warm screen over it; at the end of
- * a run won, every room's, as far as they have come on (`ending.lit`).
+ * room's ceiling lights and the faint warm screen over it; where the lab
+ * shows lit whole — the end of a run won, as far as its rooms' lights have
+ * come on, and the opening's shot — every room's (`frame.whole`).
  */
 function underOf(frame: Frame, pools: Pools): Float32Array {
   const { map } = frame;
   const count = map.width * map.height;
   const under = new Float32Array(count * 3);
-  const whole = frame.ending?.lit ?? 0;
+  const whole = frame.whole;
   const tiles = whole > 0 ? Array.from({ length: count }, (_, i) => i) : poweredTiles(frame);
   const share = whole > 0 ? whole : 1;
   const warm = pools(WARM);

@@ -25,6 +25,15 @@ const tile = z.object({ x: coord, y: coord });
 /** How many emergency lamps a map may have: each is a light the clients draw on every frame. */
 export const MAX_LAMPS = 16;
 
+/**
+ * The longest an intro may keep the power on before the lights fail by themselves, s: half a
+ * minute of announcement, the card before it and the pauses between its lines.
+ */
+export const INTRO_MAX_SEC = 40;
+
+/** How many lines the plant's loudspeakers may say in an intro. */
+export const PA_LINES_MAX = 6;
+
 export const MANUAL_KINDS = [
   'book',
   'terminal',
@@ -311,10 +320,24 @@ export const missionSchema = z
     maxAlarms: z.number().int().positive().nullable().optional(),
     /**
      * The run opens with the power on: the lab lit, the clock standing still
-     * and no station armed, until the lights fail `lightsSec` seconds in.
-     * Left out, the lights are out from the start.
+     * and no station armed, until the lights fail — `lightsSec` seconds in, or
+     * as soon as every crew member present has seen enough of it (actions.ts
+     * `intro-done`). Meanwhile each screen shows the opening: a location card,
+     * the place under the plant's name and the shift with its time, then a slow
+     * shot over the lit lab while the plant's loudspeakers say `pa`, line by
+     * line (client world/intro/). Left out, the lights are out from the start.
      */
-    intro: z.object({ lightsSec: z.number().min(1).max(10) }).optional(),
+    intro: z
+      .object({
+        lightsSec: z.number().min(1).max(INTRO_MAX_SEC),
+        /** the wing of the plant the run plays in: the card's line under the plant's name */
+        place: z.string().min(1).optional(),
+        /** the card's last line: the shift and the time („Nachtschicht · 23:47") */
+        time: z.string().min(1).optional(),
+        /** mission control's announcement over the lab's loudspeakers, line by line */
+        pa: z.array(z.string().min(1)).max(PA_LINES_MAX).default([]),
+      })
+      .optional(),
     /** mission control's lines for the moment the clock starts and for the unlocked exit */
     radio: z
       .object({

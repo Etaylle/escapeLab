@@ -1,13 +1,16 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { parseMission, radioLines, type Mission } from '../src/index.js';
+import { parseMission, PA_LINES_MAX, radioLines, type Mission } from '../src/index.js';
+import { offVoice, WORLD } from './voice.js';
 
 /**
  * Mission control's lines in every shipped mission, as a control room talks on the radio:
  * short, factual and still human — a call sign where it belongs, what is seen, what is next,
- * no praise chatter. A line is anything the reducer can put on the air (`radioLines`):
+ * no praise chatter. A line on the air is anything the reducer can put there (`radioLines`):
  * `radio.start` as the clock starts, each station's `nudges` and `onSolved`, `radio.escape` as
- * the hatch unlocks.
+ * the hatch unlocks. The intro's announcement over the lab's loudspeakers (`pa`) is the same
+ * desk making a plant's routine announcement, to the plant's own people: its own length, else
+ * the radio's rules, and never a word to the crew.
  */
 
 /** The most words one line says, its call sign aside. */
@@ -71,12 +74,25 @@ function offAir(lines: readonly string[]): string[] {
 }
 
 /** Every line `mission` can put on the air, in the order a run hears them. */
-const textsOf = (mission: Mission): string[] => radioLines(mission).map((line) => line.text);
+const textsOf = (mission: Mission): string[] =>
+  radioLines(mission)
+    .filter((line) => line.when !== 'pa')
+    .map((line) => line.text);
 
-/** Every line of `mission` but its start that names the Leitstelle: its call sign comes once. */
+/** Every line of the intro's announcement over the loudspeakers, in its order. */
+const announcementOf = (mission: Mission): string[] =>
+  radioLines(mission)
+    .filter((line) => line.when === 'pa')
+    .map((line) => line.text);
+
+/**
+ * Every line on the air of `mission` but its start that names the Leitstelle: its call sign
+ * comes once. The loudspeakers are no radio: the desk names itself there as a plant's does.
+ */
 const callsAfterStart = (mission: Mission): string[] =>
   radioLines(mission)
-    .filter((line) => line.when !== 'start' && /\bLeitstelle\b/.test(line.text))
+    .filter((line) => line.when !== 'start' && line.when !== 'pa')
+    .filter((line) => /\bLeitstelle\b/.test(line.text))
     .map((line) => line.text);
 
 /** Every nudge of `mission` that says more than one sentence: a nudge names the next place. */
@@ -93,6 +109,49 @@ const callingOut = (mission: Mission): string[] =>
   radioLines(mission)
     .filter((line) => line.when !== 'escape' && line.text.includes('!'))
     .map((line) => line.text);
+
+/** The most words one line over the loudspeakers says. */
+const PA_WORDS_MAX = 28;
+
+/** The most sentences one line over the loudspeakers has, short ones counted. */
+const PA_SENTENCES_MAX = 3;
+
+/** A plant's announcement welcomes nobody: the people it speaks to work there. */
+const WELCOME = /\bwillkommen\b/i;
+
+/** Nor does it set a mood: it says what runs, not how the night feels. */
+const MOOD = new RegExp(
+  `\\b(${['ruhig', 'angenehm', 'schön', 'friedlich', 'entspannt', 'gemütlich', 'unheimlich']
+    .map((word) => `${word}\\w*`)
+    .join('|')})\\b`,
+  'i',
+);
+
+/**
+ * What a line over the loudspeakers must not be: longer than an announcement's line — three
+ * sentences, 28 words — and otherwise anything the radio's lines must not be, a call-out
+ * included, nor open like the radio; nor welcome anybody, nor set a mood.
+ */
+const PA_CHECKS: readonly (readonly [string, (line: string) => boolean])[] = [
+  [`over ${PA_WORDS_MAX} words`, (line) => wordsIn(line) > PA_WORDS_MAX],
+  [`over ${PA_SENTENCES_MAX} sentences`, (line) => piecesOf(line).length > PA_SENTENCES_MAX],
+  ...CHECKS.filter(([what]) => !/^over /.test(what)),
+  ['calls out', (line) => line.includes('!')],
+  ['opens like the radio', (line) => CALL_SIGN.test(line)],
+  ['welcomes', (line) => WELCOME.test(line)],
+  ['sets a mood', (line) => MOOD.test(line)],
+];
+
+/**
+ * Every line of `lines` that breaks a check of the loudspeakers' rules, or speaks to the crew
+ * the way no text of the lab may (voice.ts WORLD), with what it does.
+ */
+function offSpeaker(lines: readonly string[]): string[] {
+  const checked = lines.flatMap((line) =>
+    PA_CHECKS.filter(([, breaks]) => breaks(line)).map(([what]) => `${what}: „${line}"`),
+  );
+  return [...checked, ...offVoice(lines, WORLD)];
+}
 
 const missionsDir = new URL('../../../missions/', import.meta.url);
 const missions: Mission[] = readdirSync(missionsDir)
@@ -159,11 +218,60 @@ describe('the radio-line guard', () => {
   });
 });
 
+describe('the loudspeaker guard', () => {
+  it('finds what an announcement line must not be, and prints the line', () => {
+    const long =
+      'Durchsage der Leitstelle für Trakt C, es ist 23 Uhr 47 und die Nachtschicht hat soeben ' +
+      'übernommen, Reaktor, Zentrifugen und Kühlung laufen wie vorgesehen bis zum frühen ' +
+      'Morgen durch.';
+    const four = 'Es ist 23 Uhr. Reaktor läuft. Kühlung läuft. Last normal.';
+    expect(offSpeaker([long, four])).toEqual([
+      `over 28 words: „${long}"`,
+      `over 3 sentences: „${four}"`,
+    ]);
+    expect(offSpeaker(['Achtung! Probealarm.'])).toEqual(['calls out: „Achtung! Probealarm."']);
+    expect(offSpeaker(['Leitstelle an Nachtschicht. Reaktor läuft.'])).toEqual([
+      'opens like the radio: „Leitstelle an Nachtschicht. Reaktor läuft."',
+    ]);
+    expect(offSpeaker(['Willkommen in Trakt C.', 'Es ist eine ruhige Nacht.'])).toEqual([
+      'welcomes: „Willkommen in Trakt C."',
+      'sets a mood: „Es ist eine ruhige Nacht."',
+    ]);
+  });
+
+  it('hears a word to the crew: an order, an address, the players named', () => {
+    expect(offSpeaker(['Geht zum Hebel im Flur.'])).toEqual([
+      'befiehlt: „Geht zum Hebel im Flur."',
+    ]);
+    expect(offSpeaker(['Meldet euch an der Pforte.'])).toEqual([
+      'spricht mit ihr an: „Meldet euch an der Pforte."',
+    ]);
+    expect(offSpeaker(['Die Spieler melden sich am Pult.'])).toEqual([
+      'names the crew as players: „Die Spieler melden sich am Pult."',
+      'nennt einen Spieler: „Die Spieler melden sich am Pult."',
+    ]);
+  });
+
+  it('lets a plant’s routine announcement pass: time, systems, load, its own staff', () => {
+    expect(
+      offSpeaker([
+        'Durchsage der Leitstelle für Trakt B. Es ist 6 Uhr, die Frühschicht hat übernommen.',
+        'Herr Brandt, bitte die Werkstatt anrufen.',
+        'Die Nachtschicht gibt die Ausweise an der Pforte ab.',
+      ]),
+    ).toEqual([]);
+  });
+});
+
 const byId = missions.map((m) => [m.id, m] as const);
 
 describe.each(byId)('the radio in mission %s', (_id, mission) => {
   it(`speaks as a control room: ${WORDS_MAX} words, ${SENTENCES_MAX} sentences, no praise`, () => {
     expect(offAir(textsOf(mission))).toEqual([]);
+  });
+
+  it(`announces over the loudspeakers as a plant does: ${PA_WORDS_MAX} words a line`, () => {
+    expect(offSpeaker(announcementOf(mission))).toEqual([]);
   });
 
   it('gives the call sign in the run’s first line and in no other', () => {
@@ -184,6 +292,25 @@ describe.each(byId)('the radio in mission %s', (_id, mission) => {
       return puzzle.nudges.length === 0 && before === undefined;
     });
     expect(silent.map((puzzle) => puzzle.id)).toEqual([]);
+  });
+});
+
+describe('the Leitstelle over Blackout’s loudspeakers', () => {
+  const blackout = missions.find((m) => m.id === 'blackout');
+  const lines = blackout === undefined ? [] : announcementOf(blackout);
+
+  it('makes the shift’s announcement in four to six lines', () => {
+    expect(lines.length).toBeGreaterThanOrEqual(4);
+    expect(lines.length).toBeLessThanOrEqual(Math.min(6, PA_LINES_MAX));
+  });
+
+  it('opens with who speaks and the time, and gives its own people a routine word', () => {
+    expect(lines[0]).toMatch(/^Durchsage der Leitstelle\b/);
+    expect(lines[0]).toMatch(/\b23 Uhr 47\b/);
+    expect(blackout?.intro?.time).toMatch(/23:47$/);
+    // The page the blackout cuts off: said twice, as a page is.
+    const [page, again] = (lines.at(-1) ?? '').split(/(?<=\.)\s+/);
+    expect(page).toBe(again);
   });
 });
 
@@ -218,11 +345,19 @@ describe('the lines a mission can put on the air', () => {
       const last = puzzleId === ids.at(-1);
       return last ? ['nudge', 'nudge'] : ['nudge', 'nudge', 'solved'];
     };
-    expect(lines.map((line) => line.when)).toEqual(['start', ...ids.flatMap(station), 'escape']);
-    expect(lines[0]).toEqual({ text: blackout.radio.start, when: 'start', puzzleId: null });
+    const pa = (blackout.intro?.pa ?? []).map(() => 'pa');
+    expect(pa).toHaveLength(5);
+    expect(lines.map((line) => line.when)).toEqual([
+      ...pa,
+      'start',
+      ...ids.flatMap(station),
+      'escape',
+    ]);
+    expect(lines[0]).toEqual({ text: blackout.intro?.pa[0], when: 'pa', puzzleId: null });
+    expect(lines[pa.length]).toEqual({ text: blackout.radio.start, when: 'start', puzzleId: null });
     expect(lines.at(-1)).toEqual({ text: blackout.radio.escape, when: 'escape', puzzleId: null });
     const first = blackout.puzzles[0];
-    expect(lines.slice(1, 4)).toEqual([
+    expect(lines.slice(pa.length + 1, pa.length + 4)).toEqual([
       { text: first?.nudges[0], when: 'nudge', puzzleId: first?.id },
       { text: first?.nudges[1], when: 'nudge', puzzleId: first?.id },
       { text: first?.onSolved, when: 'solved', puzzleId: first?.id },
@@ -230,7 +365,9 @@ describe('the lines a mission can put on the air', () => {
   });
 
   it('leaves out what a mission does not say', () => {
-    const quiet = missions.map((m) => ({ ...m, radio: {}, puzzles: [] }) as unknown as Mission);
+    const quiet = missions.map(
+      (m) => ({ ...m, intro: undefined, radio: {}, puzzles: [] }) as unknown as Mission,
+    );
     expect(quiet.flatMap(radioLines)).toEqual([]);
   });
 });

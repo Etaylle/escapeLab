@@ -9,8 +9,9 @@ export type RunOutcome = 'won' | 'lost:time' | 'lost:alarms';
 export interface StationReport {
   puzzleId: string;
   /**
-   * When it came up, epoch ms: the start of the run for the first station,
-   * the previous station's solve for every later one; null if never reached.
+   * When it came up, epoch ms: as the clock started for the first station —
+   * the lights going out, after a mission's intro — the previous station's
+   * solve for every later one; null if never reached.
    */
   openedAt: number | null;
   /** epoch ms; null while unsolved */
@@ -50,11 +51,12 @@ export interface RunReport {
   spawns: Record<string, { x: number; y: number }>;
   /** the seed the run played, only where a tester pinned the room: `?seed=` plays it again */
   seed?: number;
-  /** the start of the run: every time of the report counts from here */
+  /** the start of the run, its intro included */
   startedAt: number;
   /**
    * when the lights went out and the clock started: `startedAt` itself for a
-   * mission without an intro; left out by reports written before intros
+   * mission without an intro; left out by reports written before intros. The
+   * run's time counts from here (`runSeconds`).
    */
   lightsOutAt?: number;
   finishedAt: number;
@@ -93,13 +95,30 @@ export function runReport(state: GameState, roomCode: string): RunReport {
     ...(state.lightsOutAt === null ? {} : { lightsOutAt: state.lightsOutAt }),
     finishedAt,
     outcome: outcomeOf(state, alarmLimit),
-    stations: stationsOf(state, startedAt),
+    stations: stationsOf(state, clockStartOf({ startedAt, lightsOutAt: state.lightsOutAt })),
     emergencies: emergenciesOf(state.events),
     penalties: penaltiesOf(state.events),
     credits: Object.fromEntries(
       crew.map(({ player, alias }) => [alias, { ...(state.credits[player.id] ?? NO_CREDITS) }]),
     ),
   };
+}
+
+/** When a run's clock started, epoch ms: the lights going out, else — before intros — its start. */
+export function clockStartOf(run: { startedAt: number; lightsOutAt?: number | null }): number {
+  return run.lightsOutAt ?? run.startedAt;
+}
+
+/**
+ * How long a finished run took, s: from its clock's start (`clockStartOf`) to its end — what
+ * a crew spent watching an intro is no time of the run's.
+ */
+export function runSeconds(run: {
+  startedAt: number;
+  lightsOutAt?: number | null;
+  finishedAt: number;
+}): number {
+  return (run.finishedAt - clockStartOf(run)) / 1000;
 }
 
 function finishedRun(state: GameState): { startedAt: number; finishedAt: number } {
@@ -142,9 +161,10 @@ function isStationAlarm(event: RunEvent): boolean {
 /**
  * Stations fall strictly in mission order, one 'puzzle' line each: an event
  * belongs to the station that was up, the one after all solved before it.
- * Whatever happens after the last solve, on the way out, belongs to none.
+ * Whatever happens after the last solve, on the way out, belongs to none. The
+ * first comes up as the clock starts, at `clockStart`.
  */
-function stationsOf(state: GameState, startedAt: number): StationReport[] {
+function stationsOf(state: GameState, clockStart: number): StationReport[] {
   const located: { event: RunEvent; station: number }[] = [];
   let solvedSoFar = 0;
   for (const event of state.events) {
@@ -155,7 +175,7 @@ function stationsOf(state: GameState, startedAt: number): StationReport[] {
   }
   const solves = state.events.flatMap((event) => (event.kind === 'puzzle' ? [event.at] : []));
   return state.mission.puzzles.map((def, index) => {
-    const openedAt = index === 0 ? startedAt : (solves[index - 1] ?? null);
+    const openedAt = index === 0 ? clockStart : (solves[index - 1] ?? null);
     const solvedAt = solves[index] ?? null;
     const there = located.filter(({ station }) => station === index).map(({ event }) => event);
     return {

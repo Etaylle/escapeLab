@@ -14,6 +14,7 @@ import { crewSizeText } from './Crew.js';
 import { CrewRoom } from './CrewRoom.js';
 import { Icon } from './Icon.js';
 import { MapThumb } from './MapThumb.js';
+import { phosphorClass, useComesOn } from './phosphor.js';
 import { MicSetup } from './Voice.js';
 
 type Send = (msg: ClientMessage) => void;
@@ -59,9 +60,10 @@ interface HeadProps {
 }
 
 function MissionHead({ view, info, picker }: HeadProps) {
+  const comesOn = useComesOn('lobby');
   return (
     <header className="lobby-head">
-      <h1>{view.missionTitle}</h1>
+      <h1 className={phosphorClass(comesOn)}>{view.missionTitle}</h1>
       {picker ??
         (info !== undefined && info.tiles.length > 0 && (
           <div className="lobby-map">

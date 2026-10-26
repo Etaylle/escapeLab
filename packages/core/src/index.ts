@@ -4,8 +4,10 @@ export {
   missionSchema,
   DECOR_KINDS,
   DECOR_VARIANTS,
+  INTRO_MAX_SEC,
   MANUAL_KINDS,
   MAX_LAMPS,
+  PA_LINES_MAX,
   ROOM_KINDS,
   type DecorKind,
   type ManualKind,
@@ -40,7 +42,14 @@ export {
   type Action,
 } from './actions.js';
 export { radioLines, type RadioLine, type RadioMoment } from './radio.js';
-export { runReport, type RunOutcome, type RunReport, type StationReport } from './report.js';
+export {
+  clockStartOf,
+  runReport,
+  runSeconds,
+  type RunOutcome,
+  type RunReport,
+  type StationReport,
+} from './report.js';
 export type {
   DifficultyStats,
   LeaderEntry,
@@ -54,6 +63,7 @@ export {
   viewForSpectator,
   type SpectatorView,
   type PlayerView,
+  type IntroView,
   type Lights,
   type PlayerPresence,
   type ManualHere,

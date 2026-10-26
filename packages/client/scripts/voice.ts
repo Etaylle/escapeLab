@@ -7,8 +7,9 @@
  *   pnpm --filter @escapelab/client voice --list-voices            the ElevenLabs account's voices
  *   pnpm --filter @escapelab/client voice --sample <voice> <text>  one line by an ElevenLabs voice
  *
- * Every line a shipped mission (missions/*.json) can put on the air: all core's `logRadio`
- * (core/src/actions.ts) is ever handed — `radio.start` as the clock starts, every
+ * Every line a shipped mission (missions/*.json) has mission control say: the intro's
+ * announcement over the lab's loudspeakers (`intro.pa`, client world/pa.ts), then all core's
+ * `logRadio` (core/src/actions.ts) is ever handed — `radio.start` as the clock starts, every
  * `puzzles[].onSolved` as its station is solved, `radio.escape` as the hatch unlocks — and
  * every `puzzles[].nudges` line its `nudge` sends while a station stays quiet.
  *
@@ -108,9 +109,10 @@ export const MISSIONS_DIR = resolve(HERE, '../../../missions');
 export const VOICE_DIR = resolve(HERE, '../public/voice');
 export const MANIFEST_FILE = join(VOICE_DIR, 'manifest.json');
 
-/** What the script reads of a mission: its id and its radio lines. */
+/** What the script reads of a mission: its id, its intro's announcement and its radio lines. */
 export interface MissionLines {
   readonly id: string;
+  readonly intro?: { readonly pa?: readonly string[] };
   readonly radio?: { readonly start?: string; readonly escape?: string };
   readonly puzzles: readonly { readonly onSolved?: string; readonly nudges?: readonly string[] }[];
 }
@@ -154,11 +156,14 @@ export interface ShippedLine {
 }
 
 /**
- * Every line `mission` can put on the air, in the order a run hears them: the start, then for
- * each station the nudges it may get while it is up and the line its solve brings, the escape.
+ * Every line mission control says in `mission`, in the order a run hears them: the intro's
+ * announcement over the lab's loudspeakers, line by line (client world/pa.ts), then on the air
+ * the start, for each station the nudges it may get while it is up and the line its solve
+ * brings, the escape.
  */
 export function radioTexts(mission: MissionLines): string[] {
   const lines = [
+    ...(mission.intro?.pa ?? []),
     mission.radio?.start,
     ...mission.puzzles.flatMap((puzzle) => [...(puzzle.nudges ?? []), puzzle.onSolved]),
     mission.radio?.escape,

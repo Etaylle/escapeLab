@@ -5,12 +5,15 @@ import {
   armedStations,
   checkMission,
   emergenciesDue,
+  INTRO_MAX_SEC,
   LEVER_FIGURE,
   MAX_LAMPS,
+  PA_LINES_MAX,
   parseMission,
   patrollingDrones,
   POWER_OUT,
   runReport,
+  runSeconds,
   viewFor,
   viewForSpectator,
 } from '../src/index.js';
@@ -208,6 +211,103 @@ describe('a pause during the intro', () => {
   });
 });
 
+describe('a crew that has seen enough of the intro', () => {
+  const done = (state: GameState, playerId: string, at: number): GameState =>
+    applyAction(state, { type: 'intro-done', playerId, at });
+  const SKIP_AT = T0 + 1800;
+
+  it('shows every screen the intro and who of the crew has seen enough of it', () => {
+    expect(viewFor(started(mission), 'p1').intro).toEqual({
+      place: '',
+      time: '',
+      pa: [],
+      lightsSec: 3,
+      done: [],
+    });
+    expect(viewFor(done(started(mission), 'p2', SKIP_AT), 'p1').intro?.done).toEqual(['p2']);
+    expect(viewFor(started(withoutIntro()), 'p1').intro).toBeUndefined();
+  });
+
+  it('notes each of the crew once, however often said, the lights still on', () => {
+    const one = done(started(mission), 'p1', SKIP_AT);
+    expect(one.introDone).toEqual(['p1']);
+    expect(one.lightsOutAt).toBeNull();
+    expect(done(one, 'p1', SKIP_AT + 500)).toBe(one);
+  });
+
+  it('puts the lights out the moment the last of the crew present says so', () => {
+    const both = done(done(started(mission), 'p1', SKIP_AT), 'p2', SKIP_AT + 700);
+    expect(both.lightsOutAt).toBe(SKIP_AT + 700);
+    expect(both.lightsDueAt).toBeNull();
+    expect(both.deadlineAt).toBe(SKIP_AT + 700 + LIMIT_MS);
+    expect(both.events.map((event) => event.kind)).toEqual(['power', 'radio']);
+    expect(armedStations(mission.map, both)).toHaveLength(1);
+  });
+
+  it('waits for nobody who is away', () => {
+    const away = applyAction(started(mission), { type: 'player-disconnected', playerId: 'p2' });
+    expect(done(away, 'p1', SKIP_AT).lightsOutAt).toBe(SKIP_AT);
+  });
+
+  it('leaves the lights to fail by themselves, `lightsSec` in, while one still watches', () => {
+    const one = done(started(mission), 'p1', SKIP_AT);
+    expect(one.lightsDueAt).toBe(OUT_AT);
+    expect(lightsOut(one, OUT_AT).lightsOutAt).toBe(OUT_AT);
+  });
+
+  it('waits out a pause: that moment moves on, and a crew all done meanwhile goes on dark', () => {
+    const one = done(started(mission), 'p1', SKIP_AT);
+    const paused = applyAction(one, { type: 'set-paused', paused: true, at: T0 + 2000 });
+    const resumed = applyAction(paused, { type: 'set-paused', paused: false, at: T0 + 9000 });
+    expect(resumed.lightsDueAt).toBe(OUT_AT + 7000);
+    expect(resumed.lightsOutAt).toBeNull();
+    // Nothing fails while the run waits; the lights go as it goes on.
+    const both = done(paused, 'p2', T0 + 2500);
+    expect(both.lightsOutAt).toBeNull();
+    const back = applyAction(both, { type: 'set-paused', paused: false, at: T0 + 9000 });
+    expect(back.lightsOutAt).toBe(T0 + 9000);
+    expect(back.deadlineAt).toBe(T0 + 9000 + LIMIT_MS);
+  });
+
+  it('takes nothing outside an intro, and nobody who is not of the crew', () => {
+    const plain = started(withoutIntro());
+    expect(done(plain, 'p1', SKIP_AT)).toBe(plain);
+    const out = lightsOut(started(mission), OUT_AT);
+    expect(done(out, 'p1', OUT_AT + 10)).toBe(out);
+    expect(() => done(started(mission), 'zz', SKIP_AT)).toThrow(/Unbekannter Spieler/);
+  });
+
+  it('forgets who had seen enough with the next run, and in the lobby', () => {
+    const both = done(done(started(mission), 'p1', SKIP_AT), 'p2', SKIP_AT + 700);
+    const lost = applyAction(both, { type: 'time-expired', at: SKIP_AT + 700 + LIMIT_MS });
+    const ready = applyAction(lost, { type: 'set-ready', playerId: 'p2', ready: true });
+    const again = applyAction(ready, { type: 'rematch', playerId: 'p1', at: T0 + 1e6, seed: 3 });
+    expect(again.introDone).toEqual([]);
+    expect(applyAction(lost, { type: 'back-to-lobby', playerId: 'p1' }).introDone).toEqual([]);
+  });
+});
+
+describe('the intro in a mission file', () => {
+  const intro = (fields: object) => parseMission({ ...raw, intro: { lightsSec: 3, ...fields } });
+
+  it('keeps the power on up to INTRO_MAX_SEC, the announcement six lines at most', () => {
+    expect(INTRO_MAX_SEC).toBe(40);
+    expect(intro({ lightsSec: INTRO_MAX_SEC }).intro?.lightsSec).toBe(INTRO_MAX_SEC);
+    expect(() => intro({ lightsSec: INTRO_MAX_SEC + 1 })).toThrow();
+    const lines = Array.from({ length: PA_LINES_MAX }, (_, i) => `Zeile ${i + 1}.`);
+    expect(intro({ pa: lines }).intro?.pa).toHaveLength(PA_LINES_MAX);
+    expect(() => intro({ pa: [...lines, 'Eine zu viel.'] })).toThrow();
+  });
+
+  it('names a place and a time where it likes, and says nothing where it gives no lines', () => {
+    expect(intro({}).intro).toEqual({ lightsSec: 3, pa: [] });
+    expect(intro({ place: 'Trakt C', time: 'Nachtschicht · 23:47' }).intro).toMatchObject({
+      place: 'Trakt C',
+      time: 'Nachtschicht · 23:47',
+    });
+  });
+});
+
 describe('a mission without an intro', () => {
   const plain = started(withoutIntro());
 
@@ -247,7 +347,7 @@ describe('after the run', () => {
     expect(viewFor(lobby, 'p1').lights).toEqual({ out: false, outAt: null });
   });
 
-  it('reports when the lights went out; every time still counts from the start', () => {
+  it('reports when the lights went out: the first station and the time count from then', () => {
     let won = lightsOut(started(mission), OUT_AT);
     for (const at of [OUT_AT + 10_000, OUT_AT + 20_000, OUT_AT + 30_000]) {
       won = solveNext(won, at);
@@ -256,7 +356,23 @@ describe('after the run', () => {
     const report = runReport(won, 'RAUM');
     expect(report.startedAt).toBe(T0);
     expect(report.lightsOutAt).toBe(OUT_AT);
-    expect(report.stations[0]).toMatchObject({ openedAt: T0, solvedAt: OUT_AT + 10_000 });
+    expect(report.stations[0]).toMatchObject({
+      openedAt: OUT_AT,
+      solvedAt: OUT_AT + 10_000,
+      seconds: 10,
+    });
+    expect(runSeconds(report)).toBe(30);
+  });
+
+  it('grades the run by the clock: what the intro took is none of its time', () => {
+    // 419 s of 600 on the clock leave 30 % of it: S. From the start, 3 s more, they would not.
+    let won = lightsOut(started(mission), OUT_AT);
+    for (const at of [OUT_AT + 1000, OUT_AT + 2000, OUT_AT + 419_000]) {
+      won = solveNext(won, at);
+    }
+    expect(won.phase).toBe('won');
+    expect(viewFor(won, 'p1').grade?.rank).toBe('S');
+    expect(runSeconds(runReport(won, 'RAUM'))).toBe(419);
   });
 });
 
@@ -396,8 +512,12 @@ describe('Blackout opens on its lever', () => {
   const [first] = blackout.puzzles;
   const lever = blackout.map.stations.find((s) => s.puzzleId === first?.id);
 
-  it('keeps the power on for five seconds, then the lever is station one', () => {
-    expect(blackout.intro).toEqual({ lightsSec: 5 });
+  it('keeps the power on through the plant’s announcement, then the lever is station one', () => {
+    expect(blackout.intro).toMatchObject({ place: 'Trakt C', time: 'Nachtschicht · 23:47' });
+    expect(blackout.intro?.pa).toHaveLength(5);
+    // How long exactly is the recordings' to say (client test/voiceLines.test.ts).
+    expect(blackout.intro?.lightsSec).toBeGreaterThan(20);
+    expect(blackout.intro?.lightsSec).toBeLessThanOrEqual(INTRO_MAX_SEC);
     expect(first).toMatchObject({ type: 'button-sync', style: 'lever', id: 'notlicht' });
     expect(lever).toEqual({ puzzleId: 'notlicht', x: 11, y: 7 });
     expect(blackout.map.manuals.some((m) => m.puzzleIds.includes('notlicht'))).toBe(false);

@@ -209,7 +209,7 @@ function hovering(
  * lights are back.
  */
 function drawLamps(ctx: CanvasRenderingContext2D, frame: Frame): void {
-  const powered = frame.scene.lit || (frame.ending?.lit ?? 0) > 0;
+  const powered = frame.scene.lit || frame.whole > 0;
   const glow = powered ? 0 : frame.burn;
   for (const mount of frame.mounts) {
     ctx.save();

@@ -50,6 +50,7 @@ import { runLight } from './frameLight.js';
 import { frameTrace, traceRequested, type FrameTrace } from './frameTrace.js';
 import { watchInsets, type Insets } from './insets.js';
 import { carriedItem, contextAction, TOUCH, type ContextAction } from './interact.js';
+import { filmed, type IntroCue } from './intro/sequence.js';
 import { runsOf } from './light.js';
 import { positionsOf, type KnownPositions } from './movement.js';
 import { MUSIC_AFTER_CLICK_MS, musicProbe, setTension, stopMusic, type Tension } from './music.js';
@@ -125,6 +126,8 @@ interface Props {
   darkSince: number | null;
   /** the run's ending, while it plays on this screen; none while the run goes on */
   finale?: FinaleCue | null;
+  /** the run's opening on this screen (intro/sequence.ts); none where it plays none */
+  intro?: IntroCue | null;
   /**
    * the station whose panel lies over the world; none by default. While it is up the world's
    * tips wait — the device's own line is in its frame — and an alarm sounds the device's horn,
@@ -193,6 +196,14 @@ function isTextEntry(el: Element | null): boolean {
   return el !== null && ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
 }
 
+/**
+ * Whether the run's opening holds this screen's avatar now (intro/sequence.ts `filmed`): it
+ * walks nowhere, works nothing and sends no position.
+ */
+function heldBack(live: Latest): boolean {
+  return live.intro !== null && filmed(live.intro, Date.now());
+}
+
 /** A ref holding `value` as of the latest render: what the loop and the listeners read. */
 function useLatest<T>(value: T): React.MutableRefObject<T> {
   const ref = useRef(value);
@@ -228,7 +239,7 @@ function usePowerHum(darkSince: number | null, live: React.MutableRefObject<Live
  */
 function tryInteract(loop: Loop): void {
   const current = loop.live.current.view;
-  if (current.map === null || loop.live.current.locked) {
+  if (current.map === null || loop.live.current.locked || heldBack(loop.live.current)) {
     return;
   }
   const action = contextAction(
@@ -275,7 +286,7 @@ function workOn(loop: Loop, action: ContextAction, current: PlayerView): void {
 
 /** Puts down what this player carries, where they stand; the server knows what that is. */
 function dropItem(loop: Loop): void {
-  if (!loop.live.current.locked) {
+  if (!loop.live.current.locked && !heldBack(loop.live.current)) {
     loop.live.current.send({ kind: 'drop-item' });
   }
 }
@@ -331,7 +342,7 @@ function pressKey(loop: Loop, key: string, e: KeyboardEvent, setWheelOpen: SetWh
   const job = KEY_JOBS.get(key);
   if (key in MOVE_KEYS || key === SPRINT_KEY) {
     e.preventDefault();
-    if (!loop.live.current.locked) {
+    if (!loop.live.current.locked && !heldBack(loop.live.current)) {
       loop.sim.keys.add(key);
     }
   } else if (job !== undefined) {
@@ -489,7 +500,12 @@ function step(loop: Loop, dt: number, map: WorldMap): void {
   } else {
     followServer(sim, loop.positions.current, map, youId, run);
   }
-  const footfall = walk(sim, map, dt, loop.live.current.locked);
+  // The opening holds the avatar where the run put it: no step, no position going out.
+  sim.held = heldBack(loop.live.current);
+  if (sim.held) {
+    sim.keys.clear();
+  }
+  const footfall = walk(sim, map, dt, loop.live.current.locked || sim.held);
   if (footfall !== null) {
     footstep(footfall === 'sprint');
   }
@@ -622,7 +638,8 @@ function look(loop: Loop, map: WorldMap): void {
       sim.captions.push({ x: mount.x, y: mount.y - 0.6, text: 'Notiz entdeckt', at: sim.time });
     }
   }
-  if (news.found.length + news.notes.length > 0) {
+  // While the world shows as a film, nothing of the game's own speaks over it.
+  if (news.found.length + news.notes.length > 0 && !heldBack(loop.live.current)) {
     discoveryBlip();
   }
   for (const manual of news.opened) {
@@ -878,7 +895,7 @@ function WorldControls({ refs, live, view, wheelOpen, setWheelOpen }: ControlsPr
     if (sim === null) {
       return;
     }
-    if (down && !live.current.locked) {
+    if (down && !live.current.locked && !heldBack(live.current)) {
       sim.keys.add(key);
     } else {
       sim.keys.delete(key);
@@ -979,6 +996,7 @@ function useWorld(props: Props): WorldState {
     locked: inputLocked,
     station,
     finale,
+    intro: props.intro ?? null,
     escapeSince,
     reduced,
     voice,

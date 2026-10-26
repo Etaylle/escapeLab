@@ -8,6 +8,8 @@ import type { FigureMood } from './figure.js';
 import { finaleFrame, type FinaleCue, type FinaleFrame } from './finale.js';
 import { frameLight, mountedLamps } from './frameLight.js';
 import { contextAction } from './interact.js';
+import { filmed, litWhole, shotProgress, type IntroCue } from './intro/sequence.js';
+import { SHOT_WIDE, shotPoint, shotStart } from './intro/shot.js';
 import { markerTargets } from './markers.js';
 import { positionsOf, type KnownPositions } from './movement.js';
 import type { ChatLine, Frame, MapPing, RenderKit, WorldMap } from './render/frame.js';
@@ -39,6 +41,8 @@ export interface Latest {
   finale: FinaleCue | null;
   /** when the escape began on this screen (escape.ts); null before it */
   escapeSince: number | null;
+  /** the run's opening on this screen (intro/sequence.ts); null where it plays none */
+  intro: IntroCue | null;
   reduced: boolean;
   /** the crew's voice, read on every frame for who speaks; none outside the app */
   voice: VoiceMesh | null;
@@ -83,10 +87,10 @@ export function assembleFrame(
   const cue = live.finale;
   const ending = cue === null ? null : finaleFrame(cue.ending, now - cue.since, live.reduced);
   return {
-    ...stage(source, map, dpr, ending?.pull ?? 0),
+    ...stage(source, map, dpr, ending?.pull ?? 0, now),
     ...lighting(source, map, now, ending),
     ...crewOf(source),
-    ...overlaysOf(source, map, ending, perf),
+    ...overlaysOf(source, map, ending, perf, now),
     pings,
     time: sim.time,
     now,
@@ -109,6 +113,11 @@ function wholeZoom(map: WorldMap, w: number, h: number): number {
   return Math.max(14, Math.min(w / (map.width + 0.5), h / (map.height + 0.5)));
 }
 
+/** Device pixels per tile with the lab covering the canvas: no black beside it. */
+function coverZoom(map: WorldMap, w: number, h: number): number {
+  return Math.max(w / map.width, h / map.height);
+}
+
 /** Device pixels per tile: the audience sees the whole lab, a player what covers the canvas. */
 function zoomFor(map: WorldMap, w: number, h: number, spectator: boolean): number {
   if (spectator) {
@@ -116,8 +125,28 @@ function zoomFor(map: WorldMap, w: number, h: number, spectator: boolean): numbe
   }
   // Zoom so the lab always covers the canvas: no black bars beside it — but
   // stop before the lab turns into giant tiles on very wide windows.
-  const cover = Math.max(w / map.width, h / map.height);
-  return Math.min(170, Math.max(cover, Math.min(88, h / 10.5)));
+  return Math.min(170, Math.max(coverZoom(map, w, h), Math.min(88, h / 10.5)));
+}
+
+/** The opening's shot at a moment: from the reactor end to this player's spawn, how far along. */
+interface Shot {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  progress: number;
+}
+
+/**
+ * The opening's shot at `now`, tiles (intro/shot.ts); null where the camera follows the
+ * avatar.
+ */
+function shotOf(source: FrameSource, map: WorldMap, now: number): Shot | null {
+  const { intro, reduced } = source.live.current;
+  const progress = intro === null || source.spectator ? null : shotProgress(intro, now, reduced);
+  if (progress === null) {
+    return null;
+  }
+  const to = { x: map.yourSpawn.x + 0.5, y: map.yourSpawn.y + 0.5 };
+  return { from: shotStart(map, to), to, progress };
 }
 
 /** Where the camera looks as it pulls back from the avatar to the middle of the lab. */
@@ -129,15 +158,26 @@ function pulledBack(sim: Sim, map: WorldMap, pull: number): { x: number; y: numb
 }
 
 /**
- * Points the camera for this frame — at your avatar, pulling back over the
- * whole lab as a run won ends (`pull`, 0 to 1) — and keeps it in the
- * simulation, where a click and the trace read it. Returns the zoom.
+ * Points the camera for this frame — along the opening's shot, a little wider than play, with
+ * nothing of the HUD to keep clear of; at your avatar, pulling back over the whole lab as a run
+ * won ends (`pull`, 0 to 1) — and keeps it in the simulation, where a click and the trace read
+ * it. Returns the zoom.
  */
-function aim(source: FrameSource, map: WorldMap, dpr: number, pull: number): number {
+function aim(source: FrameSource, map: WorldMap, dpr: number, pull: number, now: number): number {
   const { sim, canvas, spectator } = source;
   const w = canvas.width;
   const h = canvas.height;
   const near = zoomFor(map, w, h, spectator);
+  const shot = shotOf(source, map, now);
+  if (shot !== null) {
+    const wide = Math.max(coverZoom(map, w, h), near * SHOT_WIDE);
+    // Both ends where the camera can look: the shot moves from its first frame to its last.
+    const lens = { scale: wide, w, h, top: 0, lift: 0 };
+    const [from, to] = [shot.from, shot.to].map((end) => clampCamera(map, end, lens));
+    sim.draw = shotPoint(from ?? shot.from, to ?? shot.to, shot.progress);
+    sim.scale = wide;
+    return wide;
+  }
   const s = near + (wholeZoom(map, w, h) - near) * pull;
   sim.draw = clampCamera(map, pulledBack(sim, map, pull), {
     scale: s,
@@ -180,18 +220,29 @@ function framing(
   return { camera, grid, steady };
 }
 
-/** The canvas and what lies over it this frame, the camera, the minimap and the text's size. */
+/** Whether this screen shows the world as a film at `now`: the opening's card, shot or beat. */
+function filming(source: FrameSource, now: number): boolean {
+  const intro = source.live.current.intro;
+  return intro !== null && filmed(intro, now);
+}
+
+/**
+ * The canvas and what lies over it this frame, the camera, the minimap — none while the world
+ * shows as a film — and the text's size.
+ */
 function stage(
   source: FrameSource,
   map: WorldMap,
   dpr: number,
   pull: number,
+  now: number,
 ): Pick<Frame, 'viewport' | 'camera' | 'grid' | 'steady' | 'minimap' | 'text'> {
   const { sim, canvas, insets } = source;
   const w = canvas.width;
   const h = canvas.height;
-  const scale = aim(source, map, dpr, pull);
-  const minimap = source.spectator || !sim.minimap ? null : minimapLayout(map, w, h, dpr, insets);
+  const scale = aim(source, map, dpr, pull, now);
+  const mapless = source.spectator || !sim.minimap || filming(source, now);
+  const minimap = mapless ? null : minimapLayout(map, w, h, dpr, insets);
   const viewport: Viewport = {
     w,
     h,
@@ -214,9 +265,21 @@ function escapeRed(live: Latest, now: number): number {
 }
 
 /** The frame's light and what it follows. */
-type Lighting = 'scene' | 'escapeSince' | 'red' | 'hatch' | 'light' | 'mounts' | 'litTiles' | 'lit';
+type Lighting =
+  | 'scene'
+  | 'whole'
+  | 'escapeSince'
+  | 'red'
+  | 'hatch'
+  | 'light'
+  | 'mounts'
+  | 'litTiles'
+  | 'lit';
 
-/** This frame's light (frameLight.ts), and what it follows: the cold open, the escape. */
+/**
+ * This frame's light (frameLight.ts), and what it follows: the opening's shot, which shows the
+ * lab lit whole, the cold open, the escape, the end.
+ */
 function lighting(
   source: FrameSource,
   map: WorldMap,
@@ -226,6 +289,8 @@ function lighting(
   const { sim, spectator } = source;
   const live = source.live.current;
   const scene = coldOpenFrame(live.darkSince === null ? null : now - live.darkSince, live.reduced);
+  const shot = live.intro !== null && litWhole(live.intro, now);
+  const whole = shot ? 1 : (ending?.lit ?? 0);
   const { escapeSince } = live;
   // The hatch grinds open on this screen from the escape's start.
   const hatch =
@@ -234,9 +299,10 @@ function lighting(
   const drones = source.drones.current;
   const run = live.view.startedAt;
   const lights = { map, sim, drones, spectator, run, now, hatch, mounts, clips: source.clips };
-  const light = frameLight(lights, scene.lit, (ending?.lit ?? 0) > 0);
+  const light = frameLight(lights, scene.lit, whole > 0);
   const red = escapeRed(live, now);
-  return { scene, escapeSince, red, hatch, light, mounts, litTiles: sim.litTiles, lit: sim.lit };
+  const litTiles = sim.litTiles;
+  return { scene, whole, escapeSince, red, hatch, light, mounts, litTiles, lit: sim.lit };
 }
 
 /** The view's people and the drones, as this frame draws them. */
@@ -287,15 +353,16 @@ function liveChats(source: FrameSource, perf: number): ChatLine[] {
 /**
  * What lies over the picture this frame while the run goes on: the chat
  * lines and captions still up, what to walk to and what E does here —
- * none of it while the run ends on screen.
+ * none of it while the world shows as a film or the run ends on screen.
  */
 function overlaysOf(
   source: FrameSource,
   map: WorldMap,
   ending: FinaleFrame | null,
   perf: number,
+  now: number,
 ): Pick<Frame, 'perf' | 'chats' | 'captions' | 'markers' | 'action'> {
-  if (ending !== null) {
+  if (ending !== null || filming(source, now)) {
     return { perf, chats: [], captions: [], markers: [], action: null };
   }
   const { sim } = source;

@@ -4,6 +4,7 @@ import type { DecorKind, ManualDef, ManualKind, RoomKind } from './mission.js';
 import { noteKey } from './notes.js';
 import { CREW_COLORS, type Credits, type GameState, type Phase, type RunEvent } from './state.js';
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
+import { clockStartOf } from './report.js';
 import type { ConsoleId, ManualSection, Viewer, ViewContext } from './puzzles/module.js';
 import { relayDefFor, relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
 import {
@@ -101,6 +102,26 @@ export interface PlayerView {
    * end screen offers it; left out where none follows.
    */
   nextMissionId?: string;
+  /** the run's opening while the lab still has its power (`IntroView`); left out without one */
+  intro?: IntroView;
+}
+
+/**
+ * A mission's intro as every screen plays it (client world/intro/): the location card's lines,
+ * what the plant's loudspeakers say, when the lights fail by themselves, and who of the crew
+ * has seen enough of it — the skip each screen counts.
+ */
+export interface IntroView {
+  /** the wing of the plant the run plays in; '' where the mission names none */
+  place: string;
+  /** the card's last line, the shift and the time; '' where the mission names none */
+  time: string;
+  /** mission control's announcement over the lab's loudspeakers, line by line */
+  pa: string[];
+  /** seconds from the start until the lights fail by themselves */
+  lightsSec: number;
+  /** who of the crew has seen enough of it this run, by player id */
+  done: string[];
 }
 
 /**
@@ -288,7 +309,9 @@ function gradeFor(state: GameState): Grade | null {
     return null;
   }
   const budget = state.mission.timeLimitSec * 1000;
-  const used = state.finishedAt - state.startedAt;
+  // The run's time is the clock's: from the lights going out, the intro left out.
+  const { startedAt, lightsOutAt } = state;
+  const used = state.finishedAt - clockStartOf({ startedAt, lightsOutAt });
   const spare = Math.max(0, 1 - used / budget);
   const alarms = state.penaltySeq;
   const hints = state.hintsUsed;
@@ -339,6 +362,16 @@ function viewContext(state: GameState, puzzleId: string | null): ViewContext {
 /** The lab's power as every viewer sees it. */
 function lightsOf(state: GameState): Lights {
   return { out: state.lightsOutAt !== null, outAt: state.lightsOutAt };
+}
+
+/** The mission's intro as the crew's screens play it; none for a mission without one. */
+function introOf(state: GameState): Pick<PlayerView, 'intro'> {
+  const intro = state.mission.intro;
+  if (intro === undefined) {
+    return {};
+  }
+  const { place = '', time = '', pa, lightsSec } = intro;
+  return { intro: { place, time, pa: [...pa], lightsSec, done: [...state.introDone] } };
 }
 
 /** The manual objects `playerId` stands at, in map order. */
@@ -832,5 +865,6 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     map: mapViewFor(state, playerId),
     ...(state.roomSeed === null ? {} : { seed: { room: state.roomSeed, run: state.seed } }),
     ...(state.mission.next === undefined ? {} : { nextMissionId: state.mission.next }),
+    ...introOf(state),
   };
 }

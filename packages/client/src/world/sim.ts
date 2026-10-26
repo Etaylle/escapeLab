@@ -61,6 +61,11 @@ export interface Sim {
   self: { x: number; y: number; facing: number; moving: boolean };
   /** what this client streamed lately: its own steps coming back are no correction */
   streamed: Streamed[];
+  /**
+   * the run's opening holds this screen's avatar (intro/sequence.ts `filmed`): it walks
+   * nowhere, and no position goes out
+   */
+  held: boolean;
   others: Map<string, OtherAvatar>;
   keys: Set<string>;
   /** each door's slide, by door id (doors.ts) */
@@ -110,6 +115,7 @@ export function newSim(topCss: number): Sim {
     run: null,
     self: { x: 0, y: 0, facing: 0, moving: false },
     streamed: [],
+    held: false,
     others: new Map(),
     keys: new Set(),
     doors: new Map(),

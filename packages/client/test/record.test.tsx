@@ -76,7 +76,21 @@ describe('the lines the page offers', () => {
 
   it('say of each where it comes over the air and what recording it has, in which file', () => {
     const lines = recordLines([blackout], MANIFEST, ids);
-    expect(lines[0]).toEqual({
+    // The intro's announcement over the loudspeakers comes first: here, with no recording.
+    const pa = blackout.intro?.pa ?? [];
+    expect(pa).toHaveLength(5);
+    expect(lines.slice(0, pa.length)).toEqual(
+      pa.map((text) => ({
+        id: voiceId(text),
+        text,
+        missions: [blackout.title],
+        when: 'pa',
+        station: null,
+        recording: null,
+      })),
+    );
+    const [start, nudge, second, solved] = lines.slice(pa.length);
+    expect(start).toEqual({
       id: voiceId(START),
       text: START,
       missions: [blackout.title],
@@ -84,11 +98,11 @@ describe('the lines the page offers', () => {
       station: null,
       recording: { ms: 9500, source: 'synthetic', file: `${voiceId(START)}.m4a` },
     });
-    expect(lines[1]).toMatchObject({ text: NUDGE, when: 'nudge', station: 'Notlicht' });
+    expect(nudge).toMatchObject({ text: NUDGE, when: 'nudge', station: 'Notlicht' });
     const human = { ms: 4400, source: 'human', file: `${voiceId(NUDGE)}.m4a` };
-    expect(lines[1]?.recording).toEqual(human);
-    expect(lines[2]?.recording).toMatchObject({ source: 'upload', file: `${voiceId(SECOND)}.mp3` });
-    expect(lines[3]).toMatchObject({ when: 'solved', station: 'Notlicht', recording: null });
+    expect(nudge?.recording).toEqual(human);
+    expect(second?.recording).toMatchObject({ source: 'upload', file: `${voiceId(SECOND)}.mp3` });
+    expect(solved).toMatchObject({ when: 'solved', station: 'Notlicht', recording: null });
     expect(lines.at(-1)).toMatchObject({ when: 'escape', station: null });
   });
 

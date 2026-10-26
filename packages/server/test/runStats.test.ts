@@ -123,6 +123,15 @@ describe('the stats index', () => {
     expect(statsOf(stats)).toMatchObject({ wins: 4, bestSeconds: 300, medianSeconds: 390 });
   });
 
+  it('times a run by its clock: from the lights going out, the intro left out', () => {
+    // Two crews the same 300 s on the clock: one watched its intro for 30 s, one skipped it.
+    const watched = { ...run({ seconds: 330, crew: ['Geschaut'] }), lightsOutAt: DAY - 300_000 };
+    const skipped = { ...run({ seconds: 302, at: DAY + 1, crew: ['Weiter'] }) };
+    const stats = new RunStats([watched, { ...skipped, lightsOutAt: DAY + 1 - 300_000 }]);
+    expect(statsOf(stats)?.top.map((entry) => entry.seconds)).toEqual([300, 300]);
+    expect(statsOf(stats)).toMatchObject({ bestSeconds: 300, medianSeconds: 300 });
+  });
+
   it('ranks by time, then fewer alarms, then the earlier finish', () => {
     const stats = new RunStats([
       run({ seconds: 300, alarms: 2, at: DAY, crew: ['Zwei'] }),

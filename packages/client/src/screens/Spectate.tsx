@@ -35,7 +35,7 @@ function remaining(deadlineAt: number, now: number): string {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
-/** Run time of an event as mm:ss, the way a match log reads. */
+/** Run time of an event as mm:ss, the way a match log reads, from the run's clock's start. */
 function elapsed(startedAt: number | null, at: number): string {
   const total = startedAt === null ? 0 : Math.max(0, Math.floor((at - startedAt) / 1000));
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
@@ -142,7 +142,9 @@ function SpectatePanels({ view }: { view: SpectatorView }) {
           <ul className="ticker">
             {feed.map((event, i) => (
               <li key={`${event.at}-${i}`} className={`ticker-${event.kind}`}>
-                <span className="ticker-time">{elapsed(view.startedAt, event.at)}</span>
+                <span className="ticker-time">
+                  {elapsed(view.lights.outAt ?? view.startedAt, event.at)}
+                </span>
                 {reportLine(event)}
                 {event.seconds !== null ? ` (−${event.seconds}s)` : ''}
               </li>

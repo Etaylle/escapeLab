@@ -4,6 +4,7 @@ import type { BedProbe } from './world/ambience.js';
 import type { SoundSystem } from './world/audio.js';
 import type { GraphCensus } from './world/audioCount.js';
 import type { LightProbe } from './world/gl/path.js';
+import type { IntroProbe } from './world/intro/useIntro.js';
 import type { MusicProbe } from './world/music.js';
 import type { RadioRender, VoiceProbe as RadioProbe } from './world/radioVoice.js';
 import type { MinimapLayout } from './world/render/frame.js';
@@ -85,6 +86,11 @@ export interface Probes {
   readonly light?: LightProbe;
   /** what the lab sounds like, while a world is up */
   readonly audio?: AudioProbe;
+  /**
+   * the run's opening on this screen while a run is up: its phase, whether it shows as a film,
+   * the skip, the title, and the announcement and the music under it (world/intro/useIntro.ts)
+   */
+  readonly intro?: IntroProbe;
   /** the crew figures in the lobby or on a title card, each with its last pose (CrewFigure.tsx) */
   readonly figures?: FigureProbe[];
   /**

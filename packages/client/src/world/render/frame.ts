@@ -229,6 +229,12 @@ export interface Frame {
   scene: ColdOpenFrame;
   /** where the ending stands (finale.ts); null while the run goes on */
   ending: FinaleFrame | null;
+  /**
+   * how far the lab shows lit whole, its darkness lifted, 0 to 1: as every room's light comes on
+   * at the end of a run won (`ending.lit`), and all of it through the opening's shot
+   * (intro/sequence.ts `litWhole`)
+   */
+  whole: number;
   /** when the escape began on this screen, epoch ms (escape.ts); null before it */
   escapeSince: number | null;
   /** how far the light has turned red here, 0 to 1: from the escape's start; 0 once won */

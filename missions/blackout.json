@@ -10,7 +10,18 @@
     "lose": "Schichtbuch: Ein letztes Flackern, dann Stille. Die Notversorgung ist ausgefallen, die Proben sind verloren. Das Labor bleibt dunkel bis zur Frühschicht."
   },
   "timeLimitSec": 900,
-  "intro": { "lightsSec": 5 },
+  "intro": {
+    "lightsSec": 29.1,
+    "place": "Trakt C",
+    "time": "Nachtschicht · 23:47",
+    "pa": [
+      "Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47, die Nachtschicht hat übernommen.",
+      "Reaktor in Teillast, 60 Prozent. Die Zentrifugen laufen bis 6 Uhr durch.",
+      "Netzlast im Trakt 96 Prozent, Notstrom in Bereitschaft.",
+      "Die Spätschicht gibt Dosimeter und Schlüssel bitte an der Pforte ab.",
+      "Herr Haller, bitte die Leitstelle anrufen. Herr Haller, bitte die Leitstelle anrufen."
+    ]
+  },
   "radio": {
     "start": "Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt, ich sehe nur noch die Notzellen. Geht zuerst ans Notlicht, der Hauptschalter im Flur braucht zwei Leute.",
     "escape": "Reaktor läuft. Der Notausgang ist entriegelt, Nordwestecke beim Archiv. Alle raus, jetzt."

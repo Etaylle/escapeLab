@@ -45,6 +45,9 @@ import { consoleName } from '../world/consoles.js';
 import { escapeChecklist, escaping, type Mate } from '../world/escape.js';
 import { veilOf, type Ending, type Finale } from '../world/finale.js';
 import { GameWorld } from '../world/GameWorld.js';
+import { IntroOverlay } from '../world/intro/IntroOverlay.js';
+import { cutIn, filmed, type IntroCue } from '../world/intro/sequence.js';
+import { useIntro, type Intro } from '../world/intro/useIntro.js';
 import { dueParts } from '../world/markers.js';
 import { startingSpot, type KnownPositions } from '../world/movement.js';
 import {
@@ -328,11 +331,12 @@ function useFeedback(view: PlayerView): { alarmVisible: boolean } {
 /**
  * From when the objective bar may carry a note that the sign was read and a
  * line on the air, epoch ms; null for not yet. After the briefing, or in a
- * run that opens with the power on — which has no briefing — the note at
- * once and the lines from the click of the cold open on.
+ * run that opens with the power on — which has no briefing — the note as
+ * soon as the opening no longer shows the world as a film, which fades the
+ * bar, and the lines from the click of the cold open on.
  */
 export interface NoticeGates {
-  sign: number;
+  sign: number | null;
   line: number | null;
 }
 
@@ -638,8 +642,12 @@ export interface ColdOpen {
   gates: NoticeGates;
 }
 
-function useColdOpen(view: PlayerView): ColdOpen {
-  const darkSince = useDarkSince(view.lights, view.startedAt);
+/**
+ * The cold open as this screen lives it — `cut` straight to the bang where the opening's shot
+ * still ran as the lights went out (world/intro/sequence.ts).
+ */
+function useColdOpen(view: PlayerView, cut: boolean): ColdOpen {
+  const darkSince = useDarkSince(view.lights, view.startedAt, cut);
   const dark = useRevealed(darkSince);
   const intro = opensLit(view.lights, view.startedAt);
   const saw = useRef<number | null>(null);
@@ -1063,9 +1071,10 @@ function OverTheWorld({
  * something over the world, `game--noting`, which sets it as a strip of its own
  * (styles/putdown.css).
  */
-export function gameClass(finale: Finale | null, noting: boolean): string {
+export function gameClass(finale: Finale | null, noting: boolean, film = false): string {
   const ending = finale === null ? [] : ['game--finale', `game--${finale.ending.split(':')[0]}`];
-  return ['game', ...ending, ...(noting ? ['game--noting'] : [])].join(' ');
+  const extra = [...(noting ? ['game--noting'] : []), ...(film ? ['game--film'] : [])];
+  return ['game', ...ending, ...extra].join(' ');
 }
 
 /**
@@ -1086,12 +1095,15 @@ function worldLocked(view: PlayerView, open: OpenNow, station: PuzzleView | null
 function RunWorld({
   game,
   coldOpen,
+  intro,
   station,
   open,
   holdTips,
 }: {
   game: Props;
   coldOpen: ColdOpen;
+  /** the run's opening on this screen; none where it plays none */
+  intro: IntroCue | null;
   station: PuzzleView | null;
   open: OpenNow;
   holdTips: boolean;
@@ -1100,6 +1112,7 @@ function RunWorld({
   return (
     <GameWorld
       view={view}
+      intro={intro}
       positionsRef={game.positionsRef}
       dronesRef={game.dronesRef}
       pingsRef={game.pingsRef}
@@ -1119,19 +1132,27 @@ function RunWorld({
   );
 }
 
+/** Whether the opening shows the world as a film now: the HUD fades, the tips wait. */
+function filming(intro: Intro): boolean {
+  return intro.cue !== null && filmed(intro.cue, Date.now());
+}
+
 /**
- * The running mission. While its end plays in the world (`finale`), nothing
- * lies over the world any more, the controls are gone and the HUD fades,
- * until the veil closes over the screen. The notepad stands beside whatever
- * lies over the world, as a strip of its own (`gameClass`), and a source or
- * a device hands it what is taken down (noting.ts); E, Esc or a step put a
- * sheet down (PutDown.tsx).
+ * The running mission. It opens with the run's opening (world/intro/): a mission's intro as a
+ * film over the lit lab, the HUD faded meanwhile, or a mission's name card. While its end plays
+ * in the world (`finale`), nothing lies over the world any more, the controls are gone and the
+ * HUD fades, until the veil closes over the screen. The notepad stands beside whatever lies
+ * over the world, as a strip of its own (`gameClass`), and a source or a device hands it what
+ * is taken down (noting.ts); E, Esc or a step put a sheet down (PutDown.tsx).
  */
 export function GameScreen(props: Props) {
   const { view, roomCode, positionsRef, chatsRef, send, refusals, finale } = props;
   const { alarmVisible } = useFeedback(view);
-  const coldOpen = useColdOpen(view);
-  const notice = useNotices(view, coldOpen.gates);
+  const intro = useIntro(view, send);
+  const coldOpen = useColdOpen(view, intro.cue !== null && cutIn(intro.cue));
+  // While the opening shows the world as a film the bar is faded: the sign's note waits for it.
+  const filmNow = filming(intro);
+  const notice = useNotices(view, filmNow ? { ...coldOpen.gates, sign: null } : coldOpen.gates);
   const open = useOpened(view);
   const station = useSolvedHold(open.station, view.currentPuzzleIndex);
   const sheets = useSheets(open);
@@ -1148,8 +1169,9 @@ export function GameScreen(props: Props) {
   const self = startingSpot(positionsRef.current, view.you.id, map, view.startedAt);
   const live = finale === null;
   const over = station !== null || sheets.reading !== null || sheets.note !== null;
+  const film = live && filmNow;
   return (
-    <div className={gameClass(finale, live && open.notes && over)}>
+    <div className={gameClass(finale, live && open.notes && over, film)}>
       {live && <RunOverlays view={view} coldOpen={coldOpen} />}
       {live && map.sabotage !== null && relay !== undefined && (
         <RelayAlert sabotage={map.sabotage} relay={relay} send={send} refusals={refusals} />
@@ -1167,10 +1189,14 @@ export function GameScreen(props: Props) {
         <RunWorld
           game={props}
           coldOpen={coldOpen}
+          intro={intro.cue}
           station={station}
           open={open}
-          holdTips={notice !== null}
+          holdTips={notice !== null || film}
         />
+        {live && intro.cue !== null && (
+          <IntroOverlay cue={intro.cue} view={view} skip={intro.skip} />
+        )}
         {live && open.notes && (
           <Notepad
             notes={pad.notes}

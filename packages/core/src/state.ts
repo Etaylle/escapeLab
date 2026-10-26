@@ -187,6 +187,11 @@ export interface GameState {
   /** epoch ms; set when the mission starts */
   startedAt: number | null;
   /**
+   * who of the crew has seen enough of the intro this run, by player id, in the order they
+   * said so (actions.ts `intro-done`): once every crew member present has, the lights go out
+   */
+  introDone: string[];
+  /**
    * epoch ms the lights went out and the clock started: the start itself
    * for a mission without an intro. Null while the power is still on — no
    * clock, no armed station, no patrol, no emergency — and outside a run.
@@ -256,6 +261,7 @@ export function initialState(
     items: {},
     events: [],
     startedAt: null,
+    introDone: [],
     lightsOutAt: null,
     lightsDueAt: null,
     deadlineAt: null,

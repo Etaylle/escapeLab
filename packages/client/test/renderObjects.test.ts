@@ -277,7 +277,7 @@ describe('objects — the lab’s things, in tile space', () => {
     expect(strip(drawnAt(powered, 1.5, 1.5))).toEqual(
       recording((c) => drawEmergencyLamp(c, { glow: 0, facing: null })),
     );
-    const won = drawn({ ...frame, ending: { lit: 0.1, pull: 0, dark: 0 } });
+    const won = drawn({ ...frame, ending: { lit: 0.1, pull: 0, dark: 0 }, whole: 0.1 });
     expect(strip(drawnAt(won, 1.5, 1.5))).toEqual(strip(drawnAt(powered, 1.5, 1.5)));
   });
 });

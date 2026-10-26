@@ -4,7 +4,8 @@
  * The server draws two of the three spawns and a spot for every source, so
  * the walkthrough plans as it goes, each client holding the other's plate
  * doors open on the way. The run opens with the power on — no clock, no
- * station armed — until the lights go out on the real clock; then both
+ * station armed — until both have seen enough of its opening and skip it,
+ * one after the other: the lights go out at the second skip; then both
  * throw the Notlicht's main switch in the Flur together: every spawn has an
  * open way to it. The Notstrom-Kasten and the Signalkette
  * are worked at two consoles at once, Anna at console A and Ben at console B: Ben reads
@@ -1852,12 +1853,24 @@ async function backOnTheMap(solved: number): Promise<void> {
   }
 }
 
-// The lights go out a few seconds in: the clock starts with the whole limit from then on,
+// Both have seen enough of the opening, Anna twice over: the lights burn on while one of the
+// crew still watches, and go out the moment the second skips — long before the intro's own end.
+anna.send({ kind: 'intro-done' });
+anna.send({ kind: 'intro-done' });
+await ben.expectView('Anna has seen enough of the opening', (v) =>
+  JSON.stringify(v.intro?.done) === JSON.stringify([annaJoined.playerId]));
+assert(ben.view?.lights.out === false, 'one of two skipping the opening leaves the lights on');
+const skippedAt = Date.now();
+ben.send({ kind: 'intro-done' });
+
+// The lights go out as the crew skips: the clock starts with the whole limit from then on,
 // the first station is armed and mission control speaks.
 const dark = await crew[0].expectView('the lights go out', (v) => v.lights.out);
 const outAt = dark.lights.outAt ?? fail('the lights went out at no moment');
-assert(outAt - (dark.startedAt ?? outAt) >= intro.lightsSec * 1000,
-  `the lights went out ${intro.lightsSec} s into the run, not before`);
+const outIn = outAt - (dark.startedAt ?? outAt);
+assert(outAt >= skippedAt && outIn < intro.lightsSec * 1000,
+  `the lights went out ${(outIn / 1000).toFixed(1)} s into the run, as the second of the crew ` +
+    `skipped the opening, before its ${intro.lightsSec} s were up`);
 assert(dark.deadlineAt === outAt + mission.timeLimitSec * 1000,
   'the clock started when the lights went out, with the whole limit');
 assert(dark.events.map((e) => e.label).join(' | ') === `${POWER_OUT} | ${mission.radio.start}`,
@@ -1998,7 +2011,7 @@ assert(
   'the run report has the start and the finish the end screen shows',
 );
 assert(report.lightsOutAt === outAt && outAt > report.startedAt,
-  'the run report has when the lights went out, after the start every time counts from');
+  'the run report has when the lights went out, after the start: the run’s clock counts from it');
 assert(
   report.crewSize === 2 &&
     Object.keys(report.spawns).join() === 'p1,p2' &&
@@ -2013,8 +2026,9 @@ assert(
       s.openedAt !== null &&
       s.solvedAt !== null &&
       s.solvedAt >= s.openedAt &&
-      s.openedAt === (report.stations[i - 1]?.solvedAt ?? report.startedAt)),
-  'the run report has every station, each up from the solve before it until its own',
+      s.openedAt === (report.stations[i - 1]?.solvedAt ?? report.lightsOutAt)),
+  'the run report has every station, each up from the solve before it — the first from the ' +
+    'lights going out — until its own',
 );
 assert(
   report.penalties.reduce((sum, p) => sum + p.count, 0) === won.penaltySeq &&

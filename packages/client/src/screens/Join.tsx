@@ -15,6 +15,7 @@ import { HttpsHint } from './HttpsHint.js';
 import { Icon } from './Icon.js';
 import { InstallOffer } from './Install.js';
 import { MapThumb } from './MapThumb.js';
+import { phosphorClass, useComesOn } from './phosphor.js';
 
 interface Props {
   send: (msg: ClientMessage) => void;
@@ -381,6 +382,7 @@ export function JoinScreen({
 }: Props) {
   const [name, setName] = useKeptName();
   const nameOk = name.trim().length > 0;
+  const comesOn = useComesOn('start');
 
   // Keep the room browser fresh while nobody has joined anything yet.
   useEffect(() => {
@@ -397,7 +399,7 @@ export function JoinScreen({
   const section = { send, connected, name: name.trim() };
   return (
     <div className="card join">
-      <h1>
+      <h1 className={phosphorClass(comesOn)}>
         <Icon name="hex" /> EscapeLab
       </h1>
       <p className="muted">

@@ -84,6 +84,8 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('switch-mission'), missionId: z.string().min(1) }),
   z.object({ kind: z.literal('select-difficulty'), difficulty: z.enum(DIFFICULTIES) }),
   z.object({ kind: z.literal('start-mission') }),
+  /** the player has seen enough of the intro: the skip of the opening on their screen */
+  z.object({ kind: z.literal('intro-done') }),
   /** a move at the open puzzle; its module's input schema checks `input` */
   z.object({ kind: z.literal('puzzle-input'), input: z.unknown() }),
   z.object({ kind: z.literal('request-hint') }),

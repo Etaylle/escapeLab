@@ -6,6 +6,23 @@ apart by colour at a glance; **Escape Simulator** for rooms dense with believabl
 **Alien: Isolation** for retro instruments — phosphor screens, tungsten light, gauges and
 warning stripes. Every rule below is enforced by the code; where a test checks it, it says so.
 
+## The plant
+
+The lab is a wing of the **Forschungsanlage Kaltenbrunn**, a research site of the early
+1980s with a reactor of its own, centrifuge labs and a server room, run in three shifts —
+Frühschicht, Spätschicht, Nachtschicht — from a Leitstelle that talks to the crew on the radio
+and, while the power is on, to the whole wing over loudspeakers. Blackout plays in **Trakt C**
+on the night shift, at 23:47. The plant is made up; no real site carries its name.
+
+A run opens on a location card in the art's own type, the plant's name over the wing and the
+shift with its time (`intro.place`, `intro.time` of the mission; client
+`world/intro/IntroOverlay.tsx` `PLANT`); a mission without an intro shows the plant over its own
+name. Then the opening shows the world as a film: two black bars, 12 % of the picture each,
+thinner on a phone, the subtitles in the lower one; the HUD fades meanwhile and comes back where
+it was. Its title lands in the warm white of the lit lab with a faint red glow, letterspaced, the
+mission's name in capitals. Under reduced motion nothing slides and nothing pans: the bars and
+the title fade.
+
 ## Palette (`packages/client/src/world/palette.ts`)
 
 Every colour the world draws with is a token of the palette or mixed from tokens

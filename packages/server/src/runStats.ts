@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import {
   DIFFICULTIES,
+  runSeconds,
   type Difficulty,
   type DifficultyStats,
   type LeaderEntry,
@@ -42,7 +43,7 @@ function entryOf(run: LoggedRun): LeaderEntry {
   return {
     crew: run.version === 1 ? [] : [...run.crew],
     crewSize: run.crewSize,
-    seconds: (run.finishedAt - run.startedAt) / 1000,
+    seconds: runSeconds(run),
     alarms: run.penalties.reduce((sum, penalty) => sum + penalty.count, 0),
     finishedAt: run.finishedAt,
   };

@@ -52,6 +52,11 @@ export type Action =
   | { type: 'start-mission'; playerId: string; at: number; seed: number }
   /** the end of a mission's intro, once `lightsDueAt` has come: the clock starts */
   | { type: 'lights-out'; at: number }
+  /**
+   * a crew member has seen enough of the intro (the client's skip): once every one present
+   * has, the lights go out at `at`, before `lightsDueAt`; saying it twice changes nothing
+   */
+  | { type: 'intro-done'; playerId: string; at: number }
   /** a move at the open puzzle; `input` is checked against that puzzle's module */
   | { type: 'puzzle-input'; playerId: string; at: number; input: unknown }
   /** once `puzzleDueAt` has come: whatever ran out at the open puzzle by `at` is dropped */
@@ -136,6 +141,8 @@ export function applyAction(state: GameState, action: Action): GameState {
       return startMission(state, action);
     case 'lights-out':
       return lightsOut(state, action.at);
+    case 'intro-done':
+      return introDone(state, action);
     case 'puzzle-input':
       return handlePuzzleInput(state, action);
     case 'puzzle-tick':
@@ -523,6 +530,7 @@ function startMission(
     ),
     events: [],
     startedAt: action.at,
+    introDone: [],
     lightsOutAt: null,
     lightsDueAt: intro === undefined ? null : action.at + intro.lightsSec * 1000,
     deadlineAt: null,
@@ -552,6 +560,32 @@ function lightsOut(state: GameState, at: number): GameState {
     return state;
   }
   return clockStarts(logEvent(state, 'power', POWER_OUT, at), at);
+}
+
+/**
+ * Whether every crew member present — connected — has seen enough of the intro: then it
+ * ends. Somebody away holds nothing up; a crew with nobody present has seen nothing.
+ */
+function everyoneWatched(state: GameState): boolean {
+  const present = state.players.filter((player) => player.connected);
+  return present.length > 0 && present.every((player) => state.introDone.includes(player.id));
+}
+
+/**
+ * A crew member has seen enough of the intro: noted once, however often said, and only while
+ * the power is still on. Once every one present has, the lights go out at `at` — not during a
+ * pause, which ends it instead, once everybody is back (`setPaused`).
+ */
+function introDone(state: GameState, action: { playerId: string; at: number }): GameState {
+  if (state.phase !== 'playing' || state.lightsOutAt !== null) {
+    return state;
+  }
+  const player = findPlayer(state, action.playerId);
+  if (state.introDone.includes(player.id)) {
+    return state;
+  }
+  const noted = { ...state, introDone: [...state.introDone, player.id] };
+  return everyoneWatched(noted) ? lightsOut(noted, action.at) : noted;
 }
 
 /**
@@ -867,7 +901,7 @@ function setPaused(state: GameState, action: { paused: boolean; at: number }): G
     return state;
   }
   const frozen = Math.max(0, action.at - state.paused.since);
-  return {
+  const resumed: GameState = {
     ...state,
     paused: null,
     lightsDueAt: later(state.lightsDueAt, frozen),
@@ -876,6 +910,9 @@ function setPaused(state: GameState, action: { paused: boolean; at: number }): G
     hintReadyAt: later(state.hintReadyAt, frozen),
     quietSince: later(state.quietSince, frozen),
   };
+  // The crew said it had seen enough of the intro while it waited: it ends as the run goes on.
+  const intro = resumed.lightsOutAt === null && resumed.introDone.length > 0;
+  return intro && everyoneWatched(resumed) ? lightsOut(resumed, action.at) : resumed;
 }
 
 /** A moment of the run (epoch ms) moved on by `ms`, as a pause moves it; none stays none. */
@@ -1368,6 +1405,7 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     items: {},
     events: [],
     startedAt: null,
+    introDone: [],
     lightsOutAt: null,
     lightsDueAt: null,
     deadlineAt: null,

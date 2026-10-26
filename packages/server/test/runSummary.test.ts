@@ -83,6 +83,13 @@ describe('summarize', () => {
     ]);
   });
 
+  it('times each run by its clock: from the lights going out, where a run says when', () => {
+    const blackout = runs.filter((run) => run.missionId === 'blackout');
+    expect(summarize(blackout)[0]?.medianSeconds).toBe(310);
+    const watched = blackout.map((run) => ({ ...run, lightsOutAt: run.startedAt + 30_000 }));
+    expect(summarize(watched)[0]?.medianSeconds).toBe(280);
+  });
+
   it('has nothing to say about no runs', () => {
     expect(summarize([])).toEqual([]);
   });

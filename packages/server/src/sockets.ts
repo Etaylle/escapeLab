@@ -155,6 +155,7 @@ function handleMessage(
     }
     case 'select-color':
     case 'start-mission':
+    case 'intro-done':
     case 'puzzle-input':
     case 'request-hint':
     case 'open-source':

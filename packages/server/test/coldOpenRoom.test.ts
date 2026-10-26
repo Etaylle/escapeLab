@@ -129,6 +129,36 @@ describe('a room whose mission opens with the power on', () => {
     room.dispose();
   });
 
+  it('puts the lights out early once the whole crew has seen enough of the intro', () => {
+    const { room, anna, ben, startedAt } = started();
+    vi.advanceTimersByTime(1000);
+    room.act(anna.playerId, { kind: 'intro-done' });
+    room.act(anna.playerId, { kind: 'intro-done' });
+    expect(lastView(ben).lights.out).toBe(false);
+    expect(lastView(ben).intro?.done).toEqual([anna.playerId]);
+    vi.advanceTimersByTime(500);
+    room.act(ben.playerId, { kind: 'intro-done' });
+    const out = lastView(anna);
+    expect(out.lights).toEqual({ out: true, outAt: startedAt + 1500 });
+    expect(out.deadlineAt).toBe(startedAt + 1500 + LIMIT_MS);
+    expect(out.events.map((e) => e.label)).toEqual(['Stromausfall', 'Strom weg.']);
+    // The intro's own end is called off: when it was due, nothing happens any more.
+    vi.advanceTimersByTime(INTRO_MS);
+    expect(lastView(anna).lights.outAt).toBe(startedAt + 1500);
+    expect(lastView(anna).events).toHaveLength(2);
+    room.dispose();
+  });
+
+  it('keeps the lights on for the intro’s length where one of the crew still watches', () => {
+    const { room, anna, ben, startedAt } = started();
+    room.act(anna.playerId, { kind: 'intro-done' });
+    vi.advanceTimersByTime(INTRO_MS - 1);
+    expect(lastView(ben).lights.out).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(lastView(ben).lights).toEqual({ out: true, outAt: startedAt + INTRO_MS });
+    room.dispose();
+  });
+
   it('lets the crew walk while the lights are on, but switch nothing on', () => {
     const { room, anna } = started();
     walkTo(room, anna, 3.5, 1.5);

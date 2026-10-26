@@ -28,8 +28,8 @@ function movedSince(sent: Sent, run: number, { x, y, facing, moving }: Sim['self
 /**
  * Every position goes out stamped with the run it was walked in, as it
  * changes, every POS_SEND_MS at most — kept as streamed, so that its echo is
- * no correction (movement.ts). An audience connection streams nothing.
- * Returns the timer.
+ * no correction (movement.ts). An audience connection streams nothing, nor a
+ * screen whose opening holds its avatar (`Sim.held`). Returns the timer.
  */
 export function streamPositions(
   sim: Sim,
@@ -39,7 +39,7 @@ export function streamPositions(
   const lastSent: Sent = { run: NaN, x: NaN, y: NaN, facing: NaN, moving: false };
   return setInterval(() => {
     const run = sim.run;
-    if (run === null || spectator || !movedSince(lastSent, run, sim.self)) {
+    if (run === null || spectator || sim.held || !movedSince(lastSent, run, sim.self)) {
       return;
     }
     const { x, y, facing, moving } = sim.self;

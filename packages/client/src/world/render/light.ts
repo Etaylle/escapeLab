@@ -27,15 +27,16 @@ import { drawStandby } from './standby.js';
  * The light over the picture: the darkness, and what cuts it open — the
  * lab's own warm light in your room while it has its power. The audience
  * sees the lab whole, warm all over while the power is on; and so does
- * everybody as every room's light comes on at the end of a run won
- * (`ending.lit`, 0 to 1), the darkness lifting as it does. Where there is
+ * everybody as every room's light comes on at the end of a run won, and
+ * through the opening's shot (`frame.whole`, 0 to 1), the darkness lifting as
+ * it does. Where there is
  * darkness, the WebGL light layer draws it all where the world's way for
  * its light says so (gl/path.ts); else, and as its fallback, this pass.
  * Either way the standby lights glow over it (standby.ts). Every light that
  * stands still is laid on from its bake on the frame's grid (bakes.ts).
  */
 export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
-  const whole = frame.ending?.lit ?? 0;
+  const whole = frame.whole;
   const path = lightPathOf(frame.kit, ctx.canvas);
   if (onLayer(ctx, frame) && drawLayer(ctx, frame, path)) {
     drawStandby(ctx, frame);
@@ -48,9 +49,9 @@ export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   }
 }
 
-/** Whether the world lies in the dark: not the audience's, nor lit whole by a run won. */
+/** Whether the world lies in the dark: not the audience's, nor lit whole (`frame.whole`). */
 function inTheDark(frame: Frame): boolean {
-  return !frame.spectator && (frame.ending?.lit ?? 0) < 1;
+  return !frame.spectator && frame.whole < 1;
 }
 
 /**
@@ -119,7 +120,7 @@ function poolsOf(kit: RenderKit, map: WorldMap, light: CeilingLight): Float32Arr
   return read;
 }
 
-/** The lab's own light: all of it at the end of a run won, else your room while it has power. */
+/** The lab's own light: all of it where it shows lit whole, else your room while it has power. */
 function drawPower(ctx: CanvasRenderingContext2D, frame: Frame, whole: number): void {
   const { light, spectator } = frame;
   if (whole > 0) {

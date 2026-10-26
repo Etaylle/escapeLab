@@ -135,7 +135,7 @@ export function openersOf(manifest: VoiceManifest): Set<string> {
 }
 
 /** A decoded recording, and its peak, which the chain is fed at SPEECH_PEAK. */
-interface Clip {
+export interface Clip {
   readonly buffer: AudioBuffer;
   readonly peak: number;
 }
@@ -149,13 +149,14 @@ interface Speaking {
 }
 
 /**
- * What the voice has loaded: the manifest by line, the recordings' files by id, the openers,
- * the recordings by id.
+ * What the voice has loaded: the manifest by line, the recordings' files and lengths by id, the
+ * openers, the recordings by id.
  */
 const store: {
   manifest: Promise<VoiceManifest | null> | null;
   ids: Map<string, string>;
   files: Map<string, string>;
+  ms: Map<string, number>;
   openers: Set<string>;
   loading: Map<string, Promise<void>>;
   clips: Map<string, Clip>;
@@ -163,6 +164,7 @@ const store: {
   manifest: null,
   ids: new Map(),
   files: new Map(),
+  ms: new Map(),
   openers: new Set(),
   loading: new Map(),
   clips: new Map(),
@@ -183,6 +185,7 @@ function manifest(): Promise<VoiceManifest | null> {
       } else {
         store.ids = idsOf(loaded);
         store.files = new Map(Object.entries(loaded).map(([id, entry]) => [id, entry.file]));
+        store.ms = new Map(Object.entries(loaded).map(([id, entry]) => [id, entry.ms]));
         store.openers = openersOf(loaded);
       }
       return loaded;
@@ -237,6 +240,26 @@ export function preloadVoice(missionId: string): void {
       }
     })
     .catch(() => undefined);
+}
+
+/**
+ * The manifest, once it is here: what the plant's loudspeakers (pa.ts) wait for before they lay
+ * their lines out by their lengths. Resolves either way, empty-handed where there is none.
+ */
+export function voiceReady(): Promise<void> {
+  return manifest().then(() => undefined);
+}
+
+/** The decoded recording of the line `text`, where it is loaded; null otherwise. */
+export function clipOf(text: string): Clip | null {
+  const id = store.ids.get(text);
+  return id === undefined ? null : (store.clips.get(id) ?? null);
+}
+
+/** How long the line `text` speaks by the manifest, ms; null before it, or without a recording. */
+export function recordedMs(text: string): number | null {
+  const id = store.ids.get(text);
+  return id === undefined ? null : (store.ms.get(id) ?? null);
 }
 
 /** Lines that just came over the air: any with a recording not loaded yet is fetched now. */

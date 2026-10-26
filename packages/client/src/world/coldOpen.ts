@@ -14,10 +14,12 @@ import type { BlackoutCue } from './audio.js';
  *             counting, the goal line comes up and mission control speaks
  *
  * Under reduced motion the flicker is one fade to black over the last
- * FADE_MS before the bang; the bang and the click stay. A view whose lights
- * went out more than STALE_MS ago — a reconnect, an audience that came late —
- * lands in the dark straight away. Pure but for the two hooks at the end,
- * which keep that moment for a screen.
+ * FADE_MS before the bang; the bang and the click stay. A screen whose
+ * opening shot still ran when the lights went out (intro/sequence.ts) cuts
+ * straight to the bang: its sequence starts FLICKER_MS in, with no flicker.
+ * A view whose lights went out more than STALE_MS ago — a reconnect, an
+ * audience that came late — lands in the dark straight away. Pure but for the
+ * two hooks at the end, which keep that moment for a screen.
  */
 
 /** The light flickers this long, ms into the sequence; then the bang. */
@@ -46,21 +48,25 @@ export const FADE_MS = 300;
 /**
  * When the sequence starts on this client, epoch ms by its own clock, for a
  * view of the lights that arrived at `arrivedAt` in the run started at
- * `startedAt`: then — unless the lights went out longer than STALE_MS
- * before, or were out from the start, as in a mission without an intro;
- * then the sequence counts as long over. Null while the lights are on.
+ * `startedAt`: then, or FLICKER_MS before where the opening's shot ran on
+ * this screen and `cut`s to the bang — unless the lights went out longer than
+ * STALE_MS before, or were out from the start, as in a mission without an
+ * intro; then the sequence counts as long over. Null while the lights are on.
  */
 export function darkSince(
   lights: Lights,
   startedAt: number | null,
   arrivedAt: number,
+  cut = false,
 ): number | null {
   if (!lights.out) {
     return null;
   }
   const outAt = lights.outAt ?? arrivedAt;
-  const missed = outAt === startedAt || arrivedAt - outAt > STALE_MS;
-  return missed ? arrivedAt - SEQUENCE_MS : arrivedAt;
+  if (outAt === startedAt || arrivedAt - outAt > STALE_MS) {
+    return arrivedAt - SEQUENCE_MS;
+  }
+  return cut ? arrivedAt - FLICKER_MS : arrivedAt;
 }
 
 /** Whether a run opens with the power on: its lights are on, or went out after its start. */
@@ -133,16 +139,17 @@ export function revealed(since: number | null, now: number): boolean {
 
 /**
  * The moment the lights went out on this screen, kept for the run: null
- * while they are on, then `darkSince` of the first view that had them out.
- * A new run — a rematch — starts over.
+ * while they are on, then `darkSince` of the first view that had them out —
+ * `cut` to the bang where the opening's shot ran then. A new run — a rematch —
+ * starts over.
  */
-export function useDarkSince(lights: Lights, run: number | null): number | null {
+export function useDarkSince(lights: Lights, run: number | null, cut = false): number | null {
   const kept = useRef<{ run: number | null; since: number | null }>({ run, since: null });
   if (kept.current.run !== run || !lights.out) {
     kept.current = { run, since: null };
   }
   if (lights.out && kept.current.since === null) {
-    kept.current.since = darkSince(lights, run, Date.now());
+    kept.current.since = darkSince(lights, run, Date.now(), cut);
   }
   return kept.current.since;
 }

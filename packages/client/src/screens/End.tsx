@@ -1,5 +1,13 @@
 import { useEffect } from 'react';
-import type { ClientMessage, Grade, MissionInfo, PlayerView, RunEvent } from '@escapelab/core';
+import {
+  clockStartOf,
+  runSeconds,
+  type ClientMessage,
+  type Grade,
+  type MissionInfo,
+  type PlayerView,
+  type RunEvent,
+} from '@escapelab/core';
 import { reportLine } from '../radio.js';
 import { clock } from '../runStats.js';
 import { victoryChord } from '../world/audio.js';
@@ -196,6 +204,7 @@ export type CardSource = Pick<
   | 'alarms'
   | 'missionTitle'
   | 'startedAt'
+  | 'lights'
   | 'finishedAt'
   | 'grade'
   | 'currentPuzzleIndex'
@@ -209,10 +218,15 @@ export function titleCardOf(
   fresh: boolean,
 ): TitleCardProps {
   const { startedAt, finishedAt } = view;
+  // The run's time is its clock's: from the lights going out, what an intro took left out.
+  const lightsOutAt = view.lights.outAt;
   return {
     ending: endingOf(view) ?? 'lost:time',
     missionTitle: view.missionTitle,
-    usedMs: startedAt === null || finishedAt === null ? null : finishedAt - startedAt,
+    usedMs:
+      startedAt === null || finishedAt === null
+        ? null
+        : finishedAt - clockStartOf({ startedAt, lightsOutAt }),
     grade: view.grade,
     crew: view.players.map(({ id, name, color }) => ({ id, name, color })),
     stations: { solved: view.currentPuzzleIndex, total: view.puzzleCount },
@@ -247,7 +261,7 @@ function EndStats({ view, won }: { view: PlayerView; won: boolean }) {
   );
 }
 
-/** The run report, line by line, each at its time into the run. */
+/** The run report, line by line, each at its time on the run's clock (`startedAt` its start). */
 function RunLog({ events, startedAt }: { events: RunEvent[]; startedAt: number }) {
   return (
     <>
@@ -364,6 +378,8 @@ export function EndScreen({ view, fresh, send, leaveRoom, missions = [] }: Props
   const won = card.ending === 'won';
   const { startedAt, finishedAt } = view;
   const haveStats = startedAt !== null && finishedAt !== null;
+  const clockStart =
+    startedAt === null ? null : clockStartOf({ startedAt, lightsOutAt: view.lights.outAt });
 
   return (
     <div className="end-screen">
@@ -379,7 +395,7 @@ export function EndScreen({ view, fresh, send, leaveRoom, missions = [] }: Props
               difficulty: view.difficulty,
               won,
               crew: view.players.map((p) => p.name),
-              seconds: (finishedAt - startedAt) / 1000,
+              seconds: runSeconds({ startedAt, lightsOutAt: view.lights.outAt, finishedAt }),
               alarms: view.penaltySeq,
               finishedAt,
             }}
@@ -389,8 +405,8 @@ export function EndScreen({ view, fresh, send, leaveRoom, missions = [] }: Props
         <h2>Beiträge</h2>
         <CreditsTable players={view.players} credits={view.credits} youId={view.you.id} />
 
-        {view.events.length > 0 && startedAt !== null && (
-          <RunLog events={view.events} startedAt={startedAt} />
+        {view.events.length > 0 && clockStart !== null && (
+          <RunLog events={view.events} startedAt={clockStart} />
         )}
         <Rematch view={view} missions={missions} send={send} leaveRoom={leaveRoom} />
 

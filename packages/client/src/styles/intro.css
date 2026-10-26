@@ -1,0 +1,304 @@
+/* ══ the run's opening: the card, the shot's bars, the title — and the game's title ══
+ * world/intro/IntroOverlay.tsx over the world's canvas, inside the stage and as large as it;
+ * Game.tsx's `game--film` while the opening shows the world as a film, which fades the HUD;
+ * Join.tsx's title, which comes on like a phosphor screen once a page load. Nothing here blurs
+ * what lies behind it (css.test.ts), and every move gives way to a fade under reduced motion.
+ */
+
+/* ── the overlay ───────────────────────────────────────────────────────── */
+
+/*
+ * Over the world, the objective bar and the tips; under every panel, the notepad and the full
+ * screen notices. It takes the pointer only while it holds the world or offers the skip.
+ */
+.intro {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  overflow: hidden;
+  border-radius: 14px;
+  pointer-events: none;
+  color: #ece6da;
+}
+
+.intro--holds {
+  pointer-events: auto;
+}
+
+/* A mission's name card lies over the briefing that counts its run in under it. */
+.intro--name {
+  z-index: 61;
+}
+
+/* The opacities are set ten times a second (IntroOverlay.tsx): they glide between two sets. */
+.intro-black,
+.intro-card,
+.intro-title {
+  transition: opacity 0.12s linear;
+}
+
+.intro-black {
+  position: absolute;
+  inset: 0;
+  background: #000;
+}
+
+/* ── the location card ─────────────────────────────────────────────────── */
+
+.intro-card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 24px;
+  background: #000;
+  text-align: center;
+}
+
+.intro-plant {
+  margin: 0;
+  color: #9a9182;
+  font-family: var(--mono);
+  font-size: calc(13px * var(--text-scale));
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+}
+
+.intro-place,
+.intro-name {
+  margin: 0;
+  color: #f1e8d6;
+  font-size: calc(36px * var(--text-scale));
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.intro-time {
+  margin: 0;
+  color: #c9b79b;
+  font-family: var(--mono);
+  font-size: calc(15px * var(--text-scale));
+  letter-spacing: 0.2em;
+}
+
+/* ── the shot's bars ───────────────────────────────────────────────────── */
+
+/* A tenth and a bit of the picture each, black; they slide off its edges as the film ends. */
+.intro-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 12%;
+  background: #000;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.intro-bar--top {
+  top: 0;
+}
+
+.intro-bar--bottom {
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 clamp(16px, 18vw, 220px);
+}
+
+.intro-bar--top.intro-bar--out {
+  transform: translateY(-101%);
+}
+
+.intro-bar--bottom.intro-bar--out {
+  transform: translateY(101%);
+}
+
+/* The announcement, sentence by sentence, as the loudspeakers say it. */
+.intro-subtitle {
+  margin: 0;
+  max-width: 44em;
+  color: #ece6da;
+  font-size: calc(16px * var(--text-scale));
+  line-height: 1.35;
+  text-align: center;
+  text-shadow: 0 1px 2px #000;
+}
+
+/* The skip, at the right end of the lower bar: small, out of the subtitle's way. */
+.intro-skip {
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  transform: translateY(-50%);
+  color: #8d8679;
+  font-family: var(--mono);
+  font-size: calc(11px * var(--text-scale));
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+/* ── the title, landing as the lights die ──────────────────────────────── */
+
+.intro-title {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0 16px;
+  transform: translateY(-50%);
+  color: #f3ead8;
+  font-size: calc(clamp(30px, 6vw, 78px) * var(--text-scale));
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  line-height: 1.1;
+  text-align: center;
+  text-transform: uppercase;
+  text-shadow: 0 0 26px rgba(255, 52, 52, 0.35);
+  animation: intro-title-land 0.24s ease-out both;
+}
+
+@keyframes intro-title-land {
+  from {
+    opacity: 0;
+    letter-spacing: 0.42em;
+  }
+}
+
+/* ── the HUD while the world shows as a film ───────────────────────────── */
+
+/* Faded, never taken out: the stage keeps its size and the camera its place. */
+.game--film .stage-top,
+.game--film .hud,
+.game--film .world-controls,
+.game--film .coach {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.game .stage-top,
+.game .hud,
+.game .world-controls {
+  transition: opacity 0.4s ease;
+}
+
+/* ── the game's title on the start screen ──────────────────────────────── */
+
+/* It comes on as a phosphor screen does, unsteady for a moment, once a page load (Join.tsx). */
+.phosphor-title {
+  animation: phosphor-on 1.2s linear both;
+}
+
+@keyframes phosphor-on {
+  0% {
+    opacity: 0;
+    text-shadow: none;
+  }
+  8% {
+    opacity: 0.8;
+  }
+  12% {
+    opacity: 0.1;
+  }
+  20% {
+    opacity: 0.9;
+  }
+  24% {
+    opacity: 0.3;
+  }
+  34% {
+    opacity: 1;
+    text-shadow: 0 0 18px rgba(110, 255, 150, 0.55);
+  }
+  40% {
+    opacity: 0.55;
+  }
+  52% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* ── narrow screens ────────────────────────────────────────────────────── */
+
+/* A phone: thinner bars, the skip under the subtitle, the title still on one or two lines. */
+@media (max-width: 520px) {
+  .intro-bar {
+    height: 9%;
+  }
+
+  .intro-bar--bottom {
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 12px;
+  }
+
+  .intro-subtitle {
+    font-size: calc(12.5px * var(--text-scale));
+    line-height: 1.25;
+  }
+
+  .intro-skip {
+    position: static;
+    transform: none;
+    font-size: calc(10px * var(--text-scale));
+  }
+
+  .intro-place,
+  .intro-name {
+    font-size: calc(28px * var(--text-scale));
+  }
+
+  .intro-title {
+    font-size: calc(30px * var(--text-scale));
+    letter-spacing: 0.16em;
+  }
+}
+
+/* A phone held sideways: the bars as thin, the card and the title smaller. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .intro-bar {
+    height: 10%;
+  }
+
+  .intro-subtitle {
+    font-size: calc(13px * var(--text-scale));
+  }
+
+  .intro-title {
+    font-size: calc(34px * var(--text-scale));
+  }
+}
+
+/* ── reduced motion: nothing slides, everything fades ──────────────────── */
+
+:where([data-motion='reduce']) {
+  .intro-bar {
+    transition: opacity 0.4s linear;
+  }
+
+  .intro-bar--top.intro-bar--out,
+  .intro-bar--bottom.intro-bar--out {
+    transform: none;
+    opacity: 0;
+  }
+
+  .intro-title {
+    animation: intro-title-fade 0.24s linear both;
+  }
+
+  .phosphor-title {
+    animation: none;
+  }
+}
+
+@keyframes intro-title-fade {
+  from {
+    opacity: 0;
+  }
+}

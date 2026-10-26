@@ -335,3 +335,69 @@ lights alive again, the run's first line and every solve's line spoken from the 
 200 ms a word at least, the first after the Leitstelle's opening and no other — the pressure in
 the escape, the partner's side across the corridor, and the chain's band-pass in the offline
 renders (`tools/spectrum.mjs`), on white noise and on the mission's opening line.
+
+## The opening: loudspeakers and a cue (`pa.ts`, `intro/cue.ts`)
+
+A mission with an intro opens with the lab's power on (`world/intro/sequence.ts`), and while
+the camera runs across the lit lab the Leitstelle makes its routine shift-change announcement
+over the wing's loudspeakers: the same voice as the radio's, recorded with the radio's lines by
+the voice script — the intro's `pa` lines, a run's first, listed in the manifest like every
+other — and never on the air. Blackout's, in full:
+
+> Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47, die Nachtschicht hat übernommen.
+> Reaktor in Teillast, 60 Prozent. Die Zentrifugen laufen bis 6 Uhr durch.
+> Netzlast im Trakt 96 Prozent, Notstrom in Bereitschaft.
+> Die Spätschicht gibt Dosimeter und Schlüssel bitte an der Pforte ab.
+> Herr Haller, bitte die Leitstelle anrufen. Herr Haller, bitte die Leitstelle anrufen.
+
+**The loudspeakers.** A horn on a wall, not a handset: a high-pass at 300 Hz and a low-pass at
+5 kHz, each second order (Butterworth), the direct sound straight out, and the room answering
+it in two early reflections, 45 ms later at 0.3 and 95 ms later at 0.14, each low-passed at
+3 kHz — no squelch, no static, no shaper (`paChain`). Into the radio's bus at 0.1 of a line's
+peak, so the Funk volume sets it; nothing ducks under it.
+
+**When each line speaks.** The first line starts 3 s into the opening, once the card has gone
+and the lab has faded in; each next one 0.8 s after the one before has ended, by the lengths the
+manifest gives (`paSchedule`); the subtitles follow it sentence by sentence, each sentence its
+share of its line by length. A line whose recording is not loaded yet is left out, its subtitle
+still shown, and a screen that comes in late skips the lines whose moment passed. The lights fail
+by themselves 4 s past the whole announcement's length (`LIGHTS_AFTER_SPEECH_MS`;
+`intro.lightsSec`, which `test/voiceLines.test.ts` holds to the recordings and names where it
+does not fit): with the 3 s before the first line and the pauses between, that falls into the
+last line — the page said twice — and the power under the loudspeakers goes with the lights, the
+line breaking off mid-word. A player who skips hears the rest of the announcement as the room's
+sound, without the subtitles, until the lights fail on their screen.
+
+**The cue.** Under the announcement, low, plays one instrumental bed of some 40 s — dark, low,
+industrial, slowly building — from the card on: at the peak of a room's bed (`CUE_PEAK`), into
+the music's bus at the Musik volume, one voice of the budget (`capped`). It fades out over 1.5 s
+where the player skips and stops dead at the blackout's bang; the game's own music starts 2 s
+after the click, as ever. The cue is composed once by ElevenLabs Music through the SDK
+(`scripts/introCue.ts`, `client.music.compose`, `forceInstrumental`, `mp3_44100_96`) into
+`public/intro/title.mp3`, its list `public/intro/manifest.json` naming the file, its length and
+a hash of the request: a run that finds the same hash and its file composes nothing anew. Before
+it composes, the script reads the account's credits and stops below 40,000. Where there is no
+cue the opening plays without music.
+
+**The bang.** As the lights-out view arrives on a screen whose shot still ran — or whose skip
+was the last the crew needed, which keeps the film running up to 1.5 s to meet the lights — the
+cold open is joined at its bang (`coldOpen.ts` `darkSince`, `cut`): the breaker's thunk the game
+plays today (`blackoutSounds`) with no flicker before it, the emergency relay's click 0.4 s
+later. A player who had skipped before hears the lights fail as ever, flicker and all.
+
+```sh
+# in the main checkout, whose .env.local holds the key (never printed)
+VOICE_ENGINE=elevenlabs pnpm --filter @escapelab/client voice --fresh   # Helmut reads the five
+pnpm --filter @escapelab/client intro-cue --dry-run   # what it would compose and spend
+pnpm --filter @escapelab/client intro-cue             # the cue; says what it cost
+```
+
+The announcement's five lines are 368 characters. In the branch that brought the opening they are
+recorded by Piper (Thorsten) in place of Helmut, and no cue is composed: the session could not
+spend the account's credits. The first command above has Helmut read exactly those five — every
+other line keeps its recording — after which the voice test names the `lightsSec` to set.
+
+`test/pa.test.ts` holds the chain and the lines' timing, the cut and a line left out;
+`test/intro.test.tsx` the opening's phases and their timings, the skip and its count, the
+reduced-motion path, the title on the lights-out, the crew held still; `test/introCue.test.ts`
+the script against a client of its own and the cue in the game.

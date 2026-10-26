@@ -1,4 +1,4 @@
-import { DIFFICULTIES, type Difficulty } from '@escapelab/core';
+import { DIFFICULTIES, runSeconds, type Difficulty } from '@escapelab/core';
 import type { LoggedRun } from './runLog.js';
 
 /** One station across the runs of a mission at one difficulty. */
@@ -22,7 +22,7 @@ export interface RunsSummary {
   won: number;
   lostOnTime: number;
   lostOnAlarms: number;
-  /** from start to finish, over every run */
+  /** from the clock's start to the finish, over every run */
   medianSeconds: number;
   /** in mission order */
   stations: StationSummary[];
@@ -68,7 +68,7 @@ function summarizeGroup({ missionId, difficulty, runs }: Group): RunsSummary {
     won: ended('won'),
     lostOnTime: ended('lost:time'),
     lostOnAlarms: ended('lost:alarms'),
-    medianSeconds: median(runs.map((run) => (run.finishedAt - run.startedAt) / 1000)) ?? 0,
+    medianSeconds: median(runs.map(runSeconds)) ?? 0,
     stations,
     slowest: stations
       .filter((station) => station.medianSeconds !== null)

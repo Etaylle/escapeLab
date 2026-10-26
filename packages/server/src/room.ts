@@ -48,6 +48,7 @@ export type GameMessage = Extract<
     kind:
       | 'select-color'
       | 'start-mission'
+      | 'intro-done'
       | 'puzzle-input'
       | 'request-hint'
       | 'open-source'
@@ -317,6 +318,9 @@ export class Room {
         });
         this.next = null;
         this.seedPositions();
+        break;
+      case 'intro-done':
+        this.dispatch({ type: 'intro-done', playerId, at: Date.now() });
         break;
       case 'puzzle-input':
         this.dispatch({ type: 'puzzle-input', playerId, at: Date.now(), input: msg.input });

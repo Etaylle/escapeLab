@@ -45,6 +45,15 @@
     "render": "6d6c63b60cf9",
     "file": "1c32b49724ca.mp3"
   },
+  "1d6e6f98882a": {
+    "text": "Reaktor in Teillast, 60 Prozent. Die Zentrifugen laufen bis 6 Uhr durch.",
+    "ms": 5219,
+    "missions": [
+      "blackout"
+    ],
+    "render": "4d2f056c1a05",
+    "file": "1d6e6f98882a.m4a"
+  },
   "20844d2dafb4": {
     "text": "Der Hauptschalter fürs Notlicht hängt mitten im Flur, unter der roten Lampe.",
     "ms": 4833,
@@ -80,6 +89,15 @@
     ],
     "render": "bfddbf7a0440",
     "file": "254093cbcc07.mp3"
+  },
+  "2fec42b4a1b0": {
+    "text": "Die Spätschicht gibt Dosimeter und Schlüssel bitte an der Pforte ab.",
+    "ms": 3309,
+    "missions": [
+      "blackout"
+    ],
+    "render": "3a0e2ad5e97c",
+    "file": "2fec42b4a1b0.m4a"
   },
   "337030d21e78": {
     "text": "Leitungsnetz am Westende vom Flur, Kühlmittel zum Kern.",
@@ -152,6 +170,15 @@
     ],
     "render": "8d240e775f7a",
     "file": "4f5494825480.mp3"
+  },
+  "559d72aae03f": {
+    "text": "Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47, die Nachtschicht hat übernommen.",
+    "ms": 7065,
+    "missions": [
+      "blackout"
+    ],
+    "render": "cc8649a28c6d",
+    "file": "559d72aae03f.m4a"
   },
   "5d1ab414fef4": {
     "text": "Reaktor läuft. Der Notausgang ist entriegelt, Nordwestecke beim Archiv. Alle raus, jetzt.",
@@ -371,6 +398,15 @@
     "render": "394bf291df3e",
     "file": "ceb43276953b.mp3"
   },
+  "d1ae33eb0de5": {
+    "text": "Herr Haller, bitte die Leitstelle anrufen. Herr Haller, bitte die Leitstelle anrufen.",
+    "ms": 4848,
+    "missions": [
+      "blackout"
+    ],
+    "render": "6651d230302d",
+    "file": "d1ae33eb0de5.m4a"
+  },
   "d6b1ce9ed9c7": {
     "text": "Die Pulte der Signalprobe stehen im Leitstand an der Südwand, eins links, eins rechts.",
     "ms": 6034,
@@ -379,6 +415,15 @@
     ],
     "render": "e021c6249311",
     "file": "d6b1ce9ed9c7.mp3"
+  },
+  "db81476a48b2": {
+    "text": "Netzlast im Trakt 96 Prozent, Notstrom in Bereitschaft.",
+    "ms": 4644,
+    "missions": [
+      "blackout"
+    ],
+    "render": "1855d595cfe2",
+    "file": "db81476a48b2.m4a"
   },
   "e036051a6037": {
     "text": "Druckknopf im Westflügel, Nordseite. Regeln im Nordosten.",

@@ -263,7 +263,7 @@ function lightPass(
   gl.uniform1f(u('uScale'), (camera.scale * size.w) / viewport.w);
   gl.uniform2i(u('uMapSize'), map.width, map.height);
   gl.uniform1f(u('uDark'), darknessDepth(frame));
-  gl.uniform1f(u('uVeil'), 1 - (frame.ending?.lit ?? 0));
+  gl.uniform1f(u('uVeil'), 1 - frame.whole);
   const [r, g, b] = ESCAPE_RED;
   gl.uniform4f(u('uTint'), r / 255, g / 255, b / 255, escapeTint(frame));
   gl.uniform1i(u('uCount'), packed.count);

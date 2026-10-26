@@ -147,3 +147,28 @@ describe('the main switch under reduced motion', () => {
     );
   });
 });
+
+describe('the run’s opening', () => {
+  const intro = readFileSync(new URL('styles/intro.css', SRC), 'utf8');
+
+  it('slides no bar under reduced motion, lands no title and flickers no title: all fade', () => {
+    const calm = blockAfter(intro, ":where([data-motion='reduce'])") ?? '';
+    const out = blockAfter(calm, '.intro-bar--top.intro-bar--out,') ?? '';
+    expect(calm).toMatch(/\.intro-bar--top\.intro-bar--out,\s*\.intro-bar--bottom\.intro-bar--out/);
+    expect(out).toMatch(/transform:\s*none;\s*opacity:\s*0;/);
+    expect(calm).toMatch(/\.intro-bar \{\s*transition:\s*opacity/);
+    expect(calm).toMatch(/\.intro-title \{\s*animation:\s*intro-title-fade/);
+    expect(calm).toMatch(/\.phosphor-title \{\s*animation:\s*none;/);
+  });
+
+  it('makes the bars thinner on a phone, a tenth of the picture at most', () => {
+    const phone = blockAfter(intro, '@media (max-width: 520px)') ?? '';
+    expect(blockAfter(phone, '.intro-bar {')).toMatch(/height:\s*9%;/);
+    expect(blockAfter(intro, '.intro-bar {')).toMatch(/height:\s*12%;/);
+  });
+
+  it('fades the HUD while the world shows as a film, keeping its place', () => {
+    const faded = blockAfter(intro, '.game--film .stage-top,') ?? '';
+    expect(faded).toMatch(/opacity:\s*0;\s*pointer-events:\s*none;/);
+  });
+});

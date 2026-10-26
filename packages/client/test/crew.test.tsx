@@ -321,14 +321,16 @@ describe('the lobby', () => {
       '<p class="lobby-facts"><span>[clock] 8 min</span><span>[crew] 2–3 Spieler</span>' +
       '<span>[station] 5 Stationen</span></p>';
     const guest = lobby(benSees([anna, ben], false), [withMap, tutorial]);
+    // The title comes on as a phosphor screen does, the first time a page load shows it.
     expect(guest).toContain(
-      '<h1>Blackout im Labor</h1><div class="lobby-map"><svg class="map-thumb"',
+      '<h1 class="phosphor-title">Blackout im Labor</h1><div class="lobby-map">' +
+        '<svg class="map-thumb"',
     );
     expect(guest).toContain(facts);
     // The host's strip stands in the map's place, every card with a map of its own.
     const host = lobby(annaSees([anna]), [withMap, tutorial]);
     expect(host).toContain(
-      '<h1>Blackout im Labor</h1><div class="lobby-missions" role="radiogroup"',
+      'Blackout im Labor</h1><div class="lobby-missions" role="radiogroup"',
     );
     expect(host).not.toContain('class="lobby-map"');
     expect(host).toContain(`</div>${facts}`);
