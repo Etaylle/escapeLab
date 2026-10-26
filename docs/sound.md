@@ -42,33 +42,40 @@ as `{ file, ms, gain, startMs, loop, hash, influence, source }`; `hash` names th
 made it, `influence` how closely an effect followed its prompt, so a run makes only what is
 new, changed or missing, and one cut short goes on where it stopped.
 
-**Candidates.** With `--candidates N` (up to 5) every effect the run makes is made N times,
-its prompt followed ever more closely — 0.3, 0.6 and 0.9 for three — each candidate into a
-folder of its own in the system's temp (the run names it; nothing of it goes into the project),
-and measured. The script keeps the one that misses the fewest of four rules — it needs at most
-3 dB of gain, a one-shot's peak at −6 dBFS or more before it (an RMS-measured kind's RMS within
-3 dB of its target); its sound starts within 50 ms; at most a tenth of it is silence, 10 ms
-frames under −60 dBFS; its length lies within a fifth of the catalog's — then the one that needs
-the least gain, then the one with the least silence, and says how each candidate measured. A
-short click misses the silence rule whatever it does, its tail silent long before its half
-second is over, so for it the level decides. Music is made once a piece. The key comes from the environment: the package script
-hands node the repo's `.env.local` (`--env-file-if-exists`), and from a worktree it is
-`node --env-file=<repo>/.env.local scripts/sfx.ts` in `packages/client`. Before it asks for
-anything the script reads the account's credits and stops below 40,000 or where the plan would
-pass a group's cap (12,000 credits for the effects, 18,000 for the music); after a group's first
-request it reads what that cost and prices the rest at that rate. The first full render
-(2026-10-26) cost 542 credits for the 154 s of effects and 4,136 for the 236 s of music; the dry
-run prices at those rates, rounded up to 4 and 18 credits a second.
+**Candidates.** With `--candidates N` (up to 5; 1 unless told) every entry the run makes is
+made N times, each take into a folder of its own in the system's temp (the run names it; nothing
+of it goes into the project): an effect with its prompt followed ever more closely — 0.3, 0.6
+and 0.9 for three — a piece of music by the same request again. The script prints each take's
+peak, RMS, start, silence, length and gain and keeps the one that misses the fewest of four
+rules — its peak at −6 dBFS or more before any gain; its sound starts within 50 ms; at most a
+tenth of it is silence, 10 ms frames under −60 dBFS; its length lies within a fifth of the
+catalog's — and of those the one with the loudest RMS. Only that one goes into `public/sfx` or
+`public/music`, and the check for quiet takes below is made on it. A short click misses the
+silence rule whatever it does, its tail silent long before its half second is over, so for it
+the RMS decides.
+
+The key comes from the environment: the package script hands node the repo's `.env.local`
+(`--env-file-if-exists`), and from a worktree it is `node --env-file=<repo>/.env.local
+scripts/sfx.ts` in `packages/client`. Before it asks for anything the script reads the account's
+credits and stops below 40,000 or where the plan would pass a group's cap (12,000 credits for
+the effects, 18,000 for the music); after a group's first request it reads what that cost and
+prices the rest at that rate. The first full render (2026-10-26) cost 542 credits for the 154 s
+of effects and 4,136 for the 236 s of music; the dry run prices at those rates, rounded up to 4
+and 18 credits a second, times the takes.
 
 **Listening to them.** The page `/sounds`, which no menu links to, lists every entry of the
 catalog by its kind — effects, rooms and loops, music, the end card — each with its prompt, its
 length and gain (marked „zu leise" where the gain is over the script's limit), a button that
-plays it through the game's own loader at the loudness the game brings it to (a room's bed
-round and round until it is stopped, a stem once through) and a box „neu rendern"; below, it
-puts together the command for what is ticked, `node --env-file=… scripts/sfx.ts --candidates 3
---only a,b,c`, to be run in `packages/client`, with the key file's path as the page is told it
-(`../../.env.local` from the repository's own checkout). The page asks no service for
-anything: the user runs the command.
+plays it through the game's own loader at the loudness the game brings it to (a loop — a room's
+bed, a stem — round and round until it is stopped) and a box „neu rendern"; below, it puts
+together the command for what is ticked, to be run in `packages/client`:
+
+```sh
+node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts --candidates 3 --only a,b,c
+```
+
+The key file is the main checkout's unless the page is told another path, which it remembers
+for the next visit. The page asks no service for anything: the user runs the command.
 
 **Loudness without re-encoding.** The files stay as ElevenLabs made them. The script decodes
 each with `afconvert` into a temporary folder, measures its peak and its RMS and writes the gain
@@ -108,10 +115,11 @@ crew's own voices bypass the master gain: switching the lab off leaves the crew 
 
 The recordings are loaded in the lobby (`preloadSamples`): both manifests, then every file,
 fetched and decoded once on an OfflineAudioContext at 44.1 kHz and kept by its address — 390 s
-of audio, all of it stereo as ElevenLabs makes it: about 138 MB a page once decoded. A page that comes in during a run loads them as
-its world starts. A recording not loaded yet is not played; one that cannot be loaded is said
-once on the console and stays silent — nothing synthetic stands in for it. Only the power hum
-of a run that starts in the lit lab waits for its recording and comes in once it is there.
+of audio, all of it stereo as ElevenLabs makes it: about 138 MB a page once decoded. A page that
+comes in during a run loads them as its world starts. A recording not loaded yet is not played;
+one that cannot be loaded is said once on the console and stays silent — nothing synthetic
+stands in for it. Only the power hum of a run that starts in the lit lab waits for its recording
+and comes in once it is there.
 
 Levels, at the master gain: the effects around 0.04 (`EFFECTS_LEVEL`) for a recording whose
 peak stands at −3 dBFS; a room's bed 0.03 for one at −20 dBFS RMS, each layer a few dB up or
@@ -338,7 +346,8 @@ speech, a squelch as the key goes down and a longer one as it comes up — each 
 music duck 6 dB meanwhile. The run's first line comes after the Leitstelle opening the
 channel: static swells up for 0.3 s and snaps shut on the squelch gate's click (`radio-open`),
 0.4 s before the key — on that line alone. A line no recording speaks, a custom mission's,
-keys the radio with the key's recording alone (`radioChirp`). A newer line cuts an older one short. The banner stays up while its line
+keys the radio with the key's recording alone (`radioChirp`). A newer line cuts an older one short.
+The banner stays up while its line
 speaks: 7 s at least (4 s on a touch screen), and as long as the recording, its opening and its
 squelch take for a longer line (`radio.ts` `noticeMs`, `radioVoice.ts` `airtimeMs`).
 
@@ -422,7 +431,8 @@ request as it stands, its length, its start, its gain, the folders' caps),
 the command line, the candidates' influences and the rules a take is picked by, the credits'
 guard and the pricing at the first entry's rate, a WAV read, the gain, the start and the
 silence worked out from PCM of known loudness), `test/soundsPage.test.tsx` (the audition page's
-address, its listing by kind, what it says of each recording, the command it puts together), `test/ambience.test.ts` (rooms,
+address, its listing by kind, what it says of each recording, the command it puts together),
+`test/ambience.test.ts` (rooms,
 levels, power, the beds' recorded loops, dead and alive variants, crossfades, the sporadic
 sounds, sounds let go), `test/spatial.test.ts` (pan, gain, muffle, steps, the rotor, the
 chirp placed), `test/radioVoice.test.ts` (the chain, the shaper's distortion, the static's

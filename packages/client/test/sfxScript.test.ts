@@ -171,7 +171,7 @@ describe('a request', () => {
     expect(costOf(CLACK)).toBe(3);
     expect(costOf(CLACK, 3)).toBe(8); // three candidates
     expect(costOf(CALM)).toBe(1296);
-    expect(costOf(CALM, 3)).toBe(1296); // music is made once
+    expect(costOf(CALM, 3)).toBe(3888); // three takes of the piece, too
     expect(CAPS).toEqual({ sfx: 12_000, music: 18_000 });
     for (const group of ['sfx', 'music'] as const) {
       const all = catalog.filter((entry) => groupOf(entry) === group);
@@ -438,15 +438,28 @@ describe('the loudness of a recording', () => {
 });
 
 describe('picking a candidate', () => {
+  /** How a take measures: its peak and RMS in dBFS, where its sound starts, its silence. */
+  interface Measured {
+    readonly peakDbfs?: number;
+    readonly rmsDbfs?: number;
+    readonly leadMs?: number;
+    readonly silence?: number;
+    readonly lengthOff?: number;
+  }
+
   /** A take measured as `over` says: by default one that keeps every rule. */
-  const take = (over: Partial<Take> & { leadMs?: number } = {}): Take => ({
+  const take = (over: Measured = {}): Take => ({
     path: `/tmp/${Math.random()}.mp3`,
     influence: 0.6,
-    loudness: { ms: 500, peak: 0.6, rms: 0.2, leadMs: over.leadMs ?? 0 },
-    silence: 0.05,
-    gain: 1.1,
-    lengthOff: 0.04,
-    ...over,
+    loudness: {
+      ms: 500,
+      peak: 10 ** ((over.peakDbfs ?? -2) / 20),
+      rms: 10 ** ((over.rmsDbfs ?? -18) / 20),
+      leadMs: over.leadMs ?? 0,
+    },
+    silence: over.silence ?? 0.05,
+    gain: 1,
+    lengthOff: over.lengthOff ?? 0.04,
   });
 
   it('measures silence as the share of 10 ms frames under −60 dBFS, every channel at once', () => {
@@ -460,26 +473,27 @@ describe('picking a candidate', () => {
     expect(silenceOf({ rate, channels: [faint, soft] })).toBe(0); // the other channel sounds
   });
 
-  it('names the rules a take misses: level, start, silence and length', () => {
+  it('names the rules a take misses: peak, start, silence and length', () => {
     expect(missesOf(take())).toEqual([]);
-    const late = take({ gain: 1.5, leadMs: 60, silence: 0.11, lengthOff: 0.25 });
-    expect(missesOf(late)).toEqual(['level', 'start', 'silence', 'length']);
-    // A one-shot's peak at −6 dBFS before its gain, the most it may need: 3 dB.
-    expect(missesOf(take({ gain: 10 ** (3 / 20) }))).toEqual([]);
-    expect(missesOf(take({ gain: 10 ** (3 / 20) + 0.001 }))).toEqual(['level']);
+    const late = take({ peakDbfs: -7, leadMs: 60, silence: 0.11, lengthOff: 0.25 });
+    expect(missesOf(late)).toEqual(['peak', 'start', 'silence', 'length']);
+    // The peak before the gain at −6 dBFS or more; the sound within 50 ms; a tenth silent.
+    const edge = take({ peakDbfs: -5.99, leadMs: 50, silence: 0.1, lengthOff: 0.2 });
+    expect(missesOf(edge)).toEqual([]);
+    expect(missesOf(take({ peakDbfs: -6.01 }))).toEqual(['peak']);
   });
 
-  it('keeps the take that misses fewest rules, then needs least gain, then has least silence', () => {
-    const keeps = take({ gain: 1.3 });
-    const quiet = take({ gain: 4 });
-    const late = take({ gain: 1, leadMs: 80, silence: 0.5 });
-    expect(pickTake([quiet, late, keeps])).toBe(keeps);
-    // Clicks: each misses the silence rule with its tail; the louder one wins.
-    const loud = take({ gain: 1.05, silence: 0.7 });
-    const soft = take({ gain: 1.3, silence: 0.6 });
-    expect(pickTake([soft, loud])).toBe(loud);
-    const tight = take({ gain: 1.05, silence: 0.65 });
-    expect(pickTake([loud, tight])).toBe(tight);
+  it('keeps of the takes missing fewest rules the one with the loudest RMS', () => {
+    const keeps = take({ rmsDbfs: -20 });
+    const quiet = take({ rmsDbfs: -10, peakDbfs: -8 });
+    const late = take({ rmsDbfs: -12, leadMs: 80 });
+    expect(pickTake([quiet, late, keeps])).toBe(keeps); // valid beats louder
+    const louder = take({ rmsDbfs: -15 });
+    expect(pickTake([keeps, louder])).toBe(louder);
+    // Clicks: each misses the silence rule with its tail; the loudest RMS wins.
+    const soft = take({ silence: 0.7, rmsDbfs: -30 });
+    const full = take({ silence: 0.6, rmsDbfs: -26 });
+    expect(pickTake([soft, full])).toBe(full);
     expect(() => pickTake([])).toThrow(/no take/);
   });
 });

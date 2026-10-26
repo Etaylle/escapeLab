@@ -107,10 +107,12 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
 
   it('came back loud enough: no gain that would play a quiet take’s noise floor', () => {
     expect(MAX_GAIN).toEqual({ oneshot: 6, bed: 4, stem: 4, sting: 4 });
-    const quiet = tooQuiet(entries, { sfx: {}, music: {}, [group]: manifest }).map(
-      ({ id, gain, max }) => `${id} ${gain} > ${max}`,
-    );
-    const remedy = `make their prompts close, loud, dry and full level, then ${REMEDY}`;
+    const takes = tooQuiet(entries, { sfx: {}, music: {}, [group]: manifest });
+    const quiet = takes.map(({ id, gain, max }) => `${id} ${gain} > ${max}`);
+    const only = takes.map(({ id }) => id).join(',');
+    const remedy =
+      'make their prompts close, loud, dry and full level, then render three takes of each on a ' +
+      `Mac: pnpm --filter client sfx -- --candidates 3 --only ${only} (docs/sound.md)`;
     expect(quiet, `quiet takes — ${remedy}`).toEqual([]);
   });
 

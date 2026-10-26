@@ -5,7 +5,7 @@
  *   pnpm --filter client sfx -- sfx             the effects alone; `music`, the music alone
  *   pnpm --filter client sfx -- --dry-run       the plan and what it would cost; nothing is asked
  *   pnpm --filter client sfx -- --only a,b,c    those entries, made anew
- *   pnpm --filter client sfx -- --candidates 3  each effect made three times, the best one kept
+ *   pnpm --filter client sfx -- --candidates 3  each made three times, the best take kept
  *
  * audio/catalog.json lists every sound the game plays: its id, its kind — a one-shot, a bed that
  * loops seamlessly, a stem of the music or a sting — what ElevenLabs is asked for (an English
@@ -18,11 +18,11 @@
  * its prompt — so an entry whose request is unchanged and whose file is there is not made again,
  * and a run cut short goes on where it stopped.
  *
- * With `--candidates N` every effect the run makes is made N times, its prompt followed more or
- * less closely each time (INFLUENCE_SPAN); each candidate goes into a folder of its own in the
- * system's temp, never into the project, and is measured, and the one `pickTake` picks — by its
- * level, where its sound starts, its silence and its length (PICK) — is the one kept. Music is
- * made once a piece.
+ * With `--candidates N` every entry the run makes is made N times — an effect with its prompt
+ * followed more or less closely each time (INFLUENCE_SPAN), a piece of music by the same request
+ * again — each take into a folder of its own in the system's temp, never into the project, and
+ * measured, each take's measurements said; the one `pickTake` picks — by its peak, where its
+ * sound starts, its silence and its length (PICK), then its RMS — is the one kept.
  *
  * The files stay as ElevenLabs made them. afconvert decodes each into a temporary folder, its
  * peak and RMS are measured there, and `gain` is what brings it to its target — a one-shot's peak
@@ -161,12 +161,11 @@ export const SILENCE = 10 ** (-60 / 20);
 export const MAX_GAIN: Readonly<Record<Kind, number>> = { oneshot: 6, bed: 4, stem: 4, sting: 4 };
 
 /**
- * The rules a candidate is picked by: it needs at most 3 dB of gain — a one-shot's peak stands at
- * −6 dBFS or more before it, an RMS-measured kind's RMS within 3 dB of its target — its sound
+ * The rules a take is picked by: its peak stands at −6 dBFS or more before its gain, its sound
  * starts within 50 ms, at most a tenth of it is silence, and it runs within a fifth of the length
  * asked for.
  */
-export const PICK = { gain: 10 ** (3 / 20), leadMs: 50, silence: 0.1, length: 0.2 } as const;
+export const PICK = { peakDbfs: -6, leadMs: 50, silence: 0.1, length: 0.2 } as const;
 
 /** The loudness each kind is brought to. */
 export const TARGETS: Readonly<Record<Kind, Target>> = {
@@ -306,11 +305,9 @@ export function influencesFor(count: number): number[] {
   );
 }
 
-/** What making an entry costs, credits: an effect `candidates` times over, music once. */
+/** What making an entry costs, credits: `candidates` takes of it. */
 export function costOf(entry: CatalogEntry, candidates = 1): number {
-  const group = groupOf(entry);
-  const takes = group === 'sfx' ? candidates : 1;
-  return Math.ceil(entry.durationSeconds * CREDITS_PER_SECOND[group] * takes);
+  return Math.ceil(entry.durationSeconds * CREDITS_PER_SECOND[groupOf(entry)] * candidates);
 }
 
 /**
@@ -615,10 +612,13 @@ export interface Take {
   readonly lengthOff: number;
 }
 
-/** The rules of PICK `take` misses: its level, where its sound starts, its silence, its length. */
+/** A level as dBFS; −Infinity for silence. */
+const dbfs = (level: number): number => 20 * Math.log10(level);
+
+/** The rules of PICK `take` misses: its peak, where its sound starts, its silence, its length. */
 export function missesOf(take: Take): string[] {
   const misses = [
-    take.gain > PICK.gain && 'level',
+    dbfs(take.loudness.peak) < PICK.peakDbfs && 'peak',
     take.loudness.leadMs > PICK.leadMs && 'start',
     take.silence > PICK.silence && 'silence',
     take.lengthOff > PICK.length && 'length',
@@ -627,15 +627,13 @@ export function missesOf(take: Take): string[] {
 }
 
 /**
- * The take to keep of `takes`: the one that misses the fewest rules, then the one that needs
- * the least gain, then the one with the least silence. A short click misses the silence rule
- * whatever it does — its tail falls silent long before half a second is over — so for it the
- * level decides.
+ * The take to keep of `takes`: of those that miss the fewest rules — none, where any keeps them
+ * all — the one with the loudest RMS. A short click misses the silence rule whatever it does,
+ * its tail silent long before half a second is over, so for it the RMS decides.
  */
 export function pickTake(takes: readonly Take[]): Take {
   const ranked = [...takes].sort(
-    (a, b) =>
-      missesOf(a).length - missesOf(b).length || a.gain - b.gain || a.silence - b.silence,
+    (a, b) => missesOf(a).length - missesOf(b).length || b.loudness.rms - a.loudness.rms,
   );
   const best = ranked[0];
   if (best === undefined) {
@@ -684,18 +682,20 @@ function entryOf(entry: CatalogEntry, take: Take): ManifestEntry {
   };
 }
 
-/** Says how each candidate of `entry` measured, and which one is kept. */
+/** Says how each take of `entry` measured — an effect's with its influence — and which is kept. */
 function sayTakes(entry: CatalogEntry, takes: readonly Take[], kept: Take): void {
-  for (const take of takes) {
-    const peak = (20 * Math.log10(take.loudness.peak)).toFixed(1);
+  takes.forEach((take, i) => {
+    const how = groupOf(entry) === 'sfx' ? ` (influence ${take.influence})` : '';
+    const { peak, rms, leadMs, ms } = take.loudness;
     const misses = missesOf(take);
     console.log(
-      `  ${entry.id} @${take.influence}: peak ${peak} dBFS, gain ${take.gain}, starts ` +
-        `${take.loudness.leadMs.toFixed(0)} ms, silence ${(take.silence * 100).toFixed(0)} %, ` +
-        `${take.loudness.ms} ms${misses.length > 0 ? ` — misses ${misses.join(', ')}` : ''}` +
+      `  ${entry.id} take ${i + 1}${how}: peak ${dbfs(peak).toFixed(1)} dBFS, RMS ` +
+        `${dbfs(rms).toFixed(1)} dBFS, starts ${leadMs.toFixed(0)} ms, silence ` +
+        `${(take.silence * 100).toFixed(0)} %, ${ms} ms, gain ${take.gain}` +
+        `${misses.length > 0 ? ` — misses ${misses.join(', ')}` : ''}` +
         `${take === kept ? '  ← kept' : ''}`,
     );
-  }
+  });
 }
 
 // --- the run ----------------------------------------------------------------------------------
@@ -723,7 +723,7 @@ function printPlan(jobs: readonly Job[], candidates: number): void {
     if (mine.length === 0) continue;
     const seconds = todo.reduce((sum, entry) => sum + entry.durationSeconds, 0);
     const credits = todo.reduce((sum, entry) => sum + costOf(entry, candidates), 0);
-    const takes = group === 'sfx' && candidates > 1 ? `, ${candidates} candidates each` : '';
+    const takes = candidates > 1 ? `, ${candidates} takes each` : '';
     console.log(
       `sfx: ${group} — ${todo.length} of ${mine.length} to make${takes}, ` +
         `${seconds.toFixed(1)} s, about ${credits} credits (cap ${CAPS[group]})`,
@@ -759,9 +759,10 @@ interface Folders {
 }
 
 /**
- * Makes `job`: an effect as `count` candidates, each at its influence, into the candidates'
- * folder — measured, the one `pickTake` picks copied into the project — or once, as music always
- * is. Returns the manifest's entry for what it kept.
+ * Makes `job`: once into the project, or as `count` takes into the candidates' folder — an
+ * effect's each at its influence, a piece of music's by the same request again — each measured
+ * and said, the one `pickTake` picks copied into the project. Returns the manifest's entry for
+ * what it kept.
  */
 async function renderJob(
   client: SoundClient,
@@ -771,14 +772,15 @@ async function renderJob(
 ): Promise<ManifestEntry> {
   const { entry, group } = job;
   const target = join(DIRS[group], fileOf(entry.id));
-  const influences = group === 'music' ? [PROMPT_INFLUENCE] : influencesFor(count);
+  const again = (): number[] => Array.from({ length: count }, () => PROMPT_INFLUENCE);
+  const influences = group === 'music' ? again() : influencesFor(count);
   const [only] = influences;
   if (influences.length === 1 && only !== undefined) {
     writeFileSync(target, await make(client, entry, { influence: only }));
     return entryOf(entry, takeAt(entry, target, only, folders.scratch));
   }
-  const makeTake = (influence: number) => async (): Promise<Take> => {
-    const path = join(folders.candidates, `${entry.id}@${influence}.mp3`);
+  const makeTake = (influence: number, i: number) => async (): Promise<Take> => {
+    const path = join(folders.candidates, `${entry.id}-${i + 1}.mp3`);
     writeFileSync(path, await make(client, entry, { influence }));
     return takeAt(entry, path, influence, folders.scratch);
   };
@@ -801,8 +803,7 @@ async function renderGroup(
   how: { readonly count: number; readonly folders: Folders },
 ): Promise<number> {
   const before = await creditsLeft(client);
-  const secondsOf = (job: Job): number =>
-    job.entry.durationSeconds * (job.group === 'sfx' ? how.count : 1);
+  const secondsOf = (job: Job): number => job.entry.durationSeconds * how.count;
   const tasks = jobs.map((job, i) => async () => {
     mkdirSync(DIRS[job.group], { recursive: true });
     const entry = await renderJob(client, job, how.count, how.folders);
@@ -923,7 +924,7 @@ async function main(options: Options): Promise<void> {
   requireTools();
   const scratch = mkdtempSync(join(tmpdir(), 'escapelab-sfx-'));
   const todo = jobs.filter((job) => job.make);
-  const many = options.candidates > 1 && todo.some((job) => job.group === 'sfx');
+  const many = options.candidates > 1 && todo.length > 0;
   const candidates = many ? mkdtempSync(join(tmpdir(), 'escapelab-sfx-candidates-')) : scratch;
   try {
     if (todo.length > 0) {

@@ -122,7 +122,7 @@ function Auditions({ recordings }: { recordings: Readonly<Record<string, SampleE
       const was = playing;
       stop();
       if (was === id) return;
-      const loop = catalog.find((sound) => sound.id === id)?.kind === 'bed';
+      const loop = catalog.find((sound) => sound.id === id)?.loop === true;
       const source = audition(id, loop, () => {
         if (voice.current === source) stop();
       });

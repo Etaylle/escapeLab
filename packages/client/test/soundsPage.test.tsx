@@ -68,13 +68,16 @@ describe('the page’s address', () => {
 
 describe('the command for the sounds ticked', () => {
   it('runs the sound script with the key file, three candidates and the ids, in order', () => {
-    expect(commandFor(['step-1', 'bed-archive'])).toBe(
-      'node --env-file=../../.env.local scripts/sfx.ts --candidates 3 --only step-1,bed-archive',
+    expect(commandFor(['a', 'b', 'c'])).toBe(
+      'node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts' +
+        ' --candidates 3 --only a,b,c',
     );
-    expect([ENV_FILE, CANDIDATES]).toEqual(['../../.env.local', 3]);
-    const absolute = '/Users/uros/Documents/Req.Eng./escapelab/.env.local';
-    expect(commandFor(['ping'], absolute, 2)).toBe(
-      `node --env-file=${absolute} scripts/sfx.ts --candidates 2 --only ping`,
+    expect([ENV_FILE, CANDIDATES]).toEqual([
+      '/Users/uros/Documents/Req.Eng./escapelab/.env.local',
+      3,
+    ]);
+    expect(commandFor(['step-1', 'bed-archive'], '../../.env.local', 2)).toBe(
+      'node --env-file=../../.env.local scripts/sfx.ts --candidates 2 --only step-1,bed-archive',
     );
   });
 
@@ -163,7 +166,8 @@ describe('the board', () => {
     expect(html).toContain('sounds-row sounds-row--quiet');
     expect(html).toContain('Nichts angekreuzt.');
     // The hum is not loaded: its button cannot play it.
-    const silent = /disabled=""[^>]*>Abspielen<\/button><div class="sounds-what"><code[^>]*>mains-hum/;
+    const button = /disabled=""[^>]*>Abspielen<\/button>/.source;
+    const silent = new RegExp(`${button}<div class="sounds-what"><code[^>]*>mains-hum`);
     expect(html).toMatch(silent);
   });
 

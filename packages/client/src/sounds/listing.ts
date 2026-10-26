@@ -75,9 +75,9 @@ export function listingOf(
   }));
 }
 
-/** The key file the command names unless told another: the repo's, seen from packages/client. */
-export const ENV_FILE = '../../.env.local';
-/** How many candidates the command asks of each effect: the script keeps the best. */
+/** The key file the command names unless told another: the main checkout's, by its full path. */
+export const ENV_FILE = '/Users/uros/Documents/Req.Eng./escapelab/.env.local';
+/** How many candidates the command asks of each sound: the script keeps the best. */
 export const CANDIDATES = 3;
 
 /** `word` as a shell takes it: as it is where it is plain, else in single quotes. */
@@ -87,7 +87,7 @@ export function shellWord(word: string): string {
 
 /**
  * The command that makes the sounds `ids` anew, to be run in packages/client: node with the key
- * file, the sound script, `candidates` of each effect; null where nothing is chosen.
+ * file, the sound script, `candidates` of each sound; null where nothing is chosen.
  */
 export function commandFor(
   ids: readonly string[],
