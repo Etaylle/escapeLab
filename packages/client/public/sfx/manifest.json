@@ -1,0 +1,623 @@
+{
+  "bed-archive": {
+    "file": "bed-archive.mp3",
+    "ms": 10000,
+    "gain": 104.0627,
+    "startMs": 0,
+    "loop": true,
+    "hash": "2836a23dc41e",
+    "source": "elevenlabs"
+  },
+  "bed-control": {
+    "file": "bed-control.mp3",
+    "ms": 10000,
+    "gain": 0.2602,
+    "startMs": 0,
+    "loop": true,
+    "hash": "6e748973418d",
+    "source": "elevenlabs"
+  },
+  "bed-corridor": {
+    "file": "bed-corridor.mp3",
+    "ms": 10000,
+    "gain": 1.737,
+    "startMs": 0,
+    "loop": true,
+    "hash": "cf42788a93f9",
+    "source": "elevenlabs"
+  },
+  "bed-lab": {
+    "file": "bed-lab.mp3",
+    "ms": 10000,
+    "gain": 4.1897,
+    "startMs": 0,
+    "loop": true,
+    "hash": "9d5c9a478329",
+    "source": "elevenlabs"
+  },
+  "bed-machine-idle": {
+    "file": "bed-machine-idle.mp3",
+    "ms": 10000,
+    "gain": 1.8247,
+    "startMs": 0,
+    "loop": true,
+    "hash": "b94f7a2e8e15",
+    "source": "elevenlabs"
+  },
+  "bed-plain": {
+    "file": "bed-plain.mp3",
+    "ms": 10000,
+    "gain": 23.2588,
+    "startMs": 0,
+    "loop": true,
+    "hash": "14cc527657c7",
+    "source": "elevenlabs"
+  },
+  "bed-reactor": {
+    "file": "bed-reactor.mp3",
+    "ms": 10000,
+    "gain": 0.5484,
+    "startMs": 0,
+    "loop": true,
+    "hash": "6f913c8ba075",
+    "source": "elevenlabs"
+  },
+  "bed-reactor-idle": {
+    "file": "bed-reactor-idle.mp3",
+    "ms": 10000,
+    "gain": 0.5933,
+    "startMs": 0,
+    "loop": true,
+    "hash": "d6e34cc49ba9",
+    "source": "elevenlabs"
+  },
+  "bed-server": {
+    "file": "bed-server.mp3",
+    "ms": 10000,
+    "gain": 6.7654,
+    "startMs": 0,
+    "loop": true,
+    "hash": "9a04c0b612a3",
+    "source": "elevenlabs"
+  },
+  "book-shut": {
+    "file": "book-shut.mp3",
+    "ms": 600,
+    "gain": 0.7142,
+    "startMs": 0,
+    "loop": false,
+    "hash": "d31fc0bb79d8",
+    "source": "elevenlabs"
+  },
+  "breaker-thunk": {
+    "file": "breaker-thunk.mp3",
+    "ms": 1480,
+    "gain": 11.8176,
+    "startMs": 0,
+    "loop": false,
+    "hash": "58d86077481c",
+    "source": "elevenlabs"
+  },
+  "bubbling": {
+    "file": "bubbling.mp3",
+    "ms": 1200,
+    "gain": 3.4727,
+    "startMs": 0,
+    "loop": false,
+    "hash": "0d4a8f3a3b61",
+    "source": "elevenlabs"
+  },
+  "button-thunk": {
+    "file": "button-thunk.mp3",
+    "ms": 480,
+    "gain": 18.3383,
+    "startMs": 0,
+    "loop": false,
+    "hash": "678d8e92a67b",
+    "source": "elevenlabs"
+  },
+  "cabinet-unlock": {
+    "file": "cabinet-unlock.mp3",
+    "ms": 1080,
+    "gain": 0.708,
+    "startMs": 0,
+    "loop": false,
+    "hash": "a28be685224f",
+    "source": "elevenlabs"
+  },
+  "console-ready": {
+    "file": "console-ready.mp3",
+    "ms": 600,
+    "gain": 0.7422,
+    "startMs": 0,
+    "loop": false,
+    "hash": "7cc259d01aad",
+    "source": "elevenlabs"
+  },
+  "console-tick": {
+    "file": "console-tick.mp3",
+    "ms": 480,
+    "gain": 39.0538,
+    "startMs": 0,
+    "loop": false,
+    "hash": "b3724d734b83",
+    "source": "elevenlabs"
+  },
+  "core-throb": {
+    "file": "core-throb.mp3",
+    "ms": 1480,
+    "gain": 0.9507,
+    "startMs": 0,
+    "loop": false,
+    "hash": "f9d1fdf89415",
+    "source": "elevenlabs"
+  },
+  "countdown-beep": {
+    "file": "countdown-beep.mp3",
+    "ms": 480,
+    "gain": 0.8178,
+    "startMs": 0,
+    "loop": false,
+    "hash": "a76e8f00ba75",
+    "source": "elevenlabs"
+  },
+  "countdown-go": {
+    "file": "countdown-go.mp3",
+    "ms": 680,
+    "gain": 0.7289,
+    "startMs": 0,
+    "loop": false,
+    "hash": "f2458103cfa8",
+    "source": "elevenlabs"
+  },
+  "creak": {
+    "file": "creak.mp3",
+    "ms": 1480,
+    "gain": 0.7267,
+    "startMs": 0,
+    "loop": false,
+    "hash": "da3cf9380d29",
+    "source": "elevenlabs"
+  },
+  "dial-detent": {
+    "file": "dial-detent.mp3",
+    "ms": 480,
+    "gain": 1.0777,
+    "startMs": 0,
+    "loop": false,
+    "hash": "65b76ff08615",
+    "source": "elevenlabs"
+  },
+  "discovery": {
+    "file": "discovery.mp3",
+    "ms": 800,
+    "gain": 10.7498,
+    "startMs": 0,
+    "loop": false,
+    "hash": "2eca4d205667",
+    "source": "elevenlabs"
+  },
+  "door-slide": {
+    "file": "door-slide.mp3",
+    "ms": 1000,
+    "gain": 0.7079,
+    "startMs": 0,
+    "loop": false,
+    "hash": "66dff638d471",
+    "source": "elevenlabs"
+  },
+  "drip": {
+    "file": "drip.mp3",
+    "ms": 1000,
+    "gain": 3.0939,
+    "startMs": 0,
+    "loop": false,
+    "hash": "ec6d7f7d3d1f",
+    "source": "elevenlabs"
+  },
+  "drone-alert": {
+    "file": "drone-alert.mp3",
+    "ms": 600,
+    "gain": 0.7352,
+    "startMs": 0,
+    "loop": false,
+    "hash": "2039e8c0e374",
+    "source": "elevenlabs"
+  },
+  "drone-rotor": {
+    "file": "drone-rotor.mp3",
+    "ms": 4000,
+    "gain": 1.3526,
+    "startMs": 0,
+    "loop": true,
+    "hash": "55e309811164",
+    "source": "elevenlabs"
+  },
+  "emergency-buzz": {
+    "file": "emergency-buzz.mp3",
+    "ms": 1600,
+    "gain": 1.5188,
+    "startMs": 0,
+    "loop": false,
+    "hash": "1ff761e94c0b",
+    "source": "elevenlabs"
+  },
+  "far-clank": {
+    "file": "far-clank.mp3",
+    "ms": 2000,
+    "gain": 5.5484,
+    "startMs": 0,
+    "loop": false,
+    "hash": "0d608cb98eb9",
+    "source": "elevenlabs"
+  },
+  "hatch-grind": {
+    "file": "hatch-grind.mp3",
+    "ms": 2480,
+    "gain": 0.7079,
+    "startMs": 0,
+    "loop": false,
+    "hash": "bd2668a6ade2",
+    "source": "elevenlabs"
+  },
+  "hold-tick": {
+    "file": "hold-tick.mp3",
+    "ms": 480,
+    "gain": 1.2981,
+    "startMs": 0,
+    "loop": false,
+    "hash": "09911e721176",
+    "source": "elevenlabs"
+  },
+  "key-click": {
+    "file": "key-click.mp3",
+    "ms": 480,
+    "gain": 0.9766,
+    "startMs": 0,
+    "loop": false,
+    "hash": "147c3594a449",
+    "source": "elevenlabs"
+  },
+  "klaxon": {
+    "file": "klaxon.mp3",
+    "ms": 1000,
+    "gain": 3.0006,
+    "startMs": 0,
+    "loop": false,
+    "hash": "dff2c029ab4e",
+    "source": "elevenlabs"
+  },
+  "lamp-pop": {
+    "file": "lamp-pop.mp3",
+    "ms": 480,
+    "gain": 11.6573,
+    "startMs": 0,
+    "loop": false,
+    "hash": "6c59c480273b",
+    "source": "elevenlabs"
+  },
+  "lever-chunk": {
+    "file": "lever-chunk.mp3",
+    "ms": 1000,
+    "gain": 0.9874,
+    "startMs": 0,
+    "loop": false,
+    "hash": "09766ead83eb",
+    "source": "elevenlabs"
+  },
+  "lever-pull": {
+    "file": "lever-pull.mp3",
+    "ms": 680,
+    "gain": 0.7198,
+    "startMs": 0,
+    "loop": false,
+    "hash": "f281bbdad6b7",
+    "source": "elevenlabs"
+  },
+  "lever-spring": {
+    "file": "lever-spring.mp3",
+    "ms": 680,
+    "gain": 0.9991,
+    "startMs": 0,
+    "loop": false,
+    "hash": "eca119279043",
+    "source": "elevenlabs"
+  },
+  "locker-open": {
+    "file": "locker-open.mp3",
+    "ms": 1000,
+    "gain": 1.723,
+    "startMs": 0,
+    "loop": false,
+    "hash": "2bd3be7bd42f",
+    "source": "elevenlabs"
+  },
+  "machine-stroke": {
+    "file": "machine-stroke.mp3",
+    "ms": 1000,
+    "gain": 3.254,
+    "startMs": 0,
+    "loop": false,
+    "hash": "1cb2307b9592",
+    "source": "elevenlabs"
+  },
+  "mains-hum": {
+    "file": "mains-hum.mp3",
+    "ms": 6000,
+    "gain": 0.1891,
+    "startMs": 0,
+    "loop": true,
+    "hash": "ab9b0ba6058d",
+    "source": "elevenlabs"
+  },
+  "mushroom-stomp": {
+    "file": "mushroom-stomp.mp3",
+    "ms": 600,
+    "gain": 50.4304,
+    "startMs": 0,
+    "loop": false,
+    "hash": "1d899184717d",
+    "source": "elevenlabs"
+  },
+  "ok-beeps": {
+    "file": "ok-beeps.mp3",
+    "ms": 600,
+    "gain": 0.7079,
+    "startMs": 0,
+    "loop": false,
+    "hash": "f952ab46a106",
+    "source": "elevenlabs"
+  },
+  "part-seat": {
+    "file": "part-seat.mp3",
+    "ms": 600,
+    "gain": 1.2944,
+    "startMs": 0,
+    "loop": false,
+    "hash": "a7b0739ed97a",
+    "source": "elevenlabs"
+  },
+  "pencil": {
+    "file": "pencil.mp3",
+    "ms": 600,
+    "gain": 4.1633,
+    "startMs": 0,
+    "loop": false,
+    "hash": "0240bbbfbd9b",
+    "source": "elevenlabs"
+  },
+  "ping": {
+    "file": "ping.mp3",
+    "ms": 480,
+    "gain": 8.6982,
+    "startMs": 0,
+    "loop": false,
+    "hash": "720ff50fec71",
+    "source": "elevenlabs"
+  },
+  "power-down": {
+    "file": "power-down.mp3",
+    "ms": 1600,
+    "gain": 0.7401,
+    "startMs": 0,
+    "loop": false,
+    "hash": "9bbb67a2519f",
+    "source": "elevenlabs"
+  },
+  "probe-click": {
+    "file": "probe-click.mp3",
+    "ms": 480,
+    "gain": 0.7079,
+    "startMs": 0,
+    "loop": false,
+    "hash": "5bd80a7402ba",
+    "source": "elevenlabs"
+  },
+  "radio-key": {
+    "file": "radio-key.mp3",
+    "ms": 480,
+    "gain": 0.7313,
+    "startMs": 0,
+    "loop": false,
+    "hash": "941b834e03d4",
+    "source": "elevenlabs"
+  },
+  "radio-open": {
+    "file": "radio-open.mp3",
+    "ms": 600,
+    "gain": 0.7303,
+    "startMs": 0,
+    "loop": false,
+    "hash": "12d56faaed38",
+    "source": "elevenlabs"
+  },
+  "radio-tail": {
+    "file": "radio-tail.mp3",
+    "ms": 600,
+    "gain": 0.7079,
+    "startMs": 0,
+    "loop": false,
+    "hash": "f1114b13baaa",
+    "source": "elevenlabs"
+  },
+  "reject-buzz": {
+    "file": "reject-buzz.mp3",
+    "ms": 480,
+    "gain": 1.1327,
+    "startMs": 0,
+    "loop": false,
+    "hash": "00bbf3133705",
+    "source": "elevenlabs"
+  },
+  "relay-click": {
+    "file": "relay-click.mp3",
+    "ms": 480,
+    "gain": 0.7781,
+    "startMs": 0,
+    "loop": false,
+    "hash": "8aafb8cee33a",
+    "source": "elevenlabs"
+  },
+  "server-spinup": {
+    "file": "server-spinup.mp3",
+    "ms": 1200,
+    "gain": 2.008,
+    "startMs": 0,
+    "loop": false,
+    "hash": "fb009b141100",
+    "source": "elevenlabs"
+  },
+  "sheet-down": {
+    "file": "sheet-down.mp3",
+    "ms": 600,
+    "gain": 4.2224,
+    "startMs": 0,
+    "loop": false,
+    "hash": "385521edadce",
+    "source": "elevenlabs"
+  },
+  "short-arc": {
+    "file": "short-arc.mp3",
+    "ms": 800,
+    "gain": 0.7079,
+    "startMs": 0,
+    "loop": false,
+    "hash": "b8873db8a7e9",
+    "source": "elevenlabs"
+  },
+  "siren": {
+    "file": "siren.mp3",
+    "ms": 6000,
+    "gain": 0.3877,
+    "startMs": 0,
+    "loop": true,
+    "hash": "33d6312f2b0a",
+    "source": "elevenlabs"
+  },
+  "solved-chord": {
+    "file": "solved-chord.mp3",
+    "ms": 1200,
+    "gain": 1.956,
+    "startMs": 0,
+    "loop": false,
+    "hash": "57b6d04e27fb",
+    "source": "elevenlabs"
+  },
+  "solved-chunk": {
+    "file": "solved-chunk.mp3",
+    "ms": 1000,
+    "gain": 0.7539,
+    "startMs": 0,
+    "loop": false,
+    "hash": "36c1d4bf91c6",
+    "source": "elevenlabs"
+  },
+  "spark": {
+    "file": "spark.mp3",
+    "ms": 600,
+    "gain": 0.7297,
+    "startMs": 0,
+    "loop": false,
+    "hash": "e3b4a6b35829",
+    "source": "elevenlabs"
+  },
+  "stage-chime": {
+    "file": "stage-chime.mp3",
+    "ms": 800,
+    "gain": 0.708,
+    "startMs": 0,
+    "loop": false,
+    "hash": "187c921099af",
+    "source": "elevenlabs"
+  },
+  "steam-hiss": {
+    "file": "steam-hiss.mp3",
+    "ms": 1600,
+    "gain": 0.7079,
+    "startMs": 0,
+    "loop": false,
+    "hash": "9947f66ee309",
+    "source": "elevenlabs"
+  },
+  "step-1": {
+    "file": "step-1.mp3",
+    "ms": 480,
+    "gain": 87.2104,
+    "startMs": 0,
+    "loop": false,
+    "hash": "cf23c27e60bf",
+    "source": "elevenlabs"
+  },
+  "step-2": {
+    "file": "step-2.mp3",
+    "ms": 480,
+    "gain": 27.6825,
+    "startMs": 0,
+    "loop": false,
+    "hash": "88d5ec007e30",
+    "source": "elevenlabs"
+  },
+  "step-3": {
+    "file": "step-3.mp3",
+    "ms": 480,
+    "gain": 30.6446,
+    "startMs": 0,
+    "loop": false,
+    "hash": "fd3b2c9a3a0f",
+    "source": "elevenlabs"
+  },
+  "step-tick": {
+    "file": "step-tick.mp3",
+    "ms": 480,
+    "gain": 0.7986,
+    "startMs": 0,
+    "loop": false,
+    "hash": "259273bc00c2",
+    "source": "elevenlabs"
+  },
+  "toggle-clack": {
+    "file": "toggle-clack.mp3",
+    "ms": 480,
+    "gain": 0.9411,
+    "startMs": 67,
+    "loop": false,
+    "hash": "6e5743c82482",
+    "source": "elevenlabs"
+  },
+  "tube-strike": {
+    "file": "tube-strike.mp3",
+    "ms": 1000,
+    "gain": 1.2193,
+    "startMs": 0,
+    "loop": false,
+    "hash": "e6fd0b83b46f",
+    "source": "elevenlabs"
+  },
+  "type-blip": {
+    "file": "type-blip.mp3",
+    "ms": 480,
+    "gain": 0.7349,
+    "startMs": 0,
+    "loop": false,
+    "hash": "8349103ff0ff",
+    "source": "elevenlabs"
+  },
+  "wall-thud": {
+    "file": "wall-thud.mp3",
+    "ms": 480,
+    "gain": 24.705,
+    "startMs": 0,
+    "loop": false,
+    "hash": "ef76be402531",
+    "source": "elevenlabs"
+  },
+  "wire-snip": {
+    "file": "wire-snip.mp3",
+    "ms": 480,
+    "gain": 0.7079,
+    "startMs": 59,
+    "loop": false,
+    "hash": "277b5fd9f8db",
+    "source": "elevenlabs"
+  }
+}
