@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useMedia } from '../hooks.js';
+import { keyName, useSettings } from '../settings.js';
 import type { MicTrouble } from '../voice/mesh.js';
 import { useVoice } from '../voice/useVoice.js';
 import { Icon } from './Icon.js';
@@ -56,11 +57,13 @@ export function TalkButton({ className, children }: { className: string; childre
 /**
  * The microphone in the lobby, a row of the mission panel: asked for on a
  * click, never by itself. Once on, a way to switch it off and how to talk —
- * V, or a button held on a touch screen; without one, one quiet line why.
+ * the talk key (V unless the settings name another), or a button held on a
+ * touch screen; without one, one quiet line why.
  */
 export function MicSetup() {
   const voice = useVoice();
   const touch = useMedia(TOUCH);
+  const talk = keyName(useSettings().talkKey);
   if (voice === null) {
     return null;
   }
@@ -77,7 +80,7 @@ export function MicSetup() {
         {touch ? (
           <TalkButton className="voice-talk">Halten zum Sprechen</TalkButton>
         ) : (
-          <span className="voice-line">Zum Sprechen V halten</span>
+          <span className="voice-line">{`Zum Sprechen ${talk} halten`}</span>
         )}
       </div>
     );

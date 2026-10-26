@@ -216,7 +216,7 @@ function feetOf(walker: Walker, place: Place): Placing | null {
     return null;
   }
   if (walker.feet === null) {
-    walker.feet = placing(engine.ctx, engine.master, place, FOOTSTEP_LEVEL);
+    walker.feet = placing(engine.ctx, engine.effects, place, FOOTSTEP_LEVEL);
   } else {
     moveTo(walker.feet, place, FOOTSTEP_LEVEL);
   }
@@ -312,7 +312,7 @@ function startRotor(engine: Engine, place: Place): Rotor | null {
   const loop = rotorLoopOf(engine);
   if (loop === null || !claim({ loop: 1 })) return null;
   const { ctx } = engine;
-  const stages = placing(ctx, engine.master, place, 0);
+  const stages = placing(ctx, engine.effects, place, 0);
   const source = playLoop(ctx, loop, stages.level, ctx.currentTime + LOOKAHEAD);
   source.onended = () => {
     release({ loop: 1 });
@@ -378,7 +378,7 @@ function alertChirp(place: Place): void {
   if (engine === null || place.gain <= 0.01) return;
   const { ctx } = engine;
   const t = ctx.currentTime + LOOKAHEAD;
-  capped(ctx, engine.master, { voice: 2 }, (out) => {
+  capped(ctx, engine.effects, { voice: 2 }, (out) => {
     const band = biquad(ctx, 'bandpass', 1800, 1.5);
     band.connect(placing(ctx, out, place, CHIRP_LEVEL).level);
     return (

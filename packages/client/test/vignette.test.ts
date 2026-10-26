@@ -72,7 +72,7 @@ describe('the red edge as the stylesheet draws it', () => {
   });
 
   it('holds still under reduced motion', () => {
-    const calm = blockAfter(FINALE, '@media (prefers-reduced-motion: reduce)');
+    const calm = blockAfter(FINALE, ":where([data-motion='reduce'])");
     expect(calm).toMatch(/\.vignette,[^{]*\{\s*animation:\s*none;/);
   });
 });

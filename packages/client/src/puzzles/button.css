@@ -18,13 +18,13 @@
 .button-clock-label,
 .button-caption {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: calc(11px * var(--text-scale));
   letter-spacing: 2px;
   color: var(--muted);
 }
 
 .button-clock-time {
-  font-size: 32px;
+  font-size: calc(32px * var(--text-scale));
   font-variant-numeric: tabular-nums;
   letter-spacing: 3px;
   color: var(--accent);
@@ -59,7 +59,7 @@
     0 calc(var(--lift) + 4px) 20px rgba(0, 0, 0, 0.5);
   transform: translateY(calc(8px - var(--lift)));
   font-family: var(--mono);
-  font-size: 19px;
+  font-size: calc(19px * var(--text-scale));
   font-weight: 800;
   letter-spacing: 2px;
   touch-action: none;
@@ -149,7 +149,7 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
+:where([data-motion='reduce']) {
   .button-tick--lit {
     animation-duration: 80ms;
   }
@@ -179,6 +179,6 @@
   margin: 0;
   min-height: 2.8em;
   text-align: center;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale));
   line-height: 1.4;
 }

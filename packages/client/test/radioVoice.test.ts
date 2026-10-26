@@ -204,6 +204,7 @@ describe('a line spoken over the radio', () => {
       'biquad',
       'shaper',
       'gain', // the voice's level
+      'gain', // the radio's bus, at the Funk volume
       'gain', // the master gain
       'destination',
     ]);

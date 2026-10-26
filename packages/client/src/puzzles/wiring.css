@@ -47,7 +47,7 @@
 .wiring-pos,
 .wiring-name {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale));
 }
 
 .wiring-pos {
@@ -182,7 +182,7 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
+:where([data-motion='reduce']) {
   .wiring-snapped .wiring-half--left,
   .wiring-snapped .wiring-half--right {
     animation-duration: 120ms;

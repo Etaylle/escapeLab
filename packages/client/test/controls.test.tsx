@@ -120,6 +120,17 @@ describe('the button that puts down what you carry', () => {
     expect(html).not.toContain(DROP);
   });
 
+  it('leaves „Sprint" beside the steering pad, held to run', () => {
+    const html = world([fuse()]);
+    expect(html).toContain('<button class="world-sprint" aria-label="Sprinten">Sprint</button>');
+    const pad = html.indexOf('class="world-dpad"');
+    const sprint = html.indexOf('class="world-sprint"');
+    const actions = html.indexOf('class="world-actions"');
+    expect(pad).toBeGreaterThanOrEqual(0);
+    expect(sprint).toBeGreaterThan(pad);
+    expect(actions).toBeGreaterThan(sprint);
+  });
+
   it('shows on a touch screen only: a keyboard has Q for it', () => {
     const css = readFileSync(new URL('../src/styles/world.css', import.meta.url), 'utf8');
     expect(css).toMatch(/\n\.world-drop \{[^}]*display: none;/);

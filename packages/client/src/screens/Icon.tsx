@@ -13,6 +13,7 @@ export type IconName =
   | 'exit'
   | 'eye'
   | 'flag'
+  | 'gear'
   | 'hex'
   | 'info'
   | 'mic'
@@ -97,6 +98,15 @@ const GLYPHS: Record<IconName, ReactNode> = {
     <>
       <path d="M3.25 14.5V1.75M3.25 2.5h10V9h-10" />
       <path d="M3.25 2.5h3.3v3.25h-3.3Zm6.7 0h3.3v3.25h-3.3ZM6.55 5.75h3.4V9h-3.4Z" {...SOLID} />
+    </>
+  ),
+  // A cog: its hub and its rim, eight teeth round it.
+  gear: (
+    <>
+      <circle cx="8" cy="8" r="2" />
+      <circle cx="8" cy="8" r="4.5" />
+      <path d="M8 1.25v2.25m0 9v2.25M1.25 8H3.5m9 0h2.25" />
+      <path d="M3.2 3.2l1.6 1.6m6.4 6.4 1.6 1.6m0-9.6-1.6 1.6m-6.4 6.4-1.6 1.6" />
     </>
   ),
   hex:<path d="M8 1.5 13.6 4.75v6.5L8 14.5l-5.6-3.25v-6.5Z" {...SOLID} />,

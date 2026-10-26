@@ -255,7 +255,7 @@ function startMusic(input: Tension, startAt: number): Music | null {
   if (engine === null) return null;
   const { ctx } = engine;
   const at = ctx.currentTime + LOOKAHEAD + Math.max(0, (startAt - Date.now()) / 1000);
-  const out = outlet(ctx, engine.duck, MUSIC_LEVEL);
+  const out = outlet(ctx, engine.music, MUSIC_LEVEL);
   const drain = biquad(ctx, 'lowpass', OPEN_HZ, 0);
   drain.connect(out);
   const bus = (): { node: GainNode; fade: Fade } => ({

@@ -9,7 +9,7 @@ import type {
   PuzzleView,
   RunEvent,
 } from '@escapelab/core';
-import { useKeys, useMedia, useNow } from '../hooks.js';
+import { useKeys, useNow } from '../hooks.js';
 import { appendBlock } from '../notes.js';
 import { NotepadContext, type NotepadHand } from '../noting.js';
 import {
@@ -26,6 +26,7 @@ import {
 import { deviceCoach, firstSight, SHOWN_MARKS, type CoachMark } from '../puzzles/coach.js';
 import { useSolvedHold, type DeviceRun } from '../puzzles/Device.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
+import { useReducedMotion } from '../settings.js';
 import {
   ALARM_NOTICE_MS,
   alarmLine,
@@ -42,7 +43,7 @@ import {
 import { opensLit, REVEAL_MS, useDarkSince, useRevealed } from '../world/coldOpen.js';
 import { consoleName } from '../world/consoles.js';
 import { escapeChecklist, escaping, type Mate } from '../world/escape.js';
-import { REDUCED_MOTION, veilOf, type Ending, type Finale } from '../world/finale.js';
+import { veilOf, type Ending, type Finale } from '../world/finale.js';
 import { GameWorld } from '../world/GameWorld.js';
 import { dueParts } from '../world/markers.js';
 import { startingSpot, type KnownPositions } from '../world/movement.js';
@@ -855,7 +856,7 @@ export function StageTop({
  * this screen, however late the veil went up.
  */
 export function FinaleVeil({ ending, since }: { ending: Ending; since: number }) {
-  const reduced = useMedia(REDUCED_MOTION);
+  const reduced = useReducedMotion();
   const [shown] = useState(() => Date.now());
   const veil = veilOf(ending, reduced);
   const timing = {

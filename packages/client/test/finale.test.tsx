@@ -93,7 +93,7 @@ describe('an alarm in the world', () => {
     const css = readFileSync(new URL('../src/styles/finale.css', import.meta.url), 'utf8');
     expect(css).toMatch(/\.world-wrap\.alarm-strobe::after \{[^}]*animation: alarm-strobe 360ms/);
     expect(css).toMatch(/\.world-wrap\.alarm-shake \.world-canvas \{[^}]*alarm-shake 300ms/);
-    const reduced = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
+    const reduced = css.slice(css.indexOf(":where([data-motion='reduce'])"));
     expect(reduced).toMatch(/\.world-wrap\.alarm-strobe::after,[^{]*alarm-shake[^{]*\{\s*animation: none/);
   });
 });

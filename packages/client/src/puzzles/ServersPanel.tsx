@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import {
+  DEPENDS_ON,
   SERVICES,
   serviceName,
   type ConsoleId,
@@ -157,19 +158,32 @@ function Link({ name, manned }: { name: string; manned: boolean }) {
 /** A row's status as the table prints it: RUNNING, or FEHLER and its code. */
 const statusOf = (row: ServerRow): string => (row.running ? 'RUNNING' : `FEHLER ${row.code ?? ''}`);
 
+/**
+ * What a service needs running before it starts, as the table prints it: the fixed graph of
+ * the printed Netzplan (core's DEPENDS_ON) — „AUTH, DB", or „—" for nothing.
+ */
+export const needsOf = (service: Service): string =>
+  DEPENDS_ON[service].length === 0 ? '—' : DEPENDS_ON[service].map(serviceName).join(', ');
+
 /** The terminal's status table as the notepad takes it down: a row a service, as printed. */
 export function terminalTable(rows: readonly ServerRow[]): NotableBlock {
   return {
     kind: 'table',
-    head: ['Dienst', 'Status', 'Strom'],
-    rows: rows.map((row) => [serviceName(row.service), statusOf(row), row.power ? 'AN' : 'AUS']),
+    head: ['Dienst', 'Status', 'Strom', 'Braucht'],
+    rows: rows.map((row) => [
+      serviceName(row.service),
+      statusOf(row),
+      row.power ? 'AN' : 'AUS',
+      needsOf(row.service),
+    ]),
   };
 }
 
 /**
- * The status table: every service with its status and its power, as the
- * rack reports it. A row just turned flashes; printed anew, the rows type in
- * one after the other (`printed`, the times `status` asked).
+ * The status table: every service with its status, its power, as the rack
+ * reports it, and what it needs running first. A row just turned flashes;
+ * printed anew, the rows type in one after the other (`printed`, the times
+ * `status` asked).
  */
 function Table(props: { rows: ServerRow[]; turned: Set<Service>; printed: number }) {
   const { rows, turned, printed } = props;
@@ -183,6 +197,7 @@ function Table(props: { rows: ServerRow[]; turned: Set<Service>; printed: number
           <th scope="col">DIENST</th>
           <th scope="col">STATUS</th>
           <th scope="col">STROM</th>
+          <th scope="col">BRAUCHT</th>
         </tr>
       </thead>
       <tbody>
@@ -206,6 +221,7 @@ function Table(props: { rows: ServerRow[]; turned: Set<Service>; printed: number
             <td className={row.power ? 'servers-power' : 'servers-power servers-power--off'}>
               {row.power ? 'AN' : 'AUS'}
             </td>
+            <td className="servers-needs">{needsOf(row.service)}</td>
           </tr>
         ))}
       </tbody>

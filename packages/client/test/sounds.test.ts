@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-/** What the device sounds get from world/audio.ts: the shared context, and the sound switch. */
-const audio = vi.hoisted(() => ({ ctx: null as unknown, muted: false }));
+/**
+ * What the device sounds get from world/audio.ts: the shared context, the sound switch and
+ * the effects' volume the settings set.
+ */
+const audio = vi.hoisted(() => ({ ctx: null as unknown, muted: false, volume: 1 }));
 
 vi.mock('../src/world/audio.js', () => ({
   sharedAudio: () => audio.ctx,
   isMuted: () => audio.muted,
+  effectsVolume: () => audio.volume,
 }));
 
 const {
@@ -196,6 +200,7 @@ beforeEach(() => {
   ctx = new FakeContext();
   audio.ctx = ctx;
   audio.muted = false;
+  audio.volume = 1;
 });
 
 afterEach(() => {
@@ -257,6 +262,21 @@ describe.each(ONE_SHOTS)('%s', (_, sound) => {
     audio.muted = true;
     sound();
     expect(ctx.nodes).toEqual([]);
+  });
+
+  it('plays at the effects’ volume the settings set', () => {
+    const levelAt = (volume: number): number => {
+      ctx = new FakeContext();
+      audio.ctx = ctx;
+      audio.volume = volume;
+      sound();
+      const [outlet] = ctx.outlets;
+      return outlet instanceof FakeGain ? outlet.gain.value : NaN;
+    };
+    const full = levelAt(1);
+    expect(full).toBeGreaterThan(0);
+    expect(levelAt(0.25)).toBeCloseTo(full * 0.25, 12);
+    expect(levelAt(0)).toBe(0);
   });
 
   it('makes nothing while the browser still holds the context back', () => {
@@ -394,6 +414,23 @@ describe('the device hum', () => {
     audio.muted = false;
     vi.advanceTimersByTime(250);
     expect(lastLevel()).toEqual(['target', HUM_LEVEL]);
+  });
+
+  it('fades in at the effects’ volume, and follows it as the slider moves', () => {
+    vi.useFakeTimers();
+    audio.volume = 0.5;
+    startHum();
+    expect(outletOf().gain.events).toContainEqual([
+      'linear',
+      HUM_LEVEL * 0.5,
+      ctx.currentTime + 0.15,
+    ]);
+    audio.volume = 0.2;
+    vi.advanceTimersByTime(250);
+    expect(lastLevel()).toEqual(['target', HUM_LEVEL * 0.2]);
+    audio.volume = 0;
+    vi.advanceTimersByTime(250);
+    expect(lastLevel()).toEqual(['target', 0]);
   });
 
   it('fades out on stop, once, lets go once its voices end, and watches no switch after', () => {

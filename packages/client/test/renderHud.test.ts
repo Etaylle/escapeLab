@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { ALARM, AMBER, css, READ_BLUE, TEAL, WHITE } from '../src/world/palette.js';
-import { draw, minimapBox, minimapLayout } from '../src/world/render/hud.js';
+import type { MapView } from '@escapelab/core';
+import type { Frame } from '../src/world/render/frame.js';
+import { draw, minimapBox, minimapGoal, minimapLayout } from '../src/world/render/hud.js';
 import { callEntries, callsOf, fakeCanvas, setsOf } from './fakeCanvas.js';
 import { frameWith, player, TILES } from './frames.js';
-import { mapWith } from './fixtures.js';
+import { mapWith, type Item } from './fixtures.js';
 
 const layout = { ox: 600, oy: 100, cell: 10, mw: 100, mh: 60 };
 
@@ -64,15 +66,11 @@ describe('hud — the corner minimap on the canvas', () => {
     expect(setsOf(log, 'globalAlpha').at(-1)).toBe(1);
   });
 
-  it('marks shut doors amber, and the armed station and its sources bright', () => {
+  it('marks the armed station and its sources bright', () => {
     const map = mapWith({
       width: 10,
       height: 6,
       tiles: TILES,
-      doors: [
-        { id: 'shut', x: 5, y: 1, open: false },
-        { id: 'open', x: 5, y: 2, open: true },
-      ],
       stations: [{ puzzleId: 'kasten', x: 7, y: 1, title: 'Kasten', status: 'armed' }],
       manuals: [
         {
@@ -95,10 +93,7 @@ describe('hud — the corner minimap on the canvas', () => {
         ? [[entry.value, ...next.args.slice(0, 2)]]
         : [];
     });
-    // Shut amber, open a dim shade of the floor's teal; the armed station teal, its rules blue.
-    expect(fills).toContainEqual([css(AMBER), 650, 110]);
-    const open = fills.find(([, x, y]) => x === 650 && y === 120)?.[0];
-    expect(open).not.toBe(css(AMBER));
+    // The armed station teal, its rules blue.
     expect(fills).toContainEqual([css(TEAL), 670, 110]);
     expect(fills).toContainEqual([css(READ_BLUE), 620, 110]);
   });
@@ -132,5 +127,145 @@ describe('hud — the corner minimap on the canvas', () => {
     expect([css(AMBER), css(ALARM)]).not.toContain((frozen as { value: string }).value);
     expect(setsOf(log, 'strokeStyle').at(-1)).toBe(css(WHITE));
     expect(callsOf(log, 'stroke')).toHaveLength(2);
+  });
+});
+
+/**
+ * A lab with a door in each kind of wall: (5,2) in the wall running up and down between the
+ * rooms, (3,4) in the one running left to right over the room below.
+ */
+const DOOR_TILES = [
+  '##########',
+  '#....#...#',
+  '#........#',
+  '#....#...#',
+  '###.######',
+  '#........#',
+  '##########',
+];
+
+/** The fills of `log`, each with the rectangle it fills: style, x, y, width, height. */
+function filled(log: ReturnType<typeof fakeCanvas>['log']): unknown[][] {
+  let style: unknown = null;
+  return log.flatMap((entry) => {
+    if (entry.kind === 'set' && entry.name === 'fillStyle') {
+      style = entry.value;
+    }
+    return entry.kind === 'call' && entry.name === 'fillRect' ? [[style, ...entry.args]] : [];
+  });
+}
+
+describe('hud — the doors on the minimap, as the view knows them', () => {
+  const doorsAt = (open: boolean) =>
+    mapWith({
+      width: 10,
+      height: 7,
+      tiles: DOOR_TILES,
+      doors: [
+        { id: 'flur', x: 5, y: 2, open },
+        { id: 'keller', x: 3, y: 4, open },
+      ],
+    });
+
+  it('bars a shut door in amber across its doorway, along its wall', () => {
+    const { ctx, log } = fakeCanvas();
+    draw(ctx, frameWith({ map: doorsAt(false), minimap: layout }));
+    const fills = filled(log);
+    // (5,2), the wall upright: a bar 4 px wide down the cell's middle.
+    expect(fills).toContainEqual([css(AMBER), 653, 120, 4, 10]);
+    // (3,4), the wall lying: a bar 4 px high across it.
+    expect(fills).toContainEqual([css(AMBER), 630, 143, 10, 4]);
+  });
+
+  it('leaves an open door a gap: its floor between two jambs, no amber anywhere', () => {
+    const { ctx, log } = fakeCanvas();
+    draw(ctx, frameWith({ map: doorsAt(true), minimap: layout }));
+    const fills = filled(log);
+    expect(fills.filter(([style]) => style === css(AMBER))).toEqual([]);
+    // The doorway's floor is drawn with the rest of the floor.
+    expect(fills.some(([, x, y, w, h]) => x === 650 && y === 120 && w === 10 && h === 10)).toBe(
+      true,
+    );
+    // Jambs at the ends of the gap: across the upright wall's door, beside the lying one's.
+    const jambs = fills.filter(([, x, y]) => (x === 650 && y === 120) || (x === 630 && y === 140));
+    expect(jambs.map(([, , , w, h]) => [w, h])).toEqual(
+      expect.arrayContaining([
+        [10, 2],
+        [2, 10],
+      ]),
+    );
+  });
+});
+
+describe('hud — the goal on the minimap', () => {
+  const consoles: MapView['stations'] = [
+    { puzzleId: 'kette', x: 2, y: 1, title: 'Kette', status: 'armed', console: 'a' },
+    { puzzleId: 'kette', x: 7, y: 3, title: 'Kette', status: 'armed', console: 'b' },
+    { puzzleId: 'reaktor', x: 8, y: 1, title: 'Reaktor', status: 'locked' },
+  ];
+  const fuse: Item = {
+    id: 'fuse',
+    label: 'SICHERUNG',
+    x: 3.5,
+    y: 4.5,
+    carriedBy: null,
+    delivered: false,
+    deliverTo: { x: 6, y: 4 },
+    requiredForTitle: null,
+  };
+  const labWith = (parts: Partial<MapView>) =>
+    mapWith({ width: 10, height: 6, tiles: TILES, stations: consoles, ...parts });
+
+  it('points at the station up next — at both its consoles where it has two', () => {
+    expect(minimapGoal(labWith({}), 'p1')).toEqual([
+      { x: 2.5, y: 1.5, color: css(TEAL) },
+      { x: 7.5, y: 3.5, color: css(TEAL) },
+    ]);
+  });
+
+  it('points at where the part in hand goes instead, a key at its cabinet once found', () => {
+    const carrying = labWith({ items: [{ ...fuse, carriedBy: 'p1' }] });
+    expect(minimapGoal(carrying, 'p1')).toEqual([{ x: 6.5, y: 4.5, color: css(READ_BLUE) }]);
+    // In somebody else's hands the part is theirs to bring: the station stays the goal.
+    expect(minimapGoal(labWith({ items: [{ ...fuse, carriedBy: 'p2' }] }), 'p1')).toHaveLength(2);
+  });
+
+  it('adds nothing the view keeps back: a key whose cabinet nobody has found yet', () => {
+    const key = { ...fuse, id: 'key', label: 'SCHLÜSSEL', carriedBy: 'p1', deliverTo: null };
+    expect(minimapGoal(labWith({ items: [key] }), 'p1').map((dot) => dot.color)).toEqual([
+      css(TEAL),
+      css(TEAL),
+    ]);
+  });
+
+  it('points at nothing once the hatch stands open: the exit glows instead', () => {
+    const exit = { x: 8, y: 4, open: true, openedAt: 1, atExit: [] };
+    expect(minimapGoal(labWith({ exit }), 'p1')).toEqual([]);
+    const { ctx, log } = fakeCanvas();
+    draw(ctx, frameWith({ map: labWith({ exit }), minimap: layout, pulse: 1 }));
+    const glow = callEntries(log, 'createRadialGradient')[0];
+    // Round the exit's middle at (685, 145): from 3 px out to 1.9 cells at the beat's top.
+    expect(glow?.args).toEqual([685, 145, 3, 685, 145, expect.closeTo(19, 9)]);
+    const shut = fakeCanvas();
+    const locked = labWith({ exit: { ...exit, open: false } });
+    draw(shut.ctx, frameWith({ map: locked, minimap: layout }));
+    expect(callEntries(shut.log, 'createRadialGradient')).toEqual([]);
+  });
+
+  it('pulses each dot: a ring swelling with the beat over a dot rimmed dark', () => {
+    const ringsAt = (parts: Partial<Frame>): unknown[][] => {
+      const { ctx, log } = fakeCanvas();
+      draw(ctx, frameWith({ map: labWith({}), minimap: layout, ...parts }));
+      return callsOf(log, 'arc').filter(([x, y]) => x === 625 && y === 115);
+    };
+    // The console at (2,1): its middle at (625, 115) on the minimap.
+    expect(ringsAt({ pulse: 0 })).toEqual([
+      [625, 115, 7.5, 0, Math.PI * 2],
+      [625, 115, 4.2, 0, Math.PI * 2],
+    ]);
+    expect(ringsAt({ pulse: 1 })[0]).toEqual([625, 115, 12.5, 0, Math.PI * 2]);
+    // Less motion: the ring holds still, whatever the beat.
+    const still = ringsAt({ pulse: 0, reduced: true })[0];
+    expect(ringsAt({ pulse: 1, reduced: true })[0]).toEqual(still);
   });
 });

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { addProbes } from '../probes.js';
+import { reducedMotion } from '../settings.js';
 import { drawScientist } from '../world/art.js';
 import {
   figurePhase,
@@ -8,7 +9,6 @@ import {
   type FigurePose,
   type FigureState,
 } from '../world/figure.js';
-import { REDUCED_MOTION } from '../world/finale.js';
 import { traceRequested } from '../world/frameTrace.js';
 
 /** Which way a crew member looks: toward the middle of the row, or out of the room. */
@@ -255,7 +255,7 @@ export function CrewFigure(props: Props) {
     if (canvas == null || ctx == null) {
       return undefined;
     }
-    const reduced = window.matchMedia(REDUCED_MOTION).matches;
+    const reduced = reducedMotion();
     const since = performance.now();
     const probe: FigureProbe = { color: '', mood: 'play', rise: 0, glance: 0 };
     const unprobe = probed(probe);

@@ -1,4 +1,5 @@
-import { coversArmed } from '../interact.js';
+import { isHorizontalDoor } from '../doors.js';
+import { carriedItem, coversArmed } from '../interact.js';
 import {
   ALARM,
   AMBER,
@@ -9,6 +10,7 @@ import {
   lift,
   mix,
   READ_BLUE,
+  rgba,
   sink,
   STEEL,
   TEAL,
@@ -18,8 +20,9 @@ import type { Box } from '../viewport.js';
 import { FALLBACK_COLOR, type Frame, type MinimapLayout, type WorldMap } from './frame.js';
 
 /**
- * What the canvas draws of the HUD: the corner minimap — the layout, doors,
- * the objective, the exit and everyone's dot — over the world and its
+ * What the canvas draws of the HUD: the corner minimap — the layout, the
+ * doors as the view knows them, the stations and sources, the goal pulsing,
+ * the exit glowing once unlocked, and everyone's dot — over the world and its
  * light, gone while the run ends on screen. The screen's text keeps off it.
  */
 
@@ -88,12 +91,69 @@ export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   drawPanel(ctx, layout, frame.viewport.dpr);
   drawFloor(ctx, frame.map, layout);
   drawDecor(ctx, frame.map, layout);
-  drawDoorsAndPlates(ctx, frame.map, layout);
+  drawDoors(ctx, frame.map, layout);
+  drawPlates(ctx, frame.map, layout);
   drawStationsAndSources(ctx, frame.map, layout);
   drawLandmarks(ctx, frame, layout);
+  drawGoal(ctx, frame, layout);
   drawDrones(ctx, frame, layout);
   drawCrew(ctx, frame, layout);
   ctx.globalAlpha = 1;
+}
+
+/** A goal on the minimap: where, in tiles — a tile's middle — and in the goal's colour. */
+export interface GoalDot {
+  x: number;
+  y: number;
+  color: string;
+}
+
+/**
+ * What the minimap points at, as the goal line has it: with a part in this player's hands,
+ * where it goes — a drop-off, or for a key the cabinet it opens, a source — once the view
+ * names the place; else the station up next, at both its consoles where it has two. Nothing
+ * while the hatch stands open — the exit glows instead — and nothing the view keeps back.
+ */
+export function minimapGoal(map: WorldMap, youId: string): GoalDot[] {
+  if (map.exit !== null && map.exit.open) {
+    return [];
+  }
+  const goal = carriedItem(map, youId)?.deliverTo ?? null;
+  if (goal !== null) {
+    return [{ x: goal.x + 0.5, y: goal.y + 0.5, color: C.read }];
+  }
+  return map.stations
+    .filter((station) => station.status === 'armed')
+    .map((station) => ({ x: station.x + 0.5, y: station.y + 0.5, color: C.teal }));
+}
+
+/**
+ * The goal's dots, pulsing: a ring swelling out past its cell and fading as it goes, over a
+ * dot rimmed dark, so that it shows on a station's own teal cell. Under reduced motion the
+ * ring holds still.
+ */
+function drawGoal(ctx: CanvasRenderingContext2D, frame: Frame, layout: MinimapLayout): void {
+  const { ox, oy, cell } = layout;
+  const { dpr } = frame.viewport;
+  const beat = frame.reduced ? 0.4 : frame.pulse;
+  for (const dot of minimapGoal(frame.map, frame.youId)) {
+    const cx = ox + dot.x * cell;
+    const cy = oy + dot.y * cell;
+    ctx.strokeStyle = dot.color;
+    ctx.lineWidth = Math.max(dpr, cell * 0.18);
+    ctx.globalAlpha = 0.9 - 0.6 * beat;
+    ctx.beginPath();
+    ctx.arc(cx, cy, cell * (0.75 + 0.5 * beat), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = dot.color;
+    ctx.strokeStyle = C.panel;
+    ctx.lineWidth = dpr;
+    ctx.beginPath();
+    ctx.arc(cx, cy, cell * 0.42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
 }
 
 /** The minimap's dark panel and its rim. */
@@ -135,16 +195,47 @@ function drawDecor(ctx: CanvasRenderingContext2D, map: WorldMap, layout: Minimap
   }
 }
 
-/** Doors, amber while shut, and plates, teal while pressed, half a cell. */
-function drawDoorsAndPlates(
-  ctx: CanvasRenderingContext2D,
-  map: WorldMap,
-  { ox, oy, cell }: MinimapLayout,
-): void {
+/** How thick a shut door's bar is, and an open one's jambs, against a cell. */
+const DOOR_BAR = 0.4;
+const DOOR_JAMB = 0.2;
+
+/**
+ * The doors as the view knows them now: an open one a gap in its wall — its floor, drawn
+ * with the rest, between two jambs — and a shut one an amber bar across the doorway, along
+ * its wall.
+ */
+function drawDoors(ctx: CanvasRenderingContext2D, map: WorldMap, layout: MinimapLayout): void {
+  const { ox, oy, cell } = layout;
   for (const door of map.doors) {
-    ctx.fillStyle = door.open ? C.doorOpen : C.doorShut;
-    ctx.fillRect(ox + door.x * cell, oy + door.y * cell, cell, cell);
+    const x = ox + door.x * cell;
+    const y = oy + door.y * cell;
+    // A wall running left to right: the way through goes up and down.
+    const along = isHorizontalDoor(map, door);
+    if (door.open) {
+      const jamb = Math.max(1, cell * DOOR_JAMB);
+      ctx.fillStyle = C.doorOpen;
+      if (along) {
+        ctx.fillRect(x, y, jamb, cell);
+        ctx.fillRect(x + cell - jamb, y, jamb, cell);
+      } else {
+        ctx.fillRect(x, y, cell, jamb);
+        ctx.fillRect(x, y + cell - jamb, cell, jamb);
+      }
+    } else {
+      const bar = Math.max(2, cell * DOOR_BAR);
+      ctx.fillStyle = C.doorShut;
+      if (along) {
+        ctx.fillRect(x, y + (cell - bar) / 2, cell, bar);
+      } else {
+        ctx.fillRect(x + (cell - bar) / 2, y, bar, cell);
+      }
+    }
   }
+}
+
+/** Plates, teal while pressed, half a cell. */
+function drawPlates(ctx: CanvasRenderingContext2D, map: WorldMap, layout: MinimapLayout): void {
+  const { ox, oy, cell } = layout;
   for (const plate of map.plates) {
     ctx.fillStyle = plate.pressed ? C.teal : C.plateIdle;
     ctx.fillRect(
@@ -173,7 +264,7 @@ function drawStationsAndSources(
   }
 }
 
-/** The Laborkennung until read, and the exit, green once open. */
+/** The Laborkennung until read, and the exit, green and glowing once unlocked. */
 function drawLandmarks(
   ctx: CanvasRenderingContext2D,
   frame: Frame,
@@ -187,9 +278,34 @@ function drawLandmarks(
     ctx.fillRect(ox + x * cell + cell / 4, oy + y * cell + cell / 4, cell / 2, cell / 2);
   }
   if (map.exit !== null) {
+    const x = ox + map.exit.x * cell;
+    const y = oy + map.exit.y * cell;
+    if (map.exit.open) {
+      drawExitGlow(ctx, frame, x + cell / 2, y + cell / 2, cell);
+    }
     ctx.fillStyle = map.exit.open ? C.exit : C.locked;
-    ctx.fillRect(ox + map.exit.x * cell, oy + map.exit.y * cell, cell, cell);
+    ctx.fillRect(x, y, cell, cell);
   }
+}
+
+/**
+ * The unlocked exit's glow round (cx, cy), its cell's middle: breathing, or still where
+ * motion is reduced.
+ */
+function drawExitGlow(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  cx: number,
+  cy: number,
+  cell: number,
+): void {
+  const beat = frame.reduced ? 0.5 : frame.pulse;
+  const reach = cell * (1.3 + 0.6 * beat);
+  const glow = ctx.createRadialGradient(cx, cy, cell * 0.3, cx, cy, reach);
+  glow.addColorStop(0, rgba(DONE_GREEN, 0.8));
+  glow.addColorStop(1, rgba(DONE_GREEN, 0));
+  ctx.fillStyle = glow;
+  ctx.fillRect(cx - reach, cy - reach, 2 * reach, 2 * reach);
 }
 
 /** The drones: grey while frozen, red once alerted, amber on patrol. */

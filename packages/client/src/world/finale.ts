@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { MapView, Phase, RunOutcome } from '@escapelab/core';
-import { useMedia } from '../hooks.js';
+import { useReducedMotion } from '../settings.js';
 import { stopAmbience } from './ambience.js';
 import { klaxonFade, lightsOnClick, powerDrain, startPowerHum } from './audio.js';
 import { STALE_MS } from './coldOpen.js';
@@ -44,8 +44,6 @@ export const WHITE_MS = 600;
 export const DIM_MS = 1500;
 /** Under reduced motion a fade takes this share of its time. */
 const REDUCED_FADE = 1 / 3;
-/** The media query of a player who asked for less motion. */
-export const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
 /** What the ending reads off a view, a player's or the audience's. */
 export interface FinaleSource {
@@ -156,7 +154,7 @@ interface Kept {
  * with the last map of the run. A new run starts over.
  */
 export function useFinale(view: FinaleSource | null): Finale | null {
-  const reduced = useMedia(REDUCED_MOTION);
+  const reduced = useReducedMotion();
   const run = view?.startedAt ?? null;
   const kept = useRef<Kept>({ run, map: null, start: null });
   if (kept.current.run !== run) {

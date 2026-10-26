@@ -1,5 +1,5 @@
 import type { MapView, NoteHere, SourceHere } from '@escapelab/core';
-import { noteMount } from './notes.js';
+import { noteMount, noteSheet } from './notes.js';
 
 /** Prompt and client-side gate for stations and manual objects; the server counts 1.6. */
 export const INTERACT_RADIUS = 1.5;
@@ -8,17 +8,42 @@ export const ITEM_RADIUS = 0.9;
 /** The primary pointer is a finger: no keys to name, the on-screen pad shows (as ui.css has it). */
 export const TOUCH = '(pointer: coarse)';
 
+/** The box round the thing a prompt names, in tiles: its corner, width and height. */
+export interface Outline {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** How wide the box round a part lying about is, in tiles, and round a note's sheet. */
+const PART_BOX = 0.72;
+const SHEET_BOX = 0.62;
+
+/** The box of the tile at (x, y): a station, a source, a drop-off take a whole tile. */
+const tileBox = (x: number, y: number): Outline => ({ x, y, w: 1, h: 1 });
+
+/** A box `size` across round the point (x, y). */
+const boxRound = (x: number, y: number, size: number): Outline => ({
+  x: x - size / 2,
+  y: y - size / 2,
+  w: size,
+  h: size,
+});
+
 /**
  * What pressing E does where the player stands, the words of its prompt —
- * „Bedienen", no key; promptText adds that — and where the prompt goes.
+ * „Bedienen", no key; promptText adds that — where the prompt goes, and the
+ * box round the one thing it names (`outline`), which pulses while it shows.
  */
-export type ContextAction =
+export type ContextAction = (
   | { kind: 'deliver' | 'pick' | 'operate'; label: string; x: number; y: number }
   | { kind: 'read' | 'open'; manualId: string; label: string; x: number; y: number }
   /** a note of the last shift the server counts this player at: E reads it, for nothing */
   | { kind: 'note'; index: number; label: string; x: number; y: number }
   /** a locked cabinet without its key in hand: the prompt names what is missing, E does nothing */
-  | { kind: 'locked'; label: string; x: number; y: number };
+  | { kind: 'locked'; label: string; x: number; y: number }
+) & { outline: Outline };
 
 /**
  * The prompt over the world for `action`: with a keyboard the key comes
@@ -54,7 +79,7 @@ export function opensCabinet(map: Pick<MapView, 'manuals'>, itemId: string): boo
  * unlock a cabinet with its key in hand — or learn which key is missing.
  */
 function sourceAction(map: MapView, manual: Manual, source: Source, mine?: Item): ContextAction {
-  const at = { x: manual.x + 0.5, y: manual.y - 0.55 };
+  const at = { x: manual.x + 0.5, y: manual.y - 0.55, outline: tileBox(manual.x, manual.y) };
   if (source.opened) {
     return { kind: 'read', manualId: manual.id, label: 'Lesen', ...at };
   }
@@ -82,7 +107,12 @@ function noteAction(
   if (note === undefined || mount === null) {
     return [];
   }
-  const at = { x: mount.x, y: mount.facing === null ? mount.y - 0.55 : mount.y - 0.85 };
+  const sheet = noteSheet(mount);
+  const at = {
+    x: mount.x,
+    y: mount.facing === null ? mount.y - 0.55 : mount.y - 0.85,
+    outline: boxRound(sheet.x, sheet.y, SHEET_BOX),
+  };
   return [
     {
       action: { kind: 'note', index: note.index, label: 'Lesen', ...at },
@@ -122,6 +152,7 @@ export function contextAction(
       label: `${mine.label} einsetzen`,
       x: goal.x + 0.5,
       y: goal.y - 0.45,
+      outline: tileBox(goal.x, goal.y),
     };
   }
 
@@ -147,15 +178,18 @@ export function contextAction(
   candidates.push(...noteAction(map, noteHere, dist));
   if (mine === undefined && loose !== undefined) {
     const label = `${loose.label} aufnehmen`;
+    const outline = boxRound(loose.x, loose.y, PART_BOX);
     candidates.push({
-      action: { kind: 'pick', label, x: loose.x, y: loose.y - 0.95 },
+      action: { kind: 'pick', label, x: loose.x, y: loose.y - 0.95, outline },
       d: dist(loose.x, loose.y),
     });
   }
   for (const station of stations) {
+    const { x, y } = station;
+    const outline = tileBox(x, y);
     candidates.push({
-      action: { kind: 'operate', label: 'Bedienen', x: station.x + 0.5, y: station.y - 0.55 },
-      d: dist(station.x + 0.5, station.y + 0.5),
+      action: { kind: 'operate', label: 'Bedienen', x: x + 0.5, y: y - 0.55, outline },
+      d: dist(x + 0.5, y + 0.5),
     });
   }
   const locked = (candidate: { action: ContextAction }): number =>

@@ -1,4 +1,4 @@
-import { walkable, type PlayerPosition } from '@escapelab/core';
+import { SPRINT_FACTOR, WALK_SPEED, walkable, type PlayerPosition } from '@escapelab/core';
 import type { DoorMotion } from './doors.js';
 import { lightMemory, type LightMemory } from './light.js';
 import {
@@ -20,11 +20,29 @@ import type {
  * What one mounted world simulates from animation frame to animation frame
  * (GameWorld.tsx): your avatar and the crew's, the doors' slides, the camera,
  * the lit rooms and what this run's light has shown. The movement here is
- * pure; the sounds it makes are the component's.
+ * pure; the sounds it makes are the component's. The avatar walks at core's
+ * WALK_SPEED and sprints SPRINT_FACTOR times as fast, as the server's step
+ * guard expects (core/src/map.ts).
  */
 
-const SPEED = 4.2; // tiles per second
 const RADIUS = 0.28; // collision half-size
+/** How many times a second the legs swing at a walk; a sprint swings them as much faster. */
+const GAIT_RATE = 2.4;
+/**
+ * How far apart two footfalls land, in tiles: a sprint, covering more ground in the same time,
+ * lands them faster.
+ */
+const STRIDE = 0.5;
+
+/** The key held to sprint, as KeyboardEvent names it lower-cased: Shift, or the pad's „Sprint". */
+export const SPRINT_KEY = 'shift';
+/** How far the camera looks ahead of a walking avatar, in tiles. */
+export const LEAD_TILES = 0.6;
+/** How quickly the camera's lead comes and goes, s: about 95 % of the way in 300 ms. */
+export const LEAD_TAU = 0.1;
+
+/** A footfall in a frame's walk: at a walk, or at a sprint — quicker, and a little louder. */
+export type Footfall = 'walk' | 'sprint';
 
 export const MOVE_KEYS: Record<string, [number, number]> = {
   arrowup: [0, -1],
@@ -49,6 +67,10 @@ export interface Sim {
   doors: Map<string, DoorMotion>;
   walkPhase: number;
   stepAcc: number;
+  /** footfalls your avatar has made so far: the walkthrough reads their pace off the probe */
+  footfalls: number;
+  /** how far the camera looks ahead of your avatar, in tiles: eased in and out (`leadOn`) */
+  lead: { x: number; y: number };
   cam: { x: number; y: number };
   /** how far the objective bar reaches down, CSS pixels, eased: the camera glides as it grows */
   topCss: number;
@@ -93,6 +115,8 @@ export function newSim(topCss: number): Sim {
     doors: new Map(),
     walkPhase: 0,
     stepAcc: 0,
+    footfalls: 0,
+    lead: { x: 0, y: 0 },
     cam: { x: 0, y: 0 },
     topCss,
     draw: { x: 0, y: 0 },
@@ -129,6 +153,7 @@ export function followServer(
     Object.assign(sim.self, start);
     sim.cam.x = start.x;
     sim.cam.y = start.y;
+    sim.lead = { x: 0, y: 0 };
     sim.run = run;
     sim.streamed = [];
     sim.room = null;
@@ -172,34 +197,39 @@ function heading(keys: ReadonlySet<string>, locked: boolean): [number, number] {
 /**
  * One frame's walk from the keys held (input → velocity): the facing, the
  * step as far as no wall, shut door or furniture stands in the way, and the
- * gait. Returns whether a footstep falls in it.
+ * gait — SPRINT_FACTOR times as fast with the sprint key held, no stamina.
+ * Returns the footfall that lands in it, if one does.
  */
-export function walk(sim: Sim, map: WorldMap, dt: number, locked: boolean): boolean {
+export function walk(sim: Sim, map: WorldMap, dt: number, locked: boolean): Footfall | null {
   let [dx, dy] = heading(sim.keys, locked);
   const len = Math.hypot(dx, dy);
   sim.self.moving = len > 0;
   if (!(len > 0)) {
-    return false;
+    return null;
   }
   dx /= len;
   dy /= len;
   sim.self.facing = Math.atan2(dy, dx);
+  const sprinting = sim.keys.has(SPRINT_KEY);
+  const pace = sprinting ? SPRINT_FACTOR : 1;
+  const speed = WALK_SPEED * pace;
   const closedDoors = new Set(map.doors.filter((d) => !d.open).map((d) => `${d.x},${d.y}`));
-  const nx = sim.self.x + dx * SPEED * dt;
+  const nx = sim.self.x + dx * speed * dt;
   if (!blocked(map, closedDoors, nx, sim.self.y)) {
     sim.self.x = nx;
   }
-  const ny = sim.self.y + dy * SPEED * dt;
+  const ny = sim.self.y + dy * speed * dt;
   if (!blocked(map, closedDoors, sim.self.x, ny)) {
     sim.self.y = ny;
   }
-  sim.walkPhase = (sim.walkPhase + dt * 2.4) % 1;
-  sim.stepAcc += SPEED * dt;
-  if (sim.stepAcc > 0.5) {
+  sim.walkPhase = (sim.walkPhase + dt * GAIT_RATE * pace) % 1;
+  sim.stepAcc += speed * dt;
+  if (sim.stepAcc > STRIDE) {
     sim.stepAcc = 0;
-    return true;
+    sim.footfalls += 1;
+    return sprinting ? 'sprint' : 'walk';
   }
-  return false;
+  return null;
 }
 
 /** Remote avatars ease toward their streamed positions (`live`); one gone from them goes. */
@@ -237,12 +267,27 @@ export function easeOthers(
 }
 
 /**
- * The camera following your avatar, and the objective bar's reach (`topCss`)
- * as gently: a radio line growing the bar moves it no faster.
+ * The camera's lead: up to LEAD_TILES the way your avatar walks while it
+ * walks, eased in and out over about 300 ms (LEAD_TAU), back to nothing as it
+ * stands — and nothing at all where the player asked for less motion.
  */
-export function follow(sim: Sim, dt: number, topCss: number): void {
+export function leadOn(sim: Sim, dt: number, reduced: boolean): void {
+  const reach = sim.self.moving && !reduced ? LEAD_TILES : 0;
+  const k = 1 - Math.exp(-dt / LEAD_TAU);
+  sim.lead.x += (Math.cos(sim.self.facing) * reach - sim.lead.x) * k;
+  sim.lead.y += (Math.sin(sim.self.facing) * reach - sim.lead.y) * k;
+}
+
+/**
+ * The camera following your avatar, a little ahead of it as it walks
+ * (`leadOn`), and the objective bar's reach (`topCss`) as gently: a radio
+ * line growing the bar moves it no faster. The frame clamps where it looks
+ * (assemble.ts), lead and all.
+ */
+export function follow(sim: Sim, dt: number, topCss: number, reduced = false): void {
+  leadOn(sim, dt, reduced);
   const ck = 1 - Math.exp(-dt * 6);
-  sim.cam.x += (sim.self.x - sim.cam.x) * ck;
-  sim.cam.y += (sim.self.y - sim.cam.y) * ck;
+  sim.cam.x += (sim.self.x + sim.lead.x - sim.cam.x) * ck;
+  sim.cam.y += (sim.self.y + sim.lead.y - sim.cam.y) * ck;
   sim.topCss += (topCss - sim.topCss) * ck;
 }

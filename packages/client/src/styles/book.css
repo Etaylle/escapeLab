@@ -108,7 +108,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   z-index: 0;
   display: flex;
   margin: 0 2.2em 0 0.6em;
-  font-size: calc(var(--sheet-h) / 42);
+  font-size: calc(var(--sheet-h) / 42 * var(--text-scale));
   perspective: calc(var(--sheet-h) * 4);
 }
 
@@ -193,7 +193,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
     transparent 14%
   );
   font-family: var(--serif);
-  font-size: calc(100cqw / 30);
+  font-size: calc(100cqw / 30 * var(--text-scale));
   line-height: 1.42;
 }
 
@@ -347,7 +347,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
 /* Symbols a player describes across the room: never under 18 pt. */
 .page .manual-column li {
   height: auto;
-  font-size: max(24px, 1.75em);
+  font-size: max(calc(24px * var(--text-scale)), 1.75em);
   line-height: 1.3;
 }
 
@@ -1150,7 +1150,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   min-width: 52px;
   height: 40px;
   padding: 0 14px;
-  font-size: 24px;
+  font-size: calc(24px * var(--text-scale));
   line-height: 1;
 }
 
@@ -1158,7 +1158,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   min-width: 11em;
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale));
   text-align: center;
 }
 
@@ -1236,7 +1236,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   gap: 4px 14px;
   padding: 9px 16px;
   border-bottom: 1px solid rgba(141, 240, 180, 0.25);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   letter-spacing: 2px;
   text-transform: uppercase;
 }
@@ -1246,7 +1246,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   min-height: 0;
   overflow-y: auto;
   padding: 16px 18px;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale));
   line-height: 1.55;
   text-shadow: 0 0 6px rgba(141, 240, 180, 0.35);
   animation: fadein 0.25s;
@@ -1290,7 +1290,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
 
 .terminal .manual-section p,
 .terminal .manual-rules {
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale));
 }
 
 .terminal .manual-rules li::marker {
@@ -1314,7 +1314,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
 
 .terminal .manual-column li,
 .chart .manual-column li {
-  font-size: 24px;
+  font-size: calc(24px * var(--text-scale));
 }
 
 .terminal-nav {
@@ -1333,7 +1333,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   background: transparent;
   color: #8df0b4;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale));
   letter-spacing: 2px;
 }
 
@@ -1354,7 +1354,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   max-height: calc(100% - 46px);
   margin: 46px 0 0 -30px;
   padding: 14px 14px 16px;
-  font-size: 15px;
+  font-size: calc(15px * var(--text-scale));
   transform: rotate(1.6deg);
 }
 
@@ -1409,7 +1409,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
     var(--paper-fibre),
     #f7f4ec;
   color: #1c2229;
-  font-size: 15px;
+  font-size: calc(15px * var(--text-scale));
   line-height: 1.5;
   box-shadow:
     0 2px 0 #e2dccd,
@@ -1439,7 +1439,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   margin: 0 0 10px;
   color: #b42318;
   font-family: var(--sans);
-  font-size: 22px;
+  font-size: calc(22px * var(--text-scale));
   letter-spacing: 0.14em;
 }
 
@@ -1459,14 +1459,14 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   max-height: calc(100% - 36px);
   margin-top: 18px;
   padding: 14px 14px 16px;
-  font-size: 15px;
+  font-size: calc(15px * var(--text-scale));
   transform: rotate(1.8deg);
 }
 
 .chart-heading {
   margin: 0 0 8px;
   font-family: var(--sans);
-  font-size: 17px;
+  font-size: calc(17px * var(--text-scale));
 }
 
 .chart-done .chart-text {
@@ -1576,7 +1576,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
  */
 .manual-figure figcaption {
   margin-top: 0.25em;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale));
   font-variant: small-caps;
   letter-spacing: 0.04em;
   text-align: center;
@@ -1588,7 +1588,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   padding: 0.4em 0.7em 0.5em;
   outline: 1px solid currentColor;
   outline-offset: -1px;
-  font-size: 15px;
+  font-size: calc(15px * var(--text-scale));
 }
 
 .manual-example-title {
@@ -1611,11 +1611,11 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
 }
 
 .terminal .manual-example {
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale));
 }
 
 .handbook .manual-example {
-  font-size: 16px;
+  font-size: calc(16px * var(--text-scale));
 }
 
 /* On a book's page, in its body em: the caption 0.2 em under the drawing. */
@@ -1681,7 +1681,7 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
 }
 
 /* Less motion: the page changes without a leaf turning, the prompt stands still. */
-@media (prefers-reduced-motion: reduce) {
+:where([data-motion='reduce']) {
   .book-leaf {
     display: none;
   }

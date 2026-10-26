@@ -245,14 +245,14 @@ const terminalView: PuzzleView = {
 } as unknown as PuzzleView;
 
 describe('„Notieren" at the Serverraum terminal', () => {
-  it('takes the code table down as it stands, a row a service', () => {
+  it('takes the code table down as it stands, a row a service, with what each needs', () => {
     const rows = terminalView.kind === 'servers' ? (terminalView.rows ?? []) : [];
     expect(notedText(notedHead(terminalView, 'Terminal'), terminalTable(rows))).toBe(
       [
         '§4 Serverraum · Terminal',
-        'Spalten: Dienst · Status · Strom',
-        'Zeile 1: NETZ · RUNNING · AN',
-        'Zeile 2: DNS · FEHLER E23 · AN',
+        'Spalten: Dienst · Status · Strom · Braucht',
+        'Zeile 1: NETZ · RUNNING · AN · —',
+        'Zeile 2: DNS · FEHLER E23 · AN · NETZ',
       ].join('\n'),
     );
   });

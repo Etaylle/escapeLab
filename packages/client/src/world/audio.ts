@@ -4,11 +4,13 @@
  * Everything is synthesised at runtime from oscillators, filters and one shared noise buffer;
  * the only recordings in the game are mission control's lines (radioVoice.ts). All levels are
  * deliberately quiet because this plays under the players' voice chat, and every sound passes
- * through a single master gain, so the whole lab can be muted or scaled in one place. The
- * rooms' beds (ambience.ts) and the music (music.ts) go in through the duck bus in front of
- * it, which mission control's voice pulls down while it speaks. The partners' steps and the
- * drones (spatial.ts) and the voice go straight into the master gain. This module also lends
- * those modules its small builders (gain stages, filters, envelopes, noise).
+ * through a single master gain, so the whole lab can be muted in one place. In front of it sit
+ * the three volumes the settings set (settings.ts), each a bus: the effects — this module's
+ * sounds, the partners' steps and the drones (spatial.ts) — and the radio — mission control's
+ * voice (radioVoice.ts) and its chirp — straight into the master gain; the rooms' beds
+ * (ambience.ts, at the effects' volume) and the music (music.ts) through the duck bus, which
+ * mission control's voice pulls down while it speaks. This module also lends those modules
+ * its small builders (gain stages, filters, envelopes, noise).
  *
  * Audio is decorative, so no public function ever throws: errors are swallowed on purpose.
  * The one shared AudioContext is created lazily on first use. While browser autoplay policy
@@ -22,13 +24,28 @@ import { traceRequested } from './frameTrace.js';
 
 type AudioContextCtor = new () => AudioContext;
 
-/** The shared context and the two gain stages every sound of the lab ends in. */
+/** The shared context and the gain stages every sound of the lab ends in. */
 export interface Engine {
   readonly ctx: AudioContext;
-  /** Every sound in the module passes through this gain: the single mute/volume point. */
+  /** Every sound in the module passes through this gain: the single mute point. */
   readonly master: GainNode;
   /** The beds and the music, in front of the master gain: ducked while mission control speaks. */
   readonly duck: GainNode;
+  /** The effects at their volume, into the master gain: every sound but the radio and the music. */
+  readonly effects: GainNode;
+  /** The rooms' beds at the effects' volume, into the duck bus. */
+  readonly beds: GainNode;
+  /** The music at its volume, into the duck bus. */
+  readonly music: GainNode;
+  /** Mission control's voice and the radio's chirp at their volume, into the master gain. */
+  readonly radio: GainNode;
+}
+
+/** The three volumes on the engine's buses, each a share of full (0 to 1). */
+export interface BusVolumes {
+  readonly radio: number;
+  readonly effects: number;
+  readonly music: number;
 }
 
 /** Gain envelope: linear attack to `peak`, flat hold, then exponential decay to silence. */
@@ -89,8 +106,12 @@ export function graphCensus(): GraphCensus | null {
 
 const MASTER_LEVEL = 1;
 const MUTE_STORAGE_KEY = 'escapelab-muted';
+/** How quickly a bus follows its volume as a slider moves, s. */
+const VOLUME_GLIDE = 0.05;
 /** The own footstep's level; a partner's comes in at the same level, placed (spatial.ts). */
 export const FOOTSTEP_LEVEL = 0.02;
+/** How much louder a footstep lands at a sprint: about 2 dB. */
+export const SPRINT_STEP_GAIN = 1.25;
 const DOOR_LEVEL = 0.04;
 const CHIRP_LEVEL = 0.03;
 const FIND_LEVEL = 0.035;
@@ -215,6 +236,8 @@ let noise: AudioBuffer | null = null;
 let powerHum: Loop | null = null;
 let siren: Loop | null = null;
 let muted = readStoredMute();
+/** The buses' volumes: full until the settings set theirs (settings.ts, as the page starts). */
+let volumes: BusVolumes = { radio: 1, effects: 1, music: 1 };
 /** Whether the engine's graph is counted for the walkthrough's probe (audioCount.ts). */
 let counted = false;
 let unlockArmed = false;
@@ -294,6 +317,34 @@ export function setMuted(next: boolean): void {
 }
 
 /**
+ * Sets the three volumes, each a share of full: on the engine's buses where it is made —
+ * the effects' on its beds too — and for the engine still to come. Works before any sound has
+ * been created; the mute switch stays above them all.
+ */
+export function setVolumes(next: BusVolumes): void {
+  volumes = next;
+  try {
+    if (engine !== null) {
+      const now = engine.ctx.currentTime;
+      engine.effects.gain.setTargetAtTime(next.effects, now, VOLUME_GLIDE);
+      engine.beds.gain.setTargetAtTime(next.effects, now, VOLUME_GLIDE);
+      engine.music.gain.setTargetAtTime(next.music, now, VOLUME_GLIDE);
+      engine.radio.gain.setTargetAtTime(next.radio, now, VOLUME_GLIDE);
+    }
+  } catch {
+    // Deliberately silent: a volume must never break the game.
+  }
+}
+
+/**
+ * The effects' volume, a share of full: for the devices' sounds (puzzles/sounds.ts), which
+ * play past the engine's buses.
+ */
+export function effectsVolume(): number {
+  return volumes.effects;
+}
+
+/**
  * One tick of the final countdown. `secondsLeft` 1-10 rises in pitch as the
  * clock runs out; 0 is the dull thud of the power going.
  */
@@ -303,7 +354,7 @@ export function countdownBeep(secondsLeft: number): void {
     if (audio === null) return;
     const { ctx } = audio;
     const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.master, CHIRP_LEVEL);
+    const out = outlet(ctx, audio.effects, CHIRP_LEVEL);
     const last = secondsLeft <= 0;
     const base = last ? 180 : 620 + (10 - Math.min(10, secondsLeft)) * 55;
     const beep = tone(ctx, out, {
@@ -333,7 +384,7 @@ export function briefingCountdown(elapsedMs = 0): void {
     if (audio === null) return;
     const { ctx } = audio;
     const t = ctx.currentTime + LOOKAHEAD - elapsedMs / 1000;
-    const out = outlet(ctx, audio.master, CHIRP_LEVEL);
+    const out = outlet(ctx, audio.effects, CHIRP_LEVEL);
     const beeps = BRIEFING_BEEPS.filter(([at]) => t + at >= ctx.currentTime).map(
       ([at, frequency, length]) =>
         tone(ctx, out, {
@@ -357,13 +408,17 @@ export function briefingCountdown(elapsedMs = 0): void {
   }
 }
 
-/** Soft ~60 ms footstep tap with ±10% pitch variation; cheap enough for ~3 calls per second. */
-export function footstep(): void {
+/**
+ * Soft ~60 ms footstep tap with ±10% pitch variation, a little louder at a sprint, whose
+ * steps also land faster (sim.ts); cheap enough for ~10 calls per second.
+ */
+export function footstep(sprinting = false): void {
   try {
     const audio = runningEngine();
     if (audio === null) return;
     const { ctx } = audio;
-    const out = outlet(ctx, audio.master, FOOTSTEP_LEVEL);
+    const level = FOOTSTEP_LEVEL * (sprinting ? SPRINT_STEP_GAIN : 1);
+    const out = outlet(ctx, audio.effects, level);
     onAllEnded(stepInto(ctx, out, ctx.currentTime + LOOKAHEAD), () => out.disconnect());
   } catch {
     // Deliberately silent: a missed footstep is harmless.
@@ -406,7 +461,7 @@ export function doorSlide(): void {
     const { ctx } = audio;
     const t = ctx.currentTime + LOOKAHEAD;
     const end = t + DOOR_SLIDE_SECONDS;
-    const out = outlet(ctx, audio.master, DOOR_LEVEL);
+    const out = outlet(ctx, audio.effects, DOOR_LEVEL);
     // The band sweeps down while the panel travels: a bright hiss settling into a whoosh.
     const hiss = noiseBurst(ctx, t, DOOR_SLIDE_SECONDS);
     const band = biquad(ctx, 'bandpass', 2400, 0.8);
@@ -452,7 +507,7 @@ export function stationChirp(): void {
     if (audio === null) return;
     const { ctx } = audio;
     const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.master, CHIRP_LEVEL);
+    const out = outlet(ctx, audio.effects, CHIRP_LEVEL);
     const low = tone(ctx, out, {
       type: 'triangle',
       at: t,
@@ -489,7 +544,7 @@ export function pingBlip(): void {
     if (audio === null) return;
     const { ctx } = audio;
     const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.master, CHIRP_LEVEL);
+    const out = outlet(ctx, audio.effects, CHIRP_LEVEL);
     const blip = tone(ctx, out, {
       type: 'sine',
       at: t,
@@ -516,7 +571,7 @@ export function discoveryBlip(): void {
     if (audio === null) return;
     const { ctx } = audio;
     const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.master, CHIRP_LEVEL);
+    const out = outlet(ctx, audio.effects, CHIRP_LEVEL);
     const low = tone(ctx, out, {
       type: 'sine',
       at: t,
@@ -550,10 +605,10 @@ export function lockerOpen(): void {
     if (audio === null) return;
     const { ctx } = audio;
     const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.master, FIND_LEVEL);
+    const out = outlet(ctx, audio.effects, FIND_LEVEL);
     const latch = tick(ctx, out, t, 2600, 0.8);
     onAllEnded([latch], () => out.disconnect());
-    strike(ctx, audio.master, t + 0.06, 420, FIND_LEVEL * 0.8);
+    strike(ctx, audio.effects, t + 0.06, 420, FIND_LEVEL * 0.8);
   } catch {
     // Deliberately silent: the locker opens on screen as well.
   }
@@ -569,7 +624,7 @@ export function cabinetUnlock(): void {
     if (audio === null) return;
     const { ctx } = audio;
     const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.master, FIND_LEVEL);
+    const out = outlet(ctx, audio.effects, FIND_LEVEL);
     const turn = tick(ctx, out, t, 3400, 0.6);
     const spring = tick(ctx, out, t + 0.11, 5200, 0.9);
     const ring = tone(ctx, out, {
@@ -605,7 +660,7 @@ export function sheetDown(): void {
     if (audio === null) return;
     const { ctx } = audio;
     const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.master, FIND_LEVEL);
+    const out = outlet(ctx, audio.effects, FIND_LEVEL);
     const swish = noiseBurst(ctx, t, 0.16);
     const band = biquad(ctx, 'bandpass', 3200, 0.7);
     band.frequency.setValueAtTime(3200, t);
@@ -631,7 +686,7 @@ export function coverShut(): void {
     if (audio === null) return;
     const { ctx } = audio;
     const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.master, FIND_LEVEL);
+    const out = outlet(ctx, audio.effects, FIND_LEVEL);
     const rush = lowNoise(ctx, out, t, 0.18, 900);
     const clap = tone(ctx, out, {
       type: 'sine',
@@ -657,7 +712,7 @@ export function pencilScratch(): void {
     if (audio === null) return;
     const { ctx } = audio;
     const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.master, CHIRP_LEVEL);
+    const out = outlet(ctx, audio.effects, CHIRP_LEVEL);
     const strokes = [0, 0.09, 0.19].map((after) => {
       const stroke = noiseBurst(ctx, t + after, 0.07);
       const level = gain(ctx, 0);
@@ -684,7 +739,7 @@ export function radioChirp(): void {
     if (audio === null) return;
     const { ctx } = audio;
     const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.master, CHIRP_LEVEL);
+    const out = outlet(ctx, audio.radio, CHIRP_LEVEL);
     const handset = biquad(ctx, 'bandpass', 1500, 0.8);
     handset.connect(out);
     const crackle = noiseBurst(ctx, t, 0.06);
@@ -711,7 +766,7 @@ export function powerDrain(delaySec = 0): void {
     const { ctx } = audio;
     const t = ctx.currentTime + LOOKAHEAD + delaySec;
     const end = t + DRAIN_SECONDS;
-    const out = outlet(ctx, audio.master, DRAIN_LEVEL);
+    const out = outlet(ctx, audio.effects, DRAIN_LEVEL);
     const lowpass = biquad(ctx, 'lowpass', 1400, 4);
     lowpass.frequency.setValueAtTime(1400, t);
     lowpass.frequency.exponentialRampToValueAtTime(150, end);
@@ -808,7 +863,7 @@ export function leverChunk(): void {
     if (audio === null) return;
     const { ctx } = audio;
     const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.master, LEVER_LEVEL);
+    const out = outlet(ctx, audio.effects, LEVER_LEVEL);
     const latch = tick(ctx, out, t, 1900, 0.8);
     const thud = tone(ctx, out, {
       type: 'sine',
@@ -823,7 +878,7 @@ export function leverChunk(): void {
     const knock = lowNoise(ctx, out, t + 0.12, 0.09, 700);
     const body = midKnock(ctx, out, t + 0.12, 0.13, 0.75);
     onAllEnded([latch, thud, knock, body], () => out.disconnect());
-    strike(ctx, audio.master, t + 0.12, 150, LEVER_LEVEL * 0.5);
+    strike(ctx, audio.effects, t + 0.12, 150, LEVER_LEVEL * 0.5);
   } catch {
     // Deliberately silent: the lever drops on screen as well.
   }
@@ -921,7 +976,7 @@ export function exitGrind(): void {
     if (audio === null) return;
     const { ctx } = audio;
     const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.master, GRIND_LEVEL);
+    const out = outlet(ctx, audio.effects, GRIND_LEVEL);
     const sources = [...scrape(ctx, out, t), motor(ctx, out, t)];
     const end = t + GRIND_SECONDS;
     sources.push(
@@ -938,7 +993,7 @@ export function exitGrind(): void {
       midKnock(ctx, out, end, 0.16, 0.8),
     );
     onAllEnded(sources, () => out.disconnect());
-    strike(ctx, audio.master, end, 110, GRIND_LEVEL * 0.6);
+    strike(ctx, audio.effects, end, 110, GRIND_LEVEL * 0.6);
   } catch {
     // Deliberately silent: the hatch opens on screen as well.
   }
@@ -950,8 +1005,8 @@ export function victoryChord(): void {
     const audio = runningEngine();
     if (audio === null) return;
     const t = audio.ctx.currentTime + LOOKAHEAD;
-    chord(audio.ctx, audio.master, t);
-    wind(audio.ctx, audio.master, t);
+    chord(audio.ctx, audio.effects, t);
+    wind(audio.ctx, audio.effects, t);
   } catch {
     // Deliberately silent: the card says it as well.
   }
@@ -961,7 +1016,7 @@ export function victoryChord(): void {
 function hornBlasts(audio: Engine, shots: readonly (readonly [number, number, number])[]): void {
   const { ctx } = audio;
   const t = ctx.currentTime + LOOKAHEAD;
-  const out = outlet(ctx, audio.master, KLAXON_LEVEL);
+  const out = outlet(ctx, audio.effects, KLAXON_LEVEL);
   const horn = biquad(ctx, 'bandpass', 900, 1.3);
   horn.connect(out);
   const sources = shots.flatMap(([delay, strength, pitch]) => {
@@ -984,7 +1039,7 @@ function hornBlasts(audio: Engine, shots: readonly (readonly [number, number, nu
 function buildSiren(audio: Engine): Loop {
   const { ctx } = audio;
   const t = ctx.currentTime;
-  const out = outlet(ctx, audio.master, SIREN_LEVEL);
+  const out = outlet(ctx, audio.effects, SIREN_LEVEL);
   const level = gain(ctx, 0);
   level.gain.setValueAtTime(0, t);
   level.gain.linearRampToValueAtTime(1, t + SIREN_FADE_IN);
@@ -1105,7 +1160,7 @@ function wind(ctx: AudioContext, dest: AudioNode, at: number): void {
 function buildPowerHum(audio: Engine): Loop {
   const { ctx } = audio;
   const t = ctx.currentTime;
-  const out = outlet(ctx, audio.master, POWER_LEVEL);
+  const out = outlet(ctx, audio.effects, POWER_LEVEL);
   const level = gain(ctx, 0);
   level.gain.setValueAtTime(0, t);
   level.gain.linearRampToValueAtTime(1, t + POWER_FADE_IN);
@@ -1260,7 +1315,16 @@ function createEngine(): Engine | null {
       countGraph(ctx);
     }
     const master = outlet(ctx, ctx.destination, muted ? 0 : MASTER_LEVEL);
-    return { ctx, master, duck: outlet(ctx, master, 1) };
+    const duck = outlet(ctx, master, 1);
+    return {
+      ctx,
+      master,
+      duck,
+      effects: outlet(ctx, master, volumes.effects),
+      beds: outlet(ctx, duck, volumes.effects),
+      music: outlet(ctx, duck, volumes.music),
+      radio: outlet(ctx, master, volumes.radio),
+    };
   } catch {
     return null;
   }

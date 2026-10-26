@@ -324,7 +324,7 @@ describe('the stylesheet of putting down', () => {
   });
 
   it('moves nothing under reduced motion', () => {
-    const calm = blockAfter(css, '@media (prefers-reduced-motion: reduce)');
+    const calm = blockAfter(css, ":where([data-motion='reduce'])");
     const still = blockAfter(calm, '.reading-book.puzzle-modal--leaving .book-leaves {');
     expect(still).toMatch(/animation: none;/);
     expect(calm).toMatch(/\.puzzle-modal\.puzzle-modal--leaving,\s*\.puzzle-modal--leaving \.panel,/);

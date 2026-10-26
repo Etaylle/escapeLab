@@ -6,11 +6,12 @@
  *
  * Decorative, so nothing here throws, and nothing is made while the sound is off
  * (`isMuted`), without Web Audio, or while the browser still holds the context back: a sound
- * that cannot play now is dropped, never queued to burst out later. The device hum is the
- * one sound that lasts; it follows the sound switch while it runs.
+ * that cannot play now is dropped, never queued to burst out later. Every sound plays at the
+ * effects' volume the settings set (`effectsVolume`). The device hum is the one sound that
+ * lasts; it follows the sound switch and that volume while it runs.
  */
 import type { SimonColor } from '@escapelab/core';
-import { isMuted, sharedAudio } from '../world/audio.js';
+import { effectsVolume, isMuted, sharedAudio } from '../world/audio.js';
 
 /** Exponential ramps cannot reach zero; this is -80 dB. */
 const SILENCE = 0.0001;
@@ -79,7 +80,7 @@ function sound(level: number, build: Build): void {
     if (ctx === null) {
       return;
     }
-    const out = gain(ctx, level);
+    const out = gain(ctx, level * effectsVolume());
     out.connect(ctx.destination);
     const sources = build(ctx, out, ctx.currentTime + LOOKAHEAD);
     let playing = sources.length;
@@ -365,11 +366,14 @@ export function startHum(): Hum {
   }
 }
 
+/** The hum's level now: none with the sound off, else at the effects' volume. */
+const humLevel = (): number => (isMuted() ? 0 : HUM_LEVEL * effectsVolume());
+
 function buildHum(ctx: AudioContext): Hum {
   const t = ctx.currentTime;
   const out = gain(ctx, 0);
   out.gain.setValueAtTime(0, t);
-  out.gain.linearRampToValueAtTime(HUM_LEVEL, t + HUM_FADE);
+  out.gain.linearRampToValueAtTime(humLevel(), t + HUM_FADE);
   const lowpass = filter(ctx, 'lowpass', 380, 0);
   lowpass.connect(out);
   out.connect(ctx.destination);
@@ -380,12 +384,12 @@ function buildHum(ctx: AudioContext): Hum {
     osc.start(t);
     return osc;
   });
-  let silenced = false;
+  let level = humLevel();
   const watch = setInterval(() => {
     try {
-      if (isMuted() !== silenced) {
-        silenced = !silenced;
-        out.gain.setTargetAtTime(silenced ? 0 : HUM_LEVEL, ctx.currentTime, 0.05);
+      if (humLevel() !== level) {
+        level = humLevel();
+        out.gain.setTargetAtTime(level, ctx.currentTime, 0.05);
       }
     } catch {
       // Deliberately silent: the hum keeps the level it has.

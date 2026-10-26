@@ -44,7 +44,7 @@
     0 6px 14px rgba(0, 0, 0, 0.6);
   color: var(--phosphor);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale));
   line-height: 1.35;
   text-shadow: 0 0 5px var(--phosphor-glow);
   overflow: hidden;
@@ -84,16 +84,21 @@
   padding-bottom: 3px;
   border-bottom: 1px solid var(--phosphor-faint);
   color: var(--phosphor-dim);
-  font-size: 11px;
+  font-size: calc(11px * var(--text-scale));
   letter-spacing: 1px;
 }
 
+/* DIENST, STATUS and STROM; BRAUCHT, what a service needs running first, takes the rest. */
 .servers-table th:nth-child(1) {
-  width: 28%;
+  width: 18%;
 }
 
 .servers-table th:nth-child(2) {
-  width: 48%;
+  width: 32%;
+}
+
+.servers-table th:nth-child(3) {
+  width: 15%;
 }
 
 /* A service down stands out in inverse video, its code with it. */
@@ -128,7 +133,7 @@
   margin: 0;
   padding: 6px 0 0;
   border-top: 1px dashed var(--phosphor-faint);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   list-style: none;
 }
 
@@ -316,7 +321,7 @@
     0 3px 4px rgba(0, 0, 0, 0.5);
   color: #cfe9d6;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale));
   letter-spacing: 0.5px;
   cursor: pointer;
 }
@@ -348,7 +353,7 @@
   min-width: 64px;
   background: linear-gradient(180deg, #1d4a2c, #12301c);
   color: var(--phosphor);
-  font-size: 16px;
+  font-size: calc(16px * var(--text-scale));
 }
 
 .servers-key--enter:hover:not(:disabled) {
@@ -433,7 +438,7 @@
     0 1px 1px rgba(0, 0, 0, 0.5);
   color: #1d252d;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   font-weight: 700;
   letter-spacing: 1px;
   text-align: center;
@@ -510,7 +515,7 @@
   justify-content: space-between;
   color: var(--engrave);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--text-scale));
   font-weight: 700;
   line-height: 1;
 }
@@ -560,14 +565,14 @@
   margin: 0;
   color: var(--engrave);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: calc(11px * var(--text-scale));
   letter-spacing: 2px;
   text-transform: uppercase;
 }
 
 .servers--watched .servers-crt {
   padding: 10px 12px;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
 }
 
 .servers--watched .servers-unit {
@@ -579,7 +584,7 @@
 
 /* ── calm, and narrow windows ───────────────────────────────────────── */
 
-@media (prefers-reduced-motion: reduce) {
+:where([data-motion='reduce']) {
   .servers-line--new,
   .servers-line--fail.servers-line--new,
   .servers-crt--boot .servers-table tbody tr > *,
@@ -604,13 +609,13 @@
 @media (max-width: 560px) {
   .servers-crt {
     padding: 10px;
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale));
   }
 
   .servers-key {
     min-width: 44px;
     padding: 4px 7px;
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale));
   }
 
   .servers-unit {

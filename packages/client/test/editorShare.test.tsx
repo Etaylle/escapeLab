@@ -209,7 +209,14 @@ describe('a test run', () => {
     vi.stubGlobal('window', { location: { origin: 'http://lab', pathname: '/' } });
     const bar = (toEditor: (() => void) | null): string =>
       renderToStaticMarkup(
-        <TopBar roomCode="QXT4" seed={null} running={null} status="open" toEditor={toEditor} />,
+        <TopBar
+          roomCode="QXT4"
+          seed={null}
+          running={null}
+          status="open"
+          toEditor={toEditor}
+          onSettings={noop}
+        />,
       );
     expect(bar(noop)).toContain(
       '<button class="topbar-editor" aria-label="Zurück zum Editor">' +

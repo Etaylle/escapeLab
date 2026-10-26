@@ -113,7 +113,7 @@
   padding: 0;
   list-style: none;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale));
 }
 
 .escape-mate {
@@ -599,7 +599,7 @@
  * No strobe, no shake, the red edge held still; the fades shorter, the card
  * without its flourish.
  */
-@media (prefers-reduced-motion: reduce) {
+:where([data-motion='reduce']) {
   .vignette,
   .world-wrap.alarm-strobe::after,
   .world-wrap.alarm-shake .world-canvas,

@@ -6,8 +6,19 @@ import type { GraphCensus } from './world/audioCount.js';
 import type { LightProbe } from './world/gl/path.js';
 import type { MusicProbe } from './world/music.js';
 import type { RadioRender, VoiceProbe as RadioProbe } from './world/radioVoice.js';
+import type { MinimapLayout } from './world/render/frame.js';
+import type { GoalDot } from './world/render/hud.js';
 import type { PassStats } from './world/render/profile.js';
 import type { SpatialProbe } from './world/spatial.js';
+
+/**
+ * The minimap as the frame draws it (world/render/hud.ts): its corner, cell and size in device
+ * pixels, the density, and the goal it points at, in tiles.
+ */
+export interface MinimapProbe extends MinimapLayout {
+  dpr: number;
+  goal: GoalDot[];
+}
 
 /**
  * What the lab sounds like now: the beds of the rooms round the player (world/ambience.ts),
@@ -38,6 +49,8 @@ export interface CameraProbe {
   x: number;
   y: number;
   scale: number;
+  /** how far it looks ahead of the avatar as it walks, in tiles (world/sim.ts `leadOn`) */
+  lead: { x: number; y: number };
 }
 
 /**
@@ -54,6 +67,12 @@ export interface Probes {
   resetFrames?: () => void;
   /** the world's camera, for what a tile looks like on the canvas */
   readonly camera?: CameraProbe;
+  /** where your avatar stands as this page steers it, in tiles (world/sim.ts) */
+  readonly self?: { x: number; y: number };
+  /** the avatar's footfalls so far, walking and sprinting (world/sim.ts): their pace is timed */
+  readonly footfalls?: number;
+  /** the minimap and the goal it points at; null while it is off */
+  readonly minimap?: MinimapProbe | null;
   /** the voice links, their states and who speaks (voice/mesh.ts) */
   readonly voice?: VoiceProbe;
   /** the way the world's light takes, WebGL or Canvas, and the picture's luma (world/gl/path.ts) */

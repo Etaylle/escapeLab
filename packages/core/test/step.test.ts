@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, initialState, parseMission, stepAllowed } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
-import { MAX_STEP } from '../src/map.js';
+import {
+  MAX_STEP,
+  SPRINT_FACTOR,
+  STEP_MARGIN,
+  UPDATES_PER_SECOND,
+  WALK_SPEED,
+} from '../src/map.js';
 
 /**
  * Two rooms split by a wall at x=4, with a door at (4,2) that opens only
@@ -80,5 +86,44 @@ describe('stepAllowed', () => {
   it('lets whoever a door shut on step out of it, but not on into the wall', () => {
     expect(step(shut, [4.5, 2.5], [5.5, 2.5])).toBe(true);
     expect(step(shut, [4.5, 2.5], [4.5, 1.5])).toBe(false);
+  });
+});
+
+describe('the step guard and the sprint', () => {
+  /** One update's step at `factor` times the walk, about 12 updates a second, in tiles. */
+  const stepAt = (factor: number): number => (WALK_SPEED * factor) / UPDATES_PER_SECOND;
+
+  it('bounds a step by what a sprint at 12 updates a second needs, plus the old margin', () => {
+    expect(SPRINT_FACTOR).toBe(1.3);
+    expect(stepAt(SPRINT_FACTOR)).toBeCloseTo(0.455, 9);
+    expect(MAX_STEP).toBeCloseTo(0.455 + 1.15, 9);
+    // The walk's bound was 1.5: its step of 0.35 and the same margin.
+    expect(stepAt(1) + STEP_MARGIN).toBeCloseTo(1.5, 9);
+    expect(MAX_STEP - (stepAt(1) + STEP_MARGIN)).toBeCloseTo(stepAt(SPRINT_FACTOR - 1), 9);
+  });
+
+  it('takes a sprinted step, and a sprint’s burst after some lag, over open floor', () => {
+    expect(step(shut, [1.5, 2.5], [1.5 + stepAt(SPRINT_FACTOR), 2.5])).toBe(true);
+    expect(step(shut, [1.5, 2.5], [1.5 + stepAt(SPRINT_FACTOR) + STEP_MARGIN, 2.5])).toBe(true);
+    expect(step(shut, [1.5, 2.5], [1.5 + 1.6, 2.5])).toBe(true);
+  });
+
+  it('refuses a jump at twice the walk — its burst, or two sprint bounds at once', () => {
+    const doubled = stepAt(2) + STEP_MARGIN;
+    expect(doubled).toBeCloseTo(1.85, 9);
+    expect(doubled).toBeGreaterThan(MAX_STEP);
+    // Over the open floor of the middle row: only the length can refuse it.
+    expect(step(shut, [1.5, 2.5], [1.5 + doubled, 2.5])).toBe(false);
+    expect(step(shut, [1.5, 2.5], [1.5 + 2 * MAX_STEP, 2.5])).toBe(false);
+    // The same jump split in two sprinted bursts goes, each within the bound.
+    expect(step(shut, [1.5, 2.5], [1.5 + doubled / 2, 2.5])).toBe(true);
+  });
+
+  it('keeps checking every 0.2 tiles along the way: a sprint’s burst cannot cut a pillar', () => {
+    // Within the bound, but through the pillar at (6,3) for half a tile …
+    expect(Math.hypot(1.1, 1.1)).toBeLessThanOrEqual(MAX_STEP);
+    expect(step(shut, [5.5, 3.9], [6.6, 2.8])).toBe(false);
+    // … while the same burst a row up, over the floor beside it, goes.
+    expect(step(shut, [5.5, 2.9], [6.6, 1.8])).toBe(true);
   });
 });

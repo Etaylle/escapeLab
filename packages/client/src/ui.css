@@ -14,6 +14,11 @@
   --warn: #fbbf24;
   --danger: #f87171;
   --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  /*
+   * How large the HUD's, the book's, the devices' and the notepad's text stands against its
+   * normal size: the settings' „Textgröße" sets it on the root (settings.ts).
+   */
+  --text-scale: 1;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
@@ -449,7 +454,7 @@ button.link:hover {
 }
 
 .countdown {
-  font-size: 30px;
+  font-size: calc(30px * var(--text-scale));
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
   letter-spacing: 2px;
@@ -487,7 +492,7 @@ button.link:hover {
 }
 
 .panel-label {
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   letter-spacing: 2px;
   color: var(--accent);
   font-family: var(--mono);
@@ -619,7 +624,7 @@ button.link:hover {
 /* --- sync & end --------------------------------------------------------------------------------------- */
 
 .big-button {
-  font-size: 20px;
+  font-size: calc(20px * var(--text-scale));
   font-weight: 700;
   letter-spacing: 1px;
   padding: 24px;
@@ -840,7 +845,7 @@ button.link:hover {
 
 .sabotage-clock {
   font-family: var(--mono);
-  font-size: 26px;
+  font-size: calc(26px * var(--text-scale));
   font-variant-numeric: tabular-nums;
   color: #fff;
 }
@@ -856,7 +861,7 @@ button.link:hover {
   align-items: center;
   gap: 8px;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale));
 }
 
 .panel-pip {
@@ -896,7 +901,7 @@ button.link:hover {
 .maze-label text {
   fill: var(--muted);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: calc(11px * var(--text-scale));
 }
 
 .maze-wall line {
@@ -930,7 +935,7 @@ button.link:hover {
 }
 
 .maze-btn {
-  font-size: 20px;
+  font-size: calc(20px * var(--text-scale));
   border-radius: 10px;
 }
 
@@ -985,7 +990,7 @@ button.link:hover {
   gap: 10px;
   text-align: left;
   padding: 8px 12px;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale));
 }
 
 .chat-key {
@@ -997,7 +1002,7 @@ button.link:hover {
   background: var(--panel-2);
   border: 1px solid var(--line-2);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: calc(11px * var(--text-scale));
   color: var(--muted);
 }
 
@@ -1260,7 +1265,7 @@ button.link:hover {
   border: 1px solid currentColor;
   border-radius: 999px;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: calc(11px * var(--text-scale));
   white-space: nowrap;
 }
 
@@ -1284,7 +1289,7 @@ button.link:hover {
   gap: 14px;
   flex-wrap: wrap;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   color: var(--muted);
 }
 
@@ -1389,7 +1394,7 @@ button.link:hover {
   background: var(--danger);
   border-color: var(--danger);
   text-shadow: none;
-  font-size: 36px;
+  font-size: calc(36px * var(--text-scale));
   animation: final-pulse 0.5s infinite;
 }
 
@@ -1452,7 +1457,7 @@ button.link:hover {
 
 .stage-goal h1 {
   margin: 4px 0 0;
-  font-size: 20px;
+  font-size: calc(20px * var(--text-scale));
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
 }
 
@@ -1460,17 +1465,17 @@ button.link:hover {
   display: block;
   margin-top: 2px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   color: var(--warn);
 }
 
 .stage-top .countdown {
   padding: 4px 12px;
-  font-size: 24px;
+  font-size: calc(24px * var(--text-scale));
 }
 
 .stage-top .countdown.final {
-  font-size: 28px;
+  font-size: calc(28px * var(--text-scale));
 }
 
 /*
@@ -1489,7 +1494,7 @@ button.link:hover {
   border-radius: 10px;
   background: #0b1519;
   color: var(--text);
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale));
   line-height: 1.45;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   animation: on-air 7s ease forwards;
@@ -1521,7 +1526,7 @@ button.link:hover {
 
 @media (max-width: 560px) {
   .radio-banner {
-    font-size: 13px;
+    font-size: calc(13px * var(--text-scale));
   }
 }
 
@@ -1535,7 +1540,7 @@ button.link:hover {
   background: #15120a;
   color: #fde68a;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale));
   letter-spacing: 1px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   animation: on-air 3.5s ease forwards;
@@ -1570,7 +1575,7 @@ button.link:hover {
   display: flex;
   align-items: baseline;
   gap: 7px;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale));
 }
 
 .hud-me .hud-name {
@@ -1593,7 +1598,7 @@ button.link:hover {
 
 .hud-radio {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   color: var(--muted);
   max-width: 320px;
   overflow: hidden;
@@ -1605,7 +1610,7 @@ button.link:hover {
   padding: 5px 12px;
   border-radius: 8px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
 }
 
 /* ── info panel ─────────────────────────────────────────────────────────── */
@@ -1765,14 +1770,14 @@ button.link:hover {
 
 .manual-section h3 {
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale));
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--text);
 }
 
 .manual-section p {
-  font-size: 15px;
+  font-size: calc(15px * var(--text-scale));
 }
 
 .manual-rules {
@@ -1780,7 +1785,7 @@ button.link:hover {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 15px;
+  font-size: calc(15px * var(--text-scale));
 }
 
 .manual-rules li::marker {
@@ -1796,7 +1801,7 @@ button.link:hover {
 .manual-table table {
   border-collapse: collapse;
   min-width: 100%;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale));
 }
 
 .manual-table th,
@@ -1809,7 +1814,7 @@ button.link:hover {
 
 .manual-table th {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   color: var(--muted);
   background: var(--bg-2);
 }
@@ -1839,7 +1844,7 @@ button.link:hover {
   height: 38px;
   display: grid;
   place-items: center;
-  font-size: 22px;
+  font-size: calc(22px * var(--text-scale));
 }
 
 /* ── edgework chip ──────────────────────────────────────────────────────── */
@@ -1865,13 +1870,13 @@ button.link:hover {
 }
 
 .edgework-label {
-  font-size: 9px;
+  font-size: calc(9px * var(--text-scale));
   letter-spacing: 0.5px;
   color: var(--muted);
 }
 
 .edgework-serial {
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale));
   font-weight: 700;
   letter-spacing: 1px;
 }
@@ -1879,7 +1884,7 @@ button.link:hover {
 .edgework-lamps {
   display: flex;
   gap: 8px;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   white-space: nowrap;
 }
 
@@ -1896,7 +1901,7 @@ button.link:hover {
   display: flex;
   align-items: center;
   gap: 3px;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
 }
 
 .edgework-cell {
@@ -2199,7 +2204,7 @@ button.link:hover {
 
 .hud-idle {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: calc(11px * var(--text-scale));
   color: var(--muted);
 }
 
@@ -2309,7 +2314,7 @@ button.link:hover {
 .notepad-title {
   margin-right: auto;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: calc(11px * var(--text-scale));
   font-weight: 700;
   letter-spacing: 2px;
 }
@@ -2320,7 +2325,7 @@ button.link:hover {
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.45);
   color: var(--ink);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
 }
 
 .notepad-head button:hover:not(:disabled) {
@@ -2328,19 +2333,27 @@ button.link:hover {
   box-shadow: none;
 }
 
-/* Ruled paper; the lines scroll along with the text. */
+/*
+ * Ruled paper; the lines scroll along with the text, and their pitch grows with it (the text
+ * size of the settings, `--text-scale`): seven lines whatever the size.
+ */
 .notepad-text {
-  height: 168px;
+  --rule: calc(24px * var(--text-scale));
+  height: calc(7 * var(--rule));
   padding: 3px 12px 6px;
   border: none;
   outline: none;
   resize: none;
   background:
-    repeating-linear-gradient(to bottom, transparent 0 23px, rgba(35, 63, 120, 0.22) 23px 24px),
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 calc(var(--rule) - 1px),
+      rgba(35, 63, 120, 0.22) calc(var(--rule) - 1px) var(--rule)
+    ),
     #faf4e2;
   background-attachment: local;
   color: #1d2a3f;
-  font: 14px/24px var(--mono);
+  font: calc(14px * var(--text-scale)) / var(--rule) var(--mono);
 }
 
 .notepad-text:focus-visible {
@@ -2355,7 +2368,7 @@ button.link:hover {
   margin: 0;
   padding: 4px 12px 6px;
   color: #9a3412;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
 }
 
 /* Narrow: across the bottom of the world, and above the steering pad where there is one. */
@@ -2532,7 +2545,7 @@ button.link:hover {
 
 .signal-stage {
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale));
   letter-spacing: 0.5px;
   color: var(--accent);
 }
@@ -2565,7 +2578,7 @@ button.link:hover {
 }
 
 .signal-word {
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale));
   line-height: 1.2;
   text-align: center;
 }
@@ -2621,7 +2634,7 @@ button.link:hover {
 }
 
 .signal-key .signal-word {
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
 }
 
 /* Each console's keys under its name, for the audience. */
@@ -2634,7 +2647,7 @@ button.link:hover {
 .signal-console-name {
   margin: 0;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   letter-spacing: 2px;
   color: var(--muted);
 }
@@ -2810,7 +2823,7 @@ button.link:hover {
   display: flex;
   gap: 6px;
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale));
   line-height: 1;
   color: var(--muted);
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);

@@ -135,7 +135,7 @@
     0 1px 2px rgba(0, 0, 0, 0.6);
   color: #1d252d;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   font-weight: 700;
   letter-spacing: 2px;
   text-transform: uppercase;
@@ -204,7 +204,7 @@
   gap: 8px;
   min-width: 0;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: calc(11px * var(--text-scale));
   letter-spacing: 1.5px;
 }
 
@@ -286,7 +286,7 @@
 /* A word stamped into the metal. */
 .device-engraving {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: calc(10px * var(--text-scale));
   font-weight: 700;
   letter-spacing: 2px;
   text-transform: uppercase;
@@ -563,7 +563,7 @@ button.feel-reject {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
+:where([data-motion='reduce']) {
   .device-led--red .device-lamp,
   .circuit-short .device-lamp--red {
     animation: none;
@@ -657,7 +657,7 @@ button.feel-reject {
     0 1px 0 rgba(255, 255, 255, 0.08);
   color: #1b2a1a;
   font-family: var(--mono);
-  font-size: 18px;
+  font-size: calc(18px * var(--text-scale));
   font-weight: 800;
   letter-spacing: 2px;
   text-align: center;
@@ -719,7 +719,7 @@ button.feel-reject {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
+:where([data-motion='reduce']) {
   .maze-marker--bump-odd,
   .maze-marker--bump-even {
     animation: marker-calm 120ms step-end;
@@ -781,7 +781,7 @@ button.feel-reject {
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-@media (prefers-reduced-motion: reduce) {
+:where([data-motion='reduce']) {
   .keypad-key,
   .memory-key,
   .maze-btn,
@@ -922,7 +922,7 @@ button.feel-reject {
   outline-offset: 8px;
 }
 
-@media (prefers-reduced-motion: reduce) {
+:where([data-motion='reduce']) {
   .big-button.sync-button {
     transition: none;
   }
@@ -1006,7 +1006,7 @@ button.feel-reject {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
+:where([data-motion='reduce']) {
   .circuit-flash {
     animation-duration: 120ms;
   }
@@ -1080,7 +1080,7 @@ button.feel-reject {
 .circuit-number {
   padding-top: 4px;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale));
   font-weight: 700;
   line-height: 16px;
   text-align: center;
@@ -1309,7 +1309,7 @@ button.feel-reject {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
+:where([data-motion='reduce']) {
   .circuit-wire--snapped .cable-half--left,
   .circuit-wire--snapped .cable-half--right {
     animation-duration: 120ms;
@@ -1403,7 +1403,7 @@ button.feel-pressed .pliers-arm {
 .circuit-volts {
   padding-top: 4px;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale));
   font-weight: 700;
   line-height: 16px;
   text-align: right;
@@ -1627,14 +1627,14 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
 .gauge-number {
   fill: #2b2a27;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: calc(11px * var(--text-scale));
   font-weight: 700;
 }
 
 .gauge-unit {
   fill: #4a4740;
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale));
   font-weight: 700;
 }
 
@@ -1686,7 +1686,7 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
 .circuit-unit {
   padding-bottom: 8px;
   font-family: var(--mono);
-  font-size: 16px;
+  font-size: calc(16px * var(--text-scale));
   font-weight: 800;
   color: var(--amber);
   text-shadow: 0 0 6px var(--amber-glow);
@@ -1727,7 +1727,7 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
   color: #e6edf3;
   font-family: var(--mono);
-  font-size: 18px;
+  font-size: calc(18px * var(--text-scale));
   font-weight: 800;
   transform: translateY(var(--press));
   touch-action: manipulation;
@@ -1795,7 +1795,7 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
     #efe9d8;
   color: #2a2620;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   clip-path: polygon(
     0 0,
     100% 0,
@@ -1820,7 +1820,7 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
   margin-bottom: 4px;
   padding-bottom: 4px;
   border-bottom: 1px dashed rgba(42, 38, 32, 0.45);
-  font-size: 10px;
+  font-size: calc(10px * var(--text-scale));
   font-weight: 700;
   letter-spacing: 2px;
   text-align: center;
@@ -1863,7 +1863,7 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
+:where([data-motion='reduce']) {
   .circuit-log-new {
     animation-duration: 100ms;
   }
@@ -1879,7 +1879,7 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
 .circuit-console-name {
   margin: 0;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   letter-spacing: 2px;
   color: var(--engrave);
 }
@@ -1946,7 +1946,7 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
     inset 0 2px 4px rgba(0, 0, 0, 0.8);
   color: #3d4750;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: calc(11px * var(--text-scale));
   font-weight: 800;
   letter-spacing: 2px;
 }
@@ -2172,7 +2172,7 @@ button.signal-key.feel-pressed {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
+:where([data-motion='reduce']) {
   .signal-strip .signal-sign > .signal-glyph:not(.signal-glyph--dark),
   .signal-glyph--fading {
     animation-duration: 100ms;
@@ -2200,7 +2200,7 @@ button.signal-key.feel-pressed {
     0 1px 2px rgba(0, 0, 0, 0.6);
   color: #1d252d;
   font-family: var(--mono);
-  font-size: 16px;
+  font-size: calc(16px * var(--text-scale));
   font-weight: 800;
   text-align: center;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
@@ -2240,7 +2240,7 @@ button.signal-key.feel-pressed {
 .signal-console-name {
   margin: 0;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   letter-spacing: 2px;
   color: var(--engrave);
 }

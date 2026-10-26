@@ -294,7 +294,7 @@ export function airtimeMs(text: string): number | null {
  */
 function speak(engine: Engine, id: string, clip: Clip, at: number, opens: boolean): Speaking {
   const { ctx } = engine;
-  const radio = radioChain(ctx, engine.master, VOICE_LEVEL);
+  const radio = radioChain(ctx, engine.radio, VOICE_LEVEL);
   const keyed = opens ? at + OPEN_S : at;
   const start = keyed + KEY_S;
   const end = start + clip.buffer.duration;

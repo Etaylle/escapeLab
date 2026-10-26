@@ -32,6 +32,7 @@ import { createRoomMessage, JoinScreen, keepName } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
 import { GameScreen } from './screens/Game.js';
 import { EndScreen } from './screens/End.js';
+import { SettingsPanel } from './screens/Settings.js';
 import { SpectateScreen } from './screens/Spectate.js';
 
 function difficultyLabel(id: Difficulty): string {
@@ -101,14 +102,16 @@ interface TopBarProps {
   status: Connection['status'];
   /** leaves the room for the editor, where it came from the editor's test run; else null */
   toEditor: (() => void) | null;
+  /** opens the settings (screens/Settings.tsx) */
+  onSettings: () => void;
 }
 
 /**
  * The bar over every screen: the room's code and seed, the way back to the
- * editor for the host of a test run, the running mission, the sound and the
- * connection.
+ * editor for the host of a test run, the running mission, the sound — the
+ * quick switch — and the gear for the settings, and the connection.
  */
-export function TopBar({ roomCode, seed, running, status, toEditor }: TopBarProps) {
+export function TopBar({ roomCode, seed, running, status, toEditor, onSettings }: TopBarProps) {
   const [sound, setSound] = useState(() => !isMuted());
   return (
     <header className="topbar">
@@ -138,6 +141,14 @@ export function TopBar({ roomCode, seed, running, status, toEditor }: TopBarProp
         }}
       >
         <Icon name={sound ? 'speaker' : 'speaker-off'} />
+      </button>
+      <button
+        className="settings-toggle"
+        title="Einstellungen"
+        aria-label="Einstellungen"
+        onClick={onSettings}
+      >
+        <Icon name="gear" />
       </button>
       <span className={`conn conn-${status}`}>
         {status === 'open' ? '●' : '○'}
@@ -425,6 +436,8 @@ export function App({ boot }: { boot: EditorBoot }) {
   // The mission editor, another page off the join screen; the booklet opens over it.
   const editor = useEditorPage(boot);
   const testRun = useTestRun(conn);
+  // The settings, over whatever screen is up; nothing under them pauses.
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const contentRef = useRef<HTMLElement>(null);
   // How the run ended, on this screen: the world plays it before the end screen opens.
   const finale = useFinale(conn.view ?? conn.spectatorView);
@@ -472,7 +485,9 @@ export function App({ boot }: { boot: EditorBoot }) {
         running={running}
         status={conn.status}
         toEditor={fromEditor ? testRun.back : null}
+        onSettings={() => setSettingsOpen(true)}
       />
+      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
       {conn.error !== null && (
         <div className="banner error" role="alert">
           {conn.error}

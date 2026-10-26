@@ -33,7 +33,7 @@
 }
 
 .relay-order-text {
-  font-size: 24px;
+  font-size: calc(24px * var(--text-scale));
   line-height: 1.25;
   color: #fff;
   overflow-wrap: anywhere;
@@ -57,7 +57,7 @@
 .relay-count {
   min-width: 2ch;
   font-family: var(--mono);
-  font-size: 26px;
+  font-size: calc(26px * var(--text-scale));
   font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -83,7 +83,7 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
+:where([data-motion='reduce']) {
   .relay-count--final {
     animation: none;
   }
@@ -117,7 +117,7 @@
 
 .relay-progress {
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale));
   color: var(--muted);
 }
 
@@ -149,7 +149,7 @@
 
 .relay-name {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--accent);
@@ -161,7 +161,7 @@
 .relay-dial button {
   min-height: 52px;
   font-family: var(--mono);
-  font-size: 18px;
+  font-size: calc(18px * var(--text-scale));
   font-weight: 800;
 }
 
@@ -201,7 +201,7 @@
 .relay-manual summary {
   cursor: pointer;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   letter-spacing: 2px;
   color: var(--muted);
 }
@@ -216,6 +216,6 @@
   }
 
   .relay-order-text {
-    font-size: 20px;
+    font-size: calc(20px * var(--text-scale));
   }
 }

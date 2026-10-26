@@ -18,6 +18,7 @@ import {
   type PointerEvent,
 } from 'react';
 import { SIMON_COLORS, type PuzzleView, type SimonColor } from '@escapelab/core';
+import { reducedMotion } from '../settings.js';
 import {
   buttonThunk,
   dialDetent,
@@ -37,20 +38,15 @@ export const PRESS_MS = 80;
 export const REJECT_MS = 160;
 /** How long after a press an alarm is still that press's fault. */
 export const BLAME_MS = 1500;
-/** Under `prefers-reduced-motion: reduce`, the longest anything moves, in ms. */
+/** Under reduced motion (settings.ts: „Weniger Bewegung"), the longest anything moves, in ms. */
 export const CALM_MS = 120;
 /** How long a colour key sounds its tone as it goes down, in s. */
 const PRESS_TONE_SECONDS = 0.25;
 
-/** Whether the window asks for reduced motion; without a window, nothing asks. */
-export function reducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
-
-/** How long something that takes `ms` moves here: CALM_MS at most where motion is reduced. */
+/**
+ * How long something that takes `ms` moves here: CALM_MS at most where motion is reduced —
+ * by the settings, or as the browser asks under „System".
+ */
 export function motionMs(ms: number, reduced: boolean = reducedMotion()): number {
   return reduced ? Math.min(ms, CALM_MS) : ms;
 }

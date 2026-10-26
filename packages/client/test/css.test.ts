@@ -141,7 +141,7 @@ describe('a phone held sideways', () => {
 describe('the main switch under reduced motion', () => {
   it('moves no grip, down or springing back up', () => {
     const coldopen = readFileSync(new URL('styles/coldopen.css', SRC), 'utf8');
-    const calm = blockAfter(coldopen, '@media (prefers-reduced-motion: reduce)') ?? '';
+    const calm = blockAfter(coldopen, ":where([data-motion='reduce'])") ?? '';
     expect(calm).toMatch(
       /\.lever \.lever-grip,\s*\.lever \.lever-unit--down \.lever-grip \{\s*transition:\s*none;/,
     );

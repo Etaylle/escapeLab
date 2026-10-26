@@ -119,22 +119,22 @@ html {
   }
 
   .stage-goal h1 {
-    font-size: 16px;
+    font-size: calc(16px * var(--text-scale));
   }
 
   .stage-top .countdown {
     padding: 2px 8px;
-    font-size: 18px;
+    font-size: calc(18px * var(--text-scale));
   }
 
   .stage-top .countdown.final {
-    font-size: 20px;
+    font-size: calc(20px * var(--text-scale));
   }
 
   /* A line on the air, cut short where it runs out; the radio line has it after. */
   .radio-banner {
     padding: 4px 10px;
-    font-size: 13px;
+    font-size: calc(13px * var(--text-scale));
     line-height: 1.35;
     white-space: nowrap;
     overflow: hidden;

@@ -28,13 +28,13 @@ const {
   pressed,
   pressSound,
   PRESS_MS,
-  reducedMotion,
   refusedSince,
   reject,
   REJECT_MS,
   seeing,
   usePressFeel,
 } = await import('../src/puzzles/feel.js');
+const { reducedMotion } = await import('../src/settings.js');
 
 /** A control as the kit sees it, its classes kept in a set. */
 function control(dataset: Record<string, string> = {}) {
@@ -293,7 +293,7 @@ describe('reduced motion', () => {
     expect(motionMs(600, false)).toBe(600);
   });
 
-  it('is asked of the window, as the stylesheets ask, and of nothing without one', () => {
+  it('is asked of the window under the settings’ „System", and of nothing without one', () => {
     expect(reducedMotion()).toBe(false);
     const asks = (query: string) => ({ matches: query === '(prefers-reduced-motion: reduce)' });
     vi.stubGlobal('window', { matchMedia: asks });

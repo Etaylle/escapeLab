@@ -7,6 +7,7 @@ import { bootEditor, sessionStore, workOf, type EditorBoot } from './editor/sess
 import { registerServiceWorker, watchInstallOffer } from './pwa.js';
 import { opensRecording } from './record/path.js';
 import { RecordScreen } from './record/RecordScreen.js';
+import { startSettings } from './settings.js';
 import './ui.css';
 import './styles/notes.css';
 import './styles/servers.css';
@@ -26,7 +27,10 @@ import './styles/polish.css';
 import './styles/ux2.css';
 import './styles/putdown.css';
 import './styles/record.css';
+import './styles/settings.css';
 
+// The player's volumes, text size and motion apply before the first frame (settings.ts).
+startSettings();
 watchInstallOffer();
 // The worker caches the build; `vite` serves none, and a worker would stand in its way.
 if (import.meta.env.PROD) {

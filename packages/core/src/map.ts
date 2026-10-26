@@ -55,12 +55,25 @@ export function shutDoors(map: MapDef, state: GameState): Set<string> {
   );
 }
 
+/** How fast an avatar walks, in tiles a second: the client's world/sim.ts walks it at this. */
+export const WALK_SPEED = 4.2;
+/** How much faster than walking an avatar runs while its player sprints (Shift held). */
+export const SPRINT_FACTOR = 1.3;
+/** About how many position updates a client sends a second. */
+export const UPDATES_PER_SECOND = 12;
 /**
- * The longest step an avatar takes between two position updates, in tiles:
- * clients walk 4.2 tiles and send about 12 updates a second, so a step is
- * about 0.35, and a burst after some lag stays below this.
+ * What a burst after some lag may carry beyond one update's step, in tiles: the slack the
+ * guard always gave a walking avatar (1.5 tiles a message against a walk's 0.35).
  */
-export const MAX_STEP = 1.5;
+export const STEP_MARGIN = 1.15;
+
+/**
+ * The longest step an avatar takes between two position updates, in tiles: a sprinting
+ * client runs 5.46 tiles and sends about 12 updates a second, so a step is about 0.455, and a
+ * burst after some lag stays below that plus STEP_MARGIN — about 1.6. A client running at
+ * twice the walk would need 1.85 for the same burst, and is refused.
+ */
+export const MAX_STEP = (WALK_SPEED * SPRINT_FACTOR) / UPDATES_PER_SECOND + STEP_MARGIN;
 /** How finely a step is checked along its way, in tiles. */
 const STEP_SAMPLE = 0.2;
 

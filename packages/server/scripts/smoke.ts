@@ -44,13 +44,18 @@ import { join } from 'node:path';
 import WebSocket from 'ws';
 import {
   canSee,
+  MAX_STEP,
   moduleFor,
   NO_CREDITS,
   NOTE_READ,
   noteSpot,
   parseMission,
   POWER_OUT,
+  SPRINT_FACTOR,
+  STEP_MARGIN,
   TOKENS,
+  UPDATES_PER_SECOND,
+  WALK_SPEED,
   walkable as floorFree,
   type ConsoleId,
   type Credits,
@@ -419,8 +424,6 @@ function bfsPath(
   return null;
 }
 
-/** How fast an avatar walks, tiles a second, as the client steers it (client world/sim.ts). */
-const WALK_TILES_PER_SEC = 4.2;
 /** Tiles each player has walked so far, by player id, as `walkTo` streamed them. */
 const walked = new Map<string, number>();
 
@@ -432,9 +435,9 @@ function reportWalks(): void {
   const walks = crew.map((client) => {
     const tiles = walked.get(client.playerId ?? '') ?? 0;
     const name = client.view?.you.name ?? client.label;
-    return `${name} ${tiles} tiles (${Math.round(tiles / WALK_TILES_PER_SEC)} s)`;
+    return `${name} ${tiles} tiles (${Math.round(tiles / WALK_SPEED)} s)`;
   });
-  console.log(`  walked: ${walks.join(', ')} at ${WALK_TILES_PER_SEC} tiles a second`);
+  console.log(`  walked: ${walks.join(', ')} at ${WALK_SPEED} tiles a second`);
 }
 
 /**
@@ -558,6 +561,50 @@ async function walkTo(client: TestClient, to: Tile): Promise<void> {
     return mine !== undefined && Math.hypot(mine.x - (to[0] + 0.5), mine.y - (to[1] + 0.5)) < 0.05;
   });
   console.log(`✓ ${client.label}: walked to ${to.join(',')}`);
+}
+
+/** How often a client sends its position, ms (client world/stream.ts). */
+const UPDATE_MS = 80;
+/** How far a sprinting avatar runs between two of those updates, in tiles. */
+const SPRINT_STEP = (WALK_SPEED * SPRINT_FACTOR * UPDATE_MS) / 1000;
+/** A burst after some lag at a sprint: its step at 12 updates a second and the guard's margin. */
+const SPRINT_BURST = (WALK_SPEED * SPRINT_FACTOR) / UPDATES_PER_SECOND + STEP_MARGIN;
+
+/** Waits until the positions stream has `client` at (x, y): the server took the step. */
+async function echoedAt(client: TestClient, x: number, y: number): Promise<void> {
+  const id = client.playerId ?? '';
+  await client.untilPositions(`echo at ${x.toFixed(2)},${y.toFixed(2)}`, (p) => {
+    const mine = p[id];
+    return mine !== undefined && Math.hypot(mine.x - x, mine.y - y) < 0.01;
+  });
+}
+
+/**
+ * A sprinted stretch down the Flur, open floor from the lever at (11,7) east to (20,7), as a
+ * client streams it: an update every 80 ms, each 1.3 times a walk's step, then one burst
+ * after lag on the way back — longer than a walk's burst may be (1.5 tiles), within the
+ * sprint's (MAX_STEP). The server has to take every one: its echo lands where each ended.
+ */
+async function sprintTheFlur(client: TestClient): Promise<void> {
+  await walkTo(client, [11, 7]);
+  const from = { x: 11.5, y: 7.5 };
+  const to = { x: 20.5, y: 7.5 };
+  const legs = Math.ceil((to.x - from.x) / SPRINT_STEP);
+  for (let i = 1; i <= legs; i++) {
+    client.sendPos(from.x + ((to.x - from.x) * i) / legs, from.y, true);
+    await sleep(UPDATE_MS);
+  }
+  await echoedAt(client, to.x, to.y);
+  console.log(
+    `✓ ${client.label} sprinted the Flur: ${legs} updates of ${SPRINT_STEP.toFixed(3)} tiles, ` +
+      'every one taken',
+  );
+  const burst = Math.min(1.6, SPRINT_BURST);
+  assert(burst > 1.5 && burst <= MAX_STEP,
+    `a sprint's burst of ${burst.toFixed(2)} tiles lies past the walk's 1.5, within ${MAX_STEP}`);
+  client.sendPos(to.x - burst, to.y, true);
+  await echoedAt(client, to.x - burst, to.y);
+  console.log(`✓ ${client.label}: a sprint's burst after lag, ${burst.toFixed(2)} tiles, taken`);
 }
 
 /**
@@ -1822,6 +1869,9 @@ assert(dark.map?.stations.find((s) => s.puzzleId === leverDef.id)?.status === 'a
 // to it, then throw it together; the note of the last shift pinned beside it is read there.
 await runLever();
 await readTheLeverNote();
+// The sprint (Shift): Ben runs the lit Flur at 1.3 times the walk, and the server's step guard
+// takes it — a burst after lag included — while no drone patrols yet.
+await sprintTheFlur(crew[1]);
 
 // Station 2: the Notstrom-Kasten, the fuse box in the Maschinenraum and the meter in the Flur,
 // its rules in the book in the Archiv. Ben reads them and the Laborkennung, then lets Anna in.

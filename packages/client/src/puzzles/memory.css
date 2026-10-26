@@ -28,7 +28,7 @@
   border-radius: 12px;
   background: #0b1117;
   font-family: var(--mono);
-  font-size: 76px;
+  font-size: calc(76px * var(--text-scale));
   font-weight: 700;
   line-height: 1;
   color: var(--accent);
@@ -47,7 +47,7 @@
   border-radius: 12px;
   background: linear-gradient(180deg, #16202a, #0b1117);
   font-family: var(--mono);
-  font-size: 34px;
+  font-size: calc(34px * var(--text-scale));
   font-weight: 700;
   line-height: 1;
 }
@@ -64,7 +64,7 @@
   background: rgba(88, 27, 27, 0.9);
   color: #fecaca;
   font-family: var(--mono);
-  font-size: 18px;
+  font-size: calc(18px * var(--text-scale));
   font-weight: 700;
   letter-spacing: 2px;
   text-transform: uppercase;

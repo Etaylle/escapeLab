@@ -22,7 +22,7 @@
   width: min(100%, 340px);
   margin: 14px auto 6px;
   padding: 1.7em 1.3em 1.5em;
-  font-size: 17px;
+  font-size: calc(17px * var(--text-scale));
   border-radius: 2px;
   background:
     repeating-linear-gradient(

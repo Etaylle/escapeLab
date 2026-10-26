@@ -198,12 +198,18 @@ describe('the beds as they play', () => {
     time,
   });
 
-  /** The beds' out-stages: the gains wired straight into the duck bus. */
+  /**
+   * The beds' out-stages: the gains wired straight into the beds' bus — which goes into the
+   * duck bus first, before the music's, as the duck bus goes into the master gain first.
+   */
   function bedOuts(ctx: FakeContext): FakeGain[] {
     const gains = ctx.all<FakeGain>('gain');
+    const into = (target: FakeGain | undefined): FakeGain[] =>
+      gains.filter((g) => target !== undefined && g.outputs.includes(target));
     const master = gains.find((g) => g.outputs.includes(ctx.destination));
-    const duck = gains.find((g) => master !== undefined && g.outputs.includes(master));
-    return gains.filter((g) => duck !== undefined && g.outputs.includes(duck));
+    const [duck] = into(master);
+    const [beds] = into(duck);
+    return into(beds);
   }
 
   /** The loops playing now: looping buffer sources started and not stopped. */

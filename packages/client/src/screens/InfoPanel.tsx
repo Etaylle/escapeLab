@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ManualKind, MapView, PlayerView } from '@escapelab/core';
+import { keyName, useSettings } from '../settings.js';
 import { toBring } from '../world/markers.js';
 import { Icon, type IconName } from './Icon.js';
 
@@ -10,20 +11,25 @@ interface Props {
 
 type Tab = 'auftrag' | 'karte' | 'steuerung';
 
-const CONTROLS: readonly (readonly [string, string])[] = [
-  ['W A S D / Pfeile', 'Laufen'],
-  ['E', 'Bedienen, lesen, durchsuchen, aufschließen, aufnehmen oder einsetzen'],
-  ['E oder ein Schritt beim Lesen', 'Weglegen, ein Buch zuklappen'],
-  ['Esc', 'Zurücktreten, weglegen, Notizblock einstecken'],
-  ['← → beim Lesen', 'Blättern'],
-  ['Q', 'Getragenes Objekt ablegen — so sind Übergaben möglich'],
-  ['Klick auf die Welt', 'Ping für alle setzen'],
-  ['C, dann 1–8', 'Schnellchat'],
-  ['V halten', 'Sprechen — das Mikrofon wird in der Lobby aktiviert'],
-  ['N', 'Notizblock — auch neben Buch und Pult, bleibt für diesen Raum gespeichert'],
-  ['M', 'Minikarte ein- und ausblenden'],
-  ['I oder H', 'Dieses Info-Fenster'],
-];
+/** The keys and what they do, the talk key as the settings have it (`talkKey`). */
+export function controlsOf(talkKey: string): (readonly [string, string])[] {
+  return [
+    ['W A S D / Pfeile', 'Laufen'],
+    ['Shift halten', 'Sprinten — auf dem Touchscreen „Sprint" neben dem Steuerkreuz'],
+    ['E', 'Bedienen, lesen, durchsuchen, aufschließen, aufnehmen oder einsetzen'],
+    ['E oder ein Schritt beim Lesen', 'Weglegen, ein Buch zuklappen'],
+    ['Esc', 'Zurücktreten, weglegen, Notizblock einstecken'],
+    ['← → beim Lesen', 'Blättern'],
+    ['Q', 'Getragenes Objekt ablegen — so sind Übergaben möglich'],
+    ['Klick auf die Welt', 'Ping für alle setzen'],
+    ['C, dann 1–8', 'Schnellchat'],
+    [`${keyName(talkKey)} halten`, 'Sprechen — das Mikrofon wird in der Lobby aktiviert'],
+    ['N', 'Notizblock — auch neben Buch und Pult, bleibt für diesen Raum gespeichert'],
+    ['M', 'Minikarte ein- und ausblenden'],
+    ['I oder H', 'Dieses Info-Fenster'],
+    ['⚙ in der Kopfleiste', 'Einstellungen: Lautstärke, Sprechtaste, Textgröße, Bewegung'],
+  ];
+}
 
 const KIND_NAMES: Record<ManualKind, string> = {
   book: 'Buch',
@@ -61,6 +67,27 @@ export function Legend({ map }: { map: MapView }) {
         </div>
       ))}
     </dl>
+  );
+}
+
+/** The keys and what they do, the talk key as the settings have it. */
+function KeyList() {
+  const { talkKey } = useSettings();
+  return (
+    <div className="info-body">
+      <dl className="keylist">
+        {controlsOf(talkKey).map(([keys, what]) => (
+          <div key={keys} className="keyrow">
+            <dt>{keys}</dt>
+            <dd>{what}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="muted">
+        Im Dunkeln reicht die Sicht nur so weit wie der eigene Lichtkegel. Pfeile am Bildrand
+        zeigen, wo das nächste Ziel liegt.
+      </p>
+    </div>
   );
 }
 
@@ -155,22 +182,7 @@ export function InfoPanel({ view, onClose }: Props) {
           <div className="info-body">{view.map !== null && <Legend map={view.map} />}</div>
         )}
 
-        {tab === 'steuerung' && (
-          <div className="info-body">
-            <dl className="keylist">
-              {CONTROLS.map(([keys, what]) => (
-                <div key={keys} className="keyrow">
-                  <dt>{keys}</dt>
-                  <dd>{what}</dd>
-                </div>
-              ))}
-            </dl>
-            <p className="muted">
-              Im Dunkeln reicht die Sicht nur so weit wie der eigene Lichtkegel. Pfeile am
-              Bildrand zeigen, wo das nächste Ziel liegt.
-            </p>
-          </div>
-        )}
+        {tab === 'steuerung' && <KeyList />}
       </div>
     </div>
   );

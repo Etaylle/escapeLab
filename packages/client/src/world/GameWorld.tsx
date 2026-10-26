@@ -9,10 +9,11 @@ import {
   type PlayerView,
   type PuzzleView,
 } from '@escapelab/core';
-import { useMedia, useNow } from '../hooks.js';
-import { addProbes } from '../probes.js';
+import { useNow } from '../hooks.js';
+import { addProbes, type MinimapProbe } from '../probes.js';
 import type { CoachMark } from '../puzzles/coach.js';
 import { TalkButton } from '../screens/Voice.js';
+import { useReducedMotion } from '../settings.js';
 import { VoiceContext } from '../voice/useVoice.js';
 import { useAlarm, useAlarmClasses, worldHornDue, type Alarm } from './alarm.js';
 import { bedCount, bedProbe, hearRooms, startAmbience, stopAmbience } from './ambience.js';
@@ -44,7 +45,7 @@ import { blackoutCue, FLICKER_MS, REVEAL_MS, SEQUENCE_MS } from './coldOpen.js';
 import { doorTurned } from './doors.js';
 import { drawsFrame } from './drawRate.js';
 import { escaping, useEscapeSince, useEscapeSounds } from './escape.js';
-import { REDUCED_MOTION, useFinaleSounds, type FinaleCue } from './finale.js';
+import { useFinaleSounds, type FinaleCue } from './finale.js';
 import { runLight } from './frameLight.js';
 import { frameTrace, traceRequested, type FrameTrace } from './frameTrace.js';
 import { watchInsets, type Insets } from './insets.js';
@@ -63,12 +64,22 @@ import {
   type RenderKit,
   type WorldMap,
 } from './render/frame.js';
+import { minimapGoal, minimapLayout } from './render/hud.js';
 import { dropLight } from './render/light.js';
 import { PING_LIFETIME_MS } from './render/overlays.js';
 import { drawFrame } from './render/pipeline.js';
 import { passProfile, profileRequested } from './render/profile.js';
 import { roomArea, roomsComingOn } from './rooms.js';
-import { easeOthers, follow, followServer, MOVE_KEYS, newSim, walk, type Sim } from './sim.js';
+import {
+  easeOthers,
+  follow,
+  followServer,
+  MOVE_KEYS,
+  newSim,
+  SPRINT_KEY,
+  walk,
+  type Sim,
+} from './sim.js';
 import { HEAR_EVERY_S, hearCrew, spatialProbe, stopSpatial } from './spatial.js';
 import { streamPositions } from './stream.js';
 import { useWorldTip } from './useWorldTip.js';
@@ -308,10 +319,13 @@ function onKeyDown(loop: Loop, e: KeyboardEvent, setWheelOpen: SetWheel): void {
   pressKey(loop, key, e, setWheelOpen);
 }
 
-/** A key going down: a step held, a job done once, the chat wheel shut or a phrase said. */
+/**
+ * A key going down: a step or the sprint held, a job done once, the chat wheel shut or a
+ * phrase said.
+ */
 function pressKey(loop: Loop, key: string, e: KeyboardEvent, setWheelOpen: SetWheel): void {
   const job = KEY_JOBS.get(key);
-  if (key in MOVE_KEYS) {
+  if (key in MOVE_KEYS || key === SPRINT_KEY) {
     e.preventDefault();
     if (!loop.live.current.locked) {
       loop.sim.keys.add(key);
@@ -376,14 +390,30 @@ function listen(loop: Loop, setWheelOpen: SetWheel): () => void {
 }
 
 /**
- * `?trace=1`: the walkthrough reads the last frame durations off the page, the camera, and
- * what the lab sounds like — the beds, the music, the radio's voice, the partner's place — and
- * can render the radio's chain offline.
+ * Where the minimap lies on the canvas and the goal it points at, device pixels, as the frame
+ * draws them (render/hud.ts); null while it is off or no map is up.
  */
-function traceFrames(sim: Sim): { trace: FrameTrace; drop: () => void } | null {
+function minimapOf(loop: Loop): MinimapProbe | null {
+  const { canvas, sim, insets } = loop;
+  const view = loop.live.current.view;
+  if (view.map === null || !sim.minimap || canvas.clientWidth === 0) {
+    return null;
+  }
+  const dpr = canvas.width / canvas.clientWidth;
+  const layout = minimapLayout(view.map, canvas.width, canvas.height, dpr, insets);
+  return { ...layout, dpr, goal: minimapGoal(view.map, view.you.id) };
+}
+
+/**
+ * `?trace=1`: the walkthrough reads the last frame durations off the page, the camera, your
+ * avatar's footfalls, the minimap and its goal, and what the lab sounds like — the beds, the
+ * music, the radio's voice, the partner's place — and can render the radio's chain offline.
+ */
+function traceFrames(loop: Loop): { trace: FrameTrace; drop: () => void } | null {
   if (!traceRequested(location.search)) {
     return null;
   }
+  const { sim } = loop;
   const trace = frameTrace();
   const drop = addProbes({
     get frames() {
@@ -391,7 +421,16 @@ function traceFrames(sim: Sim): { trace: FrameTrace; drop: () => void } | null {
     },
     resetFrames: () => trace.resetFrames(),
     get camera() {
-      return { x: sim.draw.x, y: sim.draw.y, scale: sim.scale };
+      return { x: sim.draw.x, y: sim.draw.y, scale: sim.scale, lead: { ...sim.lead } };
+    },
+    get self() {
+      return { x: sim.self.x, y: sim.self.y };
+    },
+    get footfalls() {
+      return sim.footfalls;
+    },
+    get minimap() {
+      return minimapOf(loop);
     },
     get audio() {
       const sound = { music: musicProbe(), voice: voiceProbe(), spatial: spatialProbe() };
@@ -442,8 +481,9 @@ function step(loop: Loop, dt: number, map: WorldMap): void {
   } else {
     followServer(sim, loop.positions.current, map, youId, run);
   }
-  if (walk(sim, map, dt, loop.live.current.locked)) {
-    footstep();
+  const footfall = walk(sim, map, dt, loop.live.current.locked);
+  if (footfall !== null) {
+    footstep(footfall === 'sprint');
   }
   easeOthers(sim, positionsOf(loop.positions.current, run), youId, dt);
   slideDoors(sim, map);
@@ -452,10 +492,10 @@ function step(loop: Loop, dt: number, map: WorldMap): void {
   }
   lightWhenClear(loop, map);
   hearTheClock(loop, map);
-  // camera: follow your avatar, or sit still over the whole lab; a radio
-  // line growing the objective bar moves it as gently
+  // camera: follow your avatar, a little ahead of it as it walks, or sit still
+  // over the whole lab; a radio line growing the objective bar moves it as gently
   if (!spectator) {
-    follow(sim, dt, loop.insets.top);
+    follow(sim, dt, loop.insets.top, loop.live.current.reduced);
   }
   sim.time += dt;
 }
@@ -739,7 +779,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
     // An audience connection watches only: no controls, no position stream.
     const unlisten = props.spectator ? null : listen(loop, setWheelOpen);
     const posTimer = streamPositions(sim, props.spectator, (msg) => live.current.send(msg));
-    const traced = traceFrames(sim);
+    const traced = traceFrames(loop);
     const profiled = profilePasses(kit);
     const stop = runFrames(loop, traced?.trace ?? null);
     const ears = setInterval(() => hearTheLab(loop), HEAR_MS);
@@ -773,11 +813,57 @@ interface ControlsProps {
   setWheelOpen: SetWheel;
 }
 
+/** The pad's buttons: the key each holds down, its arrow, and the way it goes. */
+const PAD_KEYS = [
+  ['w', '↑', 'up'],
+  ['a', '←', 'left'],
+  ['d', '→', 'right'],
+  ['s', '↓', 'down'],
+] as const;
+
+/** A key held down while a finger rests on its button, let go as the finger lifts or slides off. */
+type Press = (key: string, down: boolean) => void;
+
+/**
+ * The steering pad of a touch screen, and beside it „Sprint": held, the avatar runs, as with
+ * Shift on a keyboard (world.css shows both under a finger only).
+ */
+function TouchPad({ press }: { press: Press }) {
+  const held = (key: string) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      e.preventDefault();
+      press(key, true);
+    },
+    onPointerUp: () => press(key, false),
+    onPointerLeave: () => press(key, false),
+    onPointerCancel: () => press(key, false),
+  });
+  return (
+    <>
+      <div className="world-dpad" role="group" aria-label="Steuerkreuz">
+        {PAD_KEYS.map(([key, glyph, dir]) => (
+          <button
+            key={key}
+            className={`world-dpad-btn world-dpad-btn--${dir}`}
+            {...held(key)}
+            aria-label={dir}
+          >
+            {glyph}
+          </button>
+        ))}
+      </div>
+      <button className="world-sprint" aria-label="Sprinten" {...held(SPRINT_KEY)}>
+        Sprint
+      </button>
+    </>
+  );
+}
+
 /** The control cluster over the world: the pad, the action buttons, chat and talk. */
 function WorldControls({ refs, live, view, wheelOpen, setWheelOpen }: ControlsProps) {
   /** what this player carries now; while there is something, a touch screen offers to drop it */
   const load = view.map === null ? undefined : carriedItem(view.map, view.you.id);
-  const press = (key: string, down: boolean): void => {
+  const press: Press = (key, down) => {
     const sim = refs.simRef.current;
     if (sim === null) {
       return;
@@ -790,30 +876,7 @@ function WorldControls({ refs, live, view, wheelOpen, setWheelOpen }: ControlsPr
   };
   return (
     <div className="world-controls" ref={refs.controlsRef}>
-      <div className="world-dpad" role="group" aria-label="Steuerkreuz">
-        {(
-          [
-            ['w', '↑', 'up'],
-            ['a', '←', 'left'],
-            ['d', '→', 'right'],
-            ['s', '↓', 'down'],
-          ] as const
-        ).map(([key, glyph, dir]) => (
-          <button
-            key={key}
-            className={`world-dpad-btn world-dpad-btn--${dir}`}
-            onPointerDown={(e) => {
-              e.preventDefault();
-              press(key, true);
-            }}
-            onPointerUp={() => press(key, false)}
-            onPointerLeave={() => press(key, false)}
-            aria-label={dir}
-          >
-            {glyph}
-          </button>
-        ))}
-      </div>
+      <TouchPad press={press} />
       {/*
        * The action button, and over it while hands are full the one that puts
        * the load down: a touch screen's Q (world.css shows it there only).
@@ -845,7 +908,7 @@ function WorldControls({ refs, live, view, wheelOpen, setWheelOpen }: ControlsPr
       >
         💬<span className="world-key"> [C]</span>
       </button>
-      {/* Held to talk, on a touch screen with the microphone on; V does it on a keyboard. */}
+      {/* Held to talk, on a touch screen with the microphone on; the talk key on a keyboard. */}
       <TalkButton className="world-talk">🎤</TalkButton>
     </div>
   );
@@ -897,7 +960,7 @@ function useWorld(props: Props): WorldState {
   const interactRef = useRef<(() => void) | null>(null);
   const dropRef = useRef<(() => void) | null>(null);
   const voice = useContext(VoiceContext);
-  const reduced = useMedia(REDUCED_MOTION);
+  const reduced = useReducedMotion();
   // The escape (escape.ts) and the ending (finale.ts), as this screen lives them.
   const escapeSince = useEscapeSince(view.map?.exit ?? null, view.startedAt);
   const live = useLatest<Live>({

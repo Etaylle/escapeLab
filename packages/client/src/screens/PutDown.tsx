@@ -1,7 +1,6 @@
 import { useContext, useEffect, useRef, useState } from 'react';
-import { useMedia } from '../hooks.js';
+import { useReducedMotion } from '../settings.js';
 import { NotepadContext } from '../noting.js';
-import { REDUCED_MOTION } from '../world/finale.js';
 
 /**
  * Putting things down instead of closing windows: a source read on the spot — a book, a
@@ -71,7 +70,7 @@ export interface Shown<T> {
  * goes, `sound` plays for it once, under reduced motion too. `sound` stays the same function.
  */
 export function usePutDown<T>(item: T | null, sound: (last: T) => void): Shown<T> | null {
-  const still = useMedia(REDUCED_MOTION);
+  const still = useReducedMotion();
   const kept = useRef<PutDownState<T>>({ last: null, held: null });
   kept.current = putDownStep(kept.current, item, still);
   const held = kept.current.held;

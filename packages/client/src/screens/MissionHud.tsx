@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { chatText, type PlayerPosition, type PlayerView, type RunEvent } from '@escapelab/core';
 import { useMedia } from '../hooks.js';
 import { airIcon, fromControl, LAST_SHIFT } from '../radio.js';
+import { keyName, useSettings } from '../settings.js';
 import { useVoice, type Voice } from '../voice/useVoice.js';
 import type { KnownPositions } from '../world/movement.js';
 import type { ChatLine } from '../world/render/frame.js';
@@ -92,18 +93,20 @@ function chatArrival(line: ChatLine): number {
 }
 
 /**
- * The switch between talking by the key — V, or the talk button on a touch
- * screen — and a microphone that stays open, for a crew that wants it so.
+ * The switch between talking by the key — V unless the settings name another,
+ * or the talk button on a touch screen — and a microphone that stays open, for
+ * a crew that wants it so.
  */
 function MicSwitch({ voice, touch }: { voice: Voice; touch: boolean }) {
   const { mesh, state } = voice;
+  const talk = keyName(useSettings().talkKey);
   return (
     <button
       className="hud-info hud-mic"
       aria-pressed={state.open}
       onClick={() => mesh.setOpen(!state.open)}
     >
-      <Icon name="mic" /> {state.open ? 'Mikro: offen' : withKey('Mikro: Taste', 'V', touch)}
+      <Icon name="mic" /> {state.open ? 'Mikro: offen' : withKey('Mikro: Taste', talk, touch)}
     </button>
   );
 }

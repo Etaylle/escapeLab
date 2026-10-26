@@ -38,6 +38,7 @@ import {
   WOOD,
   type Rgb,
 } from './palette.js';
+import { SHEET_ON_FLOOR, SHEET_ON_WALL } from './notes.js';
 import { surfaceTile } from './surfaces.js';
 
 // art.ts — the props and the crew: capsule scientists in a dark 1980s lab, drawn in Canvas2D
@@ -2282,14 +2283,14 @@ export function drawPinnedNote(ctx: CanvasRenderingContext2D, o: PinnedNoteOpts)
     if (o.facing === null) {
       ctx.rotate(-0.32);
       softEllipse(ctx, 0, 0, 0.42, 0.34, READ_BLUE, call, 'lighter');
-      ctx.translate(0, -0.16);
+      ctx.translate(0, -SHEET_ON_FLOOR);
       drawNoteSheet(ctx, 0.36, 0.3);
       return;
     }
     // Local +y points away from the wall, toward the floor; the sheet hangs on the face.
     ctx.rotate(o.facing - Math.PI / 2);
     softEllipse(ctx, 0, -0.36, 0.4, 0.34, READ_BLUE, call, 'lighter');
-    ctx.translate(0, -0.56);
+    ctx.translate(0, -SHEET_ON_WALL);
     ctx.rotate(-0.07);
     drawNoteSheet(ctx, 0.3, 0.38);
     drawPin(ctx);

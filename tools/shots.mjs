@@ -126,6 +126,17 @@
  * up quiet until the Leitstelle names the next place (nudge.png,
  * nudge-phone.png): its line in both banners, spoken by its recording.
  *
+ * Settings, minimap, sprint: after info-panel.png the host opens the settings with the gear in
+ * the top bar (settings.png) — the clock has to run on under them, Esc has to close them.
+ * minimap-goal.png shows the world with the minimap pointing at the goal, a pulsing dot at each
+ * console of the station up next, which has to show in the goal's colour on the canvas where the
+ * traced page puts it (`window.__escapelab.minimap`), unless the crew stands on it. Then the host
+ * runs out along the longest open stretch from its tile, Shift held — sprint.png catches the run,
+ * the camera leading — and walks back: the log gives both paces and both footfall rates, timed
+ * in the page (`self`, `footfalls`), and the run fails unless the sprint is about 1.3 times the
+ * walk and its footfalls come faster. The Serverraum's terminal (servers-a.png) has to end its
+ * table on BRAUCHT, what each service needs running first, and the rack has to show none of it.
+ *
  * The base URL is the Vite dev server by default (`pnpm dev`), or the
  * production server (`pnpm build && pnpm start`, http://localhost:3001) as in
  * CI. The host's page opens with `?trace=1`, so the world keeps its frame
@@ -390,6 +401,8 @@ const SIZES = [
 
 /** Avatar speed in tiles per second, as the client walks. */
 const SPEED = 4.2;
+/** How much faster it runs with Shift held (core map.ts SPRINT_FACTOR). */
+const SPRINT_FACTOR = 1.3;
 /** How close to a tile centre a step has to land, in tiles. */
 const STEP_TOLERANCE = 0.15;
 /** How long a frame sample runs, in ms. */
@@ -854,7 +867,7 @@ async function clickText(page, text) {
  * crew has come across it.
  */
 function eavesdrop(page) {
-  const seen = { view: null, pos: null, drones: {}, dronesAt: null };
+  const seen = { view: null, pos: null, crew: {}, drones: {}, dronesAt: null };
   page.on('websocket', (socket) => {
     if (!socket.url().endsWith('/ws')) {
       return;
@@ -865,6 +878,7 @@ function eavesdrop(page) {
         seen.view = msg.view;
       }
       if (msg.kind === 'positions') {
+        seen.crew = msg.players;
         seen.drones = msg.drones;
         seen.dronesAt = Date.now();
       }
@@ -4486,15 +4500,36 @@ function tableSaid(rows) {
     .join(', ');
 }
 
+/** What each service needs running first, in the order of the table: the printed Netzplan. */
+const NEEDS = ['—', 'NETZ', 'NETZ', 'NETZ, DNS', 'AUTH, DB', 'AUTH, DNS'];
+
+/**
+ * The terminal's column BRAUCHT as its page shows it, for the log — the run fails unless it is
+ * the table's last and lists what each service needs, as NEEDS has it, and the rack has none.
+ */
+async function checkNeeds(terminal, rack) {
+  const screen = terminal.page.locator('.station-modal .servers-crt');
+  const heads = await screen.locator('.servers-table thead th').allInnerTexts();
+  const needs = await screen.locator('.servers-needs').allInnerTexts();
+  const onRack = await rack.page.locator('.station-modal .servers-needs').count();
+  const listed = heads.at(-1) === 'BRAUCHT' && JSON.stringify(needs) === JSON.stringify(NEEDS);
+  if (!listed || onRack > 0) {
+    fail(`servers: BRAUCHT reads ${heads.at(-1)} ${needs.join(' | ')}; ${onRack} on the rack`);
+  }
+  return listed ? `BRAUCHT ${needs.join(' | ')}` : `!! BRAUCHT missing (${heads.join(' ')})`;
+}
+
 /**
  * servers-a.png, servers-b.png: both panels at laptop size, the terminal's
- * screen scrolled in; each has to fit sideways at 1440×820, 1280×720 and on
- * a phone (420×760).
+ * screen scrolled in, its table's last column BRAUCHT listing what each
+ * service needs first (and none on the rack); each has to fit sideways at
+ * 1440×820, 1280×720 and on a phone (420×760).
  */
 async function captureServersConsoles({ terminal, rack }) {
   await sleep(1400); // past the panels' fade-in and the terminal's boot scroll
   await capture(terminal.page, 'servers-a.png');
   await capture(rack.page, 'servers-b.png');
+  const needs = await checkNeeds(terminal, rack);
   const sizes = [SIZES[0], { width: 1280, height: 720 }, SIZES[2]];
   const over = [];
   for (const player of [terminal, rack]) {
@@ -4510,7 +4545,7 @@ async function captureServersConsoles({ terminal, rack }) {
   }
   const table = tableSaid(terminal.seen.view.puzzle?.rows);
   console.log(
-    `servers-a.png      ${terminal.name} at ${seatOf(terminal)}: ${table}; ` +
+    `servers-a.png      ${terminal.name} at ${seatOf(terminal)}: ${table}; ${needs}; ` +
       `servers-b.png ${rack.name} at ${seatOf(rack)}; ` +
       (over.length === 0 ? 'both fit sideways at all three sizes' : `!! ${over.join(', ')}`),
   );
@@ -5938,6 +5973,257 @@ async function playPinnedOut(anna, ben, watcher) {
   }
 }
 
+/** Whether `promise` settles in time: true when it resolves, false when it rejects. */
+const settled = (promise) =>
+  promise.then(
+    () => true,
+    () => false,
+  );
+
+/** One of the settings' volumes as its row reads: „Funk 100". */
+const rowText = (text) => text.replace(/\s+/g, ' ').trim();
+
+/**
+ * settings.png: the gear in the top bar opens the settings over the running world — the three
+ * volumes, the talk key, the text size and less motion — and nothing pauses under them: the
+ * clock counts on. Esc closes them again. The run fails where no panel comes up, where it runs
+ * out sideways, where the clock stands still under it, or where Esc leaves it open.
+ */
+async function captureSettings(page) {
+  const clock = page.locator('.stage-top .countdown');
+  const ticking = await clock.isVisible();
+  await page.locator('.settings-toggle').click();
+  const card = page.locator('.settings-card');
+  if (!(await settled(card.waitFor({ timeout: 3000 })))) {
+    fail('settings: the gear in the top bar opened no panel');
+    return;
+  }
+  const before = ticking ? await textOf(clock) : null;
+  await sleep(1300);
+  const after = ticking ? await textOf(clock) : null;
+  const over = await sideways(page, '.settings-card');
+  await capture(page, 'settings.png');
+  const volumes = (await page.locator('.settings-volume').allInnerTexts()).map(rowText);
+  const key = await textOf(page.locator('.settings-kbd'));
+  const lit = await page.locator('.settings-option--on').allInnerTexts();
+  await page.keyboard.press('Escape');
+  const closed = await settled(card.waitFor({ state: 'hidden', timeout: 2000 }));
+  const stood = ticking && before === after;
+  const clockSaid = !ticking
+    ? 'no clock up'
+    : stood
+      ? `!! the clock stood at ${before}`
+      : `the clock ran on, ${before} → ${after}`;
+  console.log(
+    `settings.png       ${volumes.join(', ')}; talk key ${key}; ${lit.join(', ')}; ` +
+      clockSaid +
+      (closed ? '; Esc closed it' : '; !! Esc left it open') +
+      (over > 0 ? `; !! +${over}px sideways` : ''),
+  );
+  const wrong = [stood && 'the clock stood', !closed && 'Esc left it open', over > 0 && 'sideways'];
+  if (wrong.some(Boolean)) {
+    fail(`settings: ${wrong.filter(Boolean).join(', ')}`);
+  }
+}
+
+/** A colour as '#rrggbb', from its channels. */
+const hexOf = (rgb) => `#${rgb.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+
+/** Whether the channels `rgb` come out as the colour `hex`, give or take a little blending. */
+function looksLike(rgb, hex) {
+  const want = [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16));
+  return want.every((c, i) => Math.abs(c - (rgb[i] ?? 0)) <= 40);
+}
+
+/**
+ * minimap-goal.png: the world with its minimap pointing at the goal — the console(s) of the
+ * station up next, a pulsing dot each (client render/hud.ts). The traced page says where the
+ * minimap lies and what it points at (`window.__escapelab.minimap`); a dot has to show in the
+ * goal's colour on the canvas, unless somebody of the crew stands on it and their dot covers it.
+ * A world whose minimap points at nothing skips the shot.
+ */
+async function captureMinimapGoal({ name, page, seen }) {
+  const probe = await page.evaluate(() => globalThis.__escapelab?.minimap ?? null);
+  if (probe === null || probe.goal.length === 0) {
+    skip('minimap-goal.png', probe === null ? `${name}'s minimap is off` : 'no goal on it now');
+    return;
+  }
+  const spots = probe.goal.map((dot) => ({
+    x: Math.round(probe.ox + dot.x * probe.cell),
+    y: Math.round(probe.oy + dot.y * probe.cell),
+  }));
+  const colors = await page.evaluate((at) => {
+    const g = document.querySelector('.world-canvas')?.getContext('2d');
+    const rgbAt = ({ x, y }) => [...g.getImageData(x, y, 1, 1).data.slice(0, 3)];
+    return at.map((spot) => (g == null ? null : rgbAt(spot)));
+  }, spots);
+  await capture(page, 'minimap-goal.png');
+  const crew = Object.values(seen.crew ?? {});
+  const covered = (dot) => crew.some((p) => Math.hypot(p.x - dot.x, p.y - dot.y) < 0.75);
+  const shows = probe.goal.some((dot, i) => colors[i] !== null && looksLike(colors[i], dot.color));
+  const hidden = probe.goal.every(covered);
+  const where = probe.goal.map((dot) => `${dot.x - 0.5},${dot.y - 0.5}`).join(' and ');
+  console.log(
+    `minimap-goal.png   ${name}: ${probe.goal.length} goal dot(s) in ${probe.goal[0].color} at ` +
+      `${where}, ${probe.cell} px a cell; on the canvas ` +
+      `${colors.map((c) => (c === null ? 'nothing' : hexOf(c))).join(', ')}` +
+      (shows ? '' : hidden ? ' (under the crew’s dots)' : " !! none in the goal's colour"),
+  );
+  if (!shows && !hidden) {
+    fail('minimap-goal: no goal dot shows on the minimap');
+  }
+}
+
+/** The keys that walk one tile's way, by its step. */
+const WALK_KEYS = new Map([
+  ['1,0', 'd'],
+  ['-1,0', 'a'],
+  ['0,1', 's'],
+  ['0,-1', 'w'],
+]);
+
+/**
+ * The longest straight run of open floor out of `tile` — no wall, furniture, shut door or
+ * tile `avoid` names — as its step and its length in tiles.
+ */
+function longestRun(map, tile, avoid) {
+  const closed = new Set(map.doors.filter((d) => !d.open).map((d) => `${d.x},${d.y}`));
+  const solid = furniture(map);
+  const blocked = (key) => closed.has(key) || solid.has(key);
+  const open = (x, y) => map.tiles[y]?.[x] === '.' && !blocked(`${x},${y}`) && !avoid(x, y);
+  let best = null;
+  for (const [dx, dy] of [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ]) {
+    let tiles = 0;
+    while (open(tile.x + dx * (tiles + 1), tile.y + dy * (tiles + 1))) {
+      tiles += 1;
+    }
+    if (best === null || tiles > best.tiles) {
+      best = { dx, dy, tiles };
+    }
+  }
+  return best;
+}
+
+/**
+ * The avatar watched in the page for `ms`, frame by frame on the page's own clock: how far it
+ * went and when each footfall landed (the traced page's `self` and `footfalls`), and where the
+ * camera led it at the end.
+ */
+async function watchGait(page, ms) {
+  return page.evaluate(
+    (wait) =>
+      new Promise((resolve) => {
+        const probe = globalThis.__escapelab;
+        const from = { ...probe.self, t: globalThis.performance.now() };
+        const falls = [];
+        let count = probe.footfalls;
+        const tick = (now) => {
+          if (probe.footfalls !== count) {
+            count = probe.footfalls;
+            falls.push(now);
+          }
+          if (now - from.t < wait) {
+            globalThis.requestAnimationFrame(tick);
+          } else {
+            const to = { ...probe.self, t: now };
+            resolve({ from, to, falls, lead: probe.camera?.lead ?? null });
+          }
+        };
+        globalThis.requestAnimationFrame(tick);
+      }),
+    ms,
+  );
+}
+
+/**
+ * One leg of the sprint check: `keys` held for `ms`; from 120 ms in to `measureMs` the pace,
+ * in tiles a second, and the footfalls a second, from the time between the first and the last
+ * that landed meanwhile — then a shot, which `shoot` names, the keys still held — and the
+ * camera's lead as the watch ended.
+ */
+async function leg({ page }, keys, ms, measureMs, shoot) {
+  for (const key of keys) {
+    await page.keyboard.down(key);
+  }
+  const start = Date.now();
+  await sleep(120);
+  const { from, to, falls, lead } = await watchGait(page, Math.max(200, measureMs - 120));
+  if (shoot !== null) {
+    await capture(page, shoot);
+  }
+  await sleep(Math.max(0, start + ms - Date.now()));
+  for (const key of [...keys].reverse()) {
+    await page.keyboard.up(key);
+  }
+  walking.ms.set(page, (walking.ms.get(page) ?? 0) + (Date.now() - start));
+  await sleep(200); // the last update goes out
+  const pace = Math.hypot(to.x - from.x, to.y - from.y) / ((to.t - from.t) / 1000);
+  const span = falls.length < 2 ? null : (falls.at(-1) - falls[0]) / (falls.length - 1);
+  return { pace, steps: span === null ? null : 1000 / span, lead };
+}
+
+/**
+ * sprint.png: the player runs out along the longest straight stretch of open floor from where
+ * they stand, Shift held, and is shot halfway with the camera leading the run; then walks back
+ * to the same tile. The log gives both paces and both footfall rates; the run fails where the
+ * sprint is not about 1.3 times the walk, or its steps come no faster. Plates, the hatch and an
+ * unread Laborkennung stay off the stretch: nothing the walkthrough does later changes.
+ */
+async function captureSprint(player) {
+  const { name, page, seen } = player;
+  const map = seen.view?.map;
+  const home = tileOf(seen);
+  if (map == null || home === null) {
+    skip('sprint.png', `${name} stands on no map`);
+    return;
+  }
+  const sign = seen.view.presence.signSeen ? null : map.edgeworkSign;
+  const avoid = (x, y) =>
+    map.plates.some((p) => p.x === x && p.y === y) ||
+    (map.exit !== null && map.exit.x === x && map.exit.y === y) ||
+    (sign !== null && Math.hypot(sign.x - x, sign.y - y) < 2.5);
+  const run = longestRun(map, home, avoid);
+  if (run === null || run.tiles < 3) {
+    skip('sprint.png', `${name} has no 3 tiles of open floor in a line from ${home.x},${home.y}`);
+    return;
+  }
+  await stepTo(page, seen, home.x + 0.5, home.y + 0.5);
+  const out = WALK_KEYS.get(`${run.dx},${run.dy}`);
+  const back = WALK_KEYS.get(`${-run.dx},${-run.dy}`);
+  const outMs = ((run.tiles - 0.4) / (SPEED * SPRINT_FACTOR)) * 1000;
+  const sprint = await leg(player, [out, 'Shift'], outMs, Math.min(800, outMs - 150), 'sprint.png');
+  const away = whereIs(seen);
+  const gone = Math.hypot(away.x - (home.x + 0.5), away.y - (home.y + 0.5));
+  const backMs = (Math.max(0.3, gone - 0.2) / SPEED) * 1000;
+  const walk = await leg(player, [back], backMs, Math.min(900, backMs - 60), null);
+  await stepTo(page, seen, home.x + 0.5, home.y + 0.5);
+  reportSprint(name, run, sprint, walk);
+}
+
+/** The sprint check's line in the log, and its failure where the sprint is no sprint. */
+function reportSprint(name, run, sprint, walk) {
+  const fixed = (n, digits = 2) => (n === null ? '?' : n.toFixed(digits));
+  const ratio = sprint.pace !== null && walk.pace !== null ? sprint.pace / walk.pace : null;
+  const quicker = sprint.steps !== null && walk.steps !== null ? sprint.steps / walk.steps : null;
+  const lead = sprint.lead === null ? null : Math.hypot(sprint.lead.x, sprint.lead.y);
+  const fine = ratio !== null && ratio > 1.15 && ratio < 1.45 && quicker !== null && quicker > 1.1;
+  console.log(
+    `sprint.png         ${name} over ${run.tiles} tiles: ` +
+      `sprinting ${fixed(sprint.pace)} tiles/s, ` +
+      `walking ${fixed(walk.pace)} (×${fixed(ratio)}); footfalls ${fixed(sprint.steps, 1)}/s ` +
+      `against ${fixed(walk.steps, 1)}/s (×${fixed(quicker)}); camera ${fixed(lead)} tiles ahead` +
+      (fine ? '' : ' !! no sprint'),
+  );
+  if (!fine) {
+    fail(`sprint: ×${fixed(ratio)} the walk's pace, ×${fixed(quicker)} its footfalls`);
+  }
+}
+
 async function run() {
   mkdirSync(OUT, { recursive: true });
   if (CPU_SLOWDOWN > 1) {
@@ -6099,6 +6385,9 @@ async function run() {
   await sleep(400);
   await capture(host, 'info-panel.png');
   await host.keyboard.press('Escape');
+  await captureSettings(host);
+  await captureMinimapGoal(anna);
+  await captureSprint(anna);
 
   const watcherCtx = await browser.newContext({ viewport: SIZES[0] });
   const watcher = await openPage(watcherCtx, 'audience');

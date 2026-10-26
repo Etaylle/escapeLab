@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest';
 /**
  * Where a player asks for reduced motion, the devices shake nothing and move
  * nothing for longer than 120 ms (CALM_MS in puzzles/feel.ts). Their
- * stylesheets say so in their `prefers-reduced-motion: reduce` blocks: this
- * reads those blocks.
+ * stylesheets say so in their blocks for `data-motion="reduce"` on the root,
+ * which the settings set (settings.ts) — by the browser's own
+ * `prefers-reduced-motion` unless the player chose otherwise: this reads
+ * those blocks.
  */
 const SRC = new URL('../src/', import.meta.url);
 const SHEETS = [
@@ -19,7 +21,7 @@ const SHEETS = [
 function calmBlocks(css: string): string[] {
   const source = css.replace(/\/\*[\s\S]*?\*\//g, '');
   const blocks: string[] = [];
-  const head = /@media \(prefers-reduced-motion: reduce\)\s*\{/g;
+  const head = /:where\(\[data-motion='reduce'\]\)\s*\{/g;
   for (let match = head.exec(source); match !== null; match = head.exec(source)) {
     let depth = 1;
     let i = head.lastIndex;
@@ -90,7 +92,7 @@ describe('the devices, with reduced motion', () => {
 
   it('would notice a block that runs too long', () => {
     const [block = ''] = calmBlocks(
-      '@media (prefers-reduced-motion: reduce) {\n  .a { animation: x 0.4s; }\n}\n',
+      ":where([data-motion='reduce']) {\n  .a { animation: x 0.4s; }\n}\n",
     );
     expect(timesIn(block)).toEqual([400]);
     expect(rulesOf(block)[0]?.declarations.get('animation')).toBe('x 0.4s');

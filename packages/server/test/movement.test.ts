@@ -1,6 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseMission, walkable, type Mission, type ServerMessage } from '@escapelab/core';
+import {
+  parseMission,
+  SPRINT_FACTOR,
+  STEP_MARGIN,
+  UPDATES_PER_SECOND,
+  WALK_SPEED,
+  walkable,
+  type Mission,
+  type ServerMessage,
+} from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { walkTo, type Walker } from './walk.js';
 
@@ -176,6 +185,34 @@ describe('Room movement', () => {
     walkTo(room, anna, BY_THE_SCHOTT.x, BY_THE_SCHOTT.y);
     send(room, anna, runOf(anna), 14.9, 7.5);
     expect(broadcastSpot(ben, anna)).toEqual({ x: 14.9, y: 7.5 });
+    room.dispose();
+  });
+
+  it('takes a sprint down the Flur and its burst after lag, but no jump at twice the walk', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { room, anna, ben } = started();
+    walkTo(room, anna, BY_THE_SCHOTT.x, BY_THE_SCHOTT.y);
+    const run = runOf(anna);
+    /** A spot as the client streams it, to the hundredth of a tile. */
+    const sent = (x: number): number => Math.round(x * 100) / 100;
+    const stepAt = (factor: number): number => (WALK_SPEED * factor) / UPDATES_PER_SECOND;
+    // Six sprinted updates west along the Flur, about 12 a second.
+    let x = BY_THE_SCHOTT.x;
+    for (let i = 0; i < 6; i++) {
+      x = sent(x - stepAt(SPRINT_FACTOR));
+      send(room, anna, run, x, 7.5);
+    }
+    expect(broadcastSpot(ben, anna)).toEqual({ x, y: 7.5 });
+    // A lag burst at the sprint, 1.6 tiles: within its step and the margin, past the walk's 1.5.
+    expect(stepAt(SPRINT_FACTOR) + STEP_MARGIN).toBeGreaterThanOrEqual(1.6);
+    x = sent(x - 1.6);
+    send(room, anna, run, x, 7.5);
+    expect(broadcastSpot(ben, anna)).toEqual({ x, y: 7.5 });
+    expect(warn).not.toHaveBeenCalled();
+    // Twice the walk with the same burst is a teleport: refused, the old spot kept.
+    send(room, anna, run, sent(x - (stepAt(2) + STEP_MARGIN)), 7.5);
+    expect(broadcastSpot(ben, anna)).toEqual({ x, y: 7.5 });
+    expect(warn).toHaveBeenCalledTimes(1);
     room.dispose();
   });
 

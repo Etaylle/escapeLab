@@ -1191,6 +1191,30 @@ describe('the Serverraum', () => {
     expect(html).not.toMatch(/servers-unit|servers-switch|servers-led/);
   });
 
+  it('lists under BRAUCHT what each service needs running first, by the printed Netzplan', () => {
+    const html = panel(at('a', { rows: ROWS, log: LOG }));
+    const heads = [...html.matchAll(/<th scope="col">([A-Z]+)<\/th>/g)].map((m) => m[1]);
+    expect(heads).toEqual(['DIENST', 'STATUS', 'STROM', 'BRAUCHT']);
+    expect(cellsOf(html, 'servers-needs')).toEqual([
+      '—',
+      'NETZ',
+      'NETZ',
+      'NETZ, DNS',
+      'AUTH, DB',
+      'AUTH, DNS',
+    ]);
+    // Taken from the fixed graph, whatever state the rows are in.
+    const allUp = ROWS.map((row) => ({ ...row, running: true, code: null }));
+    expect(cellsOf(panel(at('a', { rows: allUp, log: [] })), 'servers-needs')).toEqual(
+      cellsOf(html, 'servers-needs'),
+    );
+  });
+
+  it('shows the rack nothing new: no BRAUCHT, no needs', () => {
+    const html = panel(at('b', { rack: RACK }));
+    expect(html).not.toMatch(/BRAUCHT|servers-needs/);
+  });
+
   it('offers a key for every command and every service, one that sends, and the prompt', () => {
     const html = panel(at('a'));
     expect([...html.matchAll(/data-cmd="([a-z]+)"/g)].map((m) => m[1])).toEqual([...COMMANDS]);

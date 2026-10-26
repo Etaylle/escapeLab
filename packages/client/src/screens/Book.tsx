@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import type { ManualHere, PuzzleView } from '@escapelab/core';
-import { useKeys, useMedia, useNow, useSwipe } from '../hooks.js';
+import { useKeys, useNow, useSwipe } from '../hooks.js';
 import {
   firstPageOf,
   leafFor,
@@ -14,6 +14,7 @@ import {
 } from '../pages.js';
 import { notedPart } from '../noting.js';
 import { READERS } from '../puzzles/index.js';
+import { useReducedMotion } from '../settings.js';
 import { Block } from './Manual.js';
 import { ReaderPanel } from './PuzzlePanel.js';
 import { Seal } from './Seal.js';
@@ -140,9 +141,6 @@ const FOOTER = 'ESCAPELAB · HANDBUCH · REV. 3';
 
 /** How long a leaf takes to turn over, in ms; styles/book.css times the motion by it. */
 const LEAF_MS = 450;
-
-/** Readers who asked for less motion see the page change without a leaf turning. */
-const STILL_QUERY = '(prefers-reduced-motion: reduce)';
 
 /** A label longer than this is set smaller on the cover, so it stays on one line. */
 const LONG_LABEL = 9;
@@ -406,7 +404,7 @@ interface Turning {
 function usePage(opening: number, total: number, spread: boolean) {
   const [page, setPage] = useState(opening);
   const [turning, setTurning] = useState<Turning | null>(null);
-  const still = useMedia(STILL_QUERY);
+  const still = useReducedMotion();
   useEffect(() => {
     if (turning === null) {
       return undefined;
