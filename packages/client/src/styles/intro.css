@@ -1,6 +1,6 @@
 /* ══ the run's opening: the card, the shot's bars, the title — and the game's title ══
  * world/intro/IntroOverlay.tsx over the world's canvas, inside the stage and as large as it;
- * Game.tsx's `game--film` while the opening shows the world as a film, which fades the HUD;
+ * Game.tsx's `game--hud-held` while the opening keeps the HUD out, which fades it;
  * Join.tsx's title, which comes on like a phosphor screen once a page load. Nothing here blurs
  * what lies behind it (css.test.ts), and every move gives way to a fade under reduced motion.
  */
@@ -168,21 +168,27 @@
   }
 }
 
-/* ── the HUD while the world shows as a film ───────────────────────────── */
+/* ── the HUD while the opening keeps it out ────────────────────────────── */
 
-/* Faded, never taken out: the stage keeps its size and the camera its place. */
-.game--film .stage-top,
-.game--film .hud,
-.game--film .world-controls,
-.game--film .coach {
-  opacity: 0;
-  pointer-events: none;
+/*
+ * Out of the picture through the film, a mission's name card and the title, never taken out:
+ * the stage keeps its size and the camera its place. It goes at once and comes back over 0.3 s
+ * (sequence.ts HUD_FADE_MS), under reduced motion too. The end of a run fades it its own way
+ * (finale.css).
+ */
+.game:not(.game--finale) .stage-top,
+.game:not(.game--finale) .hud,
+.game:not(.game--finale) .world-controls {
+  transition: opacity 0.3s ease;
 }
 
-.game .stage-top,
-.game .hud,
-.game .world-controls {
-  transition: opacity 0.4s ease;
+.game.game--hud-held .stage-top,
+.game.game--hud-held .hud,
+.game.game--hud-held .world-controls,
+.game.game--hud-held .coach {
+  opacity: 0;
+  transition: none;
+  pointer-events: none;
 }
 
 /* ── the game's title on the start screen ──────────────────────────────── */

@@ -138,6 +138,16 @@ export function revealed(since: number | null, now: number): boolean {
 }
 
 /**
+ * When what the click brings can be seen on this screen, epoch ms: the clock's start and the
+ * first line on the air — at the click of the sequence started at `since`, or where the run's
+ * opening keeps the HUD out past it, as the HUD comes back (`hudBack`); null while the power
+ * is on.
+ */
+export function clickSeenAt(since: number | null, hudBack: number | null): number | null {
+  return since === null ? null : Math.max(since + REVEAL_MS, hudBack ?? 0);
+}
+
+/**
  * The moment the lights went out on this screen, kept for the run: null
  * while they are on, then `darkSince` of the first view that had them out —
  * `cut` to the bang where the opening's shot ran then. A new run — a rematch —

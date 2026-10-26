@@ -158,8 +158,10 @@ function moved(box: Box, dy: number): Box {
 
 /**
  * The screen's own text over the world: room names, the arrows to what
- * to walk to, the hatch's sign, the E prompt, captions and chat. While the
- * run ends on screen only the room names stay: the lab is all there is to see.
+ * to walk to, the hatch's sign, the E prompt, captions and chat — the marks
+ * of play fading in with the HUD after the run's opening (`frame.hud`). While
+ * the run ends on screen only the room names stay: the lab is all there is to
+ * see.
  */
 function drawScreenText(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const view = frame.viewport;
@@ -179,11 +181,13 @@ function drawScreenText(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const arrows = markers.flatMap(({ at, captionWidth }) => markerBoxes(at, captionWidth, view.dpr));
   drawRoomNames(ctx, frame, { ...view, boxes: [...view.boxes, ...arrows] });
   drawExitSign(ctx, frame);
+  ctx.globalAlpha = frame.hud;
   drawEdgeMarkers(ctx, markers, view.dpr);
   const prompt = drawPrompt(ctx, frame, figure?.body ?? null);
   drawCaptions(ctx, frame, prompt);
   drawChatBubbles(ctx, frame);
   drawCarrying(ctx, frame);
+  ctx.globalAlpha = 1;
 }
 
 /** The open hatch's sign over it. */
@@ -306,21 +310,23 @@ function drawPrompt(ctx: CanvasRenderingContext2D, frame: Frame, figure: Box | n
 
 /**
  * „Spind entdeckt" over a source the crew has just come across, rising as
- * it fades — above the E prompt (`prompt`, its box), never on it.
+ * it fades — above the E prompt (`prompt`, its box), never on it — as far as
+ * the alpha it is drawn under lets it.
  */
 function drawCaptions(ctx: CanvasRenderingContext2D, frame: Frame, prompt: Box | null): void {
   const view = frame.viewport;
   const { dpr } = view;
+  const under = ctx.globalAlpha;
   for (const caption of frame.captions) {
     const age = (frame.time - caption.at) / CAPTION_SECONDS;
     const [sx, rawY] = toScreen(frame, caption.x, caption.y - 1 - 0.3 * age);
     const box = tagBox(ctx, caption.text, sx, Math.max(rawY, view.top + 24 * dpr), dpr);
     const ceiling = view.top + 13 * dpr;
     const dy = prompt === null ? 0 : shiftClear(box, prompt, TAG_AIR * dpr, ceiling);
-    ctx.globalAlpha = Math.min(1, age * 10, (1 - age) * 4);
+    ctx.globalAlpha = under * Math.min(1, age * 10, (1 - age) * 4);
     drawTag(ctx, caption.text, moved(box, dy), C.caption, dpr);
   }
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = under;
 }
 
 /** Where the speech bubble of `playerId` hangs, in tiles: over their head; none for nobody. */
@@ -354,7 +360,10 @@ function drawChatBubbles(ctx: CanvasRenderingContext2D, frame: Frame): void {
   }
 }
 
-/** One speech bubble with its tail at (sx, sy), fading out over the last fifth of its life. */
+/**
+ * One speech bubble with its tail at (sx, sy), fading out over the last fifth of its life — as
+ * far as the alpha it is drawn under lets it.
+ */
 function drawBubble(
   ctx: CanvasRenderingContext2D,
   frame: Frame,
@@ -367,7 +376,8 @@ function drawBubble(
   ctx.font = `600 ${12 * dpr}px system-ui, sans-serif`;
   const tw = ctx.measureText(text).width + 18 * dpr;
   const age = (frame.perf - line.at) / CHAT_LIFETIME_MS;
-  ctx.globalAlpha = age > 0.8 ? (1 - age) / 0.2 : 1;
+  const under = ctx.globalAlpha;
+  ctx.globalAlpha = under * (age > 0.8 ? (1 - age) / 0.2 : 1);
   ctx.fillStyle = C.bubble;
   ctx.beginPath();
   ctx.roundRect(sx - tw / 2, sy - 12 * dpr, tw, 22 * dpr, 7 * dpr);
@@ -380,7 +390,7 @@ function drawBubble(
   ctx.fill();
   ctx.fillStyle = C.bubbleInk;
   ctx.fillText(text, sx, sy + 4 * dpr);
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = under;
 }
 
 /**

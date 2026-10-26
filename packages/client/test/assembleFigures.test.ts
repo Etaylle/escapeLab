@@ -3,7 +3,13 @@ import type { PlayerView } from '@escapelab/core';
 import { worldText } from '../src/world/art.js';
 import { assembleFrame, type FrameSource, type Latest } from '../src/world/assemble.js';
 import type { FinaleCue } from '../src/world/finale.js';
-import type { IntroCue } from '../src/world/intro/sequence.js';
+import {
+  BARS_MS,
+  HUD_FADE_MS,
+  TITLE_FADE_MS,
+  TITLE_HOLD_MS,
+  type IntroCue,
+} from '../src/world/intro/sequence.js';
 import { newSim } from '../src/world/sim.js';
 import { fakeCanvas, FakePath2D } from './fakeCanvas.js';
 import { kitWith, TILES } from './frames.js';
@@ -204,6 +210,30 @@ describe('assembleFrame — the opening’s shot', () => {
     expect(free.minimap).not.toBeNull();
     expect(shot.camera.scale).toBeLessThan(free.camera.scale);
     expect(shot.camera.scale / free.camera.scale).toBeCloseTo(0.9, 2);
+  });
+
+  it('keeps the minimap and the marks out until the title has gone, then fades them in', () => {
+    const out = SINCE + 5000;
+    const at = (ms: number) => {
+      const source = opening({ outAt: out });
+      const { view } = source.live.current;
+      // The hatch open: an arrow points at it whenever the marks show.
+      const exit = { x: 20, y: 10, open: true, openedAt: 1, atExit: [] };
+      const map = view.map === null ? null : { ...view.map, exit };
+      source.live.current = { ...source.live.current, view: { ...view, map } };
+      vi.setSystemTime(out + ms);
+      return frameAt(source, 5 + ms / 1000);
+    };
+    // The bars gone and the crew free to walk again; the title still dissolving.
+    const walking = at(TITLE_HOLD_MS + BARS_MS);
+    expect(walking.hud).toBe(0);
+    expect(walking.minimap).toBeNull();
+    expect(walking.markers).toEqual([]);
+    const fading = at(TITLE_HOLD_MS + TITLE_FADE_MS + HUD_FADE_MS / 2);
+    expect(fading.hud).toBeCloseTo(0.5);
+    expect(fading.minimap).not.toBeNull();
+    expect(fading.markers).toHaveLength(1);
+    vi.setSystemTime(SINCE + 5000);
   });
 
   it('moves from its first frame, its ends held where the camera can look', () => {

@@ -180,6 +180,43 @@ describe('overlays — what lies over the world and its light', () => {
     expect(texts(drawn(frameWith({ markers: near })))).toEqual([]);
   });
 
+  it('fades the marks of play in with the HUD after the run’s opening, the room names not', () => {
+    const [phrase] = CHAT_PHRASE_IDS;
+    if (phrase === undefined) {
+      throw new Error('the chat needs a phrase for this test');
+    }
+    const crate: Item = {
+      id: 'crate',
+      label: 'KISTE',
+      x: 0,
+      y: 0,
+      carriedBy: 'p1',
+      delivered: false,
+      deliverTo: null,
+      requiredForTitle: null,
+    };
+    const log = drawn(
+      frameWith({
+        map: lab({ labels: [{ text: 'LABOR', x: 6, y: 2 }], items: [crate] }),
+        markers: [{ x: 9.5, y: 1.5, color: '#2dd4bf', label: 'STATION' }],
+        action: OPERATE,
+        captions: [{ x: 6.5, y: 4, text: 'Spind entdeckt', at: 0 }],
+        time: 0.5,
+        chats: [{ playerId: 'p1', phrase, at: 0 }],
+        perf: 200,
+        hud: 0.5,
+      }),
+    );
+    const alphaOf = (text: string): number | undefined =>
+      callEntries(log, 'fillText').find((call) => call.args[0] === text)?.alpha;
+    expect(alphaOf('LABOR')).toBe(1);
+    const marks = ['STATION 7m', '[E] Bedienen', 'Spind entdeckt', chatText(phrase)];
+    for (const mark of [...marks, '📦 KISTE — [Q] ablegen']) {
+      expect(alphaOf(mark)).toBe(0.5);
+    }
+    expect(setsOf(log, 'globalAlpha').at(-1)).toBe(1);
+  });
+
   it('covers the picture as far as the light has failed: the cold open’s, or the ending’s', () => {
     const cover = (parts: Partial<Frame>): unknown[] =>
       setsOf(drawn(frameWith(parts)), 'fillStyle').filter(

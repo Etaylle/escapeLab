@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { HUD_FADE_MS } from '../src/world/intro/sequence.js';
 
 /**
  * Nothing parses a stylesheet before the browser does, and a browser swallows
@@ -167,8 +168,21 @@ describe('the run’s opening', () => {
     expect(blockAfter(intro, '.intro-bar {')).toMatch(/height:\s*12%;/);
   });
 
-  it('fades the HUD while the world shows as a film, keeping its place', () => {
-    const faded = blockAfter(intro, '.game--film .stage-top,') ?? '';
-    expect(faded).toMatch(/opacity:\s*0;\s*pointer-events:\s*none;/);
+  const HELD = '.game.game--hud-held .stage-top,';
+  const BACK = '.game:not(.game--finale) .stage-top,';
+
+  it('takes the HUD out at once while the opening keeps it, keeping its place', () => {
+    const held = blockAfter(intro, HELD) ?? '';
+    expect(held).toMatch(/opacity:\s*0;\s*transition:\s*none;\s*pointer-events:\s*none;/);
+    // As specific as the fade back: it has to come after it to go at once.
+    expect(intro.indexOf(HELD)).toBeGreaterThan(intro.indexOf(BACK));
+  });
+
+  it('fades it back in over HUD_FADE_MS, under reduced motion too, the end left to its own', () => {
+    expect(blockAfter(intro, BACK)).toMatch(
+      new RegExp(`transition:\\s*opacity ${HUD_FADE_MS / 1000}s ease;`),
+    );
+    const calm = blockAfter(intro, ":where([data-motion='reduce'])") ?? '';
+    expect(calm).not.toMatch(/stage-top|\.hud\b|world-controls/);
   });
 });

@@ -32,7 +32,8 @@
  * load — the game's on the start screen, the mission's in the lobby
  * (lobby-title.png). Every run opens on a location card (intro-card.png): the
  * plant, the wing and the shift for a mission with an intro, a mission's name
- * without one. Blackout's intro shows the lab with its power on as a film:
+ * without one, the HUD out under it — a name card lets it back as it goes.
+ * Blackout's intro shows the lab with its power on as a film:
  * intro-pan.png once the loudspeakers' first line stands subtitled between the
  * two black bars, the skip beside it, the camera running across the lab — the
  * host's frames over the shot sampled for information alone. The host skips
@@ -49,8 +50,10 @@
  * the lights go out at once, long before the intro's own end, and the
  * mission's title lands — on the guest's phone between the bars of the shot
  * it cut (intro-title-phone.png), on the host's window at the bang after the
- * flicker (intro-title.png). Two seconds after the clock starts counting
- * comes blackout.png, the emergency lamps red. Then both go to the first station,
+ * flicker (intro-title.png), nothing of the HUD under either. On the host's
+ * window the HUD comes back once the title has gone, the clock flashing as it
+ * comes and mission control waiting for it. Two seconds after the clock comes
+ * into sight comes blackout.png, the emergency lamps red. Then both go to the first station,
  * a main switch — whoever is locked in let out over a plate first — and E
  * opens its panel for each (lever.png, every lamp lit, the player's own name
  * under the own lever). Where the view gives a press its expiry, the host throws alone:
@@ -1698,10 +1701,81 @@ function barsIn(page) {
 }
 
 /**
+ * How much of the HUD a traced page shows: the most of the objective bar, the crew's strip and
+ * the control cluster by their opacity (`page`), and of what the canvas draws of it, the
+ * minimap and the marks (`canvas`, the opening's probe; null without an opening).
+ */
+function hudOf(page) {
+  return page.evaluate(() => {
+    const shown = ['.stage-top', '.hud', '.world-controls'].flatMap((selector) => {
+      const element = document.querySelector(selector);
+      return element === null ? [] : [Number(globalThis.getComputedStyle(element).opacity)];
+    });
+    const intro = globalThis.__escapelab?.intro;
+    return { page: Math.max(0, ...shown), canvas: intro?.phase == null ? null : intro.hud };
+  });
+}
+
+/** Whether `hud` (from hudOf) shows nothing of the HUD. */
+const hudOut = (hud) => hud.page < 0.01 && (hud.canvas ?? 0) === 0;
+
+/** How long after the title has gone hudReturn looks for the clock's flash, ms. */
+const FLASH_LOOK_MS = 1200;
+
+/**
+ * Waits in a traced page for what the opening holds over its world to go — the title, or for
+ * `card`, a mission's name card — then for the HUD to come back whole: how much of the objective
+ * bar showed as it went (`atGone`), how long it took to come back (`ms`), whether the clock's
+ * digits flashed as it came (looked for up to FLASH_LOOK_MS on) and whether a radio line stood
+ * on the bar while the HUD was out. Null where it never came back within `limit` ms.
+ */
+function hudReturn(page, card = false, limit = 8000) {
+  return page.evaluate(
+    ([nameCard, most, look]) =>
+      new Promise((resolve) => {
+        const start = globalThis.performance.now();
+        const top = () => {
+          const bar = document.querySelector('.stage-top');
+          return bar === null ? 0 : Number(globalThis.getComputedStyle(bar).opacity);
+        };
+        const seen = { gone: null, atGone: null, whole: null, flashed: false, banner: false };
+        const step = () => {
+          const now = globalThis.performance.now();
+          const over = nameCard
+            ? document.querySelector('.intro-card') === null
+            : (globalThis.__escapelab?.intro?.title ?? 0) === 0;
+          if (seen.gone === null && over) {
+            seen.gone = now;
+            seen.atGone = top();
+          }
+          seen.banner ||= top() < 0.01 && document.querySelector('.radio-banner') !== null;
+          if (seen.gone !== null) {
+            seen.flashed ||= document.querySelector('.countdown--start') !== null;
+            seen.whole ??= top() >= 0.99 ? now : null;
+            if (seen.whole !== null && (seen.flashed || nameCard || now - seen.gone > look)) {
+              const { atGone, flashed, banner } = seen;
+              resolve({ atGone, ms: Math.round(seen.whole - seen.gone), flashed, banner });
+              return;
+            }
+          }
+          if (now - start > most) {
+            resolve(null);
+            return;
+          }
+          globalThis.requestAnimationFrame(step);
+        };
+        step();
+      }),
+    [card, limit, FLASH_LOOK_MS],
+  );
+}
+
+/**
  * intro-card.png: a run opens on the location card, on black — the plant, and for a mission
  * with an intro its wing and the shift with its time; a mission without one names itself
  * there. The card stands 1.5 s (2.5 s without an intro): waited for from before the run starts
- * and shot as soon as it is up whole. Fails where none comes up.
+ * and shot as soon as it is up whole, the HUD out under it; a mission's name card lets the HUD
+ * come back as it goes. Fails where none comes up, or the HUD shows under it or stays away.
  */
 async function captureIntroCard(player) {
   const up = await player.page
@@ -1723,8 +1797,23 @@ async function captureIntroCard(player) {
     return;
   }
   await capture(player.page, 'intro-card.png');
+  const hud = await hudOf(player.page);
   const lines = await player.page.locator('.intro-card p, .intro-card h1').allInnerTexts();
-  console.log(`intro-card.png     ${player.name}: ${lines.join(' / ')}`);
+  const named = (await player.page.locator('.intro-card .intro-name').count()) > 0;
+  const back = named ? await hudReturn(player.page, true) : undefined;
+  const after =
+    back === undefined
+      ? ''
+      : back === null
+        ? '; !! the HUD never came back after it'
+        : `; the HUD back over ${back.ms} ms once the card had gone`;
+  console.log(
+    `intro-card.png     ${player.name}: ${lines.join(' / ')}; ` +
+      `${hudOut(hud) ? 'the HUD out' : `!! the HUD showing (${hud.page}, ${hud.canvas})`}${after}`,
+  );
+  if (!hudOut(hud) || back === null) {
+    fail(`intro-card.png: the HUD at ${hud.page} under the card, back ${back?.ms ?? 'never'}`);
+  }
 }
 
 /**
@@ -1783,7 +1872,10 @@ async function captureIntroSkip(host, guest) {
   }
 }
 
-/** Shoots `player`'s title as `name` once it has landed; what it said and the bars beside it. */
+/**
+ * Shoots `player`'s title as `name` once it has landed: what it said, the bars beside it and
+ * how much of the HUD showed under it.
+ */
 async function titleShot(player, name) {
   const title = player.page.locator('.intro-title');
   const up = await attached(title, 6000);
@@ -1791,15 +1883,23 @@ async function titleShot(player, name) {
     await sleep(250); // past its landing
     await capture(player.page, name);
   }
-  return { up, text: up ? await textOf(title) : null, bars: await barsIn(player.page) };
+  const hud = await hudOf(player.page);
+  return { up, text: up ? await textOf(title) : null, bars: await barsIn(player.page), hud };
 }
+
+/** The log's words for the HUD under a title shot (titleShot). */
+const hudUnder = (shot) =>
+  hudOut(shot.hud) ? 'the HUD out' : `!! the HUD showing (${shot.hud.page}, ${shot.hud.canvas})`;
 
 /**
  * intro-title.png, intro-title-phone.png: the guest presses the opening away too, and with the
  * whole crew done the lights go out at once — on the guest's phone the shot cuts to its spawn
  * and the mission's title lands on the dark frame between the bars; on the host's window, the
- * host having skipped, it lands at the bang after the lights' flicker. Fails where a title does
- * not come, the guest's beat stands without its bars, or the lights waited for the intro's end.
+ * host having skipped, it lands at the bang after the lights' flicker. Neither shows anything of
+ * the HUD under its title; on the host's window it comes back once the title has gone, over
+ * 0.3 s, the clock's digits flashing as it comes and mission control waiting for it. Fails where
+ * a title does not come, the HUD shows under one or stays away, the guest's beat stands without
+ * its bars, or the lights waited for the intro's end.
  */
 async function captureIntroTitle(host, guest) {
   const pressed = Date.now();
@@ -1810,18 +1910,32 @@ async function captureIntroTitle(host, guest) {
     titleShot(guest, 'intro-title-phone.png'),
     titleShot(host, 'intro-title.png'),
   ]);
+  const back = await hudReturn(host.page);
   const { lights, startedAt, intro } = host.seen.view;
   const outIn = lights.outAt === null ? null : lights.outAt - startedAt;
   const early = outIn !== null && lights.outAt >= pressed - 50 && outIn < intro.lightsSec * 1000;
   console.log(
-    `intro-title.png    ${host.name}: „${desk.text ?? '!! no title'}" at the bang; ` +
-      `intro-title-phone.png ${guest.name}: „${phone.text ?? '!! no title'}" between ` +
-      `${phone.bars} bars; the lights went out ${outIn === null ? '!! never' : seconds(outIn)} ` +
-      `into the run as ${guest.name} pressed, the intro's own end at ${intro.lightsSec} s`,
+    `intro-title.png    ${host.name}: „${desk.text ?? '!! no title'}" at the bang, ` +
+      `${hudUnder(desk)}; intro-title-phone.png ${guest.name}: „${phone.text ?? '!! no title'}" ` +
+      `between ${phone.bars} bars, ${hudUnder(phone)}; the lights went out ` +
+      `${outIn === null ? '!! never' : seconds(outIn)} into the run as ${guest.name} pressed, ` +
+      `the intro's own end at ${intro.lightsSec} s`,
   );
+  const returned =
+    back === null
+      ? '!! never came back'
+      : `came back over ${back.ms} ms once the title had gone (${back.atGone} of it then), ` +
+        `${back.flashed ? 'the clock flashing' : '!! no flash on the clock'}, ` +
+        `${back.banner ? '!! a radio line up while it was out' : 'mission control waiting for it'}`;
+  console.log(`hud                ${host.name}'s HUD ${returned}`);
+  // The fade may have begun in the frame the title went in: all but out then, not yet back.
+  const hudFine = back !== null && back.atGone < 0.25 && back.flashed && !back.banner;
   if (!desk.up || !phone.up || phone.bars !== 2 || !early) {
     const said = `${host.name} ${desk.up}, ${guest.name} ${phone.up} with ${phone.bars} bars`;
     fail(`intro titles: ${said}`);
+  }
+  if (!hudOut(desk.hud) || !hudOut(phone.hud) || !hudFine) {
+    fail(`intro titles: the HUD ${hudUnder(desk)} / ${hudUnder(phone)}, then ${returned}`);
   }
 }
 
@@ -2237,13 +2351,31 @@ async function escapeMusic(player) {
 }
 
 /**
- * blackout.png: two seconds after the clock has started counting on the
- * host's page — the flashlight on, the emergency lamps red in the dark.
+ * blackout.png: two seconds after the clock has come into sight on the
+ * host's page — it counts from the click, under the HUD the opening keeps
+ * out until its title has gone — the flashlight on, the emergency lamps red
+ * in the dark. Fails where the HUD never comes back.
  */
 async function captureBlackout(host) {
   const clock = host.page.locator('.stage-clock .countdown');
   if (!(await attached(clock, 8000))) {
     throw new Error('the lights went out, but no clock ever counted');
+  }
+  const shown = await host.page
+    .waitForFunction(
+      () => {
+        const bar = document.querySelector('.stage-top');
+        return bar !== null && Number(globalThis.getComputedStyle(bar).opacity) >= 0.99;
+      },
+      null,
+      { timeout: 8000 },
+    )
+    .then(
+      () => true,
+      () => false,
+    );
+  if (!shown) {
+    fail('blackout.png: the HUD never came back over the dark lab');
   }
   await sleep(2000);
   const back = await lightPair(host.page, 'light-gl.png');

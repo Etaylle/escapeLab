@@ -8,7 +8,7 @@ import type { FigureMood } from './figure.js';
 import { finaleFrame, type FinaleCue, type FinaleFrame } from './finale.js';
 import { frameLight, mountedLamps } from './frameLight.js';
 import { contextAction } from './interact.js';
-import { filmed, litWhole, shotProgress, type IntroCue } from './intro/sequence.js';
+import { hudAt, litWhole, shotProgress, type IntroCue } from './intro/sequence.js';
 import { SHOT_WIDE, shotPoint, shotStart } from './intro/shot.js';
 import { markerTargets } from './markers.js';
 import { positionsOf, type KnownPositions } from './movement.js';
@@ -86,11 +86,13 @@ export function assembleFrame(
   const now = Date.now();
   const cue = live.finale;
   const ending = cue === null ? null : finaleFrame(cue.ending, now - cue.since, live.reduced);
+  const hud = hudOf(source, now);
   return {
-    ...stage(source, map, dpr, ending?.pull ?? 0, now),
+    ...stage(source, map, dpr, ending?.pull ?? 0, now, hud),
     ...lighting(source, map, now, ending),
     ...crewOf(source),
-    ...overlaysOf(source, map, ending, perf, now),
+    ...overlaysOf(source, map, ending, perf, hud),
+    hud,
     pings,
     time: sim.time,
     now,
@@ -220,15 +222,18 @@ function framing(
   return { camera, grid, steady };
 }
 
-/** Whether this screen shows the world as a film at `now`: the opening's card, shot or beat. */
-function filming(source: FrameSource, now: number): boolean {
+/**
+ * How much of the HUD shows on this screen at `now`, 0 to 1: none while the run's opening keeps
+ * it out, then fading in with the page's (intro/sequence.ts `hudAt`); all of it without one.
+ */
+function hudOf(source: FrameSource, now: number): number {
   const intro = source.live.current.intro;
-  return intro !== null && filmed(intro, now);
+  return intro === null ? 1 : hudAt(intro, now);
 }
 
 /**
- * The canvas and what lies over it this frame, the camera, the minimap — none while the world
- * shows as a film — and the text's size.
+ * The canvas and what lies over it this frame, the camera, the minimap — none while the run's
+ * opening keeps the HUD out (`hud`, 0 to 1) — and the text's size.
  */
 function stage(
   source: FrameSource,
@@ -236,12 +241,13 @@ function stage(
   dpr: number,
   pull: number,
   now: number,
+  hud: number,
 ): Pick<Frame, 'viewport' | 'camera' | 'grid' | 'steady' | 'minimap' | 'text'> {
   const { sim, canvas, insets } = source;
   const w = canvas.width;
   const h = canvas.height;
   const scale = aim(source, map, dpr, pull, now);
-  const mapless = source.spectator || !sim.minimap || filming(source, now);
+  const mapless = source.spectator || !sim.minimap || hud === 0;
   const minimap = mapless ? null : minimapLayout(map, w, h, dpr, insets);
   const viewport: Viewport = {
     w,
@@ -353,16 +359,17 @@ function liveChats(source: FrameSource, perf: number): ChatLine[] {
 /**
  * What lies over the picture this frame while the run goes on: the chat
  * lines and captions still up, what to walk to and what E does here —
- * none of it while the world shows as a film or the run ends on screen.
+ * none of it while the run's opening keeps the HUD out (`hud` 0) or the run
+ * ends on screen.
  */
 function overlaysOf(
   source: FrameSource,
   map: WorldMap,
   ending: FinaleFrame | null,
   perf: number,
-  now: number,
+  hud: number,
 ): Pick<Frame, 'perf' | 'chats' | 'captions' | 'markers' | 'action'> {
-  if (ending !== null || filming(source, now)) {
+  if (ending !== null || hud === 0) {
     return { perf, chats: [], captions: [], markers: [], action: null };
   }
   const { sim } = source;

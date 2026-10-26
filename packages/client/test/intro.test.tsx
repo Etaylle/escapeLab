@@ -17,6 +17,10 @@ import {
   FADE_IN_MS,
   filmed,
   hintShown,
+  hudAt,
+  hudBackAt,
+  hudHeld,
+  HUD_FADE_MS,
   introPhase,
   lightsSecFor,
   litWhole,
@@ -215,6 +219,85 @@ describe('the name card of a mission without an intro', () => {
       expect(hintShown(nameCard, at)).toBe(false);
     }
     expect(titleAt({ ...nameCard, outAt: SINCE }, SINCE)).toBe(0);
+  });
+});
+
+describe('the HUD while the opening keeps it out', () => {
+  const dark = { ...watching, outAt: OUT };
+  /** Where the title has dissolved on the screen that watched to the end. */
+  const BACK = OUT + TITLE_HOLD_MS + TITLE_FADE_MS;
+  /** Every 10 ms from `from` to `to`, epoch ms. */
+  const everyTen = (from: number, to: number): number[] =>
+    Array.from({ length: (to - from) / 10 + 1 }, (_, i) => from + i * 10);
+
+  it('keeps it out through the card and the shot', () => {
+    for (const at of [SINCE, SINCE + CARD_MS, SINCE + 20_000]) {
+      expect(hudHeld(watching, at)).toBe(true);
+      expect(hudAt(watching, at)).toBe(0);
+    }
+  });
+
+  it('keeps it out while anything of the title or the bars is in the picture', () => {
+    for (const at of everyTen(OUT, OUT + 3000)) {
+      const barsThere = at < OUT + TITLE_HOLD_MS + BARS_MS;
+      if (titleAt(dark, at) > 0 || barsThere) {
+        expect(hudAt(dark, at)).toBe(0);
+      }
+    }
+    // Control comes back with the bars gone; the HUD waits for the title to have dissolved.
+    expect(filmed(dark, OUT + TITLE_HOLD_MS + BARS_MS)).toBe(false);
+    expect(hudHeld(dark, OUT + TITLE_HOLD_MS + BARS_MS)).toBe(true);
+    expect(hudHeld(dark, BACK - 1)).toBe(true);
+    expect(hudBackAt(dark)).toBe(BACK);
+  });
+
+  it('then fades it in over 0.3 s', () => {
+    expect(HUD_FADE_MS).toBe(300);
+    expect(hudHeld(dark, BACK)).toBe(false);
+    expect(hudAt(dark, BACK)).toBe(0);
+    expect(hudAt(dark, BACK + HUD_FADE_MS / 2)).toBeCloseTo(0.5);
+    expect(hudAt(dark, BACK + HUD_FADE_MS)).toBe(1);
+    expect(hudAt(dark, BACK + 60_000)).toBe(1);
+  });
+
+  it('gives a player who skipped the HUD from the skip, out again while the title shows', () => {
+    const skip = SINCE + 4000;
+    expect(hudHeld(skipped, skip)).toBe(false);
+    expect(hudAt(skipped, skip + HUD_FADE_MS / 2)).toBeCloseTo(0.5);
+    expect(hudAt(skipped, OUT - 1)).toBe(1);
+    // The lights flicker with the HUD up; the title lands at the bang on a frame without it.
+    const out = { ...skipped, outAt: OUT };
+    expect(hudAt(out, OUT + FLICKER_MS - 1)).toBe(1);
+    expect(hudHeld(out, OUT + FLICKER_MS)).toBe(true);
+    const back = OUT + FLICKER_MS + TITLE_HOLD_MS + TITLE_FADE_MS;
+    expect(hudBackAt(out)).toBe(back);
+    expect(hudHeld(out, back - 1)).toBe(true);
+    expect(hudAt(out, back + HUD_FADE_MS / 2)).toBeCloseTo(0.5);
+  });
+
+  it('keeps it out through the film run on after the skip that was to end the intro', () => {
+    const closing = { ...watching, skippedAt: SINCE + 6000, closing: true };
+    expect(hudHeld(closing, SINCE + 6100)).toBe(true);
+    // Where the lights did not come, the film ended 1.5 s on: the HUD comes from then.
+    const ended = SINCE + 6000 + CLOSING_MS;
+    expect(hudHeld(closing, ended - 1)).toBe(true);
+    expect(hudAt(closing, ended + HUD_FADE_MS / 2)).toBeCloseTo(0.5);
+  });
+
+  it('keeps it out under a mission’s name card, and fades it in as the card goes', () => {
+    expect(hudHeld(nameCard, SINCE)).toBe(true);
+    expect(hudHeld(nameCard, SINCE + NAME_CARD_MS - 1)).toBe(true);
+    expect(hudAt(nameCard, SINCE + NAME_CARD_MS + HUD_FADE_MS / 2)).toBeCloseTo(0.5);
+    const pressed = { ...nameCard, skippedAt: SINCE + 800 };
+    expect(hudHeld(pressed, SINCE + 800)).toBe(false);
+    expect(hudAt(pressed, SINCE + 800 + HUD_FADE_MS / 2)).toBeCloseTo(0.5);
+    expect(hudBackAt(nameCard)).toBeNull();
+  });
+
+  it('has the page drawn anew as the HUD goes and comes back', () => {
+    expect(nextChange(dark, OUT + TITLE_HOLD_MS + BARS_MS)).toBe(BACK);
+    expect(nextChange({ ...skipped, outAt: OUT }, OUT)).toBe(OUT + FLICKER_MS);
+    expect(nextChange(nameCard, SINCE)).toBe(SINCE + NAME_CARD_MS);
   });
 });
 
@@ -498,11 +581,10 @@ describe('the opening over the world', () => {
     expect(overlay(dark)).toBe('');
   });
 
-  it('opens the game screen as a film, the HUD faded under it', () => {
-    vi.setSystemTime(START + 300);
-    const html = renderToStaticMarkup(
+  const game = (view: PlayerView): string =>
+    renderToStaticMarkup(
       <GameScreen
-        view={viewOf()}
+        view={view}
         roomCode="KX4P"
         positionsRef={{ current: { run: null, players: {} } }}
         dronesRef={{ current: {} }}
@@ -513,9 +595,20 @@ describe('the opening over the world', () => {
         finale={null}
       />,
     );
-    expect(html).toContain('<div class="game game--film">');
+
+  it('opens the game screen as a film, the HUD out under it', () => {
+    vi.setSystemTime(START + 300);
+    const html = game(viewOf());
+    expect(html).toContain('<div class="game game--hud-held">');
     expect(html).toContain('<div class="intro intro--holds">');
     expect(html).toContain(PLANT);
+  });
+
+  it('keeps the HUD out under a mission’s name card, and not where the screen came late', () => {
+    vi.setSystemTime(START + 300);
+    expect(game(plainView())).toContain('<div class="game game--hud-held">');
+    vi.setSystemTime(START + NAME_CARD_FRESH_MS);
+    expect(game(plainView())).toContain('<div class="game">');
   });
 });
 

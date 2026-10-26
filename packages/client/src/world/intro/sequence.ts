@@ -25,6 +25,11 @@ import { smooth } from '../ease.js';
  * A mission without one shows the card with the mission's name as its title, 2.5 s or until
  * skipped; nothing else changes. Under reduced motion nothing pans and nothing slides: the
  * camera stays on the spawn, the bars and the title fade in and out (intro.css).
+ *
+ * The HUD stays out of the picture through the card, the shot and the beat, until the title has
+ * dissolved and the bars have retracted, then fades in over HUD_FADE_MS — under reduced motion
+ * too. A player who skipped has it back from the skip, out again while the title shows at the
+ * bang; a mission's name card keeps it out as long as it shows.
  */
 
 /** The location card on black, ms from the start of the sequence on this screen. */
@@ -50,6 +55,8 @@ export const CLOSING_MS = 1500;
 export const TITLE_HOLD_MS = 1500;
 /** … then dissolves over this long. */
 export const TITLE_FADE_MS = 700;
+/** The HUD fades back in over this long once the opening lets it go, ms (intro.css). */
+export const HUD_FADE_MS = 300;
 /** The announcement's first line starts here, ms into the sequence: the lab has faded in. */
 export const PA_FROM_MS = 3000;
 /** The pause between two lines of the announcement. */
@@ -133,11 +140,61 @@ function filming(cue: IntroCue, phase: IntroPhase): boolean {
 }
 
 /**
- * Whether this screen shows the world as a film at `now`: no HUD over it, no minimap, no marks,
- * nobody of the crew moving it — the card, the shot and the beat of a mission's intro.
+ * Whether this screen shows the world as a film at `now`, nobody of the crew moving it: the
+ * card, the shot and the beat of a mission's intro. The HUD stays out a little longer
+ * (`hudHeld`).
  */
 export function filmed(cue: IntroCue, now: number): boolean {
   return filming(cue, introPhase(cue, now));
+}
+
+/** The title's end on this screen, epoch ms: from the bang, its hold and its dissolve. */
+const titleGoneAt = (bang: number): number => bang + TITLE_HOLD_MS + TITLE_FADE_MS;
+
+/**
+ * When the HUD comes back after the title on this screen, epoch ms: as the title has dissolved,
+ * the bars having retracted before it; null while the lights burn, and for a name card.
+ */
+export function hudBackAt(cue: IntroCue): number | null {
+  const bang = bangAt(cue);
+  return bang === null ? null : titleGoneAt(bang);
+}
+
+/**
+ * Since when the HUD shows on this screen as of `now`, epoch ms; null while the opening keeps
+ * it out: through a mission's name card and an intro's film, and from the bang until the title
+ * has dissolved — the title a player who had skipped sees too, who had the HUD from the skip.
+ */
+function hudSince(cue: IntroCue, now: number): number | null {
+  if (cue.lightsSec === null) {
+    const gone = Math.min(cue.skippedAt ?? Infinity, cue.since + NAME_CARD_MS);
+    return now < gone ? null : gone;
+  }
+  const bang = bangAt(cue);
+  if (bang !== null && now >= bang) {
+    const back = titleGoneAt(bang);
+    return now < back ? null : back;
+  }
+  const { skippedAt } = cue;
+  if (skippedAt === null || filmed(cue, now)) {
+    return null;
+  }
+  // A skip that was to end the intro, where the lights did not come, ended the film later.
+  return cue.closing ? skippedAt + CLOSING_MS : skippedAt;
+}
+
+/** Whether the opening keeps the HUD out of the picture at `now` (see the module's comment). */
+export function hudHeld(cue: IntroCue, now: number): boolean {
+  return hudSince(cue, now) === null;
+}
+
+/**
+ * How much of the HUD shows at `now`, 0 to 1: none while the opening keeps it out, then more
+ * and more over HUD_FADE_MS — the canvas fades its minimap in as intro.css fades the page's HUD.
+ */
+export function hudAt(cue: IntroCue, now: number): number {
+  const since = hudSince(cue, now);
+  return since === null ? 0 : Math.min(1, (now - since) / HUD_FADE_MS);
 }
 
 /** Whether the lab shows lit whole: through the card and the shot, before anybody has skipped. */
@@ -218,7 +275,8 @@ export function titleAt(cue: IntroCue, now: number): number {
 
 /**
  * The next moment after `now` at which the opening changes by itself — a phase, the black, the
- * bars, the title — epoch ms; null once nothing more will. A screen draws its DOM anew then.
+ * bars, the title, the HUD — epoch ms; null once nothing more will. A screen draws its DOM anew
+ * then.
  */
 export function nextChange(cue: IntroCue, now: number): number | null {
   const bang = bangAt(cue);

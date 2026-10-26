@@ -4,6 +4,7 @@ import type { MapView, PlayerView } from '@escapelab/core';
 import { GameScreen, StageTop, type ColdOpen } from '../src/screens/Game.js';
 import {
   blackoutCue,
+  clickSeenAt,
   coldOpenFrame,
   darkSince,
   FADE_MS,
@@ -85,6 +86,14 @@ describe('the lights failing, frame by frame', () => {
     expect(revealed(null, ARRIVED)).toBe(false);
     expect(revealed(ARRIVED, ARRIVED + REVEAL_MS - 1)).toBe(false);
     expect(revealed(ARRIVED, ARRIVED + REVEAL_MS)).toBe(true);
+  });
+
+  it('shows the clock’s start and the first line at the click, or as the HUD comes back', () => {
+    expect(clickSeenAt(null, ARRIVED + 5000)).toBeNull();
+    expect(clickSeenAt(ARRIVED, null)).toBe(ARRIVED + REVEAL_MS);
+    // The run's opening keeps the HUD out past the click, for its title: they wait for it.
+    expect(clickSeenAt(ARRIVED, ARRIVED + 2200)).toBe(ARRIVED + 2200);
+    expect(clickSeenAt(ARRIVED, ARRIVED + 100)).toBe(ARRIVED + REVEAL_MS);
   });
 
   it('cues its sounds where the screen shows them, those still ahead from later on', () => {
@@ -224,6 +233,17 @@ describe('the objective bar in the cold open', () => {
     // Once it has flashed, the clock is the clock: its last minute pulses as ever.
     const after = bar(dark, { ...flashing, flashUntil: Date.now() - 1 });
     expect(after).toMatch(/<div class="countdown\s*">10:59<\/div>/);
+  });
+
+  it('flashes the clock only from where the flash falls due: as the HUD comes back', () => {
+    const dark = viewOf({
+      lights: { out: true, outAt: START + 3000 },
+      deadlineAt: Date.now() + 659_000,
+    });
+    const coming = { darkSince: Date.now() - REVEAL_MS, dark: true, flashUntil: Date.now() + 1500 };
+    expect(bar(dark, coming)).toMatch(/<div class="countdown\s*">10:59<\/div>/);
+    const due = { ...coming, flashUntil: Date.now() + 899 };
+    expect(bar(dark, due)).toMatch(/<div class="countdown\s+countdown--start">10:59<\/div>/);
   });
 
   it('gives a screen that landed in the dark the clock without the flash', () => {

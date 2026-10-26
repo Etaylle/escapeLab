@@ -260,6 +260,11 @@ export interface Frame {
   action: ContextAction | null;
   /** where the minimap sits; null while it is off, and for the audience */
   minimap: MinimapLayout | null;
+  /**
+   * how much of the HUD shows, 0 to 1: the minimap and the marks fade in with the page's HUD as
+   * the run's opening lets it go (intro/sequence.ts `hudAt`); 1 all through the run
+   */
+  hud: number;
   /** the world's text at this frame's zoom */
   text: WorldText;
   /** the audience: the whole lab, no avatar, no lamp */

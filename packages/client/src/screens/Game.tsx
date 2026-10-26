@@ -40,13 +40,13 @@ import {
   radioChirp,
   sheetDown,
 } from '../world/audio.js';
-import { opensLit, REVEAL_MS, useDarkSince, useRevealed } from '../world/coldOpen.js';
+import { clickSeenAt, opensLit, useDarkSince, useRevealed } from '../world/coldOpen.js';
 import { consoleName } from '../world/consoles.js';
 import { escapeChecklist, escaping, type Mate } from '../world/escape.js';
 import { veilOf, type Ending, type Finale } from '../world/finale.js';
 import { GameWorld } from '../world/GameWorld.js';
 import { IntroOverlay } from '../world/intro/IntroOverlay.js';
-import { cutIn, filmed, type IntroCue } from '../world/intro/sequence.js';
+import { cutIn, hudBackAt, hudHeld, type IntroCue } from '../world/intro/sequence.js';
 import { useIntro, type Intro } from '../world/intro/useIntro.js';
 import { dueParts } from '../world/markers.js';
 import { startingSpot, type KnownPositions } from '../world/movement.js';
@@ -199,9 +199,9 @@ export function clockStage(left: number, escaping: boolean): string {
 }
 
 /**
- * The mission clock. Until `flashUntil` (epoch ms) — where it has just
- * started on this screen — its digits flash red, once; then as `clockStage`
- * has it.
+ * The mission clock. Over the START_FLASH_MS up to `flashUntil` (epoch ms) —
+ * where it has just started on this screen — its digits flash red, once; then
+ * as `clockStage` has it.
  */
 function Countdown({
   deadlineAt,
@@ -214,7 +214,11 @@ function Countdown({
 }) {
   const now = useNow(200);
   const stage = clockStage(deadlineAt - now, escaping);
-  const start = flashUntil !== null && now < flashUntil ? ' countdown--start' : '';
+  // By the time of this draw: the screen draws anew as the HUD comes back, between two ticks.
+  const drawn = Date.now();
+  const flashing =
+    flashUntil !== null && drawn >= flashUntil - START_FLASH_MS && drawn < flashUntil;
+  const start = flashing ? ' countdown--start' : '';
   return <div className={`countdown ${stage}${start}`}>{formatRemaining(deadlineAt, now)}</div>;
 }
 
@@ -644,9 +648,11 @@ export interface ColdOpen {
 
 /**
  * The cold open as this screen lives it — `cut` straight to the bang where the opening's shot
- * still ran as the lights went out (world/intro/sequence.ts).
+ * still ran as the lights went out (world/intro/sequence.ts). Where the opening keeps the HUD
+ * out past the click, until `hudBack` (epoch ms), the clock's flash and the first line on the
+ * air wait for the HUD: they come where they can be seen.
  */
-function useColdOpen(view: PlayerView, cut: boolean): ColdOpen {
+function useColdOpen(view: PlayerView, cut: boolean, hudBack: number | null): ColdOpen {
   const darkSince = useDarkSince(view.lights, view.startedAt, cut);
   const dark = useRevealed(darkSince);
   const intro = opensLit(view.lights, view.startedAt);
@@ -655,11 +661,12 @@ function useColdOpen(view: PlayerView, cut: boolean): ColdOpen {
     saw.current = view.startedAt;
   }
   const briefingEnds = (view.startedAt ?? 0) + BRIEFING_MS;
+  const shown = clickSeenAt(darkSince, hudBack);
   const gates = intro
-    ? { sign: view.startedAt ?? 0, line: darkSince === null ? null : darkSince + REVEAL_MS }
+    ? { sign: view.startedAt ?? 0, line: shown }
     : { sign: briefingEnds, line: briefingEnds };
-  const sawPower = saw.current === view.startedAt && darkSince !== null;
-  const flashUntil = sawPower ? darkSince + REVEAL_MS + START_FLASH_MS : null;
+  const sawPower = saw.current === view.startedAt && shown !== null;
+  const flashUntil = sawPower ? shown + START_FLASH_MS : null;
   return { darkSince, dark, intro, flashUntil, gates };
 }
 
@@ -1069,11 +1076,12 @@ function OverTheWorld({
 /**
  * The game's classes: while its end plays, the finale's; while the notepad stands beside
  * something over the world, `game--noting`, which sets it as a strip of its own
- * (styles/putdown.css).
+ * (styles/putdown.css); while the run's opening keeps the HUD out, `game--hud-held`
+ * (styles/intro.css).
  */
-export function gameClass(finale: Finale | null, noting: boolean, film = false): string {
+export function gameClass(finale: Finale | null, noting: boolean, hudOut = false): string {
   const ending = finale === null ? [] : ['game--finale', `game--${finale.ending.split(':')[0]}`];
-  const extra = [...(noting ? ['game--noting'] : []), ...(film ? ['game--film'] : [])];
+  const extra = [...(noting ? ['game--noting'] : []), ...(hudOut ? ['game--hud-held'] : [])];
   return ['game', ...ending, ...extra].join(' ');
 }
 
@@ -1132,27 +1140,30 @@ function RunWorld({
   );
 }
 
-/** Whether the opening shows the world as a film now: the HUD fades, the tips wait. */
-function filming(intro: Intro): boolean {
-  return intro.cue !== null && filmed(intro.cue, Date.now());
+/** Whether the opening keeps the HUD out now: it fades, the tips and the sign's note wait. */
+function hudOut(intro: Intro): boolean {
+  return intro.cue !== null && hudHeld(intro.cue, Date.now());
 }
 
 /**
  * The running mission. It opens with the run's opening (world/intro/): a mission's intro as a
- * film over the lit lab, the HUD faded meanwhile, or a mission's name card. While its end plays
- * in the world (`finale`), nothing lies over the world any more, the controls are gone and the
- * HUD fades, until the veil closes over the screen. The notepad stands beside whatever lies
- * over the world, as a strip of its own (`gameClass`), and a source or a device hands it what
- * is taken down (noting.ts); E, Esc or a step put a sheet down (PutDown.tsx).
+ * film over the lit lab, or a mission's name card, the HUD out until its title or its card is
+ * gone. While its end plays in the world (`finale`), nothing lies over the world any more, the
+ * controls are gone and the HUD fades, until the veil closes over the screen. The notepad
+ * stands beside whatever lies over the world, as a strip of its own (`gameClass`), and a source
+ * or a device hands it what is taken down (noting.ts); E, Esc or a step put a sheet down
+ * (PutDown.tsx).
  */
 export function GameScreen(props: Props) {
   const { view, roomCode, positionsRef, chatsRef, send, refusals, finale } = props;
   const { alarmVisible } = useFeedback(view);
   const intro = useIntro(view, send);
-  const coldOpen = useColdOpen(view, intro.cue !== null && cutIn(intro.cue));
-  // While the opening shows the world as a film the bar is faded: the sign's note waits for it.
-  const filmNow = filming(intro);
-  const notice = useNotices(view, filmNow ? { ...coldOpen.gates, sign: null } : coldOpen.gates);
+  const cue = intro.cue;
+  const hudBack = cue === null ? null : hudBackAt(cue);
+  const coldOpen = useColdOpen(view, cue !== null && cutIn(cue), hudBack);
+  // While the opening keeps the HUD out the bar is faded: the sign's note waits for it.
+  const heldNow = hudOut(intro);
+  const notice = useNotices(view, heldNow ? { ...coldOpen.gates, sign: null } : coldOpen.gates);
   const open = useOpened(view);
   const station = useSolvedHold(open.station, view.currentPuzzleIndex);
   const sheets = useSheets(open);
@@ -1169,9 +1180,9 @@ export function GameScreen(props: Props) {
   const self = startingSpot(positionsRef.current, view.you.id, map, view.startedAt);
   const live = finale === null;
   const over = station !== null || sheets.reading !== null || sheets.note !== null;
-  const film = live && filmNow;
+  const held = live && heldNow;
   return (
-    <div className={gameClass(finale, live && open.notes && over, film)}>
+    <div className={gameClass(finale, live && open.notes && over, held)}>
       {live && <RunOverlays view={view} coldOpen={coldOpen} />}
       {live && map.sabotage !== null && relay !== undefined && (
         <RelayAlert sabotage={map.sabotage} relay={relay} send={send} refusals={refusals} />
@@ -1192,11 +1203,9 @@ export function GameScreen(props: Props) {
           intro={intro.cue}
           station={station}
           open={open}
-          holdTips={notice !== null || film}
+          holdTips={notice !== null || held}
         />
-        {live && intro.cue !== null && (
-          <IntroOverlay cue={intro.cue} view={view} skip={intro.skip} />
-        )}
+        {live && cue !== null && <IntroOverlay cue={cue} view={view} skip={intro.skip} />}
         {live && open.notes && (
           <Notepad
             notes={pad.notes}

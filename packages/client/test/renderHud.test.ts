@@ -268,4 +268,17 @@ describe('hud — the goal on the minimap', () => {
     const still = ringsAt({ pulse: 0, reduced: true })[0];
     expect(ringsAt({ pulse: 1, reduced: true })[0]).toEqual(still);
   });
+
+  it('fades in with the page’s HUD after the run’s opening, all of it as much', () => {
+    const { ctx, log } = fakeCanvas();
+    draw(ctx, frameWith({ map: labWith({}), minimap: layout, pulse: 0, hud: 0.5 }));
+    // The panel at half its 0.86, the floor laid on it as much.
+    expect(callEntries(log, 'roundRect')[0]?.alpha).toBeCloseTo(0.43);
+    const floor = callEntries(log, 'fillRect').find(({ args }) => args[2] === 10);
+    expect(floor?.alpha).toBeCloseTo(0.43);
+    // The goal's ring at half its 0.9 at the beat's foot, the dot and what follows at half.
+    const goal = callEntries(log, 'arc').filter(({ args }) => args[0] === 625 && args[1] === 115);
+    expect(goal.map(({ alpha }) => alpha)).toEqual([0.45, 0.5]);
+    expect(setsOf(log, 'globalAlpha').at(-1)).toBe(1);
+  });
 });

@@ -23,7 +23,8 @@ import { FALLBACK_COLOR, type Frame, type MinimapLayout, type WorldMap } from '.
  * What the canvas draws of the HUD: the corner minimap — the layout, the
  * doors as the view knows them, the stations and sources, the goal pulsing,
  * the exit glowing once unlocked, and everyone's dot — over the world and its
- * light, gone while the run ends on screen. The screen's text keeps off it.
+ * light, fading in with the page's HUD after the run's opening (`frame.hud`),
+ * gone while the run ends on screen. The screen's text keeps off it.
  */
 
 /** The dark frame round the minimap's map, CSS pixels. */
@@ -88,7 +89,7 @@ export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   if (layout === null || frame.ending !== null) {
     return;
   }
-  drawPanel(ctx, layout, frame.viewport.dpr);
+  drawPanel(ctx, layout, frame.viewport.dpr, frame.hud);
   drawFloor(ctx, frame.map, layout);
   drawDecor(ctx, frame.map, layout);
   drawDoors(ctx, frame.map, layout);
@@ -141,11 +142,11 @@ function drawGoal(ctx: CanvasRenderingContext2D, frame: Frame, layout: MinimapLa
     const cy = oy + dot.y * cell;
     ctx.strokeStyle = dot.color;
     ctx.lineWidth = Math.max(dpr, cell * 0.18);
-    ctx.globalAlpha = 0.9 - 0.6 * beat;
+    ctx.globalAlpha = (0.9 - 0.6 * beat) * frame.hud;
     ctx.beginPath();
     ctx.arc(cx, cy, cell * (0.75 + 0.5 * beat), 0, Math.PI * 2);
     ctx.stroke();
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = frame.hud;
     ctx.fillStyle = dot.color;
     ctx.strokeStyle = C.panel;
     ctx.lineWidth = dpr;
@@ -156,11 +157,19 @@ function drawGoal(ctx: CanvasRenderingContext2D, frame: Frame, layout: MinimapLa
   }
 }
 
-/** The minimap's dark panel and its rim. */
-function drawPanel(ctx: CanvasRenderingContext2D, layout: MinimapLayout, dpr: number): void {
+/**
+ * The minimap's dark panel and its rim, `shown` of it (0 to 1) as it fades in; what is laid on
+ * the panel after it shows as much.
+ */
+function drawPanel(
+  ctx: CanvasRenderingContext2D,
+  layout: MinimapLayout,
+  dpr: number,
+  shown: number,
+): void {
   const { left, top, right, bottom } = minimapBox(layout, dpr);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.globalAlpha = 0.86;
+  ctx.globalAlpha = 0.86 * shown;
   ctx.fillStyle = C.panel;
   ctx.strokeStyle = C.rim;
   ctx.lineWidth = dpr;

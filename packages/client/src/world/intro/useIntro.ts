@@ -9,6 +9,7 @@ import {
   bangAt,
   filmed,
   hintShown,
+  hudAt,
   introPhase,
   nextChange,
   skippable,
@@ -99,6 +100,8 @@ export interface IntroProbe {
   filmed: boolean;
   hint: boolean;
   title: number;
+  /** how much of the HUD shows, 0 to 1 (sequence.ts `hudAt`); 1 without an opening */
+  hud: number;
   skipped: boolean;
   pa: ReturnType<typeof paProbe>;
   cue: ReturnType<typeof cueProbe>;
@@ -111,6 +114,7 @@ function probeOf(cue: IntroCue | null, now: number): IntroProbe {
     filmed: cue !== null && filmed(cue, now),
     hint: cue !== null && hintShown(cue, now),
     title: cue === null ? 0 : titleAt(cue, now),
+    hud: cue === null ? 1 : hudAt(cue, now),
     skipped: cue?.skippedAt != null,
     pa: paProbe(),
     cue: cueProbe(),
