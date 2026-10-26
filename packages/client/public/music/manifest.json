@@ -2,46 +2,46 @@
   "calm": {
     "file": "calm.mp3",
     "ms": 72046,
-    "gain": 0.6365,
+    "gain": 1.7966,
     "startMs": 0,
     "loop": true,
-    "hash": "b30335f291b3",
+    "hash": "691b16ff2ecf",
     "source": "elevenlabs"
   },
   "critical": {
     "file": "critical.mp3",
     "ms": 72046,
-    "gain": 0.6437,
-    "startMs": 0,
+    "gain": 0.5717,
+    "startMs": 338,
     "loop": true,
-    "hash": "5551c2007cb9",
+    "hash": "2c6a1064d1ea",
     "source": "elevenlabs"
   },
   "lost": {
     "file": "lost.mp3",
-    "ms": 10031,
-    "gain": 6.3781,
-    "startMs": 128,
+    "ms": 19043,
+    "gain": 2.6375,
+    "startMs": 0,
     "loop": false,
-    "hash": "fb107a9bcf62",
+    "hash": "3c5252831169",
     "source": "elevenlabs"
   },
   "tense": {
     "file": "tense.mp3",
     "ms": 72046,
-    "gain": 0.7502,
+    "gain": 0.9463,
     "startMs": 0,
     "loop": true,
-    "hash": "b0381ce2ab96",
+    "hash": "007f6d62644c",
     "source": "elevenlabs"
   },
   "won": {
     "file": "won.mp3",
     "ms": 10031,
-    "gain": 11.3459,
-    "startMs": 169,
+    "gain": 1.4491,
+    "startMs": 0,
     "loop": false,
-    "hash": "bffee40308ba",
+    "hash": "242c5b44e6e5",
     "source": "elevenlabs"
   }
 }

@@ -2,10 +2,11 @@
   "bed-archive": {
     "file": "bed-archive.mp3",
     "ms": 10000,
-    "gain": 104.0627,
+    "gain": 2.2961,
     "startMs": 0,
     "loop": true,
-    "hash": "2836a23dc41e",
+    "hash": "9cb8910a5779",
+    "influence": 0.9,
     "source": "elevenlabs"
   },
   "bed-control": {
@@ -29,10 +30,11 @@
   "bed-lab": {
     "file": "bed-lab.mp3",
     "ms": 10000,
-    "gain": 4.1897,
+    "gain": 8.1382,
     "startMs": 0,
     "loop": true,
-    "hash": "9d5c9a478329",
+    "hash": "62bac71df8b2",
+    "influence": 0.9,
     "source": "elevenlabs"
   },
   "bed-machine-idle": {
@@ -47,10 +49,11 @@
   "bed-plain": {
     "file": "bed-plain.mp3",
     "ms": 10000,
-    "gain": 23.2588,
+    "gain": 3.4086,
     "startMs": 0,
     "loop": true,
-    "hash": "14cc527657c7",
+    "hash": "828ef887328f",
+    "influence": 0.9,
     "source": "elevenlabs"
   },
   "bed-reactor": {
@@ -74,10 +77,11 @@
   "bed-server": {
     "file": "bed-server.mp3",
     "ms": 10000,
-    "gain": 6.7654,
+    "gain": 2.8025,
     "startMs": 0,
     "loop": true,
-    "hash": "9a04c0b612a3",
+    "hash": "b8ae92971403",
+    "influence": 0.6,
     "source": "elevenlabs"
   },
   "book-shut": {
@@ -92,28 +96,31 @@
   "breaker-thunk": {
     "file": "breaker-thunk.mp3",
     "ms": 1480,
-    "gain": 11.8176,
+    "gain": 1.9048,
     "startMs": 0,
     "loop": false,
-    "hash": "58d86077481c",
+    "hash": "ce3f86ba2ae7",
+    "influence": 0.9,
     "source": "elevenlabs"
   },
   "bubbling": {
     "file": "bubbling.mp3",
     "ms": 1200,
-    "gain": 3.4727,
+    "gain": 0.7205,
     "startMs": 0,
     "loop": false,
-    "hash": "0d4a8f3a3b61",
+    "hash": "de7553987809",
+    "influence": 0.6,
     "source": "elevenlabs"
   },
   "button-thunk": {
     "file": "button-thunk.mp3",
     "ms": 480,
-    "gain": 18.3383,
+    "gain": 12.3459,
     "startMs": 0,
     "loop": false,
-    "hash": "678d8e92a67b",
+    "hash": "eed6731dbc40",
+    "influence": 0.9,
     "source": "elevenlabs"
   },
   "cabinet-unlock": {
@@ -137,10 +144,11 @@
   "console-tick": {
     "file": "console-tick.mp3",
     "ms": 480,
-    "gain": 39.0538,
+    "gain": 0.945,
     "startMs": 0,
     "loop": false,
-    "hash": "b3724d734b83",
+    "hash": "479ed95bc953",
+    "influence": 0.3,
     "source": "elevenlabs"
   },
   "core-throb": {
@@ -191,10 +199,11 @@
   "discovery": {
     "file": "discovery.mp3",
     "ms": 800,
-    "gain": 10.7498,
+    "gain": 4.1425,
     "startMs": 0,
     "loop": false,
-    "hash": "2eca4d205667",
+    "hash": "3b8289cf9bb4",
+    "influence": 0.9,
     "source": "elevenlabs"
   },
   "door-slide": {
@@ -209,10 +218,11 @@
   "drip": {
     "file": "drip.mp3",
     "ms": 1000,
-    "gain": 3.0939,
+    "gain": 0.7325,
     "startMs": 0,
     "loop": false,
-    "hash": "ec6d7f7d3d1f",
+    "hash": "14a501bf0811",
+    "influence": 0.6,
     "source": "elevenlabs"
   },
   "drone-alert": {
@@ -245,10 +255,11 @@
   "far-clank": {
     "file": "far-clank.mp3",
     "ms": 2000,
-    "gain": 5.5484,
+    "gain": 0.9307,
     "startMs": 0,
     "loop": false,
-    "hash": "0d608cb98eb9",
+    "hash": "bbee8de1a024",
+    "influence": 0.3,
     "source": "elevenlabs"
   },
   "hatch-grind": {
@@ -281,19 +292,21 @@
   "klaxon": {
     "file": "klaxon.mp3",
     "ms": 1000,
-    "gain": 3.0006,
+    "gain": 0.7079,
     "startMs": 0,
     "loop": false,
-    "hash": "dff2c029ab4e",
+    "hash": "fba98aefd4c5",
+    "influence": 0.9,
     "source": "elevenlabs"
   },
   "lamp-pop": {
     "file": "lamp-pop.mp3",
     "ms": 480,
-    "gain": 11.6573,
+    "gain": 0.9617,
     "startMs": 0,
     "loop": false,
-    "hash": "6c59c480273b",
+    "hash": "24e63fd9ea27",
+    "influence": 0.9,
     "source": "elevenlabs"
   },
   "lever-chunk": {
@@ -335,10 +348,11 @@
   "machine-stroke": {
     "file": "machine-stroke.mp3",
     "ms": 1000,
-    "gain": 3.254,
+    "gain": 3.57,
     "startMs": 0,
     "loop": false,
-    "hash": "1cb2307b9592",
+    "hash": "be2478543cdc",
+    "influence": 0.3,
     "source": "elevenlabs"
   },
   "mains-hum": {
@@ -353,10 +367,11 @@
   "mushroom-stomp": {
     "file": "mushroom-stomp.mp3",
     "ms": 600,
-    "gain": 50.4304,
+    "gain": 0.7079,
     "startMs": 0,
     "loop": false,
-    "hash": "1d899184717d",
+    "hash": "efe27106795f",
+    "influence": 0.3,
     "source": "elevenlabs"
   },
   "ok-beeps": {
@@ -380,19 +395,21 @@
   "pencil": {
     "file": "pencil.mp3",
     "ms": 600,
-    "gain": 4.1633,
+    "gain": 0.8294,
     "startMs": 0,
     "loop": false,
-    "hash": "0240bbbfbd9b",
+    "hash": "c0142d77b0e5",
+    "influence": 0.3,
     "source": "elevenlabs"
   },
   "ping": {
     "file": "ping.mp3",
     "ms": 480,
-    "gain": 8.6982,
+    "gain": 0.7138,
     "startMs": 0,
     "loop": false,
-    "hash": "720ff50fec71",
+    "hash": "f4b941c4240d",
+    "influence": 0.6,
     "source": "elevenlabs"
   },
   "power-down": {
@@ -461,19 +478,21 @@
   "server-spinup": {
     "file": "server-spinup.mp3",
     "ms": 1200,
-    "gain": 2.008,
+    "gain": 0.708,
     "startMs": 0,
     "loop": false,
-    "hash": "fb009b141100",
+    "hash": "c18a866dddfd",
+    "influence": 0.9,
     "source": "elevenlabs"
   },
   "sheet-down": {
     "file": "sheet-down.mp3",
     "ms": 600,
-    "gain": 4.2224,
+    "gain": 1.9395,
     "startMs": 0,
     "loop": false,
-    "hash": "385521edadce",
+    "hash": "60c44b51b300",
+    "influence": 0.9,
     "source": "elevenlabs"
   },
   "short-arc": {
@@ -542,28 +561,31 @@
   "step-1": {
     "file": "step-1.mp3",
     "ms": 480,
-    "gain": 87.2104,
+    "gain": 1.618,
     "startMs": 0,
     "loop": false,
-    "hash": "cf23c27e60bf",
+    "hash": "e8948f901fb7",
+    "influence": 0.6,
     "source": "elevenlabs"
   },
   "step-2": {
     "file": "step-2.mp3",
     "ms": 480,
-    "gain": 27.6825,
+    "gain": 0.7416,
     "startMs": 0,
     "loop": false,
-    "hash": "88d5ec007e30",
+    "hash": "63eb57cbcf2e",
+    "influence": 0.9,
     "source": "elevenlabs"
   },
   "step-3": {
     "file": "step-3.mp3",
     "ms": 480,
-    "gain": 30.6446,
+    "gain": 0.7426,
     "startMs": 0,
     "loop": false,
-    "hash": "fd3b2c9a3a0f",
+    "hash": "67d66c45f72d",
+    "influence": 0.6,
     "source": "elevenlabs"
   },
   "step-tick": {
@@ -578,10 +600,11 @@
   "toggle-clack": {
     "file": "toggle-clack.mp3",
     "ms": 480,
-    "gain": 0.9411,
-    "startMs": 67,
+    "gain": 0.708,
+    "startMs": 0,
     "loop": false,
-    "hash": "6e5743c82482",
+    "hash": "08e6314be676",
+    "influence": 0.9,
     "source": "elevenlabs"
   },
   "tube-strike": {
@@ -605,19 +628,21 @@
   "wall-thud": {
     "file": "wall-thud.mp3",
     "ms": 480,
-    "gain": 24.705,
+    "gain": 0.7534,
     "startMs": 0,
     "loop": false,
-    "hash": "ef76be402531",
+    "hash": "51e5043badee",
+    "influence": 0.6,
     "source": "elevenlabs"
   },
   "wire-snip": {
     "file": "wire-snip.mp3",
     "ms": 480,
     "gain": 0.7079,
-    "startMs": 59,
+    "startMs": 0,
     "loop": false,
-    "hash": "277b5fd9f8db",
+    "hash": "17c7c24dd372",
+    "influence": 0.6,
     "source": "elevenlabs"
   }
 }
