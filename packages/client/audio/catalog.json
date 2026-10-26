@@ -343,7 +343,7 @@
   {
     "id": "button-thunk",
     "kind": "oneshot",
-    "prompt": "A big plastic industrial push button pressed down hard until its steel plunger bottoms out: a loud, low thump with a plastic knock. Close, dry, full level, starting at once.",
+    "prompt": "A large industrial palm push button struck down hard: its spring-loaded plunger slams to the bottom of its steel housing with one loud, low, solid thump and a muffled plastic knock. Recorded close-up and dry at full level, the hit right at the start.",
     "durationSeconds": 0.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -577,7 +577,7 @@
   {
     "id": "bed-lab",
     "kind": "bed",
-    "prompt": "Laboratory room tone at night recorded at full level: the compressor of a laboratory refrigerator humming and the fan of a fume hood blowing through its steel duct, clearly audible, constant.",
+    "prompt": "A loud, close recording of a laboratory's machines running at night: a refrigerator compressor's motor humming steadily and a fume hood's exhaust fan roaring through its steel duct, recorded dry at full level, dense and constant, with no gaps.",
     "durationSeconds": 10,
     "loop": true,
     "target": { "measure": "rms", "dbfs": -20 },
