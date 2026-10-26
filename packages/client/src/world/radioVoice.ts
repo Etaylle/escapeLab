@@ -1,29 +1,28 @@
 import {
-  applyEnvelope,
   audioEngine,
   biquad,
   chain,
   fadeTo,
   gain,
   LOOKAHEAD,
-  noiseBurst,
   noiseLoop,
   onAllEnded,
   outlet,
   playingEngine,
+  startSample,
   still,
-  tick,
   type Engine,
-  type Envelope,
   type Fade,
 } from './audio.js';
+import { sample, type SfxId } from './samples.js';
 
 /**
  * A voice on the radio: mission control's lines, recorded once on a Mac with a neural voice
  * (scripts/voice.ts, public/voice/) and played as a handset hears them — band-limited to
  * 300 Hz–3.4 kHz, lightly saturated, over a faint bed of static, keyed with a squelch at either
- * end, the run's first line opened with the Leitstelle's own squelch — while the beds and the
- * music duck 6 dB under it (audio.ts, the duck bus). The banner shows the line while it speaks;
+ * end, the run's first line opened with the Leitstelle's own squelch, the squelches recordings
+ * of their own (samples.ts) — while the beds and the music duck 6 dB under it (audio.ts, the
+ * duck bus). The banner shows the line while it speaks;
  * a line without a recording, as a custom mission's, still only chirps (audio.ts
  * `radioChirp`). At a run's start the mission's lines are fetched and decoded, so that a line
  * plays the moment it is shown; a line that comes over the air is fetched then too, where it
@@ -83,6 +82,11 @@ export const TAIL_S = 0.16;
  * snapping shut, then the key's squelch as before every line.
  */
 export const OPEN_S = 0.4;
+/**
+ * The squelches' recordings going into the chain: their peak (−3 dBFS) lands about 6 dB under
+ * the speech's (SPEECH_PEAK).
+ */
+export const KEY_LEVEL = 0.65;
 
 /** The radio's chain: in at `input`, out of `out` at its level. */
 export interface RadioChain {
@@ -328,8 +332,9 @@ function speak(engine: Engine, id: string, clip: Clip, at: number, opens: boolea
   const bed = noiseLoop(ctx, start);
   chain(bed, gain(ctx, NOISE_BED), radio.input);
   bed.stop(end);
-  const opening = opens ? openChannel(ctx, radio.input, at) : [];
-  const sources = [speech, bed, ...opening, ...squelch(ctx, radio.input, keyed, end)];
+  const keys = outlet(ctx, radio.input, KEY_LEVEL);
+  const opening = opens ? openChannel(ctx, keys, at) : [];
+  const sources = [speech, bed, ...opening, ...squelch(ctx, keys, keyed, end)];
   onAllEnded(sources, () => radio.out.disconnect());
   duckUnder(engine, opens ? at : start, end);
   const cut = (when: number): void => {
@@ -340,44 +345,41 @@ function speak(engine: Engine, id: string, clip: Clip, at: number, opens: boolea
   return { id, start, end, cut };
 }
 
-/** A slice of the shared noise into `dest`, enveloped: the stuff of every squelch. */
-function staticBurst(
+/** The recording `id` once into `dest` from `at`: none where it is not loaded. */
+function keySound(
   ctx: BaseAudioContext,
+  id: SfxId,
   dest: AudioNode,
-  from: number,
-  envelope: Envelope,
-): AudioBufferSourceNode {
-  const noise = noiseBurst(ctx, from, envelope.attack + envelope.hold + envelope.decay);
-  const level = gain(ctx, 0);
-  applyEnvelope(level.gain, from, envelope);
-  chain(noise, level, dest);
-  return noise;
+  at: number,
+): AudioScheduledSourceNode[] {
+  const recording = sample(id);
+  return recording === null ? [] : [startSample(ctx, recording, dest, at)];
 }
 
-/** The press-to-talk key: static and a click as it goes down, a longer tail as it comes up. */
+/**
+ * The press-to-talk key: its click and a crackle as it goes down at `at`, its squelch tail as
+ * it comes up after the speech ends at `end`.
+ */
 function squelch(
   ctx: BaseAudioContext,
   dest: AudioNode,
   at: number,
   end: number,
 ): AudioScheduledSourceNode[] {
-  const burst = (from: number, seconds: number, peak: number): AudioBufferSourceNode =>
-    staticBurst(ctx, dest, from, { peak, attack: 0.002, hold: seconds * 0.3, decay: seconds * 0.7 });
-  return [
-    burst(at, KEY_S * 0.6, 0.5),
-    tick(ctx, dest, at + KEY_S * 0.5, 2000, 0.8),
-    burst(end + 0.02, TAIL_S, 0.45),
-    tick(ctx, dest, end + 0.02 + TAIL_S, 1600, 0.6),
-  ];
+  const down = keySound(ctx, 'radio-key', dest, at);
+  return [...down, ...keySound(ctx, 'radio-tail', dest, end + 0.02)];
 }
 
 /**
  * The Leitstelle opening the channel at `at`, before a run's first line: static swells up for a
  * third of a second and snaps shut on the squelch gate's click, a beat before the key.
  */
-function openChannel(ctx: BaseAudioContext, dest: AudioNode, at: number): AudioScheduledSourceNode[] {
-  const swell = { peak: 0.55, attack: 0.12, hold: 0.14, decay: 0.04 };
-  return [staticBurst(ctx, dest, at, swell), tick(ctx, dest, at + 0.3, 2400, 0.9)];
+function openChannel(
+  ctx: BaseAudioContext,
+  dest: AudioNode,
+  at: number,
+): AudioScheduledSourceNode[] {
+  return keySound(ctx, 'radio-open', dest, at);
 }
 
 /** The beds and the music go down 6 dB for the speech from `start` and come back after `end`. */

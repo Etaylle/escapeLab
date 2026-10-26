@@ -1,0 +1,99 @@
+/*
+ * The audition page (/sounds, sounds/SoundsBoard.tsx): every recording of the lab in a list by
+ * its kind, each with its play button, its facts, its prompt and a box to tick for a new take,
+ * and the command for the ticked ones at the foot.
+ */
+
+.card.sounds {
+  max-width: 960px;
+}
+
+.sounds-section h2 {
+  margin: 26px 0 8px;
+  font-size: 18px;
+}
+
+.sounds-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.sounds-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.sounds-play {
+  flex: none;
+  min-width: 7.5em;
+}
+
+.sounds-what {
+  flex: 1 1 24em;
+  min-width: 0;
+}
+
+.sounds-id {
+  margin-right: 10px;
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--text);
+}
+
+.sounds-facts {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.sounds-row--noisy .sounds-facts {
+  color: var(--warn);
+}
+
+.sounds-prompt {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.sounds-pick {
+  flex: none;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.sounds-command {
+  margin-top: 28px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.sounds-env input {
+  width: min(32em, 100%);
+  font-family: var(--mono);
+}
+
+/* The command, as the terminal takes it: one line, wrapped where the page is narrow. */
+.sounds-cli {
+  margin: 10px 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: var(--mono);
+  font-size: 13px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.sounds-copied {
+  margin-left: 12px;
+  font-size: 13px;
+}

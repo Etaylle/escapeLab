@@ -241,8 +241,8 @@
  * recording from the manifest the server hands out, saying the banner's line,
  * for 200 ms a word at least and a second at the least; the first line after
  * the Leitstelle's opening squelch, and no other line. In the
- * escape the music's pressure has to stand at 0.8 or more, its pressure layer
- * up and the pad gone under the siren. Wherever the partner stands half a tile
+ * escape the music's pressure has to stand at 0.8 or more, a pressure stem
+ * up and the calm stem gone under the siren. Wherever the partner stands half a tile
  * or more to one side (after the blackout, at the hatch — and after the lever,
  * where the guest walks three to five tiles along the corridor for it and
  * back) the probe's pan has to point there, and that has to be checked once a
@@ -2369,9 +2369,9 @@ async function checkRadioLine(page, missionId) {
 }
 
 /**
- * In the escape the music's pressure is 0.8 or more, its pressure layer up
- * and the siren has taken the pad away: waits up to 4 s for the crossfade.
- * Fails otherwise.
+ * In the escape the music's pressure is 0.8 or more, a pressure stem up (the
+ * tense or the critical) and the calm stem gone under the siren: waits up to
+ * 4 s for the crossfade. Fails otherwise.
  */
 async function escapeMusic(player) {
   let music = null;

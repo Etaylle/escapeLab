@@ -5,9 +5,7 @@ import {
   FakeBuffer,
   FakeContext,
   FakeNode,
-  FakeOfflineContext,
   FakeParam,
-  flush,
   lastContext,
   type FakeBufferSource,
   type FakeOscillator,
@@ -67,68 +65,42 @@ describe('the budget of the beds, the music and the placed sounds', () => {
     expect(refused).toBe(false);
   });
 
-  it('renders a loop from the second of two periods, where the filters have settled', async () => {
-    const { audio } = await freshAudio();
-    class Ramp extends FakeOfflineContext {
-      override startRendering(): Promise<FakeBuffer> {
-        const out = new FakeBuffer(this.length, this.sampleRate);
-        out.data.forEach((_, i) => (out.data[i] = i));
-        return Promise.resolve(out);
-      }
-    }
-    vi.stubGlobal('OfflineAudioContext', Ramp);
-    let built = 0;
-    const loop = await audio.renderLoop(() => (built += 1), 1000, 2);
-    expect(built).toBe(1);
-    expect(loop.length).toBe(2000);
-    expect(loop.getChannelData(0)[0]).toBe(2000); // the second period's first sample
-    expect(loop.getChannelData(0)[1999]).toBe(3999);
-  });
-
-  it('keeps a sound whose render failed silent, and does not render it again', async () => {
-    const { audio } = await freshAudio();
-    let tries = 0;
-    class Failing extends FakeOfflineContext {
-      override startRendering(): Promise<FakeBuffer> {
-        tries += 1;
-        return Promise.reject(new Error('no rendering here'));
-      }
-    }
-    vi.stubGlobal('OfflineAudioContext', Failing);
-    const build = (): void => undefined;
-    for (let round = 0; round < 3; round++) {
-      expect(audio.sampleOf('broken', build, 0.1, 4000)).toBeNull();
-      expect(audio.loopOf('broken', build, 1, 4000)).toBeNull();
-      await flush();
-    }
-    expect(tries).toBe(2); // each once, never again
-  });
-
-  it('renders a sample once, and plays it as one source within the budget', async () => {
+  it('plays a recording once, a source within the budget from where its sound starts', async () => {
     const { audio, ctx } = await freshAudio();
     const live = ctx as unknown as BaseAudioContext;
     const into = ctx.destination as unknown as AudioNode;
-    let built = 0;
-    const build = (): void => {
-      built += 1;
-    };
-    expect(audio.sampleOf('click', build, 0.1, 4000)).toBeNull(); // still rendering
-    await flush();
-    const sample = audio.sampleOf('click', build, 0.1, 4000);
-    expect(sample?.duration).toBe(0.1);
-    expect(built).toBe(1);
-    expect(audio.playSample(live, sample, into, 10.5, 1.05)).toBe(true);
+    const buffer = new FakeBuffer(800, 8000);
+    const click = { buffer: buffer as unknown as AudioBuffer, start: 0.04 };
+    expect(audio.playSample(live, click, into, 10.5, 1.05)).toBe(true);
     const [source] = ctx.all<FakeBufferSource>('buffer');
+    expect(source?.buffer).toBe(buffer);
     expect(source?.startedAt).toBe(10.5);
+    expect(source?.offset).toBe(0.04); // past the silence before its sound
     expect(source?.playbackRate.value).toBe(1.05);
     expect(audio.inUse().voice).toBe(1);
     source?.end();
     expect(source?.disconnected).toBe(true); // nothing of it stays wired
     expect(audio.inUse().voice).toBe(0);
-    expect(audio.playSample(live, null, into, 11)).toBe(false); // no sample yet: no sound
+    expect(audio.playSample(live, null, into, 11)).toBe(false); // not loaded: no sound
     expect(audio.claim({ voice: audio.CAPS.voice })).toBe(true);
-    expect(audio.playSample(live, sample, into, 11)).toBe(false); // no room: no sound
+    expect(audio.playSample(live, click, into, 11)).toBe(false); // no room: no sound
     expect(ctx.all('buffer')).toHaveLength(1);
+  });
+
+  it('plays a loop round and round, all of it, and a capped sound at its level', async () => {
+    const { audio, ctx } = await freshAudio();
+    const live = ctx as unknown as BaseAudioContext;
+    const into = ctx.destination as unknown as AudioNode;
+    const hum = new FakeBuffer(4000, 8000);
+    const loop = audio.playLoop(live, hum as unknown as AudioBuffer, into, 10.2);
+    const source = loop as unknown as FakeBufferSource;
+    expect([source.loop, source.startedAt, source.offset]).toEqual([true, 10.2, 0]);
+    let outlet: FakeNode | undefined;
+    audio.capped(live, into, { voice: 1 }, (out) => {
+      outlet = out as unknown as FakeNode;
+      return [];
+    }, 0.4);
+    expect((outlet as unknown as { gain: FakeParam }).gain.value).toBe(0.4);
   });
 });
 

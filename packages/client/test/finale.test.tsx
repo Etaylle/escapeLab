@@ -46,7 +46,7 @@ import {
   WHITE_MS,
 } from '../src/world/finale.js';
 import { WARM_UP_MS, warmUp } from '../src/world/rooms.js';
-import { BrokenContext, fakeAudio, freshAudio, midBand, started, startedAt } from './fakeAudio.js';
+import { BrokenContext, fakeAudio, freshAudio, started, startedAt, startsOf } from './fakeAudio.js';
 import { mapWith } from './fixtures.js';
 
 const noop = (): void => undefined;
@@ -597,45 +597,41 @@ describe('the sounds of the alarm, the escape and the end', () => {
     vi.unstubAllGlobals();
   });
 
-  it('sound the klaxon in two blasts, and as it fades in five', async () => {
+  it('sound the klaxon, and as it fades three times, each weaker and slower', async () => {
     const audio = await freshAudio();
     audio.klaxon();
-    expect(startedAt('tone', 10.01)).toBe(true);
-    expect(startedAt('tone', 10.23)).toBe(true);
+    expect(started.map((s) => [s.kind, s.at, s.rate])).toEqual([
+      ['klaxon', expect.closeTo(10.01, 3), 1],
+    ]);
     started.length = 0;
     audio.klaxonFade();
-    expect(started.filter((s) => s.kind === 'tone')).toHaveLength(10);
-    expect(startedAt('tone', 11.21)).toBe(true);
+    expect(started.map((s) => [s.kind, s.at, s.rate])).toEqual([
+      ['klaxon', expect.closeTo(10.01, 3), 1],
+      ['klaxon', expect.closeTo(10.71, 3), 0.9],
+      ['klaxon', expect.closeTo(11.41, 3), 0.8],
+    ]);
   });
 
   it('start the siren once however often asked, and stop it without a fuss', async () => {
     const audio = await freshAudio();
     audio.startSiren();
     audio.startSiren();
-    expect(started.filter((s) => s.kind === 'tone')).toHaveLength(2);
+    expect(startsOf('siren')).toHaveLength(1);
     expect(() => audio.stopSiren()).not.toThrow();
     expect(() => audio.stopSiren()).not.toThrow();
     audio.startSiren();
-    expect(started.filter((s) => s.kind === 'tone')).toHaveLength(4);
+    expect(startsOf('siren')).toHaveLength(2);
   });
 
-  it('grind the hatch open for two seconds and close on its clunk; chord and wind at the end', async () => {
+  it('grind the hatch open, and click the lights on with their tubes striking after', async () => {
     const audio = await freshAudio();
     audio.exitGrind();
-    expect(startedAt('noise', 10.01)).toBe(true);
-    expect(startedAt('tone', 12.01)).toBe(true);
-    // The clunk carries its mid band, as every heavy hit does: a phone still hears it land.
-    expect(midBand(audio.MID_BAND)).toBe(true);
-    expect(startedAt('noise', 12.01)).toBe(true);
-    started.length = 0;
-    audio.victoryChord();
-    // Four notes, each with its overtone, 50 ms apart, and the wind under them.
-    expect(started.filter((s) => s.kind === 'tone')).toHaveLength(8);
-    expect(startedAt('tone', 10.16)).toBe(true);
-    expect(startedAt('noise', 10.01)).toBe(true);
+    expect(startedAt('hatch-grind', 10.01)).toBe(true);
     started.length = 0;
     audio.lightsOnClick();
-    expect(startedAt('noise', 10.01)).toBe(true);
+    expect(startedAt('relay-click', 10.01)).toBe(true);
+    expect(startedAt('tube-strike', 10.13)).toBe(true);
+    expect(started.filter((s) => s.kind === 'tone' || s.kind === 'noise')).toEqual([]);
   });
 
   it('never throw, with no audio at all or with one that breaks', async () => {
@@ -645,7 +641,6 @@ describe('the sounds of the alarm, the escape and the end', () => {
       audio.lightsOnClick();
       audio.startSiren();
       audio.exitGrind();
-      audio.victoryChord();
       audio.stopSiren();
     };
     vi.stubGlobal('AudioContext', undefined);

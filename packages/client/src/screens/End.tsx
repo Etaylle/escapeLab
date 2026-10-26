@@ -10,8 +10,8 @@ import {
 } from '@escapelab/core';
 import { reportLine } from '../radio.js';
 import { clock } from '../runStats.js';
-import { victoryChord } from '../world/audio.js';
 import { endingOf, type Ending } from '../world/finale.js';
+import { playSting } from '../world/music.js';
 import { CreditsTable } from './Crew.js';
 import { CrewFigure } from './CrewFigure.js';
 import { Icon, type IconName } from './Icon.js';
@@ -82,17 +82,17 @@ export interface TitleCardProps {
 /**
  * The card a run ends on, as the last shot of a film: what it came to in
  * large letters, the mission, the time and the rank. Won, the crew stands
- * side by side outside on the pavement, the open door behind them, and a
- * major chord sounds over the wind; lost, it stands in the dark lab under
- * the red of an emergency lamp. Where this screen played the end, the card
- * comes up out of its fade.
+ * side by side outside on the pavement, the open door behind them, and the
+ * won sting swells; lost, it stands in the dark lab under the red of an
+ * emergency lamp, and the lost sting sinks (music.ts `playSting`). Where this
+ * screen played the end, the card comes up out of its fade with its sting.
  */
 export function TitleCard(props: TitleCardProps) {
   const { ending, fresh } = props;
   const won = ending === 'won';
   useEffect(() => {
-    if (fresh && won) {
-      victoryChord();
+    if (fresh) {
+      playSting(won ? 'won' : 'lost');
     }
   }, [fresh, won]);
   const title = ENDING_TITLES[ending];

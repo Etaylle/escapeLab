@@ -15,7 +15,7 @@ import {
 } from '../src/screens/PutDown.js';
 import { PuzzlePanel } from '../src/screens/PuzzlePanel.js';
 import { lookOf, ReadingOverlay, verbOf } from '../src/screens/Reading.js';
-import { BrokenContext, fakeAudio, freshAudio, midBand, started, startedAt } from './fakeAudio.js';
+import { BrokenContext, fakeAudio, freshAudio, started, startedAt } from './fakeAudio.js';
 import { deviceRun, mapWith } from './fixtures.js';
 import { buttonsOf, elementsOf, press } from './probe.js';
 
@@ -250,30 +250,26 @@ describe('the sounds of putting down', () => {
     vi.unstubAllGlobals();
   });
 
-  it('lay a sheet down: a swish, then the soft clack of the board, with a mid band', async () => {
+  it('lay a sheet down, shut a book, take a block down: each its recording', async () => {
     const audio = await freshAudio();
     audio.sheetDown();
-    expect(startedAt('noise', 10.01)).toBe(true);
-    expect(startedAt('noise', 10.17)).toBe(true);
-    expect(midBand(audio.MID_BAND)).toBe(true);
-    expect(started.filter((s) => s.kind === 'tone')).toEqual([]);
-  });
-
-  it('shut a book: the rush of the cover, then its clap on the pages', async () => {
-    const audio = await freshAudio();
     audio.coverShut();
-    expect(startedAt('noise', 10.01)).toBe(true);
-    expect(startedAt('tone', 10.19)).toBe(true);
-    expect(midBand(audio.MID_BAND)).toBe(true);
+    audio.pencilScratch();
+    expect(startedAt('sheet-down', 10.01)).toBe(true);
+    expect(startedAt('book-shut', 10.01)).toBe(true);
+    expect(startedAt('pencil', 10.01)).toBe(true);
+    expect(started.filter((s) => s.kind === 'tone' || s.kind === 'noise')).toEqual([]);
   });
 
-  it('take a block down with three strokes of a pencil, no tone in them', async () => {
+  it('write a little faster or slower each time, so that no two blocks sound alike', async () => {
     const audio = await freshAudio();
-    audio.pencilScratch();
-    for (const at of [10.01, 10.1, 10.2]) {
-      expect(startedAt('noise', at), String(at)).toBe(true);
+    for (let i = 0; i < 12; i++) audio.pencilScratch();
+    const rates = started.filter((s) => s.kind === 'pencil').map((s) => s.rate);
+    expect(new Set(rates).size).toBeGreaterThan(1);
+    for (const rate of rates) {
+      expect(rate).toBeGreaterThanOrEqual(0.92);
+      expect(rate).toBeLessThanOrEqual(1.08);
     }
-    expect(started.filter((s) => s.kind === 'tone')).toEqual([]);
   });
 
   it('never throw, with no audio at all or with one that breaks', async () => {

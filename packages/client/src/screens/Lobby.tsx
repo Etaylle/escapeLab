@@ -10,6 +10,7 @@ import {
 import { FIRST_RUN_LINE, useWon } from '../firstRun.js';
 import { fullscreenForRun } from '../runScreen.js';
 import { recordParts } from '../runStats.js';
+import { preloadSamples } from '../world/samples.js';
 import { crewSizeText } from './Crew.js';
 import { CrewRoom } from './CrewRoom.js';
 import { Icon } from './Icon.js';
@@ -380,6 +381,10 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
   const [more, setMore] = useState(false);
   const host = view.you.isHost;
   const won = useWon();
+  // The lab's recordings load while the crew gathers, so that the run's first sounds are on time.
+  useEffect(() => {
+    void preloadSamples();
+  }, []);
   // The host picks among the missions where everyone else sees the map.
   const picker =
     host && missions.length > 1 ? (

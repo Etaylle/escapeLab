@@ -5,6 +5,7 @@ import {
   BAND_HIGH,
   BAND_LOW,
   DUCK_LEVEL,
+  KEY_LEVEL,
   KEY_S,
   NOISE_BED,
   OPEN_S,
@@ -15,8 +16,6 @@ import {
   TAIL_S,
   type VoiceManifest,
 } from '../src/world/radioVoice.js';
-import type {
-  FakeGain} from './fakeGraph.js';
 import {
   chainFrom,
   fakeGraph,
@@ -24,9 +23,11 @@ import {
   lastContext,
   type FakeBufferSource,
   type FakeFilter,
+  type FakeGain,
   type FakeNode,
   type FakeShaper,
 } from './fakeGraph.js';
+import { serveSamples } from './fakeSamples.js';
 
 const LEVER_LINE =
   'Notlicht steht, danke. Jetzt der Notstrom: Die Anleitung dafür hängt im Archiv, der ' +
@@ -146,15 +147,13 @@ describe('a line spoken over the radio', () => {
   beforeEach(() => {
     fakeGraph();
     fetched = [];
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((url: string) => {
-        fetched.push(url);
-        const json = (): Promise<VoiceManifest> => Promise.resolve(MANIFEST);
-        const arrayBuffer = (): Promise<ArrayBuffer> => Promise.resolve(new ArrayBuffer(8));
-        return Promise.resolve({ ok: true, status: 200, json, arrayBuffer });
-      }),
-    );
+    // The squelches' recordings as the samples serve them; mission control's lines as here.
+    serveSamples({}, (url: string) => {
+      fetched.push(url);
+      const json = (): Promise<VoiceManifest> => Promise.resolve(MANIFEST);
+      const arrayBuffer = (): Promise<ArrayBuffer> => Promise.resolve(new ArrayBuffer(8));
+      return Promise.resolve({ ok: true, status: 200, json, arrayBuffer });
+    });
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -163,8 +162,16 @@ describe('a line spoken over the radio', () => {
 
   async function voice() {
     vi.resetModules();
+    await (await import('../src/world/samples.js')).preloadSamples();
     return import('../src/world/radioVoice.js');
   }
+
+  /** The recordings of `id` played on `ctx`, by when they start. */
+  const keysOf = (ctx: ReturnType<typeof lastContext>, id: string): number[] =>
+    ctx
+      .all<FakeBufferSource>('buffer')
+      .filter((s) => s.buffer?.tag === id)
+      .map((s) => s.startedAt as number);
 
   /** Lets the fetches and the decoding settle. */
   const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -212,9 +219,13 @@ describe('a line spoken over the radio', () => {
     expect((bed?.outputs[0] as FakeGain).gain.value).toBe(NOISE_BED);
     expect(bed?.startedAt).toBeCloseTo(10.08, 9);
     expect(bed?.stoppedAt).toBeCloseTo(11.58, 9);
-    const bursts = sources.filter((s) => !s.loop && s !== speech).map((s) => s.startedAt as number);
-    expect(bursts.some((at) => at < 10.08)).toBe(true); // keyed up
-    expect(bursts.some((at) => at > 11.58)).toBe(true); // and down
+    expect(keysOf(ctx, 'radio-key')).toEqual([expect.closeTo(10.01, 9)]); // keyed up
+    expect(keysOf(ctx, 'radio-tail')).toEqual([expect.closeTo(11.6, 9)]); // and down
+    const key = sources.find((s) => s.buffer?.tag === 'radio-key');
+    const keys = key?.outputs[0] as FakeGain;
+    expect(keys.gain.value).toBe(KEY_LEVEL); // into the chain, under the speech's peak
+    expect(keys.outputs[0]).toBe(normal.outputs[0]);
+    expect(20 * Math.log10((KEY_LEVEL * 10 ** (-3 / 20)) / SPEECH_PEAK)).toBeCloseTo(-5.8, 1);
   });
 
   it('ducks the beds and the music 6 dB while it speaks, and reports it playing', async () => {
@@ -248,12 +259,9 @@ describe('a line spoken over the radio', () => {
     const speech = sources.find((s) => s.buffer?.duration === 1.5);
     // Keyed at 10.01: the opening, then the key's squelch, then the voice.
     expect(speech?.startedAt).toBeCloseTo(10.01 + OPEN_S + KEY_S, 9);
-    const keyed = 10.01 + OPEN_S;
-    const opening = sources
-      .filter((s) => s !== speech && !s.loop && (s.startedAt ?? 0) < keyed - 1e-9)
-      .map((s) => s.startedAt);
-    // Static swelling up from the start, the squelch gate's click as it snaps shut.
-    expect(opening).toEqual([expect.closeTo(10.01, 9), expect.closeTo(10.31, 9)]);
+    // The opening's recording from the start — static swelling, snapping shut — then the key.
+    expect(keysOf(ctx, 'radio-open')).toEqual([expect.closeTo(10.01, 9)]);
+    expect(keysOf(ctx, 'radio-key')).toEqual([expect.closeTo(10.01 + OPEN_S, 9)]);
     const master = ctx.all<FakeGain>('gain').find((g) => g.outputs.includes(ctx.destination));
     const duck = ctx.all<FakeGain>('gain').find((g) => g.outputs.includes(master as FakeNode));
     expect(duck?.gain.ramps()[0]).toEqual([DUCK_LEVEL, expect.closeTo(10.08, 9)]);

@@ -8,6 +8,7 @@ import { registerServiceWorker, watchInstallOffer } from './pwa.js';
 import { opensRecording } from './record/path.js';
 import { RecordScreen } from './record/RecordScreen.js';
 import { startSettings } from './settings.js';
+import { opensSounds } from './sounds/path.js';
 import './ui.css';
 import './styles/notes.css';
 import './styles/servers.css';
@@ -29,6 +30,7 @@ import './styles/putdown.css';
 import './styles/record.css';
 import './styles/settings.css';
 import './styles/intro.css';
+import './styles/sounds.css';
 
 // The player's volumes, text size and motion apply before the first frame (settings.ts).
 startSettings();
@@ -48,6 +50,19 @@ if (opensRecording(window.location.pathname)) {
     <StrictMode>
       <RecordScreen />
     </StrictMode>,
+  );
+} else if (opensSounds(window.location.pathname)) {
+  // /sounds: every recording of the lab to listen to, a tool beside the game, not in it — in a
+  // chunk of its own, with the catalog it lists.
+  import('./sounds/SoundsScreen.js').then(
+    ({ SoundsScreen }) => {
+      createRoot(root).render(
+        <StrictMode>
+          <SoundsScreen />
+        </StrictMode>,
+      );
+    },
+    (err: unknown) => console.error('[escapelab] the sounds page could not be loaded:', err),
   );
 } else {
   // The address may open the editor, with a mission a shared link packed into it: unpacked

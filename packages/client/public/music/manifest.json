@@ -1,0 +1,57 @@
+{
+  "calm": {
+    "file": "calm.mp3",
+    "ms": 72046,
+    "gain": 1.7966,
+    "startMs": 0,
+    "floor": 0.0159,
+    "rms": 0.0557,
+    "loop": true,
+    "hash": "691b16ff2ecf",
+    "source": "elevenlabs"
+  },
+  "critical": {
+    "file": "critical.mp3",
+    "ms": 72046,
+    "gain": 0.5717,
+    "startMs": 338,
+    "floor": 0,
+    "rms": 0.175,
+    "loop": true,
+    "hash": "2c6a1064d1ea",
+    "source": "elevenlabs"
+  },
+  "lost": {
+    "file": "lost.mp3",
+    "ms": 11050,
+    "gain": 1.1557,
+    "startMs": 0,
+    "floor": 0.0000323,
+    "rms": 0.173,
+    "loop": false,
+    "hash": "3c5252831169",
+    "source": "elevenlabs"
+  },
+  "tense": {
+    "file": "tense.mp3",
+    "ms": 72046,
+    "gain": 0.9463,
+    "startMs": 0,
+    "floor": 0.0129,
+    "rms": 0.106,
+    "loop": true,
+    "hash": "007f6d62644c",
+    "source": "elevenlabs"
+  },
+  "won": {
+    "file": "won.mp3",
+    "ms": 10031,
+    "gain": 1.4491,
+    "startMs": 0,
+    "floor": 0.0000383,
+    "rms": 0.138,
+    "loop": false,
+    "hash": "242c5b44e6e5",
+    "source": "elevenlabs"
+  }
+}

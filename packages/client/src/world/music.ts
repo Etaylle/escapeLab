@@ -1,62 +1,57 @@
 import {
   audioEngine,
   biquad,
-  chain,
   claim,
   EFFECTS_LEVEL,
   fadeTo,
-  gain,
   levelAt,
   LOOKAHEAD,
-  loopOf,
-  midKnock,
-  noiseBuffer,
-  noiseLoop,
   outlet,
-  playLoop,
-  playSample,
-  rand,
+  playingEngine,
   release,
-  sampleOf,
+  startSample,
   still,
-  tone,
   type Engine,
   type Fade,
 } from './audio.js';
+import { sample, type Sample } from './samples.js';
 
 /**
- * Music that breathes: made at runtime, in three layers that one pressure value, 0 to 1,
- * brings in and takes out —
+ * Music that breathes: three recorded stems (samples.ts: Eleven Music composed them, all three
+ * in A minor at 90 bpm, so that one blends into the next), between which one pressure value,
+ * 0 to 1, crossfades —
  *
- *   calm         a slow pad, two detuned sines through a lowpass sweeping over 20 s, and a
- *                swell of filtered noise about every 12 s;
- *   pressure     a muted bass pulse at 90 bpm and a sparse A-minor arpeggio over it;
- *   last minute  the arpeggio doubles, the pulse goes to 120 bpm and a heartbeat comes in, two
- *                thumps, rising from 70 to 120 bpm as the last 60 s run out.
+ *   calm      an uneasy pad over a low drone, sparse piano, no drums;
+ *   tense     from 0.35: a bass pulse on every beat, a sparse arpeggio, low strings;
+ *   critical  from 0.8: pounding drums, fast hats, a string ostinato in double time.
  *
  * The pressure follows the clock (the tension curve the lab always had: nothing in the first
  * half, then rising to 1 as it runs out — and at least 0.8 in the last minute), every alarm
- * (+0.15 for 20 s) and the escape (at least 0.8). A layer comes in or goes on the beat, over
+ * (+0.15 for 20 s) and the escape (at least 0.8). A stem comes in or goes on the beat, over
  * whole beats and at least 2 s. No music while the lab has its power: it starts under the
- * blackout 2 s after the click, 18 dB under the effects. The escape's siren takes the pad and
- * the arpeggio away and keeps the pulse and the heartbeat; a run won fades it out before its
- * chord, a run lost drains it with the power. `setTension` is its one input, ten times a
- * second: each call schedules the notes ahead on the audio clock. The pad is a loop rendered
- * once, playing only while its layer is heard; every note is a sample rendered once and played
- * as a single source within the budget of audio.ts (`CAPS`), unwired as it ends. Pure up to
- * `setTension`.
+ * blackout 2 s after the click. A stem plays round and round: each next pass comes in over the
+ * last SEAM_S of the one before, equal in power, two sources taking turns on the audio clock;
+ * while it is heard it takes one loop of the budget of audio.ts (`CAPS`), and it stops once it
+ * has faded out. A run won fades the music out before the end card's sting (`playSting`); a run
+ * lost drains it, its lowpass closing and the stem slowing, with the power. `setTension` is
+ * its one input, ten times a second: each call schedules what is due ahead on the audio clock.
+ * Pure up to `setTension`.
  */
 
-/** The music at full: 18 dB under the effects (audio.ts EFFECTS_LEVEL). */
-export const MUSIC_LEVEL = EFFECTS_LEVEL * 10 ** (-18 / 20);
+/** A stem's loudness and a sting's, after the gain of each (scripts/sfx.ts), RMS. */
+const STEM_RMS = 10 ** (-20 / 20);
+const STING_RMS = 10 ** (-14 / 20);
+/**
+ * The music at full: a stem's RMS 26 dB under the effects' level (audio.ts EFFECTS_LEVEL) at
+ * the master gain — about where the synthesised pad before it sat.
+ */
+export const MUSIC_LEVEL = (EFFECTS_LEVEL * 10 ** (-26 / 20)) / STEM_RMS;
+/** The end card's sting: its RMS 8 dB under the effects' level, the music gone by then. */
+export const STING_LEVEL = (EFFECTS_LEVEL * 10 ** (-8 / 20)) / STING_RMS;
 /** The music starts this long after the click of the blackout, ms (coldOpen.ts REVEAL_MS). */
 export const MUSIC_AFTER_CLICK_MS = 2000;
-/** The pulse's tempo under pressure, and in the last minute. */
-export const PULSE_BPM = 90;
-export const LAST_BPM = 120;
-/** The heartbeat's tempo as the last minute starts, and as it runs out. */
-const HEART_FROM_BPM = 70;
-const HEART_TO_BPM = 120;
+/** The stems' tempo, as their prompts name it: the beat a crossfade starts on. */
+export const MUSIC_BPM = 90;
 /** The last minute, s. */
 export const LAST_MINUTE_S = 60;
 /** What an alarm adds to the pressure, and for how long, ms. */
@@ -66,31 +61,30 @@ export const ALARM_HOLD_MS = 20_000;
 export const ESCAPE_FLOOR = 0.8;
 /** A crossfade lasts whole beats, at least this long, s. */
 export const CROSSFADE_MIN_S = 2;
-/** The pressure layer comes in at PRESSURE_ON and goes below PRESSURE_OFF; the last as well. */
+/** The next pass of a stem comes in over this long at the end of the one before, s. */
+export const SEAM_S = 3;
+/** The tense stem comes in at PRESSURE_ON and goes below PRESSURE_OFF; the critical as well. */
 const PRESSURE_ON = 0.35;
 const PRESSURE_OFF = 0.3;
 const LAST_ON = 0.8;
 const LAST_OFF = 0.75;
-/** The pad's sweep: one turn of its lowpass, s, moved on in steps this long. */
-const SWEEP_S = 20;
-const SWEEP_STEP_S = 0.25;
-/** A swell of the pad's noise about this often, s. */
-const SWELL_EVERY_S: readonly [number, number] = [10, 14];
 /** A run's end: the music fades or drains over this long, s. */
 const END_S = 1.5;
 /** The drain's lowpass, open until a run is lost. */
 const OPEN_HZ = 20000;
-/** The arpeggio, A minor: A4 C5 E5 C5, one note every other beat; doubled an octave up between. */
-const ARPEGGIO = [440, 523.25, 659.25, 523.25] as const;
 
-/** Whether each layer is in: the calm pad, the pressure layer, the last minute's. */
+/** The three stems, quietest first. */
+export const STEMS = ['calm', 'tense', 'critical'] as const;
+export type Stem = (typeof STEMS)[number];
+
+/** Whether each layer is in: the calm, the pressure, the last minute's. */
 export interface Layers {
   readonly calm: boolean;
   readonly pressure: boolean;
   readonly last: boolean;
 }
 
-/** The pulse's beat: where it started on the audio clock, and its tempo. */
+/** The beat: where it started on the audio clock, and its tempo. */
 export interface Grid {
   readonly origin: number;
   readonly bpm: number;
@@ -125,7 +119,7 @@ export function pressureOf(input: {
 /**
  * Which layers are in at `pressure`, from those that were (`was`): each comes in at its
  * threshold and only goes a little under it, so that the pressure wavering never flips it; the
- * siren (`siren`) takes the calm pad away.
+ * siren (`siren`) takes the calm away.
  */
 export function layersFor(pressure: number, siren: boolean, was: Layers): Layers {
   return {
@@ -135,10 +129,10 @@ export function layersFor(pressure: number, siren: boolean, was: Layers): Layers
   };
 }
 
-/** The heartbeat's tempo with `left` s on the clock: 70 bpm from a minute on, 120 at 0. */
-export function heartBpm(left: number): number {
-  const run = 1 - Math.min(1, Math.max(0, left) / LAST_MINUTE_S);
-  return HEART_FROM_BPM + (HEART_TO_BPM - HEART_FROM_BPM) * run;
+/** The stem that plays with `layers` in: the last minute's critical, the pressure's tense, calm. */
+export function stemFor(layers: Layers): Stem {
+  if (layers.last) return 'critical';
+  return layers.pressure ? 'tense' : 'calm';
 }
 
 /** The first beat of `grid` at or after the audio time `t`. */
@@ -172,18 +166,23 @@ export interface Tension {
 
 // --- the runtime -------------------------------------------------------------------------
 
-type Bus = 'calm' | 'pulse' | 'arp' | 'double' | 'heart';
-const BUSES: readonly Bus[] = ['calm', 'pulse', 'arp', 'double', 'heart'];
+/** One pass of a stem: its source, the stage it fades in and out through, and when it starts. */
+interface Pass {
+  readonly source: AudioBufferSourceNode;
+  readonly seam: GainNode;
+  readonly start: number;
+}
 
-/** How loud each bus plays with `layers` in: the siren keeps only the pulse and the heart. */
-function busLevels(layers: Layers, siren: boolean): Record<Bus, number> {
-  return {
-    calm: layers.calm ? 1 : 0,
-    pulse: layers.pressure ? 1 : 0,
-    arp: layers.pressure && !siren ? 1 : 0,
-    double: layers.last && !siren ? 1 : 0,
-    heart: layers.last ? 1 : 0,
-  };
+/**
+ * A stem: its bus, how loud the pressure has it, its passes — the one playing and the one it
+ * fades out under — and when the next pass starts; `next` is null while the stem is silent and
+ * holds no loop of the budget.
+ */
+interface Track {
+  readonly bus: GainNode;
+  fade: Fade;
+  passes: readonly Pass[];
+  next: number | null;
 }
 
 interface Music {
@@ -194,37 +193,33 @@ interface Music {
   outFade: Fade;
   /** the drain's lowpass */
   readonly drain: BiquadFilterNode;
-  readonly buses: Record<Bus, { readonly node: GainNode; fade: Fade }>;
-  /** the pad's loop while the calm layer is heard — a loop of the budget — and its lowpass */
-  pad: AudioBufferSourceNode | null;
-  readonly padFilter: BiquadFilterNode;
-  /** when the music started, audio time: the pad's sweep turns from there */
-  readonly origin: number;
-  /** the next unscheduled step of the pad's sweep, audio time */
-  sweepAt: number;
-  grid: Grid;
+  readonly tracks: Record<Stem, Track>;
+  readonly grid: Grid;
   layers: Layers;
   siren: boolean;
   pressure: number;
-  left: number;
   /** the run's alarms counted so far, and when the recent ones came in, epoch ms */
   alarms: number;
   readonly alarmsAt: number[];
-  /** the next unscheduled beat and its count, the next heartbeat and the next swell */
-  next: { beat: number; count: number; heart: number; swell: number };
   ended: boolean;
 }
 
-/** How far ahead the notes are scheduled, s: past the next call, a tenth of a second on. */
+/** How far ahead the passes are scheduled, s: past the next call, a tenth of a second on. */
 const AHEAD_S = 0.3;
 const NO_LAYERS: Layers = { calm: false, pressure: false, last: false };
+/** The seam's curves: in, a quarter sine, and out, its mirror — equal in power throughout. */
+const SEAM_POINTS = 32;
+const SEAM_IN = Float32Array.from({ length: SEAM_POINTS }, (_, i) =>
+  Math.sin((Math.PI / 2) * (i / (SEAM_POINTS - 1))),
+);
+const SEAM_OUT = Float32Array.from(SEAM_IN).reverse();
 
 let music: Music | null = null;
 
 /**
- * The music follows the run: starts once `startAt` has come, moves its layers with the pressure,
+ * The music follows the run: starts once `startAt` has come, moves its stems with the pressure,
  * schedules what is due, ends with the run. Called ten times a second; only a real change
- * moves a layer.
+ * moves a stem.
  */
 export function setTension(input: Tension): void {
   try {
@@ -240,7 +235,9 @@ export function setTension(input: Tension): void {
       return;
     }
     follow(music, input);
-    scheduleNotes(music);
+    if (music.engine.ctx.state === 'running') {
+      for (const stem of STEMS) tendTrack(music.engine, music.tracks[stem], stem);
+    }
   } catch {
     // Deliberately silent: the music is flavour, never required.
   }
@@ -258,56 +255,27 @@ function startMusic(input: Tension, startAt: number): Music | null {
   const out = outlet(ctx, engine.music, MUSIC_LEVEL);
   const drain = biquad(ctx, 'lowpass', OPEN_HZ, 0);
   drain.connect(out);
-  const bus = (): { node: GainNode; fade: Fade } => ({
-    node: outlet(ctx, drain, 0),
+  const track = (): Track => ({
+    bus: outlet(ctx, drain, 0),
     fade: still(0),
+    passes: [],
+    next: null,
   });
-  const buses = { calm: bus(), pulse: bus(), arp: bus(), double: bus(), heart: bus() };
-  const padFilter = biquad(ctx, 'lowpass', sweepHz(0), 6);
-  padFilter.connect(buses.calm.node);
-  noiseBuffer(ctx); // the shared noise at the live rate, before a sample is rendered from it
-  prepareSamples(engine);
   return {
     run: input.run,
     engine,
     out,
     outFade: still(MUSIC_LEVEL),
     drain,
-    buses,
-    pad: null,
-    padFilter,
-    origin: at,
-    sweepAt: at,
-    grid: { origin: at, bpm: PULSE_BPM },
+    tracks: { calm: track(), tense: track(), critical: track() },
+    grid: { origin: at, bpm: MUSIC_BPM },
     layers: NO_LAYERS,
     siren: false,
     pressure: 0,
-    left: Infinity,
     alarms: input.alarms,
     alarmsAt: [],
-    next: { beat: at, count: 0, heart: at, swell: at + rand(2, SWELL_EVERY_S[0]) },
     ended: false,
   };
-}
-
-/** The pad's lowpass `t` s into the music: from about 150 Hz up to about 690 Hz and back. */
-export function sweepHz(t: number): number {
-  return 420 + 270 * Math.sin((2 * Math.PI * t) / SWEEP_S);
-}
-
-/** The pad's two sines a hertz apart: they beat once in its loop of a second. */
-function sines(ctx: BaseAudioContext, dest: AudioNode): void {
-  for (const frequency of [220, 221]) {
-    const osc = ctx.createOscillator();
-    osc.frequency.value = frequency;
-    chain(osc, gain(ctx, 0.45), dest);
-    osc.start(0);
-  }
-}
-
-/** The pad's loop, rendered once at half the live rate; null while it renders. */
-function padLoopOf(engine: Engine): AudioBuffer | null {
-  return loopOf('music/pad', sines, 1, engine.ctx.sampleRate / 2);
 }
 
 /** The music takes in this call's input: the alarms, the clock, the escape — and its layers. */
@@ -315,7 +283,6 @@ function follow(m: Music, input: Tension): void {
   const now = Date.now();
   for (; m.alarms < input.alarms; m.alarms++) m.alarmsAt.push(now);
   while ((m.alarmsAt[0] ?? now) <= now - ALARM_HOLD_MS) m.alarmsAt.shift();
-  m.left = input.left;
   m.pressure = pressureOf({ ...input, alarms: m.alarmsAt.length });
   const layers = layersFor(m.pressure, input.escaping, m.layers);
   const was = m.layers;
@@ -326,179 +293,81 @@ function follow(m: Music, input: Tension): void {
   }
 }
 
-/**
- * The layers move to `layers` on the next beat, over whole beats and CROSSFADE_MIN_S at least;
- * where the last minute comes or goes, the beat changes its tempo there.
- */
+/** The stems move to what `layers` plays: from the next beat, over whole beats, 2 s or more. */
 function retarget(m: Music, layers: Layers, siren: boolean): void {
   const now = m.engine.ctx.currentTime;
   const start = nextBeat(now + LOOKAHEAD, m.grid);
-  if (layers.last !== m.layers.last) {
-    const bpm = layers.last ? LAST_BPM : PULSE_BPM;
-    // The beat at `start` may be scheduled already; the new tempo then goes on after it.
-    m.next.beat = m.next.beat > start + 1e-6 ? start + 60 / bpm : start;
-    m.grid = { origin: start, bpm };
-  }
-  const beats = crossfadeBeats(m.grid.bpm);
-  const end = start + (beats * 60) / m.grid.bpm;
-  const levels = busLevels(layers, siren);
-  for (const name of BUSES) {
-    const bus = m.buses[name];
-    if (bus.fade.to !== levels[name]) {
-      bus.fade = fadeTo(bus.node.gain, bus.fade, now, [start, end], levels[name]);
+  const end = start + (crossfadeBeats(m.grid.bpm) * 60) / m.grid.bpm;
+  const playing = stemFor(layers);
+  for (const stem of STEMS) {
+    const track = m.tracks[stem];
+    const to = stem === playing ? 1 : 0;
+    if (track.fade.to !== to) {
+      track.fade = fadeTo(track.bus.gain, track.fade, now, [start, end], to);
     }
   }
   m.layers = layers;
   m.siren = siren;
 }
 
-/** Whether a bus is up or coming up at audio time `t`: only then are its notes made. */
-function heard(m: Music, bus: Bus, t: number): boolean {
-  const { fade } = m.buses[bus];
-  return fade.to > 0 || levelAt(fade, t) > 0.001;
+/** How long a stem's pass sounds, s: its recording from where its sound starts. */
+function passLength(recording: Sample): number {
+  return recording.buffer.duration - recording.start;
 }
 
 /**
- * The pad plays while its layer is heard and stops once that has faded out — a stopped loop
- * costs the audio thread nothing — and its lowpass steps along its sweep.
+ * A stem as its fade has it: while it is heard its passes go on — the first as its fade comes
+ * in, once its recording is loaded and the budget has a loop for it, else tried again next
+ * round — and once it has faded out it stops and gives its loop back.
  */
-function tendPad(m: Music, now: number): void {
-  const calm = m.buses.calm.fade;
-  if (calm.to > 0 && m.pad === null) {
-    const loop = padLoopOf(m.engine);
-    if (loop !== null && claim({ loop: 1 })) {
-      m.pad = playLoop(m.engine.ctx, loop, m.padFilter, Math.max(now + LOOKAHEAD, m.origin));
-      m.pad.onended = () => release({ loop: 1 });
-    }
-  } else if (calm.to === 0 && now >= calm.end && m.pad !== null) {
-    m.pad.stop(now + 0.05);
-    m.pad = null;
+function tendTrack(engine: Engine, track: Track, stem: Stem): void {
+  const now = engine.ctx.currentTime;
+  const heard = track.fade.to > 0 || levelAt(track.fade, now) > 0.001;
+  if (!heard) {
+    silence(track, now + 0.05);
+    return;
   }
-  for (; m.sweepAt < now + AHEAD_S; m.sweepAt += SWEEP_STEP_S) {
-    m.padFilter.frequency.setValueAtTime(sweepHz(m.sweepAt - m.origin), m.sweepAt);
+  const recording = sample(stem);
+  if (recording === null || passLength(recording) <= 2 * SEAM_S) return;
+  if (track.next === null) {
+    if (!claim({ loop: 1 })) return;
+    track.next = Math.max(now + LOOKAHEAD, track.fade.start);
+  }
+  for (; track.next < now + AHEAD_S; track.next += passLength(recording) - SEAM_S) {
+    startPass(engine.ctx, recording, track, track.next);
   }
 }
 
 /**
- * The beats, the heartbeats and the swells due before now + AHEAD_S, and the pad. One that fell
- * behind — the page in the background, its timer held back — passes unplayed, so that nothing
- * comes out in a burst.
+ * The stem's next pass from `at`: where one plays already, the new one comes in over SEAM_S
+ * as the old one, at its end, goes out under it, equal in power.
  */
-function scheduleNotes(m: Music): void {
-  const { ctx } = m.engine;
-  if (ctx.state !== 'running') return;
-  const now = ctx.currentTime;
-  const until = now + AHEAD_S;
-  tendPad(m, now);
-  for (; m.next.beat < until; m.next.count++) {
-    if (m.next.beat >= now) onTheBeat(m, m.next.beat, m.next.count);
-    m.next.beat += 60 / m.grid.bpm;
+function startPass(ctx: BaseAudioContext, recording: Sample, track: Track, at: number): void {
+  const previous = track.passes.at(-1);
+  const seam = outlet(ctx, track.bus, previous === undefined ? 1 : 0);
+  if (previous !== undefined) {
+    seam.gain.setValueCurveAtTime(SEAM_IN, at, SEAM_S);
+    previous.seam.gain.setValueCurveAtTime(SEAM_OUT, at, SEAM_S);
+    previous.source.stop(at + SEAM_S + 0.05);
   }
-  for (; m.next.heart < until; m.next.heart += 60 / heartBpm(m.left)) {
-    if (m.next.heart >= now && heard(m, 'heart', m.next.heart)) heartbeat(m, m.next.heart);
-  }
-  for (; m.next.swell < until; m.next.swell += rand(...SWELL_EVERY_S)) {
-    if (m.next.swell >= now && heard(m, 'calm', m.next.swell)) {
-      // a little faster or slower each time, so that no two breaths sound alike
-      playNote(m, 'swell', 'calm', m.next.swell, rand(0.95, 1.05));
-    }
-  }
+  const source = startSample(ctx, recording, seam, at);
+  source.onended = () => seam.disconnect();
+  const pass = { source, seam, start: at };
+  track.passes = previous === undefined ? [pass] : [previous, pass];
 }
 
-/** One beat: the pulse, and every other beat the arpeggio's note — doubled on those between. */
-function onTheBeat(m: Music, at: number, count: number): void {
-  if (heard(m, 'pulse', at)) playNote(m, 'bass', 'pulse', at);
-  const note = ARPEGGIO[Math.floor(count / 2) % ARPEGGIO.length] ?? ARPEGGIO[0];
-  if (count % 2 === 0 && heard(m, 'arp', at)) playNote(m, `arp ${note}`, 'arp', at);
-  if (count % 2 === 1 && heard(m, 'double', at)) playNote(m, `double ${note}`, 'double', at);
-}
-
-type SampleBuild = (ctx: BaseAudioContext, dest: AudioNode) => void;
-
-/** A heartbeat's thump at `peak`: a low sine falling, and its mid layer. */
-function thump(ctx: BaseAudioContext, dest: AudioNode, peak: number): void {
-  const envelope = { at: 0, attack: 0.004, hold: 0.02, decay: 0.16 } as const;
-  tone(ctx, dest, { type: 'sine', from: 62, to: 38, peak, ...envelope });
-  midKnock(ctx, dest, 0, 0.08, 0.35 * peak);
-}
-
-/** A plucked note of the arpeggio at `hz`: a triangle dying away over ~0.7 s. */
-function pluck(hz: number, peak: number): SampleBuild {
-  const envelope = { at: 0, attack: 0.01, hold: 0.05, decay: 0.7 } as const;
-  return (ctx, dest) => {
-    tone(ctx, dest, { type: 'triangle', from: hz, to: hz, peak, ...envelope });
-  };
-}
-
-/** The muted bass: A1 as a triangle with its octave, through a lowpass at 380 Hz. */
-function bass(ctx: BaseAudioContext, dest: AudioNode): void {
-  const muted = biquad(ctx, 'lowpass', 380, 0);
-  muted.connect(dest);
-  const envelope = { at: 0, attack: 0.006, hold: 0.05, decay: 0.3 } as const;
-  tone(ctx, muted, { type: 'triangle', from: 55, to: 55, peak: 0.8, ...envelope });
-  tone(ctx, muted, { type: 'sine', from: 110, to: 110, peak: 0.4, ...envelope });
+/** The stem stops at `at` and gives its loop back: faded out, or the music is over. */
+function silence(track: Track, at: number): void {
+  if (track.next === null) return;
+  for (const pass of track.passes) pass.source.stop(at);
+  track.passes = [];
+  track.next = null;
+  release({ loop: 1 });
 }
 
 /**
- * The pad's breath: noise in a soft band swelling over ~3 s and fading over ~4 s — the shared
- * noise looped, as its two seconds are shorter than the breath.
- */
-function breath(ctx: BaseAudioContext, dest: AudioNode): void {
-  const air = noiseLoop(ctx, 0);
-  air.stop(8);
-  const level = gain(ctx, 0);
-  level.gain.setValueAtTime(0, 0);
-  level.gain.linearRampToValueAtTime(0.25, 3);
-  level.gain.setValueAtTime(0.25, 4);
-  level.gain.linearRampToValueAtTime(0, 8);
-  chain(air, biquad(ctx, 'bandpass', 520, 1.2), level, dest);
-}
-
-/**
- * The music's notes as samples, each rendered once (audio.ts `sampleOf`) at half the live rate
- * and played as one source a note: [seconds, how it is made] by name. The bass's octave and
- * overtones and the heartbeat's mid layer carry them on a laptop's or a phone's speaker.
- */
-const SAMPLES: Readonly<Record<string, readonly [number, SampleBuild]>> = {
-  bass: [0.4, bass],
-  lub: [0.2, (ctx, dest) => thump(ctx, dest, 1)],
-  dub: [0.2, (ctx, dest) => thump(ctx, dest, 0.7)],
-  swell: [8, breath],
-  ...Object.fromEntries(
-    ARPEGGIO.flatMap((hz) => [
-      [`arp ${hz}`, [0.8, pluck(hz, 0.35)]],
-      [`double ${hz}`, [0.8, pluck(hz * 2, 0.2)]],
-    ]),
-  ),
-};
-
-/** The music's sample `name`; null while it renders. */
-function sampleNamed(engine: Engine, name: string): AudioBuffer | null {
-  const recipe = SAMPLES[name];
-  if (recipe === undefined) return null;
-  return sampleOf(`music/${name}`, recipe[1], recipe[0], engine.ctx.sampleRate / 2);
-}
-
-/** Sets every sample of the music rendering as it starts: they are ready by its first notes. */
-function prepareSamples(engine: Engine): void {
-  for (const name of Object.keys(SAMPLES)) sampleNamed(engine, name);
-}
-
-/** The music's sample `name` played once into `bus` from `at`, `speed` times as fast. */
-function playNote(m: Music, name: string, bus: Bus, at: number, speed = 1): void {
-  playSample(m.engine.ctx, sampleNamed(m.engine, name), m.buses[bus].node, at, speed);
-}
-
-/** The heartbeat: two thumps, the second softer, closer together as it quickens. */
-function heartbeat(m: Music, at: number): void {
-  const gap = Math.min(0.28, (60 / heartBpm(m.left)) * 0.35);
-  playNote(m, 'lub', 'heart', at);
-  playNote(m, 'dub', 'heart', at + gap);
-}
-
-/**
- * The run is over: won, the music fades out before the end screen's chord; lost, it drains —
- * its lowpass closing and the pad slowing — as the power does. Then it stops.
+ * The run is over: won, the music fades out before the end card's sting; lost, it drains — its
+ * lowpass closing and every pass slowing — as the power does. Then it stops.
  */
 function endMusic(m: Music, ending: 'won' | 'lost'): void {
   m.ended = true;
@@ -508,17 +377,19 @@ function endMusic(m: Music, ending: 'won' | 'lost'): void {
   if (ending === 'lost') {
     m.drain.frequency.setValueAtTime(OPEN_HZ, now);
     m.drain.frequency.exponentialRampToValueAtTime(120, end);
-    m.pad?.playbackRate.setValueAtTime(1, now);
-    m.pad?.playbackRate.exponentialRampToValueAtTime(0.5, end);
+    for (const stem of STEMS) {
+      for (const pass of m.tracks[stem].passes) {
+        pass.source.playbackRate.setValueAtTime(1, now);
+        pass.source.playbackRate.exponentialRampToValueAtTime(0.5, end);
+      }
+    }
   }
   letGo(m, end + 0.05);
 }
 
-/** Stops the pad at `at` and lets the music's nodes go then. */
+/** Stops every stem at `at` and lets the music's nodes go then. */
 function letGo(m: Music, at: number): void {
-  const pad = m.pad;
-  m.pad = null;
-  pad?.stop(at);
+  for (const stem of STEMS) silence(m.tracks[stem], at);
   const wait = Math.max(0, (at - m.engine.ctx.currentTime) * 1000);
   setTimeout(() => m.out.disconnect(), wait);
 }
@@ -538,12 +409,32 @@ export function stopMusic(): void {
   }
 }
 
-/** The music now: each layer's level, 0 to 1 — pad, pulse, heartbeat — and the pressure. */
+/**
+ * The end card's sting for a run won or lost, once, on the music's bus at STING_LEVEL. Nothing
+ * while the context is held back, or where its recording is not loaded.
+ */
+export function playSting(ending: 'won' | 'lost'): void {
+  try {
+    const engine = playingEngine();
+    const sting = sample(ending);
+    if (engine === null || sting === null) return;
+    const { ctx } = engine;
+    const out = outlet(ctx, engine.music, STING_LEVEL);
+    const source = startSample(ctx, sting, out, ctx.currentTime + LOOKAHEAD);
+    source.onended = () => out.disconnect();
+  } catch {
+    // Deliberately silent: the card says it as well.
+  }
+}
+
+/**
+ * The music now, 0 to 1: the calm stem's level, the pressure stems' — the tense or the
+ * critical — the critical's alone, and the pressure value the stems follow.
+ */
 export interface MusicProbe {
   calm: number;
   pressure: number;
   last: number;
-  /** the pressure value the layers follow */
   level: number;
 }
 
@@ -551,6 +442,11 @@ export function musicProbe(): MusicProbe {
   const m = music;
   if (m === null) return { calm: 0, pressure: 0, last: 0, level: 0 };
   const now = m.engine.ctx.currentTime;
-  const at = (bus: Bus): number => levelAt(m.buses[bus].fade, now);
-  return { calm: at('calm'), pressure: at('pulse'), last: at('heart'), level: m.pressure };
+  const at = (stem: Stem): number => levelAt(m.tracks[stem].fade, now);
+  return {
+    calm: at('calm'),
+    pressure: Math.min(1, at('tense') + at('critical')),
+    last: at('critical'),
+    level: m.pressure,
+  };
 }

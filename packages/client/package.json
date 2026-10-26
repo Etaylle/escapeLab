@@ -9,7 +9,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "voice": "node --env-file-if-exists=../../.env.local scripts/voice.ts",
-    "intro-cue": "node --env-file-if-exists=../../.env.local scripts/introCue.ts"
+    "intro-cue": "node --env-file-if-exists=../../.env.local scripts/introCue.ts",
+    "sfx": "node --env-file-if-exists=../../.env.local scripts/sfx.ts"
   },
   "dependencies": {
     "@escapelab/core": "workspace:*",

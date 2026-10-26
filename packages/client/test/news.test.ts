@@ -17,7 +17,13 @@ const locker: Manual = { ...book, id: 'spind', kind: 'locker', x: 6, opened: fal
 describe('worldNews — what the lab shows that it did not before', () => {
   it('has nothing on the first look: that was all there already', () => {
     const now = mapWith({ manuals: [book, { ...locker, opened: true }], litRooms: ['ARCHIV'] });
-    expect(worldNews(null, now)).toEqual({ found: [], notes: [], opened: [], lit: [] });
+    expect(worldNews(null, now)).toEqual({
+      found: [],
+      notes: [],
+      opened: [],
+      lit: [],
+      delivered: [],
+    });
   });
 
   it('finds a note of the last shift the moment the view carries it, read or not', () => {
@@ -48,6 +54,29 @@ describe('worldNews — what the lab shows that it did not before', () => {
     const news = worldNews(mapWith({}), mapWith({ manuals: [book] }));
     expect(news.found).toEqual([book]);
     expect(news.opened).toEqual([]);
+  });
+
+  it('seats a part where it belongs once, and leaves a key in a cabinet to the cabinet', () => {
+    const fuse = {
+      id: 'sicherung',
+      label: 'SICHERUNG',
+      x: 9.5,
+      y: 4.5,
+      carriedBy: 'ada',
+      delivered: false,
+      deliverTo: { x: 14, y: 2 },
+      requiredForTitle: 'Notstrom',
+    };
+    const key = { ...fuse, id: 'schluessel', label: 'SCHLÜSSEL', deliverTo: { x: 6, y: 3 } };
+    const cabinet: Manual = { ...locker, kind: 'cabinet', needsKey: 'schluessel' };
+    const before = mapWith({ manuals: [cabinet], items: [fuse, key] });
+    const seated = { ...fuse, carriedBy: null, delivered: true, x: 14.5, y: 2.5 };
+    const unlocked = { ...key, carriedBy: null, delivered: true, x: 6.5, y: 3.5 };
+    const now = mapWith({ manuals: [{ ...cabinet, opened: true }], items: [seated, unlocked] });
+    const news = worldNews(before, now);
+    expect(news.delivered).toEqual([seated]);
+    expect(news.opened.map((m) => m.id)).toEqual(['spind']);
+    expect(worldNews(now, now).delivered).toEqual([]);
   });
 
   it('lights the rooms that joined the list, each once', () => {

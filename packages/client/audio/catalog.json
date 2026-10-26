@@ -1,0 +1,676 @@
+[
+  {
+    "id": "lever-chunk",
+    "kind": "oneshot",
+    "prompt": "A heavy industrial knife-switch lever thrown home in a concrete plant room: a sharp latch release, then a deep metallic chunk as the steel lever slams into its stop and rings briefly. Close-up, dry.",
+    "durationSeconds": 1,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#leverChunk"]
+  },
+  {
+    "id": "lever-pull",
+    "kind": "oneshot",
+    "prompt": "A large steel lever pulled down into a ratchet catch on a wall panel: one quick ratchet click followed by a solid metal clunk. Close-up, small concrete room, dry.",
+    "durationSeconds": 0.7,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#leverPull"]
+  },
+  {
+    "id": "lever-spring",
+    "kind": "oneshot",
+    "prompt": "A spring-loaded steel lever snapping back up: a bright metallic clack as its catch lets go, followed by the short twang of a heavy coil spring. Close-up.",
+    "durationSeconds": 0.7,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#leverSpring"]
+  },
+  {
+    "id": "relay-click",
+    "kind": "oneshot",
+    "prompt": "A single heavy electrical relay pulling in inside a steel control cabinet: one dry mechanical click with a short low knock. Close-up.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": [
+      "src/world/audio.ts#blackoutSounds",
+      "src/world/audio.ts#lightsOnClick",
+      "src/puzzles/sounds.ts#relayClick"
+    ]
+  },
+  {
+    "id": "breaker-thunk",
+    "kind": "oneshot",
+    "prompt": "A massive main circuit breaker in a steel switchgear cabinet tripping right at the microphone: its heavy copper contacts slam open with a loud, deep, violent thunk and a sharp electrical bang. Close, loud, dry, full level, starting at once.",
+    "durationSeconds": 1.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#blackoutSounds", "src/world/audio.ts#countdownBeep"]
+  },
+  {
+    "id": "short-arc",
+    "kind": "oneshot",
+    "prompt": "An electrical short circuit inside a metal fuse box: a harsh crackling arc that buzzes and stutters for about a quarter of a second, with sharp spark pops. Close-up.",
+    "durationSeconds": 0.8,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#blackoutSounds", "src/puzzles/sounds.ts#shortArc"]
+  },
+  {
+    "id": "spark",
+    "kind": "oneshot",
+    "prompt": "A spray of small electric sparks popping off a freshly cut live wire: rapid bright crackles dying away within a quarter of a second. Close-up.",
+    "durationSeconds": 0.6,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#sparkCrackle"]
+  },
+  {
+    "id": "wire-snip",
+    "kind": "oneshot",
+    "prompt": "Steel side-cutter pliers snipping through an insulated copper cable: one crisp, sharp snip as the hardened jaws click shut. Close, loud, dry, full level, starting at once.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#pliersSnip"]
+  },
+  {
+    "id": "power-down",
+    "kind": "oneshot",
+    "prompt": "Electrical power draining out of a large underground facility: a deep transformer whine sagging and falling in pitch to nothing as machines spin down. Ominous, heard in a concrete hall.",
+    "durationSeconds": 1.6,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#powerDrain"]
+  },
+  {
+    "id": "emergency-buzz",
+    "kind": "oneshot",
+    "prompt": "Battery emergency lights switching on in a dark concrete corridor: a stuttering fluorescent flicker, then a thin steady ballast buzz that fades out. Medium distance.",
+    "durationSeconds": 1.6,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#blackoutSounds"]
+  },
+  {
+    "id": "tube-strike",
+    "kind": "oneshot",
+    "prompt": "Fluorescent ceiling tubes striking on in a laboratory: two or three quick ballast ticks and a faint glassy ping as the tubes light, then a soft hum starting. Overhead, small room.",
+    "durationSeconds": 1,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#lightsOnClick"]
+  },
+  {
+    "id": "hatch-grind",
+    "kind": "oneshot",
+    "prompt": "A heavy steel floor hatch grinding open: an electric motor straining under load while steel leaves scrape and judder against their frame for two seconds, ending in a hard metallic clunk as they lock open. Concrete room.",
+    "durationSeconds": 2.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#exitGrind"]
+  },
+  {
+    "id": "door-slide",
+    "kind": "oneshot",
+    "prompt": "A pneumatic sliding steel door in a research facility opening: a short burst of air hiss and a smooth sliding whoosh, ending in a soft metallic click as the door stops. Medium distance.",
+    "durationSeconds": 1,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#doorSlide"]
+  },
+  {
+    "id": "step-1",
+    "kind": "oneshot",
+    "prompt": "One loud, close-miked footstep: the rubber heel of a heavy work boot striking a bare concrete floor with a firm thump. Dry, full level, starting at once.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#footstep", "src/world/spatial.ts#partnerStep"]
+  },
+  {
+    "id": "step-2",
+    "kind": "oneshot",
+    "prompt": "One loud, close-miked footstep: a work boot rolling from heel to toe on a dusty concrete floor, its rubber sole scuffing the grit. Dry, full level, starting at once.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#footstep", "src/world/spatial.ts#partnerStep"]
+  },
+  {
+    "id": "step-3",
+    "kind": "oneshot",
+    "prompt": "One loud, close-miked footstep: a heavy steel-toed work boot landing hard on a concrete floor, a strong heel strike. Dry, full level, starting at once.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#footstep", "src/world/spatial.ts#partnerStep"]
+  },
+  {
+    "id": "radio-key",
+    "kind": "oneshot",
+    "prompt": "A handheld two-way radio's push-to-talk key pressed: a short burst of static crackle and a crisp plastic click, narrow walkie-talkie band.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#radioChirp", "src/world/radioVoice.ts#squelch"]
+  },
+  {
+    "id": "radio-tail",
+    "kind": "oneshot",
+    "prompt": "A walkie-talkie transmission ending: the push-to-talk key released with a click and a short squelch tail of static that cuts off abruptly.",
+    "durationSeconds": 0.6,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/radioVoice.ts#squelch"]
+  },
+  {
+    "id": "radio-open",
+    "kind": "oneshot",
+    "prompt": "A radio channel opening: static swelling up for a third of a second, then snapping shut on a squelch gate click, narrow walkie-talkie band.",
+    "durationSeconds": 0.6,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/radioVoice.ts#openChannel"]
+  },
+  {
+    "id": "sheet-down",
+    "kind": "oneshot",
+    "prompt": "A hardboard clipboard holding a few paper sheets set down firmly on a steel desk: a short paper swish, then a solid clack of the board on the metal. Close, loud, dry, full level, starting at once.",
+    "durationSeconds": 0.6,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#sheetDown"]
+  },
+  {
+    "id": "book-shut",
+    "kind": "oneshot",
+    "prompt": "A thick hardcover operating manual being closed: a rush of air from the pages and a dull soft clap of the cover. Close-up.",
+    "durationSeconds": 0.6,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#coverShut"]
+  },
+  {
+    "id": "pencil",
+    "kind": "oneshot",
+    "prompt": "A graphite pencil writing fast on a paper notepad lying on a desk: three short, scratchy strokes. Close, loud, dry, full level, starting at once.",
+    "durationSeconds": 0.6,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#pencilScratch"]
+  },
+  {
+    "id": "klaxon",
+    "kind": "oneshot",
+    "prompt": "An industrial alarm klaxon, an electric horn with a vibrating steel diaphragm: two harsh, loud blasts, the second slightly lower. Close, full level, starting at once, a short concrete-hall tail.",
+    "durationSeconds": 1,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": [
+      "src/world/audio.ts#klaxon",
+      "src/world/audio.ts#klaxonFade",
+      "src/puzzles/sounds.ts#alarmKlaxon"
+    ]
+  },
+  {
+    "id": "console-ready",
+    "kind": "oneshot",
+    "prompt": "A laboratory control console signalling it is ready: a short rising two-tone electronic chirp from a small built-in speaker.",
+    "durationSeconds": 0.6,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#stationChirp"]
+  },
+  {
+    "id": "ping",
+    "kind": "oneshot",
+    "prompt": "One bright electronic ping from the small piezo speaker of a handheld tablet: a clear, high, short blip. Close, loud, dry, full level, starting at once.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#pingBlip"]
+  },
+  {
+    "id": "discovery",
+    "kind": "oneshot",
+    "prompt": "A small glass bell struck twice by a metal pin, the second note higher: a warm, clear two-note chime. Close, loud, dry, full level, starting at once.",
+    "durationSeconds": 0.8,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#discoveryBlip"]
+  },
+  {
+    "id": "locker-open",
+    "kind": "oneshot",
+    "prompt": "A steel locker door unlatched and swung open: a latch click and the thin rattling clang of its sheet metal. Close-up, small tiled room.",
+    "durationSeconds": 1,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#lockerOpen"]
+  },
+  {
+    "id": "cabinet-unlock",
+    "kind": "oneshot",
+    "prompt": "A small padlock opened with a key turn and a bright shackle tick, then a steel drawer rolling out on its runners. Close-up.",
+    "durationSeconds": 1.1,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#cabinetUnlock"]
+  },
+  {
+    "id": "countdown-beep",
+    "kind": "oneshot",
+    "prompt": "A single short electronic countdown beep from a control panel speaker, mid-high pitch, clean and dry.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#countdownBeep", "src/world/audio.ts#briefingCountdown"]
+  },
+  {
+    "id": "countdown-go",
+    "kind": "oneshot",
+    "prompt": "A longer, higher electronic start beep from a control panel speaker, the final signal of a countdown, clean and dry.",
+    "durationSeconds": 0.7,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#briefingCountdown"]
+  },
+  {
+    "id": "part-seat",
+    "kind": "oneshot",
+    "prompt": "A cartridge fuse pushed firmly into its spring-clip holder in a steel fuse panel: a short scrape and a solid metallic snap as it seats. Close-up.",
+    "durationSeconds": 0.6,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/audio.ts#partSeated"]
+  },
+  {
+    "id": "drone-alert",
+    "kind": "oneshot",
+    "prompt": "A small surveillance drone's alarm chirp: two quick rising electronic blips from a tiny speaker.",
+    "durationSeconds": 0.6,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/spatial.ts#alertChirp"]
+  },
+  {
+    "id": "key-click",
+    "kind": "oneshot",
+    "prompt": "A single hard plastic key on an industrial keypad pressed down: a dry tick with a bright edge. Close-up.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#keyClick"]
+  },
+  {
+    "id": "reject-buzz",
+    "kind": "oneshot",
+    "prompt": "A dull electronic error buzzer on a control panel: one short low rasping buzz lasting about a sixth of a second, small speaker.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#rejectBuzz"]
+  },
+  {
+    "id": "solved-chunk",
+    "kind": "oneshot",
+    "prompt": "A heavy steel bolt sliding home in a security lock: a latch click, then a deep solid thud with a short metallic ring. Close-up.",
+    "durationSeconds": 1,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#solvedChunk"]
+  },
+  {
+    "id": "solved-chord",
+    "kind": "oneshot",
+    "prompt": "A short bright major chord on a soft electric piano, strummed quickly upward and ringing out, warm and positive.",
+    "durationSeconds": 1.2,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#solvedChord"]
+  },
+  {
+    "id": "toggle-clack",
+    "kind": "oneshot",
+    "prompt": "A metal toggle switch on a steel control panel flipped over hard: its spring-loaded bat snaps into place with a crisp clack. Close, loud, dry, full level, starting at once.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#toggleClack"]
+  },
+  {
+    "id": "button-thunk",
+    "kind": "oneshot",
+    "prompt": "A large industrial palm push button struck down hard: its spring-loaded plunger slams to the bottom of its steel housing with one loud, low, solid thump and a muffled plastic knock. Recorded close-up and dry at full level, the hit right at the start.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#buttonThunk"]
+  },
+  {
+    "id": "mushroom-stomp",
+    "kind": "oneshot",
+    "prompt": "A large red mushroom emergency-stop button slammed down by a palm: its spring-loaded steel plunger latches with a loud, heavy, deep thunk. Close, dry, full level, starting at once.",
+    "durationSeconds": 0.6,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#mushroomStomp"]
+  },
+  {
+    "id": "probe-click",
+    "kind": "oneshot",
+    "prompt": "A multimeter probe tip touching a brass screw terminal: one tiny crisp metal contact click. Close-up.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#probeClick"]
+  },
+  {
+    "id": "stage-chime",
+    "kind": "oneshot",
+    "prompt": "A glassy electronic two-note chime rising a fifth: a short confirmation tone from a lab instrument.",
+    "durationSeconds": 0.8,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#stageChime"]
+  },
+  {
+    "id": "dial-detent",
+    "kind": "oneshot",
+    "prompt": "A metal rotary selector dial turned one step: a soft detent click with a little body. Close-up.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#dialDetent"]
+  },
+  {
+    "id": "step-tick",
+    "kind": "oneshot",
+    "prompt": "A small bright electronic tick from a handheld device, a cursor moving one step on a display.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#stepTick"]
+  },
+  {
+    "id": "wall-thud",
+    "kind": "oneshot",
+    "prompt": "A small rubber ball thrown hard against a padded vinyl wall: one solid, dull thud. Close, loud, dry, full level, starting at once.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#wallThud"]
+  },
+  {
+    "id": "lamp-pop",
+    "kind": "oneshot",
+    "prompt": "A small incandescent indicator lamp on a steel control panel switching on: its filament catches with one crisp electric pop. Close, loud, dry, full level, starting at once.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#lampPop"]
+  },
+  {
+    "id": "type-blip",
+    "kind": "oneshot",
+    "prompt": "One short beep from a keypad display accepting a digit, a small piezo speaker, clean.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#typeBlip"]
+  },
+  {
+    "id": "ok-beeps",
+    "kind": "oneshot",
+    "prompt": "Two short soft electronic beeps rising, a computer terminal confirming a command, small speaker.",
+    "durationSeconds": 0.6,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#okChime"]
+  },
+  {
+    "id": "server-spinup",
+    "kind": "oneshot",
+    "prompt": "A rack server powering up in its steel chassis: the hard drive motor whining up in pitch over cooling fans spinning up to speed. Close, loud, full level, starting at once.",
+    "durationSeconds": 1.2,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#spinUp"]
+  },
+  {
+    "id": "hold-tick",
+    "kind": "oneshot",
+    "prompt": "A faint soft tick of a timer counting one second, very short and quiet.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/puzzles/sounds.ts#holdTick"]
+  },
+  {
+    "id": "creak",
+    "kind": "oneshot",
+    "prompt": "A strained steel beam creaking slowly in a dark empty building: a groaning metal stress creak. Distant, with room reverb.",
+    "durationSeconds": 1.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/ambience.ts#OCCASIONS"]
+  },
+  {
+    "id": "drip",
+    "kind": "oneshot",
+    "prompt": "A single water drop falling from a steel pipe into a shallow puddle on a wooden floor: one clear plink. Close, loud, full level, starting at once, a soft room tail.",
+    "durationSeconds": 1,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/ambience.ts#OCCASIONS"]
+  },
+  {
+    "id": "far-clank",
+    "kind": "oneshot",
+    "prompt": "A steel pipe dropped onto a concrete floor far down a long concrete corridor, recorded at full level: a muffled metallic clank with two fading echoes, starting at once.",
+    "durationSeconds": 2,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/ambience.ts#OCCASIONS"]
+  },
+  {
+    "id": "machine-stroke",
+    "kind": "oneshot",
+    "prompt": "One slow stroke of a large hydraulic machine piston in a steel frame: a deep heavy thud with a metallic clank and a short hiss of air. Close, loud, full level, starting at once.",
+    "durationSeconds": 1,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/ambience.ts#OCCASIONS"]
+  },
+  {
+    "id": "steam-hiss",
+    "kind": "oneshot",
+    "prompt": "Steam escaping from a pressure valve on a pipe: a hiss swelling up and dying away over about a second and a half, in a machine room.",
+    "durationSeconds": 1.6,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/ambience.ts#OCCASIONS"]
+  },
+  {
+    "id": "bubbling",
+    "kind": "oneshot",
+    "prompt": "A glass laboratory flask of boiling liquid on a heating plate: a quick run of small bubbles popping. Close, loud, dry, full level, starting at once.",
+    "durationSeconds": 1.2,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/ambience.ts#OCCASIONS"]
+  },
+  {
+    "id": "console-tick",
+    "kind": "oneshot",
+    "prompt": "A small electromechanical relay inside a steel control console switching over: one crisp mechanical tick of its armature. Close, loud, dry, full level, starting at once.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/ambience.ts#OCCASIONS"]
+  },
+  {
+    "id": "core-throb",
+    "kind": "oneshot",
+    "prompt": "A deep low throbbing pulse from a reactor core with a faint metallic resonance: it swells up for a third of a second and fades away. Industrial hall.",
+    "durationSeconds": 1.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/ambience.ts#OCCASIONS"]
+  },
+  {
+    "id": "mains-hum",
+    "kind": "bed",
+    "prompt": "The steady electrical mains hum of a large facility's power: a 50 Hz transformer hum with soft overtones, constant and even.",
+    "durationSeconds": 6,
+    "loop": true,
+    "target": { "measure": "rms", "dbfs": -20 },
+    "usedBy": ["src/world/audio.ts#startPowerHum", "src/puzzles/sounds.ts#startHum"]
+  },
+  {
+    "id": "siren",
+    "kind": "bed",
+    "prompt": "An evacuation siren in an industrial facility: two tones alternating high and low at a steady pace, heard from a distance in a concrete hall.",
+    "durationSeconds": 6,
+    "loop": true,
+    "target": { "measure": "rms", "dbfs": -20 },
+    "usedBy": ["src/world/audio.ts#startSiren"]
+  },
+  {
+    "id": "drone-rotor",
+    "kind": "bed",
+    "prompt": "A small quadcopter drone hovering nearby: steady buzzing rotors with a slight flutter, constant.",
+    "durationSeconds": 4,
+    "loop": true,
+    "target": { "measure": "rms", "dbfs": -20 },
+    "usedBy": ["src/world/spatial.ts#startRotor"]
+  },
+  {
+    "id": "bed-server",
+    "kind": "bed",
+    "prompt": "Server room ambience recorded close at full level: dozens of rack cooling fans whooshing loudly in steel cabinets, a steady 120 Hz transformer hum and the high whine of power supplies, constant and even.",
+    "durationSeconds": 10,
+    "loop": true,
+    "target": { "measure": "rms", "dbfs": -20 },
+    "usedBy": ["src/world/ambience.ts#POWERED"]
+  },
+  {
+    "id": "bed-archive",
+    "kind": "bed",
+    "prompt": "Archive room tone recorded at full level: steady air flowing out of a sheet-metal ventilation duct between wooden shelves, an even, clearly audible soft hiss, constant.",
+    "durationSeconds": 10,
+    "loop": true,
+    "target": { "measure": "rms", "dbfs": -20 },
+    "usedBy": ["src/world/ambience.ts#POWERED"]
+  },
+  {
+    "id": "bed-corridor",
+    "kind": "bed",
+    "prompt": "Underground concrete corridor room tone: a low steady ventilation hum and air moving through overhead ducts, constant.",
+    "durationSeconds": 10,
+    "loop": true,
+    "target": { "measure": "rms", "dbfs": -20 },
+    "usedBy": ["src/world/ambience.ts#POWERED"]
+  },
+  {
+    "id": "bed-lab",
+    "kind": "bed",
+    "prompt": "A loud, close recording of a laboratory's machines running at night: a refrigerator compressor's motor humming steadily and a fume hood's exhaust fan roaring through its steel duct, recorded dry at full level, dense and constant, with no gaps.",
+    "durationSeconds": 10,
+    "loop": true,
+    "target": { "measure": "rms", "dbfs": -20 },
+    "usedBy": ["src/world/ambience.ts#POWERED"]
+  },
+  {
+    "id": "bed-reactor",
+    "kind": "bed",
+    "prompt": "Reactor hall ambience: a steady deep containment hum at 110 Hz with a soft electrical drone, in a large steel hall, constant.",
+    "durationSeconds": 10,
+    "loop": true,
+    "target": { "measure": "rms", "dbfs": -20 },
+    "usedBy": ["src/world/ambience.ts#POWERED"]
+  },
+  {
+    "id": "bed-control",
+    "kind": "bed",
+    "prompt": "Control room ambience: a soft hum of console electronics, a faint high whine from screens and quiet air conditioning, constant.",
+    "durationSeconds": 10,
+    "loop": true,
+    "target": { "measure": "rms", "dbfs": -20 },
+    "usedBy": ["src/world/ambience.ts#POWERED"]
+  },
+  {
+    "id": "bed-plain",
+    "kind": "bed",
+    "prompt": "Room tone of a research facility office recorded at full level: steady air from a ceiling ventilation grille and the low 55 Hz hum of the building's transformers, clearly audible, constant.",
+    "durationSeconds": 10,
+    "loop": true,
+    "target": { "measure": "rms", "dbfs": -20 },
+    "usedBy": ["src/world/ambience.ts#POWERED"]
+  },
+  {
+    "id": "bed-machine-idle",
+    "kind": "bed",
+    "prompt": "A dark machine hall without power: the deep low rumble of heavy idle machinery and a faint metallic tick now and then as pipes cool, constant.",
+    "durationSeconds": 10,
+    "loop": true,
+    "target": { "measure": "rms", "dbfs": -20 },
+    "usedBy": ["src/world/ambience.ts#IDLE"]
+  },
+  {
+    "id": "bed-reactor-idle",
+    "kind": "bed",
+    "prompt": "A reactor hall during a blackout: a very deep rumble from the core, faint metallic groans and the hiss of residual cooling, ominous, constant.",
+    "durationSeconds": 10,
+    "loop": true,
+    "target": { "measure": "rms", "dbfs": -20 },
+    "usedBy": ["src/world/ambience.ts#IDLE"]
+  },
+  {
+    "id": "calm",
+    "kind": "stem",
+    "prompt": "Instrumental underscore for a cooperative escape game set in a dark research lab at night. A minor, 90 BPM. Calm but uneasy: a slow evolving synth pad, a soft low drone, sparse muted piano notes and a gentle pulsing texture, no drums. Steady intensity from start to finish, no intro, no ending, made to loop.",
+    "durationSeconds": 72,
+    "loop": true,
+    "target": { "measure": "rms", "dbfs": -20 },
+    "usedBy": ["src/world/music.ts#STEMS"]
+  },
+  {
+    "id": "tense",
+    "kind": "stem",
+    "prompt": "Instrumental tension underscore for a cooperative escape game in a dark research lab. A minor, 90 BPM. Building pressure: a muted bass pulse on every beat, a sparse A minor arpeggio on a plucked synth, low sustained strings and light ticking percussion. Steady intensity from start to finish, no intro, no ending, made to loop.",
+    "durationSeconds": 72,
+    "loop": true,
+    "target": { "measure": "rms", "dbfs": -20 },
+    "usedBy": ["src/world/music.ts#STEMS"]
+  },
+  {
+    "id": "critical",
+    "kind": "stem",
+    "prompt": "Instrumental urgent underscore for the last minute of a cooperative escape game in a dark research lab. A minor, 90 BPM with a double-time feel. Driving and urgent: pounding low drums, fast ticking hi-hats, a pulsing bass, a tense string ostinato and rising synth stabs. Steady high intensity from start to finish, no intro, no ending, made to loop.",
+    "durationSeconds": 72,
+    "loop": true,
+    "target": { "measure": "rms", "dbfs": -20 },
+    "usedBy": ["src/world/music.ts#STEMS"]
+  },
+  {
+    "id": "won",
+    "kind": "sting",
+    "prompt": "A short triumphant instrumental sting, loud and fully mastered, for a crew that has just escaped a dark research lab: warm strings and brass at full strength from the first beat over a breath of wind, resolving to a bright C major chord that rings out.",
+    "durationSeconds": 10,
+    "loop": false,
+    "target": { "measure": "rms", "dbfs": -14 },
+    "usedBy": ["src/world/music.ts#playSting", "src/screens/End.tsx#TitleCard"]
+  },
+  {
+    "id": "lost",
+    "kind": "sting",
+    "prompt": "A short dark instrumental sting, loud and fully mastered, for a crew that failed to escape a research lab: a heavy low A minor chord on strings and a deep synth drone at full strength from the first beat, one muffled final hit, then a short fade.",
+    "durationSeconds": 10,
+    "loop": false,
+    "target": { "measure": "rms", "dbfs": -14 },
+    "usedBy": ["src/world/music.ts#playSting", "src/screens/End.tsx#TitleCard"]
+  }
+]

@@ -1,26 +1,29 @@
 /**
  * audio.ts: the lab's one audio path, and its sound effects.
  *
- * Everything is synthesised at runtime from oscillators, filters and one shared noise buffer;
- * the only recordings in the game are mission control's lines (radioVoice.ts). All levels are
- * deliberately quiet because this plays under the players' voice chat, and every sound passes
- * through a single master gain, so the whole lab can be muted in one place. In front of it sit
- * the three volumes the settings set (settings.ts), each a bus: the effects — this module's
- * sounds, the partners' steps and the drones (spatial.ts) — and the radio — mission control's
- * voice (radioVoice.ts) and its chirp — straight into the master gain; the rooms' beds
- * (ambience.ts, at the effects' volume) and the music (music.ts) through the duck bus, which
- * mission control's voice pulls down while it speaks. This module also lends those modules
- * its small builders (gain stages, filters, envelopes, noise).
+ * The effects are recordings (samples.ts: ElevenLabs made them, scripts/sfx.ts), each played as
+ * one buffer source into an outlet of its own; the radio's chain, its static and the two device
+ * sounds whose pitch follows the game (puzzles/sounds.ts) are the only sounds still made here.
+ * All levels are deliberately quiet because this plays under the players' voice chat, and every
+ * sound passes through a single master gain, so the whole lab can be muted in one place. In
+ * front of it sit the three volumes the settings set (settings.ts), each a bus: the effects —
+ * this module's sounds, the partners' steps and the drones (spatial.ts) — and the radio —
+ * mission control's voice (radioVoice.ts) and its key — straight into the master gain; the
+ * rooms' beds (ambience.ts, at the effects' volume) and the music (music.ts) through the duck
+ * bus, which mission control's voice pulls down while it speaks. This module also lends those
+ * modules its small builders (gain stages, filters, a sample's source, the radio's noise).
  *
  * Audio is decorative, so no public function ever throws: errors are swallowed on purpose.
  * The one shared AudioContext is created lazily on first use. While browser autoplay policy
  * keeps it suspended, one-shot effects are skipped (so they cannot queue up and all fire at
  * once later) and the next user gesture resumes it. Loops started while suspended — the
- * beds, the music, a drone's buzz — are built anyway and become audible once it resumes.
+ * beds, the music, a drone's buzz — are built anyway and become audible once it resumes. A
+ * recording not loaded yet, or one that failed to load, is not played (samples.ts).
  */
 
 import { censusOf, countGraph, type GraphCensus } from './audioCount.js';
 import { traceRequested } from './frameTrace.js';
+import { sample, sampleLoaded, type Sample, type SfxId } from './samples.js';
 
 type AudioContextCtor = new () => AudioContext;
 
@@ -37,7 +40,7 @@ export interface Engine {
   readonly beds: GainNode;
   /** The music at its volume, into the duck bus. */
   readonly music: GainNode;
-  /** Mission control's voice and the radio's chirp at their volume, into the master gain. */
+  /** Mission control's voice and the radio's key at their volume, into the master gain. */
   readonly radio: GainNode;
 }
 
@@ -46,22 +49,6 @@ export interface BusVolumes {
   readonly radio: number;
   readonly effects: number;
   readonly music: number;
-}
-
-/** Gain envelope: linear attack to `peak`, flat hold, then exponential decay to silence. */
-export interface Envelope {
-  readonly peak: number;
-  readonly attack: number;
-  readonly hold: number;
-  readonly decay: number;
-}
-
-/** An enveloped oscillator whose pitch glides exponentially from `from` to `to`. */
-export interface ToneSpec extends Envelope {
-  readonly type: OscillatorType;
-  readonly at: number;
-  readonly from: number;
-  readonly to: number;
 }
 
 /** The lab's sound systems a page's query can switch off: `?audio-off=beds,music,spatial`. */
@@ -112,13 +99,16 @@ const VOLUME_GLIDE = 0.05;
 export const FOOTSTEP_LEVEL = 0.02;
 /** How much louder a footstep lands at a sprint: about 2 dB. */
 export const SPRINT_STEP_GAIN = 1.25;
+/** A footstep's three takes, one at random each step, ±10 % in speed. */
+export const STEP_TAKES: readonly [SfxId, ...SfxId[]] = ['step-1', 'step-2', 'step-3'];
 const DOOR_LEVEL = 0.04;
 const CHIRP_LEVEL = 0.03;
 const FIND_LEVEL = 0.035;
 const DRAIN_LEVEL = 0.05;
 /**
  * Where the effects sit, as one level: the middle of their outlets (a door, a find, the
- * klaxon, the chord). The music is set against it (music.ts).
+ * klaxon). A one-shot comes in with its peak at −3 dBFS (scripts/sfx.ts); the music is set
+ * against this level (music.ts).
  */
 export const EFFECTS_LEVEL = 0.04;
 
@@ -127,31 +117,16 @@ export const SILENCE = 0.0001;
 /** Scheduling headroom so main-thread jitter never clips the start of an envelope. */
 export const LOOKAHEAD = 0.01;
 const NOISE_SECONDS = 2;
-
-const DOOR_SLIDE_SECONDS = 0.25;
-const DRAIN_SECONDS = 0.8;
-
-/** [frequency ratio, level, decay in s] of the partials of a struck free metal bar. */
-const CLANK_PARTIALS = [
-  [1, 0.4, 1.1],
-  [2.76, 0.28, 0.7],
-  [5.4, 0.18, 0.4],
-  [8.93, 0.1, 0.22],
-] as const;
-const DRAIN_DETUNE = [1, 1.012] as const;
 const UNLOCK_EVENTS = ['pointerdown', 'pointerup', 'keydown', 'touchend'] as const;
 
-/** The lab with its power on: the mains' 50 Hz and the transformers' 100 Hz with overtones. */
-const POWER_VOICES = [
-  [50, 0.35],
-  [100, 0.5],
-  [200, 0.22],
-  [300, 0.1],
-] as const;
-const POWER_LEVEL = 0.03;
+/**
+ * The lab with its power on: the mains hum, a loop whose RMS stands at −20 dBFS (a bed's), at
+ * a level that puts it about where the synthesised hum before it sat.
+ */
+const POWER_LEVEL = 0.1;
 const POWER_FADE_IN = 0.8;
 const POWER_FADE_OUT = 0.3;
-/** How long the hum takes to die once the power goes, and how far its pitch falls meanwhile. */
+/** How long the hum takes to die once the power goes, and how far it slows meanwhile. */
 const POWER_DIE_SECONDS = 1.4;
 const POWER_FALL = 0.25;
 /** How deep the hum sags in each drop of the flicker. */
@@ -159,63 +134,40 @@ const POWER_SAG = 0.3;
 const ARC_LEVEL = 0.03;
 const BANG_LEVEL = 0.07;
 const CLICK_LEVEL = 0.04;
+/** The emergency lights' buzz after the relay's click, faint, and how long after it. */
+const BUZZ_LEVEL = 0.02;
+const BUZZ_AFTER = 0.08;
 const LEVER_LEVEL = 0.06;
+/** An arc in a drop of the flicker fades out this long after the drop, s. */
+const ARC_TAIL = 0.03;
 
-/** The alarm's horn: two detuned saws in a horn's band. */
+/** The alarm's klaxon. */
 const KLAXON_LEVEL = 0.045;
-const KLAXON_PITCH = [392, 396] as const;
-/** A short alarm: two blasts [s from now, strength, pitch factor]. */
-const KLAXON_BLASTS = [
-  [0, 1, 1],
-  [0.22, 0.85, 0.94],
-] as const;
-/** A run lost to its alarms: blast after blast, each weaker and lower, ~1.5 s. */
+/** A run lost to its alarms: the klaxon again and again, weaker and slower [s, strength, speed]. */
 const KLAXON_FADING = [
   [0, 1, 1],
-  [0.3, 0.75, 0.95],
-  [0.6, 0.5, 0.89],
-  [0.9, 0.3, 0.83],
-  [1.2, 0.16, 0.76],
+  [0.7, 0.55, 0.9],
+  [1.4, 0.3, 0.8],
 ] as const;
-/** The escape's siren: quiet under everything, two tones taking turns. */
-const SIREN_LEVEL = 0.08;
-const SIREN_TONES = [440, 587] as const;
-/** Each tone holds for half a period of this, Hz. */
-const SIREN_RATE = 0.8;
+/** The escape's siren: a loop at −20 dBFS RMS, under the effects' peaks. */
+const SIREN_LEVEL = 0.3;
 const SIREN_FADE_IN = 0.4;
 const SIREN_FADE_OUT = 0.3;
-/** The hatch grinding open, s: as long as the picture takes (escape.ts). */
-const GRIND_SECONDS = 2;
 const GRIND_LEVEL = 0.05;
-/** The end of a run won: a C major chord over a breath of wind. */
-const CHORD_LEVEL = 0.045;
-const CHORD_NOTES = [261.63, 329.63, 392, 523.25] as const;
-const WIND_LEVEL = 0.03;
-const WIND_SECONDS = 3.6;
-/**
- * The mid band every heavy hit carries beside its thud, Hz and Q: noise centred at 520 Hz, about
- * 300 to 900 Hz wide — what a phone's or a laptop's small speaker still plays of a blow whose
- * body lies under 150 Hz.
- */
-export const MID_BAND = 520;
-const MID_Q = 0.9;
 /**
  * The briefing's count (Game.tsx): a beep at each of its numbers, s into it, and the higher one
- * as it lifts — [s, Hz, how long].
+ * as it lifts.
  */
-const BRIEFING_BEEPS = [
-  [0, 440, 0.1],
-  [1.2, 440, 0.1],
-  [2.4, 440, 0.1],
-  [3.6, 660, 0.4],
-] as const;
+const BRIEFING_BEEPS: readonly (readonly [number, SfxId])[] = [
+  [0, 'countdown-beep'],
+  [1.2, 'countdown-beep'],
+  [2.4, 'countdown-beep'],
+  [3.6, 'countdown-go'],
+];
 
-/**
- * A sound that runs until it is stopped — the power hum, the siren: its
- * sources, the stage that fades it, and its outlet.
- */
+/** A loop that runs until it is stopped — the power hum, the siren: its source, fade and outlet. */
 interface Loop {
-  readonly sources: OscillatorNode[];
+  readonly source: AudioBufferSourceNode;
   readonly level: GainNode;
   readonly out: GainNode;
 }
@@ -233,7 +185,8 @@ export interface BlackoutCue {
 let engine: Engine | null = null;
 let engineUnavailable = false;
 let noise: AudioBuffer | null = null;
-let powerHum: Loop | null = null;
+/** The power hum: playing, waiting for its recording (`pending`), or none. */
+let powerHum: Loop | 'pending' | null = null;
 let siren: Loop | null = null;
 let muted = readStoredMute();
 /** The buses' volumes: full until the settings set theirs (settings.ts, as the page starts). */
@@ -344,33 +297,67 @@ export function effectsVolume(): number {
   return volumes.effects;
 }
 
+/** How an effect plays: from when (audio time), how fast, and until when, if it is cut short. */
+interface Play {
+  readonly at?: number;
+  readonly rate?: number;
+  readonly until?: number;
+}
+
 /**
- * One tick of the final countdown. `secondsLeft` 1-10 rises in pitch as the
- * clock runs out; 0 is the dull thud of the power going.
+ * The recording `id` played once on the bus `bus` at `level`: one source into an outlet of its
+ * own, which goes once the source has ended. Cut short with `until`, it fades out over
+ * ARC_TAIL from there. Nothing while the context is held back, or where the recording is not
+ * loaded; never throws.
  */
-export function countdownBeep(secondsLeft: number): void {
+function effect(
+  id: SfxId,
+  bus: 'effects' | 'master' | 'radio',
+  level: number,
+  play: Play = {},
+): void {
   try {
     const audio = runningEngine();
-    if (audio === null) return;
+    const recording = sample(id);
+    if (audio === null || recording === null) return;
     const { ctx } = audio;
-    const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.effects, CHIRP_LEVEL);
-    const last = secondsLeft <= 0;
-    const base = last ? 180 : 620 + (10 - Math.min(10, secondsLeft)) * 55;
-    const beep = tone(ctx, out, {
-      type: last ? 'sawtooth' : 'square',
-      at: t,
-      from: base,
-      to: last ? 90 : base,
-      peak: last ? 0.9 : 0.6,
-      attack: 0.005,
-      hold: last ? 0.25 : 0.05,
-      decay: last ? 0.5 : 0.09,
-    });
-    onAllEnded([beep], () => out.disconnect());
+    const out = outlet(ctx, audio[bus], level);
+    const at = play.at ?? ctx.currentTime + LOOKAHEAD;
+    const source = startSample(ctx, recording, out, at, play.rate);
+    source.onended = () => out.disconnect();
+    if (play.until !== undefined) {
+      out.gain.setValueAtTime(level, play.until);
+      out.gain.linearRampToValueAtTime(0, play.until + ARC_TAIL);
+      source.stop(play.until + ARC_TAIL + 0.01);
+    }
   } catch {
-    // Deliberately silent: the countdown is on screen as well.
+    // Deliberately silent: whatever the effect marks shows on screen as well.
   }
+}
+
+/** One of `items` at random. */
+export function pick<T>(items: readonly [T, ...T[]]): T {
+  return items[Math.floor(Math.random() * items.length)] ?? items[0];
+}
+
+/**
+ * How fast the countdown's beep plays with `secondsLeft` 1–10 on the clock: as recorded at 10,
+ * rising by 55 Hz in 620 — the pitch the synthesised beep had — with every second gone.
+ */
+export function beepRate(secondsLeft: number): number {
+  return 1 + ((10 - Math.min(10, Math.max(1, secondsLeft))) * 55) / 620;
+}
+
+/**
+ * One tick of the final countdown. `secondsLeft` 1-10 rises in pitch as the
+ * clock runs out; 0 is the thunk of the breaker as the power goes.
+ */
+export function countdownBeep(secondsLeft: number): void {
+  if (secondsLeft <= 0) {
+    effect('breaker-thunk', 'effects', CHIRP_LEVEL);
+    return;
+  }
+  effect('countdown-beep', 'effects', CHIRP_LEVEL, { rate: beepRate(secondsLeft) });
 }
 
 /**
@@ -379,422 +366,100 @@ export function countdownBeep(secondsLeft: number): void {
  * it never counts down to its surprise.
  */
 export function briefingCountdown(elapsedMs = 0): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    const { ctx } = audio;
-    const t = ctx.currentTime + LOOKAHEAD - elapsedMs / 1000;
-    const out = outlet(ctx, audio.effects, CHIRP_LEVEL);
-    const beeps = BRIEFING_BEEPS.filter(([at]) => t + at >= ctx.currentTime).map(
-      ([at, frequency, length]) =>
-        tone(ctx, out, {
-          type: 'square',
-          at: t + at,
-          from: frequency,
-          to: frequency,
-          peak: 0.7,
-          attack: 0.004,
-          hold: length * 0.4,
-          decay: length * 0.6,
-        }),
-    );
-    if (beeps.length === 0) {
-      out.disconnect();
-      return;
-    }
-    onAllEnded(beeps, () => out.disconnect());
-  } catch {
-    // Deliberately silent: the briefing counts on screen as well.
+  const audio = playingEngine();
+  if (audio === null) return;
+  const t = audio.ctx.currentTime + LOOKAHEAD - elapsedMs / 1000;
+  for (const [at, id] of BRIEFING_BEEPS) {
+    if (t + at >= audio.ctx.currentTime) effect(id, 'effects', CHIRP_LEVEL, { at: t + at });
   }
 }
 
 /**
- * Soft ~60 ms footstep tap with ±10% pitch variation, a little louder at a sprint, whose
+ * The own footstep: one of its three takes, ±10 % in speed, a little louder at a sprint, whose
  * steps also land faster (sim.ts); cheap enough for ~10 calls per second.
  */
 export function footstep(sprinting = false): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    const { ctx } = audio;
-    const level = FOOTSTEP_LEVEL * (sprinting ? SPRINT_STEP_GAIN : 1);
-    const out = outlet(ctx, audio.effects, level);
-    onAllEnded(stepInto(ctx, out, ctx.currentTime + LOOKAHEAD), () => out.disconnect());
-  } catch {
-    // Deliberately silent: a missed footstep is harmless.
-  }
+  const level = FOOTSTEP_LEVEL * (sprinting ? SPRINT_STEP_GAIN : 1);
+  effect(pick(STEP_TAKES), 'effects', level, { rate: rand(0.9, 1.1) });
 }
 
-/**
- * One footstep into `out` from `at`, at `pitch` (±10 % unless given): a sine falling an
- * octave — a soft heel thump rather than a pitched tone — and the scuff of a sole. Returns its
- * sources.
- */
-export function stepInto(
-  ctx: BaseAudioContext,
-  out: AudioNode,
-  at: number,
-  pitch = rand(0.9, 1.1),
-): AudioScheduledSourceNode[] {
-  const thump = tone(ctx, out, {
-    type: 'sine',
-    at,
-    from: 150 * pitch,
-    to: 70 * pitch,
-    peak: 0.7,
-    attack: 0.004,
-    hold: 0,
-    decay: 0.075,
-  });
-  const scuff = noiseBurst(ctx, at, 0.025);
-  const scuffLevel = gain(ctx, 0);
-  applyEnvelope(scuffLevel.gain, at, { peak: 0.45, attack: 0.001, hold: 0, decay: 0.02 });
-  chain(scuff, biquad(ctx, 'bandpass', 2500 * pitch, 0.9), scuffLevel, out);
-  return [thump, scuff];
-}
-
-/** Pneumatic door slide: a ~0.25 s filtered-noise whoosh ending in a soft metallic click. */
+/** A pneumatic door sliding open. */
 export function doorSlide(): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    const { ctx } = audio;
-    const t = ctx.currentTime + LOOKAHEAD;
-    const end = t + DOOR_SLIDE_SECONDS;
-    const out = outlet(ctx, audio.effects, DOOR_LEVEL);
-    // The band sweeps down while the panel travels: a bright hiss settling into a whoosh.
-    const hiss = noiseBurst(ctx, t, DOOR_SLIDE_SECONDS);
-    const band = biquad(ctx, 'bandpass', 2400, 0.8);
-    band.frequency.setValueAtTime(2400, t);
-    band.frequency.exponentialRampToValueAtTime(600, end);
-    const swell = gain(ctx, 0);
-    swell.gain.setValueAtTime(0, t);
-    swell.gain.linearRampToValueAtTime(0.8, t + 0.03);
-    swell.gain.linearRampToValueAtTime(0.35, t + 0.18);
-    swell.gain.linearRampToValueAtTime(0, end);
-    chain(hiss, band, swell, out);
-    const clickAt = end - 0.015;
-    const click = tone(ctx, out, {
-      type: 'triangle',
-      at: clickAt,
-      from: 1700,
-      to: 1600,
-      peak: 0.35,
-      attack: 0.001,
-      hold: 0,
-      decay: 0.04,
-    });
-    const ping = tone(ctx, out, {
-      type: 'sine',
-      at: clickAt,
-      from: 4300,
-      to: 4300,
-      peak: 0.12,
-      attack: 0.001,
-      hold: 0,
-      decay: 0.02,
-    });
-    onAllEnded([hiss, click, ping], () => out.disconnect());
-  } catch {
-    // Deliberately silent: the door still opens without its sound.
-  }
+  effect('door-slide', 'effects', DOOR_LEVEL);
 }
 
-/** Rising two-tone 'station ready' chirp, ~0.3 s. */
+/** A console's rising 'station ready' chirp. */
 export function stationChirp(): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    const { ctx } = audio;
-    const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.effects, CHIRP_LEVEL);
-    const low = tone(ctx, out, {
-      type: 'triangle',
-      at: t,
-      from: 680,
-      to: 720,
-      peak: 0.85,
-      attack: 0.01,
-      hold: 0.05,
-      decay: 0.06,
-    });
-    const high = tone(ctx, out, {
-      type: 'triangle',
-      at: t + 0.13,
-      from: 1020,
-      to: 1090,
-      peak: 0.85,
-      attack: 0.01,
-      hold: 0.07,
-      decay: 0.09,
-    });
-    onAllEnded([low, high], () => out.disconnect());
-  } catch {
-    // Deliberately silent: the station state is shown visually as well.
-  }
+  effect('console-ready', 'effects', CHIRP_LEVEL);
 }
 
-/**
- * Short bright blip marking a map ping, pitched above the station chirp so the two
- * never get confused.
- */
+/** A short bright blip marking a map ping, never to be taken for the station chirp. */
 export function pingBlip(): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    const { ctx } = audio;
-    const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.effects, CHIRP_LEVEL);
-    const blip = tone(ctx, out, {
-      type: 'sine',
-      at: t,
-      from: 1560,
-      to: 1960,
-      peak: 0.8,
-      attack: 0.005,
-      hold: 0.03,
-      decay: 0.12,
-    });
-    onAllEnded([blip], () => out.disconnect());
-  } catch {
-    // Deliberately silent: pings are shown on the map as well.
-  }
+  effect('ping', 'effects', CHIRP_LEVEL);
 }
 
 /**
- * Soft rising two-note chime, ~0.45 s, for a source the crew has just come across: rounder
- * and lower than the ping, so a find never sounds like somebody calling.
+ * A soft rising two-note chime for a source the crew has just come across: rounder and lower
+ * than the ping, so a find never sounds like somebody calling.
  */
 export function discoveryBlip(): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    const { ctx } = audio;
-    const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.effects, CHIRP_LEVEL);
-    const low = tone(ctx, out, {
-      type: 'sine',
-      at: t,
-      from: 784,
-      to: 784,
-      peak: 0.6,
-      attack: 0.012,
-      hold: 0.03,
-      decay: 0.2,
-    });
-    const high = tone(ctx, out, {
-      type: 'sine',
-      at: t + 0.1,
-      from: 1175,
-      to: 1175,
-      peak: 0.55,
-      attack: 0.012,
-      hold: 0.04,
-      decay: 0.3,
-    });
-    onAllEnded([low, high], () => out.disconnect());
-  } catch {
-    // Deliberately silent: the caption shows the find as well.
-  }
+  effect('discovery', 'effects', CHIRP_LEVEL);
 }
 
-/** A locker door swung open, ~1 s: the latch, then the thin clang of its sheet metal. */
+/** A locker door swung open: the latch, then the thin clang of its sheet metal. */
 export function lockerOpen(): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    const { ctx } = audio;
-    const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.effects, FIND_LEVEL);
-    const latch = tick(ctx, out, t, 2600, 0.8);
-    onAllEnded([latch], () => out.disconnect());
-    strike(ctx, audio.effects, t + 0.06, 420, FIND_LEVEL * 0.8);
-  } catch {
-    // Deliberately silent: the locker opens on screen as well.
-  }
+  effect('locker-open', 'effects', FIND_LEVEL);
 }
 
-/**
- * A padlock coming off, ~0.45 s: the key turning, the shackle springing with a bright tick,
- * then the drawer rolling out on its runners.
- */
+/** A padlock coming off, then the drawer rolling out on its runners. */
 export function cabinetUnlock(): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    const { ctx } = audio;
-    const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.effects, FIND_LEVEL);
-    const turn = tick(ctx, out, t, 3400, 0.6);
-    const spring = tick(ctx, out, t + 0.11, 5200, 0.9);
-    const ring = tone(ctx, out, {
-      type: 'sine',
-      at: t + 0.11,
-      from: 6100,
-      to: 6000,
-      peak: 0.12,
-      attack: 0.001,
-      hold: 0,
-      decay: 0.05,
-    });
-    const runners = noiseBurst(ctx, t + 0.2, 0.22);
-    const band = biquad(ctx, 'bandpass', 900, 1.2);
-    band.frequency.setValueAtTime(900, t + 0.2);
-    band.frequency.exponentialRampToValueAtTime(450, t + 0.42);
-    const roll = gain(ctx, 0);
-    applyEnvelope(roll.gain, t + 0.2, { peak: 0.5, attack: 0.03, hold: 0.1, decay: 0.09 });
-    chain(runners, band, roll, out);
-    onAllEnded([turn, spring, ring, runners], () => out.disconnect());
-  } catch {
-    // Deliberately silent: the cabinet opens on screen as well.
-  }
+  effect('cabinet-unlock', 'effects', FIND_LEVEL);
 }
 
-/**
- * A sheet put down, ~0.25 s: the paper's swish as it slides off, then the soft clack of the
- * board or the stack meeting the table, with a mid layer a phone's small speaker still plays.
- */
+/** A part delivered where it belongs — the fuse into its holder: a scrape and a snap. */
+export function partSeated(): void {
+  effect('part-seat', 'effects', FIND_LEVEL);
+}
+
+/** A sheet put down: the paper's swish, then the soft clack of the board meeting the desk. */
 export function sheetDown(): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    const { ctx } = audio;
-    const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.effects, FIND_LEVEL);
-    const swish = noiseBurst(ctx, t, 0.16);
-    const band = biquad(ctx, 'bandpass', 3200, 0.7);
-    band.frequency.setValueAtTime(3200, t);
-    band.frequency.exponentialRampToValueAtTime(1400, t + 0.16);
-    const swishLevel = gain(ctx, 0);
-    applyEnvelope(swishLevel.gain, t, { peak: 0.35, attack: 0.03, hold: 0.04, decay: 0.09 });
-    chain(swish, band, swishLevel, out);
-    const clack = tick(ctx, out, t + 0.16, 1300, 0.9);
-    const body = midKnock(ctx, out, t + 0.16, 0.07, 0.6);
-    onAllEnded([swish, clack, body], () => out.disconnect());
-  } catch {
-    // Deliberately silent: the sheet goes down on screen as well.
-  }
+  effect('sheet-down', 'effects', FIND_LEVEL);
 }
 
-/**
- * A book shut, ~0.3 s: the rush of air as the cover swings over the pages, then the dull clap
- * of cover on block — a low thump and its mid layer.
- */
+/** A book shut: the rush of air over the pages, then the dull clap of cover on block. */
 export function coverShut(): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    const { ctx } = audio;
-    const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.effects, FIND_LEVEL);
-    const rush = lowNoise(ctx, out, t, 0.18, 900);
-    const clap = tone(ctx, out, {
-      type: 'sine',
-      at: t + 0.18,
-      from: 150,
-      to: 70,
-      peak: 0.8,
-      attack: 0.002,
-      hold: 0,
-      decay: 0.12,
-    });
-    const body = midKnock(ctx, out, t + 0.18, 0.08, 0.7);
-    onAllEnded([rush, clap, body], () => out.disconnect());
-  } catch {
-    // Deliberately silent: the book shuts on screen as well.
-  }
+  effect('book-shut', 'effects', FIND_LEVEL);
 }
 
-/** A pencil taking a block down, ~0.3 s: three quick strokes of graphite on paper. */
+/** A pencil taking a block down: three quick strokes of graphite on paper. */
 export function pencilScratch(): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    const { ctx } = audio;
-    const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.effects, CHIRP_LEVEL);
-    const strokes = [0, 0.09, 0.19].map((after) => {
-      const stroke = noiseBurst(ctx, t + after, 0.07);
-      const level = gain(ctx, 0);
-      applyEnvelope(level.gain, t + after, { peak: 0.5, attack: 0.008, hold: 0.03, decay: 0.03 });
-      chain(stroke, biquad(ctx, 'bandpass', rand(3800, 5200), 2), level, out);
-      return stroke;
-    });
-    onAllEnded(strokes, () => out.disconnect());
-  } catch {
-    // Deliberately silent: the notepad shows the lines as well.
-  }
+  effect('pencil', 'effects', CHIRP_LEVEL, { rate: rand(0.92, 1.08) });
 }
 
 /**
- * Mission control keying the radio, ~0.2 s: a crackle of static, then the press-to-talk key's
- * click going down and up, squeezed into a handset's narrow band. No tone in it: a line that
- * follows a solve comes over the solve's chord, and nothing pitched may clash with that. Only
- * for a line no recording speaks — a custom mission's, a note of the last shift: a recorded line
+ * Mission control keying the radio: a crackle and the press-to-talk key's click. Only for a
+ * line no recording speaks — a custom mission's, a note of the last shift: a recorded line
  * keys its own squelch (radioVoice.ts).
  */
 export function radioChirp(): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    const { ctx } = audio;
-    const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.radio, CHIRP_LEVEL);
-    const handset = biquad(ctx, 'bandpass', 1500, 0.8);
-    handset.connect(out);
-    const crackle = noiseBurst(ctx, t, 0.06);
-    const crackleLevel = gain(ctx, 0);
-    applyEnvelope(crackleLevel.gain, t, { peak: 0.6, attack: 0.002, hold: 0.02, decay: 0.035 });
-    chain(crackle, crackleLevel, handset);
-    const down = tick(ctx, handset, t + 0.07, 2200, 0.9);
-    const up = tick(ctx, handset, t + 0.14, 1700, 0.7);
-    onAllEnded([crackle, down, up], () => out.disconnect());
-  } catch {
-    // Deliberately silent: the line is on screen as well.
-  }
+  effect('radio-key', 'radio', CHIRP_LEVEL);
 }
 
 /**
- * Deep red-alert swell for penalties (~0.8 s): detuned saws sagging in pitch behind a closing
- * lowpass, so it reads as power draining away rather than as a klaxon. `delaySec` puts it later
- * on the audio clock, for the lights failing (`blackoutSounds`).
+ * The power draining away, for penalties and the lights failing: a whine sagging into the
+ * dark. `delaySec` puts it later on the audio clock.
  */
 export function powerDrain(delaySec = 0): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    const { ctx } = audio;
-    const t = ctx.currentTime + LOOKAHEAD + delaySec;
-    const end = t + DRAIN_SECONDS;
-    const out = outlet(ctx, audio.effects, DRAIN_LEVEL);
-    const lowpass = biquad(ctx, 'lowpass', 1400, 4);
-    lowpass.frequency.setValueAtTime(1400, t);
-    lowpass.frequency.exponentialRampToValueAtTime(150, end);
-    const swell = gain(ctx, 0);
-    swell.gain.setValueAtTime(0, t);
-    swell.gain.linearRampToValueAtTime(0.4, t + 0.2);
-    swell.gain.linearRampToValueAtTime(0.28, t + 0.5);
-    swell.gain.linearRampToValueAtTime(0, end);
-    chain(lowpass, swell, out);
-    const saws = DRAIN_DETUNE.map((ratio) => {
-      const saw = ctx.createOscillator();
-      saw.type = 'sawtooth';
-      saw.frequency.setValueAtTime(130 * ratio, t);
-      saw.frequency.exponentialRampToValueAtTime(40 * ratio, end);
-      saw.connect(lowpass);
-      saw.start(t);
-      saw.stop(end + 0.02);
-      return saw;
-    });
-    onAllEnded(saws, () => out.disconnect());
-  } catch {
-    // Deliberately silent: the penalty is shown visually as well.
-  }
+  const audio = playingEngine();
+  if (audio === null) return;
+  const at = audio.ctx.currentTime + LOOKAHEAD + delaySec;
+  effect('power-down', 'effects', DRAIN_LEVEL, { at });
 }
 
 /**
- * Idempotent. The lab with its power on (the cold open, coldOpen.ts): a low mains hum under
- * everything, fading in over ~0.8 s, until the lights fail or `stopPowerHum` ends it.
+ * Idempotent. The lab with its power on (the cold open, coldOpen.ts): the mains hum under
+ * everything, fading in over ~0.8 s, until the lights fail or `stopPowerHum` ends it. Where its
+ * recording is still loading, it starts once it has, if it is still wanted then.
  */
 export function startPowerHum(): void {
   try {
@@ -802,7 +467,17 @@ export function startPowerHum(): void {
     const audio = getEngine();
     if (audio === null || audio.ctx.state === 'closed') return;
     unlock();
-    powerHum = buildPowerHum(audio);
+    const now = buildLoop(audio, sample('mains-hum'), POWER_LEVEL, POWER_FADE_IN);
+    if (now !== null) {
+      powerHum = now;
+      return;
+    }
+    powerHum = 'pending';
+    void sampleLoaded('mains-hum').then((recording) => {
+      if (powerHum === 'pending') {
+        powerHum = buildLoop(audio, recording, POWER_LEVEL, POWER_FADE_IN);
+      }
+    });
   } catch {
     // Deliberately silent: the lit lab still looks lit.
   }
@@ -813,11 +488,8 @@ export function stopPowerHum(): void {
   try {
     const hum = powerHum;
     powerHum = null;
-    if (hum !== null && engine !== null) {
-      const now = engine.ctx.currentTime;
-      const level = hum.level.gain.value;
-      hum.level.gain.cancelScheduledValues(now);
-      windDown(hum, now, POWER_FADE_OUT, 1, level);
+    if (hum !== null && hum !== 'pending' && engine !== null) {
+      fadeAway(hum, engine.ctx.currentTime, POWER_FADE_OUT);
     }
   } catch {
     // Deliberately silent: the hum's nodes are released with the context at the latest.
@@ -826,117 +498,71 @@ export function stopPowerHum(): void {
 
 /**
  * The lights failing, scheduled at once on the audio clock: contacts arcing in every drop of
- * the flicker while the power hum sags with it, then a bang, the hum dying with its pitch
- * falling and the power draining away, and the emergency relay's click.
+ * the flicker while the power hum sags with it, then the breaker's thunk, the hum dying as it
+ * slows and the power draining away, the emergency relay's click and the emergency lights'
+ * buzz.
  */
 export function blackoutSounds(cue: BlackoutCue): void {
   try {
-    const hum = powerHum;
+    const hum = powerHum === 'pending' ? null : powerHum;
     powerHum = null;
     const audio = runningEngine();
     if (audio === null) {
       if (hum !== null && engine !== null) windDown(hum, engine.ctx.currentTime, 0.05, 1);
       return;
     }
-    const { ctx, master } = audio;
-    const t = ctx.currentTime + LOOKAHEAD;
+    const t = audio.ctx.currentTime + LOOKAHEAD;
     if (hum !== null) {
       sag(hum.level.gain, t, cue.drops);
       windDown(hum, t + cue.bang, POWER_DIE_SECONDS, POWER_FALL);
     }
-    arcing(ctx, master, t, cue.drops);
-    bang(ctx, master, t + cue.bang);
-    powerDrain(cue.bang);
-    relayClick(ctx, master, t + cue.click);
+    for (const [from, to] of cue.drops) {
+      effect('short-arc', 'master', ARC_LEVEL, { at: t + from, until: t + to });
+    }
+    effect('breaker-thunk', 'master', BANG_LEVEL, { at: t + cue.bang });
+    effect('power-down', 'effects', DRAIN_LEVEL, { at: t + cue.bang });
+    effect('relay-click', 'master', CLICK_LEVEL, { at: t + cue.click });
+    effect('emergency-buzz', 'master', BUZZ_LEVEL, { at: t + cue.click + BUZZ_AFTER });
   } catch {
     // Deliberately silent: the lights fail on screen as well.
   }
 }
 
-/**
- * A heavy main switch thrown home, ~0.4 s: the latch letting go ("ka"), then the lever
- * dropping into its stop with a thud and the ring of its steel ("chunk").
- */
+/** A heavy main switch thrown home: the latch letting go, then the lever's chunk into its stop. */
 export function leverChunk(): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    const { ctx } = audio;
-    const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.effects, LEVER_LEVEL);
-    const latch = tick(ctx, out, t, 1900, 0.8);
-    const thud = tone(ctx, out, {
-      type: 'sine',
-      at: t + 0.12,
-      from: 120,
-      to: 48,
-      peak: 1,
-      attack: 0.002,
-      hold: 0.02,
-      decay: 0.28,
-    });
-    const knock = lowNoise(ctx, out, t + 0.12, 0.09, 700);
-    const body = midKnock(ctx, out, t + 0.12, 0.13, 0.75);
-    onAllEnded([latch, thud, knock, body], () => out.disconnect());
-    strike(ctx, audio.effects, t + 0.12, 150, LEVER_LEVEL * 0.5);
-  } catch {
-    // Deliberately silent: the lever drops on screen as well.
-  }
+  effect('lever-chunk', 'effects', LEVER_LEVEL);
 }
 
-/** A short klaxon for an alarm, ~0.4 s: two harsh blasts of a horn, the second a little lower. */
+/** A short klaxon for an alarm: two harsh blasts of a horn. */
 export function klaxon(): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    hornBlasts(audio, KLAXON_BLASTS);
-  } catch {
-    // Deliberately silent: the alarm strobes on screen as well.
-  }
+  effect('klaxon', 'effects', KLAXON_LEVEL);
 }
 
 /**
- * The klaxon of a run lost to its alarms, ~1.5 s: blast after blast, each weaker and lower, as
- * the emergency supply gives out.
+ * The klaxon of a run lost to its alarms: blasting again and again, each time weaker and
+ * slower, as the emergency supply gives out.
  */
 export function klaxonFade(): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    hornBlasts(audio, KLAXON_FADING);
-  } catch {
-    // Deliberately silent: the card says it as well.
+  const audio = playingEngine();
+  if (audio === null) return;
+  const t = audio.ctx.currentTime + LOOKAHEAD;
+  for (const [after, strength, rate] of KLAXON_FADING) {
+    effect('klaxon', 'effects', KLAXON_LEVEL * strength, { at: t + after, rate });
   }
 }
 
-/** A room's lights coming on: the relay pulling in, then the faint tick of the tubes striking. */
+/** A room's lights coming on: the relay pulling in, then the tubes striking. */
 export function lightsOnClick(): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    const { ctx, master } = audio;
-    const t = ctx.currentTime + LOOKAHEAD;
-    relayClick(ctx, master, t);
-    const out = outlet(ctx, master, CLICK_LEVEL * 0.6);
-    const strikeUp = tone(ctx, out, {
-      type: 'sine',
-      at: t + 0.12,
-      from: 5200,
-      to: 4900,
-      peak: 0.3,
-      attack: 0.002,
-      hold: 0,
-      decay: 0.08,
-    });
-    onAllEnded([strikeUp], () => out.disconnect());
-  } catch {
-    // Deliberately silent: the room lights up on screen as well.
-  }
+  const audio = playingEngine();
+  if (audio === null) return;
+  const t = audio.ctx.currentTime + LOOKAHEAD;
+  effect('relay-click', 'master', CLICK_LEVEL, { at: t });
+  effect('tube-strike', 'master', CLICK_LEVEL * 0.6, { at: t + 0.12 });
 }
 
 /**
- * Idempotent. The escape's siren: two tones taking turns, high and low, looping quietly under
- * everything — fading in over ~0.4 s — until `stopSiren` ends it.
+ * Idempotent. The escape's siren: two tones taking turns, looping quietly under everything —
+ * fading in over ~0.4 s — until `stopSiren` ends it.
  */
 export function startSiren(): void {
   try {
@@ -944,7 +570,7 @@ export function startSiren(): void {
     const audio = getEngine();
     if (audio === null || audio.ctx.state === 'closed') return;
     unlock();
-    siren = buildSiren(audio);
+    siren = buildLoop(audio, sample('siren'), SIREN_LEVEL, SIREN_FADE_IN);
   } catch {
     // Deliberately silent: the hatch and the red light say it as well.
   }
@@ -956,224 +582,29 @@ export function stopSiren(): void {
     const current = siren;
     siren = null;
     if (current !== null && engine !== null) {
-      const now = engine.ctx.currentTime;
-      const level = current.level.gain.value;
-      current.level.gain.cancelScheduledValues(now);
-      windDown(current, now, SIREN_FADE_OUT, 1, level);
+      fadeAway(current, engine.ctx.currentTime, SIREN_FADE_OUT);
     }
   } catch {
     // Deliberately silent: the siren's nodes are released with the context at the latest.
   }
 }
 
-/**
- * The hatch grinding open, ~2 s: steel dragging on steel in jerks over a straining motor, then
- * the leaves striking home with a clunk.
- */
+/** The hatch grinding open: steel on steel over a straining motor, the leaves striking home. */
 export function exitGrind(): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    const { ctx } = audio;
-    const t = ctx.currentTime + LOOKAHEAD;
-    const out = outlet(ctx, audio.effects, GRIND_LEVEL);
-    const sources = [...scrape(ctx, out, t), motor(ctx, out, t)];
-    const end = t + GRIND_SECONDS;
-    sources.push(
-      tone(ctx, out, {
-        type: 'sine',
-        at: end,
-        from: 92,
-        to: 38,
-        peak: 1,
-        attack: 0.003,
-        hold: 0.03,
-        decay: 0.45,
-      }),
-      midKnock(ctx, out, end, 0.16, 0.8),
-    );
-    onAllEnded(sources, () => out.disconnect());
-    strike(ctx, audio.effects, end, 110, GRIND_LEVEL * 0.6);
-  } catch {
-    // Deliberately silent: the hatch opens on screen as well.
-  }
+  effect('hatch-grind', 'effects', GRIND_LEVEL);
 }
 
-/** The end of a run won, ~3.6 s: a soft major chord swelling and dying away over a breath of wind. */
-export function victoryChord(): void {
-  try {
-    const audio = runningEngine();
-    if (audio === null) return;
-    const t = audio.ctx.currentTime + LOOKAHEAD;
-    chord(audio.ctx, audio.effects, t);
-    wind(audio.ctx, audio.effects, t);
-  } catch {
-    // Deliberately silent: the card says it as well.
-  }
-}
-
-/** Horn blasts from now, each [s from now, strength 0–1, pitch factor], through a horn's band. */
-function hornBlasts(audio: Engine, shots: readonly (readonly [number, number, number])[]): void {
-  const { ctx } = audio;
-  const t = ctx.currentTime + LOOKAHEAD;
-  const out = outlet(ctx, audio.effects, KLAXON_LEVEL);
-  const horn = biquad(ctx, 'bandpass', 900, 1.3);
-  horn.connect(out);
-  const sources = shots.flatMap(([delay, strength, pitch]) => {
-    const level = gain(ctx, 0);
-    applyEnvelope(level.gain, t + delay, { peak: strength, attack: 0.012, hold: 0.13, decay: 0.05 });
-    level.connect(horn);
-    return KLAXON_PITCH.map((frequency) => {
-      const saw = ctx.createOscillator();
-      saw.type = 'sawtooth';
-      saw.frequency.setValueAtTime(frequency * pitch, t + delay);
-      saw.connect(level);
-      saw.start(t + delay);
-      saw.stop(t + delay + 0.22);
-      return saw;
-    });
-  });
-  onAllEnded(sources, () => out.disconnect());
-}
-
-function buildSiren(audio: Engine): Loop {
+/** The recording `loop` playing round and round on the effects' bus at `level`, fading in. */
+function buildLoop(audio: Engine, loop: Sample | null, level: number, fadeIn: number): Loop | null {
+  if (loop === null) return null;
   const { ctx } = audio;
   const t = ctx.currentTime;
-  const out = outlet(ctx, audio.effects, SIREN_LEVEL);
-  const level = gain(ctx, 0);
-  level.gain.setValueAtTime(0, t);
-  level.gain.linearRampToValueAtTime(1, t + SIREN_FADE_IN);
-  level.connect(out);
-  const [low, high] = SIREN_TONES;
-  const voice = ctx.createOscillator();
-  voice.type = 'triangle';
-  voice.frequency.value = (low + high) / 2;
-  // A square wave swings the pitch from one tone to the other; smoothed, so each turn glides.
-  const turns = ctx.createOscillator();
-  turns.type = 'square';
-  turns.frequency.value = SIREN_RATE;
-  const glide = biquad(ctx, 'lowpass', 25, 0);
-  const swing = gain(ctx, (high - low) / 2);
-  chain(turns, glide, swing);
-  swing.connect(voice.frequency);
-  chain(voice, biquad(ctx, 'lowpass', 1800, 0), level);
-  voice.start(t);
-  turns.start(t);
-  return { sources: [voice, turns], level, out };
-}
-
-/** Steel dragging on steel: noise in a low band, chopped into stick-slip jerks that speed up. */
-function scrape(ctx: AudioContext, dest: AudioNode, at: number): AudioScheduledSourceNode[] {
-  const end = at + GRIND_SECONDS;
-  const drag = noiseBurst(ctx, at, GRIND_SECONDS);
-  const chopper = gain(ctx, 0.5);
-  const slip = ctx.createOscillator();
-  slip.type = 'sawtooth';
-  slip.frequency.setValueAtTime(9, at);
-  slip.frequency.linearRampToValueAtTime(16, end);
-  const depth = gain(ctx, 0.5);
-  chain(slip, depth);
-  depth.connect(chopper.gain);
-  const swell = gain(ctx, 0);
-  swell.gain.setValueAtTime(0, at);
-  swell.gain.linearRampToValueAtTime(0.9, at + 0.15);
-  swell.gain.setValueAtTime(0.9, end - 0.2);
-  swell.gain.linearRampToValueAtTime(0, end);
-  chain(drag, biquad(ctx, 'bandpass', 380, 2.5), chopper, swell, dest);
-  slip.start(at);
-  slip.stop(end);
-  return [drag, slip];
-}
-
-/**
- * The motor straining under the hatch: a low saw climbing as the leaves give way, its
- * overtones up to the mid band left in, so that a small speaker hears it strain as well.
- */
-function motor(ctx: AudioContext, dest: AudioNode, at: number): OscillatorNode {
-  const end = at + GRIND_SECONDS;
-  const saw = ctx.createOscillator();
-  saw.type = 'sawtooth';
-  saw.frequency.setValueAtTime(40, at);
-  saw.frequency.linearRampToValueAtTime(58, end);
-  const level = gain(ctx, 0);
-  level.gain.setValueAtTime(0, at);
-  level.gain.linearRampToValueAtTime(0.5, at + 0.3);
-  level.gain.linearRampToValueAtTime(0, end);
-  chain(saw, biquad(ctx, 'lowpass', 620, 0), level, dest);
-  saw.start(at);
-  saw.stop(end + 0.02);
-  return saw;
-}
-
-/** C major, spread over two octaves: each note a sine with a triangle above, 50 ms apart. */
-function chord(ctx: AudioContext, dest: AudioNode, at: number): void {
-  const out = outlet(ctx, dest, CHORD_LEVEL);
-  const warm = biquad(ctx, 'lowpass', 2400, 0);
-  warm.connect(out);
-  const voices = CHORD_NOTES.flatMap((frequency, i) => [
-    tone(ctx, warm, {
-      type: 'sine',
-      at: at + i * 0.05,
-      from: frequency,
-      to: frequency,
-      peak: 0.5,
-      attack: 0.09,
-      hold: 0.5,
-      decay: 2.3,
-    }),
-    tone(ctx, warm, {
-      type: 'triangle',
-      at: at + i * 0.05,
-      from: frequency * 2,
-      to: frequency * 2,
-      peak: 0.12,
-      attack: 0.09,
-      hold: 0.3,
-      decay: 1.6,
-    }),
-  ]);
-  onAllEnded(voices, () => out.disconnect());
-}
-
-/** Wind outside: noise in a band that drifts up and back while it swells and dies away. */
-function wind(ctx: AudioContext, dest: AudioNode, at: number): void {
-  const end = at + WIND_SECONDS;
-  const out = outlet(ctx, dest, WIND_LEVEL);
-  const air = ctx.createBufferSource();
-  air.buffer = noiseBuffer(ctx);
-  air.loop = true;
-  const band = biquad(ctx, 'bandpass', 420, 0.8);
-  band.frequency.setValueAtTime(420, at);
-  band.frequency.linearRampToValueAtTime(900, at + 1.6);
-  band.frequency.linearRampToValueAtTime(520, end);
-  const swell = gain(ctx, 0);
-  swell.gain.setValueAtTime(0, at);
-  swell.gain.linearRampToValueAtTime(1, at + 1);
-  swell.gain.linearRampToValueAtTime(0.6, at + 2.2);
-  swell.gain.linearRampToValueAtTime(0, end);
-  chain(air, band, swell, out);
-  air.start(at);
-  air.stop(end + 0.05);
-  onAllEnded([air], () => out.disconnect());
-}
-
-function buildPowerHum(audio: Engine): Loop {
-  const { ctx } = audio;
-  const t = ctx.currentTime;
-  const out = outlet(ctx, audio.effects, POWER_LEVEL);
-  const level = gain(ctx, 0);
-  level.gain.setValueAtTime(0, t);
-  level.gain.linearRampToValueAtTime(1, t + POWER_FADE_IN);
-  const lowpass = biquad(ctx, 'lowpass', 700, 0);
-  chain(lowpass, level, out);
-  const sources = POWER_VOICES.map(([frequency, voiceLevel]) => {
-    const osc = ctx.createOscillator();
-    osc.frequency.value = frequency;
-    chain(osc, gain(ctx, voiceLevel), lowpass);
-    osc.start(t);
-    return osc;
-  });
-  return { sources, level, out };
+  const out = outlet(ctx, audio.effects, level);
+  const fade = gain(ctx, 0);
+  fade.gain.setValueAtTime(0, t);
+  fade.gain.linearRampToValueAtTime(1, t + fadeIn);
+  fade.connect(out);
+  return { source: playLoop(ctx, loop.buffer, fade, t), level: fade, out };
 }
 
 /** The hum sags in every drop of the flicker, `drops` in seconds from `at`. */
@@ -1186,111 +617,25 @@ function sag(param: AudioParam, at: number, drops: BlackoutCue['drops']): void {
   }
 }
 
+/** A loop fades out from now over `seconds`, from where it stands, and stops. */
+function fadeAway(loop: Loop, now: number, seconds: number): void {
+  const level = loop.level.gain.value;
+  loop.level.gain.cancelScheduledValues(now);
+  windDown(loop, now, seconds, 1, level);
+}
+
 /**
- * The hum dies from `at` over `seconds`, from `level` down to silence, its pitch falling to
- * `fall` times, and stops.
+ * The loop dies from `at` over `seconds`, from `level` down to silence, slowing to `fall` times
+ * its speed — its hum falling in pitch — and stops.
  */
-function windDown(hum: Loop, at: number, seconds: number, fall: number, level = 1): void {
+function windDown(loop: Loop, at: number, seconds: number, fall: number, level = 1): void {
   const end = at + seconds;
-  hum.level.gain.setValueAtTime(Math.max(SILENCE, level), at);
-  hum.level.gain.exponentialRampToValueAtTime(SILENCE, end);
-  for (const osc of hum.sources) {
-    const frequency = osc.frequency.value;
-    osc.frequency.setValueAtTime(frequency, at);
-    osc.frequency.exponentialRampToValueAtTime(frequency * fall, end);
-    osc.stop(end + 0.02);
-  }
-  onAllEnded(hum.sources, () => hum.out.disconnect());
-}
-
-/** Contacts arcing: a rasping buzz and a crackle in every drop, `drops` in seconds from `at`. */
-function arcing(ctx: AudioContext, dest: AudioNode, at: number, drops: BlackoutCue['drops']): void {
-  const last = drops.at(-1);
-  if (last === undefined) return;
-  const out = outlet(ctx, dest, ARC_LEVEL);
-  const rasp = ctx.createOscillator();
-  rasp.type = 'sawtooth';
-  rasp.frequency.value = 110;
-  const level = gain(ctx, 0);
-  chain(rasp, biquad(ctx, 'bandpass', 2400, 2), level, out);
-  const crackles = drops.map(([from, to]) => {
-    level.gain.setValueAtTime(0, at + from);
-    level.gain.linearRampToValueAtTime(0.7, at + from + 0.005);
-    level.gain.setValueAtTime(0.7, at + to);
-    level.gain.linearRampToValueAtTime(0, at + to + 0.03);
-    return tick(ctx, out, at + from, 3500, 0.9);
-  });
-  rasp.start(at);
-  rasp.stop(at + last[1] + 0.05);
-  onAllEnded([rasp, ...crackles], () => out.disconnect());
-}
-
-/** The breaker going: a low thump with a burst of muffled noise. */
-function bang(ctx: AudioContext, dest: AudioNode, at: number): void {
-  const out = outlet(ctx, dest, BANG_LEVEL);
-  const thump = tone(ctx, out, {
-    type: 'sine',
-    at,
-    from: 95,
-    to: 32,
-    peak: 1,
-    attack: 0.003,
-    hold: 0.04,
-    decay: 0.6,
-  });
-  const burst = lowNoise(ctx, out, at, 0.18, 900);
-  const body = midKnock(ctx, out, at, 0.22, 0.85);
-  onAllEnded([thump, burst, body], () => out.disconnect());
-}
-
-/** The emergency relay pulling in: a dry click with a short knock under it. */
-function relayClick(ctx: AudioContext, dest: AudioNode, at: number): void {
-  const out = outlet(ctx, dest, CLICK_LEVEL);
-  const click = tick(ctx, out, at, 2600, 0.9);
-  const knock = tone(ctx, out, {
-    type: 'sine',
-    at,
-    from: 160,
-    to: 110,
-    peak: 0.5,
-    attack: 0.002,
-    hold: 0,
-    decay: 0.05,
-  });
-  onAllEnded([click, knock], () => out.disconnect());
-}
-
-/**
- * A heavy hit's mid layer: a burst of noise in the band MID_BAND/MID_Q spans, about 300 to
- * 900 Hz, `duration` long from `at`, falling from `peak`.
- */
-export function midKnock(
-  ctx: BaseAudioContext,
-  dest: AudioNode,
-  at: number,
-  duration: number,
-  peak: number,
-): AudioBufferSourceNode {
-  const burst = noiseBurst(ctx, at, duration);
-  const level = gain(ctx, 0);
-  applyEnvelope(level.gain, at, { peak, attack: 0.002, hold: 0, decay: duration - 0.002 });
-  chain(burst, biquad(ctx, 'bandpass', MID_BAND, MID_Q), level, dest);
-  return burst;
-}
-
-/** A burst of noise behind a lowpass at `cutoff`, `duration` long from `at`. */
-function lowNoise(
-  ctx: BaseAudioContext,
-  dest: AudioNode,
-  at: number,
-  duration: number,
-  cutoff: number,
-): AudioBufferSourceNode {
-  const burst = noiseBurst(ctx, at, duration);
-  const level = gain(ctx, 0);
-  applyEnvelope(level.gain, at, { peak: 0.9, attack: 0.002, hold: 0, decay: duration - 0.002 });
-  chain(burst, biquad(ctx, 'lowpass', cutoff, 0), level, dest);
-  return burst;
+  loop.level.gain.setValueAtTime(Math.max(SILENCE, level), at);
+  loop.level.gain.exponentialRampToValueAtTime(SILENCE, end);
+  loop.source.playbackRate.setValueAtTime(1, at);
+  loop.source.playbackRate.exponentialRampToValueAtTime(fall, end);
+  loop.source.onended = () => loop.out.disconnect();
+  loop.source.stop(end + 0.02);
 }
 
 function getEngine(): Engine | null {
@@ -1367,68 +712,6 @@ function syncUnlockListeners(): void {
   }
 }
 
-/** Struck metal: the partials of a free bar at `base` Hz with the knock of the blow, from `at`. */
-export function strike(
-  ctx: BaseAudioContext,
-  dest: AudioNode,
-  at: number,
-  base: number,
-  level: number,
-): void {
-  const out = outlet(ctx, dest, level);
-  const sources = strikeInto(ctx, out, at, base, { partials: CLANK_PARTIALS.length, impact: true });
-  onAllEnded(sources, () => out.disconnect());
-}
-
-/**
- * Struck metal into `dest`, from `at`: the strongest `partials` of a free bar at `base` Hz
- * and, with `impact`, the knock of the blow. Returns its sources; the caller lets it go.
- */
-export function strikeInto(
-  ctx: BaseAudioContext,
-  dest: AudioNode,
-  at: number,
-  base: number,
-  { partials, impact }: { partials: number; impact: boolean },
-): AudioScheduledSourceNode[] {
-  const sources: AudioScheduledSourceNode[] = CLANK_PARTIALS.slice(0, partials).map(
-    ([ratio, peak, decay]) =>
-      tone(ctx, dest, {
-        type: 'sine',
-        at,
-        from: base * ratio,
-        to: base * ratio,
-        peak,
-        attack: 0.002,
-        hold: 0,
-        decay,
-      }),
-  );
-  if (impact) {
-    const knock = noiseBurst(ctx, at, 0.04);
-    const knockLevel = gain(ctx, 0);
-    applyEnvelope(knockLevel.gain, at, { peak: 0.3, attack: 0.001, hold: 0, decay: 0.03 });
-    chain(knock, biquad(ctx, 'bandpass', base * 6, 1.2), knockLevel, dest);
-    sources.push(knock);
-  }
-  return sources;
-}
-
-/** A dry mechanical tick, ~30 ms: a sliver of noise through a narrow band. */
-export function tick(
-  ctx: BaseAudioContext,
-  dest: AudioNode,
-  at: number,
-  frequency: number,
-  peak: number,
-): AudioBufferSourceNode {
-  const burst = noiseBurst(ctx, at, 0.03);
-  const level = gain(ctx, 0);
-  applyEnvelope(level.gain, at, { peak, attack: 0.001, hold: 0, decay: 0.025 });
-  chain(burst, biquad(ctx, 'bandpass', frequency, 3), level, dest);
-  return burst;
-}
-
 /** A number from `min` to `max`, at random: what keeps repeats from sounding alike. */
 export function rand(min: number, max: number): number {
   return min + Math.random() * (max - min);
@@ -1471,47 +754,7 @@ export function chain(first: AudioNode, ...rest: AudioNode[]): void {
   }
 }
 
-/**
- * Moves `param` with `source` scaled by `depth` — a slow oscillator wandering a filter's
- * centre in Hz, a fast one fluttering a gain: modulation, not an audio level.
- */
-export function modulate(
-  ctx: BaseAudioContext,
-  source: AudioNode,
-  depth: number,
-  param: AudioParam,
-): void {
-  const scale = gain(ctx, depth);
-  source.connect(scale);
-  scale.connect(param);
-}
-
-/** Schedules `env` on `param` starting at `at` and returns the time it reaches silence. */
-export function applyEnvelope(param: AudioParam, at: number, env: Envelope): number {
-  const peakAt = at + env.attack;
-  const end = peakAt + env.hold + env.decay;
-  param.setValueAtTime(0, at);
-  param.linearRampToValueAtTime(env.peak, peakAt);
-  param.setValueAtTime(env.peak, peakAt + env.hold);
-  param.exponentialRampToValueAtTime(SILENCE, end);
-  return end;
-}
-
-/** An enveloped oscillator into `dest` (ToneSpec), started and stopped on its own. */
-export function tone(ctx: BaseAudioContext, dest: AudioNode, spec: ToneSpec): OscillatorNode {
-  const osc = ctx.createOscillator();
-  osc.type = spec.type;
-  const level = gain(ctx, 0);
-  const end = applyEnvelope(level.gain, spec.at, spec);
-  osc.frequency.setValueAtTime(spec.from, spec.at);
-  osc.frequency.exponentialRampToValueAtTime(spec.to, end);
-  chain(osc, level, dest);
-  osc.start(spec.at);
-  osc.stop(end + 0.01);
-  return osc;
-}
-
-/** Two seconds of white noise, made once and shared by every sound cut from it. */
+/** Two seconds of white noise, made once: the static under the radio's voice. */
 export function noiseBuffer(ctx: BaseAudioContext): AudioBuffer {
   if (noise === null) {
     const length = Math.floor(ctx.sampleRate * NOISE_SECONDS);
@@ -1523,25 +766,12 @@ export function noiseBuffer(ctx: BaseAudioContext): AudioBuffer {
   return noise;
 }
 
-/** The shared noise looped, started at `at`: the stuff of air, fans and static. */
+/** The shared noise looped, started at `at`: the radio's static. */
 export function noiseLoop(ctx: BaseAudioContext, at: number): AudioBufferSourceNode {
   const source = ctx.createBufferSource();
   source.buffer = noiseBuffer(ctx);
   source.loop = true;
   source.start(at);
-  return source;
-}
-
-/** A one-shot slice of the shared noise; the random offset keeps repeats from sounding alike. */
-export function noiseBurst(
-  ctx: BaseAudioContext,
-  at: number,
-  duration: number,
-): AudioBufferSourceNode {
-  const source = ctx.createBufferSource();
-  const buffer = noiseBuffer(ctx);
-  source.buffer = buffer;
-  source.start(at, Math.random() * Math.max(0, buffer.duration - duration), duration);
   return source;
 }
 
@@ -1598,11 +828,12 @@ export function fadeTo(
 
 /**
  * The most sources the beds, the music and the placed sounds (ambience.ts, music.ts,
- * spatial.ts) keep alive at once: voices — the sources of short sounds, live oscillators or
- * samples rendered once — live noise, the shared noise through live filters, and prerendered
- * loops. A sound with no room left is not played; a loop that was refused is tried again on
- * the next round. Mission control's voice and the effects are not counted: they were the
- * lab's before, and are short.
+ * spatial.ts) keep alive at once: voices — the sources of short sounds, each a recording
+ * played once — live noise, the shared noise through live filters, which none of them plays
+ * any more, and loops — a bed's layer, the rotor, a stem of the music with its seam. A sound
+ * with no room left is not played; a loop that was refused is tried again on the next round.
+ * Mission control's voice and the effects are not counted: they were the lab's before, and
+ * are short.
  */
 export const CAPS = { voice: 12, noise: 4, loop: 6 } as const;
 
@@ -1634,20 +865,22 @@ export function inUse(): Record<keyof typeof CAPS, number> {
 }
 
 /**
- * A short sound within the budget: `build` makes it into an outlet of its own on `dest` and
- * returns its sources; once they have all ended the outlet is let go — nothing of the sound
- * stays wired — and `cost` goes back. False, and nothing made, where the budget has no room.
+ * A short sound within the budget: `build` makes it into an outlet of its own on `dest`, at
+ * `level`, and returns its sources; once they have all ended the outlet is let go — nothing of
+ * the sound stays wired — and `cost` goes back. False, and nothing made, where the budget has
+ * no room.
  */
 export function capped(
   ctx: BaseAudioContext,
   dest: AudioNode,
   cost: Cost,
   build: (out: GainNode) => AudioScheduledSourceNode[],
+  level = 1,
 ): boolean {
   if (!claim(cost)) {
     return false;
   }
-  const out = outlet(ctx, dest, 1);
+  const out = outlet(ctx, dest, level);
   const done = (): void => {
     out.disconnect();
     release(cost);
@@ -1663,101 +896,47 @@ export function capped(
   }
 }
 
-/** How long a prerendered loop runs before it repeats, s. */
-export const LOOP_S = 4;
-
 /**
- * Renders `build` once on an offline context into a loop `seconds` long at `rate`: two
- * periods are rendered and the second kept, so that the filters have settled. Everything a
- * loop is built from has to repeat within the period — whole cycles of every tone and of
- * every slow wander, and the shared noise's two seconds — and then the loop has no seam.
+ * A source playing `recording` once into `dest` from `at`, `rate` times as fast, from where its
+ * sound starts (its `start`, past the silence before it).
  */
-export async function renderLoop(
-  build: (ctx: BaseAudioContext, dest: AudioNode) => void,
-  rate: number,
-  seconds = LOOP_S,
-): Promise<AudioBuffer> {
-  const length = Math.round(rate * seconds);
-  const ctx = new OfflineAudioContext(1, length * 2, rate);
-  build(ctx, ctx.destination);
-  const rendered = await ctx.startRendering();
-  const loop = ctx.createBuffer(1, length, rate);
-  loop.getChannelData(0).set(rendered.getChannelData(0).subarray(length, length * 2));
-  return loop;
-}
-
-/** Renders `build` once on an offline context: a short sound, `seconds` long at `rate`. */
-export async function renderOnce(
-  build: (ctx: BaseAudioContext, dest: AudioNode) => void,
-  rate: number,
-  seconds: number,
-): Promise<AudioBuffer> {
-  const ctx = new OfflineAudioContext(1, Math.round(rate * seconds), rate);
-  build(ctx, ctx.destination);
-  return ctx.startRendering();
-}
-
-/** The sounds rendered so far, by name: null while one renders, or where it could not be. */
-const rendered = new Map<string, AudioBuffer | null>();
-
-/**
- * What `render` makes, rendered once and kept by `name` for the page's life; null while it
- * renders — it is asked for again next time — and for good where it could not be rendered, so
- * that a failing render is not tried ten times a second.
- */
-function renderedOnce(name: string, render: () => Promise<AudioBuffer>): AudioBuffer | null {
-  const known = rendered.get(name);
-  if (known !== undefined) return known;
-  rendered.set(name, null);
-  render()
-    .then((sound) => rendered.set(name, sound))
-    .catch(() => undefined); // Deliberately silent: the sound is flavour, and stays unplayed.
-  return null;
-}
-
-type Build = (ctx: BaseAudioContext, dest: AudioNode) => void;
-
-/** The sample `name` that `build` makes, `seconds` long at `rate`; null while it renders. */
-export function sampleOf(
-  name: string,
-  build: Build,
-  seconds: number,
-  rate: number,
-): AudioBuffer | null {
-  return renderedOnce(`sample ${name}`, () => renderOnce(build, rate, seconds));
-}
-
-/** The loop `name` that `build` makes, `seconds` long at `rate`; null while it renders. */
-export function loopOf(name: string, build: Build, seconds: number, rate: number): AudioBuffer | null {
-  return renderedOnce(`loop ${name}`, () => renderLoop(build, rate, seconds));
+export function startSample(
+  ctx: BaseAudioContext,
+  recording: Sample,
+  dest: AudioNode,
+  at: number,
+  rate = 1,
+): AudioBufferSourceNode {
+  const source = ctx.createBufferSource();
+  source.buffer = recording.buffer;
+  source.playbackRate.value = rate;
+  source.connect(dest);
+  source.start(at, recording.start);
+  return source;
 }
 
 /**
- * Plays `sample` once into `dest` from `at`, `speed` times as fast, within the budget (a
+ * Plays `recording` once into `dest` from `at`, `speed` times as fast, within the budget (a
  * voice): one source, unwired and given back as it ends. False where there is no room, or
- * no sample yet.
+ * no recording loaded.
  */
 export function playSample(
   ctx: BaseAudioContext,
-  sample: AudioBuffer | null,
+  recording: Sample | null,
   dest: AudioNode,
   at: number,
   speed = 1,
 ): boolean {
-  if (sample === null || !claim({ voice: 1 })) return false;
-  const source = ctx.createBufferSource();
-  source.buffer = sample;
-  source.playbackRate.value = speed;
-  source.connect(dest);
+  if (recording === null || !claim({ voice: 1 })) return false;
+  const source = startSample(ctx, recording, dest, at, speed);
   source.onended = () => {
     source.disconnect();
     release({ voice: 1 });
   };
-  source.start(at);
   return true;
 }
 
-/** A prerendered `loop` playing round and round into `dest` from `at`. */
+/** A recorded `loop` playing round and round into `dest` from `at`: a seamless loop, all of it. */
 export function playLoop(
   ctx: BaseAudioContext,
   loop: AudioBuffer,

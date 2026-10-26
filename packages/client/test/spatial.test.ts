@@ -14,15 +14,15 @@ import { WALL_SHARE } from '../src/voice/rules.js';
 import {
   endAll,
   fakeGraph,
-  FakeOfflineContext,
-  flush,
   lastContext,
+  reaches,
   type FakeBufferSource,
   type FakeFilter,
   type FakeNode,
   type FakeOscillator,
   type FakePanner,
 } from './fakeGraph.js';
+import { loadedSamples } from './fakeSamples.js';
 
 /**
  * Two rooms joined by a corridor: the west room (1–5), a wall at x 6 with a door at (6, 2),
@@ -84,6 +84,7 @@ describe('the crew and the drones, heard', () => {
 
   async function spatial() {
     vi.resetModules();
+    await loadedSamples();
     const module = await import('../src/world/spatial.js');
     const audio = await import('../src/world/audio.js');
     audio.sharedAudio(); // the engine, made on first use
@@ -112,15 +113,15 @@ describe('the crew and the drones, heard', () => {
     drones,
   });
 
-  /** The steps played: the sources of the step's rendered takes. */
+  /** The steps played: the sources of the footstep's recorded takes. */
   const stepsOf = (ctx: ReturnType<typeof lastContext>): FakeBufferSource[] =>
-    ctx.all<FakeBufferSource>('buffer').filter((source) => source.buffer?.renderedBy != null);
+    ctx
+      .all<FakeBufferSource>('buffer')
+      .filter((source) => /^step-[123]$/.test(source.buffer?.tag ?? ''));
 
   it('steps for a partner every half tile they walk, spread over the tenth to come', async () => {
     const { module, ctx } = await spatial();
     module.hearCrew(crew(OPEN, 8.5, true));
-    await flush(); // the step's takes, rendered as the crew is first heard
-    const renders = FakeOfflineContext.rendered.length;
     module.hearCrew(crew(OPEN, 8.5 + STEP_TILES * 0.6, true));
     expect(stepsOf(ctx)).toEqual([]); // not half a tile yet
     module.hearCrew(crew(OPEN, 8.5 + STEP_TILES * 3.2, true)); // 1.6 walked: three steps
@@ -130,8 +131,8 @@ describe('the crew and the drones, heard', () => {
     module.hearCrew(crew(OPEN, 8.5 + STEP_TILES * 4.1, true)); // the 0.1 left and 0.45 more
     expect(stepsOf(ctx)).toHaveLength(4);
     expect(ctx.all<FakePanner>('panner')).toHaveLength(1); // one placing for the partner's feet
-    expect(FakeOfflineContext.rendered).toHaveLength(renders); // no step rendered anew
-    expect(ctx.all<FakeOscillator>('oscillator')).toHaveLength(0); // no live tones
+    expect(ctx.all<FakeOscillator>('oscillator')).toHaveLength(0); // nothing made
+    expect(stepsOf(ctx).every((step) => step.playbackRate.value === 1)).toBe(true); // ±10 %, at 0.5
   });
 
   it('muffles a partner’s steps behind a shut door; nobody standing still steps', async () => {
@@ -149,7 +150,6 @@ describe('the crew and the drones, heard', () => {
   it('lets a step go once played, and a partner’s feet as they leave earshot', async () => {
     const { module, audio, ctx } = await spatial();
     module.hearCrew(crew(OPEN, 8.5, true));
-    await flush();
     module.hearCrew(crew(OPEN, 9.1, true));
     expect(audio.inUse()).toMatchObject({ voice: 1, noise: 0 });
     const [step] = stepsOf(ctx);
@@ -177,10 +177,9 @@ describe('the crew and the drones, heard', () => {
   it('buzzes the nearest drone in earshot as one loop, and stops it beyond', async () => {
     const { module, audio, ctx } = await spatial();
     module.hearCrew(crew(OPEN, 1.5, false, { d: drone(10.5) }));
-    await flush();
     module.hearCrew(crew(OPEN, 1.5, false, { d: drone(10.5) }));
     const rotor = ctx.all<FakeBufferSource>('buffer').find((b) => b.loop);
-    expect(rotor?.buffer?.duration).toBe(2);
+    expect(rotor?.buffer?.tag).toBe('drone-rotor');
     expect(audio.inUse().loop).toBe(1);
     const [pan] = ctx.all<FakePanner>('panner');
     expect(pan?.pan.events.at(-1)).toEqual(['target', 1, 10, 0.08]);
@@ -194,13 +193,19 @@ describe('the crew and the drones, heard', () => {
   it('keeps a frozen drone silent, and chirps once as a drone catches somebody', async () => {
     const { module, ctx } = await spatial();
     module.hearCrew(crew(OPEN, 1.5, false, { d: drone(8.5, false, true) }));
-    await flush();
     module.hearCrew(crew(OPEN, 1.5, false, { d: drone(8.5, false, true) }));
     expect(ctx.all<FakeBufferSource>('buffer').filter((b) => b.loop)).toHaveLength(0);
     module.hearCrew(crew(OPEN, 1.5, false, { d: drone(8.5, true) }));
     module.hearCrew(crew(OPEN, 1.5, false, { d: drone(8.5, true) }));
-    const chirps = ctx.all<FakeOscillator>('oscillator').filter((osc) => osc.type === 'square');
-    expect(chirps).toHaveLength(2); // two blips, once
+    const chirps = ctx
+      .all<FakeBufferSource>('buffer')
+      .filter((b) => b.buffer?.tag === 'drone-alert');
+    expect(chirps).toHaveLength(1); // once
+    // Placed where the drone flies: four tiles to the right, through the placing's panner.
+    const [chirp] = chirps;
+    const panners = ctx.all<FakePanner>('panner');
+    expect(panners.some((panner) => reaches(chirp as FakeNode, panner))).toBe(true);
+    expect(panners.at(-1)?.pan.value).toBeCloseTo(4 / PAN_SPAN, 9);
   });
 
   it('never throws, with no audio at all', async () => {
