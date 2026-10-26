@@ -7,6 +7,7 @@ import {
   type FakeGain,
   type FakeNode,
 } from './fakeGraph.js';
+import { loadedSamples } from './fakeSamples.js';
 
 /** A storage that keeps what it is given, as the browser's does. */
 function memory(initial: Record<string, string> = {}) {
@@ -235,6 +236,7 @@ describe('the volumes on the audio’s buses', () => {
   it('plays a step through the effects’ bus and the chirp through the radio’s', async () => {
     fakeGraph();
     const { audio } = await fresh();
+    await loadedSamples();
     audio.footstep();
     const stepped = busesOf(lastContext());
     expect(stepped.into(stepped.effects)).toHaveLength(1);
@@ -248,6 +250,7 @@ describe('the volumes on the audio’s buses', () => {
   it('lands a sprinted step a little louder than a walked one', async () => {
     fakeGraph();
     const { audio } = await fresh();
+    await loadedSamples();
     audio.footstep(false);
     audio.footstep(true);
     const [walked, sprinted] = busesOf(lastContext()).into(busesOf(lastContext()).effects);

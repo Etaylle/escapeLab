@@ -1,13 +1,15 @@
 import { vi } from 'vitest';
+import { serveSamples, type Served } from './fakeSamples.js';
 
 /**
- * Just enough of an AudioContext for the lab's sounds (world/audio.ts), its
- * clock at 10 s: every source it is told to start is kept in `started`, by
- * what it is and when, every exponential ramp in `ramps`, every filter in
- * `filters` and every node wired straight to the output in `toOutput`.
+ * Just enough of an AudioContext for the lab's sounds (world/audio.ts), its clock at 10 s:
+ * every source it is told to start is kept in `started`, by what it is — a recording by its
+ * id (fakeSamples.ts), the radio's noise as 'noise' — and when, with its speed; every
+ * exponential ramp in `ramps`, every filter in `filters` and every node wired straight to the
+ * output in `toOutput`. Recordings decode on a fake OfflineAudioContext.
  */
 
-export const started: { kind: string; at: number }[] = [];
+export const started: { kind: string; at: number; rate: number }[] = [];
 export const ramps: { to: number; at: number }[] = [];
 /** Every filter made, as it was set up: its type and its frequency. */
 export const filters: { type: string; frequency: FakeParam }[] = [];
@@ -29,6 +31,9 @@ class FakeParam {
   setTargetAtTime(): this {
     return this;
   }
+  setValueCurveAtTime(): this {
+    return this;
+  }
   cancelScheduledValues(): this {
     return this;
   }
@@ -48,23 +53,33 @@ class FakeNode {
 /** A context's output. */
 class FakeOutput extends FakeNode {}
 
-class FakeSource extends FakeNode {
+/** A decoded recording, or the radio's noise: its samples, and the id it was served as. */
+interface FakeAudioBuffer {
+  readonly duration: number;
+  readonly numberOfChannels: number;
+  readonly tag?: string;
+  getChannelData(): Float32Array;
+}
+
+class FakeBufferSource extends FakeNode {
   onended: (() => void) | null = null;
-  constructor(readonly kind: string) {
-    super();
-  }
+  buffer: FakeAudioBuffer | null = null;
+  loop = false;
+  readonly playbackRate = new FakeParam();
   start(at = 0): void {
-    started.push({ kind: this.kind, at });
+    started.push({ kind: this.buffer?.tag ?? 'noise', at, rate: this.playbackRate.value });
   }
   stop(): void {}
 }
 
-export class FakeOscillator extends FakeSource {
+export class FakeOscillator extends FakeNode {
+  onended: (() => void) | null = null;
   type = 'sine';
   frequency = new FakeParam();
-  constructor() {
-    super('tone');
+  start(at = 0): void {
+    started.push({ kind: 'tone', at, rate: 1 });
   }
+  stop(): void {}
 }
 
 export class FakeContext {
@@ -88,24 +103,45 @@ export class FakeContext {
     filters.push(filter);
     return filter;
   }
-  createBufferSource() {
-    return Object.assign(new FakeSource('noise'), { buffer: null, loop: false });
+  createBufferSource(): FakeBufferSource {
+    const source = new FakeBufferSource();
+    source.playbackRate.value = 1;
+    return source;
   }
   createDelay() {
     return Object.assign(new FakeNode(), { delayTime: new FakeParam() });
   }
-  createBuffer(_channels: number, length: number, rate: number) {
-    return { duration: length / rate, getChannelData: () => new Float32Array(length) };
+  createBuffer(_channels: number, length: number, rate: number): FakeAudioBuffer {
+    const data = new Float32Array(length);
+    return { duration: length / rate, numberOfChannels: 1, getChannelData: () => data };
   }
   resume() {
     return Promise.resolve();
   }
 }
 
-/** A context whose every oscillator breaks: a sound must survive it. */
+/** Where recordings are decoded: a served one ("sample:<id>:<seconds>") to a buffer tagged so. */
+class FakeOfflineContext {
+  decodeAudioData(bytes: ArrayBuffer): Promise<FakeAudioBuffer> {
+    const served = /^sample:([\w-]+):([\d.]+)$/.exec(new TextDecoder().decode(bytes));
+    const data = new Float32Array(Math.round(100 * Number(served?.[2] ?? 1))).fill(0.5);
+    const tag = served?.[1] ?? 'clip';
+    return Promise.resolve({
+      duration: data.length / 100,
+      numberOfChannels: 1,
+      tag,
+      getChannelData: () => data,
+    });
+  }
+}
+
+/** A context whose every source breaks: a sound must survive it. */
 export class BrokenContext extends FakeContext {
   override createOscillator(): FakeOscillator {
     throw new Error('no oscillators here');
+  }
+  override createBufferSource(): FakeBufferSource {
+    throw new Error('no buffer sources here');
   }
 }
 
@@ -116,11 +152,18 @@ export function fakeAudio(): void {
   filters.length = 0;
   toOutput.length = 0;
   vi.stubGlobal('AudioContext', FakeContext);
+  vi.stubGlobal('OfflineAudioContext', FakeOfflineContext);
 }
 
-/** The audio module afresh, its engine made on whatever context is stubbed now. */
-export async function freshAudio() {
+/**
+ * The audio module afresh, every recording served — as `served` changes them — and loaded, its
+ * engine made on demand.
+ */
+export async function freshAudio(served: Readonly<Record<string, Served>> = {}) {
   vi.resetModules();
+  serveSamples(served);
+  const samples = await import('../src/world/samples.js');
+  await samples.preloadSamples();
   return import('../src/world/audio.js');
 }
 
@@ -129,8 +172,7 @@ export function startedAt(kind: string, at: number): boolean {
   return started.some((s) => s.kind === kind && Math.abs(s.at - at) < 0.002);
 }
 
-/** Whether a heavy hit carried its mid layer: a bandpass at `hz`, in the 300–900 Hz band. */
-export function midBand(hz: number): boolean {
-  const inBand = hz >= 300 && hz <= 900;
-  return inBand && filters.some((f) => f.type === 'bandpass' && f.frequency.value === hz);
+/** The sources of `kind` started, in order. */
+export function startsOf(kind: string): { kind: string; at: number; rate: number }[] {
+  return started.filter((s) => s.kind === kind);
 }

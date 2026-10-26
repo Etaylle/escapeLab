@@ -31,6 +31,7 @@ import {
   klaxon,
   lightsOnClick,
   lockerOpen,
+  partSeated,
   pingBlip,
   powerDrain,
   startPowerHum,
@@ -56,6 +57,7 @@ import { MUSIC_AFTER_CLICK_MS, musicProbe, setTension, stopMusic, type Tension }
 import { worldNews } from './news.js';
 import { noteMount } from './notes.js';
 import { renderRadio, voiceProbe } from './radioVoice.js';
+import { preloadSamples } from './samples.js';
 import {
   profiled,
   renderKit,
@@ -602,7 +604,7 @@ function hearTheClock(loop: Loop, map: WorldMap): void {
 /**
  * The lab answering the crew: a source or a note of the last shift somebody
  * came across gets a blip and a caption, a locker or cabinet opening within
- * earshot its sound, a
+ * earshot its sound, and so does a part put in its place, a
  * room whose lights came on a relay's click and its warm-up (rooms.ts) —
  * in plain sight, once nothing lies over the world (`lightWhenClear`).
  * Whatever this client finds on its first look was there before it came
@@ -629,6 +631,11 @@ function look(loop: Loop, map: WorldMap): void {
     const away = Math.hypot(manual.x + 0.5 - sim.self.x, manual.y + 0.5 - sim.self.y);
     if (loop.spectator || away <= HEAR_RADIUS) {
       (manual.kind === 'cabinet' ? cabinetUnlock : lockerOpen)();
+    }
+  }
+  for (const item of news.delivered) {
+    if (loop.spectator || Math.hypot(item.x - sim.self.x, item.y - sim.self.y) <= HEAR_RADIUS) {
+      partSeated();
     }
   }
   const known = new Set(sim.lit.keys());
@@ -762,6 +769,8 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
     const sim = newSim(insets.top);
     refs.simRef.current = sim;
     const soundOff = systemsOff(location.search);
+    // The lobby loaded the recordings already; a page that came in during a run loads them now.
+    void preloadSamples();
     if (!soundOff.has('beds') && !props.spectator) {
       startAmbience(() => sim.time);
     }

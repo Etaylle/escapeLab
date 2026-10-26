@@ -129,9 +129,15 @@ export class FakeOscillator extends FakeSource {
 export class FakeBufferSource extends FakeSource {
   buffer: FakeBuffer | null = null;
   loop = false;
+  /** where in its buffer it starts playing, s */
+  offset = 0;
   readonly playbackRate = new FakeParam(1);
   constructor(ctx: FakeContext) {
     super('buffer', ctx);
+  }
+  override start(at = 0, offset = 0): void {
+    super.start(at);
+    this.offset = offset;
   }
 }
 
@@ -152,8 +158,11 @@ export class FakeShaper extends FakeNode {
 
 export class FakeBuffer {
   readonly data: Float32Array;
+  readonly numberOfChannels = 1;
   /** the offline context it was rendered on, whose graph tells what it holds */
   renderedBy: FakeOfflineContext | null = null;
+  /** the recording it was decoded from, by its id (fakeSamples.ts) */
+  tag: string | null = null;
   constructor(
     length: number,
     readonly sampleRate: number,
@@ -208,8 +217,16 @@ export class FakeContext {
   createBuffer(_channels: number, length: number, rate: number): FakeBuffer {
     return new FakeBuffer(length, rate);
   }
-  /** Any recording decodes to 1.5 s, its peak 0.45 — unlike the 2 s of the shared noise. */
-  decodeAudioData(): Promise<FakeBuffer> {
+  /**
+   * A recording that fakeSamples.ts serves ("sample:<id>:<seconds>") decodes to that long a
+   * buffer of 0.5 throughout, tagged with its id; any other decodes to 1.5 s, its peak 0.45 —
+   * unlike the 2 s of the shared noise.
+   */
+  decodeAudioData(bytes?: ArrayBuffer): Promise<FakeBuffer> {
+    const served = decodedSample(bytes);
+    if (served !== null) {
+      return Promise.resolve(served);
+    }
     const clip = new FakeBuffer(8000 * 1.5, 8000);
     clip.data[100] = 0.45;
     return Promise.resolve(clip);
@@ -221,6 +238,22 @@ export class FakeContext {
   all<T extends FakeNode>(kind: string): T[] {
     return this.nodes.filter((node) => node.kind === kind) as T[];
   }
+}
+
+/** The rate a served recording decodes at: low, so that a stem's 72 s stay small. */
+const SERVED_RATE = 1000;
+
+/** The buffer a served recording's bytes decode to; null for any other bytes. */
+function decodedSample(bytes: ArrayBuffer | undefined): FakeBuffer | null {
+  const text = bytes === undefined ? '' : new TextDecoder().decode(bytes);
+  const served = /^sample:([\w-]+):([\d.]+)$/.exec(text);
+  if (served === null) {
+    return null;
+  }
+  const buffer = new FakeBuffer(Math.round(SERVED_RATE * Number(served[2])), SERVED_RATE);
+  buffer.data.fill(0.5);
+  buffer.tag = served[1] ?? null;
+  return buffer;
 }
 
 /** An offline context: what is built on it renders into a buffer of its length, all zeros. */

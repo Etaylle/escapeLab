@@ -1,8 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FakeOfflineContext } from './fakeGraph.js';
+import { loadedSamples } from './fakeSamples.js';
 
 /**
  * What the device sounds get from world/audio.ts: the shared context, the sound switch and
- * the effects' volume the settings set.
+ * the effects' volume the settings set. Their recordings come through the real loader, from a
+ * fetch the tests serve (fakeSamples.ts).
  */
 const audio = vi.hoisted(() => ({ ctx: null as unknown, muted: false, volume: 1 }));
 
@@ -14,8 +17,8 @@ vi.mock('../src/world/audio.js', () => ({
 
 const {
   alarmKlaxon,
-  BUZZ_HZ,
-  BUZZ_LOWPASS_HZ,
+  ARC_S,
+  BUZZ_S,
   buttonThunk,
   dialDetent,
   HUM_LEVEL,
@@ -24,7 +27,6 @@ const {
   lampPop,
   leverPull,
   leverSpring,
-  MID_BAND,
   mushroomStomp,
   okChime,
   pliersSnip,
@@ -121,30 +123,16 @@ class FakeOscillator extends FakeSource {
   readonly frequency = new FakeParam();
 }
 
-class FakeBuffer {
-  private readonly data: Float32Array;
-  constructor(
-    readonly numberOfChannels: number,
-    readonly length: number,
-    readonly sampleRate: number,
-  ) {
-    this.data = new Float32Array(length);
-  }
-  get duration(): number {
-    return this.length / this.sampleRate;
-  }
-  getChannelData(): Float32Array {
-    return this.data;
-  }
-}
-
 class FakeBufferSource extends FakeSource {
-  buffer: FakeBuffer | null = null;
-  override start(at = 0, offset = 0, duration?: number): void {
-    if (this.buffer === null || offset < 0 || (duration !== undefined && duration <= 0)) {
-      throw new RangeError('a buffer source needs its buffer and a slice of it');
+  buffer: { tag?: string | null } | null = null;
+  loop = false;
+  offset = 0;
+  override start(at = 0, offset = 0): void {
+    if (this.buffer === null || offset < 0) {
+      throw new RangeError('a buffer source needs its buffer and a place in it');
     }
     super.start(at);
+    this.offset = offset;
   }
 }
 
@@ -182,11 +170,14 @@ class FakeContext {
   createBufferSource(): FakeBufferSource {
     return this.made(new FakeBufferSource());
   }
-  createBuffer(channels: number, length: number, rate: number): FakeBuffer {
-    return new FakeBuffer(channels, length, rate);
-  }
   get sources(): FakeSource[] {
     return this.nodes.filter((node): node is FakeSource => node instanceof FakeSource);
+  }
+  /** The recordings played: each buffer source's id. */
+  get played(): string[] {
+    return this.nodes.flatMap((node) =>
+      node instanceof FakeBufferSource ? [node.buffer?.tag ?? '?'] : [],
+    );
   }
   /** The sound's outlet: the one node it wired to the destination. */
   get outlets(): FakeNode[] {
@@ -195,6 +186,11 @@ class FakeContext {
 }
 
 let ctx: FakeContext;
+
+beforeAll(async () => {
+  vi.stubGlobal('OfflineAudioContext', FakeOfflineContext);
+  await loadedSamples();
+});
 
 beforeEach(() => {
   ctx = new FakeContext();
@@ -207,87 +203,110 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** Every one-shot sound of the devices, with what it needs to sound. */
-const ONE_SHOTS: [string, () => void][] = [
-  ['keyClick', keyClick],
-  ['rejectBuzz', rejectBuzz],
-  ['alarmKlaxon', alarmKlaxon],
-  ['solvedChunk', solvedChunk],
-  ['solvedChord', solvedChord],
-  ['relayClick', relayClick],
-  ['toggleClack', toggleClack],
-  ['buttonThunk', buttonThunk],
-  ['mushroomStomp', mushroomStomp],
-  ['leverPull', leverPull],
-  ['leverSpring', leverSpring],
-  ['pliersSnip', pliersSnip],
-  ['sparkCrackle', sparkCrackle],
-  ['shortArc', shortArc],
-  ['probeClick', probeClick],
-  ['voltageHum at 180 V', () => voltageHum(180)],
-  ['stageChime', stageChime],
-  ['dialDetent', dialDetent],
-  ['stepTick', stepTick],
-  ['wallThud', wallThud],
-  ['simonTone', () => simonTone('gruen', 0.4)],
-  ['lampPop', lampPop],
-  ['typeBlip', typeBlip],
-  ['holdTick', holdTick],
-  ['okChime', okChime],
-  ['spinUp', spinUp],
+/** Every recorded sound of the devices, and the recording it plays. */
+const RECORDED: [string, () => void, string][] = [
+  ['keyClick', keyClick, 'key-click'],
+  ['rejectBuzz', rejectBuzz, 'reject-buzz'],
+  ['alarmKlaxon', alarmKlaxon, 'klaxon'],
+  ['solvedChunk', solvedChunk, 'solved-chunk'],
+  ['solvedChord', solvedChord, 'solved-chord'],
+  ['relayClick', relayClick, 'relay-click'],
+  ['toggleClack', toggleClack, 'toggle-clack'],
+  ['buttonThunk', buttonThunk, 'button-thunk'],
+  ['mushroomStomp', mushroomStomp, 'mushroom-stomp'],
+  ['leverPull', leverPull, 'lever-pull'],
+  ['leverSpring', leverSpring, 'lever-spring'],
+  ['pliersSnip', pliersSnip, 'wire-snip'],
+  ['sparkCrackle', sparkCrackle, 'spark'],
+  ['shortArc', shortArc, 'short-arc'],
+  ['probeClick', probeClick, 'probe-click'],
+  ['stageChime', stageChime, 'stage-chime'],
+  ['dialDetent', dialDetent, 'dial-detent'],
+  ['stepTick', stepTick, 'step-tick'],
+  ['wallThud', wallThud, 'wall-thud'],
+  ['lampPop', lampPop, 'lamp-pop'],
+  ['typeBlip', typeBlip, 'type-blip'],
+  ['holdTick', holdTick, 'hold-tick'],
+  ['okChime', okChime, 'ok-beeps'],
+  ['spinUp', spinUp, 'server-spinup'],
 ];
 
-describe.each(ONE_SHOTS)('%s', (_, sound) => {
-  it('builds its nodes into one outlet, starts every source, and lets go once they end', () => {
-    sound();
-    expect(ctx.sources.length).toBeGreaterThan(0);
-    for (const source of ctx.sources) {
-      expect(source.started).toBeGreaterThanOrEqual(ctx.currentTime);
-      // Every source counts towards the outlet's release: the sound was built to its end.
-      expect(source.onended).toBeTypeOf('function');
-      if (source instanceof FakeOscillator) {
-        expect(source.stopped).toBeGreaterThan(source.started ?? Infinity);
-      }
-    }
-    const [outlet, ...more] = ctx.outlets;
-    expect(more).toEqual([]);
-    for (const source of ctx.sources) {
-      expect(outlet?.connections).toEqual([ctx.destination]);
-      source.onended?.();
-    }
-    expect(outlet?.connections).toEqual([]);
-  });
+/** The sounds still made here, whose pitch the game sets. */
+const MADE: [string, () => void][] = [
+  ['voltageHum at 180 V', () => voltageHum(180)],
+  ['simonTone', () => simonTone('gruen', 0.4)],
+];
 
-  it('makes nothing with the sound off', () => {
-    audio.muted = true;
-    sound();
-    expect(ctx.nodes).toEqual([]);
-  });
+/** The effects' volume `sound` plays at, read off its outlet at a volume of `volume`. */
+function levelAt(sound: () => void, volume: number): number {
+  ctx = new FakeContext();
+  audio.ctx = ctx;
+  audio.volume = volume;
+  sound();
+  const [outlet] = ctx.outlets;
+  return outlet instanceof FakeGain ? outlet.gain.value : NaN;
+}
 
-  it('plays at the effects’ volume the settings set', () => {
-    const levelAt = (volume: number): number => {
-      ctx = new FakeContext();
-      audio.ctx = ctx;
-      audio.volume = volume;
+describe.each([...RECORDED.map(([name, sound]) => [name, sound] as const), ...MADE])(
+  '%s',
+  (_, sound) => {
+    it('plays into one outlet, starts every source, and lets go once they end', () => {
       sound();
-      const [outlet] = ctx.outlets;
-      return outlet instanceof FakeGain ? outlet.gain.value : NaN;
-    };
-    const full = levelAt(1);
-    expect(full).toBeGreaterThan(0);
-    expect(levelAt(0.25)).toBeCloseTo(full * 0.25, 12);
-    expect(levelAt(0)).toBe(0);
-  });
+      expect(ctx.sources.length).toBeGreaterThan(0);
+      for (const source of ctx.sources) {
+        expect(source.started).toBeGreaterThanOrEqual(ctx.currentTime);
+        expect(source.onended).toBeTypeOf('function');
+        if (source instanceof FakeOscillator) {
+          expect(source.stopped).toBeGreaterThan(source.started ?? Infinity);
+        }
+      }
+      const [outlet, ...more] = ctx.outlets;
+      expect(more).toEqual([]);
+      for (const source of ctx.sources) {
+        expect(outlet?.connections).toEqual([ctx.destination]);
+        source.onended?.();
+      }
+      expect(outlet?.connections).toEqual([]);
+    });
 
-  it('makes nothing while the browser still holds the context back', () => {
-    ctx.state = 'suspended';
+    it('makes nothing with the sound off', () => {
+      audio.muted = true;
+      sound();
+      expect(ctx.nodes).toEqual([]);
+    });
+
+    it('plays at the effects’ volume the settings set', () => {
+      const full = levelAt(sound, 1);
+      expect(full).toBeGreaterThan(0);
+      expect(levelAt(sound, 0.25)).toBeCloseTo(full * 0.25, 12);
+      expect(levelAt(sound, 0)).toBe(0);
+    });
+
+    it('makes nothing while the browser still holds the context back', () => {
+      ctx.state = 'suspended';
+      sound();
+      expect(ctx.nodes).toEqual([]);
+    });
+
+    it('makes nothing, and throws nothing, without Web Audio', () => {
+      audio.ctx = null;
+      expect(sound).not.toThrow();
+    });
+  },
+);
+
+describe('the recordings of the devices', () => {
+  it.each(RECORDED)('%s plays its recording, „%s", and makes no tone', (_, sound, id) => {
     sound();
-    expect(ctx.nodes).toEqual([]);
+    expect(ctx.played).toEqual([id]);
+    expect(ctx.nodes.some((node) => node instanceof FakeOscillator)).toBe(false);
   });
 
-  it('makes nothing, and throws nothing, without Web Audio', () => {
-    audio.ctx = null;
-    expect(sound).not.toThrow();
+  it('strums the solved chord just after the chunk, as a lock going home and then done', () => {
+    solvedChunk();
+    solvedChord();
+    const [chunk, chord] = ctx.sources;
+    expect((chord?.started ?? 0) - (chunk?.started ?? 0)).toBeCloseTo(0.14, 9);
   });
 });
 
@@ -300,54 +319,21 @@ describe('the sounds of a mistake', () => {
     rejectBuzz();
     const made = ctx.sources.length;
     alarmKlaxon();
-    expect(firstStart(made)).toBeGreaterThanOrEqual(ctx.currentTime + 0.16);
+    expect(BUZZ_S).toBe(0.16);
+    expect(firstStart(made)).toBeGreaterThanOrEqual(ctx.currentTime + BUZZ_S);
   });
 
   it('let it wait for a short’s arc, longer still', () => {
     shortArc();
     const made = ctx.sources.length;
     alarmKlaxon();
-    expect(firstStart(made)).toBeGreaterThanOrEqual(ctx.currentTime + 0.28);
+    expect(ARC_S).toBe(0.28);
+    expect(firstStart(made)).toBeGreaterThanOrEqual(ctx.currentTime + ARC_S);
   });
 
   it('sound an alarm at once where nothing came before it', () => {
     alarmKlaxon();
     expect(firstStart(0)).toBeLessThan(ctx.currentTime + 0.05);
-  });
-});
-
-describe('weight on a small speaker', () => {
-  /** Whether the sound just made carries a band of noise in the mids, at MID_BAND. */
-  const midLayer = (): boolean =>
-    ctx.nodes.some(
-      (node) =>
-        node instanceof FakeFilter && node.type === 'bandpass' && node.frequency.value === MID_BAND,
-    );
-
-  it.each([
-    ['solvedChunk', solvedChunk],
-    ['mushroomStomp', mushroomStomp],
-    ['buttonThunk', buttonThunk],
-    ['wallThud', wallThud],
-    ['leverPull', leverPull],
-  ])('gives %s a mid layer between 300 and 900 Hz beside its thud', (_, hit) => {
-    hit();
-    expect(midLayer()).toBe(true);
-    expect(MID_BAND).toBeGreaterThanOrEqual(300);
-    expect(MID_BAND).toBeLessThanOrEqual(900);
-  });
-
-  it('pitches the buzzer an octave up, a square through a 1.2 kHz lowpass', () => {
-    rejectBuzz();
-    const filters = ctx.nodes.filter((node): node is FakeFilter => node instanceof FakeFilter);
-    expect(filters.map((f) => [f.type, f.frequency.value])).toEqual([['lowpass', BUZZ_LOWPASS_HZ]]);
-    expect(BUZZ_LOWPASS_HZ).toBe(1200);
-    const pitches = ctx.nodes
-      .filter((node): node is FakeOscillator => node instanceof FakeOscillator)
-      .map((osc) => [osc.type, osc.frequency.events[0]?.[1]]);
-    expect(pitches).toContainEqual(['square', BUZZ_HZ]);
-    expect(BUZZ_HZ).toBe(184);
-    expect(pitches.every(([, pitch]) => (pitch as number) >= 180)).toBe(true);
   });
 });
 
@@ -383,8 +369,8 @@ describe('the colour tones', () => {
 });
 
 describe('the device hum', () => {
-  const voices = (): FakeOscillator[] =>
-    ctx.nodes.filter((node): node is FakeOscillator => node instanceof FakeOscillator);
+  const loops = (): FakeBufferSource[] =>
+    ctx.nodes.filter((node): node is FakeBufferSource => node instanceof FakeBufferSource);
 
   /** The hum's outlet, the one gain it wires to the destination. */
   function outletOf(): FakeGain {
@@ -398,10 +384,10 @@ describe('the device hum', () => {
   /** What was last scheduled on the outlet's gain: the kind and the value. */
   const lastLevel = (): unknown[] => outletOf().gain.events.at(-1)?.slice(0, 2) ?? [];
 
-  it('fades in to its level with its voices running', () => {
+  it('fades in to its level, the mains hum’s recording going round and round', () => {
     startHum();
-    expect(voices().length).toBeGreaterThan(1);
-    expect(voices().every((voice) => voice.started !== null && voice.stopped === null)).toBe(true);
+    const [loop] = loops();
+    expect([loop?.buffer?.tag, loop?.loop, loop?.stopped]).toEqual(['mains-hum', true, null]);
     expect(outletOf().gain.events).toContainEqual(['linear', HUM_LEVEL, ctx.currentTime + 0.15]);
   });
 
@@ -433,16 +419,15 @@ describe('the device hum', () => {
     expect(lastLevel()).toEqual(['target', 0]);
   });
 
-  it('fades out on stop, once, lets go once its voices end, and watches no switch after', () => {
+  it('fades out on stop, once, lets go once its loop ends, and watches no switch after', () => {
     vi.useFakeTimers();
     const hum = startHum();
     const outlet = outletOf();
     hum.stop();
     hum.stop();
-    expect(voices().every((voice) => voice.stopped !== null)).toBe(true);
-    for (const voice of voices()) {
-      voice.onended?.();
-    }
+    const [loop] = loops();
+    expect(loop?.stopped).toBeCloseTo(ctx.currentTime + 0.17, 9);
+    loop?.onended?.();
     expect(outlet.connections).toEqual([]);
     const scheduled = outlet.gain.events.length;
     audio.muted = true;
@@ -453,7 +438,7 @@ describe('the device hum', () => {
   it('is built while the browser holds the context back, to sound once it runs', () => {
     ctx.state = 'suspended';
     startHum().stop();
-    expect(voices().length).toBeGreaterThan(1);
+    expect(loops()).toHaveLength(1);
   });
 
   it('makes nothing with the sound off, or without Web Audio; stopping that harms nothing', () => {

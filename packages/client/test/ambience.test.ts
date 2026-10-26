@@ -27,15 +27,13 @@ import { warmUp } from '../src/world/rooms.js';
 import {
   endAll,
   fakeGraph,
-  flush,
-  FakeOfflineContext,
   lastContext,
-  reaches,
   type FakeBufferSource,
   type FakeContext,
   type FakeGain,
   type FakeOscillator,
 } from './fakeGraph.js';
+import { loadedSamples } from './fakeSamples.js';
 
 /** A shipped mission's map as the dressing and the beds read it, every door shut. */
 function shippedMap(name: string): DressMap {
@@ -139,30 +137,36 @@ describe('the power of a bed', () => {
   });
 });
 
-describe('the layers, rendered once into loops', () => {
-  type Build = (ctx: BaseAudioContext, dest: AudioNode) => void;
+describe('the layers, recorded loops', () => {
+  const catalog = JSON.parse(
+    readFileSync(new URL('../audio/catalog.json', import.meta.url), 'utf8'),
+  ) as { id: string; kind: string; loop: boolean }[];
+  const beds = new Set(catalog.filter((e) => e.kind === 'bed' && e.loop).map((e) => e.id));
+  const oneShots = new Set(catalog.filter((e) => e.kind === 'oneshot').map((e) => e.id));
 
-  /** What a recipe builds on an offline context: its tones by frequency, its noise sources. */
-  function rendered(build: Build | undefined) {
-    const ctx = new FakeOfflineContext(1, 1000, 24000);
-    build?.(ctx as unknown as BaseAudioContext, ctx.destination as unknown as AudioNode);
-    const tones = ctx.all<FakeOscillator>('oscillator').filter((o) => reaches(o, ctx.destination));
-    return { tones: tones.map((o) => o.frequency.value), noise: ctx.all('buffer').length, ctx };
-  }
-
-  it('gives a server room fans, a 120 Hz hum and a faint 8 kHz whine; a reactor its rumble', () => {
-    expect(rendered(POWERED.server)).toMatchObject({ tones: [120, 240, 8000], noise: 1 });
-    expect(rendered(POWERED.lab)).toMatchObject({ tones: [50, 100, 150], noise: 0 });
-    expect(rendered(IDLE.reactor)).toMatchObject({ tones: [30], noise: 1 });
+  it('plays each kind of room its own recorded loop, with power and without', () => {
+    expect(POWERED.server?.sample).toBe('bed-server');
+    expect(IDLE.reactor?.sample).toBe('bed-reactor-idle');
     expect(POWERED.machine).toBeUndefined(); // its strokes are sporadic, its rumble idle
+    for (const layer of [...Object.values(POWERED), ...Object.values(IDLE)]) {
+      expect(beds.has(layer.sample), layer.sample).toBe(true);
+    }
   });
 
-  it('repeats every part within a loop: whole cycles of every tone and every wander', () => {
-    for (const build of [...Object.values(POWERED), ...Object.values(IDLE)]) {
-      const { ctx } = rendered(build);
-      for (const osc of ctx.all<FakeOscillator>('oscillator')) {
-        expect((osc.frequency.value * 4) % 1).toBeCloseTo(0, 9);
-      }
+  it('sets the rooms apart by level: the server room loudest, the archive hushed', () => {
+    const db = Object.entries(POWERED).map(([kind, layer]) => [kind, layer.db] as const);
+    const loudest = db.reduce((a, b) => (b[1] > a[1] ? b : a));
+    const faintest = db.reduce((a, b) => (b[1] < a[1] ? b : a));
+    expect([loudest[0], faintest[0]]).toEqual(['server', 'archive']);
+    for (const [, level] of db) expect(Math.abs(level)).toBeLessThanOrEqual(10);
+  });
+
+  it('plays sporadic sounds from recorded one-shots, a voice each, never out of reach', () => {
+    for (const occasion of Object.values(OCCASIONS).flat()) {
+      for (const id of occasion.samples) expect(oneShots.has(id), id).toBe(true);
+      expect(occasion.level).toBeGreaterThan(0);
+      expect(occasion.level).toBeLessThanOrEqual(1);
+      expect(occasion.vary).toBeLessThan(0.2);
     }
   });
 });
@@ -182,6 +186,7 @@ describe('the beds as they play', () => {
 
   async function started(clock: () => number = () => 0) {
     vi.resetModules();
+    await loadedSamples();
     const ambience = await import('../src/world/ambience.js');
     const audio = await import('../src/world/audio.js');
     ambience.startAmbience(clock);
@@ -216,16 +221,18 @@ describe('the beds as they play', () => {
   const loops = (ctx: FakeContext): FakeBufferSource[] =>
     ctx.all<FakeBufferSource>('buffer').filter((b) => b.loop && b.stoppedAt === null);
 
-  /** One round of the lab's ears, and another once the loops have rendered: those due start. */
-  async function hearRendered(ambience: Ambience, s: RoomScene): Promise<void> {
-    ambience.hearRooms(s);
-    await flush();
+  /** The recordings of `id` started on `ctx`, by when. */
+  const playedOf = (ctx: FakeContext, id: string): FakeBufferSource[] =>
+    ctx.all<FakeBufferSource>('buffer').filter((b) => b.buffer?.tag === id && b.startedAt !== null);
+
+  /** One round of the lab's ears: the loops due start. */
+  function hearRendered(ambience: Ambience, s: RoomScene): void {
     ambience.hearRooms(s);
   }
 
   it('builds the own room’s bed and the nearest neighbour’s, fading in over 1.2 s', async () => {
     const { ambience, ctx } = await started();
-    await hearRendered(ambience, scene(withDoors(), 4.5, 1.5, POWER_ON));
+    hearRendered(ambience, scene(withDoors(), 4.5, 1.5, POWER_ON));
     const outs = bedOuts(ctx);
     expect(outs).toHaveLength(2);
     expect(outs.map((out) => out.gain.ramps().at(-1))).toEqual(
@@ -244,15 +251,15 @@ describe('the beds as they play', () => {
     });
   });
 
-  it('plays a bed as its loop, rendered once a kind at half the live rate', async () => {
+  it('plays a bed as its recorded loop, through a stage at its layer’s level', async () => {
     const { ambience, ctx } = await started();
-    await hearRendered(ambience, scene(withDoors(), 12.5, 1.5, POWER_ON));
+    hearRendered(ambience, scene(withDoors(), 12.5, 1.5, POWER_ON));
     const [server] = loops(ctx);
-    expect(server?.buffer?.sampleRate).toBe(ctx.sampleRate / 2);
-    expect(server?.buffer?.duration).toBe(4);
-    expect(ctx.all<FakeOscillator>('oscillator')).toHaveLength(0); // no live hums
-    const lengths = FakeOfflineContext.rendered.map((offline) => offline.length);
-    expect(lengths.every((length) => length === 2 * 4 * (ctx.sampleRate / 2))).toBe(true);
+    expect(server?.buffer?.tag).toBe('bed-server');
+    expect(server?.offset).toBe(0); // a seamless loop keeps its start
+    const level = server?.outputs[0] as FakeGain;
+    expect(level.gain.value).toBeCloseTo(10 ** ((POWERED.server?.db ?? 0) / 20), 9);
+    expect(ctx.all<FakeOscillator>('oscillator')).toHaveLength(0); // nothing made
   });
 
   it('crossfades a change of room: the old down to its neighbour level, the new up', async () => {
@@ -272,7 +279,7 @@ describe('the beds as they play', () => {
 
   it('stops the bed of a room no longer heard, and gives its loop back', async () => {
     const { ambience, audio, ctx } = await started();
-    await hearRendered(ambience, scene(withDoors('maschinentuer'), 5.5, 8.5, POWER_ON));
+    hearRendered(ambience, scene(withDoors('maschinentuer'), 5.5, 8.5, POWER_ON));
     expect(audio.inUse().loop).toBe(3); // the corridor's vent, the archive's air, the rumble
     ctx.currentTime = 12;
     ambience.hearRooms(scene(withDoors(), 5.5, 8.5, POWER_ON));
@@ -287,7 +294,7 @@ describe('the beds as they play', () => {
 
   it('collapses to the dead variant at the bang: the powered loop slows and stops', async () => {
     const { ambience, ctx } = await started();
-    await hearRendered(ambience, scene(withDoors(), 12.5, 1.5, POWER_ON));
+    hearRendered(ambience, scene(withDoors(), 12.5, 1.5, POWER_ON));
     const [server] = loops(ctx);
     const bang = Date.now() + 900;
     ambience.hearRooms(scene(withDoors(), 12.5, 1.5, { ...POWER_ON, outAt: bang }));
@@ -302,29 +309,28 @@ describe('the beds as they play', () => {
   it('keeps the machine room rumbling without power, its strokes only with it', async () => {
     const { ambience, ctx } = await started();
     const dark: Power = { outAt: Date.now() - 5000, lit: new Map(), won: false };
-    await hearRendered(ambience, scene(withDoors(), 2.5, 12.5, dark));
-    expect(loops(ctx)).toHaveLength(1); // the rumble
+    hearRendered(ambience, scene(withDoors(), 2.5, 12.5, dark));
+    expect(loops(ctx).map((loop) => loop.buffer?.tag)).toEqual(['bed-machine-idle']);
     ctx.currentTime = 30;
     ambience.hearRooms(scene(withDoors(), 2.5, 12.5, dark));
-    expect(ctx.all<FakeOscillator>('oscillator')).toHaveLength(0); // dead: no stroke
+    expect(playedOf(ctx, 'machine-stroke')).toHaveLength(0); // dead: no stroke
     const lit: Power = { ...dark, lit: new Map([['MASCHINENRAUM', { since: 0 }]]) };
     ambience.hearRooms(scene(withDoors(), 2.5, 12.5, lit, 9));
     ctx.currentTime = 32;
     ambience.hearRooms(scene(withDoors(), 2.5, 12.5, lit, 9));
-    const stroke = ctx.all<FakeOscillator>('oscillator')[0];
-    expect(stroke?.frequency.events[0]).toEqual(['set', 75, expect.any(Number)]);
+    expect(playedOf(ctx, 'machine-stroke').length).toBeGreaterThan(0);
   });
 
   it('warms a room whose lights come back up along their warm-up, dips and all', async () => {
     const { ambience, ctx } = await started();
     const dark: Power = { outAt: Date.now() - 5000, lit: new Map(), won: false };
-    await hearRendered(ambience, scene(withDoors(), 5.5, 8.5, dark, 4));
+    hearRendered(ambience, scene(withDoors(), 5.5, 8.5, dark, 4));
     expect(ambience.bedProbe().power['corridor']).toBe(0);
     expect(loops(ctx)).toHaveLength(0); // the corridor's vent runs on power only
     const lit: Power = { ...dark, lit: new Map([['FLUR', { since: 4 }]]) };
-    await hearRendered(ambience, scene(withDoors(), 5.5, 8.5, lit, 4));
+    hearRendered(ambience, scene(withDoors(), 5.5, 8.5, lit, 4));
     const [vent] = loops(ctx);
-    const stage = vent?.outputs[0] as FakeGain;
+    const stage = (vent?.outputs[0] as FakeGain).outputs[0] as FakeGain; // past its level
     const curve = stage.gain.events.find((event) => event[0] === 'curve');
     const values = [...((curve?.[1] as Float32Array | undefined) ?? [])];
     expect(values[0]).toBe(0);
@@ -341,12 +347,11 @@ describe('the beds as they play', () => {
     ambience.hearRooms(scene(withDoors(), 4.5, 1.5, POWER_ON));
     ctx.currentTime = 16; // the first drip is due 6 s in (half of 12, Math.random() = 0.5)
     ambience.hearRooms(scene(withDoors(), 4.5, 1.5, POWER_ON));
-    const drip = ctx.all<FakeOscillator>('oscillator');
-    expect(drip.map((osc) => osc.startedAt)).toEqual([16.01, expect.closeTo(16.022, 6)]);
+    expect(playedOf(ctx, 'drip').map((drip) => drip.startedAt)).toEqual([16.01]);
     ctx.currentTime = 40;
     time = 2.5; // the core's next top at 3.0, half a second away
     ambience.hearRooms(scene(withDoors(), 23.5, 12.5, POWER_ON, time));
-    const throb = ctx.all<FakeOscillator>('oscillator').find((o) => (o.startedAt ?? 0) > 39);
+    const [throb] = playedOf(ctx, 'core-throb');
     expect(throb?.startedAt).toBeCloseTo(40 + 0.5 - 0.35, 6);
   });
 
@@ -355,10 +360,11 @@ describe('the beds as they play', () => {
     ambience.hearRooms(scene(withDoors(), 4.5, 1.5, POWER_ON));
     ctx.currentTime = 16;
     ambience.hearRooms(scene(withDoors(), 4.5, 1.5, POWER_ON));
-    const [plink] = ctx.all<FakeOscillator>('oscillator');
-    const envelope = plink?.outputs[0] as FakeGain;
-    const outlet = envelope.outputs[0] as FakeGain;
-    expect(audio.inUse().voice).toBe(2);
+    const [drip] = playedOf(ctx, 'drip');
+    const outlet = drip?.outputs[0] as FakeGain;
+    expect(outlet.gain.value).toBe(OCCASIONS.archive[0]?.level); // at its level against the bed
+    expect(drip?.playbackRate.value).toBe(1); // Math.random() = 0.5: the middle of its spread
+    expect(audio.inUse().voice).toBe(1);
     expect(outlet.disconnected).toBe(false);
     endAll(ctx);
     expect(outlet.disconnected).toBe(true);
@@ -367,17 +373,20 @@ describe('the beds as they play', () => {
 
   it('keeps sporadic sounds within the budget: one with no room left is not played', async () => {
     const { ambience, audio, ctx } = await started();
-    expect(audio.claim({ voice: CAPS.voice - 1 })).toBe(true);
+    expect(audio.claim({ voice: CAPS.voice })).toBe(true);
     ambience.hearRooms(scene(withDoors(), 4.5, 1.5, POWER_ON));
-    ctx.currentTime = 16; // a drip is due: it needs two voices, one is left
+    ctx.currentTime = 16; // a drip is due: it needs a voice, none is left
     ambience.hearRooms(scene(withDoors(), 4.5, 1.5, POWER_ON));
-    expect(ctx.all<FakeOscillator>('oscillator')).toHaveLength(0);
-    expect(OCCASIONS.archive[0]?.cost).toEqual({ voice: 2 });
+    expect(playedOf(ctx, 'drip')).toHaveLength(0);
+    audio.release({ voice: 1 });
+    ctx.currentTime = 28; // the next one, 6 s on: one voice is free for it
+    ambience.hearRooms(scene(withDoors(), 4.5, 1.5, POWER_ON));
+    expect(playedOf(ctx, 'drip')).toHaveLength(1);
   });
 
   it('fades every bed out and stops it when the world goes', async () => {
     const { ambience, ctx } = await started();
-    await hearRendered(ambience, scene(withDoors(), 12.5, 1.5, POWER_ON));
+    hearRendered(ambience, scene(withDoors(), 12.5, 1.5, POWER_ON));
     ambience.stopAmbience();
     const [server] = bedOuts(ctx);
     expect(server?.gain.ramps().at(-1)).toEqual([0, 10.5]);

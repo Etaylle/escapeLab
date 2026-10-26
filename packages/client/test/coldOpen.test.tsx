@@ -19,10 +19,10 @@ import {
   BrokenContext,
   fakeAudio,
   freshAudio,
-  midBand,
   ramps,
   started,
   startedAt,
+  startsOf,
   toOutput,
 } from './fakeAudio.js';
 import { mapWith } from './fixtures.js';
@@ -318,48 +318,51 @@ describe('the sounds of the cold open', () => {
     const audio = await freshAudio();
     audio.startPowerHum();
     audio.startPowerHum();
-    expect(started.filter((s) => s.kind === 'tone')).toHaveLength(4);
+    expect(startsOf('mains-hum')).toHaveLength(1);
+    expect(started.filter((s) => s.kind === 'tone')).toEqual([]);
     expect(() => audio.stopPowerHum()).not.toThrow();
     expect(() => audio.stopPowerHum()).not.toThrow();
   });
 
-  it('put the bang and the click on the audio clock where the screen shows them', async () => {
+  it('put the arcs, the thunk and the click where the screen has them', async () => {
     const audio = await freshAudio();
     audio.startPowerHum();
     audio.blackoutSounds(blackoutCue(0));
     const t = 10.01;
-    expect(startedAt('tone', t)).toBe(true); // the arcing's rasp
-    expect(startedAt('noise', t + 0.1)).toBe(true); // a crackle in the first drop
-    expect(startedAt('tone', t + 0.9)).toBe(true); // the bang's thump, the power draining
-    expect(startedAt('noise', t + 0.9)).toBe(true);
-    expect(startedAt('noise', t + 1.3)).toBe(true); // the relay's click
-    // The hum dies with the bang, its 100 Hz falling to a quarter.
-    expect(ramps).toContainEqual({ to: 25, at: t + 0.9 + 1.4 });
+    for (const drop of [0.1, 0.29, 0.47, 0.64]) {
+      expect(startedAt('short-arc', t + drop), `an arc in the drop at ${drop}`).toBe(true);
+    }
+    expect(startedAt('breaker-thunk', t + 0.9)).toBe(true);
+    expect(startedAt('power-down', t + 0.9)).toBe(true);
+    expect(startedAt('relay-click', t + 1.3)).toBe(true);
+    expect(startedAt('emergency-buzz', t + 1.38)).toBe(true);
+    // The hum dies with the thunk, slowing to a quarter as it fades.
+    expect(ramps).toContainEqual({ to: 0.25, at: t + 0.9 + 1.4 });
   });
 
-  it('throw the lever home with a ka-chunk: the latch, then the thud', async () => {
+  it('throw the lever home with its ka-chunk', async () => {
     const audio = await freshAudio();
     audio.leverChunk();
-    expect(startedAt('noise', 10.01)).toBe(true);
-    expect(startedAt('tone', 10.13)).toBe(true);
+    expect(startedAt('lever-chunk', 10.01)).toBe(true);
   });
 
-  it('give the ka-chunk and the bang a mid band, for a phone’s small speaker', async () => {
-    const audio = await freshAudio();
+  it('make nothing up for a recording that could not be loaded', async () => {
+    const said = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const audio = await freshAudio({ 'lever-chunk': { status: 404 } });
     audio.leverChunk();
-    expect(midBand(audio.MID_BAND)).toBe(true);
-    fakeAudio();
-    const again = await freshAudio();
-    again.blackoutSounds(blackoutCue(0, true));
-    expect(midBand(again.MID_BAND)).toBe(true);
+    audio.leverChunk();
+    expect(started).toEqual([]);
+    expect(said).toHaveBeenCalledTimes(1);
+    said.mockRestore();
   });
 
   it('count a briefing down by the lab’s one sound switch: a beep a number, the last higher', async () => {
     vi.stubGlobal('localStorage', { getItem: () => '1', setItem: () => undefined });
     const audio = await freshAudio();
     audio.briefingCountdown(0);
-    const beeps = started.filter((s) => s.kind === 'tone').map((s) => s.at);
-    expect(beeps).toEqual([10.01, 11.21, 12.41, 13.61].map((at) => expect.closeTo(at, 3)));
+    const beeps = startsOf('countdown-beep').map((s) => s.at);
+    expect(beeps).toEqual([10.01, 11.21, 12.41].map((at) => expect.closeTo(at, 3)));
+    expect(startsOf('countdown-go').map((s) => s.at)).toEqual([expect.closeTo(13.61, 3)]);
     // Through the master gain, at 0 with the sound off: nothing reaches the output past it.
     expect(toOutput).toHaveLength(1);
     expect(toOutput[0]?.gain?.value).toBe(0);
@@ -369,30 +372,37 @@ describe('the sounds of the cold open', () => {
   it('beep only the numbers still ahead for a briefing come to late', async () => {
     const audio = await freshAudio();
     audio.briefingCountdown(2500);
-    const beeps = started.filter((s) => s.kind === 'tone').map((s) => s.at);
-    expect(beeps).toEqual([expect.closeTo(11.11, 3)]);
+    const go = ['countdown-go', expect.closeTo(11.11, 3)];
+    expect(started.map((s) => [s.kind, s.at])).toEqual([go]);
     started.length = 0;
     audio.briefingCountdown(4000);
     expect(started).toEqual([]);
   });
 
-  it('key the radio with a crackle and two clicks — no tone to clash with a solve’s chord', async () => {
+  it('count the last ten seconds higher as they run out, and thunk at zero', async () => {
     const audio = await freshAudio();
-    audio.radioChirp();
-    expect(started.filter((s) => s.kind === 'tone')).toEqual([]);
-    expect(startedAt('noise', 10.01)).toBe(true);
-    expect(startedAt('noise', 10.08)).toBe(true);
-    expect(startedAt('noise', 10.15)).toBe(true);
+    for (const left of [10, 5, 1, 0]) audio.countdownBeep(left);
+    expect(startsOf('countdown-beep').map((s) => s.rate)).toEqual([
+      1,
+      expect.closeTo(1 + (5 * 55) / 620, 6),
+      expect.closeTo(1 + (9 * 55) / 620, 6),
+    ]);
+    expect(startsOf('breaker-thunk')).toHaveLength(1);
   });
 
-  it('arc in no drop under reduced motion, but bang and click as ever', async () => {
+  it('key the radio with its recorded key — no tone to clash with a solve’s chord', async () => {
+    const audio = await freshAudio();
+    audio.radioChirp();
+    expect(started.map((s) => [s.kind, s.at])).toEqual([['radio-key', expect.closeTo(10.01, 3)]]);
+  });
+
+  it('arc in no drop under reduced motion, but thunk and click as ever', async () => {
     const audio = await freshAudio();
     audio.blackoutSounds(blackoutCue(0, true));
     const t = 10.01;
-    expect(startedAt('noise', t + 0.1)).toBe(false); // no crackle
-    expect(startedAt('tone', t)).toBe(false); // no rasp
-    expect(startedAt('tone', t + 0.9)).toBe(true); // the bang
-    expect(startedAt('noise', t + 1.3)).toBe(true); // the click
+    expect(startsOf('short-arc')).toEqual([]);
+    expect(startedAt('breaker-thunk', t + 0.9)).toBe(true);
+    expect(startedAt('relay-click', t + 1.3)).toBe(true);
   });
 
   it('never throw, with no audio at all or with one that breaks', async () => {

@@ -9,34 +9,33 @@ import {
   FOOTSTEP_LEVEL,
   gain,
   LOOKAHEAD,
-  loopOf,
-  modulate,
-  noiseBuffer,
+  pick,
   playingEngine,
   playLoop,
   playSample,
   rand,
   release,
-  sampleOf,
-  stepInto,
-  tone,
+  startSample,
+  STEP_TAKES,
   type Engine,
 } from './audio.js';
 import { doorsShut } from './light.js';
 import type { Spot } from './movement.js';
+import { sample } from './samples.js';
 
 /**
  * A partner you can locate: the crew's steps and the drones' rotors sound from where they are —
  * panned by how far to the side they stand, quieter with the distance and muffled through a
  * wall or a shut door, by the sight lines everybody uses (core sight.ts `canSee`) and the
  * voice's rule for a wall between (voice/rules.ts WALL_SHARE). A partner steps as often as you
- * do (sim.ts: a step every half tile walked), each step a sample rendered once and played into
- * the stages that place that partner, kept while they are within earshot, within the budget of
- * audio.ts (`CAPS`); the nearest drone within earshot buzzes — a loop rendered once — and
- * falls silent, stopped, beyond it; a drone chirps once as it catches somebody — the moment its
- * lens turns red. Your own steps stay as they are (audio.ts `footstep`). The audience hears
- * none of it: it hears the crew through the audience link. `hearCrew` moves it all, ten times
- * a second, never per frame. Pure but for the runtime from `hearCrew` on.
+ * do (sim.ts: a step every half tile walked), each step one of the footstep's three recorded
+ * takes played into the stages that place that partner, kept while they are within earshot,
+ * within the budget of audio.ts (`CAPS`); the nearest drone within earshot buzzes — a recorded
+ * loop — and falls silent, stopped, beyond it; a drone chirps once as it catches somebody — the
+ * moment its lens turns red — a recording placed where it flies. Your own steps are the same
+ * takes, unplaced (audio.ts `footstep`). The audience hears none of it: it hears the crew
+ * through the audience link. `hearCrew` moves it all, ten times a second, never per frame.
+ * Pure but for the runtime from `hearCrew` on.
  */
 
 /** Tiles to the side at which a sound comes from one side only. */
@@ -51,18 +50,14 @@ export const MUFFLE_HZ = 600;
 const OPEN_HZ = 20000;
 /** A partner steps once every this many tiles walked: as you do (sim.ts). */
 export const STEP_TILES = 0.5;
-/** A drone's rotor at full, at the master gain: faint. */
-const ROTOR_LEVEL = 0.012;
+/** A drone's rotor at full, at the master gain: faint — its loop's RMS at −20 dBFS. */
+const ROTOR_LEVEL = 0.02;
 /** A drone's chirp at full. */
 const CHIRP_LEVEL = 0.03;
 /** How often `hearCrew` is called, s: the steps of one call are spread over this. */
 export const HEAR_EVERY_S = 0.1;
 /** How fast the rotor and a partner's feet follow their place, s (a time constant). */
 const GLIDE_S = 0.08;
-/** A partner's step is rendered in this many takes, each with its own scuff of the noise… */
-const STEP_TAKES = 3;
-/** …each this long, s. */
-const STEP_S = 0.1;
 
 /** Where a sound sits for a listener: left −1 to right 1, how loud, and a wall between or not. */
 export interface Place {
@@ -159,7 +154,6 @@ export interface CrewScene {
  */
 export function hearCrew(scene: CrewScene): void {
   try {
-    prepareSteps();
     const shut = doorsShut(scene.map);
     countSteps(scene, shut);
     hearRotor(scene, shut);
@@ -252,25 +246,11 @@ function moveTo(stages: Placing, place: Place, full: number): void {
   }
 }
 
-/** The take `n` of a partner's step, rendered once at half the live rate; null while it renders. */
-function stepTake(n: number, rate: number): AudioBuffer | null {
-  return sampleOf(`spatial/step ${n}`, (ctx, dest) => stepInto(ctx, dest, 0, 1), STEP_S, rate);
-}
-
-/** Sets every take of the step rendering, before a partner's first step: they are ready by it. */
-function prepareSteps(): void {
-  const engine = audioEngine();
-  if (engine === null) return;
-  noiseBuffer(engine.ctx); // the shared noise at the live rate, before a take is cut from it
-  for (let n = 0; n < STEP_TAKES; n++) stepTake(n, engine.ctx.sampleRate / 2);
-}
-
-/** A partner's footstep into their `feet`, `delay` s from now: a take at random, ±10 % in pitch. */
+/** A partner's footstep into their `feet`, `delay` s from now: a take at random, ±10 % in speed. */
 function partnerStep(feet: Placing, delay: number): void {
   const { context } = feet.level;
-  const take = stepTake(Math.floor(Math.random() * STEP_TAKES), context.sampleRate / 2);
   const at = context.currentTime + LOOKAHEAD + delay;
-  playSample(context, take, feet.level, at, rand(0.9, 1.1));
+  playSample(context, sample(pick(STEP_TAKES)), feet.level, at, rand(0.9, 1.1));
 }
 
 /** The nearest drone in flight within earshot, and how far it is; none where there is none. */
@@ -305,48 +285,21 @@ function hearRotor(scene: CrewScene, shut: ReadonlySet<string>): void {
 }
 
 /**
- * The rotor's voice at `place`, silent until moved there — it glides in; null while its loop
- * renders or the budget is full.
+ * The rotor's voice at `place`, silent until moved there — it glides in; null while its
+ * recording loads or the budget is full.
  */
 function startRotor(engine: Engine, place: Place): Rotor | null {
-  const loop = rotorLoopOf(engine);
+  const loop = sample('drone-rotor');
   if (loop === null || !claim({ loop: 1 })) return null;
   const { ctx } = engine;
   const stages = placing(ctx, engine.effects, place, 0);
-  const source = playLoop(ctx, loop, stages.level, ctx.currentTime + LOOKAHEAD);
+  const source = playLoop(ctx, loop.buffer, stages.level, ctx.currentTime + LOOKAHEAD);
   source.onended = () => {
     release({ loop: 1 });
     stages.pan.disconnect();
   };
   spatial.rotor = { ...stages, loop: source };
   return spatial.rotor;
-}
-
-/**
- * A drone's rotor: two detuned saws beating in a band, fluttering with the blades at 31 Hz —
- * all whole cycles in its loop of two seconds.
- */
-function rotor(ctx: BaseAudioContext, dest: AudioNode): void {
-  const flutter = gain(ctx, 0.6);
-  flutter.connect(dest);
-  const band = biquad(ctx, 'bandpass', 900, 1.1);
-  band.connect(flutter);
-  const blades = ctx.createOscillator();
-  blades.frequency.value = 31;
-  modulate(ctx, blades, 0.4, flutter.gain);
-  blades.start(0);
-  for (const frequency of [118, 121.5]) {
-    const saw = ctx.createOscillator();
-    saw.type = 'sawtooth';
-    saw.frequency.value = frequency;
-    saw.connect(band);
-    saw.start(0);
-  }
-}
-
-/** The rotor's loop, rendered once at half the live rate; null while it renders. */
-function rotorLoopOf(engine: Engine): AudioBuffer | null {
-  return loopOf('spatial/rotor', rotor, 2, engine.ctx.sampleRate / 2);
 }
 
 /** The rotor fades out and stops: no drone near any more, or the world is gone. */
@@ -372,25 +325,16 @@ function chirps(scene: CrewScene, shut: ReadonlySet<string>): void {
   }
 }
 
-/** A drone's chirp at its place: two quick rising blips. */
+/** A drone's chirp at its place: its recording, a voice of the budget, placed as it is heard. */
 function alertChirp(place: Place): void {
   const engine = playingEngine();
-  if (engine === null || place.gain <= 0.01) return;
+  const chirp = sample('drone-alert');
+  if (engine === null || chirp === null || place.gain <= 0.01) return;
   const { ctx } = engine;
   const t = ctx.currentTime + LOOKAHEAD;
-  capped(ctx, engine.effects, { voice: 2 }, (out) => {
-    const band = biquad(ctx, 'bandpass', 1800, 1.5);
-    band.connect(placing(ctx, out, place, CHIRP_LEVEL).level);
-    return (
-      [
-        [t, 1500, 0.05],
-        [t + 0.08, 2200, 0.07],
-      ] as const
-    ).map(([at, hz, hold]) => {
-      const blip = { type: 'square', at, from: hz, to: hz, peak: 0.7, hold } as const;
-      return tone(ctx, band, { ...blip, attack: 0.003, decay: 0.04 });
-    });
-  });
+  capped(ctx, engine.effects, { voice: 1 }, (out) => [
+    startSample(ctx, chirp, placing(ctx, out, place, CHIRP_LEVEL).level, t),
+  ]);
 }
 
 /** Where the nearest partner sounds from now; null with nobody else about. */

@@ -1,50 +1,38 @@
 import {
   audioEngine,
-  biquad,
   capped,
-  chain,
   claim,
   fadeTo,
-  gain,
   levelAt,
   LOOKAHEAD,
-  LOOP_S,
-  loopOf,
-  midKnock,
-  modulate,
-  noiseBuffer,
-  noiseBurst,
-  noiseLoop,
   outlet,
+  pick,
   playLoop,
   rand,
   release,
+  startSample,
   still,
-  strikeInto,
-  tick,
-  tone,
-  type Cost,
   type Engine,
   type Fade,
-  type ToneSpec,
 } from './audio.js';
 import type { Dressing } from './dress.js';
 import { warmUp, WARM_UP_MS } from './rooms.js';
+import { sample, type Sample, type SfxId } from './samples.js';
 import type { FloorKind } from './surfaces.js';
 
 /**
  * Rooms you can hear. Every room plays a bed after its kind (its label's, as the art bible
  * dresses it; a label without one is a plain lab room), in two layers: what runs on the lab's
  * power — fans, hums, whines — and what lives without it — the rumble of a machine room or a
- * reactor. Each layer is a loop rendered once for its kind (audio.ts `loopOf`) and played
- * round and round, so a bed costs the audio thread a source or two, not a stack of oscillators
- * and live filters. The room the player stands in plays both its layers at full and its
- * sporadic sounds — drips, creaks, strokes, a clank down the corridor, the core's beat, a
- * console's tick; the two nearest rooms behind an open door or an opening play their main
- * layer 12 dB under it; the rest nothing, stopped. A change crossfades over 1.2 s. While the
- * lab has its power every powered layer runs, under the power hum (audio.ts); when the lights
- * fail they spin down with it, slowing as they fade, and a room whose lights come back warms
- * its layer up as they do (rooms.ts `warmUp`). The audience, standing nowhere, hears no beds.
+ * reactor. Each layer is a recorded seamless loop (samples.ts: ElevenLabs made them) played
+ * round and round at its room's own level, so a bed costs the audio thread a source or two.
+ * The room the player stands in plays both its layers at full and its sporadic sounds —
+ * drips, creaks, strokes, a clank down the corridor, the core's beat, a console's tick, each a
+ * recording; the two nearest rooms behind an open door or an opening play their main layer
+ * 12 dB under it; the rest nothing, stopped. A change crossfades over 1.2 s. While the lab has
+ * its power every powered layer runs, under the power hum (audio.ts); when the lights fail
+ * they spin down with it, slowing as they fade, and a room whose lights come back warms its
+ * layer up as they do (rooms.ts `warmUp`). The audience, standing nowhere, hears no beds.
  * Everything here keeps within the budget of audio.ts (`CAPS`), and it moves only when
  * `hearRooms` is called, ten times a second, never per frame. Pure up to `startAmbience`.
  */
@@ -58,8 +46,12 @@ export const ROOM_FADE_S = 1.2;
 export const NEIGHBOUR_LEVEL = 10 ** (-12 / 20);
 /** How many rooms behind open ways are heard: the nearest. */
 export const MAX_NEIGHBOURS = 2;
-/** A bed at full, at the master gain: under the effects (audio.ts EFFECTS_LEVEL). */
-export const BED_LEVEL = 0.02;
+/**
+ * A bed at full, at the master gain: under the effects (audio.ts EFFECTS_LEVEL). Every bed's
+ * recording comes in at −20 dBFS RMS (scripts/sfx.ts); each layer's own level sets the rooms
+ * apart.
+ */
+export const BED_LEVEL = 0.03;
 /** The powered layers spin down over this long once the lights fail, s. */
 export const POWER_DIE_S = 1.4;
 /** How far a dying layer slows — its hums fall in pitch as the power hum's do (audio.ts). */
@@ -208,93 +200,32 @@ export function bedPower(
   return { alive: false, from: power.outAt };
 }
 
-// --- the beds' layers, rendered once into loops -----------------------------------------
+// --- the beds' layers: recorded loops ------------------------------------------------------
 
-/** What a recipe builds into an offline context, from 0. */
-type Build = (ctx: BaseAudioContext, dest: AudioNode) => void;
-
-/** Sines at [Hz, level] through a lowpass at `cutoff` into `dest`. */
-function hum(
-  ctx: BaseAudioContext,
-  dest: AudioNode,
-  voices: readonly (readonly [number, number])[],
-  cutoff: number,
-): void {
-  const lowpass = biquad(ctx, 'lowpass', cutoff, 0);
-  lowpass.connect(dest);
-  for (const [frequency, level] of voices) {
-    const osc = ctx.createOscillator();
-    osc.frequency.value = frequency;
-    chain(osc, gain(ctx, level), lowpass);
-    osc.start(0);
-  }
-}
-
-/** One turn of the air's wander a loop: it repeats with it. */
-const WANDER_HZ = 0.25;
-
-/**
- * Air moving: the shared noise through a band at `centre` Hz into `dest` at `level`; with a
- * `wander` (depth in Hz) its centre drifts like a fan's or a duct's, once round a loop.
- */
-function air(
-  ctx: BaseAudioContext,
-  dest: AudioNode,
-  [centre, q, level]: readonly [number, number, number],
-  wander = 0,
-): void {
-  const band = biquad(ctx, 'bandpass', centre, q);
-  chain(noiseLoop(ctx, 0), band, gain(ctx, level), dest);
-  if (wander > 0) {
-    const drift = ctx.createOscillator();
-    drift.frequency.value = WANDER_HZ;
-    modulate(ctx, drift, wander, band.frequency);
-    drift.start(0);
-  }
-}
-
-/** A low rumble: a sine at `hz` and noise under 90 Hz, felt more than heard. */
-function rumble(
-  ctx: BaseAudioContext,
-  dest: AudioNode,
-  [hz, level]: readonly [number, number],
-): void {
-  const out = outlet(ctx, dest, level);
-  hum(ctx, out, [[hz, 0.6]], 120);
-  chain(noiseLoop(ctx, 0), biquad(ctx, 'lowpass', 90, 0), gain(ctx, 0.8), out);
+/** A bed's layer: its recorded loop, and how far it plays from BED_LEVEL, dB. */
+export interface BedLayer {
+  readonly sample: SfxId;
+  readonly db: number;
 }
 
 /**
- * What each kind of room runs on the lab's power, as a loop: every tone a whole number of
- * cycles in LOOP_S (a plain room's slow beat 55 against 55.5 Hz), every wander once round.
+ * What each kind of room runs on the lab's power, as a seamless loop: fans and hums, at a level
+ * of its own, so that a server room roars and an archive hushes.
  */
-export const POWERED: Readonly<Partial<Record<BedKind, Build>>> = {
-  server: (ctx, dest) => {
-    air(ctx, dest, [1100, 0.5, 0.5], 150);
-    hum(ctx, dest, [[120, 0.35], [240, 0.08]], 600);
-    hum(ctx, dest, [[8000, 0.012]], 12000);
-  },
-  archive: (ctx, dest) => air(ctx, dest, [500, 0.7, 0.18], 120),
-  corridor: (ctx, dest) => {
-    air(ctx, dest, [320, 0.9, 0.4], 60);
-    hum(ctx, dest, [[100, 0.12], [200, 0.05]], 400);
-  },
-  lab: (ctx, dest) => hum(ctx, dest, [[50, 0.3], [100, 0.22], [150, 0.08]], 400),
-  reactor: (ctx, dest) => hum(ctx, dest, [[110, 0.12], [220, 0.06]], 500),
-  control: (ctx, dest) => {
-    hum(ctx, dest, [[60, 0.15], [180, 0.08]], 800);
-    air(ctx, dest, [2400, 4, 0.03]);
-  },
-  plain: (ctx, dest) => {
-    air(ctx, dest, [600, 0.7, 0.4], 200);
-    hum(ctx, dest, [[55, 0.5], [55.5, 0.3]], 120);
-  },
+export const POWERED: Readonly<Partial<Record<BedKind, BedLayer>>> = {
+  server: { sample: 'bed-server', db: 3 },
+  archive: { sample: 'bed-archive', db: -8 },
+  corridor: { sample: 'bed-corridor', db: -2 },
+  lab: { sample: 'bed-lab', db: -3 },
+  reactor: { sample: 'bed-reactor', db: 0 },
+  control: { sample: 'bed-control', db: -3 },
+  plain: { sample: 'bed-plain', db: -3 },
 };
 
-/** What each kind of room keeps without it, as a loop. */
-export const IDLE: Readonly<Partial<Record<BedKind, Build>>> = {
-  machine: (ctx, dest) => rumble(ctx, dest, [38, 0.5]),
-  reactor: (ctx, dest) => rumble(ctx, dest, [30, 0.6]),
+/** What each kind of room keeps without it, as a seamless loop: the rumble of what stands still. */
+export const IDLE: Readonly<Partial<Record<BedKind, BedLayer>>> = {
+  machine: { sample: 'bed-machine-idle', db: 0 },
+  reactor: { sample: 'bed-reactor-idle', db: 0 },
 };
 
 /** A bed's loops: its powered layer, its unpowered one. */
@@ -313,129 +244,13 @@ export function loopsOf(kind: BedKind, alive: boolean, neighbour: boolean): Reco
 
 // --- the own room's sporadic sounds -----------------------------------------------------
 
-/** A sine from `at`, gliding from `from` to `to` Hz: struck — no hold, a sharp attack. */
-function ping(
-  ctx: BaseAudioContext,
-  dest: AudioNode,
-  at: number,
-  [from, to, peak, decay]: readonly [number, number, number, number],
-): OscillatorNode {
-  const spec: ToneSpec = { type: 'sine', at, from, to, peak, attack: 0.003, hold: 0, decay };
-  return tone(ctx, dest, spec);
-}
-
-/** A drop of water falling into a puddle: a quick falling blip and its plink. */
-function drip(ctx: BaseAudioContext, dest: AudioNode, at: number): AudioScheduledSourceNode[] {
-  const pitch = rand(0.85, 1.2);
-  return [
-    ping(ctx, dest, at, [1800 * pitch, 900 * pitch, 0.6, 0.06]),
-    ping(ctx, dest, at + 0.012, [2600 * pitch, 2500 * pitch, 0.15, 0.12]),
-  ];
-}
-
-/** Strained metal: a tone chopped into irregular stick-slip friction pulses. */
-function creak(ctx: BaseAudioContext, dest: AudioNode, at: number): AudioScheduledSourceNode[] {
-  const length = rand(0.8, 1.5);
-  const end = at + length;
-  const pitch = rand(380, 560);
-  const voice = ctx.createOscillator();
-  voice.type = 'triangle';
-  voice.frequency.setValueAtTime(pitch, at);
-  voice.frequency.linearRampToValueAtTime(pitch * 0.92, end);
-  // Gain 0.5 - 0.5 * saw jumps to 1 and decays linearly each cycle: one pulse per 'slip'.
-  const slip = ctx.createOscillator();
-  slip.type = 'sawtooth';
-  slip.frequency.setValueAtTime(rand(12, 20), at);
-  slip.frequency.linearRampToValueAtTime(rand(24, 34), at + length * 0.4);
-  slip.frequency.linearRampToValueAtTime(rand(9, 16), end);
-  const chopper = gain(ctx, 0.5);
-  modulate(ctx, slip, -0.5, chopper.gain);
-  const swell = gain(ctx, 0);
-  swell.gain.setValueAtTime(0, at);
-  swell.gain.linearRampToValueAtTime(rand(0.2, 0.35), at + length * 0.3);
-  swell.gain.linearRampToValueAtTime(0, end);
-  chain(voice, chopper, swell, dest);
-  for (const osc of [voice, slip]) {
-    osc.start(at);
-    osc.stop(end + 0.02);
-  }
-  return [voice, slip];
-}
-
-/**
- * Metal struck far down a corridor: its highs gone, and the echo coming back off the walls
- * twice, each time fainter and plainer.
- */
-function farClank(ctx: BaseAudioContext, dest: AudioNode, at: number): AudioScheduledSourceNode[] {
-  const base = rand(170, 320);
-  const far = biquad(ctx, 'lowpass', 1800, 0);
-  far.connect(dest);
-  const echo = (level: number): GainNode => outlet(ctx, far, level);
-  return [
-    ...strikeInto(ctx, echo(rand(0.3, 0.5)), at, base, { partials: 2, impact: true }),
-    ...strikeInto(ctx, echo(0.14), at + 0.23, base, { partials: 1, impact: false }),
-    ...strikeInto(ctx, echo(0.05), at + 0.46, base, { partials: 1, impact: false }),
-  ];
-}
-
-/** Far off in a plain lab: mostly a clank, a creak about every third time. */
-function distant(ctx: BaseAudioContext, dest: AudioNode, at: number): AudioScheduledSourceNode[] {
-  return Math.random() < 0.35 ? creak(ctx, dest, at) : farClank(ctx, dest, at);
-}
-
-/** A machine's slow stroke: a low thud with its mid layer, for a small speaker too. */
-function thump(ctx: BaseAudioContext, dest: AudioNode, at: number): AudioScheduledSourceNode[] {
-  return [ping(ctx, dest, at, [75, 42, 0.9, 0.32]), midKnock(ctx, dest, at, 0.12, 0.3)];
-}
-
-/** Steam escaping a valve: high noise swelling and dying away over ~1.4 s. */
-function hiss(ctx: BaseAudioContext, dest: AudioNode, at: number): AudioScheduledSourceNode[] {
-  const steam = noiseBurst(ctx, at, 1.4);
-  const level = gain(ctx, 0);
-  level.gain.setValueAtTime(0, at);
-  level.gain.linearRampToValueAtTime(0.35, at + 0.15);
-  level.gain.setValueAtTime(0.35, at + 0.75);
-  level.gain.linearRampToValueAtTime(0, at + 1.4);
-  chain(steam, biquad(ctx, 'highpass', 2500, 0.7), level, dest);
-  return [steam];
-}
-
-/** How many blips a flask bubbles in a run. */
-const BUBBLES = 4;
-
-/** A flask on its heater: a run of small rising blips. */
-function bubbling(ctx: BaseAudioContext, dest: AudioNode, at: number): AudioScheduledSourceNode[] {
-  const blips: AudioScheduledSourceNode[] = [];
-  let t = at;
-  for (let i = 0; i < BUBBLES; i++) {
-    const from = rand(300, 520);
-    blips.push(ping(ctx, dest, t, [from, from * 1.9, 0.25, 0.04]));
-    t += rand(0.05, 0.14);
-  }
-  return blips;
-}
-
-/** A console's relay ticking over, softly. */
-function softTick(ctx: BaseAudioContext, dest: AudioNode, at: number): AudioScheduledSourceNode[] {
-  return [tick(ctx, dest, at, 3200, 0.25)];
-}
-
-/** The core swelling to the top of its beat: a low throb, its peak where the light's is. */
-function coreThrob(ctx: BaseAudioContext, dest: AudioNode, at: number): AudioScheduledSourceNode[] {
-  const swell = { attack: CORE_LEAD_S, hold: 0.1, decay: 0.9 } as const;
-  return [
-    tone(ctx, dest, { type: 'sine', at, from: 55, to: 52, peak: 0.6, ...swell }),
-    tone(ctx, dest, { type: 'sine', at, from: 330, to: 320, peak: 0.08, ...swell }),
-  ];
-}
-
 /**
  * The core's beat as its light pulses (sources.ts CORE_PULSE, gl/pack.ts `pulseAt`): a
  * period of 2.4 s on the simulation's clock, at the top of it 0.6 s in.
  */
 export const CORE_PERIOD_S = 2.4;
 const CORE_PEAK_S = 0.6;
-/** The throb rises this long to its peak. */
+/** The throb's recording swells this long to its peak. */
 const CORE_LEAD_S = 0.35;
 
 /** The first top of the core's beat after the sim time `time`. */
@@ -443,39 +258,56 @@ export function nextCorePeak(time: number): number {
   return CORE_PEAK_S + CORE_PERIOD_S * Math.ceil((time - CORE_PEAK_S) / CORE_PERIOD_S + 1e-9);
 }
 
-type Sound = (ctx: BaseAudioContext, dest: AudioNode, at: number) => AudioScheduledSourceNode[];
-
 /**
  * A sporadic sound of the own room's bed: on its powered layer or its unpowered one, every
- * [min, max] seconds or on the core's beat, and what it takes from the budget while it plays.
+ * [min, max] seconds or on the core's beat; one of its recordings at random, at its level
+ * against the bed's full — a recording's peak stands at −3 dBFS — and up to `vary` faster or
+ * slower each time, so that no two sound alike. Each takes a voice of the budget.
  */
 interface Occasion {
   readonly layer: Layer;
   readonly every: readonly [number, number] | 'core';
-  readonly sound: Sound;
-  readonly cost: Cost;
+  readonly samples: readonly [SfxId, ...SfxId[]];
+  readonly level: number;
+  readonly vary: number;
 }
 
-const CREAK: Occasion = { layer: 'idle', every: [20, 40], sound: creak, cost: { voice: 2 } };
+const CREAK: Occasion = {
+  layer: 'idle',
+  every: [20, 40],
+  samples: ['creak'],
+  level: 0.35,
+  vary: 0.12,
+};
 
 /** The sporadic sounds of each kind of room. */
 export const OCCASIONS: Readonly<Record<BedKind, readonly Occasion[]>> = {
   server: [{ ...CREAK, every: [15, 35] }],
   machine: [
-    { layer: 'power', every: [1.6, 1.6], sound: thump, cost: { voice: 1, noise: 1 } },
-    { layer: 'power', every: [8, 20], sound: hiss, cost: { noise: 1 } },
+    { layer: 'power', every: [1.6, 1.6], samples: ['machine-stroke'], level: 1, vary: 0.02 },
+    { layer: 'power', every: [8, 20], samples: ['steam-hiss'], level: 0.4, vary: 0.08 },
   ],
-  archive: [{ layer: 'idle', every: [7, 12], sound: drip, cost: { voice: 2 } }],
-  corridor: [
-    { layer: 'idle', every: [20, 40], sound: farClank, cost: { voice: 4, noise: 1 } },
-  ],
+  archive: [{ layer: 'idle', every: [7, 12], samples: ['drip'], level: 0.7, vary: 0.15 }],
+  corridor: [{ layer: 'idle', every: [20, 40], samples: ['far-clank'], level: 0.4, vary: 0.1 }],
   lab: [
-    { layer: 'power', every: [10, 25], sound: bubbling, cost: { voice: BUBBLES } },
+    { layer: 'power', every: [10, 25], samples: ['bubbling'], level: 0.35, vary: 0.1 },
     CREAK,
   ],
-  reactor: [{ layer: 'idle', every: 'core', sound: coreThrob, cost: { voice: 2 } }],
-  control: [{ layer: 'power', every: [1, 1], sound: softTick, cost: { noise: 1 } }, CREAK],
-  plain: [{ layer: 'idle', every: [7, 15], sound: distant, cost: { voice: 4, noise: 1 } }],
+  reactor: [{ layer: 'idle', every: 'core', samples: ['core-throb'], level: 0.8, vary: 0 }],
+  control: [
+    { layer: 'power', every: [1, 1], samples: ['console-tick'], level: 0.15, vary: 0.03 },
+    CREAK,
+  ],
+  // Far off in a plain lab: mostly a clank, a creak about every third time.
+  plain: [
+    {
+      layer: 'idle',
+      every: [7, 15],
+      samples: ['creak', 'far-clank', 'far-clank'],
+      level: 0.4,
+      vary: 0.12,
+    },
+  ],
 };
 
 // --- the runtime -------------------------------------------------------------------------
@@ -531,8 +363,6 @@ export function startAmbience(clock: () => number): void {
     if (ambience !== null) return;
     const engine = audioEngine();
     if (engine === null) return;
-    // The shared noise at the live context's rate, before any loop is rendered from it.
-    noiseBuffer(engine.ctx);
     const beds = new Map<string, Bed>();
     const plans = new WeakMap<object, RoomPlan>();
     ambience = { engine, clock, beds, plans, room: null, heard: null };
@@ -622,27 +452,23 @@ function sameHeard(a: Heard, b: Heard): boolean {
   return same && a.outAt === b.outAt && a.won === b.won;
 }
 
-/** The plan of the scene's dressing, worked out once for it; its kinds' loops set rendering. */
+/** The plan of the scene's dressing, worked out once for it. */
 function planOf(amb: Ambience, scene: RoomScene): RoomPlan {
   const known = amb.plans.get(scene.dressing);
   if (known !== undefined) return known;
   const plan = roomPlan(scene.dressing, scene.map.doors);
   amb.plans.set(scene.dressing, plan);
-  for (const kind of new Set(plan.kinds.values())) {
-    bedLoop(amb, kind, 'power');
-    bedLoop(amb, kind, 'idle');
-  }
   return plan;
 }
 
 /**
- * The loop of `kind`'s `layer`: rendered once, at half the live context's rate — enough for
- * what the beds hold — and kept; null while it renders, or where the kind has no such layer.
+ * The loop of `kind`'s `layer` and the level it plays at against the bed, linear; null where
+ * the kind has no such layer, or its recording is not loaded (yet).
  */
-function bedLoop(amb: Ambience, kind: BedKind, layer: Layer): AudioBuffer | null {
-  const build = (layer === 'power' ? POWERED : IDLE)[kind];
-  if (build === undefined) return null;
-  return loopOf(`ambience/${kind}/${layer}`, build, LOOP_S, amb.engine.ctx.sampleRate / 2);
+function bedLoop(kind: BedKind, layer: Layer): { loop: Sample; level: number } | null {
+  const made = (layer === 'power' ? POWERED : IDLE)[kind];
+  const loop = made === undefined ? null : sample(made.sample);
+  return made === undefined || loop === null ? null : { loop, level: 10 ** (made.db / 20) };
 }
 
 /** A new bed for `room`, silent, its loops to start as they are due: into the beds' bus. */
@@ -740,8 +566,9 @@ function tend(amb: Ambience, now: number): void {
 }
 
 /**
- * The bed's loops as `loopsOf` has them: one due starts once its loop is rendered and the
- * budget has a loop left — else it is tried again next round — and one no longer due stops.
+ * The bed's loops as `loopsOf` has them: one due starts once its recording is loaded and the
+ * budget has a loop left — else it is tried again next round — through a stage at its layer's
+ * level, and one no longer due stops.
  */
 function syncLoops(amb: Ambience, bed: Bed, now: number): void {
   const due = loopsOf(bed.kind, bed.alive, bed.neighbour);
@@ -751,10 +578,15 @@ function syncLoops(amb: Ambience, bed: Bed, now: number): void {
       bed.playing[layer] = null;
       playing.stop(now + 0.05);
     } else if (due[layer] && playing === null) {
-      const loop = bedLoop(amb, bed.kind, layer);
-      if (loop !== null && claim({ loop: 1 })) {
-        const source = playLoop(amb.engine.ctx, loop, bed.stages[layer], now + LOOKAHEAD);
-        source.onended = () => release({ loop: 1 });
+      const made = bedLoop(bed.kind, layer);
+      if (made !== null && claim({ loop: 1 })) {
+        const { ctx } = amb.engine;
+        const level = outlet(ctx, bed.stages[layer], made.level);
+        const source = playLoop(ctx, made.loop.buffer, level, now + LOOKAHEAD);
+        source.onended = () => {
+          level.disconnect();
+          release({ loop: 1 });
+        };
         bed.playing[layer] = source;
       }
     }
@@ -794,23 +626,37 @@ function scheduleOccasions(amb: Ambience, bed: Bed, now: number): void {
     if (due > now + AHEAD_S) return;
     const at = Math.max(due, now + LOOKAHEAD);
     if (occasion.layer === 'idle' || bed.alive) {
-      const { ctx } = amb.engine;
-      capped(ctx, bed.stages[occasion.layer], occasion.cost, (out) => occasion.sound(ctx, out, at));
+      playOccasion(amb, bed, occasion, at);
     }
     bed.next[i] = at + rand(occasion.every[0], occasion.every[1]);
   });
 }
 
-/** The core's throb, once a beat, rising so that it peaks with the core's light. */
+/**
+ * One of the occasion's recordings into its layer from `at`, at its level and a little faster
+ * or slower: a voice of the budget, let go as it ends. Nothing where the budget is full or the
+ * recording is not loaded.
+ */
+function playOccasion(amb: Ambience, bed: Bed, occasion: Occasion, at: number): void {
+  const recording = sample(pick(occasion.samples));
+  if (recording === null) return;
+  const { ctx } = amb.engine;
+  const rate = rand(1 - occasion.vary, 1 + occasion.vary);
+  const stage = bed.stages[occasion.layer];
+  const play = (out: GainNode): AudioScheduledSourceNode[] => [
+    startSample(ctx, recording, out, at, rate),
+  ];
+  capped(ctx, stage, { voice: 1 }, play, occasion.level);
+}
+
+/** The core's throb, once a beat, swelling so that it peaks with the core's light. */
 function throbOnTheBeat(amb: Ambience, bed: Bed, occasion: Occasion, now: number): void {
   const time = amb.clock();
   const peak = nextCorePeak(time);
   const at = now + (peak - time) - CORE_LEAD_S;
   if (peak <= bed.corePeak || at > now + AHEAD_S) return;
   bed.corePeak = peak;
-  const { ctx } = amb.engine;
-  const when = Math.max(at, now + LOOKAHEAD);
-  capped(ctx, bed.stages[occasion.layer], occasion.cost, (out) => occasion.sound(ctx, out, when));
+  playOccasion(amb, bed, occasion, Math.max(at, now + LOOKAHEAD));
 }
 
 /** How many beds are built now. */
