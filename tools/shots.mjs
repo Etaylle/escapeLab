@@ -175,14 +175,19 @@
  * The base URL is the Vite dev server by default (`pnpm dev`), or the
  * production server (`pnpm build && pnpm start`, http://localhost:3001) as in
  * CI. The host's page opens with `?trace=1`, so the world keeps its frame
- * durations (animation frame to animation frame, 16.7 ms at 60 Hz). Three
+ * durations (animation frame to animation frame, 16.7 ms at 60 Hz). Four
  * times the run resets them and samples two quiet seconds, with no
  * screenshot, resize or click in them: the host pacing inside its tile after
- * the game screenshots, idle at an open station panel, and pacing again after
- * the station step — and in a mission with an intro once more, shorter, in
- * the lit lab before the blackout. Each sample logs p50 and p95; a p95 above
- * SHOTS_FRAME_P95_MS (default 40) fails the run, as does any step that
- * throws. SHOTS_CPU_SLOWDOWN (default 1) slows every page's main thread that
+ * the game screenshots, idle at an open station panel, pacing again after the
+ * station step, and pacing beside the open hatch in the escape — and in a
+ * mission with an intro once more, shorter, in the lit lab before the
+ * blackout, and over the opening's shot for information alone. Each sample
+ * logs p50 and p95. A p95 above SHOTS_FRAME_P95_MS (default 40) has the
+ * window sampled once more after a second's pause, the same scene for as
+ * long, and fails the run only when that one is over too (framegate.mjs): a
+ * runner's hiccup spoils one window, the game's cost both. The line logs
+ * both p95s. Any step that throws fails the run too.
+ * SHOTS_CPU_SLOWDOWN (default 1) slows every page's main thread that
  * many times (Chromium's CPU throttling), so a fast machine measures the
  * frames as a CI runner without a GPU would; SHOTS_SOFTWARE_GL=1 composes the
  * pages on SwiftShader, so that the compositor's share shows too.
@@ -318,6 +323,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { chromium, request } from 'playwright';
+import { AGAIN_AFTER_MS, gateWindow } from './framegate.mjs';
 import { GLOWING, glowAtCorners, haloAgainst, verticalShift } from './glowcheck.mjs';
 import {
   arrivals,
@@ -722,14 +728,13 @@ function busyCores(before, after, seconds) {
 }
 
 /**
- * Samples a page opened with `traced`: resets its frame trace, lets `quiet`
- * fill the window and logs p50 and p95 of the durations recorded meanwhile.
- * Nothing in `quiet` may screenshot, resize or click: those stalls are the
- * harness's, not the game's. A p95 over the budget fails the run — unless the
- * window is for information only (`gating` false), which logs it alone — as
- * does a page without a trace or a window without frames.
+ * One look at a window of a page opened with `traced`: resets its frame trace, lets `quiet`
+ * fill the window and reads the durations recorded meanwhile, their p50, p95 and count, with
+ * how long the window ran (`ms`), what the machine's processes, the pages and the host's sound
+ * did meanwhile, and under SHOTS_PROFILE what each pass of the world's picture cost. Null,
+ * the run failed, for a page without a trace or a window without frames.
  */
-async function sampleFrames(page, when, quiet, { gating = true } = {}) {
+async function lookAt(page, when, quiet) {
   // The probes hold the voice as well: the frames are there only while a world is up.
   const found = await page.evaluate(() => {
     const probe = globalThis.__escapelab;
@@ -743,53 +748,89 @@ async function sampleFrames(page, when, quiet, { gating = true } = {}) {
   if (!found) {
     console.log(`frames             !! no trace ${when}: the page keeps none under ?trace=1`);
     fail(`no frame trace ${when}`);
-    return;
+    return null;
   }
   const cpuBefore = await processCpu();
   const pagesBefore = await pageCosts();
   const spentBefore = await page.evaluate(() => globalThis.__escapelab?.audio?.spent ?? null);
   const quietSince = Date.now();
   await quiet();
-  const seconds = (Date.now() - quietSince) / 1000;
-  const cores = busyCores(cpuBefore, await processCpu(), seconds);
-  const perPage = pageCostText(pagesBefore, await pageCosts(), seconds);
+  const ms = Date.now() - quietSince;
+  const cores = busyCores(cpuBefore, await processCpu(), ms / 1000);
+  const perPage = pageCostText(pagesBefore, await pageCosts(), ms / 1000);
   const frames = await page.evaluate(() => globalThis.__escapelab?.frames ?? []);
   const nodes = await page.evaluate(() => globalThis.__escapelab?.audio?.nodes ?? null);
   const spentAfter = await page.evaluate(() => globalThis.__escapelab?.audio?.spent ?? null);
+  const passes = PROFILE
+    ? await page.evaluate(() => globalThis.__escapelab?.passes ?? null)
+    : null;
   if (frames.length === 0) {
     console.log(`frames             !! no frames recorded ${when}`);
     fail(`no frames recorded ${when}`);
+    return null;
+  }
+  return {
+    p50: percentile(frames, 50),
+    p95: percentile(frames, 95),
+    count: frames.length,
+    ms,
+    cores,
+    perPage,
+    sound: soundSources(nodes),
+    js: soundJs(spentBefore, spentAfter, ms / 1000),
+    passes,
+  };
+}
+
+/**
+ * Samples a window of a page opened with `traced` (`lookAt`) and logs p50 and p95 of its
+ * frame durations. Nothing in `quiet` may screenshot, resize or click: those stalls are the
+ * harness's, not the game's. A p95 over the budget has the window looked at once more a
+ * second later (framegate.mjs), `again` filling it for as long as the first look ran — the
+ * same scene, `quiet` itself unless that would not stay the same — and fails the run only
+ * where both looks are over; the line logs both. A window for information only (`gating`
+ * false) is looked at once and logged alone. A page without a trace or a window without
+ * frames fails the run. The machine's, the pages' and the sound's lines are the first look's.
+ */
+async function sampleFrames(page, when, quiet, { gating = true, again = quiet } = {}) {
+  const first = await lookAt(page, when, quiet);
+  if (first === null) {
     return;
   }
-  const p95 = percentile(frames, 95);
-  const over = gating && p95 > FRAME_P95_MS;
-  const verdict = !gating
-    ? 'for information, gating nothing'
-    : over
-      ? `!! over the budget of ${FRAME_P95_MS} ms`
-      : `within ${FRAME_P95_MS} ms`;
+  const gate = gating
+    ? await gateWindow(
+        first,
+        FRAME_P95_MS,
+        () => lookAt(page, when, () => again(first.ms)),
+        () => sleep(AGAIN_AFTER_MS),
+      )
+    : { again: null, over: false, verdict: 'for information, gating nothing' };
+  const p95s =
+    `p95 ${first.p95.toFixed(1)} ms` +
+    (gate.again === null ? '' : `, again ${gate.again.p95.toFixed(1)} ms`);
+  const counts = [first, gate.again].flatMap((look) => (look === null ? [] : [look.count]));
   console.log(
-    `frames             p50 ${percentile(frames, 50).toFixed(1)} ms · p95 ${p95.toFixed(1)} ms ` +
-      `(${frames.length}) ${when}: ${verdict}`,
+    `frames             p50 ${first.p50.toFixed(1)} ms · ${p95s} (${counts.join(', ')}) ` +
+      `${when}: ${gate.verdict}`,
   );
-  console.log(`cpu                cores busy: ${cores}; sound: ${soundSources(nodes)}`);
-  console.log(`pages              ${perPage}`);
-  const js = soundJs(spentBefore, spentAfter, seconds);
-  console.log(`sound js           ms a second on the host's main thread: ${js}`);
+  console.log(`cpu                cores busy: ${first.cores}; sound: ${first.sound}`);
+  console.log(`pages              ${first.perPage}`);
+  console.log(`sound js           ms a second on the host's main thread: ${first.js}`);
   if (PROFILE) {
-    await logPasses(page, when);
+    logPasses(first.passes, when);
   }
-  if (over) {
-    fail(`frame p95 ${p95.toFixed(1)} ms ${when}, over ${FRAME_P95_MS} ms`);
+  // A second look that found no frames has failed the run itself (`lookAt`).
+  if (gate.over && gate.again !== null) {
+    fail(`frame ${p95s} ${when}, over ${FRAME_P95_MS} ms both times`);
   }
 }
 
 /**
- * Under SHOTS_PROFILE, what each pass of the world's picture cost a frame over the window
- * just sampled (`window.__escapelab.passes`), p50/p95 in ms; a page without the probe fails.
+ * Under SHOTS_PROFILE, what each pass of the world's picture cost a frame over a window
+ * (`window.__escapelab.passes`, read by `lookAt`), p50/p95 in ms; a page without the probe
+ * (`passes` null) fails.
  */
-async function logPasses(page, when) {
-  const passes = await page.evaluate(() => globalThis.__escapelab?.passes ?? null);
+function logPasses(passes, when) {
   if (passes === null) {
     const why = `no pass profile ${when}: the page keeps none under ?profile=1`;
     console.log(`passes             !! ${why}`);
@@ -1666,7 +1707,10 @@ async function captureColdOpen(host) {
   }
   await host.page.setViewportSize(COLD_OPEN);
   await sleep(250);
-  await sampleFrames(host.page, 'in the lit lab, the power still on', () => stepIntoRoom(host));
+  // A second look paces where the step ended: one more step could leave the host's room.
+  await sampleFrames(host.page, 'in the lit lab, the power still on', () => stepIntoRoom(host), {
+    again: (ms) => pace(host, ms),
+  });
   if (host.seen.view.lights.out) {
     throw new Error('the lights went out before cold-open.png');
   }
