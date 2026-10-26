@@ -20,7 +20,9 @@
  * peak and RMS are measured there, and `gain` is what brings it to its target — a one-shot's peak
  * to −3 dBFS, a bed's or a stem's RMS to −20 dBFS, a sting's to −14 dBFS — for the game to apply;
  * more than 30 ms of silence at the start becomes `startMs`, except in a bed, whose loop keeps its
- * start. A run that makes nothing measures every file anew, so a target changed costs nothing.
+ * start. A take that would need more gain than MAX_GAIN came back quiet: the run names it and
+ * fails, nothing capped, so that its prompt is made louder and only it is made anew. A run that
+ * makes nothing measures every file anew, so a target changed costs nothing.
  *
  * The key is ELEVENLABS_API_KEY in the environment — the package's `sfx` script hands node the
  * repo's .env.local (`--env-file`); this script opens no file for it. Before it asks for anything
@@ -115,10 +117,11 @@ export const MUSIC_MODEL = 'music_v2_5';
 /** How closely an effect follows its prompt, 0 to 1: closer than ElevenLabs' 0.3. */
 export const PROMPT_INFLUENCE = 0.5;
 /**
- * What a second costs, credits: an effect whose length is set 40 (ElevenLabs' price), music
- * about 900 a minute. The first request of a run measures the real rate.
+ * What a second costs, credits, as the first full render measured it (2026-10-26: 542 credits
+ * for 154 s of effects, 4,136 for 236 s of music), rounded up. The first request of every run
+ * measures the rate anew.
  */
-export const CREDITS_PER_SECOND: Readonly<Record<Group, number>> = { sfx: 40, music: 15 };
+export const CREDITS_PER_SECOND: Readonly<Record<Group, number>> = { sfx: 4, music: 18 };
 /** The most a run may spend on each group, credits. */
 export const CAPS: Readonly<Record<Group, number>> = { sfx: 12_000, music: 18_000 };
 /** With fewer credits left than this, nothing is asked. */
@@ -132,6 +135,13 @@ export const FOLDER_CAPS: Readonly<Record<Group, number>> = {
 export const LEAD_MS = 30;
 /** A sample quieter than this counts as silence: −60 dBFS. */
 export const SILENCE = 10 ** (-60 / 20);
+
+/**
+ * The most gain a recording may take: more, and what it brings up is the noise floor of a take
+ * that came back quiet — to be made again with a louder prompt. A one-shot's peak may lie
+ * 15.6 dB under its target, a loop's, a stem's or a sting's RMS 12 dB.
+ */
+export const MAX_GAIN: Readonly<Record<Kind, number>> = { oneshot: 6, bed: 4, stem: 4, sting: 4 };
 
 /** The loudness each kind is brought to. */
 export const TARGETS: Readonly<Record<Kind, Target>> = {
@@ -471,6 +481,25 @@ export function gainOf(target: Target, loudness: Loudness, id: string): number {
   return Number((10 ** (target.dbfs / 20) / level).toFixed(4));
 }
 
+/** A recording that came back too quiet for its kind: its id, its gain, the most it may take. */
+export interface Quiet {
+  readonly id: string;
+  readonly gain: number;
+  readonly max: number;
+}
+
+/** The recordings of `catalog` whose gain in `manifests` is over MAX_GAIN for their kind. */
+export function tooQuiet(
+  catalog: readonly CatalogEntry[],
+  manifests: Readonly<Record<Group, Manifest>>,
+): Quiet[] {
+  return catalog.flatMap((entry) => {
+    const kept = manifests[groupOf(entry)][entry.id];
+    const max = MAX_GAIN[entry.kind];
+    return kept !== undefined && kept.gain > max ? [{ id: entry.id, gain: kept.gain, max }] : [];
+  });
+}
+
 /** Where a recording's sound starts, ms: past more than LEAD_MS of silence; a bed's at 0. */
 export function startMsOf(kind: Kind, loudness: Loudness): number {
   return kind !== 'bed' && loudness.leadMs > LEAD_MS ? Math.floor(loudness.leadMs) : 0;
@@ -618,6 +647,26 @@ async function renderAll(
   console.log(`sfx: ${await creditsLeft(client)} credits left`);
 }
 
+/**
+ * Says which recordings came back too quiet (`tooQuiet`), each with its gain, and what to do;
+ * any such fails the run. Nothing is capped or hidden.
+ */
+function warnQuiet(
+  catalog: readonly CatalogEntry[],
+  manifests: Readonly<Record<Group, Manifest>>,
+): void {
+  const quiet = tooQuiet(catalog, manifests);
+  if (quiet.length === 0) return;
+  const said = `${quiet.length} recordings came back quiet — their gain plays their noise floor`;
+  console.error(`sfx: ${said}:`);
+  for (const { id, gain, max } of quiet) console.error(`  ${id}  gain ${gain}, over ${max}`);
+  console.error(
+    'sfx: make their prompts close, loud, dry and full level, then run this again: only what ' +
+      'changed is made anew',
+  );
+  process.exitCode = 1;
+}
+
 /** Says what each folder holds against its cap, and any file no entry names; over a cap fails. */
 function report(manifests: Readonly<Record<Group, Manifest>>): void {
   for (const group of GROUPS) {
@@ -643,6 +692,7 @@ async function main(options: Options): Promise<void> {
   const jobs = planOf(catalog, manifests, filedIn, options);
   printPlan(jobs);
   if (options.dryRun) {
+    warnQuiet(catalog, manifests);
     return;
   }
   requireTools();
@@ -662,6 +712,7 @@ async function main(options: Options): Promise<void> {
     rmSync(scratch, { recursive: true, force: true });
   }
   report(manifests);
+  warnQuiet(catalog, manifests);
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

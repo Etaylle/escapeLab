@@ -43,20 +43,30 @@ hands node the repo's `.env.local` (`--env-file-if-exists`), and from a worktree
 `node --env-file=<repo>/.env.local scripts/sfx.ts` in `packages/client`. Before it asks for
 anything the script reads the account's credits and stops below 40,000 or where the plan would
 pass a group's cap (12,000 credits for the effects, 18,000 for the music); after a group's first
-request it reads what that cost and prices the rest at that rate. By ElevenLabs' prices — 40
-credits a second of an effect whose length is set, about 900 a minute of music — the whole
-catalog comes to about 6,144 credits for its 154 s of effects and 3,540 for its 236 s of music.
+request it reads what that cost and prices the rest at that rate. The first full render
+(2026-10-26) cost 542 credits for the 154 s of effects and 4,136 for the 236 s of music; the dry
+run prices at those rates, rounded up to 4 and 18 credits a second.
 
 **Loudness without re-encoding.** The files stay as ElevenLabs made them. The script decodes
 each with `afconvert` into a temporary folder, measures its peak and its RMS and writes the gain
 that brings it to its target: a one-shot's peak to −3 dBFS, a bed's or a stem's RMS to
-−20 dBFS, a sting's RMS to −14 dBFS. More than 30 ms of silence at a recording's start becomes
+−20 dBFS, a sting's RMS to −14 dBFS. A take that came back quiet would need so much gain that
+its MP3's noise floor came up with it: over 6 for a one-shot, over 4 for a bed, a stem or a
+sting (`MAX_GAIN`), the script names each such take with its gain and fails, and
+`test/sampleManifest.test.ts` lists them; nothing is capped. Its prompt is then made close,
+loud, dry and at full level, which changes its hash, and the next run makes only it anew. The
+first render brought back 17 such takes, none of them a short sound late in its file — each
+was quiet throughout: the three footsteps (gain 28–87, their peaks at −42 to −32 dBFS), the
+mushroom button, the console's tick, the wall's thud, the big button, the breaker's thunk, the
+lamp's pop, the find's chime and the ping (9–50), the archive's, the plain room's, the server
+room's and the lab's beds (4.2–104; the archive's RMS stood at −60 dBFS) and both stings
+(6.4 and 11.3). More than 30 ms of silence at a recording's start becomes
 `startMs`, where its sound starts; a bed keeps its start, so that its loop stays seamless. A run
 that makes nothing measures every file anew. The game applies the gain as it decodes a
 recording (`samples.ts`), multiplying its samples once, and plays it from `startMs`.
 `test/sampleManifest.test.ts` fails, naming the command, where an entry has no file, a file
-was made from another request, lasts other than asked, needs a gain outside 0.1–20, or a folder
-passes its cap: `public/sfx` 3 MB, `public/music` 6 MB.
+was made from another request, lasts other than asked, came back clipped (a gain under 0.1) or
+quiet, or a folder passes its cap: `public/sfx` 3 MB, `public/music` 6 MB.
 
 ## One path
 
@@ -69,7 +79,7 @@ crew's own voices bypass the master gain: switching the lab off leaves the crew 
 
 The recordings are loaded in the lobby (`preloadSamples`): both manifests, then every file,
 fetched and decoded once on an OfflineAudioContext at 44.1 kHz and kept by its address — 390 s
-of audio, about 69 MB a channel once decoded. A page that comes in during a run loads them as
+of audio, all of it stereo as ElevenLabs makes it: about 138 MB a page once decoded. A page that comes in during a run loads them as
 its world starts. A recording not loaded yet is not played; one that cannot be loaded is said
 once on the console and stays silent — nothing synthetic stands in for it. Only the power hum
 of a run that starts in the lit lab waits for its recording and comes in once it is there.

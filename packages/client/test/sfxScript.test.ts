@@ -14,6 +14,7 @@ import {
   LEAD_MS,
   loudnessOf,
   make,
+  MAX_GAIN,
   MIN_CREDITS,
   musicRequest,
   optionsOf,
@@ -24,6 +25,7 @@ import {
   refuseBelow,
   startMsOf,
   TARGETS,
+  tooQuiet,
   type CatalogEntry,
   type Manifest,
   type ManifestEntry,
@@ -149,9 +151,9 @@ describe('a request', () => {
     expect(new Set([hash, ...changed]).size).toBe(4);
   });
 
-  it('costs 40 credits a second of an effect, about 15 of music, and keeps within the caps', () => {
-    expect(costOf(CLACK)).toBe(24);
-    expect(costOf(CALM)).toBe(1080);
+  it('costs about 4 credits a second of an effect, 18 of music, and keeps within the caps', () => {
+    expect(costOf(CLACK)).toBe(3);
+    expect(costOf(CALM)).toBe(1296);
     expect(CAPS).toEqual({ sfx: 12_000, music: 18_000 });
     for (const group of ['sfx', 'music'] as const) {
       const all = catalog.filter((entry) => groupOf(entry) === group);
@@ -261,6 +263,27 @@ describe('a run', () => {
     expect(() => planOf([CLACK], manifests, always, optionsOf(['--only', 'nope']))).toThrow(
       /--only nope.*no such entry/,
     );
+  });
+
+  it('names every take too quiet for its kind, its gain and the most it may take', () => {
+    expect(MAX_GAIN).toEqual({ oneshot: 6, bed: 4, stem: 4, sting: 4 });
+    const BED = { ...CALM, id: 'test-bed', kind: 'bed', durationSeconds: 10 } as const;
+    const STING = { ...CALM, id: 'test-sting', kind: 'sting', loop: false } as const;
+    const at = (gain: number, entry: CatalogEntry): ManifestEntry => ({
+      ...manifestEntry(entry),
+      gain,
+    });
+    const loud = { sfx: { [CLACK.id]: at(6, CLACK), [BED.id]: at(4, BED) }, music: {} };
+    expect(tooQuiet([CLACK, BED, CALM], loud)).toEqual([]);
+    const quiet = {
+      sfx: { [CLACK.id]: at(6.01, CLACK), [BED.id]: at(4.5, BED) },
+      music: { [CALM.id]: at(0.7, CALM), [STING.id]: at(11, STING) },
+    };
+    expect(tooQuiet([CLACK, BED, CALM, STING], quiet)).toEqual([
+      { id: 'test-clack', gain: 6.01, max: 6 },
+      { id: 'test-bed', gain: 4.5, max: 4 },
+      { id: 'test-sting', gain: 11, max: 4 },
+    ]);
   });
 
   it('reads the command line, pnpm’s -- and all, and refuses anything else', () => {

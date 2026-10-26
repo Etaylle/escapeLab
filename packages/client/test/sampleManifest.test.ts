@@ -8,7 +8,9 @@ import {
   groupOf,
   hashOf,
   MANIFEST,
+  MAX_GAIN,
   readCatalog,
+  tooQuiet,
   type CatalogEntry,
   type Group,
   type Manifest,
@@ -69,21 +71,24 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
   const entries = catalog.filter((entry) => groupOf(entry) === group);
 
   it('have one each, made by ElevenLabs from the catalog’s request as it stands', () => {
+    const filed = (id: string): boolean =>
+      existsSync(join(DIRS[group], manifest[id]?.file ?? `${id}.missing`));
+    const missing = entries.filter((entry) => !filed(entry.id)).map((entry) => entry.id);
+    expect(missing, `no recording — ${REMEDY}`).toEqual([]);
+    const stale = entries
+      .filter((entry) => manifest[entry.id]?.hash !== hashOf(entry))
+      .map((entry) => entry.id);
+    expect(stale, `made from another request — ${REMEDY}`).toEqual([]);
     for (const entry of entries) {
-      const kept = manifest[entry.id];
-      expect(kept, `${entry.id} has no recording — ${REMEDY}`).toBeDefined();
-      expect(existsSync(join(DIRS[group], kept?.file ?? '?')), `${kept?.file} — ${REMEDY}`).toBe(
-        true,
-      );
-      expect(kept?.hash, `${entry.id} was made from another request — ${REMEDY}`).toBe(
-        hashOf(entry),
-      );
-      expect([kept?.source, kept?.loop]).toEqual(['elevenlabs', entry.loop]);
+      expect([manifest[entry.id]?.source, manifest[entry.id]?.loop]).toEqual([
+        'elevenlabs',
+        entry.loop,
+      ]);
     }
     expect(Object.keys(manifest).sort()).toEqual(entries.map((entry) => entry.id).sort());
   });
 
-  it('last as long as asked for, start within themselves, and take a sane gain', () => {
+  it('last as long as asked for, start within themselves, and came back unclipped', () => {
     for (const entry of entries) {
       const kept = manifest[entry.id];
       const [min, max] = lengthsOf(entry);
@@ -92,10 +97,18 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
       expect(kept?.startMs ?? NaN).toBeGreaterThanOrEqual(0);
       expect(kept?.startMs ?? NaN, entry.id).toBeLessThan((kept?.ms ?? 0) / 4);
       if (entry.kind === 'bed') expect(kept?.startMs).toBe(0);
-      // Under +26 dB: what an almost silent take would need; over −20 dB: a clipped one.
+      // Under −20 dB: a take that came back clipped.
       expect(kept?.gain ?? NaN, `${entry.id}: gain ${kept?.gain}`).toBeGreaterThan(0.1);
-      expect(kept?.gain ?? NaN, `${entry.id}: gain ${kept?.gain}`).toBeLessThan(20);
     }
+  });
+
+  it('came back loud enough: no gain that would play a quiet take’s noise floor', () => {
+    expect(MAX_GAIN).toEqual({ oneshot: 6, bed: 4, stem: 4, sting: 4 });
+    const quiet = tooQuiet(entries, { sfx: {}, music: {}, [group]: manifest }).map(
+      ({ id, gain, max }) => `${id} ${gain} > ${max}`,
+    );
+    const remedy = `make their prompts close, loud, dry and full level, then ${REMEDY}`;
+    expect(quiet, `quiet takes — ${remedy}`).toEqual([]);
   });
 
   it('keep within the folder’s cap, and no file the manifest does not name', () => {
