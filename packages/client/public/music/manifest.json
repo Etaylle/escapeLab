@@ -23,11 +23,11 @@
   },
   "lost": {
     "file": "lost.mp3",
-    "ms": 19043,
-    "gain": 2.6375,
+    "ms": 11050,
+    "gain": 1.1557,
     "startMs": 0,
-    "floor": 0.0000476,
-    "rms": 0.0757,
+    "floor": 0.0000323,
+    "rms": 0.173,
     "loop": false,
     "hash": "3c5252831169",
     "source": "elevenlabs"

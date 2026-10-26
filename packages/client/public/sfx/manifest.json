@@ -38,13 +38,13 @@
   "bed-lab": {
     "file": "bed-lab.mp3",
     "ms": 10000,
-    "gain": 8.1382,
+    "gain": 0.5277,
     "startMs": 0,
-    "floor": 0.00985,
-    "rms": 0.0123,
+    "floor": 0.126,
+    "rms": 0.19,
     "loop": true,
-    "hash": "62bac71df8b2",
-    "influence": 0.9,
+    "hash": "ba3a7cfaa466",
+    "influence": 0.6,
     "source": "elevenlabs"
   },
   "bed-machine-idle": {
@@ -146,12 +146,12 @@
   "button-thunk": {
     "file": "button-thunk.mp3",
     "ms": 480,
-    "gain": 12.3459,
+    "gain": 7.488,
     "startMs": 0,
-    "floor": 0.000111,
-    "rms": 0.00549,
+    "floor": 0.00032,
+    "rms": 0.00971,
     "loop": false,
-    "hash": "eed6731dbc40",
+    "hash": "665d986543c1",
     "influence": 0.9,
     "source": "elevenlabs"
   },
@@ -268,11 +268,11 @@
     "ms": 1000,
     "gain": 0.7079,
     "startMs": 0,
-    "floor": 0.0073,
-    "rms": 0.204,
+    "floor": 0.0408,
+    "rms": 0.227,
     "loop": false,
-    "hash": "66dff638d471",
-    "influence": 0.5,
+    "hash": "9dd3691aa0bc",
+    "influence": 0.75,
     "source": "elevenlabs"
   },
   "drip": {
@@ -530,13 +530,13 @@
   "power-down": {
     "file": "power-down.mp3",
     "ms": 1600,
-    "gain": 0.7401,
+    "gain": 0.7411,
     "startMs": 0,
-    "floor": 0.0067,
-    "rms": 0.322,
+    "floor": 0.00399,
+    "rms": 0.386,
     "loop": false,
-    "hash": "9bbb67a2519f",
-    "influence": 0.5,
+    "hash": "005c879fc5e6",
+    "influence": 0.75,
     "source": "elevenlabs"
   },
   "probe-click": {
