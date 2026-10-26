@@ -81,6 +81,15 @@ export interface CarryableOpts {
   carried: boolean;
   /** the world's text at this zoom (art.ts's worldText); plain tiles when left out */
   text?: WorldText;
+  /** how far the item rises off its shadow, in tiles: one named by the E prompt bobs */
+  lift?: number;
+  /**
+   * what lies between its shadow and the item, drawn round its anchor as far up as the item
+   * rises: the glow of one the E prompt names (render/highlight.ts)
+   */
+  glow?: (ctx: CanvasRenderingContext2D) => void;
+  /** the thing alone — no shadow, glow or label: what its silhouette is baked from */
+  bare?: boolean;
 }
 
 /** A carried item against one on the floor. */
@@ -183,30 +192,41 @@ function drawKey(ctx: CanvasRenderingContext2D, pulse: number): void {
   ctx.fill();
 }
 
+/** The item itself, as its kind looks. */
+function drawItem(ctx: CanvasRenderingContext2D, kind: CarryableKind, pulse: number): void {
+  if (kind === 'fuse') {
+    drawFuse(ctx, pulse);
+  } else if (kind === 'key') {
+    drawKey(ctx, pulse);
+  } else {
+    drawCrate(ctx, pulse);
+  }
+}
+
 /**
  * A carryable: a fuse cartridge, a key, or a crate for anything else, as its
- * label says. On the floor it lies on its shadow in a blue glow, its label
- * under it like any prop's. Anchor: its own centre, scaled to tile units.
+ * label says. On the floor it lies on its shadow in a blue glow — or hovers
+ * `lift` over it, with its `glow` — its label under it like any prop's.
+ * Anchor: its own centre, scaled to tile units.
  */
 export function drawCarryable(ctx: CanvasRenderingContext2D, o: CarryableOpts): void {
-  const kind = carryableKind(o.label);
+  const dressed = !o.carried && o.bare !== true;
   ctx.save();
-  if (!o.carried) {
+  if (dressed) {
     drawItemGround(ctx, o.pulse);
   }
   ctx.save();
   if (o.carried) {
     ctx.scale(IN_HAND, IN_HAND);
   }
-  if (kind === 'fuse') {
-    drawFuse(ctx, o.pulse);
-  } else if (kind === 'key') {
-    drawKey(ctx, o.pulse);
-  } else {
-    drawCrate(ctx, o.pulse);
+  const lift = o.lift ?? 0;
+  if (lift !== 0) {
+    ctx.translate(0, -lift);
   }
+  o.glow?.(ctx);
+  drawItem(ctx, carryableKind(o.label), o.pulse);
   ctx.restore();
-  if (!o.carried) {
+  if (dressed) {
     drawPropLabel(ctx, o.label.toUpperCase(), 0.41, ITEM_LABEL, o.text);
   }
   ctx.restore();

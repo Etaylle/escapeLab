@@ -1,5 +1,5 @@
 import type { MapView, NoteHere, SourceHere } from '@escapelab/core';
-import { noteMount, noteSheet } from './notes.js';
+import { noteMount } from './notes.js';
 
 /** Prompt and client-side gate for stations and manual objects; the server counts 1.6. */
 export const INTERACT_RADIUS = 1.5;
@@ -8,33 +8,24 @@ export const ITEM_RADIUS = 0.9;
 /** The primary pointer is a finger: no keys to name, the on-screen pad shows (as ui.css has it). */
 export const TOUCH = '(pointer: coarse)';
 
-/** The box round the thing a prompt names, in tiles: its corner, width and height. */
-export interface Outline {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-/** How wide the box round a part lying about is, in tiles, and round a note's sheet. */
-const PART_BOX = 0.72;
-const SHEET_BOX = 0.62;
-
-/** The box of the tile at (x, y): a station, a source, a drop-off take a whole tile. */
-const tileBox = (x: number, y: number): Outline => ({ x, y, w: 1, h: 1 });
-
-/** A box `size` across round the point (x, y). */
-const boxRound = (x: number, y: number, size: number): Outline => ({
-  x: x - size / 2,
-  y: y - size / 2,
-  w: size,
-  h: size,
-});
+/**
+ * The one thing a prompt names, as the map lists it: a station's console by
+ * its tile, a source by its id, a note of the last shift by its index, a
+ * part lying about by its id, and the drop-off of the part in hand by that
+ * part's id. It glows in its own shape while the prompt shows
+ * (render/highlight.ts).
+ */
+export type Subject =
+  | { of: 'station'; x: number; y: number }
+  | { of: 'manual'; id: string }
+  | { of: 'note'; index: number }
+  | { of: 'item'; id: string }
+  | { of: 'drop'; id: string };
 
 /**
  * What pressing E does where the player stands, the words of its prompt —
  * „Bedienen", no key; promptText adds that — where the prompt goes, and the
- * box round the one thing it names (`outline`), which pulses while it shows.
+ * one thing it names (`subject`).
  */
 export type ContextAction = (
   | { kind: 'deliver' | 'pick' | 'operate'; label: string; x: number; y: number }
@@ -43,7 +34,7 @@ export type ContextAction = (
   | { kind: 'note'; index: number; label: string; x: number; y: number }
   /** a locked cabinet without its key in hand: the prompt names what is missing, E does nothing */
   | { kind: 'locked'; label: string; x: number; y: number }
-) & { outline: Outline };
+) & { subject: Subject };
 
 /**
  * The prompt over the world for `action`: with a keyboard the key comes
@@ -79,7 +70,8 @@ export function opensCabinet(map: Pick<MapView, 'manuals'>, itemId: string): boo
  * unlock a cabinet with its key in hand — or learn which key is missing.
  */
 function sourceAction(map: MapView, manual: Manual, source: Source, mine?: Item): ContextAction {
-  const at = { x: manual.x + 0.5, y: manual.y - 0.55, outline: tileBox(manual.x, manual.y) };
+  const subject: Subject = { of: 'manual', id: manual.id };
+  const at = { x: manual.x + 0.5, y: manual.y - 0.55, subject };
   if (source.opened) {
     return { kind: 'read', manualId: manual.id, label: 'Lesen', ...at };
   }
@@ -107,12 +99,8 @@ function noteAction(
   if (note === undefined || mount === null) {
     return [];
   }
-  const sheet = noteSheet(mount);
-  const at = {
-    x: mount.x,
-    y: mount.facing === null ? mount.y - 0.55 : mount.y - 0.85,
-    outline: boxRound(sheet.x, sheet.y, SHEET_BOX),
-  };
+  const subject: Subject = { of: 'note', index: note.index };
+  const at = { x: mount.x, y: mount.facing === null ? mount.y - 0.55 : mount.y - 0.85, subject };
   return [
     {
       action: { kind: 'note', index: note.index, label: 'Lesen', ...at },
@@ -152,7 +140,7 @@ export function contextAction(
       label: `${mine.label} einsetzen`,
       x: goal.x + 0.5,
       y: goal.y - 0.45,
-      outline: tileBox(goal.x, goal.y),
+      subject: { of: 'drop', id: mine.id },
     };
   }
 
@@ -178,17 +166,17 @@ export function contextAction(
   candidates.push(...noteAction(map, noteHere, dist));
   if (mine === undefined && loose !== undefined) {
     const label = `${loose.label} aufnehmen`;
-    const outline = boxRound(loose.x, loose.y, PART_BOX);
+    const subject: Subject = { of: 'item', id: loose.id };
     candidates.push({
-      action: { kind: 'pick', label, x: loose.x, y: loose.y - 0.95, outline },
+      action: { kind: 'pick', label, x: loose.x, y: loose.y - 0.95, subject },
       d: dist(loose.x, loose.y),
     });
   }
   for (const station of stations) {
     const { x, y } = station;
-    const outline = tileBox(x, y);
+    const subject: Subject = { of: 'station', x, y };
     candidates.push({
-      action: { kind: 'operate', label: 'Bedienen', x: x + 0.5, y: y - 0.55, outline },
+      action: { kind: 'operate', label: 'Bedienen', x: x + 0.5, y: y - 0.55, subject },
       d: dist(x + 0.5, y + 0.5),
     });
   }

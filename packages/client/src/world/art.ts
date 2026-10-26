@@ -675,6 +675,8 @@ export interface StationOpts {
   pulse: number;
   /** which console of a two-console station this is, lettered on it; null at a station with one */
   console: ConsoleId | null;
+  /** the thing alone, no foot shadow or glow: what its silhouette is baked from (silhouette.ts) */
+  bare?: boolean;
 }
 
 type StationStatus = StationOpts['status'];
@@ -924,8 +926,10 @@ export function drawStation(ctx: CanvasRenderingContext2D, o: StationOpts): void
   const wave = pulseWave(o.pulse);
   ctx.save();
   try {
-    footShadow(ctx, 0, 0.37, 0.46, 0.13);
-    drawStationGlow(ctx, o.status, wave);
+    if (o.bare !== true) {
+      footShadow(ctx, 0, 0.37, 0.46, 0.13);
+      drawStationGlow(ctx, o.status, wave);
+    }
     drawStationCabinet(ctx, look, o.status === 'armed' ? 0.35 + 0.65 * wave : 0.85);
     drawStationMonitor(ctx, look);
     drawStationScreen(ctx, o.status, wave);
@@ -994,8 +998,10 @@ export function drawFusebox(ctx: CanvasRenderingContext2D, o: StationOpts): void
   const wave = pulseWave(o.pulse);
   ctx.save();
   try {
-    footShadow(ctx, 0, 0.3, 0.42, 0.11);
-    drawStationGlow(ctx, o.status, wave);
+    if (o.bare !== true) {
+      footShadow(ctx, 0, 0.3, 0.42, 0.11);
+      drawStationGlow(ctx, o.status, wave);
+    }
     ctx.beginPath();
     roundRectPath(ctx, -0.36, -0.42, 0.72, 0.64, 0.04);
     ctx.fillStyle = FUSE_BODY;
@@ -1025,6 +1031,8 @@ export interface LeverBoxOpts {
   pulse: number;
   /** how many levers it has: one for each member of the crew, two at least */
   levers: number;
+  /** the thing alone, no foot shadow or glow: what its silhouette is baked from (silhouette.ts) */
+  bare?: boolean;
 }
 
 /** The lever's red: emergency red leaning to orange, as such handles are painted. */
@@ -1067,8 +1075,10 @@ export function drawLeverBox(ctx: CanvasRenderingContext2D, o: LeverBoxOpts): vo
   const armed = o.status === 'armed';
   ctx.save();
   try {
-    footShadow(ctx, 0, 0.3, 0.44, 0.12);
-    drawStationGlow(ctx, o.status, wave);
+    if (o.bare !== true) {
+      footShadow(ctx, 0, 0.3, 0.44, 0.12);
+      drawStationGlow(ctx, o.status, wave);
+    }
     ctx.beginPath();
     roundRectPath(ctx, -0.38, -0.46, 0.76, 0.66, 0.05);
     ctx.fillStyle = steel(0.55);
@@ -1478,6 +1488,8 @@ export interface ManualObjectOpts {
   pulse: number;
   /** the world's text at this zoom (worldText); the label in plain tiles when left out */
   text?: WorldText;
+  /** the thing alone — no foot shadow, glow or label: what its silhouette is baked from */
+  bare?: boolean;
 }
 
 const READ_LABEL = css(lift(READ_BLUE, 0.3));
@@ -1991,11 +2003,14 @@ function drawCabinet(ctx: CanvasRenderingContext2D, active: boolean, opened: boo
  * follows pulse) and lit paper or screen; label under it (world text, dark halo). */
 export function drawManualObject(ctx: CanvasRenderingContext2D, o: ManualObjectOpts): void {
   const wave = pulseWave(o.pulse);
+  const dressed = o.bare !== true;
   ctx.save();
   try {
     // A clipboard hangs on the wall and casts its shadow there.
-    if (o.kind !== 'clipboard') footShadow(ctx, 0, 0.36, 0.42, 0.12);
-    if (o.active) softEllipse(ctx, 0, -0.12, 0.85, 0.75, READ_BLUE, 0.14 + 0.26 * wave, 'lighter');
+    if (dressed && o.kind !== 'clipboard') footShadow(ctx, 0, 0.36, 0.42, 0.12);
+    if (dressed && o.active) {
+      softEllipse(ctx, 0, -0.12, 0.85, 0.75, READ_BLUE, 0.14 + 0.26 * wave, 'lighter');
+    }
     ctx.save();
     switch (o.kind) {
       case 'book':
@@ -2018,8 +2033,10 @@ export function drawManualObject(ctx: CanvasRenderingContext2D, o: ManualObjectO
         break;
     }
     ctx.restore();
-    const color = o.active ? READ_LABEL : IDLE_LABEL;
-    drawHaloText(ctx, o.label, 0, 0.41, (o.text ?? TILE_TEXT).label, color, 'top');
+    if (dressed) {
+      const color = o.active ? READ_LABEL : IDLE_LABEL;
+      drawHaloText(ctx, o.label, 0, 0.41, (o.text ?? TILE_TEXT).label, color, 'top');
+    }
   } finally {
     ctx.restore();
   }

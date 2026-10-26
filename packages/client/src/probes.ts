@@ -7,6 +7,7 @@ import type { LightProbe } from './world/gl/path.js';
 import type { MusicProbe } from './world/music.js';
 import type { RadioRender, VoiceProbe as RadioProbe } from './world/radioVoice.js';
 import type { MinimapLayout } from './world/render/frame.js';
+import type { HighlightProbe } from './world/render/highlight.js';
 import type { GoalDot } from './world/render/hud.js';
 import type { PassStats } from './world/render/profile.js';
 import type { SpatialProbe } from './world/spatial.js';
@@ -73,6 +74,11 @@ export interface Probes {
   readonly footfalls?: number;
   /** the minimap and the goal it points at; null while it is off */
   readonly minimap?: MinimapProbe | null;
+  /**
+   * what the E prompt names and its glow as the world's last frame drew them, the halo's bake
+   * read back on request (world/render/highlight.ts); null while it names nothing
+   */
+  readonly highlight?: HighlightProbe | null;
   /** the voice links, their states and who speaks (voice/mesh.ts) */
   readonly voice?: VoiceProbe;
   /** the way the world's light takes, WebGL or Canvas, and the picture's luma (world/gl/path.ts) */

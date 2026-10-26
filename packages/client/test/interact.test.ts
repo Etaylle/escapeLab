@@ -142,42 +142,38 @@ describe('contextAction — what E does where the player stands', () => {
   });
 });
 
-describe('contextAction — the outline round what the prompt names', () => {
-  const tile = (x: number, y: number) => ({ x, y, w: 1, h: 1 });
-
-  it('goes round exactly the one thing the prompt names: of station and book, the nearer', () => {
+describe('contextAction — the one thing the prompt names', () => {
+  it('names exactly the thing E works on: of station and book, the nearer', () => {
     const map = mapWith({ stations: [station], manuals: [{ ...book, x: 4, y: 6 }] });
-    // Both in reach, from either spot: the outline follows the prompt, never both.
+    // Both in reach, from either spot: the subject follows the prompt, never both.
     const nearBook = contextAction(map, { x: 4.6, y: 6.4 }, YOU, AT_BOOK, SHUT, null);
-    expect(nearBook).toMatchObject({ kind: 'read', outline: tile(4, 6) });
+    expect(nearBook).toMatchObject({ kind: 'read', subject: { of: 'manual', id: 'buch' } });
     const nearStation = contextAction(map, { x: 5.4, y: 5.6 }, YOU, AT_BOOK, SHUT, null);
-    expect(nearStation).toMatchObject({ kind: 'operate', outline: tile(5, 5) });
+    expect(nearStation).toMatchObject({ kind: 'operate', subject: { of: 'station', x: 5, y: 5 } });
   });
 
-  it('goes round a loose part where it lies, and round its drop-off with the part in hand', () => {
+  it('names a loose part by its id, and with the part in hand its drop-off by the part', () => {
     const lying = mapWith({ stations: [station], items: [part({})] });
     const pick = contextAction(lying, { x: 3.5, y: 6.2 }, YOU, [], SHUT, null);
-    expect(pick).toMatchObject({ kind: 'pick' });
-    expect(pick?.outline).toEqual({
-      x: expect.closeTo(3.5 - 0.36, 9),
-      y: expect.closeTo(6.5 - 0.36, 9),
-      w: 0.72,
-      h: 0.72,
-    });
+    expect(pick).toMatchObject({ kind: 'pick', subject: { of: 'item', id: 'fuse' } });
     const carried = part({ carriedBy: YOU, deliverTo: { x: 2, y: 6 } });
     const holding = mapWith({ items: [carried] });
     const deliver = contextAction(holding, { x: 2.5, y: 6.5 }, YOU, [], SHUT, null);
-    expect(deliver).toMatchObject({ kind: 'deliver', outline: tile(2, 6) });
+    expect(deliver).toMatchObject({ kind: 'deliver', subject: { of: 'drop', id: 'fuse' } });
   });
 
-  it('goes round a cabinet whose key is missing, and round a locker to search', () => {
+  it('names a cabinet whose key is missing, a locker to search, the cabinet a key opens', () => {
     const key = part({ id: 'key', label: 'SCHLÜSSEL', x: 4.5, y: 9.5, deliverTo: { x: 8, y: 5 } });
     const away = mapWith({ manuals: [cabinet], items: [key] });
     const locked = contextAction(away, { x: 8.5, y: 6.4 }, YOU, AT_CABINET, SHUT, null);
-    expect(locked).toMatchObject({ kind: 'locked', outline: tile(8, 5) });
+    expect(locked).toMatchObject({ kind: 'locked', subject: { of: 'manual', id: 'schrank' } });
     const closed = mapWith({ manuals: [locker] });
     const search = contextAction(closed, { x: 2.5, y: 6.4 }, YOU, AT_LOCKER, SHUT, null);
-    expect(search).toMatchObject({ kind: 'open', outline: tile(2, 5) });
+    expect(search).toMatchObject({ kind: 'open', subject: { of: 'manual', id: 'spind' } });
+    // The key goes into its padlock: the cabinet glows, not a drop-off of the key's.
+    const inHand = mapWith({ manuals: [cabinet], items: [{ ...key, carriedBy: YOU }] });
+    const unlock = contextAction(inHand, { x: 8.5, y: 5.6 }, YOU, AT_CABINET, SHUT, null);
+    expect(unlock).toMatchObject({ kind: 'open', subject: { of: 'manual', id: 'schrank' } });
   });
 });
 
@@ -196,14 +192,14 @@ describe('contextAction — a station with two consoles', () => {
         label: 'Bedienen',
         x: 5.5,
         y: 4.45,
-        outline: { x: 5, y: 5, w: 1, h: 1 },
+        subject: { of: 'station', x: 5, y: 5 },
       });
       expect(contextAction(map, { x: 12.5, y: 6.4 }, YOU, [], open, null)).toEqual({
         kind: 'operate',
         label: 'Bedienen',
         x: 12.5,
         y: 4.45,
-        outline: { x: 12, y: 5, w: 1, h: 1 },
+        subject: { of: 'station', x: 12, y: 5 },
       });
     }
   });
@@ -259,7 +255,7 @@ describe('contextAction — lockers and cabinets', () => {
       label: '🔒 SCHLÜSSEL fehlt',
       x: 8.5,
       y: 4.45,
-      outline: { x: 8, y: 5, w: 1, h: 1 },
+      subject: { of: 'manual', id: 'schrank' },
     });
     const otherHands = mapWith({ manuals: [cabinet], items: [{ ...key, carriedBy: 'p2' }] });
     const wrongPart = mapWith({ manuals: [cabinet], items: [key, part({ carriedBy: YOU })] });
@@ -350,25 +346,24 @@ const noteRoom = mapWith({
 describe('contextAction — a note of the last shift', () => {
   it('reads the note the server counts this player at, the prompt over its sheet', () => {
     const action = contextAction(noteRoom, { x: 3.5, y: 1.6 }, YOU, [], SHUT, { index: 0 });
-    expect(action).toMatchObject({ kind: 'note', index: 0, label: 'Lesen', x: 3.5, y: 1 - 0.85 });
+    expect(action).toEqual({
+      kind: 'note',
+      index: 0,
+      label: 'Lesen',
+      x: 3.5,
+      y: 1 - 0.85,
+      subject: { of: 'note', index: 0 },
+    });
     expect(action === null ? null : promptText(action, true)).toBe('[E] Lesen');
     const floor = contextAction(noteRoom, { x: 7.5, y: 3.6 }, YOU, [], SHUT, { index: 1 });
-    expect(floor).toMatchObject({ kind: 'note', index: 1, label: 'Lesen', x: 7.5, y: 4.5 - 0.55 });
-  });
-
-  it('outlines the sheet: up the wall face it hangs on, or where it lies on the floor', () => {
-    const box = (x: number, y: number) => ({
-      x: expect.closeTo(x - 0.31, 9),
-      y: expect.closeTo(y - 0.31, 9),
-      w: 0.62,
-      h: 0.62,
+    expect(floor).toEqual({
+      kind: 'note',
+      index: 1,
+      label: 'Lesen',
+      x: 7.5,
+      y: 4.5 - 0.55,
+      subject: { of: 'note', index: 1 },
     });
-    // Pinned to the north wall at (3,0): its foot at (3.5, 1), the sheet 0.56 up the face.
-    const wall = contextAction(noteRoom, { x: 3.5, y: 1.6 }, YOU, [], SHUT, { index: 0 });
-    expect(wall?.outline).toEqual(box(3.5, 1 - 0.56));
-    // On the floor at (7,4): the sheet a little up its tile's middle.
-    const floor = contextAction(noteRoom, { x: 7.5, y: 3.6 }, YOU, [], SHUT, { index: 1 });
-    expect(floor?.outline).toEqual(box(7.5, 4.5 - 0.16));
   });
 
   it('offers nothing where the server counts nobody at it, or the crew has not found it', () => {

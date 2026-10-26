@@ -27,17 +27,6 @@ export interface NoteMount {
 export const SHEET_ON_WALL = 0.56;
 export const SHEET_ON_FLOOR = 0.16;
 
-/** Where the middle of a note's sheet shows, in tiles: on the wall's face, or on the floor. */
-export function noteSheet(mount: Pick<NoteMount, 'x' | 'y' | 'facing'>): { x: number; y: number } {
-  if (mount.facing === null) {
-    return { x: mount.x, y: mount.y - SHEET_ON_FLOOR };
-  }
-  return {
-    x: mount.x - Math.cos(mount.facing) * SHEET_ON_WALL,
-    y: mount.y - Math.sin(mount.facing) * SHEET_ON_WALL,
-  };
-}
-
 /** Where `note` shows; null where it lies neither on the floor nor on a wall beside it. */
 export function noteMount(
   map: Pick<MapView, 'tiles'>,

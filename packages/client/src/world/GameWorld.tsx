@@ -60,10 +60,12 @@ import {
   profiled,
   renderKit,
   type ChatLine,
+  type Frame,
   type MapPing,
   type RenderKit,
   type WorldMap,
 } from './render/frame.js';
+import { highlightProbe } from './render/highlight.js';
 import { minimapGoal, minimapLayout } from './render/hud.js';
 import { dropLight } from './render/light.js';
 import { PING_LIFETIME_MS } from './render/overlays.js';
@@ -160,6 +162,8 @@ interface Loop extends FrameSource {
   pings: React.MutableRefObject<MapPing[]>;
   /** the sound systems this page's query switched off (`?audio-off=`) */
   soundOff: ReadonlySet<SoundSystem>;
+  /** the frame drawn last, for the walkthrough's probe of the glow; null before the first */
+  drawn: Frame | null;
 }
 
 /** The component's handles on its canvas, its controls, its simulation and its E and Q jobs. */
@@ -406,8 +410,9 @@ function minimapOf(loop: Loop): MinimapProbe | null {
 
 /**
  * `?trace=1`: the walkthrough reads the last frame durations off the page, the camera, your
- * avatar's footfalls, the minimap and its goal, and what the lab sounds like — the beds, the
- * music, the radio's voice, the partner's place — and can render the radio's chain offline.
+ * avatar's footfalls, the minimap and its goal, the glow round what the E prompt names, and
+ * what the lab sounds like — the beds, the music, the radio's voice, the partner's place — and
+ * can render the radio's chain offline.
  */
 function traceFrames(loop: Loop): { trace: FrameTrace; drop: () => void } | null {
   if (!traceRequested(location.search)) {
@@ -431,6 +436,9 @@ function traceFrames(loop: Loop): { trace: FrameTrace; drop: () => void } | null
     },
     get minimap() {
       return minimapOf(loop);
+    },
+    get highlight() {
+      return loop.drawn === null ? null : highlightProbe(loop.drawn);
     },
     get audio() {
       const sound = { music: musicProbe(), voice: voiceProbe(), spatial: spatialProbe() };
@@ -711,6 +719,7 @@ function render(loop: Loop, map: WorldMap): void {
   const pings = livePings(loop, perf);
   const frame = profiled(kit, 'assemble', null, () => assembleFrame(loop, map, dpr, perf, pings));
   drawFrame(loop.ctx, frame);
+  loop.drawn = frame;
   kit.profile?.endFrame();
 }
 
@@ -773,6 +782,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
       clips: new WeakMap(),
       texts: { s: 0, dpr: 0, styles: worldText(48, 1) },
       soundOff,
+      drawn: null,
     };
     refs.interactRef.current = () => tryInteract(loop);
     refs.dropRef.current = () => dropItem(loop);

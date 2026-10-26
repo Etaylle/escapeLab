@@ -14,7 +14,6 @@ import {
   LABEL,
   lift,
   NIGHT,
-  PHOSPHOR,
   READ_BLUE,
   rgba,
   TEAL,
@@ -181,7 +180,6 @@ function drawScreenText(ctx: CanvasRenderingContext2D, frame: Frame): void {
   drawRoomNames(ctx, frame, { ...view, boxes: [...view.boxes, ...arrows] });
   drawExitSign(ctx, frame);
   drawEdgeMarkers(ctx, markers, view.dpr);
-  drawOutline(ctx, frame);
   const prompt = drawPrompt(ctx, frame, figure?.body ?? null);
   drawCaptions(ctx, frame, prompt);
   drawChatBubbles(ctx, frame);
@@ -281,41 +279,6 @@ function drawRoomNames(ctx: CanvasRenderingContext2D, frame: Frame, view: Viewpo
     ctx.fillText(name.text, name.x, name.y);
   }
   ctx.restore();
-}
-
-/** How far the outline stands off what it goes round, and how round its corners are, in tiles. */
-const OUTLINE_PAD = 0.06;
-const OUTLINE_ROUND = 0.14;
-/** The outline's soft halo and its line, CSS pixels wide, and how strong each is at full. */
-const HALO_PX = 6;
-const LINE_PX = 1.5;
-const HALO_ALPHA = 0.22;
-const LINE_ALPHA = 0.8;
-
-/**
- * A soft outline in phosphor round the thing the E prompt names — the one thing, never two:
- * the action carries its box (interact.ts) — pulsing with the lab's beat, steady where motion
- * is reduced. Under the prompt's tag; nothing while no prompt shows.
- */
-function drawOutline(ctx: CanvasRenderingContext2D, frame: Frame): void {
-  const { action } = frame;
-  if (action === null) {
-    return;
-  }
-  const { dpr } = frame.viewport;
-  const s = frame.camera.scale;
-  const { x, y, w, h } = action.outline;
-  const [left, top] = toScreen(frame, x - OUTLINE_PAD, y - OUTLINE_PAD);
-  const pad = 2 * OUTLINE_PAD;
-  const beat = frame.reduced ? 1 : 0.55 + 0.45 * frame.pulse;
-  ctx.beginPath();
-  ctx.roundRect(left, top, (w + pad) * s, (h + pad) * s, OUTLINE_ROUND * s);
-  ctx.strokeStyle = rgba(PHOSPHOR, HALO_ALPHA * beat);
-  ctx.lineWidth = HALO_PX * dpr;
-  ctx.stroke();
-  ctx.strokeStyle = rgba(PHOSPHOR, LINE_ALPHA * beat);
-  ctx.lineWidth = LINE_PX * dpr;
-  ctx.stroke();
 }
 
 /**

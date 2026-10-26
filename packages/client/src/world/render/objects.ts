@@ -13,28 +13,38 @@ import {
 } from '../art.js';
 import { doorOpenness, isHorizontalDoor } from '../doors.js';
 import { burning } from '../frameLight.js';
-import { drawCarryable, drawDropZone, drawSabotagePanel } from '../hazards.js';
+import {
+  drawCarryable,
+  drawDropZone,
+  drawSabotagePanel,
+  type CarryableOpts,
+} from '../hazards.js';
 import { coversArmed, opensCabinet } from '../interact.js';
 import { noteMount } from '../notes.js';
-import { inTiles, type Frame } from './frame.js';
+import { inTiles, type Frame, type WorldMap } from './frame.js';
+import { drawGlow, namedThing, type Named } from './highlight.js';
 
 /**
  * The lab's things, in tile space. Objects show only where some light has
  * fallen — a cabinet behind a wall stays unseen. Sources and the notes of
  * the last shift reach the map once found; a station that is up or done, the
- * sign, the hatch and the valves always show. Then the emergency lamps on
- * their walls and ceilings. The furniture is baked with the floor it stands
- * on (render/tiles.ts).
+ * sign, the hatch and the valves always show. The one thing the E prompt
+ * names glows in its own shape under it (highlight.ts) — over the plates and
+ * doors, under the things. Then the emergency lamps on their walls and
+ * ceilings. The furniture is baked with the floor it stands on
+ * (render/tiles.ts).
  */
 export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   inTiles(ctx, frame);
+  const named = namedThing(frame);
   drawPlates(ctx, frame);
   drawDoors(ctx, frame);
+  drawGlowUnder(ctx, frame, named);
   drawStations(ctx, frame);
   drawManuals(ctx, frame);
   drawNotes(ctx, frame);
   drawFixtures(ctx, frame);
-  drawItems(ctx, frame);
+  drawItems(ctx, frame, named);
   drawLamps(ctx, frame);
 }
 
@@ -57,6 +67,16 @@ function drawPlates(ctx: CanvasRenderingContext2D, frame: Frame): void {
       text,
     };
     at(ctx, plate.x + 0.5, plate.y + 0.5, () => drawPlate(ctx, look));
+  }
+}
+
+/**
+ * The glow round what the E prompt names, where it stands: a part lying
+ * about takes its own between its shadow and itself, bobbing with it (drawLoose).
+ */
+function drawGlowUnder(ctx: CanvasRenderingContext2D, frame: Frame, named: Named | null): void {
+  if (named !== null && named.subject.of !== 'item') {
+    at(ctx, named.x, named.y, () => drawGlow(ctx, frame, named.shape));
   }
 }
 
@@ -134,19 +154,53 @@ function drawFixtures(ctx: CanvasRenderingContext2D, frame: Frame): void {
   }
 }
 
+type Item = WorldMap['items'][number];
+
 /** Drop-offs and the crates, fuses and keys lying about, where light has fallen on them. */
-function drawItems(ctx: CanvasRenderingContext2D, frame: Frame): void {
-  const { map, light, pulse, text } = frame;
-  for (const item of map.items) {
-    const zone = item.deliverTo;
-    if (zone !== null && !opensCabinet(map, item.id) && light.shown(zone.x, zone.y)) {
-      at(ctx, zone.x + 0.5, zone.y + 0.5, () => drawDropZone(ctx, item.delivered, pulse));
-    }
-    if (!item.delivered && item.carriedBy === null && light.shown(item.x, item.y)) {
-      const look = { label: item.label, pulse, carried: false, text };
-      at(ctx, item.x, item.y, () => drawCarryable(ctx, look));
-    }
+function drawItems(ctx: CanvasRenderingContext2D, frame: Frame, named: Named | null): void {
+  for (const item of frame.map.items) {
+    drawZone(ctx, frame, item);
+    drawLoose(ctx, frame, item, named);
   }
+}
+
+/** The drop-off of `item` where light has fallen on it; none for a cabinet's key. */
+function drawZone(ctx: CanvasRenderingContext2D, frame: Frame, item: Item): void {
+  const { map, light, pulse } = frame;
+  const zone = item.deliverTo;
+  if (zone !== null && !opensCabinet(map, item.id) && light.shown(zone.x, zone.y)) {
+    at(ctx, zone.x + 0.5, zone.y + 0.5, () => drawDropZone(ctx, item.delivered, pulse));
+  }
+}
+
+/** `item` lying about where light has fallen on it, as the E prompt has it (`hovering`). */
+function drawLoose(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  item: Item,
+  named: Named | null,
+): void {
+  const { light, pulse, text } = frame;
+  if (item.delivered || item.carriedBy !== null || !light.shown(item.x, item.y)) {
+    return;
+  }
+  const look = { label: item.label, pulse, carried: false, text, ...hovering(frame, item, named) };
+  at(ctx, item.x, item.y, () => drawCarryable(ctx, look));
+}
+
+/**
+ * How `item` lies: named by the E prompt, it bobs, its glow under it and over
+ * its shadow, rising with it; else just as it is.
+ */
+function hovering(
+  frame: Frame,
+  item: Item,
+  named: Named | null,
+): Pick<CarryableOpts, 'lift' | 'glow'> {
+  if (named?.subject.of !== 'item' || named.subject.id !== item.id) {
+    return {};
+  }
+  return { lift: named.lift, glow: (g) => drawGlow(g, frame, named.shape) };
 }
 
 /**

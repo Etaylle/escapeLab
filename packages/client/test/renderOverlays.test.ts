@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CHAT_PHRASE_IDS, chatText } from '@escapelab/core';
-import { PHOSPHOR, rgba } from '../src/world/palette.js';
+import { PHOSPHOR } from '../src/world/palette.js';
 import { FALLBACK_COLOR, type Frame } from '../src/world/render/frame.js';
 import { draw } from '../src/world/render/overlays.js';
 import { callEntries, callsOf, fakeCanvas, setsOf } from './fakeCanvas.js';
@@ -21,15 +21,15 @@ const texts = (log: ReturnType<typeof drawn>): unknown[] =>
 const lab = (parts: Parameters<typeof mapWith>[0]) =>
   mapWith({ width: 10, height: 6, tiles: TILES, ...parts });
 
-/** The box of a station on the tile (3, 2), as interact.ts outlines it. */
-const STATION_BOX = { x: 3, y: 2, w: 1, h: 1 };
+/** The station on the tile (3, 2), as interact.ts names it. */
+const STATION = { of: 'station' as const, x: 3, y: 2 };
 /** E works that station. */
 const OPERATE = {
   kind: 'operate' as const,
   label: 'Bedienen',
   x: 3.5,
   y: 1.5,
-  outline: STATION_BOX,
+  subject: STATION,
 };
 
 describe('overlays — what lies over the world and its light', () => {
@@ -64,7 +64,7 @@ describe('overlays — what lies over the world and its light', () => {
         map,
         ending: { lit: 0.5, pull: 0.5, dark: 0 },
         markers: [{ x: 9.5, y: 1.5, color: '#2dd4bf', label: 'STATION' }],
-        action: { kind: 'operate', label: 'Bedienen', x: 3.5, y: 1.5, outline: STATION_BOX },
+        action: OPERATE,
         captions: [{ x: 3, y: 3, text: 'Spind entdeckt', at: 0 }],
       }),
     );
@@ -92,7 +92,7 @@ describe('overlays — what lies over the world and its light', () => {
       label: '🔒 Schlüssel fehlt',
       x: 3.5,
       y: 1.5,
-      outline: STATION_BOX,
+      subject: { of: 'manual' as const, id: 'schrank' },
     };
     const missing = drawn(frameWith({ action: locked }));
     expect(texts(missing)).toContain('🔒 Schlüssel fehlt');
@@ -103,47 +103,18 @@ describe('overlays — what lies over the world and its light', () => {
   const isPhosphor = (style: unknown): boolean =>
     String(style).startsWith(`rgba(${PHOSPHOR.join(', ')},`);
 
-  /** The rounded boxes `log` strokes in phosphor next: the outline's. */
-  const outlined = (log: ReturnType<typeof drawn>): unknown[][] =>
-    log.flatMap((entry, i) => {
-      if (entry.kind !== 'call' || entry.name !== 'roundRect') {
-        return [];
-      }
-      const style = log.slice(i + 1).find((e) => e.kind === 'set' && e.name === 'strokeStyle');
-      return style?.kind === 'set' && isPhosphor(style.value) ? [entry.args] : [];
-    });
-
-  it('outlines in phosphor the one thing the prompt names, under the prompt’s tag', () => {
-    const log = drawn(frameWith({ action: OPERATE, pulse: 1 }));
-    // The tile (3, 2) lies from (200, 200) to (300, 300); the outline stands 6 px off it.
-    const boxes = outlined(log);
-    expect(boxes).toHaveLength(1);
-    const [left, top, width, height, round] = (boxes[0] ?? []) as number[];
-    expect([left, top, width, height, round].map((n) => Math.round(n ?? NaN))).toEqual([
-      194, 194, 112, 112, 14,
-    ]);
-    const strokes = setsOf(log, 'strokeStyle').filter(isPhosphor);
-    expect(strokes).toEqual([rgba(PHOSPHOR, 0.22), rgba(PHOSPHOR, 0.8)]);
-    // Halo and line first, the tag after them: the prompt lies over its outline.
-    const line = log.findIndex((e) => e.kind === 'set' && e.value === rgba(PHOSPHOR, 0.8));
-    const tag = log.findIndex((e) => e.kind === 'call' && e.name === 'fillText');
-    expect(line).toBeGreaterThanOrEqual(0);
-    expect(tag).toBeGreaterThan(line);
-  });
-
-  it('outlines nothing while no prompt shows', () => {
-    const log = drawn(frameWith({ action: null }));
-    expect(setsOf(log, 'strokeStyle').filter(isPhosphor)).toEqual([]);
-    expect(outlined(log)).toEqual([]);
-  });
-
-  it('pulses the outline with the lab’s beat, and holds it steady under reduced motion', () => {
-    const lineAt = (parts: Partial<Frame>): unknown =>
-      setsOf(drawn(frameWith({ action: OPERATE, ...parts })), 'strokeStyle').filter(isPhosphor)[1];
-    expect(lineAt({ pulse: 0 })).toBe(rgba(PHOSPHOR, 0.8 * 0.55));
-    expect(lineAt({ pulse: 1 })).toBe(rgba(PHOSPHOR, 0.8));
-    expect(lineAt({ pulse: 0, reduced: true })).toBe(rgba(PHOSPHOR, 0.8));
-    expect(lineAt({ pulse: 0.5, reduced: true })).toBe(rgba(PHOSPHOR, 0.8));
+  it('puts no box round what the prompt names: the one rounded box it draws is the tag', () => {
+    for (const parts of [{ pulse: 1 }, { pulse: 0, reduced: true }]) {
+      const log = drawn(frameWith({ action: OPERATE, ...parts }));
+      // '[E] Bedienen' is 84 px wide here: the tag 100 px round it, 20 high, over (250, 150).
+      expect(callsOf(log, 'roundRect')).toEqual([[200, 139, 100, 20, 5]]);
+      expect(callsOf(log, 'rect')).toEqual([]);
+      expect(callsOf(log, 'strokeRect')).toEqual([]);
+      // Nothing in the glow's phosphor either: what glows lies under the light, in its shape.
+      const styles = [...setsOf(log, 'strokeStyle'), ...setsOf(log, 'fillStyle')];
+      expect(styles.filter(isPhosphor)).toEqual([]);
+    }
+    expect(callsOf(drawn(frameWith({ action: null })), 'roundRect')).toEqual([]);
   });
 
   it('lets a caption rise over a source just come across, fading in and out', () => {

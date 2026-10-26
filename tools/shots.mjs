@@ -126,6 +126,25 @@
  * up quiet until the Leitstelle names the next place (nudge.png,
  * nudge-phone.png): its line in both banners, spoken by its recording.
  *
+ * The glow: what the E prompt names glows in its own shape, no box round it
+ * (client world/render/highlight.ts). As each player stands in reach of the
+ * source it is about to note from — a clipboard first — highlight.png (and
+ * highlight-phone.png on the guest's phone) catches it glowing, and the
+ * traced page hands back the halo's bake and the silhouette it was baked
+ * from (`window.__escapelab.highlight`, checked by tools/glowcheck.mjs): the
+ * halo has to come out strong, every pixel of it that glows within its
+ * spread and three sigma of its blur of the silhouette, and the corners of
+ * the box the old outline drew round the source's tile dark — or the run
+ * fails. At the first station with two consoles, highlight-console.png
+ * checks console A the same way as its player arrives: in Blackout the
+ * Maschinenraum is still dark there, the console lit by the player's own
+ * lamp alone. Before figure-carry.png the host stands beside the fuse, in
+ * reach, not on it: it bobs a pixel of the art over two seconds, and
+ * fuse-bob-1.png, taken as it stands highest or lowest, and fuse-bob-2.png a
+ * second later have to show it on either side of its middle — the page's
+ * lifts, and the canvas round it moved down or up by as much — or the run
+ * fails.
+ *
  * Settings, minimap, sprint: after info-panel.png the host opens the settings with the gear in
  * the top bar (settings.png) — the clock has to run on under them, Esc has to close them.
  * minimap-goal.png shows the world with the minimap pointing at the goal, a pulsing dot at each
@@ -283,6 +302,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { chromium, request } from 'playwright';
+import { GLOWING, glowAtCorners, haloAgainst, verticalShift } from './glowcheck.mjs';
 import {
   arrivals,
   cornersOf,
@@ -405,6 +425,13 @@ const SPEED = 4.2;
 const SPRINT_FACTOR = 1.3;
 /** How close to a tile centre a step has to land, in tiles. */
 const STEP_TOLERANCE = 0.15;
+/** A pixel of the art at 64 px a tile: how far a part the E prompt names bobs (client BOB). */
+const ART_PX = 1 / 64;
+/** How far the glow's halo spreads, then how wide it blurs: px at 64 px a tile (client HALO). */
+const HALO_SPREAD = 1.5;
+const HALO_BLUR = 6;
+/** The box the old outline drew round a source: its tile and 0.06 more, tiles round its middle. */
+const OLD_BOX = { x: -0.56, y: -0.56, w: 1.12, h: 1.12 };
 /** How long a frame sample runs, in ms. */
 const SAMPLE_MS = 2000;
 /**
@@ -2289,21 +2316,164 @@ function looseItem(map) {
 }
 
 /**
+ * Where a player can stand beside `item` and reach it, rather than on it, where the figure
+ * would hide it: 0.65 tiles off its middle, over the first floor tile next to it to the north,
+ * west, east or south that no wall, shut door, furniture or plate takes; null where none is.
+ */
+function besideItem(map, item) {
+  const x = Math.floor(item.x);
+  const y = Math.floor(item.y);
+  const taken = new Set([
+    ...furniture(map),
+    ...shutOn(map),
+    ...map.plates.map((plate) => `${plate.x},${plate.y}`),
+  ]);
+  const ways = [
+    [0, -1],
+    [-1, 0],
+    [1, 0],
+    [0, 1],
+  ];
+  const free = ([dx, dy]) =>
+    map.tiles[y + dy]?.[x + dx] === '.' && !taken.has(`${x + dx},${y + dy}`);
+  const way = ways.find(free);
+  if (way === undefined) {
+    return null;
+  }
+  const [dx, dy] = way;
+  return { tile: { x: x + dx, y: y + dy }, x: item.x + 0.65 * dx, y: item.y + 0.65 * dy };
+}
+
+/**
+ * How far the part the E prompt names on `page` rises now, in tiles, and the grey of the
+ * canvas round `item` — 0.4 tiles each way of its middle, from 0.32 above it to 0.3 below,
+ * short of its label — both off the same frame.
+ */
+function bobRead(page, item) {
+  return page.evaluate(({ x, y }) => {
+    const glow = globalThis.__escapelab?.highlight;
+    const camera = globalThis.__escapelab?.camera;
+    const canvas = document.querySelector('.world-canvas');
+    const g = canvas?.getContext('2d');
+    if (glow == null || camera === undefined || g == null) {
+      return null;
+    }
+    const s = camera.scale;
+    const left = Math.round(canvas.width / 2 + (x - 0.4 - camera.x) * s);
+    const top = Math.round(canvas.height / 2 + (y - 0.32 - camera.y) * s);
+    const width = Math.round(0.8 * s);
+    const height = Math.round(0.62 * s);
+    const { data } = g.getImageData(left, top, width, height);
+    const grey = [];
+    for (let i = 0; i < data.length; i += 4) {
+      grey.push(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+    }
+    return { lift: glow.lift, scale: s, width, height, grey };
+  }, item);
+}
+
+/** The first read of the part bobbing on `page` as it stands highest or lowest, within 2.5 s. */
+async function atBobPeak(page, item) {
+  const end = Date.now() + 2500;
+  while (Date.now() < end) {
+    const read = await bobRead(page, item);
+    if (read !== null && Math.abs(read.lift) >= 0.9 * ART_PX) {
+      return read;
+    }
+    await sleep(20);
+  }
+  return null;
+}
+
+/**
+ * fuse-bob-1.png and fuse-bob-2.png: before figure-carry.png the host steps up beside the
+ * part lying loose (`besideItem`) until the E prompt names it: it bobs a pixel of the art up
+ * and down over two seconds, its glow with it (client world/render/highlight.ts). The first
+ * shot is taken as it stands highest or lowest, the second a second later, as it stands the
+ * other way (`reportBob`). Skipped where there is no floor beside it to stand on.
+ */
+async function captureBob(player, item) {
+  const { page, seen, name } = player;
+  const beside = besideItem(seen.view.map, item);
+  const there =
+    beside !== null &&
+    (await standOn(player, beside.tile)) &&
+    (await stepTo(page, seen, beside.x, beside.y));
+  if (!there) {
+    skip('fuse-bob-*.png', `no floor to stand on beside "${item.label}"`);
+    return;
+  }
+  if ((await glowNaming(page, { of: 'item', id: item.id }, 3000)) === null) {
+    console.log(`fuse-bob-*.png     !! ${name} stands beside "${item.label}", but nothing glows`);
+    fail(`fuse-bob: the E prompt beside "${item.label}" names nothing that glows`);
+    return;
+  }
+  await sleep(400); // the camera settles once the walk is over
+  const first = await atBobPeak(page, item);
+  const since = Date.now();
+  await capture(page, 'fuse-bob-1.png');
+  await sleep(Math.max(0, 1000 - (Date.now() - since)));
+  const second = first === null ? null : await bobRead(page, item);
+  await capture(page, 'fuse-bob-2.png');
+  reportBob(name, item, first, second);
+}
+
+/**
+ * The bob check's line in the log: the lifts the traced page gave at the two shots have to lie
+ * a pixel of the art on either side, and the canvas round the part has to have moved down or
+ * up by as much between the two reads, or the run fails.
+ */
+function reportBob(name, item, first, second) {
+  const said = (read) =>
+    read === null
+      ? '!! not rising or sinking'
+      : `${read.lift >= 0 ? 'up' : 'down'} ${(Math.abs(read.lift) / ART_PX).toFixed(2)} px`;
+  const reads = first !== null && second !== null;
+  // How far the second picture should lie below the first, in canvas pixels.
+  const expected = reads ? (first.lift - second.lift) * first.scale : 0;
+  const most = reads ? Math.ceil(3 * first.scale * ART_PX) + 2 : 0;
+  const moved = reads
+    ? verticalShift(first.grey, second.grey, first.width, first.height, most)
+    : null;
+  const fine =
+    reads &&
+    first.lift * second.lift < 0 &&
+    moved.shift !== 0 &&
+    Math.sign(moved.shift) === Math.sign(expected) &&
+    Math.abs(moved.shift - expected) <= 1.5 &&
+    moved.cost < moved.still;
+  const way = moved !== null && moved.shift >= 0 ? 'down' : 'up';
+  const shift = moved === null ? '?' : `${Math.abs(moved.shift)} px ${way}`;
+  console.log(
+    `fuse-bob-*.png     ${name} beside "${item.label}": ${said(first)}, a second later ` +
+      `${said(second)} of the art; the canvas round it moved ${shift} ` +
+      `(${expected.toFixed(1)} expected), off by ${moved?.cost.toFixed(1) ?? '?'} ` +
+      `against ${moved?.still.toFixed(1) ?? '?'} unmoved${fine ? '' : ' !! no bob'}`,
+  );
+  if (!fine) {
+    fail(`fuse-bob: "${item.label}" did not bob a pixel between the two shots`);
+  }
+}
+
+/**
  * figure-carry.png: after the lever the host walks to the fuse lying in the
- * Archiv — any part lying loose, where a map has no fuse — picks it up with
- * E and is shot at 1440×1000 holding it before the chest. Then it puts it
- * down with Q and walks back to where it stood, so that the walkthrough
- * goes on with free hands. Skipped where nothing lies loose or no way leads
- * to it; fails where E picks nothing up or Q puts nothing down.
+ * Archiv — any part lying loose, where a map has no fuse — stands beside it
+ * as it bobs (captureBob), picks it up with E and is shot at 1440×1000
+ * holding it before the chest. Then it puts it down with Q and walks back to
+ * where it stood, so that the walkthrough goes on with free hands. Skipped
+ * where nothing lies loose or no way leads to it; fails where E picks nothing
+ * up or Q puts nothing down.
  */
 async function captureCarry(player) {
   const item = looseItem(player.seen.view.map);
   if (item === undefined) {
     skip('figure-carry.png', 'nothing lies loose to carry on this map');
+    skip('fuse-bob-*.png', 'nothing lies loose to bob on this map');
     return;
   }
   const home = tileOf(player.seen);
   const spot = { x: Math.floor(item.x), y: Math.floor(item.y) };
+  await captureBob(player, item);
   if (home === null || !(await standOn(player, spot))) {
     skip('figure-carry.png', `no open way to "${item.label}" at ${spot.x},${spot.y}`);
     return;
@@ -2566,6 +2736,10 @@ async function captureConsoles(operator, reader) {
       );
     }
   }
+  // Console A glows for its player before E — in Blackout in the Maschinenraum still dark.
+  const glowing = { subject: { of: 'station', x: consoleA.x, y: consoleA.y } };
+  const said = `console A of "${title}"`;
+  await captureHighlight(operator, { ...glowing, said }, 'highlight-console.png');
   for (const [player, spot] of seats) {
     if (!(await interactUntil(player.page, player.page.locator('.station-modal')))) {
       throw new Error(
@@ -3186,19 +3360,91 @@ async function putSourceDown(page, overlay, touch, shot, label) {
 }
 
 /**
+ * What the E prompt names on `page` and its glow, as the traced page's last frame drew them
+ * (client world/render/highlight.ts): the thing, where it stands, its halo, how far it rose.
+ * Null while it names nothing.
+ */
+function glowOn(page) {
+  return page.evaluate(() => {
+    const glow = globalThis.__escapelab?.highlight;
+    return glow == null
+      ? null
+      : { subject: glow.subject, x: glow.x, y: glow.y, halo: glow.halo, lift: glow.lift };
+  });
+}
+
+/** The glow on `page` once its E prompt names `subject`, within `ms`; null where it never does. */
+async function glowNaming(page, subject, ms) {
+  const end = Date.now() + ms;
+  for (;;) {
+    const glow = await glowOn(page);
+    if (glow !== null && JSON.stringify(glow.subject) === JSON.stringify(subject)) {
+      return glow;
+    }
+    if (Date.now() >= end) {
+      return null;
+    }
+    await sleep(100);
+  }
+}
+
+/**
+ * `shot`: `player` stands in reach of a thing — `subject`, as client world/interact.ts names
+ * it, `said` in the log — the E prompt names it, and it glows in its own shape. The traced
+ * page hands back the halo's bake and the silhouette it was baked from
+ * (`window.__escapelab.highlight`): the halo has to come out strong, every pixel of it that
+ * glows has to lie within the spread and the blur's reach of the silhouette, and the corners
+ * of the box once drawn round the thing's tile have to stay dark — or the run fails.
+ */
+async function captureHighlight({ page, name }, { subject, said }, shot) {
+  const label = `${shot} `.padEnd(19);
+  const glow = await glowNaming(page, subject, 3000);
+  const pixels =
+    glow === null
+      ? null
+      : await page.evaluate(() => globalThis.__escapelab?.highlight?.pixels() ?? null);
+  if (glow === null || pixels === null) {
+    console.log(`${label}!! ${name} stands at ${said}, but nothing glows`);
+    fail(`${shot}: the E prompt at ${said} names nothing that glows`);
+    return;
+  }
+  await capture(page, shot);
+  // The halo's spread and three sigma of its blur at its level, and two pixels more.
+  const reach = Math.ceil(((HALO_SPREAD + HALO_BLUR * 1.5) * pixels.level) / 64) + 2;
+  const seen = haloAgainst(pixels, reach);
+  const corners = glowAtCorners(pixels, OLD_BOX);
+  const dark = corners.every((alpha) => alpha === null || alpha < GLOWING);
+  const shaped = seen.strongest >= 128 && seen.glowing > 0 && seen.stray === 0;
+  console.log(
+    `${label}${name} at ${said}, halo ${glow.halo.toFixed(2)}: ` +
+      `${seen.glowing} px glow at ${pixels.level} px a tile, ` +
+      `${seen.stray === 0 ? 'all' : `!! ${seen.stray} not`} within ${reach} px of its ` +
+      `${seen.solid} px silhouette, strongest ${seen.strongest}; the old box's corners ` +
+      `${dark ? 'dark' : '!! lit'} (${corners.map((alpha) => alpha ?? 'off').join(', ')})`,
+  );
+  if (!shaped || !dark) {
+    fail(`${shot}: the glow round ${said} does not keep to its shape`);
+  }
+}
+
+/**
  * reading-notepad.png (reading-notepad-phone.png on the guest's phone): a player reads an open
  * source — a clipboard where one is open — brings the notepad up beside it and takes the
  * first rules list or table in view down with „Notieren". The pad has to stand beside the
  * page and hold the block under the station's line („§3 Signalkette · Legende"), or the run
- * fails. Then the source is put down again (`putSourceDown`).
+ * fails. Then the source is put down again (`putSourceDown`). Before E, as the player stands
+ * in reach, `glowShot` catches the source glowing in its shape (captureHighlight).
  */
-async function captureNoting(player, shot, audience) {
+async function captureNoting(player, shot, glowShot, audience) {
   const { page, seen, name } = player;
   const source = sourceToNote(seen, audience);
   if (source === null || !(await walkNear(page, seen, source))) {
     skip(shot, `no open source within ${name}'s reach`);
+    skip(glowShot, `no open source within ${name}'s reach`);
     return;
   }
+  const subject = { of: 'manual', id: source.id };
+  await captureHighlight(player, { subject, said: `"${source.label}" (${source.kind})` }, glowShot);
   const overlay = page.locator('.reading-modal');
   if (!(await interactUntil(page, overlay))) {
     throw new Error(`${name} stands at "${source.id}", but no .reading-modal opened after 3 tries`);
@@ -6440,8 +6686,8 @@ async function run() {
     }
   }
   await captureNotepad(guest, guestSeen);
-  await captureNoting(anna, 'reading-notepad.png', watcherSeen);
-  await captureNoting(ben, 'reading-notepad-phone.png', watcherSeen);
+  await captureNoting(anna, 'reading-notepad.png', 'highlight.png', watcherSeen);
+  await captureNoting(ben, 'reading-notepad-phone.png', 'highlight-phone.png', watcherSeen);
   await voiceAfterReload(anna, ben);
 
   const firstSpots = operator.seen.view.map.stations.filter((s) => s.status === 'armed');

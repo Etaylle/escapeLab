@@ -1,15 +1,17 @@
 import { newAtlas, spriteKey, type Atlas, type CanvasMaker, type SpriteSpec } from './atlas.js';
 import { dressMap, seedOf, type DressMap, type Dressing } from './dress.js';
 import { newParticles, type Particles } from './particles.js';
+import { newGlows, type Glows } from './silhouette.js';
 import { hasFace } from './surfaces.js';
 import type { TileCache } from './tileCache.js';
 
 /**
  * What the art keeps between frames for one world (RenderKit.art): the
  * dressing of the map on show and the sprites its tiles are drawn with,
- * the atlas they are baked into, the map baked whole from them, the
- * particles, and where each coloured light may fall. Worked out anew only
- * when the map or the mission changes.
+ * the atlas they are baked into and, next to it, the glows baked round
+ * what the E prompt names, the map baked whole from them, the particles,
+ * and where each coloured light may fall. Worked out anew only when the map
+ * or the mission changes.
  */
 
 /** A sprite to draw, and its key in the atlas, worked out once. */
@@ -39,6 +41,8 @@ export interface ArtKit {
   /** the map last dressed, what it was dressed for, and its dressing */
   dressed: { map: DressMap; key: string; dressed: Dressed } | null;
   atlas: Atlas;
+  /** the glows in the shape of what the E prompt names, per zoom level (silhouette.ts) */
+  glows: Glows;
   /** the map's floor, walls and furniture baked on the grid last drawn on (tileCache.ts) */
   tiles: TileCache | null;
   particles: Particles;
@@ -46,11 +50,13 @@ export interface ArtKit {
   clips: Map<string, Path2D>;
 }
 
-/** A fresh kit baking its sprites on canvases from `make` (the DOM's by default). */
+/** A fresh kit baking its sprites and glows on canvases from `make` (the DOM's by default). */
 export function artKit(make?: CanvasMaker): ArtKit {
+  const atlas = newAtlas(make);
   return {
     dressed: null,
-    atlas: newAtlas(make),
+    atlas,
+    glows: newGlows(atlas.make),
     tiles: null,
     particles: newParticles(),
     clips: new Map(),
