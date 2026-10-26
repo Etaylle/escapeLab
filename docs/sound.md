@@ -25,20 +25,33 @@ fuse into its holder; a key that opens a cabinet is the cabinet's sound) and the
 lights' buzz after the relay's click at the blackout.
 
 ```sh
-pnpm --filter client sfx -- --dry-run      # the plan and what it would cost; nothing is asked
-pnpm --filter client sfx                   # every effect and piece of music not made yet
-pnpm --filter client sfx -- sfx            # the effects alone (`music`: the music alone)
-pnpm --filter client sfx -- --only klaxon  # one entry, made anew
+pnpm --filter client sfx -- --dry-run                    # the plan and its cost; nothing asked
+pnpm --filter client sfx                                 # everything not made yet
+pnpm --filter client sfx -- sfx                          # the effects alone (`music`: the music)
+pnpm --filter client sfx -- --only klaxon,ping           # those entries, made anew
+pnpm --filter client sfx -- --candidates 3 --only ping   # three takes, the best one kept
 ```
 
 `scripts/sfx.ts` asks text-to-sound-effects (`eleven_text_to_sound_v2`, prompt influence 0.5,
 a bed with `loop: true`) and Eleven Music (`music_v2_5`, instrumental) for each entry, one
 request after the other, 300 ms apart, a 429 waited out as the voice script does, through the
-client of `scripts/elevenlabs.ts`; each comes as MP3 at 44.1 kHz and 128 kbit/s into
-`public/sfx/<id>.mp3` or `public/music/<id>.mp3`. `public/sfx/manifest.json` and
-`public/music/manifest.json` list each as `{ file, ms, gain, startMs, loop, hash, source }`;
-`hash` names the request that made it, so a run makes only what is new, changed or missing, and
-one cut short goes on where it stopped. The key comes from the environment: the package script
+client of `scripts/elevenlabs.ts`; an effect comes as MP3 at 44.1 kHz and 128 kbit/s into
+`public/sfx/<id>.mp3`, a piece of music at 192 kbit/s — the Creator plan's best — into
+`public/music/<id>.mp3`. `public/sfx/manifest.json` and `public/music/manifest.json` list each
+as `{ file, ms, gain, startMs, loop, hash, influence, source }`; `hash` names the request that
+made it, `influence` how closely an effect followed its prompt, so a run makes only what is
+new, changed or missing, and one cut short goes on where it stopped.
+
+**Candidates.** With `--candidates N` (up to 5) every effect the run makes is made N times,
+its prompt followed ever more closely — 0.3, 0.6 and 0.9 for three — each candidate into a
+folder of its own in the system's temp (the run names it; nothing of it goes into the project),
+and measured. The script keeps the one that misses the fewest of four rules — it needs at most
+3 dB of gain, a one-shot's peak at −6 dBFS or more before it (an RMS-measured kind's RMS within
+3 dB of its target); its sound starts within 50 ms; at most a tenth of it is silence, 10 ms
+frames under −60 dBFS; its length lies within a fifth of the catalog's — then the one that needs
+the least gain, then the one with the least silence, and says how each candidate measured. A
+short click misses the silence rule whatever it does, its tail silent long before its half
+second is over, so for it the level decides. Music is made once a piece. The key comes from the environment: the package script
 hands node the repo's `.env.local` (`--env-file-if-exists`), and from a worktree it is
 `node --env-file=<repo>/.env.local scripts/sfx.ts` in `packages/client`. Before it asks for
 anything the script reads the account's credits and stops below 40,000 or where the plan would
@@ -46,6 +59,16 @@ pass a group's cap (12,000 credits for the effects, 18,000 for the music); after
 request it reads what that cost and prices the rest at that rate. The first full render
 (2026-10-26) cost 542 credits for the 154 s of effects and 4,136 for the 236 s of music; the dry
 run prices at those rates, rounded up to 4 and 18 credits a second.
+
+**Listening to them.** The page `/sounds`, which no menu links to, lists every entry of the
+catalog by its kind — effects, rooms and loops, music, the end card — each with its prompt, its
+length and gain (marked „zu leise" where the gain is over the script's limit), a button that
+plays it through the game's own loader at the loudness the game brings it to (a room's bed
+round and round until it is stopped, a stem once through) and a box „neu rendern"; below, it
+puts together the command for what is ticked, `node --env-file=… scripts/sfx.ts --candidates 3
+--only a,b,c`, to be run in `packages/client`, with the key file's path as the page is told it
+(`../../.env.local` from the repository's own checkout). The page asks no service for
+anything: the user runs the command.
 
 **Loudness without re-encoding.** The files stay as ElevenLabs made them. The script decodes
 each with `afconvert` into a temporary folder, measures its peak and its RMS and writes the gain
@@ -60,13 +83,19 @@ was quiet throughout: the three footsteps (gain 28–87, their peaks at −42 to
 mushroom button, the console's tick, the wall's thud, the big button, the breaker's thunk, the
 lamp's pop, the find's chime and the ping (9–50), the archive's, the plain room's, the server
 room's and the lab's beds (4.2–104; the archive's RMS stood at −60 dBFS) and both stings
-(6.4 and 11.3). More than 30 ms of silence at a recording's start becomes
+(6.4 and 11.3). With them go ten more, judged weak by the same measures: eight one-shots that
+needed more than 6 dB (the sheet, the pencil, the klaxon, the drip, the far clank, the machine's
+stroke, the bubbling, the server's spin-up) and two whose sound began late (the wire's snip, the
+toggle's clack). Their prompts now name the material and the mechanism and ask for close, loud,
+dry takes at full level that start at once, and they are made again as three candidates each;
+the music, at its new 192 kbit/s, once again. More than 30 ms of silence at a recording's start
+becomes
 `startMs`, where its sound starts; a bed keeps its start, so that its loop stays seamless. A run
 that makes nothing measures every file anew. The game applies the gain as it decodes a
 recording (`samples.ts`), multiplying its samples once, and plays it from `startMs`.
 `test/sampleManifest.test.ts` fails, naming the command, where an entry has no file, a file
 was made from another request, lasts other than asked, came back clipped (a gain under 0.1) or
-quiet, or a folder passes its cap: `public/sfx` 3 MB, `public/music` 6 MB.
+quiet, or a folder passes its cap: `public/sfx` 3 MB, `public/music` 8 MB.
 
 ## One path
 
@@ -390,8 +419,10 @@ silent, a manifest fetched again), `test/sampleManifest.test.ts` (the code's ids
 catalog, the catalog's `usedBy` against the code, every recording on disk, made from its
 request as it stands, its length, its start, its gain, the folders' caps),
 `test/sfxScript.test.ts` (the catalog's rules, the requests and their hash, what a run makes,
-the command line, the credits' guard and the pricing at the first request's rate, a WAV read,
-the gain and the start worked out from PCM of known loudness), `test/ambience.test.ts` (rooms,
+the command line, the candidates' influences and the rules a take is picked by, the credits'
+guard and the pricing at the first entry's rate, a WAV read, the gain, the start and the
+silence worked out from PCM of known loudness), `test/soundsPage.test.tsx` (the audition page's
+address, its listing by kind, what it says of each recording, the command it puts together), `test/ambience.test.ts` (rooms,
 levels, power, the beds' recorded loops, dead and alive variants, crossfades, the sporadic
 sounds, sounds let go), `test/spatial.test.ts` (pan, gain, muffle, steps, the rotor, the
 chirp placed), `test/radioVoice.test.ts` (the chain, the shaper's distortion, the static's

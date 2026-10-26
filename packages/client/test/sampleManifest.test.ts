@@ -6,11 +6,11 @@ import {
   DIRS,
   FOLDER_CAPS,
   groupOf,
-  hashOf,
   MANIFEST,
   MAX_GAIN,
   readCatalog,
   tooQuiet,
+  upToDate,
   type CatalogEntry,
   type Group,
   type Manifest,
@@ -76,7 +76,10 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
     const missing = entries.filter((entry) => !filed(entry.id)).map((entry) => entry.id);
     expect(missing, `no recording — ${REMEDY}`).toEqual([]);
     const stale = entries
-      .filter((entry) => manifest[entry.id]?.hash !== hashOf(entry))
+      .filter((entry) => {
+        const kept = manifest[entry.id];
+        return kept === undefined || !upToDate(entry, kept);
+      })
       .map((entry) => entry.id);
     expect(stale, `made from another request — ${REMEDY}`).toEqual([]);
     for (const entry of entries) {
@@ -119,6 +122,6 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
     expect(files.filter((file) => !named.has(file))).toEqual([]);
     const bytes = files.reduce((sum, file) => sum + statSync(join(DIRS[group], file)).size, 0);
     expect(bytes).toBeLessThanOrEqual(FOLDER_CAPS[group]);
-    expect(FOLDER_CAPS).toEqual({ sfx: 3 * 1024 * 1024, music: 6 * 1024 * 1024 });
+    expect(FOLDER_CAPS).toEqual({ sfx: 3 * 1024 * 1024, music: 8 * 1024 * 1024 });
   });
 });

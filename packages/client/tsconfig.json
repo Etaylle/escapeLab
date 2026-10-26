@@ -10,6 +10,7 @@
       "DOM.Iterable"
     ],
     "useDefineForClassFields": true,
+    "resolveJsonModule": true,
     "allowImportingTsExtensions": true
   },
   "include": [

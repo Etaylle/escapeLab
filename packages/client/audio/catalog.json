@@ -42,7 +42,7 @@
   {
     "id": "breaker-thunk",
     "kind": "oneshot",
-    "prompt": "A massive main circuit breaker tripping right next to the microphone: a loud, deep, violent thunk with a sharp electrical bang at full level, then a short concrete reverb tail. Starting at once.",
+    "prompt": "A massive main circuit breaker in a steel switchgear cabinet tripping right at the microphone: its heavy copper contacts slam open with a loud, deep, violent thunk and a sharp electrical bang. Close, loud, dry, full level, starting at once.",
     "durationSeconds": 1.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -69,7 +69,7 @@
   {
     "id": "wire-snip",
     "kind": "oneshot",
-    "prompt": "Steel side-cutter pliers snipping through an insulated copper cable: one crisp sharp snip with the jaws clicking shut. Close-up, dry.",
+    "prompt": "Steel side-cutter pliers snipping through an insulated copper cable: one crisp, sharp snip as the hardened jaws click shut. Close, loud, dry, full level, starting at once.",
     "durationSeconds": 0.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -123,7 +123,7 @@
   {
     "id": "step-1",
     "kind": "oneshot",
-    "prompt": "One loud, close-miked footstep of a rubber-soled work boot on a bare concrete floor: a firm heel thump recorded at full level, dry, starting at once.",
+    "prompt": "One loud, close-miked footstep: the rubber heel of a heavy work boot striking a bare concrete floor with a firm thump. Dry, full level, starting at once.",
     "durationSeconds": 0.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -132,7 +132,7 @@
   {
     "id": "step-2",
     "kind": "oneshot",
-    "prompt": "One loud, close-miked footstep of a work boot on a dusty concrete floor: a heel-and-toe roll with a gritty scuff, recorded at full level, dry, starting at once.",
+    "prompt": "One loud, close-miked footstep: a work boot rolling from heel to toe on a dusty concrete floor, its rubber sole scuffing the grit. Dry, full level, starting at once.",
     "durationSeconds": 0.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -141,7 +141,7 @@
   {
     "id": "step-3",
     "kind": "oneshot",
-    "prompt": "One loud, close-miked heavy work boot landing hard on a concrete floor: a strong heel strike recorded at full level, dry, starting at once.",
+    "prompt": "One loud, close-miked footstep: a heavy steel-toed work boot landing hard on a concrete floor, a strong heel strike. Dry, full level, starting at once.",
     "durationSeconds": 0.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -177,7 +177,7 @@
   {
     "id": "sheet-down",
     "kind": "oneshot",
-    "prompt": "A clipboard holding a few paper sheets set down on a steel desk: a short paper swish, then a soft clack of the hardboard. Close-up, small office.",
+    "prompt": "A hardboard clipboard holding a few paper sheets set down firmly on a steel desk: a short paper swish, then a solid clack of the board on the metal. Close, loud, dry, full level, starting at once.",
     "durationSeconds": 0.6,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -195,7 +195,7 @@
   {
     "id": "pencil",
     "kind": "oneshot",
-    "prompt": "A pencil writing quickly on a paper notepad: three short graphite scratches. Close-up, quiet room.",
+    "prompt": "A graphite pencil writing fast on a paper notepad lying on a desk: three short, scratchy strokes. Close, loud, dry, full level, starting at once.",
     "durationSeconds": 0.6,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -204,7 +204,7 @@
   {
     "id": "klaxon",
     "kind": "oneshot",
-    "prompt": "An industrial alarm klaxon: two harsh electric horn blasts, the second slightly lower, in a concrete hall with a short reverb.",
+    "prompt": "An industrial alarm klaxon, an electric horn with a vibrating steel diaphragm: two harsh, loud blasts, the second slightly lower. Close, full level, starting at once, a short concrete-hall tail.",
     "durationSeconds": 1,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -226,7 +226,7 @@
   {
     "id": "ping",
     "kind": "oneshot",
-    "prompt": "One bright electronic ping from a handheld tablet speaker: a clear high blip at full level, dry, starting at once.",
+    "prompt": "One bright electronic ping from the small piezo speaker of a handheld tablet: a clear, high, short blip. Close, loud, dry, full level, starting at once.",
     "durationSeconds": 0.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -235,7 +235,7 @@
   {
     "id": "discovery",
     "kind": "oneshot",
-    "prompt": "A warm two-note chime rising, like a small glass bell struck twice: clear and bright at full level, dry, starting at once.",
+    "prompt": "A small glass bell struck twice by a metal pin, the second note higher: a warm, clear two-note chime. Close, loud, dry, full level, starting at once.",
     "durationSeconds": 0.8,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -334,7 +334,7 @@
   {
     "id": "toggle-clack",
     "kind": "oneshot",
-    "prompt": "A metal toggle switch on a control panel flipped over: a crisp snap with a small knock in the panel. Close-up.",
+    "prompt": "A metal toggle switch on a steel control panel flipped over hard: its spring-loaded bat snaps into place with a crisp clack. Close, loud, dry, full level, starting at once.",
     "durationSeconds": 0.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -343,7 +343,7 @@
   {
     "id": "button-thunk",
     "kind": "oneshot",
-    "prompt": "A big industrial push button pressed down hard: a loud, low thump with a plastic knock, close-miked at full level, dry, starting at once.",
+    "prompt": "A big plastic industrial push button pressed down hard until its steel plunger bottoms out: a loud, low thump with a plastic knock. Close, dry, full level, starting at once.",
     "durationSeconds": 0.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -352,7 +352,7 @@
   {
     "id": "mushroom-stomp",
     "kind": "oneshot",
-    "prompt": "A large red mushroom emergency-stop button slammed down hard by hand: a loud, heavy, deep thunk with a mechanical latch catching. Close-miked, full level, dry, starting at once.",
+    "prompt": "A large red mushroom emergency-stop button slammed down by a palm: its spring-loaded steel plunger latches with a loud, heavy, deep thunk. Close, dry, full level, starting at once.",
     "durationSeconds": 0.6,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -397,7 +397,7 @@
   {
     "id": "wall-thud",
     "kind": "oneshot",
-    "prompt": "A small object bumping hard into a padded wall: one solid, dull thud, close-miked at full level, dry, starting at once.",
+    "prompt": "A small rubber ball thrown hard against a padded vinyl wall: one solid, dull thud. Close, loud, dry, full level, starting at once.",
     "durationSeconds": 0.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -406,7 +406,7 @@
   {
     "id": "lamp-pop",
     "kind": "oneshot",
-    "prompt": "A small indicator lamp on a control panel switching on: one crisp electric pop, close-miked at full level, dry, starting at once.",
+    "prompt": "A small incandescent indicator lamp on a steel control panel switching on: its filament catches with one crisp electric pop. Close, loud, dry, full level, starting at once.",
     "durationSeconds": 0.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -433,7 +433,7 @@
   {
     "id": "server-spinup",
     "kind": "oneshot",
-    "prompt": "A rack server powering up: a hard drive whine gliding up in pitch over cooling fans spinning up to speed. Close-up in a server room.",
+    "prompt": "A rack server powering up in its steel chassis: the hard drive motor whining up in pitch over cooling fans spinning up to speed. Close, loud, full level, starting at once.",
     "durationSeconds": 1.2,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -460,7 +460,7 @@
   {
     "id": "drip",
     "kind": "oneshot",
-    "prompt": "A single water drop falling into a shallow puddle on a wooden floor in a quiet archive room: a small plink with a soft reverb.",
+    "prompt": "A single water drop falling from a steel pipe into a shallow puddle on a wooden floor: one clear plink. Close, loud, full level, starting at once, a soft room tail.",
     "durationSeconds": 1,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -469,7 +469,7 @@
   {
     "id": "far-clank",
     "kind": "oneshot",
-    "prompt": "A metal object clanking far down a long concrete corridor, muffled by the distance, with two fading echoes.",
+    "prompt": "A steel pipe dropped onto a concrete floor far down a long concrete corridor, recorded at full level: a muffled metallic clank with two fading echoes, starting at once.",
     "durationSeconds": 2,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -478,7 +478,7 @@
   {
     "id": "machine-stroke",
     "kind": "oneshot",
-    "prompt": "One slow stroke of a large industrial machine piston: a deep heavy thud with a metallic clank and a short mechanical hiss, in a machine hall.",
+    "prompt": "One slow stroke of a large hydraulic machine piston in a steel frame: a deep heavy thud with a metallic clank and a short hiss of air. Close, loud, full level, starting at once.",
     "durationSeconds": 1,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -496,7 +496,7 @@
   {
     "id": "bubbling",
     "kind": "oneshot",
-    "prompt": "A glass flask of liquid bubbling on a heating plate in a laboratory: a short run of small bubbles popping. Close-up.",
+    "prompt": "A glass laboratory flask of boiling liquid on a heating plate: a quick run of small bubbles popping. Close, loud, dry, full level, starting at once.",
     "durationSeconds": 1.2,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -505,7 +505,7 @@
   {
     "id": "console-tick",
     "kind": "oneshot",
-    "prompt": "One crisp relay tick inside an electronic control console: a single sharp mechanical click, close-miked at full level, dry, starting at once.",
+    "prompt": "A small electromechanical relay inside a steel control console switching over: one crisp mechanical tick of its armature. Close, loud, dry, full level, starting at once.",
     "durationSeconds": 0.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -550,7 +550,7 @@
   {
     "id": "bed-server",
     "kind": "bed",
-    "prompt": "Server room ambience, recorded close at full level: many rack cooling fans whooshing loudly, a steady 120 Hz electrical hum and a high whine from the power supplies, constant.",
+    "prompt": "Server room ambience recorded close at full level: dozens of rack cooling fans whooshing loudly in steel cabinets, a steady 120 Hz transformer hum and the high whine of power supplies, constant and even.",
     "durationSeconds": 10,
     "loop": true,
     "target": { "measure": "rms", "dbfs": -20 },
@@ -559,7 +559,7 @@
   {
     "id": "bed-archive",
     "kind": "bed",
-    "prompt": "Archive room tone: steady ventilation air flowing through a duct between wooden shelves, a soft but clearly audible even hiss, recorded at full level, constant.",
+    "prompt": "Archive room tone recorded at full level: steady air flowing out of a sheet-metal ventilation duct between wooden shelves, an even, clearly audible soft hiss, constant.",
     "durationSeconds": 10,
     "loop": true,
     "target": { "measure": "rms", "dbfs": -20 },
@@ -577,7 +577,7 @@
   {
     "id": "bed-lab",
     "kind": "bed",
-    "prompt": "Laboratory room tone at night, recorded at full level: a refrigerator compressor humming and a fume hood fan blowing, clearly audible, constant.",
+    "prompt": "Laboratory room tone at night recorded at full level: the compressor of a laboratory refrigerator humming and the fan of a fume hood blowing through its steel duct, clearly audible, constant.",
     "durationSeconds": 10,
     "loop": true,
     "target": { "measure": "rms", "dbfs": -20 },
@@ -604,7 +604,7 @@
   {
     "id": "bed-plain",
     "kind": "bed",
-    "prompt": "Room tone of a research facility office, recorded at full level: steady ventilation air and a low 55 Hz building hum, clearly audible, constant.",
+    "prompt": "Room tone of a research facility office recorded at full level: steady air from a ceiling ventilation grille and the low 55 Hz hum of the building's transformers, clearly audible, constant.",
     "durationSeconds": 10,
     "loop": true,
     "target": { "measure": "rms", "dbfs": -20 },
@@ -658,7 +658,7 @@
   {
     "id": "won",
     "kind": "sting",
-    "prompt": "A short triumphant instrumental sting, loud and fully mastered, for a crew that has just escaped a dark research lab: warm strings and brass swelling at once to full strength over a breath of wind, resolving to a bright C major chord that rings out.",
+    "prompt": "A short triumphant instrumental sting, loud and fully mastered, for a crew that has just escaped a dark research lab: warm strings and brass at full strength from the first beat over a breath of wind, resolving to a bright C major chord that rings out.",
     "durationSeconds": 10,
     "loop": false,
     "target": { "measure": "rms", "dbfs": -14 },
@@ -667,7 +667,7 @@
   {
     "id": "lost",
     "kind": "sting",
-    "prompt": "A short dark instrumental sting, loud and fully mastered, for a crew that failed to escape a research lab: a heavy low A minor chord on strings over a deep synth drone at full strength, one muffled final hit, then a short fade.",
+    "prompt": "A short dark instrumental sting, loud and fully mastered, for a crew that failed to escape a research lab: a heavy low A minor chord on strings and a deep synth drone at full strength from the first beat, one muffled final hit, then a short fade.",
     "durationSeconds": 10,
     "loop": false,
     "target": { "measure": "rms", "dbfs": -14 },

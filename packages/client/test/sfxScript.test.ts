@@ -11,25 +11,31 @@ import {
   gainOf,
   groupOf,
   hashOf,
+  influencesFor,
   LEAD_MS,
   loudnessOf,
   make,
   MAX_GAIN,
   MIN_CREDITS,
+  missesOf,
   musicRequest,
   optionsOf,
   parseWav,
+  pickTake,
   planOf,
   priced,
   readCatalog,
   refuseBelow,
+  silenceOf,
   startMsOf,
   TARGETS,
   tooQuiet,
+  upToDate,
   type CatalogEntry,
   type Manifest,
   type ManifestEntry,
   type Pcm,
+  type Take,
 } from '../scripts/sfx.js';
 
 /**
@@ -122,15 +128,16 @@ describe('a request', () => {
     });
     const bed = catalog.find((entry) => entry.id === 'bed-server') as CatalogEntry;
     expect(effectRequest(bed).loop).toBe(true);
+    expect(effectRequest(CLACK, 0.9).promptInfluence).toBe(0.9);
   });
 
-  it('asks Eleven Music for an instrumental piece as long as the catalog says', () => {
+  it('asks Eleven Music for an instrumental piece at 192 kbit/s, as long as asked', () => {
     expect(musicRequest(CALM)).toEqual({
       prompt: CALM.prompt,
       musicLengthMs: 72_000,
       forceInstrumental: true,
       modelId: 'music_v2_5',
-      outputFormat: 'mp3_44100_128',
+      outputFormat: 'mp3_44100_192',
     });
     expect(groupOf(CALM)).toBe('music');
     expect(groupOf({ kind: 'sting' })).toBe('music');
@@ -147,13 +154,24 @@ describe('a request', () => {
       hashOf({ ...CLACK, prompt: `${CLACK.prompt} Louder.` }),
       hashOf({ ...CLACK, durationSeconds: 0.7 }),
       hashOf({ ...CLACK, kind: 'bed', loop: true }),
+      hashOf(CLACK, 0.9),
     ];
-    expect(new Set([hash, ...changed]).size).toBe(4);
+    expect(new Set([hash, ...changed]).size).toBe(5);
+    expect(hashOf(CALM, 0.9)).toBe(hashOf(CALM)); // music follows no influence
+  });
+
+  it('spreads an effect’s candidates from loose to close, one made once at 0.5', () => {
+    expect(influencesFor(1)).toEqual([0.5]);
+    expect(influencesFor(2)).toEqual([0.3, 0.9]);
+    expect(influencesFor(3)).toEqual([0.3, 0.6, 0.9]);
+    expect(influencesFor(5)).toEqual([0.3, 0.45, 0.6, 0.75, 0.9]);
   });
 
   it('costs about 4 credits a second of an effect, 18 of music, and keeps within the caps', () => {
     expect(costOf(CLACK)).toBe(3);
+    expect(costOf(CLACK, 3)).toBe(8); // three candidates
     expect(costOf(CALM)).toBe(1296);
+    expect(costOf(CALM, 3)).toBe(1296); // music is made once
     expect(CAPS).toEqual({ sfx: 12_000, music: 18_000 });
     for (const group of ['sfx', 'music'] as const) {
       const all = catalog.filter((entry) => groupOf(entry) === group);
@@ -186,7 +204,8 @@ describe('making a recording', () => {
   it('asks for an effect or a piece of music by the entry’s group', async () => {
     const { client, effects, pieces } = clientOf(MP3);
     expect([...(await make(client, CLACK))]).toEqual([...MP3]);
-    expect(effects).toEqual([effectRequest(CLACK)]);
+    await make(client, CLACK, { influence: 0.3 });
+    expect(effects).toEqual([effectRequest(CLACK), effectRequest(CLACK, 0.3)]);
     await make(client, CALM);
     expect(pieces).toEqual([musicRequest(CALM)]);
   });
@@ -206,7 +225,7 @@ describe('making a recording', () => {
     });
     const waits: number[] = [];
     const wait = (ms: number): Promise<void> => (waits.push(ms), Promise.resolve());
-    await expect(make(clientOf(busy).client, CLACK, wait)).rejects.toThrow(/\(429\)/);
+    await expect(make(clientOf(busy).client, CLACK, { wait })).rejects.toThrow(/\(429\)/);
     expect(waits).toEqual([2000, 2000, 2000, 2000, 2000]);
     expect(said).toHaveBeenCalledWith(expect.stringMatching(/^sfx: ElevenLabs asks for a pause/));
     said.mockRestore();
@@ -219,11 +238,11 @@ describe('making a recording', () => {
     expect(() => refuseBelow(39_999)).toThrow(/39999 credits left.*nothing asked/);
   });
 
-  it('prices a group at what its first request cost, and stops it over its cap', () => {
-    const rest = [CLACK, { ...CLACK, durationSeconds: 1.2 }];
-    expect(priced(24, CLACK, rest)).toEqual({ perSecond: 40, total: 96, over: false });
-    expect(priced(600, CLACK, Array.from({ length: 30 }, () => CLACK)).over).toBe(true);
-    expect(priced(0, CLACK, rest).total).toBe(0); // the account not caught up yet: no stop
+  it('prices a group at what its first entry cost a second, and stops it over its cap', () => {
+    expect(priced(24, 0.6, 1.8, 'sfx')).toEqual({ perSecond: 40, total: 96, over: false });
+    expect(priced(600, 0.6, 18, 'sfx').over).toBe(true);
+    expect(priced(600, 0.6, 18, 'music').over).toBe(true);
+    expect(priced(0, 0.6, 1.8, 'sfx').total).toBe(0); // the account not caught up yet: no stop
   });
 });
 
@@ -260,9 +279,32 @@ describe('a run', () => {
     expect(music.map((job) => job.entry.id)).toEqual(['test-calm']);
     const only = planOf([CLACK, CALM], manifests, always, optionsOf(['--only', 'test-clack']));
     expect(only.map((job) => [job.entry.id, job.make])).toEqual([['test-clack', true]]);
+    const both = optionsOf(['--only', 'test-calm,test-clack']);
+    expect(planOf([CLACK, CALM], manifests, always, both).map((job) => job.make)).toEqual([
+      true,
+      true,
+    ]);
     expect(() => planOf([CLACK], manifests, always, optionsOf(['--only', 'nope']))).toThrow(
       /--only nope.*no such entry/,
     );
+    const stray = optionsOf(['--only', 'test-clack,nope,zap']);
+    expect(() => planOf([CLACK], manifests, always, stray)).toThrow(/--only nope,zap /);
+  });
+
+  it('keeps a candidate made at another influence, as long as its prompt stands', () => {
+    const at = (influence: number): ManifestEntry => ({
+      ...manifestEntry(CLACK),
+      hash: hashOf(CLACK, influence),
+      influence,
+    });
+    expect(upToDate(CLACK, at(0.9))).toBe(true);
+    expect(upToDate(CLACK, manifestEntry(CLACK))).toBe(true); // made once, at 0.5
+    const unnamed = { ...manifestEntry(CLACK), hash: hashOf(CLACK, 0.9) };
+    expect(upToDate(CLACK, unnamed)).toBe(false); // whose influence goes unsaid: 0.5
+    expect(upToDate({ ...CLACK, prompt: `${CLACK.prompt} Louder.` }, at(0.9))).toBe(false);
+    const kept = { sfx: { [CLACK.id]: at(0.6) }, music: {} };
+    const fresh = planOf([CLACK], kept, () => true, everything);
+    expect(fresh[0]?.make).toBe(false);
   });
 
   it('names every take too quiet for its kind, its gain and the most it may take', () => {
@@ -287,20 +329,23 @@ describe('a run', () => {
   });
 
   it('reads the command line, pnpm’s -- and all, and refuses anything else', () => {
-    expect(optionsOf([])).toEqual({ groups: ['sfx', 'music'], dryRun: false, only: null });
-    expect(optionsOf(['--', '--dry-run'])).toEqual({
-      groups: ['sfx', 'music'],
-      dryRun: true,
-      only: null,
-    });
+    const none = { groups: ['sfx', 'music'], dryRun: false, only: null, candidates: 1 };
+    expect(optionsOf([])).toEqual(none);
+    expect(optionsOf(['--', '--dry-run'])).toEqual({ ...none, dryRun: true });
     expect(optionsOf(['sfx', '--only', 'klaxon'])).toEqual({
+      ...none,
       groups: ['sfx'],
-      dryRun: false,
-      only: 'klaxon',
+      only: ['klaxon'],
     });
+    const list = optionsOf(['--candidates', '3', '--only', 'step-1,step-2, ,ping']);
+    expect(list).toEqual({ ...none, only: ['step-1', 'step-2', 'ping'], candidates: 3 });
     expect(() => optionsOf(['--fresh'])).toThrow(/--fresh — it takes sfx, music/);
     expect(() => optionsOf(['--only'])).toThrow(/--only — it takes/);
     expect(() => optionsOf(['--only', '--dry-run'])).toThrow(/--only — it takes/);
+    expect(() => optionsOf(['--candidates'])).toThrow(/--candidates — it takes a number/);
+    for (const bad of ['0', '6', '2.5', 'drei']) {
+      expect(() => optionsOf(['--candidates', bad]), bad).toThrow(/from 1 to 5/);
+    }
   });
 });
 
@@ -389,5 +434,52 @@ describe('the loudness of a recording', () => {
     const rate = 8000;
     const late = loudnessOf(parseWav(wavOf(rate, [toneAfter(rate, 40, 0.2, 100)])));
     expect(startMsOf('oneshot', late)).toBe(40);
+  });
+});
+
+describe('picking a candidate', () => {
+  /** A take measured as `over` says: by default one that keeps every rule. */
+  const take = (over: Partial<Take> & { leadMs?: number } = {}): Take => ({
+    path: `/tmp/${Math.random()}.mp3`,
+    influence: 0.6,
+    loudness: { ms: 500, peak: 0.6, rms: 0.2, leadMs: over.leadMs ?? 0 },
+    silence: 0.05,
+    gain: 1.1,
+    lengthOff: 0.04,
+    ...over,
+  });
+
+  it('measures silence as the share of 10 ms frames under −60 dBFS, every channel at once', () => {
+    const rate = 8000;
+    const tone = toneAfter(rate, 50, 0.5, 450);
+    expect(silenceOf({ rate, channels: [Float32Array.from(tone)] })).toBeCloseTo(0.1, 9);
+    const faint = Float32Array.from(toneAfter(rate, 0, 10 ** (-70 / 20), 500));
+    const soft = Float32Array.from(toneAfter(rate, 0, 10 ** (-50 / 20), 500));
+    expect(silenceOf({ rate, channels: [faint] })).toBe(1);
+    expect(silenceOf({ rate, channels: [soft] })).toBe(0);
+    expect(silenceOf({ rate, channels: [faint, soft] })).toBe(0); // the other channel sounds
+  });
+
+  it('names the rules a take misses: level, start, silence and length', () => {
+    expect(missesOf(take())).toEqual([]);
+    const late = take({ gain: 1.5, leadMs: 60, silence: 0.11, lengthOff: 0.25 });
+    expect(missesOf(late)).toEqual(['level', 'start', 'silence', 'length']);
+    // A one-shot's peak at −6 dBFS before its gain, the most it may need: 3 dB.
+    expect(missesOf(take({ gain: 10 ** (3 / 20) }))).toEqual([]);
+    expect(missesOf(take({ gain: 10 ** (3 / 20) + 0.001 }))).toEqual(['level']);
+  });
+
+  it('keeps the take that misses fewest rules, then needs least gain, then has least silence', () => {
+    const keeps = take({ gain: 1.3 });
+    const quiet = take({ gain: 4 });
+    const late = take({ gain: 1, leadMs: 80, silence: 0.5 });
+    expect(pickTake([quiet, late, keeps])).toBe(keeps);
+    // Clicks: each misses the silence rule with its tail; the louder one wins.
+    const loud = take({ gain: 1.05, silence: 0.7 });
+    const soft = take({ gain: 1.3, silence: 0.6 });
+    expect(pickTake([soft, loud])).toBe(loud);
+    const tight = take({ gain: 1.05, silence: 0.65 });
+    expect(pickTake([loud, tight])).toBe(tight);
+    expect(() => pickTake([])).toThrow(/no take/);
   });
 });
