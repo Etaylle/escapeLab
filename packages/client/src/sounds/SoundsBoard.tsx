@@ -1,4 +1,4 @@
-import { QUIET_GAIN, type Section, type SoundRow } from './listing.js';
+import type { Section, SoundRow } from './listing.js';
 
 /** What the board's controls ask the page for. */
 export interface BoardActions {
@@ -28,15 +28,26 @@ function seconds(ms: number): string {
   return `${(Math.max(0, ms) / 1000).toFixed(1).replace('.', ',')} s`;
 }
 
-/** What the page says of a sound's recording: its length, its gain, a loop, too quiet. */
+/** A level as the page writes it: „−45,7 dBFS". */
+function level(dbfs: number): string {
+  return `${dbfs.toFixed(1).replace('-', '−').replace('.', ',')} dBFS`;
+}
+
+/** What the page says of a recording's floor once its gain is applied, and whether it is heard. */
+function floorFact(row: SoundRow): string {
+  if (row.floorDbfs === null) return 'Grundrauschen vom Klang verdeckt';
+  if (row.floorDbfs === -Infinity) return 'kein Grundrauschen';
+  return `Grundrauschen ${level(row.floorDbfs)}${row.noisy ? ', hörbar' : ''}`;
+}
+
+/** What the page says of a sound's recording: its length, its gain, its floor, a loop. */
 export function factsOf(row: SoundRow): string {
   const { recording, sound } = row;
   if (recording === null) {
     return 'keine Aufnahme';
   }
   const gain = `Verstärkung ${recording.gain.toFixed(2).replace('.', ',')}×`;
-  const parts = [seconds(recording.ms), gain, sound.loop ? 'Schleife' : null];
-  if (row.quiet) parts.push(`zu leise (über ${QUIET_GAIN[sound.kind]}×)`);
+  const parts = [seconds(recording.ms), gain, floorFact(row), sound.loop ? 'Schleife' : null];
   return parts.filter((part) => part !== null).join(' · ');
 }
 
@@ -45,7 +56,7 @@ function Row({ row, props }: { row: SoundRow; props: BoardProps }) {
   const { id, prompt } = row.sound;
   const playing = props.playing === id;
   return (
-    <li className={row.quiet ? 'sounds-row sounds-row--quiet' : 'sounds-row'}>
+    <li className={row.noisy ? 'sounds-row sounds-row--noisy' : 'sounds-row'}>
       <button
         type="button"
         className="sounds-play"
@@ -88,8 +99,8 @@ function CommandBox(props: BoardProps) {
         <input value={props.envFile} onChange={(e) => props.on.envFile(e.currentTarget.value)} />
       </label>
       <p className="muted">
-        Im Ordner packages/client ausführen. Jeder Effekt entsteht dreimal, das Skript behält die
-        beste Fassung; Musik entsteht einmal.
+        Im Ordner packages/client ausführen. Jede angekreuzte Aufnahme entsteht dreimal neu, Musik
+        wie Effekte; das Skript behält die beste Fassung.
       </p>
       {props.command === null ? (
         <p className="muted">Nichts angekreuzt.</p>

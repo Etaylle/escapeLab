@@ -2,16 +2,16 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  AUDIBLE_FLOOR_DBFS,
   CATALOG_FILE,
   DIRS,
   FOLDER_CAPS,
   groupOf,
   MANIFEST,
-  MAX_GAIN,
+  noisyTakes,
+  offLength,
   readCatalog,
-  tooQuiet,
   upToDate,
-  type CatalogEntry,
   type Group,
   type Manifest,
 } from '../scripts/sfx.js';
@@ -60,12 +60,6 @@ function manifestOf(group: Group): Manifest {
   return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as Manifest) : {};
 }
 
-/** How far a recording may run from the length asked for: effects to the frame, music looser. */
-function lengthsOf(entry: CatalogEntry): [number, number] {
-  const asked = entry.durationSeconds * 1000;
-  return groupOf(entry) === 'music' ? [asked * 0.9, asked * 1.1] : [asked - 60, asked + 150];
-}
-
 describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) => {
   const manifest = manifestOf(group);
   const entries = catalog.filter((entry) => groupOf(entry) === group);
@@ -92,11 +86,13 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
   });
 
   it('last as long as asked for, start within themselves, and came back unclipped', () => {
+    const off = offLength(entries, { sfx: {}, music: {}, [group]: manifest });
+    const said = off.map(({ id, ms, asked }) => `${id} ${ms} ms, asked for ${asked}`);
+    const only = off.map(({ id }) => id).join(',');
+    const remedy = `render them again: pnpm --filter client sfx -- --candidates 5 --only ${only}`;
+    expect(said, `more than a fifth off their length — ${remedy}`).toEqual([]);
     for (const entry of entries) {
       const kept = manifest[entry.id];
-      const [min, max] = lengthsOf(entry);
-      expect(kept?.ms, `${entry.id}: ${kept?.ms} ms`).toBeGreaterThanOrEqual(min);
-      expect(kept?.ms, `${entry.id}: ${kept?.ms} ms`).toBeLessThanOrEqual(max);
       expect(kept?.startMs ?? NaN).toBeGreaterThanOrEqual(0);
       expect(kept?.startMs ?? NaN, entry.id).toBeLessThan((kept?.ms ?? 0) / 4);
       if (entry.kind === 'bed') expect(kept?.startMs).toBe(0);
@@ -105,15 +101,21 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
     }
   });
 
-  it('came back loud enough: no gain that would play a quiet take’s noise floor', () => {
-    expect(MAX_GAIN).toEqual({ oneshot: 6, bed: 4, stem: 4, sting: 4 });
-    const takes = tooQuiet(entries, { sfx: {}, music: {}, [group]: manifest });
-    const quiet = takes.map(({ id, gain, max }) => `${id} ${gain} > ${max}`);
+  it('play no noise floor that is heard once their gain is applied', () => {
+    for (const entry of entries) {
+      const { floor, rms } = manifest[entry.id] ?? {};
+      expect([typeof floor, typeof rms], `${entry.id}: floor and RMS measured`).toEqual([
+        'number',
+        'number',
+      ]);
+    }
+    const takes = noisyTakes(entries, { sfx: {}, music: {}, [group]: manifest });
+    const heard = takes.map(({ id, gain, heardDbfs }) => `${id} gain ${gain}, ${heardDbfs} dBFS`);
     const only = takes.map(({ id }) => id).join(',');
     const remedy =
-      'make their prompts close, loud, dry and full level, then render three takes of each on a ' +
-      `Mac: pnpm --filter client sfx -- --candidates 3 --only ${only} (docs/sound.md)`;
-    expect(quiet, `quiet takes — ${remedy}`).toEqual([]);
+      'render five takes of each on a Mac, one whose floor is not heard kept: ' +
+      `pnpm --filter client sfx -- --candidates 5 --only ${only} (docs/sound.md)`;
+    expect(heard, `floors over ${AUDIBLE_FLOOR_DBFS} dBFS — ${remedy}`).toEqual([]);
   });
 
   it('keep within the folder’s cap, and no file the manifest does not name', () => {

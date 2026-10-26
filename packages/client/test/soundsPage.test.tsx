@@ -1,13 +1,23 @@
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { MAX_GAIN, readCatalog } from '../scripts/sfx.js';
 import {
+  AUDIBLE_FLOOR_DBFS as SCRIPT_AUDIBLE,
+  DIRS,
+  MANIFEST,
+  MASKED_WITHIN_DB as SCRIPT_MASKED,
+  noisyTakes,
+  readCatalog,
+  type Manifest,
+} from '../scripts/sfx.js';
+import {
+  AUDIBLE_FLOOR_DBFS,
   CANDIDATES,
   commandFor,
   ENV_FILE,
   listingOf,
-  QUIET_GAIN,
+  MASKED_WITHIN_DB,
   SECTIONS,
   shellWord,
   soundsOf,
@@ -22,11 +32,14 @@ import type { SampleEntry } from '../src/world/samples.js';
  * puts together for the user — no request leaves the page.
  */
 
-const recording = (gain: number, ms = 480): SampleEntry => ({
+/** A recording at `gain`, `ms` long, its floor and its RMS as dBFS before the gain. */
+const recording = (gain: number, ms = 480, floorDbfs = -90, rmsDbfs = -20): SampleEntry => ({
   file: 'x.mp3',
   ms,
   gain,
   startMs: 0,
+  floor: 10 ** (floorDbfs / 20),
+  rms: 10 ** (rmsDbfs / 20),
   loop: false,
   hash: '000000000000',
   source: 'elevenlabs',
@@ -109,15 +122,29 @@ describe('the listing', () => {
     expect(SECTIONS.map((section) => section.kind)).toEqual(['oneshot', 'bed', 'stem', 'sting']);
   });
 
-  it('gives each sound its recording, and calls one too quiet as the sound script does', () => {
-    expect(QUIET_GAIN).toEqual(MAX_GAIN);
+  it('gives each sound its recording, and hears its floor as the sound script does', () => {
+    expect([AUDIBLE_FLOOR_DBFS, MASKED_WITHIN_DB]).toEqual([SCRIPT_AUDIBLE, SCRIPT_MASKED]);
     const [effects, loops, music] = listingOf([CLICK, HUM, CALM], {
-      'key-click': recording(6.5),
-      'mains-hum': recording(4, 6000),
+      'key-click': recording(12, 480, -70, -30), // its tail brought up to −48.4 dBFS
+      'mains-hum': recording(8, 6000, -40, -38), // its quietest 100 ms: the hum itself
     });
-    expect(effects?.rows[0]).toMatchObject({ quiet: true, recording: { gain: 6.5 } });
-    expect(loops?.rows[0]).toMatchObject({ quiet: false });
-    expect(music?.rows[0]).toEqual({ sound: CALM, recording: null, quiet: false });
+    expect(effects?.rows[0]).toMatchObject({ noisy: true, recording: { gain: 12 } });
+    expect(effects?.rows[0]?.floorDbfs).toBeCloseTo(-48.42, 2);
+    expect(loops?.rows[0]).toMatchObject({ noisy: false, floorDbfs: null });
+    const none = { sound: CALM, recording: null, floorDbfs: null, noisy: false };
+    expect(music?.rows[0]).toEqual(none);
+  });
+
+  it('flags just the lab’s recordings the sound script flags', () => {
+    const catalog = readCatalog();
+    const read = (dir: string): Manifest =>
+      JSON.parse(readFileSync(join(dir, MANIFEST), 'utf8')) as Manifest;
+    const manifests = { sfx: read(DIRS.sfx), music: read(DIRS.music) };
+    const rows = listingOf(soundsOf(catalog), { ...manifests.sfx, ...manifests.music });
+    const flagged = rows.flatMap((section) => section.rows.filter((row) => row.noisy));
+    const ids = (list: readonly { readonly id: string }[]): string[] =>
+      list.map(({ id }) => id).sort();
+    expect(ids(flagged.map((row) => row.sound))).toEqual(ids(noisyTakes(catalog, manifests)));
   });
 
   it('reads only the kinds it knows from the catalog', () => {
@@ -125,14 +152,19 @@ describe('the listing', () => {
     expect(soundsOf([CLICK, odd]).map((sound) => sound.id)).toEqual(['key-click']);
   });
 
-  it('says of a recording its length, its gain, a loop and too quiet, in German', () => {
-    const [effects, loops] = listingOf([CLICK, HUM], {
-      'key-click': recording(8.25),
-      'mains-hum': recording(0.19, 6000),
-    });
-    const quiet = '0,5 s · Verstärkung 8,25× · zu leise (über 6×)';
-    expect(factsOf(effects?.rows[0] as never)).toBe(quiet);
-    expect(factsOf(loops?.rows[0] as never)).toBe('6,0 s · Verstärkung 0,19× · Schleife');
+  it('says of a recording its length, its gain, its floor and a loop, in German', () => {
+    const facts = (sound: CatalogSound, take: SampleEntry): string => {
+      const [section] = listingOf([sound], { [sound.id]: take }).filter((s) => s.rows.length);
+      return factsOf(section?.rows[0] as never);
+    };
+    const soft = '0,5 s · Verstärkung 8,25× · Grundrauschen −51,7 dBFS';
+    expect(facts(CLICK, recording(8.25, 480, -70, -30))).toBe(soft);
+    const heard = '0,5 s · Verstärkung 12,00× · Grundrauschen −48,4 dBFS, hörbar';
+    expect(facts(CLICK, recording(12, 480, -70, -30))).toBe(heard);
+    const hum = '6,0 s · Verstärkung 0,19× · Grundrauschen vom Klang verdeckt · Schleife';
+    expect(facts(HUM, recording(0.19, 6000, -10.2, -5.5))).toBe(hum);
+    const still = '0,5 s · Verstärkung 1,00× · kein Grundrauschen';
+    expect(facts(CLICK, recording(1, 480, -Infinity, -20))).toBe(still);
     const [none] = listingOf([CLICK], {});
     expect(factsOf(none?.rows[0] as never)).toBe('keine Aufnahme');
   });
@@ -140,7 +172,10 @@ describe('the listing', () => {
 
 describe('the board', () => {
   const props = (over: Partial<BoardProps> = {}): BoardProps => ({
-    sections: listingOf([CLICK, HUM], { 'key-click': recording(8.25), 'mains-hum': recording(1) }),
+    sections: listingOf([CLICK, HUM], {
+      'key-click': recording(12, 480, -70, -30),
+      'mains-hum': recording(1),
+    }),
     playing: null,
     loaded: (id) => id === 'key-click',
     selected: new Set(),
@@ -163,7 +198,7 @@ describe('the board', () => {
     expect(html).toContain(HUM.prompt);
     expect(html.match(/neu rendern/g)).toHaveLength(2);
     expect(html.match(/>Abspielen</g)).toHaveLength(2);
-    expect(html).toContain('sounds-row sounds-row--quiet');
+    expect(html).toContain('sounds-row sounds-row--noisy');
     expect(html).toContain('Nichts angekreuzt.');
     // The hum is not loaded: its button cannot play it.
     const button = /disabled=""[^>]*>Abspielen<\/button>/.source;

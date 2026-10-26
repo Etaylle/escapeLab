@@ -26,19 +26,21 @@ export const SECTIONS: readonly { readonly kind: SoundKind; readonly title: stri
   { kind: 'sting', title: 'Endkarte' },
 ];
 
-/** The gain over which a take came back too quiet, by kind: as scripts/sfx.ts MAX_GAIN. */
-export const QUIET_GAIN: Readonly<Record<SoundKind, number>> = {
-  oneshot: 6,
-  bed: 4,
-  stem: 4,
-  sting: 4,
-};
+/** A floor that comes out louder than this once the gain is applied is heard: as scripts/sfx.ts. */
+export const AUDIBLE_FLOOR_DBFS = -50;
+/** A floor less than this far under the RMS, dB, is the sound itself, which masks it: as sfx.ts. */
+export const MASKED_WITHIN_DB = 20;
 
-/** A sound as the page lists it: its catalog entry, its recording, and whether it is too quiet. */
+/**
+ * A sound as the page lists it: its catalog entry, its recording, its floor once the gain is
+ * applied — null where its sound masks it, −Infinity where it falls to digital silence — and
+ * whether that floor is heard.
+ */
 export interface SoundRow {
   readonly sound: CatalogSound;
   readonly recording: SampleEntry | null;
-  readonly quiet: boolean;
+  readonly floorDbfs: number | null;
+  readonly noisy: boolean;
 }
 
 /** A section of the page: its kind, its title and its sounds in the catalog's order. */
@@ -49,6 +51,24 @@ export interface Section {
 }
 
 const KINDS = new Set<string>(SECTIONS.map(({ kind }) => kind));
+
+const dbfs = (level: number): number => 20 * Math.log10(level);
+
+/**
+ * `recording`'s floor once its gain is applied, dBFS: null where it lies less than
+ * MASKED_WITHIN_DB under the recording's RMS — the sound itself — as scripts/sfx.ts `floorHeard`.
+ */
+export function floorDbfsOf(recording: SampleEntry): number | null {
+  if (dbfs(recording.rms) - dbfs(recording.floor) < MASKED_WITHIN_DB) return null;
+  return dbfs(recording.floor * recording.gain);
+}
+
+/** The row of `sound`, with its recording where there is one. */
+function rowOf(sound: CatalogSound, recording: SampleEntry | null): SoundRow {
+  const floorDbfs = recording === null ? null : floorDbfsOf(recording);
+  const noisy = floorDbfs !== null && floorDbfs > AUDIBLE_FLOOR_DBFS;
+  return { sound, recording, floorDbfs, noisy };
+}
 
 /** The catalog's entries as the page reads them; one of a kind it does not know is left out. */
 export function soundsOf(
@@ -67,17 +87,13 @@ export function listingOf(
     title,
     rows: catalog
       .filter((sound) => sound.kind === kind)
-      .map((sound) => {
-        const recording = recordings[sound.id] ?? null;
-        const quiet = recording !== null && recording.gain > QUIET_GAIN[sound.kind];
-        return { sound, recording, quiet };
-      }),
+      .map((sound) => rowOf(sound, recordings[sound.id] ?? null)),
   }));
 }
 
 /** The key file the command names unless told another: the main checkout's, by its full path. */
 export const ENV_FILE = '/Users/uros/Documents/Req.Eng./escapelab/.env.local';
-/** How many candidates the command asks of each sound: the script keeps the best. */
+/** How many takes the command asks of each sound: the script keeps the best. */
 export const CANDIDATES = 3;
 
 /** `word` as a shell takes it: as it is where it is plain, else in single quotes. */

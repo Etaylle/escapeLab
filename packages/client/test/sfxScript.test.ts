@@ -2,23 +2,31 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ElevenLabs } from '@elevenlabs/elevenlabs-js';
 import type { SoundClient } from '../scripts/elevenlabs.js';
 import {
+  AUDIBLE_FLOOR_DBFS,
   CAPS,
   checkCatalog,
   costOf,
   creditsLeft,
   effectRequest,
   flawsOf,
+  FLOOR_WINDOW_MS,
+  floorHeard,
+  floorOf,
   gainOf,
   groupOf,
   hashOf,
+  heardDbfs,
   influencesFor,
   LEAD_MS,
+  lengthOff,
   loudnessOf,
   make,
-  MAX_GAIN,
+  MASKED_WITHIN_DB,
   MIN_CREDITS,
   missesOf,
   musicRequest,
+  noisyTakes,
+  offLength,
   optionsOf,
   parseWav,
   pickTake,
@@ -29,9 +37,9 @@ import {
   silenceOf,
   startMsOf,
   TARGETS,
-  tooQuiet,
   upToDate,
   type CatalogEntry,
+  type Floor,
   type Manifest,
   type ManifestEntry,
   type Pcm,
@@ -252,6 +260,8 @@ describe('a run', () => {
     ms: 600,
     gain: 1,
     startMs: 0,
+    floor: 0.0001,
+    rms: 0.1,
     loop: entry.loop,
     hash: hashOf(entry),
     source: 'elevenlabs',
@@ -307,25 +317,33 @@ describe('a run', () => {
     expect(fresh[0]?.make).toBe(false);
   });
 
-  it('names every take too quiet for its kind, its gain and the most it may take', () => {
-    expect(MAX_GAIN).toEqual({ oneshot: 6, bed: 4, stem: 4, sting: 4 });
+  it('names every recording whose floor is heard, with its gain and that floor', () => {
     const BED = { ...CALM, id: 'test-bed', kind: 'bed', durationSeconds: 10 } as const;
-    const STING = { ...CALM, id: 'test-sting', kind: 'sting', loop: false } as const;
-    const at = (gain: number, entry: CatalogEntry): ManifestEntry => ({
+    const at = (entry: CatalogEntry, gain: number, floorDbfs: number, rmsDbfs: number) => ({
       ...manifestEntry(entry),
       gain,
+      floor: 10 ** (floorDbfs / 20),
+      rms: 10 ** (rmsDbfs / 20),
     });
-    const loud = { sfx: { [CLACK.id]: at(6, CLACK), [BED.id]: at(4, BED) }, music: {} };
-    expect(tooQuiet([CLACK, BED, CALM], loud)).toEqual([]);
-    const quiet = {
-      sfx: { [CLACK.id]: at(6.01, CLACK), [BED.id]: at(4.5, BED) },
-      music: { [CALM.id]: at(0.7, CALM), [STING.id]: at(11, STING) },
+    const manifests = {
+      sfx: { [CLACK.id]: at(CLACK, 12, -70, -30), [BED.id]: at(BED, 8, -40, -38) },
+      music: { [CALM.id]: at(CALM, 1, -90, -20) },
     };
-    expect(tooQuiet([CLACK, BED, CALM, STING], quiet)).toEqual([
-      { id: 'test-clack', gain: 6.01, max: 6 },
-      { id: 'test-bed', gain: 4.5, max: 4 },
-      { id: 'test-sting', gain: 11, max: 4 },
+    expect(noisyTakes([CLACK, BED, CALM], manifests)).toEqual([
+      { id: 'test-clack', gain: 12, heardDbfs: -48.4 },
     ]);
+    const softer = { ...manifests, sfx: { [CLACK.id]: at(CLACK, 8, -70, -30) } };
+    expect(noisyTakes([CLACK, BED, CALM], softer)).toEqual([]);
+  });
+
+  it('names every recording more than a fifth off the length it asked for', () => {
+    const at = (ms: number) => ({ sfx: {}, music: { [CALM.id]: { ...manifestEntry(CALM), ms } } });
+    expect(lengthOff(CALM, 86_400)).toBeCloseTo(0.2, 9);
+    expect(offLength([CALM], at(86_400))).toEqual([]); // 72 s and a fifth
+    expect(offLength([CALM], at(57_600))).toEqual([]);
+    const long = [{ id: 'test-calm', ms: 86_500, asked: 72_000 }];
+    expect(offLength([CALM], at(86_500))).toEqual(long);
+    expect(offLength([CALM], { sfx: {}, music: {} })).toEqual([]); // nothing made yet
   });
 
   it('reads the command line, pnpm’s -- and all, and refuses anything else', () => {
@@ -435,15 +453,53 @@ describe('the loudness of a recording', () => {
     const late = loudnessOf(parseWav(wavOf(rate, [toneAfter(rate, 40, 0.2, 100)])));
     expect(startMsOf('oneshot', late)).toBe(40);
   });
+
+  it('measures the floor as the RMS of the quietest 100 ms, every channel at once', () => {
+    expect(FLOOR_WINDOW_MS).toBe(100);
+    const rate = 8000;
+    const loud = toneAfter(rate, 0, 0.5, 300);
+    const gap = Float32Array.from([...loud, ...toneAfter(rate, 0, 0.001, 200), ...loud]);
+    expect(floorOf({ rate, channels: [gap] }) / (0.001 / Math.SQRT2)).toBeCloseTo(1, 2);
+    // A dip shorter than 100 ms is no floor: every window takes in some of the sound.
+    const dip = Float32Array.from([...loud, ...toneAfter(rate, 0, 0.001, 60), ...loud]);
+    expect(floorOf({ rate, channels: [dip] })).toBeGreaterThan(0.1);
+    const steady = Float32Array.from(toneAfter(rate, 0, 0.5, 800));
+    expect(floorOf({ rate, channels: [gap, steady] })).toBeCloseTo(0.25, 2); // both at once
+    const short = Float32Array.from(toneAfter(rate, 0, 0.2, 50)); // shorter: all of it
+    expect(floorOf({ rate, channels: [short] }) / (0.2 / Math.SQRT2)).toBeCloseTo(1, 2);
+    expect(floorOf({ rate, channels: [new Float32Array(1600)] })).toBe(0);
+    expect(floorOf({ rate, channels: [new Float32Array(0)] })).toBe(0);
+  });
+
+  it('hears a floor only in a gap of the sound, over −50 dBFS once the gain is applied', () => {
+    expect([AUDIBLE_FLOOR_DBFS, MASKED_WITHIN_DB]).toEqual([-50, 20]);
+    const at = (floorDbfs: number, rmsDbfs: number, gain: number): Floor => ({
+      floor: 10 ** (floorDbfs / 20),
+      rms: 10 ** (rmsDbfs / 20),
+      gain,
+    });
+    // A click's tail at −70 dBFS, brought up 12×, comes out at −48.4 dBFS; at 8×, at −51.9.
+    expect(heardDbfs(at(-70, -30, 12))).toBeCloseTo(-48.42, 2);
+    expect(floorHeard(at(-70, -30, 12))).toBe(true);
+    expect(floorHeard(at(-70, -30, 8))).toBe(false);
+    // A take played softer than made still plays a loud floor: a hiss after a door.
+    expect(floorHeard(at(-42, -14, 0.7))).toBe(true);
+    // A bed's quietest 100 ms is the bed: within 20 dB of its RMS, the sound masks it.
+    expect(floorHeard(at(-40, -38, 8))).toBe(false);
+    expect(floorHeard(at(-58.01, -38, 8))).toBe(true);
+    expect(floorHeard({ floor: 0, rms: 0.1, gain: 100 })).toBe(false); // digital silence
+  });
 });
 
 describe('picking a candidate', () => {
-  /** How a take measures: its peak and RMS in dBFS, where its sound starts, its silence. */
+  /** How a take measures: its peak, RMS and floor in dBFS, its start, silence, gain, length. */
   interface Measured {
     readonly peakDbfs?: number;
     readonly rmsDbfs?: number;
+    readonly floorDbfs?: number;
     readonly leadMs?: number;
     readonly silence?: number;
+    readonly gain?: number;
     readonly lengthOff?: number;
   }
 
@@ -458,7 +514,8 @@ describe('picking a candidate', () => {
       leadMs: over.leadMs ?? 0,
     },
     silence: over.silence ?? 0.05,
-    gain: 1,
+    floor: over.floorDbfs === undefined ? 0 : 10 ** (over.floorDbfs / 20),
+    gain: over.gain ?? 1,
     lengthOff: over.lengthOff ?? 0.04,
   });
 
@@ -473,10 +530,12 @@ describe('picking a candidate', () => {
     expect(silenceOf({ rate, channels: [faint, soft] })).toBe(0); // the other channel sounds
   });
 
-  it('names the rules a take misses: peak, start, silence and length', () => {
+  it('names the rules a take misses: peak, start, silence, length and floor', () => {
     expect(missesOf(take())).toEqual([]);
     const late = take({ peakDbfs: -7, leadMs: 60, silence: 0.11, lengthOff: 0.25 });
     expect(missesOf(late)).toEqual(['peak', 'start', 'silence', 'length']);
+    const hiss = take({ rmsDbfs: -30, floorDbfs: -70, gain: 12 });
+    expect(missesOf(hiss)).toEqual(['floor']);
     // The peak before the gain at −6 dBFS or more; the sound within 50 ms; a tenth silent.
     const edge = take({ peakDbfs: -5.99, leadMs: 50, silence: 0.1, lengthOff: 0.2 });
     expect(missesOf(edge)).toEqual([]);
@@ -490,6 +549,8 @@ describe('picking a candidate', () => {
     expect(pickTake([quiet, late, keeps])).toBe(keeps); // valid beats louder
     const louder = take({ rmsDbfs: -15 });
     expect(pickTake([keeps, louder])).toBe(louder);
+    const hiss = take({ rmsDbfs: -10, floorDbfs: -40 }); // its floor heard at −40 dBFS
+    expect(pickTake([hiss, keeps])).toBe(keeps);
     // Clicks: each misses the silence rule with its tail; the loudest RMS wins.
     const soft = take({ silence: 0.7, rmsDbfs: -30 });
     const full = take({ silence: 0.6, rmsDbfs: -26 });

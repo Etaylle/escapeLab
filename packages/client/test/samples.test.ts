@@ -26,6 +26,8 @@ describe('the recordings, loaded', () => {
     ms: 500,
     gain: 1,
     startMs: 0,
+    floor: 0,
+    rms: 0.1,
     loop: false,
     hash: '0',
     source: 'elevenlabs',

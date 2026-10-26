@@ -4,6 +4,8 @@
     "ms": 10000,
     "gain": 2.2961,
     "startMs": 0,
+    "floor": 0.000875,
+    "rms": 0.0436,
     "loop": true,
     "hash": "9cb8910a5779",
     "influence": 0.9,
@@ -14,8 +16,11 @@
     "ms": 10000,
     "gain": 0.2602,
     "startMs": 0,
+    "floor": 0.188,
+    "rms": 0.384,
     "loop": true,
     "hash": "6e748973418d",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "bed-corridor": {
@@ -23,8 +28,11 @@
     "ms": 10000,
     "gain": 1.737,
     "startMs": 0,
+    "floor": 0.0298,
+    "rms": 0.0576,
     "loop": true,
     "hash": "cf42788a93f9",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "bed-lab": {
@@ -32,6 +40,8 @@
     "ms": 10000,
     "gain": 8.1382,
     "startMs": 0,
+    "floor": 0.00985,
+    "rms": 0.0123,
     "loop": true,
     "hash": "62bac71df8b2",
     "influence": 0.9,
@@ -42,8 +52,11 @@
     "ms": 10000,
     "gain": 1.8247,
     "startMs": 0,
+    "floor": 0.0281,
+    "rms": 0.0548,
     "loop": true,
     "hash": "b94f7a2e8e15",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "bed-plain": {
@@ -51,6 +64,8 @@
     "ms": 10000,
     "gain": 3.4086,
     "startMs": 0,
+    "floor": 0.00353,
+    "rms": 0.0293,
     "loop": true,
     "hash": "828ef887328f",
     "influence": 0.9,
@@ -61,8 +76,11 @@
     "ms": 10000,
     "gain": 0.5484,
     "startMs": 0,
+    "floor": 0.126,
+    "rms": 0.182,
     "loop": true,
     "hash": "6f913c8ba075",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "bed-reactor-idle": {
@@ -70,8 +88,11 @@
     "ms": 10000,
     "gain": 0.5933,
     "startMs": 0,
+    "floor": 0.019,
+    "rms": 0.169,
     "loop": true,
     "hash": "d6e34cc49ba9",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "bed-server": {
@@ -79,6 +100,8 @@
     "ms": 10000,
     "gain": 2.8025,
     "startMs": 0,
+    "floor": 0.0165,
+    "rms": 0.0357,
     "loop": true,
     "hash": "b8ae92971403",
     "influence": 0.6,
@@ -89,8 +112,11 @@
     "ms": 600,
     "gain": 0.7142,
     "startMs": 0,
+    "floor": 0.000912,
+    "rms": 0.0659,
     "loop": false,
     "hash": "d31fc0bb79d8",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "breaker-thunk": {
@@ -98,6 +124,8 @@
     "ms": 1480,
     "gain": 1.9048,
     "startMs": 0,
+    "floor": 0.0000421,
+    "rms": 0.0291,
     "loop": false,
     "hash": "ce3f86ba2ae7",
     "influence": 0.9,
@@ -108,6 +136,8 @@
     "ms": 1200,
     "gain": 0.7205,
     "startMs": 0,
+    "floor": 0.000178,
+    "rms": 0.14,
     "loop": false,
     "hash": "de7553987809",
     "influence": 0.6,
@@ -118,6 +148,8 @@
     "ms": 480,
     "gain": 12.3459,
     "startMs": 0,
+    "floor": 0.000111,
+    "rms": 0.00549,
     "loop": false,
     "hash": "eed6731dbc40",
     "influence": 0.9,
@@ -128,8 +160,11 @@
     "ms": 1080,
     "gain": 0.708,
     "startMs": 0,
+    "floor": 0.000124,
+    "rms": 0.0325,
     "loop": false,
     "hash": "a28be685224f",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "console-ready": {
@@ -137,8 +172,11 @@
     "ms": 600,
     "gain": 0.7422,
     "startMs": 0,
+    "floor": 0.0857,
+    "rms": 0.497,
     "loop": false,
     "hash": "7cc259d01aad",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "console-tick": {
@@ -146,6 +184,8 @@
     "ms": 480,
     "gain": 0.945,
     "startMs": 0,
+    "floor": 0.00174,
+    "rms": 0.0881,
     "loop": false,
     "hash": "479ed95bc953",
     "influence": 0.3,
@@ -156,8 +196,11 @@
     "ms": 1480,
     "gain": 0.9507,
     "startMs": 0,
+    "floor": 0.00151,
+    "rms": 0.137,
     "loop": false,
     "hash": "f9d1fdf89415",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "countdown-beep": {
@@ -165,8 +208,11 @@
     "ms": 480,
     "gain": 0.8178,
     "startMs": 0,
+    "floor": 0.000544,
+    "rms": 0.0754,
     "loop": false,
     "hash": "a76e8f00ba75",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "countdown-go": {
@@ -174,8 +220,11 @@
     "ms": 680,
     "gain": 0.7289,
     "startMs": 0,
+    "floor": 0.000163,
+    "rms": 0.462,
     "loop": false,
     "hash": "f2458103cfa8",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "creak": {
@@ -183,8 +232,11 @@
     "ms": 1480,
     "gain": 0.7267,
     "startMs": 0,
+    "floor": 0.0000495,
+    "rms": 0.233,
     "loop": false,
     "hash": "da3cf9380d29",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "dial-detent": {
@@ -192,8 +244,11 @@
     "ms": 480,
     "gain": 1.0777,
     "startMs": 0,
+    "floor": 0.000155,
+    "rms": 0.0258,
     "loop": false,
     "hash": "65b76ff08615",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "discovery": {
@@ -201,6 +256,8 @@
     "ms": 800,
     "gain": 4.1425,
     "startMs": 0,
+    "floor": 0.0000415,
+    "rms": 0.0151,
     "loop": false,
     "hash": "3b8289cf9bb4",
     "influence": 0.9,
@@ -211,8 +268,11 @@
     "ms": 1000,
     "gain": 0.7079,
     "startMs": 0,
+    "floor": 0.0073,
+    "rms": 0.204,
     "loop": false,
     "hash": "66dff638d471",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "drip": {
@@ -220,6 +280,8 @@
     "ms": 1000,
     "gain": 0.7325,
     "startMs": 0,
+    "floor": 0.000081,
+    "rms": 0.0648,
     "loop": false,
     "hash": "14a501bf0811",
     "influence": 0.6,
@@ -230,8 +292,11 @@
     "ms": 600,
     "gain": 0.7352,
     "startMs": 0,
+    "floor": 0.0381,
+    "rms": 0.222,
     "loop": false,
     "hash": "2039e8c0e374",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "drone-rotor": {
@@ -239,8 +304,11 @@
     "ms": 4000,
     "gain": 1.3526,
     "startMs": 0,
+    "floor": 0.0512,
+    "rms": 0.0739,
     "loop": true,
     "hash": "55e309811164",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "emergency-buzz": {
@@ -248,8 +316,11 @@
     "ms": 1600,
     "gain": 1.5188,
     "startMs": 0,
+    "floor": 0.0000489,
+    "rms": 0.0864,
     "loop": false,
     "hash": "1ff761e94c0b",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "far-clank": {
@@ -257,6 +328,8 @@
     "ms": 2000,
     "gain": 0.9307,
     "startMs": 0,
+    "floor": 0.0000563,
+    "rms": 0.0473,
     "loop": false,
     "hash": "bbee8de1a024",
     "influence": 0.3,
@@ -267,8 +340,11 @@
     "ms": 2480,
     "gain": 0.7079,
     "startMs": 0,
+    "floor": 0.0024,
+    "rms": 0.204,
     "loop": false,
     "hash": "bd2668a6ade2",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "hold-tick": {
@@ -276,8 +352,11 @@
     "ms": 480,
     "gain": 1.2981,
     "startMs": 0,
+    "floor": 0.0394,
+    "rms": 0.0448,
     "loop": false,
     "hash": "09911e721176",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "key-click": {
@@ -285,8 +364,11 @@
     "ms": 480,
     "gain": 0.9766,
     "startMs": 0,
+    "floor": 0.0000745,
+    "rms": 0.0295,
     "loop": false,
     "hash": "147c3594a449",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "klaxon": {
@@ -294,6 +376,8 @@
     "ms": 1000,
     "gain": 0.7079,
     "startMs": 0,
+    "floor": 0.000807,
+    "rms": 0.325,
     "loop": false,
     "hash": "fba98aefd4c5",
     "influence": 0.9,
@@ -304,6 +388,8 @@
     "ms": 480,
     "gain": 0.9617,
     "startMs": 0,
+    "floor": 0.0000463,
+    "rms": 0.0315,
     "loop": false,
     "hash": "24e63fd9ea27",
     "influence": 0.9,
@@ -314,8 +400,11 @@
     "ms": 1000,
     "gain": 0.9874,
     "startMs": 0,
+    "floor": 0.0000437,
+    "rms": 0.0228,
     "loop": false,
     "hash": "09766ead83eb",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "lever-pull": {
@@ -323,8 +412,11 @@
     "ms": 680,
     "gain": 0.7198,
     "startMs": 0,
+    "floor": 0.0000533,
+    "rms": 0.0504,
     "loop": false,
     "hash": "f281bbdad6b7",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "lever-spring": {
@@ -332,8 +424,11 @@
     "ms": 680,
     "gain": 0.9991,
     "startMs": 0,
+    "floor": 0.00865,
+    "rms": 0.0462,
     "loop": false,
     "hash": "eca119279043",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "locker-open": {
@@ -341,8 +436,11 @@
     "ms": 1000,
     "gain": 1.723,
     "startMs": 0,
+    "floor": 0.0000835,
+    "rms": 0.0376,
     "loop": false,
     "hash": "2bd3be7bd42f",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "machine-stroke": {
@@ -350,6 +448,8 @@
     "ms": 1000,
     "gain": 3.57,
     "startMs": 0,
+    "floor": 0.0000485,
+    "rms": 0.0366,
     "loop": false,
     "hash": "be2478543cdc",
     "influence": 0.3,
@@ -360,8 +460,11 @@
     "ms": 6000,
     "gain": 0.1891,
     "startMs": 0,
+    "floor": 0.309,
+    "rms": 0.529,
     "loop": true,
     "hash": "ab9b0ba6058d",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "mushroom-stomp": {
@@ -369,6 +472,8 @@
     "ms": 600,
     "gain": 0.7079,
     "startMs": 0,
+    "floor": 0.00139,
+    "rms": 0.146,
     "loop": false,
     "hash": "efe27106795f",
     "influence": 0.3,
@@ -379,8 +484,11 @@
     "ms": 600,
     "gain": 0.7079,
     "startMs": 0,
+    "floor": 0.32,
+    "rms": 0.427,
     "loop": false,
     "hash": "f952ab46a106",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "part-seat": {
@@ -388,8 +496,11 @@
     "ms": 600,
     "gain": 1.2944,
     "startMs": 0,
+    "floor": 0.000424,
+    "rms": 0.0267,
     "loop": false,
     "hash": "a7b0739ed97a",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "pencil": {
@@ -397,6 +508,8 @@
     "ms": 600,
     "gain": 0.8294,
     "startMs": 0,
+    "floor": 0.0868,
+    "rms": 0.135,
     "loop": false,
     "hash": "c0142d77b0e5",
     "influence": 0.3,
@@ -407,6 +520,8 @@
     "ms": 480,
     "gain": 0.7138,
     "startMs": 0,
+    "floor": 0.388,
+    "rms": 0.405,
     "loop": false,
     "hash": "f4b941c4240d",
     "influence": 0.6,
@@ -417,8 +532,11 @@
     "ms": 1600,
     "gain": 0.7401,
     "startMs": 0,
+    "floor": 0.0067,
+    "rms": 0.322,
     "loop": false,
     "hash": "9bbb67a2519f",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "probe-click": {
@@ -426,8 +544,11 @@
     "ms": 480,
     "gain": 0.7079,
     "startMs": 0,
+    "floor": 0.0000888,
+    "rms": 0.0707,
     "loop": false,
     "hash": "5bd80a7402ba",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "radio-key": {
@@ -435,8 +556,11 @@
     "ms": 480,
     "gain": 0.7313,
     "startMs": 0,
+    "floor": 0.00324,
+    "rms": 0.0436,
     "loop": false,
     "hash": "941b834e03d4",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "radio-open": {
@@ -444,8 +568,11 @@
     "ms": 600,
     "gain": 0.7303,
     "startMs": 0,
+    "floor": 0.188,
+    "rms": 0.252,
     "loop": false,
     "hash": "12d56faaed38",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "radio-tail": {
@@ -453,8 +580,11 @@
     "ms": 600,
     "gain": 0.7079,
     "startMs": 0,
+    "floor": 0.0269,
+    "rms": 0.191,
     "loop": false,
     "hash": "f1114b13baaa",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "reject-buzz": {
@@ -462,8 +592,11 @@
     "ms": 480,
     "gain": 1.1327,
     "startMs": 0,
+    "floor": 0.0000514,
+    "rms": 0.0999,
     "loop": false,
     "hash": "00bbf3133705",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "relay-click": {
@@ -471,8 +604,11 @@
     "ms": 480,
     "gain": 0.7781,
     "startMs": 0,
+    "floor": 0.00137,
+    "rms": 0.061,
     "loop": false,
     "hash": "8aafb8cee33a",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "server-spinup": {
@@ -480,6 +616,8 @@
     "ms": 1200,
     "gain": 0.708,
     "startMs": 0,
+    "floor": 0.0783,
+    "rms": 0.344,
     "loop": false,
     "hash": "c18a866dddfd",
     "influence": 0.9,
@@ -490,6 +628,8 @@
     "ms": 600,
     "gain": 1.9395,
     "startMs": 0,
+    "floor": 0.00034,
+    "rms": 0.0343,
     "loop": false,
     "hash": "60c44b51b300",
     "influence": 0.9,
@@ -500,8 +640,11 @@
     "ms": 800,
     "gain": 0.7079,
     "startMs": 0,
+    "floor": 0.000173,
+    "rms": 0.169,
     "loop": false,
     "hash": "b8873db8a7e9",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "siren": {
@@ -509,8 +652,11 @@
     "ms": 6000,
     "gain": 0.3877,
     "startMs": 0,
+    "floor": 0.184,
+    "rms": 0.258,
     "loop": true,
     "hash": "33d6312f2b0a",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "solved-chord": {
@@ -518,8 +664,11 @@
     "ms": 1200,
     "gain": 1.956,
     "startMs": 0,
+    "floor": 0.000853,
+    "rms": 0.0606,
     "loop": false,
     "hash": "57b6d04e27fb",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "solved-chunk": {
@@ -527,8 +676,11 @@
     "ms": 1000,
     "gain": 0.7539,
     "startMs": 0,
+    "floor": 0.0000972,
+    "rms": 0.0444,
     "loop": false,
     "hash": "36c1d4bf91c6",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "spark": {
@@ -536,8 +688,11 @@
     "ms": 600,
     "gain": 0.7297,
     "startMs": 0,
+    "floor": 0.00142,
+    "rms": 0.21,
     "loop": false,
     "hash": "e3b4a6b35829",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "stage-chime": {
@@ -545,8 +700,11 @@
     "ms": 800,
     "gain": 0.708,
     "startMs": 0,
+    "floor": 0.00108,
+    "rms": 0.231,
     "loop": false,
     "hash": "187c921099af",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "steam-hiss": {
@@ -554,8 +712,11 @@
     "ms": 1600,
     "gain": 0.7079,
     "startMs": 0,
+    "floor": 0.159,
+    "rms": 0.222,
     "loop": false,
     "hash": "9947f66ee309",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "step-1": {
@@ -563,6 +724,8 @@
     "ms": 480,
     "gain": 1.618,
     "startMs": 0,
+    "floor": 0.000113,
+    "rms": 0.0278,
     "loop": false,
     "hash": "e8948f901fb7",
     "influence": 0.6,
@@ -573,6 +736,8 @@
     "ms": 480,
     "gain": 0.7416,
     "startMs": 0,
+    "floor": 0.000322,
+    "rms": 0.0714,
     "loop": false,
     "hash": "63eb57cbcf2e",
     "influence": 0.9,
@@ -583,6 +748,8 @@
     "ms": 480,
     "gain": 0.7426,
     "startMs": 0,
+    "floor": 0.0000725,
+    "rms": 0.0638,
     "loop": false,
     "hash": "67d66c45f72d",
     "influence": 0.6,
@@ -593,8 +760,11 @@
     "ms": 480,
     "gain": 0.7986,
     "startMs": 0,
+    "floor": 0.0000537,
+    "rms": 0.0472,
     "loop": false,
     "hash": "259273bc00c2",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "toggle-clack": {
@@ -602,6 +772,8 @@
     "ms": 480,
     "gain": 0.708,
     "startMs": 0,
+    "floor": 0.000534,
+    "rms": 0.0556,
     "loop": false,
     "hash": "08e6314be676",
     "influence": 0.9,
@@ -612,8 +784,11 @@
     "ms": 1000,
     "gain": 1.2193,
     "startMs": 0,
+    "floor": 0.00176,
+    "rms": 0.0963,
     "loop": false,
     "hash": "e6fd0b83b46f",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "type-blip": {
@@ -621,8 +796,11 @@
     "ms": 480,
     "gain": 0.7349,
     "startMs": 0,
+    "floor": 0.0000527,
+    "rms": 0.308,
     "loop": false,
     "hash": "8349103ff0ff",
+    "influence": 0.5,
     "source": "elevenlabs"
   },
   "wall-thud": {
@@ -630,6 +808,8 @@
     "ms": 480,
     "gain": 0.7534,
     "startMs": 0,
+    "floor": 0.000709,
+    "rms": 0.0868,
     "loop": false,
     "hash": "51e5043badee",
     "influence": 0.6,
@@ -640,6 +820,8 @@
     "ms": 480,
     "gain": 0.7079,
     "startMs": 0,
+    "floor": 0.0000854,
+    "rms": 0.0774,
     "loop": false,
     "hash": "17c7c24dd372",
     "influence": 0.6,

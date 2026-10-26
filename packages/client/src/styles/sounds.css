@@ -52,7 +52,7 @@
   color: var(--muted);
 }
 
-.sounds-row--quiet .sounds-facts {
+.sounds-row--noisy .sounds-facts {
   color: var(--warn);
 }
 

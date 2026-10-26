@@ -13,24 +13,25 @@
  * it. An effect comes from text-to-sound-effects (`eleven_text_to_sound_v2`, a bed as a seamless
  * loop) as MP3 at 44.1 kHz and 128 kbit/s, a piece of music from Eleven Music, instrumental, at
  * 192 kbit/s; each into public/sfx/<id>.mp3 or public/music/<id>.mp3. public/sfx/manifest.json
- * and public/music/manifest.json list each as { file, ms, gain, startMs, loop, hash, influence,
- * source }: `hash` names the request that made it — `influence` how closely an effect followed
- * its prompt — so an entry whose request is unchanged and whose file is there is not made again,
- * and a run cut short goes on where it stopped.
+ * and public/music/manifest.json list each as { file, ms, gain, startMs, floor, rms, loop, hash,
+ * influence, source }: `hash` names the request that made it — `influence` how closely an effect
+ * followed its prompt — so an entry whose request is unchanged and whose file is there is not
+ * made again, and a run cut short goes on where it stopped.
  *
  * With `--candidates N` every entry the run makes is made N times — an effect with its prompt
  * followed more or less closely each time (INFLUENCE_SPAN), a piece of music by the same request
  * again — each take into a folder of its own in the system's temp, never into the project, and
  * measured, each take's measurements said; the one `pickTake` picks — by its peak, where its
- * sound starts, its silence and its length (PICK), then its RMS — is the one kept.
+ * sound starts, its silence, its length and its floor (PICK), then its RMS — is the one kept.
  *
  * The files stay as ElevenLabs made them. afconvert decodes each into a temporary folder, its
  * peak and RMS are measured there, and `gain` is what brings it to its target — a one-shot's peak
  * to −3 dBFS, a bed's or a stem's RMS to −20 dBFS, a sting's to −14 dBFS — for the game to apply;
  * more than 30 ms of silence at the start becomes `startMs`, except in a bed, whose loop keeps its
- * start. A take that would need more gain than MAX_GAIN came back quiet: the run names it and
- * fails, nothing capped, so that its prompt is made louder and only it is made anew. A run that
- * makes nothing measures every file anew, so a target changed costs nothing.
+ * start. `floor` is the RMS of its quietest 100 ms: where that is a gap in the sound and comes out
+ * louder than −50 dBFS once the gain is applied, the take plays its noise floor where it is heard
+ * (`floorHeard`) — the run names it with its gain and fails, nothing capped, so that it is made
+ * anew. A run that makes nothing measures every file anew, so a rule changed costs nothing.
  *
  * The key is ELEVENLABS_API_KEY in the environment — the package's `sfx` script hands node the
  * repo's .env.local (`--env-file`); this script opens no file for it. Before it asks for anything
@@ -93,14 +94,19 @@ export interface CatalogEntry {
 
 /**
  * One recording as the game finds it: its file, how long it lasts, ms, the gain that brings it
- * to its target, the silence its sound starts after, ms, whether it plays round and round, the
- * hash of the request that made it, how closely an effect followed its prompt, and who made it.
+ * to its target, the silence its sound starts after, ms, its noise floor and its RMS before the
+ * gain, whether it plays round and round, the hash of the request that made it, how closely an
+ * effect followed its prompt, and who made it.
  */
 export interface ManifestEntry {
   readonly file: string;
   readonly ms: number;
   readonly gain: number;
   readonly startMs: number;
+  /** the RMS of its quietest FLOOR_WINDOW_MS, over every channel, before the gain */
+  readonly floor: number;
+  /** its RMS from where its sound starts, over every channel, before the gain */
+  readonly rms: number;
   readonly loop: boolean;
   readonly hash: string;
   /** an effect's prompt influence; PROMPT_INFLUENCE where it is not given */
@@ -153,17 +159,20 @@ export const LEAD_MS = 30;
 /** A sample, or a 10 ms frame, quieter than this counts as silence: −60 dBFS. */
 export const SILENCE = 10 ** (-60 / 20);
 
+/** A recording's noise floor is the RMS of its quietest stretch this long, ms. */
+export const FLOOR_WINDOW_MS = 100;
+/** A floor that comes out louder than this once the gain is applied is heard, dBFS. */
+export const AUDIBLE_FLOOR_DBFS = -50;
 /**
- * The most gain a recording may take: more, and what it brings up is the noise floor of a take
- * that came back quiet — to be made again with a louder prompt. A one-shot's peak may lie
- * 15.6 dB under its target, a loop's, a stem's or a sting's RMS 12 dB.
+ * A floor less than this far under the recording's RMS, dB, is the sound itself — a bed, a stem,
+ * a hiss or a ringing tone that fills its file — and the sound masks whatever noise lies under it.
  */
-export const MAX_GAIN: Readonly<Record<Kind, number>> = { oneshot: 6, bed: 4, stem: 4, sting: 4 };
+export const MASKED_WITHIN_DB = 20;
 
 /**
  * The rules a take is picked by: its peak stands at −6 dBFS or more before its gain, its sound
- * starts within 50 ms, at most a tenth of it is silence, and it runs within a fifth of the length
- * asked for.
+ * starts within 50 ms, at most a tenth of it is silence, it runs within a fifth of the length
+ * asked for, and its floor is not heard (`floorHeard`).
  */
 export const PICK = { peakDbfs: -6, leadMs: 50, silence: 0.1, length: 0.2 } as const;
 
@@ -564,6 +573,42 @@ export function silenceOf(pcm: Pcm): number {
   return frames > 0 ? silent / frames : 1;
 }
 
+/** Each full 10 ms frame's sum of squares, over every channel, and the frame's length. */
+function frameSums(pcm: Pcm): { sums: number[]; frame: number } {
+  const samples = pcm.channels[0]?.length ?? 0;
+  const frame = Math.max(1, Math.round(pcm.rate / 100));
+  const sums: number[] = [];
+  for (let from = 0; from + frame <= samples; from += frame) {
+    let sum = 0;
+    for (const data of pcm.channels) {
+      for (let i = from; i < from + frame; i++) sum += (data[i] ?? 0) ** 2;
+    }
+    sums.push(sum);
+  }
+  return { sums, frame };
+}
+
+/**
+ * `pcm`'s noise floor: the RMS, over every channel, of its quietest FLOOR_WINDOW_MS, stepped
+ * 10 ms at a time; of all of it where it is shorter.
+ */
+export function floorOf(pcm: Pcm): number {
+  const { sums, frame } = frameSums(pcm);
+  const span = Math.round(FLOOR_WINDOW_MS / 10);
+  const width = pcm.channels.length * frame;
+  if (sums.length < span) {
+    const total = sums.reduce((sum, each) => sum + each, 0);
+    return sums.length > 0 ? Math.sqrt(total / (sums.length * width)) : 0;
+  }
+  let least = Infinity;
+  for (let k = 0; k + span <= sums.length; k++) {
+    let window = 0;
+    for (let j = k; j < k + span; j++) window += sums[j] ?? 0;
+    least = Math.min(least, window);
+  }
+  return Math.sqrt(least / (span * width));
+}
+
 /** The linear gain that brings a recording measured as `loudness` to `target`; fails on silence. */
 export function gainOf(target: Target, loudness: Loudness, id: string): number {
   const level = target.measure === 'peak' ? loudness.peak : loudness.rms;
@@ -573,22 +618,76 @@ export function gainOf(target: Target, loudness: Loudness, id: string): number {
   return Number((10 ** (target.dbfs / 20) / level).toFixed(4));
 }
 
-/** A recording that came back too quiet for its kind: its id, its gain, the most it may take. */
-export interface Quiet {
-  readonly id: string;
+/** A level as dBFS; −Infinity for silence. */
+const dbfs = (level: number): number => 20 * Math.log10(level);
+
+/** What decides whether a recording's floor is heard: the floor, its RMS, both before its gain. */
+export interface Floor {
+  readonly floor: number;
+  readonly rms: number;
   readonly gain: number;
-  readonly max: number;
 }
 
-/** The recordings of `catalog` whose gain in `manifests` is over MAX_GAIN for their kind. */
-export function tooQuiet(
+/** The floor a recording plays once its gain is applied, dBFS; −Infinity for digital silence. */
+export function heardDbfs(measured: Floor): number {
+  return dbfs(measured.floor * measured.gain);
+}
+
+/** Whether a recording's floor lies less than MASKED_WITHIN_DB under its RMS: the sound itself. */
+function floorMasked(measured: Floor): boolean {
+  return dbfs(measured.rms) - dbfs(measured.floor) < MASKED_WITHIN_DB;
+}
+
+/**
+ * Whether a recording plays its noise floor where it is heard: a floor MASKED_WITHIN_DB or more
+ * under its RMS — a gap in the sound, not the sound itself — that comes out louder than
+ * AUDIBLE_FLOOR_DBFS once the gain is applied.
+ */
+export function floorHeard(measured: Floor): boolean {
+  return !floorMasked(measured) && heardDbfs(measured) > AUDIBLE_FLOOR_DBFS;
+}
+
+/** A recording whose floor is heard: its id, its gain, and its floor once that is applied, dBFS. */
+export interface Noisy {
+  readonly id: string;
+  readonly gain: number;
+  readonly heardDbfs: number;
+}
+
+/** How far a recording `ms` long lies from the length `entry` asks for: a share of it. */
+export function lengthOff(entry: CatalogEntry, ms: number): number {
+  const asked = entry.durationSeconds * 1000;
+  return Math.abs(ms - asked) / asked;
+}
+
+/** A recording that runs off the length asked for: its id, how long it is and was asked, ms. */
+export interface OffLength {
+  readonly id: string;
+  readonly ms: number;
+  readonly asked: number;
+}
+
+/** The recordings of `catalog` that run more than PICK.length off the length they asked for. */
+export function offLength(
   catalog: readonly CatalogEntry[],
   manifests: Readonly<Record<Group, Manifest>>,
-): Quiet[] {
+): OffLength[] {
   return catalog.flatMap((entry) => {
     const kept = manifests[groupOf(entry)][entry.id];
-    const max = MAX_GAIN[entry.kind];
-    return kept !== undefined && kept.gain > max ? [{ id: entry.id, gain: kept.gain, max }] : [];
+    if (kept === undefined || lengthOff(entry, kept.ms) <= PICK.length) return [];
+    return [{ id: entry.id, ms: kept.ms, asked: entry.durationSeconds * 1000 }];
+  });
+}
+
+/** The recordings of `catalog` that, as `manifests` measured them, play a floor that is heard. */
+export function noisyTakes(
+  catalog: readonly CatalogEntry[],
+  manifests: Readonly<Record<Group, Manifest>>,
+): Noisy[] {
+  return catalog.flatMap((entry) => {
+    const kept = manifests[groupOf(entry)][entry.id];
+    if (kept === undefined || !floorHeard(kept)) return [];
+    return [{ id: entry.id, gain: kept.gain, heardDbfs: Number(heardDbfs(kept).toFixed(1)) }];
   });
 }
 
@@ -601,27 +700,37 @@ export function startMsOf(kind: Kind, loudness: Loudness): number {
 
 /**
  * A take of an entry as it measures: where it lies, how closely it followed its prompt, its
- * loudness, the share of it that is silence, its gain, and how far its length is off, a share.
+ * loudness, the share of it that is silence, its noise floor, its gain, and how far its length
+ * is off, a share.
  */
 export interface Take {
   readonly path: string;
   readonly influence: number;
   readonly loudness: Loudness;
   readonly silence: number;
+  readonly floor: number;
   readonly gain: number;
   readonly lengthOff: number;
 }
 
-/** A level as dBFS; −Infinity for silence. */
-const dbfs = (level: number): number => 20 * Math.log10(level);
+/** What decides whether `take`'s floor is heard. */
+const floorAt = (take: Take): Floor => ({
+  floor: take.floor,
+  rms: take.loudness.rms,
+  gain: take.gain,
+});
 
-/** The rules of PICK `take` misses: its peak, where its sound starts, its silence, its length. */
+/**
+ * The rules of PICK `take` misses: its peak, where its sound starts, its silence, its length,
+ * its floor.
+ */
 export function missesOf(take: Take): string[] {
   const misses = [
     dbfs(take.loudness.peak) < PICK.peakDbfs && 'peak',
     take.loudness.leadMs > PICK.leadMs && 'start',
     take.silence > PICK.silence && 'silence',
     take.lengthOff > PICK.length && 'length',
+    floorHeard(floorAt(take)) && 'floor',
   ];
   return misses.filter((miss): miss is string => typeof miss === 'string');
 }
@@ -657,14 +766,14 @@ function decode(path: string, scratch: string): Pcm {
 function takeAt(entry: CatalogEntry, path: string, influence: number, scratch: string): Take {
   const pcm = decode(path, scratch);
   const loudness = loudnessOf(pcm);
-  const asked = entry.durationSeconds * 1000;
   return {
     path,
     influence,
     loudness,
     silence: silenceOf(pcm),
+    floor: floorOf(pcm),
     gain: gainOf(entry.target, loudness, entry.id),
-    lengthOff: Math.abs(loudness.ms - asked) / asked,
+    lengthOff: lengthOff(entry, loudness.ms),
   };
 }
 
@@ -675,6 +784,8 @@ function entryOf(entry: CatalogEntry, take: Take): ManifestEntry {
     ms: take.loudness.ms,
     gain: take.gain,
     startMs: startMsOf(entry.kind, take.loudness),
+    floor: Number(take.floor.toPrecision(3)),
+    rms: Number(take.loudness.rms.toPrecision(3)),
     loop: entry.loop,
     hash: hashOf(entry, take.influence),
     ...(groupOf(entry) === 'sfx' ? { influence: take.influence } : {}),
@@ -688,10 +799,13 @@ function sayTakes(entry: CatalogEntry, takes: readonly Take[], kept: Take): void
     const how = groupOf(entry) === 'sfx' ? ` (influence ${take.influence})` : '';
     const { peak, rms, leadMs, ms } = take.loudness;
     const misses = missesOf(take);
+    const measured = floorAt(take);
+    const masked = floorMasked(measured) ? ' (masked)' : '';
+    const floor = `${heardDbfs(measured).toFixed(1)} dBFS${masked}`;
     console.log(
       `  ${entry.id} take ${i + 1}${how}: peak ${dbfs(peak).toFixed(1)} dBFS, RMS ` +
         `${dbfs(rms).toFixed(1)} dBFS, starts ${leadMs.toFixed(0)} ms, silence ` +
-        `${(take.silence * 100).toFixed(0)} %, ${ms} ms, gain ${take.gain}` +
+        `${(take.silence * 100).toFixed(0)} %, ${ms} ms, gain ${take.gain}, floor ${floor}` +
         `${misses.length > 0 ? ` — misses ${misses.join(', ')}` : ''}` +
         `${take === kept ? '  ← kept' : ''}`,
     );
@@ -856,22 +970,32 @@ async function renderAll(
 }
 
 /**
- * Says which recordings came back too quiet (`tooQuiet`), each with its gain, and what to do;
+ * Says which recordings play a floor that is heard (`noisyTakes`), each with its gain and its
+ * floor, and which run off their length (`offLength`), and the command that makes them again;
  * any such fails the run. Nothing is capped or hidden.
  */
-function warnQuiet(
+function warnTakes(
   catalog: readonly CatalogEntry[],
   manifests: Readonly<Record<Group, Manifest>>,
 ): void {
-  const quiet = tooQuiet(catalog, manifests);
-  if (quiet.length === 0) return;
-  const said = `${quiet.length} recordings came back quiet — their gain plays their noise floor`;
-  console.error(`sfx: ${said}:`);
-  for (const { id, gain, max } of quiet) console.error(`  ${id}  gain ${gain}, over ${max}`);
-  console.error(
-    'sfx: sharpen their prompts — close, loud, dry, full level — and make them again: ' +
-      '--candidates 3 --only a,b,c',
-  );
+  const noisy = noisyTakes(catalog, manifests);
+  const off = offLength(catalog, manifests);
+  if (noisy.length > 0) {
+    console.error(
+      `sfx: ${noisy.length} recordings play their noise floor over ${AUDIBLE_FLOOR_DBFS} dBFS ` +
+        `once their gain is applied:`,
+    );
+    for (const { id, gain, heardDbfs: heard } of noisy) {
+      console.error(`  ${id}  gain ${gain}, floor ${heard} dBFS`);
+    }
+  }
+  if (off.length > 0) {
+    console.error(`sfx: ${off.length} recordings run more than a fifth off their length:`);
+    for (const { id, ms, asked } of off) console.error(`  ${id}  ${ms} ms, asked for ${asked}`);
+  }
+  const ids = [...new Set([...noisy, ...off].map(({ id }) => id))];
+  if (ids.length === 0) return;
+  console.error(`sfx: make them again, the best take kept: --candidates 5 --only ${ids.join(',')}`);
   process.exitCode = 1;
 }
 
@@ -918,7 +1042,7 @@ async function main(options: Options): Promise<void> {
   const jobs = planOf(catalog, manifests, filedIn, options);
   printPlan(jobs, options.candidates);
   if (options.dryRun) {
-    warnQuiet(catalog, manifests);
+    warnTakes(catalog, manifests);
     return;
   }
   requireTools();
@@ -937,7 +1061,7 @@ async function main(options: Options): Promise<void> {
   }
   if (many) console.log(`sfx: every candidate lies in ${candidates}`);
   report(manifests);
-  warnQuiet(catalog, manifests);
+  warnTakes(catalog, manifests);
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

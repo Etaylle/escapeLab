@@ -38,21 +38,22 @@ request after the other, 300 ms apart, a 429 waited out as the voice script does
 client of `scripts/elevenlabs.ts`; an effect comes as MP3 at 44.1 kHz and 128 kbit/s into
 `public/sfx/<id>.mp3`, a piece of music at 192 kbit/s — the Creator plan's best — into
 `public/music/<id>.mp3`. `public/sfx/manifest.json` and `public/music/manifest.json` list each
-as `{ file, ms, gain, startMs, loop, hash, influence, source }`; `hash` names the request that
-made it, `influence` how closely an effect followed its prompt, so a run makes only what is
-new, changed or missing, and one cut short goes on where it stopped.
+as `{ file, ms, gain, startMs, floor, rms, loop, hash, influence, source }`; `floor` and `rms`
+are measured before the gain (below), `hash` names the request that made it, `influence` how
+closely an effect followed its prompt, so a run makes only what is new, changed or missing, and
+one cut short goes on where it stopped.
 
 **Candidates.** With `--candidates N` (up to 5; 1 unless told) every entry the run makes is
 made N times, each take into a folder of its own in the system's temp (the run names it; nothing
 of it goes into the project): an effect with its prompt followed ever more closely — 0.3, 0.6
 and 0.9 for three — a piece of music by the same request again. The script prints each take's
-peak, RMS, start, silence, length and gain and keeps the one that misses the fewest of four
-rules — its peak at −6 dBFS or more before any gain; its sound starts within 50 ms; at most a
-tenth of it is silence, 10 ms frames under −60 dBFS; its length lies within a fifth of the
-catalog's — and of those the one with the loudest RMS. Only that one goes into `public/sfx` or
-`public/music`, and the check for quiet takes below is made on it. A short click misses the
-silence rule whatever it does, its tail silent long before its half second is over, so for it
-the RMS decides.
+peak, RMS, start, silence, length, gain and floor and keeps the one that misses the fewest of
+five rules — its peak at −6 dBFS or more before any gain; its sound starts within 50 ms; at most
+a tenth of it is silence, 10 ms frames under −60 dBFS; its length lies within a fifth of the
+catalog's; its floor is not heard (below) — and of those the one with the loudest RMS. Only that
+one goes into `public/sfx` or `public/music`, and the checks below are made on it. A short click
+misses the silence rule whatever it does, its tail silent long before its half second is over,
+so for it the RMS decides.
 
 The key comes from the environment: the package script hands node the repo's `.env.local`
 (`--env-file-if-exists`), and from a worktree it is `node --env-file=<repo>/.env.local
@@ -65,10 +66,11 @@ and 18 credits a second, times the takes.
 
 **Listening to them.** The page `/sounds`, which no menu links to, lists every entry of the
 catalog by its kind — effects, rooms and loops, music, the end card — each with its prompt, its
-length and gain (marked „zu leise" where the gain is over the script's limit), a button that
-plays it through the game's own loader at the loudness the game brings it to (a loop — a room's
-bed, a stem — round and round until it is stopped) and a box „neu rendern"; below, it puts
-together the command for what is ticked, to be run in `packages/client`:
+length, its gain and its floor once the gain is applied („Grundrauschen −45,7 dBFS, hörbar"
+where it is heard, „vom Klang verdeckt" where the sound fills its quietest 100 ms), a button
+that plays it through the game's own loader at the loudness the game brings it to (a loop — a
+room's bed, a stem — round and round until it is stopped) and a box „neu rendern"; below, it
+puts together the command for what is ticked, to be run in `packages/client`:
 
 ```sh
 node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts --candidates 3 --only a,b,c
@@ -80,29 +82,36 @@ for the next visit. The page asks no service for anything: the user runs the com
 **Loudness without re-encoding.** The files stay as ElevenLabs made them. The script decodes
 each with `afconvert` into a temporary folder, measures its peak and its RMS and writes the gain
 that brings it to its target: a one-shot's peak to −3 dBFS, a bed's or a stem's RMS to
-−20 dBFS, a sting's RMS to −14 dBFS. A take that came back quiet would need so much gain that
-its MP3's noise floor came up with it: over 6 for a one-shot, over 4 for a bed, a stem or a
-sting (`MAX_GAIN`), the script names each such take with its gain and fails, and
-`test/sampleManifest.test.ts` lists them; nothing is capped. Its prompt is then made close,
-loud, dry and at full level, which changes its hash, and the next run makes only it anew. The
-first render brought back 17 such takes, none of them a short sound late in its file — each
-was quiet throughout: the three footsteps (gain 28–87, their peaks at −42 to −32 dBFS), the
-mushroom button, the console's tick, the wall's thud, the big button, the breaker's thunk, the
-lamp's pop, the find's chime and the ping (9–50), the archive's, the plain room's, the server
-room's and the lab's beds (4.2–104; the archive's RMS stood at −60 dBFS) and both stings
-(6.4 and 11.3). With them go ten more, judged weak by the same measures: eight one-shots that
-needed more than 6 dB (the sheet, the pencil, the klaxon, the drip, the far clank, the machine's
-stroke, the bubbling, the server's spin-up) and two whose sound began late (the wire's snip, the
-toggle's clack). Their prompts now name the material and the mechanism and ask for close, loud,
-dry takes at full level that start at once, and they are made again as three candidates each;
-the music, at its new 192 kbit/s, once again. More than 30 ms of silence at a recording's start
-becomes
+−20 dBFS, a sting's RMS to −14 dBFS. What a gain can spoil is the noise floor it brings up, so
+the script measures that as well: `floor`, the RMS of the recording's quietest 100 ms. A take
+plays its floor where it is heard when that floor comes out louder than −50 dBFS once the gain
+is applied, and lies 20 dB or more under the take's RMS — closer, the quietest 100 ms is the
+sound itself, a bed, a stem, a hiss, a ringing tone that fills its file, and the sound masks
+whatever noise lies under it (`floorHeard`). A take more than a fifth off its length is named as
+well. The script names each such take, with its gain, its floor or its length, and fails with
+the command that makes them again, `--candidates 5 --only …`; `test/sampleManifest.test.ts`
+lists them. Nothing is capped. More than 30 ms of silence at a recording's start becomes
 `startMs`, where its sound starts; a bed keeps its start, so that its loop stays seamless. A run
-that makes nothing measures every file anew. The game applies the gain as it decodes a
-recording (`samples.ts`), multiplying its samples once, and plays it from `startMs`.
-`test/sampleManifest.test.ts` fails, naming the command, where an entry has no file, a file
-was made from another request, lasts other than asked, came back clipped (a gain under 0.1) or
-quiet, or a folder passes its cap: `public/sfx` 3 MB, `public/music` 8 MB.
+that makes nothing measures every file anew, so a rule changed costs nothing. The game applies
+the gain as it decodes a recording (`samples.ts`), multiplying its samples once, and plays it
+from `startMs`. `test/sampleManifest.test.ts` fails, naming the command, where an entry has no
+file, a file was made from another request, runs off its length, came back clipped (a gain
+under 0.1) or plays a floor that is heard, or a folder passes its cap: `public/sfx` 3 MB,
+`public/music` 8 MB.
+
+The rule replaced a limit on the gain alone — 6 for a one-shot, 4 for the rest — that flagged a
+take for being quiet rather than for what is heard. The first render (2026-10-26) brought 17
+takes over it, each quiet throughout (the three footsteps at a gain of 28 to 87, the archive's
+bed at 104); they and ten more judged weak were made again as three candidates each, their
+prompts naming the material and the mechanism and asking for close, loud, dry takes at full
+level, and the music anew at 192 kbit/s. Two stayed over the limit, the big button (12.3) and
+the lab's bed (8.1); neither plays a floor that is heard, but their prompts were sharpened once
+more. Measured by the floor without the 20 dB, 26 of the 74 recordings would fail: every bed
+but the archive's, the calm and the tense stem, and 13 one-shots, 11 of them sounds that fill
+their file, such as the ping, the steam's hiss and the radio's static. With it, two fail, both
+played at a gain of about 0.7: the door's slide, which settles on a floor of −42.7 dBFS after
+the slide, and the power going down, whose whine still falls at −43.5 dBFS where its file ends.
+The `lost` sting came back 19.0 s long for the 10 s asked, its chord struck three times.
 
 ## One path
 
@@ -426,12 +435,13 @@ its id (`test/fakeSamples.ts`): `test/samples.test.ts` (both manifests and every
 once, a load shared by address, the gain and the start applied, a failure said once and kept
 silent, a manifest fetched again), `test/sampleManifest.test.ts` (the code's ids against the
 catalog, the catalog's `usedBy` against the code, every recording on disk, made from its
-request as it stands, its length, its start, its gain, the folders' caps),
+request as it stands, its length, its start, its gain, its floor, the folders' caps),
 `test/sfxScript.test.ts` (the catalog's rules, the requests and their hash, what a run makes,
 the command line, the candidates' influences and the rules a take is picked by, the credits'
-guard and the pricing at the first entry's rate, a WAV read, the gain, the start and the
-silence worked out from PCM of known loudness), `test/soundsPage.test.tsx` (the audition page's
-address, its listing by kind, what it says of each recording, the command it puts together),
+guard and the pricing at the first entry's rate, a WAV read, the gain, the start, the silence
+and the floor worked out from PCM of known loudness, the floor heard or masked, a length off),
+`test/soundsPage.test.tsx` (the audition page's address, its listing by kind, its floors flagged
+as the script flags them, what it says of each recording, the command it puts together),
 `test/ambience.test.ts` (rooms,
 levels, power, the beds' recorded loops, dead and alive variants, crossfades, the sporadic
 sounds, sounds let go), `test/spatial.test.ts` (pan, gain, muffle, steps, the rotor, the

@@ -46,6 +46,8 @@ export function serveSamples(
     ms: Math.round(secondsOf(id) * 1000),
     gain: served[id]?.gain ?? 1,
     startMs: served[id]?.startMs ?? 0,
+    floor: 0,
+    rms: 0.1,
     loop: LOOPS.has(id) || id.startsWith('bed-'),
     hash: '000000000000',
     source: 'elevenlabs',

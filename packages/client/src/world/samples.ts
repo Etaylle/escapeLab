@@ -97,14 +97,18 @@ export const MUSIC_BASE = '/music/';
 
 /**
  * One recording as its manifest lists it (scripts/sfx.ts): its file, how long it lasts, ms, the
- * gain that brings it to its loudness, where its sound starts, ms, whether it plays round and
- * round, the hash of what made it, and who made it.
+ * gain that brings it to its loudness, where its sound starts, ms, its noise floor and its RMS
+ * before the gain, whether it plays round and round, the hash of what made it, and who made it.
  */
 export interface SampleEntry {
   readonly file: string;
   readonly ms: number;
   readonly gain: number;
   readonly startMs: number;
+  /** the RMS of its quietest 100 ms, before the gain */
+  readonly floor: number;
+  /** its RMS from where its sound starts, before the gain */
+  readonly rms: number;
   readonly loop: boolean;
   readonly hash: string;
   readonly source: 'elevenlabs';
