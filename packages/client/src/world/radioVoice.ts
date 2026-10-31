@@ -2,7 +2,6 @@ import {
   audioEngine,
   biquad,
   chain,
-  fadeTo,
   gain,
   LOOKAHEAD,
   noiseLoop,
@@ -10,10 +9,9 @@ import {
   outlet,
   playingEngine,
   startSample,
-  still,
   type Engine,
-  type Fade,
 } from './audio.js';
+import { duck, unduck } from './mix.js';
 import { sample, type SfxId } from './samples.js';
 
 /**
@@ -21,8 +19,8 @@ import { sample, type SfxId } from './samples.js';
  * (scripts/voice.ts, public/voice/) and played as a handset hears them — band-limited to
  * 300 Hz–3.4 kHz, lightly saturated, over a faint bed of static, keyed with a squelch at either
  * end, the run's first line opened with the Leitstelle's own squelch, the squelches recordings
- * of their own (samples.ts) — while the beds and the music duck 6 dB under it (audio.ts, the
- * duck bus). The banner shows the line while it speaks;
+ * of their own (samples.ts) — while the music goes 8 dB and the beds 4 dB down under it (mix.ts
+ * `duck`). The banner shows the line while it speaks;
  * a line without a recording, as a custom mission's, still only chirps (audio.ts
  * `radioChirp`). At a run's start the mission's lines are fetched and decoded, so that a line
  * plays the moment it is shown; a line that comes over the air is fetched then too, where it
@@ -72,8 +70,6 @@ export const SPEECH_PEAK = 0.9;
 export const NOISE_BED = 10 ** (-33 / 20);
 /** The voice at the master gain: over the beds and the music, under the crew's own voices. */
 const VOICE_LEVEL = 0.12;
-/** The beds and the music while it speaks: −6 dB. */
-export const DUCK_LEVEL = 10 ** (-6 / 20);
 /** The squelch before the speech, s; the tail after it. */
 export const KEY_S = 0.07;
 export const TAIL_S = 0.16;
@@ -177,7 +173,6 @@ const store: {
 let speaking: Speaking | null = null;
 let lastId: string | null = null;
 let lastOpened = false;
-let duck: Fade = still(1);
 
 /** The manifest, fetched once; null where there is none to be had (it is tried again later). */
 function manifest(): Promise<VoiceManifest | null> {
@@ -321,7 +316,7 @@ export function airtimeMs(text: string): number | null {
  */
 function speak(engine: Engine, id: string, clip: Clip, at: number, opens: boolean): Speaking {
   const { ctx } = engine;
-  const radio = radioChain(ctx, engine.radio, VOICE_LEVEL);
+  const radio = radioChain(ctx, engine.voice, VOICE_LEVEL);
   const keyed = opens ? at + OPEN_S : at;
   const start = keyed + KEY_S;
   const end = start + clip.buffer.duration;
@@ -336,11 +331,11 @@ function speak(engine: Engine, id: string, clip: Clip, at: number, opens: boolea
   const opening = opens ? openChannel(ctx, keys, at) : [];
   const sources = [speech, bed, ...opening, ...squelch(ctx, keys, keyed, end)];
   onAllEnded(sources, () => radio.out.disconnect());
-  duckUnder(engine, opens ? at : start, end);
+  duck(engine, 'voice', opens ? at : start, end, ctx.currentTime);
   const cut = (when: number): void => {
     radio.out.gain.setTargetAtTime(0, when, 0.02);
     for (const source of sources) source.stop(when + 0.1);
-    unduck(engine, when);
+    unduck(engine, 'voice', when, ctx.currentTime);
   };
   return { id, start, end, cut };
 }
@@ -380,21 +375,6 @@ function openChannel(
   at: number,
 ): AudioScheduledSourceNode[] {
   return keySound(ctx, 'radio-open', dest, at);
-}
-
-/** The beds and the music go down 6 dB for the speech from `start` and come back after `end`. */
-function duckUnder(engine: Engine, start: number, end: number): void {
-  const param = engine.duck.gain;
-  const now = engine.ctx.currentTime;
-  fadeTo(param, duck, now, [now, Math.max(now + 0.08, start)], DUCK_LEVEL);
-  param.setValueAtTime(DUCK_LEVEL, end);
-  param.linearRampToValueAtTime(1, end + 0.4);
-  duck = { from: DUCK_LEVEL, to: 1, start: end, end: end + 0.4 };
-}
-
-/** The beds and the music come back from `at`: the line was cut short. */
-function unduck(engine: Engine, at: number): void {
-  duck = fadeTo(engine.duck.gain, duck, engine.ctx.currentTime, [at, at + 0.3], 1);
 }
 
 /** Cuts a line still on the air: the game screen is gone. */

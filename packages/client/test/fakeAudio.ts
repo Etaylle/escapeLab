@@ -5,16 +5,19 @@ import { serveSamples, type Served } from './fakeSamples.js';
  * Just enough of an AudioContext for the lab's sounds (world/audio.ts), its clock at 10 s:
  * every source it is told to start is kept in `started`, by what it is — a recording by its
  * id (fakeSamples.ts), the radio's noise as 'noise' — and when, with its speed; every
- * exponential ramp in `ramps`, every filter in `filters` and every node wired straight to the
- * output in `toOutput`. Recordings decode on a fake OfflineAudioContext.
+ * exponential ramp in `ramps`, every filter in `filters`, every node wired straight to the
+ * output in `toOutput` and every node wired into the master's brickwall in `toLimiter`.
+ * Recordings decode on a fake OfflineAudioContext.
  */
 
 export const started: { kind: string; at: number; rate: number }[] = [];
 export const ramps: { to: number; at: number }[] = [];
 /** Every filter made, as it was set up: its type and its frequency. */
 export const filters: { type: string; frequency: FakeParam }[] = [];
-/** Every node wired straight to a context's output — the lab's master gain, and nothing else. */
+/** Every node wired straight to a context's output — the brickwall's trim, and nothing else. */
 export const toOutput: { gain?: FakeParam }[] = [];
+/** Every node wired into the brickwall (mix.ts) — the lab's master gain, and nothing else. */
+export const toLimiter: { gain?: FakeParam }[] = [];
 
 class FakeParam {
   value = 0;
@@ -41,10 +44,9 @@ class FakeParam {
 
 class FakeNode {
   connect<T>(next: T): T {
-    if (next instanceof FakeOutput) {
-      // A gain wired to the output carries its gain; whatever else, nothing is read off it.
-      toOutput.push(this as { gain?: FakeParam });
-    }
+    // A gain wired to the output or the brickwall carries its gain; nothing else is read off it.
+    if (next instanceof FakeOutput) toOutput.push(this as { gain?: FakeParam });
+    if (next instanceof FakeCompressor) toLimiter.push(this as { gain?: FakeParam });
     return next;
   }
   disconnect(): void {}
@@ -52,6 +54,16 @@ class FakeNode {
 
 /** A context's output. */
 class FakeOutput extends FakeNode {}
+
+/** A dynamics compressor: its settings, as the mix sets them. */
+class FakeCompressor extends FakeNode {
+  readonly threshold = new FakeParam();
+  readonly knee = new FakeParam();
+  readonly ratio = new FakeParam();
+  readonly attack = new FakeParam();
+  readonly release = new FakeParam();
+  readonly reduction = 0;
+}
 
 /** A decoded recording, or the radio's noise: its samples, and the id it was served as. */
 interface FakeAudioBuffer {
@@ -111,6 +123,16 @@ export class FakeContext {
   createDelay() {
     return Object.assign(new FakeNode(), { delayTime: new FakeParam() });
   }
+  createDynamicsCompressor(): FakeCompressor {
+    return new FakeCompressor();
+  }
+  createConvolver() {
+    const buffer: FakeAudioBuffer | null = null;
+    return Object.assign(new FakeNode(), { buffer, normalize: true });
+  }
+  createStereoPanner() {
+    return Object.assign(new FakeNode(), { pan: new FakeParam() });
+  }
   createBuffer(_channels: number, length: number, rate: number): FakeAudioBuffer {
     const data = new Float32Array(length);
     return { duration: length / rate, numberOfChannels: 1, getChannelData: () => data };
@@ -151,6 +173,7 @@ export function fakeAudio(): void {
   ramps.length = 0;
   filters.length = 0;
   toOutput.length = 0;
+  toLimiter.length = 0;
   vi.stubGlobal('AudioContext', FakeContext);
   vi.stubGlobal('OfflineAudioContext', FakeOfflineContext);
 }

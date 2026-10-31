@@ -122,7 +122,7 @@ function sayOver(run: Announcement, text: string): void {
 /** The recording `clip` through a loudspeaker's chain into the radio's bus, from now on. */
 function speak(engine: Engine, clip: Clip, text: string): Speaking {
   const { ctx } = engine;
-  const pa = paChain(ctx, engine.radio, PA_LEVEL);
+  const pa = paChain(ctx, engine.announce, PA_LEVEL);
   const speech = ctx.createBufferSource();
   speech.buffer = clip.buffer;
   chain(speech, gain(ctx, SPEECH_PEAK / clip.peak), pa.input);

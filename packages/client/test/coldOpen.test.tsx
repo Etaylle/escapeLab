@@ -24,6 +24,7 @@ import {
   started,
   startedAt,
   startsOf,
+  toLimiter,
   toOutput,
 } from './fakeAudio.js';
 import { mapWith } from './fixtures.js';
@@ -383,9 +384,11 @@ describe('the sounds of the cold open', () => {
     const beeps = startsOf('countdown-beep').map((s) => s.at);
     expect(beeps).toEqual([10.01, 11.21, 12.41].map((at) => expect.closeTo(at, 3)));
     expect(startsOf('countdown-go').map((s) => s.at)).toEqual([expect.closeTo(13.61, 3)]);
-    // Through the master gain, at 0 with the sound off: nothing reaches the output past it.
+    // Through the master gain, at 0 with the sound off: nothing reaches the brickwall past it,
+    // and only the brickwall's trim reaches the output.
+    expect(toLimiter).toHaveLength(1);
+    expect(toLimiter[0]?.gain?.value).toBe(0);
     expect(toOutput).toHaveLength(1);
-    expect(toOutput[0]?.gain?.value).toBe(0);
     expect(audio.isMuted()).toBe(true);
   });
 

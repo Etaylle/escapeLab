@@ -156,9 +156,30 @@ export class FakeShaper extends FakeNode {
   }
 }
 
+export class FakeCompressor extends FakeNode {
+  readonly threshold = new FakeParam(-24);
+  readonly knee = new FakeParam(30);
+  readonly ratio = new FakeParam(12);
+  readonly attack = new FakeParam(0.003);
+  readonly release = new FakeParam(0.25);
+  /** the gain reduction it applies now, dB: none in a fake */
+  readonly reduction = 0;
+  constructor(ctx: FakeContext) {
+    super('compressor', ctx);
+  }
+}
+
+export class FakeConvolver extends FakeNode {
+  buffer: FakeBuffer | null = null;
+  normalize = true;
+  constructor(ctx: FakeContext) {
+    super('convolver', ctx);
+  }
+}
+
 export class FakeBuffer {
-  readonly data: Float32Array;
-  readonly numberOfChannels = 1;
+  /** its samples, channel by channel */
+  readonly channels: Float32Array[];
   /** the offline context it was rendered on, whose graph tells what it holds */
   renderedBy: FakeOfflineContext | null = null;
   /** the recording it was decoded from, by its id (fakeSamples.ts) */
@@ -166,17 +187,27 @@ export class FakeBuffer {
   constructor(
     length: number,
     readonly sampleRate: number,
+    channels = 1,
   ) {
-    this.data = new Float32Array(length);
+    this.channels = Array.from({ length: channels }, () => new Float32Array(length));
+  }
+  /** its first channel's samples */
+  get data(): Float32Array {
+    return this.getChannelData(0);
+  }
+  get numberOfChannels(): number {
+    return this.channels.length;
   }
   get duration(): number {
-    return this.data.length / this.sampleRate;
+    return this.length / this.sampleRate;
   }
   get length(): number {
-    return this.data.length;
+    return this.channels[0]?.length ?? 0;
   }
-  getChannelData(): Float32Array {
-    return this.data;
+  getChannelData(channel = 0): Float32Array {
+    const data = this.channels[channel];
+    if (data === undefined) throw new RangeError(`no channel ${channel}`);
+    return data;
   }
 }
 
@@ -214,8 +245,14 @@ export class FakeContext {
   createDelay(): FakeNode & { delayTime: FakeParam } {
     return Object.assign(new FakeNode('delay', this), { delayTime: new FakeParam(0) });
   }
-  createBuffer(_channels: number, length: number, rate: number): FakeBuffer {
-    return new FakeBuffer(length, rate);
+  createDynamicsCompressor(): FakeCompressor {
+    return new FakeCompressor(this);
+  }
+  createConvolver(): FakeConvolver {
+    return new FakeConvolver(this);
+  }
+  createBuffer(channels: number, length: number, rate: number): FakeBuffer {
+    return new FakeBuffer(length, rate, channels);
   }
   /**
    * A recording that fakeSamples.ts serves ("sample:<id>:<seconds>") decodes to that long a

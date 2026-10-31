@@ -259,7 +259,7 @@ function feetOf(walker: Walker, place: Place): Placing | null {
     return null;
   }
   if (walker.feet === null) {
-    walker.feet = placing(engine.ctx, engine.effects, place, STEP_LEVEL);
+    walker.feet = placing(engine.ctx, engine.sfx, place, STEP_LEVEL);
   } else {
     moveTo(walker.feet, place, STEP_LEVEL);
   }
@@ -350,7 +350,7 @@ function startRotor(engine: Engine, place: Place): Rotor | null {
   const loop = sample('drone-rotor');
   if (loop === null || !claim({ loop: 1 })) return null;
   const { ctx } = engine;
-  const stages = placing(ctx, engine.effects, place, 0);
+  const stages = placing(ctx, engine.sfx, place, 0);
   const source = playLoop(ctx, loop.buffer, stages.level, ctx.currentTime + LOOKAHEAD);
   source.onended = () => {
     release({ loop: 1 });
@@ -414,7 +414,7 @@ function placedOnce(engine: Engine, id: SfxId, place: Place, level: number): voi
   if (recording === null || !place.heard) return;
   const { ctx } = engine;
   const t = ctx.currentTime + LOOKAHEAD;
-  capped(ctx, engine.effects, { voice: 1 }, (out) => [
+  capped(ctx, engine.sfx, { voice: 1 }, (out) => [
     startSample(ctx, recording, placing(ctx, out, place, level).level, t),
   ]);
 }

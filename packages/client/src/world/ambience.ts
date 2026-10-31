@@ -479,7 +479,7 @@ function bedLoop(kind: BedKind, layer: Layer): { loop: Sample; level: number } |
 
 /** A new bed for `room`, silent, its loops to start as they are due: into the beds' bus. */
 function addBed(amb: Ambience, room: string, kind: BedKind, now: number): Bed {
-  const { ctx, beds } = amb.engine;
+  const { ctx, ambience: beds } = amb.engine;
   const out = outlet(ctx, beds, 0);
   const stages = { power: outlet(ctx, out, 0), idle: outlet(ctx, out, 1) };
   const next = OCCASIONS[kind].map((occasion) => firstAt(occasion, now));

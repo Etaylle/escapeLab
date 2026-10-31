@@ -4,7 +4,6 @@ import { voiced } from '../src/radio.js';
 import {
   BAND_HIGH,
   BAND_LOW,
-  DUCK_LEVEL,
   KEY_LEVEL,
   KEY_S,
   NOISE_BED,
@@ -176,6 +175,12 @@ describe('a line spoken over the radio', () => {
   /** Lets the fetches and the decoding settle. */
   const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
+  /** The ducks of the engine the radio plays on (mix.ts). */
+  async function ducks(): Promise<{ musicDuck: FakeGain; ambienceDuck: FakeGain }> {
+    const engine = (await import('../src/world/audio.js')).audioEngine();
+    return engine as unknown as { musicDuck: FakeGain; ambienceDuck: FakeGain };
+  }
+
   it('fetches the run’s mission’s lines at its start, from the files they name', async () => {
     const radio = await voice();
     radio.preloadVoice('blackout');
@@ -213,6 +218,8 @@ describe('a line spoken over the radio', () => {
       'gain', // the voice's level
       'gain', // the radio's bus, at the Funk volume
       'gain', // the master gain
+      'compressor', // the brickwall
+      'gain', // its makeup taken back
       'destination',
     ]);
     const bed = sources.find((s) => s.loop);
@@ -228,18 +235,23 @@ describe('a line spoken over the radio', () => {
     expect(20 * Math.log10((KEY_LEVEL * 10 ** (-3 / 20)) / SPEECH_PEAK)).toBeCloseTo(-5.8, 1);
   });
 
-  it('ducks the beds and the music 6 dB while it speaks, and reports it playing', async () => {
+  it('pulls the music 8 dB and the beds 4 dB down while it speaks, and reports it', async () => {
     const radio = await voice();
     radio.preloadVoice('blackout');
     await settle();
     radio.sayLine(LEVER_LINE);
     const ctx = lastContext();
-    const master = ctx.all<FakeGain>('gain').find((g) => g.outputs.includes(ctx.destination));
-    const duck = ctx.all<FakeGain>('gain').find((g) => g.outputs.includes(master as FakeNode));
-    expect(DUCK_LEVEL).toBeCloseTo(0.501, 3);
-    expect(duck?.gain.ramps()).toEqual([
-      [DUCK_LEVEL, expect.closeTo(10.08, 9)],
-      [1, expect.closeTo(11.98, 9)],
+    const { musicDuck, ambienceDuck } = await ducks();
+    const music = 10 ** (-8 / 20);
+    expect(musicDuck.gain.ramps()).toEqual([
+      [1, expect.closeTo(10.08, 9)], // as the speech starts…
+      [expect.closeTo(music, 9), expect.closeTo(10.13, 9)], // …down in 50 ms…
+      [expect.closeTo(music, 9), expect.closeTo(11.58, 9)], // …until it ends…
+      [1, expect.closeTo(11.98, 9)], // …and back in 400 ms
+    ]);
+    expect(ambienceDuck.gain.ramps()[1]).toEqual([
+      expect.closeTo(10 ** (-4 / 20), 9),
+      expect.closeTo(10.13, 9),
     ]);
     ctx.currentTime = 10.05;
     expect(radio.voiceProbe()).toEqual({ playing: false, lastId: 'aaaaaaaaaaaa', opened: false });
@@ -262,9 +274,9 @@ describe('a line spoken over the radio', () => {
     // The opening's recording from the start — static swelling, snapping shut — then the key.
     expect(keysOf(ctx, 'radio-open')).toEqual([expect.closeTo(10.01, 9)]);
     expect(keysOf(ctx, 'radio-key')).toEqual([expect.closeTo(10.01 + OPEN_S, 9)]);
-    const master = ctx.all<FakeGain>('gain').find((g) => g.outputs.includes(ctx.destination));
-    const duck = ctx.all<FakeGain>('gain').find((g) => g.outputs.includes(master as FakeNode));
-    expect(duck?.gain.ramps()[0]).toEqual([DUCK_LEVEL, expect.closeTo(10.08, 9)]);
+    const { musicDuck } = await ducks();
+    // Pulled down as the Leitstelle opens the channel, not as the voice comes in.
+    expect(musicDuck.gain.ramps()[1]).toEqual([expect.closeTo(10 ** (-8 / 20), 9), 10.06]);
     expect(radio.voiceProbe()).toMatchObject({ lastId: 'cccccccccccc', opened: true });
     ctx.currentTime = 10.45; // the opening plays, the voice has not begun
     expect(radio.voiceProbe().playing).toBe(false);

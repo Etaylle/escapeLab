@@ -188,15 +188,13 @@ describe('the talk key', () => {
   });
 });
 
-/** The engine's buses by their place in the graph. */
-function busesOf(ctx: FakeContext) {
-  const gains = ctx.all<FakeGain>('gain');
+/** The engine's buses by their names in the mix (mix.ts), and what feeds a node. */
+function busesOf(engine: unknown, ctx: FakeContext) {
+  type Bus = 'master' | 'sfx' | 'ambience' | 'music' | 'voice' | 'announce';
+  const buses = engine as Record<Bus, FakeGain>;
   const into = (target: FakeNode | undefined): FakeGain[] =>
-    gains.filter((g) => target !== undefined && g.outputs.includes(target));
-  const [master] = into(ctx.destination);
-  const [duck, effects, radio] = into(master);
-  const [beds, music] = into(duck);
-  return { master, duck, effects, radio, beds, music, into };
+    ctx.all<FakeGain>('gain').filter((g) => target !== undefined && g.outputs.includes(target));
+  return { ...buses, into };
 }
 
 /** The value last aimed at on a bus, or its value where nothing was scheduled. */
@@ -209,12 +207,13 @@ describe('the volumes on the audio’s buses', () => {
   it('sets each bus as a share of full — the effects on the beds too', async () => {
     fakeGraph();
     const { settings, audio } = await fresh();
-    audio.audioEngine();
+    const engine = audio.audioEngine();
     settings.applyVolumes({ radio: 50, effects: 20, music: 0 });
-    const buses = busesOf(lastContext());
-    expect(aimedAt(buses.radio)).toBe(0.5);
-    expect(aimedAt(buses.effects)).toBe(0.2);
-    expect(aimedAt(buses.beds)).toBe(0.2);
+    const buses = busesOf(engine, lastContext());
+    expect(aimedAt(buses.voice)).toBe(0.5);
+    expect(aimedAt(buses.announce)).toBe(0.5);
+    expect(aimedAt(buses.sfx)).toBe(0.2);
+    expect(aimedAt(buses.ambience)).toBe(0.2);
     expect(aimedAt(buses.music)).toBe(0);
     // The sound switch keeps the master gain: no volume touches it.
     expect(buses.master?.gain.events).toEqual([]);
@@ -225,12 +224,11 @@ describe('the volumes on the audio’s buses', () => {
     fakeGraph();
     const { settings, audio } = await fresh();
     settings.applyVolumes(settings.DEFAULT_SETTINGS.volumes);
-    audio.audioEngine();
-    const buses = busesOf(lastContext());
-    expect(buses.radio?.gain.value).toBe(1);
-    expect(buses.effects?.gain.value).toBe(1);
-    expect(buses.beds?.gain.value).toBe(1);
-    expect(buses.music?.gain.value).toBe(0.7);
+    const buses = busesOf(audio.audioEngine(), lastContext());
+    expect(buses.voice.gain.value).toBe(1);
+    expect(buses.sfx.gain.value).toBe(1);
+    expect(buses.ambience.gain.value).toBe(1);
+    expect(buses.music.gain.value).toBe(0.7);
   });
 
   it('plays a step through the effects’ bus and the chirp through the radio’s', async () => {
@@ -238,13 +236,12 @@ describe('the volumes on the audio’s buses', () => {
     const { audio } = await fresh();
     await loadedSamples();
     audio.footstep();
-    const stepped = busesOf(lastContext());
-    expect(stepped.into(stepped.effects)).toHaveLength(1);
-    expect(stepped.into(stepped.radio)).toHaveLength(0);
+    const buses = busesOf(audio.audioEngine(), lastContext());
+    expect(buses.into(buses.sfx)).toHaveLength(1);
+    expect(buses.into(buses.voice)).toHaveLength(0);
     audio.radioChirp();
-    const chirped = busesOf(lastContext());
-    expect(chirped.into(chirped.radio)).toHaveLength(1);
-    expect(chirped.into(chirped.effects)).toHaveLength(1);
+    expect(buses.into(buses.voice)).toHaveLength(1);
+    expect(buses.into(buses.sfx)).toHaveLength(1);
   });
 
   it('lands a sprinted step a little louder than a walked one', async () => {
@@ -253,7 +250,8 @@ describe('the volumes on the audio’s buses', () => {
     await loadedSamples();
     audio.footstep(false);
     audio.footstep(true);
-    const [walked, sprinted] = busesOf(lastContext()).into(busesOf(lastContext()).effects);
+    const buses = busesOf(audio.audioEngine(), lastContext());
+    const [walked, sprinted] = buses.into(buses.sfx);
     expect(sprinted?.gain.value).toBeCloseTo((walked?.gain.value ?? 0) * audio.SPRINT_STEP_GAIN, 9);
     expect(audio.SPRINT_STEP_GAIN).toBeGreaterThan(1);
     expect(audio.SPRINT_STEP_GAIN).toBeLessThan(1.5);

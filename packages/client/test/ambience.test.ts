@@ -203,18 +203,10 @@ describe('the beds as they play', () => {
     time,
   });
 
-  /**
-   * The beds' out-stages: the gains wired straight into the beds' bus — which goes into the
-   * duck bus first, before the music's, as the duck bus goes into the master gain first.
-   */
-  function bedOuts(ctx: FakeContext): FakeGain[] {
-    const gains = ctx.all<FakeGain>('gain');
-    const into = (target: FakeGain | undefined): FakeGain[] =>
-      gains.filter((g) => target !== undefined && g.outputs.includes(target));
-    const master = gains.find((g) => g.outputs.includes(ctx.destination));
-    const [duck] = into(master);
-    const [beds] = into(duck);
-    return into(beds);
+  /** The beds' out-stages: the gains wired straight into the mix's bus for them (mix.ts). */
+  function bedOuts(ctx: FakeContext, audio: { audioEngine: () => unknown }): FakeGain[] {
+    const { ambience } = audio.audioEngine() as { ambience: FakeGain };
+    return ctx.all<FakeGain>('gain').filter((g) => g.outputs.includes(ambience));
   }
 
   /** The loops playing now: looping buffer sources started and not stopped. */
@@ -231,9 +223,9 @@ describe('the beds as they play', () => {
   }
 
   it('builds the own room’s bed and the nearest neighbour’s, fading in over 1.2 s', async () => {
-    const { ambience, ctx } = await started();
+    const { ambience, audio, ctx } = await started();
     hearRendered(ambience, scene(withDoors(), 4.5, 1.5, POWER_ON));
-    const outs = bedOuts(ctx);
+    const outs = bedOuts(ctx, audio);
     expect(outs).toHaveLength(2);
     expect(outs.map((out) => out.gain.ramps().at(-1))).toEqual(
       expect.arrayContaining([
@@ -385,10 +377,10 @@ describe('the beds as they play', () => {
   });
 
   it('fades every bed out and stops it when the world goes', async () => {
-    const { ambience, ctx } = await started();
+    const { ambience, audio, ctx } = await started();
     hearRendered(ambience, scene(withDoors(), 12.5, 1.5, POWER_ON));
     ambience.stopAmbience();
-    const [server] = bedOuts(ctx);
+    const [server] = bedOuts(ctx, audio);
     expect(server?.gain.ramps().at(-1)).toEqual([0, 10.5]);
     expect(ctx.all<FakeBufferSource>('buffer').every((b) => b.stoppedAt === 10.55)).toBe(true);
     expect(() => ambience.hearRooms(scene(withDoors(), 4.5, 1.5, POWER_ON))).not.toThrow();
