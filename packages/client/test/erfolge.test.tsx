@@ -10,7 +10,7 @@ import {
 } from '../src/achievements.js';
 import { DailyDays } from '../src/screens/History.js';
 import { EndScreen, shareCardOf, titleCardOf } from '../src/screens/End.js';
-import { DailySwitch, LobbyScreen } from '../src/screens/Lobby.js';
+import { DAILY_NOTE, DailySwitch, LobbyScreen } from '../src/screens/Lobby.js';
 import { Plaques } from '../src/screens/Plaques.js';
 import {
   drawShareCard,
@@ -210,6 +210,9 @@ describe('the lobby', () => {
     const off = lobby({ day: null });
     expect(off).toContain('role="switch" aria-checked="false"');
     expect(off).toContain('Tagesschicht 31.10.');
+    // A chip beside the difficulty's caption, what it is in its title.
+    expect(off).toMatch(/<p class="lobby-caption">Schwierigkeit<\/p><button[^>]*role="switch"/);
+    expect(off).toContain(`title="${DAILY_NOTE}"`);
     const on = lobby({ day: '2026-10-31' });
     expect(on).toContain('class="daily-switch daily-switch--on" role="switch" aria-checked="true"');
     // Everyone else sees whether it is on.

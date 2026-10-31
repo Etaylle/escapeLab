@@ -80,7 +80,8 @@ what happened.
 ## Tagesschicht
 
 One seed a day for a mission that offers it (`daily: true` in the mission; Blackout does): the
-host's switch „Tagesschicht 31.10." in the lobby pins the room to the seed of the UTC day
+host's switch „Tagesschicht 31.10." beside the difficulty in the lobby (its title says what it
+is) pins the room to the seed of the UTC day
 (`dailySeed(utcDay(at))`, an FNV-1a hash of the day mixed through a finaliser), so every crew
 that day plays the same instance — spawns, sources, edgework, every station. The day is the
 one each run starts on: a rematch after midnight UTC plays the next day's. It needs no

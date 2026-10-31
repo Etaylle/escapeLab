@@ -136,17 +136,29 @@ interface LevelsProps {
    * crew (firstRun.ts), and while it stays on it, a muted line says so
    */
   firstRun?: boolean;
+  /** the Tagesschicht's switch beside the caption, where the mission offers one */
+  daily?: ReactNode;
 }
 
 /**
  * The difficulty as three chips: the host picks one, everyone else sees which. A host on a
  * first run is told why „entspannt" stands picked.
  */
-export function Levels({ current, pick, firstRun = false }: LevelsProps) {
+export function Levels({ current, pick, firstRun = false, daily }: LevelsProps) {
   const levels = difficultyInfos();
+  const caption = (
+    <p className="lobby-caption">Schwierigkeit{pick === null && ' (wählt der Host)'}</p>
+  );
   return (
     <div className="lobby-levels">
-      <p className="lobby-caption">Schwierigkeit{pick === null && ' (wählt der Host)'}</p>
+      {daily === undefined ? (
+        caption
+      ) : (
+        <div className="lobby-levels-head">
+          {caption}
+          {daily}
+        </div>
+      )}
       <div className={pick === null ? 'level-chips level-chips-shown' : 'level-chips'}>
         {levels.map((level) => {
           const on = level.id === current;
@@ -178,10 +190,15 @@ export function Levels({ current, pick, firstRun = false }: LevelsProps) {
   );
 }
 
+/** What the Tagesschicht is, on its switch: the same instance for every crew, ranked apart. */
+export const DAILY_NOTE =
+  'Jede Crew bekommt heute dieselbe Lage; die Läufe stehen auf einer eigenen Bestenliste.';
+
 /**
  * The Tagesschicht, where the mission offers one: the host's switch „Tagesschicht 31.10." —
  * the day's seed for every crew, ranked among that day's runs (core daily.ts) — named by the
  * day the room plays, or today's (UTC) while it is off; everyone else sees whether it is on.
+ * A chip beside the difficulty's caption, what it is in its title.
  */
 export function DailySwitch({
   day,
@@ -198,27 +215,24 @@ export function DailySwitch({
   const on = day !== null;
   const label = `Tagesschicht ${dailyLabel(day ?? today)}`;
   const marks = on ? 'daily-switch daily-switch--on' : 'daily-switch';
+  if (pick === null) {
+    return (
+      <span className={marks} title={DAILY_NOTE}>
+        <span className="daily-lamp" aria-hidden="true" /> {label} {on ? '· an' : '· aus'}
+      </span>
+    );
+  }
   return (
-    <div className="lobby-daily">
-      {pick === null ? (
-        <span className={marks}>
-          <span className="daily-lamp" aria-hidden="true" /> {label} {on ? '· an' : '· aus'}
-        </span>
-      ) : (
-        <button
-          type="button"
-          className={marks}
-          role="switch"
-          aria-checked={on}
-          onClick={() => pick(!on)}
-        >
-          <span className="daily-lamp" aria-hidden="true" /> {label}
-        </button>
-      )}
-      <p className="muted lobby-daily-note">
-        Jede Crew bekommt heute dieselbe Lage; die Läufe stehen auf einer eigenen Bestenliste.
-      </p>
-    </div>
+    <button
+      type="button"
+      className={marks}
+      role="switch"
+      aria-checked={on}
+      title={DAILY_NOTE}
+      onClick={() => pick(!on)}
+    >
+      <span className="daily-lamp" aria-hidden="true" /> {label}
+    </button>
   );
 }
 
@@ -459,20 +473,27 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
         className={more ? 'lobby-panel lobby-panel-more' : 'lobby-panel'}
         aria-label="Mission"
       >
-        <MissionHead view={view} info={info} picker={picker} earned={earned} />
+        <MissionHead
+          view={view}
+          info={info}
+          picker={picker}
+          earned={earned}
+        />
         <Story text={view.storyText} open={more} toggle={() => setMore(!more)} />
         <Levels
           current={view.difficulty}
           pick={host ? (difficulty) => send({ kind: 'select-difficulty', difficulty }) : null}
           firstRun={host && !won}
+          daily={
+            view.daily === undefined ? undefined : (
+              <DailySwitch
+                day={view.daily.day}
+                today={today}
+                pick={host ? (daily) => send({ kind: 'set-daily', daily }) : null}
+              />
+            )
+          }
         />
-        {view.daily !== undefined && (
-          <DailySwitch
-            day={view.daily.day}
-            today={today}
-            pick={host ? (daily) => send({ kind: 'set-daily', daily }) : null}
-          />
-        )}
         <MicSetup />
         <StartArea view={view} send={send} />
         <div className="lobby-foot">

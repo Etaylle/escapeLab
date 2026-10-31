@@ -6880,7 +6880,7 @@ function todayShift() {
  * plays. A mission without one skips it.
  */
 async function captureDaily(page, seen) {
-  const toggle = page.locator('.lobby-daily button.daily-switch');
+  const toggle = page.locator('.lobby-levels button.daily-switch');
   if ((await toggle.count()) === 0) {
     skip('daily.png', `${MISSION} offers no Tagesschicht`);
     return;
