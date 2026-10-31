@@ -7356,7 +7356,8 @@ async function captureShadow({ name, page }) {
   }
   await sleep(150);
   await shootAround(page, 'shadow-blob.png', { x: self.x, y: self.y }, FIGURE_SHOT);
-  console.log(`shadow-blob.png    ${name} standing in the ${still.ground}: its blob of shadow`);
+  const light = { lit: 'under the ceiling lights', dark: 'in the dark' }[still.ground];
+  console.log(`shadow-blob.png    ${name} standing ${light ?? 'unlit'}: its blob of shadow`);
 }
 
 /**

@@ -23,10 +23,10 @@ import { seededRandom } from './brush.js';
 export const MAX_PARTICLES = 120;
 /** How many of them each kind may take: the sparks always find room. */
 export const SHARE: Readonly<Record<Exclude<ParticleKind, 'spark'>, number>> = {
-  dust: 48,
-  steam: 30,
+  dust: 44,
+  steam: 28,
   smoke: 18,
-  debris: 24,
+  debris: 30,
 };
 /** A burst of sparks. */
 const SPARKS = 18;
@@ -208,7 +208,7 @@ function spawnDebris(p: Particles, rim: Spot): void {
     vy: 0.35 + rand() * 0.5,
     age: 0,
     life: 0.6 + rand() * 0.7,
-    size: 0.012 + rand() * 0.02,
+    size: 0.03 + rand() * 0.035,
   });
 }
 
@@ -275,7 +275,7 @@ function emit(p: Particles, emitters: Emitters): void {
   }
   const { smoke, hatch } = emitters;
   if (smoke !== null && p.rand() < 0.6 && roomFor(p, 'smoke')) spawnSmoke(p, smoke);
-  for (let k = 0; hatch !== null && k < 2 && roomFor(p, 'debris'); k++) spawnDebris(p, hatch);
+  for (let k = 0; hatch !== null && k < 3 && roomFor(p, 'debris'); k++) spawnDebris(p, hatch);
 }
 
 /** One step of `dt` seconds: everything moves and ages, the dead go, the emitters make more. */
