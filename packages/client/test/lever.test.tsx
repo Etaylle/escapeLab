@@ -1,11 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PuzzleView } from '@escapelab/core';
+import { DEFAULT_KEYS } from '../src/input/bindings.js';
+import { noteDevice } from '../src/input/device.js';
 import { deviceCoach, firstSight } from '../src/puzzles/coach.js';
 import { heldView, type DeviceRun } from '../src/puzzles/Device.js';
 import { expiredLine, handlesOf, leverPlate, togetherWord } from '../src/puzzles/LeverPanel.js';
 import { ownPressAt, secondsText, syncPress } from '../src/puzzles/syncPress.js';
 import { PuzzlePanel } from '../src/screens/PuzzlePanel.js';
+import { changeSettings, DEFAULT_SETTINGS } from '../src/settings.js';
 
 type SyncView = Extract<PuzzleView, { kind: 'button-sync' }>;
 
@@ -218,6 +221,16 @@ describe('the coach line at a sync station', () => {
     );
     const shown = new Set(['device:lever']);
     expect(firstSight(deviceCoach(lever(), 'mouse'), shown)).toBeNull();
+  });
+
+  it('names the key the settings bind to working the world, or the controller’s button', () => {
+    const line = () => deviceCoach(lever(), 'mouse')?.text;
+    changeSettings({ keys: { ...DEFAULT_KEYS, interact: 'f' } });
+    expect(line()).toBe('Ein Hebel je Ausweis, alle zugleich — F drücken.');
+    noteDevice('pad', 'playstation');
+    expect(line()).toBe('Ein Hebel je Ausweis, alle zugleich — ✕ drücken.');
+    noteDevice('keys', 'xbox');
+    changeSettings(DEFAULT_SETTINGS);
   });
 
   it('words the sync button’s line from its window: seconds where it has one, order free where not', () => {

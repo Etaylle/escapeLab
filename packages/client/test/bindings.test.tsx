@@ -129,10 +129,17 @@ const SRC = fileURLToPath(new URL('../src/', import.meta.url));
 
 /**
  * A key named in a prompt's text: a letter or a key's name in brackets — „[E] Bedienen",
- * „Schließen [Esc]" — or the space bar by its name.
+ * „Schließen [Esc]" —, the space bar by its name, or a letter worked in a sentence — „E
+ * drücken", „mit Q ablegen".
  */
-const KEY_IN_PROMPT =
-  /\[(?:[A-Z]|Esc|Enter|Space|Shift|Tab|Strg|Alt|F\d{1,2}|←|→|↑|↓)\]|Leertaste/;
+const KEY_IN_PROMPT = new RegExp(
+  [
+    String.raw`\[(?:[A-Z]|Esc|Enter|Space|Shift|Tab|Strg|Alt|F\d{1,2}|←|→|↑|↓)\]`,
+    'Leertaste',
+    String.raw`\b[A-Z] (?:drücken|halten)\b`,
+    String.raw`\bmit [A-Z] (?:einsetzen|ablegen|bedienen|öffnen|lesen|sprechen)\b`,
+  ].join('|'),
+);
 
 function sourcesUnder(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -145,18 +152,34 @@ function sourcesUnder(dir: string): string[] {
   });
 }
 
-/** Every text `source` shows — strings, templates' parts, JSX text — that names a key itself. */
+/**
+ * Every text `source` shows — strings, templates' parts, JSX text — that names a key itself,
+ * and every letter a handler listens for by hand (`useKeys(['e'], …)`): a binding's key.
+ */
 function keysNamedIn(path: string, source: string): string[] {
   const kind = path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
   const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, kind);
   const found: string[] = [];
+  const note = (text: string, node: ts.Node): void => {
+    const { line } = file.getLineAndCharacterOfPosition(node.getStart());
+    found.push(`${line + 1}: ${text.trim()}`);
+  };
   const check = (text: string, node: ts.Node): void => {
     if (KEY_IN_PROMPT.test(text)) {
-      const { line } = file.getLineAndCharacterOfPosition(node.getStart());
-      found.push(`${line + 1}: ${text.trim()}`);
+      note(text, node);
     }
   };
   const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && node.expression.getText(file) === 'useKeys') {
+      const [keys] = node.arguments;
+      const letters =
+        keys !== undefined && ts.isArrayLiteralExpression(keys)
+          ? keys.elements.filter((key) => ts.isStringLiteral(key) && /^[a-z]$/.test(key.text))
+          : [];
+      for (const letter of letters) {
+        note(`[${letter.getText(file)}]`, letter);
+      }
+    }
     const plainText =
       ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isJsxText(node);
     if (plainText) {
@@ -193,6 +216,11 @@ describe('the prompts — every key from the binding map', () => {
       '1: [Esc] Zurück',
     ]);
     expect(keysNamedIn('a.ts', 'const a = `[E] ${b}`; const c = list[0];')).toEqual(['1: [E]']);
+    expect(keysNamedIn('a.ts', "const a = 'Hebel — E drücken, mit Q ablegen.';")).toEqual([
+      '1: Hebel — E drücken, mit Q ablegen.',
+    ]);
+    const heard = "useKeys(['e'], pull); useKeys(['escape', 'arrowleft'], f);";
+    expect(keysNamedIn('a.tsx', heard)).toEqual(["1: ['e']"]);
     // A comment may name a key: no player reads it.
     expect(keysNamedIn('a.ts', '// [E] Bedienen\nconst a = 1;')).toEqual([]);
   });
