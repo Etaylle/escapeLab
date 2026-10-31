@@ -52,8 +52,15 @@ export function radial(x: number, y: number, deadzone = DEADZONE): { x: number; 
 /** Which buttons a controller is printed with: letters, or the four symbols. */
 export type PadFamily = 'xbox' | 'playstation';
 
-/** Sony's controllers say so in their id: the vendor 054c, or their name. */
+/**
+ * Which buttons a controller is printed with, told by its id: Microsoft's first — the vendor
+ * 045e, Xbox or XInput, „Xbox Wireless Controller" among them — then Sony's: the vendor 054c,
+ * their names, or the bare „Wireless Controller" a DualShock 4 reports. Letters for any other.
+ */
 export function padFamily(id: string): PadFamily {
+  if (/045e|xbox|xinput/i.test(id)) {
+    return 'xbox';
+  }
   return /054c|playstation|dualsense|dualshock|wireless controller/i.test(id)
     ? 'playstation'
     : 'xbox';

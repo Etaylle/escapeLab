@@ -193,10 +193,10 @@ function systemReduced(): boolean {
 let current: Settings = DEFAULT_SETTINGS;
 const listeners = new Set<() => void>();
 /**
- * Whether the panel waits for the next key or controller button, to bind it: meanwhile no key
- * and no button acts — nobody talks, walks or works.
+ * How many of the panel's waits for the next key or controller button, to bind it, are open:
+ * meanwhile no key and no button acts — nobody talks, walks or works.
  */
-let rebinding = false;
+let waits = 0;
 
 /** The settings as they stand now. */
 export function getSettings(): Settings {
@@ -256,10 +256,20 @@ export function useReducedMotion(): boolean {
 
 /** Whether the panel waits for a key or a controller button to bind. */
 export function isRebinding(): boolean {
-  return rebinding;
+  return waits > 0;
 }
 
-/** The panel starts or stops waiting for a key or a controller button to bind. */
-export function setRebinding(waiting: boolean): void {
-  rebinding = waiting;
+/**
+ * The panel starts waiting for a key or a controller button to bind; returns what ends this
+ * wait, once — the keys' table and the controller's each end their own.
+ */
+export function startRebinding(): () => void {
+  waits += 1;
+  let open = true;
+  return () => {
+    if (open) {
+      open = false;
+      waits -= 1;
+    }
+  };
 }

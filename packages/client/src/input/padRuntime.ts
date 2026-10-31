@@ -1,4 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { typing } from '../hooks.js';
 import { addProbes } from '../probes.js';
 import { getSettings, isRebinding } from '../settings.js';
 import { isPadSlot, padActionOf, type PadAction, type PadSlot } from './bindings.js';
@@ -30,7 +31,8 @@ import {
  * controller as it hears the keys. Over a dialog the D-pad or a flick of the stick moves between
  * its controls, A presses one and B steps back (Esc); a book turns its pages left and right.
  * L1 talks while held, Start opens the settings, Select the Einsatzinfo. With `?fakepad=1` the
- * walkthrough plays a controller of its own through `window.__escapelab.pad`.
+ * walkthrough plays a controller of its own through `window.__escapelab.pad`. Only a controller
+ * of the standard mapping is read: another one's buttons and axes would mean something else.
  */
 
 /** How long a direction held over a dialog waits before it repeats, and then between steps. */
@@ -71,6 +73,11 @@ interface Runtime {
   holding: Map<PadButton, string>;
   /** a direction held over a dialog: which, and when it steps again */
   repeat: { dir: Direction; at: number } | null;
+  /**
+   * a direction is held that walked in the world: a dialog that comes up under it waits for it
+   * to be let go, so that the walk does not run on through the dialog's controls
+   */
+  walking: boolean;
   /** the settings wait for a button to remap: it goes there instead of acting */
   capture: ((slot: PadSlot | null) => void) | null;
 }
@@ -117,7 +124,7 @@ function setLive(next: PadLive): void {
   }
 }
 
-/** The controller in use: the walkthrough's, or the first connected one. */
+/** The controller in use: the walkthrough's, or the first connected one of the standard mapping. */
 function connectedPad(): GamepadLike | null {
   if (rt?.fake != null) {
     return rt.fake.connected ? rt.fake : null;
@@ -126,7 +133,11 @@ function connectedPad(): GamepadLike | null {
     typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function'
       ? navigator.getGamepads()
       : [];
-  return pads.find((pad): pad is Gamepad => pad !== null && pad.connected) ?? null;
+  return (
+    pads.find(
+      (pad): pad is Gamepad => pad !== null && pad.connected && pad.mapping === 'standard',
+    ) ?? null
+  );
 }
 
 /** The named keys as KeyboardEvent carries them; the bindings keep every key lower-cased. */
@@ -149,8 +160,15 @@ function eventKey(name: string): string {
   return EVENT_KEYS[name] ?? name.toUpperCase();
 }
 
-/** A key going `type` on the page, where the focus is: as every listener hears a real one. */
+/**
+ * A key going `type` on the page, where the focus is: as every listener hears a real one. A
+ * controller types nothing, so a text field in the focus lets go of it first — else the key
+ * would only type there, and the notepad, say, would never close.
+ */
 function sendKey(type: 'keydown' | 'keyup', name: string): void {
+  if (typing()) {
+    (document.activeElement as HTMLElement).blur();
+  }
   const target = document.activeElement ?? document.body;
   const init = { key: eventKey(name), bubbles: true, cancelable: true };
   target.dispatchEvent(new KeyboardEvent(type, init));
@@ -183,10 +201,23 @@ function inWorld(action: PadAction): void {
   tap(action === 'interact' ? ' ' : getSettings().keys[action]);
 }
 
-/** A main action over a dialog: A presses the control in the focus, B steps back. */
-function overDialog(action: PadAction, scope: Element): void {
-  if (action === 'interact') {
+/**
+ * A's press over a dialog, by `button`: a control made to be held (`data-pad="hold"`, the
+ * button module's face) is held for as long as the button is, by Space; any other is pressed.
+ */
+function pressInDialog(scope: Element, button: PadButton): void {
+  const focused = document.activeElement as HTMLElement | null;
+  if (focused !== null && scope.contains(focused) && focused.dataset['pad'] === 'hold') {
+    hold(button, ' ');
+  } else {
     activate(scope);
+  }
+}
+
+/** A main action over a dialog, by `button`: A presses the control in the focus, B steps back. */
+function overDialog(action: PadAction, scope: Element, button: PadButton): void {
+  if (action === 'interact') {
+    pressInDialog(scope, button);
   } else if (action === 'drop') {
     tap('escape');
   } else if (action === 'notes') {
@@ -213,7 +244,7 @@ function pressIn(button: PadButton): void {
     if (scope === null) {
       inWorld(action);
     } else {
-      overDialog(action, scope);
+      overDialog(action, scope, button);
     }
   }
 }
@@ -227,7 +258,10 @@ function menuStep(scope: Element, dir: Direction): void {
   moveFocus(scope, dir);
 }
 
-/** The D-pad or the stick held over a dialog: a step now, then again after a while. */
+/**
+ * The D-pad or the stick held over a dialog: a step now, then again after a while — but not
+ * while a direction that walked in the world is still held.
+ */
 function steerMenu(state: PadState, now: number): void {
   if (rt === null) {
     return;
@@ -236,6 +270,10 @@ function steerMenu(state: PadState, now: number): void {
   const scope = dir === null ? null : menuScope(document);
   if (dir === null || scope === null) {
     rt.repeat = null;
+    rt.walking = dir !== null;
+    return;
+  }
+  if (rt.walking) {
     return;
   }
   const same = rt.repeat?.dir === dir;
@@ -279,7 +317,12 @@ function poll(now: number): void {
   released.forEach(letGo);
   if (rt.capture !== null) {
     captured(pressed);
-  } else if (!isRebinding()) {
+  } else if (isRebinding()) {
+    // The keys' table waits for a key, which no button gives: any button calls it off (Esc).
+    if (pressed.length > 0) {
+      tap('escape');
+    }
+  } else {
     pressed.forEach(pressIn);
     steerMenu(next, now);
   }
@@ -340,7 +383,16 @@ function probeOf(fake: FakePad): PadProbe {
  */
 export function startPad(hooks: PadHooks, search: string): () => void {
   const fake = new URLSearchParams(search).get('fakepad') === '1' ? new FakePad() : null;
-  rt = { hooks, fake, last: AT_REST, raf: null, holding: new Map(), repeat: null, capture: null };
+  rt = {
+    hooks,
+    fake,
+    last: AT_REST,
+    raf: null,
+    holding: new Map(),
+    repeat: null,
+    walking: false,
+    capture: null,
+  };
   const stopKeys = watchKeyboard();
   window.addEventListener('gamepadconnected', run);
   const dropProbe = fake === null ? null : addProbes({ pad: probeOf(fake) });

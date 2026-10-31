@@ -79,6 +79,15 @@ describe('a poll of the controller', () => {
     );
     expect(padFamily('Xbox 360 Controller (XInput STANDARD GAMEPAD)')).toBe('xbox');
     expect(padFamily('8BitDo Pro 2')).toBe('xbox');
+    // Microsoft's own say „Xbox Wireless Controller" on macOS, Linux, Firefox and Safari.
+    const series = 'Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)';
+    expect(padFamily(series)).toBe('xbox');
+    expect(padFamily('Xbox Wireless Controller')).toBe('xbox');
+    expect(padFamily('045e-0b13-Xbox Wireless Controller')).toBe('xbox');
+    // A DualShock 4 calls itself a bare „Wireless Controller".
+    const ds4 = 'Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 09cc)';
+    expect(padFamily(ds4)).toBe('playstation');
+    expect(padFamily('Wireless Controller')).toBe('playstation');
   });
 
   it('tells what was pressed and let go since the poll before', () => {

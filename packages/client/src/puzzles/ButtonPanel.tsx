@@ -158,6 +158,7 @@ function Console({
             type="button"
             className={`button-face button-face--${COLOURS[colour].css}`}
             data-feel="none"
+            data-pad="hold"
             aria-pressed={puzzle.holding}
             aria-label={`Knopf ${COLOURS[colour].word}, Aufschrift ${label}`}
             onPointerDown={(event) => {

@@ -16,7 +16,7 @@ import {
 } from '../input/bindings.js';
 import { PAD_GLYPHS, type PadButton, type PadFamily } from '../input/pad.js';
 import { capturePadButton, usePadLive, type PadLive } from '../input/padRuntime.js';
-import { changeSettings, setRebinding, useSettings } from '../settings.js';
+import { changeSettings, startRebinding, useSettings } from '../settings.js';
 
 /**
  * The settings' controls (screens/Settings.tsx): every action's key, rebound by pressing the
@@ -74,7 +74,7 @@ function useKeyCapture(
     if (waiting === null) {
       return undefined;
     }
-    setRebinding(true);
+    const endWait = startRebinding();
     const onKey = (e: KeyboardEvent): void => {
       e.preventDefault();
       e.stopPropagation();
@@ -93,7 +93,7 @@ function useKeyCapture(
     window.addEventListener('keydown', onKey, true);
     return () => {
       window.removeEventListener('keydown', onKey, true);
-      setRebinding(false);
+      endWait();
     };
   }, [waiting, keys, done]);
 }
@@ -252,7 +252,7 @@ function PadSettings({ pad }: { pad: PadBindings }) {
     if (waiting === null) {
       return undefined;
     }
-    setRebinding(true);
+    const endWait = startRebinding();
     const stop = capturePadButton((slot) => {
       if (slot !== null) {
         const { pad: next, swapped } = rebindPad(pad, waiting, slot);
@@ -271,7 +271,7 @@ function PadSettings({ pad }: { pad: PadBindings }) {
     return () => {
       stop();
       window.removeEventListener('keydown', onKey, true);
-      setRebinding(false);
+      endWait();
     };
   }, [waiting, pad]);
   const glyphs = PAD_GLYPHS[live.family];

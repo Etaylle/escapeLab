@@ -168,7 +168,15 @@ describe('the talk key', () => {
   it('talks on nothing while typing or rebinding, with a modifier, or on auto-repeat', async () => {
     const { settings, voice } = await fresh();
     expect(settings.isRebinding()).toBe(false);
-    settings.setRebinding(true);
+    // The keys' table and the controller's wait each on their own: one ending ends not both.
+    const endKeys = settings.startRebinding();
+    const endPad = settings.startRebinding();
+    endKeys();
+    endKeys();
+    expect(settings.isRebinding()).toBe(true);
+    endPad();
+    expect(settings.isRebinding()).toBe(false);
+    settings.startRebinding();
     expect(settings.isRebinding()).toBe(true);
     expect(voice.talksOnDown(key('v'), 'v', true)).toBe(false);
     for (const held of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { repeat: true }]) {
