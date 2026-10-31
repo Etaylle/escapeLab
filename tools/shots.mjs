@@ -6823,7 +6823,7 @@ function reportSprint(name, run, sprint, walk) {
   }
 }
 
-// ── the gameplay package's captures: the controller, the keys, the Erfolge, the Tagesschicht ──
+// ── the gameplay package's captures: the controller, the keys, the Erfolge, the Tagesschicht
 //
 // The host's page opens with `?fakepad=1` (`padded`): the client's controller layer then takes a
 // controller the walkthrough plays through `window.__escapelab.pad` (client input/padRuntime.ts),
@@ -7074,6 +7074,10 @@ async function captureAchievements(player) {
 const DANGER_MISSION = { id: 'custom-gefahr', title: 'Gefahrprobe' };
 /** How long the danger sense gets to hear a drone close in, ms: a patrol's round and more. */
 const DANGER_WAIT_MS = 45_000;
+/** What stands over the world as a run starts: the location card, the briefing's count. */
+const DANGER_COVERS = '.intro-card, .briefing';
+/** How near the shot wants the drone sensed, tiles: nearer, its glow shows plainer. */
+const DANGER_SHOT_TILES = 3.5;
 
 /**
  * Blackout as the danger sense's capture plays it: no intro, so the lights are out from the
@@ -7105,11 +7109,14 @@ function dangerOf(page) {
   return page.evaluate(() => globalThis.__escapelab?.danger ?? null);
 }
 
-/** Waits up to `ms` for `page`'s danger sense to name a drone closing in: the probe, or null. */
+/**
+ * Waits up to `ms` for `page`'s danger sense to name a drone closing in, DANGER_SHOT_TILES or
+ * nearer: the probe, or null.
+ */
 async function dangerSensed(page, ms) {
   for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) {
     const danger = await dangerOf(page);
-    if (danger?.drone != null) {
+    if (danger?.drone != null && danger.distance <= DANGER_SHOT_TILES) {
       return danger;
     }
   }
@@ -7118,9 +7125,10 @@ async function dangerSensed(page, ms) {
 
 /**
  * danger-sense.png: Blackout's scratch copy, saved through the editor's route and played by
- * two; the player starting under the Flur's patrol stands still until a drone closes in, and is
- * shot the moment the probe names it, the edge glowing toward it. Fails where none comes within
- * five tiles in DANGER_WAIT_MS. The copy is deleted again whatever happened.
+ * two; the player starting under the Flur's patrol stands still, past the location card, until a
+ * drone closes in, and is shot the moment the probe names it DANGER_SHOT_TILES away, the edge
+ * glowing toward it. Fails where none comes that near in DANGER_WAIT_MS, or a card still covers
+ * the world. The copy is deleted again whatever happened.
  */
 async function captureDangerSense() {
   if (MISSION.toLowerCase() !== 'blackout') {
@@ -7156,19 +7164,28 @@ async function captureDangerSense() {
     if (under === undefined) {
       throw new Error('nobody of the danger sense’s crew started at (21,8)');
     }
+    // The location card, and under it the briefing's count, stand over the world as the run
+    // starts: the glow shows once both are gone.
+    await under.page.locator('.intro-card').waitFor({ state: 'attached', timeout: 5000 });
+    await under.page.waitForFunction(
+      (covers) => document.querySelector(covers) === null,
+      DANGER_COVERS,
+      { timeout: 20_000 },
+    );
     const danger = await dangerSensed(under.page, DANGER_WAIT_MS);
     if (danger === null) {
-      fail(`danger-sense.png: no drone closed in on ${under.name} in ${seconds(DANGER_WAIT_MS)}`);
+      const near = `${DANGER_SHOT_TILES} tiles in ${seconds(DANGER_WAIT_MS)}`;
+      fail(`danger-sense.png: no drone closed in on ${under.name} to ${near}`);
       return;
     }
     await capture(under.page, 'danger-sense.png');
+    if ((await under.page.locator(DANGER_COVERS).count()) > 0) {
+      fail('danger-sense.png: the location card or the briefing stood over the world at the shot');
+    }
     console.log(
       `danger-sense.png   ${under.name} at 21,8: ${danger.drone} closing in, ` +
         `${danger.distance.toFixed(1)} tiles, ${danger.ticks} tick(s)`,
     );
-    if (!(danger.distance <= 5)) {
-      fail(`danger-sense.png: ${danger.drone} sensed ${danger.distance} tiles away`);
-    }
   } catch (err) {
     console.log(`danger-sense       !! ${firstLine(err)}`);
     fail(`danger-sense: ${firstLine(err)}`);
