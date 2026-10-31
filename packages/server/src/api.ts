@@ -85,15 +85,20 @@ export function statsResponse(
   if (id === null || mission === null) {
     return { status: 404, body: { error: `Mission "${id ?? segment}" gibt es nicht.` } };
   }
-  const { run, day } = asked;
-  const place =
-    run === null
-      ? null
-      : day === null
-        ? stats.placeOf(id, run)
-        : stats.dailyPlaceOf(day, id, run);
-  const body: MissionStanding = { ...mission, place };
+  const body: MissionStanding = { ...mission, place: placeAsked(stats, id, asked) };
   return { status: 200, body };
+}
+
+/** The place of the won run that finished at `run` — among its day's where it played one. */
+function placeAsked(
+  stats: RunStats,
+  id: string,
+  { run, day }: { run: number | null; day: string | null },
+): MissionStanding['place'] {
+  if (run === null) {
+    return null;
+  }
+  return day === null ? stats.placeOf(id, run) : stats.dailyPlaceOf(day, id, run);
 }
 
 /**

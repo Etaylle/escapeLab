@@ -259,6 +259,36 @@ function menuStep(scope: Element, dir: Direction): void {
 }
 
 /**
+ * The direction the D-pad or the stick holds over a dialog, and the dialog; null where none is
+ * held, where the world takes it — there it walks —, or while one held from walking is still
+ * held.
+ */
+function heldOverDialog(
+  runtime: Runtime,
+  state: PadState,
+): { dir: Direction; scope: Element } | null {
+  const dir = directionOf(state);
+  const scope = dir === null ? null : menuScope(document);
+  if (dir === null || scope === null) {
+    runtime.repeat = null;
+    runtime.walking = dir !== null;
+    return null;
+  }
+  return runtime.walking ? null : { dir, scope };
+}
+
+/** Whether `dir`, held, steps now: at once, again after REPEAT_AFTER_MS, then every REPEAT_EVERY_MS. */
+function stepDue(runtime: Runtime, dir: Direction, now: number): boolean {
+  const { repeat } = runtime;
+  const same = repeat !== null && repeat.dir === dir;
+  if (same && now < repeat.at) {
+    return false;
+  }
+  runtime.repeat = { dir, at: now + (same ? REPEAT_EVERY_MS : REPEAT_AFTER_MS) };
+  return true;
+}
+
+/**
  * The D-pad or the stick held over a dialog: a step now, then again after a while — but not
  * while a direction that walked in the world is still held.
  */
@@ -266,22 +296,10 @@ function steerMenu(state: PadState, now: number): void {
   if (rt === null) {
     return;
   }
-  const dir = directionOf(state);
-  const scope = dir === null ? null : menuScope(document);
-  if (dir === null || scope === null) {
-    rt.repeat = null;
-    rt.walking = dir !== null;
-    return;
+  const held = heldOverDialog(rt, state);
+  if (held !== null && stepDue(rt, held.dir, now)) {
+    menuStep(held.scope, held.dir);
   }
-  if (rt.walking) {
-    return;
-  }
-  const same = rt.repeat?.dir === dir;
-  if (same && rt.repeat !== null && now < rt.repeat.at) {
-    return;
-  }
-  rt.repeat = { dir, at: now + (same ? REPEAT_EVERY_MS : REPEAT_AFTER_MS) };
-  menuStep(scope, dir);
 }
 
 /** The settings wait for a button: the first one pressed goes there, a slot or nothing. */
@@ -298,24 +316,16 @@ function captured(pressed: readonly PadButton[]): void {
 /** Whether the stick leans past its dead zone. */
 const leaning = (state: PadState): boolean => state.stick.x !== 0 || state.stick.y !== 0;
 
-/** One poll: the live test told, the device noted, the presses carried out. */
-function poll(now: number): void {
-  if (rt === null) {
-    return;
-  }
-  const pad = connectedPad();
-  const next = pad === null ? AT_REST : padStateOf(pad);
-  const before = rt.last;
-  rt.last = next;
-  const pressed = pressedSince(before, next);
-  const released = releasedSince(before, next);
-  // A press, or the stick coming out of its dead zone, turns the prompts to the controller.
+/** A press, or the stick coming out of its dead zone, turns the prompts to the controller. */
+function noteUse(before: PadState, next: PadState, pressed: readonly PadButton[]): void {
   if (pressed.length > 0 || (leaning(next) && !leaning(before))) {
     noteDevice('pad', next.family);
   }
-  setLive({ connected: pad !== null, family: next.family, held: next.held, stick: next.stick });
-  released.forEach(letGo);
-  if (rt.capture !== null) {
+}
+
+/** What the presses do: go to the settings' remap, call off their wait for a key, or act. */
+function actOn(runtime: Runtime, pressed: readonly PadButton[], next: PadState, now: number): void {
+  if (runtime.capture !== null) {
     captured(pressed);
   } else if (isRebinding()) {
     // The keys' table waits for a key, which no button gives: any button calls it off (Esc).
@@ -326,6 +336,22 @@ function poll(now: number): void {
     pressed.forEach(pressIn);
     steerMenu(next, now);
   }
+}
+
+/** One poll: the live test told, the device noted, the presses carried out. */
+function poll(now: number): void {
+  if (rt === null) {
+    return;
+  }
+  const pad = connectedPad();
+  const next = pad === null ? AT_REST : padStateOf(pad);
+  const before = rt.last;
+  rt.last = next;
+  const pressed = pressedSince(before, next);
+  noteUse(before, next, pressed);
+  setLive({ connected: pad !== null, family: next.family, held: next.held, stick: next.stick });
+  releasedSince(before, next).forEach(letGo);
+  actOn(rt, pressed, next, now);
 }
 
 /** Whether there is a controller to poll: the walkthrough's once used, or one connected. */

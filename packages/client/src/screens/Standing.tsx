@@ -35,6 +35,11 @@ export function RunStanding({ run }: { run: FinishedRun }) {
   return <Standing run={run} stats={loaded.value} />;
 }
 
+/** The Tagesschicht a run played, as its standing names it after the mission; nothing for none. */
+function shiftOf(daily: string | null): string {
+  return daily === null ? '' : ` · Tagesschicht ${dailyLabel(daily)}`;
+}
+
 /**
  * Where the run stands. After a win: its place among every run of the
  * mission at its difficulty — on the Tagesschicht, among that day's — and the
@@ -47,8 +52,7 @@ export function Standing({ run, stats }: { run: FinishedRun; stats: MissionStand
   if (group === undefined) {
     return null;
   }
-  const shift = run.daily === null ? '' : ` · Tagesschicht ${dailyLabel(run.daily)}`;
-  const where = `${run.missionTitle}${shift} · ${difficultyLabel(run.difficulty)}`;
+  const where = `${run.missionTitle}${shiftOf(run.daily)} · ${difficultyLabel(run.difficulty)}`;
   const place = run.won && stats.place?.difficulty === run.difficulty ? stats.place.place : null;
   if (place === null) {
     return (

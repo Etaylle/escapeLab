@@ -96,6 +96,13 @@ function classesOf(cue: IntroCue, phase: IntroPhase): string {
     .join(' ');
 }
 
+/** Whether the skip is a tap: on a touch screen — unless a controller was used last. */
+function useTapToSkip(): boolean {
+  const coarse = useMedia('(pointer: coarse)');
+  const padUsed = usePadUsed();
+  return coarse && !padUsed;
+}
+
 /** The run's opening over the world on this screen; `skip` skips it where it can be skipped. */
 export function IntroOverlay({
   cue,
@@ -107,10 +114,7 @@ export function IntroOverlay({
   skip: () => void;
 }) {
   const now = useNow(DRAW_MS);
-  // A controller names its button on a touch screen too.
-  const coarse = useMedia('(pointer: coarse)');
-  const padUsed = usePadUsed();
-  const touch = coarse && !padUsed;
+  const touch = useTapToSkip();
   if (!overlayUp(cue, now)) {
     return null;
   }

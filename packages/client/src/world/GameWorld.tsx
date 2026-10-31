@@ -520,16 +520,18 @@ function step(loop: Loop, dt: number, map: WorldMap): void {
   if (spectator) {
     sim.cam.x = map.width / 2;
     sim.cam.y = map.height / 2;
+    // The audience steers nothing.
+    sim.pad = NO_STEER;
   } else {
     followServer(sim, loop.positions.current, map, youId, run);
+    // A controller steers as the keys do (input/padRuntime.ts).
+    sim.pad = padSteer();
   }
   // The opening holds the avatar where the run put it: no step, no position going out.
   sim.held = heldBack(loop.live.current);
   if (sim.held) {
     sim.keys.clear();
   }
-  // A controller steers as the keys do (input/padRuntime.ts); the audience steers nothing.
-  sim.pad = spectator ? NO_STEER : padSteer();
   const footfall = walk(sim, map, dt, loop.live.current.locked || sim.held);
   if (footfall !== null) {
     footstep(footfall === 'sprint');

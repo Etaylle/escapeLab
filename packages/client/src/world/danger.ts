@@ -72,9 +72,26 @@ export function glowOf(distance: number): number {
 }
 
 /**
- * Of `drones`, the nearest one in flight within DANGER_TILES of `self` that is nearer than at
- * the look LOOK_BACK_S ago (`before`: each drone's distance then) — or, where `held` names the
- * drone sensed last, still within the sense and not flying off. Null where none closes in.
+ * Whether a drone `distance` tiles away, `then` tiles away a look ago, closes in: in flight,
+ * within DANGER_TILES and nearer than then — or, the one sensed last (`sensedLast`), still
+ * within the sense and not flying off.
+ */
+function closesIn(
+  drone: DronePosition,
+  distance: number,
+  then: number | undefined,
+  sensedLast: boolean,
+): boolean {
+  if (drone.frozen || distance > DANGER_TILES || then === undefined) {
+    return false;
+  }
+  return distance < then - CLOSING_TILES || (sensedLast && distance <= then + CLOSING_TILES);
+}
+
+/**
+ * Of `drones`, the nearest one that closes in on `self` (`closesIn`), measured against the look
+ * LOOK_BACK_S ago (`before`: each drone's distance then); `held` names the drone sensed last.
+ * Null where none closes in.
  */
 export function closingDrone(
   self: Spot,
@@ -85,13 +102,8 @@ export function closingDrone(
   let nearest: Sensed | null = null;
   for (const [id, drone] of Object.entries(drones)) {
     const distance = Math.hypot(drone.x - self.x, drone.y - self.y);
-    const then = before.get(id);
-    if (drone.frozen || distance > DANGER_TILES || then === undefined) {
-      continue;
-    }
-    const closing = distance < then - CLOSING_TILES;
-    const staying = id === held && distance <= then + CLOSING_TILES;
-    if ((closing || staying) && (nearest === null || distance < nearest.distance)) {
+    const nearer = nearest === null || distance < nearest.distance;
+    if (nearer && closesIn(drone, distance, before.get(id), id === held)) {
       nearest = { id, x: drone.x, y: drone.y, distance };
     }
   }

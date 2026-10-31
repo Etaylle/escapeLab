@@ -376,6 +376,11 @@ function Rematch({ view, missions, send, leaveRoom }: RematchProps) {
   );
 }
 
+/** The day of the Tagesschicht the run played; null for any other run. */
+function dailyDayOf(view: PlayerView): string | null {
+  return view.daily?.day ?? null;
+}
+
 /** The run's card as the picture „Bild speichern" saves (shareCard.ts). */
 export function shareCardOf(view: PlayerView, card: TitleCardProps): ShareCard {
   return {
@@ -387,7 +392,7 @@ export function shareCardOf(view: PlayerView, card: TitleCardProps): ShareCard {
     crew: view.players.map(({ name, color }) => ({ name, color })),
     achievements: view.achievements ?? [],
     finishedAt: view.finishedAt ?? view.startedAt ?? 0,
-    daily: view.daily?.day ?? null,
+    daily: dailyDayOf(view),
   };
 }
 
@@ -436,7 +441,7 @@ export function EndScreen({ view, fresh, send, leaveRoom, missions = [] }: Props
               seconds: runSeconds({ startedAt, lightsOutAt: view.lights.outAt, finishedAt }),
               alarms: view.penaltySeq,
               finishedAt,
-              daily: view.daily?.day ?? null,
+              daily: dailyDayOf(view),
             }}
           />
         )}

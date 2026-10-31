@@ -1,5 +1,11 @@
 import { getSettings, useSettings } from '../settings.js';
-import { keyName, type InputAction, type KeyBindings, type PadBindings } from './bindings.js';
+import {
+  keyName,
+  type InputAction,
+  type KeyBindings,
+  type PadAction,
+  type PadBindings,
+} from './bindings.js';
 import { inputDevice, useInputDevice, type InputDevice } from './device.js';
 import { PAD_GLYPHS, type PadButton, type PadFamily } from './pad.js';
 
@@ -36,22 +42,21 @@ const PAD_FIXED: Readonly<Partial<Record<Prompt, PadButton>>> = {
   pageOn: 'dright',
 };
 
+/** The prompts worked by one of the controller's main actions, on the button bound to it. */
+const BY_PAD_ACTION: Partial<Record<Prompt, PadAction>> = {
+  interact: 'interact',
+  skip: 'interact',
+  drop: 'drop',
+  close: 'drop',
+  putDown: 'drop',
+  notes: 'notes',
+  minimap: 'minimap',
+};
+
 /** The controller's button for `prompt`; none where the controller has none (the quick chat). */
 function padButtonOf(prompt: Prompt, pad: PadBindings): PadButton | null {
-  switch (prompt) {
-    case 'interact':
-    case 'skip':
-      return pad.interact;
-    case 'drop':
-    case 'close':
-    case 'putDown':
-      return pad.drop;
-    case 'notes':
-    case 'minimap':
-      return pad[prompt];
-    default:
-      return PAD_FIXED[prompt] ?? null;
-  }
+  const action = BY_PAD_ACTION[prompt];
+  return action === undefined ? (PAD_FIXED[prompt] ?? null) : pad[action];
 }
 
 /**
