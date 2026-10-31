@@ -88,7 +88,7 @@ import {
 import { HEAR_EVERY_S, hearCrew, spatialProbe, stopSpatial } from './spatial.js';
 import { streamPositions } from './stream.js';
 import { useWorldTip } from './useWorldTip.js';
-import { vignetteShown } from './vignette.js';
+import { vignettePressure } from './vignette.js';
 
 /**
  * The world as one screen lives it: a canvas the lab is drawn on, frame by
@@ -1042,13 +1042,15 @@ function useWorld(props: Props): WorldState {
 /**
  * The red edge round the world in the clock's last minute and all through the escape
  * (vignette.ts): an element right over the canvas and under everything else on it — the
- * coach, the controls, the bar — breathing by its opacity alone (finale.css). Gone once the
- * run's end plays on this screen.
+ * coach, the controls, the bar — breathing by its opacity alone (finale.css), the harder the
+ * more pressing the moment. Gone once the run's end plays on this screen.
  */
 function RedEdge({ view, ending }: { view: PlayerView; ending: boolean }) {
   const now = useNow(500);
-  const shown = vignetteShown(view.deadlineAt, now, escaping(view.map), ending);
-  return shown ? <div className="vignette" aria-hidden="true" /> : null;
+  const pressure = vignettePressure(view.deadlineAt, now, escaping(view.map), ending);
+  return pressure === null ? null : (
+    <div className={`vignette vignette--${pressure}`} aria-hidden="true" />
+  );
 }
 
 export function GameWorld(props: Props) {

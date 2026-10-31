@@ -92,6 +92,24 @@
   }
 }
 
+/*
+ * It breathes with the pressure (world/vignette.ts `vignettePressure`): calmly as the last
+ * minute begins, quicker in its last twenty seconds, quickest and deepest through the escape.
+ * A breath changes its pace only as the pressure steps up, never in the middle of a stretch.
+ */
+.vignette--minute {
+  animation-duration: 1.5s;
+}
+
+.vignette--stretch {
+  animation-duration: 0.95s;
+}
+
+.vignette--escape {
+  animation-duration: 0.8s;
+  box-shadow: inset 0 0 170px 56px rgba(253, 70, 70, 0.38);
+}
+
 .stage-goal--escape h1 {
   color: #fecaca;
   letter-spacing: 2px;

@@ -23,6 +23,7 @@ export const PASS_NAMES = [
   'darkness',
   'hud',
   'overlays',
+  'aberration',
 ] as const;
 
 export type PassName = (typeof PASS_NAMES)[number];

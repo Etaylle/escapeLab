@@ -1,4 +1,4 @@
-import type { DronePosition, PlayerView, Sight } from '@escapelab/core';
+import type { DronePosition, PlayerView, PuzzleView, Sight } from '@escapelab/core';
 import type { VoiceMesh } from '../voice/mesh.js';
 import type { Alarm } from './alarm.js';
 import { worldText, type WorldText } from './art.js';
@@ -13,6 +13,7 @@ import { SHOT_WIDE, shotPoint, shotStart } from './intro/shot.js';
 import { markerTargets } from './markers.js';
 import { positionsOf, type KnownPositions } from './movement.js';
 import type { ChatLine, Frame, MapPing, RenderKit, WorldMap } from './render/frame.js';
+import { zoomAt, zoomToward } from './render/camera.js';
 import { gridOf, sameGrid, snapCamera } from './render/grid.js';
 import { minimapBox, minimapLayout } from './render/hud.js';
 import { CAPTION_SECONDS, CHAT_LIFETIME_MS } from './render/overlays.js';
@@ -46,6 +47,8 @@ export interface Latest {
   reduced: boolean;
   /** the crew's voice, read on every frame for who speaks; none outside the app */
   voice: VoiceMesh | null;
+  /** the station whose panel lies over the world; null for none: the camera leans in on it */
+  station: PuzzleView | null;
 }
 
 /** What one mounted world assembles its frames from. */
@@ -169,7 +172,7 @@ function aim(source: FrameSource, map: WorldMap, dpr: number, pull: number, now:
   const { sim, canvas, spectator } = source;
   const w = canvas.width;
   const h = canvas.height;
-  const near = zoomFor(map, w, h, spectator);
+  const near = zoomFor(map, w, h, spectator) * leanIn(source, now);
   const shot = shotOf(source, map, now);
   if (shot !== null) {
     const wide = Math.max(coverZoom(map, w, h), near * SHOT_WIDE);
@@ -190,6 +193,17 @@ function aim(source: FrameSource, map: WorldMap, dpr: number, pull: number, now:
   });
   sim.scale = s;
   return s;
+}
+
+/**
+ * How far the camera leans in at `now` on the station whose panel lies over the world
+ * (render/camera.ts), kept in the kit from frame to frame; never for the audience.
+ */
+function leanIn(source: FrameSource, now: number): number {
+  const { kit, spectator } = source;
+  const { station, reduced } = source.live.current;
+  kit.zoom = zoomToward(kit.zoom, !spectator && station !== null, now, reduced);
+  return zoomAt(kit.zoom, now, reduced);
 }
 
 /** The world's text at the zoom it was last worked out for; the zoom seldom changes. */

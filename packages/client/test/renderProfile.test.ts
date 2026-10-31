@@ -74,6 +74,7 @@ describe('profile — what each pass costs a frame (?profile=1)', () => {
       'darkness',
       'hud',
       'overlays',
+      'aberration',
     ]);
   });
 });

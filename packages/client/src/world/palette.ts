@@ -75,6 +75,14 @@ export const LABEL: Rgb = [138, 150, 165];
 export const WHITE: Rgb = [255, 255, 255];
 export const BLACK: Rgb = [0, 0, 0];
 
+/**
+ * A tube's three guns, each alone: no colour the lab is painted in, but what an alarm's knock
+ * cuts the picture's colours down to before it pushes them apart (render/aberration.ts).
+ */
+export const GUN_RED: Rgb = [255, 0, 0];
+export const GUN_GREEN: Rgb = [0, 255, 0];
+export const GUN_BLUE: Rgb = [0, 0, 255];
+
 /** The crew's eight colours, as the server hands them out: unchanged. */
 export const CREW: readonly string[] = CREW_COLORS;
 
