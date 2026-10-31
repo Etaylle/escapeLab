@@ -249,13 +249,17 @@ describe('loadRunStats', () => {
   it('leaves out each line that holds no run, and says which', () => {
     const file = join(dir, 'runs.jsonl');
     const good = JSON.stringify(run({ seconds: 300 }));
-    writeFileSync(file, `${good}\n{"version":2,\n${good}\n{"version":9}\n`);
+    // A run of the Tagesschicht starting at no moment has no day to be ranked on.
+    const dayless = JSON.stringify({ ...run({ seconds: 300 }), daily: true, startedAt: 7 });
+    const never = dayless.replace('"startedAt":7', '"startedAt":1e999');
+    writeFileSync(file, `${good}\n{"version":2,\n${good}\n{"version":9}\n${never}\n`);
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
       expect(loadRunStats(file).runs).toBe(2);
       expect(logged.mock.calls.map(([line]) => String(line))).toEqual([
         expect.stringMatching(/runs\.jsonl:2: not JSON .*\(the Bestenliste leaves it out\)$/),
         expect.stringMatching(/runs\.jsonl:4: not a run report .*\(the Bestenliste leaves it ou/),
+        expect.stringMatching(/runs\.jsonl:5: not a run report .*\(the Bestenliste leaves it ou/),
       ]);
     } finally {
       logged.mockRestore();
