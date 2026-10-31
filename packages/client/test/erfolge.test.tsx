@@ -13,7 +13,9 @@ import { EndScreen, shareCardOf, titleCardOf } from '../src/screens/End.js';
 import { DAILY_NOTE, DailySwitch, LobbyScreen } from '../src/screens/Lobby.js';
 import { Plaques } from '../src/screens/Plaques.js';
 import {
+  CREW_RIGHT,
   drawShareCard,
+  saveShareCard,
   SHARE_SIZE,
   shareFileName,
   type ShareCard,
@@ -325,6 +327,59 @@ describe('the picture of a run', () => {
     expect(lines).toContain('STATIONEN');
     expect(lines).not.toContain('RANG');
     expect(lines).not.toContain('TAGESSCHICHT 31.10.');
+  });
+
+  /** The card drawn with letters as wide as a monospace font's at its size: each line, its end. */
+  const drawnLines = (card: ShareCard) => {
+    const { ctx } = fakeCanvas(SHARE_SIZE.width, SHARE_SIZE.height);
+    const sizeOf = (): number => Number(/(\d+)px/.exec(ctx.font)?.[1] ?? 10);
+    ctx.measureText = (words: string) => ({ width: words.length * sizeOf() * 0.6 }) as TextMetrics;
+    const drawn: { words: string; right: number }[] = [];
+    const fill = ctx.fillText.bind(ctx);
+    ctx.fillText = (words: string, x: number, y: number) => {
+      drawn.push({ words, right: x + ctx.measureText(words).width });
+      fill(words, x, y);
+    };
+    drawShareCard(ctx, card);
+    return drawn;
+  };
+
+  it('keeps the crew left of the plaques: smaller for long names, cut short for very long', () => {
+    const view = blackoutOver({});
+    const base = shareCardOf(view, titleCardOf(view, 'p1', false));
+    const crewOf = (names: string[]) =>
+      drawnLines({ ...base, crew: names.map((name) => ({ name, color: '#2dd4bf' })) }).filter(
+        ({ words }) => names.some((name) => name.startsWith(words.replace('…', ''))),
+      );
+    const long = ['Maximiliane', 'Bartholomäus', 'Konstantinos'];
+    const three = crewOf(long);
+    expect(three.map(({ words }) => words)).toEqual(long);
+    expect(Math.max(...three.map(({ right }) => right))).toBeLessThanOrEqual(CREW_RIGHT);
+    const four = crewOf(['Maximiliane von Hohenberg', 'Bartholomäus Ziegler', 'Kunigunde', 'Ho']);
+    expect(four.map(({ words }) => words.endsWith('…'))).toEqual([true, true, false, false]);
+    expect(Math.max(...four.map(({ right }) => right))).toBeLessThanOrEqual(CREW_RIGHT);
+  });
+
+  it('says why where the browser draws or encodes no picture, its reason the cause', async () => {
+    const view = blackoutOver({});
+    const card = shareCardOf(view, titleCardOf(view, 'p1', false));
+    const { ctx } = fakeCanvas(SHARE_SIZE.width, SHARE_SIZE.height);
+    const page = (encoded: Blob | null) => ({
+      createElement: () => ({
+        getContext: () => ctx,
+        toBlob: (done: (blob: Blob | null) => void) => done(encoded),
+      }),
+    });
+    vi.stubGlobal('document', page(null));
+    await expect(saveShareCard(card)).rejects.toThrow('Das Bild ließ sich nicht erzeugen.');
+    const old = new TypeError('ctx.roundRect is not a function');
+    ctx.roundRect = () => {
+      throw old;
+    };
+    const refused = await saveShareCard(card).catch((err: unknown) => err);
+    expect(refused).toEqual(new Error('Dieser Browser zeichnet das Bild nicht.'));
+    expect((refused as Error).cause).toBe(old);
+    vi.unstubAllGlobals();
   });
 
   it('is saved under the mission and the day', () => {

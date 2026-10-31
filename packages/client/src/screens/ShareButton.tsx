@@ -12,7 +12,8 @@ export function ShareButton({ card }: { card: ShareCard }) {
     setRefused(null);
     saveShareCard(card).catch((err: unknown) => {
       const why = err instanceof Error ? err.message : String(err);
-      console.warn(`[escapelab] the run's picture was not saved: ${why}`);
+      // The browser's own reason, where there is one, for whoever looks into the console.
+      console.warn(`[escapelab] the run's picture was not saved: ${why}`, err);
       setRefused(why);
     });
   };

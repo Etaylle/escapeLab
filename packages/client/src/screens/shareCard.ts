@@ -161,20 +161,66 @@ function facts(ctx: CanvasRenderingContext2D, card: ShareCard): void {
   text(ctx, 'STATIONEN', [x, top + 34], label);
 }
 
-/** The crew by name, each behind a dot of their colour. */
-function crew(ctx: CanvasRenderingContext2D, card: ShareCard): void {
-  let x = MARGIN;
-  const y = 530;
-  ctx.font = `600 28px ${MONO}`;
+/** How far right the crew's row may run, px: clear of the plaques' column (`plaques`). */
+export const CREW_RIGHT = 680;
+/** The sizes the crew's names are tried at, largest first; at the last they are cut short. */
+const SMALLEST_CREW = 18;
+const CREW_SIZES = [28, 24, 21, SMALLEST_CREW];
+
+/** The crew row's measures at `size` px: a dot's radius, from a dot to its name, to the next. */
+function crewSpacing(size: number): { dot: number; lead: number; gap: number } {
+  const k = size / 28;
+  return { dot: 9 * k, lead: 28 * k, gap: 36 * k };
+}
+
+/** `name` cut short with „…" to `width` px, in the font `ctx` has. */
+function cutTo(ctx: CanvasRenderingContext2D, name: string, width: number): string {
+  if (ctx.measureText(name).width <= width) {
+    return name;
+  }
+  let cut = name;
+  while (cut.length > 1 && ctx.measureText(`${cut}…`).width > width) {
+    cut = cut.slice(0, -1);
+  }
+  return `${cut}…`;
+}
+
+/**
+ * The largest size the crew's `names` fit at left of the plaques, and the names — at the
+ * smallest, each cut short to an equal share of the row where even that is too wide.
+ */
+function crewFit(ctx: CanvasRenderingContext2D, names: readonly string[]) {
+  const room = CREW_RIGHT - MARGIN;
   ctx.letterSpacing = '0px';
-  for (const mate of card.crew) {
+  for (const size of CREW_SIZES) {
+    ctx.font = `600 ${size}px ${MONO}`;
+    const { lead, gap } = crewSpacing(size);
+    const widths = names.map((name) => lead + ctx.measureText(name).width + gap);
+    const width = widths.reduce((sum, each) => sum + each, -gap);
+    if (width <= room) {
+      return { size, names };
+    }
+  }
+  const { lead, gap } = crewSpacing(SMALLEST_CREW);
+  const share = (room + gap) / names.length - lead - gap;
+  return { size: SMALLEST_CREW, names: names.map((name) => cutTo(ctx, name, share)) };
+}
+
+/** The crew by name, each behind a dot of their colour, the row left of the plaques. */
+function crew(ctx: CanvasRenderingContext2D, card: ShareCard): void {
+  const y = 530;
+  const fit = crewFit(ctx, card.crew.map((mate) => mate.name));
+  const { dot, lead, gap } = crewSpacing(fit.size);
+  let x = MARGIN;
+  card.crew.forEach((mate, i) => {
+    const name = fit.names[i] ?? mate.name;
     ctx.fillStyle = mate.color;
     ctx.beginPath();
-    ctx.arc(x + 9, y - 10, 9, 0, Math.PI * 2);
+    ctx.arc(x + dot, y - dot - 1, dot, 0, Math.PI * 2);
     ctx.fill();
-    text(ctx, mate.name, [x + 28, y], { size: 28, color: INK.text });
-    x += 28 + ctx.measureText(mate.name).width + 36;
-  }
+    text(ctx, name, [x + lead, y], { size: fit.size, color: INK.text });
+    x += lead + ctx.measureText(name).width + gap;
+  });
   text(ctx, 'FORSCHUNGSANLAGE KALTENBRUNN', [MARGIN, 584], {
     size: 15,
     spacing: 5,
@@ -235,34 +281,39 @@ export function shareFileName(card: Pick<ShareCard, 'missionTitle' | 'finishedAt
   return `escapelab-${slug}-${date}.png`;
 }
 
+/** `blob` saved as `name` through the browser's download. */
+function download(blob: Blob, name: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 /**
  * The card drawn on a canvas of its own and saved as a PNG through the browser's download —
- * rejected, saying why, where the browser draws or encodes no picture.
+ * rejected, saying why, where the browser draws or encodes no picture; whatever goes wrong on
+ * the way rejects too, the browser's own reason as the cause.
  */
-export function saveShareCard(card: ShareCard): Promise<void> {
+export async function saveShareCard(card: ShareCard): Promise<void> {
   const canvas = document.createElement('canvas');
   canvas.width = SHARE_SIZE.width;
   canvas.height = SHARE_SIZE.height;
   const ctx = canvas.getContext('2d');
   if (ctx === null) {
-    return Promise.reject(new Error('Dieser Browser zeichnet kein Bild.'));
+    throw new Error('Dieser Browser zeichnet kein Bild.');
   }
-  drawShareCard(ctx, card);
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob === null) {
-        reject(new Error('Das Bild ließ sich nicht erzeugen.'));
-        return;
-      }
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = shareFileName(card);
-      document.body.append(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
-      resolve();
-    }, 'image/png');
-  });
+  try {
+    drawShareCard(ctx, card);
+  } catch (cause) {
+    throw new Error('Dieser Browser zeichnet das Bild nicht.', { cause });
+  }
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  if (blob === null) {
+    throw new Error('Das Bild ließ sich nicht erzeugen.');
+  }
+  download(blob, shareFileName(card));
 }
