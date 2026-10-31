@@ -131,19 +131,23 @@ function tick(place: Place, rate: number): void {
   }
   const { ctx } = engine;
   const at = ctx.currentTime + LOOKAHEAD;
-  capped(ctx, engine.effects, { voice: 1 }, (out) => {
-    const level = gain(ctx, TICK_LEVEL * place.gain);
-    const pan = ctx.createStereoPanner();
-    pan.pan.value = place.pan;
-    if (place.muffled) {
-      chain(level, biquad(ctx, 'lowpass', MUFFLE_HZ, 0), pan, out);
-    } else {
-      chain(level, pan, out);
-    }
-    const source = startSample(ctx, ping, level, at, rate);
-    source.stop(at + TICK_S);
-    return [source];
-  });
+  try {
+    capped(ctx, engine.effects, { voice: 1 }, (out) => {
+      const level = gain(ctx, TICK_LEVEL * place.gain);
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = place.pan;
+      if (place.muffled) {
+        chain(level, biquad(ctx, 'lowpass', MUFFLE_HZ, 0), pan, out);
+      } else {
+        chain(level, pan, out);
+      }
+      const source = startSample(ctx, ping, level, at, rate);
+      source.stop(at + TICK_S);
+      return [source];
+    });
+  } catch {
+    // Deliberately silent: a missed tick is harmless, the edge still glows toward the drone.
+  }
 }
 
 /** What the sense hears from: the map with its doors, where the player stands, the drones. */
@@ -155,30 +159,26 @@ export interface DangerScene {
 
 /**
  * One look, at `now` (ms, performance.now): the drone closing in sensed, if any, and its tick
- * where one is due — the first at once. Never throws: the world goes on without its sense.
+ * where one is due — the first at once. A tick the audio cannot play is skipped (`tick`).
  */
 export function senseDanger(scene: DangerScene, now: number): void {
-  try {
-    probeOnce();
-    const before = lookBack(now);
-    const sensed = closingDrone(scene.self, scene.drones, before, danger.sensed?.id ?? null);
-    const { self } = scene;
-    const distances = new Map(
-      Object.entries(scene.drones).map(([id, d]) => [id, Math.hypot(d.x - self.x, d.y - self.y)]),
-    );
-    const recent = danger.looks.filter((look) => look.at > now - 2000);
-    danger.looks = [...recent, { at: now, distances }];
-    const fresh = sensed !== null && danger.sensed?.id !== sensed.id;
-    danger.sensed = sensed;
-    if (sensed === null || (!fresh && now < danger.tickAt)) {
-      return;
-    }
-    danger.tickAt = now + tickEvery(sensed.distance);
-    danger.ticks += 1;
-    tick(placeOf(scene.map, doorsShut(scene.map), scene.self, sensed), tickRate(sensed.distance));
-  } catch {
-    // Deliberately silent: the drone still shows, and its rotor still buzzes.
+  probeOnce();
+  const before = lookBack(now);
+  const sensed = closingDrone(scene.self, scene.drones, before, danger.sensed?.id ?? null);
+  const { self } = scene;
+  const distances = new Map(
+    Object.entries(scene.drones).map(([id, d]) => [id, Math.hypot(d.x - self.x, d.y - self.y)]),
+  );
+  const recent = danger.looks.filter((look) => look.at > now - 2000);
+  danger.looks = [...recent, { at: now, distances }];
+  const fresh = sensed !== null && danger.sensed?.id !== sensed.id;
+  danger.sensed = sensed;
+  if (sensed === null || (!fresh && now < danger.tickAt)) {
+    return;
   }
+  danger.tickAt = now + tickEvery(sensed.distance);
+  danger.ticks += 1;
+  tick(placeOf(scene.map, doorsShut(scene.map), scene.self, sensed), tickRate(sensed.distance));
 }
 
 /** The marker toward the drone sensed: an edge glow, as strong as it is near; none without. */
