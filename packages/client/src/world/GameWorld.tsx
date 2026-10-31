@@ -59,6 +59,7 @@ import { worldNews } from './news.js';
 import { noteMount } from './notes.js';
 import { renderRadio, voiceProbe } from './radioVoice.js';
 import { preloadSamples } from './samples.js';
+import { fitBacking } from './render/backing.js';
 import {
   profiled,
   renderKit,
@@ -727,18 +728,13 @@ function livePings(loop: Loop, perf: number): MapPing[] {
   return live;
 }
 
-/** Sizes the canvas to its box at this screen's density, assembles the frame and draws it. */
+/**
+ * Sizes the canvas to its box at this screen's density (render/backing.ts), assembles the frame
+ * and draws it.
+ */
 function render(loop: Loop, map: WorldMap): void {
   const { canvas, kit } = loop;
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const cw = canvas.clientWidth;
-  const ch = canvas.clientHeight;
-  if (canvas.width !== cw * dpr || canvas.height !== ch * dpr) {
-    canvas.width = cw * dpr;
-    canvas.height = ch * dpr;
-    kit.overlay.canvas.width = canvas.width;
-    kit.overlay.canvas.height = canvas.height;
-  }
+  const dpr = fitBacking(canvas, kit.overlay.canvas, window.devicePixelRatio);
   const perf = performance.now();
   const pings = livePings(loop, perf);
   const frame = profiled(kit, 'assemble', null, () => assembleFrame(loop, map, dpr, perf, pings));
