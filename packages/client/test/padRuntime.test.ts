@@ -158,6 +158,16 @@ describe('a controller over a dialog', () => {
     expect(click('y')).toEqual([]);
   });
 
+  it('walks nobody while a dialog lies over the world: the stick is the dialog’s', () => {
+    page.dialogs = [dialog];
+    // Leant, but not enough for a flick between the dialog's controls.
+    probe().lean(0.45, 0);
+    frame();
+    expect(padSteer()).toEqual({ x: 0, y: 0, sprint: false });
+    page.dialogs = [];
+    expect(padSteer().x).toBeCloseTo(0.3125, 9);
+  });
+
   it('turns a book’s pages left and right with the D-pad', () => {
     const book = { contains: (name: string) => name === 'reading-modal' };
     page.dialogs = [{ ...dialog, classList: book }];

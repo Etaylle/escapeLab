@@ -369,14 +369,19 @@ export function usePad(onSettings: () => void): void {
 
 /**
  * Where the controller steers the avatar this frame — the D-pad, else the stick past its dead
- * zone — and whether R1 sprints; nothing without a controller, or while the settings wait for a
- * key or a button. The world's lock (a panel, the pause) holds the avatar anyway.
+ * zone — and whether R1 sprints; nothing without a controller, while the settings wait for a
+ * key or a button, or while a dialog is open over the world — the settings, the info — where
+ * the D-pad moves between controls instead. The world's own lock holds the avatar anyway.
  */
 export function padSteer(): Steer {
   if (rt === null || rt.capture !== null || isRebinding()) {
     return NO_STEER;
   }
-  return { ...steerOf(rt.last), sprint: rt.last.held.has('r1') };
+  const steer = steerOf(rt.last);
+  if ((steer.x !== 0 || steer.y !== 0) && menuScope(document) !== null) {
+    return NO_STEER;
+  }
+  return { ...steer, sprint: rt.last.held.has('r1') };
 }
 
 /**
