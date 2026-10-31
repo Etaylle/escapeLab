@@ -134,8 +134,13 @@ bottom right under the ceiling lights, away from their key light; 18 % and right
 in the dark, where the only light is the lamp in its own hands; 35 % where no light is said (the
 lobby). Your flashlight shines from your hands (`handLamp`), 0.16 tile ahead of you across the
 picture, and sways `SWAY` (2°) either way with the step; under reduced motion it holds still.
-Cost: +0.02 ms a frame walking the dark Flur on the software Canvas path, +0.02 ms of the
-main thread on the light layer (bench, below).
+What its light sees — where walls and shut doors cut it — is taken from where you stand
+(frameLight.ts `standingLamp`): pacing over the same ground finds that sight kept from before
+(light.ts `sightCache`), however the lamp in your hands sways. Taken from the swaying lamp, the
+sight was worked out anew on every frame of a walk: 0.7 to 0.9 ms a frame more than before,
+pacing by the hatch in the escape on a main thread slowed four times (bench, below), where CI's
+runner has the least to spare. Cost now: within the bench's noise of the frames before the
+walk cycle, walking or standing.
 
 ## Light and shadow on the light layer (`gl/`)
 
@@ -161,9 +166,9 @@ smoke rises from the main breaker, the first station that is a lever. Dust falls
 hatch's rim while it grinds open. Screens, terminals and station monitors flicker as tubes do
 (`crtFlicker`: between 92 % and full, now and then a dip to 82 %, a light blinking that reduced
 motion keeps) and roll a faint bar down every 3.4 s (`rollAt`, none under reduced motion).
-Cost: at most +0.09 ms a frame for all of it together in any scene the bench draws (the
-Labor lit, with its oscilloscopes; +0.06 ms two seconds after the thunk by the breaker, +0.02 ms
-walking in the beam), against the budget of 1 ms.
+Cost: switched off one at a time, each lies within the bench's noise (±0.3 ms a frame on the
+main thread slowed four times, below), against the budget of 1 ms; the whole package together
+in Cost.
 
 ## Props with life (`anim.ts`, wallProps.ts, decor.ts, render/props.ts)
 
@@ -178,9 +183,10 @@ under it, its corner lifting in the draught as the fan turns (`paperFlutter`). T
 hanging loose from a corridor's cable trays swing for 3 s after the blackout's thunk, dying away
 (`cableSwing`). A lab's screens and every other bench show an oscilloscope's trace
 (`scopeTrace`) instead of text. Under reduced motion the fan stands still, the paper lies flat
-and the cables hang plumb. Cost: +0.05 ms a frame in the Maschinenraum lit (the fan, its
-shadow, the sheet, the steam), +0.09 ms in the Labor lit (the scopes and the tubes), −0.05 ms in
-the dark Serverraum (the patterns cost less than the old blinking).
+and the cables hang plumb. Cost: switched off one at a time — the fan with its shadow and
+sheet, the trays' cables, the wall screens, the furniture's screens and scopes, the stations'
+tubes — each within the bench's noise (Atmosphere); the Labor lit, where most of them show
+together, costs 0.45 ms a frame more on the slowed main thread (Cost).
 
 ## Camera (render/camera.ts, render/aberration.ts, vignette.ts)
 
@@ -233,12 +239,20 @@ baked together and laid over the picture in one go. A bake never reads pixels ba
 canvas: on a GPU that stalls the frame. The grain is one canvas per tile size, laid over each
 tile in one draw.
 
-What the graphics package's work costs was measured on this machine (an M4) with a bench that
-draws real Blackout frames through the game's own assembly and passes — the dark Flur walking
-and standing, the Maschinenraum lit and dark, the Labor lit, the dark Serverraum, two seconds
-after the blackout's thunk, 50 ms after an alarm, a panel open — at 1400 × 700 CSS pixels and a
-density of 1, the base and the change three rounds each in turns, 300 frames a round, the
-frame's mean without the pass profiler: on the software Canvas path the walkthrough's
-`SHOTS_SOFTWARE_GL` composes on (2.5 to 3.3 ms a frame before), and the main thread's share on
-the light layer on the M4's GPU (0.35 to 0.75 ms before). Every new effect but the alarm's knock
-costs at most 0.1 ms a frame there; the walkthrough's gated windows stay at 16.7 ms p95.
+What the graphics package's work costs is measured on this machine (an M4) with a bench that
+draws real Blackout frames through the game's own assembly and passes at the screen's pace — a
+frame each animation frame, the clock running as in the game, Anna pacing a fifth of a tile
+either way of her tile as the walkthrough paces — the canvas flushed after each frame and the
+page's main thread slowed four times, on the software Canvas path the walkthrough's
+`SHOTS_SOFTWARE_GL` composes on, at 1440 × 600 CSS pixels and a density of 1: the escape by the
+hatch, the dark Flur, the lab lit before the blackout, the Labor lit and the audience's whole
+lab in the escape, the base and the change six rounds each, every round starting at another
+build. The whole package costs a frame there +0.1 to +0.2 ms in the dark Flur and the lab lit
+before the blackout, +0.35 ms by the hatch in the escape (19.2 ms against 18.8), +0.45 ms in
+the Labor lit and +0.6 ms for the audience's whole lab in the escape — at the M4's own speed a
+quarter of that. The alarm's knock is apart (Camera). A bench that draws its frames back to
+back counts what the clock and the walk move only once in tens of frames instead of every
+fourth, and misses what pacing reuses: it saw 0.1 ms where the swaying lamp's sight cost 0.9
+(Figures). The escape is the walkthrough's dearest window — the light and the darkness over a
+lab lit red take half its frame — and CI's runners differ by a third in speed: on the slower
+ones it ran at 50 ms p95 before this package too.
