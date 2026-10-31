@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import {
+  dailyLabel,
   difficultyInfos,
+  utcDay,
   type ClientMessage,
   type Difficulty,
   type MissionInfo,
   type MissionStats,
   type PlayerView,
 } from '@escapelab/core';
+import { earnedCount, useEarned } from '../achievements.js';
 import { FIRST_RUN_LINE, useWon } from '../firstRun.js';
+import { useNow } from '../hooks.js';
 import { fullscreenForRun } from '../runScreen.js';
 import { recordParts } from '../runStats.js';
 import { preloadSamples } from '../world/samples.js';
@@ -16,6 +20,7 @@ import { CrewRoom } from './CrewRoom.js';
 import { Icon } from './Icon.js';
 import { MapThumb } from './MapThumb.js';
 import { phosphorClass, useComesOn } from './phosphor.js';
+import { plaqueCount } from './Plaques.js';
 import { MicSetup } from './Voice.js';
 
 type Send = (msg: ClientMessage) => void;
@@ -58,9 +63,11 @@ interface HeadProps {
   info: MissionInfo | undefined;
   /** the host's strip of missions, in the map's place — each card has a map of its own */
   picker: ReactNode;
+  /** how many of the mission's Erfolge this device holds (achievements.ts) */
+  earned: number;
 }
 
-function MissionHead({ view, info, picker }: HeadProps) {
+function MissionHead({ view, info, picker, earned }: HeadProps) {
   const comesOn = useComesOn('lobby');
   return (
     <header className="lobby-head">
@@ -83,6 +90,9 @@ function MissionHead({ view, info, picker }: HeadProps) {
             <Icon name="station" /> {info.puzzleCount} Stationen
           </span>
         )}
+        <span className="lobby-earned">
+          <Icon name="star" /> {plaqueCount(earned)}
+        </span>
       </p>
       {info?.stage === 'prototype' && <p className="muted lobby-prototype">{PROTOTYPE_LINE}</p>}
     </header>
@@ -164,6 +174,50 @@ export function Levels({ current, pick, firstRun = false }: LevelsProps) {
       {firstRun && current === 'entspannt' && (
         <p className="muted lobby-first-run">{FIRST_RUN_LINE}</p>
       )}
+    </div>
+  );
+}
+
+/**
+ * The Tagesschicht, where the mission offers one: the host's switch „Tagesschicht 31.10." —
+ * the day's seed for every crew, ranked among that day's runs (core daily.ts) — named by the
+ * day the room plays, or today's (UTC) while it is off; everyone else sees whether it is on.
+ */
+export function DailySwitch({
+  day,
+  today,
+  pick,
+}: {
+  /** the day the room plays; null while it is off */
+  day: string | null;
+  /** today, UTC, „2026-10-31" */
+  today: string;
+  /** the host's switch; null for everyone else, who only sees it */
+  pick: ((on: boolean) => void) | null;
+}) {
+  const on = day !== null;
+  const label = `Tagesschicht ${dailyLabel(day ?? today)}`;
+  const marks = on ? 'daily-switch daily-switch--on' : 'daily-switch';
+  return (
+    <div className="lobby-daily">
+      {pick === null ? (
+        <span className={marks}>
+          <span className="daily-lamp" aria-hidden="true" /> {label} {on ? '· an' : '· aus'}
+        </span>
+      ) : (
+        <button
+          type="button"
+          className={marks}
+          role="switch"
+          aria-checked={on}
+          onClick={() => pick(!on)}
+        >
+          <span className="daily-lamp" aria-hidden="true" /> {label}
+        </button>
+      )}
+      <p className="muted lobby-daily-note">
+        Jede Crew bekommt heute dieselbe Lage; die Läufe stehen auf einer eigenen Bestenliste.
+      </p>
     </div>
   );
 }
@@ -381,6 +435,9 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
   const [more, setMore] = useState(false);
   const host = view.you.isHost;
   const won = useWon();
+  const earned = earnedCount(useEarned(), view.missionId);
+  // Today's Tagesschicht by the UTC day, looked at again every minute: midnight turns it over.
+  const today = utcDay(useNow(60_000));
   // The lab's recordings load while the crew gathers, so that the run's first sounds are on time.
   useEffect(() => {
     void preloadSamples();
@@ -402,13 +459,20 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
         className={more ? 'lobby-panel lobby-panel-more' : 'lobby-panel'}
         aria-label="Mission"
       >
-        <MissionHead view={view} info={info} picker={picker} />
+        <MissionHead view={view} info={info} picker={picker} earned={earned} />
         <Story text={view.storyText} open={more} toggle={() => setMore(!more)} />
         <Levels
           current={view.difficulty}
           pick={host ? (difficulty) => send({ kind: 'select-difficulty', difficulty }) : null}
           firstRun={host && !won}
         />
+        {view.daily !== undefined && (
+          <DailySwitch
+            day={view.daily.day}
+            today={today}
+            pick={host ? (daily) => send({ kind: 'set-daily', daily }) : null}
+          />
+        )}
         <MicSetup />
         <StartArea view={view} send={send} />
         <div className="lobby-foot">

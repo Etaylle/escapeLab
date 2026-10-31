@@ -319,7 +319,8 @@ describe('the lobby', () => {
     const withMap = { ...blackout, tiles: ['###', '#.#', '###'] };
     const facts =
       '<p class="lobby-facts"><span>[clock] 8 min</span><span>[crew] 2–3 Spieler</span>' +
-      '<span>[station] 5 Stationen</span></p>';
+      '<span>[station] 5 Stationen</span>' +
+      '<span class="lobby-earned">[star] Erfolge 0/7</span></p>';
     const guest = lobby(benSees([anna, ben], false), [withMap, tutorial]);
     // The title comes on as a phosphor screen does, the first time a page load shows it.
     expect(guest).toContain(

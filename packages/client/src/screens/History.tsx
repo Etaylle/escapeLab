@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import {
+  dailyLabel,
   DIFFICULTIES,
+  type DailyStats,
   type Difficulty,
   type DifficultyStats,
   type LeaderEntry,
@@ -10,12 +12,16 @@ import {
 import {
   clock,
   crewText,
+  DAILY_PATH,
   dateText,
   difficultyLabel,
   STATS_PATH,
   useJson,
   winShare,
 } from '../runStats.js';
+
+/** The Tagesschicht's tab among the missions': no mission carries this id. */
+export const DAILY_TAB = ':tagesschicht';
 
 interface Props {
   missions: MissionInfo[];
@@ -27,8 +33,9 @@ interface Props {
 
 /**
  * The Bestenliste, a page of its own off the join screen like the handbook:
- * a tab per mission, the difficulty to show, the totals and the fastest
- * crews. On paper only the list of the open tab remains — see history.css.
+ * a tab per mission and one for the Tagesschicht, the difficulty to show, the
+ * totals and the fastest crews. On paper only the list of the open tab
+ * remains — see history.css.
  */
 export function HistoryScreen({ missions, missionId, selectMission, back }: Props) {
   // Fetched afresh every time the page opens: runs end while it is closed.
@@ -88,7 +95,10 @@ function tabsOf(missions: MissionInfo[], stats: MissionStats[]): { id: string; t
   ];
 }
 
-/** The tabs and the difficulty, then the totals and the list of the pair picked. */
+/**
+ * The tabs and the difficulty, then the totals and the list of the pair picked — on the
+ * Tagesschicht's tab, of the day picked (`DailyBoard`).
+ */
 export function HistoryBoard({
   missions,
   stats,
@@ -106,7 +116,7 @@ export function HistoryBoard({
   return (
     <>
       <div className="history-tabs" role="group" aria-label="Mission">
-        {tabs.map((tab) => (
+        {[...tabs, { id: DAILY_TAB, title: 'Tagesschicht' }].map((tab) => (
           <button
             key={tab.id}
             className="history-tab"
@@ -129,14 +139,86 @@ export function HistoryBoard({
           </button>
         ))}
       </div>
-      <section className="history-board">
-        <h2>{`${title} · ${difficultyLabel(difficulty)}`}</h2>
-        {group === undefined ? (
-          <p className="muted">Auf dieser Stufe ist hier noch niemand gelaufen.</p>
-        ) : (
-          <Ranking group={group} />
-        )}
-      </section>
+      {missionId === DAILY_TAB ? (
+        <DailyBoard missions={missions} difficulty={difficulty} />
+      ) : (
+        <section className="history-board">
+          <h2>{`${title} · ${difficultyLabel(difficulty)}`}</h2>
+          {group === undefined ? (
+            <p className="muted">Auf dieser Stufe ist hier noch niemand gelaufen.</p>
+          ) : (
+            <Ranking group={group} />
+          )}
+        </section>
+      )}
+    </>
+  );
+}
+
+/** The Tagesschicht's days as the server ranks them (GET /stats/daily), fetched as it opens. */
+function DailyBoard({ missions, difficulty }: { missions: MissionInfo[]; difficulty: Difficulty }) {
+  const loaded = useJson<DailyStats[]>(DAILY_PATH);
+  if (loaded.status === 'loading') {
+    return <p className="muted">Lade die Tagesschicht …</p>;
+  }
+  if (loaded.status === 'failed') {
+    return (
+      <p className="warn" role="alert">
+        Die Tagesschicht ließ sich nicht laden ({loaded.reason}).
+      </p>
+    );
+  }
+  return <DailyDays days={loaded.value} missions={missions} difficulty={difficulty} />;
+}
+
+/**
+ * The Tagesschicht by day, the newest first: a chip per day, then each mission played on the
+ * day picked at the difficulty picked — its totals and its fastest crews, every one of which
+ * played the same instance.
+ */
+export function DailyDays({
+  days,
+  missions,
+  difficulty,
+}: {
+  days: readonly DailyStats[];
+  missions: MissionInfo[];
+  difficulty: Difficulty;
+}) {
+  const [picked, setPicked] = useState<string | null>(null);
+  const day = days.find((each) => each.day === picked) ?? days[0];
+  if (day === undefined) {
+    return <p className="muted">Noch ist keine Tagesschicht gelaufen.</p>;
+  }
+  const titleOf = (id: string): string => missions.find((m) => m.id === id)?.title ?? id;
+  return (
+    <>
+      <div className="history-days" role="group" aria-label="Tag">
+        {days.map((each) => (
+          <button
+            key={each.day}
+            className="history-level"
+            aria-pressed={each.day === day.day}
+            onClick={() => setPicked(each.day)}
+          >
+            {dailyLabel(each.day)}
+          </button>
+        ))}
+      </div>
+      {day.missions.map((mission) => {
+        const group = mission.difficulties.find((level) => level.difficulty === difficulty);
+        const shift = `Tagesschicht ${dailyLabel(day.day)}`;
+        return (
+          <section key={mission.missionId} className="history-board">
+            <h2>{`${titleOf(mission.missionId)} · ${shift} · ${difficultyLabel(difficulty)}`}</h2>
+            {group === undefined ? (
+              <p className="muted">Auf dieser Stufe ist an diesem Tag niemand gelaufen.</p>
+            ) : (
+              <Ranking group={group} />
+            )}
+          </section>
+        );
+      })}
     </>
   );
 }

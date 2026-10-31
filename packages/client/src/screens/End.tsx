@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import {
   clockStartOf,
   runSeconds,
@@ -8,6 +8,7 @@ import {
   type PlayerView,
   type RunEvent,
 } from '@escapelab/core';
+import { useRunPlaques } from '../achievements.js';
 import { reportLine } from '../radio.js';
 import { clock } from '../runStats.js';
 import { endingOf, type Ending } from '../world/finale.js';
@@ -15,6 +16,9 @@ import { playSting } from '../world/music.js';
 import { CreditsTable } from './Crew.js';
 import { CrewFigure } from './CrewFigure.js';
 import { Icon, type IconName } from './Icon.js';
+import { Plaques } from './Plaques.js';
+import { ShareButton } from './ShareButton.js';
+import type { ShareCard } from './shareCard.js';
 import { RunStanding } from './Standing.js';
 
 interface Props {
@@ -77,6 +81,8 @@ export interface TitleCardProps {
   youId: string | null;
   /** this screen played the run's end: the card comes up out of its fade */
   fresh: boolean;
+  /** what stands under the facts: a player's plaques and „Bild speichern"; none for the audience */
+  extra?: ReactNode;
 }
 
 /**
@@ -111,6 +117,7 @@ export function TitleCard(props: TitleCardProps) {
         stations={props.stations}
         cause={ending === 'lost:alarms' ? alarmsCause(props.alarms) : null}
       />
+      {props.extra}
     </section>
   );
 }
@@ -369,9 +376,40 @@ function Rematch({ view, missions, send, leaveRoom }: RematchProps) {
   );
 }
 
+/** The run's card as the picture „Bild speichern" saves (shareCard.ts). */
+export function shareCardOf(view: PlayerView, card: TitleCardProps): ShareCard {
+  return {
+    ending: card.ending,
+    missionTitle: view.missionTitle,
+    usedMs: card.usedMs,
+    grade: view.grade,
+    stations: card.stations,
+    crew: view.players.map(({ name, color }) => ({ name, color })),
+    achievements: view.achievements ?? [],
+    finishedAt: view.finishedAt ?? view.startedAt ?? 0,
+    daily: view.daily?.day ?? null,
+  };
+}
+
 /**
- * The end of a run: its title card on top, then the story, the numbers,
- * where it stands, who did what, the run report and the rematch.
+ * Under a player's card: the run's Erfolge on brass — the ones new to this device coming in
+ * (achievements.ts) — and „Bild speichern".
+ */
+function CardExtras({ view, card }: { view: PlayerView; card: TitleCardProps }) {
+  const earned = view.achievements ?? [];
+  const { fresh, since } = useRunPlaques(view.missionId, earned, view.finishedAt);
+  return (
+    <>
+      <Plaques earned={earned} fresh={fresh} since={since} />
+      <ShareButton card={shareCardOf(view, card)} />
+    </>
+  );
+}
+
+/**
+ * The end of a run: its title card on top — its plaques and its picture to keep under the
+ * facts — then the story, the numbers, where it stands, who did what, the run report and the
+ * rematch.
  */
 export function EndScreen({ view, fresh, send, leaveRoom, missions = [] }: Props) {
   const card = titleCardOf(view, view.you.id, fresh);
@@ -383,7 +421,7 @@ export function EndScreen({ view, fresh, send, leaveRoom, missions = [] }: Props
 
   return (
     <div className="end-screen">
-      <TitleCard {...card} />
+      <TitleCard {...card} extra={<CardExtras view={view} card={card} />} />
       <div className={`card end end-${won ? 'won' : 'lost'}`}>
         <p className="story">{view.storyText}</p>
         {haveStats && <EndStats view={view} won={won} />}
@@ -398,6 +436,7 @@ export function EndScreen({ view, fresh, send, leaveRoom, missions = [] }: Props
               seconds: runSeconds({ startedAt, lightsOutAt: view.lights.outAt, finishedAt }),
               alarms: view.penaltySeq,
               finishedAt,
+              daily: view.daily?.day ?? null,
             }}
           />
         )}
