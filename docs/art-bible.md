@@ -47,7 +47,9 @@ drawing module with the TypeScript scanner and fails on `#…`, `rgb(…)` or `h
 Materials besides: `WOOD`, `LINO`, `PAPER`, `GLASS`. The game's signal colours keep their
 meaning everywhere: `TEAL` what is up and who you are, `READ_BLUE` reading, `DONE_GREEN` done
 and the way out, `ALARM` red. Neutrals: `INK` (every outline), `VOID`, `NIGHT` (the darkness),
-`LABEL`. The crew's eight colours stay as the server hands them out (`CREW`).
+`LABEL`. The crew's eight colours stay as the server hands them out (`CREW`). A tube's red and
+blue guns alone, `GUN_RED` and `GUN_BLUE`, paint nothing: they are what an alarm's knock cuts
+the picture down to (Camera).
 
 In the dark a material is drawn in `night(colour)`: darker and colder — the flashlight finds
 it, the ceiling lights show it warm. A wall's face takes the light of the room it looks into.
@@ -77,10 +79,11 @@ from, or lying turned on the floor; until somebody reads it, a faint `READ_BLUE`
 ## Motion rule
 
 Ambient motion is slow and small: fans turning, screens scrolling, LEDs blinking, the core
-pulsing, steam rising, dust drifting in the flashlight's beam. It steps at most 15 times a
+pulsing, steam rising, dust drifting in the light cones. It steps at most 15 times a
 second (`ANIM_HZ`), and nothing moves faster than a walking crew member (4.2 tiles/s) except
 the sparks of a short. Under reduced motion nothing turns, scrolls or flies; lights still blink.
-`test/particles.test.ts` checks the cap of 80 particles, the 15 Hz step and the speeds.
+`test/particles.test.ts` checks the pool's cap of 120 particles, each kind's share, the 15 Hz
+step and the speeds.
 
 ## Rooms with identity
 
@@ -116,6 +119,112 @@ under its light map and shaded like everything else. The Canvas pass, its fallba
 emergency lamps itself and lays the other sources' glow, the glowing marks and the particles
 over its darkness.
 
+## Figures (`figure.ts`, art.ts `drawScientist`)
+
+A crew member walks a real cycle: the legs swing in boots that lift as they come forward and
+plant as they go back, the back leg half a cycle behind the front; the body rides one art
+pixel (`WALK_BOB` = 1/64 tile) higher while the legs pass each other than at full stride, and
+leans `LEAN` into the way it walks — only as far as that way runs across the picture, so a
+figure walking up or down the screen stands straight. The cycle runs on the ground covered,
+one cycle every `GAIT_CYCLE` (1.75 tiles): a sprint swings the legs 1.3 times as fast, and a
+partner's legs keep pace with how far their figure moves on this screen, never skating. Idle,
+look, carry, flinch, celebrate and slump stand as before. Under every figure lies a soft blob of
+shadow in the light it stands in (`FIGURE_SHADOWS`): 50 % dark and thrown a little to the
+bottom right under the ceiling lights, away from their key light; 18 % and right under the feet
+in the dark, where the only light is the lamp in its own hands; 35 % where no light is said (the
+lobby). Your flashlight shines from your hands (`handLamp`), 0.16 tile ahead of you across the
+picture, and sways `SWAY` (2°) either way with the step; under reduced motion it holds still.
+Cost: +0.02 ms a frame walking the dark Flur on the software Canvas path, +0.02 ms of the
+main thread on the light layer (bench, below).
+
+## Light and shadow on the light layer (`gl/`)
+
+Every light with a size throws soft shadows on the layer — the walls, shut doors and furniture
+stopping it, four samples across the light — and so do the lamps the crew carries as they move:
+the light pass marches every pixel's lines to every light each frame, a moving lamp no dearer
+than a still one. Each emergency lamp's tube wavers (`trembleAt`) by 2 to 4 % of its strength,
+its own depth and out of step with every other, stepped at most 12 times a second and seeded by
+where it hangs. The reactor's core pulses slowly, 2.4 s a beat, on both ways of the light. The
+Canvas pass keeps its look: its lamps burn as they did. Cost: none on the Canvas pass; on the
+light layer a few more numbers in the lights' uniforms, within the bench's noise.
+
+## Atmosphere (`particles.ts`, render/atmosphere.ts)
+
+The air of the lab is one pool of at most 120 particles, each kind within its share — dust 44,
+steam 28, smoke 18, falling dust 30, the sparks always finding room — and none ever made twice:
+one that dies waits in the pool to be born again. Dust drifts in the light cones — your beam, a
+drone's eye, a lit room's light through a door standing open — and shows only inside a cone
+and on a tile its lamp can see, so the dark between the beams stays dark. Steam rises from the
+machine room's vents and puffs, now and then three at a time, from the reactor's core. The fuse
+box throws its sparks on a short as before. For 10 s after the blackout's thunk a wisp of grey
+smoke rises from the main breaker, the first station that is a lever. Dust falls off the
+hatch's rim while it grinds open. Screens, terminals and station monitors flicker as tubes do
+(`crtFlicker`: between 92 % and full, now and then a dip to 82 %, a light blinking that reduced
+motion keeps) and roll a faint bar down every 3.4 s (`rollAt`, none under reduced motion).
+Cost: at most +0.09 ms a frame for all of it together in any scene the bench draws (the
+Labor lit, with its oscilloscopes; +0.06 ms two seconds after the thunk by the breaker, +0.02 ms
+walking in the beam), against the budget of 1 ms.
+
+## Props with life (`anim.ts`, wallProps.ts, decor.ts, render/props.ts)
+
+A rack's LEDs blink each in one of five patterns — steady, a heartbeat's double blink, the
+flutter of disk activity, a slow blink, a light chasing along its row — chosen by the LED alone
+and read off the clock alone: nothing on a rack tells how a service is doing. Every machine room
+gets a ceiling fan over its floor tile nearest its middle that nothing stands on (dress.ts
+`fans`); its blades hang a room's height over the floor, over whoever walks under them, turn
+while the room has its power — spinning up as its lights come on, coasting to a stop without
+them (`spinFan`) — and throw a sweeping shadow under the ceiling lights; a sheet of paper lies
+under it, its corner lifting in the draught as the fan turns (`paperFlutter`). The cables
+hanging loose from a corridor's cable trays swing for 3 s after the blackout's thunk, dying away
+(`cableSwing`). A lab's screens and every other bench show an oscilloscope's trace
+(`scopeTrace`) instead of text. Under reduced motion the fan stands still, the paper lies flat
+and the cables hang plumb. Cost: +0.05 ms a frame in the Maschinenraum lit (the fan, its
+shadow, the sheet, the steam), +0.09 ms in the Labor lit (the scopes and the tubes), −0.05 ms in
+the dark Serverraum (the patterns cost less than the old blinking).
+
+## Camera (render/camera.ts, render/aberration.ts, vignette.ts)
+
+As a station's panel opens over the world the camera leans in 1.08 times over 200 ms, eased
+out, and back out as it shuts, from wherever it stood. The hatch grinds open with dust falling
+off its rim (Atmosphere).
+An alarm knocks the picture's colours apart for 150 ms: the finished frame's red pushed one way
+and its blue the other, 4 CSS px at first and closing in as the knock fades — two offset passes
+of the finished frame, each cut down to one colour and added over the picture's two sides, a
+twelfth of its width each, where a tube's convergence is worst and the eye looks least; the
+middle, where the crew stands, stays sharp, and the alarm's red strobe hides the light the
+passes add. The red edge of the last minute breathes with the pressure: 1.5 s a breath as the
+minute begins, 0.95 s in its last 20 s, 0.8 s and deeper through the escape. Under reduced motion
+the zoom is a cut, there is no knock and the edge holds still. Cost: the zoom nothing once it
+has settled (the map baked once more at the new zoom as the panel opens and as it shuts); the
+knock 0.9 ms a frame for its 150 ms on the software Canvas path and nothing between alarms —
+kept to the sides for that: across the whole picture, its own colours faded, it cost 3.4 ms; the
+red edge nothing, its opacity the compositor's.
+
+## Crispness (render/backing.ts)
+
+The world's canvas has as many device pixels as its box has CSS pixels times the screen's
+density, at most 2, rounded to whole pixels: a laptop at 125 % or a browser zoomed draws the
+same size frame after frame instead of sizing — and clearing — the canvas on every one.
+Everything the passes draw is in device pixels: the sprites are baked per device pixels a tile
+(atlas.ts, two levels kept), the bakes and glows on the frame's pixel grid within their bounds
+(bakes.ts, radial.ts), the world's text at its CSS size times the density. `dpr2.png` checks a
+page at twice the density.
+
+## Interface (styles/interaction.css)
+
+A panel over the world — a station's device, a source's pages, a note — grows from 0.98 to its
+size as it fades in, over 150 ms; a sheet put down slides out as before, while a station's device
+still goes at once as it is stepped back from, the camera leaning back out behind it (its frame
+is the game screen's to keep up for a fade, screens/Game.tsx). A plain button gives a
+pixel as it is pressed and darkens a little; a device's keys, levers and wires keep their own
+press. Keyboard focus shows as a 2 px teal ring, never for a click; hover affordances belong to
+a mouse. The type keeps its hierarchy: titles in the system sans, bold (the page's 27 px, the
+station's line 20 px); labels in the mono, upper case and spaced 2 px (13 px heads, 12 px panel
+labels, 10 px marks); figures in the mono with tabular digits (the clock 30 px, 36 px at the
+end); running text in the system sans at 15 to 16 px; the world's own text in the mono, bold,
+with a dark halo, held within 10 to 14 CSS px whatever the zoom. Under reduced motion every move
+is a cut or a cross-fade: a panel only fades, a press only darkens.
+
 ## Cost
 
 Floors, walls, wall props and furniture are sprites baked once per zoom level and light
@@ -123,3 +232,13 @@ Floors, walls, wall props and furniture are sprites baked once per zoom level an
 baked together and laid over the picture in one go. A bake never reads pixels back from a
 canvas: on a GPU that stalls the frame. The grain is one canvas per tile size, laid over each
 tile in one draw.
+
+What the graphics package's work costs was measured on this machine (an M4) with a bench that
+draws real Blackout frames through the game's own assembly and passes — the dark Flur walking
+and standing, the Maschinenraum lit and dark, the Labor lit, the dark Serverraum, two seconds
+after the blackout's thunk, 50 ms after an alarm, a panel open — at 1400 × 700 CSS pixels and a
+density of 1, the base and the change three rounds each in turns, 300 frames a round, the
+frame's mean without the pass profiler: on the software Canvas path the walkthrough's
+`SHOTS_SOFTWARE_GL` composes on (2.5 to 3.3 ms a frame before), and the main thread's share on
+the light layer on the M4's GPU (0.35 to 0.75 ms before). Every new effect but the alarm's knock
+costs at most 0.1 ms a frame there; the walkthrough's gated windows stay at 16.7 ms p95.
