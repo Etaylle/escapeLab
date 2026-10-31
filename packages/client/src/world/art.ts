@@ -256,7 +256,6 @@ const BODY_BOTTOM = -0.15;
 const BODY_CORNER = 0.09;
 const LEG_W = 0.17;
 const LEG_TOP = -0.24;
-const LEG_X = 0.12;
 /** A boot at a leg's foot: its sole's height, its toe reaching forward past the leg. */
 const BOOT_H = 0.075;
 const TOE = 0.035;
@@ -373,17 +372,17 @@ function getScientistPaths(): ScientistPaths {
 }
 
 /**
- * A leg where its foot is in the walk (figure.ts strideAt), facing-right space, its hip at
- * `hipX`: stroked (the outline pass, `fill` null) or filled — the leg, then its boot, the
- * boot's toe tipped up as the foot lifts.
+ * A leg where its foot is in the walk (figure.ts strideAt), facing-right space: stroked (the
+ * outline pass, `fill` null) or filled — the leg, then its boot, the boot's toe tipped up as the
+ * foot lifts.
  */
 function legAt(
   ctx: CanvasRenderingContext2D,
-  [hipX, foot]: readonly [number, Foot],
+  foot: Foot,
   fill: readonly [leg: string, boot: string] | null,
 ): void {
   const { leg, boot } = getScientistPaths();
-  const x = hipX + foot.x;
+  const { x } = foot;
   ctx.translate(x, -foot.lift);
   if (fill === null) {
     ctx.stroke(leg);
@@ -603,8 +602,7 @@ function drawScientistFigure(
   pose: FigurePose,
 ): void {
   const paths = getScientistPaths();
-  const back = [-LEG_X, stride.back] as const;
-  const front = [LEG_X, stride.front] as const;
+  const { back, front } = stride;
   ctx.scale(Math.cos(pose.look) < 0 ? -1 : 1, 1);
   ctx.rotate(leanOf(o.facing, o.moving) + pose.bow);
   ctx.lineJoin = 'round';

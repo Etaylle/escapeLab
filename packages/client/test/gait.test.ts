@@ -4,6 +4,7 @@ import {
   gaitStep,
   GAIT_CYCLE,
   handLamp,
+  HIP_X,
   HAND_AHEAD,
   HAND_DEPTH,
   LEAN,
@@ -15,6 +16,7 @@ import {
   strideAt,
   SWAY,
   WALK_BOB,
+  WALK_HIP,
 } from '../src/world/figure.js';
 import { ownLamp } from '../src/world/frameLight.js';
 import { easeOthers, newSim } from '../src/world/sim.js';
@@ -45,27 +47,32 @@ describe('gaitStep — the legs keep pace with the ground', () => {
 });
 
 describe('strideAt — a walk cycle', () => {
-  it('stands on both feet under its hips, the body down, while not walking', () => {
+  it('stands on both feet under its hips, either side of the middle, while not walking', () => {
     expect(strideAt(0.3, false)).toEqual(STANDING);
+    expect([STANDING.front.x, STANDING.back.x]).toEqual([HIP_X, -HIP_X]);
   });
 
   it('passes the feet with the front one lifted and the body a pixel up at phase 0', () => {
     const { front, back, bob } = strideAt(0, true);
-    expect(front.x).toBeCloseTo(0, 12);
-    expect(back.x).toBeCloseTo(0, 12);
+    expect(front.x).toBeCloseTo(WALK_HIP, 12);
+    expect(back.x).toBeCloseTo(-WALK_HIP, 12);
     expect(front.lift).toBeCloseTo(STEP_LIFT, 12);
     expect(back.lift).toBe(0);
     expect(bob).toBeCloseTo(-WALK_BOB, 12);
     expect(WALK_BOB).toBe(PX);
   });
 
-  it('plants both feet wide at a quarter, the body at its lowest', () => {
-    const { front, back, bob } = strideAt(0.25, true);
-    expect(front.x).toBeCloseTo(STRIDE, 12);
-    expect(back.x).toBeCloseTo(-STRIDE, 12);
-    expect(front.lift).toBeCloseTo(0, 12);
-    expect(back.lift).toBeCloseTo(0, 12);
-    expect(bob).toBeCloseTo(0, 12);
+  it('plants both feet wide, the front one leading at a quarter, the back one at three', () => {
+    const quarter = strideAt(0.25, true);
+    expect(quarter.front.x).toBeCloseTo(WALK_HIP + STRIDE, 12);
+    expect(quarter.back.x).toBeCloseTo(-WALK_HIP - STRIDE, 12);
+    expect(quarter.front.lift).toBeCloseTo(0, 12);
+    expect(quarter.back.lift).toBeCloseTo(0, 12);
+    expect(quarter.bob).toBeCloseTo(0, 12);
+    // The legs take turns leading: at three quarters the back foot is the one ahead.
+    const three = strideAt(0.75, true);
+    expect(three.back.x).toBeGreaterThan(three.front.x);
+    expect(three.back.x - three.front.x).toBeCloseTo(2 * (STRIDE - WALK_HIP), 12);
   });
 
   it('lifts the back foot as the front one did, half a cycle later', () => {
@@ -73,7 +80,8 @@ describe('strideAt — a walk cycle', () => {
       const now = strideAt(phase, true);
       const later = strideAt(phase + 0.5, true);
       expect(later.back.lift).toBeCloseTo(now.front.lift, 12);
-      expect(later.back.x).toBeCloseTo(now.front.x, 12);
+      // Each foot swings about its own hip: the back one's swing is the front one's, later.
+      expect(later.back.x + WALK_HIP).toBeCloseTo(now.front.x - WALK_HIP, 12);
     }
   });
 

@@ -8,9 +8,11 @@ import {
 } from '../src/world/art.js';
 import {
   figurePose,
+  HIP_X,
   restingPose,
   STEP_LIFT,
   STRIDE,
+  WALK_HIP,
   type FigurePose,
 } from '../src/world/figure.js';
 import { BLACK, rgba } from '../src/world/palette.js';
@@ -239,21 +241,23 @@ describe('drawScientist — walking, over a shadow of the light it stands in', (
     expect(boots).toHaveLength(2);
   });
 
-  it('puts the legs where the walk cycle has them: wide at a quarter, swapped at three', () => {
+  it('puts the legs where the walk cycle has them, each leading in turn', () => {
     /** Whether a leg was drawn with its hip at `x` and its foot `lift` off the ground. */
     const legAt = (log: readonly Entry[], x: number, lift: number): boolean =>
       callsOf(log, 'translate').some(
         ([tx, ty]) => Math.abs(Number(tx) - x) < 1e-9 && Math.abs(Number(ty) + lift) < 1e-9,
       );
     const walking = (phase: number): Entry[] => drawn(null, { moving: true, walkPhase: phase });
-    const hip = 0.12;
     const quarter = walking(0.25);
-    expect(legAt(quarter, hip + STRIDE, 0)).toBe(true);
-    expect(legAt(quarter, -hip - STRIDE, 0)).toBe(true);
+    expect(legAt(quarter, WALK_HIP + STRIDE, 0)).toBe(true);
+    expect(legAt(quarter, -WALK_HIP - STRIDE, 0)).toBe(true);
     const threeQuarters = walking(0.75);
-    expect(legAt(threeQuarters, hip - STRIDE, 0)).toBe(true);
-    expect(legAt(threeQuarters, -hip + STRIDE, 0)).toBe(true);
-    expect(legAt(walking(0), hip, STEP_LIFT)).toBe(true);
-    expect(legAt(walking(0.5), -hip, STEP_LIFT)).toBe(true);
+    expect(legAt(threeQuarters, WALK_HIP - STRIDE, 0)).toBe(true);
+    expect(legAt(threeQuarters, -WALK_HIP + STRIDE, 0)).toBe(true);
+    expect(legAt(walking(0), WALK_HIP, STEP_LIFT)).toBe(true);
+    expect(legAt(walking(0.5), -WALK_HIP, STEP_LIFT)).toBe(true);
+    // Standing, on both feet at the hips.
+    expect(legAt(drawn(null), HIP_X, 0)).toBe(true);
+    expect(legAt(drawn(null), -HIP_X, 0)).toBe(true);
   });
 });

@@ -167,19 +167,23 @@ const SHADOW_SHRINK = 0.45;
 /**
  * The walk: one cycle of the legs — two steps, a footfall each — every GAIT_CYCLE tiles walked,
  * so the legs keep pace with the ground whatever the speed: a sprint swings them as much
- * faster as it runs, a partner easing in slows them as it slows. A foot reaches STRIDE ahead of
- * its hip and as far behind, and lifts STEP_LIFT at most as it swings forward; the body rides a
- * pixel higher while the legs pass each other than at full stride (WALK_BOB), and leans LEAN
- * into the way it walks — as far as that way runs across the picture: a figure walking up or
- * down the screen does not tilt.
+ * faster as it runs, a partner easing in slows them as it slows. Standing, the legs stand at
+ * HIP_X either side of the middle; walking, the hips draw in to WALK_HIP and each foot swings
+ * STRIDE ahead of its hip and as far behind — past the other foot, so the legs truly take
+ * turns leading — lifting STEP_LIFT at most as it swings forward. The body rides a pixel higher
+ * while the legs pass each other than at full stride (WALK_BOB), and leans LEAN into the way it
+ * walks — as far as that way runs across the picture: a figure walking up or down the screen
+ * does not tilt.
  */
 export const GAIT_CYCLE = 1.75;
-export const STRIDE = 0.06;
-export const STEP_LIFT = 0.025;
+export const HIP_X = 0.12;
+export const WALK_HIP = 0.025;
+export const STRIDE = 0.125;
+export const STEP_LIFT = 0.035;
 export const WALK_BOB = PX;
 export const LEAN = 0.06;
 
-/** Where one foot is in the walk: ahead of its hip (facing right, tiles) and off the ground. */
+/** Where one foot is in the walk: across the figure (facing right, tiles) and off the ground. */
 export interface Foot {
   x: number;
   lift: number;
@@ -195,7 +199,11 @@ export interface Stride {
 }
 
 /** Both feet on the ground under the hips, the body down: a figure standing. */
-export const STANDING: Stride = { front: { x: 0, lift: 0 }, back: { x: 0, lift: 0 }, bob: 0 };
+export const STANDING: Stride = {
+  front: { x: HIP_X, lift: 0 },
+  back: { x: -HIP_X, lift: 0 },
+  bob: 0,
+};
 
 /** The walk cycle `phase` (0 to 1) on from where it stood, `tiles` further on. */
 export function gaitStep(phase: number, tiles: number): number {
@@ -205,9 +213,9 @@ export function gaitStep(phase: number, tiles: number): number {
 
 /**
  * The legs `phase` (0 to 1) into the walk cycle: the front foot swings forward lifted and walks
- * back planted, the back foot half a cycle behind it; the body highest as they pass each other
- * (phase 0 and 0.5), lowest with both feet planted wide (0.25 and 0.75). A figure standing
- * stands on both feet.
+ * back planted, the back foot half a cycle behind it; at a quarter the front foot leads, at
+ * three quarters the back one, the body highest as they pass each other (phase 0 and 0.5) and
+ * lowest with both planted wide. A figure standing stands on both feet.
  */
 export function strideAt(phase: number, moving: boolean): Stride {
   if (!moving) {
@@ -217,8 +225,8 @@ export function strideAt(phase: number, moving: boolean): Stride {
   const swing = Math.sin(theta) * STRIDE;
   const raise = Math.cos(theta) * STEP_LIFT;
   return {
-    front: { x: swing, lift: Math.max(0, raise) },
-    back: { x: -swing, lift: Math.max(0, -raise) },
+    front: { x: WALK_HIP + swing, lift: Math.max(0, raise) },
+    back: { x: -WALK_HIP - swing, lift: Math.max(0, -raise) },
     bob: -Math.abs(Math.cos(theta)) * WALK_BOB,
   };
 }
