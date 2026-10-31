@@ -1,5 +1,5 @@
 import { chatText } from '@escapelab/core';
-import { carriedItem, promptText } from '../interact.js';
+import { carriedItem, carryLine, promptText } from '../interact.js';
 import {
   markerBoxes,
   placeMarkers,
@@ -406,7 +406,7 @@ function drawCarrying(ctx: CanvasRenderingContext2D, frame: Frame): void {
     const view = frame.viewport;
     ctx.font = `700 ${12 * view.dpr}px ui-monospace, Menlo, monospace`;
     ctx.fillStyle = C.carrying;
-    ctx.fillText(`📦 ${carrying.label} — [Q] ablegen`, view.w / 2, view.h - 16 * view.dpr);
+    ctx.fillText(carryLine(carrying.label), view.w / 2, view.h - 16 * view.dpr);
   }
 }
 

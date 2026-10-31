@@ -4,26 +4,26 @@ import {
   followServer,
   LEAD_TILES,
   newSim,
-  SPRINT_KEY,
   walk,
   type Footfall,
   type Sim,
 } from '../src/world/sim.js';
+import type { Held } from '../src/input/bindings.js';
 import { clampCamera } from '../src/world/viewport.js';
 import { mapWith } from './fixtures.js';
 import { TILES } from './frames.js';
 
-/** Walks `frames` frames of 1/60 s holding `key`, from (x, y); where the avatar ends up. */
+/** Walks `frames` frames of 1/60 s holding `move`, from (x, y); where the avatar ends up. */
 function walked(
   decor: { kind: 'shelf'; x: number; y: number }[],
-  key: string,
+  move: Held,
   [x, y]: readonly [number, number],
   frames = 60,
 ): { x: number; y: number } {
   const map = mapWith({ width: 10, height: 6, tiles: TILES, decor });
   const sim = newSim(0);
   Object.assign(sim.self, { x, y });
-  sim.keys.add(key);
+  sim.keys.add(move);
   for (let i = 0; i < frames; i++) {
     walk(sim, map, 1 / 60, false);
   }
@@ -32,17 +32,17 @@ function walked(
 
 describe('walk — furniture stands in the way like a wall', () => {
   it('walks on over the floor where nothing stands', () => {
-    expect(walked([], 'd', [1.5, 3.5]).x).toBeGreaterThan(4);
+    expect(walked([], 'right', [1.5, 3.5]).x).toBeGreaterThan(4);
   });
 
   it('stops the avatar at a piece of furniture, its body short of the tile', () => {
-    const { x } = walked([{ kind: 'shelf', x: 3, y: 3 }], 'd', [1.5, 3.5]);
+    const { x } = walked([{ kind: 'shelf', x: 3, y: 3 }], 'right', [1.5, 3.5]);
     expect(x).toBeLessThan(3);
     expect(x).toBeGreaterThan(2.5);
   });
 
   it('lets the avatar pass beside it, on the next row', () => {
-    expect(walked([{ kind: 'shelf', x: 3, y: 3 }], 'd', [1.5, 2.5]).x).toBeGreaterThan(4);
+    expect(walked([{ kind: 'shelf', x: 3, y: 3 }], 'right', [1.5, 2.5]).x).toBeGreaterThan(4);
   });
 });
 
@@ -50,11 +50,11 @@ describe('walk — furniture stands in the way like a wall', () => {
 const OPEN = mapWith({ width: 10, height: 6, tiles: TILES });
 
 /** `frames` frames of 1/60 s east from (1.5, 2.5) with `held` held: how far, and each footfall. */
-function ran(held: string[], frames = 60, locked = false) {
+function ran(held: Held[], frames = 60, locked = false) {
   const sim = newSim(0);
   Object.assign(sim.self, { x: 1.5, y: 2.5 });
-  for (const key of held) {
-    sim.keys.add(key);
+  for (const move of held) {
+    sim.keys.add(move);
   }
   const falls: Footfall[] = [];
   const at: number[] = [];
@@ -70,8 +70,8 @@ function ran(held: string[], frames = 60, locked = false) {
 
 describe('walk — the sprint', () => {
   it('runs 1.3 times the walk with Shift held, for as long as it is held', () => {
-    expect(ran(['d']).tiles).toBeCloseTo(4.2, 6);
-    const sprint = ran(['d', SPRINT_KEY]);
+    expect(ran(['right']).tiles).toBeCloseTo(4.2, 6);
+    const sprint = ran(['right', 'sprint']);
     expect(sprint.tiles).toBeCloseTo(4.2 * 1.3, 6);
     // No stamina: the second half second as fast as the first.
     const half = (sprint.at[29] ?? 0) - 1.5;
@@ -79,26 +79,26 @@ describe('walk — the sprint', () => {
   });
 
   it('lands its footfalls faster at a sprint, each told a sprint’s', () => {
-    const walking = ran(['d']).falls;
-    const sprinting = ran(['d', SPRINT_KEY]).falls;
+    const walking = ran(['right']).falls;
+    const sprinting = ran(['right', 'sprint']).falls;
     expect(sprinting.length).toBeGreaterThan(walking.length);
     expect(new Set(walking)).toEqual(new Set(['walk']));
     expect(new Set(sprinting)).toEqual(new Set(['sprint']));
     // A footfall every half tile run, at either pace, counted for the walkthrough's probe.
-    expect(ran(['d', SPRINT_KEY]).sim.footfalls).toBe(sprinting.length);
+    expect(ran(['right', 'sprint']).sim.footfalls).toBe(sprinting.length);
   });
 
   it('swings the legs as much faster as it runs', () => {
-    const phaseAfter = (held: string[]): number => ran(held, 12).sim.walkPhase;
-    expect(phaseAfter(['d', SPRINT_KEY])).toBeCloseTo(phaseAfter(['d']) * 1.3, 9);
+    const phaseAfter = (held: Held[]): number => ran(held, 12).sim.walkPhase;
+    expect(phaseAfter(['right', 'sprint'])).toBeCloseTo(phaseAfter(['right']) * 1.3, 9);
   });
 
   it('moves nothing on Shift alone, nor while input is locked', () => {
-    const still = ran([SPRINT_KEY]);
+    const still = ran(['sprint']);
     expect(still.tiles).toBe(0);
     expect(still.falls).toEqual([]);
     expect(still.sim.self.moving).toBe(false);
-    expect(ran(['d', SPRINT_KEY], 60, true).tiles).toBe(0);
+    expect(ran(['right', 'sprint'], 60, true).tiles).toBe(0);
   });
 });
 

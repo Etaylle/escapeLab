@@ -8,6 +8,7 @@ import {
   type FakeNode,
 } from './fakeGraph.js';
 import { loadedSamples } from './fakeSamples.js';
+import { DEFAULT_KEYS, DEFAULT_PAD } from '../src/input/bindings.js';
 
 /** A storage that keeps what it is given, as the browser's does. */
 function memory(initial: Record<string, string> = {}) {
@@ -49,7 +50,8 @@ describe('readSettings and writeSettings — kept on this device', () => {
     const { settings } = await fresh();
     expect(settings.readSettings(memory())).toEqual({
       volumes: { radio: 100, effects: 100, music: 70 },
-      talkKey: 'v',
+      keys: DEFAULT_KEYS,
+      pad: DEFAULT_PAD,
       textSize: 'normal',
       motion: 'system',
     });
@@ -61,7 +63,8 @@ describe('readSettings and writeSettings — kept on this device', () => {
     const store = memory();
     const chosen = {
       volumes: { radio: 40, effects: 85, music: 0 },
-      talkKey: 'g',
+      keys: { ...DEFAULT_KEYS, talk: 'g', interact: 'f' },
+      pad: { interact: 'b', drop: 'a', notes: 'x', minimap: 'r2' },
       textSize: 'large',
       motion: 'on',
     } as const;
@@ -74,21 +77,26 @@ describe('readSettings and writeSettings — kept on this device', () => {
     const { settings } = await fresh();
     const odd = {
       volumes: { radio: 140, effects: -5.4, music: 'laut' },
-      talkKey: 'w',
+      // Two actions on one key, a key the game keeps, a button that is none.
+      keys: { talk: 'w', info: 'escape' },
+      pad: { notes: 'a', minimap: 'start' },
       textSize: 'riesig',
       motion: 'vielleicht',
     };
     const store = memory({ 'escapelab.settings': JSON.stringify(odd) });
     expect(settings.readSettings(store)).toEqual({
       volumes: { radio: 100, effects: 0, music: 70 },
-      talkKey: 'v',
+      keys: DEFAULT_KEYS,
+      pad: DEFAULT_PAD,
       textSize: 'normal',
       motion: 'system',
     });
-    const rounded = memory({ 'escapelab.settings': '{"volumes":{"music":33.6},"talkKey":"F4"}' });
+    const rounded = memory({
+      'escapelab.settings': '{"volumes":{"music":33.6},"keys":{"talk":"F4"}}',
+    });
     expect(settings.readSettings(rounded)).toMatchObject({
       volumes: { music: 34 },
-      talkKey: 'f4',
+      keys: { talk: 'f4', interact: 'e' },
     });
   });
 
@@ -120,14 +128,14 @@ describe('readSettings and writeSettings — kept on this device', () => {
   });
 
   it('comes back as the page starts, and a change is kept at once', async () => {
-    const store = memory({ 'escapelab.settings': '{"talkKey":"b","textSize":"small"}' });
+    const store = memory({ 'escapelab.settings': '{"keys":{"talk":"b"},"textSize":"small"}' });
     windowWith(store);
     const { settings } = await fresh();
     settings.startSettings();
-    expect(settings.getSettings()).toMatchObject({ talkKey: 'b', textSize: 'small' });
+    expect(settings.getSettings()).toMatchObject({ keys: { talk: 'b' }, textSize: 'small' });
     settings.changeSettings({ motion: 'off' });
     expect(JSON.parse(store.items.get('escapelab.settings') ?? '{}')).toMatchObject({
-      talkKey: 'b',
+      keys: { talk: 'b' },
       textSize: 'small',
       motion: 'off',
     });
@@ -144,29 +152,12 @@ describe('the talk key', () => {
     ...parts,
   });
 
-  it('takes a letter, a digit past the chat’s, F1–F12, refuses what the game holds', async () => {
-    const { settings } = await fresh();
-    for (const ok of ['v', 'G', 'ö', '9', '0', 'F2', 'f12', 'x']) {
-      expect(settings.talkKeyVerdict(ok), ok).toBe('ok');
-    }
-    for (const taken of ['w', 'A', 'ArrowUp', 'Shift', 'e', ' ', 'Enter', 'q', 'm', 'c', 'i']) {
-      expect(settings.talkKeyVerdict(taken), taken).toBe('taken');
-    }
-    for (const taken of ['h', '?', 'n', 'Escape', 'Tab', '1', '8']) {
-      expect(settings.talkKeyVerdict(taken), taken).toBe('taken');
-    }
-    for (const unfit of ['Control', 'Alt', 'Meta', 'PageUp', 'F13', 'Dead']) {
-      expect(settings.talkKeyVerdict(unfit), unfit).toBe('unfit');
-    }
-    expect(['v', 'f2', 'ö'].map(settings.keyName)).toEqual(['V', 'F2', 'Ö']);
-  });
-
   it('talks on the key the settings name, and no longer on V once rebound', async () => {
     windowWith(memory());
     const { settings, voice } = await fresh();
-    const talkKey = (): string => settings.getSettings().talkKey;
+    const talkKey = (): string => settings.getSettings().keys.talk;
     expect(voice.talksOnDown(key('V'), talkKey(), false)).toBe(true);
-    settings.changeSettings({ talkKey: 'g' });
+    settings.changeSettings({ keys: { ...DEFAULT_KEYS, talk: 'g' } });
     expect(voice.talksOnDown(key('v'), talkKey(), false)).toBe(false);
     expect(voice.talksOnDown(key('g'), talkKey(), false)).toBe(true);
     expect(voice.talksOnDown(key('G'), talkKey(), false)).toBe(true);

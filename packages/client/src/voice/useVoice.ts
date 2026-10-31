@@ -42,9 +42,9 @@ export function useVoiceMesh(conn: Pick<Connection, 'listen' | 'signal'>): Voice
 export type KeyLike = Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'repeat'>;
 
 /**
- * Whether a key going down starts talking: the talk key (`talkKey`, as the settings have it),
+ * Whether a key going down starts talking: the talk key (`keys.talk`, as the settings bind it),
  * plain — no Strg, Alt or Cmd, no auto-repeat — and not while the keys are `busy`: typing,
- * or the settings waiting for a new talk key.
+ * or the settings waiting for a key to bind.
  */
 export function talksOnDown(e: KeyLike, talkKey: string, busy: boolean): boolean {
   const plain = !e.altKey && !e.ctrlKey && !e.metaKey && !e.repeat;
@@ -59,19 +59,19 @@ export function stopsOnUp(e: Pick<KeyboardEvent, 'key'>, talkKey: string): boole
 /**
  * The talk key held down talks, wherever the focus sits — the relay console
  * keeps the other keys to itself, but not this one — and never while typing,
- * nor while the settings wait for a new talk key. Losing the window lets go,
+ * nor while the settings wait for a key to bind. Losing the window lets go,
  * as a key let go there never comes back up here. The key is read as it is
  * pressed: a key the settings change takes over at once.
  */
 function usePushToTalk(mesh: VoiceMesh): void {
   useEffect(() => {
     const onDown = (e: KeyboardEvent): void => {
-      if (talksOnDown(e, getSettings().talkKey, typing() || isRebinding())) {
+      if (talksOnDown(e, getSettings().keys.talk, typing() || isRebinding())) {
         mesh.setHeld(true);
       }
     };
     const onUp = (e: KeyboardEvent): void => {
-      if (stopsOnUp(e, getSettings().talkKey)) {
+      if (stopsOnUp(e, getSettings().keys.talk)) {
         mesh.setHeld(false);
       }
     };

@@ -26,7 +26,7 @@ import {
 import { deviceCoach, firstSight, SHOWN_MARKS, type CoachMark } from '../puzzles/coach.js';
 import { useSolvedHold, type DeviceRun } from '../puzzles/Device.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
-import { useReducedMotion } from '../settings.js';
+import { useReducedMotion, useSettings } from '../settings.js';
 import {
   ALARM_NOTICE_MS,
   alarmLine,
@@ -1169,8 +1169,9 @@ export function GameScreen(props: Props) {
   const sheets = useSheets(open);
   const pad = useNotepad(roomCode, view.you.id, open);
   const closeModal = (): void => open.set(NOTHING_OVER);
-  useKeys(['n'], pad.toggle);
-  useKeys(putDownKeys(overOf(open)), closeModal);
+  const { keys } = useSettings();
+  useKeys([keys.notes], pad.toggle);
+  useKeys(putDownKeys(overOf(open), keys), closeModal);
   useEscapeCloses(open, closeModal);
   const map = view.map;
   if (map === null) {

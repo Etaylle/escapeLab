@@ -1,31 +1,35 @@
 import { useContext, useEffect, useRef, useState } from 'react';
+import type { KeyBindings } from '../input/bindings.js';
+import { useGlyph } from '../input/glyphs.js';
 import { useReducedMotion } from '../settings.js';
 import { NotepadContext } from '../noting.js';
 
 /**
  * Putting things down instead of closing windows: a source read on the spot — a book, a
  * clipboard, a terminal, a wall chart, a locker's pages, a note of the last shift — has no
- * window's ✕. Its foot says how to put it down, „[E] Weglegen" (a book: „[E] Zuklappen");
- * E, Esc or a step away (W A S D) do it, and on a touch screen a tab at the board's edge. The
- * sheet then slides down out of view in PUT_DOWN_MS — a book shuts as it goes — with a soft
- * clack, and the player walks on at once.
+ * window's ✕. Its foot says how to put it down, „[E] Weglegen" (a book: „[E] Zuklappen") —
+ * the key that works things, or the controller's B, as bound (input/glyphs.ts); that key, Esc
+ * or a step away do it, and on a touch screen a tab at the board's edge. The sheet then slides
+ * down out of view in PUT_DOWN_MS — a book shuts as it goes — with a soft clack, and the
+ * player walks on at once.
  */
 
 /** How long a sheet takes to slide down out of view, ms; styles/putdown.css times it so. */
 export const PUT_DOWN_MS = 220;
 
-/** The keys that put a sheet down: E, as it was picked up, and a step, W A S D. */
-export const PUT_DOWN_KEYS = ['e', 'w', 'a', 's', 'd'] as const;
-
 /** What lies over the world: a station's device, a source's pages, a note of the last shift. */
 export type Over = 'station' | 'reading' | 'note';
 
 /**
- * The keys besides Esc that put away what lies over the world: E and a step put down what
- * was read; at a device — whose controls they may work — none, Esc steps back from it.
+ * The keys besides Esc that put away what lies over the world, as `keys` binds them: the key
+ * that works things — as it was picked up — and a step put down what was read; at a device,
+ * whose controls they may work, none: Esc steps back from it.
  */
-export function putDownKeys(over: Over | null): readonly string[] {
-  return over === 'reading' || over === 'note' ? PUT_DOWN_KEYS : [];
+export function putDownKeys(over: Over | null, keys: KeyBindings): readonly string[] {
+  if (over !== 'reading' && over !== 'note') {
+    return [];
+  }
+  return [keys.interact, keys.up, keys.left, keys.down, keys.right];
 }
 
 /** The verb a source is put down with: a book is shut, everything else laid down. */
@@ -110,15 +114,17 @@ function usePutDownSound<T>(item: T | null, sound: (last: T) => void): void {
 
 /**
  * The foot of a sheet read on the spot: „[E] Weglegen" — a book's „[E] Zuklappen" — where
- * there are keys, a tab at the board's edge on a touch screen (styles/putdown.css shows one of
- * them), and beside the tab the notepad's, where no N key is. Either puts it down.
+ * there are keys, by the key or button that puts it down; a tab at the board's edge on a touch
+ * screen (styles/putdown.css shows one of them), and beside the tab the notepad's, where no N
+ * key is. Either puts it down.
  */
 export function PutDown({ verb, onPutDown }: { verb: PutDownVerb; onPutDown: () => void }) {
   const hand = useContext(NotepadContext);
+  const key = useGlyph('putDown');
   return (
     <div className="put-down">
       <button type="button" className="put-down-caption" onClick={onPutDown}>
-        {`[E] ${verb}`}
+        {`[${key}] ${verb}`}
       </button>
       <div className="put-down-tabs">
         <button type="button" className="put-down-tab" onClick={onPutDown}>

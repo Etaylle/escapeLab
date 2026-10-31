@@ -251,7 +251,6 @@ function setDaily(
   }
   requireHost(state, action.playerId);
   if (action.daily && !state.mission.daily) {
-    // voice: interface
     fail(`„${state.mission.title}" hat keine Tagesschicht.`);
   }
   const daily = action.daily ? utcDay(action.at) : null;

@@ -1,0 +1,102 @@
+/* ── the keys and the controller in the settings (screens/ControlSettings.tsx) ──────────── */
+
+/* Every action on a row: its name, its key as a keycap, „Ändern". */
+.settings-bindings {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.settings-bindings th {
+  padding: 3px 8px 3px 0;
+  font-weight: 400;
+  text-align: left;
+  color: var(--text);
+}
+
+.settings-bindings td {
+  padding: 3px 0 3px 8px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.settings-bindings td:first-of-type {
+  width: 4.5em;
+  text-align: center;
+}
+
+.settings-bindings .settings-kbd {
+  display: inline-block;
+  min-width: 2.6em;
+  padding: 3px 8px;
+  font-size: 13px;
+}
+
+.settings-bindings .settings-kbd--pad {
+  border-radius: 999px;
+  color: var(--accent);
+}
+
+.settings-reset {
+  justify-self: start;
+  margin-top: 14px;
+  padding: 7px 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+/* The controller's live test: every button lit while it is held. */
+.pad-test {
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+  margin: 2px auto 4px;
+  overflow: visible;
+}
+
+.pad-body {
+  fill: var(--panel-2);
+  stroke: var(--line-2);
+  stroke-width: 1.5;
+}
+
+.pad-key circle,
+.pad-key rect,
+.pad-stick circle {
+  fill: var(--bg-2);
+  stroke: var(--line-2);
+  stroke-width: 1.2;
+}
+
+.pad-key text {
+  fill: var(--muted);
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.pad-key--lit circle,
+.pad-key--lit rect,
+.pad-dot.pad-key--lit {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+
+.pad-key--lit text {
+  fill: var(--bg);
+}
+
+.pad-stick .pad-dot {
+  fill: var(--muted);
+  stroke: none;
+}
+
+/*
+ * With a controller in use the focus it moves between a panel's controls has to show plainly
+ * (input/focus.ts): the root says which device steers (input/device.ts).
+ */
+:root[data-input='pad'] :focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 10px var(--accent-glow);
+}

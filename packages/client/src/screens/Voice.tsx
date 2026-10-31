@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useMedia } from '../hooks.js';
-import { keyName, useSettings } from '../settings.js';
+import { useGlyph } from '../input/glyphs.js';
 import type { MicTrouble } from '../voice/mesh.js';
 import { useVoice } from '../voice/useVoice.js';
 import { Icon } from './Icon.js';
@@ -63,7 +63,7 @@ export function TalkButton({ className, children }: { className: string; childre
 export function MicSetup() {
   const voice = useVoice();
   const touch = useMedia(TOUCH);
-  const talk = keyName(useSettings().talkKey);
+  const talk = useGlyph('talk');
   if (voice === null) {
     return null;
   }

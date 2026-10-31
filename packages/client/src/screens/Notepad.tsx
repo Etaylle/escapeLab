@@ -8,6 +8,7 @@ import {
   readNotes,
   writeNotes,
 } from '../notes.js';
+import { useGlyph } from '../input/glyphs.js';
 
 export interface Notes {
   text: string;
@@ -63,6 +64,7 @@ export function Notepad({
 }) {
   const area = useRef<HTMLTextAreaElement>(null);
   const takesKeys = useRef(focus);
+  const closeKey = useGlyph('notes');
   useEffect(() => {
     if (takesKeys.current) {
       area.current?.focus();
@@ -90,7 +92,7 @@ export function Notepad({
         >
           Laborkennung übernehmen
         </button>
-        <button className="notepad-close" title="Weglegen [N]" onClick={onClose}>
+        <button className="notepad-close" title={`Weglegen [${closeKey}]`} onClick={onClose}>
           Weglegen
         </button>
       </div>

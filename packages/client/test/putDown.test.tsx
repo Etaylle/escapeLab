@@ -5,8 +5,8 @@ import type { ManualHere, ManualKind, PuzzleView } from '@escapelab/core';
 import { NotepadContext, type NotepadHand } from '../src/noting.js';
 import { Device } from '../src/puzzles/Device.js';
 import { StationModal } from '../src/screens/Game.js';
+import { DEFAULT_KEYS } from '../src/input/bindings.js';
 import {
-  PUT_DOWN_KEYS,
   PUT_DOWN_MS,
   PutDown,
   putDownKeys,
@@ -85,13 +85,14 @@ function hand(): NotepadHand & { noted: string[]; toggled: number } {
 const KINDS: ManualKind[] = ['book', 'locker', 'cabinet', 'clipboard', 'terminal', 'chart'];
 
 describe('putting down what was read', () => {
-  it('puts down what was read with E or a step; at a device only Esc steps back', () => {
-    expect(PUT_DOWN_KEYS).toEqual(['e', 'w', 'a', 's', 'd']);
-    expect(putDownKeys('reading')).toEqual(PUT_DOWN_KEYS);
-    expect(putDownKeys('note')).toEqual(PUT_DOWN_KEYS);
+  it('puts down what was read with E or a step, as bound; at a device only Esc steps back', () => {
+    expect(putDownKeys('reading', DEFAULT_KEYS)).toEqual(['e', 'w', 'a', 's', 'd']);
+    expect(putDownKeys('note', DEFAULT_KEYS)).toEqual(['e', 'w', 'a', 's', 'd']);
+    const rebound = { ...DEFAULT_KEYS, interact: 'f', up: 'i' };
+    expect(putDownKeys('reading', rebound)).toEqual(['f', 'i', 'a', 's', 'd']);
     // E works a lever, and a step is no step at a device.
-    expect(putDownKeys('station')).toEqual([]);
-    expect(putDownKeys(null)).toEqual([]);
+    expect(putDownKeys('station', DEFAULT_KEYS)).toEqual([]);
+    expect(putDownKeys(null, DEFAULT_KEYS)).toEqual([]);
   });
 
   it('holds a sheet put down on its way out of view, and nothing under reduced motion', () => {

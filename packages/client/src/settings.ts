@@ -1,16 +1,25 @@
 import { useSyncExternalStore } from 'react';
 import { useMedia } from './hooks.js';
+import {
+  DEFAULT_KEYS,
+  DEFAULT_PAD,
+  readKeys,
+  readPad,
+  type KeyBindings,
+  type PadBindings,
+} from './input/bindings.js';
 import { setVolumes } from './world/audio.js';
 
 /**
  * The player's settings on this device, as the panel sets them (screens/Settings.tsx): how
- * loud the radio, the effects and the music play, the key held to talk, how large the text
- * stands, and whether things move less. They are kept in the browser's storage and act where
- * they belong: on the audio's buses (world/audio.ts), on the talk key (voice/useVoice.ts),
- * and on the page's root — the text's scale as `--text-scale`, which the HUD, the book, the
- * devices and the notepad set their text by, and the motion as `data-motion`, which every
- * sheet's calmer rules hang on. „System" motion follows the browser's own
- * `prefers-reduced-motion`, live.
+ * loud the radio, the effects and the music play, the key for every action and the
+ * controller's buttons for the four main ones (input/bindings.ts), how large the text stands,
+ * and whether things move less. They are kept in the browser's storage and act where they
+ * belong: on the audio's buses (world/audio.ts), on the keys the world, the screens and the
+ * voice listen for and the prompts name (input/), and on the page's root — the text's scale
+ * as `--text-scale`, which the HUD, the book, the devices and the notepad set their text by,
+ * and the motion as `data-motion`, which every sheet's calmer rules hang on. „System" motion
+ * follows the browser's own `prefers-reduced-motion`, live.
  */
 
 export type TextSize = 'small' | 'normal' | 'large';
@@ -28,15 +37,18 @@ export interface Volumes {
 
 export interface Settings {
   volumes: Volumes;
-  /** the key held to talk, as KeyboardEvent names it, lower-cased */
-  talkKey: string;
+  /** the key of every action, as KeyboardEvent names it, lower-cased (input/bindings.ts) */
+  keys: KeyBindings;
+  /** the controller's buttons for the four main actions (input/bindings.ts) */
+  pad: PadBindings;
   textSize: TextSize;
   motion: Motion;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   volumes: { radio: 100, effects: 100, music: 70 },
-  talkKey: 'v',
+  keys: DEFAULT_KEYS,
+  pad: DEFAULT_PAD,
   textSize: 'normal',
   motion: 'system',
 };
@@ -61,39 +73,6 @@ export const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 export interface SettingsStore {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
-}
-
-/**
- * The keys the game takes for itself, as KeyboardEvent names them lower-cased: walking and
- * sprinting, E, Enter and Space, Q, M, C, I, H and ?, N, the quick chat's 1–8, Esc, and the
- * keys a field or the browser keeps.
- */
-const TAKEN = new Set([
-  ...['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'],
-  ...['e', 'enter', ' ', 'q', 'm', 'c', 'i', 'h', '?', 'n', 'escape', 'tab'],
-  ...['1', '2', '3', '4', '5', '6', '7', '8', 'backspace', 'delete'],
-]);
-
-/** What a key would be as the talk key: fine, taken by the game, or no key to hold. */
-export type KeyVerdict = 'ok' | 'taken' | 'unfit';
-
-/**
- * Whether `key` (as KeyboardEvent names it) can be the talk key: a key of one character or
- * F1–F12 that the game does not take already. Modifiers alone are no talk key: the talk key
- * is held without them.
- */
-export function talkKeyVerdict(key: string): KeyVerdict {
-  const named = key.toLowerCase();
-  if (TAKEN.has(named)) {
-    return 'taken';
-  }
-  const one = [...named].length === 1 && named.trim() !== '';
-  return one || /^f([1-9]|1[0-2])$/.test(named) ? 'ok' : 'unfit';
-}
-
-/** A key as the screen names it: V, F2, Ö. */
-export function keyName(key: string): string {
-  return key.toUpperCase();
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -137,17 +116,14 @@ export function readSettings(store: SettingsStore | null): Settings {
   const raw = stored(store) ?? {};
   const volumes = isRecord(raw['volumes']) ? raw['volumes'] : {};
   const fallback = DEFAULT_SETTINGS;
-  const talkKey = raw['talkKey'];
   return {
     volumes: {
       radio: volumeOf(volumes['radio']) ?? fallback.volumes.radio,
       effects: volumeOf(volumes['effects']) ?? fallback.volumes.effects,
       music: volumeOf(volumes['music']) ?? fallback.volumes.music,
     },
-    talkKey:
-      typeof talkKey === 'string' && talkKeyVerdict(talkKey) === 'ok'
-        ? talkKey.toLowerCase()
-        : fallback.talkKey,
+    keys: readKeys(raw['keys']),
+    pad: readPad(raw['pad']),
     textSize: oneOf(raw['textSize'], TEXT_SIZES, fallback.textSize),
     motion: oneOf(raw['motion'], MOTIONS, fallback.motion),
   };
@@ -216,7 +192,10 @@ function systemReduced(): boolean {
 
 let current: Settings = DEFAULT_SETTINGS;
 const listeners = new Set<() => void>();
-/** Whether the panel waits for the next key, the new talk key: meanwhile no key talks. */
+/**
+ * Whether the panel waits for the next key or controller button, to bind it: meanwhile no key
+ * and no button acts — nobody talks, walks or works.
+ */
 let rebinding = false;
 
 /** The settings as they stand now. */
@@ -275,12 +254,12 @@ export function useReducedMotion(): boolean {
   return motionReduced(motion, useMedia(REDUCED_MOTION));
 }
 
-/** Whether the panel waits for a new talk key. */
+/** Whether the panel waits for a key or a controller button to bind. */
 export function isRebinding(): boolean {
   return rebinding;
 }
 
-/** The panel starts or stops waiting for a new talk key. */
+/** The panel starts or stops waiting for a key or a controller button to bind. */
 export function setRebinding(waiting: boolean): void {
   rebinding = waiting;
 }

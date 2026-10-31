@@ -1,5 +1,6 @@
 import type { PlayerView } from '@escapelab/core';
 import { useMedia, useNow } from '../../hooks.js';
+import { glyph, usePadUsed } from '../../input/glyphs.js';
 import { recordedMs } from '../radioVoice.js';
 import {
   barsIn,
@@ -34,11 +35,14 @@ export function overlayUp(cue: IntroCue, now: number): boolean {
   return introPhase(cue, now) !== 'done' || titleAt(cue, now) > 0;
 }
 
-/** The skip as the lower bar offers it: the key, or a tap, and how many of the crew have. */
+/**
+ * The skip as the lower bar offers it: a tap where there are no keys (`touch`), else the key or
+ * the controller's button as bound (input/glyphs.ts) — and how many of the crew have.
+ */
 export function skipLine(view: PlayerView, touch: boolean): string {
   const present = view.players.filter((player) => player.connected);
   const done = present.filter((player) => view.intro?.done.includes(player.id) === true).length;
-  return `Überspringen · ${touch ? 'Tippen' : 'Leertaste'} (${done}/${present.length})`;
+  return `Überspringen · ${touch ? 'Tippen' : glyph('skip')} (${done}/${present.length})`;
 }
 
 /** The location card: the plant, then the wing and the shift — or a mission's name for title. */
@@ -103,7 +107,10 @@ export function IntroOverlay({
   skip: () => void;
 }) {
   const now = useNow(DRAW_MS);
-  const touch = useMedia('(pointer: coarse)');
+  // A controller names its button on a touch screen too.
+  const coarse = useMedia('(pointer: coarse)');
+  const padUsed = usePadUsed();
+  const touch = coarse && !padUsed;
   if (!overlayUp(cue, now)) {
     return null;
   }

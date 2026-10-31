@@ -1,4 +1,6 @@
 import type { MapView, NoteHere, SourceHere } from '@escapelab/core';
+import { inputDevice } from '../input/device.js';
+import { glyph } from '../input/glyphs.js';
 import { noteMount } from './notes.js';
 
 /** Prompt and client-side gate for stations and manual objects; the server counts 1.6. */
@@ -38,11 +40,22 @@ export type ContextAction = (
 
 /**
  * The prompt over the world for `action`: with a keyboard the key comes
- * first, „[E] Bedienen"; a touch screen has no keys, so it gets the verb
- * alone. A locked cabinet only names what is missing, either way.
+ * first, „[E] Bedienen" — the key as the settings bind it, or the
+ * controller's button where one was used last (input/glyphs.ts); a touch
+ * screen has no keys, so it gets the verb alone, unless a controller steers
+ * it. A locked cabinet only names what is missing, either way.
  */
 export function promptText(action: ContextAction, keyboard: boolean): string {
-  return keyboard && action.kind !== 'locked' ? `[E] ${action.label}` : action.label;
+  const named = keyboard || inputDevice().device === 'pad';
+  if (!named || action.kind === 'locked') {
+    return action.label;
+  }
+  return `[${glyph('interact')}] ${action.label}`;
+}
+
+/** The standing reminder under the world while hands are full: what, and how to put it down. */
+export function carryLine(label: string): string {
+  return `📦 ${label} — [${glyph('drop')}] ablegen`;
 }
 
 type Source = Pick<SourceHere, 'id' | 'kind' | 'opened' | 'needsKey'>;

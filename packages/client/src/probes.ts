@@ -1,3 +1,4 @@
+import type { PadProbe } from './input/padRuntime.js';
 import type { FigureProbe } from './screens/CrewFigure.js';
 import type { VoiceProbe } from './voice/mesh.js';
 import type { BedProbe } from './world/ambience.js';
@@ -100,6 +101,8 @@ export interface Probes {
   readonly passes?: PassStats;
   /** forgets the frames the pass costs were taken over */
   resetPasses?: () => void;
+  /** the walkthrough's controller, only with `?fakepad=1` (input/padRuntime.ts) */
+  readonly pad?: PadProbe;
 }
 
 declare global {

@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import type { ManualKind, MapView, PlayerView } from '@escapelab/core';
-import { keyName, useSettings } from '../settings.js';
+import { useInputDevice } from '../input/device.js';
+import { glyphOf, useGlyph, type GlyphSource, type Prompt } from '../input/glyphs.js';
+import { PAD_GLYPHS } from '../input/pad.js';
+import { useSettings } from '../settings.js';
 import { toBring } from '../world/markers.js';
 import { Icon, type IconName } from './Icon.js';
 
@@ -11,23 +14,37 @@ interface Props {
 
 type Tab = 'auftrag' | 'karte' | 'steuerung';
 
-/** The keys and what they do, the talk key as the settings have it (`talkKey`). */
-export function controlsOf(talkKey: string): (readonly [string, string])[] {
+/**
+ * The controls and what they do, by the keys as the settings bind them — or by the
+ * controller's buttons where one was used last (`source.device`).
+ */
+export function controlsOf(source: GlyphSource): (readonly [string, string])[] {
+  const g = (prompt: Prompt): string => glyphOf(prompt, source);
+  const pad = source.device === 'pad';
+  const walk = `${g('up')} ${g('left')} ${g('down')} ${g('right')}`;
+  const putDown = pad ? g('putDown') : `${g('putDown')} oder ein Schritt`;
+  const panels: (readonly [string, string])[] = pad
+    ? [[`Steuerkreuz, dann ${g('interact')}`, 'In Pulten und Fenstern wählen und drücken']]
+    : [];
   return [
-    ['W A S D / Pfeile', 'Laufen'],
-    ['Shift halten', 'Sprinten — auf dem Touchscreen „Sprint" neben dem Steuerkreuz'],
-    ['E', 'Bedienen, lesen, durchsuchen, aufschließen, aufnehmen oder einsetzen'],
-    ['E oder ein Schritt beim Lesen', 'Weglegen, ein Buch zuklappen'],
-    ['Esc', 'Zurücktreten, weglegen, Notizblock einstecken'],
-    ['← → beim Lesen', 'Blättern'],
-    ['Q', 'Getragenes Objekt ablegen — so sind Übergaben möglich'],
+    [pad ? `Stick / ${walk}` : `${walk} / Pfeile`, 'Laufen'],
+    [`${g('sprint')} halten`, 'Sprinten — auf dem Touchscreen „Sprint" neben dem Steuerkreuz'],
+    [g('interact'), 'Bedienen, lesen, durchsuchen, aufschließen, aufnehmen oder einsetzen'],
+    [`${putDown} beim Lesen`, 'Weglegen, ein Buch zuklappen'],
+    [g('close'), 'Zurücktreten, weglegen, Notizblock einstecken'],
+    [`${g('pageBack')} ${g('pageOn')} beim Lesen`, 'Blättern'],
+    [g('drop'), 'Getragenes Objekt ablegen — so sind Übergaben möglich'],
     ['Klick auf die Welt', 'Ping für alle setzen'],
-    ['C, dann 1–8', 'Schnellchat'],
-    [`${keyName(talkKey)} halten`, 'Sprechen — das Mikrofon wird in der Lobby aktiviert'],
-    ['N', 'Notizblock — auch neben Buch und Pult, bleibt für diesen Raum gespeichert'],
-    ['M', 'Minikarte ein- und ausblenden'],
-    ['I oder H', 'Dieses Info-Fenster'],
-    ['⚙ in der Kopfleiste', 'Einstellungen: Lautstärke, Sprechtaste, Textgröße, Bewegung'],
+    [`${g('chat')}, dann 1–8`, 'Schnellchat'],
+    [`${g('talk')} halten`, 'Sprechen — das Mikrofon wird in der Lobby aktiviert'],
+    [g('notes'), 'Notizblock — auch neben Buch und Pult, bleibt für diesen Raum gespeichert'],
+    [g('minimap'), 'Minikarte ein- und ausblenden'],
+    [g('info'), 'Dieses Info-Fenster'],
+    ...panels,
+    [
+      pad ? PAD_GLYPHS[source.family].start : '⚙ in der Kopfleiste',
+      'Einstellungen: Lautstärke, Tasten und Controller, Textgröße, Bewegung',
+    ],
   ];
 }
 
@@ -70,15 +87,16 @@ export function Legend({ map }: { map: MapView }) {
   );
 }
 
-/** The keys and what they do, the talk key as the settings have it. */
+/** The keys and what they do, as the settings bind them — a controller's buttons on one. */
 function KeyList() {
-  const { talkKey } = useSettings();
+  const { keys, pad } = useSettings();
+  const device = useInputDevice();
   return (
     <div className="info-body">
       <dl className="keylist">
-        {controlsOf(talkKey).map(([keys, what]) => (
-          <div key={keys} className="keyrow">
-            <dt>{keys}</dt>
+        {controlsOf({ keys, pad, ...device }).map(([control, what]) => (
+          <div key={control} className="keyrow">
+            <dt>{control}</dt>
             <dd>{what}</dd>
           </div>
         ))}
@@ -98,6 +116,7 @@ function KeyList() {
  */
 export function InfoPanel({ view, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('auftrag');
+  const closeKey = useGlyph('close');
   const armed = view.map?.stations.find((s) => s.status === 'armed');
   const pending = view.map === null ? [] : toBring(view.map);
   const escaping = view.map?.exit?.open === true;
@@ -111,7 +130,7 @@ export function InfoPanel({ view, onClose }: Props) {
             <h2>Einsatzinfo</h2>
           </div>
           <button className="link" onClick={onClose}>
-            Schließen [Esc]
+            Schließen [{closeKey}]
           </button>
         </div>
 

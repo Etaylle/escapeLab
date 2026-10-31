@@ -14,6 +14,7 @@ import {
 } from '../pages.js';
 import { notedPart } from '../noting.js';
 import { READERS } from '../puzzles/index.js';
+import { useGlyph } from '../input/glyphs.js';
 import { useReducedMotion } from '../settings.js';
 import { Block } from './Manual.js';
 import { ReaderPanel } from './PuzzlePanel.js';
@@ -482,6 +483,8 @@ export function Book({
     }
   };
   useKeys(['arrowleft', 'arrowright'], (key) => turn(key === 'arrowright' ? 1 : -1));
+  const backKey = useGlyph('pageBack');
+  const onKey = useGlyph('pageOn');
   const swipe = useSwipe(turn);
   const shown = pagesInView(at, spread);
   const book: BookContext = { manual, puzzle, current, pages, imprint, onOpen: go, onAskNote };
@@ -509,7 +512,7 @@ export function Book({
         <button
           className="turn-back"
           aria-label="Zurückblättern"
-          title="Zurückblättern [←]"
+          title={`Zurückblättern [${backKey}]`}
           disabled={turnFrom(at, pages.length, spread, -1) === null}
           onClick={() => turn(-1)}
         >
@@ -519,7 +522,7 @@ export function Book({
         <button
           className="turn-next"
           aria-label="Weiterblättern"
-          title="Weiterblättern [→]"
+          title={`Weiterblättern [${onKey}]`}
           disabled={turnFrom(at, pages.length, spread, 1) === null}
           onClick={() => turn(1)}
         >
