@@ -227,6 +227,12 @@ export interface Frame {
   alarm: Alarm | null;
   /** where the cold open stands (coldOpen.ts) */
   scene: ColdOpenFrame;
+  /**
+   * when the blackout's thunk fell on this screen, epoch ms — the bang of the cold open
+   * (coldOpen.ts FLICKER_MS): the breaker smokes after it, the cables swing; null while the
+   * lab has its power
+   */
+  blackoutAt: number | null;
   /** where the ending stands (finale.ts); null while the run goes on */
   ending: FinaleFrame | null;
   /**

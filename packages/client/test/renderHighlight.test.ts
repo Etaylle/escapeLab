@@ -24,7 +24,7 @@ import {
   noteShape,
   stationShape,
 } from '../src/world/render/highlight.js';
-import { draw } from '../src/world/render/objects.js';
+import { draw, tubeAt } from '../src/world/render/objects.js';
 import { CORE, glowSprite, HALO, type Shape } from '../src/world/silhouette.js';
 import {
   callEntries,
@@ -197,7 +197,8 @@ describe('the objects pass — the named thing glows in its own shape, under it'
     const frame = frameWith({ map: LAB, action: OPERATE, time: 0.3 });
     const log = drawn(frame);
     expect(strip(drawnAt(log, 3.5, 2.5, 0))).toEqual(glowOf(frame, stationShape(STATION, 1), 0.9));
-    const look = { status: 'armed' as const, pulse: frame.pulse, console: null };
+    const tube = tubeAt(frame, 3, 2);
+    const look = { status: 'armed' as const, pulse: frame.pulse, console: null, tube };
     expect(strip(drawnAt(log, 3.5, 2.5, 1))).toEqual(recording((c) => drawStation(c, look)));
   });
 

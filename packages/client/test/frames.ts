@@ -135,6 +135,7 @@ function frameParts(parts: Partial<Frame>): Omit<Frame, 'grid'> {
     doors: new Map(),
     alarm: null,
     scene: { lit: false, cover: 0 },
+    blackoutAt: null,
     ending: null,
     // As the frame's assembly has it outside the opening: the lab lit whole as the end lights it.
     whole: parts.ending?.lit ?? 0,

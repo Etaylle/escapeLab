@@ -1,4 +1,4 @@
-import { animTime } from '../anim.js';
+import { animTime, cableSwing, propSeed } from '../anim.js';
 import { dressedFor } from '../artKit.js';
 import { css, VOID } from '../palette.js';
 import { powerAt } from '../sources.js';
@@ -61,10 +61,15 @@ function drawSurfaces(ctx: CanvasRenderingContext2D, frame: Frame, view: TileRan
   drawTiles(ctx, cache, frame.grid, view);
 }
 
-/** What moves on the walls' faces in view; the still part is in the wall's sprite. */
+/**
+ * What moves on the walls' faces in view — the cables hanging loose from a tray swinging for a
+ * while after the blackout's thunk — the still part being in the wall's sprite.
+ */
 function drawWallMotion(ctx: CanvasRenderingContext2D, frame: Frame, view: TileRange): void {
   const { dressing } = dressedFor(frame.kit.art, frame.map, frame.missionId);
   const t = animTime(frame.time);
+  const since = frame.blackoutAt === null ? null : frame.now - frame.blackoutAt;
+  const swing = cableSwing(since, frame.reduced);
   for (const prop of dressing.props) {
     const out = prop.x < view.x0 || prop.x > view.x1 || prop.y < view.y0 || prop.y > view.y1;
     if (out || !moves(prop.kind)) {
@@ -75,7 +80,8 @@ function drawWallMotion(ctx: CanvasRenderingContext2D, frame: Frame, view: TileR
     const on = powerAt(frame, prop.x, prop.y + 1, prop.room);
     ctx.save();
     ctx.translate(prop.x, prop.y);
-    const state = { t, on, now: frame.now, reduced: frame.reduced, lit };
+    const seed = propSeed(prop.x, prop.y);
+    const state = { t, on, now: frame.now, reduced: frame.reduced, lit, swing, seed };
     drawWallPropMotion(ctx, prop.kind, prop.variant, state);
     ctx.restore();
   }

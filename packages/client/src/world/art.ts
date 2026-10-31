@@ -741,9 +741,48 @@ export interface StationOpts {
   console: ConsoleId | null;
   /** the thing alone, no foot shadow or glow: what its silhouette is baked from (silhouette.ts) */
   bare?: boolean;
+  /** its monitor's tube this frame (Tube); a steady tube where left out */
+  tube?: Tube;
 }
 
 type StationStatus = StationOpts['status'];
+
+/**
+ * A CRT's tube this frame (anim.ts crtFlicker, rollAt): how brightly it burns, 0 to 1, and where
+ * its roll bar lies down the screen, 0 to 1 — none under reduced motion.
+ */
+export interface Tube {
+  burn: number;
+  roll: number | null;
+}
+
+/**
+ * A CRT's tube over its screen `[x, y, w, h]`: the picture dimmed by as much as the tube
+ * flickers down, and its roll bar, a faint brighter band, drifting down it. A tube left out
+ * burns steady.
+ */
+function drawTube(
+  ctx: CanvasRenderingContext2D,
+  [x, y, w, h]: readonly [number, number, number, number],
+  tube: Tube | undefined,
+): void {
+  if (tube === undefined) {
+    return;
+  }
+  if (tube.burn < 1) {
+    ctx.fillStyle = rgba(BLACK, Math.min(1, (1 - tube.burn) * 1.6));
+    ctx.fillRect(x, y, w, h);
+  }
+  if (tube.roll !== null) {
+    const band = h * 0.22;
+    const top = Math.max(y, y - band + tube.roll * (h + band));
+    const bottom = Math.min(y + h, y - band + tube.roll * (h + band) + band);
+    if (bottom > top) {
+      ctx.fillStyle = rgba(WHITE, 0.045);
+      ctx.fillRect(x, top, w, bottom - top);
+    }
+  }
+}
 
 interface StationLook {
   deskTop: string;
@@ -997,6 +1036,7 @@ export function drawStation(ctx: CanvasRenderingContext2D, o: StationOpts): void
     drawStationCabinet(ctx, look, o.status === 'armed' ? 0.35 + 0.65 * wave : 0.85);
     drawStationMonitor(ctx, look);
     drawStationScreen(ctx, o.status, wave);
+    drawTube(ctx, [SCREEN_X, SCREEN_Y, SCREEN_W, SCREEN_H], o.tube);
     if (o.console !== null) drawConsoleBadge(ctx, look, o.console);
   } finally {
     ctx.restore();
@@ -1554,6 +1594,8 @@ export interface ManualObjectOpts {
   text?: WorldText;
   /** the thing alone — no foot shadow, glow or label: what its silhouette is baked from */
   bare?: boolean;
+  /** a terminal's tube this frame (Tube); a steady tube where left out */
+  tube?: Tube;
 }
 
 const READ_LABEL = css(lift(READ_BLUE, 0.3));
@@ -2082,6 +2124,7 @@ export function drawManualObject(ctx: CanvasRenderingContext2D, o: ManualObjectO
         break;
       case 'terminal':
         drawTerminal(ctx, o.active, wave);
+        drawTube(ctx, [PLAN_X, PLAN_Y, PLAN_W, PLAN_H], o.tube);
         break;
       case 'chart':
         drawChart(ctx, o.active);

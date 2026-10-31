@@ -2,7 +2,7 @@ import type { DronePosition, PlayerView, Sight } from '@escapelab/core';
 import type { VoiceMesh } from '../voice/mesh.js';
 import type { Alarm } from './alarm.js';
 import { worldText, type WorldText } from './art.js';
-import { coldOpenFrame } from './coldOpen.js';
+import { coldOpenFrame, FLICKER_MS } from './coldOpen.js';
 import { exitOpening, redShift } from './escape.js';
 import type { FigureMood } from './figure.js';
 import { finaleFrame, type FinaleCue, type FinaleFrame } from './finale.js';
@@ -273,6 +273,7 @@ function escapeRed(live: Latest, now: number): number {
 /** The frame's light and what it follows. */
 type Lighting =
   | 'scene'
+  | 'blackoutAt'
   | 'whole'
   | 'escapeSince'
   | 'red'
@@ -310,7 +311,9 @@ function lighting(
   const light = frameLight(lights, scene.lit, whole > 0);
   const red = escapeRed(live, now);
   const litTiles = sim.litTiles;
-  return { scene, whole, escapeSince, red, hatch, light, mounts, litTiles, lit: sim.lit };
+  const blackoutAt = live.darkSince === null ? null : live.darkSince + FLICKER_MS;
+  const lit = sim.lit;
+  return { scene, blackoutAt, whole, escapeSince, red, hatch, light, mounts, litTiles, lit };
 }
 
 /** The view's people and the drones, as this frame draws them. */

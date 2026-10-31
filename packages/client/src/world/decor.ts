@@ -1,4 +1,5 @@
 import type { DecorKind } from '@escapelab/core';
+import { crtFlicker, ledLit } from './anim.js';
 import {
   addCircle,
   footShadow,
@@ -34,7 +35,7 @@ import {
   WOOD,
   type Rgb,
 } from './palette.js';
-import type { PropState } from './wallProps.js';
+import { drawRollBar, drawScope, type PropState } from './wallProps.js';
 
 /**
  * The lab's furniture (map.decor), drawn with the origin at its TILE'S
@@ -174,6 +175,27 @@ function glassware(
   g.fillRect(x - size * 0.45, y - size * 0.9, size * 0.18, size * 0.6);
 }
 
+/** Whether a lab bench of `variant` carries an oscilloscope at its end: every other one does. */
+export function benchScope(variant: number): boolean {
+  return variant % 2 === 0;
+}
+
+/** Where a bench's oscilloscope shows its trace: left, top, width, height, tile-centre space. */
+export const SCOPE_SCREEN = [0.155, -0.31, 0.21, 0.15] as const;
+
+/** A bench's oscilloscope: a steel case standing on the bench's end, its dark screen, two knobs. */
+function drawScopeHousing(g: CanvasRenderingContext2D, paint: Paint): void {
+  const [x, y, w, h] = SCOPE_SCREEN;
+  block(g, [x - 0.035, y - 0.035, w + 0.11, h + 0.14], 0.05, sink(STEEL, 0.15), paint);
+  g.fillStyle = paint(mix(sink(PHOSPHOR, 0.92), INK, 0.45));
+  g.fillRect(x, y, w, h);
+  g.fillStyle = paint(sink(STEEL, 0.55));
+  g.beginPath();
+  addCircle(g, x + w + 0.035, y + 0.035, 0.018);
+  addCircle(g, x + w + 0.035, y + 0.09, 0.018);
+  g.fill();
+}
+
 function drawBench(g: CanvasRenderingContext2D, variant: number, paint: Paint): void {
   footShadow(g, 0, 0.38, 0.47, 0.09);
   block(g, [-0.46, -0.2, 0.92, 0.56], 0.22, lift(LINO, 0.15), paint);
@@ -185,10 +207,14 @@ function drawBench(g: CanvasRenderingContext2D, variant: number, paint: Paint): 
   g.fillRect(0.04, 0.16, 0.025, 0.07);
   const liquids: readonly Rgb[] = [sink(PHOSPHOR, 0.25), sink(READ_BLUE, 0.2), sink(AMBER, 0.15)];
   const rand = seededRandom(0xbe7c + variant);
-  for (let k = 0; k < 3; k++) {
+  const scope = benchScope(variant);
+  for (let k = 0; k < (scope ? 2 : 3); k++) {
     const x = -0.32 + k * 0.24 + rand() * 0.06;
     const liquid = liquids[(k + variant) % liquids.length] ?? PHOSPHOR;
     glassware(g, [x, -0.06, 0.05 + rand() * 0.015], liquid, (k + variant) % 2 === 0, paint);
+  }
+  if (scope) {
+    drawScopeHousing(g, paint);
   }
   if (variant === 3) {
     // A microscope at the bench's end.
@@ -496,14 +522,17 @@ export function decorVariant(piece: { x: number; y: number; variant?: number }):
   return piece.variant ?? hashTile(0xdec0, piece.x, piece.y) % 4;
 }
 
-/** A rack's LEDs, blinking in patterns of their own, in the dark too. */
-function rackLeds(ctx: CanvasRenderingContext2D, variant: number, t: number): void {
+/**
+ * A rack's LEDs, each blinking in a pattern of its own (anim.ts ledLit) that says nothing of
+ * the run, in the dark too.
+ */
+function rackLeds(ctx: CanvasRenderingContext2D, variant: number, state: PropState): void {
+  const seed = state.seed ?? 0;
   for (let unit = 0; unit < 6; unit++) {
     const y = -0.31 + unit * 0.11;
     for (let k = 0; k < 4; k++) {
-      const id = unit * 4 + k + variant * 31;
-      const rate = 1.2 + (id % 6) * 0.8;
-      if ((Math.floor(t * rate + id * 0.29) + id) % 3 === 0) continue;
+      const id = unit * 4 + k + variant * 31 + seed * 67;
+      if (!ledLit(id, k, state.t)) continue;
       const colour = id % 9 === 0 ? AMBER : id % 4 === 0 ? DONE_GREEN : SERVER_BLUE;
       ctx.fillStyle = rgba(colour, 0.95);
       ctx.fillRect(-0.3 + k * 0.05, y, 0.025, 0.02);
@@ -539,7 +568,13 @@ function generatorLamp(ctx: CanvasRenderingContext2D, state: PropState): void {
   ctx.fill();
 }
 
-/** A desk's screen: phosphor text once its room is lit, a standby dot while it is dark. */
+/** A desk's screen: left, top, width, height, tile-centre space. */
+const DESK_SCREEN = [-0.24, -0.41, 0.48, 0.26] as const;
+
+/**
+ * A desk's screen: phosphor text once its room is lit, its tube flickering and its roll bar
+ * drifting down (anim.ts crtFlicker, rollAt); a standby dot while it is dark.
+ */
 function deskScreen(ctx: CanvasRenderingContext2D, variant: number, state: PropState): void {
   if (state.on <= 0.02) {
     ctx.fillStyle = rgba(AMBER, 0.85);
@@ -548,20 +583,39 @@ function deskScreen(ctx: CanvasRenderingContext2D, variant: number, state: PropS
     ctx.fill();
     return;
   }
-  ctx.fillStyle = rgba(PHOSPHOR, 0.18 * state.on);
-  ctx.fillRect(-0.24, -0.41, 0.48, 0.26);
-  ctx.fillStyle = rgba(PHOSPHOR, 0.8 * state.on);
+  const tube = state.on * crtFlicker(state.t, state.seed ?? variant);
+  ctx.fillStyle = rgba(PHOSPHOR, 0.18 * tube);
+  ctx.fillRect(...DESK_SCREEN);
+  ctx.fillStyle = rgba(PHOSPHOR, 0.8 * tube);
   const step = state.reduced ? 0 : Math.floor(state.t * 1.5);
   for (let k = 0; k < 5; k++) {
     const length = 0.1 + (hashTile(variant, k + step, 3) % 100) * 0.0025;
     ctx.fillRect(-0.2, -0.38 + k * 0.045, length, 0.016);
+  }
+  drawRollBar(ctx, DESK_SCREEN, state, tube);
+}
+
+/**
+ * A lab bench's glow: the green flask's, and on a bench with an oscilloscope its trace, its
+ * tube flickering as a screen's does.
+ */
+function benchGlow(ctx: CanvasRenderingContext2D, variant: number, state: PropState): void {
+  ctx.fillStyle = rgba(PHOSPHOR, 0.55);
+  ctx.beginPath();
+  ctx.arc(-0.32, -0.06, 0.035, 0, TAU);
+  ctx.fill();
+  if (benchScope(variant)) {
+    const tube = crtFlicker(state.t, state.seed ?? variant);
+    ctx.fillStyle = rgba(PHOSPHOR, 0.14 * tube);
+    ctx.fillRect(...SCOPE_SCREEN);
+    drawScope(ctx, SCOPE_SCREEN, state, tube);
   }
 }
 
 /**
  * What glows on a piece of furniture, over the darkness: a rack's LEDs, the
  * core's heart, a desk's screen, a generator's lamp, the hood's light, a
- * flask's green. Anchor: TILE CENTRE.
+ * flask's green and a bench's oscilloscope. Anchor: TILE CENTRE.
  */
 export function drawDecorGlow(
   ctx: CanvasRenderingContext2D,
@@ -571,18 +625,15 @@ export function drawDecorGlow(
 ): void {
   ctx.save();
   try {
-    if (kind === 'rack') rackLeds(ctx, variant, state.t);
+    if (kind === 'rack') rackLeds(ctx, variant, state);
     else if (kind === 'core') coreHeart(ctx, state.t);
     else if (kind === 'desk') deskScreen(ctx, variant, state);
     else if (kind === 'generator') generatorLamp(ctx, state);
     else if (kind === 'hood' && state.on > 0.02) {
       ctx.fillStyle = rgba(lift(GLASS, 0.5), 0.3 * state.on);
       ctx.fillRect(-0.36, -0.32, 0.72, 0.18);
-    } else if (kind === 'bench' && variant % 2 === 0) {
-      ctx.fillStyle = rgba(PHOSPHOR, 0.55);
-      ctx.beginPath();
-      ctx.arc(-0.32, -0.06, 0.035, 0, TAU);
-      ctx.fill();
+    } else if (kind === 'bench' && benchScope(variant)) {
+      benchGlow(ctx, variant, state);
     }
   } finally {
     ctx.restore();
@@ -597,7 +648,7 @@ export function decorGlows(kind: DecorKind, variant: number): boolean {
     kind === 'desk' ||
     kind === 'generator' ||
     kind === 'hood' ||
-    (kind === 'bench' && variant % 2 === 0)
+    (kind === 'bench' && benchScope(variant))
   );
 }
 

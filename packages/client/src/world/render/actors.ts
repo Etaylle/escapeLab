@@ -9,19 +9,22 @@ import {
   drawDroneBody,
   drawDroneCone,
 } from '../hazards.js';
-import { FALLBACK_COLOR, inTiles, type Frame, type OtherAvatar } from './frame.js';
+import { FALLBACK_COLOR, inTiles, profiled, type Frame, type OtherAvatar } from './frame.js';
+import { drawFans } from './props.js';
 
 /**
  * Drones and the crew, in tile space: the drones' cones under everybody, the
  * crew — remote first, you on top, whoever speaks in a ring, each with a
  * name tag, each standing as the frame says (crewPose) and holding what they
- * carry before their chest — and the drones' bodies.
+ * carry before their chest, over a shadow of the light they stand in — the
+ * drones' bodies, and over everybody the ceiling fans' blades (props.ts).
  */
 export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   inTiles(ctx, frame);
   drawCones(ctx, frame);
   drawCrew(ctx, frame);
   drawDrones(ctx, frame);
+  profiled(frame.kit, 'props', ctx, () => drawFans(ctx, frame));
 }
 
 type Player = PlayerView['players'][number];
