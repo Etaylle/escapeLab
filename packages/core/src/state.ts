@@ -1,3 +1,4 @@
+import type { DailyDay } from './daily.js';
 import type { Difficulty } from './difficulty.js';
 import type { Edgework } from './edgework.js';
 import type { Mission } from './mission.js';
@@ -139,6 +140,12 @@ export interface GameState {
    * A pinned room's run n (from 0) plays roomSeed + n.
    */
   roomSeed: number | null;
+  /**
+   * The Tagesschicht, where the host switched it on for a mission that offers it: the UTC day
+   * (daily.ts) whose seed the room's runs play — the day of the switch, moved on to the day
+   * each run starts — over the room's own and any tester's; null while it is off.
+   */
+  daily: DailyDay | null;
   /** runs started in this room so far: the n of the next one */
   runs: number;
   /** serial, lamps and cells of this run; rolled from the seed by start-mission */
@@ -244,6 +251,7 @@ export function initialState(
     puzzleState: null,
     seed: null,
     roomSeed,
+    daily: null,
     runs: 0,
     edgework: null,
     pressedPlates: [],

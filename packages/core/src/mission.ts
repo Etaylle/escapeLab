@@ -297,6 +297,11 @@ export const missionSchema = z
      * screen offers it to the crew; the server checks that it exists
      */
     next: z.string().min(1).optional(),
+    /**
+     * the Tagesschicht: the lobby offers a run on the day's seed (daily.ts), the same instance
+     * for every crew that day, ranked among that day's runs alone
+     */
+    daily: z.boolean().default(false),
     /** how many play it: a run starts with any count from min to max */
     players: z.object({
       min: z.number().int().min(2).max(4),

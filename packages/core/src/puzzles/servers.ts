@@ -43,6 +43,49 @@ export const DEPENDS_ON: Readonly<Record<Service, readonly Service[]>> = {
   mail: ['auth', 'dns'],
 };
 
+/**
+ * The Netzplan as a cabling diagram draws it: each node in the column of the longest chain of
+ * dependencies under it — what needs nothing first — and an arrow from every dependency to
+ * the node that needs it. Rules only: what depends on what, never how a service stands.
+ */
+export interface Diagram<T extends string> {
+  /** the columns left to right, each top to bottom in the order the nodes are listed */
+  columns: T[][];
+  /** [dependency, dependent], dependents in their listed order, each one's dependencies in theirs */
+  arrows: [T, T][];
+}
+
+/**
+ * The diagram of `nodes`, listed so that every dependency comes before whatever needs it, by
+ * `dependsOn`. Throws for a dependency that is not listed before its dependent: no column
+ * could be worked out for it.
+ */
+export function diagramOf<T extends string>(
+  nodes: readonly T[],
+  dependsOn: Readonly<Record<T, readonly T[]>>,
+): Diagram<T> {
+  const column = new Map<T, number>();
+  for (const node of nodes) {
+    const under = dependsOn[node].map((dep) => {
+      const at = column.get(dep);
+      if (at === undefined) {
+        throw new Error(`diagram: "${node}" depends on "${dep}", which is not listed before it`);
+      }
+      return at;
+    });
+    column.set(node, under.length === 0 ? 0 : Math.max(...under) + 1);
+  }
+  const width = Math.max(0, ...column.values()) + (nodes.length === 0 ? 0 : 1);
+  const columns = Array.from({ length: width }, (_, i) => nodes.filter((n) => column.get(n) === i));
+  const arrows = nodes.flatMap((node) => dependsOn[node].map((dep): [T, T] => [dep, node]));
+  return { columns, arrows };
+}
+
+/** The Serverraum's Netzplan as its rack and its printed page draw it: NETZ → DNS, DB → … */
+export function serviceDiagram(): Diagram<Service> {
+  return diagramOf(SERVICES, DEPENDS_ON);
+}
+
 export const SERVER_CODES = ['E11', 'E23', 'E42', 'E50'] as const;
 export type ServerCode = (typeof SERVER_CODES)[number];
 

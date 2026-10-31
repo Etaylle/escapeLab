@@ -8,6 +8,7 @@ import {
   type Player,
   type RunEvent,
 } from './state.js';
+import { dailySeed, utcDay } from './daily.js';
 import type { Difficulty } from './difficulty.js';
 import { generateEdgework } from './edgework.js';
 import { fail } from './errors.js';
@@ -48,6 +49,11 @@ export type Action =
   | { type: 'select-color'; playerId: string; color: string }
   | { type: 'set-ready'; playerId: string; ready: boolean }
   | { type: 'switch-mission'; playerId: string; mission: Mission; difficulty: Difficulty }
+  /**
+   * the host switches the Tagesschicht on or off in the lobby, for a mission that offers it:
+   * on, the room's runs play the seed of the UTC day of their start (daily.ts)
+   */
+  | { type: 'set-daily'; playerId: string; daily: boolean; at: number }
   /** the players connected right now are the crew, each drawn a spawn; the rest leave */
   | { type: 'start-mission'; playerId: string; at: number; seed: number }
   /** the end of a mission's intro, once `lightsDueAt` has come: the clock starts */
@@ -137,6 +143,8 @@ export function applyAction(state: GameState, action: Action): GameState {
       return setReady(state, action);
     case 'switch-mission':
       return switchMission(state, action);
+    case 'set-daily':
+      return setDaily(state, action);
     case 'start-mission':
       return startMission(state, action);
     case 'lights-out':
@@ -224,7 +232,30 @@ function switchMission(
     mission: action.mission,
     difficulty: action.difficulty,
     players: unready(state.players),
+    // A mission without a Tagesschicht plays its own seeds again.
+    daily: action.mission.daily ? state.daily : null,
   };
+}
+
+/**
+ * The host's switch for the Tagesschicht, in the lobby: on, the room plays the seed of the
+ * UTC day — named by the day of the switch until a run starts — for a mission that offers it;
+ * off, the room's own seeds again. A change of setup like any other: everybody confirms anew.
+ */
+function setDaily(
+  state: GameState,
+  action: { playerId: string; daily: boolean; at: number },
+): GameState {
+  if (state.phase !== 'lobby') {
+    fail('Die Tagesschicht lässt sich nur in der Lobby wählen.');
+  }
+  requireHost(state, action.playerId);
+  if (action.daily && !state.mission.daily) {
+    // voice: interface
+    fail(`„${state.mission.title}" hat keine Tagesschicht.`);
+  }
+  const daily = action.daily ? utcDay(action.at) : null;
+  return daily === state.daily ? state : { ...state, daily, players: unready(state.players) };
 }
 
 function playerJoin(
@@ -482,11 +513,15 @@ function crewToStart(state: GameState): Player[] {
 }
 
 /**
- * The seed a run plays: in a room pinned to a seed, run n (from 0) plays
- * seed + n, wrapped to 32 bits, so that any of its runs can be named by its
- * seed and played again; in any other room, the seed the server rolled.
+ * The seed a run starting at `at` plays: on the Tagesschicht the day's (`dailySeed` of the UTC
+ * day of `at`), whatever else the room is pinned to; in a room pinned to a seed, run n (from 0)
+ * plays seed + n, wrapped to 32 bits, so that any of its runs can be named by its seed and
+ * played again; in any other room, the seed the server rolled.
  */
-function runSeed(state: GameState, rolled: number): number {
+function runSeed(state: GameState, rolled: number, at: number): number {
+  if (state.daily !== null) {
+    return dailySeed(utcDay(at));
+  }
   return state.roomSeed === null ? rolled : (state.roomSeed + state.runs) >>> 0;
 }
 
@@ -500,7 +535,7 @@ function startMission(
   requireHost(state, action.playerId);
   const crew = crewToStart(state);
   const { map, intro } = state.mission;
-  const seed = runSeed(state, action.seed);
+  const seed = runSeed(state, action.seed, action.at);
   const started: GameState = {
     ...state,
     phase: 'playing',
@@ -508,6 +543,8 @@ function startMission(
     currentPuzzleIndex: 0,
     puzzleState: null,
     seed,
+    // The Tagesschicht a run plays is the day it starts on.
+    daily: state.daily === null ? null : utcDay(action.at),
     runs: state.runs + 1,
     edgework: generateEdgework(mulberry32((seed ^ EDGEWORK_STREAM) >>> 0)),
     pressedPlates: [],
@@ -1374,7 +1411,9 @@ function rematch(
     fail('Ein neuer Lauf geht erst nach Missionsende.');
   }
   const mission = action.mission ?? state.mission;
-  return startMission({ ...state, phase: 'lobby', mission }, action);
+  // On to a mission without a Tagesschicht, the room plays its own seeds again.
+  const daily = mission.daily ? state.daily : null;
+  return startMission({ ...state, phase: 'lobby', mission, daily }, action);
 }
 
 function backToLobby(state: GameState, action: { playerId: string }): GameState {

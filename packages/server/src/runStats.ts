@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import {
   DIFFICULTIES,
   runSeconds,
+  utcDay,
+  type DailyStats,
   type Difficulty,
   type DifficultyStats,
   type LeaderEntry,
@@ -14,6 +16,9 @@ import { median } from './runSummary.js';
 
 /** How many of the fastest won runs each mission keeps by name at each difficulty. */
 export const TOP_RUNS = 10;
+
+/** How many days of the Tagesschicht the Bestenliste hands out, the newest first. */
+export const DAILY_DAYS = 14;
 
 /** What a won run is ranked by: its time, then fewer alarms, then the earlier finish. */
 type Rank = Pick<LeaderEntry, 'seconds' | 'alarms' | 'finishedAt'>;
@@ -90,46 +95,24 @@ class Tally {
   }
 }
 
-/**
- * The Bestenliste's numbers by mission and difficulty: built from the run log
- * once, when the server starts, then kept up to date run by run — the log is
- * never read again. It keeps the time of every won run, for the median and
- * the places, and names only for the TOP_RUNS fastest.
- */
-export class RunStats {
+/** One ranking: every mission's runs in it, by mission and difficulty. */
+class Board {
   private readonly missions = new Map<string, Map<Difficulty, Tally>>();
-  private counted = 0;
 
-  /** The stats of `runs`, oldest first. */
-  constructor(runs: Iterable<LoggedRun> = []) {
-    for (const run of runs) {
-      this.add(run);
-    }
-  }
-
-  /** How many runs it counts, over every mission. */
-  get runs(): number {
-    return this.counted;
-  }
-
-  /** Counts one more finished run in. */
   add(run: LoggedRun): void {
     const tallies = this.missions.get(run.missionId) ?? new Map<Difficulty, Tally>();
     const tally = tallies.get(run.difficulty) ?? new Tally();
     tally.add(run);
     tallies.set(run.difficulty, tally);
     this.missions.set(run.missionId, tallies);
-    this.counted += 1;
   }
 
-  /** Every mission with a run, by id. */
   all(): MissionStats[] {
     return [...this.missions.keys()]
       .sort()
       .flatMap((missionId) => this.mission(missionId) ?? []);
   }
 
-  /** One mission, its difficulties easiest first; null while no run of it is logged. */
   mission(missionId: string): MissionStats | null {
     const tallies = this.missions.get(missionId);
     if (tallies === undefined) {
@@ -143,7 +126,6 @@ export class RunStats {
     };
   }
 
-  /** Where the won run of `missionId` that finished at `finishedAt` stands; null when none did. */
   placeOf(missionId: string, finishedAt: number): RunPlace | null {
     for (const [difficulty, tally] of this.missions.get(missionId) ?? []) {
       const place = tally.placeOf(finishedAt);
@@ -152,6 +134,83 @@ export class RunStats {
       }
     }
     return null;
+  }
+}
+
+/** Whether a logged run played the Tagesschicht: only version 2 reports can say so. */
+const isDaily = (run: LoggedRun): boolean => run.version === 2 && run.daily === true;
+
+/**
+ * The Bestenliste's numbers by mission and difficulty: built from the run log
+ * once, when the server starts, then kept up to date run by run — the log is
+ * never read again. It keeps the time of every won run, for the median and
+ * the places, and names only for the TOP_RUNS fastest. The runs of the
+ * Tagesschicht rank apart, a board for each UTC day they started on: every
+ * crew that day played the same instance.
+ */
+export class RunStats {
+  private readonly board = new Board();
+  /** the Tagesschicht's boards, by the UTC day its runs started on */
+  private readonly days = new Map<string, Board>();
+  private counted = 0;
+
+  /** The stats of `runs`, oldest first. */
+  constructor(runs: Iterable<LoggedRun> = []) {
+    for (const run of runs) {
+      this.add(run);
+    }
+  }
+
+  /** How many runs it counts, over every mission, the Tagesschicht's too. */
+  get runs(): number {
+    return this.counted;
+  }
+
+  /** Counts one more finished run in: on the Tagesschicht's board of its day, or the main one. */
+  add(run: LoggedRun): void {
+    if (isDaily(run)) {
+      const day = utcDay(run.startedAt);
+      const board = this.days.get(day) ?? new Board();
+      board.add(run);
+      this.days.set(day, board);
+    } else {
+      this.board.add(run);
+    }
+    this.counted += 1;
+  }
+
+  /** Every mission with a run off the Tagesschicht, by id. */
+  all(): MissionStats[] {
+    return this.board.all();
+  }
+
+  /** One mission off the Tagesschicht, its difficulties easiest first; null before its first run. */
+  mission(missionId: string): MissionStats | null {
+    return this.board.mission(missionId);
+  }
+
+  /** Where the won run of `missionId` that finished at `finishedAt` stands; null when none did. */
+  placeOf(missionId: string, finishedAt: number): RunPlace | null {
+    return this.board.placeOf(missionId, finishedAt);
+  }
+
+  /** The Tagesschicht's last DAILY_DAYS days with runs, the newest first. */
+  daily(): DailyStats[] {
+    return [...this.days.keys()]
+      .sort()
+      .reverse()
+      .slice(0, DAILY_DAYS)
+      .map((day) => ({ day, missions: this.days.get(day)?.all() ?? [] }));
+  }
+
+  /** One mission on the Tagesschicht of `day`; null where nobody played it that day. */
+  dailyMission(day: string, missionId: string): MissionStats | null {
+    return this.days.get(day)?.mission(missionId) ?? null;
+  }
+
+  /** Where a won run of the Tagesschicht of `day` stands among that day's; null when none did. */
+  dailyPlaceOf(day: string, missionId: string, finishedAt: number): RunPlace | null {
+    return this.days.get(day)?.placeOf(missionId, finishedAt) ?? null;
   }
 }
 

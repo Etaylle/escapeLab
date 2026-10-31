@@ -3,6 +3,7 @@
   "title": "Blackout im Labor",
   "subtitle": "Der Klassiker: verstreute Regeln, verschlossene Türen, ein Labor im Dunkeln.",
   "listOrder": 10,
+  "daily": true,
   "players": { "min": 2, "max": 3 },
   "story": {
     "intro": "Schichtbuch, 23:47 Uhr: ein Knall, dann Dunkelheit — nur die Notbeleuchtung glimmt rot. Die Nachtschicht ist quer durchs Labor verstreut, die Betriebsunterlagen auch: Handbuch, Klemmbrett, Spind, Aktenschrank. An den Pulten steht keine Regel, und jede Anlage wird zu zweit gefahren, an zwei Orten zugleich. Allein bleibt das Labor dunkel.",

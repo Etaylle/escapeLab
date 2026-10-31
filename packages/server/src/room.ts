@@ -47,6 +47,7 @@ export type GameMessage = Extract<
   {
     kind:
       | 'select-color'
+      | 'set-daily'
       | 'start-mission'
       | 'intro-done'
       | 'puzzle-input'
@@ -308,6 +309,10 @@ export class Room {
     switch (msg.kind) {
       case 'select-color':
         this.dispatch({ type: 'select-color', playerId, color: msg.color });
+        break;
+      case 'set-daily':
+        // The Tagesschicht needs no ALLOW_SEED: its seed is the day's, the same for every room.
+        this.dispatch({ type: 'set-daily', playerId, daily: msg.daily, at: Date.now() });
         break;
       case 'start-mission':
         this.dispatch({

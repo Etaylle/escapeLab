@@ -1,10 +1,12 @@
+import { achievementsOf, type AchievementId } from './achievements.js';
+import type { DailyDay } from './daily.js';
 import type { Difficulty } from './difficulty.js';
 import type { Edgework } from './edgework.js';
 import type { DecorKind, ManualDef, ManualKind, RoomKind } from './mission.js';
 import { noteKey } from './notes.js';
 import { CREW_COLORS, type Credits, type GameState, type Phase, type RunEvent } from './state.js';
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
-import { clockStartOf } from './report.js';
+import { clockStartOf, runReport } from './report.js';
 import type { ConsoleId, ManualSection, Viewer, ViewContext } from './puzzles/module.js';
 import { relayDefFor, relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
 import {
@@ -97,6 +99,14 @@ export interface PlayerView {
    * gives every instance away.
    */
   seed?: { room: number; run: number | null };
+  /**
+   * The Tagesschicht, where the mission offers one (`Mission['daily']`): the UTC day whose seed
+   * the room plays (daily.ts) — the day of the host's switch in the lobby, the day the run
+   * started once one has — or null while the host has it off. Left out where none is offered.
+   */
+  daily?: { day: DailyDay | null };
+  /** the Erfolge the run earned, once it is over (achievements.ts); left out before its end */
+  achievements?: AchievementId[];
   /**
    * The mission a won run of this one leads on to, by its catalog id — the
    * end screen offers it; left out where none follows.
@@ -864,7 +874,16 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     puzzle: puzzleViewFor(state, playerId),
     map: mapViewFor(state, playerId),
     ...(state.roomSeed === null ? {} : { seed: { room: state.roomSeed, run: state.seed } }),
+    ...(state.mission.daily ? { daily: { day: state.daily } } : {}),
+    ...achievementsOfRun(state),
     ...(state.mission.next === undefined ? {} : { nextMissionId: state.mission.next }),
     ...introOf(state),
   };
+}
+
+/** The Erfolge of a run that is over, read off its report; none while it runs or before it. */
+function achievementsOfRun(state: GameState): Pick<PlayerView, 'achievements'> {
+  return state.phase === 'won' || state.phase === 'lost'
+    ? { achievements: achievementsOf(runReport(state, '')) }
+    : {};
 }

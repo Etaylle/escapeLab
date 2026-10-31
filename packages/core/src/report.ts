@@ -8,6 +8,8 @@ export type RunOutcome = 'won' | 'lost:time' | 'lost:alarms';
 /** One station of a run. A station the run never got to has nulls and zeros. */
 export interface StationReport {
   puzzleId: string;
+  /** the module it runs, `PuzzleDef['type']`; left out by reports written before the Erfolge */
+  type?: string;
   /**
    * When it came up, epoch ms: as the clock started for the first station —
    * the lights going out, after a mission's intro — the previous station's
@@ -49,8 +51,16 @@ export interface RunReport {
   crew: string[];
   /** the start tile each crew member drew, by p1…pn */
   spawns: Record<string, { x: number; y: number }>;
-  /** the seed the run played, only where a tester pinned the room: `?seed=` plays it again */
+  /**
+   * the seed the run played, only where a tester pinned the room — `?seed=` plays it again —
+   * or where it played the Tagesschicht, whose seed is the same for every crew that day
+   */
   seed?: number;
+  /**
+   * the Tagesschicht: the run played the day's seed (daily.ts), the UTC day of `startedAt`,
+   * and ranks among that day's runs alone; left out for every other run
+   */
+  daily?: true;
   /** the start of the run, its intro included */
   startedAt: number;
   /**
@@ -65,6 +75,13 @@ export interface RunReport {
   stations: StationReport[];
   /** emergencies started, and those that ran out before the crew cleared them */
   emergencies: { count: number; failed: number };
+  /**
+   * the notes of the last shift the map holds, and how many of them the crew read; left out
+   * by reports written before the Erfolge
+   */
+  notes?: { read: number; total: number };
+  /** the drones patrolling the map; left out by reports written before the Erfolge */
+  drones?: number;
   /** every alarm by its cause, in the order the causes first came up */
   penalties: { cause: string; count: number; seconds: number }[];
   /** what each crew member did, by p1…pn */
@@ -90,18 +107,35 @@ export function runReport(state: GameState, roomCode: string): RunReport {
     crewSize: crew.length,
     crew: crew.map(({ player }) => cut(player.name)),
     spawns: Object.fromEntries(crew.map(({ player, alias }) => [alias, spawnOf(player, alias)])),
-    ...(state.roomSeed === null || state.seed === null ? {} : { seed: state.seed }),
+    ...seedOf(state),
     startedAt,
     ...(state.lightsOutAt === null ? {} : { lightsOutAt: state.lightsOutAt }),
     finishedAt,
     outcome: outcomeOf(state, alarmLimit),
     stations: stationsOf(state, clockStartOf({ startedAt, lightsOutAt: state.lightsOutAt })),
     emergencies: emergenciesOf(state.events),
+    notes: { read: state.notesRead.length, total: state.mission.map.notes.length },
+    drones: state.mission.map.drones.length,
     penalties: penaltiesOf(state.events),
     credits: Object.fromEntries(
       crew.map(({ player, alias }) => [alias, { ...(state.credits[player.id] ?? NO_CREDITS) }]),
     ),
   };
+}
+
+/**
+ * The seed a report names, and whether the run was the Tagesschicht: a pinned room's seed and
+ * the day's are no secret — the one plays again with `?seed=`, the other is everybody's that
+ * day; a seed the server rolled stays out.
+ */
+function seedOf(state: GameState): Pick<RunReport, 'seed' | 'daily'> {
+  if (state.seed === null) {
+    return {};
+  }
+  if (state.daily !== null) {
+    return { seed: state.seed, daily: true };
+  }
+  return state.roomSeed === null ? {} : { seed: state.seed };
 }
 
 /** When a run's clock started, epoch ms: the lights going out, else — before intros — its start. */
@@ -180,6 +214,7 @@ function stationsOf(state: GameState, clockStart: number): StationReport[] {
     const there = located.filter(({ station }) => station === index).map(({ event }) => event);
     return {
       puzzleId: def.id,
+      type: def.type,
       openedAt,
       solvedAt,
       seconds: openedAt === null || solvedAt === null ? null : (solvedAt - openedAt) / 1000,

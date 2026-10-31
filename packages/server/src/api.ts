@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { createReadStream, existsSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { MissionStanding, MissionStats } from '@escapelab/core';
+import { isDailyDay, type MissionStanding, type MissionStats } from '@escapelab/core';
 import type { MissionCatalog } from './missions.js';
 import type { RunStats } from './runStats.js';
 
@@ -51,10 +51,12 @@ const MISSION_STATS_PATH = /^\/stats\/([^/]+)$/;
 
 /**
  * The Bestenliste, public and naming nobody but by the names they played
- * under: GET /stats, every mission with runs; GET /stats/:mission, one —
- * asked with ?run=<finishedAt>, with the place of the won run that finished
- * then. 404 for a mission neither the catalog nor the log knows. Null for
- * any other path.
+ * under: GET /stats, every mission with runs off the Tagesschicht; GET
+ * /stats/daily, the Tagesschicht's last days, each ranked apart; GET
+ * /stats/:mission, one — asked with ?run=<finishedAt>, with the place of the
+ * won run that finished then, and with &daily=<day> among the runs of that
+ * day's Tagesschicht. 404 for a mission neither the catalog nor the log
+ * knows. Null for any other path.
  */
 export function statsResponse(
   stats: RunStats,
@@ -66,33 +68,65 @@ export function statsResponse(
   if (path === '/stats') {
     return { status: 200, body: stats.all() };
   }
+  if (path === '/stats/daily') {
+    return { status: 200, body: stats.daily() };
+  }
   const segment = MISSION_STATS_PATH.exec(path)?.[1];
   if (segment === undefined) {
     return null;
   }
+  const query = new URLSearchParams(cut < 0 ? '' : url.slice(cut + 1));
+  const asked = standingAsked(query);
+  if ('error' in asked) {
+    return { status: 400, body: { error: asked.error } };
+  }
   const id = decodeSegment(segment);
-  const mission = id === null ? null : missionStats(stats, catalog, id);
+  const mission = id === null ? null : missionStats(stats, catalog, id, asked.day);
   if (id === null || mission === null) {
     return { status: 404, body: { error: `Mission "${id ?? segment}" gibt es nicht.` } };
   }
-  const run = new URLSearchParams(cut < 0 ? '' : url.slice(cut + 1)).get('run');
-  if (run !== null && !/^\d+$/.test(run)) {
-    return {
-      status: 400,
-      body: { error: `?run= nennt das Ende eines Laufs in Millisekunden, nicht "${run}".` },
-    };
-  }
-  const body: MissionStanding = {
-    ...mission,
-    place: run === null ? null : stats.placeOf(id, Number(run)),
-  };
+  const { run, day } = asked;
+  const place =
+    run === null
+      ? null
+      : day === null
+        ? stats.placeOf(id, run)
+        : stats.dailyPlaceOf(day, id, run);
+  const body: MissionStanding = { ...mission, place };
   return { status: 200, body };
 }
 
-/** A mission's stats; none yet for one the catalog has, null for one nobody knows. */
-function missionStats(stats: RunStats, catalog: MissionCatalog, id: string): MissionStats | null {
+/**
+ * What a standing asks after: the end of a run in ms (`?run=`), and the day of the
+ * Tagesschicht it played (`&daily=`); an error to answer for either written wrong.
+ */
+function standingAsked(
+  query: URLSearchParams,
+): { run: number | null; day: string | null } | { error: string } {
+  const run = query.get('run');
+  if (run !== null && !/^\d+$/.test(run)) {
+    return { error: `?run= nennt das Ende eines Laufs in Millisekunden, nicht "${run}".` };
+  }
+  const day = query.get('daily');
+  if (day !== null && !isDailyDay(day)) {
+    return { error: `&daily= nennt den Tag einer Tagesschicht, JJJJ-MM-TT, nicht "${day}".` };
+  }
+  return { run: run === null ? null : Number(run), day };
+}
+
+/**
+ * A mission's stats — of the Tagesschicht of `day` where one is named — none yet for one the
+ * catalog has, null for one nobody knows.
+ */
+function missionStats(
+  stats: RunStats,
+  catalog: MissionCatalog,
+  id: string,
+  day: string | null,
+): MissionStats | null {
   const known = catalog.all.some((mission) => mission.id === id);
-  return stats.mission(id) ?? (known ? { missionId: id, difficulties: [] } : null);
+  const counted = day === null ? stats.mission(id) : stats.dailyMission(day, id);
+  return counted ?? (known ? { missionId: id, difficulties: [] } : null);
 }
 
 /** A URL path segment as text; null when its percent-encoding is broken. */
