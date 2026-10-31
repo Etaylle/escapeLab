@@ -3,7 +3,9 @@ import { DEPENDS_ON, diagramOf, SERVICES, serviceDiagram } from '../src/index.js
 
 describe('the Serverraum’s cabling diagram, derived from DEPENDS_ON', () => {
   it('lays the services out NETZ → DNS, DB → AUTH → WEB, MAIL', () => {
-    expect(serviceDiagram().columns).toEqual([['netz'], ['dns', 'db'], ['auth'], ['web', 'mail']]);
+    // MAIL over WEB: it hangs on DNS above, WEB on DB below — no arrow crosses AUTH's box.
+    const columns = [['netz'], ['dns', 'db'], ['auth'], ['mail', 'web']];
+    expect(serviceDiagram().columns).toEqual(columns);
   });
 
   it('draws an arrow from every dependency to the service that needs it, and no other', () => {
@@ -25,6 +27,18 @@ describe('the Serverraum’s cabling diagram, derived from DEPENDS_ON', () => {
     const flat = diagramOf(['x', 'y'], { x: [], y: [] });
     expect(flat).toEqual({ columns: [['x', 'y']], arrows: [] });
     expect(diagramOf([], {})).toEqual({ columns: [], arrows: [] });
+  });
+
+  it('orders a column by where its dependencies stand, a tie by the order listed', () => {
+    const crossed = diagramOf(['top', 'bottom', 'low', 'high'], {
+      top: [],
+      bottom: [],
+      low: ['bottom'],
+      high: ['top'],
+    });
+    expect(crossed.columns).toEqual([['top', 'bottom'], ['high', 'low']]);
+    const tied = diagramOf(['a', 'b', 'c'], { a: [], b: ['a'], c: ['a'] });
+    expect(tied.columns).toEqual([['a'], ['b', 'c']]);
   });
 
   it('refuses a node listed before what it needs', () => {

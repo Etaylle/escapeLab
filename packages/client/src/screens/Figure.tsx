@@ -6,6 +6,7 @@ import {
   type PuzzleDef,
   type SignalPattern,
 } from '@escapelab/core';
+import { ServicesGraph } from '../puzzles/RackDiagram.js';
 
 /**
  * Line drawings of the devices for the printed rules, one per module type,
@@ -676,42 +677,6 @@ function Circuit() {
   );
 }
 
-/** The Serverraum's services as boxes of its graph, by their top-left corner: 40 × 22 each. */
-const SERVICE_BOXES = [
-  { name: 'NETZ', x: 4, y: 59 },
-  { name: 'DNS', x: 72, y: 13 },
-  { name: 'DB', x: 72, y: 105 },
-  { name: 'AUTH', x: 140, y: 59 },
-  { name: 'MAIL', x: 208, y: 13 },
-  { name: 'WEB', x: 208, y: 105 },
-] as const;
-
-/**
- * The graph's arrows, each from a dependency to the service that needs it:
- * [x1, y1, x2, y2] from an edge of the one box to an edge of the other.
- */
-const NEEDS = [
-  [34, 59, 72, 24],
-  [34, 81, 72, 116],
-  [44, 70, 140, 70],
-  [112, 24, 150, 59],
-  [112, 24, 208, 24],
-  [112, 116, 208, 116],
-  [180, 70, 218, 35],
-  [180, 70, 218, 105],
-] as const;
-
-/** A straight arrow from (x1, y1) to (x2, y2), its head an open V at the end, as one path. */
-function arrowPath(x1: number, y1: number, x2: number, y2: number): string {
-  const length = Math.hypot(x2 - x1, y2 - y1);
-  const [ux, uy] = [(x2 - x1) / length, (y2 - y1) / length];
-  const barb = (turn: number): string => {
-    const [c, s] = [Math.cos(turn), Math.sin(turn)];
-    return `${round(x2 - 6 * (ux * c - uy * s))} ${round(y2 - 6 * (uy * c + ux * s))}`;
-  };
-  return `M${x1} ${y1}L${x2} ${y2}M${barb(0.45)}L${x2} ${y2}L${barb(-0.45)}`;
-}
-
 /** The rack's six units, top to bottom: its name, whether its LED burns and its switch is up. */
 const RACK_UNITS = [
   { name: 'NETZ', lit: true, on: true },
@@ -723,22 +688,17 @@ const RACK_UNITS = [
 ] as const;
 
 /**
- * The Serverraum: on the left its six services as boxes, an arrow from every
- * dependency to the service that needs it, NETZ first; on the right a small
+ * The Serverraum: on the left its six services as the rack's cabling diagram draws them —
+ * derived from the plan's dependencies (puzzles/RackDiagram.tsx), every LED dark on paper — an
+ * arrow from every dependency to the service that needs it, NETZ first; on the right a small
  * rack of six units, each with its name, an LED and a power switch.
  */
 function Servers() {
   return (
     <>
-      {SERVICE_BOXES.map(({ name, x, y }) => (
-        <g key={name}>
-          <rect x={x} y={y} width={40} height={22} rx={3} strokeWidth={1.4} />
-          <Mark x={x + 20} y={y + 14.5} size={9}>
-            {name}
-          </Mark>
-        </g>
-      ))}
-      <path d={NEEDS.map(([x1, y1, x2, y2]) => arrowPath(x1, y1, x2, y2)).join('')} />
+      <g transform="translate(4 0)">
+        <ServicesGraph leds={{}} />
+      </g>
       <rect x={268} y={6} width={102} height={128} rx={5} strokeWidth={1.6} />
       <rect x={274} y={12} width={6} height={116} rx={1} />
       <rect x={358} y={12} width={6} height={116} rx={1} />

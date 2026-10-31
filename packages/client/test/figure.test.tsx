@@ -154,7 +154,7 @@ describe('Figure', () => {
     expect(lettering.slice(6)).toEqual(SERVICES.map(serviceName));
     // One arrow for every dependency the printed table lists: a shaft and an open head each.
     const dependencies = SERVICES.flatMap((service) => DEPENDS_ON[service]).length;
-    const arrows = /<path d="([^"]*)"><\/path>/.exec(html)?.[1] ?? '';
+    const arrows = /<path class="services-arrows" d="([^"]*)"><\/path>/.exec(html)?.[1] ?? '';
     expect(arrows.match(/M/g)).toHaveLength(2 * dependencies);
     expect(html.match(/<rect x="284"/g)).toHaveLength(6);
   });

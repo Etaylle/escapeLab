@@ -49,16 +49,18 @@ export const DEPENDS_ON: Readonly<Record<Service, readonly Service[]>> = {
  * the node that needs it. Rules only: what depends on what, never how a service stands.
  */
 export interface Diagram<T extends string> {
-  /** the columns left to right, each top to bottom in the order the nodes are listed */
+  /** the columns left to right, each top to bottom in the order that keeps the arrows clear */
   columns: T[][];
-  /** [dependency, dependent], dependents in their listed order, each one's dependencies in theirs */
+  /** [dependency, dependent]: dependents in their listed order, their dependencies in theirs */
   arrows: [T, T][];
 }
 
 /**
  * The diagram of `nodes`, listed so that every dependency comes before whatever needs it, by
- * `dependsOn`. Throws for a dependency that is not listed before its dependent: no column
- * could be worked out for it.
+ * `dependsOn`: each column after the first ordered by where its nodes' dependencies stand —
+ * the mean of their heights in their own columns, top 0, bottom 1 — so that the arrows run
+ * past the boxes, not through them; a tie keeps the listed order. Throws for a dependency that
+ * is not listed before its dependent: no column could be worked out for it.
  */
 export function diagramOf<T extends string>(
   nodes: readonly T[],
@@ -76,7 +78,19 @@ export function diagramOf<T extends string>(
     column.set(node, under.length === 0 ? 0 : Math.max(...under) + 1);
   }
   const width = Math.max(0, ...column.values()) + (nodes.length === 0 ? 0 : 1);
-  const columns = Array.from({ length: width }, (_, i) => nodes.filter((n) => column.get(n) === i));
+  const height = new Map<T, number>();
+  const columns: T[][] = [];
+  for (let i = 0; i < width; i++) {
+    const listed = nodes.filter((n) => column.get(n) === i);
+    const mean = (node: T): number => {
+      const deps = dependsOn[node].map((dep) => height.get(dep) ?? 0.5);
+      return deps.length === 0 ? 0.5 : deps.reduce((sum, h) => sum + h, 0) / deps.length;
+    };
+    const ordered = [...listed].sort((a, b) => mean(a) - mean(b));
+    const last = Math.max(1, ordered.length - 1);
+    ordered.forEach((node, row) => height.set(node, ordered.length === 1 ? 0.5 : row / last));
+    columns.push(ordered);
+  }
   const arrows = nodes.flatMap((node) => dependsOn[node].map((dep): [T, T] => [dep, node]));
   return { columns, arrows };
 }
