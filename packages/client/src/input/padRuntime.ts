@@ -277,7 +277,10 @@ function heldOverDialog(
   return runtime.walking ? null : { dir, scope };
 }
 
-/** Whether `dir`, held, steps now: at once, again after REPEAT_AFTER_MS, then every REPEAT_EVERY_MS. */
+/**
+ * Whether `dir`, held, steps now: at once, again after REPEAT_AFTER_MS, then every
+ * REPEAT_EVERY_MS.
+ */
 function stepDue(runtime: Runtime, dir: Direction, now: number): boolean {
   const { repeat } = runtime;
   const same = repeat !== null && repeat.dir === dir;

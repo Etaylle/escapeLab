@@ -169,7 +169,7 @@ describe('the talk key', () => {
     expect(voice.stopsOnUp(key('g'), null)).toBe(false);
   });
 
-  it('stops talking at the key held, whatever Shift or a new binding made of its name', async () => {
+  it('stops talking at the key held, whatever Shift or a rebinding made of its name', async () => {
     const { settings, voice } = await fresh();
     settings.changeSettings({ keys: { ...DEFAULT_KEYS, talk: '9' } });
     const nine = key('9', { code: 'Digit9' });
