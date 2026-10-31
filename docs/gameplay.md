@@ -33,27 +33,39 @@ Controller), the rest is fixed.
 **Rebinding.** „Ändern" waits for the next key: a key the game keeps (the arrows, Enter, Space,
 Esc, Tab, 1–8, Backspace, Delete) is refused with its task, a key another action holds is
 refused naming that action („Schon belegt: Notizblock (N)."), a key held with Strg, Alt or Cmd
-is no key to hold alone; Esc stops waiting. On the controller the next button pressed takes the
-action — A, B, X, Y, L2 or R2 — and where another of the four sat there, the two swap, which
-the panel says. „Tasten und Controller zurücksetzen" brings both back. The settings are kept
-on the device (`escapelab.settings`, `keys` and `pad`).
+is no key to hold alone; Esc stops waiting, and so does any controller button, which has no key
+to give. On the controller the next button pressed takes the action — A, B, X, Y, L2 or R2 —
+and where another of the four sat there, the two swap, which the panel says. „Tasten und
+Controller zurücksetzen" brings both back. The settings are kept on the device
+(`escapelab.settings`, `keys` and `pad`); settings kept before the key map keep their talk key.
+A bound key is the game's: the browser's own use of it stays off (F5 bound to the minimap
+reloads nothing). A key held down — a step, the sprint, the talk key — is let go where it went
+down, whatever Shift or a new binding made of its name meanwhile (`input/heldKeys.ts`).
 
 **Prompts.** No screen names a key by itself: every prompt reads it from the binding map
 (`input/glyphs.ts`) — „[E] Lesen" on keys, „[A] Lesen" (or „[✕] Lesen" on a PlayStation
 controller, told by its id) once a controller was pressed or its stick leant, and back to keys
 at the next real key. The world's prompt, the carried part's line, the HUD's buttons, the foot
 of a sheet and of a device, the notepad's and the book's buttons, the intro's skip and the key
-list all follow. `client/test/bindings.test.tsx` reads every screen's strings and JSX text and
-fails on a key written by hand.
+list all follow, and the lever and the world's tips name the keys bound.
+`client/test/bindings.test.tsx` reads every screen's strings and JSX text and fails on a key
+written by hand — in brackets or worked in a sentence („E drücken") — and on a letter a handler
+listens for itself (`useKeys(['e'], …)`).
 
-**A controller.** Polled once a frame while one is connected (`input/padRuntime.ts`). In the
-world the stick walks as far as it leans — past the dead zone of 0.2, scaled from there to the
-rim, as fast on a diagonal — and the D-pad at full; the buttons press the keys they stand for,
-A by Space, so that it also skips the opening. Over a dialog (the device, the pages, the
-settings, the info) the D-pad moves the focus to the nearest control that way, A presses it, B
-steps back; in a book the D-pad turns the pages. The settings show a live test: every button
-lights while held, the stick's dot leans. The walkthrough's `?fakepad=1` puts a controller of
-its own on `window.__escapelab.pad` (press, release, tap, lean).
+**A controller.** Polled once a frame while one of the standard mapping is connected — another
+one's buttons and axes would mean something else (`input/padRuntime.ts`). In the world the
+stick walks as far as it leans — past the dead zone of 0.2, scaled from there to the rim, as
+fast on a diagonal — and the D-pad at full; the buttons press the keys they stand for, A by
+Space, so that it also skips the opening. A text field in the focus lets go first, as a
+controller types nothing: X closes the notepad it opened. Over a dialog (the device, the pages,
+the settings, the info) the D-pad moves the focus to the nearest control that way, A presses
+it — a control made to be held, as the button module's face, for as long as A is held — and B
+steps back; in a book the D-pad turns the pages. A direction still held from walking as a
+dialog comes up moves nothing there until it is let go. An Xbox controller says Xbox in its id
+(„Xbox Wireless Controller"), a PlayStation one Sony's vendor or its name. The settings show a
+live test: every button lights while held, the stick's dot leans. The walkthrough's
+`?fakepad=1` puts a controller of its own on `window.__escapelab.pad` (press, release, tap,
+lean).
 
 ## Erfolge
 
