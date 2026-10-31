@@ -184,7 +184,7 @@ export class RunStats {
     return this.board.all();
   }
 
-  /** One mission off the Tagesschicht, its difficulties easiest first; null before its first run. */
+  /** One mission off the Tagesschicht, difficulties easiest first; null before its first run. */
   mission(missionId: string): MissionStats | null {
     return this.board.mission(missionId);
   }

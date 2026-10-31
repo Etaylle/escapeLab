@@ -64,10 +64,10 @@ Seven plaques a crew earns in a run it wins, read off the run's report alone
 | --- | --- |
 | Ohne Alarm | not one alarm in the whole run, whatever set it off |
 | Unter acht Minuten | from the lights going out to the escape in under 8:00 |
-| Alle Notizen gelesen | every note of the last shift on the map read (a map without notes has none to earn) |
+| Alle Notizen gelesen | every note of the last shift on the map read; none on a map without notes |
 | Jede Station im ersten Versuch | no station reported a wrong move (a drone's alarm is none) |
 | Ungesehen | no drone caught anybody, on a map where drones patrol |
-| Stiller Serverraum | no command at the Serverraum failed (an alarm there); a map without one has none |
+| Stiller Serverraum | no command at the Serverraum failed (an alarm there); none without one |
 | Erste Schicht | every won run — that it is the first is the device's to tell |
 
 The view of a finished run carries them (`PlayerView.achievements`). The device keeps each with
