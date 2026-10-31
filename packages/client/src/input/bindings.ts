@@ -41,6 +41,15 @@ export const MOVES: Readonly<Record<Move, readonly [number, number]>> = {
 /** What acts while held: walking and sprinting; talking is the voice's (voice/useVoice.ts). */
 export type Held = Move | 'sprint';
 
+/**
+ * Where a key sits on the keyboard (`code`), so that a key held down is let go where it went
+ * down, whatever Shift or a rebinding made of its name meanwhile; a key a controller sends sits
+ * nowhere and goes by its name.
+ */
+export function keyPlace(e: Pick<KeyboardEvent, 'code' | 'key'>): string {
+  return e.code || `key:${e.key.toLowerCase()}`;
+}
+
 /** An action held, not done once a press. */
 export function isHeld(action: InputAction): action is Held {
   return action === 'sprint' || MOVE_ACTIONS.some((move) => move === action);

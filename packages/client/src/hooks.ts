@@ -35,11 +35,14 @@ export function useKeys(keys: readonly string[], onKey: (key: string) => void): 
     const listened = new Set(wanted.split(' '));
     const onDown = (e: KeyboardEvent): void => {
       const key = e.key.toLowerCase();
-      if (!listened.has(key) || e.repeat || e.altKey || e.ctrlKey || e.metaKey || typing()) {
+      if (!listened.has(key) || e.altKey || e.ctrlKey || e.metaKey || typing()) {
         return;
       }
+      // The key is the game's, auto-repeat too: F5 bound to the notepad reloads nothing.
       e.preventDefault();
-      handler.current(key);
+      if (!e.repeat) {
+        handler.current(key);
+      }
     };
     window.addEventListener('keydown', onDown);
     return () => window.removeEventListener('keydown', onDown);

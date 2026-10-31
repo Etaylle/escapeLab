@@ -12,6 +12,7 @@ import {
 import { useNow } from '../hooks.js';
 import { actionOfKey, isHeld, type Held, type InputAction } from '../input/bindings.js';
 import { useGlyph } from '../input/glyphs.js';
+import { HeldKeys } from '../input/heldKeys.js';
 import { NO_STEER } from '../input/pad.js';
 import { padSteer } from '../input/padRuntime.js';
 import { addProbes, type MinimapProbe } from '../probes.js';
@@ -297,27 +298,15 @@ function dropItem(loop: Loop): void {
 }
 
 /** What a key does once a press, not on its auto-repeat. */
-type KeyJob = (loop: Loop, e: KeyboardEvent, setWheelOpen: SetWheel) => void;
+type KeyJob = (loop: Loop, setWheelOpen: SetWheel) => void;
 
-const interactKey: KeyJob = (loop, e) => {
-  e.preventDefault();
-  tryInteract(loop);
-};
-const dropKey: KeyJob = (loop, e) => {
-  e.preventDefault();
-  dropItem(loop);
-};
+const interactKey: KeyJob = (loop) => tryInteract(loop);
+const dropKey: KeyJob = (loop) => dropItem(loop);
 const minimapKey: KeyJob = (loop) => {
   loop.sim.minimap = !loop.sim.minimap;
 };
-const chatKey: KeyJob = (_, e, setWheelOpen) => {
-  e.preventDefault();
-  setWheelOpen((open) => !open);
-};
-const infoKey: KeyJob = (loop, e) => {
-  e.preventDefault();
-  loop.live.current.onToggleInfo();
-};
+const chatKey: KeyJob = (_, setWheelOpen) => setWheelOpen((open) => !open);
+const infoKey: KeyJob = (loop) => loop.live.current.onToggleInfo();
 /**
  * The actions that work the world once a press, by whatever key the settings bind them to
  * (input/bindings.ts): the notepad is the game screen's, talking the voice's.
@@ -330,38 +319,63 @@ const KEY_JOBS: Partial<Record<InputAction, KeyJob>> = {
   info: infoKey,
 };
 
-function onKeyDown(loop: Loop, e: KeyboardEvent, setWheelOpen: SetWheel): void {
+function onKeyDown(loop: Loop, e: KeyboardEvent, setWheelOpen: SetWheel, held: HeldKeys): void {
   if (isTextEntry(document.activeElement) || e.altKey || e.ctrlKey || e.metaKey) {
     return;
   }
-  pressKey(loop, e.key.toLowerCase(), e, setWheelOpen);
+  const key = e.key.toLowerCase();
+  const action = actionOfKey(getSettings().keys, key);
+  if (action !== null && isHeld(action)) {
+    holdKey(loop, action, e, held);
+  } else {
+    pressKey(loop, key, action, e, setWheelOpen);
+  }
 }
 
 /**
- * A key going down, as the settings bind it: a step or the sprint held, a job done once, the
- * chat wheel shut or a phrase said.
+ * A step or the sprint held down, where the world takes it: held until the key that went down
+ * comes up again, found by where it sits whatever its name has become meanwhile (`HeldKeys`).
  */
-function pressKey(loop: Loop, key: string, e: KeyboardEvent, setWheelOpen: SetWheel): void {
-  const action = actionOfKey(getSettings().keys, key);
+function holdKey(loop: Loop, action: Held, e: KeyboardEvent, held: HeldKeys): void {
+  e.preventDefault();
+  if (!loop.live.current.locked && !heldBack(loop.live.current)) {
+    loop.sim.keys.add(action);
+    held.press(e, action);
+  }
+}
+
+/**
+ * A key going down, as the settings bind it: a job done once — the key the game's even on its
+ * auto-repeat, so that F5 bound to the minimap reloads nothing —, the chat wheel shut or a
+ * phrase said.
+ */
+function pressKey(
+  loop: Loop,
+  key: string,
+  action: InputAction | null,
+  e: KeyboardEvent,
+  setWheelOpen: SetWheel,
+): void {
   const job = action === null ? undefined : KEY_JOBS[action];
-  if (action !== null && isHeld(action)) {
+  if (job !== undefined) {
     e.preventDefault();
-    if (!loop.live.current.locked && !heldBack(loop.live.current)) {
-      loop.sim.keys.add(action);
-    }
-  } else if (job !== undefined) {
     if (!e.repeat) {
-      job(loop, e, setWheelOpen);
+      job(loop, setWheelOpen);
     }
   } else if (key === 'escape') {
     setWheelOpen(false);
-  } else if (/^[1-8]$/.test(key)) {
-    const phrase = CHAT_PHRASE_IDS[Number(key) - 1];
-    if (phrase !== undefined) {
-      e.preventDefault();
-      loop.live.current.send({ kind: 'chat', phrase });
-      setWheelOpen(false);
-    }
+  } else {
+    sayPhrase(loop, key, e, setWheelOpen);
+  }
+}
+
+/** 1–8 say the chat wheel's phrases, and shut it. */
+function sayPhrase(loop: Loop, key: string, e: KeyboardEvent, setWheelOpen: SetWheel): void {
+  const phrase = /^[1-8]$/.test(key) ? CHAT_PHRASE_IDS[Number(key) - 1] : undefined;
+  if (phrase !== undefined) {
+    e.preventDefault();
+    loop.live.current.send({ kind: 'chat', phrase });
+    setWheelOpen(false);
   }
 }
 
@@ -388,15 +402,17 @@ function onPointerDown(loop: Loop, e: PointerEvent): void {
 /** The keyboard and the pointer drive the world; returns what takes them off again. */
 function listen(loop: Loop, setWheelOpen: SetWheel): () => void {
   const { canvas, sim } = loop;
-  const keyDown = (e: KeyboardEvent): void => onKeyDown(loop, e, setWheelOpen);
+  const held = new HeldKeys();
+  const keyDown = (e: KeyboardEvent): void => onKeyDown(loop, e, setWheelOpen, held);
   const pointerDown = (e: PointerEvent): void => onPointerDown(loop, e);
   const keyUp = (e: KeyboardEvent): void => {
-    const action = actionOfKey(getSettings().keys, e.key);
-    if (action !== null && isHeld(action)) {
-      sim.keys.delete(action);
+    const freed = held.release(e);
+    if (freed !== null) {
+      sim.keys.delete(freed);
     }
   };
   const blur = (): void => {
+    held.clear();
     sim.keys.clear();
   };
   window.addEventListener('keydown', keyDown);

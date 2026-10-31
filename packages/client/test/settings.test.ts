@@ -143,8 +143,10 @@ describe('readSettings and writeSettings — kept on this device', () => {
 });
 
 describe('the talk key', () => {
+  /** A key as a keyboard sends it: a letter sits at Key<letter>, whatever case it comes in. */
   const key = (name: string, parts: Partial<KeyboardEvent> = {}) => ({
     key: name,
+    code: `Key${name.toUpperCase()}`,
     altKey: false,
     ctrlKey: false,
     metaKey: false,
@@ -161,8 +163,23 @@ describe('the talk key', () => {
     expect(voice.talksOnDown(key('v'), talkKey(), false)).toBe(false);
     expect(voice.talksOnDown(key('g'), talkKey(), false)).toBe(true);
     expect(voice.talksOnDown(key('G'), talkKey(), false)).toBe(true);
-    expect(voice.stopsOnUp(key('g'), talkKey())).toBe(true);
-    expect(voice.stopsOnUp(key('v'), talkKey())).toBe(false);
+    // Talking stops at the key that started it, by where it sits.
+    expect(voice.stopsOnUp(key('g'), 'KeyG')).toBe(true);
+    expect(voice.stopsOnUp(key('v'), 'KeyG')).toBe(false);
+    expect(voice.stopsOnUp(key('g'), null)).toBe(false);
+  });
+
+  it('stops talking at the key held, whatever Shift or a new binding made of its name', async () => {
+    const { settings, voice } = await fresh();
+    settings.changeSettings({ keys: { ...DEFAULT_KEYS, talk: '9' } });
+    const nine = key('9', { code: 'Digit9' });
+    expect(voice.talksOnDown(nine, settings.getSettings().keys.talk, false)).toBe(true);
+    // Shift went down meanwhile: the 9 comes up as „)".
+    expect(voice.stopsOnUp(key(')', { code: 'Digit9' }), 'Digit9')).toBe(true);
+    settings.changeSettings({ keys: { ...DEFAULT_KEYS, talk: 'g' } });
+    expect(voice.stopsOnUp(nine, 'Digit9')).toBe(true);
+    // A key a controller sends sits nowhere: it goes by its name.
+    expect(voice.stopsOnUp({ key: 'v', code: '' }, 'key:v')).toBe(true);
   });
 
   it('talks on nothing while typing or rebinding, with a modifier, or on auto-repeat', async () => {
@@ -183,7 +200,7 @@ describe('the talk key', () => {
       expect(voice.talksOnDown(key('v', held), 'v', false)).toBe(false);
     }
     // Let go however it comes up: a modifier pressed meanwhile keeps nobody talking.
-    expect(voice.stopsOnUp(key('V'), 'v')).toBe(true);
+    expect(voice.stopsOnUp(key('V', { shiftKey: true }), 'KeyV')).toBe(true);
   });
 });
 
