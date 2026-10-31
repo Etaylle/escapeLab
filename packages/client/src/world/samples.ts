@@ -25,10 +25,19 @@ export const SFX_IDS = [
   'emergency-buzz',
   'tube-strike',
   'hatch-grind',
+  'hatch-open-done',
   'door-slide',
-  'step-1',
-  'step-2',
-  'step-3',
+  'door-close-1',
+  'door-close-2',
+  'step-concrete-1',
+  'step-concrete-2',
+  'step-concrete-3',
+  'step-lino-1',
+  'step-lino-2',
+  'step-lino-3',
+  'step-steel-1',
+  'step-steel-2',
+  'step-steel-3',
   'radio-key',
   'radio-tail',
   'radio-open',
@@ -36,6 +45,7 @@ export const SFX_IDS = [
   'book-shut',
   'pencil',
   'klaxon',
+  'alarm-sting',
   'console-ready',
   'ping',
   'discovery',
@@ -45,6 +55,7 @@ export const SFX_IDS = [
   'countdown-go',
   'part-seat',
   'drone-alert',
+  'drone-pass',
   'key-click',
   'reject-buzz',
   'solved-chunk',
@@ -62,6 +73,7 @@ export const SFX_IDS = [
   'ok-beeps',
   'server-spinup',
   'hold-tick',
+  'ui-tick',
   'creak',
   'drip',
   'far-clank',
@@ -156,7 +168,13 @@ function atLoudness(buffer: AudioBuffer, gain: number): AudioBuffer {
  */
 export function loadSample(id: string, url: string, entry: SampleEntry): Promise<Sample | null> {
   const known = loads.get(url);
-  if (known !== undefined) return known;
+  if (known !== undefined) {
+    // An entry that plays another's recording until its own is made shares that one's load.
+    return known.then((loaded) => {
+      if (loaded !== null) ready.set(id, loaded);
+      return loaded;
+    });
+  }
   const load = fetch(url)
     .then((res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

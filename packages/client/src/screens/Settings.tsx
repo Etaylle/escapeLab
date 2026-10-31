@@ -11,6 +11,7 @@ import {
   type TextSize,
   type Volumes,
 } from '../settings.js';
+import { volumeTick } from '../world/audio.js';
 
 /** The three volumes as the panel names them. */
 const VOLUMES: readonly (readonly [keyof Volumes, string])[] = [
@@ -177,8 +178,11 @@ function useEscapeCloses(onClose: () => void): void {
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const settings = useSettings();
   useEscapeCloses(onClose);
-  const setVolume = (part: keyof Volumes, value: number): void =>
+  // A volume set ticks through the bus it sets, at its new level (world/audio.ts `volumeTick`).
+  const setVolume = (part: keyof Volumes, value: number): void => {
     changeSettings({ volumes: { ...settings.volumes, [part]: value } });
+    volumeTick(part);
+  };
   return (
     <div
       className="overlay settings"

@@ -16,6 +16,7 @@ import {
   type Fade,
 } from './audio.js';
 import type { Dressing } from './dress.js';
+import { followFloors, forgetFloors } from './footsteps.js';
 import { warmUp, WARM_UP_MS } from './rooms.js';
 import { sample, type Sample, type SfxId } from './samples.js';
 import type { FloorKind } from './surfaces.js';
@@ -347,8 +348,6 @@ interface Ambience {
   /** the simulation's clock, s: the core beats on it */
   readonly clock: () => number;
   readonly beds: Map<string, Bed>;
-  readonly plans: WeakMap<object, RoomPlan>;
-  room: string | null;
   heard: Heard | null;
 }
 
@@ -356,6 +355,10 @@ interface Ambience {
 const AHEAD_S = 0.4;
 
 let ambience: Ambience | null = null;
+/** The plans worked out, one for each dressing. */
+const plans = new WeakMap<object, RoomPlan>();
+/** The room the player stood in at the last round; null before it and for the audience. */
+let here: string | null = null;
 
 /** Idempotent. The beds' runtime for a world: silent until `hearRooms` says where you are. */
 export function startAmbience(clock: () => number): void {
@@ -363,9 +366,7 @@ export function startAmbience(clock: () => number): void {
     if (ambience !== null) return;
     const engine = audioEngine();
     if (engine === null) return;
-    const beds = new Map<string, Bed>();
-    const plans = new WeakMap<object, RoomPlan>();
-    ambience = { engine, clock, beds, plans, room: null, heard: null };
+    ambience = { engine, clock, beds: new Map<string, Bed>(), heard: null };
   } catch {
     // Deliberately silent: a quiet lab is better than a broken game.
   }
@@ -373,6 +374,8 @@ export function startAmbience(clock: () => number): void {
 
 /** Fades every bed out over ~0.5 s and stops it. Safe when none plays. */
 export function stopAmbience(): void {
+  here = null;
+  forgetFloors();
   try {
     const amb = ambience;
     ambience = null;
@@ -401,20 +404,25 @@ export interface RoomScene {
 }
 
 /**
- * The beds follow the player, the doors and the power: called ten times a second. Where the
- * tile, the view, the rooms lit or the power changed, each bed heard crossfades to its level,
- * beds come and go and powered layers die or warm up; every call the loops due start, those
- * done stop, and the own room's sporadic sounds are scheduled on the audio clock.
+ * The beds follow the player, the doors and the power: called ten times a second. The room the
+ * player stands in is worked out every call, and with it the floor under their feet
+ * (footsteps.ts). Where the tile, the view, the rooms lit or the power changed, each bed heard
+ * crossfades to its level, beds come and go and powered layers die or warm up; every call the
+ * loops due start, those done stop, and the own room's sporadic sounds are scheduled on the
+ * audio clock.
  */
 export function hearRooms(scene: RoomScene): void {
   try {
+    const plan = planOf(scene);
+    here = roomAt(plan, Math.floor(scene.at.x), Math.floor(scene.at.y), here);
+    followFloors(plan, here);
     const amb = ambience;
     if (amb === null) return;
     const heard = heardOf(scene);
     const now = amb.engine.ctx.currentTime;
     if (amb.heard === null || !sameHeard(amb.heard, heard)) {
       amb.heard = heard;
-      follow(amb, scene, now);
+      follow(amb, scene, plan, now);
     }
     tend(amb, now);
   } catch {
@@ -423,11 +431,9 @@ export function hearRooms(scene: RoomScene): void {
 }
 
 /** The beds take in a changed scene: their levels, who is a neighbour, their power. */
-function follow(amb: Ambience, scene: RoomScene, now: number): void {
-  const plan = planOf(amb, scene);
+function follow(amb: Ambience, scene: RoomScene, plan: RoomPlan, now: number): void {
+  const room = here;
   const { at } = scene;
-  const room = roomAt(plan, Math.floor(at.x), Math.floor(at.y), amb.room);
-  amb.room = room;
   const open = new Set(scene.map.doors.filter((door) => door.open).map((door) => door.id));
   const levels = bedLevels(plan, room, open, at);
   for (const [name, level] of levels) {
@@ -453,11 +459,11 @@ function sameHeard(a: Heard, b: Heard): boolean {
 }
 
 /** The plan of the scene's dressing, worked out once for it. */
-function planOf(amb: Ambience, scene: RoomScene): RoomPlan {
-  const known = amb.plans.get(scene.dressing);
+function planOf(scene: RoomScene): RoomPlan {
+  const known = plans.get(scene.dressing);
   if (known !== undefined) return known;
   const plan = roomPlan(scene.dressing, scene.map.doors);
-  amb.plans.set(scene.dressing, plan);
+  plans.set(scene.dressing, plan);
   return plan;
 }
 
@@ -559,7 +565,7 @@ function tend(amb: Ambience, now: number): void {
       continue;
     }
     syncLoops(amb, bed, now);
-    if (bed.room === amb.room && amb.engine.ctx.state === 'running') {
+    if (bed.room === here && amb.engine.ctx.state === 'running') {
       scheduleOccasions(amb, bed, now);
     }
   }
@@ -686,8 +692,8 @@ export function bedProbe(): BedProbe {
     probe.beds[bed.kind] = Math.max(probe.beds[bed.kind] ?? 0, level);
     probe.power[bed.kind] = Math.max(probe.power[bed.kind] ?? 0, levelAt(bed.powerFade, now));
   }
-  probe.room = amb.room;
-  probe.kind = amb.room === null ? null : (amb.beds.get(amb.room)?.kind ?? null);
+  probe.room = here;
+  probe.kind = here === null ? null : (amb.beds.get(here)?.kind ?? null);
   return probe;
 }
 

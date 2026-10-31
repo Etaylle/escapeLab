@@ -37,6 +37,7 @@ import {
   silenceOf,
   startMsOf,
   TARGETS,
+  tempoOf,
   upToDate,
   type CatalogEntry,
   type Floor,
@@ -69,6 +70,7 @@ const CALM: CatalogEntry = {
   prompt: 'Instrumental underscore for a dark lab at night, A minor, 90 BPM, steady, made to loop.',
   durationSeconds: 72,
   loop: true,
+  bpm: 90,
   target: { measure: 'rms', dbfs: -20 },
   usedBy: ['src/world/music.ts#STEMS'],
 };
@@ -121,6 +123,31 @@ describe('the catalog', () => {
       expect.stringMatching(/30 s, outside 60–90 s/),
     ]);
     expect(() => checkCatalog([CLACK, CLACK])).toThrow(/test-clack: its id comes twice/);
+  });
+
+  it('gives each stem the tempo its prompt states, one for all three, no other kind one', () => {
+    expect(tempoOf(CALM.prompt)).toBe(90);
+    expect(tempoOf('steady, 92.5 bpm, no drums')).toBe(92.5);
+    expect(tempoOf(CLACK.prompt)).toBeNull();
+    const untimed: CatalogEntry = {
+      id: CALM.id,
+      kind: 'stem',
+      prompt: CALM.prompt,
+      durationSeconds: CALM.durationSeconds,
+      loop: true,
+      target: CALM.target,
+      usedBy: CALM.usedBy,
+    };
+    expect(flawsOf(untimed)).toEqual([expect.stringMatching(/the tempo its prompt states \(90\)/)]);
+    expect(flawsOf({ ...CALM, bpm: 120 })).toHaveLength(1);
+    expect(flawsOf({ ...CLACK, bpm: 90 })).toEqual(['only a stem has a bpm']);
+    const prompt = CALM.prompt.replace('90', '120');
+    const quicker = { ...CALM, id: 'test-quick', prompt, bpm: 120 };
+    expect(() => checkCatalog([CALM, quicker])).toThrow(/share one tempo, not 90, 120 bpm/);
+    for (const stem of catalog.filter((entry) => entry.kind === 'stem')) {
+      expect(stem.bpm, stem.id).toBe(90);
+    }
+    expect(hashOf({ ...CALM, bpm: 120 })).toBe(hashOf(CALM)); // the tempo asks nothing anew
   });
 });
 

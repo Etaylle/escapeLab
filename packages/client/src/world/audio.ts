@@ -22,6 +22,7 @@
  */
 
 import { censusOf, countGraph, type GraphCensus } from './audioCount.js';
+import { ownSurface, stepRate, stepTake } from './footsteps.js';
 import { traceRequested } from './frameTrace.js';
 import { sample, sampleLoaded, type Sample, type SfxId } from './samples.js';
 
@@ -95,13 +96,12 @@ const MASTER_LEVEL = 1;
 const MUTE_STORAGE_KEY = 'escapelab-muted';
 /** How quickly a bus follows its volume as a slider moves, s. */
 const VOLUME_GLIDE = 0.05;
-/** The own footstep's level; a partner's comes in at the same level, placed (spatial.ts). */
-export const FOOTSTEP_LEVEL = 0.02;
+/** A partner's footstep at full, before it is placed (spatial.ts). */
+export const STEP_LEVEL = 0.02;
+/** Your own steps against a partner's: 4 dB under them — your own feet are always there. */
+export const OWN_STEP_DB = -4;
 /** How much louder a footstep lands at a sprint: about 2 dB. */
 export const SPRINT_STEP_GAIN = 1.25;
-/** A footstep's three takes, one at random each step, ±10 % in speed. */
-export const STEP_TAKES: readonly [SfxId, ...SfxId[]] = ['step-1', 'step-2', 'step-3'];
-const DOOR_LEVEL = 0.04;
 const CHIRP_LEVEL = 0.03;
 const FIND_LEVEL = 0.035;
 const DRAIN_LEVEL = 0.05;
@@ -312,7 +312,7 @@ interface Play {
  */
 function effect(
   id: SfxId,
-  bus: 'effects' | 'master' | 'radio',
+  bus: 'effects' | 'master' | 'radio' | 'music',
   level: number,
   play: Play = {},
 ): void {
@@ -375,17 +375,13 @@ export function briefingCountdown(elapsedMs = 0): void {
 }
 
 /**
- * The own footstep: one of its three takes, ±10 % in speed, a little louder at a sprint, whose
- * steps also land faster (sim.ts); cheap enough for ~10 calls per second.
+ * The own footstep on the floor under you (footsteps.ts): one of its three takes, ±5 % in speed,
+ * OWN_STEP_DB under a partner's, a little louder at a sprint, whose steps also land faster
+ * (sim.ts); cheap enough for ~10 calls per second.
  */
 export function footstep(sprinting = false): void {
-  const level = FOOTSTEP_LEVEL * (sprinting ? SPRINT_STEP_GAIN : 1);
-  effect(pick(STEP_TAKES), 'effects', level, { rate: rand(0.9, 1.1) });
-}
-
-/** A pneumatic door sliding open. */
-export function doorSlide(): void {
-  effect('door-slide', 'effects', DOOR_LEVEL);
+  const level = STEP_LEVEL * 10 ** (OWN_STEP_DB / 20) * (sprinting ? SPRINT_STEP_GAIN : 1);
+  effect(stepTake(ownSurface()), 'effects', level, { rate: stepRate() });
 }
 
 /** A console's rising 'station ready' chirp. */
@@ -538,6 +534,17 @@ export function klaxon(): void {
   effect('klaxon', 'effects', KLAXON_LEVEL);
 }
 
+/** The alarm's sting at its peak: a step under the klaxon's horn. */
+const ALARM_STING_LEVEL = 0.035;
+
+/**
+ * The music's answer to an alarm (music.ts, at every alarm while it plays): a two-second
+ * stinger of brass and strings, on the effects' bus.
+ */
+export function alarmSting(): void {
+  effect('alarm-sting', 'effects', ALARM_STING_LEVEL);
+}
+
 /**
  * The klaxon of a run lost to its alarms: blasting again and again, each time weaker and
  * slower, as the emergency supply gives out.
@@ -589,9 +596,53 @@ export function stopSiren(): void {
   }
 }
 
-/** The hatch grinding open: steel on steel over a straining motor, the leaves striking home. */
+/**
+ * How long the hatch grinds open, s: the screen's own (escape.ts EXIT_GRIND_MS), on which the
+ * leaves strike their stops.
+ */
+export const HATCH_OPEN_S = 2;
+/** The grind gives way to the leaves striking home over this long, s. */
+const HATCH_HANDOVER_S = 0.06;
+
+/**
+ * The hatch grinding open: steel on steel over a straining motor, then — as the leaves strike
+ * their stops on screen, HATCH_OPEN_S on — the boom of them hitting home and the shaft's air
+ * rushing up. Where that recording is not there, the grind plays out with the clunk it ends on.
+ */
 export function exitGrind(): void {
-  effect('hatch-grind', 'effects', GRIND_LEVEL);
+  const audio = playingEngine();
+  if (audio === null) return;
+  const t = audio.ctx.currentTime + LOOKAHEAD;
+  const home = t + HATCH_OPEN_S;
+  if (sample('hatch-open-done') === null) {
+    effect('hatch-grind', 'effects', GRIND_LEVEL, { at: t });
+    return;
+  }
+  effect('hatch-grind', 'effects', GRIND_LEVEL, { at: t, until: home - HATCH_HANDOVER_S });
+  effect('hatch-open-done', 'effects', GRIND_LEVEL, { at: home - HATCH_HANDOVER_S });
+}
+
+/** The tick of a volume as it is set, at its peak: soft. */
+const TICK_LEVEL = 0.03;
+/** A volume ticks no oftener than this, s: a slider dragged clicks along, never buzzes. */
+const TICK_GAP_S = 0.06;
+/** The bus each volume of the settings sets, and when each last ticked (audio time). */
+const TICK_BUS = { radio: 'radio', effects: 'effects', music: 'music' } as const;
+const ticked: Record<keyof typeof TICK_BUS, number> = {
+  radio: -Infinity,
+  effects: -Infinity,
+  music: -Infinity,
+};
+
+/**
+ * A volume set in the settings (screens/Settings.tsx): a knob's tick through the bus it sets, at
+ * the level it has now, so that the ear hears where the slider stands.
+ */
+export function volumeTick(part: keyof typeof TICK_BUS): void {
+  const audio = playingEngine();
+  if (audio === null || audio.ctx.currentTime - ticked[part] < TICK_GAP_S) return;
+  ticked[part] = audio.ctx.currentTime;
+  effect('ui-tick', TICK_BUS[part], TICK_LEVEL);
 }
 
 /** The recording `loop` playing round and round on the effects' bus at `level`, fading in. */

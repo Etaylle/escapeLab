@@ -1,4 +1,5 @@
 import {
+  alarmSting,
   audioEngine,
   biquad,
   claim,
@@ -278,9 +279,13 @@ function startMusic(input: Tension, startAt: number): Music | null {
   };
 }
 
-/** The music takes in this call's input: the alarms, the clock, the escape — and its layers. */
+/**
+ * The music takes in this call's input: the alarms — each answered by the alarm's sting
+ * (audio.ts) — the clock, the escape, and its layers.
+ */
 function follow(m: Music, input: Tension): void {
   const now = Date.now();
+  if (input.alarms > m.alarms) alarmSting();
   for (; m.alarms < input.alarms; m.alarms++) m.alarmsAt.push(now);
   while ((m.alarmsAt[0] ?? now) <= now - ALARM_HOLD_MS) m.alarmsAt.shift();
   m.pressure = pressureOf({ ...input, alarms: m.alarmsAt.length });

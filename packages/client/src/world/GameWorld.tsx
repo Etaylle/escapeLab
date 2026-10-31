@@ -25,7 +25,6 @@ import {
   cabinetUnlock,
   countdownBeep,
   discoveryBlip,
-  doorSlide,
   footstep,
   graphCensus,
   klaxon,
@@ -53,7 +52,7 @@ import { watchInsets, type Insets } from './insets.js';
 import { carriedItem, contextAction, TOUCH, type ContextAction } from './interact.js';
 import { filmed, type IntroCue } from './intro/sequence.js';
 import { runsOf } from './light.js';
-import { positionsOf, type KnownPositions } from './movement.js';
+import { positionsOf, type KnownPositions, type Spot } from './movement.js';
 import { MUSIC_AFTER_CLICK_MS, musicProbe, setTension, stopMusic, type Tension } from './music.js';
 import { worldNews } from './news.js';
 import { noteMount } from './notes.js';
@@ -85,7 +84,7 @@ import {
   walk,
   type Sim,
 } from './sim.js';
-import { HEAR_EVERY_S, hearCrew, spatialProbe, stopSpatial } from './spatial.js';
+import { doorMoved, HEAR_EVERY_S, hearCrew, spatialProbe, stopSpatial } from './spatial.js';
 import { streamPositions } from './stream.js';
 import { useWorldTip } from './useWorldTip.js';
 import { vignetteShown } from './vignette.js';
@@ -512,7 +511,7 @@ function step(loop: Loop, dt: number, map: WorldMap): void {
     footstep(footfall === 'sprint');
   }
   easeOthers(sim, positionsOf(loop.positions.current, run), youId, dt);
-  slideDoors(sim, map);
+  slideDoors(sim, map, spectator ? null : sim.self);
   if (map !== sim.seen) {
     look(loop, map);
   }
@@ -526,14 +525,17 @@ function step(loop: Loop, dt: number, map: WorldMap): void {
   sim.time += dt;
 }
 
-/** A door the view turned slides open or shut, with the hiss (doors.ts). */
-function slideDoors(sim: Sim, map: WorldMap): void {
+/**
+ * A door the view turned slides open or shut (doors.ts), heard from where it is by the player at
+ * `listener` — the audience, standing nowhere, hears it unplaced (spatial.ts `doorMoved`).
+ */
+function slideDoors(sim: Sim, map: WorldMap, listener: Spot | null): void {
   const now = Date.now();
   for (const door of map.doors) {
     const { motion, moved } = doorTurned(sim.doors.get(door.id), door.open, now);
     sim.doors.set(door.id, motion);
     if (moved) {
-      doorSlide();
+      doorMoved(map, listener, door);
     }
   }
 }

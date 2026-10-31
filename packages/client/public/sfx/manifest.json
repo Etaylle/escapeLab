@@ -263,6 +263,32 @@
     "influence": 0.9,
     "source": "elevenlabs"
   },
+  "door-close-1": {
+    "file": "door-slide.mp3",
+    "ms": 1000,
+    "gain": 0.7079,
+    "startMs": 0,
+    "floor": 0.0408,
+    "rms": 0.227,
+    "loop": false,
+    "hash": "9dd3691aa0bc",
+    "influence": 0.75,
+    "standIn": "door-slide",
+    "source": "elevenlabs"
+  },
+  "door-close-2": {
+    "file": "door-slide.mp3",
+    "ms": 1000,
+    "gain": 0.7079,
+    "startMs": 0,
+    "floor": 0.0408,
+    "rms": 0.227,
+    "loop": false,
+    "hash": "9dd3691aa0bc",
+    "influence": 0.75,
+    "standIn": "door-slide",
+    "source": "elevenlabs"
+  },
   "door-slide": {
     "file": "door-slide.mp3",
     "ms": 1000,
@@ -719,8 +745,8 @@
     "influence": 0.5,
     "source": "elevenlabs"
   },
-  "step-1": {
-    "file": "step-1.mp3",
+  "step-concrete-1": {
+    "file": "step-concrete-1.mp3",
     "ms": 480,
     "gain": 1.618,
     "startMs": 0,
@@ -731,8 +757,8 @@
     "influence": 0.6,
     "source": "elevenlabs"
   },
-  "step-2": {
-    "file": "step-2.mp3",
+  "step-concrete-2": {
+    "file": "step-concrete-2.mp3",
     "ms": 480,
     "gain": 0.7416,
     "startMs": 0,
@@ -743,8 +769,8 @@
     "influence": 0.9,
     "source": "elevenlabs"
   },
-  "step-3": {
-    "file": "step-3.mp3",
+  "step-concrete-3": {
+    "file": "step-concrete-3.mp3",
     "ms": 480,
     "gain": 0.7426,
     "startMs": 0,
@@ -753,6 +779,84 @@
     "loop": false,
     "hash": "67d66c45f72d",
     "influence": 0.6,
+    "source": "elevenlabs"
+  },
+  "step-lino-1": {
+    "file": "step-concrete-1.mp3",
+    "ms": 480,
+    "gain": 1.618,
+    "startMs": 0,
+    "floor": 0.000113,
+    "rms": 0.0278,
+    "loop": false,
+    "hash": "e8948f901fb7",
+    "influence": 0.6,
+    "standIn": "step-concrete-1",
+    "source": "elevenlabs"
+  },
+  "step-lino-2": {
+    "file": "step-concrete-2.mp3",
+    "ms": 480,
+    "gain": 0.7416,
+    "startMs": 0,
+    "floor": 0.000322,
+    "rms": 0.0714,
+    "loop": false,
+    "hash": "63eb57cbcf2e",
+    "influence": 0.9,
+    "standIn": "step-concrete-2",
+    "source": "elevenlabs"
+  },
+  "step-lino-3": {
+    "file": "step-concrete-3.mp3",
+    "ms": 480,
+    "gain": 0.7426,
+    "startMs": 0,
+    "floor": 0.0000725,
+    "rms": 0.0638,
+    "loop": false,
+    "hash": "67d66c45f72d",
+    "influence": 0.6,
+    "standIn": "step-concrete-3",
+    "source": "elevenlabs"
+  },
+  "step-steel-1": {
+    "file": "step-concrete-1.mp3",
+    "ms": 480,
+    "gain": 1.618,
+    "startMs": 0,
+    "floor": 0.000113,
+    "rms": 0.0278,
+    "loop": false,
+    "hash": "e8948f901fb7",
+    "influence": 0.6,
+    "standIn": "step-concrete-1",
+    "source": "elevenlabs"
+  },
+  "step-steel-2": {
+    "file": "step-concrete-2.mp3",
+    "ms": 480,
+    "gain": 0.7416,
+    "startMs": 0,
+    "floor": 0.000322,
+    "rms": 0.0714,
+    "loop": false,
+    "hash": "63eb57cbcf2e",
+    "influence": 0.9,
+    "standIn": "step-concrete-2",
+    "source": "elevenlabs"
+  },
+  "step-steel-3": {
+    "file": "step-concrete-3.mp3",
+    "ms": 480,
+    "gain": 0.7426,
+    "startMs": 0,
+    "floor": 0.0000725,
+    "rms": 0.0638,
+    "loop": false,
+    "hash": "67d66c45f72d",
+    "influence": 0.6,
+    "standIn": "step-concrete-3",
     "source": "elevenlabs"
   },
   "step-tick": {

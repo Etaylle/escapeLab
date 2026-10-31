@@ -623,10 +623,22 @@ describe('the sounds of the alarm, the escape and the end', () => {
     expect(startsOf('siren')).toHaveLength(2);
   });
 
-  it('grind the hatch open, and click the lights on with their tubes striking after', async () => {
+  it('grind the hatch open, its leaves striking home as they do on screen', async () => {
     const audio = await freshAudio();
+    expect(audio.HATCH_OPEN_S * 1000).toBe(EXIT_GRIND_MS);
     audio.exitGrind();
     expect(startedAt('hatch-grind', 10.01)).toBe(true);
+    expect(startedAt('hatch-open-done', 10.01 + audio.HATCH_OPEN_S - 0.06)).toBe(true);
+    // Without the leaves' recording the grind plays out with the clunk it ends on.
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const plain = await freshAudio({ 'hatch-open-done': { status: 404 } });
+    started.length = 0;
+    plain.exitGrind();
+    expect(started.map((s) => s.kind)).toEqual(['hatch-grind']);
+  });
+
+  it('click the lights on with their tubes striking after', async () => {
+    const audio = await freshAudio();
     started.length = 0;
     audio.lightsOnClick();
     expect(startedAt('relay-click', 10.01)).toBe(true);

@@ -251,6 +251,19 @@ describe('the music as it plays', () => {
     expect(m.musicProbe().level).toBe(0);
   });
 
+  it('answers each alarm with its sting on the effects’ bus, none from before it', async () => {
+    const m = await music();
+    m.setTension(tension({ alarms: 3 })); // alarms from before the music: no sting
+    const ctx = lastContext();
+    const stings = (): FakeBufferSource[] => passesOf(ctx, 'alarm-sting');
+    expect(stings()).toHaveLength(0);
+    m.setTension(tension({ alarms: 4 }));
+    m.setTension(tension({ alarms: 4 }));
+    expect(stings()).toHaveLength(1);
+    m.setTension(tension({ alarms: 6 })); // two at once: one sting
+    expect(stings()).toHaveLength(2);
+  });
+
   it('waits with a stem that finds no loop in the budget, and starts it with room', async () => {
     const m = await music();
     expect(m.claim({ loop: CAPS.loop })).toBe(true);

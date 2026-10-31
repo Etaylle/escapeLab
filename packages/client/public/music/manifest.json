@@ -8,6 +8,7 @@
     "rms": 0.0557,
     "loop": true,
     "hash": "691b16ff2ecf",
+    "bpm": 90,
     "source": "elevenlabs"
   },
   "critical": {
@@ -19,6 +20,7 @@
     "rms": 0.175,
     "loop": true,
     "hash": "2c6a1064d1ea",
+    "bpm": 90,
     "source": "elevenlabs"
   },
   "lost": {
@@ -41,6 +43,7 @@
     "rms": 0.106,
     "loop": true,
     "hash": "007f6d62644c",
+    "bpm": 90,
     "source": "elevenlabs"
   },
   "won": {
