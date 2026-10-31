@@ -40,6 +40,12 @@ export interface LightSource {
   /** coming on now: it flickers as its room's lights strike */
   flicker?: boolean;
   /**
+   * an emergency lamp's ageing tube: on the light layer it wavers by 2 to 4 % of its
+   * strength, each lamp its own depth and out of step with the others (gl/pack.ts
+   * `trembleAt`); the Canvas pass keeps its lamps' look
+   */
+  tremble?: boolean;
+  /**
    * asleep in a room without power — a screen's standby dot, a rack's LEDs,
    * a generator's standby lamp: how strongly it glows over the dark
    * (render/standby.ts), 0 to 1; it breathes on the light layer too
@@ -110,6 +116,7 @@ export function lampSources(frame: Frame): LightSource[] {
     reach: EMERGENCY_GLOW,
     strength: 1,
     pulse: { ...LAMP_PULSE },
+    tremble: true,
   }));
 }
 

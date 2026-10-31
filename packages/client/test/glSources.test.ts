@@ -12,7 +12,7 @@ import {
   SPILL_STOPS,
   spillTint,
 } from '../src/world/light.js';
-import { strengthAt } from '../src/world/gl/pack.js';
+import { seedOf, strengthAt, trembleAt } from '../src/world/gl/pack.js';
 import { fromSource, lightsOf, tintOf, type Light } from '../src/world/gl/sources.js';
 import { EMERGENCY, REACTOR } from '../src/world/palette.js';
 import { objectGlows } from '../src/world/render/darkness.js';
@@ -75,7 +75,11 @@ describe('lightsOf — what the light layer lights in a frame', () => {
       expect(lamp?.glow).toEqual({ reach: EMERGENCY_GLOW, stops: EMERGENCY_STOPS });
       expect(lamp?.colour).toEqual([...EMERGENCY]);
       expect(lamp?.tint).toEqual(tintOf(EMERGENCY_TINT));
-      expect(lamp === undefined ? 0 : strengthAt(lamp, time * 1000)).toBeCloseTo(frame.burn, 9);
+      expect(lamp?.tremble).toBe(true);
+      // The Canvas pass's burn, the tube wavering a few per cent under it.
+      const strength = lamp === undefined ? 0 : strengthAt(lamp, time * 1000);
+      const tube = trembleAt(seedOf({ x: 1.5, y: 1.5 }), time * 1000);
+      expect(strength).toBeCloseTo(frame.burn * tube, 9);
     }
   });
 
@@ -132,7 +136,9 @@ describe('the coloured lights, as world/sources.ts lists them', () => {
       expect(lights).toContainEqual(fromSource(source));
     }
     const [lamp] = at(lights, 4.5, 2.05);
-    expect(lamp && strengthAt(lamp, 1300)).toBeCloseTo(0.7 + 0.3 * Math.sin(2.4 * 1.3), 9);
+    const tube = trembleAt(seedOf({ x: 4.5, y: 2.05 }), 1300);
+    const burn = 0.7 + 0.3 * Math.sin(2.4 * 1.3);
+    expect(lamp && strengthAt(lamp, 1300)).toBeCloseTo(burn * tube, 9);
   });
 
   it('lights any LightSource as an emergency lamp is lit, in its colour, flickering', () => {

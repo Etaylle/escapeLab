@@ -98,21 +98,47 @@ export function flickerAt(seed: number, ms: number): number {
 }
 
 /**
+ * How often an emergency lamp's tube may waver, per second: at the motion rule's pace
+ * (anim.ts ANIM_HZ), never faster.
+ */
+export const TREMBLE_HZ = 12;
+/** How far a tube wavers at most: each lamp somewhere from 2 % to 4 %, by where it hangs. */
+export const TREMBLE_DEPTH = [0.02, 0.04] as const;
+
+/** How far the tube of the lamp `seed` wavers at most, 0 to 1: its own share of TREMBLE_DEPTH. */
+export function trembleDepth(seed: number): number {
+  const [least, most] = TREMBLE_DEPTH;
+  return least + (most - least) * noise(seed * 0.377 + 0.5);
+}
+
+/**
+ * How brightly the ageing tube of the lamp `seed` burns `ms` into the run, as share of its full:
+ * just under it, wavering by up to its own depth (trembleDepth) — never dark — the same for the
+ * same moment, each lamp out of step with every other.
+ */
+export function trembleAt(seed: number, ms: number): number {
+  const step = Math.floor((ms * TREMBLE_HZ) / 1000);
+  return 1 - trembleDepth(seed) * noise(step * 0.731 + seed * 1.37);
+}
+
+/**
  * What says how strongly a light burns at a moment: a light of the layer's,
  * or a coloured light as world/sources.ts lists it, which the Canvas pass
  * burns alike (render/glow.ts).
  */
-export type Burning = Pick<Light, 'x' | 'y' | 'strength' | 'pulse' | 'flicker'>;
+export type Burning = Pick<Light, 'x' | 'y' | 'strength' | 'pulse' | 'flicker' | 'tremble'>;
 
 /** A light's own number, from where it hangs: its flicker does not keep step with another's. */
-function seedOf(light: Burning): number {
+export function seedOf(light: Pick<Burning, 'x' | 'y'>): number {
   return Math.round(light.x * 97) * 31 + Math.round(light.y * 89);
 }
 
-/** How strongly `light` burns `ms` into the run: its strength, pulse and flicker. */
+/** How strongly `light` burns `ms` into the run: its strength, pulse, flicker and tremble. */
 export function strengthAt(light: Burning, ms: number): number {
-  const flicker = light.flicker === true ? flickerAt(seedOf(light), ms) : 1;
-  return light.strength * pulseAt(light.pulse, ms) * flicker;
+  const seed = seedOf(light);
+  const flicker = light.flicker === true ? flickerAt(seed, ms) : 1;
+  const tremble = light.tremble === true ? trembleAt(seed, ms) : 1;
+  return light.strength * pulseAt(light.pulse, ms) * flicker * tremble;
 }
 
 /** How far a light reaches at most, glow or beam. */

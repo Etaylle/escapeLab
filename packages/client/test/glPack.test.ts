@@ -12,7 +12,12 @@ import {
   packLights,
   profileOf,
   pulseAt,
+  seedOf,
   strengthAt,
+  trembleAt,
+  trembleDepth,
+  TREMBLE_DEPTH,
+  TREMBLE_HZ,
   viewOf,
   type TileView,
 } from '../src/world/gl/pack.js';
@@ -96,6 +101,51 @@ describe('pulses and flickers, worked out per moment', () => {
     const seen = new Set(Array.from({ length: 200 }, (_, i) => strengthAt(flickering, i * 50)));
     expect(seen.size).toBeGreaterThan(1);
     expect(strengthAt(light(1, 1, 0.8), 999)).toBe(0.8);
+  });
+});
+
+describe('trembleAt — an emergency lamp’s ageing tube', () => {
+  /** The tube of lamp `seed` over 20 s, a reading every 37 ms. */
+  const run = (seed: number): number[] =>
+    Array.from({ length: 540 }, (_, i) => trembleAt(seed, i * 37));
+
+  it('wavers the same for the same lamp and moment, holding within a step', () => {
+    expect(trembleAt(4321, 5678)).toBe(trembleAt(4321, 5678));
+    const step = 1000 / TREMBLE_HZ;
+    expect(trembleAt(4321, 3 * step)).toBe(trembleAt(4321, 4 * step - 1));
+    expect(run(4321)).toEqual(run(4321));
+  });
+
+  it('dims each lamp by 2 to 4 % at most, its own depth, and never more', () => {
+    const [least, most] = TREMBLE_DEPTH;
+    expect([least, most]).toEqual([0.02, 0.04]);
+    const seeds = [1, 77, 4321, 90_210, 31 * 1100 + 89 * 7];
+    for (const seed of seeds) {
+      const depth = trembleDepth(seed);
+      expect(depth).toBeGreaterThanOrEqual(least);
+      expect(depth).toBeLessThanOrEqual(most);
+      const values = run(seed);
+      expect(Math.min(...values)).toBeGreaterThanOrEqual(1 - depth);
+      expect(Math.max(...values)).toBeLessThanOrEqual(1);
+      expect(new Set(values).size).toBeGreaterThan(20);
+    }
+    expect(new Set(seeds.map(trembleDepth)).size).toBe(seeds.length);
+  });
+
+  it('keeps every lamp out of step with the others', () => {
+    expect(run(seedOf({ x: 11.5, y: 6.55 }))).not.toEqual(run(seedOf({ x: 14.5, y: 6.55 })));
+  });
+
+  it('wavers a light marked as trembling, on top of its pulse, and no other', () => {
+    const lamp = light(11.5, 6.55, 1, { pulse: { periodMs: 2618, depth: 0.6 }, tremble: true });
+    const steady = { ...lamp, tremble: false };
+    const ratios = Array.from({ length: 200 }, (_, i) => {
+      const ms = i * 61;
+      return strengthAt(lamp, ms) / strengthAt(steady, ms);
+    });
+    expect(Math.min(...ratios)).toBeGreaterThanOrEqual(1 - TREMBLE_DEPTH[1] - 1e-12);
+    expect(Math.max(...ratios)).toBeLessThanOrEqual(1);
+    expect(new Set(ratios.map((r) => r.toFixed(6))).size).toBeGreaterThan(10);
   });
 });
 
