@@ -7136,7 +7136,7 @@ async function captureDangerSense() {
   }
   const pages = [];
   try {
-    const host = await artPage('danger host', SIZES[0]);
+    const host = await artPage('Anna', SIZES[0]);
     pages.push(host);
     await host.page.goto(traced(BASE));
     await host.page.getByPlaceholder('z. B. Anna').fill('Anna');
@@ -7144,7 +7144,7 @@ async function captureDangerSense() {
     await clickText(host.page, 'Runde eröffnen');
     await host.page.locator('.room-code strong').waitFor({ timeout: 10_000 });
     const code = (await host.page.locator('.room-code strong').innerText()).trim();
-    const guest = await artPage('danger guest', SIZES[0]);
+    const guest = await artPage('Ben', SIZES[0]);
     pages.push(guest);
     await guest.page.goto(traced(BASE));
     await guest.page.getByPlaceholder('z. B. Anna').fill('Ben');
