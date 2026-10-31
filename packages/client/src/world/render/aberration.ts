@@ -1,5 +1,5 @@
 import type { Alarm } from '../alarm.js';
-import { css, GUN_BLUE, GUN_GREEN, GUN_RED, mix, WHITE } from '../palette.js';
+import { css, GUN_BLUE, GUN_RED } from '../palette.js';
 import type { Frame } from './frame.js';
 
 /**
@@ -9,20 +9,24 @@ import type { Frame } from './frame.js';
  * when the camera is shaken — along the picture's two sides, a SIDE of its
  * width each, where a tube's convergence is worst and the eye looks least;
  * the middle, where the crew stands, stays sharp. Canvas, after everything
- * else is drawn: the frame is copied twice into the kit's scratch canvases,
- * each copy cut down to one colour, the picture's own red and blue faded by
- * as much as the knock is strong, and the two copies laid back on it —
- * exactly two offset draws of the finished frame, kept to the sides. The
- * sides keep the cost of the knock's frames within the budget of a frame's
- * effect (docs/art-bible.md). Under reduced motion there is none.
+ * else is drawn: the frame's two sides are copied twice into the kit's
+ * scratch canvases — no larger than the sides — each copy cut down to one
+ * colour, and the two copies added back over it, one pushed each way, FRINGE
+ * strong and fading with the knock: exactly two offset passes of the finished
+ * frame, each laid in its two sides. The knock comes with the alarm's red
+ * strobe over the world (alarm.ts), which hides the light it adds. Kept to the
+ * sides, the knock's frames stay within the budget of a frame's effect
+ * (docs/art-bible.md). Under reduced motion there is none.
  */
 
 /** How long the colours stay knocked apart after an alarm, ms. */
 export const ABERRATION_MS = 150;
 /** How far apart they are at first, CSS pixels. */
-export const ABERRATION_PX = 3;
+export const ABERRATION_PX = 4;
 /** How much of the picture's width each of its two sides takes, where the colours slip. */
-export const SIDE = 1 / 8;
+export const SIDE = 1 / 12;
+/** How strongly the pushed copies are laid over the picture at the knock's start. */
+export const FRINGE = 0.6;
 
 /** The knock `ms` after an alarm: how strong, 1 to 0, and how far apart, CSS px; null for none. */
 export interface Knock {
@@ -43,16 +47,33 @@ export function knockAt(alarm: Alarm | null, now: number, reduced: boolean): Kno
   return { strength, px: ABERRATION_PX * strength };
 }
 
-/** The scratch canvases the frame's colours are cut into, made for the kit on the first knock. */
+/**
+ * The scratch canvases the sides' colours are cut into, made for the kit on the first knock:
+ * each holds the left side's copy at its left and the right side's beside it.
+ */
 export interface Fringe {
   red: CanvasRenderingContext2D;
   blue: CanvasRenderingContext2D;
 }
 
-/** The scratch canvases of `frame`'s kit at the canvas's size: made once, sized as it is. */
-function fringeOf(frame: Frame, w: number, h: number): Fringe {
+/** Where the knock works on a picture: the sides' width, and how much more each copy takes. */
+export interface Sides {
+  /** each side's width, device pixels */
+  side: number;
+  /** each copy's width: the side and as far as the copies may be pushed toward the middle */
+  copy: number;
+}
+
+/** The sides of a picture `w` wide at `dpr` device pixels a CSS pixel. */
+export function sidesOf(w: number, dpr: number): Sides {
+  const side = Math.round(w * SIDE);
+  return { side, copy: side + Math.ceil(ABERRATION_PX * dpr) };
+}
+
+/** The scratch canvases of `frame`'s kit, two copies wide and `h` high: made once, sized as asked. */
+function fringeOf(frame: Frame, copy: number, h: number): Fringe {
   const make = (): CanvasRenderingContext2D => {
-    const g = frame.kit.art.atlas.make(w, h).getContext('2d');
+    const g = frame.kit.art.atlas.make(copy * 2, h).getContext('2d');
     if (g === null) {
       throw new Error('aberration: canvas.getContext("2d") returned null; cannot split colours.');
     }
@@ -60,45 +81,37 @@ function fringeOf(frame: Frame, w: number, h: number): Fringe {
   };
   const fringe = (frame.kit.fringe ??= { red: make(), blue: make() });
   for (const g of [fringe.red, fringe.blue]) {
-    if (g.canvas.width !== w || g.canvas.height !== h) {
-      g.canvas.width = w;
+    if (g.canvas.width !== copy * 2 || g.canvas.height !== h) {
+      g.canvas.width = copy * 2;
       g.canvas.height = h;
     }
   }
   return fringe;
 }
 
-/**
- * The picture's two sides, where the colours slip — `pad` pixels wider toward the middle —
- * as left, top, width, height, device pixels.
- */
-export function sidesOf(w: number, h: number, pad = 0): [number, number, number, number][] {
-  const side = Math.round(w * SIDE) + pad;
-  return [
-    [0, 0, side, h],
-    [w - side, 0, side, h],
-  ];
-}
-
-/**
- * Copies the sides `sides` of the finished frame of `from` into `g` — the frame is opaque, so
- * each copy covers what lay there — and cuts them down to `colour` alone.
- */
+/** Copies the two sides of the finished frame `from` into `g`, cut down to `colour` alone. */
 function oneColour(
   g: CanvasRenderingContext2D,
   from: HTMLCanvasElement,
   colour: string,
-  sides: readonly (readonly [number, number, number, number])[],
+  copy: number,
 ): void {
+  const { width, height } = g.canvas;
+  g.globalCompositeOperation = 'copy';
+  g.drawImage(from, 0, 0, copy, height, 0, 0, copy, height);
   g.globalCompositeOperation = 'source-over';
-  for (const side of sides) {
-    g.drawImage(from, ...side, ...side);
-  }
+  g.drawImage(from, from.width - copy, 0, copy, height, copy, 0, copy, height);
   g.globalCompositeOperation = 'multiply';
   g.fillStyle = colour;
-  for (const side of sides) {
-    g.fillRect(...side);
-  }
+  g.fillRect(0, 0, width, height);
+}
+
+/** Lays the copies in `g` back over the sides of `ctx`, pushed `shift` pixels across. */
+function layBack(ctx: CanvasRenderingContext2D, g: CanvasRenderingContext2D, shift: number): void {
+  const { width, height } = g.canvas;
+  const copy = width / 2;
+  ctx.drawImage(g.canvas, 0, 0, copy, height, shift, 0, copy, height);
+  ctx.drawImage(g.canvas, copy, 0, copy, height, ctx.canvas.width - copy + shift, 0, copy, height);
 }
 
 /** Knocks the finished frame's colours apart along its sides, where an alarm has just come in. */
@@ -109,27 +122,19 @@ export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   }
   const { w, h, dpr } = frame.viewport;
   const shift = Math.max(1, Math.round(knock.px * dpr));
-  const sides = sidesOf(w, h);
-  // Each copy cut down a shift wider than the sides: what slides into them is one colour too.
-  const cut = sidesOf(w, h, shift);
-  const fringe = fringeOf(frame, w, h);
-  oneColour(fringe.red, ctx.canvas, css(GUN_RED), cut);
-  oneColour(fringe.blue, ctx.canvas, css(GUN_BLUE), cut);
+  const { side, copy } = sidesOf(w, dpr);
+  const fringe = fringeOf(frame, copy, h);
+  oneColour(fringe.red, ctx.canvas, css(GUN_RED), copy);
+  oneColour(fringe.blue, ctx.canvas, css(GUN_BLUE), copy);
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.beginPath();
-  for (const side of sides) {
-    ctx.rect(...side);
-  }
+  ctx.rect(0, 0, side, h);
+  ctx.rect(w - side, 0, side, h);
   ctx.clip();
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = 'multiply';
-  // The picture's own red and blue faded by as much as the knock is strong, its green kept.
-  ctx.fillStyle = css(mix(GUN_GREEN, WHITE, 1 - knock.strength));
-  ctx.fillRect(0, 0, w, h);
   ctx.globalCompositeOperation = 'lighter';
-  ctx.globalAlpha = knock.strength;
-  ctx.drawImage(fringe.red.canvas, shift, 0);
-  ctx.drawImage(fringe.blue.canvas, -shift, 0);
+  ctx.globalAlpha = knock.strength * FRINGE;
+  layBack(ctx, fringe.red, shift);
+  layBack(ctx, fringe.blue, -shift);
   ctx.restore();
 }

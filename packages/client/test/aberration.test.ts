@@ -3,8 +3,10 @@ import {
   ABERRATION_MS,
   ABERRATION_PX,
   draw,
+  FRINGE,
   knockAt,
   SIDE,
+  sidesOf,
 } from '../src/world/render/aberration.js';
 import type { Frame } from '../src/world/render/frame.js';
 import { drawFrame } from '../src/world/render/pipeline.js';
@@ -29,29 +31,45 @@ function knocked(
   return { frame: frameWith({ kit, alarm, now: NOW, ...parts }), made };
 }
 
-/** What the pass drew onto the picture's own canvas for `frame`. */
+/** What the pass drew onto the picture's own canvas for `frame`, 800 × 600. */
 function drawnOnto(frame: Frame): FakeCanvas {
   const picture = fakeCanvas(800, 600, 'picture');
   draw(picture.ctx, frame);
   return picture;
 }
 
+/** The pass's offset passes: by the scratch canvas each comes from, where each piece lands. */
+function passes(log: FakeCanvas['log']): Map<unknown, unknown[][]> {
+  const byCopy = new Map<unknown, unknown[][]>();
+  for (const { args } of callEntries(log, 'drawImage')) {
+    byCopy.set(args[0], [...(byCopy.get(args[0]) ?? []), args.slice(5, 7)]);
+  }
+  return byCopy;
+}
+
 describe('aberration — an alarm knocks the finished picture’s colours apart', () => {
-  it('lays exactly two offset copies of the finished frame over it for ABERRATION_MS', () => {
+  it('lays exactly two offset passes of the finished frame over it for ABERRATION_MS', () => {
     for (const ms of [0, 40, 100, ABERRATION_MS - 1]) {
       const { frame, made } = knocked(ms);
       const { log } = drawnOnto(frame);
-      const blits = callEntries(log, 'drawImage');
-      expect(blits).toHaveLength(2);
-      const [red, blue] = blits;
-      const shift = Number(red?.args[1]);
-      expect(shift).toBeGreaterThanOrEqual(1);
-      expect(red?.args.slice(1)).toEqual([shift, 0]);
-      expect(blue?.args.slice(1)).toEqual([-shift, 0]);
-      expect(red?.args[0]).toBe(made[0]?.canvas);
-      expect(blue?.args[0]).toBe(made[1]?.canvas);
-      expect(red?.op).toBe('lighter');
-      expect(blue?.op).toBe('lighter');
+      const laid = passes(log);
+      expect([...laid.keys()]).toEqual([made[0]?.canvas, made[1]?.canvas]);
+      const strength = 1 - ms / ABERRATION_MS;
+      const shift = Math.max(1, Math.round(ABERRATION_PX * strength));
+      const { copy } = sidesOf(800, 1);
+      // Red pushed one way, blue the other: each pass in the picture's two sides.
+      expect(laid.get(made[0]?.canvas)).toEqual([
+        [shift, 0],
+        [800 - copy + shift, 0],
+      ]);
+      expect(laid.get(made[1]?.canvas)).toEqual([
+        [-shift, 0],
+        [800 - copy - shift, 0],
+      ]);
+      for (const entry of callEntries(log, 'drawImage')) {
+        expect(entry.op).toBe('lighter');
+        expect(entry.alpha).toBeCloseTo(FRINGE * strength, 12);
+      }
     }
   });
 
@@ -66,7 +84,7 @@ describe('aberration — an alarm knocks the finished picture’s colours apart'
     expect(knockAt({ seq: 1, at: NOW }, NOW, false)).toEqual({ strength: 1, px: ABERRATION_PX });
     const shifts = [0, 50, 100, 140].map((ms) => {
       const { log } = drawnOnto(knocked(ms).frame);
-      return Number(callsOf(log, 'drawImage')[0]?.[1]);
+      return Number(callsOf(log, 'drawImage')[0]?.[5]);
     });
     expect(shifts[0]).toBe(ABERRATION_PX);
     expect([...shifts].sort((a, b) => b - a)).toEqual(shifts);
@@ -75,56 +93,36 @@ describe('aberration — an alarm knocks the finished picture’s colours apart'
 
   it('shifts by device pixels: twice as far on a screen twice as dense', () => {
     const viewport = { w: 1600, h: 1200, dpr: 2, top: 0, bottom: 0, boxes: [] };
-    const { log } = drawnOnto(knocked(0, { viewport }).frame);
-    expect(callsOf(log, 'drawImage')[0]?.[1]).toBe(2 * ABERRATION_PX);
+    const { frame } = knocked(0, { viewport });
+    const picture = fakeCanvas(1600, 1200, 'picture');
+    draw(picture.ctx, frame);
+    expect(callsOf(picture.log, 'drawImage')[0]?.[5]).toBe(2 * ABERRATION_PX);
   });
 
-  it('cuts each copy down to one colour of the finished frame, and fades the picture’s own', () => {
+  it('cuts each copy of the picture’s two sides down to one colour', () => {
     const { frame, made } = knocked(75);
     const picture = drawnOnto(frame);
-    const side = Math.round(800 * SIDE) + 2;
+    const { copy } = sidesOf(800, 1);
     for (const [scratch, colour] of [
       [made[0], '#ff0000'],
       [made[1], '#0000ff'],
     ] as const) {
+      expect([scratch?.canvas.width, scratch?.canvas.height]).toEqual([copy * 2, 600]);
       const copies = callEntries(scratch?.log ?? [], 'drawImage');
-      expect(copies.map((copy) => copy.args)).toEqual([
-        [picture.canvas, 0, 0, side, 600, 0, 0, side, 600],
-        [picture.canvas, 800 - side, 0, side, 600, 800 - side, 0, side, 600],
+      expect(copies.map((entry) => [entry.args.slice(1), entry.op])).toEqual([
+        [[0, 0, copy, 600, 0, 0, copy, 600], 'copy'],
+        [[800 - copy, 0, copy, 600, copy, 0, copy, 600], 'source-over'],
       ]);
+      expect(copies.every((entry) => entry.args[0] === picture.canvas)).toBe(true);
       const cut = callEntries(scratch?.log ?? [], 'fillRect')[0];
       expect(cut?.op).toBe('multiply');
+      expect(cut?.args).toEqual([0, 0, copy * 2, 600]);
       expect(scratch?.log).toContainEqual({ kind: 'set', name: 'fillStyle', value: colour });
     }
-    const fade = callEntries(picture.log, 'fillRect')[0];
-    expect(fade?.op).toBe('multiply');
-    const faded = { kind: 'set', name: 'fillStyle', value: '#80ff80' };
-    expect(picture.log).toContainEqual(faded);
   });
 
-  it('comes last in the pipeline, over the finished picture', () => {
-    vi.stubGlobal('Path2D', FakePath2D);
-    const { frame } = knocked(10);
-    const picture = fakeCanvas(800, 600, 'picture');
-    drawFrame(picture.ctx, frame);
-    vi.unstubAllGlobals();
-    const last = picture.log.filter((entry) => entry.kind === 'call').slice(-3);
-    expect(last.map((entry) => entry.kind === 'call' && entry.name)).toEqual([
-      'drawImage',
-      'drawImage',
-      'restore',
-    ]);
-    expect(last.slice(0, 2).map((entry) => entry.kind === 'call' && entry.op)).toEqual([
-      'lighter',
-      'lighter',
-    ]);
-  });
-});
-
-describe('aberration — kept to the picture’s sides', () => {
-  it('clips both offset draws to the two sides, a SIDE of the width each', () => {
-    const { frame } = knocked(20);
-    const { log } = drawnOnto(frame);
+  it('keeps to the picture’s two sides, a SIDE of its width each', () => {
+    const { log } = drawnOnto(knocked(20).frame);
     const side = Math.round(800 * SIDE);
     expect(callsOf(log, 'rect')).toEqual([
       [0, 0, side, 600],
@@ -134,15 +132,23 @@ describe('aberration — kept to the picture’s sides', () => {
     const firstDraw = log.findIndex((entry) => entry.kind === 'call' && entry.name === 'drawImage');
     expect(clip).toBeGreaterThan(-1);
     expect(clip).toBeLessThan(firstDraw);
+    // Each copy reaches past its side by as far as it may be pushed: what slides in is cut too.
+    expect(sidesOf(800, 2)).toEqual({ side, copy: side + 2 * ABERRATION_PX });
   });
 
-  it('cuts each copy down a shift wider than the sides, so what slides in is one colour too', () => {
-    const { frame, made } = knocked(0);
-    drawnOnto(frame);
-    const side = Math.round(800 * SIDE) + ABERRATION_PX;
-    expect(callsOf(made[0]?.log ?? [], 'fillRect')).toEqual([
-      [0, 0, side, 600],
-      [800 - side, 0, side, 600],
+  it('comes last in the pipeline, over the finished picture', () => {
+    vi.stubGlobal('Path2D', FakePath2D);
+    const { frame } = knocked(10);
+    const picture = fakeCanvas(800, 600, 'picture');
+    drawFrame(picture.ctx, frame);
+    vi.unstubAllGlobals();
+    const last = picture.log.filter((entry) => entry.kind === 'call').slice(-5);
+    expect(last.map((entry) => entry.kind === 'call' && entry.name)).toEqual([
+      'drawImage',
+      'drawImage',
+      'drawImage',
+      'drawImage',
+      'restore',
     ]);
   });
 });
