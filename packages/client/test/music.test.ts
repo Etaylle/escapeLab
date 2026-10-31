@@ -297,6 +297,11 @@ describe('the music as it plays', () => {
     m.setTension(tension());
     await vi.advanceTimersByTimeAsync(300); // its first pass starts on 10.3
     const [calm] = decksOf('calm');
+    ctx.currentTime = 10.9;
+    (calm as FakeAudio).currentTime = 10.9 - 10.3 - 0.02;
+    m.setTension(tension());
+    expect(calm?.playbackRate).toBeCloseTo(1 + STEER_MAX, 9); // steered from the start…
+    expect(m.musicProbe().lagMs).toBe(0); // …its lag told once it has played a second
     ctx.currentTime = 12.01;
     (calm as FakeAudio).currentTime = 12.01 - 10.3 - 0.02; // 20 ms behind where its bar puts it
     m.setTension(tension());

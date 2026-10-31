@@ -258,8 +258,8 @@ drift over 45 s; a seek in the MP3 lands 17–26 ms off where it says it is; a p
 switching `preservesPitch` off throws its position about by hundreds of milliseconds. So nothing
 is ever placed in time by a seek: an element starts from its file's start on its timer, and one
 that came in late is caught up by playing it up to 3 % faster, its pitch kept (`steer`). The
-walkthrough logs, for the music, how late its latest element came in and how far one is off
-now.
+walkthrough logs, for the music, how late its latest element came in and how far one that has
+played a second or more is off now.
 
 ## What it may cost
 

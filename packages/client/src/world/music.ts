@@ -84,8 +84,8 @@ export const CROSSFADE_S = 2;
 export const SEAM_S = 3;
 /** A stem's next pass starts this many bars before it comes in: caught up meanwhile, unheard. */
 export const SEAM_LEAD_BARS = 1;
-/** An element that came in later than this is started again on the next bar, s. */
-export const RESTART_LATE_S = 0.25;
+/** A pass is caught up, its lag what the probe reports, once it has played this long, s. */
+export const SETTLED_S = 1;
 /** How far ahead a pass's element is told when to start, s. */
 const READY_S = 1;
 /** How far ahead a change of stem is laid on its bar, at the least, s: its timer must make it. */
@@ -248,7 +248,7 @@ interface Music {
   alarms: number;
   readonly alarmsAt: number[];
   ended: boolean;
-  /** how late the passes came in, s, the worst; how far one lags now, the worst */
+  /** how late the passes came in, s, the worst; how far one caught up by now lags, the worst */
   late: number;
   lag: number;
 }
@@ -442,7 +442,7 @@ function tendTrack(m: Music, track: Track): void {
   if (track.next - now < READY_S) startPass(m, track, entry, grid);
   for (const pass of track.passes) {
     const lag = steer(pass.stream, m.engine.ctx);
-    m.lag = Math.max(m.lag, Math.abs(lag));
+    if (now - pass.zero >= SETTLED_S) m.lag = Math.max(m.lag, Math.abs(lag));
     m.late = Math.max(m.late, pass.stream.lateBy ?? 0);
   }
 }
@@ -569,7 +569,7 @@ function stingOnce(engine: Engine, id: MusicId): void {
 /**
  * The music now, 0 to 1: the calm stem's level, the pressure stems' — the tense or the critical
  * — the critical's alone, and the pressure value the stems follow; how many elements play, how
- * late the latest came in and how far one lags now, ms.
+ * late the latest came in, and how far one that has played SETTLED_S and more lags now, ms.
  */
 export interface MusicProbe {
   calm: number;
