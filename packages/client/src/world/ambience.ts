@@ -19,7 +19,14 @@ import type { Dressing } from './dress.js';
 import { followFloors, forgetFloors } from './footsteps.js';
 import { hearRoom, stopReverb } from './reverb.js';
 import { warmUp, WARM_UP_MS } from './rooms.js';
-import { sample, type Sample, type SfxId } from './samples.js';
+import {
+  loadSample,
+  loadTheRest,
+  releaseSample,
+  sample,
+  type Sample,
+  type SfxId,
+} from './samples.js';
 import type { FloorKind } from './surfaces.js';
 
 /**
@@ -350,6 +357,8 @@ interface Ambience {
   readonly clock: () => number;
   readonly beds: Map<string, Bed>;
   heard: Heard | null;
+  /** the beds' recordings kept, and since when no room near needs each (audio time), or null */
+  readonly kept: Map<SfxId, number | null>;
 }
 
 /** How far ahead the own room's sporadic sounds are scheduled, s: past the next update. */
@@ -367,7 +376,7 @@ export function startAmbience(clock: () => number): void {
     if (ambience !== null) return;
     const engine = audioEngine();
     if (engine === null) return;
-    ambience = { engine, clock, beds: new Map<string, Bed>(), heard: null };
+    ambience = { engine, clock, beds: new Map<string, Bed>(), heard: null, kept: new Map() };
   } catch {
     // Deliberately silent: a quiet lab is better than a broken game.
   }
@@ -387,6 +396,7 @@ export function stopAmbience(): void {
       bed.level = fadeTo(bed.out.gain, bed.level, now, [now, now + 0.5], 0);
       letGo(bed, now + 0.55);
     }
+    for (const id of amb.kept.keys()) releaseSample(id);
   } catch {
     // Deliberately silent: the beds' nodes are released with the context at the latest.
   }
@@ -419,10 +429,13 @@ export function hearRooms(scene: RoomScene): void {
     here = roomAt(plan, Math.floor(scene.at.x), Math.floor(scene.at.y), here);
     followFloors(plan, here);
     hearRoom(here === null ? null : (plan.kinds.get(here) ?? 'plain'));
+    const { outAt } = scene.power;
+    if (outAt !== null && Date.now() >= outAt) loadTheRest();
     const amb = ambience;
     if (amb === null) return;
     const heard = heardOf(scene);
     const now = amb.engine.ctx.currentTime;
+    keepBeds(amb, bedsWanted(plan, here, scene.power, scene.time), now);
     if (amb.heard === null || !sameHeard(amb.heard, heard)) {
       amb.heard = heard;
       follow(amb, scene, plan, now);
@@ -459,6 +472,62 @@ function heardOf(scene: RoomScene): Heard {
 function sameHeard(a: Heard, b: Heard): boolean {
   const same = a.map === b.map && a.tile === b.tile && a.lit === b.lit;
   return same && a.outAt === b.outAt && a.won === b.won;
+}
+
+/** A bed's recording is let go this long after no room near the player needs it any more, s. */
+export const BED_RELEASE_S = 4;
+
+/** The rooms one way from `room` — through a door, open or shut, or an opening — and itself. */
+export function roomsNear(plan: RoomPlan, room: string): Set<string> {
+  const near = new Set([room]);
+  for (const { a, b } of plan.links) {
+    if (a === room) near.add(b);
+    if (b === room) near.add(a);
+  }
+  return near;
+}
+
+/**
+ * The recordings the beds near a player in `room` need now: of the room itself and of each room
+ * one way from it, the layers its power has due (`loopsOf`) — none for nobody's room.
+ */
+export function bedsWanted(
+  plan: RoomPlan,
+  room: string | null,
+  power: Power,
+  time: number,
+): Set<SfxId> {
+  const ids = new Set<SfxId>();
+  if (room === null) return ids;
+  for (const name of roomsNear(plan, room)) {
+    const kind = plan.kinds.get(name) ?? 'plain';
+    const due = loopsOf(kind, bedPower(name, power, time).alive, name !== room);
+    const powered = POWERED[kind];
+    const idle = IDLE[kind];
+    if (due.power && powered !== undefined) ids.add(powered.sample);
+    if (due.idle && idle !== undefined) ids.add(idle.sample);
+  }
+  return ids;
+}
+
+/**
+ * The beds' recordings as `wanted` has them: each wanted one loaded — the beds start it once it
+ * is (`syncLoops`) — and each no room near needs let go BED_RELEASE_S on, its loop long faded.
+ */
+function keepBeds(amb: Ambience, wanted: ReadonlySet<SfxId>, now: number): void {
+  for (const id of wanted) {
+    amb.kept.set(id, null);
+    if (sample(id) === null) void loadSample(id);
+  }
+  for (const [id, since] of amb.kept) {
+    if (wanted.has(id)) continue;
+    if (since === null) {
+      amb.kept.set(id, now);
+    } else if (now - since >= BED_RELEASE_S) {
+      amb.kept.delete(id);
+      releaseSample(id);
+    }
+  }
 }
 
 /** The plan of the scene's dressing, worked out once for it. */

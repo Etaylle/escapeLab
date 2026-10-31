@@ -68,6 +68,7 @@ class FakeCompressor extends FakeNode {
 /** A decoded recording, or the radio's noise: its samples, and the id it was served as. */
 interface FakeAudioBuffer {
   readonly duration: number;
+  readonly length?: number;
   readonly numberOfChannels: number;
   readonly tag?: string;
   getChannelData(): Float32Array;
@@ -142,14 +143,18 @@ export class FakeContext {
   }
 }
 
-/** Where recordings are decoded: a served one ("sample:<id>:<seconds>") to a buffer tagged so. */
+/**
+ * Where recordings are decoded: a served one ("sample:<id>:<seconds>:<channels>") to a buffer of
+ * one channel at 100 Hz, tagged so.
+ */
 class FakeOfflineContext {
   decodeAudioData(bytes: ArrayBuffer): Promise<FakeAudioBuffer> {
-    const served = /^sample:([\w-]+):([\d.]+)$/.exec(new TextDecoder().decode(bytes));
+    const served = /^sample:([\w-]+):([\d.]+):\d$/.exec(new TextDecoder().decode(bytes));
     const data = new Float32Array(Math.round(100 * Number(served?.[2] ?? 1))).fill(0.5);
     const tag = served?.[1] ?? 'clip';
     return Promise.resolve({
       duration: data.length / 100,
+      length: data.length,
       numberOfChannels: 1,
       tag,
       getChannelData: () => data,
@@ -186,7 +191,7 @@ export async function freshAudio(served: Readonly<Record<string, Served>> = {}) 
   vi.resetModules();
   serveSamples(served);
   const samples = await import('../src/world/samples.js');
-  await samples.preloadSamples();
+  await Promise.all(samples.SFX_IDS.map((id) => samples.loadSample(id)));
   return import('../src/world/audio.js');
 }
 

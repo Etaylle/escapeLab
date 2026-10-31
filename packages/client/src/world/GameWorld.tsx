@@ -85,6 +85,7 @@ import {
   type Sim,
 } from './sim.js';
 import { doorMoved, HEAR_EVERY_S, hearCrew, spatialProbe, stopSpatial } from './spatial.js';
+import { soundProbe } from './soundProbe.js';
 import { streamPositions } from './stream.js';
 import { useWorldTip } from './useWorldTip.js';
 import { vignetteShown } from './vignette.js';
@@ -455,7 +456,7 @@ function traceFrames(loop: Loop): { trace: FrameTrace; drop: () => void } | null
     get audio() {
       const sound = { music: musicProbe(), voice: voiceProbe(), spatial: spatialProbe() };
       const nodes = { ...graphCensus(), beds: bedCount() };
-      return { ...bedProbe(), ...sound, nodes, spent: timeSpent(), renderRadio };
+      return { ...bedProbe(), ...sound, nodes, spent: timeSpent(), renderRadio, ...soundProbe() };
     },
   });
   return { trace, drop };

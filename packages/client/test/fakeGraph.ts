@@ -251,20 +251,25 @@ export class FakeContext {
   createConvolver(): FakeConvolver {
     return new FakeConvolver(this);
   }
+  /** A media element's sound in the graph: a node of its own, the element kept on it. */
+  createMediaElementSource(element: unknown): FakeNode & { mediaElement: unknown } {
+    return Object.assign(new FakeNode('media', this), { mediaElement: element });
+  }
   createBuffer(channels: number, length: number, rate: number): FakeBuffer {
     return new FakeBuffer(length, rate, channels);
   }
   /**
-   * A recording that fakeSamples.ts serves ("sample:<id>:<seconds>") decodes to that long a
-   * buffer of 0.5 throughout, tagged with its id; any other decodes to 1.5 s, its peak 0.45 —
-   * unlike the 2 s of the shared noise.
+   * A recording that fakeSamples.ts serves ("sample:<id>:<seconds>:<channels>") decodes to that
+   * long a buffer of 0.5 throughout — a second channel at 0.25 — tagged with its id; any other
+   * decodes to 1.5 s, its peak 0.45 — unlike the 2 s of the shared noise. Both at the context's
+   * rate, as decodeAudioData resamples to it.
    */
   decodeAudioData(bytes?: ArrayBuffer): Promise<FakeBuffer> {
-    const served = decodedSample(bytes);
+    const served = decodedSample(bytes, this.sampleRate);
     if (served !== null) {
       return Promise.resolve(served);
     }
-    const clip = new FakeBuffer(8000 * 1.5, 8000);
+    const clip = new FakeBuffer(this.sampleRate * 1.5, this.sampleRate);
     clip.data[100] = 0.45;
     return Promise.resolve(clip);
   }
@@ -277,18 +282,16 @@ export class FakeContext {
   }
 }
 
-/** The rate a served recording decodes at: low, so that a stem's 72 s stay small. */
-const SERVED_RATE = 1000;
-
-/** The buffer a served recording's bytes decode to; null for any other bytes. */
-function decodedSample(bytes: ArrayBuffer | undefined): FakeBuffer | null {
+/** The buffer a served recording's bytes decode to at `rate`; null for any other bytes. */
+function decodedSample(bytes: ArrayBuffer | undefined, rate: number): FakeBuffer | null {
   const text = bytes === undefined ? '' : new TextDecoder().decode(bytes);
-  const served = /^sample:([\w-]+):([\d.]+)$/.exec(text);
+  const served = /^sample:([\w-]+):([\d.]+):(\d)$/.exec(text);
   if (served === null) {
     return null;
   }
-  const buffer = new FakeBuffer(Math.round(SERVED_RATE * Number(served[2])), SERVED_RATE);
-  buffer.data.fill(0.5);
+  const channels = Number(served[3]);
+  const buffer = new FakeBuffer(Math.round(rate * Number(served[2])), rate, channels);
+  buffer.channels.forEach((data, i) => data.fill(i === 0 ? 0.5 : 0.25));
   buffer.tag = served[1] ?? null;
   return buffer;
 }

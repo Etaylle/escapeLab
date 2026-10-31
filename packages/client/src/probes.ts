@@ -6,6 +6,7 @@ import type { GraphCensus } from './world/audioCount.js';
 import type { LightProbe } from './world/gl/path.js';
 import type { IntroProbe } from './world/intro/useIntro.js';
 import type { MusicProbe } from './world/music.js';
+import type { SoundProbe } from './world/soundProbe.js';
 import type { RadioRender, VoiceProbe as RadioProbe } from './world/radioVoice.js';
 import type { MinimapLayout } from './world/render/frame.js';
 import type { HighlightProbe } from './world/render/highlight.js';
@@ -25,10 +26,11 @@ export interface MinimapProbe extends MinimapLayout {
 /**
  * What the lab sounds like now: the beds of the rooms round the player (world/ambience.ts),
  * the music's layers and pressure (music.ts), mission control's voice (radioVoice.ts) and
- * where the nearest partner sounds from (spatial.ts) — and the radio's chain rendered offline,
- * on white noise or on a recorded line.
+ * where the nearest partner sounds from (spatial.ts); what the mix holds and does — the PCM the
+ * page keeps, the budget, the room's reverb, the ducks, the brickwall (soundProbe.ts) — and the
+ * radio's chain rendered offline, on white noise or on a recorded line.
  */
-export interface AudioProbe extends BedProbe {
+export interface AudioProbe extends BedProbe, SoundProbe {
   readonly music: MusicProbe;
   readonly voice: RadioProbe;
   readonly spatial: SpatialProbe;

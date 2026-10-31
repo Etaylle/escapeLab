@@ -1,6 +1,14 @@
 import { biquad, chain, gain, LOOKAHEAD, outlet, playingEngine, type Engine } from './audio.js';
 import { paSchedule } from './intro/sequence.js';
-import { clipOf, recordedMs, SPEECH_PEAK, voiceReady, type Clip } from './radioVoice.js';
+import {
+  clipOf,
+  preloadLines,
+  recordedMs,
+  releaseLine,
+  SPEECH_PEAK,
+  voiceReady,
+  type Clip,
+} from './radioVoice.js';
 
 /**
  * The lab's loudspeakers: mission control's announcement while an intro keeps the power on
@@ -57,6 +65,7 @@ interface Speaking {
 
 /** An announcement under way on this screen. */
 interface Announcement {
+  readonly lines: readonly string[];
   timers: ReturnType<typeof setTimeout>[];
   speaking: Speaking | null;
   lastLine: string | null;
@@ -68,15 +77,24 @@ let current: Announcement | null = null;
 
 /**
  * Starts the announcement `lines` on a sequence that began at `since` (epoch ms): once the voice
- * manifest is here, every line is put in its place on the sequence's clock by its length, and
- * each speaks as its moment comes. One already under way stops.
+ * manifest is here, every line is decoded (radioVoice.ts `preloadLines`) and put in its place on
+ * the sequence's clock by its length, and each speaks as its moment comes, then is let go. One
+ * already under way stops.
  */
 export function startAnnouncement(lines: readonly string[], since: number): void {
   stopAnnouncement();
-  const run: Announcement = { timers: [], speaking: null, lastLine: null, played: 0, cut: false };
+  const run: Announcement = {
+    lines,
+    timers: [],
+    speaking: null,
+    lastLine: null,
+    played: 0,
+    cut: false,
+  };
   current = run;
   void voiceReady().then(() => {
     if (current !== run) return;
+    preloadLines(lines);
     const schedule = paSchedule(lines.map((text) => ({ text, ms: recordedMs(text) })));
     for (const line of schedule) {
       const wait = since + line.at - Date.now();
@@ -115,7 +133,10 @@ function speak(engine: Engine, clip: Clip, text: string): Speaking {
   chain(speech, gain(ctx, SPEECH_PEAK / clip.peak), pa.input);
   const at = ctx.currentTime + LOOKAHEAD;
   speech.start(at);
-  speech.addEventListener('ended', () => pa.out.disconnect());
+  speech.addEventListener('ended', () => {
+    pa.out.disconnect();
+    releaseLine(text);
+  });
   const stop = (when: number): void => {
     pa.out.gain.setTargetAtTime(0, when, CUT_TAU);
     speech.stop(when + CUT_TAU * 5);
@@ -123,7 +144,10 @@ function speak(engine: Engine, clip: Clip, text: string): Speaking {
   return { text, end: at + clip.buffer.duration, stop };
 }
 
-/** The power goes under the loudspeakers: the line on now breaks off, and nothing more comes. */
+/**
+ * The power goes under the loudspeakers: the line on now breaks off, nothing more comes, and
+ * every line of the announcement is let go.
+ */
 export function cutAnnouncement(): void {
   const run = current;
   if (run === null) return;
@@ -137,6 +161,7 @@ export function cutAnnouncement(): void {
     // Deliberately silent: the line ends on its own.
   }
   run.speaking = null;
+  for (const text of run.lines) releaseLine(text);
 }
 
 /** The screen is gone: the announcement breaks off and is forgotten. */

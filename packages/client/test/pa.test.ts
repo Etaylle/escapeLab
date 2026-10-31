@@ -80,9 +80,12 @@ describe('the announcement over the loudspeakers', () => {
     vi.resetModules();
     const radio = await import('../src/world/radioVoice.js');
     const pa = await import('../src/world/pa.js');
+    const audio = await import('../src/world/audio.js');
+    const memory = await import('../src/world/audioMemory.js');
+    audio.sharedAudio(); // the lab's context, made as a world makes it
     radio.preloadVoice('blackout');
     await vi.advanceTimersByTimeAsync(0);
-    return { radio, pa };
+    return { radio, pa, memory };
   }
 
   /** The recordings started so far on the lab's context. */
@@ -119,6 +122,24 @@ describe('the announcement over the loudspeakers', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(spoken()).toHaveLength(2);
     expect(pa.paProbe().lastLine).toBe(SECOND);
+  });
+
+  it('decodes its lines as it starts, and lets each go once it has been said', async () => {
+    const { pa, radio, memory } = await loudspeakers();
+    expect(radio.clipOf(FIRST)).toBeNull(); // fetched at the run's start, not decoded
+    pa.startAnnouncement([FIRST, SECOND], Date.now());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(radio.clipOf(FIRST)).not.toBeNull();
+    expect(radio.clipOf(SECOND)).not.toBeNull();
+    expect(memory.decodedBytes().voice).toBeGreaterThan(0);
+    await vi.advanceTimersByTimeAsync(PA_FROM_MS);
+    const [first] = spoken();
+    first?.end();
+    expect(radio.clipOf(FIRST)).toBeNull(); // said: let go
+    expect(radio.clipOf(SECOND)).not.toBeNull();
+    pa.cutAnnouncement(); // the power goes: the rest let go with it
+    expect(radio.clipOf(SECOND)).toBeNull();
+    expect(memory.decodedBytes().voice).toBe(0);
   });
 
   it('breaks off as the power goes, mid-line, and says nothing more', async () => {

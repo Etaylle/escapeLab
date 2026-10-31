@@ -260,8 +260,14 @@
  * page's renderer CPU, its main thread's task time, Chrome's count of its live
  * audio nodes (wired, or waiting to be collected) and its heap; a line `sound
  * js` the main thread's milliseconds a second each sound system took. With
- * SHOTS_AUDIO_OFF=beds,music,spatial those systems stay off on every page
+ * SHOTS_AUDIO_OFF=beds,music,spatial,reverb those systems stay off on every page
  * (`?audio-off=`), to tell their cost apart — their sound checks then fail.
+ *
+ * What the sound keeps: at the first station and in the escape a line `audio` gives, for each
+ * page, the PCM it keeps decoded (`audio.decodedBytes`, client world/audioMemory.ts) by who
+ * holds it, the voices and loops of the budget against their caps, the buffer sources playing,
+ * the music's streams with how late the latest came in and how far one lags, the room's reverb
+ * and the brickwall's hold. A page over 30 MB, or a budget over its caps, fails the run.
  *
  * Editor: before the walkthrough a page of its own opens the editor from the
  * join screen, paints a 7 × 5 room, places a start and a station and
@@ -508,9 +514,9 @@ function cpuSlowdown(text) {
 /** The sound systems SHOTS_AUDIO_OFF names, comma-separated; throws for one it does not know. */
 function audioOff(text) {
   const named = (text ?? '').split(',').filter((name) => name !== '');
-  const unknown = named.find((name) => !['beds', 'music', 'spatial'].includes(name));
+  const unknown = named.find((name) => !['beds', 'music', 'spatial', 'reverb'].includes(name));
   if (unknown !== undefined) {
-    throw new Error(`SHOTS_AUDIO_OFF names beds, music and spatial, not "${unknown}"`);
+    throw new Error(`SHOTS_AUDIO_OFF names beds, music, spatial and reverb, not "${unknown}"`);
   }
   return named;
 }
@@ -1543,6 +1549,7 @@ async function captureBothAtStation(reader, operator, station, sync) {
     const solved = await pressTogether([operator, reader], station);
     await bedAlive(operator, solved.lit, `after "${station.title}"`);
     await checkRadioVoice(operator, solved.listening, `"${station.title}"`);
+    await audioKept([operator, reader], 'at the first station');
   }
   // Whatever E opened instead of the panel locks the avatar too.
   await reader.page.keyboard.press('Escape');
@@ -2368,6 +2375,66 @@ async function checkRadioLine(page, missionId) {
   }
 }
 
+/** What a page may keep decoded at most, bytes (client world/audioMemory.ts DECODED_BUDGET). */
+const DECODED_BUDGET = 30 * 1024 * 1024;
+/** Where the PCM kept has been logged already: the first station is logged once a run. */
+const keptLogged = new Set();
+
+/** What a page's sound keeps and holds now, as its audio probe reads it; null without one. */
+function keptOf(page) {
+  return page.evaluate(() => {
+    const audio = globalThis.__escapelab?.audio;
+    if (audio === undefined || typeof audio.decodedBytes !== 'number') {
+      return null;
+    }
+    const { decodedBytes, decoded, budget, nodes, music, reverb, limiterDb } = audio;
+    const playing = nodes?.playing?.buffer ?? null;
+    return { decodedBytes, decoded, budget, playing, music, room: reverb?.room ?? null, limiterDb };
+  });
+}
+
+/** Bytes as megabytes, one place. */
+const megabytes = (bytes) => (bytes / 1024 / 1024).toFixed(1);
+
+/**
+ * The PCM each of `players`' pages keeps decoded and the sources it holds (keptOf), logged at
+ * `when` — the first station once a run: a page over 30 MB, a budget over its caps or a page
+ * without the probe fails the run.
+ */
+async function audioKept(players, when) {
+  if (keptLogged.has(when) && when === 'at the first station') {
+    return;
+  }
+  keptLogged.add(when);
+  for (const player of players) {
+    const kept = await keptOf(player.page);
+    if (kept === null) {
+      console.log(`audio              ${player.name} ${when}: !! no audio probe`);
+      fail(`audio ${when}: ${player.name}'s page has no audio probe`);
+      continue;
+    }
+    const over = kept.decodedBytes > DECODED_BUDGET;
+    const by = Object.entries(kept.decoded).map(([who, bytes]) => `${who} ${megabytes(bytes)}`);
+    const { voice, loop, caps } = kept.budget;
+    const within = voice <= caps.voice && loop <= caps.loop;
+    const music = kept.music;
+    console.log(
+      `audio              ${player.name} ${when}: decoded ${megabytes(kept.decodedBytes)} MB ` +
+        `(${by.join(', ')})${over ? ' !! over 30 MB' : ''}; sources ${voice} of ${caps.voice} ` +
+        `voices, ${loop} of ${caps.loop} loops${within ? '' : ' !! over the budget'}, ` +
+        `${kept.playing ?? '?'} buffers playing, ${music.streams} streams (latest in ` +
+        `${music.lateMs} ms late, ${music.lagMs} ms off now); reverb ${kept.room ?? 'none'}; ` +
+        `limiter ${kept.limiterDb.toFixed(1)} dB`,
+    );
+    if (over) {
+      fail(`audio ${when}: ${player.name} keeps ${megabytes(kept.decodedBytes)} MB decoded`);
+    }
+    if (!within) {
+      fail(`audio ${when}: ${player.name} holds ${voice} voices, ${loop} loops`);
+    }
+  }
+}
+
 /**
  * In the escape the music's pressure is 0.8 or more, a pressure stem up (the
  * tense or the critical) and the calm stem gone under the siren: waits up to
@@ -2533,6 +2600,7 @@ async function throwLever(players) {
   await captureLitFlur(first, lever);
   await bedAlive(first, solved.lit, 'after the lever');
   await checkRadioVoice(first, solved.listening, 'the lever');
+  await audioKept(players, 'at the first station');
   await partnerAcross(first, players[1], 'across the corridor');
 }
 
@@ -6310,6 +6378,7 @@ async function captureEscape(host, guest) {
   }
   await sampleFrames(host.page, 'in the escape, the siren on', () => pace(host, SAMPLE_MS));
   await escapeMusic(host);
+  await audioKept([host, guest], 'in the escape');
   const guestId = guest.seen.view.you.id;
   const ticked = () => host.seen.view.map?.exit?.atExit.includes(guestId) === true;
   if (!(await standOn(guest, exit)) || !(await until(ticked, 3000))) {

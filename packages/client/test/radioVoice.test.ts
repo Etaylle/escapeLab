@@ -181,8 +181,9 @@ describe('a line spoken over the radio', () => {
     return engine as unknown as { musicDuck: FakeGain; ambienceDuck: FakeGain };
   }
 
-  it('fetches the run’s mission’s lines at its start, from the files they name', async () => {
+  it('fetches the run’s lines at its start and decodes the opening line alone', async () => {
     const radio = await voice();
+    const { decodedBytes } = await import('../src/world/audioMemory.js');
     radio.preloadVoice('blackout');
     await settle();
     expect(fetched).toEqual([
@@ -190,17 +191,24 @@ describe('a line spoken over the radio', () => {
       '/voice/aaaaaaaaaaaa.mp3',
       '/voice/cccccccccccc.m4a',
     ]);
+    expect(radio.clipOf(START_LINE)).not.toBeNull(); // it comes the moment the lights fail
+    expect(radio.clipOf(LEVER_LINE)).toBeNull(); // kept as it came, compressed
+    // One channel at 22.05 kHz: the fake decodes any line to 1.5 s.
+    expect(radio.VOICE_RATE).toBe(22050);
+    expect(decodedBytes().voice).toBe(1.5 * 22050 * 4);
     radio.preloadLines(['Beide hin.', 'Etwas ohne Aufnahme.']);
     await settle();
     expect(fetched.at(-1)).toBe('/voice/bbbbbbbbbbbb.m4a');
     expect(fetched).toHaveLength(4);
+    expect(radio.clipOf('Beide hin.')).not.toBeNull(); // about to be heard: decoded
   });
 
   it('speaks a recorded line through the chain: squelch, speech over static, tail', async () => {
     const radio = await voice();
     radio.preloadVoice('blackout');
     await settle();
-    expect(radio.sayLine(LEVER_LINE)).toBe(true);
+    expect(radio.sayLine(LEVER_LINE)).toBe(true); // decoded as it comes over the air
+    await settle();
     const ctx = lastContext();
     const sources = ctx.all<FakeBufferSource>('buffer');
     const speech = sources.find((s) => s.buffer?.duration === 1.5);
@@ -240,6 +248,7 @@ describe('a line spoken over the radio', () => {
     radio.preloadVoice('blackout');
     await settle();
     radio.sayLine(LEVER_LINE);
+    await settle();
     const ctx = lastContext();
     const { musicDuck, ambienceDuck } = await ducks();
     const music = 10 ** (-8 / 20);
@@ -282,6 +291,7 @@ describe('a line spoken over the radio', () => {
     expect(radio.voiceProbe().playing).toBe(false);
     ctx.currentTime = 11;
     expect(radio.sayLine(LEVER_LINE)).toBe(true);
+    await settle();
     expect(radio.voiceProbe()).toMatchObject({ lastId: 'aaaaaaaaaaaa', opened: false });
     const lever = ctx.all<FakeBufferSource>('buffer').filter((s) => s.buffer?.duration === 1.5);
     expect(lever.at(-1)?.startedAt).toBeCloseTo(11.01 + KEY_S, 9);
@@ -289,8 +299,12 @@ describe('a line spoken over the radio', () => {
 
   it('tells how long a line keeps the air: the opening, the key, the recording, the tail', async () => {
     const radio = await voice();
-    expect(radio.airtimeMs(LEVER_LINE)).toBeNull(); // nothing loaded yet
+    expect(radio.airtimeMs(LEVER_LINE)).toBeNull(); // no manifest yet
     radio.preloadVoice('blackout');
+    await settle();
+    // Not decoded yet: by the manifest's 2 s; decoded, by its recording's 1.5 s.
+    expect(radio.airtimeMs(LEVER_LINE)).toBe(Math.round((KEY_S + 2 + TAIL_S) * 1000));
+    radio.preloadLines([LEVER_LINE]);
     await settle();
     expect(radio.airtimeMs(LEVER_LINE)).toBe(Math.round((KEY_S + 1.5 + TAIL_S) * 1000));
     expect(radio.airtimeMs(START_LINE)).toBe(Math.round((OPEN_S + KEY_S + 1.5 + TAIL_S) * 1000));
@@ -304,15 +318,55 @@ describe('a line spoken over the radio', () => {
     radio.preloadVoice('systemcheck');
     await settle();
     radio.sayLine(LEVER_LINE);
+    await settle();
     const ctx = lastContext();
     ctx.currentTime = 11;
     expect(radio.sayLine('Beide hin.')).toBe(true);
+    await settle();
     const clips = ctx.all<FakeBufferSource>('buffer').filter((s) => s.buffer?.duration === 1.5);
     const [first, second] = clips;
     expect(first?.stoppedAt).toBeCloseTo(11.1, 9);
     expect(second?.startedAt).toBeCloseTo(11.08, 9);
     expect(radio.voiceProbe().lastId).toBe('bbbbbbbbbbbb');
     expect(radio.sayLine('Eine Zeile aus dem Editor.')).toBe(false);
+  });
+
+  it('speaks only the newest of two lines asked for while the first still decoded', async () => {
+    const radio = await voice();
+    radio.preloadVoice('blackout');
+    radio.preloadVoice('systemcheck');
+    await settle();
+    expect(radio.sayLine(LEVER_LINE)).toBe(true);
+    expect(radio.sayLine('Beide hin.')).toBe(true); // before the first is decoded
+    await settle();
+    const clips = lastContext()
+      .all<FakeBufferSource>('buffer')
+      .filter((s) => s.buffer?.duration === 1.5);
+    expect(clips).toHaveLength(1);
+    expect(radio.voiceProbe().lastId).toBe('bbbbbbbbbbbb');
+  });
+
+  it('lets a line go once spoken, and decodes it anew when it comes again', async () => {
+    vi.useFakeTimers();
+    try {
+      const radio = await voice();
+      const { decodedBytes } = await import('../src/world/audioMemory.js');
+      radio.preloadVoice('blackout');
+      await vi.advanceTimersByTimeAsync(0);
+      radio.sayLine(LEVER_LINE);
+      await vi.advanceTimersByTimeAsync(0);
+      const ctx = lastContext();
+      expect(radio.clipOf(LEVER_LINE)).not.toBeNull();
+      ctx.currentTime = 11.6; // past its end at 11.58
+      await vi.advanceTimersByTimeAsync((1.58 + TAIL_S + 0.2) * 1000);
+      expect(radio.clipOf(LEVER_LINE)).toBeNull();
+      expect(decodedBytes().voice).toBe(1.5 * 22050 * 4); // the opening line still kept
+      expect(radio.sayLine(LEVER_LINE)).toBe(true); // its file still here
+      await vi.advanceTimersByTimeAsync(0);
+      expect(radio.voiceProbe()).toMatchObject({ lastId: 'aaaaaaaaaaaa' });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('says nothing before a gesture woke the sound, nor anything not loaded', async () => {
@@ -347,10 +401,10 @@ describe('a line spoken over the radio', () => {
     const render = await radio.renderRadio('aaaaaaaaaaaa');
     expect(fetched).toEqual(['/voice/manifest.json', '/voice/aaaaaaaaaaaa.mp3']);
     await expect(radio.renderRadio('dddddddddddd')).rejects.toThrow(/not in the manifest/);
-    // The fake decodes any recording to 1.5 s at 8 kHz, its peak 0.45.
-    expect(render.input).toHaveLength(12000);
+    // The fake decodes any recording to 1.5 s at the render's 44.1 kHz, its peak 0.45.
+    expect(render.input).toHaveLength(66150);
     expect(Math.max(...render.input.map(Math.abs))).toBeCloseTo(SPEECH_PEAK, 6);
-    expect(render.output).toHaveLength(12000);
+    expect(render.output).toHaveLength(66150);
     const chainKinds = chainFrom(lastContext().all<FakeBufferSource>('buffer')[0] as FakeNode);
     expect(chainKinds.map((node) => node.kind)).toEqual([
       'buffer',

@@ -22,6 +22,7 @@
  */
 
 import { censusOf, countGraph, type GraphCensus } from './audioCount.js';
+import { hold } from './audioMemory.js';
 import { ownSurface, stepRate, stepTake } from './footsteps.js';
 import { traceRequested } from './frameTrace.js';
 import { buildMix, duck, setBusVolumes, unduck, type BusVolumes, type Mix } from './mix.js';
@@ -792,7 +793,7 @@ export function chain(first: AudioNode, ...rest: AudioNode[]): void {
   }
 }
 
-/** Two seconds of white noise, made once: the static under the radio's voice. */
+/** Two seconds of white noise, made once and counted (audioMemory.ts): the radio's static. */
 export function noiseBuffer(ctx: BaseAudioContext): AudioBuffer {
   if (noise === null) {
     const length = Math.floor(ctx.sampleRate * NOISE_SECONDS);
@@ -800,6 +801,7 @@ export function noiseBuffer(ctx: BaseAudioContext): AudioBuffer {
     const data = buffer.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
     noise = buffer;
+    hold('noise', 'made', buffer);
   }
   return noise;
 }

@@ -1,4 +1,5 @@
 import { audioEngine, systemsOff, timed, type Engine } from './audio.js';
+import { hold, letGo } from './audioMemory.js';
 import type { FloorKind } from './surfaces.js';
 
 /**
@@ -136,12 +137,19 @@ export function impulseResponse(spec: IrSpec, rate: number): [Float32Array, Floa
 
 // --- the runtime -------------------------------------------------------------------------
 
-/** A room's answer playing: its kind, its convolver and the level its return comes in at. */
+/**
+ * A room's answer playing: its kind, its convolver, the level its return comes in at, and the
+ * key its response is counted under (audioMemory.ts).
+ */
 interface Slot {
   readonly kind: FloorKind;
   readonly convolver: ConvolverNode;
   readonly wet: GainNode;
+  readonly key: string;
 }
+
+/** How many answers have been opened: each response is counted under a key of its own. */
+let opened = 0;
 
 interface Reverb {
   readonly engine: Engine;
@@ -167,13 +175,17 @@ function open(engine: Engine, kind: FloorKind): Slot {
   const { ctx } = engine;
   const convolver = ctx.createConvolver();
   convolver.normalize = false;
-  convolver.buffer = bufferOf(engine, kind);
+  const response = bufferOf(engine, kind);
+  convolver.buffer = response;
   const wet = ctx.createGain();
   wet.gain.value = 0;
   engine.sends.connect(convolver);
   convolver.connect(wet);
   wet.connect(engine.master);
-  return { kind, convolver, wet };
+  opened += 1;
+  const key = `reverb:${opened}`;
+  hold(key, 'made', response);
+  return { kind, convolver, wet, key };
 }
 
 /** How fast an answer still going is cut for a third, s. */
@@ -188,6 +200,7 @@ function close(engine: Engine, slot: Slot, now: number, seconds: number): void {
   slot.wet.gain.linearRampToValueAtTime(0, now + seconds);
   const tail = seconds + ROOM_IRS[slot.kind].seconds;
   setTimeout(() => {
+    letGo(slot.key);
     try {
       engine.sends.disconnect(slot.convolver);
       slot.convolver.disconnect();

@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type MapView } from '@escapelab/core';
 import {
   BED_LEVEL,
+  BED_RELEASE_S,
   bedLevels,
   bedPower,
+  bedsWanted,
   CORE_PERIOD_S,
   IDLE,
   loopsOf,
@@ -17,6 +19,7 @@ import {
   ROOM_FADE_S,
   roomAt,
   roomPlan,
+  roomsNear,
   type Power,
   type RoomScene,
 } from '../src/world/ambience.js';
@@ -33,7 +36,7 @@ import {
   type FakeGain,
   type FakeOscillator,
 } from './fakeGraph.js';
-import { loadedSamples } from './fakeSamples.js';
+import { loadedSamples, serveSamples } from './fakeSamples.js';
 
 /** A shipped mission's map as the dressing and the beds read it, every door shut. */
 function shippedMap(name: string): DressMap {
@@ -397,5 +400,126 @@ describe('the beds as they play', () => {
       ambience.stopAmbience();
     }).not.toThrow();
     expect(ambience.bedProbe()).toEqual({ room: null, kind: null, beds: {}, power: {} });
+  });
+});
+
+describe('the beds’ recordings, loaded as rooms come near', () => {
+  const DARK: Power = { outAt: 1, lit: new Map(), won: false };
+
+  it('takes the rooms one way from the player’s, through doors shut or open', () => {
+    expect([...roomsNear(plan, 'FLUR')].sort()).toEqual([
+      'ARCHIV',
+      'FLUR',
+      'MASCHINENRAUM',
+      'SERVERRAUM',
+    ]);
+    expect([...roomsNear(plan, 'REAKTOR')].sort()).toEqual(['OST-FLUR', 'REAKTOR', 'SÜD-FLUR']);
+  });
+
+  it('wants each near room’s layers as its power has them due, none for nobody’s room', () => {
+    expect([...bedsWanted(plan, 'FLUR', POWER_ON, 0)].sort()).toEqual([
+      'bed-archive',
+      'bed-corridor',
+      'bed-machine-idle',
+      'bed-server',
+    ]);
+    // In the dark only what lives without power: the machine room's rumble next door.
+    expect([...bedsWanted(plan, 'FLUR', DARK, 0)]).toEqual(['bed-machine-idle']);
+    expect([...bedsWanted(plan, 'REAKTOR', DARK, 0)]).toEqual(['bed-reactor-idle']);
+    const lit: Power = { ...DARK, lit: new Map([['REAKTOR', { since: 0 }]]) };
+    expect([...bedsWanted(plan, 'REAKTOR', lit, 0)].sort()).toEqual([
+      'bed-reactor',
+      'bed-reactor-idle',
+    ]);
+    expect(bedsWanted(plan, null, POWER_ON, 0).size).toBe(0);
+  });
+
+  describe('on the lab’s context', () => {
+    let fetched: string[] = [];
+    beforeEach(() => {
+      fakeGraph();
+      vi.spyOn(Math, 'random').mockReturnValue(0.5);
+      fetched = serveSamples({ 'bed-corridor': { channels: 2 } });
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    });
+
+    async function nothingLoaded() {
+      vi.resetModules();
+      const ambience = await import('../src/world/ambience.js');
+      const samples = await import('../src/world/samples.js');
+      const memory = await import('../src/world/audioMemory.js');
+      const reverb = await import('../src/world/reverb.js');
+      ambience.startAmbience(() => 0);
+      return { ambience, samples, memory, reverb, ctx: lastContext() };
+    }
+
+    const settle = async (): Promise<void> => {
+      for (let i = 0; i < 30; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+    };
+    const beds = (): string[] =>
+      fetched.filter((url) => url.startsWith('/sfx/bed-')).map((url) => url.slice(5, -4));
+
+    const at = (power: Power, x: number, y: number): RoomScene => ({
+      map: withDoors(),
+      dressing,
+      at: { x, y },
+      power,
+      time: 0,
+    });
+
+    it('loads a bed as its room comes near, and starts its loop once it is in', async () => {
+      const { ambience, samples, ctx } = await nothingLoaded();
+      ambience.hearRooms(at(POWER_ON, IN_FLUR.x, IN_FLUR.y));
+      await settle();
+      const near = ['bed-archive', 'bed-corridor', 'bed-machine-idle', 'bed-server'];
+      expect(beds().sort()).toEqual(near);
+      expect(fetched).not.toContain('/sfx/bed-reactor.mp3');
+      const corridor = samples.sample('bed-corridor')?.buffer;
+      expect(corridor?.numberOfChannels).toBe(2);
+      ambience.hearRooms(at(POWER_ON, IN_FLUR.x, IN_FLUR.y));
+      const loops = ctx.all<FakeBufferSource>('buffer').filter((b) => b.loop);
+      expect(loops.map((b) => b.buffer?.tag)).toContain('bed-corridor');
+    });
+
+    it('lets a bed go four seconds after no room near needs it', async () => {
+      const { ambience, samples, memory, ctx } = await nothingLoaded();
+      ambience.hearRooms(at(POWER_ON, IN_FLUR.x, IN_FLUR.y));
+      await settle();
+      ambience.hearRooms(at(POWER_ON, IN_FLUR.x, IN_FLUR.y));
+      const before = memory.decodedBytes().beds;
+      expect(samples.sample('bed-archive')).not.toBeNull();
+      ambience.hearRooms(at(POWER_ON, 23.5, 12.5)); // the reactor hall: the archive is far
+      ctx.currentTime += BED_RELEASE_S - 0.1;
+      ambience.hearRooms(at(POWER_ON, 23.5, 12.5));
+      expect(samples.sample('bed-archive')).not.toBeNull(); // not yet
+      ctx.currentTime += 0.2;
+      ambience.hearRooms(at(POWER_ON, 23.5, 12.5));
+      expect(samples.sample('bed-archive')).toBeNull();
+      expect(memory.decodedBytes().beds).toBeLessThan(before);
+      expect(BED_RELEASE_S).toBe(4);
+    });
+
+    it('brings the rest of the effects in once the lights have failed', async () => {
+      const { ambience } = await nothingLoaded();
+      ambience.hearRooms(at(POWER_ON, IN_FLUR.x, IN_FLUR.y));
+      await settle();
+      expect(fetched).not.toContain('/sfx/klaxon.mp3');
+      ambience.hearRooms(at(DARK, IN_FLUR.x, IN_FLUR.y));
+      await settle();
+      expect(fetched).toContain('/sfx/klaxon.mp3');
+    });
+
+    it('has the player’s room answer: its kind’s reverb', async () => {
+      const { ambience, reverb } = await nothingLoaded();
+      ambience.hearRooms(at(POWER_ON, IN_FLUR.x, IN_FLUR.y));
+      expect(reverb.reverbProbe().room).toBe('corridor');
+      ambience.hearRooms(at(POWER_ON, 23.5, 12.5));
+      expect(reverb.reverbProbe().room).toBe('reactor');
+      ambience.stopAmbience();
+      expect(reverb.reverbProbe().room).toBeNull();
+    });
   });
 });
