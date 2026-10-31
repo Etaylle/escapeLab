@@ -2438,13 +2438,14 @@ async function audioKept(players, when) {
 /**
  * In the escape the music's pressure is 0.8 or more, a pressure stem up (the
  * tense or the critical) and the calm stem gone under the siren: waits up to
- * 4 s for the crossfade. Fails otherwise.
+ * 6 s for the crossfade — a change waits for the stems' next bar (client
+ * music.ts, under 3 s at 90 bpm), then crosses over 2 s. Fails otherwise.
  */
 async function escapeMusic(player) {
   let music = null;
   const pressed = () =>
     music !== null && music.level >= 0.8 && music.pressure >= 0.8 && music.calm <= 0.05;
-  for (const end = Date.now() + 4000; ; await sleep(100)) {
+  for (const end = Date.now() + 6000; ; await sleep(100)) {
     music = (await soundOf(player.page))?.music ?? null;
     if (pressed() || Date.now() >= end) {
       break;
