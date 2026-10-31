@@ -117,6 +117,14 @@ describe('the Info panel’s keys', () => {
     expect(pad.get('Options')).toMatch(/^Einstellungen/);
     expect(pad.get('Steuerkreuz, dann ✕')).toMatch(/Pulten und Fenstern/);
   });
+
+  it('tells every row apart by what it does, though a controller works two with B', () => {
+    const pad = controlsOf({ ...keyboard, device: 'pad' });
+    expect(pad.filter(([control]) => control === 'B')).toHaveLength(2);
+    for (const rows of [controlsOf(keyboard), pad]) {
+      expect(new Set(rows.map(([, what]) => what)).size).toBe(rows.length);
+    }
+  });
 });
 
 describe('the sprint on a touch screen', () => {

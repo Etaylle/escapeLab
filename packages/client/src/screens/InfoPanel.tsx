@@ -94,8 +94,9 @@ function KeyList() {
   return (
     <div className="info-body">
       <dl className="keylist">
+        {/* A row goes by what it does: on a controller two rows can share a button (B). */}
         {controlsOf({ keys, pad, ...device }).map(([control, what]) => (
-          <div key={control} className="keyrow">
+          <div key={what} className="keyrow">
             <dt>{control}</dt>
             <dd>{what}</dd>
           </div>
