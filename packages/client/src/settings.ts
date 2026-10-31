@@ -122,7 +122,8 @@ export function readSettings(store: SettingsStore | null): Settings {
       effects: volumeOf(volumes['effects']) ?? fallback.volumes.effects,
       music: volumeOf(volumes['music']) ?? fallback.volumes.music,
     },
-    keys: readKeys(raw['keys']),
+    // Settings kept before every action had a key of its own named only the talk key.
+    keys: readKeys(raw['keys'] ?? { talk: raw['talkKey'] }),
     pad: readPad(raw['pad']),
     textSize: oneOf(raw['textSize'], TEXT_SIZES, fallback.textSize),
     motion: oneOf(raw['motion'], MOTIONS, fallback.motion),

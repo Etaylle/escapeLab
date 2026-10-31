@@ -142,6 +142,24 @@ describe('readSettings and writeSettings — kept on this device', () => {
   });
 });
 
+describe('settings kept before every action had its key', () => {
+  it('keep the talk key they named, the other keys at their defaults', async () => {
+    windowWith(memory({ 'escapelab.settings': '{"talkKey":"b","motion":"off"}' }));
+    const { settings } = await fresh();
+    settings.startSettings();
+    expect(settings.getSettings().keys).toEqual({ ...DEFAULT_KEYS, talk: 'b' });
+    expect(settings.getSettings().motion).toBe('off');
+  });
+
+  it('give way to the keys kept since', async () => {
+    const kept = JSON.stringify({ keys: { ...DEFAULT_KEYS, talk: 'g' }, talkKey: 'b' });
+    windowWith(memory({ 'escapelab.settings': kept }));
+    const { settings } = await fresh();
+    settings.startSettings();
+    expect(settings.getSettings().keys.talk).toBe('g');
+  });
+});
+
 describe('the talk key', () => {
   /** A key as a keyboard sends it: a letter sits at Key<letter>, whatever case it comes in. */
   const key = (name: string, parts: Partial<KeyboardEvent> = {}) => ({
