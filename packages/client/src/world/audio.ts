@@ -34,9 +34,11 @@ export interface Engine extends Mix {
   readonly ctx: AudioContext;
 }
 
-/** The lab's sound systems a page's query can switch off: `?audio-off=beds,music,spatial`. */
-export type SoundSystem = 'beds' | 'music' | 'spatial';
-const SOUND_SYSTEMS: readonly SoundSystem[] = ['beds', 'music', 'spatial'];
+/**
+ * The lab's sound systems a page's query can switch off: `?audio-off=beds,music,spatial,reverb`.
+ */
+export type SoundSystem = 'beds' | 'music' | 'spatial' | 'reverb';
+const SOUND_SYSTEMS: readonly SoundSystem[] = ['beds', 'music', 'spatial', 'reverb'];
 
 /**
  * The sound systems the query string `search` switches off (`?audio-off=beds,music`): for

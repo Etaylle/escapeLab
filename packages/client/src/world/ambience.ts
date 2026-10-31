@@ -17,6 +17,7 @@ import {
 } from './audio.js';
 import type { Dressing } from './dress.js';
 import { followFloors, forgetFloors } from './footsteps.js';
+import { hearRoom, stopReverb } from './reverb.js';
 import { warmUp, WARM_UP_MS } from './rooms.js';
 import { sample, type Sample, type SfxId } from './samples.js';
 import type { FloorKind } from './surfaces.js';
@@ -376,6 +377,7 @@ export function startAmbience(clock: () => number): void {
 export function stopAmbience(): void {
   here = null;
   forgetFloors();
+  stopReverb();
   try {
     const amb = ambience;
     ambience = null;
@@ -406,16 +408,17 @@ export interface RoomScene {
 /**
  * The beds follow the player, the doors and the power: called ten times a second. The room the
  * player stands in is worked out every call, and with it the floor under their feet
- * (footsteps.ts). Where the tile, the view, the rooms lit or the power changed, each bed heard
- * crossfades to its level, beds come and go and powered layers die or warm up; every call the
- * loops due start, those done stop, and the own room's sporadic sounds are scheduled on the
- * audio clock.
+ * (footsteps.ts) and the room's answer (reverb.ts). Where the tile, the view, the rooms lit or
+ * the power changed, each bed heard crossfades to its level, beds come and go and powered layers
+ * die or warm up; every call the loops due start, those done stop, and the own room's sporadic
+ * sounds are scheduled on the audio clock.
  */
 export function hearRooms(scene: RoomScene): void {
   try {
     const plan = planOf(scene);
     here = roomAt(plan, Math.floor(scene.at.x), Math.floor(scene.at.y), here);
     followFloors(plan, here);
+    hearRoom(here === null ? null : (plan.kinds.get(here) ?? 'plain'));
     const amb = ambience;
     if (amb === null) return;
     const heard = heardOf(scene);

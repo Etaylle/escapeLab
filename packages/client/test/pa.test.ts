@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PA_FROM_MS, PA_GAP_MS } from '../src/world/intro/sequence.js';
-import { PA_HIGH, PA_LOW, paChain, REFLECTION_LOWPASS, REFLECTIONS } from '../src/world/pa.js';
+import { PA_HIGH, PA_LOW, paChain } from '../src/world/pa.js';
 import type { VoiceManifest } from '../src/world/radioVoice.js';
 import {
   downstream,
@@ -11,7 +11,6 @@ import {
   type FakeFilter,
   type FakeGain,
   type FakeNode,
-  type FakeParam,
 } from './fakeGraph.js';
 
 const FIRST = 'Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47.';
@@ -47,20 +46,11 @@ describe('the loudspeakers’ chain', () => {
     expect(out.gain.value).toBe(0.1);
   });
 
-  it('lets the room answer later, quieter, duller: no shaper, no static, no squelch', () => {
+  it('leaves the answer to the room it hangs in: no delay, shaper, static or squelch', () => {
     const { ctx, input, out } = chainOnItsOwn();
     const high = (input.outputs[0] as FakeNode).outputs[0] as FakeNode;
-    type Delay = FakeNode & { delayTime: FakeParam };
-    const delays = high.outputs.filter((node) => (node as FakeNode).kind === 'delay') as Delay[];
-    expect(delays.map((delay) => delay.delayTime.value)).toEqual(REFLECTIONS.map(([s]) => s));
-    for (const [i, delay] of delays.entries()) {
-      const [dull] = delay.outputs as FakeFilter[];
-      const [level] = (dull?.outputs ?? []) as FakeGain[];
-      expect([dull?.type, dull?.frequency.value]).toEqual(['lowpass', REFLECTION_LOWPASS]);
-      expect(level?.gain.value).toBe(REFLECTIONS[i]?.[1]);
-      expect(level?.outputs).toEqual([out]);
-    }
-    expect(REFLECTIONS.every(([s, share]) => s > 0.03 && s < 0.12 && share < 0.5)).toBe(true);
+    expect(high.outputs).toEqual([out]);
+    expect(ctx.all('delay')).toEqual([]);
     expect(ctx.all('shaper')).toEqual([]);
     expect(ctx.all('buffer')).toEqual([]);
     expect(ctx.all('oscillator')).toEqual([]);
@@ -112,11 +102,14 @@ describe('the announcement over the loudspeakers', () => {
     const after = [...downstream(first as unknown as FakeNode)];
     const filters = after.filter((node) => node.kind === 'biquad') as FakeFilter[];
     expect(filters.map((filter) => filter.frequency.value)).toEqual(
-      expect.arrayContaining([PA_LOW, PA_HIGH, REFLECTION_LOWPASS]),
+      expect.arrayContaining([PA_LOW, PA_HIGH]),
     );
     expect(filters.some((filter) => filter.frequency.value === 3400)).toBe(false);
-    expect(after.some((node) => node.kind === 'delay')).toBe(true);
     expect(after.some((node) => node.kind === 'shaper')).toBe(false);
+    // Through the loudspeakers' bus, whose send the room's reverb answers (reverb.ts).
+    const engine = (await import('../src/world/audio.js')).audioEngine();
+    const { announce, sends } = engine as unknown as { announce: FakeNode; sends: FakeNode };
+    expect(after.includes(announce) && after.includes(sends)).toBe(true);
     // Nothing else plays with it: no static bed, no squelch, no Leitstelle opening.
     expect(spoken()).toHaveLength(1);
     expect(pa.paProbe()).toEqual({ playing: true, lastLine: FIRST, played: 1, cut: false });
