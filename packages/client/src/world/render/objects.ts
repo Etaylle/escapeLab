@@ -10,7 +10,9 @@ import {
   drawSign,
   drawStation,
   plateCaption,
+  type Tube,
 } from '../art.js';
+import { animTime, crtFlicker, propSeed, rollAt } from '../anim.js';
 import { doorOpenness, isHorizontalDoor } from '../doors.js';
 import { burning } from '../frameLight.js';
 import {
@@ -21,8 +23,9 @@ import {
 } from '../hazards.js';
 import { coversArmed, opensCabinet } from '../interact.js';
 import { noteMount } from '../notes.js';
-import { inTiles, type Frame, type WorldMap } from './frame.js';
+import { inTiles, profiled, type Frame, type WorldMap } from './frame.js';
 import { drawGlow, namedThing, type Named } from './highlight.js';
+import * as props from './props.js';
 
 /**
  * The lab's things, in tile space. Objects show only where some light has
@@ -38,6 +41,7 @@ export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   inTiles(ctx, frame);
   const named = namedThing(frame);
   drawPlates(ctx, frame);
+  profiled(frame.kit, 'props', ctx, () => props.drawFloor(ctx, frame));
   drawDoors(ctx, frame);
   drawGlowUnder(ctx, frame, named);
   drawStations(ctx, frame);
@@ -101,7 +105,12 @@ function drawStations(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const levers = frame.players.filter((p) => p.connected).length;
   for (const station of map.stations) {
     if (station.status !== 'locked' || light.shown(station.x, station.y)) {
-      const look = { status: station.status, pulse, console: station.console ?? null };
+      const look = {
+        status: station.status,
+        pulse,
+        console: station.console ?? null,
+        tube: tubeAt(frame, station.x, station.y),
+      };
       const draw =
         station.look === 'lever'
           ? () => drawLeverBox(ctx, { status: look.status, pulse, levers })
@@ -113,13 +122,24 @@ function drawStations(ctx: CanvasRenderingContext2D, frame: Frame): void {
   }
 }
 
+/**
+ * The tube of the screen on the tile (x, y) this frame: flickering and its roll bar drifting
+ * down (anim.ts), each screen out of step with the others.
+ */
+export function tubeAt(frame: Frame, x: number, y: number): Tube {
+  const t = animTime(frame.time);
+  const seed = propSeed(x, y);
+  return { burn: crtFlicker(t, seed), roll: rollAt(t, seed, frame.reduced) };
+}
+
 /** The sources found so far, the ones printing the armed station's rules lit up. */
 function drawManuals(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const { map, pulse, text } = frame;
   for (const manual of map.manuals) {
     const active = coversArmed(map, manual);
     const { kind, label, opened } = manual;
-    const look = { kind, label, active, opened, pulse, text };
+    const tube = tubeAt(frame, manual.x, manual.y);
+    const look = { kind, label, active, opened, pulse, text, tube };
     at(ctx, manual.x + 0.5, manual.y + 0.5, () => drawManualObject(ctx, look));
   }
 }

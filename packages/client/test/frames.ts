@@ -5,6 +5,7 @@ import type { CanvasMaker } from '../src/world/atlas.js';
 import type { LightPath } from '../src/world/gl/path.js';
 import type { Lamp } from '../src/world/light.js';
 import type { Frame, FrameLight, FrameLit, RenderKit } from '../src/world/render/frame.js';
+import { NO_ZOOM } from '../src/world/render/camera.js';
 import { frameCache } from '../src/world/render/frameCache.js';
 import { gridOf } from '../src/world/render/grid.js';
 import { radialSprites } from '../src/world/render/radial.js';
@@ -84,6 +85,8 @@ export function kitWith(overlay: FakeCanvas = fakeCanvas(800, 600, 'overlay')): 
     still: new Map(),
     profile: null,
     grid: null,
+    zoom: NO_ZOOM,
+    fringe: null,
   };
 }
 
@@ -135,6 +138,7 @@ function frameParts(parts: Partial<Frame>): Omit<Frame, 'grid'> {
     doors: new Map(),
     alarm: null,
     scene: { lit: false, cover: 0 },
+    blackoutAt: null,
     ending: null,
     // As the frame's assembly has it outside the opening: the lab lit whole as the end lights it.
     whole: parts.ending?.lit ?? 0,

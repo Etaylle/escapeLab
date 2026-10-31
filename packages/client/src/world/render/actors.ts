@@ -1,6 +1,6 @@
 import type { PlayerView } from '@escapelab/core';
 import { DRONE_MARK_MS } from '../alarm.js';
-import { drawScientist, drawVoiceRing, type ScientistOpts } from '../art.js';
+import { drawScientist, drawVoiceRing, type Ground, type ScientistOpts } from '../art.js';
 import { figurePhase, figurePose, type FigurePose } from '../figure.js';
 import {
   carryableKind,
@@ -9,19 +9,22 @@ import {
   drawDroneBody,
   drawDroneCone,
 } from '../hazards.js';
-import { FALLBACK_COLOR, inTiles, type Frame, type OtherAvatar } from './frame.js';
+import { FALLBACK_COLOR, inTiles, profiled, type Frame, type OtherAvatar } from './frame.js';
+import { drawFans } from './props.js';
 
 /**
  * Drones and the crew, in tile space: the drones' cones under everybody, the
  * crew — remote first, you on top, whoever speaks in a ring, each with a
  * name tag, each standing as the frame says (crewPose) and holding what they
- * carry before their chest — and the drones' bodies.
+ * carry before their chest, over a shadow of the light they stand in — the
+ * drones' bodies, and over everybody the ceiling fans' blades (props.ts).
  */
 export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   inTiles(ctx, frame);
   drawCones(ctx, frame);
   drawCrew(ctx, frame);
   drawDrones(ctx, frame);
+  profiled(frame.kit, 'props', ctx, () => drawFans(ctx, frame));
 }
 
 type Player = PlayerView['players'][number];
@@ -73,8 +76,21 @@ function otherLook(
     connected: meta?.connected ?? true,
     text: frame.text,
     pose: crewPose(frame, id, other),
+    ground: groundAt(frame, other.rx, other.ry),
     ...heldBy(frame, id),
   };
+}
+
+/**
+ * The light a crew member standing at (x, y) stands in, for the shadow under them: the
+ * ceiling lights of the lab with its power on, of a lit room, or of the lab lit whole at the
+ * end; else the dark.
+ */
+export function groundAt(frame: Frame, x: number, y: number): Ground {
+  const tx = Math.floor(x);
+  const ty = Math.floor(y);
+  const lit = frame.whole > 0 || frame.light.powered(tx, ty) || frame.litTiles.has(`${tx},${ty}`);
+  return lit ? 'lit' : 'dark';
 }
 
 /** You, as the view names you: by your own name where the crew's list has no entry for you. */
@@ -89,6 +105,7 @@ function yourLook(you: Player | undefined, frame: Frame): ScientistOpts {
     connected: true,
     text: frame.text,
     pose: crewPose(frame, frame.youId, frame.self),
+    ground: groundAt(frame, frame.self.x, frame.self.y),
     ...heldBy(frame, frame.youId),
   };
 }

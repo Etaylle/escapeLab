@@ -1,3 +1,4 @@
+import type { FanState } from './anim.js';
 import { newAtlas, spriteKey, type Atlas, type CanvasMaker, type SpriteSpec } from './atlas.js';
 import { dressMap, seedOf, type DressMap, type Dressing } from './dress.js';
 import { newParticles, type Particles } from './particles.js';
@@ -48,6 +49,8 @@ export interface ArtKit {
   particles: Particles;
   /** where each light may fall, as a path in tiles, by its spot, its reach and the doors shut */
   clips: Map<string, Path2D>;
+  /** each ceiling fan's turn, by its tile (render/props.ts) */
+  fans: Map<string, FanState>;
 }
 
 /** A fresh kit baking its sprites and glows on canvases from `make` (the DOM's by default). */
@@ -60,6 +63,7 @@ export function artKit(make?: CanvasMaker): ArtKit {
     tiles: null,
     particles: newParticles(),
     clips: new Map(),
+    fans: new Map(),
   };
 }
 

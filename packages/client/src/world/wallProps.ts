@@ -1,3 +1,4 @@
+import { crtFlicker, ledLit, rollAt, scopeTrace } from './anim.js';
 import { addCircle, hashTile, OUTLINE, roundRectPath, seededRandom, TAU } from './brush.js';
 import type { WallPropKind } from './dress.js';
 import {
@@ -102,14 +103,7 @@ function drawTray(g: CanvasRenderingContext2D, variant: number, paint: Paint): v
   g.fillRect(0, 0.585, 1, 0.018);
   g.fillStyle = paint(INK);
   g.fillRect(0, 0.6, 1, OUTLINE / 2);
-  if (variant === 2) {
-    g.strokeStyle = paint(sink(STEEL, 0.75));
-    g.lineWidth = 0.024;
-    g.beginPath();
-    g.moveTo(0.7, 0.6);
-    g.bezierCurveTo(0.72, 0.72, 0.66, 0.8, 0.7, FOOT);
-    g.stroke();
-  } else if (variant === 3) {
+  if (variant === 3) {
     box(g, [0.38, 0.66, 0.2, 0.16], paint(sink(STEEL, 0.35)), paint);
     g.fillStyle = paint(sink(AMBER, 0.1));
     g.fillRect(0.44, 0.7, 0.08, 0.035);
@@ -469,6 +463,15 @@ export interface PropState {
   reduced: boolean;
   /** lit by the ceiling lights: the moving parts in the lit colours */
   lit: boolean;
+  /**
+   * the prop's own number, from where it hangs: its tube flickers and its LEDs blink out of
+   * step with every other's; 0 where none is given
+   */
+  seed?: number;
+  /** its screen shows an oscilloscope's trace, as a lab's screens do, not text */
+  scope?: boolean;
+  /** how far a loose cable hangs off plumb after the blackout's thunk, radians (cableSwing) */
+  swing?: number;
 }
 
 function drawFan(ctx: CanvasRenderingContext2D, state: PropState): void {
@@ -540,10 +543,44 @@ function drawHands(ctx: CanvasRenderingContext2D, state: PropState): void {
   hand(minutes / 60, 0.11, 0.014);
 }
 
+/** Where the tray's underside is, cables hanging loose from it. */
+const TRAY_FOOT = 0.6;
+/**
+ * The cables hanging loose from a cable tray, by its look: where each hangs from across the
+ * tray, and how long it hangs; the longest reaches the face's foot.
+ */
+export const LOOSE_CABLES: Readonly<Record<number, readonly (readonly [number, number])[]>> = {
+  0: [[0.28, 0.16]],
+  1: [],
+  2: [[0.7, FOOT - TRAY_FOOT]],
+  3: [[0.84, 0.12]],
+};
+
+/**
+ * The cables hanging loose from a cable tray, each swung `state.swing` off plumb — the longer
+ * the wider — sagging as a cable does.
+ */
+function drawLooseCables(ctx: CanvasRenderingContext2D, variant: number, state: PropState): void {
+  const swing = state.swing ?? 0;
+  ctx.strokeStyle = css(inLight(sink(STEEL, 0.75), state.lit));
+  ctx.lineWidth = 0.024;
+  ctx.lineCap = 'round';
+  for (const [x, length] of LOOSE_CABLES[variant] ?? []) {
+    const a = swing * (0.7 + length);
+    const ex = x + Math.sin(a) * length;
+    const ey = TRAY_FOOT + Math.cos(a) * length;
+    ctx.beginPath();
+    ctx.moveTo(x, TRAY_FOOT);
+    const bend = x + 0.025 + Math.sin(a) * length * 0.25;
+    ctx.quadraticCurveTo(bend, TRAY_FOOT + length * 0.55, ex, ey);
+    ctx.stroke();
+  }
+}
+
 /**
  * The parts of a wall prop that move, under the darkness: a fan turning
- * behind its grille, a gauge's needles twitching, a clock's hands. Nothing
- * for the rest. Wall tile space.
+ * behind its grille, a gauge's needles twitching, a clock's hands, the
+ * cables hanging loose from a tray. Nothing for the rest. Wall tile space.
  */
 export function drawWallPropMotion(
   ctx: CanvasRenderingContext2D,
@@ -556,6 +593,7 @@ export function drawWallPropMotion(
     if (kind === 'vent') drawFan(ctx, state);
     else if (kind === 'gauge') drawNeedles(ctx, variant, state);
     else if (kind === 'clock') drawHands(ctx, state);
+    else if (kind === 'tray') drawLooseCables(ctx, variant, state);
   } finally {
     ctx.restore();
   }
@@ -563,7 +601,7 @@ export function drawWallPropMotion(
 
 /** Whether a wall prop has anything that moves: the rest bake whole. */
 export function moves(kind: WallPropKind): boolean {
-  return kind === 'vent' || kind === 'gauge' || kind === 'clock';
+  return kind === 'vent' || kind === 'gauge' || kind === 'clock' || kind === 'tray';
 }
 
 /** Whether a wall prop has anything that glows. */
@@ -571,7 +609,78 @@ export function glows(kind: WallPropKind): boolean {
   return kind === 'screen' || kind === 'rack' || kind === 'gauge' || kind === 'steam';
 }
 
-/** Phosphor text scrolling up a screen that is on, or its standby dot while it is dark. */
+/** Phosphor text running up a screen, a line at a time, each line keeping its length. */
+function screenText(ctx: CanvasRenderingContext2D, variant: number, state: PropState): void {
+  const { x, y } = SCREEN;
+  const line = 0.045;
+  const travelled = state.reduced ? 0 : state.t * 0.12;
+  const first = Math.floor(travelled / line);
+  const scroll = travelled - first * line;
+  for (let k = 0; k < 8; k++) {
+    const n = first + k;
+    const length = (0.15 + (hashTile(variant, n, 7) % 100) * 0.0032) * (n % 4 === 3 ? 0.5 : 1);
+    ctx.fillRect(x + 0.04, y + 0.04 + k * line - scroll, length, 0.018);
+  }
+}
+
+/**
+ * An oscilloscope's trace across a screen (anim.ts scopeTrace), its graticule faint behind it;
+ * standing still under reduced motion.
+ */
+export function drawScope(
+  ctx: CanvasRenderingContext2D,
+  [x, y, w, h]: readonly [number, number, number, number],
+  state: PropState,
+  alpha: number,
+): void {
+  const seed = state.seed ?? 0;
+  const t = state.reduced ? 0 : state.t;
+  ctx.fillStyle = rgba(PHOSPHOR, 0.18 * alpha);
+  ctx.fillRect(x, y + h / 2 - 0.004, w, 0.008);
+  ctx.fillRect(x + w / 2 - 0.004, y, 0.008, h);
+  ctx.strokeStyle = rgba(PHOSPHOR, 0.9 * alpha);
+  ctx.lineWidth = 0.016;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  const steps = 24;
+  for (let i = 0; i <= steps; i++) {
+    const u = i / steps;
+    const ty = y + h / 2 - scopeTrace(u, t, seed) * h * 0.38;
+    if (i === 0) ctx.moveTo(x + u * w, ty);
+    else ctx.lineTo(x + u * w, ty);
+  }
+  ctx.stroke();
+}
+
+/**
+ * A CRT's roll bar: a faint brighter band drifting down the screen `[x, y, w, h]` (anim.ts
+ * rollAt); none under reduced motion.
+ */
+export function drawRollBar(
+  ctx: CanvasRenderingContext2D,
+  [x, y, w, h]: readonly [number, number, number, number],
+  state: PropState,
+  alpha: number,
+): void {
+  const roll = rollAt(state.t, state.seed ?? 0, state.reduced);
+  if (roll === null) {
+    return;
+  }
+  const band = h * 0.22;
+  const top = y - band + roll * (h + band);
+  const from = Math.max(y, top);
+  const to = Math.min(y + h, top + band);
+  if (to > from) {
+    ctx.fillStyle = rgba(PHOSPHOR, 0.07 * alpha);
+    ctx.fillRect(x, from, w, to - from);
+  }
+}
+
+/**
+ * A screen that is on — phosphor text running up it, or in a lab an oscilloscope's trace —
+ * its tube flickering and its roll bar drifting down (anim.ts crtFlicker, rollAt); its standby
+ * dot while it is dark.
+ */
 function screenGlow(ctx: CanvasRenderingContext2D, variant: number, state: PropState): void {
   const { x, y, w, h } = SCREEN;
   if (state.on <= 0.02) {
@@ -581,35 +690,35 @@ function screenGlow(ctx: CanvasRenderingContext2D, variant: number, state: PropS
     ctx.fill();
     return;
   }
-  ctx.fillStyle = rgba(PHOSPHOR, 0.16 * state.on);
+  const tube = state.on * crtFlicker(state.t, state.seed ?? variant);
+  ctx.fillStyle = rgba(PHOSPHOR, 0.16 * tube);
   ctx.fillRect(x, y, w, h);
   ctx.save();
   ctx.beginPath();
-  ctx.rect(x + 0.02, y + 0.02, w - 0.04, h - 0.04);
+  const inner = [x + 0.02, y + 0.02, w - 0.04, h - 0.04] as const;
+  ctx.rect(...inner);
   ctx.clip();
-  const line = 0.045;
-  // The text runs up a line at a time; each line keeps its length as it goes.
-  const travelled = state.reduced ? 0 : state.t * 0.12;
-  const first = Math.floor(travelled / line);
-  const scroll = travelled - first * line;
-  ctx.fillStyle = rgba(PHOSPHOR, 0.8 * state.on);
-  for (let k = 0; k < 8; k++) {
-    const n = first + k;
-    const length = (0.15 + (hashTile(variant, n, 7) % 100) * 0.0032) * (n % 4 === 3 ? 0.5 : 1);
-    ctx.fillRect(x + 0.04, y + 0.04 + k * line - scroll, length, 0.018);
+  if (state.scope === true) {
+    drawScope(ctx, inner, state, tube);
+  } else {
+    ctx.fillStyle = rgba(PHOSPHOR, 0.8 * tube);
+    screenText(ctx, variant, state);
   }
+  drawRollBar(ctx, inner, state, tube);
   ctx.restore();
 }
 
-/** Rack LEDs in a row per unit, each blinking in a pattern of its own; they run in the dark too. */
+/**
+ * Rack LEDs in a row per unit, each blinking in a pattern of its own (anim.ts ledLit) that says
+ * nothing of the run; they run in the dark too.
+ */
 function rackGlow(ctx: CanvasRenderingContext2D, variant: number, state: PropState): void {
+  const seed = state.seed ?? 0;
   for (let unit = 0; unit < 5; unit++) {
     const y = RACK.y + 0.065 + unit * 0.095;
     for (let k = 0; k < 3; k++) {
-      const id = unit * 3 + k + variant * 17;
-      const rate = 1.5 + (id % 5) * 0.9;
-      const lit = (Math.floor(state.t * rate + id * 0.37) + id) % 3 !== 0;
-      if (!lit) continue;
+      const id = unit * 3 + k + variant * 17 + seed * 61;
+      if (!ledLit(id, k, state.t)) continue;
       const colour = id % 7 === 0 ? AMBER : id % 3 === 0 ? DONE_GREEN : SERVER_BLUE;
       ctx.fillStyle = rgba(colour, 0.95);
       ctx.fillRect(RACK.x + 0.08 + k * 0.05, y, 0.025, 0.018);

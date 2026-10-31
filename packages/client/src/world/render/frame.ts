@@ -13,7 +13,9 @@ import type { MarkerTarget } from '../markers.js';
 import type { CeilingLight } from '../power.js';
 import type { LitGroup, RoomLight } from '../rooms.js';
 import type { Viewport } from '../viewport.js';
+import type { Fringe } from './aberration.js';
 import type { BakeStore } from './bakes.js';
+import { NO_ZOOM, type Zoom } from './camera.js';
 import { frameCache } from './frameCache.js';
 import type { PixelGrid } from './grid.js';
 import type { PassName, PassProfile } from './profile.js';
@@ -165,6 +167,10 @@ export interface RenderKit {
   profile: PassProfile | null;
   /** the pixel grid the frame before was drawn on (grid.ts); null before the first */
   grid: PixelGrid | null;
+  /** the camera leaning in on a station whose panel is open (camera.ts), from frame to frame */
+  zoom: Zoom;
+  /** the scratch canvases an alarm knocks the colours apart in (aberration.ts); null before */
+  fringe: Fringe | null;
 }
 
 /** A fresh kit drawing the darkness into `overlay`: nothing baked yet, nothing timed. */
@@ -181,6 +187,8 @@ export function renderKit(overlay: CanvasRenderingContext2D): RenderKit {
     still: new Map(),
     profile: null,
     grid: null,
+    zoom: NO_ZOOM,
+    fringe: null,
   };
 }
 
@@ -227,6 +235,12 @@ export interface Frame {
   alarm: Alarm | null;
   /** where the cold open stands (coldOpen.ts) */
   scene: ColdOpenFrame;
+  /**
+   * when the blackout's thunk fell on this screen, epoch ms — the bang of the cold open
+   * (coldOpen.ts FLICKER_MS): the breaker smokes after it, the cables swing; null while the
+   * lab has its power
+   */
+  blackoutAt: number | null;
   /** where the ending stands (finale.ts); null while the run goes on */
   ending: FinaleFrame | null;
   /**

@@ -2,12 +2,19 @@ import { describe, expect, it } from 'vitest';
 import type { PlayerView } from '@escapelab/core';
 import { ANIM_HZ, animTime, WALK_SPEED } from '../src/world/anim.js';
 import {
+  breakerSmoke,
+  inCone,
   MAX_PARTICLES,
   newParticles,
   particleAlpha,
+  SHARE,
   shortOf,
+  SMOKE_MS,
+  STILL_AIR,
   stepParticles,
   type Emitters,
+  type Particle,
+  type ParticleKind,
 } from '../src/world/particles.js';
 import { mapWith } from './fixtures.js';
 
@@ -17,7 +24,27 @@ const vents = [
   { x: 8, y: 1 },
   { x: 11, y: 1 },
 ];
-const busy: Emitters = { beam, vents, short: null, reduced: false };
+const busy: Emitters = { ...STILL_AIR, cones: [beam], vents };
+
+/** The kinds among `live`, counted. */
+function kinds(live: readonly Particle[]): Partial<Record<ParticleKind, number>> {
+  const counts: Partial<Record<ParticleKind, number>> = {};
+  for (const particle of live) {
+    counts[particle.kind] = (counts[particle.kind] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/** Everything emitting at once: three cones, vents, a core, the breaker, the hatch, shorts. */
+const everything = (frame: number): Emitters => ({
+  cones: [beam, { ...beam, x: 9, facing: Math.PI }, { ...beam, y: 5, facing: -Math.PI / 2 }],
+  vents,
+  cores: [{ x: 6, y: 4 }],
+  short: frame % 20 === 0 ? { x: 1, y: 1, seq: frame } : null,
+  smoke: { x: 4, y: 3 },
+  hatch: { x: 1.5, y: 1.2 },
+  reduced: false,
+});
 
 describe('the world’s particles — few, small and slow', () => {
   it('never lets more than MAX_PARTICLES live, however long and however much is emitted', () => {
@@ -25,8 +52,7 @@ describe('the world’s particles — few, small and slow', () => {
     let most = 0;
     for (let frame = 0; frame < 60 * 30; frame++) {
       // A short every third of a second on top: the sparks push the oldest motes out.
-      const short = frame % 20 === 0 ? { x: 1, y: 1, seq: frame } : null;
-      stepParticles(p, frame / 60, { ...busy, short });
+      stepParticles(p, frame / 60, everything(frame));
       most = Math.max(most, p.live.length);
     }
     expect(most).toBe(MAX_PARTICLES);
@@ -64,14 +90,15 @@ describe('the world’s particles — few, small and slow', () => {
     const p = newParticles(5);
     stepParticles(p, 0, busy);
     const short = { x: 3, y: 3, seq: 1 };
-    stepParticles(p, 1 / ANIM_HZ, { beam: null, vents: [], short, reduced: false });
+    stepParticles(p, 1 / ANIM_HZ, { ...STILL_AIR, short });
     const sparks = p.live.filter((q) => q.kind === 'spark').length;
     expect(sparks).toBeGreaterThan(10);
-    stepParticles(p, 2 / ANIM_HZ, { beam: null, vents: [], short, reduced: false });
+    stepParticles(p, 2 / ANIM_HZ, { ...STILL_AIR, short });
     expect(p.live.filter((q) => q.kind === 'spark').length).toBeLessThanOrEqual(sparks);
     const calm = newParticles(5);
     stepParticles(calm, 0, busy);
-    stepParticles(calm, 1, { beam, vents, short: { x: 3, y: 3, seq: 2 }, reduced: true });
+    const quiet = { ...busy, short: { x: 3, y: 3, seq: 2 }, reduced: true };
+    stepParticles(calm, 1, quiet);
     expect(calm.live).toEqual([]);
   });
 
@@ -99,6 +126,106 @@ describe('the world’s particles — few, small and slow', () => {
   it('holds the animation clock still between its steps', () => {
     expect(animTime(1 / ANIM_HZ - 0.001)).toBe(0);
     expect(animTime(1 / ANIM_HZ + 0.001)).toBeCloseTo(1 / ANIM_HZ);
+  });
+});
+
+describe('the particle pool — bounded, reused, each kind within its share', () => {
+  it('never makes more particles than MAX_PARTICLES, however long everything emits', () => {
+    const p = newParticles(13);
+    const made = new Set<Particle>();
+    for (let frame = 0; frame < 60 * 40; frame++) {
+      stepParticles(p, frame / 60, everything(frame));
+      for (const particle of p.live) made.add(particle);
+      expect(p.live.length).toBeLessThanOrEqual(MAX_PARTICLES);
+      expect(p.live.length + p.spare.length).toBeLessThanOrEqual(MAX_PARTICLES);
+    }
+    expect(MAX_PARTICLES).toBeLessThanOrEqual(120);
+    expect(made.size).toBeLessThanOrEqual(MAX_PARTICLES);
+  });
+
+  it('gives a particle that died back to the pool, to be born again', () => {
+    const p = newParticles(17);
+    stepParticles(p, 0, busy);
+    for (let frame = 1; frame < 120; frame++) stepParticles(p, frame / 60, busy);
+    const first = new Set(p.live);
+    for (let frame = 120; frame < 600; frame++) stepParticles(p, frame / 60, busy);
+    const reborn = p.live.filter((particle) => first.has(particle));
+    expect(p.spare.length + p.live.length).toBeGreaterThan(0);
+    expect(reborn.length).toBeGreaterThan(0);
+  });
+
+  it('keeps every kind but the sparks within its share', () => {
+    const p = newParticles(19);
+    for (let frame = 0; frame < 60 * 30; frame++) {
+      stepParticles(p, frame / 60, everything(frame));
+      const counts = kinds(p.live);
+      for (const [kind, most] of Object.entries(SHARE)) {
+        expect(counts[kind as ParticleKind] ?? 0).toBeLessThanOrEqual(most);
+      }
+    }
+  });
+
+  it('drifts dust only inside the light cones it was born in', () => {
+    const p = newParticles(23);
+    const cones = everything(0).cones;
+    for (let frame = 0; frame < 240; frame++) {
+      stepParticles(p, frame / 60, { ...STILL_AIR, cones });
+      for (const mote of p.live.filter((q) => q.kind === 'dust' && q.age === 1 / ANIM_HZ)) {
+        const bornX = mote.x - mote.vx / ANIM_HZ;
+        const bornY = mote.y - mote.vy / ANIM_HZ;
+        expect(cones.some((cone) => inCone(cone, bornX, bornY))).toBe(true);
+      }
+    }
+    expect(p.live.some((q) => q.kind === 'dust')).toBe(true);
+  });
+
+  it('puffs steam from a core now and then, smoke from the breaker, dust from the hatch', () => {
+    const p = newParticles(29);
+    const seen = new Set<ParticleKind>();
+    for (let frame = 0; frame < 60 * 8; frame++) {
+      const emitters = { ...STILL_AIR, cores: [{ x: 6, y: 4 }], smoke: { x: 4, y: 3 } };
+      const hatch = frame < 120 ? { x: 1.5, y: 1.2 } : null;
+      stepParticles(p, frame / 60, { ...emitters, hatch });
+      for (const particle of p.live) seen.add(particle.kind);
+    }
+    expect([...seen].sort()).toEqual(['debris', 'smoke', 'steam']);
+    const smoke = p.live.filter((q) => q.kind === 'smoke');
+    expect(smoke.every((q) => q.vy < 0 && Math.hypot(q.vx, q.vy) < WALK_SPEED)).toBe(true);
+  });
+
+  it('lets the hatch’s dust fall, slower than anybody walks', () => {
+    const p = newParticles(31);
+    for (let frame = 0; frame < 90; frame++) {
+      stepParticles(p, frame / 60, { ...STILL_AIR, hatch: { x: 1.5, y: 1.2 } });
+    }
+    const debris = p.live.filter((q) => q.kind === 'debris');
+    expect(debris.length).toBeGreaterThan(5);
+    expect(debris.every((q) => q.vy > 0 && Math.hypot(q.vx, q.vy) < WALK_SPEED)).toBe(true);
+  });
+
+  it('makes nothing new under reduced motion', () => {
+    const p = newParticles(37);
+    for (let frame = 0; frame < 240; frame++) {
+      stepParticles(p, frame / 60, { ...everything(frame), reduced: true });
+    }
+    expect(p.live).toEqual([]);
+  });
+});
+
+describe('breakerSmoke — the main breaker smoking after the blackout’s thunk', () => {
+  const lever = { x: 11, y: 7, look: 'lever' };
+  const fuse = { x: 1, y: 12, look: 'fusebox' };
+
+  it('smokes from the main switch’s box for SMOKE_MS after the thunk', () => {
+    expect(breakerSmoke([fuse, lever], 5000, 5000)).toEqual({ x: 11.62, y: 7.05 });
+    expect(breakerSmoke([fuse, lever], 5000, 5000 + SMOKE_MS)).not.toBeNull();
+    expect(breakerSmoke([fuse, lever], 5000, 5001 + SMOKE_MS)).toBeNull();
+  });
+
+  it('smokes not before the thunk, not without one, nor on a map without a main switch', () => {
+    expect(breakerSmoke([lever], 5000, 4999)).toBeNull();
+    expect(breakerSmoke([lever], null, 5000)).toBeNull();
+    expect(breakerSmoke([fuse], 5000, 6000)).toBeNull();
   });
 });
 

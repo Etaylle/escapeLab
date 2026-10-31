@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ALARM, EMERGENCY, mix, rgba } from '../src/world/palette.js';
-import { vignetteShown } from '../src/world/vignette.js';
+import { vignettePressure, vignetteShown } from '../src/world/vignette.js';
 
 const NOW = 1_700_000_000_000;
 
@@ -74,5 +74,35 @@ describe('the red edge as the stylesheet draws it', () => {
   it('holds still under reduced motion', () => {
     const calm = blockAfter(FINALE, ":where([data-motion='reduce'])");
     expect(calm).toMatch(/\.vignette,[^{]*\{\s*animation:\s*none;/);
+  });
+});
+
+describe('vignettePressure — how hard the red edge breathes', () => {
+  it('breathes calmly as the last minute begins, harder in its last twenty seconds', () => {
+    expect(vignettePressure(NOW + 59_000, NOW, false, false)).toBe('minute');
+    expect(vignettePressure(NOW + 20_001, NOW, false, false)).toBe('minute');
+    expect(vignettePressure(NOW + 19_999, NOW, false, false)).toBe('stretch');
+    expect(vignettePressure(NOW - 1_000, NOW, false, false)).toBe('stretch');
+  });
+
+  it('breathes hardest through the escape, whatever the clock', () => {
+    expect(vignettePressure(NOW + 300_000, NOW, true, false)).toBe('escape');
+    expect(vignettePressure(NOW + 10_000, NOW, true, false)).toBe('escape');
+  });
+
+  it('is not there where the edge is not', () => {
+    expect(vignettePressure(NOW + 61_000, NOW, false, false)).toBeNull();
+    expect(vignettePressure(null, NOW, true, false)).toBeNull();
+    expect(vignettePressure(NOW + 1_000, NOW, true, true)).toBeNull();
+  });
+
+  it('gives every pressure a breath of its own in the stylesheet', () => {
+    const css = readFileSync(new URL('../src/styles/finale.css', import.meta.url), 'utf8');
+    const durations = ['minute', 'stretch', 'escape'].map((level) => {
+      const rule = new RegExp(`\\.vignette--${level} \\{[^}]*animation-duration: ([\\d.]+)s`);
+      return Number(rule.exec(css)?.[1]);
+    });
+    expect(durations.every((s) => s > 0)).toBe(true);
+    expect([...durations].sort((a, b) => b - a)).toEqual(durations);
   });
 });

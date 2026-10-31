@@ -1,0 +1,99 @@
+/* ══ interaction: how the controls answer a hand, and how panels come up ══════
+ * Over every sheet before it (main.tsx imports this one last), and only where
+ * a control has said nothing of its own: a device's keys, levers and wires keep
+ * their own hover, press and focus (devices.css and the panels' sheets). The
+ * art bible's „Interface" section names the rules; css.test.ts and
+ * interaction.test.ts hold them.
+ */
+
+/* ── a panel coming up: a breath larger and out of nothing, 150 ms ───────── */
+
+/*
+ * A station's device, a source's pages, a note: the frame over the world grows from 0.98 to its
+ * size as it fades in. A sheet being put down keeps its own way out (putdown.css).
+ */
+.puzzle-modal:not(.puzzle-modal--leaving) .panel {
+  transform-origin: 50% 42%;
+  animation: panel-up 150ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes panel-up {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── pressing a button: it gives a pixel, and lets go as quickly ────────── */
+
+/*
+ * The base buttons' transition (ui.css) with the press added; `translate` composes with any
+ * transform a button stands in, so nothing laid out by one moves out of place. A device's
+ * controls, the relay's and the world's pad press in their own way and keep it.
+ */
+button {
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    background 0.15s,
+    translate 0.06s ease-out,
+    filter 0.06s ease-out;
+}
+
+:where(button):active:not(
+    :disabled,
+    .device *,
+    .relay *,
+    .lever-grip,
+    .world-dpad-btn,
+    .world-sprint
+  ) {
+  translate: 0 1px;
+  filter: brightness(0.92);
+}
+
+/* ── focus for keyboard and pad: a teal ring, never for a click ───────────── */
+
+:where(button, a[href], summary, [role='button'], [role='menuitem'], [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── hover where there is a mouse to hover with ─────────────────────────── */
+
+@media (hover: hover) and (pointer: fine) {
+  :where(button.link):hover {
+    text-decoration-thickness: 2px;
+  }
+
+  :where(.chat-wheel button, .info-tab, .notepad-head button):hover:not(:disabled) {
+    background: var(--panel);
+  }
+}
+
+/* ── less motion: a cross-fade for the panel, a change of light for a press ─ */
+
+:where([data-motion='reduce']) {
+  .puzzle-modal:not(.puzzle-modal--leaving) .panel {
+    animation-name: panel-fade;
+  }
+
+  button:active:not(:disabled) {
+    translate: none;
+  }
+}
+
+@keyframes panel-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}

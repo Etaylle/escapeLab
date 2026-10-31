@@ -10,7 +10,15 @@ import {
   softEllipse,
   TAU,
 } from './brush.js';
-import { restingPose, type Arms, type FigurePose } from './figure.js';
+import {
+  leanOf,
+  restingPose,
+  strideAt,
+  type Arms,
+  type FigurePose,
+  type Foot,
+  type Stride,
+} from './figure.js';
 import {
   ALARM,
   AMBER,
@@ -216,7 +224,29 @@ export interface ScientistOpts {
    * its own anchor, in tiles — the figure puts it before its chest at HELD_SCALE
    */
   held?: (ctx: CanvasRenderingContext2D) => void;
+  /**
+   * the light the figure stands in, which its shadow follows (FIGURE_SHADOWS): a lit room's
+   * ceiling lights, or the dark; left out, the shadow of a figure with no light round it, as
+   * the lobby stands its crew
+   */
+  ground?: Ground;
 }
+
+/** The light a figure stands in, for its shadow. */
+export type Ground = 'lit' | 'dark' | 'plain';
+
+/**
+ * The soft blob of shadow under a figure, by the light it stands in: dark under the ceiling
+ * lights, and thrown a little to the bottom right, away from their key light at the top left;
+ * faint in the dark, where the only light is the lamp in its own hands; in between where no
+ * light is said.
+ */
+export const FIGURE_SHADOWS: Readonly<Record<Ground, { alpha: number; dx: number; dy: number }>> =
+  {
+    lit: { alpha: 0.5, dx: 0.035, dy: 0.012 },
+    dark: { alpha: 0.18, dx: 0, dy: 0 },
+    plain: { alpha: 0.35, dx: 0, dy: 0 },
+  };
 
 // Geometry in tile units, drawn facing right with the origin at the feet center.
 const BODY_HALF_W = 0.22;
@@ -226,7 +256,11 @@ const BODY_BOTTOM = -0.15;
 const BODY_CORNER = 0.09;
 const LEG_W = 0.17;
 const LEG_TOP = -0.24;
-const LEG_X = 0.12;
+/** A boot at a leg's foot: its sole's height, its toe reaching forward past the leg. */
+const BOOT_H = 0.075;
+const TOE = 0.035;
+/** How far a lifted boot tips its toe up, radians a tile lifted. */
+const TOE_TIP = 4;
 const OUTLINE_W = 0.035;
 const VISOR_FRONT = 0.285;
 const VISOR_H = 0.19;
@@ -249,11 +283,6 @@ const HOLD_BACK: readonly [number, number] = [0.06, -0.5];
 const HELD_X = 0.43;
 const HELD_Y = -0.44;
 export const HELD_SCALE = 0.6;
-// Animation amplitudes (tile units, radians for LEAN).
-const STRIDE = 0.06;
-const STEP_LIFT = 0.025;
-const BOB = 0.025;
-const LEAN = 0.06;
 const DISCONNECTED_ALPHA = 0.45;
 /** Visor glass: steel with a cold sheen. */
 const VISOR_GLASS = mix(STEEL, GLASS, 0.3);
@@ -304,6 +333,8 @@ interface ScientistPaths {
   body: Path2D;
   /** Centered on x = 0, standing on y = 0. */
   leg: Path2D;
+  /** A leg's boot, its heel at the leg's back and its toe forward, standing on y = 0. */
+  boot: Path2D;
   pack: Path2D;
   /** Hanging from its shoulder at the origin down +y, the hand at its end. */
   arm: Path2D;
@@ -327,6 +358,8 @@ function getScientistPaths(): ScientistPaths {
   body.closePath();
   const leg = new Path2D();
   roundRectPath(leg, -LEG_W / 2, LEG_TOP, LEG_W, -LEG_TOP, 0.06);
+  const boot = new Path2D();
+  roundRectPath(boot, -LEG_W / 2, -BOOT_H, LEG_W + TOE, BOOT_H, 0.035);
   const pack = new Path2D();
   roundRectPath(pack, -0.285, -0.62, 0.13, 0.32, 0.05);
   const arm = new Path2D();
@@ -334,8 +367,38 @@ function getScientistPaths(): ScientistPaths {
   addCircle(arm, 0, ARM_LENGTH, HAND_R);
   const hand = new Path2D();
   addCircle(hand, 0, 0, HAND_R);
-  scientistPaths = { body, leg, pack, arm, hand };
+  scientistPaths = { body, leg, boot, pack, arm, hand };
   return scientistPaths;
+}
+
+/**
+ * A leg where its foot is in the walk (figure.ts strideAt), facing-right space: stroked (the
+ * outline pass, `fill` null) or filled — the leg, then its boot, the boot's toe tipped up as the
+ * foot lifts.
+ */
+function legAt(
+  ctx: CanvasRenderingContext2D,
+  foot: Foot,
+  fill: readonly [leg: string, boot: string] | null,
+): void {
+  const { leg, boot } = getScientistPaths();
+  const { x } = foot;
+  ctx.translate(x, -foot.lift);
+  if (fill === null) {
+    ctx.stroke(leg);
+  } else {
+    ctx.fillStyle = fill[0];
+    ctx.fill(leg);
+  }
+  ctx.rotate(-foot.lift * TOE_TIP);
+  if (fill === null) {
+    ctx.stroke(boot);
+  } else {
+    ctx.fillStyle = fill[1];
+    ctx.fill(boot);
+  }
+  ctx.rotate(foot.lift * TOE_TIP);
+  ctx.translate(-x, foot.lift);
 }
 
 /** Body fill: lit front-top fading to the shaded back-bottom (facing-right space). */
@@ -360,12 +423,6 @@ function buildVisorGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
 function strokePathAt(ctx: CanvasRenderingContext2D, path: Path2D, x: number, y: number): void {
   ctx.translate(x, y);
   ctx.stroke(path);
-  ctx.translate(-x, -y);
-}
-
-function fillPathAt(ctx: CanvasRenderingContext2D, path: Path2D, x: number, y: number): void {
-  ctx.translate(x, y);
-  ctx.fill(path);
   ctx.translate(-x, -y);
 }
 
@@ -530,29 +587,24 @@ function drawHeld(
 }
 
 /**
- * Arms, legs, backpack, body and visor, and what the hands hold. Turns the
- * figure to the side it looks to, bows it as the pose says and leans it
- * while moving; leaves the transform changed, so callers wrap it in
- * save/restore. `bob` raises the body over the legs (negative is up).
+ * Arms, legs and their boots, backpack, body and visor, and what the hands
+ * hold. Turns the figure to the side it looks to, bows it as the pose says
+ * and leans it into the way it walks (figure.ts leanOf); leaves the
+ * transform changed, so callers wrap it in save/restore. The legs stand as
+ * `stride` has them; `bob` raises the body over them (negative is up).
  */
 function drawScientistFigure(
   ctx: CanvasRenderingContext2D,
   o: ScientistOpts,
   colors: BodyColors,
-  theta: number,
+  stride: Stride,
   bob: number,
   pose: FigurePose,
 ): void {
   const paths = getScientistPaths();
-  const swing = o.moving ? Math.sin(theta) * STRIDE : 0;
-  // Positive while the front leg swings forward (lifted), negative while the rear one does.
-  const raise = o.moving ? Math.cos(theta) * STEP_LIFT : 0;
-  const frontX = LEG_X + swing;
-  const frontY = -Math.max(0, raise);
-  const backX = -LEG_X - swing;
-  const backY = -Math.max(0, -raise);
+  const { back, front } = stride;
   ctx.scale(Math.cos(pose.look) < 0 ? -1 : 1, 1);
-  ctx.rotate((o.moving ? LEAN : 0) + pose.bow);
+  ctx.rotate(leanOf(o.facing, o.moving) + pose.bow);
   ctx.lineJoin = 'round';
   // Outline pass at twice the outline width; the fill pass covers the inner half, leaving
   // one continuous outline around the union of arms, legs, backpack and body.
@@ -563,14 +615,12 @@ function drawScientistFigure(
     drawArms(ctx, pose.arms, pose.holding, null);
     ctx.translate(0, -bob);
   }
-  strokePathAt(ctx, paths.leg, backX, backY);
-  strokePathAt(ctx, paths.leg, frontX, frontY);
+  legAt(ctx, back, null);
+  legAt(ctx, front, null);
   strokePathAt(ctx, paths.pack, 0, bob);
   strokePathAt(ctx, paths.body, 0, bob);
-  ctx.fillStyle = colors.shade;
-  fillPathAt(ctx, paths.leg, backX, backY);
-  ctx.fillStyle = o.color;
-  fillPathAt(ctx, paths.leg, frontX, frontY);
+  legAt(ctx, back, [colors.shade, colors.outline]);
+  legAt(ctx, front, [o.color, colors.pack]);
   ctx.translate(0, bob);
   if (pose.arms !== null) {
     drawArms(ctx, pose.arms, pose.holding, colors);
@@ -619,9 +669,25 @@ export function drawVoiceRing(ctx: CanvasRenderingContext2D, color: string, time
 }
 
 /**
+ * The soft blob of shadow under a figure standing on `ground` (FIGURE_SHADOWS), `scale` of its
+ * size: a raised body casts a slightly smaller one, a figure in the air a smaller one still.
+ */
+export function drawFigureShadow(
+  ctx: CanvasRenderingContext2D,
+  ground: Ground,
+  [scale, bob]: readonly [number, number],
+): void {
+  const { alpha, dx, dy } = FIGURE_SHADOWS[ground];
+  const rx = (0.3 + bob) * scale;
+  const ry = (0.1 + bob / 3) * scale;
+  softEllipse(ctx, dx, dy, rx, ry, BLACK, alpha, 'source-over');
+}
+
+/**
  * Anchor: FEET CENTER. Body ~0.62 tile wide, ~0.85 tile tall. Stands as
  * `o.pose` says (figure.ts) — off the ground and squashed or stretched about
- * its feet, its shadow shrinking under it as it rises — at rest without one.
+ * its feet, its shadow shrinking under it as it rises — at rest without one;
+ * walks as its cycle says (strideAt), over a shadow of the light it stands in.
  */
 export function drawScientist(ctx: CanvasRenderingContext2D, o: ScientistOpts): void {
   // Resolved first so an invalid color throws before anything is drawn.
@@ -630,18 +696,14 @@ export function drawScientist(ctx: CanvasRenderingContext2D, o: ScientistOpts): 
   ctx.save();
   try {
     if (!o.connected) ctx.globalAlpha *= DISCONNECTED_ALPHA;
-    const theta = o.walkPhase * TAU;
     // The body is highest while the legs pass each other and back down at full stride.
-    const bob = o.moving ? -Math.abs(Math.cos(theta)) * BOB : 0;
-    // bob <= 0: a raised body casts a slightly smaller shadow, a figure in the air a smaller one.
-    const rx = (0.3 + bob) * pose.shadow;
-    const ry = (0.1 + bob / 3) * pose.shadow;
-    softEllipse(ctx, 0, 0, rx, ry, BLACK, 0.35, 'source-over');
+    const stride = strideAt(o.walkPhase, o.moving);
+    drawFigureShadow(ctx, o.ground ?? 'plain', [pose.shadow, stride.bob]);
     if (o.isYou) drawYouRing(ctx);
     ctx.save();
     ctx.translate(0, -pose.rise);
     ctx.scale(1 / pose.stretch, pose.stretch);
-    drawScientistFigure(ctx, o, colors, theta, bob - pose.bob, pose);
+    drawScientistFigure(ctx, o, colors, stride, stride.bob - pose.bob, pose);
     ctx.restore();
     drawHaloText(ctx, o.name, 0, NAME_Y, (o.text ?? TILE_TEXT).name, NAME_COLOR, 'bottom');
   } finally {
@@ -677,9 +739,48 @@ export interface StationOpts {
   console: ConsoleId | null;
   /** the thing alone, no foot shadow or glow: what its silhouette is baked from (silhouette.ts) */
   bare?: boolean;
+  /** its monitor's tube this frame (Tube); a steady tube where left out */
+  tube?: Tube;
 }
 
 type StationStatus = StationOpts['status'];
+
+/**
+ * A CRT's tube this frame (anim.ts crtFlicker, rollAt): how brightly it burns, 0 to 1, and where
+ * its roll bar lies down the screen, 0 to 1 — none under reduced motion.
+ */
+export interface Tube {
+  burn: number;
+  roll: number | null;
+}
+
+/**
+ * A CRT's tube over its screen `[x, y, w, h]`: the picture dimmed by as much as the tube
+ * flickers down, and its roll bar, a faint brighter band, drifting down it. A tube left out
+ * burns steady.
+ */
+function drawTube(
+  ctx: CanvasRenderingContext2D,
+  [x, y, w, h]: readonly [number, number, number, number],
+  tube: Tube | undefined,
+): void {
+  if (tube === undefined) {
+    return;
+  }
+  if (tube.burn < 1) {
+    ctx.fillStyle = rgba(BLACK, Math.min(1, (1 - tube.burn) * 1.6));
+    ctx.fillRect(x, y, w, h);
+  }
+  if (tube.roll !== null) {
+    const band = h * 0.22;
+    const top = Math.max(y, y - band + tube.roll * (h + band));
+    const bottom = Math.min(y + h, y - band + tube.roll * (h + band) + band);
+    if (bottom > top) {
+      ctx.fillStyle = rgba(WHITE, 0.045);
+      ctx.fillRect(x, top, w, bottom - top);
+    }
+  }
+}
 
 interface StationLook {
   deskTop: string;
@@ -933,6 +1034,7 @@ export function drawStation(ctx: CanvasRenderingContext2D, o: StationOpts): void
     drawStationCabinet(ctx, look, o.status === 'armed' ? 0.35 + 0.65 * wave : 0.85);
     drawStationMonitor(ctx, look);
     drawStationScreen(ctx, o.status, wave);
+    drawTube(ctx, [SCREEN_X, SCREEN_Y, SCREEN_W, SCREEN_H], o.tube);
     if (o.console !== null) drawConsoleBadge(ctx, look, o.console);
   } finally {
     ctx.restore();
@@ -1490,6 +1592,8 @@ export interface ManualObjectOpts {
   text?: WorldText;
   /** the thing alone — no foot shadow, glow or label: what its silhouette is baked from */
   bare?: boolean;
+  /** a terminal's tube this frame (Tube); a steady tube where left out */
+  tube?: Tube;
 }
 
 const READ_LABEL = css(lift(READ_BLUE, 0.3));
@@ -2018,6 +2122,7 @@ export function drawManualObject(ctx: CanvasRenderingContext2D, o: ManualObjectO
         break;
       case 'terminal':
         drawTerminal(ctx, o.active, wave);
+        drawTube(ctx, [PLAN_X, PLAN_Y, PLAN_W, PLAN_H], o.tube);
         break;
       case 'chart':
         drawChart(ctx, o.active);

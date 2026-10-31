@@ -20,6 +20,10 @@ import type { CarryableKind } from './hazards.js';
  *   lost       slumped: the body sagged 2 px and bowed, the visor dimmed, the
  *              arms down
  *   ready      in the lobby: a wave of the arm for 1.8 s
+ *   walking    the legs swing in a cycle tied to the ground covered (strideAt,
+ *              gaitStep), the body a pixel up as they pass, leaning into
+ *              the way it walks; the lamp in its hands sways with the step
+ *              (handLamp)
  *
  * Lengths are in tiles — PX is a pixel at the art's 64 px a tile — angles in
  * radians, times in ms. Every crew member runs each loop at an offset of
@@ -159,6 +163,116 @@ const STARTLE = 1.8;
 
 /** How far the shadow shrinks at the top of a jump, as a share of its size. */
 const SHADOW_SHRINK = 0.45;
+
+/**
+ * The walk: one cycle of the legs — two steps, a footfall each — every GAIT_CYCLE tiles walked,
+ * so the legs keep pace with the ground whatever the speed: a sprint swings them as much
+ * faster as it runs, a partner easing in slows them as it slows. Standing, the legs stand at
+ * HIP_X either side of the middle; walking, the hips draw in to WALK_HIP and each foot swings
+ * STRIDE ahead of its hip and as far behind — past the other foot, so the legs truly take
+ * turns leading — lifting STEP_LIFT at most as it swings forward. The body rides a pixel higher
+ * while the legs pass each other than at full stride (WALK_BOB), and leans LEAN into the way it
+ * walks — as far as that way runs across the picture: a figure walking up or down the screen
+ * does not tilt.
+ */
+export const GAIT_CYCLE = 1.75;
+export const HIP_X = 0.12;
+export const WALK_HIP = 0.025;
+export const STRIDE = 0.125;
+export const STEP_LIFT = 0.035;
+export const WALK_BOB = PX;
+export const LEAN = 0.06;
+
+/** Where one foot is in the walk: across the figure (facing right, tiles) and off the ground. */
+export interface Foot {
+  x: number;
+  lift: number;
+}
+
+/** The legs in one frame of the walk, and how far the body rides up over them (negative: up). */
+export interface Stride {
+  /** the leg at the figure's front, the one its visor looks past */
+  front: Foot;
+  /** the leg at its back, by the pack: half a cycle behind the front one */
+  back: Foot;
+  bob: number;
+}
+
+/** Both feet on the ground under the hips, the body down: a figure standing. */
+export const STANDING: Stride = {
+  front: { x: HIP_X, lift: 0 },
+  back: { x: -HIP_X, lift: 0 },
+  bob: 0,
+};
+
+/** The walk cycle `phase` (0 to 1) on from where it stood, `tiles` further on. */
+export function gaitStep(phase: number, tiles: number): number {
+  const next = phase + Math.max(0, tiles) / GAIT_CYCLE;
+  return next - Math.floor(next);
+}
+
+/**
+ * The legs `phase` (0 to 1) into the walk cycle: the front foot swings forward lifted and walks
+ * back planted, the back foot half a cycle behind it; at a quarter the front foot leads, at
+ * three quarters the back one, the body highest as they pass each other (phase 0 and 0.5) and
+ * lowest with both planted wide. A figure standing stands on both feet.
+ */
+export function strideAt(phase: number, moving: boolean): Stride {
+  if (!moving) {
+    return STANDING;
+  }
+  const theta = phase * TAU;
+  const swing = Math.sin(theta) * STRIDE;
+  const raise = Math.cos(theta) * STEP_LIFT;
+  return {
+    front: { x: WALK_HIP + swing, lift: Math.max(0, raise) },
+    back: { x: -WALK_HIP - swing, lift: Math.max(0, -raise) },
+    bob: -Math.abs(Math.cos(theta)) * WALK_BOB,
+  };
+}
+
+/** How far a figure walking toward `facing` leans into it, radians: by how far it runs sideways. */
+export function leanOf(facing: number, moving: boolean): number {
+  return moving ? LEAN * Math.abs(Math.cos(facing)) : 0;
+}
+
+/**
+ * The flashlight in a figure's hands: before its chest toward where it faces — HAND_AHEAD
+ * across the picture, less up or down it, as the view is foreshortened — riding the body's bob,
+ * and swaying with the step, SWAY either way of the facing once a stride. A figure standing,
+ * or one asked to move less, holds it still before it.
+ */
+export const HAND_AHEAD = 0.16;
+export const HAND_DEPTH = 0.1;
+export const SWAY = 0.035;
+/** How far the lamp's light rocks across the beam with the step, tiles. */
+export const SWAY_SIDE = 0.012;
+
+/** Where the light a figure carries comes from, and where it points. */
+export interface HandLamp {
+  x: number;
+  y: number;
+  facing: number;
+}
+
+/** The lamp in the hands of a figure at (x, y) facing `facing`, `phase` into its walk. */
+export function handLamp(
+  at: { x: number; y: number; facing: number; moving: boolean },
+  phase: number,
+  reduced: boolean,
+): HandLamp {
+  const { facing } = at;
+  const swaying = at.moving && !reduced;
+  const theta = phase * TAU;
+  const sway = swaying ? Math.sin(theta) : 0;
+  const bob = swaying ? strideAt(phase, true).bob : 0;
+  const side = SWAY_SIDE * sway;
+  return {
+    x: at.x + Math.cos(facing) * HAND_AHEAD - Math.sin(facing) * side,
+    y: at.y + Math.sin(facing) * HAND_DEPTH + Math.cos(facing) * side + bob,
+    facing: facing + SWAY * sway,
+  };
+}
 
 /** The number of 32-bit values: a hash over it is a share of 1. */
 const UINT32 = 2 ** 32;

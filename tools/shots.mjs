@@ -2985,6 +2985,7 @@ async function coldOpen(host, guest) {
   await captureColdOpen(host);
   await captureIntroTitle(host, guest);
   await captureBlackout(host);
+  await captureDust(host);
   await bedDead(host, 'after the blackout');
   await partnerSide(host, guest, 'after the blackout');
   await checkRadioVoice(guest, opening, 'the blackout', startLineOf(guest));
@@ -3166,6 +3167,7 @@ async function captureConsoles(operator, reader) {
     await sleep(300); // past the resize
     await sampleFrames(watched.page, `idle at the open "${title}" panel`, () => sleep(SAMPLE_MS));
     panelSampled = true;
+    await capturePanelZoom(watched);
   }
   if (kind === 'signal') {
     await solveSignal(crew, title);
@@ -6048,6 +6050,7 @@ async function readLocker(reader, locker) {
 async function playServerraum(host, guest) {
   const locker = pinnedSource('locker');
   await sneakTo(host, BLACKOUT_SPOTS.terminal);
+  await captureRackLeds(host);
   await sneakTo(guest, BLACKOUT_SPOTS.locker);
   await foundWherePinned(guest, locker);
   await readLocker(guest, locker);
@@ -6628,6 +6631,7 @@ async function playToTheEnd(host, guest, watcher, pinned) {
  * elsewhere the captures of the end are skipped, saying why.
  */
 async function playPinnedOut(anna, ben, watcher) {
+  const stopHatchDust = watchHatchDust(watcher, anna.seen);
   const mission = MISSION.toLowerCase();
   const pinned = mission === 'systemcheck' ? PINNED_WIRING.get(SEED) : undefined;
   if (pinned !== undefined) {
@@ -6638,6 +6642,7 @@ async function playPinnedOut(anna, ben, watcher) {
   } else if (mission === 'blackout') {
     skip('escape.png', `seed ${SEED} is not the one tools/fixtures/blackout-plan.json pins`);
   }
+  await stopHatchDust();
 }
 
 /** Whether `promise` settles in time: true when it resolves, false when it rejects. */
@@ -7061,6 +7066,7 @@ async function run() {
   await captureSettings(host);
   await captureMinimapGoal(anna);
   await captureSprint(anna);
+  await captureWalkCycle(anna);
 
   const watcherCtx = await browser.newContext({ viewport: SIZES[0] });
   const watcher = await openPage(watcherCtx, 'audience');
@@ -7074,6 +7080,7 @@ async function run() {
   await capture(watcher, 'spectate.png');
   await overflow(watcher, 'spectate @ 1440x820');
   await listenIn(watcher, [anna, ben]);
+  await captureDpr2(code);
 
   await captureLocker(guest, guestSeen, watcherSeen);
 
@@ -7219,6 +7226,302 @@ async function run() {
   reportWalking();
   await browser.close();
   console.log('screenshots in', OUT);
+}
+
+// ── the graphics package's captures: figures, the air, the props, the camera, the density ──
+//
+// What the world's picture shows of them, the traced pages hand back (`?trace=1`,
+// `window.__escapelab.graphics`, client world/render/graphicsProbe.ts): the walk cycle's phase
+// and the light the figure's shadow follows, the motes lit in the light cones, the camera
+// leaning in on an open panel, the hatch grinding open, the canvas's backing store.
+//
+// walk-cycle-a.png, walk-cycle-b.png  the host walking out along the longest open stretch from
+//   its tile, shot as its legs stand wide one way and then the other — the probe's phase in
+//   each shot's window, half a cycle apart — or the run fails
+// shadow-blob.png  the host standing still again, the blob of shadow under it in the light it
+//   stands in, the probe saying which
+// dust.png  in Blackout two seconds into the dark, after blackout.png — in a mission without
+//   an intro after the game screenshots — the host's lamp lighting motes in its cone (the
+//   breaker's smoke rising in Blackout); skipped where fewer than four show within 4 s
+// panel-zoom.png  the host's world behind its open panel at the panel window, the camera
+//   leaned in PANEL_ZOOM times — or the run fails
+// rack-leds.png  Blackout's Serverraum as the host comes to its terminal, the racks' LEDs
+//   blinking round it; the Systemcheck has no server room and skips it
+// hatch-dust.png  the audience's world round the hatch as it grinds open, dust falling off its
+//   rim — the probe counting the grains — waited for from before the last station's presses
+// dpr2.png  a second audience page at twice the density: the canvas's backing store has to be
+//   its box's CSS pixels times two, rounded — or the run fails
+
+/** How far round a figure a figure's shot reaches, tiles each way. */
+const FIGURE_SHOT = 1.1;
+/** The walk cycle's two windows the walk shots are taken in: legs wide one way, then the other. */
+const STRIDE_WINDOWS = [
+  ['walk-cycle-a.png', 0.18, 0.32],
+  ['walk-cycle-b.png', 0.68, 0.82],
+];
+/** How far the camera leans in on an open panel (client world/render/camera.ts PANEL_ZOOM). */
+const PANEL_ZOOM = 1.08;
+/** Whether dust.png was taken this run: a mission with an intro takes it at the blackout. */
+let dustShot = false;
+
+/** The graphics probe of a traced page; null where there is none. */
+function graphicsOf(page) {
+  return page.evaluate(() => globalThis.__escapelab?.graphics ?? null);
+}
+
+/** Waits up to `ms` for the graphics probe of `page` to satisfy `check`: the probe, or null. */
+async function graphicsWhen(page, check, ms) {
+  const until = Date.now() + ms;
+  for (;;) {
+    const probe = await graphicsOf(page);
+    if (probe !== null && check(probe)) {
+      return probe;
+    }
+    if (Date.now() >= until) {
+      return null;
+    }
+    await sleep(30);
+  }
+}
+
+/** Where the world point (x, y), in tiles, lies on `page`, CSS px, and a tile's size there. */
+function onPage(page, x, y) {
+  return page.evaluate(
+    ([wx, wy]) => {
+      const camera = globalThis.__escapelab?.camera;
+      const canvas = document.querySelector('.world-canvas');
+      if (camera === undefined || canvas === null) {
+        return null;
+      }
+      const rect = canvas.getBoundingClientRect();
+      const dpr = canvas.width / rect.width;
+      return {
+        x: rect.left + rect.width / 2 + ((wx - camera.x) * camera.scale) / dpr,
+        y: rect.top + rect.height / 2 + ((wy - camera.y) * camera.scale) / dpr,
+        tile: camera.scale / dpr,
+      };
+    },
+    [x, y],
+  );
+}
+
+/** A shot of `page` round the world point `at`, `tiles` tiles each way, as `name`; counted. */
+async function shootAround(page, name, at, tiles) {
+  const spot = await onPage(page, at.x, at.y);
+  if (spot === null) {
+    skip(name, 'the page shows no world to frame');
+    return false;
+  }
+  const view = page.viewportSize();
+  const half = spot.tile * tiles;
+  const x = Math.max(0, Math.round(spot.x - half));
+  const y = Math.max(0, Math.round(spot.y - half));
+  const width = Math.min(view.width - x, Math.round(half * 2));
+  const height = Math.min(view.height - y, Math.round(half * 2));
+  await page.screenshot({ path: join(OUT, name), clip: { x, y, width, height } });
+  tally.taken += 1;
+  return true;
+}
+
+/** Where `page`'s own figure stands as it steers it, tiles; null without the probe. */
+function selfOn(page) {
+  return page.evaluate(() => globalThis.__escapelab?.self ?? null);
+}
+
+/**
+ * dust.png: the motes `player`'s lamp lights in its cone, once four or more show within 4 s —
+ * in Blackout with the breaker's smoke rising two seconds into the dark.
+ */
+async function captureDust({ name, page }) {
+  const lit = await graphicsWhen(page, (probe) => probe.particles.litMotes >= 4, 4000);
+  if (lit === null) {
+    const now = await graphicsOf(page);
+    skip('dust.png', `${name}'s lamp lit ${now?.particles.litMotes ?? 0} motes within 4 s`);
+    return;
+  }
+  await capture(page, 'dust.png');
+  dustShot = true;
+  const { litMotes, dust = 0, smoke = 0 } = lit.particles;
+  console.log(
+    `dust.png           ${name}'s lamp lights ${litMotes} of ${dust} motes in its cone; ` +
+      `${smoke} wisps of the breaker's smoke in the air`,
+  );
+}
+
+/**
+ * walk-cycle-a.png and walk-cycle-b.png: `player` walking out along the longest open stretch
+ * from its tile, shot in each stride window — the run fails where either never comes — then
+ * back; then shadow-blob.png as it stands, and in a mission without an intro dust.png.
+ */
+async function captureWalkCycle(player) {
+  const { name, page, seen } = player;
+  const map = seen.view?.map;
+  const home = tileOf(seen);
+  const avoid = (x, y) =>
+    map.plates.some((p) => p.x === x && p.y === y) || (map.exit?.x === x && map.exit?.y === y);
+  const run = map == null || home === null ? null : longestRun(map, home, avoid);
+  if (run === null || run.tiles < 2) {
+    skip('walk-cycle-a.png', `${name} has no 2 tiles of open floor in a line from its tile`);
+    return;
+  }
+  await stepTo(page, seen, home.x + 0.5, home.y + 0.5);
+  const phases = await walkTheStride(player, run);
+  await stepTo(page, seen, home.x + 0.5, home.y + 0.5);
+  if (phases.length < STRIDE_WINDOWS.length) {
+    console.log(`walk-cycle         !! ${name}'s legs never stood wide both ways on the walk`);
+    fail(`${name}'s walk cycle never reached both stride windows`);
+  } else {
+    const at = phases.map((p) => p.toFixed(2)).join(' and ');
+    console.log(
+      `walk-cycle         ${name} shot at walk phases ${at}: legs wide one way, then the other`,
+    );
+  }
+  await captureShadow(player);
+  if (!dustShot) {
+    await captureDust(player);
+  }
+  if (MISSION.toLowerCase() !== 'blackout') {
+    skip('rack-leds.png', `${MISSION} has no server room: Blackout's Serverraum takes it`);
+  }
+}
+
+/** Holds the key out along `run`, shooting each stride window as it comes; their phases. */
+async function walkTheStride({ page }, run) {
+  const out = WALK_KEYS.get(`${run.dx},${run.dy}`);
+  const ms = ((run.tiles - 0.4) / SPEED) * 1000;
+  const phases = [];
+  await page.keyboard.down(out);
+  const start = Date.now();
+  try {
+    for (const [shot, from, to] of STRIDE_WINDOWS) {
+      const left = Math.max(0, start + ms - Date.now());
+      const at = await graphicsWhen(
+        page,
+        ({ gait }) => gait.moving && gait.phase >= from && gait.phase <= to,
+        left,
+      );
+      const self = at === null ? null : await selfOn(page);
+      if (self === null) {
+        break;
+      }
+      await shootAround(page, shot, { x: self.x, y: self.y - 0.15 }, FIGURE_SHOT);
+      phases.push(at.gait.phase);
+    }
+  } finally {
+    await page.keyboard.up(out);
+    walking.ms.set(page, (walking.ms.get(page) ?? 0) + (Date.now() - start));
+  }
+  await sleep(200);
+  return phases;
+}
+
+/** shadow-blob.png: `player` standing still, the shadow under it in the light it stands in. */
+async function captureShadow({ name, page }) {
+  const standing = ({ gait, ground }) => !gait.moving && ground !== null;
+  const still = await graphicsWhen(page, standing, 2000);
+  const self = await selfOn(page);
+  if (still === null || self === null) {
+    skip('shadow-blob.png', `${name}'s figure never stood still in the probe's sight`);
+    return;
+  }
+  await sleep(150);
+  await shootAround(page, 'shadow-blob.png', { x: self.x, y: self.y }, FIGURE_SHOT);
+  const light = { lit: 'under the ceiling lights', dark: 'in the dark' }[still.ground];
+  console.log(`shadow-blob.png    ${name} standing ${light ?? 'unlit'}: its blob of shadow`);
+}
+
+/**
+ * panel-zoom.png: `player`'s world behind its open panel, the camera leaned in PANEL_ZOOM times
+ * — or the run fails.
+ */
+async function capturePanelZoom({ name, page }) {
+  const leaned = await graphicsWhen(
+    page,
+    ({ zoom }) => Math.abs(zoom.to - PANEL_ZOOM) < 1e-9 && Math.abs(zoom.now - zoom.to) < 1e-9,
+    2000,
+  );
+  if (leaned === null) {
+    const now = await graphicsOf(page);
+    const at = now?.zoom.now;
+    console.log(`panel-zoom.png     !! ${name}'s camera stands at ${at} behind its panel`);
+    fail(`${name}'s camera did not lean in on the open panel`);
+    return;
+  }
+  await capture(page, 'panel-zoom.png');
+  const lean = leaned.zoom.now.toFixed(2);
+  console.log(`panel-zoom.png     ${name}'s camera leaned in ${lean}× behind the panel`);
+}
+
+/** rack-leds.png: Blackout's Serverraum round its terminal as `player` comes to it. */
+async function captureRackLeds({ name, page }) {
+  await sleep(400);
+  if (await shootAround(page, 'rack-leds.png', { x: 11.5, y: 3.5 }, 2.3)) {
+    console.log(`rack-leds.png      ${name} by the terminal: the racks' LEDs blinking round it`);
+  }
+}
+
+/**
+ * hatch-dust.png, watched for on the audience's page `watcher` from now on: as the hatch grinds
+ * open there, dust falling off its rim — the probe counting the grains. Returns what stops the
+ * watch once the run is played out, resolved when the watch is over; it fails nothing.
+ */
+function watchHatchDust(watcher, seen) {
+  let stopped = false;
+  const watch = (async () => {
+    while (!stopped) {
+      const probe = await graphicsOf(watcher).catch(() => null);
+      const exit = seen.view?.map?.exit;
+      if (probe !== null && exit != null && probe.hatch > 0.12 && probe.hatch < 0.85) {
+        const grains = probe.particles.debris ?? 0;
+        await shootAround(watcher, 'hatch-dust.png', { x: exit.x + 0.5, y: exit.y + 0.5 }, 2.5);
+        console.log(
+          `hatch-dust.png     the audience: the hatch grinding open, ${grains} grains of dust falling`,
+        );
+        return;
+      }
+      await sleep(40);
+    }
+    skip('hatch-dust.png', 'the audience never saw the hatch grinding open');
+  })();
+  return () => {
+    stopped = true;
+    return watch;
+  };
+}
+
+/**
+ * dpr2.png: a second audience page at twice the density, joined to room `code`; its canvas's
+ * backing store has to be its box's CSS pixels times two — or the run fails.
+ */
+async function captureDpr2(code) {
+  const context = await browser.newContext({ viewport: SIZES[0], deviceScaleFactor: 2 });
+  try {
+    const page = await context.newPage();
+    await page.goto(traced(BASE));
+    await page.getByLabel('Raumcode').fill(code);
+    await clickText(page, 'Mit Code zuschauen');
+    await page.locator('.spectate').waitFor({ timeout: 10_000 });
+    const drawn = await graphicsWhen(page, ({ backing }) => backing.cssWidth > 0, 5000);
+    await sleep(800);
+    await capture(page, 'dpr2.png');
+    const backing = drawn?.backing ?? null;
+    const crisp =
+      backing !== null &&
+      backing.width === Math.round(backing.cssWidth * 2) &&
+      backing.height === Math.round(backing.cssHeight * 2);
+    const sizes =
+      backing === null
+        ? 'no canvas'
+        : `canvas ${backing.width}×${backing.height} ` +
+          `for a box of ${backing.cssWidth}×${backing.cssHeight}`;
+    const verdict = crisp ? ', a device pixel each' : ' — !! not 2×';
+    console.log(`dpr2.png           the audience at 2×: ${sizes}${verdict}`);
+    if (!crisp) {
+      fail(`the canvas at twice the density is not twice its box: ${sizes}`);
+    }
+  } finally {
+    await context.close();
+  }
 }
 
 /**

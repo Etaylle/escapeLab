@@ -1,5 +1,6 @@
 import { SPRINT_FACTOR, WALK_SPEED, walkable, type PlayerPosition } from '@escapelab/core';
 import type { DoorMotion } from './doors.js';
+import { gaitStep } from './figure.js';
 import { lightMemory, type LightMemory } from './light.js';
 import {
   correction,
@@ -26,8 +27,6 @@ import type {
  */
 
 const RADIUS = 0.28; // collision half-size
-/** How many times a second the legs swing at a walk; a sprint swings them as much faster. */
-const GAIT_RATE = 2.4;
 /**
  * How far apart two footfalls land, in tiles: a sprint, covering more ground in the same time,
  * lands them faster.
@@ -228,7 +227,7 @@ export function walk(sim: Sim, map: WorldMap, dt: number, locked: boolean): Foot
   if (!blocked(map, closedDoors, sim.self.x, ny)) {
     sim.self.y = ny;
   }
-  sim.walkPhase = (sim.walkPhase + dt * GAIT_RATE * pace) % 1;
+  sim.walkPhase = gaitStep(sim.walkPhase, speed * dt);
   sim.stepAcc += speed * dt;
   if (sim.stepAcc > STRIDE) {
     sim.stepAcc = 0;
@@ -258,10 +257,13 @@ export function easeOthers(
       other.y = pos.y;
       other.facing = pos.facing;
       other.moving = pos.moving;
-      other.rx += (pos.x - other.rx) * k;
-      other.ry += (pos.y - other.ry) * k;
+      const dx = (pos.x - other.rx) * k;
+      const dy = (pos.y - other.ry) * k;
+      other.rx += dx;
+      other.ry += dy;
+      // The legs keep pace with the ground the figure covers on this screen (figure.ts).
       if (pos.moving) {
-        other.phase = (other.phase + dt * 2.4) % 1;
+        other.phase = gaitStep(other.phase, Math.hypot(dx, dy));
       }
     }
   }
