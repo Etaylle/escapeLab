@@ -125,8 +125,8 @@ export function runReport(state: GameState, roomCode: string): RunReport {
 
 /**
  * The seed a report names, and whether the run was the Tagesschicht: a pinned room's seed and
- * the day's are no secret — the one plays again with `?seed=`, the other is everybody's that
- * day; a seed the server rolled stays out.
+ * the day's are kept: the one plays again with `?seed=`, the other names the day's instance to
+ * whoever holds the log (the players never see it); a seed the server rolled stays out.
  */
 function seedOf(state: GameState): Pick<RunReport, 'seed' | 'daily'> {
   if (state.seed === null) {

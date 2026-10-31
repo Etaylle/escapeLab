@@ -100,11 +100,11 @@ export interface PlayerView {
    */
   seed?: { room: number; run: number | null };
   /**
-   * The Tagesschicht, where the mission offers one (`Mission['daily']`): the UTC day whose seed
-   * the room plays (daily.ts) — the day of the host's switch in the lobby, the day the run
-   * started once one has — or null while the host has it off. Left out where none is offered.
+   * The Tagesschicht, where the mission offers one (`Mission['daily']`): whether the host has
+   * it on, and the UTC day whose seed the run plays (daily.ts) once one has started on it —
+   * null in the lobby, where the switch names today. Left out where none is offered.
    */
-  daily?: { day: DailyDay | null };
+  daily?: { on: boolean; day: DailyDay | null };
   /** the Erfolge the run earned, once it is over (achievements.ts); left out before its end */
   achievements?: AchievementId[];
   /**
@@ -874,7 +874,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     puzzle: puzzleViewFor(state, playerId),
     map: mapViewFor(state, playerId),
     ...(state.roomSeed === null ? {} : { seed: { room: state.roomSeed, run: state.seed } }),
-    ...(state.mission.daily ? { daily: { day: state.daily } } : {}),
+    ...(state.mission.daily ? { daily: { on: state.dailyOn, day: state.daily } } : {}),
     ...achievementsOfRun(state),
     ...(state.mission.next === undefined ? {} : { nextMissionId: state.mission.next }),
     ...introOf(state),

@@ -67,7 +67,14 @@ export {
   type Achievement,
   type AchievementId,
 } from './achievements.js';
-export { dailyLabel, dailySeed, isDailyDay, utcDay, type DailyDay } from './daily.js';
+export {
+  dailyLabel,
+  dailySeed,
+  isDailyDay,
+  utcDay,
+  type DailyDay,
+  type DailyStart,
+} from './daily.js';
 export { GameError } from './errors.js';
 export {
   viewFor,

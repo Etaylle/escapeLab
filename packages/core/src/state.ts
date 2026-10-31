@@ -141,9 +141,13 @@ export interface GameState {
    */
   roomSeed: number | null;
   /**
-   * The Tagesschicht, where the host switched it on for a mission that offers it: the UTC day
-   * (daily.ts) whose seed the room's runs play — the day of the switch, moved on to the day
-   * each run starts — over the room's own and any tester's; null while it is off.
+   * The host's switch for the Tagesschicht, for a mission that offers it: on, the room's runs
+   * play the seed of the day each starts on (daily.ts), over the room's own and any tester's.
+   */
+  dailyOn: boolean;
+  /**
+   * the UTC day whose Tagesschicht the run plays (daily.ts), as the server's clock had it at
+   * the start; null for any other run, and in the lobby
    */
   daily: DailyDay | null;
   /** runs started in this room so far: the n of the next one */
@@ -251,6 +255,7 @@ export function initialState(
     puzzleState: null,
     seed: null,
     roomSeed,
+    dailyOn: false,
     daily: null,
     runs: 0,
     edgework: null,

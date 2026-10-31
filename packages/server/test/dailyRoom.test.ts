@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   dailySeed,
   parseMission,
+  utcDay,
   type DailyStats,
   type Mission,
   type MissionStanding,
@@ -25,6 +26,11 @@ const shipped = new MissionCatalog(fileURLToPath(new URL('../../../missions', im
 
 /** 31 October 2026, 18:00 UTC: the day of the walkthrough's Tagesschicht. */
 const OCT_31 = Date.UTC(2026, 9, 31, 18);
+/** The salt of the server these rooms run on (dailySalt.ts), and another server's. */
+const SALT = 'kaltenbrunn-c';
+const OTHER_SALT = 'kaltenbrunn-d';
+/** A run's length here, intro to clock out, ms, and a little more. */
+const RUN_MS = ((blackout.intro?.lightsSec ?? 0) + blackout.timeLimitSec + 5) * 1000;
 
 function collector(): { messages: ServerMessage[]; listen: (m: ServerMessage) => void } {
   const messages: ServerMessage[] = [];
@@ -45,22 +51,37 @@ function lastView(messages: ServerMessage[]): PlayerView {
  * report the room hands on and the lobby's view of the switch.
  */
 function playedOut(manager: RoomManager, reports: RunReport[], daily: boolean, seed = 7) {
+  const { room, anna, ben } = lobbyOf(manager, seed);
+  room.act(anna.playerId, { kind: 'set-daily', daily });
+  const lobby = lastView(ben.messages).daily;
+  room.setReady(ben.playerId, true);
+  room.act(anna.playerId, { kind: 'start-mission' });
+  vi.advanceTimersByTime(RUN_MS);
+  room.dispose();
+  return { report: lastReport(reports), lobby };
+}
+
+/** Anna (host) and Ben in a new Blackout room of `manager`, pinned to `seed` where asked. */
+function lobbyOf(manager: RoomManager, seed = 7) {
   const room = manager.create(blackout, seed);
   const anna = { ...room.join('Anna'), ...collector() };
   const ben = { ...room.join('Ben'), ...collector() };
   room.attach(anna.playerId, anna.listen);
   room.attach(ben.playerId, ben.listen);
-  room.act(anna.playerId, { kind: 'set-daily', daily });
-  const lobby = lastView(ben.messages).daily;
-  room.setReady(ben.playerId, true);
-  room.act(anna.playerId, { kind: 'start-mission' });
-  vi.advanceTimersByTime(((blackout.intro?.lightsSec ?? 0) + blackout.timeLimitSec + 5) * 1000);
-  room.dispose();
+  return { room, anna, ben };
+}
+
+function lastReport(reports: RunReport[]): RunReport {
   const report = reports.at(-1);
   if (report === undefined) {
     throw new Error('the run never ended');
   }
-  return { report, lobby };
+  return report;
+}
+
+/** A manager of rooms on a server with `salt`, its reports into `reports`. */
+function server(reports: RunReport[], salt: string | null = SALT, seeds = seedsAllowed({})) {
+  return new RoomManager((report) => reports.push(report), seeds, salt);
 }
 
 describe('the Tagesschicht on the server', () => {
@@ -74,38 +95,70 @@ describe('the Tagesschicht on the server', () => {
     vi.restoreAllMocks();
   });
 
-  it('pins the day’s seed without ALLOW_SEED, the switch shown in the lobby', () => {
+  it('plays the salted day’s seed without ALLOW_SEED; the lobby shows the switch', () => {
     const reports: RunReport[] = [];
-    const manager = new RoomManager((report) => reports.push(report), seedsAllowed({}));
-    const { report, lobby } = playedOut(manager, reports, true);
-    expect(lobby).toEqual({ day: '2026-10-31' });
-    expect(report).toMatchObject({ daily: true, seed: dailySeed('2026-10-31') });
+    const { report, lobby } = playedOut(server(reports), reports, true);
+    expect(lobby).toEqual({ on: true, day: null });
+    expect(report).toMatchObject({ daily: true, seed: dailySeed('2026-10-31', SALT) });
   });
 
-  it('deals every room the same instance that day', () => {
+  it('deals every room the same instance that day; another server’s salt deals another', () => {
     const reports: RunReport[] = [];
-    const manager = new RoomManager((report) => reports.push(report), seedsAllowed({}));
+    const manager = server(reports);
     const one = playedOut(manager, reports, true).report;
     const other = playedOut(manager, reports, true).report;
     expect(other.spawns).toEqual(one.spawns);
     expect(other.seed).toBe(one.seed);
+    const elsewhere = playedOut(server(reports, OTHER_SALT), reports, true).report;
+    expect(elsewhere.seed).toBe(dailySeed('2026-10-31', OTHER_SALT));
+    expect(elsewhere.seed).not.toBe(one.seed);
   });
 
   it('leaves a room off it to chance, its seed kept to itself', () => {
     const reports: RunReport[] = [];
-    const manager = new RoomManager((report) => reports.push(report), seedsAllowed({}));
-    const { report, lobby } = playedOut(manager, reports, false);
-    expect(lobby).toEqual({ day: null });
+    const { report, lobby } = playedOut(server(reports), reports, false);
+    expect(lobby).toEqual({ on: false, day: null });
     expect(report).not.toHaveProperty('daily');
     expect(report).not.toHaveProperty('seed');
   });
 
   it('passes over a tester’s pinned seed while it is on', () => {
     const reports: RunReport[] = [];
-    const allowed = seedsAllowed({ ALLOW_SEED: '1' });
-    const manager = new RoomManager((report) => reports.push(report), allowed);
-    expect(playedOut(manager, reports, true, 5).report.seed).toBe(dailySeed('2026-10-31'));
+    const manager = server(reports, SALT, seedsAllowed({ ALLOW_SEED: '1' }));
+    expect(playedOut(manager, reports, true, 5).report.seed).toBe(dailySeed('2026-10-31', SALT));
     expect(playedOut(manager, reports, false, 5).report.seed).toBe(5);
+  });
+
+  it('starts no run on it on a server without a salt', () => {
+    const { room, anna, ben } = lobbyOf(server([], null));
+    room.act(anna.playerId, { kind: 'set-daily', daily: true });
+    room.setReady(ben.playerId, true);
+    expect(() => room.act(anna.playerId, { kind: 'start-mission' })).toThrow(/nicht eingerichtet/);
+    room.dispose();
+  });
+
+  it('takes the day from its own clock: a rematch after midnight plays the next day', () => {
+    vi.setSystemTime(Date.UTC(2026, 9, 31, 23, 50));
+    const reports: RunReport[] = [];
+    const { room, anna, ben } = lobbyOf(server(reports));
+    room.act(anna.playerId, { kind: 'set-daily', daily: true });
+    room.setReady(ben.playerId, true);
+    room.act(anna.playerId, { kind: 'start-mission' });
+    vi.advanceTimersByTime(RUN_MS);
+    const first = lastReport(reports);
+    room.setReady(ben.playerId, true);
+    room.setReady(anna.playerId, true);
+    vi.advanceTimersByTime(RUN_MS);
+    room.dispose();
+    const second = lastReport(reports);
+    expect([utcDay(first.startedAt), utcDay(second.startedAt)]).toEqual([
+      '2026-10-31',
+      '2026-11-01',
+    ]);
+    expect([first.seed, second.seed]).toEqual([
+      dailySeed('2026-10-31', SALT),
+      dailySeed('2026-11-01', SALT),
+    ]);
   });
 });
 

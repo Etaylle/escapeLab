@@ -80,17 +80,26 @@ what happened.
 ## Tagesschicht
 
 One seed a day for a mission that offers it (`daily: true` in the mission; Blackout does): the
-host's switch „Tagesschicht 31.10." beside the difficulty in the lobby (its title says what it
-is) pins the room to the seed of the UTC day
-(`dailySeed(utcDay(at))`, an FNV-1a hash of the day mixed through a finaliser), so every crew
-that day plays the same instance — spawns, sources, edgework, every station. The day is the
-one each run starts on: a rematch after midnight UTC plays the next day's. It needs no
-`ALLOW_SEED` (the server's own pinning stays dev-only) and passes over a tester's pinned seed
-while it is on. A switch to a mission without one turns it off. The report says `daily: true`
-and names the seed. The Bestenliste ranks daily runs apart, by the UTC day they started on:
-`GET /stats/daily` (the last 14 days, the newest first), `GET /stats/:mission?run=…&daily=…` for
-a run's place among its day's; `GET /stats` leaves them out. The Bestenliste page has a
-„Tagesschicht" tab with a chip per day; the end screen of a daily run gives its place on its day.
+host's switch „Tagesschicht 31.10." beside the difficulty in the lobby, named by today (UTC; its
+title says what it is), pins the room to the day's seed, so every crew that day plays the same
+instance — spawns, sources, edgework, every station. The server decides the day: its clock at
+each start, so a rematch after midnight UTC plays the next day's; it hands the reducer the day
+and the day's seed with the start, and the core reads no clock.
+
+The seed is an FNV-1a hash of a salt and the day, mixed through a finaliser
+(`dailySeed(day, salt)`). The salt is the server's alone, so that nobody works a day's instance
+out from its date: `DAILY_SALT` where it is set, else `packages/server/data/daily-salt`, made at
+random on the first start, readable by the server alone and kept across restarts (git ignores
+it). Two servers with different salts play different instances on the same day; a server
+without one starts no run on the Tagesschicht. The start-up log says where the salt came from.
+
+It needs no `ALLOW_SEED` (the server's own pinning stays dev-only) and passes over a tester's
+pinned seed while it is on. A switch to a mission without one turns it off. The report says
+`daily: true` and names the seed, for whoever holds the run log; the players never see it. The
+Bestenliste ranks daily runs apart, by the UTC day they started on: `GET /stats/daily` (the last
+14 days, the newest first), `GET /stats/:mission?run=…&daily=…` for a run's place among its
+day's; `GET /stats` leaves them out. The Bestenliste page has a „Tagesschicht" tab with a chip
+per day; the end screen of a daily run gives its place on its day.
 
 ## The picture of a run
 

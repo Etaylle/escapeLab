@@ -1,12 +1,20 @@
 /**
  * The Tagesschicht: one seed a day for a mission that offers it (`Mission['daily']`), the
  * same for every room and every crew, so that the day's runs all play the same instance and
- * rank against each other. The day is the UTC date of the moment a run starts — epoch ms in,
- * a day out, no clock read here: the server hands the reducer its `at`.
+ * rank against each other. The day is the UTC date of the moment a run starts, as the
+ * server's clock has it, and the seed mixes the day with a salt only the server holds, so
+ * that nobody works the day's instance out from its date. Epoch ms in, a day out, no clock
+ * read here: the server hands the reducer the day and its seed with the start (`DailyStart`).
  */
 
 /** A UTC day as the Tagesschicht names it: „2026-10-31". */
 export type DailyDay = string;
+
+/** What the server hands a run on the Tagesschicht as it starts: its day, and the day's seed. */
+export interface DailyStart {
+  day: DailyDay;
+  seed: number;
+}
 
 const MS_PER_DAY = 86_400_000;
 
@@ -51,15 +59,19 @@ export function isDailyDay(text: string): text is DailyDay {
 }
 
 /**
- * The seed of the Tagesschicht of `day`: FNV-1a over the day's text, mixed through a
- * finaliser so that neighbouring days land far apart — 32 bits, as the PRNG takes them.
+ * The seed of the Tagesschicht of `day` on a server holding `salt`: FNV-1a over the salt and
+ * the day's text, mixed through a finaliser so that neighbouring days land far apart — 32 bits,
+ * as the PRNG takes them. Without the salt the day's seed cannot be worked out.
  */
-export function dailySeed(day: DailyDay): number {
+export function dailySeed(day: DailyDay, salt: string): number {
   if (!isDailyDay(day)) {
     throw new Error(`dailySeed: "${day}" is no day — pass one as utcDay writes it, YYYY-MM-DD`);
   }
+  if (salt === '') {
+    throw new Error('dailySeed: an empty salt makes the day\'s seed public — pass the server\'s');
+  }
   let hash = 0x811c9dc5;
-  for (const char of `tagesschicht:${day}`) {
+  for (const char of `tagesschicht:${salt}:${day}`) {
     hash ^= char.charCodeAt(0);
     hash = Math.imul(hash, 0x01000193);
   }

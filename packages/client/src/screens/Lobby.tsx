@@ -196,24 +196,23 @@ export const DAILY_NOTE =
 
 /**
  * The Tagesschicht, where the mission offers one: the host's switch „Tagesschicht 31.10." —
- * the day's seed for every crew, ranked among that day's runs (core daily.ts) — named by the
- * day the room plays, or today's (UTC) while it is off; everyone else sees whether it is on.
- * A chip beside the difficulty's caption, what it is in its title.
+ * the day's seed for every crew, ranked among that day's runs (core daily.ts) — named by today
+ * (UTC); the run plays the day the server's clock has as it starts. Everyone else sees whether
+ * it is on. A chip beside the difficulty's caption, what it is in its title.
  */
 export function DailySwitch({
-  day,
+  on,
   today,
   pick,
 }: {
-  /** the day the room plays; null while it is off */
-  day: string | null;
+  /** whether the host has it on */
+  on: boolean;
   /** today, UTC, „2026-10-31" */
   today: string;
   /** the host's switch; null for everyone else, who only sees it */
   pick: ((on: boolean) => void) | null;
 }) {
-  const on = day !== null;
-  const label = `Tagesschicht ${dailyLabel(day ?? today)}`;
+  const label = `Tagesschicht ${dailyLabel(today)}`;
   const marks = on ? 'daily-switch daily-switch--on' : 'daily-switch';
   if (pick === null) {
     return (
@@ -487,7 +486,7 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
           daily={
             view.daily === undefined ? undefined : (
               <DailySwitch
-                day={view.daily.day}
+                on={view.daily.on}
                 today={today}
                 pick={host ? (daily) => send({ kind: 'set-daily', daily }) : null}
               />

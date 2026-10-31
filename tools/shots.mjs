@@ -6875,8 +6875,8 @@ function todayShift() {
 }
 
 /**
- * daily.png: the host switches the Tagesschicht on in the lobby — the server's view has to name
- * today's UTC day and the switch its date — and off again for the pinned seed the walkthrough
+ * daily.png: the host switches the Tagesschicht on in the lobby — the server's view has to say
+ * so and the switch name today's UTC date — and off again for the pinned seed the walkthrough
  * plays. A mission without one skips it.
  */
 async function captureDaily(page, seen) {
@@ -6887,14 +6887,14 @@ async function captureDaily(page, seen) {
   }
   const { day, label } = todayShift();
   await toggle.click();
-  const on = await until(() => seen.view?.daily?.day === day, 3000);
+  const on = await until(() => seen.view?.daily?.on === true, 3000);
   await sleep(300);
   await capture(page, 'daily.png');
   const said = await textOf(toggle);
   await toggle.click();
-  const off = await until(() => seen.view?.daily?.day === null, 3000);
+  const off = await until(() => seen.view?.daily?.on === false, 3000);
   console.log(
-    `daily.png          "${said}": ${on ? `on for ${day}` : '!! never on'}, ` +
+    `daily.png          "${said}": ${on ? `on, today ${day}` : '!! never on'}, ` +
       (off ? 'off again for the pinned seed' : '!! still on'),
   );
   if (!on || !off || said !== label) {

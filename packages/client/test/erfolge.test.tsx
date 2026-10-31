@@ -78,7 +78,7 @@ function blackoutOver(parts: Partial<PlayerView> = {}): PlayerView {
     noteHere: null,
     puzzle: null,
     map: null,
-    daily: { day: null },
+    daily: { on: false, day: null },
     achievements: ['unter-acht-minuten', 'ungesehen', 'stiller-serverraum', 'erste-schicht'],
     ...parts,
   };
@@ -202,33 +202,36 @@ describe('the lobby', () => {
       blackout: { ungesehen: 1, 'ohne-alarm': 2, 'erste-schicht': 3 },
     });
     vi.stubGlobal('window', { localStorage: memory({ [ACHIEVEMENTS_KEY]: kept }) });
-    expect(lobby({ day: null })).toContain('Erfolge 3/7');
+    expect(lobby({ on: false, day: null })).toContain('Erfolge 3/7');
   });
 
   it('offers the host the Tagesschicht, named by today, where the mission has one', () => {
     vi.useFakeTimers({ now: OCT_31 });
-    const off = lobby({ day: null });
+    const off = lobby({ on: false, day: null });
     expect(off).toContain('role="switch" aria-checked="false"');
     expect(off).toContain('Tagesschicht 31.10.');
     // A chip beside the difficulty's caption, what it is in its title.
     expect(off).toMatch(/<p class="lobby-caption">Schwierigkeit<\/p><button[^>]*role="switch"/);
     expect(off).toContain(`title="${DAILY_NOTE}"`);
-    const on = lobby({ day: '2026-10-31' });
+    const on = lobby({ on: true, day: null });
     expect(on).toContain('class="daily-switch daily-switch--on" role="switch" aria-checked="true"');
     // Everyone else sees whether it is on.
-    expect(lobby({ day: '2026-10-31' }, false)).toContain('Tagesschicht 31.10. · an');
-    expect(lobby({ day: null }, false)).not.toContain('role="switch"');
+    expect(lobby({ on: true, day: null }, false)).toContain('Tagesschicht 31.10. · an');
+    expect(lobby({ on: false, day: null }, false)).not.toContain('role="switch"');
     // A mission without one offers none.
     expect(lobby(undefined)).not.toContain('Tagesschicht');
+    // Past midnight (UTC) the switch names the new day, on or off: the run plays that one.
+    vi.setSystemTime(Date.UTC(2026, 10, 1, 0, 5));
+    expect(lobby({ on: true, day: null })).toContain('Tagesschicht 01.11.');
     vi.useRealTimers();
   });
 
   it('sends the host’s switch: on, then off — the lobby sends it on as set-daily', () => {
     const sent: boolean[] = [];
     const pick = (daily: boolean) => sent.push(daily);
-    const off = <DailySwitch day={null} today="2026-10-31" pick={pick} />;
+    const off = <DailySwitch on={false} today="2026-10-31" pick={pick} />;
     press(buttonsOf(elementsOf(() => off), 'daily-switch')[0]);
-    const on = <DailySwitch day="2026-10-31" today="2026-10-31" pick={pick} />;
+    const on = <DailySwitch on today="2026-10-31" pick={pick} />;
     press(buttonsOf(elementsOf(() => on), 'daily-switch')[0]);
     expect(sent).toEqual([true, false]);
   });
@@ -287,7 +290,7 @@ describe('the picture of a run', () => {
 
   it('draws a won run: mission, word, time, rank, crew, Erfolge, day, the plant', () => {
     vi.stubGlobal('window', { localStorage: memory() });
-    const view = blackoutOver({ daily: { day: '2026-10-31' } });
+    const view = blackoutOver({ daily: { on: true, day: '2026-10-31' } });
     const lines = written(shareCardOf(view, titleCardOf(view, 'p1', false)));
     for (const line of [
       'ESCAPELAB',
