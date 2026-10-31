@@ -9,6 +9,7 @@ import type { MusicProbe } from './world/music.js';
 import type { RadioRender, VoiceProbe as RadioProbe } from './world/radioVoice.js';
 import type { MinimapLayout } from './world/render/frame.js';
 import type { HighlightProbe } from './world/render/highlight.js';
+import type { GraphicsProbe } from './world/render/graphicsProbe.js';
 import type { GoalDot } from './world/render/hud.js';
 import type { PassStats } from './world/render/profile.js';
 import type { SpatialProbe } from './world/spatial.js';
@@ -100,6 +101,12 @@ export interface Probes {
   readonly passes?: PassStats;
   /** forgets the frames the pass costs were taken over */
   resetPasses?: () => void;
+  /**
+   * what the world's picture shows of the graphics package's work: the walk cycle, the
+   * shadow's light, the panel zoom, the hatch, the particles, the backing store
+   * (world/render/graphicsProbe.ts)
+   */
+  readonly graphics?: GraphicsProbe;
 }
 
 declare global {

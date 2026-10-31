@@ -69,6 +69,7 @@ import {
   type RenderKit,
   type WorldMap,
 } from './render/frame.js';
+import { graphicsProbe } from './render/graphicsProbe.js';
 import { highlightProbe } from './render/highlight.js';
 import { minimapGoal, minimapLayout } from './render/hud.js';
 import { dropLight } from './render/light.js';
@@ -812,6 +813,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
     const unlisten = props.spectator ? null : listen(loop, setWheelOpen);
     const posTimer = streamPositions(sim, props.spectator, (msg) => live.current.send(msg));
     const traced = traceFrames(loop);
+    const tracedGraphics = traceGraphics(loop);
     const profiled = profilePasses(kit);
     const stop = runFrames(loop, traced?.trace ?? null);
     const ears = setInterval(() => hearTheLab(loop), HEAR_MS);
@@ -826,6 +828,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
       stopSpatial();
       stopPowerHum();
       traced?.drop();
+      tracedGraphics?.();
       profiled?.();
       dropLight(kit);
       refs.simRef.current = null;
@@ -1079,4 +1082,20 @@ export function GameWorld(props: Props) {
       {wheelOpen && <ChatWheel send={props.send} setWheelOpen={setWheelOpen} />}
     </div>
   );
+}
+
+/**
+ * `?trace=1`: what the world's picture shows of the graphics package's work, read off the page
+ * by the walkthrough (`window.__escapelab.graphics`, render/graphicsProbe.ts). Returns what takes
+ * the probe off; null without the trace.
+ */
+function traceGraphics(loop: Loop): (() => void) | null {
+  if (!traceRequested(location.search)) {
+    return null;
+  }
+  return addProbes({
+    get graphics() {
+      return graphicsProbe(loop);
+    },
+  });
 }
