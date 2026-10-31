@@ -127,5 +127,7 @@ The rack (console B) shows the Netzplan as a cabling diagram derived from `DEPEN
 (`serviceDiagram`): each service in the column of the longest chain of dependencies under it —
 NETZ; DNS, DB; AUTH; MAIL, WEB — each column ordered so that no cable runs through a box, an
 arrow from every dependency to the service that needs it, every box with its power LED as the
-rack's unit shows it. Rules, not answers: the codes stay at the terminal. The printed page of
-the Serverraum draws the same diagram, its LEDs dark.
+rack's unit shows it. Rules, not answers: the codes stay at the terminal. The Netzplan is the
+plant's fixed topology, the same for every seed and every instance, so it may stand at a console;
+the rules that vary with the instance stay with the sources. The printed page of the Serverraum
+draws the same diagram, its LEDs dark.
