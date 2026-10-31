@@ -4,6 +4,7 @@ import type { Alarm } from './alarm.js';
 import { worldText, type WorldText } from './art.js';
 import { coldOpenFrame } from './coldOpen.js';
 import { exitOpening, redShift } from './escape.js';
+import { dangerMarker } from './danger.js';
 import type { FigureMood } from './figure.js';
 import { finaleFrame, type FinaleCue, type FinaleFrame } from './finale.js';
 import { frameLight, mountedLamps } from './frameLight.js';
@@ -377,7 +378,10 @@ function overlaysOf(
   sim.captions = sim.captions.filter((c) => sim.time - c.at < CAPTION_SECONDS);
   const chats = liveChats(source, perf);
   const crew = positionsOf(source.positions.current, sim.run);
-  const markers = markerTargets(map, view.you.id, sim.self, crew);
+  // A drone closing in glows at the edge toward it (danger.ts), beside the places to walk to.
+  const danger = dangerMarker();
+  const targets = markerTargets(map, view.you.id, sim.self, crew);
+  const markers = danger === null ? targets : [...targets, danger];
   const action = locked
     ? null
     : contextAction(

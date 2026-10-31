@@ -47,6 +47,7 @@ import {
   type SoundSystem,
 } from './audio.js';
 import { blackoutCue, FLICKER_MS, REVEAL_MS, SEQUENCE_MS } from './coldOpen.js';
+import { senseDanger, stopDanger } from './danger.js';
 import { doorTurned } from './doors.js';
 import { drawsFrame } from './drawRate.js';
 import { escaping, useEscapeSince, useEscapeSounds } from './escape.js';
@@ -577,6 +578,8 @@ function hearTheLab(loop: Loop): void {
   if (!soundOff.has('music')) {
     timed('music', () => setTension(tensionOf(loop, map)));
   }
+  // A drone closing in ticks from where it flies, and the edge glows toward it (danger.ts).
+  senseDanger({ map, self: sim.self, drones: loop.drones.current }, performance.now());
 }
 
 /**
@@ -834,6 +837,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
       stopAmbience();
       stopMusic();
       stopSpatial();
+      stopDanger();
       stopPowerHum();
       traced?.drop();
       profiled?.();
