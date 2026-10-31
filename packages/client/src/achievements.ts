@@ -120,8 +120,11 @@ export function useRunPlaques(
   const [known] = useState(() => readEarned(localStore()));
   const ids = earned.join(' ');
   useEffect(() => {
-    if (at !== null && ids !== '') {
-      keepEarned(localStore(), missionId, ids.split(' ').filter(isId), at);
+    if (at === null || ids === '') {
+      return;
+    }
+    if (!keepEarned(localStore(), missionId, ids.split(' ').filter(isId), at)) {
+      console.warn('[escapelab] the browser keeps nothing here: the Erfolge stay this screen\'s');
     }
   }, [missionId, ids, at]);
   const fresh = new Set(newOnes(known, missionId, earned));
