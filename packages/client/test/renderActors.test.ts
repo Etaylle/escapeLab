@@ -13,7 +13,7 @@ import {
   drawDroneBody,
   drawDroneCone,
 } from '../src/world/hazards.js';
-import { crewPose, draw, heldItem } from '../src/world/render/actors.js';
+import { crewPose, draw, groundAt, heldItem } from '../src/world/render/actors.js';
 import { FALLBACK_COLOR, type Frame, type OtherAvatar } from '../src/world/render/frame.js';
 import { callsOf, drawnAt, fakeCanvas, FakePath2D, recording, strip } from './fakeCanvas.js';
 import { frameWith, lightWith, lit, player } from './frames.js';
@@ -70,6 +70,7 @@ function benLook(frame: Frame, parts: Partial<FigureState> = {}, id = 'p2'): Sci
     connected: true,
     text: frame.text,
     pose: poseIn(frame, id, { moving: true, facing: 1, ...parts }),
+    ground: 'dark',
   };
 }
 
@@ -122,6 +123,7 @@ describe('actors — drones and the crew, in tile space', () => {
       connected: true,
       text: frame.text,
       pose: poseIn(frame, 'p1', {}),
+      ground: 'dark',
     };
     expect(strip(drawnAt(log, 2.5, 2.5 + 0.3))).toEqual(recording((c) => drawScientist(c, you)));
     const order = callsOf(log, 'translate').map(([x]) => x);
@@ -158,6 +160,7 @@ describe('actors — drones and the crew, in tile space', () => {
       connected: true,
       text: frame.text,
       pose: poseIn(frame, 'p1', {}),
+      ground: 'dark',
     };
     expect(strip(drawnAt(log, 2.5, 2.5 + 0.3))).toEqual(recording((c) => drawScientist(c, you)));
   });
@@ -278,5 +281,18 @@ describe('crewPose — the frame says how each of the crew stands', () => {
     const lost = crewPose(frameWith({ mood: 'slump' }), 'p1', { moving: false, facing: 0 });
     expect(lost.dim).toBeGreaterThan(0);
     expect(lost.bob).toBeLessThan(0);
+  });
+
+  it('lays each figure’s shadow by the light it stands in: lit rooms dark, the dark faint', () => {
+    const others = new Map([['p2', ben]]);
+    const inLitRoom = frameWith({ others, players, litTiles: new Set(['4,2']) });
+    expect(strip(drawnAt(drawn(inLitRoom), 4.2, 2.1 + 0.3))).toEqual(
+      recording((c) => drawScientist(c, { ...benLook(inLitRoom), ground: 'lit' })),
+    );
+    expect(groundAt(inLitRoom, 4.2, 2.1)).toBe('lit');
+    expect(groundAt(inLitRoom, 2.5, 2.5)).toBe('dark');
+    const powered = frameWith({ light: lightWith({ powered: (x, y) => x === 2 && y === 2 }) });
+    expect(groundAt(powered, 2.5, 2.5)).toBe('lit');
+    expect(groundAt(frameWith({ whole: 0.4 }), 2.5, 2.5)).toBe('lit');
   });
 });

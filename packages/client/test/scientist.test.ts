@@ -1,8 +1,28 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { drawScientist, HELD_SCALE, type ScientistOpts } from '../src/world/art.js';
-import { figurePose, restingPose, type FigurePose } from '../src/world/figure.js';
+import {
+  drawScientist,
+  FIGURE_SHADOWS,
+  HELD_SCALE,
+  type Ground,
+  type ScientistOpts,
+} from '../src/world/art.js';
+import {
+  figurePose,
+  restingPose,
+  STEP_LIFT,
+  STRIDE,
+  type FigurePose,
+} from '../src/world/figure.js';
 import { BLACK, rgba } from '../src/world/palette.js';
-import { callsOf, fakeCanvas, FakePath2D, recording, setsOf, type Entry } from './fakeCanvas.js';
+import {
+  callEntries,
+  callsOf,
+  fakeCanvas,
+  FakePath2D,
+  recording,
+  setsOf,
+  type Entry,
+} from './fakeCanvas.js';
 
 /** Anna standing in the lab, facing right. */
 const ANNA: ScientistOpts = {
@@ -175,5 +195,65 @@ describe('drawScientist — a crew member standing as the pose says', () => {
     };
     expect(visorAt(drawn(null))).toBeCloseTo(0.285, 9);
     expect(visorAt(drawn({ look: 0.9 }))).toBeLessThan(0.285);
+  });
+});
+
+describe('drawScientist — walking, over a shadow of the light it stands in', () => {
+  beforeAll(() => {
+    vi.stubGlobal('Path2D', FakePath2D);
+  });
+  afterAll(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** Where the shadow under Anna lies and how dark it is in its middle, standing on `ground`. */
+  function shadowOn(ground: Ground): { at: unknown[] | undefined; alpha: number | undefined } {
+    const log = drawn(null, { ground });
+    const [at] = callsOf(log, 'translate');
+    const fill = callEntries(log, 'fill')[0];
+    return { at, alpha: fill?.alpha };
+  }
+
+  it('lays a dark shadow a little to the bottom right under the ceiling lights', () => {
+    const { lit } = FIGURE_SHADOWS;
+    expect(shadowOn('lit')).toEqual({ at: [lit.dx, lit.dy], alpha: lit.alpha });
+    expect(lit.dx).toBeGreaterThan(0);
+    expect(lit.dy).toBeGreaterThan(0);
+  });
+
+  it('lays a faint one right under the feet in the dark, the plain one where none is said', () => {
+    expect(shadowOn('dark')).toEqual({ at: [0, 0], alpha: FIGURE_SHADOWS.dark.alpha });
+    expect(FIGURE_SHADOWS.dark.alpha).toBeLessThan(FIGURE_SHADOWS.plain.alpha);
+    expect(FIGURE_SHADOWS.lit.alpha).toBeGreaterThan(FIGURE_SHADOWS.plain.alpha);
+    expect(shadowOn('plain').alpha).toBe(FIGURE_SHADOWS.plain.alpha);
+    expect(recording((c) => drawScientist(c, ANNA))).toEqual(
+      recording((c) => drawScientist(c, { ...ANNA, ground: 'plain' })),
+    );
+  });
+
+  it('stands each leg in a boot, its sole on the ground', () => {
+    const boots = paths(drawn(null), 'fill').filter((path) => {
+      const [op, , y] = path.ops[0] ?? [];
+      return op === 'moveTo' && Number(y) < 0 && Number(y) > -0.1;
+    });
+    expect(boots).toHaveLength(2);
+  });
+
+  it('puts the legs where the walk cycle has them: wide at a quarter, swapped at three', () => {
+    /** Whether a leg was drawn with its hip at `x` and its foot `lift` off the ground. */
+    const legAt = (log: readonly Entry[], x: number, lift: number): boolean =>
+      callsOf(log, 'translate').some(
+        ([tx, ty]) => Math.abs(Number(tx) - x) < 1e-9 && Math.abs(Number(ty) + lift) < 1e-9,
+      );
+    const walking = (phase: number): Entry[] => drawn(null, { moving: true, walkPhase: phase });
+    const hip = 0.12;
+    const quarter = walking(0.25);
+    expect(legAt(quarter, hip + STRIDE, 0)).toBe(true);
+    expect(legAt(quarter, -hip - STRIDE, 0)).toBe(true);
+    const threeQuarters = walking(0.75);
+    expect(legAt(threeQuarters, hip - STRIDE, 0)).toBe(true);
+    expect(legAt(threeQuarters, -hip + STRIDE, 0)).toBe(true);
+    expect(legAt(walking(0), hip, STEP_LIFT)).toBe(true);
+    expect(legAt(walking(0.5), -hip, STEP_LIFT)).toBe(true);
   });
 });

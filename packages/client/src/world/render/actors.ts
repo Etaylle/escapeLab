@@ -1,6 +1,6 @@
 import type { PlayerView } from '@escapelab/core';
 import { DRONE_MARK_MS } from '../alarm.js';
-import { drawScientist, drawVoiceRing, type ScientistOpts } from '../art.js';
+import { drawScientist, drawVoiceRing, type Ground, type ScientistOpts } from '../art.js';
 import { figurePhase, figurePose, type FigurePose } from '../figure.js';
 import {
   carryableKind,
@@ -73,8 +73,21 @@ function otherLook(
     connected: meta?.connected ?? true,
     text: frame.text,
     pose: crewPose(frame, id, other),
+    ground: groundAt(frame, other.rx, other.ry),
     ...heldBy(frame, id),
   };
+}
+
+/**
+ * The light a crew member standing at (x, y) stands in, for the shadow under them: the
+ * ceiling lights of the lab with its power on, of a lit room, or of the lab lit whole at the
+ * end; else the dark.
+ */
+export function groundAt(frame: Frame, x: number, y: number): Ground {
+  const tx = Math.floor(x);
+  const ty = Math.floor(y);
+  const lit = frame.whole > 0 || frame.light.powered(tx, ty) || frame.litTiles.has(`${tx},${ty}`);
+  return lit ? 'lit' : 'dark';
 }
 
 /** You, as the view names you: by your own name where the crew's list has no entry for you. */
@@ -89,6 +102,7 @@ function yourLook(you: Player | undefined, frame: Frame): ScientistOpts {
     connected: true,
     text: frame.text,
     pose: crewPose(frame, frame.youId, frame.self),
+    ground: groundAt(frame, frame.self.x, frame.self.y),
     ...heldBy(frame, frame.youId),
   };
 }
