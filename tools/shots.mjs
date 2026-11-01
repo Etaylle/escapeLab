@@ -195,10 +195,11 @@
  * mission with an intro once more, shorter, in the lit lab before the
  * blackout, and over the opening's shot for information alone. Each sample
  * measures what a frame costs one client: while it runs, every other page of
- * the run — the guest's phone, the audience — stands frozen, its main thread
- * paused in the debugger and its CPU throttle lifted (freeze.mjs; Chromium's
- * own freeze leaves a page on screen running), and is thawed once it is over,
- * its messages waiting for it; a line `frozen` names them. Otherwise a
+ * the run — the guest's phone, the audience — stands frozen, its animations
+ * stopped, its main thread paused in the debugger and its CPU throttle lifted
+ * (freeze.mjs; Chromium's own freeze leaves a page on screen running, and a
+ * paused page's compositor plays its animations on), and is thawed once it is
+ * over, its messages waiting for it; a line `frozen` names them. Otherwise a
  * runner's few cores and its one compositor would be shared by every page
  * drawing the same scene, and a window would measure the sharing, not the
  * game. Each sample
@@ -781,15 +782,33 @@ const FREEZE_WAIT_MS = 1000;
 const freezeSessions = new WeakMap();
 
 /**
- * Freezes the page of `other` (`othersOf`): its main thread paused in the debugger at its next
- * line of script, so that it draws nothing, takes nothing in and fires no timer until it is
- * thawed — what the server sends meanwhile waits for it, its audio plays on, and the browser
- * answers the server's pings for it (a socket goes only after twenty silent seconds, server
- * heartbeat.ts). Chromium's own freeze, CDP Page.setWebLifecycleState, leaves a page on screen
- * running, and every page of a headless run is on screen. Under SHOTS_CPU_SLOWDOWN its throttle
- * is lifted while it stands frozen: Chromium's throttle holds a thread back by keeping it
- * spinning, which would keep a core busy for a page with nothing to run. Says 'paused', or
- * 'idle' where no script ran within FREEZE_WAIT_MS: then the first that runs pauses.
+ * Stops the animations of `page` (`cdp`, its session): the compositor plays a page's
+ * animations on a thread of its own, past any pause of the main thread, and composes every
+ * frame of them in the one GPU process all pages share — the frozen guest's red edge breathing
+ * cost the escape's window half its GPU process. A stopped timeline reaches the compositor with
+ * the next frame the page draws, so the page draws one more, given FREEZE_WAIT_MS for it.
+ */
+async function stopAnimations(cdp, page) {
+  await cdp.send('Animation.enable');
+  await cdp.send('Animation.setPlaybackRate', { playbackRate: 0 });
+  const twoFrames = () =>
+    new Promise((drawn) => {
+      globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(drawn));
+    });
+  await Promise.race([page.evaluate(twoFrames), sleep(FREEZE_WAIT_MS)]);
+}
+
+/**
+ * Freezes the page of `other` (`othersOf`): its animations stopped (`stopAnimations`), then its
+ * main thread paused in the debugger at its next line of script, so that it draws nothing,
+ * takes nothing in and fires no timer until it is thawed — what the server sends meanwhile
+ * waits for it, its audio plays on, and the browser answers the server's pings for it (a socket
+ * goes only after twenty silent seconds, server heartbeat.ts). Chromium's own freeze, CDP
+ * Page.setWebLifecycleState, leaves a page on screen running, and every page of a headless run
+ * is on screen. Under SHOTS_CPU_SLOWDOWN its throttle is lifted while it stands frozen:
+ * Chromium's throttle holds a thread back by keeping it spinning, which would keep a core busy
+ * for a page with nothing to run. Says 'paused', or 'idle' where no script ran within
+ * FREEZE_WAIT_MS: then the first that runs pauses.
  */
 async function freezePage({ page }) {
   let cdp = freezeSessions.get(page);
@@ -797,6 +816,7 @@ async function freezePage({ page }) {
     cdp = await page.context().newCDPSession(page);
     freezeSessions.set(page, cdp);
   }
+  await stopAnimations(cdp, page);
   let onPaused = () => {};
   const paused = new Promise((resolve) => {
     onPaused = () => resolve('paused');
@@ -812,11 +832,14 @@ async function freezePage({ page }) {
 
 /**
  * Thaws the page of `other`: its throttle back on, the debugger switched off — it runs on, or
- * the pause still pending is called off.
+ * the pause still pending is called off — and its animations playing again.
  */
 async function thawPage({ page }) {
+  const cdp = freezeSessions.get(page);
   await throttleSessions.get(page)?.send('Emulation.setCPUThrottlingRate', { rate: CPU_SLOWDOWN });
-  await freezeSessions.get(page).send('Debugger.disable');
+  await cdp.send('Debugger.disable');
+  await cdp.send('Animation.setPlaybackRate', { playbackRate: 1 });
+  await cdp.send('Animation.disable');
 }
 
 /** Every page open in the run's browser but `page`, each with the name it was opened under. */
