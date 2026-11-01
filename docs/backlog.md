@@ -120,6 +120,15 @@ die Entscheidung.
   Notiz, Teil, erstes Pult, Schild; ≤ 1 je 1,5 s, nie zweimal je Objekt; Deko nie.
 - Beweis: Captures beim Betreten des Archivs, Glöckchen-Zählung über die Audio-Probe.
 
+### H-1 Flucht-Budget relativ zum Runner — Status: bereit · Größe: S
+- CI auf c23afc5 (gleicher Code wie das grüne 65e3e1e): Systemcheck-Flucht p50 33,4 / p95 50,1
+  zweimal — der ganze Runner lief mit halber Rate. Das Fenster misst seit M-ciwin einen Client,
+  aber ein langsamer Runner kippt die Flucht (33 ms bei 4× Drossel) über die 40 ms.
+- Neu: ein Fenster gilt, wenn p95 ≤ max(40 ms, 2 × p95 des ruhigen Lauffensters desselben Laufs);
+  ein Rückschritt nur in der Flucht fällt weiter auf, ein langsamer Runner nicht. Protokollzeile
+  nennt beide Werte. Tests in tools/framegate; Header-Kommentar und art-bible ergänzen.
+- Langfristig: Flucht-Main-Thread billiger (Licht/Dunkel-Pässe, halbe Frame), siehe Audit-Addenda.
+
 ### T-4 Leerlauf zu zweit — Status: wartet (Entscheidung Uros) · Größe: M
 - Audit: Ben wartet 7,7 s am Reaktor auf die Sicherung, Anna 5 s vor der Notstrom-Tür. Optionen:
   Wartende lesen die nächste Quelle vor, oder eine kleine Nebenaufgabe (Ventil halten). Erst
