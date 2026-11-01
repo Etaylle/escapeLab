@@ -10,7 +10,9 @@ import {
   type TintStops,
 } from '../light.js';
 import { ALARM_RED, ceilingLayer, WARM, type CeilingLight } from '../power.js';
-import { layBake } from './bakes.js';
+import { glowSources } from '../sources.js';
+import { layAdded, layBake, type BakePart } from './bakes.js';
+import { shutKey } from './clips.js';
 import { cutDarkness, ESCAPE_RED, escapeTint, roomUp, wedge } from './darkness.js';
 import {
   inTiles,
@@ -21,6 +23,7 @@ import {
   type RenderKit,
   type WorldMap,
 } from './frame.js';
+import { steadyOf, steadyPart } from './pools.js';
 import { drawStandby } from './standby.js';
 
 /**
@@ -44,7 +47,7 @@ export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   }
   drawPower(ctx, frame, whole);
   if (inTheDark(frame)) {
-    drawLighting(ctx, frame, 1 - whole);
+    drawLighting(ctx, frame, 1 - whole, glowsWithLight(ctx, frame));
     drawStandby(ctx, frame);
   }
 }
@@ -52,6 +55,15 @@ export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
 /** Whether the world lies in the dark: not the audience's, nor lit whole (`frame.whole`). */
 function inTheDark(frame: Frame): boolean {
   return !frame.spectator && frame.whole < 1;
+}
+
+/**
+ * Whether this pass lays the coloured lights' steady glows (pools.ts) with the rest of the
+ * light that holds still, the glow pass leaving them out: a world in the dark, lit the Canvas
+ * way (render/glow.ts).
+ */
+export function glowsWithLight(ctx: CanvasRenderingContext2D, frame: Frame): boolean {
+  return inTheDark(frame) && !onLayer(ctx, frame);
 }
 
 /**
@@ -206,9 +218,16 @@ function drawPowerOn(
 
 /**
  * The darkness over the picture, `veil` strong, with every light cut into
- * it where its lamp can see (darkness.ts); then the colours of the lights over it.
+ * it where its lamp can see (darkness.ts); then the colours of the lights over
+ * it: what holds still in one go — with the coloured lights' steady glows where
+ * `withGlow` says (glowsWithLight) — then what comes and goes, each apart.
  */
-function drawLighting(ctx: CanvasRenderingContext2D, frame: Frame, veil: number): void {
+function drawLighting(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  veil: number,
+  withGlow: boolean,
+): void {
   const { overlay } = frame.kit;
   profiled(frame.kit, 'darkness', overlay, () => cutDarkness(overlay, frame));
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -217,8 +236,13 @@ function drawLighting(ctx: CanvasRenderingContext2D, frame: Frame, veil: number)
   ctx.globalAlpha = 1;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  drawRoomLight(ctx, frame);
-  drawHatchGlow(ctx, frame);
+  laySteadyLight(ctx, frame, withGlow);
+  if (!roomsSettled(frame)) {
+    drawRoomsApart(ctx, frame);
+  }
+  if (!hatchOpen(frame)) {
+    drawHatchGlow(ctx, frame);
+  }
   drawLampLight(ctx, frame);
   drawSpillLight(ctx, frame);
   ctx.restore();
@@ -232,43 +256,65 @@ const TINTS = [
 ] as const;
 
 /**
- * The light the lit rooms add over the darkness: a room a solved station
- * lit glows warm again, as the whole lab did with the power on, as far as
- * its lights have come on, and turns red as the escape's siren sounds. Once
- * every room's lights are up and the red has come in or not at all, all of
- * them baked together in their colour and laid on in one go; while any is
- * still coming on, each room's ceiling lights baked once in each colour, cut
- * to its tiles, and laid on at the strength of the moment.
+ * Whether the lit rooms' light holds still: every room's lights up, and the escape's red come
+ * in or not at all. Before, each room is laid apart at the strength of the moment.
  */
-function drawRoomLight(ctx: CanvasRenderingContext2D, frame: Frame): void {
-  const settled =
-    (frame.red === 0 || frame.red === 1) &&
-    [...frame.lit.values()].every((room) => roomUp(frame, room.since) >= 1);
-  if (settled) {
-    drawRoomsTogether(ctx, frame);
-  } else {
-    drawRoomsApart(ctx, frame);
+function roomsSettled(frame: Frame): boolean {
+  const up = [...frame.lit.values()].every((room) => roomUp(frame, room.since) >= 1);
+  return (frame.red === 0 || frame.red === 1) && up;
+}
+
+/** Whether the hatch stands open all the way, its light holding still. */
+function hatchOpen(frame: Frame): boolean {
+  return (frame.light.exit?.open ?? 0) >= 1;
+}
+
+/**
+ * The light that holds still, laid on in one go (bakes.ts `layAdded`): the
+ * lit rooms' ceiling lights once they hold still (roomsSettled) — a room a
+ * solved station lit glows warm again, as the whole lab did with the power on,
+ * and red through the escape — the open hatch's green-white glow once it
+ * stands open, and, `withGlow`, the coloured lights' steady glows (pools.ts).
+ * Each keeps its own bake and adds onto the picture what it added on its own;
+ * only the escape's red tint, laid on after, now lies over the steady glows
+ * too. A bake added onto the picture costs the software canvas two and a half
+ * times a plain copy — 2 ms a frame at 1440 × 600 on a main thread slowed four
+ * times — and each of these covers most of the picture in a lab lit.
+ */
+function laySteadyLight(ctx: CanvasRenderingContext2D, frame: Frame, withGlow: boolean): void {
+  const parts: BakePart[] = [];
+  if (roomsSettled(frame) && frame.lit.size > 0) {
+    parts.push(roomsPart(frame));
   }
+  const glows = withGlow ? steadyOf(glowSources(frame)) : [];
+  if (glows.length > 0) {
+    parts.push(steadyPart(frame, glows, shutKey(frame)));
+  }
+  const exit = frame.light.exit;
+  if (exit !== null && hatchOpen(frame)) {
+    parts.push(litPart(frame, 'glow:hatch', [exit.lit, HATCH_TINT, exit.lit.lamp.glow]));
+  }
+  layAdded(ctx, frame, 'steady', parts);
 }
 
 /** Every lit room's ceiling lights, up, in the escape's red or warm, baked together. */
-function drawRoomsTogether(ctx: CanvasRenderingContext2D, frame: Frame): void {
+function roomsPart(frame: Frame): BakePart {
   const { map, kit, lit } = frame;
-  if (lit.size === 0) {
-    return;
-  }
   const { name, light } = frame.red === 1 ? TINTS[1] : TINTS[0];
   const layer = layerOf(kit, map, light);
   const of = `${name}|${[...lit.keys()].join('\n')}|${map.tiles.join('/')}`;
   const box = bakeBox(map, [...lit.values()].flatMap((room) => room.tiles), []);
-  layBake(ctx, frame, { name: 'rooms', of, box }, (g) => {
-    for (const room of lit.values()) {
-      g.save();
-      g.clip(room.path);
-      drawPools(g, layer, map);
-      g.restore();
-    }
-  });
+  return {
+    bake: { name: 'rooms', of, box },
+    draw: (g) => {
+      for (const room of lit.values()) {
+        g.save();
+        g.clip(room.path);
+        drawPools(g, layer, map);
+        g.restore();
+      }
+    },
+  };
 }
 
 /** Each lit room's ceiling lights in each colour, as far as they are up and the red has come. */
@@ -307,30 +353,37 @@ function tintGradient(
   return gradient;
 }
 
+/** A light of the frame, the stops of its colour, and how far they reach, tiles. */
+type Tinted = readonly [FrameLit, TintStops, number];
+
 /**
  * Lays the light `stops` of `lit` out to `r` tiles over `ctx`, where it can
  * see — in its beam's cone where it has one — from its bake `name`, baked
  * once for its sight.
  */
-function layLit(
-  ctx: CanvasRenderingContext2D,
-  frame: Frame,
-  name: string,
-  [lit, stops, r]: readonly [FrameLit, TintStops, number],
-): void {
+function layLit(ctx: CanvasRenderingContext2D, frame: Frame, name: string, tinted: Tinted): void {
+  const part = litPart(frame, name, tinted);
+  layBake(ctx, frame, part.bake, part.draw);
+}
+
+/** The light `stops` of `lit` out to `r` tiles where it can see, as the bake `name` of its sight. */
+function litPart(frame: Frame, name: string, [lit, stops, r]: Tinted): BakePart {
   const { x, y } = lit.lamp;
-  const box = bakeBox(frame.map, [], [{ x, y, r }]);
-  layBake(ctx, frame, { name, of: lit.sight, box }, (g) => {
-    g.clip(lit.clip);
-    wedge(g, lit);
-    g.fillStyle = tintGradient(g, [x, y, r], stops);
-    g.fillRect(x - r, y - r, r * 2, r * 2);
-  });
+  return {
+    bake: { name, of: lit.sight, box: bakeBox(frame.map, [], [{ x, y, r }]) },
+    draw: (g) => {
+      g.clip(lit.clip);
+      wedge(g, lit);
+      g.fillStyle = tintGradient(g, [x, y, r], stops);
+      g.fillRect(x - r, y - r, r * 2, r * 2);
+    },
+  };
 }
 
 /**
- * The open hatch's green-white light spilling out as far as it has ground
- * open, cut off by the walls like every light.
+ * The hatch's green-white light spilling out as far as it has ground open,
+ * cut off by the walls like every light — while it grinds open: once it
+ * stands open, it holds still with the rest (laySteadyLight).
  */
 function drawHatchGlow(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const exit = frame.light.exit;

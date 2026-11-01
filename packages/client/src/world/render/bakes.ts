@@ -1,4 +1,4 @@
-import { bake, bakeGrid, drawBaked, type Baked, type TileBox } from '../baked.js';
+import { addBaked, bake, bakeGrid, drawBaked, type Baked, type TileBox } from '../baked.js';
 import { inTiles, type Frame } from './frame.js';
 import { keep, touch, type CacheLimits, type FrameCache } from './frameCache.js';
 import { sameGrid } from './grid.js';
@@ -83,4 +83,63 @@ export function layBake(
   if (baked !== null) {
     drawBaked(ctx, baked, frame.grid);
   }
+}
+
+/** A light laid on with others in one go (layAdded): its bake, and what draws it in tile space. */
+export interface BakePart {
+  bake: BakeOf;
+  draw: (g: CanvasRenderingContext2D) => void;
+}
+
+/**
+ * Lays the lights `parts` over `ctx` added up — `ctx` compositing 'lighter' —
+ * as one: each part baked as layBake bakes it, under its own name, and their
+ * sum (baked.ts `addBaked`) kept under `name` and copied onto the picture in
+ * one go, added up anew only as a part is baked anew. A copy added onto the
+ * picture costs the software canvas two and a half times a plain one. Parts
+ * on another grid than the frame's, or too large a sum, are laid one by one;
+ * while the grid moves, each is drawn straight.
+ */
+export function layAdded(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  name: string,
+  parts: readonly BakePart[],
+): void {
+  if (!frame.steady) {
+    parts.forEach((part) => layBake(ctx, frame, part.bake, part.draw));
+    return;
+  }
+  const baked = parts.flatMap((part) => bakedFor(frame, part.bake, part.draw) ?? []);
+  const sum = baked.length > 1 ? addedFor(frame, name, baked) : null;
+  for (const one of sum === null ? baked : [sum]) {
+    drawBaked(ctx, one, frame.grid);
+  }
+}
+
+/**
+ * The sum of the bakes `parts` kept under `name`: the one kept while it holds the same bakes,
+ * else added up anew into its canvas. Null where a part lies on another grid than the frame's,
+ * or the sum would be too large to bake (baked.ts `addBaked`).
+ */
+function addedFor(frame: Frame, name: string, parts: readonly Baked[]): Baked | null {
+  if (!parts.every((part) => sameGrid(part.grid, frame.grid))) {
+    return null;
+  }
+  const store = frame.kit.bakes;
+  const kept = touch(store, name, frame);
+  // The same bakes lie on the frame's grid, and so does their sum.
+  if (kept !== undefined && sameParts(kept.of, parts)) {
+    return kept.baked;
+  }
+  const sum = addBaked(parts, kept?.baked?.canvas ?? frame.kit.art.atlas.make(1, 1));
+  keep(store, [name, { of: [...parts], baked: sum }], frame, BAKE_LIMITS, canvasOf);
+  return sum;
+}
+
+/** Whether `was`, what a sum was added up of, holds the bakes `parts`, the same ones in order. */
+function sameParts(was: unknown, parts: readonly Baked[]): boolean {
+  return (
+    Array.isArray(was) && was.length === parts.length && parts.every((part, i) => was[i] === part)
+  );
 }

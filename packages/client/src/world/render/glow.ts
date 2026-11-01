@@ -10,7 +10,8 @@ import * as atmosphere from './atmosphere.js';
 import { layBake } from './bakes.js';
 import { clipOf, shutKey } from './clips.js';
 import { inTiles, profiled, type Frame } from './frame.js';
-import { onLayer } from './light.js';
+import { glowsWithLight, onLayer } from './light.js';
+import { fillPool, steadyOf, steadyPart } from './pools.js';
 
 /**
  * What glows and moves in the lab — the glowing marks on the walls and the
@@ -19,7 +20,8 @@ import { onLayer } from './light.js';
  * it before the light, so that the layer's light map shades it like
  * everything else; the layer lights the coloured lights of sources.ts
  * itself, glow, shadows and bloom. On the Canvas pass `draw` lays it over
- * the darkness after the light pass, which draws the emergency lamps, and
+ * the darkness after the light pass, which draws the emergency lamps — and,
+ * in the dark, the coloured lights' glow that holds still (pools.ts) — and
  * the other coloured lights' glow under it. Tile space.
  */
 export function under(ctx: CanvasRenderingContext2D, frame: Frame): void {
@@ -31,22 +33,26 @@ export function under(ctx: CanvasRenderingContext2D, frame: Frame): void {
 /** Over the Canvas pass's darkness: the coloured lights' glow, then what glows and moves. */
 export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   if (!onLayer(ctx, frame)) {
-    drawGlowing(ctx, frame, glowSources(frame));
+    const steady = !glowsWithLight(ctx, frame);
+    drawGlowing(ctx, frame, { sources: glowSources(frame), steady });
   }
+}
+
+/** The coloured lights whose glow the glow pass lays, and whether it lays the steady ones too. */
+interface Pools {
+  sources: readonly LightSource[];
+  /** false where the light pass laid the steady ones already (light.ts `glowsWithLight`) */
+  steady: boolean;
 }
 
 /**
  * The glow of `pools` where given — each where its light can see: the faint
- * screens and racks baked together for the doors as they stand; the pulsing
- * core, the beacon and a screen striking up each baked once at full strength
- * and laid on at the strength of the moment — then the beacon's beams, the
- * glowing marks and the particles.
+ * screens and racks baked together for the doors as they stand, unless the
+ * light pass laid them; the pulsing core, the beacon and a screen striking up
+ * each baked once at full strength and laid on at the strength of the moment
+ * — then the beacon's beams, the glowing marks and the particles.
  */
-function drawGlowing(
-  ctx: CanvasRenderingContext2D,
-  frame: Frame,
-  pools: readonly LightSource[] | null,
-): void {
+function drawGlowing(ctx: CanvasRenderingContext2D, frame: Frame, pools: Pools | null): void {
   ctx.save();
   inTiles(ctx, frame);
   ctx.globalCompositeOperation = 'lighter';
@@ -60,46 +66,6 @@ function drawGlowing(
   ctx.restore();
 }
 
-/** How bright a light's glow is at its middle, part of the way out and at its rim. */
-const POOL_STOPS = [
-  [0, 0.55],
-  [0.4, 0.22],
-  [1, 0],
-] as const;
-
-/** Fills a light's glow round its spot in `g`, tile space, `strength` bright. */
-function fillPool(g: CanvasRenderingContext2D, source: LightSource, strength: number): void {
-  const { x, y, reach } = source;
-  const glow = g.createRadialGradient(x, y, 0, x, y, reach);
-  for (const [offset, alpha] of POOL_STOPS) {
-    glow.addColorStop(offset, rgba(source.colour, alpha * strength));
-  }
-  g.fillStyle = glow;
-  g.fillRect(x - reach, y - reach, reach * 2, reach * 2);
-}
-
-/** The steady faint lights, from one bake for them all and the doors as they stand. */
-function laySteady(
-  ctx: CanvasRenderingContext2D,
-  frame: Frame,
-  steady: readonly LightSource[],
-  shut: string,
-): void {
-  const lights = steady.map((s) => [s.x, s.y, s.colour, s.reach, s.strength.toFixed(2)]);
-  const of = JSON.stringify([frame.missionId, shut, lights]);
-  const rounds = steady.map((s) => ({ x: s.x, y: s.y, r: s.reach }));
-  const box = steady.length === 0 ? null : bakeBox(frame.map, [], rounds);
-  layBake(ctx, frame, { name: 'pools', of, box }, (g) => {
-    g.globalCompositeOperation = 'lighter';
-    for (const source of steady) {
-      g.save();
-      g.clip(clipOf(frame, source, shut));
-      fillPool(g, source, source.strength);
-      g.restore();
-    }
-  });
-}
-
 /** A light's glow at full strength where it can see, from its bake for the doors as they stand. */
 function layLive(ctx: CanvasRenderingContext2D, frame: Frame, source: LightSource, shut: string) {
   const of = `${source.x},${source.y},${source.reach},${source.colour.join(',')},${shut}`;
@@ -110,16 +76,16 @@ function layLive(ctx: CanvasRenderingContext2D, frame: Frame, source: LightSourc
   });
 }
 
-/** The lights' glow: the steady ones in one go, the rest each at its strength now. */
-function drawPools(
-  ctx: CanvasRenderingContext2D,
-  frame: Frame,
-  sources: readonly LightSource[],
-): void {
+/** The lights' glow: the steady ones in one go where the pass lays them, the rest each as now. */
+function drawPools(ctx: CanvasRenderingContext2D, frame: Frame, pools: Pools): void {
   const shut = shutKey(frame);
-  const steady = sources.filter((s) => s.pulse === undefined && s.flicker !== true);
-  laySteady(ctx, frame, steady, shut);
-  for (const source of sources.filter((s) => !steady.includes(s))) {
+  const steady = steadyOf(pools.sources);
+  if (pools.steady) {
+    // The steady faint lights, from one bake for them all and the doors as they stand.
+    const part = steadyPart(frame, steady, shut);
+    layBake(ctx, frame, part.bake, part.draw);
+  }
+  for (const source of pools.sources.filter((s) => !steady.includes(s))) {
     ctx.globalAlpha = strengthAt(source, frame.time * 1000);
     layLive(ctx, frame, source, shut);
   }

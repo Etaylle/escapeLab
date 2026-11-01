@@ -87,8 +87,8 @@ describe('glow — the coloured light over the darkness', () => {
     expect(poolsOf(frame).filter(([, of]) => String(of).includes('255,122,28'))).toHaveLength(1);
   });
 
-  it('bakes the steady faint lights once, and lays the bake over the picture after', () => {
-    const frame = frameWith({ map: lab() });
+  it('bakes the steady faint lights once over a lab not in the dark, and lays the bake', () => {
+    const frame = frameWith({ map: lab(), spectator: true });
     drawn(frame);
     const pools = frame.kit.bakes.entries.get('pools');
     // The server room's racks glow steadily: baked, not drawn anew every frame.
@@ -96,6 +96,15 @@ describe('glow — the coloured light over the darkness', () => {
     const { log } = drawn(frame);
     expect(frame.kit.bakes.entries.get('pools')?.baked).toBe(pools?.baked);
     expect(callsOf(log, 'drawImage').map(([canvas]) => canvas)).toContain(pools?.baked?.canvas);
+  });
+
+  it('leaves the steady faint lights to the light pass in the dark, the pulsing ones its own', () => {
+    // In the dark the light pass lays the steady glows with the rest of the light that holds
+    // still (render/light.ts): one copy added onto the picture instead of two.
+    const frame = frameWith({ map: lab(), time: 1.8 });
+    drawn(frame);
+    expect(frame.kit.bakes.entries.has('pools')).toBe(false);
+    expect(poolsOf(frame).filter(([, of]) => String(of).includes('255,122,28'))).toHaveLength(1);
   });
 
   it('draws the lights’ glow straight while the zoom moves, and bakes nothing for it', () => {
