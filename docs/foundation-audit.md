@@ -267,3 +267,77 @@ shift draws the partners on time as well (`clock.test.tsx`).
 `SHOTS_SOFTWARE_GL=1` and without: Blackout 99 captures, 3 skipped, 0 failed (won 383.6 s and
 377.3 s after the lights went out), Systemcheck 76 captures, 9 skipped, 0 failed (won in 3:34 and
 3:33). Every frame window gated at 40 ms held at 16.8 ms p95 or less.
+
+---
+
+## Stand nach N-readability
+
+Branch `N-readability` (on main `3134e78`): one commit per item — the book's pages
+(`c1cc5c6`), the canvas text (`8fba064`), the phone's controls (`345fe96`), the devices' type
+and targets (`a92705b`), these notes — and two the walkthrough asked for: the minimap 56 px
+tall for a wide map too (`1280e43`), the phone shots' names (`ea60b87`). Measured on 2026-11-01
+with the audit's scripts, copied to `scratchpad/readability/` and pointed at port 3372, on a
+quiet machine (1-min load under 4, no other walkthrough), the base (`3134e78`, built beside it)
+run by the same scripts in the same hour. Findings by the numbers of the table above.
+
+| # | What | Measure | Before | After |
+|---|---|---|---|---|
+| 9 | Device text, Blackout's six devices (m5) | smallest · median, px | 8 (the rack's I/O) and 10 · 11–13 | 11.1 · 11.2–14.3 |
+| 9 | Controls under a pointer's 36 px (m5, per window) | count | 31 (keys 52×34, grips 88×30, switches 36×34, the way back 13 px high) | 0 |
+| 9 | The rack at 1280×720 | panel · scrolls | 739 px · 77 px, a control out of view | 471 px · no |
+| 9 | Devices on a phone held sideways (m5) | scroll · under 44 px · out of view | all 11 consoles in a 680×359 box · 42 of 71 · 50 | none · 0 · 0 |
+| 9 | The terminal on that phone | controls out of view | 14 of 14 | 0 |
+| 9 | The relay console on that phone · at 1280×720 | scrolls | 319 px, all 13 controls out of view · 16 px | 0 · 0 |
+| 9 | Morsetafel · Serverraum codes (m8) | over a page turn | 11 + 2 rows · 2 + 4 items | whole · whole, at 0.9, 1 and 1.15 |
+| 9 | The Archiv's book at the large text size (v-book) | pages running past the sheet | 3 of 3, in each of three windows | 0 |
+| 10 | The HUD's smallest words (m6) | px | 9 (the Laborkennung's heads), 10 (ALARME), 11 („unterwegs") | 12 |
+| 10 | ALARME at the large text size | px | 11.5 | 13.8 |
+| 10 | FLUR on the lit corridor | contrast | 1.26:1 (1.82 in its box) | 4.96:1 on its plate |
+| 8 | Steering on a phone held sideways (v-phone) | — | four 42-px arrows on the right, 4 ways | nine 48-px cells at x 22–168, 8 ways, a slide turns |
+| 8 | The objective bar · with a line on the air | share of the canvas | 20.5 % · 31.8 % | 13.5 % · 23.9 % |
+| 8 | The minimap on that phone | px | 54×34 (41×26 under a line) | 135×85 (the Systemcheck's 152×56) |
+
+**What changed.** Every word on a device takes its role's size from four tokens on the root —
+engraved 11 px, a label 12, read off a face 14, a readout 18 in 720 px of height, a little more
+in a taller window, all times the text size — and every control is a target, 36 px under a
+pointer and 44 under a finger (`docs/art-bible.md`, „Type and targets"). The rack and its
+Netzplan stand side by side; the terminal's prompt, the way back and the relay's „Ablauf
+nachlesen" reach their target over the chassis round them; the station and relay frames take
+the modal's whole height. On a phone held sideways a device takes the window, the Laborkennung
+and the coach line in a column beside it, a long list scrolling in its own box (the terminal's
+log, kept at its newest line); the relay console stands in two columns. The book's pages are
+estimated at the reader's text size, tables and rule lists move whole to the next page, a
+heading never ends a page, and a station's rules open on a spread where a page alone would not
+hold them. The canvas text follows the text size, room names stand on plates, prop labels give
+way to each other. On the phone the steering pad lies under the left thumb, the actions under
+the right, the objective bar a quarter of the canvas at most.
+
+**Not reached, and why.** Targets are asserted for Blackout's devices and its relay console
+(`test/deviceTargets.test.tsx`) and measured there (m5, `v-relay.mjs`); the other missions'
+devices keep the sizes their layouts give them, and only their type floor is tested. The
+walkthrough's phone shots cover the devices the guest's phone opens — the lever, the meter,
+Signalkette console A, the rack, the reactor, and the relay console when an emergency comes; the
+box, the receiver, the terminal and the radio panel are worked in the host's window, and m5
+measures them on the phone, `v-relay.mjs` the relay console.
+
+**About the scripts.** m5 also counts the controls under 36 px, the modal's own scroll and the
+controls out of view, and reads SVG text as drawn — its set size times the drawing's scale —
+where the audit took 0.8 of its box's height, which reads an 11-px label as 10.4 px; no base
+minimum came from SVG text. m6 measures a room name in the box of its plate at the name's
+anchor: a name the canvas leaves out — under the radio line (ARCHIV, 2.99), the minimap
+(OST-FLUR) or, at the large text size, a prop's label (the second FLUR, 1.21) — measures what
+lies there instead. The gallery gained „Audit relay", Blackout's relay emergency 2 s into a run;
+`v-relay.mjs`, `v-phone.mjs`, `v-book.mjs`, `v-parts.mjs` and `v-netzplan.mjs` are new probes.
+
+**Walkthrough.** `tools/shots.mjs` played both missions to the end, with `SHOTS_SOFTWARE_GL=1`
+and without, on a server whose custom missions started empty (the audit's six gallery missions,
+left on the server of the last package's run, had made its join screen scroll by 79 and 179 px):
+Blackout 108 captures, 4 skipped, 0 failed (won 400.7 s and 387.6 s after the lights went out),
+Systemcheck 79 captures, 9 skipped, 0 failed (won in 3:39 and 3:36). Every device the guest's
+phone opened stood whole sideways, every control in view and 44 px at least
+(`device-phone-*.png`); no relay emergency came in either Blackout run, so its shot is skipped.
+No screen scrolls, the join screen at both laptop sizes included. Every frame window gated at 40
+ms held at 33.4 ms p95 or less under software GL and 16.8 ms without. Blackout ran on
+`a92705b`'s client with `ea60b87`'s harness — `1280e43` leaves its 27×17 map's minimap as it was
+in every window — the Systemcheck on the head. The smoke passed; core 1392, server 250, client
+2714 and tools 77 tests pass.
