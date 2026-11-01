@@ -176,6 +176,11 @@ describe('the countdown’s beeps', () => {
       10, 9, 8, 7, 9, 8,
     ]);
   });
+
+  it('replays none where a fresh reading of the server’s clock sets it back a few ms', () => {
+    // 6 announced at 6.000 s; the next ask moves the offset 10 ms, just past the second
+    expect(beepsOver([7_000, 6_500, 6_000, 5_995, 6_005, 5_990, 5_000])).toEqual([7, 6, 5]);
+  });
 });
 
 /** A running mission's view on this page, its clock running out at `deadlineAt`. */

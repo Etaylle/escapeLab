@@ -133,12 +133,13 @@ export function timeLeft(mission: MissionTime, now: number = serverNow()): numbe
 /**
  * The countdown's beep due with `leftMs` on the mission's clock, the whole second announced
  * last being `last`: each of the last ten seconds once — and once more where the clock went
- * back up past it — and what to remember as announced. The clock stands still while the run is
- * paused (`timeLeft`), so a pause spends no beep.
+ * back up past it by more than a second, as for a new run: the few ms a fresh reading of the
+ * server's clock may set it back replay none — and what to remember as announced. The clock
+ * stands still while the run is paused (`timeLeft`), so a pause spends no beep.
  */
 export function beepDue(leftMs: number, last: number): { beep: number | null; last: number } {
   const whole = Math.ceil(leftMs / 1000);
-  const heard = whole > last ? Number.POSITIVE_INFINITY : last;
+  const heard = whole > last + 1 ? Number.POSITIVE_INFINITY : last;
   if (whole <= 10 && whole >= 0 && whole < heard) {
     return { beep: whole, last: whole };
   }
