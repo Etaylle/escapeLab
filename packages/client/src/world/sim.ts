@@ -1,4 +1,6 @@
 import { SPRINT_FACTOR, WALK_SPEED, walkable, type PlayerPosition } from '@escapelab/core';
+import { MOVE_ACTIONS, MOVES, type Held } from '../input/bindings.js';
+import { NO_STEER, type Steer } from '../input/pad.js';
 import type { DoorMotion } from './doors.js';
 import { gaitStep } from './figure.js';
 import { lightMemory, type LightMemory } from './light.js';
@@ -33,8 +35,6 @@ const RADIUS = 0.28; // collision half-size
  */
 const STRIDE = 0.5;
 
-/** The key held to sprint, as KeyboardEvent names it lower-cased: Shift, or the pad's „Sprint". */
-export const SPRINT_KEY = 'shift';
 /** How far the camera looks ahead of a walking avatar, in tiles. */
 export const LEAD_TILES = 0.6;
 /** How quickly the camera's lead comes and goes, s: about 95 % of the way in 300 ms. */
@@ -42,17 +42,6 @@ export const LEAD_TAU = 0.1;
 
 /** A footfall in a frame's walk: at a walk, or at a sprint — quicker, and a little louder. */
 export type Footfall = 'walk' | 'sprint';
-
-export const MOVE_KEYS: Record<string, [number, number]> = {
-  arrowup: [0, -1],
-  w: [0, -1],
-  arrowdown: [0, 1],
-  s: [0, 1],
-  arrowleft: [-1, 0],
-  a: [-1, 0],
-  arrowright: [1, 0],
-  d: [1, 0],
-};
 
 export interface Sim {
   /** the run `self` was placed for, by its `startedAt`; null before the first frame */
@@ -66,7 +55,13 @@ export interface Sim {
    */
   held: boolean;
   others: Map<string, OtherAvatar>;
-  keys: Set<string>;
+  /**
+   * what is held down to walk and sprint, by action — the keys as the settings bind them, the
+   * touch screen's pad (input/bindings.ts `Held`)
+   */
+  keys: Set<Held>;
+  /** how a controller steers this frame (input/padRuntime.ts `padSteer`); still without one */
+  pad: Steer;
   /** each door's slide, by door id (doors.ts) */
   doors: Map<string, DoorMotion>;
   walkPhase: number;
@@ -117,6 +112,7 @@ export function newSim(topCss: number): Sim {
     held: false,
     others: new Map(),
     keys: new Set(),
+    pad: NO_STEER,
     doors: new Map(),
     walkPhase: 0,
     stepAcc: 0,
@@ -184,40 +180,57 @@ function blocked(map: WorldMap, closedDoors: Set<string>, x: number, y: number):
   return false;
 }
 
-/** The way the keys held point, not yet of unit length; none while input is locked. */
-function heading(keys: ReadonlySet<string>, locked: boolean): [number, number] {
+/** Where the avatar is steered: a way of unit length, and how much of a full walk. */
+interface Heading {
+  dx: number;
+  dy: number;
+  /** 1 by the keys, the stick's lean past its dead zone by a controller; 0 standing */
+  lean: number;
+}
+
+const STANDING: Heading = { dx: 0, dy: 0, lean: 0 };
+
+/**
+ * Where the moves held point (`sim.keys`), at a full walk — or, with none held, where the
+ * controller steers (`sim.pad`), as far as its stick leans; standing while input is locked.
+ */
+function heading(sim: Sim, locked: boolean): Heading {
+  if (locked) {
+    return STANDING;
+  }
   let dx = 0;
   let dy = 0;
-  if (!locked) {
-    for (const [key, [kx, ky]] of Object.entries(MOVE_KEYS)) {
-      if (keys.has(key)) {
-        dx += kx;
-        dy += ky;
-      }
+  for (const move of MOVE_ACTIONS) {
+    if (sim.keys.has(move)) {
+      dx += MOVES[move][0];
+      dy += MOVES[move][1];
     }
   }
-  return [dx, dy];
+  const keyed = Math.hypot(dx, dy);
+  if (keyed > 0) {
+    return { dx: dx / keyed, dy: dy / keyed, lean: 1 };
+  }
+  const { x, y } = sim.pad;
+  const lean = Math.hypot(x, y);
+  return lean > 0 ? { dx: x / lean, dy: y / lean, lean: Math.min(1, lean) } : STANDING;
 }
 
 /**
- * One frame's walk from the keys held (input → velocity): the facing, the
- * step as far as no wall, shut door or furniture stands in the way, and the
- * gait — SPRINT_FACTOR times as fast with the sprint key held, no stamina.
- * Returns the footfall that lands in it, if one does.
+ * One frame's walk from the keys held or the controller's stick (input → velocity): the
+ * facing, the step as far as no wall, shut door or furniture stands in the way, and the gait —
+ * SPRINT_FACTOR times as fast with sprint held, no stamina; a stick leant part of the way walks
+ * that part as fast. Returns the footfall that lands in it, if one does.
  */
 export function walk(sim: Sim, map: WorldMap, dt: number, locked: boolean): Footfall | null {
-  let [dx, dy] = heading(sim.keys, locked);
-  const len = Math.hypot(dx, dy);
-  sim.self.moving = len > 0;
-  if (!(len > 0)) {
+  const { dx, dy, lean } = heading(sim, locked);
+  sim.self.moving = lean > 0;
+  if (!(lean > 0)) {
     return null;
   }
-  dx /= len;
-  dy /= len;
   sim.self.facing = Math.atan2(dy, dx);
-  const sprinting = sim.keys.has(SPRINT_KEY);
+  const sprinting = sim.keys.has('sprint') || sim.pad.sprint;
   const pace = sprinting ? SPRINT_FACTOR : 1;
-  const speed = WALK_SPEED * pace;
+  const speed = WALK_SPEED * pace * lean;
   const closedDoors = new Set(map.doors.filter((d) => !d.open).map((d) => `${d.x},${d.y}`));
   const nx = sim.self.x + dx * speed * dt;
   if (!blocked(map, closedDoors, nx, sim.self.y)) {

@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import {
+  dailyLabel,
   difficultyInfos,
+  utcDay,
   type ClientMessage,
   type Difficulty,
   type MissionInfo,
   type MissionStats,
   type PlayerView,
 } from '@escapelab/core';
+import { earnedCount, useEarned } from '../achievements.js';
 import { FIRST_RUN_LINE, useWon } from '../firstRun.js';
+import { useNow } from '../hooks.js';
 import { fullscreenForRun } from '../runScreen.js';
 import { recordParts } from '../runStats.js';
 import { preloadSamples } from '../world/samples.js';
@@ -16,6 +20,7 @@ import { CrewRoom } from './CrewRoom.js';
 import { Icon } from './Icon.js';
 import { MapThumb } from './MapThumb.js';
 import { phosphorClass, useComesOn } from './phosphor.js';
+import { plaqueCount } from './Plaques.js';
 import { MicSetup } from './Voice.js';
 
 type Send = (msg: ClientMessage) => void;
@@ -58,9 +63,11 @@ interface HeadProps {
   info: MissionInfo | undefined;
   /** the host's strip of missions, in the map's place — each card has a map of its own */
   picker: ReactNode;
+  /** how many of the mission's Erfolge this device holds (achievements.ts) */
+  earned: number;
 }
 
-function MissionHead({ view, info, picker }: HeadProps) {
+function MissionHead({ view, info, picker, earned }: HeadProps) {
   const comesOn = useComesOn('lobby');
   return (
     <header className="lobby-head">
@@ -83,6 +90,9 @@ function MissionHead({ view, info, picker }: HeadProps) {
             <Icon name="station" /> {info.puzzleCount} Stationen
           </span>
         )}
+        <span className="lobby-earned">
+          <Icon name="star" /> {plaqueCount(earned)}
+        </span>
       </p>
       {info?.stage === 'prototype' && <p className="muted lobby-prototype">{PROTOTYPE_LINE}</p>}
     </header>
@@ -126,17 +136,29 @@ interface LevelsProps {
    * crew (firstRun.ts), and while it stays on it, a muted line says so
    */
   firstRun?: boolean;
+  /** the Tagesschicht's switch beside the caption, where the mission offers one */
+  daily?: ReactNode;
 }
 
 /**
  * The difficulty as three chips: the host picks one, everyone else sees which. A host on a
  * first run is told why „entspannt" stands picked.
  */
-export function Levels({ current, pick, firstRun = false }: LevelsProps) {
+export function Levels({ current, pick, firstRun = false, daily }: LevelsProps) {
   const levels = difficultyInfos();
+  const caption = (
+    <p className="lobby-caption">Schwierigkeit{pick === null && ' (wählt der Host)'}</p>
+  );
   return (
     <div className="lobby-levels">
-      <p className="lobby-caption">Schwierigkeit{pick === null && ' (wählt der Host)'}</p>
+      {daily === undefined ? (
+        caption
+      ) : (
+        <div className="lobby-levels-head">
+          {caption}
+          {daily}
+        </div>
+      )}
       <div className={pick === null ? 'level-chips level-chips-shown' : 'level-chips'}>
         {levels.map((level) => {
           const on = level.id === current;
@@ -165,6 +187,51 @@ export function Levels({ current, pick, firstRun = false }: LevelsProps) {
         <p className="muted lobby-first-run">{FIRST_RUN_LINE}</p>
       )}
     </div>
+  );
+}
+
+/** What the Tagesschicht is, on its switch: the same instance for every crew, ranked apart. */
+export const DAILY_NOTE =
+  'Jede Crew bekommt heute dieselbe Lage; die Läufe stehen auf einer eigenen Bestenliste.';
+
+/**
+ * The Tagesschicht, where the mission offers one: the host's switch „Tagesschicht 31.10." —
+ * the day's seed for every crew, ranked among that day's runs (core daily.ts) — named by today
+ * (UTC); the run plays the day the server's clock has as it starts. Everyone else sees whether
+ * it is on. A chip beside the difficulty's caption, what it is in its title.
+ */
+export function DailySwitch({
+  on,
+  today,
+  pick,
+}: {
+  /** whether the host has it on */
+  on: boolean;
+  /** today, UTC, „2026-10-31" */
+  today: string;
+  /** the host's switch; null for everyone else, who only sees it */
+  pick: ((on: boolean) => void) | null;
+}) {
+  const label = `Tagesschicht ${dailyLabel(today)}`;
+  const marks = on ? 'daily-switch daily-switch--on' : 'daily-switch';
+  if (pick === null) {
+    return (
+      <span className={marks} title={DAILY_NOTE}>
+        <span className="daily-lamp" aria-hidden="true" /> {label} {on ? '· an' : '· aus'}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className={marks}
+      role="switch"
+      aria-checked={on}
+      title={DAILY_NOTE}
+      onClick={() => pick(!on)}
+    >
+      <span className="daily-lamp" aria-hidden="true" /> {label}
+    </button>
   );
 }
 
@@ -381,6 +448,9 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
   const [more, setMore] = useState(false);
   const host = view.you.isHost;
   const won = useWon();
+  const earned = earnedCount(useEarned(), view.missionId);
+  // Today's Tagesschicht by the UTC day, looked at again every minute: midnight turns it over.
+  const today = utcDay(useNow(60_000));
   // The lab's recordings load while the crew gathers, so that the run's first sounds are on time.
   useEffect(() => {
     void preloadSamples();
@@ -402,12 +472,26 @@ export function LobbyScreen({ view, send, leaveRoom, missions, stats }: Props) {
         className={more ? 'lobby-panel lobby-panel-more' : 'lobby-panel'}
         aria-label="Mission"
       >
-        <MissionHead view={view} info={info} picker={picker} />
+        <MissionHead
+          view={view}
+          info={info}
+          picker={picker}
+          earned={earned}
+        />
         <Story text={view.storyText} open={more} toggle={() => setMore(!more)} />
         <Levels
           current={view.difficulty}
           pick={host ? (difficulty) => send({ kind: 'select-difficulty', difficulty }) : null}
           firstRun={host && !won}
+          daily={
+            view.daily === undefined ? undefined : (
+              <DailySwitch
+                on={view.daily.on}
+                today={today}
+                pick={host ? (daily) => send({ kind: 'set-daily', daily }) : null}
+              />
+            )
+          }
         />
         <MicSetup />
         <StartArea view={view} send={send} />

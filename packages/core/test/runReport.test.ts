@@ -169,9 +169,18 @@ describe('runReport', () => {
       finishedAt: T0 + 140_000,
       outcome: 'won',
       stations: [
-        { puzzleId: 'erst', openedAt: T0, solvedAt: T0 + 60_000, seconds: 60, alarms: 1, hints: 1 },
+        {
+          puzzleId: 'erst',
+          type: 'wiring',
+          openedAt: T0,
+          solvedAt: T0 + 60_000,
+          seconds: 60,
+          alarms: 1,
+          hints: 1,
+        },
         {
           puzzleId: 'dann',
+          type: 'wiring',
           openedAt: T0 + 60_000,
           solvedAt: T0 + 130_000,
           seconds: 70,
@@ -180,6 +189,8 @@ describe('runReport', () => {
         },
       ],
       emergencies: { count: 2, failed: 1 },
+      notes: { read: 0, total: 0 },
+      drones: 0,
       penalties: [
         { cause: 'Falsches Kabel getrennt', count: 1, seconds: 30 },
         { cause: 'Von einer Drohne erfasst', count: 2, seconds: 30 },
@@ -226,9 +237,10 @@ describe('runReport', () => {
     state = applyAction(state, { type: 'time-expired', at: T0 + 570_000 });
     const report = runReport(state, ROOM);
     expect(report).toMatchObject({ outcome: 'lost:time', finishedAt: T0 + 570_000 });
+    const never = { openedAt: null, solvedAt: null, seconds: null, alarms: 0, hints: 0 };
     expect(report.stations).toEqual([
-      { puzzleId: 'erst', openedAt: T0, solvedAt: null, seconds: null, alarms: 1, hints: 0 },
-      { puzzleId: 'dann', openedAt: null, solvedAt: null, seconds: null, alarms: 0, hints: 0 },
+      { ...never, puzzleId: 'erst', type: 'wiring', openedAt: T0, alarms: 1 },
+      { ...never, puzzleId: 'dann', type: 'wiring' },
     ]);
   });
 

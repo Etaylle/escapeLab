@@ -51,12 +51,30 @@ export {
   type StationReport,
 } from './report.js';
 export type {
+  DailyStats,
   DifficultyStats,
   LeaderEntry,
   MissionStanding,
   MissionStats,
   RunPlace,
 } from './runStats.js';
+export {
+  achievement,
+  achievementsOf,
+  ACHIEVEMENT_IDS,
+  ACHIEVEMENTS,
+  EIGHT_MINUTES_SEC,
+  type Achievement,
+  type AchievementId,
+} from './achievements.js';
+export {
+  dailyLabel,
+  dailySeed,
+  isDailyDay,
+  utcDay,
+  type DailyDay,
+  type DailyStart,
+} from './daily.js';
 export { GameError } from './errors.js';
 export {
   viewFor,
@@ -161,8 +179,11 @@ export {
 export type { RelayView } from './puzzles/relay.js';
 export {
   DEPENDS_ON,
+  diagramOf,
   SERVICES,
+  serviceDiagram,
   serviceName,
+  type Diagram,
   type RackUnit,
   type ServerCode,
   type ServerLed,

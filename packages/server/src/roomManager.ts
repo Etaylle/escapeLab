@@ -30,11 +30,13 @@ export class RoomManager {
 
   /**
    * `onRunFinished` hears of every run that ends in any of these rooms;
-   * `allowSeed` (`seedsAllowed`) lets a new room be pinned to a seed.
+   * `allowSeed` (`seedsAllowed`) lets a new room be pinned to a seed;
+   * `dailySalt` (dailySalt.ts) makes the Tagesschicht's seeds in every room.
    */
   constructor(
     private readonly onRunFinished: RunListener = () => undefined,
     private readonly allowSeed = false,
+    private readonly dailySalt: string | null = null,
   ) {}
 
   /**
@@ -52,7 +54,7 @@ export class RoomManager {
     } else if (pinned !== null) {
       console.log(`[escapelab] room ${code}: pinned to seed ${pinned}, run n plays seed + n`);
     }
-    const room = new Room(code, mission, this.onRunFinished, pinned, difficulty);
+    const room = new Room(code, mission, this.onRunFinished, pinned, difficulty, this.dailySalt);
     this.rooms.set(code, room);
     return room;
   }

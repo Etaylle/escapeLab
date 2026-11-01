@@ -5197,6 +5197,7 @@ async function captureServersConsoles({ terminal, rack }) {
   await sleep(1400); // past the panels' fade-in and the terminal's boot scroll
   await capture(terminal.page, 'servers-a.png');
   await capture(rack.page, 'servers-b.png');
+  await captureRackDiagram(rack);
   const needs = await checkNeeds(terminal, rack);
   const sizes = [SIZES[0], { width: 1280, height: 720 }, SIZES[2]];
   const over = [];
@@ -6548,6 +6549,7 @@ async function captureEnd(host, watcher) {
   const cardAt = Date.now() - wonAt;
   await sleep(1700); // past the card's way out of the white
   await capture(host.page, 'won.png');
+  await captureAchievements(host);
   const says = await textOf(card.locator('.end-title-word'));
   const figures = await card.locator('.end-mate canvas').count();
   const facts = (await textOf(card.locator('.end-facts')))?.replace(/\s+/g, ' ') ?? 'none';
@@ -6896,6 +6898,382 @@ function reportSprint(name, run, sprint, walk) {
   }
 }
 
+// ── the gameplay package's captures: the controller, the keys, the Erfolge, the Tagesschicht
+//
+// The host's page opens with `?fakepad=1` (`padded`): the client's controller layer then takes a
+// controller the walkthrough plays through `window.__escapelab.pad` (client input/padRuntime.ts),
+// for nothing until it is used.
+//
+// daily.png  the host's lobby with the Tagesschicht switched on, named by today's UTC day — the
+//   server's view has to say so — then off again, as the walkthrough plays the room's pinned
+//   seed; a mission without one skips it
+// settings-controller.png  the settings' controller section with R1, Y and L2 held on the
+//   walkthrough's controller: those have to light up in the live test, the controller has to
+//   count as connected, and the key table has to list all twelve actions
+// gamepad-prompts.png  the host beside the nearest source or the station up, the controller used
+//   last: the HUD's buttons have to name its buttons (X, View); a key pressed has to turn them
+//   back (N, I)
+// rack-diagram.png  the rack console's cabling diagram as its player opens it: six boxes, each
+//   LED as the rack's unit says, no code anywhere — or the run fails
+// achievements.png  the won card once its plaques are in: the ones the view says the run earned,
+//   all new to the host's device — or the run fails
+// share-card.png  the picture „Bild speichern" downloads from the won card, 1200 × 630
+// danger-sense.png  Blackout's scratch copy with its drones up from the start: the player
+//   starting at (21,8) the moment a drone closes in within five tiles — the probe naming it
+//   (client world/danger.ts); a Systemcheck run skips it
+
+/** `url` with `?fakepad=1`: the page takes the walkthrough's controller. */
+function padded(url) {
+  const withPad = new URL(url);
+  withPad.searchParams.set('fakepad', '1');
+  return withPad.href;
+}
+
+/** Saves what `locator` shows as `name` in the output folder, and counts it. */
+async function captureElement(locator, name) {
+  await locator.screenshot({ path: join(OUT, name) });
+  tally.taken += 1;
+}
+
+/** Calls `method` on the page's controller with `args` (client input/padRuntime.ts PadProbe). */
+function onPad(page, method, ...args) {
+  return page.evaluate(
+    ([name, rest]) => globalThis.__escapelab?.pad?.[name](...rest),
+    [method, args],
+  );
+}
+
+/** Today's UTC day, as the Tagesschicht names it, and as the lobby's switch prints it. */
+function todayShift() {
+  const day = new Date().toISOString().slice(0, 10);
+  return { day, label: `Tagesschicht ${day.slice(8, 10)}.${day.slice(5, 7)}.` };
+}
+
+/**
+ * daily.png: the host switches the Tagesschicht on in the lobby — the server's view has to say
+ * so and the switch name today's UTC date — and off again for the pinned seed the walkthrough
+ * plays. A mission without one skips it.
+ */
+async function captureDaily(page, seen) {
+  const toggle = page.locator('.lobby-levels button.daily-switch');
+  if ((await toggle.count()) === 0) {
+    skip('daily.png', `${MISSION} offers no Tagesschicht`);
+    return;
+  }
+  const { day, label } = todayShift();
+  await toggle.click();
+  const on = await until(() => seen.view?.daily?.on === true, 3000);
+  await sleep(300);
+  await capture(page, 'daily.png');
+  const said = await textOf(toggle);
+  await toggle.click();
+  const off = await until(() => seen.view?.daily?.on === false, 3000);
+  console.log(
+    `daily.png          "${said}": ${on ? `on, today ${day}` : '!! never on'}, ` +
+      (off ? 'off again for the pinned seed' : '!! still on'),
+  );
+  if (!on || !off || said !== label) {
+    fail(`daily.png: "${said}" (${label}), on ${on}, off again ${off}`);
+  }
+}
+
+/** The buttons the live test lights, by their names. */
+function litButtons(page) {
+  return page.locator('.pad-test .pad-key--lit').evaluateAll((els) =>
+    els.map((el) => el.getAttribute('data-button')),
+  );
+}
+
+/**
+ * settings-controller.png: the gear opens the settings, the controller's section in view; the
+ * walkthrough's controller holds R1, Y and L2 — none of them acts over a dialog — and the live
+ * test has to light exactly those, the controller connected, the key table all twelve actions.
+ * Esc closes the settings again: a real key, which turns the prompts back to the keys.
+ */
+async function captureControllerSettings(page) {
+  await page.locator('.settings-toggle').click();
+  const section = page.locator('.settings-pad');
+  if (!(await settled(section.waitFor({ timeout: 3000 })))) {
+    fail('settings-controller.png: the settings show no controller');
+    return;
+  }
+  const held = ['r1', 'y', 'l2'];
+  for (const button of held) {
+    await onPad(page, 'press', button);
+  }
+  await section.scrollIntoViewIfNeeded();
+  await sleep(300);
+  await capture(page, 'settings-controller.png');
+  const lit = await litButtons(page);
+  const status = await textOf(section.locator('.settings-note').first());
+  const actions = await page.locator('.settings-bindings tr[data-action]').count();
+  for (const button of held) {
+    await onPad(page, 'release', button);
+  }
+  await page.keyboard.press('Escape');
+  const closed = await settled(page.locator('.settings-card').waitFor({ state: 'hidden' }));
+  console.log(
+    `settings-controller.png lit ${lit.join(', ') || 'nothing'}; "${status}"; ` +
+      `${actions} actions with their keys; ${closed ? 'Esc closed it' : '!! still open'}`,
+  );
+  const lights = [...lit].sort().join(' ') === [...held].sort().join(' ');
+  if (!lights || !status?.startsWith('Verbunden') || actions !== 12 || !closed) {
+    fail(`settings-controller.png: lit ${lit.join(' ')}, "${status}", ${actions} actions`);
+  }
+}
+
+/** What the HUD's notepad and info buttons say now. */
+async function hudButtons(page) {
+  const notes = await textOf(page.locator('.hud .hud-notes'));
+  const info = await textOf(page.locator('.hud .hud-info:not(.hud-notes):not(.hud-mic)'));
+  return `${notes} · ${info}`;
+}
+
+/**
+ * gamepad-prompts.png: the player walks up to the nearest open source — else the station up —
+ * the E prompt over it, then taps L3 on the walkthrough's controller, which does nothing but
+ * count as using it: the HUD's buttons have to name the controller's buttons; a key pressed
+ * has to turn them back. Then back to where the player stood.
+ */
+async function captureGamepadPrompts(player) {
+  const { page, seen } = player;
+  const from = tileOf(seen);
+  const station = seen.view?.map?.stations.find((s) => s.status === 'armed');
+  const target = nearestManual(seen) ?? station;
+  if (from === null || target === undefined || !(await walkNear(page, seen, target))) {
+    skip('gamepad-prompts.png', `${player.name} found no source or station to stand at`);
+    return;
+  }
+  await sleep(400); // the prompt over it, the camera settled
+  await onPad(page, 'tap', 'l3');
+  await sleep(250);
+  await capture(page, 'gamepad-prompts.png');
+  const pad = await hudButtons(page);
+  const prompt = await page.evaluate(() => globalThis.__escapelab?.highlight?.subject ?? null);
+  await page.keyboard.press('Shift');
+  await sleep(250);
+  const keys = await hudButtons(page);
+  console.log(
+    `gamepad-prompts.png ${player.name} at ${JSON.stringify(prompt)}: "${pad}" on the ` +
+      `controller, "${keys}" after a key`,
+  );
+  if (pad !== 'Notizen [X] · Info [View]' || keys !== 'Notizen [N] · Info [I]') {
+    fail(`gamepad-prompts.png: "${pad}" on the controller, "${keys}" after a key`);
+  }
+  await walkNear(page, seen, from);
+}
+
+/** settings-controller.png and gamepad-prompts.png, one after the other. */
+async function captureControls(player) {
+  await captureControllerSettings(player.page);
+  await captureGamepadPrompts(player);
+}
+
+/**
+ * rack-diagram.png: the rack console's cabling diagram (client puzzles/RackDiagram.tsx) as its
+ * player opened it — six boxes, each LED as the view's unit says, no code anywhere — or the run
+ * fails.
+ */
+async function captureRackDiagram(rack) {
+  const diagram = rack.page.locator('.station-modal .rack-diagram');
+  if (!(await settled(diagram.waitFor({ timeout: 3000 })))) {
+    fail('rack-diagram.png: the rack shows no cabling diagram');
+    return;
+  }
+  await captureElement(diagram, 'rack-diagram.png');
+  const leds = await diagram.locator('.services-box').evaluateAll((boxes) =>
+    boxes.map((box) => [
+      box.getAttribute('data-service'),
+      box.querySelector('.services-led')?.getAttribute('class') ?? '',
+    ]),
+  );
+  const units = rack.seen.view?.puzzle?.rack ?? [];
+  const off = units.filter(
+    (unit) => !leds.some(([service, led]) => service === unit.service && led.endsWith(unit.led)),
+  );
+  const codes = /E\d\d/.test(await diagram.innerText());
+  console.log(
+    `rack-diagram.png   ${rack.name}: ${leds.length} boxes, ` +
+      `${units.map((unit) => `${unit.service} ${unit.led}`).join(', ')}` +
+      `${off.length > 0 ? ` !! LEDs off the rack: ${off.map((u) => u.service).join(', ')}` : ''}` +
+      `${codes ? ' !! a code on the rack' : ''}`,
+  );
+  if (leds.length !== 6 || off.length > 0 || codes) {
+    fail(`rack-diagram.png: ${leds.length} boxes, ${off.length} LEDs off, codes ${codes}`);
+  }
+}
+
+/** How long the won card's plaques take to come in: after 1.2 s, 300 ms apart, 450 ms each. */
+const plaquesInMs = (count) => 1200 + 300 * Math.max(0, count - 1) + 450 + 300;
+
+/** A PNG's size, from its header. */
+function pngSize(path) {
+  const png = readFileSync(path);
+  return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
+}
+
+/**
+ * achievements.png: the won card once its plaques are in — the ones the view says the run
+ * earned, every one new to the host's device, which has won nothing before; share-card.png:
+ * the picture „Bild speichern" downloads, 1200 × 630. Fails otherwise.
+ */
+async function captureAchievements(player) {
+  const { page, seen } = player;
+  const earned = seen.view?.achievements ?? [];
+  await sleep(plaquesInMs(earned.length));
+  await captureElement(page.locator('.end-title'), 'achievements.png');
+  const shown = await page
+    .locator('.end-title .plaque')
+    .evaluateAll((plaques) => plaques.map((plaque) => plaque.getAttribute('data-achievement')));
+  const fresh = await page.locator('.end-title .plaque--new').count();
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 5000 }),
+    page.locator('.end-title .share-save').click(),
+  ]);
+  const path = join(OUT, 'share-card.png');
+  await download.saveAs(path);
+  tally.taken += 1;
+  const { width, height } = pngSize(path);
+  console.log(
+    `achievements.png   ${player.name}: ${shown.join(', ') || 'no plaque'} (${fresh} new); ` +
+      `share-card.png "${download.suggestedFilename()}" ${width}×${height}`,
+  );
+  const plaques = JSON.stringify(shown) === JSON.stringify(earned) && fresh === earned.length;
+  if (!plaques || width !== 1200 || height !== 630) {
+    const said = `${shown.join(' ')} of ${earned.join(' ')}, ${fresh} new`;
+    fail(`achievements: ${said}, the picture ${width}×${height}`);
+  }
+}
+
+/** The danger sense's scratch copy of Blackout, by its id and title. */
+const DANGER_MISSION = { id: 'custom-gefahr', title: 'Gefahrprobe' };
+/** How long the danger sense gets to hear a drone close in, ms: a patrol's round and more. */
+const DANGER_WAIT_MS = 45_000;
+/** What stands over the world as a run starts: the location card, the briefing's count. */
+const DANGER_COVERS = '.intro-card, .briefing';
+/** How near the shot wants the drone sensed, tiles: nearer, its glow shows plainer. */
+const DANGER_SHOT_TILES = 3.5;
+
+/**
+ * Blackout as the danger sense's capture plays it: no intro, so the lights are out from the
+ * start; its drones up with them; for two, one starting at (21,8), under the Flur's patrol.
+ */
+function dangerMission() {
+  const blackout = structuredClone(BLACKOUT);
+  delete blackout.next;
+  delete blackout.intro;
+  return {
+    ...blackout,
+    ...DANGER_MISSION,
+    listOrder: 98,
+    daily: false,
+    players: { min: 2, max: 2 },
+    map: {
+      ...blackout.map,
+      spawns: [
+        { x: 21, y: 8 },
+        { x: 3, y: 3 },
+      ],
+      drones: blackout.map.drones.map((drone) => ({ ...drone, activeAfterSolved: 0 })),
+    },
+  };
+}
+
+/** The danger probe of a traced page (client world/danger.ts); null before its first look. */
+function dangerOf(page) {
+  return page.evaluate(() => globalThis.__escapelab?.danger ?? null);
+}
+
+/**
+ * Waits up to `ms` for `page`'s danger sense to name a drone closing in, DANGER_SHOT_TILES or
+ * nearer: the probe, or null.
+ */
+async function dangerSensed(page, ms) {
+  for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) {
+    const danger = await dangerOf(page);
+    if (danger?.drone != null && danger.distance <= DANGER_SHOT_TILES) {
+      return danger;
+    }
+  }
+  return null;
+}
+
+/**
+ * danger-sense.png: Blackout's scratch copy, saved through the editor's route and played by
+ * two; the player starting under the Flur's patrol stands still, past the location card, until a
+ * drone closes in, and is shot the moment the probe names it DANGER_SHOT_TILES away, the edge
+ * glowing toward it. Fails where none comes that near in DANGER_WAIT_MS, or a card still covers
+ * the world. The copy is deleted again whatever happened.
+ */
+async function captureDangerSense() {
+  if (MISSION.toLowerCase() !== 'blackout') {
+    skip('danger-sense.png', `the danger sense plays Blackout's copy; this run plays ${MISSION}`);
+    return;
+  }
+  const api = await request.newContext({ baseURL: BASE });
+  const saved = await api.post('/missions/custom', { data: dangerMission() });
+  if (saved.status() !== 201) {
+    fail(`danger-sense: the scratch copy was not taken (${saved.status()}): ${await saved.text()}`);
+    await api.dispose();
+    return;
+  }
+  const pages = [];
+  try {
+    const host = await artPage('Anna', SIZES[0]);
+    pages.push(host);
+    await host.page.goto(traced(BASE));
+    await host.page.getByPlaceholder('z. B. Anna').fill('Anna');
+    await host.page.locator('.mission', { hasText: DANGER_MISSION.title }).first().click();
+    await clickText(host.page, 'Runde eröffnen');
+    await host.page.locator('.room-code strong').waitFor({ timeout: 10_000 });
+    const code = (await host.page.locator('.room-code strong').innerText()).trim();
+    const guest = await artPage('Ben', SIZES[0]);
+    pages.push(guest);
+    await guest.page.goto(traced(BASE));
+    await guest.page.getByPlaceholder('z. B. Anna').fill('Ben');
+    await guest.page.getByLabel('Raumcode').fill(code);
+    await clickText(guest.page, 'Beitreten');
+    await guest.page.locator('.lobby').waitFor({ timeout: 10_000 });
+    await startRun(host, guest);
+    const under = startedAt([host, guest], 21, 8);
+    if (under === undefined) {
+      throw new Error('nobody of the danger sense’s crew started at (21,8)');
+    }
+    // The location card, and under it the briefing's count, stand over the world as the run
+    // starts: the glow shows once both are gone.
+    await under.page.locator('.intro-card').waitFor({ state: 'attached', timeout: 5000 });
+    await under.page.waitForFunction(
+      (covers) => document.querySelector(covers) === null,
+      DANGER_COVERS,
+      { timeout: 20_000 },
+    );
+    const danger = await dangerSensed(under.page, DANGER_WAIT_MS);
+    if (danger === null) {
+      const near = `${DANGER_SHOT_TILES} tiles in ${seconds(DANGER_WAIT_MS)}`;
+      fail(`danger-sense.png: no drone closed in on ${under.name} to ${near}`);
+      return;
+    }
+    await capture(under.page, 'danger-sense.png');
+    if ((await under.page.locator(DANGER_COVERS).count()) > 0) {
+      fail('danger-sense.png: the location card or the briefing stood over the world at the shot');
+    }
+    console.log(
+      `danger-sense.png   ${under.name} at 21,8: ${danger.drone} closing in, ` +
+        `${danger.distance.toFixed(1)} tiles, ${danger.ticks} tick(s)`,
+    );
+  } catch (err) {
+    console.log(`danger-sense       !! ${firstLine(err)}`);
+    fail(`danger-sense: ${firstLine(err)}`);
+  } finally {
+    for (const { context } of pages) {
+      await context.close();
+    }
+    const gone = await api.delete(`/missions/custom/${DANGER_MISSION.id}`);
+    console.log(`danger-sense       ${DANGER_MISSION.id} deleted again: ${gone.status()}`);
+    await api.dispose();
+  }
+}
+
 async function run() {
   mkdirSync(OUT, { recursive: true });
   if (CPU_SLOWDOWN > 1) {
@@ -6909,6 +7287,7 @@ async function run() {
   await captureEditor();
   await captureServers();
   await captureArtTour();
+  await captureDangerSense();
 
   // --- host: create a room and grab the code ---------------------------
   const hostCtx = await browser.newContext({ viewport: SIZES[0] });
@@ -6919,7 +7298,7 @@ async function run() {
   });
   host.on('pageerror', (e) => console.log('[host error]', e.message));
   // Only the host's page keeps a frame trace: every frame sample reads it.
-  await host.goto(seeded(traced(BASE)));
+  await host.goto(padded(seeded(traced(BASE))));
   // The game's title comes on as a phosphor screen does as the page loads (lobby-title.png).
   const titleCameOn = (await host.locator('.join h1.phosphor-title').count()) === 1;
   await host.getByPlaceholder('z. B. Anna').fill('Anna');
@@ -6960,6 +7339,7 @@ async function run() {
   await captureLobbyTitle(host, titleCameOn);
   await captureFirstRun(host, hostSeen);
   await capture(host, 'lobby-host.png');
+  await captureDaily(host, hostSeen);
 
   // --- guest: join by code ---------------------------------------------
   // Touch-capable on purpose: the on-screen D-pad is hidden for `pointer:
@@ -7064,6 +7444,7 @@ async function run() {
   await capture(host, 'info-panel.png');
   await host.keyboard.press('Escape');
   await captureSettings(host);
+  await captureControls(anna);
   await captureMinimapGoal(anna);
   await captureSprint(anna);
   await captureWalkCycle(anna);

@@ -19,7 +19,9 @@ Kooperatives Multiplayer-Escape-Spiel (Studienprojekt, FH-Themengruppe Schefer-W
   (`map.spawns`), der Start lost sie aus; die Validierung beweist Lösbarkeit für jede Crew-Größe
   und jede Startplatz-Auswahl. Regeln liegen an Quellen in der Welt (Buch, Terminal, Tafel,
   Klemmbrett, Spind, Schrank), teils mit Kandidatenplätzen, die der Seed wählt; nichts, was
-  Regeln enthält, ist tragbar.
+  Regeln enthält, ist tragbar. Ausnahme: feste Topologie, die für jeden Seed gleich ist (der
+  Netzplan des Serverraums, die BRAUCHT-Spalte), darf an den Pulten stehen; Regeln, die mit der
+  Instanz variieren, bleiben an den Quellen.
 - Niemand bedient eine Station allein: Eine Eingabe zählt nur, solange ein zweites
   Crewmitglied am anderen Pult oder an einer geöffneten Quelle der Station steht (`backupsOf`
   in `core/src/map.ts`, vom Reducer durchgesetzt; ausgenommen Stationen, an denen die ganze Crew

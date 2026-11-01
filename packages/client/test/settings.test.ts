@@ -8,6 +8,7 @@ import {
   type FakeNode,
 } from './fakeGraph.js';
 import { loadedSamples } from './fakeSamples.js';
+import { DEFAULT_KEYS, DEFAULT_PAD } from '../src/input/bindings.js';
 
 /** A storage that keeps what it is given, as the browser's does. */
 function memory(initial: Record<string, string> = {}) {
@@ -49,7 +50,8 @@ describe('readSettings and writeSettings — kept on this device', () => {
     const { settings } = await fresh();
     expect(settings.readSettings(memory())).toEqual({
       volumes: { radio: 100, effects: 100, music: 70 },
-      talkKey: 'v',
+      keys: DEFAULT_KEYS,
+      pad: DEFAULT_PAD,
       textSize: 'normal',
       motion: 'system',
     });
@@ -61,7 +63,8 @@ describe('readSettings and writeSettings — kept on this device', () => {
     const store = memory();
     const chosen = {
       volumes: { radio: 40, effects: 85, music: 0 },
-      talkKey: 'g',
+      keys: { ...DEFAULT_KEYS, talk: 'g', interact: 'f' },
+      pad: { interact: 'b', drop: 'a', notes: 'x', minimap: 'r2' },
       textSize: 'large',
       motion: 'on',
     } as const;
@@ -74,21 +77,26 @@ describe('readSettings and writeSettings — kept on this device', () => {
     const { settings } = await fresh();
     const odd = {
       volumes: { radio: 140, effects: -5.4, music: 'laut' },
-      talkKey: 'w',
+      // Two actions on one key, a key the game keeps, a button that is none.
+      keys: { talk: 'w', info: 'escape' },
+      pad: { notes: 'a', minimap: 'start' },
       textSize: 'riesig',
       motion: 'vielleicht',
     };
     const store = memory({ 'escapelab.settings': JSON.stringify(odd) });
     expect(settings.readSettings(store)).toEqual({
       volumes: { radio: 100, effects: 0, music: 70 },
-      talkKey: 'v',
+      keys: DEFAULT_KEYS,
+      pad: DEFAULT_PAD,
       textSize: 'normal',
       motion: 'system',
     });
-    const rounded = memory({ 'escapelab.settings': '{"volumes":{"music":33.6},"talkKey":"F4"}' });
+    const rounded = memory({
+      'escapelab.settings': '{"volumes":{"music":33.6},"keys":{"talk":"F4"}}',
+    });
     expect(settings.readSettings(rounded)).toMatchObject({
       volumes: { music: 34 },
-      talkKey: 'f4',
+      keys: { talk: 'f4', interact: 'e' },
     });
   });
 
@@ -120,23 +128,43 @@ describe('readSettings and writeSettings — kept on this device', () => {
   });
 
   it('comes back as the page starts, and a change is kept at once', async () => {
-    const store = memory({ 'escapelab.settings': '{"talkKey":"b","textSize":"small"}' });
+    const store = memory({ 'escapelab.settings': '{"keys":{"talk":"b"},"textSize":"small"}' });
     windowWith(store);
     const { settings } = await fresh();
     settings.startSettings();
-    expect(settings.getSettings()).toMatchObject({ talkKey: 'b', textSize: 'small' });
+    expect(settings.getSettings()).toMatchObject({ keys: { talk: 'b' }, textSize: 'small' });
     settings.changeSettings({ motion: 'off' });
     expect(JSON.parse(store.items.get('escapelab.settings') ?? '{}')).toMatchObject({
-      talkKey: 'b',
+      keys: { talk: 'b' },
       textSize: 'small',
       motion: 'off',
     });
   });
 });
 
+describe('settings kept before every action had its key', () => {
+  it('keep the talk key they named, the other keys at their defaults', async () => {
+    windowWith(memory({ 'escapelab.settings': '{"talkKey":"b","motion":"off"}' }));
+    const { settings } = await fresh();
+    settings.startSettings();
+    expect(settings.getSettings().keys).toEqual({ ...DEFAULT_KEYS, talk: 'b' });
+    expect(settings.getSettings().motion).toBe('off');
+  });
+
+  it('give way to the keys kept since', async () => {
+    const kept = JSON.stringify({ keys: { ...DEFAULT_KEYS, talk: 'g' }, talkKey: 'b' });
+    windowWith(memory({ 'escapelab.settings': kept }));
+    const { settings } = await fresh();
+    settings.startSettings();
+    expect(settings.getSettings().keys.talk).toBe('g');
+  });
+});
+
 describe('the talk key', () => {
+  /** A key as a keyboard sends it: a letter sits at Key<letter>, whatever case it comes in. */
   const key = (name: string, parts: Partial<KeyboardEvent> = {}) => ({
     key: name,
+    code: `Key${name.toUpperCase()}`,
     altKey: false,
     ctrlKey: false,
     metaKey: false,
@@ -144,47 +172,53 @@ describe('the talk key', () => {
     ...parts,
   });
 
-  it('takes a letter, a digit past the chat’s, F1–F12, refuses what the game holds', async () => {
-    const { settings } = await fresh();
-    for (const ok of ['v', 'G', 'ö', '9', '0', 'F2', 'f12', 'x']) {
-      expect(settings.talkKeyVerdict(ok), ok).toBe('ok');
-    }
-    for (const taken of ['w', 'A', 'ArrowUp', 'Shift', 'e', ' ', 'Enter', 'q', 'm', 'c', 'i']) {
-      expect(settings.talkKeyVerdict(taken), taken).toBe('taken');
-    }
-    for (const taken of ['h', '?', 'n', 'Escape', 'Tab', '1', '8']) {
-      expect(settings.talkKeyVerdict(taken), taken).toBe('taken');
-    }
-    for (const unfit of ['Control', 'Alt', 'Meta', 'PageUp', 'F13', 'Dead']) {
-      expect(settings.talkKeyVerdict(unfit), unfit).toBe('unfit');
-    }
-    expect(['v', 'f2', 'ö'].map(settings.keyName)).toEqual(['V', 'F2', 'Ö']);
-  });
-
   it('talks on the key the settings name, and no longer on V once rebound', async () => {
     windowWith(memory());
     const { settings, voice } = await fresh();
-    const talkKey = (): string => settings.getSettings().talkKey;
+    const talkKey = (): string => settings.getSettings().keys.talk;
     expect(voice.talksOnDown(key('V'), talkKey(), false)).toBe(true);
-    settings.changeSettings({ talkKey: 'g' });
+    settings.changeSettings({ keys: { ...DEFAULT_KEYS, talk: 'g' } });
     expect(voice.talksOnDown(key('v'), talkKey(), false)).toBe(false);
     expect(voice.talksOnDown(key('g'), talkKey(), false)).toBe(true);
     expect(voice.talksOnDown(key('G'), talkKey(), false)).toBe(true);
-    expect(voice.stopsOnUp(key('g'), talkKey())).toBe(true);
-    expect(voice.stopsOnUp(key('v'), talkKey())).toBe(false);
+    // Talking stops at the key that started it, by where it sits.
+    expect(voice.stopsOnUp(key('g'), 'KeyG')).toBe(true);
+    expect(voice.stopsOnUp(key('v'), 'KeyG')).toBe(false);
+    expect(voice.stopsOnUp(key('g'), null)).toBe(false);
+  });
+
+  it('stops talking at the key held, whatever Shift or a rebinding made of its name', async () => {
+    const { settings, voice } = await fresh();
+    settings.changeSettings({ keys: { ...DEFAULT_KEYS, talk: '9' } });
+    const nine = key('9', { code: 'Digit9' });
+    expect(voice.talksOnDown(nine, settings.getSettings().keys.talk, false)).toBe(true);
+    // Shift went down meanwhile: the 9 comes up as „)".
+    expect(voice.stopsOnUp(key(')', { code: 'Digit9' }), 'Digit9')).toBe(true);
+    settings.changeSettings({ keys: { ...DEFAULT_KEYS, talk: 'g' } });
+    expect(voice.stopsOnUp(nine, 'Digit9')).toBe(true);
+    // A key a controller sends sits nowhere: it goes by its name.
+    expect(voice.stopsOnUp({ key: 'v', code: '' }, 'key:v')).toBe(true);
   });
 
   it('talks on nothing while typing or rebinding, with a modifier, or on auto-repeat', async () => {
     const { settings, voice } = await fresh();
     expect(settings.isRebinding()).toBe(false);
-    settings.setRebinding(true);
+    // The keys' table and the controller's wait each on their own: one ending ends not both.
+    const endKeys = settings.startRebinding();
+    const endPad = settings.startRebinding();
+    endKeys();
+    endKeys();
+    expect(settings.isRebinding()).toBe(true);
+    endPad();
+    expect(settings.isRebinding()).toBe(false);
+    settings.startRebinding();
     expect(settings.isRebinding()).toBe(true);
     expect(voice.talksOnDown(key('v'), 'v', true)).toBe(false);
     for (const held of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { repeat: true }]) {
       expect(voice.talksOnDown(key('v', held), 'v', false)).toBe(false);
     }
     // Let go however it comes up: a modifier pressed meanwhile keeps nobody talking.
-    expect(voice.stopsOnUp(key('V'), 'v')).toBe(true);
+    expect(voice.stopsOnUp(key('V', { shiftKey: true }), 'KeyV')).toBe(true);
   });
 });
 

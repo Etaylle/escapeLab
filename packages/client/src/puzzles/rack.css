@@ -1,0 +1,58 @@
+/* ── the rack's cabling diagram (puzzles/RackDiagram.tsx) ──────────────────────────────── */
+
+/* A plate beside the units: the Netzplan in the rack's cold light, its LEDs as the units'. */
+.rack-diagram {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0 0;
+  padding: 8px 10px 6px;
+  border: 1px solid #22364a;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #0c1826, #08111b);
+  color: #8fb4d8;
+}
+
+.rack-diagram svg {
+  display: block;
+  width: 100%;
+  max-width: 340px;
+  height: auto;
+  margin: 0 auto;
+}
+
+.rack-diagram-caption {
+  font-family: var(--mono);
+  font-size: calc(10px * var(--text-scale));
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #5f7f9f;
+}
+
+.rack-diagram .services-box rect {
+  fill: #101d2b;
+}
+
+.rack-diagram .services-arrows {
+  stroke: #4d769e;
+}
+
+/* A dark LED, its glass only; on the printed page every LED is a ring in the ink. */
+.rack-diagram .services-led {
+  fill: #18232e;
+  stroke: #33475b;
+  stroke-width: 0.8;
+}
+
+.rack-diagram .services-led--green {
+  fill: #4ade80;
+  stroke: #86efac;
+}
+
+.rack-diagram .services-led--red {
+  fill: #f87171;
+  stroke: #fecaca;
+}
+
+.rack-diagram .services-led--off {
+  fill: #18232e;
+}

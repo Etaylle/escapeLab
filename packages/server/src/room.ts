@@ -4,6 +4,7 @@ import {
   applyAction,
   armedStations,
   canSee,
+  dailySeed,
   emergenciesDue,
   inEscapePhase,
   initialState,
@@ -16,11 +17,13 @@ import {
   shutDoors,
   stationKey,
   stepAllowed,
+  utcDay,
   viewFor,
   viewForSpectator,
   type Action,
   type ChatPhrase,
   type ClientMessage,
+  type DailyStart,
   type Difficulty,
   type GameState,
   type MapDef,
@@ -47,6 +50,7 @@ export type GameMessage = Extract<
   {
     kind:
       | 'select-color'
+      | 'set-daily'
       | 'start-mission'
       | 'intro-done'
       | 'puzzle-input'
@@ -140,7 +144,8 @@ export class Room {
 
   /**
    * `seed` pins the room's runs for a repeatable test: run n plays seed + n. `mission` comes
-   * scaled to `difficulty`, the one the room opens on.
+   * scaled to `difficulty`, the one the room opens on. `dailySalt` (dailySalt.ts) makes the
+   * Tagesschicht's seeds; a room without one starts no run on it.
    */
   constructor(
     code: string,
@@ -148,6 +153,7 @@ export class Room {
     private readonly onRunFinished: RunListener = () => undefined,
     seed: number | null = null,
     difficulty: Difficulty = 'normal',
+    private readonly dailySalt: string | null = null,
   ) {
     this.code = code;
     this.state = initialState(mission, seed, difficulty);
@@ -309,16 +315,23 @@ export class Room {
       case 'select-color':
         this.dispatch({ type: 'select-color', playerId, color: msg.color });
         break;
-      case 'start-mission':
+      case 'set-daily':
+        // The Tagesschicht needs no ALLOW_SEED: its seed is the day's, the same for every room.
+        this.dispatch({ type: 'set-daily', playerId, daily: msg.daily });
+        break;
+      case 'start-mission': {
+        const at = Date.now();
         this.dispatch({
           type: 'start-mission',
           playerId,
-          at: Date.now(),
+          at,
           seed: randomInt(2 ** 31),
+          ...this.dailyAt(at),
         });
         this.next = null;
         this.seedPositions();
         break;
+      }
       case 'intro-done':
         this.dispatch({ type: 'intro-done', playerId, at: Date.now() });
         break;
@@ -351,15 +364,30 @@ export class Room {
     }
   }
 
+  /**
+   * The Tagesschicht of a run starting at `at`, for the reducer to play where the host has it
+   * on: the day by this server's clock, and the day's seed made with its salt. None without a
+   * salt.
+   */
+  private dailyAt(at: number): { daily?: DailyStart } {
+    if (this.dailySalt === null) {
+      return {};
+    }
+    const day = utcDay(at);
+    return { daily: { day, seed: dailySeed(day, this.dailySalt) } };
+  }
+
   /** The next run, started by `playerId`: of the mission the host's yes named, if it named one. */
   private startRematch(playerId: string): void {
     this.positions.clear();
     const next = this.next;
+    const at = Date.now();
     this.dispatch({
       type: 'rematch',
       playerId,
-      at: Date.now(),
+      at,
       seed: randomInt(2 ** 31),
+      ...this.dailyAt(at),
       ...(next === null ? {} : { mission: next }),
     });
     this.next = null;

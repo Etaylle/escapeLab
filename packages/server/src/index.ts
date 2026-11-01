@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { apiResponse, serveRuns, statsResponse, type RunsExport } from './api.js';
 import { customMissions, serveCustomMissions } from './customMissions.js';
+import { dailySalt } from './dailySalt.js';
 import { startHeartbeat } from './heartbeat.js';
 import { MissionCatalog } from './missions.js';
 import { RoomManager, seedsAllowed } from './roomManager.js';
@@ -14,6 +15,12 @@ import { createWebServer, lanUrls, tlsLogLine, tlsSetup } from './tls.js';
 import { recordingAllowed, serveVoiceRecording, VoiceDesk } from './voiceRecording.js';
 
 const PORT = Number(process.env['PORT'] ?? 3001);
+/** Where the Tagesschicht's salt came from, as the start-up log says it. */
+const DAILY_SALT_FROM = {
+  env: 'salt from DAILY_SALT',
+  file: 'salt kept in packages/server/data/daily-salt',
+  made: 'salt made anew in packages/server/data/daily-salt',
+} as const;
 const MISSIONS_DIR =
   process.env['MISSIONS_DIR'] ?? fileURLToPath(new URL('../../../missions', import.meta.url));
 // An empty RUNS_LOG counts as unset, like an empty RUNS_TOKEN.
@@ -34,8 +41,10 @@ const voiceDesk = recordingAllowed(process.env)
   : null;
 // The Bestenliste: read from the log once, then counted run by run as they are logged.
 const stats = loadRunStats(RUNS_LOG);
+// The Tagesschicht's salt: DAILY_SALT, else packages/server/data/daily-salt, made once and kept.
+const daily = dailySalt(process.env);
 // A room pinned to a seed repeats its runs: for the walkthrough and bug reports, not for play.
-const manager = new RoomManager(logRun(RUNS_LOG, stats), seedsAllowed(process.env));
+const manager = new RoomManager(logRun(RUNS_LOG, stats), seedsAllowed(process.env), daily.salt);
 setInterval(() => manager.sweep(), 60_000).unref();
 
 const httpServer = createWebServer(tls, (req, res) => {
@@ -77,6 +86,7 @@ httpServer.listen(PORT, () => {
     : 'RUNS_TOKEN unset: no download';
   console.log(`[escapelab] finished runs go to ${RUNS_LOG} (${download})`);
   console.log(`[escapelab] GET /stats ranks the ${stats.runs} runs logged so far`);
+  console.log(`[escapelab] Tagesschicht: ${DAILY_SALT_FROM[daily.from]}`);
   if (voiceDesk !== null) {
     console.log(`[escapelab] ALLOW_RECORD=1: POST /voice/:id saves recordings to ${VOICE_DIR}`);
   }

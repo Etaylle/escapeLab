@@ -43,6 +43,63 @@ export const DEPENDS_ON: Readonly<Record<Service, readonly Service[]>> = {
   mail: ['auth', 'dns'],
 };
 
+/**
+ * The Netzplan as a cabling diagram draws it: each node in the column of the longest chain of
+ * dependencies under it — what needs nothing first — and an arrow from every dependency to
+ * the node that needs it. Rules only: what depends on what, never how a service stands.
+ */
+export interface Diagram<T extends string> {
+  /** the columns left to right, each top to bottom in the order that keeps the arrows clear */
+  columns: T[][];
+  /** [dependency, dependent]: dependents in their listed order, their dependencies in theirs */
+  arrows: [T, T][];
+}
+
+/**
+ * The diagram of `nodes`, listed so that every dependency comes before whatever needs it, by
+ * `dependsOn`: each column after the first ordered by where its nodes' dependencies stand —
+ * the mean of their heights in their own columns, top 0, bottom 1 — so that the arrows run
+ * past the boxes, not through them; a tie keeps the listed order. Throws for a dependency that
+ * is not listed before its dependent: no column could be worked out for it.
+ */
+export function diagramOf<T extends string>(
+  nodes: readonly T[],
+  dependsOn: Readonly<Record<T, readonly T[]>>,
+): Diagram<T> {
+  const column = new Map<T, number>();
+  for (const node of nodes) {
+    const under = dependsOn[node].map((dep) => {
+      const at = column.get(dep);
+      if (at === undefined) {
+        throw new Error(`diagram: "${node}" depends on "${dep}", which is not listed before it`);
+      }
+      return at;
+    });
+    column.set(node, under.length === 0 ? 0 : Math.max(...under) + 1);
+  }
+  const width = Math.max(0, ...column.values()) + (nodes.length === 0 ? 0 : 1);
+  const height = new Map<T, number>();
+  const columns: T[][] = [];
+  for (let i = 0; i < width; i++) {
+    const listed = nodes.filter((n) => column.get(n) === i);
+    const mean = (node: T): number => {
+      const deps = dependsOn[node].map((dep) => height.get(dep) ?? 0.5);
+      return deps.length === 0 ? 0.5 : deps.reduce((sum, h) => sum + h, 0) / deps.length;
+    };
+    const ordered = [...listed].sort((a, b) => mean(a) - mean(b));
+    const last = Math.max(1, ordered.length - 1);
+    ordered.forEach((node, row) => height.set(node, ordered.length === 1 ? 0.5 : row / last));
+    columns.push(ordered);
+  }
+  const arrows = nodes.flatMap((node) => dependsOn[node].map((dep): [T, T] => [dep, node]));
+  return { columns, arrows };
+}
+
+/** The Serverraum's Netzplan as its rack and its printed page draw it: NETZ → DNS, DB → … */
+export function serviceDiagram(): Diagram<Service> {
+  return diagramOf(SERVICES, DEPENDS_ON);
+}
+
 export const SERVER_CODES = ['E11', 'E23', 'E42', 'E50'] as const;
 export type ServerCode = (typeof SERVER_CODES)[number];
 

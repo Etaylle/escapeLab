@@ -18,12 +18,23 @@ export type Loaded<T> =
   | { status: 'failed'; reason: string }
   | { status: 'ready'; value: T };
 
-/** Every mission with runs. */
+/** Every mission with runs off the Tagesschicht. */
 export const STATS_PATH = '/stats';
 
-/** One mission, and where its won run that finished at `finishedAt` stands. */
-export function standingPath(missionId: string, finishedAt: number): string {
-  return `/stats/${encodeURIComponent(missionId)}?run=${finishedAt}`;
+/** The Tagesschicht's last days, each ranked apart. */
+export const DAILY_PATH = '/stats/daily';
+
+/**
+ * One mission, and where its won run that finished at `finishedAt` stands — among the runs of
+ * the Tagesschicht of `daily` where the run played it.
+ */
+export function standingPath(
+  missionId: string,
+  finishedAt: number,
+  daily: string | null = null,
+): string {
+  const day = daily === null ? '' : `&daily=${daily}`;
+  return `/stats/${encodeURIComponent(missionId)}?run=${finishedAt}${day}`;
 }
 
 /**

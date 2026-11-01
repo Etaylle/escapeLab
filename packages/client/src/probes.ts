@@ -1,3 +1,5 @@
+import type { PadProbe } from './input/padRuntime.js';
+import type { DangerProbe } from './world/danger.js';
 import type { FigureProbe } from './screens/CrewFigure.js';
 import type { VoiceProbe } from './voice/mesh.js';
 import type { BedProbe } from './world/ambience.js';
@@ -109,6 +111,10 @@ export interface Probes {
    * (world/render/graphicsProbe.ts)
    */
   readonly graphics?: GraphicsProbe;
+  /** the walkthrough's controller, only with `?fakepad=1` (input/padRuntime.ts) */
+  readonly pad?: PadProbe;
+  /** the danger sense: the drone closing in, how far, the ticks so far (world/danger.ts) */
+  readonly danger?: DangerProbe;
 }
 
 declare global {

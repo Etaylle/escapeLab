@@ -154,6 +154,7 @@ function handleMessage(
       return s;
     }
     case 'select-color':
+    case 'set-daily':
     case 'start-mission':
     case 'intro-done':
     case 'puzzle-input':

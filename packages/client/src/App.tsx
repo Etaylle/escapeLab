@@ -7,6 +7,7 @@ import {
   type MissionStats,
 } from '@escapelab/core';
 import { firstDifficulty, hasWon, useWonMark } from './firstRun.js';
+import { usePad } from './input/padRuntime.js';
 import { localStore } from './notes.js';
 import { STATS_PATH, useJson } from './runStats.js';
 import { useRunScreen } from './runScreen.js';
@@ -436,8 +437,9 @@ export function App({ boot }: { boot: EditorBoot }) {
   // The mission editor, another page off the join screen; the booklet opens over it.
   const editor = useEditorPage(boot);
   const testRun = useTestRun(conn);
-  // The settings, over whatever screen is up; nothing under them pauses.
+  // The settings, over whatever screen is up (a controller's Start too); nothing pauses.
   const [settingsOpen, setSettingsOpen] = useState(false);
+  usePad(() => setSettingsOpen((open) => !open));
   const contentRef = useRef<HTMLElement>(null);
   // How the run ended, on this screen: the world plays it before the end screen opens.
   const finale = useFinale(conn.view ?? conn.spectatorView);

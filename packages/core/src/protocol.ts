@@ -83,6 +83,8 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('switch-mission'), missionId: z.string().min(1) }),
   z.object({ kind: z.literal('select-difficulty'), difficulty: z.enum(DIFFICULTIES) }),
+  /** the host's switch for the Tagesschicht in the lobby: the day's seed for every crew */
+  z.object({ kind: z.literal('set-daily'), daily: z.boolean() }),
   z.object({ kind: z.literal('start-mission') }),
   /** the player has seen enough of the intro: the skip of the opening on their screen */
   z.object({ kind: z.literal('intro-done') }),

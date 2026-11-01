@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { PlayerView, PuzzleView } from '@escapelab/core';
+import { glyph } from '../input/glyphs.js';
 import { firstSight, SHOWN_MARKS, type CoachMark } from '../puzzles/coach.js';
 import type { FinaleCue } from './finale.js';
 import { carriedItem, opensCabinet, TOUCH } from './interact.js';
@@ -48,13 +49,14 @@ function coachTip(
 function carryTip(map: WorldMap, carried: WorldMap['items'][number], keyboard: boolean): CoachMark {
   // A key has no marked spot: it goes into a cabinet, found or not yet.
   if (carried.deliverTo === null || opensCabinet(map, carried.id)) {
-    const there = keyboard ? 'dort E drücken' : 'dort ⚡ tippen';
+    const there = keyboard ? `dort ${glyph('interact')} drücken` : 'dort ⚡ tippen';
     return { id: 'key', text: `Ein Schlüssel: Er schließt einen Aktenschrank auf — ${there}.` };
   }
   return {
     id: 'carry',
     text: keyboard
-      ? 'Getragen: an der markierten Fläche mit E einsetzen, mit Q ablegen.'
+      ? `Getragen: an der markierten Fläche mit ${glyph('interact')} einsetzen, ` +
+        `mit ${glyph('drop')} ablegen.`
       : 'Getragen: an der markierten Fläche mit ⚡ einsetzen, mit 📦 ablegen.',
   };
 }

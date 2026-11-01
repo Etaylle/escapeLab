@@ -6,6 +6,8 @@ dist/
 .worktrees/
 # `pnpm cert`'s certificate and private key: made per machine, never shared.
 packages/server/cert/
+# The Tagesschicht's salt (DAILY_SALT unset): made per server, never shared.
+packages/server/data/
 # Missions saved from the editor: made on this server, not shipped.
 missions/custom/
 

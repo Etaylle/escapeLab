@@ -1,12 +1,14 @@
 import { chatText } from '@escapelab/core';
-import { carriedItem, promptText } from '../interact.js';
+import { carriedItem, carryLine, promptText } from '../interact.js';
 import {
+  glowSpot,
   markerBoxes,
   placeMarkers,
   type MarkerPlacement,
   type MarkerTarget,
 } from '../markers.js';
 import {
+  ALARM,
   AMBER,
   css,
   DONE_GREEN,
@@ -182,6 +184,7 @@ function drawScreenText(ctx: CanvasRenderingContext2D, frame: Frame): void {
   drawRoomNames(ctx, frame, { ...view, boxes: [...view.boxes, ...arrows] });
   drawExitSign(ctx, frame);
   ctx.globalAlpha = frame.hud;
+  drawDangerGlows(ctx, frame);
   drawEdgeMarkers(ctx, markers, view.dpr);
   const prompt = drawPrompt(ctx, frame, figure?.body ?? null);
   drawCaptions(ctx, frame, prompt);
@@ -225,7 +228,7 @@ function figureOn(frame: Frame): { body: Box; keepOut: Box } {
 /** The arrows due at the screen's edge this frame, each with its caption, placed in `view`. */
 function edgeMarkers(ctx: CanvasRenderingContext2D, frame: Frame, view: Viewport): EdgeMarker[] {
   ctx.font = `700 ${11 * view.dpr}px ui-monospace, Menlo, monospace`;
-  const marks = frame.markers.map((target) => {
+  const marks = frame.markers.filter((target) => target.glow === undefined).map((target) => {
     const [px, py] = toScreen(frame, target.x, target.y);
     const tiles = Math.round(Math.hypot(target.x - frame.self.x, target.y - frame.self.y));
     const caption = `${target.label} ${tiles}m`;
@@ -406,7 +409,7 @@ function drawCarrying(ctx: CanvasRenderingContext2D, frame: Frame): void {
     const view = frame.viewport;
     ctx.font = `700 ${12 * view.dpr}px ui-monospace, Menlo, monospace`;
     ctx.fillStyle = C.carrying;
-    ctx.fillText(`📦 ${carrying.label} — [Q] ablegen`, view.w / 2, view.h - 16 * view.dpr);
+    ctx.fillText(carryLine(carrying.label), view.w / 2, view.h - 16 * view.dpr);
   }
 }
 
@@ -420,4 +423,30 @@ function drawCover(ctx: CanvasRenderingContext2D, frame: Frame): void {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = rgba(NIGHT, cover);
   ctx.fillRect(0, 0, w, h);
+}
+
+/**
+ * A danger sensed (world/danger.ts) glows softly at the screen's edge toward it, red, as
+ * strong as it is near (markers.ts `glowSpot`): on screen or off, the glow keeps to the edge,
+ * where nothing of the world's own lies. Only while a drone closes in; nothing else draws it.
+ */
+function drawDangerGlows(ctx: CanvasRenderingContext2D, frame: Frame): void {
+  const view = frame.viewport;
+  for (const target of frame.markers) {
+    const [px, py] = toScreen(frame, target.x, target.y);
+    const spot = target.glow === undefined ? null : glowSpot(px, py, view);
+    if (spot === null || target.glow === undefined) {
+      continue;
+    }
+    const fill = ctx.createRadialGradient(spot.x, spot.y, 0, spot.x, spot.y, spot.r);
+    fill.addColorStop(0, rgba(ALARM, 0.5 * target.glow));
+    fill.addColorStop(1, rgba(ALARM, 0));
+    ctx.fillStyle = fill;
+    // Only the part of the circle on the screen is filled.
+    const left = Math.max(0, spot.x - spot.r);
+    const top = Math.max(0, spot.y - spot.r);
+    const right = Math.min(view.w, spot.x + spot.r);
+    const bottom = Math.min(view.h, spot.y + spot.r);
+    ctx.fillRect(left, top, right - left, bottom - top);
+  }
 }

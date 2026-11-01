@@ -23,6 +23,7 @@ import './styles/book.css';
 import './styles/pwa.css';
 import './styles/https.css';
 import './styles/history.css';
+import './styles/gameplay.css';
 import './styles/seed.css';
 import './styles/polish.css';
 import './styles/ux2.css';

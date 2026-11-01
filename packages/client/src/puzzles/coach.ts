@@ -1,4 +1,5 @@
 import type { PuzzleView } from '@escapelab/core';
+import { glyph } from '../input/glyphs.js';
 import { secondsText, syncPress } from './syncPress.js';
 
 /** A line for a newcomer; its `id` says which, so that a session shows it once. */
@@ -25,8 +26,11 @@ export function pointerNow(): Pointer {
   return window.matchMedia('(pointer: coarse)').matches ? 'touch' : 'mouse';
 }
 
-/** A device's line: one for every pointer, or a tap and a click worded apart. */
-type Line = string | Readonly<Record<Pointer, string>>;
+/**
+ * A device's line: one for every pointer, or a tap and a click worded apart — a click's naming
+ * a key worded as it is shown, the key read from the settings (input/glyphs.ts).
+ */
+type Line = string | Readonly<Record<Pointer, string | (() => string)>>;
 
 /**
  * Every device's line but the sync button's, which its window words (`syncMark`): by module,
@@ -35,7 +39,7 @@ type Line = string | Readonly<Record<Pointer, string>>;
 const LINES = {
   lever: {
     touch: 'Ein Hebel je Ausweis, alle zugleich — antippen.',
-    mouse: 'Ein Hebel je Ausweis, alle zugleich — E drücken.',
+    mouse: () => `Ein Hebel je Ausweis, alle zugleich — ${glyph('interact')} drücken.`,
   },
   wiring: {
     touch: 'Ein Tipp auf ein Kabel trennt es sofort.',
@@ -118,7 +122,8 @@ export function deviceCoach(puzzle: PuzzleView, pointer: Pointer = pointerNow())
     return null;
   }
   const line: Line = LINES[device];
-  return { id: `device:${device}`, text: typeof line === 'string' ? line : line[pointer] };
+  const said = typeof line === 'string' ? line : line[pointer];
+  return { id: `device:${device}`, text: typeof said === 'string' ? said : said() };
 }
 
 /** `next` the first time a session meets it; null once it has been shown, and for no mark. */

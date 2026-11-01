@@ -12,6 +12,11 @@ export interface MarkerTarget {
   y: number;
   color: string;
   label: string;
+  /**
+   * a danger sensed rather than a place to walk to (danger.ts): a soft glow at the screen's
+   * edge toward it this strong, 0 to 1, instead of an arrow — on screen or off
+   */
+  glow?: number;
 }
 
 /** Where the arrow and its caption end up on screen, all in device pixels. */
@@ -143,6 +148,40 @@ export function markerTargets(
     out.push({ x: loose.x, y: loose.y, color: BLUE, label: 'TEIL' });
   }
   return out;
+}
+
+/** How far a danger's glow reaches into the screen from its edge, of the screen's shorter side. */
+const GLOW_REACH = 0.24;
+
+/** Where a danger's glow sits: the middle of its circle, on the screen's edge, and its radius. */
+export interface GlowSpot {
+  x: number;
+  y: number;
+  r: number;
+}
+
+/**
+ * The glow toward a danger at (px, py) on or off the screen `view`: on the screen's edge where
+ * the line from its middle toward the danger leaves it, half of it outside; none for a danger
+ * at the very middle. Device pixels.
+ */
+export function glowSpot(
+  px: number,
+  py: number,
+  view: Pick<Viewport, 'w' | 'h'>,
+): GlowSpot | null {
+  const cx = view.w / 2;
+  const cy = view.h / 2;
+  const dx = px - cx;
+  const dy = py - cy;
+  if (dx === 0 && dy === 0) {
+    return null;
+  }
+  // How far along the line the edge lies: the nearer of the side and the top or bottom.
+  const toSide = dx === 0 ? Infinity : cx / Math.abs(dx);
+  const toEnd = dy === 0 ? Infinity : cy / Math.abs(dy);
+  const t = Math.min(toSide, toEnd);
+  return { x: cx + dx * t, y: cy + dy * t, r: GLOW_REACH * Math.min(view.w, view.h) };
 }
 
 /** All in CSS pixels; the canvas works in device pixels, hence the `dpr`. */

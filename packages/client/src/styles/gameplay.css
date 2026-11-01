@@ -1,0 +1,302 @@
+/* ── the keys and the controller in the settings (screens/ControlSettings.tsx) ──────────── */
+
+/* Every action on a row: its name, its key as a keycap, „Ändern". */
+.settings-bindings {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.settings-bindings th {
+  padding: 3px 8px 3px 0;
+  font-weight: 400;
+  text-align: left;
+  color: var(--text);
+}
+
+.settings-bindings td {
+  padding: 3px 0 3px 8px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.settings-bindings td:first-of-type {
+  width: 4.5em;
+  text-align: center;
+}
+
+.settings-bindings .settings-kbd {
+  display: inline-block;
+  min-width: 2.6em;
+  padding: 3px 8px;
+  font-size: 13px;
+}
+
+.settings-bindings .settings-kbd--pad {
+  border-radius: 999px;
+  color: var(--accent);
+}
+
+.settings-reset {
+  justify-self: start;
+  margin-top: 14px;
+  padding: 7px 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+/* The controller's live test: every button lit while it is held. */
+.pad-test {
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+  margin: 2px auto 4px;
+  overflow: visible;
+}
+
+.pad-body {
+  fill: var(--panel-2);
+  stroke: var(--line-2);
+  stroke-width: 1.5;
+}
+
+.pad-key circle,
+.pad-key rect,
+.pad-stick circle {
+  fill: var(--bg-2);
+  stroke: var(--line-2);
+  stroke-width: 1.2;
+}
+
+.pad-key text {
+  fill: var(--muted);
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.pad-key--lit circle,
+.pad-key--lit rect,
+.pad-dot.pad-key--lit {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+
+.pad-key--lit text {
+  fill: var(--bg);
+}
+
+.pad-stick .pad-dot {
+  fill: var(--muted);
+  stroke: none;
+}
+
+/*
+ * With a controller in use the focus it moves between a panel's controls has to show plainly
+ * (input/focus.ts): the root says which device steers (input/device.ts).
+ */
+:root[data-input='pad'] :focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+/* ── the Erfolge on the won card (screens/Plaques.tsx) ──────────────────────────────────── */
+
+/* Brass plates screwed to the card's foot: the title engraved, its line and its day under it. */
+.plaques {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plaque {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  min-width: 13.5em;
+  max-width: 17em;
+  padding: 9px 22px 8px;
+  border: 1px solid #7c6431;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #dcc283 0%, #b59552 55%, #9a7c3f 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 214, 0.65),
+    inset 0 -2px 0 rgba(60, 44, 14, 0.35),
+    0 4px 14px rgba(0, 0, 0, 0.45);
+  color: #2a2010;
+  text-align: center;
+}
+
+/* Two screws, one at each end. */
+.plaque::before,
+.plaque::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #f3e3b4, #5b4720 70%);
+}
+
+.plaque::before {
+  left: 7px;
+}
+
+.plaque::after {
+  right: 7px;
+}
+
+.plaque-title {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 rgba(255, 244, 210, 0.55);
+}
+
+.plaque-line {
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.plaque-date {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 1px;
+  opacity: 0.75;
+}
+
+/*
+ * A plaque new to this device comes in after the card, one after the other 300 ms apart
+ * (Plaques.tsx PLAQUE_STAGGER_MS): it drops onto the card and settles.
+ */
+.plaque--new {
+  animation: plaque-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+  animation-delay: calc(1.2s + var(--i, 0) * 300ms);
+}
+
+@keyframes plaque-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) scale(1.12);
+  }
+}
+
+/* „Bild speichern" under the facts. */
+.share {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 16px;
+}
+
+.share-save {
+  padding: 8px 14px;
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+
+.share-refused {
+  font-size: 12px;
+  color: var(--warn);
+}
+
+/* A phone held sideways: the card's right column takes the plaques under the facts. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .end-title .plaques,
+  .end-title .share {
+    grid-column: 2;
+    margin-top: 8px;
+  }
+
+  .plaque {
+    min-width: 0;
+    padding: 5px 18px 4px;
+  }
+
+  .plaque-line,
+  .plaque-date {
+    display: none;
+  }
+}
+
+/* ── the Tagesschicht in the lobby, and the Erfolge held (screens/Lobby.tsx) ─────────────── */
+
+/* Beside the difficulty's caption, pushed to the row's end; under it where the row is narrow. */
+.lobby-levels-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px 8px;
+  margin-bottom: 6px;
+}
+
+.lobby-levels-head .lobby-caption {
+  margin: 0;
+}
+
+/* A chip: a lamp, dark while off, amber while on, and the day. */
+.daily-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--panel-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.daily-switch--on {
+  border-color: var(--warn);
+  color: var(--warn);
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.25);
+}
+
+.daily-lamp {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3b3325;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.daily-switch--on .daily-lamp {
+  background: var(--warn);
+  box-shadow: 0 0 8px var(--warn);
+}
+
+.lobby-earned {
+  color: #d8bd7c;
+}
+
+/* ── the Tagesschicht's days in the Bestenliste (screens/History.tsx) ───────────────────── */
+
+.history-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* Less motion: the new plaques are simply there, nothing drops in. */
+:where([data-motion='reduce']) {
+  .plaque--new {
+    animation: none;
+  }
+}

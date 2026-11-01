@@ -46,8 +46,21 @@ export interface RunPlace {
   place: number;
 }
 
-/** GET /stats/:mission: one mission and, asked with ?run=<finishedAt>, where that run stands. */
+/**
+ * GET /stats/:mission: one mission and, asked with ?run=<finishedAt>, where that run stands —
+ * asked with &daily=<day> as well, among the runs of that day's Tagesschicht alone.
+ */
 export interface MissionStanding extends MissionStats {
   /** null without ?run=, and when no won run of the mission finished at that moment */
   place: RunPlace | null;
+}
+
+/**
+ * GET /stats/daily: the Tagesschicht of one UTC day (daily.ts), every mission played on its
+ * seed — counted apart from every other run, since every crew that day played the same.
+ */
+export interface DailyStats {
+  /** the UTC day, „2026-10-31" */
+  day: string;
+  missions: MissionStats[];
 }

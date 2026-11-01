@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TopBar } from '../src/App.js';
+import { DEFAULT_KEYS, DEFAULT_PAD } from '../src/input/bindings.js';
 import { controlsOf } from '../src/screens/InfoPanel.js';
 import { SettingsPanel } from '../src/screens/Settings.js';
 import { changeSettings, DEFAULT_SETTINGS } from '../src/settings.js';
@@ -22,12 +23,13 @@ const SLIDER = /<span class="settings-label">([^<]+)<\/span><input type="range"[
 const lit = (html: string): string[] => [...html.matchAll(LIT)].map((m) => m[1] ?? '');
 
 describe('the settings panel', () => {
-  it('offers the three volumes, the talk key, the text size and less motion', () => {
+  it('offers the three volumes, the keys, the controller, the text size and less motion', () => {
     const html = renderToStaticMarkup(<SettingsPanel onClose={noop} />);
     expect(html).toContain('role="dialog"');
     expect(html).toContain('<h2>Einstellungen</h2>');
     expect(html).toContain('Schließen [Esc]');
-    for (const legend of ['Lautstärke', 'Push-to-Talk-Taste', 'Textgröße', 'Weniger Bewegung']) {
+    const legends = ['Lautstärke', 'Tastenbelegung', 'Controller', 'Textgröße', 'Weniger Bewegung'];
+    for (const legend of legends) {
       expect(html).toContain(`<legend>${legend}</legend>`);
     }
     const sliders = [...html.matchAll(SLIDER)].map((m) => `${m[1]} ${m[2]}`);
@@ -43,7 +45,7 @@ describe('the settings panel', () => {
   it('shows what is set: the talk key rebound, the volumes moved, the choices lit', () => {
     changeSettings({
       volumes: { radio: 35, effects: 0, music: 90 },
-      talkKey: 'g',
+      keys: { ...DEFAULT_KEYS, talk: 'g' },
       textSize: 'large',
       motion: 'on',
     });
@@ -57,9 +59,10 @@ describe('the settings panel', () => {
     expect(lit(html)).toEqual(['Groß', 'An']);
   });
 
-  it('keeps its touch line plain: the talk button stays on a touch screen', () => {
+  it('keeps its touch line plain: a touch screen keeps its buttons', () => {
     const html = renderToStaticMarkup(<SettingsPanel onClose={noop} />);
-    expect(html).toContain('Gilt für die Tastatur; Touch-Geräte behalten den Sprechknopf.');
+    expect(html).toContain('Touch-Geräte behalten ihre Knöpfe.');
+    expect(html).toContain('↑ ↓ ← →, Enter, Leertaste, Esc behalten ihre Aufgabe');
   });
 });
 
@@ -87,14 +90,40 @@ describe('the gear in the top bar', () => {
 });
 
 describe('the Info panel’s keys', () => {
+  const keyboard = {
+    keys: DEFAULT_KEYS,
+    pad: DEFAULT_PAD,
+    device: 'keys',
+    family: 'xbox',
+  } as const;
+
   it('lists the sprint, the talk key as set, and the settings', () => {
-    const keys = new Map(controlsOf('v'));
+    const keys = new Map(controlsOf(keyboard));
+    expect(keys.get('W A S D / Pfeile')).toBe('Laufen');
     expect(keys.get('Shift halten')).toMatch(/^Sprinten/);
     expect(keys.get('V halten')).toMatch(/^Sprechen/);
     expect(keys.get('⚙ in der Kopfleiste')).toMatch(/^Einstellungen/);
-    const rebound = new Map(controlsOf('g'));
+    const rebound = new Map(controlsOf({ ...keyboard, keys: { ...DEFAULT_KEYS, talk: 'g' } }));
     expect(rebound.has('V halten')).toBe(false);
     expect(rebound.get('G halten')).toMatch(/^Sprechen/);
+  });
+
+  it('names the controller’s buttons where one was used last, Start for the settings', () => {
+    const pad = new Map(controlsOf({ ...keyboard, device: 'pad', family: 'playstation' }));
+    expect(pad.get('R1 halten')).toMatch(/^Sprinten/);
+    expect(pad.get('L1 halten')).toMatch(/^Sprechen/);
+    expect(pad.get('✕')).toMatch(/^Bedienen/);
+    expect(pad.get('□')).toMatch(/^Notizblock/);
+    expect(pad.get('Options')).toMatch(/^Einstellungen/);
+    expect(pad.get('Steuerkreuz, dann ✕')).toMatch(/Pulten und Fenstern/);
+  });
+
+  it('tells every row apart by what it does, though a controller works two with B', () => {
+    const pad = controlsOf({ ...keyboard, device: 'pad' });
+    expect(pad.filter(([control]) => control === 'B')).toHaveLength(2);
+    for (const rows of [controlsOf(keyboard), pad]) {
+      expect(new Set(rows.map(([, what]) => what)).size).toBe(rows.length);
+    }
   });
 });
 

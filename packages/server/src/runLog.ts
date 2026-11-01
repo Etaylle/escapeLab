@@ -90,13 +90,14 @@ function isLoggedRun(value: unknown): value is LoggedRun {
     return false;
   }
   const run = value as Partial<Record<keyof RunReport, unknown>>;
-  const all = (fields: (keyof RunReport)[], type: 'string' | 'number'): boolean =>
-    fields.every((field) => typeof run[field] === type);
+  // A moment of 1e999 parses as Infinity: no day of the Tagesschicht, no time to rank.
+  const finite = (fields: (keyof RunReport)[]): boolean =>
+    fields.every((field) => Number.isFinite(run[field]));
   const common =
-    all(['missionId'], 'string') &&
+    typeof run.missionId === 'string' &&
     DIFFICULTIES.some((difficulty) => difficulty === run.difficulty) &&
     OUTCOMES.some((outcome) => outcome === run.outcome) &&
-    all(['startedAt', 'finishedAt', 'crewSize'], 'number') &&
+    finite(['startedAt', 'finishedAt', 'crewSize']) &&
     Array.isArray(run.stations) &&
     Array.isArray(run.penalties);
   if (run.version === 1) {

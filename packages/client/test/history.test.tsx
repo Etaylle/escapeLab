@@ -168,6 +168,7 @@ function finished(parts: Partial<FinishedRun> = {}): FinishedRun {
     seconds: 501,
     alarms: 2,
     finishedAt: DAY,
+    daily: null,
     ...parts,
   };
 }
@@ -268,6 +269,7 @@ describe('the Bestenliste page', () => {
       '<button class="history-tab" aria-pressed="true">Blackout im Labor',
       '<button class="history-tab" aria-pressed="false">Tutorial: Systemcheck',
       '<button class="history-tab" aria-pressed="false">abgeschafft',
+      '<button class="history-tab" aria-pressed="false">Tagesschicht',
     ]);
     const levels = html.match(/<button class="history-level" aria-pressed="(true|false)">[^<]+/g);
     expect(levels).toEqual([

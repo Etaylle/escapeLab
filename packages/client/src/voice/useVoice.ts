@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react';
 import { typing } from '../hooks.js';
+import { keyPlace } from '../input/bindings.js';
 import { addProbes } from '../probes.js';
 import { getSettings, isRebinding } from '../settings.js';
 import { traceRequested } from '../world/frameTrace.js';
@@ -42,40 +43,54 @@ export function useVoiceMesh(conn: Pick<Connection, 'listen' | 'signal'>): Voice
 export type KeyLike = Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'repeat'>;
 
 /**
- * Whether a key going down starts talking: the talk key (`talkKey`, as the settings have it),
+ * Whether a key going down starts talking: the talk key (`keys.talk`, as the settings bind it),
  * plain — no Strg, Alt or Cmd, no auto-repeat — and not while the keys are `busy`: typing,
- * or the settings waiting for a new talk key.
+ * or the settings waiting for a key to bind.
  */
 export function talksOnDown(e: KeyLike, talkKey: string, busy: boolean): boolean {
   const plain = !e.altKey && !e.ctrlKey && !e.metaKey && !e.repeat;
   return plain && !busy && e.key.toLowerCase() === talkKey;
 }
 
-/** Whether a key going up stops talking: the talk key, however it came up. */
-export function stopsOnUp(e: Pick<KeyboardEvent, 'key'>, talkKey: string): boolean {
-  return e.key.toLowerCase() === talkKey;
+/**
+ * Whether a key going up stops talking: the key that started it, `talking` by where it sits
+ * (bindings.ts `keyPlace`), however it came up — Shift or a new binding meanwhile changes
+ * nothing.
+ */
+export function stopsOnUp(e: Pick<KeyboardEvent, 'key' | 'code'>, talking: string | null): boolean {
+  return talking !== null && keyPlace(e) === talking;
 }
 
 /**
  * The talk key held down talks, wherever the focus sits — the relay console
  * keeps the other keys to itself, but not this one — and never while typing,
- * nor while the settings wait for a new talk key. Losing the window lets go,
+ * nor while the settings wait for a key to bind. Losing the window lets go,
  * as a key let go there never comes back up here. The key is read as it is
  * pressed: a key the settings change takes over at once.
  */
 function usePushToTalk(mesh: VoiceMesh): void {
   useEffect(() => {
+    /** where the key held to talk sits; null while nobody talks */
+    let talking: string | null = null;
     const onDown = (e: KeyboardEvent): void => {
-      if (talksOnDown(e, getSettings().talkKey, typing() || isRebinding())) {
+      if (talksOnDown(e, getSettings().keys.talk, typing() || isRebinding())) {
+        // The key is the game's: F5 bound to talking reloads nothing.
+        e.preventDefault();
+        talking = keyPlace(e);
         mesh.setHeld(true);
       }
     };
     const onUp = (e: KeyboardEvent): void => {
-      if (stopsOnUp(e, getSettings().talkKey)) {
+      if (stopsOnUp(e, talking)) {
+        e.preventDefault();
+        talking = null;
         mesh.setHeld(false);
       }
     };
-    const letGo = (): void => mesh.setHeld(false);
+    const letGo = (): void => {
+      talking = null;
+      mesh.setHeld(false);
+    };
     // Capturing: a dialog that stops the keys it handles still lets this one through first.
     window.addEventListener('keydown', onDown, true);
     window.addEventListener('keyup', onUp, true);

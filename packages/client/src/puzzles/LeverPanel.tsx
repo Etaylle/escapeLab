@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { PuzzleView } from '@escapelab/core';
 import { useKeys } from '../hooks.js';
+import { useSettings } from '../settings.js';
 import { Icon } from '../screens/Icon.js';
 import { leverChunk } from '../world/audio.js';
 import { DeviceLamp, type DeviceCrew, type DeviceMate } from './Device.js';
@@ -174,7 +175,8 @@ export function LeverPanel({ puzzle, send, crew }: PanelProps<'button-sync'>) {
   const lever = atStation ? ownPressAt(puzzle, sync, now) : null;
   const thrown = puzzle.pressedCount >= puzzle.requiredCount;
   const grip = useRef<HTMLButtonElement>(null);
-  useKeys(['e'], () => grip.current?.click());
+  // The lever is pulled with the key that works the world, wherever the settings put it.
+  useKeys([useSettings().keys.interact], () => grip.current?.click());
   useLeverSounds(lever, thrown);
   const pull = (): void => {
     if (lever !== null && !lever.down) {

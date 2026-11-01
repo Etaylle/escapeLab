@@ -17,6 +17,7 @@ import { consoleName } from '../world/consoles.js';
 import { DeviceLamp } from './Device.js';
 import { cssVars, reject, type Change } from './feel.js';
 import type { PanelProps } from './index.js';
+import { RackDiagram } from './RackDiagram.js';
 import { lampPop, okChime, rejectBuzz, spinUp, typeBlip } from './sounds.js';
 
 type ServersPuzzle = PanelProps<'servers'>['puzzle'];
@@ -469,8 +470,10 @@ function Units(props: { rack: RackUnit[]; change: ServersChange | null; send: Se
 
 /**
  * Console b: the rack — a unit for every service with its plate, its LED
- * and its power switch, and no code anywhere. The TERMINAL lamp on its
- * bezel burns while somebody stands at the terminal.
+ * and its power switch, and no code anywhere; beside them the cabling
+ * diagram of the Netzplan, each service's LED as its unit shows it
+ * (RackDiagram.tsx). The TERMINAL lamp on its bezel burns while somebody
+ * stands at the terminal.
  */
 function Rack(props: {
   puzzle: ServersPuzzle;
@@ -484,6 +487,7 @@ function Rack(props: {
       <div className="servers-cabinet">
         <Units rack={rack} change={change} send={send} />
       </div>
+      <RackDiagram rack={rack} />
       <div className="servers-bezel">
         <Link name="TERMINAL" manned={otherManned(puzzle)} />
       </div>
@@ -512,6 +516,7 @@ function Watched(props: {
           <div className="servers-cabinet">
             <Units rack={rack} change={change} send={null} />
           </div>
+          <RackDiagram rack={rack} />
         </section>
       </div>
     </div>

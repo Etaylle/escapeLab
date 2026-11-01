@@ -10,10 +10,15 @@ import {
   type PuzzleView,
 } from '@escapelab/core';
 import { useNow } from '../hooks.js';
+import { actionOfKey, isHeld, type Held, type InputAction } from '../input/bindings.js';
+import { useGlyph } from '../input/glyphs.js';
+import { HeldKeys } from '../input/heldKeys.js';
+import { NO_STEER } from '../input/pad.js';
+import { padSteer } from '../input/padRuntime.js';
 import { addProbes, type MinimapProbe } from '../probes.js';
 import type { CoachMark } from '../puzzles/coach.js';
 import { TalkButton } from '../screens/Voice.js';
-import { useReducedMotion } from '../settings.js';
+import { getSettings, useReducedMotion } from '../settings.js';
 import { VoiceContext } from '../voice/useVoice.js';
 import { useAlarm, useAlarmClasses, worldHornDue, type Alarm } from './alarm.js';
 import { bedCount, bedProbe, hearRooms, startAmbience, stopAmbience } from './ambience.js';
@@ -42,6 +47,7 @@ import {
   type SoundSystem,
 } from './audio.js';
 import { blackoutCue, FLICKER_MS, REVEAL_MS, SEQUENCE_MS } from './coldOpen.js';
+import { senseDanger, stopDanger } from './danger.js';
 import { doorTurned } from './doors.js';
 import { drawsFrame } from './drawRate.js';
 import { escaping, useEscapeSince, useEscapeSounds } from './escape.js';
@@ -80,9 +86,7 @@ import {
   easeOthers,
   follow,
   followServer,
-  MOVE_KEYS,
   newSim,
-  SPRINT_KEY,
   walk,
   type Sim,
 } from './sim.js';
@@ -296,72 +300,84 @@ function dropItem(loop: Loop): void {
 }
 
 /** What a key does once a press, not on its auto-repeat. */
-type KeyJob = (loop: Loop, e: KeyboardEvent, setWheelOpen: SetWheel) => void;
+type KeyJob = (loop: Loop, setWheelOpen: SetWheel) => void;
 
-const interactKey: KeyJob = (loop, e) => {
-  e.preventDefault();
-  tryInteract(loop);
-};
-const dropKey: KeyJob = (loop, e) => {
-  e.preventDefault();
-  dropItem(loop);
-};
+const interactKey: KeyJob = (loop) => tryInteract(loop);
+const dropKey: KeyJob = (loop) => dropItem(loop);
 const minimapKey: KeyJob = (loop) => {
   loop.sim.minimap = !loop.sim.minimap;
 };
-const chatKey: KeyJob = (_, e, setWheelOpen) => {
-  e.preventDefault();
-  setWheelOpen((open) => !open);
+const chatKey: KeyJob = (_, setWheelOpen) => setWheelOpen((open) => !open);
+const infoKey: KeyJob = (loop) => loop.live.current.onToggleInfo();
+/**
+ * The actions that work the world once a press, by whatever key the settings bind them to
+ * (input/bindings.ts): the notepad is the game screen's, talking the voice's.
+ */
+const KEY_JOBS: Partial<Record<InputAction, KeyJob>> = {
+  interact: interactKey,
+  drop: dropKey,
+  minimap: minimapKey,
+  chat: chatKey,
+  info: infoKey,
 };
-const infoKey: KeyJob = (loop, e) => {
-  e.preventDefault();
-  loop.live.current.onToggleInfo();
-};
-/** The keys that work the world once a press, lower-cased: E, Q, M, C and I. */
-const KEY_JOBS = new Map<string, KeyJob>([
-  ['e', interactKey],
-  ['enter', interactKey],
-  [' ', interactKey],
-  ['q', dropKey],
-  ['m', minimapKey],
-  ['c', chatKey],
-  ['i', infoKey],
-  ['h', infoKey],
-  ['?', infoKey],
-]);
 
-function onKeyDown(loop: Loop, e: KeyboardEvent, setWheelOpen: SetWheel): void {
+function onKeyDown(loop: Loop, e: KeyboardEvent, setWheelOpen: SetWheel, held: HeldKeys): void {
   if (isTextEntry(document.activeElement) || e.altKey || e.ctrlKey || e.metaKey) {
     return;
   }
-  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key.toLowerCase();
-  pressKey(loop, key, e, setWheelOpen);
+  const key = e.key.toLowerCase();
+  const action = actionOfKey(getSettings().keys, key);
+  if (action !== null && isHeld(action)) {
+    holdKey(loop, action, e, held);
+  } else {
+    pressKey(loop, key, action, e, setWheelOpen);
+  }
 }
 
 /**
- * A key going down: a step or the sprint held, a job done once, the chat wheel shut or a
+ * A step or the sprint held down, where the world takes it: held until the key that went down
+ * comes up again, found by where it sits whatever its name has become meanwhile (`HeldKeys`).
+ */
+function holdKey(loop: Loop, action: Held, e: KeyboardEvent, held: HeldKeys): void {
+  e.preventDefault();
+  if (!loop.live.current.locked && !heldBack(loop.live.current)) {
+    loop.sim.keys.add(action);
+    held.press(e, action);
+  }
+}
+
+/**
+ * A key going down, as the settings bind it: a job done once — the key the game's even on its
+ * auto-repeat, so that F5 bound to the minimap reloads nothing —, the chat wheel shut or a
  * phrase said.
  */
-function pressKey(loop: Loop, key: string, e: KeyboardEvent, setWheelOpen: SetWheel): void {
-  const job = KEY_JOBS.get(key);
-  if (key in MOVE_KEYS || key === SPRINT_KEY) {
+function pressKey(
+  loop: Loop,
+  key: string,
+  action: InputAction | null,
+  e: KeyboardEvent,
+  setWheelOpen: SetWheel,
+): void {
+  const job = action === null ? undefined : KEY_JOBS[action];
+  if (job !== undefined) {
     e.preventDefault();
-    if (!loop.live.current.locked && !heldBack(loop.live.current)) {
-      loop.sim.keys.add(key);
-    }
-  } else if (job !== undefined) {
     if (!e.repeat) {
-      job(loop, e, setWheelOpen);
+      job(loop, setWheelOpen);
     }
   } else if (key === 'escape') {
     setWheelOpen(false);
-  } else if (/^[1-8]$/.test(key)) {
-    const phrase = CHAT_PHRASE_IDS[Number(key) - 1];
-    if (phrase !== undefined) {
-      e.preventDefault();
-      loop.live.current.send({ kind: 'chat', phrase });
-      setWheelOpen(false);
-    }
+  } else {
+    sayPhrase(loop, key, e, setWheelOpen);
+  }
+}
+
+/** 1–8 say the chat wheel's phrases, and shut it. */
+function sayPhrase(loop: Loop, key: string, e: KeyboardEvent, setWheelOpen: SetWheel): void {
+  const phrase = /^[1-8]$/.test(key) ? CHAT_PHRASE_IDS[Number(key) - 1] : undefined;
+  if (phrase !== undefined) {
+    e.preventDefault();
+    loop.live.current.send({ kind: 'chat', phrase });
+    setWheelOpen(false);
   }
 }
 
@@ -388,12 +404,17 @@ function onPointerDown(loop: Loop, e: PointerEvent): void {
 /** The keyboard and the pointer drive the world; returns what takes them off again. */
 function listen(loop: Loop, setWheelOpen: SetWheel): () => void {
   const { canvas, sim } = loop;
-  const keyDown = (e: KeyboardEvent): void => onKeyDown(loop, e, setWheelOpen);
+  const held = new HeldKeys();
+  const keyDown = (e: KeyboardEvent): void => onKeyDown(loop, e, setWheelOpen, held);
   const pointerDown = (e: PointerEvent): void => onPointerDown(loop, e);
   const keyUp = (e: KeyboardEvent): void => {
-    sim.keys.delete(e.key.toLowerCase());
+    const freed = held.release(e);
+    if (freed !== null) {
+      sim.keys.delete(freed);
+    }
   };
   const blur = (): void => {
+    held.clear();
     sim.keys.clear();
   };
   window.addEventListener('keydown', keyDown);
@@ -501,8 +522,12 @@ function step(loop: Loop, dt: number, map: WorldMap): void {
   if (spectator) {
     sim.cam.x = map.width / 2;
     sim.cam.y = map.height / 2;
+    // The audience steers nothing.
+    sim.pad = NO_STEER;
   } else {
     followServer(sim, loop.positions.current, map, youId, run);
+    // A controller steers as the keys do (input/padRuntime.ts).
+    sim.pad = padSteer();
   }
   // The opening holds the avatar where the run put it: no step, no position going out.
   sim.held = heldBack(loop.live.current);
@@ -576,6 +601,8 @@ function hearTheLab(loop: Loop): void {
   if (!soundOff.has('music')) {
     timed('music', () => setTension(tensionOf(loop, map)));
   }
+  // A drone closing in ticks from where it flies, and the edge glows toward it (danger.ts).
+  senseDanger({ map, self: sim.self, drones: loop.drones.current }, performance.now());
 }
 
 /**
@@ -829,6 +856,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
       stopAmbience();
       stopMusic();
       stopSpatial();
+      stopDanger();
       stopPowerHum();
       traced?.drop();
       tracedGraphics?.();
@@ -851,46 +879,46 @@ interface ControlsProps {
   setWheelOpen: SetWheel;
 }
 
-/** The pad's buttons: the key each holds down, its arrow, and the way it goes. */
-const PAD_KEYS = [
-  ['w', '↑', 'up'],
-  ['a', '←', 'left'],
-  ['d', '→', 'right'],
-  ['s', '↓', 'down'],
+/** The pad's buttons: the way each walks while held, and its arrow. */
+const PAD_MOVES = [
+  ['up', '↑'],
+  ['left', '←'],
+  ['right', '→'],
+  ['down', '↓'],
 ] as const;
 
-/** A key held down while a finger rests on its button, let go as the finger lifts or slides off. */
-type Press = (key: string, down: boolean) => void;
+/** A move held while a finger rests on its button, let go as the finger lifts or slides off. */
+type Press = (held: Held, down: boolean) => void;
 
 /**
  * The steering pad of a touch screen, and beside it „Sprint": held, the avatar runs, as with
- * Shift on a keyboard (world.css shows both under a finger only).
+ * the sprint key on a keyboard (world.css shows both under a finger only).
  */
 function TouchPad({ press }: { press: Press }) {
-  const held = (key: string) => ({
+  const held = (move: Held) => ({
     onPointerDown: (e: React.PointerEvent) => {
       e.preventDefault();
-      press(key, true);
+      press(move, true);
     },
-    onPointerUp: () => press(key, false),
-    onPointerLeave: () => press(key, false),
-    onPointerCancel: () => press(key, false),
+    onPointerUp: () => press(move, false),
+    onPointerLeave: () => press(move, false),
+    onPointerCancel: () => press(move, false),
   });
   return (
     <>
       <div className="world-dpad" role="group" aria-label="Steuerkreuz">
-        {PAD_KEYS.map(([key, glyph, dir]) => (
+        {PAD_MOVES.map(([dir, arrow]) => (
           <button
-            key={key}
+            key={dir}
             className={`world-dpad-btn world-dpad-btn--${dir}`}
-            {...held(key)}
+            {...held(dir)}
             aria-label={dir}
           >
-            {glyph}
+            {arrow}
           </button>
         ))}
       </div>
-      <button className="world-sprint" aria-label="Sprinten" {...held(SPRINT_KEY)}>
+      <button className="world-sprint" aria-label="Sprinten" {...held('sprint')}>
         Sprint
       </button>
     </>
@@ -901,15 +929,17 @@ function TouchPad({ press }: { press: Press }) {
 function WorldControls({ refs, live, view, wheelOpen, setWheelOpen }: ControlsProps) {
   /** what this player carries now; while there is something, a touch screen offers to drop it */
   const load = view.map === null ? undefined : carriedItem(view.map, view.you.id);
-  const press: Press = (key, down) => {
+  const interactGlyph = useGlyph('interact');
+  const chatGlyph = useGlyph('chat');
+  const press: Press = (move, down) => {
     const sim = refs.simRef.current;
     if (sim === null) {
       return;
     }
     if (down && !live.current.locked && !heldBack(live.current)) {
-      sim.keys.add(key);
+      sim.keys.add(move);
     } else {
-      sim.keys.delete(key);
+      sim.keys.delete(move);
     }
   };
   return (
@@ -935,7 +965,7 @@ function WorldControls({ refs, live, view, wheelOpen, setWheelOpen }: ControlsPr
           aria-label="Benutzen"
           onClick={() => refs.interactRef.current?.()}
         >
-          ⚡<span className="world-key"> [E]</span>
+          ⚡<span className="world-key"> [{interactGlyph}]</span>
         </button>
       </div>
       <button
@@ -944,7 +974,7 @@ function WorldControls({ refs, live, view, wheelOpen, setWheelOpen }: ControlsPr
         onClick={() => setWheelOpen((open) => !open)}
         aria-expanded={wheelOpen}
       >
-        💬<span className="world-key"> [C]</span>
+        💬<span className="world-key"> [{chatGlyph}]</span>
       </button>
       {/* Held to talk, on a touch screen with the microphone on; the talk key on a keyboard. */}
       <TalkButton className="world-talk">🎤</TalkButton>

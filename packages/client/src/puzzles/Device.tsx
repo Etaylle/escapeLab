@@ -1,5 +1,6 @@
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { moduleFor, type ConsoleId, type PuzzleView } from '@escapelab/core';
+import { useGlyph } from '../input/glyphs.js';
 import { NotepadContext } from '../noting.js';
 import { ALARM_NOTICE_MS, type AlarmNotice } from '../world/alarm.js';
 import { consoleName } from '../world/consoles.js';
@@ -138,10 +139,11 @@ function AlarmDisplay({ notice }: { notice: AlarmNotice }) {
  */
 function StepBack({ onStepBack }: { onStepBack: () => void }) {
   const hand = useContext(NotepadContext);
+  const closeKey = useGlyph('close');
   return (
     <div className="device-foot">
       <button type="button" className="device-step-back" onClick={onStepBack}>
-        [Esc] Zurücktreten
+        [{closeKey}] Zurücktreten
       </button>
       <div className="device-tabs">
         <button type="button" className="device-tab" onClick={onStepBack}>

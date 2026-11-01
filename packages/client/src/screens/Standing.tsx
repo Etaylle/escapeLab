@@ -1,4 +1,4 @@
-import type { Difficulty, MissionStanding } from '@escapelab/core';
+import { dailyLabel, type Difficulty, type MissionStanding } from '@escapelab/core';
 import { difficultyLabel, recordLine, standingPath, useJson } from '../runStats.js';
 import { LeaderTable, type LeaderRow } from './History.js';
 
@@ -17,11 +17,13 @@ export interface FinishedRun {
   alarms: number;
   /** epoch ms: what the server knows the run by */
   finishedAt: number;
+  /** the Tagesschicht's day the run played — it stands among that day's runs alone; else null */
+  daily: string | null;
 }
 
 /** The end screen's part of the Bestenliste, loaded for the run just finished. */
 export function RunStanding({ run }: { run: FinishedRun }) {
-  const loaded = useJson<MissionStanding>(standingPath(run.missionId, run.finishedAt));
+  const loaded = useJson<MissionStanding>(standingPath(run.missionId, run.finishedAt, run.daily));
   if (loaded.status === 'loading') {
     return null;
   }
@@ -33,11 +35,16 @@ export function RunStanding({ run }: { run: FinishedRun }) {
   return <Standing run={run} stats={loaded.value} />;
 }
 
+/** The Tagesschicht a run played, as its standing names it after the mission; nothing for none. */
+function shiftOf(daily: string | null): string {
+  return daily === null ? '' : ` · Tagesschicht ${dailyLabel(daily)}`;
+}
+
 /**
  * Where the run stands. After a win: its place among every run of the
- * mission at its difficulty and the five fastest, this crew's row lit — at
- * the foot where it is not among them. After a loss: the mission's best
- * time and how often it is won.
+ * mission at its difficulty — on the Tagesschicht, among that day's — and the
+ * five fastest, this crew's row lit — at the foot where it is not among them.
+ * After a loss: the mission's best time and how often it is won.
  */
 export function Standing({ run, stats }: { run: FinishedRun; stats: MissionStanding }) {
   const group = stats.difficulties.find((level) => level.difficulty === run.difficulty);
@@ -45,7 +52,7 @@ export function Standing({ run, stats }: { run: FinishedRun; stats: MissionStand
   if (group === undefined) {
     return null;
   }
-  const where = `${run.missionTitle} · ${difficultyLabel(run.difficulty)}`;
+  const where = `${run.missionTitle}${shiftOf(run.daily)} · ${difficultyLabel(run.difficulty)}`;
   const place = run.won && stats.place?.difficulty === run.difficulty ? stats.place.place : null;
   if (place === null) {
     return (

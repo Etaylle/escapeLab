@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { chatText, type PlayerPosition, type PlayerView, type RunEvent } from '@escapelab/core';
 import { useMedia } from '../hooks.js';
 import { airIcon, fromControl, LAST_SHIFT } from '../radio.js';
-import { keyName, useSettings } from '../settings.js';
+import { useGlyph, usePadUsed } from '../input/glyphs.js';
 import { useVoice, type Voice } from '../voice/useVoice.js';
 import type { KnownPositions } from '../world/movement.js';
 import type { ChatLine } from '../world/render/frame.js';
@@ -99,7 +99,7 @@ function chatArrival(line: ChatLine): number {
  */
 function MicSwitch({ voice, touch }: { voice: Voice; touch: boolean }) {
   const { mesh, state } = voice;
-  const talk = keyName(useSettings().talkKey);
+  const talk = useGlyph('talk');
   return (
     <button
       className="hud-info hud-mic"
@@ -154,6 +154,11 @@ export function MissionHud({
   }, []);
   void tick;
   const touch = useMedia('(pointer: coarse)');
+  // A touch screen has no keys to name — unless a controller steers it.
+  const padUsed = usePadUsed();
+  const keyless = touch && !padUsed;
+  const notesKey = useGlyph('notes');
+  const infoKey = useGlyph('info');
   const voice = useVoice();
   const talking = voice?.state.mic === 'on' ? voice : null;
 
@@ -195,12 +200,12 @@ export function MissionHud({
       <div className="hud-right">
         {view.edgework !== null && <EdgeworkChip edgework={view.edgework} />}
         <RadioStrip radio={radio} parts={parts} />
-        {talking !== null && <MicSwitch voice={talking} touch={touch} />}
+        {talking !== null && <MicSwitch voice={talking} touch={keyless} />}
         <button className="hud-info hud-notes" aria-pressed={notesOpen} onClick={onToggleNotes}>
-          <Icon name="pencil" /> {withKey('Notizen', 'N', touch)}
+          <Icon name="pencil" /> {withKey('Notizen', notesKey, keyless)}
         </button>
         <button className="hud-info" onClick={onOpenInfo}>
-          <Icon name="info" /> {withKey('Info', 'I', touch)}
+          <Icon name="info" /> {withKey('Info', infoKey, keyless)}
         </button>
       </div>
     </section>

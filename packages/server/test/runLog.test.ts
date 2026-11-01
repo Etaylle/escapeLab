@@ -122,6 +122,9 @@ describe('parseRuns', () => {
       good.replace('"crew":[]', '"crew":[7]'),
       good.replace('"difficulty":"normal"', '"difficulty":"extrem"'),
       good.replace('"outcome":"lost:time"', '"outcome":"vielleicht"'),
+      // a moment past every day: JSON's 1e999 is Infinity
+      good.replace(/"startedAt":\d+/, '"startedAt":1e999'),
+      good.replace(/"finishedAt":\d+/, '"finishedAt":-1e999'),
       '[1,2]',
     ];
     for (const line of broken) {
