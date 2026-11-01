@@ -107,8 +107,7 @@ die Entscheidung.
   hat. Phrasen je Mission aus `mission.json`, davon zwei mit Platzhalter (Zahl/Farbe/Dienst),
   per Steuerkreuz/Taste wählbar. Beweis: Tests, Capture des Chat-Rads in Blackout.
 
-### T-6 Entdeckung ist eine Handlung — Status: geplant (Mac, Paket N-discovery, startet nach
-### Lesbarkeit oder Notizen) · Größe: M
+### T-6 Entdeckung ist eine Handlung — Status: im PR (N-discovery) · Größe: M
 - Uros: „Nach den ersten Bewegungen im Raum ist schon alles aufgedeckt, der Sound klingelt paar
   Mal." Heute: 3,5 Kacheln + Sichtlinie. Neu: 2 Kacheln oder im Lampenkegel (250 ms) mit
   Sichtlinie; Unentdecktes ohne Beschriftung; Glöckchen nur für Quelle der aktiven Station,

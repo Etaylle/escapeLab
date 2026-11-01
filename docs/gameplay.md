@@ -1,10 +1,11 @@
 # EscapeLab — gameplay
 
-How the crew steers, what a run leaves behind and how runs compare: the controls on keys and
-on a controller, the Erfolge, the Tagesschicht, the picture of a run, the danger sense and the
-Serverraum's cabling diagram. Code: `packages/client/src/input/` (bindings, controller,
-prompts), `client/src/achievements.ts` and `screens/{Plaques,ShareButton,ControlSettings}.tsx`,
-`screens/shareCard.ts`, `world/danger.ts`, `puzzles/RackDiagram.tsx`; in the core
+How the crew steers, how it finds things, what a run leaves behind and how runs compare: the
+controls on keys and on a controller, finding things, the Erfolge, the Tagesschicht, the picture
+of a run, the danger sense and the Serverraum's cabling diagram. Code:
+`packages/client/src/input/` (bindings, controller, prompts), `client/src/achievements.ts` and
+`screens/{Plaques,ShareButton,ControlSettings}.tsx`, `screens/shareCard.ts`,
+`world/{labels,finds,danger}.ts`, `puzzles/RackDiagram.tsx`; in the core `discovery.ts`,
 `achievements.ts`, `daily.ts` and `puzzles/servers.ts` (`serviceDiagram`).
 
 ## Controls
@@ -72,6 +73,13 @@ there until it is let go. An Xbox controller says Xbox in its id
 live test: every button lights while held, the stick's dot leans. The walkthrough's
 `?fakepad=1` puts a controller of its own on `window.__escapelab.pad` (press, release, tap,
 lean).
+
+## Finding things
+
+A player finds a source, note, part, console or the sign within 2 tiles in sight, or once it has
+stood 250 ms in their lamp's cone (0.5 rad either side, 7.5 tiles) in sight; a part within 0.9
+always. The server decides, per player; a lit room finds nothing by itself. Names wait for a find
+and fade in over 300 ms; only finds that matter chime, once a thing, at most once in 1.5 s.
 
 ## Erfolge
 
