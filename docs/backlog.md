@@ -13,7 +13,7 @@ die Entscheidung.
 
 ## Bereit
 
-### F-1 Fundament-Fehler der Rückmeldung — Status: bereit · Größe: M
+### F-1 Fundament-Fehler der Rückmeldung — Status: in Arbeit (Mac, Paket N-foundation) · Größe: M
 - Pause hält die Uhr nur auf dem Server an: HUD-Countdown, Pieptöne und der Schlag bei 0
   laufen weiter, verbrauchte Pieptöne fehlen danach (`screens/Game.tsx`, `world/sim.ts`,
   `core/src/actions.ts` pause/resume).
@@ -52,17 +52,48 @@ die Entscheidung.
 - Ein werfender Schritt lässt `watchSightings` laufen; `tools/shots.mjs` endet nie, CI hängt
   bis zum Timeout.
 
-## Wartet auf das Fundament-Audit
+## Aus dem Fundament-Audit (`docs/foundation-audit.md`, 2026-11-01)
 
-### A-1 Bewegung und Kamera — Status: wartet
-- Geschwindigkeit, Beschleunigung, Wandgleiten, Partnerfigur bei 12/15 Hz, sichtbare Kacheln
-  je Bildschirmgröße; Zielwerte kommen aus dem Audit (Referenzen: Among Us, Overcooked, Valve).
+### N-1 Netz und Körper — Status: in Arbeit (Mac, Paket N-foundation) · Größe: L
+- Positionen tragen keinen Zeitstempel; die Partnerfigur ruckelt (Schritt 0–7,2 px je Frame,
+  153 ms hinterher). Zeitstempel in `pos`, Partner 150 ms in der Vergangenheit zeichnen
+  (Valve/Fiedler), Variation von 0,44 auf ≤ 0,25.
+- Plattentür, die sich auf einen Gehenden schließt, friert ihn ein (4 von 4 im LAN): die
+  Start-Kachel-Regel des Servers in die Client-Kollision.
+- Ein-Kachel-Öffnungen fangen den Körper (nur ±0,22 Kacheln passen): Ecken-Nudge bis 0,3
+  Kacheln (Celeste: 4 px).
+- Uhren folgen jedem Gerät statt dem Server (5 s Versatz; in der Pause zählt die Partneruhr
+  weiter und springt zurück): Server-Zeitversatz schätzen, Uhr steht mit dem Lauf.
+- Beweis: Messskripte des Audits wiederholen (`scratchpad`-Pfade stehen im Audit); Walkthrough.
 
-### A-2 Minispiel-Darstellung — Status: wartet
-- Panelgrößen, Affordanzen, Rückmeldezeiten je Station; Zweipult-Verständlichkeit ohne Text.
+### N-2 Kamera — Status: wartet (Entscheidung Uros) · Größe: M
+- Der Bildausschnitt hängt von der Pixeldichte ab: 1440×820 zeigt 22×10,5 Kacheln bei Dichte 1,
+  die ganze 27er-Breite bei Dichte 2 (MacBook). Vorschlag: Rahmen in CSS-Pixeln festlegen
+  (11–12 Kacheln hoch auf jedem Bildschirm, mindestens doppelte Drohnenreichweite quer), Harness
+  auch bei Dichte 2. Offene Frage: fester Radius um den Spieler (Among Us) oder Überblick
+  (Overcooked)?
 
-### A-3 Informationsfluss zu zweit — Status: wartet
-- Wo das Spiel Reden erzwingt, wo einer wartet; Leerlauf im gepinnten Plan.
+### N-3 Stimme am Pult — Status: wartet (Entscheidung Uros) · Größe: S
+- Die Sprachlautstärke fällt zwischen den Pulten der Signalkette auf 5 % (−25,6 dB), genau wo
+  geredet werden muss. Vorschlag: zwischen den Pulten und der Quelle der aktiven Station volle
+  Lautstärke per Funk, überall sonst Abstand.
+
+### N-4 Erster Sieg — Status: wartet (Entscheidung Uros) · Größe: S
+- Menschen brauchten 70–164 s für den Hebel oder schafften ihn nie (Skript: 25 s); 0 von 7
+  menschlichen Läufen gewonnen. Vorschlag: Fenster 3–4 s plus gemeinsamer Countdown wie in
+  Portal 2 („beide sehen GO im selben Moment"), für Hebel und Reaktor.
+
+### N-5 Lesbarkeit — Status: bereit · Größe: M
+- Gerätetexte Median 11–13 px (min 8), Tasten unter 44 px, Rack scrollt bei 1280×720, auf dem
+  Handy scrollt jedes Gerät; Ziel: Fließtext ≥ 14 px, Anzeigen ≥ 18 px, Ziele ≥ 44 px, eine
+  Station je Buchaufschlag mit ganzen Tabellen (enthält F-2); Canvas-Beschriftungen folgen der
+  Textgröße; Raumname über hellem Boden bekommt eine Platte (FLUR 1,3:1).
+- Touch: 8-Wege-Pad ≥ 48 px unter dem linken Daumen, Aktionen rechts.
+
+### N-6 Pacing und Stationsfolge — Status: wartet (Daten) · Größe: ?
+- Erst nach N-4 und dem zweiten Playtest messen (`runs.jsonl`): Ziel, dass eine Erstspieler-
+  Crew Station 2 in 5 Minuten schafft. Offene Fragen aus dem Audit: Zeitlimit beim ersten Lauf,
+  Notstrom als zweite Station, dritter Spawn, Größe der Schleife.
 
 ## Nur lokal
 
