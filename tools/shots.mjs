@@ -143,12 +143,14 @@
  * nudge-phone.png): its line in both banners, spoken by its recording.
  *
  * Stepping back: the first player to step back with Esc from a station standing
- * open — the station step's operator, else the Signalkette's sender — is shot
- * as the device fades out, as it came, over 150 ms (panel-close.png): the page
- * notes the panel each frame meanwhile, and it has to leave inert, its opacity
- * only falling and midway on a frame at least, gone within 100 to 600 ms; the
- * shot has to lie between the panel open and gone, taken again with the panel
- * opened anew where it came too late, up to three times — or the run fails.
+ * open — the station step's operator, else the Signalkette's sender — sees the
+ * device fade out as it came, over 150 ms: the page notes the panel each frame
+ * meanwhile, and it has to leave inert, its opacity only falling and midway on
+ * a frame at least, gone within 100 to 600 ms. For the shot (panel-close.png)
+ * the station is opened anew and stepped back from with the fade held 120 ms
+ * in — a screenshot asked for at once draws the fade's first frame, the panel
+ * whole — and it has to lie between the panel open and gone, taken again where
+ * it came after the panel had gone, up to three times — or the run fails.
  *
  * The glow: what the E prompt names glows in its own shape, no box round it
  * (client world/render/highlight.ts). As each player stands in reach of the
@@ -3486,7 +3488,7 @@ function checkStage(sending, pin, stage) {
 const FLINCH_SHOT_MS = 150;
 /** Whether figure-flinch.png was taken: a run meets one Signalkette at most for it. */
 let flinchShot = false;
-/** Whether panel-close.png was taken: the first open station a player steps back from takes it. */
+/** Whether panel-close.png was tried: the first open station a player steps back from takes it. */
 let panelCloseShot = false;
 
 /**
@@ -3518,61 +3520,99 @@ function recordPanelFade(page) {
 }
 
 /**
- * One try at panel-close.png: the panel shot open, Esc, shot at once, and shot gone; whether the
- * middle shot lies midway over the panel's box, the frames the page noted meanwhile, the lumas.
+ * How far into its 150 ms fade-out panel-close.png holds the panel, ms: past the ease-in's slow
+ * start, the panel about half gone and the dim behind it two-thirds lifted.
  */
-async function panelCloseTry(page, modal) {
-  const dpr = await page.evaluate(() => globalThis.devicePixelRatio);
-  const box = await modal.locator('.panel').boundingBox();
-  const open = await page.screenshot();
+const PANEL_SHOT_MS = 120;
+
+/**
+ * The device's fade-out as the game plays it: Esc, the page noting the panel each frame
+ * (recordPanelFade) until it has gone, and the world shot once it has.
+ */
+async function fadeOutAsPlayed(page, modal) {
   await recordPanelFade(page);
   await page.keyboard.press('Escape');
-  const shot = await page.screenshot();
   await modal.waitFor({ state: 'hidden', timeout: 3000 });
   await sleep(100);
   const closed = await page.screenshot();
   const samples = await page.evaluate(() => globalThis.__panelFade ?? []);
-  const lumas = [open, shot, closed].map((png) => meanLuma(decodePng(png), box, dpr));
-  const [up, mid, gone] = lumas;
-  return { shot, between: midway(up, mid, gone), fade: fadeOf(samples), lumas };
+  return { closed, fade: fadeOf(samples) };
+}
+
+/**
+ * The shot of panel-close.png: the station opened anew with E, stepped back from with its
+ * fade-out held PANEL_SHOT_MS in — a screenshot asked for at once draws the fade's first frame,
+ * the panel still whole — and the hold let go. Null where the station did not open again.
+ */
+async function heldFadeShot(page, modal) {
+  if (!(await interactUntil(page, modal))) {
+    return null;
+  }
+  await sleep(400); // past its fade-in
+  await page.evaluate((ms) => {
+    const hold = document.createElement('style');
+    hold.id = 'shots-panel-hold';
+    hold.textContent =
+      '.station-modal.puzzle-modal--leaving, .station-modal.puzzle-modal--leaving .panel ' +
+      `{ animation-delay: -${ms}ms !important; animation-play-state: paused !important; }`;
+    document.head.append(hold);
+  }, PANEL_SHOT_MS);
+  await page.keyboard.press('Escape');
+  // A shot without the panel leaving is judged by its luma (capturePanelClose), not thrown.
+  const leaving = page.locator('.station-modal.puzzle-modal--leaving');
+  await leaving.waitFor({ state: 'attached', timeout: 1000 }).catch(() => undefined);
+  const shot = await page.screenshot();
+  await page.evaluate(() => document.getElementById('shots-panel-hold')?.remove());
+  await modal.waitFor({ state: 'hidden', timeout: 3000 });
+  return shot;
 }
 
 /**
  * panel-close.png: `player` steps back from the open station with Esc, and the device fades out
  * as it came, over 150 ms (client styles/interaction.css, screens/Game.tsx): the page notes the
  * panel each frame meanwhile — it has to leave inert, its opacity only falling and midway on a
- * frame at least, and be gone within 100 to 600 ms — and the shot, taken at once, has to lie
- * between the panel open and gone over the panel's box. A shot that came too late is taken
- * again, the panel opened anew with E, up to three times. Any of these that fails, fails the run.
+ * frame at least, and be gone within 100 to 600 ms. Then the shot (heldFadeShot), which has to
+ * lie between the panel open and gone over the panel's box; one that came after the game had
+ * let the panel go is taken again, up to three times. Any of these that fails, fails the run.
  */
 async function capturePanelClose(player, modal) {
   const { page } = player;
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    const { shot, between, fade, lumas } = await panelCloseTry(page, modal);
-    if (between || attempt === 3) {
-      writeFileSync(join(OUT, 'panel-close.png'), shot);
-      tally.taken += 1;
-      panelCloseShot = true;
-      const faded = fade.ms !== null && fade.ms >= 100 && fade.ms <= 600;
-      const fine = faded && fade.midway > 0 && fade.falling && fade.inert && between;
-      const gone = fade.ms === null ? '!! gone at once' : `gone in ${Math.round(fade.ms)} ms`;
-      console.log(
-        `panel-close.png    ${player.name}, Esc: ${gone}, ${fade.midway} frames midway, ` +
-          `${fade.falling ? 'falling' : '!! not only falling'}, ` +
-          `${fade.inert ? 'inert' : '!! taking input'}; ` +
-          `the shot ${between ? 'midway' : '!! not midway'} ` +
-          `(luma ${lumas.map((l) => l.toFixed(0)).join(' → ')}), try ${attempt}`,
-      );
-      if (!fine) {
-        fail(`panel-close.png: ${JSON.stringify(fade)}, shot midway ${between}`);
-      }
+  panelCloseShot = true;
+  const dpr = await page.evaluate(() => globalThis.devicePixelRatio);
+  const box = await modal.locator('.panel').boundingBox();
+  const luma = (png) => meanLuma(decodePng(png), box, dpr);
+  const open = luma(await page.screenshot());
+  const { closed, fade } = await fadeOutAsPlayed(page, modal);
+  const gone = luma(closed);
+  let held = null;
+  for (let attempt = 1; attempt <= 3 && !(held?.between ?? false); attempt++) {
+    const shot = await heldFadeShot(page, modal);
+    if (shot === null) {
+      fail('panel-close.png: the station did not open again for its shot');
       return;
     }
-    if (!(await interactUntil(page, modal))) {
-      fail('panel-close.png: the station did not open again for another try');
-      return;
-    }
-    await sleep(400); // past its fade-in
+    const mid = luma(shot);
+    held = { shot, attempt, lumas: [open, mid, gone], between: midway(open, mid, gone) };
+  }
+  writeFileSync(join(OUT, 'panel-close.png'), held.shot);
+  tally.taken += 1;
+  reportPanelClose(player, fade, held);
+}
+
+/** panel-close.png's line in the log; the run fails where the fade or its shot was wrong. */
+function reportPanelClose(player, fade, held) {
+  const faded = fade.ms !== null && fade.ms >= 100 && fade.ms <= 600;
+  const fine = faded && fade.midway > 0 && fade.falling && fade.inert && held.between;
+  const gone = fade.ms === null ? '!! gone at once' : `gone in ${Math.round(fade.ms)} ms`;
+  console.log(
+    `panel-close.png    ${player.name}, Esc: ${gone}, ${fade.midway} frames midway, ` +
+      `${fade.falling ? 'falling' : '!! not only falling'}, ` +
+      `${fade.inert ? 'inert' : '!! taking input'}; the shot held ${PANEL_SHOT_MS} ms in ` +
+      `${held.between ? 'midway' : '!! not midway'} ` +
+      `(luma ${held.lumas.map((l) => l.toFixed(0)).join(' → ')}), try ${held.attempt}`,
+  );
+  if (!fine) {
+    fail(`panel-close.png: ${JSON.stringify(fade)}, shot midway ${held.between}`);
   }
 }
 

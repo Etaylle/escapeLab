@@ -1,8 +1,8 @@
 /**
  * The walkthrough's proof that a station's device fades out as it came (client
  * screens/Game.tsx, styles/interaction.css): what the page recorded of the panel frame by
- * frame as it was stepped back from, and a shot taken meanwhile, held against the panel open
- * and the panel gone. Pure.
+ * frame as it was stepped back from, and a shot of the fade held part-way, against the panel
+ * open and the panel gone. Pure.
  */
 
 /** A frame as the page recorded it while the panel closed. */
