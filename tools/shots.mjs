@@ -3542,15 +3542,16 @@ function holdPanelFade({ ms, fade }) {
     '.station-modal.puzzle-modal--leaving, .station-modal.puzzle-modal--leaving .panel ' +
     `{ animation-delay: -${ms}ms !important; animation-play-state: paused !important; }`;
   document.head.append(style);
+  // The browser's own setTimeout throws unless it is called on the window.
   const plain = globalThis.setTimeout;
   const kept = [];
   globalThis.__panelHold = { plain, kept };
   globalThis.setTimeout = (run, delay, ...args) => {
     if (delay !== fade) {
-      return plain(run, delay, ...args);
+      return plain.call(globalThis, run, delay, ...args);
     }
     kept.push(() => run(...args));
-    return plain(() => undefined, 0);
+    return plain.call(globalThis, () => undefined, 0);
   };
 }
 
@@ -3562,7 +3563,7 @@ function releasePanelFade() {
     globalThis.setTimeout = hold.plain;
     delete globalThis.__panelHold;
     for (const run of hold.kept) {
-      hold.plain(run, 0);
+      hold.plain.call(globalThis, run, 0);
     }
   }
 }
