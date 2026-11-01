@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EMERGENCY_CLEARED, type PlayerView, type PuzzleView, type RunEvent } from '@escapelab/core';
+import {
+  EMERGENCY_CLEARED,
+  type PlayerView,
+  type PuzzleView,
+  type RunEvent,
+} from '@escapelab/core';
 import { readerSawSolve } from '../src/screens/Game.js';
 import { emergencyCleared } from '../src/world/alarm.js';
 import { lightsHeld } from '../src/world/rooms.js';
