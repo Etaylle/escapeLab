@@ -58,7 +58,6 @@ export type GameMessage = Extract<
       | 'request-hint'
       | 'open-source'
       | 'read-note'
-      | 'interact'
       | 'drop-item'
       | 'back-to-lobby'
       | 'rematch';
@@ -78,6 +77,11 @@ const PRESENCE_LEAVE_RADIUS = 2.0;
 const DISCOVER_RADIUS = 3.5;
 /** How close to the armed station an interact is accepted. */
 const INTERACT_RADIUS = 1.6;
+/**
+ * How far from where the room has a player, in tiles, the spot they pressed E on may lie and
+ * still be taken: about two of a sprint's position updates.
+ */
+const PRESS_REACH = 0.5;
 /** Everyone must stand on the exit hatch itself (below one tile) to escape. */
 const EXIT_RADIUS = 0.7;
 /** Positions fan out at most this often. */
@@ -363,9 +367,6 @@ export class Room {
       case 'read-note':
         this.dispatch({ type: 'read-note', playerId, note: msg.note, at: Date.now() });
         break;
-      case 'interact':
-        this.resolveInteract(playerId);
-        break;
       case 'drop-item':
         this.dropCarried(playerId);
         break;
@@ -509,6 +510,27 @@ export class Room {
   /** Host switches mission or difficulty (validated by the reducer). */
   switchMission(playerId: string, mission: Mission, difficulty: Difficulty): void {
     this.dispatch({ type: 'switch-mission', playerId, mission, difficulty });
+  }
+
+  /**
+   * E pressed on the spot `at`, walked in the sender's frame `t`: the room takes the spot as
+   * the player's — where it lies within PRESS_REACH of where the room had them and they could
+   * have walked there, else it judges where it had them — and then does what E does there
+   * (`resolveInteract`). A position update is due anyway: this one comes with the press.
+   */
+  interact(playerId: string, at: { x: number; y: number }, t: number): void {
+    const from = this.positions.get(playerId);
+    const taken =
+      from !== undefined &&
+      this.state.phase === 'playing' &&
+      this.state.paused === null &&
+      Math.hypot(at.x - from.x, at.y - from.y) <= PRESS_REACH &&
+      stepAllowed(this.state.mission.map, this.state, from, at);
+    if (taken) {
+      const pressed = { x: at.x, y: at.y, facing: from.facing, moving: from.moving };
+      this.updatePosition(playerId, this.state.startedAt ?? Number.NaN, pressed, t);
+    }
+    this.resolveInteract(playerId);
   }
 
   /**

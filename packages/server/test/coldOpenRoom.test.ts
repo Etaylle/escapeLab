@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
-import { walkTo, type Walker } from './walk.js';
+import { pressE, walkTo, type Walker } from './walk.js';
 
 /**
  * A corridor that opens with the power on for three seconds: three stations
@@ -108,7 +108,7 @@ describe('a room whose mission opens with the power on', () => {
     }
     walkTo(room, anna, armed.x + 0.5, armed.y + 0.5);
     walkTo(room, ben, armed.x + 1.5, armed.y + 0.5);
-    room.act(anna.playerId, { kind: 'interact' });
+    pressE(room, anna);
     for (const player of [anna, ben]) {
       room.act(player.playerId, { kind: 'puzzle-input', input: { press: true } });
     }
@@ -163,7 +163,7 @@ describe('a room whose mission opens with the power on', () => {
     const { room, anna } = started();
     walkTo(room, anna, 3.5, 1.5);
     expect(lastView(anna).presence.stationId).toBe('eins');
-    expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/nichts zu aktivieren/);
+    expect(() => pressE(room, anna)).toThrow(/nichts zu aktivieren/);
     room.dispose();
   });
 

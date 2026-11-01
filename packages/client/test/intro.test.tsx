@@ -592,7 +592,8 @@ describe('the opening over the world', () => {
         pingsRef={{ current: [] }}
         chatsRef={{ current: [] }}
         send={() => undefined}
-        refusals={0}
+        listen={() => () => undefined}
+        refusal={null}
         finale={null}
       />,
     );

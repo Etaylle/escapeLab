@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
-import { walkTo, type Walker } from './walk.js';
+import { pressE, walkTo, type Walker } from './walk.js';
 
 /**
  * Corridor with two stations and a patrol that sleeps until the first is done.
@@ -95,7 +95,7 @@ describe('Room with a sleeping drone', () => {
     // The first solve wakes it up exactly where its patrol starts …
     moveTo(room, ben, 2, 1);
     moveTo(room, anna, 2, 2);
-    room.act(ben.playerId, { kind: 'interact' });
+    pressE(room, ben);
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
     moveTo(room, anna, 3, 2);

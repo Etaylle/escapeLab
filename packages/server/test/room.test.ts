@@ -9,7 +9,7 @@ import {
 } from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { RoomManager } from '../src/roomManager.js';
-import { walkTo, type Walker } from './walk.js';
+import { pressE, walkTo, type Walker } from './walk.js';
 
 /** The host's start now requires everyone else to have confirmed. */
 function ready(room: Room, ...players: { playerId: string }[]): void {
@@ -104,7 +104,7 @@ describe('Room', () => {
     const signal = mission.puzzles[1];
     moveTo(room, anna, 8, 4);
     moveTo(room, ben, 13, 4);
-    room.act(anna.playerId, { kind: 'interact' });
+    pressE(room, anna);
     while (lastView(anna.messages).currentPuzzleIndex === 1) {
       const operator = lastView(anna.messages).puzzle;
       const partner = lastView(ben.messages).puzzle;
@@ -134,7 +134,7 @@ describe('Room', () => {
     // Station 1 sits in the Leitstand: the whole crew walks there and presses.
     moveTo(room, ben, 12, 2);
     moveTo(room, anna, 11, 1);
-    room.act(ben.playerId, { kind: 'interact' });
+    pressE(room, ben);
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
     expect(lastView(ben.messages).currentPuzzleIndex).toBe(1);
@@ -150,7 +150,7 @@ describe('Room', () => {
     room.act(anna.playerId, { kind: 'open-source', manualId: 'spind-leitstand' });
     expect(lastView(anna.messages).presence.manualId).toBe('spind-leitstand');
     moveTo(room, ben, 2, 3);
-    room.act(ben.playerId, { kind: 'interact' });
+    pressE(room, ben);
     const wiring = mission.puzzles[2];
     const annaView = lastView(anna.messages);
     const benView = lastView(ben.messages);
@@ -167,7 +167,7 @@ describe('Room', () => {
 
     moveTo(room, ben, 16, 3);
     moveTo(room, anna, 16, 5);
-    room.act(ben.playerId, { kind: 'interact' });
+    pressE(room, ben);
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
 
@@ -241,7 +241,7 @@ describe('Room', () => {
   it('refuses a puzzle input from a player away from the station', () => {
     const { room, anna, ben } = startedRoom();
     moveTo(room, ben, 12, 2);
-    room.act(ben.playerId, { kind: 'interact' });
+    pressE(room, ben);
     expect(lastView(anna.messages).puzzle).not.toBeNull();
     expect(() =>
       room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } }),
@@ -284,7 +284,7 @@ describe('Room', () => {
     const paused = lastView(anna.messages);
     expect(paused.pausedFor).toEqual(['Ben']);
     // Nothing can be done while the crew is short-handed.
-    expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/Pausiert/);
+    expect(() => pressE(room, anna)).toThrow(/Pausiert/);
 
     // The clock does not run during the pause …
     vi.advanceTimersByTime(30_000);
@@ -334,15 +334,15 @@ describe('Room', () => {
     // fuse, the key does nothing useful.
     moveTo(room, ben, 7, 2);
     moveTo(room, anna, 5, 1);
-    expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/Zu weit weg/);
+    expect(() => pressE(room, anna)).toThrow(/Zu weit weg/);
 
     // At the fuse it picks it up — and full hands switch station one on like empty ones.
     moveTo(room, anna, 1, 1);
-    room.act(anna.playerId, { kind: 'interact' });
+    pressE(room, anna);
     expect(lastView(anna.messages).map?.items[0]?.carriedBy).toBe(anna.playerId);
     moveTo(room, anna, 11, 1);
     moveTo(room, ben, 12, 2);
-    room.act(anna.playerId, { kind: 'interact' });
+    pressE(room, anna);
     expect(lastView(anna.messages).puzzle).not.toBeNull();
     expect(lastView(anna.messages).map?.items[0]?.carriedBy).toBe(anna.playerId);
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
@@ -354,24 +354,24 @@ describe('Room', () => {
     // alike. Anna holds the door for Ben, and it shuts behind her.
     moveTo(room, anna, 7, 2);
     moveTo(room, ben, 2, 3);
-    expect(() => room.act(ben.playerId, { kind: 'interact' })).toThrow(/fehlt noch: SICHERUNG/);
+    expect(() => pressE(room, ben)).toThrow(/fehlt noch: SICHERUNG/);
     moveTo(room, anna, 2, 3);
-    expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/fehlt noch: SICHERUNG/);
+    expect(() => pressE(room, anna)).toThrow(/fehlt noch: SICHERUNG/);
 
     // Carrying it anywhere else refuses politely.
     moveTo(room, anna, 5, 1);
-    expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/markierten Platz/);
+    expect(() => pressE(room, anna)).toThrow(/markierten Platz/);
 
     // Q drops it right where she stands, and it can be picked up again.
     room.act(anna.playerId, { kind: 'drop-item' });
     expect(lastView(anna.messages).map?.items[0]).toMatchObject({ carriedBy: null, x: 5.5 });
-    room.act(anna.playerId, { kind: 'interact' });
+    pressE(room, anna);
 
     // On the slot the same key installs it and the station comes alive.
     moveTo(room, anna, 3, 4);
-    room.act(anna.playerId, { kind: 'interact' });
+    pressE(room, anna);
     expect(lastView(anna.messages).map?.items[0]?.delivered).toBe(true);
-    room.act(ben.playerId, { kind: 'interact' });
+    pressE(room, ben);
     expect(lastView(ben.messages).puzzle).not.toBeNull();
     room.dispose();
   });
@@ -454,7 +454,7 @@ describe('Room', () => {
     const { room, anna, ben } = startedRoom();
     moveTo(room, ben, 12, 2);
     moveTo(room, anna, 11, 1);
-    room.act(ben.playerId, { kind: 'interact' });
+    pressE(room, ben);
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     const pressedAt = Date.now();
     expect(lastView(anna.messages).puzzle).toMatchObject({
@@ -501,7 +501,7 @@ describe('Room', () => {
 
     room.act(anna.playerId, { kind: 'open-source', manualId: 'spind-leitstand' });
     moveTo(room, ben, 12, 2);
-    room.act(ben.playerId, { kind: 'interact' });
+    pressE(room, ben);
     expect(() => room.act(ben.playerId, { kind: 'request-hint' })).toThrow(/bei den Regeln/);
     expect(() => room.act(anna.playerId, { kind: 'request-hint' })).toThrow(/Moment/);
     vi.advanceTimersByTime(hinted.hintDelaySec * 1000);
@@ -520,7 +520,7 @@ describe('Room', () => {
     const { room, anna, ben } = startedRoom();
     moveTo(room, ben, 12, 2);
     moveTo(room, anna, 11, 1);
-    room.act(ben.playerId, { kind: 'interact' });
+    pressE(room, ben);
 
     expect(() =>
       room.act(ben.playerId, { kind: 'puzzle-input', input: { wireId: 'w1' } }),
@@ -535,7 +535,7 @@ describe('Room', () => {
   it('rejects an interact from too far away', () => {
     const { room, ben } = startedRoom();
     // Ben spawns across the Leitstand from the first station.
-    expect(() => room.act(ben.playerId, { kind: 'interact' })).toThrow(/Zu weit weg/);
+    expect(() => pressE(room, ben)).toThrow(/Zu weit weg/);
     room.dispose();
   });
 
@@ -603,7 +603,7 @@ describe('Room', () => {
     const { room, anna, ben } = startedRoom();
     moveTo(room, ben, 12, 2);
     moveTo(room, anna, 11, 1);
-    room.act(ben.playerId, { kind: 'interact' });
+    pressE(room, ben);
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
     sendSignals(room, anna, ben);
@@ -611,7 +611,7 @@ describe('Room', () => {
     moveTo(room, anna, 7, 2);
     moveTo(room, ben, 2, 3);
     room.act(anna.playerId, { kind: 'open-source', manualId: 'spind-leitstand' });
-    room.act(ben.playerId, { kind: 'interact' });
+    pressE(room, ben);
     const benView = lastView(ben.messages);
     const wires = benView.puzzle?.kind === 'wiring' ? benView.puzzle.wires : null;
     expect(wires).not.toBeNull();

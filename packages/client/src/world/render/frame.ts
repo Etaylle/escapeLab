@@ -8,6 +8,7 @@ import type { FigureMood } from '../figure.js';
 import type { FinaleFrame } from '../finale.js';
 import type { LightPath } from '../gl/path.js';
 import type { ContextAction } from '../interact.js';
+import type { Refused } from '../press.js';
 import type { LampMount, Lit } from '../light.js';
 import type { MarkerTarget } from '../markers.js';
 import type { CeilingLight } from '../power.js';
@@ -275,6 +276,11 @@ export interface Frame {
   markers: readonly MarkerTarget[];
   /** what E does here; null for nothing, under a panel, and while the run ends on screen */
   action: ContextAction | null;
+  /**
+   * a refusal of E's, on the prompt pill in amber with the server's words for its time
+   * (world/press.ts); null while there is none
+   */
+  refusal: Refused | null;
   /** where the minimap sits; null while it is off, and for the audience */
   minimap: MinimapLayout | null;
   /**

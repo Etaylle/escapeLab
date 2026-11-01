@@ -46,7 +46,7 @@ const ben = { id: 'p2', name: 'Ben', color: '#f472b6' };
 
 /** The run around the device: Anna's, Ben her partner, no alarm. */
 function run(you: string | null = 'p1'): DeviceRun {
-  return { alarms: 0, solved: 0, refusals: 0, crew: { you, mates: [anna, ben] }, alarm: null };
+  return { alarms: 0, solved: 0, refusal: null, crew: { you, mates: [anna, ben] }, alarm: null };
 }
 
 function panel(puzzle: PuzzleView, around: DeviceRun = run()): string {

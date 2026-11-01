@@ -19,6 +19,7 @@ import type {
   PoweredRoom,
   WorldMap,
 } from './render/frame.js';
+import { newPresses, type Presses } from './press.js';
 import { drawnAt, hear, newTrail, type Trail } from './trail.js';
 
 /**
@@ -85,6 +86,8 @@ export interface Sim {
   footfalls: number;
   /** whether a move is held against something that stops it: one bump a push */
   pushing: boolean;
+  /** E as this screen keeps it: a press waiting for reach, the asks out, a refusal shown */
+  presses: Presses;
   /** the pushes so far, each with its bump: the walkthrough counts them off the probe */
   bumps: number;
   /** how far the camera looks ahead of your avatar, in tiles: eased in and out (`leadOn`) */
@@ -139,6 +142,7 @@ export function newSim(topCss: number): Sim {
     stepAcc: 0,
     footfalls: 0,
     pushing: false,
+    presses: newPresses(),
     bumps: 0,
     lead: { x: 0, y: 0 },
     cam: { x: 0, y: 0 },

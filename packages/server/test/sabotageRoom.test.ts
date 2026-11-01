@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
-import { walkTo, type Walker } from './walk.js';
+import { pressE, walkTo, type Walker } from './walk.js';
 
 /** The host's start now requires everyone else to have confirmed. */
 function ready(room: Room, ...players: { playerId: string }[]): void {
@@ -71,7 +71,7 @@ describe('Room emergencies', () => {
   function solveAt(room: Room, x: number, anna: Walker, ben: Walker) {
     moveTo(room, ben, x, 1);
     moveTo(room, anna, x, 2);
-    room.act(ben.playerId, { kind: 'interact' });
+    pressE(room, ben);
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
   }

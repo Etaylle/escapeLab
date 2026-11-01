@@ -6,7 +6,7 @@ export function deviceRun(parts: Partial<DeviceRun> = {}): DeviceRun {
   return {
     alarms: 0,
     solved: 0,
-    refusals: 0,
+    refusal: null,
     crew: { you: 'p1', mates: [] },
     alarm: null,
     ...parts,

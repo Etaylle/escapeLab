@@ -167,7 +167,7 @@ export function refusedSince(seen: number, now: number): boolean {
 }
 
 /**
- * Blames the press a refusal answers, every time the server's count of them (`refusals`,
+ * Blames the press a refusal answers, every time the server's count of them (`Refusal.seq`,
  * ws.ts) goes up while the device is open — those from before it opened excepted.
  */
 export function useRefusalBlame(refusals: number, blame: () => void): void {

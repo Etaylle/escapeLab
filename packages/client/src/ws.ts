@@ -19,6 +19,35 @@ interface Credentials {
   token: string;
 }
 
+/** A refusal of the server's: how many it has made so far, its words, what it refused. */
+export interface Refusal {
+  seq: number;
+  message: string;
+  /** the kind of message refused; null where the server could not read it */
+  of: ClientMessage['kind'] | null;
+}
+
+/**
+ * What is refused where the player looks — at the device they work (its head), at the prompt
+ * they pressed E on (the pill) — and not in the banner over the screen, which lies under a
+ * device and away from the prompt.
+ */
+const ANSWERED_IN_PLACE: ReadonlySet<ClientMessage['kind']> = new Set([
+  'puzzle-input',
+  'interact',
+  'open-source',
+]);
+
+/** Whether a refusal of a message of kind `of` goes to the banner: none answered in place. */
+export function inBanner(of: ClientMessage['kind'] | undefined): boolean {
+  return of === undefined || !ANSWERED_IN_PLACE.has(of);
+}
+
+/** Whether sending a message of `kind` takes the banner down: the player's next deed, no stream. */
+export function wipesBanner(kind: ClientMessage['kind']): boolean {
+  return !STREAMED.has(kind);
+}
+
 export interface Connection {
   /** socket status; the game itself lives in `view` */
   status: 'connecting' | 'open' | 'closed';
@@ -28,13 +57,18 @@ export interface Connection {
   /** open and running rooms, refreshed while sitting on the join screen */
   rooms: RoomSummary[];
   roomCode: string | null;
+  /**
+   * the banner's words: a refusal of what is answered nowhere else (`ANSWERED_IN_PLACE`), there
+   * until the player does the next thing — what the page streams by itself (`pos`, `clock`)
+   * wipes nothing — or dismisses it
+   */
   error: string | null;
   /**
-   * How many of this connection's messages the server has refused so far
-   * (an `error` each), counted up: an open device shakes the press that a
-   * new one refused, while the banner shows `error`.
+   * The server's latest refusal of this connection's messages, counted up (an `error` each):
+   * an open device shakes the press it refused and says it in its head, the prompt pill says
+   * one of E's (world/press.ts); null before the first.
    */
-  refusals: number;
+  refusal: Refusal | null;
   /**
    * Live avatar positions with the run they belong to, written on every
    * positions broadcast WITHOUT a React re-render — the canvas render loop
@@ -225,7 +259,7 @@ interface Page {
   setSpectatorView: (view: SpectatorView) => void;
   setRooms: (rooms: RoomSummary[]) => void;
   setError: (message: string) => void;
-  countRefusal: () => void;
+  refuse: (message: string, of: ClientMessage['kind'] | null) => void;
   /** a resume is out: an error now means the stored session is dead */
   resuming: MutableRefObject<boolean>;
   positions: Connection['positions'];
@@ -282,8 +316,10 @@ function takeIn(msg: ServerMessage, page: Page): void {
         page.setRoomCode(null);
         page.setView(null);
       }
-      page.setError(msg.message);
-      page.countRefusal();
+      if (inBanner(msg.of)) {
+        page.setError(msg.message);
+      }
+      page.refuse(msg.message, msg.of ?? null);
       break;
   }
 }
@@ -299,7 +335,7 @@ export function useGameConnection(): Connection {
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [roomCode, setRoomCode] = useState<string | null>(loadCredentials()?.code ?? null);
   const [error, setError] = useState<string | null>(null);
-  const [refusals, setRefusals] = useState(0);
+  const [refusal, setRefusal] = useState<Refusal | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const lineRef = useRef<Line | null>(null);
   const resumingRef = useRef(false);
@@ -330,7 +366,8 @@ export function useGameConnection(): Connection {
       setSpectatorView,
       setRooms,
       setError,
-      countRefusal: () => setRefusals((count) => count + 1),
+      refuse: (message, of) =>
+        setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
       resuming: resumingRef,
       positions: positionsRef,
       drones: dronesRef,
@@ -383,13 +420,15 @@ export function useGameConnection(): Connection {
     rooms,
     roomCode,
     error,
-    refusals,
+    refusal,
     positions: positionsRef,
     drones: dronesRef,
     pings: pingsRef,
     chats: chatsRef,
     send: (msg) => {
-      setError(null);
+      if (wipesBanner(msg.kind)) {
+        setError(null);
+      }
       lineRef.current?.send(msg);
     },
     listen,

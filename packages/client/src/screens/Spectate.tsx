@@ -58,7 +58,7 @@ function audienceRunOf(view: SpectatorView): DeviceRun {
   return {
     alarms: view.penaltySeq,
     solved: view.currentPuzzleIndex,
-    refusals: 0,
+    refusal: null,
     crew: {
       you: null,
       mates: view.players
@@ -128,7 +128,7 @@ function SpectatePanels({ view }: { view: SpectatorView }) {
                   relay={panel.emergency}
                   pausedAt={view.pausedAt}
                   send={noop}
-                  refusals={0}
+                  refusal={null}
                 />
               </div>
             </section>

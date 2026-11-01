@@ -1,6 +1,8 @@
 import type { PuzzleInputOf, RelayView } from '@escapelab/core';
 import { clockTime } from '../clock.js';
 import { useServerNow } from '../hooks.js';
+import type { Refusal } from '../ws.js';
+import { useFreshRefusal } from './Device.js';
 import { usePressFeel, useRefusalBlame } from './feel.js';
 import type { PanelProps } from './index.js';
 import './relay.css';
@@ -118,27 +120,34 @@ function ControlCard({ control, send }: { control: Control; send: (input: RelayI
  * One player's side of the relay emergency: the instruction to read out on
  * top, the crew's progress, and the four controls of their console, each
  * with the kit's feel — switches clack, dials catch, the button clicks, and
- * a control whose press the server refuses (`refusals`, ws.ts) shakes.
+ * a control whose press the server refuses (`refusal`, ws.ts) shakes, the
+ * server's words under the instruction.
  */
 export function RelayConsole({
   relay,
   pausedAt,
   send,
-  refusals,
+  refusal,
 }: {
   relay: RelayView;
   /** since when the run stands paused, epoch ms; null while it runs */
   pausedAt: number | null;
   send: (input: RelayInput) => void;
-  /** what the server has refused of this player's inputs so far; 0 for the audience */
-  refusals: number;
+  /** the server's latest refusal of this player's messages; null for the audience */
+  refusal: Refusal | null;
 }) {
   const { handlers, blame } = usePressFeel(true);
-  useRefusalBlame(refusals, blame);
+  useRefusalBlame(refusal?.seq ?? 0, blame);
+  const refused = useFreshRefusal(refusal);
   return (
     <div className="relay" {...handlers}>
       {relay.instruction !== null && (
         <Order instruction={relay.instruction} windowSec={relay.windowSec} pausedAt={pausedAt} />
+      )}
+      {refused !== null && (
+        <p key={refused.seq} className="relay-refusal" role="alert">
+          {refused.message}
+        </p>
       )}
       <div className="relay-progress">
         Erledigt: <strong>{relay.completed}/{relay.required}</strong>
@@ -157,5 +166,5 @@ export function RelayConsole({
  * with the refusals it hears of — a relay never stands at a station's device.
  */
 export function RelayPanel({ puzzle, send, mission }: PanelProps<'relay'>) {
-  return <RelayConsole relay={puzzle} pausedAt={mission.pausedAt} send={send} refusals={0} />;
+  return <RelayConsole relay={puzzle} pausedAt={mission.pausedAt} send={send} refusal={null} />;
 }

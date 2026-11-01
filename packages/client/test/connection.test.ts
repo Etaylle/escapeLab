@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClientMessage, ServerMessage } from '@escapelab/core';
-import { keepConnected, OUTBOX_MAX, type SocketEvents } from '../src/ws.js';
+import {
+  inBanner,
+  keepConnected,
+  OUTBOX_MAX,
+  wipesBanner,
+  type SocketEvents,
+} from '../src/ws.js';
 
 /**
  * A browser socket as `keepConnected` drives it: the test opens it, has the server say
@@ -196,13 +202,13 @@ describe('keepConnected — sending while the line is down never throws', () => 
     send(E);
     send({ kind: 'drop-item' });
     vi.advanceTimersByTime(1000);
-    send({ kind: 'interact' });
+    send({ kind: 'interact', x: 2.5, y: 3.5, t: 1 });
     last().open();
     expect(last().sent).toEqual([
       { kind: 'resume', ...SESSION },
       E,
       { kind: 'drop-item' },
-      { kind: 'interact' },
+      { kind: 'interact', x: 2.5, y: 3.5, t: 1 },
     ]);
   });
 
@@ -236,5 +242,23 @@ describe('keepConnected — sending while the line is down never throws', () => 
     stop();
     last().open();
     expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
+  });
+});
+
+describe('the banner and the refusals said in place', () => {
+  it('leaves to the device and the prompt pill what they answer, the rest to the banner', () => {
+    for (const kind of ['puzzle-input', 'interact', 'open-source'] as const) {
+      expect(inBanner(kind), kind).toBe(false);
+    }
+    for (const kind of ['resume', 'join-room', 'request-hint', 'read-note', undefined] as const) {
+      expect(inBanner(kind), String(kind)).toBe(true);
+    }
+  });
+
+  it('is taken down by the player’s next deed, never by what the page streams', () => {
+    expect(wipesBanner('pos')).toBe(false);
+    expect(wipesBanner('clock')).toBe(false);
+    expect(wipesBanner('interact')).toBe(true);
+    expect(wipesBanner('puzzle-input')).toBe(true);
   });
 });

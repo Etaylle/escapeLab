@@ -26,8 +26,15 @@ vi.mock('../src/puzzles/sounds.js', async (importOriginal) => {
 
 const sounds = await import('../src/puzzles/sounds.js');
 const { needleAngle, probedWith, scrambled } = await import('../src/puzzles/CircuitPanel.js');
-const { closeAfterSolved, Device, feelChange, heldView, SOLVED_CLOSE_MS, STRIP_LEDS } =
-  await import('../src/puzzles/Device.js');
+const {
+  closeAfterSolved,
+  Device,
+  feelChange,
+  heldView,
+  refusedHere,
+  SOLVED_CLOSE_MS,
+  STRIP_LEDS,
+} = await import('../src/puzzles/Device.js');
 const { PANELS, SOUNDS } = await import('../src/puzzles/index.js');
 const { typedOrder } = await import('../src/puzzles/KeypadPanel.js');
 const { knobAngle } = await import('../src/puzzles/MorsePanel.js');
@@ -240,6 +247,57 @@ describe('an alarm at an open device', () => {
     );
     // In the head, before the face: nothing of it lies over the controls.
     expect(html.indexOf('device-alarm')).toBeLessThan(html.indexOf('device-face'));
+  });
+});
+
+describe('a press the server refuses at an open device', () => {
+  const refusal = {
+    seq: 3,
+    message: 'Eingabe gesperrt: Am anderen Pult und bei den Regeln steht niemand.',
+    of: 'puzzle-input' as const,
+  };
+
+  it('says the server’s words in the device’s head, before the face', () => {
+    const html = renderToStaticMarkup(
+      <Device
+        kind="keypad"
+        paragraph="§1"
+        title="Tastenfeld"
+        tag={null}
+        leds={[]}
+        alarms={0}
+        solved={false}
+        press={null}
+        refused={refusal}
+      >
+        <p>Gesicht</p>
+      </Device>,
+    );
+    expect(html).toContain(`<div class="device-refusal" role="alert">${refusal.message}</div>`);
+    expect(html.indexOf('device-refusal')).toBeLessThan(html.indexOf('device-face'));
+  });
+
+  it('heeds only a refusal of a press there that came after it opened', () => {
+    expect(refusedHere(refusal, 2)).toBe(true);
+    expect(refusedHere(refusal, 3)).toBe(false);
+    expect(refusedHere({ ...refusal, of: 'interact' }, 2)).toBe(false);
+    expect(refusedHere(null, 0)).toBe(false);
+  });
+
+  it('says it on the relay console too, under the instruction', () => {
+    const relay = {
+      kind: 'relay' as const,
+      instruction: null,
+      windowSec: 12,
+      controls: [],
+      completed: 0,
+      required: 6,
+    } as unknown as Parameters<typeof RelayConsole>[0]['relay'];
+    // a refusal heard before the console came up is not its own
+    const html = renderToStaticMarkup(
+      <RelayConsole relay={relay} pausedAt={null} send={noop} refusal={refusal} />,
+    );
+    expect(html).not.toContain('relay-refusal');
   });
 });
 
@@ -618,14 +676,14 @@ describe('the relay console', () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000_000);
     const calm = renderToStaticMarkup(
-      <RelayConsole relay={relay(12_000)} pausedAt={null} send={noop} refusals={0} />,
+      <RelayConsole relay={relay(12_000)} pausedAt={null} send={noop} refusal={null} />,
     );
     expect(calm).toContain(
       '<span class="relay-count" role="timer" aria-label="noch 12 Sekunden">12',
     );
     const lastSeconds = relay(FINAL_SECONDS * 1000);
     const late = renderToStaticMarkup(
-      <RelayConsole relay={lastSeconds} pausedAt={null} send={noop} refusals={0} />,
+      <RelayConsole relay={lastSeconds} pausedAt={null} send={noop} refusal={null} />,
     );
     expect(late).toContain('<span class="relay-count relay-count--final" role="timer"');
     expect(late).toContain('>05</span>');
@@ -634,7 +692,7 @@ describe('the relay console', () => {
   it('clacks its switches and catches its dials, as their data-feel says', () => {
     vi.useFakeTimers();
     const html = renderToStaticMarkup(
-      <RelayConsole relay={relay(12_000)} pausedAt={null} send={noop} refusals={0} />,
+      <RelayConsole relay={relay(12_000)} pausedAt={null} send={noop} refusal={null} />,
     );
     expect(html).toContain('<button class="relay-switch " data-feel="clack"');
     expect(html.match(/data-feel="detent"/g)).toHaveLength(5);

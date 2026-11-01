@@ -21,6 +21,7 @@ import type { CoachMark } from '../puzzles/coach.js';
 import { TalkButton } from '../screens/Voice.js';
 import { getSettings, useReducedMotion } from '../settings.js';
 import { VoiceContext } from '../voice/useVoice.js';
+import type { Connection } from '../ws.js';
 import { useAlarm, useAlarmClasses, worldHornDue, type Alarm } from './alarm.js';
 import { bedCount, bedProbe, hearRooms, startAmbience, stopAmbience } from './ambience.js';
 import { worldText } from './art.js';
@@ -57,7 +58,8 @@ import { useFinaleSounds, type FinaleCue } from './finale.js';
 import { runLight } from './frameLight.js';
 import { frameTrace, traceRequested, type FrameTrace } from './frameTrace.js';
 import { watchInsets, type Insets } from './insets.js';
-import { carriedItem, contextAction, TOUCH, type ContextAction } from './interact.js';
+import { carriedItem, TOUCH } from './interact.js';
+import { hearAnswer, pressE, pressWhenInReach, type PressWorld } from './press.js';
 import { filmed, type IntroCue } from './intro/sequence.js';
 import { runsOf } from './light.js';
 import { positionsOf, type KnownPositions, type Spot } from './movement.js';
@@ -156,6 +158,8 @@ interface Props {
   /** E at the armed station: show its panel once it is open */
   onOperate: () => void;
   send: (msg: ClientMessage) => void;
+  /** hears the server as it speaks (ws.ts): E's answers; none for the audience, who press none */
+  listen?: Connection['listen'];
 }
 
 /** The latest of what the world's loop and its listeners read, as the component last rendered. */
@@ -242,57 +246,23 @@ function usePowerHum(darkSince: number | null, live: React.MutableRefObject<Live
   }, [darkSince, live]);
 }
 
-/**
- * Fires the one context action. Reading and working an open station stay
- * on this client; everything else the server decides. A note of the last
- * crew comes up here at once, and the server hears of the read for the run
- * report. A locked cabinet only says what is missing.
- */
-function tryInteract(loop: Loop): void {
-  const current = loop.live.current.view;
-  if (current.map === null || loop.live.current.locked || heldBack(loop.live.current)) {
-    return;
-  }
-  const action = contextAction(
-    current.map,
-    loop.sim.self,
-    current.you.id,
-    current.sourcesHere,
-    current.puzzle !== null,
-    current.noteHere,
-  );
-  if (action === null || action.kind === 'locked') {
-    return;
-  }
-  if (action.kind === 'open') {
-    loop.live.current.send({ kind: 'open-source', manualId: action.manualId });
-    return;
-  }
-  stationChirp();
-  workOn(loop, action, current);
+/** E's part of the world (press.ts) as the loop has it now. */
+function pressWorld(loop: Loop): PressWorld {
+  const live = loop.live.current;
+  return {
+    view: live.view,
+    sim: loop.sim,
+    shut: live.locked || heldBack(live),
+    send: live.send,
+    onRead: live.onRead,
+    onReadNote: live.onReadNote,
+    onOperate: live.onOperate,
+  };
 }
 
-/**
- * E at a source that is open, a note, or the armed station: read it, work
- * it, or ask the server.
- */
-function workOn(loop: Loop, action: ContextAction, current: PlayerView): void {
-  if (action.kind === 'read') {
-    loop.live.current.onRead(action.manualId);
-    return;
-  }
-  if (action.kind === 'note') {
-    loop.live.current.onReadNote(action.index);
-    loop.live.current.send({ kind: 'read-note', note: action.index });
-    return;
-  }
-  if (action.kind === 'operate') {
-    loop.live.current.onOperate();
-    if (current.puzzle !== null) {
-      return;
-    }
-  }
-  loop.live.current.send({ kind: 'interact' });
+/** E pressed on this screen (press.ts `pressE`). */
+function tryInteract(loop: Loop): void {
+  pressE(pressWorld(loop), performance.now());
 }
 
 /** Puts down what this player carries, where they stand; the server knows what that is. */
@@ -566,6 +536,9 @@ function step(loop: Loop, dt: number, now: number, map: WorldMap): void {
   }
   const sound = walk(sim, map, dt, loop.live.current.locked || sim.held);
   sim.selfAt = now;
+  if (!spectator) {
+    pressWhenInReach(pressWorld(loop), performance.now());
+  }
   if (sound === 'bump') {
     wallBump();
   } else if (sound !== null) {
@@ -875,6 +848,10 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
     refs.dropRef.current = () => dropItem(loop);
     // An audience connection watches only: no controls, no position stream.
     const unlisten = props.spectator ? null : listen(loop, setWheelOpen);
+    const unhear = props.listen?.({
+      message: (msg) => hearAnswer(sim.presses, msg, performance.now()),
+      closed: () => undefined,
+    });
     const posTimer = streamPositions(sim, props.spectator, (msg) => live.current.send(msg));
     const traced = traceFrames(loop);
     const tracedGraphics = traceGraphics(loop);
@@ -883,6 +860,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
     const ears = setInterval(() => hearTheLab(loop), HEAR_MS);
     return () => {
       stop();
+      unhear?.();
       clearInterval(ears);
       clearInterval(posTimer);
       insets.disconnect();

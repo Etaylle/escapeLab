@@ -368,7 +368,8 @@ function Screens(props: ScreenProps) {
           pingsRef={conn.pings}
           chatsRef={conn.chats}
           send={conn.send}
-          refusals={conn.refusals}
+          listen={conn.listen}
+          refusal={conn.refusal}
           finale={null}
         />
       );
@@ -383,7 +384,8 @@ function Screens(props: ScreenProps) {
           pingsRef={conn.pings}
           chatsRef={conn.chats}
           send={conn.send}
-          refusals={conn.refusals}
+          listen={conn.listen}
+          refusal={conn.refusal}
           finale={finale}
         />
       ) : (

@@ -5,6 +5,7 @@ import {
   deviceOf,
   useDeviceFeel,
   useFreshAlarm,
+  useFreshRefusal,
   type ChangeSounds,
   type DeviceRun,
 } from '../puzzles/Device.js';
@@ -37,6 +38,7 @@ function StationDevice({ puzzle, run, send, mission, onStepBack = null }: Puzzle
   const sounds = (SOUNDS[puzzle.kind] ?? null) as ChangeSounds | null;
   const feel = useDeviceFeel(puzzle, run, sounds);
   const notice = useFreshAlarm(run.alarm, feel.alarms);
+  const refused = useFreshRefusal(run.refusal);
   return (
     <Device
       {...deviceOf(puzzle)}
@@ -44,6 +46,7 @@ function StationDevice({ puzzle, run, send, mission, onStepBack = null }: Puzzle
       solved={feel.solved}
       press={feel.press}
       notice={notice}
+      refused={refused}
       onStepBack={onStepBack}
     >
       <ModulePanel

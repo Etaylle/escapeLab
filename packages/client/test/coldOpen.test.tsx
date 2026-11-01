@@ -267,7 +267,8 @@ describe('the start of a run with the power on', () => {
         pingsRef={{ current: [] }}
         chatsRef={{ current: [] }}
         send={() => undefined}
-        refusals={0}
+        listen={() => () => undefined}
+        refusal={null}
         finale={null}
       />,
     );

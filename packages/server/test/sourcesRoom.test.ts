@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
-import { walkTo, type Walker } from './walk.js';
+import { pressE, walkTo, type Walker } from './walk.js';
 
 /**
  * A corridor for two or three: the wiring box at its west end beside the
@@ -182,12 +182,12 @@ describe('Room with sources to find and open', () => {
   it('unlocks a cabinet with the key in hand, by the one key that does the obvious thing', () => {
     const { room, anna } = started();
     moveTo(room, anna, 8, 2);
-    room.act(anna.playerId, { kind: 'interact' });
+    pressE(room, anna);
     expect(lastView(anna.messages).map?.items[0]?.carriedBy).toBe(anna.playerId);
     moveTo(room, anna, 11, 2);
-    expect(() => room.act(anna.playerId, { kind: 'interact' })).toThrow(/markierten Platz/);
+    expect(() => pressE(room, anna)).toThrow(/markierten Platz/);
     moveTo(room, anna, 14, 2);
-    room.act(anna.playerId, { kind: 'interact' });
+    pressE(room, anna);
     const view = lastView(anna.messages);
     expect(view.sourcesHere.find((s) => s.id === 'schrank')?.opened).toBe(true);
     expect(view.map?.items[0]).toMatchObject({ delivered: true, x: 14.5, y: 2.5 });

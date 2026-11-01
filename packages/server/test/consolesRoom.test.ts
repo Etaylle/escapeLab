@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { moduleFor, parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
-import { walkTo, type Walker } from './walk.js';
+import { pressE, walkTo, type Walker } from './walk.js';
 
 /**
  * A corridor for two or three with a station of two consoles: the
@@ -108,8 +108,8 @@ describe('Room with a station of two consoles', () => {
   it('switches the station on from either console, and from nowhere else', () => {
     for (const at of ['a', 'b'] as const) {
       const { room, anna, ben, cleo } = inPlace();
-      expect(() => room.act(cleo.playerId, { kind: 'interact' })).toThrow(/Zu weit weg/);
-      room.act((at === 'a' ? anna : ben).playerId, { kind: 'interact' });
+      expect(() => pressE(room, cleo)).toThrow(/Zu weit weg/);
+      pressE(room, at === 'a' ? anna : ben);
       expect(lastView(cleo.messages).puzzle?.kind, `from console ${at}`).toBe('signal');
       room.dispose();
     }
@@ -117,7 +117,7 @@ describe('Room with a station of two consoles', () => {
 
   it('takes a press from the player at console b, none from a player at neither', () => {
     const { room, anna, ben, cleo } = inPlace();
-    room.act(ben.playerId, { kind: 'interact' });
+    pressE(room, ben);
     const atA = lastView(anna.messages).puzzle;
     const first = atA?.kind === 'signal' ? atA.sequence?.[0] : undefined;
     if (first === undefined) {
@@ -137,7 +137,7 @@ describe('Room with a station of two consoles', () => {
 
   it('turns away a press at console b while nobody stands at console a, without an alarm', () => {
     const { room, anna, ben, cleo } = inPlace();
-    room.act(ben.playerId, { kind: 'interact' });
+    pressE(room, ben);
     const atA = lastView(anna.messages).puzzle;
     const first = atA?.kind === 'signal' ? atA.sequence?.[0] : undefined;
     if (first === undefined) {
@@ -163,7 +163,7 @@ describe('Room with a station of two consoles', () => {
 
   it('credits both consoles once the chain is closed, and the reader with reading', () => {
     const { room, anna, ben, cleo } = inPlace();
-    room.act(ben.playerId, { kind: 'interact' });
+    pressE(room, ben);
     const [def] = mission.puzzles;
     for (let round = 0; lastView(cleo.messages).phase === 'playing'; round++) {
       const atA = lastView(anna.messages).puzzle;

@@ -154,6 +154,7 @@ function frameParts(parts: Partial<Frame>): Omit<Frame, 'grid'> {
     captions: [],
     markers: [],
     action: null,
+    refusal: null,
     minimap: null,
     hud: 1,
     text: worldText(100, 1),

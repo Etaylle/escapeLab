@@ -42,21 +42,23 @@ interface Session {
 
 /**
  * Serves every connection of `server`: each message the socket sends is carried out in the
- * room it joined, resumed or watches, a refusal answered with an `error` — and once the
- * socket closes, for whatever reason, the room lets go of it.
+ * room it joined, resumed or watches, a refusal answered with an `error` naming the kind of
+ * message it refuses — and once the socket closes, for whatever reason, the room lets go of it.
  */
 export function serveSockets(server: SocketServer, lab: Lab): void {
   server.on('connection', (socket) => {
     let session: Session | null = null;
 
     socket.on('message', (raw) => {
+      let of: ClientMessage['kind'] | null = null;
       try {
         const msg = parseClientMessage(String(raw));
+        of = msg.kind;
         session = handleMessage(lab, socket, session, msg);
       } catch (err) {
         const message =
           err instanceof GameError || err instanceof Error ? err.message : 'Unbekannter Fehler.';
-        send(socket, { kind: 'error', message });
+        send(socket, of === null ? { kind: 'error', message } : { kind: 'error', message, of });
       }
     });
 
@@ -142,6 +144,14 @@ function handleMessage(
       s.room.relaySignal(s.playerId, msg.to, msg.signal);
       return s;
     }
+    case 'interact': {
+      // The press is taken where the player stood as they pressed; the views it changed go
+      // out first, then the word that E was taken.
+      const s = requireSession(session);
+      s.room.interact(s.playerId, { x: msg.x, y: msg.y }, msg.t);
+      send(socket, { kind: 'interacted' });
+      return s;
+    }
     case 'pos': {
       const s = requireSession(session);
       const { x, y, facing, moving } = msg;
@@ -161,7 +171,6 @@ function handleMessage(
     case 'request-hint':
     case 'open-source':
     case 'read-note':
-    case 'interact':
     case 'drop-item':
     case 'rematch':
     case 'back-to-lobby': {

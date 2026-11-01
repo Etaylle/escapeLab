@@ -3,7 +3,7 @@ import { applyAction, initialState, parseMission } from '@escapelab/core';
 import type { Action, GameState, MapDef, Mission, ServerMessage } from '@escapelab/core';
 import { DronePatrol } from '../src/drones.js';
 import { Room } from '../src/room.js';
-import { walkTo, type Walker } from './walk.js';
+import { pressE, walkTo, type Walker } from './walk.js';
 
 /**
  * Corridor with three stations along its top row; its emergencies run in
@@ -107,7 +107,7 @@ describe('Room relay emergencies', () => {
     for (const x of [2, 4]) {
       moveTo(room, ben, x, 1);
       moveTo(room, anna, x, 2);
-      room.act(ben.playerId, { kind: 'interact' });
+      pressE(room, ben);
       room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
       room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
     }

@@ -267,6 +267,12 @@ class TestClient {
     this.send({ kind: 'pos', run, x, y, facing: 0, moving, t: Date.now() });
   }
 
+  /** E where this client stands, its spot sent with the press as the page sends it. */
+  pressE(): void {
+    const at = this.self ?? fail(`${this.label}: pressed E before it stood anywhere`);
+    this.send({ kind: 'interact', x: at.x, y: at.y, t: Date.now() });
+  }
+
   close(): void {
     this.socket.close();
   }
@@ -750,14 +756,14 @@ async function readUp(reader: TestClient, helper: TestClient): Promise<void> {
 
 /** E with an item at the client's feet picks it up. */
 async function pickUp(client: TestClient, itemId: string): Promise<void> {
-  client.send({ kind: 'interact' });
+  client.pressE();
   await client.expectView(`picked up ${itemId}`, (v) =>
     v.map?.items.find((i) => i.id === itemId)?.carriedBy === client.playerId);
 }
 
 /** E with the item on its drop-off puts it in. */
 async function install(client: TestClient, itemId: string): Promise<void> {
-  client.send({ kind: 'interact' });
+  client.pressE();
   await client.expectView(`put ${itemId} in`, (v) =>
     v.map?.items.find((i) => i.id === itemId)?.delivered === true);
 }
@@ -1533,7 +1539,7 @@ async function switchOn(client: TestClient, index: number): Promise<void> {
     ),
     `${client.label} stands within interact range of station ${index + 1}`,
   );
-  client.send({ kind: 'interact' });
+  client.pressE();
   await client.until('puzzle active', (v) => v.puzzle !== null);
 }
 

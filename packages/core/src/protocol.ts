@@ -122,7 +122,16 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
     x: z.number().finite().min(-10).max(500),
     y: z.number().finite().min(-10).max(500),
   }),
-  z.object({ kind: z.literal('interact') }),
+  /**
+   * E where the player stands as they press it — with the frame it was walked in, as a `pos`
+   * carries it: the server judges the press there (within reason of where it has them)
+   */
+  z.object({
+    kind: z.literal('interact'),
+    x: z.number().finite().min(-10).max(500),
+    y: z.number().finite().min(-10).max(500),
+    t: z.number().finite(),
+  }),
   z.object({ kind: z.literal('drop-item') }),
   z.object({
     kind: z.literal('chat'),
@@ -243,6 +252,8 @@ export type ServerMessage =
   | { kind: 'spectator-view'; view: SpectatorView; code: string; at: number }
   /** the answer to a `clock` ask: the page's `sent` handed back, and the server's time (`at`) */
   | { kind: 'clock'; sent: number; at: number }
+  /** E was taken: what it did is in the views that came before this */
+  | { kind: 'interacted' }
   | { kind: 'rooms'; rooms: RoomSummary[] }
   | {
       kind: 'positions';
@@ -255,7 +266,8 @@ export type ServerMessage =
   | { kind: 'chat'; playerId: string; phrase: ChatPhrase }
   /** a voice signal from another member of the room, as they sent it */
   | { kind: 'rtc'; from: string; signal: RtcSignal }
-  | { kind: 'error'; message: string };
+  /** a refusal, and the kind of message it refuses (`of`) — left out where none could be read */
+  | { kind: 'error'; message: string; of?: ClientMessage['kind'] };
 
 export function parseClientMessage(raw: string): ClientMessage {
   let data: unknown;

@@ -28,6 +28,7 @@ import { deviceCoach, firstSight, SHOWN_MARKS, type CoachMark } from '../puzzles
 import { useSolvedHold, type DeviceRun } from '../puzzles/Device.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { useReducedMotion, useSettings } from '../settings.js';
+import type { Connection, Refusal } from '../ws.js';
 import {
   ALARM_NOTICE_MS,
   alarmLine,
@@ -80,11 +81,13 @@ interface Props {
   pingsRef: React.MutableRefObject<MapPing[]>;
   chatsRef: React.MutableRefObject<ChatLine[]>;
   send: (msg: ClientMessage) => void;
+  /** hears what the server says as it comes (ws.ts): the world hears E's answers by it */
+  listen: Connection['listen'];
   /**
-   * what the server has refused of this player's inputs so far (ws.ts): the
-   * open device or relay console shakes the press a new refusal answers
+   * the server's latest refusal of this player's messages (ws.ts): the open device or relay
+   * console shakes the press it answers and says it in its head
    */
-  refusals: number;
+  refusal: Refusal | null;
   /** the run's end, while the world still plays it on this screen (finale.ts); none before */
   finale: Finale | null;
 }
@@ -147,13 +150,13 @@ function RelayAlert({
   relay,
   pausedAt,
   send,
-  refusals,
+  refusal,
 }: {
   sabotage: Sabotage;
   relay: NonNullable<Sabotage['relay']>;
   pausedAt: number | null;
   send: (msg: ClientMessage) => void;
-  refusals: number;
+  refusal: Refusal | null;
 }) {
   const now = useServerNow(200);
   const frame = useRef<HTMLDivElement>(null);
@@ -183,7 +186,7 @@ function RelayAlert({
           relay={relay}
           pausedAt={pausedAt}
           send={(input) => send({ kind: 'puzzle-input', input })}
-          refusals={refusals}
+          refusal={refusal}
         />
         <details className="relay-manual">
           <summary>ABLAUF NACHLESEN</summary>
@@ -1006,11 +1009,11 @@ function useNotepad(roomCode: string | null, playerId: string, open: OpenNow) {
  * notice for the device's head — the stations solved, what the server refused, and the crew,
  * connected, in order, for the levers' names.
  */
-export function deviceRunOf(view: PlayerView, refusals: number): DeviceRun {
+export function deviceRunOf(view: PlayerView, refusal: Refusal | null): DeviceRun {
   return {
     alarms: view.penaltySeq,
     solved: view.currentPuzzleIndex,
-    refusals,
+    refusal,
     crew: {
       you: view.you.id,
       mates: view.players
@@ -1025,7 +1028,7 @@ export function deviceRunOf(view: PlayerView, refusals: number): DeviceRun {
  * The station's panel, a source's pages or a note of the last shift over the
  * world, as this player opened them — pages and note on their way down too,
  * once put down; the panel hears of the run's alarms and solves, of the crew
- * and of what the server refused (`refusals`).
+ * and of what the server refused (`refusal`).
  */
 function OverTheWorld({
   view,
@@ -1034,7 +1037,7 @@ function OverTheWorld({
   reading,
   note,
   send,
-  refusals,
+  refusal,
   onClose,
 }: {
   view: PlayerView;
@@ -1043,10 +1046,10 @@ function OverTheWorld({
   reading: Shown<ManualHere> | null;
   note: Shown<NoteHere> | null;
   send: (msg: ClientMessage) => void;
-  refusals: number;
+  refusal: Refusal | null;
   onClose: () => void;
 }) {
-  const run = deviceRunOf(view, refusals);
+  const run = deviceRunOf(view, refusal);
   return (
     <>
       {station !== null && (
@@ -1149,6 +1152,7 @@ function RunWorld({
       onReadNote={(index) => open.set({ noteIndex: index })}
       onOperate={() => open.set({ operating: true })}
       send={game.send}
+      listen={game.listen}
     />
   );
 }
@@ -1168,7 +1172,7 @@ function hudOut(intro: Intro): boolean {
  * (PutDown.tsx).
  */
 export function GameScreen(props: Props) {
-  const { view, roomCode, positionsRef, chatsRef, send, refusals, finale } = props;
+  const { view, roomCode, positionsRef, chatsRef, send, refusal, finale } = props;
   const { alarmVisible } = useFeedback(view);
   const intro = useIntro(view, send);
   const cue = intro.cue;
@@ -1204,7 +1208,7 @@ export function GameScreen(props: Props) {
           relay={relay}
           pausedAt={view.pausedAt}
           send={send}
-          refusals={refusals}
+          refusal={refusal}
         />
       )}
       <div className="stage">
@@ -1245,7 +1249,7 @@ export function GameScreen(props: Props) {
             reading={sheets.reading}
             note={sheets.note}
             send={send}
-            refusals={refusals}
+            refusal={refusal}
             onClose={closeModal}
           />
         </NotepadContext>
