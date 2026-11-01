@@ -275,7 +275,7 @@ describe('a controller over a dialog', () => {
     off();
   });
 
-  it('takes the quick chat’s wheel for a menu over the world: B shuts it, the stick walks nobody', () => {
+  it('takes the quick chat’s wheel for a menu: B shuts it, the stick walks nobody', () => {
     vi.stubGlobal('HTMLElement', class {});
     vi.stubGlobal('HTMLInputElement', class {});
     page.wheel = {

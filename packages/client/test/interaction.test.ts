@@ -47,9 +47,9 @@ describe('interaction.css — how panels come up and controls answer', () => {
     expect(down).toMatch(/from \{\s*opacity: 1;\s*transform: none;/);
     expect(down).toMatch(/to \{\s*opacity: 0;\s*transform: scale\(0\.98\);/);
     const reduced = CSS.slice(CSS.indexOf(":where([data-motion='reduce'])"));
-    expect(reduced).toMatch(
-      /\.station-modal\.puzzle-modal--leaving,\s*\.station-modal\.puzzle-modal--leaving \.panel \{\s*animation: none;/,
-    );
+    const leaving = '\\.station-modal\\.puzzle-modal--leaving';
+    const still = new RegExp(`${leaving},\\s*${leaving} \\.panel \\{\\s*animation: none;`);
+    expect(reduced).toMatch(still);
   });
 
   it('presses a plain button a pixel down, and leaves a device’s controls their own press', () => {

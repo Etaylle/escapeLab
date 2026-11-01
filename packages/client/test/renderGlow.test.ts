@@ -98,7 +98,7 @@ describe('glow — the coloured light over the darkness', () => {
     expect(callsOf(log, 'drawImage').map(([canvas]) => canvas)).toContain(pools?.baked?.canvas);
   });
 
-  it('leaves the steady faint lights to the light pass in the dark, the pulsing ones its own', () => {
+  it('leaves the steady lights to the light pass in the dark, the pulsing ones its own', () => {
     // In the dark the light pass lays the steady glows with the rest of the light that holds
     // still (render/light.ts): one copy added onto the picture instead of two.
     const frame = frameWith({ map: lab(), time: 1.8 });

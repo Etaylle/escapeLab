@@ -7187,7 +7187,7 @@ async function captureGamepadPrompts(player) {
   await walkNear(page, seen, from);
 }
 
-/** What the page's focus is on in the quick chat's wheel: its phrase's place, from 1; 0 for none. */
+/** Where the page's focus is in the quick chat's wheel: its phrase's place from 1; 0 for none. */
 function wheelFocus(page) {
   return page.evaluate(() => {
     const items = [...document.querySelectorAll('.chat-wheel [role="menuitem"]')];
@@ -7220,9 +7220,11 @@ async function captureQuickChat(player) {
   const said = seen.sent.slice(sentBefore).find((msg) => msg.kind === 'chat');
   const at = whereIs(seen);
   await onPad(page, 'tap', 'dleft');
-  const pinged = await until(() => seen.sent.slice(sentBefore).some((m) => m.kind === 'ping'), 3000);
-  const ping = seen.sent.slice(sentBefore).find((msg) => msg.kind === 'ping');
-  const away = ping === undefined || at === null ? Infinity : Math.hypot(ping.x - at.x, ping.y - at.y);
+  const sentPing = () => seen.sent.slice(sentBefore).find((msg) => msg.kind === 'ping');
+  const pinged = await until(() => sentPing() !== undefined, 3000);
+  const ping = sentPing();
+  const away =
+    ping === undefined || at === null ? Infinity : Math.hypot(ping.x - at.x, ping.y - at.y);
   console.log(
     `pad-quickchat.png  ▶ ${open ? 'opened the wheel' : '!! opened nothing'}, phrase ${first} in ` +
       `the focus, the button "${glyph}"; ▼ to ${second}, A said ${said?.phrase ?? '!! nothing'}` +
@@ -7230,7 +7232,8 @@ async function captureQuickChat(player) {
       (pinged ? `(${ping.x}, ${ping.y}), ${away.toFixed(2)} tiles away` : '!! nothing'),
   );
   if (!open || first !== 1 || glyph !== '[▶]' || second !== 2 || said === undefined || !shut) {
-    fail(`pad-quickchat.png: open ${open}, focus ${first} then ${second}, "${glyph}", said ${said}`);
+    const what = `open ${open}, focus ${first} then ${second}, "${glyph}", said ${said}`;
+    fail(`pad-quickchat.png: ${what}`);
   }
   if (!pinged || !(away <= 2.05)) {
     fail(`pad-quickchat.png: ◀ pinged ${JSON.stringify(ping)} from ${JSON.stringify(at)}`);

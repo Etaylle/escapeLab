@@ -32,11 +32,13 @@ describe('census — what the light works out anew, frame by frame', () => {
     census.bakes = 4;
     trace.record(census);
     trace.reset();
-    expect(trace.work).toEqual({ frames: 0, sights: { p50: 0, p95: 0, max: 0, total: 0 }, bakes: 0 });
+    const none = { p50: 0, p95: 0, max: 0, total: 0 };
+    expect(trace.work).toEqual({ frames: 0, sights: none, bakes: 0 });
     census.sights += 2;
     census.bakes += 1;
     trace.record(census);
-    expect(trace.work).toEqual({ frames: 1, sights: { p50: 2, p95: 2, max: 2, total: 2 }, bakes: 1 });
+    const two = { p50: 2, p95: 2, max: 2, total: 2 };
+    expect(trace.work).toEqual({ frames: 1, sights: two, bakes: 1 });
   });
 
   it('keeps the frame trace’s length of frames a frame, the totals over all of them', () => {

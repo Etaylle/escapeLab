@@ -366,7 +366,7 @@ function layLit(ctx: CanvasRenderingContext2D, frame: Frame, name: string, tinte
   layBake(ctx, frame, part.bake, part.draw);
 }
 
-/** The light `stops` of `lit` out to `r` tiles where it can see, as the bake `name` of its sight. */
+/** The light `stops` of `lit` out to `r` tiles where it can see: the bake `name` of its sight. */
 function litPart(frame: Frame, name: string, [lit, stops, r]: Tinted): BakePart {
   const { x, y } = lit.lamp;
   return {

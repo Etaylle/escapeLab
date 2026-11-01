@@ -103,7 +103,7 @@ export function scrollToShow(
   return right + pad > scroll + width ? right + pad - width : scroll;
 }
 
-/** Scrolls the strip of tabs `strip` so that its tab pressed shows (history.css `.history-tabs`). */
+/** Scrolls the strip of tabs `strip` to show its tab pressed (history.css `.history-tabs`). */
 function showPressed(strip: HTMLElement | null): void {
   const tab = strip?.querySelector<HTMLElement>('[aria-pressed="true"]');
   if (strip == null || tab == null) {
@@ -113,7 +113,8 @@ function showPressed(strip: HTMLElement | null): void {
   const at = tab.getBoundingClientRect();
   const left = at.left - box.left + strip.scrollLeft;
   const pad = parseFloat(getComputedStyle(strip).paddingLeft) || 0;
-  strip.scrollLeft = scrollToShow(strip.scrollLeft, strip.clientWidth, [left, left + at.width], pad);
+  const span = [left, left + at.width] as const;
+  strip.scrollLeft = scrollToShow(strip.scrollLeft, strip.clientWidth, span, pad);
 }
 
 /** The missions to pick from: the catalog's in its order, then any it no longer has, by id. */

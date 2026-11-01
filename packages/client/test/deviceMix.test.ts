@@ -39,7 +39,8 @@ describe('the devices’ sounds in the mix', () => {
   it('ends a recording’s chain at the effects’ bus, the mix taking it on from there', async () => {
     const { sounds, ctx, node, engine } = await mixed();
     sounds.keyClick();
-    const [click] = ctx.all<FakeBufferSource>('buffer').filter((s) => s.buffer?.tag === 'key-click');
+    const buffers = ctx.all<FakeBufferSource>('buffer');
+    const [click] = buffers.filter((s) => s.buffer?.tag === 'key-click');
     expect(click).toBeDefined();
     const chain = chainFrom(click as FakeNode);
     // The click, its outlet, the bus — which feeds the master and its send into the reverb.
@@ -57,7 +58,8 @@ describe('the devices’ sounds in the mix', () => {
     const [tone] = ctx.all<FakeOscillator>('oscillator');
     expect(chainFrom(tone as FakeNode).at(-1)).toBe(node(engine.sfx));
     const hum = sounds.startHum();
-    const [loop] = ctx.all<FakeBufferSource>('buffer').filter((s) => s.buffer?.tag === 'mains-hum');
+    const buffers = ctx.all<FakeBufferSource>('buffer');
+    const [loop] = buffers.filter((s) => s.buffer?.tag === 'mains-hum');
     expect(chainFrom(loop as FakeNode).at(-1)).toBe(node(engine.sfx));
     hum.stop();
   });

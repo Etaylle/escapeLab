@@ -379,7 +379,7 @@ describe('the device hum', () => {
     expect(outletOf().gain.events).toContainEqual(['linear', HUM_LEVEL, ctx.currentTime + 0.15]);
   });
 
-  it('plays into the effects’ bus, where the sound switch and the volume reach it as it runs', () => {
+  it('plays into the effects’ bus, where the switch and the volume reach it as it runs', () => {
     vi.useFakeTimers();
     startHum();
     expect(outletOf().connections).toEqual([ctx.sfx]);
@@ -405,7 +405,7 @@ describe('the device hum', () => {
     expect(loops()).toHaveLength(1);
   });
 
-  it('makes nothing without Web Audio, or once the context is closed; stopping harms nothing', () => {
+  it('makes nothing without Web Audio, or with the context closed; stopping harms nothing', () => {
     ctx.state = 'closed';
     expect(() => startHum().stop()).not.toThrow();
     expect(ctx.nodes).toEqual([]);
