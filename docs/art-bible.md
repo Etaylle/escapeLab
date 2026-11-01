@@ -222,16 +222,16 @@ A panel over the world — a station's device, a source's pages, a note — grow
 size as it fades in, over 150 ms; a sheet put down slides out as before, and a station's device
 goes as it came, shrinking back to 0.98 as it fades out over the same 150 ms, the dim behind it
 lifting, the camera leaning back out behind it — the game screen keeps it up that long
-(screens/Game.tsx, PutDown.tsx `useLeaving`), inert, its keys and presses reaching nothing. A plain button gives a
-pixel as it is pressed and darkens a little; a device's keys, levers and wires keep their own
-press. Keyboard focus shows as a 2 px teal ring, never for a click; hover affordances belong to
-a mouse. The type keeps its hierarchy: titles in the system sans, bold (the page's 27 px, the
-station's line 20 px); labels in the mono, upper case and spaced 2 px (13 px heads, 12 px panel
-labels, 10 px marks); figures in the mono with tabular digits (the clock 30 px, 36 px at the
-end); running text in the system sans at 15 to 16 px; the world's own text in the mono, bold,
-with a dark halo, held within 10 to 14 CSS px whatever the zoom. Under reduced motion every move
-is a cut or a cross-fade: a panel only fades in, a device stepped back from goes at once, a press
-only darkens.
+(screens/Game.tsx, PutDown.tsx `useLeaving`), inert, its keys and presses reaching nothing. A
+plain button gives a pixel as it is pressed and darkens a little; a device's keys, levers and
+wires keep their own press. Keyboard focus shows as a 2 px teal ring, never for a click; hover
+affordances belong to a mouse. The type keeps its hierarchy: titles in the system sans, bold
+(the page's 27 px, the station's line 20 px); labels in the mono, upper case and spaced 2 px
+(13 px heads, 12 px panel labels, 10 px marks); figures in the mono with tabular digits (the
+clock 30 px, 36 px at the end); running text in the system sans at 15 to 16 px; the world's own
+text in the mono, bold, with a dark halo, held within 10 to 14 CSS px whatever the zoom. Under
+reduced motion every move is a cut or a cross-fade: a panel only fades in, a device stepped back
+from goes at once, a press only darkens.
 
 ## Cost
 
@@ -259,6 +259,50 @@ fourth, and misses what pacing reuses: it saw 0.1 ms where the swaying lamp's si
 lab lit red take half its frame — and CI's runners differ by a third in speed: on the slower
 ones it ran at 50 ms p95 before this package too.
 
+**The escape's headroom (L-polish).** Main against the package on that bench, eight scenes six
+rounds each, every round starting at another build, medians — a frame's work on the main thread
+slowed four times, mean and p95, and the time from one animation frame to the next, p95, ms:
+
+| Scene | Work before | Work after | Frames before → after |
+| --- | --- | --- | --- |
+| Escape by the hatch | 18.45, 20.40 | 15.05, 16.55 | 33.4 → 16.8 |
+| Escape, a drone flying in the Ost-Flur | 18.95, 20.90 | 16.09, 18.25 | 33.4 → 16.8 |
+| The escape's first second | 18.39, 20.10 | 15.21, 17.25 | 33.4 → 16.8 |
+| The dark Flur | 10.50, 11.95 | 9.66, 10.95 | 16.8 → 16.7 |
+| The lab lit before the blackout | 9.48, 10.65 | 8.38, 9.60 | 16.7 → 16.7 |
+| The Labor lit | 12.78, 14.40 | 11.24, 14.00 | 16.8 → 16.8 |
+| The Labor's rooms coming on | 13.04, 14.80 | 11.00, 12.65 | 16.7 → 16.8 |
+| The audience in the escape | 6.91, 8.00 | 6.92, 8.05 | 16.7 → 16.8 |
+
+Main's three escape scenes reached 33.4 at p95 in all six rounds; the package's reached it once
+each, the drone and the first second in the fifth round, which ran slower for both builds. The
+walkthrough itself cannot show the step down: under `SHOTS_SOFTWARE_GL=1` and
+`SHOTS_CPU_SLOWDOWN=4` its three pages share the cores and each one's main thread stays busy
+throughout, so the escape's window read 33.3 ms p50 and 33.4 p95 in three Blackout runs of each
+build taken in turn. The package's drew more frames in it — 93, 93 and 82 against main's 87, 72
+and 71, and 130, 126 and 127 pacing after the game screenshots against 117, 117 and 114.
+
+What it took were three copies the software canvas made dearer than they had to be. The map
+baked whole was copied with a source rectangle, which sends a copy down the canvas's filtered
+path: 1.6 to 1.8 ms at 1440 × 600 against 0.74 for the same pixels copied whole (tileCache.ts
+`drawTiles`), in every scene. The darkness was filled with `copy` and every lit run cleared and
+filled again; now each pixel is filled once, the dark round the lit tiles in one even-odd path
+and each lit share over its own tiles (render/darkness.ts `fillDarkness`). And the light that
+holds still — the lit rooms' ceiling lights, the steady glows of screens and racks, the open
+hatch — was laid from three bakes each added onto the picture, 2 ms a copy against 0.75 for a
+plain one; their bakes stay as they were and are added up at whole pixels into one, which alone
+is laid on, and added up again only as one of them is baked anew (render/light.ts
+`laySteadyLight`, render/bakes.ts `layAdded`). Stills of the eight scenes on the bench's own
+clock, the canvas flushed after each pass, came out identical but in the escape, whose red tint
+now lies over the steady glows too: there at most 11 % of the pixels move by more than 2 of 255,
+0.34 on average away from edges, the most — 20 — at the hearts of glows where a channel
+saturates. Unflushed, two stills of the Labor differ in 19 pixels of the generators' green LEDs
+by up to 8: where the canvas flushes what it was asked to draw moves those, the base's as well.
+Tried and left: drawing only the lab's things near the camera saved nothing measurable. Every
+window of the walkthrough logs what the light worked out anew meanwhile — a line `light`, the
+sights a frame and the bakes (render/census.ts) — so that a cache that stops holding shows in
+CI's log before it shows in the frames.
+
 ## Open
 
 What the graphics packages left for later, one line each:
@@ -269,5 +313,5 @@ What the graphics packages left for later, one line each:
   the Metal flags of the paced bench (Cost).
 - **The escape on CI's slower runners** (L-graphics, L-graphics-fix): a client build of 3.3 s and
   more marked the runners on which the escape's window ran at 50 ms p95 whatever the commit. The
-  escape's frame is a fifth cheaper since L-polish (Cost); a CI run on such a runner has yet to
-  show the window under its 40 ms.
+  escape's frame is almost a fifth cheaper since L-polish (Cost); a CI run on such a runner has
+  yet to show the window under its 40 ms.

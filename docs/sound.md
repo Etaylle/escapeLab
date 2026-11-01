@@ -777,7 +777,7 @@ What the sound packages left for later, one line each, the newest first:
   The agents may not spend the account's credits; the command is under „Awaiting a render"
   (some 130 credits). Until it runs, stand-ins play or nothing does, and
   `test/sampleManifest.test.ts` lists them in `AWAITING_RENDER`, to be emptied once they are made.
-- **Helmut's announcement and the opening's cue** (the opening, below): Piper (Thorsten) reads the
+- **Helmut's announcement and the opening's cue** (the opening, above): Piper (Thorsten) reads the
   loudspeakers' five lines and no cue is composed until the two commands there are run.
 - Done in L-polish: the devices' sounds play into the effects' bus, its reverb and its brickwall
   (The mix); nothing of the lab goes past the buses any more.
