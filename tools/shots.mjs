@@ -6937,21 +6937,27 @@ async function playToTheEnd(host, guest, watcher, pinned) {
 /**
  * Where the mission's seed is pinned — the Systemcheck's wiring box,
  * Blackout's every station — the walkthrough plays the run out to the card;
- * elsewhere the captures of the end are skipped, saying why.
+ * elsewhere the captures of the end are skipped, saying why. The hatch's dust
+ * is watched for meanwhile, and the watch stopped however the play ends: one
+ * left polling after a step threw would hold the process open, and a CI job
+ * with it, until the job's time limit.
  */
 async function playPinnedOut(anna, ben, watcher) {
   const stopHatchDust = watchHatchDust(watcher, anna.seen);
-  const mission = MISSION.toLowerCase();
-  const pinned = mission === 'systemcheck' ? PINNED_WIRING.get(SEED) : undefined;
-  if (pinned !== undefined) {
-    await playToTheEnd(anna, ben, watcher, pinned);
-  } else if (mission === 'blackout' && SEED === BLACKOUT_PLAN.seed) {
-    await playBlackoutToTheEnd(anna, ben, watcher);
-    skip('next-mission.png', 'Blackout leads on to no other mission');
-  } else if (mission === 'blackout') {
-    skip('escape.png', `seed ${SEED} is not the one tools/fixtures/blackout-plan.json pins`);
+  try {
+    const mission = MISSION.toLowerCase();
+    const pinned = mission === 'systemcheck' ? PINNED_WIRING.get(SEED) : undefined;
+    if (pinned !== undefined) {
+      await playToTheEnd(anna, ben, watcher, pinned);
+    } else if (mission === 'blackout' && SEED === BLACKOUT_PLAN.seed) {
+      await playBlackoutToTheEnd(anna, ben, watcher);
+      skip('next-mission.png', 'Blackout leads on to no other mission');
+    } else if (mission === 'blackout') {
+      skip('escape.png', `seed ${SEED} is not the one tools/fixtures/blackout-plan.json pins`);
+    }
+  } finally {
+    await stopHatchDust();
   }
-  await stopHatchDust();
 }
 
 /** Whether `promise` settles in time: true when it resolves, false when it rejects. */
@@ -8210,7 +8216,9 @@ async function captureRackLeds({ name, page }) {
 /**
  * hatch-dust.png, watched for on the audience's page `watcher` from now on: as the hatch grinds
  * open there, dust falling off its rim — the probe counting the grains. Returns what stops the
- * watch once the run is played out, resolved when the watch is over; it fails nothing.
+ * watch once the run is played out (playPinnedOut, however the play ends), resolved when the
+ * watch is over; it fails nothing, and never rejects: a shot that throws ends it with a skip
+ * saying why, so that stopping it cannot stand in for the error a step threw.
  */
 function watchHatchDust(watcher, seen) {
   let stopped = false;
@@ -8229,7 +8237,9 @@ function watchHatchDust(watcher, seen) {
       await sleep(40);
     }
     skip('hatch-dust.png', 'the audience never saw the hatch grinding open');
-  })();
+  })().catch((err) => {
+    skip('hatch-dust.png', `the watch broke off: ${String(err?.message ?? err).split('\n')[0]}`);
+  });
   return () => {
     stopped = true;
     return watch;
