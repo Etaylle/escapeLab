@@ -251,7 +251,6 @@ describe('the volumes on the audio’s buses', () => {
     expect(aimedAt(buses.music)).toBe(0);
     // The sound switch keeps the master gain: no volume touches it.
     expect(buses.master?.gain.events).toEqual([]);
-    expect(audio.effectsVolume()).toBe(0.2);
   });
 
   it('builds an engine made later at the volumes already set', async () => {

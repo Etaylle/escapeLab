@@ -6,7 +6,8 @@
  * sounds whose pitch follows the game (puzzles/sounds.ts) are the only sounds still made here.
  * All levels are deliberately quiet because this plays under the players' voice chat. Every
  * sound goes into one of the mix's buses (mix.ts): the effects — this module's sounds, the
- * partners' steps, the drones and the doors (spatial.ts) — the rooms' beds (ambience.ts), the
+ * devices' (puzzles/sounds.ts), the partners' steps, the drones and the doors (spatial.ts) —
+ * the rooms' beds (ambience.ts), the
  * music (music.ts), mission control's voice and its key (radioVoice.ts) and the plant's
  * loudspeakers (pa.ts); the buses meet in a single master gain, so the whole lab can be muted
  * in one place, and a brickwall behind it. The klaxon and the siren pull the music down while
@@ -266,14 +267,6 @@ export function setVolumes(next: BusVolumes): void {
   } catch {
     // Deliberately silent: a volume must never break the game.
   }
-}
-
-/**
- * The effects' volume, a share of full: for the devices' sounds (puzzles/sounds.ts), which
- * play past the engine's buses.
- */
-export function effectsVolume(): number {
-  return volumes.effects;
 }
 
 /** How an effect plays: from when (audio time), how fast, and until when, if it is cut short. */

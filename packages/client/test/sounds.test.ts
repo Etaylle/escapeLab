@@ -3,17 +3,23 @@ import { FakeOfflineContext } from './fakeGraph.js';
 import { loadedSamples } from './fakeSamples.js';
 
 /**
- * What the device sounds get from world/audio.ts: the shared context, the sound switch and
- * the effects' volume the settings set. Their recordings come through the real loader, from a
- * fetch the tests serve (fakeSamples.ts).
+ * What the device sounds get from world/audio.ts: the engine — the shared context and the
+ * effects' bus of its mix, where the sound switch and the Effekte volume reach them — while the
+ * context runs (`playingEngine`), or held back too (`audioEngine`). Their recordings come
+ * through the real loader, from a fetch the tests serve (fakeSamples.ts).
  */
-const audio = vi.hoisted(() => ({ ctx: null as unknown, muted: false, volume: 1 }));
+const audio = vi.hoisted(() => ({ ctx: null as unknown }));
 
-vi.mock('../src/world/audio.js', () => ({
-  sharedAudio: () => audio.ctx,
-  isMuted: () => audio.muted,
-  effectsVolume: () => audio.volume,
-}));
+vi.mock('../src/world/audio.js', () => {
+  const engine = (playing: boolean) => {
+    const ctx = audio.ctx as { state: string; sfx: unknown } | null;
+    if (ctx === null || ctx.state === 'closed' || (playing && ctx.state !== 'running')) {
+      return null;
+    }
+    return { ctx, sfx: ctx.sfx };
+  };
+  return { playingEngine: () => engine(true), audioEngine: () => engine(false) };
+});
 
 const {
   alarmKlaxon,
@@ -153,6 +159,8 @@ class FakeContext {
   readonly currentTime = (FakeContext.clock += 100);
   readonly sampleRate = 8000;
   readonly destination = new FakeNode();
+  /** the effects' bus of the mix (world/mix.ts) */
+  readonly sfx = new FakeNode();
   readonly nodes: FakeNode[] = [];
   private made<N extends FakeNode>(node: N): N {
     this.nodes.push(node);
@@ -179,9 +187,9 @@ class FakeContext {
       node instanceof FakeBufferSource ? [node.buffer?.tag ?? '?'] : [],
     );
   }
-  /** The sound's outlet: the one node it wired to the destination. */
+  /** The sound's outlet: the one node it wired to the effects' bus. */
   get outlets(): FakeNode[] {
-    return this.nodes.filter((node) => node.connections.includes(this.destination));
+    return this.nodes.filter((node) => node.connections.includes(this.sfx));
   }
 }
 
@@ -195,8 +203,6 @@ beforeAll(async () => {
 beforeEach(() => {
   ctx = new FakeContext();
   audio.ctx = ctx;
-  audio.muted = false;
-  audio.volume = 1;
 });
 
 afterEach(() => {
@@ -237,16 +243,6 @@ const MADE: [string, () => void][] = [
   ['simonTone', () => simonTone('gruen', 0.4)],
 ];
 
-/** The effects' volume `sound` plays at, read off its outlet at a volume of `volume`. */
-function levelAt(sound: () => void, volume: number): number {
-  ctx = new FakeContext();
-  audio.ctx = ctx;
-  audio.volume = volume;
-  sound();
-  const [outlet] = ctx.outlets;
-  return outlet instanceof FakeGain ? outlet.gain.value : NaN;
-}
-
 describe.each([...RECORDED.map(([name, sound]) => [name, sound] as const), ...MADE])(
   '%s',
   (_, sound) => {
@@ -263,23 +259,18 @@ describe.each([...RECORDED.map(([name, sound]) => [name, sound] as const), ...MA
       const [outlet, ...more] = ctx.outlets;
       expect(more).toEqual([]);
       for (const source of ctx.sources) {
-        expect(outlet?.connections).toEqual([ctx.destination]);
+        expect(outlet?.connections).toEqual([ctx.sfx]);
         source.onended?.();
       }
       expect(outlet?.connections).toEqual([]);
     });
 
-    it('makes nothing with the sound off', () => {
-      audio.muted = true;
+    it('plays at its own level into the effects’ bus, never past it to the output', () => {
+      // The bus carries the Effekte volume, the master behind it the sound switch (mix.ts).
       sound();
-      expect(ctx.nodes).toEqual([]);
-    });
-
-    it('plays at the effects’ volume the settings set', () => {
-      const full = levelAt(sound, 1);
-      expect(full).toBeGreaterThan(0);
-      expect(levelAt(sound, 0.25)).toBeCloseTo(full * 0.25, 12);
-      expect(levelAt(sound, 0)).toBe(0);
+      const [outlet] = ctx.outlets;
+      expect(outlet instanceof FakeGain ? outlet.gain.value : 0).toBeGreaterThan(0);
+      expect(ctx.nodes.some((node) => node.connections.includes(ctx.destination))).toBe(false);
     });
 
     it('makes nothing while the browser still holds the context back', () => {
@@ -372,17 +363,14 @@ describe('the device hum', () => {
   const loops = (): FakeBufferSource[] =>
     ctx.nodes.filter((node): node is FakeBufferSource => node instanceof FakeBufferSource);
 
-  /** The hum's outlet, the one gain it wires to the destination. */
+  /** The hum's outlet, the one gain it wires to the effects' bus. */
   function outletOf(): FakeGain {
     const [outlet] = ctx.outlets;
     if (!(outlet instanceof FakeGain)) {
-      throw new Error('the hum wired no gain to the destination');
+      throw new Error('the hum wired no gain to the effects’ bus');
     }
     return outlet;
   }
-
-  /** What was last scheduled on the outlet's gain: the kind and the value. */
-  const lastLevel = (): unknown[] => outletOf().gain.events.at(-1)?.slice(0, 2) ?? [];
 
   it('fades in to its level, the mains hum’s recording going round and round', () => {
     startHum();
@@ -391,36 +379,15 @@ describe('the device hum', () => {
     expect(outletOf().gain.events).toContainEqual(['linear', HUM_LEVEL, ctx.currentTime + 0.15]);
   });
 
-  it('falls silent with the sound switch while it runs, and comes back with it', () => {
+  it('plays into the effects’ bus, where the sound switch and the volume reach it as it runs', () => {
     vi.useFakeTimers();
     startHum();
-    audio.muted = true;
-    vi.advanceTimersByTime(250);
-    expect(lastLevel()).toEqual(['target', 0]);
-    audio.muted = false;
-    vi.advanceTimersByTime(250);
-    expect(lastLevel()).toEqual(['target', HUM_LEVEL]);
+    expect(outletOf().connections).toEqual([ctx.sfx]);
+    // Nothing of its own watches the switch or the slider: no timer runs for it.
+    expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('fades in at the effects’ volume, and follows it as the slider moves', () => {
-    vi.useFakeTimers();
-    audio.volume = 0.5;
-    startHum();
-    expect(outletOf().gain.events).toContainEqual([
-      'linear',
-      HUM_LEVEL * 0.5,
-      ctx.currentTime + 0.15,
-    ]);
-    audio.volume = 0.2;
-    vi.advanceTimersByTime(250);
-    expect(lastLevel()).toEqual(['target', HUM_LEVEL * 0.2]);
-    audio.volume = 0;
-    vi.advanceTimersByTime(250);
-    expect(lastLevel()).toEqual(['target', 0]);
-  });
-
-  it('fades out on stop, once, lets go once its loop ends, and watches no switch after', () => {
-    vi.useFakeTimers();
+  it('fades out on stop, once, and lets go once its loop ends', () => {
     const hum = startHum();
     const outlet = outletOf();
     hum.stop();
@@ -429,10 +396,7 @@ describe('the device hum', () => {
     expect(loop?.stopped).toBeCloseTo(ctx.currentTime + 0.17, 9);
     loop?.onended?.();
     expect(outlet.connections).toEqual([]);
-    const scheduled = outlet.gain.events.length;
-    audio.muted = true;
-    vi.advanceTimersByTime(1000);
-    expect(outlet.gain.events.length).toBe(scheduled);
+    expect(outlet.gain.events.filter(([kind]) => kind === 'cancel')).toHaveLength(1);
   });
 
   it('is built while the browser holds the context back, to sound once it runs', () => {
@@ -441,11 +405,10 @@ describe('the device hum', () => {
     expect(loops()).toHaveLength(1);
   });
 
-  it('makes nothing with the sound off, or without Web Audio; stopping that harms nothing', () => {
-    audio.muted = true;
+  it('makes nothing without Web Audio, or once the context is closed; stopping harms nothing', () => {
+    ctx.state = 'closed';
     expect(() => startHum().stop()).not.toThrow();
     expect(ctx.nodes).toEqual([]);
-    audio.muted = false;
     audio.ctx = null;
     expect(() => startHum().stop()).not.toThrow();
   });

@@ -1,20 +1,20 @@
 /**
  * sounds.ts: what the devices sound like — every press, snip, clack and alarm at a station,
- * recorded (world/samples.ts: ElevenLabs made them, scripts/sfx.ts) and played on the one
- * AudioContext the game shares (`sharedAudio`). Two sounds are still made here from
- * oscillators, because the game sets their pitch: the meter's hum, rising with the voltage it
- * reads, and the colour game's tones, one pitch a colour — they carry what the crew has to
+ * recorded (world/samples.ts: ElevenLabs made them, scripts/sfx.ts) and played into the
+ * effects' bus of the game's mix (world/mix.ts) like every other effect: at the Effekte volume
+ * the settings set, under the sound switch, into the room's reverb by the bus's send, and
+ * under the brickwall that keeps the whole lab from clipping. Two sounds are still made here
+ * from oscillators, because the game sets their pitch: the meter's hum, rising with the voltage
+ * it reads, and the colour game's tones, one pitch a colour — they carry what the crew has to
  * hear. Quiet on purpose: it all plays under the crew's voices.
  *
- * Decorative, so nothing here throws, and nothing is made while the sound is off
- * (`isMuted`), without Web Audio, or while the browser still holds the context back: a sound
- * that cannot play now is dropped, never queued to burst out later; one whose recording is not
- * loaded is not played (samples.ts). Every sound plays at the effects' volume the settings set
- * (`effectsVolume`). The device hum is the one sound that lasts; it follows the sound switch
- * and that volume while it runs.
+ * Decorative, so nothing here throws, and nothing is made without Web Audio or while the
+ * browser still holds the context back: a sound that cannot play now is dropped, never queued
+ * to burst out later; one whose recording is not loaded is not played (samples.ts). The device
+ * hum is the one sound that lasts.
  */
 import type { SimonColor } from '@escapelab/core';
-import { effectsVolume, isMuted, sharedAudio } from '../world/audio.js';
+import { audioEngine, playingEngine, type Engine } from '../world/audio.js';
 import { sample, type Sample, type SfxId } from '../world/samples.js';
 
 /** Exponential ramps cannot reach zero; this is -80 dB. */
@@ -47,19 +47,10 @@ type Build = (ctx: AudioContext, out: AudioNode, at: number) => AudioScheduledSo
  */
 let alarmFrom = 0;
 
-/** The context, where a sound can play right now: sound on, Web Audio there and running. */
-function live(): AudioContext | null {
-  if (isMuted()) {
-    return null;
-  }
-  const ctx = sharedAudio();
-  return ctx !== null && ctx.state === 'running' ? ctx : null;
-}
-
-/** An outlet at `level` times the effects' volume, into the context's output. */
-function outletAt(ctx: AudioContext, level: number): GainNode {
-  const out = gain(ctx, level * effectsVolume());
-  out.connect(ctx.destination);
+/** An outlet at `level` into the effects' bus of `audio`'s mix. */
+function outletAt(audio: Engine, level: number): GainNode {
+  const out = gain(audio.ctx, level);
+  out.connect(audio.sfx);
   return out;
 }
 
@@ -75,12 +66,13 @@ interface When {
  */
 function play(id: SfxId, level: number, when: When = {}): number | null {
   try {
-    const ctx = live();
+    const audio = playingEngine();
     const recording = sample(id);
-    if (ctx === null || recording === null) {
+    if (audio === null || recording === null) {
       return null;
     }
-    const out = outletAt(ctx, level);
+    const { ctx } = audio;
+    const out = outletAt(audio, level);
     const at = Math.max(ctx.currentTime + LOOKAHEAD + (when.delay ?? 0), when.notBefore ?? 0);
     const source = ctx.createBufferSource();
     source.buffer = recording.buffer;
@@ -97,11 +89,12 @@ function play(id: SfxId, level: number, when: When = {}): number | null {
 /** Makes one sound at `level`: `build` schedules it, and its outlet goes once its sources end. */
 function sound(level: number, build: Build): void {
   try {
-    const ctx = live();
-    if (ctx === null) {
+    const audio = playingEngine();
+    if (audio === null) {
       return;
     }
-    const out = outletAt(ctx, level);
+    const { ctx } = audio;
+    const out = outletAt(audio, level);
     const sources = build(ctx, out, ctx.currentTime + LOOKAHEAD);
     let playing = sources.length;
     for (const source of sources) {
@@ -216,54 +209,36 @@ const NO_HUM: Hum = { stop: () => undefined };
 /** The device hum's level: the mains hum's loop, its RMS at −20 dBFS, soft under everything. */
 export const HUM_LEVEL = 0.12;
 const HUM_FADE = 0.15;
-/** How often a running hum looks at the sound switch, in ms. */
-const HUM_WATCH_MS = 250;
 
 /**
  * An open device's hum — the mains hum's loop — fading in over 150 ms until `stop` fades it
- * out. Built even while the browser holds the context back — it sounds as soon as the context
- * runs — but not with the sound off or before its recording has loaded; while it runs it falls
- * silent and comes back with the sound switch.
+ * out, into the effects' bus: the sound switch and the Effekte volume reach it there while it
+ * runs. Built even while the browser holds the context back — it sounds as soon as the context
+ * runs — but not before its recording has loaded.
  */
 export function startHum(): Hum {
   try {
     const recording = sample('mains-hum');
-    if (isMuted() || recording === null) {
-      return NO_HUM;
-    }
-    const ctx = sharedAudio();
-    return ctx === null || ctx.state === 'closed' ? NO_HUM : buildHum(ctx, recording);
+    const audio = recording === null ? null : audioEngine();
+    return audio === null || recording === null ? NO_HUM : buildHum(audio, recording);
   } catch {
     // Deliberately silent: a device without its hum still works.
     return NO_HUM;
   }
 }
 
-/** The hum's level now: none with the sound off, else at the effects' volume. */
-const humLevel = (): number => (isMuted() ? 0 : HUM_LEVEL * effectsVolume());
-
-function buildHum(ctx: AudioContext, recording: Sample): Hum {
+function buildHum(audio: Engine, recording: Sample): Hum {
+  const { ctx } = audio;
   const t = ctx.currentTime;
   const out = gain(ctx, 0);
   out.gain.setValueAtTime(0, t);
-  out.gain.linearRampToValueAtTime(humLevel(), t + HUM_FADE);
-  out.connect(ctx.destination);
+  out.gain.linearRampToValueAtTime(HUM_LEVEL, t + HUM_FADE);
+  out.connect(audio.sfx);
   const loop = ctx.createBufferSource();
   loop.buffer = recording.buffer;
   loop.loop = true;
   loop.connect(out);
   loop.start(t);
-  let level = humLevel();
-  const watch = setInterval(() => {
-    try {
-      if (humLevel() !== level) {
-        level = humLevel();
-        out.gain.setTargetAtTime(level, ctx.currentTime, 0.05);
-      }
-    } catch {
-      // Deliberately silent: the hum keeps the level it has.
-    }
-  }, HUM_WATCH_MS);
   let stopped = false;
   return {
     stop: () => {
@@ -271,7 +246,6 @@ function buildHum(ctx: AudioContext, recording: Sample): Hum {
         return;
       }
       stopped = true;
-      clearInterval(watch);
       fadeOut(ctx, out, loop);
     },
   };

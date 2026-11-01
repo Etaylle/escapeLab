@@ -166,12 +166,11 @@ sound switch (`isMuted()`). Behind it stands a brickwall, a DynamicsCompressorNo
 never clip. Web Audio puts a makeup gain behind every compressor, worked out from its own curve
 — its gain at full scale, inverted and raised to 0.6: +1.71 dB for these settings — which the
 trim takes back (`limiterMakeup`), so that whatever stays under the threshold plays exactly as
-loud as before the brickwall. The devices' own sounds (`puzzles/sounds.ts`) are the one
-exception: that file belongs to the gameplay, and they still go straight to the output at the
-Effekte volume, past the buses and the brickwall; they are quiet and short (at most 0.085 of
-full scale) and never clip with the rest. Moving them onto the effects' bus is two lines there
-(`outletAt` and `buildHum` connecting to the engine's `sfx` instead of `ctx.destination`, its
-own `effectsVolume` and mute check gone with them) for when the branches meet.
+loud as before the brickwall. The devices' own sounds (`puzzles/sounds.ts`) go into the
+effects' bus like every other effect — the meter's hum and the colour tones the game pitches,
+and the device hum while a panel stands open, too: the Effekte volume and the sound switch reach
+them there, the bus's send carries them into the room's reverb, and the brickwall covers them
+with the rest (`test/deviceMix.test.ts` follows their chains into the real mix).
 
 **Ducking.** Mission control's voice pulls the music 8 dB and the beds 4 dB down while it is on
 the air — from its opening squelch where it opens a run, else from its first word — and the
