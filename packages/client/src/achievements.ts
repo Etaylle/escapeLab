@@ -23,6 +23,17 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isId = (value: string): value is AchievementId => ACHIEVEMENT_IDS.some((id) => id === value);
 
+/** What this page has said about a browser that refuses its storage: each thing once. */
+const said = new Set<string>();
+
+/** `what` in the console, with the browser's reason, once a page: a refusal stays a refusal. */
+function warnOnce(what: string, error: unknown): void {
+  if (!said.has(what)) {
+    said.add(what);
+    console.warn(`[escapelab] ${what}`, error);
+  }
+}
+
 /** One mission's plaques as stored: every known id with a moment, the rest left out. */
 function missionOf(value: unknown): Partial<Record<AchievementId, number>> {
   if (!isRecord(value)) {
@@ -41,7 +52,8 @@ export function readEarned(store: Pick<Store, 'getItem'> | null): Earned {
   let text: string | null = null;
   try {
     text = store?.getItem(ACHIEVEMENTS_KEY) ?? null;
-  } catch {
+  } catch (error) {
+    warnOnce('the browser keeps no Erfolge here: none are read', error);
     return {};
   }
   if (text === null) {
@@ -91,7 +103,8 @@ export function keepEarned(
   try {
     store.setItem(ACHIEVEMENTS_KEY, JSON.stringify({ ...known, [missionId]: mission }));
     return true;
-  } catch {
+  } catch (error) {
+    warnOnce('the browser keeps no Erfolge here: the run’s stay on this screen', error);
     return false;
   }
 }
@@ -120,11 +133,8 @@ export function useRunPlaques(
   const [known] = useState(() => readEarned(localStore()));
   const ids = earned.join(' ');
   useEffect(() => {
-    if (at === null || ids === '') {
-      return;
-    }
-    if (!keepEarned(localStore(), missionId, ids.split(' ').filter(isId), at)) {
-      console.warn('[escapelab] the browser keeps nothing here: the Erfolge stay this screen\'s');
+    if (at !== null && ids !== '') {
+      keepEarned(localStore(), missionId, ids.split(' ').filter(isId), at);
     }
   }, [missionId, ids, at]);
   const fresh = new Set(newOnes(known, missionId, earned));

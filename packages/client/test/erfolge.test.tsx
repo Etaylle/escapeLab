@@ -115,6 +115,24 @@ describe('the Erfolge kept on this device', () => {
     expect(readEarned(memory({ [ACHIEVEMENTS_KEY]: 'kaputt{' }))).toEqual({});
     expect(warn).toHaveBeenCalledTimes(1);
     expect(keepEarned(null, 'blackout', ['ungesehen'], OCT_31)).toBe(false);
+    // A browser that refuses its storage is told of once for reading and once for keeping.
+    const refusing = {
+      getItem: (): string | null => {
+        throw new Error('SecurityError: storage denied');
+      },
+      setItem: (): void => {
+        throw new Error('QuotaExceededError: storage full');
+      },
+    };
+    warn.mockClear();
+    for (let i = 0; i < 2; i += 1) {
+      expect(readEarned(refusing)).toEqual({});
+      expect(keepEarned(refusing, 'blackout', ['ungesehen'], OCT_31)).toBe(false);
+    }
+    expect(warn.mock.calls.map(([what]) => String(what))).toEqual([
+      '[escapelab] the browser keeps no Erfolge here: none are read',
+      '[escapelab] the browser keeps no Erfolge here: the run’s stay on this screen',
+    ]);
   });
 });
 

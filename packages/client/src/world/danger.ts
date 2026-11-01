@@ -126,6 +126,8 @@ function nothing(): Danger {
 }
 
 let danger = nothing();
+/** Whether the audio has refused a tick yet: said once, then the ticks go on without. */
+let tickRefused = false;
 
 /** The distances of the look nearest LOOK_BACK_S before `now`: what „nearer" compares with. */
 function lookBack(now: number): ReadonlyMap<string, number> {
@@ -157,8 +159,12 @@ function tick(place: Place, rate: number): void {
       source.stop(at + TICK_S);
       return [source];
     });
-  } catch {
-    // Deliberately silent: a missed tick is harmless, the edge still glows toward the drone.
+  } catch (error) {
+    // A missed tick is harmless — the edge still glows toward the drone —, said once.
+    if (!tickRefused) {
+      tickRefused = true;
+      console.warn('[escapelab] the danger sense’s tick does not play:', error);
+    }
   }
 }
 
