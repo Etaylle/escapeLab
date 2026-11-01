@@ -19,7 +19,7 @@ import { gameClass, NOTHING_OVER } from '../src/screens/Game.js';
 import { Block } from '../src/screens/Manual.js';
 import { Notepad } from '../src/screens/Notepad.js';
 import { ReadingOverlay } from '../src/screens/Reading.js';
-import { mapWith } from './fixtures.js';
+import { mapWith, NO_CLOCK } from './fixtures.js';
 import { buttonsOf, elementsOf, press } from './probe.js';
 
 const noop = (): void => undefined;
@@ -264,7 +264,7 @@ describe('„Notieren" at the Serverraum terminal', () => {
         puzzle={terminalView as Extract<PuzzleView, { kind: 'servers' }>}
         change={null}
         send={noop}
-        mission={{ deadlineAt: null, pausedAt: null }}
+        mission={NO_CLOCK}
         crew={{ you: 'p1', mates: [] }}
       />
     );

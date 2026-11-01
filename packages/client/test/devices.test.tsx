@@ -12,6 +12,7 @@ import {
   type ServerRow,
 } from '@escapelab/core';
 import type { Panel as PanelOf } from '../src/puzzles/index.js';
+import { NO_CLOCK } from './fixtures.js';
 
 vi.mock('../src/puzzles/sounds.js', async (importOriginal) => {
   const real = await importOriginal<Record<string, unknown>>();
@@ -93,7 +94,7 @@ function panelAfter<K extends Kind>(
   // PANELS is keyed by kind, so the entry for this kind takes exactly this puzzle.
   const Panel = PANELS[kind] as unknown as PanelOf<K>;
   return renderToStaticMarkup(
-    <Panel puzzle={after} change={changed(before, after, alarm)} send={noop} mission={{ deadlineAt: null, pausedAt: null }} />,
+    <Panel puzzle={after} change={changed(before, after, alarm)} send={noop} mission={NO_CLOCK} />,
   );
 }
 
@@ -272,7 +273,7 @@ describe('the fuse box', () => {
 
   it('shows a box opened with a wire cut before as cut, and nothing falling', () => {
     const html = renderToStaticMarkup(
-      <PANELS.circuit puzzle={cutAt(at('a'), 2)} change={null} send={noop} mission={{ deadlineAt: null, pausedAt: null }} />,
+      <PANELS.circuit puzzle={cutAt(at('a'), 2)} change={null} send={noop} mission={NO_CLOCK} />,
     );
     expect(html).not.toMatch(/snapped|class="spark"/);
   });
@@ -443,7 +444,7 @@ describe('the memory bank', () => {
 
   it('says nothing of a fall as it opens', () => {
     const html = renderToStaticMarkup(
-      <PANELS.memory puzzle={at(1)} change={null} send={noop} mission={{ deadlineAt: null, pausedAt: null }} />,
+      <PANELS.memory puzzle={at(1)} change={null} send={noop} mission={NO_CLOCK} />,
     );
     expect(html).not.toContain('memory-reset');
   });
@@ -582,13 +583,13 @@ describe('the big button', () => {
         puzzle={{ ...button, holding: true }}
         change={null}
         send={noop}
-        mission={{ deadlineAt: null, pausedAt: null }}
+        mission={NO_CLOCK}
       />,
     );
     expect(html.match(/<span class="button-tick"><\/span>/g)).toHaveLength(HOLD_TICKS);
     expect(html).toContain('data-feel="none"');
     const released = renderToStaticMarkup(
-      <PANELS.button puzzle={button} change={null} send={noop} mission={{ deadlineAt: null, pausedAt: null }} />,
+      <PANELS.button puzzle={button} change={null} send={noop} mission={NO_CLOCK} />,
     );
     expect(released).not.toContain('button-ticks');
   });
@@ -717,7 +718,7 @@ describe('the Serverraum', () => {
 
   it('scrolls the screen in as the terminal opens, and only what a change brought after', () => {
     const opened = renderToStaticMarkup(
-      <PANELS.servers puzzle={terminal([])} change={null} send={noop} mission={{ deadlineAt: null, pausedAt: null }} />,
+      <PANELS.servers puzzle={terminal([])} change={null} send={noop} mission={NO_CLOCK} />,
     );
     expect(opened).toContain('<div class="servers-crt servers-crt--boot">');
     const after = panelAfter('servers', terminal([]), terminal([line(1, 'ok', 'db läuft')]));

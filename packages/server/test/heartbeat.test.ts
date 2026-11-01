@@ -275,7 +275,7 @@ describe('the server’s clock on the line', () => {
     end();
   });
 
-  it('says since when a run stands paused: its clock reads the same there, through and after', () => {
+  it('says since when a run stands paused: its clock reads the same then, through, after', () => {
     const { server, anna, ben, end } = startedRun();
     vi.advanceTimersByTime(HEARTBEAT_MS + 5);
     ben.answering = false;

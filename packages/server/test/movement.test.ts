@@ -278,13 +278,14 @@ describe('Room positions as they fan out', () => {
     vi.advanceTimersByTime(500);
     room.updatePosition(anna.playerId, run, { ...to, facing: 0, moving: true }, 4_242.5);
     const relayed = lastPositions(ben).players;
-    expect(relayed[anna.playerId]).toEqual({ ...to, facing: 0, moving: true, t: 4_242.5, rt: Date.now() });
+    const sample = { ...to, facing: 0, moving: true, t: 4_242.5, rt: Date.now() };
+    expect(relayed[anna.playerId]).toEqual(sample);
     // A spawn the room placed itself has no sender's moment: its receipt is all it has.
     expect(relayed[ben.playerId]).toMatchObject({ t: null, rt: 1_700_000_000_000 });
     room.dispose();
   });
 
-  it('go out only with something new — a walker’s sample never twice — and once a second else', () => {
+  it('go out only with something new — a sample never twice — and once a second else', () => {
     const { room, anna, ben, run } = walkingRun();
     // Past the intro: the lights out, the patrols' clock ticking, every drone still asleep.
     vi.advanceTimersByTime((blackout.intro?.lightsSec ?? 0) * 1000 + 2_000);
@@ -300,7 +301,9 @@ describe('Room positions as they fan out', () => {
       vi.advanceTimersByTime(80);
     }
     const walked = ben.messages.slice(heard).filter((m) => m.kind === 'positions');
-    const samples = walked.map((m) => (m.kind === 'positions' ? m.players[anna.playerId]?.t : null));
+    const tOf = (m: ServerMessage): number | null | undefined =>
+      m.kind === 'positions' ? m.players[anna.playerId]?.t : null;
+    const samples = walked.map(tOf);
     expect(walked).toHaveLength(25);
     expect(samples.filter((t, i) => i > 0 && t === samples[i - 1])).toEqual([]);
     // Then she stands: the positions go out once a second.

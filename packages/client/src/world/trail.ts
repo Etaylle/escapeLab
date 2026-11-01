@@ -32,7 +32,7 @@ const KEEP_MS = 1000;
  */
 export const STAND_MS = 2 * REMOTE_DELAY_MS;
 
-/** One sample of a walk: where, facing where, walking or not, by the sender's clock and the server's. */
+/** A sample of a walk: where, which way, walking or not, by the sender's clock and the server's. */
 export interface Sample {
   x: number;
   y: number;
@@ -134,7 +134,13 @@ function between(a: Sample, b: Sample, k: number, span: number): Drawn {
  * Past the newest sample (`last`, true at `lastAt`): on as the walk went from `before` for at
  * most MAX_EXTRAPOLATE_MS — a walker who stopped, or jumped, stands where they were sampled.
  */
-function onward(before: Sample | undefined, last: Sample, lastAt: number, at: number, offset: number): Drawn {
+function onward(
+  before: Sample | undefined,
+  last: Sample,
+  lastAt: number,
+  at: number,
+  offset: number,
+): Drawn {
   const still = { x: last.x, y: last.y, facing: last.facing, moving: last.moving };
   if (before === undefined || !last.moving) {
     return still;
@@ -145,7 +151,8 @@ function onward(before: Sample | undefined, last: Sample, lastAt: number, at: nu
     return still;
   }
   const ahead = Math.min(at - lastAt, MAX_EXTRAPOLATE_MS) / span;
-  return { ...still, x: last.x + (last.x - before.x) * ahead, y: last.y + (last.y - before.y) * ahead };
+  const x = last.x + (last.x - before.x) * ahead;
+  return { ...still, x, y: last.y + (last.y - before.y) * ahead };
 }
 
 /**
@@ -176,7 +183,9 @@ export function drawnAt(trail: Trail, at: number): Drawn | null {
   const span = Math.max(1e-6, momentOf(later, offset) - from);
   const k = (at - from) / span;
   // What the drawn moment has long passed goes; the sample just before it stays.
-  const gone = samples.findIndex((sample, i) => i >= next - 1 || momentOf(sample, offset) >= at - KEEP_MS);
+  const kept = (sample: Sample, i: number): boolean =>
+    i >= next - 1 || momentOf(sample, offset) >= at - KEEP_MS;
+  const gone = samples.findIndex(kept);
   if (gone > 0) {
     trail.samples = samples.slice(gone);
   }

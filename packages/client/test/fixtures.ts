@@ -37,6 +37,9 @@ export function mapWith(parts: Partial<MapView>): MapView {
   };
 }
 
+/** A mission's clock that is not running: no deadline, no pause (clock.ts `MissionTime`). */
+export const NO_CLOCK = { deadlineAt: null, pausedAt: null } as const;
+
 export type Manual = MapView['manuals'][number];
 export type Plate = MapView['plates'][number];
 export type Item = MapView['items'][number];

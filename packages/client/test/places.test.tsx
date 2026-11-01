@@ -13,7 +13,7 @@ import { InfoPanel, Legend } from '../src/screens/InfoPanel.js';
 import { ReadingOverlay, roomOf } from '../src/screens/Reading.js';
 import { titleSize } from '../src/screens/Seal.js';
 import { WorldModal } from '../src/screens/WorldModal.js';
-import { deviceRun, mapWith, type Item, type Manual, type Plate } from './fixtures.js';
+import { deviceRun, mapWith, NO_CLOCK, type Item, type Manual, type Plate } from './fixtures.js';
 
 const noop = (): void => undefined;
 
@@ -524,7 +524,7 @@ describe('the station frame', () => {
         run={deviceRun()}
         map={single}
         edgework={null}
-        mission={{ deadlineAt: null, pausedAt: null }}
+        mission={NO_CLOCK}
         send={noop}
         onStepBack={noop}
       />,
@@ -603,7 +603,7 @@ describe('the station frame', () => {
         run={deviceRun()}
         map={single}
         edgework={edgework}
-        mission={{ deadlineAt: null, pausedAt: null }}
+        mission={NO_CLOCK}
         send={noop}
         onStepBack={noop}
       />,

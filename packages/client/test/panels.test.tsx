@@ -27,7 +27,7 @@ import {
 } from '../src/puzzles/SignalPanel.js';
 import { commandOf, COMMANDS, Keys, withWord } from '../src/puzzles/ServersPanel.js';
 import { PuzzlePanel, ReaderPanel } from '../src/screens/PuzzlePanel.js';
-import { deviceRun, iconsAsWords, PICTOGRAPH } from './fixtures.js';
+import { deviceRun, iconsAsWords, NO_CLOCK, PICTOGRAPH } from './fixtures.js';
 
 /** A small deterministic generator, enough to set an instance up. */
 function lcg(seed: number): () => number {
@@ -79,7 +79,7 @@ function panel(puzzle: PuzzleView): string {
       puzzle={puzzle}
       run={deviceRun()}
       send={() => undefined}
-      mission={{ deadlineAt: null, pausedAt: null }}
+      mission={NO_CLOCK}
     />,
   );
 }
@@ -589,7 +589,7 @@ describe('the signal chain', () => {
     const sent: unknown[] = [];
     const Panel = PANELS.signal;
     const tree = (
-      <Panel puzzle={puzzle} change={null} send={(input) => sent.push(input)} mission={{ deadlineAt: null, pausedAt: null }} />
+      <Panel puzzle={puzzle} change={null} send={(input) => sent.push(input)} mission={NO_CLOCK} />
     );
     const keys = elementsOf(tree).filter((element) => element.type === 'button');
     expect(keys).toHaveLength(12);
@@ -1341,7 +1341,7 @@ describe('the Serverraum', () => {
         puzzle={at('b', { rack: RACK })}
         change={null}
         send={(input) => sent.push(input)}
-        mission={{ deadlineAt: null, pausedAt: null }}
+        mission={NO_CLOCK}
       />
     );
     expect(pressAll(tree)).toBe(6);

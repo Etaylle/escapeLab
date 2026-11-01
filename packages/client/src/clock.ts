@@ -28,7 +28,7 @@ export interface ServerClock {
   now: () => number;
   /** how far the server's clock is ahead of this page's, ms */
   offset: () => number;
-  /** an answer to an ask that left at local `sent` and came back at local `back`: the server read `at` */
+  /** an answer to an ask that left at local `sent`, back at local `back`: the server read `at` */
   heard: (sent: number, at: number, back?: number) => void;
   /** a view the server stamped `at`, come in at local `back`: a guess until an answer comes */
   stamped: (at: number, back?: number) => void;

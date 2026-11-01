@@ -9,6 +9,7 @@ import { expiredLine, handlesOf, leverPlate, togetherWord } from '../src/puzzles
 import { ownPressAt, secondsText, syncPress } from '../src/puzzles/syncPress.js';
 import { PuzzlePanel } from '../src/screens/PuzzlePanel.js';
 import { changeSettings, DEFAULT_SETTINGS } from '../src/settings.js';
+import { NO_CLOCK } from './fixtures.js';
 
 type SyncView = Extract<PuzzleView, { kind: 'button-sync' }>;
 
@@ -50,7 +51,7 @@ function run(you: string | null = 'p1'): DeviceRun {
 
 function panel(puzzle: PuzzleView, around: DeviceRun = run()): string {
   return renderToStaticMarkup(
-    <PuzzlePanel puzzle={puzzle} run={around} send={() => undefined} mission={{ deadlineAt: null, pausedAt: null }} />,
+    <PuzzlePanel puzzle={puzzle} run={around} send={() => undefined} mission={NO_CLOCK} />,
   );
 }
 

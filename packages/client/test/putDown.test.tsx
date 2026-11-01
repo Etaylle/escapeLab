@@ -16,7 +16,7 @@ import {
 import { PuzzlePanel } from '../src/screens/PuzzlePanel.js';
 import { lookOf, ReadingOverlay, verbOf } from '../src/screens/Reading.js';
 import { BrokenContext, fakeAudio, freshAudio, started, startedAt } from './fakeAudio.js';
-import { deviceRun, mapWith } from './fixtures.js';
+import { deviceRun, mapWith, NO_CLOCK } from './fixtures.js';
 import { buttonsOf, elementsOf, press } from './probe.js';
 
 const noop = (): void => undefined;
@@ -185,7 +185,7 @@ describe('stepping back from a device', () => {
         run={deviceRun()}
         map={single}
         edgework={null}
-        mission={{ deadlineAt: null, pausedAt: null }}
+        mission={NO_CLOCK}
         send={noop}
         onStepBack={noop}
       />,
@@ -235,7 +235,7 @@ describe('stepping back from a device', () => {
         puzzle={{ ...maze, console: null }}
         run={deviceRun()}
         send={noop}
-        mission={{ deadlineAt: null, pausedAt: null }}
+        mission={NO_CLOCK}
       />,
     );
     expect(watched).not.toContain('device-foot');

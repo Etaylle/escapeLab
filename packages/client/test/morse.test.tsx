@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { PuzzleView } from '@escapelab/core';
 import { lampRuns, MorsePanel } from '../src/puzzles/MorsePanel.js';
+import { NO_CLOCK } from './fixtures.js';
 
 type MorseView = Extract<PuzzleView, { kind: 'morse' }>;
 
@@ -25,7 +26,7 @@ function view(pattern: string | null, dial: number): MorseView {
 
 function render(puzzle: MorseView): string {
   return renderToStaticMarkup(
-    <MorsePanel puzzle={puzzle} change={null} send={noop} mission={{ deadlineAt: null, pausedAt: null }} />,
+    <MorsePanel puzzle={puzzle} change={null} send={noop} mission={NO_CLOCK} />,
   );
 }
 

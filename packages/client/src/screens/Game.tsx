@@ -617,7 +617,13 @@ export function StationModal({
           {coach.text}
         </p>
       )}
-      <PuzzlePanel puzzle={puzzle} run={run} send={send} mission={mission} onStepBack={onStepBack} />
+      <PuzzlePanel
+        puzzle={puzzle}
+        run={run}
+        send={send}
+        mission={mission}
+        onStepBack={onStepBack}
+      />
     </WorldModal>
   );
 }
