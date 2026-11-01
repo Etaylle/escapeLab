@@ -305,13 +305,24 @@ CI's log before it shows in the frames.
 
 ## Open
 
-What the graphics packages left for later, one line each:
+What the graphics and gameplay packages left for later, one line each:
 
 - **The light layer cannot be measured on a software renderer** (L-graphics): under
   `SHOTS_WEBGL=1` SwiftShader takes 83 to 133 ms a frame, as it did before the package, so CI
-  keeps the Canvas pass and the layer is measured on this machine's GPU — `SHOTS_HEADED=1`, or
-  the Metal flags of the paced bench (Cost).
-- **The escape on CI's slower runners** (L-graphics, L-graphics-fix): a client build of 3.3 s and
-  more marked the runners on which the escape's window ran at 50 ms p95 whatever the commit. The
-  escape's frame is almost a fifth cheaper since L-polish (Cost); a CI run on such a runner has
-  yet to show the window under its 40 ms.
+  keeps the Canvas pass, and the layer was measured only on this machine's M4 GPU, through a
+  headless copy of the walkthrough started with the Metal flags of the paced bench (Cost).
+- **The escape on CI's slower runners** (L-graphics, L-graphics-fix): after the graphics merge
+  CI's escape window failed at 50 ms twice, the swaying hand lamp defeating the sight cache —
+  fixed in L-graphics-fix (Figures). A client build of 3.3 s and more still marks the runners on
+  which the window runs at the edge whatever the commit. The escape's frame is almost a fifth
+  cheaper since L-polish (Cost); a CI run on such a runner has yet to show it under its 40 ms.
+- **Edits outside the graphics package's files** (L-graphics): the hooks in GameWorld.tsx,
+  assemble.ts and sim.ts — the zoom, the station, `blackoutAt`, the partner's cadence — and
+  decor.ts were changed outside the files the package owned, for whoever works there next to
+  look over.
+- **Kept on purpose** (L-gameplay): on a controller, A presses Space only on a control made to
+  be held — the button module's face, `data-pad="hold"` — and clicks every other one
+  (gameplay.md, „A controller").
+- Done in L-polish: a station's device fades out as it came (Interface); the controller pings
+  with ◀ and opens the quick chat with ▶; the Bestenliste's mission tabs keep to one row that
+  scrolls, so that the screen fits 1280 × 720 and a phone.

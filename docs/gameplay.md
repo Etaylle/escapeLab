@@ -61,13 +61,13 @@ points — two tiles ahead along the way the avatar faces, short of the first wa
 piece of furniture (`world/padPing.ts`), as a click pings where it lands — and its ▶ opens the
 quick chat by its key; the wheel then takes the controller as a dialog does, its first phrase in
 the focus, the D-pad moving between them, A saying one and B shutting it. ▲ and ▼ do nothing in
-the world. A text field in the focus lets go first, as a
-controller types nothing: X closes the notepad it opened. Over a dialog (the device, the pages,
-the settings, the info) the D-pad moves the focus to the nearest control that way, A presses
-it — a control made to be held, as the button module's face, for as long as A is held — and B
-steps back; in a book the D-pad turns the pages. A direction still held in the world as a
-dialog comes up — the stick walking, the ▶ that opened the quick chat — moves nothing there
-until it is let go. An Xbox controller says Xbox in its id
+the world. A text field in the focus lets go first, as a controller types nothing: X closes the
+notepad it opened. Over a dialog (the device, the pages, the settings, the info) the D-pad moves
+the focus to the nearest control that way, A presses it — a control made to be held, as the
+button module's face (`data-pad="hold"`), by Space for as long as A is held, every other one by a
+click — and B steps back; in a book the D-pad turns the pages. A direction still held in the
+world as a dialog comes up — the stick walking, the ▶ that opened the quick chat — moves nothing
+there until it is let go. An Xbox controller says Xbox in its id
 („Xbox Wireless Controller"), a PlayStation one Sony's vendor or its name. The settings show a
 live test: every button lights while held, the stick's dot leans. The walkthrough's
 `?fakepad=1` puts a controller of its own on `window.__escapelab.pad` (press, release, tap,

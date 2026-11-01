@@ -775,8 +775,12 @@ What the sound packages left for later, one line each, the newest first:
 - **Twelve recordings await a render** (L-sound): the linoleum and steel steps, both door
   closes, the alarm's sting, the drone's fly-by, the hatch's landing and the settings' tick.
   The agents may not spend the account's credits; the command is under „Awaiting a render"
-  (some 130 credits). Until it runs, stand-ins play or nothing does, and
+  (some 130 credits). Until it runs the linoleum and steel steps borrow the concrete takes, the
+  door's closes borrow its slide and the other four stay silent, and
   `test/sampleManifest.test.ts` lists them in `AWAITING_RENDER`, to be emptied once they are made.
+- **The opening's cue plays 3.9 dB quieter** (L-sound): its level now follows its peak over both
+  channels, where the first channel's alone set it before (The opening, above) — a change of
+  level, not a fault.
 - **Helmut's announcement and the opening's cue** (the opening, above): Piper (Thorsten) reads the
   loudspeakers' five lines and no cue is composed until the two commands there are run.
 - Done in L-polish: the devices' sounds play into the effects' bus, its reverb and its brickwall
