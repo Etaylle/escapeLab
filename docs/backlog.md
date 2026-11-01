@@ -90,6 +90,32 @@ die Entscheidung.
   Textgröße; Raumname über hellem Boden bekommt eine Platte (FLUR 1,3:1).
 - Touch: 8-Wege-Pad ≥ 48 px unter dem linken Daumen, Aktionen rechts.
 
+### T-1 Terminal und Notizen — Status: in Arbeit (Mac, Paket N-notes) · Größe: M
+- Prompt fokussiert beim Öffnen und nach jedem Befehl, jede Taste tippt, Tab vervollständigt,
+  Fehler am Prompt; Funk am Terminal per Maus/Touch/Pad. Aufnahmeformat je Quelle (Legende,
+  Dienste, Kennung, Morse, Frequenzen, Regeln) ≤ 12 Zeilen mit Herkunft; Notizblock in
+  Handschrift auf liniertem Papier (OFL-Schrift lokal), Lesbarkeit ≥ 15 px, Kontrast ≥ 4,5:1.
+
+### T-2 Jedes Pult sagt, wozu die Maschine da ist — Status: bereit · Größe: S
+- Audit: beide Hälften einer Station sehen aus wie Geräte, keine sagt die Aufgabe. Ein
+  Typenschild-Satz je Pult in Weltsprache (was die Maschine tut, nicht was der Spieler tun
+  soll), z. B. Prüfpult „misst die Spannung des gewählten Kabels"; kein Hinweis auf die Lösung.
+- Beweis: Texte durch die Handbuch-Stimmen-Tests; Capture je Pult.
+
+### T-3 Schnellchat trägt Stationsdaten — Status: bereit · Größe: S
+- Heute acht feste Phrasen ohne Daten; „Alle an die Ventile!" nennt Ventile, die Blackout nicht
+  hat. Phrasen je Mission aus `mission.json`, davon zwei mit Platzhalter (Zahl/Farbe/Dienst),
+  per Steuerkreuz/Taste wählbar. Beweis: Tests, Capture des Chat-Rads in Blackout.
+
+### T-4 Leerlauf zu zweit — Status: wartet (Entscheidung Uros) · Größe: M
+- Audit: Ben wartet 7,7 s am Reaktor auf die Sicherung, Anna 5 s vor der Notstrom-Tür. Optionen:
+  Wartende lesen die nächste Quelle vor, oder eine kleine Nebenaufgabe (Ventil halten). Erst
+  nach dem zweiten Playtest entscheiden.
+
+### T-5 Größere Räume — Status: wartet (nach N-2 Kamera + Playtest) · Größe: L
+- Erst den Kamera-Rahmen festlegen, dann beurteilen; falls dann zu eng: Räume 9×7, Flure 4
+  breit, Zwei-Kachel-Türen auf den Hauptwegen, Laufwege ≤ 10 s, Handy-Layout prüfen.
+
 ### N-6 Pacing und Stationsfolge — Status: wartet (Daten) · Größe: ?
 - Erst nach N-4 und dem zweiten Playtest messen (`runs.jsonl`): Ziel, dass eine Erstspieler-
   Crew Station 2 in 5 Minuten schafft. Offene Fragen aus dem Audit: Zeitlimit beim ersten Lauf,
