@@ -303,6 +303,26 @@ window of the walkthrough logs what the light worked out anew meanwhile — a li
 sights a frame and the bakes (render/census.ts) — so that a cache that stops holding shows in
 CI's log before it shows in the frames.
 
+**What a window measures (M-ciwin).** CI's escape window read 49.9 to 50 ms p95 on both looks in
+three runs, while one client's frame of the scene comes to 16.8 ms on the bench above, its main
+thread slowed four times: the walkthrough's three pages — the host, the guest's phone, the audience
+— drew the escape at once on the runner, which composes every page in software in its one GPU
+process (0.93 to 0.95 cores in that window; `compositing disabled_software` in the log's first
+line, as this machine's headless shell composes without `SHOTS_SOFTWARE_GL`, which composes on
+SwiftShader's GL for a tenth of that). Every window now measures one client: while a look runs,
+every other page stands frozen, its main thread paused in the debugger at its next line of script
+and its CPU throttle lifted — Chromium's throttle holds a thread back by keeping it spinning — and
+is thawed once the look is over, the server's messages waiting for it (tools/freeze.mjs; Chromium's
+own freeze, `Page.setWebLifecycleState`, leaves a page on screen running, as every page of a
+headless run is). Each window logs a line `frozen` with the pages it froze, and the `pages` line
+shows them at 0.02 to 0.08 cores. Without `SHOTS_SOFTWARE_GL` and at `SHOTS_CPU_SLOWDOWN=4` this
+machine fails the escape as CI does, 50.1 ms on both looks with the GPU process at 0.94 cores;
+measured back to back in one run, the window read 50.0 ms p95 with every page running and 33.4 with
+the others frozen, the GPU process down from 0.85 cores to 0.53 and the renderers from 3.4 to 1.2 —
+at 3× 33.4 against 16.8, at 5× 66.6 against 33.4. Under `SHOTS_SOFTWARE_GL=1` the pages share
+little: there the escape reached 50 ms only at 5× and 6×, where the host's own frame comes to 33
+and 50 ms with the others frozen.
+
 ## Open
 
 What the graphics and gameplay packages left for later, one line each:
