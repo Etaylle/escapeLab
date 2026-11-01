@@ -1,7 +1,14 @@
 import { achievementsOf, type AchievementId } from './achievements.js';
 import type { DailyDay } from './daily.js';
 import type { Difficulty } from './difficulty.js';
-import { consoleFind, crewFound, findKey, type Find } from './discovery.js';
+import {
+  consoleFind,
+  crewFound,
+  findKey,
+  findOf,
+  type Chime,
+  type Find,
+} from './discovery.js';
 import type { Edgework } from './edgework.js';
 import type { DecorKind, ManualDef, ManualKind, RoomKind } from './mission.js';
 import { noteKey } from './notes.js';
@@ -274,6 +281,11 @@ export interface MapView {
   notes: { index: number; x: number; y: number; read: boolean; found: boolean; known: boolean }[];
   /** the wall sign with the Laborkennung, and whether this player has found it; null for none */
   edgeworkSign: { x: number; y: number; found: boolean } | null;
+  /**
+   * the finds that chimed for this player, oldest first (discovery.ts `chimeFinds`): their
+   * screen answers each with the chime and a caption, once; none for the audience
+   */
+  chimes: Chime[];
   /** the emergency lamps, on the floor or on a wall beside it; they glow once the lights are out */
   lamps: { x: number; y: number }[];
   /** room names, each with the kind of room it names, where the mission gives one */
@@ -648,6 +660,14 @@ function notesOnMap(state: GameState, viewer: MapViewer): MapView['notes'] {
   }));
 }
 
+/** The finds that chimed for this viewer, oldest first; none for the audience. */
+function chimesFor(state: GameState, viewer: MapViewer): Chime[] {
+  return (viewer === null ? [] : (state.chimed[viewer] ?? [])).flatMap(({ key, at }) => {
+    const find = findOf(state.mission.map, key);
+    return find === null ? [] : [{ find, at }];
+  });
+}
+
 function itemsOnMap(state: GameState, viewer: MapViewer): MapView['items'] {
   const map = state.mission.map;
   const finds = findsFor(state, viewer);
@@ -727,6 +747,7 @@ function mapViewFor(state: GameState, viewer: MapViewer): MapView | null {
       map.edgeworkSign === undefined
         ? null
         : { ...map.edgeworkSign, found: findsFor(state, viewer)({ of: 'sign' }).found },
+    chimes: chimesFor(state, viewer),
     lamps: map.lamps.map((lamp) => ({ x: lamp.x, y: lamp.y })),
     labels: map.labels.map((l) => ({
       text: l.text,

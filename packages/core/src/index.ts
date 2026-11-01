@@ -150,6 +150,7 @@ export {
 } from './map.js';
 export { canSee, sightFrom, visibleTiles, type Sight, type SightMap } from './sight.js';
 export {
+  CHIME_GAP_MS,
   FIND_REACH,
   ITEM_REACH,
   LAMP_HALF_ANGLE,
@@ -160,6 +161,7 @@ export {
   findables,
   inCone,
   lookAround,
+  type Chime,
   type Find,
   type FindKey,
   type Glances,

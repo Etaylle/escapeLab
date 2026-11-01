@@ -176,6 +176,11 @@ export interface GameState {
    * arrows, a key's lock
    */
   found: Record<string, FindKey[]>;
+  /**
+   * the finds that chimed for each player, by player id, oldest first (discovery.ts
+   * `chimeFinds`): at most one every CHIME_GAP_MS, never twice for one thing
+   */
+  chimed: Record<string, { key: FindKey; at: number }[]>;
   /** notes somebody has read this run, by index: the run report logs each once */
   notesRead: number[];
   /** who did what this run, by player id */
@@ -266,6 +271,7 @@ export function initialState(
     places: {},
     opened: [],
     found: {},
+    chimed: {},
     notesRead: [],
     credits: {},
     readersCredited: [],

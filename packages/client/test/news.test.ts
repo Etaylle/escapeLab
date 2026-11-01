@@ -19,35 +19,7 @@ const locker: Manual = { ...book, id: 'spind', kind: 'locker', x: 6, opened: fal
 describe('worldNews — what the lab shows that it did not before', () => {
   it('has nothing on the first look: that was all there already', () => {
     const now = mapWith({ manuals: [book, { ...locker, opened: true }], litRooms: ['ARCHIV'] });
-    expect(worldNews(null, now)).toEqual({
-      found: [],
-      notes: [],
-      opened: [],
-      lit: [],
-      delivered: [],
-      dropped: [],
-    });
-  });
-
-  it('finds a note of the last shift the moment the crew knows of it, read or not', () => {
-    const lever = { index: 0, x: 12, y: 6, read: false, found: true, known: true };
-    const hatch = { index: 2, x: 2, y: 0, read: true, found: true, known: true };
-    const unknown = { ...hatch, found: false, known: false };
-    const before = mapWith({ notes: [lever, unknown] });
-    const now = mapWith({ notes: [lever, hatch] });
-    expect(worldNews(before, now).notes).toEqual([hatch]);
-    expect(worldNews(now, now).notes).toEqual([]);
-    expect(worldNews(null, now).notes).toEqual([]);
-    expect(worldNews(before, before).notes).toEqual([]);
-  });
-
-  it('finds a source the moment the crew knows of it, and only then', () => {
-    const unknown = { ...locker, found: false, known: false };
-    const before = mapWith({ manuals: [book, unknown] });
-    const now = mapWith({ manuals: [book, locker] });
-    expect(worldNews(before, now).found).toEqual([locker]);
-    expect(worldNews(now, now).found).toEqual([]);
-    expect(worldNews(mapWith({}), before).found).toEqual([book]);
+    expect(worldNews(null, now)).toEqual({ opened: [], lit: [], delivered: [], dropped: [] });
   });
 
   it('opens a locker once: closed before, open now', () => {
@@ -57,10 +29,8 @@ describe('worldNews — what the lab shows that it did not before', () => {
     expect(worldNews(now, now).opened).toEqual([]);
   });
 
-  it('counts a source found already open as found, not as opened', () => {
-    const news = worldNews(mapWith({}), mapWith({ manuals: [book] }));
-    expect(news.found).toEqual([book]);
-    expect(news.opened).toEqual([]);
+  it('takes a source come into the view already open as nothing opened', () => {
+    expect(worldNews(mapWith({}), mapWith({ manuals: [book] })).opened).toEqual([]);
   });
 
   it('seats a part where it belongs once, and leaves a key in a cabinet to the cabinet', () => {

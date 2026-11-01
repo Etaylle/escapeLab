@@ -207,7 +207,7 @@ describe('reading a note', () => {
     const willing = applyAction(lost, { type: 'set-ready', playerId: 'p2', ready: true });
     const rematch: Action = { type: 'rematch', playerId: 'p1', at: T0 + 900_000, seed: 3 };
     const again = applyAction(willing, rematch);
-    expect([again.found, again.notesRead]).toEqual([{}, []]);
+    expect([again.found, again.chimed, again.notesRead]).toEqual([{}, {}, []]);
     expect(again.presence.notes).toEqual({});
   });
 });

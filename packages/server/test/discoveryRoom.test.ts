@@ -131,6 +131,33 @@ describe('a room where things are found by reach or by the lamp', () => {
     room.dispose();
   });
 
+  it('chimes for whoever found it, the find that matters most, then nothing for 1.5 s', () => {
+    const { room, anna, ben, startedAt } = started();
+    // At the start each finds the sign beside the spawns; the box ahead takes a look.
+    expect(lastView(anna).map?.chimes).toEqual([{ find: { of: 'sign' }, at: startedAt }]);
+    expect(lastView(ben).map?.chimes).toEqual([{ find: { of: 'sign' }, at: startedAt }]);
+    vi.advanceTimersByTime(250);
+    // The box and the key down the hall, looked at from the spawns: found inside the gap, they
+    // stay silent for good.
+    expect(lastView(anna).map?.stations[0]?.found).toBe(true);
+    expect(lastView(anna).map?.items[0]?.found).toBe(true);
+    expect(lastView(anna).map?.chimes).toHaveLength(1);
+    vi.advanceTimersByTime(1250);
+    // Along the north wall up to the locker, which prints the armed box's rules: it chimes; the
+    // cabinet beside it, looked at a quarter of a second later, is found in the gap.
+    walkTo(room, anna, 1.5, 1.5);
+    walkTo(room, anna, 12.5, 1.5);
+    vi.advanceTimersByTime(250);
+    expect(sourcesFound(anna)).toEqual(['spind', 'schrank']);
+    expect(lastView(anna).map?.chimes).toEqual([
+      { find: { of: 'sign' }, at: startedAt },
+      { find: { of: 'source', id: 'spind' }, at: startedAt + 1500 },
+    ]);
+    expect(lastView(ben).map?.chimes).toHaveLength(1);
+    expect(sourcesFound(ben)).toEqual([]);
+    room.dispose();
+  });
+
   it('finds in the lab lit for its opening only what the two rules find (Blackout, seed 5)', () => {
     const { room, anna, ben } = started(blackout, 5);
     expect(lastView(anna).lights.out).toBe(false);

@@ -1,5 +1,6 @@
 import type { PadProbe } from './input/padRuntime.js';
 import type { DangerProbe } from './world/danger.js';
+import type { Heard } from './world/finds.js';
 import type { FigureProbe } from './screens/CrewFigure.js';
 import type { VoiceProbe } from './voice/mesh.js';
 import type { BedProbe } from './world/ambience.js';
@@ -48,6 +49,8 @@ export interface AudioProbe extends BedProbe, SoundProbe {
    * what came out
    */
   readonly renderRadio: (id?: string) => Promise<RadioRender>;
+  /** the finds that chimed for this player this run, as this screen took them (world/finds.ts) */
+  readonly chimes: Heard[];
 }
 
 /**

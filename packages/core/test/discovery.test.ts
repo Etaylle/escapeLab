@@ -1,17 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyAction,
+  CHIME_GAP_MS,
   findables,
   findKey,
   lookAround,
   shutDoors,
   viewFor,
+  viewForSpectator,
   type Find,
   type GameState,
 } from '../src/index.js';
-import { inCone, type Findable, type Looker } from '../src/discovery.js';
+import { findOf, inCone, mattering, type Findable, type Looker } from '../src/discovery.js';
 import { blackoutMission } from './blackoutPlan.js';
-import { lightsOut, started, T0 } from './lab.js';
+import { consoleLab, lightsOut, standing, started, T0 } from './lab.js';
 
 /** A source to find at (x, y). */
 const source = (id: string, x: number, y: number): Findable => ({
@@ -175,7 +177,8 @@ describe('what a run has to find', () => {
     expect(findables(carried).some((thing) => thing.key === 'item:ersatzsicherung')).toBe(false);
   });
 
-  it('keys every thing apart, both consoles of a station too', () => {
+  it('keys every thing apart, both consoles of a station too, and finds each by its key', () => {
+    const map = consoleLab().map;
     const finds: Find[] = [
       { of: 'source', id: 'buch' },
       { of: 'console', puzzleId: 'kette', console: 'a' },
@@ -190,6 +193,8 @@ describe('what a run has to find', () => {
       'console:kabel/-',
       'sign',
     ]);
+    expect(finds.map((find) => findOf(map, findKey(find)))).toEqual(finds);
+    expect(findOf(map, 'source:nix')).toBeNull();
   });
 });
 
@@ -219,5 +224,74 @@ describe('a room the power lights', () => {
     expect(Object.keys(glance.glances)).toContain('source:buch-archiv');
     const later = lookAround(map, shutDoors(map, state), book, things, glance.glances, T0 + 250);
     expect(later.found).toContain('source:buch-archiv');
+  });
+});
+
+describe('the chime', () => {
+  /** The double console lab with its lights out: the Signalkette armed, the book its rules. */
+  const armed = (): GameState => lightsOut(started(consoleLab()));
+  const chimedFor = (state: GameState, playerId: string) =>
+    (state.chimed[playerId] ?? []).map((chime) => [chime.key, chime.at - T0]);
+
+  it('sounds once a thing, once every 1.5 s a player; a find in the gap stays silent', () => {
+    const first = standing(armed(), { found: { p1: ['sign'] }, at: T0 });
+    expect(chimedFor(first, 'p1')).toEqual([['sign', 0]]);
+    const inTheGap = standing(first, { found: { p1: ['source:buch'] }, at: T0 + 1000 });
+    expect(inTheGap.found['p1']).toEqual(['sign', 'source:buch']);
+    expect(chimedFor(inTheGap, 'p1')).toEqual([['sign', 0]]);
+    const after = standing(inTheGap, {
+      found: { p1: ['console:kette/a'] },
+      at: T0 + CHIME_GAP_MS,
+    });
+    expect(chimedFor(after, 'p1')).toEqual([
+      ['sign', 0],
+      ['console:kette/a', 1500],
+    ]);
+    // Found again later, the book stays silent: it was found in the gap.
+    const again = standing(after, { found: { p1: ['source:buch', 'sign'] }, at: T0 + 9000 });
+    expect(chimedFor(again, 'p1')).toEqual(chimedFor(after, 'p1'));
+    // Ben's chimes are his own: the sign chimes for him in the middle of Anna's gap.
+    const ben = standing(first, { found: { p2: ['sign'] }, at: T0 + 100 });
+    expect(chimedFor(ben, 'p2')).toEqual([['sign', 100]]);
+  });
+
+  it('sounds for the find that matters most of those made at once', () => {
+    const state = standing(armed(), {
+      found: { p1: ['sign', 'console:kabel/-', 'source:buch', 'console:kette/b'] },
+      at: T0,
+    });
+    expect(chimedFor(state, 'p1')).toEqual([['console:kette/b', 0]]);
+    expect(viewFor(state, 'p1').map?.chimes).toEqual([
+      { find: { of: 'console', puzzleId: 'kette', console: 'b' }, at: T0 },
+    ]);
+    expect(viewFor(state, 'p2').map?.chimes).toEqual([]);
+    expect(viewForSpectator(state).map?.chimes).toEqual([]);
+  });
+
+  it('matters for the armed station’s consoles and rules, a part, a note, the sign', () => {
+    const state = armed();
+    const how = (find: Find) => mattering(state, find);
+    expect(how({ of: 'console', puzzleId: 'kette', console: 'a' })).toBe(0);
+    expect(how({ of: 'source', id: 'buch' })).toBe(1);
+    expect(how({ of: 'item', id: 'sicherung' })).toBe(2);
+    expect(how({ of: 'note', index: 0 })).toBe(3);
+    expect(how({ of: 'sign' })).toBe(4);
+    // A console of a station still to come, or one done, would drown the one at hand.
+    const kabel: Find = { of: 'console', puzzleId: 'kabel', console: null };
+    expect(how(kabel)).toBeNull();
+    const solved = { ...state, currentPuzzleIndex: 1 };
+    expect(mattering(solved, kabel)).toBe(0);
+    expect(mattering(solved, { of: 'console', puzzleId: 'kette', console: 'a' })).toBeNull();
+    // With the power still on, no station is armed: neither its console nor its rules matter.
+    const lightsOn = started(blackoutMission(), 5);
+    expect(mattering(lightsOn, { of: 'source', id: 'buch-archiv' })).toBeNull();
+    expect(mattering(lightsOn, { of: 'console', puzzleId: 'notlicht', console: null })).toBeNull();
+  });
+
+  it('stays silent for the rules of a station not armed', () => {
+    // Blackout's book prints the Notstrom-Kasten's rules; the lever is armed.
+    expect(mattering(blackout(), { of: 'source', id: 'buch-archiv' })).toBeNull();
+    const notstrom = { ...blackout(), currentPuzzleIndex: 1 };
+    expect(mattering(notstrom, { of: 'source', id: 'buch-archiv' })).toBe(1);
   });
 });

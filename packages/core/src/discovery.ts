@@ -1,3 +1,4 @@
+import { lightsAreOut } from './map.js';
 import type { MapDef } from './mission.js';
 import { noteSpot } from './notes.js';
 import type { ConsoleId } from './puzzles/module.js';
@@ -14,8 +15,14 @@ import type { GameState } from './state.js';
  * lights shows its things, but finds nothing for anybody: the same two
  * rules hold there. What a player has found stays theirs for the run; the
  * crew shares it only as the game already shares things — the minimap, the
- * arrows, a key's lock once somebody has come across it. Pure: the server
- * says where everybody stands and when, this says what they found.
+ * arrows, a key's lock once somebody has come across it.
+ *
+ * A find that matters chimes once for whoever made it (`chimeFinds`): a
+ * console of the armed station, a source printing its rules, a part, a note,
+ * the sign — at most one every CHIME_GAP_MS for a player, and never twice
+ * for one thing. One that comes while the gap runs is dropped, not kept for
+ * later. Pure: the server says where everybody stands and when, this says
+ * what they found.
  */
 
 /** How near a thing has to lie to be found outright, tiles, with nothing in between. */
@@ -28,6 +35,8 @@ export const LAMP_HALF_ANGLE = 0.5;
 export const LAMP_REACH = 7.5;
 /** How long a thing has to stand in the lamp's cone to be found, ms. */
 export const LOOK_MS = 250;
+/** How long after one chime the next may sound for the same player, ms. */
+export const CHIME_GAP_MS = 1500;
 
 /** One thing to find, as the views name it. */
 export type Find =
@@ -39,6 +48,13 @@ export type Find =
 
 /** What the state keeps a find by: `source:<id>`, `note:<index>`, `item:<id>`, … */
 export type FindKey = string;
+
+/** A find the player's screen answers with its chime and caption, and when it was made. */
+export interface Chime {
+  find: Find;
+  /** epoch ms */
+  at: number;
+}
 
 type StationSpot = MapDef['stations'][number];
 
@@ -60,6 +76,31 @@ export function findKey(find: Find): FindKey {
     case 'sign':
       return 'sign';
   }
+}
+
+/** The finds a map holds, by key: its sources, notes, parts, consoles and sign. */
+function findsOf(map: MapDef): Map<FindKey, Find> {
+  const finds: Find[] = [
+    ...map.manuals.map((m): Find => ({ of: 'source', id: m.id })),
+    ...map.notes.map((_, index): Find => ({ of: 'note', index })),
+    ...map.items.map((item): Find => ({ of: 'item', id: item.id })),
+    ...map.stations.map(consoleFind),
+    ...(map.edgeworkSign === undefined ? [] : [{ of: 'sign' } as const]),
+  ];
+  return new Map(finds.map((find) => [findKey(find), find]));
+}
+
+/** The finds of each map, worked out once per map. */
+const findsByMap = new WeakMap<MapDef, Map<FindKey, Find>>();
+
+/** The thing of `map` kept as `key`; null where the map holds none. */
+export function findOf(map: MapDef, key: FindKey): Find | null {
+  let finds = findsByMap.get(map);
+  if (finds === undefined) {
+    finds = findsOf(map);
+    findsByMap.set(map, finds);
+  }
+  return finds.get(key) ?? null;
 }
 
 /** A thing of this run to find: what it is, and the point in tiles it is looked for at. */
@@ -203,4 +244,68 @@ export function lookAround(
 /** Whether somebody of the crew has found the thing kept as `key`: what the game shares of it. */
 export function crewFound(state: GameState, key: FindKey): boolean {
   return Object.values(state.found).some((keys) => keys.includes(key));
+}
+
+/** The puzzle of the armed station, while one is: the lights out and a station still to work. */
+function armedPuzzle(state: GameState): string | null {
+  const current = state.mission.puzzles[state.currentPuzzleIndex];
+  return lightsAreOut(state) && current !== undefined ? current.id : null;
+}
+
+/**
+ * How much finding `find` matters now, most first, or null where it does
+ * not: a console of the armed station, a source printing its rules, a part,
+ * a note, the sign. A console or the rules of any other station stay silent,
+ * as a find to work later would only drown the one at hand; decor,
+ * furniture, lamps and plates are never found at all.
+ */
+export function mattering(state: GameState, find: Find): number | null {
+  switch (find.of) {
+    case 'console':
+      return find.puzzleId === armedPuzzle(state) ? 0 : null;
+    case 'source': {
+      const armed = armedPuzzle(state);
+      const source = state.mission.map.manuals.find((m) => m.id === find.id);
+      return armed !== null && source?.puzzleIds.includes(armed) === true ? 1 : null;
+    }
+    case 'item':
+      return 2;
+    case 'note':
+      return 3;
+    case 'sign':
+      return 4;
+  }
+}
+
+/**
+ * The chimes after each player's new finds at `at` (epoch ms), by player id:
+ * the one that matters most chimes — where the player's last chime was
+ * CHIME_GAP_MS ago or more, and never twice for one thing; the rest of them
+ * stay silent for good.
+ */
+export function chimeFinds(
+  state: GameState,
+  fresh: Readonly<Record<string, readonly FindKey[]>>,
+  at: number,
+): GameState['chimed'] {
+  const chimed = { ...state.chimed };
+  for (const [playerId, keys] of Object.entries(fresh)) {
+    const had = chimed[playerId] ?? [];
+    const last = had.at(-1);
+    if (last !== undefined && at - last.at < CHIME_GAP_MS) {
+      continue;
+    }
+    const due = keys
+      .filter((key) => !had.some((chime) => chime.key === key))
+      .map((key) => {
+        const find = findOf(state.mission.map, key);
+        return { key, rank: find === null ? null : mattering(state, find) };
+      })
+      .filter((one): one is { key: FindKey; rank: number } => one.rank !== null)
+      .sort((a, b) => a.rank - b.rank)[0];
+    if (due !== undefined) {
+      chimed[playerId] = [...had, { key: due.key, at }];
+    }
+  }
+  return chimed;
 }
