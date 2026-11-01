@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   dailyLabel,
   DIFFICULTIES,
@@ -86,6 +86,36 @@ interface BoardProps {
   selectDifficulty: (difficulty: Difficulty) => void;
 }
 
+/**
+ * Where a strip scrolled to `scroll`, `width` wide, scrolls to so that the span from `left` to
+ * `right` of what it holds shows whole, `pad` clear of its edges: where it is if it shows, else
+ * the nearest scroll that shows it.
+ */
+export function scrollToShow(
+  scroll: number,
+  width: number,
+  [left, right]: readonly [number, number],
+  pad: number,
+): number {
+  if (left - pad < scroll) {
+    return Math.max(0, left - pad);
+  }
+  return right + pad > scroll + width ? right + pad - width : scroll;
+}
+
+/** Scrolls the strip of tabs `strip` so that its tab pressed shows (history.css `.history-tabs`). */
+function showPressed(strip: HTMLElement | null): void {
+  const tab = strip?.querySelector<HTMLElement>('[aria-pressed="true"]');
+  if (strip == null || tab == null) {
+    return;
+  }
+  const box = strip.getBoundingClientRect();
+  const at = tab.getBoundingClientRect();
+  const left = at.left - box.left + strip.scrollLeft;
+  const pad = parseFloat(getComputedStyle(strip).paddingLeft) || 0;
+  strip.scrollLeft = scrollToShow(strip.scrollLeft, strip.clientWidth, [left, left + at.width], pad);
+}
+
 /** The missions to pick from: the catalog's in its order, then any it no longer has, by id. */
 function tabsOf(missions: MissionInfo[], stats: MissionStats[]): { id: string; title: string }[] {
   const gone = stats.filter((m) => !missions.some((known) => known.id === m.missionId));
@@ -112,10 +142,12 @@ export function HistoryBoard({
   const group = stats
     .find((mission) => mission.missionId === missionId)
     ?.difficulties.find((level) => level.difficulty === difficulty);
+  const strip = useRef<HTMLDivElement>(null);
+  useEffect(() => showPressed(strip.current), [missionId]);
 
   return (
     <>
-      <div className="history-tabs" role="group" aria-label="Mission">
+      <div ref={strip} className="history-tabs" role="group" aria-label="Mission">
         {[...tabs, { id: DAILY_TAB, title: 'Tagesschicht' }].map((tab) => (
           <button
             key={tab.id}

@@ -9,7 +9,7 @@ import type {
   MissionStats,
 } from '@escapelab/core';
 import { clock, recordLine, recordParts, winShare } from '../src/runStats.js';
-import { HistoryBoard, HistoryScreen } from '../src/screens/History.js';
+import { HistoryBoard, HistoryScreen, scrollToShow } from '../src/screens/History.js';
 import { JoinScreen } from '../src/screens/Join.js';
 import { Standing, type FinishedRun } from '../src/screens/Standing.js';
 import { iconsAsWords, PICTOGRAPH } from './fixtures.js';
@@ -322,6 +322,15 @@ describe('the Bestenliste page', () => {
     expect(html).toContain('Lade Bestenliste …');
   });
 
+  it('scrolls the strip of tabs only as far as the tab open needs to show whole', () => {
+    // A strip 400 px wide, 26 px kept clear at its edges.
+    expect(scrollToShow(0, 400, [100, 200], 26)).toBe(0);
+    expect(scrollToShow(0, 400, [500, 620], 26)).toBe(620 + 26 - 400);
+    expect(scrollToShow(300, 400, [40, 160], 26)).toBe(14);
+    expect(scrollToShow(300, 400, [10, 120], 26)).toBe(0);
+    expect(scrollToShow(300, 400, [400, 500], 26)).toBe(300);
+  });
+
   it('draws no emoji', () => {
     expect(board('blackout')).not.toMatch(PICTOGRAPH);
     expect(standing(finished(), 3)).not.toMatch(PICTOGRAPH);
@@ -330,6 +339,12 @@ describe('the Bestenliste page', () => {
 
 describe('the stylesheet', () => {
   const css = readFileSync(new URL('../src/styles/history.css', import.meta.url), 'utf8');
+
+  it('keeps the missions’ tabs to one row that scrolls sideways, however many missions', () => {
+    // A row that wrapped grew the page past a 1280 × 720 window (the walkthrough's `scrolls`).
+    expect(css).toMatch(/\.history-tabs \{[^}]*flex-wrap: nowrap;[^}]*overflow-x: auto;/);
+    expect(css).toMatch(/\.history-tab \{\s*flex: none;\s*white-space: nowrap;/);
+  });
 
   it('sets a card with its record to four lines that fit its 64px map: 18 + 3 × 15', () => {
     expect(css).toMatch(/\.mission-text:has\(\.mission-record\) \{\s*gap: 0;/);
