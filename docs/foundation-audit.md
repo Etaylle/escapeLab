@@ -181,3 +181,89 @@ Measurements took about 24 minutes of active run time (31 with an accidental sec
 | Code census | `census-minigames.md`, `census-feedback.md`, `census-interaction-ui.md` |
 | References | `references-raw.md` |
 | Helpers | `lib.mjs`, `server.sh`, `audit-server-3341.mjs`, `quiet.sh`, `run-chain.sh` |
+
+---
+
+## Stand nach N-foundation
+
+Branch `N-foundation` (on main `b606247`): one commit per item, then one per finding of a code
+review of the branch. Measured on 2026-11-01 with the audit's scripts, copied to
+`scratchpad/foundation/` and pointed at port 3351, on a quiet machine (1-min load under 4, no
+other walkthrough), the base (`b606247`, built beside it) run alongside. The plate door, E on
+arrival and the partner's figure were measured again on the branch head after the review, the
+partner's figure with the base between its runs (A B A B); the other rows on their item's own
+build, which the review's fixes leave alone. Findings by the numbers of the table above.
+
+| # | What | Measure | Before | After |
+|---|---|---|---|---|
+| 5 | Partner's figure, drawn 150 ms in the past | step variation (m1 metric) | 0.435, 0.430 | 0.271, 0.281 |
+|   |   | the same, where the walker also walked 150 ms before | 0.345, 0.342 | 0.086, 0.115 |
+|   |   | broadcasts repeating the walker's last sample | 39 of 95, 39 of 95 | 2 of 56, 3 of 56 |
+|   |   | lag behind the walker, p50 | 153, 149 ms | 153, 152 ms |
+| 4 | Plate door shutting on a walker (8 trials) | frozen on the LAN · at 200 ms | 8 · 0 | 0 · 0 |
+| 7 | One-tile opening, the audit's 11 trials and ±0.45 | passed | 5 of 13 (to ±0.20) | 13 of 13 (to ±0.43) |
+| 7 | W held 2 s against a wall | footfalls · thuds | 15 · – | 1 (the 0.21 tiles to it) · 1 |
+| 10 | A device whose clock runs 5 s ahead | clock against its partner | 5 s off, 0 of 10 alike | 1 ms off, 9 of 10 alike |
+| 10 | A run paused by a silent line | counted 6 s in · jump on resume | 6 s · +5 s | 0 ms · −4 ms |
+| 6 | E the moment the prompt shows (one judged press per run) | opened on the LAN · at 200 ms | 4 of 8 · 4 of 8 | 8 of 8 · 8 of 8 |
+| 6 | A refusal at an open device | where it shows | banner under the device, wiped by walking | the device's head, on top |
+| 11 | The start line on two pages, one spawned at the sign | apart | 4.41 s | 0.89 s (each screen's cold open) |
+| 11 | A message sent while the socket reconnects | – | throws | held for a socket on its way, sent once its session is back |
+
+**After review.** A review of the branch found two bugs, four risks and five smaller faults. Each
+has its own commit, and a test that fails without it gives its numbers:
+
+| Finding | Before | After |
+|---|---|---|
+| E pressed just before reach of a station already open | up to 8 chirps and panel opens | 1 |
+| The spot E was pressed on, echoed to a player 1.6 tiles further on | pulled back to it | kept as sent, nothing pulled |
+| A frame's moment on the server's clock after a minute asleep | partners drawn 60 s late | on time |
+| A partner's samples kept on a 300 ms line over ten minutes | 7 500 | 12 |
+| A step into a door that shut first on the server | let out the far side | back the way it came |
+| A puzzle press made while the line was down | sent once the line is back | dropped with one warning |
+| Messages waiting where the server refuses the session | each one „Noch in keinem Raum." over the reason | dropped with one warning |
+| Countdown beeps over a 10 ms clock correction | 7, 6, 7, 6, 5 | 7, 6, 5 |
+| The note slip 20 s into a pause | offers the note 10 s early | still 10 s |
+| A drone woken held still, a spectator coming in | reaches the crew up to 1 s late | on the next 80 ms tick |
+
+**What changed.** Every `pos` carries the frame it was walked in and the server relays it with
+its receipt; each screen draws a partner 150 ms behind on the server's clock, straight between
+the samples round that moment, at most 100 ms past the newest, a walk after a long stand setting
+off as late as its pace allows (`world/trail.ts`); positions fan out only when a sample is new, a
+step was refused or a drone moved, and once a second besides. An avatar walks — and is sent as
+walking — only while it covers ground. The client lets a body out of a door that shut on it as
+the server takes the step. A body caught on the edge of an opening slides into it (up to 0.3
+tiles); against a wall the steps stop and it thuds once a push. Views carry the server's time,
+the page asks for it (median of five round trips) and every countdown to a moment the server set
+reads that clock, standing still while the run is paused. E goes out with the spot it was
+pressed on, is judged there, waits 150 ms for reach when pressed early, and chirps on the
+server's yes; refusals are said in the device's head and on the prompt pill, not in the banner,
+which no position wipes any more. An emergency cleared chimes, a missed one is silent but for its
+alarm; the reader hears a solve quietly and sees its room light up behind the book; Q, page
+turns and the notepad sound; the radio goes on the air before the sign's note. A message waits
+only for a socket on its way — still connecting, or waiting for its session — and goes out once
+the server has the session back; while none is on its way it is dropped with one warning, so
+nothing done blind lands once the run goes on.
+
+**Not reached, and why.** The m1 step variation stays above the 0.25 the audit's replay
+promised: 0.271 and 0.281. The metric counts the frames where the walker is walking now, and
+150 ms later the figure faithfully replays the walker's own stops — the start and three 80-ms
+turns of the script, 25 of about 238 frames; where the walker also walked 150 ms before, the
+variation is 0.086 and 0.115. The audit's own timestamped replay lands on either side of the
+target with the recording: 0.218 and 0.224 on today's base recordings, 0.258 and 0.266 on the
+branch's own, where the branch's `trail.ts` replayed gives 0.271 and 0.282, as drawn live. Left
+on each device's own clock: the opening, the cold open, the briefing and the end's timeline,
+which animate from server moments but count nothing down.
+
+**About the scripts.** m4b's arrival trials judge a press only until one succeeds: the lever
+stays switched on, and every later press opens its panel without asking the server — the audit's
+5 of 8 on the LAN were three refusals, one press taken and four that asked nothing (its 0 of 8 at
+200 ms were all judged). `m4e-arrival.mjs` presses once per fresh run. m4's clock test shifts
+`Date` only; the copy shifts the page's time origin with it, as on a device whose clock runs
+ahead. Since the review a frame's moment goes over from the server's time now, so a `Date`-only
+shift draws the partners on time as well (`clock.test.tsx`).
+
+**Walkthrough.** On the branch head `tools/shots.mjs` played both missions to the end, with
+`SHOTS_SOFTWARE_GL=1` and without: Blackout 99 captures, 3 skipped, 0 failed (won 383.6 s and
+377.3 s after the lights went out), Systemcheck 76 captures, 9 skipped, 0 failed (won in 3:34 and
+3:33). Every frame window gated at 40 ms held at 16.8 ms p95 or less.
