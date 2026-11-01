@@ -180,6 +180,10 @@ The terminal (console A) is worked by typing, and its prompt holds the keyboard 
   FUNK key talks while held by a mouse or a finger (with the microphone on), and L1 on a
   controller talks straight to the voice, sending no key (`input/padRuntime.ts` `onPadTalk`).
   The Einsatzinfo's controls say „Am Terminal: Funk per Maus/Pad".
+- **The notepad.** N types at the prompt like any letter too. The bezel's „Notieren" brings the
+  pad up beside the terminal with the table taken down fresh; a controller's X and the
+  chassis' tab on a touch screen bring it up as at every device, and Esc, N and E again do it
+  from the world.
 
 `client/test/terminal.test.tsx` holds each of these; the walkthrough types Blackout's first
 command as a player would — a click on the screen first, then letters and Tab — and shoots the
