@@ -173,18 +173,76 @@ export function followServer(
   }
 }
 
-/** Whether an avatar at (x, y) would stand in a wall, a shut door or a piece of furniture. */
-function blocked(map: WorldMap, closedDoors: Set<string>, x: number, y: number): boolean {
+/** The tiles the four corners of an avatar's body at (x, y) stand on, as [x, y]. */
+function cornerTiles(x: number, y: number): [number, number][] {
+  const out: [number, number][] = [];
   for (const dx of [-RADIUS, RADIUS]) {
     for (const dy of [-RADIUS, RADIUS]) {
-      const tx = Math.floor(x + dx);
-      const ty = Math.floor(y + dy);
-      if (!walkable(map, tx, ty) || closedDoors.has(`${tx},${ty}`)) {
-        return true;
-      }
+      out.push([Math.floor(x + dx), Math.floor(y + dy)]);
     }
   }
-  return false;
+  return out;
+}
+
+/** The key of the tile (x, y) lies on. */
+function tileOf(x: number, y: number): string {
+  return `${Math.floor(x)},${Math.floor(y)}`;
+}
+
+/**
+ * What a frame's step is checked against: the doors shut now, by tile; the shut ones the body
+ * overlaps already — a door may shut on a walker —; the tile the body's centre stands on; and
+ * the tile the server last had it on, as this page last sent it.
+ */
+interface Footing {
+  shut: ReadonlySet<string>;
+  overlapped: ReadonlySet<string>;
+  centre: string;
+  server: string;
+}
+
+function footingOf(sim: Sim, map: WorldMap): Footing {
+  const shut = new Set(map.doors.filter((d) => !d.open).map((d) => `${d.x},${d.y}`));
+  const { x, y } = sim.self;
+  const touched = cornerTiles(x, y).map(([tx, ty]) => `${tx},${ty}`);
+  const sent = sim.streamed.at(-1);
+  const centre = tileOf(x, y);
+  return {
+    shut,
+    overlapped: new Set(touched.filter((key) => shut.has(key))),
+    centre,
+    server: sent === undefined ? centre : tileOf(sent.x, sent.y),
+  };
+}
+
+/**
+ * Whether the centre of a body may stand on `tile`, as the server takes a step (core's
+ * `stepAllowed`, whose start tile never stops it): never into a shut door; out of one the door
+ * shut on anywhere where the server had it in the door, else only back where the server had it.
+ */
+function centreMay(footing: Footing, tile: string): boolean {
+  const { shut, centre, server } = footing;
+  if (tile === centre) {
+    return true;
+  }
+  if (shut.has(tile)) {
+    return false;
+  }
+  return !shut.has(centre) || server === centre || tile === server;
+}
+
+/**
+ * Whether an avatar at (x, y) would stand in a wall or a piece of furniture, or step into a shut
+ * door — its body only into one that shut on it, its centre as `centreMay` has it.
+ */
+function blocked(map: WorldMap, footing: Footing, x: number, y: number): boolean {
+  for (const [tx, ty] of cornerTiles(x, y)) {
+    const key = `${tx},${ty}`;
+    if (!walkable(map, tx, ty) || (footing.shut.has(key) && !footing.overlapped.has(key))) {
+      return true;
+    }
+  }
+  return !centreMay(footing, tileOf(x, y));
 }
 
 /** Where the avatar is steered: a way of unit length, and how much of a full walk. */
@@ -224,7 +282,8 @@ function heading(sim: Sim, locked: boolean): Heading {
 
 /**
  * One frame's walk from the keys held or the controller's stick (input → velocity): the
- * facing, the step as far as no wall, shut door or furniture stands in the way, and the gait —
+ * facing, the step as far as no wall, shut door or furniture stands in the way — a door shut
+ * on the avatar lets it out as the server does (`blocked`) — and the gait —
  * SPRINT_FACTOR times as fast with sprint held, no stamina; a stick leant part of the way walks
  * that part as fast. The avatar walks (`self.moving`) only where it covers ground: pushing
  * into a wall it stands, as its partners then see it (trail.ts). Returns the footfall that
@@ -241,13 +300,13 @@ export function walk(sim: Sim, map: WorldMap, dt: number, locked: boolean): Foot
   const sprinting = sim.keys.has('sprint') || sim.pad.sprint;
   const pace = sprinting ? SPRINT_FACTOR : 1;
   const speed = WALK_SPEED * pace * lean;
-  const closedDoors = new Set(map.doors.filter((d) => !d.open).map((d) => `${d.x},${d.y}`));
+  const footing = footingOf(sim, map);
   const nx = sim.self.x + dx * speed * dt;
-  if (!blocked(map, closedDoors, nx, sim.self.y)) {
+  if (!blocked(map, footing, nx, sim.self.y)) {
     sim.self.x = nx;
   }
   const ny = sim.self.y + dy * speed * dt;
-  if (!blocked(map, closedDoors, sim.self.x, ny)) {
+  if (!blocked(map, footing, sim.self.x, ny)) {
     sim.self.y = ny;
   }
   sim.self.moving = sim.self.x !== from.x || sim.self.y !== from.y;

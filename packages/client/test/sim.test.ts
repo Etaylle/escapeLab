@@ -46,6 +46,52 @@ describe('walk — furniture stands in the way like a wall', () => {
   });
 });
 
+/** A corridor north to south with a door at (2,3), shut: the plate it waits for let go. */
+const DOORWAY = mapWith({
+  width: 5,
+  height: 7,
+  tiles: ['#####', '#...#', '#...#', '##.##', '#...#', '#...#', '#####'],
+  doors: [{ id: 'tuer', x: 2, y: 3, open: false }],
+});
+
+/**
+ * An avatar at `y` on the corridor's middle column, the server last having it at `sent`,
+ * walking `move` for half a second: where it ends up.
+ */
+function fromDoor(y: number, sent: number, move: Held): number {
+  const sim = newSim(0);
+  Object.assign(sim.self, { x: 2.5, y });
+  sim.streamed = [{ x: 2.5, y: sent, at: 0 }];
+  sim.keys.add(move);
+  for (let i = 0; i < 30; i++) {
+    walk(sim, DOORWAY, 1 / 60, false);
+  }
+  return sim.self.y;
+}
+
+describe('walk — a door shut on a walker', () => {
+  it('lets out either way a walker the server had in the doorway as it shut', () => {
+    expect(fromDoor(3.4, 3.35, 'down')).toBeGreaterThan(4.5);
+    expect(fromDoor(3.4, 3.35, 'up')).toBeLessThan(2.5);
+  });
+
+  it('takes one the server still had before the door back that way, never through', () => {
+    expect(fromDoor(3.2, 2.9, 'down')).toBeLessThan(4);
+    expect(fromDoor(3.2, 2.9, 'up')).toBeLessThan(2.5);
+  });
+
+  it('lets a body the door shut on from outside step back, its centre never in', () => {
+    expect(fromDoor(2.85, 2.85, 'up')).toBeLessThan(2.5);
+    expect(fromDoor(2.85, 2.85, 'down')).toBeLessThan(3);
+  });
+
+  it('stops a walker coming up to it, the body short of the doorway', () => {
+    const y = fromDoor(1.5, 1.5, 'down');
+    expect(y).toBeLessThanOrEqual(3 - 0.28);
+    expect(y).toBeGreaterThan(3 - 0.28 - 0.08);
+  });
+});
+
 describe('walk — walking means covering ground', () => {
   it('walks while it covers ground and stands once a wall holds it, the key still down', () => {
     const map = mapWith({ width: 10, height: 6, tiles: TILES });
