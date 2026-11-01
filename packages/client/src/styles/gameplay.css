@@ -285,6 +285,22 @@
   color: #d8bd7c;
 }
 
+/*
+ * A laptop's window, 720 px high: the mission panel draws its parts closer, so that a first
+ * crew's host — the Erfolge under the facts, why „entspannt" stands picked under the levels —
+ * starts without scrolling. Narrower windows stack the lobby (lobby.css) and scroll anyway.
+ */
+@media (min-width: 861px) and (max-height: 760px) {
+  .lobby-panel {
+    gap: 8px;
+    padding-block: 12px;
+  }
+
+  .lobby-head {
+    gap: 5px;
+  }
+}
+
 /* ── the Tagesschicht's days in the Bestenliste (screens/History.tsx) ───────────────────── */
 
 .history-days {
