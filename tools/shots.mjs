@@ -101,6 +101,8 @@
  * and a shape; the deliberate wrong one gives figure-flinch.png), the
  * Serverraum's table and moves (servers-manual.png from its locker,
  * servers-a.png and servers-b.png from its consoles, servers-solved.png),
+ * the cabinet read at the large text size (book-morse-1.15.png: the
+ * Morsetafel whole on its page, the Frequenztabelle facing it, no line cut),
  * the radio panel's lamp and dial, the spare fuse carried from the Archiv to
  * the reactor and the reactor pressed together. From the Signalkette on the
  * drones are awake: every walk goes from haven to haven past them — the
@@ -6496,14 +6498,102 @@ async function handle(player, what, done) {
   }
 }
 
+/** Picks the text size reading `label` („Klein", „Normal", „Groß") in the settings, then Esc. */
+async function chooseTextSize(page, label) {
+  await page.locator('.settings-toggle').click();
+  const sizes = page.locator('.settings-options[aria-label="Textgröße"]');
+  await sizes.waitFor({ timeout: 3000 });
+  await sizes.locator('.settings-option', { hasText: label }).click();
+  await page.keyboard.press('Escape');
+  await page.locator('.settings-card').waitFor({ state: 'hidden', timeout: 2000 });
+}
+
+/** How the open book shows its Morsetafel: the page it stands on, its rows, the table facing it. */
+function morseOnShow() {
+  const pages = [...document.querySelectorAll('.reading-modal .book-pages > .book-leaves > .page')];
+  const headed = (page, first) =>
+    [...page.querySelectorAll('.manual-table table')].find(
+      (table) => table.querySelector('th')?.textContent?.trim() === first,
+    ) ?? null;
+  const morse = pages.find((page) => headed(page, 'Buchstabe') !== null) ?? null;
+  const facing = pages.some((page) => page !== morse && headed(page, 'Wort') !== null);
+  const table = morse === null ? null : headed(morse, 'Buchstabe');
+  return {
+    page: morse?.getAttribute('aria-label') ?? null,
+    rows: table === null ? 0 : table.querySelectorAll('tbody tr').length,
+    facing,
+  };
+}
+
+/** Pages of the open book whose lines run past the sheet's edge, or past its foot. */
+function pagesCut() {
+  return [...document.querySelectorAll('.reading-modal .page')].filter((page) => {
+    const text = page.querySelector('.page-text');
+    if (text === null) {
+      return false;
+    }
+    const sheet = page.getBoundingClientRect();
+    const wide = [...text.querySelectorAll('*')].some(
+      (el) => el.getBoundingClientRect().right > sheet.right + 0.5,
+    );
+    const over = text.scrollHeight > text.clientHeight + 1;
+    return wide || text.scrollWidth > text.clientWidth + 1 || over;
+  }).length;
+}
+
+/**
+ * book-morse-1.15.png: the cabinet's pages at the large text size („Groß") at 1280×720, where
+ * they lie open as a spread: the Morsetafel whole on its page — all 13 rows, over no page turn
+ * — and the Frequenztabelle facing it, read together; no line runs past the sheet's edge and
+ * no page past its foot. The run fails where the table breaks, the two lie apart or a page is
+ * cut. The text size goes back to normal and the window to the phone after.
+ */
+async function captureMorseBook(reader) {
+  const { page } = reader;
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await chooseTextSize(page, 'Groß');
+  const overlay = page.locator('.reading-modal');
+  if (!(await interactUntil(page, overlay))) {
+    throw new Error(`${reader.name} stands at the cabinet, but no .reading-modal opened`);
+  }
+  await sleep(500);
+  let shown = await page.evaluate(morseOnShow);
+  for (let turns = 0; shown.page === null && turns < 6; turns++) {
+    await page.keyboard.press('ArrowRight');
+    await sleep(600);
+    shown = await page.evaluate(morseOnShow);
+  }
+  const cut = await page.evaluate(pagesCut);
+  await capture(page, 'book-morse-1.15.png');
+  const where = await textOf(overlay.locator('.book-where'));
+  console.log(
+    `book-morse-1.15.png ${reader.name} at the AKTENSCHRANK, „Groß": ${where}, the Morsetafel ` +
+      `on ${shown.page ?? '!! no page'} with ${shown.rows} rows, the Frequenztabelle ` +
+      `${shown.facing ? 'facing it' : '!! not in view'}, ${cut} page(s) cut`,
+  );
+  const wrong = [
+    shown.rows !== 13 && `the Morsetafel shows ${shown.rows} of 13 rows on one page`,
+    !shown.facing && 'the Frequenztabelle does not face the Morsetafel',
+    cut > 0 && `${cut} page(s) cut at the sheet's edge or foot`,
+  ];
+  if (wrong.some(Boolean)) {
+    fail(`book-morse-1.15: ${wrong.filter(Boolean).join(', ')}`);
+  }
+  await page.keyboard.press('Escape');
+  await overlay.waitFor({ state: 'hidden', timeout: 3000 });
+  await chooseTextSize(page, 'Normal');
+  await page.setViewportSize({ width: SIZES[2].width, height: SIZES[2].height });
+}
+
 /**
  * The radio panel in the Labor on the pinned seed: the guest, left at the
  * rack in the open, takes the key there round to the cabinet past the
- * patrols and unlocks it from the haven behind the pillar, while the host
- * waits by the terminal, where no drone looks either; then the host walks to
- * the panel, switches it on — from then on the panel hides them both — and
- * tunes and sends as the plan pins it. Fails naming the seed where the lamp
- * or the dial differ.
+ * patrols and unlocks it from the haven behind the pillar, reads it at the
+ * large text size (book-morse-1.15.png), while the host waits by the
+ * terminal, where no drone looks either; then the host walks to the panel,
+ * switches it on — from then on the panel hides them both — and tunes and
+ * sends as the plan pins it. Fails naming the seed where the lamp or the
+ * dial differ.
  */
 async function playFrequenz(host, guest) {
   const pin = BLACKOUT_PLAN.frequenz;
@@ -6519,6 +6609,7 @@ async function playFrequenz(host, guest) {
   await foundWherePinned(guest, cabinet);
   await handle(guest, 'the cabinet', () =>
     guest.seen.view.map.manuals.some((m) => m.id === cabinet.id && m.opened));
+  await captureMorseBook(guest);
   await sneakTo(host, BLACKOUT_SPOTS.radio);
   await clearOfEmergencies(host, 25);
   const index = host.seen.view.currentPuzzleIndex;

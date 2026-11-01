@@ -360,7 +360,7 @@ describe('the stylesheets under the settings', () => {
         expect(size, `${sheet}: ${size}`).toMatch(/var\(--text-scale\)/);
       }
     }
-    const page = /\.page-in \{[^}]*font-size: calc\(100cqw \/ 30 \* var\(--text-scale\)\);/;
+    const page = /\.page-in \{[^}]*font-size: calc\(var\(--sheet-em\) \* var\(--text-scale\)\);/;
     expect(read('styles/book.css')).toMatch(page);
     const pad = /\.notepad-text \{[^}]*--rule: calc\(24px \* var\(--text-scale\)\);/;
     expect(read('ui.css')).toMatch(pad);

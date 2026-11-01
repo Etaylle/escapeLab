@@ -4,11 +4,14 @@ import {
   MODULES,
   moduleFor,
   PATTERN_FIGURE,
+  puzzleDefSchema,
   type ManualBlock,
   type ManualSection,
 } from '@escapelab/core';
+import { TEXT_SCALE } from '../src/settings.js';
 import {
   BOOK_PAGE,
+  bookPage,
   FIGURE_WIDTH,
   filled,
   firstPageOf,
@@ -339,38 +342,260 @@ describe('drawings and example boxes as ui.css sets them', () => {
 
 /**
  * The page as styles/book.css draws it, against what the pager counts: the
- * sheet 30 em across, the text column between the margins as tall as it
- * counts and a little wider — so a line that only just fits is counted as
- * two, and a page never runs over for it.
+ * sheet 30 of its em across, the text column between the margins as tall as
+ * it counts and a little wider — so a line that only just fits is counted as
+ * two, and a page never runs over for it — at every text size, the text set
+ * in the sheet's em times the size.
  */
 describe('the page as book.css draws it', () => {
   const sheet = readFileSync(new URL('../src/styles/book.css', import.meta.url), 'utf8');
-  /** The em values of a declaration in the first rule `selector` opens. */
-  function ems(selector: string, property: string): number[] {
+  /** A declaration in the first rule `selector` opens, as written. */
+  function declared(selector: string, property: string): string {
     const from = sheet.indexOf(`${selector} {`);
     if (from < 0) {
       throw new Error(`book.css has no rule "${selector}"`);
     }
     const rule = sheet.slice(from, sheet.indexOf('}', from));
-    const value = new RegExp(`\\n  ${property}: ([^;]+);`).exec(rule)?.[1] ?? '';
-    return [...value.matchAll(/([\d.]+)em/g)].map((m) => Number(m[1]));
+    return (new RegExp(`\\n  ${property}: ([^;]+);`).exec(rule)?.[1] ?? '').replace(/\s+/g, ' ');
   }
+  /** The sheet's em a declaration counts: every `calc(n * var(--sheet-em))` in it, in order. */
+  function sheetEms(selector: string, property: string): number[] {
+    const value = declared(selector, property);
+    return [...value.matchAll(/calc\(([\d.]+) \* var\(--sheet-em\)\)/g)].map((m) => Number(m[1]));
+  }
+  const [column = 0] = sheetEms('.page-in', 'grid-template-columns');
+  const [top = 0, outer = 0, bottom = 0, gutter = 0] = sheetEms('.page-in', 'padding');
 
-  it('sets one text column between a gutter of 1.8 em and an outer margin of 3', () => {
-    const [column = 0] = ems('.page-in', 'grid-template-columns');
-    const [top = 0, outer = 0, bottom = 0, gutter = 0] = ems('.page-in', 'padding');
+  it('sets one text column between a gutter of 1.8 sheet em and an outer margin of 3', () => {
     expect([gutter, column, outer]).toEqual([1.8, 25.2, 3]);
     expect(gutter + column + outer).toBeCloseTo(30, 9);
     expect(42 - top - bottom).toBeCloseTo(BOOK_PAGE.height, 9);
     // A left-hand page mirrors it: the gutter on its right.
-    expect(ems('.page-left .page-in', 'padding')).toEqual([top, gutter, bottom, outer]);
+    expect(sheetEms('.page-left .page-in', 'padding')).toEqual([top, gutter, bottom, outer]);
   });
 
-  it('counts the column a little narrower than it is drawn, never wider', () => {
-    const [column = 0] = ems('.page-in', 'grid-template-columns');
-    const slack = column - BOOK_PAGE.width;
-    expect(slack).toBeGreaterThan(0);
-    expect(slack).toBeLessThanOrEqual(0.6 + 1e-9);
+  it('measures the sheet in a thirtieth of its width, the text in that times the text size', () => {
+    expect(declared('.page-in', '--sheet-em')).toBe('calc(100cqw / 30)');
+    expect(declared('.page-in', 'font-size')).toBe('calc(var(--sheet-em) * var(--text-scale))');
+    // The book's frame is paper: the text size leaves the stack, the tabs and the slip alone.
+    expect(declared('.book-leaves', 'font-size')).toBe('calc(var(--sheet-h) / 42)');
+  });
+
+  it('counts the column a little narrower than it is drawn at every text size, never wider', () => {
+    for (const scale of Object.values(TEXT_SCALE)) {
+      // The sheet's column holds column / scale of the text's em.
+      const slack = column / scale - bookPage(scale).width;
+      expect(slack, `at ${scale}`).toBeGreaterThan(0);
+      expect(slack, `at ${scale}`).toBeLessThanOrEqual(0.6 + 1e-9);
+      expect((42 - top - bottom) / scale).toBeCloseTo(bookPage(scale).height, 9);
+    }
+  });
+});
+
+describe('bookPage', () => {
+  it('counts the normal text size’s column, and fewer of the text’s em at a larger size', () => {
+    expect(BOOK_PAGE.width).toBeCloseTo(24.6, 9);
+    expect(BOOK_PAGE.height).toBe(37);
+    expect(bookPage(1.15).width).toBeCloseTo(25.2 / 1.15 - 0.6, 9);
+    expect(bookPage(1.15).height).toBeCloseTo(37 / 1.15, 9);
+    expect(bookPage(0.9).width).toBeGreaterThan(BOOK_PAGE.width);
+    expect(bookPage(0.9).height).toBeGreaterThan(BOOK_PAGE.height);
+  });
+
+  it('refuses a size that is no factor above 0', () => {
+    for (const scale of [0, -1, Number.NaN]) {
+      expect(() => bookPage(scale)).toThrow(/factor above 0/);
+    }
+  });
+});
+
+describe('a table or a rules list that would break over a page turn', () => {
+  const half = 'Ein Absatz, der die Seite gut zur Hälfte füllt. ';
+  const lead: ManualBlock = { kind: 'p', text: half.repeat(3) };
+  const rows = Array.from({ length: 5 }, (_, i) => [`Zeile ${i + 1}`, 'an', 'aus']);
+  const table: ManualBlock = { kind: 'table', head: ['Name', 'Links', 'Rechts'], rows };
+
+  it('moves to the next page whole, under its heading, where it fits there', () => {
+    const manual: ManualSection[] = [
+      { heading: 'Vorab', blocks: [lead] },
+      { heading: 'Tafel', blocks: [table] },
+    ];
+    const pages = paginate([{ title: '§1 — Tafel', manual, reader: false }], SMALL);
+    expect(pages[1]?.fragments.at(-1)).toEqual(lead);
+    expect(pages[2]?.fragments).toEqual([{ kind: 'heading', text: 'Tafel' }, { ...table }]);
+  });
+
+  it('moves a list on whole under its heading „(Fortsetzung)" where it follows a block', () => {
+    const manual: ManualSection[] = [
+      { heading: 'Regeln', blocks: [lead, { kind: 'rules', items: items(4) }] },
+    ];
+    const pages = paginate([{ title: '§1 — Regeln', manual, reader: false }], SMALL);
+    expect(pages[2]?.fragments).toEqual([
+      { kind: 'heading', text: 'Regeln (Fortsetzung)' },
+      { kind: 'rules', items: items(4), start: 1 },
+    ]);
+  });
+
+  it('still breaks where not even a fresh page holds it', () => {
+    const long: ManualBlock = { ...table, rows: [...rows, ...rows, ...rows] };
+    const manual: ManualSection[] = [{ heading: 'Tafel', blocks: [lead, long] }];
+    const pages = paginate([{ title: '§1 — Tafel', manual, reader: false }], SMALL);
+    const parts = fragmentsOf(pages, 'table') as Extract<Fragment, { kind: 'table' }>[];
+    expect(parts.length).toBeGreaterThan(1);
+    expect(parts.flatMap((part) => part.rows)).toEqual(long.rows);
+  });
+});
+
+describe('a drawing', () => {
+  const drawing: ManualBlock = { kind: 'figure', of: 'wiring', caption: 'Abb. 1 — Kasten' };
+  // One line under the title: the drawing alone would still fit on that page.
+  const lead: ManualBlock = { kind: 'p', text: 'Ein Absatz über dem Aufbau.' };
+  const page = { width: 20, height: 16 };
+
+  it('stays with the paragraph after it, onto the next page', () => {
+    const text: ManualBlock = { kind: 'p', text: 'Pult A ist der Kasten. '.repeat(4) };
+    const manual: ManualSection[] = [{ heading: 'Aufbau', blocks: [lead, drawing, text] }];
+    const pages = paginate([{ title: '§1 — Kasten', manual, reader: false }], page);
+    expect(pages[1]?.fragments.at(-1)).toEqual(lead);
+    expect(pages[2]?.fragments).toEqual([drawing, text]);
+  });
+
+  it('stays with the table after it, the table whole', () => {
+    const rows = Array.from({ length: 2 }, (_, i) => [`${i + 1}`, 'rot']);
+    const table: ManualBlock = { kind: 'table', head: ['Nr.', 'Farbe'], rows };
+    const manual: ManualSection[] = [
+      { heading: 'Aufbau', blocks: [lead] },
+      { heading: 'Legende', blocks: [drawing, table] },
+      { heading: 'Werkstatt', blocks: [lead] },
+    ];
+    const pages = paginate([{ title: '§1 — Kasten', manual, reader: false }], {
+      width: 20,
+      height: 20,
+    });
+    const kinds = pages.map((p) => p.fragments.map((f) => f.kind));
+    expect(kinds[1]).toEqual(['title', 'heading', 'p']);
+    expect(kinds[2]?.slice(0, 3)).toEqual(['heading', 'figure', 'table']);
+  });
+
+  it('goes first where not even a fresh page holds it together with the block after it', () => {
+    // The paragraph fills most of a page on its own.
+    const wall: ManualBlock = { kind: 'p', text: 'Sehr viel Text. '.repeat(19) };
+    const manual: ManualSection[] = [{ heading: 'Aufbau', blocks: [drawing, wall] }];
+    const pages = paginate([{ title: '§1 — Kasten', manual, reader: false }], page);
+    const kinds = pages.map((p) => p.fragments.map((f) => f.kind));
+    expect(kinds.slice(1)).toEqual([['title', 'heading', 'figure'], ['p']]);
+  });
+});
+
+describe('a book lying open as a spread', () => {
+  // Four rules under the title, four more on the next page.
+  const short = station('§1 — Kurz', [{ kind: 'rules', items: items(8) }]);
+
+  it('opens a station of two pages on a left-hand page, a blank page before it', () => {
+    const one = paginate([short], SMALL, { spread: false });
+    expect(one.filter((page) => page.section === 0)).toHaveLength(2);
+    const two = paginate([short], SMALL, { spread: true });
+    expect(two.map((page) => [page.section, page.first])).toEqual([
+      [null, true],
+      [null, false],
+      [0, true],
+      [0, false],
+    ]);
+    expect(two[1]?.fragments).toEqual([]);
+    expect(pagesInView(firstPageOf(two, 0) ?? 0, true)).toEqual([3, 4]);
+    expect(openingPage(two, null)).toBe(3);
+  });
+
+  it('leaves no page blank where the book lies open one page at a time', () => {
+    const pages = paginate([short, short, short], SMALL);
+    expect(pages.slice(1).every((page) => page.section !== null)).toBe(true);
+  });
+
+  it('opens a station of three pages where it stands, both sides alike', () => {
+    // Three paragraphs, each with most of a page to itself.
+    const text: ManualBlock = { kind: 'p', text: 'Noch ein Absatz. '.repeat(11) };
+    const three = station('§1 — Drei', [text, text, text]);
+    const pages = paginate([three], SMALL, { spread: true });
+    expect(pages.filter((page) => page.section === 0)).toHaveLength(3);
+    expect(firstPageOf(pages, 0)).toBe(2);
+  });
+});
+
+/** A Blackout station's printed rules, as its module prints them for its def in the mission. */
+function blackout(id: string, index: number): BookSection {
+  const mission = JSON.parse(
+    readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8'),
+  ) as { puzzles: { id: string }[] };
+  const raw = mission.puzzles.find((puzzle) => puzzle.id === id);
+  if (raw === undefined) {
+    throw new Error(`blackout.json has no puzzle "${id}"`);
+  }
+  const def = puzzleDefSchema.parse(raw);
+  const manual = moduleFor(def.type).manual(def as never);
+  return { title: `§${index + 1} — ${def.title}`, manual, reader: false };
+}
+
+/** The tables of `pages` whose head starts with `first`, as set: one per page they stand on. */
+function tablesHeaded(pages: readonly BookPage[], first: string): number[] {
+  return pages.flatMap((page, i) =>
+    page.fragments.some((f) => f.kind === 'table' && f.head[0] === first) ? [i + 1] : [],
+  );
+}
+
+describe('Blackout’s manuals at every text size, a page at a time and as a spread', () => {
+  const frequenz = blackout('frequenz', 4);
+  const serverraum = blackout('subsysteme', 3);
+  const signal = blackout('signalkette', 2);
+  const notstrom = blackout('notstrom', 1);
+  const cases = Object.values(TEXT_SCALE).flatMap((scale) =>
+    [false, true].map((spread) => ({ scale, spread, size: bookPage(scale) })),
+  );
+
+  it.each(cases)('sets the Morsetafel and Frequenztabelle whole, at $scale', ({ size, spread }) => {
+    const pages = paginate([frequenz], size, { spread });
+    const tables = fragmentsOf(pages, 'table') as Extract<Fragment, { kind: 'table' }>[];
+    expect(tables.map((table) => [table.head[0], table.rows.length])).toEqual([
+      ['Buchstabe', 13],
+      ['Wort', 16],
+    ]);
+    if (spread) {
+      // Read together, the two tables lie open together.
+      const [morse = 0] = tablesHeaded(pages, 'Buchstabe');
+      const [words = 0] = tablesHeaded(pages, 'Wort');
+      expect(pagesInView(morse, true)).toContain(words);
+    }
+  });
+
+  it.each(cases)('sets the Serverraum’s tables and rules whole, at $scale', ({ size, spread }) => {
+    const pages = paginate([serverraum], size, { spread });
+    const tables = fragmentsOf(pages, 'table') as Extract<Fragment, { kind: 'table' }>[];
+    expect(tables.map((table) => [table.head[0], table.rows.length])).toEqual([
+      ['Dienst', 6],
+      ['Befehl am Terminal', 3],
+      ['Code', 4],
+    ]);
+    const rules = fragmentsOf(pages, 'rules') as Extract<Fragment, { kind: 'rules' }>[];
+    expect(rules.map((list) => [list.start, list.items.length])).toEqual([[1, 6]]);
+  });
+
+  it.each(cases)('keeps the Signalkette’s key with its legend, at $scale', ({ size, spread }) => {
+    const pages = paginate([signal], size, { spread });
+    const legend = pages.find((page) => page.fragments.some((f) => f.kind === 'table'));
+    const kinds = legend?.fragments.map((f) => (f.kind === 'figure' ? f.of : f.kind)) ?? [];
+    expect(kinds.slice(-3)).toEqual(['heading', PATTERN_FIGURE, 'table']);
+    const rows = fragmentsOf(pages, 'table').flatMap((t) => (t.kind === 'table' ? t.rows : []));
+    expect(rows).toHaveLength(4);
+  });
+
+  it.each(cases)('fills no page past its foot, at $scale', ({ size, spread }) => {
+    for (const section of [notstrom, signal, serverraum, frequenz]) {
+      const pages = paginate([section], size, { spread });
+      const own = pages.filter((page) => page.section === 0);
+      own.forEach((page, i) => {
+        const room = i === own.length - 1 ? size.height + 1.5 : size.height;
+        expect(filled(page, size), `${section.title}, page ${i + 1}`).toBeLessThanOrEqual(room);
+      });
+    }
   });
 });
 
