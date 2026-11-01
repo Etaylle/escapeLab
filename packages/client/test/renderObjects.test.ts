@@ -38,6 +38,8 @@ const plate = (parts: Partial<Plate>): Plate => ({
 });
 
 const manual = (parts: Partial<Manual>): Manual => ({
+  found: true,
+  known: true,
   id: 'm',
   kind: 'book',
   x: 3,
@@ -50,6 +52,7 @@ const manual = (parts: Partial<Manual>): Manual => ({
 });
 
 const item = (parts: Partial<Item>): Item => ({
+  found: true,
   id: 'fuse',
   label: 'SICHERUNG',
   x: 2.5,
@@ -109,10 +112,10 @@ describe('objects — the lab’s things, in tile space', () => {
   it('hides a locked station in the dark; a main switch has a lever per connected player', () => {
     type Station = Parameters<typeof lab>[0]['stations'];
     const stations: Station = [
-      { puzzleId: 'licht', x: 2, y: 1, title: 'Notlicht', status: 'armed', look: 'lever' },
-      { puzzleId: 'kasten', x: 7, y: 1, title: 'Kasten', status: 'armed', console: 'b' },
-      { puzzleId: 'kasten', x: 6, y: 4, title: 'Kasten', status: 'done' },
-      { puzzleId: 'tasten', x: 8, y: 3, title: 'Tasten', status: 'locked' },
+      { puzzleId: 'licht', x: 2, y: 1, title: 'Notlicht', status: 'armed', look: 'lever', found: false },
+      { puzzleId: 'kasten', x: 7, y: 1, title: 'Kasten', status: 'armed', console: 'b', found: false },
+      { puzzleId: 'kasten', x: 6, y: 4, title: 'Kasten', status: 'done', found: false },
+      { puzzleId: 'tasten', x: 8, y: 3, title: 'Tasten', status: 'locked', found: false },
     ];
     const players = [
       player('p1', 'Anna', '#fff'),
@@ -136,7 +139,7 @@ describe('objects — the lab’s things, in tile space', () => {
   });
 
   it('lights up a manual object while it prints the armed station’s rules', () => {
-    const armed = { puzzleId: 'kasten', x: 7, y: 1, title: 'Kasten', status: 'armed' as const };
+    const armed = { puzzleId: 'kasten', x: 7, y: 1, title: 'Kasten', status: 'armed' as const, found: false };
     const rules = manual({ id: 'rules', puzzleIds: ['kasten'] });
     const other = manual({ id: 'other', kind: 'locker', x: 8, y: 4, opened: false });
     const map = lab({ stations: [armed], manuals: [rules, other] });
@@ -153,9 +156,9 @@ describe('objects — the lab’s things, in tile space', () => {
   it('pins a found note to its wall’s face, or lays it on the floor, unread ones calling', () => {
     // (2,0) is wall over the floor at (2,1); (7,2) is floor; (5,5) wall with no floor beside.
     const notes = [
-      { index: 0, x: 2, y: 0, read: false },
-      { index: 1, x: 7, y: 2, read: true },
-      { index: 2, x: 5, y: 5, read: false },
+      { index: 0, x: 2, y: 0, read: false, found: true, known: true },
+      { index: 1, x: 7, y: 2, read: true, found: true, known: true },
+      { index: 2, x: 5, y: 5, read: false, found: true, known: true },
     ];
     const frame = frameWith({ map: lab({ notes }), light: lightWith({ shown: () => false }) });
     const log = drawn(frame);
@@ -176,8 +179,8 @@ describe('objects — the lab’s things, in tile space', () => {
 
   it('lets a found note glow in the dark, on its wall’s face, fainter once read', () => {
     const notes = [
-      { index: 0, x: 2, y: 0, read: false },
-      { index: 1, x: 7, y: 2, read: true },
+      { index: 0, x: 2, y: 0, read: false, found: true, known: true },
+      { index: 1, x: 7, y: 2, read: true, found: true, known: true },
     ];
     const glows = objectGlows(frameWith({ map: lab({ notes }) }));
     expect(glows).toEqual(
@@ -188,10 +191,19 @@ describe('objects — the lab’s things, in tile space', () => {
     );
   });
 
+  it('lets nothing nobody has come across glow in the dark: no note, no source', () => {
+    const notes = [{ index: 1, x: 7, y: 2, read: false, found: false, known: false }];
+    const tafel = manual({ id: 'tafel', kind: 'chart', x: 3, y: 4, found: false, known: false });
+    const glows = objectGlows(frameWith({ map: lab({ notes, manuals: [tafel] }) }));
+    expect(glows.filter((glow) => glow.radius === 0.9 || glow.radius === 1.3)).toEqual([]);
+    const known = objectGlows(frameWith({ map: lab({ manuals: [{ ...tafel, known: true }] }) }));
+    expect(known).toContainEqual({ x: 3.5, y: 4.5, radius: 1.3, strength: 0.5 });
+  });
+
   it('always shows the sign, the hatch as far open as the frame says, and the valves', () => {
     const panels = [{ id: 'v', x: 7, y: 2, occupied: true }];
     const map = lab({
-      edgeworkSign: { x: 1, y: 4 },
+      edgeworkSign: { x: 1, y: 4, found: true },
       exit: { x: 8, y: 4, open: true, openedAt: 1, atExit: [] },
       sabotage: { label: 'Notfall', hint: '', endsAt: 0, panels },
     });
@@ -237,6 +249,7 @@ describe('objects — the lab’s things, in tile space', () => {
     type Station = Parameters<typeof lab>[0]['stations'];
     const stations: Station = [
       {
+        found: false,
         puzzleId: 'kasten',
         x: 2,
         y: 1,

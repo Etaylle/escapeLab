@@ -1387,13 +1387,16 @@ function operatorFirst(players) {
     : [...players].sort((a, b) => stepsTo(a.seen, station) - stepsTo(b.seen, station));
 }
 
-/** The open manual object a player can walk to soonest, one covering the armed station first. */
+/**
+ * The open manual object the crew has come across that a player can walk to soonest, one
+ * covering the armed station first.
+ */
 function nearestManual(seen) {
   const map = seen.view.map;
   const from = tileOf(seen);
   const armed = map.stations.find((s) => s.status === 'armed')?.puzzleId;
   const options = map.manuals
-    .filter((manual) => manual.opened)
+    .filter((manual) => manual.known && manual.opened)
     .map((manual) => ({ manual, path: from === null ? null : route(map, from, manual) }))
     .filter((option) => option.path !== null)
     .sort(
@@ -1880,7 +1883,8 @@ async function captureColdOpen(host) {
   const status = await textOf(host.page.locator('.stage-clock .power-status'));
   const room = await textOf(host.page.locator('.stage-goal--power .stage-sub'));
   const rooms = await checkPowerRooms(host);
-  const found = host.seen.view.map.manuals.map((manual) => manual.kind).join(', ') || 'none';
+  const found =
+    host.seen.view.map.manuals.filter((m) => m.found).map((m) => m.kind).join(', ') || 'none';
   console.log(
     `cold-open.png      ${host.name} @ ${COLD_OPEN.width}x${COLD_OPEN.height}: "${status}", ` +
       `"${room}"; ${rooms}; sources found: ${found}`,
@@ -3062,11 +3066,11 @@ function readFrom(map, note) {
 }
 
 /**
- * note.png: `player` walks up to the nearest note of the last shift the crew
- * has come across and presses E — its slip has to come up with the words
- * the view gives whoever stands there, and the run report has to log it
- * read, for nothing: no time, no alarm. Then the slip goes and the player
- * walks back. Skipped where the crew has found no note it can walk to.
+ * note.png: `player` walks up to the nearest note of the last shift — the
+ * view places every one; walking up finds it — and presses E: its slip has
+ * to come up with the words the view gives whoever stands there, and the run
+ * report has to log it read, for nothing: no time, no alarm. Then the slip
+ * goes and the player walks back. Skipped where no note lies within reach.
  */
 async function captureNote(player) {
   const map = player.seen.view.map;
@@ -3076,7 +3080,7 @@ async function captureNote(player) {
     .filter(({ spot }) => spot !== null && stepsTo(player.seen, spot) !== Infinity)
     .sort((a, b) => stepsTo(player.seen, a.spot) - stepsTo(player.seen, b.spot));
   if (found === undefined) {
-    skip('note.png', 'the crew has found no note of the last shift it can walk to');
+    skip('note.png', 'no note of the last shift lies where the player can walk');
     return;
   }
   const { note, spot } = found;
@@ -6263,9 +6267,9 @@ function pinnedSource(kind) {
   return { id: source.id, label: source.label, ...at };
 }
 
-/** Once `player` has come near, the crew's map shows `source` where the plan lays it. */
+/** Once `player` has come near, the crew knows of `source`, where the plan lays it. */
 async function foundWherePinned(player, source) {
-  const shown = () => player.seen.view.map.manuals.find((m) => m.id === source.id);
+  const shown = () => player.seen.view.map.manuals.find((m) => m.id === source.id && m.known);
   await until(() => shown() !== undefined, 3000);
   const found = shown();
   if (found?.x !== source.x || found.y !== source.y) {

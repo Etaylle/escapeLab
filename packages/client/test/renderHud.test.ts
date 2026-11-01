@@ -71,14 +71,28 @@ describe('hud — the corner minimap on the canvas', () => {
       width: 10,
       height: 6,
       tiles: TILES,
-      stations: [{ puzzleId: 'kasten', x: 7, y: 1, title: 'Kasten', status: 'armed' }],
+      stations: [{ puzzleId: 'kasten', x: 7, y: 1, title: 'Kasten', status: 'armed', found: false }],
       manuals: [
         {
+          found: true,
+          known: true,
           id: 'm',
           kind: 'book',
           x: 2,
           y: 1,
           label: 'HANDBUCH',
+          puzzleIds: ['kasten'],
+          opened: true,
+          needsKey: null,
+        },
+        {
+          found: false,
+          known: false,
+          id: 'n',
+          kind: 'chart',
+          x: 4,
+          y: 1,
+          label: 'TAFEL',
           puzzleIds: ['kasten'],
           opened: true,
           needsKey: null,
@@ -93,9 +107,10 @@ describe('hud — the corner minimap on the canvas', () => {
         ? [[entry.value, ...next.args.slice(0, 2)]]
         : [];
     });
-    // The armed station teal, its rules blue.
+    // The armed station teal, its rules blue; the chart nobody has come across, not at all.
     expect(fills).toContainEqual([css(TEAL), 670, 110]);
     expect(fills).toContainEqual([css(READ_BLUE), 620, 110]);
+    expect(fills.filter(([, x, y]) => x === 640 && y === 110)).toEqual([]);
   });
 
   it('dots the drones by their state and the crew in their colours, yours ringed in white', () => {
@@ -199,11 +214,12 @@ describe('hud — the doors on the minimap, as the view knows them', () => {
 
 describe('hud — the goal on the minimap', () => {
   const consoles: MapView['stations'] = [
-    { puzzleId: 'kette', x: 2, y: 1, title: 'Kette', status: 'armed', console: 'a' },
-    { puzzleId: 'kette', x: 7, y: 3, title: 'Kette', status: 'armed', console: 'b' },
-    { puzzleId: 'reaktor', x: 8, y: 1, title: 'Reaktor', status: 'locked' },
+    { puzzleId: 'kette', x: 2, y: 1, title: 'Kette', status: 'armed', console: 'a', found: false },
+    { puzzleId: 'kette', x: 7, y: 3, title: 'Kette', status: 'armed', console: 'b', found: false },
+    { puzzleId: 'reaktor', x: 8, y: 1, title: 'Reaktor', status: 'locked', found: false },
   ];
   const fuse: Item = {
+    found: true,
     id: 'fuse',
     label: 'SICHERUNG',
     x: 3.5,

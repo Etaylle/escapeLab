@@ -86,7 +86,8 @@ function maze(index: number, cells: number[] | null): PuzzleView {
 
 /** A source of each kind where the tests put them: two rooms, a door between, one named. */
 function source(id: string, kind: Manual['kind'], x: number, y: number): Manual {
-  return { id, kind, x, y, label: id, puzzleIds: ['kabel', 'netz'], opened: true, needsKey: null };
+  const found = { found: true, known: true };
+  return { id, kind, x, y, label: id, puzzleIds: ['kabel', 'netz'], opened: true, needsKey: null, ...found };
 }
 
 const lab = mapWith({
@@ -546,14 +547,14 @@ describe('the station frame', () => {
     };
     const consoles = mapWith({
       stations: [
-        { puzzleId: 'kette', x: 8, y: 5, title: 'Signalkette', status: 'armed', console: 'a' },
-        { puzzleId: 'kette', x: 13, y: 5, title: 'Signalkette', status: 'armed', console: 'b' },
+        { puzzleId: 'kette', x: 8, y: 5, title: 'Signalkette', status: 'armed', console: 'a', found: false },
+        { puzzleId: 'kette', x: 13, y: 5, title: 'Signalkette', status: 'armed', console: 'b', found: false },
       ],
     });
     expect(stationLabel(atB, consoles)).toBe('§2 — Signalkette · Pult B');
     // The view names console a at a station with one as well; the label leaves it out.
     const single = mapWith({
-      stations: [{ puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed' }],
+      stations: [{ puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed', found: false }],
     });
     expect(stationLabel({ ...maze(2, null), console: 'a' }, single)).toBe('§3 — Leitungsnetz');
   });
@@ -561,7 +562,7 @@ describe('the station frame', () => {
   /** The frame the station opens in, as the game shows it, at a station with one console. */
   function stationFrame(puzzle: PuzzleView): string {
     const single = mapWith({
-      stations: [{ puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed' }],
+      stations: [{ puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed', found: false }],
     });
     return renderToStaticMarkup(
       <StationModal
@@ -640,7 +641,7 @@ describe('the station frame', () => {
 
   it('puts the device’s first-time line under the Laborkennung’s row, never over the serial', () => {
     const single = mapWith({
-      stations: [{ puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed' }],
+      stations: [{ puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed', found: false }],
     });
     const html = renderToStaticMarkup(
       <StationModal
@@ -667,6 +668,8 @@ describe('the station frame', () => {
 
 describe('the map legend', () => {
   const book: Manual = {
+    found: true,
+    known: true,
     id: 'b',
     kind: 'book',
     x: 1,
@@ -691,7 +694,7 @@ describe('the map legend', () => {
       <Legend
         map={mapWith({
           manuals: [book, { ...book, id: 't', kind: 'terminal' }, { ...book, id: 'b2' }],
-          edgeworkSign: { x: 3, y: 3 },
+          edgeworkSign: { x: 3, y: 3, found: true },
           plates: [camera, door],
         })}
       />,
@@ -703,8 +706,10 @@ describe('the map legend', () => {
     expect(html).toContain('HALTEN-Platte</dt><dd>hält eine Tür offen</dd>');
   });
 
-  it('leaves out what the map does not have', () => {
-    const bare = renderToStaticMarkup(<Legend map={mapWith({ manuals: [book] })} />);
+  it('leaves out what the map does not have, and the sources nobody has come across', () => {
+    const unknown = { ...book, id: 't', kind: 'terminal' as const, found: false, known: false };
+    const bare = renderToStaticMarkup(<Legend map={mapWith({ manuals: [book, unknown] })} />);
+    expect(bare).not.toContain('Terminal');
     expect(bare.match(/class="legend-row"/g)).toHaveLength(1);
     expect(bare).not.toContain('Platte');
     expect(bare).not.toContain('Schild');
@@ -769,7 +774,7 @@ function justStarted(parts: Partial<PlayerView> = {}): PlayerView {
       tiles: ['#######', '#.....#', '#.....#', '#######'],
       yourSpawn: { x: 1, y: 2 },
       labels: [{ text: 'MASCHINENRAUM', x: 2, y: 1 }],
-      stations: [{ puzzleId: 'kabel', x: 4, y: 1, title: 'Notstrom', status: 'armed' }],
+      stations: [{ puzzleId: 'kabel', x: 4, y: 1, title: 'Notstrom', status: 'armed', found: false }],
     }),
     ...parts,
   };
@@ -837,6 +842,7 @@ describe('the start of a run', () => {
 
 describe('what the crew still has to bring', () => {
   const fuse: Item = {
+    found: true,
     id: 'fuse',
     label: 'SICHERUNG',
     x: 2.5,
@@ -891,6 +897,7 @@ describe('what the crew still has to bring', () => {
       ];
       return order.map((station, i) => ({
         ...station,
+        found: false,
         status: i < done ? 'done' : i === done ? 'armed' : 'locked',
       }));
     }

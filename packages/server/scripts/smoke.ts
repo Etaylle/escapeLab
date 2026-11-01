@@ -45,6 +45,8 @@ import { join } from 'node:path';
 import WebSocket from 'ws';
 import {
   canSee,
+  FIND_REACH,
+  inCone,
   MAX_STEP,
   moduleFor,
   NO_CREDITS,
@@ -777,8 +779,8 @@ async function openSource(client: TestClient, manualId: string, find: string): P
     v.sourcesHere.some((s) => s.id === manualId && !s.opened) &&
     !v.manualsHere.some((m) => m.id === manualId));
   assert(before.presence.manualId !== manualId, `${manualId} shows no rules before it is opened`);
-  assert(before.map?.manuals.some((m) => m.id === manualId) === true,
-    `${client.label} walked up to ${manualId} and found it for the crew`);
+  assert(before.map?.manuals.some((m) => m.id === manualId && m.found && m.known) === true,
+    `${client.label} walked up to ${manualId} and found it, the crew knowing of it`);
   client.send({ kind: 'open-source', manualId });
   await client.expectView(`opened ${manualId}, the rules in hand`, (v) =>
     v.manualsHere.some((m) => m.id === manualId));
@@ -1085,7 +1087,7 @@ async function readTheLeverNote(): Promise<void> {
   const note = mission.map.notes[index] ?? fail('Blackout pins no note by the lever');
   const [anna, ben] = crew;
   const at = await anna.expectView('finds the note by the lever and stands at it', (v) =>
-    v.map?.notes.some((n) => n.index === index) === true && v.noteHere?.index === index);
+    v.map?.notes.some((n) => n.index === index && n.found) === true && v.noteHere?.index === index);
   assert(at.noteHere?.text === note.text, 'the note’s words reach whoever stands at it');
   const { deadlineAt, penaltySeq, hintsUsed } = at;
   anna.send({ kind: 'read-note', note: index });
@@ -1716,33 +1718,40 @@ await zoe.untilSpectator('sees where everybody stands', (v) =>
     JSON.stringify(p.presence) ===
       JSON.stringify(crew.find((client) => client.playerId === p.id)?.view?.presence)));
 
-// The sign and the sources go to whoever comes near them, the sources for the whole crew —
-// and a source only to somebody who has it in sight: through a wall nobody finds anything.
+// The sign goes to whoever walks up to it; a source to whoever has it within two tiles in
+// sight, or long enough in the cone of the lamp they face east with from their spawn — each
+// for themselves; the crew knows of whatever either found. Through a wall nobody finds anything.
 const sign = mission.map.edgeworkSign ?? fail('Blackout has no sign');
 const doorsAtStart = crew[0].view?.map?.doors ?? fail('anna: no doors at the start');
 const shutAtStart = new Set(doorsAtStart.filter((d) => !d.open).map((d) => key(d.x, d.y)));
 const middle = (x: number, y: number): { x: number; y: number } => ({ x: x + 0.5, y: y + 0.5 });
-const inSight = (spot: Tile, radius: number): boolean =>
-  crew.some((client) => {
-    const at = spawnOf(client);
-    return (
-      Math.hypot(spot[0] - at.x, spot[1] - at.y) <= radius &&
-      canSee(mission.map, middle(at.x, at.y), middle(...spot), shutAtStart)
-    );
-  });
-const foundAtStart = mission.map.manuals
-  .filter((m) => inSight(placeOf(m.id), 3.5))
+const foundFrom = (client: TestClient): string[] => {
+  const at = middle(spawnOf(client).x, spawnOf(client).y);
+  return mission.map.manuals
+    .filter((m) => {
+      const spot = middle(...placeOf(m.id));
+      const near = Math.hypot(spot.x - at.x, spot.y - at.y) <= FIND_REACH;
+      const looked = inCone(mission.map, shutAtStart, { ...at, facing: 0 }, spot);
+      return (near && canSee(mission.map, at, spot, shutAtStart)) || looked;
+    })
+    .map((m) => m.id);
+};
+const crewKnows = mission.map.manuals
+  .filter((m) => crew.some((client) => foundFrom(client).includes(m.id)))
   .map((m) => m.id)
   .join(',');
 for (const client of crew) {
   const at = spawnOf(client);
   const atSign = Math.hypot(at.x - sign.x, at.y - sign.y) <= 1.6;
+  const mine = foundFrom(client).join(',');
   await client.expectView(
-    `${atSign ? 'has' : 'has not'} the Laborkennung and has found ${foundAtStart || 'nothing'}`,
+    `${atSign ? 'has' : 'has not'} the Laborkennung and has found ${mine || 'nothing'}; ` +
+      `the crew knows of ${crewKnows || 'nothing'}`,
     (v) =>
       (v.edgework !== null) === atSign &&
       v.presence.signSeen === atSign &&
-      v.map?.manuals.map((m) => m.id).join(',') === foundAtStart,
+      v.map?.manuals.filter((m) => m.found).map((m) => m.id).join(',') === mine &&
+      v.map?.manuals.filter((m) => m.known).map((m) => m.id).join(',') === crewKnows,
   );
 }
 
@@ -1929,7 +1938,7 @@ await backOnTheMap(mission.puzzles.length);
 // --- escape finale: everyone to the hatch before the clock runs out --------
 const unlocked = await crew[0].expectView('exit hatch is open', (v) =>
   v.map?.exit?.open === true);
-assert(unlocked.map?.manuals.length === mission.map.manuals.length,
+assert(unlocked.map?.manuals.every((m) => m.known) === true,
   'the crew has found every source on the way');
 assert(unlocked.map?.litRooms.join(',') === litAfter(mission.puzzles.length),
   `the reactor lit the last room: ${litAfter(mission.puzzles.length)}`);

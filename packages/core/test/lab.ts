@@ -114,7 +114,10 @@ export function lightsOut(state: GameState, at = T0): GameState {
   return applyAction(state, { type: 'lights-out', at });
 }
 
-/** Who stands where, the way the server reports it from positions. */
+/**
+ * Who stands where, the way the server reports it from positions, and what
+ * each player has just found (discovery.ts keys, by player id) at `at`.
+ */
 export function standing(
   state: GameState,
   where: {
@@ -122,9 +125,9 @@ export function standing(
     manuals?: Record<string, string[]>;
     notes?: Record<string, string[]>;
     signSeen?: string[];
-    seen?: string[];
-    notesSeen?: number[];
+    found?: Record<string, string[]>;
     exit?: string[];
+    at?: number;
   },
 ): GameState {
   return applyAction(state, {
@@ -133,9 +136,9 @@ export function standing(
     manuals: where.manuals ?? {},
     notes: where.notes ?? {},
     signSeen: where.signSeen ?? [],
-    seen: where.seen ?? [],
-    notesSeen: where.notesSeen ?? [],
+    found: where.found ?? {},
     exit: where.exit ?? [],
+    at: where.at ?? T0,
   });
 }
 

@@ -6,9 +6,9 @@ type Item = MapView['items'][number];
 
 /** What changed in the lab between two views of it. */
 export interface WorldNews {
-  /** manual objects the crew has just come across */
+  /** manual objects the crew has just come across (`known`) */
   found: Manual[];
-  /** notes of the last shift the crew has just come across */
+  /** notes of the last shift the crew has just come across (`known`) */
   notes: Note[];
   /** lockers just searched and cabinets just unlocked */
   opened: Manual[];
@@ -33,7 +33,7 @@ export function worldNews(before: MapView | null, now: MapView): WorldNews {
     return { found: [], notes: [], opened: [], lit: [], delivered: [], dropped: [] };
   }
   const was = new Map(before.manuals.map((manual) => [manual.id, manual]));
-  const known = new Set(before.notes.map((note) => note.index));
+  const known = new Set(before.notes.filter((note) => note.known).map((note) => note.index));
   const opened = now.manuals.filter(
     (manual) => manual.opened && was.get(manual.id)?.opened === false,
   );
@@ -41,8 +41,8 @@ export function worldNews(before: MapView | null, now: MapView): WorldNews {
   const placed = new Set(before.items.filter((item) => item.delivered).map((item) => item.id));
   const held = new Set(before.items.filter((item) => item.carriedBy !== null).map((i) => i.id));
   return {
-    found: now.manuals.filter((manual) => !was.has(manual.id)),
-    notes: now.notes.filter((note) => !known.has(note.index)),
+    found: now.manuals.filter((manual) => manual.known && was.get(manual.id)?.known !== true),
+    notes: now.notes.filter((note) => note.known && !known.has(note.index)),
     opened,
     lit: now.litRooms.filter((room) => !before.litRooms.includes(room)),
     delivered: now.items.filter(

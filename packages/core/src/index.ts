@@ -149,6 +149,21 @@ export {
   stationKey,
 } from './map.js';
 export { canSee, sightFrom, visibleTiles, type Sight, type SightMap } from './sight.js';
+export {
+  FIND_REACH,
+  ITEM_REACH,
+  LAMP_HALF_ANGLE,
+  LAMP_REACH,
+  LOOK_MS,
+  consoleFind,
+  findKey,
+  findables,
+  inCone,
+  lookAround,
+  type Find,
+  type FindKey,
+  type Glances,
+} from './discovery.js';
 export { type MapDef } from './mission.js';
 export {
   parseClientMessage,

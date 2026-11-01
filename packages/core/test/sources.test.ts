@@ -105,36 +105,45 @@ describe('where the sources lie', () => {
     });
   });
 
-  it('shows the crew only what somebody came close to, for good; the audience sees all', () => {
+  it('lists every source where it lies, named for whoever found it, known to the crew for good', () => {
     const state = started(mission);
-    expect(viewFor(state, 'p1').map?.manuals).toEqual([]);
-    const found = standing(standing(state, { seen: ['tafel', 'spind'] }), { seen: [] });
-    expect(found.discovered).toEqual(['spind', 'tafel']);
-    expect(viewFor(found, 'p2').map?.manuals).toEqual([
-      {
-        ...state.places['tafel'],
-        id: 'tafel',
-        kind: 'chart',
-        label: 'TAFEL',
-        puzzleIds: ['kabel'],
-        opened: true,
-        needsKey: null,
-      },
-      {
-        x: 10,
-        y: 2,
-        id: 'spind',
-        kind: 'locker',
-        label: 'SPIND',
-        puzzleIds: ['code'],
-        opened: false,
-        needsKey: null,
-      },
+    const flags = (view: ReturnType<typeof viewFor> | ReturnType<typeof viewForSpectator>) =>
+      view.map?.manuals.map((m) => [m.id, m.found, m.known]);
+    expect(flags(viewFor(state, 'p1'))).toEqual([
+      ['tafel', false, false],
+      ['spind', false, false],
+      ['schrank', false, false],
     ]);
-    expect(viewForSpectator(state).map?.manuals.map((m) => m.id)).toEqual([
-      'tafel',
-      'spind',
-      'schrank',
+    const found = standing(state, { found: { p1: ['source:tafel', 'source:spind'] } });
+    const walkedOn = standing(found, {});
+    expect(walkedOn.found).toEqual({ p1: ['source:spind', 'source:tafel'] });
+    expect(flags(viewFor(walkedOn, 'p1'))).toEqual([
+      ['tafel', true, true],
+      ['spind', true, true],
+      ['schrank', false, false],
+    ]);
+    // Ben has found nothing himself: the crew knows of them, his screen names none.
+    expect(flags(viewFor(walkedOn, 'p2'))).toEqual([
+      ['tafel', false, true],
+      ['spind', false, true],
+      ['schrank', false, false],
+    ]);
+    expect(viewFor(walkedOn, 'p2').map?.manuals[1]).toEqual({
+      x: 10,
+      y: 2,
+      id: 'spind',
+      kind: 'locker',
+      label: 'SPIND',
+      puzzleIds: ['code'],
+      opened: false,
+      needsKey: null,
+      found: false,
+      known: true,
+    });
+    expect(flags(viewForSpectator(state))).toEqual([
+      ['tafel', true, true],
+      ['spind', true, true],
+      ['schrank', true, true],
     ]);
   });
 });
@@ -210,7 +219,8 @@ describe('a cabinet', () => {
     const carrying = applyAction(started(mission), pick);
     const key = (state: GameState) => viewFor(state, 'p1').map?.items[0]?.deliverTo;
     expect(key(carrying)).toBeNull();
-    expect(key(standing(carrying, { seen: ['schrank'] }))).toEqual({ x: 12, y: 2 });
+    // Ben comes across the cabinet: Anna, key in hand, now knows where it goes.
+    expect(key(standing(carrying, { found: { p2: ['source:schrank'] } }))).toEqual({ x: 12, y: 2 });
     expect(viewForSpectator(carrying).map?.items[0]?.deliverTo).toEqual({ x: 12, y: 2 });
     expect(() =>
       applyAction(carrying, { type: 'deliver-item', playerId: 'p1', itemId: 'schluessel', at: T0 }),

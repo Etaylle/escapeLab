@@ -15,8 +15,10 @@ const station: MapView['stations'][number] = {
   y: 5,
   title: 'Notstrom',
   status: 'armed',
+  found: false,
 };
 const book: Manual = {
+  found: true,
   id: 'buch',
   kind: 'book',
   x: 2,
@@ -25,6 +27,7 @@ const book: Manual = {
   puzzleIds: ['notstrom'],
   opened: true,
   needsKey: null,
+  known: true,
 };
 /** What the server says this player stands at. */
 const AT_BOOK = [{ id: 'buch', kind: 'book', opened: true, needsKey: null }] as const;
@@ -45,6 +48,7 @@ const AT_CABINET = [{ id: 'schrank', kind: 'cabinet', opened: false, needsKey: '
 
 function part(parts: Partial<MapView['items'][number]>): MapView['items'][number] {
   return {
+    found: true,
     id: 'fuse',
     label: 'Sicherung',
     x: 3.5,
@@ -65,6 +69,9 @@ describe('contextAction — what E does where the player stands', () => {
       manualId: 'buch',
       label: 'Lesen',
     });
+    // Counted there through a pillar, the crew not knowing of it yet: nothing to read.
+    const unknown = mapWith({ manuals: [{ ...book, found: false, known: false }] });
+    expect(contextAction(unknown, { x: 2.5, y: 6.4 }, YOU, AT_BOOK, SHUT, null)).toBeNull();
   });
 
   it('offers no reading the server does not count yet, however close', () => {
@@ -335,8 +342,8 @@ describe('carriedItem — what a player has in hand', () => {
  * station at (5,1).
  */
 const ROOM = ['##########', ...Array.from({ length: 5 }, () => '#........#'), '##########'];
-const wallNote = { index: 0, x: 3, y: 0, read: false };
-const floorNote = { index: 1, x: 7, y: 4, read: true };
+const wallNote = { index: 0, x: 3, y: 0, read: false, found: true, known: true };
+const floorNote = { index: 1, x: 7, y: 4, read: true, found: true, known: true };
 const noteRoom = mapWith({
   tiles: ROOM,
   notes: [wallNote, floorNote],

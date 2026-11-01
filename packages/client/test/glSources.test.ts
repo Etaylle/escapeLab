@@ -104,8 +104,8 @@ describe('lightsOf — what the light layer lights in a frame', () => {
       width: 10,
       height: 6,
       tiles: TILES,
-      stations: [{ puzzleId: 's', x: 2, y: 2, title: 'S', status: 'armed' }],
-      edgeworkSign: { x: 7, y: 1 },
+      stations: [{ puzzleId: 's', x: 2, y: 2, title: 'S', status: 'armed', found: false }],
+      edgeworkSign: { x: 7, y: 1, found: true },
     });
     const frame = frameWith({ map });
     const glows = lightsOf(frame).filter((light) => light.size === null);

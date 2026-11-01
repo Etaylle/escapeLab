@@ -1,6 +1,7 @@
 import { achievementsOf, type AchievementId } from './achievements.js';
 import type { DailyDay } from './daily.js';
 import type { Difficulty } from './difficulty.js';
+import { consoleFind, crewFound, findKey, type Find } from './discovery.js';
 import type { Edgework } from './edgework.js';
 import type { DecorKind, ManualDef, ManualKind, RoomKind } from './mission.js';
 import { noteKey } from './notes.js';
@@ -240,11 +241,14 @@ export interface MapView {
      * a wrong cut shorts it out, the world's sparks fly; left out for a console
      */
     look?: 'lever' | 'fusebox';
+    /** this player has found it (discovery.ts); the audience has found everything */
+    found: boolean;
   }[];
   /**
-   * the manual objects the crew has come across so far (the audience sees
-   * all of them), where this run placed them, and the puzzles whose printed
-   * rules lie there
+   * every manual object of the run, where this run placed it, and the
+   * puzzles whose printed rules lie there: drawn where light has fallen,
+   * named once this player has found it (`found`); the minimap and the
+   * arrows show only what the crew has come across (`known`)
    */
   manuals: {
     id: string;
@@ -257,15 +261,19 @@ export interface MapView {
     opened: boolean;
     /** a cabinet's key, by item id; null for everything else */
     needsKey: string | null;
+    /** this player has found it (discovery.ts); the audience has found everything */
+    found: boolean;
+    /** somebody of the crew has found it: what the game shares of it */
+    known: boolean;
   }[];
   /**
-   * the notes of the last shift the crew has come across so far (the audience
-   * sees all of them), where each lies — on a wall or the floor — and
-   * whether somebody has read it; never what it says
+   * every note of the last shift, where it lies — on a wall or the floor —
+   * whether somebody has read it, whether this player has found it and
+   * whether the crew has; never what it says
    */
-  notes: { index: number; x: number; y: number; read: boolean }[];
-  /** the wall sign with the Laborkennung; null on a map without one */
-  edgeworkSign: { x: number; y: number } | null;
+  notes: { index: number; x: number; y: number; read: boolean; found: boolean; known: boolean }[];
+  /** the wall sign with the Laborkennung, and whether this player has found it; null on a map without one */
+  edgeworkSign: { x: number; y: number; found: boolean } | null;
   /** the emergency lamps, on the floor or on a wall beside it; they glow once the lights are out */
   lamps: { x: number; y: number }[];
   /** room names, each with the kind of room it names, where the mission gives one */
@@ -292,6 +300,8 @@ export interface MapView {
     y: number;
     carriedBy: string | null;
     delivered: boolean;
+    /** this player has found it lying about (discovery.ts); the audience has found everything */
+    found: boolean;
     /** a key's is the cabinet it unlocks, once that has been come across; null until then */
     deliverTo: { x: number; y: number } | null;
     /** title of the station waiting for it, if any */
@@ -565,7 +575,8 @@ function stationStatus(state: GameState, index: number): MapView['stations'][num
   return index === state.currentPuzzleIndex && lightsAreOut(state) ? 'armed' : 'locked';
 }
 
-function stationsOnMap(state: GameState): MapView['stations'] {
+function stationsOnMap(state: GameState, viewer: MapViewer): MapView['stations'] {
+  const finds = findsFor(state, viewer);
   return state.mission.map.stations.map((s) => {
     const index = state.mission.puzzles.findIndex((p) => p.id === s.puzzleId);
     const def = state.mission.puzzles[index];
@@ -581,20 +592,33 @@ function stationsOnMap(state: GameState): MapView['stations'] {
       status: stationStatus(state, index),
       ...(s.console === undefined ? {} : { console: s.console }),
       ...(look === null ? {} : { look }),
+      found: finds(consoleFind(s)).found,
     };
   });
 }
 
-/** Whether a manual object shows on this viewer's map: once found by the crew, always for the audience. */
-function foundBy(state: GameState, viewer: MapViewer): (manualId: string) => boolean {
-  return (manualId) => viewer === null || state.discovered.includes(manualId);
+/**
+ * What a map view tells of a thing: whether its viewer has found it, and
+ * whether somebody of the crew has. The audience has found everything.
+ */
+function findsFor(
+  state: GameState,
+  viewer: MapViewer,
+): (find: Find) => { found: boolean; known: boolean } {
+  const mine = new Set(viewer === null ? [] : (state.found[viewer] ?? []));
+  return (find) => {
+    const key = findKey(find);
+    return viewer === null
+      ? { found: true, known: true }
+      : { found: mine.has(key), known: crewFound(state, key) };
+  };
 }
 
 function manualsOnMap(state: GameState, viewer: MapViewer): MapView['manuals'] {
-  const found = foundBy(state, viewer);
+  const finds = findsFor(state, viewer);
   return state.mission.map.manuals.flatMap((m) => {
     const place = state.places[m.id];
-    return place === undefined || !found(m.id)
+    return place === undefined
       ? []
       : [
           {
@@ -606,27 +630,32 @@ function manualsOnMap(state: GameState, viewer: MapViewer): MapView['manuals'] {
             puzzleIds: [...m.puzzleIds],
             opened: sourceOpen(state, m),
             needsKey: m.needsKey ?? null,
+            ...finds({ of: 'source', id: m.id }),
           },
         ];
   });
 }
 
-/** The notes the crew has come across, or every one for the audience — where, and whether read. */
+/** Every note: where, whether read, and whether this viewer and the crew have found it. */
 function notesOnMap(state: GameState, viewer: MapViewer): MapView['notes'] {
-  return state.mission.map.notes.flatMap((note, index) =>
-    viewer === null || state.notesFound.includes(index)
-      ? [{ index, x: note.x, y: note.y, read: state.notesRead.includes(index) }]
-      : [],
-  );
+  const finds = findsFor(state, viewer);
+  return state.mission.map.notes.map((note, index) => ({
+    index,
+    x: note.x,
+    y: note.y,
+    read: state.notesRead.includes(index),
+    ...finds({ of: 'note', index }),
+  }));
 }
 
 function itemsOnMap(state: GameState, viewer: MapViewer): MapView['items'] {
   const map = state.mission.map;
-  const found = foundBy(state, viewer);
+  const finds = findsFor(state, viewer);
   return map.items.map((def) => {
     const live = state.items[def.id];
     const lock = map.manuals.find((m) => m.needsKey === def.id);
-    const lockAt = lock !== undefined && found(lock.id) ? state.places[lock.id] : undefined;
+    const known = lock !== undefined && finds({ of: 'source', id: lock.id }).known;
+    const lockAt = known ? state.places[lock.id] : undefined;
     const goal = def.deliverTo ?? lockAt;
     return {
       id: def.id,
@@ -635,6 +664,7 @@ function itemsOnMap(state: GameState, viewer: MapViewer): MapView['items'] {
       y: live?.y ?? def.y + 0.5,
       carriedBy: live?.carriedBy ?? null,
       delivered: live?.delivered ?? false,
+      found: finds({ of: 'item', id: def.id }).found,
       deliverTo: goal === undefined ? null : { x: goal.x, y: goal.y },
       requiredForTitle:
         state.mission.puzzles.find((p) => p.id === def.requiredFor)?.title ?? null,
@@ -690,10 +720,13 @@ function mapViewFor(state: GameState, viewer: MapViewer): MapView | null {
       pressed: platePressed(state, p.id),
       freezesDrone: map.drones.some((d) => d.frozenByPlate === p.id),
     })),
-    stations: stationsOnMap(state),
+    stations: stationsOnMap(state, viewer),
     manuals: manualsOnMap(state, viewer),
     notes: notesOnMap(state, viewer),
-    edgeworkSign: map.edgeworkSign === undefined ? null : { ...map.edgeworkSign },
+    edgeworkSign:
+      map.edgeworkSign === undefined
+        ? null
+        : { ...map.edgeworkSign, found: findsFor(state, viewer)({ of: 'sign' }).found },
     lamps: map.lamps.map((lamp) => ({ x: lamp.x, y: lamp.y })),
     labels: map.labels.map((l) => ({
       text: l.text,

@@ -42,7 +42,7 @@ export function presenceNear(map: MapView | null, pos: PlayerPosition | undefine
     return { stationId: null, manualId: null };
   }
   const station = map.stations.find((s) => s.status === 'armed' && near(pos, s, PRESENCE_RADIUS));
-  const source = map.manuals.find((m) => m.opened && near(pos, m, PRESENCE_RADIUS));
+  const source = map.manuals.find((m) => m.known && m.opened && near(pos, m, PRESENCE_RADIUS));
   return { stationId: station?.puzzleId ?? null, manualId: source?.id ?? null };
 }
 

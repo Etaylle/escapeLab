@@ -10,6 +10,7 @@ import {
 } from './state.js';
 import type { DailyStart } from './daily.js';
 import type { Difficulty } from './difficulty.js';
+import type { FindKey } from './discovery.js';
 import { generateEdgework } from './edgework.js';
 import { fail } from './errors.js';
 import type { ManualDef, Mission } from './mission.js';
@@ -77,9 +78,9 @@ export type Action =
   | { type: 'set-occupancy'; plates: string[]; panels: string[] }
   /**
    * who stands at which station spot (by `stationKey`), manual object and
-   * note (by `noteKey`), who has seen the sign (stays seen), which manual
-   * objects and notes somebody has come close to and has in sight (stay
-   * found) and who stands on the exit hatch
+   * note (by `noteKey`), who has seen the sign (stays seen), what each
+   * player has just found at `at` (discovery.ts; stays found) and who stands
+   * on the exit hatch
    */
   | {
       type: 'set-presence';
@@ -87,9 +88,9 @@ export type Action =
       manuals: Record<string, string[]>;
       notes: Record<string, string[]>;
       signSeen: string[];
-      seen: string[];
-      notesSeen: number[];
+      found: Record<string, FindKey[]>;
       exit: string[];
+      at: number;
     }
   /** a locker searched or a cabinet unlocked by a player standing at it */
   | { type: 'open-source'; playerId: string; manualId: string; at: number }
@@ -411,10 +412,28 @@ function presentAtConsoles(state: GameState, from: ConsoleId | null): PuzzleCont
 }
 
 /**
+ * What each player found at `at` that they had not found before, by player id; nobody who
+ * found nothing new.
+ */
+function freshFinds(
+  state: GameState,
+  found: Readonly<Record<string, readonly FindKey[]>>,
+): Record<string, FindKey[]> {
+  return Object.fromEntries(
+    Object.entries(found)
+      .map(([playerId, keys]) => {
+        const had = new Set(state.found[playerId] ?? []);
+        return [playerId, [...new Set(keys)].filter((key) => !had.has(key))] as const;
+      })
+      .filter(([, keys]) => keys.length > 0),
+  );
+}
+
+/**
  * Who stands where, as the server sees it. Lists are kept sorted and empty
  * ones dropped, so equal presence compares equal; whoever has seen the sign
- * keeps it, and a manual object or a note once found stays on the crew's
- * map. Nobody stands on the hatch before it opens.
+ * keeps it, and whatever a player has found stays theirs. Nobody stands on
+ * the hatch before it opens.
  */
 function setPresence(
   state: GameState,
@@ -426,6 +445,11 @@ function setPresence(
         .filter(([, players]) => players.length > 0)
         .map(([id, players]) => [id, [...new Set(players)].sort()]),
     );
+  const fresh = freshFinds(state, action.found);
+  const found = { ...state.found };
+  for (const [playerId, keys] of Object.entries(fresh)) {
+    found[playerId] = [...(found[playerId] ?? []), ...keys].sort();
+  }
   return creditReaders({
     ...state,
     presence: {
@@ -435,8 +459,7 @@ function setPresence(
       signSeen: [...new Set([...state.presence.signSeen, ...action.signSeen])].sort(),
       exit: inEscapePhase(state) ? [...new Set(action.exit)].sort() : [],
     },
-    discovered: [...new Set([...state.discovered, ...action.seen])].sort(),
-    notesFound: [...new Set([...state.notesFound, ...action.notesSeen])].sort((a, b) => a - b),
+    found,
   });
 }
 
@@ -575,8 +598,7 @@ function startMission(
     presence: NOBODY_PRESENT,
     places: placeSources(map.manuals, seed),
     opened: [],
-    discovered: [],
-    notesFound: [],
+    found: {},
     notesRead: [],
     credits: Object.fromEntries(crew.map((player) => [player.id, NO_CREDITS])),
     readersCredited: [],
@@ -1458,8 +1480,7 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     presence: NOBODY_PRESENT,
     places: {},
     opened: [],
-    discovered: [],
-    notesFound: [],
+    found: {},
     notesRead: [],
     credits: {},
     readersCredited: [],

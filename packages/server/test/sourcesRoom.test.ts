@@ -119,44 +119,63 @@ describe('Room with sources to find and open', () => {
     return { room, anna, ben };
   }
 
-  it('finds a source for the whole crew once somebody comes within three and a half tiles', () => {
+  /** Each source of the last view `walker` got: whether they found it, and whether the crew has. */
+  function finds(walker: Walker & { messages: ServerMessage[] }): [string, boolean, boolean][] {
+    return (lastView(walker.messages).map?.manuals ?? []).map((m) => [m.id, m.found, m.known]);
+  }
+
+  it('finds a source for whoever comes within two tiles of it in sight; the crew knows of it', () => {
     const { room, anna, ben } = started();
-    const found = (): string[] => (lastView(ben.messages).map?.manuals ?? []).map((m) => m.id);
-    expect(found()).toEqual([]);
-    moveTo(room, anna, 10, 1); // four tiles short of the locker
-    expect(found()).toEqual([]);
-    moveTo(room, anna, 11, 1); // three and a half
-    expect(found()).toEqual(['spind', 'schrank']);
+    expect(finds(ben)).toEqual([
+      ['spind', false, false],
+      ['schrank', false, false],
+    ]);
+    moveTo(room, anna, 11, 1); // three tiles short of the locker: no time to look
+    expect(finds(anna)).toEqual([
+      ['spind', false, false],
+      ['schrank', false, false],
+    ]);
+    moveTo(room, anna, 12, 1); // two tiles from the locker, a little more from the cabinet
+    expect(finds(anna)).toEqual([
+      ['spind', true, true],
+      ['schrank', false, false],
+    ]);
+    expect(finds(ben)).toEqual([
+      ['spind', false, true],
+      ['schrank', false, false],
+    ]);
     moveTo(room, anna, 1, 1);
-    expect(found()).toEqual(['spind', 'schrank']);
+    expect(finds(anna)[0]).toEqual(['spind', true, true]);
     expect(lastView(anna.messages).map?.manuals[0]).toMatchObject({ x: 14, y: 1, opened: false });
     room.dispose();
   });
 
-  it('finds nothing through a wall or a shut door, close as it is, and finds it through the open door', () => {
+  it('finds nothing through a shut door, however long the lamp rests on it, and finds it through the open door', () => {
     const { room, anna, ben } = started(behindTheDoor({ x: 6, y: 2 }));
-    const found = (): string[] => (lastView(ben.messages).map?.manuals ?? []).map((m) => m.id);
-    moveTo(room, anna, 3, 1); // three tiles from the locker, the wall between
-    expect(found()).toEqual([]);
-    moveTo(room, anna, 3, 2); // three tiles from it, the shut door between
-    expect(found()).toEqual([]);
-    moveTo(room, ben, 1, 3); // onto the plate: the door opens before Anna's eyes
+    moveTo(room, anna, 3, 2); // three tiles from the locker, the shut door between, facing it
+    vi.advanceTimersByTime(1000);
+    expect(finds(anna)).toEqual([['spind', false, false]]);
+    moveTo(room, ben, 1, 3); // onto the plate: the door opens before Anna's lamp
     expect(lastView(ben.messages).map?.doors[0]?.open).toBe(true);
-    expect(found()).toEqual(['spind']);
+    vi.advanceTimersByTime(249);
+    expect(finds(anna)).toEqual([['spind', false, false]]);
+    vi.advanceTimersByTime(1);
+    expect(finds(anna)).toEqual([['spind', true, true]]);
     moveTo(room, ben, 1, 1); // off the plate again: found stays found
     expect(lastView(ben.messages).map?.doors[0]?.open).toBe(false);
-    expect(found()).toEqual(['spind']);
+    expect(finds(anna)).toEqual([['spind', true, true]]);
     room.dispose();
   });
 
   it('finds a source round the corner of a door only for whoever walks in', () => {
     const { room, anna, ben } = started(behindTheDoor({ x: 5, y: 1 }));
-    const found = (): string[] => (lastView(anna.messages).map?.manuals ?? []).map((m) => m.id);
     moveTo(room, ben, 1, 3); // the door opens
-    moveTo(room, anna, 3, 2); // before the open door, two tiles off: the wall beside it hides it
-    expect(found()).toEqual([]);
+    moveTo(room, anna, 3, 2); // before the open door, facing in: the wall beside it hides it
+    vi.advanceTimersByTime(1000);
+    expect(finds(anna)).toEqual([['spind', false, false]]);
     moveTo(room, anna, 5, 2); // through the door, the locker a step ahead
-    expect(found()).toEqual(['spind']);
+    expect(finds(anna)).toEqual([['spind', true, true]]);
+    expect(finds(ben)).toEqual([['spind', false, true]]);
     room.dispose();
   });
 

@@ -79,8 +79,8 @@ describe('mapped missions', () => {
     expect(drawn).toEqual(expect.arrayContaining(fixture.map.spawns));
     expect(drawn).toHaveLength(2);
     expect(anna.map?.stations).toEqual([
-      { puzzleId: 'first', x: 1, y: 4, title: 'Erstes', status: 'armed' },
-      { puzzleId: 'second', x: 3, y: 4, title: 'Zweites', status: 'locked' },
+      { puzzleId: 'first', x: 1, y: 4, title: 'Erstes', status: 'armed', found: false },
+      { puzzleId: 'second', x: 3, y: 4, title: 'Zweites', status: 'locked', found: false },
     ]);
     expect(anna.map?.manuals).toEqual([]);
     expect(anna.map?.edgeworkSign).toBeNull();

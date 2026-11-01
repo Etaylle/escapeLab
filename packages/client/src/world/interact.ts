@@ -73,9 +73,12 @@ export function coversArmed(map: Pick<MapView, 'stations'>, manual: Manual): boo
   return armed !== undefined && manual.puzzleIds.includes(armed.puzzleId);
 }
 
-/** A cabinet's key goes into its padlock: the cabinet is the drop-off, no zone needed. */
+/**
+ * A cabinet's key goes into its padlock: the cabinet is the drop-off, no zone needed — once the
+ * crew has come across the cabinet; before, nobody knows the key is one.
+ */
 export function opensCabinet(map: Pick<MapView, 'manuals'>, itemId: string): boolean {
-  return map.manuals.some((manual) => manual.needsKey === itemId);
+  return map.manuals.some((manual) => manual.known && manual.needsKey === itemId);
 }
 
 /**
@@ -145,7 +148,7 @@ export function contextAction(
   const dist = (x: number, y: number): number => Math.hypot(self.x - x, self.y - y);
 
   const mine = carriedItem(map, youId);
-  const key = mine !== undefined && map.manuals.some((manual) => manual.needsKey === mine.id);
+  const key = mine !== undefined && opensCabinet(map, mine.id);
   const goal = key ? null : (mine?.deliverTo ?? null);
   if (mine !== undefined && goal !== null && dist(goal.x + 0.5, goal.y + 0.5) <= ITEM_RADIUS) {
     return {
@@ -165,7 +168,8 @@ export function contextAction(
     stationOpen || mine !== undefined || loose === undefined
       ? map.stations.filter((s) => s.status === 'armed')
       : [];
-  const candidates: { action: ContextAction; d: number }[] = map.manuals.flatMap((manual) => {
+  const known = map.manuals.filter((manual) => manual.known);
+  const candidates: { action: ContextAction; d: number }[] = known.flatMap((manual) => {
     const source = sourcesHere.find((here) => here.id === manual.id);
     return source === undefined
       ? []

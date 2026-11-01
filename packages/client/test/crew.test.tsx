@@ -577,8 +577,8 @@ describe('the join screen', () => {
 /** A lab with an armed station, a done one, a held plate, an open book and a closed locker. */
 const lab: MapView = mapWith({
   stations: [
-    { puzzleId: 'kabel', x: 2, y: 2, title: 'Notstrom', status: 'done' },
-    { puzzleId: 'code', x: 8, y: 2, title: 'Zugangscode', status: 'armed' },
+    { puzzleId: 'kabel', x: 2, y: 2, title: 'Notstrom', status: 'done', found: false },
+    { puzzleId: 'code', x: 8, y: 2, title: 'Zugangscode', status: 'armed', found: false },
   ],
   plates: [
     { id: 'tuer', x: 5, y: 8, label: 'HALTEN', pressed: true, freezesDrone: false },
@@ -586,6 +586,8 @@ const lab: MapView = mapWith({
   ],
   manuals: [
     {
+      found: true,
+      known: true,
       id: 'buch',
       kind: 'book',
       x: 14,
@@ -596,6 +598,8 @@ const lab: MapView = mapWith({
       needsKey: null,
     },
     {
+      found: true,
+      known: true,
       id: 'spind',
       kind: 'locker',
       x: 14,
@@ -608,6 +612,7 @@ const lab: MapView = mapWith({
   ],
   items: [
     {
+      found: true,
       id: 'sicherung',
       label: 'Ersatzsicherung',
       x: 1,
@@ -635,8 +640,8 @@ const nowhere = { stationId: null, manualId: null };
 /** The Signalkette, armed at both its consoles: a at (8,5), b at (13,5). */
 const kette: MapView = mapWith({
   stations: [
-    { puzzleId: 'kette', x: 8, y: 5, title: 'Signalkette', status: 'armed', console: 'a' },
-    { puzzleId: 'kette', x: 13, y: 5, title: 'Signalkette', status: 'armed', console: 'b' },
+    { puzzleId: 'kette', x: 8, y: 5, title: 'Signalkette', status: 'armed', console: 'a', found: false },
+    { puzzleId: 'kette', x: 13, y: 5, title: 'Signalkette', status: 'armed', console: 'b', found: false },
   ],
 });
 
@@ -686,6 +691,9 @@ describe('presence tags', () => {
     expect(presenceNear(lab, on(14, 3))).toEqual({ stationId: null, manualId: 'buch' });
     expect(presenceNear(lab, on(14, 7))).toEqual(nowhere);
     expect(presenceNear(lab, undefined)).toEqual(nowhere);
+    // A book the crew has not come across is no place to read at, as far as anybody knows.
+    const unknown = { ...lab, manuals: lab.manuals.map((m) => ({ ...m, known: false })) };
+    expect(presenceNear(unknown, on(14, 3))).toEqual(nowhere);
   });
 });
 

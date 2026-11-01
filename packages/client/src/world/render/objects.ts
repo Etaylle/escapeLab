@@ -132,10 +132,10 @@ export function tubeAt(frame: Frame, x: number, y: number): Tube {
   return { burn: crtFlicker(t, seed), roll: rollAt(t, seed, frame.reduced) };
 }
 
-/** The sources found so far, the ones printing the armed station's rules lit up. */
+/** The sources the crew has come across, the ones printing the armed station's rules lit up. */
 function drawManuals(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const { map, pulse, text } = frame;
-  for (const manual of map.manuals) {
+  for (const manual of map.manuals.filter((m) => m.known)) {
     const active = coversArmed(map, manual);
     const { kind, label, opened } = manual;
     const tube = tubeAt(frame, manual.x, manual.y);
@@ -144,10 +144,10 @@ function drawManuals(ctx: CanvasRenderingContext2D, frame: Frame): void {
   }
 }
 
-/** The notes of the last shift found so far, on their walls or the floor, unread ones calling. */
+/** The notes of the last shift the crew has come across, on their walls or the floor, unread ones calling. */
 function drawNotes(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const { map, pulse } = frame;
-  for (const note of map.notes) {
+  for (const note of map.notes.filter((n) => n.known)) {
     const mount = noteMount(map, note);
     if (mount !== null) {
       const look = { facing: mount.facing, read: note.read, pulse };

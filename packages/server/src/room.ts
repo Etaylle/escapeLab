@@ -3,12 +3,13 @@ import { DronePatrol } from './drones.js';
 import {
   applyAction,
   armedStations,
-  canSee,
   dailySeed,
   emergenciesDue,
+  findables,
   inEscapePhase,
   initialState,
   lightsAreOut,
+  lookAround,
   noteKey,
   noteSpot,
   nudgeDueAt,
@@ -25,7 +26,9 @@ import {
   type ClientMessage,
   type DailyStart,
   type Difficulty,
+  type FindKey,
   type GameState,
+  type Glances,
   type MapDef,
   type Mission,
   type PlayerPosition,
@@ -70,11 +73,6 @@ const PLATE_RELEASE_RADIUS = 0.75;
 /** A player is at a station, a manual object or the sign this close (in tiles); leaves wider. */
 const PRESENCE_ENTER_RADIUS = 1.6;
 const PRESENCE_LEAVE_RADIUS = 2.0;
-/**
- * A manual object is found for the whole crew once somebody comes this close
- * (in tiles) and has it in sight: through a wall nobody finds anything.
- */
-const DISCOVER_RADIUS = 3.5;
 /** How close to the armed station an interact is accepted. */
 const INTERACT_RADIUS = 1.6;
 /**
@@ -139,6 +137,13 @@ export class Room {
   private puzzleTimer: NodeJS.Timeout | null = null;
   /** lets mission control speak up once the station that is up has stayed quiet */
   private nudgeTimer: NodeJS.Timeout | null = null;
+  /**
+   * since when each thing has stood in each player's lamp cone, by player id
+   * (core discovery.ts): a look held long enough finds it
+   */
+  private readonly glances = new Map<string, Glances>();
+  /** looks round again once the next glance has been held long enough, nobody moving meanwhile */
+  private glanceTimer: NodeJS.Timeout | null = null;
   /** the mission the host's yes on the end screen named for the next run; null: the same again */
   private next: Mission | null = null;
   private timer: NodeJS.Timeout | null = null;
@@ -372,6 +377,7 @@ export class Room {
         break;
       case 'back-to-lobby':
         this.positions.clear();
+        this.glances.clear();
         this.dispatch({ type: 'back-to-lobby', playerId });
         this.next = null;
         break;
@@ -651,6 +657,8 @@ export class Room {
       return;
     }
     this.positions.clear();
+    // A glance of the last run finds nothing in this one.
+    this.glances.clear();
     for (const player of this.state.players) {
       const spawn = player.spawn;
       this.positions.set(player.id, {
@@ -743,13 +751,59 @@ export class Room {
       .sort();
   }
 
-  /** Whether a connected player within DISCOVER_RADIUS of a source's tile has it in sight. */
-  private sighted(spot: { x: number; y: number }, shut: ReadonlySet<string>): boolean {
-    const middle = { x: spot.x + 0.5, y: spot.y + 0.5 };
-    return this.occupantsOf(spot.x, spot.y, DISCOVER_RADIUS).some((id) => {
-      const pos = this.positions.get(id);
-      return pos !== undefined && canSee(this.state.mission.map, pos, middle, shut);
-    });
+  /**
+   * What each connected player finds where they stand at `now` (core discovery.ts), of what
+   * they have not found yet, by player id: whatever lies in reach, whatever their lamp's cone
+   * has rested on long enough — nothing while the run stands paused. Keeps the glances still
+   * running and arms the look that ends the next of them.
+   */
+  private findsNow(now: number): Record<string, FindKey[]> {
+    const found: Record<string, FindKey[]> = {};
+    if (this.state.paused !== null) {
+      this.armGlances(null, now);
+      return found;
+    }
+    const map = this.state.mission.map;
+    const shut = shutDoors(map, this.state);
+    const things = findables(this.state);
+    let dueAt: number | null = null;
+    for (const player of this.state.players) {
+      const pos = this.positions.get(player.id);
+      if (!player.connected || pos === undefined) {
+        this.glances.delete(player.id);
+        continue;
+      }
+      const had = new Set(this.state.found[player.id] ?? []);
+      const fresh = things.filter((thing) => !had.has(thing.key));
+      const look = lookAround(map, shut, pos, fresh, this.glances.get(player.id) ?? {}, now);
+      this.glances.set(player.id, look.glances);
+      if (look.found.length > 0) {
+        found[player.id] = look.found;
+      }
+      dueAt = look.dueAt === null ? dueAt : Math.min(dueAt ?? Infinity, look.dueAt);
+    }
+    this.armGlances(dueAt, now);
+    return found;
+  }
+
+  /**
+   * Looks round again at `dueAt` (epoch ms), when the next glance has been held long enough
+   * though nobody moved; none for null.
+   */
+  private armGlances(dueAt: number | null, now: number): void {
+    if (this.glanceTimer !== null) {
+      clearTimeout(this.glanceTimer);
+      this.glanceTimer = null;
+    }
+    if (dueAt !== null) {
+      this.glanceTimer = setTimeout(
+        () => {
+          this.glanceTimer = null;
+          this.reconcilePresence();
+        },
+        Math.max(0, dueAt - now),
+      );
+    }
   }
 
   /**
@@ -792,16 +846,15 @@ export class Room {
   /**
    * Translate live positions into who stands at which station spot — each
    * console of a station on its own, keyed by `stationKey` — manual object
-   * and note, who has walked up to the sign, which manual objects and notes
-   * somebody has come close to and seen for the first time, and who stands on
-   * the open hatch; dispatch only on change.
+   * and note, who has walked up to the sign, what each player has just found
+   * (`findsNow`), and who stands on the open hatch; dispatch only on change.
    */
   private reconcilePresence(): void {
     const map = this.state.mission.map;
     if (this.state.phase !== 'playing') {
       return;
     }
-    const { presence, places, discovered, notesFound } = this.state;
+    const { presence, places } = this.state;
     const stations = this.atEach(
       map.stations.map((s) => ({ id: stationKey(s), x: s.x, y: s.y })),
       presence.stations,
@@ -818,13 +871,8 @@ export class Room {
       sign === undefined
         ? presence.signSeen
         : [...new Set([...presence.signSeen, ...this.presentAt(sign.x, sign.y, [])])].sort();
-    const shut = shutDoors(map, this.state);
-    const seen = sources
-      .filter((s) => !discovered.includes(s.id) && this.sighted(s, shut))
-      .map((s) => s.id);
-    const notesSeen = pinned
-      .filter((n) => !notesFound.includes(n.index) && this.sighted(n, shut))
-      .map((n) => n.index);
+    const now = Date.now();
+    const found = this.findsNow(now);
     const exit = this.onTheHatch();
     const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
     if (
@@ -832,10 +880,10 @@ export class Room {
       !same(manuals, presence.manuals) ||
       !same(notes, presence.notes) ||
       signSeen.length !== presence.signSeen.length ||
-      seen.length + notesSeen.length > 0 ||
+      Object.keys(found).length > 0 ||
       !same(exit, presence.exit)
     ) {
-      const action = { stations, manuals, notes, signSeen, seen, notesSeen, exit };
+      const action = { stations, manuals, notes, signSeen, found, exit, at: now };
       this.dispatch({ type: 'set-presence', ...action });
     }
   }
@@ -1187,6 +1235,10 @@ export class Room {
     if (this.nudgeTimer !== null) {
       clearTimeout(this.nudgeTimer);
       this.nudgeTimer = null;
+    }
+    if (this.glanceTimer !== null) {
+      clearTimeout(this.glanceTimer);
+      this.glanceTimer = null;
     }
     if (this.positionsTimer !== null) {
       clearTimeout(this.positionsTimer);

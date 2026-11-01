@@ -46,7 +46,7 @@ function atLever(): PlayerView {
     noteHere: null,
     puzzle: null,
     map: mapWith({
-      stations: [{ puzzleId: 'notlicht', x: 11, y: 7, title: 'Notlicht', status: 'armed' }],
+      stations: [{ puzzleId: 'notlicht', x: 11, y: 7, title: 'Notlicht', status: 'armed', found: false }],
     }),
   };
 }

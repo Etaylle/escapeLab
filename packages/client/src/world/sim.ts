@@ -189,6 +189,8 @@ export function followServer(
   if (sim.run !== run) {
     const start = startingSpot(known, youId, map, run);
     Object.assign(sim.self, start);
+    // Facing as the server has you — east on a fresh spawn —, where its lamp finds things.
+    sim.self.facing = kept?.facing ?? 0;
     sim.cam.x = start.x;
     sim.cam.y = start.y;
     sim.lead = { x: 0, y: 0 };

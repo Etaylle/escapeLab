@@ -76,9 +76,10 @@ const KIND_NAMES: Record<ManualKind, string> = {
   cabinet: 'Aktenschrank',
 };
 
-/** What the things in the lab are for, one line each; only what this map has. */
+/** What the things in the lab are for, one line each; only what the crew has come across. */
 export function Legend({ map }: { map: MapView }) {
-  const kinds = [...new Set(map.manuals.map((m) => KIND_NAMES[m.kind]))];
+  const known = map.manuals.filter((m) => m.known);
+  const kinds = [...new Set(known.map((m) => KIND_NAMES[m.kind]))];
   const rows: [IconName, string, string][] = [];
   if (kinds.length > 0) {
     rows.push(['book', kinds.join(' · '), 'Regeln der Stationen']);

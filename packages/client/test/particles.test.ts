@@ -231,6 +231,7 @@ describe('breakerSmoke — the main breaker smoking after the blackout’s thunk
 
 describe('shortOf — when the fuse box shorts out', () => {
   const box = {
+    found: false,
     puzzleId: 'notstrom',
     x: 1,
     y: 9,

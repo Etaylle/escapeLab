@@ -28,11 +28,12 @@ const YOU = 'p1';
 const HERE = { x: 10.5, y: 6.5 };
 
 function station(x: number, y: number, status: MapView['stations'][number]['status']) {
-  return { puzzleId: 'notstrom', x, y, title: 'Notstrom', status };
+  return { puzzleId: 'notstrom', x, y, title: 'Notstrom', status, found: false };
 }
 
 function item(parts: Partial<MapView['items'][number]>): MapView['items'][number] {
   return {
+    found: true,
     id: 'fuse',
     label: 'Sicherung',
     x: 3,
@@ -57,6 +58,8 @@ describe('markerTargets — what the player is pointed at', () => {
 
   it('points at the nearer console of a station with two, named by its console', () => {
     const locker: Manual = {
+      found: true,
+      known: true,
       id: 'spind',
       kind: 'locker',
       x: 8,
@@ -148,6 +151,7 @@ describe('markerTargets — what the player is pointed at', () => {
         y: 11,
         title: puzzleId === 'reaktor' ? 'Reaktor-Neustart' : puzzleId,
         status: i < done ? ('done' as const) : i === done ? ('armed' as const) : ('locked' as const),
+        found: false,
       }));
       const fuse = item({ ...partAt, requiredForTitle: 'Reaktor-Neustart' });
       return mapWith({ tiles: openLab, stations, items: [fuse] });
@@ -186,6 +190,8 @@ describe('markerTargets — what the player is pointed at', () => {
 
   it('points at every manual object printing the armed station, blue like a part', () => {
     const book: Manual = {
+      found: true,
+      known: true,
       id: 'buch',
       kind: 'book',
       x: 2,
@@ -202,7 +208,12 @@ describe('markerTargets — what the player is pointed at', () => {
       x: 8,
       puzzleIds: ['frequenz'],
     };
-    const map = mapWith({ stations: [station(5, 9, 'armed')], manuals: [book, elsewhere] });
+    // A source printing the station's rules that nobody has come across yet: no arrow to it.
+    const unknown: Manual = { ...book, id: 'tafel', x: 12, found: false, known: false };
+    const map = mapWith({
+      stations: [station(5, 9, 'armed')],
+      manuals: [book, elsewhere, unknown],
+    });
     expect(markerTargets(map, YOU, HERE)).toEqual([
       { x: 5.5, y: 9.5, color: '#2dd4bf', label: 'STATION' },
       { x: 2.5, y: 3.5, color: '#60a5fa', label: 'LESEN' },
@@ -211,6 +222,8 @@ describe('markerTargets — what the player is pointed at', () => {
 
   it('points at no manual object once every station is done, or while hands are full', () => {
     const book: Manual = {
+      found: true,
+      known: true,
       id: 'buch',
       kind: 'book',
       x: 2,

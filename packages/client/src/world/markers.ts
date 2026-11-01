@@ -46,7 +46,7 @@ type Spot = MapView['stations'][number];
 type Point = { x: number; y: number };
 type Item = MapView['items'][number];
 
-/** How far a player sees a part lying about, in tiles: as far as the crew comes across a source. */
+/** How far a player sees a part lying about for its arrow, in tiles: past the lamp's glow (3.2). */
 export const PART_SIGHT = 3.5;
 
 /**
@@ -139,7 +139,8 @@ export function markerTargets(
     const label =
       armed.console === undefined ? 'STATION' : consoleName(armed.console).toUpperCase();
     out.push({ x: armed.x + 0.5, y: armed.y + 0.5, color: TEAL, label });
-    for (const manual of map.manuals.filter((m) => m.puzzleIds.includes(armed.puzzleId))) {
+    const sources = map.manuals.filter((m) => m.known && m.puzzleIds.includes(armed.puzzleId));
+    for (const manual of sources) {
       out.push({ x: manual.x + 0.5, y: manual.y + 0.5, color: BLUE, label: 'LESEN' });
     }
   }

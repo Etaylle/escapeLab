@@ -364,4 +364,14 @@ describe('follow — the camera leads the walk', () => {
     followServer(sim, { run: 7, players: {} }, OPEN, 'p1', 7);
     expect(sim.lead).toEqual({ x: 0, y: 0 });
   });
+
+  it('starts a new run facing as the server has the avatar: east on a fresh spawn', () => {
+    const sim = walking(Math.PI / 2);
+    follows(sim, 1);
+    followServer(sim, { run: 7, players: {} }, OPEN, 'p1', 7);
+    expect(sim.self.facing).toBe(0);
+    const kept = { x: 3.5, y: 2.5, facing: Math.PI, moving: false, t: null, rt: 0 };
+    followServer(sim, { run: 8, players: { p1: kept } }, OPEN, 'p1', 8);
+    expect(sim.self.facing).toBe(Math.PI);
+  });
 });

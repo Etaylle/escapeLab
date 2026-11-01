@@ -217,10 +217,11 @@ describe('who stands at which console', () => {
 
   it('marks both consoles on the map, and only those', () => {
     const stations = viewFor(atTheConsoles(), 'p3').map?.stations ?? [];
+    const kette = { puzzleId: 'kette', title: 'Signalkette', status: 'armed', found: false };
     expect(stations).toEqual([
-      { puzzleId: 'kette', x: 6, y: 1, title: 'Signalkette', status: 'armed', console: 'a' },
-      { puzzleId: 'kette', x: 13, y: 1, title: 'Signalkette', status: 'armed', console: 'b' },
-      { puzzleId: 'kabel', x: 3, y: 1, title: 'Kabel', status: 'locked' },
+      { ...kette, x: 6, y: 1, console: 'a' },
+      { ...kette, x: 13, y: 1, console: 'b' },
+      { puzzleId: 'kabel', x: 3, y: 1, title: 'Kabel', status: 'locked', found: false },
     ]);
     expect(stations[2]).not.toHaveProperty('console');
   });

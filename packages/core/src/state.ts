@@ -1,5 +1,6 @@
 import type { DailyDay } from './daily.js';
 import type { Difficulty } from './difficulty.js';
+import type { FindKey } from './discovery.js';
 import type { Edgework } from './edgework.js';
 import type { Mission } from './mission.js';
 import type { PuzzleState } from './puzzles/index.js';
@@ -168,13 +169,13 @@ export interface GameState {
   places: Record<string, { x: number; y: number }>;
   /** lockers searched and cabinets unlocked this run, by manual object id */
   opened: string[];
-  /** manual objects somebody has come close to this run; the crew's map shows only these */
-  discovered: string[];
   /**
-   * notes of the last shift somebody has come across this run, by index; the
-   * crew's map shows only these
+   * what each player has found this run, by player id: the keys of the sources, notes, parts,
+   * consoles and the sign they came near enough to or looked at long enough (discovery.ts),
+   * sorted. The crew shares them only as the game already shares things — the minimap, the
+   * arrows, a key's lock
    */
-  notesFound: number[];
+  found: Record<string, FindKey[]>;
   /** notes somebody has read this run, by index: the run report logs each once */
   notesRead: number[];
   /** who did what this run, by player id */
@@ -264,8 +265,7 @@ export function initialState(
     presence: NOBODY_PRESENT,
     places: {},
     opened: [],
-    discovered: [],
-    notesFound: [],
+    found: {},
     notesRead: [],
     credits: {},
     readersCredited: [],

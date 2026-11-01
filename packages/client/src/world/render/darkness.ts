@@ -379,10 +379,10 @@ function stationGlows(frame: Frame): Glow[] {
   });
 }
 
-/** The sources found, brighter where they print the armed station's rules, and the sign. */
+/** The sources the crew has come across, brighter where they print the armed station's rules, and the sign. */
 function sourceGlows(frame: Frame): Glow[] {
   const { map } = frame;
-  const glows = map.manuals.map((manual): Glow => {
+  const glows = map.manuals.filter((m) => m.known).map((manual): Glow => {
     const active = coversArmed(map, manual);
     const at = { x: manual.x + 0.5, y: manual.y + 0.5 };
     return { ...at, radius: active ? 2.1 : 1.3, strength: active ? 0.8 : 0.5 };
@@ -393,12 +393,12 @@ function sourceGlows(frame: Frame): Glow[] {
     : [...glows, { x: sign.x + 0.5, y: sign.y + 0.5, radius: 1.4, strength: 0.6 }];
 }
 
-/** The notes of the last shift found so far: faint, and fainter once somebody has read one. */
+/** The notes of the last shift the crew has come across: faint, and fainter once somebody has read one. */
 function noteGlows(frame: Frame): Glow[] {
   const { map } = frame;
   return map.notes.flatMap((note): Glow[] => {
     const mount = noteMount(map, note);
-    if (mount === null) {
+    if (mount === null || !note.known) {
       return [];
     }
     // A sheet on a wall hangs on its face, above the point it is read from.

@@ -3,6 +3,8 @@ import { worldNews } from '../src/world/news.js';
 import { mapWith, type Manual } from './fixtures.js';
 
 const book: Manual = {
+  found: true,
+  known: true,
   id: 'buch',
   kind: 'book',
   x: 2,
@@ -27,21 +29,25 @@ describe('worldNews — what the lab shows that it did not before', () => {
     });
   });
 
-  it('finds a note of the last shift the moment the view carries it, read or not', () => {
-    const lever = { index: 0, x: 12, y: 6, read: false };
-    const hatch = { index: 2, x: 2, y: 0, read: true };
-    const before = mapWith({ notes: [lever] });
+  it('finds a note of the last shift the moment the crew knows of it, read or not', () => {
+    const lever = { index: 0, x: 12, y: 6, read: false, found: true, known: true };
+    const hatch = { index: 2, x: 2, y: 0, read: true, found: true, known: true };
+    const unknown = { ...hatch, found: false, known: false };
+    const before = mapWith({ notes: [lever, unknown] });
     const now = mapWith({ notes: [lever, hatch] });
     expect(worldNews(before, now).notes).toEqual([hatch]);
     expect(worldNews(now, now).notes).toEqual([]);
     expect(worldNews(null, now).notes).toEqual([]);
+    expect(worldNews(before, before).notes).toEqual([]);
   });
 
-  it('finds a source the moment the view carries it, and only then', () => {
-    const before = mapWith({ manuals: [book] });
+  it('finds a source the moment the crew knows of it, and only then', () => {
+    const unknown = { ...locker, found: false, known: false };
+    const before = mapWith({ manuals: [book, unknown] });
     const now = mapWith({ manuals: [book, locker] });
     expect(worldNews(before, now).found).toEqual([locker]);
     expect(worldNews(now, now).found).toEqual([]);
+    expect(worldNews(mapWith({}), before).found).toEqual([book]);
   });
 
   it('opens a locker once: closed before, open now', () => {
@@ -59,6 +65,7 @@ describe('worldNews — what the lab shows that it did not before', () => {
 
   it('seats a part where it belongs once, and leaves a key in a cabinet to the cabinet', () => {
     const fuse = {
+      found: true,
       id: 'sicherung',
       label: 'SICHERUNG',
       x: 9.5,
@@ -82,6 +89,7 @@ describe('worldNews — what the lab shows that it did not before', () => {
 
   it('puts a part down off somebody’s hands once, where it now lies — not one set in place', () => {
     const fuse = {
+      found: true,
       id: 'sicherung',
       label: 'SICHERUNG',
       x: 9.5,

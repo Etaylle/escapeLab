@@ -256,7 +256,7 @@ function drawPlates(ctx: CanvasRenderingContext2D, map: WorldMap, layout: Minima
   }
 }
 
-/** Stations, the armed one bright, and the sources, bright where they print its rules. */
+/** Stations, the armed one bright, and the sources the crew has come across, bright where they print its rules. */
 function drawStationsAndSources(
   ctx: CanvasRenderingContext2D,
   map: WorldMap,
@@ -267,7 +267,7 @@ function drawStationsAndSources(
       station.status === 'armed' ? C.teal : station.status === 'done' ? C.done : C.locked;
     ctx.fillRect(ox + station.x * cell, oy + station.y * cell, cell, cell);
   }
-  for (const manual of map.manuals) {
+  for (const manual of map.manuals.filter((m) => m.known)) {
     ctx.fillStyle = coversArmed(map, manual) ? C.read : C.unread;
     ctx.fillRect(ox + manual.x * cell, oy + manual.y * cell, cell, cell);
   }
