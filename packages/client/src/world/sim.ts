@@ -222,7 +222,7 @@ function tileOf(x: number, y: number): string {
 /**
  * What a frame's step is checked against: the doors shut now, by tile; the shut ones the body
  * overlaps already — a door may shut on a walker —; the tile the body's centre stands on; and
- * the tile the server has it on (`Sim.serverSpot`), its centre's before the server said.
+ * the tile the server has it on (`Sim.serverSpot`), the centre's own until the server says.
  */
 interface Footing {
   shut: ReadonlySet<string>;
