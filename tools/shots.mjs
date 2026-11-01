@@ -7489,9 +7489,19 @@ function watchHatchDust(watcher, seen) {
   };
 }
 
+/** How long a page at twice the density has to size its canvas with its first frames, ms. */
+const DPR2_MS = 8000;
+
+/** Whether a canvas's backing store is its box's CSS pixels times two, rounded. */
+const twiceItsBox = (backing) =>
+  backing.cssWidth > 0 &&
+  backing.width === Math.round(backing.cssWidth * 2) &&
+  backing.height === Math.round(backing.cssHeight * 2);
+
 /**
  * dpr2.png: a second audience page at twice the density, joined to room `code`; its canvas's
- * backing store has to be its box's CSS pixels times two — or the run fails.
+ * backing store has to come to its box's CSS pixels times two within DPR2_MS — the world sizes
+ * it as it draws, on a slowed page only after a while — or the run fails.
  */
 async function captureDpr2(code) {
   const context = await browser.newContext({ viewport: SIZES[0], deviceScaleFactor: 2 });
@@ -7501,14 +7511,11 @@ async function captureDpr2(code) {
     await page.getByLabel('Raumcode').fill(code);
     await clickText(page, 'Mit Code zuschauen');
     await page.locator('.spectate').waitFor({ timeout: 10_000 });
-    const drawn = await graphicsWhen(page, ({ backing }) => backing.cssWidth > 0, 5000);
+    const sized = await graphicsWhen(page, ({ backing }) => twiceItsBox(backing), DPR2_MS);
+    const backing = (sized ?? (await graphicsOf(page)))?.backing ?? null;
     await sleep(800);
     await capture(page, 'dpr2.png');
-    const backing = drawn?.backing ?? null;
-    const crisp =
-      backing !== null &&
-      backing.width === Math.round(backing.cssWidth * 2) &&
-      backing.height === Math.round(backing.cssHeight * 2);
+    const crisp = sized !== null;
     const sizes =
       backing === null
         ? 'no canvas'
