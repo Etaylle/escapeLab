@@ -90,7 +90,7 @@ die Entscheidung.
   Textgröße; Raumname über hellem Boden bekommt eine Platte (FLUR 1,3:1).
 - Touch: 8-Wege-Pad ≥ 48 px unter dem linken Daumen, Aktionen rechts.
 
-### T-1 Terminal und Notizen — Status: im PR (N-notes) · Größe: M
+### T-1 Terminal und Notizen — Status: erledigt (N-notes, Merge 2026-11-01) · Größe: M
 - Prompt fokussiert beim Öffnen und nach jedem Befehl, jede Taste tippt, Tab vervollständigt,
   Fehler am Prompt; Funk am Terminal per Maus/Touch/Pad. Aufnahmeformat je Quelle (Legende,
   Dienste, Kennung, Morse, Frequenzen, Regeln) ≤ 12 Zeilen mit Herkunft; Notizblock in
