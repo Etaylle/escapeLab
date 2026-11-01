@@ -9,6 +9,7 @@ import {
   clock,
   formatLeft,
   ROUND_TRIPS,
+  serverAt,
   serverClock,
   timeLeft,
 } from '../src/clock.js';
@@ -271,5 +272,26 @@ describe('the objective bar’s clock', () => {
     expect(clockReads(view)).toBe('05:01');
     vi.setSystemTime(truth + 20_000);
     expect(clockReads(view)).toBe('05:01');
+  });
+});
+
+describe('a frame’s moment on the server’s clock', () => {
+  afterEach(() => {
+    offsetBy(0);
+    vi.useRealTimers();
+  });
+
+  it('stays the server’s time after a sleep: the wall clock went on, the timeline stood', () => {
+    vi.useFakeTimers();
+    // the wall clock as the frame timeline has it, the server 2 s ahead of both
+    const start = Math.round(performance.timeOrigin + performance.now());
+    vi.setSystemTime(start);
+    offsetBy(2_000);
+    expect(serverAt(performance.now())).toBeCloseTo(start + 2_000, -1);
+    // a minute asleep: the wall clock and the server went on, the frame timeline did not
+    vi.setSystemTime(start + 60_000);
+    expect(serverAt(performance.now())).toBeCloseTo(start + 62_000, -1);
+    // a frame 16 ms before now is 16 ms before the server's now
+    expect(serverAt(performance.now() - 16)).toBeCloseTo(start + 62_000 - 16, -1);
   });
 });

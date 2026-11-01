@@ -7,7 +7,7 @@
  * the median offset of the last ROUND_TRIPS answers; until the first comes, a view's own stamp
  * stands in, a one-way guess. Local time is the page's wall clock (`Date.now()`), asked anew
  * every ASK_EVERY_MS: a clock set anew mid-run is caught up with in a few asks. A moment of the
- * page's frame timeline (`performance.now()`) goes over by `serverAt`.
+ * page's frame timeline (`performance.now()`) goes over by `serverAt`, from the time now.
  */
 
 /** How many round trips the offset is the median of. */
@@ -72,10 +72,12 @@ export function serverNow(): number {
 
 /**
  * The moment `perf` of the page's frame timeline (`performance.now()`, a frame's timestamp) on
- * the server's clock, epoch ms: frame by frame as smooth as the timeline itself.
+ * the server's clock, epoch ms: as long before the server's time now as it lies before the
+ * timeline's now. The timeline is never read against the wall clock's origin: it stands still
+ * while the machine sleeps, and the wall clock may be set anew, so the two drift apart.
  */
 export function serverAt(perf: number): number {
-  return performance.timeOrigin + perf + clock.offset();
+  return clock.now() - (performance.now() - perf);
 }
 
 /**
