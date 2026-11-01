@@ -233,6 +233,36 @@ text in the mono, bold, with a dark halo, held within 10 to 14 CSS px whatever t
 reduced motion every move is a cut or a cross-fade: a panel only fades in, a device stepped back
 from goes at once, a press only darkens.
 
+## The notepad (screens/Notepad.tsx, styles/notepad.css)
+
+The notepad is the one thing on screen that belongs to the player, so it looks like a pad a
+person on the night shift keeps, not like the lab's machines: cream paper (#fbf6e6), faint blue
+rules a writing line apart (28 px at text size 1) and a red double margin line down its left,
+glued to a board at its head. The player's own writing stands in blue-black pen (#22305a), in a
+hand: **Kalam** by the Indian Type Foundry (2014), under the **SIL Open Font License 1.1**, which
+reserves no font name. Its Latin subset — Latin-1 and the general punctuation, as Google Fonts
+cuts it, enough for every German text and „ “ – — · … — ships with the game as
+`client/public/fonts/kalam-latin.woff2` (14 kB), its licence beside it as `kalam-OFL.txt`; the
+page preloads it (index.html) and the service worker keeps it, so the pad never opens in a
+stand-in face and nothing comes from a CDN. The pen's ink sinks a little into the paper (a
+0.6 px shadow of itself). What was taken down at a source is copied in pencil (#3a3c41, every
+second capture a softer, warmer #4a4038): a table in the system's monospace — block letters — on
+ruled pencil lines 24 px apart, its columns aligned and never wrapped; running text, rules and
+notes, in the same hand as the pen's; each capture's head in pen, underlined as a heading on a
+pad is, „aktualisiert" beside it in red pencil (#a3352b). Nothing on the pad moves, so reduced
+motion has nothing to change.
+
+Readable first: the writing 18 px, the hand's running text and heads 17 px, the pencil's tables
+15 px, the red pencil 15 px, all at text size 1 and all scaled by it; against the paper the pen
+stands at 11.9:1, the pencils at 10.2 and 9.3:1, the red pencil at 6.3:1 and the placeholder at
+5.6:1 (`client/test/notepadLook.test.ts` reads them off the stylesheet). A table stays aligned
+up to 38 characters of the pencil's — the terminal's table runs 36, the Signalkette's legend 31
+— which the pad holds whole on a phone 420 px wide (its margin moved in to 24 px there); a wider
+one is set as running text (gameplay.md). The pad in the world's corner is 390 px wide at text
+size 1 and grows with it; the strip beside a page keeps its width (`--note-strip`), so in a
+narrow window at the large text size a table may scroll sideways in its own box.
+notepad-captured.png and notepad-captured-phone.png show the legend and the Laborkennung in it.
+
 ## Cost
 
 Floors, walls, wall props and furniture are sprites baked once per zoom level and light

@@ -37,6 +37,27 @@ export function typing(): boolean {
   return el !== null && ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
 }
 
+/** The prompts holding the keyboard now, one token each. */
+const claims = new Set<symbol>();
+
+/**
+ * A prompt holds the keyboard while it is up — the Serverraum's terminal: every printable key
+ * typed goes there wherever the focus is, the talk key with them (voice/useVoice.ts). Returns
+ * what lets go of it again.
+ */
+export function claimKeys(): () => void {
+  const claim = Symbol('prompt');
+  claims.add(claim);
+  return () => {
+    claims.delete(claim);
+  };
+}
+
+/** Whether a prompt holds the keyboard now (`claimKeys`). */
+export function keysClaimed(): boolean {
+  return claims.size > 0;
+}
+
 /**
  * Calls `onKey` with the key, lower-cased, when one of `keys` goes down —
  * not while typing, not on auto-repeat, not with a modifier the browser owns.

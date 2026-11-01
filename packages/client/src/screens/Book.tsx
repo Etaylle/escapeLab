@@ -13,12 +13,13 @@ import {
   type Fragment,
   type Leaf,
 } from '../pages.js';
-import { notedPart } from '../noting.js';
+import { notedPart, shiftNotesTaken } from '../noting.js';
 import { READERS } from '../puzzles/index.js';
 import { useGlyph } from '../input/glyphs.js';
 import { useReducedMotion } from '../settings.js';
 import { paperSwish } from '../world/audio.js';
 import { Block } from './Manual.js';
+import { Notable } from './NoteButton.js';
 import { ReaderPanel } from './PuzzlePanel.js';
 import { Seal } from './Seal.js';
 
@@ -115,13 +116,15 @@ export function NoteSlip({
     <aside className="note-slip" aria-label={label}>
       <p className="note-slip-for">{`zu §${section.index + 1}`}</p>
       {section.notes.length > 0 && (
-        <ol className="margin-notes">
-          {section.notes.map((note, i) => (
-            <li key={i} className="margin-note">
-              {note}
-            </li>
-          ))}
-        </ol>
+        <Notable noted={shiftNotesTaken(section, section.notes)}>
+          <ol className="margin-notes">
+            {section.notes.map((note, i) => (
+              <li key={i} className="margin-note">
+                {note}
+              </li>
+            ))}
+          </ol>
+        </Notable>
       )}
       {section.notesLeft > 0 && <AskNote section={section} pausedAt={pausedAt} onAsk={onAsk} />}
     </aside>

@@ -1,5 +1,5 @@
 import type { ManualBlock, ManualSection } from '@escapelab/core';
-import { notable, notedHead, notedText, type NotedStation } from '../noting.js';
+import { blockTaken, notable, type NotedStation, type Taken } from '../noting.js';
 import { blockText } from '../pages.js';
 import { Figure } from './Figure.js';
 import { Notable } from './NoteButton.js';
@@ -32,7 +32,7 @@ export function Manual({
               noted={
                 station === null || !notable(block)
                   ? null
-                  : notedText(notedHead(station, section.heading), block)
+                  : blockTaken(station, sections, section, block)
               }
             />
           ))}
@@ -44,8 +44,8 @@ export function Manual({
 
 /**
  * One printed block; a rules list continued from another page numbers on from `start`. A rules
- * list or a table with its text for the notepad (`noted`) carries the „Notieren" control where
- * a notepad is within reach. A block of a kind this client does not know yet reads as a
+ * list or a table with its capture for the notepad (`noted`) carries the „Notieren" control
+ * where a notepad is within reach. A block of a kind this client does not know yet reads as a
  * paragraph of its words.
  */
 export function Block({
@@ -55,7 +55,7 @@ export function Block({
 }: {
   block: ManualBlock;
   start?: number;
-  noted?: string | null;
+  noted?: Taken | null;
 }) {
   switch (block.kind) {
     case 'p':

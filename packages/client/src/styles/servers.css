@@ -623,3 +623,59 @@
     gap: 8px;
   }
 }
+
+/* ── the prompt's answer to a refusal, the bezel's FUNK key ─────────── */
+
+/* A command the server refused, answered at the prompt it was typed at: amber, as the head's. */
+.servers-reply--refused {
+  color: #ffd27a;
+  text-shadow: 0 0 6px rgba(255, 196, 80, 0.45);
+}
+
+/*
+ * FUNK: held to talk, by a mouse or a finger, where the talk key types (puzzles/prompt.ts) — a
+ * keycap of the bezel's, its legend amber; it goes down and lights while the microphone sends,
+ * from L1 as well.
+ */
+.servers-talk {
+  flex: none;
+  min-width: 64px;
+  min-height: 44px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #3a3020, #241d12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.5),
+    0 2px 0 #06090b,
+    0 3px 4px rgba(0, 0, 0, 0.5);
+  color: #ffd27a;
+  font-family: var(--mono);
+  font-size: calc(13px * var(--text-scale));
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.servers-talk:focus-visible {
+  outline: 2px solid var(--phosphor);
+  outline-offset: 2px;
+}
+
+.servers-talk--on {
+  translate: 0 2px;
+  background: linear-gradient(180deg, #7a5a18, #4d3a10);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    0 0 14px rgba(255, 196, 80, 0.55);
+  color: #fff3d6;
+}
+
+:where([data-motion='reduce']) .servers-talk--on {
+  translate: none;
+}

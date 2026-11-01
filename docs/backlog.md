@@ -90,11 +90,16 @@ die Entscheidung.
   Textgröße; Raumname über hellem Boden bekommt eine Platte (FLUR 1,3:1).
 - Touch: 8-Wege-Pad ≥ 48 px unter dem linken Daumen, Aktionen rechts.
 
-### T-1 Terminal und Notizen — Status: in Arbeit (Mac, Paket N-notes) · Größe: M
+### T-1 Terminal und Notizen — Status: im PR (N-notes) · Größe: M
 - Prompt fokussiert beim Öffnen und nach jedem Befehl, jede Taste tippt, Tab vervollständigt,
   Fehler am Prompt; Funk am Terminal per Maus/Touch/Pad. Aufnahmeformat je Quelle (Legende,
   Dienste, Kennung, Morse, Frequenzen, Regeln) ≤ 12 Zeilen mit Herkunft; Notizblock in
   Handschrift auf liniertem Papier (OFL-Schrift lokal), Lesbarkeit ≥ 15 px, Kontrast ≥ 4,5:1.
+- Umgesetzt: Prompt hält die Tastatur (`puzzles/prompt.ts`), FUNK-Taste am Terminal, L1 spricht
+  direkt; Aufnahmen mit Kopfzeile „Quelle · Teil" (`noting.ts`), Notizblock getrennt in Schrift
+  und Aufnahmen, „aktualisiert" beim zweiten Mal; „Notieren" auch am Zettel der letzten Schicht
+  und an angehefteten Notizen; Kalam (OFL) in `public/fonts`. Regeln in `docs/gameplay.md`,
+  Aussehen in `docs/art-bible.md`.
 
 ### T-2 Jedes Pult sagt, wozu die Maschine da ist — Status: bereit · Größe: S
 - Audit: beide Hälften einer Station sehen aus wie Geräte, keine sagt die Aufgabe. Ein

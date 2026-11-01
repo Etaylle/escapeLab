@@ -55,6 +55,7 @@ function StationDevice({ puzzle, run, send, mission, onStepBack = null }: Puzzle
         send={(input) => send({ kind: 'puzzle-input', input })}
         mission={mission}
         crew={run.crew}
+        refused={refused}
       />
     </Device>
   );

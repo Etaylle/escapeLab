@@ -1,4 +1,11 @@
-import { useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import {
   DEPENDS_ON,
   SERVICES,
@@ -11,12 +18,15 @@ import {
   type ServerRow,
   type Service,
 } from '@escapelab/core';
-import { notedHead, notedText, type NotableBlock } from '../noting.js';
+import { alignedLines, type NotedStation, type Place, type Taken } from '../noting.js';
 import { NoteButton } from '../screens/NoteButton.js';
+import { TalkButton } from '../screens/Voice.js';
 import { consoleName } from '../world/consoles.js';
+import type { Refusal } from '../ws.js';
 import { DeviceLamp } from './Device.js';
 import { cssVars, reject, type Change } from './feel.js';
 import type { PanelProps } from './index.js';
+import { holdKeys, keepFocus } from './prompt.js';
 import { RackDiagram } from './RackDiagram.js';
 import { lampPop, okChime, rejectBuzz, spinUp, typeBlip } from './sounds.js';
 
@@ -81,6 +91,92 @@ export function withWord(line: string, word: { cmd: Command } | { service: Servi
   const cmd = 'cmd' in word ? word.cmd : (words.find(isCommand) ?? null);
   const service = 'service' in word ? word.service : (words.find(isService) ?? null);
   return cmd === 'status' ? cmd : [cmd, service].filter((part) => part !== null).join(' ');
+}
+
+/** Whether a command takes a service after it: `start` and `restart` do, `status` does not. */
+const takesService = (word: string | undefined): boolean => word === 'start' || word === 'restart';
+
+/** The longest start every one of `words` shares. */
+function sharedStart(words: readonly string[]): string {
+  const [first = '', ...rest] = words;
+  let length = first.length;
+  for (const word of rest) {
+    while (!word.startsWith(first.slice(0, length))) {
+      length -= 1;
+    }
+  }
+  return first.slice(0, length);
+}
+
+/**
+ * `line` with its last word completed, as Tab completes it: the first word to a command, the
+ * word after `start` or `restart` to a service — as far as every word it could still become
+ * agrees, whole where one alone fits, a command that takes a service with the blank after it.
+ * A line it cannot complete stays as it was.
+ */
+export function completed(line: string): string {
+  const [, before = '', word = ''] = /^(.*?)(\S*)$/s.exec(line) ?? [];
+  const said = wordsIn(before);
+  const words: readonly string[] =
+    said.length === 0 ? COMMANDS : said.length === 1 && takesService(said[0]) ? SERVICES : [];
+  const fits = words.filter((candidate) => candidate.startsWith(word.toLowerCase()));
+  const [only] = fits;
+  if (only === undefined) {
+    return line;
+  }
+  if (fits.length > 1) {
+    return `${before}${sharedStart(fits)}`;
+  }
+  return `${before}${only}${said.length === 0 && takesService(only) ? ' ' : ''}`;
+}
+
+/** What Enter made of the prompt's line. */
+export type Entered =
+  | { kind: 'empty' }
+  | { kind: 'unread' }
+  | { kind: 'sent'; input: CommandInput };
+
+/**
+ * Enter at the prompt: a line the terminal reads goes out as its command by `send`, one it
+ * cannot read is answered at the prompt and sends nothing, an empty one does nothing — and the
+ * prompt keeps the keyboard for the next line (`field`, prompt.ts `keepFocus`) whichever it was,
+ * even where ⏎ was the bezel's key. What it came to.
+ */
+export function enter(
+  line: string,
+  send: (input: CommandInput) => void,
+  field: Pick<HTMLElement, 'focus'> | null,
+): Entered {
+  keepFocus(field);
+  if (wordsIn(line).length === 0) {
+    return { kind: 'empty' };
+  }
+  const input = commandOf(line);
+  if (input === null) {
+    return { kind: 'unread' };
+  }
+  send(input);
+  return { kind: 'sent', input };
+}
+
+/**
+ * A key going down at the prompt: Tab completes the line's last word (`completed`) and keeps
+ * the focus where it is — Shift+Tab still goes back through the controls —; every other key
+ * does what it does, Enter sending and Esc stepping back from the device. Every key that types,
+ * takes a character back or completes blips.
+ */
+export function promptKeyDown(
+  e: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'altKey' | 'ctrlKey' | 'metaKey' | 'preventDefault'>,
+  setLine: (update: (line: string) => string) => void,
+): void {
+  const tab = e.key === 'Tab' && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey;
+  if (tab) {
+    e.preventDefault();
+    setLine(completed);
+  }
+  if (tab || e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete') {
+    typeBlip();
+  }
 }
 
 /** The log lines a change brought: those numbered past the last one before it. */
@@ -166,17 +262,25 @@ const statusOf = (row: ServerRow): string => (row.running ? 'RUNNING' : `FEHLER 
 export const needsOf = (service: Service): string =>
   DEPENDS_ON[service].length === 0 ? '—' : DEPENDS_ON[service].map(serviceName).join(', ');
 
-/** The terminal's status table as the notepad takes it down: a row a service, as printed. */
-export function terminalTable(rows: readonly ServerRow[]): NotableBlock {
+/** Where the notepad takes the status table down: the terminal. */
+export const TERMINAL: Place = { id: 'terminal', name: 'Terminal' };
+
+/**
+ * The terminal's status table as the notepad takes it down: a row a service as printed — its
+ * status, its power, what it needs running first — under the columns' names, aligned.
+ */
+export function terminalTaken(station: NotedStation, rows: readonly ServerRow[]): Taken {
+  const table = rows.map((row) => [
+    serviceName(row.service),
+    statusOf(row),
+    row.power ? 'AN' : 'AUS',
+    needsOf(row.service),
+  ]);
   return {
-    kind: 'table',
-    head: ['Dienst', 'Status', 'Strom', 'Braucht'],
-    rows: rows.map((row) => [
-      serviceName(row.service),
-      statusOf(row),
-      row.power ? 'AN' : 'AUS',
-      needsOf(row.service),
-    ]),
+    part: 'Dienste',
+    key: `${station.index}/dienste`,
+    lines: alignedLines([['Dienst', 'Status', 'Strom', 'Braucht'], ...table]),
+    form: 'table',
   };
 }
 
@@ -315,21 +419,36 @@ export function Keys({ put }: { put: (word: { cmd: Command } | { service: Servic
   );
 }
 
-/** A key typed into the prompt: a blip for every character and every one taken back. */
-function blipOn(event: KeyboardEvent<HTMLInputElement>): void {
-  if (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete') {
-    typeBlip();
+/**
+ * The answer under the prompt: „? Befehl unbekannt" for a line the terminal cannot read, and a
+ * command the server refused, as the device's head says it too — there for the eye at the line
+ * that was typed, its words read out once, by the head.
+ */
+export function Reply({ unread, refused }: { unread: boolean; refused: Refusal | null }) {
+  if (unread) {
+    return (
+      <p className="servers-reply" role="status">
+        ? Befehl unbekannt
+      </p>
+    );
   }
+  return refused === null ? null : (
+    <p className="servers-reply servers-reply--refused" aria-hidden="true">
+      {`! ${refused.message}`}
+    </p>
+  );
 }
 
 /**
- * Console a: the terminal. The green screen shows the table and the log;
- * under it the prompt takes a command typed or put together on the keys,
- * and sends it with ⏎. A line it cannot read it answers itself — the prompt
- * shakes — and sends nothing; `status` prints the table anew. The prompt never takes the
- * keyboard by itself and lets go of it once a line is sent, so that V
- * talks. The RACK lamp on its bezel burns while somebody stands at the rack, and beside it
- * „Notieren" takes the table down into the notepad as it stands.
+ * Console a: the terminal. The green screen shows the table and the log; under it the prompt
+ * takes a command typed or put together on the keys, Tab completing a command or a service, and
+ * sends it with Enter or ⏎. A line it cannot read it answers at the prompt — which shakes — and
+ * sends nothing, as it answers a command the server refuses; `status` prints the table anew.
+ * The prompt holds the keyboard while the terminal is up (prompt.ts): it takes the focus as it
+ * opens and after every command and key, every key typed elsewhere goes to it, and V types
+ * there like any letter — the bezel's FUNK key and L1 talk. The RACK lamp on its bezel burns
+ * while somebody stands at the rack, and beside it „Notieren" takes the table down into the
+ * notepad as it stands.
  */
 function Terminal(props: {
   puzzle: ServersPuzzle;
@@ -337,34 +456,48 @@ function Terminal(props: {
   log: ServerLogLine[];
   change: ServersChange | null;
   send: Send;
+  refused: Refusal | null;
 }) {
-  const { puzzle, rows, log, change, send } = props;
+  const { puzzle, rows, log, change, send, refused } = props;
   const [line, setLine] = useState('');
   const [unread, setUnread] = useState(false);
   const [printed, setPrinted] = useState(0);
   const prompt = useRef<HTMLLabelElement>(null);
-  const field = useRef<HTMLInputElement>(null);
+  const field = useRef<HTMLInputElement | null>(null);
+  const hold = useCallback((input: HTMLInputElement | null) => {
+    if (input === null) {
+      return undefined;
+    }
+    field.current = input;
+    const release = holdKeys(input, (text) => {
+      setLine((now) => now + text);
+      setUnread(false);
+      typeBlip();
+    });
+    return () => {
+      release();
+      field.current = null;
+    };
+  }, []);
   const submit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
-    if (wordsIn(line).length === 0) {
-      return;
-    }
-    const input = commandOf(line);
-    if (input === null) {
+    const entered = enter(line, send, field.current);
+    if (entered.kind === 'unread') {
       setUnread(true);
       if (prompt.current !== null) {
         reject(prompt.current, true);
       }
-      return;
+    } else if (entered.kind === 'sent') {
+      setUnread(false);
+      setLine('');
+      if (entered.input.cmd === 'status') {
+        setPrinted((n) => n + 1);
+      }
     }
-    setUnread(false);
-    setLine('');
-    if (input.cmd === 'status') {
-      setPrinted((n) => n + 1);
-    }
-    send(input);
-    // Sent, the prompt lets go of the keyboard: V talks again, until the prompt is clicked.
-    field.current?.blur();
+  };
+  const put = (word: { cmd: Command } | { service: Service }): void => {
+    setLine((now) => withWord(now, word));
+    keepFocus(field.current);
   };
   return (
     <form className="servers servers--terminal" onSubmit={submit}>
@@ -375,7 +508,7 @@ function Terminal(props: {
           </span>
           <span className="servers-field">
             <input
-              ref={field}
+              ref={hold}
               className="servers-input"
               value={line}
               aria-label="Befehl"
@@ -386,7 +519,7 @@ function Terminal(props: {
                 setLine(event.target.value);
                 setUnread(false);
               }}
-              onKeyDown={blipOn}
+              onKeyDown={(event) => promptKeyDown(event, setLine)}
             />
             {/* What was typed, in phosphor, the block cursor after it: the field's is hidden. */}
             <span className="servers-echo" aria-hidden="true">
@@ -395,16 +528,13 @@ function Terminal(props: {
             </span>
           </span>
         </label>
-        {unread && (
-          <p className="servers-reply" role="status">
-            ? Befehl unbekannt
-          </p>
-        )}
+        <Reply unread={unread} refused={refused} />
       </Screen>
       <div className="servers-bezel">
-        <Keys put={(word) => setLine((now) => withWord(now, word))} />
+        <Keys put={put} />
         <Link name="RACK" manned={otherManned(puzzle)} />
-        <NoteButton text={notedText(notedHead(puzzle, 'Terminal'), terminalTable(rows))} />
+        <TalkButton className="servers-talk">FUNK</TalkButton>
+        <NoteButton taken={terminalTaken(puzzle, rows)} place={TERMINAL} />
       </div>
     </form>
   );
@@ -525,14 +655,24 @@ function Watched(props: {
 
 /**
  * Serverraum at one console. Console a, the terminal, shows every service
- * with its code and takes `start`, `restart` and `status`; console b, the
- * rack, switches the services' power and shows their LEDs. The audience sees
- * both side by side, and switches nothing.
+ * with its code and takes `start`, `restart` and `status` — a command refused
+ * answered at its prompt; console b, the rack, switches the services' power
+ * and shows their LEDs. The audience sees both side by side, and switches
+ * nothing.
  */
-export function ServersPanel({ puzzle, change, send }: PanelProps<'servers'>) {
+export function ServersPanel({ puzzle, change, send, refused = null }: PanelProps<'servers'>) {
   const { role, rows, log, rack } = puzzle;
   if (role === 'terminal' && rows !== null && log !== null) {
-    return <Terminal puzzle={puzzle} rows={rows} log={log} change={change} send={send} />;
+    return (
+      <Terminal
+        puzzle={puzzle}
+        rows={rows}
+        log={log}
+        change={change}
+        send={send}
+        refused={refused}
+      />
+    );
   }
   if (role === 'rack' && rack !== null) {
     return <Rack puzzle={puzzle} rack={rack} change={change} send={send} />;

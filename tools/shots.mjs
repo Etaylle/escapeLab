@@ -122,7 +122,10 @@
  * note the crew has found and presses E; note.png shows its slip, which has
  * to carry the words the view gives the reader there, and the run report
  * has to log it read for nothing, or the run fails. A map without notes
- * skips it.
+ * skips it. A note asked for at a source (hint-*.png) is taken down with
+ * the slip's own „Notieren" once it is written in: it has to come into the
+ * notepad word for word under „… · Notizen der letzten Schicht", or the run
+ * fails.
  *
  * A first crew: the host's device has won no run, so the join screen labels
  * the tutorial's card „Erster Einsatz? Hier starten" and the room it opens
@@ -137,8 +140,14 @@
  * comes up beside each open device (device-notepad.png,
  * device-notepad-phone.png). The pad has to stand beside the page — a strip
  * down the right edge, a drawer along a phone's foot — the block has to come
- * in under its station's line, and E has to put the source down again, or
- * the run fails. After the station step the crew leaves the station that is
+ * in at the pad's foot as a capture under a head naming the source
+ * („Klemmbrett · Legende"), and E has to put the source down again, or the
+ * run fails. The host, who noted the Signalkette's legend, then takes the
+ * Laborkennung over too: notepad-captured.png shows both in the pad's own
+ * look, and notepad-captured-phone.png at the phone's size — the writing in
+ * the hand shipped with the game, the legend's columns whole on their ruled
+ * lines, every text 15 px or more and 4.5:1 against the paper, or the run
+ * fails. After the station step the crew leaves the station that is
  * up quiet until the Leitstelle names the next place (nudge.png,
  * nudge-phone.png): its line in both banners, spoken by its recording.
  *
@@ -183,6 +192,11 @@
  * in the page (`self`, `footfalls`), and the run fails unless the sprint is about 1.3 times the
  * walk and its footfalls come faster. The Serverraum's terminal (servers-a.png) has to end its
  * table on BRAUCHT, what each service needs running first, and the rack has to show none of it.
+ * The first command at the terminal is typed as a player types it: the prompt has to hold the
+ * focus as the terminal opened, a click on its screen takes the focus away and the keys typed
+ * next have to land at the prompt all the same, Tab completes the command and then the service,
+ * and once Enter has sent it the prompt has to hold the focus again, or the run fails; in a
+ * Blackout run terminal-typing.png catches the line half typed, the cursor after it.
  *
  * The base URL is the Vite dev server by default (`pnpm dev`), or the
  * production server (`pnpm build && pnpm start`, http://localhost:3001) as in
@@ -3920,16 +3934,39 @@ function overlapping(a, b) {
   );
 }
 
+/** The head the Laborkennung comes into the notepad under (client noting.ts SIGN). */
+const SIGN_CAPTURE = 'Schild · Laborkennung';
+
+/** All the notepad on `page` holds: its writing, then each capture's head and lines. */
+function padText(page) {
+  return page.evaluate(() => {
+    const writing = document.querySelector('.notepad .notepad-text')?.value ?? '';
+    const captures = [...document.querySelectorAll('.notepad .notepad-capture')].map(
+      (capture) =>
+        `${capture.querySelector('.notepad-capture-head')?.textContent ?? ''}\n` +
+        `${capture.querySelector('textarea')?.value ?? ''}`,
+    );
+    return [writing, ...captures].join('\n\n');
+  });
+}
+
+/** The head of the newest capture on the notepad on `page`; null for none. */
+async function newestCapture(page) {
+  const heads = page.locator('.notepad .notepad-capture-head');
+  return (await heads.count()) === 0 ? null : heads.last().textContent();
+}
+
 /**
  * notepad.png: the guest opens the notepad from the HUD, writes a line and
- * takes the Laborkennung over. The pad is kept per room, so a reload has to
- * bring the text back.
+ * takes the Laborkennung over — a capture of its own at the foot of the pad,
+ * „Schild · Laborkennung". The pad is kept per room, so a reload has to bring
+ * the writing and the captures back.
  */
 async function captureNotepad(page, seen) {
   const pad = page.locator('.notepad');
   await page.locator('.hud-notes').click();
   await pad.waitFor({ state: 'visible', timeout: 3000 });
-  await pad.locator('textarea').fill('Spalte 4: Ω ☆ ¶ Ѭ');
+  await pad.locator('.notepad-text').fill('Spalte 4: Ω ☆ ¶ Ѭ');
   const take = pad.locator('.notepad-take');
   const offered = !(await take.isDisabled());
   if (offered) {
@@ -3937,12 +3974,13 @@ async function captureNotepad(page, seen) {
   }
   await sleep(300);
   await capture(page, 'notepad.png');
-  const written = await pad.locator('textarea').inputValue();
+  const written = await padText(page);
+  const taken = offered ? await newestCapture(page) : null;
   const dpad = await page.locator('.world-dpad').boundingBox();
   const blocks = overlapping(await pad.boundingBox(), dpad);
   // The pad offers the Laborkennung only to a player who has read the sign.
   const kennung = offered
-    ? 'Laborkennung taken over'
+    ? `Laborkennung taken over as ${taken === SIGN_CAPTURE ? '' : '!! '}„${taken}"`
     : seen.view.edgework === null
       ? 'no Laborkennung read yet, none to take over'
       : '!! Laborkennung read but not offered';
@@ -3950,15 +3988,18 @@ async function captureNotepad(page, seen) {
     `notepad.png        guest: ${kennung}, ` +
       `${blocks ? '!! covers the steering pad' : 'clear of the steering pad'}`,
   );
+  if (offered && taken !== SIGN_CAPTURE) {
+    fail(`notepad.png: the Laborkennung came in as „${taken}", not „${SIGN_CAPTURE}"`);
+  }
 
   await page.reload();
   await page.locator('.stage').waitFor({ timeout: 10_000 });
   await page.locator('.overlay.pause').waitFor({ state: 'hidden', timeout: 10_000 });
   await page.locator('.hud-notes').click();
   await pad.waitFor({ state: 'visible', timeout: 3000 });
-  const kept = (await pad.locator('textarea').inputValue()) === written;
+  const kept = (await padText(page)) === written;
   console.log(
-    `notepad            guest: ${kept ? 'text kept over a reload' : '!! text lost on reload'}`,
+    `notepad            guest: ${kept ? 'all of it kept over a reload' : '!! lost on reload'}`,
   );
   await pad.locator('.notepad-close').click();
   await pad.waitFor({ state: 'hidden', timeout: 3000 });
@@ -4045,12 +4086,15 @@ function sourceToNote(seen, audience) {
   return options[0]?.manual ?? null;
 }
 
+/** A „Notieren" by a printed block — not the one on the last shift's slip, which lies over them. */
+const ON_PAGE = '.note-down:not(.note-slip .note-down)';
+
 /**
  * Turns the pages of an open source forwards until a „Notieren" stands on one in view: a
  * source of several stations opens on its cover while none of them is up. Whether one does.
  */
 async function turnToNotable(overlay) {
-  const notable = overlay.locator('.note-down').first();
+  const notable = overlay.locator(ON_PAGE).first();
   for (let turns = 0; turns < 8 && !(await notable.isVisible()); turns++) {
     const next = overlay.locator('.turn-next');
     if ((await next.count()) === 0 || (await next.isDisabled())) {
@@ -4155,13 +4199,146 @@ async function captureHighlight({ page, name }, { subject, said }, shot) {
   }
 }
 
+/** A label on the map as the notepad names the place: „KLEMMBRETT" is the Klemmbrett. */
+function placeNamed(label) {
+  return label
+    .toLowerCase()
+    .replace(/(^|[\s-])(\p{L})/gu, (_, before, first) => before + first.toUpperCase());
+}
+
+/** How many lines a capture holds under its head, at most (client noting.ts CAPTURE_LINES). */
+const CAPTURE_LINES = 11;
+
+/**
+ * The newest capture on the notepad on `page` as it should stand after „Notieren" at `source`:
+ * under a head naming the source and the part („Klemmbrett · Legende"), at most CAPTURE_LINES
+ * lines under it. Whether it does, and the log's words for it.
+ */
+async function noteTakenAt(page, source) {
+  const head = await newestCapture(page);
+  const body = page.locator('.notepad .notepad-capture textarea').last();
+  const lines = head === null ? 0 : (await body.inputValue()).split('\n').length;
+  const named = head !== null && head.startsWith(`${placeNamed(source.label)} · `);
+  const ok = named && lines <= CAPTURE_LINES;
+  return { ok, head, said: `${ok ? '' : '!! '}noted „${head}", ${lines} line(s) under it` };
+}
+
+/** The capture reading-notepad.png took, and whose pad holds it; null before. */
+let noted = null;
+
+/**
+ * The notepad on `page` as it shows now, read off the page: the faces it writes in, the sizes
+ * and the contrast of its texts against its paper, whether every table of pencil fits its line,
+ * the heads of its captures, and whether the pad lies within the window.
+ */
+function padLook(page) {
+  return page.evaluate(() => {
+    const luminance = (color) => {
+      const [r, g, b] = (color.match(/[\d.]+/g) ?? []).slice(0, 3).map((c) => {
+        const s = Number(c) / 255;
+        return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const style = (el) => globalThis.getComputedStyle(el);
+    const pad = document.querySelector('.notepad');
+    const paper = luminance(style(pad).backgroundColor);
+    const texts = [
+      ...pad.querySelectorAll('.notepad-text, .notepad-capture-head, .notepad-capture-text'),
+    ];
+    const contrast = Math.min(
+      ...texts.map((el) => {
+        const [light, dark] = [luminance(style(el).color), paper].sort((a, b) => b - a);
+        return (light + 0.05) / (dark + 0.05);
+      }),
+    );
+    const tables = [...pad.querySelectorAll('.notepad-capture--table .notepad-capture-text')];
+    const box = pad.getBoundingClientRect();
+    return {
+      hand: style(pad.querySelector('.notepad-text')).fontFamily.split(',')[0].replaceAll('"', ''),
+      handLoaded: document.fonts.check('18px Kalam'),
+      pencil: tables.map((el) => style(el).fontFamily.split(',')[0])[0] ?? null,
+      smallest: Math.min(...texts.map((el) => Number.parseFloat(style(el).fontSize))),
+      contrast,
+      tablesFit: tables.every((el) => el.scrollWidth <= el.clientWidth),
+      heads: [...pad.querySelectorAll('.notepad-capture-head')].map(
+        (el) => el.firstChild?.textContent,
+      ),
+      inWindow:
+        box.left >= 0 &&
+        box.top >= 0 &&
+        box.right <= globalThis.innerWidth &&
+        box.bottom <= globalThis.innerHeight,
+    };
+  });
+}
+
+/**
+ * notepad-captured.png, then notepad-captured-phone.png at the phone's size: the pad of the
+ * player who noted the Signalkette's legend at the Klemmbrett (reading-notepad.png) takes the
+ * Laborkennung over too, and shows both in the notepad's own look — the writing in the hand
+ * shipped with the game (Kalam), the legend in pencil block letters on ruled lines, the
+ * Laborkennung on its line —, scrolled down to them. Its texts have to stand at 15 px or more
+ * and 4.5:1 against the paper, the legend's columns on their lines without scrolling, the pad
+ * within the window, or the run fails. A pad without the legend, or a player who has not read
+ * the sign, skips the shots.
+ */
+async function captureNotepadCaptured() {
+  const shots = ['notepad-captured.png', 'notepad-captured-phone.png'];
+  if (noted === null || !/ · Legende$/.test(noted.head ?? '')) {
+    const why = `no Signalkette legend noted (${noted?.head ?? 'nothing'})`;
+    shots.forEach((shot) => skip(shot, why));
+    return;
+  }
+  const { page, name, seen } = noted.player;
+  if (seen.view.edgework === null) {
+    shots.forEach((shot) => skip(shot, `${name} has not read the Laborkennung`));
+    return;
+  }
+  const pad = page.locator('.notepad');
+  await page.locator('.hud-notes').click();
+  await pad.waitFor({ state: 'visible', timeout: 3000 });
+  await pad.locator('.notepad-take').click();
+  const size = page.viewportSize();
+  for (const [shot, at] of [[shots[0], size], [shots[1], SIZES[2]]]) {
+    await page.setViewportSize({ width: at.width, height: at.height });
+    await sleep(300);
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+      const sheet = document.querySelector('.notepad-sheet');
+      sheet.scrollTop = sheet.scrollHeight;
+    });
+    await capture(page, shot);
+    const look = await padLook(page);
+    const both = look.heads.includes(noted.head) && look.heads.at(-1) === SIGN_CAPTURE;
+    const ok =
+      both && look.hand === 'Kalam' && look.handLoaded && look.pencil !== null &&
+      look.smallest >= 15 && look.contrast >= 4.5 && look.tablesFit && look.inWindow;
+    console.log(
+      `${`${shot} `.padEnd(19)}${name} @ ${at.width}x${at.height}: ` +
+        `${look.heads.map((h) => `„${h}"`).join(', ')}; ` +
+        `writing in ${look.hand}${look.handLoaded ? '' : ' (!! not loaded)'}, ` +
+        `tables in ${look.pencil}` +
+        `${look.tablesFit ? '' : ' (!! cut)'}; smallest ${look.smallest} px, contrast ` +
+        `${look.contrast.toFixed(1)}:1` +
+        `${look.inWindow ? '' : '; !! the pad runs out of the window'}`,
+    );
+    if (!ok) {
+      fail(`${shot}: the notepad does not show the captures in its own look`);
+    }
+  }
+  await page.setViewportSize(size);
+  await padAway(page);
+}
+
 /**
  * reading-notepad.png (reading-notepad-phone.png on the guest's phone): a player reads an open
  * source — a clipboard where one is open — brings the notepad up beside it and takes the
  * first rules list or table in view down with „Notieren". The pad has to stand beside the
- * page and hold the block under the station's line („§3 Signalkette · Legende"), or the run
- * fails. Then the source is put down again (`putSourceDown`). Before E, as the player stands
- * in reach, `glowShot` catches the source glowing in its shape (captureHighlight).
+ * page and hold the capture at its foot under a head naming the source („Klemmbrett ·
+ * Legende"), or the run fails. Then the source is put down again (`putSourceDown`). Before E,
+ * as the player stands in reach, `glowShot` catches the source glowing in its shape
+ * (captureHighlight).
  */
 async function captureNoting(player, shot, glowShot, audience) {
   const { page, seen, name } = player;
@@ -4181,21 +4358,21 @@ async function captureNoting(player, shot, glowShot, audience) {
   const touch = await padUp(page, '.reading-modal');
   const offered = await turnToNotable(overlay);
   if (offered) {
-    await overlay.locator('.note-down').first().click();
+    await overlay.locator(ON_PAGE).first().click();
   }
   await sleep(500); // the pad scrolled down to it, the control says it took it
   await capture(page, shot);
-  const text = await page.locator('.notepad textarea').inputValue();
-  const block = text.split('\n\n').at(-1) ?? '';
+  const taken = await noteTakenAt(page, source);
   const side = await notingSide(page);
   console.log(
     `${`${shot} `.padEnd(19)}${name}: "${source.label}" (${source.kind}), ` +
-      (offered ? `noted „${block.split('\n')[0]}", ${block.split('\n').length} lines` : '!! no „Notieren"') +
+      (offered ? taken.said : '!! no „Notieren"') +
       `; the pad ${side.said}${touch ? ', up by its tab' : ', up by N'}`,
   );
-  if (!offered || !/^§\d+ \S/.test(block) || !side.ok) {
-    fail(`${shot}: ${offered ? 'the noted block or the pad is not as it should be' : 'no „Notieren"'}`);
+  if (!offered || !taken.ok || !side.ok) {
+    fail(`${shot}: ${offered ? 'the capture or the pad is not as it should be' : 'no „Notieren"'}`);
   }
+  noted = { player, head: taken.head };
   await putSourceDown(page, overlay, touch, shot, source.label);
 }
 
@@ -4365,7 +4542,37 @@ async function captureNotes(page, seen, who, other) {
     `radio-banner.png   the other player: banner ${banner}, ` +
       (panel ? '!! station panel shown away from the station' : 'no station panel away'),
   );
+  await noteTheSlip(page, overlay, who);
   return true;
+}
+
+/**
+ * The last shift's note just written into the slip, taken down with the slip's own
+ * „Notieren": the notepad has to come up with it at its foot, under „… · Notizen der letzten
+ * Schicht", word for word as the margin holds it, or the run fails. The pad goes away again.
+ */
+async function noteTheSlip(page, overlay, who) {
+  const take = overlay.locator('.note-slip .note-down');
+  if ((await take.count()) === 0) {
+    console.log(`hint-noted         ${who}: !! no „Notieren" on the slip`);
+    fail('hint-noted: the last shift’s slip offers no „Notieren"');
+    return;
+  }
+  await take.click();
+  await page.locator('.notepad').waitFor({ state: 'visible', timeout: 3000 });
+  const head = await newestCapture(page);
+  const written = await page.locator('.notepad .notepad-capture textarea').last().inputValue();
+  const margin = await overlay.locator('.margin-note').allInnerTexts();
+  const verbatim = written === margin.map((note) => note.trim()).join('\n');
+  const named = (head ?? '').endsWith(' · Notizen der letzten Schicht');
+  console.log(
+    `hint-noted         ${who}: ${named ? '' : '!! '}„${head}", ` +
+      `${margin.length} note(s) ${verbatim ? 'word for word' : '!! not as the margin has them'}`,
+  );
+  if (!named || !verbatim) {
+    fail('hint-noted: the slip’s notes did not come into the notepad as written');
+  }
+  await padAway(page);
 }
 
 /**
@@ -5616,11 +5823,12 @@ async function captureServersConsoles({ terminal, rack }) {
 
 /**
  * One move of the plan at its console — a switch at the rack; a command at
- * the terminal, typed at the prompt where `typed`, else put together on the
- * keys and sent with ⏎ — and its effect in that console's view, or the
- * solve. Returns the move as the log says it; throws where nothing shows.
+ * the terminal, typed at the prompt where `typed` (`typeCommand`, shot as
+ * `shot` where one is named), else put together on the keys and sent with ⏎
+ * — and its effect in that console's view, or the solve. Returns the move as
+ * the log says it; throws where nothing shows.
  */
-async function serversMove({ terminal, rack }, move, typed) {
+async function serversMove({ terminal, rack }, move, typed, shot = null) {
   const index = terminal.seen.view.currentPuzzleIndex;
   const solved = () => terminal.seen.view.currentPuzzleIndex > index;
   if (move.by === 'partner') {
@@ -5636,9 +5844,7 @@ async function serversMove({ terminal, rack }, move, typed) {
   const modal = terminal.page.locator('.station-modal');
   const last = terminal.seen.view.puzzle?.log?.at(-1)?.n ?? 0;
   if (typed) {
-    await modal.locator('.servers-input').click();
-    await terminal.page.keyboard.type(`${cmd} ${service}`, { delay: 40 });
-    await terminal.page.keyboard.press('Enter');
+    await typeCommand(terminal, move.input, shot);
   } else {
     await modal.locator(`.servers-key[data-cmd="${cmd}"]`).click();
     await modal.locator(`.servers-key[data-service="${service}"]`).click();
@@ -5649,6 +5855,75 @@ async function serversMove({ terminal, rack }, move, typed) {
     throw new Error(`${terminal.name} sent "${cmd} ${service}", but the log took no line`);
   }
   return `A ${cmd} ${service}${typed ? ' (getippt)' : ''}`;
+}
+
+/** Whether the terminal's prompt holds the focus on `page`. */
+function promptFocused(page) {
+  return page.evaluate(
+    () => document.activeElement?.classList.contains('servers-input') === true,
+  );
+}
+
+/**
+ * A command typed at the terminal's prompt as a player types it — terminal-typing.png where
+ * `shot` names it. The prompt has to hold the focus as the terminal opened; a click on the
+ * screen's table takes the focus away, and the command's first letter typed then has to land at
+ * the prompt all the same; Tab completes the command, a letter at a time where the words agree
+ * no further, the service's first letter follows — the shot catches the line half typed, the
+ * cursor lit after it — and Tab the service; Enter sends it, and the prompt has to hold the
+ * focus again. The run fails where any of it does not hold.
+ */
+async function typeCommand(terminal, { cmd, service }, shot) {
+  const { page, name } = terminal;
+  const modal = page.locator('.station-modal');
+  const input = modal.locator('.servers-input');
+  const opened = await promptFocused(page);
+  await modal.locator('.servers-table thead th').first().click();
+  const lost = !(await promptFocused(page));
+  await page.keyboard.type(cmd.charAt(0), { delay: 40 });
+  const caught = (await input.inputValue()) === cmd.charAt(0);
+  const steps = [];
+  /** Tab, then the next letter where Tab stops short, until the line is `line`; whether it got there. */
+  const tabTo = async (line) => {
+    for (let i = 0; i < 12; i++) {
+      await page.keyboard.press('Tab');
+      const now = await input.inputValue();
+      steps.push(now);
+      if (now === line || !line.startsWith(now)) {
+        return now === line;
+      }
+      await page.keyboard.type(line.charAt(now.length), { delay: 40 });
+    }
+    return false;
+  };
+  const command = await tabTo(`${cmd} `);
+  await page.keyboard.type(service.charAt(0), { delay: 40 });
+  const half = await input.inputValue();
+  if (shot !== null) {
+    // The block cursor blinks: the shot waits for its lit half.
+    const lit = () => {
+      const cursor = document.querySelector('.station-modal .servers-cursor');
+      return cursor !== null && globalThis.getComputedStyle(cursor).opacity === '1';
+    };
+    await page.waitForFunction(lit, null, { timeout: 1500 }).catch(() => undefined);
+    await capture(page, shot);
+  }
+  const whole = await tabTo(`${cmd} ${service}`);
+  await page.keyboard.press('Enter');
+  await sleep(150);
+  const kept = await promptFocused(page);
+  const label = `${shot ?? 'terminal typing'} `.padEnd(19);
+  const ok = opened && lost && caught && command && whole && kept;
+  console.log(
+    `${label}${name}: the prompt ${opened ? 'held' : '!! did not hold'} the focus as it opened; ` +
+      `a click on the screen ${lost ? 'took it' : '!! left it there'}, „${cmd.charAt(0)}" typed ` +
+      `${caught ? 'went to the prompt' : '!! went elsewhere'}; Tab ${steps.map((s) => `„${s}"`).join(', ')}` +
+      `${shot === null ? '' : `; shot at „${half}"`}; Enter sent it, the prompt ` +
+      `${kept ? 'kept the focus' : '!! lost the focus'}`,
+  );
+  if (!ok) {
+    fail(`${shot ?? 'terminal typing'}: typing at the terminal's prompt did not hold`);
+  }
 }
 
 /**
@@ -5669,10 +5944,11 @@ async function captureServersSolved(player) {
 
 /**
  * A plan's moves played at both consoles, move by move, ~150 ms apart — the
- * first command typed at the prompt, the rest put together on the keys — and
- * the station solved by the last move, without an alarm.
+ * first command typed at the prompt (`typeCommand`, caught as `typingShot`
+ * where one is named), the rest put together on the keys — and the station
+ * solved by the last move, without an alarm.
  */
-async function playServers(crew, moves = SERVERS_PLAN.moves) {
+async function playServers(crew, moves = SERVERS_PLAN.moves, typingShot = null) {
   const { terminal } = crew;
   const index = terminal.seen.view.currentPuzzleIndex;
   const alarms = terminal.seen.view.alarms.count;
@@ -5680,7 +5956,7 @@ async function playServers(crew, moves = SERVERS_PLAN.moves) {
   const said = [];
   for (const move of moves) {
     const typed = move.by === 'operator' && !said.some((line) => line.startsWith('A '));
-    said.push(await serversMove(crew, move, typed));
+    said.push(await serversMove(crew, move, typed, typed ? typingShot : null));
     if (said.length < moves.length) {
       await sleep(150);
     }
@@ -6432,7 +6708,8 @@ async function readLocker(reader, locker) {
  * (servers-manual.png). Clear of the next emergency the guest takes the rack
  * — out in the open until the panels are up — and both open their panels at
  * once (servers-a.png, servers-b.png), the terminal has to open on the plan's
- * table, and the plan's moves are played at both consoles (`playServers`) —
+ * table, and the plan's moves are played at both consoles (`playServers`), the
+ * first command typed at the prompt (terminal-typing.png, `typeCommand`) —
  * at a moment no drone will look at the rack for a while: solved, the
  * station hides nobody, and the guest stands there until the next walk. An
  * emergency that drops the station anyway is weathered, and it is opened and
@@ -6461,7 +6738,7 @@ async function playServerraum(host, guest) {
       differs('terminal table', tableSaid(rows), tableSaid(BLACKOUT_PLAN.subsysteme.rows));
     }
     await clearOfDrones(guest, 9);
-    await playServers(crew, BLACKOUT_PLAN.subsysteme.moves);
+    await playServers(crew, BLACKOUT_PLAN.subsysteme.moves, 'terminal-typing.png');
   });
 }
 
@@ -7998,6 +8275,7 @@ async function run() {
   }
   await captureNotepad(guest, guestSeen);
   await captureNoting(anna, 'reading-notepad.png', 'highlight.png', watcherSeen);
+  await captureNotepadCaptured();
   await captureNoting(ben, 'reading-notepad-phone.png', 'highlight-phone.png', watcherSeen);
   await voiceAfterReload(anna, ben);
 
