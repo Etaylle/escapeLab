@@ -156,13 +156,32 @@ function onward(
 }
 
 /**
+ * Lets go of the samples the drawn moment `at` passed more than KEEP_MS ago — but for the last
+ * of them, which may be the one just before `at`, and the newest two, which a walk past the
+ * newest goes on from — however far behind or ahead of them the screen draws.
+ */
+function letGo(trail: Trail, at: number, offset: number): void {
+  const { samples } = trail;
+  const passed = (sample: Sample | undefined): boolean =>
+    sample !== undefined && momentOf(sample, offset) < at - KEEP_MS;
+  let gone = 0;
+  while (gone < samples.length - 2 && passed(samples[gone + 1])) {
+    gone += 1;
+  }
+  if (gone > 0) {
+    trail.samples = samples.slice(gone);
+  }
+}
+
+/**
  * Where the trail puts its walker at `at` (server time, epoch ms — REMOTE_DELAY_MS before now
  * as the caller reads it): between the samples round it, before the first at the first, past
  * the newest as `onward` has it; null for a trail without samples. Samples the moment has
- * long passed are let go.
+ * long passed are let go (`letGo`).
  */
 export function drawnAt(trail: Trail, at: number): Drawn | null {
   const offset = offsetOf(trail);
+  letGo(trail, at, offset);
   const { samples } = trail;
   const next = samples.findIndex((sample) => momentOf(sample, offset) > at);
   if (next === -1) {
@@ -181,13 +200,5 @@ export function drawnAt(trail: Trail, at: number): Drawn | null {
   }
   const from = momentOf(earlier, offset);
   const span = Math.max(1e-6, momentOf(later, offset) - from);
-  const k = (at - from) / span;
-  // What the drawn moment has long passed goes; the sample just before it stays.
-  const kept = (sample: Sample, i: number): boolean =>
-    i >= next - 1 || momentOf(sample, offset) >= at - KEEP_MS;
-  const gone = samples.findIndex(kept);
-  if (gone > 0) {
-    trail.samples = samples.slice(gone);
-  }
-  return between(earlier, later, k, span);
+  return between(earlier, later, (at - from) / span, span);
 }

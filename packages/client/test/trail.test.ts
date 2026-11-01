@@ -170,6 +170,20 @@ describe('a partner past their newest sample', () => {
     expect(drawnAt(newTrail(), 0)).toBeNull();
     expect(drawnAt(sampled(), -500)?.x).toBe(2);
   });
+
+  it('keeps a second of samples on a slow line, where every frame draws past the newest', () => {
+    const trail = newTrail();
+    // ten minutes of a walk, each sample drawn 200 ms after its moment: a 300 ms round trip
+    for (let i = 0; i < 7_500; i++) {
+      const t = i * SEND_MS;
+      hear(trail, walking(2 + (i % 100) * 0.01, t, t + 5));
+      drawnAt(trail, t + 5 + 200);
+    }
+    expect(trail.samples.length).toBeLessThanOrEqual(1000 / SEND_MS + 3);
+    // and goes on from the newest two as ever
+    const newest = 2 + 99 * 0.01;
+    expect(drawnAt(trail, 7_499 * SEND_MS + 5 + 50)?.x).toBeCloseTo(newest + 0.01 * (50 / 80), 9);
+  });
 });
 
 describe('what a trail takes in', () => {
