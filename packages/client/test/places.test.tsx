@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Edgework, ManualHere, MapView, PlayerView, PuzzleView } from '@escapelab/core';
+import { clock } from '../src/clock.js';
 import { leafFor, type Leaf } from '../src/pages.js';
 import { Book, TurningLeaf, type Binding, type Imprint } from '../src/screens/Book.js';
 import {
@@ -330,6 +331,25 @@ describe('reading a book', () => {
         '<li class="margin-note">Erst die Farben ansagen.</li></ol>' +
         '<button class="note-ask">Notiz der letzten Schicht erbitten · −20 s</button></aside>',
     );
+  });
+
+  it('counts the wait for the next note on the server’s clock, as on every other device', () => {
+    const ready = 1_700_000_000_000;
+    const waiting = { ...noted(), noteReadyAt: ready + 12_000 };
+    vi.useFakeTimers();
+    try {
+      // this device's own clock runs 5 s ahead; the server has said so in its answers
+      vi.setSystemTime(ready + 5_000);
+      for (let i = 0; i < 5; i++) {
+        clock.heard(Date.now(), ready, Date.now());
+      }
+      expect(slip(opened(bound(waiting), 2))).toContain('>Notiz in 12 s</button>');
+    } finally {
+      for (let i = 0; i < 5; i++) {
+        clock.heard(Date.now(), Date.now(), Date.now());
+      }
+      vi.useRealTimers();
+    }
   });
 
   it('keeps the note with the book, not on a page: there on every page and spread', () => {

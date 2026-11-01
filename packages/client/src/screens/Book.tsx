@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import type { ManualHere, PuzzleView } from '@escapelab/core';
-import { useKeys, useNow, useSwipe } from '../hooks.js';
+import { useKeys, useServerNow, useSwipe } from '../hooks.js';
 import {
   firstPageOf,
   leafFor,
@@ -53,7 +53,8 @@ export function SectionReader({
 
 /** Counts down to the next note, then asks for it at the price it names. */
 function AskNote({ section, onAsk }: { section: ReadSection; onAsk: () => void }) {
-  const now = useNow(1000);
+  // The note is ready at a moment the server set: counted on its clock (clock.ts).
+  const now = useServerNow(1000);
   const wait = section.noteReadyAt === null ? 0 : Math.ceil((section.noteReadyAt - now) / 1000);
   return (
     <button className="note-ask" disabled={wait > 0} onClick={onAsk}>
