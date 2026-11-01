@@ -12,7 +12,7 @@ import {
 import { useNow } from '../hooks.js';
 import { actionOfKey, isHeld, type Held, type InputAction } from '../input/bindings.js';
 import { useGlyph } from '../input/glyphs.js';
-import { HeldKeys } from '../input/heldKeys.js';
+import { HeldKeys, watchBindings } from '../input/heldKeys.js';
 import { NO_STEER } from '../input/pad.js';
 import { padSteer } from '../input/padRuntime.js';
 import { addProbes, type MinimapProbe } from '../probes.js';
@@ -403,6 +403,11 @@ function onPointerDown(loop: Loop, e: PointerEvent): void {
 function listen(loop: Loop, setWheelOpen: SetWheel): () => void {
   const { canvas, sim } = loop;
   const held = new HeldKeys();
+  // A key bound anew takes over at once: whatever the old keys held is let go.
+  const stopBindings = watchBindings(() => {
+    held.clear();
+    sim.keys.clear();
+  });
   const keyDown = (e: KeyboardEvent): void => onKeyDown(loop, e, setWheelOpen, held);
   const pointerDown = (e: PointerEvent): void => onPointerDown(loop, e);
   const keyUp = (e: KeyboardEvent): void => {
@@ -420,6 +425,7 @@ function listen(loop: Loop, setWheelOpen: SetWheel): () => void {
   window.addEventListener('blur', blur);
   canvas.addEventListener('pointerdown', pointerDown);
   return () => {
+    stopBindings();
     canvas.removeEventListener('pointerdown', pointerDown);
     window.removeEventListener('keydown', keyDown);
     window.removeEventListener('keyup', keyUp);

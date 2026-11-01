@@ -1,3 +1,4 @@
+import { getSettings, watchSettings } from '../settings.js';
 import { keyPlace, type Held } from './bindings.js';
 
 /** A key going down or up, as far as holding cares: where it sits, and its name. */
@@ -31,4 +32,19 @@ export class HeldKeys {
   clear(): void {
     this.byPlace.clear();
   }
+}
+
+/**
+ * Calls `onChange` whenever the keys are bound anew (Settings → Tastenbelegung), and on no other
+ * change of the settings: what the old keys held is to be let go then. Returns what stops it.
+ */
+export function watchBindings(onChange: () => void): () => void {
+  let bound = getSettings().keys;
+  return watchSettings(() => {
+    const { keys } = getSettings();
+    if (keys !== bound) {
+      bound = keys;
+      onChange();
+    }
+  });
 }

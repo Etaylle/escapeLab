@@ -204,7 +204,8 @@ export function getSettings(): Settings {
   return current;
 }
 
-function subscribe(listener: () => void): () => void {
+/** Calls `listener` whenever the settings change; returns what stops it. */
+export function watchSettings(listener: () => void): () => void {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
@@ -241,7 +242,7 @@ export function changeSettings(patch: Partial<Settings>): void {
 
 /** The settings, kept up to date. */
 export function useSettings(): Settings {
-  return useSyncExternalStore(subscribe, getSettings, getSettings);
+  return useSyncExternalStore(watchSettings, getSettings, getSettings);
 }
 
 /** Whether things move less now, by the settings and the browser. */

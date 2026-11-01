@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { HeldKeys } from '../src/input/heldKeys.js';
+import { afterEach, describe, expect, it } from 'vitest';
+import { DEFAULT_KEYS } from '../src/input/bindings.js';
+import { HeldKeys, watchBindings } from '../src/input/heldKeys.js';
+import { changeSettings, DEFAULT_SETTINGS } from '../src/settings.js';
+
+afterEach(() => {
+  changeSettings(DEFAULT_SETTINGS);
+});
 
 describe('the keys held for a step or the sprint', () => {
   it('lets a key go where it went down, whatever Shift made of its name meanwhile', () => {
@@ -24,6 +30,18 @@ describe('the keys held for a step or the sprint', () => {
     held.press({ code: 'ShiftLeft', key: 'Shift' }, 'sprint');
     held.clear();
     expect(held.release({ code: 'ShiftLeft', key: 'Shift' })).toBeNull();
+  });
+
+  it('hears of keys bound anew, and of no other change of the settings', () => {
+    const heard: string[] = [];
+    const stop = watchBindings(() => heard.push('bound anew'));
+    changeSettings({ motion: 'off' });
+    expect(heard).toEqual([]);
+    changeSettings({ keys: { ...DEFAULT_KEYS, up: 'i' } });
+    expect(heard).toEqual(['bound anew']);
+    stop();
+    changeSettings({ keys: DEFAULT_KEYS });
+    expect(heard).toEqual(['bound anew']);
   });
 
   it('goes by the name of a key a controller sends, which sits nowhere', () => {
