@@ -29,6 +29,41 @@
   }
 }
 
+/*
+ * A station's device goes as it came: stepped back from, it shrinks back to 0.98 as it fades
+ * out over the same 150 ms, the dim behind it lifting with it — the game screen keeps it up
+ * for that long (screens/Game.tsx, PutDown.tsx `useLeaving`), taking nothing more. A sheet
+ * being put down slides out of view instead (putdown.css).
+ */
+.station-modal.puzzle-modal--leaving {
+  /* As it stood open (ui.css): putdown.css's hidden overflow is for a sheet sliding out. */
+  overflow: visible auto;
+  animation: panel-undim 150ms ease-in forwards;
+}
+
+.station-modal.puzzle-modal--leaving .panel {
+  transform-origin: 50% 42%;
+  animation: panel-down 150ms cubic-bezier(0.6, 0, 0.8, 0.4) both;
+}
+
+@keyframes panel-down {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes panel-undim {
+  to {
+    background-color: rgba(4, 7, 10, 0);
+  }
+}
+
 /* ── pressing a button: it gives a pixel, and lets go as quickly ────────── */
 
 /*
@@ -81,6 +116,12 @@ button {
 :where([data-motion='reduce']) {
   .puzzle-modal:not(.puzzle-modal--leaving) .panel {
     animation-name: panel-fade;
+  }
+
+  /* A device stepped back from goes at once: nothing holds it (PutDown.tsx `useLeaving`). */
+  .station-modal.puzzle-modal--leaving,
+  .station-modal.puzzle-modal--leaving .panel {
+    animation: none;
   }
 
   button:active:not(:disabled) {

@@ -142,6 +142,14 @@
  * up quiet until the Leitstelle names the next place (nudge.png,
  * nudge-phone.png): its line in both banners, spoken by its recording.
  *
+ * Stepping back: the first player to step back with Esc from a station standing
+ * open — the station step's operator, else the Signalkette's sender — is shot
+ * as the device fades out, as it came, over 150 ms (panel-close.png): the page
+ * notes the panel each frame meanwhile, and it has to leave inert, its opacity
+ * only falling and midway on a frame at least, gone within 100 to 600 ms; the
+ * shot has to lie between the panel open and gone, taken again with the panel
+ * opened anew where it came too late, up to three times — or the run fails.
+ *
  * The glow: what the E prompt names glows in its own shape, no box round it
  * (client world/render/highlight.ts). As each player stands in reach of the
  * source it is about to note from — a clipboard first — highlight.png (and
@@ -329,13 +337,14 @@
  * celebrating too. A mission the walkthrough does not take that far skips
  * what it leaves out.
  */
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { chromium, request } from 'playwright';
 import { AGAIN_AFTER_MS, gateWindow } from './framegate.mjs';
 import { GLOWING, glowAtCorners, haloAgainst, verticalShift } from './glowcheck.mjs';
 import { lightWorkText } from './lightwork.mjs';
+import { fadeOf, meanLuma, midway } from './panelfade.mjs';
 import {
   arrivals,
   cornersOf,
@@ -346,6 +355,7 @@ import {
   stretchOf,
 } from './patrol.mjs';
 import { percentile } from './percentile.mjs';
+import { decodePng } from './pixeldiff.mjs';
 import { bandPowers, decibels } from './spectrum.mjs';
 
 const BASE = process.argv[2] ?? 'http://localhost:5173';
@@ -3476,6 +3486,105 @@ function checkStage(sending, pin, stage) {
 const FLINCH_SHOT_MS = 150;
 /** Whether figure-flinch.png was taken: a run meets one Signalkette at most for it. */
 let flinchShot = false;
+/** Whether panel-close.png was taken: the first open station a player steps back from takes it. */
+let panelCloseShot = false;
+
+/**
+ * From now on, each animation frame of `page` notes the station's panel — there or not, on its
+ * way out (`puzzle-modal--leaving`), inert, its opacity — until it is gone or a second has
+ * passed (`window.__panelFade`, read by panelfade.mjs `fadeOf`).
+ */
+function recordPanelFade(page) {
+  return page.evaluate(() => {
+    const samples = [];
+    globalThis.__panelFade = samples;
+    const t0 = globalThis.performance.now();
+    const step = () => {
+      const modal = document.querySelector('.station-modal');
+      const panel = modal?.querySelector('.panel') ?? null;
+      samples.push({
+        t: globalThis.performance.now() - t0,
+        present: modal !== null,
+        leaving: modal?.classList.contains('puzzle-modal--leaving') ?? false,
+        inert: modal?.inert ?? false,
+        opacity: panel === null ? 0 : Number(globalThis.getComputedStyle(panel).opacity),
+      });
+      if (modal !== null && globalThis.performance.now() - t0 < 1000) {
+        globalThis.requestAnimationFrame(step);
+      }
+    };
+    globalThis.requestAnimationFrame(step);
+  });
+}
+
+/**
+ * One try at panel-close.png: the panel shot open, Esc, shot at once, and shot gone; whether the
+ * middle shot lies midway over the panel's box, the frames the page noted meanwhile, the lumas.
+ */
+async function panelCloseTry(page, modal) {
+  const dpr = await page.evaluate(() => globalThis.devicePixelRatio);
+  const box = await modal.locator('.panel').boundingBox();
+  const open = await page.screenshot();
+  await recordPanelFade(page);
+  await page.keyboard.press('Escape');
+  const shot = await page.screenshot();
+  await modal.waitFor({ state: 'hidden', timeout: 3000 });
+  await sleep(100);
+  const closed = await page.screenshot();
+  const samples = await page.evaluate(() => globalThis.__panelFade ?? []);
+  const lumas = [open, shot, closed].map((png) => meanLuma(decodePng(png), box, dpr));
+  const [up, mid, gone] = lumas;
+  return { shot, between: midway(up, mid, gone), fade: fadeOf(samples), lumas };
+}
+
+/**
+ * panel-close.png: `player` steps back from the open station with Esc, and the device fades out
+ * as it came, over 150 ms (client styles/interaction.css, screens/Game.tsx): the page notes the
+ * panel each frame meanwhile — it has to leave inert, its opacity only falling and midway on a
+ * frame at least, and be gone within 100 to 600 ms — and the shot, taken at once, has to lie
+ * between the panel open and gone over the panel's box. A shot that came too late is taken
+ * again, the panel opened anew with E, up to three times. Any of these that fails, fails the run.
+ */
+async function capturePanelClose(player, modal) {
+  const { page } = player;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const { shot, between, fade, lumas } = await panelCloseTry(page, modal);
+    if (between || attempt === 3) {
+      writeFileSync(join(OUT, 'panel-close.png'), shot);
+      tally.taken += 1;
+      panelCloseShot = true;
+      const faded = fade.ms !== null && fade.ms >= 100 && fade.ms <= 600;
+      const fine = faded && fade.midway > 0 && fade.falling && fade.inert && between;
+      const gone = fade.ms === null ? '!! gone at once' : `gone in ${Math.round(fade.ms)} ms`;
+      console.log(
+        `panel-close.png    ${player.name}, Esc: ${gone}, ${fade.midway} frames midway, ` +
+          `${fade.falling ? 'falling' : '!! not only falling'}, ` +
+          `${fade.inert ? 'inert' : '!! taking input'}; ` +
+          `the shot ${between ? 'midway' : '!! not midway'} ` +
+          `(luma ${lumas.map((l) => l.toFixed(0)).join(' → ')}), try ${attempt}`,
+      );
+      if (!fine) {
+        fail(`panel-close.png: ${JSON.stringify(fade)}, shot midway ${between}`);
+      }
+      return;
+    }
+    if (!(await interactUntil(page, modal))) {
+      fail('panel-close.png: the station did not open again for another try');
+      return;
+    }
+    await sleep(400); // past its fade-in
+  }
+}
+
+/** Steps `player` back from the open station `modal` with Esc: the first time, panel-close.png. */
+async function stepBack(player, modal) {
+  if (!panelCloseShot && (await modal.isVisible())) {
+    await capturePanelClose(player, modal);
+    return;
+  }
+  await player.page.keyboard.press('Escape');
+  await modal.waitFor({ state: 'hidden', timeout: 3000 });
+}
 
 /**
  * A key on `presser`'s panel that is not the first one the stage asks for:
@@ -3522,8 +3631,7 @@ async function wrongKey(sender, presser, firstKey) {
 async function captureFlinch(sender, presser, firstKey = null) {
   flinchShot = true;
   const modal = sender.page.locator('.station-modal');
-  await sender.page.keyboard.press('Escape');
-  await modal.waitFor({ state: 'hidden', timeout: 3000 });
+  await stepBack(sender, modal);
   const size = sender.page.viewportSize();
   await sender.page.setViewportSize(COLD_OPEN);
   await sleep(700); // the layout settles, the panel past its fade-out
@@ -7615,8 +7723,7 @@ async function run() {
     const sync = operator.seen.view.puzzle?.kind === 'button-sync';
     await captureBothAtStation(reader, operator, station, sync);
     // The last shift's notes come only for an open station: leave it open, go read.
-    await operator.page.keyboard.press('Escape');
-    await modal.waitFor({ state: 'hidden', timeout: 3000 });
+    await stepBack(operator, modal);
     if (sync) {
       skip(
         'hint-*.png',
@@ -7660,6 +7767,9 @@ async function run() {
   await playPinnedOut(anna, ben, watcher);
   if (!flinchShot) {
     skip('figure-flinch.png', 'the walkthrough works no Signalkette in this mission');
+  }
+  if (!panelCloseShot) {
+    skip('panel-close.png', 'no player stepped back from a station standing open');
   }
   if (!celebrateShot) {
     skip('figure-celebrate.png', 'the walkthrough does not play this mission to a won card');

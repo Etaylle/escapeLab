@@ -69,11 +69,11 @@ export interface Shown<T> {
 }
 
 /**
- * What lies over the world as it is put down: `item` while it is open; once it closed — put
- * down, or walked away from — the last of it for PUT_DOWN_MS, leaving, then nothing. As it
- * goes, `sound` plays for it once, under reduced motion too. `sound` stays the same function.
+ * What lies over the world as it goes: `item` while it is open; once it closed — put down,
+ * stepped back from, or walked away from — the last of it for `ms`, leaving, then nothing.
+ * Under reduced motion it just goes.
  */
-export function usePutDown<T>(item: T | null, sound: (last: T) => void): Shown<T> | null {
+export function useLeaving<T>(item: T | null, ms: number): Shown<T> | null {
   const still = useReducedMotion();
   const kept = useRef<PutDownState<T>>({ last: null, held: null });
   kept.current = putDownStep(kept.current, item, still);
@@ -86,14 +86,24 @@ export function usePutDown<T>(item: T | null, sound: (last: T) => void): Shown<T
     const timer = setTimeout(() => {
       kept.current = { ...kept.current, held: null };
       release((n) => n + 1);
-    }, PUT_DOWN_MS);
+    }, ms);
     return () => clearTimeout(timer);
-  }, [held]);
-  usePutDownSound(item, sound);
+  }, [held, ms]);
   if (item !== null) {
     return { item, leaving: false };
   }
   return held === null ? null : { item: held, leaving: true };
+}
+
+/**
+ * What lies over the world as it is put down: `item` while it is open; once it closed — put
+ * down, or walked away from — the last of it for PUT_DOWN_MS, leaving, then nothing. As it
+ * goes, `sound` plays for it once, under reduced motion too. `sound` stays the same function.
+ */
+export function usePutDown<T>(item: T | null, sound: (last: T) => void): Shown<T> | null {
+  const shown = useLeaving(item, PUT_DOWN_MS);
+  usePutDownSound(item, sound);
+  return shown;
 }
 
 /** `sound` for the sheet that was open, once, as it is put down. */

@@ -219,9 +219,10 @@ page at twice the density.
 ## Interface (styles/interaction.css)
 
 A panel over the world — a station's device, a source's pages, a note — grows from 0.98 to its
-size as it fades in, over 150 ms; a sheet put down slides out as before, while a station's device
-still goes at once as it is stepped back from, the camera leaning back out behind it (its frame
-is the game screen's to keep up for a fade, screens/Game.tsx). A plain button gives a
+size as it fades in, over 150 ms; a sheet put down slides out as before, and a station's device
+goes as it came, shrinking back to 0.98 as it fades out over the same 150 ms, the dim behind it
+lifting, the camera leaning back out behind it — the game screen keeps it up that long
+(screens/Game.tsx, PutDown.tsx `useLeaving`), inert, its keys and presses reaching nothing. A plain button gives a
 pixel as it is pressed and darkens a little; a device's keys, levers and wires keep their own
 press. Keyboard focus shows as a 2 px teal ring, never for a click; hover affordances belong to
 a mouse. The type keeps its hierarchy: titles in the system sans, bold (the page's 27 px, the
@@ -229,7 +230,8 @@ station's line 20 px); labels in the mono, upper case and spaced 2 px (13 px hea
 labels, 10 px marks); figures in the mono with tabular digits (the clock 30 px, 36 px at the
 end); running text in the system sans at 15 to 16 px; the world's own text in the mono, bold,
 with a dark halo, held within 10 to 14 CSS px whatever the zoom. Under reduced motion every move
-is a cut or a cross-fade: a panel only fades, a press only darkens.
+is a cut or a cross-fade: a panel only fades in, a device stepped back from goes at once, a press
+only darkens.
 
 ## Cost
 
