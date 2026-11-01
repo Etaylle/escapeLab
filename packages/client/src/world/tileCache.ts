@@ -150,9 +150,30 @@ function rangeBox(cache: TileCache, range: TileRange): PixelBox {
 
 /**
  * Copies the tiles of `range` from `cache` onto `ctx` for a frame on `grid`:
- * pixel for pixel where the cache was baked on that grid, else scaled to it.
+ * pixel for pixel where the cache was baked on that grid — the whole cache in
+ * one plain copy, the canvas keeping what falls in it, which the tiles of
+ * `range` cover — else those tiles scaled to it.
  */
 export function drawTiles(
+  ctx: CanvasRenderingContext2D,
+  cache: TileCache,
+  grid: PixelGrid,
+  range: TileRange,
+): void {
+  ctx.save();
+  if (sameGrid(cache.grid, grid)) {
+    // A copy with a source rectangle takes the canvas's slow path, filtered as if scaled: about
+    // twice the time of a plain copy at whole pixels, which lays the same pixels.
+    ctx.setTransform(1, 0, 0, 1, Math.round(grid.ox) + cache.left, Math.round(grid.oy) + cache.top);
+    ctx.drawImage(cache.canvas, 0, 0);
+  } else {
+    drawScaled(ctx, cache, grid, range);
+  }
+  ctx.restore();
+}
+
+/** Copies the tiles of `range` from `cache`, baked on another grid, scaled onto `grid`. */
+function drawScaled(
   ctx: CanvasRenderingContext2D,
   cache: TileCache,
   grid: PixelGrid,
@@ -167,17 +188,11 @@ export function drawTiles(
   if (sw <= 0 || sh <= 0) {
     return;
   }
-  ctx.save();
-  if (sameGrid(cache.grid, grid)) {
-    ctx.setTransform(1, 0, 0, 1, Math.round(grid.ox) + cache.left, Math.round(grid.oy) + cache.top);
-  } else {
-    // A pixel of the cache lies at (left - phase + i) / scale tiles from the origin.
-    const k = grid.scale / cache.grid.scale;
-    const [px, py] = phaseOf(cache.grid);
-    ctx.setTransform(k, 0, 0, k, grid.ox + (cache.left - px) * k, grid.oy + (cache.top - py) * k);
-  }
+  // A pixel of the cache lies at (left - phase + i) / scale tiles from the origin.
+  const k = grid.scale / cache.grid.scale;
+  const [px, py] = phaseOf(cache.grid);
+  ctx.setTransform(k, 0, 0, k, grid.ox + (cache.left - px) * k, grid.oy + (cache.top - py) * k);
   ctx.drawImage(cache.canvas, sx, sy, sw, sh, sx, sy, sw, sh);
-  ctx.restore();
 }
 
 /** Where tile column `x` and row `y` begin on the cache's canvas, px. */

@@ -68,6 +68,13 @@ function drawnKeys(frame: Frame, log: readonly Entry[]): [string, number, number
   ]);
 }
 
+/** The transform the first copy of `log` was made with: the last one set before it. */
+function transformAtCopy(log: readonly Entry[]): unknown {
+  const at = log.findIndex((e) => e.kind === 'call' && e.name === 'drawImage');
+  const moves = strip(log.slice(0, at)).filter((e) => (e as unknown[])[0] === 'setTransform');
+  return (moves.at(-1) as unknown[] | undefined)?.[1];
+}
+
 /** How many sprites the atlas holds over all its levels. */
 const bakedCount = (atlas: Atlas): number =>
   [...atlas.levels.values()].reduce((n, level) => n + level.size, 0);
@@ -88,21 +95,33 @@ describe('tiles — the void, then the map baked whole, copied in one go', () =>
     ]);
   });
 
-  it('copies what the camera shows of the baked map at whole pixels, a tile’s margin kept', () => {
+  it('copies the baked map at whole pixels in one plain copy, no source rectangle', () => {
     const { frame } = recorded({ map: wide(), camera: { x: 5, y: 3, scale: 100 } });
     const { ctx, log } = fakeCanvas(800, 600);
     draw(ctx, frame);
+    // A source rectangle would send the copy down the canvas's slow path: the whole map goes,
+    // and the canvas keeps the 800 px the camera shows of it.
+    const copy = callEntries(log, 'drawImage');
+    expect(copy.map((e) => e.args)).toEqual([[frame.kit.art.tiles?.canvas, 0, 0]]);
+    // The world's origin lies at (-100, 0) on the canvas: the copy is put there, unscaled.
+    expect(transformAtCopy(log)).toEqual([1, 0, 0, 1, -100, 0]);
+    expect(frame.kit.art.tiles?.canvas.width).toBe(30 * 100);
+    expect(frame.kit.art.tiles?.canvas.height).toBe(6 * 100);
+  });
+
+  it('copies what the camera shows of a map baked at fewer pixels scaled, a margin kept', () => {
+    // 100 tiles at 100 px would pass MAX_SIDE: the map is baked at 81 px a tile.
+    const map = mapWith({ width: 100, height: 6, tiles: TILES.map((row) => row.repeat(10)) });
+    const { frame } = recorded({ map, camera: { x: 5, y: 3, scale: 100 } });
+    const { ctx, log } = fakeCanvas(800, 600);
+    draw(ctx, frame);
+    expect(frame.kit.art.tiles?.grid.scale).toBe(81);
     // 800 px at 100 a tile over x = 5: tiles 1 to 9 in view, 0 and 10 the margin; all six rows.
     const copy = callEntries(log, 'drawImage');
     expect(copy.map((e) => e.args)).toEqual([
-      [frame.kit.art.tiles?.canvas, 0, 0, 1100, 600, 0, 0, 1100, 600],
+      [frame.kit.art.tiles?.canvas, 0, 0, 11 * 81, 6 * 81, 0, 0, 11 * 81, 6 * 81],
     ]);
-    // The world's origin lies at (-100, 0) on the canvas: the copy is put there, unscaled.
-    const at = log.findIndex((e) => e.kind === 'call' && e.name === 'drawImage');
-    const moves = strip(log.slice(0, at)).filter((e) => (e as unknown[])[0] === 'setTransform');
-    expect(moves.at(-1)).toEqual(['setTransform', [1, 0, 0, 1, -100, 0]]);
-    expect(frame.kit.art.tiles?.canvas.width).toBe(30 * 100);
-    expect(frame.kit.art.tiles?.canvas.height).toBe(6 * 100);
+    expect(transformAtCopy(log)).toEqual([100 / 81, 0, 0, 100 / 81, -100, 0]);
   });
 
   it('bakes each floor and wall tile once, in tile space at the frame’s scale, no void', () => {
