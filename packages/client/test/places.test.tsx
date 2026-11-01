@@ -524,7 +524,7 @@ describe('the station frame', () => {
         run={deviceRun()}
         map={single}
         edgework={null}
-        deadlineAt={null}
+        mission={{ deadlineAt: null, pausedAt: null }}
         send={noop}
         onStepBack={noop}
       />,
@@ -603,7 +603,7 @@ describe('the station frame', () => {
         run={deviceRun()}
         map={single}
         edgework={edgework}
-        deadlineAt={null}
+        mission={{ deadlineAt: null, pausedAt: null }}
         send={noop}
         onStepBack={noop}
       />,
@@ -706,6 +706,7 @@ function justStarted(parts: Partial<PlayerView> = {}): PlayerView {
     currentPuzzleIndex: 0,
     puzzleCount: 1,
     pausedFor: null,
+    pausedAt: null,
     events: [],
     grade: null,
     penaltySeq: 0,

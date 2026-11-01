@@ -103,9 +103,9 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
       drawn(withKit(dark, warm, { now, ...parts }));
       return setsOf(dark.log, 'fillStyle')[0];
     };
-    expect(first({ deadlineAt: now + 30_000 })).toBe('rgba(3,5,9,0.945)');
+    expect(first({ timeLeft: 30_000 })).toBe('rgba(3,5,9,0.945)');
     expect(first({ escapeSince: now - 10 })).toBe('rgba(3,5,9,0.945)');
-    expect(first({ deadlineAt: now + 90_000 })).toBe('rgba(3,5,9,0.92)');
+    expect(first({ timeLeft: 90_000 })).toBe('rgba(3,5,9,0.92)');
     expect(first({ time: 1 })).toBe(`rgba(3,5,9,${0.92 + 0.02 * Math.sin(1.7)})`);
   });
 

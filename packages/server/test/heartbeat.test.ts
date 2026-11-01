@@ -228,3 +228,67 @@ describe('the heartbeat', () => {
     expect(anna.pings).toBe(0);
   });
 });
+
+/** The latest view message `socket` was sent, stamp and all. */
+function lastViewOf(socket: FakeSocket): Extract<ServerMessage, { kind: 'view' }> {
+  const last = socket.heard.filter((m) => m.kind === 'view').at(-1);
+  if (last?.kind !== 'view') {
+    throw new Error('this socket was sent no view');
+  }
+  return last;
+}
+
+/** What a page shows on the mission's clock at server time `now` by its latest view, ms. */
+function clockOf(socket: FakeSocket, now: number): number {
+  const { deadlineAt, pausedAt } = socket.view;
+  if (deadlineAt === null) {
+    throw new Error('the run has no clock');
+  }
+  return deadlineAt - (pausedAt ?? now);
+}
+
+describe('the server’s clock on the line', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_700_000_000_000);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('answers an ask for its time with the page’s own and its own, in a room or not', () => {
+    const server = new FakeServer();
+    const lab = { catalog: { get: () => mission, default: mission }, manager: new RoomManager() };
+    serveSockets(server, lab);
+    const page = server.connect();
+    page.say({ kind: 'clock', sent: 42.5 });
+    expect(page.heard).toEqual([{ kind: 'clock', sent: 42.5, at: 1_700_000_000_000 }]);
+  });
+
+  it('stamps every view with its time as it goes out', () => {
+    const { anna, ben, end } = startedRun();
+    expect(lastViewOf(anna).at).toBe(1_700_000_000_000);
+    ben.answering = false;
+    vi.advanceTimersByTime(3 * HEARTBEAT_MS);
+    expect(anna.view.pausedFor).toEqual(['Ben']);
+    expect(lastViewOf(anna).at).toBe(Date.now());
+    end();
+  });
+
+  it('says since when a run stands paused: its clock reads the same there, through and after', () => {
+    const { server, anna, ben, end } = startedRun();
+    vi.advanceTimersByTime(HEARTBEAT_MS + 5);
+    ben.answering = false;
+    vi.advanceTimersByTime(3 * HEARTBEAT_MS);
+    expect(anna.view.pausedAt).toBe(lastViewOf(anna).at);
+    const atPause = clockOf(anna, Date.now());
+    vi.advanceTimersByTime(20_000);
+    expect(clockOf(anna, Date.now())).toBe(atPause);
+    resumeBen(server, ben);
+    expect(anna.view.pausedAt).toBeNull();
+    expect(clockOf(anna, Date.now())).toBe(atPause);
+    vi.advanceTimersByTime(1_000);
+    expect(clockOf(anna, Date.now())).toBe(atPause - 1_000);
+    end();
+  });
+});

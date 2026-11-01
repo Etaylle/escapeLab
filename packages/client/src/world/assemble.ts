@@ -1,4 +1,5 @@
 import type { DronePosition, PlayerView, PuzzleView, Sight } from '@escapelab/core';
+import { timeLeft } from '../clock.js';
 import type { VoiceMesh } from '../voice/mesh.js';
 import type { Alarm } from './alarm.js';
 import { worldText, type WorldText } from './art.js';
@@ -337,7 +338,7 @@ type Crew =
   | 'youName'
   | 'players'
   | 'signSeen'
-  | 'deadlineAt'
+  | 'timeLeft'
   | 'self'
   | 'walkPhase'
   | 'others'
@@ -355,7 +356,7 @@ function crewOf(source: FrameSource): Pick<Frame, Crew> {
     youName: view.you.name,
     players: view.players,
     signSeen: view.presence.signSeen,
-    deadlineAt: view.deadlineAt,
+    timeLeft: timeLeft(view),
     self: sim.self,
     walkPhase: sim.walkPhase,
     others: sim.others,

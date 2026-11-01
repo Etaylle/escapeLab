@@ -219,8 +219,11 @@ export interface Frame {
   players: PlayerView['players'];
   /** whether this player has seen the Laborkennung */
   signSeen: boolean;
-  /** when the clock runs out, epoch ms; null for a run without one */
-  deadlineAt: number | null;
+  /**
+   * what is left on the mission's clock, ms, as the server keeps it (clock.ts); null for a run
+   * without one
+   */
+  timeLeft: number | null;
   /** your avatar where you steer it, and its gait */
   self: { x: number; y: number; facing: number; moving: boolean };
   walkPhase: number;

@@ -210,6 +210,7 @@ function viewOf(parts: Partial<PlayerView> = {}): PlayerView {
     currentPuzzleIndex: 4,
     puzzleCount: 4,
     pausedFor: null,
+    pausedAt: null,
     events: [],
     grade: null,
     penaltySeq: 0,
@@ -451,6 +452,7 @@ describe('the title card', () => {
       alarms: { count: 1, limit: 5 },
       hintsUsed: 0,
       pausedFor: null,
+      pausedAt: null,
       events: [],
       grade: null,
       players: [anna, ben].map((p) => ({
@@ -551,6 +553,7 @@ describe('the game screen while the world plays the end', () => {
       alarms: { count: 0, limit: null },
       hintsUsed: 0,
       pausedFor: null,
+      pausedAt: null,
       events: [],
       grade: null,
       players: [anna, ben].map((p) => ({

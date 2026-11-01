@@ -50,7 +50,7 @@ function run(you: string | null = 'p1'): DeviceRun {
 
 function panel(puzzle: PuzzleView, around: DeviceRun = run()): string {
   return renderToStaticMarkup(
-    <PuzzlePanel puzzle={puzzle} run={around} send={() => undefined} deadlineAt={null} />,
+    <PuzzlePanel puzzle={puzzle} run={around} send={() => undefined} mission={{ deadlineAt: null, pausedAt: null }} />,
   );
 }
 

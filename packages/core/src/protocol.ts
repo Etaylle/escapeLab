@@ -127,6 +127,11 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('rematch') }),
   /** a voice signal for one other member of the room, by id */
   z.object({ kind: z.literal('rtc'), to: z.string().min(1).max(64), signal: rtcSignalSchema }),
+  /**
+   * asks the server for its time; `sent` is the page's own clock as it asked (ms), handed back
+   * with the answer — whatever the page's clock says, the server only echoes it
+   */
+  z.object({ kind: z.literal('clock'), sent: z.number().finite() }),
 ]);
 
 /** One row in the lobby browser. */
@@ -212,10 +217,16 @@ export interface DronePosition {
   frozen: boolean;
 }
 
+/**
+ * What the server says. A view carries the server's time as it went out (`at`, epoch ms by the
+ * server's clock): every moment a view names is on that clock.
+ */
 export type ServerMessage =
   | { kind: 'joined'; code: string; playerId: string; token: string }
-  | { kind: 'view'; view: PlayerView }
-  | { kind: 'spectator-view'; view: SpectatorView; code: string }
+  | { kind: 'view'; view: PlayerView; at: number }
+  | { kind: 'spectator-view'; view: SpectatorView; code: string; at: number }
+  /** the answer to a `clock` ask: the page's `sent` handed back, and the server's time (`at`) */
+  | { kind: 'clock'; sent: number; at: number }
   | { kind: 'rooms'; rooms: RoomSummary[] }
   | {
       kind: 'positions';

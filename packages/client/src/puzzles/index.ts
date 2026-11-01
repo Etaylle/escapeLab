@@ -13,6 +13,7 @@ import { RelayPanel } from './RelayPanel.js';
 import { SignalPanel, signalSounds } from './SignalPanel.js';
 import { CircuitPanel, circuitSounds } from './CircuitPanel.js';
 import { ServersPanel, serversSounds } from './ServersPanel.js';
+import type { MissionTime } from '../clock.js';
 import type { DeviceCrew } from './Device.js';
 import type { Change } from './feel.js';
 
@@ -31,8 +32,8 @@ export interface PanelProps<K extends PuzzleKind> {
   change: Change<ViewOf<K>> | null;
   /** sends one of this module's inputs as a `puzzle-input` message */
   send: (input: PuzzleInputOf<K>) => void;
-  /** the mission clock's end, for modules whose rules read the clock; null when it is not running */
-  deadlineAt: number | null;
+  /** the mission's clock, for modules whose rules read it (clock.ts) */
+  mission: MissionTime;
   /** the crew at the device, for a device that names them — the main switch's levers */
   crew?: DeviceCrew;
 }

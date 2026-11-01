@@ -9,6 +9,7 @@ import type {
   ServerMessage,
   SpectatorView,
 } from '@escapelab/core';
+import { askForTime, clock, localNow } from './clock.js';
 import { forgetNotes, localStore } from './notes.js';
 import type { KnownPositions } from './world/movement.js';
 
@@ -98,8 +99,11 @@ const RETRY_FIRST_MS = 1000;
 const RETRY_MAX_MS = 10_000;
 /** How many messages wait for a socket to open; any more are dropped. */
 export const OUTBOX_MAX = 32;
-/** What the page streams: the next one supersedes it, so none waits for a socket to open. */
-const STREAMED: ReadonlySet<ClientMessage['kind']> = new Set(['pos']);
+/**
+ * What the page streams — positions, asks for the server's time — the next one supersedes it,
+ * so none waits for a socket to open.
+ */
+const STREAMED: ReadonlySet<ClientMessage['kind']> = new Set(['pos', 'clock']);
 
 /** What the socket `keepConnected` keeps open tells the app, and asks of it. */
 export interface SocketEvents {
@@ -242,11 +246,16 @@ function takeIn(msg: ServerMessage, page: Page): void {
       page.setRoomCode(msg.code);
       break;
     case 'view':
+      clock.stamped(msg.at);
       page.setView(msg.view);
       break;
     case 'spectator-view':
+      clock.stamped(msg.at);
       page.setSpectatorView(msg.view);
       page.setRoomCode(msg.code);
+      break;
+    case 'clock':
+      clock.heard(msg.sent, msg.at);
       break;
     case 'rooms':
       page.setRooms(msg.rooms);
@@ -328,11 +337,21 @@ export function useGameConnection(): Connection {
       pings: pingsRef,
       chats: chatsRef,
     };
-    const line = keepConnected(() => new WebSocket(wsUrl()), {
+    let line: Line | null = null;
+    // The server's time, asked for while the line is open (clock.ts): every clock follows it.
+    const asking = askForTime(() => line?.send({ kind: 'clock', sent: localNow() }));
+    line = keepConnected(() => new WebSocket(wsUrl()), {
       made: (socket) => {
         socketRef.current = socket;
       },
-      status: setStatus,
+      status: (next) => {
+        setStatus(next);
+        if (next === 'open') {
+          asking.open();
+        } else {
+          asking.close();
+        }
+      },
       session: loadCredentials,
       resuming: () => {
         resumingRef.current = true;
@@ -350,7 +369,11 @@ export function useGameConnection(): Connection {
       },
     });
     lineRef.current = line;
-    return line.stop;
+    const stop = line.stop;
+    return () => {
+      asking.close();
+      stop();
+    };
   }, []);
 
   return {

@@ -90,6 +90,10 @@ function handleMessage(
     case 'list-rooms':
       send(socket, { kind: 'rooms', rooms: lab.manager.list() });
       return session;
+    case 'clock':
+      // The page's own time comes back as it was sent: only the round trip is the page's.
+      send(socket, { kind: 'clock', sent: msg.sent, at: Date.now() });
+      return session;
     case 'spectate': {
       const room = lab.manager.get(msg.code);
       // An audience connection goes by its spectator id: voice signals reach it by that.

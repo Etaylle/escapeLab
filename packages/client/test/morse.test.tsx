@@ -25,7 +25,7 @@ function view(pattern: string | null, dial: number): MorseView {
 
 function render(puzzle: MorseView): string {
   return renderToStaticMarkup(
-    <MorsePanel puzzle={puzzle} change={null} send={noop} deadlineAt={null} />,
+    <MorsePanel puzzle={puzzle} change={null} send={noop} mission={{ deadlineAt: null, pausedAt: null }} />,
   );
 }
 

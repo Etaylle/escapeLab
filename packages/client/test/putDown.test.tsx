@@ -185,7 +185,7 @@ describe('stepping back from a device', () => {
         run={deviceRun()}
         map={single}
         edgework={null}
-        deadlineAt={null}
+        mission={{ deadlineAt: null, pausedAt: null }}
         send={noop}
         onStepBack={noop}
       />,
@@ -235,7 +235,7 @@ describe('stepping back from a device', () => {
         puzzle={{ ...maze, console: null }}
         run={deviceRun()}
         send={noop}
-        deadlineAt={null}
+        mission={{ deadlineAt: null, pausedAt: null }}
       />,
     );
     expect(watched).not.toContain('device-foot');

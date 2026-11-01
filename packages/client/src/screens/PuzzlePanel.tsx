@@ -1,4 +1,5 @@
 import type { ClientMessage, PuzzleView } from '@escapelab/core';
+import type { MissionTime } from '../clock.js';
 import {
   Device,
   deviceOf,
@@ -14,7 +15,8 @@ interface PuzzlePanelProps {
   /** the run around the device: its alarms, the stations solved, the crew — as the view has it */
   run: DeviceRun;
   send: (msg: ClientMessage) => void;
-  deadlineAt: number | null;
+  /** the mission's clock, for a device that shows it */
+  mission: MissionTime;
   /** steps back from the device, as its chassis offers; none for the audience */
   onStepBack?: (() => void) | null;
 }
@@ -29,7 +31,7 @@ export function PuzzlePanel(props: PuzzlePanelProps) {
   return <StationDevice key={props.puzzle.index} {...props} />;
 }
 
-function StationDevice({ puzzle, run, send, deadlineAt, onStepBack = null }: PuzzlePanelProps) {
+function StationDevice({ puzzle, run, send, mission, onStepBack = null }: PuzzlePanelProps) {
   // PANELS and SOUNDS are keyed by kind, so the entries for this kind take exactly this puzzle.
   const ModulePanel = PANELS[puzzle.kind] as Panel<PuzzleView['kind']>;
   const sounds = (SOUNDS[puzzle.kind] ?? null) as ChangeSounds | null;
@@ -48,7 +50,7 @@ function StationDevice({ puzzle, run, send, deadlineAt, onStepBack = null }: Puz
         puzzle={puzzle}
         change={feel.change}
         send={(input) => send({ kind: 'puzzle-input', input })}
-        deadlineAt={deadlineAt}
+        mission={mission}
         crew={run.crew}
       />
     </Device>

@@ -193,7 +193,7 @@ export class Room {
   attach(playerId: string, listener: Listener): () => void {
     this.listeners.set(playerId, listener);
     this.emptySince = null;
-    listener({ kind: 'view', view: viewFor(this.state, playerId) });
+    listener({ kind: 'view', view: viewFor(this.state, playerId), at: Date.now() });
     if (this.positions.size > 0) {
       listener(this.positionsMessage());
     }
@@ -212,7 +212,8 @@ export class Room {
   attachSpectator(listener: Listener): { spectatorId: string; detach: () => void } {
     const spectatorId = `audience-${randomUUID()}`;
     this.spectators.set(spectatorId, listener);
-    listener({ kind: 'spectator-view', view: viewForSpectator(this.state), code: this.code });
+    const view = viewForSpectator(this.state);
+    listener({ kind: 'spectator-view', view, code: this.code, at: Date.now() });
     if (this.positions.size > 0) {
       listener(this.positionsMessage());
     }
@@ -1092,14 +1093,16 @@ export class Room {
     }
   }
 
+  /** Every member's view of the state as it stands, stamped with the server's time. */
   private broadcast(): void {
+    const at = Date.now();
     for (const [playerId, listener] of this.listeners) {
-      listener({ kind: 'view', view: viewFor(this.state, playerId) });
+      listener({ kind: 'view', view: viewFor(this.state, playerId), at });
     }
     if (this.spectators.size > 0) {
       const view = viewForSpectator(this.state);
       for (const listener of this.spectators.values()) {
-        listener({ kind: 'spectator-view', view, code: this.code });
+        listener({ kind: 'spectator-view', view, code: this.code, at });
       }
     }
   }

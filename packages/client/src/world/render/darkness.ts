@@ -87,9 +87,8 @@ export function roomUp(frame: Frame, since: number): number {
  * light layer starts from it.
  */
 export function darknessDepth(frame: Frame): number {
-  const { deadlineAt } = frame;
-  const pressed =
-    frame.escapeSince !== null || (deadlineAt !== null && deadlineAt - frame.now < 60_000);
+  const left = frame.timeLeft;
+  const pressed = frame.escapeSince !== null || (left !== null && left < 60_000);
   return (pressed ? 0.945 : 0.92) + 0.02 * Math.sin(frame.time * (pressed ? 3.2 : 1.7));
 }
 

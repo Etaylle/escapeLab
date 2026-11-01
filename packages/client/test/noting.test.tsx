@@ -264,7 +264,7 @@ describe('„Notieren" at the Serverraum terminal', () => {
         puzzle={terminalView as Extract<PuzzleView, { kind: 'servers' }>}
         change={null}
         send={noop}
-        deadlineAt={null}
+        mission={{ deadlineAt: null, pausedAt: null }}
         crew={{ you: 'p1', mates: [] }}
       />
     );

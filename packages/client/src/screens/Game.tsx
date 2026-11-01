@@ -9,7 +9,8 @@ import type {
   PuzzleView,
   RunEvent,
 } from '@escapelab/core';
-import { useKeys, useNow } from '../hooks.js';
+import { clockTime, formatLeft, type MissionTime } from '../clock.js';
+import { useKeys, useNow, useServerNow } from '../hooks.js';
 import { appendBlock } from '../notes.js';
 import { NotepadContext, type NotepadHand } from '../noting.js';
 import {
@@ -88,20 +89,27 @@ interface Props {
   finale: Finale | null;
 }
 
-function formatRemaining(deadlineAt: number, now: number): string {
-  const totalSec = Math.max(0, Math.ceil((deadlineAt - now) / 1000));
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+/**
+ * The whole seconds left until `endsAt` on the server's clock at `now` — standing still at the
+ * pause's start (`pausedAt`) while the run is paused — never below 0.
+ */
+function secondsUntil(endsAt: number, pausedAt: number | null, now: number): number {
+  return Math.max(0, Math.ceil((endsAt - clockTime(pausedAt, now)) / 1000));
 }
 
 /** Full-width emergency banner: what broke, where to go, how long you have. */
-function SabotageAlert({ sabotage }: { sabotage: NonNullable<PlayerView['map']>['sabotage'] }) {
-  const now = useNow(200);
+function SabotageAlert({
+  sabotage,
+  pausedAt,
+}: {
+  sabotage: NonNullable<PlayerView['map']>['sabotage'];
+  pausedAt: number | null;
+}) {
+  const now = useServerNow(200);
   if (sabotage === null) {
     return null;
   }
-  const left = Math.max(0, Math.ceil((sabotage.endsAt - now) / 1000));
+  const left = secondsUntil(sabotage.endsAt, pausedAt, now);
   const manned = sabotage.panels.filter((p) => p.occupied).length;
   return (
     <div className="sabotage" role="alert">
@@ -137,20 +145,22 @@ type Sabotage = NonNullable<NonNullable<PlayerView['map']>['sabotage']>;
 function RelayAlert({
   sabotage,
   relay,
+  pausedAt,
   send,
   refusals,
 }: {
   sabotage: Sabotage;
   relay: NonNullable<Sabotage['relay']>;
+  pausedAt: number | null;
   send: (msg: ClientMessage) => void;
   refusals: number;
 }) {
-  const now = useNow(200);
+  const now = useServerNow(200);
   const frame = useRef<HTMLDivElement>(null);
   useEffect(() => {
     frame.current?.focus();
   }, []);
-  const left = Math.max(0, Math.ceil((sabotage.endsAt - now) / 1000));
+  const left = secondsUntil(sabotage.endsAt, pausedAt, now);
   return (
     <div
       ref={frame}
@@ -171,6 +181,7 @@ function RelayAlert({
         {sabotage.hint !== '' && <p className="sabotage-hint">{sabotage.hint}</p>}
         <RelayConsole
           relay={relay}
+          pausedAt={pausedAt}
           send={(input) => send({ kind: 'puzzle-input', input })}
           refusals={refusals}
         />
@@ -199,27 +210,28 @@ export function clockStage(left: number, escaping: boolean): string {
 }
 
 /**
- * The mission clock. Over the START_FLASH_MS up to `flashUntil` (epoch ms) —
- * where it has just started on this screen — its digits flash red, once; then
- * as `clockStage` has it.
+ * The mission clock, on the server's clock (clock.ts) and standing still while the run is
+ * paused. Over the START_FLASH_MS up to `flashUntil` (epoch ms) — where it has just started on
+ * this screen — its digits flash red, once; then as `clockStage` has it.
  */
 function Countdown({
-  deadlineAt,
+  mission,
   flashUntil,
   escaping,
 }: {
-  deadlineAt: number;
+  mission: MissionTime & { deadlineAt: number };
   flashUntil: number | null;
   escaping: boolean;
 }) {
-  const now = useNow(200);
-  const stage = clockStage(deadlineAt - now, escaping);
+  const now = useServerNow(200);
+  const left = mission.deadlineAt - clockTime(mission.pausedAt, now);
+  const stage = clockStage(left, escaping);
   // By the time of this draw: the screen draws anew as the HUD comes back, between two ticks.
   const drawn = Date.now();
   const flashing =
     flashUntil !== null && drawn >= flashUntil - START_FLASH_MS && drawn < flashUntil;
   const start = flashing ? ' countdown--start' : '';
-  return <div className={`countdown ${stage}${start}`}>{formatRemaining(deadlineAt, now)}</div>;
+  return <div className={`countdown ${stage}${start}`}>{formatLeft(left)}</div>;
 }
 
 /** How long the clock's digits flash red as it starts: its animation in coldopen.css. */
@@ -583,7 +595,7 @@ export function StationModal({
   run,
   map,
   edgework,
-  deadlineAt,
+  mission,
   send,
   onStepBack,
 }: {
@@ -592,7 +604,8 @@ export function StationModal({
   run: DeviceRun;
   map: MapView;
   edgework: PlayerView['edgework'];
-  deadlineAt: number | null;
+  /** the mission's clock, for a device that shows it */
+  mission: MissionTime;
   send: (msg: ClientMessage) => void;
   onStepBack: () => void;
 }) {
@@ -604,13 +617,7 @@ export function StationModal({
           {coach.text}
         </p>
       )}
-      <PuzzlePanel
-        puzzle={puzzle}
-        run={run}
-        send={send}
-        deadlineAt={deadlineAt}
-        onStepBack={onStepBack}
-      />
+      <PuzzlePanel puzzle={puzzle} run={run} send={send} mission={mission} onStepBack={onStepBack} />
     </WorldModal>
   );
 }
@@ -833,7 +840,7 @@ export function StageTop({
         ) : (
           view.deadlineAt !== null && (
             <Countdown
-              deadlineAt={view.deadlineAt}
+              mission={{ deadlineAt: view.deadlineAt, pausedAt: view.pausedAt }}
               flashUntil={coldOpen.flashUntil}
               escaping={escaping(map)}
             />
@@ -859,7 +866,7 @@ export function StageTop({
           ✓ Laborkennung notiert
         </div>
       )}
-      {relay === undefined && <SabotageAlert sabotage={map.sabotage} />}
+      {relay === undefined && <SabotageAlert sabotage={map.sabotage} pausedAt={view.pausedAt} />}
       {alarm !== null && <AlarmBanner key={alarm.seq} notice={alarm} />}
     </div>
   );
@@ -1042,7 +1049,7 @@ function OverTheWorld({
           run={run}
           map={map}
           edgework={view.edgework}
-          deadlineAt={view.deadlineAt}
+          mission={view}
           send={send}
           onStepBack={onClose}
         />
@@ -1186,7 +1193,13 @@ export function GameScreen(props: Props) {
     <div className={gameClass(finale, live && open.notes && over, held)}>
       {live && <RunOverlays view={view} coldOpen={coldOpen} />}
       {live && map.sabotage !== null && relay !== undefined && (
-        <RelayAlert sabotage={map.sabotage} relay={relay} send={send} refusals={refusals} />
+        <RelayAlert
+          sabotage={map.sabotage}
+          relay={relay}
+          pausedAt={view.pausedAt}
+          send={send}
+          refusals={refusals}
+        />
       )}
       <div className="stage">
         <StageTop

@@ -180,6 +180,7 @@ function crewView(you: string, crew: [string, boolean][]): ServerMessage {
     currentPuzzleIndex: 0,
     puzzleCount: 1,
     pausedFor: null,
+    pausedAt: null,
     events: [],
     grade: null,
     penaltySeq: 0,
@@ -195,7 +196,7 @@ function crewView(you: string, crew: [string, boolean][]): ServerMessage {
     puzzle: null,
     map: null,
   };
-  return { kind: 'view', view };
+  return { kind: 'view', view, at: 0 };
 }
 
 /** The crew as the audience's view gives it. */
@@ -217,6 +218,7 @@ function audienceView(crew: [string, boolean][]): ServerMessage {
     alarms: { count: 0, limit: 5 },
     hintsUsed: 0,
     pausedFor: null,
+    pausedAt: null,
     events: [],
     grade: null,
     players: crew.map(([id, connected]) => ({
@@ -232,7 +234,7 @@ function audienceView(crew: [string, boolean][]): ServerMessage {
     edgework: null,
     panels: [],
   };
-  return { kind: 'spectator-view', view, code: 'TEST' };
+  return { kind: 'spectator-view', view, code: 'TEST', at: 0 };
 }
 
 const BOTH: [string, boolean][] = [

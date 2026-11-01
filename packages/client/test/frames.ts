@@ -129,7 +129,7 @@ function frameParts(parts: Partial<Frame>): Omit<Frame, 'grid'> {
     youName: 'Anna',
     players: [player('p1', 'Anna', '#2dd4bf')],
     signSeen: false,
-    deadlineAt: null,
+    timeLeft: null,
     self: { x: 2.5, y: 2.5, facing: 0, moving: false },
     walkPhase: 0,
     others: new Map(),

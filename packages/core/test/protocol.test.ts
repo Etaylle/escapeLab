@@ -76,6 +76,17 @@ describe('client messages', () => {
     expect(parseClientMessage(JSON.stringify(stamped))).toEqual(stamped);
   });
 
+  it('ask for the server’s time with the page’s own, a number', () => {
+    const ask = { kind: 'clock', sent: 1_700_000_000_123.5 };
+    expect(parseClientMessage(JSON.stringify(ask))).toEqual(ask);
+    expect(() => parseClientMessage(JSON.stringify({ kind: 'clock' }))).toThrow(
+      /Unbekanntes Nachrichtenformat/,
+    );
+    expect(() => parseClientMessage(JSON.stringify({ kind: 'clock', sent: 'now' }))).toThrow(
+      /Unbekanntes Nachrichtenformat/,
+    );
+  });
+
   it('know no per-puzzle messages any more', () => {
     for (const kind of [
       'press-button',

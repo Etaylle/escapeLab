@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
 import type { PuzzleInputOf, RelayView } from '@escapelab/core';
+import { clockTime } from '../clock.js';
+import { useServerNow } from '../hooks.js';
 import { usePressFeel, useRefusalBlame } from './feel.js';
 import type { PanelProps } from './index.js';
 import './relay.css';
@@ -12,15 +13,6 @@ type Control = RelayView['controls'][number];
 const LEVELS = [1, 2, 3, 4, 5] as const;
 /** From this many seconds left, an instruction's countdown pulses red. */
 export const FINAL_SECONDS = 5;
-
-function useNow(intervalMs: number): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(timer);
-  }, [intervalMs]);
-  return now;
-}
 
 /** The way it is shouted: „Kryo-Puffer auf 3", „Faradaykäfig AUS", „Zirkulator drücken". */
 function spoken(control: string, value: RelayInput['value']): string {
@@ -40,10 +32,19 @@ export function secondsLeft(expiresAt: number, now: number): number {
 
 /**
  * The highlighted box: what to read out, for whose console, and how long it still counts —
- * a bar running down and its seconds in digits, pulsing red over the last FINAL_SECONDS.
+ * a bar running down and its seconds in digits, pulsing red over the last FINAL_SECONDS — on
+ * the server's clock, standing still while the run is paused (`pausedAt`).
  */
-function Order({ instruction, windowSec }: { instruction: Instruction; windowSec: number }) {
-  const now = useNow(200);
+function Order({
+  instruction,
+  windowSec,
+  pausedAt,
+}: {
+  instruction: Instruction;
+  windowSec: number;
+  pausedAt: number | null;
+}) {
+  const now = clockTime(pausedAt, useServerNow(200));
   const share = Math.min(1, Math.max(0, instruction.expiresAt - now) / (windowSec * 1000));
   const left = secondsLeft(instruction.expiresAt, now);
   return (
@@ -121,10 +122,13 @@ function ControlCard({ control, send }: { control: Control; send: (input: RelayI
  */
 export function RelayConsole({
   relay,
+  pausedAt,
   send,
   refusals,
 }: {
   relay: RelayView;
+  /** since when the run stands paused, epoch ms; null while it runs */
+  pausedAt: number | null;
   send: (input: RelayInput) => void;
   /** what the server has refused of this player's inputs so far; 0 for the audience */
   refusals: number;
@@ -134,7 +138,7 @@ export function RelayConsole({
   return (
     <div className="relay" {...handlers}>
       {relay.instruction !== null && (
-        <Order instruction={relay.instruction} windowSec={relay.windowSec} />
+        <Order instruction={relay.instruction} windowSec={relay.windowSec} pausedAt={pausedAt} />
       )}
       <div className="relay-progress">
         Erledigt: <strong>{relay.completed}/{relay.required}</strong>
@@ -152,6 +156,6 @@ export function RelayConsole({
  * The registry's entry; the emergency overlay renders RelayConsole itself,
  * with the refusals it hears of — a relay never stands at a station's device.
  */
-export function RelayPanel({ puzzle, send }: PanelProps<'relay'>) {
-  return <RelayConsole relay={puzzle} send={send} refusals={0} />;
+export function RelayPanel({ puzzle, send, mission }: PanelProps<'relay'>) {
+  return <RelayConsole relay={puzzle} pausedAt={mission.pausedAt} send={send} refusals={0} />;
 }

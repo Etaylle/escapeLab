@@ -79,7 +79,7 @@ function panel(puzzle: PuzzleView): string {
       puzzle={puzzle}
       run={deviceRun()}
       send={() => undefined}
-      deadlineAt={null}
+      mission={{ deadlineAt: null, pausedAt: null }}
     />,
   );
 }
@@ -589,7 +589,7 @@ describe('the signal chain', () => {
     const sent: unknown[] = [];
     const Panel = PANELS.signal;
     const tree = (
-      <Panel puzzle={puzzle} change={null} send={(input) => sent.push(input)} deadlineAt={null} />
+      <Panel puzzle={puzzle} change={null} send={(input) => sent.push(input)} mission={{ deadlineAt: null, pausedAt: null }} />
     );
     const keys = elementsOf(tree).filter((element) => element.type === 'button');
     expect(keys).toHaveLength(12);
@@ -1341,7 +1341,7 @@ describe('the Serverraum', () => {
         puzzle={at('b', { rack: RACK })}
         change={null}
         send={(input) => sent.push(input)}
-        deadlineAt={null}
+        mission={{ deadlineAt: null, pausedAt: null }}
       />
     );
     expect(pressAll(tree)).toBe(6);

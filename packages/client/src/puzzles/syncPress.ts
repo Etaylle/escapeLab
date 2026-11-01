@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { PuzzleView } from '@escapelab/core';
+import { serverNow } from '../clock.js';
 
 /**
  * syncPress.ts: what a sync station's view says of the presses — the window, this player's own
@@ -73,16 +74,19 @@ export function ownPressAt(view: SyncView, sync: SyncPress, now: number): OwnPre
   return { down, ring: down ? sync.press : null, expired: !down && (sync.expired || ranOut) };
 }
 
-/** Renders again at `at` (epoch ms) — as a press's window shuts — and returns the render's time. */
+/**
+ * Renders again at `at` (epoch ms on the server's clock, clock.ts) — as a press's window shuts
+ * — and returns the render's time on that clock.
+ */
 export function useNowUntil(at: number | null): number {
   const [, setTick] = useState(0);
   useEffect(() => {
-    const wait = at === null ? 0 : at - Date.now();
+    const wait = at === null ? 0 : at - serverNow();
     if (wait <= 0) {
       return undefined;
     }
     const timer = setTimeout(() => setTick((tick) => tick + 1), wait);
     return () => clearTimeout(timer);
   }, [at]);
-  return Date.now();
+  return serverNow();
 }

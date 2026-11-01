@@ -61,6 +61,16 @@ export interface CameraProbe {
 }
 
 /**
+ * The server's clock as the page reads it (clock.ts): how far it is ahead of the page's own,
+ * its time now, and what is left on the mission's clock, ms — null without one.
+ */
+export interface ClockProbe {
+  offset: number;
+  serverNow: number;
+  left: number | null;
+}
+
+/**
  * The page's probes for the walkthrough harness (`tools/shots.mjs`), there
  * only when the URL asks for them with `?trace=1` (world/frameTrace.ts): the
  * world's last frame durations and its camera while a world is up, the voice
@@ -115,6 +125,8 @@ export interface Probes {
   readonly pad?: PadProbe;
   /** the danger sense: the drone closing in, how far, the ticks so far (world/danger.ts) */
   readonly danger?: DangerProbe;
+  /** the server's clock and the mission's on it, while a world is up (clock.ts) */
+  readonly clock?: ClockProbe;
 }
 
 declare global {

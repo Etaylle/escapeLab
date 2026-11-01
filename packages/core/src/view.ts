@@ -63,6 +63,11 @@ export interface PlayerView {
   puzzleCount: number;
   /** set while the run is frozen because a crew member is missing */
   pausedFor: string[] | null;
+  /**
+   * since when the run stands frozen, epoch ms; null while it runs. The mission clock stands
+   * at it — the pause moves every deadline on by its length once it is over
+   */
+  pausedAt: number | null;
   /** the run report, filled in as the mission goes on */
   events: RunEvent[];
   /** only once the mission is over */
@@ -747,6 +752,8 @@ export interface SpectatorView {
   alarms: PlayerView['alarms'];
   hintsUsed: number;
   pausedFor: string[] | null;
+  /** since when the run stands frozen, as the players see it */
+  pausedAt: number | null;
   events: RunEvent[];
   grade: Grade | null;
   players: {
@@ -791,6 +798,7 @@ export function viewForSpectator(state: GameState): SpectatorView {
       state.paused === null
         ? null
         : state.players.filter((p) => !p.connected).map((p) => p.name),
+    pausedAt: state.paused?.since ?? null,
     events: [...state.events],
     grade: gradeFor(state),
     players: state.players.map((p) => ({
@@ -859,6 +867,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
       state.paused === null
         ? null
         : state.players.filter((p) => !p.connected).map((p) => p.name),
+    pausedAt: state.paused?.since ?? null,
     events: [...state.events],
     grade: gradeFor(state),
     penaltySeq: state.penaltySeq,

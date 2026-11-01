@@ -9,7 +9,8 @@ import {
   type PlayerView,
   type PuzzleView,
 } from '@escapelab/core';
-import { useNow } from '../hooks.js';
+import { beepDue, clock, clockTime, timeLeft } from '../clock.js';
+import { useServerNow } from '../hooks.js';
 import { actionOfKey, isHeld, type Held, type InputAction } from '../input/bindings.js';
 import { useGlyph } from '../input/glyphs.js';
 import { HeldKeys, watchBindings } from '../input/heldKeys.js';
@@ -452,9 +453,9 @@ function minimapOf(loop: Loop): MinimapProbe | null {
 
 /**
  * `?trace=1`: the walkthrough reads the last frame durations off the page, the camera, your
- * avatar's footfalls, the minimap and its goal, the glow round what the E prompt names, and
- * what the lab sounds like — the beds, the music, the radio's voice, the partner's place — and
- * can render the radio's chain offline.
+ * avatar's footfalls, the minimap and its goal, the glow round what the E prompt names, what
+ * the lab sounds like — the beds, the music, the radio's voice, the partner's place — and the
+ * server's clock as the page reads it; and it can render the radio's chain offline.
  */
 function traceFrames(loop: Loop): { trace: FrameTrace; drop: () => void } | null {
   if (!traceRequested(location.search)) {
@@ -486,6 +487,14 @@ function traceFrames(loop: Loop): { trace: FrameTrace; drop: () => void } | null
       const sound = { music: musicProbe(), voice: voiceProbe(), spatial: spatialProbe() };
       const nodes = { ...graphCensus(), beds: bedCount() };
       return { ...bedProbe(), ...sound, nodes, spent: timeSpent(), renderRadio, ...soundProbe() };
+    },
+    get clock() {
+      const serverNow = clock.now();
+      return {
+        offset: clock.offset(),
+        serverNow,
+        left: timeLeft(loop.live.current.view, serverNow),
+      };
     },
   });
   return { trace, drop };
@@ -617,11 +626,11 @@ function hearTheLab(loop: Loop): void {
  */
 function tensionOf(loop: Loop, map: WorldMap): Tension {
   const { view, darkSince, finale } = loop.live.current;
-  const deadline = view.deadlineAt;
+  const left = timeLeft(view);
   return {
     run: view.startedAt,
     startAt: darkSince === null ? null : darkSince + REVEAL_MS + MUSIC_AFTER_CLICK_MS,
-    left: deadline === null ? Infinity : (deadline - Date.now()) / 1000,
+    left: left === null ? Infinity : left / 1000,
     budget: view.timeLimitSec,
     alarms: view.penaltySeq,
     escaping: escaping(map),
@@ -630,18 +639,17 @@ function tensionOf(loop: Loop, map: WorldMap): Tension {
 }
 
 /**
- * The last ten seconds counted out loud — for a player — and an emergency's
- * siren as it starts, a chirp as it is over.
+ * The last ten seconds counted out loud — for a player — on the mission's clock as the server
+ * keeps it, and an emergency's siren as it starts, a chirp as it is over.
  */
 function hearTheClock(loop: Loop, map: WorldMap): void {
   const { sim } = loop;
-  const view = loop.live.current.view;
-  const deadline = view.deadlineAt;
-  if (deadline !== null && !loop.spectator) {
-    const whole = Math.ceil((deadline - Date.now()) / 1000);
-    if (whole <= 10 && whole >= 0 && whole < sim.lastBeepAt) {
-      sim.lastBeepAt = whole;
-      countdownBeep(whole);
+  const left = timeLeft(loop.live.current.view);
+  if (left !== null && !loop.spectator) {
+    const due = beepDue(left, sim.lastBeepAt);
+    sim.lastBeepAt = due.last;
+    if (due.beep !== null) {
+      countdownBeep(due.beep);
     }
   }
   const sabotageOn = map.sabotage !== null;
@@ -1084,7 +1092,7 @@ function useWorld(props: Props): WorldState {
  * more pressing the moment. Gone once the run's end plays on this screen.
  */
 function RedEdge({ view, ending }: { view: PlayerView; ending: boolean }) {
-  const now = useNow(500);
+  const now = clockTime(view.pausedAt, useServerNow(500));
   const pressure = vignettePressure(view.deadlineAt, now, escaping(view.map), ending);
   return pressure === null ? null : (
     <div className={`vignette vignette--${pressure}`} aria-hidden="true" />
