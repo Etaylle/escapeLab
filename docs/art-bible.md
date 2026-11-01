@@ -258,3 +258,16 @@ fourth, and misses what pacing reuses: it saw 0.1 ms where the swaying lamp's si
 (Figures). The escape is the walkthrough's dearest window — the light and the darkness over a
 lab lit red take half its frame — and CI's runners differ by a third in speed: on the slower
 ones it ran at 50 ms p95 before this package too.
+
+## Open
+
+What the graphics packages left for later, one line each:
+
+- **The light layer cannot be measured on a software renderer** (L-graphics): under
+  `SHOTS_WEBGL=1` SwiftShader takes 83 to 133 ms a frame, as it did before the package, so CI
+  keeps the Canvas pass and the layer is measured on this machine's GPU — `SHOTS_HEADED=1`, or
+  the Metal flags of the paced bench (Cost).
+- **The escape on CI's slower runners** (L-graphics, L-graphics-fix): a client build of 3.3 s and
+  more marked the runners on which the escape's window ran at 50 ms p95 whatever the commit. The
+  escape's frame is a fifth cheaper since L-polish (Cost); a CI run on such a runner has yet to
+  show the window under its 40 ms.

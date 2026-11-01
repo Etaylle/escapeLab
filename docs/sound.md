@@ -767,3 +767,17 @@ other line keeps its recording — after which the voice test names the `lightsS
 `test/intro.test.tsx` the opening's phases and their timings, the skip and its count, the
 reduced-motion path, the title on the lights-out, the crew held still; `test/introCue.test.ts`
 the script against a client of its own and the cue in the game.
+
+## Open
+
+What the sound packages left for later, one line each, the newest first:
+
+- **Twelve recordings await a render** (L-sound): the linoleum and steel steps, both door
+  closes, the alarm's sting, the drone's fly-by, the hatch's landing and the settings' tick.
+  The agents may not spend the account's credits; the command is under „Awaiting a render"
+  (some 130 credits). Until it runs, stand-ins play or nothing does, and
+  `test/sampleManifest.test.ts` lists them in `AWAITING_RENDER`, to be emptied once they are made.
+- **Helmut's announcement and the opening's cue** (the opening, below): Piper (Thorsten) reads the
+  loudspeakers' five lines and no cue is composed until the two commands there are run.
+- Done in L-polish: the devices' sounds play into the effects' bus, its reverb and its brickwall
+  (The mix); nothing of the lab goes past the buses any more.
