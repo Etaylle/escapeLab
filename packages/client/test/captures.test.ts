@@ -100,16 +100,31 @@ function captureOf(sourceId: string, part: string): Capture {
 }
 
 describe('captures of Blackout’s sources, as their rules print', () => {
-  it('takes the legend at the Klemmbrett: a row a key row, each console’s colour, pattern', () => {
+  it('takes the legend at the Klemmbrett as rows „Zeile · Pult A · Muster · Pult B"', () => {
     expect(shown(captureOf('klemmbrett', 'Legende'))).toEqual([
       'Klemmbrett · Legende',
-      'Zeile  Pult A  Muster    Pult B  Muster',
-      '1      rot     glatt     gelb    Ring',
-      '2      blau    Punkte    grün    Streifen',
-      '3      grün    Streifen  rot     glatt',
-      '4      gelb    Ring      blau    Punkte',
+      'Zeile  Pult A  Muster    Pult B',
+      '1      rot     glatt     gelb',
+      '2      blau    Punkte    grün',
+      '3      grün    Streifen  rot',
+      '4      gelb    Ring      blau',
     ]);
     expect(captureOf('klemmbrett', 'Legende').form).toBe('table');
+  });
+
+  it('leaves out the printed legend’s second „Muster" only because Pult A’s column gives it', () => {
+    const station = stationOf(blackout, 'signalkette');
+    const printed = station.manual
+      .flatMap((section) => section.blocks)
+      .find((block) => block.kind === 'table');
+    if (printed?.kind !== 'table') {
+      throw new Error('the Signalkette prints no legend');
+    }
+    expect(printed.head).toEqual(['Zeile', 'Pult A', 'Muster', 'Pult B', 'Muster']);
+    const patterns = new Map(printed.rows.map(([, colour, pattern]) => [colour, pattern]));
+    for (const [, , , colour, pattern] of printed.rows) {
+      expect(patterns.get(colour), colour).toBe(pattern);
+    }
   });
 
   it('takes the Notstrom’s rules in the Handbuch as numbered lines, word for word', () => {

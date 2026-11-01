@@ -197,11 +197,11 @@ section a table by its first column, a list as „Regeln" — or what the place 
 
 | Template | Set as | In Blackout (seed 5) |
 | --- | --- | --- |
-| Table | its columns aligned under their names, two blanks apart, never wrapped | Klemmbrett · Legende (Zeile · Pult A · Muster · Pult B · Muster), Spind · Netzplan, Terminal · Dienste (Dienst · Status · Strom · Braucht) |
+| Table | its columns aligned under their names, two blanks apart, never wrapped; a repeated column the table already gives left out | Klemmbrett · Legende (Zeile · Pult A · Muster · Pult B: the printed second „Muster" is the pattern Pult A's column gives B's colour), Spind · Netzplan, Terminal · Dienste (Dienst · Status · Strom · Braucht) |
 | More pairs than lines | two pairs a line, the first half down the left | Aktenschrank · Frequenztabelle: 16 words in 8 lines |
 | Morsetafel | only the letters the Frequenztabelle's words are told apart by (their first three) — 18 of 26 — two a line | Aktenschrank · Morsetafel: 9 lines |
 | Long table of pairs of rows | a pair of rows a line, alike but for a yes-or-no column | the Kippschalterbank's Stellungstabelle (Stern nein · Stern ja) |
-| Table wider than 44 characters | a row a line, its cells parted by „ · ", wrapped | Spind · Code, Spind · Befehl am Terminal |
+| Table wider than 38 characters (what the pad holds aligned on a phone) | a row a line, its cells parted by „ · ", wrapped | Spind · Code, Spind · Befehl am Terminal |
 | Rules list | numbered as printed | Handbuch · Schnittfolge, Spind · Regeln |
 | Laborkennung | one line: serial · control lamps · cells | Schild · Laborkennung: „UZKM9-8 · CAR aus, SIG an, NSA aus · 4 Notstromzellen" |
 | Notes of the last shift | as written, one a line; a pinned note under the room it hangs in | Zettel · Flur |

@@ -94,7 +94,8 @@ function CaptureOnPad({
  * the world it locks nothing — the player walks on with it open, and Esc hands the keys back to
  * walking; beside a source or a device it stands as a strip of its own (styles/putdown.css).
  * Opened by N it takes the keys (`focus`); opened by a „Notieren" control it leaves them to the
- * page, and scrolls down to what came in (`jump`, a count of the captures taken).
+ * page, and scrolls down to what came in (`jump`, a count of the captures taken) — as it does
+ * to the Laborkennung taken over at its head.
  */
 export function Notepad({
   notes,
@@ -114,6 +115,8 @@ export function Notepad({
   const sheet = useRef<HTMLDivElement>(null);
   const takesKeys = useRef(focus);
   const closeKey = useGlyph('notes');
+  /** the times the Laborkennung was taken over here: the sheet goes down to it as to a capture */
+  const [signed, setSigned] = useState(0);
   useEffect(() => {
     if (takesKeys.current) {
       writing.current?.focus();
@@ -121,10 +124,10 @@ export function Notepad({
   }, []);
   useEffect(() => {
     const paper = sheet.current;
-    if (jump > 0 && paper !== null) {
+    if (jump + signed > 0 && paper !== null) {
       paper.scrollTop = paper.scrollHeight;
     }
-  }, [jump]);
+  }, [jump, signed]);
   const { content, change } = notes;
   const done = (): void => {
     const kept = withoutEmpty(content);
@@ -143,6 +146,7 @@ export function Notepad({
           onClick={() => {
             if (edgework !== null) {
               change(withCapture(content, captureAt(SIGN, edgeworkTaken(edgework))).content);
+              setSigned((n) => n + 1);
             }
           }}
         >

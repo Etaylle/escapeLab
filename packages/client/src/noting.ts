@@ -51,10 +51,11 @@ export interface Place {
 export const CAPTURE_LINES = 11;
 
 /**
- * How wide a table may run aligned, in characters: what the notepad's strip holds beside a page
- * in a window 1280 px wide. A wider one — a table of sentences — is set as running text.
+ * How wide a table may run aligned, in characters: what the notepad holds in the world's corner
+ * on a phone 420 px wide, at 15 px a character of the pencil's. A wider one — a table of
+ * sentences — is set as running text.
  */
-export const TABLE_WIDTH = 44;
+export const TABLE_WIDTH = 38;
 
 /** `taken` as captured at `place`, under the line naming both; under its part alone at none. */
 export function captureAt(place: Place | null, taken: Taken): Capture {
@@ -228,11 +229,31 @@ function pairedRows(block: NotableBlock & { kind: 'table' }): string[][] | null 
 }
 
 /**
- * A table's rows under its head as the pad sets them: as printed, or — too long for a capture —
- * a pair of rows a row where they pair (`pairedRows`).
+ * `rows` (the head first) without a column named as an earlier one whose every cell that column
+ * already gives for the cell before it: the Signalkette legend's second „Muster" — the pattern
+ * of Pult B's colour, which Pult A's column pairs with that colour already. Its rows then read
+ * „Zeile · Pult A · Muster · Pult B". Every other column stays.
+ */
+function withoutRepeats(rows: readonly (readonly string[])[]): (readonly string[])[] {
+  const [head = [], ...body] = rows;
+  const repeats = head.flatMap((name, i) => {
+    const first = head.indexOf(name);
+    if (first === i || first < 1) {
+      return [];
+    }
+    const given = new Map(body.map((row) => [row[first - 1], row[first]]));
+    return body.every((row) => given.get(row[i - 1]) === row[i]) ? [i] : [];
+  });
+  return repeats.length === 0 ? [...rows] : rows.map((row) => without(row, repeats));
+}
+
+/**
+ * A table's rows under its head as the pad sets them: as printed but for a column it already
+ * gives (`withoutRepeats`), or — too long for a capture — a pair of rows a row where they pair
+ * (`pairedRows`).
  */
 function tableRows(block: NotableBlock & { kind: 'table' }): (readonly string[])[] {
-  const printed = [block.head, ...block.rows];
+  const printed = withoutRepeats([block.head, ...block.rows]);
   return printed.length > CAPTURE_LINES ? (pairedRows(block) ?? printed) : printed;
 }
 
