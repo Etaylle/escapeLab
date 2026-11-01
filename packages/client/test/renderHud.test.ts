@@ -52,6 +52,25 @@ describe('minimapLayout — where the corner minimap goes', () => {
     expect(minimapLayout(lab, 1656, 582, 2, { top: 41, controls: [row] })).toEqual(phone);
   });
 
+  it('stands 56 px tall on that phone for a wide, low map too, up to half the window wide', () => {
+    // The Systemcheck's 19×7: a sixth of the window's width gives 7 px a tile, 49 px tall.
+    const row = { left: 650, top: 291 - 68, right: 814, bottom: 275 };
+    const check = minimapLayout(mapWith({ width: 19, height: 7 }), 1656, 582, 2, {
+      top: 41,
+      controls: [row],
+    });
+    expect(check.mh / 2).toBe(56);
+    expect(check.mw / 2).toBe(152);
+    expect(minimapBox(check, 2).bottom).toBeLessThanOrEqual(row.top * 2);
+    // A strip of a map, 60×5, stops at half the window's width before it is 56 px tall.
+    const strip = minimapLayout(mapWith({ width: 60, height: 5 }), 1656, 582, 2, {
+      top: 41,
+      controls: [row],
+    });
+    expect(strip.mw).toBeLessThanOrEqual(1656 / 2);
+    expect(strip.cell).toBe(13);
+  });
+
   it('covers its dark frame too, which the arrows and room names keep off', () => {
     expect(minimapBox(layout, 2)).toEqual({ left: 590, top: 90, right: 710, bottom: 170 });
   });

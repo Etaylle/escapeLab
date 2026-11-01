@@ -29,6 +29,8 @@ import { FALLBACK_COLOR, type Frame, type MinimapLayout, type WorldMap } from '.
 
 /** The dark frame round the minimap's map, CSS pixels. */
 const MINIMAP_FRAME = 5;
+/** How tall the minimap stands at least, CSS pixels, where the room below the clock allows. */
+const MINIMAP_LEAST = 56;
 
 /** The minimap's blue-grey: steel with a cold cast. */
 const CHART = mix(STEEL, READ_BLUE, 0.2);
@@ -58,7 +60,9 @@ const C = {
  * clock, and a radio line while one is up (`insets.top`, CSS pixels) — and
  * above the controls in the bottom right corner (`insets.controls`, CSS
  * pixels from the canvas's corner). It scales with the window, but never so
- * small it stops being readable or so large it eats a phone screen.
+ * small it stops being readable or so large it eats a phone screen: a wide,
+ * low map — the Systemcheck's 19×7 — stands MINIMAP_LEAST tall all the same,
+ * as wide as that makes it, up to half the window.
  */
 export function minimapLayout(
   map: WorldMap,
@@ -75,7 +79,9 @@ export function minimapLayout(
   const under = reachOf(right, h / dpr);
   const roomBelow = (h - oy - (under + 2 * MINIMAP_FRAME) * dpr) / map.height;
   const fit = Math.round((targetCss * dpr) / map.width);
-  const cell = Math.max(3, Math.min(fit, Math.floor(roomBelow)));
+  const least = Math.ceil((MINIMAP_LEAST * dpr) / map.height);
+  const tall = Math.min(least, Math.floor(w / 2 / map.width));
+  const cell = Math.max(3, Math.min(Math.max(fit, tall), Math.floor(roomBelow)));
   const mw = map.width * cell;
   const mh = map.height * cell;
   return { ox: w - mw - 14 * dpr, oy, cell, mw, mh };
