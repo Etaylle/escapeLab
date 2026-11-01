@@ -31,7 +31,7 @@ die Entscheidung.
   wenn der Prompt stand.
 - Beweis: je ein Test, der ohne den Fix rot ist; Smoke; Walkthrough beider Missionen 0 Fehler.
 
-### F-2 Handbuch- und Gerätetexte — Status: im PR (N-readability) · Größe: M
+### F-2 Handbuch- und Gerätetexte — Status: erledigt (N-readability, Merge 2026-11-02) · Größe: M
 - Tabellen nie über einen Seitenwechsel brechen, wenn sie ganz auf die nächste Seite passen
   (`client/src/pages.ts`); die Morsetafel im Aktenschrank (13 Zeilen) steht auf einer Seite.
 - Zeichnung und zugehörige Tabelle bleiben zusammen.
@@ -83,7 +83,7 @@ die Entscheidung.
   menschlichen Läufen gewonnen. Vorschlag: Fenster 3–4 s plus gemeinsamer Countdown wie in
   Portal 2 („beide sehen GO im selben Moment"), für Hebel und Reaktor.
 
-### N-5 Lesbarkeit — Status: im PR (N-readability) · Größe: M
+### N-5 Lesbarkeit — Status: erledigt (N-readability, Merge 2026-11-02; Vorher/Nachher im Audit-Addendum) · Größe: M
 - Gerätetexte Median 11–13 px (min 8), Tasten unter 44 px, Rack scrollt bei 1280×720, auf dem
   Handy scrollt jedes Gerät; Ziel: Fließtext ≥ 14 px, Anzeigen ≥ 18 px, Ziele ≥ 44 px, eine
   Station je Buchaufschlag mit ganzen Tabellen (enthält F-2); Canvas-Beschriftungen folgen der
