@@ -148,9 +148,11 @@
  * meanwhile, and it has to leave inert, its opacity only falling and midway on
  * a frame at least, gone within 100 to 600 ms. For the shot (panel-close.png)
  * the station is opened anew and stepped back from with the fade held 120 ms
- * in — a screenshot asked for at once draws the fade's first frame, the panel
- * whole — and it has to lie between the panel open and gone, taken again where
- * it came after the panel had gone, up to three times — or the run fails.
+ * in and the game's timer that lets the panel go kept back until it is taken —
+ * a screenshot asked for at once draws the fade's first frame, the panel whole,
+ * and one under load can come after the panel has gone — and it has to lie
+ * between the panel open and gone, taken again where it does not, up to three
+ * times — or the run fails.
  *
  * The glow: what the E prompt names glows in its own shape, no box round it
  * (client world/render/highlight.ts). As each player stands in reach of the
@@ -3519,11 +3521,51 @@ function recordPanelFade(page) {
   });
 }
 
+/** How long the game keeps a device up as it fades out, ms (client WorldModal.tsx). */
+const PANEL_FADE_MS = 150;
 /**
- * How far into its 150 ms fade-out panel-close.png holds the panel, ms: past the ease-in's slow
- * start, the panel about half gone and the dim behind it two-thirds lifted.
+ * How far into its fade-out panel-close.png holds the panel, ms: past the ease-in's slow start,
+ * the panel about half gone and the dim behind it two-thirds lifted.
  */
 const PANEL_SHOT_MS = 120;
+
+/**
+ * In the page, until releasePanelFade: a device that starts to fade out stands still `ms` into
+ * its fade, and the game's timer that lets it go — the one timer of the fade's length, `fade`
+ * (client PutDown.tsx `useLeaving`) — is kept back, so that a shot coming late under load still
+ * finds the panel there. The world goes on as it does.
+ */
+function holdPanelFade({ ms, fade }) {
+  const style = document.createElement('style');
+  style.id = 'shots-panel-hold';
+  style.textContent =
+    '.station-modal.puzzle-modal--leaving, .station-modal.puzzle-modal--leaving .panel ' +
+    `{ animation-delay: -${ms}ms !important; animation-play-state: paused !important; }`;
+  document.head.append(style);
+  const plain = globalThis.setTimeout;
+  const kept = [];
+  globalThis.__panelHold = { plain, kept };
+  globalThis.setTimeout = (run, delay, ...args) => {
+    if (delay !== fade) {
+      return plain(run, delay, ...args);
+    }
+    kept.push(() => run(...args));
+    return plain(() => undefined, 0);
+  };
+}
+
+/** In the page: lets the device held by holdPanelFade go — its timer runs now, its fade goes on. */
+function releasePanelFade() {
+  const hold = globalThis.__panelHold;
+  document.getElementById('shots-panel-hold')?.remove();
+  if (hold !== undefined) {
+    globalThis.setTimeout = hold.plain;
+    delete globalThis.__panelHold;
+    for (const run of hold.kept) {
+      hold.plain(run, 0);
+    }
+  }
+}
 
 /**
  * The device's fade-out as the game plays it: Esc, the page noting the panel each frame
@@ -3541,28 +3583,26 @@ async function fadeOutAsPlayed(page, modal) {
 
 /**
  * The shot of panel-close.png: the station opened anew with E, stepped back from with its
- * fade-out held PANEL_SHOT_MS in — a screenshot asked for at once draws the fade's first frame,
- * the panel still whole — and the hold let go. Null where the station did not open again.
+ * fade-out held PANEL_SHOT_MS in (holdPanelFade) — a screenshot asked for at once draws the
+ * fade's first frame, the panel still whole — and the hold let go, however the shot went. Null
+ * where the station did not open again.
  */
 async function heldFadeShot(page, modal) {
   if (!(await interactUntil(page, modal))) {
     return null;
   }
   await sleep(400); // past its fade-in
-  await page.evaluate((ms) => {
-    const hold = document.createElement('style');
-    hold.id = 'shots-panel-hold';
-    hold.textContent =
-      '.station-modal.puzzle-modal--leaving, .station-modal.puzzle-modal--leaving .panel ' +
-      `{ animation-delay: -${ms}ms !important; animation-play-state: paused !important; }`;
-    document.head.append(hold);
-  }, PANEL_SHOT_MS);
-  await page.keyboard.press('Escape');
-  // A shot without the panel leaving is judged by its luma (capturePanelClose), not thrown.
-  const leaving = page.locator('.station-modal.puzzle-modal--leaving');
-  await leaving.waitFor({ state: 'attached', timeout: 1000 }).catch(() => undefined);
-  const shot = await page.screenshot();
-  await page.evaluate(() => document.getElementById('shots-panel-hold')?.remove());
+  let shot = null;
+  await page.evaluate(holdPanelFade, { ms: PANEL_SHOT_MS, fade: PANEL_FADE_MS });
+  try {
+    await page.keyboard.press('Escape');
+    // A shot without the panel leaving is judged by its luma (capturePanelClose), not thrown.
+    const leaving = page.locator('.station-modal.puzzle-modal--leaving');
+    await leaving.waitFor({ state: 'attached', timeout: 1000 }).catch(() => undefined);
+    shot = await page.screenshot();
+  } finally {
+    await page.evaluate(releasePanelFade);
+  }
   await modal.waitFor({ state: 'hidden', timeout: 3000 });
   return shot;
 }
