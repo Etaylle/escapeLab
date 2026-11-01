@@ -111,3 +111,44 @@ describe('Room with a sleeping drone', () => {
     room.dispose();
   });
 });
+
+/** The same corridor, its patrol held still while someone stands on the plate at (3,1). */
+const heldMission: Mission = parseMission({
+  ...mission,
+  map: {
+    ...mission.map,
+    plates: [{ id: 'halt', x: 3, y: 1 }],
+    drones: mission.map.drones.map((drone) => ({ ...drone, frozenByPlate: 'halt' })),
+  },
+});
+
+describe('Room with a drone that wakes held still', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('shows it to the crew on the next tick, though a newcomer heard of it first', () => {
+    const room = new Room('TEST', heldMission);
+    const anna = { ...room.join('Anna'), ...collector() };
+    const ben = { ...room.join('Ben'), ...collector() };
+    room.attach(anna.playerId, anna.listen);
+    room.attach(ben.playerId, ben.listen);
+    room.setReady(ben.playerId, true);
+    room.act(anna.playerId, { kind: 'start-mission' });
+    walkTo(room, ben, 2.5, 1.5);
+    walkTo(room, anna, 3.5, 1.5);
+    pressE(room, ben);
+    // the walk's last positions out, and nothing moving since
+    vi.advanceTimersByTime(300);
+    room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
+    room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
+    // The solve woke it, held still by Anna on the plate; someone comes to watch at once.
+    const audience = collector();
+    room.attachSpectator(audience.listen);
+    expect(lastPositions(audience.messages).drones['wache']).toMatchObject({ frozen: true });
+    const before = anna.messages.length;
+    vi.advanceTimersByTime(100);
+    const heard = anna.messages.slice(before).filter((m) => m.kind === 'positions');
+    expect(heard.some((m) => m.kind === 'positions' && 'wache' in m.drones)).toBe(true);
+    room.dispose();
+  });
+});

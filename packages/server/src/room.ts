@@ -971,6 +971,8 @@ export class Room {
   private broadcastPositions(): void {
     this.positionsDirty = false;
     const msg = this.positionsMessage();
+    // What everybody heard of the drones: a newcomer told alone is no one else's news.
+    this.dronesSent = JSON.stringify(msg.drones);
     for (const listener of this.audience) {
       listener(msg);
     }
@@ -987,14 +989,12 @@ export class Room {
   }
 
   /** Where everybody stands right now, stamped with the run it belongs to. */
-  private positionsMessage(): ServerMessage {
-    const drones = this.drones?.snapshot(this.state, Date.now()) ?? {};
-    this.dronesSent = JSON.stringify(drones);
+  private positionsMessage(): Extract<ServerMessage, { kind: 'positions' }> {
     return {
       kind: 'positions',
       run: this.state.startedAt,
       players: Object.fromEntries(this.positions),
-      drones,
+      drones: this.drones?.snapshot(this.state, Date.now()) ?? {},
     };
   }
 
