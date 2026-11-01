@@ -113,7 +113,8 @@ function clipPath(clips: WeakMap<Sight, Path2D>, sight: Sight): Path2D {
  * dark. And what the world shows — whatever lies where light falls now, in
  * a lit room, or fell earlier this run. The audience sees the whole lab,
  * and the drones' cones only; so does everybody once the lab is lit
- * `whole` again, as at the end of a run won.
+ * `whole` again, as at the end of a run won. Your lamp's light is seen
+ * from where you stand and laid from the lamp in your hands (`inHands`).
  */
 export function frameLight(scene: LightScene, powered: boolean, whole: boolean): FrameLight {
   const { map, spectator, clips } = scene;
@@ -132,7 +133,28 @@ export function frameLight(scene: LightScene, powered: boolean, whole: boolean):
     whole || (powered && (spectator || falling.has(`${x},${y}`)));
   const crewShown = (x: number, y: number): boolean =>
     everything || !powered || falling.has(`${Math.floor(x)},${Math.floor(y)}`);
-  return { ...lamps, shown, powered: inPower, crewShown };
+  const own = inHands(lamps.own, scene);
+  return { ...lamps, own, shown, powered: inPower, crewShown };
+}
+
+/**
+ * Your flashlight where you stand, facing where you face: what its light sees and lights is
+ * worked out from here — kept from frame to frame wherever you stand again (light.ts
+ * sightCache), as you pace over the same ground — however your step sways the lamp in your
+ * hands (`inHands`).
+ */
+function standingLamp(sim: Pick<Sim, 'self'>): Lamp {
+  const cone = { facing: sim.self.facing, halfAngle: CONE_HALF_ANGLE, reach: CONE_REACH };
+  return { x: sim.self.x, y: sim.self.y, glow: OWN_GLOW, beam: cone };
+}
+
+/**
+ * Your flashlight as the frame draws it: its light seen from where you stand (standingLamp),
+ * laid from the lamp in your hands, swaying with your step (ownLamp). A sight taken from the
+ * swaying lamp would be taken anew on every frame of a walk.
+ */
+function inHands(own: FrameLit | null, scene: LightScene): FrameLit | null {
+  return own === null ? null : { ...own, lamp: ownLamp(scene.sim, scene.reduced) };
 }
 
 /**
@@ -175,7 +197,8 @@ function ownRoom(sim: Sim, map: WorldMap): PoweredRoom | null {
 
 /**
  * Your flashlight: in your figure's hands, swaying with your step (figure.ts handLamp), a glow
- * all round and its cone where the lamp points.
+ * all round and its cone where the lamp points — where the frame lays its light from; what that
+ * light sees is taken from where you stand (`standingLamp`).
  */
 export function ownLamp(sim: Pick<Sim, 'self' | 'walkPhase'>, reduced: boolean): Lamp {
   const hand = handLamp(sim.self, sim.walkPhase, reduced);
@@ -190,7 +213,7 @@ export function ownLamp(sim: Pick<Sim, 'self' | 'walkPhase'>, reduced: boolean):
  */
 function darkLights(scene: LightScene, lit: LightUp): FrameLamps {
   const { sim, spectator } = scene;
-  const own = spectator ? null : lit(ownLamp(sim, scene.reduced));
+  const own = spectator ? null : lit(standingLamp(sim));
   const crew = spectator
     ? []
     : [...sim.others.values()].map((o) => lit({ x: o.rx, y: o.ry, glow: CREW_GLOW, beam: null }));
