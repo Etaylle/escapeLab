@@ -33,7 +33,8 @@ import {
  * it hears the keys; the D-pad's ◀ pings where the avatar looks (`onPadPing`, the world's) and
  * its ▶ opens the quick chat by the chat key. Over a dialog — the quick chat's wheel among them
  * (input/focus.ts) — the D-pad or a flick of the stick moves between its controls, A presses
- * one and B steps back (Esc); a book turns its pages left and right. L1 talks while held, Start
+ * one and B steps back (Esc); a book turns its pages left and right. L1 talks while held —
+ * straight to the voice (`onPadTalk`), so that it talks at a prompt holding the keys too —, Start
  * opens the settings, Select the Einsatzinfo. With `?fakepad=1` the walkthrough plays a
  * controller of its own through `window.__escapelab.pad`. Only a controller of the standard
  * mapping is read: another one's buttons and axes would mean something else.
@@ -73,8 +74,10 @@ interface Runtime {
   fake: FakePad | null;
   last: PadState;
   raf: number | null;
-  /** keys held down on the page for a button held — L1's talk key — by that button */
+  /** keys held down on the page for a button held — A on a control made to be held — by it */
   holding: Map<PadButton, string>;
+  /** L1 is held down: the voice talks until it is let go */
+  talking: boolean;
   /** a direction held over a dialog: which, and when it steps again */
   repeat: { dir: Direction; at: number } | null;
   /**
@@ -101,6 +104,23 @@ export function onPadPing(ping: () => void): () => void {
   return () => {
     if (worldPing === ping) {
       worldPing = null;
+    }
+  };
+}
+
+/** The voice's way to talk, for L1, while a voice is up; null else. */
+let padTalk: ((held: boolean) => void) | null = null;
+
+/**
+ * L1 talks by `talk` from now on — held down `talk(true)`, let go `talk(false)` — straight to the
+ * voice and not by the talk key, which a prompt holding the keyboard would type (the
+ * Serverraum's terminal, hooks.ts `claimKeys`). Returns what takes it off again.
+ */
+export function onPadTalk(talk: (held: boolean) => void): () => void {
+  padTalk = talk;
+  return () => {
+    if (padTalk === talk) {
+      padTalk = null;
     }
   };
 }
@@ -210,10 +230,21 @@ function hold(button: PadButton, name: string): void {
 }
 
 function letGo(button: PadButton): void {
+  if (button === 'l1') {
+    talk(false);
+  }
   const name = rt?.holding.get(button);
   if (rt !== null && name !== undefined) {
     rt.holding.delete(button);
     sendKey('keyup', name);
+  }
+}
+
+/** L1 held down or let go: the voice talks for as long as it is held (`onPadTalk`). */
+function talk(held: boolean): void {
+  if (rt !== null && rt.talking !== held) {
+    rt.talking = held;
+    padTalk?.(held);
   }
 }
 
@@ -269,7 +300,7 @@ function pressIn(button: PadButton): void {
   } else if (button === 'select') {
     tap(keys.info);
   } else if (button === 'l1') {
-    hold(button, keys.talk);
+    talk(true);
   } else if (button === PAD_PING || button === PAD_CHAT) {
     inWorldDpad(button);
   } else {
@@ -456,6 +487,7 @@ export function startPad(hooks: PadHooks, search: string): () => void {
     last: AT_REST,
     raf: null,
     holding: new Map(),
+    talking: false,
     repeat: null,
     walking: false,
     capture: null,
@@ -471,6 +503,7 @@ export function startPad(hooks: PadHooks, search: string): () => void {
     for (const button of [...(rt?.holding.keys() ?? [])]) {
       letGo(button);
     }
+    talk(false);
     window.removeEventListener('gamepadconnected', run);
     stopKeys();
     dropProbe?.();

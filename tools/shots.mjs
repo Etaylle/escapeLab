@@ -183,6 +183,11 @@
  * in the page (`self`, `footfalls`), and the run fails unless the sprint is about 1.3 times the
  * walk and its footfalls come faster. The Serverraum's terminal (servers-a.png) has to end its
  * table on BRAUCHT, what each service needs running first, and the rack has to show none of it.
+ * The first command at the terminal is typed as a player types it: the prompt has to hold the
+ * focus as the terminal opened, a click on its screen takes the focus away and the keys typed
+ * next have to land at the prompt all the same, Tab completes the command and then the service,
+ * and once Enter has sent it the prompt has to hold the focus again, or the run fails; in a
+ * Blackout run terminal-typing.png catches the line half typed, the cursor after it.
  *
  * The base URL is the Vite dev server by default (`pnpm dev`), or the
  * production server (`pnpm build && pnpm start`, http://localhost:3001) as in
@@ -5616,11 +5621,12 @@ async function captureServersConsoles({ terminal, rack }) {
 
 /**
  * One move of the plan at its console — a switch at the rack; a command at
- * the terminal, typed at the prompt where `typed`, else put together on the
- * keys and sent with ⏎ — and its effect in that console's view, or the
- * solve. Returns the move as the log says it; throws where nothing shows.
+ * the terminal, typed at the prompt where `typed` (`typeCommand`, shot as
+ * `shot` where one is named), else put together on the keys and sent with ⏎
+ * — and its effect in that console's view, or the solve. Returns the move as
+ * the log says it; throws where nothing shows.
  */
-async function serversMove({ terminal, rack }, move, typed) {
+async function serversMove({ terminal, rack }, move, typed, shot = null) {
   const index = terminal.seen.view.currentPuzzleIndex;
   const solved = () => terminal.seen.view.currentPuzzleIndex > index;
   if (move.by === 'partner') {
@@ -5636,9 +5642,7 @@ async function serversMove({ terminal, rack }, move, typed) {
   const modal = terminal.page.locator('.station-modal');
   const last = terminal.seen.view.puzzle?.log?.at(-1)?.n ?? 0;
   if (typed) {
-    await modal.locator('.servers-input').click();
-    await terminal.page.keyboard.type(`${cmd} ${service}`, { delay: 40 });
-    await terminal.page.keyboard.press('Enter');
+    await typeCommand(terminal, move.input, shot);
   } else {
     await modal.locator(`.servers-key[data-cmd="${cmd}"]`).click();
     await modal.locator(`.servers-key[data-service="${service}"]`).click();
@@ -5649,6 +5653,75 @@ async function serversMove({ terminal, rack }, move, typed) {
     throw new Error(`${terminal.name} sent "${cmd} ${service}", but the log took no line`);
   }
   return `A ${cmd} ${service}${typed ? ' (getippt)' : ''}`;
+}
+
+/** Whether the terminal's prompt holds the focus on `page`. */
+function promptFocused(page) {
+  return page.evaluate(
+    () => document.activeElement?.classList.contains('servers-input') === true,
+  );
+}
+
+/**
+ * A command typed at the terminal's prompt as a player types it — terminal-typing.png where
+ * `shot` names it. The prompt has to hold the focus as the terminal opened; a click on the
+ * screen's table takes the focus away, and the command's first letter typed then has to land at
+ * the prompt all the same; Tab completes the command, a letter at a time where the words agree
+ * no further, the service's first letter follows — the shot catches the line half typed, the
+ * cursor lit after it — and Tab the service; Enter sends it, and the prompt has to hold the
+ * focus again. The run fails where any of it does not hold.
+ */
+async function typeCommand(terminal, { cmd, service }, shot) {
+  const { page, name } = terminal;
+  const modal = page.locator('.station-modal');
+  const input = modal.locator('.servers-input');
+  const opened = await promptFocused(page);
+  await modal.locator('.servers-table thead th').first().click();
+  const lost = !(await promptFocused(page));
+  await page.keyboard.type(cmd.charAt(0), { delay: 40 });
+  const caught = (await input.inputValue()) === cmd.charAt(0);
+  const steps = [];
+  /** Tab, then the next letter where Tab stops short, until the line is `line`; whether it got there. */
+  const tabTo = async (line) => {
+    for (let i = 0; i < 12; i++) {
+      await page.keyboard.press('Tab');
+      const now = await input.inputValue();
+      steps.push(now);
+      if (now === line || !line.startsWith(now)) {
+        return now === line;
+      }
+      await page.keyboard.type(line.charAt(now.length), { delay: 40 });
+    }
+    return false;
+  };
+  const command = await tabTo(`${cmd} `);
+  await page.keyboard.type(service.charAt(0), { delay: 40 });
+  const half = await input.inputValue();
+  if (shot !== null) {
+    // The block cursor blinks: the shot waits for its lit half.
+    const lit = () => {
+      const cursor = document.querySelector('.station-modal .servers-cursor');
+      return cursor !== null && globalThis.getComputedStyle(cursor).opacity === '1';
+    };
+    await page.waitForFunction(lit, null, { timeout: 1500 }).catch(() => undefined);
+    await capture(page, shot);
+  }
+  const whole = await tabTo(`${cmd} ${service}`);
+  await page.keyboard.press('Enter');
+  await sleep(150);
+  const kept = await promptFocused(page);
+  const label = `${shot ?? 'terminal typing'} `.padEnd(19);
+  const ok = opened && lost && caught && command && whole && kept;
+  console.log(
+    `${label}${name}: the prompt ${opened ? 'held' : '!! did not hold'} the focus as it opened; ` +
+      `a click on the screen ${lost ? 'took it' : '!! left it there'}, „${cmd.charAt(0)}" typed ` +
+      `${caught ? 'went to the prompt' : '!! went elsewhere'}; Tab ${steps.map((s) => `„${s}"`).join(', ')}` +
+      `${shot === null ? '' : `; shot at „${half}"`}; Enter sent it, the prompt ` +
+      `${kept ? 'kept the focus' : '!! lost the focus'}`,
+  );
+  if (!ok) {
+    fail(`${shot ?? 'terminal typing'}: typing at the terminal's prompt did not hold`);
+  }
 }
 
 /**
@@ -5669,10 +5742,11 @@ async function captureServersSolved(player) {
 
 /**
  * A plan's moves played at both consoles, move by move, ~150 ms apart — the
- * first command typed at the prompt, the rest put together on the keys — and
- * the station solved by the last move, without an alarm.
+ * first command typed at the prompt (`typeCommand`, caught as `typingShot`
+ * where one is named), the rest put together on the keys — and the station
+ * solved by the last move, without an alarm.
  */
-async function playServers(crew, moves = SERVERS_PLAN.moves) {
+async function playServers(crew, moves = SERVERS_PLAN.moves, typingShot = null) {
   const { terminal } = crew;
   const index = terminal.seen.view.currentPuzzleIndex;
   const alarms = terminal.seen.view.alarms.count;
@@ -5680,7 +5754,7 @@ async function playServers(crew, moves = SERVERS_PLAN.moves) {
   const said = [];
   for (const move of moves) {
     const typed = move.by === 'operator' && !said.some((line) => line.startsWith('A '));
-    said.push(await serversMove(crew, move, typed));
+    said.push(await serversMove(crew, move, typed, typed ? typingShot : null));
     if (said.length < moves.length) {
       await sleep(150);
     }
@@ -6432,7 +6506,8 @@ async function readLocker(reader, locker) {
  * (servers-manual.png). Clear of the next emergency the guest takes the rack
  * — out in the open until the panels are up — and both open their panels at
  * once (servers-a.png, servers-b.png), the terminal has to open on the plan's
- * table, and the plan's moves are played at both consoles (`playServers`) —
+ * table, and the plan's moves are played at both consoles (`playServers`), the
+ * first command typed at the prompt (terminal-typing.png, `typeCommand`) —
  * at a moment no drone will look at the rack for a while: solved, the
  * station hides nobody, and the guest stands there until the next walk. An
  * emergency that drops the station anyway is weathered, and it is opened and
@@ -6461,7 +6536,7 @@ async function playServerraum(host, guest) {
       differs('terminal table', tableSaid(rows), tableSaid(BLACKOUT_PLAN.subsysteme.rows));
     }
     await clearOfDrones(guest, 9);
-    await playServers(crew, BLACKOUT_PLAN.subsysteme.moves);
+    await playServers(crew, BLACKOUT_PLAN.subsysteme.moves, 'terminal-typing.png');
   });
 }
 
