@@ -15,7 +15,7 @@ import {
 import { doorOpenness, type DoorMotion } from '../src/world/doors.js';
 import { drawCarryable, drawDropZone, drawSabotagePanel } from '../src/world/hazards.js';
 import { objectGlows } from '../src/world/render/darkness.js';
-import { draw } from '../src/world/render/objects.js';
+import { draw, tubeAt } from '../src/world/render/objects.js';
 import { callsOf, drawnAt, fakeCanvas, recording, strip } from './fakeCanvas.js';
 import { frameWith, lightWith, player, TILES } from './frames.js';
 import { mapWith, type Item, type Manual, type Plate } from './fixtures.js';
@@ -124,11 +124,13 @@ describe('objects — the lab’s things, in tile space', () => {
     expect(strip(drawnAt(log, 2.5, 1.5))).toEqual(
       recording((c) => drawLeverBox(c, { status: 'armed', pulse: 0.3, levers: 2 })),
     );
+    const kasten = { status: 'armed' as const, pulse: 0.3, console: 'b' as const };
     expect(strip(drawnAt(log, 7.5, 1.5))).toEqual(
-      recording((c) => drawStation(c, { status: 'armed', pulse: 0.3, console: 'b' })),
+      recording((c) => drawStation(c, { ...kasten, tube: tubeAt(frame, 7, 1) })),
     );
+    const done = { status: 'done' as const, pulse: 0.3, console: null };
     expect(strip(drawnAt(log, 6.5, 4.5))).toEqual(
-      recording((c) => drawStation(c, { status: 'done', pulse: 0.3, console: null })),
+      recording((c) => drawStation(c, { ...done, tube: tubeAt(frame, 6, 4) })),
     );
     expect(drawnAt(log, 8.5, 3.5)).toEqual([]);
   });

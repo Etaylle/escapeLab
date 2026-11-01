@@ -9,7 +9,17 @@
  */
 
 /** What a node is, as the census counts it. */
-export type NodeKind = 'oscillator' | 'buffer' | 'gain' | 'filter' | 'panner' | 'delay' | 'shaper';
+export type NodeKind =
+  | 'oscillator'
+  | 'buffer'
+  | 'media'
+  | 'gain'
+  | 'filter'
+  | 'panner'
+  | 'delay'
+  | 'shaper'
+  | 'compressor'
+  | 'convolver';
 
 /** The census of a context's graph. */
 export interface GraphCensus {
@@ -23,14 +33,17 @@ export interface GraphCensus {
 
 type Target = AudioNode | AudioParam;
 
-const FACTORIES: readonly (readonly [keyof BaseAudioContext, NodeKind])[] = [
+const FACTORIES: readonly (readonly [keyof AudioContext, NodeKind])[] = [
   ['createOscillator', 'oscillator'],
   ['createBufferSource', 'buffer'],
+  ['createMediaElementSource', 'media'],
   ['createGain', 'gain'],
   ['createBiquadFilter', 'filter'],
   ['createStereoPanner', 'panner'],
   ['createDelay', 'delay'],
   ['createWaveShaper', 'shaper'],
+  ['createDynamicsCompressor', 'compressor'],
+  ['createConvolver', 'convolver'],
 ];
 const PARAMS = ['gain', 'frequency', 'detune', 'Q', 'pan', 'delayTime', 'playbackRate'] as const;
 
@@ -98,7 +111,9 @@ function countPlaying(node: AudioScheduledSourceNode, kind: 'oscillator' | 'buff
 /** Makes every node `ctx` creates from now on count in the census. */
 export function countGraph(ctx: BaseAudioContext): void {
   for (const [factory, kind] of FACTORIES) {
-    const make = (ctx[factory] as (...args: unknown[]) => AudioNode).bind(ctx);
+    const own: unknown = Reflect.get(ctx, factory);
+    if (typeof own !== 'function') continue; // an offline context streams nothing
+    const make = (own as (...args: unknown[]) => AudioNode).bind(ctx);
     Object.assign(ctx, {
       [factory]: (...args: unknown[]) => {
         const node = make(...args);

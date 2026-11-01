@@ -26,6 +26,31 @@ import { MUSIC_IDS, SFX_IDS } from '../src/world/samples.js';
 /** What to do when a recording is missing or stale. */
 const REMEDY = 'render it on a Mac: pnpm --filter client sfx (docs/sound.md)';
 
+/**
+ * The entries whose recordings the user still has to render (they cost credits, which no agent
+ * may spend): until then each plays another's recording (`standIn`) or none. Render them in
+ * packages/client, then empty this list:
+ *
+ *   node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts \
+ *     --candidates 3 --only step-lino-1,step-lino-2,step-lino-3,step-steel-1,step-steel-2,\
+ *     step-steel-3,alarm-sting,door-close-1,door-close-2,drone-pass,hatch-open-done,ui-tick
+ */
+const AWAITING_RENDER: readonly string[] = [
+  'step-lino-1',
+  'step-lino-2',
+  'step-lino-3',
+  'step-steel-1',
+  'step-steel-2',
+  'step-steel-3',
+  'alarm-sting',
+  'door-close-1',
+  'door-close-2',
+  'drone-pass',
+  'hatch-open-done',
+  'ui-tick',
+];
+const awaiting = new Set(AWAITING_RENDER);
+
 const catalog = readCatalog();
 const CLIENT = join(CATALOG_FILE, '../..');
 const idsOf = (group: Group): string[] =>
@@ -60,29 +85,63 @@ function manifestOf(group: Group): Manifest {
   return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as Manifest) : {};
 }
 
+describe('the entries awaiting the user’s render', () => {
+  const sfx = manifestOf('sfx');
+  const pending = catalog.filter((entry) => {
+    const kept = manifestOf(groupOf(entry))[entry.id];
+    return kept === undefined || !upToDate(entry, kept);
+  });
+
+  it(`are ${pending.map((entry) => entry.id).join(', ') || 'none'}`, () => {
+    const unexpected = pending.filter((entry) => !awaiting.has(entry.id)).map((e) => e.id);
+    expect(unexpected, `no recording, or a stale one — ${REMEDY}`).toEqual([]);
+  });
+
+  it('play a recording of the catalog meanwhile where they name one, none of their own', () => {
+    for (const id of AWAITING_RENDER) {
+      const entry = catalog.find((each) => each.id === id);
+      expect(entry, `${id} is in the catalog`).toBeDefined();
+      const kept = sfx[id];
+      if (entry === undefined || kept === undefined || upToDate(entry, kept)) continue;
+      const borrowed = kept.standIn ?? '';
+      expect(sfx[borrowed]?.file, `${id} names the recording it borrows`).toBe(kept.file);
+      const own = existsSync(join(DIRS.sfx, `${id}.mp3`));
+      expect(own, `${id} has no file of its own yet`).toBe(false);
+    }
+  });
+});
+
 describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) => {
   const manifest = manifestOf(group);
   const entries = catalog.filter((entry) => groupOf(entry) === group);
+  const rendered = entries.filter((entry) => !awaiting.has(entry.id));
 
   it('have one each, made by ElevenLabs from the catalog’s request as it stands', () => {
     const filed = (id: string): boolean =>
       existsSync(join(DIRS[group], manifest[id]?.file ?? `${id}.missing`));
-    const missing = entries.filter((entry) => !filed(entry.id)).map((entry) => entry.id);
+    const missing = rendered.filter((entry) => !filed(entry.id)).map((entry) => entry.id);
     expect(missing, `no recording — ${REMEDY}`).toEqual([]);
-    const stale = entries
+    const stale = rendered
       .filter((entry) => {
         const kept = manifest[entry.id];
         return kept === undefined || !upToDate(entry, kept);
       })
       .map((entry) => entry.id);
     expect(stale, `made from another request — ${REMEDY}`).toEqual([]);
-    for (const entry of entries) {
+    for (const entry of rendered) {
       expect([manifest[entry.id]?.source, manifest[entry.id]?.loop]).toEqual([
         'elevenlabs',
         entry.loop,
       ]);
     }
-    expect(Object.keys(manifest).sort()).toEqual(entries.map((entry) => entry.id).sort());
+    const listed = Object.keys(manifest).filter((id) => !awaiting.has(id));
+    expect(listed.sort()).toEqual(rendered.map((entry) => entry.id).sort());
+  });
+
+  it('name each stem’s tempo as the catalog has it, the bars the music is counted in', () => {
+    for (const entry of entries) {
+      expect(manifest[entry.id]?.bpm, entry.id).toBe(entry.bpm);
+    }
   });
 
   it('last as long as asked for, start within themselves, and came back unclipped', () => {
@@ -91,7 +150,7 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
     const only = off.map(({ id }) => id).join(',');
     const remedy = `render them again: pnpm --filter client sfx -- --candidates 5 --only ${only}`;
     expect(said, `more than a fifth off their length — ${remedy}`).toEqual([]);
-    for (const entry of entries) {
+    for (const entry of rendered) {
       const kept = manifest[entry.id];
       expect(kept?.startMs ?? NaN).toBeGreaterThanOrEqual(0);
       expect(kept?.startMs ?? NaN, entry.id).toBeLessThan((kept?.ms ?? 0) / 4);
@@ -102,7 +161,7 @@ describe.each(['sfx', 'music'] as const)('the recordings in public/%s', (group) 
   });
 
   it('play no noise floor that is heard once their gain is applied', () => {
-    for (const entry of entries) {
+    for (const entry of rendered) {
       const { floor, rms } = manifest[entry.id] ?? {};
       expect([typeof floor, typeof rms], `${entry.id}: floor and RMS measured`).toEqual([
         'number',

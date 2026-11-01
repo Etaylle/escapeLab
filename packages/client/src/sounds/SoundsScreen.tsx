@@ -2,30 +2,35 @@ import { useEffect, useRef, useState } from 'react';
 import catalogJson from '../../audio/catalog.json';
 import { Icon } from '../screens/Icon.js';
 import { sharedAudio } from '../world/audio.js';
+import { closeStream, openStream, startStream } from '../world/audioStream.js';
 import {
+  loadSample,
   MUSIC_BASE,
   MUSIC_IDS,
-  preloadSamples,
-  sample,
   SFX_BASE,
   SFX_IDS,
+  type MusicId,
   type SampleEntry,
-  type SampleId,
+  type SfxId,
 } from '../world/samples.js';
 import { commandFor, ENV_FILE, listingOf, soundsOf, type CatalogSound } from './listing.js';
 import { SoundsBoard, type BoardActions } from './SoundsBoard.js';
 
 /**
- * The page at /sounds, reached by its address alone: every recording of the catalog, played
- * through the game's own loader at the loudness it brings it to (world/samples.ts) — a room's
- * bed or a loop round and round until it is stopped, everything else once — its prompt beside
- * it, and a box to tick where it should be made anew. The command for what is ticked goes to
- * the clipboard; the page itself asks no service for anything.
+ * The page at /sounds, reached by its address alone: every recording of the catalog, played as
+ * the game plays it at the loudness it brings it to — an effect or a bed through the game's own
+ * loader (world/samples.ts), decoded as it is first played, the music streamed from its file
+ * (world/audioStream.ts) — a room's bed, a loop or a stem round and round until it is stopped,
+ * everything else once; its prompt beside it, and a box to tick where it should be made anew.
+ * The command for what is ticked goes to the clipboard; the page itself asks no service for
+ * anything.
  */
 
 const catalog: readonly CatalogSound[] = soundsOf(catalogJson);
-const IDS = new Set<string>([...SFX_IDS, ...MUSIC_IDS]);
-const isSampleId = (id: string): id is SampleId => IDS.has(id);
+const EFFECTS = new Set<string>(SFX_IDS);
+const MUSIC = new Set<string>(MUSIC_IDS);
+const isEffect = (id: string): id is SfxId => EFFECTS.has(id);
+const isMusic = (id: string): id is MusicId => MUSIC.has(id);
 /** How loud the page plays a recording at its loudness: half way down, for headroom. */
 const AUDITION_LEVEL = 0.5;
 /** Where the page keeps the key file the command names, for the next visit. */
@@ -45,28 +50,86 @@ async function loadRecordings(): Promise<Record<string, SampleEntry>> {
   return Object.assign({}, ...lists) as Record<string, SampleEntry>;
 }
 
+/** A recording playing on the page, and how to stop it. */
+interface Audition {
+  stop(): void;
+}
+
 /**
- * Plays the recording `id` — round and round where `loop` says — at AUDITION_LEVEL, and calls
- * `ended` once it has stopped; null where it is not loaded or there is no Web Audio.
+ * Plays the effect `id` — round and round where `loop` says — at AUDITION_LEVEL once it is
+ * loaded, and calls `ended` once it has stopped; nothing where it cannot be had.
  */
-function audition(id: string, loop: boolean, ended: () => void): AudioBufferSourceNode | null {
-  const ctx = sharedAudio();
-  const recording = isSampleId(id) ? sample(id) : null;
-  if (ctx === null || recording === null) return null;
-  ctx.resume().catch(() => undefined); // the click that asked is the gesture it needs
-  const out = ctx.createGain();
-  out.gain.value = AUDITION_LEVEL;
-  out.connect(ctx.destination);
-  const source = ctx.createBufferSource();
-  source.buffer = recording.buffer;
-  source.loop = loop;
-  source.connect(out);
-  source.onended = () => {
-    out.disconnect();
-    ended();
+function playEffect(ctx: AudioContext, id: SfxId, loop: boolean, ended: () => void): Audition {
+  let source: AudioBufferSourceNode | null = null;
+  let stopped = false;
+  void loadSample(id).then((recording) => {
+    if (recording === null || stopped) {
+      if (!stopped) ended();
+      return;
+    }
+    const out = ctx.createGain();
+    out.gain.value = AUDITION_LEVEL;
+    out.connect(ctx.destination);
+    source = ctx.createBufferSource();
+    source.buffer = recording.buffer;
+    source.loop = loop;
+    source.connect(out);
+    source.onended = () => {
+      out.disconnect();
+      ended();
+    };
+    source.start(ctx.currentTime + 0.01, recording.start);
+  });
+  return {
+    stop: () => {
+      stopped = true;
+      source?.stop();
+    },
   };
-  source.start(ctx.currentTime + 0.01, recording.start);
-  return source;
+}
+
+/**
+ * Streams the piece of music `id` as its manifest names it — a stem round and round — at
+ * AUDITION_LEVEL times its gain, and calls `ended` once it has stopped.
+ */
+function playMusic(
+  ctx: AudioContext,
+  entry: SampleEntry,
+  loop: boolean,
+  ended: () => void,
+): Audition {
+  const stream = openStream(ctx, `${MUSIC_BASE}${entry.file}`, ctx.destination, 0);
+  stream.out.gain.value = AUDITION_LEVEL * entry.gain;
+  stream.element.loop = loop;
+  stream.element.addEventListener('ended', () => {
+    closeStream(stream);
+    ended();
+  });
+  startStream(stream, ctx, ctx.currentTime + 0.01);
+  return {
+    stop: () => {
+      closeStream(stream);
+      ended();
+    },
+  };
+}
+
+/**
+ * Plays the recording `id` — round and round where `loop` says — and calls `ended` once it has
+ * stopped; null where there is no Web Audio or no such recording.
+ */
+function audition(
+  id: string,
+  recordings: Readonly<Record<string, SampleEntry>>,
+  loop: boolean,
+  ended: () => void,
+): Audition | null {
+  const ctx = sharedAudio();
+  const entry = recordings[id];
+  if (ctx === null || entry === undefined) return null;
+  ctx.resume().catch(() => undefined); // the click that asked is the gesture it needs
+  if (isMusic(id)) return playMusic(ctx, entry, loop, ended);
+  return isEffect(id) ? playEffect(ctx, id, loop, ended) : null;
 }
 
 function readEnvFile(): string {
@@ -99,16 +162,12 @@ function toClipboard(text: string): Promise<boolean> {
 
 /** The board at work: the recordings behind its play buttons, its ticks, its command. */
 function Auditions({ recordings }: { recordings: Readonly<Record<string, SampleEntry>> }) {
-  const [, setLoaded] = useState(0);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [envFile, setEnvFile] = useState(readEnvFile);
   const [playing, setPlaying] = useState<string | null>(null);
   const [copied, setCopied] = useState<'copied' | 'refused' | null>(null);
-  const voice = useRef<AudioBufferSourceNode | null>(null);
-  useEffect(() => {
-    void preloadSamples().then(() => setLoaded((n) => n + 1));
-    return () => voice.current?.stop();
-  }, []);
+  const voice = useRef<Audition | null>(null);
+  useEffect(() => () => voice.current?.stop(), []);
   const ticked = catalog.filter((sound) => selected.has(sound.id)).map((sound) => sound.id);
   const command = commandFor(ticked, envFile);
   const stop = (): void => {
@@ -123,11 +182,11 @@ function Auditions({ recordings }: { recordings: Readonly<Record<string, SampleE
       stop();
       if (was === id) return;
       const loop = catalog.find((sound) => sound.id === id)?.loop === true;
-      const source = audition(id, loop, () => {
-        if (voice.current === source) stop();
+      const played: Audition | null = audition(id, recordings, loop, () => {
+        if (voice.current === played) stop();
       });
-      voice.current = source;
-      setPlaying(source === null ? null : id);
+      voice.current = played;
+      setPlaying(played === null ? null : id);
     },
     toggle: (id) =>
       setSelected((was) => {
@@ -149,7 +208,7 @@ function Auditions({ recordings }: { recordings: Readonly<Record<string, SampleE
     <SoundsBoard
       sections={listingOf(catalog, recordings)}
       playing={playing}
-      loaded={(id) => isSampleId(id) && sample(id) !== null}
+      loaded={(id) => recordings[id] !== undefined}
       selected={selected}
       envFile={envFile}
       command={command}

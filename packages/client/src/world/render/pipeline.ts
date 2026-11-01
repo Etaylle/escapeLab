@@ -1,3 +1,4 @@
+import * as aberration from './aberration.js';
 import * as actors from './actors.js';
 import { profiled, type Frame } from './frame.js';
 import * as glow from './glow.js';
@@ -12,7 +13,8 @@ import * as tiles from './tiles.js';
  * floor and walls, the lab's things, drones and crew, what glows and moves
  * — under the light where the WebGL layer lights the frame, so that its
  * light map shades it — the light, over it what glows and moves where the
- * Canvas pass lights it, the minimap, and what lies over it all. Every pass
+ * Canvas pass lights it, the minimap, what lies over it all, and an alarm's
+ * knock to the colours of the finished picture. Every pass
  * draws from the frame alone; each is timed where the page asked for the
  * profile (profile.ts).
  */
@@ -26,4 +28,5 @@ export function drawFrame(ctx: CanvasRenderingContext2D, frame: Frame): void {
   profiled(kit, 'glow', ctx, () => glow.draw(ctx, frame));
   profiled(kit, 'hud', ctx, () => hud.draw(ctx, frame));
   profiled(kit, 'overlays', ctx, () => overlays.draw(ctx, frame));
+  profiled(kit, 'aberration', ctx, () => aberration.draw(ctx, frame));
 }

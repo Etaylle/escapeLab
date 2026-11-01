@@ -6,7 +6,9 @@
  *
  * One instrumental bed of CUE_MS — dark, low, industrial, slowly building, as CUE_PROMPT asks —
  * through the official SDK, @elevenlabs/elevenlabs-js, into public/intro/title.mp3, and its list
- * public/intro/manifest.json { file, ms, hash }. `hash` is over what makes the cue — the whole
+ * public/intro/manifest.json { file, ms, peak, hash }: its length, its peak over both channels —
+ * the game streams the cue rather than decoding it, so it reads its level here — and `hash`,
+ * over what makes the cue — the whole
  * request: the prompt, the length, the format, instrumental — so that a run finding the same
  * hash and its file composes nothing anew, and a changed prompt composes it again. Before it
  * composes, it reads the account's credits (`client.user.subscription.get()`) and stops where
@@ -14,15 +16,17 @@
  * environment, as the voice script's does (elevenlabs.ts `loadApiKey`), and is printed nowhere.
  *
  * Runs on Node's own TypeScript (type stripping), as the voice script does, and measures the
- * file with macOS's afinfo.
+ * file with macOS's afconvert (scripts/sfx.ts `parseWav`, `loudnessOf`).
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ElevenLabs } from '@elevenlabs/elevenlabs-js';
 import { loadApiKey } from './elevenlabs.ts';
+import { loudnessOf, parseWav } from './sfx.ts';
 
 /** What the cue is asked to be: a bed under an announcement, no tune to talk over. */
 export const CUE_PROMPT =
@@ -48,7 +52,15 @@ export const INTRO_DIR = resolve(HERE, '../public/intro');
 export interface CueEntry {
   file: string;
   ms: number;
+  /** its peak over both channels, linear: the game brings it to its level by it */
+  peak: number;
   hash: string;
+}
+
+/** How a file measures: how long it plays, ms, and its peak over every channel. */
+export interface CueMeasure {
+  ms: number;
+  peak: number;
 }
 
 /** What the script asks of the SDK's client: the account's credits, and music. */
@@ -89,8 +101,8 @@ export async function creditsLeft(client: CueClient): Promise<number> {
 /** What the script works on: the folder, how a file is measured, where it reports. */
 export interface CueRun {
   readonly dir: string;
-  /** how long the file at a path plays, ms */
-  readonly measure: (path: string) => number;
+  /** how long the file at a path plays and its peak */
+  readonly measure: (path: string) => CueMeasure;
   readonly log: (line: string) => void;
   readonly dryRun: boolean;
 }
@@ -133,21 +145,25 @@ export async function composeCue(
   mkdirSync(run.dir, { recursive: true });
   const path = join(run.dir, CUE_FILE);
   writeFileSync(path, Buffer.from(await new Response(audio).arrayBuffer()));
-  const entry: CueEntry = { file: CUE_FILE, ms: run.measure(path), hash };
+  const { ms, peak } = run.measure(path);
+  const entry: CueEntry = { file: CUE_FILE, ms, peak: Number(peak.toPrecision(4)), hash };
   writeFileSync(join(run.dir, 'manifest.json'), `${JSON.stringify(entry, null, 2)}\n`);
   const after = await creditsLeft(client);
   run.log(`intro cue: ${entry.ms} ms into ${path}, ${left - after} credits spent, ${after} left`);
   return 'composed';
 }
 
-/** How long the file at `path` plays, ms, as afinfo estimates it. */
-function afinfoMs(path: string): number {
-  const info = execFileSync('afinfo', [path], { encoding: 'utf8' });
-  const seconds = /estimated duration:\s*([\d.]+)/.exec(info)?.[1];
-  if (seconds === undefined) {
-    throw new Error(`intro cue: afinfo gave no duration for ${path}`);
+/** The file at `path`'s length and peak, decoded by afconvert into a folder of its own. */
+function afconvertMeasure(path: string): CueMeasure {
+  const scratch = mkdtempSync(join(tmpdir(), 'escapelab-cue-'));
+  const wav = join(scratch, 'cue.wav');
+  try {
+    execFileSync('afconvert', ['-f', 'WAVE', '-d', 'LEI16', path, wav]);
+    const { ms, peak } = loudnessOf(parseWav(readFileSync(wav)));
+    return { ms, peak };
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
   }
-  return Math.round(Number(seconds) * 1000);
 }
 
 /** The SDK's client, which takes the key from the environment and leaves retrying to us. */
@@ -162,7 +178,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(
       loadApiKey();
       const run = {
         dir: INTRO_DIR,
-        measure: afinfoMs,
+        measure: afconvertMeasure,
         log: (line: string) => console.log(line),
         dryRun: process.argv.includes('--dry-run'),
       };

@@ -25,6 +25,7 @@ import {
   type FakeGain,
   type FakeNode,
 } from './fakeGraph.js';
+import { elements, fakeMedia, type FakeAudio } from './fakeMedia.js';
 
 /** A client of its own: credits as given, and music that is three bytes; it counts its calls. */
 function fakeClient(left: number, spend = 1200) {
@@ -53,7 +54,8 @@ function fakeClient(left: number, spend = 1200) {
 /** A run of the script into a folder of its own, measuring every file at 40.1 s. */
 function runIn(dir = mkdtempSync(join(tmpdir(), 'intro-cue-')), dryRun = false) {
   const lines: string[] = [];
-  const run: CueRun = { dir, measure: () => 40_100, log: (line) => lines.push(line), dryRun };
+  const measure = (): { ms: number; peak: number } => ({ ms: 40_100, peak: 0.84457 });
+  const run: CueRun = { dir, measure, log: (line) => lines.push(line), dryRun };
   return { run, lines, dir };
 }
 
@@ -87,7 +89,8 @@ describe('composing the cue', () => {
     expect(calls.compose).toEqual([cueRequest()]);
     expect([...readFileSync(join(dir, CUE_FILE))]).toEqual([1, 2, 3]);
     const entry = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8')) as CueEntry;
-    expect(entry).toEqual({ file: CUE_FILE, ms: 40_100, hash: cueHash(cueRequest()) });
+    const hash = cueHash(cueRequest());
+    expect(entry).toEqual({ file: CUE_FILE, ms: 40_100, peak: 0.8446, hash });
     expect(lines.at(-1)).toMatch(/1200 credits spent, 127800 left$/);
   });
 
@@ -99,7 +102,7 @@ describe('composing the cue', () => {
     expect(await composeCue(again.client, run)).toBe('kept');
     expect(again.calls).toEqual({ compose: [], credits: 0 });
     // A list naming another prompt's cue is stale: composed anew.
-    const stale: CueEntry = { file: CUE_FILE, ms: 40_100, hash: 'aaaaaaaaaaaa' };
+    const stale: CueEntry = { file: CUE_FILE, ms: 40_100, peak: 0.8, hash: 'aaaaaaaaaaaa' };
     writeFileSync(join(dir, 'manifest.json'), JSON.stringify(stale));
     expect(await composeCue(client, run)).toBe('composed');
     expect(calls.compose).toHaveLength(2);
@@ -127,22 +130,24 @@ describe('composing the cue', () => {
 });
 
 describe('the cue in the game', () => {
-  const MANIFEST: CueManifest = { file: 'title.mp3', ms: 40_000, hash: 'abcdefabcdef' };
+  const MANIFEST: CueManifest = { file: 'title.mp3', ms: 40_000, peak: 0.8, hash: 'abcdefabcdef' };
   let found = true;
 
   beforeEach(() => {
     fakeGraph();
+    fakeMedia();
+    vi.useFakeTimers();
     found = true;
     vi.stubGlobal(
       'fetch',
       vi.fn(() => {
         const json = (): Promise<CueManifest> => Promise.resolve(MANIFEST);
-        const arrayBuffer = (): Promise<ArrayBuffer> => Promise.resolve(new ArrayBuffer(8));
-        return Promise.resolve({ ok: found, status: found ? 200 : 404, json, arrayBuffer });
+        return Promise.resolve({ ok: found, status: found ? 200 : 404, json });
       }),
     );
   });
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -150,80 +155,87 @@ describe('the cue in the game', () => {
     vi.resetModules();
     const cue = await import('../src/world/intro/cue.js');
     const audio = await import('../src/world/audio.js');
+    audio.audioEngine();
     return { cue, audio };
   }
 
-  const settle = async (): Promise<void> => {
-    for (let i = 0; i < 20; i++) await Promise.resolve();
+  /** The cue's list fetched, and its element played, a lookahead on. */
+  const settle = (): Promise<void> => vi.advanceTimersByTimeAsync(10).then(() => undefined);
+
+  /** The level the cue's element comes in at: its stream's own gain. */
+  const levelOf = (element: FakeAudio | undefined): FakeGain => {
+    const media = lastContext()
+      .all<FakeNode & { mediaElement: unknown }>('media')
+      .find((node) => node.mediaElement === element);
+    return media?.outputs[0] as FakeGain;
   };
 
-  const playing = (): FakeBufferSource[] =>
-    lastContext()
-      .all<FakeBufferSource>('buffer')
-      .filter((source) => source.startedAt !== null);
-
-  it('plays from where the opening stands, low, into the music, as one voice', async () => {
+  it('streams from where the opening stands, low, into the music, as one voice', async () => {
     const { cue, audio } = await fresh();
-    audio.audioEngine();
-    // The fake decodes every file to 1.5 s: an opening 1 s in still has some of it to hear.
     cue.startCue(Date.now() - 1000);
     await settle();
-    const [bed] = playing();
-    expect(bed).toBeDefined();
+    const [element] = elements;
+    expect(element?.src).toBe('/intro/title.mp3');
+    expect(element?.currentTime).toBe(1); // where the opening stands: no beat to keep
+    expect(element?.plays).toBe(1);
     expect(audio.inUse().voice).toBe(1);
-    const level = bed?.outputs[0] as FakeGain;
-    // The fake decodes to a peak of 0.45: the cue comes in at CUE_PEAK.
-    expect(level.gain.value).toBeCloseTo(CUE_PEAK / 0.45, 6);
-    const engine = audio.audioEngine();
-    expect(downstream(bed as unknown as FakeNode).has(engine?.music as unknown as FakeNode)).toBe(
-      true,
-    );
+    // Its list names its peak over both channels: the cue comes in at CUE_PEAK.
+    expect(levelOf(element).gain.value).toBeCloseTo(CUE_PEAK / 0.8, 9);
+    const engine = audio.audioEngine() as unknown as { music: FakeNode };
+    expect(downstream(levelOf(element) as unknown as FakeNode).has(engine.music)).toBe(true);
+    expect(lastContext().all<FakeBufferSource>('buffer')).toEqual([]); // nothing decoded
     expect(cue.cueProbe().playing).toBe(true);
   });
 
   it('fades out where the player skips, and stops dead at the blackout', async () => {
     const { cue, audio } = await fresh();
-    audio.audioEngine();
     cue.startCue(Date.now());
     await settle();
-    const [bed] = playing();
-    const level = bed?.outputs[0] as FakeGain;
+    const [first] = elements;
     cue.stopCue(CUE_FADE_S);
-    expect(level.gain.ramps()).toEqual([[0, expect.closeTo(10 + CUE_FADE_S, 9)]]);
-    expect(bed?.stoppedAt).toBeCloseTo(10 + CUE_FADE_S + 0.05, 9);
+    expect(levelOf(first).gain.ramps()).toEqual([[0, expect.closeTo(10 + CUE_FADE_S, 9)]]);
     expect(cue.cueProbe().playing).toBe(false);
+    await vi.advanceTimersByTimeAsync((CUE_FADE_S + 0.05) * 1000);
+    expect([first?.src, audio.inUse().voice]).toEqual(['', 0]); // let go, its voice back
     cue.startCue(Date.now());
     await settle();
-    const second = playing()[1];
+    const second = elements[1];
     cue.stopCue(0);
-    expect(second?.stoppedAt).toBeLessThan(10.1);
+    expect(levelOf(second).gain.ramps()).toEqual([[0, expect.closeTo(10.02, 9)]]);
+  });
+
+  it('lets its stream go once it has played through', async () => {
+    const { cue, audio } = await fresh();
+    cue.startCue(Date.now());
+    await settle();
+    elements[0]?.fire('ended');
+    expect([elements[0]?.src, audio.inUse().voice]).toEqual(['', 0]);
+    cue.stopCue(CUE_FADE_S); // nothing left to stop
+    expect(audio.inUse().voice).toBe(0);
   });
 
   it('plays nothing for an opening further in than the cue is long', async () => {
-    const { cue, audio } = await fresh();
-    audio.audioEngine();
-    cue.startCue(Date.now() - 2000);
+    const { cue } = await fresh();
+    cue.startCue(Date.now() - 41_000);
     await settle();
-    expect(playing()).toEqual([]);
+    expect(elements).toEqual([]);
   });
 
   it('plays nothing where there is no cue, and never throws', async () => {
     found = false;
-    const { cue, audio } = await fresh();
-    audio.audioEngine();
+    const { cue } = await fresh();
     expect(() => cue.startCue(Date.now())).not.toThrow();
     await settle();
-    expect(playing()).toEqual([]);
+    expect(elements).toEqual([]);
     expect(() => cue.stopCue(0)).not.toThrow();
   });
 
-  it('plays nothing for an opening skipped before its cue had loaded', async () => {
-    const { cue, audio } = await fresh();
-    audio.audioEngine();
+  it('plays nothing for an opening skipped before its list had come', async () => {
+    const { cue } = await fresh();
     cue.startCue(Date.now());
     cue.stopCue(CUE_FADE_S);
     await settle();
-    expect(playing()).toEqual([]);
+    expect(elements).toEqual([]);
   });
 });
 
@@ -231,10 +243,12 @@ const shipped = join(INTRO_DIR, 'manifest.json');
 
 describe('the cue the game ships', () => {
   it.skipIf(!existsSync(shipped))(
-    'is the cue this prompt makes, some 40 s long, its file there and under 1 MB',
+    'is the cue this prompt makes, some 40 s long, its peak named, under 1 MB',
     () => {
       const entry = JSON.parse(readFileSync(shipped, 'utf8')) as CueEntry;
       expect(entry.hash).toBe(cueHash(cueRequest()));
+      expect(entry.peak).toBeGreaterThan(0.1);
+      expect(entry.peak).toBeLessThanOrEqual(1);
       expect(entry.ms).toBeGreaterThan(CUE_MS - 3000);
       expect(entry.ms).toBeLessThan(CUE_MS + 3000);
       expect(statSync(join(INTRO_DIR, entry.file)).size).toBeLessThan(1024 * 1024);

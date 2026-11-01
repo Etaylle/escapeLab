@@ -2,7 +2,6 @@ import {
   audioEngine,
   biquad,
   chain,
-  fadeTo,
   gain,
   LOOKAHEAD,
   noiseLoop,
@@ -10,10 +9,10 @@ import {
   outlet,
   playingEngine,
   startSample,
-  still,
   type Engine,
-  type Fade,
 } from './audio.js';
+import { hold, letGo } from './audioMemory.js';
+import { duck, unduck } from './mix.js';
 import { sample, type SfxId } from './samples.js';
 
 /**
@@ -21,13 +20,14 @@ import { sample, type SfxId } from './samples.js';
  * (scripts/voice.ts, public/voice/) and played as a handset hears them — band-limited to
  * 300 Hz–3.4 kHz, lightly saturated, over a faint bed of static, keyed with a squelch at either
  * end, the run's first line opened with the Leitstelle's own squelch, the squelches recordings
- * of their own (samples.ts) — while the beds and the music duck 6 dB under it (audio.ts, the
- * duck bus). The banner shows the line while it speaks;
- * a line without a recording, as a custom mission's, still only chirps (audio.ts
- * `radioChirp`). At a run's start the mission's lines are fetched and decoded, so that a line
- * plays the moment it is shown; a line that comes over the air is fetched then too, where it
- * was not yet. Nothing that plays throws — only the harness's offline render may reject — and
- * nothing plays while the context is held back.
+ * of their own (samples.ts) — while the music goes 8 dB and the beds 4 dB down under it (mix.ts
+ * `duck`). The banner shows the line while it speaks; a line without a recording, as a custom
+ * mission's, still only chirps (audio.ts `radioChirp`). At a run's start the mission's lines are
+ * fetched and kept as they came, compressed, and the run's opening line decoded; any other line
+ * is decoded as it comes over the air — at 22.05 kHz in one channel, a few tens of milliseconds —
+ * and let go once it has been spoken, so that a page keeps a line or two decoded, never a
+ * mission's (audioMemory.ts). Nothing that plays throws — only the harness's offline render may
+ * reject — and nothing plays while the context is held back.
  */
 
 /** Where the recordings lie, and their list: { [id]: { text, ms, missions, opens?, file } }. */
@@ -72,8 +72,6 @@ export const SPEECH_PEAK = 0.9;
 export const NOISE_BED = 10 ** (-33 / 20);
 /** The voice at the master gain: over the beds and the music, under the crew's own voices. */
 const VOICE_LEVEL = 0.12;
-/** The beds and the music while it speaks: −6 dB. */
-export const DUCK_LEVEL = 10 ** (-6 / 20);
 /** The squelch before the speech, s; the tail after it. */
 export const KEY_S = 0.07;
 export const TAIL_S = 0.16;
@@ -144,6 +142,13 @@ export interface Clip {
   readonly peak: number;
 }
 
+/**
+ * The rate a line is decoded at, Hz: its one channel kept to what the radio's band (3.4 kHz) and
+ * the loudspeakers' (5 kHz) let through, with room to spare — a quarter of the memory of 44.1 kHz
+ * in two channels.
+ */
+export const VOICE_RATE = 22050;
+
 /** The line on the air: from when to when it speaks, audio time, and how to cut it short. */
 interface Speaking {
   readonly id: string;
@@ -154,7 +159,8 @@ interface Speaking {
 
 /**
  * What the voice has loaded: the manifest by line, the recordings' files and lengths by id, the
- * openers, the recordings by id.
+ * openers, each recording's file as fetched — compressed, a few kB a second — and the lines
+ * decoded now.
  */
 const store: {
   manifest: Promise<VoiceManifest | null> | null;
@@ -162,7 +168,8 @@ const store: {
   files: Map<string, string>;
   ms: Map<string, number>;
   openers: Set<string>;
-  loading: Map<string, Promise<void>>;
+  bytes: Map<string, Promise<ArrayBuffer | null>>;
+  decoding: Map<string, Promise<Clip | null>>;
   clips: Map<string, Clip>;
 } = {
   manifest: null,
@@ -170,14 +177,16 @@ const store: {
   files: new Map(),
   ms: new Map(),
   openers: new Set(),
-  loading: new Map(),
+  bytes: new Map(),
+  decoding: new Map(),
   clips: new Map(),
 };
 
 let speaking: Speaking | null = null;
 let lastId: string | null = null;
 let lastOpened = false;
-let duck: Fade = still(1);
+/** The line asked for last, whose decoding a newer ask makes moot. */
+let asked: string | null = null;
 
 /** The manifest, fetched once; null where there is none to be had (it is tried again later). */
 function manifest(): Promise<VoiceManifest | null> {
@@ -201,30 +210,58 @@ function manifest(): Promise<VoiceManifest | null> {
   return store.manifest;
 }
 
-/**
- * Fetches and decodes the recording `id` from the file its entry names, once; a failure lets a
- * later call try again.
- */
-function load(id: string): Promise<void> {
-  const known = store.loading.get(id);
+/** The file of the recording `id`, fetched once and kept as it came; null where it failed. */
+function bytesOf(id: string): Promise<ArrayBuffer | null> {
+  const known = store.bytes.get(id);
   if (known !== undefined) return known;
-  const engine = audioEngine();
   const file = store.files.get(id);
-  if (engine === null || file === undefined) return Promise.resolve();
-  const loading = fetch(`${VOICE_BASE}${file}`)
+  if (file === undefined) return Promise.resolve(null);
+  const fetching = fetch(`${VOICE_BASE}${file}`)
     .then((res) => {
       if (!res.ok) throw new Error(`voice ${id}: ${res.status}`);
       return res.arrayBuffer();
     })
-    .then((bytes) => engine.ctx.decodeAudioData(bytes))
-    .then((buffer) => {
-      store.clips.set(id, { buffer, peak: peakOf(buffer) });
-    })
     .catch(() => {
-      store.loading.delete(id);
+      store.bytes.delete(id);
+      return null;
     });
-  store.loading.set(id, loading);
-  return loading;
+  store.bytes.set(id, fetching);
+  return fetching;
+}
+
+/**
+ * The recording `id` decoded at VOICE_RATE in one channel, once — from its file as fetched,
+ * which decoding leaves whole — and counted (audioMemory.ts) until it is let go (`dropLine`).
+ */
+function decodeLine(id: string): Promise<Clip | null> {
+  const known = store.decoding.get(id);
+  if (known !== undefined) return known;
+  const decoding = bytesOf(id)
+    .then((bytes) => {
+      if (bytes === null) return null;
+      return new OfflineAudioContext(1, 1, VOICE_RATE).decodeAudioData(bytes.slice(0));
+    })
+    .then((buffer) => {
+      if (buffer === null || store.decoding.get(id) !== decoding) return null;
+      const clip = { buffer, peak: peakOf(buffer) };
+      store.clips.set(id, clip);
+      hold(`voice:${id}`, 'voice', buffer);
+      return clip;
+    })
+    .catch(() => null)
+    .then((clip) => {
+      if (clip === null && store.decoding.get(id) === decoding) store.decoding.delete(id);
+      return clip;
+    });
+  store.decoding.set(id, decoding);
+  return decoding;
+}
+
+/** The decoded recording `id` let go: what it held is free; its file stays for another time. */
+function dropLine(id: string): void {
+  store.decoding.delete(id);
+  store.clips.delete(id);
+  letGo(`voice:${id}`);
 }
 
 /** The loudest sample of a recording's first channel; 1 for a silent one. */
@@ -235,12 +272,17 @@ function peakOf(buffer: AudioBuffer): number {
   return peak > 0 ? peak : 1;
 }
 
-/** At a run's start: every line of the mission `missionId` is fetched and decoded. */
+/**
+ * At a run's start: every line of the mission `missionId` is fetched — kept compressed — and the
+ * line that opens the run decoded, so that it comes the moment the lights fail.
+ */
 export function preloadVoice(missionId: string): void {
   manifest()
     .then((loaded) => {
       for (const [id, entry] of Object.entries(loaded ?? {})) {
-        if (entry.missions.includes(missionId)) void load(id);
+        if (!entry.missions.includes(missionId)) continue;
+        if (entry.opens === true) void decodeLine(id);
+        else void bytesOf(id);
       }
     })
     .catch(() => undefined);
@@ -254,7 +296,7 @@ export function voiceReady(): Promise<void> {
   return manifest().then(() => undefined);
 }
 
-/** The decoded recording of the line `text`, where it is loaded; null otherwise. */
+/** The decoded recording of the line `text`, where it is decoded; null otherwise. */
 export function clipOf(text: string): Clip | null {
   const id = store.ids.get(text);
   return id === undefined ? null : (store.clips.get(id) ?? null);
@@ -266,36 +308,48 @@ export function recordedMs(text: string): number | null {
   return id === undefined ? null : (store.ms.get(id) ?? null);
 }
 
-/** Lines that just came over the air: any with a recording not loaded yet is fetched now. */
+/**
+ * Lines about to be heard — just come over the air, or the loudspeakers' — each decoded now
+ * where it is not yet: its file is here already, or fetched first.
+ */
 export function preloadLines(texts: readonly string[]): void {
   if (texts.length === 0) return;
   manifest()
     .then(() => {
       for (const text of texts) {
         const id = store.ids.get(text);
-        if (id !== undefined) void load(id);
+        if (id !== undefined) void decodeLine(id);
       }
     })
     .catch(() => undefined);
 }
 
+/** The line `text` heard and done with (the loudspeakers', pa.ts): what it held let go. */
+export function releaseLine(text: string): void {
+  const id = store.ids.get(text);
+  if (id !== undefined && speaking?.id !== id) dropLine(id);
+}
+
 /**
- * Speaks the line `text` over the radio, now, cutting short one still on the air: a line that
- * opens a run after the Leitstelle's opening squelch. True where it does; false where it has
- * no recording ready or nothing can play — the caller chirps then.
+ * Speaks the line `text` over the radio, now — or as soon as it is decoded — cutting short one
+ * still on the air: a line that opens a run after the Leitstelle's opening squelch; once spoken,
+ * it is let go. True where it speaks; false where it has no recording or nothing can play — the
+ * caller chirps then.
  */
 export function sayLine(text: string): boolean {
   try {
     const id = store.ids.get(text);
-    const clip = id === undefined ? undefined : store.clips.get(id);
     const engine = playingEngine();
-    if (id === undefined || clip === undefined || engine === null) return false;
-    const now = engine.ctx.currentTime;
-    const opens = store.openers.has(id);
-    speaking?.cut(now);
-    speaking = speak(engine, id, clip, now + LOOKAHEAD, opens);
-    lastId = id;
-    lastOpened = opens;
+    if (id === undefined || engine === null || !store.files.has(id)) return false;
+    asked = id;
+    const clip = store.clips.get(id);
+    if (clip !== undefined) {
+      onAir(engine, id, clip);
+    } else {
+      void decodeLine(id).then((decoded) => {
+        if (decoded !== null && asked === id) onAir(engine, id, decoded);
+      });
+    }
     return true;
   } catch {
     // Deliberately silent: the banner shows the line as well.
@@ -303,16 +357,34 @@ export function sayLine(text: string): boolean {
   }
 }
 
+/** The line `id` on the air from now, cutting short one still on it; let go once it ends. */
+function onAir(engine: Engine, id: string, clip: Clip): void {
+  const now = engine.ctx.currentTime;
+  const opens = store.openers.has(id);
+  speaking?.cut(now);
+  const line = speak(engine, id, clip, now + LOOKAHEAD, opens);
+  speaking = line;
+  lastId = id;
+  lastOpened = opens;
+  setTimeout(() => {
+    if (speaking !== line) dropLine(id);
+    else if (engine.ctx.currentTime >= line.end) dropLine(id);
+  }, (line.end - now + TAIL_S + 0.2) * 1000);
+}
+
 /**
  * How long the line `text` keeps the air when it is spoken, ms: the Leitstelle's opening where
- * it opens a run, the key, its recording, the tail. Null where it has no recording ready.
+ * it opens a run, the key, its recording — as decoded, or by the manifest — the tail. Null where
+ * it has no recording.
  */
 export function airtimeMs(text: string): number | null {
   const id = store.ids.get(text);
-  const clip = id === undefined ? undefined : store.clips.get(id);
-  if (id === undefined || clip === undefined) return null;
+  if (id === undefined) return null;
+  const clip = store.clips.get(id);
+  const seconds = clip?.buffer.duration ?? (store.ms.get(id) ?? NaN) / 1000;
+  if (!Number.isFinite(seconds)) return null;
   const lead = (store.openers.has(id) ? OPEN_S : 0) + KEY_S;
-  return Math.round((lead + clip.buffer.duration + TAIL_S) * 1000);
+  return Math.round((lead + seconds + TAIL_S) * 1000);
 }
 
 /**
@@ -321,7 +393,7 @@ export function airtimeMs(text: string): number | null {
  */
 function speak(engine: Engine, id: string, clip: Clip, at: number, opens: boolean): Speaking {
   const { ctx } = engine;
-  const radio = radioChain(ctx, engine.radio, VOICE_LEVEL);
+  const radio = radioChain(ctx, engine.voice, VOICE_LEVEL);
   const keyed = opens ? at + OPEN_S : at;
   const start = keyed + KEY_S;
   const end = start + clip.buffer.duration;
@@ -336,11 +408,11 @@ function speak(engine: Engine, id: string, clip: Clip, at: number, opens: boolea
   const opening = opens ? openChannel(ctx, keys, at) : [];
   const sources = [speech, bed, ...opening, ...squelch(ctx, keys, keyed, end)];
   onAllEnded(sources, () => radio.out.disconnect());
-  duckUnder(engine, opens ? at : start, end);
+  duck(engine, 'voice', opens ? at : start, end, ctx.currentTime);
   const cut = (when: number): void => {
     radio.out.gain.setTargetAtTime(0, when, 0.02);
     for (const source of sources) source.stop(when + 0.1);
-    unduck(engine, when);
+    unduck(engine, 'voice', when, ctx.currentTime);
   };
   return { id, start, end, cut };
 }
@@ -380,21 +452,6 @@ function openChannel(
   at: number,
 ): AudioScheduledSourceNode[] {
   return keySound(ctx, 'radio-open', dest, at);
-}
-
-/** The beds and the music go down 6 dB for the speech from `start` and come back after `end`. */
-function duckUnder(engine: Engine, start: number, end: number): void {
-  const param = engine.duck.gain;
-  const now = engine.ctx.currentTime;
-  fadeTo(param, duck, now, [now, Math.max(now + 0.08, start)], DUCK_LEVEL);
-  param.setValueAtTime(DUCK_LEVEL, end);
-  param.linearRampToValueAtTime(1, end + 0.4);
-  duck = { from: DUCK_LEVEL, to: 1, start: end, end: end + 0.4 };
-}
-
-/** The beds and the music come back from `at`: the line was cut short. */
-function unduck(engine: Engine, at: number): void {
-  duck = fadeTo(engine.duck.gain, duck, engine.ctx.currentTime, [at, at + 0.3], 1);
 }
 
 /** Cuts a line still on the air: the game screen is gone. */

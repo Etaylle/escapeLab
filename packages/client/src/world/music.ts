@@ -1,4 +1,5 @@
 import {
+  alarmSting,
   audioEngine,
   biquad,
   claim,
@@ -9,17 +10,31 @@ import {
   outlet,
   playingEngine,
   release,
-  startSample,
   still,
   type Engine,
   type Fade,
 } from './audio.js';
-import { sample, type Sample } from './samples.js';
+import {
+  closeStream,
+  openStream,
+  rewindStream,
+  startStream,
+  steer,
+  type Stream,
+} from './audioStream.js';
+import {
+  MUSIC_BASE,
+  musicEntry,
+  musicListed,
+  RETRY_MS,
+  type MusicId,
+  type SampleEntry,
+} from './samples.js';
 
 /**
  * Music that breathes: three recorded stems (samples.ts: Eleven Music composed them, all three
- * in A minor at 90 bpm, so that one blends into the next), between which one pressure value,
- * 0 to 1, crossfades —
+ * in A minor at the one tempo the catalog gives them, so that one blends into the next), between
+ * which one pressure value, 0 to 1, crossfades —
  *
  *   calm      an uneasy pad over a low drone, sparse piano, no drums;
  *   tense     from 0.35: a bass pulse on every beat, a sparse arpeggio, low strings;
@@ -27,15 +42,19 @@ import { sample, type Sample } from './samples.js';
  *
  * The pressure follows the clock (the tension curve the lab always had: nothing in the first
  * half, then rising to 1 as it runs out — and at least 0.8 in the last minute), every alarm
- * (+0.15 for 20 s) and the escape (at least 0.8). A stem comes in or goes on the beat, over
- * whole beats and at least 2 s. No music while the lab has its power: it starts under the
- * blackout 2 s after the click. A stem plays round and round: each next pass comes in over the
- * last SEAM_S of the one before, equal in power, two sources taking turns on the audio clock;
- * while it is heard it takes one loop of the budget of audio.ts (`CAPS`), and it stops once it
- * has faded out. A run won fades the music out before the end card's sting (`playSting`); a run
- * lost drains it, its lowpass closing and the stem slowing, with the power. `setTension` is
- * its one input, ten times a second: each call schedules what is due ahead on the audio clock.
- * Pure up to `setTension`.
+ * (+0.15 for 20 s, each answered by the alarm's sting on the effects' bus) and the escape (at
+ * least 0.8). No music while the lab has its power: it starts under the blackout 2 s after the
+ * click, and its first bar is where its bars are counted from. A change of stem waits for the
+ * next bar: the stem coming in starts from its beginning on it and crosses with the one going
+ * over CROSSFADE_S. A stem plays round and round: its next pass starts from its beginning on a
+ * bar line too, one bar before it comes in over the last SEAM_S of the pass before, equal in
+ * power — the bar it has to be caught up in. The stems are never decoded: each streams from its
+ * file (audioStream.ts) on two <audio> elements taking turns, every stem's file fetched once as
+ * the music starts; an element that came in late is caught up by playing it a little faster.
+ * While a stem is heard it takes one loop of the budget of audio.ts (`CAPS`), and it stops once
+ * it has faded out. A run won fades the music out before the end card's sting (`playSting`); a
+ * run lost drains it, its lowpass closing and the stems slowing, with the power. `setTension` is
+ * its one input, ten times a second. Pure up to `setTension`.
  */
 
 /** A stem's loudness and a sting's, after the gain of each (scripts/sfx.ts), RMS. */
@@ -50,8 +69,6 @@ export const MUSIC_LEVEL = (EFFECTS_LEVEL * 10 ** (-26 / 20)) / STEM_RMS;
 export const STING_LEVEL = (EFFECTS_LEVEL * 10 ** (-8 / 20)) / STING_RMS;
 /** The music starts this long after the click of the blackout, ms (coldOpen.ts REVEAL_MS). */
 export const MUSIC_AFTER_CLICK_MS = 2000;
-/** The stems' tempo, as their prompts name it: the beat a crossfade starts on. */
-export const MUSIC_BPM = 90;
 /** The last minute, s. */
 export const LAST_MINUTE_S = 60;
 /** What an alarm adds to the pressure, and for how long, ms. */
@@ -59,17 +76,28 @@ export const ALARM_PUSH = 0.15;
 export const ALARM_HOLD_MS = 20_000;
 /** The pressure in the escape, at least; in the last minute, at least as much. */
 export const ESCAPE_FLOOR = 0.8;
-/** A crossfade lasts whole beats, at least this long, s. */
-export const CROSSFADE_MIN_S = 2;
+/** A bar of the stems, in beats. */
+export const BEATS_PER_BAR = 4;
+/** A stem crosses into the next over this long, from the bar the new one starts on, s. */
+export const CROSSFADE_S = 2;
 /** The next pass of a stem comes in over this long at the end of the one before, s. */
 export const SEAM_S = 3;
+/** A stem's next pass starts this many bars before it comes in: caught up meanwhile, unheard. */
+export const SEAM_LEAD_BARS = 1;
+/** A pass is caught up, its lag what the probe reports, once it has played this long, s. */
+export const SETTLED_S = 1;
+/** How far ahead a pass's element is told when to start, s. */
+const READY_S = 1;
+/** How far ahead a change of stem is laid on its bar, at the least, s: its timer must make it. */
+const PREPARE_S = 0.3;
 /** The tense stem comes in at PRESSURE_ON and goes below PRESSURE_OFF; the critical as well. */
 const PRESSURE_ON = 0.35;
 const PRESSURE_OFF = 0.3;
 const LAST_ON = 0.8;
 const LAST_OFF = 0.75;
-/** A run's end: the music fades or drains over this long, s. */
+/** A run's end: the music fades or drains over this long, s; a lost run's in this many steps. */
 const END_S = 1.5;
+const DRAIN_STEPS = 6;
 /** The drain's lowpass, open until a run is lost. */
 const OPEN_HZ = 20000;
 
@@ -84,7 +112,7 @@ export interface Layers {
   readonly last: boolean;
 }
 
-/** The beat: where it started on the audio clock, and its tempo. */
+/** The bars: where the first started on the audio clock, and the stems' tempo. */
 export interface Grid {
   readonly origin: number;
   readonly bpm: number;
@@ -135,15 +163,24 @@ export function stemFor(layers: Layers): Stem {
   return layers.pressure ? 'tense' : 'calm';
 }
 
-/** The first beat of `grid` at or after the audio time `t`. */
-export function nextBeat(t: number, grid: Grid): number {
-  const beat = 60 / grid.bpm;
-  return grid.origin + Math.max(0, Math.ceil((t - grid.origin) / beat - 1e-9)) * beat;
+/** A bar at `bpm`, s. */
+export function barOf(bpm: number): number {
+  return (60 / bpm) * BEATS_PER_BAR;
 }
 
-/** How many beats a crossfade at `bpm` lasts: as few as reach CROSSFADE_MIN_S. */
-export function crossfadeBeats(bpm: number): number {
-  return Math.ceil((CROSSFADE_MIN_S * bpm) / 60 - 1e-9);
+/** The first bar line of `grid` at or after the audio time `t`. */
+export function nextBar(t: number, grid: Grid): number {
+  const bar = barOf(grid.bpm);
+  return grid.origin + Math.max(0, Math.ceil((t - grid.origin) / bar - 1e-9)) * bar;
+}
+
+/**
+ * How long after a pass starts the next one does, s: whole bars, as many as leave a pass of
+ * `seconds` room for the next one's lead bar and the seam over its end.
+ */
+export function passPeriod(seconds: number, bpm: number): number {
+  const bar = barOf(bpm);
+  return Math.max(1, Math.floor((seconds - SEAM_S) / bar) - SEAM_LEAD_BARS) * bar;
 }
 
 /** The music's input, ten times a second (GameWorld.tsx). */
@@ -166,23 +203,30 @@ export interface Tension {
 
 // --- the runtime -------------------------------------------------------------------------
 
-/** One pass of a stem: its source, the stage it fades in and out through, and when it starts. */
+/** One pass of a stem: the element playing it, and when its sound starts on the audio clock. */
 interface Pass {
-  readonly source: AudioBufferSourceNode;
-  readonly seam: GainNode;
-  readonly start: number;
+  readonly stream: Stream;
+  readonly zero: number;
 }
 
 /**
- * A stem: its bus, how loud the pressure has it, its passes — the one playing and the one it
- * fades out under — and when the next pass starts; `next` is null while the stem is silent and
- * holds no loop of the budget.
+ * A stem: its file (fetched once, played from memory), its entry, how loud the pressure has it,
+ * its two elements, its passes — the one playing and the one it crosses from — and where its
+ * next pass starts; `next` is null while it is silent and holds no loop of the budget.
  */
 interface Track {
+  readonly stem: Stem;
   readonly bus: GainNode;
+  readonly level: GainNode;
   fade: Fade;
-  passes: readonly Pass[];
+  file: string | null;
+  /** when its file was last asked for, epoch ms */
+  tried: number;
+  decks: Stream[];
+  passes: Pass[];
   next: number | null;
+  /** the bar its first pass starts on, once a change brings it in */
+  first: number | null;
 }
 
 interface Music {
@@ -194,7 +238,9 @@ interface Music {
   /** the drain's lowpass */
   readonly drain: BiquadFilterNode;
   readonly tracks: Record<Stem, Track>;
-  readonly grid: Grid;
+  /** where the music starts, audio time; its bars, once the stems' tempo is known */
+  readonly at: number;
+  grid: Grid | null;
   layers: Layers;
   siren: boolean;
   pressure: number;
@@ -202,10 +248,11 @@ interface Music {
   alarms: number;
   readonly alarmsAt: number[];
   ended: boolean;
+  /** how late the passes came in, s, the worst; how far one caught up by now lags, the worst */
+  late: number;
+  lag: number;
 }
 
-/** How far ahead the passes are scheduled, s: past the next call, a tenth of a second on. */
-const AHEAD_S = 0.3;
 const NO_LAYERS: Layers = { calm: false, pressure: false, last: false };
 /** The seam's curves: in, a quarter sine, and out, its mirror — equal in power throughout. */
 const SEAM_POINTS = 32;
@@ -218,8 +265,8 @@ let music: Music | null = null;
 
 /**
  * The music follows the run: starts once `startAt` has come, moves its stems with the pressure,
- * schedules what is due, ends with the run. Called ten times a second; only a real change
- * moves a stem.
+ * starts and steers what is due, ends with the run. Called ten times a second; only a real
+ * change moves a stem.
  */
 export function setTension(input: Tension): void {
   try {
@@ -236,7 +283,8 @@ export function setTension(input: Tension): void {
     }
     follow(music, input);
     if (music.engine.ctx.state === 'running') {
-      for (const stem of STEMS) tendTrack(music.engine, music.tracks[stem], stem);
+      music.lag = 0;
+      for (const stem of STEMS) tendTrack(music, music.tracks[stem]);
     }
   } catch {
     // Deliberately silent: the music is flavour, never required.
@@ -245,7 +293,7 @@ export function setTension(input: Tension): void {
 
 /**
  * The music for the input's run, starting at the epoch time `startAt` (or now, where that has
- * passed). The run's alarms so far came before it: they push nothing.
+ * passed); every stem's file fetched as it starts. The run's alarms so far came before it.
  */
 function startMusic(input: Tension, startAt: number): Music | null {
   const engine = audioEngine();
@@ -255,32 +303,66 @@ function startMusic(input: Tension, startAt: number): Music | null {
   const out = outlet(ctx, engine.music, MUSIC_LEVEL);
   const drain = biquad(ctx, 'lowpass', OPEN_HZ, 0);
   drain.connect(out);
-  const track = (): Track => ({
-    bus: outlet(ctx, drain, 0),
-    fade: still(0),
-    passes: [],
-    next: null,
-  });
-  return {
+  const track = (stem: Stem): Track => {
+    const level = outlet(ctx, drain, 1);
+    const bus = outlet(ctx, level, 0);
+    const none = { file: null, tried: -Infinity, decks: [], passes: [], next: null, first: null };
+    return { stem, bus, level, fade: still(0), ...none };
+  };
+  const m: Music = {
     run: input.run,
     engine,
     out,
     outFade: still(MUSIC_LEVEL),
     drain,
-    tracks: { calm: track(), tense: track(), critical: track() },
-    grid: { origin: at, bpm: MUSIC_BPM },
+    tracks: { calm: track('calm'), tense: track('tense'), critical: track('critical') },
+    at,
+    grid: null,
     layers: NO_LAYERS,
     siren: false,
     pressure: 0,
     alarms: input.alarms,
     alarmsAt: [],
     ended: false,
+    late: 0,
+    lag: 0,
   };
+  void fetchStems(m);
+  return m;
 }
 
-/** The music takes in this call's input: the alarms, the clock, the escape — and its layers. */
+/** Every stem's file fetched into memory, once: its elements play it from there. */
+async function fetchStems(m: Music): Promise<void> {
+  await musicListed();
+  for (const stem of STEMS) await fetchStem(m, m.tracks[stem]);
+}
+
+/** A stem's file fetched into memory and named by a blob address; tried again RETRY_MS on. */
+async function fetchStem(m: Music, track: Track): Promise<void> {
+  track.tried = Date.now();
+  const entry = musicEntry(track.stem);
+  if (entry === null || track.file !== null) return;
+  const res = await fetch(`${MUSIC_BASE}${entry.file}`).catch(() => null);
+  const blob = res?.ok === true ? await res.blob().catch(() => null) : null;
+  if (blob === null || m.ended || track.file !== null) return;
+  track.file = URL.createObjectURL(blob);
+  track.level.gain.value = entry.gain;
+}
+
+/** A stem whose file — or the music's manifest — could not be had asks for it again. */
+async function retryStem(m: Music, track: Track): Promise<void> {
+  track.tried = Date.now();
+  await musicListed();
+  await fetchStem(m, track);
+}
+
+/**
+ * The music takes in this call's input: the alarms — each answered by the alarm's sting
+ * (audio.ts) — the clock, the escape, and its layers.
+ */
 function follow(m: Music, input: Tension): void {
   const now = Date.now();
+  if (input.alarms > m.alarms) alarmSting();
   for (; m.alarms < input.alarms; m.alarms++) m.alarmsAt.push(now);
   while ((m.alarmsAt[0] ?? now) <= now - ALARM_HOLD_MS) m.alarmsAt.shift();
   m.pressure = pressureOf({ ...input, alarms: m.alarmsAt.length });
@@ -293,81 +375,124 @@ function follow(m: Music, input: Tension): void {
   }
 }
 
-/** The stems move to what `layers` plays: from the next beat, over whole beats, 2 s or more. */
+/**
+ * The bars of the stems' tempo, counted from the music's start — or from as soon as a stem's
+ * timer can make it, where that start has passed; null while their manifest is not here.
+ */
+function gridOf(m: Music, now: number): Grid | null {
+  if (m.grid !== null) return m.grid;
+  const bpm = musicEntry('calm')?.bpm;
+  if (bpm === undefined) return null;
+  m.grid = { origin: Math.max(m.at, now + PREPARE_S), bpm };
+  return m.grid;
+}
+
+/**
+ * The stems move to what `layers` plays: the stem coming in from its start on the next bar — the
+ * first at the music's start — crossing with the one going over CROSSFADE_S.
+ */
 function retarget(m: Music, layers: Layers, siren: boolean): void {
   const now = m.engine.ctx.currentTime;
-  const start = nextBeat(now + LOOKAHEAD, m.grid);
-  const end = start + (crossfadeBeats(m.grid.bpm) * 60) / m.grid.bpm;
+  const grid = gridOf(m, now);
+  if (grid === null) return;
+  const start = nextBar(now + PREPARE_S, grid);
   const playing = stemFor(layers);
   for (const stem of STEMS) {
     const track = m.tracks[stem];
     const to = stem === playing ? 1 : 0;
-    if (track.fade.to !== to) {
-      track.fade = fadeTo(track.bus.gain, track.fade, now, [start, end], to);
-    }
+    if (track.fade.to === to) continue;
+    track.fade = fadeTo(track.bus.gain, track.fade, now, [start, start + CROSSFADE_S], to);
+    if (to === 1 && track.next === null) track.first = start;
   }
   m.layers = layers;
   m.siren = siren;
 }
 
-/** How long a stem's pass sounds, s: its recording from where its sound starts. */
-function passLength(recording: Sample): number {
-  return recording.buffer.duration - recording.start;
+/** The stem's elements, opened as it is first heard: two, taking turns. */
+function decksOf(m: Music, track: Track, file: string): Stream[] {
+  if (track.decks.length === 0) {
+    const { ctx } = m.engine;
+    track.decks = [0, 1].map(() => openStream(ctx, file, track.bus, 0));
+  }
+  return track.decks;
 }
 
 /**
- * A stem as its fade has it: while it is heard its passes go on — the first as its fade comes
- * in, once its recording is loaded and the budget has a loop for it, else tried again next
- * round — and once it has faded out it stops and gives its loop back.
+ * A stem as its fade has it: while it is heard its elements stand ready and its passes go on —
+ * the first on the bar its change brought it in on, once its file is here and the budget has a
+ * loop for it — each next one told READY_S ahead when to start, all of them steered; once it has
+ * faded out it stops, lets its elements go and gives its loop back.
  */
-function tendTrack(engine: Engine, track: Track, stem: Stem): void {
-  const now = engine.ctx.currentTime;
+function tendTrack(m: Music, track: Track): void {
+  const now = m.engine.ctx.currentTime;
   const heard = track.fade.to > 0 || levelAt(track.fade, now) > 0.001;
   if (!heard) {
-    silence(track, now + 0.05);
+    silence(m, track, now + 0.05);
     return;
   }
-  const recording = sample(stem);
-  if (recording === null || passLength(recording) <= 2 * SEAM_S) return;
+  const entry = musicEntry(track.stem);
+  const grid = gridOf(m, now);
+  if (track.file === null && Date.now() - track.tried >= RETRY_MS) void retryStem(m, track);
+  if (track.file === null || entry === null || grid === null) return;
+  decksOf(m, track, track.file);
   if (track.next === null) {
     if (!claim({ loop: 1 })) return;
-    track.next = Math.max(now + LOOKAHEAD, track.fade.start);
+    track.next = Math.max(track.first ?? 0, nextBar(now + PREPARE_S, grid));
   }
-  for (; track.next < now + AHEAD_S; track.next += passLength(recording) - SEAM_S) {
-    startPass(engine.ctx, recording, track, track.next);
+  if (track.next - now < READY_S) startPass(m, track, entry, grid);
+  for (const pass of track.passes) {
+    const lag = steer(pass.stream, m.engine.ctx);
+    if (now - pass.zero >= SETTLED_S) m.lag = Math.max(m.lag, Math.abs(lag));
+    m.late = Math.max(m.late, pass.stream.lateBy ?? 0);
   }
 }
 
 /**
- * The stem's next pass from `at`: where one plays already, the new one comes in over SEAM_S
- * as the old one, at its end, goes out under it, equal in power.
+ * The stem's next pass, on the element not playing: started from its file's start so that its
+ * sound starts on its bar; where a pass plays already, the new one comes in over SEAM_S one bar
+ * later as the old one goes out under it, equal in power, and the old one is stopped after.
  */
-function startPass(ctx: BaseAudioContext, recording: Sample, track: Track, at: number): void {
+function startPass(m: Music, track: Track, entry: SampleEntry, grid: Grid): void {
+  const { ctx } = m.engine;
+  const zero = track.next ?? 0;
   const previous = track.passes.at(-1);
-  const seam = outlet(ctx, track.bus, previous === undefined ? 1 : 0);
-  if (previous !== undefined) {
-    seam.gain.setValueCurveAtTime(SEAM_IN, at, SEAM_S);
-    previous.seam.gain.setValueCurveAtTime(SEAM_OUT, at, SEAM_S);
-    previous.source.stop(at + SEAM_S + 0.05);
+  const decks = decksOf(m, track, track.file ?? '');
+  const deck = decks.find((each) => each !== previous?.stream) ?? decks[0];
+  if (deck === undefined) return;
+  startStream(deck, ctx, zero - entry.startMs / 1000);
+  const bar = barOf(grid.bpm);
+  if (previous === undefined) {
+    deck.out.gain.setValueAtTime(1, ctx.currentTime);
+  } else {
+    const cross = zero + SEAM_LEAD_BARS * bar;
+    deck.out.gain.setValueAtTime(0, ctx.currentTime);
+    deck.out.gain.setValueCurveAtTime(SEAM_IN, cross, SEAM_S);
+    previous.stream.out.gain.setValueCurveAtTime(SEAM_OUT, cross, SEAM_S);
+    rewindStream(previous.stream, ctx, cross + SEAM_S + 0.05);
   }
-  const source = startSample(ctx, recording, seam, at);
-  source.onended = () => seam.disconnect();
-  const pass = { source, seam, start: at };
+  const pass = { stream: deck, zero };
   track.passes = previous === undefined ? [pass] : [previous, pass];
+  const seconds = (entry.ms - entry.startMs) / 1000;
+  track.next = zero + passPeriod(seconds, grid.bpm);
 }
 
 /** The stem stops at `at` and gives its loop back: faded out, or the music is over. */
-function silence(track: Track, at: number): void {
+function silence(m: Music, track: Track, at: number): void {
   if (track.next === null) return;
-  for (const pass of track.passes) pass.source.stop(at);
+  const decks = track.decks;
+  for (const deck of decks) rewindStream(deck, m.engine.ctx, at);
+  const wait = Math.max(0, (at - m.engine.ctx.currentTime) * 1000);
+  setTimeout(() => decks.forEach(closeStream), wait + 50);
+  track.decks = [];
   track.passes = [];
   track.next = null;
+  track.first = null;
   release({ loop: 1 });
 }
 
 /**
  * The run is over: won, the music fades out before the end card's sting; lost, it drains — its
- * lowpass closing and every pass slowing — as the power does. Then it stops.
+ * lowpass closing and every stem slowing — as the power does. Then it stops.
  */
 function endMusic(m: Music, ending: 'won' | 'lost'): void {
   m.ended = true;
@@ -377,21 +502,27 @@ function endMusic(m: Music, ending: 'won' | 'lost'): void {
   if (ending === 'lost') {
     m.drain.frequency.setValueAtTime(OPEN_HZ, now);
     m.drain.frequency.exponentialRampToValueAtTime(120, end);
-    for (const stem of STEMS) {
-      for (const pass of m.tracks[stem].passes) {
-        pass.source.playbackRate.setValueAtTime(1, now);
-        pass.source.playbackRate.exponentialRampToValueAtTime(0.5, end);
-      }
+    const elements = STEMS.flatMap((stem) => m.tracks[stem].passes.map((p) => p.stream.element));
+    for (let step = 1; step <= DRAIN_STEPS; step++) {
+      setTimeout(() => {
+        for (const element of elements) element.playbackRate = 1 - (0.5 * step) / DRAIN_STEPS;
+      }, (step * END_S * 1000) / DRAIN_STEPS);
     }
   }
   letGo(m, end + 0.05);
 }
 
-/** Stops every stem at `at` and lets the music's nodes go then. */
+/** Stops every stem at `at` and lets the music's nodes and files go then. */
 function letGo(m: Music, at: number): void {
-  for (const stem of STEMS) silence(m.tracks[stem], at);
+  for (const stem of STEMS) silence(m, m.tracks[stem], at);
   const wait = Math.max(0, (at - m.engine.ctx.currentTime) * 1000);
-  setTimeout(() => m.out.disconnect(), wait);
+  setTimeout(() => {
+    m.out.disconnect();
+    for (const stem of STEMS) {
+      const { file } = m.tracks[stem];
+      if (file !== null) URL.revokeObjectURL(file);
+    }
+  }, wait + 100);
 }
 
 /** Stops the music at once (a fade of 0.3 s): the world is gone, or another run begins. */
@@ -410,43 +541,62 @@ export function stopMusic(): void {
 }
 
 /**
- * The end card's sting for a run won or lost, once, on the music's bus at STING_LEVEL. Nothing
- * while the context is held back, or where its recording is not loaded.
+ * The end card's sting for a run won or lost, once, streamed on the music's bus at STING_LEVEL
+ * and let go once it has played. Nothing while the context is held back, or where its manifest
+ * names none.
  */
 export function playSting(ending: 'won' | 'lost'): void {
   try {
     const engine = playingEngine();
-    const sting = sample(ending);
-    if (engine === null || sting === null) return;
-    const { ctx } = engine;
-    const out = outlet(ctx, engine.music, STING_LEVEL);
-    const source = startSample(ctx, sting, out, ctx.currentTime + LOOKAHEAD);
-    source.onended = () => out.disconnect();
+    if (engine === null) return;
+    void musicListed().then(() => stingOnce(engine, ending));
   } catch {
     // Deliberately silent: the card says it as well.
   }
 }
 
+/** The sting `id` streamed once from now, its element let go as it ends. */
+function stingOnce(engine: Engine, id: MusicId): void {
+  const entry = musicEntry(id);
+  if (entry === null) return;
+  const { ctx } = engine;
+  const file = `${MUSIC_BASE}${entry.file}`;
+  const sting = openStream(ctx, file, engine.music, STING_LEVEL * entry.gain);
+  sting.element.addEventListener('ended', () => closeStream(sting), { once: true });
+  startStream(sting, ctx, ctx.currentTime + LOOKAHEAD);
+}
+
 /**
- * The music now, 0 to 1: the calm stem's level, the pressure stems' — the tense or the
- * critical — the critical's alone, and the pressure value the stems follow.
+ * The music now, 0 to 1: the calm stem's level, the pressure stems' — the tense or the critical
+ * — the critical's alone, and the pressure value the stems follow; how many elements play, how
+ * late the latest came in, and how far one that has played SETTLED_S and more lags now, ms.
  */
 export interface MusicProbe {
   calm: number;
   pressure: number;
   last: number;
   level: number;
+  streams: number;
+  lateMs: number;
+  lagMs: number;
 }
 
 export function musicProbe(): MusicProbe {
   const m = music;
-  if (m === null) return { calm: 0, pressure: 0, last: 0, level: 0 };
+  const none = { calm: 0, pressure: 0, last: 0, level: 0, streams: 0, lateMs: 0, lagMs: 0 };
+  if (m === null) return none;
   const now = m.engine.ctx.currentTime;
   const at = (stem: Stem): number => levelAt(m.tracks[stem].fade, now);
+  const streams = STEMS.flatMap((stem) => m.tracks[stem].passes).filter(
+    (pass) => pass.stream.state === 'playing',
+  ).length;
   return {
     calm: at('calm'),
     pressure: Math.min(1, at('tense') + at('critical')),
     last: at('critical'),
     level: m.pressure,
+    streams,
+    lateMs: Math.round(m.late * 1000 * 10) / 10,
+    lagMs: Math.round(m.lag * 1000 * 10) / 10,
   };
 }

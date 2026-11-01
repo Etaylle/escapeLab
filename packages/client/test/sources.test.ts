@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MapView } from '@escapelab/core';
 import { dressedFor } from '../src/world/artKit.js';
-import { strengthAt } from '../src/world/gl/pack.js';
+import { strengthAt, TREMBLE_DEPTH } from '../src/world/gl/pack.js';
 import { AMBER, EMERGENCY, PHOSPHOR, REACTOR, SERVER_BLUE } from '../src/world/palette.js';
 import type { Frame } from '../src/world/render/frame.js';
 import { glowSources, lampSources, sourcesOf, type LightSource } from '../src/world/sources.js';
@@ -97,11 +97,16 @@ describe('sourcesOf — every coloured light of the frame, one list for both lig
         reach: 1.5,
         strength: 1,
         pulse: { periodMs: (2 * Math.PI * 1000) / 2.4, depth: 0.6 },
+        tremble: true,
       },
     ]);
+    // As brightly as the Canvas pass burns them, each tube wavering a few per cent under it.
     const [lamp] = lampSources(dark);
     for (const t of [0, 0.4, 1.3, 2.9]) {
-      expect(lamp && strengthAt(lamp, t * 1000)).toBeCloseTo(0.7 + 0.3 * Math.sin(2.4 * t), 9);
+      const burn = 0.7 + 0.3 * Math.sin(2.4 * t);
+      const strength = lamp === undefined ? 0 : strengthAt(lamp, t * 1000);
+      expect(strength).toBeLessThanOrEqual(burn + 1e-9);
+      expect(strength).toBeGreaterThanOrEqual(burn * (1 - TREMBLE_DEPTH[1]) - 1e-9);
     }
     // A lamp the light pass leaves dark — its room lit, the power on, the audience's — is none.
     expect(lampSources(frameWith({ map: lab(), mounts: [mount] }))).toEqual([]);

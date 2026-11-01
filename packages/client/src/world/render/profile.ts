@@ -15,12 +15,15 @@ export const PASS_NAMES = [
   'assemble',
   'tiles',
   'objects',
+  'props',
   'actors',
   'glow',
+  'atmosphere',
   'light',
   'darkness',
   'hud',
   'overlays',
+  'aberration',
 ] as const;
 
 export type PassName = (typeof PASS_NAMES)[number];

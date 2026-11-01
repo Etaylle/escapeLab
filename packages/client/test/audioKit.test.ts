@@ -27,22 +27,22 @@ describe('the budget of the beds, the music and the placed sounds', () => {
     return { audio: module, ctx: lastContext() };
   }
 
-  it('gives out at most 12 voices, 4 noises and 6 loops, and takes them back', async () => {
+  it('gives out at most 12 voices and 6 loops, and takes them back', async () => {
     const { audio } = await freshAudio();
-    expect(audio.CAPS).toEqual({ voice: 12, noise: 4, loop: 6 });
-    expect(audio.claim({ voice: 10, noise: 4 })).toBe(true);
+    expect(audio.CAPS).toEqual({ voice: 12, loop: 6 });
+    expect(audio.claim({ voice: 10, loop: 6 })).toBe(true);
     expect(audio.claim({ voice: 3 })).toBe(false); // over by one: nothing taken
-    expect(audio.claim({ noise: 1 })).toBe(false);
-    expect(audio.inUse()).toEqual({ voice: 10, noise: 4, loop: 0 });
-    audio.release({ voice: 10, noise: 4 });
+    expect(audio.claim({ loop: 1 })).toBe(false);
+    expect(audio.inUse()).toEqual({ voice: 10, loop: 6 });
+    audio.release({ voice: 10, loop: 6 });
     expect(audio.claim({ voice: 12, loop: 6 })).toBe(true);
   });
 
   it('lets a capped sound go once it has ended: its outlet unwired, its share back', async () => {
     const { audio, ctx } = await freshAudio();
-    const master = ctx.all('gain')[0] as FakeNode;
+    const bus = ctx.all('gain')[0] as FakeNode;
     const live = ctx as unknown as BaseAudioContext;
-    const into = master as unknown as AudioNode;
+    const into = bus as unknown as AudioNode;
     let made: FakeOscillator | undefined;
     const played = audio.capped(live, into, { voice: 1 }, (out) => {
       const osc = ctx.createOscillator();
@@ -53,7 +53,7 @@ describe('the budget of the beds, the music and the placed sounds', () => {
     });
     expect(played).toBe(true);
     const outlet = made?.outputs[0] as FakeNode;
-    expect(outlet.outputs).toContain(master);
+    expect(outlet.outputs).toContain(bus);
     expect(audio.inUse().voice).toBe(1);
     endAll(ctx);
     expect(outlet.disconnected).toBe(true);

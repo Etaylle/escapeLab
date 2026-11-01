@@ -146,7 +146,7 @@ function tick(place: Place, rate: number): void {
   const { ctx } = engine;
   const at = ctx.currentTime + LOOKAHEAD;
   try {
-    capped(ctx, engine.effects, { voice: 1 }, (out) => {
+    capped(ctx, engine.sfx, { voice: 1 }, (out) => {
       const level = gain(ctx, TICK_LEVEL * place.gain);
       const pan = ctx.createStereoPanner();
       pan.pan.value = place.pan;

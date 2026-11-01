@@ -78,6 +78,19 @@ export interface Dressing {
   /** each wall tile's floor neighbours as bits (surfaces.ts FLOOR_N …), row by row; 0 elsewhere */
   walls: Uint8Array;
   props: WallProp[];
+  /** the ceiling fans: one over the middle of every machine room, a sheet of paper under it */
+  fans: CeilingFan[];
+}
+
+/**
+ * A ceiling fan over the floor tile (x, y), in the room `room` (its label): it turns while the
+ * room has its power and coasts to a stop without it (render/props.ts); a sheet of paper lies on
+ * the floor under it, fluttering in its draught.
+ */
+export interface CeilingFan {
+  x: number;
+  y: number;
+  room: string;
 }
 
 /**
@@ -414,6 +427,44 @@ function wallProps(
 }
 
 /**
+ * A ceiling fan over every machine room: over the room's floor tile nearest its middle that no
+ * furniture, door or lamp stands on — the first such in reading order where two are as near —
+ * so that the sheet under it lies free. A room with no such tile gets none.
+ */
+function ceilingFans(
+  grid: Grid,
+  kinds: readonly FloorKind[],
+  rooms: readonly (string | null)[],
+): CeilingFan[] {
+  const { map, index } = grid;
+  const taken = new Set([
+    ...map.decor.map((piece) => index(piece.x, piece.y)),
+    ...map.doors.map((door) => index(door.x, door.y)),
+    ...map.lamps.map((lamp) => index(lamp.x, lamp.y)),
+  ]);
+  const machines = new Set(map.labels.filter((l) => l.kind === 'machine').map((l) => l.text));
+  return [...machines].flatMap((room) => {
+    const tiles: { x: number; y: number }[] = [];
+    rooms.forEach((owner, i) => {
+      const x = i % map.width;
+      const y = Math.floor(i / map.width);
+      if (owner === room && kinds[i] === 'machine' && grid.floor(x, y)) {
+        tiles.push({ x, y });
+      }
+    });
+    const free = tiles.filter((t) => !taken.has(index(t.x, t.y)));
+    if (free.length === 0) {
+      return [];
+    }
+    const cx = tiles.reduce((sum, t) => sum + t.x, 0) / tiles.length;
+    const cy = tiles.reduce((sum, t) => sum + t.y, 0) / tiles.length;
+    const away = (t: { x: number; y: number }): number => Math.hypot(t.x - cx, t.y - cy);
+    const best = free.reduce((a, b) => (away(b) < away(a) - 1e-9 ? b : a));
+    return [{ ...best, room }];
+  });
+}
+
+/**
  * The dressing of `map` grown from `seed` (seedOf the mission's id): the same
  * map and seed, the same dressing, run after run.
  */
@@ -435,5 +486,6 @@ export function dressMap(map: DressMap, seed: number): Dressing {
     floor: floorVariants(grid, kinds, rooms),
     walls,
     props: wallProps(grid, kinds, rooms),
+    fans: ceilingFans(grid, kinds, rooms),
   };
 }

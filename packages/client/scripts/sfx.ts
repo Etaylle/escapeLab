@@ -14,9 +14,11 @@
  * loop) as MP3 at 44.1 kHz and 128 kbit/s, a piece of music from Eleven Music, instrumental, at
  * 192 kbit/s; each into public/sfx/<id>.mp3 or public/music/<id>.mp3. public/sfx/manifest.json
  * and public/music/manifest.json list each as { file, ms, gain, startMs, floor, rms, loop, hash,
- * influence, source }: `hash` names the request that made it — `influence` how closely an effect
- * followed its prompt — so an entry whose request is unchanged and whose file is there is not
- * made again, and a run cut short goes on where it stopped.
+ * influence, bpm, source }: `hash` names the request that made it — `influence` how closely an
+ * effect followed its prompt, `bpm` a stem's tempo as its prompt states it — so an entry whose
+ * request is unchanged and whose file is there is not made again, and a run cut short goes on
+ * where it stopped. An entry not made yet may play another's recording meanwhile (`standIn`): it
+ * counts as made from another request, and the next run makes it.
  *
  * With `--candidates N` every entry the run makes is made N times — an effect with its prompt
  * followed more or less closely each time (INFLUENCE_SPAN), a piece of music by the same request
@@ -87,6 +89,8 @@ export interface CatalogEntry {
   readonly prompt: string;
   readonly durationSeconds: number;
   readonly loop: boolean;
+  /** a stem's tempo, beats a minute: the one its prompt states (`tempoOf`); no other kind's */
+  readonly bpm?: number;
   readonly target: Target;
   /** where the game plays it: "src/<file>#<symbol>" */
   readonly usedBy: readonly string[];
@@ -111,6 +115,14 @@ export interface ManifestEntry {
   readonly hash: string;
   /** an effect's prompt influence; PROMPT_INFLUENCE where it is not given */
   readonly influence?: number;
+  /** a stem's tempo, as the catalog has it: the music's bars are counted by it */
+  readonly bpm?: number;
+  /**
+   * an entry not rendered yet that plays another's recording meanwhile, by that one's id: its
+   * `file` and its measurements are that recording's, its hash that request's — so it counts as
+   * made from another request, and the next run makes it
+   */
+  readonly standIn?: string;
   readonly source: 'elevenlabs';
 }
 
@@ -195,8 +207,21 @@ export const LENGTHS: Readonly<Record<Kind, readonly [number, number]>> = {
 
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const USED_BY = /^src\/[\w/.-]+\.tsx?#\w+$/;
+const TEMPO = /\b(\d+(?:\.\d+)?)\s*BPM\b/i;
 const kindOf = (entry: CatalogEntry): Kind | undefined =>
   Object.keys(TARGETS).find((kind): kind is Kind => kind === entry.kind);
+
+/** The tempo a prompt states, beats a minute („A minor, 90 BPM"); null where it states none. */
+export function tempoOf(prompt: string): number | null {
+  const stated = TEMPO.exec(prompt)?.[1];
+  return stated === undefined ? null : Number(stated);
+}
+
+/** Whether `entry` keeps the tempo rule: a stem names its prompt's tempo, the rest none. */
+function tempoKept(entry: CatalogEntry): boolean {
+  if (entry.kind !== 'stem') return entry.bpm === undefined;
+  return entry.bpm !== undefined && entry.bpm === tempoOf(entry.prompt);
+}
 
 /** Each rule a catalog entry keeps, and what is said where it does not. */
 type Rule = readonly [(entry: CatalogEntry) => boolean, (entry: CatalogEntry) => string];
@@ -226,6 +251,13 @@ const RULES: readonly Rule[] = [
       Array.isArray(e.usedBy) && e.usedBy.length > 0 && e.usedBy.every((u) => USED_BY.test(u)),
     () => 'usedBy has to name where it plays, as "src/<file>#<symbol>"',
   ],
+  [
+    tempoKept,
+    (e) =>
+      e.kind === 'stem'
+        ? `its bpm has to be the tempo its prompt states (${tempoOf(e.prompt) ?? 'none'})`
+        : 'only a stem has a bpm',
+  ],
 ];
 
 /** What is wrong with `entry`, a sentence each; none for an entry that keeps every rule. */
@@ -238,7 +270,10 @@ export function readCatalog(file = CATALOG_FILE): CatalogEntry[] {
   return JSON.parse(readFileSync(file, 'utf8')) as CatalogEntry[];
 }
 
-/** Returns `catalog` where every entry keeps the rules and no id comes twice; fails naming each. */
+/**
+ * Returns `catalog` where every entry keeps the rules, no id comes twice and the stems share one
+ * tempo — the music crosses from one to the next on their common bar; fails naming each flaw.
+ */
 export function checkCatalog(catalog: readonly CatalogEntry[]): readonly CatalogEntry[] {
   const seen = new Set<string>();
   const flaws = catalog.flatMap((entry) => {
@@ -246,6 +281,10 @@ export function checkCatalog(catalog: readonly CatalogEntry[]): readonly Catalog
     seen.add(entry.id);
     return [...flawsOf(entry), ...twice].map((flaw) => `${entry.id}: ${flaw}`);
   });
+  const tempos = new Set(catalog.filter((e) => e.kind === 'stem').map((e) => e.bpm));
+  if (tempos.size > 1) {
+    flaws.push(`the stems have to share one tempo, not ${[...tempos].join(', ')} bpm`);
+  }
   if (flaws.length > 0) {
     throw new Error(`sfx: audio/catalog.json —\n  ${flaws.join('\n  ')}`);
   }
@@ -789,6 +828,7 @@ function entryOf(entry: CatalogEntry, take: Take): ManifestEntry {
     loop: entry.loop,
     hash: hashOf(entry, take.influence),
     ...(groupOf(entry) === 'sfx' ? { influence: take.influence } : {}),
+    ...(entry.bpm === undefined ? {} : { bpm: entry.bpm }),
     source: 'elevenlabs',
   };
 }

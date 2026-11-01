@@ -4,14 +4,14 @@
  * The effects are recordings (samples.ts: ElevenLabs made them, scripts/sfx.ts), each played as
  * one buffer source into an outlet of its own; the radio's chain, its static and the two device
  * sounds whose pitch follows the game (puzzles/sounds.ts) are the only sounds still made here.
- * All levels are deliberately quiet because this plays under the players' voice chat, and every
- * sound passes through a single master gain, so the whole lab can be muted in one place. In
- * front of it sit the three volumes the settings set (settings.ts), each a bus: the effects —
- * this module's sounds, the partners' steps and the drones (spatial.ts) — and the radio —
- * mission control's voice (radioVoice.ts) and its key — straight into the master gain; the
- * rooms' beds (ambience.ts, at the effects' volume) and the music (music.ts) through the duck
- * bus, which mission control's voice pulls down while it speaks. This module also lends those
- * modules its small builders (gain stages, filters, a sample's source, the radio's noise).
+ * All levels are deliberately quiet because this plays under the players' voice chat. Every
+ * sound goes into one of the mix's buses (mix.ts): the effects — this module's sounds, the
+ * partners' steps, the drones and the doors (spatial.ts) — the rooms' beds (ambience.ts), the
+ * music (music.ts), mission control's voice and its key (radioVoice.ts) and the plant's
+ * loudspeakers (pa.ts); the buses meet in a single master gain, so the whole lab can be muted
+ * in one place, and a brickwall behind it. The klaxon and the siren pull the music down while
+ * they sound. This module also lends the others its small builders (gain stages, filters, a
+ * sample's source, the radio's noise).
  *
  * Audio is decorative, so no public function ever throws: errors are swallowed on purpose.
  * The one shared AudioContext is created lazily on first use. While browser autoplay policy
@@ -22,38 +22,24 @@
  */
 
 import { censusOf, countGraph, type GraphCensus } from './audioCount.js';
+import { hold } from './audioMemory.js';
+import { ownSurface, stepRate, stepTake } from './footsteps.js';
 import { traceRequested } from './frameTrace.js';
+import { buildMix, duck, setBusVolumes, unduck, type BusVolumes, type Mix } from './mix.js';
 import { sample, sampleLoaded, type Sample, type SfxId } from './samples.js';
 
 type AudioContextCtor = new () => AudioContext;
 
-/** The shared context and the gain stages every sound of the lab ends in. */
-export interface Engine {
+/** The shared context and the mix every sound of the lab ends in (mix.ts). */
+export interface Engine extends Mix {
   readonly ctx: AudioContext;
-  /** Every sound in the module passes through this gain: the single mute point. */
-  readonly master: GainNode;
-  /** The beds and the music, in front of the master gain: ducked while mission control speaks. */
-  readonly duck: GainNode;
-  /** The effects at their volume, into the master gain: every sound but the radio and the music. */
-  readonly effects: GainNode;
-  /** The rooms' beds at the effects' volume, into the duck bus. */
-  readonly beds: GainNode;
-  /** The music at its volume, into the duck bus. */
-  readonly music: GainNode;
-  /** Mission control's voice and the radio's key at their volume, into the master gain. */
-  readonly radio: GainNode;
 }
 
-/** The three volumes on the engine's buses, each a share of full (0 to 1). */
-export interface BusVolumes {
-  readonly radio: number;
-  readonly effects: number;
-  readonly music: number;
-}
-
-/** The lab's sound systems a page's query can switch off: `?audio-off=beds,music,spatial`. */
-export type SoundSystem = 'beds' | 'music' | 'spatial';
-const SOUND_SYSTEMS: readonly SoundSystem[] = ['beds', 'music', 'spatial'];
+/**
+ * The lab's sound systems a page's query can switch off: `?audio-off=beds,music,spatial,reverb`.
+ */
+export type SoundSystem = 'beds' | 'music' | 'spatial' | 'reverb';
+const SOUND_SYSTEMS: readonly SoundSystem[] = ['beds', 'music', 'spatial', 'reverb'];
 
 /**
  * The sound systems the query string `search` switches off (`?audio-off=beds,music`): for
@@ -93,15 +79,12 @@ export function graphCensus(): GraphCensus | null {
 
 const MASTER_LEVEL = 1;
 const MUTE_STORAGE_KEY = 'escapelab-muted';
-/** How quickly a bus follows its volume as a slider moves, s. */
-const VOLUME_GLIDE = 0.05;
-/** The own footstep's level; a partner's comes in at the same level, placed (spatial.ts). */
-export const FOOTSTEP_LEVEL = 0.02;
+/** A partner's footstep at full, before it is placed (spatial.ts). */
+export const STEP_LEVEL = 0.02;
+/** Your own steps against a partner's: 4 dB under them — your own feet are always there. */
+export const OWN_STEP_DB = -4;
 /** How much louder a footstep lands at a sprint: about 2 dB. */
 export const SPRINT_STEP_GAIN = 1.25;
-/** A footstep's three takes, one at random each step, ±10 % in speed. */
-export const STEP_TAKES: readonly [SfxId, ...SfxId[]] = ['step-1', 'step-2', 'step-3'];
-const DOOR_LEVEL = 0.04;
 const CHIRP_LEVEL = 0.03;
 const FIND_LEVEL = 0.035;
 const DRAIN_LEVEL = 0.05;
@@ -270,19 +253,15 @@ export function setMuted(next: boolean): void {
 }
 
 /**
- * Sets the three volumes, each a share of full: on the engine's buses where it is made —
- * the effects' on its beds too — and for the engine still to come. Works before any sound has
+ * Sets the three volumes, each a share of full: on the engine's buses where it is made (mix.ts
+ * `setBusVolumes`) and for the engine still to come. Works before any sound has
  * been created; the mute switch stays above them all.
  */
 export function setVolumes(next: BusVolumes): void {
   volumes = next;
   try {
     if (engine !== null) {
-      const now = engine.ctx.currentTime;
-      engine.effects.gain.setTargetAtTime(next.effects, now, VOLUME_GLIDE);
-      engine.beds.gain.setTargetAtTime(next.effects, now, VOLUME_GLIDE);
-      engine.music.gain.setTargetAtTime(next.music, now, VOLUME_GLIDE);
-      engine.radio.gain.setTargetAtTime(next.radio, now, VOLUME_GLIDE);
+      setBusVolumes(engine, next, engine.ctx.currentTime);
     }
   } catch {
     // Deliberately silent: a volume must never break the game.
@@ -310,12 +289,7 @@ interface Play {
  * ARC_TAIL from there. Nothing while the context is held back, or where the recording is not
  * loaded; never throws.
  */
-function effect(
-  id: SfxId,
-  bus: 'effects' | 'master' | 'radio',
-  level: number,
-  play: Play = {},
-): void {
+function effect(id: SfxId, bus: 'sfx' | 'voice' | 'music', level: number, play: Play = {}): void {
   try {
     const audio = runningEngine();
     const recording = sample(id);
@@ -354,10 +328,10 @@ export function beepRate(secondsLeft: number): number {
  */
 export function countdownBeep(secondsLeft: number): void {
   if (secondsLeft <= 0) {
-    effect('breaker-thunk', 'effects', CHIRP_LEVEL);
+    effect('breaker-thunk', 'sfx', CHIRP_LEVEL);
     return;
   }
-  effect('countdown-beep', 'effects', CHIRP_LEVEL, { rate: beepRate(secondsLeft) });
+  effect('countdown-beep', 'sfx', CHIRP_LEVEL, { rate: beepRate(secondsLeft) });
 }
 
 /**
@@ -370,32 +344,28 @@ export function briefingCountdown(elapsedMs = 0): void {
   if (audio === null) return;
   const t = audio.ctx.currentTime + LOOKAHEAD - elapsedMs / 1000;
   for (const [at, id] of BRIEFING_BEEPS) {
-    if (t + at >= audio.ctx.currentTime) effect(id, 'effects', CHIRP_LEVEL, { at: t + at });
+    if (t + at >= audio.ctx.currentTime) effect(id, 'sfx', CHIRP_LEVEL, { at: t + at });
   }
 }
 
 /**
- * The own footstep: one of its three takes, ±10 % in speed, a little louder at a sprint, whose
- * steps also land faster (sim.ts); cheap enough for ~10 calls per second.
+ * The own footstep on the floor under you (footsteps.ts): one of its three takes, ±5 % in speed,
+ * OWN_STEP_DB under a partner's, a little louder at a sprint, whose steps also land faster
+ * (sim.ts); cheap enough for ~10 calls per second.
  */
 export function footstep(sprinting = false): void {
-  const level = FOOTSTEP_LEVEL * (sprinting ? SPRINT_STEP_GAIN : 1);
-  effect(pick(STEP_TAKES), 'effects', level, { rate: rand(0.9, 1.1) });
-}
-
-/** A pneumatic door sliding open. */
-export function doorSlide(): void {
-  effect('door-slide', 'effects', DOOR_LEVEL);
+  const level = STEP_LEVEL * 10 ** (OWN_STEP_DB / 20) * (sprinting ? SPRINT_STEP_GAIN : 1);
+  effect(stepTake(ownSurface()), 'sfx', level, { rate: stepRate() });
 }
 
 /** A console's rising 'station ready' chirp. */
 export function stationChirp(): void {
-  effect('console-ready', 'effects', CHIRP_LEVEL);
+  effect('console-ready', 'sfx', CHIRP_LEVEL);
 }
 
 /** A short bright blip marking a map ping, never to be taken for the station chirp. */
 export function pingBlip(): void {
-  effect('ping', 'effects', CHIRP_LEVEL);
+  effect('ping', 'sfx', CHIRP_LEVEL);
 }
 
 /**
@@ -403,37 +373,37 @@ export function pingBlip(): void {
  * than the ping, so a find never sounds like somebody calling.
  */
 export function discoveryBlip(): void {
-  effect('discovery', 'effects', CHIRP_LEVEL);
+  effect('discovery', 'sfx', CHIRP_LEVEL);
 }
 
 /** A locker door swung open: the latch, then the thin clang of its sheet metal. */
 export function lockerOpen(): void {
-  effect('locker-open', 'effects', FIND_LEVEL);
+  effect('locker-open', 'sfx', FIND_LEVEL);
 }
 
 /** A padlock coming off, then the drawer rolling out on its runners. */
 export function cabinetUnlock(): void {
-  effect('cabinet-unlock', 'effects', FIND_LEVEL);
+  effect('cabinet-unlock', 'sfx', FIND_LEVEL);
 }
 
 /** A part delivered where it belongs — the fuse into its holder: a scrape and a snap. */
 export function partSeated(): void {
-  effect('part-seat', 'effects', FIND_LEVEL);
+  effect('part-seat', 'sfx', FIND_LEVEL);
 }
 
 /** A sheet put down: the paper's swish, then the soft clack of the board meeting the desk. */
 export function sheetDown(): void {
-  effect('sheet-down', 'effects', FIND_LEVEL);
+  effect('sheet-down', 'sfx', FIND_LEVEL);
 }
 
 /** A book shut: the rush of air over the pages, then the dull clap of cover on block. */
 export function coverShut(): void {
-  effect('book-shut', 'effects', FIND_LEVEL);
+  effect('book-shut', 'sfx', FIND_LEVEL);
 }
 
 /** A pencil taking a block down: three quick strokes of graphite on paper. */
 export function pencilScratch(): void {
-  effect('pencil', 'effects', CHIRP_LEVEL, { rate: rand(0.92, 1.08) });
+  effect('pencil', 'sfx', CHIRP_LEVEL, { rate: rand(0.92, 1.08) });
 }
 
 /**
@@ -442,7 +412,7 @@ export function pencilScratch(): void {
  * keys its own squelch (radioVoice.ts).
  */
 export function radioChirp(): void {
-  effect('radio-key', 'radio', CHIRP_LEVEL);
+  effect('radio-key', 'voice', CHIRP_LEVEL);
 }
 
 /**
@@ -453,7 +423,7 @@ export function powerDrain(delaySec = 0): void {
   const audio = playingEngine();
   if (audio === null) return;
   const at = audio.ctx.currentTime + LOOKAHEAD + delaySec;
-  effect('power-down', 'effects', DRAIN_LEVEL, { at });
+  effect('power-down', 'sfx', DRAIN_LEVEL, { at });
 }
 
 /**
@@ -517,12 +487,12 @@ export function blackoutSounds(cue: BlackoutCue): void {
       windDown(hum, t + cue.bang, POWER_DIE_SECONDS, POWER_FALL);
     }
     for (const [from, to] of cue.drops) {
-      effect('short-arc', 'master', ARC_LEVEL, { at: t + from, until: t + to });
+      effect('short-arc', 'sfx', ARC_LEVEL, { at: t + from, until: t + to });
     }
-    effect('breaker-thunk', 'master', BANG_LEVEL, { at: t + cue.bang });
-    effect('power-down', 'effects', DRAIN_LEVEL, { at: t + cue.bang });
-    effect('relay-click', 'master', CLICK_LEVEL, { at: t + cue.click });
-    effect('emergency-buzz', 'master', BUZZ_LEVEL, { at: t + cue.click + BUZZ_AFTER });
+    effect('breaker-thunk', 'sfx', BANG_LEVEL, { at: t + cue.bang });
+    effect('power-down', 'sfx', DRAIN_LEVEL, { at: t + cue.bang });
+    effect('relay-click', 'sfx', CLICK_LEVEL, { at: t + cue.click });
+    effect('emergency-buzz', 'sfx', BUZZ_LEVEL, { at: t + cue.click + BUZZ_AFTER });
   } catch {
     // Deliberately silent: the lights fail on screen as well.
   }
@@ -530,12 +500,40 @@ export function blackoutSounds(cue: BlackoutCue): void {
 
 /** A heavy main switch thrown home: the latch letting go, then the lever's chunk into its stop. */
 export function leverChunk(): void {
-  effect('lever-chunk', 'effects', LEVER_LEVEL);
+  effect('lever-chunk', 'sfx', LEVER_LEVEL);
 }
 
-/** A short klaxon for an alarm: two harsh blasts of a horn. */
+/** How long the recording `id` sounds from where its sound starts, s; 0 where it is not loaded. */
+function lengthOf(id: SfxId): number {
+  const recording = sample(id);
+  return recording === null ? 0 : recording.buffer.duration - recording.start;
+}
+
+/**
+ * A short klaxon for an alarm: two harsh blasts of a horn, the music pulled 6 dB down under
+ * them (mix.ts).
+ */
 export function klaxon(): void {
-  effect('klaxon', 'effects', KLAXON_LEVEL);
+  const audio = playingEngine();
+  if (audio === null) return;
+  const t = audio.ctx.currentTime + LOOKAHEAD;
+  effect('klaxon', 'sfx', KLAXON_LEVEL, { at: t });
+  duck(audio, 'alarm', t, t + lengthOf('klaxon'), audio.ctx.currentTime);
+}
+
+/** The alarm's sting at its peak: a step under the klaxon's horn. */
+const ALARM_STING_LEVEL = 0.035;
+
+/**
+ * The music's answer to an alarm (music.ts, at every alarm while it plays): a two-second
+ * stinger of brass and strings, on the effects' bus.
+ */
+export function alarmSting(): void {
+  const audio = playingEngine();
+  if (audio === null) return;
+  const t = audio.ctx.currentTime + LOOKAHEAD;
+  effect('alarm-sting', 'sfx', ALARM_STING_LEVEL, { at: t });
+  duck(audio, 'alarm', t, t + lengthOf('alarm-sting'), audio.ctx.currentTime);
 }
 
 /**
@@ -546,9 +544,12 @@ export function klaxonFade(): void {
   const audio = playingEngine();
   if (audio === null) return;
   const t = audio.ctx.currentTime + LOOKAHEAD;
+  let until = t;
   for (const [after, strength, rate] of KLAXON_FADING) {
-    effect('klaxon', 'effects', KLAXON_LEVEL * strength, { at: t + after, rate });
+    effect('klaxon', 'sfx', KLAXON_LEVEL * strength, { at: t + after, rate });
+    until = t + after + lengthOf('klaxon') / rate;
   }
+  duck(audio, 'alarm', t, until, audio.ctx.currentTime);
 }
 
 /** A room's lights coming on: the relay pulling in, then the tubes striking. */
@@ -556,13 +557,13 @@ export function lightsOnClick(): void {
   const audio = playingEngine();
   if (audio === null) return;
   const t = audio.ctx.currentTime + LOOKAHEAD;
-  effect('relay-click', 'master', CLICK_LEVEL, { at: t });
-  effect('tube-strike', 'master', CLICK_LEVEL * 0.6, { at: t + 0.12 });
+  effect('relay-click', 'sfx', CLICK_LEVEL, { at: t });
+  effect('tube-strike', 'sfx', CLICK_LEVEL * 0.6, { at: t + 0.12 });
 }
 
 /**
  * Idempotent. The escape's siren: two tones taking turns, looping quietly under everything —
- * fading in over ~0.4 s — until `stopSiren` ends it.
+ * fading in over ~0.4 s, the music 6 dB down under it — until `stopSiren` ends it.
  */
 export function startSiren(): void {
   try {
@@ -571,6 +572,8 @@ export function startSiren(): void {
     if (audio === null || audio.ctx.state === 'closed') return;
     unlock();
     siren = buildLoop(audio, sample('siren'), SIREN_LEVEL, SIREN_FADE_IN);
+    const now = audio.ctx.currentTime;
+    if (siren !== null) duck(audio, 'siren', now, Infinity, now);
   } catch {
     // Deliberately silent: the hatch and the red light say it as well.
   }
@@ -582,16 +585,62 @@ export function stopSiren(): void {
     const current = siren;
     siren = null;
     if (current !== null && engine !== null) {
-      fadeAway(current, engine.ctx.currentTime, SIREN_FADE_OUT);
+      const now = engine.ctx.currentTime;
+      fadeAway(current, now, SIREN_FADE_OUT);
+      unduck(engine, 'siren', now + SIREN_FADE_OUT, now);
     }
   } catch {
     // Deliberately silent: the siren's nodes are released with the context at the latest.
   }
 }
 
-/** The hatch grinding open: steel on steel over a straining motor, the leaves striking home. */
+/**
+ * How long the hatch grinds open, s: the screen's own (escape.ts EXIT_GRIND_MS), on which the
+ * leaves strike their stops.
+ */
+export const HATCH_OPEN_S = 2;
+/** The grind gives way to the leaves striking home over this long, s. */
+const HATCH_HANDOVER_S = 0.06;
+
+/**
+ * The hatch grinding open: steel on steel over a straining motor, then — as the leaves strike
+ * their stops on screen, HATCH_OPEN_S on — the boom of them hitting home and the shaft's air
+ * rushing up. Where that recording is not there, the grind plays out with the clunk it ends on.
+ */
 export function exitGrind(): void {
-  effect('hatch-grind', 'effects', GRIND_LEVEL);
+  const audio = playingEngine();
+  if (audio === null) return;
+  const t = audio.ctx.currentTime + LOOKAHEAD;
+  const home = t + HATCH_OPEN_S;
+  if (sample('hatch-open-done') === null) {
+    effect('hatch-grind', 'sfx', GRIND_LEVEL, { at: t });
+    return;
+  }
+  effect('hatch-grind', 'sfx', GRIND_LEVEL, { at: t, until: home - HATCH_HANDOVER_S });
+  effect('hatch-open-done', 'sfx', GRIND_LEVEL, { at: home - HATCH_HANDOVER_S });
+}
+
+/** The tick of a volume as it is set, at its peak: soft. */
+const TICK_LEVEL = 0.03;
+/** A volume ticks no oftener than this, s: a slider dragged clicks along, never buzzes. */
+const TICK_GAP_S = 0.06;
+/** The bus each volume of the settings sets, and when each last ticked (audio time). */
+const TICK_BUS = { radio: 'voice', effects: 'sfx', music: 'music' } as const;
+const ticked: Record<keyof typeof TICK_BUS, number> = {
+  radio: -Infinity,
+  effects: -Infinity,
+  music: -Infinity,
+};
+
+/**
+ * A volume set in the settings (screens/Settings.tsx): a knob's tick through the bus it sets, at
+ * the level it has now, so that the ear hears where the slider stands.
+ */
+export function volumeTick(part: keyof typeof TICK_BUS): void {
+  const audio = playingEngine();
+  if (audio === null || audio.ctx.currentTime - ticked[part] < TICK_GAP_S) return;
+  ticked[part] = audio.ctx.currentTime;
+  effect('ui-tick', TICK_BUS[part], TICK_LEVEL);
 }
 
 /** The recording `loop` playing round and round on the effects' bus at `level`, fading in. */
@@ -599,7 +648,7 @@ function buildLoop(audio: Engine, loop: Sample | null, level: number, fadeIn: nu
   if (loop === null) return null;
   const { ctx } = audio;
   const t = ctx.currentTime;
-  const out = outlet(ctx, audio.effects, level);
+  const out = outlet(ctx, audio.sfx, level);
   const fade = gain(ctx, 0);
   fade.gain.setValueAtTime(0, t);
   fade.gain.linearRampToValueAtTime(1, t + fadeIn);
@@ -659,17 +708,7 @@ function createEngine(): Engine | null {
     if (counted) {
       countGraph(ctx);
     }
-    const master = outlet(ctx, ctx.destination, muted ? 0 : MASTER_LEVEL);
-    const duck = outlet(ctx, master, 1);
-    return {
-      ctx,
-      master,
-      duck,
-      effects: outlet(ctx, master, volumes.effects),
-      beds: outlet(ctx, duck, volumes.effects),
-      music: outlet(ctx, duck, volumes.music),
-      radio: outlet(ctx, master, volumes.radio),
-    };
+    return { ctx, ...buildMix(ctx, volumes, muted ? 0 : MASTER_LEVEL) };
   } catch {
     return null;
   }
@@ -754,7 +793,7 @@ export function chain(first: AudioNode, ...rest: AudioNode[]): void {
   }
 }
 
-/** Two seconds of white noise, made once: the static under the radio's voice. */
+/** Two seconds of white noise, made once and counted (audioMemory.ts): the radio's static. */
 export function noiseBuffer(ctx: BaseAudioContext): AudioBuffer {
   if (noise === null) {
     const length = Math.floor(ctx.sampleRate * NOISE_SECONDS);
@@ -762,6 +801,7 @@ export function noiseBuffer(ctx: BaseAudioContext): AudioBuffer {
     const data = buffer.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
     noise = buffer;
+    hold('noise', 'made', buffer);
   }
   return noise;
 }
@@ -829,18 +869,17 @@ export function fadeTo(
 /**
  * The most sources the beds, the music and the placed sounds (ambience.ts, music.ts,
  * spatial.ts) keep alive at once: voices — the sources of short sounds, each a recording
- * played once — live noise, the shared noise through live filters, which none of them plays
- * any more, and loops — a bed's layer, the rotor, a stem of the music with its seam. A sound
- * with no room left is not played; a loop that was refused is tried again on the next round.
- * Mission control's voice and the effects are not counted: they were the lab's before, and
- * are short.
+ * played once — and loops — a bed's layer, the rotor, a stem of the music with its seam. A
+ * sound with no room left is not played; a loop that was refused is tried again on the next
+ * round. Mission control's voice and the effects are not counted: they were the lab's before,
+ * and are short.
  */
-export const CAPS = { voice: 12, noise: 4, loop: 6 } as const;
+export const CAPS = { voice: 12, loop: 6 } as const;
 
 /** What a sound takes from the budget while it plays. */
 export type Cost = Partial<Record<keyof typeof CAPS, number>>;
 
-const used: Record<keyof typeof CAPS, number> = { voice: 0, noise: 0, loop: 0 };
+const used: Record<keyof typeof CAPS, number> = { voice: 0, loop: 0 };
 
 /** Takes `cost` from the budget, or refuses (false) where it would go over a cap. */
 export function claim(cost: Cost): boolean {

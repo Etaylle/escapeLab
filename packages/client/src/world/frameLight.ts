@@ -1,5 +1,6 @@
 import type { DronePosition, Sight } from '@escapelab/core';
 import { doorOpenness, spillThrough, SPILL_HALF_ANGLE, SPILL_REACH } from './doors.js';
+import { handLamp } from './figure.js';
 import {
   doorsShut,
   emergencyLamp,
@@ -48,6 +49,8 @@ export interface LightScene {
   mounts: readonly LampMount[];
   /** clip paths in tiles, by the sight they were made from: a lamp standing still reuses its own */
   clips: WeakMap<Sight, Path2D>;
+  /** the player asked for less motion: the lamp in your hands holds still as you walk */
+  reduced: boolean;
 }
 
 /** A frame's lights, before what they show is worked out. */
@@ -171,14 +174,23 @@ function ownRoom(sim: Sim, map: WorldMap): PoweredRoom | null {
 }
 
 /**
+ * Your flashlight: in your figure's hands, swaying with your step (figure.ts handLamp), a glow
+ * all round and its cone where the lamp points.
+ */
+export function ownLamp(sim: Pick<Sim, 'self' | 'walkPhase'>, reduced: boolean): Lamp {
+  const hand = handLamp(sim.self, sim.walkPhase, reduced);
+  const cone = { facing: hand.facing, halfAngle: CONE_HALF_ANGLE, reach: CONE_REACH };
+  return { x: hand.x, y: hand.y, glow: OWN_GLOW, beam: cone };
+}
+
+/**
  * The lights of the dark: your flashlight, the crew's lamps, the drones'
  * eyes, the emergency lamps, the open hatch and the lit rooms' light
  * through open doors.
  */
 function darkLights(scene: LightScene, lit: LightUp): FrameLamps {
   const { sim, spectator } = scene;
-  const cone = { facing: sim.self.facing, halfAngle: CONE_HALF_ANGLE, reach: CONE_REACH };
-  const own = spectator ? null : lit({ x: sim.self.x, y: sim.self.y, glow: OWN_GLOW, beam: cone });
+  const own = spectator ? null : lit(ownLamp(sim, scene.reduced));
   const crew = spectator
     ? []
     : [...sim.others.values()].map((o) => lit({ x: o.rx, y: o.ry, glow: CREW_GLOW, beam: null }));

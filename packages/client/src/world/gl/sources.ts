@@ -51,6 +51,8 @@ export interface Light {
   strength: number;
   pulse?: { periodMs: number; depth: number };
   flicker?: boolean;
+  /** an emergency lamp's ageing tube: it wavers a few per cent, out of step with the others */
+  tremble?: boolean;
 }
 
 /**
@@ -128,6 +130,7 @@ export function fromSource(source: LightSource): Light {
     strength: asleep ? STANDBY_STRENGTH : source.strength,
     ...(pulse === undefined ? {} : { pulse: { ...pulse } }),
     ...(source.flicker === undefined ? {} : { flicker: source.flicker }),
+    ...(source.tremble === undefined ? {} : { tremble: source.tremble }),
   };
 }
 

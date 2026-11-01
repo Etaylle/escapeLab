@@ -66,12 +66,15 @@ describe('profile — what each pass costs a frame (?profile=1)', () => {
       'assemble',
       'tiles',
       'objects',
+      'props',
       'actors',
       'glow',
+      'atmosphere',
       'light',
       'darkness',
       'hud',
       'overlays',
+      'aberration',
     ]);
   });
 });

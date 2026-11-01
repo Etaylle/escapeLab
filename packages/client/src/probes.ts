@@ -8,9 +8,11 @@ import type { GraphCensus } from './world/audioCount.js';
 import type { LightProbe } from './world/gl/path.js';
 import type { IntroProbe } from './world/intro/useIntro.js';
 import type { MusicProbe } from './world/music.js';
+import type { SoundProbe } from './world/soundProbe.js';
 import type { RadioRender, VoiceProbe as RadioProbe } from './world/radioVoice.js';
 import type { MinimapLayout } from './world/render/frame.js';
 import type { HighlightProbe } from './world/render/highlight.js';
+import type { GraphicsProbe } from './world/render/graphicsProbe.js';
 import type { GoalDot } from './world/render/hud.js';
 import type { PassStats } from './world/render/profile.js';
 import type { SpatialProbe } from './world/spatial.js';
@@ -27,10 +29,11 @@ export interface MinimapProbe extends MinimapLayout {
 /**
  * What the lab sounds like now: the beds of the rooms round the player (world/ambience.ts),
  * the music's layers and pressure (music.ts), mission control's voice (radioVoice.ts) and
- * where the nearest partner sounds from (spatial.ts) — and the radio's chain rendered offline,
- * on white noise or on a recorded line.
+ * where the nearest partner sounds from (spatial.ts); what the mix holds and does — the PCM the
+ * page keeps, the budget, the room's reverb, the ducks, the brickwall (soundProbe.ts) — and the
+ * radio's chain rendered offline, on white noise or on a recorded line.
  */
-export interface AudioProbe extends BedProbe {
+export interface AudioProbe extends BedProbe, SoundProbe {
   readonly music: MusicProbe;
   readonly voice: RadioProbe;
   readonly spatial: SpatialProbe;
@@ -102,6 +105,12 @@ export interface Probes {
   readonly passes?: PassStats;
   /** forgets the frames the pass costs were taken over */
   resetPasses?: () => void;
+  /**
+   * what the world's picture shows of the graphics package's work: the walk cycle, the
+   * shadow's light, the panel zoom, the hatch, the particles, the backing store
+   * (world/render/graphicsProbe.ts)
+   */
+  readonly graphics?: GraphicsProbe;
   /** the walkthrough's controller, only with `?fakepad=1` (input/padRuntime.ts) */
   readonly pad?: PadProbe;
   /** the danger sense: the drone closing in, how far, the ticks so far (world/danger.ts) */

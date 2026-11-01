@@ -30,7 +30,6 @@ import {
   cabinetUnlock,
   countdownBeep,
   discoveryBlip,
-  doorSlide,
   footstep,
   graphCensus,
   klaxon,
@@ -59,12 +58,13 @@ import { watchInsets, type Insets } from './insets.js';
 import { carriedItem, contextAction, TOUCH, type ContextAction } from './interact.js';
 import { filmed, type IntroCue } from './intro/sequence.js';
 import { runsOf } from './light.js';
-import { positionsOf, type KnownPositions } from './movement.js';
+import { positionsOf, type KnownPositions, type Spot } from './movement.js';
 import { MUSIC_AFTER_CLICK_MS, musicProbe, setTension, stopMusic, type Tension } from './music.js';
 import { worldNews } from './news.js';
 import { noteMount } from './notes.js';
 import { renderRadio, voiceProbe } from './radioVoice.js';
 import { preloadSamples } from './samples.js';
+import { fitBacking } from './render/backing.js';
 import {
   profiled,
   renderKit,
@@ -74,6 +74,7 @@ import {
   type RenderKit,
   type WorldMap,
 } from './render/frame.js';
+import { graphicsProbe } from './render/graphicsProbe.js';
 import { highlightProbe } from './render/highlight.js';
 import { minimapGoal, minimapLayout } from './render/hud.js';
 import { dropLight } from './render/light.js';
@@ -89,10 +90,11 @@ import {
   walk,
   type Sim,
 } from './sim.js';
-import { HEAR_EVERY_S, hearCrew, spatialProbe, stopSpatial } from './spatial.js';
+import { doorMoved, HEAR_EVERY_S, hearCrew, spatialProbe, stopSpatial } from './spatial.js';
+import { soundProbe } from './soundProbe.js';
 import { streamPositions } from './stream.js';
 import { useWorldTip } from './useWorldTip.js';
-import { vignetteShown } from './vignette.js';
+import { vignettePressure } from './vignette.js';
 
 /**
  * The world as one screen lives it: a canvas the lab is drawn on, frame by
@@ -483,7 +485,7 @@ function traceFrames(loop: Loop): { trace: FrameTrace; drop: () => void } | null
     get audio() {
       const sound = { music: musicProbe(), voice: voiceProbe(), spatial: spatialProbe() };
       const nodes = { ...graphCensus(), beds: bedCount() };
-      return { ...bedProbe(), ...sound, nodes, spent: timeSpent(), renderRadio };
+      return { ...bedProbe(), ...sound, nodes, spent: timeSpent(), renderRadio, ...soundProbe() };
     },
   });
   return { trace, drop };
@@ -543,7 +545,7 @@ function step(loop: Loop, dt: number, map: WorldMap): void {
     footstep(footfall === 'sprint');
   }
   easeOthers(sim, positionsOf(loop.positions.current, run), youId, dt);
-  slideDoors(sim, map);
+  slideDoors(sim, map, spectator ? null : sim.self);
   if (map !== sim.seen) {
     look(loop, map);
   }
@@ -557,14 +559,17 @@ function step(loop: Loop, dt: number, map: WorldMap): void {
   sim.time += dt;
 }
 
-/** A door the view turned slides open or shut, with the hiss (doors.ts). */
-function slideDoors(sim: Sim, map: WorldMap): void {
+/**
+ * A door the view turned slides open or shut (doors.ts), heard from where it is by the player at
+ * `listener` — the audience, standing nowhere, hears it unplaced (spatial.ts `doorMoved`).
+ */
+function slideDoors(sim: Sim, map: WorldMap, listener: Spot | null): void {
   const now = Date.now();
   for (const door of map.doors) {
     const { motion, moved } = doorTurned(sim.doors.get(door.id), door.open, now);
     sim.doors.set(door.id, motion);
     if (moved) {
-      doorSlide();
+      doorMoved(map, listener, door);
     }
   }
 }
@@ -760,18 +765,13 @@ function livePings(loop: Loop, perf: number): MapPing[] {
   return live;
 }
 
-/** Sizes the canvas to its box at this screen's density, assembles the frame and draws it. */
+/**
+ * Sizes the canvas to its box at this screen's density (render/backing.ts), assembles the frame
+ * and draws it.
+ */
 function render(loop: Loop, map: WorldMap): void {
   const { canvas, kit } = loop;
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const cw = canvas.clientWidth;
-  const ch = canvas.clientHeight;
-  if (canvas.width !== cw * dpr || canvas.height !== ch * dpr) {
-    canvas.width = cw * dpr;
-    canvas.height = ch * dpr;
-    kit.overlay.canvas.width = canvas.width;
-    kit.overlay.canvas.height = canvas.height;
-  }
+  const dpr = fitBacking(canvas, kit.overlay.canvas, window.devicePixelRatio);
   const perf = performance.now();
   const pings = livePings(loop, perf);
   const frame = profiled(kit, 'assemble', null, () => assembleFrame(loop, map, dpr, perf, pings));
@@ -849,6 +849,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
     const unlisten = props.spectator ? null : listen(loop, setWheelOpen);
     const posTimer = streamPositions(sim, props.spectator, (msg) => live.current.send(msg));
     const traced = traceFrames(loop);
+    const tracedGraphics = traceGraphics(loop);
     const profiled = profilePasses(kit);
     const stop = runFrames(loop, traced?.trace ?? null);
     const ears = setInterval(() => hearTheLab(loop), HEAR_MS);
@@ -864,6 +865,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
       stopDanger();
       stopPowerHum();
       traced?.drop();
+      tracedGraphics?.();
       profiled?.();
       dropLight(kit);
       refs.simRef.current = null;
@@ -1078,13 +1080,15 @@ function useWorld(props: Props): WorldState {
 /**
  * The red edge round the world in the clock's last minute and all through the escape
  * (vignette.ts): an element right over the canvas and under everything else on it — the
- * coach, the controls, the bar — breathing by its opacity alone (finale.css). Gone once the
- * run's end plays on this screen.
+ * coach, the controls, the bar — breathing by its opacity alone (finale.css), the harder the
+ * more pressing the moment. Gone once the run's end plays on this screen.
  */
 function RedEdge({ view, ending }: { view: PlayerView; ending: boolean }) {
   const now = useNow(500);
-  const shown = vignetteShown(view.deadlineAt, now, escaping(view.map), ending);
-  return shown ? <div className="vignette" aria-hidden="true" /> : null;
+  const pressure = vignettePressure(view.deadlineAt, now, escaping(view.map), ending);
+  return pressure === null ? null : (
+    <div className={`vignette vignette--${pressure}`} aria-hidden="true" />
+  );
 }
 
 export function GameWorld(props: Props) {
@@ -1117,4 +1121,20 @@ export function GameWorld(props: Props) {
       {wheelOpen && <ChatWheel send={props.send} setWheelOpen={setWheelOpen} />}
     </div>
   );
+}
+
+/**
+ * `?trace=1`: what the world's picture shows of the graphics package's work, read off the page
+ * by the walkthrough (`window.__escapelab.graphics`, render/graphicsProbe.ts). Returns what takes
+ * the probe off; null without the trace.
+ */
+function traceGraphics(loop: Loop): (() => void) | null {
+  if (!traceRequested(location.search)) {
+    return null;
+  }
+  return addProbes({
+    get graphics() {
+      return graphicsProbe(loop);
+    },
+  });
 }

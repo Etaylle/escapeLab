@@ -1,23 +1,18 @@
-import {
-  audioEngine,
-  capped,
-  chain,
-  EFFECTS_LEVEL,
-  gain,
-  LOOKAHEAD,
-  playingEngine,
-} from '../audio.js';
+import { claim, EFFECTS_LEVEL, LOOKAHEAD, playingEngine, release } from '../audio.js';
+import { closeStream, openStream, startStream, type Stream } from '../audioStream.js';
 
 /**
  * The opening's music: one instrumental bed of some 40 s — dark, low, industrial, slowly
  * building — composed once by ElevenLabs Music (scripts/introCue.ts) into public/intro/. It
- * plays from the card on under the announcement, low, into the music's bus at the Musik
- * volume, and counts as one voice of the lab's budget (audio.ts `capped`). Skipping the
- * opening fades it out; the blackout cuts it off. Where there is no cue — none composed, or the
- * file not to be had — the opening plays without it. Nothing here throws.
+ * plays from the card on under the announcement, low, into the music's bus at the Musik volume,
+ * and counts as one voice of the lab's budget (audio.ts `claim`). It streams from its file
+ * (audioStream.ts) rather than being decoded — 40 s in two channels would hold some 15 MB — its
+ * level set by the peak its list names. Skipping the opening fades it out; the blackout cuts it
+ * off. Where there is no cue — none composed, or the file not to be had — the opening plays
+ * without it. Nothing here throws.
  */
 
-/** Where the cue lies, and its list: { file, ms, hash } (scripts/introCue.ts). */
+/** Where the cue lies, and its list: { file, ms, peak, hash } (scripts/introCue.ts). */
 export const CUE_BASE = '/intro/';
 export const CUE_MANIFEST = `${CUE_BASE}manifest.json`;
 
@@ -25,6 +20,8 @@ export const CUE_MANIFEST = `${CUE_BASE}manifest.json`;
 export interface CueManifest {
   readonly file: string;
   readonly ms: number;
+  /** its peak over both channels, linear */
+  readonly peak: number;
   readonly hash: string;
 }
 
@@ -33,85 +30,71 @@ export const CUE_PEAK = EFFECTS_LEVEL * 0.5;
 /** How long the cue fades where the player skips the opening, s. */
 export const CUE_FADE_S = 1.5;
 
-/** A decoded cue and its peak. */
-interface Cue {
-  readonly buffer: AudioBuffer;
-  readonly peak: number;
-}
-
-/** The cue as it plays: its level, its source, and when it ends on the audio clock. */
+/** The cue as it plays: its stream, when it ends on the audio clock, and whether it has gone. */
 interface Playing {
-  readonly level: GainNode;
-  readonly source: AudioBufferSourceNode;
+  readonly stream: Stream;
   readonly end: number;
+  gone: boolean;
 }
 
-let loading: Promise<Cue | null> | null = null;
+let listed: Promise<CueManifest | null> | null = null;
 let playing: Playing | null = null;
 /** The opening that wants the cue, by when it began (epoch ms); null once none does. */
 let wanted: number | null = null;
 
-/** The loudest sample of the cue's first channel; 1 for a silent one. */
-function peakOf(buffer: AudioBuffer): number {
-  const data = buffer.getChannelData(0);
-  let peak = 0;
-  for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i] ?? 0));
-  return peak > 0 ? peak : 1;
-}
-
-/** Fetches and decodes the cue the list names, once; null where there is none to be had. */
-export function loadCue(): Promise<Cue | null> {
-  loading ??= fetch(CUE_MANIFEST)
+/** The cue's list, fetched once; null where there is none to be had (it is asked again later). */
+function cueListed(): Promise<CueManifest | null> {
+  listed ??= fetch(CUE_MANIFEST)
     .then((res) => (res.ok ? (res.json() as Promise<CueManifest>) : null))
-    .then(async (manifest) => {
-      const ctx = audioEngine()?.ctx;
-      if (manifest === null || ctx === undefined) return null;
-      const res = await fetch(`${CUE_BASE}${manifest.file}`);
-      if (!res.ok) return null;
-      const buffer = await ctx.decodeAudioData(await res.arrayBuffer());
-      return { buffer, peak: peakOf(buffer) };
-    })
     .catch(() => null)
     .then((cue) => {
-      if (cue === null) loading = null;
+      if (cue === null) listed = null;
       return cue;
     });
-  return loading;
+  return listed;
 }
 
 /**
  * The cue for the opening that began at `since` (epoch ms): from where that opening stands now,
- * once it is loaded — unless the opening was skipped or cut meanwhile.
+ * once its list is here — unless the opening was skipped or cut meanwhile.
  */
 export function startCue(since: number): void {
   wanted = since;
-  void loadCue().then((cue) => {
+  void cueListed().then((cue) => {
     if (cue !== null && wanted === since) begin(cue, since);
   });
 }
 
-/** Plays `cue` from where the opening that began at `since` stands, as one voice. */
-function begin(cue: Cue, since: number): void {
+/** The cue's stream let go, and its voice given back: once. */
+function letGo(cue: Playing): void {
+  if (cue.gone) return;
+  cue.gone = true;
+  closeStream(cue.stream);
+  release({ voice: 1 });
+}
+
+/** Streams `cue` from where the opening that began at `since` stands, as one voice. */
+function begin(cue: CueManifest, since: number): void {
   try {
     const engine = playingEngine();
-    const offset = (Date.now() - since) / 1000;
-    if (engine === null || playing !== null || offset >= cue.buffer.duration) return;
+    const from = Math.max(0, (Date.now() - since) / 1000);
+    if (engine === null || playing !== null || from >= cue.ms / 1000) return;
+    if (!claim({ voice: 1 })) return;
     const { ctx } = engine;
-    capped(ctx, engine.music, { voice: 1 }, (out) => {
-      const level = gain(ctx, CUE_PEAK / cue.peak);
-      const source = ctx.createBufferSource();
-      source.buffer = cue.buffer;
-      chain(source, level, out);
-      const at = ctx.currentTime + LOOKAHEAD;
-      const from = Math.max(0, offset);
-      source.start(at, from);
-      const now: Playing = { level, source, end: at + cue.buffer.duration - from };
-      playing = now;
-      source.addEventListener('ended', () => {
+    const level = CUE_PEAK / (cue.peak > 0 ? cue.peak : 1);
+    const stream = openStream(ctx, `${CUE_BASE}${cue.file}`, engine.music, level);
+    const at = ctx.currentTime + LOOKAHEAD;
+    startStream(stream, ctx, at - from, from);
+    const now: Playing = { stream, end: at + cue.ms / 1000 - from, gone: false };
+    playing = now;
+    stream.element.addEventListener(
+      'ended',
+      () => {
         if (playing === now) playing = null;
-      });
-      return [source];
-    });
+        letGo(now);
+      },
+      { once: true },
+    );
   } catch {
     // Deliberately silent: the opening plays on without its music.
   }
@@ -124,12 +107,13 @@ export function stopCue(fadeS: number): void {
   playing = null;
   if (cue === null) return;
   try {
-    const now = cue.level.context.currentTime;
-    const param = cue.level.gain;
+    const param = cue.stream.out.gain;
+    const now = cue.stream.out.context.currentTime;
+    const fade = Math.max(0.02, fadeS);
     param.cancelScheduledValues(now);
     param.setValueAtTime(param.value, now);
-    param.linearRampToValueAtTime(0, now + Math.max(0.02, fadeS));
-    cue.source.stop(now + Math.max(0.02, fadeS) + 0.05);
+    param.linearRampToValueAtTime(0, now + fade);
+    setTimeout(() => letGo(cue), (fade + 0.05) * 1000);
   } catch {
     // Deliberately silent: the cue ends on its own.
   }

@@ -516,20 +516,22 @@ describe('the game screen while the world plays the end', () => {
     expect(html).toMatch(/^<div class="game">/);
     expect(html).not.toContain('finale-veil');
     // Right over the canvas, under the coach, the controls and the bar: never over the page.
+    // Breathing its hardest through the escape (world/vignette.ts vignettePressure).
     expect(html).toContain(
       '<div class="world-wrap"><canvas class="world-canvas "></canvas>' +
-        '<div class="vignette" aria-hidden="true"></div>',
+        '<div class="vignette vignette--escape" aria-hidden="true"></div>',
     );
-    expect(html.match(/vignette/g)).toHaveLength(1);
+    expect(html.match(/class="vignette /g)).toHaveLength(1);
   });
 
   it('edges the world red only in the clock’s last minute outside the escape', () => {
     const calm = mapWith({ exit: hatch(null) });
-    const edged = (deadlineAt: number | null): boolean =>
-      game(viewOf({ map: calm, deadlineAt }), null).includes('class="vignette"');
-    expect(edged(Date.now() + 30_000)).toBe(true);
-    expect(edged(Date.now() + 90_000)).toBe(false);
-    expect(edged(null)).toBe(false);
+    const edged = (deadlineAt: number | null): string | undefined =>
+      /class="vignette vignette--(\w+)"/.exec(game(viewOf({ map: calm, deadlineAt }), null))?.[1];
+    expect(edged(Date.now() + 30_000)).toBe('minute');
+    expect(edged(Date.now() + 10_000)).toBe('stretch');
+    expect(edged(Date.now() + 90_000)).toBeUndefined();
+    expect(edged(null)).toBeUndefined();
   });
 
   it('leaves the audience’s lab without it, in the escape too', () => {
@@ -623,10 +625,22 @@ describe('the sounds of the alarm, the escape and the end', () => {
     expect(startsOf('siren')).toHaveLength(2);
   });
 
-  it('grind the hatch open, and click the lights on with their tubes striking after', async () => {
+  it('grind the hatch open, its leaves striking home as they do on screen', async () => {
     const audio = await freshAudio();
+    expect(audio.HATCH_OPEN_S * 1000).toBe(EXIT_GRIND_MS);
     audio.exitGrind();
     expect(startedAt('hatch-grind', 10.01)).toBe(true);
+    expect(startedAt('hatch-open-done', 10.01 + audio.HATCH_OPEN_S - 0.06)).toBe(true);
+    // Without the leaves' recording the grind plays out with the clunk it ends on.
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const plain = await freshAudio({ 'hatch-open-done': { status: 404 } });
+    started.length = 0;
+    plain.exitGrind();
+    expect(started.map((s) => s.kind)).toEqual(['hatch-grind']);
+  });
+
+  it('click the lights on with their tubes striking after', async () => {
+    const audio = await freshAudio();
     started.length = 0;
     audio.lightsOnClick();
     expect(startedAt('relay-click', 10.01)).toBe(true);

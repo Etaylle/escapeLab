@@ -1,21 +1,15 @@
-import { animTime } from '../anim.js';
+import { animTime, propSeed } from '../anim.js';
 import { dressedFor } from '../artKit.js';
 import { bakeBox } from '../baked.js';
-import { decorGlows, decorSteams, decorVariant, drawDecorGlow } from '../decor.js';
+import { decorGlows, decorVariant, drawDecorGlow } from '../decor.js';
 import { strengthAt } from '../gl/pack.js';
-import { AMBER, lift, rgba, TUNGSTEN, WHITE, type Rgb } from '../palette.js';
-import {
-  particleAlpha,
-  stepParticles,
-  type Beam,
-  type Emitters,
-  type Particle,
-} from '../particles.js';
+import { AMBER, lift, rgba } from '../palette.js';
 import { glowSources, lightShown, powerAt, type LightSource } from '../sources.js';
-import { drawWallPropGlow, glows, STEAM_SPOT } from '../wallProps.js';
+import { drawWallPropGlow, glows } from '../wallProps.js';
+import * as atmosphere from './atmosphere.js';
 import { layBake } from './bakes.js';
 import { clipOf, shutKey } from './clips.js';
-import { inTiles, type Frame } from './frame.js';
+import { inTiles, profiled, type Frame } from './frame.js';
 import { onLayer } from './light.js';
 
 /**
@@ -62,7 +56,7 @@ function drawGlowing(
   drawBeacon(ctx, frame);
   ctx.globalCompositeOperation = 'source-over';
   drawEmissive(ctx, frame);
-  drawParticles(ctx, frame);
+  profiled(frame.kit, 'atmosphere', ctx, () => atmosphere.draw(ctx, frame));
   ctx.restore();
 }
 
@@ -172,7 +166,11 @@ function inView(frame: Frame, x: number, y: number): boolean {
   return Math.abs(x + 0.5 - camera.x) <= halfW && Math.abs(y + 0.5 - camera.y) <= halfH;
 }
 
-/** What glows on the walls and the furniture in view, where the world shows it. */
+/**
+ * What glows on the walls and the furniture in view, where the world shows it: each thing's
+ * tube and LEDs out of step with the others' (its seed, from its tile), a lab's screens
+ * showing an oscilloscope's trace.
+ */
 function drawEmissive(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const { dressing } = dressedFor(frame.kit.art, frame.map, frame.missionId);
   const t = animTime(frame.time);
@@ -181,9 +179,12 @@ function drawEmissive(ctx: CanvasRenderingContext2D, frame: Frame): void {
     if (!glows(prop.kind) || !inView(frame, prop.x, prop.y)) continue;
     if (!lightShown(frame, prop.x, prop.y + 1)) continue;
     const on = powerAt(frame, prop.x, prop.y + 1, prop.room);
+    const below = (prop.y + 1) * dressing.width + prop.x;
+    const scope = dressing.kinds[below] === 'lab';
+    const seed = propSeed(prop.x, prop.y);
     ctx.save();
     ctx.translate(prop.x, prop.y);
-    drawWallPropGlow(ctx, prop.kind, prop.variant, { ...base, on });
+    drawWallPropGlow(ctx, prop.kind, prop.variant, { ...base, on, seed, scope });
     ctx.restore();
   }
   for (const piece of frame.map.decor) {
@@ -192,95 +193,10 @@ function drawEmissive(ctx: CanvasRenderingContext2D, frame: Frame): void {
     if (!lightShown(frame, piece.x, piece.y)) continue;
     const room = dressing.rooms[piece.y * dressing.width + piece.x] ?? null;
     const on = powerAt(frame, piece.x, piece.y, room);
+    const seed = propSeed(piece.x, piece.y);
     ctx.save();
     ctx.translate(piece.x + 0.5, piece.y + 0.5);
-    drawDecorGlow(ctx, piece.kind, variant, { ...base, on });
+    drawDecorGlow(ctx, piece.kind, variant, { ...base, on, seed });
     ctx.restore();
-  }
-}
-
-/** How close to you a steam vent in the dark has to be for your lamp to show its steam, tiles. */
-const STEAM_SEEN = 4.5;
-
-/** Your flashlight's beam; none for the audience, nor while the lab has its power. */
-function beamOf(frame: Frame): Beam | null {
-  const own = frame.light.own;
-  const beam = own?.lamp.beam;
-  if (frame.spectator || own === null || beam === null || beam === undefined) {
-    return null;
-  }
-  return { x: own.lamp.x, y: own.lamp.y, ...beam };
-}
-
-/** Where steam rises: the vents in view whose steam light shows — a lit room's, or near you. */
-function ventsOf(frame: Frame): { x: number; y: number }[] {
-  const { dressing } = dressedFor(frame.kit.art, frame.map, frame.missionId);
-  const seen = (x: number, y: number): boolean => {
-    if (!inView(frame, x, y) || !frame.light.shown(x, y)) return false;
-    const near = Math.hypot(x + 0.5 - frame.self.x, y + 0.5 - frame.self.y) < STEAM_SEEN;
-    return frame.spectator || near || frame.light.powered(x, y) || frame.litTiles.has(`${x},${y}`);
-  };
-  const walls = dressing.props
-    .filter((prop) => prop.kind === 'steam' && seen(prop.x, prop.y + 1))
-    .map((prop) => ({ x: prop.x + STEAM_SPOT.x, y: prop.y + STEAM_SPOT.y }));
-  const stacks = frame.map.decor
-    .filter((piece) => decorSteams(piece.kind, decorVariant(piece)) && seen(piece.x, piece.y))
-    .map((piece) => ({ x: piece.x + 0.55, y: piece.y + 0.05 }));
-  return [...walls, ...stacks];
-}
-
-/** Whether a mote at (x, y) is in the beam, and so lit. */
-function inBeam(beam: Beam, particle: Particle): boolean {
-  const dx = particle.x - beam.x;
-  const dy = particle.y - beam.y;
-  const turn = Math.atan2(dy, dx) - beam.facing;
-  const off = Math.abs(Math.atan2(Math.sin(turn), Math.cos(turn)));
-  return off < beam.halfAngle && Math.hypot(dx, dy) < beam.reach;
-}
-
-const DUST: Rgb = lift(TUNGSTEN, 0.4);
-const SPARK: Rgb = lift(AMBER, 0.6);
-
-/** The motes lit in your beam, only where your lamp can see: none behind a wall. */
-function drawDust(ctx: CanvasRenderingContext2D, frame: Frame, beam: Beam): void {
-  const own = frame.light.own;
-  ctx.save();
-  if (own !== null) {
-    ctx.clip(own.clip);
-  }
-  for (const particle of frame.kit.art.particles.live) {
-    if (particle.kind === 'dust' && inBeam(beam, particle)) {
-      ctx.fillStyle = rgba(DUST, 0.55 * particleAlpha(particle));
-      ctx.fillRect(particle.x, particle.y, particle.size, particle.size);
-    }
-  }
-  ctx.restore();
-}
-
-/** The particles, moved on to this frame: steam, the motes in your beam, the sparks. */
-function drawParticles(ctx: CanvasRenderingContext2D, frame: Frame): void {
-  const { particles } = frame.kit.art;
-  const beam = beamOf(frame);
-  const { short, reduced } = frame;
-  const emitters: Emitters = { beam, vents: ventsOf(frame), short, reduced };
-  stepParticles(particles, frame.time, emitters);
-  for (const particle of particles.live) {
-    const alpha = particleAlpha(particle);
-    if (particle.kind === 'steam') {
-      ctx.fillStyle = rgba(WHITE, 0.13 * alpha);
-      ctx.beginPath();
-      ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (particle.kind === 'spark') {
-      ctx.strokeStyle = rgba(SPARK, alpha);
-      ctx.lineWidth = 0.025;
-      ctx.beginPath();
-      ctx.moveTo(particle.x, particle.y);
-      ctx.lineTo(particle.x - particle.vx * 0.04, particle.y - particle.vy * 0.04);
-      ctx.stroke();
-    }
-  }
-  if (beam !== null) {
-    drawDust(ctx, frame, beam);
   }
 }
