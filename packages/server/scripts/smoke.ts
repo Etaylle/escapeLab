@@ -264,7 +264,7 @@ class TestClient {
   sendPos(x: number, y: number, moving: boolean): void {
     this.self = { x, y };
     const run = this.view?.startedAt ?? fail(`${this.label}: no run to walk in`);
-    this.send({ kind: 'pos', run, x, y, facing: 0, moving });
+    this.send({ kind: 'pos', run, x, y, facing: 0, moving, t: Date.now() });
   }
 
   close(): void {
@@ -2120,7 +2120,7 @@ console.log('✓ after the rematch, both clients see everybody on the spawn just
 // A step inside the spawn's own tile, floor for every spawn: the new run would take it.
 const fresh = spawnOf(first);
 const aside = { x: fresh.x + 0.5, y: fresh.y + 0.8, facing: 0, moving: true };
-first.send({ kind: 'pos', run: lastRun, ...aside });
+first.send({ kind: 'pos', run: lastRun, ...aside, t: Date.now() });
 // The server answers in order: once the room list is back, it has handled the position.
 first.send({ kind: 'list-rooms' });
 await first.expect(

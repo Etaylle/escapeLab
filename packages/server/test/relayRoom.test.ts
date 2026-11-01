@@ -180,9 +180,11 @@ describe('Room relay emergencies', () => {
     expect(running(anna)).toBe(false);
     expect(inputs).toBe(4);
     expect(lastView(anna.messages).penaltySeq).toBe(0);
-    const quiet = anna.messages.length;
+    // Nothing but the positions' keepalive goes out any more: no tick changes a view.
+    const views = (): number => anna.messages.filter((m) => m.kind !== 'positions').length;
+    const quiet = views();
     vi.advanceTimersByTime(5000);
-    expect(anna.messages.length).toBe(quiet);
+    expect(views()).toBe(quiet);
     room.dispose();
   });
 });

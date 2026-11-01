@@ -144,12 +144,8 @@ function handleMessage(
     }
     case 'pos': {
       const s = requireSession(session);
-      s.room.updatePosition(s.playerId, msg.run, {
-        x: msg.x,
-        y: msg.y,
-        facing: msg.facing,
-        moving: msg.moving,
-      });
+      const { x, y, facing, moving } = msg;
+      s.room.updatePosition(s.playerId, msg.run, { x, y, facing, moving }, msg.t);
       return s;
     }
     case 'set-ready': {

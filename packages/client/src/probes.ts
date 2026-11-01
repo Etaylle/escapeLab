@@ -86,6 +86,8 @@ export interface Probes {
   readonly camera?: CameraProbe;
   /** where your avatar stands as this page steers it, in tiles (world/sim.ts) */
   readonly self?: { x: number; y: number };
+  /** where this page draws the rest of the crew, by player id, in tiles (world/trail.ts) */
+  readonly others?: Record<string, { x: number; y: number }>;
   /** the avatar's footfalls so far, walking and sprinting (world/sim.ts): their pace is timed */
   readonly footfalls?: number;
   /** the minimap and the goal it points at; null while it is off */

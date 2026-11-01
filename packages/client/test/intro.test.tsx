@@ -620,6 +620,7 @@ describe('the crew held by the opening', () => {
   it('sends no position while held, and the spawn once it lets go', () => {
     const sim = newSim(0);
     Object.assign(sim.self, { x: 3.5, y: 3.5 });
+    sim.selfAt = 2_000;
     sim.run = START;
     sim.held = true;
     const sent: ClientMessage[] = [];
@@ -628,8 +629,9 @@ describe('the crew held by the opening', () => {
     expect(sent).toEqual([]);
     sim.held = false;
     vi.advanceTimersByTime(100);
+    const t = Math.round((performance.timeOrigin + 2_000) * 10) / 10;
     expect(sent).toEqual([
-      { kind: 'pos', run: START, x: 3.5, y: 3.5, facing: 0, moving: false },
+      { kind: 'pos', run: START, x: 3.5, y: 3.5, facing: 0, moving: false, t },
     ]);
     clearInterval(timer);
   });

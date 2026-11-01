@@ -19,7 +19,8 @@ import {
   WALK_HIP,
 } from '../src/world/figure.js';
 import { ownLamp } from '../src/world/frameLight.js';
-import { easeOthers, newSim } from '../src/world/sim.js';
+import { followOthers, newSim } from '../src/world/sim.js';
+import { REMOTE_DELAY_MS } from '../src/world/trail.js';
 
 /** `value` sampled over one walk cycle, `steps` points from phase 0. */
 function overCycle<T>(steps: number, value: (phase: number) => T): T[] {
@@ -148,19 +149,19 @@ describe('handLamp — the flashlight in the hands', () => {
   });
 });
 
-describe('easeOthers — a partner’s legs keep pace with the ground they cover', () => {
+describe('followOthers — a partner’s legs keep pace with the ground they cover', () => {
   /**
-   * A partner running east at `speed` tiles a second for `frames` frames: their walk phase,
-   * short of a whole cycle at either pace.
+   * A partner running east at `speed` tiles a second, sampled every 80 ms and drawn
+   * REMOTE_DELAY_MS behind, over `frames` frames: their walk phase, short of a whole cycle at
+   * either pace.
    */
-  function phaseAfter(speed: number, frames = 10): number {
+  function phaseAfter(speed: number, frames = 18): number {
     const sim = newSim(0);
-    const dt = 1 / 60;
-    let x = 2;
-    easeOthers(sim, { p2: { x, y: 2.5, facing: 0, moving: true } }, 'p1', dt);
     for (let i = 0; i < frames; i++) {
-      x += speed * dt;
-      easeOthers(sim, { p2: { x, y: 2.5, facing: 0, moving: true } }, 'p1', dt);
+      const now = 1_000 + (i * 1000) / 60;
+      const t = Math.floor(now / 80) * 80;
+      const pos = { x: 2 + (speed * t) / 1000, y: 2.5, facing: 0, moving: true, t, rt: t };
+      followOthers(sim, { p2: pos }, 'p1', now - REMOTE_DELAY_MS);
     }
     return sim.others.get('p2')?.phase ?? Number.NaN;
   }
@@ -175,8 +176,11 @@ describe('easeOthers — a partner’s legs keep pace with the ground they cover
 
   it('keeps a partner’s legs still while they stand', () => {
     const sim = newSim(0);
-    easeOthers(sim, { p2: { x: 2, y: 2.5, facing: 0, moving: false } }, 'p1', 1 / 60);
-    easeOthers(sim, { p2: { x: 3, y: 2.5, facing: 0, moving: false } }, 'p1', 1 / 60);
+    const standing = { x: 2, y: 2.5, facing: 0, moving: false, t: null };
+    followOthers(sim, { p2: { ...standing, rt: 0 } }, 'p1', 0);
+    followOthers(sim, { p2: { ...standing, facing: 1, rt: 80 } }, 'p1', 40);
+    followOthers(sim, { p2: { ...standing, facing: 1, rt: 80 } }, 'p1', 120);
     expect(sim.others.get('p2')?.phase).toBe(0);
+    expect(sim.others.get('p2')?.moving).toBe(false);
   });
 });

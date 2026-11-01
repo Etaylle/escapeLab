@@ -46,6 +46,34 @@ describe('walk — furniture stands in the way like a wall', () => {
   });
 });
 
+describe('walk — walking means covering ground', () => {
+  it('walks while it covers ground and stands once a wall holds it, the key still down', () => {
+    const map = mapWith({ width: 10, height: 6, tiles: TILES });
+    const sim = newSim(0);
+    Object.assign(sim.self, { x: 7.5, y: 2.5 });
+    sim.keys.add('right');
+    walk(sim, map, 1 / 60, false);
+    expect(sim.self.moving).toBe(true);
+    for (let i = 0; i < 60; i++) {
+      walk(sim, map, 1 / 60, false);
+    }
+    expect(sim.self.x).toBeCloseTo(8.72, 1);
+    expect(sim.self.moving).toBe(false);
+    // and it faces the wall it pushes against
+    expect(sim.self.facing).toBe(0);
+  });
+
+  it('walks along a wall it is pushed against slantwise', () => {
+    const map = mapWith({ width: 10, height: 6, tiles: TILES });
+    const sim = newSim(0);
+    Object.assign(sim.self, { x: 6.5, y: 1.3 });
+    sim.keys.add('up');
+    sim.keys.add('right');
+    walk(sim, map, 1 / 60, false);
+    expect(sim.self.moving).toBe(true);
+  });
+});
+
 /** The lab's open middle row, (1,2) to (8,2): room to run a second east. */
 const OPEN = mapWith({ width: 10, height: 6, tiles: TILES });
 

@@ -5,7 +5,7 @@ import type {
   MapView,
   MissionInfo,
   MissionStats,
-  PlayerPosition,
+  RelayedPosition,
   PlayerView,
   RoomSummary,
   SpectatorView,
@@ -620,12 +620,14 @@ const lab: MapView = mapWith({
   ],
 });
 
-/** Standing on tile (x, y). */
-const on = (x: number, y: number): PlayerPosition => ({
+/** Standing on tile (x, y), as the server placed them. */
+const on = (x: number, y: number): RelayedPosition => ({
   x: x + 0.5,
   y: y + 0.5,
   facing: 0,
   moving: false,
+  t: null,
+  rt: 0,
 });
 
 const nowhere = { stationId: null, manualId: null };

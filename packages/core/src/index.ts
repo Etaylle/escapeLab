@@ -164,6 +164,7 @@ export {
   type MissionManualStation,
   type RoomSummary,
   type PlayerPosition,
+  type RelayedPosition,
   type DronePosition,
 } from './protocol.js';
 export { SIMON_COLORS, type SimonColor } from './puzzles/simon.js';

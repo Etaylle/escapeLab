@@ -69,10 +69,14 @@ describe('client messages', () => {
     expect(parseClientMessage(JSON.stringify(msg))).toEqual(msg);
   });
 
-  it('take a position only with the run it was walked in', () => {
+  it('take a position only with the run it was walked in and the moment it was true', () => {
     const pos = { kind: 'pos', x: 3.5, y: 2.5, facing: 0, moving: true };
     expect(() => parseClientMessage(JSON.stringify(pos))).toThrow(/Unbekanntes Nachrichtenformat/);
-    const stamped = { ...pos, run: 1_000_000 };
+    const inRun = { ...pos, run: 1_000_000 };
+    expect(() => parseClientMessage(JSON.stringify(inRun))).toThrow(
+      /Unbekanntes Nachrichtenformat/,
+    );
+    const stamped = { ...inRun, t: 1_700_000_000_016.7 };
     expect(parseClientMessage(JSON.stringify(stamped))).toEqual(stamped);
   });
 

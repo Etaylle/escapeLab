@@ -251,3 +251,62 @@ describe('Room movement', () => {
     room.dispose();
   });
 });
+
+describe('Room positions as they fan out', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_700_000_000_000);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A Blackout run of two: what Ben's screen is sent while Anna walks the Flur. */
+  function walkingRun() {
+    const room = new Room('TEST', blackout);
+    const anna = join(room, 'Anna');
+    const ben = join(room, 'Ben');
+    room.setReady(ben.playerId, true);
+    room.act(anna.playerId, { kind: 'start-mission' });
+    return { room, anna, ben, run: runOf(anna) };
+  }
+
+  it('carry when each position was true by its sender and when the room took it', () => {
+    const { room, anna, ben, run } = walkingRun();
+    const from = spawnOf(anna);
+    const to = stepOff(from);
+    vi.advanceTimersByTime(500);
+    room.updatePosition(anna.playerId, run, { ...to, facing: 0, moving: true }, 4_242.5);
+    const relayed = lastPositions(ben).players;
+    expect(relayed[anna.playerId]).toEqual({ ...to, facing: 0, moving: true, t: 4_242.5, rt: Date.now() });
+    // A spawn the room placed itself has no sender's moment: its receipt is all it has.
+    expect(relayed[ben.playerId]).toMatchObject({ t: null, rt: 1_700_000_000_000 });
+    room.dispose();
+  });
+
+  it('go out only with something new — a walker’s sample never twice — and once a second else', () => {
+    const { room, anna, ben, run } = walkingRun();
+    // Past the intro: the lights out, the patrols' clock ticking, every drone still asleep.
+    vi.advanceTimersByTime((blackout.intro?.lightsSec ?? 0) * 1000 + 2_000);
+    expect(lastView(anna).lights.out).toBe(true);
+    const heard = ben.messages.length;
+    // Anna walks on the spot's tile and back for 2 s, a position every 80 ms; nothing else moves.
+    const from = spawnOf(anna);
+    const to = stepOff(from);
+    for (let i = 0; i < 25; i++) {
+      const k = (i % 10) / 10;
+      const at = { x: from.x + (to.x - from.x) * k, y: from.y + (to.y - from.y) * k };
+      room.updatePosition(anna.playerId, run, { ...at, facing: 0, moving: true }, 10_000 + i * 80);
+      vi.advanceTimersByTime(80);
+    }
+    const walked = ben.messages.slice(heard).filter((m) => m.kind === 'positions');
+    const samples = walked.map((m) => (m.kind === 'positions' ? m.players[anna.playerId]?.t : null));
+    expect(walked).toHaveLength(25);
+    expect(samples.filter((t, i) => i > 0 && t === samples[i - 1])).toEqual([]);
+    // Then she stands: the positions go out once a second.
+    const stood = ben.messages.length;
+    vi.advanceTimersByTime(3_000);
+    expect(ben.messages.slice(stood).filter((m) => m.kind === 'positions')).toHaveLength(3);
+    room.dispose();
+  });
+});

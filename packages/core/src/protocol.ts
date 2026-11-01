@@ -111,6 +111,11 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
     /** facing angle in radians */
     facing: z.number().finite(),
     moving: z.boolean(),
+    /**
+     * when the position was true, epoch ms by the sender's own clock: the frame it was walked
+     * in. The server relays it unread beside its own receive time (`RelayedPosition`)
+     */
+    t: z.number().finite(),
   }),
   z.object({
     kind: z.literal('ping'),
@@ -205,6 +210,17 @@ export interface PlayerPosition {
   moving: boolean;
 }
 
+/**
+ * A player's position as the server relays it: when it was true by the sender's own clock
+ * (`t`; null for one the server placed itself, a spawn) and when the server took it (`rt`, the
+ * server's clock). The spacing of the `t`s is the walk's own; the `rt`s tie them to the
+ * server's clock — a partner is drawn on that timeline (client world/trail.ts).
+ */
+export interface RelayedPosition extends PlayerPosition {
+  t: number | null;
+  rt: number;
+}
+
 export interface DronePosition {
   x: number;
   y: number;
@@ -232,7 +248,7 @@ export type ServerMessage =
       kind: 'positions';
       /** the run these positions belong to, by its `startedAt` */
       run: number | null;
-      players: Record<string, PlayerPosition>;
+      players: Record<string, RelayedPosition>;
       drones: Record<string, DronePosition>;
     }
   | { kind: 'ping'; playerId: string; x: number; y: number }

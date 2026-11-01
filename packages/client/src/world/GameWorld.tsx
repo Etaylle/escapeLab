@@ -9,7 +9,7 @@ import {
   type PlayerView,
   type PuzzleView,
 } from '@escapelab/core';
-import { beepDue, clock, clockTime, timeLeft } from '../clock.js';
+import { beepDue, clock, clockTime, serverAt, timeLeft } from '../clock.js';
 import { useServerNow } from '../hooks.js';
 import { actionOfKey, isHeld, type Held, type InputAction } from '../input/bindings.js';
 import { useGlyph } from '../input/glyphs.js';
@@ -84,8 +84,8 @@ import { drawFrame } from './render/pipeline.js';
 import { passProfile, profileRequested } from './render/profile.js';
 import { roomArea, roomsComingOn } from './rooms.js';
 import {
-  easeOthers,
   follow,
+  followOthers,
   followServer,
   newSim,
   walk,
@@ -94,6 +94,7 @@ import {
 import { doorMoved, HEAR_EVERY_S, hearCrew, spatialProbe, stopSpatial } from './spatial.js';
 import { soundProbe } from './soundProbe.js';
 import { streamPositions } from './stream.js';
+import { REMOTE_DELAY_MS } from './trail.js';
 import { useWorldTip } from './useWorldTip.js';
 import { vignettePressure } from './vignette.js';
 
@@ -474,6 +475,13 @@ function traceFrames(loop: Loop): { trace: FrameTrace; drop: () => void } | null
     get self() {
       return { x: sim.self.x, y: sim.self.y };
     },
+    get others() {
+      const drawn: Record<string, { x: number; y: number }> = {};
+      for (const [id, other] of sim.others) {
+        drawn[id] = { x: other.rx, y: other.ry };
+      }
+      return drawn;
+    },
     get footfalls() {
       return sim.footfalls;
     },
@@ -516,7 +524,7 @@ function runFrames(loop: Loop, trace: FrameTrace | null): () => void {
     frames += 1;
     const map = loop.live.current.view.map;
     if (map !== null) {
-      step(loop, dt, map);
+      step(loop, dt, now, map);
       if (drawsFrame(frames, { locked: loop.live.current.locked, spectator: loop.spectator })) {
         render(loop, map);
       }
@@ -527,8 +535,11 @@ function runFrames(loop: Loop, trace: FrameTrace | null): () => void {
   return () => cancelAnimationFrame(raf);
 }
 
-/** One frame of the simulation: you, the crew, the doors, the news, the clock, the camera. */
-function step(loop: Loop, dt: number, map: WorldMap): void {
+/**
+ * One frame of the simulation at `now` (the frame's timestamp, performance.now): you, the
+ * crew, the doors, the news, the clock, the camera.
+ */
+function step(loop: Loop, dt: number, now: number, map: WorldMap): void {
   const { sim, spectator } = loop;
   const view = loop.live.current.view;
   // Spectators own no avatar, so every streamed position is "someone else".
@@ -550,10 +561,13 @@ function step(loop: Loop, dt: number, map: WorldMap): void {
     sim.keys.clear();
   }
   const footfall = walk(sim, map, dt, loop.live.current.locked || sim.held);
+  sim.selfAt = now;
   if (footfall !== null) {
     footstep(footfall === 'sprint');
   }
-  easeOthers(sim, positionsOf(loop.positions.current, run), youId, dt);
+  // The crew REMOTE_DELAY_MS in the past, where their samples put them (trail.ts).
+  const drawnAt = serverAt(now) - REMOTE_DELAY_MS;
+  followOthers(sim, positionsOf(loop.positions.current, run), youId, drawnAt);
   slideDoors(sim, map, spectator ? null : sim.self);
   if (map !== sim.seen) {
     look(loop, map);

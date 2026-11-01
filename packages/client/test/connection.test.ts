@@ -81,7 +81,15 @@ function connection(session: typeof SESSION | null = SESSION) {
 }
 
 const E: ClientMessage = { kind: 'request-hint' };
-const POS: ClientMessage = { kind: 'pos', run: 1, x: 2.5, y: 3.5, facing: 0, moving: true };
+const POS: ClientMessage = {
+  kind: 'pos',
+  run: 1,
+  x: 2.5,
+  y: 3.5,
+  facing: 0,
+  moving: true,
+  t: 1_700_000_000_000,
+};
 
 describe('keepConnected — the page’s line to the server', () => {
   beforeEach(() => {

@@ -1,4 +1,4 @@
-import { SPRINT_FACTOR, WALK_SPEED, walkable, type PlayerPosition } from '@escapelab/core';
+import { SPRINT_FACTOR, WALK_SPEED, walkable, type RelayedPosition } from '@escapelab/core';
 import { MOVE_ACTIONS, MOVES, type Held } from '../input/bindings.js';
 import { NO_STEER, type Steer } from '../input/pad.js';
 import type { DoorMotion } from './doors.js';
@@ -18,6 +18,7 @@ import type {
   PoweredRoom,
   WorldMap,
 } from './render/frame.js';
+import { drawnAt, hear, newTrail, type Trail } from './trail.js';
 
 /**
  * What one mounted world simulates from animation frame to animation frame
@@ -47,6 +48,8 @@ export interface Sim {
   /** the run `self` was placed for, by its `startedAt`; null before the first frame */
   run: number | null;
   self: { x: number; y: number; facing: number; moving: boolean };
+  /** when `self` was true: the frame it was walked in, on the page's timeline (performance.now) */
+  selfAt: number;
   /** what this client streamed lately: its own steps coming back are no correction */
   streamed: Streamed[];
   /**
@@ -55,6 +58,8 @@ export interface Sim {
    */
   held: boolean;
   others: Map<string, OtherAvatar>;
+  /** each partner's samples as the server relayed them, by player id (trail.ts) */
+  trails: Map<string, Trail>;
   /**
    * what is held down to walk and sprint, by action — the keys as the settings bind them, the
    * touch screen's pad (input/bindings.ts `Held`)
@@ -108,9 +113,11 @@ export function newSim(topCss: number): Sim {
   return {
     run: null,
     self: { x: 0, y: 0, facing: 0, moving: false },
+    selfAt: 0,
     streamed: [],
     held: false,
     others: new Map(),
+    trails: new Map(),
     keys: new Set(),
     pad: NO_STEER,
     doors: new Map(),
@@ -219,14 +226,17 @@ function heading(sim: Sim, locked: boolean): Heading {
  * One frame's walk from the keys held or the controller's stick (input → velocity): the
  * facing, the step as far as no wall, shut door or furniture stands in the way, and the gait —
  * SPRINT_FACTOR times as fast with sprint held, no stamina; a stick leant part of the way walks
- * that part as fast. Returns the footfall that lands in it, if one does.
+ * that part as fast. The avatar walks (`self.moving`) only where it covers ground: pushing
+ * into a wall it stands, as its partners then see it (trail.ts). Returns the footfall that
+ * lands in it, if one does.
  */
 export function walk(sim: Sim, map: WorldMap, dt: number, locked: boolean): Footfall | null {
   const { dx, dy, lean } = heading(sim, locked);
-  sim.self.moving = lean > 0;
+  sim.self.moving = false;
   if (!(lean > 0)) {
     return null;
   }
+  const from = { x: sim.self.x, y: sim.self.y };
   sim.self.facing = Math.atan2(dy, dx);
   const sprinting = sim.keys.has('sprint') || sim.pad.sprint;
   const pace = sprinting ? SPRINT_FACTOR : 1;
@@ -240,6 +250,7 @@ export function walk(sim: Sim, map: WorldMap, dt: number, locked: boolean): Foot
   if (!blocked(map, closedDoors, sim.self.x, ny)) {
     sim.self.y = ny;
   }
+  sim.self.moving = sim.self.x !== from.x || sim.self.y !== from.y;
   sim.walkPhase = gaitStep(sim.walkPhase, speed * dt);
   sim.stepAcc += speed * dt;
   if (sim.stepAcc > STRIDE) {
@@ -250,39 +261,45 @@ export function walk(sim: Sim, map: WorldMap, dt: number, locked: boolean): Foot
   return null;
 }
 
-/** Remote avatars ease toward their streamed positions (`live`); one gone from them goes. */
-export function easeOthers(
+/**
+ * The crew as this screen draws them at `at` (server time, epoch ms: REMOTE_DELAY_MS before
+ * now, trail.ts): each relayed position (`live`) is a sample of their walk, and each figure is
+ * drawn where its samples put it then — the newest position kept beside it. One gone from the
+ * positions goes.
+ */
+export function followOthers(
   sim: Sim,
-  live: Record<string, PlayerPosition>,
+  live: Record<string, RelayedPosition>,
   youId: string,
-  dt: number,
+  at: number,
 ): void {
-  const k = 1 - Math.exp(-dt * 12);
   for (const [id, pos] of Object.entries(live)) {
     if (id === youId) {
       continue;
     }
+    const trail = sim.trails.get(id) ?? newTrail();
+    sim.trails.set(id, trail);
+    hear(trail, pos);
+    const drawn = drawnAt(trail, at) ?? pos;
     const other = sim.others.get(id);
     if (other === undefined) {
-      sim.others.set(id, { ...pos, rx: pos.x, ry: pos.y, phase: 0 });
-    } else {
-      other.x = pos.x;
-      other.y = pos.y;
-      other.facing = pos.facing;
-      other.moving = pos.moving;
-      const dx = (pos.x - other.rx) * k;
-      const dy = (pos.y - other.ry) * k;
-      other.rx += dx;
-      other.ry += dy;
-      // The legs keep pace with the ground the figure covers on this screen (figure.ts).
-      if (pos.moving) {
-        other.phase = gaitStep(other.phase, Math.hypot(dx, dy));
-      }
+      const { facing, moving } = drawn;
+      sim.others.set(id, { x: pos.x, y: pos.y, facing, moving, rx: drawn.x, ry: drawn.y, phase: 0 });
+      continue;
+    }
+    const step = Math.hypot(drawn.x - other.rx, drawn.y - other.ry);
+    Object.assign(other, { x: pos.x, y: pos.y, facing: drawn.facing, moving: drawn.moving });
+    other.rx = drawn.x;
+    other.ry = drawn.y;
+    // The legs keep pace with the ground the figure covers on this screen (figure.ts).
+    if (drawn.moving) {
+      other.phase = gaitStep(other.phase, step);
     }
   }
   for (const id of sim.others.keys()) {
     if (live[id] === undefined) {
       sim.others.delete(id);
+      sim.trails.delete(id);
     }
   }
 }

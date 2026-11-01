@@ -82,11 +82,13 @@ describe('Room with a sleeping drone', () => {
     room.setReady(ben.playerId, true);
     room.act(anna.playerId, { kind: 'start-mission' });
 
-    // Anna loiters right in front of it while the patrol simulation keeps ticking.
+    // Anna loiters right in front of it while the patrol simulation keeps ticking: nothing
+    // moves, so the positions go out once a second.
     moveTo(room, anna, 3, 2);
+    const before = anna.messages.length;
     vi.advanceTimersByTime(5000);
-    const streamed = anna.messages.filter((m) => m.kind === 'positions');
-    expect(streamed.length).toBeGreaterThan(10);
+    const streamed = anna.messages.slice(before).filter((m) => m.kind === 'positions');
+    expect(streamed).toHaveLength(5);
     expect(streamed.some((m) => 'wache' in m.drones)).toBe(false);
     expect(lastView(anna.messages).penaltySeq).toBe(0);
 
