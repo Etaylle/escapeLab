@@ -55,7 +55,7 @@ describe('interaction.css — how panels come up and controls answer', () => {
   it('presses a plain button a pixel down, and leaves a device’s controls their own press', () => {
     const press = /:where\(button\):active:not\(([^)]*)\)\s*\{([^}]*)\}/.exec(CSS);
     expect(press?.[2]).toMatch(/translate: 0 1px;/);
-    const ownPress = ['.device *', '.relay *', '.lever-grip', '.world-dpad-btn', '.world-sprint'];
+    const ownPress = ['.device *', '.relay *', '.lever-grip', '.world-sprint'];
     for (const own of ownPress) {
       expect(press?.[1]).toContain(own);
     }

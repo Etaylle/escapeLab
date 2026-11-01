@@ -118,7 +118,7 @@ export function frameWith(parts: Partial<Frame> = {}): Frame {
 /** The frame of `frameWith` before its grid. */
 function frameParts(parts: Partial<Frame>): Omit<Frame, 'grid'> {
   return {
-    viewport: { w: 800, h: 600, dpr: 1, textScale: 1, top: 0, bottom: 0, boxes: [] },
+    viewport: { w: 800, h: 600, dpr: 1, textScale: 1, top: 0, boxes: [] },
     camera: { x: 5, y: 3, scale: 100 },
     steady: true,
     time: 0,

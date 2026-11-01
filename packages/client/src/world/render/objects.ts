@@ -12,10 +12,9 @@ import {
   LABEL_BELOW,
   plateCaption,
   SIGN_LABEL_BELOW,
-  textBox,
   type Tube,
 } from '../art.js';
-import { placeLabels, type PropLabel } from '../labelLayout.js';
+import type { PlacedLabels } from '../labelLayout.js';
 import { animTime, crtFlicker, propSeed, rollAt } from '../anim.js';
 import { doorOpenness, isHorizontalDoor } from '../doors.js';
 import { burning } from '../frameLight.js';
@@ -29,6 +28,7 @@ import { coversArmed, opensCabinet } from '../interact.js';
 import { noteMount } from '../notes.js';
 import { inTiles, profiled, type Frame, type WorldMap } from './frame.js';
 import { drawGlow, namedThing, type Named } from './highlight.js';
+import { labelAt, looseAndShown, propLabels, SIGN_LABEL } from './labels.js';
 import * as props from './props.js';
 
 /**
@@ -40,12 +40,12 @@ import * as props from './props.js';
  * doors, under the things. Then the emergency lamps on their walls and
  * ceilings. The furniture is baked with the floor it stands on
  * (render/tiles.ts). The labels under plates, sources, the sign and the parts
- * lying about are placed first, so that none lies on another (labelLayout.ts).
+ * lying about go where they were placed, none on another (labels.ts).
  */
 export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   inTiles(ctx, frame);
   const named = namedThing(frame);
-  const labels = labelSpots(ctx, frame);
+  const labels = propLabels(ctx, frame);
   drawPlates(ctx, frame, labels);
   profiled(frame.kit, 'props', ctx, () => props.drawFloor(ctx, frame));
   drawDoors(ctx, frame);
@@ -58,65 +58,6 @@ export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   drawLamps(ctx, frame);
 }
 
-/** Where each thing's label goes this frame, by key: its top under the anchor, or null. */
-type LabelSpots = ReadonlyMap<string, number | null>;
-
-/**
- * How much a label matters: what calls for the crew now — the source of the armed station,
- * the sign not yet read — then the plates and the parts lying about, then the rest.
- */
-const RANK = { calling: 3, plate: 2, item: 2, quiet: 1 } as const;
-
-/** A label as the layout takes it, before its size is measured. */
-interface Labelled {
-  key: string;
-  words: string;
-  x: number;
-  y: number;
-  below: number;
-  rank: number;
-}
-
-/** The labels of the things this frame shows, each placed clear of the others. */
-function labelSpots(ctx: CanvasRenderingContext2D, frame: Frame): LabelSpots {
-  const { map, light } = frame;
-  const shown: Labelled[] = [];
-  for (const plate of map.plates.filter((p) => light.shown(p.x, p.y))) {
-    const words = plateCaption(plate).toUpperCase();
-    const at = { x: plate.x + 0.5, y: plate.y + 0.5, below: LABEL_BELOW, rank: RANK.plate };
-    shown.push({ key: `plate:${plate.id}`, words, ...at });
-  }
-  for (const manual of map.manuals) {
-    const rank = coversArmed(map, manual) ? RANK.calling : RANK.quiet;
-    const at = { x: manual.x + 0.5, y: manual.y + 0.5, below: LABEL_BELOW, rank };
-    shown.push({ key: `manual:${manual.id}`, words: manual.label, ...at });
-  }
-  const sign = map.edgeworkSign;
-  if (sign !== null) {
-    const rank = frame.signSeen ? RANK.quiet : RANK.calling;
-    const at = { x: sign.x + 0.5, y: sign.y + 0.5, below: SIGN_LABEL_BELOW, rank };
-    shown.push({ key: 'sign', words: SIGN_LABEL, ...at });
-  }
-  for (const item of map.items.filter((i) => looseAndShown(frame, i))) {
-    const at = { x: item.x, y: item.y, below: LABEL_BELOW, rank: RANK.item };
-    shown.push({ key: `item:${item.id}`, words: item.label.toUpperCase(), ...at });
-  }
-  const labels = shown.map(({ words, ...label }): PropLabel => ({
-    ...label,
-    ...textBox(ctx, words, frame.text.label),
-  }));
-  return placeLabels(labels);
-}
-
-/** The sign's label. */
-const SIGN_LABEL = 'LABORKENNUNG';
-
-/** Where `key`'s label goes this frame: the place it was given, null for none, else `own`. */
-function labelAt(spots: LabelSpots, key: string, own: number): number | null {
-  const spot = spots.get(key);
-  return spot === undefined ? own : spot;
-}
-
 /** Draws with `draw` with the origin moved to (x, y), the context as it was after. */
 function at(ctx: CanvasRenderingContext2D, x: number, y: number, draw: () => void): void {
   ctx.save();
@@ -126,7 +67,7 @@ function at(ctx: CanvasRenderingContext2D, x: number, y: number, draw: () => voi
 }
 
 /** The pressure plates light has fallen on, each label where `labels` puts it. */
-function drawPlates(ctx: CanvasRenderingContext2D, frame: Frame, labels: LabelSpots): void {
+function drawPlates(ctx: CanvasRenderingContext2D, frame: Frame, labels: PlacedLabels): void {
   const { map, light, text } = frame;
   for (const plate of map.plates.filter((p) => light.shown(p.x, p.y))) {
     const look = {
@@ -202,7 +143,7 @@ export function tubeAt(frame: Frame, x: number, y: number): Tube {
  * The sources found so far, the ones printing the armed station's rules lit up, each label
  * where `labels` puts it.
  */
-function drawManuals(ctx: CanvasRenderingContext2D, frame: Frame, labels: LabelSpots): void {
+function drawManuals(ctx: CanvasRenderingContext2D, frame: Frame, labels: PlacedLabels): void {
   const { map, pulse, text } = frame;
   for (const manual of map.manuals) {
     const active = coversArmed(map, manual);
@@ -227,7 +168,7 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: Frame): void {
 }
 
 /** The Laborkennung, its label where `labels` puts it, the hatch and an emergency's valves. */
-function drawFixtures(ctx: CanvasRenderingContext2D, frame: Frame, labels: LabelSpots): void {
+function drawFixtures(ctx: CanvasRenderingContext2D, frame: Frame, labels: PlacedLabels): void {
   const { map, pulse, text } = frame;
   const sign = map.edgeworkSign;
   if (sign !== null) {
@@ -252,7 +193,7 @@ function drawItems(
   ctx: CanvasRenderingContext2D,
   frame: Frame,
   named: Named | null,
-  labels: LabelSpots,
+  labels: PlacedLabels,
 ): void {
   for (const item of frame.map.items) {
     drawZone(ctx, frame, item);
@@ -260,10 +201,6 @@ function drawItems(
   }
 }
 
-/** Whether `item` lies about where light has fallen on it: neither carried nor put in. */
-function looseAndShown(frame: Frame, item: Item): boolean {
-  return !item.delivered && item.carriedBy === null && frame.light.shown(item.x, item.y);
-}
 
 /** The drop-off of `item` where light has fallen on it; none for a cabinet's key. */
 function drawZone(ctx: CanvasRenderingContext2D, frame: Frame, item: Item): void {

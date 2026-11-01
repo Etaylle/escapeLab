@@ -11,10 +11,12 @@ const layout = { ox: 600, oy: 100, cell: 10, mw: 100, mh: 60 };
 
 describe('minimapLayout — where the corner minimap goes', () => {
   const map = mapWith({ width: 20, height: 13 });
+  /** The chat's handle in a laptop window's bottom right corner, reaching 100 px up. */
+  const CHAT = { left: 1300, top: 720, right: 1426, bottom: 804 };
 
   it('sits top right below the objective bar, a sixth of the window wide, at most 190 px', () => {
     // 1440 px: a sixth is 230, held to 190; 190 px over 20 tiles is 9.5, rounded to 10 a cell.
-    expect(minimapLayout(map, 1440, 820, 1, { top: 120, bottom: 100 })).toEqual({
+    expect(minimapLayout(map, 1440, 820, 1, { top: 120, controls: [CHAT] })).toEqual({
       ox: 1440 - 200 - 14,
       oy: 120,
       cell: 10,
@@ -24,17 +26,30 @@ describe('minimapLayout — where the corner minimap goes', () => {
   });
 
   it('keeps 84 px down at least, and shrinks its cells where the window is short', () => {
-    const short = minimapLayout(map, 1440, 200, 1, { top: 0, bottom: 0 });
+    const short = minimapLayout(map, 1440, 200, 1, { top: 0, controls: [] });
     expect(short.oy).toBe(84);
     // Below 84 px there are 200 - 84 - 10 left for 13 rows: 8 px a cell.
     expect(short.cell).toBe(8);
-    expect(minimapLayout(map, 1440, 100, 1, { top: 0, bottom: 0 }).cell).toBe(3);
+    expect(minimapLayout(map, 1440, 100, 1, { top: 0, controls: [] }).cell).toBe(3);
   });
 
   it('works in device pixels: the bar, the size and the air at the edge all at the density', () => {
     // 190 CSS px at 2 is 380 device px: 19 a cell over 20 tiles.
-    const sharp = minimapLayout(map, 2880, 1640, 2, { top: 120, bottom: 100 });
+    const sharp = minimapLayout(map, 2880, 1640, 2, { top: 120, controls: [CHAT] });
     expect(sharp).toEqual({ ox: 2880 - 380 - 28, oy: 240, cell: 19, mw: 380, mh: 247 });
+  });
+
+  it('stands at least 56 px tall on a phone held sideways, clear of the thumb’s row', () => {
+    // Blackout's 27×17 lab on the 844×390 phone: the canvas 828×291 drawn at density 2, under
+    // a bar 41 px deep; the pad in the bottom left corner, the thumb's row in the right one.
+    const lab = mapWith({ width: 27, height: 17 });
+    const pad = { left: 14, top: 291 - 162, right: 160, bottom: 275 };
+    const row = { left: 650, top: 291 - 68, right: 814, bottom: 275 };
+    const phone = minimapLayout(lab, 1656, 582, 2, { top: 41, controls: [pad, row] });
+    expect(phone.mh / 2).toBeGreaterThanOrEqual(56);
+    expect(minimapBox(phone, 2).bottom).toBeLessThanOrEqual(row.top * 2);
+    // The pad lies under the other thumb, far from the minimap: it takes nothing from it.
+    expect(minimapLayout(lab, 1656, 582, 2, { top: 41, controls: [row] })).toEqual(phone);
   });
 
   it('covers its dark frame too, which the arrows and room names keep off', () => {

@@ -89,25 +89,38 @@ describe('the button that puts down what you carry', () => {
   it('is not there while your hands are empty', () => {
     const html = world([fuse()]);
     expect(html).not.toContain(DROP);
-    for (const control of ['world-dpad', 'world-interact', 'world-chat-toggle']) {
+    for (const control of ['world-pad', 'world-interact', 'world-chat-toggle']) {
       expect(html).toContain(`class="${control}"`);
     }
   });
 
-  it('shows while you carry something: a round 📦 named „Ablegen", over the action button', () => {
+  it('shows while you carry something: a round 📦 named „Ablegen", at the row’s far end', () => {
     const drop = '<button class="world-drop" aria-label="Ablegen">📦</button>';
     expect(world([fuse({ carriedBy: YOU })])).toContain(
-      `<div class="world-actions">${drop}<button class="world-interact"`,
+      `<div class="world-thumb">${drop}<button class="world-chat-toggle"`,
     );
   });
 
-  it('keeps the steering pad, the action and the chat where they were in the cluster', () => {
+  it('puts the pad under the left thumb, the buttons under the right one, the action last', () => {
     const html = world([fuse({ carriedBy: YOU })]);
-    const order = ['world-dpad', 'world-drop', 'world-interact', 'world-chat-toggle'].map(
-      (control) => html.indexOf(`class="${control}"`),
+    const controls = ['world-pad', 'world-thumb', 'world-drop', 'world-chat-toggle'];
+    const order = [...controls, 'world-sprint', 'world-interact'].map((control) =>
+      html.indexOf(`class="${control}"`),
     );
     expect(order.every((at) => at >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // The action stands in the right corner: nothing comes after it in the row.
+    const row = html.slice(html.indexOf('class="world-thumb"'));
+    expect(row.slice(row.indexOf('class="world-interact"')).match(/<button/g)).toBeNull();
+  });
+
+  it('draws the pad as eight ways round a still middle, three cells by three', () => {
+    const html = world([fuse()]);
+    const opens = '<div class="world-pad" role="group" aria-label="Steuerkreuz">';
+    const pad = html.slice(html.indexOf(opens), html.indexOf('</div>', html.indexOf(opens)));
+    const cell = /<span class="world-pad-cell" aria-hidden="true">(.)<\/span>/gu;
+    const cells = [...pad.matchAll(cell)];
+    expect(cells.map((cell) => cell[1])).toEqual(['↖', '↑', '↗', '←', '•', '→', '↙', '↓', '↘']);
   });
 
   it('is not there for what somebody else carries, or for what is already in place', () => {
@@ -121,15 +134,12 @@ describe('the button that puts down what you carry', () => {
     expect(html).not.toContain(DROP);
   });
 
-  it('leaves „Sprint" beside the steering pad, held to run', () => {
+  it('puts „Sprint" beside the action under the right thumb, held to run', () => {
     const html = world([fuse()]);
-    expect(html).toContain('<button class="world-sprint" aria-label="Sprinten">Sprint</button>');
-    const pad = html.indexOf('class="world-dpad"');
-    const sprint = html.indexOf('class="world-sprint"');
-    const actions = html.indexOf('class="world-actions"');
-    expect(pad).toBeGreaterThanOrEqual(0);
-    expect(sprint).toBeGreaterThan(pad);
-    expect(actions).toBeGreaterThan(sprint);
+    expect(html).toContain(
+      '<button class="world-sprint" aria-label="Sprinten">Sprint</button>' +
+        '<button class="world-interact" aria-label="Benutzen">',
+    );
   });
 
   it('shows on a touch screen only: a keyboard has Q for it', () => {

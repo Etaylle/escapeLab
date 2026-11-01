@@ -104,7 +104,7 @@ function sourceWith(items: Item[], finale: FinaleCue | null = null): FrameSource
     sim,
     spectator: false,
     touchPad: { matches: false } as MediaQueryList,
-    insets: { top: 0, bottom: 0 },
+    insets: { top: 0, bottom: 0, controls: [] },
     live: { current: latest },
     alarm: { current: null },
     positions: { current: { run: null, players: {} } },

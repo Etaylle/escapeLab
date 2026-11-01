@@ -3940,8 +3940,8 @@ async function captureNotepad(page, seen) {
   await sleep(300);
   await capture(page, 'notepad.png');
   const written = await pad.locator('textarea').inputValue();
-  const dpad = await page.locator('.world-dpad').boundingBox();
-  const blocks = overlapping(await pad.boundingBox(), dpad);
+  const steering = await page.locator('.world-pad').boundingBox();
+  const blocks = overlapping(await pad.boundingBox(), steering);
   // The pad offers the Laborkennung only to a player who has read the sign.
   const kennung = offered
     ? 'Laborkennung taken over'
@@ -4507,6 +4507,63 @@ async function infoInView(player, size, how) {
   }
   await page.setViewportSize(before);
   await sleep(400);
+}
+
+/** What the phone held sideways shows under its thumbs, CSS px: the pad, the buttons, the bar. */
+function thumbsLayout() {
+  const rect = (selector) => {
+    const box = document.querySelector(selector)?.getBoundingClientRect();
+    return box === undefined || box.width === 0 ? null : box;
+  };
+  const canvas = document.querySelector('.world-canvas');
+  const map = globalThis.__escapelab?.minimap ?? null;
+  const cells = [...document.querySelectorAll('.world-pad-cell')].map((cell) => {
+    const box = cell.getBoundingClientRect();
+    return Math.min(box.width, box.height);
+  });
+  return {
+    mid: canvas === null ? 0 : canvas.getBoundingClientRect().x + canvas.clientWidth / 2,
+    height: canvas?.clientHeight ?? 0,
+    bar: document.querySelector('.stage-top')?.offsetHeight ?? 0,
+    line: document.querySelector('.stage-top .radio-banner, .stage-top .toast') !== null,
+    pad: rect('.world-pad')?.toJSON() ?? null,
+    thumb: rect('.world-thumb')?.toJSON() ?? null,
+    cells,
+    minimap: map === null ? null : Math.round(map.mh / map.dpr),
+  };
+}
+
+/**
+ * pad-left.png: the guest's phone held sideways, the world under its thumbs —
+ * the steering pad of eight ways round a still middle, 48 px a cell, in the
+ * left half under the left thumb, the buttons in the right half under the
+ * right one — the objective bar a quarter of the canvas's height at most, a
+ * line on the air included, and the minimap 56 px tall at least. The run fails
+ * where any of it is not so.
+ */
+async function capturePadLeft(page) {
+  const seen = await page.evaluate(thumbsLayout);
+  await capture(page, 'pad-left.png');
+  const share = seen.height === 0 ? 1 : seen.bar / seen.height;
+  const percent = (share * 100).toFixed(1);
+  const smallest = seen.cells.length === 0 ? 0 : Math.min(...seen.cells);
+  const at = (box) => (box === null ? 'none' : `${Math.round(box.x)}–${Math.round(box.right)}`);
+  console.log(
+    `pad-left.png       Ben sideways: the pad at x ${at(seen.pad)}, the buttons at x ` +
+      `${at(seen.thumb)} (middle ${Math.round(seen.mid)}), ${seen.cells.length} cells of ` +
+      `${Math.round(smallest)} px; the bar ${seen.bar}/${seen.height} px, ${percent} %` +
+      `${seen.line ? ' with a line on the air' : ''}; the minimap ${seen.minimap ?? 'not'} px tall`,
+  );
+  const wrong = [
+    (seen.pad === null || seen.pad.right > seen.mid) && 'the pad is not in the left half',
+    (seen.thumb === null || seen.thumb.x < seen.mid) && 'the buttons are not in the right half',
+    (seen.cells.length !== 9 || smallest < 48 - 0.5) && `${seen.cells.length} pad cells`,
+    share > 0.25 && `the objective bar covers ${percent} % of the canvas`,
+    (seen.minimap === null || seen.minimap < 56) && `the minimap is ${seen.minimap} px tall`,
+  ];
+  if (wrong.some(Boolean)) {
+    fail(`pad-left: ${wrong.filter(Boolean).join(', ')}`);
+  }
 }
 
 /**
@@ -8017,6 +8074,7 @@ async function run() {
   await sleep(700);
   await capture(guest, `game-${turned.name}.png`);
   await overflow(guest, `game @ ${turned.width}x${turned.height}, Ben's phone sideways`);
+  await capturePadLeft(guest);
   steady.push({ name: 'Ben sideways', page: guest, start: await layoutOf(guest), turn: turned });
   await guest.setViewportSize(SIZES[2]);
   await sleep(400);

@@ -39,16 +39,25 @@ function boxOf(label: PropLabel, top: number): Box {
   };
 }
 
+/** The labels as placed: where each one's top hangs, by key, and the boxes they cover. */
+export interface PlacedLabels {
+  /** the top under its thing's anchor, tiles; null for a label left out */
+  spots: Map<string, number | null>;
+  /** what the placed labels cover, their air round them, tiles */
+  boxes: Box[];
+}
+
 /**
- * Where each label's top hangs under its thing's anchor, by key, tiles; null
- * for one left out. The labels go in order of rank, ties in the order given,
- * and each takes the first of its places that no label placed before it covers.
+ * Where each label's top hangs under its thing's anchor. The labels go in
+ * order of rank, ties in the order given, and each takes the first of its
+ * places that no label placed before it covers; one with none left is left
+ * out.
  */
-export function placeLabels(labels: readonly PropLabel[]): Map<string, number | null> {
+export function placeLabels(labels: readonly PropLabel[]): PlacedLabels {
   const order = labels
     .map((label, i) => ({ label, i }))
     .sort((a, b) => b.label.rank - a.label.rank || a.i - b.i);
-  const taken: Box[] = [];
+  const boxes: Box[] = [];
   const spots = new Map<string, number | null>();
   for (const { label } of order) {
     let spot: number | null = null;
@@ -56,12 +65,12 @@ export function placeLabels(labels: readonly PropLabel[]): Map<string, number | 
       // A line further down leaves the air of both labels between them, and as much again.
       const top = label.below + line * (label.height + 2 * LABEL_AIR);
       const box = boxOf(label, top);
-      if (!taken.some((other) => overlaps(box, other))) {
-        taken.push(box);
+      if (!boxes.some((other) => overlaps(box, other))) {
+        boxes.push(box);
         spot = top;
       }
     }
     spots.set(label.key, spot);
   }
-  return spots;
+  return { spots, boxes };
 }

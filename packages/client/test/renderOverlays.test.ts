@@ -285,7 +285,7 @@ describe('overlays — what lies over the world and its light', () => {
       perf: 200,
     };
     const at = (textScale: number): string[] => {
-      const viewport = { w: 800, h: 600, dpr: 1, textScale, top: 0, bottom: 0, boxes: [] };
+      const viewport = { w: 800, h: 600, dpr: 1, textScale, top: 0, boxes: [] };
       return sized(drawn(frameWith({ ...parts, viewport })));
     };
     const normal = [
@@ -310,7 +310,7 @@ describe('overlays — what lies over the world and its light', () => {
 
   it('grows the prompt’s tag with the text size round the same point', () => {
     const tag = (textScale: number): unknown[] | undefined => {
-      const viewport = { w: 800, h: 600, dpr: 1, textScale, top: 0, bottom: 0, boxes: [] };
+      const viewport = { w: 800, h: 600, dpr: 1, textScale, top: 0, boxes: [] };
       return callsOf(drawn(frameWith({ action: OPERATE, viewport })), 'roundRect')[0];
     };
     // '[E] Bedienen' is 84 px wide in the fake context at any size: the tag 16 px wider.
@@ -343,6 +343,25 @@ describe('overlays — what lies over the world and its light', () => {
       const letters = over(NAME_INK, plate);
       expect(contrast(letters, plate), `over ${floor.join(',')}`).toBeGreaterThanOrEqual(4.5);
     }
+  });
+
+  it('leaves out a room name that would cover the label under a thing, which matters more', () => {
+    const crate: Item = {
+      id: 'crate',
+      label: 'KISTE',
+      x: 6.5,
+      y: 1.9,
+      carriedBy: null,
+      delivered: false,
+      deliverTo: null,
+      requiredForTitle: null,
+    };
+    const named = (items: Item[]): unknown[] =>
+      texts(drawn(frameWith({ map: lab({ labels: [{ text: 'LABOR', x: 6, y: 2 }], items }) })));
+    expect(named([])).toContain('LABOR');
+    // The crate's label hangs 0.41 under it, on the name's line.
+    expect(named([crate])).not.toContain('LABOR');
+    expect(named([{ ...crate, x: 2.5 }])).toContain('LABOR');
   });
 
   it('covers the picture as far as the light has failed: the cold open’s, or the ending’s', () => {

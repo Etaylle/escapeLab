@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   clampCamera,
+  liftAbove,
   placeRoomNames,
+  reachOf,
   shiftClear,
   type Box,
   type Lens,
@@ -81,18 +83,46 @@ describe('clampCamera — where the camera looks', () => {
   });
 });
 
+describe('liftAbove — the avatar over the controls on a touch screen', () => {
+  // A phone held sideways at density 2: the canvas 582 device px high under a bar of 82, the
+  // pad reaching 324 up from its foot, 61.4 device px a tile — the lab far larger than that.
+  const LAB = { width: 27, height: 40 };
+  const phone = { scale: 61.4, w: 1656, h: 582, top: 82 };
+  const screenY = (y: number, cam: { y: number }): number =>
+    phone.h / 2 + (y - cam.y) * phone.scale;
+
+  it('lifts the avatar until its feet stand on the pad’s top edge, no further', () => {
+    const lift = liftAbove(324, phone.h, phone.top, phone.scale);
+    const cam = clampCamera(LAB, { x: 13, y: 20 }, { ...phone, lift });
+    // The feet half a tile under the spot the avatar stands on.
+    expect(screenY(20 + 0.5, cam)).toBeCloseTo(phone.h - 324, 6);
+  });
+
+  it('lifts nothing where the controls reach no higher than the band’s middle leaves free', () => {
+    expect(liftAbove(136, phone.h, phone.top, phone.scale)).toBe(0);
+    expect(liftAbove(0, phone.h, phone.top, phone.scale)).toBe(0);
+  });
+
+  it('takes the reach of the highest of the controls', () => {
+    const pad: Box = { left: 28, top: 258, right: 320, bottom: 550 };
+    const row: Box = { left: 1300, top: 446, right: 1628, bottom: 550 };
+    expect(reachOf([pad, row], 582)).toBe(324);
+    expect(reachOf([], 582)).toBe(0);
+  });
+});
+
 describe('placeRoomNames — which room names are drawn, and where', () => {
-  // A laptop's world: 1000x600, the bar 80px deep, the controls reaching 68px
-  // up, the minimap below the bar at the top right.
+  // A laptop's world: 1000x600, the bar 80px deep, the minimap below the bar at the top right,
+  // the chat's handle in the bottom right corner.
   const MINIMAP: Box = { left: 820, top: 79, right: 991, bottom: 190 };
+  const CHAT: Box = { left: 920, top: 532, right: 986, bottom: 584 };
   const VIEW: Viewport = {
     w: 1000,
     h: 600,
     dpr: 1,
     textScale: 1,
     top: 80,
-    bottom: 68,
-    boxes: [MINIMAP],
+    boxes: [MINIMAP, CHAT],
   };
   const name = (x: number, y: number, text = 'LABOR', width = 100): RoomName => ({
     text,
@@ -124,14 +154,18 @@ describe('placeRoomNames — which room names are drawn, and where', () => {
     ]);
   });
 
-  it('drops a name whose plate would lie under the objective bar or the controls', () => {
+  it('drops a name whose plate would lie under the objective bar or past the bottom edge', () => {
     const under = Math.ceil(80 + RISE) - 1;
-    const over = Math.floor(600 - 68 - DROP) + 1;
+    const over = Math.floor(600 - DROP) + 1;
     expect(placed([name(500, under), name(500, over)])).toEqual([]);
     expect(placed([name(500, under + 1), name(500, over - 1)])).toEqual([
       `LABOR@500,${under + 1}`,
       `LABOR@500,${over - 1}`,
     ]);
+  });
+
+  it('drops a name that would lie on the controls in a corner, and keeps one beside them', () => {
+    expect(placed([name(900, 560, 'REAKTOR'), name(600, 560, 'LABOR')])).toEqual(['LABOR@600,560']);
   });
 
   it('drops a name that would lie on the minimap, and keeps one beside it', () => {
@@ -144,7 +178,7 @@ describe('placeRoomNames — which room names are drawn, and where', () => {
   });
 
   it('keeps its plate and air in device pixels: twice as much at twice the density', () => {
-    const dense: Viewport = { ...VIEW, w: 2000, h: 1200, dpr: 2, top: 160, bottom: 136, boxes: [] };
+    const dense: Viewport = { ...VIEW, w: 2000, h: 1200, dpr: 2, top: 160, boxes: [] };
     const clear = Math.ceil(160 + 2 * RISE);
     expect(placed([name(1000, clear - 1)], dense)).toEqual([]);
     expect(placed([name(1000, clear)], dense)).toEqual([`LABOR@1000,${clear}`]);

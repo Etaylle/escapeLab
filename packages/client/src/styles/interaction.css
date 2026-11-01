@@ -85,7 +85,6 @@ button {
     .device *,
     .relay *,
     .lever-grip,
-    .world-dpad-btn,
     .world-sprint
   ) {
   translate: 0 1px;

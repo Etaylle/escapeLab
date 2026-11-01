@@ -67,6 +67,7 @@ import { runLight } from './frameLight.js';
 import { frameTrace, traceRequested, type FrameTrace } from './frameTrace.js';
 import { watchInsets, type Insets } from './insets.js';
 import { carriedItem, TOUCH } from './interact.js';
+import { PAD_CELLS, PadSteer, type PadTouch } from './touchPad.js';
 import { hearAnswer, pressE, pressWhenInReach, type PressWorld } from './press.js';
 import { filmed, type IntroCue } from './intro/sequence.js';
 import { runsOf } from './light.js';
@@ -929,23 +930,97 @@ interface ControlsProps {
   setWheelOpen: SetWheel;
 }
 
-/** The pad's buttons: the way each walks while held, and its arrow. */
-const PAD_MOVES = [
-  ['up', '↑'],
-  ['left', '←'],
-  ['right', '→'],
-  ['down', '↓'],
-] as const;
-
-/** A move held while a finger rests on its button, let go as the finger lifts or slides off. */
+/** A way to walk or the sprint held while a finger is down on its control, let go as it lifts. */
 type Press = (held: Held, down: boolean) => void;
 
+/** The arrow each cell of the pad shows (touchPad.ts PAD_CELLS); the middle one a dot. */
+const PAD_ARROWS: Readonly<Record<string, string>> = {
+  'up-left': '↖',
+  up: '↑',
+  'up-right': '↗',
+  left: '←',
+  stop: '•',
+  right: '→',
+  'down-left': '↙',
+  down: '↓',
+  'down-right': '↘',
+};
+
+/** A cell of the pad the steering finger holds now: lit. */
+const HELD_CELL = 'world-pad-cell world-pad-held';
+
+/** The name of the pad's cell that walks `moves` (touchPad.ts PAD_CELLS). */
+function cellOf(moves: readonly Held[]): string {
+  const same = ([, cell]: (typeof PAD_CELLS)[number]): boolean =>
+    cell.length === moves.length && cell.every((move) => moves.includes(move));
+  return PAD_CELLS.find(same)?.[0] ?? 'stop';
+}
+
+/** Where a pointer is on the pad it fell on: its offset from the middle, and the cell size. */
+function touchOn(e: React.PointerEvent<HTMLDivElement>): PadTouch {
+  const box = e.currentTarget.getBoundingClientRect();
+  return {
+    id: e.pointerId,
+    dx: e.clientX - (box.left + box.width / 2),
+    dy: e.clientY - (box.top + box.height / 2),
+    cell: box.width / 3,
+  };
+}
+
 /**
- * The steering pad of a touch screen, and beside it „Sprint": held, the avatar runs, as with
- * the sprint key on a keyboard (world.css shows both under a finger only).
+ * The steering pad under the left thumb of a touch screen (touchPad.ts): eight ways round a
+ * middle that stands still, one finger steering as it slides over it — the cell it holds lit —
+ * and nothing of it where there are keys (world.css). The finger stays the pad's as it slides
+ * past its edge, until it lifts.
  */
 function TouchPad({ press }: { press: Press }) {
-  const held = (move: Held) => ({
+  const [steer] = useState(() => new PadSteer(press));
+  const [lit, setLit] = useState('stop');
+  const steered = (): void => setLit(cellOf(steer.held));
+  return (
+    <div
+      className="world-pad"
+      role="group"
+      aria-label="Steuerkreuz"
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        steer.down(touchOn(e));
+        steered();
+      }}
+      onPointerMove={(e) => {
+        steer.move(touchOn(e));
+        steered();
+      }}
+      onPointerUp={(e) => {
+        steer.up(e.pointerId);
+        steered();
+      }}
+      onPointerCancel={(e) => {
+        steer.up(e.pointerId);
+        steered();
+      }}
+      onLostPointerCapture={(e) => {
+        steer.up(e.pointerId);
+        steered();
+      }}
+    >
+      {PAD_CELLS.map(([name]) => (
+        <span
+          key={name}
+          className={name === lit && name !== 'stop' ? HELD_CELL : 'world-pad-cell'}
+          aria-hidden="true"
+        >
+          {PAD_ARROWS[name]}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** What a control held to act answers a finger with: `move` held while it is down on it. */
+function holding(press: Press, move: Held) {
+  return {
     onPointerDown: (e: React.PointerEvent) => {
       e.preventDefault();
       press(move, true);
@@ -953,29 +1028,17 @@ function TouchPad({ press }: { press: Press }) {
     onPointerUp: () => press(move, false),
     onPointerLeave: () => press(move, false),
     onPointerCancel: () => press(move, false),
-  });
-  return (
-    <>
-      <div className="world-dpad" role="group" aria-label="Steuerkreuz">
-        {PAD_MOVES.map(([dir, arrow]) => (
-          <button
-            key={dir}
-            className={`world-dpad-btn world-dpad-btn--${dir}`}
-            {...held(dir)}
-            aria-label={dir}
-          >
-            {arrow}
-          </button>
-        ))}
-      </div>
-      <button className="world-sprint" aria-label="Sprinten" {...held('sprint')}>
-        Sprint
-      </button>
-    </>
-  );
+  };
 }
 
-/** The control cluster over the world: the pad, the action buttons, chat and talk. */
+/**
+ * The controls over the world. On a touch screen the steering pad lies under the left thumb
+ * and the buttons under the right one, in a row from the corner: the action where the thumb
+ * rests, „Sprint" held to run beside it, talk and chat, and while hands are full the one that
+ * puts the load down — a touch screen's Q — at the row's far end, where it moves nothing as it
+ * comes and goes. With a keyboard only the chat's handle shows (world.css); the key on a
+ * button shows only where there are keys.
+ */
 function WorldControls({ refs, live, view, wheelOpen, setWheelOpen }: ControlsProps) {
   /** what this player carries now; while there is something, a touch screen offers to drop it */
   const load = view.map === null ? undefined : carriedItem(view.map, view.you.id);
@@ -995,12 +1058,7 @@ function WorldControls({ refs, live, view, wheelOpen, setWheelOpen }: ControlsPr
   return (
     <div className="world-controls" ref={refs.controlsRef}>
       <TouchPad press={press} />
-      {/*
-       * The action button, and over it while hands are full the one that puts
-       * the load down: a touch screen's Q (world.css shows it there only).
-       * The key on a button shows only where there are keys.
-       */}
-      <div className="world-actions">
+      <div className="world-thumb">
         {load !== undefined && (
           <button
             className="world-drop"
@@ -1011,6 +1069,19 @@ function WorldControls({ refs, live, view, wheelOpen, setWheelOpen }: ControlsPr
           </button>
         )}
         <button
+          className="world-chat-toggle"
+          aria-label="Schnellchat"
+          onClick={() => setWheelOpen((open) => !open)}
+          aria-expanded={wheelOpen}
+        >
+          💬<span className="world-key"> [{chatGlyph}]</span>
+        </button>
+        {/* Held to talk, on a touch screen with the microphone on; the talk key on a keyboard. */}
+        <TalkButton className="world-talk">🎤</TalkButton>
+        <button className="world-sprint" aria-label="Sprinten" {...holding(press, 'sprint')}>
+          Sprint
+        </button>
+        <button
           className="world-interact"
           aria-label="Benutzen"
           onClick={() => refs.interactRef.current?.()}
@@ -1018,16 +1089,6 @@ function WorldControls({ refs, live, view, wheelOpen, setWheelOpen }: ControlsPr
           ⚡<span className="world-key"> [{interactGlyph}]</span>
         </button>
       </div>
-      <button
-        className="world-chat-toggle"
-        aria-label="Schnellchat"
-        onClick={() => setWheelOpen((open) => !open)}
-        aria-expanded={wheelOpen}
-      >
-        💬<span className="world-key"> [{chatGlyph}]</span>
-      </button>
-      {/* Held to talk, on a touch screen with the microphone on; the talk key on a keyboard. */}
-      <TalkButton className="world-talk">🎤</TalkButton>
     </div>
   );
 }

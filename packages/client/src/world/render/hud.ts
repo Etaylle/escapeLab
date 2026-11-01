@@ -16,7 +16,7 @@ import {
   TEAL,
   WHITE,
 } from '../palette.js';
-import type { Box } from '../viewport.js';
+import { reachOf, type Box } from '../viewport.js';
 import { FALLBACK_COLOR, type Frame, type MinimapLayout, type WorldMap } from './frame.js';
 
 /**
@@ -55,22 +55,25 @@ const C = {
 
 /**
  * Where the corner minimap goes: top right, below the objective bar — the
- * clock, and a radio line while one is up (`insets.top`, CSS pixels). It
- * scales with the window, but never so small it stops being readable or so
- * large it eats a phone screen.
+ * clock, and a radio line while one is up (`insets.top`, CSS pixels) — and
+ * above the controls in the bottom right corner (`insets.controls`, CSS
+ * pixels from the canvas's corner). It scales with the window, but never so
+ * small it stops being readable or so large it eats a phone screen.
  */
 export function minimapLayout(
   map: WorldMap,
   w: number,
   h: number,
   dpr: number,
-  insets: { top: number; bottom: number },
+  insets: { top: number; controls: readonly Box[] },
 ): MinimapLayout {
   const targetCss = Math.min(190, Math.max(110, (w / dpr) * 0.16));
   const oy = Math.max(84, insets.top) * dpr;
-  // A short window has less room below the clock than beside it, and both
-  // the minimap and the control cluster hug the right edge.
-  const roomBelow = (h - oy - (insets.bottom + 2 * MINIMAP_FRAME) * dpr) / map.height;
+  // A short window has less room below the clock than beside it, and the
+  // minimap shares the right edge with the buttons in that corner.
+  const right = insets.controls.filter((box) => box.right > w / dpr / 2);
+  const under = reachOf(right, h / dpr);
+  const roomBelow = (h - oy - (under + 2 * MINIMAP_FRAME) * dpr) / map.height;
   const fit = Math.round((targetCss * dpr) / map.width);
   const cell = Math.max(3, Math.min(fit, Math.floor(roomBelow)));
   const mw = map.width * cell;

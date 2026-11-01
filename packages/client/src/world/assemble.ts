@@ -21,7 +21,7 @@ import { gridOf, sameGrid, snapCamera } from './render/grid.js';
 import { minimapBox, minimapLayout } from './render/hud.js';
 import { CAPTION_SECONDS, CHAT_LIFETIME_MS } from './render/overlays.js';
 import type { Sim } from './sim.js';
-import { clampCamera, type Viewport } from './viewport.js';
+import { clampCamera, liftAbove, type Box, type Viewport } from './viewport.js';
 import { shortOf } from './particles.js';
 
 /**
@@ -32,9 +32,6 @@ import { shortOf } from './particles.js';
  * and captions gone dropped. The camera and the light's memory are kept in
  * the simulation; nothing here makes a sound.
  */
-
-/** On a touch screen the pad would sit on the avatar: it is lifted this far, CSS pixels. */
-const PAD_LIFT = 60;
 
 /** What a frame reads of the component's latest render. */
 export interface Latest {
@@ -64,8 +61,11 @@ export interface FrameSource {
   spectator: boolean;
   /** same condition the stylesheet uses to show the on-screen pad */
   touchPad: MediaQueryList;
-  /** how far the objective bar and the control cluster reach into the canvas, CSS pixels */
-  insets: { top: number; bottom: number };
+  /**
+   * how far the objective bar reaches into the canvas and the controls up from its foot, the
+   * highest of them, and where each group of the controls lies on it; CSS pixels
+   */
+  insets: { top: number; bottom: number; controls: readonly Box[] };
   live: React.MutableRefObject<Latest>;
   alarm: React.MutableRefObject<Alarm | null>;
   positions: React.MutableRefObject<KnownPositions>;
@@ -192,13 +192,11 @@ function aim(source: FrameSource, map: WorldMap, dpr: number, pull: number, now:
     return wide;
   }
   const s = near + (wholeZoom(map, w, h) - near) * pull;
-  sim.draw = clampCamera(map, pulledBack(sim, map, pull), {
-    scale: s,
-    w,
-    h,
-    top: sim.topCss * dpr * (1 - pull),
-    lift: source.touchPad.matches && !spectator ? PAD_LIFT * dpr * (1 - pull) : 0,
-  });
+  const top = sim.topCss * dpr * (1 - pull);
+  // On a touch screen the avatar stands clear above the pad and the buttons in the corners.
+  const touch = source.touchPad.matches && !spectator;
+  const lift = touch ? liftAbove(source.insets.bottom * dpr, h, top, s) * (1 - pull) : 0;
+  sim.draw = clampCamera(map, pulledBack(sim, map, pull), { scale: s, w, h, top, lift });
   sim.scale = s;
   return s;
 }
@@ -272,17 +270,27 @@ function stage(
   const scale = aim(source, map, dpr, pull, now);
   const mapless = source.spectator || !sim.minimap || hud === 0;
   const minimap = mapless ? null : minimapLayout(map, w, h, dpr, insets);
+  const controls = insets.controls.map((box) => scaled(box, dpr));
   const viewport: Viewport = {
     w,
     h,
     dpr,
     textScale: source.live.current.textScale,
     top: insets.top * dpr,
-    bottom: insets.bottom * dpr,
-    boxes: minimap === null ? [] : [minimapBox(minimap, dpr)],
+    boxes: minimap === null ? controls : [minimapBox(minimap, dpr), ...controls],
   };
   const text = textAt(source, scale, dpr);
   return { viewport, ...framing(source, scale, pull), minimap, text };
+}
+
+/** `box`, CSS pixels, in device pixels at `dpr`. */
+function scaled(box: Box, dpr: number): Box {
+  return {
+    left: box.left * dpr,
+    top: box.top * dpr,
+    right: box.right * dpr,
+    bottom: box.bottom * dpr,
+  };
 }
 
 /** How far the light has turned red on this screen: from the escape's start; warm once won. */

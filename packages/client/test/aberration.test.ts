@@ -92,7 +92,7 @@ describe('aberration — an alarm knocks the finished picture’s colours apart'
   });
 
   it('shifts by device pixels: twice as far on a screen twice as dense', () => {
-    const viewport = { w: 1600, h: 1200, dpr: 2, textScale: 1, top: 0, bottom: 0, boxes: [] };
+    const viewport = { w: 1600, h: 1200, dpr: 2, textScale: 1, top: 0, boxes: [] };
     const { frame } = knocked(0, { viewport });
     const picture = fakeCanvas(1600, 1200, 'picture');
     draw(picture.ctx, frame);

@@ -1,8 +1,10 @@
 /**
  * The canvas as the world draws on it, and what lies over it: the objective
- * bar along the top edge, the control cluster along the bottom one, the
- * minimap. The camera keeps the avatar clear of them, and the screen's own
- * text — edge arrows, room names — keeps off them. Pure; device pixels.
+ * bar along the top edge, the minimap, and the controls in the bottom corners
+ * — on a touch screen the steering pad under the left thumb and the buttons
+ * under the right one. The camera keeps the avatar clear of them, and the
+ * screen's own text — edge arrows, room names — keeps off them. Pure; device
+ * pixels.
  */
 
 /** A box on the canvas. */
@@ -26,10 +28,13 @@ export interface Viewport {
   textScale: number;
   /** how far the objective bar reaches down from the top edge */
   top: number;
-  /** how far the control cluster reaches up from the bottom edge */
-  bottom: number;
-  /** what else lies over the canvas: the minimap */
+  /** what else lies over the canvas: the minimap, the controls in the bottom corners */
   boxes: readonly Box[];
+}
+
+/** How far `boxes` reach up from the bottom edge of a canvas `height` high: 0 for none. */
+export function reachOf(boxes: readonly Box[], height: number): number {
+  return Math.max(0, ...boxes.map((box) => height - box.top));
 }
 
 /** Whether two boxes share any area; boxes that only touch do not. */
@@ -69,6 +74,19 @@ function within(target: number, lo: number, hi: number): number {
 
 /** How far above the spot it stands on the avatar and its name tag reach, in tiles. */
 const HEADROOM = 1;
+/** How far below that spot its feet reach, in tiles. */
+const FOOTROOM = 0.5;
+
+/**
+ * How far the avatar is lifted on a touch screen, device pixels: so far that
+ * its feet stand clear above the controls — they reach `reach` up from the
+ * bottom of a canvas `h` high under an objective bar `top` deep, at `scale`
+ * device pixels a tile — and no further; nothing where they reach no higher
+ * than the middle of the band below the bar leaves free.
+ */
+export function liftAbove(reach: number, h: number, top: number, scale: number): number {
+  return Math.max(0, reach + FOOTROOM * scale + top / 2 - h / 2);
+}
 
 /**
  * Where the camera looks — the world point drawn at the canvas's middle, in
@@ -147,8 +165,8 @@ function grown(box: Box, by: number): Box {
  * The room names worth drawing, and where. A name whose anchor lies off the
  * canvas is left out — the edge arrows point that way — and one near a side
  * is nudged in to be read whole. A name is dropped where its plate would lie
- * under the overlays at the top or the bottom edge, over a box such as the
- * minimap, or over a name placed before it.
+ * under the objective bar or past the bottom edge, over a box such as the
+ * minimap or the controls, or over a name placed before it.
  */
 export function placeRoomNames(names: readonly RoomName[], view: Viewport): RoomName[] {
   const { w, h, dpr } = view;
@@ -163,7 +181,7 @@ export function placeRoomNames(names: readonly RoomName[], view: Viewport): Room
     const half = name.width / 2 + PLATE_SIDE * size + air;
     const x = Math.min(w - half, Math.max(half, name.x));
     const box = grown(namePlate({ ...name, x }, size), air);
-    const covered = box.top < view.top || box.bottom > h - view.bottom;
+    const covered = box.top < view.top || box.bottom > h;
     if (covered || taken.some((other) => overlaps(box, other))) {
       continue;
     }

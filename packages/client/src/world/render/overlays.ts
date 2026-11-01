@@ -29,6 +29,7 @@ import {
   type Viewport,
 } from '../viewport.js';
 import { FALLBACK_COLOR, toScreen, type ChatLine, type Frame } from './frame.js';
+import { propLabels } from './labels.js';
 
 /**
  * What lies over the world and its light, screen space: the pings' rings
@@ -202,10 +203,12 @@ function moved(box: Box, dy: number): Box {
  */
 function drawScreenText(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const view = frame.viewport;
+  // The room names keep off the labels under the things, which matter more to play.
+  const named = [...view.boxes, ...labelsOnScreen(ctx, frame)];
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.textAlign = 'center';
   if (frame.ending !== null) {
-    drawRoomNames(ctx, frame, view);
+    drawRoomNames(ctx, frame, { ...view, boxes: named });
     return;
   }
   // Anything you need to walk to gets an arrow at the screen edge while
@@ -216,7 +219,7 @@ function drawScreenText(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const shunned = figure === null ? view.boxes : [...view.boxes, figure.keepOut];
   const markers = edgeMarkers(ctx, frame, { ...view, boxes: shunned });
   const arrows = markers.flatMap(({ at, captionWidth }) => markerBoxes(at, captionWidth, view));
-  drawRoomNames(ctx, frame, { ...view, boxes: [...view.boxes, ...arrows] });
+  drawRoomNames(ctx, frame, { ...view, boxes: [...named, ...arrows] });
   drawExitSign(ctx, frame);
   ctx.globalAlpha = frame.hud;
   drawDangerGlows(ctx, frame);
@@ -226,6 +229,15 @@ function drawScreenText(ctx: CanvasRenderingContext2D, frame: Frame): void {
   drawChatBubbles(ctx, frame);
   drawCarrying(ctx, frame);
   ctx.globalAlpha = 1;
+}
+
+/** The boxes the labels under the things cover this frame (labels.ts), device pixels. */
+function labelsOnScreen(ctx: CanvasRenderingContext2D, frame: Frame): Box[] {
+  return propLabels(ctx, frame).boxes.map((box) => {
+    const [left, top] = toScreen(frame, box.left, box.top);
+    const [right, bottom] = toScreen(frame, box.right, box.bottom);
+    return { left, top, right, bottom };
+  });
 }
 
 /** The open hatch's sign over it. */
