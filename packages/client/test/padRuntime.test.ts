@@ -204,6 +204,22 @@ describe('a controller over a dialog', () => {
   /** A book's dialog: the D-pad turns its pages. */
   const book = { ...dialog, classList: { contains: (name: string) => name === 'reading-modal' } };
 
+  it('presses any other control with A, sending no Space the world behind would hear', () => {
+    class FakeElement {}
+    vi.stubGlobal('HTMLElement', FakeElement);
+    const pressed: string[] = [];
+    const control = Object.assign(new FakeElement(), {
+      dataset: {},
+      click: () => pressed.push('click'),
+      dispatchEvent: noted,
+    });
+    const contains = (el: unknown): boolean => el === control;
+    page.dialogs = [{ ...dialog, ownerDocument: document, contains }];
+    page.focus = control;
+    expect(click('a')).toEqual([]);
+    expect(pressed).toEqual(['click']);
+  });
+
   it('steps nowhere with a direction still held from walking as a dialog comes up', () => {
     probe().press('dright');
     frame();
