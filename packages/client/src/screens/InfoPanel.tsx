@@ -55,7 +55,10 @@ export function controlsOf(source: GlyphSource): (readonly [string, string])[] {
     [`${g('pageBack')} ${g('pageOn')} beim Lesen`, 'Blättern'],
     [g('drop'), 'Getragenes Objekt ablegen — so sind Übergaben möglich'],
     ...signalRows(source, g),
-    [`${g('talk')} halten`, 'Sprechen — das Mikrofon wird in der Lobby aktiviert'],
+    [
+      `${g('talk')} halten`,
+      'Sprechen — das Mikrofon wird in der Lobby aktiviert. Am Terminal: Funk per Maus/Pad',
+    ],
     [g('notes'), 'Notizblock — auch neben Buch und Pult, bleibt für diesen Raum gespeichert'],
     [g('minimap'), 'Minikarte ein- und ausblenden'],
     [g('info'), 'Dieses Info-Fenster'],

@@ -3,6 +3,7 @@ import type { ManualHere, PuzzleView } from '@escapelab/core';
 import { clockTime } from '../clock.js';
 import { useKeys, useServerNow, useSwipe } from '../hooks.js';
 import {
+  bookPage,
   firstPageOf,
   leafFor,
   openingPage,
@@ -13,12 +14,13 @@ import {
   type Fragment,
   type Leaf,
 } from '../pages.js';
-import { notedPart } from '../noting.js';
+import { notedPart, shiftNotesTaken } from '../noting.js';
 import { READERS } from '../puzzles/index.js';
 import { useGlyph } from '../input/glyphs.js';
-import { useReducedMotion } from '../settings.js';
+import { TEXT_SCALE, useReducedMotion, useSettings } from '../settings.js';
 import { paperSwish } from '../world/audio.js';
 import { Block } from './Manual.js';
+import { Notable } from './NoteButton.js';
 import { ReaderPanel } from './PuzzlePanel.js';
 import { Seal } from './Seal.js';
 
@@ -115,13 +117,15 @@ export function NoteSlip({
     <aside className="note-slip" aria-label={label}>
       <p className="note-slip-for">{`zu §${section.index + 1}`}</p>
       {section.notes.length > 0 && (
-        <ol className="margin-notes">
-          {section.notes.map((note, i) => (
-            <li key={i} className="margin-note">
-              {note}
-            </li>
-          ))}
-        </ol>
+        <Notable noted={shiftNotesTaken(section, section.notes)}>
+          <ol className="margin-notes">
+            {section.notes.map((note, i) => (
+              <li key={i} className="margin-note">
+                {note}
+              </li>
+            ))}
+          </ol>
+        </Notable>
       )}
       {section.notesLeft > 0 && <AskNote section={section} pausedAt={pausedAt} onAsk={onAsk} />}
     </aside>
@@ -310,13 +314,29 @@ function CoverSheet({ side, book }: { side: Side; book: BookContext }) {
   );
 }
 
+/**
+ * A page left blank so that the station after it opens a spread (pages.ts): paper and nothing
+ * printed on it, as in a book — not even its number.
+ */
+function EmptySheet({ number, side }: { number: number; side: Side }) {
+  return (
+    <article className={`page page-${side} page-empty`} aria-label={`Seite ${number}, leer`}>
+      <div className="page-in" />
+    </article>
+  );
+}
+
 function PageView({ number, side, book }: { number: number; side: Side; book: BookContext }) {
   const page = book.pages[number - 1];
   if (page === undefined) {
     return <article className={`page page-${side} page-blank`} aria-hidden="true" />;
   }
   if (page.section === null) {
-    return <CoverSheet side={side} book={book} />;
+    return page.first ? (
+      <CoverSheet side={side} book={book} />
+    ) : (
+      <EmptySheet number={number} side={side} />
+    );
   }
   const section = book.manual.sections[page.section];
   if (section === undefined) {
@@ -487,12 +507,16 @@ export function Book({
   pausedAt: number | null;
   onAskNote: () => void;
 }) {
+  // The pages as this player's text size sets them on the sheet, and as the book lies open.
+  const { textSize } = useSettings();
   const pages = paginate(
     manual.sections.map((section) => ({
       title: stationTitle(section),
       manual: section.manual,
       reader: puzzle !== null && readerIn(puzzle, section),
     })),
+    bookPage(TEXT_SCALE[textSize]),
+    { spread },
   );
   const marked = manual.sections.findIndex((section) => section.index === current);
   const { at, go, turning } = usePage(

@@ -19,7 +19,7 @@ import { mapWith, type Manual } from './fixtures.js';
  * deep over its top, and nothing else on it unless `more` says so.
  */
 function frame(w: number, h: number, bar: number, dpr: number, more: Partial<Viewport> = {}) {
-  const plain: Viewport = { w, h, dpr, top: bar * dpr, bottom: 0, boxes: [] };
+  const plain: Viewport = { w, h, dpr, textScale: 1, top: bar * dpr, boxes: [] };
   return { ...plain, ...more };
 }
 
@@ -473,7 +473,7 @@ describe('placeMarkers — targets in the same direction', () => {
     for (const p of placeMarkers(points, frame(W, H, BAR, 1))) {
       expect(p).not.toBeNull();
       if (p !== null) {
-        expect(markerBoxes(p, CAPTION, 1)).toEqual(boxes(p, CAPTION));
+        expect(markerBoxes(p, CAPTION, { dpr: 1, textScale: 1 })).toEqual(boxes(p, CAPTION));
       }
     }
   });
@@ -481,15 +481,16 @@ describe('placeMarkers — targets in the same direction', () => {
 
 describe('placeMarkers — clear of the minimap and the controls', () => {
   // A laptop's world: 1000x600, the objective bar 80px deep, the minimap under
-  // it at the top right, the control cluster reaching 68px up from the bottom.
+  // it at the top right, the chat's handle in the bottom right corner, 68px up.
   const W = 1000;
   const H = 600;
   const MINIMAP: Box = { left: 820, top: 79, right: 991, bottom: 190 };
-  const VIEW = frame(W, H, 80, 1, { bottom: 68, boxes: [MINIMAP] });
+  const CHAT: Box = { left: 920, top: H - 68, right: 986, bottom: H - 16 };
+  const VIEW = frame(W, H, 80, 1, { boxes: [MINIMAP, CHAT] });
   const at = (px: number, py: number): MarkerPoint => ({ px, py, captionWidth: 60 });
   /** Whether a placed marker's arrow or caption lies on the minimap. */
   const onMinimap = (p: MarkerPlacement | null | undefined): boolean =>
-    p != null && markerBoxes(p, 60, 1).some((box) => overlaps(box, MINIMAP));
+    p != null && markerBoxes(p, 60, VIEW).some((box) => overlaps(box, MINIMAP));
 
   it('slides an arrow on the right edge down, past the minimap', () => {
     const [right] = placeMarkers([at(W + 200, 120)], VIEW);
@@ -514,18 +515,22 @@ describe('placeMarkers — clear of the minimap and the controls', () => {
     ys.slice(1).forEach((y, i) => expect(y - (ys[i] ?? NaN)).toBeGreaterThanOrEqual(apart));
   });
 
-  it('leaves the edges and the stretches the minimap does not touch alone', () => {
+  it('leaves the edges and the stretches the minimap and the controls do not touch alone', () => {
     const points = [at(-200, 120), at(300, -300), at(300, 900), at(W + 200, 400)];
-    expect(placeMarkers(points, VIEW)).toEqual(
-      placeMarkers(points, frame(W, H, 80, 1, { bottom: 68 })),
-    );
+    expect(placeMarkers(points, VIEW)).toEqual(placeMarkers(points, frame(W, H, 80, 1)));
   });
 
-  it('keeps the arrows above the control cluster at the bottom edge and down the sides', () => {
-    const [down, side] = placeMarkers([at(500, 900), at(-200, 590)], VIEW);
-    expect(down?.y).toBe(H - 68 - 16);
-    expect(side?.y).toBe(H - 68 - 16);
-    expect(placeMarker(500, 900, frame(W, H, 80, 1))?.y).toBe(H - 34);
+  it('keeps the arrows off the controls: beside them on the bottom, over them up the side', () => {
+    const [down, side] = placeMarkers([at(950, 900), at(W + 200, 590)], VIEW);
+    const onControls = (p: MarkerPlacement | null | undefined): boolean =>
+      p != null && markerBoxes(p, 60, VIEW).some((box) => overlaps(box, CHAT));
+    expect(down?.y).toBe(H - 34);
+    expect(down?.x).toBeLessThan(CHAT.left);
+    expect(side?.x).toBe(W - 34);
+    expect(side?.y).toBeLessThan(CHAT.top);
+    expect([down, side].some(onControls)).toBe(false);
+    // Down the bottom edge's middle nothing is in the way: the margin off the edge alone.
+    expect(placeMarkers([at(500, 900)], VIEW)[0]?.y).toBe(H - 34);
   });
 
   it('falls back to the whole edge where a box covers all of it', () => {
@@ -551,12 +556,41 @@ describe('placeMarkers — clear of the own figure on a phone held sideways', ()
   const at = (px: number, py: number): MarkerPoint => ({ px, py, captionWidth: 70 });
 
   it('moves an arrow along the bottom edge off the figure, its caption too', () => {
-    const view = frame(W, H, 40, 1, { bottom: 20 });
+    const view = frame(W, H, 40, 1);
     const [plain] = placeMarkers([at(430, 600)], view);
-    expect(plain != null && markerBoxes(plain, 70, 1).some((b) => overlaps(b, KEEP_OUT))).toBe(true);
+    expect(plain != null && markerBoxes(plain, 70, view).some((b) => overlaps(b, KEEP_OUT))).toBe(
+      true,
+    );
     const [clear] = placeMarkers([at(430, 600)], { ...view, boxes: [KEEP_OUT] });
-    expect(clear != null && markerBoxes(clear, 70, 1).some((b) => overlaps(b, KEEP_OUT))).toBe(
+    expect(clear != null && markerBoxes(clear, 70, view).some((b) => overlaps(b, KEEP_OUT))).toBe(
       false,
     );
+  });
+});
+
+describe('placeMarkers — on a phone held sideways, the pad under the left thumb', () => {
+  // 844×390 sideways: the canvas 828×291 under a bar 41 px deep, the steering pad in the bottom
+  // left corner, 146 px square and 16 px off the foot, the thumb's row in the bottom right one.
+  const W = 828;
+  const H = 291;
+  const PAD: Box = { left: 14, top: H - 162, right: 160, bottom: H - 16 };
+  const THUMB: Box = { left: 650, top: H - 68, right: 814, bottom: H - 16 };
+  const VIEW = frame(W, H, 41, 1, { boxes: [PAD, THUMB] });
+  const at = (px: number, py: number): MarkerPoint => ({ px, py, captionWidth: 70 });
+  const onControls = (p: MarkerPlacement | null | undefined): boolean =>
+    p != null && markerBoxes(p, 70, VIEW).some((box) => overlaps(box, PAD) || overlaps(box, THUMB));
+
+  it('keeps an arrow down the left side above the pad, one down the right above the row', () => {
+    const [left, right] = placeMarkers([at(-120, 260), at(W + 120, 270)], VIEW);
+    expect(left?.x).toBe(34);
+    expect(right?.x).toBe(W - 34);
+    expect([left, right].some(onControls)).toBe(false);
+  });
+
+  it('puts an arrow along the bottom edge between the two corners', () => {
+    const [low, lowLeft] = placeMarkers([at(400, 600), at(60, 600)], VIEW);
+    expect(low?.y).toBe(H - 34);
+    expect(lowLeft?.x).toBeGreaterThan(PAD.right);
+    expect([low, lowLeft].some(onControls)).toBe(false);
   });
 });

@@ -227,11 +227,95 @@ plain button gives a pixel as it is pressed and darkens a little; a device's key
 wires keep their own press. Keyboard focus shows as a 2 px teal ring, never for a click; hover
 affordances belong to a mouse. The type keeps its hierarchy: titles in the system sans, bold
 (the page's 27 px, the station's line 20 px); labels in the mono, upper case and spaced 2 px
-(13 px heads, 12 px panel labels, 10 px marks); figures in the mono with tabular digits (the
+(13 px heads, 12 px panel labels and marks); figures in the mono with tabular digits (the
 clock 30 px, 36 px at the end); running text in the system sans at 15 to 16 px; the world's own
-text in the mono, bold, with a dark halo, held within 10 to 14 CSS px whatever the zoom. Under
+text in the mono, bold, with a dark halo (sizes under Type and targets). Under
 reduced motion every move is a cut or a cross-fade: a panel only fades in, a device stepped back
 from goes at once, a press only darkens.
+
+## The notepad (screens/Notepad.tsx, styles/notepad.css)
+
+The notepad is the one thing on screen that belongs to the player, so it looks like a pad a
+person on the night shift keeps, not like the lab's machines: cream paper (#fbf6e6), faint blue
+rules a writing line apart (28 px at text size 1) and a red double margin line down its left,
+glued to a board at its head. The player's own writing stands in blue-black pen (#22305a), in a
+hand: **Kalam** by the Indian Type Foundry (2014), under the **SIL Open Font License 1.1**, which
+reserves no font name. Its Latin subset — Latin-1 and the general punctuation, as Google Fonts
+cuts it, enough for every German text and „ “ – — · … — ships with the game as
+`client/public/fonts/kalam-latin.woff2` (14 kB), its licence beside it as `kalam-OFL.txt`; the
+page preloads it (index.html) and the service worker keeps it, so the pad never opens in a
+stand-in face and nothing comes from a CDN. The pen's ink sinks a little into the paper (a
+0.6 px shadow of itself). What was taken down at a source is copied in pencil (#3a3c41, every
+second capture a softer, warmer #4a4038): a table in the system's monospace — block letters — on
+ruled pencil lines 24 px apart, its columns aligned and never wrapped; running text, rules and
+notes, in the same hand as the pen's; each capture's head in pen, underlined as a heading on a
+pad is, „aktualisiert" beside it in red pencil (#a3352b). Nothing on the pad moves, so reduced
+motion has nothing to change.
+
+Readable first: the writing 18 px, the hand's running text and heads 17 px, the pencil's tables
+15 px, the red pencil 15 px, all at text size 1 and all scaled by it; against the paper the pen
+stands at 11.9:1, the pencils at 10.2 and 9.3:1, the red pencil at 6.3:1 and the placeholder at
+5.6:1 (`client/test/notepadLook.test.ts` reads them off the stylesheet). A table stays aligned
+up to 38 characters of the pencil's — the terminal's table runs 36, the Signalkette's legend 31
+— which the pad holds whole on a phone 420 px wide (its margin moved in to 24 px there); a wider
+one is set as running text (gameplay.md). The pad in the world's corner is 390 px wide at text
+size 1 and grows with it; the strip beside a page keeps its width (`--note-strip`), so in a
+narrow window at the large text size a table may scroll sideways in its own box.
+notepad-captured.png and notepad-captured-phone.png show the legend and the Laborkennung in it.
+
+## Type and targets (styles/devices.css, test/deviceTargets.test.tsx)
+
+Every word on a device is set by its role, at the normal text size and in a laptop's 720 px of
+height at least:
+
+| Role | Least size | Token | Where |
+|---|---|---|---|
+| Engraved in the metal | 11 px | `--type-engraving` | AUS/EIN, STUFE, KABEL, RACK, the way back |
+| A label, an LED's words | 12 px | `--type-label` | the plate, PARTNER, key legends, unit plates |
+| Read off its face | 14 px | `--type-body` | the terminal's table and log, wire numbers |
+| A readout | 18 px | `--type-readout` | the meter's V, probe digits, the maze's display |
+
+A taller window adds a little to each (0.3 to 0.8 px for every 100 px of height, up to 12, 13,
+15 and 22 px), and the text size multiplies all of it (0.9, 1, 1.15). Readouts that are the
+device's one figure keep their own size: the radio's frequency 32 px, the relay's instruction
+24 px and its seconds 26 px. Words drawn in an SVG grow with their drawing: the Netzplan's
+names stand 11 units high (12 at most at the large text size, as much as their box holds right
+of its LED), the meter's scale 11 units, 13 on a phone, where its dial is drawn smaller.
+
+Every control on a device is a target: 36 px each way under a mouse, 44 under a finger
+(`--target`; Apple's 44 pt, WCAG 2.2's enhanced 44 × 44) — terminal keys, rack switches, lever
+grips, probe keys, the way back and the tabs under the chassis, the relay console's switches,
+dials and buttons. Where a target's height would push lines apart — the terminal's prompt, the
+engraved way back, the relay's „Ablauf nachlesen" — its box reaches over the chassis round it
+and the line keeps its place. The rack and its Netzplan stand side by side, and a device's frame
+takes the window's height but the dim's edge: every device stands whole in 720 px of height.
+
+Around the devices: the HUD's smallest words stand at 12 px (the Laborkennung's heads, ALARME,
+„unterwegs"). On the canvas, room names stand at 13 px on a dark plate that keeps them at 4.5:1
+or more over the brightest lit floor (WCAG 2.2; FLUR on the lit corridor read 1.3:1 without
+it); the E prompt, captions, chat bubbles, the carry line and the hatch's sign at 12 px, the
+arrows' captions at 11, a prop's label within 10 to 12 and a name tag within 11 to 14 whatever
+the zoom — every one of them times the text size. Where two prop labels would cover each other,
+the one that matters less moves a line down or is left out (labelLayout.ts).
+
+## A phone held sideways
+
+844 × 390 px under a finger. In the world the steering pad lies under the left thumb: three by
+three cells of 48 px, the eight round its middle walking the eight ways, the corners two keys at
+once; a finger that slides over it turns the walk without lifting (touchPad.ts). The actions —
+E, sprint, drop, chat, talk — lie under the right thumb, 52 px each. The objective bar covers a
+quarter of the canvas's height at most, a line on the air included; the minimap stands 56 px
+tall at least; the camera lifts the avatar clear of both thumbs' controls.
+
+A device takes the window: the device on the left, the Laborkennung and a newcomer's line in a
+column of their own beside it, the bezel slimmer; every control in reach without scrolling,
+and a list that runs long scrolls in its own box — the terminal's log, kept at its newest line.
+The terminal's keys stand in a column beside its screen, the rack's units a fingertip high with
+the Netzplan beside them, the meter's smaller dial beside its keys and paper, the Signalkette's
+keys lower with the done lamps beside the status row, the radio's lamp beside its dial. The way
+back and the notepad hang as steel tabs under the chassis. The relay console stands in two
+columns: the emergency, its procedure and the instruction to read out on the left, the
+console's controls on the right.
 
 ## Cost
 

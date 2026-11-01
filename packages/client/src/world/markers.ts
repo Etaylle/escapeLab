@@ -189,28 +189,49 @@ export function glowSpot(
 const MARGIN = 34;
 /** gap between an overlay along an edge — the objective bar, the controls — and an arrow there */
 const BAR_GAP = 16;
-const CAPTION_BELOW = 26;
-const CAPTION_ABOVE = 20;
 /** how far an arrow reaches from its middle, however it is turned */
 const ARROW_REACH = 13;
-/** how far a caption's letters rise above and drop below its baseline */
+/**
+ * how far a caption's letters rise above and drop below its baseline at the normal text size;
+ * the reader's text size scales them (`Viewport.textScale`)
+ */
 const CAPTION_RISE = 8;
 const CAPTION_DROP = 3;
+/** air between an arrow and its caption, under it or over it */
+const CAPTION_GAP_BELOW = 5;
+const CAPTION_GAP_ABOVE = 4;
 /** air left between two markers on one edge, and between a marker and a box */
 const MARKER_AIR = 4;
 
-/** How high and how low an arrow may sit: clear of the objective bar and of the controls. */
+/** How a caption's letters rise and drop at `view`'s text size, CSS pixels. */
+function captionFace(view: Pick<Viewport, 'textScale'>): { rise: number; drop: number } {
+  return { rise: CAPTION_RISE * view.textScale, drop: CAPTION_DROP * view.textScale };
+}
+
+/** How far under an arrow's middle its caption's baseline lies, and how far over it, CSS px. */
+function captionOffsets(view: Pick<Viewport, 'textScale'>): { below: number; above: number } {
+  const { rise, drop } = captionFace(view);
+  return {
+    below: ARROW_REACH + CAPTION_GAP_BELOW + rise,
+    above: ARROW_REACH + CAPTION_GAP_ABOVE + drop,
+  };
+}
+
+/**
+ * How high and how low an arrow may sit: clear of the objective bar, and the
+ * margin off the bottom edge — the controls in its corners are boxes of the
+ * view, which the arrows along an edge keep off (placeMarkers).
+ */
 function heights(view: Viewport): [number, number] {
   const margin = MARGIN * view.dpr;
   const gap = BAR_GAP * view.dpr;
-  return [Math.max(margin, view.top + gap), view.h - Math.max(margin, view.bottom + gap)];
+  return [Math.max(margin, view.top + gap), view.h - margin];
 }
 
 /**
  * Pins an off-screen target to the inside of the frame, clear of what lies
- * over its top and bottom edges: an arrow at the top has to clear the
- * objective bar, or it is drawn on the mission title, and one at the bottom
- * the control cluster.
+ * over its top edge: an arrow at the top has to clear the objective bar, or
+ * it is drawn on the mission title.
  *
  * Returns null while the target is on screen — everything an arrow points at
  * lights its own patch of the darkness, so the arrow would only cover it up.
@@ -224,26 +245,33 @@ export function placeMarker(px: number, py: number, view: Viewport): MarkerPlace
   const [top, bottom] = heights(view);
   const x = Math.min(w - margin, Math.max(margin, px));
   const y = Math.min(bottom, Math.max(top, py));
+  const caption = captionOffsets(view);
   return {
     x,
     y,
     angle: Math.atan2(py - h / 2, px - w / 2),
     // Caption below the arrow, except near the bottom where that would push it
     // off the frame.
-    captionY: py > h / 2 ? y - CAPTION_ABOVE * dpr : y + CAPTION_BELOW * dpr,
+    captionY: py > h / 2 ? y - caption.above * dpr : y + caption.below * dpr,
   };
 }
 
-/** What a placed marker covers: its arrow, and its caption `captionWidth` wide. */
-export function markerBoxes(at: MarkerPlacement, captionWidth: number, dpr: number): Box[] {
+/** What a placed marker covers on `view`: its arrow, and its caption `captionWidth` wide. */
+export function markerBoxes(
+  at: MarkerPlacement,
+  captionWidth: number,
+  view: Pick<Viewport, 'dpr' | 'textScale'>,
+): Box[] {
+  const { dpr } = view;
   const reach = ARROW_REACH * dpr;
+  const { rise, drop } = captionFace(view);
   return [
     { left: at.x - reach, top: at.y - reach, right: at.x + reach, bottom: at.y + reach },
     {
       left: at.x - captionWidth / 2,
-      top: at.captionY - CAPTION_RISE * dpr,
+      top: at.captionY - rise * dpr,
       right: at.x + captionWidth / 2,
-      bottom: at.captionY + CAPTION_DROP * dpr,
+      bottom: at.captionY + drop * dpr,
     },
   ];
 }
@@ -279,14 +307,16 @@ interface Slot {
 function slotOf(index: number, at: MarkerPlacement, point: MarkerPoint, view: Viewport): Slot {
   const { w, dpr } = view;
   const half = Math.max(ARROW_REACH * dpr, point.captionWidth / 2);
+  const { rise, drop } = captionFace(view);
+  const caption = captionOffsets(view);
   if (point.px < 0 || point.px > w) {
     const below = at.captionY > at.y;
     return {
       index,
       edge: point.px < 0 ? 'left' : 'right',
       at: at.y,
-      before: (below ? ARROW_REACH : CAPTION_ABOVE + CAPTION_RISE) * dpr,
-      after: (below ? CAPTION_BELOW + CAPTION_DROP : ARROW_REACH) * dpr,
+      before: (below ? ARROW_REACH : caption.above + rise) * dpr,
+      after: (below ? caption.below + drop : ARROW_REACH) * dpr,
       across: half,
     };
   }
@@ -297,7 +327,7 @@ function slotOf(index: number, at: MarkerPlacement, point: MarkerPoint, view: Vi
     at: at.x,
     before: half,
     after: half,
-    across: (top ? CAPTION_BELOW + CAPTION_DROP : CAPTION_ABOVE + CAPTION_RISE) * dpr,
+    across: (top ? caption.below + drop : caption.above + rise) * dpr,
   };
 }
 
@@ -344,9 +374,9 @@ function freeSpans(lo: number, hi: number, cuts: readonly Span[]): Span[] {
 }
 
 /**
- * Where along `edge` its markers may sit: inside the frame, clear of the bars,
- * and off every box lying in their lane — the minimap — by the room a marker
- * takes before and after its middle.
+ * Where along `edge` its markers may sit: inside the frame, clear of the bar,
+ * and off every box lying in their lane — the minimap, the controls in the
+ * bottom corners — by the room a marker takes before and after its middle.
  */
 function spansOf(edge: Edge, slots: readonly Slot[], view: Viewport): Span[] {
   const margin = MARGIN * view.dpr;
@@ -401,11 +431,11 @@ function spread(slots: Slot[], lo: number, hi: number, air: number): void {
 
 /**
  * Every target pinned as by placeMarker, then the markers sharing an edge
- * moved along it until none covers another or a box such as the minimap: on
- * a side they stack, each arrow clear of its neighbour's caption; along the
- * top and the bottom the captions stand side by side. A box cuts its edge in
- * stretches, and each marker keeps to the stretch nearest it; a stack that
- * would run off its stretch backs up.
+ * moved along it until none covers another or a box such as the minimap or
+ * the controls: on a side they stack, each arrow clear of its neighbour's
+ * caption; along the top and the bottom the captions stand side by side. A
+ * box cuts its edge in stretches, and each marker keeps to the stretch
+ * nearest it; a stack that would run off its stretch backs up.
  */
 export function placeMarkers(
   points: readonly MarkerPoint[],

@@ -9,9 +9,12 @@ import {
   drawPlate,
   drawSign,
   drawStation,
+  LABEL_BELOW,
   plateCaption,
+  SIGN_LABEL_BELOW,
   type Tube,
 } from '../art.js';
+import type { PlacedLabels } from '../labelLayout.js';
 import { animTime, crtFlicker, propSeed, rollAt } from '../anim.js';
 import { doorOpenness, isHorizontalDoor } from '../doors.js';
 import { burning } from '../frameLight.js';
@@ -23,8 +26,16 @@ import {
 } from '../hazards.js';
 import { coversArmed, opensCabinet } from '../interact.js';
 import { noteMount } from '../notes.js';
-import { inTiles, profiled, toScreen, type Frame, type WorldMap } from './frame.js';
+import { inTiles, profiled, type Frame, type WorldMap } from './frame.js';
 import { drawGlow, namedThing, type Named } from './highlight.js';
+import {
+  labelAt,
+  looseAndShown,
+  propLabels,
+  SIGN,
+  SIGN_LABEL,
+  sourceShows,
+} from './labels.js';
 import * as props from './props.js';
 
 /**
@@ -33,24 +44,26 @@ import * as props from './props.js';
  * the last shift also wherever the crew knows of them; a station that is up
  * or done, the sign, the hatch and the valves always show. A thing shows its
  * name and calls for attention only once this player has found it
- * (labels.ts): till then it is drawn as what it is. The one thing the E prompt
+ * (labelFade.ts): till then it is drawn as what it is. The one thing the E prompt
  * names glows in its own shape under it (highlight.ts) — over the plates and
  * doors, under the things. Then the emergency lamps on their walls and
  * ceilings. The furniture is baked with the floor it stands on
- * (render/tiles.ts).
+ * (render/tiles.ts). The labels under plates, sources, the sign and the parts
+ * lying about go where they were placed, none on another (labels.ts).
  */
 export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   inTiles(ctx, frame);
   const named = namedThing(frame);
-  drawPlates(ctx, frame);
+  const labels = propLabels(ctx, frame);
+  drawPlates(ctx, frame, labels);
   profiled(frame.kit, 'props', ctx, () => props.drawFloor(ctx, frame));
   drawDoors(ctx, frame);
   drawGlowUnder(ctx, frame, named);
   drawStations(ctx, frame);
-  drawManuals(ctx, frame);
+  drawManuals(ctx, frame, labels);
   drawNotes(ctx, frame);
-  drawFixtures(ctx, frame);
-  drawItems(ctx, frame, named);
+  drawFixtures(ctx, frame, labels);
+  drawItems(ctx, frame, named, labels);
   drawLamps(ctx, frame);
 }
 
@@ -62,8 +75,8 @@ function at(ctx: CanvasRenderingContext2D, x: number, y: number, draw: () => voi
   ctx.restore();
 }
 
-/** The pressure plates light has fallen on. */
-function drawPlates(ctx: CanvasRenderingContext2D, frame: Frame): void {
+/** The pressure plates light has fallen on, each label where `labels` puts it. */
+function drawPlates(ctx: CanvasRenderingContext2D, frame: Frame, labels: PlacedLabels): void {
   const { map, light, text } = frame;
   for (const plate of map.plates.filter((p) => light.shown(p.x, p.y))) {
     const look = {
@@ -71,6 +84,7 @@ function drawPlates(ctx: CanvasRenderingContext2D, frame: Frame): void {
       label: plateCaption(plate),
       camera: plate.freezesDrone,
       text,
+      labelAt: labelAt(labels, `plate:${plate.id}`, LABEL_BELOW),
     };
     at(ctx, plate.x + 0.5, plate.y + 0.5, () => drawPlate(ctx, look));
   }
@@ -135,10 +149,10 @@ export function tubeAt(frame: Frame, x: number, y: number): Tube {
 }
 
 /**
- * The sources where light has fallen or the crew knows of them, named as far as this player has
- * found them, the ones printing the armed station's rules lit up.
+ * The sources where light has fallen or the crew knows of them, the ones printing the armed
+ * station's rules lit up, each named where `labels` puts it as far as this player has found it.
  */
-function drawManuals(ctx: CanvasRenderingContext2D, frame: Frame): void {
+function drawManuals(ctx: CanvasRenderingContext2D, frame: Frame, labels: PlacedLabels): void {
   const { map, pulse, text } = frame;
   for (const manual of map.manuals) {
     if (!sourceShows(frame, manual)) {
@@ -147,8 +161,9 @@ function drawManuals(ctx: CanvasRenderingContext2D, frame: Frame): void {
     const active = coversArmed(map, manual);
     const { kind, label, opened } = manual;
     const tube = tubeAt(frame, manual.x, manual.y);
+    const place = labelAt(labels, `manual:${manual.id}`, LABEL_BELOW);
     const found = frame.labels({ of: 'source', id: manual.id });
-    const look = { kind, label, active, opened, pulse, text, tube, found };
+    const look = { kind, label, active, opened, pulse, text, tube, labelAt: place, found };
     at(ctx, manual.x + 0.5, manual.y + 0.5, () => drawManualObject(ctx, look));
   }
 }
@@ -169,13 +184,14 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: Frame): void {
   }
 }
 
-/** The Laborkennung, the hatch and an emergency's valves: always in sight. */
-function drawFixtures(ctx: CanvasRenderingContext2D, frame: Frame): void {
+/** The Laborkennung, its label where `labels` puts it, the hatch and an emergency's valves. */
+function drawFixtures(ctx: CanvasRenderingContext2D, frame: Frame, labels: PlacedLabels): void {
   const { map, pulse, text } = frame;
   const sign = map.edgeworkSign;
   if (sign !== null) {
-    const found = frame.labels({ of: 'sign' });
-    const look = { label: 'LABORKENNUNG', seen: frame.signSeen, pulse, text, found };
+    const place = labelAt(labels, 'sign', SIGN_LABEL_BELOW);
+    const found = frame.labels(SIGN);
+    const look = { label: SIGN_LABEL, seen: frame.signSeen, pulse, text, labelAt: place, found };
     at(ctx, sign.x + 0.5, sign.y + 0.5, () => drawSign(ctx, look));
   }
   const exit = map.exit;
@@ -189,25 +205,17 @@ function drawFixtures(ctx: CanvasRenderingContext2D, frame: Frame): void {
 }
 
 type Item = WorldMap['items'][number];
-type Manual = WorldMap['manuals'][number];
-
-const SIGN = { of: 'sign' } as const;
-
-/** Whether a source shows this frame: where light has fallen on it, or the crew knows of it. */
-function sourceShows(frame: Frame, manual: Manual): boolean {
-  return manual.known || frame.light.shown(manual.x, manual.y);
-}
-
-/** Whether a part lies about where light has fallen on it. */
-function looseShows(frame: Frame, item: Item): boolean {
-  return !item.delivered && item.carriedBy === null && frame.light.shown(item.x, item.y);
-}
 
 /** Drop-offs and the crates, fuses and keys lying about, where light has fallen on them. */
-function drawItems(ctx: CanvasRenderingContext2D, frame: Frame, named: Named | null): void {
+function drawItems(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  named: Named | null,
+  labels: PlacedLabels,
+): void {
   for (const item of frame.map.items) {
     drawZone(ctx, frame, item);
-    drawLoose(ctx, frame, item, named);
+    drawLoose(ctx, frame, item, named, labelAt(labels, `item:${item.id}`, LABEL_BELOW));
   }
 }
 
@@ -221,23 +229,30 @@ function drawZone(ctx: CanvasRenderingContext2D, frame: Frame, item: Item): void
 }
 
 /**
- * `item` lying about where light has fallen on it, named as far as this player has found it, as
- * the E prompt has it (`hovering`).
+ * `item` lying about where light has fallen on it, as the E prompt has it (`hovering`), its
+ * label's top `label` under it, or none — named as far as this player has found it.
  */
 function drawLoose(
   ctx: CanvasRenderingContext2D,
   frame: Frame,
   item: Item,
   named: Named | null,
+  label: number | null,
 ): void {
   const { pulse, text } = frame;
-  if (!looseShows(frame, item)) {
+  if (!looseAndShown(frame, item)) {
     return;
   }
-  const found = frame.labels({ of: 'item', id: item.id });
-  const look = { label: item.label, pulse, carried: false, text, found };
-  const lying = { ...look, ...hovering(frame, item, named) };
-  at(ctx, item.x, item.y, () => drawCarryable(ctx, lying));
+  const look = {
+    label: item.label,
+    pulse,
+    carried: false,
+    text,
+    labelAt: label,
+    found: frame.labels({ of: 'item', id: item.id }),
+    ...hovering(frame, item, named),
+  };
+  at(ctx, item.x, item.y, () => drawCarryable(ctx, look));
 }
 
 /**
@@ -270,51 +285,4 @@ function drawLamps(ctx: CanvasRenderingContext2D, frame: Frame): void {
     drawEmergencyLamp(ctx, { glow: own, facing: mount.facing });
     ctx.restore();
   }
-}
-
-/** A name this frame draws under a thing: its words, its thing's anchor in tiles and on screen. */
-export interface ShownLabel {
-  text: string;
-  x: number;
-  y: number;
-  /** device pixels on the canvas */
-  sx: number;
-  sy: number;
-  /** how far it shows, above 0 */
-  alpha: number;
-  /** its anchor lies on the canvas, below the objective bar */
-  onScreen: boolean;
-}
-
-/**
- * The names this frame draws under things, as the passes above decide them: the sources that
- * show and the parts lying where light has fallen, as far as this player has found them, the
- * sign once found or read, every plate where light has fallen — for the walkthrough's count
- * (`window.__escapelab.labels`).
- */
-export function labelsShown(frame: Frame): ShownLabel[] {
-  const { map, light } = frame;
-  const sign = map.edgeworkSign;
-  const at = (text: string, x: number, y: number, alpha: number) => ({ text, x, y, alpha });
-  const named = [
-    ...map.manuals
-      .filter((m) => sourceShows(frame, m))
-      .map((m) => at(m.label, m.x + 0.5, m.y + 0.5, frame.labels({ of: 'source', id: m.id }))),
-    ...map.items
-      .filter((i) => looseShows(frame, i))
-      .map((i) => at(i.label.toUpperCase(), i.x, i.y, frame.labels({ of: 'item', id: i.id }))),
-    ...(sign === null
-      ? []
-      : [at('LABORKENNUNG', sign.x + 0.5, sign.y + 0.5, frame.signSeen ? 1 : frame.labels(SIGN))]),
-    ...map.plates
-      .filter((p) => light.shown(p.x, p.y))
-      .map((p) => at(plateCaption(p).toUpperCase(), p.x + 0.5, p.y + 0.5, 1)),
-  ];
-  const { w, h, top } = frame.viewport;
-  return named
-    .filter((label) => label.alpha > 0)
-    .map((label) => {
-      const [sx, sy] = toScreen(frame, label.x, label.y);
-      return { ...label, sx, sy, onScreen: sx >= 0 && sx <= w && sy >= top && sy <= h };
-    });
 }

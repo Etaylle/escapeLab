@@ -6,7 +6,7 @@ import {
   labelAlpha,
   labelClock,
   noteLabels,
-} from '../src/world/labels.js';
+} from '../src/world/labelFade.js';
 import { mapWith, type Item, type Manual } from './fixtures.js';
 
 const book: Manual = {

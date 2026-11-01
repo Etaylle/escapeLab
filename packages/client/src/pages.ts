@@ -2,15 +2,20 @@ import type { ManualBlock, ManualSection } from '@escapelab/core';
 
 /**
  * Printed rules laid out as the pages of a book. Page 1 is the cover;
- * every station starts on a fresh page and its blocks flow on from there: a
- * rules list or a table breaks between items, two at least to a page — the
- * list repeats its heading „(Fortsetzung)" where it goes on, the table its
- * head on every page it spans — everything else moves on whole, and a heading
- * never ends a page.
+ * every station starts on a fresh page and its blocks flow on from there. A
+ * rules list or a table that would break over a page turn moves to the next
+ * page whole where it fits there, as KTANE's manual gives a module its page;
+ * only one taller than a page breaks between items, two at least to a page —
+ * the list repeats its heading „(Fortsetzung)" where it goes on, the table its
+ * head on every page it spans. Everything else moves on whole, a drawing
+ * together with the block it illustrates, and a heading never ends a page.
+ * Seen as a spread, a station opens on a left-hand page where that saves a
+ * turn, a blank page before it, so that a station of two pages lies open whole.
  * Heights are estimates in em of the page's body text. styles/book.css draws
  * the page to the same measure at whatever size it is shown, so the same
- * pages come out on every screen — and every player's page 3 is the same
- * page 3.
+ * pages come out on every screen at one text size — and every player's page 3
+ * at that size is the same page 3. A larger text size sets fewer words on the
+ * same sheet (bookPage).
  */
 
 /** One station's part of the book. */
@@ -54,9 +59,12 @@ export function blockText(block: object): string {
 }
 
 export interface BookPage {
-  /** the station the page belongs to, by index into the sections; null for the cover */
+  /**
+   * the station the page belongs to, by index into the sections; null for the cover and for a
+   * blank page left before a station that opens a spread
+   */
   section: number | null;
-  /** opens its station, or is the cover */
+  /** opens its station, or is the cover; a blank page is neither */
   first: boolean;
   fragments: Fragment[];
 }
@@ -68,12 +76,27 @@ export interface PageSize {
 }
 
 /**
- * The text column as styles/book.css draws it — `.page-text`, 25.2 × 37 em
- * on a 30 × 42 em sheet, within a book's usual margins — counted 0.6 em
- * narrower: a line that only just fits in print is counted as wrapping, so
- * an estimate errs toward a fuller page rather than one that runs over.
+ * The text column as styles/book.css draws it — `.page-text`, 25.2 × 37 em of
+ * a 30 × 42 em sheet, within a book's usual margins — at text size `scale`
+ * (settings.ts TEXT_SCALE): the sheet and its margins stay, and the body text
+ * grows by `scale`, so the column holds 1/scale as many of its em. Counted
+ * 0.6 em narrower: a line that only just fits in print is counted as
+ * wrapping, so an estimate errs toward a fuller page rather than one that
+ * runs over.
  */
-export const BOOK_PAGE: PageSize = { width: 24.6, height: 37 };
+export function bookPage(scale: number): PageSize {
+  if (!(scale > 0)) {
+    throw new Error(`bookPage: a text size scales by a factor above 0, not ${scale}`);
+  }
+  return { width: SHEET_COLUMN.width / scale - NARROWER, height: SHEET_COLUMN.height / scale };
+}
+
+/** The text column in em of the sheet (book.css `.page-in`), and how much narrower it counts. */
+const SHEET_COLUMN = { width: 25.2, height: 37 } as const;
+const NARROWER = 0.6;
+
+/** The text column at the normal text size. */
+export const BOOK_PAGE: PageSize = bookPage(1);
 
 /**
  * A device drawing keeps its printed width on the page, centred in the
@@ -257,15 +280,15 @@ class Pager {
 
   constructor(private readonly size: PageSize) {}
 
-  /** A fresh page: a station's first, a continuation, or the cover (null). */
-  open(section: number | null, first: boolean): void {
+  /** A fresh page: a station's first, or a continuation. */
+  open(section: number, first: boolean): void {
     this.pages.push({ section, first, fragments: [] });
     this.used = 0;
     this.last = null;
   }
 
   turn(): void {
-    this.open(this.pages.at(-1)?.section ?? null, false);
+    this.open(this.pages.at(-1)?.section ?? 0, false);
   }
 
   blank(): boolean {
@@ -282,6 +305,11 @@ class Pager {
     return this.used + this.cost(fragments) <= this.size.height + slack;
   }
 
+  /** Whether fragments would fit on a fresh page, running `slack` em past its foot at most. */
+  fitsFresh(fragments: readonly Fragment[], slack = 0): boolean {
+    return this.cost(fragments, null) <= this.size.height + slack;
+  }
+
   /**
    * Puts fragments on the page together. If they do not fit but would on a
    * fresh page, they go on the next one; if not even that would hold them,
@@ -291,8 +319,7 @@ class Pager {
     if (fragments.length === 0) {
       return;
     }
-    const fresh = this.cost(fragments, null) <= this.size.height;
-    if (!this.blank() && !this.fits(fragments, slack) && fresh) {
+    if (!this.blank() && !this.fits(fragments, slack) && this.fitsFresh(fragments)) {
       this.turn();
     }
     const page = this.pages.at(-1);
@@ -305,13 +332,49 @@ class Pager {
   }
 }
 
+/** A block that may break between its units: a rules list's items, a table's rows. */
+interface Breakable {
+  count: number;
+  /** the fragment that holds units from..to-1 */
+  part: (from: number, to: number) => Fragment;
+  /** what heads every page the block goes on, or moves on to, with nothing else to lead it */
+  resumed: Fragment[];
+}
+
 /**
- * A block that may break between its `count` units, `part(from, to)` being
- * the fragment that holds units from..to-1. Each page takes as many units as
- * fit, the first of them together with `lead` (a heading waiting for it) and
- * every later page's first with `resumed`. A page holds two units at least,
- * so neither the first nor the last unit stands alone; the page that would
- * take the last unit may run `slack` em longer.
+ * A block that may break between its units, set after `lead` (a heading, a
+ * drawing, waiting for it): whole on this page where it fits, else whole on
+ * the next page where it fits there — after `lead`, or where nothing leads it
+ * after `resumed` — and only where not even a fresh page holds it, broken
+ * (placeSplit). The block that closes its station may run `slack` em longer.
+ */
+function placeBreakable(pager: Pager, block: Breakable, lead: Fragment[], slack: number): void {
+  const { count, part, resumed } = block;
+  if (count === 0) {
+    pager.put(lead);
+    return;
+  }
+  const whole = part(0, count);
+  if (pager.fits([...lead, whole], slack)) {
+    pager.put([...lead, whole], slack);
+    return;
+  }
+  const opening = lead.length > 0 ? lead : resumed;
+  if (!pager.blank() && pager.fitsFresh([...opening, whole], slack)) {
+    pager.turn();
+    pager.put([...opening, whole], slack);
+    return;
+  }
+  placeSplit(pager, count, part, lead, resumed, slack);
+}
+
+/**
+ * A block taller than a page, broken between its `count` units, `part(from,
+ * to)` being the fragment that holds units from..to-1. Each page takes as
+ * many units as fit, the first of them together with `lead` and every later
+ * page's first with `resumed`. A page holds two units at least, so neither the
+ * first nor the last unit stands alone; the page that would take the last
+ * unit may run `slack` em longer.
  */
 function placeSplit(
   pager: Pager,
@@ -348,9 +411,6 @@ function placeSplit(
       pager.turn();
     }
   }
-  if (count === 0) {
-    pager.put(lead);
-  }
 }
 
 function place(
@@ -362,56 +422,135 @@ function place(
 ): void {
   switch (block.kind) {
     case 'rules':
-      placeSplit(
+      placeBreakable(
         pager,
-        block.items.length,
-        (from, to) => ({ kind: 'rules', items: block.items.slice(from, to), start: from + 1 }),
+        {
+          count: block.items.length,
+          part: (from, to) => ({
+            kind: 'rules',
+            items: block.items.slice(from, to),
+            start: from + 1,
+          }),
+          resumed: [{ kind: 'heading', text: `${heading} (Fortsetzung)` }],
+        },
         lead,
-        [{ kind: 'heading', text: `${heading} (Fortsetzung)` }],
         slack,
       );
       return;
     case 'table':
-      placeSplit(
+      placeBreakable(
         pager,
-        block.rows.length,
-        (from, to) => ({ kind: 'table', head: block.head, rows: block.rows.slice(from, to) }),
+        {
+          count: block.rows.length,
+          part: (from, to) => ({
+            kind: 'table',
+            head: block.head,
+            rows: block.rows.slice(from, to),
+          }),
+          resumed: [],
+        },
         lead,
-        [],
         slack,
       );
       return;
     default:
+      if (lead.some((f) => f.kind === 'figure') && !pager.fitsFresh([...lead, block], slack)) {
+        // Not even a fresh page holds the drawing and the block together: one after the other.
+        pager.put(lead);
+        pager.put([block], slack);
+        return;
+      }
       pager.put([...lead, block], slack);
   }
 }
 
 /**
- * The book's pages: the cover, then each section from a fresh page. A
- * reader's plan goes right under the station's title, so it is on the page
- * the bookmark opens; the station's last block may run a little long rather
- * than leave a line or two alone on a page.
+ * One station's pages, from a fresh page of its own: its title, a reader's
+ * plan right under it, so it is on the page the bookmark opens, then its
+ * printed parts. The title, the plan, a heading and a drawing wait for the
+ * block after them and go with it — a drawing only within its part — so
+ * none of them ends a page; the station's last block may run a little long
+ * rather than leave a line or two alone on a page.
  */
-export function paginate(sections: readonly BookSection[], size: PageSize = BOOK_PAGE): BookPage[] {
+function stationPages(section: BookSection, index: number, size: PageSize): BookPage[] {
   const pager = new Pager(size);
-  pager.open(null, true);
-  sections.forEach((section, index) => {
-    pager.open(index, true);
-    pager.put([{ kind: 'title', text: section.title }]);
-    if (section.reader) {
-      pager.put([{ kind: 'reader' }]);
-    }
-    section.manual.forEach((part, p) => {
-      let lead: Fragment[] = [{ kind: 'heading', text: part.heading }];
-      part.blocks.forEach((block, b) => {
-        const closing = p === section.manual.length - 1 && b === part.blocks.length - 1;
-        place(pager, block, part.heading, lead, closing ? OVERRUN : 0);
-        lead = [];
-      });
-      pager.put(lead);
+  pager.open(index, true);
+  let lead: Fragment[] = [{ kind: 'title', text: section.title }];
+  if (section.reader) {
+    lead.push({ kind: 'reader' });
+  }
+  section.manual.forEach((part, p) => {
+    lead = [...lead, { kind: 'heading', text: part.heading }];
+    part.blocks.forEach((block, b) => {
+      if (block.kind === 'figure' && b < part.blocks.length - 1) {
+        lead = [...lead, block];
+        return;
+      }
+      const closing = p === section.manual.length - 1 && b === part.blocks.length - 1;
+      place(pager, block, part.heading, lead, closing ? OVERRUN : 0);
+      lead = [];
     });
   });
+  pager.put(lead);
   return pager.pages;
+}
+
+/** How the book lies open: two pages side by side, odd ones on the left, or one at a time. */
+export interface Opening {
+  spread: boolean;
+}
+
+/** What a reader consults while the station is worked: its rules, tables, symbols and plan. */
+const LAW: ReadonlySet<Fragment['kind']> = new Set(['rules', 'table', 'columns', 'reader']);
+
+/**
+ * How many spreads a station's pages at `offsets` (0 for its first page) lie in, opening on a
+ * left-hand page (`shift` 0) or a right-hand one (1).
+ */
+function spreadsOf(offsets: readonly number[], shift: 0 | 1): number {
+  return new Set(offsets.map((i) => Math.floor((i + shift) / 2))).size;
+}
+
+/**
+ * The side a station's pages lie open best from: the one that shows its rules
+ * in fewer spreads — two tables read together face each other — or, where
+ * that is alike, the whole station in fewer; null where both lie alike.
+ */
+function bestSide(own: readonly BookPage[]): 'left' | 'right' | null {
+  const all = own.map((_, i) => i);
+  const law = all.filter((i) => own[i]?.fragments.some((f) => LAW.has(f.kind)) === true);
+  for (const offsets of [law, all]) {
+    const [left, right] = [spreadsOf(offsets, 0), spreadsOf(offsets, 1)];
+    if (left !== right) {
+      return left < right ? 'left' : 'right';
+    }
+  }
+  return null;
+}
+
+/**
+ * The book's pages at text column `size`: the cover, then each station from
+ * a fresh page. Seen as a spread, a station opens on the side its pages lie
+ * open best from (bestSide) — a station of two pages lies open whole — a
+ * blank page before it where the next page is on the other side.
+ */
+export function paginate(
+  sections: readonly BookSection[],
+  size: PageSize = BOOK_PAGE,
+  { spread }: Opening = { spread: false },
+): BookPage[] {
+  const pages: BookPage[] = [{ section: null, first: true, fragments: [] }];
+  sections.forEach((section, index) => {
+    const own = stationPages(section, index, size);
+    // The next page is a left-hand one, odd, while the book so far has an even count of pages.
+    const next = pages.length % 2 === 0 ? 'left' : 'right';
+    const side = spread ? bestSide(own) : null;
+    if (side !== null && side !== next) {
+      pages.push({ section: null, first: false, fragments: [] });
+    }
+    pages.push(...own);
+  });
+  return pages;
 }
 
 /** The page a section starts on, numbered from 1 like the book; null when it has none. */

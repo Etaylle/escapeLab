@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ManualHere, ManualKind, PuzzleView } from '@escapelab/core';
-import { NotepadContext, type NotepadHand } from '../src/noting.js';
+import { NotepadContext, type Capture, type NotepadHand } from '../src/noting.js';
 import { Device } from '../src/puzzles/Device.js';
 import { StationModal } from '../src/screens/Game.js';
 import { DEFAULT_KEYS } from '../src/input/bindings.js';
@@ -75,7 +75,10 @@ function hand(): NotepadHand & { noted: string[]; toggled: number } {
   const counted = {
     noted: [] as string[],
     toggled: 0,
-    noteDown: (text: string) => counted.noted.push(text),
+    noteDown: (capture: Capture) => {
+      counted.noted.push(capture.head);
+      return false;
+    },
     toggle: () => {
       counted.toggled += 1;
     },

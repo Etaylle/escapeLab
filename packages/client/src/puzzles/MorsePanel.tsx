@@ -132,7 +132,7 @@ export function MorsePanel({ puzzle, send }: PanelProps<'morse'>) {
   }
   const tune = (step: -1 | 1): void => send({ tune: step });
   return (
-    <div>
+    <div className="morse">
       {/* A new word restarts the loop from its long pause. */}
       <Lamp key={puzzle.pattern} pattern={puzzle.pattern} />
       <div className="morse-dial">

@@ -1,11 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import { CHAT_PHRASE_IDS, chatText } from '@escapelab/core';
-import { PHOSPHOR } from '../src/world/palette.js';
+import { PHOSPHOR, rgba, type Rgb } from '../src/world/palette.js';
 import { FALLBACK_COLOR, type Frame } from '../src/world/render/frame.js';
-import { draw } from '../src/world/render/overlays.js';
+import { draw, NAME_INK, NAME_PLATE } from '../src/world/render/overlays.js';
 import { callEntries, callsOf, fakeCanvas, setsOf } from './fakeCanvas.js';
 import { frameWith, player, TILES } from './frames.js';
 import { mapWith, type Item } from './fixtures.js';
+
+const WHITE: Rgb = [255, 255, 255];
+const BLACK: Rgb = [0, 0, 0];
+
+/** A colour at its opacity, as the pass sets it. */
+const rgbaOf = (paint: { rgb: Rgb; alpha: number }): string => rgba(paint.rgb, paint.alpha);
+
+/** `paint` laid over `under` at its opacity. */
+function over(paint: { rgb: Rgb; alpha: number }, under: Rgb): Rgb {
+  const [r, g, b] = paint.rgb.map((c, i) => c * paint.alpha + (under[i] ?? 0) * (1 - paint.alpha));
+  return [r ?? 0, g ?? 0, b ?? 0];
+}
+
+/** The relative luminance of a colour (WCAG 2.2). */
+function luminance(rgb: Rgb): number {
+  const linear = rgb.map((c) => {
+    const s = c / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * (linear[0] ?? 0) + 0.7152 * (linear[1] ?? 0) + 0.0722 * (linear[2] ?? 0);
+}
+
+/** The contrast ratio of two colours (WCAG 2.2): 1 to 21. */
+function contrast(a: Rgb, b: Rgb): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05);
+}
 
 /** What the pass drew for `frame`. */
 function drawn(frame: Frame) {
@@ -217,6 +244,128 @@ describe('overlays — what lies over the world and its light', () => {
       expect(alphaOf(mark)).toBe(0.5);
     }
     expect(setsOf(log, 'globalAlpha').at(-1)).toBe(1);
+  });
+
+  /** Every text the pass drew with the font size it stood in, px: `text@size`. */
+  function sized(log: ReturnType<typeof drawn>): string[] {
+    let font = '';
+    const out: string[] = [];
+    for (const entry of log) {
+      if (entry.kind === 'set' && entry.name === 'font') {
+        font = String(entry.value);
+      } else if (entry.kind === 'call' && entry.name === 'fillText') {
+        const px = /(\d+(?:\.\d+)?)px/.exec(font)?.[1];
+        out.push(`${String(entry.args[0])}@${Number(px).toFixed(2)}`);
+      }
+    }
+    return out;
+  }
+
+  it('sets room names, prompt, captions, arrows, chat and carry line at the text size', () => {
+    const [phrase] = CHAT_PHRASE_IDS;
+    if (phrase === undefined) {
+      throw new Error('the chat needs a phrase for this test');
+    }
+    const crate: Item = {
+      found: true,
+      id: 'crate',
+      label: 'KISTE',
+      x: 0,
+      y: 0,
+      carriedBy: 'p1',
+      delivered: false,
+      deliverTo: null,
+      requiredForTitle: null,
+    };
+    const exit = { x: 8, y: 4, open: true, openedAt: 1, atExit: [] };
+    const parts = {
+      map: lab({ labels: [{ text: 'LABOR', x: 6, y: 2 }], items: [crate], exit }),
+      markers: [{ x: 9.5, y: 1.5, color: '#2dd4bf', label: 'STATION' }],
+      action: OPERATE,
+      captions: [{ x: 6.5, y: 4, text: 'Spind entdeckt', at: 0 }],
+      time: 0.5,
+      chats: [{ playerId: 'p1', phrase, at: 0 }],
+      perf: 200,
+    };
+    const at = (textScale: number): string[] => {
+      const viewport = { w: 800, h: 600, dpr: 1, textScale, top: 0, boxes: [] };
+      return sized(drawn(frameWith({ ...parts, viewport })));
+    };
+    const normal = [
+      'LABOR@13.00',
+      'NOTAUSGANG@12.00',
+      'STATION 7m@11.00',
+      '[E] Bedienen@12.00',
+      'Spind entdeckt@12.00',
+      `${chatText(phrase)}@12.00`,
+      '📦 KISTE — [Q] ablegen@12.00',
+    ];
+    expect(at(1)).toEqual(normal);
+    for (const scale of [0.9, 1.15]) {
+      expect(at(scale)).toEqual(
+        normal.map((entry) => {
+          const [text, px] = entry.split(/@(?=[\d.]+$)/);
+          return `${text}@${(Number(px) * scale).toFixed(2)}`;
+        }),
+      );
+    }
+  });
+
+  it('grows the prompt’s tag with the text size round the same point', () => {
+    const tag = (textScale: number): unknown[] | undefined => {
+      const viewport = { w: 800, h: 600, dpr: 1, textScale, top: 0, boxes: [] };
+      return callsOf(drawn(frameWith({ action: OPERATE, viewport })), 'roundRect')[0];
+    };
+    // '[E] Bedienen' is 84 px wide in the fake context at any size: the tag 16 px wider.
+    expect(tag(1)).toEqual([200, 139, 100, 20, 5]);
+    const k = 1.15;
+    const want = [250 - (84 + 16 * k) / 2, 150 - 11 * k, 84 + 16 * k, 20 * k, 5 * k];
+    (tag(k) ?? []).forEach((value, i) => expect(value).toBeCloseTo(want[i] ?? NaN, 9));
+  });
+
+  it('sets every room name on a dark plate it reads from at 4.5:1, over lit floor or dark', () => {
+    const map = lab({ labels: [{ text: 'LABOR', x: 6, y: 2 }] });
+    const log = drawn(frameWith({ map }));
+    // The plate under the letters: 13 px of them from 0.8 + 0.25 over the baseline at (550,
+    // 250) to 0.3 + 0.25 under it, 0.5 of their size past their 35 px at either side.
+    const [plate] = callsOf(log, 'roundRect');
+    const want = [550 - 17.5 - 6.5, 250 - 1.05 * 13, 35 + 13, 1.6 * 13, 3];
+    expect(plate).toHaveLength(5);
+    (plate ?? []).forEach((value, i) => expect(value).toBeCloseTo(want[i] ?? NaN, 9));
+    // The plate is filled in its colour before the letters go on it in theirs.
+    const step = (match: (entry: (typeof log)[number]) => boolean): number => log.findIndex(match);
+    const plateSet = step((e) => e.kind === 'set' && e.value === rgbaOf(NAME_PLATE));
+    const inkSet = step((e) => e.kind === 'set' && e.value === rgbaOf(NAME_INK));
+    const filled = log.findIndex((e, i) => i > plateSet && e.kind === 'call' && e.name === 'fill');
+    expect(plateSet).toBeGreaterThanOrEqual(0);
+    expect(filled).toBeGreaterThan(plateSet);
+    expect(inkSet).toBeGreaterThan(filled);
+    // The worst floor is white, the best black: the plate over it, the letters over the plate.
+    for (const floor of [WHITE, BLACK]) {
+      const plate = over(NAME_PLATE, floor);
+      const letters = over(NAME_INK, plate);
+      expect(contrast(letters, plate), `over ${floor.join(',')}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('leaves out a room name that would cover the label under a thing, which matters more', () => {
+    const crate: Item = {
+      found: true,
+      id: 'crate',
+      label: 'KISTE',
+      x: 6.5,
+      y: 1.9,
+      carriedBy: null,
+      delivered: false,
+      deliverTo: null,
+      requiredForTitle: null,
+    };
+    const named = (items: Item[]): unknown[] =>
+      texts(drawn(frameWith({ map: lab({ labels: [{ text: 'LABOR', x: 6, y: 2 }], items }) })));
+    expect(named([])).toContain('LABOR');
+    // The crate's label hangs 0.41 under it, on the name's line.
+    expect(named([crate])).not.toContain('LABOR');
+    expect(named([{ ...crate, x: 2.5 }])).toContain('LABOR');
   });
 
   it('covers the picture as far as the light has failed: the cold open’s, or the ending’s', () => {

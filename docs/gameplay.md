@@ -2,11 +2,13 @@
 
 How the crew steers, how it finds things, what a run leaves behind and how runs compare: the
 controls on keys and on a controller, finding things, the Erfolge, the Tagesschicht, the picture
-of a run, the danger sense and the Serverraum's cabling diagram. Code:
-`packages/client/src/input/` (bindings, controller, prompts), `client/src/achievements.ts` and
-`screens/{Plaques,ShareButton,ControlSettings}.tsx`, `screens/shareCard.ts`,
-`world/{labels,finds,danger}.ts`, `puzzles/RackDiagram.tsx`; in the core `discovery.ts`,
-`achievements.ts`, `daily.ts` and `puzzles/servers.ts` (`serviceDiagram`).
+of a run, the danger sense, the Serverraum's cabling diagram, typing at its terminal and what the
+notepad takes down. Code: `packages/client/src/input/` (bindings, controller, prompts),
+`client/src/achievements.ts` and `screens/{Plaques,ShareButton,ControlSettings}.tsx`,
+`screens/shareCard.ts`, `world/{labelFade,finds,danger}.ts`, `puzzles/RackDiagram.tsx`,
+`puzzles/{prompt.ts,ServersPanel.tsx}`, `noting.ts`, `notes.ts`,
+`screens/{Notepad,NoteButton}.tsx`; in the core `discovery.ts`, `achievements.ts`, `daily.ts`
+and `puzzles/servers.ts` (`serviceDiagram`).
 
 ## Controls
 
@@ -26,7 +28,7 @@ actions sit on buttons of the player's choosing (Settings → Controller), the r
 | Ping für alle | a click on the world | D-pad ◀: the floor the lamp points at |
 | Schnellchat | C, then 1–8 (fixed) | D-pad ▶, then the D-pad to a phrase and A |
 | Einsatzinfo | I | Select |
-| Sprechen (push-to-talk) | V, held | L1, held |
+| Sprechen (push-to-talk) | V, held (at the terminal V types; its FUNK key talks) | L1, held |
 | Einstellungen | ⚙ in the top bar | Start |
 | Blättern beim Lesen | ← → (fixed) | D-pad ◀ ▶ |
 | In Pulten und Fenstern wählen und drücken | Tab, Enter | D-pad or a flick of the stick, then A |
@@ -157,3 +159,73 @@ rack's unit shows it. Rules, not answers: the codes stay at the terminal. The Ne
 plant's fixed topology, the same for every seed and every instance, so it may stand at a console;
 the rules that vary with the instance stay with the sources. The printed page of the Serverraum
 draws the same diagram, its LEDs dark.
+
+## Typing at the Serverraum's terminal
+
+The terminal (console A) is worked by typing, and its prompt holds the keyboard while it is up
+(`puzzles/prompt.ts`, `ServersPanel.tsx`):
+
+- **Focus.** The prompt takes the focus as the terminal opens and takes it back after every
+  command and every key of the bezel — where keys and a mouse steer. Under a finger it waits to
+  be touched, as the screen's own keyboard would cover the terminal; on a controller the D-pad
+  moves the focus itself.
+- **Stray keys.** While the terminal is up, every printable key typed on the keyboard goes to
+  the prompt wherever the focus went — a click on the screen or a key of the bezel loses
+  nothing — and no other listener hears it: not the world, not N for the notepad. Keys typed in
+  the notepad stay there, a dialog over the terminal (settings, Einsatzinfo) keeps its own, a
+  terminal stepped back from or solved takes none, and a controller's presses are no letters
+  (`isTrusted`, as `input/device.ts` reads it).
+- **Tab** completes the line's last word: the first to a command, the one after `start` or
+  `restart` to a service, as far as every word it could still become agrees — `s` → `sta`,
+  `star` → `start ` (a command that takes a service gets the blank), `start d` stays (DNS or DB),
+  `start dn` → `start dns`. A line it cannot complete stays; Shift+Tab leaves the prompt.
+- **Enter** sends, as ⏎ on the bezel does; **Esc** steps back as at every device.
+- **Answers at the prompt.** A line the terminal cannot read gets „? Befehl unbekannt" under the
+  prompt, which shakes; a command the server refuses gets its words there too („! Am Rack steht
+  niemand."), besides the device's head.
+- **Talking.** The talk key types at the prompt like any letter: while a prompt holds the keys
+  the voice stands back (`hooks.ts` `claimKeys`, `voice/useVoice.ts` `talkKeyBusy`). The bezel's
+  FUNK key talks while held by a mouse or a finger (with the microphone on), and L1 on a
+  controller talks straight to the voice, sending no key (`input/padRuntime.ts` `onPadTalk`).
+  The Einsatzinfo's controls say „Am Terminal: Funk per Maus/Pad".
+- **The notepad.** N types at the prompt like any letter too. The bezel's „Notieren" brings the
+  pad up beside the terminal with the table taken down fresh; a controller's X and the
+  chassis' tab on a touch screen bring it up as at every device, and Esc, N and E again do it
+  from the world.
+
+`client/test/terminal.test.tsx` holds each of these; the walkthrough types Blackout's first
+command as a player would — a click on the screen first, then letters and Tab — and shoots the
+line half typed (terminal-typing.png).
+
+## Captures in the notepad
+
+„Notieren" — at a source's rules list or table, on the slip with the last shift's notes at a
+source, on the terminal's bezel, under a note of the last shift pinned up — and the notepad's
+„Laborkennung übernehmen" take down a capture: a
+one-line head naming the place and the part of it, and at most eleven lines under it, holding
+the data a player needs there and nothing else (`noting.ts`). The place is the source by its
+label („Klemmbrett", „Handbuch", „Spind", „Aktenschrank"), the terminal, the sign („Schild") or
+the note's slip („Zettel"); the part is the section's heading — among several blocks in one
+section a table by its first column, a list as „Regeln" — or what the place holds.
+
+| Template | Set as | In Blackout (seed 5) |
+| --- | --- | --- |
+| Table | its columns aligned under their names, two blanks apart, never wrapped; a repeated column the table already gives left out | Klemmbrett · Legende (Zeile · Pult A · Muster · Pult B: the printed second „Muster" is the pattern Pult A's column gives B's colour), Spind · Netzplan, Terminal · Dienste (Dienst · Status · Strom · Braucht) |
+| More pairs than lines | two pairs a line, the first half down the left | Aktenschrank · Frequenztabelle: 16 words in 8 lines |
+| Morsetafel | only the letters the Frequenztabelle's words are told apart by (their first three) — 18 of 26 — two a line | Aktenschrank · Morsetafel: 9 lines |
+| Long table of pairs of rows | a pair of rows a line, alike but for a yes-or-no column | the Kippschalterbank's Stellungstabelle (Stern nein · Stern ja) |
+| Table wider than 38 characters (what the pad holds aligned on a phone) | a row a line, its cells parted by „ · ", wrapped | Spind · Code, Spind · Befehl am Terminal |
+| Rules list | numbered as printed | Handbuch · Schnittfolge, Spind · Regeln |
+| Laborkennung | one line: serial · control lamps · cells | Schild · Laborkennung: „UZKM9-8 · CAR aus, SIG an, NSA aus · 4 Notstromzellen" |
+| Notes of the last shift | as written, one a line; a pinned note under the room it hangs in | Klemmbrett · Notizen der letzten Schicht, Zettel · Flur |
+
+The notepad keeps the player's own writing at the top and the captures under it, newest at the
+bottom (`notes.ts`), each one editable; one wiped is gone once the pen leaves it. A capture of
+the same place and part replaces the first: it moves to the bottom with „aktualisiert" beside its
+head, and the control says „Aktualisiert" instead of „Notiert". The pad is kept per room and
+player (`escapelab-notes:<ROOM>:<player>`, JSON); a pad kept before captures were kept apart
+reads as the player's writing. The walkthrough takes the last shift's note it asked for down
+from the slip as well (hint-noted), word for word.
+`client/test/captures.test.ts` runs every template on Blackout's real rules and on what seed 5
+deals (`tools/fixtures/blackout-plan.json`), and holds every capture of every mission to twelve
+lines with its head.

@@ -11,7 +11,7 @@ import { finaleFrame, type FinaleCue, type FinaleFrame } from './finale.js';
 import { frameLight, mountedLamps } from './frameLight.js';
 import { contextAction } from './interact.js';
 import { hudAt, litWhole, shotProgress, type IntroCue } from './intro/sequence.js';
-import { labelAlpha } from './labels.js';
+import { labelAlpha } from './labelFade.js';
 import { SHOT_WIDE, shotPoint, shotStart } from './intro/shot.js';
 import { markerTargets } from './markers.js';
 import { positionsOf, type KnownPositions } from './movement.js';
@@ -22,7 +22,7 @@ import { gridOf, sameGrid, snapCamera } from './render/grid.js';
 import { minimapBox, minimapLayout } from './render/hud.js';
 import { CAPTION_SECONDS, CHAT_LIFETIME_MS } from './render/overlays.js';
 import type { Sim } from './sim.js';
-import { clampCamera, type Viewport } from './viewport.js';
+import { clampCamera, liftAbove, type Box, type Viewport } from './viewport.js';
 import { shortOf } from './particles.js';
 
 /**
@@ -33,9 +33,6 @@ import { shortOf } from './particles.js';
  * and captions gone dropped. The camera and the light's memory are kept in
  * the simulation; nothing here makes a sound.
  */
-
-/** On a touch screen the pad would sit on the avatar: it is lifted this far, CSS pixels. */
-const PAD_LIFT = 60;
 
 /** What a frame reads of the component's latest render. */
 export interface Latest {
@@ -49,6 +46,8 @@ export interface Latest {
   /** the run's opening on this screen (intro/sequence.ts); null where it plays none */
   intro: IntroCue | null;
   reduced: boolean;
+  /** the reader's text size (settings.ts TEXT_SCALE): the canvas's own text follows it */
+  textScale: number;
   /** the crew's voice, read on every frame for who speaks; none outside the app */
   voice: VoiceMesh | null;
   /** the station whose panel lies over the world; null for none: the camera leans in on it */
@@ -63,8 +62,11 @@ export interface FrameSource {
   spectator: boolean;
   /** same condition the stylesheet uses to show the on-screen pad */
   touchPad: MediaQueryList;
-  /** how far the objective bar and the control cluster reach into the canvas, CSS pixels */
-  insets: { top: number; bottom: number };
+  /**
+   * how far the objective bar reaches into the canvas and the controls up from its foot, the
+   * highest of them, and where each group of the controls lies on it; CSS pixels
+   */
+  insets: { top: number; bottom: number; controls: readonly Box[] };
   live: React.MutableRefObject<Latest>;
   alarm: React.MutableRefObject<Alarm | null>;
   positions: React.MutableRefObject<KnownPositions>;
@@ -72,8 +74,11 @@ export interface FrameSource {
   chats: React.MutableRefObject<ChatLine[]>;
   /** clip paths in tiles, by the sight they were made from: a lamp standing still reuses its own */
   clips: WeakMap<Sight, Path2D>;
-  /** the world's text at the zoom it was last worked out for; the zoom seldom changes */
-  texts: { s: number; dpr: number; styles: WorldText };
+  /**
+   * the world's text at the zoom and the text size it was last worked out for; neither
+   * changes often
+   */
+  texts: { s: number; dpr: number; scale: number; styles: WorldText };
 }
 
 /**
@@ -189,13 +194,11 @@ function aim(source: FrameSource, map: WorldMap, dpr: number, pull: number, now:
     return wide;
   }
   const s = near + (wholeZoom(map, w, h) - near) * pull;
-  sim.draw = clampCamera(map, pulledBack(sim, map, pull), {
-    scale: s,
-    w,
-    h,
-    top: sim.topCss * dpr * (1 - pull),
-    lift: source.touchPad.matches && !spectator ? PAD_LIFT * dpr * (1 - pull) : 0,
-  });
+  const top = sim.topCss * dpr * (1 - pull);
+  // On a touch screen the avatar stands clear above the pad and the buttons in the corners.
+  const touch = source.touchPad.matches && !spectator;
+  const lift = touch ? liftAbove(source.insets.bottom * dpr, h, top, s) * (1 - pull) : 0;
+  sim.draw = clampCamera(map, pulledBack(sim, map, pull), { scale: s, w, h, top, lift });
   sim.scale = s;
   return s;
 }
@@ -211,11 +214,12 @@ function leanIn(source: FrameSource, now: number): number {
   return zoomAt(kit.zoom, now, reduced);
 }
 
-/** The world's text at the zoom it was last worked out for; the zoom seldom changes. */
+/** The world's text at this zoom and text size, worked out again only where either changed. */
 function textAt(source: FrameSource, s: number, dpr: number): WorldText {
   const { texts } = source;
-  if (texts.s !== s || texts.dpr !== dpr) {
-    Object.assign(texts, { s, dpr, styles: worldText(s, dpr) });
+  const scale = source.live.current.textScale;
+  if (texts.s !== s || texts.dpr !== dpr || texts.scale !== scale) {
+    Object.assign(texts, { s, dpr, scale, styles: worldText(s, dpr, scale) });
   }
   return texts.styles;
 }
@@ -268,16 +272,27 @@ function stage(
   const scale = aim(source, map, dpr, pull, now);
   const mapless = source.spectator || !sim.minimap || hud === 0;
   const minimap = mapless ? null : minimapLayout(map, w, h, dpr, insets);
+  const controls = insets.controls.map((box) => scaled(box, dpr));
   const viewport: Viewport = {
     w,
     h,
     dpr,
+    textScale: source.live.current.textScale,
     top: insets.top * dpr,
-    bottom: insets.bottom * dpr,
-    boxes: minimap === null ? [] : [minimapBox(minimap, dpr)],
+    boxes: minimap === null ? controls : [minimapBox(minimap, dpr), ...controls],
   };
   const text = textAt(source, scale, dpr);
   return { viewport, ...framing(source, scale, pull), minimap, text };
+}
+
+/** `box`, CSS pixels, in device pixels at `dpr`. */
+function scaled(box: Box, dpr: number): Box {
+  return {
+    left: box.left * dpr,
+    top: box.top * dpr,
+    right: box.right * dpr,
+    bottom: box.bottom * dpr,
+  };
 }
 
 /** How far the light has turned red on this screen: from the escape's start; warm once won. */

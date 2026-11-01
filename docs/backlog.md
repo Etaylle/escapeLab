@@ -31,7 +31,7 @@ die Entscheidung.
   wenn der Prompt stand.
 - Beweis: je ein Test, der ohne den Fix rot ist; Smoke; Walkthrough beider Missionen 0 Fehler.
 
-### F-2 Handbuch- und Gerätetexte — Status: bereit · Größe: M
+### F-2 Handbuch- und Gerätetexte — Status: erledigt (N-readability, Merge 2026-11-02) · Größe: M
 - Tabellen nie über einen Seitenwechsel brechen, wenn sie ganz auf die nächste Seite passen
   (`client/src/pages.ts`); die Morsetafel im Aktenschrank (13 Zeilen) steht auf einer Seite.
 - Zeichnung und zugehörige Tabelle bleiben zusammen.
@@ -83,18 +83,23 @@ die Entscheidung.
   menschlichen Läufen gewonnen. Vorschlag: Fenster 3–4 s plus gemeinsamer Countdown wie in
   Portal 2 („beide sehen GO im selben Moment"), für Hebel und Reaktor.
 
-### N-5 Lesbarkeit — Status: bereit · Größe: M
+### N-5 Lesbarkeit — Status: erledigt (N-readability, Merge 2026-11-02; Vorher/Nachher im Audit-Addendum) · Größe: M
 - Gerätetexte Median 11–13 px (min 8), Tasten unter 44 px, Rack scrollt bei 1280×720, auf dem
   Handy scrollt jedes Gerät; Ziel: Fließtext ≥ 14 px, Anzeigen ≥ 18 px, Ziele ≥ 44 px, eine
   Station je Buchaufschlag mit ganzen Tabellen (enthält F-2); Canvas-Beschriftungen folgen der
   Textgröße; Raumname über hellem Boden bekommt eine Platte (FLUR 1,3:1).
 - Touch: 8-Wege-Pad ≥ 48 px unter dem linken Daumen, Aktionen rechts.
 
-### T-1 Terminal und Notizen — Status: in Arbeit (Mac, Paket N-notes) · Größe: M
+### T-1 Terminal und Notizen — Status: erledigt (N-notes, Merge 2026-11-01) · Größe: M
 - Prompt fokussiert beim Öffnen und nach jedem Befehl, jede Taste tippt, Tab vervollständigt,
   Fehler am Prompt; Funk am Terminal per Maus/Touch/Pad. Aufnahmeformat je Quelle (Legende,
   Dienste, Kennung, Morse, Frequenzen, Regeln) ≤ 12 Zeilen mit Herkunft; Notizblock in
   Handschrift auf liniertem Papier (OFL-Schrift lokal), Lesbarkeit ≥ 15 px, Kontrast ≥ 4,5:1.
+- Umgesetzt: Prompt hält die Tastatur (`puzzles/prompt.ts`), FUNK-Taste am Terminal, L1 spricht
+  direkt; Aufnahmen mit Kopfzeile „Quelle · Teil" (`noting.ts`), Notizblock getrennt in Schrift
+  und Aufnahmen, „aktualisiert" beim zweiten Mal; „Notieren" auch am Zettel der letzten Schicht
+  und an angehefteten Notizen; Kalam (OFL) in `public/fonts`. Regeln in `docs/gameplay.md`,
+  Aussehen in `docs/art-bible.md`.
 
 ### T-2 Jedes Pult sagt, wozu die Maschine da ist — Status: bereit · Größe: S
 - Audit: beide Hälften einer Station sehen aus wie Geräte, keine sagt die Aufgabe. Ein

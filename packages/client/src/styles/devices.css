@@ -5,15 +5,41 @@
  * corner, an engraved label plate, an LED strip and a recessed face — and
  * not one word of instruction on it. Status shows as lamps, counters and
  * displays; a newcomer gets one coach line over the panel, once.
+ *
+ * Every device sets its words by role (docs/art-bible.md, „Type and targets"):
+ * engraved in the metal, a label or an LED's word, what is read off its face,
+ * what a display reads out — at least 11, 12, 14 and 18 px at the normal text
+ * size, a little larger in a taller window, each times the text size. Every
+ * control on a face takes a pointer's 36 px at least, a fingertip's 44 on a
+ * touch screen (`--target`).
  */
+
+/* ── the type and the targets ───────────────────────────────────────── */
+
+:root {
+  --type-engraving: clamp(11px, 0.3vh + 9px, 12px);
+  --type-label: clamp(12px, 0.3vh + 10px, 13px);
+  --type-body: clamp(14px, 0.4vh + 11px, 15px);
+  --type-readout: clamp(18px, 0.8vh + 12px, 22px);
+  --target: 36px;
+}
+
+/* A fingertip's target on a touch screen: Apple's 44 pt, WCAG 2.2's enhanced 44 × 44. */
+@media (pointer: coarse) {
+  :root {
+    --target: 44px;
+  }
+}
 
 /* ── the station frame ───────────────────────────────────────────────── */
 
 /* No card of its own: the device floats over the dimmed world, with the
    Laborkennung and the way out above it. The padding keeps the device's
-   shadow inside the box that scrolls. */
+   shadow inside the box that scrolls; the frame takes the window's whole
+   height but the dim's edge, which a laptop's 720 px need. */
 .puzzle-modal.station-modal .panel {
   max-width: 680px;
+  max-height: 100%;
   margin-top: 0;
   gap: 10px;
   padding: 4px 6px 22px;
@@ -135,7 +161,7 @@
     0 1px 2px rgba(0, 0, 0, 0.6);
   color: #1d252d;
   font-family: var(--mono);
-  font-size: calc(12px * var(--text-scale));
+  font-size: calc(var(--type-label) * var(--text-scale));
   font-weight: 700;
   letter-spacing: 2px;
   text-transform: uppercase;
@@ -204,7 +230,7 @@
   gap: 8px;
   min-width: 0;
   font-family: var(--mono);
-  font-size: calc(11px * var(--text-scale));
+  font-size: calc(var(--type-label) * var(--text-scale));
   letter-spacing: 1.5px;
 }
 
@@ -286,7 +312,7 @@
 /* A word stamped into the metal. */
 .device-engraving {
   font-family: var(--mono);
-  font-size: calc(10px * var(--text-scale));
+  font-size: calc(var(--type-engraving) * var(--text-scale));
   font-weight: 700;
   letter-spacing: 2px;
   text-transform: uppercase;
@@ -657,7 +683,7 @@ button.feel-reject {
     0 1px 0 rgba(255, 255, 255, 0.08);
   color: #1b2a1a;
   font-family: var(--mono);
-  font-size: calc(18px * var(--text-scale));
+  font-size: calc(var(--type-readout) * var(--text-scale));
   font-weight: 800;
   letter-spacing: 2px;
   text-align: center;
@@ -1080,7 +1106,7 @@ button.feel-reject {
 .circuit-number {
   padding-top: 4px;
   font-family: var(--mono);
-  font-size: calc(13px * var(--text-scale));
+  font-size: calc(var(--type-body) * var(--text-scale));
   font-weight: 700;
   line-height: 16px;
   text-align: center;
@@ -1403,7 +1429,7 @@ button.feel-pressed .pliers-arm {
 .circuit-volts {
   padding-top: 4px;
   font-family: var(--mono);
-  font-size: calc(13px * var(--text-scale));
+  font-size: calc(var(--type-body) * var(--text-scale));
   font-weight: 700;
   line-height: 16px;
   text-align: right;
@@ -1686,7 +1712,7 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
 .circuit-unit {
   padding-bottom: 8px;
   font-family: var(--mono);
-  font-size: calc(16px * var(--text-scale));
+  font-size: calc(var(--type-readout) * var(--text-scale));
   font-weight: 800;
   color: var(--amber);
   text-shadow: 0 0 6px var(--amber-glow);
@@ -1715,6 +1741,7 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
   --press: 0px;
   --collar: #3e4954;
   position: relative;
+  min-width: var(--target);
   min-height: 52px;
   padding: 14px 0 6px;
   border: none;
@@ -1727,7 +1754,7 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
   color: #e6edf3;
   font-family: var(--mono);
-  font-size: calc(18px * var(--text-scale));
+  font-size: calc(var(--type-readout) * var(--text-scale));
   font-weight: 800;
   transform: translateY(var(--press));
   touch-action: manipulation;
@@ -1795,7 +1822,7 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
     #efe9d8;
   color: #2a2620;
   font-family: var(--mono);
-  font-size: calc(12px * var(--text-scale));
+  font-size: calc(var(--type-body) * var(--text-scale));
   clip-path: polygon(
     0 0,
     100% 0,
@@ -1820,7 +1847,7 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
   margin-bottom: 4px;
   padding-bottom: 4px;
   border-bottom: 1px dashed rgba(42, 38, 32, 0.45);
-  font-size: calc(10px * var(--text-scale));
+  font-size: calc(var(--type-engraving) * var(--text-scale));
   font-weight: 700;
   letter-spacing: 2px;
   text-align: center;
@@ -1879,7 +1906,7 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
 .circuit-console-name {
   margin: 0;
   font-family: var(--mono);
-  font-size: calc(12px * var(--text-scale));
+  font-size: calc(var(--type-label) * var(--text-scale));
   letter-spacing: 2px;
   color: var(--engrave);
 }
@@ -1946,7 +1973,7 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
     inset 0 2px 4px rgba(0, 0, 0, 0.8);
   color: #3d4750;
   font-family: var(--mono);
-  font-size: calc(11px * var(--text-scale));
+  font-size: calc(var(--type-engraving) * var(--text-scale));
   font-weight: 800;
   letter-spacing: 2px;
 }
@@ -2069,6 +2096,7 @@ th d='M12 11 12.8 13.6' stroke='%23cfd6dc' stroke-width='1.6'/%3E%3Cpath d='M12.
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  min-width: var(--target);
   min-height: 70px;
   padding: 8px 4px;
   border: none;
@@ -2240,7 +2268,7 @@ button.signal-key.feel-pressed {
 .signal-console-name {
   margin: 0;
   font-family: var(--mono);
-  font-size: calc(12px * var(--text-scale));
+  font-size: calc(var(--type-label) * var(--text-scale));
   letter-spacing: 2px;
   color: var(--engrave);
 }
@@ -2333,5 +2361,224 @@ button.signal-key.feel-pressed {
   .signal-key .signal-glyph {
     width: 34px;
     height: 34px;
+  }
+}
+
+/* ── a phone held sideways ──────────────────────────────────────────── */
+
+/*
+ * Some 360–430 px of height: the station's frame takes the window — the
+ * device on the left, the Laborkennung and a newcomer's line in a column of
+ * their own beside it — and the bezel is slimmer, so that every device
+ * stands whole, its controls in reach without scrolling; a list that runs
+ * long scrolls in its own box (docs/art-bible.md, „A phone held sideways").
+ */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .puzzle-modal.station-modal {
+    align-items: flex-start;
+    padding: 4px;
+  }
+
+  .puzzle-modal.station-modal .panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    align-items: start;
+    gap: 6px 8px;
+    width: 100%;
+    max-width: none;
+    max-height: 100%;
+  }
+
+  .puzzle-modal.station-modal .panel > .modal-head {
+    grid-area: 1 / 2;
+    width: 13.5rem;
+  }
+
+  .puzzle-modal.station-modal .panel > .station-coach {
+    grid-area: 2 / 2;
+    width: 13.5rem;
+    margin: 0;
+  }
+
+  .puzzle-modal.station-modal .panel > .device {
+    grid-area: 1 / 1 / 4 / 2;
+  }
+
+  .device {
+    padding: 10px 12px 14px;
+    border-radius: 14px;
+  }
+
+  .device-screw--tl,
+  .device-screw--tr {
+    top: 4px;
+  }
+
+  .device-screw--bl,
+  .device-screw--br {
+    bottom: 4px;
+  }
+
+  .device-screw--tl,
+  .device-screw--bl {
+    left: 4px;
+  }
+
+  .device-screw--tr,
+  .device-screw--br {
+    right: 4px;
+  }
+
+  .device-head {
+    gap: 4px 12px;
+  }
+
+  .device-plate {
+    padding: 3px 16px;
+  }
+
+  .device-face {
+    margin-top: 6px;
+    padding: 8px;
+  }
+
+  .device-strip {
+    bottom: 5px;
+  }
+
+  /* The box: the cables as close as a fingertip's rows allow, the door's frame slimmer. */
+  .circuit {
+    gap: 8px;
+  }
+
+  .circuit-cabinet {
+    gap: 10px;
+  }
+
+  .circuit-door {
+    padding: 4px 8px 4px 14px;
+  }
+
+  .circuit-door::after {
+    inset: 4px 8px 4px 14px;
+  }
+
+  .circuit-board {
+    padding: 2px 4px;
+  }
+
+  .circuit-side {
+    gap: 10px;
+    padding-top: 0;
+  }
+
+  /* The meter: a smaller dial, its keys a fingertip high, the paper beside them. */
+  .circuit-meter {
+    gap: 8px 12px;
+  }
+
+  .circuit-dial,
+  .circuit-keys-plate,
+  .circuit-paper {
+    gap: 6px;
+  }
+
+  /* No wider than its 220 units; the scale's numbers, 13 of them, stand at about 12 px. */
+  .circuit-gauge {
+    max-width: 220px;
+  }
+
+  .gauge-number {
+    font-size: calc(13px * var(--text-scale));
+  }
+
+  .circuit-keys {
+    gap: 8px;
+  }
+
+  .circuit-probe {
+    min-height: var(--target);
+    padding: 12px 0 4px;
+  }
+
+  .circuit-log {
+    padding: 6px 20px 10px;
+  }
+
+  /*
+   * The Signalkette: lower keys and signs, four rows still in view; the receiver's done lamps
+   * beside the status row, the stage's lamps in a line with their word.
+   */
+  .signal {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px 12px;
+  }
+
+  .signal > * {
+    grid-column: 1 / -1;
+  }
+
+  .signal > .signal-status {
+    grid-column: 1;
+  }
+
+  .signal > .signal-lamps {
+    grid-row: 1;
+    grid-column: 2;
+    padding: 8px 12px;
+  }
+
+  .signal-stages {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .signal-strip {
+    padding: 8px 10px;
+  }
+
+  .signal-sign {
+    width: 56px;
+    padding: 6px 4px;
+  }
+
+  .signal-glyph {
+    width: 36px;
+    height: 36px;
+  }
+
+  .signal-grid {
+    gap: 6px 8px;
+    padding: 8px 10px 10px;
+  }
+
+  .signal-key {
+    min-height: 48px;
+    padding: 4px;
+  }
+
+  .signal-key .signal-glyph {
+    width: 30px;
+    height: 30px;
+  }
+
+  /* The mushroom button in a smaller collar. */
+  .sync {
+    gap: 10px;
+    padding: 0;
+  }
+
+  .sync-collar {
+    width: 132px;
+    height: 132px;
+  }
+
+  .big-button.sync-button {
+    width: 100px;
+    height: 100px;
   }
 }

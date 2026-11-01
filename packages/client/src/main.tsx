@@ -10,6 +10,7 @@ import { RecordScreen } from './record/RecordScreen.js';
 import { startSettings } from './settings.js';
 import { opensSounds } from './sounds/path.js';
 import './ui.css';
+import './styles/notepad.css';
 import './styles/notes.css';
 import './styles/servers.css';
 import './styles/finale.css';

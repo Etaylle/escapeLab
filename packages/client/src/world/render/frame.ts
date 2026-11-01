@@ -296,7 +296,7 @@ export interface Frame {
   text: WorldText;
   /**
    * how far the name and the call of a thing show, 0 to 1: none until this player has found it,
-   * then fading in (labels.ts); everything for the audience
+   * then fading in (labelFade.ts); everything for the audience
    */
   labels: (find: Find) => number;
   /** the audience: the whole lab, no avatar, no lamp */

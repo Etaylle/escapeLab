@@ -4,7 +4,7 @@ import { NO_STEER, type Steer } from '../input/pad.js';
 import type { DoorMotion } from './doors.js';
 import { gaitStep } from './figure.js';
 import { chimeEar, type ChimeEar } from './finds.js';
-import { labelClock, type LabelClock } from './labels.js';
+import { labelClock, type LabelClock } from './labelFade.js';
 import { lightMemory, type LightMemory } from './light.js';
 import {
   correction,
@@ -120,7 +120,7 @@ export interface Sim {
   captions: Caption[];
   /** what this screen has heard of the run's chimes (finds.ts) */
   ear: ChimeEar;
-  /** when the name of each thing this player has found came up on this screen (labels.ts) */
+  /** when the name of each thing this player has found came up on this screen (labelFade.ts) */
   labels: LabelClock;
   /**
    * lit rooms by label: the tiles their lights reach, as a path in tiles,

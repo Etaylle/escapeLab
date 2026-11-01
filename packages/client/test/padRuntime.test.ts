@@ -5,6 +5,7 @@ import { STANDARD_BUTTONS } from '../src/input/pad.js';
 import {
   capturePadButton,
   onPadPing,
+  onPadTalk,
   padSteer,
   startPad,
   type PadProbe,
@@ -129,14 +130,28 @@ describe('a controller in the world', () => {
     expect(inputDevice()).toEqual({ device: 'pad', family: 'xbox' });
   });
 
-  it('talks while L1 is held, opens the settings with Start', () => {
+  it('talks while L1 is held — straight to the voice, no key a prompt would type —, opens the settings with Start', () => {
+    const talking: boolean[] = [];
+    const off = onPadTalk((held) => talking.push(held));
     page.sent = [];
     probe().press('l1');
     frame();
-    expect(page.sent).toEqual(['↓v']);
+    expect(talking).toEqual([true]);
     probe().release('l1');
     frame();
-    expect(page.sent).toEqual(['↓v', '↑v']);
+    expect(talking).toEqual([true, false]);
+    // A prompt holding the keys would type the talk key: none is sent, and no text field loses it.
+    expect(page.sent).toEqual([]);
+    page.focus = {
+      tagName: 'INPUT',
+      blur: () => {
+        page.focus = null;
+      },
+    };
+    click('l1');
+    expect(page.focus).not.toBeNull();
+    expect(talking).toEqual([true, false, true, false]);
+    off();
     click('start');
     expect(onSettings).toHaveBeenCalledTimes(1);
   });
@@ -164,7 +179,6 @@ describe('a controller in the world', () => {
     expect(click('b')).toEqual(['↓g', '↑g']);
     expect(click('a')).toEqual(['↓n', '↑n']);
     expect(click('x')).toEqual(['↓ ', '↑ ']);
-    expect(click('l1')).toEqual(['↓b', '↑b']);
   });
 
   it('lets a text field in the focus go before a key: X closes the notepad it opened', () => {
@@ -347,12 +361,27 @@ describe('remapping in the settings', () => {
     expect(padSteer()).toEqual({ x: 0, y: 0, sprint: false });
   });
 
-  it('lets go of a key held as it stops: nobody keeps talking', () => {
+  it('lets go of what is held as it stops: nobody keeps talking, no key stays down', () => {
+    const talking: boolean[] = [];
+    const off = onPadTalk((held) => talking.push(held));
+    const face = { tagName: 'BUTTON', dataset: { pad: 'hold' }, dispatchEvent: noted };
+    page.dialogs = [
+      {
+        closest: () => null,
+        getClientRects: () => [{}],
+        classList: { contains: () => false },
+        contains: (el: unknown) => el === face,
+      },
+    ];
+    page.focus = face;
     page.sent = [];
     probe().press('l1');
+    probe().press('a');
     frame();
     stop();
-    expect(page.sent).toEqual(['↓v', '↑v']);
+    expect(talking).toEqual([true, false]);
+    expect(page.sent).toEqual(['↓ ', '↑ ']);
+    off();
     stop = () => undefined;
   });
 });

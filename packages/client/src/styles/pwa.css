@@ -86,11 +86,12 @@ html {
 /*
  * A phone held sideways has some 360–430 px of height, and the world's zoom
  * follows the canvas's. During a run the chrome around the world is slimmer
- * there: a thin top bar, less padding, an objective bar of one line with a
- * radio banner of one line under it, and the crew strip's buttons a thumb
- * tall. All of it by this query alone, so the world keeps its size through a
- * run. The control cluster stays at the right edge, where the notepad, the
- * tips and the chat wheel expect it.
+ * there: a thin top bar, less padding, an objective bar of one row — the
+ * goal, and the clock with the alarm marks beside it — with a radio line of
+ * one row under it, a quarter of the world's height at most, and the crew
+ * strip's buttons a thumb tall (44 px). All of it by this query alone, so the
+ * world keeps its size through a run. The steering pad lies under the left
+ * thumb and the buttons under the right one (ui.css).
  */
 @media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
   .app:has(> .content--stage > .game) > .topbar {
@@ -115,11 +116,22 @@ html {
   }
 
   .stage-top .led-strip {
-    margin-bottom: 4px;
+    margin-bottom: 3px;
+  }
+
+  .stage-top .led {
+    height: 5px;
   }
 
   .stage-goal h1 {
+    margin-top: 2px;
     font-size: calc(16px * var(--text-scale));
+  }
+
+  .stage-clock {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
   }
 
   .stage-top .countdown {
@@ -132,8 +144,9 @@ html {
   }
 
   /* A line on the air, cut short where it runs out; the radio line has it after. */
-  .radio-banner {
-    padding: 4px 10px;
+  .radio-banner,
+  .toast {
+    padding: 3px 10px;
     font-size: calc(13px * var(--text-scale));
     line-height: 1.35;
     white-space: nowrap;
@@ -160,8 +173,19 @@ html {
     margin-left: 0;
   }
 
+  /* One steady height still: the 44 px buttons and 3 px above and below them. */
+  .hud {
+    height: 52px;
+    padding-block: 3px;
+  }
+
+  /* The notepad between the steering pad and the thumb's buttons: neither thumb loses its own. */
+  .notepad {
+    left: 172px;
+  }
+
   .hud-info {
-    min-height: 40px;
+    min-height: 44px;
   }
 }
 
@@ -175,8 +199,9 @@ html {
 @media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) and
   (max-width: 820px) {
   .hud {
+    height: auto;
     grid-template-columns: minmax(0, 1fr) auto auto auto;
-    grid-template-rows: 40px 18px;
+    grid-template-rows: 44px 18px;
     grid-template-areas:
       'crew chip notes info'
       'radio radio radio radio';

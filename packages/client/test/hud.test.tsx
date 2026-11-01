@@ -169,8 +169,9 @@ describe('what the crew still has to bring, on a phone held sideways', () => {
     expect(sideways).toMatch(/\n {2}\.stage-sub \{\s*display: none;/);
     expect(sideways).toMatch(/\n {2}\.hud-parts \{[^}]*display: inline;/);
     expect(sideways).toMatch(/\n {2}\.hud-radio--parts \{\s*display: block;/);
+    // The Laborkennung's toast keeps to one line beside it.
     expect(sideways).toMatch(
-      /\n {2}\.radio-banner \{[^}]*white-space: nowrap;[^}]*text-overflow: ellipsis;/,
+      /\n {2}\.radio-banner,\n {2}\.toast \{[^}]*white-space: nowrap;[^}]*text-overflow: ellipsis;/,
     );
   });
 

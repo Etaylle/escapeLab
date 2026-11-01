@@ -14,6 +14,7 @@ import { SignalPanel, signalSounds } from './SignalPanel.js';
 import { CircuitPanel, circuitSounds } from './CircuitPanel.js';
 import { ServersPanel, serversSounds } from './ServersPanel.js';
 import type { MissionTime } from '../clock.js';
+import type { Refusal } from '../ws.js';
 import type { DeviceCrew } from './Device.js';
 import type { Change } from './feel.js';
 
@@ -36,6 +37,11 @@ export interface PanelProps<K extends PuzzleKind> {
   mission: MissionTime;
   /** the crew at the device, for a device that names them — the main switch's levers */
   crew?: DeviceCrew;
+  /**
+   * a press the server refused while the device was open, as long as it is fresh — for a device
+   * that answers it where the press was made as well as in its head: the terminal's prompt
+   */
+  refused?: Refusal | null;
 }
 
 export type Panel<K extends PuzzleKind> = ComponentType<PanelProps<K>>;

@@ -43,6 +43,7 @@
 }
 
 .morse-dial > button {
+  min-width: var(--target);
   height: 56px;
   padding: 0;
   font-size: calc(22px * var(--text-scale));
@@ -122,5 +123,41 @@
 }
 
 .morse-send {
+  min-height: var(--target);
   margin-top: 16px;
+}
+
+/* A phone held sideways: the lamp beside the dial and the key that sends, all in view. */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .morse {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'lamp dial'
+      'lamp send';
+    align-items: center;
+    gap: 8px 14px;
+  }
+
+  .morse-lamp {
+    grid-area: lamp;
+    width: 96px;
+    height: 96px;
+    margin: 0;
+  }
+
+  .morse-dial {
+    grid-area: dial;
+  }
+
+  .morse-knob {
+    width: 80px;
+    height: 80px;
+  }
+
+  .morse-send {
+    grid-area: send;
+    margin-top: 0;
+    padding: 12px;
+  }
 }
