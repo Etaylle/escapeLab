@@ -9,9 +9,12 @@ import {
   drawPlate,
   drawSign,
   drawStation,
+  LABEL_BELOW,
   plateCaption,
+  SIGN_LABEL_BELOW,
   type Tube,
 } from '../art.js';
+import type { PlacedLabels } from '../labelLayout.js';
 import { animTime, crtFlicker, propSeed, rollAt } from '../anim.js';
 import { doorOpenness, isHorizontalDoor } from '../doors.js';
 import { burning } from '../frameLight.js';
@@ -25,6 +28,7 @@ import { coversArmed, opensCabinet } from '../interact.js';
 import { noteMount } from '../notes.js';
 import { inTiles, profiled, type Frame, type WorldMap } from './frame.js';
 import { drawGlow, namedThing, type Named } from './highlight.js';
+import { labelAt, looseAndShown, propLabels, SIGN_LABEL } from './labels.js';
 import * as props from './props.js';
 
 /**
@@ -35,20 +39,22 @@ import * as props from './props.js';
  * names glows in its own shape under it (highlight.ts) — over the plates and
  * doors, under the things. Then the emergency lamps on their walls and
  * ceilings. The furniture is baked with the floor it stands on
- * (render/tiles.ts).
+ * (render/tiles.ts). The labels under plates, sources, the sign and the parts
+ * lying about go where they were placed, none on another (labels.ts).
  */
 export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   inTiles(ctx, frame);
   const named = namedThing(frame);
-  drawPlates(ctx, frame);
+  const labels = propLabels(ctx, frame);
+  drawPlates(ctx, frame, labels);
   profiled(frame.kit, 'props', ctx, () => props.drawFloor(ctx, frame));
   drawDoors(ctx, frame);
   drawGlowUnder(ctx, frame, named);
   drawStations(ctx, frame);
-  drawManuals(ctx, frame);
+  drawManuals(ctx, frame, labels);
   drawNotes(ctx, frame);
-  drawFixtures(ctx, frame);
-  drawItems(ctx, frame, named);
+  drawFixtures(ctx, frame, labels);
+  drawItems(ctx, frame, named, labels);
   drawLamps(ctx, frame);
 }
 
@@ -60,8 +66,8 @@ function at(ctx: CanvasRenderingContext2D, x: number, y: number, draw: () => voi
   ctx.restore();
 }
 
-/** The pressure plates light has fallen on. */
-function drawPlates(ctx: CanvasRenderingContext2D, frame: Frame): void {
+/** The pressure plates light has fallen on, each label where `labels` puts it. */
+function drawPlates(ctx: CanvasRenderingContext2D, frame: Frame, labels: PlacedLabels): void {
   const { map, light, text } = frame;
   for (const plate of map.plates.filter((p) => light.shown(p.x, p.y))) {
     const look = {
@@ -69,6 +75,7 @@ function drawPlates(ctx: CanvasRenderingContext2D, frame: Frame): void {
       label: plateCaption(plate),
       camera: plate.freezesDrone,
       text,
+      labelAt: labelAt(labels, `plate:${plate.id}`, LABEL_BELOW),
     };
     at(ctx, plate.x + 0.5, plate.y + 0.5, () => drawPlate(ctx, look));
   }
@@ -132,14 +139,18 @@ export function tubeAt(frame: Frame, x: number, y: number): Tube {
   return { burn: crtFlicker(t, seed), roll: rollAt(t, seed, frame.reduced) };
 }
 
-/** The sources found so far, the ones printing the armed station's rules lit up. */
-function drawManuals(ctx: CanvasRenderingContext2D, frame: Frame): void {
+/**
+ * The sources found so far, the ones printing the armed station's rules lit up, each label
+ * where `labels` puts it.
+ */
+function drawManuals(ctx: CanvasRenderingContext2D, frame: Frame, labels: PlacedLabels): void {
   const { map, pulse, text } = frame;
   for (const manual of map.manuals) {
     const active = coversArmed(map, manual);
     const { kind, label, opened } = manual;
     const tube = tubeAt(frame, manual.x, manual.y);
-    const look = { kind, label, active, opened, pulse, text, tube };
+    const place = labelAt(labels, `manual:${manual.id}`, LABEL_BELOW);
+    const look = { kind, label, active, opened, pulse, text, tube, labelAt: place };
     at(ctx, manual.x + 0.5, manual.y + 0.5, () => drawManualObject(ctx, look));
   }
 }
@@ -156,12 +167,13 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: Frame): void {
   }
 }
 
-/** The Laborkennung, the hatch and an emergency's valves: always in sight. */
-function drawFixtures(ctx: CanvasRenderingContext2D, frame: Frame): void {
+/** The Laborkennung, its label where `labels` puts it, the hatch and an emergency's valves. */
+function drawFixtures(ctx: CanvasRenderingContext2D, frame: Frame, labels: PlacedLabels): void {
   const { map, pulse, text } = frame;
   const sign = map.edgeworkSign;
   if (sign !== null) {
-    const look = { label: 'LABORKENNUNG', seen: frame.signSeen, pulse, text };
+    const place = labelAt(labels, 'sign', SIGN_LABEL_BELOW);
+    const look = { label: SIGN_LABEL, seen: frame.signSeen, pulse, text, labelAt: place };
     at(ctx, sign.x + 0.5, sign.y + 0.5, () => drawSign(ctx, look));
   }
   const exit = map.exit;
@@ -177,12 +189,18 @@ function drawFixtures(ctx: CanvasRenderingContext2D, frame: Frame): void {
 type Item = WorldMap['items'][number];
 
 /** Drop-offs and the crates, fuses and keys lying about, where light has fallen on them. */
-function drawItems(ctx: CanvasRenderingContext2D, frame: Frame, named: Named | null): void {
+function drawItems(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  named: Named | null,
+  labels: PlacedLabels,
+): void {
   for (const item of frame.map.items) {
     drawZone(ctx, frame, item);
-    drawLoose(ctx, frame, item, named);
+    drawLoose(ctx, frame, item, named, labelAt(labels, `item:${item.id}`, LABEL_BELOW));
   }
 }
+
 
 /** The drop-off of `item` where light has fallen on it; none for a cabinet's key. */
 function drawZone(ctx: CanvasRenderingContext2D, frame: Frame, item: Item): void {
@@ -193,18 +211,29 @@ function drawZone(ctx: CanvasRenderingContext2D, frame: Frame, item: Item): void
   }
 }
 
-/** `item` lying about where light has fallen on it, as the E prompt has it (`hovering`). */
+/**
+ * `item` lying about where light has fallen on it, as the E prompt has it (`hovering`), its
+ * label's top `label` under it, or none.
+ */
 function drawLoose(
   ctx: CanvasRenderingContext2D,
   frame: Frame,
   item: Item,
   named: Named | null,
+  label: number | null,
 ): void {
-  const { light, pulse, text } = frame;
-  if (item.delivered || item.carriedBy !== null || !light.shown(item.x, item.y)) {
+  const { pulse, text } = frame;
+  if (!looseAndShown(frame, item)) {
     return;
   }
-  const look = { label: item.label, pulse, carried: false, text, ...hovering(frame, item, named) };
+  const look = {
+    label: item.label,
+    pulse,
+    carried: false,
+    text,
+    labelAt: label,
+    ...hovering(frame, item, named),
+  };
   at(ctx, item.x, item.y, () => drawCarryable(ctx, look));
 }
 

@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useLayoutEffect,
   useRef,
   useState,
   type FormEvent,
@@ -337,10 +338,20 @@ function Table(props: { rows: ServerRow[]; turned: Set<Service>; printed: number
 /** The class a line the last change brought carries: it types in. */
 const NEW_LINE = ' servers-line--new';
 
-/** The log's last lines, the newest at the foot; the lines a change brought type in. */
+/**
+ * The log's last lines, the newest at the foot; the lines a change brought type in. Where the
+ * log scrolls in a box of its own (a phone held sideways), the newest line is the one in sight.
+ */
 function Log({ log, fresh }: { log: ServerLogLine[]; fresh: Set<number> }) {
+  const list = useRef<HTMLOListElement>(null);
+  useLayoutEffect(() => {
+    const box = list.current;
+    if (box !== null) {
+      box.scrollTop = box.scrollHeight;
+    }
+  }, [log]);
   return (
-    <ol className="servers-log" aria-label="Protokoll" aria-live="polite">
+    <ol ref={list} className="servers-log" aria-label="Protokoll" aria-live="polite">
       {log.map((line, i) => (
         <li
           key={line.n}

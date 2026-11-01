@@ -1,8 +1,17 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
-import type { Edgework, ManualHere, MapView, PlayerView, PuzzleView } from '@escapelab/core';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  moduleFor,
+  puzzleDefSchema,
+  type Edgework,
+  type ManualHere,
+  type MapView,
+  type PlayerView,
+  type PuzzleView,
+} from '@escapelab/core';
 import { clock } from '../src/clock.js';
 import { leafFor, type Leaf } from '../src/pages.js';
+import { changeSettings, DEFAULT_SETTINGS, type TextSize } from '../src/settings.js';
 import { Book, TurningLeaf, type Binding, type Imprint } from '../src/screens/Book.js';
 import {
   AlarmMarks,
@@ -423,6 +432,55 @@ describe('reading a book', () => {
     const last = opened(bound(), 2, true);
     expect(last).toContain('page-blank');
     expect(last.split(foot)).toHaveLength(2);
+  });
+});
+
+/** The Frequenz-Abgleich's printed rules as a source's section: two tables read together. */
+function frequenz(index: number): Section {
+  const def = puzzleDefSchema.parse({ type: 'morse', id: 'frequenz', title: 'Frequenz-Abgleich' });
+  return {
+    puzzleId: 'frequenz',
+    index,
+    title: 'Frequenz-Abgleich',
+    manual: moduleFor('morse').manual(def as never),
+    notes: [],
+    noteReadyAt: null,
+    notesLeft: 0,
+    costSec: 20,
+  };
+}
+
+describe('a book set for its reader', () => {
+  afterEach(() => {
+    changeSettings(DEFAULT_SETTINGS);
+  });
+
+  it('leaves a page blank in a spread, so that two tables read together face each other', () => {
+    const [first] = terminal.sections as [Section, Section];
+    const sections = [frequenz(4), { ...first, index: 5 }];
+    const cabinet: ManualHere = { ...terminal, label: 'AKTENSCHRANK', kind: 'cabinet', sections };
+    // Neither station is up: the book opens on its cover, the blank page beside it.
+    const spread = opened(cabinet, 0, true);
+    expect(spread).toContain(
+      '<article class="page page-right page-empty" aria-label="Seite 2, leer">' +
+        '<div class="page-in"></div></article>',
+    );
+    expect(spread).toContain('<span class="contents-page">Seite 3</span>');
+    // A page at a time, no page is left blank and the station starts on page 2.
+    const single = opened(cabinet, 0);
+    expect(single).not.toContain('page-empty');
+    expect(single).toContain('<span class="contents-page">Seite 2</span>');
+  });
+
+  it('sets the pages at the reader’s text size: a larger one takes more of them', () => {
+    const cabinet: ManualHere = { ...terminal, kind: 'cabinet', sections: [frequenz(4)] };
+    const pagesAt = (textSize: TextSize): number => {
+      changeSettings({ textSize });
+      const total = /Seite \d+ von (\d+)/.exec(opened(cabinet, 4))?.[1];
+      return Number(total);
+    };
+    expect(pagesAt('small')).toBe(5);
+    expect(pagesAt('large')).toBe(6);
   });
 });
 

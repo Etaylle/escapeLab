@@ -139,7 +139,7 @@ function SabotageAlert({
   );
 }
 
-type Sabotage = NonNullable<NonNullable<PlayerView['map']>['sabotage']>;
+export type Sabotage = NonNullable<NonNullable<PlayerView['map']>['sabotage']>;
 
 /**
  * Relay mode: no valves to run to — the player's console stays in front of
@@ -147,7 +147,7 @@ type Sabotage = NonNullable<NonNullable<PlayerView['map']>['sabotage']>;
  * It takes the keys: focus moves in, and what is pressed there reaches
  * neither the world nor the screen's shortcuts.
  */
-function RelayAlert({
+export function RelayAlert({
   sabotage,
   relay,
   pausedAt,

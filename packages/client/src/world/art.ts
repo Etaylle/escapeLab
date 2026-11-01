@@ -116,6 +116,14 @@ const HALO_TILES = 0.075;
 const LABEL_PX = [10, 12] as const;
 const NAME_PX = [11, 14] as const;
 
+/**
+ * How far under its anchor a thing's label hangs, its top, tiles: plates, sources and the
+ * parts lying about; the sign's a little higher. A thing may be told another place, or none,
+ * where two labels would lie on each other (labelLayout.ts).
+ */
+export const LABEL_BELOW = 0.41;
+export const SIGN_LABEL_BELOW = 0.36;
+
 /** Text `size` tiles high, its halo grown or shrunk with it from its size at `natural`. */
 function textStyle(size: number, natural: number): TextStyle {
   return {
@@ -125,26 +133,46 @@ function textStyle(size: number, natural: number): TextStyle {
   };
 }
 
-/** `natural` tiles of text at `tilePx` device pixels per tile, held within `px` CSS pixels. */
+/**
+ * `natural` tiles of text at `tilePx` device pixels per tile, held within `px` CSS pixels,
+ * then grown or shrunk by the reader's text size `scale`; in tiles.
+ */
 function heldWithin(
   natural: number,
   tilePx: number,
   dpr: number,
   [min, max]: readonly [number, number],
+  scale: number,
 ): number {
-  return (Math.min(max, Math.max(min, (natural * tilePx) / dpr)) * dpr) / tilePx;
+  const css = Math.min(max, Math.max(min, (natural * tilePx) / dpr));
+  return (css * scale * dpr) / tilePx;
 }
 
 /**
  * The world's text at a zoom of `tilePx` device pixels per tile: labels and name tags
  * follow the zoom, but only so far — no giant letters on a wide window, none too small to
- * read on a phone.
+ * read on a phone — and that range follows the reader's text size `scale` (settings.ts
+ * TEXT_SCALE).
  */
-export function worldText(tilePx: number, dpr: number): WorldText {
+export function worldText(tilePx: number, dpr: number, scale = 1): WorldText {
   return {
-    label: textStyle(heldWithin(LABEL_TILES, tilePx, dpr, LABEL_PX), LABEL_TILES),
-    name: textStyle(heldWithin(NAME_TILES, tilePx, dpr, NAME_PX), NAME_TILES),
+    label: textStyle(heldWithin(LABEL_TILES, tilePx, dpr, LABEL_PX, scale), LABEL_TILES),
+    name: textStyle(heldWithin(NAME_TILES, tilePx, dpr, NAME_PX, scale), NAME_TILES),
   };
+}
+
+/** How much room `text` takes in `style`, its halo included, in tiles. */
+export function textBox(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  style: TextStyle,
+): { width: number; height: number } {
+  const font = ctx.font;
+  ctx.font = style.font;
+  const width = ctx.measureText(text).width;
+  ctx.font = font;
+  const halo = style.halo / TEXT_SCALE;
+  return { width: width / TEXT_SCALE + halo, height: style.size + halo };
 }
 
 /** The world's text at its size in tiles, for a caller that names no zoom. */
@@ -1217,6 +1245,8 @@ export interface PlateOpts {
   camera: boolean;
   /** the world's text at this zoom (worldText); the label in plain tiles when left out */
   text?: WorldText;
+  /** where the label's top hangs under the anchor (LABEL_BELOW when left out); null: none */
+  labelAt?: number | null;
 }
 
 const PLATE_SOCKET_R = 0.38;
@@ -1359,7 +1389,10 @@ export function drawPlate(ctx: CanvasRenderingContext2D, o: PlateOpts): void {
       ctx.stroke();
     }
     const color = o.pressed ? css(lift(TEAL, 0.25)) : IDLE_LABEL;
-    drawHaloText(ctx, o.label.toUpperCase(), 0, 0.41, (o.text ?? TILE_TEXT).label, color, 'top');
+    const at = o.labelAt === undefined ? LABEL_BELOW : o.labelAt;
+    if (at !== null) {
+      drawHaloText(ctx, o.label.toUpperCase(), 0, at, (o.text ?? TILE_TEXT).label, color, 'top');
+    }
   } finally {
     ctx.restore();
   }
@@ -1594,6 +1627,8 @@ export interface ManualObjectOpts {
   bare?: boolean;
   /** a terminal's tube this frame (Tube); a steady tube where left out */
   tube?: Tube;
+  /** where the label's top hangs under the anchor (LABEL_BELOW when left out); null: none */
+  labelAt?: number | null;
 }
 
 const READ_LABEL = css(lift(READ_BLUE, 0.3));
@@ -2138,9 +2173,10 @@ export function drawManualObject(ctx: CanvasRenderingContext2D, o: ManualObjectO
         break;
     }
     ctx.restore();
-    if (dressed) {
+    const at = o.labelAt === undefined ? LABEL_BELOW : o.labelAt;
+    if (dressed && at !== null) {
       const color = o.active ? READ_LABEL : IDLE_LABEL;
-      drawHaloText(ctx, o.label, 0, 0.41, (o.text ?? TILE_TEXT).label, color, 'top');
+      drawHaloText(ctx, o.label, 0, at, (o.text ?? TILE_TEXT).label, color, 'top');
     }
   } finally {
     ctx.restore();
@@ -2157,6 +2193,8 @@ export interface SignOpts {
   pulse: number;
   /** the world's text at this zoom (worldText); the label in plain tiles when left out */
   text?: WorldText;
+  /** where the label's top hangs under the anchor (SIGN_LABEL_BELOW when left out); null: none */
+  labelAt?: number | null;
 }
 
 /** Brushed brass, lit from the top. */
@@ -2240,7 +2278,10 @@ export function drawSign(ctx: CanvasRenderingContext2D, o: SignOpts): void {
     drawEngraving(ctx);
     if (o.seen) drawSeenTick(ctx);
     const color = o.seen ? IDLE_LABEL : css(lift(AMBER, 0.2));
-    drawHaloText(ctx, o.label, 0, 0.36, (o.text ?? TILE_TEXT).label, color, 'top');
+    const at = o.labelAt === undefined ? SIGN_LABEL_BELOW : o.labelAt;
+    if (at !== null) {
+      drawHaloText(ctx, o.label, 0, at, (o.text ?? TILE_TEXT).label, color, 'top');
+    }
   } finally {
     ctx.restore();
   }

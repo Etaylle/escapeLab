@@ -360,10 +360,24 @@ describe('the stylesheets under the settings', () => {
         expect(size, `${sheet}: ${size}`).toMatch(/var\(--text-scale\)/);
       }
     }
-    const page = /\.page-in \{[^}]*font-size: calc\(100cqw \/ 30 \* var\(--text-scale\)\);/;
+    const page = /\.page-in \{[^}]*font-size: calc\(var\(--sheet-em\) \* var\(--text-scale\)\);/;
     expect(read('styles/book.css')).toMatch(page);
     const pad = /\n\.notepad \{[^}]*--rule: calc\(28px \* var\(--text-scale\)\);/;
     expect(read('styles/notepad.css')).toMatch(pad);
+  });
+
+  it('set the HUD’s smallest words at 12 px or more: the chip’s heads, ALARME, unterwegs', () => {
+    const smallest: [string, string][] = [
+      ['ui.css', '.edgework-label'],
+      ['styles/ux2.css', '.alarm-marks-label'],
+      ['ui.css', '.hud-idle'],
+    ];
+    for (const [sheet, selector] of smallest) {
+      const opens = new RegExp(`\\n${selector.replace(/\./g, '\\.')} \\{([^}]*)\\}`);
+      const rule = opens.exec(read(sheet))?.[1] ?? '';
+      const px = /font-size: calc\((\d+(?:\.\d+)?)px \* var\(--text-scale\)\);/.exec(rule);
+      expect(Number(px?.[1]), selector).toBeGreaterThanOrEqual(12);
+    }
   });
 
   it('size the HUD’s goal, clock, banner and crew strip by it', () => {

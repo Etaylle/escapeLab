@@ -101,8 +101,16 @@
  * and a shape; the deliberate wrong one gives figure-flinch.png), the
  * Serverraum's table and moves (servers-manual.png from its locker,
  * servers-a.png and servers-b.png from its consoles, servers-solved.png),
+ * the cabinet read at the large text size (book-morse-1.15.png: the
+ * Morsetafel whole on its page, the Frequenztabelle facing it, no line cut),
  * the radio panel's lamp and dial, the spare fuse carried from the Archiv to
- * the reactor and the reactor pressed together. From the Signalkette on the
+ * the reactor and the reactor pressed together. Every device the guest's
+ * phone opens on the way — the lever, the meter, console A of the
+ * Signalkette, the rack, the reactor and the relay console where an
+ * emergency comes — is also shot with the phone held sideways
+ * (device-phone-<station>.png): the device whole in the window, nothing of
+ * it scrolling, every control in view and 44 px at least each way, or the
+ * run fails. From the Signalkette on the
  * drones are awake: every walk goes from haven to haven past them — the
  * tiles no drone ever looks at — as a crew times its run past a patrol:
  * their flights foretold from the positions stream as the server steps them
@@ -2764,6 +2772,9 @@ async function throwLever(players) {
     }
   }
   await sleep(500); // past the panel's fade-in
+  for (const player of players) {
+    await captureDevicePhone(player, stationSlug(player));
+  }
   await captureLeverPanel(first, players.length);
   await captureLeverRing(first);
   const solved = await pressTogether(players, lever);
@@ -3976,8 +3987,8 @@ async function captureNotepad(page, seen) {
   await capture(page, 'notepad.png');
   const written = await padText(page);
   const taken = offered ? await newestCapture(page) : null;
-  const dpad = await page.locator('.world-dpad').boundingBox();
-  const blocks = overlapping(await pad.boundingBox(), dpad);
+  const steering = await page.locator('.world-pad').boundingBox();
+  const blocks = overlapping(await pad.boundingBox(), steering);
   // The pad offers the Laborkennung only to a player who has read the sign.
   const kennung = offered
     ? `Laborkennung taken over as ${taken === SIGN_CAPTURE ? '' : '!! '}„${taken}"`
@@ -4712,6 +4723,157 @@ async function infoInView(player, size, how) {
   }
   await page.setViewportSize(before);
   await sleep(400);
+}
+
+/** What the phone held sideways shows under its thumbs, CSS px: the pad, the buttons, the bar. */
+function thumbsLayout() {
+  const rect = (selector) => {
+    const box = document.querySelector(selector)?.getBoundingClientRect();
+    return box === undefined || box.width === 0 ? null : box;
+  };
+  const canvas = document.querySelector('.world-canvas');
+  const map = globalThis.__escapelab?.minimap ?? null;
+  const cells = [...document.querySelectorAll('.world-pad-cell')].map((cell) => {
+    const box = cell.getBoundingClientRect();
+    return Math.min(box.width, box.height);
+  });
+  return {
+    mid: canvas === null ? 0 : canvas.getBoundingClientRect().x + canvas.clientWidth / 2,
+    height: canvas?.clientHeight ?? 0,
+    bar: document.querySelector('.stage-top')?.offsetHeight ?? 0,
+    line: document.querySelector('.stage-top .radio-banner, .stage-top .toast') !== null,
+    pad: rect('.world-pad')?.toJSON() ?? null,
+    thumb: rect('.world-thumb')?.toJSON() ?? null,
+    cells,
+    minimap: map === null ? null : Math.round(map.mh / map.dpr),
+  };
+}
+
+/**
+ * pad-left.png: the guest's phone held sideways, the world under its thumbs —
+ * the steering pad of eight ways round a still middle, 48 px a cell, in the
+ * left half under the left thumb, the buttons in the right half under the
+ * right one — the objective bar a quarter of the canvas's height at most, a
+ * line on the air included, and the minimap 56 px tall at least. The run fails
+ * where any of it is not so.
+ */
+async function capturePadLeft(page) {
+  const seen = await page.evaluate(thumbsLayout);
+  await capture(page, 'pad-left.png');
+  const share = seen.height === 0 ? 1 : seen.bar / seen.height;
+  const percent = (share * 100).toFixed(1);
+  const smallest = seen.cells.length === 0 ? 0 : Math.min(...seen.cells);
+  const at = (box) => (box === null ? 'none' : `${Math.round(box.x)}–${Math.round(box.right)}`);
+  console.log(
+    `pad-left.png       Ben sideways: the pad at x ${at(seen.pad)}, the buttons at x ` +
+      `${at(seen.thumb)} (middle ${Math.round(seen.mid)}), ${seen.cells.length} cells of ` +
+      `${Math.round(smallest)} px; the bar ${seen.bar}/${seen.height} px, ${percent} %` +
+      `${seen.line ? ' with a line on the air' : ''}; the minimap ${seen.minimap ?? 'not'} px tall`,
+  );
+  const wrong = [
+    (seen.pad === null || seen.pad.right > seen.mid) && 'the pad is not in the left half',
+    (seen.thumb === null || seen.thumb.x < seen.mid) && 'the buttons are not in the right half',
+    (seen.cells.length !== 9 || smallest < 48 - 0.5) && `${seen.cells.length} pad cells`,
+    share > 0.25 && `the objective bar covers ${percent} % of the canvas`,
+    (seen.minimap === null || seen.minimap < 56) && `the minimap is ${seen.minimap} px tall`,
+  ];
+  if (wrong.some(Boolean)) {
+    fail(`pad-left: ${wrong.filter(Boolean).join(', ')}`);
+  }
+}
+
+/** The stations whose device a phone has shown sideways this run: each once. */
+const phoneDevices = new Set();
+
+/**
+ * What the page shows of its open device or relay console: the most its frame or the modal
+ * round it scrolls; its controls shown, those under a fingertip's 44 px either way, and those
+ * cut off by the frame or the window.
+ */
+function deviceReach() {
+  const modal = document.querySelector('.station-modal, .relay-modal');
+  const panel = modal?.querySelector('.panel') ?? null;
+  if (modal === null || panel === null) {
+    return null;
+  }
+  const frame = panel.getBoundingClientRect();
+  const box = (el) => el.getBoundingClientRect();
+  const said = (el) => {
+    const { width, height } = box(el);
+    const name = (el.getAttribute('aria-label') ?? el.textContent ?? '').trim().slice(0, 20);
+    return `„${name}" ${Math.round(width)}×${Math.round(height)}`;
+  };
+  const shown = [...panel.querySelectorAll('button, input, summary')].filter(
+    (el) => box(el).width > 0 && globalThis.getComputedStyle(el).visibility !== 'hidden',
+  );
+  const out = (el) =>
+    box(el).top < Math.max(frame.top, 0) - 1 ||
+    box(el).bottom > Math.min(frame.bottom, globalThis.innerHeight) + 1 ||
+    box(el).left < -1 ||
+    box(el).right > globalThis.innerWidth + 1;
+  return {
+    scroll: Math.max(
+      panel.scrollHeight - panel.clientHeight,
+      modal.scrollHeight - modal.clientHeight,
+    ),
+    controls: shown.length,
+    small: shown.filter((el) => box(el).width < 43.5 || box(el).height < 43.5).map(said),
+    cut: shown.filter(out).map(said),
+  };
+}
+
+/** The station `player` has open: its id, and its console's letter where it has two. */
+function stationSlug(player) {
+  const { map, puzzle } = player.seen.view;
+  const armed = map.stations.find((station) => station.status === 'armed');
+  const id = armed?.puzzleId ?? 'station';
+  const two = map.stations.some((station) => station.puzzleId === id && station.console === 'b');
+  return two && puzzle?.console != null ? `${id}-${puzzle.console}` : id;
+}
+
+/**
+ * device-phone-<slug>.png: the device a phone has open — the guest's page, a touch screen —
+ * with the phone held sideways: the device whole in the window, nothing of it scrolling, every
+ * control in view and 44 px at least each way. The run fails where it is not so. Once a
+ * station; a window without touch is left alone. The phone goes back to how it was held.
+ */
+async function captureDevicePhone(player, slug) {
+  const { page } = player;
+  const touch = await page.evaluate(() => globalThis.matchMedia('(pointer: coarse)').matches);
+  if (!touch || phoneDevices.has(slug)) {
+    return;
+  }
+  phoneDevices.add(slug);
+  const held = page.viewportSize();
+  const { width, height } = SIZES[3];
+  await page.setViewportSize({ width, height });
+  await sleep(500);
+  const seen = await page.evaluate(deviceReach);
+  await capture(page, `device-phone-${slug}.png`);
+  if (held !== null) {
+    await page.setViewportSize(held);
+    await sleep(300);
+  }
+  const name = `device-phone-${slug}.png`.padEnd(18);
+  if (seen === null) {
+    fail(`device-phone-${slug}: no device open on ${player.name}'s phone`);
+    console.log(`${name} !! ${player.name}'s phone has no device open`);
+    return;
+  }
+  console.log(
+    `${name} ${player.name}'s phone sideways: ${seen.controls} controls, scrolls ` +
+      `${seen.scroll}px, ${seen.small.length} under 44 px, ${seen.cut.length} cut off` +
+      [...seen.small, ...seen.cut].map((what) => `\n                   !! ${what}`).join(''),
+  );
+  const wrong = [
+    seen.controls === 0 && 'no control shown',
+    seen.scroll > 1 && `it scrolls ${seen.scroll}px`,
+    seen.small.length > 0 && `${seen.small.join(', ')} under 44 px`,
+    seen.cut.length > 0 && `${seen.cut.join(', ')} cut off`,
+  ];
+  if (wrong.some(Boolean)) {
+    fail(`device-phone-${slug}: ${wrong.filter(Boolean).join('; ')}`);
+  }
 }
 
 /**
@@ -6439,6 +6601,11 @@ async function weather() {
   }
   const from = Date.now();
   const label = relayCrew.find((p) => emergencyOn(p.seen))?.seen.view.map.sabotage.label;
+  for (const player of relayCrew) {
+    if (await player.page.locator('.relay-modal').isVisible()) {
+      await captureDevicePhone(player, 'relay');
+    }
+  }
   while (relayCrew.some((p) => emergencyOn(p.seen)) && Date.now() - from < 70_000) {
     let acted = false;
     for (const holder of relayCrew) {
@@ -6633,6 +6800,7 @@ async function finishNotstrom(box, meter) {
     }
     await openPanel(player);
   }
+  await captureDevicePhone(meter, stationSlug(meter));
   const wires = (box.seen.view.puzzle?.wires ?? []).map((wire) => wire.colour).join(', ');
   if (wires !== pin.wires.join(', ')) {
     differs('fuse box', wires, pin.wires.join(', '));
@@ -6675,6 +6843,7 @@ async function playSignalkette(host, guest) {
     throw new Error(`${host.name} found no way to console B of "${title}"`);
   }
   await openPanel(guest);
+  await captureDevicePhone(guest, stationSlug(guest));
   await openPanel(host);
   await solveSignal([host, guest], title, BLACKOUT_PLAN.signalkette.stages);
 }
@@ -6734,6 +6903,7 @@ async function playServerraum(host, guest) {
     }
     const rows = host.seen.view.puzzle?.rows ?? null;
     await captureServersConsoles(crew);
+    await captureDevicePhone(guest, stationSlug(guest));
     if (JSON.stringify(rows) !== JSON.stringify(BLACKOUT_PLAN.subsysteme.rows)) {
       differs('terminal table', tableSaid(rows), tableSaid(BLACKOUT_PLAN.subsysteme.rows));
     }
@@ -6773,14 +6943,102 @@ async function handle(player, what, done) {
   }
 }
 
+/** Picks the text size reading `label` („Klein", „Normal", „Groß") in the settings, then Esc. */
+async function chooseTextSize(page, label) {
+  await page.locator('.settings-toggle').click();
+  const sizes = page.locator('.settings-options[aria-label="Textgröße"]');
+  await sizes.waitFor({ timeout: 3000 });
+  await sizes.locator('.settings-option', { hasText: label }).click();
+  await page.keyboard.press('Escape');
+  await page.locator('.settings-card').waitFor({ state: 'hidden', timeout: 2000 });
+}
+
+/** How the open book shows its Morsetafel: the page it stands on, its rows, the table facing it. */
+function morseOnShow() {
+  const pages = [...document.querySelectorAll('.reading-modal .book-pages > .book-leaves > .page')];
+  const headed = (page, first) =>
+    [...page.querySelectorAll('.manual-table table')].find(
+      (table) => table.querySelector('th')?.textContent?.trim() === first,
+    ) ?? null;
+  const morse = pages.find((page) => headed(page, 'Buchstabe') !== null) ?? null;
+  const facing = pages.some((page) => page !== morse && headed(page, 'Wort') !== null);
+  const table = morse === null ? null : headed(morse, 'Buchstabe');
+  return {
+    page: morse?.getAttribute('aria-label') ?? null,
+    rows: table === null ? 0 : table.querySelectorAll('tbody tr').length,
+    facing,
+  };
+}
+
+/** Pages of the open book whose lines run past the sheet's edge, or past its foot. */
+function pagesCut() {
+  return [...document.querySelectorAll('.reading-modal .page')].filter((page) => {
+    const text = page.querySelector('.page-text');
+    if (text === null) {
+      return false;
+    }
+    const sheet = page.getBoundingClientRect();
+    const wide = [...text.querySelectorAll('*')].some(
+      (el) => el.getBoundingClientRect().right > sheet.right + 0.5,
+    );
+    const over = text.scrollHeight > text.clientHeight + 1;
+    return wide || text.scrollWidth > text.clientWidth + 1 || over;
+  }).length;
+}
+
+/**
+ * book-morse-1.15.png: the cabinet's pages at the large text size („Groß") at 1280×720, where
+ * they lie open as a spread: the Morsetafel whole on its page — all 13 rows, over no page turn
+ * — and the Frequenztabelle facing it, read together; no line runs past the sheet's edge and
+ * no page past its foot. The run fails where the table breaks, the two lie apart or a page is
+ * cut. The text size goes back to normal and the window to the phone after.
+ */
+async function captureMorseBook(reader) {
+  const { page } = reader;
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await chooseTextSize(page, 'Groß');
+  const overlay = page.locator('.reading-modal');
+  if (!(await interactUntil(page, overlay))) {
+    throw new Error(`${reader.name} stands at the cabinet, but no .reading-modal opened`);
+  }
+  await sleep(500);
+  let shown = await page.evaluate(morseOnShow);
+  for (let turns = 0; shown.page === null && turns < 6; turns++) {
+    await page.keyboard.press('ArrowRight');
+    await sleep(600);
+    shown = await page.evaluate(morseOnShow);
+  }
+  const cut = await page.evaluate(pagesCut);
+  await capture(page, 'book-morse-1.15.png');
+  const where = await textOf(overlay.locator('.book-where'));
+  console.log(
+    `book-morse-1.15.png ${reader.name} at the AKTENSCHRANK, „Groß": ${where}, the Morsetafel ` +
+      `on ${shown.page ?? '!! no page'} with ${shown.rows} rows, the Frequenztabelle ` +
+      `${shown.facing ? 'facing it' : '!! not in view'}, ${cut} page(s) cut`,
+  );
+  const wrong = [
+    shown.rows !== 13 && `the Morsetafel shows ${shown.rows} of 13 rows on one page`,
+    !shown.facing && 'the Frequenztabelle does not face the Morsetafel',
+    cut > 0 && `${cut} page(s) cut at the sheet's edge or foot`,
+  ];
+  if (wrong.some(Boolean)) {
+    fail(`book-morse-1.15: ${wrong.filter(Boolean).join(', ')}`);
+  }
+  await page.keyboard.press('Escape');
+  await overlay.waitFor({ state: 'hidden', timeout: 3000 });
+  await chooseTextSize(page, 'Normal');
+  await page.setViewportSize({ width: SIZES[2].width, height: SIZES[2].height });
+}
+
 /**
  * The radio panel in the Labor on the pinned seed: the guest, left at the
  * rack in the open, takes the key there round to the cabinet past the
- * patrols and unlocks it from the haven behind the pillar, while the host
- * waits by the terminal, where no drone looks either; then the host walks to
- * the panel, switches it on — from then on the panel hides them both — and
- * tunes and sends as the plan pins it. Fails naming the seed where the lamp
- * or the dial differ.
+ * patrols and unlocks it from the haven behind the pillar, reads it at the
+ * large text size (book-morse-1.15.png), while the host waits by the
+ * terminal, where no drone looks either; then the host walks to the panel,
+ * switches it on — from then on the panel hides them both — and tunes and
+ * sends as the plan pins it. Fails naming the seed where the lamp or the
+ * dial differ.
  */
 async function playFrequenz(host, guest) {
   const pin = BLACKOUT_PLAN.frequenz;
@@ -6796,6 +7054,7 @@ async function playFrequenz(host, guest) {
   await foundWherePinned(guest, cabinet);
   await handle(guest, 'the cabinet', () =>
     guest.seen.view.map.manuals.some((m) => m.id === cabinet.id && m.opened));
+  await captureMorseBook(guest);
   await sneakTo(host, BLACKOUT_SPOTS.radio);
   await clearOfEmergencies(host, 25);
   const index = host.seen.view.currentPuzzleIndex;
@@ -6859,7 +7118,9 @@ async function playReaktor(host, guest) {
       `${pin.to.x},${pin.to.y} and put it in`,
   );
   await clearOfEmergencies(host, 25);
-  await pastEmergencies(() => pressLastSync([host, guest]));
+  await pastEmergencies(() =>
+    pressLastSync([host, guest], () => captureDevicePhone(guest, stationSlug(guest))),
+  );
 }
 
 /**
@@ -6904,6 +7165,9 @@ async function playBlackoutToTheEnd(host, guest, watcher) {
     await playFrequenz(host, guest);
     await playReaktor(host, guest);
     await runForTheHatch(host, guest);
+    if (!phoneDevices.has('relay')) {
+      skip('device-phone-relay', 'no relay emergency came in this run (v-relay.mjs measures it)');
+    }
     await captureEscape(host, guest);
     await captureEnd(host, watcher);
   } finally {
@@ -6969,8 +7233,11 @@ async function cutPinnedWire(cutter, holder, pinned) {
   );
 }
 
-/** The last station, a sync for the whole crew: all gather at it, open it and press together. */
-async function pressLastSync(players) {
+/**
+ * The last station, a sync for the whole crew: all gather at it, open it and press together;
+ * `opened` comes in between, with the panels up.
+ */
+async function pressLastSync(players, opened = async () => undefined) {
   const station = players[0].seen.view.map.stations.find((s) => s.status === 'armed');
   if (station === undefined) {
     throw new Error('no station is armed after the Kabelprüfung');
@@ -6983,6 +7250,7 @@ async function pressLastSync(players) {
     }
   }
   await sleep(400); // past the panel's fade-in
+  await opened();
   const solved = await pressTogether(players, station);
   await checkRadioVoice(players[0], solved.listening, `"${station.title}"`);
 }
@@ -8203,6 +8471,7 @@ async function run() {
   await sleep(700);
   await capture(guest, `game-${turned.name}.png`);
   await overflow(guest, `game @ ${turned.width}x${turned.height}, Ben's phone sideways`);
+  await capturePadLeft(guest);
   steady.push({ name: 'Ben sideways', page: guest, start: await layoutOf(guest), turn: turned });
   await guest.setViewportSize(SIZES[2]);
   await sleep(400);

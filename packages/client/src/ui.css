@@ -696,42 +696,70 @@ button.link:hover {
   touch-action: none;
 }
 
+/*
+ * The controls along the world's foot: the steering pad in the left corner,
+ * under the left thumb, the buttons in the right one, under the right thumb.
+ * The stretch between them is the world's: taps there reach the canvas. Each
+ * group is measured apart (world/insets.ts), and what the canvas draws keeps
+ * off both.
+ */
 .world-controls {
   position: absolute;
+  left: 14px;
   right: 14px;
   bottom: 16px;
   display: flex;
   align-items: flex-end;
+  justify-content: space-between;
   gap: 12px;
   opacity: 0.85;
+  pointer-events: none;
 }
 
-.world-dpad {
+.world-controls > * {
+  pointer-events: auto;
+}
+
+/* The right thumb's row, its far end in the corner. */
+.world-thumb {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-left: auto;
+}
+
+/*
+ * Eight ways round a still middle, each a cell of 48 px (Material's least target), one
+ * surface a finger slides over without lifting (world/touchPad.ts); the cell it holds lit.
+ */
+.world-pad {
   display: grid;
-  grid-template-areas: '. up .' 'left . right' '. down .';
-  grid-template-columns: repeat(3, 42px);
-  grid-template-rows: repeat(3, 42px);
-  gap: 4px;
-}
-
-.world-dpad-btn {
-  width: 42px;
-  height: 42px;
-  padding: 0;
-  border-radius: 10px;
+  grid-template-columns: repeat(3, 48px);
+  grid-template-rows: repeat(3, 48px);
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
   background: rgba(18, 27, 36, 0.8);
-  font-size: 18px;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
 }
 
-.world-dpad-btn--up { grid-area: up; }
-.world-dpad-btn--down { grid-area: down; }
-.world-dpad-btn--left { grid-area: left; }
-.world-dpad-btn--right { grid-area: right; }
+.world-pad-cell {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.world-pad-held {
+  background: rgba(15, 118, 110, 0.6);
+  color: var(--text);
+}
 
 .world-interact {
+  min-width: 52px;
   min-height: 52px;
   padding: 10px 16px;
   border-radius: 12px;
@@ -746,7 +774,7 @@ button.link:hover {
  * do the same job. Touch devices keep it.
  */
 @media (pointer: fine) {
-  .world-dpad,
+  .world-pad,
   .world-interact {
     display: none;
   }
@@ -961,6 +989,7 @@ button.link:hover {
 /* ── quick chat ─────────────────────────────────────────────────────────── */
 
 .world-chat-toggle {
+  min-width: 52px;
   min-height: 52px;
   padding: 10px 14px;
   border-radius: 12px;
@@ -1869,8 +1898,10 @@ button.link:hover {
   gap: 1px;
 }
 
+/* The HUD's smallest words: never under 12 px (docs/art-bible.md, „Schriftgrade"). */
 .edgework-label {
-  font-size: calc(9px * var(--text-scale));
+  font-size: calc(12px * var(--text-scale));
+  line-height: 1.1;
   letter-spacing: 0.5px;
   color: var(--muted);
 }
@@ -2204,7 +2235,7 @@ button.link:hover {
 
 .hud-idle {
   font-family: var(--mono);
-  font-size: calc(11px * var(--text-scale));
+  font-size: calc(12px * var(--text-scale));
   color: var(--muted);
 }
 
@@ -2328,10 +2359,12 @@ button.link:hover {
   white-space: nowrap;
 }
 
+/* 40 px high: 3 px above and below the 12 px heads and the serial under them. */
 .hud .edgework {
   height: 40px;
   flex-wrap: nowrap;
   align-items: center;
+  padding-block: 3px;
   overflow: hidden;
 }
 

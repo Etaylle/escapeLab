@@ -1,18 +1,15 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  generateEdgework,
-  moduleFor,
-  puzzleDefSchema,
-  type ConsoleId,
-  type PuzzleView,
-  type RackUnit,
-  type RelayView,
-  type ServerLogLine,
-  type ServerRow,
+import type {
+  ConsoleId,
+  PuzzleView,
+  RackUnit,
+  RelayView,
+  ServerLogLine,
+  ServerRow,
 } from '@escapelab/core';
 import type { Panel as PanelOf } from '../src/puzzles/index.js';
-import { NO_CLOCK } from './fixtures.js';
+import { NO_CLOCK, stationView } from './fixtures.js';
 
 vi.mock('../src/puzzles/sounds.js', async (importOriginal) => {
   const real = await importOriginal<Record<string, unknown>>();
@@ -46,15 +43,6 @@ type ViewOf<K extends Kind> = Extract<PuzzleView, { kind: K }>;
 
 const noop = (): void => undefined;
 
-/** A small deterministic generator, enough to set an instance up. */
-function lcg(seed: number): () => number {
-  let state = seed;
-  return () => {
-    state = (state * 1664525 + 1013904223) % 2 ** 32;
-    return state / 2 ** 32;
-  };
-}
-
 /**
  * The open puzzle of `kind` as player p1 sees it at console `seat` of its
  * station, with the def's `fields`, nobody backing p1 up.
@@ -64,26 +52,7 @@ function seen<K extends Kind>(
   fields: Record<string, unknown> = {},
   seat: ConsoleId = 'a',
 ): ViewOf<K> {
-  const def = puzzleDefSchema.parse({ type: kind, id: kind, title: 'Station', ...fields });
-  const station = moduleFor(def.type);
-  const rng = lcg(7);
-  const edgework = generateEdgework(rng);
-  const crew = ['p1', 'p2'];
-  const setup = {
-    edgework,
-    alarms: 0,
-    remainingSec: 600,
-    at: 0,
-    crew,
-    console: null,
-    atConsoles: { a: [], b: [] },
-    readers: [],
-  };
-  const state = station.init(def, rng, setup);
-  const viewer = { playerId: 'p1', operating: true, reading: false, console: seat };
-  const view = station.view(def, state, viewer, { edgework, alarms: 0, crew, operators: ['p1'] });
-  const common = { index: 0, total: 1, title: def.title, manual: null, console: seat };
-  return { ...view, ...common, backup: null } as ViewOf<K>;
+  return stationView({ type: kind, id: kind, title: 'Station', ...fields }, { seat }) as ViewOf<K>;
 }
 
 /** A change from `before` to `after` at an open device. */

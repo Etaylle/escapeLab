@@ -1,8 +1,10 @@
 /**
  * The canvas as the world draws on it, and what lies over it: the objective
- * bar along the top edge, the control cluster along the bottom one, the
- * minimap. The camera keeps the avatar clear of them, and the screen's own
- * text — edge arrows, room names — keeps off them. Pure; device pixels.
+ * bar along the top edge, the minimap, and the controls in the bottom corners
+ * — on a touch screen the steering pad under the left thumb and the buttons
+ * under the right one. The camera keeps the avatar clear of them, and the
+ * screen's own text — edge arrows, room names — keeps off them. Pure; device
+ * pixels.
  */
 
 /** A box on the canvas. */
@@ -13,18 +15,26 @@ export interface Box {
   bottom: number;
 }
 
-/** The canvas, and what lies over it; all in device pixels but `dpr`. */
+/** The canvas, and what lies over it; all in device pixels but `dpr` and `textScale`. */
 export interface Viewport {
   w: number;
   h: number;
   /** device pixels per CSS pixel */
   dpr: number;
+  /**
+   * how large the screen's own text stands against its normal size: the reader's text size
+   * (settings.ts TEXT_SCALE) — room names, the E prompt, captions, chat, the arrows' captions
+   */
+  textScale: number;
   /** how far the objective bar reaches down from the top edge */
   top: number;
-  /** how far the control cluster reaches up from the bottom edge */
-  bottom: number;
-  /** what else lies over the canvas: the minimap */
+  /** what else lies over the canvas: the minimap, the controls in the bottom corners */
   boxes: readonly Box[];
+}
+
+/** How far `boxes` reach up from the bottom edge of a canvas `height` high: 0 for none. */
+export function reachOf(boxes: readonly Box[], height: number): number {
+  return Math.max(0, ...boxes.map((box) => height - box.top));
 }
 
 /** Whether two boxes share any area; boxes that only touch do not. */
@@ -64,6 +74,19 @@ function within(target: number, lo: number, hi: number): number {
 
 /** How far above the spot it stands on the avatar and its name tag reach, in tiles. */
 const HEADROOM = 1;
+/** How far below that spot its feet reach, in tiles. */
+const FOOTROOM = 0.5;
+
+/**
+ * How far the avatar is lifted on a touch screen, device pixels: so far that
+ * its feet stand clear above the controls — they reach `reach` up from the
+ * bottom of a canvas `h` high under an objective bar `top` deep, at `scale`
+ * device pixels a tile — and no further; nothing where they reach no higher
+ * than the middle of the band below the bar leaves free.
+ */
+export function liftAbove(reach: number, h: number, top: number, scale: number): number {
+  return Math.max(0, reach + FOOTROOM * scale + top / 2 - h / 2);
+}
 
 /**
  * Where the camera looks — the world point drawn at the canvas's middle, in
@@ -92,12 +115,18 @@ export function clampCamera(
   };
 }
 
-/** The size room names are drawn at, CSS pixels: above any prop's label (art.ts: 12 at most). */
+/**
+ * The size room names are drawn at at the normal text size, CSS pixels: above any prop's label
+ * (art.ts: 12 at most); the reader's text size scales it (`Viewport.textScale`).
+ */
 export const ROOM_NAME_PX = 13;
 /** How far a room name's letters rise above and drop below its baseline, against its size. */
 const NAME_RISE = 0.8;
 const NAME_DROP = 0.3;
-/** Air a room name keeps from the canvas's sides and from anything else, CSS pixels. */
+/** The plate under a room name reaches this far past its letters, sideways and up and down. */
+const PLATE_SIDE = 0.5;
+const PLATE_END = 0.25;
+/** Air a room name's plate keeps from the canvas's sides and from anything else, CSS pixels. */
 const NAME_AIR = 6;
 
 /** A room's name on the canvas: its anchor, the baseline's middle, and how wide its text runs. */
@@ -108,28 +137,51 @@ export interface RoomName {
   width: number;
 }
 
+/** How large room names are drawn on `view`, device pixels: their size at its text size. */
+export function roomNamePx(view: Pick<Viewport, 'dpr' | 'textScale'>): number {
+  return ROOM_NAME_PX * view.textScale * view.dpr;
+}
+
+/**
+ * The dark plate a room name stands on, device pixels, its letters `size` high: signage that
+ * reads on lit floor as in the dark (overlays.ts draws it).
+ */
+export function namePlate(name: RoomName, size: number): Box {
+  const side = name.width / 2 + PLATE_SIDE * size;
+  return {
+    left: name.x - side,
+    top: name.y - (NAME_RISE + PLATE_END) * size,
+    right: name.x + side,
+    bottom: name.y + (NAME_DROP + PLATE_END) * size,
+  };
+}
+
+/** `box` grown by `by` all round. */
+function grown(box: Box, by: number): Box {
+  return { left: box.left - by, top: box.top - by, right: box.right + by, bottom: box.bottom + by };
+}
+
 /**
  * The room names worth drawing, and where. A name whose anchor lies off the
  * canvas is left out — the edge arrows point that way — and one near a side
- * is nudged in to be read whole. A name is dropped where it would lie under
- * the overlays at the top or the bottom edge, over a box such as the minimap,
- * or over a name placed before it.
+ * is nudged in to be read whole. A name is dropped where its plate would lie
+ * under the objective bar or past the bottom edge, over a box such as the
+ * minimap or the controls, or over a name placed before it.
  */
 export function placeRoomNames(names: readonly RoomName[], view: Viewport): RoomName[] {
   const { w, h, dpr } = view;
   const air = NAME_AIR * dpr;
-  const rise = ROOM_NAME_PX * NAME_RISE * dpr + air;
-  const drop = ROOM_NAME_PX * NAME_DROP * dpr + air;
+  const size = roomNamePx(view);
   const taken: Box[] = [...view.boxes];
   const placed: RoomName[] = [];
   for (const name of names) {
     if (name.x < 0 || name.x > w || name.y < 0 || name.y > h) {
       continue;
     }
-    const half = name.width / 2 + air;
+    const half = name.width / 2 + PLATE_SIDE * size + air;
     const x = Math.min(w - half, Math.max(half, name.x));
-    const box = { left: x - half, top: name.y - rise, right: x + half, bottom: name.y + drop };
-    const covered = box.top < view.top || box.bottom > h - view.bottom;
+    const box = grown(namePlate({ ...name, x }, size), air);
+    const covered = box.top < view.top || box.bottom > h;
     if (covered || taken.some((other) => overlaps(box, other))) {
       continue;
     }

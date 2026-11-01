@@ -10,7 +10,10 @@ import {
   drawPlate,
   drawSign,
   drawStation,
+  LABEL_BELOW,
   plateCaption,
+  textBox,
+  worldText,
 } from '../src/world/art.js';
 import { doorOpenness, type DoorMotion } from '../src/world/doors.js';
 import { drawCarryable, drawDropZone, drawSabotagePanel } from '../src/world/hazards.js';
@@ -148,6 +151,56 @@ describe('objects — the lab’s things, in tile space', () => {
     const locker = { ...look, kind: 'locker' as const, active: false, opened: false };
     expect(strip(drawnAt(log, 3.5, 1.5))).toEqual(recording((c) => drawManualObject(c, look)));
     expect(strip(drawnAt(log, 8.5, 4.5))).toEqual(recording((c) => drawManualObject(c, locker)));
+  });
+
+  describe('labels on a phone', () => {
+    // A phone held sideways: 30.7 CSS px a tile, drawn at 2 device px each — a label 10 px
+    // high, „HALTEN · TÜR" under the Flur's plate and „KLEMMBRETT" under the clipboard two
+    // tiles on run into each other.
+    const text = worldText(61.4, 2);
+    const holding = plate({ id: 'flur', x: 6, y: 4 });
+    const board = manual({ id: 'klemmbrett', kind: 'clipboard', x: 8, y: 4, label: 'KLEMMBRETT' });
+    const armed = { puzzleId: 'kette', x: 1, y: 1, title: 'Kette', status: 'armed' as const };
+
+    /** Where each label was drawn, its top under its thing, tiles: from the text's y. */
+    function labelTops(log: ReturnType<typeof drawn>): Map<string, number> {
+      const tops = new Map<string, number>();
+      for (const [at, words] of [
+        [[6.5, 4.5], 'HALTEN · TÜR'],
+        [[8.5, 4.5], 'KLEMMBRETT'],
+      ] as const) {
+        const call = callsOf(drawnAt(log, at[0], at[1]), 'fillText').find((a) => a[0] === words);
+        if (call !== undefined) {
+          // The world's text is drawn 32 times larger inside a matching down-scale (art.ts).
+          tops.set(words, Number(call[2]) / 32);
+        }
+      }
+      return tops;
+    }
+
+    it('moves the label that matters less a line down, clear of the other', () => {
+      const map = lab({ plates: [holding], manuals: [board] });
+      const tops = labelTops(drawn(frameWith({ map, text })));
+      expect(plateCaption(holding)).toBe('HALTEN · TÜR');
+      expect(tops.get('HALTEN · TÜR')).toBe(LABEL_BELOW);
+      const { height } = textBox(fakeCanvas().ctx, 'KLEMMBRETT', text.label);
+      expect(tops.get('KLEMMBRETT')).toBeGreaterThan(LABEL_BELOW + height);
+    });
+
+    it('lets the armed station’s source keep its place, the plate’s label moving instead', () => {
+      const rules = { ...board, puzzleIds: ['kette'] };
+      const map = lab({ plates: [holding], manuals: [rules], stations: [armed] });
+      const tops = labelTops(drawn(frameWith({ map, text })));
+      expect(tops.get('KLEMMBRETT')).toBe(LABEL_BELOW);
+      expect(tops.get('HALTEN · TÜR')).toBeGreaterThan(LABEL_BELOW);
+    });
+
+    it('leaves both in their places where they lie apart', () => {
+      const far = { ...board, x: 1 };
+      const map = lab({ plates: [holding], manuals: [far] });
+      const tops = labelTops(drawn(frameWith({ map, text })));
+      expect(tops.get('HALTEN · TÜR')).toBe(LABEL_BELOW);
+    });
   });
 
   it('pins a found note to its wall’s face, or lays it on the floor, unread ones calling', () => {

@@ -21,6 +21,12 @@ import './rack.css';
 /** A service's box, in the diagram's units. */
 export const BOX = { w: 44, h: 22 } as const;
 
+/** A box's power LED: its middle from the box's left edge, and its radius. */
+const LED = { x: 7, r: 2.6 } as const;
+
+/** Where a service's name stands: in the middle of the room right of its LED. */
+const NAME_X = (LED.x + LED.r + BOX.w) / 2;
+
 /** A box where it is drawn, and an arrow from the right edge of one to the left of another. */
 export interface Laid<T extends string> {
   boxes: { node: T; x: number; y: number }[];
@@ -90,12 +96,12 @@ export function ServicesGraph({ leds }: { leds: Readonly<Partial<Record<Service,
             <rect x={x} y={y} width={BOX.w} height={BOX.h} rx={3} strokeWidth={1.4} />
             <circle
               className={led === null ? 'services-led' : `services-led services-led--${led}`}
-              cx={x + 7}
+              cx={x + LED.x}
               cy={y + BOX.h / 2}
-              r={2.6}
+              r={LED.r}
             />
             <text
-              x={x + 26}
+              x={x + NAME_X}
               y={y + 14.5}
               fontSize={8.5}
               textAnchor="middle"

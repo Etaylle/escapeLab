@@ -47,20 +47,11 @@
 /* ── putting down what you carry, on a touch screen ───────────────────── */
 
 /*
- * The action button, and stacked over it while your hands are full a round
- * one that puts the load down (Q on a keyboard). The column keeps one width
- * either way, so the pad beside it never shifts under a thumb, and the stack
- * stays lower than the pad, so the cluster's measured reach — which the edge
- * arrows, room names, minimap and tips keep clear of — does not change.
+ * While your hands are full a round button puts the load down (Q on a
+ * keyboard), at the far end of the right thumb's row: it moves no other
+ * button as it comes and goes, and the row keeps its height, so the reach the
+ * edge arrows, room names, minimap and tips keep clear of does not change.
  */
-.world-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  min-width: 52px;
-}
-
 .world-drop {
   display: none;
   width: 52px;
@@ -80,18 +71,11 @@
   }
 }
 
-/* With a mouse and keys the column holds nothing to show. */
-@media (pointer: fine) {
-  .world-actions {
-    display: none;
-  }
-}
-
 /* ── the sprint, on a touch screen ───────────────────────────────────────── */
 
 /*
- * „Sprint" beside the pad, held to run as Shift does on a keyboard: no taller than the
- * action column, so the cluster's measured reach does not change.
+ * „Sprint" beside the action, held to run as Shift does on a keyboard: as tall as the row's
+ * other buttons, so the row's measured reach does not change.
  */
 .world-sprint {
   display: none;
@@ -107,7 +91,7 @@
     border-radius: 12px;
     background: rgba(26, 38, 48, 0.8);
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.5px;
     touch-action: none;

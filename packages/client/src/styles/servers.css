@@ -44,7 +44,7 @@
     0 6px 14px rgba(0, 0, 0, 0.6);
   color: var(--phosphor);
   font-family: var(--mono);
-  font-size: calc(13px * var(--text-scale));
+  font-size: calc(var(--type-body) * var(--text-scale));
   line-height: 1.35;
   text-shadow: 0 0 5px var(--phosphor-glow);
   overflow: hidden;
@@ -84,7 +84,7 @@
   padding-bottom: 3px;
   border-bottom: 1px solid var(--phosphor-faint);
   color: var(--phosphor-dim);
-  font-size: calc(11px * var(--text-scale));
+  font-size: calc(var(--type-label) * var(--text-scale));
   letter-spacing: 1px;
 }
 
@@ -133,7 +133,7 @@
   margin: 0;
   padding: 6px 0 0;
   border-top: 1px dashed var(--phosphor-faint);
-  font-size: calc(12px * var(--text-scale));
+  font-size: calc(var(--type-body) * var(--text-scale));
   list-style: none;
 }
 
@@ -225,12 +225,17 @@
   min-width: 0;
 }
 
-/* The field takes the keys; what it holds shows in the echo beneath it. */
+/*
+ * The field takes the keys; what it holds shows in the echo beneath it. It is a target high,
+ * reaching over the dashed line and into the glass's foot, so the prompt stays one line.
+ */
 .servers-input {
   position: relative;
   z-index: 1;
   display: block;
   width: 100%;
+  min-height: var(--target);
+  margin-block: calc((1.35em - var(--target)) / 2);
   padding: 0;
   border: 0;
   outline: 0;
@@ -254,6 +259,8 @@
 .servers-echo {
   position: absolute;
   inset: 0;
+  display: flex;
+  align-items: center;
   white-space: pre;
   overflow: hidden;
   pointer-events: none;
@@ -309,7 +316,7 @@
 /* A keycap of dark plastic, its legend printed light; it goes down 2 px under the finger. */
 .servers-key {
   min-width: 52px;
-  min-height: 34px;
+  min-height: var(--target);
   padding: 4px 10px;
   border: 0;
   border-radius: 6px;
@@ -321,7 +328,7 @@
     0 3px 4px rgba(0, 0, 0, 0.5);
   color: #cfe9d6;
   font-family: var(--mono);
-  font-size: calc(13px * var(--text-scale));
+  font-size: calc(var(--type-label) * var(--text-scale));
   letter-spacing: 0.5px;
   cursor: pointer;
 }
@@ -371,6 +378,32 @@
 
 /* ── the rack ───────────────────────────────────────────────────────── */
 
+/*
+ * The rack and its Netzplan side by side, the TERMINAL lamp under the plan: the device
+ * stands whole in a laptop's 720 px of height, where one under the other it ran over.
+ */
+.servers--rack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.95fr);
+  grid-template-areas:
+    'cabinet diagram'
+    'cabinet bezel';
+  align-items: start;
+  gap: 10px 12px;
+}
+
+.servers--rack > .servers-cabinet {
+  grid-area: cabinet;
+}
+
+.servers--rack > .rack-diagram {
+  grid-area: diagram;
+}
+
+.servers--rack > .servers-bezel {
+  grid-area: bezel;
+}
+
 /* The cabinet: dark steel, its units between two rails of square holes. */
 .servers-cabinet {
   padding: 10px 8px;
@@ -416,7 +449,7 @@
   grid-template-columns: 64px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
-  min-height: 42px;
+  min-height: calc(var(--target) + 8px);
   padding: 4px 10px;
   border-radius: 3px;
   background:
@@ -438,7 +471,7 @@
     0 1px 1px rgba(0, 0, 0, 0.5);
   color: #1d252d;
   font-family: var(--mono);
-  font-size: calc(12px * var(--text-scale));
+  font-size: calc(var(--type-label) * var(--text-scale));
   font-weight: 700;
   letter-spacing: 1px;
   text-align: center;
@@ -457,11 +490,11 @@
 }
 
 /* The power switch: a dark plate with a steel nut, the bat pointing up at I or down at O; it
-   flips over about the nut in 120 ms. */
+   flips over about the nut in 120 ms. A target square: 36 px at a desk, 44 under a finger. */
 .servers-switch {
   position: relative;
-  width: 36px;
-  height: 34px;
+  width: var(--target);
+  height: var(--target);
   padding: 0;
   border: 0;
   border-radius: 6px;
@@ -507,15 +540,15 @@
 
 .servers-marks {
   position: absolute;
-  top: 3px;
+  top: 2px;
   right: 4px;
-  bottom: 3px;
+  bottom: 2px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   color: var(--engrave);
   font-family: var(--mono);
-  font-size: calc(8px * var(--text-scale));
+  font-size: calc(var(--type-engraving) * var(--text-scale));
   font-weight: 700;
   line-height: 1;
 }
@@ -565,14 +598,14 @@
   margin: 0;
   color: var(--engrave);
   font-family: var(--mono);
-  font-size: calc(11px * var(--text-scale));
+  font-size: calc(var(--type-engraving) * var(--text-scale));
   letter-spacing: 2px;
   text-transform: uppercase;
 }
 
 .servers--watched .servers-crt {
   padding: 10px 12px;
-  font-size: calc(12px * var(--text-scale));
+  font-size: calc(var(--type-body) * var(--text-scale));
 }
 
 .servers--watched .servers-unit {
@@ -609,18 +642,89 @@
 @media (max-width: 560px) {
   .servers-crt {
     padding: 10px;
-    font-size: calc(12px * var(--text-scale));
   }
 
   .servers-key {
     min-width: 44px;
     padding: 4px 7px;
-    font-size: calc(12px * var(--text-scale));
   }
 
   .servers-unit {
     grid-template-columns: 52px minmax(0, 1fr) auto auto;
     gap: 8px;
+  }
+
+  .servers--rack {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'cabinet'
+      'diagram'
+      'bezel';
+  }
+}
+
+/*
+ * A phone held sideways: the terminal's keys in a column beside the screen, every one in
+ * reach, the log scrolling in its own box under the table, kept at its newest line
+ * (ServersPanel.tsx), the field a fingertip high on its own; the rack's units a fingertip high
+ * and close, the Netzplan beside them (devices.css lays out the frame).
+ */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .servers--terminal {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 8px 10px;
+  }
+
+  .servers--terminal > .servers-bezel {
+    flex-direction: column;
+    align-items: stretch;
+    width: 12.5rem;
+  }
+
+  .servers-keyboard {
+    flex: none;
+  }
+
+  .servers-crt {
+    gap: 6px;
+    padding: 8px 10px;
+    line-height: 1.25;
+  }
+
+  .servers-table th,
+  .servers-table td {
+    padding-block: 0;
+  }
+
+  /* Three lines high: at its newest line the space over the first has scrolled away. */
+  .servers-log {
+    min-height: 0;
+    max-height: calc(3 * 1.25em);
+    overflow-y: auto;
+  }
+
+  .servers-input {
+    margin-block: 0;
+  }
+
+  .servers-cabinet {
+    padding: 4px 6px;
+  }
+
+  .servers-rack {
+    gap: 2px;
+  }
+
+  .servers-unit {
+    gap: 8px;
+    min-height: var(--target);
+    padding: 0 8px;
+  }
+
+  .rack-diagram {
+    padding: 6px 8px 4px;
   }
 }
 
