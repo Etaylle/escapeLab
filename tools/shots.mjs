@@ -106,10 +106,11 @@
  * the radio panel's lamp and dial, the spare fuse carried from the Archiv to
  * the reactor and the reactor pressed together. Every device the guest's
  * phone opens on the way — the lever, the meter, console A of the
- * Signalkette, the rack, the reactor and the relay console — is also shot
- * with the phone held sideways (device-phone-<station>.png): the device
- * whole in the window, nothing of it scrolling, every control in view and
- * 44 px at least each way, or the run fails. From the Signalkette on the
+ * Signalkette, the rack, the reactor and the relay console where an
+ * emergency comes — is also shot with the phone held sideways
+ * (device-phone-<station>.png): the device whole in the window, nothing of
+ * it scrolling, every control in view and 44 px at least each way, or the
+ * run fails. From the Signalkette on the
  * drones are awake: every walk goes from haven to haven past them — the
  * tiles no drone ever looks at — as a crew times its run past a patrol:
  * their flights foretold from the positions stream as the server steps them
@@ -4618,8 +4619,9 @@ function deviceReach() {
 function stationSlug(player) {
   const { map, puzzle } = player.seen.view;
   const armed = map.stations.find((station) => station.status === 'armed');
-  const seat = puzzle?.console ?? null;
-  return `${armed?.puzzleId ?? 'station'}${seat === null ? '' : `-${seat}`}`;
+  const id = armed?.puzzleId ?? 'station';
+  const two = map.stations.some((station) => station.puzzleId === id && station.console === 'b');
+  return two && puzzle?.console != null ? `${id}-${puzzle.console}` : id;
 }
 
 /**
@@ -6886,6 +6888,9 @@ async function playBlackoutToTheEnd(host, guest, watcher) {
     await playFrequenz(host, guest);
     await playReaktor(host, guest);
     await runForTheHatch(host, guest);
+    if (!phoneDevices.has('relay')) {
+      skip('device-phone-relay', 'no relay emergency came in this run (v-relay.mjs measures it)');
+    }
     await captureEscape(host, guest);
     await captureEnd(host, watcher);
   } finally {
