@@ -25,8 +25,9 @@ jobs:
   walkthrough:
     needs: check
     runs-on: ubuntu-latest
-    # Setup takes about 4 minutes; each run about 1 locally, 8 at most here.
-    timeout-minutes: 25
+    # Setup takes 4 to 11 minutes by runner; Blackout runs 7 minutes locally and up to 12
+    # on a slow runner since the opening and the gameplay captures, Systemcheck up to 8.
+    timeout-minutes: 40
     defaults:
       run:
         # Named, bash runs with -o pipefail: a walkthrough piped through tee
@@ -56,14 +57,14 @@ jobs:
           cat server.log
           exit 1
       - name: Walkthrough (Blackout)
-        timeout-minutes: 8
+        timeout-minutes: 14
         run: >-
           node tools/shots.mjs http://localhost:3001 shots-blackout 2>&1
           | tee shots-blackout.log
       - name: Walkthrough (Systemcheck)
         # Runs after a failed Blackout run too: both sets of screenshots are wanted.
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
-        timeout-minutes: 8
+        timeout-minutes: 10
         env:
           SHOTS_MISSION: Systemcheck
         run: >-
