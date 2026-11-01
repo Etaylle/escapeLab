@@ -42,21 +42,23 @@ interface Session {
 
 /**
  * Serves every connection of `server`: each message the socket sends is carried out in the
- * room it joined, resumed or watches, a refusal answered with an `error` — and once the
- * socket closes, for whatever reason, the room lets go of it.
+ * room it joined, resumed or watches, a refusal answered with an `error` naming the kind of
+ * message it refuses — and once the socket closes, for whatever reason, the room lets go of it.
  */
 export function serveSockets(server: SocketServer, lab: Lab): void {
   server.on('connection', (socket) => {
     let session: Session | null = null;
 
     socket.on('message', (raw) => {
+      let of: ClientMessage['kind'] | null = null;
       try {
         const msg = parseClientMessage(String(raw));
+        of = msg.kind;
         session = handleMessage(lab, socket, session, msg);
       } catch (err) {
         const message =
           err instanceof GameError || err instanceof Error ? err.message : 'Unbekannter Fehler.';
-        send(socket, { kind: 'error', message });
+        send(socket, of === null ? { kind: 'error', message } : { kind: 'error', message, of });
       }
     });
 
@@ -70,11 +72,37 @@ function send(socket: PlayerSocket, msg: ServerMessage): void {
   socket.send(JSON.stringify(msg));
 }
 
+/** What a socket may send before it is in a room: to open, join, watch or resume one, or ask. */
+type AtTheDoor = Extract<
+  ClientMessage,
+  { kind: 'create-room' | 'join-room' | 'list-rooms' | 'clock' | 'spectate' | 'resume' }
+>;
+
 function handleMessage(
   lab: Lab,
   socket: PlayerSocket,
   session: Session | null,
   msg: ClientMessage,
+): Session | null {
+  switch (msg.kind) {
+    case 'create-room':
+    case 'join-room':
+    case 'list-rooms':
+    case 'clock':
+    case 'spectate':
+    case 'resume':
+      return atTheDoor(lab, socket, session, msg);
+    default:
+      return inRoom(lab, socket, requireSession(session), msg);
+  }
+}
+
+/** A message a socket may send in no room: the session it opens, or the one it had. */
+function atTheDoor(
+  lab: Lab,
+  socket: PlayerSocket,
+  session: Session | null,
+  msg: AtTheDoor,
 ): Session | null {
   switch (msg.kind) {
     case 'create-room':
@@ -90,6 +118,10 @@ function handleMessage(
     case 'list-rooms':
       send(socket, { kind: 'rooms', rooms: lab.manager.list() });
       return session;
+    case 'clock':
+      // The page's own time comes back as it was sent: only the round trip is the page's.
+      send(socket, { kind: 'clock', sent: msg.sent, at: Date.now() });
+      return session;
     case 'spectate': {
       const room = lab.manager.get(msg.code);
       // An audience connection goes by its spectator id: voice signals reach it by that.
@@ -103,8 +135,18 @@ function handleMessage(
       const detach = room.attach(msg.playerId, (m) => send(socket, m));
       return { room, playerId: msg.playerId, detach };
     }
+  }
+}
+
+/** A message of a player in the room of session `s`, carried out there. */
+function inRoom(
+  lab: Lab,
+  socket: PlayerSocket,
+  s: Session,
+  msg: Exclude<ClientMessage, AtTheDoor>,
+): Session {
+  switch (msg.kind) {
     case 'switch-mission': {
-      const s = requireSession(session);
       const difficulty = s.room.difficulty;
       s.room.switchMission(
         s.playerId,
@@ -113,8 +155,7 @@ function handleMessage(
       );
       return s;
     }
-    case 'select-difficulty': {
-      const s = requireSession(session);
+    case 'select-difficulty':
       // Rescale from the pristine mission, never from an already scaled one.
       s.room.switchMission(
         s.playerId,
@@ -122,37 +163,29 @@ function handleMessage(
         msg.difficulty,
       );
       return s;
-    }
-    case 'ping': {
-      const s = requireSession(session);
+    case 'ping':
       s.room.ping(s.playerId, msg.x, msg.y);
       return s;
-    }
-    case 'chat': {
-      const s = requireSession(session);
+    case 'chat':
       s.room.chat(s.playerId, msg.phrase);
       return s;
-    }
-    case 'rtc': {
-      const s = requireSession(session);
+    case 'rtc':
       s.room.relaySignal(s.playerId, msg.to, msg.signal);
       return s;
-    }
+    case 'interact':
+      // The press is taken where the player stood as they pressed; the views it changed go
+      // out first, then the word that E was taken.
+      s.room.interact(s.playerId, { x: msg.x, y: msg.y }, msg.t);
+      send(socket, { kind: 'interacted' });
+      return s;
     case 'pos': {
-      const s = requireSession(session);
-      s.room.updatePosition(s.playerId, msg.run, {
-        x: msg.x,
-        y: msg.y,
-        facing: msg.facing,
-        moving: msg.moving,
-      });
+      const { x, y, facing, moving } = msg;
+      s.room.updatePosition(s.playerId, msg.run, { x, y, facing, moving }, msg.t);
       return s;
     }
-    case 'set-ready': {
-      const s = requireSession(session);
+    case 'set-ready':
       s.room.setReady(s.playerId, msg.ready, nextMission(lab, s.room, msg.missionId));
       return s;
-    }
     case 'select-color':
     case 'set-daily':
     case 'start-mission':
@@ -161,14 +194,11 @@ function handleMessage(
     case 'request-hint':
     case 'open-source':
     case 'read-note':
-    case 'interact':
     case 'drop-item':
     case 'rematch':
-    case 'back-to-lobby': {
-      const s = requireSession(session);
+    case 'back-to-lobby':
       s.room.act(s.playerId, msg);
       return s;
-    }
   }
 }
 

@@ -2,6 +2,7 @@ import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { moduleFor, type ConsoleId, type PuzzleView } from '@escapelab/core';
 import { useGlyph } from '../input/glyphs.js';
 import { NotepadContext } from '../noting.js';
+import type { Refusal } from '../ws.js';
 import { ALARM_NOTICE_MS, type AlarmNotice } from '../world/alarm.js';
 import { consoleName } from '../world/consoles.js';
 import {
@@ -47,8 +48,8 @@ export interface DeviceRun {
   alarms: number;
   /** stations solved so far (`currentPuzzleIndex`): a device further up the list is done */
   solved: number;
-  /** what the server has refused of this player's inputs so far (ws.ts); 0 for the audience */
-  refusals: number;
+  /** the server's latest refusal of this player's messages (ws.ts); null for the audience */
+  refusal: Refusal | null;
   crew: DeviceCrew;
   /** what the run's latest alarm says (world/alarm.ts); null before the first */
   alarm: AlarmNotice | null;
@@ -79,6 +80,11 @@ export interface DeviceProps {
    * cause and cost in the head — the banner over the world would lie half under the device
    */
   notice?: AlarmNotice | null;
+  /**
+   * a press the server refused while it was open, as long as it is fresh (`useFreshRefusal`):
+   * the server's words in the head, where the player looks
+   */
+  refused?: Refusal | null;
   /**
    * the way back from the device — „[Esc] Zurücktreten" in its chassis' foot, a tab on a
    * touch screen; none by default, as for the audience, which stands at no console
@@ -132,6 +138,15 @@ function AlarmDisplay({ notice }: { notice: AlarmNotice }) {
   );
 }
 
+/** A press the server refused, on the head's amber display: its words, as the server said them. */
+function RefusalDisplay({ refusal }: { refusal: Refusal }) {
+  return (
+    <div className="device-refusal" role="alert">
+      {refusal.message}
+    </div>
+  );
+}
+
 /**
  * The way back from a device, on its chassis: „[Esc] Zurücktreten" engraved in its foot where
  * there are keys, a tab under its edge on a touch screen (styles/putdown.css shows one of
@@ -171,6 +186,7 @@ function StepBack({ onStepBack }: { onStepBack: () => void }) {
 export function Device(props: DeviceProps) {
   const { kind, paragraph, title, tag, leds, alarms, solved, press, children } = props;
   const notice = props.notice ?? null;
+  const refused = props.refused ?? null;
   const onStepBack = props.onStepBack ?? null;
   return (
     <div className={deviceClass(kind, alarms, solved)}>
@@ -195,6 +211,9 @@ export function Device(props: DeviceProps) {
           </ul>
         )}
         {notice !== null && <AlarmDisplay key={notice.seq} notice={notice} />}
+        {notice === null && refused !== null && (
+          <RefusalDisplay key={refused.seq} refusal={refused} />
+        )}
       </div>
       <div className="device-face" inert={solved} {...(press ?? {})}>
         {children}
@@ -309,7 +328,7 @@ export function useDeviceFeel(
   const [alarmsAtOpen] = useState(run.alarms);
   const change = useChange(puzzle, run.alarms);
   const { handlers, blame } = usePressFeel(operating && !solved);
-  useRefusalBlame(run.refusals, blame);
+  useRefusalBlame(run.refusal?.seq ?? 0, blame);
   useEffect(() => {
     if (!operating) {
       return undefined;
@@ -351,6 +370,33 @@ export function useFreshAlarm(alarm: AlarmNotice | null, sinceOpen: number): Ala
     return () => clearTimeout(timer);
   }, [seq]);
   return seq === null || stale === seq ? null : alarm;
+}
+
+/**
+ * Whether `refusal` is one for a device's head: of a press at a device, and newer than the
+ * refusals there were as it opened (`openedAt`, their count then).
+ */
+export function refusedHere(refusal: Refusal | null, openedAt: number): boolean {
+  return refusal !== null && refusal.of === 'puzzle-input' && refusal.seq > openedAt;
+}
+
+/**
+ * The server's latest refusal (`refusal`) for the device's head while it is fresh: a refusal
+ * of a press at a device that came in while it was open, for ALARM_NOTICE_MS after it did;
+ * null otherwise.
+ */
+export function useFreshRefusal(refusal: Refusal | null): Refusal | null {
+  const [openedAt] = useState(() => refusal?.seq ?? 0);
+  const seq = refusedHere(refusal, openedAt) ? (refusal?.seq ?? null) : null;
+  const [stale, setStale] = useState<number | null>(null);
+  useEffect(() => {
+    if (seq === null) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setStale(seq), ALARM_NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [seq]);
+  return seq === null || stale === seq ? null : refusal;
 }
 
 /**

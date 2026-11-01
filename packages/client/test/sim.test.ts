@@ -46,6 +46,190 @@ describe('walk — furniture stands in the way like a wall', () => {
   });
 });
 
+/** A corridor north to south with a door at (2,3), shut: the plate it waits for let go. */
+const DOORWAY = mapWith({
+  width: 5,
+  height: 7,
+  tiles: ['#####', '#...#', '#...#', '##.##', '#...#', '#...#', '#####'],
+  doors: [{ id: 'tuer', x: 2, y: 3, open: false }],
+});
+
+/**
+ * An avatar at `y` on the corridor's middle column, the server having it at `kept` by its
+ * positions, the page having last sent `sent`, walking `move` for half a second: where it ends.
+ */
+function fromDoor(y: number, kept: number, move: Held, sent = kept): number {
+  const sim = newSim(0);
+  Object.assign(sim.self, { x: 2.5, y });
+  sim.streamed = [{ x: 2.5, y: sent, at: 0 }];
+  sim.serverSpot = { x: 2.5, y: kept };
+  sim.keys.add(move);
+  for (let i = 0; i < 30; i++) {
+    walk(sim, DOORWAY, 1 / 60, false);
+  }
+  return sim.self.y;
+}
+
+describe('walk — a door shut on a walker', () => {
+  it('lets out either way a walker the server had in the doorway as it shut', () => {
+    expect(fromDoor(3.4, 3.35, 'down')).toBeGreaterThan(4.5);
+    expect(fromDoor(3.4, 3.35, 'up')).toBeLessThan(2.5);
+  });
+
+  it('takes one the server still had before the door back that way, never through', () => {
+    expect(fromDoor(3.2, 2.9, 'down')).toBeLessThan(4);
+    expect(fromDoor(3.2, 2.9, 'up')).toBeLessThan(2.5);
+  });
+
+  it('takes one whose step in the server refused back, though the page sent it in', () => {
+    // the door shut on the server before the step into it came: it kept the walker before it
+    expect(fromDoor(3.4, 2.9, 'down', 3.4)).toBeLessThan(4);
+    expect(fromDoor(3.4, 2.9, 'up', 3.4)).toBeLessThan(2.5);
+  });
+
+  it('keeps where the server has the avatar by its positions of this run, none of another', () => {
+    const sim = newSim(0);
+    const kept = { x: 2.5, y: 2.9, facing: 0, moving: false, t: null, rt: 0 };
+    followServer(sim, { run: 5, players: { p1: kept } }, DOORWAY, 'p1', 5);
+    expect(sim.serverSpot).toEqual({ x: 2.5, y: 2.9 });
+    followServer(sim, { run: 4, players: { p1: kept } }, DOORWAY, 'p1', 5);
+    expect(sim.serverSpot).toBeNull();
+  });
+
+  it('lets a body the door shut on from outside step back, its centre never in', () => {
+    expect(fromDoor(2.85, 2.85, 'up')).toBeLessThan(2.5);
+    expect(fromDoor(2.85, 2.85, 'down')).toBeLessThan(3);
+  });
+
+  it('stops a walker coming up to it, the body short of the doorway', () => {
+    const y = fromDoor(1.5, 1.5, 'down');
+    expect(y).toBeLessThanOrEqual(3 - 0.28);
+    expect(y).toBeGreaterThan(3 - 0.28 - 0.08);
+  });
+});
+
+/** A room over a corridor, joined by a one-tile opening at (4,3). */
+const OPENING = mapWith({
+  width: 9,
+  height: 7,
+  tiles: [
+    '#########',
+    '#.......#',
+    '#.......#',
+    '####.####',
+    '#.......#',
+    '#.......#',
+    '#########',
+  ],
+});
+
+/** Walking `held` for `frames` frames from (x, y): where the avatar ends, and its sim. */
+function walkedFrom(
+  map: typeof OPENING,
+  held: Held[],
+  [x, y]: readonly [number, number],
+  frames = 40,
+) {
+  const sim = newSim(0);
+  Object.assign(sim.self, { x, y });
+  for (const move of held) {
+    sim.keys.add(move);
+  }
+  const sounds: (string | null)[] = [];
+  for (let i = 0; i < frames; i++) {
+    sounds.push(walk(sim, map, 1 / 60, false));
+  }
+  return { at: { x: sim.self.x, y: sim.self.y }, sim, sounds };
+}
+
+describe('walk — a body caught on the edge of an opening is nudged into it', () => {
+  it('passes a one-tile opening up to 0.3 tiles of its body over the edge, either side', () => {
+    for (const off of [0, 0.22, -0.22, 0.3, -0.3, 0.45, -0.45, 0.51, -0.51]) {
+      const { at } = walkedFrom(OPENING, ['up'], [4.5 + off, 4.6]);
+      expect(at.y, `offset ${off}`).toBeLessThan(2.5);
+      // through the opening, nudged across no further than its body overlapped the edge
+      expect(Math.abs(at.x - 4.5), `offset ${off}`).toBeLessThanOrEqual(0.22 + 1e-9);
+      const nudged = Math.abs(at.x - (4.5 + off));
+      const overlap = Math.max(0, Math.abs(off) - 0.22);
+      expect(nudged, `offset ${off}`).toBeLessThanOrEqual(overlap + 0.011);
+    }
+  });
+
+  it('stops dead against the wall where more than 0.3 tiles of the body overlaps it', () => {
+    for (const off of [0.6, -0.6]) {
+      const { at } = walkedFrom(OPENING, ['up'], [4.5 + off, 4.6]);
+      expect(at.y).toBeGreaterThan(3);
+      expect(at.x).toBeCloseTo(4.5 + off, 9);
+    }
+  });
+
+  it('never nudges against the way the player leans: up and right slides on along the wall', () => {
+    const { at } = walkedFrom(OPENING, ['up', 'right'], [4.9, 4.6], 20);
+    expect(at.y).toBeGreaterThan(3);
+    expect(at.x).toBeGreaterThan(4.9);
+  });
+
+  it('still funnels a slant into the opening', () => {
+    const { at } = walkedFrom(OPENING, ['up', 'left'], [5.2, 4.6]);
+    expect(at.y).toBeLessThan(3);
+  });
+});
+
+describe('walk — against a wall', () => {
+  it('stops the steps and the legs, and bumps once a push', () => {
+    const { sim, sounds } = walkedFrom(OPENING, ['up'], [2.5, 4.6], 120);
+    expect(sounds.filter((sound) => sound === 'bump')).toHaveLength(1);
+    const steps = sim.footfalls;
+    const legs = sim.walkPhase;
+    for (let i = 0; i < 120; i++) {
+      walk(sim, OPENING, 1 / 60, false);
+    }
+    expect(sim.footfalls).toBe(steps);
+    expect(sim.walkPhase).toBe(legs);
+    expect(sim.bumps).toBe(1);
+    // let go and push again: another bump
+    sim.keys.clear();
+    walk(sim, OPENING, 1 / 60, false);
+    sim.keys.add('up');
+    expect(walk(sim, OPENING, 1 / 60, false)).toBe('bump');
+    expect(sim.bumps).toBe(2);
+  });
+
+  it('keeps the steps to the ground covered while sliding along it', () => {
+    const { sim, sounds } = walkedFrom(OPENING, ['up', 'right'], [1.5, 4.3], 60);
+    expect(sounds).not.toContain('bump');
+    expect(sim.footfalls).toBeGreaterThan(0);
+  });
+});
+
+describe('walk — walking means covering ground', () => {
+  it('walks while it covers ground and stands once a wall holds it, the key still down', () => {
+    const map = mapWith({ width: 10, height: 6, tiles: TILES });
+    const sim = newSim(0);
+    Object.assign(sim.self, { x: 7.5, y: 2.5 });
+    sim.keys.add('right');
+    walk(sim, map, 1 / 60, false);
+    expect(sim.self.moving).toBe(true);
+    for (let i = 0; i < 60; i++) {
+      walk(sim, map, 1 / 60, false);
+    }
+    expect(sim.self.x).toBeCloseTo(8.72, 1);
+    expect(sim.self.moving).toBe(false);
+    // and it faces the wall it pushes against
+    expect(sim.self.facing).toBe(0);
+  });
+
+  it('walks along a wall it is pushed against slantwise', () => {
+    const map = mapWith({ width: 10, height: 6, tiles: TILES });
+    const sim = newSim(0);
+    Object.assign(sim.self, { x: 6.5, y: 1.3 });
+    sim.keys.add('up');
+    sim.keys.add('right');
+    walk(sim, map, 1 / 60, false);
+    expect(sim.self.moving).toBe(true);
+  });
+});
+
 /** The lab's open middle row, (1,2) to (8,2): room to run a second east. */
 const OPEN = mapWith({ width: 10, height: 6, tiles: TILES });
 
@@ -60,7 +244,7 @@ function ran(held: Held[], frames = 60, locked = false) {
   const at: number[] = [];
   for (let i = 0; i < frames; i++) {
     const fall = walk(sim, OPEN, 1 / 60, locked);
-    if (fall !== null) {
+    if (fall === 'walk' || fall === 'sprint') {
       falls.push(fall);
     }
     at.push(sim.self.x);

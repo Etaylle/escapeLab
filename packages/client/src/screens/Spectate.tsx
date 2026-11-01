@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
 import type { PlayerPosition, DronePosition, SpectatorView } from '@escapelab/core';
+import { formatLeft, timeLeft } from '../clock.js';
+import { useServerNow } from '../hooks.js';
 import type { DeviceRun } from '../puzzles/Device.js';
 import { reportLine } from '../radio.js';
 import { useVoice } from '../voice/useVoice.js';
@@ -30,11 +31,6 @@ interface Props {
   leaveRoom: () => void;
 }
 
-function remaining(deadlineAt: number, now: number): string {
-  const total = Math.max(0, Math.ceil((deadlineAt - now) / 1000));
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-}
-
 /** Run time of an event as mm:ss, the way a match log reads, from the run's clock's start. */
 function elapsed(startedAt: number | null, at: number): string {
   const total = startedAt === null ? 0 : Math.max(0, Math.floor((at - startedAt) / 1000));
@@ -62,7 +58,7 @@ function audienceRunOf(view: SpectatorView): DeviceRun {
   return {
     alarms: view.penaltySeq,
     solved: view.currentPuzzleIndex,
-    refusals: 0,
+    refusal: null,
     crew: {
       you: null,
       mates: view.players
@@ -107,7 +103,7 @@ function SpectatePanels({ view }: { view: SpectatorView }) {
                   puzzle={view.puzzle}
                   run={audienceRunOf(view)}
                   send={noop}
-                  deadlineAt={view.deadlineAt}
+                  mission={view}
                 />
               </div>
             </>
@@ -128,7 +124,12 @@ function SpectatePanels({ view }: { view: SpectatorView }) {
                 {panel.name}
               </div>
               <div className="read-only">
-                <RelayConsole relay={panel.emergency} send={noop} refusals={0} />
+                <RelayConsole
+                  relay={panel.emergency}
+                  pausedAt={view.pausedAt}
+                  send={noop}
+                  refusal={null}
+                />
               </div>
             </section>
           ),
@@ -199,11 +200,8 @@ export function SpectateScreen({
   chatsRef,
   leaveRoom,
 }: Props) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 250);
-    return () => clearInterval(timer);
-  }, []);
+  // The mission's clock on the server's, standing still while the run is paused (clock.ts).
+  const left = timeLeft(view, useServerNow(250));
   // The audience sees the lights fail too, unless it came in after.
   const darkSince = useDarkSince(view.lights, view.startedAt);
 
@@ -221,8 +219,8 @@ export function SpectateScreen({
           <h1>{view.missionTitle}</h1>
         </div>
         <div className="spectate-stats">
-          {view.deadlineAt !== null && view.phase === 'playing' && (
-            <span className="countdown">{remaining(view.deadlineAt, now)}</span>
+          {left !== null && view.phase === 'playing' && (
+            <span className="countdown">{formatLeft(left)}</span>
           )}
           <span className="pill">
             {view.currentPuzzleIndex}/{view.puzzleCount} Stationen · {view.penaltySeq} Alarme
@@ -306,6 +304,7 @@ function spectatorAsPlayerView(view: SpectatorView): Parameters<typeof GameWorld
     currentPuzzleIndex: view.currentPuzzleIndex,
     puzzleCount: view.puzzleCount,
     pausedFor: view.pausedFor,
+    pausedAt: view.pausedAt,
     events: view.events,
     grade: view.grade,
     penaltySeq: view.penaltySeq,

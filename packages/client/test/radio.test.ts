@@ -117,9 +117,14 @@ describe('the objective bar, one notice at a time', () => {
 
   it('lets fresh lines replace the queued ones, but never the note that the sign was read', () => {
     const queued = withNews([line('old'), sign, line('older')], [event('radio', 0, 'new')]);
-    expect(shown(queued)).toEqual(['sign', 'new']);
-    expect(queued[0]).toBe(sign);
-    expect(shown(withNews([sign], [event('hint', 0, 'tip')]))).toEqual(['sign', 'tip']);
+    expect(shown(queued)).toEqual(['new', 'sign']);
+    expect(queued[1]).toBe(sign);
+  });
+
+  it('puts the radio on the air first: the note waits behind a line, even one up now', () => {
+    // a player spawned at the sign: its note is up as the run's first line comes in
+    expect(shown(withNews([sign], [event('radio', 0, 'start')]))).toEqual(['start', 'sign']);
+    expect(shown(withNews([sign], [event('hint', 0, 'tip')]))).toEqual(['tip', 'sign']);
   });
 
   it('holds a line that comes with a solve a second, so the win is seen and heard first', () => {

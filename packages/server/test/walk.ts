@@ -67,6 +67,22 @@ function wayTo(map: MapView, from: Tile, to: Tile): Tile[] {
   throw new Error(`no way from ${key(from)} to ${key(to)} through the doors as they stand`);
 }
 
+/** Where the walks have left `walker` in this run: where its last walk ended, else its spawn. */
+function standingOf(room: Room, walker: Walker): Spot {
+  const view = latestView(walker);
+  const last = walked.get(room)?.get(walker.playerId);
+  if (last !== undefined && last.run === view.startedAt) {
+    return last.at;
+  }
+  const spawn = view.map?.yourSpawn ?? { x: 0, y: 0 };
+  return { x: spawn.x + 0.5, y: spawn.y + 0.5 };
+}
+
+/** E pressed by `walker` where its walks left it, as a client sends it with the press. */
+export function pressE(room: Room, walker: Walker): void {
+  room.interact(walker.playerId, standingOf(room, walker), Date.now());
+}
+
 /**
  * Walk `walker` to the spot (x, y), in tiles. The first walk of a run sets
  * out from the spawn the walker drew; each later one from where the last

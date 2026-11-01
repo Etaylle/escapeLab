@@ -69,11 +69,26 @@ describe('client messages', () => {
     expect(parseClientMessage(JSON.stringify(msg))).toEqual(msg);
   });
 
-  it('take a position only with the run it was walked in', () => {
+  it('take a position only with the run it was walked in and the moment it was true', () => {
     const pos = { kind: 'pos', x: 3.5, y: 2.5, facing: 0, moving: true };
     expect(() => parseClientMessage(JSON.stringify(pos))).toThrow(/Unbekanntes Nachrichtenformat/);
-    const stamped = { ...pos, run: 1_000_000 };
+    const inRun = { ...pos, run: 1_000_000 };
+    expect(() => parseClientMessage(JSON.stringify(inRun))).toThrow(
+      /Unbekanntes Nachrichtenformat/,
+    );
+    const stamped = { ...inRun, t: 1_700_000_000_016.7 };
     expect(parseClientMessage(JSON.stringify(stamped))).toEqual(stamped);
+  });
+
+  it('ask for the server’s time with the page’s own, a number', () => {
+    const ask = { kind: 'clock', sent: 1_700_000_000_123.5 };
+    expect(parseClientMessage(JSON.stringify(ask))).toEqual(ask);
+    expect(() => parseClientMessage(JSON.stringify({ kind: 'clock' }))).toThrow(
+      /Unbekanntes Nachrichtenformat/,
+    );
+    expect(() => parseClientMessage(JSON.stringify({ kind: 'clock', sent: 'now' }))).toThrow(
+      /Unbekanntes Nachrichtenformat/,
+    );
   });
 
   it('know no per-puzzle messages any more', () => {

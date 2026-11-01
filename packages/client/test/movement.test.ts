@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PlayerPosition } from '@escapelab/core';
+import type { RelayedPosition } from '@escapelab/core';
 import {
   correction,
   ECHO_MS,
@@ -9,7 +9,14 @@ import {
   type KnownPositions,
 } from '../src/world/movement.js';
 
-const at = (x: number, y: number): PlayerPosition => ({ x, y, facing: 0, moving: false });
+const at = (x: number, y: number): RelayedPosition => ({
+  x,
+  y,
+  facing: 0,
+  moving: false,
+  t: null,
+  rt: 0,
+});
 
 /** Two runs by their `startedAt`: the one before „Nochmal", and the one it started. */
 const LAST_RUN = 1_000;

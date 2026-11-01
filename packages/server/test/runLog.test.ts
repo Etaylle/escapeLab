@@ -13,7 +13,7 @@ import {
 import { RoomManager } from '../src/roomManager.js';
 import { appendRun, parseRuns, readRuns } from '../src/runLog.js';
 import type { Room } from '../src/room.js';
-import { walkTo, type Walker } from './walk.js';
+import { pressE, walkTo, type Walker } from './walk.js';
 
 /**
  * Two presses for the whole crew along a corridor and the hatch between
@@ -169,7 +169,7 @@ describe('a room', () => {
   function solveAt(room: Room, x: number, anna: Walker, ben: Walker): void {
     moveTo(room, ben, x, 1);
     moveTo(room, anna, x, 2);
-    room.act(ben.playerId, { kind: 'interact' });
+    pressE(room, ben);
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
   }

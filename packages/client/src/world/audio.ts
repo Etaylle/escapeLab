@@ -351,6 +351,14 @@ export function footstep(sprinting = false): void {
   effect(stepTake(ownSurface()), 'sfx', level, { rate: stepRate() });
 }
 
+/**
+ * The body meeting a wall, a shut door or a piece of furniture it was walked into: a soft, dull
+ * thud, once a push (world/sim.ts `walk`) — a little over a footstep, ±5 % in speed.
+ */
+export function wallBump(): void {
+  effect('wall-thud', 'sfx', STEP_LEVEL, { rate: rand(0.95, 1.05) });
+}
+
 /** A console's rising 'station ready' chirp. */
 export function stationChirp(): void {
   effect('console-ready', 'sfx', CHIRP_LEVEL);
@@ -387,6 +395,33 @@ export function partSeated(): void {
 /** A sheet put down: the paper's swish, then the soft clack of the board meeting the desk. */
 export function sheetDown(): void {
   effect('sheet-down', 'sfx', FIND_LEVEL);
+}
+
+/** How long a sheet's swish lasts at the start of its recording, before the board's clack, s. */
+const SWISH_S = 0.1;
+
+/**
+ * Paper moving — a page turned, the notepad taken up: the swish the sheet's recording opens
+ * with, cut before its clack, quieter, a little faster or slower each time.
+ */
+export function paperSwish(): void {
+  const audio = playingEngine();
+  if (audio === null) return;
+  const at = audio.ctx.currentTime + LOOKAHEAD;
+  effect('sheet-down', 'sfx', FIND_LEVEL * 0.6, { at, until: at + SWISH_S, rate: rand(0.95, 1.1) });
+}
+
+/** An emergency cleared in time: a lab instrument's glassy two-note chime, rising. */
+export function emergencyOver(): void {
+  effect('stage-chime', 'sfx', CHIRP_LEVEL);
+}
+
+/**
+ * A station solved while this player read its rules at the source: the solve's chord, quietly
+ * — the console's own sounds are its operator's.
+ */
+export function readerSolve(): void {
+  effect('solved-chord', 'sfx', CHIRP_LEVEL * 0.4);
 }
 
 /** A book shut: the rush of air over the pages, then the dull clap of cover on block. */

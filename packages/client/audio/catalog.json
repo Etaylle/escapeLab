@@ -262,7 +262,7 @@
     "durationSeconds": 0.6,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
-    "usedBy": ["src/world/audio.ts#sheetDown"]
+    "usedBy": ["src/world/audio.ts#sheetDown", "src/world/audio.ts#paperSwish"]
   },
   {
     "id": "book-shut",
@@ -428,7 +428,7 @@
     "durationSeconds": 1.2,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
-    "usedBy": ["src/puzzles/sounds.ts#solvedChord"]
+    "usedBy": ["src/puzzles/sounds.ts#solvedChord", "src/world/audio.ts#readerSolve"]
   },
   {
     "id": "toggle-clack",
@@ -473,7 +473,7 @@
     "durationSeconds": 0.8,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
-    "usedBy": ["src/puzzles/sounds.ts#stageChime"]
+    "usedBy": ["src/puzzles/sounds.ts#stageChime", "src/world/audio.ts#emergencyOver"]
   },
   {
     "id": "dial-detent",
@@ -500,7 +500,7 @@
     "durationSeconds": 0.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
-    "usedBy": ["src/puzzles/sounds.ts#wallThud"]
+    "usedBy": ["src/puzzles/sounds.ts#wallThud", "src/world/audio.ts#wallBump"]
   },
   {
     "id": "lamp-pop",

@@ -43,6 +43,7 @@ function viewWith(items: Item[]): PlayerView {
     currentPuzzleIndex: 0,
     puzzleCount: 1,
     pausedFor: null,
+    pausedAt: null,
     events: [],
     grade: null,
     penaltySeq: 0,

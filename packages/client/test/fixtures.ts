@@ -6,7 +6,7 @@ export function deviceRun(parts: Partial<DeviceRun> = {}): DeviceRun {
   return {
     alarms: 0,
     solved: 0,
-    refusals: 0,
+    refusal: null,
     crew: { you: 'p1', mates: [] },
     alarm: null,
     ...parts,
@@ -36,6 +36,9 @@ export function mapWith(parts: Partial<MapView>): MapView {
     ...parts,
   };
 }
+
+/** A mission's clock that is not running: no deadline, no pause (clock.ts `MissionTime`). */
+export const NO_CLOCK = { deadlineAt: null, pausedAt: null } as const;
 
 export type Manual = MapView['manuals'][number];
 export type Plate = MapView['plates'][number];

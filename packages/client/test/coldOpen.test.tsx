@@ -158,6 +158,7 @@ function viewOf(parts: Partial<PlayerView> = {}): PlayerView {
     currentPuzzleIndex: 0,
     puzzleCount: 6,
     pausedFor: null,
+    pausedAt: null,
     events: [],
     grade: null,
     penaltySeq: 0,
@@ -266,7 +267,8 @@ describe('the start of a run with the power on', () => {
         pingsRef={{ current: [] }}
         chatsRef={{ current: [] }}
         send={() => undefined}
-        refusals={0}
+        listen={() => () => undefined}
+        refusal={null}
         finale={null}
       />,
     );

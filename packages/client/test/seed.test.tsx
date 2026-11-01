@@ -28,6 +28,7 @@ function lostRun(parts: Partial<PlayerView> = {}): PlayerView {
     currentPuzzleIndex: 0,
     puzzleCount: 5,
     pausedFor: null,
+    pausedAt: null,
     events: [],
     grade: null,
     penaltySeq: 0,

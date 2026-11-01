@@ -9,7 +9,8 @@ import type {
   PuzzleView,
   RunEvent,
 } from '@escapelab/core';
-import { useKeys, useNow } from '../hooks.js';
+import { clockTime, formatLeft, type MissionTime } from '../clock.js';
+import { useKeys, useNow, useServerNow } from '../hooks.js';
 import { appendBlock } from '../notes.js';
 import { NotepadContext, type NotepadHand } from '../noting.js';
 import {
@@ -27,6 +28,7 @@ import { deviceCoach, firstSight, SHOWN_MARKS, type CoachMark } from '../puzzles
 import { useSolvedHold, type DeviceRun } from '../puzzles/Device.js';
 import { RelayConsole } from '../puzzles/RelayPanel.js';
 import { useReducedMotion, useSettings } from '../settings.js';
+import type { Connection, Refusal } from '../ws.js';
 import {
   ALARM_NOTICE_MS,
   alarmLine,
@@ -36,8 +38,10 @@ import {
 import {
   briefingCountdown,
   coverShut,
+  paperSwish,
   pencilScratch,
   radioChirp,
+  readerSolve,
   sheetDown,
 } from '../world/audio.js';
 import { clickSeenAt, opensLit, useDarkSince, useRevealed } from '../world/coldOpen.js';
@@ -46,7 +50,7 @@ import { escapeChecklist, escaping, type Mate } from '../world/escape.js';
 import { veilOf, type Ending, type Finale } from '../world/finale.js';
 import { GameWorld } from '../world/GameWorld.js';
 import { IntroOverlay } from '../world/intro/IntroOverlay.js';
-import { cutIn, hudBackAt, hudHeld, type IntroCue } from '../world/intro/sequence.js';
+import { airFrom, cutIn, hudBackAt, hudHeld, type IntroCue } from '../world/intro/sequence.js';
 import { useIntro, type Intro } from '../world/intro/useIntro.js';
 import { dueParts } from '../world/markers.js';
 import { startingSpot, type KnownPositions } from '../world/movement.js';
@@ -79,29 +83,38 @@ interface Props {
   pingsRef: React.MutableRefObject<MapPing[]>;
   chatsRef: React.MutableRefObject<ChatLine[]>;
   send: (msg: ClientMessage) => void;
+  /** hears what the server says as it comes (ws.ts): the world hears E's answers by it */
+  listen: Connection['listen'];
   /**
-   * what the server has refused of this player's inputs so far (ws.ts): the
-   * open device or relay console shakes the press a new refusal answers
+   * the server's latest refusal of this player's messages (ws.ts): the open device or relay
+   * console shakes the press it answers and says it in its head
    */
-  refusals: number;
+  refusal: Refusal | null;
   /** the run's end, while the world still plays it on this screen (finale.ts); none before */
   finale: Finale | null;
 }
 
-function formatRemaining(deadlineAt: number, now: number): string {
-  const totalSec = Math.max(0, Math.ceil((deadlineAt - now) / 1000));
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+/**
+ * The whole seconds left until `endsAt` on the server's clock at `now` — standing still at the
+ * pause's start (`pausedAt`) while the run is paused — never below 0.
+ */
+function secondsUntil(endsAt: number, pausedAt: number | null, now: number): number {
+  return Math.max(0, Math.ceil((endsAt - clockTime(pausedAt, now)) / 1000));
 }
 
 /** Full-width emergency banner: what broke, where to go, how long you have. */
-function SabotageAlert({ sabotage }: { sabotage: NonNullable<PlayerView['map']>['sabotage'] }) {
-  const now = useNow(200);
+function SabotageAlert({
+  sabotage,
+  pausedAt,
+}: {
+  sabotage: NonNullable<PlayerView['map']>['sabotage'];
+  pausedAt: number | null;
+}) {
+  const now = useServerNow(200);
   if (sabotage === null) {
     return null;
   }
-  const left = Math.max(0, Math.ceil((sabotage.endsAt - now) / 1000));
+  const left = secondsUntil(sabotage.endsAt, pausedAt, now);
   const manned = sabotage.panels.filter((p) => p.occupied).length;
   return (
     <div className="sabotage" role="alert">
@@ -137,20 +150,22 @@ type Sabotage = NonNullable<NonNullable<PlayerView['map']>['sabotage']>;
 function RelayAlert({
   sabotage,
   relay,
+  pausedAt,
   send,
-  refusals,
+  refusal,
 }: {
   sabotage: Sabotage;
   relay: NonNullable<Sabotage['relay']>;
+  pausedAt: number | null;
   send: (msg: ClientMessage) => void;
-  refusals: number;
+  refusal: Refusal | null;
 }) {
-  const now = useNow(200);
+  const now = useServerNow(200);
   const frame = useRef<HTMLDivElement>(null);
   useEffect(() => {
     frame.current?.focus();
   }, []);
-  const left = Math.max(0, Math.ceil((sabotage.endsAt - now) / 1000));
+  const left = secondsUntil(sabotage.endsAt, pausedAt, now);
   return (
     <div
       ref={frame}
@@ -171,8 +186,9 @@ function RelayAlert({
         {sabotage.hint !== '' && <p className="sabotage-hint">{sabotage.hint}</p>}
         <RelayConsole
           relay={relay}
+          pausedAt={pausedAt}
           send={(input) => send({ kind: 'puzzle-input', input })}
-          refusals={refusals}
+          refusal={refusal}
         />
         <details className="relay-manual">
           <summary>ABLAUF NACHLESEN</summary>
@@ -199,27 +215,28 @@ export function clockStage(left: number, escaping: boolean): string {
 }
 
 /**
- * The mission clock. Over the START_FLASH_MS up to `flashUntil` (epoch ms) —
- * where it has just started on this screen — its digits flash red, once; then
- * as `clockStage` has it.
+ * The mission clock, on the server's clock (clock.ts) and standing still while the run is
+ * paused. Over the START_FLASH_MS up to `flashUntil` (epoch ms) — where it has just started on
+ * this screen — its digits flash red, once; then as `clockStage` has it.
  */
 function Countdown({
-  deadlineAt,
+  mission,
   flashUntil,
   escaping,
 }: {
-  deadlineAt: number;
+  mission: MissionTime & { deadlineAt: number };
   flashUntil: number | null;
   escaping: boolean;
 }) {
-  const now = useNow(200);
-  const stage = clockStage(deadlineAt - now, escaping);
+  const now = useServerNow(200);
+  const left = mission.deadlineAt - clockTime(mission.pausedAt, now);
+  const stage = clockStage(left, escaping);
   // By the time of this draw: the screen draws anew as the HUD comes back, between two ticks.
   const drawn = Date.now();
   const flashing =
     flashUntil !== null && drawn >= flashUntil - START_FLASH_MS && drawn < flashUntil;
   const start = flashing ? ' countdown--start' : '';
-  return <div className={`countdown ${stage}${start}`}>{formatRemaining(deadlineAt, now)}</div>;
+  return <div className={`countdown ${stage}${start}`}>{formatLeft(left)}</div>;
 }
 
 /** How long the clock's digits flash red as it starts: its animation in coldopen.css. */
@@ -426,6 +443,37 @@ function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
   return shown;
 }
 
+/**
+ * Whether the view going from `before` to `after` solved a station whose rules this player
+ * stood reading at the source, with no device of their own open (`deviceOpen`): the reader's
+ * share of the solve.
+ */
+export function readerSawSolve(
+  before: PlayerView,
+  after: PlayerView,
+  deviceOpen: boolean,
+): boolean {
+  const map = before.map;
+  const armed = map?.stations.find((s) => s.status === 'armed')?.puzzleId;
+  const source = map?.manuals.find((m) => m.id === before.presence.manualId);
+  const read = armed !== undefined && source !== undefined && source.puzzleIds.includes(armed);
+  return read && !deviceOpen && after.currentPuzzleIndex > before.currentPuzzleIndex;
+}
+
+/**
+ * The reader at the source hears a solve as it comes, quietly (world/audio.ts `readerSolve`):
+ * the console's own sounds are its operator's.
+ */
+function useReaderHearsSolve(view: PlayerView, deviceOpen: boolean): void {
+  const before = useRef(view);
+  useEffect(() => {
+    if (readerSawSolve(before.current, view, deviceOpen)) {
+      readerSolve();
+    }
+    before.current = view;
+  }, [view, deviceOpen]);
+}
+
 /** What this player has open over the world. */
 export interface Opened {
   /** the open station's panel, asked for at the station */
@@ -587,7 +635,7 @@ export function StationModal({
   run,
   map,
   edgework,
-  deadlineAt,
+  mission,
   send,
   onStepBack,
   leaving = false,
@@ -597,7 +645,8 @@ export function StationModal({
   run: DeviceRun;
   map: MapView;
   edgework: PlayerView['edgework'];
-  deadlineAt: number | null;
+  /** the mission's clock, for a device that shows it */
+  mission: MissionTime;
   send: (msg: ClientMessage) => void;
   onStepBack: () => void;
   leaving?: boolean;
@@ -619,7 +668,7 @@ export function StationModal({
         puzzle={puzzle}
         run={run}
         send={leaving ? TAKES_NOTHING : send}
-        deadlineAt={deadlineAt}
+        mission={mission}
         onStepBack={leaving ? TAKES_NOTHING : onStepBack}
       />
     </WorldModal>
@@ -674,7 +723,7 @@ function useColdOpen(view: PlayerView, cut: boolean, hudBack: number | null): Co
   const briefingEnds = (view.startedAt ?? 0) + BRIEFING_MS;
   const shown = clickSeenAt(darkSince, hudBack);
   const gates = intro
-    ? { sign: view.startedAt ?? 0, line: shown }
+    ? { sign: view.startedAt ?? 0, line: airFrom(shown, hudBack) }
     : { sign: briefingEnds, line: briefingEnds };
   const sawPower = saw.current === view.startedAt && shown !== null;
   const flashUntil = sawPower ? shown + START_FLASH_MS : null;
@@ -844,7 +893,7 @@ export function StageTop({
         ) : (
           view.deadlineAt !== null && (
             <Countdown
-              deadlineAt={view.deadlineAt}
+              mission={{ deadlineAt: view.deadlineAt, pausedAt: view.pausedAt }}
               flashUntil={coldOpen.flashUntil}
               escaping={escaping(map)}
             />
@@ -870,7 +919,7 @@ export function StageTop({
           ✓ Laborkennung notiert
         </div>
       )}
-      {relay === undefined && <SabotageAlert sabotage={map.sabotage} />}
+      {relay === undefined && <SabotageAlert sabotage={map.sabotage} pausedAt={view.pausedAt} />}
       {alarm !== null && <AlarmBanner key={alarm.seq} notice={alarm} />}
     </div>
   );
@@ -913,14 +962,35 @@ function PauseOverlay({ pausedFor }: { pausedFor: string[] }) {
 }
 
 /**
- * What comes and goes over a run: the briefing, the pause. The clock's red
+ * What comes and goes over a run: the briefing, the pause, the relay's alert. The clock's red
  * edge lies over the world alone, under the HUD (GameWorld.tsx RedEdge).
  */
-function RunOverlays({ view, coldOpen }: { view: PlayerView; coldOpen: ColdOpen }) {
+function RunOverlays({
+  view,
+  coldOpen,
+  send,
+  refusal,
+}: {
+  view: PlayerView;
+  coldOpen: ColdOpen;
+  send: Props['send'];
+  refusal: Refusal | null;
+}) {
+  const sabotage = view.map?.sabotage ?? null;
+  const relay = sabotage?.relay;
   return (
     <>
       {!coldOpen.intro && <Briefing view={view} />}
       {view.pausedFor !== null && <PauseOverlay pausedFor={view.pausedFor} />}
+      {sabotage !== null && relay !== undefined && (
+        <RelayAlert
+          sabotage={sabotage}
+          relay={relay}
+          pausedAt={view.pausedAt}
+          send={send}
+          refusal={refusal}
+        />
+      )}
     </>
   );
 }
@@ -972,6 +1042,17 @@ function useSheets(open: OpenNow): {
   return { reading: usePutDown(open.reading, readingDown), note: usePutDown(open.note, sheetDown) };
 }
 
+/** The notepad taken up with the paper's swish, and laid down again with its clack. */
+function useNotepadSounds(open: boolean): void {
+  const was = useRef(open);
+  useEffect(() => {
+    if (open !== was.current) {
+      (open ? paperSwish : sheetDown)();
+    }
+    was.current = open;
+  }, [open]);
+}
+
 /**
  * The notepad as the game screen keeps it: the text (`useNotes`), whether N or a tab opened it
  * — then it takes the keys — and the hand it holds out to a source or a device (noting.ts): a
@@ -980,6 +1061,7 @@ function useSheets(open: OpenNow): {
  */
 function useNotepad(roomCode: string | null, playerId: string, open: OpenNow) {
   const notes = useNotes(roomCode, playerId);
+  useNotepadSounds(open.notes);
   const [focus, setFocus] = useState(true);
   const [jump, setJump] = useState(0);
   const toggle = (): void => {
@@ -1004,11 +1086,11 @@ function useNotepad(roomCode: string | null, playerId: string, open: OpenNow) {
  * notice for the device's head — the stations solved, what the server refused, and the crew,
  * connected, in order, for the levers' names.
  */
-export function deviceRunOf(view: PlayerView, refusals: number): DeviceRun {
+export function deviceRunOf(view: PlayerView, refusal: Refusal | null): DeviceRun {
   return {
     alarms: view.penaltySeq,
     solved: view.currentPuzzleIndex,
-    refusals,
+    refusal,
     crew: {
       you: view.you.id,
       mates: view.players
@@ -1024,7 +1106,7 @@ export function deviceRunOf(view: PlayerView, refusals: number): DeviceRun {
  * world, as this player opened them — the panel fading out once stepped back
  * from, pages and note on their way down once put down; the panel hears of
  * the run's alarms and solves, of the crew and of what the server refused
- * (`refusals`).
+ * (`refusal`).
  */
 function OverTheWorld({
   view,
@@ -1033,7 +1115,7 @@ function OverTheWorld({
   reading,
   note,
   send,
-  refusals,
+  refusal,
   onClose,
 }: {
   view: PlayerView;
@@ -1042,10 +1124,10 @@ function OverTheWorld({
   reading: Shown<ManualHere> | null;
   note: Shown<NoteHere> | null;
   send: (msg: ClientMessage) => void;
-  refusals: number;
+  refusal: Refusal | null;
   onClose: () => void;
 }) {
-  const run = deviceRunOf(view, refusals);
+  const run = deviceRunOf(view, refusal);
   return (
     <>
       {station !== null && (
@@ -1054,7 +1136,7 @@ function OverTheWorld({
           run={run}
           map={map}
           edgework={view.edgework}
-          deadlineAt={view.deadlineAt}
+          mission={view}
           send={send}
           onStepBack={onClose}
           leaving={station.leaving}
@@ -1066,6 +1148,7 @@ function OverTheWorld({
           manual={reading.item}
           puzzle={view.puzzle}
           current={view.currentPuzzleIndex}
+          pausedAt={view.pausedAt}
           mission={view.missionTitle}
           map={map}
           edgework={view.edgework}
@@ -1149,6 +1232,7 @@ function RunWorld({
       onReadNote={(index) => open.set({ noteIndex: index })}
       onOperate={() => open.set({ operating: true })}
       send={game.send}
+      listen={game.listen}
     />
   );
 }
@@ -1168,7 +1252,7 @@ function hudOut(intro: Intro): boolean {
  * (PutDown.tsx).
  */
 export function GameScreen(props: Props) {
-  const { view, roomCode, positionsRef, chatsRef, send, refusals, finale } = props;
+  const { view, roomCode, positionsRef, chatsRef, send, refusal, finale } = props;
   const { alarmVisible } = useFeedback(view);
   const intro = useIntro(view, send);
   const cue = intro.cue;
@@ -1181,6 +1265,7 @@ export function GameScreen(props: Props) {
   const station = useSolvedHold(open.station, view.currentPuzzleIndex);
   // Stepped back from, the device fades out as it came: held a moment, taking nothing more.
   const panel = useLeaving(station, PANEL_FADE_MS);
+  useReaderHearsSolve(view, station !== null);
   const sheets = useSheets(open);
   const pad = useNotepad(roomCode, view.you.id, open);
   const closeModal = (): void => open.set(NOTHING_OVER);
@@ -1192,17 +1277,13 @@ export function GameScreen(props: Props) {
   if (map === null) {
     return <p className="muted">Lade Mission …</p>;
   }
-  const relay = map.sabotage?.relay;
   const self = startingSpot(positionsRef.current, view.you.id, map, view.startedAt);
   const live = finale === null;
   const over = station !== null || sheets.reading !== null || sheets.note !== null;
   const held = live && heldNow;
   return (
     <div className={gameClass(finale, live && open.notes && over, held)}>
-      {live && <RunOverlays view={view} coldOpen={coldOpen} />}
-      {live && map.sabotage !== null && relay !== undefined && (
-        <RelayAlert sabotage={map.sabotage} relay={relay} send={send} refusals={refusals} />
-      )}
+      {live && <RunOverlays view={view} coldOpen={coldOpen} send={send} refusal={refusal} />}
       <div className="stage">
         <StageTop
           view={view}
@@ -1241,7 +1322,7 @@ export function GameScreen(props: Props) {
             reading={sheets.reading}
             note={sheets.note}
             send={send}
-            refusals={refusals}
+            refusal={refusal}
             onClose={closeModal}
           />
         </NotepadContext>

@@ -1,4 +1,4 @@
-import type { MapView } from '@escapelab/core';
+import type { MapView, PuzzleView } from '@escapelab/core';
 import { runsOf, type Run } from './light.js';
 
 type Spot = { x: number; y: number };
@@ -129,10 +129,20 @@ export interface RoomsComingOn {
 }
 
 /**
+ * Whether a room just lit waits on this screen: while a station's panel lies over the world
+ * (`station`), so that the solved device closes first and its room warms up in plain sight. A
+ * source's pages hold nothing back — its reader sees the room come on as the station is
+ * solved — and the audience, at no device, never waits.
+ */
+export function lightsHeld(spectator: boolean, station: PuzzleView | null): boolean {
+  return !spectator && station !== null;
+}
+
+/**
  * How the rooms of `litRooms` come on at a screen that has lit `known` already: one lit before
- * it looked comes on whole at once; one just lit (`news`) warms up — but not behind a panel or
- * pages (`covered`): it waits, with those `waiting` already, until nothing lies over the
- * world, so that a solved device closes first and its room lights up in plain sight.
+ * it looked comes on whole at once; one just lit (`news`) warms up — but not behind a station's
+ * panel (`covered`, `lightsHeld`): it waits, with those `waiting` already, until the panel is
+ * gone, so that a solved device closes first and its room lights up in plain sight.
  */
 export function roomsComingOn(
   litRooms: readonly string[],

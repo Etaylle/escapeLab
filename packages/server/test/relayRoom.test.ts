@@ -3,7 +3,7 @@ import { applyAction, initialState, parseMission } from '@escapelab/core';
 import type { Action, GameState, MapDef, Mission, ServerMessage } from '@escapelab/core';
 import { DronePatrol } from '../src/drones.js';
 import { Room } from '../src/room.js';
-import { walkTo, type Walker } from './walk.js';
+import { pressE, walkTo, type Walker } from './walk.js';
 
 /**
  * Corridor with three stations along its top row; its emergencies run in
@@ -107,7 +107,7 @@ describe('Room relay emergencies', () => {
     for (const x of [2, 4]) {
       moveTo(room, ben, x, 1);
       moveTo(room, anna, x, 2);
-      room.act(ben.playerId, { kind: 'interact' });
+      pressE(room, ben);
       room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
       room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
     }
@@ -180,9 +180,11 @@ describe('Room relay emergencies', () => {
     expect(running(anna)).toBe(false);
     expect(inputs).toBe(4);
     expect(lastView(anna.messages).penaltySeq).toBe(0);
-    const quiet = anna.messages.length;
+    // Nothing but the positions' keepalive goes out any more: no tick changes a view.
+    const views = (): number => anna.messages.filter((m) => m.kind !== 'positions').length;
+    const quiet = views();
     vi.advanceTimersByTime(5000);
-    expect(anna.messages.length).toBe(quiet);
+    expect(views()).toBe(quiet);
     room.dispose();
   });
 });

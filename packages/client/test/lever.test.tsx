@@ -9,6 +9,7 @@ import { expiredLine, handlesOf, leverPlate, togetherWord } from '../src/puzzles
 import { ownPressAt, secondsText, syncPress } from '../src/puzzles/syncPress.js';
 import { PuzzlePanel } from '../src/screens/PuzzlePanel.js';
 import { changeSettings, DEFAULT_SETTINGS } from '../src/settings.js';
+import { NO_CLOCK } from './fixtures.js';
 
 type SyncView = Extract<PuzzleView, { kind: 'button-sync' }>;
 
@@ -45,12 +46,12 @@ const ben = { id: 'p2', name: 'Ben', color: '#f472b6' };
 
 /** The run around the device: Anna's, Ben her partner, no alarm. */
 function run(you: string | null = 'p1'): DeviceRun {
-  return { alarms: 0, solved: 0, refusals: 0, crew: { you, mates: [anna, ben] }, alarm: null };
+  return { alarms: 0, solved: 0, refusal: null, crew: { you, mates: [anna, ben] }, alarm: null };
 }
 
 function panel(puzzle: PuzzleView, around: DeviceRun = run()): string {
   return renderToStaticMarkup(
-    <PuzzlePanel puzzle={puzzle} run={around} send={() => undefined} deadlineAt={null} />,
+    <PuzzlePanel puzzle={puzzle} run={around} send={() => undefined} mission={NO_CLOCK} />,
   );
 }
 

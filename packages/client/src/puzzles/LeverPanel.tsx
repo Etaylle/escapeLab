@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { PuzzleView } from '@escapelab/core';
+import { serverNow } from '../clock.js';
 import { useKeys } from '../hooks.js';
 import { useSettings } from '../settings.js';
 import { Icon } from '../screens/Icon.js';
@@ -117,10 +118,11 @@ function useLeverSounds(lever: OwnPressState | null, thrown: boolean): void {
 
 /**
  * The window of this player's press draining round the grip, from full at the press to
- * empty as its window shuts — in step with the press however late the panel came to it.
+ * empty as its window shuts — in step with the press however late the panel came to it, on
+ * the server's clock (clock.ts).
  */
 function LeverRing({ press }: { press: OwnPress }) {
-  const [shown] = useState(() => Date.now());
+  const [shown] = useState(serverNow);
   const total = Math.max(1, press.expiresAt - press.at);
   const elapsed = Math.min(total, Math.max(0, shown - press.at));
   const timing = cssVars({ '--ring-ms': `${total}ms`, '--ring-delay': `${-elapsed}ms` });

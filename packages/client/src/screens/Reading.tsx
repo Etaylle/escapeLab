@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Edgework, ManualHere, ManualKind, MapView, PuzzleView } from '@escapelab/core';
 import { useKeys, useMedia, useSwipe } from '../hooks.js';
+import { stepTick } from '../puzzles/sounds.js';
 import { roomFloor } from '../world/rooms.js';
 import {
   Book,
@@ -67,20 +68,28 @@ interface SourceProps {
   puzzle: PuzzleView | null;
   /** index of the station that is up now; earlier ones are done */
   current: number;
+  /** since when the run stands paused, server time; null while it runs */
+  pausedAt: number | null;
   onAskNote: () => void;
 }
 
 /**
  * A terminal shows one station per screen and starts at the one that is up
- * now, if it covers it. The last shift's note is a sticky label on its
- * bezel, there whichever screen is up.
+ * now, if it covers it — a screen changing with the display's tick. The last
+ * shift's note is a sticky label on its bezel, there whichever screen is up.
  */
-function Terminal({ manual, puzzle, current, onAskNote }: SourceProps) {
+function Terminal({ manual, puzzle, current, pausedAt, onAskNote }: SourceProps) {
   const sections = manual.sections;
   const last = sections.length - 1;
   const [at, setAt] = useState(() => Math.max(0, sections.findIndex((s) => s.index === current)));
   const shown = Math.min(at, last);
-  const go = (dir: 1 | -1): void => setAt(Math.min(last, Math.max(0, shown + dir)));
+  const go = (dir: 1 | -1): void => {
+    const to = Math.min(last, Math.max(0, shown + dir));
+    if (to !== shown) {
+      stepTick();
+    }
+    setAt(to);
+  };
   useKeys(['arrowleft', 'arrowright'], (key) => go(key === 'arrowright' ? 1 : -1));
   const swipe = useSwipe(go);
   const section = sections[shown];
@@ -114,7 +123,7 @@ function Terminal({ manual, puzzle, current, onAskNote }: SourceProps) {
         </div>
         <span className="terminal-led" aria-hidden="true" />
       </div>
-      <NoteSlip sections={sections} onAsk={onAskNote} />
+      <NoteSlip sections={sections} pausedAt={pausedAt} onAsk={onAskNote} />
     </div>
   );
 }
@@ -139,7 +148,7 @@ function ChartSection({
  * A wall chart is one sheet pinned up: every station it covers at once. The
  * last shift's note is a label stuck on the board beside it.
  */
-function Chart({ manual, puzzle, current, onAskNote }: SourceProps) {
+function Chart({ manual, puzzle, current, pausedAt, onAskNote }: SourceProps) {
   return (
     <div className="chart">
       <article className="chart-sheet">
@@ -153,7 +162,7 @@ function Chart({ manual, puzzle, current, onAskNote }: SourceProps) {
           />
         ))}
       </article>
-      <NoteSlip sections={manual.sections} onAsk={onAskNote} />
+      <NoteSlip sections={manual.sections} pausedAt={pausedAt} onAsk={onAskNote} />
     </div>
   );
 }
@@ -171,6 +180,7 @@ export function ReadingOverlay({
   manual,
   puzzle,
   current,
+  pausedAt,
   mission,
   map,
   edgework,
@@ -188,7 +198,7 @@ export function ReadingOverlay({
 }) {
   const spread = useMedia(SPREAD_QUERY);
   const look = LOOKS[manual.kind];
-  const source = { manual, puzzle, current, onAskNote };
+  const source = { manual, puzzle, current, pausedAt, onAskNote };
   const imprint = { mission, room: roomOf(map, manual.id) };
   return (
     <WorldModal

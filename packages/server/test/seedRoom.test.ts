@@ -8,7 +8,7 @@ import {
   type SpectatorView,
 } from '@escapelab/core';
 import { RoomManager, seedsAllowed } from '../src/roomManager.js';
-import { walkTo } from './walk.js';
+import { pressE, walkTo } from './walk.js';
 
 /**
  * Blackout: spawns in the Archiv (3,3) and at either end of the Flur, (1,8)
@@ -71,13 +71,13 @@ function firstRunOf(manager: RoomManager, seed: number) {
   vi.advanceTimersByTime((blackout.intro?.lightsSec ?? 0) * 1000);
   walkTo(room, ben, 11.5, 8.5);
   walkTo(room, anna, 11.5, 7.5);
-  room.act(anna.playerId, { kind: 'interact' });
+  pressE(room, anna);
   for (const player of [anna, ben]) {
     room.act(player.playerId, { kind: 'puzzle-input', input: { press: true } });
   }
   walkTo(room, ben, 6.5, 9.5);
   walkTo(room, anna, 2.5, 12.5);
-  room.act(anna.playerId, { kind: 'interact' });
+  pressE(room, anna);
   const box = lastSpectatorView(audience.messages).puzzle;
   room.dispose();
   return {

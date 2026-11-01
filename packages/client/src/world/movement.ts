@@ -1,4 +1,4 @@
-import type { PlayerPosition } from '@escapelab/core';
+import type { RelayedPosition } from '@escapelab/core';
 
 /**
  * Where your own avatar stands by the server's word: where a run starts it,
@@ -15,7 +15,7 @@ export interface Spot {
 /** The latest positions broadcast: where everybody stands, and in which run. */
 export interface KnownPositions {
   run: number | null;
-  players: Record<string, PlayerPosition>;
+  players: Record<string, RelayedPosition>;
 }
 
 /** A position this client streamed, and when (`performance.now()`). */
@@ -32,7 +32,7 @@ export const ECHO_MS = 1000;
 export function positionsOf(
   known: KnownPositions,
   run: number | null,
-): Record<string, PlayerPosition> {
+): Record<string, RelayedPosition> {
   return known.run === run ? known.players : {};
 }
 

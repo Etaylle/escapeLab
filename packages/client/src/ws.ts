@@ -9,6 +9,7 @@ import type {
   ServerMessage,
   SpectatorView,
 } from '@escapelab/core';
+import { askForTime, clock, localNow } from './clock.js';
 import { forgetNotes, localStore } from './notes.js';
 import type { KnownPositions } from './world/movement.js';
 
@@ -16,6 +17,35 @@ interface Credentials {
   code: string;
   playerId: string;
   token: string;
+}
+
+/** A refusal of the server's: how many it has made so far, its words, what it refused. */
+export interface Refusal {
+  seq: number;
+  message: string;
+  /** the kind of message refused; null where the server could not read it */
+  of: ClientMessage['kind'] | null;
+}
+
+/**
+ * What is refused where the player looks — at the device they work (its head), at the prompt
+ * they pressed E on (the pill) — and not in the banner over the screen, which lies under a
+ * device and away from the prompt.
+ */
+const ANSWERED_IN_PLACE: ReadonlySet<ClientMessage['kind']> = new Set([
+  'puzzle-input',
+  'interact',
+  'open-source',
+]);
+
+/** Whether a refusal of a message of kind `of` goes to the banner: none answered in place. */
+export function inBanner(of: ClientMessage['kind'] | undefined): boolean {
+  return of === undefined || !ANSWERED_IN_PLACE.has(of);
+}
+
+/** Whether sending a message of `kind` takes the banner down: the player's next deed, no stream. */
+export function wipesBanner(kind: ClientMessage['kind']): boolean {
+  return !STREAMED.has(kind);
 }
 
 export interface Connection {
@@ -27,13 +57,18 @@ export interface Connection {
   /** open and running rooms, refreshed while sitting on the join screen */
   rooms: RoomSummary[];
   roomCode: string | null;
+  /**
+   * the banner's words: a refusal of what is answered nowhere else (`ANSWERED_IN_PLACE`), there
+   * until the player does the next thing — what the page streams by itself (`pos`, `clock`)
+   * wipes nothing — or dismisses it
+   */
   error: string | null;
   /**
-   * How many of this connection's messages the server has refused so far
-   * (an `error` each), counted up: an open device shakes the press that a
-   * new one refused, while the banner shows `error`.
+   * The server's latest refusal of this connection's messages, counted up (an `error` each):
+   * an open device shakes the press it refused and says it in its head, the prompt pill says
+   * one of E's (world/press.ts); null before the first.
    */
-  refusals: number;
+  refusal: Refusal | null;
   /**
    * Live avatar positions with the run they belong to, written on every
    * positions broadcast WITHOUT a React re-render — the canvas render loop
@@ -96,6 +131,13 @@ function wsUrl(): string {
 const RETRY_FIRST_MS = 1000;
 /** The longest pause between two tries, ms. */
 const RETRY_MAX_MS = 10_000;
+/** How many messages wait for a socket to open; any more are dropped. */
+export const OUTBOX_MAX = 32;
+/**
+ * What the page streams — positions, asks for the server's time — the next one supersedes it,
+ * so none waits for a socket to open.
+ */
+const STREAMED: ReadonlySet<ClientMessage['kind']> = new Set(['pos', 'clock']);
 
 /** What the socket `keepConnected` keeps open tells the app, and asks of it. */
 export interface SocketEvents {
@@ -106,8 +148,73 @@ export interface SocketEvents {
   session: () => Credentials | null;
   /** a resume went out: an error now means the stored session is dead */
   resuming: () => void;
+  /** the line is ready: its socket open with the session back, or needing none (`Line.send`) */
+  ready: () => void;
   message: (msg: ServerMessage) => void;
   closed: () => void;
+}
+
+/** The line `keepConnected` keeps: what goes out on it, and how to stop it for good. */
+export interface Line {
+  /**
+   * Sends `msg` on the socket that is open and ready. While a socket is on its way — still
+   * connecting, or waiting for the server to take its session back — a message waits for it,
+   * up to OUTBOX_MAX, and goes out in order once it is ready; if it never is (it closed, or
+   * the server refused the session) what waited is dropped. While none is on its way — the
+   * line dropped, the next try not made yet — nothing waits: a deed done blind must not land
+   * once the run goes on. Nor does what the page streams (`pos`, `clock`) or anything over
+   * the limit. Whatever is dropped is said once a time the line is down.
+   */
+  send: (msg: ClientMessage) => void;
+  stop: () => void;
+}
+
+/** What waits for a socket on its way (`Line.send`), and the one warning a time it is down. */
+interface Outbox {
+  /** keeps `msg` for the socket on its way; false where it may not wait: streamed, or full */
+  keep: (msg: ClientMessage) => boolean;
+  /** says once a time the line is down that `what` was dropped */
+  drop: (what: string) => void;
+  /** what waited, in order, taken out: the line is ready, and back */
+  release: () => string[];
+  /** what waited dropped: its socket will never be ready */
+  forget: () => void;
+}
+
+function outbox(): Outbox {
+  let waiting: string[] = [];
+  let warned = false;
+  const drop = (what: string): void => {
+    if (!warned) {
+      warned = true;
+      console.warn(
+        `escapelab: no line to the server — ${what} dropped, as is what the page streams or ` +
+          'does while no socket is on its way, until the line is back',
+      );
+    }
+  };
+  return {
+    keep: (msg) => {
+      if (STREAMED.has(msg.kind) || waiting.length >= OUTBOX_MAX) {
+        return false;
+      }
+      waiting.push(JSON.stringify(msg));
+      return true;
+    },
+    drop,
+    release: () => {
+      const out = waiting;
+      waiting = [];
+      warned = false;
+      return out;
+    },
+    forget: () => {
+      if (waiting.length > 0) {
+        drop(`what waited (${waiting.length})`);
+      }
+      waiting = [];
+    },
+  };
 }
 
 /**
@@ -115,17 +222,43 @@ export interface SocketEvents {
  * the session the page keeps, and after every close — the server restarted, the line
  * dropped, the server's heartbeat terminating a socket it heard nothing from — a new one is
  * made after a pause that doubles from 1 s up to 10 s, and is back at 1 s once a socket
- * opens. Returns how to stop for good.
+ * opens. A message sent meanwhile never throws (`Line.send`).
  */
-export function keepConnected(open: () => WebSocket, on: SocketEvents): () => void {
+export function keepConnected(open: () => WebSocket, on: SocketEvents): Line {
   let stopped = false;
   let retryDelay = RETRY_FIRST_MS;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
   let current: WebSocket | null = null;
+  /** `current` is open with its session back, or needs none: what is sent goes straight out */
+  let ready = false;
+  const waiting = outbox();
+
+  function send(msg: ClientMessage): void {
+    if (ready && current?.readyState === WebSocket.OPEN) {
+      current.send(JSON.stringify(msg));
+      return;
+    }
+    // Not ready, yet connecting or open: on its way.
+    const onItsWay =
+      current?.readyState === WebSocket.CONNECTING || current?.readyState === WebSocket.OPEN;
+    if (!onItsWay || !waiting.keep(msg)) {
+      waiting.drop(`"${msg.kind}"`);
+    }
+  }
+
+  /** The line is ready on `socket`: what waited goes out on it, in order. */
+  function flush(socket: WebSocket): void {
+    ready = true;
+    for (const data of waiting.release()) {
+      socket.send(data);
+    }
+    on.ready();
+  }
 
   function connect(): void {
     const socket = open();
     current = socket;
+    ready = false;
     on.made(socket);
     on.status('connecting');
 
@@ -133,20 +266,32 @@ export function keepConnected(open: () => WebSocket, on: SocketEvents): () => vo
       on.status('open');
       retryDelay = RETRY_FIRST_MS;
       const creds = on.session();
-      if (creds !== null) {
-        on.resuming();
-        socket.send(JSON.stringify({ kind: 'resume', ...creds } satisfies ClientMessage));
+      if (creds === null) {
+        flush(socket);
+        return;
       }
+      on.resuming();
+      socket.send(JSON.stringify({ kind: 'resume', ...creds } satisfies ClientMessage));
     };
 
     socket.onmessage = (event) => {
-      on.message(JSON.parse(String(event.data)) as ServerMessage);
+      const msg = JSON.parse(String(event.data)) as ServerMessage;
+      on.message(msg);
+      // The server's answer to the resume: the session back, or refused.
+      if (!ready && (msg.kind === 'joined' || msg.kind === 'error')) {
+        if (msg.kind === 'error') {
+          waiting.forget();
+        }
+        flush(socket);
+      }
     };
 
     socket.onclose = () => {
       if (stopped) {
         return;
       }
+      ready = false;
+      waiting.forget();
       on.closed();
       on.status('closed');
       retryTimer = setTimeout(connect, retryDelay);
@@ -155,10 +300,14 @@ export function keepConnected(open: () => WebSocket, on: SocketEvents): () => vo
   }
 
   connect();
-  return () => {
-    stopped = true;
-    clearTimeout(retryTimer);
-    current?.close();
+  return {
+    send,
+    stop: () => {
+      stopped = true;
+      clearTimeout(retryTimer);
+      waiting.release();
+      current?.close();
+    },
   };
 }
 
@@ -169,7 +318,7 @@ interface Page {
   setSpectatorView: (view: SpectatorView) => void;
   setRooms: (rooms: RoomSummary[]) => void;
   setError: (message: string) => void;
-  countRefusal: () => void;
+  refuse: (message: string, of: ClientMessage['kind'] | null) => void;
   /** a resume is out: an error now means the stored session is dead */
   resuming: MutableRefObject<boolean>;
   positions: Connection['positions'];
@@ -190,11 +339,16 @@ function takeIn(msg: ServerMessage, page: Page): void {
       page.setRoomCode(msg.code);
       break;
     case 'view':
+      clock.stamped(msg.at);
       page.setView(msg.view);
       break;
     case 'spectator-view':
+      clock.stamped(msg.at);
       page.setSpectatorView(msg.view);
       page.setRoomCode(msg.code);
+      break;
+    case 'clock':
+      clock.heard(msg.sent, msg.at);
       break;
     case 'rooms':
       page.setRooms(msg.rooms);
@@ -221,10 +375,67 @@ function takeIn(msg: ServerMessage, page: Page): void {
         page.setRoomCode(null);
         page.setView(null);
       }
-      page.setError(msg.message);
-      page.countRefusal();
+      if (inBanner(msg.of)) {
+        page.setError(msg.message);
+      }
+      page.refuse(msg.message, msg.of ?? null);
       break;
   }
+}
+
+/** What `openLine` wires the page's line to: the page, its status, socket and listeners. */
+interface Wiring {
+  page: Page;
+  setStatus: (status: Connection['status']) => void;
+  /** the socket made last: a voice signal goes on it, past the line */
+  socket: MutableRefObject<WebSocket | null>;
+  listeners: MutableRefObject<Set<ServerListener>>;
+}
+
+/**
+ * Opens the page's line to the server (`keepConnected`), asking for the server's time on it
+ * while it is ready (clock.ts): every clock follows it. What the server says goes into the
+ * page (`takeIn`) and on to every listener, in order. Returns the line, and how to close it.
+ */
+function openLine(wiring: Wiring): { line: Line; close: () => void } {
+  const { page, listeners } = wiring;
+  let line: Line | null = null;
+  const asking = askForTime(() => line?.send({ kind: 'clock', sent: localNow() }));
+  const opened = keepConnected(() => new WebSocket(wsUrl()), {
+    made: (socket) => {
+      wiring.socket.current = socket;
+    },
+    status: (next) => {
+      wiring.setStatus(next);
+      if (next !== 'open') {
+        asking.close();
+      }
+    },
+    session: loadCredentials,
+    resuming: () => {
+      page.resuming.current = true;
+    },
+    ready: () => asking.open(),
+    message: (msg) => {
+      takeIn(msg, page);
+      for (const listener of listeners.current) {
+        listener.message(msg);
+      }
+    },
+    closed: () => {
+      for (const listener of listeners.current) {
+        listener.closed();
+      }
+    },
+  });
+  line = opened;
+  return {
+    line: opened,
+    close: () => {
+      asking.close();
+      opened.stop();
+    },
+  };
 }
 
 /**
@@ -238,8 +449,9 @@ export function useGameConnection(): Connection {
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [roomCode, setRoomCode] = useState<string | null>(loadCredentials()?.code ?? null);
   const [error, setError] = useState<string | null>(null);
-  const [refusals, setRefusals] = useState(0);
+  const [refusal, setRefusal] = useState<Refusal | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  const lineRef = useRef<Line | null>(null);
   const resumingRef = useRef(false);
   const positionsRef = useRef<KnownPositions>({ run: null, players: {} });
   const dronesRef = useRef<Record<string, DronePosition>>({});
@@ -262,40 +474,27 @@ export function useGameConnection(): Connection {
   }, []);
 
   useEffect(() => {
-    const page: Page = {
-      setRoomCode,
-      setView,
-      setSpectatorView,
-      setRooms,
-      setError,
-      countRefusal: () => setRefusals((count) => count + 1),
-      resuming: resumingRef,
-      positions: positionsRef,
-      drones: dronesRef,
-      pings: pingsRef,
-      chats: chatsRef,
-    };
-    return keepConnected(() => new WebSocket(wsUrl()), {
-      made: (socket) => {
-        socketRef.current = socket;
+    const { line, close } = openLine({
+      page: {
+        setRoomCode,
+        setView,
+        setSpectatorView,
+        setRooms,
+        setError,
+        refuse: (message, of) =>
+          setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
+        resuming: resumingRef,
+        positions: positionsRef,
+        drones: dronesRef,
+        pings: pingsRef,
+        chats: chatsRef,
       },
-      status: setStatus,
-      session: loadCredentials,
-      resuming: () => {
-        resumingRef.current = true;
-      },
-      message: (msg) => {
-        takeIn(msg, page);
-        for (const listener of listenersRef.current) {
-          listener.message(msg);
-        }
-      },
-      closed: () => {
-        for (const listener of listenersRef.current) {
-          listener.closed();
-        }
-      },
+      setStatus,
+      socket: socketRef,
+      listeners: listenersRef,
     });
+    lineRef.current = line;
+    return close;
   }, []);
 
   return {
@@ -305,14 +504,16 @@ export function useGameConnection(): Connection {
     rooms,
     roomCode,
     error,
-    refusals,
+    refusal,
     positions: positionsRef,
     drones: dronesRef,
     pings: pingsRef,
     chats: chatsRef,
     send: (msg) => {
-      setError(null);
-      socketRef.current?.send(JSON.stringify(msg));
+      if (wipesBanner(msg.kind)) {
+        setError(null);
+      }
+      lineRef.current?.send(msg);
     },
     listen,
     signal,

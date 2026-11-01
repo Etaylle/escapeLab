@@ -1,4 +1,4 @@
-import { SPRINT_FACTOR, WALK_SPEED, walkable, type PlayerPosition } from '@escapelab/core';
+import { SPRINT_FACTOR, WALK_SPEED, walkable, type RelayedPosition } from '@escapelab/core';
 import { MOVE_ACTIONS, MOVES, type Held } from '../input/bindings.js';
 import { NO_STEER, type Steer } from '../input/pad.js';
 import type { DoorMotion } from './doors.js';
@@ -6,8 +6,10 @@ import { gaitStep } from './figure.js';
 import { lightMemory, type LightMemory } from './light.js';
 import {
   correction,
+  positionsOf,
   startingSpot,
   type KnownPositions,
+  type Spot,
   type Streamed,
 } from './movement.js';
 import type {
@@ -18,6 +20,8 @@ import type {
   PoweredRoom,
   WorldMap,
 } from './render/frame.js';
+import { newPresses, type Presses } from './press.js';
+import { drawnAt, hear, newTrail, type Trail } from './trail.js';
 
 /**
  * What one mounted world simulates from animation frame to animation frame
@@ -42,19 +46,37 @@ export const LEAD_TAU = 0.1;
 
 /** A footfall in a frame's walk: at a walk, or at a sprint — quicker, and a little louder. */
 export type Footfall = 'walk' | 'sprint';
+/** What a frame's walk sounds like: a footfall, or the body meeting what stops it (`bump`). */
+export type WalkSound = Footfall | 'bump';
+/**
+ * How far a body that would catch on the edge of an opening is nudged sideways into it, in
+ * tiles: Celeste's corner correction (4 px of an 8-px tile), scaled to a body this wide.
+ */
+export const NUDGE_TILES = 0.3;
+/** How finely the nudge looks for the opening, in tiles. */
+const NUDGE_STEP = 0.01;
 
 export interface Sim {
   /** the run `self` was placed for, by its `startedAt`; null before the first frame */
   run: number | null;
   self: { x: number; y: number; facing: number; moving: boolean };
+  /** when `self` was true: the frame it was walked in, on the page's timeline (performance.now) */
+  selfAt: number;
   /** what this client streamed lately: its own steps coming back are no correction */
   streamed: Streamed[];
+  /**
+   * where the server has your avatar by its latest positions of this run — a step it refused
+   * is not where the page sent it —; null before the first
+   */
+  serverSpot: Spot | null;
   /**
    * the run's opening holds this screen's avatar (intro/sequence.ts `filmed`): it walks
    * nowhere, and no position goes out
    */
   held: boolean;
   others: Map<string, OtherAvatar>;
+  /** each partner's samples as the server relayed them, by player id (trail.ts) */
+  trails: Map<string, Trail>;
   /**
    * what is held down to walk and sprint, by action — the keys as the settings bind them, the
    * touch screen's pad (input/bindings.ts `Held`)
@@ -68,6 +90,12 @@ export interface Sim {
   stepAcc: number;
   /** footfalls your avatar has made so far: the walkthrough reads their pace off the probe */
   footfalls: number;
+  /** whether a move is held against something that stops it: one bump a push */
+  pushing: boolean;
+  /** E as this screen keeps it: a press waiting for reach, the asks out, a refusal shown */
+  presses: Presses;
+  /** the pushes so far, each with its bump: the walkthrough counts them off the probe */
+  bumps: number;
   /** how far the camera looks ahead of your avatar, in tiles: eased in and out (`leadOn`) */
   lead: { x: number; y: number };
   cam: { x: number; y: number };
@@ -108,15 +136,21 @@ export function newSim(topCss: number): Sim {
   return {
     run: null,
     self: { x: 0, y: 0, facing: 0, moving: false },
+    selfAt: 0,
     streamed: [],
+    serverSpot: null,
     held: false,
     others: new Map(),
+    trails: new Map(),
     keys: new Set(),
     pad: NO_STEER,
     doors: new Map(),
     walkPhase: 0,
     stepAcc: 0,
     footfalls: 0,
+    pushing: false,
+    presses: newPresses(),
+    bumps: 0,
     lead: { x: 0, y: 0 },
     cam: { x: 0, y: 0 },
     topCss,
@@ -140,7 +174,8 @@ export function newSim(topCss: number): Sim {
 /**
  * Your avatar by the server's word: every run starts it on its spawn — on
  * the first frame, and after a rematch with the world still up — and a
- * step the server refused puts it back where the server kept it.
+ * step the server refused puts it back where the server kept it. Where the
+ * server has it is kept for the step's door rule (`centreMay`).
  */
 export function followServer(
   sim: Sim,
@@ -149,6 +184,8 @@ export function followServer(
   youId: string,
   run: number | null,
 ): void {
+  const kept = positionsOf(known, run)[youId];
+  sim.serverSpot = kept === undefined ? null : { x: kept.x, y: kept.y };
   if (sim.run !== run) {
     const start = startingSpot(known, youId, map, run);
     Object.assign(sim.self, start);
@@ -166,18 +203,76 @@ export function followServer(
   }
 }
 
-/** Whether an avatar at (x, y) would stand in a wall, a shut door or a piece of furniture. */
-function blocked(map: WorldMap, closedDoors: Set<string>, x: number, y: number): boolean {
+/** The tiles the four corners of an avatar's body at (x, y) stand on, as [x, y]. */
+function cornerTiles(x: number, y: number): [number, number][] {
+  const out: [number, number][] = [];
   for (const dx of [-RADIUS, RADIUS]) {
     for (const dy of [-RADIUS, RADIUS]) {
-      const tx = Math.floor(x + dx);
-      const ty = Math.floor(y + dy);
-      if (!walkable(map, tx, ty) || closedDoors.has(`${tx},${ty}`)) {
-        return true;
-      }
+      out.push([Math.floor(x + dx), Math.floor(y + dy)]);
     }
   }
-  return false;
+  return out;
+}
+
+/** The key of the tile (x, y) lies on. */
+function tileOf(x: number, y: number): string {
+  return `${Math.floor(x)},${Math.floor(y)}`;
+}
+
+/**
+ * What a frame's step is checked against: the doors shut now, by tile; the shut ones the body
+ * overlaps already — a door may shut on a walker —; the tile the body's centre stands on; and
+ * the tile the server has it on (`Sim.serverSpot`), the centre's own until the server says.
+ */
+interface Footing {
+  shut: ReadonlySet<string>;
+  overlapped: ReadonlySet<string>;
+  centre: string;
+  server: string;
+}
+
+function footingOf(sim: Sim, map: WorldMap): Footing {
+  const shut = new Set(map.doors.filter((d) => !d.open).map((d) => `${d.x},${d.y}`));
+  const { x, y } = sim.self;
+  const touched = cornerTiles(x, y).map(([tx, ty]) => `${tx},${ty}`);
+  const kept = sim.serverSpot;
+  const centre = tileOf(x, y);
+  return {
+    shut,
+    overlapped: new Set(touched.filter((key) => shut.has(key))),
+    centre,
+    server: kept === null ? centre : tileOf(kept.x, kept.y),
+  };
+}
+
+/**
+ * Whether the centre of a body may stand on `tile`, as the server takes a step (core's
+ * `stepAllowed`, whose start tile never stops it): never into a shut door; out of one the door
+ * shut on anywhere where the server had it in the door, else only back where the server had it.
+ */
+function centreMay(footing: Footing, tile: string): boolean {
+  const { shut, centre, server } = footing;
+  if (tile === centre) {
+    return true;
+  }
+  if (shut.has(tile)) {
+    return false;
+  }
+  return !shut.has(centre) || server === centre || tile === server;
+}
+
+/**
+ * Whether an avatar at (x, y) would stand in a wall or a piece of furniture, or step into a shut
+ * door — its body only into one that shut on it, its centre as `centreMay` has it.
+ */
+function blocked(map: WorldMap, footing: Footing, x: number, y: number): boolean {
+  for (const [tx, ty] of cornerTiles(x, y)) {
+    const key = `${tx},${ty}`;
+    if (!walkable(map, tx, ty) || (footing.shut.has(key) && !footing.overlapped.has(key))) {
+      return true;
+    }
+  }
+  return !centreMay(footing, tileOf(x, y));
 }
 
 /** Where the avatar is steered: a way of unit length, and how much of a full walk. */
@@ -215,33 +310,87 @@ function heading(sim: Sim, locked: boolean): Heading {
   return lean > 0 ? { dx: x / lean, dy: y / lean, lean: Math.min(1, lean) } : STANDING;
 }
 
+type Axis = 'x' | 'y';
+
+/** The other axis: the one a body is nudged along while it walks along `axis`. */
+const ACROSS: Record<Axis, Axis> = { x: 'y', y: 'x' };
+
+/** `at` moved `by` tiles along `axis`. */
+function shifted(at: Spot, axis: Axis, by: number): Spot {
+  return axis === 'x' ? { x: at.x + by, y: at.y } : { x: at.x, y: at.y + by };
+}
+
 /**
- * One frame's walk from the keys held or the controller's stick (input → velocity): the
- * facing, the step as far as no wall, shut door or furniture stands in the way, and the gait —
- * SPRINT_FACTOR times as fast with sprint held, no stamina; a stick leant part of the way walks
- * that part as fast. Returns the footfall that lands in it, if one does.
+ * The smallest shift across `axis`, at most NUDGE_TILES, that takes a body at `at` stopped
+ * going `by` along it into the opening beside it — never against the way the player leans
+ * across (`lean`); null where no opening lies that near.
  */
-export function walk(sim: Sim, map: WorldMap, dt: number, locked: boolean): Footfall | null {
-  const { dx, dy, lean } = heading(sim, locked);
-  sim.self.moving = lean > 0;
-  if (!(lean > 0)) {
-    return null;
+function nudgeFor(
+  map: WorldMap,
+  footing: Footing,
+  at: Spot,
+  axis: Axis,
+  by: number,
+  lean: number,
+): number | null {
+  const free = (spot: Spot): boolean => !blocked(map, footing, spot.x, spot.y);
+  for (let reach = NUDGE_STEP; reach <= NUDGE_TILES + 1e-9; reach += NUDGE_STEP) {
+    for (const way of [1, -1]) {
+      const aside = shifted(at, ACROSS[axis], way * reach);
+      if (lean * way >= 0 && free(aside) && free(shifted(aside, axis, by))) {
+        return way * reach;
+      }
+    }
   }
-  sim.self.facing = Math.atan2(dy, dx);
-  const sprinting = sim.keys.has('sprint') || sim.pad.sprint;
-  const pace = sprinting ? SPRINT_FACTOR : 1;
-  const speed = WALK_SPEED * pace * lean;
-  const closedDoors = new Set(map.doors.filter((d) => !d.open).map((d) => `${d.x},${d.y}`));
-  const nx = sim.self.x + dx * speed * dt;
-  if (!blocked(map, closedDoors, nx, sim.self.y)) {
-    sim.self.x = nx;
+  return null;
+}
+
+/**
+ * The body moved `by` tiles along `axis` where nothing stands in the way — or, caught on the
+ * edge of an opening, slid across towards it as fast as it walks (`nudgeFor`). Returns how far
+ * it went.
+ */
+function stepAlong(
+  sim: Sim,
+  map: WorldMap,
+  footing: Footing,
+  axis: Axis,
+  by: number,
+  lean: number,
+): number {
+  const at = sim.self;
+  const to = shifted(at, axis, by);
+  if (by === 0) {
+    return 0;
   }
-  const ny = sim.self.y + dy * speed * dt;
-  if (!blocked(map, closedDoors, sim.self.x, ny)) {
-    sim.self.y = ny;
+  if (!blocked(map, footing, to.x, to.y)) {
+    at[axis] = to[axis];
+    return Math.abs(by);
   }
-  sim.walkPhase = gaitStep(sim.walkPhase, speed * dt);
-  sim.stepAcc += speed * dt;
+  const nudge = nudgeFor(map, footing, at, axis, by, lean);
+  if (nudge === null) {
+    return 0;
+  }
+  const slide = Math.sign(nudge) * Math.min(Math.abs(nudge), Math.abs(by));
+  at[ACROSS[axis]] += slide;
+  return Math.abs(slide);
+}
+
+/**
+ * The gait of a frame that covered `covered` tiles: the legs and the footfalls keep pace with
+ * the ground covered — none against a wall — and a move held against what stops it bumps into
+ * it once a push. Returns the frame's sound.
+ */
+function gaitOf(sim: Sim, covered: number, sprinting: boolean): WalkSound | null {
+  if (covered === 0) {
+    const first = !sim.pushing;
+    sim.pushing = true;
+    sim.bumps += first ? 1 : 0;
+    return first ? 'bump' : null;
+  }
+  sim.pushing = false;
+  sim.walkPhase = gaitStep(sim.walkPhase, covered);
+  sim.stepAcc += covered;
   if (sim.stepAcc > STRIDE) {
     sim.stepAcc = 0;
     sim.footfalls += 1;
@@ -250,39 +399,74 @@ export function walk(sim: Sim, map: WorldMap, dt: number, locked: boolean): Foot
   return null;
 }
 
-/** Remote avatars ease toward their streamed positions (`live`); one gone from them goes. */
-export function easeOthers(
+/**
+ * One frame's walk from the keys held or the controller's stick (input → velocity): the
+ * facing, the step as far as no wall, shut door or furniture stands in the way — a door shut
+ * on the avatar lets it out as the server does (`blocked`), and a body caught on the edge of an
+ * opening is nudged into it (`stepAlong`) — and the gait (`gaitOf`), SPRINT_FACTOR times as
+ * fast with sprint held, no stamina; a stick leant part of the way walks that part as fast.
+ * The avatar walks (`self.moving`) only where it covers ground: pushing into a wall it stands,
+ * as its partners then see it (trail.ts). Returns what the frame sounds like, if anything.
+ */
+export function walk(sim: Sim, map: WorldMap, dt: number, locked: boolean): WalkSound | null {
+  const { dx, dy, lean } = heading(sim, locked);
+  sim.self.moving = false;
+  if (!(lean > 0)) {
+    sim.pushing = false;
+    return null;
+  }
+  const from = { x: sim.self.x, y: sim.self.y };
+  sim.self.facing = Math.atan2(dy, dx);
+  const sprinting = sim.keys.has('sprint') || sim.pad.sprint;
+  const speed = WALK_SPEED * (sprinting ? SPRINT_FACTOR : 1) * lean;
+  const footing = footingOf(sim, map);
+  stepAlong(sim, map, footing, 'x', dx * speed * dt, dy);
+  stepAlong(sim, map, footing, 'y', dy * speed * dt, dx);
+  const covered = Math.hypot(sim.self.x - from.x, sim.self.y - from.y);
+  sim.self.moving = covered > 0;
+  return gaitOf(sim, covered, sprinting);
+}
+
+/**
+ * The crew as this screen draws them at `at` (server time, epoch ms: REMOTE_DELAY_MS before
+ * now, trail.ts): each relayed position (`live`) is a sample of their walk, and each figure is
+ * drawn where its samples put it then — the newest position kept beside it. One gone from the
+ * positions goes.
+ */
+export function followOthers(
   sim: Sim,
-  live: Record<string, PlayerPosition>,
+  live: Record<string, RelayedPosition>,
   youId: string,
-  dt: number,
+  at: number,
 ): void {
-  const k = 1 - Math.exp(-dt * 12);
   for (const [id, pos] of Object.entries(live)) {
     if (id === youId) {
       continue;
     }
+    const trail = sim.trails.get(id) ?? newTrail();
+    sim.trails.set(id, trail);
+    hear(trail, pos);
+    const drawn = drawnAt(trail, at) ?? pos;
     const other = sim.others.get(id);
     if (other === undefined) {
-      sim.others.set(id, { ...pos, rx: pos.x, ry: pos.y, phase: 0 });
-    } else {
-      other.x = pos.x;
-      other.y = pos.y;
-      other.facing = pos.facing;
-      other.moving = pos.moving;
-      const dx = (pos.x - other.rx) * k;
-      const dy = (pos.y - other.ry) * k;
-      other.rx += dx;
-      other.ry += dy;
-      // The legs keep pace with the ground the figure covers on this screen (figure.ts).
-      if (pos.moving) {
-        other.phase = gaitStep(other.phase, Math.hypot(dx, dy));
-      }
+      const { facing, moving } = drawn;
+      const { x, y } = pos;
+      sim.others.set(id, { x, y, facing, moving, rx: drawn.x, ry: drawn.y, phase: 0 });
+      continue;
+    }
+    const step = Math.hypot(drawn.x - other.rx, drawn.y - other.ry);
+    Object.assign(other, { x: pos.x, y: pos.y, facing: drawn.facing, moving: drawn.moving });
+    other.rx = drawn.x;
+    other.ry = drawn.y;
+    // The legs keep pace with the ground the figure covers on this screen (figure.ts).
+    if (drawn.moving) {
+      other.phase = gaitStep(other.phase, step);
     }
   }
   for (const id of sim.others.keys()) {
     if (live[id] === undefined) {
       sim.others.delete(id);
+      sim.trails.delete(id);
     }
   }
 }

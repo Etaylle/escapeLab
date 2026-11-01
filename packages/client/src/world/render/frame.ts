@@ -8,6 +8,7 @@ import type { FigureMood } from '../figure.js';
 import type { FinaleFrame } from '../finale.js';
 import type { LightPath } from '../gl/path.js';
 import type { ContextAction } from '../interact.js';
+import type { Refused } from '../press.js';
 import type { LampMount, Lit } from '../light.js';
 import type { MarkerTarget } from '../markers.js';
 import type { CeilingLight } from '../power.js';
@@ -223,8 +224,11 @@ export interface Frame {
   players: PlayerView['players'];
   /** whether this player has seen the Laborkennung */
   signSeen: boolean;
-  /** when the clock runs out, epoch ms; null for a run without one */
-  deadlineAt: number | null;
+  /**
+   * what is left on the mission's clock, ms, as the server keeps it (clock.ts); null for a run
+   * without one
+   */
+  timeLeft: number | null;
   /** your avatar where you steer it, and its gait */
   self: { x: number; y: number; facing: number; moving: boolean };
   walkPhase: number;
@@ -276,6 +280,11 @@ export interface Frame {
   markers: readonly MarkerTarget[];
   /** what E does here; null for nothing, under a panel, and while the run ends on screen */
   action: ContextAction | null;
+  /**
+   * a refusal of E's, on the prompt pill in amber with the server's words for its time
+   * (world/press.ts); null while there is none
+   */
+  refusal: Refused | null;
   /** where the minimap sits; null while it is off, and for the audience */
   minimap: MinimapLayout | null;
   /**

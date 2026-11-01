@@ -12,6 +12,7 @@ import {
   type ServerRow,
 } from '@escapelab/core';
 import type { Panel as PanelOf } from '../src/puzzles/index.js';
+import { NO_CLOCK } from './fixtures.js';
 
 vi.mock('../src/puzzles/sounds.js', async (importOriginal) => {
   const real = await importOriginal<Record<string, unknown>>();
@@ -25,8 +26,15 @@ vi.mock('../src/puzzles/sounds.js', async (importOriginal) => {
 
 const sounds = await import('../src/puzzles/sounds.js');
 const { needleAngle, probedWith, scrambled } = await import('../src/puzzles/CircuitPanel.js');
-const { closeAfterSolved, Device, feelChange, heldView, SOLVED_CLOSE_MS, STRIP_LEDS } =
-  await import('../src/puzzles/Device.js');
+const {
+  closeAfterSolved,
+  Device,
+  feelChange,
+  heldView,
+  refusedHere,
+  SOLVED_CLOSE_MS,
+  STRIP_LEDS,
+} = await import('../src/puzzles/Device.js');
 const { PANELS, SOUNDS } = await import('../src/puzzles/index.js');
 const { typedOrder } = await import('../src/puzzles/KeypadPanel.js');
 const { knobAngle } = await import('../src/puzzles/MorsePanel.js');
@@ -93,7 +101,7 @@ function panelAfter<K extends Kind>(
   // PANELS is keyed by kind, so the entry for this kind takes exactly this puzzle.
   const Panel = PANELS[kind] as unknown as PanelOf<K>;
   return renderToStaticMarkup(
-    <Panel puzzle={after} change={changed(before, after, alarm)} send={noop} deadlineAt={null} />,
+    <Panel puzzle={after} change={changed(before, after, alarm)} send={noop} mission={NO_CLOCK} />,
   );
 }
 
@@ -242,6 +250,57 @@ describe('an alarm at an open device', () => {
   });
 });
 
+describe('a press the server refuses at an open device', () => {
+  const refusal = {
+    seq: 3,
+    message: 'Eingabe gesperrt: Am anderen Pult und bei den Regeln steht niemand.',
+    of: 'puzzle-input' as const,
+  };
+
+  it('says the server’s words in the device’s head, before the face', () => {
+    const html = renderToStaticMarkup(
+      <Device
+        kind="keypad"
+        paragraph="§1"
+        title="Tastenfeld"
+        tag={null}
+        leds={[]}
+        alarms={0}
+        solved={false}
+        press={null}
+        refused={refusal}
+      >
+        <p>Gesicht</p>
+      </Device>,
+    );
+    expect(html).toContain(`<div class="device-refusal" role="alert">${refusal.message}</div>`);
+    expect(html.indexOf('device-refusal')).toBeLessThan(html.indexOf('device-face'));
+  });
+
+  it('heeds only a refusal of a press there that came after it opened', () => {
+    expect(refusedHere(refusal, 2)).toBe(true);
+    expect(refusedHere(refusal, 3)).toBe(false);
+    expect(refusedHere({ ...refusal, of: 'interact' }, 2)).toBe(false);
+    expect(refusedHere(null, 0)).toBe(false);
+  });
+
+  it('says it on the relay console too, under the instruction', () => {
+    const relay = {
+      kind: 'relay' as const,
+      instruction: null,
+      windowSec: 12,
+      controls: [],
+      completed: 0,
+      required: 6,
+    } as unknown as Parameters<typeof RelayConsole>[0]['relay'];
+    // a refusal heard before the console came up is not its own
+    const html = renderToStaticMarkup(
+      <RelayConsole relay={relay} pausedAt={null} send={noop} refusal={refusal} />,
+    );
+    expect(html).not.toContain('relay-refusal');
+  });
+});
+
 describe('the fuse box', () => {
   type Circuit = ViewOf<'circuit'>;
   const at = (seat: ConsoleId, change: Partial<Circuit> = {}): Circuit => ({
@@ -272,7 +331,7 @@ describe('the fuse box', () => {
 
   it('shows a box opened with a wire cut before as cut, and nothing falling', () => {
     const html = renderToStaticMarkup(
-      <PANELS.circuit puzzle={cutAt(at('a'), 2)} change={null} send={noop} deadlineAt={null} />,
+      <PANELS.circuit puzzle={cutAt(at('a'), 2)} change={null} send={noop} mission={NO_CLOCK} />,
     );
     expect(html).not.toMatch(/snapped|class="spark"/);
   });
@@ -443,7 +502,7 @@ describe('the memory bank', () => {
 
   it('says nothing of a fall as it opens', () => {
     const html = renderToStaticMarkup(
-      <PANELS.memory puzzle={at(1)} change={null} send={noop} deadlineAt={null} />,
+      <PANELS.memory puzzle={at(1)} change={null} send={noop} mission={NO_CLOCK} />,
     );
     expect(html).not.toContain('memory-reset');
   });
@@ -582,13 +641,13 @@ describe('the big button', () => {
         puzzle={{ ...button, holding: true }}
         change={null}
         send={noop}
-        deadlineAt={null}
+        mission={NO_CLOCK}
       />,
     );
     expect(html.match(/<span class="button-tick"><\/span>/g)).toHaveLength(HOLD_TICKS);
     expect(html).toContain('data-feel="none"');
     const released = renderToStaticMarkup(
-      <PANELS.button puzzle={button} change={null} send={noop} deadlineAt={null} />,
+      <PANELS.button puzzle={button} change={null} send={noop} mission={NO_CLOCK} />,
     );
     expect(released).not.toContain('button-ticks');
   });
@@ -617,14 +676,14 @@ describe('the relay console', () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000_000);
     const calm = renderToStaticMarkup(
-      <RelayConsole relay={relay(12_000)} send={noop} refusals={0} />,
+      <RelayConsole relay={relay(12_000)} pausedAt={null} send={noop} refusal={null} />,
     );
     expect(calm).toContain(
       '<span class="relay-count" role="timer" aria-label="noch 12 Sekunden">12',
     );
     const lastSeconds = relay(FINAL_SECONDS * 1000);
     const late = renderToStaticMarkup(
-      <RelayConsole relay={lastSeconds} send={noop} refusals={0} />,
+      <RelayConsole relay={lastSeconds} pausedAt={null} send={noop} refusal={null} />,
     );
     expect(late).toContain('<span class="relay-count relay-count--final" role="timer"');
     expect(late).toContain('>05</span>');
@@ -633,7 +692,7 @@ describe('the relay console', () => {
   it('clacks its switches and catches its dials, as their data-feel says', () => {
     vi.useFakeTimers();
     const html = renderToStaticMarkup(
-      <RelayConsole relay={relay(12_000)} send={noop} refusals={0} />,
+      <RelayConsole relay={relay(12_000)} pausedAt={null} send={noop} refusal={null} />,
     );
     expect(html).toContain('<button class="relay-switch " data-feel="clack"');
     expect(html.match(/data-feel="detent"/g)).toHaveLength(5);
@@ -717,7 +776,7 @@ describe('the Serverraum', () => {
 
   it('scrolls the screen in as the terminal opens, and only what a change brought after', () => {
     const opened = renderToStaticMarkup(
-      <PANELS.servers puzzle={terminal([])} change={null} send={noop} deadlineAt={null} />,
+      <PANELS.servers puzzle={terminal([])} change={null} send={noop} mission={NO_CLOCK} />,
     );
     expect(opened).toContain('<div class="servers-crt servers-crt--boot">');
     const after = panelAfter('servers', terminal([]), terminal([line(1, 'ok', 'db läuft')]));

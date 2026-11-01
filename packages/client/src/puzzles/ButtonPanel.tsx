@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { formatLeft, timeLeft, type MissionTime } from '../clock.js';
+import { useServerNow } from '../hooks.js';
 import { Icon } from '../screens/Icon.js';
 import type { PanelProps } from './index.js';
 import { buttonThunk, holdTick, keyClick } from './sounds.js';
@@ -27,23 +29,13 @@ const MISTAKES: Record<NonNullable<ButtonPuzzle['lastResult']>, string> = {
   'wrong-time': 'Fehlgriff: zur falschen Zeit losgelassen.',
 };
 
-function useNow(intervalMs: number): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(timer);
-  }, [intervalMs]);
-  return now;
-}
-
-/** The mission clock again, worked out like the HUD's, so the operator need not look away. */
-function MissionClock({ deadlineAt }: { deadlineAt: number | null }) {
-  const now = useNow(200);
-  const left = deadlineAt === null ? null : Math.max(0, Math.ceil((deadlineAt - now) / 1000));
-  const text =
-    left === null
-      ? '--:--'
-      : `${String(Math.floor(left / 60)).padStart(2, '0')}:${String(left % 60).padStart(2, '0')}`;
+/**
+ * The mission clock again, worked out like the HUD's — on the server's clock, standing still
+ * while the run is paused — so the operator need not look away.
+ */
+function MissionClock({ mission }: { mission: MissionTime }) {
+  const left = timeLeft(mission, useServerNow(200));
+  const text = left === null ? '--:--' : formatLeft(left);
   return (
     <div className="button-clock">
       <span className="button-clock-label">MISSIONSUHR</span>
@@ -144,14 +136,14 @@ function Console({
   colour,
   label,
   send,
-  deadlineAt,
+  mission,
 }: PanelProps<'button'> & { colour: Colour; label: NonNullable<ButtonPuzzle['label']> }) {
   const touch = useHoldButton(puzzle.holding, send);
   const isKey = (key: string) => key === ' ' || key === 'Enter';
   const strip = puzzle.strip === null ? null : COLOURS[puzzle.strip];
   return (
     <div className="button-console">
-      <MissionClock deadlineAt={deadlineAt} />
+      <MissionClock mission={mission} />
       <div className="button-rig">
         <div className="button-mount">
           <button

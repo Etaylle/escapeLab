@@ -23,6 +23,7 @@ describe('worldNews — what the lab shows that it did not before', () => {
       opened: [],
       lit: [],
       delivered: [],
+      dropped: [],
     });
   });
 
@@ -77,6 +78,25 @@ describe('worldNews — what the lab shows that it did not before', () => {
     expect(news.delivered).toEqual([seated]);
     expect(news.opened.map((m) => m.id)).toEqual(['spind']);
     expect(worldNews(now, now).delivered).toEqual([]);
+  });
+
+  it('puts a part down off somebody’s hands once, where it now lies — not one set in place', () => {
+    const fuse = {
+      id: 'sicherung',
+      label: 'SICHERUNG',
+      x: 9.5,
+      y: 4.5,
+      carriedBy: 'ada',
+      delivered: false,
+      deliverTo: { x: 14, y: 2 },
+      requiredForTitle: 'Notstrom',
+    };
+    const down = { ...fuse, carriedBy: null, x: 9.7, y: 4.4 };
+    const before = mapWith({ items: [fuse] });
+    expect(worldNews(before, mapWith({ items: [down] })).dropped).toEqual([down]);
+    expect(worldNews(mapWith({ items: [down] }), mapWith({ items: [down] })).dropped).toEqual([]);
+    const seated = { ...fuse, carriedBy: null, delivered: true };
+    expect(worldNews(before, mapWith({ items: [seated] })).dropped).toEqual([]);
   });
 
   it('lights the rooms that joined the list, each once', () => {

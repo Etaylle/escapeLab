@@ -66,6 +66,7 @@ function blackoutOver(parts: Partial<PlayerView> = {}): PlayerView {
     currentPuzzleIndex: 6,
     puzzleCount: 6,
     pausedFor: null,
+    pausedAt: null,
     events: [],
     grade: { rank: 'A', label: 'Sauber' },
     penaltySeq: 1,

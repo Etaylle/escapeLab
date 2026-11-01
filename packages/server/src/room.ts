@@ -29,6 +29,7 @@ import {
   type MapDef,
   type Mission,
   type PlayerPosition,
+  type RelayedPosition,
   type RoomSummary,
   type RtcSignal,
   type RunReport,
@@ -57,7 +58,6 @@ export type GameMessage = Extract<
       | 'request-hint'
       | 'open-source'
       | 'read-note'
-      | 'interact'
       | 'drop-item'
       | 'back-to-lobby'
       | 'rematch';
@@ -77,10 +77,17 @@ const PRESENCE_LEAVE_RADIUS = 2.0;
 const DISCOVER_RADIUS = 3.5;
 /** How close to the armed station an interact is accepted. */
 const INTERACT_RADIUS = 1.6;
+/**
+ * How far from where the room has a player, in tiles, the spot they pressed E on may lie and
+ * still be taken: about two of a sprint's position updates.
+ */
+const PRESS_REACH = 0.5;
 /** Everyone must stand on the exit hatch itself (below one tile) to escape. */
 const EXIT_RADIUS = 0.7;
 /** Positions fan out at most this often. */
 const POSITIONS_INTERVAL_MS = 66;
+/** …and at least this often while a run is on, whether or not anything moved. */
+const POSITIONS_KEEPALIVE_MS = 1000;
 /** Minimum gap between two pings from the same player. */
 const PING_COOLDOWN_MS = 700;
 /** Same idea for quick chat, a little slower so it stays readable. */
@@ -116,7 +123,7 @@ export class Room {
   private readonly listeners = new Map<string, Listener>();
   /** audience connections, by the id each got on attaching */
   private readonly spectators = new Map<string, Listener>();
-  private readonly positions = new Map<string, PlayerPosition>();
+  private readonly positions = new Map<string, RelayedPosition>();
   private readonly lastPingAt = new Map<string, number>();
   private readonly lastChatAt = new Map<string, number>();
   /** each member's voice signals still allowed, and when that was last worked out (epoch ms) */
@@ -136,7 +143,12 @@ export class Room {
   private next: Mission | null = null;
   private timer: NodeJS.Timeout | null = null;
   private positionsTimer: NodeJS.Timeout | null = null;
+  /** a new sample, a refused step or a drone that moved since the positions last went out */
   private positionsDirty = false;
+  /** sends the positions again once a second of a run has gone by without them */
+  private keepaliveTimer: NodeJS.Timeout | null = null;
+  /** the drones as the positions last carried them, to tell whether one has moved since */
+  private dronesSent = '{}';
   /** steps refused in this room so far, for the log */
   private refusedSteps = 0;
   /** epoch ms since the room has had no connected players, null while occupied */
@@ -193,7 +205,7 @@ export class Room {
   attach(playerId: string, listener: Listener): () => void {
     this.listeners.set(playerId, listener);
     this.emptySince = null;
-    listener({ kind: 'view', view: viewFor(this.state, playerId) });
+    listener({ kind: 'view', view: viewFor(this.state, playerId), at: Date.now() });
     if (this.positions.size > 0) {
       listener(this.positionsMessage());
     }
@@ -212,7 +224,8 @@ export class Room {
   attachSpectator(listener: Listener): { spectatorId: string; detach: () => void } {
     const spectatorId = `audience-${randomUUID()}`;
     this.spectators.set(spectatorId, listener);
-    listener({ kind: 'spectator-view', view: viewForSpectator(this.state), code: this.code });
+    const view = viewForSpectator(this.state);
+    listener({ kind: 'spectator-view', view, code: this.code, at: Date.now() });
     if (this.positions.size > 0) {
       listener(this.positionsMessage());
     }
@@ -257,8 +270,15 @@ export class Room {
    * another run (`run`, by its `startedAt`) is dropped. A step no avatar can
    * walk — too long, or through a wall or a shut door — is refused: the
    * player stays where the room had them, and the next fan-out says so.
+   * The fan-out relays when the position was true by the sender's clock
+   * (`t`; null for one taken as it comes) beside when the room took it.
    */
-  updatePosition(playerId: string, run: number, pos: PlayerPosition): void {
+  updatePosition(
+    playerId: string,
+    run: number,
+    pos: PlayerPosition,
+    t: number | null = null,
+  ): void {
     if (
       this.state.phase !== 'playing' ||
       this.state.paused !== null ||
@@ -284,7 +304,7 @@ export class Room {
       this.schedulePositionsBroadcast();
       return;
     }
-    this.positions.set(playerId, pos);
+    this.positions.set(playerId, { ...pos, t, rt: Date.now() });
     this.reconcilePlates();
     this.reconcilePresence();
     this.checkEscape();
@@ -346,9 +366,6 @@ export class Room {
         break;
       case 'read-note':
         this.dispatch({ type: 'read-note', playerId, note: msg.note, at: Date.now() });
-        break;
-      case 'interact':
-        this.resolveInteract(playerId);
         break;
       case 'drop-item':
         this.dropCarried(playerId);
@@ -496,6 +513,27 @@ export class Room {
   }
 
   /**
+   * E pressed on the spot `at`, walked in the sender's frame `t`: the room takes the spot as
+   * the player's — where it lies within PRESS_REACH of where the room had them and they could
+   * have walked there, else it judges where it had them — and then does what E does there
+   * (`resolveInteract`). A position update is due anyway: this one comes with the press.
+   */
+  interact(playerId: string, at: { x: number; y: number }, t: number): void {
+    const from = this.positions.get(playerId);
+    const taken =
+      from !== undefined &&
+      this.state.phase === 'playing' &&
+      this.state.paused === null &&
+      Math.hypot(at.x - from.x, at.y - from.y) <= PRESS_REACH &&
+      stepAllowed(this.state.mission.map, this.state, from, at);
+    if (taken) {
+      const pressed = { x: at.x, y: at.y, facing: from.facing, moving: from.moving };
+      this.updatePosition(playerId, this.state.startedAt ?? Number.NaN, pressed, t);
+    }
+    this.resolveInteract(playerId);
+  }
+
+  /**
    * One key does the obvious thing: deliver what you carry where it belongs
    * (a key unlocks its cabinet), otherwise pick up what lies at your feet,
    * otherwise switch on the station in front of you — full hands or not.
@@ -620,6 +658,8 @@ export class Room {
         y: (spawn?.y ?? 1) + 0.5,
         facing: 0,
         moving: false,
+        t: null,
+        rt: Date.now(),
       });
     }
     this.positionsDirty = true;
@@ -910,6 +950,11 @@ export class Room {
     }
   }
 
+  /**
+   * The positions go out now, and again POSITIONS_INTERVAL_MS on if something changed
+   * meanwhile — a new sample, a refused step, a drone that moved — never oftener; a run that
+   * stands still hears them once a second (POSITIONS_KEEPALIVE_MS).
+   */
   private schedulePositionsBroadcast(): void {
     if (this.positionsTimer !== null) {
       return;
@@ -926,13 +971,25 @@ export class Room {
   private broadcastPositions(): void {
     this.positionsDirty = false;
     const msg = this.positionsMessage();
+    // What everybody heard of the drones: a newcomer told alone is no one else's news.
+    this.dronesSent = JSON.stringify(msg.drones);
     for (const listener of this.audience) {
       listener(msg);
+    }
+    if (this.keepaliveTimer !== null) {
+      clearTimeout(this.keepaliveTimer);
+      this.keepaliveTimer = null;
+    }
+    if (this.state.phase === 'playing') {
+      this.keepaliveTimer = setTimeout(() => {
+        this.keepaliveTimer = null;
+        this.schedulePositionsBroadcast();
+      }, POSITIONS_KEEPALIVE_MS);
     }
   }
 
   /** Where everybody stands right now, stamped with the run it belongs to. */
-  private positionsMessage(): ServerMessage {
+  private positionsMessage(): Extract<ServerMessage, { kind: 'positions' }> {
     return {
       kind: 'positions',
       run: this.state.startedAt,
@@ -1041,8 +1098,11 @@ export class Room {
     for (const { penaltySec, playerId } of spotted) {
       this.dispatch({ type: 'drone-spotted', at: now, penaltySec, playerId });
     }
-    this.positionsDirty = true;
-    this.schedulePositionsBroadcast();
+    // Drones asleep or held by their plate say nothing new: no fan-out for them.
+    if (JSON.stringify(patrol.snapshot(this.state, now)) !== this.dronesSent) {
+      this.positionsDirty = true;
+      this.schedulePositionsBroadcast();
+    }
   }
 
   private positionSnapshot(): Map<string, { x: number; y: number }> {
@@ -1092,14 +1152,16 @@ export class Room {
     }
   }
 
+  /** Every member's view of the state as it stands, stamped with the server's time. */
   private broadcast(): void {
+    const at = Date.now();
     for (const [playerId, listener] of this.listeners) {
-      listener({ kind: 'view', view: viewFor(this.state, playerId) });
+      listener({ kind: 'view', view: viewFor(this.state, playerId), at });
     }
     if (this.spectators.size > 0) {
       const view = viewForSpectator(this.state);
       for (const listener of this.spectators.values()) {
-        listener({ kind: 'spectator-view', view, code: this.code });
+        listener({ kind: 'spectator-view', view, code: this.code, at });
       }
     }
   }
@@ -1129,6 +1191,10 @@ export class Room {
     if (this.positionsTimer !== null) {
       clearTimeout(this.positionsTimer);
       this.positionsTimer = null;
+    }
+    if (this.keepaliveTimer !== null) {
+      clearTimeout(this.keepaliveTimer);
+      this.keepaliveTimer = null;
     }
     if (this.droneTimer !== null) {
       clearInterval(this.droneTimer);

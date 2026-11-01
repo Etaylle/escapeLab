@@ -1,4 +1,5 @@
 import type { DronePosition, PlayerView, PuzzleView, Sight } from '@escapelab/core';
+import { timeLeft } from '../clock.js';
 import type { VoiceMesh } from '../voice/mesh.js';
 import type { Alarm } from './alarm.js';
 import { worldText, type WorldText } from './art.js';
@@ -13,6 +14,7 @@ import { hudAt, litWhole, shotProgress, type IntroCue } from './intro/sequence.j
 import { SHOT_WIDE, shotPoint, shotStart } from './intro/shot.js';
 import { markerTargets } from './markers.js';
 import { positionsOf, type KnownPositions } from './movement.js';
+import { refusalAt } from './press.js';
 import type { ChatLine, Frame, MapPing, RenderKit, WorldMap } from './render/frame.js';
 import { zoomAt, zoomToward } from './render/camera.js';
 import { gridOf, sameGrid, snapCamera } from './render/grid.js';
@@ -338,7 +340,7 @@ type Crew =
   | 'youName'
   | 'players'
   | 'signSeen'
-  | 'deadlineAt'
+  | 'timeLeft'
   | 'self'
   | 'walkPhase'
   | 'others'
@@ -356,7 +358,7 @@ function crewOf(source: FrameSource): Pick<Frame, Crew> {
     youName: view.you.name,
     players: view.players,
     signSeen: view.presence.signSeen,
-    deadlineAt: view.deadlineAt,
+    timeLeft: timeLeft(view),
     self: sim.self,
     walkPhase: sim.walkPhase,
     others: sim.others,
@@ -389,9 +391,9 @@ function overlaysOf(
   ending: FinaleFrame | null,
   perf: number,
   hud: number,
-): Pick<Frame, 'perf' | 'chats' | 'captions' | 'markers' | 'action'> {
+): Pick<Frame, 'perf' | 'chats' | 'captions' | 'markers' | 'action' | 'refusal'> {
   if (ending !== null || hud === 0) {
-    return { perf, chats: [], captions: [], markers: [], action: null };
+    return { perf, chats: [], captions: [], markers: [], action: null, refusal: null };
   }
   const { sim } = source;
   const { view, locked } = source.live.current;
@@ -412,7 +414,8 @@ function overlaysOf(
         view.puzzle !== null,
         view.noteHere,
       );
-  return { perf, chats, captions: sim.captions, markers, action };
+  const refusal = locked ? null : refusalAt(sim.presses, perf);
+  return { perf, chats, captions: sim.captions, markers, action, refusal };
 }
 
 /** How the crew stands for an ending on screen: celebrating a run won, slumped over one lost. */

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Edgework, ManualHere, MapView, PlayerView, PuzzleView } from '@escapelab/core';
+import { clock } from '../src/clock.js';
 import { leafFor, type Leaf } from '../src/pages.js';
 import { Book, TurningLeaf, type Binding, type Imprint } from '../src/screens/Book.js';
 import {
@@ -13,7 +14,7 @@ import { InfoPanel, Legend } from '../src/screens/InfoPanel.js';
 import { ReadingOverlay, roomOf } from '../src/screens/Reading.js';
 import { titleSize } from '../src/screens/Seal.js';
 import { WorldModal } from '../src/screens/WorldModal.js';
-import { deviceRun, mapWith, type Item, type Manual, type Plate } from './fixtures.js';
+import { deviceRun, mapWith, NO_CLOCK, type Item, type Manual, type Plate } from './fixtures.js';
 
 const noop = (): void => undefined;
 
@@ -109,6 +110,7 @@ function read(
       mission="Blackout im Labor"
       map={lab}
       edgework={seen}
+      pausedAt={null}
       onAskNote={noop}
       onPutDown={noop}
     />,
@@ -117,12 +119,13 @@ function read(
 
 const imprint: Imprint = { mission: 'Blackout im Labor', room: 'ARCHIV' };
 
-/** The book as it opens, at whichever page it opens at. */
+/** The book as it opens, at whichever page it opens at; the run paused since `pausedAt`. */
 function opened(
   manual: ManualHere,
   current: number,
   spread = false,
   binding: Binding = 'bound',
+  pausedAt: number | null = null,
 ): string {
   return renderToStaticMarkup(
     <Book
@@ -132,6 +135,7 @@ function opened(
       spread={spread}
       binding={binding}
       imprint={imprint}
+      pausedAt={pausedAt}
       onAskNote={noop}
     />,
   );
@@ -237,6 +241,7 @@ describe('reading a book', () => {
         spread={false}
         binding="bound"
         imprint={{ mission: 'Blackout im Labor', room: null }}
+        pausedAt={null}
         onAskNote={noop}
       />,
     );
@@ -330,6 +335,46 @@ describe('reading a book', () => {
         '<li class="margin-note">Erst die Farben ansagen.</li></ol>' +
         '<button class="note-ask">Notiz der letzten Schicht erbitten · −20 s</button></aside>',
     );
+  });
+
+  it('counts the wait for the next note on the server’s clock, as on every other device', () => {
+    const ready = 1_700_000_000_000;
+    const waiting = { ...noted(), noteReadyAt: ready + 12_000 };
+    vi.useFakeTimers();
+    try {
+      // this device's own clock runs 5 s ahead; the server has said so in its answers
+      vi.setSystemTime(ready + 5_000);
+      for (let i = 0; i < 5; i++) {
+        clock.heard(Date.now(), ready, Date.now());
+      }
+      expect(slip(opened(bound(waiting), 2))).toContain('>Notiz in 12 s</button>');
+    } finally {
+      for (let i = 0; i < 5; i++) {
+        clock.heard(Date.now(), Date.now(), Date.now());
+      }
+      vi.useRealTimers();
+    }
+  });
+
+  it('stands the wait still while the run is paused: the server moves it on by the pause', () => {
+    const ready = 1_700_000_000_000;
+    const waiting = { ...noted(), noteReadyAt: ready + 12_000 };
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(ready);
+      for (let i = 0; i < 5; i++) {
+        clock.heard(Date.now(), Date.now(), Date.now());
+      }
+      // paused 2 s in, 20 s ago: the slip reads what it read as the pause began
+      vi.setSystemTime(ready + 22_000);
+      const paused = opened(bound(waiting), 2, false, 'bound', ready + 2_000);
+      expect(slip(paused)).toContain('>Notiz in 10 s</button>');
+    } finally {
+      for (let i = 0; i < 5; i++) {
+        clock.heard(Date.now(), Date.now(), Date.now());
+      }
+      vi.useRealTimers();
+    }
   });
 
   it('keeps the note with the book, not on a page: there on every page and spread', () => {
@@ -524,7 +569,7 @@ describe('the station frame', () => {
         run={deviceRun()}
         map={single}
         edgework={null}
-        deadlineAt={null}
+        mission={NO_CLOCK}
         send={noop}
         onStepBack={noop}
       />,
@@ -603,7 +648,7 @@ describe('the station frame', () => {
         run={deviceRun()}
         map={single}
         edgework={edgework}
-        deadlineAt={null}
+        mission={NO_CLOCK}
         send={noop}
         onStepBack={noop}
       />,
@@ -706,6 +751,7 @@ function justStarted(parts: Partial<PlayerView> = {}): PlayerView {
     currentPuzzleIndex: 0,
     puzzleCount: 1,
     pausedFor: null,
+    pausedAt: null,
     events: [],
     grade: null,
     penaltySeq: 0,
@@ -739,7 +785,8 @@ function game(view: PlayerView): string {
       pingsRef={{ current: [] }}
       chatsRef={{ current: [] }}
       send={noop}
-      refusals={0}
+      listen={() => noop}
+      refusal={null}
       finale={null}
     />,
   );

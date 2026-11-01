@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Phase, PlayerView, RunEvent } from '@escapelab/core';
+import { EMERGENCY_CLEARED, type Phase, type PlayerView, type RunEvent } from '@escapelab/core';
 
 /**
  * The world answering an alarm — any penalty: the picture strobes red twice,
@@ -25,6 +25,16 @@ export function alarmCause(reason: string): string {
     return 'Drohne';
   }
   return reason === EMERGENCY_REASON ? 'Notfall' : 'Fehlversuch';
+}
+
+/**
+ * Whether the emergency just over was cleared in time, by the run report's latest emergency
+ * line: an emergency missed is logged as its alarm instead, and has the alarm's sounds.
+ */
+export function emergencyCleared(events: readonly RunEvent[]): boolean {
+  const ends = events.filter((event) => event.kind === 'sabotage' || event.kind === 'penalty');
+  const last = ends.at(-1);
+  return last?.kind === 'sabotage' && last.label === EMERGENCY_CLEARED;
 }
 
 /** How long an alarm's notice stays up, on the banner or in the device's head, ms. */

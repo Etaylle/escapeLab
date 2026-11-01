@@ -93,8 +93,9 @@ export function followsSolve(events: readonly RunEvent[], seen: number): boolean
 
 /**
  * The bar's queue once fresh lines came in, none on the air before `notBefore`: they replace
- * the lines still queued, the one on the air included — they are the newer news — but the
- * note that the sign was read keeps its place, ahead of them.
+ * the lines still queued, the one on the air included — they are the newer news — and go on
+ * the air first: the note that the sign was read waits behind them, a note up now included,
+ * which comes back once they are said. The radio never waits for the note.
  */
 export function withNews(
   queue: readonly Notice[],
@@ -102,8 +103,8 @@ export function withNews(
   notBefore = 0,
 ): Notice[] {
   return [
-    ...queue.filter((notice) => notice.kind === 'sign'),
     ...news.map((event): Notice => ({ kind: 'line', event, notBefore })),
+    ...queue.filter((notice) => notice.kind === 'sign'),
   ];
 }
 

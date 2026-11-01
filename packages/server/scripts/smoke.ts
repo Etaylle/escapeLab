@@ -264,7 +264,13 @@ class TestClient {
   sendPos(x: number, y: number, moving: boolean): void {
     this.self = { x, y };
     const run = this.view?.startedAt ?? fail(`${this.label}: no run to walk in`);
-    this.send({ kind: 'pos', run, x, y, facing: 0, moving });
+    this.send({ kind: 'pos', run, x, y, facing: 0, moving, t: Date.now() });
+  }
+
+  /** E where this client stands, its spot sent with the press as the page sends it. */
+  pressE(): void {
+    const at = this.self ?? fail(`${this.label}: pressed E before it stood anywhere`);
+    this.send({ kind: 'interact', x: at.x, y: at.y, t: Date.now() });
   }
 
   close(): void {
@@ -750,14 +756,14 @@ async function readUp(reader: TestClient, helper: TestClient): Promise<void> {
 
 /** E with an item at the client's feet picks it up. */
 async function pickUp(client: TestClient, itemId: string): Promise<void> {
-  client.send({ kind: 'interact' });
+  client.pressE();
   await client.expectView(`picked up ${itemId}`, (v) =>
     v.map?.items.find((i) => i.id === itemId)?.carriedBy === client.playerId);
 }
 
 /** E with the item on its drop-off puts it in. */
 async function install(client: TestClient, itemId: string): Promise<void> {
-  client.send({ kind: 'interact' });
+  client.pressE();
   await client.expectView(`put ${itemId} in`, (v) =>
     v.map?.items.find((i) => i.id === itemId)?.delivered === true);
 }
@@ -1533,7 +1539,7 @@ async function switchOn(client: TestClient, index: number): Promise<void> {
     ),
     `${client.label} stands within interact range of station ${index + 1}`,
   );
-  client.send({ kind: 'interact' });
+  client.pressE();
   await client.until('puzzle active', (v) => v.puzzle !== null);
 }
 
@@ -2120,7 +2126,7 @@ console.log('✓ after the rematch, both clients see everybody on the spawn just
 // A step inside the spawn's own tile, floor for every spawn: the new run would take it.
 const fresh = spawnOf(first);
 const aside = { x: fresh.x + 0.5, y: fresh.y + 0.8, facing: 0, moving: true };
-first.send({ kind: 'pos', run: lastRun, ...aside });
+first.send({ kind: 'pos', run: lastRun, ...aside, t: Date.now() });
 // The server answers in order: once the room list is back, it has handled the position.
 first.send({ kind: 'list-rooms' });
 await first.expect(

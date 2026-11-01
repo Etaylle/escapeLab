@@ -67,6 +67,7 @@ function over(parts: Partial<PlayerView>): PlayerView {
     currentPuzzleIndex: 5,
     puzzleCount: 5,
     pausedFor: null,
+    pausedAt: null,
     events: REPORT,
     grade: { rank: 'A', label: 'Starke Leistung' },
     penaltySeq: 1,
@@ -103,6 +104,7 @@ function watched(parts: Partial<SpectatorView>): SpectatorView {
     alarms: { count: 1, limit: 5 },
     hintsUsed: 1,
     pausedFor: null,
+    pausedAt: null,
     events: REPORT,
     grade: null,
     players: [anna, ben].map((p) => ({

@@ -6,12 +6,26 @@ import {
   useSyncExternalStore,
   type PointerEvent,
 } from 'react';
+import { serverNow } from './clock.js';
 
 /** The wall clock, read again every `intervalMs`. */
 export function useNow(intervalMs: number): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(timer);
+  }, [intervalMs]);
+  return now;
+}
+
+/**
+ * The server's clock as this page reads it (clock.ts), read again every `intervalMs`: what
+ * counts down to a moment the server set counts by it.
+ */
+export function useServerNow(intervalMs: number): number {
+  const [now, setNow] = useState(serverNow);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(serverNow()), intervalMs);
     return () => clearInterval(timer);
   }, [intervalMs]);
   return now;

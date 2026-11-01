@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, scaleMission, type Difficulty, type Mission } from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { RoomManager } from '../src/roomManager.js';
-import { walkTo, type Walker } from './walk.js';
+import { pressE, walkTo, type Walker } from './walk.js';
 
 /**
  * A corridor of two stations where the whole crew presses; mission control has two lines for
@@ -92,7 +92,7 @@ describe('mission control watching from the room', () => {
     vi.advanceTimersByTime(60_000);
     walkTo(room, anna, 3.5, 1.5);
     walkTo(room, ben, 4.5, 1.5);
-    room.act(anna.playerId, { kind: 'interact' });
+    pressE(room, anna);
     vi.advanceTimersByTime(QUIET_MS - 1);
     expect(nudges(anna)).toEqual([]);
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });

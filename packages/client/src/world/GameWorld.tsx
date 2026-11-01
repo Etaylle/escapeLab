@@ -9,7 +9,8 @@ import {
   type PlayerView,
   type PuzzleView,
 } from '@escapelab/core';
-import { useNow } from '../hooks.js';
+import { beepDue, clock, clockTime, serverAt, timeLeft } from '../clock.js';
+import { useServerNow } from '../hooks.js';
 import { actionOfKey, isHeld, type Held, type InputAction } from '../input/bindings.js';
 import { useGlyph } from '../input/glyphs.js';
 import { HeldKeys, watchBindings } from '../input/heldKeys.js';
@@ -21,7 +22,14 @@ import type { CoachMark } from '../puzzles/coach.js';
 import { TalkButton } from '../screens/Voice.js';
 import { getSettings, useReducedMotion } from '../settings.js';
 import { VoiceContext } from '../voice/useVoice.js';
-import { useAlarm, useAlarmClasses, worldHornDue, type Alarm } from './alarm.js';
+import type { Connection } from '../ws.js';
+import {
+  emergencyCleared,
+  useAlarm,
+  useAlarmClasses,
+  worldHornDue,
+  type Alarm,
+} from './alarm.js';
 import { bedCount, bedProbe, hearRooms, startAmbience, stopAmbience } from './ambience.js';
 import { worldText } from './art.js';
 import { dressedFor } from './artKit.js';
@@ -31,6 +39,7 @@ import {
   cabinetUnlock,
   countdownBeep,
   discoveryBlip,
+  emergencyOver,
   footstep,
   graphCensus,
   klaxon,
@@ -38,13 +47,14 @@ import {
   lockerOpen,
   partSeated,
   pingBlip,
+  sheetDown,
   powerDrain,
   startPowerHum,
-  stationChirp,
   stopPowerHum,
   systemsOff,
   timed,
   timeSpent,
+  wallBump,
   type SoundSystem,
 } from './audio.js';
 import { blackoutCue, FLICKER_MS, REVEAL_MS, SEQUENCE_MS } from './coldOpen.js';
@@ -56,7 +66,8 @@ import { useFinaleSounds, type FinaleCue } from './finale.js';
 import { runLight } from './frameLight.js';
 import { frameTrace, traceRequested, type FrameTrace } from './frameTrace.js';
 import { watchInsets, type Insets } from './insets.js';
-import { carriedItem, contextAction, TOUCH, type ContextAction } from './interact.js';
+import { carriedItem, TOUCH } from './interact.js';
+import { hearAnswer, pressE, pressWhenInReach, type PressWorld } from './press.js';
 import { filmed, type IntroCue } from './intro/sequence.js';
 import { runsOf } from './light.js';
 import { positionsOf, type KnownPositions, type Spot } from './movement.js';
@@ -84,10 +95,10 @@ import { dropLight } from './render/light.js';
 import { PING_LIFETIME_MS } from './render/overlays.js';
 import { drawFrame } from './render/pipeline.js';
 import { passProfile, profileRequested } from './render/profile.js';
-import { roomArea, roomsComingOn } from './rooms.js';
+import { lightsHeld, roomArea, roomsComingOn } from './rooms.js';
 import {
-  easeOthers,
   follow,
+  followOthers,
   followServer,
   newSim,
   walk,
@@ -96,6 +107,7 @@ import {
 import { doorMoved, HEAR_EVERY_S, hearCrew, spatialProbe, stopSpatial } from './spatial.js';
 import { soundProbe } from './soundProbe.js';
 import { streamPositions } from './stream.js';
+import { REMOTE_DELAY_MS } from './trail.js';
 import { useWorldTip } from './useWorldTip.js';
 import { vignettePressure } from './vignette.js';
 
@@ -156,6 +168,8 @@ interface Props {
   /** E at the armed station: show its panel once it is open */
   onOperate: () => void;
   send: (msg: ClientMessage) => void;
+  /** hears the server as it speaks (ws.ts): E's answers; none for the audience, who press none */
+  listen?: Connection['listen'];
 }
 
 /** The latest of what the world's loop and its listeners read, as the component last rendered. */
@@ -242,57 +256,23 @@ function usePowerHum(darkSince: number | null, live: React.MutableRefObject<Live
   }, [darkSince, live]);
 }
 
-/**
- * Fires the one context action. Reading and working an open station stay
- * on this client; everything else the server decides. A note of the last
- * crew comes up here at once, and the server hears of the read for the run
- * report. A locked cabinet only says what is missing.
- */
-function tryInteract(loop: Loop): void {
-  const current = loop.live.current.view;
-  if (current.map === null || loop.live.current.locked || heldBack(loop.live.current)) {
-    return;
-  }
-  const action = contextAction(
-    current.map,
-    loop.sim.self,
-    current.you.id,
-    current.sourcesHere,
-    current.puzzle !== null,
-    current.noteHere,
-  );
-  if (action === null || action.kind === 'locked') {
-    return;
-  }
-  if (action.kind === 'open') {
-    loop.live.current.send({ kind: 'open-source', manualId: action.manualId });
-    return;
-  }
-  stationChirp();
-  workOn(loop, action, current);
+/** E's part of the world (press.ts) as the loop has it now. */
+function pressWorld(loop: Loop): PressWorld {
+  const live = loop.live.current;
+  return {
+    view: live.view,
+    sim: loop.sim,
+    shut: live.locked || heldBack(live),
+    send: live.send,
+    onRead: live.onRead,
+    onReadNote: live.onReadNote,
+    onOperate: live.onOperate,
+  };
 }
 
-/**
- * E at a source that is open, a note, or the armed station: read it, work
- * it, or ask the server.
- */
-function workOn(loop: Loop, action: ContextAction, current: PlayerView): void {
-  if (action.kind === 'read') {
-    loop.live.current.onRead(action.manualId);
-    return;
-  }
-  if (action.kind === 'note') {
-    loop.live.current.onReadNote(action.index);
-    loop.live.current.send({ kind: 'read-note', note: action.index });
-    return;
-  }
-  if (action.kind === 'operate') {
-    loop.live.current.onOperate();
-    if (current.puzzle !== null) {
-      return;
-    }
-  }
-  loop.live.current.send({ kind: 'interact' });
+/** E pressed on this screen (press.ts `pressE`). */
+function tryInteract(loop: Loop): void {
+  pressE(pressWorld(loop), performance.now());
 }
 
 /** Puts down what this player carries, where they stand; the server knows what that is. */
@@ -463,9 +443,9 @@ function minimapOf(loop: Loop): MinimapProbe | null {
 
 /**
  * `?trace=1`: the walkthrough reads the last frame durations off the page, the camera, your
- * avatar's footfalls, the minimap and its goal, the glow round what the E prompt names, and
- * what the lab sounds like — the beds, the music, the radio's voice, the partner's place — and
- * can render the radio's chain offline.
+ * avatar's footfalls, the minimap and its goal, the glow round what the E prompt names, what
+ * the lab sounds like — the beds, the music, the radio's voice, the partner's place — and the
+ * server's clock as the page reads it; and it can render the radio's chain offline.
  */
 function traceFrames(loop: Loop): Traced | null {
   if (!traceRequested(location.search)) {
@@ -489,8 +469,18 @@ function traceFrames(loop: Loop): Traced | null {
     get self() {
       return { x: sim.self.x, y: sim.self.y };
     },
+    get others() {
+      const drawn: Record<string, { x: number; y: number }> = {};
+      for (const [id, other] of sim.others) {
+        drawn[id] = { x: other.rx, y: other.ry };
+      }
+      return drawn;
+    },
     get footfalls() {
       return sim.footfalls;
+    },
+    get bumps() {
+      return sim.bumps;
     },
     get minimap() {
       return minimapOf(loop);
@@ -502,6 +492,14 @@ function traceFrames(loop: Loop): Traced | null {
       const sound = { music: musicProbe(), voice: voiceProbe(), spatial: spatialProbe() };
       const nodes = { ...graphCensus(), beds: bedCount() };
       return { ...bedProbe(), ...sound, nodes, spent: timeSpent(), renderRadio, ...soundProbe() };
+    },
+    get clock() {
+      const serverNow = clock.now();
+      return {
+        offset: clock.offset(),
+        serverNow,
+        left: timeLeft(loop.live.current.view, serverNow),
+      };
     },
   });
   return { trace, work, drop };
@@ -531,7 +529,7 @@ function runFrames(loop: Loop, traced: Traced | null): () => void {
     frames += 1;
     const map = loop.live.current.view.map;
     if (map !== null) {
-      step(loop, dt, map);
+      step(loop, dt, now, map);
       if (drawsFrame(frames, { locked: loop.live.current.locked, spectator: loop.spectator })) {
         render(loop, map);
         traced?.work.record(loop.kit.census);
@@ -543,8 +541,11 @@ function runFrames(loop: Loop, traced: Traced | null): () => void {
   return () => cancelAnimationFrame(raf);
 }
 
-/** One frame of the simulation: you, the crew, the doors, the news, the clock, the camera. */
-function step(loop: Loop, dt: number, map: WorldMap): void {
+/**
+ * One frame of the simulation at `now` (the frame's timestamp, performance.now): you, the
+ * crew, the doors, the news, the clock, the camera.
+ */
+function step(loop: Loop, dt: number, now: number, map: WorldMap): void {
   const { sim, spectator } = loop;
   const view = loop.live.current.view;
   // Spectators own no avatar, so every streamed position is "someone else".
@@ -565,11 +566,19 @@ function step(loop: Loop, dt: number, map: WorldMap): void {
   if (sim.held) {
     sim.keys.clear();
   }
-  const footfall = walk(sim, map, dt, loop.live.current.locked || sim.held);
-  if (footfall !== null) {
-    footstep(footfall === 'sprint');
+  const sound = walk(sim, map, dt, loop.live.current.locked || sim.held);
+  sim.selfAt = now;
+  if (!spectator) {
+    pressWhenInReach(pressWorld(loop), performance.now());
   }
-  easeOthers(sim, positionsOf(loop.positions.current, run), youId, dt);
+  if (sound === 'bump') {
+    wallBump();
+  } else if (sound !== null) {
+    footstep(sound === 'sprint');
+  }
+  // The crew REMOTE_DELAY_MS in the past, where their samples put them (trail.ts).
+  const drawnAt = serverAt(now) - REMOTE_DELAY_MS;
+  followOthers(sim, positionsOf(loop.positions.current, run), youId, drawnAt);
   slideDoors(sim, map, spectator ? null : sim.self);
   if (map !== sim.seen) {
     look(loop, map);
@@ -642,11 +651,11 @@ function hearTheLab(loop: Loop): void {
  */
 function tensionOf(loop: Loop, map: WorldMap): Tension {
   const { view, darkSince, finale } = loop.live.current;
-  const deadline = view.deadlineAt;
+  const left = timeLeft(view);
   return {
     run: view.startedAt,
     startAt: darkSince === null ? null : darkSince + REVEAL_MS + MUSIC_AFTER_CLICK_MS,
-    left: deadline === null ? Infinity : (deadline - Date.now()) / 1000,
+    left: left === null ? Infinity : left / 1000,
     budget: view.timeLimitSec,
     alarms: view.penaltySeq,
     escaping: escaping(map),
@@ -655,18 +664,18 @@ function tensionOf(loop: Loop, map: WorldMap): Tension {
 }
 
 /**
- * The last ten seconds counted out loud — for a player — and an emergency's
- * siren as it starts, a chirp as it is over.
+ * The last ten seconds counted out loud — for a player — on the mission's clock as the server
+ * keeps it, and an emergency's power draining as it starts, its chime as it is cleared — and
+ * nothing as it runs out, its alarm sounding instead.
  */
 function hearTheClock(loop: Loop, map: WorldMap): void {
   const { sim } = loop;
-  const view = loop.live.current.view;
-  const deadline = view.deadlineAt;
-  if (deadline !== null && !loop.spectator) {
-    const whole = Math.ceil((deadline - Date.now()) / 1000);
-    if (whole <= 10 && whole >= 0 && whole < sim.lastBeepAt) {
-      sim.lastBeepAt = whole;
-      countdownBeep(whole);
+  const left = timeLeft(loop.live.current.view);
+  if (left !== null && !loop.spectator) {
+    const due = beepDue(left, sim.lastBeepAt);
+    sim.lastBeepAt = due.last;
+    if (due.beep !== null) {
+      countdownBeep(due.beep);
     }
   }
   const sabotageOn = map.sabotage !== null;
@@ -674,8 +683,8 @@ function hearTheClock(loop: Loop, map: WorldMap): void {
     sim.sabotageWasOn = sabotageOn;
     if (sabotageOn) {
       powerDrain();
-    } else {
-      stationChirp();
+    } else if (emergencyCleared(loop.live.current.view.events)) {
+      emergencyOver();
     }
   }
 }
@@ -718,8 +727,15 @@ function look(loop: Loop, map: WorldMap): void {
       partSeated();
     }
   }
+  // A part put down (Q) is set down where it now lies, heard as far as a locker opening.
+  for (const item of news.dropped) {
+    if (loop.spectator || Math.hypot(item.x - sim.self.x, item.y - sim.self.y) <= HEAR_RADIUS) {
+      sheetDown();
+    }
+  }
   const known = new Set(sim.lit.keys());
-  const lit = roomsComingOn(map.litRooms, known, news.lit, sim.pendingLit, covered(loop));
+  const held = lightsHeld(loop.spectator, loop.live.current.station);
+  const lit = roomsComingOn(map.litRooms, known, news.lit, sim.pendingLit, held);
   for (const room of lit.long) {
     lightRoom(loop, map, room, -Infinity);
   }
@@ -727,16 +743,12 @@ function look(loop: Loop, map: WorldMap): void {
   warmUpRooms(loop, map, lit.now);
 }
 
-/** Whether something lies over the world on this screen: a panel, pages, the pause. */
-function covered(loop: Loop): boolean {
-  return !loop.spectator && loop.live.current.locked;
-}
-
-/** The rooms that waited behind a panel or pages come on once nothing lies over the world. */
+/** The rooms that waited behind a panel come on once it is gone. */
 function lightWhenClear(loop: Loop, map: WorldMap): void {
   const { sim } = loop;
   if (sim.pendingLit.length > 0) {
-    const lit = roomsComingOn([], new Set(), [], sim.pendingLit, covered(loop));
+    const held = lightsHeld(loop.spectator, loop.live.current.station);
+    const lit = roomsComingOn([], new Set(), [], sim.pendingLit, held);
     sim.pendingLit = lit.waiting;
     warmUpRooms(loop, map, lit.now);
   }
@@ -873,6 +885,10 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
     // An audience connection watches only: no controls, no position stream.
     const unlisten = props.spectator ? null : listen(loop, setWheelOpen);
     const unping = props.spectator ? null : onPadPing(() => padPing(loop));
+    const unhear = props.listen?.({
+      message: (msg) => hearAnswer(sim.presses, msg, performance.now()),
+      closed: () => undefined,
+    });
     const posTimer = streamPositions(sim, props.spectator, (msg) => live.current.send(msg));
     const traced = traceFrames(loop);
     const tracedGraphics = traceGraphics(loop);
@@ -881,6 +897,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
     const ears = setInterval(() => hearTheLab(loop), HEAR_MS);
     return () => {
       stop();
+      unhear?.();
       clearInterval(ears);
       clearInterval(posTimer);
       insets.disconnect();
@@ -1126,7 +1143,7 @@ function useWorld(props: Props): WorldState {
  * more pressing the moment. Gone once the run's end plays on this screen.
  */
 function RedEdge({ view, ending }: { view: PlayerView; ending: boolean }) {
-  const now = useNow(500);
+  const now = clockTime(view.pausedAt, useServerNow(500));
   const pressure = vignettePressure(view.deadlineAt, now, escaping(view.map), ending);
   return pressure === null ? null : (
     <div className={`vignette vignette--${pressure}`} aria-hidden="true" />

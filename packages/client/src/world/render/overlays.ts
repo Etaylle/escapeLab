@@ -292,22 +292,34 @@ function drawRoomNames(ctx: CanvasRenderingContext2D, frame: Frame, view: Viewpo
  * What E does here, over the thing it works on — amber where E does
  * nothing yet — and clear of your figure (`figure`), above it where there
  * is room: standing beside a station, its prompt would lie on your name.
+ * While the server's refusal of a press is up (`frame.refusal`), the pill
+ * where that press was made says the server's words instead, in amber.
  * Returns where it went, or null for none.
  */
 function drawPrompt(ctx: CanvasRenderingContext2D, frame: Frame, figure: Box | null): Box | null {
-  const { action } = frame;
-  if (action === null) {
+  const { action, refusal } = frame;
+  const shown =
+    refusal !== null
+      ? { x: refusal.x, y: refusal.y, text: refusal.text, tint: C.locked }
+      : action === null
+        ? null
+        : {
+            x: action.x,
+            y: action.y,
+            text: promptText(action, !frame.touch),
+            tint: action.kind === 'locked' ? C.locked : C.action,
+          };
+  if (shown === null) {
     return null;
   }
   const view = frame.viewport;
   const { dpr } = view;
-  const [sx, rawY] = toScreen(frame, action.x, action.y);
+  const [sx, rawY] = toScreen(frame, shown.x, shown.y);
   // Like the edge arrows: the prompt must stay below the objective bar.
-  const text = promptText(action, !frame.touch);
-  const box = tagBox(ctx, text, sx, Math.max(rawY, view.top + 24 * dpr), dpr);
+  const box = tagBox(ctx, shown.text, sx, Math.max(rawY, view.top + 24 * dpr), dpr);
   const ceiling = view.top + 13 * dpr;
   const at = moved(box, figure === null ? 0 : shiftClear(box, figure, TAG_AIR * dpr, ceiling));
-  drawTag(ctx, text, at, action.kind === 'locked' ? C.locked : C.action, dpr);
+  drawTag(ctx, shown.text, at, shown.tint, dpr);
   return at;
 }
 

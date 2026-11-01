@@ -16,7 +16,7 @@ import {
 import { PuzzlePanel } from '../src/screens/PuzzlePanel.js';
 import { lookOf, ReadingOverlay, verbOf } from '../src/screens/Reading.js';
 import { BrokenContext, fakeAudio, freshAudio, started, startedAt } from './fakeAudio.js';
-import { deviceRun, mapWith } from './fixtures.js';
+import { deviceRun, mapWith, NO_CLOCK } from './fixtures.js';
 import { buttonsOf, elementsOf, press } from './probe.js';
 
 const noop = (): void => undefined;
@@ -62,6 +62,7 @@ function reading(kind: ManualKind, extra: { leaving?: boolean } = {}, onPutDown 
       mission="Blackout im Labor"
       map={lab}
       edgework={null}
+      pausedAt={null}
       onAskNote={noop}
       onPutDown={onPutDown}
       {...extra}
@@ -185,7 +186,7 @@ describe('stepping back from a device', () => {
         run={deviceRun()}
         map={single}
         edgework={null}
-        deadlineAt={null}
+        mission={NO_CLOCK}
         send={noop}
         onStepBack={noop}
       />,
@@ -238,7 +239,7 @@ describe('stepping back from a device', () => {
         run={deviceRun()}
         map={single}
         edgework={null}
-        deadlineAt={null}
+        mission={NO_CLOCK}
         send={(msg) => sent.push(msg)}
         onStepBack={() => (backs += 1)}
         leaving={leaving}
@@ -264,7 +265,7 @@ describe('stepping back from a device', () => {
         puzzle={{ ...maze, console: null }}
         run={deviceRun()}
         send={noop}
-        deadlineAt={null}
+        mission={NO_CLOCK}
       />,
     );
     expect(watched).not.toContain('device-foot');

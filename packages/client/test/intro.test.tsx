@@ -5,6 +5,7 @@ import { GameScreen } from '../src/screens/Game.js';
 import { darkSince, FLICKER_MS } from '../src/world/coldOpen.js';
 import { IntroOverlay, overlayUp, PLANT, skipLine } from '../src/world/intro/IntroOverlay.js';
 import {
+  airFrom,
   bangAt,
   barsIn,
   BARS_MS,
@@ -260,6 +261,16 @@ describe('the HUD while the opening keeps it out', () => {
     expect(hudAt(dark, BACK + 60_000)).toBe(1);
   });
 
+  it('lets mission control speak once the HUD is back whole, never on a bar still out', () => {
+    // the click seen as the HUD comes back: the line waits out the fade
+    expect(airFrom(BACK, BACK)).toBe(BACK + HUD_FADE_MS);
+    expect(hudAt(dark, airFrom(BACK, BACK) ?? 0)).toBe(1);
+    // a click seen later than that is the line's moment; none before the click
+    expect(airFrom(BACK + 5000, BACK)).toBe(BACK + 5000);
+    expect(airFrom(1000, null)).toBe(1000);
+    expect(airFrom(null, BACK)).toBeNull();
+  });
+
   it('gives a player who skipped the HUD from the skip, out again while the title shows', () => {
     const skip = SINCE + 4000;
     expect(hudHeld(skipped, skip)).toBe(false);
@@ -376,6 +387,7 @@ function viewOf(parts: Partial<PlayerView> = {}): PlayerView {
     currentPuzzleIndex: 0,
     puzzleCount: 6,
     pausedFor: null,
+    pausedAt: null,
     events: [],
     grade: null,
     penaltySeq: 0,
@@ -591,7 +603,8 @@ describe('the opening over the world', () => {
         pingsRef={{ current: [] }}
         chatsRef={{ current: [] }}
         send={() => undefined}
-        refusals={0}
+        listen={() => () => undefined}
+        refusal={null}
         finale={null}
       />,
     );
@@ -619,6 +632,7 @@ describe('the crew held by the opening', () => {
   it('sends no position while held, and the spawn once it lets go', () => {
     const sim = newSim(0);
     Object.assign(sim.self, { x: 3.5, y: 3.5 });
+    sim.selfAt = 2_000;
     sim.run = START;
     sim.held = true;
     const sent: ClientMessage[] = [];
@@ -627,8 +641,9 @@ describe('the crew held by the opening', () => {
     expect(sent).toEqual([]);
     sim.held = false;
     vi.advanceTimersByTime(100);
+    const t = Math.round((performance.timeOrigin + 2_000) * 10) / 10;
     expect(sent).toEqual([
-      { kind: 'pos', run: START, x: 3.5, y: 3.5, facing: 0, moving: false },
+      { kind: 'pos', run: START, x: 3.5, y: 3.5, facing: 0, moving: false, t },
     ]);
     clearInterval(timer);
   });

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
-import { walkTo, type Walker } from './walk.js';
+import { pressE, walkTo, type Walker } from './walk.js';
 
 /**
  * Corridor with two stations and a patrol that sleeps until the first is done.
@@ -82,18 +82,20 @@ describe('Room with a sleeping drone', () => {
     room.setReady(ben.playerId, true);
     room.act(anna.playerId, { kind: 'start-mission' });
 
-    // Anna loiters right in front of it while the patrol simulation keeps ticking.
+    // Anna loiters right in front of it while the patrol simulation keeps ticking: nothing
+    // moves, so the positions go out once a second.
     moveTo(room, anna, 3, 2);
+    const before = anna.messages.length;
     vi.advanceTimersByTime(5000);
-    const streamed = anna.messages.filter((m) => m.kind === 'positions');
-    expect(streamed.length).toBeGreaterThan(10);
+    const streamed = anna.messages.slice(before).filter((m) => m.kind === 'positions');
+    expect(streamed).toHaveLength(5);
     expect(streamed.some((m) => 'wache' in m.drones)).toBe(false);
     expect(lastView(anna.messages).penaltySeq).toBe(0);
 
     // The first solve wakes it up exactly where its patrol starts …
     moveTo(room, ben, 2, 1);
     moveTo(room, anna, 2, 2);
-    room.act(ben.playerId, { kind: 'interact' });
+    pressE(room, ben);
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
     moveTo(room, anna, 3, 2);
@@ -106,6 +108,47 @@ describe('Room with a sleeping drone', () => {
     expect(lastPositions(anna.messages).drones['wache']).toBeDefined();
     expect(lastView(anna.messages).penaltySeq).toBe(1);
     expect(lastView(anna.messages).credits[anna.playerId]?.alarms).toBe(1);
+    room.dispose();
+  });
+});
+
+/** The same corridor, its patrol held still while someone stands on the plate at (3,1). */
+const heldMission: Mission = parseMission({
+  ...mission,
+  map: {
+    ...mission.map,
+    plates: [{ id: 'halt', x: 3, y: 1 }],
+    drones: mission.map.drones.map((drone) => ({ ...drone, frozenByPlate: 'halt' })),
+  },
+});
+
+describe('Room with a drone that wakes held still', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('shows it to the crew on the next tick, though a newcomer heard of it first', () => {
+    const room = new Room('TEST', heldMission);
+    const anna = { ...room.join('Anna'), ...collector() };
+    const ben = { ...room.join('Ben'), ...collector() };
+    room.attach(anna.playerId, anna.listen);
+    room.attach(ben.playerId, ben.listen);
+    room.setReady(ben.playerId, true);
+    room.act(anna.playerId, { kind: 'start-mission' });
+    walkTo(room, ben, 2.5, 1.5);
+    walkTo(room, anna, 3.5, 1.5);
+    pressE(room, ben);
+    // the walk's last positions out, and nothing moving since
+    vi.advanceTimersByTime(300);
+    room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
+    room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
+    // The solve woke it, held still by Anna on the plate; someone comes to watch at once.
+    const audience = collector();
+    room.attachSpectator(audience.listen);
+    expect(lastPositions(audience.messages).drones['wache']).toMatchObject({ frozen: true });
+    const before = anna.messages.length;
+    vi.advanceTimersByTime(100);
+    const heard = anna.messages.slice(before).filter((m) => m.kind === 'positions');
+    expect(heard.some((m) => m.kind === 'positions' && 'wache' in m.drones)).toBe(true);
     room.dispose();
   });
 });

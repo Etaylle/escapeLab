@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { moduleFor, parseMission, type Mission, type ServerMessage } from '@escapelab/core';
 import { Room } from '../src/room.js';
-import { walkTo, type Walker } from './walk.js';
+import { pressE, walkTo, type Walker } from './walk.js';
 
 /**
  * A corridor for two: the keypad at the west end, its book further east,
@@ -70,7 +70,7 @@ describe('Room: nobody works a station alone', () => {
     room.act(anna.playerId, { kind: 'start-mission' });
     walkTo(room, anna, 4.5, 1.5);
     walkTo(room, ben, 10.5, 2.5);
-    room.act(anna.playerId, { kind: 'interact' });
+    pressE(room, anna);
     return { room, anna, ben };
   }
 
