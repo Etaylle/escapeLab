@@ -96,6 +96,10 @@ function wsUrl(): string {
 const RETRY_FIRST_MS = 1000;
 /** The longest pause between two tries, ms. */
 const RETRY_MAX_MS = 10_000;
+/** How many messages wait for a socket to open; any more are dropped. */
+export const OUTBOX_MAX = 32;
+/** What the page streams: the next one supersedes it, so none waits for a socket to open. */
+const STREAMED: ReadonlySet<ClientMessage['kind']> = new Set(['pos']);
 
 /** What the socket `keepConnected` keeps open tells the app, and asks of it. */
 export interface SocketEvents {
@@ -110,18 +114,61 @@ export interface SocketEvents {
   closed: () => void;
 }
 
+/** The line `keepConnected` keeps: what goes out on it, and how to stop it for good. */
+export interface Line {
+  /**
+   * Sends `msg` on the socket that is open; while none is — one still connecting, one gone,
+   * the next not made yet — a message waits for the next to open, up to OUTBOX_MAX, and goes
+   * out in order right after the resume. What the page streams (`pos`) waits for nothing,
+   * and nothing over the limit waits: both are dropped, said once a time the line is down.
+   */
+  send: (msg: ClientMessage) => void;
+  stop: () => void;
+}
+
 /**
  * Keeps a socket to the server open, each made by `open`: every socket that opens resumes
  * the session the page keeps, and after every close — the server restarted, the line
  * dropped, the server's heartbeat terminating a socket it heard nothing from — a new one is
  * made after a pause that doubles from 1 s up to 10 s, and is back at 1 s once a socket
- * opens. Returns how to stop for good.
+ * opens. A message sent meanwhile never throws (`Line.send`).
  */
-export function keepConnected(open: () => WebSocket, on: SocketEvents): () => void {
+export function keepConnected(open: () => WebSocket, on: SocketEvents): Line {
   let stopped = false;
   let retryDelay = RETRY_FIRST_MS;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
   let current: WebSocket | null = null;
+  let waiting: string[] = [];
+  let warned = false;
+
+  function send(msg: ClientMessage): void {
+    const data = JSON.stringify(msg);
+    if (current?.readyState === WebSocket.OPEN) {
+      current.send(data);
+      return;
+    }
+    if (!STREAMED.has(msg.kind) && waiting.length < OUTBOX_MAX) {
+      waiting.push(data);
+      return;
+    }
+    if (!warned) {
+      warned = true;
+      console.warn(
+        `escapelab: no connection to the server — "${msg.kind}" dropped, as is what the page ` +
+          'streams or sends past the queue until the line is back',
+      );
+    }
+  }
+
+  /** What waited for `socket` to open goes out on it, in order. */
+  function flush(socket: WebSocket): void {
+    const queued = waiting;
+    waiting = [];
+    warned = false;
+    for (const data of queued) {
+      socket.send(data);
+    }
+  }
 
   function connect(): void {
     const socket = open();
@@ -137,6 +184,7 @@ export function keepConnected(open: () => WebSocket, on: SocketEvents): () => vo
         on.resuming();
         socket.send(JSON.stringify({ kind: 'resume', ...creds } satisfies ClientMessage));
       }
+      flush(socket);
     };
 
     socket.onmessage = (event) => {
@@ -155,10 +203,14 @@ export function keepConnected(open: () => WebSocket, on: SocketEvents): () => vo
   }
 
   connect();
-  return () => {
-    stopped = true;
-    clearTimeout(retryTimer);
-    current?.close();
+  return {
+    send,
+    stop: () => {
+      stopped = true;
+      clearTimeout(retryTimer);
+      waiting = [];
+      current?.close();
+    },
   };
 }
 
@@ -240,6 +292,7 @@ export function useGameConnection(): Connection {
   const [error, setError] = useState<string | null>(null);
   const [refusals, setRefusals] = useState(0);
   const socketRef = useRef<WebSocket | null>(null);
+  const lineRef = useRef<Line | null>(null);
   const resumingRef = useRef(false);
   const positionsRef = useRef<KnownPositions>({ run: null, players: {} });
   const dronesRef = useRef<Record<string, DronePosition>>({});
@@ -275,7 +328,7 @@ export function useGameConnection(): Connection {
       pings: pingsRef,
       chats: chatsRef,
     };
-    return keepConnected(() => new WebSocket(wsUrl()), {
+    const line = keepConnected(() => new WebSocket(wsUrl()), {
       made: (socket) => {
         socketRef.current = socket;
       },
@@ -296,6 +349,8 @@ export function useGameConnection(): Connection {
         }
       },
     });
+    lineRef.current = line;
+    return line.stop;
   }, []);
 
   return {
@@ -312,7 +367,7 @@ export function useGameConnection(): Connection {
     chats: chatsRef,
     send: (msg) => {
       setError(null);
-      socketRef.current?.send(JSON.stringify(msg));
+      lineRef.current?.send(msg);
     },
     listen,
     signal,

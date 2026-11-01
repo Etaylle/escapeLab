@@ -1,21 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClientMessage, ServerMessage } from '@escapelab/core';
-import { keepConnected, type SocketEvents } from '../src/ws.js';
+import { keepConnected, OUTBOX_MAX, type SocketEvents } from '../src/ws.js';
 
 /**
  * A browser socket as `keepConnected` drives it: the test opens it, has the server say
  * something, or ends it — the server's heartbeat terminating it looks the same to a page as
- * any other end: the socket closes.
+ * any other end: the socket closes. Like a browser's, it throws when sent to while it is
+ * still connecting, and lets go of what is sent to it once closed.
  */
 class FakeSocket {
   onopen: (() => void) | null = null;
   onmessage: ((event: { data: string }) => void) | null = null;
   onclose: (() => void) | null = null;
+  readyState: number = WebSocket.CONNECTING;
   readonly sent: ClientMessage[] = [];
   closedByPage = false;
 
   send(data: string): void {
-    this.sent.push(JSON.parse(data) as ClientMessage);
+    if (this.readyState === WebSocket.CONNECTING) {
+      throw new DOMException("Failed to execute 'send': Still in CONNECTING state.");
+    }
+    if (this.readyState === WebSocket.OPEN) {
+      this.sent.push(JSON.parse(data) as ClientMessage);
+    }
   }
 
   close(): void {
@@ -24,6 +31,7 @@ class FakeSocket {
 
   /** The server takes the socket. */
   open(): void {
+    this.readyState = WebSocket.OPEN;
     this.onopen?.();
   }
 
@@ -34,6 +42,7 @@ class FakeSocket {
 
   /** The socket ends: the server terminated it, or it never got through. */
   end(): void {
+    this.readyState = WebSocket.CLOSED;
     this.onclose?.();
   }
 }
@@ -56,7 +65,7 @@ function connection(session: typeof SESSION | null = SESSION) {
       told.closed += 1;
     },
   };
-  const stop = keepConnected(() => {
+  const line = keepConnected(() => {
     const socket = new FakeSocket();
     sockets.push(socket);
     return socket as unknown as WebSocket;
@@ -68,8 +77,11 @@ function connection(session: typeof SESSION | null = SESSION) {
     }
     return socket;
   };
-  return { sockets, told, stop, last };
+  return { sockets, told, stop: line.stop, send: line.send, last };
 }
+
+const E: ClientMessage = { kind: 'request-hint' };
+const POS: ClientMessage = { kind: 'pos', run: 1, x: 2.5, y: 3.5, facing: 0, moving: true };
 
 describe('keepConnected — the page’s line to the server', () => {
   beforeEach(() => {
@@ -141,5 +153,80 @@ describe('keepConnected — the page’s line to the server', () => {
     vi.advanceTimersByTime(60_000);
     expect(sockets).toHaveLength(1);
     expect(told.closed).toBe(0);
+  });
+});
+
+describe('keepConnected — sending while the line is down never throws', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('sends at once on a socket that is open', () => {
+    const { send, last } = connection();
+    last().open();
+    send(E);
+    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }, E]);
+  });
+
+  it('keeps an action sent while the socket connects, and sends it right after the resume', () => {
+    const { send, last } = connection();
+    expect(() => send(E)).not.toThrow();
+    expect(last().sent).toEqual([]);
+    last().open();
+    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }, E]);
+  });
+
+  it('keeps what was sent while the socket was gone for the next one, in order', () => {
+    const { send, last } = connection();
+    last().open();
+    last().end();
+    send(E);
+    send({ kind: 'drop-item' });
+    vi.advanceTimersByTime(1000);
+    send({ kind: 'interact' });
+    last().open();
+    expect(last().sent).toEqual([
+      { kind: 'resume', ...SESSION },
+      E,
+      { kind: 'drop-item' },
+      { kind: 'interact' },
+    ]);
+  });
+
+  it('drops a position sent while the socket connects: the next one goes out anyway', () => {
+    const { send, last } = connection();
+    send(POS);
+    last().open();
+    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
+    send(POS);
+    expect(last().sent.at(-1)).toEqual(POS);
+  });
+
+  it('drops what comes past the queue, said once on the console a time the line is down', () => {
+    const { send, last } = connection();
+    for (let i = 0; i < OUTBOX_MAX + 5; i++) {
+      send(E);
+    }
+    send(POS);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    last().open();
+    expect(last().sent).toHaveLength(1 + OUTBOX_MAX);
+    last().end();
+    vi.advanceTimersByTime(1000);
+    send(POS);
+    expect(console.warn).toHaveBeenCalledTimes(2);
+  });
+
+  it('forgets what waits once stopped', () => {
+    const { send, stop, last } = connection();
+    send(E);
+    stop();
+    last().open();
+    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
   });
 });
