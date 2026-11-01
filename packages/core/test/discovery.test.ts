@@ -57,7 +57,11 @@ describe('finding by reach', () => {
   it('finds what lies within two tiles with nothing between, and nothing a step further', () => {
     // Facing the west wall: the lamp's cone finds nothing to the east.
     const looker = { x: 1.5, y: 1.5, facing: WEST };
-    const things = [source('zwei', 3.5, 1.5), source('mehr', 3.6, 1.5), source('schraeg', 2.9, 2.9)];
+    const things = [
+      source('zwei', 3.5, 1.5),
+      source('mehr', 3.6, 1.5),
+      source('schraeg', 2.9, 2.9),
+    ];
     expect(foundIn(looker, things)).toEqual(['source:zwei', 'source:schraeg']);
   });
 
@@ -70,7 +74,7 @@ describe('finding by reach', () => {
     ]);
   });
 
-  it('finds a part within 0.9 tiles whatever stands between: it lies at the player’s feet', () => {
+  it('finds a part within 0.9 tiles whatever stands between: it lies at one’s feet', () => {
     // Two walls meet at the corner (2,2) between the player and the floor beyond it.
     const corner = { tiles: ['#####', '#.#.#', '##..#', '#####'] };
     const looker = { x: 1.9, y: 1.9, facing: WEST };
@@ -109,7 +113,8 @@ describe('finding by the lamp', () => {
   });
 
   it('reaches 7.5 tiles, half a radian either side, and no further', () => {
-    const open = { tiles: ['#'.repeat(20), ...Array(12).fill(`#${'.'.repeat(18)}#`), '#'.repeat(20)] };
+    const floor = Array<string>(12).fill(`#${'.'.repeat(18)}#`);
+    const open = { tiles: ['#'.repeat(20), ...floor, '#'.repeat(20)] };
     const from = { x: 1.5, y: 6.5, facing: EAST };
     const at = (away: number, angle: number) => ({
       x: from.x + away * Math.cos(angle),
@@ -148,7 +153,7 @@ function findsIn(state: GameState, looker: Looker): string[] {
 }
 
 describe('what a run has to find', () => {
-  it('lists the sources where the run placed them, notes on their faces, loose parts, consoles, the sign', () => {
+  it('lists the sources as placed, notes on their faces, loose parts, consoles, the sign', () => {
     const state = blackout();
     const things = findables(state);
     const at = (key: string) => things.find((thing) => thing.key === key);
@@ -201,7 +206,7 @@ describe('a room the power lights', () => {
     expect(findsIn(blackout(), in2)).toEqual([]);
   });
 
-  it('finds the sign by the shelves, and nothing across the room until the lamp rests on it', () => {
+  it('finds the sign by the shelves, nothing across the room till the lamp rests on it', () => {
     const state = lit();
     const byShelves = { x: 3.5, y: 3.5, facing: WEST };
     expect(findsIn(state, byShelves)).toEqual(['sign']);

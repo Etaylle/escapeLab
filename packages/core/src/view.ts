@@ -272,7 +272,7 @@ export interface MapView {
    * whether the crew has; never what it says
    */
   notes: { index: number; x: number; y: number; read: boolean; found: boolean; known: boolean }[];
-  /** the wall sign with the Laborkennung, and whether this player has found it; null on a map without one */
+  /** the wall sign with the Laborkennung, and whether this player has found it; null for none */
   edgeworkSign: { x: number; y: number; found: boolean } | null;
   /** the emergency lamps, on the floor or on a wall beside it; they glow once the lights are out */
   lamps: { x: number; y: number }[];

@@ -11,6 +11,7 @@ import { finaleFrame, type FinaleCue, type FinaleFrame } from './finale.js';
 import { frameLight, mountedLamps } from './frameLight.js';
 import { contextAction } from './interact.js';
 import { hudAt, litWhole, shotProgress, type IntroCue } from './intro/sequence.js';
+import { labelAlpha } from './labels.js';
 import { SHOT_WIDE, shotPoint, shotStart } from './intro/shot.js';
 import { markerTargets } from './markers.js';
 import { positionsOf, type KnownPositions } from './movement.js';
@@ -108,6 +109,7 @@ export function assembleFrame(
     ending,
     spectator: source.spectator,
     reduced: live.reduced,
+    labels: (find) => labelAlpha(sim.labels, find, sim.time, live.reduced),
     touch: source.touchPad.matches,
     kit: source.kit,
     missionId: live.view.missionId,

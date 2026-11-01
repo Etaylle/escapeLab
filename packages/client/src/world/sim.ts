@@ -3,6 +3,7 @@ import { MOVE_ACTIONS, MOVES, type Held } from '../input/bindings.js';
 import { NO_STEER, type Steer } from '../input/pad.js';
 import type { DoorMotion } from './doors.js';
 import { gaitStep } from './figure.js';
+import { labelClock, type LabelClock } from './labels.js';
 import { lightMemory, type LightMemory } from './light.js';
 import {
   correction,
@@ -116,6 +117,8 @@ export interface Sim {
   seen: WorldMap | null;
   /** „… entdeckt" over sources the crew has just come across, `at` in sim time */
   captions: Caption[];
+  /** when the name of each thing this player has found came up on this screen (labels.ts) */
+  labels: LabelClock;
   /**
    * lit rooms by label: the tiles their lights reach, as a path in tiles,
    * and the sim time they came on
@@ -163,6 +166,7 @@ export function newSim(topCss: number): Sim {
     lastBeepAt: Number.POSITIVE_INFINITY,
     seen: null,
     captions: [],
+    labels: labelClock(null),
     lit: new Map(),
     pendingLit: [],
     room: null,

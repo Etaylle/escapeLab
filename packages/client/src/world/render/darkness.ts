@@ -379,7 +379,10 @@ function stationGlows(frame: Frame): Glow[] {
   });
 }
 
-/** The sources the crew has come across, brighter where they print the armed station's rules, and the sign. */
+/**
+ * The sources the crew has come across, brighter where they print the armed station's rules,
+ * and the sign.
+ */
 function sourceGlows(frame: Frame): Glow[] {
   const { map } = frame;
   const glows = map.manuals.filter((m) => m.known).map((manual): Glow => {
@@ -393,7 +396,7 @@ function sourceGlows(frame: Frame): Glow[] {
     : [...glows, { x: sign.x + 0.5, y: sign.y + 0.5, radius: 1.4, strength: 0.6 }];
 }
 
-/** The notes of the last shift the crew has come across: faint, and fainter once somebody has read one. */
+/** The notes the crew has come across: faint, and fainter once somebody has read one. */
 function noteGlows(frame: Frame): Glow[] {
   const { map } = frame;
   return map.notes.flatMap((note): Glow[] => {
@@ -420,12 +423,16 @@ function plateAndValveGlows(frame: Frame): Glow[] {
   return [...plates, ...valves];
 }
 
-/** Crates lying about and drop-offs, where light has fallen on them. */
+/**
+ * Crates lying about where light has fallen on them, once this player has found them, and
+ * drop-offs where light has fallen.
+ */
 function itemGlows(frame: Frame): Glow[] {
   const { light } = frame;
   return frame.map.items.flatMap((item): Glow[] => {
     const glows: Glow[] = [];
-    if (!item.delivered && item.carriedBy === null && light.shown(item.x, item.y)) {
+    const loose = !item.delivered && item.carriedBy === null;
+    if (loose && item.found && light.shown(item.x, item.y)) {
       glows.push({ x: item.x, y: item.y, radius: 1.6, strength: 0.7 });
     }
     const zone = item.deliverTo;

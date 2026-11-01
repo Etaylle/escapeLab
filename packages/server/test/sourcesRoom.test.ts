@@ -124,7 +124,7 @@ describe('Room with sources to find and open', () => {
     return (lastView(walker.messages).map?.manuals ?? []).map((m) => [m.id, m.found, m.known]);
   }
 
-  it('finds a source for whoever comes within two tiles of it in sight; the crew knows of it', () => {
+  it('finds a source for whoever comes within two tiles in sight; the crew knows of it', () => {
     const { room, anna, ben } = started();
     expect(finds(ben)).toEqual([
       ['spind', false, false],
@@ -150,7 +150,7 @@ describe('Room with sources to find and open', () => {
     room.dispose();
   });
 
-  it('finds nothing through a shut door, however long the lamp rests on it, and finds it through the open door', () => {
+  it('finds nothing through a shut door, however long the lamp rests there; open, it does', () => {
     const { room, anna, ben } = started(behindTheDoor({ x: 6, y: 2 }));
     moveTo(room, anna, 3, 2); // three tiles from the locker, the shut door between, facing it
     vi.advanceTimersByTime(1000);

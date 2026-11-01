@@ -41,7 +41,14 @@ import { frameWith, kitWith, lightWith, TILES } from './frames.js';
 import { mapWith, type Item, type Manual } from './fixtures.js';
 
 /** The armed station at (3, 2), a clipboard at (7, 1), a note on the wall over (2, 1), the fuse. */
-const STATION = { puzzleId: 'kasten', x: 3, y: 2, title: 'Kasten', status: 'armed' as const, found: false };
+const STATION = {
+  puzzleId: 'kasten',
+  x: 3,
+  y: 2,
+  title: 'Kasten',
+  status: 'armed' as const,
+  found: false,
+};
 const CLIPBOARD: Manual = {
   found: true,
   known: true,

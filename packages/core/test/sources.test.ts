@@ -105,7 +105,7 @@ describe('where the sources lie', () => {
     });
   });
 
-  it('lists every source where it lies, named for whoever found it, known to the crew for good', () => {
+  it('lists every source where it lies, found by whoever came close, known to the crew', () => {
     const state = started(mission);
     const flags = (view: ReturnType<typeof viewFor> | ReturnType<typeof viewForSpectator>) =>
       view.map?.manuals.map((m) => [m.id, m.found, m.known]);

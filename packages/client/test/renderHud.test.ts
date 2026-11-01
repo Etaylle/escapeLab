@@ -71,7 +71,9 @@ describe('hud — the corner minimap on the canvas', () => {
       width: 10,
       height: 6,
       tiles: TILES,
-      stations: [{ puzzleId: 'kasten', x: 7, y: 1, title: 'Kasten', status: 'armed', found: false }],
+      stations: [
+        { puzzleId: 'kasten', x: 7, y: 1, title: 'Kasten', status: 'armed', found: false },
+      ],
       manuals: [
         {
           found: true,

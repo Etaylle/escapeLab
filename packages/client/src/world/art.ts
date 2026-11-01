@@ -1594,6 +1594,11 @@ export interface ManualObjectOpts {
   bare?: boolean;
   /** a terminal's tube this frame (Tube); a steady tube where left out */
   tube?: Tube;
+  /**
+   * how far this player has found it, 0 to 1 (labels.ts): its label and its glow come up with
+   * it, none before; found where left out
+   */
+  found?: number;
 }
 
 const READ_LABEL = css(lift(READ_BLUE, 0.3));
@@ -2104,16 +2109,18 @@ function drawCabinet(ctx: CanvasRenderingContext2D, active: boolean, opened: boo
  * showing a plan, a chart on an easel, a clipboard on a hook in the wall above, a grey locker
  * (ajar once searched, the rules inside) or a filing cabinet under a padlock (gone once
  * unlocked, the top drawer pulled out). Covering the armed station = blue glow (strength
- * follows pulse) and lit paper or screen; label under it (world text, dark halo). */
+ * follows pulse) and lit paper or screen; label under it (world text, dark halo) — glow and
+ * label as far as it is found. */
 export function drawManualObject(ctx: CanvasRenderingContext2D, o: ManualObjectOpts): void {
   const wave = pulseWave(o.pulse);
   const dressed = o.bare !== true;
+  const found = o.found ?? 1;
   ctx.save();
   try {
     // A clipboard hangs on the wall and casts its shadow there.
     if (dressed && o.kind !== 'clipboard') footShadow(ctx, 0, 0.36, 0.42, 0.12);
-    if (dressed && o.active) {
-      softEllipse(ctx, 0, -0.12, 0.85, 0.75, READ_BLUE, 0.14 + 0.26 * wave, 'lighter');
+    if (dressed && o.active && found > 0) {
+      softEllipse(ctx, 0, -0.12, 0.85, 0.75, READ_BLUE, (0.14 + 0.26 * wave) * found, 'lighter');
     }
     ctx.save();
     switch (o.kind) {
@@ -2138,8 +2145,9 @@ export function drawManualObject(ctx: CanvasRenderingContext2D, o: ManualObjectO
         break;
     }
     ctx.restore();
-    if (dressed) {
+    if (dressed && found > 0) {
       const color = o.active ? READ_LABEL : IDLE_LABEL;
+      ctx.globalAlpha *= found;
       drawHaloText(ctx, o.label, 0, 0.41, (o.text ?? TILE_TEXT).label, color, 'top');
     }
   } finally {
@@ -2157,6 +2165,11 @@ export interface SignOpts {
   pulse: number;
   /** the world's text at this zoom (worldText); the label in plain tiles when left out */
   text?: WorldText;
+  /**
+   * how far this player has found it, 0 to 1 (labels.ts): its label and its amber call come up
+   * with it, none before; found where left out, and once read
+   */
+  found?: number;
 }
 
 /** Brushed brass, lit from the top. */
@@ -2211,13 +2224,16 @@ function drawSeenTick(ctx: CanvasRenderingContext2D): void {
 
 /** Anchor: TILE CENTER. The Laborkennung: a brass plaque on two posts, a serial's outline
  * and three lamps engraved; amber glow (strength follows pulse) until this player has read
- * it, then a teal tick. Label under it (world text, dark halo). */
+ * it, then a teal tick. Label under it (world text, dark halo) — glow and label as far as it
+ * is found. */
 export function drawSign(ctx: CanvasRenderingContext2D, o: SignOpts): void {
   const wave = pulseWave(o.pulse);
+  const found = o.seen ? 1 : (o.found ?? 1);
   ctx.save();
   try {
     footShadow(ctx, 0, 0.33, 0.3, 0.09);
-    softEllipse(ctx, 0, -0.12, 0.75, 0.6, AMBER, o.seen ? 0.06 : 0.12 + 0.22 * wave, 'lighter');
+    const call = o.seen ? 0.06 : (0.12 + 0.22 * wave) * found;
+    if (call > 0) softEllipse(ctx, 0, -0.12, 0.75, 0.6, AMBER, call, 'lighter');
     ctx.fillStyle = steel(0.75);
     ctx.fillRect(-0.2, 0.04, 0.05, 0.28);
     ctx.fillRect(0.15, 0.04, 0.05, 0.28);
@@ -2239,8 +2255,11 @@ export function drawSign(ctx: CanvasRenderingContext2D, o: SignOpts): void {
     ctx.fill();
     drawEngraving(ctx);
     if (o.seen) drawSeenTick(ctx);
-    const color = o.seen ? IDLE_LABEL : css(lift(AMBER, 0.2));
-    drawHaloText(ctx, o.label, 0, 0.36, (o.text ?? TILE_TEXT).label, color, 'top');
+    if (found > 0) {
+      const color = o.seen ? IDLE_LABEL : css(lift(AMBER, 0.2));
+      ctx.globalAlpha *= found;
+      drawHaloText(ctx, o.label, 0, 0.36, (o.text ?? TILE_TEXT).label, color, 'top');
+    }
   } finally {
     ctx.restore();
   }
@@ -2322,6 +2341,8 @@ export interface PinnedNoteOpts {
   read: boolean;
   /** 0..1 looping pulse driven by the caller */
   pulse: number;
+  /** how far this player has found it, 0 to 1 (labels.ts): its call comes with it; 1 if left out */
+  found?: number;
 }
 
 /** The sheet's paper, a shade warmer than a printed page: it was torn off a pad. */
@@ -2396,10 +2417,10 @@ function drawPin(ctx: CanvasRenderingContext2D): void {
  * from, its pin at the top, a little askew; on the floor, the sheet lying
  * there, turned. Handwriting in blue ballpoint, a dog-ear. Until somebody of
  * the crew has read it, a faint reading-blue glow (strength follows pulse)
- * calls for attention.
+ * calls for attention — as far as this player has found it.
  */
 export function drawPinnedNote(ctx: CanvasRenderingContext2D, o: PinnedNoteOpts): void {
-  const call = o.read ? 0 : 0.08 + 0.14 * pulseWave(o.pulse);
+  const call = o.read ? 0 : (0.08 + 0.14 * pulseWave(o.pulse)) * (o.found ?? 1);
   ctx.save();
   try {
     if (o.facing === null) {

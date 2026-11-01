@@ -256,7 +256,10 @@ function drawPlates(ctx: CanvasRenderingContext2D, map: WorldMap, layout: Minima
   }
 }
 
-/** Stations, the armed one bright, and the sources the crew has come across, bright where they print its rules. */
+/**
+ * Stations, the armed one bright, and the sources the crew has come across, bright where they
+ * print its rules.
+ */
 function drawStationsAndSources(
   ctx: CanvasRenderingContext2D,
   map: WorldMap,

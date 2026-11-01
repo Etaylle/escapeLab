@@ -1,4 +1,4 @@
-import type { ChatPhrase, DronePosition, PlayerView } from '@escapelab/core';
+import type { ChatPhrase, DronePosition, Find, PlayerView } from '@escapelab/core';
 import type { Alarm } from '../alarm.js';
 import type { WorldText } from '../art.js';
 import { artKit, type ArtKit } from '../artKit.js';
@@ -294,6 +294,11 @@ export interface Frame {
   hud: number;
   /** the world's text at this frame's zoom */
   text: WorldText;
+  /**
+   * how far the name and the call of a thing show, 0 to 1: none until this player has found it,
+   * then fading in (labels.ts); everything for the audience
+   */
+  labels: (find: Find) => number;
   /** the audience: the whole lab, no avatar, no lamp */
   spectator: boolean;
   /** the player asked for less motion */

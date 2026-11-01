@@ -15,6 +15,7 @@ import type { MinimapLayout } from './world/render/frame.js';
 import type { HighlightProbe } from './world/render/highlight.js';
 import type { GraphicsProbe } from './world/render/graphicsProbe.js';
 import type { GoalDot } from './world/render/hud.js';
+import type { ShownLabel } from './world/render/objects.js';
 import type { PassStats } from './world/render/profile.js';
 import type { SpatialProbe } from './world/spatial.js';
 
@@ -100,6 +101,11 @@ export interface Probes {
    * read back on request (world/render/highlight.ts); null while it names nothing
    */
   readonly highlight?: HighlightProbe | null;
+  /**
+   * the names the world's last frame drew under things, as far as this player has found them
+   * (world/render/objects.ts `labelsShown`)
+   */
+  readonly labels?: ShownLabel[];
   /** the voice links, their states and who speaks (voice/mesh.ts) */
   readonly voice?: VoiceProbe;
   /** the way the world's light takes, WebGL or Canvas, and the picture's luma (world/gl/path.ts) */

@@ -90,6 +90,11 @@ export interface CarryableOpts {
   glow?: (ctx: CanvasRenderingContext2D) => void;
   /** the thing alone — no shadow, glow or label: what its silhouette is baked from */
   bare?: boolean;
+  /**
+   * how far this player has found it, 0 to 1 (labels.ts): its blue glow and its label come up
+   * with it, none before; found where left out
+   */
+  found?: number;
 }
 
 /** A carried item against one on the floor. */
@@ -100,15 +105,17 @@ const ITEM_EDGE = css(INK);
 const C_BLUE = css(READ_BLUE);
 
 /** The shadow under an item on the floor, and its blue glow. */
-function drawItemGround(ctx: CanvasRenderingContext2D, pulse: number): void {
+function drawItemGround(ctx: CanvasRenderingContext2D, pulse: number, found: number): void {
   ctx.fillStyle = rgba(BLACK, 0.45);
   ctx.beginPath();
   ctx.ellipse(0, 0.29, 0.32, 0.13, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = rgba(READ_BLUE, 0.1 + 0.08 * pulse);
-  ctx.beginPath();
-  ctx.arc(0, 0, 0.8, 0, Math.PI * 2);
-  ctx.fill();
+  if (found > 0) {
+    ctx.fillStyle = rgba(READ_BLUE, (0.1 + 0.08 * pulse) * found);
+    ctx.beginPath();
+    ctx.arc(0, 0, 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 /** A crate with a lit cross on its lid. */
@@ -206,14 +213,16 @@ function drawItem(ctx: CanvasRenderingContext2D, kind: CarryableKind, pulse: num
 /**
  * A carryable: a fuse cartridge, a key, or a crate for anything else, as its
  * label says. On the floor it lies on its shadow in a blue glow — or hovers
- * `lift` over it, with its `glow` — its label under it like any prop's.
+ * `lift` over it, with its `glow` — its label under it like any prop's; glow
+ * and label as far as it is found.
  * Anchor: its own centre, scaled to tile units.
  */
 export function drawCarryable(ctx: CanvasRenderingContext2D, o: CarryableOpts): void {
   const dressed = !o.carried && o.bare !== true;
+  const found = o.found ?? 1;
   ctx.save();
   if (dressed) {
-    drawItemGround(ctx, o.pulse);
+    drawItemGround(ctx, o.pulse, found);
   }
   ctx.save();
   if (o.carried) {
@@ -226,7 +235,8 @@ export function drawCarryable(ctx: CanvasRenderingContext2D, o: CarryableOpts): 
   o.glow?.(ctx);
   drawItem(ctx, carryableKind(o.label), o.pulse);
   ctx.restore();
-  if (dressed) {
+  if (dressed && found > 0) {
+    ctx.globalAlpha *= found;
     drawPropLabel(ctx, o.label.toUpperCase(), 0.41, ITEM_LABEL, o.text);
   }
   ctx.restore();

@@ -30,7 +30,13 @@ const hall: Mission = parseMission({
     ],
     stations: [{ puzzleId: 'kabel', x: 5, y: 1 }],
     manuals: [
-      { id: 'spind', kind: 'locker', label: 'SPIND', puzzleIds: ['kabel'], spots: [{ x: 14, y: 1 }] },
+      {
+        id: 'spind',
+        kind: 'locker',
+        label: 'SPIND',
+        puzzleIds: ['kabel'],
+        spots: [{ x: 14, y: 1 }],
+      },
       {
         id: 'schrank',
         kind: 'cabinet',
@@ -91,7 +97,7 @@ describe('a room where things are found by reach or by the lamp', () => {
     return { room, anna, ben, startedAt: Date.now() };
   }
 
-  it('finds what the lamp rests on for a quarter of a second, by its own clock as nobody moves', () => {
+  it('finds what the lamp rests on for a quarter second, by its own clock as nobody moves', () => {
     const { room, anna } = started();
     walkTo(room, anna, 9.5, 1.5); // facing east, the locker five tiles ahead
     vi.advanceTimersByTime(249);

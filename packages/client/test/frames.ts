@@ -160,6 +160,8 @@ function frameParts(parts: Partial<Frame>): Omit<Frame, 'grid'> {
     minimap: null,
     hud: 1,
     text: worldText(100, 1),
+    // Everything found long ago: names up, as the audience sees them.
+    labels: () => 1,
     spectator: false,
     reduced: false,
     touch: false,

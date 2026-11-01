@@ -87,7 +87,8 @@ function maze(index: number, cells: number[] | null): PuzzleView {
 /** A source of each kind where the tests put them: two rooms, a door between, one named. */
 function source(id: string, kind: Manual['kind'], x: number, y: number): Manual {
   const found = { found: true, known: true };
-  return { id, kind, x, y, label: id, puzzleIds: ['kabel', 'netz'], opened: true, needsKey: null, ...found };
+  const puzzleIds = ['kabel', 'netz'];
+  return { id, kind, x, y, label: id, puzzleIds, opened: true, needsKey: null, ...found };
 }
 
 const lab = mapWith({
@@ -547,14 +548,32 @@ describe('the station frame', () => {
     };
     const consoles = mapWith({
       stations: [
-        { puzzleId: 'kette', x: 8, y: 5, title: 'Signalkette', status: 'armed', console: 'a', found: false },
-        { puzzleId: 'kette', x: 13, y: 5, title: 'Signalkette', status: 'armed', console: 'b', found: false },
+        {
+          puzzleId: 'kette',
+          x: 8,
+          y: 5,
+          title: 'Signalkette',
+          status: 'armed',
+          console: 'a',
+          found: false,
+        },
+        {
+          puzzleId: 'kette',
+          x: 13,
+          y: 5,
+          title: 'Signalkette',
+          status: 'armed',
+          console: 'b',
+          found: false,
+        },
       ],
     });
     expect(stationLabel(atB, consoles)).toBe('§2 — Signalkette · Pult B');
     // The view names console a at a station with one as well; the label leaves it out.
     const single = mapWith({
-      stations: [{ puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed', found: false }],
+      stations: [
+        { puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed', found: false },
+      ],
     });
     expect(stationLabel({ ...maze(2, null), console: 'a' }, single)).toBe('§3 — Leitungsnetz');
   });
@@ -562,7 +581,9 @@ describe('the station frame', () => {
   /** The frame the station opens in, as the game shows it, at a station with one console. */
   function stationFrame(puzzle: PuzzleView): string {
     const single = mapWith({
-      stations: [{ puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed', found: false }],
+      stations: [
+        { puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed', found: false },
+      ],
     });
     return renderToStaticMarkup(
       <StationModal
@@ -641,7 +662,9 @@ describe('the station frame', () => {
 
   it('puts the device’s first-time line under the Laborkennung’s row, never over the serial', () => {
     const single = mapWith({
-      stations: [{ puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed', found: false }],
+      stations: [
+        { puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed', found: false },
+      ],
     });
     const html = renderToStaticMarkup(
       <StationModal
@@ -774,7 +797,9 @@ function justStarted(parts: Partial<PlayerView> = {}): PlayerView {
       tiles: ['#######', '#.....#', '#.....#', '#######'],
       yourSpawn: { x: 1, y: 2 },
       labels: [{ text: 'MASCHINENRAUM', x: 2, y: 1 }],
-      stations: [{ puzzleId: 'kabel', x: 4, y: 1, title: 'Notstrom', status: 'armed', found: false }],
+      stations: [
+        { puzzleId: 'kabel', x: 4, y: 1, title: 'Notstrom', status: 'armed', found: false },
+      ],
     }),
     ...parts,
   };

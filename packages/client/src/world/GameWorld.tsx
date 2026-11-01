@@ -90,11 +90,13 @@ import {
 import { censusTrace, type CensusTrace } from './render/census.js';
 import { graphicsProbe } from './render/graphicsProbe.js';
 import { highlightProbe } from './render/highlight.js';
+import { labelsShown } from './render/objects.js';
 import { minimapGoal, minimapLayout } from './render/hud.js';
 import { dropLight } from './render/light.js';
 import { PING_LIFETIME_MS } from './render/overlays.js';
 import { drawFrame } from './render/pipeline.js';
 import { passProfile, profileRequested } from './render/profile.js';
+import { noteLabels } from './labels.js';
 import { lightsHeld, roomArea, roomsComingOn } from './rooms.js';
 import {
   follow,
@@ -443,7 +445,8 @@ function minimapOf(loop: Loop): MinimapProbe | null {
 
 /**
  * `?trace=1`: the walkthrough reads the last frame durations off the page, the camera, your
- * avatar's footfalls, the minimap and its goal, the glow round what the E prompt names, what
+ * avatar's footfalls, the minimap and its goal, the glow round what the E prompt names, the
+ * names drawn under things (render/objects.ts `labelsShown`), what
  * the lab sounds like — the beds, the music, the radio's voice, the partner's place — and the
  * server's clock as the page reads it; and it can render the radio's chain offline.
  */
@@ -487,6 +490,9 @@ function traceFrames(loop: Loop): Traced | null {
     },
     get highlight() {
       return loop.drawn === null ? null : highlightProbe(loop.drawn);
+    },
+    get labels() {
+      return loop.drawn === null ? [] : labelsShown(loop.drawn);
     },
     get audio() {
       const sound = { music: musicProbe(), voice: voiceProbe(), spatial: spatialProbe() };
@@ -701,6 +707,8 @@ function hearTheClock(loop: Loop, map: WorldMap): void {
 function look(loop: Loop, map: WorldMap): void {
   const { sim } = loop;
   const news = worldNews(sim.seen, map);
+  const run = loop.live.current.view.startedAt;
+  sim.labels = noteLabels(sim.labels, map, run, sim.time, sim.seen === null);
   sim.seen = map;
   for (const manual of news.found) {
     const text = `${SOURCE_NAMES[manual.kind]} entdeckt`;

@@ -640,8 +640,24 @@ const nowhere = { stationId: null, manualId: null };
 /** The Signalkette, armed at both its consoles: a at (8,5), b at (13,5). */
 const kette: MapView = mapWith({
   stations: [
-    { puzzleId: 'kette', x: 8, y: 5, title: 'Signalkette', status: 'armed', console: 'a', found: false },
-    { puzzleId: 'kette', x: 13, y: 5, title: 'Signalkette', status: 'armed', console: 'b', found: false },
+    {
+      puzzleId: 'kette',
+      x: 8,
+      y: 5,
+      title: 'Signalkette',
+      status: 'armed',
+      console: 'a',
+      found: false,
+    },
+    {
+      puzzleId: 'kette',
+      x: 13,
+      y: 5,
+      title: 'Signalkette',
+      status: 'armed',
+      console: 'b',
+      found: false,
+    },
   ],
 });
 
