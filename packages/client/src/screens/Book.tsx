@@ -16,6 +16,7 @@ import { notedPart } from '../noting.js';
 import { READERS } from '../puzzles/index.js';
 import { useGlyph } from '../input/glyphs.js';
 import { useReducedMotion } from '../settings.js';
+import { paperSwish } from '../world/audio.js';
 import { Block } from './Manual.js';
 import { ReaderPanel } from './PuzzlePanel.js';
 import { Seal } from './Seal.js';
@@ -399,8 +400,8 @@ interface Turning {
 /**
  * The page the book lies open at and the leaf turning over to it: `go`
  * opens another page, a leaf turning there unless the reader asked for less
- * motion; it lies still after LEAF_MS. A leaf of a view the window has just
- * left behind is dropped.
+ * motion — the paper's swish either way; it lies still after LEAF_MS. A leaf
+ * of a view the window has just left behind is dropped.
  */
 function usePage(opening: number, total: number, spread: boolean) {
   const [page, setPage] = useState(opening);
@@ -415,6 +416,9 @@ function usePage(opening: number, total: number, spread: boolean) {
   }, [turning]);
   const at = Math.min(page, total);
   const go = (to: number): void => {
+    if (to !== at) {
+      paperSwish();
+    }
     const leaf = still ? null : leafFor(at, to, spread);
     setTurning((last) => (leaf === null ? null : { leaf, spread, count: (last?.count ?? 0) + 1 }));
     setPage(to);

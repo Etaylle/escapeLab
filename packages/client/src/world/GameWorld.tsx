@@ -22,7 +22,13 @@ import { TalkButton } from '../screens/Voice.js';
 import { getSettings, useReducedMotion } from '../settings.js';
 import { VoiceContext } from '../voice/useVoice.js';
 import type { Connection } from '../ws.js';
-import { useAlarm, useAlarmClasses, worldHornDue, type Alarm } from './alarm.js';
+import {
+  emergencyCleared,
+  useAlarm,
+  useAlarmClasses,
+  worldHornDue,
+  type Alarm,
+} from './alarm.js';
 import { bedCount, bedProbe, hearRooms, startAmbience, stopAmbience } from './ambience.js';
 import { worldText } from './art.js';
 import { dressedFor } from './artKit.js';
@@ -32,6 +38,7 @@ import {
   cabinetUnlock,
   countdownBeep,
   discoveryBlip,
+  emergencyOver,
   footstep,
   graphCensus,
   klaxon,
@@ -39,9 +46,9 @@ import {
   lockerOpen,
   partSeated,
   pingBlip,
+  sheetDown,
   powerDrain,
   startPowerHum,
-  stationChirp,
   stopPowerHum,
   systemsOff,
   timed,
@@ -85,7 +92,7 @@ import { dropLight } from './render/light.js';
 import { PING_LIFETIME_MS } from './render/overlays.js';
 import { drawFrame } from './render/pipeline.js';
 import { passProfile, profileRequested } from './render/profile.js';
-import { roomArea, roomsComingOn } from './rooms.js';
+import { lightsHeld, roomArea, roomsComingOn } from './rooms.js';
 import {
   follow,
   followOthers,
@@ -633,7 +640,8 @@ function tensionOf(loop: Loop, map: WorldMap): Tension {
 
 /**
  * The last ten seconds counted out loud — for a player — on the mission's clock as the server
- * keeps it, and an emergency's siren as it starts, a chirp as it is over.
+ * keeps it, and an emergency's power draining as it starts, its chime as it is cleared — and
+ * nothing as it runs out, its alarm sounding instead.
  */
 function hearTheClock(loop: Loop, map: WorldMap): void {
   const { sim } = loop;
@@ -650,8 +658,8 @@ function hearTheClock(loop: Loop, map: WorldMap): void {
     sim.sabotageWasOn = sabotageOn;
     if (sabotageOn) {
       powerDrain();
-    } else {
-      stationChirp();
+    } else if (emergencyCleared(loop.live.current.view.events)) {
+      emergencyOver();
     }
   }
 }
@@ -694,8 +702,15 @@ function look(loop: Loop, map: WorldMap): void {
       partSeated();
     }
   }
+  // A part put down (Q) is set down where it now lies, heard as far as a locker opening.
+  for (const item of news.dropped) {
+    if (loop.spectator || Math.hypot(item.x - sim.self.x, item.y - sim.self.y) <= HEAR_RADIUS) {
+      sheetDown();
+    }
+  }
   const known = new Set(sim.lit.keys());
-  const lit = roomsComingOn(map.litRooms, known, news.lit, sim.pendingLit, covered(loop));
+  const held = lightsHeld(loop.spectator, loop.live.current.station);
+  const lit = roomsComingOn(map.litRooms, known, news.lit, sim.pendingLit, held);
   for (const room of lit.long) {
     lightRoom(loop, map, room, -Infinity);
   }
@@ -703,16 +718,12 @@ function look(loop: Loop, map: WorldMap): void {
   warmUpRooms(loop, map, lit.now);
 }
 
-/** Whether something lies over the world on this screen: a panel, pages, the pause. */
-function covered(loop: Loop): boolean {
-  return !loop.spectator && loop.live.current.locked;
-}
-
-/** The rooms that waited behind a panel or pages come on once nothing lies over the world. */
+/** The rooms that waited behind a panel come on once it is gone. */
 function lightWhenClear(loop: Loop, map: WorldMap): void {
   const { sim } = loop;
   if (sim.pendingLit.length > 0) {
-    const lit = roomsComingOn([], new Set(), [], sim.pendingLit, covered(loop));
+    const held = lightsHeld(loop.spectator, loop.live.current.station);
+    const lit = roomsComingOn([], new Set(), [], sim.pendingLit, held);
     sim.pendingLit = lit.waiting;
     warmUpRooms(loop, map, lit.now);
   }

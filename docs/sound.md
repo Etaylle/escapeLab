@@ -386,6 +386,23 @@ recording placed where it flies. A door that starts to slide is heard from where
 (`doorMoved`, its own leaf no wall between): its pneumatic slide as it opens, one of two closes
 as it shuts. The audience hears the doors unplaced and none of the rest.
 
+## Answers that wait for the lab (`press.ts`, `audio.ts`)
+
+The station's chirp (`console-ready`) plays as the server takes E, never on the press: a press
+it refuses has no chirp, and its words turn the prompt pill amber instead (`press.ts`).
+Reading a source, a note or a station already open needs nobody's yes, and chirps at once. An
+emergency cleared in time chimes (`stage-chime`, `emergencyOver`); one that runs out has its
+alarm's klaxon and no sound of its own. A station solved while a player reads its rules at the
+source plays the solve's chord for them too, quietly (`readerSolve`, two fifths of a chirp) —
+the ka-chunk and the full chord are the operator's at the console — and the room it lights
+comes on behind the open book at once: only a station's panel holds the light back until it
+closes. A part put down (Q) is set down with the sheet's recording (`sheet-down`) within
+earshot; a page turning in a book and the notepad taken up are the paper's swish that recording
+opens with (`paperSwish`, cut at 0.1 s, before the board's clack), the notepad laid down its
+whole sound, and a terminal's screen changing the display's tick (`step-tick`). A body walked
+into a wall thuds once a push (`wall-thud`, `wallBump`), its steps silent while it stands. The
+drone warning (`danger.ts`) keeps the ping's recording (`ping`) until L-1 renders one of its own.
+
 ## A voice on the radio (`radioVoice.ts`, `scripts/voice.ts`)
 
 Mission control speaks every line a shipped mission can put on the air: everything core's

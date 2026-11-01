@@ -19,6 +19,8 @@ export interface WorldNews {
    * cabinet that just opened is the cabinet's news
    */
   delivered: Item[];
+  /** parts just put down off somebody's hands (Q), where they now lie */
+  dropped: Item[];
 }
 
 /**
@@ -28,7 +30,7 @@ export interface WorldNews {
  */
 export function worldNews(before: MapView | null, now: MapView): WorldNews {
   if (before === null) {
-    return { found: [], notes: [], opened: [], lit: [], delivered: [] };
+    return { found: [], notes: [], opened: [], lit: [], delivered: [], dropped: [] };
   }
   const was = new Map(before.manuals.map((manual) => [manual.id, manual]));
   const known = new Set(before.notes.map((note) => note.index));
@@ -37,6 +39,7 @@ export function worldNews(before: MapView | null, now: MapView): WorldNews {
   );
   const unlocked = new Set(opened.map((manual) => `${manual.x},${manual.y}`));
   const placed = new Set(before.items.filter((item) => item.delivered).map((item) => item.id));
+  const held = new Set(before.items.filter((item) => item.carriedBy !== null).map((i) => i.id));
   return {
     found: now.manuals.filter((manual) => !was.has(manual.id)),
     notes: now.notes.filter((note) => !known.has(note.index)),
@@ -47,6 +50,9 @@ export function worldNews(before: MapView | null, now: MapView): WorldNews {
         item.delivered &&
         !placed.has(item.id) &&
         !unlocked.has(`${Math.floor(item.x)},${Math.floor(item.y)}`),
+    ),
+    dropped: now.items.filter(
+      (item) => held.has(item.id) && item.carriedBy === null && !item.delivered,
     ),
   };
 }

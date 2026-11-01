@@ -31,6 +31,7 @@ export {
 } from './state.js';
 export {
   applyAction,
+  EMERGENCY_CLEARED,
   inEscapePhase,
   missingItemsFor,
   NOTE_READ,

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Edgework, ManualHere, ManualKind, MapView, PuzzleView } from '@escapelab/core';
 import { useKeys, useMedia, useSwipe } from '../hooks.js';
+import { stepTick } from '../puzzles/sounds.js';
 import { roomFloor } from '../world/rooms.js';
 import {
   Book,
@@ -72,15 +73,21 @@ interface SourceProps {
 
 /**
  * A terminal shows one station per screen and starts at the one that is up
- * now, if it covers it. The last shift's note is a sticky label on its
- * bezel, there whichever screen is up.
+ * now, if it covers it — a screen changing with the display's tick. The last
+ * shift's note is a sticky label on its bezel, there whichever screen is up.
  */
 function Terminal({ manual, puzzle, current, onAskNote }: SourceProps) {
   const sections = manual.sections;
   const last = sections.length - 1;
   const [at, setAt] = useState(() => Math.max(0, sections.findIndex((s) => s.index === current)));
   const shown = Math.min(at, last);
-  const go = (dir: 1 | -1): void => setAt(Math.min(last, Math.max(0, shown + dir)));
+  const go = (dir: 1 | -1): void => {
+    const to = Math.min(last, Math.max(0, shown + dir));
+    if (to !== shown) {
+      stepTick();
+    }
+    setAt(to);
+  };
   useKeys(['arrowleft', 'arrowright'], (key) => go(key === 'arrowright' ? 1 : -1));
   const swipe = useSwipe(go);
   const section = sections[shown];

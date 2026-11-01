@@ -38,8 +38,10 @@ import {
 import {
   briefingCountdown,
   coverShut,
+  paperSwish,
   pencilScratch,
   radioChirp,
+  readerSolve,
   sheetDown,
 } from '../world/audio.js';
 import { clickSeenAt, opensLit, useDarkSince, useRevealed } from '../world/coldOpen.js';
@@ -439,6 +441,37 @@ function useNotices(view: PlayerView, gates: NoticeGates): Notice | null {
   }, [next, gate]);
 
   return shown;
+}
+
+/**
+ * Whether the view going from `before` to `after` solved a station whose rules this player
+ * stood reading at the source, with no device of their own open (`deviceOpen`): the reader's
+ * share of the solve.
+ */
+export function readerSawSolve(
+  before: PlayerView,
+  after: PlayerView,
+  deviceOpen: boolean,
+): boolean {
+  const map = before.map;
+  const armed = map?.stations.find((s) => s.status === 'armed')?.puzzleId;
+  const source = map?.manuals.find((m) => m.id === before.presence.manualId);
+  const read = armed !== undefined && source !== undefined && source.puzzleIds.includes(armed);
+  return read && !deviceOpen && after.currentPuzzleIndex > before.currentPuzzleIndex;
+}
+
+/**
+ * The reader at the source hears a solve as it comes, quietly (world/audio.ts `readerSolve`):
+ * the console's own sounds are its operator's.
+ */
+function useReaderHearsSolve(view: PlayerView, deviceOpen: boolean): void {
+  const before = useRef(view);
+  useEffect(() => {
+    if (readerSawSolve(before.current, view, deviceOpen)) {
+      readerSolve();
+    }
+    before.current = view;
+  }, [view, deviceOpen]);
 }
 
 /** What this player has open over the world. */
@@ -977,6 +1010,17 @@ function useSheets(open: OpenNow): {
   return { reading: usePutDown(open.reading, readingDown), note: usePutDown(open.note, sheetDown) };
 }
 
+/** The notepad taken up with the paper's swish, and laid down again with its clack. */
+function useNotepadSounds(open: boolean): void {
+  const was = useRef(open);
+  useEffect(() => {
+    if (open !== was.current) {
+      (open ? paperSwish : sheetDown)();
+    }
+    was.current = open;
+  }, [open]);
+}
+
 /**
  * The notepad as the game screen keeps it: the text (`useNotes`), whether N or a tab opened it
  * — then it takes the keys — and the hand it holds out to a source or a device (noting.ts): a
@@ -985,6 +1029,7 @@ function useSheets(open: OpenNow): {
  */
 function useNotepad(roomCode: string | null, playerId: string, open: OpenNow) {
   const notes = useNotes(roomCode, playerId);
+  useNotepadSounds(open.notes);
   const [focus, setFocus] = useState(true);
   const [jump, setJump] = useState(0);
   const toggle = (): void => {
@@ -1183,6 +1228,7 @@ export function GameScreen(props: Props) {
   const notice = useNotices(view, heldNow ? { ...coldOpen.gates, sign: null } : coldOpen.gates);
   const open = useOpened(view);
   const station = useSolvedHold(open.station, view.currentPuzzleIndex);
+  useReaderHearsSolve(view, station !== null);
   const sheets = useSheets(open);
   const pad = useNotepad(roomCode, view.you.id, open);
   const closeModal = (): void => open.set(NOTHING_OVER);
