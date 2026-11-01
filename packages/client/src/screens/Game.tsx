@@ -11,8 +11,8 @@ import type {
 } from '@escapelab/core';
 import { clockTime, formatLeft, type MissionTime } from '../clock.js';
 import { useKeys, useNow, useServerNow } from '../hooks.js';
-import { appendBlock } from '../notes.js';
-import { NotepadContext, type NotepadHand } from '../noting.js';
+import { withCapture } from '../notes.js';
+import { NotepadContext, NotingPlace, placeName, type NotepadHand } from '../noting.js';
 import {
   AFTER_SOLVE_MS,
   airIcon,
@@ -69,7 +69,7 @@ import { MissionHud } from './MissionHud.js';
 import { InfoPanel } from './InfoPanel.js';
 import { Manual } from './Manual.js';
 import { Notepad, useNotes } from './Notepad.js';
-import { PinnedNote } from './PinnedNote.js';
+import { noteRoom, PinnedNote } from './PinnedNote.js';
 import { putDownKeys, useLeaving, usePutDown, type Over, type Shown } from './PutDown.js';
 import { lookOf, ReadingOverlay } from './Reading.js';
 import { PANEL_FADE_MS, WorldModal } from './WorldModal.js';
@@ -1054,10 +1054,11 @@ function useNotepadSounds(open: boolean): void {
 }
 
 /**
- * The notepad as the game screen keeps it: the text (`useNotes`), whether N or a tab opened it
- * — then it takes the keys — and the hand it holds out to a source or a device (noting.ts): a
- * block taken down goes below the text with a pencil's scratch, the pad opening where it was
- * shut without taking the keys from the page, and scrolling down to it.
+ * The notepad as the game screen keeps it: what it holds (`useNotes`), whether N or a tab
+ * opened it — then it takes the keys — and the hand it holds out to a source, a device or a
+ * note (noting.ts): a capture goes down at the bottom with a pencil's scratch — one of the same
+ * replaced, which the hand reports —, the pad opening where it was shut without taking the keys
+ * from the page, and scrolling down to it.
  */
 function useNotepad(roomCode: string | null, playerId: string, open: OpenNow) {
   const notes = useNotes(roomCode, playerId);
@@ -1069,12 +1070,14 @@ function useNotepad(roomCode: string | null, playerId: string, open: OpenNow) {
     open.toggleNotes();
   };
   const hand: NotepadHand = {
-    noteDown: (text) => {
-      notes.change(appendBlock(notes.text, text));
+    noteDown: (capture) => {
+      const taken = withCapture(notes.content, capture);
+      notes.change(taken.content);
       setFocus(false);
       setJump((n) => n + 1);
       open.set({ notes: true });
       pencilScratch();
+      return taken.replaced;
     },
     toggle,
   };
@@ -1143,23 +1146,27 @@ function OverTheWorld({
         />
       )}
       {reading !== null && (
-        <ReadingOverlay
-          key={reading.item.id}
-          manual={reading.item}
-          puzzle={view.puzzle}
-          current={view.currentPuzzleIndex}
-          pausedAt={view.pausedAt}
-          mission={view.missionTitle}
-          map={map}
-          edgework={view.edgework}
-          onAskNote={() => send({ kind: 'request-hint' })}
-          onPutDown={onClose}
-          leaving={reading.leaving}
-        />
+        // What the notepad takes down here is taken at this source: „Klemmbrett · Legende".
+        <NotingPlace value={{ id: reading.item.id, name: placeName(reading.item.label) }}>
+          <ReadingOverlay
+            key={reading.item.id}
+            manual={reading.item}
+            puzzle={view.puzzle}
+            current={view.currentPuzzleIndex}
+            pausedAt={view.pausedAt}
+            mission={view.missionTitle}
+            map={map}
+            edgework={view.edgework}
+            onAskNote={() => send({ kind: 'request-hint' })}
+            onPutDown={onClose}
+            leaving={reading.leaving}
+          />
+        </NotingPlace>
       )}
       {note !== null && (
         <PinnedNote
           note={note.item}
+          room={noteRoom(map, note.item.index)}
           edgework={view.edgework}
           onPutDown={onClose}
           leaving={note.leaving}

@@ -2364,6 +2364,50 @@ button.link:hover {
   color: rgba(42, 36, 28, 0.45);
 }
 
+/* The paper under the head: the writing, then the captures; it scrolls as one sheet. */
+.notepad-sheet {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  background: #faf4e2;
+}
+
+.notepad-sheet .notepad-text {
+  flex: none;
+}
+
+/* A capture under its head: the lines as taken, a table's never wrapped. */
+.notepad-capture {
+  padding: 4px 12px 8px;
+  border-top: 1px solid var(--ink-line);
+}
+
+.notepad-capture-head {
+  margin: 0;
+  color: var(--ink-soft);
+  font: 700 calc(12px * var(--text-scale)) / 1.4 var(--sans);
+}
+
+.notepad-capture-updated {
+  font-weight: 400;
+  font-style: italic;
+}
+
+.notepad-capture-text {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: #1d2a3f;
+  font: calc(14px * var(--text-scale)) / 1.5 var(--mono);
+  field-sizing: content;
+}
+
 .notepad-warn {
   margin: 0;
   padding: 4px 12px 6px;

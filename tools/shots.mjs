@@ -137,8 +137,9 @@
  * comes up beside each open device (device-notepad.png,
  * device-notepad-phone.png). The pad has to stand beside the page — a strip
  * down the right edge, a drawer along a phone's foot — the block has to come
- * in under its station's line, and E has to put the source down again, or
- * the run fails. After the station step the crew leaves the station that is
+ * in at the pad's foot as a capture under a head naming the source
+ * („Klemmbrett · Legende"), and E has to put the source down again, or the
+ * run fails. After the station step the crew leaves the station that is
  * up quiet until the Leitstelle names the next place (nudge.png,
  * nudge-phone.png): its line in both banners, spoken by its recording.
  *
@@ -3925,16 +3926,39 @@ function overlapping(a, b) {
   );
 }
 
+/** The head the Laborkennung comes into the notepad under (client noting.ts SIGN). */
+const SIGN_CAPTURE = 'Schild · Laborkennung';
+
+/** All the notepad on `page` holds: its writing, then each capture's head and lines. */
+function padText(page) {
+  return page.evaluate(() => {
+    const writing = document.querySelector('.notepad .notepad-text')?.value ?? '';
+    const captures = [...document.querySelectorAll('.notepad .notepad-capture')].map(
+      (capture) =>
+        `${capture.querySelector('.notepad-capture-head')?.textContent ?? ''}\n` +
+        `${capture.querySelector('textarea')?.value ?? ''}`,
+    );
+    return [writing, ...captures].join('\n\n');
+  });
+}
+
+/** The head of the newest capture on the notepad on `page`; null for none. */
+async function newestCapture(page) {
+  const heads = page.locator('.notepad .notepad-capture-head');
+  return (await heads.count()) === 0 ? null : heads.last().textContent();
+}
+
 /**
  * notepad.png: the guest opens the notepad from the HUD, writes a line and
- * takes the Laborkennung over. The pad is kept per room, so a reload has to
- * bring the text back.
+ * takes the Laborkennung over — a capture of its own at the foot of the pad,
+ * „Schild · Laborkennung". The pad is kept per room, so a reload has to bring
+ * the writing and the captures back.
  */
 async function captureNotepad(page, seen) {
   const pad = page.locator('.notepad');
   await page.locator('.hud-notes').click();
   await pad.waitFor({ state: 'visible', timeout: 3000 });
-  await pad.locator('textarea').fill('Spalte 4: Ω ☆ ¶ Ѭ');
+  await pad.locator('.notepad-text').fill('Spalte 4: Ω ☆ ¶ Ѭ');
   const take = pad.locator('.notepad-take');
   const offered = !(await take.isDisabled());
   if (offered) {
@@ -3942,12 +3966,13 @@ async function captureNotepad(page, seen) {
   }
   await sleep(300);
   await capture(page, 'notepad.png');
-  const written = await pad.locator('textarea').inputValue();
+  const written = await padText(page);
+  const taken = offered ? await newestCapture(page) : null;
   const dpad = await page.locator('.world-dpad').boundingBox();
   const blocks = overlapping(await pad.boundingBox(), dpad);
   // The pad offers the Laborkennung only to a player who has read the sign.
   const kennung = offered
-    ? 'Laborkennung taken over'
+    ? `Laborkennung taken over as ${taken === SIGN_CAPTURE ? '' : '!! '}„${taken}"`
     : seen.view.edgework === null
       ? 'no Laborkennung read yet, none to take over'
       : '!! Laborkennung read but not offered';
@@ -3955,15 +3980,18 @@ async function captureNotepad(page, seen) {
     `notepad.png        guest: ${kennung}, ` +
       `${blocks ? '!! covers the steering pad' : 'clear of the steering pad'}`,
   );
+  if (offered && taken !== SIGN_CAPTURE) {
+    fail(`notepad.png: the Laborkennung came in as „${taken}", not „${SIGN_CAPTURE}"`);
+  }
 
   await page.reload();
   await page.locator('.stage').waitFor({ timeout: 10_000 });
   await page.locator('.overlay.pause').waitFor({ state: 'hidden', timeout: 10_000 });
   await page.locator('.hud-notes').click();
   await pad.waitFor({ state: 'visible', timeout: 3000 });
-  const kept = (await pad.locator('textarea').inputValue()) === written;
+  const kept = (await padText(page)) === written;
   console.log(
-    `notepad            guest: ${kept ? 'text kept over a reload' : '!! text lost on reload'}`,
+    `notepad            guest: ${kept ? 'all of it kept over a reload' : '!! lost on reload'}`,
   );
   await pad.locator('.notepad-close').click();
   await pad.waitFor({ state: 'hidden', timeout: 3000 });
@@ -4160,13 +4188,38 @@ async function captureHighlight({ page, name }, { subject, said }, shot) {
   }
 }
 
+/** A label on the map as the notepad names the place: „KLEMMBRETT" is the Klemmbrett. */
+function placeNamed(label) {
+  return label
+    .toLowerCase()
+    .replace(/(^|[\s-])(\p{L})/gu, (_, before, first) => before + first.toUpperCase());
+}
+
+/** How many lines a capture holds under its head, at most (client noting.ts CAPTURE_LINES). */
+const CAPTURE_LINES = 11;
+
+/**
+ * The newest capture on the notepad on `page` as it should stand after „Notieren" at `source`:
+ * under a head naming the source and the part („Klemmbrett · Legende"), at most CAPTURE_LINES
+ * lines under it. Whether it does, and the log's words for it.
+ */
+async function noteTakenAt(page, source) {
+  const head = await newestCapture(page);
+  const body = page.locator('.notepad .notepad-capture textarea').last();
+  const lines = head === null ? 0 : (await body.inputValue()).split('\n').length;
+  const named = head !== null && head.startsWith(`${placeNamed(source.label)} · `);
+  const ok = named && lines <= CAPTURE_LINES;
+  return { ok, said: `${ok ? '' : '!! '}noted „${head}", ${lines} line(s) under it` };
+}
+
 /**
  * reading-notepad.png (reading-notepad-phone.png on the guest's phone): a player reads an open
  * source — a clipboard where one is open — brings the notepad up beside it and takes the
  * first rules list or table in view down with „Notieren". The pad has to stand beside the
- * page and hold the block under the station's line („§3 Signalkette · Legende"), or the run
- * fails. Then the source is put down again (`putSourceDown`). Before E, as the player stands
- * in reach, `glowShot` catches the source glowing in its shape (captureHighlight).
+ * page and hold the capture at its foot under a head naming the source („Klemmbrett ·
+ * Legende"), or the run fails. Then the source is put down again (`putSourceDown`). Before E,
+ * as the player stands in reach, `glowShot` catches the source glowing in its shape
+ * (captureHighlight).
  */
 async function captureNoting(player, shot, glowShot, audience) {
   const { page, seen, name } = player;
@@ -4190,16 +4243,15 @@ async function captureNoting(player, shot, glowShot, audience) {
   }
   await sleep(500); // the pad scrolled down to it, the control says it took it
   await capture(page, shot);
-  const text = await page.locator('.notepad textarea').inputValue();
-  const block = text.split('\n\n').at(-1) ?? '';
+  const taken = await noteTakenAt(page, source);
   const side = await notingSide(page);
   console.log(
     `${`${shot} `.padEnd(19)}${name}: "${source.label}" (${source.kind}), ` +
-      (offered ? `noted „${block.split('\n')[0]}", ${block.split('\n').length} lines` : '!! no „Notieren"') +
+      (offered ? taken.said : '!! no „Notieren"') +
       `; the pad ${side.said}${touch ? ', up by its tab' : ', up by N'}`,
   );
-  if (!offered || !/^§\d+ \S/.test(block) || !side.ok) {
-    fail(`${shot}: ${offered ? 'the noted block or the pad is not as it should be' : 'no „Notieren"'}`);
+  if (!offered || !taken.ok || !side.ok) {
+    fail(`${shot}: ${offered ? 'the capture or the pad is not as it should be' : 'no „Notieren"'}`);
   }
   await putSourceDown(page, overlay, touch, shot, source.label);
 }

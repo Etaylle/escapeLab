@@ -2,22 +2,25 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ManualHere, ManualSection, PuzzleView } from '@escapelab/core';
-import { appendBlock } from '../src/notes.js';
 import {
+  blockTaken,
+  captureAt,
   NotepadContext,
-  notedHead,
+  NotingPlace,
   notedPart,
-  notedText,
   ownerOf,
+  type Capture,
   type NotableBlock,
   type NotepadHand,
+  type Place,
 } from '../src/noting.js';
 import { paginate } from '../src/pages.js';
-import { ServersPanel, terminalTable } from '../src/puzzles/ServersPanel.js';
+import { ServersPanel } from '../src/puzzles/ServersPanel.js';
 import { Book } from '../src/screens/Book.js';
 import { gameClass, NOTHING_OVER } from '../src/screens/Game.js';
 import { Block } from '../src/screens/Manual.js';
 import { Notepad } from '../src/screens/Notepad.js';
+import { PinnedNote } from '../src/screens/PinnedNote.js';
 import { ReadingOverlay } from '../src/screens/Reading.js';
 import { mapWith, NO_CLOCK } from './fixtures.js';
 import { buttonsOf, elementsOf, press } from './probe.js';
@@ -51,43 +54,49 @@ const MANUAL: ManualSection[] = [
 
 const STATION = { index: 2, title: 'Signalkette' };
 
-/** A notepad's hand that keeps what it is handed. */
-function hand(): NotepadHand & { noted: string[] } {
-  const noted: string[] = [];
-  return { noted, noteDown: (text) => noted.push(text), toggle: noop };
+const CLIPBOARD: Place = { id: 'klemmbrett', name: 'Klemmbrett' };
+
+/** A notepad's hand that keeps what it is handed, and has held one of each key before. */
+function hand(): NotepadHand & { noted: Capture[] } {
+  const noted: Capture[] = [];
+  return {
+    noted,
+    noteDown: (capture) => {
+      const again = noted.some((each) => each.key === capture.key);
+      noted.push(capture);
+      return again;
+    },
+    toggle: noop,
+  };
 }
 
-describe('a block taken down into the notepad', () => {
-  it('opens with the station and the part of its rules, the part left out where it repeats', () => {
-    expect(notedHead(STATION, 'Legende')).toBe('§3 Signalkette · Legende');
-    expect(notedHead(STATION, 'Signalkette')).toBe('§3 Signalkette');
-    expect(notedHead(STATION, null)).toBe('§3 Signalkette');
+describe('a printed block as the notepad takes it', () => {
+  it('names a part by its heading; among several a list „Regeln", a table its first column', () => {
+    const [signal, legend] = MANUAL;
+    if (signal === undefined || legend === undefined) {
+      throw new Error('the fixture lost a section');
+    }
+    expect(blockTaken(STATION, MANUAL, legend, LEGEND).part).toBe('Legende');
+    expect(blockTaken(STATION, MANUAL, signal, RULES).part).toBe('Signalkette');
+    const both: ManualSection = { heading: 'Befehle und Codes', blocks: [LEGEND, RULES] };
+    expect(blockTaken(STATION, MANUAL, both, LEGEND).part).toBe('Zeile');
+    expect(blockTaken(STATION, MANUAL, both, RULES).part).toBe('Regeln');
   });
 
-  it('writes a table as its columns once and a line a row: „Zeile 1: rot · …"', () => {
-    expect(notedText('§3 Signalkette · Legende', LEGEND)).toBe(
-      [
-        '§3 Signalkette · Legende',
-        'Spalten: Pult A · Muster · Pult B · Muster',
-        'Zeile 1: rot · Kreis · gelb · Dreieck',
-        'Zeile 2: blau · Quadrat · rot · Kreis',
-      ].join('\n'),
-    );
-    // A table that does not number its rows is numbered from 1.
-    const codes: NotableBlock = {
-      kind: 'table',
-      head: ['Code', 'Bedeutung'],
-      rows: [['E11', 'Absturz']],
-    };
-    expect(notedText('§4 Serverraum', codes)).toBe(
-      '§4 Serverraum\nSpalten: Code · Bedeutung\nZeile 1: E11 · Absturz',
-    );
-  });
-
-  it('writes a rules list numbered as printed', () => {
-    expect(notedText('§3 Signalkette', RULES)).toBe(
-      '§3 Signalkette\n1. Rot zuerst.\n2. Dann blau.\n3. Nie grün.',
-    );
+  it('names the place it is taken at in its head, and keys it by place, station and part', () => {
+    const legend: ManualSection = { heading: 'Legende', blocks: [LEGEND] };
+    const taken = blockTaken(STATION, MANUAL, legend, LEGEND);
+    expect(captureAt(CLIPBOARD, taken)).toEqual({
+      key: 'klemmbrett/2/Legende',
+      head: 'Klemmbrett · Legende',
+      lines: [
+        'Zeile  Pult A  Muster   Pult B  Muster',
+        '1      rot     Kreis    gelb    Dreieck',
+        '2      blau    Quadrat  rot     Kreis',
+      ],
+      form: 'table',
+    });
+    expect(captureAt(null, taken).head).toBe('Legende');
   });
 
   it('notes the whole of a table or a list from any page it runs over', () => {
@@ -108,18 +117,14 @@ describe('a block taken down into the notepad', () => {
       }
       const owner = ownerOf(manual, part);
       expect(owner?.block).toBe(part.kind === 'table' ? long : list);
-      expect(owner?.heading).toBe('Tafel');
+      expect(owner?.section.heading).toBe('Tafel');
+      expect(notedPart({ index: 0, manual }, part)?.key).toBe(
+        part.kind === 'table' ? '0/Zeile' : '0/Regeln',
+      );
     }
     const strange = { kind: 'table' as const, head: ['Zeile', 'Wert'], rows: [['9', 'anders']] };
     expect(ownerOf(manual, strange)).toBeNull();
-    expect(notedPart({ index: 0, title: 'Tafel', manual }, strange)).toBeNull();
-  });
-
-  it('goes below what is written, an empty line between', () => {
-    expect(appendBlock('', 'neu')).toBe('neu');
-    expect(appendBlock('alt', 'neu')).toBe('alt\n\nneu');
-    expect(appendBlock('alt\n\n\n', 'neu')).toBe('alt\n\nneu');
-    expect(appendBlock('  \n', 'neu')).toBe('neu');
+    expect(notedPart({ index: 0, manual }, strange)).toBeNull();
   });
 });
 
@@ -173,24 +178,29 @@ describe('„Notieren" at a source', () => {
     expect(html).not.toContain('class="noted"');
   });
 
-  it('hands the notepad the whole block under the station it belongs to', () => {
+  it('hands the notepad the whole block, named for the source it is read at', () => {
     const notepad = hand();
     const elements = elementsOf(
       () => bookOf(clipboard),
-      (probe) => <NotepadContext value={notepad}>{probe}</NotepadContext>,
+      (probe) => (
+        <NotepadContext value={notepad}>
+          <NotingPlace value={CLIPBOARD}>{probe}</NotingPlace>
+        </NotepadContext>
+      ),
     );
     const [rules, legend] = buttonsOf(elements, 'note-down');
     press(rules);
     press(legend);
-    expect(notepad.noted).toEqual([
-      notedText('§3 Signalkette', RULES),
-      notedText('§3 Signalkette · Legende', LEGEND),
+    expect(notepad.noted.map((capture) => capture.head)).toEqual([
+      'Klemmbrett · Signalkette',
+      'Klemmbrett · Legende',
     ]);
+    expect(notepad.noted[0]?.lines).toEqual(['1. Rot zuerst.', '2. Dann blau.', '3. Nie grün.']);
   });
 
-  it('stands by the rules on a terminal’s screen too, named for the station', () => {
+  it('stands by the rules on a terminal’s screen too, named for the source', () => {
     const notepad = hand();
-    const terminal: ManualHere = { ...clipboard, kind: 'terminal' };
+    const terminal: ManualHere = { ...clipboard, kind: 'terminal', label: 'TERMINAL' };
     const overlay = (
       <ReadingOverlay
         manual={terminal}
@@ -206,12 +216,16 @@ describe('„Notieren" at a source', () => {
     );
     const elements = elementsOf(
       () => overlay,
-      (probe) => <NotepadContext value={notepad}>{probe}</NotepadContext>,
+      (probe) => (
+        <NotepadContext value={notepad}>
+          <NotingPlace value={{ id: 'terminal-quelle', name: 'Terminal' }}>{probe}</NotingPlace>
+        </NotepadContext>
+      ),
     );
     buttonsOf(elements, 'note-down').forEach(press);
-    expect(notepad.noted).toEqual([
-      notedText('§3 Signalkette', RULES),
-      notedText('§3 Signalkette · Legende', LEGEND),
+    expect(notepad.noted.map((capture) => capture.head)).toEqual([
+      'Terminal · Signalkette',
+      'Terminal · Legende',
     ]);
   });
 
@@ -247,19 +261,7 @@ const terminalView: PuzzleView = {
 } as unknown as PuzzleView;
 
 describe('„Notieren" at the Serverraum terminal', () => {
-  it('takes the code table down as it stands, a row a service, with what each needs', () => {
-    const rows = terminalView.kind === 'servers' ? (terminalView.rows ?? []) : [];
-    expect(notedText(notedHead(terminalView, 'Terminal'), terminalTable(rows))).toBe(
-      [
-        '§4 Serverraum · Terminal',
-        'Spalten: Dienst · Status · Strom · Braucht',
-        'Zeile 1: NETZ · RUNNING · AN · —',
-        'Zeile 2: DNS · FEHLER E23 · AN · NETZ',
-      ].join('\n'),
-    );
-  });
-
-  it('sits on the terminal’s bezel in the game, and hands the table to the notepad', () => {
+  it('sits on the terminal’s bezel and hands the table down as „Terminal · Dienste"', () => {
     const notepad = hand();
     const panel = (
       <ServersPanel
@@ -277,13 +279,45 @@ describe('„Notieren" at the Serverraum terminal', () => {
     const [button] = buttonsOf(elements, 'note-down');
     expect(button?.props['type']).toBe('button');
     press(button);
-    expect(notepad.noted[0]).toMatch(/^§4 Serverraum · Terminal\nSpalten: Dienst · Status · Strom/);
+    expect(notepad.noted).toEqual([
+      {
+        key: 'terminal/3/dienste',
+        head: 'Terminal · Dienste',
+        lines: [
+          'Dienst  Status      Strom  Braucht',
+          'NETZ    RUNNING     AN     —',
+          'DNS     FEHLER E23  AN     NETZ',
+        ],
+        form: 'table',
+      },
+    ]);
     expect(renderToStaticMarkup(panel)).not.toContain('note-down');
   });
 });
 
+describe('„Notieren" at a note of the last shift', () => {
+  it('takes the note down word for word under the room it hangs in', () => {
+    const notepad = hand();
+    const text = 'Drei Tickets wegen der Lüfter, keins bearbeitet. – Admin';
+    const elements = elementsOf(
+      () => (
+        <PinnedNote note={{ index: 1, text }} room="SERVERRAUM" edgework={null} onPutDown={noop} />
+      ),
+      (probe) => <NotepadContext value={notepad}>{probe}</NotepadContext>,
+    );
+    press(buttonsOf(elements, 'note-down')[0]);
+    expect(notepad.noted).toEqual([
+      { key: 'zettel/notiz/1', head: 'Zettel · Serverraum', lines: [text], form: 'text' },
+    ]);
+  });
+});
+
 describe('the notepad beside a source or a device', () => {
-  const notes = { text: 'Stufe 1', change: noop, saved: true };
+  const notes = {
+    content: { text: 'Stufe 1', captures: [] },
+    change: noop,
+    saved: true,
+  };
 
   it('is put away by a word, not a window’s ✕', () => {
     const html = renderToStaticMarkup(<Notepad notes={notes} edgework={null} onClose={noop} />);

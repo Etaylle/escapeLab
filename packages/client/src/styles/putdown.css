@@ -217,10 +217,14 @@
     inset 1px 0 0 rgba(0, 0, 0, 0.35);
 }
 
-.game--noting .notepad-text {
+/* The sheet fills the strip; the writing takes what captures leave, seven lines at least. */
+.game--noting .notepad-sheet {
   flex: 1;
-  height: auto;
-  min-height: 0;
+  max-height: none;
+}
+
+.game--noting .notepad-sheet .notepad-text {
+  flex: 1 0 auto;
 }
 
 /* A phone: the pad comes up from the bottom as a drawer, the page above it. */

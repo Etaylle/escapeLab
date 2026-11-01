@@ -7,7 +7,12 @@ const TEXT = 'Drei Tickets wegen der Lüfter, keins bearbeitet. – Admin';
 
 describe('a note of the last shift, read where it hangs', () => {
   const html = renderToStaticMarkup(
-    <PinnedNote note={{ index: 1, text: TEXT }} edgework={null} onPutDown={noop} />,
+    <PinnedNote
+      note={{ index: 1, text: TEXT }}
+      room="SERVERRAUM"
+      edgework={null}
+      onPutDown={noop}
+    />,
   );
 
   it('opens a slip over the world, named for what it is, put down like a sheet', () => {
@@ -22,7 +27,13 @@ describe('a note of the last shift, read where it hangs', () => {
 
   it('slides away once put down, taking nothing more', () => {
     const leaving = renderToStaticMarkup(
-      <PinnedNote note={{ index: 1, text: TEXT }} edgework={null} onPutDown={noop} leaving />,
+      <PinnedNote
+        note={{ index: 1, text: TEXT }}
+        room={null}
+        edgework={null}
+        onPutDown={noop}
+        leaving
+      />,
     );
     expect(leaving).toContain('class="puzzle-modal note-modal puzzle-modal--leaving"');
     expect(leaving).toMatch(/role="dialog"[^>]*inert=""/);

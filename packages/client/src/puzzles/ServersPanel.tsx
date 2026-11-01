@@ -18,7 +18,7 @@ import {
   type ServerRow,
   type Service,
 } from '@escapelab/core';
-import { notedHead, notedText, type NotableBlock } from '../noting.js';
+import { alignedLines, type NotedStation, type Place, type Taken } from '../noting.js';
 import { NoteButton } from '../screens/NoteButton.js';
 import { TalkButton } from '../screens/Voice.js';
 import { consoleName } from '../world/consoles.js';
@@ -262,17 +262,25 @@ const statusOf = (row: ServerRow): string => (row.running ? 'RUNNING' : `FEHLER 
 export const needsOf = (service: Service): string =>
   DEPENDS_ON[service].length === 0 ? '—' : DEPENDS_ON[service].map(serviceName).join(', ');
 
-/** The terminal's status table as the notepad takes it down: a row a service, as printed. */
-export function terminalTable(rows: readonly ServerRow[]): NotableBlock {
+/** Where the notepad takes the status table down: the terminal. */
+export const TERMINAL: Place = { id: 'terminal', name: 'Terminal' };
+
+/**
+ * The terminal's status table as the notepad takes it down: a row a service as printed — its
+ * status, its power, what it needs running first — under the columns' names, aligned.
+ */
+export function terminalTaken(station: NotedStation, rows: readonly ServerRow[]): Taken {
+  const table = rows.map((row) => [
+    serviceName(row.service),
+    statusOf(row),
+    row.power ? 'AN' : 'AUS',
+    needsOf(row.service),
+  ]);
   return {
-    kind: 'table',
-    head: ['Dienst', 'Status', 'Strom', 'Braucht'],
-    rows: rows.map((row) => [
-      serviceName(row.service),
-      statusOf(row),
-      row.power ? 'AN' : 'AUS',
-      needsOf(row.service),
-    ]),
+    part: 'Dienste',
+    key: `${station.index}/dienste`,
+    lines: alignedLines([['Dienst', 'Status', 'Strom', 'Braucht'], ...table]),
+    form: 'table',
   };
 }
 
@@ -526,7 +534,7 @@ function Terminal(props: {
         <Keys put={put} />
         <Link name="RACK" manned={otherManned(puzzle)} />
         <TalkButton className="servers-talk">FUNK</TalkButton>
-        <NoteButton text={notedText(notedHead(puzzle, 'Terminal'), terminalTable(rows))} />
+        <NoteButton taken={terminalTaken(puzzle, rows)} place={TERMINAL} />
       </div>
     </form>
   );
