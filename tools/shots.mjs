@@ -2735,10 +2735,11 @@ async function gatherAt(station, players) {
 
 /**
  * lever.png, lit-flur.png: the whole crew at the main switch the first
- * station is (gatherAt). E opens its panel on both pages, a lever lit for
- * each of them; both throw theirs together, the panel closes itself and the
- * room the station lights comes up warm. Logs how long the lever took from
- * the lights going out.
+ * station is (gatherAt). On the way each page finds the switch — within two
+ * tiles or in its lamp's cone, or the run fails (`reportLeverFound`). E
+ * opens its panel on both pages, a lever lit for each of them; both throw
+ * theirs together, the panel closes itself and the room the station lights
+ * comes up warm. Logs how long the lever took from the lights going out.
  */
 async function throwLever(players) {
   const [first] = players;
@@ -2747,7 +2748,13 @@ async function throwLever(players) {
     skip('lever.png', 'the first station is no main switch');
     return;
   }
-  await gatherAt(lever, players);
+  const watches = players.map((player) => watchFinding(player, lever));
+  try {
+    await gatherAt(lever, players);
+  } finally {
+    watches.forEach((watch) => watch.stop());
+  }
+  await reportLeverFound(players, lever, watches);
   for (const player of players) {
     if (!(await interactUntil(player.page, player.page.locator('.station-modal')))) {
       throw new Error(`${player.name} stands at the lever, but no .station-modal after 3 tries`);
@@ -2816,6 +2823,209 @@ async function captureLeverRing(player) {
   );
   if (ring === 0 || !sprang || says?.includes('Zug verfallen') !== true) {
     fail(`lever-ring.png: ring ${ring}, sprang back ${sprang}, says "${says}"`);
+  }
+}
+
+// ── discovery: finding things is an act (client world/labels.ts, world/finds.ts) ──
+//
+// A thing shows its name only once the player has found it — within 2 tiles in sight, or 250 ms
+// in their lamp's cone (core discovery.ts) — and only finds that matter chime, once a thing, at
+// most once in 1.5 s. The lever's line: how far off each page found the main switch. Then Ben
+// walks into the Archiv the lever lit:
+// discover-enter.png  two steps in, standing: the names under the Archiv's things in his window
+//   — at most two, or the run fails
+// discover-later.png  by the shelves at the sign: the sign named, a thing across the room not —
+//   or the run fails
+// The audio line: the discovery chimes each page sounded since the start, and Ben's in the
+// Archiv — at most three there, or the run fails.
+
+/** How far a lamp's cone reaches, tiles (core discovery.ts LAMP_REACH). */
+const LAMP_REACH = 7.5;
+/** Within this many tiles a thing in sight is found outright (core discovery.ts FIND_REACH). */
+const FIND_REACH = 2;
+/** Blackout's Archiv for Ben's walk: its floor, its door, two steps in, the shelves by the sign. */
+const ARCHIV = {
+  floor: { left: 1, top: 1, right: 7, bottom: 5 },
+  door: { x: 4, y: 6 },
+  inside: [
+    { x: 4, y: 5 },
+    { x: 4, y: 4 },
+  ],
+  shelves: { x: 3, y: 3 },
+};
+/** A name comes up over 300 ms (client labels.ts): a shot waits this long after a step, ms. */
+const NAMES_UP_MS = 600;
+
+/**
+ * Watches `player`'s view while it walks for the moment it has found `spot` — a station's
+ * console — and where it stood then; `stop` ends the watch and says what it saw.
+ */
+function watchFinding(player, spot) {
+  const seen = { at: null, from: null };
+  const timer = setInterval(() => {
+    const stations = player.seen.view?.map?.stations ?? [];
+    const station = stations.find((s) => s.x === spot.x && s.y === spot.y);
+    if (seen.at === null && station?.found === true) {
+      seen.at = Date.now();
+      seen.from = whereIs(player.seen);
+    }
+  }, 40);
+  return {
+    stop: () => {
+      clearInterval(timer);
+      return seen;
+    },
+    seen,
+  };
+}
+
+/** The finds `page` took this run as its audio probe lists them; null without the probe. */
+function chimesOn(page) {
+  return page.evaluate(() => globalThis.__escapelab?.audio?.chimes ?? null);
+}
+
+/** What a chime found, in a word: „console notlicht", „source spind". */
+const findSaid = ({ find }) =>
+  find.of === 'sign' ? 'sign' : `${find.of} ${find.id ?? find.puzzleId ?? find.index}`;
+
+/**
+ * The lever's line: each page found the main switch within FIND_REACH or by its lamp's cone
+ * within LAMP_REACH — from where it stood when its view first said so — or the run fails; and
+ * whether the find chimed there („Hauptschalter entdeckt").
+ */
+async function reportLeverFound(players, lever, watches) {
+  const said = [];
+  for (const [i, player] of players.entries()) {
+    const { from } = watches[i].seen;
+    const away = from === null ? null : Math.hypot(from.x - lever.x - 0.5, from.y - lever.y - 0.5);
+    const how = away === null ? '!! never' : away <= FIND_REACH ? 'within reach' : 'by the lamp';
+    const chimes = (await chimesOn(player.page)) ?? [];
+    const chime = chimes.find((c) => c.find.of === 'console' && c.find.puzzleId === lever.puzzleId);
+    const rang = chime === undefined ? 'no chime' : chime.sounded ? 'chimed' : 'chime let go';
+    said.push(`${player.name} ${away?.toFixed(1) ?? '?'} tiles off ${how}, ${rang}`);
+    if (away === null || away > LAMP_REACH + 0.5) {
+      fail(`the lever: ${player.name} found the main switch ${away ?? 'never'} tiles off`);
+    }
+  }
+  console.log(`lever found        ${said.join('; ')}`);
+}
+
+/** Whether the point (x, y), in tiles, lies on the Archiv's floor. */
+function inArchiv(x, y) {
+  const { left, top, right, bottom } = ARCHIV.floor;
+  return x >= left && x < right + 1 && y >= top && y < bottom + 1;
+}
+
+/** The names on `page`'s canvas under the Archiv's things, and how far each lies from `at`. */
+async function archivNames(page, at) {
+  const names = await page.evaluate(() => globalThis.__escapelab?.labels ?? null);
+  if (names === null) {
+    throw new Error('discover-*.png: the traced page lists no names (`__escapelab.labels`)');
+  }
+  return names
+    .filter((name) => name.onScreen && inArchiv(name.x, name.y))
+    .map((name) => ({ ...name, away: Math.hypot(name.x - at.x, name.y - at.y) }));
+}
+
+/** „SICHERUNG 3.6" — a name and how far it lies from the player, for the log. */
+const namesSaid = (names) =>
+  names.map((name) => `${name.text} ${name.away.toFixed(1)}`).join(', ') || 'none';
+
+/**
+ * discover-enter.png, discover-later.png and the audio line: Ben walks from where the lever
+ * left him into the Archiv the lever lit, two steps in, and stands — his window at laptop
+ * size — then on to the shelves by the sign; he walks back after. Skipped on a map without
+ * Blackout's Archiv.
+ */
+async function captureDiscovery(walker, other) {
+  const map = walker.seen.view.map;
+  const archiv = map.labels.some((label) => label.text === 'ARCHIV');
+  if (!archiv || map.tiles[ARCHIV.door.y]?.[ARCHIV.door.x] !== '.') {
+    skip('discover-*.png', 'this map has no Archiv to walk into');
+    return;
+  }
+  const home = tileOf(walker.seen);
+  if (!(await standOn(walker, ARCHIV.door))) {
+    throw new Error(`${walker.name} found no way to the Archiv's door`);
+  }
+  const atDoor = ((await chimesOn(walker.page)) ?? []).length;
+  for (const step of ARCHIV.inside) {
+    await stepTo(walker.page, walker.seen, step.x + 0.5, step.y + 0.5);
+  }
+  await walker.page.setViewportSize(SIZES[0]);
+  await sleep(NAMES_UP_MS);
+  const inside = ARCHIV.inside.at(-1);
+  const entering = await archivNames(walker.page, { x: inside.x + 0.5, y: inside.y + 0.5 });
+  await capture(walker.page, 'discover-enter.png');
+  await standOn(walker, ARCHIV.shelves);
+  await sleep(NAMES_UP_MS);
+  const by = { x: ARCHIV.shelves.x + 0.5, y: ARCHIV.shelves.y + 0.5 };
+  const later = await archivNames(walker.page, by);
+  await capture(walker.page, 'discover-later.png');
+  const chimes = ((await chimesOn(walker.page)) ?? []).slice(atDoor);
+  await walker.page.setViewportSize(SIZES[2]);
+  reportDiscovery(walker, map, { entering, later, by });
+  await reportChimes([walker, other], walker, chimes);
+  if (home !== null && !(await standOn(walker, home))) {
+    throw new Error(`${walker.name} found no way back to ${home.x},${home.y} from the Archiv`);
+  }
+}
+
+/**
+ * The names' lines: two steps in, at most two names under the Archiv's things; by the shelves,
+ * the sign named and at least one thing across the room — more than three tiles off — not.
+ */
+function reportDiscovery(walker, map, { entering, later, by }) {
+  console.log(
+    `discover-enter.png ${walker.name} two steps into the Archiv: ${entering.length} name(s) ` +
+      `under its things (${namesSaid(entering)})${entering.length > 2 ? ' !! more than two' : ''}`,
+  );
+  const things = [
+    ...map.manuals.map((m) => ({ text: m.label, x: m.x + 0.5, y: m.y + 0.5 })),
+    ...map.items.map((i) => ({ text: i.label.toUpperCase(), x: i.x, y: i.y })),
+  ].filter((thing) => inArchiv(thing.x, thing.y));
+  const named = new Set(later.map((name) => name.text));
+  const across = things.filter((thing) => Math.hypot(thing.x - by.x, thing.y - by.y) > 3);
+  const unnamed = across.filter((thing) => !named.has(thing.text));
+  const sign = named.has('LABORKENNUNG');
+  console.log(
+    `discover-later.png ${walker.name} by the shelves: ${later.length} name(s) ` +
+      `(${namesSaid(later)}); across the room unnamed: ` +
+      `${unnamed.map((thing) => thing.text).join(', ') || '!! none'}${sign ? '' : ' !! no sign'}`,
+  );
+  if (entering.length > 2) {
+    fail(`discover-enter.png: ${entering.length} names two steps into the Archiv`);
+  }
+  if (!sign || (across.length > 0 && unnamed.length === 0)) {
+    fail(`discover-later.png: sign named ${sign}, ${unnamed.length} of ${across.length} unnamed`);
+  }
+}
+
+/**
+ * The audio line: the discovery chimes each page sounded since the run began — and let go —
+ * and `walker`'s in the Archiv (`inArchiv`), at most three or the run fails.
+ */
+async function reportChimes(players, walker, inArchivChimes) {
+  const pages = [];
+  for (const player of players) {
+    const chimes = (await chimesOn(player.page)) ?? [];
+    const sounded = chimes.filter((chime) => chime.sounded);
+    const letGo = chimes.length - sounded.length;
+    pages.push(
+      `${player.name} ${sounded.length} (${sounded.map(findSaid).join(', ') || 'none'}` +
+        `${letGo > 0 ? `; ${letGo} let go` : ''})`,
+    );
+  }
+  const archivChimes = inArchivChimes.filter((chime) => chime.sounded);
+  const since = Date.now() - (walker.seen.view.lights.outAt ?? Date.now());
+  console.log(
+    `audio              discovery chimes ${seconds(since)} after the blackout: ` +
+      `${pages.join(', ')}; ${walker.name} in the Archiv ${archivChimes.length} ` +
+      `(${archivChimes.map(findSaid).join(', ') || 'none'})` +
+      `${archivChimes.length > 3 ? ' !! more than three' : ''}`,
+  );
+  if (archivChimes.length > 3) {
+    fail(`audio: ${archivChimes.length} discovery chimes in the Archiv`);
   }
 }
 
@@ -3151,6 +3361,7 @@ async function coldOpen(host, guest) {
   await partnerSide(host, guest, 'after the blackout');
   await checkRadioVoice(guest, opening, 'the blackout', startLineOf(guest));
   await throwLever([host, guest]);
+  await captureDiscovery(guest, host);
   return atSign;
 }
 
