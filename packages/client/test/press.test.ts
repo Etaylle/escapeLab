@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClientMessage, PlayerView } from '@escapelab/core';
+import { correction, type Streamed } from '../src/world/movement.js';
 import { fakeAudio, freshAudio, startsOf } from './fakeAudio.js';
 import { mapWith } from './fixtures.js';
 
@@ -56,9 +57,10 @@ type Press = Awaited<ReturnType<typeof freshPress>>;
 function worldAt(press: Press, x: number) {
   const sent: ClientMessage[] = [];
   const opened: string[] = [];
+  const streamed: Streamed[] = [];
   const world = {
     view: atLever(),
-    sim: { self: { x, y: 7.5 }, selfAt: 1_000, presses: press.newPresses() },
+    sim: { self: { x, y: 7.5 }, selfAt: 1_000, presses: press.newPresses(), streamed },
     shut: false,
     send: (msg: ClientMessage) => sent.push(msg),
     onRead: (id: string) => opened.push(`read ${id}`),
@@ -91,6 +93,20 @@ describe('E pressed a moment before reach', () => {
     press.pressWhenInReach(world, 100 + press.PRESS_BUFFER_MS + 20);
     expect(sent).toEqual([]);
   });
+
+  it('is pressed once as reach comes, at a station already open too', async () => {
+    const press = await freshPress();
+    const { world, opened } = worldAt(press, 9.85);
+    world.view = { ...world.view, puzzle: { kind: 'relay' } as unknown as PlayerView['puzzle'] };
+    press.pressE(world, 100);
+    world.sim.self.x = 10.05;
+    // frame after frame while the panel waits for the server to have the player at it
+    for (let frame = 1; frame <= 8; frame++) {
+      press.pressWhenInReach(world, 100 + frame * 16);
+    }
+    expect(opened).toEqual(['operate']);
+    expect(startsOf('console-ready')).toHaveLength(1);
+  });
 });
 
 describe('E the server decides', () => {
@@ -106,6 +122,16 @@ describe('E the server decides', () => {
     expect(opened).toEqual(['operate']);
   });
 
+  it('puts nothing back as the server brings that spot back to a walker gone on', async () => {
+    const press = await freshPress();
+    const { world } = worldAt(press, 10.12345);
+    press.pressE(world, 100);
+    const pressed = { x: 10.123, y: 7.5, facing: 0, moving: true, t: 1, rt: 2 };
+    const known = { run: 1, players: { p1: pressed } };
+    // 300 ms on, a sprint further: 1.6 tiles past the spot it pressed on
+    expect(correction(known, 'p1', 1, { x: 11.72, y: 7.5 }, world.sim.streamed, 400)).toBeNull();
+  });
+
   it('chirps as the server takes it, not on the press, and once', async () => {
     const press = await freshPress();
     const { world } = worldAt(press, 10.5);
@@ -117,7 +143,7 @@ describe('E the server decides', () => {
     expect(startsOf('console-ready')).toHaveLength(1);
   });
 
-  it('turns the prompt pill amber with the server’s words for 2.5 s, and never chirps', async () => {
+  it('turns the prompt pill amber with the server’s words for 2.5 s, never chirping', async () => {
     const press = await freshPress();
     const { world } = worldAt(press, 10.5);
     press.pressE(world, 100);
@@ -137,7 +163,11 @@ describe('E the server decides', () => {
     const press = await freshPress();
     const { world } = worldAt(press, 10.5);
     press.pressE(world, 100);
-    const refusal = { kind: 'error' as const, message: 'Eingabe gesperrt.', of: 'puzzle-input' as const };
+    const refusal = {
+      kind: 'error' as const,
+      message: 'Eingabe gesperrt.',
+      of: 'puzzle-input' as const,
+    };
     press.hearAnswer(world.sim.presses, refusal, 200);
     expect(press.refusalAt(world.sim.presses, 200)).toBeNull();
   });

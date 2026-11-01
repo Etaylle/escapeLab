@@ -12,6 +12,7 @@
 import type { ClientMessage, PlayerView, ServerMessage } from '@escapelab/core';
 import { stationChirp } from './audio.js';
 import { contextAction, type ContextAction } from './interact.js';
+import type { Streamed } from './movement.js';
 
 /** How long a press made out of reach waits for it, ms. */
 export const PRESS_BUFFER_MS = 150;
@@ -63,9 +64,8 @@ export function pressWaiting(presses: Presses, now: number): boolean {
   return presses.waiting !== null;
 }
 
-/** An ask of `of` goes out; whatever waited for reach is done with. */
+/** An ask of `of` goes out. */
 export function ask(presses: Presses, of: AskKind, sent: Ask): void {
-  presses.waiting = null;
   presses.asks[of] = sent;
 }
 
@@ -108,8 +108,11 @@ export function asksOf(kind: string | undefined): kind is AskKind {
 export interface PressWorld {
   /** the view as the screen last rendered it */
   view: PlayerView;
-  /** where the avatar stands, the frame it was walked in (performance.now), and E's state */
-  sim: { self: { x: number; y: number }; selfAt: number; presses: Presses };
+  /**
+   * where the avatar stands, the frame it was walked in (performance.now), E's state, and what
+   * this page sent as where it stands (movement.ts: its echo is no correction)
+   */
+  sim: { self: { x: number; y: number }; selfAt: number; presses: Presses; streamed: Streamed[] };
   /** nothing may be worked now: a panel, pages or the pause lie over it, the opening holds */
   shut: boolean;
   send: (msg: ClientMessage) => void;
@@ -138,7 +141,7 @@ function actionHere(world: PressWorld): ContextAction | null {
  * station stay on this client; everything else the server decides. A note of the last crew
  * comes up here at once, and the server hears of the read for the run report. A locked
  * cabinet only says what is missing. A press a moment before reach waits for it
- * (`holdPress`): the frame step fires it as it comes (`pressWhenInReach`).
+ * (`holdPress`): the frame step fires it as it comes (`pressWhenInReach`), once.
  */
 export function pressE(world: PressWorld, now: number): void {
   if (world.view.map === null || world.shut) {
@@ -149,6 +152,8 @@ export function pressE(world: PressWorld, now: number): void {
     holdPress(world.sim.presses, now);
     return;
   }
+  // E does what it does here now: a press that waited for reach has had its answer.
+  world.sim.presses.waiting = null;
   if (action.kind === 'locked') {
     return;
   }
@@ -163,7 +168,9 @@ export function pressE(world: PressWorld, now: number): void {
 /**
  * E at a source that is open, a note, or the armed station: read it or work it — with the
  * chirp at once, nobody else having to say yes — or ask the server, with the spot the avatar
- * stands on and the frame it was walked in: the chirp waits for its yes (`hearAnswer`).
+ * stands on and the frame it was walked in: the chirp waits for its yes (`hearAnswer`). The
+ * server takes that spot as where the avatar stands, so it is kept as sent, like a position
+ * going out (stream.ts): coming back while the avatar walks on, it puts nothing back.
  */
 function workOn(world: PressWorld, action: ContextAction, now: number): void {
   if (action.kind === 'read') {
@@ -185,11 +192,12 @@ function workOn(world: PressWorld, action: ContextAction, now: number): void {
     }
   }
   const { sim } = world;
+  const spot = { x: Math.round(sim.self.x * 1000) / 1000, y: Math.round(sim.self.y * 1000) / 1000 };
   ask(sim.presses, 'interact', { x: action.x, y: action.y, at: now });
+  sim.streamed.push({ ...spot, at: now });
   world.send({
     kind: 'interact',
-    x: Math.round(sim.self.x * 1000) / 1000,
-    y: Math.round(sim.self.y * 1000) / 1000,
+    ...spot,
     t: Math.round((performance.timeOrigin + sim.selfAt) * 10) / 10,
   });
 }
