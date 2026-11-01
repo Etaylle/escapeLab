@@ -55,13 +55,14 @@ const DOORWAY = mapWith({
 });
 
 /**
- * An avatar at `y` on the corridor's middle column, the server last having it at `sent`,
- * walking `move` for half a second: where it ends up.
+ * An avatar at `y` on the corridor's middle column, the server having it at `kept` by its
+ * positions, the page having last sent `sent`, walking `move` for half a second: where it ends.
  */
-function fromDoor(y: number, sent: number, move: Held): number {
+function fromDoor(y: number, kept: number, move: Held, sent = kept): number {
   const sim = newSim(0);
   Object.assign(sim.self, { x: 2.5, y });
   sim.streamed = [{ x: 2.5, y: sent, at: 0 }];
+  sim.serverSpot = { x: 2.5, y: kept };
   sim.keys.add(move);
   for (let i = 0; i < 30; i++) {
     walk(sim, DOORWAY, 1 / 60, false);
@@ -78,6 +79,21 @@ describe('walk — a door shut on a walker', () => {
   it('takes one the server still had before the door back that way, never through', () => {
     expect(fromDoor(3.2, 2.9, 'down')).toBeLessThan(4);
     expect(fromDoor(3.2, 2.9, 'up')).toBeLessThan(2.5);
+  });
+
+  it('takes one whose step in the server refused back, though the page sent it in', () => {
+    // the door shut on the server before the step into it came: it kept the walker before it
+    expect(fromDoor(3.4, 2.9, 'down', 3.4)).toBeLessThan(4);
+    expect(fromDoor(3.4, 2.9, 'up', 3.4)).toBeLessThan(2.5);
+  });
+
+  it('keeps where the server has the avatar by its positions of this run, none of another', () => {
+    const sim = newSim(0);
+    const kept = { x: 2.5, y: 2.9, facing: 0, moving: false, t: null, rt: 0 };
+    followServer(sim, { run: 5, players: { p1: kept } }, DOORWAY, 'p1', 5);
+    expect(sim.serverSpot).toEqual({ x: 2.5, y: 2.9 });
+    followServer(sim, { run: 4, players: { p1: kept } }, DOORWAY, 'p1', 5);
+    expect(sim.serverSpot).toBeNull();
   });
 
   it('lets a body the door shut on from outside step back, its centre never in', () => {

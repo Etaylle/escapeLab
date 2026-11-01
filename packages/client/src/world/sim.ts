@@ -6,6 +6,7 @@ import { gaitStep } from './figure.js';
 import { lightMemory, type LightMemory } from './light.js';
 import {
   correction,
+  positionsOf,
   startingSpot,
   type KnownPositions,
   type Spot,
@@ -63,6 +64,11 @@ export interface Sim {
   selfAt: number;
   /** what this client streamed lately: its own steps coming back are no correction */
   streamed: Streamed[];
+  /**
+   * where the server has your avatar by its latest positions of this run — a step it refused
+   * is not where the page sent it —; null before the first
+   */
+  serverSpot: Spot | null;
   /**
    * the run's opening holds this screen's avatar (intro/sequence.ts `filmed`): it walks
    * nowhere, and no position goes out
@@ -132,6 +138,7 @@ export function newSim(topCss: number): Sim {
     self: { x: 0, y: 0, facing: 0, moving: false },
     selfAt: 0,
     streamed: [],
+    serverSpot: null,
     held: false,
     others: new Map(),
     trails: new Map(),
@@ -167,7 +174,8 @@ export function newSim(topCss: number): Sim {
 /**
  * Your avatar by the server's word: every run starts it on its spawn — on
  * the first frame, and after a rematch with the world still up — and a
- * step the server refused puts it back where the server kept it.
+ * step the server refused puts it back where the server kept it. Where the
+ * server has it is kept for the step's door rule (`centreMay`).
  */
 export function followServer(
   sim: Sim,
@@ -176,6 +184,8 @@ export function followServer(
   youId: string,
   run: number | null,
 ): void {
+  const kept = positionsOf(known, run)[youId];
+  sim.serverSpot = kept === undefined ? null : { x: kept.x, y: kept.y };
   if (sim.run !== run) {
     const start = startingSpot(known, youId, map, run);
     Object.assign(sim.self, start);
@@ -212,7 +222,7 @@ function tileOf(x: number, y: number): string {
 /**
  * What a frame's step is checked against: the doors shut now, by tile; the shut ones the body
  * overlaps already — a door may shut on a walker —; the tile the body's centre stands on; and
- * the tile the server last had it on, as this page last sent it.
+ * the tile the server has it on (`Sim.serverSpot`), its centre's before the server said.
  */
 interface Footing {
   shut: ReadonlySet<string>;
@@ -225,13 +235,13 @@ function footingOf(sim: Sim, map: WorldMap): Footing {
   const shut = new Set(map.doors.filter((d) => !d.open).map((d) => `${d.x},${d.y}`));
   const { x, y } = sim.self;
   const touched = cornerTiles(x, y).map(([tx, ty]) => `${tx},${ty}`);
-  const sent = sim.streamed.at(-1);
+  const kept = sim.serverSpot;
   const centre = tileOf(x, y);
   return {
     shut,
     overlapped: new Set(touched.filter((key) => shut.has(key))),
     centre,
-    server: sent === undefined ? centre : tileOf(sent.x, sent.y),
+    server: kept === null ? centre : tileOf(kept.x, kept.y),
   };
 }
 
