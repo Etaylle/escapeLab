@@ -1,0 +1,84 @@
+name: Nachtschicht
+
+# One backlog item per night, built by Claude Code on a GitHub runner and handed in as a pull
+# request with its proof (docs/backlog.md names the items, CLAUDE.md the rules). The CI
+# workflow then plays both missions against the pull request. Nothing lands on main without a
+# human merge. Secrets: ANTHROPIC_API_KEY (required) and NACHTSCHICHT_TOKEN (a fine-grained
+# token with contents and pull-requests write, optional — pull requests opened with the default
+# GITHUB_TOKEN do not trigger the CI workflow).
+
+on:
+  schedule:
+    - cron: '0 2 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      item:
+        description: 'Backlog item (its id); empty takes the first item marked bereit'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+concurrency:
+  group: nachtschicht
+  cancel-in-progress: false
+
+jobs:
+  improve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.NACHTSCHICHT_TOKEN || secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
+      - name: Build one backlog item and open a pull request
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ secrets.NACHTSCHICHT_TOKEN || secrets.GITHUB_TOKEN }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.NACHTSCHICHT_TOKEN || secrets.GITHUB_TOKEN }}
+          claude_args: >-
+            --model claude-opus-5-5
+            --max-turns 400
+            --allowedTools "Read,Write,Edit,Glob,Grep,Bash(pnpm:*),Bash(node:*),Bash(npx:*),Bash(git:*),Bash(gh:*),Bash(ls:*),Bash(cat:*),Bash(mkdir:*),Bash(curl:*),Bash(sleep:*),Bash(pkill:*),Bash(kill:*)"
+          prompt: |
+            You are the night shift of EscapeLab, a cooperative browser escape game. One item per
+            night, finished and proven, handed in as a pull request. Never push to main.
+
+            1. Read CLAUDE.md (architecture invariants and language rules: English code, German
+               player-facing texts in the world's voice, zero warnings), docs/backlog.md, and the
+               docs the item names. Take the item "${{ github.event.inputs.item }}" if that is not
+               empty, otherwise the first item in docs/backlog.md whose status is `bereit`. If
+               there is none, stop and open no pull request.
+            2. Create the branch nacht/<yyyy-mm-dd>-<item id> from main. Implement exactly the
+               item, nothing beyond it, in small commits with imperative messages (≤ 72 chars)
+               ending in "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>". Every
+               behavioural change gets a test that fails without it; functions stay under 100
+               lines; no new dependencies.
+            3. Prove it: `pnpm typecheck`, `pnpm lint`, `pnpm test`, and the server smoke
+               (`cd packages/server && SMOKE_PORT=3105 TLS=off node --import tsx scripts/smoke.ts`)
+               must all pass. For anything the player sees or hears, also run the walkthrough:
+               `pnpm build`, then from packages/server
+               `PORT=3001 ALLOW_SEED=1 TLS=off node --import tsx src/index.ts &`, wait for
+               http://localhost:3001/health, then `node tools/shots.mjs http://localhost:3001 shots-blackout`
+               and, with SHOTS_MISSION=Systemcheck, `shots-systemcheck`; both must end with
+               0 failed and every frame window within its budget.
+            4. Update docs/backlog.md: set the item's status to `im PR` with the branch name.
+            5. Push the branch and open the pull request with `gh pr create`, title and body in
+               German: Was (one paragraph), Warum (the backlog item), Beweis (test counts, smoke,
+               walkthrough captures and the frame windows, copied from the logs), Weggelassen
+               (what you did not do and why). Mention the user with nothing; no praise words.
+            If a proof fails and you cannot fix it within the night, open the pull request as a
+            draft with the failure stated plainly in Beweis, never silently.
