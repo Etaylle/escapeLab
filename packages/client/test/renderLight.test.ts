@@ -50,6 +50,32 @@ function bakeOf(frame: Frame, name: string): { canvas: unknown; log: Entry[]; of
   return { canvas, log: logs.get(canvas) ?? [], of: kept?.of };
 }
 
+/** A path filled in a log: its rectangles, the fill rule and the fill style it was filled with. */
+interface Filled {
+  rects: unknown[][];
+  rule: unknown;
+  style: unknown;
+}
+
+/** The paths filled in `log`, in order. */
+function fillsOf(log: readonly Entry[]): Filled[] {
+  const fills: Filled[] = [];
+  let rects: unknown[][] = [];
+  let style: unknown = null;
+  for (const entry of log) {
+    if (entry.kind === 'set') {
+      style = entry.name === 'fillStyle' ? entry.value : style;
+    } else if (entry.name === 'beginPath') {
+      rects = [];
+    } else if (entry.name === 'rect') {
+      rects.push(entry.args);
+    } else if (entry.name === 'fill') {
+      fills.push({ rects, rule: entry.args[0] ?? 'nonzero', style });
+    }
+  }
+  return fills;
+}
+
 /** The gradients set as a fill in `log`. */
 function gradients(log: readonly Entry[]): FakeGradient[] {
   return setsOf(log, 'fillStyle').filter(
@@ -70,18 +96,21 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
     vi.unstubAllGlobals();
   });
 
-  it('fills the darkness in one go, cuts your lamp into it from its sprite, lays it over', () => {
+  it('fills the darkness once over, cuts your lamp into it from its sprite, lays it over', () => {
     const beam = { facing: 0, halfAngle: 0.5, reach: 7.5 };
     const own = lit({ x: 2.5, y: 2.5, glow: 3.2, beam }, 'own');
     const frame = withKit(overlay, warm, { light: lightWith({ own }) });
     const log = drawn(frame);
-    expect(overlay.log.slice(0, 5)).toMatchObject([
+    // Cleared, then filled: a fill copying over the frame before costs as much as the overlay.
+    expect(overlay.log.slice(0, 3)).toMatchObject([
       { name: 'setTransform', args: [1, 0, 0, 1, 0, 0] },
-      { name: 'globalCompositeOperation', value: 'copy' },
-      { name: 'fillStyle', value: 'rgba(3,5,9,0.92)' },
-      { name: 'fillRect', args: [0, 0, 800, 600] },
       { name: 'globalCompositeOperation', value: 'source-over' },
+      { name: 'clearRect', args: [0, 0, 800, 600] },
     ]);
+    expect(fillsOf(overlay.log)).toEqual([
+      { rects: [[0, 0, 800, 600]], rule: 'evenodd', style: 'rgba(3,5,9,0.92)' },
+    ]);
+    expect(setsOf(overlay.log, 'globalCompositeOperation')).not.toContain('copy');
     expect(callsOf(overlay.log, 'clip')[0]).toEqual([own.clip]);
     // The glow: 3.2 tiles round (2.5, 2.5) — at (150, 250) on the canvas, 100 px a tile — from
     // its sprite, 321 px either side of its middle, at whole pixels.
@@ -126,8 +155,49 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
     const laid = callEntries(log, 'drawImage').find((e) => e.args[0] === power.canvas);
     expect(laid).toMatchObject({ args: [power.canvas, -100 + 200, 200], op: 'lighter', alpha: 1 });
     expect(callsOf(log, 'clip')).toEqual([]);
-    // The room's two tiles from (2, 2), cleared of darkness in whole pixels.
-    expect(callsOf(overlay.log, 'clearRect')).toContainEqual([100, 200, 200, 100]);
+    // The room's two tiles from (2, 2) left out of the darkness in whole pixels, nothing over them.
+    expect(fillsOf(overlay.log)).toEqual([
+      {
+        rects: [
+          [0, 0, 800, 600],
+          [100, 200, 200, 100],
+        ],
+        rule: 'evenodd',
+        style: 'rgba(3,5,9,0.92)',
+      },
+    ]);
+  });
+
+  it('leaves your powered room out of a lit room’s darkness: no tile filled twice', () => {
+    const room = {
+      light: { keys: new Set(['2,2', '3,2']), runs: [{ x: 2, y: 2, length: 2 }] },
+      path: { path: 'room' } as unknown as Path2D,
+    };
+    const tiles = [1, 2, 3, 4].map((x) => ({ x, y: 2 }));
+    const coming = { tiles, path: { path: 'labor' } as unknown as Path2D, since: 10 - 0.25 };
+    const parts = { time: 10, scene: { lit: true, cover: 0 }, light: lightWith({ room }) };
+    drawn(withKit(overlay, warm, { ...parts, lit: new Map([['LABOR', coming]]) }));
+    const keep = 1 - warmUp(250);
+    expect(fillsOf(overlay.log)).toEqual([
+      {
+        rects: [
+          [0, 0, 800, 600],
+          [100, 200, 200, 100],
+          [0, 200, 100, 100],
+          [300, 200, 100, 100],
+        ],
+        rule: 'evenodd',
+        style: `rgba(3,5,9,${0.92 + 0.02 * Math.sin(17)})`,
+      },
+      {
+        rects: [
+          [0, 200, 100, 100],
+          [300, 200, 100, 100],
+        ],
+        rule: 'nonzero',
+        style: `rgba(3,5,9,${(0.92 + 0.02 * Math.sin(17)) * keep})`,
+      },
+    ]);
   });
 
   it('shows the audience the lab whole: no darkness, warm all over while the power is on', () => {
@@ -229,14 +299,22 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
   it('keeps a lit room clear of the darkness, as far as its lights have come on', () => {
     const tiles = [{ x: 6, y: 2 }];
     const path = { path: 'labor' } as unknown as Path2D;
-    const fills = (since: number): unknown[][] => {
+    const fills = (since: number): Filled[] => {
       const dark = fakeCanvas(800, 600);
       drawn(withKit(dark, warm, { time: 10, lit: new Map([['LABOR', { tiles, path, since }]]) }));
-      expect(callsOf(dark.log, 'clearRect')).toContainEqual([500, 200, 100, 100]);
-      return callsOf(dark.log, 'fillRect').filter(([x, y]) => x === 500 && y === 200);
+      const [round, ...over] = fillsOf(dark.log);
+      // The dark is filled round the room's tile, in whole pixels.
+      expect(round?.rects).toEqual([
+        [0, 0, 800, 600],
+        [500, 200, 100, 100],
+      ]);
+      expect(round?.rule).toBe('evenodd');
+      return over;
     };
+    const base = 0.92 + 0.02 * Math.sin(17);
     expect(fills(-Infinity)).toEqual([]);
-    expect(fills(10 - 0.25)).toEqual([[500, 200, 100, 100]]);
+    const style = `rgba(3,5,9,${base * (1 - warmUp(250))})`;
+    expect(fills(10 - 0.25)).toEqual([{ rects: [[500, 200, 100, 100]], rule: 'nonzero', style }]);
     expect(1 - warmUp(250)).toBeGreaterThan(0);
   });
 
