@@ -191,8 +191,9 @@ line half typed (terminal-typing.png).
 
 ## Captures in the notepad
 
-„Notieren" — at a source's rules list or table, on the terminal's bezel, under a note of the
-last shift pinned up — and the notepad's „Laborkennung übernehmen" take down a capture: a
+„Notieren" — at a source's rules list or table, on the slip with the last shift's notes at a
+source, on the terminal's bezel, under a note of the last shift pinned up — and the notepad's
+„Laborkennung übernehmen" take down a capture: a
 one-line head naming the place and the part of it, and at most eleven lines under it, holding
 the data a player needs there and nothing else (`noting.ts`). The place is the source by its
 label („Klemmbrett", „Handbuch", „Spind", „Aktenschrank"), the terminal, the sign („Schild") or
@@ -208,15 +209,15 @@ section a table by its first column, a list as „Regeln" — or what the place 
 | Table wider than 38 characters (what the pad holds aligned on a phone) | a row a line, its cells parted by „ · ", wrapped | Spind · Code, Spind · Befehl am Terminal |
 | Rules list | numbered as printed | Handbuch · Schnittfolge, Spind · Regeln |
 | Laborkennung | one line: serial · control lamps · cells | Schild · Laborkennung: „UZKM9-8 · CAR aus, SIG an, NSA aus · 4 Notstromzellen" |
-| Notes of the last shift | as written, one a line; a pinned note under the room it hangs in | Zettel · Flur |
+| Notes of the last shift | as written, one a line; a pinned note under the room it hangs in | Klemmbrett · Notizen der letzten Schicht, Zettel · Flur |
 
 The notepad keeps the player's own writing at the top and the captures under it, newest at the
 bottom (`notes.ts`), each one editable; one wiped is gone once the pen leaves it. A capture of
 the same place and part replaces the first: it moves to the bottom with „aktualisiert" beside its
 head, and the control says „Aktualisiert" instead of „Notiert". The pad is kept per room and
 player (`escapelab-notes:<ROOM>:<player>`, JSON); a pad kept before captures were kept apart
-reads as the player's writing. The last shift's notes at a source — the slip in a book's margin
-(`Book.tsx` `NoteSlip`) — have no „Notieren" yet; the template is there (`shiftNotesTaken`).
+reads as the player's writing. The walkthrough takes the last shift's note it asked for down
+from the slip as well (hint-noted), word for word.
 `client/test/captures.test.ts` runs every template on Blackout's real rules and on what seed 5
 deals (`tools/fixtures/blackout-plan.json`), and holds every capture of every mission to twelve
 lines with its head.

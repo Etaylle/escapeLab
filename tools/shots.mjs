@@ -122,7 +122,10 @@
  * note the crew has found and presses E; note.png shows its slip, which has
  * to carry the words the view gives the reader there, and the run report
  * has to log it read for nothing, or the run fails. A map without notes
- * skips it.
+ * skips it. A note asked for at a source (hint-*.png) is taken down with
+ * the slip's own „Notieren" once it is written in: it has to come into the
+ * notepad word for word under „… · Notizen der letzten Schicht", or the run
+ * fails.
  *
  * A first crew: the host's device has won no run, so the join screen labels
  * the tutorial's card „Erster Einsatz? Hier starten" and the room it opens
@@ -4083,12 +4086,15 @@ function sourceToNote(seen, audience) {
   return options[0]?.manual ?? null;
 }
 
+/** A „Notieren" by a printed block — not the one on the last shift's slip, which lies over them. */
+const ON_PAGE = '.note-down:not(.note-slip .note-down)';
+
 /**
  * Turns the pages of an open source forwards until a „Notieren" stands on one in view: a
  * source of several stations opens on its cover while none of them is up. Whether one does.
  */
 async function turnToNotable(overlay) {
-  const notable = overlay.locator('.note-down').first();
+  const notable = overlay.locator(ON_PAGE).first();
   for (let turns = 0; turns < 8 && !(await notable.isVisible()); turns++) {
     const next = overlay.locator('.turn-next');
     if ((await next.count()) === 0 || (await next.isDisabled())) {
@@ -4352,7 +4358,7 @@ async function captureNoting(player, shot, glowShot, audience) {
   const touch = await padUp(page, '.reading-modal');
   const offered = await turnToNotable(overlay);
   if (offered) {
-    await overlay.locator('.note-down').first().click();
+    await overlay.locator(ON_PAGE).first().click();
   }
   await sleep(500); // the pad scrolled down to it, the control says it took it
   await capture(page, shot);
@@ -4536,7 +4542,37 @@ async function captureNotes(page, seen, who, other) {
     `radio-banner.png   the other player: banner ${banner}, ` +
       (panel ? '!! station panel shown away from the station' : 'no station panel away'),
   );
+  await noteTheSlip(page, overlay, who);
   return true;
+}
+
+/**
+ * The last shift's note just written into the slip, taken down with the slip's own
+ * „Notieren": the notepad has to come up with it at its foot, under „… · Notizen der letzten
+ * Schicht", word for word as the margin holds it, or the run fails. The pad goes away again.
+ */
+async function noteTheSlip(page, overlay, who) {
+  const take = overlay.locator('.note-slip .note-down');
+  if ((await take.count()) === 0) {
+    console.log(`hint-noted         ${who}: !! no „Notieren" on the slip`);
+    fail('hint-noted: the last shift’s slip offers no „Notieren"');
+    return;
+  }
+  await take.click();
+  await page.locator('.notepad').waitFor({ state: 'visible', timeout: 3000 });
+  const head = await newestCapture(page);
+  const written = await page.locator('.notepad .notepad-capture textarea').last().inputValue();
+  const margin = await overlay.locator('.margin-note').allInnerTexts();
+  const verbatim = written === margin.map((note) => note.trim()).join('\n');
+  const named = (head ?? '').endsWith(' · Notizen der letzten Schicht');
+  console.log(
+    `hint-noted         ${who}: ${named ? '' : '!! '}„${head}", ` +
+      `${margin.length} note(s) ${verbatim ? 'word for word' : '!! not as the margin has them'}`,
+  );
+  if (!named || !verbatim) {
+    fail('hint-noted: the slip’s notes did not come into the notepad as written');
+  }
+  await padAway(page);
 }
 
 /**

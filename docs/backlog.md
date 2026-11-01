@@ -97,10 +97,9 @@ die Entscheidung.
   Handschrift auf liniertem Papier (OFL-Schrift lokal), Lesbarkeit ≥ 15 px, Kontrast ≥ 4,5:1.
 - Umgesetzt: Prompt hält die Tastatur (`puzzles/prompt.ts`), FUNK-Taste am Terminal, L1 spricht
   direkt; Aufnahmen mit Kopfzeile „Quelle · Teil" (`noting.ts`), Notizblock getrennt in Schrift
-  und Aufnahmen, „aktualisiert" beim zweiten Mal; Kalam (OFL) in `public/fonts`. Regeln in
-  `docs/gameplay.md`, Aussehen in `docs/art-bible.md`.
-- Offen: „Notieren" an den Notizen der letzten Schicht im Buch (`Book.tsx` `NoteSlip`, Datei
-  des Lesbarkeits-Pakets); die Vorlage steht (`shiftNotesTaken`).
+  und Aufnahmen, „aktualisiert" beim zweiten Mal; „Notieren" auch am Zettel der letzten Schicht
+  und an angehefteten Notizen; Kalam (OFL) in `public/fonts`. Regeln in `docs/gameplay.md`,
+  Aussehen in `docs/art-bible.md`.
 
 ### T-2 Jedes Pult sagt, wozu die Maschine da ist — Status: bereit · Größe: S
 - Audit: beide Hälften einer Station sehen aus wie Geräte, keine sagt die Aufgabe. Ein

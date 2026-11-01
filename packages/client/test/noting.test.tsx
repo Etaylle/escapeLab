@@ -16,7 +16,7 @@ import {
 } from '../src/noting.js';
 import { paginate } from '../src/pages.js';
 import { ServersPanel } from '../src/puzzles/ServersPanel.js';
-import { Book } from '../src/screens/Book.js';
+import { Book, NoteSlip } from '../src/screens/Book.js';
 import { gameClass, NOTHING_OVER } from '../src/screens/Game.js';
 import { Block } from '../src/screens/Manual.js';
 import { Notepad } from '../src/screens/Notepad.js';
@@ -333,6 +333,51 @@ describe('„Notieren" at a note of the last shift', () => {
     expect(notepad.noted).toEqual([
       { key: 'zettel/notiz/1', head: 'Zettel · Serverraum', lines: [text], form: 'text' },
     ]);
+  });
+
+  /** The clipboard's station with the notes the last shift left on it, asked for so far. */
+  const noted = (notes: string[]): ManualHere['sections'] => [
+    { ...clipboard.sections[0], notes, notesLeft: 1 } as ManualHere['sections'][number],
+  ];
+
+  it('takes the notes on the source’s slip down word for word, named for the source', () => {
+    const notepad = hand();
+    const notes = [
+      'Frühschicht: Jedes Pult quittiert nach seiner eigenen Spalte der Legende.',
+      'Haller: Ab Stufe 3 zeigt die Anzeige jedes Zeichen nur kurz.',
+    ];
+    const elements = elementsOf(
+      () => <NoteSlip sections={noted(notes)} pausedAt={null} onAsk={noop} />,
+      (probe) => (
+        <NotepadContext value={notepad}>
+          <NotingPlace value={CLIPBOARD}>{probe}</NotingPlace>
+        </NotepadContext>
+      ),
+    );
+    press(buttonsOf(elements, 'note-down')[0]);
+    expect(notepad.noted).toEqual([
+      {
+        key: 'klemmbrett/2/notizen',
+        head: 'Klemmbrett · Notizen der letzten Schicht',
+        lines: notes,
+        form: 'text',
+      },
+    ]);
+  });
+
+  it('offers nothing on a slip with no note yet, or with no notepad within reach', () => {
+    const empty = renderToStaticMarkup(
+      <NotepadContext value={hand()}>
+        <NoteSlip sections={noted([])} pausedAt={null} onAsk={noop} />
+      </NotepadContext>,
+    );
+    expect(empty).toContain('note-slip');
+    expect(empty).not.toContain('note-down');
+    const away = renderToStaticMarkup(
+      <NoteSlip sections={noted(['Haller: kurz.'])} pausedAt={null} onAsk={noop} />,
+    );
+    expect(away).toContain('Haller: kurz.');
+    expect(away).not.toContain('note-down');
   });
 });
 
