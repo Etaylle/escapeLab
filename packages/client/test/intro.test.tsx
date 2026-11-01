@@ -5,6 +5,7 @@ import { GameScreen } from '../src/screens/Game.js';
 import { darkSince, FLICKER_MS } from '../src/world/coldOpen.js';
 import { IntroOverlay, overlayUp, PLANT, skipLine } from '../src/world/intro/IntroOverlay.js';
 import {
+  airFrom,
   bangAt,
   barsIn,
   BARS_MS,
@@ -258,6 +259,16 @@ describe('the HUD while the opening keeps it out', () => {
     expect(hudAt(dark, BACK + HUD_FADE_MS / 2)).toBeCloseTo(0.5);
     expect(hudAt(dark, BACK + HUD_FADE_MS)).toBe(1);
     expect(hudAt(dark, BACK + 60_000)).toBe(1);
+  });
+
+  it('lets mission control speak once the HUD is back whole, never on a bar still out', () => {
+    // the click seen as the HUD comes back: the line waits out the fade
+    expect(airFrom(BACK, BACK)).toBe(BACK + HUD_FADE_MS);
+    expect(hudAt(dark, airFrom(BACK, BACK) ?? 0)).toBe(1);
+    // a click seen later than that is the line's moment; none before the click
+    expect(airFrom(BACK + 5000, BACK)).toBe(BACK + 5000);
+    expect(airFrom(1000, null)).toBe(1000);
+    expect(airFrom(null, BACK)).toBeNull();
   });
 
   it('gives a player who skipped the HUD from the skip, out again while the title shows', () => {

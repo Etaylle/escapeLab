@@ -50,7 +50,7 @@ import { escapeChecklist, escaping, type Mate } from '../world/escape.js';
 import { veilOf, type Ending, type Finale } from '../world/finale.js';
 import { GameWorld } from '../world/GameWorld.js';
 import { IntroOverlay } from '../world/intro/IntroOverlay.js';
-import { cutIn, hudBackAt, hudHeld, type IntroCue } from '../world/intro/sequence.js';
+import { airFrom, cutIn, hudBackAt, hudHeld, type IntroCue } from '../world/intro/sequence.js';
 import { useIntro, type Intro } from '../world/intro/useIntro.js';
 import { dueParts } from '../world/markers.js';
 import { startingSpot, type KnownPositions } from '../world/movement.js';
@@ -712,7 +712,7 @@ function useColdOpen(view: PlayerView, cut: boolean, hudBack: number | null): Co
   const briefingEnds = (view.startedAt ?? 0) + BRIEFING_MS;
   const shown = clickSeenAt(darkSince, hudBack);
   const gates = intro
-    ? { sign: view.startedAt ?? 0, line: shown }
+    ? { sign: view.startedAt ?? 0, line: airFrom(shown, hudBack) }
     : { sign: briefingEnds, line: briefingEnds };
   const sawPower = saw.current === view.startedAt && shown !== null;
   const flashUntil = sawPower ? shown + START_FLASH_MS : null;

@@ -161,6 +161,16 @@ export function hudBackAt(cue: IntroCue): number | null {
 }
 
 /**
+ * From when mission control's first line may go on the bar on this screen, epoch ms: once the
+ * click is seen there (`shown`, coldOpen.ts `clickSeenAt`) and the HUD is back whole after the
+ * opening — `hudBack` and its HUD_FADE_MS — so that a line never stands on a bar still faded
+ * out; null while the click is not seen yet.
+ */
+export function airFrom(shown: number | null, hudBack: number | null): number | null {
+  return shown === null ? null : Math.max(shown, hudBack === null ? 0 : hudBack + HUD_FADE_MS);
+}
+
+/**
  * Since when the HUD shows on this screen as of `now`, epoch ms; null while the opening keeps
  * it out: through a mission's name card and an intro's film, and from the bang until the title
  * has dissolved — the title a player who had skipped sees too, who had the HUD from the skip.
