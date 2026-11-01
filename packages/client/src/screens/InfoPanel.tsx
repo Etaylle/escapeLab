@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { ManualKind, MapView, PlayerView } from '@escapelab/core';
 import { useInputDevice } from '../input/device.js';
 import { glyphOf, useGlyph, type GlyphSource, type Prompt } from '../input/glyphs.js';
-import { PAD_GLYPHS } from '../input/pad.js';
+import { PAD_GLYPHS, PAD_PING } from '../input/pad.js';
 import { useSettings } from '../settings.js';
 import { toBring } from '../world/markers.js';
 import { Icon, type IconName } from './Icon.js';
@@ -13,6 +13,26 @@ interface Props {
 }
 
 type Tab = 'auftrag' | 'karte' | 'steuerung';
+
+/**
+ * The ping and the quick chat: by the mouse and the digits on keys; on a controller the D-pad's
+ * ◀ pings where the lamp points, its ▶ opens the chat to pick a phrase from with the D-pad.
+ */
+function signalRows(
+  source: GlyphSource,
+  g: (prompt: Prompt) => string,
+): (readonly [string, string])[] {
+  if (source.device !== 'pad') {
+    return [
+      ['Klick auf die Welt', 'Ping für alle setzen'],
+      [`${g('chat')}, dann 1–8`, 'Schnellchat'],
+    ];
+  }
+  return [
+    [PAD_GLYPHS[source.family][PAD_PING], 'Ping für alle setzen, wohin die Lampe zeigt'],
+    [`${g('chat')}, dann Steuerkreuz und ${g('interact')}`, 'Schnellchat'],
+  ];
+}
 
 /**
  * The controls and what they do, by the keys as the settings bind them — or by the
@@ -27,15 +47,14 @@ export function controlsOf(source: GlyphSource): (readonly [string, string])[] {
     ? [[`Steuerkreuz, dann ${g('interact')}`, 'In Pulten und Fenstern wählen und drücken']]
     : [];
   return [
-    [pad ? `Stick / ${walk}` : `${walk} / Pfeile`, 'Laufen'],
+    [pad ? 'Stick' : `${walk} / Pfeile`, 'Laufen'],
     [`${g('sprint')} halten`, 'Sprinten — auf dem Touchscreen „Sprint" neben dem Steuerkreuz'],
     [g('interact'), 'Bedienen, lesen, durchsuchen, aufschließen, aufnehmen oder einsetzen'],
     [`${putDown} beim Lesen`, 'Weglegen, ein Buch zuklappen'],
     [g('close'), 'Zurücktreten, weglegen, Notizblock einstecken'],
     [`${g('pageBack')} ${g('pageOn')} beim Lesen`, 'Blättern'],
     [g('drop'), 'Getragenes Objekt ablegen — so sind Übergaben möglich'],
-    ['Klick auf die Welt', 'Ping für alle setzen'],
-    [`${g('chat')}, dann 1–8`, 'Schnellchat'],
+    ...signalRows(source, g),
     [`${g('talk')} halten`, 'Sprechen — das Mikrofon wird in der Lobby aktiviert'],
     [g('notes'), 'Notizblock — auch neben Buch und Pult, bleibt für diesen Raum gespeichert'],
     [g('minimap'), 'Minikarte ein- und ausblenden'],

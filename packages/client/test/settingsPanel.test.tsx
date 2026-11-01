@@ -116,6 +116,13 @@ describe('the Info panel’s keys', () => {
     expect(pad.get('□')).toMatch(/^Notizblock/);
     expect(pad.get('Options')).toMatch(/^Einstellungen/);
     expect(pad.get('Steuerkreuz, dann ✕')).toMatch(/Pulten und Fenstern/);
+    // The stick walks; the D-pad's ◀ pings where the lamp points, its ▶ opens the quick chat.
+    expect(pad.get('Stick')).toBe('Laufen');
+    expect(pad.get('◀')).toBe('Ping für alle setzen, wohin die Lampe zeigt');
+    expect(pad.get('▶, dann Steuerkreuz und ✕')).toBe('Schnellchat');
+    const keys = new Map(controlsOf(keyboard));
+    expect(keys.get('Klick auf die Welt')).toBe('Ping für alle setzen');
+    expect(keys.get('C, dann 1–8')).toBe('Schnellchat');
   });
 
   it('tells every row apart by what it does, though a controller works two with B', () => {

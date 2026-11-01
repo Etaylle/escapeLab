@@ -97,12 +97,9 @@ describe('a poll of the controller', () => {
     expect(releasedSince(before, now)).toEqual(['a']);
   });
 
-  it('steers by the D-pad over the stick, as fast on a diagonal, else by the stick', () => {
-    expect(steerOf(padStateOf(pad(['dright'], [-1, 0])))).toEqual({ x: 1, y: 0 });
-    const diagonal = steerOf(padStateOf(pad(['dup', 'dleft'])));
-    expect(length(diagonal)).toBeCloseTo(1, 9);
-    expect(diagonal.x).toBeLessThan(0);
-    expect(diagonal.y).toBeLessThan(0);
+  it('steers by the stick alone: the D-pad walks nobody, in the world it pings and chats', () => {
+    expect(steerOf(padStateOf(pad(['dright'], [-1, 0])))).toEqual({ x: -1, y: 0 });
+    expect(steerOf(padStateOf(pad(['dup', 'dleft'])))).toEqual({ x: 0, y: 0 });
     expect(length(steerOf(padStateOf(pad([], [0.6, 0]))))).toBeCloseTo(0.5, 9);
   });
 
@@ -167,8 +164,9 @@ describe('the prompts follow the device used last', () => {
     ]);
     const ps: GlyphSource = { ...keys, device: 'pad', family: 'playstation' };
     expect(shared.map((p) => glyphOf(p, ps))).toEqual(['○', '○', '✕', '▶', 'L1', 'R1', 'Create']);
-    // The quick chat has no button: its key is named on a controller too.
-    expect(glyphOf('chat', ps)).toBe('C');
+    // The quick chat opens on the D-pad's ▶; the ways to walk are the stick's, no button's.
+    expect(glyphOf('chat', ps)).toBe('▶');
+    expect(glyphOf('chat', keys)).toBe('C');
     expect(glyph('notes')).toBe('N');
   });
 });

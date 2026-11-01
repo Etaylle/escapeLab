@@ -14,7 +14,13 @@ import {
   type PadAction,
   type PadBindings,
 } from '../input/bindings.js';
-import { PAD_GLYPHS, type PadButton, type PadFamily } from '../input/pad.js';
+import {
+  PAD_CHAT,
+  PAD_GLYPHS,
+  PAD_PING,
+  type PadButton,
+  type PadFamily,
+} from '../input/pad.js';
 import { capturePadButton, usePadLive, type PadLive } from '../input/padRuntime.js';
 import { changeSettings, startRebinding, useSettings } from '../settings.js';
 
@@ -233,9 +239,9 @@ export function PadTest({ live }: { live: PadLive }) {
 function fixedLine(family: PadFamily, pad: PadBindings): string {
   const g = PAD_GLYPHS[family];
   return (
-    `Stick oder Steuerkreuz laufen, ${g.r1} sprintet, ${g.l1} hält den Funk, ` +
-    `${g.start} öffnet die Einstellungen, ${g.select} die Einsatzinfo; in Pulten und Fenstern ` +
-    `wählt das Steuerkreuz, ${g[pad.interact]} drückt.`
+    `Der Stick läuft, ${g.r1} sprintet, ${g.l1} hält den Funk, ${g[PAD_PING]} setzt einen ` +
+    `Ping, ${g[PAD_CHAT]} öffnet den Schnellchat, ${g.start} die Einstellungen, ${g.select} ` +
+    `die Einsatzinfo; in Pulten und Fenstern wählt das Steuerkreuz, ${g[pad.interact]} drückt.`
   );
 }
 

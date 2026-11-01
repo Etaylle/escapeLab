@@ -971,7 +971,8 @@ async function clickText(page, text) {
  * crew has come across it.
  */
 function eavesdrop(page) {
-  const seen = { view: null, pos: null, crew: {}, drones: {}, dronesAt: null };
+  // `sent`: the quick-chat lines and pings the page sent, in order.
+  const seen = { view: null, pos: null, crew: {}, drones: {}, dronesAt: null, sent: [] };
   page.on('websocket', (socket) => {
     if (!socket.url().endsWith('/ws')) {
       return;
@@ -991,6 +992,9 @@ function eavesdrop(page) {
       const msg = JSON.parse(String(payload));
       if (msg.kind === 'pos') {
         seen.pos = { x: msg.x, y: msg.y };
+      }
+      if (msg.kind === 'chat' || msg.kind === 'ping') {
+        seen.sent.push(msg);
       }
     });
   });
@@ -6922,6 +6926,9 @@ function reportSprint(name, run, sprint, walk) {
 // gamepad-prompts.png  the host beside the nearest source or the station up, the controller used
 //   last: the HUD's buttons have to name its buttons (X, View); a key pressed has to turn them
 //   back (N, I)
+// pad-quickchat.png  the quick chat the controller's ▶ opened in the world, its first phrase in
+//   the focus and its button naming ▶; ▼ and A have to say the second phrase and shut it, and ◀
+//   has to ping the floor within two tiles of the host
 // rack-diagram.png  the rack console's cabling diagram as its player opens it: six boxes, each
 //   LED as the rack's unit says, no code anywhere — or the run fails
 // achievements.png  the won card once its plaques are in: the ones the view says the run earned,
@@ -7072,10 +7079,61 @@ async function captureGamepadPrompts(player) {
   await walkNear(page, seen, from);
 }
 
-/** settings-controller.png and gamepad-prompts.png, one after the other. */
+/** What the page's focus is on in the quick chat's wheel: its phrase's place, from 1; 0 for none. */
+function wheelFocus(page) {
+  return page.evaluate(() => {
+    const items = [...document.querySelectorAll('.chat-wheel [role="menuitem"]')];
+    return items.indexOf(document.activeElement) + 1;
+  });
+}
+
+/**
+ * pad-quickchat.png: in the world, the walkthrough's controller's ▶ opens the quick chat — its
+ * first phrase in the focus, the chat's button naming ▶ — then ▼ moves to the second phrase and
+ * A says it: the wheel has to shut and the host's page send that line. Then ◀ pings: the page has
+ * to send a ping on the floor within two tiles of where the avatar stands. Any of these that
+ * fails, fails the run.
+ */
+async function captureQuickChat(player) {
+  const { page, seen } = player;
+  const sentBefore = seen.sent.length;
+  await onPad(page, 'tap', 'dright');
+  const wheel = page.locator('.chat-wheel');
+  const open = await settled(wheel.waitFor({ timeout: 3000 }));
+  await sleep(250);
+  const first = await wheelFocus(page);
+  const glyph = await textOf(page.locator('.world-chat-toggle .world-key'));
+  await capture(page, 'pad-quickchat.png');
+  await onPad(page, 'tap', 'ddown');
+  await sleep(250);
+  const second = await wheelFocus(page);
+  await onPad(page, 'tap', 'a');
+  const shut = await settled(wheel.waitFor({ state: 'detached', timeout: 3000 }));
+  const said = seen.sent.slice(sentBefore).find((msg) => msg.kind === 'chat');
+  const at = whereIs(seen);
+  await onPad(page, 'tap', 'dleft');
+  const pinged = await until(() => seen.sent.slice(sentBefore).some((m) => m.kind === 'ping'), 3000);
+  const ping = seen.sent.slice(sentBefore).find((msg) => msg.kind === 'ping');
+  const away = ping === undefined || at === null ? Infinity : Math.hypot(ping.x - at.x, ping.y - at.y);
+  console.log(
+    `pad-quickchat.png  ▶ ${open ? 'opened the wheel' : '!! opened nothing'}, phrase ${first} in ` +
+      `the focus, the button "${glyph}"; ▼ to ${second}, A said ${said?.phrase ?? '!! nothing'}` +
+      `${shut ? ', the wheel shut' : ' !! the wheel still open'}; ◀ pinged ` +
+      (pinged ? `(${ping.x}, ${ping.y}), ${away.toFixed(2)} tiles away` : '!! nothing'),
+  );
+  if (!open || first !== 1 || glyph !== '[▶]' || second !== 2 || said === undefined || !shut) {
+    fail(`pad-quickchat.png: open ${open}, focus ${first} then ${second}, "${glyph}", said ${said}`);
+  }
+  if (!pinged || !(away <= 2.05)) {
+    fail(`pad-quickchat.png: ◀ pinged ${JSON.stringify(ping)} from ${JSON.stringify(at)}`);
+  }
+}
+
+/** settings-controller.png, gamepad-prompts.png and pad-quickchat.png, one after the other. */
 async function captureControls(player) {
   await captureControllerSettings(player.page);
   await captureGamepadPrompts(player);
+  await captureQuickChat(player);
 }
 
 /**

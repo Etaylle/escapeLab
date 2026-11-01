@@ -7,7 +7,7 @@ import {
   type PadBindings,
 } from './bindings.js';
 import { inputDevice, useInputDevice, type InputDevice } from './device.js';
-import { PAD_GLYPHS, type PadButton, type PadFamily } from './pad.js';
+import { PAD_CHAT, PAD_GLYPHS, type PadButton, type PadFamily } from './pad.js';
 
 /**
  * What every prompt names a control by: the key bound to it, or — where a controller was used
@@ -29,15 +29,15 @@ export interface GlyphSource {
   family: PadFamily;
 }
 
-/** The fixed buttons of a controller, by what they do. */
+/**
+ * The fixed buttons of a controller, by what they do; the stick walks, so the four ways to walk
+ * have none.
+ */
 const PAD_FIXED: Readonly<Partial<Record<Prompt, PadButton>>> = {
-  up: 'dup',
-  down: 'ddown',
-  left: 'dleft',
-  right: 'dright',
   sprint: 'r1',
   talk: 'l1',
   info: 'select',
+  chat: PAD_CHAT,
   pageBack: 'dleft',
   pageOn: 'dright',
 };
@@ -53,7 +53,7 @@ const BY_PAD_ACTION: Partial<Record<Prompt, PadAction>> = {
   minimap: 'minimap',
 };
 
-/** The controller's button for `prompt`; none where the controller has none (the quick chat). */
+/** The controller's button for `prompt`; none where the controller has none (the ways to walk). */
 function padButtonOf(prompt: Prompt, pad: PadBindings): PadButton | null {
   const action = BY_PAD_ACTION[prompt];
   return action === undefined ? (PAD_FIXED[prompt] ?? null) : pad[action];

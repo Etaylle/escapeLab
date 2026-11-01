@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_PAD } from '../src/input/bindings.js';
 import { inputDevice, noteDevice } from '../src/input/device.js';
 import { STANDARD_BUTTONS } from '../src/input/pad.js';
-import { capturePadButton, padSteer, startPad, type PadProbe } from '../src/input/padRuntime.js';
+import {
+  capturePadButton,
+  onPadPing,
+  padSteer,
+  startPad,
+  type PadProbe,
+} from '../src/input/padRuntime.js';
 import { changeSettings, DEFAULT_SETTINGS, startRebinding } from '../src/settings.js';
 
 /** A key event as the page sends it on: the fake keeps what it was. */
@@ -26,6 +32,8 @@ interface FakePage {
   now: number;
   /** what has the focus: nothing, a text field, a control */
   focus: object | null;
+  /** the quick chat's wheel, while it is open over the world */
+  wheel: object | null;
 }
 
 let page: FakePage;
@@ -37,7 +45,7 @@ function noted(e: FakeKeyboardEvent): boolean {
 }
 
 function stubPage(): void {
-  page = { sent: [], dialogs: [], world: true, frames: [], now: 0, focus: null };
+  page = { sent: [], dialogs: [], world: true, frames: [], now: 0, focus: null, wheel: null };
   const body = { dispatchEvent: noted };
   vi.stubGlobal('document', {
     get activeElement() {
@@ -47,7 +55,12 @@ function stubPage(): void {
     documentElement: { dataset: {}, style: { setProperty: () => undefined } },
     querySelectorAll: (selector: string) =>
       selector === '[aria-modal="true"]' ? page.dialogs : [],
-    querySelector: (selector: string) => (selector === '.world-wrap' && page.world ? {} : null),
+    querySelector: (selector: string) => {
+      if (selector === '.chat-wheel') {
+        return page.wheel;
+      }
+      return selector === '.world-wrap' && page.world ? {} : null;
+    },
   });
   const listen = { addEventListener: () => undefined, removeEventListener: () => undefined };
   vi.stubGlobal('window', listen);
@@ -128,6 +141,21 @@ describe('a controller in the world', () => {
     expect(onSettings).toHaveBeenCalledTimes(1);
   });
 
+  it('pings with the D-pad’s ◀ and opens the quick chat with its ▶, by the chat key', () => {
+    const ping = vi.fn();
+    const off = onPadPing(ping);
+    expect(click('dleft')).toEqual([]);
+    expect(ping).toHaveBeenCalledTimes(1);
+    expect(click('dright')).toEqual(['↓c', '↑c']);
+    changeSettings({ keys: { ...DEFAULT_SETTINGS.keys, chat: 'k' } });
+    expect(click('dright')).toEqual(['↓k', '↑k']);
+    // ▲ and ▼ do nothing in the world; without a world that pings, ◀ neither.
+    expect(click('dup')).toEqual([]);
+    off();
+    click('dleft');
+    expect(ping).toHaveBeenCalledTimes(1);
+  });
+
   it('sends the keys the settings bind, and its main actions where the settings put them', () => {
     changeSettings({
       keys: { ...DEFAULT_SETTINGS.keys, drop: 'g', talk: 'b' },
@@ -150,7 +178,7 @@ describe('a controller in the world', () => {
     expect(page.focus).toBeNull();
   });
 
-  it('steers with the stick past its dead zone, the D-pad over it, R1 sprinting', () => {
+  it('steers with the stick past its dead zone, R1 sprinting; the D-pad walks nobody', () => {
     expect(padSteer()).toEqual({ x: 0, y: 0, sprint: false });
     probe().lean(0.6, 0);
     frame();
@@ -158,7 +186,8 @@ describe('a controller in the world', () => {
     probe().press('dleft');
     probe().press('r1');
     frame();
-    expect(padSteer()).toEqual({ x: -1, y: 0, sprint: true });
+    expect(padSteer().x).toBeCloseTo(0.5, 9);
+    expect(padSteer().sprint).toBe(true);
   });
 });
 
@@ -234,6 +263,36 @@ describe('a controller over a dialog', () => {
     probe().press('dright');
     frame();
     expect(page.sent).toEqual(['↓ArrowRight', '↑ArrowRight']);
+  });
+
+  it('neither pings nor opens the quick chat over a dialog: the D-pad is the dialog’s', () => {
+    const ping = vi.fn();
+    const off = onPadPing(ping);
+    page.dialogs = [book];
+    expect(click('dleft')).toEqual(['↓ArrowLeft', '↑ArrowLeft']);
+    expect(click('dright')).toEqual(['↓ArrowRight', '↑ArrowRight']);
+    expect(ping).not.toHaveBeenCalled();
+    off();
+  });
+
+  it('takes the quick chat’s wheel for a menu over the world: B shuts it, the stick walks nobody', () => {
+    vi.stubGlobal('HTMLElement', class {});
+    vi.stubGlobal('HTMLInputElement', class {});
+    page.wheel = {
+      closest: () => null,
+      classList: { contains: () => false },
+      ownerDocument: document,
+      contains: () => false,
+      querySelectorAll: () => [],
+    };
+    expect(click('b')).toEqual(['↓Escape', '↑Escape']);
+    // ▶ moves in the wheel instead of opening it again.
+    expect(click('dright')).toEqual([]);
+    probe().lean(0.45, 0);
+    frame();
+    expect(padSteer().x).toBe(0);
+    page.wheel = null;
+    expect(padSteer().x).toBeCloseTo(0.3125, 9);
   });
 
   it('turns a book’s pages left and right with the D-pad', () => {
