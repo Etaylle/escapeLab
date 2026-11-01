@@ -54,17 +54,28 @@ class FakeSocket {
 }
 
 const SESSION = { code: 'ABCD', playerId: 'p-ben', token: 't-ben' };
+/** The server has the session back. */
+const JOINED: ServerMessage = { kind: 'joined', ...SESSION };
 
 /** `keepConnected` over fake sockets, with what it told the page. */
 function connection(session: typeof SESSION | null = SESSION) {
   const sockets: FakeSocket[] = [];
-  const told = { statuses: [] as string[], heard: [] as ServerMessage[], closed: 0, resumes: 0 };
+  const told = {
+    statuses: [] as string[],
+    heard: [] as ServerMessage[],
+    closed: 0,
+    resumes: 0,
+    ready: 0,
+  };
   const events: SocketEvents = {
     made: () => undefined,
     status: (status) => told.statuses.push(status),
     session: () => session,
     resuming: () => {
       told.resumes += 1;
+    },
+    ready: () => {
+      told.ready += 1;
     },
     message: (msg) => told.heard.push(msg),
     closed: () => {
@@ -121,6 +132,17 @@ describe('keepConnected — the page’s line to the server', () => {
     last().open();
     expect(last().sent).toEqual([]);
     expect(told.resumes).toBe(0);
+  });
+
+  it('is ready once the server has the session back, or as it opens where none is kept', () => {
+    const { told, last } = connection();
+    last().open();
+    expect(told.ready).toBe(0);
+    last().say(JOINED);
+    expect(told.ready).toBe(1);
+    const fresh = connection(null);
+    fresh.last().open();
+    expect(fresh.told.ready).toBe(1);
   });
 
   it('after the server terminates the socket, connects again a second later and resumes', () => {
@@ -180,42 +202,71 @@ describe('keepConnected — sending while the line is down never throws', () => 
     vi.restoreAllMocks();
   });
 
-  it('sends at once on a socket that is open', () => {
+  it('sends at once on a socket that is open with its session back, or needing none', () => {
     const { send, last } = connection();
     last().open();
+    last().say(JOINED);
     send(E);
     expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }, E]);
+    const fresh = connection(null);
+    fresh.last().open();
+    fresh.send(E);
+    expect(fresh.last().sent).toEqual([E]);
   });
 
-  it('keeps an action sent while the socket connects, and sends it right after the resume', () => {
+  it('keeps an action sent while the socket connects until the server has the session back', () => {
     const { send, last } = connection();
     expect(() => send(E)).not.toThrow();
     expect(last().sent).toEqual([]);
     last().open();
-    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }, E]);
+    send({ kind: 'drop-item' });
+    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
+    last().say(JOINED);
+    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }, E, { kind: 'drop-item' }]);
   });
 
-  it('keeps what was sent while the socket was gone for the next one, in order', () => {
+  it('drops what waited where the server refuses the session: none of it draws a refusal', () => {
+    const { send, last } = connection();
+    send(E);
+    last().open();
+    last().say({ kind: 'error', message: 'Wiederverbinden fehlgeschlagen.', of: 'resume' });
+    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    // the line is the page's again, for joining anew
+    send({ kind: 'list-rooms' });
+    expect(last().sent.at(-1)).toEqual({ kind: 'list-rooms' });
+  });
+
+  it('drops what waited for a socket that closed before it was ready', () => {
+    const { send, last } = connection();
+    send(E);
+    last().end();
+    vi.advanceTimersByTime(1000);
+    last().open();
+    last().say(JOINED);
+    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps nothing done while no socket is on its way: no blind deed lands once back', () => {
     const { send, last } = connection();
     last().open();
+    last().say(JOINED);
     last().end();
     send(E);
-    send({ kind: 'drop-item' });
+    send({ kind: 'puzzle-input', input: { action: 'press', value: 3 } });
+    expect(console.warn).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(1000);
-    send({ kind: 'interact', x: 2.5, y: 3.5, t: 1 });
     last().open();
-    expect(last().sent).toEqual([
-      { kind: 'resume', ...SESSION },
-      E,
-      { kind: 'drop-item' },
-      { kind: 'interact', x: 2.5, y: 3.5, t: 1 },
-    ]);
+    last().say(JOINED);
+    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
   });
 
   it('drops a position sent while the socket connects: the next one goes out anyway', () => {
     const { send, last } = connection();
     send(POS);
     last().open();
+    last().say(JOINED);
     expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
     send(POS);
     expect(last().sent.at(-1)).toEqual(POS);
@@ -229,6 +280,7 @@ describe('keepConnected — sending while the line is down never throws', () => 
     send(POS);
     expect(console.warn).toHaveBeenCalledTimes(1);
     last().open();
+    last().say(JOINED);
     expect(last().sent).toHaveLength(1 + OUTBOX_MAX);
     last().end();
     vi.advanceTimersByTime(1000);

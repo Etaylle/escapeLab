@@ -148,6 +148,8 @@ export interface SocketEvents {
   session: () => Credentials | null;
   /** a resume went out: an error now means the stored session is dead */
   resuming: () => void;
+  /** the line is ready: its socket open with the session back, or needing none (`Line.send`) */
+  ready: () => void;
   message: (msg: ServerMessage) => void;
   closed: () => void;
 }
@@ -155,10 +157,13 @@ export interface SocketEvents {
 /** The line `keepConnected` keeps: what goes out on it, and how to stop it for good. */
 export interface Line {
   /**
-   * Sends `msg` on the socket that is open; while none is — one still connecting, one gone,
-   * the next not made yet — a message waits for the next to open, up to OUTBOX_MAX, and goes
-   * out in order right after the resume. What the page streams (`pos`) waits for nothing,
-   * and nothing over the limit waits: both are dropped, said once a time the line is down.
+   * Sends `msg` on the socket that is open and ready. While a socket is on its way — still
+   * connecting, or waiting for the server to take its session back — a message waits for it,
+   * up to OUTBOX_MAX, and goes out in order once it is ready; if it never is (it closed, or
+   * the server refused the session) what waited is dropped. While none is on its way — the
+   * line dropped, the next try not made yet — nothing waits: a deed done blind must not land
+   * once the run goes on. Nor does what the page streams (`pos`, `clock`) or anything over
+   * the limit. Whatever is dropped is said once a time the line is down.
    */
   send: (msg: ClientMessage) => void;
   stop: () => void;
@@ -176,41 +181,72 @@ export function keepConnected(open: () => WebSocket, on: SocketEvents): Line {
   let retryDelay = RETRY_FIRST_MS;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
   let current: WebSocket | null = null;
+  /** `current` is open with its session back, or needs none: what is sent goes straight out */
+  let ready = false;
   let waiting: string[] = [];
   let warned = false;
 
-  function send(msg: ClientMessage): void {
-    const data = JSON.stringify(msg);
-    if (current?.readyState === WebSocket.OPEN) {
-      current.send(data);
-      return;
-    }
-    if (!STREAMED.has(msg.kind) && waiting.length < OUTBOX_MAX) {
-      waiting.push(data);
-      return;
-    }
+  /** Says once a time the line is down that `what` was dropped. */
+  function dropped(what: string): void {
     if (!warned) {
       warned = true;
       console.warn(
-        `escapelab: no connection to the server — "${msg.kind}" dropped, as is what the page ` +
-          'streams or sends past the queue until the line is back',
+        `escapelab: no line to the server — ${what} dropped, as is what the page streams or ` +
+          'does while no socket is on its way, until the line is back',
       );
     }
   }
 
-  /** What waited for `socket` to open goes out on it, in order. */
+  function send(msg: ClientMessage): void {
+    const data = JSON.stringify(msg);
+    if (ready && current?.readyState === WebSocket.OPEN) {
+      current.send(data);
+      return;
+    }
+    // Not ready, yet connecting or open: on its way.
+    const onItsWay =
+      current?.readyState === WebSocket.CONNECTING || current?.readyState === WebSocket.OPEN;
+    if (onItsWay && !STREAMED.has(msg.kind) && waiting.length < OUTBOX_MAX) {
+      waiting.push(data);
+      return;
+    }
+    dropped(`"${msg.kind}"`);
+  }
+
+  /** The line is ready on `socket`: what waited goes out on it, in order. */
   function flush(socket: WebSocket): void {
+    ready = true;
     const queued = waiting;
     waiting = [];
     warned = false;
     for (const data of queued) {
       socket.send(data);
     }
+    on.ready();
+  }
+
+  /** What waited for a socket that will never be ready goes. */
+  function forget(): void {
+    if (waiting.length > 0) {
+      dropped(`what waited (${waiting.length})`);
+    }
+    waiting = [];
+  }
+
+  /** The server's answer to a resume: the session back (`joined`), or refused (`error`). */
+  function answered(socket: WebSocket, msg: ServerMessage): void {
+    if (msg.kind === 'error') {
+      forget();
+    }
+    if (msg.kind === 'joined' || msg.kind === 'error') {
+      flush(socket);
+    }
   }
 
   function connect(): void {
     const socket = open();
     current = socket;
+    ready = false;
     on.made(socket);
     on.status('connecting');
 
@@ -218,21 +254,28 @@ export function keepConnected(open: () => WebSocket, on: SocketEvents): Line {
       on.status('open');
       retryDelay = RETRY_FIRST_MS;
       const creds = on.session();
-      if (creds !== null) {
-        on.resuming();
-        socket.send(JSON.stringify({ kind: 'resume', ...creds } satisfies ClientMessage));
+      if (creds === null) {
+        flush(socket);
+        return;
       }
-      flush(socket);
+      on.resuming();
+      socket.send(JSON.stringify({ kind: 'resume', ...creds } satisfies ClientMessage));
     };
 
     socket.onmessage = (event) => {
-      on.message(JSON.parse(String(event.data)) as ServerMessage);
+      const msg = JSON.parse(String(event.data)) as ServerMessage;
+      on.message(msg);
+      if (!ready) {
+        answered(socket, msg);
+      }
     };
 
     socket.onclose = () => {
       if (stopped) {
         return;
       }
+      ready = false;
+      forget();
       on.closed();
       on.status('closed');
       retryTimer = setTimeout(connect, retryDelay);
@@ -375,7 +418,7 @@ export function useGameConnection(): Connection {
       chats: chatsRef,
     };
     let line: Line | null = null;
-    // The server's time, asked for while the line is open (clock.ts): every clock follows it.
+    // The server's time, asked for while the line is ready (clock.ts): every clock follows it.
     const asking = askForTime(() => line?.send({ kind: 'clock', sent: localNow() }));
     line = keepConnected(() => new WebSocket(wsUrl()), {
       made: (socket) => {
@@ -383,9 +426,7 @@ export function useGameConnection(): Connection {
       },
       status: (next) => {
         setStatus(next);
-        if (next === 'open') {
-          asking.open();
-        } else {
+        if (next !== 'open') {
           asking.close();
         }
       },
@@ -393,6 +434,7 @@ export function useGameConnection(): Connection {
       resuming: () => {
         resumingRef.current = true;
       },
+      ready: () => asking.open(),
       message: (msg) => {
         takeIn(msg, page);
         for (const listener of listenersRef.current) {
