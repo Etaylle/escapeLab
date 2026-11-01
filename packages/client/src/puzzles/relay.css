@@ -1,6 +1,9 @@
 /* ── relay emergency: one console per role, instructions for the others ── */
 
-.relay-modal .panel {
+/* The whole window's height but the dim's edge: the console stands whole in a laptop's 720 px. */
+.puzzle-modal.relay-modal .panel {
+  max-height: 100%;
+  margin-top: 0;
   gap: 14px;
   border-color: var(--danger);
   box-shadow:
@@ -159,6 +162,7 @@
 .relay-switch,
 .relay-press,
 .relay-dial button {
+  min-width: var(--target);
   min-height: 52px;
   font-family: var(--mono);
   font-size: calc(18px * var(--text-scale));
@@ -198,10 +202,13 @@
   box-shadow: 0 0 12px var(--accent-glow);
 }
 
+/* A target high, reaching over the gap and the frame's edge round it: its line keeps its place. */
 .relay-manual summary {
+  margin-block: calc((1.2em - var(--target)) / 2);
   cursor: pointer;
   font-family: var(--mono);
   font-size: calc(12px * var(--text-scale));
+  line-height: var(--target);
   letter-spacing: 2px;
   color: var(--muted);
 }
@@ -217,5 +224,60 @@
 
   .relay-order-text {
     font-size: calc(20px * var(--text-scale));
+  }
+}
+
+/*
+ * A phone held sideways: the emergency, its procedure and the instruction to read out on the
+ * left, the console's controls on the right, every one in reach without scrolling.
+ */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .puzzle-modal.relay-modal {
+    padding: 6px 10px;
+  }
+
+  .puzzle-modal.relay-modal .panel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(5, auto) minmax(0, 1fr);
+    align-content: start;
+    gap: 8px 14px;
+    max-width: none;
+    padding: 10px 14px;
+  }
+
+  .relay-modal .relay {
+    display: contents;
+  }
+
+  .relay-modal .panel > *,
+  .relay-modal .relay > * {
+    grid-column: 1;
+  }
+
+  .relay-modal .relay > .relay-console {
+    grid-row: 1 / -1;
+    grid-column: 2;
+    align-self: start;
+    gap: 8px;
+  }
+
+  .relay-modal .sabotage-hint {
+    margin: 0;
+    line-height: 1.35;
+  }
+
+  .relay-order {
+    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  .relay-control {
+    gap: 4px;
+    padding: 8px 10px;
+  }
+
+  .relay-manual summary {
+    margin-block: 0;
   }
 }

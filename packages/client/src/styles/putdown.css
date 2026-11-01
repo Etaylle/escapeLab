@@ -77,14 +77,20 @@
   margin-top: 10px;
 }
 
+/*
+ * The words engraved small, the way back a pointer's target: 36 px high, the words in its
+ * middle. The target reaches over the chassis round the words, so the line keeps its place.
+ */
 .device-step-back {
-  min-height: 0;
+  min-height: var(--target);
+  margin-block: calc((1.2em - var(--target)) / 2);
   padding: 0 8px;
   border: none;
   background: none;
   color: var(--engrave);
   font-family: var(--mono);
-  font-size: calc(11px * var(--text-scale));
+  font-size: calc(var(--type-engraving) * var(--text-scale));
+  line-height: 1.2;
   letter-spacing: 1.5px;
   text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.6);
 }
@@ -94,20 +100,20 @@
   color: #c9d2da;
 }
 
-/* On a touch screen: a steel tab hanging under the chassis' lower edge. */
+/* On a touch screen: a steel tab hanging under the chassis' lower edge, a fingertip high. */
 .device-tabs {
   display: none;
   position: absolute;
   left: 50%;
-  bottom: -20px;
+  bottom: -28px;
   gap: 10px;
   transform: translateX(-50%);
 }
 
 .device-tab {
   min-width: 132px;
-  min-height: 36px;
-  padding: 10px 16px 6px;
+  min-height: var(--target);
+  padding: 14px 16px 6px;
   border: none;
   border-radius: 0 0 10px 10px;
   background: linear-gradient(180deg, #161d24, #3a4754);
@@ -147,7 +153,7 @@
 
   /* Room under the chassis for its tab, inside the box that scrolls. */
   .puzzle-modal.station-modal .panel {
-    padding-bottom: 32px;
+    padding-bottom: 40px;
   }
 }
 
@@ -339,9 +345,9 @@
   background: rgba(141, 240, 180, 0.08);
 }
 
-/* On the Serverraum terminal's bezel: a key among its keys. */
+/* On the Serverraum terminal's bezel: a key among its keys, as tall. */
 .servers-bezel .note-down {
-  min-height: 34px;
+  min-height: var(--target);
   border: 0;
   background: linear-gradient(180deg, #2b343c, #1a2127);
   box-shadow:

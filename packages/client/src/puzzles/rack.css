@@ -4,7 +4,7 @@
 .rack-diagram {
   display: grid;
   gap: 4px;
-  margin: 10px 0 0;
+  margin: 0;
   padding: 8px 10px 6px;
   border: 1px solid #22364a;
   border-radius: 6px;
@@ -22,7 +22,7 @@
 
 .rack-diagram-caption {
   font-family: var(--mono);
-  font-size: calc(10px * var(--text-scale));
+  font-size: calc(var(--type-engraving) * var(--text-scale));
   letter-spacing: 2px;
   text-transform: uppercase;
   color: #5f7f9f;
@@ -30,6 +30,15 @@
 
 .rack-diagram .services-box rect {
   fill: #101d2b;
+}
+
+/*
+ * The services' names 11 units high at the normal text size: 11 px where the plan is drawn
+ * narrowest, at its 256 units beside the rack. A larger text size takes them to 12 units, as
+ * much as the room right of a box's LED holds of „AUTH".
+ */
+.rack-diagram .services-box text {
+  font-size: min(calc(11px * var(--text-scale)), 12px);
 }
 
 .rack-diagram .services-arrows {

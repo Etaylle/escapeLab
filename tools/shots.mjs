@@ -104,7 +104,12 @@
  * the cabinet read at the large text size (book-morse-1.15.png: the
  * Morsetafel whole on its page, the Frequenztabelle facing it, no line cut),
  * the radio panel's lamp and dial, the spare fuse carried from the Archiv to
- * the reactor and the reactor pressed together. From the Signalkette on the
+ * the reactor and the reactor pressed together. Every device the guest's
+ * phone opens on the way — the lever, the meter, console A of the
+ * Signalkette, the rack, the reactor and the relay console — is also shot
+ * with the phone held sideways (device-phone-<station>.png): the device
+ * whole in the window, nothing of it scrolling, every control in view and
+ * 44 px at least each way, or the run fails. From the Signalkette on the
  * drones are awake: every walk goes from haven to haven past them — the
  * tiles no drone ever looks at — as a crew times its run past a patrol:
  * their flights foretold from the positions stream as the server steps them
@@ -2752,6 +2757,9 @@ async function throwLever(players) {
     }
   }
   await sleep(500); // past the panel's fade-in
+  for (const player of players) {
+    await captureDevicePhone(player, stationSlug(player));
+  }
   await captureLeverPanel(first, players.length);
   await captureLeverRing(first);
   const solved = await pressTogether(players, lever);
@@ -4566,6 +4574,99 @@ async function capturePadLeft(page) {
   }
 }
 
+/** The stations whose device a phone has shown sideways this run: each once. */
+const phoneDevices = new Set();
+
+/**
+ * What the page shows of its open device or relay console: the most its frame or the modal
+ * round it scrolls; its controls shown, those under a fingertip's 44 px either way, and those
+ * cut off by the frame or the window.
+ */
+function deviceReach() {
+  const modal = document.querySelector('.station-modal, .relay-modal');
+  const panel = modal?.querySelector('.panel') ?? null;
+  if (modal === null || panel === null) {
+    return null;
+  }
+  const frame = panel.getBoundingClientRect();
+  const box = (el) => el.getBoundingClientRect();
+  const said = (el) => {
+    const { width, height } = box(el);
+    const name = (el.getAttribute('aria-label') ?? el.textContent ?? '').trim().slice(0, 20);
+    return `„${name}" ${Math.round(width)}×${Math.round(height)}`;
+  };
+  const shown = [...panel.querySelectorAll('button, input, summary')].filter(
+    (el) => box(el).width > 0 && globalThis.getComputedStyle(el).visibility !== 'hidden',
+  );
+  const out = (el) =>
+    box(el).top < Math.max(frame.top, 0) - 1 ||
+    box(el).bottom > Math.min(frame.bottom, globalThis.innerHeight) + 1 ||
+    box(el).left < -1 ||
+    box(el).right > globalThis.innerWidth + 1;
+  return {
+    scroll: Math.max(
+      panel.scrollHeight - panel.clientHeight,
+      modal.scrollHeight - modal.clientHeight,
+    ),
+    controls: shown.length,
+    small: shown.filter((el) => box(el).width < 43.5 || box(el).height < 43.5).map(said),
+    cut: shown.filter(out).map(said),
+  };
+}
+
+/** The station `player` has open: its id, and its console's letter where it has two. */
+function stationSlug(player) {
+  const { map, puzzle } = player.seen.view;
+  const armed = map.stations.find((station) => station.status === 'armed');
+  const seat = puzzle?.console ?? null;
+  return `${armed?.puzzleId ?? 'station'}${seat === null ? '' : `-${seat}`}`;
+}
+
+/**
+ * device-phone-<slug>.png: the device a phone has open — the guest's page, a touch screen —
+ * with the phone held sideways: the device whole in the window, nothing of it scrolling, every
+ * control in view and 44 px at least each way. The run fails where it is not so. Once a
+ * station; a window without touch is left alone. The phone goes back to how it was held.
+ */
+async function captureDevicePhone(player, slug) {
+  const { page } = player;
+  const touch = await page.evaluate(() => globalThis.matchMedia('(pointer: coarse)').matches);
+  if (!touch || phoneDevices.has(slug)) {
+    return;
+  }
+  phoneDevices.add(slug);
+  const held = page.viewportSize();
+  const { width, height } = SIZES[3];
+  await page.setViewportSize({ width, height });
+  await sleep(500);
+  const seen = await page.evaluate(deviceReach);
+  await capture(page, `device-phone-${slug}.png`);
+  if (held !== null) {
+    await page.setViewportSize(held);
+    await sleep(300);
+  }
+  const name = `device-phone-${slug}.png`.padEnd(18);
+  if (seen === null) {
+    fail(`device-phone-${slug}: no device open on ${player.name}'s phone`);
+    console.log(`${name} !! ${player.name}'s phone has no device open`);
+    return;
+  }
+  console.log(
+    `${name} ${player.name}'s phone sideways: ${seen.controls} controls, scrolls ` +
+      `${seen.scroll}px, ${seen.small.length} under 44 px, ${seen.cut.length} cut off` +
+      [...seen.small, ...seen.cut].map((what) => `\n                   !! ${what}`).join(''),
+  );
+  const wrong = [
+    seen.controls === 0 && 'no control shown',
+    seen.scroll > 1 && `it scrolls ${seen.scroll}px`,
+    seen.small.length > 0 && `${seen.small.join(', ')} under 44 px`,
+    seen.cut.length > 0 && `${seen.cut.join(', ')} cut off`,
+  ];
+  if (wrong.some(Boolean)) {
+    fail(`device-phone-${slug}: ${wrong.filter(Boolean).join('; ')}`);
+  }
+}
+
 /**
  * After the sign step: the Info button on the guest's phone held sideways —
  * and where the host read the sign, in the host's window at the same size,
@@ -6222,6 +6323,11 @@ async function weather() {
   }
   const from = Date.now();
   const label = relayCrew.find((p) => emergencyOn(p.seen))?.seen.view.map.sabotage.label;
+  for (const player of relayCrew) {
+    if (await player.page.locator('.relay-modal').isVisible()) {
+      await captureDevicePhone(player, 'relay');
+    }
+  }
   while (relayCrew.some((p) => emergencyOn(p.seen)) && Date.now() - from < 70_000) {
     let acted = false;
     for (const holder of relayCrew) {
@@ -6416,6 +6522,7 @@ async function finishNotstrom(box, meter) {
     }
     await openPanel(player);
   }
+  await captureDevicePhone(meter, stationSlug(meter));
   const wires = (box.seen.view.puzzle?.wires ?? []).map((wire) => wire.colour).join(', ');
   if (wires !== pin.wires.join(', ')) {
     differs('fuse box', wires, pin.wires.join(', '));
@@ -6458,6 +6565,7 @@ async function playSignalkette(host, guest) {
     throw new Error(`${host.name} found no way to console B of "${title}"`);
   }
   await openPanel(guest);
+  await captureDevicePhone(guest, stationSlug(guest));
   await openPanel(host);
   await solveSignal([host, guest], title, BLACKOUT_PLAN.signalkette.stages);
 }
@@ -6516,6 +6624,7 @@ async function playServerraum(host, guest) {
     }
     const rows = host.seen.view.puzzle?.rows ?? null;
     await captureServersConsoles(crew);
+    await captureDevicePhone(guest, stationSlug(guest));
     if (JSON.stringify(rows) !== JSON.stringify(BLACKOUT_PLAN.subsysteme.rows)) {
       differs('terminal table', tableSaid(rows), tableSaid(BLACKOUT_PLAN.subsysteme.rows));
     }
@@ -6730,7 +6839,9 @@ async function playReaktor(host, guest) {
       `${pin.to.x},${pin.to.y} and put it in`,
   );
   await clearOfEmergencies(host, 25);
-  await pastEmergencies(() => pressLastSync([host, guest]));
+  await pastEmergencies(() =>
+    pressLastSync([host, guest], () => captureDevicePhone(guest, stationSlug(guest))),
+  );
 }
 
 /**
@@ -6840,8 +6951,11 @@ async function cutPinnedWire(cutter, holder, pinned) {
   );
 }
 
-/** The last station, a sync for the whole crew: all gather at it, open it and press together. */
-async function pressLastSync(players) {
+/**
+ * The last station, a sync for the whole crew: all gather at it, open it and press together;
+ * `opened` comes in between, with the panels up.
+ */
+async function pressLastSync(players, opened = async () => undefined) {
   const station = players[0].seen.view.map.stations.find((s) => s.status === 'armed');
   if (station === undefined) {
     throw new Error('no station is armed after the Kabelprüfung');
@@ -6854,6 +6968,7 @@ async function pressLastSync(players) {
     }
   }
   await sleep(400); // past the panel's fade-in
+  await opened();
   const solved = await pressTogether(players, station);
   await checkRadioVoice(players[0], solved.listening, `"${station.title}"`);
 }

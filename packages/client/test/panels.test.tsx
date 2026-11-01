@@ -2,9 +2,6 @@ import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  generateEdgework,
-  moduleFor,
-  puzzleDefSchema,
   SERVICES,
   tokenLabel,
   TOKENS,
@@ -27,16 +24,7 @@ import {
 } from '../src/puzzles/SignalPanel.js';
 import { commandOf, COMMANDS, Keys, withWord } from '../src/puzzles/ServersPanel.js';
 import { PuzzlePanel, ReaderPanel } from '../src/screens/PuzzlePanel.js';
-import { deviceRun, iconsAsWords, NO_CLOCK, PICTOGRAPH } from './fixtures.js';
-
-/** A small deterministic generator, enough to set an instance up. */
-function lcg(seed: number): () => number {
-  let state = seed;
-  return () => {
-    state = (state * 1664525 + 1013904223) % 2 ** 32;
-    return state / 2 ** 32;
-  };
-}
+import { deviceRun, iconsAsWords, NO_CLOCK, PICTOGRAPH, stationView } from './fixtures.js';
 
 /**
  * The open puzzle of `type` as player `who` sees it, at its station — at
@@ -50,27 +38,7 @@ function seen(
   seat: ConsoleId | null = operating ? 'a' : null,
   who: string | null = 'p1',
 ): PuzzleView {
-  const def = puzzleDefSchema.parse({ type, id: type, title: 'Station', ...fields });
-  const station = moduleFor(def.type);
-  const rng = lcg(7);
-  const edgework = generateEdgework(rng);
-  const crew = ['p1', 'p2'];
-  const setup = {
-    edgework,
-    alarms: 0,
-    remainingSec: 600,
-    at: 0,
-    crew,
-    console: null,
-    atConsoles: { a: [], b: [] },
-    readers: [],
-  };
-  const state = station.init(def, rng, setup);
-  const viewer = { playerId: who, operating, reading: false, console: seat };
-  const operators = operating && who !== null ? [who] : [];
-  const view = station.view(def, state, viewer, { edgework, alarms: 0, crew, operators });
-  const common = { index: 0, total: 1, title: def.title, manual: null, console: seat };
-  return { ...view, ...common, backup: null };
+  return stationView({ type, id: type, title: 'Station', ...fields }, { operating, seat, who });
 }
 
 function panel(puzzle: PuzzleView): string {

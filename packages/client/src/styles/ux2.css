@@ -107,7 +107,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--mono);
-  font-size: calc(12px * var(--text-scale));
+  font-size: calc(var(--type-label) * var(--text-scale));
   font-weight: 700;
   letter-spacing: 2px;
   color: #e2e8f0;
@@ -166,7 +166,7 @@
 /* ── the device's line, under the Laborkennung's row ───────────────────── */
 
 .station-coach {
-  margin: 0 0 12px;
+  margin: 0 0 4px;
   padding: 8px 14px;
   border: 1px solid rgba(255, 181, 71, 0.6);
   border-radius: 10px;
