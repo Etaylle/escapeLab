@@ -13,7 +13,7 @@ die Entscheidung.
 
 ## Bereit
 
-### F-1 Fundament-Fehler der Rückmeldung — Status: in Arbeit (Mac, Paket N-foundation) · Größe: M
+### F-1 Fundament-Fehler der Rückmeldung — Status: erledigt (N-foundation, Merge 2026-11-01) · Größe: M
 - Pause hält die Uhr nur auf dem Server an: HUD-Countdown, Pieptöne und der Schlag bei 0
   laufen weiter, verbrauchte Pieptöne fehlen danach (`screens/Game.tsx`, `world/sim.ts`,
   `core/src/actions.ts` pause/resume).
@@ -48,13 +48,13 @@ die Entscheidung.
 - Tutorial-Story nennt feste Tasten („WASD … E … M"): aus der Tastenbelegung bilden.
 - Beweis: Tests; Walkthrough.
 
-### F-4 Harness beendet sich nach einem Fehler — Status: im PR (L-polish) · Größe: S
+### F-4 Harness beendet sich nach einem Fehler — Status: erledigt (L-polish 10bcce8) · Größe: S
 - Ein werfender Schritt lässt `watchSightings` laufen; `tools/shots.mjs` endet nie, CI hängt
   bis zum Timeout.
 
 ## Aus dem Fundament-Audit (`docs/foundation-audit.md`, 2026-11-01)
 
-### N-1 Netz und Körper — Status: in Arbeit (Mac, Paket N-foundation) · Größe: L
+### N-1 Netz und Körper — Status: erledigt (N-foundation, Merge 2026-11-01; Vorher/Nachher im Audit-Addendum) · Größe: L
 - Positionen tragen keinen Zeitstempel; die Partnerfigur ruckelt (Schritt 0–7,2 px je Frame,
   153 ms hinterher). Zeitstempel in `pos`, Partner 150 ms in der Vergangenheit zeichnen
   (Valve/Fiedler), Variation von 0,44 auf ≤ 0,25.
