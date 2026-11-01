@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { PANEL_FADE_MS } from '../src/screens/WorldModal.js';
 
 /** The interaction sheet, as main.tsx loads it last. */
 const CSS = readFileSync(new URL('../src/styles/interaction.css', import.meta.url), 'utf8');
@@ -33,6 +34,22 @@ describe('interaction.css — how panels come up and controls answer', () => {
     const up = keyframes('panel-up');
     expect(up).toMatch(/from \{\s*opacity: 0;\s*transform: scale\(0\.98\);/);
     expect(up).toMatch(/to \{\s*opacity: 1;\s*transform: none;/);
+  });
+
+  it('fades a station’s device out as it came, shrinking to 0.98 over the same 150 ms', () => {
+    expect(PANEL_FADE_MS).toBe(150);
+    const panel = rule(/\.station-modal\.puzzle-modal--leaving \.panel/);
+    expect(panel).toMatch(new RegExp(`animation: panel-down ${PANEL_FADE_MS}ms`));
+    expect(rule(/\.station-modal\.puzzle-modal--leaving/)).toMatch(
+      new RegExp(`animation: panel-undim ${PANEL_FADE_MS}ms`),
+    );
+    const down = keyframes('panel-down');
+    expect(down).toMatch(/from \{\s*opacity: 1;\s*transform: none;/);
+    expect(down).toMatch(/to \{\s*opacity: 0;\s*transform: scale\(0\.98\);/);
+    const reduced = CSS.slice(CSS.indexOf(":where([data-motion='reduce'])"));
+    const leaving = '\\.station-modal\\.puzzle-modal--leaving';
+    const still = new RegExp(`${leaving},\\s*${leaving} \\.panel \\{\\s*animation: none;`);
+    expect(reduced).toMatch(still);
   });
 
   it('presses a plain button a pixel down, and leaves a device’s controls their own press', () => {

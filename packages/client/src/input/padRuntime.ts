@@ -9,6 +9,8 @@ import {
   AT_REST,
   directionOf,
   NO_STEER,
+  PAD_CHAT,
+  PAD_PING,
   padStateOf,
   pressedSince,
   releasedSince,
@@ -25,14 +27,16 @@ import {
 /**
  * The controller at work: polled once an animation frame while one is connected (the Gamepad
  * API has no events for presses), its presses turned into what the keys do. In the world the
- * stick and the D-pad walk (`padSteer`, read by the world's step) and R1 sprints; A/✕ works
- * what is in front — it sends Space, which skips the opening too —, B/○ puts down, X/□ opens
- * the notepad and Y/△ the minimap, each by the key bound to it, so that every screen hears the
- * controller as it hears the keys. Over a dialog the D-pad or a flick of the stick moves between
- * its controls, A presses one and B steps back (Esc); a book turns its pages left and right.
- * L1 talks while held, Start opens the settings, Select the Einsatzinfo. With `?fakepad=1` the
- * walkthrough plays a controller of its own through `window.__escapelab.pad`. Only a controller
- * of the standard mapping is read: another one's buttons and axes would mean something else.
+ * stick walks (`padSteer`, read by the world's step) and R1 sprints; A/✕ works what is in
+ * front — it sends Space, which skips the opening too —, B/○ puts down, X/□ opens the notepad
+ * and Y/△ the minimap, each by the key bound to it, so that every screen hears the controller as
+ * it hears the keys; the D-pad's ◀ pings where the avatar looks (`onPadPing`, the world's) and
+ * its ▶ opens the quick chat by the chat key. Over a dialog — the quick chat's wheel among them
+ * (input/focus.ts) — the D-pad or a flick of the stick moves between its controls, A presses
+ * one and B steps back (Esc); a book turns its pages left and right. L1 talks while held, Start
+ * opens the settings, Select the Einsatzinfo. With `?fakepad=1` the walkthrough plays a
+ * controller of its own through `window.__escapelab.pad`. Only a controller of the standard
+ * mapping is read: another one's buttons and axes would mean something else.
  */
 
 /** How long a direction held over a dialog waits before it repeats, and then between steps. */
@@ -74,8 +78,9 @@ interface Runtime {
   /** a direction held over a dialog: which, and when it steps again */
   repeat: { dir: Direction; at: number } | null;
   /**
-   * a direction is held that walked in the world: a dialog that comes up under it waits for it
-   * to be let go, so that the walk does not run on through the dialog's controls
+   * a direction is held that the world took — the stick walking, the D-pad's ◀ or ▶ — : a dialog
+   * that comes up under it waits for it to be let go, so that it does not run on through the
+   * dialog's controls
    */
   walking: boolean;
   /** the settings wait for a button to remap: it goes there instead of acting */
@@ -83,6 +88,22 @@ interface Runtime {
 }
 
 let rt: Runtime | null = null;
+
+/** The world's ping for the D-pad's ◀, while a world that pings is up; null else. */
+let worldPing: (() => void) | null = null;
+
+/**
+ * The D-pad's ◀ pings by `ping` in the world from now on — where the avatar looks, as the world
+ * that registers it says. Returns what takes it off again.
+ */
+export function onPadPing(ping: () => void): () => void {
+  worldPing = ping;
+  return () => {
+    if (worldPing === ping) {
+      worldPing = null;
+    }
+  };
+}
 
 /** The controller as the settings' live test shows it. */
 export interface PadLive {
@@ -225,6 +246,21 @@ function overDialog(action: PadAction, scope: Element, button: PadButton): void 
   }
 }
 
+/**
+ * The D-pad's ◀ or ▶ in the world: ◀ pings (`onPadPing`), ▶ opens the quick chat by its key.
+ * Over a dialog the D-pad is the dialog's (`steerMenu`).
+ */
+function inWorldDpad(button: typeof PAD_PING | typeof PAD_CHAT): void {
+  if (menuScope(document) !== null) {
+    return;
+  }
+  if (button === PAD_PING) {
+    worldPing?.();
+  } else {
+    tap(getSettings().keys.chat);
+  }
+}
+
 /** A button pressed: the fixed ones, then the main actions as the settings bind them. */
 function pressIn(button: PadButton): void {
   const { keys, pad } = getSettings();
@@ -234,8 +270,10 @@ function pressIn(button: PadButton): void {
     tap(keys.info);
   } else if (button === 'l1') {
     hold(button, keys.talk);
+  } else if (button === PAD_PING || button === PAD_CHAT) {
+    inWorldDpad(button);
   } else {
-    // R1 and the D-pad steer (`padSteer`); a button no main action sits on does nothing.
+    // R1 sprints (`padSteer`); a button no main action sits on does nothing.
     const action = padActionOf(pad, button);
     if (action === null) {
       return;
@@ -260,8 +298,8 @@ function menuStep(scope: Element, dir: Direction): void {
 
 /**
  * The direction the D-pad or the stick holds over a dialog, and the dialog; null where none is
- * held, where the world takes it — there it walks —, or while one held from walking is still
- * held.
+ * held, where the world takes it — there the stick walks, the D-pad pings or opens the quick
+ * chat —, or while one held in the world is still held.
  */
 function heldOverDialog(
   runtime: Runtime,
@@ -449,10 +487,10 @@ export function usePad(onSettings: () => void): void {
 }
 
 /**
- * Where the controller steers the avatar this frame — the D-pad, else the stick past its dead
- * zone — and whether R1 sprints; nothing without a controller, while the settings wait for a
- * key or a button, or while a dialog is open over the world — the settings, the info — where
- * the D-pad moves between controls instead. The world's own lock holds the avatar anyway.
+ * Where the controller steers the avatar this frame — the stick past its dead zone — and whether
+ * R1 sprints; nothing without a controller, while the settings wait for a key or a button, or
+ * while a dialog is open over the world — the settings, the info, the quick chat's wheel —
+ * where the stick moves between controls instead. The world's own lock holds the avatar anyway.
  */
 export function padSteer(): Steer {
   if (rt === null || rt.capture !== null || isRebinding()) {

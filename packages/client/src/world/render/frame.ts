@@ -16,6 +16,7 @@ import type { Viewport } from '../viewport.js';
 import type { Fringe } from './aberration.js';
 import type { BakeStore } from './bakes.js';
 import { NO_ZOOM, type Zoom } from './camera.js';
+import { lightCensus, type LightCensus } from './census.js';
 import { frameCache } from './frameCache.js';
 import type { PixelGrid } from './grid.js';
 import type { PassName, PassProfile } from './profile.js';
@@ -171,6 +172,8 @@ export interface RenderKit {
   zoom: Zoom;
   /** the scratch canvases an alarm knocks the colours apart in (aberration.ts); null before */
   fringe: Fringe | null;
+  /** the sights and bakes the light has worked out so far, for the walkthrough (census.ts) */
+  census: LightCensus;
 }
 
 /** A fresh kit drawing the darkness into `overlay`: nothing baked yet, nothing timed. */
@@ -189,6 +192,7 @@ export function renderKit(overlay: CanvasRenderingContext2D): RenderKit {
     grid: null,
     zoom: NO_ZOOM,
     fringe: null,
+    census: lightCensus(),
   };
 }
 

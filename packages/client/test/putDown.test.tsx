@@ -229,6 +229,35 @@ describe('stepping back from a device', () => {
     expect(notepad.toggled).toBe(1);
   });
 
+  it('fades out once stepped back from, taking nothing more: no press, no step back', () => {
+    let backs = 0;
+    const sent: unknown[] = [];
+    const modal = (leaving: boolean) => (
+      <StationModal
+        puzzle={maze}
+        run={deviceRun()}
+        map={single}
+        edgework={null}
+        deadlineAt={null}
+        send={(msg) => sent.push(msg)}
+        onStepBack={() => (backs += 1)}
+        leaving={leaving}
+      />
+    );
+    const html = renderToStaticMarkup(modal(true));
+    expect(html).toContain('class="puzzle-modal station-modal puzzle-modal--leaving"');
+    expect(html).toMatch(/role="dialog"[^>]*inert=""/);
+    const leaving = elementsOf(() => modal(true));
+    press(buttonsOf(leaving, 'device-step-back')[0]);
+    press(buttonsOf(leaving, 'maze-btn')[0]);
+    expect([backs, sent]).toEqual([0, []]);
+    const open = elementsOf(() => modal(false));
+    press(buttonsOf(open, 'device-step-back')[0]);
+    press(buttonsOf(open, 'maze-btn')[0]);
+    expect(backs).toBe(1);
+    expect(sent).toHaveLength(1);
+  });
+
   it('gives the audience no way back: it stands at no console', () => {
     const watched = renderToStaticMarkup(
       <PuzzlePanel

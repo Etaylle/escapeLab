@@ -9,7 +9,9 @@ import { phaseOf, sameGrid, type PixelGrid } from './render/grid.js';
  * lights, the open hatch's light, the emergency lamps', the light through
  * open doors and the faint lights' glow are baked this way (render/bakes.ts):
  * again only as they change, or for another grid. A box too large for
- * BAKE_MAX is baked at fewer pixels a tile and drawn scaled, filtered.
+ * BAKE_MAX is baked at fewer pixels a tile and drawn scaled, filtered. Bakes
+ * added onto the picture together are added up into one first (`addBaked`):
+ * one copy instead of several.
  */
 
 type Spot = { x: number; y: number };
@@ -121,6 +123,54 @@ export function bake(
   draw(g);
   g.restore();
   return { canvas: into, box, grid: on, left, top };
+}
+
+/**
+ * The bakes `parts`, all baked on one grid, added up into `into`: each copied
+ * over the box round them all at whole pixels, adding ('lighter'), so that a
+ * channel of a pixel is the sum of the parts' as whole numbers — laying the
+ * sum adds onto a picture exactly what laying the parts one by one did, where
+ * no channel passes full. Null where `parts` is empty, or where the box round
+ * them passes BAKE_MAX pixels on a side.
+ */
+export function addBaked(parts: readonly Baked[], into: HTMLCanvasElement): Baked | null {
+  const first = parts[0];
+  if (first === undefined) {
+    return null;
+  }
+  const left = Math.min(...parts.map((p) => p.left));
+  const top = Math.min(...parts.map((p) => p.top));
+  const width = Math.max(...parts.map((p) => p.left + p.canvas.width)) - left;
+  const height = Math.max(...parts.map((p) => p.top + p.canvas.height)) - top;
+  if (Math.max(width, height) > BAKE_MAX) {
+    return null;
+  }
+  if (into.width !== width || into.height !== height) {
+    into.width = width;
+    into.height = height;
+  }
+  const g = into.getContext('2d');
+  if (g === null) {
+    throw new Error('baked: canvas.getContext("2d") returned null; cannot add the bakes up.');
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.clearRect(0, 0, width, height);
+  g.globalCompositeOperation = 'lighter';
+  for (const part of parts) {
+    g.drawImage(part.canvas, part.left - left, part.top - top);
+  }
+  g.globalCompositeOperation = 'source-over';
+  const box = boxRound(parts.map((p) => p.box));
+  return { canvas: into, box, grid: first.grid, left, top };
+}
+
+/** The box of whole tiles round `boxes`, none of them empty. */
+function boxRound(boxes: readonly TileBox[]): TileBox {
+  const x = Math.min(...boxes.map((b) => b.x));
+  const y = Math.min(...boxes.map((b) => b.y));
+  const w = Math.max(...boxes.map((b) => b.x + b.w)) - x;
+  const h = Math.max(...boxes.map((b) => b.y + b.h)) - y;
+  return { x, y, w, h };
 }
 
 /**

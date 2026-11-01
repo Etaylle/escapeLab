@@ -1,10 +1,11 @@
 /**
  * A controller as the browser's Gamepad API hands it over in its standard mapping, read once a
  * frame (input/padRuntime.ts): the buttons held, the left stick past its dead zone, the D-pad.
- * Pure: a poll in, its state out. The left stick and the D-pad walk, A/✕ works, B/○ puts down
- * or steps back, X/□ the notepad, Y/△ the minimap — those four as the settings bind them
+ * Pure: a poll in, its state out. The left stick walks, A/✕ works, B/○ puts down or steps
+ * back, X/□ the notepad, Y/△ the minimap — those four as the settings bind them
  * (input/bindings.ts `PadBindings`) — L1 talks while held, R1 sprints, Start opens the settings
- * and Select the Einsatzinfo.
+ * and Select the Einsatzinfo. In the world the D-pad's ◀ pings and its ▶ opens the quick chat;
+ * over a dialog it moves between the controls.
  */
 
 /** The buttons of the standard mapping, by their index there. */
@@ -29,6 +30,11 @@ export const STANDARD_BUTTONS = [
 ] as const;
 
 export type PadButton = (typeof STANDARD_BUTTONS)[number];
+
+/** In the world, the D-pad's ◀ pings where the avatar looks (input/padRuntime.ts). */
+export const PAD_PING = 'dleft' satisfies PadButton;
+/** In the world, the D-pad's ▶ opens the quick chat. */
+export const PAD_CHAT = 'dright' satisfies PadButton;
 
 /** How far the stick may lean before it counts, of its full lean. */
 export const DEADZONE = 0.2;
@@ -151,17 +157,11 @@ export function releasedSince(before: PadState, now: PadState): PadButton[] {
 }
 
 /**
- * Where the controller steers: the D-pad's held directions, at full and as fast on a diagonal,
- * where it is held; else the stick past its dead zone, as far as it leans.
+ * Where the controller steers: the stick past its dead zone, as far as it leans. The D-pad walks
+ * nobody: in the world it pings and opens the quick chat (input/padRuntime.ts).
  */
 export function steerOf(state: PadState): { x: number; y: number } {
-  const dx = Number(state.held.has('dright')) - Number(state.held.has('dleft'));
-  const dy = Number(state.held.has('ddown')) - Number(state.held.has('dup'));
-  if (dx === 0 && dy === 0) {
-    return { ...state.stick };
-  }
-  const length = Math.hypot(dx, dy);
-  return { x: dx / length, y: dy / length };
+  return { ...state.stick };
 }
 
 /** How the controller steers the avatar: where it points, as far as it leans, and R1 held. */

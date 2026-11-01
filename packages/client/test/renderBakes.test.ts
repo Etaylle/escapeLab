@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Baked } from '../src/world/baked.js';
-import { BAKE_LIMITS, bakedFor, layBake } from '../src/world/render/bakes.js';
+import { addBaked, BAKE_MAX, type Baked } from '../src/world/baked.js';
+import { BAKE_LIMITS, bakedFor, layAdded, layBake } from '../src/world/render/bakes.js';
 import type { Frame } from '../src/world/render/frame.js';
 import { callEntries, callsOf, fakeCanvas } from './fakeCanvas.js';
 import { frameWith } from './frames.js';
@@ -87,5 +87,62 @@ describe('bakes — the light’s bakes, kept by name and what they are of', () 
     expect(callsOf(log, 'setTransform')).toEqual([[100, 0, 0, 100, -100, 0]]);
     // Between a save and a restore: the context is as it was after.
     expect(fill[0]?.depth).toBe(1);
+  });
+});
+
+/** A bake of `w` × `h` px whose top-left pixel lies at (left, top) from the grid's origin. */
+function bakedAt(left: number, top: number, w: number, h: number, name: string): Baked {
+  const box = { x: left / 100, y: top / 100, w: w / 100, h: h / 100 };
+  const grid = { scale: 100, ox: 0, oy: 0 };
+  return { canvas: fakeCanvas(w, h, name).canvas, box, grid, left, top };
+}
+
+describe('added bakes — lights laid on together in one copy', () => {
+  it('adds the parts up over the box round them all, each at whole pixels', () => {
+    const a = bakedAt(100, 200, 300, 100, 'a');
+    const b = bakedAt(250, 100, 100, 400, 'b');
+    const into = fakeCanvas(1, 1, 'sum');
+    const sum = addBaked([a, b], into.canvas);
+    expect(sum).toMatchObject({ left: 100, top: 100, box: { x: 1, y: 1, w: 3, h: 4 } });
+    expect([into.canvas.width, into.canvas.height]).toEqual([300, 400]);
+    expect(callsOf(into.log, 'clearRect')).toEqual([[0, 0, 300, 400]]);
+    expect(callEntries(into.log, 'drawImage').map((e) => [e.args, e.op])).toEqual([
+      [[a.canvas, 0, 100], 'lighter'],
+      [[b.canvas, 150, 0], 'lighter'],
+    ]);
+  });
+
+  it('adds nothing up for no parts, nor a sum too large to bake', () => {
+    expect(addBaked([], fakeCanvas(1, 1).canvas)).toBeNull();
+    const wide = [bakedAt(0, 0, 100, 100, 'a'), bakedAt(BAKE_MAX, 0, 100, 100, 'b')];
+    expect(addBaked(wide, fakeCanvas(1, 1).canvas)).toBeNull();
+  });
+
+  const part = (name: string, x: number) => ({
+    bake: { name, of: name, box: { x, y: 1, w: 1, h: 1 } },
+    draw: (g: CanvasRenderingContext2D) => g.fillRect(x, 1, 1, 1),
+  });
+
+  it('lays two parts as their sum, one part as itself, and keeps each part’s own bake', () => {
+    const frame = frameWith();
+    const { ctx, log } = fakeCanvas(800, 600);
+    layAdded(ctx, frame, 'both', [part('one', 1), part('two', 3)]);
+    const kept = (name: string) => frame.kit.bakes.entries.get(name)?.baked?.canvas;
+    expect(callsOf(log, 'drawImage').map(([canvas]) => canvas)).toEqual([kept('both')]);
+    expect([kept('one'), kept('two')].every((canvas) => canvas !== undefined)).toBe(true);
+    const alone = fakeCanvas(800, 600);
+    layAdded(alone.ctx, frameWith(), 'single', [part('one', 1)]);
+    expect(callsOf(alone.log, 'drawImage')).toHaveLength(1);
+  });
+
+  it('draws each part straight while the grid moves, adding nothing up', () => {
+    const frame = frameWith({ steady: false });
+    const { ctx, log } = fakeCanvas(800, 600);
+    layAdded(ctx, frame, 'both', [part('one', 1), part('two', 3)]);
+    expect(frame.kit.bakes.entries.size).toBe(0);
+    expect(callsOf(log, 'fillRect')).toEqual([
+      [1, 1, 1, 1],
+      [3, 1, 1, 1],
+    ]);
   });
 });

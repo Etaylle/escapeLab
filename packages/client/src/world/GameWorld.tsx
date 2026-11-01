@@ -13,8 +13,9 @@ import { useNow } from '../hooks.js';
 import { actionOfKey, isHeld, type Held, type InputAction } from '../input/bindings.js';
 import { useGlyph } from '../input/glyphs.js';
 import { HeldKeys, watchBindings } from '../input/heldKeys.js';
+import { inputDevice } from '../input/device.js';
 import { NO_STEER } from '../input/pad.js';
-import { padSteer } from '../input/padRuntime.js';
+import { onPadPing, padSteer } from '../input/padRuntime.js';
 import { addProbes, type MinimapProbe } from '../probes.js';
 import type { CoachMark } from '../puzzles/coach.js';
 import { TalkButton } from '../screens/Voice.js';
@@ -62,6 +63,7 @@ import { positionsOf, type KnownPositions, type Spot } from './movement.js';
 import { MUSIC_AFTER_CLICK_MS, musicProbe, setTension, stopMusic, type Tension } from './music.js';
 import { worldNews } from './news.js';
 import { noteMount } from './notes.js';
+import { pingAhead } from './padPing.js';
 import { renderRadio, voiceProbe } from './radioVoice.js';
 import { preloadSamples } from './samples.js';
 import { fitBacking } from './render/backing.js';
@@ -74,6 +76,7 @@ import {
   type RenderKit,
   type WorldMap,
 } from './render/frame.js';
+import { censusTrace, type CensusTrace } from './render/census.js';
 import { graphicsProbe } from './render/graphicsProbe.js';
 import { highlightProbe } from './render/highlight.js';
 import { minimapGoal, minimapLayout } from './render/hud.js';
@@ -401,6 +404,14 @@ function onPointerDown(loop: Loop, e: PointerEvent): void {
   });
 }
 
+/** The D-pad's ◀: a ping for the whole crew on the floor the avatar's lamp points at. */
+function padPing(loop: Loop): void {
+  const map = loop.live.current.view.map;
+  if (map !== null) {
+    loop.live.current.send({ kind: 'ping', ...pingAhead(map, loop.sim.self) });
+  }
+}
+
 /** The keyboard and the pointer drive the world; returns what takes them off again. */
 function listen(loop: Loop, setWheelOpen: SetWheel): () => void {
   const { canvas, sim } = loop;
@@ -456,17 +467,22 @@ function minimapOf(loop: Loop): MinimapProbe | null {
  * what the lab sounds like — the beds, the music, the radio's voice, the partner's place — and
  * can render the radio's chain offline.
  */
-function traceFrames(loop: Loop): { trace: FrameTrace; drop: () => void } | null {
+function traceFrames(loop: Loop): Traced | null {
   if (!traceRequested(location.search)) {
     return null;
   }
   const { sim } = loop;
   const trace = frameTrace();
+  const work = censusTrace();
   const drop = addProbes({
     get frames() {
       return trace.frames;
     },
     resetFrames: () => trace.resetFrames(),
+    get lightWork() {
+      return work.work;
+    },
+    resetLightWork: () => work.reset(),
     get camera() {
       return { x: sim.draw.x, y: sim.draw.y, scale: sim.scale, lead: { ...sim.lead } };
     },
@@ -488,20 +504,28 @@ function traceFrames(loop: Loop): { trace: FrameTrace; drop: () => void } | null
       return { ...bedProbe(), ...sound, nodes, spent: timeSpent(), renderRadio, ...soundProbe() };
     },
   });
-  return { trace, drop };
+  return { trace, work, drop };
+}
+
+/** What `?trace=1` keeps of the frame loop: the frame durations, the light's census. */
+interface Traced {
+  trace: FrameTrace;
+  /** the sights and bakes each drawn frame worked out (render/census.ts) */
+  work: CensusTrace;
+  drop: () => void;
 }
 
 /**
  * The frame loop: the simulation runs on every animation frame; the canvas
  * is redrawn less under a panel (drawRate.ts). Returns what stops it.
  */
-function runFrames(loop: Loop, trace: FrameTrace | null): () => void {
+function runFrames(loop: Loop, traced: Traced | null): () => void {
   let raf = 0;
   let prev = performance.now();
   /** Animation frames since the loop started: under a panel only some are drawn. */
   let frames = 0;
   const frame = (now: number): void => {
-    trace?.record(now - prev);
+    traced?.trace.record(now - prev);
     const dt = Math.min(0.05, (now - prev) / 1000);
     prev = now;
     frames += 1;
@@ -510,6 +534,7 @@ function runFrames(loop: Loop, trace: FrameTrace | null): () => void {
       step(loop, dt, map);
       if (drawsFrame(frames, { locked: loop.live.current.locked, spectator: loop.spectator })) {
         render(loop, map);
+        traced?.work.record(loop.kit.census);
       }
     }
     raf = requestAnimationFrame(frame);
@@ -847,11 +872,12 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
     refs.dropRef.current = () => dropItem(loop);
     // An audience connection watches only: no controls, no position stream.
     const unlisten = props.spectator ? null : listen(loop, setWheelOpen);
+    const unping = props.spectator ? null : onPadPing(() => padPing(loop));
     const posTimer = streamPositions(sim, props.spectator, (msg) => live.current.send(msg));
     const traced = traceFrames(loop);
     const tracedGraphics = traceGraphics(loop);
     const profiled = profilePasses(kit);
-    const stop = runFrames(loop, traced?.trace ?? null);
+    const stop = runFrames(loop, traced);
     const ears = setInterval(() => hearTheLab(loop), HEAR_MS);
     return () => {
       stop();
@@ -859,6 +885,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
       clearInterval(posTimer);
       insets.disconnect();
       unlisten?.();
+      unping?.();
       stopAmbience();
       stopMusic();
       stopSpatial();
@@ -988,8 +1015,18 @@ function WorldControls({ refs, live, view, wheelOpen, setWheelOpen }: ControlsPr
   );
 }
 
-/** The quick-chat phrases, one button each, with the digit that says it. */
+/**
+ * The quick-chat phrases, one button each, with the digit that says it. Opened from a
+ * controller, the first phrase takes the focus: the D-pad picks one, A says it, B shuts the
+ * wheel (input/focus.ts takes it for a menu over the world).
+ */
 function ChatWheel({ send, setWheelOpen }: { send: Props['send']; setWheelOpen: SetWheel }) {
+  const first = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (inputDevice().device === 'pad') {
+      first.current?.focus();
+    }
+  }, []);
   const say = (phrase: ChatPhrase): void => {
     send({ kind: 'chat', phrase });
     setWheelOpen(false);
@@ -997,7 +1034,12 @@ function ChatWheel({ send, setWheelOpen }: { send: Props['send']; setWheelOpen: 
   return (
     <div className="chat-wheel" role="menu">
       {CHAT_PHRASE_IDS.map((phrase, i) => (
-        <button key={phrase} role="menuitem" onClick={() => say(phrase)}>
+        <button
+          key={phrase}
+          ref={i === 0 ? first : undefined}
+          role="menuitem"
+          onClick={() => say(phrase)}
+        >
           <span className="chat-key">{i + 1}</span>
           {chatText(phrase)}
         </button>

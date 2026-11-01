@@ -130,11 +130,7 @@ function cutGradient(
  * your room, and the light every lamp cuts into it where it can see.
  */
 export function cutDarkness(cut: CanvasRenderingContext2D, frame: Frame): void {
-  const base = fillDarkness(cut, frame);
-  litDarkness(cut, frame, base);
-  for (const run of frame.light.room?.light.runs ?? []) {
-    clearRun(cut, frame, run);
-  }
+  fillDarkness(cut, frame);
   cut.globalCompositeOperation = 'destination-out';
   const cutters = lightCutters(cut, frame);
   cutLamps(frame, cutters);
@@ -146,16 +142,100 @@ export function cutDarkness(cut: CanvasRenderingContext2D, frame: Frame): void {
   cutSpills(cut, frame);
 }
 
-/** Fills the overlay with the darkness, breathing, in one go; returns how deep it is this frame. */
-function fillDarkness(cut: CanvasRenderingContext2D, frame: Frame): number {
+/**
+ * The darkness of the overlay before any light cuts it, breathing: `base` deep
+ * (darknessDepth), none over your room while the lab has its power, and over a
+ * lit room what its lights leave (roomKeep) — every pixel filled once: the
+ * overlay cleared, the dark filled round the lit tiles, then each share of a
+ * lit room's darkness over its own tiles, at whole pixels so that neighbouring
+ * tiles meet without seams. A fill copying over the frame before, and lit
+ * tiles cleared to be filled again, each cost the software canvas about as much
+ * as filling the whole overlay.
+ */
+function fillDarkness(cut: CanvasRenderingContext2D, frame: Frame): void {
   const { w, h } = frame.viewport;
   cut.setTransform(1, 0, 0, 1, 0, 0);
-  const base = darknessDepth(frame);
-  cut.globalCompositeOperation = 'copy';
-  cut.fillStyle = `rgba(3,5,9,${base})`;
-  cut.fillRect(0, 0, w, h);
   cut.globalCompositeOperation = 'source-over';
-  return base;
+  cut.clearRect(0, 0, w, h);
+  const base = darknessDepth(frame);
+  const { holes, shares } = darkShares(frame, base);
+  cut.fillStyle = `rgba(3,5,9,${base})`;
+  cut.beginPath();
+  cut.rect(0, 0, w, h);
+  traceRuns(cut, frame, holes);
+  cut.fill('evenodd');
+  for (const [alpha, runs] of shares) {
+    cut.fillStyle = `rgba(3,5,9,${alpha})`;
+    cut.beginPath();
+    traceRuns(cut, frame, runs);
+    cut.fill();
+  }
+}
+
+/** The lit tiles the darkness leaves out, as runs, and the shares of it laid over some again. */
+interface DarkShares {
+  /** every tile of a lit room and of your powered room: no tile twice */
+  holes: Run[];
+  /** how deep the darkness lies over a lit room's tiles, and those tiles; none for none */
+  shares: [alpha: number, runs: Run[]][];
+}
+
+/**
+ * The tiles that keep less than the darkness's `base` this frame: your room while the lab has
+ * its power, which keeps none, and the lit rooms' tiles, grouped by the rooms lighting them
+ * (rooms.ts) — a tile keeps what every room lighting it leaves — less your room's.
+ */
+function darkShares(frame: Frame, base: number): DarkShares {
+  const room = frame.light.room?.light ?? null;
+  const holes: Run[] = room === null ? [] : [...room.runs];
+  const shares: [number, Run[]][] = [];
+  const left = roomKeep(frame);
+  for (const { rooms, runs } of litTileGroups(frame)) {
+    const own = room === null ? runs : outside(runs, room.keys);
+    const keep = rooms.reduce((dark, label) => dark * left(label), 1);
+    holes.push(...own);
+    if (keep > 0) {
+      shares.push([base * keep, own]);
+    }
+  }
+  return { holes, shares };
+}
+
+/** `runs` less the tiles of `keys`, as runs. */
+function outside(runs: readonly Run[], keys: ReadonlySet<string>): Run[] {
+  const left: Run[] = [];
+  for (const run of runs) {
+    for (let x = run.x; x < run.x + run.length; x++) {
+      const last = left.at(-1);
+      if (keys.has(`${x},${run.y}`)) {
+        continue;
+      }
+      if (last !== undefined && last.y === run.y && last.x + last.length === x) {
+        last.length += 1;
+      } else {
+        left.push({ x, y: run.y, length: 1 });
+      }
+    }
+  }
+  return left;
+}
+
+/**
+ * Adds a rectangle a run to the path of `cut`, in whole pixels, so that neighbouring runs meet
+ * without seams and none overlaps another.
+ */
+function traceRuns(cut: CanvasRenderingContext2D, frame: Frame, runs: readonly Run[]): void {
+  for (const run of runs) {
+    const [sx0, sy0] = toScreen(frame, run.x, run.y);
+    const [sx1, sy1] = toScreen(frame, run.x + run.length, run.y + 1);
+    const x0 = Math.round(sx0);
+    const y0 = Math.round(sy0);
+    const x1 = Math.round(sx1);
+    const y1 = Math.round(sy1);
+    if (x1 > x0 && y1 > y0) {
+      cut.rect(x0, y0, x1 - x0, y1 - y0);
+    }
+  }
 }
 
 /**
@@ -366,49 +446,6 @@ function litTileGroups(frame: Frame): LitGroup[] {
     kit.groups = { lit, groups: litGroups(rooms) };
   }
   return kit.groups.groups;
-}
-
-/**
- * A lit room keeps no darkness at all, walls and doors included — some
- * while its lights are still coming on, and on the escape's alarm
- * lighting: a tile keeps of the overlay's darkness, `base` deep, what
- * every room lighting it leaves. Its pixels are cleared and filled anew,
- * whole ones, so that neighbouring tiles meet without seams; the lamps
- * cut into it after.
- */
-function litDarkness(cut: CanvasRenderingContext2D, frame: Frame, base: number): void {
-  const groups = litTileGroups(frame);
-  const left = roomKeep(frame);
-  for (const { rooms, runs } of groups) {
-    const keep = rooms.reduce((dark, room) => dark * left(room), 1);
-    cut.fillStyle = `rgba(3,5,9,${base * keep})`;
-    for (const run of runs) {
-      const [x0, y0, x1, y1] = clearRun(cut, frame, run);
-      if (keep > 0) {
-        cut.fillRect(x0, y0, x1 - x0, y1 - y0);
-      }
-    }
-  }
-}
-
-/**
- * Clears the darkness of `cut` over a run of tiles, whole pixels, so that
- * neighbouring runs meet without seams; returns the pixels cleared, left,
- * top, right and bottom.
- */
-function clearRun(
-  cut: CanvasRenderingContext2D,
-  frame: Frame,
-  run: Run,
-): [number, number, number, number] {
-  const [sx0, sy0] = toScreen(frame, run.x, run.y);
-  const [sx1, sy1] = toScreen(frame, run.x + run.length, run.y + 1);
-  const x0 = Math.round(sx0);
-  const y0 = Math.round(sy0);
-  const x1 = Math.round(sx1);
-  const y1 = Math.round(sy1);
-  cut.clearRect(x0, y0, x1 - x0, y1 - y0);
-  return [x0, y0, x1, y1];
 }
 
 /**

@@ -144,8 +144,26 @@
   gap: 6px;
 }
 
+/*
+ * The missions' tabs keep to one row however many missions the board has
+ * counted — the editor's own and ones gone from the catalog besides the
+ * Tagesschicht — reaching to the card's edges and scrolling sideways under
+ * them, as the lobby's strip of missions does (lobby.css): a row that wraps
+ * grows the page past a 1280 × 720 window. The tab open is scrolled into view.
+ */
 .history-tabs {
-  margin-top: 14px;
+  flex-wrap: nowrap;
+  margin: 12px -26px 0;
+  padding: 2px 26px 4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: 26px;
+  scrollbar-width: thin;
+}
+
+.history-tab {
+  flex: none;
+  white-space: nowrap;
 }
 
 .history-levels {
@@ -217,6 +235,12 @@
 @media (max-width: 560px) {
   .card.history {
     padding: 20px 16px;
+  }
+
+  .history-tabs {
+    margin-inline: -16px;
+    padding-inline: 16px;
+    scroll-padding-inline: 16px;
   }
 
   .history-head h1 {

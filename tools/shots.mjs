@@ -142,6 +142,18 @@
  * up quiet until the Leitstelle names the next place (nudge.png,
  * nudge-phone.png): its line in both banners, spoken by its recording.
  *
+ * Stepping back: the first player to step back with Esc from a station standing
+ * open — the station step's operator, else the Signalkette's sender — sees the
+ * device fade out as it came, over 150 ms: the page notes the panel each frame
+ * meanwhile, and it has to leave inert, its opacity only falling and midway on
+ * a frame at least, gone within 100 to 600 ms. For the shot (panel-close.png)
+ * the station is opened anew and stepped back from with the fade held 120 ms
+ * in and the game's timer that lets the panel go kept back until it is taken —
+ * a screenshot asked for at once draws the fade's first frame, the panel whole,
+ * and one under load can come after the panel has gone — and it has to lie
+ * between the panel open and gone, taken again where it does not, up to three
+ * times — or the run fails.
+ *
  * The glow: what the E prompt names glows in its own shape, no box round it
  * (client world/render/highlight.ts). As each player stands in reach of the
  * source it is about to note from — a clipboard first — highlight.png (and
@@ -156,10 +168,10 @@
  * Maschinenraum is still dark there, the console lit by the player's own
  * lamp alone. Before figure-carry.png the host stands beside the fuse, in
  * reach, not on it: it bobs a pixel of the art over two seconds, and
- * fuse-bob-1.png, taken as it stands highest or lowest, and fuse-bob-2.png a
- * second later have to show it on either side of its middle — the page's
- * lifts, and the canvas round it moved down or up by as much — or the run
- * fails.
+ * fuse-bob-1.png, taken as it stands highest or lowest, and fuse-bob-2.png,
+ * taken as it next stands the other way, have to show it on either side of
+ * its middle — the page's lifts, and the canvas round it moved down or up by
+ * as much — or the run fails.
  *
  * Settings, minimap, sprint: after info-panel.png the host opens the settings with the gear in
  * the top bar (settings.png) — the clock has to run on under them, Esc has to close them.
@@ -182,7 +194,11 @@
  * station step, and pacing beside the open hatch in the escape — and in a
  * mission with an intro once more, shorter, in the lit lab before the
  * blackout, and over the opening's shot for information alone. Each sample
- * logs p50 and p95. A p95 above SHOTS_FRAME_P95_MS (default 40) has the
+ * logs p50 and p95, and a line `light` with what the host's light worked out
+ * anew meanwhile — the sights a frame and the bakes (client
+ * world/render/census.ts, lightwork.mjs): a lamp on the move takes a sight a
+ * frame, the host's own as it paces and each drone's as it flies, and nothing
+ * is baked while the light holds still. A p95 above SHOTS_FRAME_P95_MS (default 40) has the
  * window sampled once more after a second's pause, the same scene for as
  * long, and fails the run only when that one is over too (framegate.mjs): a
  * runner's hiccup spoils one window, the game's cost both. The line logs
@@ -314,23 +330,27 @@
  * Figures: the crew stands as client world/figure.ts poses it, and four shots
  * at 1440×1000 show it. lobby-idle.png catches a lobby figure turned in a
  * glance round the room, when the figures' probe (`?trace=1`,
- * `window.__escapelab.figures`) says one is. After Blackout's lever the host
- * picks up the fuse lying in the Archiv, is shot holding it before the chest
- * (figure-carry.png) and puts it down again with Q. At the Systemcheck's
- * Signalkette the sending side closes its panel and the pressing side presses
- * one wrong sign on purpose — the one alarm the run spends — and the sender's
- * world is shot within 150 ms of the press, the crew mid-flinch
- * (figure-flinch.png). The won card is shot with a figure high in its jump
- * (figure-celebrate.png), and the audience's card has to show its crew
- * celebrating too. A mission the walkthrough does not take that far skips
- * what it leaves out.
+ * `window.__escapelab.figures`) says one is — and says so again after the
+ * shot, or it is taken again on the next (figureShot). After Blackout's lever
+ * the host picks up the fuse lying in the Archiv, is shot holding it before
+ * the chest (figure-carry.png) and puts it down again with Q. At the
+ * Systemcheck's Signalkette the sending side closes its panel and the pressing
+ * side presses one wrong sign on purpose — the one alarm the run spends — and
+ * the sender's world is shot the moment the alarm comes in, asked for within
+ * 200 ms of it, the crew mid-flinch (figure-flinch.png). The won card, scrolled
+ * back to its top so that its figures move in the window, is shot with a
+ * figure in the air, before and after the shot (figure-celebrate.png), and
+ * the audience's card has to show its crew celebrating too. A mission the
+ * walkthrough does not take that far skips what it leaves out.
  */
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { chromium, request } from 'playwright';
 import { AGAIN_AFTER_MS, gateWindow } from './framegate.mjs';
 import { GLOWING, glowAtCorners, haloAgainst, verticalShift } from './glowcheck.mjs';
+import { lightWorkText } from './lightwork.mjs';
+import { fadeOf, meanLuma, midway } from './panelfade.mjs';
 import {
   arrivals,
   cornersOf,
@@ -341,6 +361,7 @@ import {
   stretchOf,
 } from './patrol.mjs';
 import { percentile } from './percentile.mjs';
+import { decodePng } from './pixeldiff.mjs';
 import { bandPowers, decibels } from './spectrum.mjs';
 
 const BASE = process.argv[2] ?? 'http://localhost:5173';
@@ -749,6 +770,7 @@ async function lookAt(page, when, quiet) {
     }
     probe.resetFrames();
     probe.resetPasses?.();
+    probe.resetLightWork?.();
     return true;
   });
   if (!found) {
@@ -770,6 +792,7 @@ async function lookAt(page, when, quiet) {
   const passes = PROFILE
     ? await page.evaluate(() => globalThis.__escapelab?.passes ?? null)
     : null;
+  const light = await page.evaluate(() => globalThis.__escapelab?.lightWork ?? null);
   if (frames.length === 0) {
     console.log(`frames             !! no frames recorded ${when}`);
     fail(`no frames recorded ${when}`);
@@ -785,6 +808,7 @@ async function lookAt(page, when, quiet) {
     sound: soundSources(nodes),
     js: soundJs(spentBefore, spentAfter, ms / 1000),
     passes,
+    light,
   };
 }
 
@@ -822,6 +846,7 @@ async function sampleFrames(page, when, quiet, { gating = true, again = quiet } 
   console.log(`cpu                cores busy: ${first.cores}; sound: ${first.sound}`);
   console.log(`pages              ${first.perPage}`);
   console.log(`sound js           ms a second on the host's main thread: ${first.js}`);
+  console.log(`light              ${lightWorkText(first.light)} ${when}`);
   if (PROFILE) {
     logPasses(first.passes, when);
   }
@@ -962,7 +987,8 @@ async function clickText(page, text) {
  * crew has come across it.
  */
 function eavesdrop(page) {
-  const seen = { view: null, pos: null, crew: {}, drones: {}, dronesAt: null };
+  // `sent`: the quick-chat lines and pings the page sent, in order.
+  const seen = { view: null, pos: null, crew: {}, drones: {}, dronesAt: null, sent: [] };
   page.on('websocket', (socket) => {
     if (!socket.url().endsWith('/ws')) {
       return;
@@ -982,6 +1008,9 @@ function eavesdrop(page) {
       const msg = JSON.parse(String(payload));
       if (msg.kind === 'pos') {
         seen.pos = { x: msg.x, y: msg.y };
+      }
+      if (msg.kind === 'chat' || msg.kind === 'ping') {
+        seen.sent.push(msg);
       }
     });
   });
@@ -2748,12 +2777,15 @@ function bobRead(page, item) {
   }, item);
 }
 
-/** The first read of the part bobbing on `page` as it stands highest or lowest, within 2.5 s. */
-async function atBobPeak(page, item) {
+/**
+ * The first read of the part bobbing on `page` as it stands highest or lowest — on the side of
+ * its middle `side` names (1 up, -1 down, 0 either) — within 2.5 s, more than a bob.
+ */
+async function atBobPeak(page, item, side = 0) {
   const end = Date.now() + 2500;
   while (Date.now() < end) {
     const read = await bobRead(page, item);
-    if (read !== null && Math.abs(read.lift) >= 0.9 * ART_PX) {
+    if (read !== null && Math.abs(read.lift) >= 0.9 * ART_PX && read.lift * side >= 0) {
       return read;
     }
     await sleep(20);
@@ -2765,8 +2797,9 @@ async function atBobPeak(page, item) {
  * fuse-bob-1.png and fuse-bob-2.png: before figure-carry.png the host steps up beside the
  * part lying loose (`besideItem`) until the E prompt names it: it bobs a pixel of the art up
  * and down over two seconds, its glow with it (client world/render/highlight.ts). The first
- * shot is taken as it stands highest or lowest, the second a second later, as it stands the
- * other way (`reportBob`). Skipped where there is no floor beside it to stand on.
+ * shot is taken as it stands highest or lowest, the second as it next stands the other way,
+ * read for it rather than timed, so that a slow page cannot land it on the middle
+ * (`reportBob`). Skipped where there is no floor beside it to stand on.
  */
 async function captureBob(player, item) {
   const { page, seen, name } = player;
@@ -2786,10 +2819,8 @@ async function captureBob(player, item) {
   }
   await sleep(400); // the camera settles once the walk is over
   const first = await atBobPeak(page, item);
-  const since = Date.now();
   await capture(page, 'fuse-bob-1.png');
-  await sleep(Math.max(0, 1000 - (Date.now() - since)));
-  const second = first === null ? null : await bobRead(page, item);
+  const second = first === null ? null : await atBobPeak(page, item, -Math.sign(first.lift));
   await capture(page, 'fuse-bob-2.png');
   reportBob(name, item, first, second);
 }
@@ -2821,7 +2852,7 @@ function reportBob(name, item, first, second) {
   const way = moved !== null && moved.shift >= 0 ? 'down' : 'up';
   const shift = moved === null ? '?' : `${Math.abs(moved.shift)} px ${way}`;
   console.log(
-    `fuse-bob-*.png     ${name} beside "${item.label}": ${said(first)}, a second later ` +
+    `fuse-bob-*.png     ${name} beside "${item.label}": ${said(first)}, then ` +
       `${said(second)} of the art; the canvas round it moved ${shift} ` +
       `(${expected.toFixed(1)} expected), off by ${moved?.cost.toFixed(1) ?? '?'} ` +
       `against ${moved?.still.toFixed(1) ?? '?'} unmoved${fine ? '' : ' !! no bob'}`,
@@ -3459,10 +3490,192 @@ function checkStage(sending, pin, stage) {
   }
 }
 
-/** How soon after the wrong press figure-flinch.png has to be shot, ms: mid-flinch. */
-const FLINCH_SHOT_MS = 150;
+/**
+ * How soon after the alarm comes in figure-flinch.png has to be asked for, ms: within the hop
+ * of the crew's flinch (client world/figure.ts HOP_MS), so that the frame the shot takes — the
+ * next one, a slow page's a few later — still shows the 400 ms flinch the page starts as the
+ * alarm reaches it. Timed from the alarm, not the press: the alarm's way to the server and back
+ * is not the shot's, nor is the picture's encoding after its frame.
+ */
+const FLINCH_SHOT_MS = 200;
 /** Whether figure-flinch.png was taken: a run meets one Signalkette at most for it. */
 let flinchShot = false;
+/** Whether panel-close.png was tried: the first open station a player steps back from takes it. */
+let panelCloseShot = false;
+
+/**
+ * From now on, each animation frame of `page` notes the station's panel — there or not, on its
+ * way out (`puzzle-modal--leaving`), inert, its opacity — until it is gone or a second has
+ * passed (`window.__panelFade`, read by panelfade.mjs `fadeOf`).
+ */
+function recordPanelFade(page) {
+  return page.evaluate(() => {
+    const samples = [];
+    globalThis.__panelFade = samples;
+    const t0 = globalThis.performance.now();
+    const step = () => {
+      const modal = document.querySelector('.station-modal');
+      const panel = modal?.querySelector('.panel') ?? null;
+      samples.push({
+        t: globalThis.performance.now() - t0,
+        present: modal !== null,
+        leaving: modal?.classList.contains('puzzle-modal--leaving') ?? false,
+        inert: modal?.inert ?? false,
+        opacity: panel === null ? 0 : Number(globalThis.getComputedStyle(panel).opacity),
+      });
+      if (modal !== null && globalThis.performance.now() - t0 < 1000) {
+        globalThis.requestAnimationFrame(step);
+      }
+    };
+    globalThis.requestAnimationFrame(step);
+  });
+}
+
+/** How long the game keeps a device up as it fades out, ms (client WorldModal.tsx). */
+const PANEL_FADE_MS = 150;
+/**
+ * How far into its fade-out panel-close.png holds the panel, ms: past the ease-in's slow start,
+ * the panel about half gone and the dim behind it two-thirds lifted.
+ */
+const PANEL_SHOT_MS = 120;
+
+/**
+ * In the page, until releasePanelFade: a device that starts to fade out stands still `ms` into
+ * its fade, and the game's timer that lets it go — the one timer of the fade's length, `fade`
+ * (client PutDown.tsx `useLeaving`) — is kept back, so that a shot coming late under load still
+ * finds the panel there. The world goes on as it does.
+ */
+function holdPanelFade({ ms, fade }) {
+  const style = document.createElement('style');
+  style.id = 'shots-panel-hold';
+  style.textContent =
+    '.station-modal.puzzle-modal--leaving, .station-modal.puzzle-modal--leaving .panel ' +
+    `{ animation-delay: -${ms}ms !important; animation-play-state: paused !important; }`;
+  document.head.append(style);
+  // The browser's own setTimeout throws unless it is called on the window.
+  const plain = globalThis.setTimeout;
+  const kept = [];
+  globalThis.__panelHold = { plain, kept };
+  globalThis.setTimeout = (run, delay, ...args) => {
+    if (delay !== fade) {
+      return plain.call(globalThis, run, delay, ...args);
+    }
+    kept.push(() => run(...args));
+    return plain.call(globalThis, () => undefined, 0);
+  };
+}
+
+/** In the page: lets the device held by holdPanelFade go — its timer runs now, its fade goes on. */
+function releasePanelFade() {
+  const hold = globalThis.__panelHold;
+  document.getElementById('shots-panel-hold')?.remove();
+  if (hold !== undefined) {
+    globalThis.setTimeout = hold.plain;
+    delete globalThis.__panelHold;
+    for (const run of hold.kept) {
+      hold.plain.call(globalThis, run, 0);
+    }
+  }
+}
+
+/**
+ * The device's fade-out as the game plays it: Esc, the page noting the panel each frame
+ * (recordPanelFade) until it has gone, and the world shot once it has.
+ */
+async function fadeOutAsPlayed(page, modal) {
+  await recordPanelFade(page);
+  await page.keyboard.press('Escape');
+  await modal.waitFor({ state: 'hidden', timeout: 3000 });
+  await sleep(100);
+  const closed = await page.screenshot();
+  const samples = await page.evaluate(() => globalThis.__panelFade ?? []);
+  return { closed, fade: fadeOf(samples) };
+}
+
+/**
+ * The shot of panel-close.png: the station opened anew with E, stepped back from with its
+ * fade-out held PANEL_SHOT_MS in (holdPanelFade) — a screenshot asked for at once draws the
+ * fade's first frame, the panel still whole — and the hold let go, however the shot went. Null
+ * where the station did not open again.
+ */
+async function heldFadeShot(page, modal) {
+  if (!(await interactUntil(page, modal))) {
+    return null;
+  }
+  await sleep(400); // past its fade-in
+  let shot = null;
+  await page.evaluate(holdPanelFade, { ms: PANEL_SHOT_MS, fade: PANEL_FADE_MS });
+  try {
+    await page.keyboard.press('Escape');
+    // A shot without the panel leaving is judged by its luma (capturePanelClose), not thrown.
+    const leaving = page.locator('.station-modal.puzzle-modal--leaving');
+    await leaving.waitFor({ state: 'attached', timeout: 1000 }).catch(() => undefined);
+    shot = await page.screenshot();
+  } finally {
+    await page.evaluate(releasePanelFade);
+  }
+  await modal.waitFor({ state: 'hidden', timeout: 3000 });
+  return shot;
+}
+
+/**
+ * panel-close.png: `player` steps back from the open station with Esc, and the device fades out
+ * as it came, over 150 ms (client styles/interaction.css, screens/Game.tsx): the page notes the
+ * panel each frame meanwhile — it has to leave inert, its opacity only falling and midway on a
+ * frame at least, and be gone within 100 to 600 ms. Then the shot (heldFadeShot), which has to
+ * lie between the panel open and gone over the panel's box; one that came after the game had
+ * let the panel go is taken again, up to three times. Any of these that fails, fails the run.
+ */
+async function capturePanelClose(player, modal) {
+  const { page } = player;
+  panelCloseShot = true;
+  const dpr = await page.evaluate(() => globalThis.devicePixelRatio);
+  const box = await modal.locator('.panel').boundingBox();
+  const luma = (png) => meanLuma(decodePng(png), box, dpr);
+  const open = luma(await page.screenshot());
+  const { closed, fade } = await fadeOutAsPlayed(page, modal);
+  const gone = luma(closed);
+  let held = null;
+  for (let attempt = 1; attempt <= 3 && !(held?.between ?? false); attempt++) {
+    const shot = await heldFadeShot(page, modal);
+    if (shot === null) {
+      fail('panel-close.png: the station did not open again for its shot');
+      return;
+    }
+    const mid = luma(shot);
+    held = { shot, attempt, lumas: [open, mid, gone], between: midway(open, mid, gone) };
+  }
+  writeFileSync(join(OUT, 'panel-close.png'), held.shot);
+  tally.taken += 1;
+  reportPanelClose(player, fade, held);
+}
+
+/** panel-close.png's line in the log; the run fails where the fade or its shot was wrong. */
+function reportPanelClose(player, fade, held) {
+  const faded = fade.ms !== null && fade.ms >= 100 && fade.ms <= 600;
+  const fine = faded && fade.midway > 0 && fade.falling && fade.inert && held.between;
+  const gone = fade.ms === null ? '!! gone at once' : `gone in ${Math.round(fade.ms)} ms`;
+  console.log(
+    `panel-close.png    ${player.name}, Esc: ${gone}, ${fade.midway} frames midway, ` +
+      `${fade.falling ? 'falling' : '!! not only falling'}, ` +
+      `${fade.inert ? 'inert' : '!! taking input'}; the shot held ${PANEL_SHOT_MS} ms in ` +
+      `${held.between ? 'midway' : '!! not midway'} ` +
+      `(luma ${held.lumas.map((l) => l.toFixed(0)).join(' → ')}), try ${held.attempt}`,
+  );
+  if (!fine) {
+    fail(`panel-close.png: ${JSON.stringify(fade)}, shot midway ${held.between}`);
+  }
+}
+
+/** Steps `player` back from the open station `modal` with Esc: the first time, panel-close.png. */
+async function stepBack(player, modal) {
+  if (!panelCloseShot && (await modal.isVisible())) {
+    await capturePanelClose(player, modal);
+    return;
+  }
+  await player.page.keyboard.press('Escape');
+  await modal.waitFor({ state: 'hidden', timeout: 3000 });
+}
 
 /**
  * A key on `presser`'s panel that is not the first one the stage asks for:
@@ -3501,16 +3714,16 @@ async function wrongKey(sender, presser, firstKey) {
  * alarm the run spends on it. The sender closes its panel and its window
  * grows to 1440×1000, so that its world shows both figures; the presser
  * clicks a key the sequence does not start with, and the sender's page is
- * shot the moment the alarm comes in — within FLINCH_SHOT_MS of the press,
- * the crew mid-flinch. Then the window shrinks back and the sender opens its
- * panel again for the stage. Fails where no alarm comes in or the shot comes
- * too late; throws where the panel does not open again.
+ * shot the moment the alarm comes in, asked for within FLINCH_SHOT_MS of it —
+ * the crew mid-flinch, however long the alarm took on its way. Then the
+ * window shrinks back and the sender opens its panel again for the stage.
+ * Fails where no alarm comes in or the shot is asked for too late; throws
+ * where the panel does not open again.
  */
 async function captureFlinch(sender, presser, firstKey = null) {
   flinchShot = true;
   const modal = sender.page.locator('.station-modal');
-  await sender.page.keyboard.press('Escape');
-  await modal.waitFor({ state: 'hidden', timeout: 3000 });
+  await stepBack(sender, modal);
   const size = sender.page.viewportSize();
   await sender.page.setViewportSize(COLD_OPEN);
   await sleep(700); // the layout settles, the panel past its fade-out
@@ -3523,17 +3736,21 @@ async function captureFlinch(sender, presser, firstKey = null) {
     await sleep(5);
   }
   const came = sender.seen.view.alarms.count > count ? Date.now() - pressed : null;
-  const shot = Date.now() - pressed;
+  const asked = Date.now() - pressed;
   await capture(sender.page, 'figure-flinch.png');
+  const done = Date.now() - pressed;
+  const after = came === null ? null : asked - came;
   console.log(
     `figure-flinch.png  ${presser.name} pressed "${wrong.said}" (${clicked} ms), the alarm ` +
       (came === null ? '!! never came in' : `in ${came} ms`) +
-      `; ${sender.name}'s world @ ${COLD_OPEN.width}x${COLD_OPEN.height} shot ${shot} ms ` +
-      `after the press${shot > FLINCH_SHOT_MS ? ` — !! later than ${FLINCH_SHOT_MS} ms` : ''}`,
+      `; ${sender.name}'s world @ ${COLD_OPEN.width}x${COLD_OPEN.height} shot ` +
+      (after === null ? `${asked} ms after the press` : `${after} ms after the alarm`) +
+      `, the picture in by ${done} ms` +
+      (after !== null && after > FLINCH_SHOT_MS ? ` — !! later than ${FLINCH_SHOT_MS} ms` : ''),
   );
-  if (came === null || shot > FLINCH_SHOT_MS) {
+  if (after === null || after > FLINCH_SHOT_MS) {
     const alarm = came === null ? 'missing' : `in ${came} ms`;
-    fail(`figure-flinch.png: the alarm ${alarm}, the shot ${shot} ms after the press`);
+    fail(`figure-flinch.png: the alarm ${alarm}, the shot asked for ${asked} ms after the press`);
   }
   if (size !== null) {
     await sender.page.setViewportSize(size);
@@ -4226,33 +4443,80 @@ async function figureWhen(page, pick, ms) {
   }
 }
 
+/**
+ * A shot of `page` with one of its figures in a pose. Waits (figureWhen) for a figure `pick`
+ * takes, shoots, and reads the figures again: the shot is kept where the same figure still
+ * `holds` the pose within `span` ms of the first read — a pose rises and falls once, so it held
+ * in between, through the shot — else the next pose is waited for, until `ms` have passed. A
+ * single read can land a slow page's shot on either side of a pose. Returns the last shot (null
+ * where no figure took the pose), the figure as found and as read after it, the shots taken and
+ * whether the last one held.
+ */
+async function figureShot(page, { pick, holds, span, ms }) {
+  const end = Date.now() + ms;
+  let last = { png: null, found: null, after: null, tries: 0, held: false };
+  while (last.tries === 0 || Date.now() < end) {
+    const found = await figureWhen(page, pick, Math.max(0, end - Date.now()));
+    if (found === null) {
+      return last;
+    }
+    const since = Date.now();
+    const png = await page.screenshot();
+    const after = ((await figuresOn(page)) ?? []).find((figure) => figure.color === found.color);
+    const held = after !== undefined && holds(after) && Date.now() - since <= span;
+    last = { png, found, after: after ?? null, tries: last.tries + 1, held };
+    if (held) {
+      return last;
+    }
+  }
+  return last;
+}
+
+/** Keeps figureShot's last shot as `name`; shoots `page` now where it took none. */
+async function keepFigureShot(page, name, caught) {
+  if (caught.png === null) {
+    await capture(page, name);
+    return;
+  }
+  writeFileSync(join(OUT, name), caught.png);
+  tally.taken += 1;
+}
+
 /** A figure counts as mid look-around turned this far from its way, radians (it turns 1.1). */
 const GLANCE_SHOWN = 0.9;
 /** How long the lobby gets for one of its figures to look round: each does every 4 to 7 s. */
 const GLANCE_WAIT_MS = 15_000;
+/** How far apart the reads round lobby-idle.png may lie, ms: a glance stays turned for ~870. */
+const GLANCE_SPAN_MS = 800;
 
 /**
  * lobby-idle.png: the host's lobby at 1440×1000, shot while a figure of the
  * crew stands turned in a glance round the room — the figures' probe says
- * when. Fails where no figure looks round within GLANCE_WAIT_MS.
+ * when, before and after the shot (figureShot). Fails where no figure looks
+ * round within GLANCE_WAIT_MS, or none is still turned once shot.
  */
 async function captureLobbyIdle(page) {
   await page.setViewportSize(COLD_OPEN);
   await sleep(400);
   const glancing = (figure) => figure.mood === 'play' && Math.abs(figure.glance) >= GLANCE_SHOWN;
-  const turned = await figureWhen(page, glancing, GLANCE_WAIT_MS);
-  await capture(page, 'lobby-idle.png');
-  const shot = (await figuresOn(page)) ?? [];
+  const caught = await figureShot(page, {
+    pick: glancing,
+    holds: glancing,
+    span: GLANCE_SPAN_MS,
+    ms: GLANCE_WAIT_MS,
+  });
+  await keepFigureShot(page, 'lobby-idle.png', caught);
+  const { found, after, tries, held } = caught;
   console.log(
     `lobby-idle.png     Anna's lobby @ ${COLD_OPEN.width}x${COLD_OPEN.height}: ` +
-      (turned === null
+      (found === null
         ? `!! no figure looked round within ${seconds(GLANCE_WAIT_MS)}`
-        : `${turned.color} turned ${turned.glance.toFixed(2)} rad in a glance`) +
-      `; at the shot ${shot.length} figures, glances ` +
-      (shot.map((figure) => figure.glance.toFixed(2)).join(', ') || 'none'),
+        : `${found.color} turned ${found.glance.toFixed(2)} rad in a glance, ` +
+          `${after?.glance.toFixed(2) ?? '?'} once shot${held ? '' : ' !! no longer turned'}, ` +
+          `shot ${tries} times`),
   );
-  if (turned === null) {
-    fail(`lobby-idle.png: no lobby figure looked round within ${seconds(GLANCE_WAIT_MS)}`);
+  if (!held) {
+    fail(`lobby-idle.png: no lobby figure caught turned round within ${seconds(GLANCE_WAIT_MS)}`);
   }
   await page.setViewportSize(SIZES[0]);
   await sleep(300);
@@ -6486,40 +6750,83 @@ async function captureLandscapeCard(guest) {
 const JUMP_SHOWN = 0.12;
 /** How long the card gets for one of its figures to be caught mid-jump: each jumps every 1.6 s. */
 const JUMP_WAIT_MS = 5000;
+/**
+ * How far apart the reads round figure-celebrate.png may lie, ms: under the 800 ms a figure
+ * stands between two flights, so that two reads in the air are of one flight.
+ */
+const JUMP_SPAN_MS = 600;
 /** Whether figure-celebrate.png was taken: only a run played to its end has a won card. */
 let celebrateShot = false;
 
 /**
- * figure-celebrate.png: the host's won card at 1440×1000, shot while a
- * figure of the crew is high in its jump — the figures' probe says when.
- * Fails where a figure on the card does not celebrate, or none is caught in
- * the air within JUMP_WAIT_MS.
+ * Whether the won card's figures lie wholly in the window, below the top bar: a figure out of
+ * it stops moving (client CrewFigure.tsx `runFigure`), its probe keeping its last pose.
+ */
+function figuresInView(page) {
+  return page.locator('.end-title').evaluate((card) => {
+    const bar = document.querySelector('.topbar')?.getBoundingClientRect().bottom ?? 0;
+    const figures = [...card.querySelectorAll('.end-mate canvas')];
+    return (
+      figures.length > 0 &&
+      figures.every((figure) => {
+        const box = figure.getBoundingClientRect();
+        return box.top >= bar && box.bottom <= globalThis.innerHeight;
+      })
+    );
+  });
+}
+
+/**
+ * figure-celebrate.png: the host's won card at 1440×1000, scrolled back to its top — „Bild
+ * speichern" (captureAchievements) scrolls it down, and on a page whose card runs taller its
+ * figures leave the window and stand still — and shot while a figure of the crew is high in
+ * its jump and still in the air after the shot, as the figures' probe says (figureShot). Fails
+ * where the figures do not lie in the window, a figure on the card does not celebrate, or none
+ * is caught in the air within JUMP_WAIT_MS.
  */
 async function captureCelebrate(page) {
   celebrateShot = true;
   const before = page.viewportSize();
   await page.setViewportSize(COLD_OPEN);
+  await page.locator('.end-title').evaluate((card) => {
+    for (let box = card.parentElement; box !== null; box = box.parentElement) {
+      box.scrollTop = 0;
+    }
+  });
   await sleep(500);
-  const jumping = (figure) => figure.mood === 'celebrate' && figure.rise >= JUMP_SHOWN;
-  const high = await figureWhen(page, jumping, JUMP_WAIT_MS);
-  await capture(page, 'figure-celebrate.png');
-  const shot = (await figuresOn(page)) ?? [];
-  const cheering = shot.filter((figure) => figure.mood === 'celebrate').length;
-  console.log(
-    `figure-celebrate.png Anna's card @ ${COLD_OPEN.width}x${COLD_OPEN.height}: ` +
-      (high === null
-        ? '!! no figure caught in the air'
-        : `${high.color} ${high.rise.toFixed(3)} tiles up`) +
-      `; at the shot ${cheering} of ${shot.length} figures celebrating, off the ground ` +
-      (shot.map((figure) => figure.rise.toFixed(3)).join(', ') || 'none'),
-  );
-  if (high === null || shot.length === 0 || cheering !== shot.length) {
-    fail(`figure-celebrate.png: ${cheering} of ${shot.length} figures celebrate, none in the air`);
-  }
+  const inView = await figuresInView(page);
+  const caught = await figureShot(page, {
+    pick: (figure) => figure.mood === 'celebrate' && figure.rise >= JUMP_SHOWN,
+    holds: (figure) => figure.mood === 'celebrate' && figure.rise > 0,
+    span: JUMP_SPAN_MS,
+    ms: JUMP_WAIT_MS,
+  });
+  await keepFigureShot(page, 'figure-celebrate.png', caught);
+  reportCelebrate(caught, (await figuresOn(page)) ?? [], inView);
   if (before !== null) {
     await page.setViewportSize(before);
   }
   await sleep(300);
+}
+
+/** figure-celebrate.png's line in the log; the run fails where the crew was not caught so. */
+function reportCelebrate({ found, after, tries, held }, shot, inView) {
+  const cheering = shot.filter((figure) => figure.mood === 'celebrate').length;
+  console.log(
+    `figure-celebrate.png Anna's card @ ${COLD_OPEN.width}x${COLD_OPEN.height}: ` +
+      (inView ? '' : '!! its figures out of the window; ') +
+      (found === null
+        ? '!! no figure caught in the air'
+        : `${found.color} ${found.rise.toFixed(3)} tiles up, ${after?.rise.toFixed(3) ?? '?'} ` +
+          `once shot${held ? '' : ' !! landed'}, shot ${tries} times`) +
+      `; ${cheering} of ${shot.length} figures celebrating`,
+  );
+  if (!inView || !held || shot.length === 0 || cheering !== shot.length) {
+    fail(
+      `figure-celebrate.png: ${cheering} of ${shot.length} figures celebrate, in the window ` +
+        `${inView}, caught in the air ${held}`,
+    );
+  }
 }
 
 /**
@@ -6630,21 +6937,27 @@ async function playToTheEnd(host, guest, watcher, pinned) {
 /**
  * Where the mission's seed is pinned — the Systemcheck's wiring box,
  * Blackout's every station — the walkthrough plays the run out to the card;
- * elsewhere the captures of the end are skipped, saying why.
+ * elsewhere the captures of the end are skipped, saying why. The hatch's dust
+ * is watched for meanwhile, and the watch stopped however the play ends: one
+ * left polling after a step threw would hold the process open, and a CI job
+ * with it, until the job's time limit.
  */
 async function playPinnedOut(anna, ben, watcher) {
   const stopHatchDust = watchHatchDust(watcher, anna.seen);
-  const mission = MISSION.toLowerCase();
-  const pinned = mission === 'systemcheck' ? PINNED_WIRING.get(SEED) : undefined;
-  if (pinned !== undefined) {
-    await playToTheEnd(anna, ben, watcher, pinned);
-  } else if (mission === 'blackout' && SEED === BLACKOUT_PLAN.seed) {
-    await playBlackoutToTheEnd(anna, ben, watcher);
-    skip('next-mission.png', 'Blackout leads on to no other mission');
-  } else if (mission === 'blackout') {
-    skip('escape.png', `seed ${SEED} is not the one tools/fixtures/blackout-plan.json pins`);
+  try {
+    const mission = MISSION.toLowerCase();
+    const pinned = mission === 'systemcheck' ? PINNED_WIRING.get(SEED) : undefined;
+    if (pinned !== undefined) {
+      await playToTheEnd(anna, ben, watcher, pinned);
+    } else if (mission === 'blackout' && SEED === BLACKOUT_PLAN.seed) {
+      await playBlackoutToTheEnd(anna, ben, watcher);
+      skip('next-mission.png', 'Blackout leads on to no other mission');
+    } else if (mission === 'blackout') {
+      skip('escape.png', `seed ${SEED} is not the one tools/fixtures/blackout-plan.json pins`);
+    }
+  } finally {
+    await stopHatchDust();
   }
-  await stopHatchDust();
 }
 
 /** Whether `promise` settles in time: true when it resolves, false when it rejects. */
@@ -6913,6 +7226,9 @@ function reportSprint(name, run, sprint, walk) {
 // gamepad-prompts.png  the host beside the nearest source or the station up, the controller used
 //   last: the HUD's buttons have to name its buttons (X, View); a key pressed has to turn them
 //   back (N, I)
+// pad-quickchat.png  the quick chat the controller's ▶ opened in the world, its first phrase in
+//   the focus and its button naming ▶; ▼ and A have to say the second phrase and shut it, and ◀
+//   has to ping the floor within two tiles of the host
 // rack-diagram.png  the rack console's cabling diagram as its player opens it: six boxes, each
 //   LED as the rack's unit says, no code anywhere — or the run fails
 // achievements.png  the won card once its plaques are in: the ones the view says the run earned,
@@ -7063,10 +7379,64 @@ async function captureGamepadPrompts(player) {
   await walkNear(page, seen, from);
 }
 
-/** settings-controller.png and gamepad-prompts.png, one after the other. */
+/** Where the page's focus is in the quick chat's wheel: its phrase's place from 1; 0 for none. */
+function wheelFocus(page) {
+  return page.evaluate(() => {
+    const items = [...document.querySelectorAll('.chat-wheel [role="menuitem"]')];
+    return items.indexOf(document.activeElement) + 1;
+  });
+}
+
+/**
+ * pad-quickchat.png: in the world, the walkthrough's controller's ▶ opens the quick chat — its
+ * first phrase in the focus, the chat's button naming ▶ — then ▼ moves to the second phrase and
+ * A says it: the wheel has to shut and the host's page send that line. Then ◀ pings: the page has
+ * to send a ping on the floor within two tiles of where the avatar stands. Any of these that
+ * fails, fails the run.
+ */
+async function captureQuickChat(player) {
+  const { page, seen } = player;
+  const sentBefore = seen.sent.length;
+  await onPad(page, 'tap', 'dright');
+  const wheel = page.locator('.chat-wheel');
+  const open = await settled(wheel.waitFor({ timeout: 3000 }));
+  await sleep(250);
+  const first = await wheelFocus(page);
+  const glyph = await textOf(page.locator('.world-chat-toggle .world-key'));
+  await capture(page, 'pad-quickchat.png');
+  await onPad(page, 'tap', 'ddown');
+  await sleep(250);
+  const second = await wheelFocus(page);
+  await onPad(page, 'tap', 'a');
+  const shut = await settled(wheel.waitFor({ state: 'detached', timeout: 3000 }));
+  const said = seen.sent.slice(sentBefore).find((msg) => msg.kind === 'chat');
+  const at = whereIs(seen);
+  await onPad(page, 'tap', 'dleft');
+  const sentPing = () => seen.sent.slice(sentBefore).find((msg) => msg.kind === 'ping');
+  const pinged = await until(() => sentPing() !== undefined, 3000);
+  const ping = sentPing();
+  const away =
+    ping === undefined || at === null ? Infinity : Math.hypot(ping.x - at.x, ping.y - at.y);
+  console.log(
+    `pad-quickchat.png  ▶ ${open ? 'opened the wheel' : '!! opened nothing'}, phrase ${first} in ` +
+      `the focus, the button "${glyph}"; ▼ to ${second}, A said ${said?.phrase ?? '!! nothing'}` +
+      `${shut ? ', the wheel shut' : ' !! the wheel still open'}; ◀ pinged ` +
+      (pinged ? `(${ping.x}, ${ping.y}), ${away.toFixed(2)} tiles away` : '!! nothing'),
+  );
+  if (!open || first !== 1 || glyph !== '[▶]' || second !== 2 || said === undefined || !shut) {
+    const what = `open ${open}, focus ${first} then ${second}, "${glyph}", said ${said}`;
+    fail(`pad-quickchat.png: ${what}`);
+  }
+  if (!pinged || !(away <= 2.05)) {
+    fail(`pad-quickchat.png: ◀ pinged ${JSON.stringify(ping)} from ${JSON.stringify(at)}`);
+  }
+}
+
+/** settings-controller.png, gamepad-prompts.png and pad-quickchat.png, one after the other. */
 async function captureControls(player) {
   await captureControllerSettings(player.page);
   await captureGamepadPrompts(player);
+  await captureQuickChat(player);
 }
 
 /**
@@ -7548,8 +7918,7 @@ async function run() {
     const sync = operator.seen.view.puzzle?.kind === 'button-sync';
     await captureBothAtStation(reader, operator, station, sync);
     // The last shift's notes come only for an open station: leave it open, go read.
-    await operator.page.keyboard.press('Escape');
-    await modal.waitFor({ state: 'hidden', timeout: 3000 });
+    await stepBack(operator, modal);
     if (sync) {
       skip(
         'hint-*.png',
@@ -7593,6 +7962,9 @@ async function run() {
   await playPinnedOut(anna, ben, watcher);
   if (!flinchShot) {
     skip('figure-flinch.png', 'the walkthrough works no Signalkette in this mission');
+  }
+  if (!panelCloseShot) {
+    skip('panel-close.png', 'no player stepped back from a station standing open');
   }
   if (!celebrateShot) {
     skip('figure-celebrate.png', 'the walkthrough does not play this mission to a won card');
@@ -7844,7 +8216,9 @@ async function captureRackLeds({ name, page }) {
 /**
  * hatch-dust.png, watched for on the audience's page `watcher` from now on: as the hatch grinds
  * open there, dust falling off its rim — the probe counting the grains. Returns what stops the
- * watch once the run is played out, resolved when the watch is over; it fails nothing.
+ * watch once the run is played out (playPinnedOut, however the play ends), resolved when the
+ * watch is over; it fails nothing, and never rejects: a shot that throws ends it with a skip
+ * saying why, so that stopping it cannot stand in for the error a step threw.
  */
 function watchHatchDust(watcher, seen) {
   let stopped = false;
@@ -7863,7 +8237,9 @@ function watchHatchDust(watcher, seen) {
       await sleep(40);
     }
     skip('hatch-dust.png', 'the audience never saw the hatch grinding open');
-  })();
+  })().catch((err) => {
+    skip('hatch-dust.png', `the watch broke off: ${String(err?.message ?? err).split('\n')[0]}`);
+  });
   return () => {
     stopped = true;
     return watch;

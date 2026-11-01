@@ -3,6 +3,12 @@ import type { Edgework } from '@escapelab/core';
 import { EdgeworkChip } from './EdgeworkChip.js';
 
 /**
+ * How long a panel over the world takes to come up, and a station's device to go again, ms:
+ * styles/interaction.css times both so.
+ */
+export const PANEL_FADE_MS = 150;
+
+/**
  * The frame a station's device, a manual object's pages and a note of the
  * last shift open in, over the world: what you are reading — a station's
  * device carries its own label plate, so its name stays with the dialog —
@@ -26,7 +32,10 @@ export function WorldModal({
   /** the dialog's name; printed over a manual object's pages and a note */
   label: string;
   edgework: Edgework | null;
-  /** put down and on its way out of view (PutDown.tsx `usePutDown`): it takes nothing more */
+  /**
+   * put down, or stepped back from, and on its way out of view (PutDown.tsx `useLeaving`): it
+   * takes nothing more
+   */
   leaving?: boolean;
   /** what stands at the frame's foot: the way a sheet is put down */
   foot?: ReactNode;

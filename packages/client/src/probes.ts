@@ -10,6 +10,7 @@ import type { IntroProbe } from './world/intro/useIntro.js';
 import type { MusicProbe } from './world/music.js';
 import type { SoundProbe } from './world/soundProbe.js';
 import type { RadioRender, VoiceProbe as RadioProbe } from './world/radioVoice.js';
+import type { LightWork } from './world/render/census.js';
 import type { MinimapLayout } from './world/render/frame.js';
 import type { HighlightProbe } from './world/render/highlight.js';
 import type { GraphicsProbe } from './world/render/graphicsProbe.js';
@@ -105,6 +106,13 @@ export interface Probes {
   readonly passes?: PassStats;
   /** forgets the frames the pass costs were taken over */
   resetPasses?: () => void;
+  /**
+   * what the world's light worked out anew over the frames drawn since `resetLightWork`: the
+   * sights a frame and the bakes made (world/render/census.ts)
+   */
+  readonly lightWork?: LightWork;
+  /** forgets the frames the light's census was taken over */
+  resetLightWork?: () => void;
   /**
    * what the world's picture shows of the graphics package's work: the walk cycle, the
    * shadow's light, the panel zoom, the hatch, the particles, the backing store

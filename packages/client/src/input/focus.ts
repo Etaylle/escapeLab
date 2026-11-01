@@ -69,7 +69,8 @@ export function focusables(scope: Element): HTMLElement[] {
 
 /**
  * The part of the page a controller moves in: the settings over everything, else the topmost
- * dialog (the last open one), else the page; null while the world takes the controller.
+ * dialog (the last open one), else the quick chat's wheel open over the world, else the page;
+ * null while the world takes the controller.
  */
 export function menuScope(doc: Document): Element | null {
   const dialogs = [...doc.querySelectorAll('[aria-modal="true"]')].filter(
@@ -79,6 +80,10 @@ export function menuScope(doc: Document): Element | null {
   const dialog = settings ?? dialogs.at(-1);
   if (dialog !== undefined) {
     return dialog;
+  }
+  const wheel = doc.querySelector('.chat-wheel');
+  if (wheel !== null && wheel.closest('[inert]') === null) {
+    return wheel;
   }
   if (doc.querySelector('.world-wrap') !== null) {
     return null;

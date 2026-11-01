@@ -66,9 +66,9 @@ import { InfoPanel } from './InfoPanel.js';
 import { Manual } from './Manual.js';
 import { Notepad, useNotes } from './Notepad.js';
 import { PinnedNote } from './PinnedNote.js';
-import { putDownKeys, usePutDown, type Over, type Shown } from './PutDown.js';
+import { putDownKeys, useLeaving, usePutDown, type Over, type Shown } from './PutDown.js';
 import { lookOf, ReadingOverlay } from './Reading.js';
-import { WorldModal } from './WorldModal.js';
+import { PANEL_FADE_MS, WorldModal } from './WorldModal.js';
 
 interface Props {
   view: PlayerView;
@@ -571,12 +571,16 @@ function useDeviceCoach(puzzle: PuzzleView): CoachMark | null {
   return mark;
 }
 
+/** What a device on its way out of view does with a press or a step back: nothing. */
+const TAKES_NOTHING = (): void => undefined;
+
 /**
  * The open station over the world: its device, which names it on its plate
  * and says on its LED strip who backs this player up and on its chassis how
  * to step back — and, the first time, the line that says what its controls
  * do, under the Laborkennung's row, where it covers neither the serial nor
- * the device.
+ * the device. Stepped back from (`leaving`), it fades out as it came and
+ * takes nothing more: no key, no press, no step back reaches the run.
  */
 export function StationModal({
   puzzle,
@@ -586,6 +590,7 @@ export function StationModal({
   deadlineAt,
   send,
   onStepBack,
+  leaving = false,
 }: {
   puzzle: PuzzleView;
   /** the run around the device: its alarms, the stations solved, the crew */
@@ -595,10 +600,16 @@ export function StationModal({
   deadlineAt: number | null;
   send: (msg: ClientMessage) => void;
   onStepBack: () => void;
+  leaving?: boolean;
 }) {
   const coach = useDeviceCoach(puzzle);
   return (
-    <WorldModal kind="station" label={stationLabel(puzzle, map)} edgework={edgework}>
+    <WorldModal
+      kind="station"
+      label={stationLabel(puzzle, map)}
+      edgework={edgework}
+      leaving={leaving}
+    >
       {coach !== null && (
         <p className="station-coach" role="note">
           {coach.text}
@@ -607,9 +618,9 @@ export function StationModal({
       <PuzzlePanel
         puzzle={puzzle}
         run={run}
-        send={send}
+        send={leaving ? TAKES_NOTHING : send}
         deadlineAt={deadlineAt}
-        onStepBack={onStepBack}
+        onStepBack={leaving ? TAKES_NOTHING : onStepBack}
       />
     </WorldModal>
   );
@@ -1010,9 +1021,10 @@ export function deviceRunOf(view: PlayerView, refusals: number): DeviceRun {
 
 /**
  * The station's panel, a source's pages or a note of the last shift over the
- * world, as this player opened them — pages and note on their way down too,
- * once put down; the panel hears of the run's alarms and solves, of the crew
- * and of what the server refused (`refusals`).
+ * world, as this player opened them — the panel fading out once stepped back
+ * from, pages and note on their way down once put down; the panel hears of
+ * the run's alarms and solves, of the crew and of what the server refused
+ * (`refusals`).
  */
 function OverTheWorld({
   view,
@@ -1026,7 +1038,7 @@ function OverTheWorld({
 }: {
   view: PlayerView;
   map: MapView;
-  station: PuzzleView | null;
+  station: Shown<PuzzleView> | null;
   reading: Shown<ManualHere> | null;
   note: Shown<NoteHere> | null;
   send: (msg: ClientMessage) => void;
@@ -1038,13 +1050,14 @@ function OverTheWorld({
     <>
       {station !== null && (
         <StationModal
-          puzzle={station}
+          puzzle={station.item}
           run={run}
           map={map}
           edgework={view.edgework}
           deadlineAt={view.deadlineAt}
           send={send}
           onStepBack={onClose}
+          leaving={station.leaving}
         />
       )}
       {reading !== null && (
@@ -1166,6 +1179,8 @@ export function GameScreen(props: Props) {
   const notice = useNotices(view, heldNow ? { ...coldOpen.gates, sign: null } : coldOpen.gates);
   const open = useOpened(view);
   const station = useSolvedHold(open.station, view.currentPuzzleIndex);
+  // Stepped back from, the device fades out as it came: held a moment, taking nothing more.
+  const panel = useLeaving(station, PANEL_FADE_MS);
   const sheets = useSheets(open);
   const pad = useNotepad(roomCode, view.you.id, open);
   const closeModal = (): void => open.set(NOTHING_OVER);
@@ -1222,7 +1237,7 @@ export function GameScreen(props: Props) {
           <OverTheWorld
             view={view}
             map={map}
-            station={station}
+            station={panel}
             reading={sheets.reading}
             note={sheets.note}
             send={send}

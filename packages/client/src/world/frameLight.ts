@@ -12,6 +12,7 @@ import {
   type LampMount,
   type LightMemory,
 } from './light.js';
+import type { LightCensus } from './render/census.js';
 import type { FrameLight, FrameLit, PoweredRoom, WorldMap } from './render/frame.js';
 import { powerRoom } from './rooms.js';
 import type { Sim } from './sim.js';
@@ -51,6 +52,8 @@ export interface LightScene {
   clips: WeakMap<Sight, Path2D>;
   /** the player asked for less motion: the lamp in your hands holds still as you walk */
   reduced: boolean;
+  /** where the sights worked out anew are counted (render/census.ts) */
+  census: LightCensus;
 }
 
 /** A frame's lights, before what they show is worked out. */
@@ -86,12 +89,17 @@ export function runLight(sim: Sim, run: number | null): LightMemory {
   return sim.light;
 }
 
-/** Where a light falls, as a path in tiles: the floor it sees and the walls it lights whole. */
-function clipPath(clips: WeakMap<Sight, Path2D>, sight: Sight): Path2D {
+/**
+ * Where a light falls, as a path in tiles: the floor it sees and the walls it lights whole. A
+ * sight this world has made no path for is one worked out anew (light.ts `sightCache`): counted.
+ */
+function clipPath(scene: LightScene, sight: Sight): Path2D {
+  const { clips } = scene;
   const known = clips.get(sight);
   if (known !== undefined) {
     return known;
   }
+  scene.census.sights += 1;
   const { outline, walls } = lightClip(sight);
   const path = new Path2D();
   outline.forEach((spot, i) =>
@@ -117,12 +125,12 @@ function clipPath(clips: WeakMap<Sight, Path2D>, sight: Sight): Path2D {
  * from where you stand and laid from the lamp in your hands (`inHands`).
  */
 export function frameLight(scene: LightScene, powered: boolean, whole: boolean): FrameLight {
-  const { map, spectator, clips } = scene;
+  const { map, spectator } = scene;
   const memory = runLight(scene.sim, scene.run);
   const shut = doorsShut(map);
   const lit: LightUp = (lamp) => {
     const sight = memory.look(map, lamp, reachOf(lamp), shut);
-    return { lamp, sight, clip: clipPath(clips, sight) };
+    return { lamp, sight, clip: clipPath(scene, sight) };
   };
   const lamps = powered ? powerLights(scene) : darkLights(scene, lit);
   const falling = remember(memory, lamps);

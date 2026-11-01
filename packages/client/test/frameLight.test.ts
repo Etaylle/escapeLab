@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { frameLight, ownLamp, type LightScene } from '../src/world/frameLight.js';
+import { lightCensus } from '../src/world/render/census.js';
 import { newSim, type Sim } from '../src/world/sim.js';
 import { FakePath2D } from './fakeCanvas.js';
 import { mapWith } from './fixtures.js';
@@ -20,6 +21,7 @@ function sceneOf(sim: Sim): LightScene {
     mounts: [],
     clips: new WeakMap(),
     reduced: false,
+    census: lightCensus(),
   };
 }
 
@@ -44,9 +46,10 @@ describe('frameLight — your flashlight in the dark', () => {
     const there = walkingAt(scene, 3.25, 0.1);
     walkingAt(scene, 3.5, 0.3);
     const back = walkingAt(scene, 3.25, 0.65);
-    // The same sight and clip, taken once: pacing costs no sight a frame.
+    // The same sight and clip, taken once: pacing costs no sight a frame, and the census says so.
     expect(back?.sight).toBe(there?.sight);
     expect(back?.clip).toBe(there?.clip);
+    expect(scene.census.sights).toBe(2);
     // The lamp in your hands swayed meanwhile, and the light is laid from it.
     expect(back?.lamp).not.toEqual(there?.lamp);
     expect(back?.lamp).toEqual(ownLamp(scene.sim, false));
@@ -57,5 +60,8 @@ describe('frameLight — your flashlight in the dark', () => {
     const here = walkingAt(scene, 3.25, 0.1);
     const further = walkingAt(scene, 3.75, 0.1);
     expect(further?.sight).not.toBe(here?.sight);
+    expect(scene.census.sights).toBe(2);
+    walkingAt(scene, 3.75, 0.4);
+    expect(scene.census.sights).toBe(2);
   });
 });

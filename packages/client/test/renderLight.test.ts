@@ -4,21 +4,24 @@ import type { CanvasMaker } from '../src/world/atlas.js';
 import type { LightLayer } from '../src/world/gl/lightLayer.js';
 import type { Pools } from '../src/world/gl/maps.js';
 import { EMERGENCY_STOPS, OWN_GLOW_STOPS } from '../src/world/light.js';
+import { rgba, SERVER_BLUE } from '../src/world/palette.js';
 import { warmUp } from '../src/world/rooms.js';
 import { ALARM_RED, WARM } from '../src/world/power.js';
 import { draw, dropLight } from '../src/world/render/light.js';
-import type { Frame } from '../src/world/render/frame.js';
+import type { Frame, LitRoom } from '../src/world/render/frame.js';
 import { cutStops } from '../src/world/render/radial.js';
 import {
   callEntries,
   callsOf,
   fakeCanvas,
+  FakePath2D,
   setsOf,
   type Entry,
   type FakeCanvas,
   type FakeGradient,
 } from './fakeCanvas.js';
-import { canvasLight, frameWith, kitWith, lightWith, lit } from './frames.js';
+import { mapWith } from './fixtures.js';
+import { canvasLight, frameWith, kitWith, lightWith, lit, TILES } from './frames.js';
 
 /** What was drawn on each canvas the art made — the bakes' — by the canvas. */
 let logs = new Map<unknown, Entry[]>();
@@ -50,6 +53,40 @@ function bakeOf(frame: Frame, name: string): { canvas: unknown; log: Entry[]; of
   return { canvas, log: logs.get(canvas) ?? [], of: kept?.of };
 }
 
+/** A path filled in a log: its rectangles, the fill rule and the fill style it was filled with. */
+interface Filled {
+  rects: unknown[][];
+  rule: unknown;
+  style: unknown;
+}
+
+/** The paths filled in `log`, in order. */
+function fillsOf(log: readonly Entry[]): Filled[] {
+  const fills: Filled[] = [];
+  let rects: unknown[][] = [];
+  let style: unknown = null;
+  for (const entry of log) {
+    if (entry.kind === 'set') {
+      style = entry.name === 'fillStyle' ? entry.value : style;
+    } else if (entry.name === 'beginPath') {
+      rects = [];
+    } else if (entry.name === 'rect') {
+      rects.push(entry.args);
+    } else if (entry.name === 'fill') {
+      fills.push({ rects, rule: entry.args[0] ?? 'nonzero', style });
+    }
+  }
+  return fills;
+}
+
+/** A rack in the Labor: it glows steadily. */
+const RACK = { kind: 'rack' as const, x: 7, y: 3 };
+
+/** A lit room of one tile at (x, 2), long lit, its clip a stand-in path named `path`. */
+function room(x: number, path: string): LitRoom {
+  return { tiles: [{ x, y: 2 }], path: { path } as unknown as Path2D, since: -Infinity };
+}
+
 /** The gradients set as a fill in `log`. */
 function gradients(log: readonly Entry[]): FakeGradient[] {
   return setsOf(log, 'fillStyle').filter(
@@ -70,18 +107,21 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
     vi.unstubAllGlobals();
   });
 
-  it('fills the darkness in one go, cuts your lamp into it from its sprite, lays it over', () => {
+  it('fills the darkness once over, cuts your lamp into it from its sprite, lays it over', () => {
     const beam = { facing: 0, halfAngle: 0.5, reach: 7.5 };
     const own = lit({ x: 2.5, y: 2.5, glow: 3.2, beam }, 'own');
     const frame = withKit(overlay, warm, { light: lightWith({ own }) });
     const log = drawn(frame);
-    expect(overlay.log.slice(0, 5)).toMatchObject([
+    // Cleared, then filled: a fill copying over the frame before costs as much as the overlay.
+    expect(overlay.log.slice(0, 3)).toMatchObject([
       { name: 'setTransform', args: [1, 0, 0, 1, 0, 0] },
-      { name: 'globalCompositeOperation', value: 'copy' },
-      { name: 'fillStyle', value: 'rgba(3,5,9,0.92)' },
-      { name: 'fillRect', args: [0, 0, 800, 600] },
       { name: 'globalCompositeOperation', value: 'source-over' },
+      { name: 'clearRect', args: [0, 0, 800, 600] },
     ]);
+    expect(fillsOf(overlay.log)).toEqual([
+      { rects: [[0, 0, 800, 600]], rule: 'evenodd', style: 'rgba(3,5,9,0.92)' },
+    ]);
+    expect(setsOf(overlay.log, 'globalCompositeOperation')).not.toContain('copy');
     expect(callsOf(overlay.log, 'clip')[0]).toEqual([own.clip]);
     // The glow: 3.2 tiles round (2.5, 2.5) — at (150, 250) on the canvas, 100 px a tile — from
     // its sprite, 321 px either side of its middle, at whole pixels.
@@ -126,8 +166,49 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
     const laid = callEntries(log, 'drawImage').find((e) => e.args[0] === power.canvas);
     expect(laid).toMatchObject({ args: [power.canvas, -100 + 200, 200], op: 'lighter', alpha: 1 });
     expect(callsOf(log, 'clip')).toEqual([]);
-    // The room's two tiles from (2, 2), cleared of darkness in whole pixels.
-    expect(callsOf(overlay.log, 'clearRect')).toContainEqual([100, 200, 200, 100]);
+    // The room's two tiles from (2, 2) left out of the darkness in whole pixels, nothing over them.
+    expect(fillsOf(overlay.log)).toEqual([
+      {
+        rects: [
+          [0, 0, 800, 600],
+          [100, 200, 200, 100],
+        ],
+        rule: 'evenodd',
+        style: 'rgba(3,5,9,0.92)',
+      },
+    ]);
+  });
+
+  it('leaves your powered room out of a lit room’s darkness: no tile filled twice', () => {
+    const room = {
+      light: { keys: new Set(['2,2', '3,2']), runs: [{ x: 2, y: 2, length: 2 }] },
+      path: { path: 'room' } as unknown as Path2D,
+    };
+    const tiles = [1, 2, 3, 4].map((x) => ({ x, y: 2 }));
+    const coming = { tiles, path: { path: 'labor' } as unknown as Path2D, since: 10 - 0.25 };
+    const parts = { time: 10, scene: { lit: true, cover: 0 }, light: lightWith({ room }) };
+    drawn(withKit(overlay, warm, { ...parts, lit: new Map([['LABOR', coming]]) }));
+    const keep = 1 - warmUp(250);
+    expect(fillsOf(overlay.log)).toEqual([
+      {
+        rects: [
+          [0, 0, 800, 600],
+          [100, 200, 200, 100],
+          [0, 200, 100, 100],
+          [300, 200, 100, 100],
+        ],
+        rule: 'evenodd',
+        style: `rgba(3,5,9,${0.92 + 0.02 * Math.sin(17)})`,
+      },
+      {
+        rects: [
+          [0, 200, 100, 100],
+          [300, 200, 100, 100],
+        ],
+        rule: 'nonzero',
+        style: `rgba(3,5,9,${(0.92 + 0.02 * Math.sin(17)) * keep})`,
+      },
+    ]);
   });
 
   it('shows the audience the lab whole: no darkness, warm all over while the power is on', () => {
@@ -229,23 +310,26 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
   it('keeps a lit room clear of the darkness, as far as its lights have come on', () => {
     const tiles = [{ x: 6, y: 2 }];
     const path = { path: 'labor' } as unknown as Path2D;
-    const fills = (since: number): unknown[][] => {
+    const fills = (since: number): Filled[] => {
       const dark = fakeCanvas(800, 600);
       drawn(withKit(dark, warm, { time: 10, lit: new Map([['LABOR', { tiles, path, since }]]) }));
-      expect(callsOf(dark.log, 'clearRect')).toContainEqual([500, 200, 100, 100]);
-      return callsOf(dark.log, 'fillRect').filter(([x, y]) => x === 500 && y === 200);
+      const [round, ...over] = fillsOf(dark.log);
+      // The dark is filled round the room's tile, in whole pixels.
+      expect(round?.rects).toEqual([
+        [0, 0, 800, 600],
+        [500, 200, 100, 100],
+      ]);
+      expect(round?.rule).toBe('evenodd');
+      return over;
     };
+    const base = 0.92 + 0.02 * Math.sin(17);
     expect(fills(-Infinity)).toEqual([]);
-    expect(fills(10 - 0.25)).toEqual([[500, 200, 100, 100]]);
+    const style = `rgba(3,5,9,${base * (1 - warmUp(250))})`;
+    expect(fills(10 - 0.25)).toEqual([{ rects: [[500, 200, 100, 100]], rule: 'nonzero', style }]);
     expect(1 - warmUp(250)).toBeGreaterThan(0);
   });
 
   it('lays the lit rooms’ light from one bake once up, from each room’s while one comes on', () => {
-    const room = (x: number, path: string) => ({
-      tiles: [{ x, y: 2 }],
-      path: { path } as unknown as Path2D,
-      since: -Infinity,
-    });
     const rooms = new Map([
       ['ARCHIV', room(2, 'archiv')],
       ['LABOR', room(7, 'labor')],
@@ -263,6 +347,65 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
     const laid = callEntries(log, 'drawImage').find((e) => e.args[0] === labor.canvas);
     expect(laid?.alpha).toBeCloseTo(warmUp(250));
     expect(frame.kit.bakes.entries.has('rooms')).toBe(false);
+  });
+
+  it('adds the lit rooms, the steady glows and the open hatch up: one copy for them all', () => {
+    vi.stubGlobal('Path2D', FakePath2D);
+    // A rack in the Labor glows steadily; the hatch at (8, 4) stands open.
+    const map = mapWith({ width: 10, height: 6, tiles: TILES, decor: [RACK] });
+    const exit = { lit: lit({ x: 8.5, y: 4.5, glow: 3.2 }, 'hatch'), open: 1 };
+    const parts = { map, time: 10, red: 1, escapeSince: 1, hatch: 1 };
+    const lab = new Map([['LABOR', room(7, 'labor')]]);
+    const frame = withKit(overlay, warm, { ...parts, light: lightWith({ exit }), lit: lab });
+    frame.kit.ceiling?.byLight.set(ALARM_RED, warm.canvas);
+    const log = drawn(frame);
+    // Each baked as it always was: the room's red ceiling lights, the rack's blue, the hatch's.
+    const [rooms, pools, hatch] = ['rooms', 'pools', 'glow:hatch'].map((n) => bakeOf(frame, n));
+    expect(callEntries(rooms?.log ?? [], 'drawImage')).toMatchObject([
+      { args: [warm.canvas, 0, 0, 10, 6], op: 'lighter' },
+    ]);
+    expect(gradients(pools?.log ?? [])[0]?.stops[0]?.[1]).toBe(rgba(SERVER_BLUE, 0.55 * 0.28));
+    expect(gradients(hatch?.log ?? [])[0]?.stops[0]?.[1]).toBe('rgba(240, 255, 246, 0.8)');
+    // Added up at whole pixels into one canvas, which alone is laid on the picture, added.
+    const sum = bakeOf(frame, 'steady');
+    const added = callEntries(sum.log, 'drawImage');
+    expect(added.map((e) => e.args[0])).toEqual([rooms?.canvas, pools?.canvas, hatch?.canvas]);
+    const whole = added.every((e) => e.op === 'lighter' && e.args.slice(1).every(Number.isInteger));
+    expect(whole).toBe(true);
+    const images = callEntries(log, 'drawImage');
+    const bakes = [sum, rooms, pools, hatch].map((b) => b?.canvas);
+    const laid = images.filter((e) => bakes.includes(e.args[0]));
+    expect(laid.map((e) => [e.args[0], e.op, e.alpha])).toEqual([[sum.canvas, 'lighter', 1]]);
+    // Before the escape's red tint goes over the picture.
+    const red = (e: Entry): boolean =>
+      e.kind === 'set' && String(e.value).startsWith('rgba(255, 34');
+    expect(log.indexOf(laid[0] as Entry)).toBeLessThan(log.findIndex(red));
+  });
+
+  it('adds them up again only as one of them is baked anew', () => {
+    vi.stubGlobal('Path2D', FakePath2D);
+    const map = mapWith({ width: 10, height: 6, tiles: TILES, decor: [RACK] });
+    const lab = new Map([['LABOR', room(7, 'labor')]]);
+    const frame = withKit(overlay, warm, { map, time: 10, lit: lab });
+    drawn(frame);
+    const first = frame.kit.bakes.entries.get('steady')?.baked;
+    drawn(frame);
+    expect(frame.kit.bakes.entries.get('steady')?.baked).toBe(first);
+    // The Archiv's lights come up too: the rooms are baked anew, and the sum with them.
+    drawn({ ...frame, lit: new Map([...lab, ['ARCHIV', room(2, 'archiv')]]) });
+    const again = frame.kit.bakes.entries.get('steady')?.baked;
+    expect(again).not.toBe(first);
+    expect(again?.canvas).toBe(first?.canvas);
+  });
+
+  it('keeps the hatch’s glow apart while it grinds open, at the strength of the moment', () => {
+    const exit = { lit: lit({ x: 8.5, y: 4.5, glow: 3.2 }, 'hatch'), open: 0.4 };
+    const frame = withKit(overlay, warm, { light: lightWith({ exit }), hatch: 0.4 });
+    const log = drawn(frame);
+    const hatch = bakeOf(frame, 'glow:hatch');
+    const laid = callEntries(log, 'drawImage').find((e) => e.args[0] === hatch.canvas);
+    expect(laid).toMatchObject({ op: 'lighter', alpha: 0.4 });
+    expect(frame.kit.bakes.entries.has('steady')).toBe(false);
   });
 
   it('draws the lights straight while the zoom moves, baking none of them', () => {

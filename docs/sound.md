@@ -166,12 +166,11 @@ sound switch (`isMuted()`). Behind it stands a brickwall, a DynamicsCompressorNo
 never clip. Web Audio puts a makeup gain behind every compressor, worked out from its own curve
 — its gain at full scale, inverted and raised to 0.6: +1.71 dB for these settings — which the
 trim takes back (`limiterMakeup`), so that whatever stays under the threshold plays exactly as
-loud as before the brickwall. The devices' own sounds (`puzzles/sounds.ts`) are the one
-exception: that file belongs to the gameplay, and they still go straight to the output at the
-Effekte volume, past the buses and the brickwall; they are quiet and short (at most 0.085 of
-full scale) and never clip with the rest. Moving them onto the effects' bus is two lines there
-(`outletAt` and `buildHum` connecting to the engine's `sfx` instead of `ctx.destination`, its
-own `effectsVolume` and mute check gone with them) for when the branches meet.
+loud as before the brickwall. The devices' own sounds (`puzzles/sounds.ts`) go into the
+effects' bus like every other effect — the meter's hum and the colour tones the game pitches,
+and the device hum while a panel stands open, too: the Effekte volume and the sound switch reach
+them there, the bus's send carries them into the room's reverb, and the brickwall covers them
+with the rest (`test/deviceMix.test.ts` follows their chains into the real mix).
 
 **Ducking.** Mission control's voice pulls the music 8 dB and the beds 4 dB down while it is on
 the air — from its opening squelch where it opens a run, else from its first word — and the
@@ -768,3 +767,21 @@ other line keeps its recording — after which the voice test names the `lightsS
 `test/intro.test.tsx` the opening's phases and their timings, the skip and its count, the
 reduced-motion path, the title on the lights-out, the crew held still; `test/introCue.test.ts`
 the script against a client of its own and the cue in the game.
+
+## Open
+
+What the sound packages left for later, one line each, the newest first:
+
+- **Twelve recordings await a render** (L-sound): the linoleum and steel steps, both door
+  closes, the alarm's sting, the drone's fly-by, the hatch's landing and the settings' tick.
+  The agents may not spend the account's credits; the command is under „Awaiting a render"
+  (some 130 credits). Until it runs the linoleum and steel steps borrow the concrete takes, the
+  door's closes borrow its slide and the other four stay silent, and
+  `test/sampleManifest.test.ts` lists them in `AWAITING_RENDER`, to be emptied once they are made.
+- **The opening's cue plays 3.9 dB quieter** (L-sound): its level now follows its peak over both
+  channels, where the first channel's alone set it before (The opening, above) — a change of
+  level, not a fault.
+- **Helmut's announcement and the opening's cue** (the opening, above): Piper (Thorsten) reads the
+  loudspeakers' five lines and no cue is composed until the two commands there are run.
+- Done in L-polish: the devices' sounds play into the effects' bus, its reverb and its brickwall
+  (The mix); nothing of the lab goes past the buses any more.
