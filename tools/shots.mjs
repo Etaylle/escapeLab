@@ -194,6 +194,15 @@
  * station step, and pacing beside the open hatch in the escape — and in a
  * mission with an intro once more, shorter, in the lit lab before the
  * blackout, and over the opening's shot for information alone. Each sample
+ * measures what a frame costs one client: while it runs, every other page of
+ * the run — the guest's phone, the audience — stands frozen, its animations
+ * stopped, its main thread paused in the debugger and its CPU throttle lifted
+ * (freeze.mjs; Chromium's own freeze leaves a page on screen running, and a
+ * paused page's compositor plays its animations on), and is thawed once it is
+ * over, its messages waiting for it; a line `frozen` names them. Otherwise a
+ * runner's few cores and its one compositor would be shared by every page
+ * drawing the same scene, and a window would measure the sharing, not the
+ * game. Each sample
  * logs p50 and p95, and a line `light` with what the host's light worked out
  * anew meanwhile — the sights a frame and the bakes (client
  * world/render/census.ts, lightwork.mjs): a lamp on the move takes a sight a
@@ -273,8 +282,10 @@
  * each kind of the browser's processes kept busy meanwhile (CDP SystemInfo)
  * and what the host's audio thread renders (the probe's census: sources
  * playing, nodes wired into the output, beds built); a line `pages` gives each
- * page's renderer CPU, its main thread's task time, Chrome's count of its live
- * audio nodes (wired, or waiting to be collected) and its heap; a line `sound
+ * page's renderer CPU, its main thread's task time — for a page frozen
+ * meanwhile only `frozen` and its CPU, its pause counting as one long task —
+ * Chrome's count of its live audio nodes (wired, or waiting to be collected)
+ * and its heap; a line `sound
  * js` the main thread's milliseconds a second each sound system took. With
  * SHOTS_AUDIO_OFF=beds,music,spatial,reverb those systems stay off on every page
  * (`?audio-off=`), to tell their cost apart — their sound checks then fail.
@@ -348,6 +359,7 @@ import { join } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { chromium, request } from 'playwright';
 import { AGAIN_AFTER_MS, gateWindow } from './framegate.mjs';
+import { withOthersFrozen } from './freeze.mjs';
 import { GLOWING, glowAtCorners, haloAgainst, verticalShift } from './glowcheck.mjs';
 import { lightWorkText } from './lightwork.mjs';
 import { fadeOf, meanLuma, midway } from './panelfade.mjs';
@@ -590,6 +602,9 @@ async function wonBefore(context) {
   await context.addInitScript(() => globalThis.localStorage.setItem('escapelab.won', '1'));
 }
 
+/** Each page's CDP session holding its CPU throttle, under SHOTS_CPU_SLOWDOWN (`openPage`). */
+const throttleSessions = new WeakMap();
+
 /** A new page in `context`, its main thread slowed down CPU_SLOWDOWN times before it loads. */
 async function openPage(context, name = 'page') {
   const page = await context.newPage();
@@ -597,6 +612,7 @@ async function openPage(context, name = 'page') {
   if (CPU_SLOWDOWN > 1) {
     const cdp = await context.newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU_SLOWDOWN });
+    throttleSessions.set(page, cdp);
   }
   return page;
 }
@@ -715,15 +731,20 @@ async function pageCosts() {
   return new Map(await Promise.all(open.map(async (page) => [page, await pageCost(page)])));
 }
 
-/** Each page's cores busy between two readings `seconds` apart, and its audio nodes, as text. */
-function pageCostText(before, after, seconds) {
+/**
+ * Each page's cores busy between two readings `seconds` apart, and its audio nodes, as text; a
+ * page of `frozen` is marked so, without its main thread's task time — its pause counts as one
+ * task, as long as the window.
+ */
+function pageCostText(before, after, seconds, frozen) {
   return [...after]
     .map(([page, now]) => {
       const was = before.get(page) ?? now;
       const cores = ((now.cpu - was.cpu) / seconds).toFixed(2);
       const main = ((now.main - was.main) / seconds).toFixed(2);
       const heap = now.heap.toFixed(0);
-      return `${named.get(page)} ${cores} (main ${main}), ${now.audio} audio nodes, ${heap} MB`;
+      const busy = frozen.has(page) ? `frozen ${cores}` : `${cores} (main ${main})`;
+      return `${named.get(page)} ${busy}, ${now.audio} audio nodes, ${heap} MB`;
     })
     .join('; ');
 }
@@ -754,14 +775,107 @@ function busyCores(before, after, seconds) {
     .join(', ');
 }
 
+/** How long a page being frozen gets to come to its next line of script and pause there, ms. */
+const FREEZE_WAIT_MS = 1000;
+
+/** Each page's CDP session for freezing it (`freezePage`), opened once. */
+const freezeSessions = new WeakMap();
+
 /**
- * One look at a window of a page opened with `traced`: resets its frame trace, lets `quiet`
- * fill the window and reads the durations recorded meanwhile, their p50, p95 and count, with
- * how long the window ran (`ms`), what the machine's processes, the pages and the host's sound
- * did meanwhile, and under SHOTS_PROFILE what each pass of the world's picture cost. Null,
+ * Stops the animations of `page` (`cdp`, its session): the compositor plays a page's
+ * animations on a thread of its own, past any pause of the main thread, and composes every
+ * frame of them in the one GPU process all pages share — the frozen guest's red edge breathing
+ * cost the escape's window half its GPU process. A stopped timeline reaches the compositor with
+ * the next frame the page draws, so the page draws one more, given FREEZE_WAIT_MS for it.
+ */
+async function stopAnimations(cdp, page) {
+  await cdp.send('Animation.enable');
+  await cdp.send('Animation.setPlaybackRate', { playbackRate: 0 });
+  const twoFrames = () =>
+    new Promise((drawn) => {
+      globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(drawn));
+    });
+  await Promise.race([page.evaluate(twoFrames), sleep(FREEZE_WAIT_MS)]);
+}
+
+/**
+ * Freezes the page of `other` (`othersOf`): its animations stopped (`stopAnimations`), then its
+ * main thread paused in the debugger at its next line of script, so that it draws nothing,
+ * takes nothing in and fires no timer until it is thawed — what the server sends meanwhile
+ * waits for it, its audio plays on, and the browser answers the server's pings for it (a socket
+ * goes only after twenty silent seconds, server heartbeat.ts). Chromium's own freeze, CDP
+ * Page.setWebLifecycleState, leaves a page on screen running, and every page of a headless run
+ * is on screen. Under SHOTS_CPU_SLOWDOWN its throttle is lifted while it stands frozen:
+ * Chromium's throttle holds a thread back by keeping it spinning, which would keep a core busy
+ * for a page with nothing to run. Says 'paused', or 'idle' where no script ran within
+ * FREEZE_WAIT_MS: then the first that runs pauses.
+ */
+async function freezePage({ page }) {
+  let cdp = freezeSessions.get(page);
+  if (cdp === undefined) {
+    cdp = await page.context().newCDPSession(page);
+    freezeSessions.set(page, cdp);
+  }
+  await stopAnimations(cdp, page);
+  let onPaused = () => {};
+  const paused = new Promise((resolve) => {
+    onPaused = () => resolve('paused');
+    cdp.once('Debugger.paused', onPaused);
+  });
+  await cdp.send('Debugger.enable');
+  await cdp.send('Debugger.pause');
+  const how = await Promise.race([paused, sleep(FREEZE_WAIT_MS).then(() => 'idle')]);
+  cdp.off('Debugger.paused', onPaused);
+  await throttleSessions.get(page)?.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+  return how;
+}
+
+/**
+ * Thaws the page of `other`: its throttle back on, the debugger switched off — it runs on, or
+ * the pause still pending is called off — and its animations playing again.
+ */
+async function thawPage({ page }) {
+  const cdp = freezeSessions.get(page);
+  await throttleSessions.get(page)?.send('Emulation.setCPUThrottlingRate', { rate: CPU_SLOWDOWN });
+  await cdp.send('Debugger.disable');
+  await cdp.send('Animation.setPlaybackRate', { playbackRate: 1 });
+  await cdp.send('Animation.disable');
+}
+
+/** Every page open in the run's browser but `page`, each with the name it was opened under. */
+function othersOf(page) {
+  return browser
+    .contexts()
+    .flatMap((context) => context.pages())
+    .filter((other) => other !== page && !other.isClosed())
+    .map((other) => ({ name: named.get(other) ?? 'page', page: other }));
+}
+
+/**
+ * One look at a window of a page opened with `traced`, every other page of the run frozen
+ * meanwhile (freeze.mjs): what `lookAlone` saw, with the pages frozen and how (`frozen`). Null,
  * the run failed, for a page without a trace or a window without frames.
  */
 async function lookAt(page, when, quiet) {
+  const others = othersOf(page);
+  const frozenPages = new Set(others.map((other) => other.page));
+  const { value, frozen } = await withOthersFrozen(
+    others,
+    { freeze: freezePage, thaw: thawPage },
+    () => lookAlone(page, when, quiet, frozenPages),
+  );
+  return value === null ? null : { ...value, frozen };
+}
+
+/**
+ * One look at a window of a page opened with `traced`, the pages of `frozen` standing still:
+ * resets its frame trace, lets `quiet` fill the window and reads the durations recorded
+ * meanwhile, their p50, p95 and count, with how long the window ran (`ms`), what the machine's
+ * processes, the pages and the host's sound did meanwhile, and under SHOTS_PROFILE what each
+ * pass of the world's picture cost. Null, the run failed, for a page without a trace or a
+ * window without frames.
+ */
+async function lookAlone(page, when, quiet, frozen) {
   // The probes hold the voice as well: the frames are there only while a world is up.
   const found = await page.evaluate(() => {
     const probe = globalThis.__escapelab;
@@ -785,7 +899,7 @@ async function lookAt(page, when, quiet) {
   await quiet();
   const ms = Date.now() - quietSince;
   const cores = busyCores(cpuBefore, await processCpu(), ms / 1000);
-  const perPage = pageCostText(pagesBefore, await pageCosts(), ms / 1000);
+  const perPage = pageCostText(pagesBefore, await pageCosts(), ms / 1000, frozen);
   const frames = await page.evaluate(() => globalThis.__escapelab?.frames ?? []);
   const nodes = await page.evaluate(() => globalThis.__escapelab?.audio?.nodes ?? null);
   const spentAfter = await page.evaluate(() => globalThis.__escapelab?.audio?.spent ?? null);
@@ -812,15 +926,26 @@ async function lookAt(page, when, quiet) {
   };
 }
 
+/** Which pages a look froze while it measured the page named `measured`, for the log. */
+function frozenText(frozen, measured) {
+  if (frozen.length === 0) {
+    return `none: the ${measured}'s page is the only one open`;
+  }
+  const pages = frozen.map(({ name, how }) => (how === 'paused' ? name : `${name} (${how})`));
+  return `${pages.join(', ')} while the ${measured}'s frames ran`;
+}
+
 /**
- * Samples a window of a page opened with `traced` (`lookAt`) and logs p50 and p95 of its
- * frame durations. Nothing in `quiet` may screenshot, resize or click: those stalls are the
- * harness's, not the game's. A p95 over the budget has the window looked at once more a
- * second later (framegate.mjs), `again` filling it for as long as the first look ran — the
- * same scene, `quiet` itself unless that would not stay the same — and fails the run only
- * where both looks are over; the line logs both. A window for information only (`gating`
- * false) is looked at once and logged alone. A page without a trace or a window without
- * frames fails the run. The machine's, the pages' and the sound's lines are the first look's.
+ * Samples a window of a page opened with `traced` (`lookAt`), every other page frozen while
+ * each look runs, and logs p50 and p95 of its frame durations and which pages stood frozen.
+ * Nothing in `quiet` may screenshot, resize or click: those stalls are the harness's, not the
+ * game's. A p95 over the budget has the window looked at once more a second later
+ * (framegate.mjs), the other pages thawed in between, `again` filling it for as long as the
+ * first look ran — the same scene, `quiet` itself unless that would not stay the same — and
+ * fails the run only where both looks are over; the line logs both. A window for information
+ * only (`gating` false) is looked at once and logged alone. A page without a trace or a window
+ * without frames fails the run. The machine's, the pages' and the sound's lines are the first
+ * look's.
  */
 async function sampleFrames(page, when, quiet, { gating = true, again = quiet } = {}) {
   const first = await lookAt(page, when, quiet);
@@ -843,6 +968,7 @@ async function sampleFrames(page, when, quiet, { gating = true, again = quiet } 
     `frames             p50 ${first.p50.toFixed(1)} ms · ${p95s} (${counts.join(', ')}) ` +
       `${when}: ${gate.verdict}`,
   );
+  console.log(`frozen             ${frozenText(first.frozen, named.get(page))}`);
   console.log(`cpu                cores busy: ${first.cores}; sound: ${first.sound}`);
   console.log(`pages              ${first.perPage}`);
   console.log(`sound js           ms a second on the host's main thread: ${first.js}`);
