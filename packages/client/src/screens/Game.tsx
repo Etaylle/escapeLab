@@ -1135,6 +1135,7 @@ function OverTheWorld({
           manual={reading.item}
           puzzle={view.puzzle}
           current={view.currentPuzzleIndex}
+          pausedAt={view.pausedAt}
           mission={view.missionTitle}
           map={map}
           edgework={view.edgework}

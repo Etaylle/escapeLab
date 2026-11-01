@@ -62,6 +62,7 @@ function reading(kind: ManualKind, extra: { leaving?: boolean } = {}, onPutDown 
       mission="Blackout im Labor"
       map={lab}
       edgework={null}
+      pausedAt={null}
       onAskNote={noop}
       onPutDown={onPutDown}
       {...extra}

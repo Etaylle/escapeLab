@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import type { ManualHere, PuzzleView } from '@escapelab/core';
+import { clockTime } from '../clock.js';
 import { useKeys, useServerNow, useSwipe } from '../hooks.js';
 import {
   firstPageOf,
@@ -51,10 +52,22 @@ export function SectionReader({
   return puzzle !== null && readerIn(puzzle, section) ? <ReaderPanel puzzle={puzzle} /> : null;
 }
 
-/** Counts down to the next note, then asks for it at the price it names. */
-function AskNote({ section, onAsk }: { section: ReadSection; onAsk: () => void }) {
-  // The note is ready at a moment the server set: counted on its clock (clock.ts).
-  const now = useServerNow(1000);
+/**
+ * Counts down to the next note, then asks for it at the price it names. The note is ready at a
+ * moment the server set, counted on its clock (clock.ts), and standing still while the run is
+ * paused since `pausedAt`: the server moves that moment on by the pause.
+ */
+function AskNote({
+  section,
+  pausedAt,
+  onAsk,
+}: {
+  section: ReadSection;
+  pausedAt: number | null;
+  onAsk: () => void;
+}) {
+  const serverNow = useServerNow(1000);
+  const now = clockTime(pausedAt, serverNow);
   const wait = section.noteReadyAt === null ? 0 : Math.ceil((section.noteReadyAt - now) / 1000);
   return (
     <button className="note-ask" disabled={wait > 0} onClick={onAsk}>
@@ -85,9 +98,12 @@ function notedSection(sections: readonly ReadSection[]): ReadSection | null {
  */
 export function NoteSlip({
   sections,
+  pausedAt,
   onAsk,
 }: {
   sections: readonly ReadSection[];
+  /** since when the run stands paused, server time; null while it runs */
+  pausedAt: number | null;
   onAsk: () => void;
 }) {
   const section = notedSection(sections);
@@ -107,7 +123,7 @@ export function NoteSlip({
           ))}
         </ol>
       )}
-      {section.notesLeft > 0 && <AskNote section={section} onAsk={onAsk} />}
+      {section.notesLeft > 0 && <AskNote section={section} pausedAt={pausedAt} onAsk={onAsk} />}
     </aside>
   );
 }
@@ -456,6 +472,7 @@ export function Book({
   spread,
   binding,
   imprint,
+  pausedAt,
   onAskNote,
 }: {
   manual: ManualHere;
@@ -466,6 +483,8 @@ export function Book({
   spread: boolean;
   binding: Binding;
   imprint: Imprint;
+  /** since when the run stands paused, server time; null while it runs */
+  pausedAt: number | null;
   onAskNote: () => void;
 }) {
   const pages = paginate(
@@ -498,7 +517,7 @@ export function Book({
     <div className={lookOf(spread, binding, notedSection(manual.sections) !== null)}>
       <div className="book-pages" {...swipe}>
         <div className="book-leaves">
-          <NoteSlip sections={manual.sections} onAsk={onAskNote} />
+          <NoteSlip sections={manual.sections} pausedAt={pausedAt} onAsk={onAskNote} />
           {(turning?.leaf.under ?? shown).map((number, i) => (
             <PageView key={number} number={number} side={sideOf(i)} book={book} />
           ))}

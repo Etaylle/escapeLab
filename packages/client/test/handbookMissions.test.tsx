@@ -133,6 +133,7 @@ describe.each(missions.map((mission) => [mission.id, mission] as const))(
               spread
               binding="bound"
               imprint={{ mission: mission.title, room: null }}
+              pausedAt={null}
               onAskNote={noop}
             />,
           );

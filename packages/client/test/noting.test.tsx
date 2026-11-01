@@ -151,6 +151,7 @@ function bookOf(manual: ManualHere) {
       spread={false}
       binding="clip"
       imprint={{ mission: 'Blackout im Labor', room: 'FLUR' }}
+      pausedAt={null}
       onAskNote={noop}
     />
   );
@@ -198,6 +199,7 @@ describe('„Notieren" at a source', () => {
         mission="Blackout im Labor"
         map={mapWith({})}
         edgework={null}
+        pausedAt={null}
         onAskNote={noop}
         onPutDown={noop}
       />

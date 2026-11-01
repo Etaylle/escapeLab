@@ -110,6 +110,7 @@ function read(
       mission="Blackout im Labor"
       map={lab}
       edgework={seen}
+      pausedAt={null}
       onAskNote={noop}
       onPutDown={noop}
     />,
@@ -118,12 +119,13 @@ function read(
 
 const imprint: Imprint = { mission: 'Blackout im Labor', room: 'ARCHIV' };
 
-/** The book as it opens, at whichever page it opens at. */
+/** The book as it opens, at whichever page it opens at; the run paused since `pausedAt`. */
 function opened(
   manual: ManualHere,
   current: number,
   spread = false,
   binding: Binding = 'bound',
+  pausedAt: number | null = null,
 ): string {
   return renderToStaticMarkup(
     <Book
@@ -133,6 +135,7 @@ function opened(
       spread={spread}
       binding={binding}
       imprint={imprint}
+      pausedAt={pausedAt}
       onAskNote={noop}
     />,
   );
@@ -238,6 +241,7 @@ describe('reading a book', () => {
         spread={false}
         binding="bound"
         imprint={{ mission: 'Blackout im Labor', room: null }}
+        pausedAt={null}
         onAskNote={noop}
       />,
     );
@@ -344,6 +348,27 @@ describe('reading a book', () => {
         clock.heard(Date.now(), ready, Date.now());
       }
       expect(slip(opened(bound(waiting), 2))).toContain('>Notiz in 12 s</button>');
+    } finally {
+      for (let i = 0; i < 5; i++) {
+        clock.heard(Date.now(), Date.now(), Date.now());
+      }
+      vi.useRealTimers();
+    }
+  });
+
+  it('stands the wait still while the run is paused: the server moves it on by the pause', () => {
+    const ready = 1_700_000_000_000;
+    const waiting = { ...noted(), noteReadyAt: ready + 12_000 };
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(ready);
+      for (let i = 0; i < 5; i++) {
+        clock.heard(Date.now(), Date.now(), Date.now());
+      }
+      // paused 2 s in, 20 s ago: the slip reads what it read as the pause began
+      vi.setSystemTime(ready + 22_000);
+      const paused = opened(bound(waiting), 2, false, 'bound', ready + 2_000);
+      expect(slip(paused)).toContain('>Notiz in 10 s</button>');
     } finally {
       for (let i = 0; i < 5; i++) {
         clock.heard(Date.now(), Date.now(), Date.now());
