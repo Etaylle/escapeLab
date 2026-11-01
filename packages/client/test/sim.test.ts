@@ -92,6 +92,100 @@ describe('walk — a door shut on a walker', () => {
   });
 });
 
+/** A room over a corridor, joined by a one-tile opening at (4,3). */
+const OPENING = mapWith({
+  width: 9,
+  height: 7,
+  tiles: [
+    '#########',
+    '#.......#',
+    '#.......#',
+    '####.####',
+    '#.......#',
+    '#.......#',
+    '#########',
+  ],
+});
+
+/** Walking `held` for `frames` frames from (x, y): where the avatar ends, and its sim. */
+function walkedFrom(
+  map: typeof OPENING,
+  held: Held[],
+  [x, y]: readonly [number, number],
+  frames = 40,
+) {
+  const sim = newSim(0);
+  Object.assign(sim.self, { x, y });
+  for (const move of held) {
+    sim.keys.add(move);
+  }
+  const sounds: (string | null)[] = [];
+  for (let i = 0; i < frames; i++) {
+    sounds.push(walk(sim, map, 1 / 60, false));
+  }
+  return { at: { x: sim.self.x, y: sim.self.y }, sim, sounds };
+}
+
+describe('walk — a body caught on the edge of an opening is nudged into it', () => {
+  it('passes a one-tile opening up to 0.3 tiles of its body over the edge, either side', () => {
+    for (const off of [0, 0.22, -0.22, 0.3, -0.3, 0.45, -0.45, 0.51, -0.51]) {
+      const { at } = walkedFrom(OPENING, ['up'], [4.5 + off, 4.6]);
+      expect(at.y, `offset ${off}`).toBeLessThan(2.5);
+      // through the opening, nudged across no further than its body overlapped the edge
+      expect(Math.abs(at.x - 4.5), `offset ${off}`).toBeLessThanOrEqual(0.22 + 1e-9);
+      const nudged = Math.abs(at.x - (4.5 + off));
+      const overlap = Math.max(0, Math.abs(off) - 0.22);
+      expect(nudged, `offset ${off}`).toBeLessThanOrEqual(overlap + 0.011);
+    }
+  });
+
+  it('stops dead against the wall where more than 0.3 tiles of the body overlaps it', () => {
+    for (const off of [0.6, -0.6]) {
+      const { at } = walkedFrom(OPENING, ['up'], [4.5 + off, 4.6]);
+      expect(at.y).toBeGreaterThan(3);
+      expect(at.x).toBeCloseTo(4.5 + off, 9);
+    }
+  });
+
+  it('never nudges against the way the player leans: up and right slides on along the wall', () => {
+    const { at } = walkedFrom(OPENING, ['up', 'right'], [4.9, 4.6], 20);
+    expect(at.y).toBeGreaterThan(3);
+    expect(at.x).toBeGreaterThan(4.9);
+  });
+
+  it('still funnels a slant into the opening', () => {
+    const { at } = walkedFrom(OPENING, ['up', 'left'], [5.2, 4.6]);
+    expect(at.y).toBeLessThan(3);
+  });
+});
+
+describe('walk — against a wall', () => {
+  it('stops the steps and the legs, and bumps once a push', () => {
+    const { sim, sounds } = walkedFrom(OPENING, ['up'], [2.5, 4.6], 120);
+    expect(sounds.filter((sound) => sound === 'bump')).toHaveLength(1);
+    const steps = sim.footfalls;
+    const legs = sim.walkPhase;
+    for (let i = 0; i < 120; i++) {
+      walk(sim, OPENING, 1 / 60, false);
+    }
+    expect(sim.footfalls).toBe(steps);
+    expect(sim.walkPhase).toBe(legs);
+    expect(sim.bumps).toBe(1);
+    // let go and push again: another bump
+    sim.keys.clear();
+    walk(sim, OPENING, 1 / 60, false);
+    sim.keys.add('up');
+    expect(walk(sim, OPENING, 1 / 60, false)).toBe('bump');
+    expect(sim.bumps).toBe(2);
+  });
+
+  it('keeps the steps to the ground covered while sliding along it', () => {
+    const { sim, sounds } = walkedFrom(OPENING, ['up', 'right'], [1.5, 4.3], 60);
+    expect(sounds).not.toContain('bump');
+    expect(sim.footfalls).toBeGreaterThan(0);
+  });
+});
+
 describe('walk — walking means covering ground', () => {
   it('walks while it covers ground and stands once a wall holds it, the key still down', () => {
     const map = mapWith({ width: 10, height: 6, tiles: TILES });
@@ -134,7 +228,7 @@ function ran(held: Held[], frames = 60, locked = false) {
   const at: number[] = [];
   for (let i = 0; i < frames; i++) {
     const fall = walk(sim, OPEN, 1 / 60, locked);
-    if (fall !== null) {
+    if (fall === 'walk' || fall === 'sprint') {
       falls.push(fall);
     }
     at.push(sim.self.x);

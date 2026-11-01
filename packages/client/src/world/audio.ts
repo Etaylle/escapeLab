@@ -358,6 +358,14 @@ export function footstep(sprinting = false): void {
   effect(stepTake(ownSurface()), 'sfx', level, { rate: stepRate() });
 }
 
+/**
+ * The body meeting a wall, a shut door or a piece of furniture it was walked into: a soft, dull
+ * thud, once a push (world/sim.ts `walk`) — a little over a footstep, ±5 % in speed.
+ */
+export function wallBump(): void {
+  effect('wall-thud', 'sfx', STEP_LEVEL, { rate: rand(0.95, 1.05) });
+}
+
 /** A console's rising 'station ready' chirp. */
 export function stationChirp(): void {
   effect('console-ready', 'sfx', CHIRP_LEVEL);

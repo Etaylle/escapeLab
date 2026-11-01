@@ -90,6 +90,8 @@ export interface Probes {
   readonly others?: Record<string, { x: number; y: number }>;
   /** the avatar's footfalls so far, walking and sprinting (world/sim.ts): their pace is timed */
   readonly footfalls?: number;
+  /** the pushes against a wall so far, each bumping once (world/sim.ts) */
+  readonly bumps?: number;
   /** the minimap and the goal it points at; null while it is off */
   readonly minimap?: MinimapProbe | null;
   /**

@@ -45,6 +45,7 @@ import {
   systemsOff,
   timed,
   timeSpent,
+  wallBump,
   type SoundSystem,
 } from './audio.js';
 import { blackoutCue, FLICKER_MS, REVEAL_MS, SEQUENCE_MS } from './coldOpen.js';
@@ -485,6 +486,9 @@ function traceFrames(loop: Loop): { trace: FrameTrace; drop: () => void } | null
     get footfalls() {
       return sim.footfalls;
     },
+    get bumps() {
+      return sim.bumps;
+    },
     get minimap() {
       return minimapOf(loop);
     },
@@ -560,10 +564,12 @@ function step(loop: Loop, dt: number, now: number, map: WorldMap): void {
   if (sim.held) {
     sim.keys.clear();
   }
-  const footfall = walk(sim, map, dt, loop.live.current.locked || sim.held);
+  const sound = walk(sim, map, dt, loop.live.current.locked || sim.held);
   sim.selfAt = now;
-  if (footfall !== null) {
-    footstep(footfall === 'sprint');
+  if (sound === 'bump') {
+    wallBump();
+  } else if (sound !== null) {
+    footstep(sound === 'sprint');
   }
   // The crew REMOTE_DELAY_MS in the past, where their samples put them (trail.ts).
   const drawnAt = serverAt(now) - REMOTE_DELAY_MS;
