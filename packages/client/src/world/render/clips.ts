@@ -29,6 +29,7 @@ export function clipOf(
   if (clips.size > 256) {
     clips.clear();
   }
+  frame.kit.census.sights += 1;
   const sight = sightFrom(frame.map, source, source.reach, doorsShut(frame.map));
   const { outline, walls } = lightClip(sight);
   const path = new Path2D();

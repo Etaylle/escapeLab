@@ -321,8 +321,9 @@ function lighting(
   const drones = source.drones.current;
   const run = live.view.startedAt;
   const { clips } = source;
+  const { census } = source.kit;
   const reduced = live.reduced;
-  const lights = { map, sim, drones, spectator, run, now, hatch, mounts, clips, reduced };
+  const lights = { map, sim, drones, spectator, run, now, hatch, mounts, clips, reduced, census };
   const light = frameLight(lights, scene.lit, whole > 0);
   const red = escapeRed(live, now);
   const litTiles = sim.litTiles;

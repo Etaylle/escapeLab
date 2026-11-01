@@ -74,6 +74,7 @@ import {
   type RenderKit,
   type WorldMap,
 } from './render/frame.js';
+import { censusTrace, type CensusTrace } from './render/census.js';
 import { graphicsProbe } from './render/graphicsProbe.js';
 import { highlightProbe } from './render/highlight.js';
 import { minimapGoal, minimapLayout } from './render/hud.js';
@@ -456,17 +457,22 @@ function minimapOf(loop: Loop): MinimapProbe | null {
  * what the lab sounds like — the beds, the music, the radio's voice, the partner's place — and
  * can render the radio's chain offline.
  */
-function traceFrames(loop: Loop): { trace: FrameTrace; drop: () => void } | null {
+function traceFrames(loop: Loop): Traced | null {
   if (!traceRequested(location.search)) {
     return null;
   }
   const { sim } = loop;
   const trace = frameTrace();
+  const work = censusTrace();
   const drop = addProbes({
     get frames() {
       return trace.frames;
     },
     resetFrames: () => trace.resetFrames(),
+    get lightWork() {
+      return work.work;
+    },
+    resetLightWork: () => work.reset(),
     get camera() {
       return { x: sim.draw.x, y: sim.draw.y, scale: sim.scale, lead: { ...sim.lead } };
     },
@@ -488,20 +494,28 @@ function traceFrames(loop: Loop): { trace: FrameTrace; drop: () => void } | null
       return { ...bedProbe(), ...sound, nodes, spent: timeSpent(), renderRadio, ...soundProbe() };
     },
   });
-  return { trace, drop };
+  return { trace, work, drop };
+}
+
+/** What `?trace=1` keeps of the frame loop: the frame durations, the light's census. */
+interface Traced {
+  trace: FrameTrace;
+  /** the sights and bakes each drawn frame worked out (render/census.ts) */
+  work: CensusTrace;
+  drop: () => void;
 }
 
 /**
  * The frame loop: the simulation runs on every animation frame; the canvas
  * is redrawn less under a panel (drawRate.ts). Returns what stops it.
  */
-function runFrames(loop: Loop, trace: FrameTrace | null): () => void {
+function runFrames(loop: Loop, traced: Traced | null): () => void {
   let raf = 0;
   let prev = performance.now();
   /** Animation frames since the loop started: under a panel only some are drawn. */
   let frames = 0;
   const frame = (now: number): void => {
-    trace?.record(now - prev);
+    traced?.trace.record(now - prev);
     const dt = Math.min(0.05, (now - prev) / 1000);
     prev = now;
     frames += 1;
@@ -510,6 +524,7 @@ function runFrames(loop: Loop, trace: FrameTrace | null): () => void {
       step(loop, dt, map);
       if (drawsFrame(frames, { locked: loop.live.current.locked, spectator: loop.spectator })) {
         render(loop, map);
+        traced?.work.record(loop.kit.census);
       }
     }
     raf = requestAnimationFrame(frame);
@@ -851,7 +866,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
     const traced = traceFrames(loop);
     const tracedGraphics = traceGraphics(loop);
     const profiled = profilePasses(kit);
-    const stop = runFrames(loop, traced?.trace ?? null);
+    const stop = runFrames(loop, traced);
     const ears = setInterval(() => hearTheLab(loop), HEAR_MS);
     return () => {
       stop();

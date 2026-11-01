@@ -182,7 +182,11 @@
  * station step, and pacing beside the open hatch in the escape — and in a
  * mission with an intro once more, shorter, in the lit lab before the
  * blackout, and over the opening's shot for information alone. Each sample
- * logs p50 and p95. A p95 above SHOTS_FRAME_P95_MS (default 40) has the
+ * logs p50 and p95, and a line `light` with what the host's light worked out
+ * anew meanwhile — the sights a frame and the bakes (client
+ * world/render/census.ts, lightwork.mjs): a lamp on the move takes a sight a
+ * frame, the host's own as it paces and each drone's as it flies, and nothing
+ * is baked while the light holds still. A p95 above SHOTS_FRAME_P95_MS (default 40) has the
  * window sampled once more after a second's pause, the same scene for as
  * long, and fails the run only when that one is over too (framegate.mjs): a
  * runner's hiccup spoils one window, the game's cost both. The line logs
@@ -331,6 +335,7 @@ import { fileURLToPath, URL } from 'node:url';
 import { chromium, request } from 'playwright';
 import { AGAIN_AFTER_MS, gateWindow } from './framegate.mjs';
 import { GLOWING, glowAtCorners, haloAgainst, verticalShift } from './glowcheck.mjs';
+import { lightWorkText } from './lightwork.mjs';
 import {
   arrivals,
   cornersOf,
@@ -749,6 +754,7 @@ async function lookAt(page, when, quiet) {
     }
     probe.resetFrames();
     probe.resetPasses?.();
+    probe.resetLightWork?.();
     return true;
   });
   if (!found) {
@@ -770,6 +776,7 @@ async function lookAt(page, when, quiet) {
   const passes = PROFILE
     ? await page.evaluate(() => globalThis.__escapelab?.passes ?? null)
     : null;
+  const light = await page.evaluate(() => globalThis.__escapelab?.lightWork ?? null);
   if (frames.length === 0) {
     console.log(`frames             !! no frames recorded ${when}`);
     fail(`no frames recorded ${when}`);
@@ -785,6 +792,7 @@ async function lookAt(page, when, quiet) {
     sound: soundSources(nodes),
     js: soundJs(spentBefore, spentAfter, ms / 1000),
     passes,
+    light,
   };
 }
 
@@ -822,6 +830,7 @@ async function sampleFrames(page, when, quiet, { gating = true, again = quiet } 
   console.log(`cpu                cores busy: ${first.cores}; sound: ${first.sound}`);
   console.log(`pages              ${first.perPage}`);
   console.log(`sound js           ms a second on the host's main thread: ${first.js}`);
+  console.log(`light              ${lightWorkText(first.light)} ${when}`);
   if (PROFILE) {
     logPasses(first.passes, when);
   }

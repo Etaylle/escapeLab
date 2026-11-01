@@ -52,6 +52,7 @@ export function bakedFor(
   }
   const into = kept?.baked?.canvas ?? frame.kit.art.atlas.make(1, 1);
   const baked = box === null ? null : bake(box, frame.grid, draw, into);
+  frame.kit.census.bakes += baked === null ? 0 : 1;
   keep(store, [name, { of, baked }], frame, BAKE_LIMITS, canvasOf);
   return baked;
 }
@@ -133,6 +134,7 @@ function addedFor(frame: Frame, name: string, parts: readonly Baked[]): Baked | 
     return kept.baked;
   }
   const sum = addBaked(parts, kept?.baked?.canvas ?? frame.kit.art.atlas.make(1, 1));
+  frame.kit.census.bakes += sum === null ? 0 : 1;
   keep(store, [name, { of: [...parts], baked: sum }], frame, BAKE_LIMITS, canvasOf);
   return sum;
 }
