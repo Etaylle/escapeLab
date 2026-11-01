@@ -951,14 +951,35 @@ function PauseOverlay({ pausedFor }: { pausedFor: string[] }) {
 }
 
 /**
- * What comes and goes over a run: the briefing, the pause. The clock's red
+ * What comes and goes over a run: the briefing, the pause, the relay's alert. The clock's red
  * edge lies over the world alone, under the HUD (GameWorld.tsx RedEdge).
  */
-function RunOverlays({ view, coldOpen }: { view: PlayerView; coldOpen: ColdOpen }) {
+function RunOverlays({
+  view,
+  coldOpen,
+  send,
+  refusal,
+}: {
+  view: PlayerView;
+  coldOpen: ColdOpen;
+  send: Props['send'];
+  refusal: Refusal | null;
+}) {
+  const sabotage = view.map?.sabotage ?? null;
+  const relay = sabotage?.relay;
   return (
     <>
       {!coldOpen.intro && <Briefing view={view} />}
       {view.pausedFor !== null && <PauseOverlay pausedFor={view.pausedFor} />}
+      {sabotage !== null && relay !== undefined && (
+        <RelayAlert
+          sabotage={sabotage}
+          relay={relay}
+          pausedAt={view.pausedAt}
+          send={send}
+          refusal={refusal}
+        />
+      )}
     </>
   );
 }
@@ -1240,23 +1261,13 @@ export function GameScreen(props: Props) {
   if (map === null) {
     return <p className="muted">Lade Mission …</p>;
   }
-  const relay = map.sabotage?.relay;
   const self = startingSpot(positionsRef.current, view.you.id, map, view.startedAt);
   const live = finale === null;
   const over = station !== null || sheets.reading !== null || sheets.note !== null;
   const held = live && heldNow;
   return (
     <div className={gameClass(finale, live && open.notes && over, held)}>
-      {live && <RunOverlays view={view} coldOpen={coldOpen} />}
-      {live && map.sabotage !== null && relay !== undefined && (
-        <RelayAlert
-          sabotage={map.sabotage}
-          relay={relay}
-          pausedAt={view.pausedAt}
-          send={send}
-          refusal={refusal}
-        />
-      )}
+      {live && <RunOverlays view={view} coldOpen={coldOpen} send={send} refusal={refusal} />}
       <div className="stage">
         <StageTop
           view={view}

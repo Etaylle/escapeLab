@@ -169,6 +169,54 @@ export interface Line {
   stop: () => void;
 }
 
+/** What waits for a socket on its way (`Line.send`), and the one warning a time it is down. */
+interface Outbox {
+  /** keeps `msg` for the socket on its way; false where it may not wait: streamed, or full */
+  keep: (msg: ClientMessage) => boolean;
+  /** says once a time the line is down that `what` was dropped */
+  drop: (what: string) => void;
+  /** what waited, in order, taken out: the line is ready, and back */
+  release: () => string[];
+  /** what waited dropped: its socket will never be ready */
+  forget: () => void;
+}
+
+function outbox(): Outbox {
+  let waiting: string[] = [];
+  let warned = false;
+  const drop = (what: string): void => {
+    if (!warned) {
+      warned = true;
+      console.warn(
+        `escapelab: no line to the server — ${what} dropped, as is what the page streams or ` +
+          'does while no socket is on its way, until the line is back',
+      );
+    }
+  };
+  return {
+    keep: (msg) => {
+      if (STREAMED.has(msg.kind) || waiting.length >= OUTBOX_MAX) {
+        return false;
+      }
+      waiting.push(JSON.stringify(msg));
+      return true;
+    },
+    drop,
+    release: () => {
+      const out = waiting;
+      waiting = [];
+      warned = false;
+      return out;
+    },
+    forget: () => {
+      if (waiting.length > 0) {
+        drop(`what waited (${waiting.length})`);
+      }
+      waiting = [];
+    },
+  };
+}
+
 /**
  * Keeps a socket to the server open, each made by `open`: every socket that opens resumes
  * the session the page keeps, and after every close — the server restarted, the line
@@ -183,64 +231,28 @@ export function keepConnected(open: () => WebSocket, on: SocketEvents): Line {
   let current: WebSocket | null = null;
   /** `current` is open with its session back, or needs none: what is sent goes straight out */
   let ready = false;
-  let waiting: string[] = [];
-  let warned = false;
-
-  /** Says once a time the line is down that `what` was dropped. */
-  function dropped(what: string): void {
-    if (!warned) {
-      warned = true;
-      console.warn(
-        `escapelab: no line to the server — ${what} dropped, as is what the page streams or ` +
-          'does while no socket is on its way, until the line is back',
-      );
-    }
-  }
+  const waiting = outbox();
 
   function send(msg: ClientMessage): void {
-    const data = JSON.stringify(msg);
     if (ready && current?.readyState === WebSocket.OPEN) {
-      current.send(data);
+      current.send(JSON.stringify(msg));
       return;
     }
     // Not ready, yet connecting or open: on its way.
     const onItsWay =
       current?.readyState === WebSocket.CONNECTING || current?.readyState === WebSocket.OPEN;
-    if (onItsWay && !STREAMED.has(msg.kind) && waiting.length < OUTBOX_MAX) {
-      waiting.push(data);
-      return;
+    if (!onItsWay || !waiting.keep(msg)) {
+      waiting.drop(`"${msg.kind}"`);
     }
-    dropped(`"${msg.kind}"`);
   }
 
   /** The line is ready on `socket`: what waited goes out on it, in order. */
   function flush(socket: WebSocket): void {
     ready = true;
-    const queued = waiting;
-    waiting = [];
-    warned = false;
-    for (const data of queued) {
+    for (const data of waiting.release()) {
       socket.send(data);
     }
     on.ready();
-  }
-
-  /** What waited for a socket that will never be ready goes. */
-  function forget(): void {
-    if (waiting.length > 0) {
-      dropped(`what waited (${waiting.length})`);
-    }
-    waiting = [];
-  }
-
-  /** The server's answer to a resume: the session back (`joined`), or refused (`error`). */
-  function answered(socket: WebSocket, msg: ServerMessage): void {
-    if (msg.kind === 'error') {
-      forget();
-    }
-    if (msg.kind === 'joined' || msg.kind === 'error') {
-      flush(socket);
-    }
   }
 
   function connect(): void {
@@ -265,8 +277,12 @@ export function keepConnected(open: () => WebSocket, on: SocketEvents): Line {
     socket.onmessage = (event) => {
       const msg = JSON.parse(String(event.data)) as ServerMessage;
       on.message(msg);
-      if (!ready) {
-        answered(socket, msg);
+      // The server's answer to the resume: the session back, or refused.
+      if (!ready && (msg.kind === 'joined' || msg.kind === 'error')) {
+        if (msg.kind === 'error') {
+          waiting.forget();
+        }
+        flush(socket);
       }
     };
 
@@ -275,7 +291,7 @@ export function keepConnected(open: () => WebSocket, on: SocketEvents): Line {
         return;
       }
       ready = false;
-      forget();
+      waiting.forget();
       on.closed();
       on.status('closed');
       retryTimer = setTimeout(connect, retryDelay);
@@ -289,7 +305,7 @@ export function keepConnected(open: () => WebSocket, on: SocketEvents): Line {
     stop: () => {
       stopped = true;
       clearTimeout(retryTimer);
-      waiting = [];
+      waiting.release();
       current?.close();
     },
   };
@@ -367,6 +383,61 @@ function takeIn(msg: ServerMessage, page: Page): void {
   }
 }
 
+/** What `openLine` wires the page's line to: the page, its status, socket and listeners. */
+interface Wiring {
+  page: Page;
+  setStatus: (status: Connection['status']) => void;
+  /** the socket made last: a voice signal goes on it, past the line */
+  socket: MutableRefObject<WebSocket | null>;
+  listeners: MutableRefObject<Set<ServerListener>>;
+}
+
+/**
+ * Opens the page's line to the server (`keepConnected`), asking for the server's time on it
+ * while it is ready (clock.ts): every clock follows it. What the server says goes into the
+ * page (`takeIn`) and on to every listener, in order. Returns the line, and how to close it.
+ */
+function openLine(wiring: Wiring): { line: Line; close: () => void } {
+  const { page, listeners } = wiring;
+  let line: Line | null = null;
+  const asking = askForTime(() => line?.send({ kind: 'clock', sent: localNow() }));
+  const opened = keepConnected(() => new WebSocket(wsUrl()), {
+    made: (socket) => {
+      wiring.socket.current = socket;
+    },
+    status: (next) => {
+      wiring.setStatus(next);
+      if (next !== 'open') {
+        asking.close();
+      }
+    },
+    session: loadCredentials,
+    resuming: () => {
+      page.resuming.current = true;
+    },
+    ready: () => asking.open(),
+    message: (msg) => {
+      takeIn(msg, page);
+      for (const listener of listeners.current) {
+        listener.message(msg);
+      }
+    },
+    closed: () => {
+      for (const listener of listeners.current) {
+        listener.closed();
+      }
+    },
+  });
+  line = opened;
+  return {
+    line: opened,
+    close: () => {
+      asking.close();
+      opened.stop();
+    },
+  };
+}
+
 /**
  * Owns the WebSocket for the whole app: connects, resumes a stored session
  * after reload or connection loss, and reconnects with backoff (`keepConnected`).
@@ -403,56 +474,27 @@ export function useGameConnection(): Connection {
   }, []);
 
   useEffect(() => {
-    const page: Page = {
-      setRoomCode,
-      setView,
-      setSpectatorView,
-      setRooms,
-      setError,
-      refuse: (message, of) =>
-        setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
-      resuming: resumingRef,
-      positions: positionsRef,
-      drones: dronesRef,
-      pings: pingsRef,
-      chats: chatsRef,
-    };
-    let line: Line | null = null;
-    // The server's time, asked for while the line is ready (clock.ts): every clock follows it.
-    const asking = askForTime(() => line?.send({ kind: 'clock', sent: localNow() }));
-    line = keepConnected(() => new WebSocket(wsUrl()), {
-      made: (socket) => {
-        socketRef.current = socket;
+    const { line, close } = openLine({
+      page: {
+        setRoomCode,
+        setView,
+        setSpectatorView,
+        setRooms,
+        setError,
+        refuse: (message, of) =>
+          setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
+        resuming: resumingRef,
+        positions: positionsRef,
+        drones: dronesRef,
+        pings: pingsRef,
+        chats: chatsRef,
       },
-      status: (next) => {
-        setStatus(next);
-        if (next !== 'open') {
-          asking.close();
-        }
-      },
-      session: loadCredentials,
-      resuming: () => {
-        resumingRef.current = true;
-      },
-      ready: () => asking.open(),
-      message: (msg) => {
-        takeIn(msg, page);
-        for (const listener of listenersRef.current) {
-          listener.message(msg);
-        }
-      },
-      closed: () => {
-        for (const listener of listenersRef.current) {
-          listener.closed();
-        }
-      },
+      setStatus,
+      socket: socketRef,
+      listeners: listenersRef,
     });
     lineRef.current = line;
-    const stop = line.stop;
-    return () => {
-      asking.close();
-      stop();
-    };
+    return close;
   }, []);
 
   return {
