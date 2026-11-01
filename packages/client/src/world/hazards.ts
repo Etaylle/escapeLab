@@ -1,5 +1,5 @@
 import type { DronePosition } from '@escapelab/core';
-import { drawPropLabel, type WorldText } from './art.js';
+import { drawPropLabel, LABEL_BELOW, type WorldText } from './art.js';
 import {
   ALARM,
   AMBER,
@@ -90,6 +90,8 @@ export interface CarryableOpts {
   glow?: (ctx: CanvasRenderingContext2D) => void;
   /** the thing alone — no shadow, glow or label: what its silhouette is baked from */
   bare?: boolean;
+  /** where the label's top hangs under the anchor (LABEL_BELOW when left out); null: none */
+  labelAt?: number | null;
 }
 
 /** A carried item against one on the floor. */
@@ -226,8 +228,9 @@ export function drawCarryable(ctx: CanvasRenderingContext2D, o: CarryableOpts): 
   o.glow?.(ctx);
   drawItem(ctx, carryableKind(o.label), o.pulse);
   ctx.restore();
-  if (dressed) {
-    drawPropLabel(ctx, o.label.toUpperCase(), 0.41, ITEM_LABEL, o.text);
+  const at = o.labelAt === undefined ? LABEL_BELOW : o.labelAt;
+  if (dressed && at !== null) {
+    drawPropLabel(ctx, o.label.toUpperCase(), at, ITEM_LABEL, o.text);
   }
   ctx.restore();
 }

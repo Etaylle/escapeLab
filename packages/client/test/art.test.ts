@@ -38,6 +38,19 @@ describe('worldText — how large the world’s labels and names come out', () =
     }
   });
 
+  it('grows and shrinks with the reader’s text size at every zoom, below the names at each', () => {
+    for (const tilePx of ZOOMS) {
+      const normal = worldText(tilePx, 1);
+      for (const scale of [0.9, 1.15]) {
+        const sized = worldText(tilePx, 1, scale);
+        expect(sized.label.size).toBeCloseTo(normal.label.size * scale, 9);
+        expect(sized.name.size).toBeCloseTo(normal.name.size * scale, 9);
+        expect(fontPx(sized.label)).toBeCloseTo(fontPx(normal.label) * scale, 6);
+        expect(cssPx(sized.label, tilePx, 1)).toBeLessThan(ROOM_NAME_PX * scale);
+      }
+    }
+  });
+
   it('names a font of that size, with its halo grown or shrunk alongside', () => {
     const [small, large] = [worldText(20, 1), worldText(340, 1)];
     for (const pick of [(t: typeof small) => t.label, (t: typeof small) => t.name]) {

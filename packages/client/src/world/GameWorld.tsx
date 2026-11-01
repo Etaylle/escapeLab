@@ -20,7 +20,7 @@ import { onPadPing, padSteer } from '../input/padRuntime.js';
 import { addProbes, type MinimapProbe } from '../probes.js';
 import type { CoachMark } from '../puzzles/coach.js';
 import { TalkButton } from '../screens/Voice.js';
-import { getSettings, useReducedMotion } from '../settings.js';
+import { getSettings, TEXT_SCALE, useReducedMotion, useSettings } from '../settings.js';
 import { VoiceContext } from '../voice/useVoice.js';
 import type { Connection } from '../ws.js';
 import {
@@ -876,7 +876,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
       pings: props.pingsRef,
       chats: props.chatsRef,
       clips: new WeakMap(),
-      texts: { s: 0, dpr: 0, styles: worldText(48, 1) },
+      texts: { s: 0, dpr: 0, scale: 0, styles: worldText(48, 1) },
       soundOff,
       drawn: null,
     };
@@ -1094,6 +1094,7 @@ function useWorld(props: Props): WorldState {
   const dropRef = useRef<(() => void) | null>(null);
   const voice = useContext(VoiceContext);
   const reduced = useReducedMotion();
+  const textScale = TEXT_SCALE[useSettings().textSize];
   // The escape (escape.ts) and the ending (finale.ts), as this screen lives them.
   const escapeSince = useEscapeSince(view.map?.exit ?? null, view.startedAt);
   const live = useLatest<Live>({
@@ -1105,6 +1106,7 @@ function useWorld(props: Props): WorldState {
     intro: props.intro ?? null,
     escapeSince,
     reduced,
+    textScale,
     voice,
     send: props.send,
     onToggleInfo: props.onToggleInfo,

@@ -1869,8 +1869,10 @@ button.link:hover {
   gap: 1px;
 }
 
+/* The HUD's smallest words: never under 12 px (docs/art-bible.md, „Schriftgrade"). */
 .edgework-label {
-  font-size: calc(9px * var(--text-scale));
+  font-size: calc(12px * var(--text-scale));
+  line-height: 1.1;
   letter-spacing: 0.5px;
   color: var(--muted);
 }
@@ -2204,7 +2206,7 @@ button.link:hover {
 
 .hud-idle {
   font-family: var(--mono);
-  font-size: calc(11px * var(--text-scale));
+  font-size: calc(12px * var(--text-scale));
   color: var(--muted);
 }
 
@@ -2436,10 +2438,12 @@ button.link:hover {
   white-space: nowrap;
 }
 
+/* 40 px high: 3 px above and below the 12 px heads and the serial under them. */
 .hud .edgework {
   height: 40px;
   flex-wrap: nowrap;
   align-items: center;
+  padding-block: 3px;
   overflow: hidden;
 }
 

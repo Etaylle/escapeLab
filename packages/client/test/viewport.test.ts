@@ -85,7 +85,15 @@ describe('placeRoomNames — which room names are drawn, and where', () => {
   // A laptop's world: 1000x600, the bar 80px deep, the controls reaching 68px
   // up, the minimap below the bar at the top right.
   const MINIMAP: Box = { left: 820, top: 79, right: 991, bottom: 190 };
-  const VIEW: Viewport = { w: 1000, h: 600, dpr: 1, top: 80, bottom: 68, boxes: [MINIMAP] };
+  const VIEW: Viewport = {
+    w: 1000,
+    h: 600,
+    dpr: 1,
+    textScale: 1,
+    top: 80,
+    bottom: 68,
+    boxes: [MINIMAP],
+  };
   const name = (x: number, y: number, text = 'LABOR', width = 100): RoomName => ({
     text,
     x,
@@ -103,16 +111,27 @@ describe('placeRoomNames — which room names are drawn, and where', () => {
     expect(placed([name(-10, 300), name(1010, 300), name(500, -5), name(500, 610)])).toEqual([]);
   });
 
-  it('nudges a name near a side in, to be read whole', () => {
+  // A name's plate reaches 0.5 of its 13 px past its letters at either side, and the air
+  // 6 px past that: 12.5 px beyond the 100 px of letters' half. Up and down the plate reaches
+  // 0.8 + 0.25 of its size over the baseline, 0.3 + 0.25 under it, and the air 6 px past that.
+  const RISE = (0.8 + 0.25) * 13 + 6;
+  const DROP = (0.3 + 0.25) * 13 + 6;
+
+  it('nudges a name near a side in, plate and all, to be read whole', () => {
     expect(placed([name(20, 300, 'ARCHIV'), name(990, 400, 'REAKTOR')])).toEqual([
-      'ARCHIV@56,300',
-      'REAKTOR@944,400',
+      'ARCHIV@62.5,300',
+      'REAKTOR@937.5,400',
     ]);
   });
 
-  it('drops a name that would lie under the objective bar or the controls', () => {
-    expect(placed([name(500, 85), name(500, 540)])).toEqual([]);
-    expect(placed([name(500, 100), name(500, 520)])).toEqual(['LABOR@500,100', 'LABOR@500,520']);
+  it('drops a name whose plate would lie under the objective bar or the controls', () => {
+    const under = Math.ceil(80 + RISE) - 1;
+    const over = Math.floor(600 - 68 - DROP) + 1;
+    expect(placed([name(500, under), name(500, over)])).toEqual([]);
+    expect(placed([name(500, under + 1), name(500, over - 1)])).toEqual([
+      `LABOR@500,${under + 1}`,
+      `LABOR@500,${over - 1}`,
+    ]);
   });
 
   it('drops a name that would lie on the minimap, and keeps one beside it', () => {
@@ -124,10 +143,20 @@ describe('placeRoomNames — which room names are drawn, and where', () => {
     expect(placed(names)).toEqual(['FLUR@500,300', 'KERN@500,340']);
   });
 
-  it('keeps its air in device pixels: twice as much at twice the density', () => {
+  it('keeps its plate and air in device pixels: twice as much at twice the density', () => {
     const dense: Viewport = { ...VIEW, w: 2000, h: 1200, dpr: 2, top: 160, bottom: 136, boxes: [] };
-    expect(placed([name(1000, 185)], dense)).toEqual([]);
-    expect(placed([name(1000, 195)], dense)).toEqual(['LABOR@1000,195']);
+    const clear = Math.ceil(160 + 2 * RISE);
+    expect(placed([name(1000, clear - 1)], dense)).toEqual([]);
+    expect(placed([name(1000, clear)], dense)).toEqual([`LABOR@1000,${clear}`]);
+  });
+
+  it('grows the plate with the reader’s text size, and drops more names for it', () => {
+    const large: Viewport = { ...VIEW, textScale: 1.15 };
+    const clear = Math.ceil(80 + RISE);
+    expect(placed([name(500, clear)])).toEqual([`LABOR@500,${clear}`]);
+    expect(placed([name(500, clear)], large)).toEqual([]);
+    const nudged = 50 + 0.5 * 13 * 1.15 + 6;
+    expect(placed([name(20, 300, 'ARCHIV')], large)).toEqual([`ARCHIV@${nudged},300`]);
   });
 });
 

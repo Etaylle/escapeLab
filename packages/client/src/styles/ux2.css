@@ -15,7 +15,7 @@
 /* The word the marks count, small, in the marks' colour. */
 .alarm-marks-label {
   margin-right: 2px;
-  font-size: calc(10px * var(--text-scale));
+  font-size: calc(12px * var(--text-scale));
   letter-spacing: 2px;
   color: var(--muted);
 }

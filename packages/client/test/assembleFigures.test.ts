@@ -94,6 +94,7 @@ function sourceWith(items: Item[], finale: FinaleCue | null = null): FrameSource
     escapeSince: null,
     intro: null,
     reduced: false,
+    textScale: 1,
     voice: null,
     station: null,
   };
@@ -110,7 +111,7 @@ function sourceWith(items: Item[], finale: FinaleCue | null = null): FrameSource
     drones: { current: {} },
     chats: { current: [] },
     clips: new WeakMap(),
-    texts: { s: 100, dpr: 1, styles: worldText(100, 1) },
+    texts: { s: 100, dpr: 1, scale: 1, styles: worldText(100, 1) },
   };
 }
 
@@ -131,6 +132,17 @@ describe('assembleFrame — what the crew’s figures stand by', () => {
   });
   afterAll(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('sets the screen’s and the world’s text at the reader’s text size, anew on a change', () => {
+    const source = sourceWith([]);
+    const normal = frameAt(source, 1);
+    expect(normal.viewport.textScale).toBe(1);
+    source.live.current = { ...source.live.current, textScale: 1.15 };
+    const large = frameAt(source, 2);
+    expect(large.viewport.textScale).toBe(1.15);
+    expect(large.text.label.size).toBeCloseTo(normal.text.label.size * 1.15, 9);
+    expect(large.text.name.size).toBeCloseTo(normal.text.name.size * 1.15, 9);
   });
 
   it('tells who carries what by the view’s items, and nobody for an item delivered', () => {

@@ -366,6 +366,20 @@ describe('the stylesheets under the settings', () => {
     expect(read('ui.css')).toMatch(pad);
   });
 
+  it('set the HUD’s smallest words at 12 px or more: the chip’s heads, ALARME, unterwegs', () => {
+    const smallest: [string, string][] = [
+      ['ui.css', '.edgework-label'],
+      ['styles/ux2.css', '.alarm-marks-label'],
+      ['ui.css', '.hud-idle'],
+    ];
+    for (const [sheet, selector] of smallest) {
+      const opens = new RegExp(`\\n${selector.replace(/\./g, '\\.')} \\{([^}]*)\\}`);
+      const rule = opens.exec(read(sheet))?.[1] ?? '';
+      const px = /font-size: calc\((\d+(?:\.\d+)?)px \* var\(--text-scale\)\);/.exec(rule);
+      expect(Number(px?.[1]), selector).toBeGreaterThanOrEqual(12);
+    }
+  });
+
   it('size the HUD’s goal, clock, banner and crew strip by it', () => {
     const ui = read('ui.css');
     const hud = ['.stage-goal h1', '.stage-top .countdown', '.radio-banner', '.hud-crew li'];

@@ -19,7 +19,7 @@ import { mapWith, type Manual } from './fixtures.js';
  * deep over its top, and nothing else on it unless `more` says so.
  */
 function frame(w: number, h: number, bar: number, dpr: number, more: Partial<Viewport> = {}) {
-  const plain: Viewport = { w, h, dpr, top: bar * dpr, bottom: 0, boxes: [] };
+  const plain: Viewport = { w, h, dpr, textScale: 1, top: bar * dpr, bottom: 0, boxes: [] };
   return { ...plain, ...more };
 }
 
@@ -460,7 +460,7 @@ describe('placeMarkers — targets in the same direction', () => {
     for (const p of placeMarkers(points, frame(W, H, BAR, 1))) {
       expect(p).not.toBeNull();
       if (p !== null) {
-        expect(markerBoxes(p, CAPTION, 1)).toEqual(boxes(p, CAPTION));
+        expect(markerBoxes(p, CAPTION, { dpr: 1, textScale: 1 })).toEqual(boxes(p, CAPTION));
       }
     }
   });
@@ -476,7 +476,7 @@ describe('placeMarkers — clear of the minimap and the controls', () => {
   const at = (px: number, py: number): MarkerPoint => ({ px, py, captionWidth: 60 });
   /** Whether a placed marker's arrow or caption lies on the minimap. */
   const onMinimap = (p: MarkerPlacement | null | undefined): boolean =>
-    p != null && markerBoxes(p, 60, 1).some((box) => overlaps(box, MINIMAP));
+    p != null && markerBoxes(p, 60, VIEW).some((box) => overlaps(box, MINIMAP));
 
   it('slides an arrow on the right edge down, past the minimap', () => {
     const [right] = placeMarkers([at(W + 200, 120)], VIEW);
@@ -540,9 +540,11 @@ describe('placeMarkers — clear of the own figure on a phone held sideways', ()
   it('moves an arrow along the bottom edge off the figure, its caption too', () => {
     const view = frame(W, H, 40, 1, { bottom: 20 });
     const [plain] = placeMarkers([at(430, 600)], view);
-    expect(plain != null && markerBoxes(plain, 70, 1).some((b) => overlaps(b, KEEP_OUT))).toBe(true);
+    expect(plain != null && markerBoxes(plain, 70, view).some((b) => overlaps(b, KEEP_OUT))).toBe(
+      true,
+    );
     const [clear] = placeMarkers([at(430, 600)], { ...view, boxes: [KEEP_OUT] });
-    expect(clear != null && markerBoxes(clear, 70, 1).some((b) => overlaps(b, KEEP_OUT))).toBe(
+    expect(clear != null && markerBoxes(clear, 70, view).some((b) => overlaps(b, KEEP_OUT))).toBe(
       false,
     );
   });

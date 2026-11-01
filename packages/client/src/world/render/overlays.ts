@@ -20,7 +20,14 @@ import {
   rgba,
   TEAL,
 } from '../palette.js';
-import { placeRoomNames, ROOM_NAME_PX, shiftClear, type Box, type Viewport } from '../viewport.js';
+import {
+  namePlate,
+  placeRoomNames,
+  roomNamePx,
+  shiftClear,
+  type Box,
+  type Viewport,
+} from '../viewport.js';
 import { FALLBACK_COLOR, toScreen, type ChatLine, type Frame } from './frame.js';
 
 /**
@@ -47,12 +54,30 @@ export const CAPTION_SECONDS = 2;
 const KEEP_OUT_TILES = 1.5;
 /** Air between two tags on the screen — a caption and the E prompt — CSS pixels. */
 const TAG_AIR = 4;
+/**
+ * The screen's own text at the normal text size, CSS pixels; the reader's text size scales
+ * it (`Viewport.textScale`), boxes and all: the E prompt's and the captions' tags, the arrows'
+ * captions, the chat bubbles, the carry line and the hatch's sign. Room names: viewport.ts.
+ */
+const TAG_PX = 12;
+const ARROW_PX = 11;
+const BUBBLE_PX = 12;
+const CARRY_PX = 12;
+const EXIT_PX = 12;
+
+/**
+ * A room name's letters and the dark plate under them, as colour and opacity: over the
+ * brightest lit floor the letters still stand out from the plate at 4.5:1 or more (WCAG 2.2).
+ */
+export const NAME_INK = { rgb: lift(LABEL, 0.15), alpha: 0.8 } as const;
+export const NAME_PLATE = { rgb: NIGHT, alpha: 0.9 } as const;
 
 const C = {
   tag: rgba(INK, 0.88),
   exit: css(DONE_GREEN),
   nameHalo: rgba(NIGHT, 0.85),
-  name: rgba(lift(LABEL, 0.15), 0.8),
+  name: rgba(NAME_INK.rgb, NAME_INK.alpha),
+  namePlate: rgba(NAME_PLATE.rgb, NAME_PLATE.alpha),
   locked: css(AMBER),
   action: css(TEAL),
   caption: css(lift(READ_BLUE, 0.3)),
@@ -60,6 +85,11 @@ const C = {
   bubbleInk: css(INK),
   carrying: css(READ_BLUE),
 } as const;
+
+/** `px` CSS pixels of text at `view`'s text size, in device pixels. */
+function textPx(px: number, view: Pick<Viewport, 'dpr' | 'textScale'>): number {
+  return px * view.textScale * view.dpr;
+}
 
 /** An arrow at the screen's edge: what it points at, its caption and where it sits. */
 interface EdgeMarker {
@@ -120,17 +150,21 @@ function drawPingArrow(
   }
 }
 
-/** The box a tag like the E prompt covers with `text` centred on (sx, sy); device pixels. */
+/**
+ * The box a tag like the E prompt covers with `text` centred on (sx, sy), at `view`'s text
+ * size; device pixels. Its measures are in device pixels per CSS pixel of the normal size.
+ */
 function tagBox(
   ctx: CanvasRenderingContext2D,
   text: string,
   sx: number,
   sy: number,
-  dpr: number,
+  view: Viewport,
 ): Box {
-  ctx.font = `700 ${12 * dpr}px ui-monospace, Menlo, monospace`;
-  const half = (ctx.measureText(text).width + 16 * dpr) / 2;
-  return { left: sx - half, top: sy - 11 * dpr, right: sx + half, bottom: sy + 9 * dpr };
+  const k = textPx(1, view);
+  ctx.font = `700 ${TAG_PX * k}px ui-monospace, Menlo, monospace`;
+  const half = (ctx.measureText(text).width + 16 * k) / 2;
+  return { left: sx - half, top: sy - 11 * k, right: sx + half, bottom: sy + 9 * k };
 }
 
 /** A tag on the screen like the E prompt: a dark pill with rim and text in `tint`, in `box`. */
@@ -139,18 +173,19 @@ function drawTag(
   text: string,
   box: Box,
   tint: string,
-  dpr: number,
+  view: Viewport,
 ): void {
-  ctx.font = `700 ${12 * dpr}px ui-monospace, Menlo, monospace`;
+  const k = textPx(1, view);
+  ctx.font = `700 ${TAG_PX * k}px ui-monospace, Menlo, monospace`;
   ctx.fillStyle = C.tag;
   ctx.strokeStyle = tint;
-  ctx.lineWidth = dpr;
+  ctx.lineWidth = view.dpr;
   ctx.beginPath();
-  ctx.roundRect(box.left, box.top, box.right - box.left, box.bottom - box.top, 5 * dpr);
+  ctx.roundRect(box.left, box.top, box.right - box.left, box.bottom - box.top, 5 * k);
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = tint;
-  ctx.fillText(text, (box.left + box.right) / 2, box.top + 15 * dpr);
+  ctx.fillText(text, (box.left + box.right) / 2, box.top + 15 * k);
 }
 
 /** `box` moved down by `dy`, device pixels. */
@@ -180,12 +215,12 @@ function drawScreenText(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const figure = frame.spectator ? null : figureOn(frame);
   const shunned = figure === null ? view.boxes : [...view.boxes, figure.keepOut];
   const markers = edgeMarkers(ctx, frame, { ...view, boxes: shunned });
-  const arrows = markers.flatMap(({ at, captionWidth }) => markerBoxes(at, captionWidth, view.dpr));
+  const arrows = markers.flatMap(({ at, captionWidth }) => markerBoxes(at, captionWidth, view));
   drawRoomNames(ctx, frame, { ...view, boxes: [...view.boxes, ...arrows] });
   drawExitSign(ctx, frame);
   ctx.globalAlpha = frame.hud;
   drawDangerGlows(ctx, frame);
-  drawEdgeMarkers(ctx, markers, view.dpr);
+  drawEdgeMarkers(ctx, markers, view);
   const prompt = drawPrompt(ctx, frame, figure?.body ?? null);
   drawCaptions(ctx, frame, prompt);
   drawChatBubbles(ctx, frame);
@@ -198,7 +233,7 @@ function drawExitSign(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const exit = frame.map.exit;
   if (exit !== null && exit.open) {
     const [ex, ey] = toScreen(frame, exit.x + 0.5, exit.y - 0.5);
-    ctx.font = `700 ${12 * frame.viewport.dpr}px ui-monospace, Menlo, monospace`;
+    ctx.font = `700 ${textPx(EXIT_PX, frame.viewport)}px ui-monospace, Menlo, monospace`;
     ctx.fillStyle = C.exit;
     ctx.fillText('NOTAUSGANG', ex, ey);
   }
@@ -227,7 +262,7 @@ function figureOn(frame: Frame): { body: Box; keepOut: Box } {
 
 /** The arrows due at the screen's edge this frame, each with its caption, placed in `view`. */
 function edgeMarkers(ctx: CanvasRenderingContext2D, frame: Frame, view: Viewport): EdgeMarker[] {
-  ctx.font = `700 ${11 * view.dpr}px ui-monospace, Menlo, monospace`;
+  ctx.font = `700 ${textPx(ARROW_PX, view)}px ui-monospace, Menlo, monospace`;
   const marks = frame.markers.filter((target) => target.glow === undefined).map((target) => {
     const [px, py] = toScreen(frame, target.x, target.y);
     const tiles = Math.round(Math.hypot(target.x - frame.self.x, target.y - frame.self.y));
@@ -244,9 +279,10 @@ function edgeMarkers(ctx: CanvasRenderingContext2D, frame: Frame, view: Viewport
 function drawEdgeMarkers(
   ctx: CanvasRenderingContext2D,
   markers: readonly EdgeMarker[],
-  dpr: number,
+  view: Viewport,
 ): void {
-  ctx.font = `700 ${11 * dpr}px ui-monospace, Menlo, monospace`;
+  const { dpr } = view;
+  ctx.font = `700 ${textPx(ARROW_PX, view)}px ui-monospace, Menlo, monospace`;
   for (const { target, caption, at } of markers) {
     ctx.save();
     ctx.translate(at.x, at.y);
@@ -265,14 +301,17 @@ function drawEdgeMarkers(
 }
 
 /**
- * Room names are signage, not world objects: a fixed size above every
- * prop's label, nudged in rather than cut off at a side, and left out
- * where they would lie off screen or under something else in `view`.
+ * Room names are signage, not world objects: a size above every prop's
+ * label at the reader's text size, each on a dark plate that keeps it
+ * readable over lit floor as in the dark, nudged in rather than cut off at a
+ * side, and left out where they would lie off screen or under something else
+ * in `view`.
  */
 function drawRoomNames(ctx: CanvasRenderingContext2D, frame: Frame, view: Viewport): void {
   const { dpr } = view;
+  const size = roomNamePx(view);
   ctx.save();
-  ctx.font = `700 ${ROOM_NAME_PX * dpr}px ui-monospace, Menlo, monospace`;
+  ctx.font = `700 ${size}px ui-monospace, Menlo, monospace`;
   const names = frame.map.labels.map((label) => {
     const [x, y] = toScreen(frame, label.x + 0.5, label.y + 0.5);
     return { text: label.text, x, y, width: ctx.measureText(label.text).width };
@@ -280,8 +319,14 @@ function drawRoomNames(ctx: CanvasRenderingContext2D, frame: Frame, view: Viewpo
   ctx.lineJoin = 'round';
   ctx.lineWidth = 3 * dpr;
   ctx.strokeStyle = C.nameHalo;
-  ctx.fillStyle = C.name;
   for (const name of placeRoomNames(names, view)) {
+    const plate = namePlate(name, size);
+    ctx.fillStyle = C.namePlate;
+    ctx.beginPath();
+    const { left, top, right, bottom } = plate;
+    ctx.roundRect(left, top, right - left, bottom - top, 3 * dpr);
+    ctx.fill();
+    ctx.fillStyle = C.name;
     ctx.strokeText(name.text, name.x, name.y);
     ctx.fillText(name.text, name.x, name.y);
   }
@@ -316,11 +361,16 @@ function drawPrompt(ctx: CanvasRenderingContext2D, frame: Frame, figure: Box | n
   const { dpr } = view;
   const [sx, rawY] = toScreen(frame, shown.x, shown.y);
   // Like the edge arrows: the prompt must stay below the objective bar.
-  const box = tagBox(ctx, shown.text, sx, Math.max(rawY, view.top + 24 * dpr), dpr);
+  const box = tagBox(ctx, shown.text, sx, Math.max(rawY, lowestTag(view)), view);
   const ceiling = view.top + 13 * dpr;
   const at = moved(box, figure === null ? 0 : shiftClear(box, figure, TAG_AIR * dpr, ceiling));
-  drawTag(ctx, shown.text, at, shown.tint, dpr);
+  drawTag(ctx, shown.text, at, shown.tint, view);
   return at;
+}
+
+/** Where a tag's middle may lie highest on `view`: its top 13 CSS px below the objective bar. */
+function lowestTag(view: Viewport): number {
+  return view.top + 13 * view.dpr + 11 * textPx(1, view);
 }
 
 /**
@@ -335,11 +385,11 @@ function drawCaptions(ctx: CanvasRenderingContext2D, frame: Frame, prompt: Box |
   for (const caption of frame.captions) {
     const age = (frame.time - caption.at) / CAPTION_SECONDS;
     const [sx, rawY] = toScreen(frame, caption.x, caption.y - 1 - 0.3 * age);
-    const box = tagBox(ctx, caption.text, sx, Math.max(rawY, view.top + 24 * dpr), dpr);
+    const box = tagBox(ctx, caption.text, sx, Math.max(rawY, lowestTag(view)), view);
     const ceiling = view.top + 13 * dpr;
     const dy = prompt === null ? 0 : shiftClear(box, prompt, TAG_AIR * dpr, ceiling);
     ctx.globalAlpha = under * Math.min(1, age * 10, (1 - age) * 4);
-    drawTag(ctx, caption.text, moved(box, dy), C.caption, dpr);
+    drawTag(ctx, caption.text, moved(box, dy), C.caption, view);
   }
   ctx.globalAlpha = under;
 }
@@ -376,7 +426,8 @@ function drawChatBubbles(ctx: CanvasRenderingContext2D, frame: Frame): void {
 }
 
 /**
- * One speech bubble with its tail at (sx, sy), fading out over the last fifth of its life — as
+ * One speech bubble over (sx, sy), its tail's tip 16 CSS px under that point whatever the text
+ * size — the bubble grows upward from there — fading out over the last fifth of its life, as
  * far as the alpha it is drawn under lets it.
  */
 function drawBubble(
@@ -386,25 +437,27 @@ function drawBubble(
   sx: number,
   sy: number,
 ): void {
-  const { dpr } = frame.viewport;
+  const view = frame.viewport;
+  const k = textPx(1, view);
+  const tip = sy + 16 * view.dpr;
   const text = chatText(line.phrase);
-  ctx.font = `600 ${12 * dpr}px system-ui, sans-serif`;
-  const tw = ctx.measureText(text).width + 18 * dpr;
+  ctx.font = `600 ${BUBBLE_PX * k}px system-ui, sans-serif`;
+  const tw = ctx.measureText(text).width + 18 * k;
   const age = (frame.perf - line.at) / CHAT_LIFETIME_MS;
   const under = ctx.globalAlpha;
   ctx.globalAlpha = under * (age > 0.8 ? (1 - age) / 0.2 : 1);
   ctx.fillStyle = C.bubble;
   ctx.beginPath();
-  ctx.roundRect(sx - tw / 2, sy - 12 * dpr, tw, 22 * dpr, 7 * dpr);
+  ctx.roundRect(sx - tw / 2, tip - 28 * k, tw, 22 * k, 7 * k);
   ctx.fill();
   ctx.beginPath();
-  ctx.moveTo(sx - 5 * dpr, sy + 9 * dpr);
-  ctx.lineTo(sx + 5 * dpr, sy + 9 * dpr);
-  ctx.lineTo(sx, sy + 16 * dpr);
+  ctx.moveTo(sx - 5 * k, tip - 7 * k);
+  ctx.lineTo(sx + 5 * k, tip - 7 * k);
+  ctx.lineTo(sx, tip);
   ctx.closePath();
   ctx.fill();
   ctx.fillStyle = C.bubbleInk;
-  ctx.fillText(text, sx, sy + 4 * dpr);
+  ctx.fillText(text, sx, tip - 12 * k);
   ctx.globalAlpha = under;
 }
 
@@ -419,7 +472,7 @@ function drawCarrying(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const carrying = carriedItem(frame.map, frame.youId);
   if (carrying !== undefined) {
     const view = frame.viewport;
-    ctx.font = `700 ${12 * view.dpr}px ui-monospace, Menlo, monospace`;
+    ctx.font = `700 ${textPx(CARRY_PX, view)}px ui-monospace, Menlo, monospace`;
     ctx.fillStyle = C.carrying;
     ctx.fillText(carryLine(carrying.label), view.w / 2, view.h - 16 * view.dpr);
   }

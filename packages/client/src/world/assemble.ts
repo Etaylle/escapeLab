@@ -48,6 +48,8 @@ export interface Latest {
   /** the run's opening on this screen (intro/sequence.ts); null where it plays none */
   intro: IntroCue | null;
   reduced: boolean;
+  /** the reader's text size (settings.ts TEXT_SCALE): the canvas's own text follows it */
+  textScale: number;
   /** the crew's voice, read on every frame for who speaks; none outside the app */
   voice: VoiceMesh | null;
   /** the station whose panel lies over the world; null for none: the camera leans in on it */
@@ -71,8 +73,11 @@ export interface FrameSource {
   chats: React.MutableRefObject<ChatLine[]>;
   /** clip paths in tiles, by the sight they were made from: a lamp standing still reuses its own */
   clips: WeakMap<Sight, Path2D>;
-  /** the world's text at the zoom it was last worked out for; the zoom seldom changes */
-  texts: { s: number; dpr: number; styles: WorldText };
+  /**
+   * the world's text at the zoom and the text size it was last worked out for; neither
+   * changes often
+   */
+  texts: { s: number; dpr: number; scale: number; styles: WorldText };
 }
 
 /**
@@ -209,11 +214,12 @@ function leanIn(source: FrameSource, now: number): number {
   return zoomAt(kit.zoom, now, reduced);
 }
 
-/** The world's text at the zoom it was last worked out for; the zoom seldom changes. */
+/** The world's text at this zoom and text size, worked out again only where either changed. */
 function textAt(source: FrameSource, s: number, dpr: number): WorldText {
   const { texts } = source;
-  if (texts.s !== s || texts.dpr !== dpr) {
-    Object.assign(texts, { s, dpr, styles: worldText(s, dpr) });
+  const scale = source.live.current.textScale;
+  if (texts.s !== s || texts.dpr !== dpr || texts.scale !== scale) {
+    Object.assign(texts, { s, dpr, scale, styles: worldText(s, dpr, scale) });
   }
   return texts.styles;
 }
@@ -270,6 +276,7 @@ function stage(
     w,
     h,
     dpr,
+    textScale: source.live.current.textScale,
     top: insets.top * dpr,
     bottom: insets.bottom * dpr,
     boxes: minimap === null ? [] : [minimapBox(minimap, dpr)],
