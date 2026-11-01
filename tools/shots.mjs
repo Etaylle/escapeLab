@@ -139,7 +139,12 @@
  * down the right edge, a drawer along a phone's foot — the block has to come
  * in at the pad's foot as a capture under a head naming the source
  * („Klemmbrett · Legende"), and E has to put the source down again, or the
- * run fails. After the station step the crew leaves the station that is
+ * run fails. The host, who noted the Signalkette's legend, then takes the
+ * Laborkennung over too: notepad-captured.png shows both in the pad's own
+ * look, and notepad-captured-phone.png at the phone's size — the writing in
+ * the hand shipped with the game, the legend's columns whole on their ruled
+ * lines, every text 15 px or more and 4.5:1 against the paper, or the run
+ * fails. After the station step the crew leaves the station that is
  * up quiet until the Leitstelle names the next place (nudge.png,
  * nudge-phone.png): its line in both banners, spoken by its recording.
  *
@@ -4209,7 +4214,115 @@ async function noteTakenAt(page, source) {
   const lines = head === null ? 0 : (await body.inputValue()).split('\n').length;
   const named = head !== null && head.startsWith(`${placeNamed(source.label)} · `);
   const ok = named && lines <= CAPTURE_LINES;
-  return { ok, said: `${ok ? '' : '!! '}noted „${head}", ${lines} line(s) under it` };
+  return { ok, head, said: `${ok ? '' : '!! '}noted „${head}", ${lines} line(s) under it` };
+}
+
+/** The capture reading-notepad.png took, and whose pad holds it; null before. */
+let noted = null;
+
+/**
+ * The notepad on `page` as it shows now, read off the page: the faces it writes in, the sizes
+ * and the contrast of its texts against its paper, whether every table of pencil fits its line,
+ * the heads of its captures, and whether the pad lies within the window.
+ */
+function padLook(page) {
+  return page.evaluate(() => {
+    const luminance = (color) => {
+      const [r, g, b] = (color.match(/[\d.]+/g) ?? []).slice(0, 3).map((c) => {
+        const s = Number(c) / 255;
+        return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const style = (el) => globalThis.getComputedStyle(el);
+    const pad = document.querySelector('.notepad');
+    const paper = luminance(style(pad).backgroundColor);
+    const texts = [
+      ...pad.querySelectorAll('.notepad-text, .notepad-capture-head, .notepad-capture-text'),
+    ];
+    const contrast = Math.min(
+      ...texts.map((el) => {
+        const [light, dark] = [luminance(style(el).color), paper].sort((a, b) => b - a);
+        return (light + 0.05) / (dark + 0.05);
+      }),
+    );
+    const tables = [...pad.querySelectorAll('.notepad-capture--table .notepad-capture-text')];
+    const box = pad.getBoundingClientRect();
+    return {
+      hand: style(pad.querySelector('.notepad-text')).fontFamily.split(',')[0].replaceAll('"', ''),
+      handLoaded: document.fonts.check('18px Kalam'),
+      pencil: tables.map((el) => style(el).fontFamily.split(',')[0])[0] ?? null,
+      smallest: Math.min(...texts.map((el) => Number.parseFloat(style(el).fontSize))),
+      contrast,
+      tablesFit: tables.every((el) => el.scrollWidth <= el.clientWidth),
+      heads: [...pad.querySelectorAll('.notepad-capture-head')].map(
+        (el) => el.firstChild?.textContent,
+      ),
+      inWindow:
+        box.left >= 0 &&
+        box.top >= 0 &&
+        box.right <= globalThis.innerWidth &&
+        box.bottom <= globalThis.innerHeight,
+    };
+  });
+}
+
+/**
+ * notepad-captured.png, then notepad-captured-phone.png at the phone's size: the pad of the
+ * player who noted the Signalkette's legend at the Klemmbrett (reading-notepad.png) takes the
+ * Laborkennung over too, and shows both in the notepad's own look — the writing in the hand
+ * shipped with the game (Kalam), the legend in pencil block letters on ruled lines, the
+ * Laborkennung on its line —, scrolled down to them. Its texts have to stand at 15 px or more
+ * and 4.5:1 against the paper, the legend's columns on their lines without scrolling, the pad
+ * within the window, or the run fails. A pad without the legend, or a player who has not read
+ * the sign, skips the shots.
+ */
+async function captureNotepadCaptured() {
+  const shots = ['notepad-captured.png', 'notepad-captured-phone.png'];
+  if (noted === null || !/ · Legende$/.test(noted.head ?? '')) {
+    const why = `no Signalkette legend noted (${noted?.head ?? 'nothing'})`;
+    shots.forEach((shot) => skip(shot, why));
+    return;
+  }
+  const { page, name, seen } = noted.player;
+  if (seen.view.edgework === null) {
+    shots.forEach((shot) => skip(shot, `${name} has not read the Laborkennung`));
+    return;
+  }
+  const pad = page.locator('.notepad');
+  await page.locator('.hud-notes').click();
+  await pad.waitFor({ state: 'visible', timeout: 3000 });
+  await pad.locator('.notepad-take').click();
+  const size = page.viewportSize();
+  for (const [shot, at] of [[shots[0], size], [shots[1], SIZES[2]]]) {
+    await page.setViewportSize({ width: at.width, height: at.height });
+    await sleep(300);
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+      const sheet = document.querySelector('.notepad-sheet');
+      sheet.scrollTop = sheet.scrollHeight;
+    });
+    await capture(page, shot);
+    const look = await padLook(page);
+    const both = look.heads.includes(noted.head) && look.heads.at(-1) === SIGN_CAPTURE;
+    const ok =
+      both && look.hand === 'Kalam' && look.handLoaded && look.pencil !== null &&
+      look.smallest >= 15 && look.contrast >= 4.5 && look.tablesFit && look.inWindow;
+    console.log(
+      `${`${shot} `.padEnd(19)}${name} @ ${at.width}x${at.height}: ` +
+        `${look.heads.map((h) => `„${h}"`).join(', ')}; ` +
+        `writing in ${look.hand}${look.handLoaded ? '' : ' (!! not loaded)'}, ` +
+        `tables in ${look.pencil}` +
+        `${look.tablesFit ? '' : ' (!! cut)'}; smallest ${look.smallest} px, contrast ` +
+        `${look.contrast.toFixed(1)}:1` +
+        `${look.inWindow ? '' : '; !! the pad runs out of the window'}`,
+    );
+    if (!ok) {
+      fail(`${shot}: the notepad does not show the captures in its own look`);
+    }
+  }
+  await page.setViewportSize(size);
+  await padAway(page);
 }
 
 /**
@@ -4253,6 +4366,7 @@ async function captureNoting(player, shot, glowShot, audience) {
   if (!offered || !taken.ok || !side.ok) {
     fail(`${shot}: ${offered ? 'the capture or the pad is not as it should be' : 'no „Notieren"'}`);
   }
+  noted = { player, head: taken.head };
   await putSourceDown(page, overlay, touch, shot, source.label);
 }
 
@@ -8125,6 +8239,7 @@ async function run() {
   }
   await captureNotepad(guest, guestSeen);
   await captureNoting(anna, 'reading-notepad.png', 'highlight.png', watcherSeen);
+  await captureNotepadCaptured();
   await captureNoting(ben, 'reading-notepad-phone.png', 'highlight-phone.png', watcherSeen);
   await voiceAfterReload(anna, ben);
 

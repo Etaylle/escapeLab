@@ -1,0 +1,244 @@
+/* ══ the notepad: paper, pen and pencil ═════════════════════════════════════
+ * Notepad.tsx. A pad of faintly lined paper with a red margin, as a person on the night shift
+ * keeps one: their own writing in blue-black pen, in a hand — Kalam (Indian Type Foundry, SIL
+ * Open Font License 1.1), its Latin subset shipped as public/fonts/kalam-latin.woff2 with its
+ * licence beside it, never from a CDN —, and what was taken down at a source copied in pencil:
+ * a table in block letters on ruled lines, its columns aligned, running text in the same hand.
+ * Every capture's pencil a shade of its own, the pen sinking a little into the paper; nothing
+ * moves. Sizes follow the text size of the settings (`--text-scale`): the writing 18 px at
+ * size 1, the pencil's table 15 px, everything at 4.5:1 against the paper or better.
+ * Beside a source or a device the pad stands as a strip of its own (styles/putdown.css).
+ */
+
+@font-face {
+  font-family: 'Kalam';
+  src: url('/fonts/kalam-latin.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* A pad in the bottom corner of the world; walking goes on around it. */
+.notepad {
+  /* the paper, its rules and its margin */
+  --pad-paper: #fbf6e6;
+  --pad-rule: rgba(35, 63, 120, 0.16);
+  --pad-margin: rgba(178, 34, 34, 0.32);
+  /* the pen: the player's own writing and the captures' heads */
+  --pen: #22305a;
+  --pen-hand: 'Kalam', var(--hand);
+  /* the pencil: what was copied in */
+  --lead: #3a3c41;
+  --lead-rule: rgba(58, 60, 65, 0.24);
+  /* a line of writing, and a line of the pencil's block letters */
+  --rule: calc(28px * var(--text-scale));
+  --mono-rule: calc(24px * var(--text-scale));
+  /* where the writing starts, past the margin, and where it ends */
+  --pad-left: 30px;
+  --pad-right: 12px;
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 58;
+  /* wide enough for the Signalkette's legend in the pencil's letters, whatever the text size */
+  width: min(calc(420px * var(--text-scale)), calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--pad-paper);
+  color: var(--pen);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+/* The pad's head: the board it is glued to. */
+.notepad-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 5px 5px 12px;
+  border-bottom: 1px solid var(--ink-line);
+  background: var(--paper-edge);
+  color: var(--ink);
+}
+
+.notepad-title {
+  margin-right: auto;
+  font-family: var(--mono);
+  font-size: calc(11px * var(--text-scale));
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.notepad-head button {
+  padding: 4px 8px;
+  border-color: var(--ink-line);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.45);
+  color: var(--ink);
+  font-size: calc(12px * var(--text-scale));
+}
+
+.notepad-head button:hover:not(:disabled) {
+  border-color: var(--ink);
+  box-shadow: none;
+}
+
+/*
+ * The sheet under the head: the writing, then the captures, scrolling as one. The margin's
+ * double red line runs down its left; the rules come with each piece of writing, so that they
+ * scroll along with it and their pitch grows with the text size.
+ */
+.notepad-sheet {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  max-height: min(55vh, 520px);
+  overflow-y: auto;
+  padding-bottom: calc(var(--rule) / 2);
+  background:
+    linear-gradient(
+      to right,
+      transparent 0 calc(var(--pad-left) - 10px),
+      var(--pad-margin) calc(var(--pad-left) - 10px) calc(var(--pad-left) - 9px),
+      transparent calc(var(--pad-left) - 9px) calc(var(--pad-left) - 7px),
+      var(--pad-margin) calc(var(--pad-left) - 7px) calc(var(--pad-left) - 6px),
+      transparent calc(var(--pad-left) - 6px)
+    ),
+    var(--pad-paper);
+}
+
+/* Ruled lines a writing line apart, the last pixel of each line drawn. */
+.notepad-text,
+.notepad-capture--text .notepad-capture-text {
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 calc(var(--rule) - 1px),
+    var(--pad-rule) calc(var(--rule) - 1px) var(--rule)
+  );
+  background-attachment: local;
+}
+
+/* The player's own writing: in pen, in a hand, sitting on the rules. */
+.notepad-text {
+  flex: none;
+  min-height: calc(6 * var(--rule));
+  padding: 0 var(--pad-right) 0 var(--pad-left);
+  border: none;
+  outline: none;
+  resize: none;
+  color: var(--pen);
+  font: calc(18px * var(--text-scale)) / var(--rule) var(--pen-hand);
+  /* the ink sinking a little into the paper */
+  text-shadow: 0 0 0.6px rgba(34, 48, 90, 0.5);
+  field-sizing: content;
+}
+
+.notepad-text::placeholder {
+  color: #6d6150;
+  text-shadow: none;
+}
+
+/* A capture under its head, copied in pencil; each pencil a shade of its own. */
+.notepad-capture {
+  min-width: 0;
+  padding: calc(var(--rule) / 4) var(--pad-right) 0 var(--pad-left);
+}
+
+.notepad-capture:nth-of-type(even) {
+  --lead: #4a4038;
+}
+
+/* Its head: where it was taken and what, in pen, underlined as a heading on a pad is. */
+.notepad-capture-head {
+  margin: 0;
+  color: var(--pen);
+  font: calc(17px * var(--text-scale)) / var(--rule) var(--pen-hand);
+  text-decoration: underline 1.5px rgba(34, 48, 90, 0.55);
+  text-underline-offset: 4px;
+}
+
+/* Taken again over an earlier one: said so in red pencil, beside the head. */
+.notepad-capture-updated {
+  display: inline-block;
+  color: #a3352b;
+  font-size: calc(15px * var(--text-scale));
+}
+
+.notepad-capture-text {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  resize: none;
+  color: var(--lead);
+  background: transparent;
+  field-sizing: content;
+}
+
+/* A table in the pencil's block letters on ruled lines, its columns aligned, never wrapped. */
+.notepad-capture--table .notepad-capture-text {
+  margin-top: 2px;
+  font: calc(15px * var(--text-scale)) / var(--mono-rule) var(--mono);
+  /* the graphite's sheen */
+  text-shadow: 0.3px 0.3px 0 rgba(58, 60, 65, 0.3);
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 calc(var(--mono-rule) - 1px),
+    var(--lead-rule) calc(var(--mono-rule) - 1px) var(--mono-rule)
+  );
+  background-attachment: local;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* Running text in pencil: the rules lists and the notes, in the same hand as the pen's. */
+.notepad-capture--text .notepad-capture-text {
+  font: calc(17px * var(--text-scale)) / var(--rule) var(--pen-hand);
+}
+
+.notepad-text:focus-visible,
+.notepad-capture-text:focus-visible {
+  box-shadow: inset 2px 0 0 rgba(34, 48, 90, 0.45);
+}
+
+.notepad-warn {
+  margin: 0;
+  padding: 4px 12px 6px;
+  color: #9a3412;
+  font-size: calc(12px * var(--text-scale));
+}
+
+/* Narrow: across the bottom of the world, and above the steering pad where there is one. */
+@media (max-width: 560px) {
+  .notepad {
+    --pad-left: 24px;
+    --pad-right: 8px;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+  }
+
+  .notepad-sheet {
+    max-height: 42vh;
+  }
+
+  .notepad-text {
+    min-height: calc(3 * var(--rule));
+  }
+}
+
+@media (max-width: 560px) and (pointer: coarse) {
+  .notepad {
+    bottom: 162px;
+  }
+}

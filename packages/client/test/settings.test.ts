@@ -362,8 +362,8 @@ describe('the stylesheets under the settings', () => {
     }
     const page = /\.page-in \{[^}]*font-size: calc\(100cqw \/ 30 \* var\(--text-scale\)\);/;
     expect(read('styles/book.css')).toMatch(page);
-    const pad = /\.notepad-text \{[^}]*--rule: calc\(24px \* var\(--text-scale\)\);/;
-    expect(read('ui.css')).toMatch(pad);
+    const pad = /\n\.notepad \{[^}]*--rule: calc\(28px \* var\(--text-scale\)\);/;
+    expect(read('styles/notepad.css')).toMatch(pad);
   });
 
   it('size the HUD’s goal, clock, banner and crew strip by it', () => {
