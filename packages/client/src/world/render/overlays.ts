@@ -49,7 +49,7 @@ export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
 export const PING_LIFETIME_MS = 3200;
 /** How long a chat line's bubble stays up, ms. */
 export const CHAT_LIFETIME_MS = 4200;
-/** How long „… entdeckt" stays over a source the crew has just come across, s. */
+/** How long „… entdeckt" stays over a find of this player's that matters (finds.ts), s. */
 export const CAPTION_SECONDS = 2;
 /** How far round your figure the edge arrows keep off, in tiles. */
 const KEEP_OUT_TILES = 1.5;
@@ -386,9 +386,9 @@ function lowestTag(view: Viewport): number {
 }
 
 /**
- * „Spind entdeckt" over a source the crew has just come across, rising as
- * it fades — above the E prompt (`prompt`, its box), never on it — as far as
- * the alpha it is drawn under lets it.
+ * „Spind entdeckt" over a find of this player's that matters (finds.ts), rising
+ * as it fades — above the E prompt (`prompt`, its box), never on it — as far
+ * as the alpha it is drawn under lets it.
  */
 function drawCaptions(ctx: CanvasRenderingContext2D, frame: Frame, prompt: Box | null): void {
   const view = frame.viewport;
