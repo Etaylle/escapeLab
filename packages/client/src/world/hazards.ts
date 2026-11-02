@@ -1,5 +1,5 @@
-import type { DronePosition } from '@escapelab/core';
-import { drawPropLabel, LABEL_BELOW, type WorldText } from './art.js';
+import type { DronePosition, PartKind } from '@escapelab/core';
+import { drawFoundLabel, LABEL_BELOW, type WorldText } from './art.js';
 import {
   ALARM,
   AMBER,
@@ -58,23 +58,11 @@ export function drawDroneCone(
   ctx.restore();
 }
 
-/** What a carryable looks like on the floor and in hand. */
-export type CarryableKind = 'fuse' | 'key' | 'crate';
-
-/**
- * A carryable's look, told from its label: a „Sicherung" is a fuse cartridge,
- * a „Schlüssel" a key, anything else a crate.
- */
-export function carryableKind(label: string): CarryableKind {
-  if (/sicherung/i.test(label)) {
-    return 'fuse';
-  }
-  return /schl(?:ü|ue)ssel/i.test(label) ? 'key' : 'crate';
-}
-
 export interface CarryableOpts {
-  /** the item's label: its look follows from it, and the floor shows it under the item */
-  label: string;
+  /** what it looks like: a fuse cartridge, a key, a crate (core `partKind`) */
+  kind: PartKind;
+  /** the item's label, which the floor shows under it; none for one nobody has found */
+  label?: string;
   /** 0..1 looping pulse driven by the caller */
   pulse: number;
   /** riding above its carrier's head: a size smaller, with no shadow, glow or label */
@@ -92,6 +80,11 @@ export interface CarryableOpts {
   bare?: boolean;
   /** where the label's top hangs under the anchor (LABEL_BELOW when left out); null: none */
   labelAt?: number | null;
+  /**
+   * how far this player has found it, 0 to 1 (labelFade.ts): its blue glow and its label come
+   * up with it, none before; found where left out
+   */
+  found?: number;
 }
 
 /** A carried item against one on the floor. */
@@ -102,15 +95,17 @@ const ITEM_EDGE = css(INK);
 const C_BLUE = css(READ_BLUE);
 
 /** The shadow under an item on the floor, and its blue glow. */
-function drawItemGround(ctx: CanvasRenderingContext2D, pulse: number): void {
+function drawItemGround(ctx: CanvasRenderingContext2D, pulse: number, found: number): void {
   ctx.fillStyle = rgba(BLACK, 0.45);
   ctx.beginPath();
   ctx.ellipse(0, 0.29, 0.32, 0.13, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = rgba(READ_BLUE, 0.1 + 0.08 * pulse);
-  ctx.beginPath();
-  ctx.arc(0, 0, 0.8, 0, Math.PI * 2);
-  ctx.fill();
+  if (found > 0) {
+    ctx.fillStyle = rgba(READ_BLUE, (0.1 + 0.08 * pulse) * found);
+    ctx.beginPath();
+    ctx.arc(0, 0, 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 /** A crate with a lit cross on its lid. */
@@ -195,7 +190,7 @@ function drawKey(ctx: CanvasRenderingContext2D, pulse: number): void {
 }
 
 /** The item itself, as its kind looks. */
-function drawItem(ctx: CanvasRenderingContext2D, kind: CarryableKind, pulse: number): void {
+function drawItem(ctx: CanvasRenderingContext2D, kind: PartKind, pulse: number): void {
   if (kind === 'fuse') {
     drawFuse(ctx, pulse);
   } else if (kind === 'key') {
@@ -207,15 +202,17 @@ function drawItem(ctx: CanvasRenderingContext2D, kind: CarryableKind, pulse: num
 
 /**
  * A carryable: a fuse cartridge, a key, or a crate for anything else, as its
- * label says. On the floor it lies on its shadow in a blue glow — or hovers
- * `lift` over it, with its `glow` — its label under it like any prop's.
+ * kind says. On the floor it lies on its shadow in a blue glow — or hovers
+ * `lift` over it, with its `glow` — its label under it like any prop's; glow
+ * and label as far as it is found.
  * Anchor: its own centre, scaled to tile units.
  */
 export function drawCarryable(ctx: CanvasRenderingContext2D, o: CarryableOpts): void {
   const dressed = !o.carried && o.bare !== true;
+  const found = o.found ?? 1;
   ctx.save();
   if (dressed) {
-    drawItemGround(ctx, o.pulse);
+    drawItemGround(ctx, o.pulse, found);
   }
   ctx.save();
   if (o.carried) {
@@ -226,13 +223,18 @@ export function drawCarryable(ctx: CanvasRenderingContext2D, o: CarryableOpts): 
     ctx.translate(0, -lift);
   }
   o.glow?.(ctx);
-  drawItem(ctx, carryableKind(o.label), o.pulse);
+  drawItem(ctx, o.kind, o.pulse);
   ctx.restore();
-  const at = o.labelAt === undefined ? LABEL_BELOW : o.labelAt;
-  if (dressed && at !== null) {
-    drawPropLabel(ctx, o.label.toUpperCase(), at, ITEM_LABEL, o.text);
+  if (dressed) {
+    drawCarryableLabel(ctx, o, found);
   }
   ctx.restore();
+}
+
+/** A carryable's name under it as far as it is found (`found`); none where the view tells none. */
+function drawCarryableLabel(ctx: CanvasRenderingContext2D, o: CarryableOpts, found: number): void {
+  const at = o.labelAt === undefined ? LABEL_BELOW : o.labelAt;
+  drawFoundLabel(ctx, o.label?.toUpperCase(), { at, found, color: ITEM_LABEL, text: o.text });
 }
 
 /** The marked spot a carryable has to end up on. */

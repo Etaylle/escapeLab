@@ -129,14 +129,17 @@ describe('Room relay emergencies', () => {
   it('is not cleared by anyone standing anywhere, nor does walking send views', () => {
     const { room, anna, ben } = midMission();
     vi.advanceTimersByTime(61_000);
-    moveTo(room, anna, 1, 3);
-    moveTo(room, ben, 7, 3);
+    const walkTheRow = (): void => {
+      for (const x of [1, 4, 7]) {
+        moveTo(room, anna, x, 3);
+        moveTo(room, ben, 8 - x, 3);
+      }
+    };
+    // Once along the bottom row first: the armed station's console found on the way is news.
+    walkTheRow();
     const views = (): number => anna.messages.filter((m) => m.kind === 'view').length;
     const before = views();
-    for (const x of [1, 4, 7]) {
-      moveTo(room, anna, x, 3);
-      moveTo(room, ben, 8 - x, 3);
-    }
+    walkTheRow();
     expect(running(anna)).toBe(true);
     expect(views()).toBe(before);
     room.dispose();

@@ -14,6 +14,7 @@ import {
   type Run,
   type Stops,
 } from '../light.js';
+import { known, statusOf } from '../known.js';
 import { litGroups, warmUp, type LitGroup } from '../rooms.js';
 import { layBake } from './bakes.js';
 import { inTiles, toScreen, type Frame, type FrameLit } from './frame.js';
@@ -372,33 +373,37 @@ export function objectGlows(frame: Frame): Glow[] {
 function stationGlows(frame: Frame): Glow[] {
   return frame.map.stations.flatMap((station): Glow[] => {
     const at = { x: station.x + 0.5, y: station.y + 0.5 };
-    if (station.status === 'armed') {
+    const status = statusOf(station);
+    if (status === 'armed') {
       return [{ ...at, radius: 2.4, strength: 0.85 }];
     }
-    return station.status === 'done' ? [{ ...at, radius: 1.1, strength: 0.4 }] : [];
+    return status === 'done' ? [{ ...at, radius: 1.1, strength: 0.4 }] : [];
   });
 }
 
-/** The sources found, brighter where they print the armed station's rules, and the sign. */
+/**
+ * The sources the crew has come across, brighter where they print the armed station's rules,
+ * and the sign once somebody of the crew has found it: before, nothing shows it through a wall.
+ */
 function sourceGlows(frame: Frame): Glow[] {
   const { map } = frame;
-  const glows = map.manuals.map((manual): Glow => {
+  const glows = map.manuals.filter((m) => m.known).map((manual): Glow => {
     const active = coversArmed(map, manual);
     const at = { x: manual.x + 0.5, y: manual.y + 0.5 };
     return { ...at, radius: active ? 2.1 : 1.3, strength: active ? 0.8 : 0.5 };
   });
   const sign = map.edgeworkSign;
-  return sign === null
+  return sign === null || !sign.known
     ? glows
     : [...glows, { x: sign.x + 0.5, y: sign.y + 0.5, radius: 1.4, strength: 0.6 }];
 }
 
-/** The notes of the last shift found so far: faint, and fainter once somebody has read one. */
+/** The notes the crew has come across: faint, and fainter once somebody has read one. */
 function noteGlows(frame: Frame): Glow[] {
   const { map } = frame;
   return map.notes.flatMap((note): Glow[] => {
     const mount = noteMount(map, note);
-    if (mount === null) {
+    if (mount === null || !note.known) {
       return [];
     }
     // A sheet on a wall hangs on its face, above the point it is read from.
@@ -420,12 +425,16 @@ function plateAndValveGlows(frame: Frame): Glow[] {
   return [...plates, ...valves];
 }
 
-/** Crates lying about and drop-offs, where light has fallen on them. */
+/**
+ * Crates lying about where light has fallen on them, once this player has found them, and
+ * drop-offs where light has fallen.
+ */
 function itemGlows(frame: Frame): Glow[] {
   const { light } = frame;
-  return frame.map.items.flatMap((item): Glow[] => {
+  return frame.map.items.filter(known).flatMap((item): Glow[] => {
     const glows: Glow[] = [];
-    if (!item.delivered && item.carriedBy === null && light.shown(item.x, item.y)) {
+    const loose = !item.delivered && item.carriedBy === null;
+    if (loose && item.found && light.shown(item.x, item.y)) {
       glows.push({ x: item.x, y: item.y, radius: 1.6, strength: 0.7 });
     }
     const zone = item.deliverTo;

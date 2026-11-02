@@ -1,5 +1,6 @@
 import type { PadProbe } from './input/padRuntime.js';
 import type { DangerProbe } from './world/danger.js';
+import type { Heard } from './world/finds.js';
 import type { FigureProbe } from './screens/CrewFigure.js';
 import type { VoiceProbe } from './voice/mesh.js';
 import type { BedProbe } from './world/ambience.js';
@@ -15,6 +16,7 @@ import type { MinimapLayout } from './world/render/frame.js';
 import type { HighlightProbe } from './world/render/highlight.js';
 import type { GraphicsProbe } from './world/render/graphicsProbe.js';
 import type { GoalDot } from './world/render/hud.js';
+import type { ShownLabel } from './world/render/labels.js';
 import type { PassStats } from './world/render/profile.js';
 import type { SpatialProbe } from './world/spatial.js';
 
@@ -47,6 +49,11 @@ export interface AudioProbe extends BedProbe, SoundProbe {
    * what came out
    */
   readonly renderRadio: (id?: string) => Promise<RadioRender>;
+  /**
+   * this player's finds that matter this run as this screen took them, each with whether its
+   * chime sounded (world/finds.ts)
+   */
+  readonly finds: Heard[];
 }
 
 /**
@@ -100,6 +107,11 @@ export interface Probes {
    * read back on request (world/render/highlight.ts); null while it names nothing
    */
   readonly highlight?: HighlightProbe | null;
+  /**
+   * the names the world's last frame drew under things, as far as this player has found them
+   * (world/render/labels.ts `labelsShown`)
+   */
+  readonly labels?: ShownLabel[];
   /** the voice links, their states and who speaks (voice/mesh.ts) */
   readonly voice?: VoiceProbe;
   /** the way the world's light takes, WebGL or Canvas, and the picture's luma (world/gl/path.ts) */

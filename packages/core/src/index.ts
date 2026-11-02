@@ -78,6 +78,7 @@ export {
 } from './daily.js';
 export { GameError } from './errors.js';
 export {
+  partKind,
   viewFor,
   viewForSpectator,
   type SpectatorView,
@@ -89,6 +90,17 @@ export {
   type NoteHere,
   type SourceHere,
   type MapView,
+  type Glimpse,
+  type Known,
+  type KnownPart,
+  type KnownSource,
+  type KnownStation,
+  type MapNote,
+  type MapPart,
+  type MapSource,
+  type MapStation,
+  type PartKind,
+  type StationSpotLook,
   type Grade,
 } from './view.js';
 export {
@@ -149,6 +161,29 @@ export {
   stationKey,
 } from './map.js';
 export { canSee, sightFrom, visibleTiles, type Sight, type SightMap } from './sight.js';
+export {
+  CHIME_GAP_MS,
+  FIND_REACH,
+  ITEM_REACH,
+  LAMP_HALF_ANGLE,
+  LAMP_REACH,
+  LOOK_MS,
+  consoleFind,
+  findKey,
+  findables,
+  foundBy,
+  inCone,
+  inSight,
+  labLit,
+  lookAround,
+  sightables,
+  type Discovery,
+  type Find,
+  type Findable,
+  type FindKey,
+  type Glances,
+  type Look,
+} from './discovery.js';
 export { type MapDef } from './mission.js';
 export {
   parseClientMessage,

@@ -1,5 +1,6 @@
 import type { DailyDay } from './daily.js';
 import type { Difficulty } from './difficulty.js';
+import type { FindKey } from './discovery.js';
 import type { Edgework } from './edgework.js';
 import type { Mission } from './mission.js';
 import type { PuzzleState } from './puzzles/index.js';
@@ -51,6 +52,14 @@ export interface Presence {
   signSeen: string[];
   /** players standing on the open exit hatch right now; nobody before the escape */
   exit: string[];
+  /**
+   * what each player has in sight right now, by player id: the keys of the sources, notes,
+   * loose parts and consoles nobody of the crew has found — the armed station's aside — that a
+   * straight line reaches from where they stand (discovery.ts `sightables`, `inSight`), sorted;
+   * none while the power lights the whole lab (`labLit`). A view carries a thing nobody has
+   * found only while it is in sight
+   */
+  sight: Record<string, FindKey[]>;
 }
 
 export const NOBODY_PRESENT: Presence = {
@@ -59,6 +68,7 @@ export const NOBODY_PRESENT: Presence = {
   notes: {},
   signSeen: [],
   exit: [],
+  sight: {},
 };
 
 export interface ItemState {
@@ -168,13 +178,18 @@ export interface GameState {
   places: Record<string, { x: number; y: number }>;
   /** lockers searched and cabinets unlocked this run, by manual object id */
   opened: string[];
-  /** manual objects somebody has come close to this run; the crew's map shows only these */
-  discovered: string[];
   /**
-   * notes of the last shift somebody has come across this run, by index; the
-   * crew's map shows only these
+   * what each player has found this run, by player id: the keys of the sources, notes, parts,
+   * consoles and the sign they came near enough to or looked at long enough (discovery.ts),
+   * sorted. The crew shares them only as the game already shares things — the minimap, the
+   * arrows, a key's lock
    */
-  notesFound: number[];
+  found: Record<string, FindKey[]>;
+  /**
+   * each player's finds that matter, by player id, oldest first (discovery.ts `discover`):
+   * when, and whether its chime sounds — at most one every CHIME_GAP_MS
+   */
+  discoveries: Record<string, { key: FindKey; at: number; chime: boolean }[]>;
   /** notes somebody has read this run, by index: the run report logs each once */
   notesRead: number[];
   /** who did what this run, by player id */
@@ -264,8 +279,8 @@ export function initialState(
     presence: NOBODY_PRESENT,
     places: {},
     opened: [],
-    discovered: [],
-    notesFound: [],
+    found: {},
+    discoveries: {},
     notesRead: [],
     credits: {},
     readersCredited: [],

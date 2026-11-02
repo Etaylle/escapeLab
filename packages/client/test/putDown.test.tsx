@@ -179,7 +179,17 @@ const maze: PuzzleView = {
 
 describe('stepping back from a device', () => {
   const single = mapWith({
-    stations: [{ puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed' }],
+    stations: [
+      {
+        puzzleId: 'netz',
+        x: 4,
+        y: 1,
+        title: 'Leitungsnetz',
+        status: 'armed',
+        found: false,
+        known: true,
+      },
+    ],
   });
 
   it('says on its chassis how to step back, a tab under it on a touch screen, and no ✕', () => {

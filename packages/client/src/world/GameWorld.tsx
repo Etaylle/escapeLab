@@ -5,7 +5,6 @@ import {
   type ChatPhrase,
   type ClientMessage,
   type DronePosition,
-  type ManualKind,
   type PlayerView,
   type PuzzleView,
 } from '@escapelab/core';
@@ -38,7 +37,6 @@ import {
   blackoutSounds,
   cabinetUnlock,
   countdownBeep,
-  discoveryBlip,
   emergencyOver,
   footstep,
   graphCensus,
@@ -62,6 +60,7 @@ import { senseDanger, stopDanger } from './danger.js';
 import { doorTurned } from './doors.js';
 import { drawsFrame } from './drawRate.js';
 import { escaping, useEscapeSince, useEscapeSounds } from './escape.js';
+import { answerDiscoveries, firstLook } from './finds.js';
 import { useFinaleSounds, type FinaleCue } from './finale.js';
 import { runLight } from './frameLight.js';
 import { frameTrace, traceRequested, type FrameTrace } from './frameTrace.js';
@@ -74,7 +73,6 @@ import { runsOf } from './light.js';
 import { positionsOf, type KnownPositions, type Spot } from './movement.js';
 import { MUSIC_AFTER_CLICK_MS, musicProbe, setTension, stopMusic, type Tension } from './music.js';
 import { worldNews } from './news.js';
-import { noteMount } from './notes.js';
 import { pingAhead } from './padPing.js';
 import { renderRadio, voiceProbe } from './radioVoice.js';
 import { preloadSamples } from './samples.js';
@@ -91,11 +89,13 @@ import {
 import { censusTrace, type CensusTrace } from './render/census.js';
 import { graphicsProbe } from './render/graphicsProbe.js';
 import { highlightProbe } from './render/highlight.js';
+import { labelsShown } from './render/labels.js';
 import { minimapGoal, minimapLayout } from './render/hud.js';
 import { dropLight } from './render/light.js';
 import { PING_LIFETIME_MS } from './render/overlays.js';
 import { drawFrame } from './render/pipeline.js';
 import { passProfile, profileRequested } from './render/profile.js';
+import { noteLabels } from './labelFade.js';
 import { lightsHeld, roomArea, roomsComingOn } from './rooms.js';
 import {
   follow,
@@ -124,15 +124,6 @@ import { vignettePressure } from './vignette.js';
 const HEAR_RADIUS = 4;
 /** Air between the control cluster and a first-time tip above it, CSS pixels. */
 const TIP_GAP = 12;
-
-const SOURCE_NAMES: Record<ManualKind, string> = {
-  book: 'Buch',
-  terminal: 'Terminal',
-  chart: 'Wandtafel',
-  clipboard: 'Klemmbrett',
-  locker: 'Spind',
-  cabinet: 'Aktenschrank',
-};
 
 interface Props {
   view: PlayerView;
@@ -444,7 +435,8 @@ function minimapOf(loop: Loop): MinimapProbe | null {
 
 /**
  * `?trace=1`: the walkthrough reads the last frame durations off the page, the camera, your
- * avatar's footfalls, the minimap and its goal, the glow round what the E prompt names, what
+ * avatar's footfalls, the minimap and its goal, the glow round what the E prompt names, the
+ * names drawn under things (render/labels.ts `labelsShown`), what
  * the lab sounds like — the beds, the music, the radio's voice, the partner's place — and the
  * server's clock as the page reads it; and it can render the radio's chain offline.
  */
@@ -489,10 +481,14 @@ function traceFrames(loop: Loop): Traced | null {
     get highlight() {
       return loop.drawn === null ? null : highlightProbe(loop.drawn);
     },
+    get labels() {
+      return loop.drawn === null ? [] : labelsShown(loop.drawn);
+    },
     get audio() {
       const sound = { music: musicProbe(), voice: voiceProbe(), spatial: spatialProbe() };
       const nodes = { ...graphCensus(), beds: bedCount() };
-      return { ...bedProbe(), ...sound, nodes, spent: timeSpent(), renderRadio, ...soundProbe() };
+      const probe = { ...bedProbe(), ...sound, nodes, spent: timeSpent(), renderRadio };
+      return { ...probe, ...soundProbe(), finds: sim.ear.heard };
     },
     get clock() {
       const serverNow = clock.now();
@@ -691,32 +687,23 @@ function hearTheClock(loop: Loop, map: WorldMap): void {
 }
 
 /**
- * The lab answering the crew: a source or a note of the last shift somebody
- * came across gets a blip and a caption, a locker or cabinet opening within
- * earshot its sound, and so does a part put in its place, a
- * room whose lights came on a relay's click and its warm-up (rooms.ts) —
- * in plain sight, once nothing lies over the world (`lightWhenClear`).
- * Whatever this client finds on its first look was there before it came
- * in.
+ * The lab answering the crew: what this player found that matters chimes, its caption over it,
+ * and names come up as found (finds.ts, labelFade.ts); a locker or cabinet opening within earshot
+ * gets its sound, and so does a part put in its place, a room whose lights came on a relay's
+ * click and its warm-up (rooms.ts) — in plain sight, once nothing lies over the world
+ * (`lightWhenClear`). Whatever this client finds on its first look at a run (`firstLook`) was
+ * there before it came in.
  */
 function look(loop: Loop, map: WorldMap): void {
   const { sim } = loop;
   const news = worldNews(sim.seen, map);
-  sim.seen = map;
-  for (const manual of news.found) {
-    const text = `${SOURCE_NAMES[manual.kind]} entdeckt`;
-    sim.captions.push({ x: manual.x + 0.5, y: manual.y, text, at: sim.time });
-  }
-  for (const note of news.notes) {
-    const mount = noteMount(map, note);
-    if (mount !== null) {
-      sim.captions.push({ x: mount.x, y: mount.y - 0.6, text: 'Notiz entdeckt', at: sim.time });
-    }
-  }
+  const run = loop.live.current.view.startedAt;
+  const first = firstLook(sim.seen, sim.ear, run);
+  sim.labels = noteLabels(sim.labels, map, run, sim.time, first);
   // While the world shows as a film, nothing of the game's own speaks over it.
-  if (news.found.length + news.notes.length > 0 && !heldBack(loop.live.current)) {
-    discoveryBlip();
-  }
+  const listening = { run, first, held: heldBack(loop.live.current), serverNow: clock.now() };
+  sim.ear = answerDiscoveries(sim.ear, map, listening, sim.captions, sim.time);
+  sim.seen = map;
   for (const manual of news.opened) {
     const away = Math.hypot(manual.x + 0.5 - sim.self.x, manual.y + 0.5 - sim.self.y);
     if (loop.spectator || away <= HEAR_RADIUS) {

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, inEscapePhase, initialState, parseMission, viewFor } from '../src/index.js';
+import {
+  applyAction,
+  inEscapePhase,
+  initialState,
+  parseMission,
+  viewFor,
+  viewForSpectator,
+} from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
 import { standing } from './lab.js';
 
@@ -78,9 +85,10 @@ describe('mapped missions', () => {
     const drawn = ['p1', 'p2'].map((id) => viewFor(state, id).map?.yourSpawn);
     expect(drawn).toEqual(expect.arrayContaining(fixture.map.spawns));
     expect(drawn).toHaveLength(2);
+    // The armed station on every map; the one still to come only where somebody has seen it.
+    const objective = { found: false, known: true };
     expect(anna.map?.stations).toEqual([
-      { puzzleId: 'first', x: 1, y: 4, title: 'Erstes', status: 'armed' },
-      { puzzleId: 'second', x: 3, y: 4, title: 'Zweites', status: 'locked' },
+      { puzzleId: 'first', x: 1, y: 4, title: 'Erstes', status: 'armed', ...objective },
     ]);
     expect(anna.map?.manuals).toEqual([]);
     expect(anna.map?.edgeworkSign).toBeNull();
@@ -121,7 +129,8 @@ describe('mapped missions', () => {
     state = bothPress(state, T0 + 2000);
     expect(state.currentPuzzleIndex).toBe(1);
     expect(state.puzzleState).toBeNull();
-    expect(viewFor(state, 'p2').map?.stations[1]?.status).toBe('armed');
+    const second = viewFor(state, 'p2').map?.stations.find((s) => s.puzzleId === 'second');
+    expect(second?.known === true ? second.status : null).toBe('armed');
 
     state = applyAction(state, { type: 'interact', playerId: 'p1', at: T0 + 3000 });
     state = bothPress(state, T0 + 4000);
@@ -203,7 +212,8 @@ describe('mapped missions', () => {
     expect(state.phase).toBe('playing');
     expect(inEscapePhase(state)).toBe(true);
     expect(viewFor(state, 'p1').map?.exit?.open).toBe(true);
-    expect(viewFor(state, 'p1').map?.stations.every((s) => s.status === 'done')).toBe(true);
+    const solved = viewForSpectator(state).map?.stations ?? [];
+    expect(solved.every((s) => s.known && s.status === 'done')).toBe(true);
 
     const won = applyAction(state, { type: 'escaped', at: T0 + 9000 });
     expect(won.phase).toBe('won');

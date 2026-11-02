@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { PlayerView, PuzzleView } from '@escapelab/core';
+import type { KnownPart, PlayerView, PuzzleView } from '@escapelab/core';
 import { glyph } from '../input/glyphs.js';
 import { firstSight, SHOWN_MARKS, type CoachMark } from '../puzzles/coach.js';
 import type { FinaleCue } from './finale.js';
@@ -19,7 +19,7 @@ const TIP_MS = 6500;
 function coachTip(
   map: WorldMap,
   youId: string,
-  carried: WorldMap['items'][number] | undefined,
+  carried: KnownPart | undefined,
   station: PuzzleView | null,
   keyboard: boolean,
 ): CoachMark | null {
@@ -46,7 +46,7 @@ function coachTip(
 }
 
 /** The tip for full hands: where a key goes, or where a part is brought and how it is put down. */
-function carryTip(map: WorldMap, carried: WorldMap['items'][number], keyboard: boolean): CoachMark {
+function carryTip(map: WorldMap, carried: KnownPart, keyboard: boolean): CoachMark {
   // A key has no marked spot: it goes into a cabinet, found or not yet.
   if (carried.deliverTo === null || opensCabinet(map, carried.id)) {
     const there = keyboard ? `dort ${glyph('interact')} drücken` : 'dort ⚡ tippen';

@@ -41,8 +41,18 @@ import { frameWith, kitWith, lightWith, TILES } from './frames.js';
 import { mapWith, type Item, type Manual } from './fixtures.js';
 
 /** The armed station at (3, 2), a clipboard at (7, 1), a note on the wall over (2, 1), the fuse. */
-const STATION = { puzzleId: 'kasten', x: 3, y: 2, title: 'Kasten', status: 'armed' as const };
+const STATION = {
+  puzzleId: 'kasten',
+  x: 3,
+  y: 2,
+  title: 'Kasten',
+  status: 'armed' as const,
+  found: false,
+  known: true as const,
+};
 const CLIPBOARD: Manual = {
+  found: true,
+  known: true,
   id: 'klemmbrett',
   kind: 'clipboard',
   x: 7,
@@ -52,16 +62,19 @@ const CLIPBOARD: Manual = {
   opened: true,
   needsKey: null,
 };
-const NOTE = { index: 0, x: 2, y: 0, read: false };
+const NOTE = { index: 0, x: 2, y: 0, read: false, seen: true, found: true, known: true } as const;
 const FUSE: Item = {
+  found: true,
+  known: true,
   id: 'fuse',
+  kind: 'fuse',
   label: 'SICHERUNG',
   x: 6.5,
   y: 3.5,
   carriedBy: null,
   delivered: false,
   deliverTo: { x: 8, y: 4 },
-  requiredForTitle: null,
+  requiredFor: null,
 };
 const LAB = mapWith({
   width: 10,
@@ -304,11 +317,12 @@ describe('the objects pass — the named thing glows in its own shape, under it'
   it('lifts the named part off its shadow with its glow; its shadow and label stay put', () => {
     const frame = frameWith({ map: LAB, action: PICK, time: 0.5 });
     const block = drawnAt(drawn(frame), 6.5, 3.5);
-    const shape = itemShape('SICHERUNG');
-    const look = { label: 'SICHERUNG', pulse: frame.pulse, carried: false, text: frame.text };
+    const shape = itemShape('fuse');
+    const look = { kind: 'fuse' as const, label: 'SICHERUNG', pulse: frame.pulse, carried: false };
+    const text = frame.text;
     const glow = (g: CanvasRenderingContext2D) => drawGlow(g, frame, shape);
     expect(strip(block)).toEqual(
-      recording((c) => drawCarryable(c, { ...look, lift: 1 / 64, glow })),
+      recording((c) => drawCarryable(c, { ...look, text, lift: 1 / 64, glow })),
     );
     const calls = block.flatMap((e, i) => (e.kind === 'call' ? [{ ...e, i }] : []));
     const first = (name: string) => calls.find((e) => e.name === name)?.i ?? -1;
@@ -380,11 +394,11 @@ describe('the shapes — what each thing is baked from', () => {
   });
 
   it('leaves a part’s shadow, its blue glow and its label out', () => {
-    const bare = fakeDraw(itemShape('SICHERUNG'));
+    const bare = fakeDraw(itemShape('fuse'));
     expect(callsOf(bare, 'ellipse')).toEqual([]);
     expect(callsOf(bare, 'fillText')).toEqual([]);
     expect(callsOf(bare, 'arc')).toEqual([]);
-    expect(itemShape('Schlüssel').key).toBe('item:key');
+    expect(itemShape('key').key).toBe('item:key');
   });
 
   it('leaves the dressing out of every kind of thing the prompt can name', () => {
@@ -400,9 +414,9 @@ describe('the shapes — what each thing is baked from', () => {
       noteShape(null),
       noteShape(Math.PI / 2),
       noteShape(0),
-      itemShape('SICHERUNG'),
-      itemShape('SCHLÜSSEL'),
-      itemShape('KISTE'),
+      itemShape('fuse'),
+      itemShape('key'),
+      itemShape('crate'),
       DROP_SHAPE,
     ];
     for (const shape of shapes) {
@@ -442,7 +456,7 @@ describe('highlightProbe — the glow as the walkthrough reads it', () => {
       lift: 1 / 64,
     });
     const pixels = probe?.pixels();
-    const halo = glowSprite(frame.kit.art.glows, LEVEL, itemShape('SICHERUNG'), HALO);
+    const halo = glowSprite(frame.kit.art.glows, LEVEL, itemShape('fuse'), HALO);
     expect(pixels?.level).toBe(LEVEL);
     expect([pixels?.width, pixels?.height]).toEqual([halo.canvas.width, halo.canvas.height]);
     expect(pixels?.halo).toHaveLength(halo.canvas.width * halo.canvas.height);

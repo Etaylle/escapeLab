@@ -135,7 +135,17 @@ const archiv: MapView = mapWith({
   tiles: ['#####', '#...#', '#####'],
   yourSpawn: { x: 1, y: 1 },
   labels: [{ text: 'ARCHIV', x: 2, y: 1 }],
-  stations: [{ puzzleId: 'notlicht', x: 3, y: 1, title: 'Notlicht', status: 'armed' }],
+  stations: [
+    {
+      puzzleId: 'notlicht',
+      x: 3,
+      y: 1,
+      title: 'Notlicht',
+      status: 'armed',
+      found: false,
+      known: true,
+    },
+  ],
 });
 
 function viewOf(parts: Partial<PlayerView> = {}): PlayerView {

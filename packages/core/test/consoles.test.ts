@@ -27,10 +27,11 @@ const AT_A = { puzzleId: 'kette', x: 6, y: 1, console: 'a' };
 const AT_B = { puzzleId: 'kette', x: 13, y: 1, console: 'b' };
 
 /** The console lab for three: p1 at console a, p2 at console b, p3 at the book. */
-function atTheConsoles(): GameState {
+function atTheConsoles(sight: Record<string, string[]> = {}): GameState {
   return standing(started(consoleLab(3)), {
     stations: { kette: ['p1'], [CONSOLE_B]: ['p2'] },
     manuals: { buch: ['p3'] },
+    sight,
   });
 }
 
@@ -216,13 +217,29 @@ describe('who stands at which console', () => {
   });
 
   it('marks both consoles on the map, and only those', () => {
-    const stations = viewFor(atTheConsoles(), 'p3').map?.stations ?? [];
-    expect(stations).toEqual([
-      { puzzleId: 'kette', x: 6, y: 1, title: 'Signalkette', status: 'armed', console: 'a' },
-      { puzzleId: 'kette', x: 13, y: 1, title: 'Signalkette', status: 'armed', console: 'b' },
-      { puzzleId: 'kabel', x: 3, y: 1, title: 'Kabel', status: 'locked' },
+    const kette = {
+      puzzleId: 'kette',
+      title: 'Signalkette',
+      status: 'armed',
+      found: false,
+      known: true,
+    };
+    // Both consoles of the armed station on every map, the objective all share; the Kabel
+    // station only once in sight, glimpsed: no title, no status.
+    expect(viewFor(atTheConsoles(), 'p3').map?.stations).toEqual([
+      { ...kette, x: 6, y: 1, console: 'a' },
+      { ...kette, x: 13, y: 1, console: 'b' },
     ]);
-    expect(stations[2]).not.toHaveProperty('console');
+    const stations = viewFor(atTheConsoles({ p3: ['console:kabel/-'] }), 'p3').map?.stations;
+    expect(stations?.[2]).toEqual({
+      puzzleId: 'kabel',
+      x: 3,
+      y: 1,
+      seen: true,
+      found: false,
+      known: false,
+    });
+    expect(stations?.[2]).not.toHaveProperty('console');
   });
 });
 

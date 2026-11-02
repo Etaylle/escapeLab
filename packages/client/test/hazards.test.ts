@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { partKind } from '@escapelab/core';
 import { worldText, type WorldText } from '../src/world/art.js';
-import { carryableKind, drawCarryable } from '../src/world/hazards.js';
+import { drawCarryable } from '../src/world/hazards.js';
 
 /** One call on the 2D context: the method, and for fillText the text and the font then set. */
 type Call = { method: string; text?: string; font?: unknown; rule?: unknown };
@@ -32,32 +33,16 @@ function recorder(): { ctx: CanvasRenderingContext2D; calls: Call[] } {
   return { ctx: ctx as unknown as CanvasRenderingContext2D, calls };
 }
 
-/** What drawing the carryable `label` does, on the floor or in hand. */
+/** What drawing the carryable `label` does, on the floor or in hand: its kind as core tells it. */
 function draw(label: string, carried: boolean, text?: WorldText): Call[] {
   const { ctx, calls } = recorder();
-  drawCarryable(ctx, { label, pulse: 0.5, carried, ...(text === undefined ? {} : { text }) });
+  const look = { kind: partKind(label), label, pulse: 0.5, carried };
+  drawCarryable(ctx, { ...look, ...(text === undefined ? {} : { text }) });
   return calls;
 }
 
 const printed = (calls: Call[]): string[] =>
   calls.filter((call) => call.method === 'fillText').map((call) => call.text ?? '');
-
-describe('carryableKind — a carryable’s look, told from its label', () => {
-  it('makes a fuse of a Sicherung and a key of a Schlüssel, however it is spelt', () => {
-    for (const label of ['SICHERUNG', 'Ersatzsicherung', 'sicherung']) {
-      expect(carryableKind(label)).toBe('fuse');
-    }
-    for (const label of ['SCHLÜSSEL', 'Schlüssel', 'SCHLUESSEL']) {
-      expect(carryableKind(label)).toBe('key');
-    }
-  });
-
-  it('makes a crate of anything else', () => {
-    for (const label of ['SPEICHERKERN', 'KÜHLMITTEL', '']) {
-      expect(carryableKind(label)).toBe('crate');
-    }
-  });
-});
 
 describe('drawCarryable', () => {
   it('draws a fuse, a key and a crate each its own way', () => {
@@ -74,6 +59,14 @@ describe('drawCarryable', () => {
   it('labels an item on the floor as other props are labelled, in capitals', () => {
     expect(printed(draw('Sicherung', false))).toEqual(['SICHERUNG']);
     expect(printed(draw('SCHLÜSSEL', false))).toEqual(['SCHLÜSSEL']);
+  });
+
+  it('draws a part nobody has found as what it is, with no label to print', () => {
+    const { ctx, calls } = recorder();
+    drawCarryable(ctx, { kind: 'fuse', pulse: 0.5, carried: false });
+    expect(printed(calls)).toEqual([]);
+    const looks = (found: Call[]) => found.filter((call) => call.method !== 'fillText');
+    expect(looks(calls).length).toBeGreaterThan(0);
   });
 
   it('labels nothing in hand: the item rides over its carrier’s head', () => {

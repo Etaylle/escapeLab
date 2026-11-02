@@ -3,18 +3,24 @@ import { DronePatrol } from './drones.js';
 import {
   applyAction,
   armedStations,
-  canSee,
   dailySeed,
   emergenciesDue,
+  findKey,
+  findables,
+  foundBy,
+  inSight,
   inEscapePhase,
   initialState,
+  labLit,
   lightsAreOut,
+  lookAround,
   noteKey,
   noteSpot,
   nudgeDueAt,
   puzzleDueAt,
   runReport,
   shutDoors,
+  sightables,
   stationKey,
   stepAllowed,
   utcDay,
@@ -25,7 +31,11 @@ import {
   type ClientMessage,
   type DailyStart,
   type Difficulty,
+  type Findable,
+  type FindKey,
   type GameState,
+  type Glances,
+  type Look,
   type MapDef,
   type Mission,
   type PlayerPosition,
@@ -70,11 +80,7 @@ const PLATE_RELEASE_RADIUS = 0.75;
 /** A player is at a station, a manual object or the sign this close (in tiles); leaves wider. */
 const PRESENCE_ENTER_RADIUS = 1.6;
 const PRESENCE_LEAVE_RADIUS = 2.0;
-/**
- * A manual object is found for the whole crew once somebody comes this close
- * (in tiles) and has it in sight: through a wall nobody finds anything.
- */
-const DISCOVER_RADIUS = 3.5;
+
 /** How close to the armed station an interact is accepted. */
 const INTERACT_RADIUS = 1.6;
 /**
@@ -108,6 +114,27 @@ const ITEM_RADIUS = 0.95;
 /** A relay emergency's instructions are aged this often. */
 const RELAY_TICK_MS = 1000;
 
+/** Who stands where and what they found and see, as the room reports it in `set-presence`. */
+type PresenceReport = Omit<Extract<Action, { type: 'set-presence' }>, 'type' | 'at'>;
+
+/** Whose views a change reaches: every member's and the audience's, or only these members'. */
+type Reach = 'everybody' | readonly string[];
+
+/**
+ * `byId` — who stands at each thing, by its id — with only the players `found(id)` lets count
+ * there; a thing nobody counts at is left out.
+ */
+function onlyFinders(
+  byId: Record<string, string[]>,
+  found: (id: string) => (playerId: string) => boolean,
+): Record<string, string[]> {
+  return Object.fromEntries(
+    Object.entries(byId)
+      .map(([id, players]) => [id, players.filter(found(id))] as const)
+      .filter(([, players]) => players.length > 0),
+  );
+}
+
 /**
  * One game room: owns the authoritative GameState, player sessions
  * (reconnect tokens), the mission timer and the live avatar positions.
@@ -139,6 +166,13 @@ export class Room {
   private puzzleTimer: NodeJS.Timeout | null = null;
   /** lets mission control speak up once the station that is up has stayed quiet */
   private nudgeTimer: NodeJS.Timeout | null = null;
+  /**
+   * since when each thing has stood in each player's lamp cone, by player id
+   * (core discovery.ts): a look held long enough finds it
+   */
+  private readonly glances = new Map<string, Glances>();
+  /** looks round again once the next glance has been held long enough, nobody moving meanwhile */
+  private glanceTimer: NodeJS.Timeout | null = null;
   /** the mission the host's yes on the end screen named for the next run; null: the same again */
   private next: Mission | null = null;
   private timer: NodeJS.Timeout | null = null;
@@ -743,13 +777,103 @@ export class Room {
       .sort();
   }
 
-  /** Whether a connected player within DISCOVER_RADIUS of a source's tile has it in sight. */
-  private sighted(spot: { x: number; y: number }, shut: ReadonlySet<string>): boolean {
-    const middle = { x: spot.x + 0.5, y: spot.y + 0.5 };
-    return this.occupantsOf(spot.x, spot.y, DISCOVER_RADIUS).some((id) => {
-      const pos = this.positions.get(id);
-      return pos !== undefined && canSee(this.state.mission.map, pos, middle, shut);
-    });
+  /**
+   * What each connected player finds where they stand at `now` (core discovery.ts), of what
+   * they have not found yet, by player id: whatever lies in reach, whatever their lamp's cone
+   * has rested on long enough. Keeps the glances still running and arms the look that ends the
+   * next of them. A pause freezes the run: nothing is found while it lasts, and a look begun
+   * before it starts anew after it.
+   */
+  private findsNow(now: number): Record<string, FindKey[]> {
+    const found: Record<string, FindKey[]> = {};
+    if (this.state.paused !== null) {
+      this.forgetGlances();
+      return found;
+    }
+    const shut = shutDoors(this.state.mission.map, this.state);
+    const things = findables(this.state);
+    let dueAt: number | null = null;
+    for (const player of this.state.players) {
+      const look = this.lookFor(player, things, shut, now);
+      if (look === null) {
+        continue;
+      }
+      if (look.found.length > 0) {
+        found[player.id] = look.found;
+      }
+      if (look.dueAt !== null) {
+        dueAt = Math.min(dueAt ?? Infinity, look.dueAt);
+      }
+    }
+    this.armGlances(dueAt, now);
+    return found;
+  }
+
+  /**
+   * One player's look round at `now`, of what they have not found yet among `things`, keeping
+   * their glances still running; null for a player away or not placed yet. (One away pauses the
+   * run, and a pause lets every glance go.)
+   */
+  private lookFor(
+    player: GameState['players'][number],
+    things: readonly Findable[],
+    shut: ReadonlySet<string>,
+    now: number,
+  ): Look | null {
+    const pos = this.positions.get(player.id);
+    if (!player.connected || pos === undefined) {
+      return null;
+    }
+    const had = new Set(this.state.found[player.id] ?? []);
+    const fresh = things.filter((thing) => !had.has(thing.key));
+    const glances = this.glances.get(player.id) ?? {};
+    const look = lookAround(this.state.mission.map, shut, pos, fresh, glances, now);
+    this.glances.set(player.id, look.glances);
+    return look;
+  }
+
+  /** Lets every running glance go, and the look that would have ended the next of them. */
+  private forgetGlances(): void {
+    this.glances.clear();
+    this.armGlances(null, 0);
+  }
+
+  /**
+   * What there is to find and to see as the run stands, in one string: the doors shut, the
+   * station armed, the parts lying loose, a pause. Outside a run, just its phase.
+   */
+  private findingWorld(): string {
+    const { state } = this;
+    if (state.phase !== 'playing') {
+      return state.phase;
+    }
+    const shut = [...shutDoors(state.mission.map, state)].sort().join(' ');
+    const armed = lightsAreOut(state) ? state.currentPuzzleIndex : -1;
+    const loose = Object.entries(state.items)
+      .filter(([, item]) => item.carriedBy === null && !item.delivered)
+      .map(([id, item]) => `${id}@${item.x},${item.y}`)
+      .join(' ');
+    return `${shut}|${armed}|${loose}|${state.paused === null ? 'on' : 'paused'}`;
+  }
+
+  /**
+   * Looks round again at `dueAt` (epoch ms), when the next glance has been held long enough
+   * though nobody moved; none for null.
+   */
+  private armGlances(dueAt: number | null, now: number): void {
+    if (this.glanceTimer !== null) {
+      clearTimeout(this.glanceTimer);
+      this.glanceTimer = null;
+    }
+    if (dueAt !== null) {
+      this.glanceTimer = setTimeout(
+        () => {
+          this.glanceTimer = null;
+          this.reconcilePresence();
+        },
+        Math.max(0, dueAt - now),
+      );
+    }
   }
 
   /**
@@ -792,16 +916,35 @@ export class Room {
   /**
    * Translate live positions into who stands at which station spot — each
    * console of a station on its own, keyed by `stationKey` — manual object
-   * and note, who has walked up to the sign, which manual objects and notes
-   * somebody has come close to and seen for the first time, and who stands on
-   * the open hatch; dispatch only on change.
+   * and note, who has walked up to the sign, what each player has just found
+   * (`findsNow`), and who stands on the open hatch; dispatch only on change.
    */
   private reconcilePresence(): void {
-    const map = this.state.mission.map;
     if (this.state.phase !== 'playing') {
       return;
     }
-    const { presence, places, discovered, notesFound } = this.state;
+    const now = Date.now();
+    const found = this.findsNow(now);
+    const next = { ...this.whereEverybodyStands(found), found, sight: this.sightNow() };
+    const reach = this.reachOf(next);
+    if (reach === 'everybody' || reach.length > 0) {
+      this.dispatch({ type: 'set-presence', ...next, at: now }, reach);
+    }
+  }
+
+  /**
+   * Who stands at each station spot, source and note, who saw the sign, who is on the hatch. At
+   * a source, a note or the sign only a player who has found it — `fresh` from this very look
+   * round included — counts: the distance alone would have them read, open or copy the
+   * Laborkennung round a pillar or through a wall.
+   */
+  private whereEverybodyStands(
+    fresh: Readonly<Record<string, FindKey[]>>,
+  ): Omit<PresenceReport, 'found' | 'sight'> {
+    const map = this.state.mission.map;
+    const { presence, places } = this.state;
+    const finders = (key: FindKey) => (playerId: string) =>
+      foundBy(this.state, playerId, key) || fresh[playerId]?.includes(key) === true;
     const stations = this.atEach(
       map.stations.map((s) => ({ id: stationKey(s), x: s.x, y: s.y })),
       presence.stations,
@@ -810,34 +953,66 @@ export class Room {
       const at = places[m.id];
       return at === undefined ? [] : [{ id: m.id, x: at.x, y: at.y }];
     });
-    const manuals = this.atEach(sources, presence.manuals);
-    const pinned = this.noteSpots();
-    const notes = this.atEach(pinned, presence.notes);
     const sign = map.edgeworkSign;
-    const signSeen =
-      sign === undefined
-        ? presence.signSeen
-        : [...new Set([...presence.signSeen, ...this.presentAt(sign.x, sign.y, [])])].sort();
-    const shut = shutDoors(map, this.state);
-    const seen = sources
-      .filter((s) => !discovered.includes(s.id) && this.sighted(s, shut))
-      .map((s) => s.id);
-    const notesSeen = pinned
-      .filter((n) => !notesFound.includes(n.index) && this.sighted(n, shut))
-      .map((n) => n.index);
-    const exit = this.onTheHatch();
-    const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+    const atSign = sign === undefined ? [] : this.presentAt(sign.x, sign.y, []);
+    const signSeen = [...new Set([...presence.signSeen, ...atSign.filter(finders('sign'))])];
+    return {
+      stations,
+      manuals: onlyFinders(this.atEach(sources, presence.manuals), (id) =>
+        finders(findKey({ of: 'source', id })),
+      ),
+      notes: onlyFinders(this.atEach(this.noteSpots(), presence.notes), (id) =>
+        finders(findKey({ of: 'note', index: Number(id) })),
+      ),
+      signSeen: signSeen.sort(),
+      exit: this.onTheHatch(),
+    };
+  }
+
+  /**
+   * Whose views `next` changes, set as the presence: everybody's for a step, a find or the
+   * sign; for a change of sight alone only those of the players whose sight it is, since no
+   * other view shows it (`viewFor`); nobody's for no change.
+   */
+  private reachOf(next: PresenceReport): Reach {
+    const { presence } = this.state;
+    const { stations, manuals, notes, exit, sight } = presence;
+    const stood = JSON.stringify([next.stations, next.manuals, next.notes, next.exit]);
     if (
-      !same(stations, presence.stations) ||
-      !same(manuals, presence.manuals) ||
-      !same(notes, presence.notes) ||
-      signSeen.length !== presence.signSeen.length ||
-      seen.length + notesSeen.length > 0 ||
-      !same(exit, presence.exit)
+      Object.keys(next.found).length > 0 ||
+      next.signSeen.length !== presence.signSeen.length ||
+      stood !== JSON.stringify([stations, manuals, notes, exit])
     ) {
-      const action = { stations, manuals, notes, signSeen, seen, notesSeen, exit };
-      this.dispatch({ type: 'set-presence', ...action });
+      return 'everybody';
     }
+    const lookers = new Set([...Object.keys(sight), ...Object.keys(next.sight)]);
+    const sees = (id: string, all: Record<string, readonly string[]>) =>
+      JSON.stringify(all[id] ?? []);
+    return [...lookers].filter((id) => sees(id, sight) !== sees(id, next.sight)).sort();
+  }
+
+  /**
+   * What each connected player has in sight right now (core discovery.ts `inSight`) of what a
+   * view carries only in sight (`sightables`), by player id, as the state keeps it: sorted,
+   * nobody with nothing in sight. A pause stops no sight; while the power lights the whole lab
+   * (`labLit`) every view shows all of it, and no sight is kept.
+   */
+  private sightNow(): Record<string, FindKey[]> {
+    if (labLit(this.state)) {
+      return {};
+    }
+    const map = this.state.mission.map;
+    const shut = shutDoors(map, this.state);
+    const things = sightables(this.state);
+    const sight: Record<string, FindKey[]> = {};
+    for (const player of this.state.players) {
+      const pos = this.positions.get(player.id);
+      const seen = player.connected && pos !== undefined ? inSight(map, shut, pos, things) : [];
+      if (seen.length > 0) {
+        sight[player.id] = seen.sort();
+      }
+    }
+    return sight;
   }
 
   /** All panels manned at once ends the emergency. */
@@ -1113,12 +1288,21 @@ export class Room {
     return out;
   }
 
-  private dispatch(action: Action): void {
+  /**
+   * Applies `action` and sends the views it changes — every view, unless `reach` names the only
+   * members whose view it can change — then keeps the timers and the presence in step.
+   */
+  private dispatch(action: Action, reach: Reach = 'everybody'): void {
     const wasPlaying = this.state.phase === 'playing';
+    const world = this.findingWorld();
     this.state = applyAction(this.state, action);
     // A run ends exactly once, won or lost; a rematch is a run of its own.
     if (wasPlaying && (this.state.phase === 'won' || this.state.phase === 'lost')) {
       this.onRunFinished(runReport(this.state, this.code));
+    }
+    // A glance of one run finds nothing in the next.
+    if (this.state.phase !== 'playing') {
+      this.forgetGlances();
     }
     this.reconcileTimer();
     this.reconcileLights();
@@ -1127,7 +1311,11 @@ export class Room {
     this.reconcileDroneTimer();
     this.reconcileSabotage();
     this.reconcileRelayTick();
-    this.broadcast();
+    this.broadcast(reach);
+    // A door opened, a part put down, a station armed: whoever stands still sees it as well.
+    if (action.type !== 'set-presence' && this.findingWorld() !== world) {
+      this.reconcilePresence();
+    }
   }
 
   /**
@@ -1152,13 +1340,18 @@ export class Room {
     }
   }
 
-  /** Every member's view of the state as it stands, stamped with the server's time. */
-  private broadcast(): void {
+  /**
+   * The views of the state as it stands, stamped with the server's time: every member's and the
+   * audience's, or only those of the members `reach` names.
+   */
+  private broadcast(reach: Reach): void {
     const at = Date.now();
     for (const [playerId, listener] of this.listeners) {
-      listener({ kind: 'view', view: viewFor(this.state, playerId), at });
+      if (reach === 'everybody' || reach.includes(playerId)) {
+        listener({ kind: 'view', view: viewFor(this.state, playerId), at });
+      }
     }
-    if (this.spectators.size > 0) {
+    if (reach === 'everybody' && this.spectators.size > 0) {
       const view = viewForSpectator(this.state);
       for (const listener of this.spectators.values()) {
         listener({ kind: 'spectator-view', view, code: this.code, at });
@@ -1188,6 +1381,7 @@ export class Room {
       clearTimeout(this.nudgeTimer);
       this.nudgeTimer = null;
     }
+    this.forgetGlances();
     if (this.positionsTimer !== null) {
       clearTimeout(this.positionsTimer);
       this.positionsTimer = null;

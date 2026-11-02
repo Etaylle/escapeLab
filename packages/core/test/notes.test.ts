@@ -146,8 +146,9 @@ describe('notes on the map', () => {
 });
 
 /** The run started, the lights out, Anna (p1) and Ben (p2) standing where `notes` says. */
-function atNotes(notes: Record<string, string[]>, notesSeen: number[] = [0, 1]): GameState {
-  return standing(lightsOut(started(mission)), { notes, notesSeen });
+function atNotes(notes: Record<string, string[]>): GameState {
+  const found = { p1: ['note:0', 'note:1'], p2: ['note:0', 'note:1'] };
+  return standing(lightsOut(started(mission)), { notes, found });
 }
 
 const read = (playerId: string, note: number, at = T0 + 2000): Action => ({
@@ -206,18 +207,29 @@ describe('reading a note', () => {
     const willing = applyAction(lost, { type: 'set-ready', playerId: 'p2', ready: true });
     const rematch: Action = { type: 'rematch', playerId: 'p1', at: T0 + 900_000, seed: 3 };
     const again = applyAction(willing, rematch);
-    expect([again.notesFound, again.notesRead]).toEqual([[], []]);
+    expect([again.found, again.discoveries, again.notesRead]).toEqual([{}, {}, []]);
     expect(again.presence.notes).toEqual({});
   });
 });
 
 describe('notes in the views', () => {
-  it('shows the crew the notes it has come across, the audience every one, never the words', () => {
-    const found = standing(lightsOut(started(mission)), { notesSeen: [1] });
-    expect(viewFor(found, 'p1').map?.notes).toEqual([{ index: 1, x: 7, y: 2, read: false }]);
+  it('lists the notes the crew found or a player sees, never the words', () => {
+    // Ben found the floor note; Anna has the one on the wall in sight, found by nobody.
+    const found = standing(lightsOut(started(mission)), {
+      found: { p2: ['note:1'] },
+      sight: { p1: ['note:0'] },
+    });
+    expect(viewFor(found, 'p1').map?.notes).toEqual([
+      { index: 0, x: 4, y: 0, seen: true, found: false, known: false },
+      { index: 1, x: 7, y: 2, read: false, found: false, known: true },
+    ]);
+    // Ben has the wall note neither in sight nor found: it is not on his map at all.
+    expect(viewFor(found, 'p2').map?.notes).toEqual([
+      { index: 1, x: 7, y: 2, read: false, found: true, known: true },
+    ]);
     expect(viewForSpectator(found).map?.notes).toEqual([
-      { index: 0, x: 4, y: 0, read: false },
-      { index: 1, x: 7, y: 2, read: false },
+      { index: 0, x: 4, y: 0, read: false, found: true, known: true },
+      { index: 1, x: 7, y: 2, read: false, found: true, known: true },
     ]);
     const nobodyThere = JSON.stringify([viewFor(found, 'p1'), viewForSpectator(found)]);
     expect(nobodyThere).not.toContain(FLOOR_NOTE);
@@ -225,11 +237,21 @@ describe('notes in the views', () => {
   });
 
   it('keeps found notes found as the crew walks on, and marks a note read for all', () => {
-    const seen = standing(lightsOut(started(mission)), { notesSeen: [0], notes: { '0': ['p2'] } });
-    const walkedOn = standing(seen, { notesSeen: [] });
-    expect(walkedOn.notesFound).toEqual([0]);
+    const seen = standing(lightsOut(started(mission)), {
+      found: { p2: ['note:0'] },
+      notes: { '0': ['p2'] },
+    });
+    const walkedOn = standing(seen, {});
+    expect(walkedOn.found).toEqual({ p2: ['note:0'] });
     const read0 = applyAction(seen, read('p2', 0));
-    expect(viewFor(read0, 'p1').map?.notes).toEqual([{ index: 0, x: 4, y: 0, read: true }]);
+    expect(viewFor(read0, 'p1').map?.notes[0]).toEqual({
+      index: 0,
+      x: 4,
+      y: 0,
+      read: true,
+      found: false,
+      known: true,
+    });
   });
 
   it('gives a note’s words only to who stands at it, the first one in map order', () => {

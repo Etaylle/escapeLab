@@ -1,4 +1,4 @@
-import { applyAction, initialState, parseMission } from '../src/index.js';
+import { applyAction, consoleFind, findKey, initialState, parseMission } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
 
 export const T0 = 1_000_000;
@@ -114,7 +114,11 @@ export function lightsOut(state: GameState, at = T0): GameState {
   return applyAction(state, { type: 'lights-out', at });
 }
 
-/** Who stands where, the way the server reports it from positions. */
+/**
+ * Who stands where, the way the server reports it from positions: what each
+ * player has just found at `at` and what each has in sight (discovery.ts
+ * keys, by player id).
+ */
 export function standing(
   state: GameState,
   where: {
@@ -122,9 +126,10 @@ export function standing(
     manuals?: Record<string, string[]>;
     notes?: Record<string, string[]>;
     signSeen?: string[];
-    seen?: string[];
-    notesSeen?: number[];
+    found?: Record<string, string[]>;
+    sight?: Record<string, string[]>;
     exit?: string[];
+    at?: number;
   },
 ): GameState {
   return applyAction(state, {
@@ -133,9 +138,10 @@ export function standing(
     manuals: where.manuals ?? {},
     notes: where.notes ?? {},
     signSeen: where.signSeen ?? [],
-    seen: where.seen ?? [],
-    notesSeen: where.notesSeen ?? [],
+    found: where.found ?? {},
+    sight: where.sight ?? {},
     exit: where.exit ?? [],
+    at: where.at ?? T0,
   });
 }
 
@@ -180,3 +186,8 @@ export const ELSEWHERE = {
   console: null,
 } as const;
 export const AUDIENCE = { playerId: null, operating: true, reading: true, console: null } as const;
+
+/** The keys of every console of the run's map: what a player with all of them in sight has. */
+export function everyConsole(state: GameState): string[] {
+  return state.mission.map.stations.map((spot) => findKey(consoleFind(spot)));
+}

@@ -95,7 +95,9 @@ function maze(index: number, cells: number[] | null): PuzzleView {
 
 /** A source of each kind where the tests put them: two rooms, a door between, one named. */
 function source(id: string, kind: Manual['kind'], x: number, y: number): Manual {
-  return { id, kind, x, y, label: id, puzzleIds: ['kabel', 'netz'], opened: true, needsKey: null };
+  const found = { seen: true, found: true, known: true } as const;
+  const puzzleIds = ['kabel', 'netz'];
+  return { id, kind, x, y, label: id, puzzleIds, opened: true, needsKey: null, ...found };
 }
 
 const lab = mapWith({
@@ -604,14 +606,42 @@ describe('the station frame', () => {
     };
     const consoles = mapWith({
       stations: [
-        { puzzleId: 'kette', x: 8, y: 5, title: 'Signalkette', status: 'armed', console: 'a' },
-        { puzzleId: 'kette', x: 13, y: 5, title: 'Signalkette', status: 'armed', console: 'b' },
+        {
+          puzzleId: 'kette',
+          x: 8,
+          y: 5,
+          title: 'Signalkette',
+          status: 'armed',
+          console: 'a',
+          found: false,
+          known: true,
+        },
+        {
+          puzzleId: 'kette',
+          x: 13,
+          y: 5,
+          title: 'Signalkette',
+          status: 'armed',
+          console: 'b',
+          found: false,
+          known: true,
+        },
       ],
     });
     expect(stationLabel(atB, consoles)).toBe('§2 — Signalkette · Pult B');
     // The view names console a at a station with one as well; the label leaves it out.
     const single = mapWith({
-      stations: [{ puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed' }],
+      stations: [
+        {
+          puzzleId: 'netz',
+          x: 4,
+          y: 1,
+          title: 'Leitungsnetz',
+          status: 'armed',
+          found: false,
+          known: true,
+        },
+      ],
     });
     expect(stationLabel({ ...maze(2, null), console: 'a' }, single)).toBe('§3 — Leitungsnetz');
   });
@@ -619,7 +649,17 @@ describe('the station frame', () => {
   /** The frame the station opens in, as the game shows it, at a station with one console. */
   function stationFrame(puzzle: PuzzleView): string {
     const single = mapWith({
-      stations: [{ puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed' }],
+      stations: [
+        {
+          puzzleId: 'netz',
+          x: 4,
+          y: 1,
+          title: 'Leitungsnetz',
+          status: 'armed',
+          found: false,
+          known: true,
+        },
+      ],
     });
     return renderToStaticMarkup(
       <StationModal
@@ -698,7 +738,17 @@ describe('the station frame', () => {
 
   it('puts the device’s first-time line under the Laborkennung’s row, never over the serial', () => {
     const single = mapWith({
-      stations: [{ puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed' }],
+      stations: [
+        {
+          puzzleId: 'netz',
+          x: 4,
+          y: 1,
+          title: 'Leitungsnetz',
+          status: 'armed',
+          found: false,
+          known: true,
+        },
+      ],
     });
     const html = renderToStaticMarkup(
       <StationModal
@@ -725,6 +775,8 @@ describe('the station frame', () => {
 
 describe('the map legend', () => {
   const book: Manual = {
+    found: true,
+    known: true,
     id: 'b',
     kind: 'book',
     x: 1,
@@ -749,7 +801,7 @@ describe('the map legend', () => {
       <Legend
         map={mapWith({
           manuals: [book, { ...book, id: 't', kind: 'terminal' }, { ...book, id: 'b2' }],
-          edgeworkSign: { x: 3, y: 3 },
+          edgeworkSign: { x: 3, y: 3, found: true, known: true },
           plates: [camera, door],
         })}
       />,
@@ -761,11 +813,19 @@ describe('the map legend', () => {
     expect(html).toContain('HALTEN-Platte</dt><dd>hält eine Tür offen</dd>');
   });
 
-  it('leaves out what the map does not have', () => {
-    const bare = renderToStaticMarkup(<Legend map={mapWith({ manuals: [book] })} />);
+  it('leaves out what the map does not have, and the sources nobody has come across', () => {
+    // A terminal in sight that nobody has found: the legend has no word for it yet.
+    const glimpse = { seen: true, found: false, known: false } as const;
+    const unknown = { id: 't', kind: 'terminal' as const, x: book.x, y: book.y, ...glimpse };
+    const bare = renderToStaticMarkup(<Legend map={mapWith({ manuals: [book, unknown] })} />);
+    expect(bare).not.toContain('Terminal');
     expect(bare.match(/class="legend-row"/g)).toHaveLength(1);
     expect(bare).not.toContain('Platte');
     expect(bare).not.toContain('Schild');
+    // Nor the sign before somebody of the crew has found it.
+    const sign = { x: 3, y: 3, found: false, known: false };
+    const unfound = renderToStaticMarkup(<Legend map={mapWith({ edgeworkSign: sign })} />);
+    expect(unfound).not.toContain('Schild');
     const doorsOnly = renderToStaticMarkup(<Legend map={mapWith({ plates: [door] })} />);
     expect(doorsOnly.match(/class="legend-row"/g)).toHaveLength(1);
     expect(doorsOnly).toContain('HALTEN-Platte');
@@ -827,7 +887,17 @@ function justStarted(parts: Partial<PlayerView> = {}): PlayerView {
       tiles: ['#######', '#.....#', '#.....#', '#######'],
       yourSpawn: { x: 1, y: 2 },
       labels: [{ text: 'MASCHINENRAUM', x: 2, y: 1 }],
-      stations: [{ puzzleId: 'kabel', x: 4, y: 1, title: 'Notstrom', status: 'armed' }],
+      stations: [
+        {
+          puzzleId: 'kabel',
+          x: 4,
+          y: 1,
+          title: 'Notstrom',
+          status: 'armed',
+          found: false,
+          known: true,
+        },
+      ],
     }),
     ...parts,
   };
@@ -895,17 +965,20 @@ describe('the start of a run', () => {
 
 describe('what the crew still has to bring', () => {
   const fuse: Item = {
+    found: true,
+    known: true,
     id: 'fuse',
+    kind: 'fuse',
     label: 'SICHERUNG',
     x: 2.5,
     y: 2.5,
     carriedBy: null,
     delivered: false,
     deliverTo: { x: 4, y: 2 },
-    requiredForTitle: 'Notstrom',
+    requiredFor: { title: 'Notstrom', ahead: 0 },
   };
   /** A cabinet's key: where it goes stays unknown until the cabinet is found. */
-  const key: Item = { ...fuse, id: 'key', label: 'SCHLÜSSEL', deliverTo: null };
+  const key: Item = { ...fuse, id: 'key', kind: 'key', label: 'SCHLÜSSEL', deliverTo: null };
 
   function lying(items: Item[]): PlayerView {
     const view = justStarted();
@@ -930,7 +1003,7 @@ describe('what the crew still has to bring', () => {
   });
 
   it('tells a part a later station needs apart from what this one lacks', () => {
-    const later = { ...fuse, requiredForTitle: 'Reaktor-Neustart' };
+    const later = { ...fuse, requiredFor: { title: 'Reaktor-Neustart', ahead: 2 } };
     expect(game(lying([later]))).toContain('<span class="stage-sub">SICHERUNG mitnehmen</span>');
     const both = lying([later, { ...key, deliverTo: { x: 5, y: 1 } }]);
     expect(game(both)).toContain(
@@ -949,12 +1022,20 @@ describe('what the crew still has to bring', () => {
       ];
       return order.map((station, i) => ({
         ...station,
+        found: false,
+        known: true,
         status: i < done ? 'done' : i === done ? 'armed' : 'locked',
       }));
     }
-    /** The fuse for the reactor, out of sight of the spawn at 1,2: four tiles off. */
-    const away = { ...fuse, x: 5.5, y: 1.5, requiredForTitle: 'Reaktor-Neustart' };
-    function lab(done: number, part: Item): PlayerView {
+    /**
+     * The fuse for the reactor, out of sight of the spawn at 1,2, four tiles off, with `done`
+     * stations solved.
+     */
+    const away = (done: number): Item => {
+      const requiredFor = { title: 'Reaktor-Neustart', ahead: 2 - done };
+      return { ...fuse, x: 5.5, y: 1.5, requiredFor };
+    };
+    function lab(done: number, part: Item = away(done)): PlayerView {
       const view = justStarted();
       return view.map === null
         ? view
@@ -962,18 +1043,18 @@ describe('what the crew still has to bring', () => {
     }
 
     it('keeps the goal line to the station while the part’s station is two or more ahead', () => {
-      const html = game(lab(0, away));
+      const html = game(lab(0));
       expect(html).toContain('<h1>Notstrom</h1>');
       expect(html).not.toContain('mitnehmen');
       expect(html).not.toContain('hud-parts');
     });
 
     it('names the part once its station is the next one', () => {
-      expect(game(lab(1, away))).toContain('<span class="stage-sub">SICHERUNG mitnehmen</span>');
+      expect(game(lab(1))).toContain('<span class="stage-sub">SICHERUNG mitnehmen</span>');
     });
 
     it('names it at once while it lies in sight of the player', () => {
-      const near = { ...away, x: 2.5, y: 2.5 };
+      const near = { ...away(0), x: 2.5, y: 2.5 };
       expect(game(lab(0, near))).toContain('<span class="stage-sub">SICHERUNG mitnehmen</span>');
     });
   });

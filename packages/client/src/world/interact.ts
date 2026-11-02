@@ -1,6 +1,7 @@
-import type { MapView, NoteHere, SourceHere } from '@escapelab/core';
+import type { KnownPart, KnownSource, MapView, NoteHere, SourceHere } from '@escapelab/core';
 import { inputDevice } from '../input/device.js';
 import { glyph } from '../input/glyphs.js';
+import { isArmed, known } from './known.js';
 import { noteMount } from './notes.js';
 
 /** Prompt and client-side gate for stations and manual objects; the server counts 1.6. */
@@ -59,30 +60,36 @@ export function carryLine(label: string): string {
 }
 
 type Source = Pick<SourceHere, 'id' | 'kind' | 'opened' | 'needsKey'>;
-type Manual = MapView['manuals'][number];
-type Item = MapView['items'][number];
 
 /** What `playerId` carries right now: an item in their hands, not yet set in its place. */
-export function carriedItem(map: Pick<MapView, 'items'>, playerId: string): Item | undefined {
-  return map.items.find((item) => item.carriedBy === playerId && !item.delivered);
+export function carriedItem(map: Pick<MapView, 'items'>, playerId: string): KnownPart | undefined {
+  return map.items.filter(known).find((item) => item.carriedBy === playerId && !item.delivered);
 }
 
 /** The manual object prints the rules of the station that is armed now. */
-export function coversArmed(map: Pick<MapView, 'stations'>, manual: Manual): boolean {
-  const armed = map.stations.find((s) => s.status === 'armed');
+export function coversArmed(map: Pick<MapView, 'stations'>, manual: KnownSource): boolean {
+  const armed = map.stations.find(isArmed);
   return armed !== undefined && manual.puzzleIds.includes(armed.puzzleId);
 }
 
-/** A cabinet's key goes into its padlock: the cabinet is the drop-off, no zone needed. */
+/**
+ * A cabinet's key goes into its padlock: the cabinet is the drop-off, no zone needed — once the
+ * crew has come across the cabinet; before, nobody knows the key is one.
+ */
 export function opensCabinet(map: Pick<MapView, 'manuals'>, itemId: string): boolean {
-  return map.manuals.some((manual) => manual.needsKey === itemId);
+  return map.manuals.filter(known).some((manual) => manual.needsKey === itemId);
 }
 
 /**
  * E at a manual object: read it once it is open, search a closed locker,
  * unlock a cabinet with its key in hand — or learn which key is missing.
  */
-function sourceAction(map: MapView, manual: Manual, source: Source, mine?: Item): ContextAction {
+function sourceAction(
+  map: MapView,
+  manual: KnownSource,
+  source: Source,
+  mine?: KnownPart,
+): ContextAction {
   const subject: Subject = { of: 'manual', id: manual.id };
   const at = { x: manual.x + 0.5, y: manual.y - 0.55, subject };
   if (source.opened) {
@@ -94,20 +101,21 @@ function sourceAction(map: MapView, manual: Manual, source: Source, mine?: Item)
   if (mine !== undefined && mine.id === source.needsKey) {
     return { kind: 'open', manualId: manual.id, label: 'Aufschließen', ...at };
   }
-  const key = map.items.find((item) => item.id === source.needsKey);
+  const key = map.items.filter(known).find((item) => item.id === source.needsKey);
   return { kind: 'locked', label: `🔒 ${key?.label ?? 'Schlüssel'} fehlt`, ...at };
 }
 
 /**
  * E at the note of the last shift the server counts this player at, by its
- * spot on the map; none where the crew has not come across it yet.
+ * spot on the map; none before this player has found it — counted there
+ * round a pillar, they cannot read it.
  */
 function noteAction(
   map: MapView,
   noteHere: Pick<NoteHere, 'index'> | null,
   dist: (x: number, y: number) => number,
 ): { action: ContextAction; d: number }[] {
-  const note = map.notes.find((n) => n.index === noteHere?.index);
+  const note = map.notes.find((n) => n.index === noteHere?.index && n.found);
   const mount = note === undefined ? null : noteMount(map, note);
   if (note === undefined || mount === null) {
     return [];
@@ -145,7 +153,7 @@ export function contextAction(
   const dist = (x: number, y: number): number => Math.hypot(self.x - x, self.y - y);
 
   const mine = carriedItem(map, youId);
-  const key = mine !== undefined && map.manuals.some((manual) => manual.needsKey === mine.id);
+  const key = mine !== undefined && opensCabinet(map, mine.id);
   const goal = key ? null : (mine?.deliverTo ?? null);
   if (mine !== undefined && goal !== null && dist(goal.x + 0.5, goal.y + 0.5) <= ITEM_RADIUS) {
     return {
@@ -158,14 +166,17 @@ export function contextAction(
   }
 
   // The server picks up the first loose part in reach, in map order, and only with free hands.
-  const loose = map.items.find(
-    (item) => !item.delivered && item.carriedBy === null && dist(item.x, item.y) <= ITEM_RADIUS,
-  );
+  const loose = map.items
+    .filter(known)
+    .find(
+      (item) => !item.delivered && item.carriedBy === null && dist(item.x, item.y) <= ITEM_RADIUS,
+    );
   const stations =
     stationOpen || mine !== undefined || loose === undefined
-      ? map.stations.filter((s) => s.status === 'armed')
+      ? map.stations.filter(isArmed)
       : [];
-  const candidates: { action: ContextAction; d: number }[] = map.manuals.flatMap((manual) => {
+  const sources = map.manuals.filter(known);
+  const candidates: { action: ContextAction; d: number }[] = sources.flatMap((manual) => {
     const source = sourcesHere.find((here) => here.id === manual.id);
     return source === undefined
       ? []

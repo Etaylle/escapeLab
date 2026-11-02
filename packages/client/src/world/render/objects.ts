@@ -1,3 +1,4 @@
+import type { KnownPart, MapPart, MapSource } from '@escapelab/core';
 import {
   drawDoor,
   drawEmergencyLamp,
@@ -12,6 +13,7 @@ import {
   LABEL_BELOW,
   plateCaption,
   SIGN_LABEL_BELOW,
+  type ManualObjectOpts,
   type Tube,
 } from '../art.js';
 import type { PlacedLabels } from '../labelLayout.js';
@@ -25,17 +27,27 @@ import {
   type CarryableOpts,
 } from '../hazards.js';
 import { coversArmed, opensCabinet } from '../interact.js';
+import { statusOf } from '../known.js';
 import { noteMount } from '../notes.js';
-import { inTiles, profiled, type Frame, type WorldMap } from './frame.js';
+import { inTiles, profiled, type Frame } from './frame.js';
 import { drawGlow, namedThing, type Named } from './highlight.js';
-import { labelAt, looseAndShown, propLabels, SIGN_LABEL } from './labels.js';
+import {
+  labelAt,
+  looseAndShown,
+  propLabels,
+  SIGN,
+  SIGN_LABEL,
+  sourceShows,
+} from './labels.js';
 import * as props from './props.js';
 
 /**
  * The lab's things, in tile space. Objects show only where some light has
- * fallen — a cabinet behind a wall stays unseen. Sources and the notes of
- * the last shift reach the map once found; a station that is up or done, the
- * sign, the hatch and the valves always show. The one thing the E prompt
+ * fallen — a cabinet behind a wall stays unseen —, sources and the notes of
+ * the last shift also wherever the crew knows of them; a station that is up
+ * or done, the sign, the hatch and the valves always show. A thing shows its
+ * name and calls for attention only once this player has found it
+ * (labelFade.ts): till then it is drawn as what it is. The one thing the E prompt
  * names glows in its own shape under it (highlight.ts) — over the plates and
  * doors, under the things. Then the emergency lamps on their walls and
  * ceilings. The furniture is baked with the floor it stands on
@@ -111,9 +123,10 @@ function drawStations(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const { map, light, pulse } = frame;
   const levers = frame.players.filter((p) => p.connected).length;
   for (const station of map.stations) {
-    if (station.status !== 'locked' || light.shown(station.x, station.y)) {
+    const status = statusOf(station);
+    if (status !== 'locked' || light.shown(station.x, station.y)) {
       const look = {
-        status: station.status,
+        status,
         pulse,
         console: station.console ?? null,
         tube: tubeAt(frame, station.x, station.y),
@@ -140,28 +153,44 @@ export function tubeAt(frame: Frame, x: number, y: number): Tube {
 }
 
 /**
- * The sources found so far, the ones printing the armed station's rules lit up, each label
- * where `labels` puts it.
+ * How `manual` looks this frame, its label's top at `place`: one nobody has found as what it
+ * is, shut, holding nothing; one the crew knows of whole, named as far as this player has found
+ * it — and only then lit up where it prints the armed station's rules.
  */
+function sourceLook(frame: Frame, manual: MapSource, place: number | null): ManualObjectOpts {
+  const { pulse, text } = frame;
+  const found = frame.labels({ of: 'source', id: manual.id });
+  const tube = tubeAt(frame, manual.x, manual.y);
+  const look = { kind: manual.kind, active: false, opened: false, pulse, text, tube, found };
+  if (!manual.known) {
+    return { ...look, labelAt: place };
+  }
+  const active = found > 0 && coversArmed(frame.map, manual);
+  return { ...look, label: manual.label, active, opened: manual.opened, labelAt: place };
+}
+
+/** The sources where light has fallen or the crew knows of them, as `sourceLook` has them. */
 function drawManuals(ctx: CanvasRenderingContext2D, frame: Frame, labels: PlacedLabels): void {
-  const { map, pulse, text } = frame;
-  for (const manual of map.manuals) {
-    const active = coversArmed(map, manual);
-    const { kind, label, opened } = manual;
-    const tube = tubeAt(frame, manual.x, manual.y);
-    const place = labelAt(labels, `manual:${manual.id}`, LABEL_BELOW);
-    const look = { kind, label, active, opened, pulse, text, tube, labelAt: place };
-    at(ctx, manual.x + 0.5, manual.y + 0.5, () => drawManualObject(ctx, look));
+  for (const manual of frame.map.manuals) {
+    if (sourceShows(frame, manual)) {
+      const look = sourceLook(frame, manual, labelAt(labels, `manual:${manual.id}`, LABEL_BELOW));
+      at(ctx, manual.x + 0.5, manual.y + 0.5, () => drawManualObject(ctx, look));
+    }
   }
 }
 
-/** The notes of the last shift found so far, on their walls or the floor, unread ones calling. */
+/**
+ * The notes of the last shift where light has fallen or the crew knows of them, on their walls
+ * or the floor, unread ones calling as far as this player has found them.
+ */
 function drawNotes(ctx: CanvasRenderingContext2D, frame: Frame): void {
-  const { map, pulse } = frame;
+  const { map, light, pulse } = frame;
   for (const note of map.notes) {
     const mount = noteMount(map, note);
-    if (mount !== null) {
-      const look = { facing: mount.facing, read: note.read, pulse };
+    if (mount !== null && (note.known || light.shown(mount.spot.x, mount.spot.y))) {
+      const found = frame.labels({ of: 'note', index: note.index });
+      // Nobody has read a note nobody has found.
+      const look = { facing: mount.facing, read: note.known && note.read, pulse, found };
       at(ctx, mount.x, mount.y, () => drawPinnedNote(ctx, look));
     }
   }
@@ -173,7 +202,8 @@ function drawFixtures(ctx: CanvasRenderingContext2D, frame: Frame, labels: Place
   const sign = map.edgeworkSign;
   if (sign !== null) {
     const place = labelAt(labels, 'sign', SIGN_LABEL_BELOW);
-    const look = { label: SIGN_LABEL, seen: frame.signSeen, pulse, text, labelAt: place };
+    const found = frame.labels(SIGN);
+    const look = { label: SIGN_LABEL, seen: frame.signSeen, pulse, text, labelAt: place, found };
     at(ctx, sign.x + 0.5, sign.y + 0.5, () => drawSign(ctx, look));
   }
   const exit = map.exit;
@@ -186,9 +216,10 @@ function drawFixtures(ctx: CanvasRenderingContext2D, frame: Frame, labels: Place
   }
 }
 
-type Item = WorldMap['items'][number];
-
-/** Drop-offs and the crates, fuses and keys lying about, where light has fallen on them. */
+/**
+ * Drop-offs of the parts the crew knows of, and the crates, fuses and keys lying about, where
+ * light has fallen on them.
+ */
 function drawItems(
   ctx: CanvasRenderingContext2D,
   frame: Frame,
@@ -196,14 +227,15 @@ function drawItems(
   labels: PlacedLabels,
 ): void {
   for (const item of frame.map.items) {
-    drawZone(ctx, frame, item);
+    if (item.known) {
+      drawZone(ctx, frame, item);
+    }
     drawLoose(ctx, frame, item, named, labelAt(labels, `item:${item.id}`, LABEL_BELOW));
   }
 }
 
-
 /** The drop-off of `item` where light has fallen on it; none for a cabinet's key. */
-function drawZone(ctx: CanvasRenderingContext2D, frame: Frame, item: Item): void {
+function drawZone(ctx: CanvasRenderingContext2D, frame: Frame, item: KnownPart): void {
   const { map, light, pulse } = frame;
   const zone = item.deliverTo;
   if (zone !== null && !opensCabinet(map, item.id) && light.shown(zone.x, zone.y)) {
@@ -213,12 +245,12 @@ function drawZone(ctx: CanvasRenderingContext2D, frame: Frame, item: Item): void
 
 /**
  * `item` lying about where light has fallen on it, as the E prompt has it (`hovering`), its
- * label's top `label` under it, or none.
+ * label's top `label` under it, or none — named as far as this player has found it.
  */
 function drawLoose(
   ctx: CanvasRenderingContext2D,
   frame: Frame,
-  item: Item,
+  item: MapPart,
   named: Named | null,
   label: number | null,
 ): void {
@@ -227,11 +259,13 @@ function drawLoose(
     return;
   }
   const look = {
-    label: item.label,
+    kind: item.kind,
+    ...(item.known ? { label: item.label } : {}),
     pulse,
     carried: false,
     text,
     labelAt: label,
+    found: frame.labels({ of: 'item', id: item.id }),
     ...hovering(frame, item, named),
   };
   at(ctx, item.x, item.y, () => drawCarryable(ctx, look));
@@ -243,7 +277,7 @@ function drawLoose(
  */
 function hovering(
   frame: Frame,
-  item: Item,
+  item: MapPart,
   named: Named | null,
 ): Pick<CarryableOpts, 'lift' | 'glow'> {
   if (named?.subject.of !== 'item' || named.subject.id !== item.id) {

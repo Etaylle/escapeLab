@@ -3,6 +3,8 @@ import { MOVE_ACTIONS, MOVES, type Held } from '../input/bindings.js';
 import { NO_STEER, type Steer } from '../input/pad.js';
 import type { DoorMotion } from './doors.js';
 import { gaitStep } from './figure.js';
+import { freshEar, type Ear } from './finds.js';
+import { labelClock, type LabelClock } from './labelFade.js';
 import { lightMemory, type LightMemory } from './light.js';
 import {
   correction,
@@ -114,8 +116,12 @@ export interface Sim {
   lastBeepAt: number;
   /** the map as the last frame saw it, to tell what changed since; null before the first */
   seen: WorldMap | null;
-  /** „… entdeckt" over sources the crew has just come across, `at` in sim time */
+  /** „… entdeckt" over this player's finds that matter, `at` in sim time (finds.ts) */
   captions: Caption[];
+  /** what this screen has taken of the run's discoveries (finds.ts) */
+  ear: Ear;
+  /** when the name of each thing this player has found came up on this screen (labelFade.ts) */
+  labels: LabelClock;
   /**
    * lit rooms by label: the tiles their lights reach, as a path in tiles,
    * and the sim time they came on
@@ -163,6 +169,8 @@ export function newSim(topCss: number): Sim {
     lastBeepAt: Number.POSITIVE_INFINITY,
     seen: null,
     captions: [],
+    ear: freshEar(null),
+    labels: labelClock(null),
     lit: new Map(),
     pendingLit: [],
     room: null,
@@ -189,6 +197,8 @@ export function followServer(
   if (sim.run !== run) {
     const start = startingSpot(known, youId, map, run);
     Object.assign(sim.self, start);
+    // Facing as the server has you — east on a fresh spawn —, where its lamp finds things.
+    sim.self.facing = kept?.facing ?? 0;
     sim.cam.x = start.x;
     sim.cam.y = start.y;
     sim.lead = { x: 0, y: 0 };

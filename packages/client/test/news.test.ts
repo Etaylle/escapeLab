@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { worldNews } from '../src/world/news.js';
-import { mapWith, type Manual } from './fixtures.js';
+import { mapWith, type Item, type Manual } from './fixtures.js';
 
 const book: Manual = {
+  found: true,
+  known: true,
   id: 'buch',
   kind: 'book',
   x: 2,
@@ -17,31 +19,7 @@ const locker: Manual = { ...book, id: 'spind', kind: 'locker', x: 6, opened: fal
 describe('worldNews — what the lab shows that it did not before', () => {
   it('has nothing on the first look: that was all there already', () => {
     const now = mapWith({ manuals: [book, { ...locker, opened: true }], litRooms: ['ARCHIV'] });
-    expect(worldNews(null, now)).toEqual({
-      found: [],
-      notes: [],
-      opened: [],
-      lit: [],
-      delivered: [],
-      dropped: [],
-    });
-  });
-
-  it('finds a note of the last shift the moment the view carries it, read or not', () => {
-    const lever = { index: 0, x: 12, y: 6, read: false };
-    const hatch = { index: 2, x: 2, y: 0, read: true };
-    const before = mapWith({ notes: [lever] });
-    const now = mapWith({ notes: [lever, hatch] });
-    expect(worldNews(before, now).notes).toEqual([hatch]);
-    expect(worldNews(now, now).notes).toEqual([]);
-    expect(worldNews(null, now).notes).toEqual([]);
-  });
-
-  it('finds a source the moment the view carries it, and only then', () => {
-    const before = mapWith({ manuals: [book] });
-    const now = mapWith({ manuals: [book, locker] });
-    expect(worldNews(before, now).found).toEqual([locker]);
-    expect(worldNews(now, now).found).toEqual([]);
+    expect(worldNews(null, now)).toEqual({ opened: [], lit: [], delivered: [], dropped: [] });
   });
 
   it('opens a locker once: closed before, open now', () => {
@@ -51,24 +29,31 @@ describe('worldNews — what the lab shows that it did not before', () => {
     expect(worldNews(now, now).opened).toEqual([]);
   });
 
-  it('counts a source found already open as found, not as opened', () => {
-    const news = worldNews(mapWith({}), mapWith({ manuals: [book] }));
-    expect(news.found).toEqual([book]);
-    expect(news.opened).toEqual([]);
+  it('takes a source come into the view already open as nothing opened', () => {
+    expect(worldNews(mapWith({}), mapWith({ manuals: [book] })).opened).toEqual([]);
   });
 
   it('seats a part where it belongs once, and leaves a key in a cabinet to the cabinet', () => {
-    const fuse = {
+    const fuse: Item = {
+      found: true,
+      known: true,
       id: 'sicherung',
+      kind: 'fuse',
       label: 'SICHERUNG',
       x: 9.5,
       y: 4.5,
       carriedBy: 'ada',
       delivered: false,
       deliverTo: { x: 14, y: 2 },
-      requiredForTitle: 'Notstrom',
+      requiredFor: { title: 'Notstrom', ahead: 0 },
     };
-    const key = { ...fuse, id: 'schluessel', label: 'SCHLÜSSEL', deliverTo: { x: 6, y: 3 } };
+    const key: Item = {
+      ...fuse,
+      id: 'schluessel',
+      kind: 'key',
+      label: 'SCHLÜSSEL',
+      deliverTo: { x: 6, y: 3 },
+    };
     const cabinet: Manual = { ...locker, kind: 'cabinet', needsKey: 'schluessel' };
     const before = mapWith({ manuals: [cabinet], items: [fuse, key] });
     const seated = { ...fuse, carriedBy: null, delivered: true, x: 14.5, y: 2.5 };
@@ -81,15 +66,18 @@ describe('worldNews — what the lab shows that it did not before', () => {
   });
 
   it('puts a part down off somebody’s hands once, where it now lies — not one set in place', () => {
-    const fuse = {
+    const fuse: Item = {
+      found: true,
+      known: true,
       id: 'sicherung',
+      kind: 'fuse',
       label: 'SICHERUNG',
       x: 9.5,
       y: 4.5,
       carriedBy: 'ada',
       delivered: false,
       deliverTo: { x: 14, y: 2 },
-      requiredForTitle: 'Notstrom',
+      requiredFor: { title: 'Notstrom', ahead: 0 },
     };
     const down = { ...fuse, carriedBy: null, x: 9.7, y: 4.4 };
     const before = mapWith({ items: [fuse] });

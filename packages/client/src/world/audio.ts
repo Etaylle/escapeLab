@@ -370,8 +370,8 @@ export function pingBlip(): void {
 }
 
 /**
- * A soft rising two-note chime for a source the crew has just come across: rounder and lower
- * than the ping, so a find never sounds like somebody calling.
+ * A soft rising two-note chime for a find of this player's that matters (finds.ts): rounder and
+ * lower than the ping, so a find never sounds like somebody calling.
  */
 export function discoveryBlip(): void {
   effect('discovery', 'sfx', CHIRP_LEVEL);

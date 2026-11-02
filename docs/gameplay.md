@@ -1,13 +1,14 @@
 # EscapeLab — gameplay
 
-How the crew steers, what a run leaves behind and how runs compare: the controls on keys and
-on a controller, the Erfolge, the Tagesschicht, the picture of a run, the danger sense, the
-Serverraum's cabling diagram, typing at its terminal and what the notepad takes down. Code:
-`packages/client/src/input/` (bindings, controller, prompts), `client/src/achievements.ts` and
-`screens/{Plaques,ShareButton,ControlSettings}.tsx`, `screens/shareCard.ts`, `world/danger.ts`,
-`puzzles/RackDiagram.tsx`, `puzzles/{prompt.ts,ServersPanel.tsx}`, `noting.ts`, `notes.ts`,
-`screens/{Notepad,NoteButton}.tsx`; in the core `achievements.ts`, `daily.ts` and
-`puzzles/servers.ts` (`serviceDiagram`).
+How the crew steers, how it finds things, what a run leaves behind and how runs compare: the
+controls on keys and on a controller, finding things, the Erfolge, the Tagesschicht, the picture
+of a run, the danger sense, the Serverraum's cabling diagram, typing at its terminal and what the
+notepad takes down. Code: `packages/client/src/input/` (bindings, controller, prompts),
+`client/src/achievements.ts` and `screens/{Plaques,ShareButton,ControlSettings}.tsx`,
+`screens/shareCard.ts`, `world/{labelFade,finds,danger}.ts`, `puzzles/RackDiagram.tsx`,
+`puzzles/{prompt.ts,ServersPanel.tsx}`, `noting.ts`, `notes.ts`,
+`screens/{Notepad,NoteButton}.tsx`; in the core `discovery.ts`, `achievements.ts`, `daily.ts`
+and `puzzles/servers.ts` (`serviceDiagram`).
 
 ## Controls
 
@@ -74,6 +75,16 @@ there until it is let go. An Xbox controller says Xbox in its id
 live test: every button lights while held, the stick's dot leans. The walkthrough's
 `?fakepad=1` puts a controller of its own on `window.__escapelab.pad` (press, release, tap,
 lean).
+
+## Finding things
+
+A player finds a source, note, part, the sign or an armed console within 2 tiles in sight, or
+after 250 ms in their lamp's cone (0.5 rad, 7.5 tiles), lit room or not; a part within 0.9 always.
+The server decides, per player. While the power is on (the opening, the way out) every view shows
+the whole lab; in the dark it holds a thing nobody has found only in sight: what and where. The
+armed station is whole on every map. The sign stays on every map and the minimap as a landmark,
+but glows through the dark only once the crew has found it.
+Names fade in over 300 ms; a find that matters gets its caption, a chime at most once in 1.5 s.
 
 ## Erfolge
 

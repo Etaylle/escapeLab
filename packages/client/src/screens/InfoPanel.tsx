@@ -4,6 +4,7 @@ import { useInputDevice } from '../input/device.js';
 import { glyphOf, useGlyph, type GlyphSource, type Prompt } from '../input/glyphs.js';
 import { PAD_GLYPHS, PAD_PING } from '../input/pad.js';
 import { useSettings } from '../settings.js';
+import { isArmed } from '../world/known.js';
 import { toBring } from '../world/markers.js';
 import { Icon, type IconName } from './Icon.js';
 
@@ -79,14 +80,15 @@ const KIND_NAMES: Record<ManualKind, string> = {
   cabinet: 'Aktenschrank',
 };
 
-/** What the things in the lab are for, one line each; only what this map has. */
+/** What the things in the lab are for, one line each; only what the crew has come across. */
 export function Legend({ map }: { map: MapView }) {
-  const kinds = [...new Set(map.manuals.map((m) => KIND_NAMES[m.kind]))];
+  const known = map.manuals.filter((m) => m.known);
+  const kinds = [...new Set(known.map((m) => KIND_NAMES[m.kind]))];
   const rows: [IconName, string, string][] = [];
   if (kinds.length > 0) {
     rows.push(['book', kinds.join(' · '), 'Regeln der Stationen']);
   }
-  if (map.edgeworkSign !== null) {
+  if (map.edgeworkSign?.known === true) {
     rows.push(['sign', 'Schild', 'Laborkennung']);
   }
   if (map.plates.some((p) => p.freezesDrone)) {
@@ -140,7 +142,7 @@ function KeyList() {
 export function InfoPanel({ view, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('auftrag');
   const closeKey = useGlyph('close');
-  const armed = view.map?.stations.find((s) => s.status === 'armed');
+  const armed = view.map?.stations.find(isArmed);
   const pending = view.map === null ? [] : toBring(view.map);
   const escaping = view.map?.exit?.open === true;
 
