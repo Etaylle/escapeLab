@@ -208,7 +208,8 @@ export function labLit(state: GameState): boolean {
  * What a view carries only while its player has it in sight: what nobody of the crew has found
  * — the sources where the run placed them, the notes, the parts lying loose and the consoles of
  * every station but the armed one. Every view carries the rest whole, the sign, a fixture,
- * included; and sight is kept of nothing else, so that walking past a corner sends no view.
+ * included; and sight is kept of nothing else, so that a known thing coming into sight sends no
+ * view.
  */
 export function sightables(state: GameState): Findable[] {
   const { map } = state.mission;

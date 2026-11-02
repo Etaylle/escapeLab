@@ -54,8 +54,10 @@ export interface Presence {
   exit: string[];
   /**
    * what each player has in sight right now, by player id: the keys of the sources, notes,
-   * loose parts and consoles a straight line reaches from where they stand (discovery.ts
-   * `inSight`), sorted. A view carries one nobody has found only while it is in sight
+   * loose parts and consoles nobody of the crew has found — the armed station's aside — that a
+   * straight line reaches from where they stand (discovery.ts `sightables`, `inSight`), sorted;
+   * none while the power lights the whole lab (`labLit`). A view carries a thing nobody has
+   * found only while it is in sight
    */
   sight: Record<string, FindKey[]>;
 }
