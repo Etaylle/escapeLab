@@ -56,7 +56,7 @@ const blackout: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
 );
 
-type Player = Walker & { detach: () => void };
+type Player = Walker & { token: string; detach: () => void };
 
 function join(room: Room, name: string): Player {
   const messages: ServerMessage[] = [];
@@ -122,12 +122,18 @@ describe('a room where things are found by reach or by the lamp', () => {
     room.dispose();
   });
 
-  it('finds nothing while the run stands paused', () => {
+  it('finds nothing while the run stands paused, and looks anew once it goes on', () => {
     const { room, anna, ben } = started();
     walkTo(room, anna, 9.5, 1.5);
     ben.detach();
     vi.advanceTimersByTime(1000);
     expect(sourcesFound(anna)).toEqual([]);
+    // The lamp rested on the locker all through the pause, but the pause froze the look.
+    room.resume(ben.playerId, ben.token);
+    vi.advanceTimersByTime(249);
+    expect(sourcesFound(anna)).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(sourcesFound(anna)).toEqual(['spind', 'schrank']);
     room.dispose();
   });
 

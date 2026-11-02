@@ -754,12 +754,14 @@ export class Room {
   /**
    * What each connected player finds where they stand at `now` (core discovery.ts), of what
    * they have not found yet, by player id: whatever lies in reach, whatever their lamp's cone
-   * has rested on long enough — nothing while the run stands paused. Keeps the glances still
-   * running and arms the look that ends the next of them.
+   * has rested on long enough. Keeps the glances still running and arms the look that ends the
+   * next of them. A pause freezes the run: nothing is found while it lasts, and a look begun
+   * before it starts anew after it.
    */
   private findsNow(now: number): Record<string, FindKey[]> {
     const found: Record<string, FindKey[]> = {};
     if (this.state.paused !== null) {
+      this.glances.clear();
       this.armGlances(null, now);
       return found;
     }
