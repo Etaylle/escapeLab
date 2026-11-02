@@ -78,10 +78,10 @@ lean).
 
 ## Finding things
 
-A player finds a source, note, part, console or the sign within 2 tiles in sight, or once it has
-stood 250 ms in their lamp's cone (0.5 rad either side, 7.5 tiles) in sight; a part within 0.9
-always. The server decides, per player; a lit room finds nothing by itself. Names wait for a find
-and fade in over 300 ms; only finds that matter chime, once a thing, at most once in 1.5 s.
+A player finds a source, note, part, the sign or the armed station's console within 2 tiles in
+sight, or after 250 ms in their lamp's cone (0.5 rad either side, 7.5 tiles) in sight; a part
+within 0.9 always. The server decides, per player; a lit room finds nothing by itself. Names
+fade in over 300 ms once found; only finds that matter chime, once a thing, at most once in 1.5 s.
 
 ## Erfolge
 

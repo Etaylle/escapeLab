@@ -183,9 +183,9 @@ describe('a room where things are found by reach or by the lamp', () => {
     // Anna in the Archiv, facing east: the sign at her side, the fuse in her lamp's cone; the
     // book on its lectern to the north-east and the note on the north wall stay unfound.
     expect(found(anna)).toEqual(['ersatzsicherung', 'sign']);
-    // Ben at the Flur's west end, facing east: console B of the Notstrom-Kasten at his side,
-    // the clipboard down the Flur in his cone.
-    expect(found(ben)).toEqual(['klemmbrett', 'notstrom']);
+    // Ben at the Flur's west end, facing east: the clipboard down the Flur in his cone; console
+    // B of the Notstrom-Kasten at his side is no find before its station is armed.
+    expect(found(ben)).toEqual(['klemmbrett']);
     room.dispose();
   });
 });

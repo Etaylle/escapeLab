@@ -248,7 +248,10 @@ export interface MapView {
      * a wrong cut shorts it out, the world's sparks fly; left out for a console
      */
     look?: 'lever' | 'fusebox';
-    /** this player has found it (discovery.ts); the audience has found everything */
+    /**
+     * this player has found it (discovery.ts: only ever while its station is armed); the
+     * audience has found everything
+     */
     found: boolean;
   }[];
   /**

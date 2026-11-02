@@ -11,11 +11,13 @@ import type { GameState } from './state.js';
  * when it lies within FIND_REACH of them with nothing in between, or when
  * it has stood in their lamp's cone — LAMP_HALF_ANGLE either side of where
  * they face, out to LAMP_REACH, nothing in between — for LOOK_MS; a part
- * within ITEM_REACH is found whatever stands between. A room the power
- * lights shows its things, but finds nothing for anybody: the same two
- * rules hold there. What a player has found stays theirs for the run; the
- * crew shares it only as the game already shares things — the minimap, the
- * arrows, a key's lock once somebody has come across it.
+ * within ITEM_REACH is found whatever stands between. A console is found
+ * only while its station is armed: one passed before is found once it is,
+ * as the thing to work then. A room the power lights shows its things, but
+ * finds nothing for anybody: the same two rules hold there. What a player
+ * has found stays theirs for the run; the crew shares it only as the game
+ * already shares things — the minimap, the arrows, a key's lock once
+ * somebody has come across it.
  *
  * A find that matters chimes once for whoever made it (`chimeFinds`): a
  * console of the armed station, a source printing its rules, a part, a note,
@@ -133,13 +135,21 @@ function notePoint(map: MapDef, note: { x: number; y: number }): { x: number; y:
   return { x: note.x + 0.5 + (spot.x - note.x) * out, y: note.y + 0.5 + (spot.y - note.y) * out };
 }
 
+/** The puzzle of the armed station, while one is: the lights out and a station still to work. */
+function armedPuzzle(state: GameState): string | null {
+  const current = state.mission.puzzles[state.currentPuzzleIndex];
+  return lightsAreOut(state) && current !== undefined ? current.id : null;
+}
+
 /**
  * Everything this run has to find, in map order: the sources where the run
  * placed them, the notes, the parts lying loose — a part in somebody's
- * hands or in its place is found by nobody —, every console and the sign.
+ * hands or in its place is found by nobody —, the consoles of the armed
+ * station and the sign.
  */
 export function findables(state: GameState): Findable[] {
   const { map } = state.mission;
+  const armed = armedPuzzle(state);
   const sources = map.manuals.flatMap((m) => {
     const at = state.places[m.id];
     return at === undefined ? [] : [findable({ of: 'source', id: m.id }, at.x + 0.5, at.y + 0.5)];
@@ -153,7 +163,9 @@ export function findables(state: GameState): Findable[] {
     const loose = live !== undefined && live.carriedBy === null && !live.delivered;
     return loose ? [findable({ of: 'item', id: def.id }, live.x, live.y)] : [];
   });
-  const consoles = map.stations.map((s) => findable(consoleFind(s), s.x + 0.5, s.y + 0.5));
+  const consoles = map.stations
+    .filter((s) => s.puzzleId === armed)
+    .map((s) => findable(consoleFind(s), s.x + 0.5, s.y + 0.5));
   const sign = map.edgeworkSign;
   const signs = sign === undefined ? [] : [findable({ of: 'sign' }, sign.x + 0.5, sign.y + 0.5)];
   return [...sources, ...notes, ...items, ...consoles, ...signs];
@@ -244,12 +256,6 @@ export function lookAround(
 /** Whether somebody of the crew has found the thing kept as `key`: what the game shares of it. */
 export function crewFound(state: GameState, key: FindKey): boolean {
   return Object.values(state.found).some((keys) => keys.includes(key));
-}
-
-/** The puzzle of the armed station, while one is: the lights out and a station still to work. */
-function armedPuzzle(state: GameState): string | null {
-  const current = state.mission.puzzles[state.currentPuzzleIndex];
-  return lightsAreOut(state) && current !== undefined ? current.id : null;
 }
 
 /**

@@ -164,7 +164,6 @@ describe('what a run has to find', () => {
     expect(at('note:2')?.x).toBe(2.5);
     expect(at('note:2')?.y).toBeCloseTo(1.05);
     expect(at('item:ersatzsicherung')).toMatchObject({ x: 7.5, y: 5.5 });
-    expect(at('console:notstrom/b')).toMatchObject({ x: 2.5, y: 7.5 });
     expect(at('console:notlicht/-')).toMatchObject({ x: 11.5, y: 7.5 });
     expect(at('sign')).toMatchObject({ x: 2.5, y: 3.5 });
     expect(things.some((thing) => thing.key.includes('shelf'))).toBe(false);
@@ -175,6 +174,34 @@ describe('what a run has to find', () => {
       at: T0,
     });
     expect(findables(carried).some((thing) => thing.key === 'item:ersatzsicherung')).toBe(false);
+  });
+
+  it('lists only the consoles of the armed station: none while the lights burn or all is done', () => {
+    const consoles = (state: GameState) =>
+      findables(state)
+        .filter((thing) => thing.find.of === 'console')
+        .map((thing) => thing.key);
+    expect(consoles(started(blackoutMission(), 5))).toEqual([]);
+    expect(consoles(blackout())).toEqual(['console:notlicht/-']);
+    const notstrom = { ...blackout(), currentPuzzleIndex: 1 };
+    expect(consoles(notstrom)).toEqual(['console:notstrom/a', 'console:notstrom/b']);
+    const done = { ...blackout(), currentPuzzleIndex: blackout().mission.puzzles.length };
+    expect(consoles(done)).toEqual([]);
+  });
+
+  it('finds the lever passed in the lit opening once the lights die, and it chimes then', () => {
+    // Who skipped the intro walks the lit lab while the crew still watches, up to the lever.
+    const byLever = { x: 10.5, y: 7.5, facing: EAST };
+    const lightsOn = started(blackoutMission(), 5);
+    const passed = findsIn(lightsOn, byLever);
+    expect(passed.some((key) => key.startsWith('console:'))).toBe(false);
+    const walked = standing(lightsOn, { found: { p1: passed }, at: T0 + 1000 });
+    // The lights die with them still there: the lever is up now, found and chiming.
+    const dark = lightsOut(walked, T0 + 6000);
+    const fresh = findsIn(dark, byLever).filter((key) => !passed.includes(key));
+    expect(fresh).toEqual(['console:notlicht/-']);
+    const after = standing(dark, { found: { p1: fresh }, at: T0 + 6000 });
+    expect(after.chimed['p1']?.at(-1)).toEqual({ key: 'console:notlicht/-', at: T0 + 6000 });
   });
 
   it('keys every thing apart, both consoles of a station too, and finds each by its key', () => {
