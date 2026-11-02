@@ -49,8 +49,11 @@ export interface AudioProbe extends BedProbe, SoundProbe {
    * what came out
    */
   readonly renderRadio: (id?: string) => Promise<RadioRender>;
-  /** the finds that chimed for this player this run, as this screen took them (world/finds.ts) */
-  readonly chimes: Heard[];
+  /**
+   * this player's finds that matter this run as this screen took them, each with whether its
+   * chime sounded (world/finds.ts)
+   */
+  readonly finds: Heard[];
 }
 
 /**

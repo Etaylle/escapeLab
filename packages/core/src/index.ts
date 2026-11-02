@@ -161,7 +161,7 @@ export {
   findables,
   inCone,
   lookAround,
-  type Chime,
+  type Discovery,
   type Find,
   type Findable,
   type FindKey,

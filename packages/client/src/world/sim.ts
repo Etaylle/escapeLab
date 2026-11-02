@@ -3,7 +3,7 @@ import { MOVE_ACTIONS, MOVES, type Held } from '../input/bindings.js';
 import { NO_STEER, type Steer } from '../input/pad.js';
 import type { DoorMotion } from './doors.js';
 import { gaitStep } from './figure.js';
-import { chimeEar, type ChimeEar } from './finds.js';
+import { freshEar, type Ear } from './finds.js';
 import { labelClock, type LabelClock } from './labelFade.js';
 import { lightMemory, type LightMemory } from './light.js';
 import {
@@ -116,10 +116,10 @@ export interface Sim {
   lastBeepAt: number;
   /** the map as the last frame saw it, to tell what changed since; null before the first */
   seen: WorldMap | null;
-  /** „… entdeckt" over the finds that chimed for this player, `at` in sim time (finds.ts) */
+  /** „… entdeckt" over this player's finds that matter, `at` in sim time (finds.ts) */
   captions: Caption[];
-  /** what this screen has heard of the run's chimes (finds.ts) */
-  ear: ChimeEar;
+  /** what this screen has taken of the run's discoveries (finds.ts) */
+  ear: Ear;
   /** when the name of each thing this player has found came up on this screen (labelFade.ts) */
   labels: LabelClock;
   /**
@@ -169,7 +169,7 @@ export function newSim(topCss: number): Sim {
     lastBeepAt: Number.POSITIVE_INFINITY,
     seen: null,
     captions: [],
-    ear: chimeEar(null),
+    ear: freshEar(null),
     labels: labelClock(null),
     lit: new Map(),
     pendingLit: [],

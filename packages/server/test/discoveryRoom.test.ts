@@ -1,6 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseMission, type Mission, type PlayerView, type ServerMessage } from '@escapelab/core';
+import {
+  findKey,
+  parseMission,
+  type Mission,
+  type PlayerView,
+  type ServerMessage,
+} from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { walkTo, type Walker } from './walk.js';
 
@@ -170,36 +176,48 @@ describe('a room where things are found by reach or by the lamp', () => {
     const out = Date.now();
     expect(lastView(ben).lights.out).toBe(true);
     expect(lever()?.found).toBe(true);
-    expect(lastView(ben).map?.chimes.at(-1)).toEqual({
+    expect(lastView(ben).map?.discoveries.at(-1)).toEqual({
       find: { of: 'console', puzzleId: 'notlicht', console: null },
       at: out,
+      chime: true,
     });
     room.dispose();
   });
 
-  it('chimes for whoever found it, the find that matters most, then nothing for 1.5 s', () => {
+  it('lists each player’s own finds that matter, a chime at most once in 1.5 s', () => {
     const { room, anna, ben, startedAt } = started();
+    /** A player's discoveries: what, how long after the start, and whether it chimes. */
+    const listed = (walker: Walker) =>
+      (lastView(walker).map?.discoveries ?? []).map((one) => [
+        findKey(one.find),
+        one.at - startedAt,
+        one.chime,
+      ]);
     // At the start each finds the sign beside the spawns; the box ahead takes a look.
-    expect(lastView(anna).map?.chimes).toEqual([{ find: { of: 'sign' }, at: startedAt }]);
-    expect(lastView(ben).map?.chimes).toEqual([{ find: { of: 'sign' }, at: startedAt }]);
+    expect(listed(anna)).toEqual([['sign', 0, true]]);
+    expect(listed(ben)).toEqual([['sign', 0, true]]);
     vi.advanceTimersByTime(250);
-    // The box and the key down the hall, looked at from the spawns: found inside the gap, they
-    // stay silent for good.
-    expect(lastView(anna).map?.stations[0]?.found).toBe(true);
-    expect(lastView(anna).map?.items[0]?.found).toBe(true);
-    expect(lastView(anna).map?.chimes).toHaveLength(1);
+    // The box and the key down the hall, looked at from the spawns: found inside the gap, both
+    // are listed, the box first — their captions show, their chime is dropped for good.
+    const looked = [
+      ['sign', 0, true],
+      ['console:kabel/-', 250, false],
+      ['item:schluessel', 250, false],
+    ];
+    expect(listed(anna)).toEqual(looked);
     vi.advanceTimersByTime(1250);
     // Along the north wall up to the locker, which prints the armed box's rules: it chimes; the
-    // cabinet beside it, looked at a quarter of a second later, is found in the gap.
+    // cabinet beside it, looked at a quarter of a second later, comes in the gap.
     walkTo(room, anna, 1.5, 1.5);
     walkTo(room, anna, 12.5, 1.5);
     vi.advanceTimersByTime(250);
     expect(sourcesFound(anna)).toEqual(['spind', 'schrank']);
-    expect(lastView(anna).map?.chimes).toEqual([
-      { find: { of: 'sign' }, at: startedAt },
-      { find: { of: 'source', id: 'spind' }, at: startedAt + 1500 },
+    expect(listed(anna)).toEqual([
+      ...looked,
+      ['source:spind', 1500, true],
+      ['source:schrank', 1750, false],
     ]);
-    expect(lastView(ben).map?.chimes).toHaveLength(1);
+    expect(listed(ben)).toEqual(looked);
     expect(sourcesFound(ben)).toEqual([]);
     room.dispose();
   });

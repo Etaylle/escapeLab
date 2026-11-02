@@ -1,4 +1,4 @@
-import { CHIME_GAP_MS, type Chime, type Find, type ManualKind } from '@escapelab/core';
+import { CHIME_GAP_MS, type Discovery, type Find, type ManualKind } from '@escapelab/core';
 import { discoveryBlip } from './audio.js';
 import { consoleName } from './consoles.js';
 import { carryableKind, type CarryableKind } from './hazards.js';
@@ -6,13 +6,13 @@ import { noteMount } from './notes.js';
 import type { Caption, WorldMap } from './render/frame.js';
 
 /**
- * Finds that matter chime. The server picks them (core discovery.ts `chimeFinds`): a console of
- * the armed station, a source printing its rules, a part, a note, the sign — at most one every
- * CHIME_GAP_MS for a player, never twice for one thing — and lists
- * them in the player's view. This screen answers each once, there and then, with the chime and
- * „… entdeckt" over the thing; one that comes while the opening holds the screen as a film, or
- * comes late, is let go — never kept for later. Whatever chimed before the screen first looked
- * chimed then.
+ * A player's finds that matter are their discoveries. The server lists them in the player's
+ * view (core discovery.ts `discover`) — a console of the armed station, a source printing its
+ * rules, a part, a note, the sign — and marks the ones whose chime sounds, at most one every
+ * CHIME_GAP_MS. This screen answers each once: „… entdeckt" always rises over the thing, and
+ * the chime sounds there and then — not while the opening holds the screen as a film, nor for a
+ * discovery that comes late; a chime let go is never kept for later. On the screen's first look
+ * only what was found just now is news: the rest was there before it came in.
  */
 
 const SOURCE_NAMES: Record<ManualKind, string> = {
@@ -92,30 +92,30 @@ export function findWords(map: WorldMap, find: Find): Words | null {
   }
 }
 
-/** A chime as this screen took it: answered with its sound and caption, or let go. */
-export interface Heard extends Chime {
+/** A discovery as this screen took it: its caption shown, and whether its chime sounded. */
+export interface Heard extends Discovery {
   sounded: boolean;
 }
 
-/** What this screen has heard of a run's chimes. */
-export interface ChimeEar {
+/** What this screen has taken of a run's discoveries. */
+export interface Ear {
   /** the run, by its `startedAt`; null before one */
   run: number | null;
-  /** how many of the run's chimes it has taken, answered or let go: the view only adds to them */
+  /** how many of the run's discoveries it has taken, news or not: the view only adds to them */
   taken: number;
-  /** each chime it took this run, oldest first: for the walkthrough's probe */
+  /** each discovery it took as news this run, oldest first: for the walkthrough's probe */
   heard: Heard[];
 }
 
-/** An ear for `run` that has heard nothing yet. */
-export function chimeEar(run: number | null): ChimeEar {
+/** An ear for `run` that has taken nothing yet. */
+export function freshEar(run: number | null): Ear {
   return { run, taken: 0, heard: [] };
 }
 
-/** Where this screen stands as a view's chimes come in. */
+/** Where this screen stands as a view's discoveries come in. */
 export interface Listening {
   run: number | null;
-  /** this screen's first look at the lab: what chimed before was there already */
+  /** this screen's first look at the lab: what was found before it came in is no news */
   first: boolean;
   /** the opening holds the screen as a film: nothing of the game's own sounds over it */
   held: boolean;
@@ -124,50 +124,45 @@ export interface Listening {
 }
 
 /**
- * The chimes of `chimes` (a run's, oldest first) this screen answers now, and its ear after
- * them: the new ones, each sounded unless the screen is held or it is older than CHIME_GAP_MS —
- * then let go. On the first look, and for a chime of another run, nothing old is answered.
+ * The discoveries of `list` (a run's, oldest first) that are news to this screen now, and its
+ * ear after them: every new one — on the screen's first look only those made within
+ * CHIME_GAP_MS. Each shows its caption; one that chimes sounds unless the screen is held or it
+ * is older than CHIME_GAP_MS — then its chime is let go, its caption shows all the same.
  */
-export function hearChimes(
-  ear: ChimeEar,
-  chimes: readonly Chime[],
+export function hearDiscoveries(
+  ear: Ear,
+  list: readonly Discovery[],
   now: Listening,
-): { ear: ChimeEar; due: Chime[] } {
-  const was = ear.run === now.run ? ear : chimeEar(now.run);
-  if (now.first) {
-    return { ear: { ...was, taken: chimes.length }, due: [] };
-  }
-  const fresh = chimes.slice(was.taken);
-  const heard = fresh.map((chime) => ({
-    ...chime,
-    sounded: !now.held && now.serverNow - chime.at <= CHIME_GAP_MS,
-  }));
-  return {
-    ear: { run: now.run, taken: chimes.length, heard: [...was.heard, ...heard] },
-    due: heard.filter((one) => one.sounded).map(({ find, at }) => ({ find, at })),
-  };
+): { ear: Ear; news: Heard[] } {
+  const was = ear.run === now.run ? ear : freshEar(now.run);
+  const recent = (one: Discovery): boolean => now.serverNow - one.at <= CHIME_GAP_MS;
+  const news = list
+    .slice(was.taken)
+    .filter((one) => !now.first || recent(one))
+    .map((one) => ({ ...one, sounded: one.chime && !now.held && recent(one) }));
+  return { ear: { run: now.run, taken: list.length, heard: [...was.heard, ...news] }, news };
 }
 
 /**
- * Answers the chimes `map` brings this screen (`hearChimes`): each due one's caption rises over
- * its thing from sim time `time` — into `captions` — and the chime sounds, once for them all.
- * Returns the ear after them.
+ * Answers the discoveries `map` brings this screen (`hearDiscoveries`): each one's caption rises
+ * over its thing from sim time `time` — into `captions` — and the chime sounds, once for those
+ * that chime. Returns the ear after them.
  */
-export function answerChimes(
-  ear: ChimeEar,
+export function answerDiscoveries(
+  ear: Ear,
   map: WorldMap,
   now: Listening,
   captions: Caption[],
   time: number,
-): ChimeEar {
-  const { ear: next, due } = hearChimes(ear, map.chimes, now);
-  for (const chime of due) {
-    const words = findWords(map, chime.find);
+): Ear {
+  const { ear: next, news } = hearDiscoveries(ear, map.discoveries, now);
+  for (const one of news) {
+    const words = findWords(map, one.find);
     if (words !== null) {
       captions.push({ ...words, at: time });
     }
   }
-  if (due.length > 0) {
+  if (news.some((one) => one.sounded)) {
     discoveryBlip();
   }
   return next;

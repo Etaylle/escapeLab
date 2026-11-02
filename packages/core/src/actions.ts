@@ -10,7 +10,7 @@ import {
 } from './state.js';
 import type { DailyStart } from './daily.js';
 import type { Difficulty } from './difficulty.js';
-import { chimeFinds, findKey, foundBy, type FindKey } from './discovery.js';
+import { discover, findKey, foundBy, type FindKey } from './discovery.js';
 import { generateEdgework } from './edgework.js';
 import { fail } from './errors.js';
 import type { ManualDef, Mission } from './mission.js';
@@ -433,8 +433,8 @@ function freshFinds(
  * Who stands where, as the server sees it. Lists are kept sorted and empty
  * ones dropped, so equal presence compares equal; whoever has seen the sign
  * keeps it, and whatever a player has found stays theirs — the finds that
- * matter chime for them (discovery.ts `chimeFinds`). Nobody stands on the
- * hatch before it opens.
+ * matter are their discoveries (discovery.ts `discover`). Nobody stands on
+ * the hatch before it opens.
  */
 function setPresence(
   state: GameState,
@@ -461,7 +461,7 @@ function setPresence(
       exit: inEscapePhase(state) ? [...new Set(action.exit)].sort() : [],
     },
     found,
-    chimed: chimeFinds(state, fresh, action.at),
+    discoveries: discover(state, fresh, action.at),
   });
 }
 
@@ -601,7 +601,7 @@ function startMission(
     places: placeSources(map.manuals, seed),
     opened: [],
     found: {},
-    chimed: {},
+    discoveries: {},
     notesRead: [],
     credits: Object.fromEntries(crew.map((player) => [player.id, NO_CREDITS])),
     readersCredited: [],
@@ -1486,7 +1486,7 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     places: {},
     opened: [],
     found: {},
-    chimed: {},
+    discoveries: {},
     notesRead: [],
     credits: {},
     readersCredited: [],

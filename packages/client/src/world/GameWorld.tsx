@@ -60,7 +60,7 @@ import { senseDanger, stopDanger } from './danger.js';
 import { doorTurned } from './doors.js';
 import { drawsFrame } from './drawRate.js';
 import { escaping, useEscapeSince, useEscapeSounds } from './escape.js';
-import { answerChimes } from './finds.js';
+import { answerDiscoveries } from './finds.js';
 import { useFinaleSounds, type FinaleCue } from './finale.js';
 import { runLight } from './frameLight.js';
 import { frameTrace, traceRequested, type FrameTrace } from './frameTrace.js';
@@ -488,7 +488,7 @@ function traceFrames(loop: Loop): Traced | null {
       const sound = { music: musicProbe(), voice: voiceProbe(), spatial: spatialProbe() };
       const nodes = { ...graphCensus(), beds: bedCount() };
       const probe = { ...bedProbe(), ...sound, nodes, spent: timeSpent(), renderRadio };
-      return { ...probe, ...soundProbe(), chimes: sim.ear.heard };
+      return { ...probe, ...soundProbe(), finds: sim.ear.heard };
     },
     get clock() {
       const serverNow = clock.now();
@@ -702,7 +702,7 @@ function look(loop: Loop, map: WorldMap): void {
   sim.labels = noteLabels(sim.labels, map, run, sim.time, first);
   // While the world shows as a film, nothing of the game's own speaks over it.
   const listening = { run, first, held: heldBack(loop.live.current), serverNow: clock.now() };
-  sim.ear = answerChimes(sim.ear, map, listening, sim.captions, sim.time);
+  sim.ear = answerDiscoveries(sim.ear, map, listening, sim.captions, sim.time);
   sim.seen = map;
   for (const manual of news.opened) {
     const away = Math.hypot(manual.x + 0.5 - sim.self.x, manual.y + 0.5 - sim.self.y);

@@ -33,7 +33,7 @@ export function mapWith(parts: Partial<MapView>): MapView {
     manuals: [],
     notes: [],
     edgeworkSign: null,
-    chimes: [],
+    discoveries: [],
     lamps: [],
     labels: [],
     decor: [],

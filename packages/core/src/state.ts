@@ -177,10 +177,10 @@ export interface GameState {
    */
   found: Record<string, FindKey[]>;
   /**
-   * the finds that chimed for each player, by player id, oldest first (discovery.ts
-   * `chimeFinds`): at most one every CHIME_GAP_MS, never twice for one thing
+   * each player's finds that matter, by player id, oldest first (discovery.ts `discover`):
+   * when, and whether its chime sounds — at most one every CHIME_GAP_MS
    */
-  chimed: Record<string, { key: FindKey; at: number }[]>;
+  discoveries: Record<string, { key: FindKey; at: number; chime: boolean }[]>;
   /** notes somebody has read this run, by index: the run report logs each once */
   notesRead: number[];
   /** who did what this run, by player id */
@@ -271,7 +271,7 @@ export function initialState(
     places: {},
     opened: [],
     found: {},
-    chimed: {},
+    discoveries: {},
     notesRead: [],
     credits: {},
     readersCredited: [],

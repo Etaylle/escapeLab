@@ -19,12 +19,12 @@ import type { GameState } from './state.js';
  * already shares things — the minimap, the arrows, a key's lock once
  * somebody has come across it.
  *
- * A find that matters chimes once for whoever made it (`chimeFinds`): a
- * console of the armed station, a source printing its rules, a part, a note,
- * the sign — at most one every CHIME_GAP_MS for a player, and never twice
- * for one thing. One that comes while the gap runs is dropped, not kept for
- * later. Pure: the server says where everybody stands and when, this says
- * what they found.
+ * A find that matters is a discovery for whoever made it, once (`discover`):
+ * a console of the armed station, a source printing its rules, a part, a
+ * note, the sign. Its caption always shows; its chime sounds at most once
+ * every CHIME_GAP_MS for a player — one the gap would hold back is dropped,
+ * not kept for later. Pure: the server says where everybody stands and when,
+ * this says what they found.
  */
 
 /** How near a thing has to lie to be found outright, tiles, with nothing in between. */
@@ -51,11 +51,13 @@ export type Find =
 /** What the state keeps a find by: `source:<id>`, `note:<index>`, `item:<id>`, … */
 export type FindKey = string;
 
-/** A find the player's screen answers with its chime and caption, and when it was made. */
-export interface Chime {
+/** A find that matters, as its finder's view lists it: what, when, and whether it chimes. */
+export interface Discovery {
   find: Find;
   /** epoch ms */
   at: number;
+  /** its chime sounds: at most once every CHIME_GAP_MS for a player; its caption always shows */
+  chime: boolean;
 }
 
 type StationSpot = MapDef['stations'][number];
@@ -263,10 +265,17 @@ export function foundBy(state: GameState, playerId: string, key: FindKey): boole
   return state.found[playerId]?.includes(key) === true;
 }
 
+/** Whether the source `id` prints the rules of the armed station. */
+function printsArmedRules(state: GameState, id: string): boolean {
+  const armed = armedPuzzle(state);
+  const source = state.mission.map.manuals.find((m) => m.id === id);
+  return armed !== null && source?.puzzleIds.includes(armed) === true;
+}
+
 /**
  * How much finding `find` matters now, most first, or null where it does
  * not: a console of the armed station, a source printing its rules, a part,
- * a note, the sign. A console or the rules of any other station stay silent,
+ * a note, the sign. A console or the rules of any other station stay quiet,
  * as a find to work later would only drown the one at hand; decor,
  * furniture, lamps and plates are never found at all.
  */
@@ -274,11 +283,8 @@ export function mattering(state: GameState, find: Find): number | null {
   switch (find.of) {
     case 'console':
       return find.puzzleId === armedPuzzle(state) ? 0 : null;
-    case 'source': {
-      const armed = armedPuzzle(state);
-      const source = state.mission.map.manuals.find((m) => m.id === find.id);
-      return armed !== null && source?.puzzleIds.includes(armed) === true ? 1 : null;
-    }
+    case 'source':
+      return printsArmedRules(state, find.id) ? 1 : null;
     case 'item':
       return 2;
     case 'note':
@@ -288,35 +294,44 @@ export function mattering(state: GameState, find: Find): number | null {
   }
 }
 
+/** Of a player's first finds `keys`, the ones that matter, most mattering first. */
+function thatMatter(state: GameState, keys: readonly FindKey[]): FindKey[] {
+  return keys
+    .map((key) => {
+      const find = findOf(state.mission.map, key);
+      return { key, rank: find === null ? null : mattering(state, find) };
+    })
+    .filter((one): one is { key: FindKey; rank: number } => one.rank !== null)
+    .sort((a, b) => a.rank - b.rank)
+    .map((one) => one.key);
+}
+
+/** Whether a chime may sound at `at` (epoch ms) after a player's discoveries `had`. */
+function chimeFree(had: readonly { at: number; chime: boolean }[], at: number): boolean {
+  const last = had.filter((one) => one.chime).at(-1);
+  return last === undefined || at - last.at >= CHIME_GAP_MS;
+}
+
 /**
- * The chimes after each player's new finds at `at` (epoch ms), by player id:
- * the one that matters most chimes — where the player's last chime was
- * CHIME_GAP_MS ago or more, and never twice for one thing; the rest of them
- * stay silent for good.
+ * Each player's discoveries after their first finds `fresh` at `at` (epoch ms), by player id:
+ * every one of them that matters joins the player's list, most mattering first, its caption
+ * certain; the first of them chimes where the player's last chime was CHIME_GAP_MS ago or more.
+ * A chime the gap holds back is dropped for good, and a thing is found for the first time once.
  */
-export function chimeFinds(
+export function discover(
   state: GameState,
   fresh: Readonly<Record<string, readonly FindKey[]>>,
   at: number,
-): GameState['chimed'] {
-  const chimed = { ...state.chimed };
+): GameState['discoveries'] {
+  const discoveries = { ...state.discoveries };
   for (const [playerId, keys] of Object.entries(fresh)) {
-    const had = chimed[playerId] ?? [];
-    const last = had.at(-1);
-    if (last !== undefined && at - last.at < CHIME_GAP_MS) {
-      continue;
-    }
-    const due = keys
-      .filter((key) => !had.some((chime) => chime.key === key))
-      .map((key) => {
-        const find = findOf(state.mission.map, key);
-        return { key, rank: find === null ? null : mattering(state, find) };
-      })
-      .filter((one): one is { key: FindKey; rank: number } => one.rank !== null)
-      .sort((a, b) => a.rank - b.rank)[0];
-    if (due !== undefined) {
-      chimed[playerId] = [...had, { key: due.key, at }];
+    const had = discoveries[playerId] ?? [];
+    const due = thatMatter(state, keys);
+    if (due.length > 0) {
+      const chimes = chimeFree(had, at);
+      const made = due.map((key, i) => ({ key, at, chime: chimes && i === 0 }));
+      discoveries[playerId] = [...had, ...made];
     }
   }
-  return chimed;
+  return discoveries;
 }

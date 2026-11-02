@@ -52,7 +52,7 @@ export interface ChatLine {
   at: number;
 }
 
-/** „… entdeckt" over a find that chimed for this player (world/finds.ts), `at` in sim time. */
+/** „… entdeckt" over a find of this player's that matters (world/finds.ts), `at` in sim time. */
 export interface Caption {
   x: number;
   y: number;

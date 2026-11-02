@@ -201,7 +201,11 @@ describe('what a run has to find', () => {
     const fresh = findsIn(dark, byLever).filter((key) => !passed.includes(key));
     expect(fresh).toEqual(['console:notlicht/-']);
     const after = standing(dark, { found: { p1: fresh }, at: T0 + 6000 });
-    expect(after.chimed['p1']?.at(-1)).toEqual({ key: 'console:notlicht/-', at: T0 + 6000 });
+    expect(after.discoveries['p1']?.at(-1)).toEqual({
+      key: 'console:notlicht/-',
+      at: T0 + 6000,
+      chime: true,
+    });
   });
 
   it('keys every thing apart, both consoles of a station too, and finds each by its key', () => {
@@ -254,45 +258,55 @@ describe('a room the power lights', () => {
   });
 });
 
-describe('the chime', () => {
+describe('discoveries and their chime', () => {
   /** The double console lab with its lights out: the Signalkette armed, the book its rules. */
   const armed = (): GameState => lightsOut(started(consoleLab()));
-  const chimedFor = (state: GameState, playerId: string) =>
-    (state.chimed[playerId] ?? []).map((chime) => [chime.key, chime.at - T0]);
+  /** A player's discoveries: what, how long after T0, and whether it chimes. */
+  const listed = (state: GameState, playerId: string) =>
+    (state.discoveries[playerId] ?? []).map((one) => [one.key, one.at - T0, one.chime]);
 
-  it('sounds once a thing, once every 1.5 s a player; a find in the gap stays silent', () => {
+  it('lists a find once, its chime once every 1.5 s a player; a find in the gap stays silent', () => {
     const first = standing(armed(), { found: { p1: ['sign'] }, at: T0 });
-    expect(chimedFor(first, 'p1')).toEqual([['sign', 0]]);
+    expect(listed(first, 'p1')).toEqual([['sign', 0, true]]);
     const inTheGap = standing(first, { found: { p1: ['source:buch'] }, at: T0 + 1000 });
     expect(inTheGap.found['p1']).toEqual(['sign', 'source:buch']);
-    expect(chimedFor(inTheGap, 'p1')).toEqual([['sign', 0]]);
+    // Found in the gap, the book is a discovery all the same: its caption shows, its chime not.
+    expect(listed(inTheGap, 'p1')).toEqual([
+      ['sign', 0, true],
+      ['source:buch', 1000, false],
+    ]);
+    // The gap runs from the last chime, not from the last discovery.
     const after = standing(inTheGap, {
       found: { p1: ['console:kette/a'] },
       at: T0 + CHIME_GAP_MS,
     });
-    expect(chimedFor(after, 'p1')).toEqual([
-      ['sign', 0],
-      ['console:kette/a', 1500],
-    ]);
-    // Found again later, the book stays silent: it was found in the gap.
+    expect(listed(after, 'p1').at(-1)).toEqual(['console:kette/a', 1500, true]);
+    // Found again later, nothing is listed twice and nothing chimes.
     const again = standing(after, { found: { p1: ['source:buch', 'sign'] }, at: T0 + 9000 });
-    expect(chimedFor(again, 'p1')).toEqual(chimedFor(after, 'p1'));
-    // Ben's chimes are his own: the sign chimes for him in the middle of Anna's gap.
+    expect(listed(again, 'p1')).toEqual(listed(after, 'p1'));
+    // Ben's are his own: the sign chimes for him in the middle of Anna's gap.
     const ben = standing(first, { found: { p2: ['sign'] }, at: T0 + 100 });
-    expect(chimedFor(ben, 'p2')).toEqual([['sign', 100]]);
+    expect(listed(ben, 'p2')).toEqual([['sign', 100, true]]);
   });
 
-  it('sounds for the find that matters most of those made at once', () => {
+  it('lists what matters of the finds made at once, the most first, which alone chimes', () => {
     const state = standing(armed(), {
       found: { p1: ['sign', 'console:kabel/-', 'source:buch', 'console:kette/b'] },
       at: T0,
     });
-    expect(chimedFor(state, 'p1')).toEqual([['console:kette/b', 0]]);
-    expect(viewFor(state, 'p1').map?.chimes).toEqual([
-      { find: { of: 'console', puzzleId: 'kette', console: 'b' }, at: T0 },
+    // The Kabel station's console is not up: it is found, but no discovery.
+    expect(listed(state, 'p1')).toEqual([
+      ['console:kette/b', 0, true],
+      ['source:buch', 0, false],
+      ['sign', 0, false],
     ]);
-    expect(viewFor(state, 'p2').map?.chimes).toEqual([]);
-    expect(viewForSpectator(state).map?.chimes).toEqual([]);
+    expect(viewFor(state, 'p1').map?.discoveries).toEqual([
+      { find: { of: 'console', puzzleId: 'kette', console: 'b' }, at: T0, chime: true },
+      { find: { of: 'source', id: 'buch' }, at: T0, chime: false },
+      { find: { of: 'sign' }, at: T0, chime: false },
+    ]);
+    expect(viewFor(state, 'p2').map?.discoveries).toEqual([]);
+    expect(viewForSpectator(state).map?.discoveries).toEqual([]);
   });
 
   it('matters for the armed station’s consoles and rules, a part, a note, the sign', () => {
