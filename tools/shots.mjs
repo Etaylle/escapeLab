@@ -2974,15 +2974,20 @@ async function captureDiscovery(walker, other) {
     throw new Error(`${walker.name} found no way to the Archiv's door`);
   }
   const atDoor = ((await chimesOn(walker.page)) ?? []).length;
+  // Names counted from anywhere but where the shots say would prove nothing: a stall fails.
   for (const step of ARCHIV.inside) {
-    await stepTo(walker.page, walker.seen, step.x + 0.5, step.y + 0.5);
+    if (!(await stepTo(walker.page, walker.seen, step.x + 0.5, step.y + 0.5))) {
+      throw new Error(`${walker.name} stalled going into the Archiv, short of ${step.x},${step.y}`);
+    }
   }
   await walker.page.setViewportSize(SIZES[0]);
   await sleep(NAMES_UP_MS);
   const inside = ARCHIV.inside.at(-1);
   const entering = await archivNames(walker.page, { x: inside.x + 0.5, y: inside.y + 0.5 });
   await capture(walker.page, 'discover-enter.png');
-  await standOn(walker, ARCHIV.shelves);
+  if (!(await standOn(walker, ARCHIV.shelves))) {
+    throw new Error(`${walker.name} found no way to the Archiv's shelves by the sign`);
+  }
   await sleep(NAMES_UP_MS);
   const by = { x: ARCHIV.shelves.x + 0.5, y: ARCHIV.shelves.y + 0.5 };
   const later = await archivNames(walker.page, by);
