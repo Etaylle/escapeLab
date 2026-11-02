@@ -379,6 +379,12 @@ describe('contextAction — a note of the last shift', () => {
     expect(contextAction(unfound, { x: 3.5, y: 1.6 }, YOU, [], SHUT, { index: 0 })).toBeNull();
   });
 
+  it('offers no note counted there round a pillar that this player has not found', () => {
+    // The partner found it; this player stands behind the pillar, within the server's reach.
+    const behind = mapWith({ tiles: ROOM, notes: [{ ...wallNote, found: false }] });
+    expect(contextAction(behind, { x: 3.5, y: 1.6 }, YOU, [], SHUT, { index: 0 })).toBeNull();
+  });
+
   it('takes the nearer of a note and the armed station', () => {
     expect(contextAction(noteRoom, { x: 4.1, y: 1.5 }, YOU, [], SHUT, { index: 0 })?.kind).toBe(
       'note',

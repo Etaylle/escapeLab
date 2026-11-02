@@ -6,6 +6,7 @@ import {
   crewFound,
   findKey,
   findOf,
+  foundBy,
   type Chime,
   type Find,
 } from './discovery.js';
@@ -487,13 +488,19 @@ function manualsHereFor(state: GameState, playerId: string): ManualHere[] {
     .map((m) => ({ id: m.id, label: m.label, kind: m.kind, sections: sectionsOf(state, m) }));
 }
 
-/** The first note of the map, in map order, that `playerId` stands at; null at none. */
+/**
+ * The first note of the map, in map order, that `playerId` stands at and has found; null at
+ * none. The server counts a player at a note by distance alone: round a pillar or through a
+ * wall, a note nobody could see from there gives its words to nobody.
+ */
 function noteHereFor(state: GameState, playerId: string): NoteHere | null {
   if (state.phase !== 'playing') {
     return null;
   }
   const index = state.mission.map.notes.findIndex(
-    (_, i) => state.presence.notes[noteKey(i)]?.includes(playerId) === true,
+    (_, i) =>
+      state.presence.notes[noteKey(i)]?.includes(playerId) === true &&
+      foundBy(state, playerId, findKey({ of: 'note', index: i })),
   );
   const note = state.mission.map.notes[index];
   return note === undefined ? null : { index, text: note.text };

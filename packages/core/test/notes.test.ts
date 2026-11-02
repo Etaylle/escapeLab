@@ -195,6 +195,11 @@ describe('reading a note', () => {
     expect(() => applyAction(paused, read('p2', 0))).toThrow(/Pausiert/);
   });
 
+  it('turns away a read of a note counted there round a pillar, not found from there', () => {
+    const behind = standing(lightsOut(started(mission)), { notes: { [noteKey(0)]: ['p1'] } });
+    expect(() => applyAction(behind, read('p1', 0))).toThrow('Nur direkt davor.');
+  });
+
   it('loses a run read after the clock ran out', () => {
     const state = atNotes({ [noteKey(0)]: ['p2'] });
     const late = applyAction(state, read('p2', 0, (state.deadlineAt ?? 0) + 1));
@@ -255,6 +260,12 @@ describe('notes in the views', () => {
     expect(viewFor(away, 'p1').noteHere).toBeNull();
     expect(JSON.stringify(viewFor(away, 'p1'))).not.toContain(FLOOR_NOTE);
     expect(JSON.stringify(viewForSpectator(away))).not.toContain(FLOOR_NOTE);
+  });
+
+  it('gives no words to who is counted at a note round a pillar, not having found it', () => {
+    const behind = standing(lightsOut(started(mission)), { notes: { [noteKey(0)]: ['p1'] } });
+    expect(viewFor(behind, 'p1').noteHere).toBeNull();
+    expect(JSON.stringify(viewFor(behind, 'p1'))).not.toContain(WALL_NOTE);
   });
 });
 

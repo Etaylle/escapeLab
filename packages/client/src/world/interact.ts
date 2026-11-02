@@ -103,14 +103,15 @@ function sourceAction(map: MapView, manual: Manual, source: Source, mine?: Item)
 
 /**
  * E at the note of the last shift the server counts this player at, by its
- * spot on the map; none where the crew has not come across it yet.
+ * spot on the map; none before this player has found it — counted there
+ * round a pillar, they cannot read it.
  */
 function noteAction(
   map: MapView,
   noteHere: Pick<NoteHere, 'index'> | null,
   dist: (x: number, y: number) => number,
 ): { action: ContextAction; d: number }[] {
-  const note = map.notes.find((n) => n.index === noteHere?.index);
+  const note = map.notes.find((n) => n.index === noteHere?.index && n.found);
   const mount = note === undefined ? null : noteMount(map, note);
   if (note === undefined || mount === null) {
     return [];

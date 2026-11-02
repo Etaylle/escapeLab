@@ -258,6 +258,11 @@ export function crewFound(state: GameState, key: FindKey): boolean {
   return Object.values(state.found).some((keys) => keys.includes(key));
 }
 
+/** Whether `playerId` has found the thing kept as `key` this run. */
+export function foundBy(state: GameState, playerId: string, key: FindKey): boolean {
+  return state.found[playerId]?.includes(key) === true;
+}
+
 /**
  * How much finding `find` matters now, most first, or null where it does
  * not: a console of the armed station, a source printing its rules, a part,
