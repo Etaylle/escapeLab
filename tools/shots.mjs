@@ -3013,10 +3013,11 @@ async function captureDiscovery(walker, other) {
   await sleep(NAMES_UP_MS);
   const by = { x: ARCHIV.shelves.x + 0.5, y: ARCHIV.shelves.y + 0.5 };
   const later = await archivNames(walker.page, by);
+  const atShelves = walker.seen.view.map;
   await capture(walker.page, 'discover-later.png');
   const finds = ((await findsOn(walker.page)) ?? []).slice(atDoor);
   await walker.page.setViewportSize(SIZES[2]);
-  reportDiscovery(walker, map, { entering, later, by });
+  reportDiscovery(walker, atShelves, { entering, later, by });
   await reportChimes([walker, other], walker, finds);
   if (home !== null && !(await standOn(walker, home))) {
     throw new Error(`${walker.name} found no way back to ${home.x},${home.y} from the Archiv`);
@@ -3024,22 +3025,32 @@ async function captureDiscovery(walker, other) {
 }
 
 /**
+ * The Archiv's things on `map` — the walker's, by the shelves: found, or nobody having found
+ * them, glimpsed in sight — each at the point its name hangs from, as render/labels.ts places it.
+ */
+function archivThings(map) {
+  const said = (thing) => (thing.known ? thing.label.toUpperCase() : thing.id);
+  return [
+    ...map.manuals.map((m) => ({ text: said(m), x: m.x + 0.5, y: m.y + 0.5 })),
+    ...map.items.map((i) => ({ text: said(i), x: i.x, y: i.y })),
+  ].filter((thing) => inArchiv(thing.x, thing.y));
+}
+
+/**
  * The names' lines: two steps in, at most two names under the Archiv's things; by the shelves,
- * the sign named and at least one thing across the room — more than three tiles off — not.
+ * the sign named and at least one thing across the room — more than three tiles off — not: no
+ * name hangs from it.
  */
 function reportDiscovery(walker, map, { entering, later, by }) {
   console.log(
     `discover-enter.png ${walker.name} two steps into the Archiv: ${entering.length} name(s) ` +
       `under its things (${namesSaid(entering)})${entering.length > 2 ? ' !! more than two' : ''}`,
   );
-  const things = [
-    ...map.manuals.map((m) => ({ text: m.label, x: m.x + 0.5, y: m.y + 0.5 })),
-    ...map.items.map((i) => ({ text: i.label.toUpperCase(), x: i.x, y: i.y })),
-  ].filter((thing) => inArchiv(thing.x, thing.y));
-  const named = new Set(later.map((name) => name.text));
-  const across = things.filter((thing) => Math.hypot(thing.x - by.x, thing.y - by.y) > 3);
-  const unnamed = across.filter((thing) => !named.has(thing.text));
-  const sign = named.has('LABORKENNUNG');
+  const hangs = (name, thing) => Math.hypot(name.x - thing.x, name.y - thing.y) < 0.01;
+  const named = (thing) => later.some((name) => hangs(name, thing));
+  const across = archivThings(map).filter((t) => Math.hypot(t.x - by.x, t.y - by.y) > 3);
+  const unnamed = across.filter((thing) => !named(thing));
+  const sign = later.some((name) => name.text === 'LABORKENNUNG');
   console.log(
     `discover-later.png ${walker.name} by the shelves: ${later.length} name(s) ` +
       `(${namesSaid(later)}); across the room unnamed: ` +
@@ -3107,11 +3118,19 @@ async function captureLitFlur(player, lever) {
   }
 }
 
-/** The fuse lying loose for figure-carry.png, or any part lying loose where there is none. */
+/**
+ * The fuse lying loose for figure-carry.png, or any part lying loose where there is none: one
+ * glimpsed in sight, found by nobody yet, lies loose as well.
+ */
 function looseItem(map) {
-  const loose = map.items.filter((item) => item.carriedBy === null && !item.delivered);
-  return loose.find((item) => /sicherung/i.test(item.label)) ?? loose[0];
+  const loose = map.items.filter(
+    (item) => !item.known || (item.carriedBy === null && !item.delivered),
+  );
+  return loose.find((item) => item.kind === 'fuse') ?? loose[0];
 }
+
+/** A part as the log names it: by its label, or by its id where nobody has found it yet. */
+const partName = (item) => item.label ?? item.id;
 
 /**
  * Where a player can stand beside `item` and reach it, rather than on it, where the figure
@@ -3202,12 +3221,13 @@ async function captureBob(player, item) {
     (await standOn(player, beside.tile)) &&
     (await stepTo(page, seen, beside.x, beside.y));
   if (!there) {
-    skip('fuse-bob-*.png', `no floor to stand on beside "${item.label}"`);
+    skip('fuse-bob-*.png', `no floor to stand on beside "${partName(item)}"`);
     return;
   }
   if ((await glowNaming(page, { of: 'item', id: item.id }, 3000)) === null) {
-    console.log(`fuse-bob-*.png     !! ${name} stands beside "${item.label}", but nothing glows`);
-    fail(`fuse-bob: the E prompt beside "${item.label}" names nothing that glows`);
+    const where = `${name} stands beside "${partName(item)}"`;
+    console.log(`fuse-bob-*.png     !! ${where}, but nothing glows`);
+    fail(`fuse-bob: the E prompt beside "${partName(item)}" names nothing that glows`);
     return;
   }
   await sleep(400); // the camera settles once the walk is over
@@ -3245,13 +3265,13 @@ function reportBob(name, item, first, second) {
   const way = moved !== null && moved.shift >= 0 ? 'down' : 'up';
   const shift = moved === null ? '?' : `${Math.abs(moved.shift)} px ${way}`;
   console.log(
-    `fuse-bob-*.png     ${name} beside "${item.label}": ${said(first)}, then ` +
+    `fuse-bob-*.png     ${name} beside "${partName(item)}": ${said(first)}, then ` +
       `${said(second)} of the art; the canvas round it moved ${shift} ` +
       `(${expected.toFixed(1)} expected), off by ${moved?.cost.toFixed(1) ?? '?'} ` +
       `against ${moved?.still.toFixed(1) ?? '?'} unmoved${fine ? '' : ' !! no bob'}`,
   );
   if (!fine) {
-    fail(`fuse-bob: "${item.label}" did not bob a pixel between the two shots`);
+    fail(`fuse-bob: "${partName(item)}" did not bob a pixel between the two shots`);
   }
 }
 
@@ -3275,7 +3295,7 @@ async function captureCarry(player) {
   const spot = { x: Math.floor(item.x), y: Math.floor(item.y) };
   await captureBob(player, item);
   if (home === null || !(await standOn(player, spot))) {
-    skip('figure-carry.png', `no open way to "${item.label}" at ${spot.x},${spot.y}`);
+    skip('figure-carry.png', `no open way to "${partName(item)}" at ${spot.x},${spot.y}`);
     return;
   }
   const you = player.seen.view.you.id;
@@ -3286,7 +3306,7 @@ async function captureCarry(player) {
     await until(held, 1500);
   }
   if (!held()) {
-    fail(`figure-carry.png: ${player.name} stood on "${item.label}", but E picked nothing up`);
+    fail(`figure-carry.png: ${player.name} stood on "${partName(item)}", but E picked nothing up`);
     return;
   }
   await player.page.setViewportSize(COLD_OPEN);
@@ -3296,16 +3316,17 @@ async function captureCarry(player) {
   const down = await until(() => !held(), 3000);
   console.log(
     `figure-carry.png   ${player.name} @ ${COLD_OPEN.width}x${COLD_OPEN.height} holds ` +
-      `"${item.label}", picked up at ${spot.x},${spot.y}; ` +
+      `"${partName(item)}", picked up at ${spot.x},${spot.y}; ` +
       (down ? 'put down again with Q' : '!! Q put nothing down'),
   );
   if (!down) {
-    fail(`figure-carry.png: ${player.name} pressed Q, but still carries "${item.label}"`);
+    fail(`figure-carry.png: ${player.name} pressed Q, but still carries "${partName(item)}"`);
   }
   await player.page.setViewportSize(SIZES[0]);
   await sleep(300);
   if (!(await standOn(player, home))) {
-    throw new Error(`${player.name} found no way back to ${home.x},${home.y} from "${item.label}"`);
+    const from = `from "${partName(item)}"`;
+    throw new Error(`${player.name} found no way back to ${home.x},${home.y} ${from}`);
   }
 }
 
@@ -7285,7 +7306,10 @@ async function captureMorseBook(reader) {
  */
 async function playFrequenz(host, guest) {
   const pin = BLACKOUT_PLAN.frequenz;
-  const key = guest.seen.view.map.items.find((item) => /schl/i.test(item.label));
+  // The key on the guest's map, glimpsed or known — out of the guest's sight, where it was laid.
+  const key =
+    guest.seen.view.map.items.find((item) => item.kind === 'key') ??
+    BLACKOUT.map.items.find((item) => /schl/i.test(item.label));
   if (key === undefined) {
     throw new Error('the cabinet’s key lies nowhere on the map');
   }
@@ -7341,7 +7365,7 @@ async function playFrequenz(host, guest) {
  */
 async function playReaktor(host, guest) {
   const pin = BLACKOUT_PLAN.ersatzsicherung;
-  const fuse = host.seen.view.map.items.find((item) => item.requiredForTitle !== null);
+  const fuse = host.seen.view.map.items.find((item) => item.known && item.requiredFor !== null);
   if (fuse?.deliverTo?.x !== pin.to.x || fuse.deliverTo.y !== pin.to.y) {
     differs('fuse drop-off', JSON.stringify(fuse?.deliverTo), JSON.stringify(pin.to));
   }

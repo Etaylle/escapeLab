@@ -129,6 +129,7 @@ function standing(state: GameState, stations: Record<string, string[]>): GameSta
     notes: {},
     signSeen: [],
     found: {},
+    sight: {},
     exit: [],
     at: 0,
   });

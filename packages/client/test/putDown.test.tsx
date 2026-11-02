@@ -180,7 +180,16 @@ const maze: PuzzleView = {
 describe('stepping back from a device', () => {
   const single = mapWith({
     stations: [
-      { puzzleId: 'netz', x: 4, y: 1, title: 'Leitungsnetz', status: 'armed', found: false },
+      {
+        puzzleId: 'netz',
+        x: 4,
+        y: 1,
+        title: 'Leitungsnetz',
+        status: 'armed',
+        seen: true,
+        found: false,
+        known: false,
+      },
     ],
   });
 

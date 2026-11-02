@@ -26,15 +26,18 @@ import { mapWith, type Item } from './fixtures.js';
 /** A carryable lying in the lab, or carried as `parts` say. */
 function item(parts: Partial<Item>): Item {
   return {
+    seen: true,
     found: true,
+    known: true,
     id: 'fuse',
+    kind: 'fuse',
     label: 'SICHERUNG',
     x: 3.5,
     y: 2.5,
     carriedBy: null,
     delivered: false,
     deliverTo: null,
-    requiredForTitle: null,
+    requiredFor: null,
     ...parts,
   };
 }
@@ -149,10 +152,10 @@ describe('assembleFrame — what the crew’s figures stand by', () => {
   it('tells who carries what by the view’s items, and nobody for an item delivered', () => {
     const source = sourceWith([
       item({ carriedBy: 'p2' }),
-      item({ id: 'key', label: 'SCHLÜSSEL', carriedBy: 'p1', delivered: true }),
-      item({ id: 'crate', label: 'KISTE' }),
+      item({ id: 'key', kind: 'key', label: 'SCHLÜSSEL', carriedBy: 'p1', delivered: true }),
+      item({ id: 'crate', kind: 'crate', label: 'KISTE' }),
     ]);
-    expect([...frameAt(source, 1).carrying]).toEqual([['p2', 'SICHERUNG']]);
+    expect([...frameAt(source, 1).carrying]).toEqual([['p2', 'fuse']]);
   });
 
   it('keeps since when each has stood still: you as you steer, the rest as they stream in', () => {

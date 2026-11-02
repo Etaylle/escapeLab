@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, initialState, missingItemsFor, parseMission, viewFor } from '../src/index.js';
+import {
+  applyAction,
+  initialState,
+  missingItemsFor,
+  parseMission,
+  partKind,
+  viewFor,
+} from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
 import { standing } from './lab.js';
 
@@ -74,8 +81,25 @@ const pick = (playerId: string): Action => ({
   at: T0 + 1000,
 });
 
+describe('partKind — a part’s look, told from its label', () => {
+  it('makes a fuse of a Sicherung and a key of a Schlüssel, however it is spelt', () => {
+    for (const label of ['SICHERUNG', 'Ersatzsicherung', 'sicherung']) {
+      expect(partKind(label)).toBe('fuse');
+    }
+    for (const label of ['SCHLÜSSEL', 'Schlüssel', 'SCHLUESSEL']) {
+      expect(partKind(label)).toBe('key');
+    }
+  });
+
+  it('makes a crate of anything else', () => {
+    for (const label of ['SPEICHERKERN', 'KÜHLMITTEL', '']) {
+      expect(partKind(label)).toBe('crate');
+    }
+  });
+});
+
 describe('carryable items', () => {
-  it('starts on the floor and shows up in every view', () => {
+  it('starts on the floor, in a view whole once found there, as a fuse in sight before', () => {
     const state = playing();
     expect(state.items['sicherung']).toEqual({
       x: 1.5,
@@ -83,9 +107,17 @@ describe('carryable items', () => {
       carriedBy: null,
       delivered: false,
     });
-    const item = viewFor(state, 'p1').map?.items[0];
+    const found = standing(state, { found: { p1: ['item:sicherung'] } });
+    const item = viewFor(found, 'p1').map?.items[0];
     expect(item).toMatchObject({ label: 'SICHERUNG', delivered: false, carriedBy: null });
-    expect(item?.requiredForTitle).toBe('Zweites');
+    // Wanted at the second station, the one after the first in front of the crew.
+    expect(item?.known === true ? item.requiredFor : null).toEqual({ title: 'Zweites', ahead: 1 });
+    // Ben has it in sight, but nobody has found it yet: a fuse, where it lies — and no more.
+    const seen = standing(state, { sight: { p2: ['item:sicherung'] } });
+    expect(viewFor(seen, 'p2').map?.items).toEqual([
+      { id: 'sicherung', kind: 'fuse', x: 1.5, y: 1.5, seen: true, found: false, known: false },
+    ]);
+    expect(viewFor(seen, 'p1').map?.items).toEqual([]);
   });
 
   it('can be picked up, dropped where you stand, and picked up by someone else', () => {

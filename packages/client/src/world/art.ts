@@ -1614,7 +1614,8 @@ export function drawExitHatch(ctx: CanvasRenderingContext2D, o: ExitHatchOpts): 
 
 export interface ManualObjectOpts {
   kind: ManualKind;
-  label: string;
+  /** its name, under it once found; none for one nobody has found */
+  label?: string;
   /** covers the armed station: blue glow, strength follows pulse */
   active: boolean;
   /** a locker searched, a cabinet unlocked; everything else is always open */
@@ -2181,7 +2182,7 @@ export function drawManualObject(ctx: CanvasRenderingContext2D, o: ManualObjectO
     }
     ctx.restore();
     const at = o.labelAt === undefined ? LABEL_BELOW : o.labelAt;
-    if (dressed && at !== null && found > 0) {
+    if (dressed && at !== null && found > 0 && o.label !== undefined) {
       const color = o.active ? READ_LABEL : IDLE_LABEL;
       ctx.globalAlpha *= found;
       drawHaloText(ctx, o.label, 0, at, (o.text ?? TILE_TEXT).label, color, 'top');

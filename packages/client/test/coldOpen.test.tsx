@@ -136,7 +136,16 @@ const archiv: MapView = mapWith({
   yourSpawn: { x: 1, y: 1 },
   labels: [{ text: 'ARCHIV', x: 2, y: 1 }],
   stations: [
-    { puzzleId: 'notlicht', x: 3, y: 1, title: 'Notlicht', status: 'armed', found: false },
+    {
+      puzzleId: 'notlicht',
+      x: 3,
+      y: 1,
+      title: 'Notlicht',
+      status: 'armed',
+      seen: true,
+      found: false,
+      known: false,
+    },
   ],
 });
 

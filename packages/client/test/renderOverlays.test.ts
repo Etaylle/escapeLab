@@ -179,15 +179,18 @@ describe('overlays — what lies over the world and its light', () => {
 
   it('reminds of Q while hands are full — on a keyboard, not on a touch screen', () => {
     const crate: Item = {
+      seen: true,
       found: true,
+      known: true,
       id: 'crate',
+      kind: 'crate',
       label: 'KISTE',
       x: 0,
       y: 0,
       carriedBy: 'p1',
       delivered: false,
       deliverTo: null,
-      requiredForTitle: null,
+      requiredFor: null,
     };
     const map = lab({ items: [crate] });
     expect(callsOf(drawn(frameWith({ map })), 'fillText')).toContainEqual([
@@ -214,15 +217,18 @@ describe('overlays — what lies over the world and its light', () => {
       throw new Error('the chat needs a phrase for this test');
     }
     const crate: Item = {
+      seen: true,
       found: true,
+      known: true,
       id: 'crate',
+      kind: 'crate',
       label: 'KISTE',
       x: 0,
       y: 0,
       carriedBy: 'p1',
       delivered: false,
       deliverTo: null,
-      requiredForTitle: null,
+      requiredFor: null,
     };
     const log = drawn(
       frameWith({
@@ -267,15 +273,18 @@ describe('overlays — what lies over the world and its light', () => {
       throw new Error('the chat needs a phrase for this test');
     }
     const crate: Item = {
+      seen: true,
       found: true,
+      known: true,
       id: 'crate',
+      kind: 'crate',
       label: 'KISTE',
       x: 0,
       y: 0,
       carriedBy: 'p1',
       delivered: false,
       deliverTo: null,
-      requiredForTitle: null,
+      requiredFor: null,
     };
     const exit = { x: 8, y: 4, open: true, openedAt: 1, atExit: [] };
     const parts = {
@@ -350,15 +359,18 @@ describe('overlays — what lies over the world and its light', () => {
 
   it('leaves out a room name that would cover the label under a thing, which matters more', () => {
     const crate: Item = {
+      seen: true,
       found: true,
+      known: true,
       id: 'crate',
+      kind: 'crate',
       label: 'KISTE',
       x: 6.5,
       y: 1.9,
       carriedBy: null,
       delivered: false,
       deliverTo: null,
-      requiredForTitle: null,
+      requiredFor: null,
     };
     const named = (items: Item[]): unknown[] =>
       texts(drawn(frameWith({ map: lab({ labels: [{ text: 'LABOR', x: 6, y: 2 }], items }) })));

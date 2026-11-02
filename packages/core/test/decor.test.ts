@@ -7,6 +7,7 @@ import {
   parseMission,
   stepAllowed,
   viewFor,
+  viewForSpectator,
 } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
 import { canGather, reachability, tileKey } from '../src/reach.js';
@@ -208,18 +209,20 @@ describe('decor — solid for every step', () => {
     const shipped = parseMission(
       JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
     );
-    const view = viewFor(
-      ([
+    const state = (
+      [
         { type: 'player-join', playerId: 'p1', name: 'Anna' },
         { type: 'player-join', playerId: 'p2', name: 'Ben' },
         { type: 'set-ready', playerId: 'p2', ready: true },
         { type: 'start-mission', playerId: 'p1', at: 1_000_000, seed: 1 },
-      ] satisfies Action[]).reduce(applyAction, initialState(shipped)),
-      'p1',
-    );
+      ] satisfies Action[]
+    ).reduce(applyAction, initialState(shipped));
+    const view = viewFor(state, 'p1');
     expect(view.map?.decor).toHaveLength(shipped.map.decor.length);
     expect(view.map?.labels.find((l) => l.text === 'ARCHIV')?.kind).toBe('archive');
-    const box = view.map?.stations.find((s) => s.puzzleId === 'notstrom' && s.console === 'a');
+    // The Notstrom-Kasten still to come shows only where in sight: the audience sees it all.
+    const stations = viewForSpectator(state).map?.stations ?? [];
+    const box = stations.find((s) => s.puzzleId === 'notstrom' && s.console === 'a');
     expect(box?.look).toBe('fusebox');
   });
 });

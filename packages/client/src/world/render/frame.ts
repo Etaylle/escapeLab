@@ -1,4 +1,4 @@
-import type { ChatPhrase, DronePosition, Find, PlayerView } from '@escapelab/core';
+import type { ChatPhrase, DronePosition, Find, PartKind, PlayerView } from '@escapelab/core';
 import type { Alarm } from '../alarm.js';
 import type { WorldText } from '../art.js';
 import { artKit, type ArtKit } from '../artKit.js';
@@ -310,8 +310,8 @@ export interface Frame {
   missionId: string;
   /** a wrong cut shorting the armed fuse box: its sparks fly from (x, y), once for `seq` */
   short: { x: number; y: number; seq: number } | null;
-  /** what each of the crew carries, by player id: the item's label, which tells its kind */
-  carrying: ReadonlyMap<string, string>;
+  /** what each of the crew carries, by player id: what kind of part it is */
+  carrying: ReadonlyMap<string, PartKind>;
   /** since when each of the crew has stood still, by player id, sim ms; nobody walking is in it */
   stillSince: ReadonlyMap<string, number>;
   /** how the crew stands while the run ends on screen: celebrating it won, slumped it lost */

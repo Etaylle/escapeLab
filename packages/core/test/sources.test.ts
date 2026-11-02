@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, parseMission, viewFor, viewForSpectator } from '../src/index.js';
-import type { Action, GameState, Mission } from '../src/index.js';
+import type { Action, GameState, MapView, Mission } from '../src/index.js';
 import { standing, started, T0 } from './lab.js';
 
 /**
@@ -105,30 +105,35 @@ describe('where the sources lie', () => {
     });
   });
 
-  it('lists every source where it lies, found by whoever came close, known to the crew', () => {
+  it('shows the crew only what somebody can see or has found', () => {
     const state = started(mission);
-    const flags = (view: ReturnType<typeof viewFor> | ReturnType<typeof viewForSpectator>) =>
-      view.map?.manuals.map((m) => [m.id, m.found, m.known]);
-    expect(flags(viewFor(state, 'p1'))).toEqual([
-      ['tafel', false, false],
-      ['spind', false, false],
-      ['schrank', false, false],
+    const listed = (view: { map: MapView | null }) =>
+      view.map?.manuals.map((m) => [m.id, m.seen, m.found, m.known]);
+    // Nothing in anybody's sight, nothing found: no view carries a source, nor a word of one.
+    for (const view of [viewFor(state, 'p1'), viewFor(state, 'p2')]) {
+      expect(view.map?.manuals).toEqual([]);
+      expect(JSON.stringify(view)).not.toMatch(/TAFEL|SPIND|SCHRANK|schluessel/);
+    }
+    // Anna has the locker in sight, found by nobody: what it is and where, nothing it holds.
+    const looking = standing(state, { sight: { p1: ['source:spind'] } });
+    expect(viewFor(looking, 'p1').map?.manuals).toEqual([
+      { id: 'spind', kind: 'locker', x: 10, y: 2, seen: true, found: false, known: false },
     ]);
-    const found = standing(state, { found: { p1: ['source:tafel', 'source:spind'] } });
-    const walkedOn = standing(found, {});
-    expect(walkedOn.found).toEqual({ p1: ['source:spind', 'source:tafel'] });
-    expect(flags(viewFor(walkedOn, 'p1'))).toEqual([
-      ['tafel', true, true],
-      ['spind', true, true],
-      ['schrank', false, false],
+    expect(viewFor(looking, 'p2').map?.manuals).toEqual([]);
+    // Anna comes across the chart and the locker, then walks on: whole on every map now.
+    const found = standing(looking, { found: { p1: ['source:tafel', 'source:spind'] } });
+    expect(found.found).toEqual({ p1: ['source:spind', 'source:tafel'] });
+    expect(listed(viewFor(found, 'p1'))).toEqual([
+      ['tafel', false, true, true],
+      ['spind', false, true, true],
     ]);
-    // Ben has found nothing himself: the crew knows of them, his screen names none.
-    expect(flags(viewFor(walkedOn, 'p2'))).toEqual([
-      ['tafel', false, true],
-      ['spind', false, true],
-      ['schrank', false, false],
+    // Ben has found nothing himself: the crew knows of them, his screen names none; the cabinet
+    // nobody has seen stays off every map.
+    expect(listed(viewFor(found, 'p2'))).toEqual([
+      ['tafel', false, false, true],
+      ['spind', false, false, true],
     ]);
-    expect(viewFor(walkedOn, 'p2').map?.manuals[1]).toEqual({
+    expect(viewFor(found, 'p2').map?.manuals[1]).toEqual({
       x: 10,
       y: 2,
       id: 'spind',
@@ -137,13 +142,17 @@ describe('where the sources lie', () => {
       puzzleIds: ['code'],
       opened: false,
       needsKey: null,
+      seen: false,
       found: false,
       known: true,
     });
-    expect(flags(viewForSpectator(state))).toEqual([
-      ['tafel', true, true],
-      ['spind', true, true],
-      ['schrank', true, true],
+    for (const view of [viewFor(found, 'p1'), viewFor(found, 'p2')]) {
+      expect(JSON.stringify(view)).not.toContain('SCHRANK');
+    }
+    expect(listed(viewForSpectator(state))).toEqual([
+      ['tafel', true, true, true],
+      ['spind', true, true, true],
+      ['schrank', true, true, true],
     ]);
   });
 });
@@ -217,11 +226,16 @@ describe('a cabinet', () => {
 
   it('leads its key nowhere until the crew has found it, and is no drop-off of its own', () => {
     const carrying = applyAction(started(mission), pick);
-    const key = (state: GameState) => viewFor(state, 'p1').map?.items[0]?.deliverTo;
+    /** Where the key in Anna's hands goes, as `view` has it; undefined for a key not known. */
+    const goes = (view: { map: MapView | null }) => {
+      const item = view.map?.items[0];
+      return item?.known === true ? item.deliverTo : undefined;
+    };
+    const key = (state: GameState) => goes(viewFor(state, 'p1'));
     expect(key(carrying)).toBeNull();
     // Ben comes across the cabinet: Anna, key in hand, now knows where it goes.
     expect(key(standing(carrying, { found: { p2: ['source:schrank'] } }))).toEqual({ x: 12, y: 2 });
-    expect(viewForSpectator(carrying).map?.items[0]?.deliverTo).toEqual({ x: 12, y: 2 });
+    expect(goes(viewForSpectator(carrying))).toEqual({ x: 12, y: 2 });
     expect(() =>
       applyAction(carrying, { type: 'deliver-item', playerId: 'p1', itemId: 'schluessel', at: T0 }),
     ).toThrow(/gehört in ein Schloss/);

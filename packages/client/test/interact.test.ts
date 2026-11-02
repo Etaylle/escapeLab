@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { MapView } from '@escapelab/core';
 import { carriedItem, contextAction, promptText } from '../src/world/interact.js';
-import { mapWith, type Manual } from './fixtures.js';
+import { mapWith, type Item, type Manual } from './fixtures.js';
+
+/** A note of the last shift the crew knows of. */
+type Note = Extract<MapView['notes'][number], { known: true }>;
 
 const YOU = 'p1';
 /** Whether the armed station's puzzle already runs: E there then only shows its panel. */
@@ -15,9 +18,12 @@ const station: MapView['stations'][number] = {
   y: 5,
   title: 'Notstrom',
   status: 'armed',
+  seen: true,
   found: false,
+  known: false,
 };
 const book: Manual = {
+  seen: true,
   found: true,
   id: 'buch',
   kind: 'book',
@@ -46,17 +52,20 @@ const cabinet: Manual = {
 const AT_LOCKER = [{ id: 'spind', kind: 'locker', opened: false, needsKey: null }] as const;
 const AT_CABINET = [{ id: 'schrank', kind: 'cabinet', opened: false, needsKey: 'key' }] as const;
 
-function part(parts: Partial<MapView['items'][number]>): MapView['items'][number] {
+function part(parts: Partial<Item>): Item {
   return {
+    seen: true,
     found: true,
+    known: true,
     id: 'fuse',
+    kind: 'fuse',
     label: 'Sicherung',
     x: 3.5,
     y: 6.5,
     carriedBy: null,
     delivered: false,
     deliverTo: { x: 9, y: 2 },
-    requiredForTitle: null,
+    requiredFor: null,
     ...parts,
   };
 }
@@ -70,7 +79,8 @@ describe('contextAction — what E does where the player stands', () => {
       label: 'Lesen',
     });
     // Counted there through a pillar, the crew not knowing of it yet: nothing to read.
-    const unknown = mapWith({ manuals: [{ ...book, found: false, known: false }] });
+    const glimpse = { seen: true, found: false, known: false } as const;
+    const unknown = mapWith({ manuals: [{ id: 'buch', kind: 'book', x: 2, y: 5, ...glimpse }] });
     expect(contextAction(unknown, { x: 2.5, y: 6.4 }, YOU, AT_BOOK, SHUT, null)).toBeNull();
   });
 
@@ -170,7 +180,14 @@ describe('contextAction — the one thing the prompt names', () => {
   });
 
   it('names a cabinet whose key is missing, a locker to search, the cabinet a key opens', () => {
-    const key = part({ id: 'key', label: 'SCHLÜSSEL', x: 4.5, y: 9.5, deliverTo: { x: 8, y: 5 } });
+    const key = part({
+      id: 'key',
+      kind: 'key',
+      label: 'SCHLÜSSEL',
+      x: 4.5,
+      y: 9.5,
+      deliverTo: { x: 8, y: 5 },
+    });
     const away = mapWith({ manuals: [cabinet], items: [key] });
     const locked = contextAction(away, { x: 8.5, y: 6.4 }, YOU, AT_CABINET, SHUT, null);
     expect(locked).toMatchObject({ kind: 'locked', subject: { of: 'manual', id: 'schrank' } });
@@ -224,7 +241,14 @@ describe('contextAction — a station with two consoles', () => {
 });
 
 describe('contextAction — lockers and cabinets', () => {
-  const key = part({ id: 'key', label: 'SCHLÜSSEL', x: 4.5, y: 9.5, deliverTo: { x: 8, y: 5 } });
+  const key = part({
+    id: 'key',
+    kind: 'key',
+    label: 'SCHLÜSSEL',
+    x: 4.5,
+    y: 9.5,
+    deliverTo: { x: 8, y: 5 },
+  });
 
   it('searches a closed locker, full hands or not, and reads it once open', () => {
     const map = mapWith({ manuals: [locker] });
@@ -303,7 +327,14 @@ describe('promptText — the prompt over the world', () => {
   });
 
   it('names only what is missing at a locked cabinet, keyboard or touch', () => {
-    const key = part({ id: 'key', label: 'SCHLÜSSEL', x: 4.5, y: 9.5, deliverTo: { x: 8, y: 5 } });
+    const key = part({
+      id: 'key',
+      kind: 'key',
+      label: 'SCHLÜSSEL',
+      x: 4.5,
+      y: 9.5,
+      deliverTo: { x: 8, y: 5 },
+    });
     const locked = contextAction(
       mapWith({ manuals: [cabinet], items: [key] }),
       { x: 8.5, y: 6.4 },
@@ -342,8 +373,8 @@ describe('carriedItem — what a player has in hand', () => {
  * station at (5,1).
  */
 const ROOM = ['##########', ...Array.from({ length: 5 }, () => '#........#'), '##########'];
-const wallNote = { index: 0, x: 3, y: 0, read: false, found: true, known: true };
-const floorNote = { index: 1, x: 7, y: 4, read: true, found: true, known: true };
+const wallNote: Note = { index: 0, x: 3, y: 0, read: false, seen: true, found: true, known: true };
+const floorNote: Note = { index: 1, x: 7, y: 4, read: true, seen: true, found: true, known: true };
 const noteRoom = mapWith({
   tiles: ROOM,
   notes: [wallNote, floorNote],

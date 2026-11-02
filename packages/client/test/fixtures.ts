@@ -3,6 +3,8 @@ import {
   moduleFor,
   puzzleDefSchema,
   type ConsoleId,
+  type KnownPart,
+  type KnownSource,
   type MapView,
   type PuzzleView,
 } from '@escapelab/core';
@@ -48,9 +50,12 @@ export function mapWith(parts: Partial<MapView>): MapView {
 /** A mission's clock that is not running: no deadline, no pause (clock.ts `MissionTime`). */
 export const NO_CLOCK = { deadlineAt: null, pausedAt: null } as const;
 
-export type Manual = MapView['manuals'][number];
+/** A manual object the crew knows of, as the tests build their maps. */
+export type Manual = KnownSource;
 export type Plate = MapView['plates'][number];
-export type Item = MapView['items'][number];
+/** A part the crew knows of, as the tests build their maps. */
+export type Item = KnownPart;
+export type Station = MapView['stations'][number];
 
 /**
  * Markup with every icon (screens/Icon.tsx) written as its name in brackets,

@@ -1,3 +1,4 @@
+import type { KnownSource, PartKind } from '@escapelab/core';
 import {
   drawFusebox,
   drawLeverBox,
@@ -8,8 +9,9 @@ import {
 import { atlasLevel } from '../atlas.js';
 import { TAU } from '../brush.js';
 import { PX } from '../figure.js';
-import { carryableKind, drawCarryable, drawDropZone } from '../hazards.js';
+import { drawCarryable, drawDropZone } from '../hazards.js';
 import type { Subject } from '../interact.js';
+import { known } from '../known.js';
 import { noteMount } from '../notes.js';
 import {
   CORE,
@@ -50,7 +52,6 @@ const PROP_BOX = { x: -0.5, y: -0.6, w: 1, h: 1.1 };
 const NOTE_BOX = { x: -0.7, y: -0.7, w: 1.4, h: 1.4 };
 
 type Station = WorldMap['stations'][number];
-type Manual = WorldMap['manuals'][number];
 
 /** How strong the halo is at sim time `time`, s: a sine from HALO_FAINT to HALO_FULL. */
 export function haloAlpha(time: number, reduced: boolean): number {
@@ -87,7 +88,7 @@ export function stationShape(
 }
 
 /** A source as objects.ts draws it, without its shadow, glow and label: shut or open. */
-export function manualShape(manual: Pick<Manual, 'kind' | 'opened' | 'label'>): Shape {
+export function manualShape(manual: Pick<KnownSource, 'kind' | 'opened' | 'label'>): Shape {
   const { kind, opened, label } = manual;
   const look = { kind, label, active: false, opened, pulse: 0, bare: true };
   return {
@@ -104,11 +105,11 @@ export function noteShape(facing: number | null): Shape {
   return { key: `note:${facing ?? 'floor'}`, box: NOTE_BOX, draw: (g) => drawPinnedNote(g, look) };
 }
 
-/** A part lying about, by its label: the fuse, the key or a crate itself. */
-export function itemShape(label: string): Shape {
-  const look = { label, pulse: 0, carried: false, bare: true };
+/** A part lying about, by its kind: the fuse, the key or a crate itself. */
+export function itemShape(kind: PartKind): Shape {
+  const look = { kind, pulse: 0, carried: false, bare: true };
   return {
-    key: `item:${carryableKind(label)}`,
+    key: `item:${kind}`,
     box: PROP_BOX,
     draw: (g) => drawCarryable(g, look),
   };
@@ -143,7 +144,7 @@ function stationPlace(frame: Frame, at: { x: number; y: number }): Place | null 
 }
 
 function manualPlace(map: WorldMap, id: string): Place | null {
-  const manual = map.manuals.find((m) => m.id === id);
+  const manual = map.manuals.filter(known).find((m) => m.id === id);
   return manual === undefined
     ? null
     : { x: manual.x + 0.5, y: manual.y + 0.5, shape: manualShape(manual) };
@@ -157,15 +158,16 @@ function notePlace(map: WorldMap, index: number): Place | null {
 
 /** A part lying about where light has fallen on it, as objects.ts shows it. */
 function itemPlace({ map, light }: Frame, id: string): Place | null {
-  const item = map.items.find((i) => i.id === id && i.carriedBy === null && !i.delivered);
+  const loose = map.items.filter(known).filter((i) => i.carriedBy === null && !i.delivered);
+  const item = loose.find((i) => i.id === id);
   return item === undefined || !light.shown(item.x, item.y)
     ? null
-    : { x: item.x, y: item.y, shape: itemShape(item.label) };
+    : { x: item.x, y: item.y, shape: itemShape(item.kind) };
 }
 
 /** The drop-off of the part `id`, where light has fallen on it, as objects.ts shows it. */
 function dropPlace({ map, light }: Frame, id: string): Place | null {
-  const zone = map.items.find((i) => i.id === id)?.deliverTo ?? null;
+  const zone = map.items.filter(known).find((i) => i.id === id)?.deliverTo ?? null;
   return zone === null || !light.shown(zone.x, zone.y)
     ? null
     : { x: zone.x + 0.5, y: zone.y + 0.5, shape: DROP_SHAPE };

@@ -577,8 +577,26 @@ describe('the join screen', () => {
 /** A lab with an armed station, a done one, a held plate, an open book and a closed locker. */
 const lab: MapView = mapWith({
   stations: [
-    { puzzleId: 'kabel', x: 2, y: 2, title: 'Notstrom', status: 'done', found: false },
-    { puzzleId: 'code', x: 8, y: 2, title: 'Zugangscode', status: 'armed', found: false },
+    {
+      puzzleId: 'kabel',
+      x: 2,
+      y: 2,
+      title: 'Notstrom',
+      status: 'done',
+      seen: true,
+      found: false,
+      known: false,
+    },
+    {
+      puzzleId: 'code',
+      x: 8,
+      y: 2,
+      title: 'Zugangscode',
+      status: 'armed',
+      seen: true,
+      found: false,
+      known: false,
+    },
   ],
   plates: [
     { id: 'tuer', x: 5, y: 8, label: 'HALTEN', pressed: true, freezesDrone: false },
@@ -586,6 +604,7 @@ const lab: MapView = mapWith({
   ],
   manuals: [
     {
+      seen: true,
       found: true,
       known: true,
       id: 'buch',
@@ -598,6 +617,7 @@ const lab: MapView = mapWith({
       needsKey: null,
     },
     {
+      seen: true,
       found: true,
       known: true,
       id: 'spind',
@@ -612,15 +632,18 @@ const lab: MapView = mapWith({
   ],
   items: [
     {
+      seen: true,
       found: true,
+      known: true,
       id: 'sicherung',
+      kind: 'fuse',
       label: 'Ersatzsicherung',
       x: 1,
       y: 1,
       carriedBy: 'p2',
       delivered: false,
       deliverTo: { x: 3, y: 3 },
-      requiredForTitle: null,
+      requiredFor: null,
     },
   ],
 });
@@ -647,7 +670,9 @@ const kette: MapView = mapWith({
       title: 'Signalkette',
       status: 'armed',
       console: 'a',
+      seen: true,
       found: false,
+      known: false,
     },
     {
       puzzleId: 'kette',
@@ -656,7 +681,9 @@ const kette: MapView = mapWith({
       title: 'Signalkette',
       status: 'armed',
       console: 'b',
+      seen: true,
       found: false,
+      known: false,
     },
   ],
 });
@@ -707,8 +734,11 @@ describe('presence tags', () => {
     expect(presenceNear(lab, on(14, 3))).toEqual({ stationId: null, manualId: 'buch' });
     expect(presenceNear(lab, on(14, 7))).toEqual(nowhere);
     expect(presenceNear(lab, undefined)).toEqual(nowhere);
-    // A book the crew has not come across is no place to read at, as far as anybody knows.
-    const unknown = { ...lab, manuals: lab.manuals.map((m) => ({ ...m, known: false })) };
+    // A book in sight that the crew has not come across is no place to read at, as far as
+    // anybody knows.
+    const glimpse = { seen: true, found: false, known: false } as const;
+    const glimpsed = lab.manuals.map(({ id, kind, x, y }) => ({ id, kind, x, y, ...glimpse }));
+    const unknown = { ...lab, manuals: glimpsed };
     expect(presenceNear(unknown, on(14, 3))).toEqual(nowhere);
   });
 });

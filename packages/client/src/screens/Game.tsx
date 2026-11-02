@@ -456,7 +456,7 @@ export function readerSawSolve(
   const map = before.map;
   const armed = map?.stations.find((s) => s.status === 'armed')?.puzzleId;
   const source = map?.manuals.find((m) => m.id === before.presence.manualId);
-  const read = armed !== undefined && source !== undefined && source.puzzleIds.includes(armed);
+  const read = armed !== undefined && source?.known === true && source.puzzleIds.includes(armed);
   return read && !deviceOpen && after.currentPuzzleIndex > before.currentPuzzleIndex;
 }
 
@@ -749,9 +749,7 @@ function goalOf(view: PlayerView, map: MapView, self: Point): Goal {
   const armedTitle = map.stations.find((s) => s.status === 'armed')?.title ?? null;
   const out = escaping(map);
   const parts = dueParts(map, self);
-  const forNow = parts.filter(
-    (i) => i.requiredForTitle === null || i.requiredForTitle === armedTitle,
-  );
+  const forNow = parts.filter((i) => i.requiredFor === null || i.requiredFor.ahead === 0);
   const forLater = parts.filter((i) => !forNow.includes(i));
   const errands = [
     forNow.length === 0 ? null : `${forNow.map((i) => i.label).join(', ')} fehlt noch`,

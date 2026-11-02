@@ -6,6 +6,7 @@ import {
   dailySeed,
   emergenciesDue,
   findables,
+  inSight,
   inEscapePhase,
   initialState,
   lightsAreOut,
@@ -16,6 +17,7 @@ import {
   puzzleDueAt,
   runReport,
   shutDoors,
+  sightables,
   stationKey,
   stepAllowed,
   utcDay,
@@ -75,6 +77,9 @@ const PLATE_RELEASE_RADIUS = 0.75;
 /** A player is at a station, a manual object or the sign this close (in tiles); leaves wider. */
 const PRESENCE_ENTER_RADIUS = 1.6;
 const PRESENCE_LEAVE_RADIUS = 2.0;
+
+/** Who stands where and what they found and see, as the room reports it in `set-presence`. */
+type PresenceReport = Omit<Extract<Action, { type: 'set-presence' }>, 'type' | 'at'>;
 /** How close to the armed station an interact is accepted. */
 const INTERACT_RADIUS = 1.6;
 /**
@@ -893,10 +898,20 @@ export class Room {
    * (`findsNow`), and who stands on the open hatch; dispatch only on change.
    */
   private reconcilePresence(): void {
-    const map = this.state.mission.map;
     if (this.state.phase !== 'playing') {
       return;
     }
+    const now = Date.now();
+    const found = this.findsNow(now);
+    const next = { ...this.whereEverybodyStands(), found, sight: this.sightNow() };
+    if (this.presenceChanged(next)) {
+      this.dispatch({ type: 'set-presence', ...next, at: now });
+    }
+  }
+
+  /** Who stands at each station spot, source and note, who saw the sign, who is on the hatch. */
+  private whereEverybodyStands(): Omit<PresenceReport, 'found' | 'sight'> {
+    const map = this.state.mission.map;
     const { presence, places } = this.state;
     const stations = this.atEach(
       map.stations.map((s) => ({ id: stationKey(s), x: s.x, y: s.y })),
@@ -906,29 +921,50 @@ export class Room {
       const at = places[m.id];
       return at === undefined ? [] : [{ id: m.id, x: at.x, y: at.y }];
     });
-    const manuals = this.atEach(sources, presence.manuals);
-    const pinned = this.noteSpots();
-    const notes = this.atEach(pinned, presence.notes);
     const sign = map.edgeworkSign;
     const signSeen =
       sign === undefined
         ? presence.signSeen
         : [...new Set([...presence.signSeen, ...this.presentAt(sign.x, sign.y, [])])].sort();
-    const now = Date.now();
-    const found = this.findsNow(now);
-    const exit = this.onTheHatch();
-    const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
-    if (
-      !same(stations, presence.stations) ||
-      !same(manuals, presence.manuals) ||
-      !same(notes, presence.notes) ||
-      signSeen.length !== presence.signSeen.length ||
-      Object.keys(found).length > 0 ||
-      !same(exit, presence.exit)
-    ) {
-      const action = { stations, manuals, notes, signSeen, found, exit, at: now };
-      this.dispatch({ type: 'set-presence', ...action });
+    return {
+      stations,
+      manuals: this.atEach(sources, presence.manuals),
+      notes: this.atEach(this.noteSpots(), presence.notes),
+      signSeen,
+      exit: this.onTheHatch(),
+    };
+  }
+
+  /** Whether `next` tells anything the presence does not: a step, a find, a sight. */
+  private presenceChanged(next: PresenceReport): boolean {
+    const { presence } = this.state;
+    const { stations, manuals, notes, exit, sight } = presence;
+    const now = [next.stations, next.manuals, next.notes, next.exit, next.sight];
+    const was = [stations, manuals, notes, exit, sight];
+    return (
+      Object.keys(next.found).length > 0 ||
+      next.signSeen.length !== presence.signSeen.length ||
+      JSON.stringify(now) !== JSON.stringify(was)
+    );
+  }
+
+  /**
+   * What each connected player has in sight right now (core discovery.ts `inSight`), by player
+   * id, as the state keeps it: sorted, nobody with nothing in sight. A pause stops no sight.
+   */
+  private sightNow(): Record<string, FindKey[]> {
+    const map = this.state.mission.map;
+    const shut = shutDoors(map, this.state);
+    const things = sightables(this.state);
+    const sight: Record<string, FindKey[]> = {};
+    for (const player of this.state.players) {
+      const pos = this.positions.get(player.id);
+      const seen = player.connected && pos !== undefined ? inSight(map, shut, pos, things) : [];
+      if (seen.length > 0) {
+        sight[player.id] = seen.sort();
+      }
     }
+    return sight;
   }
 
   /** All panels manned at once ends the emergency. */

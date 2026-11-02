@@ -1,4 +1,4 @@
-import type { DronePosition, PlayerView, PuzzleView, Sight } from '@escapelab/core';
+import type { DronePosition, PartKind, PlayerView, PuzzleView, Sight } from '@escapelab/core';
 import { timeLeft } from '../clock.js';
 import type { VoiceMesh } from '../voice/mesh.js';
 import type { Alarm } from './alarm.js';
@@ -11,6 +11,7 @@ import { finaleFrame, type FinaleCue, type FinaleFrame } from './finale.js';
 import { frameLight, mountedLamps } from './frameLight.js';
 import { contextAction } from './interact.js';
 import { hudAt, litWhole, shotProgress, type IntroCue } from './intro/sequence.js';
+import { known } from './known.js';
 import { labelAlpha } from './labelFade.js';
 import { SHOT_WIDE, shotPoint, shotStart } from './intro/shot.js';
 import { markerTargets } from './markers.js';
@@ -464,10 +465,10 @@ function figuresOf(
       kit.still.set(id, now);
     }
   }
-  const carrying = new Map<string, string>();
-  for (const item of map.items) {
+  const carrying = new Map<string, PartKind>();
+  for (const item of map.items.filter(known)) {
     if (item.carriedBy !== null && !item.delivered) {
-      carrying.set(item.carriedBy, item.label);
+      carrying.set(item.carriedBy, item.kind);
     }
   }
   return { carrying, stillSince: kit.still, mood: moodOf(finale) };

@@ -78,6 +78,7 @@ export {
 } from './daily.js';
 export { GameError } from './errors.js';
 export {
+  partKind,
   viewFor,
   viewForSpectator,
   type SpectatorView,
@@ -89,6 +90,14 @@ export {
   type NoteHere,
   type SourceHere,
   type MapView,
+  type Glimpse,
+  type KnownPart,
+  type KnownSource,
+  type MapNote,
+  type MapPart,
+  type MapSource,
+  type PartKind,
+  type Sighting,
   type Grade,
 } from './view.js';
 export {
@@ -160,7 +169,9 @@ export {
   findKey,
   findables,
   inCone,
+  inSight,
   lookAround,
+  sightables,
   type Discovery,
   type Find,
   type Findable,

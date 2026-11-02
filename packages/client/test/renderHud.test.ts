@@ -106,10 +106,20 @@ describe('hud — the corner minimap on the canvas', () => {
       height: 6,
       tiles: TILES,
       stations: [
-        { puzzleId: 'kasten', x: 7, y: 1, title: 'Kasten', status: 'armed', found: false },
+        {
+          puzzleId: 'kasten',
+          x: 7,
+          y: 1,
+          title: 'Kasten',
+          status: 'armed',
+          seen: true,
+          found: false,
+          known: false,
+        },
       ],
       manuals: [
         {
+          seen: true,
           found: true,
           known: true,
           id: 'm',
@@ -121,18 +131,7 @@ describe('hud — the corner minimap on the canvas', () => {
           opened: true,
           needsKey: null,
         },
-        {
-          found: false,
-          known: false,
-          id: 'n',
-          kind: 'chart',
-          x: 4,
-          y: 1,
-          label: 'TAFEL',
-          puzzleIds: ['kasten'],
-          opened: true,
-          needsKey: null,
-        },
+        { seen: true, found: false, known: false, id: 'n', kind: 'chart', x: 4, y: 1 },
       ],
     });
     const { ctx, log } = fakeCanvas();
@@ -250,20 +249,52 @@ describe('hud — the doors on the minimap, as the view knows them', () => {
 
 describe('hud — the goal on the minimap', () => {
   const consoles: MapView['stations'] = [
-    { puzzleId: 'kette', x: 2, y: 1, title: 'Kette', status: 'armed', console: 'a', found: false },
-    { puzzleId: 'kette', x: 7, y: 3, title: 'Kette', status: 'armed', console: 'b', found: false },
-    { puzzleId: 'reaktor', x: 8, y: 1, title: 'Reaktor', status: 'locked', found: false },
+    {
+      puzzleId: 'kette',
+      x: 2,
+      y: 1,
+      title: 'Kette',
+      status: 'armed',
+      console: 'a',
+      seen: true,
+      found: false,
+      known: false,
+    },
+    {
+      puzzleId: 'kette',
+      x: 7,
+      y: 3,
+      title: 'Kette',
+      status: 'armed',
+      console: 'b',
+      seen: true,
+      found: false,
+      known: false,
+    },
+    {
+      puzzleId: 'reaktor',
+      x: 8,
+      y: 1,
+      title: 'Reaktor',
+      status: 'locked',
+      seen: true,
+      found: false,
+      known: false,
+    },
   ];
   const fuse: Item = {
+    seen: true,
     found: true,
+    known: true,
     id: 'fuse',
+    kind: 'fuse',
     label: 'SICHERUNG',
     x: 3.5,
     y: 4.5,
     carriedBy: null,
     delivered: false,
     deliverTo: { x: 6, y: 4 },
-    requiredForTitle: null,
+    requiredFor: null,
   };
   const labWith = (parts: Partial<MapView>) =>
     mapWith({ width: 10, height: 6, tiles: TILES, stations: consoles, ...parts });
@@ -283,7 +314,14 @@ describe('hud — the goal on the minimap', () => {
   });
 
   it('adds nothing the view keeps back: a key whose cabinet nobody has found yet', () => {
-    const key = { ...fuse, id: 'key', label: 'SCHLÜSSEL', carriedBy: 'p1', deliverTo: null };
+    const key = {
+      ...fuse,
+      id: 'key',
+      kind: 'key' as const,
+      label: 'SCHLÜSSEL',
+      carriedBy: 'p1',
+      deliverTo: null,
+    };
     expect(minimapGoal(labWith({ items: [key] }), 'p1').map((dot) => dot.color)).toEqual([
       css(TEAL),
       css(TEAL),

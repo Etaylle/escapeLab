@@ -1,14 +1,8 @@
-import type { PlayerView } from '@escapelab/core';
+import type { PartKind, PlayerView } from '@escapelab/core';
 import { DRONE_MARK_MS } from '../alarm.js';
 import { drawScientist, drawVoiceRing, type Ground, type ScientistOpts } from '../art.js';
 import { figurePhase, figurePose, type FigurePose } from '../figure.js';
-import {
-  carryableKind,
-  drawAlarmMark,
-  drawCarryable,
-  drawDroneBody,
-  drawDroneCone,
-} from '../hazards.js';
+import { drawAlarmMark, drawCarryable, drawDroneBody, drawDroneCone } from '../hazards.js';
 import { FALLBACK_COLOR, inTiles, profiled, type Frame, type OtherAvatar } from './frame.js';
 import { drawFans } from './props.js';
 
@@ -127,7 +121,7 @@ export function crewPose(
   return figurePose({
     moving: gait.moving,
     facing: gait.facing,
-    carrying: carried === undefined ? null : carryableKind(carried),
+    carrying: carried ?? null,
     speaking: frame.speaking?.has(id) === true,
     alarmAgoMs: frame.alarm === null ? null : frame.now - frame.alarm.at,
     readyAgoMs: null,
@@ -146,17 +140,17 @@ const CARRIED_SIZE = 0.82;
  * An item as the hands hold it: drawn as carried — no shadow, glow or label —
  * at its size on the floor, which the figure takes to its HELD_SCALE.
  */
-export function heldItem(label: string, pulse: number): (ctx: CanvasRenderingContext2D) => void {
+export function heldItem(kind: PartKind, pulse: number): (ctx: CanvasRenderingContext2D) => void {
   return (ctx) => {
     ctx.scale(1 / CARRIED_SIZE, 1 / CARRIED_SIZE);
-    drawCarryable(ctx, { label, pulse, carried: true });
+    drawCarryable(ctx, { kind, pulse, carried: true });
   };
 }
 
 /** What `id` carries, for their hands; nothing for none. */
 function heldBy(frame: Frame, id: string): Pick<ScientistOpts, 'held'> {
-  const label = frame.carrying.get(id);
-  return label === undefined ? {} : { held: heldItem(label, frame.pulse) };
+  const kind = frame.carrying.get(id);
+  return kind === undefined ? {} : { held: heldItem(kind, frame.pulse) };
 }
 
 /** A crew member standing at `spot`, in a ring while they speak. */

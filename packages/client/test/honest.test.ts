@@ -42,6 +42,7 @@ describe('the end of an emergency', () => {
 
 /** The book of the Notlicht's rules at (2,3), the station armed at (11,7). */
 const book: Manual = {
+  seen: true,
   found: true,
   id: 'buch',
   kind: 'book',
@@ -63,7 +64,9 @@ function viewAt(solved: number, manualId: string | null): PlayerView {
       manuals: [book, { ...book, id: 'tafel', puzzleIds: ['notstrom'] }],
       stations: [
         {
+          seen: true,
           found: false,
+          known: false,
           puzzleId: 'notlicht',
           x: 11,
           y: 7,

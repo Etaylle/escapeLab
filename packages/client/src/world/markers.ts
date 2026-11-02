@@ -1,6 +1,7 @@
-import { canSee, type MapView } from '@escapelab/core';
+import { canSee, type KnownPart, type MapView } from '@escapelab/core';
 import { consoleName } from './consoles.js';
 import { carriedItem } from './interact.js';
+import { known } from './known.js';
 import { doorsShut } from './light.js';
 import { ALARM, css, DONE_GREEN, READ_BLUE, TEAL as TEAL_RGB } from './palette.js';
 import { overlaps, type Box, type Viewport } from './viewport.js';
@@ -38,31 +39,18 @@ const GREEN = css(DONE_GREEN);
  * until its cabinet has been come across, and so does the key: naming it
  * earlier would give the cabinet away.
  */
-export function toBring(map: MapView): MapView['items'] {
-  return map.items.filter((item) => !item.delivered && item.deliverTo !== null);
+export function toBring(map: MapView): KnownPart[] {
+  return map.items.filter(known).filter((item) => !item.delivered && item.deliverTo !== null);
 }
 
 type Spot = MapView['stations'][number];
 type Point = { x: number; y: number };
-type Item = MapView['items'][number];
 
 /** How far a player sees a part lying about for its arrow, in tiles: past the lamp's glow (3.2). */
 export const PART_SIGHT = 3.5;
 
-/**
- * How many stations after the one in front of the crew the station titled `title` comes — 0
- * for that one, 1 for the next — by the map's list, which keeps the mission's order. Null
- * where no station has that title.
- */
-export function stationsAhead(map: Pick<MapView, 'stations'>, title: string): number | null {
-  const order = [...new Set(map.stations.map((station) => station.puzzleId))];
-  const done = new Set(map.stations.filter((s) => s.status === 'done').map((s) => s.puzzleId));
-  const target = map.stations.find((station) => station.title === title);
-  return target === undefined ? null : order.indexOf(target.puzzleId) - done.size;
-}
-
 /** Whether a part lies in sight of a player standing at `self`: near enough, no wall between. */
-function inSight(map: MapView, self: Point, item: Item): boolean {
+function inSight(map: MapView, self: Point, item: Point): boolean {
   const near = Math.hypot(item.x - self.x, item.y - self.y) <= PART_SIGHT;
   return near && canSee(map, self, { x: item.x, y: item.y }, doorsShut(map));
 }
@@ -70,16 +58,15 @@ function inSight(map: MapView, self: Point, item: Item): boolean {
 /**
  * What the crew has to bring that matters now, one goal at a time: a part for the station in
  * front of the crew or the one after it, a part in somebody's hands, a key, and any part
- * lying in sight of the player at `self`. A part for a station further on waits — until then
- * the goal is the station.
+ * lying in sight of the player at `self`. A part for a station further on (core view.ts
+ * `requiredFor`) waits — until then the goal is the station.
  */
-export function dueParts(map: MapView, self: Point): MapView['items'] {
+export function dueParts(map: MapView, self: Point): KnownPart[] {
   return toBring(map).filter((item) => {
-    if (item.carriedBy !== null || item.requiredForTitle === null) {
+    if (item.carriedBy !== null || item.requiredFor === null) {
       return true;
     }
-    const ahead = stationsAhead(map, item.requiredForTitle);
-    return ahead === null || ahead <= 1 || inSight(map, self, item);
+    return item.requiredFor.ahead <= 1 || inSight(map, self, item);
   });
 }
 

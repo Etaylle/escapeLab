@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Find } from '@escapelab/core';
+import type { Find, MapNote, MapPart, MapSource } from '@escapelab/core';
 import {
   drawDoor,
   drawEmergencyLamp,
@@ -42,6 +42,7 @@ const plate = (parts: Partial<Plate>): Plate => ({
 });
 
 const manual = (parts: Partial<Manual>): Manual => ({
+  seen: true,
   found: true,
   known: true,
   id: 'm',
@@ -56,15 +57,18 @@ const manual = (parts: Partial<Manual>): Manual => ({
 });
 
 const item = (parts: Partial<Item>): Item => ({
+  seen: true,
   found: true,
+  known: true,
   id: 'fuse',
+  kind: 'fuse',
   label: 'SICHERUNG',
   x: 2.5,
   y: 3.5,
   carriedBy: null,
   delivered: false,
   deliverTo: null,
-  requiredForTitle: null,
+  requiredFor: null,
   ...parts,
 });
 
@@ -123,7 +127,9 @@ describe('objects — the lab’s things, in tile space', () => {
         title: 'Notlicht',
         status: 'armed',
         look: 'lever',
+        seen: true,
         found: false,
+        known: false,
       },
       {
         puzzleId: 'kasten',
@@ -132,10 +138,30 @@ describe('objects — the lab’s things, in tile space', () => {
         title: 'Kasten',
         status: 'armed',
         console: 'b',
+        seen: true,
         found: false,
+        known: false,
       },
-      { puzzleId: 'kasten', x: 6, y: 4, title: 'Kasten', status: 'done', found: false },
-      { puzzleId: 'tasten', x: 8, y: 3, title: 'Tasten', status: 'locked', found: false },
+      {
+        puzzleId: 'kasten',
+        x: 6,
+        y: 4,
+        title: 'Kasten',
+        status: 'done',
+        seen: true,
+        found: false,
+        known: false,
+      },
+      {
+        puzzleId: 'tasten',
+        x: 8,
+        y: 3,
+        title: 'Tasten',
+        status: 'locked',
+        seen: true,
+        found: false,
+        known: false,
+      },
     ];
     const players = [
       player('p1', 'Anna', '#fff'),
@@ -160,7 +186,7 @@ describe('objects — the lab’s things, in tile space', () => {
 
   it('lights up a manual object while it prints the armed station’s rules', () => {
     const kasten = { puzzleId: 'kasten', x: 7, y: 1, title: 'Kasten' };
-    const armed = { ...kasten, status: 'armed' as const, found: false };
+    const armed = { ...kasten, status: 'armed' as const, seen: true, found: false, known: false };
     const rules = manual({ id: 'rules', puzzleIds: ['kasten'] });
     const other = manual({ id: 'other', kind: 'locker', x: 8, y: 4, opened: false });
     const map = lab({ stations: [armed], manuals: [rules, other] });
@@ -182,7 +208,7 @@ describe('objects — the lab’s things, in tile space', () => {
     const holding = plate({ id: 'flur', x: 6, y: 4 });
     const board = manual({ id: 'klemmbrett', kind: 'clipboard', x: 8, y: 4, label: 'KLEMMBRETT' });
     const kette = { puzzleId: 'kette', x: 1, y: 1, title: 'Kette' };
-    const armed = { ...kette, status: 'armed' as const, found: false };
+    const armed = { ...kette, status: 'armed' as const, seen: true, found: false, known: false };
 
     /** Where each label was drawn, its top under its thing, tiles: from the text's y. */
     function labelTops(log: ReturnType<typeof drawn>): Map<string, number> {
@@ -236,10 +262,10 @@ describe('objects — the lab’s things, in tile space', () => {
 
   it('pins a found note to its wall’s face, or lays it on the floor, unread ones calling', () => {
     // (2,0) is wall over the floor at (2,1); (7,2) is floor; (5,5) wall with no floor beside.
-    const notes = [
-      { index: 0, x: 2, y: 0, read: false, found: true, known: true },
-      { index: 1, x: 7, y: 2, read: true, found: true, known: true },
-      { index: 2, x: 5, y: 5, read: false, found: true, known: true },
+    const notes: MapNote[] = [
+      { index: 0, x: 2, y: 0, read: false, seen: true, found: true, known: true },
+      { index: 1, x: 7, y: 2, read: true, seen: true, found: true, known: true },
+      { index: 2, x: 5, y: 5, read: false, seen: true, found: true, known: true },
     ];
     const frame = frameWith({ map: lab({ notes }), light: lightWith({ shown: () => false }) });
     const log = drawn(frame);
@@ -259,9 +285,9 @@ describe('objects — the lab’s things, in tile space', () => {
   });
 
   it('lets a found note glow in the dark, on its wall’s face, fainter once read', () => {
-    const notes = [
-      { index: 0, x: 2, y: 0, read: false, found: true, known: true },
-      { index: 1, x: 7, y: 2, read: true, found: true, known: true },
+    const notes: MapNote[] = [
+      { index: 0, x: 2, y: 0, read: false, seen: true, found: true, known: true },
+      { index: 1, x: 7, y: 2, read: true, seen: true, found: true, known: true },
     ];
     const glows = objectGlows(frameWith({ map: lab({ notes }) }));
     expect(glows).toEqual(
@@ -273,16 +299,18 @@ describe('objects — the lab’s things, in tile space', () => {
   });
 
   it('lets nothing nobody has come across glow in the dark: no note, no source', () => {
-    const notes = [{ index: 1, x: 7, y: 2, read: false, found: false, known: false }];
-    const tafel = manual({ id: 'tafel', kind: 'chart', x: 3, y: 4, found: false, known: false });
-    const glows = objectGlows(frameWith({ map: lab({ notes, manuals: [tafel] }) }));
+    const glimpse = { seen: true, found: false, known: false } as const;
+    const notes: MapNote[] = [{ index: 1, x: 7, y: 2, ...glimpse }];
+    const glimpsed: MapSource = { id: 'tafel', kind: 'chart', x: 3, y: 4, ...glimpse };
+    const glows = objectGlows(frameWith({ map: lab({ notes, manuals: [glimpsed] }) }));
     expect(glows.filter((glow) => glow.radius === 0.9 || glow.radius === 1.3)).toEqual([]);
-    const known = objectGlows(frameWith({ map: lab({ manuals: [{ ...tafel, known: true }] }) }));
+    const tafel = manual({ id: 'tafel', kind: 'chart', x: 3, y: 4, found: false });
+    const known = objectGlows(frameWith({ map: lab({ manuals: [tafel] }) }));
     expect(known).toContainEqual({ x: 3.5, y: 4.5, radius: 1.3, strength: 0.5 });
     // A part lies unfound in the light: drawn as it is, no beacon round it until found.
-    const fuse = item({ found: false });
-    expect(objectGlows(frameWith({ map: lab({ items: [fuse] }) }))).toEqual([]);
-    expect(objectGlows(frameWith({ map: lab({ items: [{ ...fuse, found: true }] }) }))).toEqual([
+    const part: MapPart = { id: 'fuse', kind: 'fuse', x: 2.5, y: 3.5, ...glimpse };
+    expect(objectGlows(frameWith({ map: lab({ items: [part] }) }))).toEqual([]);
+    expect(objectGlows(frameWith({ map: lab({ items: [item({ found: true })] }) }))).toEqual([
       { x: 2.5, y: 3.5, radius: 1.6, strength: 0.7 },
     ]);
   });
@@ -309,8 +337,10 @@ describe('objects — the lab’s things, in tile space', () => {
 
   it('draws loose items and drop-offs where light fell — none for a cabinet’s key', () => {
     const fuse = item({ deliverTo: { x: 3, y: 4 } });
-    const key = item({ id: 'key', label: 'SCHLÜSSEL', x: 1.5, y: 1.5, deliverTo: { x: 4, y: 1 } });
-    const carried = item({ id: 'crate', label: 'KISTE', x: 3.5, y: 2.5, carriedBy: 'p2' });
+    const keyAt = { x: 1.5, y: 1.5, deliverTo: { x: 4, y: 1 } };
+    const key = item({ id: 'key', kind: 'key', label: 'SCHLÜSSEL', ...keyAt });
+    const crate = { id: 'crate', kind: 'crate' as const, label: 'KISTE' };
+    const carried = item({ ...crate, x: 3.5, y: 2.5, carriedBy: 'p2' });
     const dark = item({ id: 'far', x: 7.5, y: 3.5, deliverTo: { x: 8, y: 1 } });
     const cabinet = manual({ id: 'cab', kind: 'cabinet', x: 4, y: 1, needsKey: 'key' });
     const map = lab({ items: [fuse, key, carried, dark], manuals: [cabinet] });
@@ -319,10 +349,14 @@ describe('objects — the lab’s things, in tile space', () => {
     const { pulse, text } = frame;
     expect(strip(drawnAt(log, 3.5, 4.5))).toEqual(recording((c) => drawDropZone(c, false, pulse)));
     expect(strip(drawnAt(log, 2.5, 3.5))).toEqual(
-      recording((c) => drawCarryable(c, { label: 'SICHERUNG', pulse, carried: false, text })),
+      recording((c) =>
+        drawCarryable(c, { kind: 'fuse', label: 'SICHERUNG', pulse, carried: false, text }),
+      ),
     );
     expect(strip(drawnAt(log, 1.5, 1.5))).toEqual(
-      recording((c) => drawCarryable(c, { label: 'SCHLÜSSEL', pulse, carried: false, text })),
+      recording((c) =>
+        drawCarryable(c, { kind: 'key', label: 'SCHLÜSSEL', pulse, carried: false, text }),
+      ),
     );
     expect(drawnAt(log, 3.5, 2.5)).toEqual([]);
     expect(drawnAt(log, 7.5, 3.5)).toEqual([]);
@@ -336,7 +370,9 @@ describe('objects — the lab’s things, in tile space', () => {
     type Station = Parameters<typeof lab>[0]['stations'];
     const stations: Station = [
       {
+        seen: true,
         found: false,
+        known: false,
         puzzleId: 'kasten',
         x: 2,
         y: 1,
@@ -385,43 +421,60 @@ describe('objects — the lab’s things, in tile space', () => {
 });
 
 describe('objects — names wait for discovery', () => {
-  /** The Kasten up, and a chart printing its rules that nobody has come across. */
-  const armed = { puzzleId: 'kasten', x: 7, y: 1, title: 'Kasten', status: 'armed' as const };
-  const tafel = manual({
-    id: 'tafel',
-    kind: 'chart',
-    label: 'TAFEL',
-    puzzleIds: ['kasten'],
-    found: false,
-    known: false,
-  });
+  /** The Kasten up, and a chart printing its rules. */
+  const armed = {
+    puzzleId: 'kasten',
+    x: 7,
+    y: 1,
+    title: 'Kasten',
+    status: 'armed' as const,
+    seen: true,
+    found: true,
+    known: true,
+  };
+  /** The chart as the crew knows it: whole, with its name and the rules it prints. */
+  const tafel = manual({ id: 'tafel', kind: 'chart', label: 'TAFEL', puzzleIds: ['kasten'] });
+  /** The chart in sight, nobody having found it: what it is and where, no more. */
+  const glimpse = { seen: true, found: false, known: false } as const;
+  const glimpsed: MapSource = { id: 'tafel', kind: 'chart', x: tafel.x, y: tafel.y, ...glimpse };
 
   it('draws a source nobody has found where light fell, as what it is: no name, no glow', () => {
-    const map = lab({ stations: [{ ...armed, found: true }], manuals: [tafel] });
+    const map = lab({ stations: [armed], manuals: [glimpsed] });
     const frame = frameWith({ map, light: leftOnly, labels: () => 0 });
     const here = drawnAt(drawn(frame), 3.5, 1.5);
     const { pulse, text } = frame;
-    const chart = { kind: 'chart' as const, label: 'TAFEL' };
-    // It prints the armed station's rules, yet stays unlit: nothing calls before it is found.
-    const look = { ...chart, active: false, opened: true, pulse, text };
+    // What it prints is not on the map: unlit and shut, nothing about it calls for attention.
+    const look = { kind: 'chart' as const, active: false, opened: false, pulse, text };
     const plain = { ...look, tube: tubeAt(frame, 3, 1), found: 0 };
     expect(strip(here)).toEqual(recording((c) => drawManualObject(c, plain)));
     expect(callsOf(here, 'fillText')).toEqual([]);
-    const found = drawnAt(drawn(frameWith({ map, light: leftOnly, labels: () => 1 })), 3.5, 1.5);
-    const lit = { ...plain, active: true, found: 1 };
-    expect(strip(found)).toEqual(recording((c) => drawManualObject(c, lit)));
+    // Found, it is whole: named, and lit for the armed station whose rules it prints.
+    const whole = lab({ stations: [armed], manuals: [tafel] });
+    const lights = frameWith({ map: whole, light: leftOnly, labels: () => 1 });
+    const lit = { ...plain, label: 'TAFEL', active: true, opened: true, found: 1 };
+    expect(strip(drawnAt(drawn(lights), 3.5, 1.5))).toEqual(
+      recording((c) => drawManualObject(c, lit)),
+    );
     // In the dark and unknown to the crew it is not drawn at all; known, it is — unnamed.
     const dark = lightWith({ shown: () => false });
     expect(drawnAt(drawn(frameWith({ map, light: dark, labels: () => 0 })), 3.5, 1.5)).toEqual([]);
-    const known = lab({ manuals: [{ ...tafel, known: true }] });
+    const known = lab({ manuals: [{ ...tafel, found: false }] });
     const lookedAt = frameWith({ map: known, light: dark, labels: () => 0 });
     const unnamed = drawnAt(drawn(lookedAt), 3.5, 1.5);
     expect(unnamed).not.toEqual([]);
     expect(callsOf(unnamed, 'fillText')).toEqual([]);
   });
 
+  it('draws a part nobody has found as what it is: no name to show, whatever the fade', () => {
+    const part: MapPart = { id: 'fuse', kind: 'fuse', x: 2.5, y: 3.5, ...glimpse };
+    const log = drawn(frameWith({ map: lab({ items: [part] }), labels: () => 1 }));
+    const here = drawnAt(log, 2.5, 3.5);
+    expect(here).not.toEqual([]);
+    expect(callsOf(here, 'fillText')).toEqual([]);
+  });
+
   it('brings a name up as far as its fade has come', () => {
-    const map = lab({ manuals: [{ ...tafel, found: true, known: true }] });
+    const map = lab({ manuals: [tafel] });
     const texts = (found: number) =>
       callEntries(drawnAt(drawn(frameWith({ map, labels: () => found })), 3.5, 1.5), 'fillText');
     expect(texts(0.5).map((call) => [call.args[0], call.alpha])).toEqual([['TAFEL', 0.5]]);
@@ -431,7 +484,7 @@ describe('objects — names wait for discovery', () => {
 
   it('names a part and the sign only once found; a note unfound calls for nobody', () => {
     const fuse = item({});
-    const notes = [{ index: 0, x: 7, y: 2, read: false, found: false, known: false }];
+    const notes: MapNote[] = [{ index: 0, x: 7, y: 2, ...glimpse }];
     const map = lab({ items: [fuse], notes, edgeworkSign: { x: 1, y: 4, found: false } });
     const log = drawn(frameWith({ map, labels: () => 0 }));
     expect(callsOf(drawnAt(log, 2.5, 3.5), 'fillText')).toEqual([]);

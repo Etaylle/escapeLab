@@ -6,6 +6,7 @@ import {
   type PlayerPresence,
 } from '@escapelab/core';
 import { consoleName } from '../world/consoles.js';
+import { carriedItem } from '../world/interact.js';
 
 /** How many play a mission: „2 Spieler", or „2–3 Spieler" where the count may vary. */
 export function crewSizeText({ min, max }: { min: number; max: number }): string {
@@ -98,7 +99,7 @@ export function crewTags(
   if (held !== null) {
     tags.push({ text: held, tone: 'hold' });
   }
-  const carried = map?.items.find((item) => item.carriedBy === player.id && !item.delivered);
+  const carried = map === null ? undefined : carriedItem(map, player.id);
   if (carried !== undefined) {
     tags.push({ text: `trägt ${carried.label}`, tone: 'carry' });
   }

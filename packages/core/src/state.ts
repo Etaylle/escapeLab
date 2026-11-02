@@ -52,6 +52,12 @@ export interface Presence {
   signSeen: string[];
   /** players standing on the open exit hatch right now; nobody before the escape */
   exit: string[];
+  /**
+   * what each player has in sight right now, by player id: the keys of the sources, notes,
+   * loose parts and consoles a straight line reaches from where they stand (discovery.ts
+   * `inSight`), sorted. A view carries one nobody has found only while it is in sight
+   */
+  sight: Record<string, FindKey[]>;
 }
 
 export const NOBODY_PRESENT: Presence = {
@@ -60,6 +66,7 @@ export const NOBODY_PRESENT: Presence = {
   notes: {},
   signSeen: [],
   exit: [],
+  sight: {},
 };
 
 export interface ItemState {

@@ -11,7 +11,14 @@ import {
   type Find,
 } from './discovery.js';
 import type { Edgework } from './edgework.js';
-import type { DecorKind, ManualDef, ManualKind, RoomKind } from './mission.js';
+import type {
+  DecorKind,
+  ManualDef,
+  ManualKind,
+  MapDef,
+  Mission,
+  RoomKind,
+} from './mission.js';
 import { noteKey } from './notes.js';
 import { CREW_COLORS, type Credits, type GameState, type Phase, type RunEvent } from './state.js';
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
@@ -215,6 +222,37 @@ export interface NoteHere {
 }
 
 /**
+ * What a view says of a thing as far as its player is concerned (discovery.ts); the audience
+ * has everything in sight, found and known.
+ */
+export interface Sighting {
+  /** in this player's sight right now: a straight line reaches it, nothing in between */
+  seen: boolean;
+  /** this player has found it */
+  found: boolean;
+  /** somebody of the crew has found it: what the game shares of it */
+  known: boolean;
+}
+
+/** A thing nobody has found, in this player's sight: the view tells what it is and where. */
+export interface Glimpse {
+  seen: true;
+  found: false;
+  known: false;
+}
+
+/** A part's look: a fuse cartridge, a key, or a crate for anything else. */
+export type PartKind = 'fuse' | 'key' | 'crate';
+
+/** A part's look, told from its label: a „Sicherung" is a fuse, a „Schlüssel" a key. */
+export function partKind(label: string): PartKind {
+  if (/sicherung/i.test(label)) {
+    return 'fuse';
+  }
+  return /schl(?:ü|ue)ssel/i.test(label) ? 'key' : 'crate';
+}
+
+/**
  * Static world + authoritative door/plate/station state. Live avatar
  * positions travel separately (client-authoritative, streamed as
  * `positions` messages) and are not part of this view.
@@ -235,8 +273,12 @@ export interface MapView {
     /** holding it freezes a drone: a camera plate */
     freezesDrone: boolean;
   }[];
-  /** one entry per spot: a station with two consoles has two, the same puzzle at both */
-  stations: {
+  /**
+   * one entry per spot — a station with two consoles has two, the same puzzle at both — of the
+   * armed station, the objective every view shares, and of the others only as far as the crew
+   * has found them or this player has them in sight
+   */
+  stations: ({
     puzzleId: string;
     x: number;
     y: number;
@@ -249,40 +291,38 @@ export interface MapView {
      * a wrong cut shorts it out, the world's sparks fly; left out for a console
      */
     look?: 'lever' | 'fusebox';
-    /**
-     * this player has found it (discovery.ts: only ever while its station is armed); the
-     * audience has found everything
-     */
-    found: boolean;
-  }[];
+  } & Sighting)[];
   /**
-   * every manual object of the run, where this run placed it, and the
-   * puzzles whose printed rules lie there: drawn where light has fallen,
-   * named once this player has found it (`found`); the minimap and the
-   * arrows show only what the crew has come across (`known`)
+   * the manual objects of the run this player can make out: whole where the crew has come
+   * across them (`known`) — where this run placed them, the puzzles whose printed rules lie
+   * there —, and of one nobody has found, only what it is and where, while it is in sight
+   * (`seen`). Named once this player has found it (`found`); the minimap and the arrows show
+   * only what the crew knows of
    */
-  manuals: {
-    id: string;
-    kind: ManualKind;
-    x: number;
-    y: number;
-    label: string;
-    puzzleIds: string[];
-    /** readable: always, for a locker or cabinet once opened */
-    opened: boolean;
-    /** a cabinet's key, by item id; null for everything else */
-    needsKey: string | null;
-    /** this player has found it (discovery.ts); the audience has found everything */
-    found: boolean;
-    /** somebody of the crew has found it: what the game shares of it */
-    known: boolean;
-  }[];
+  manuals: (
+    | ({
+        id: string;
+        kind: ManualKind;
+        x: number;
+        y: number;
+        label: string;
+        puzzleIds: string[];
+        /** readable: always, for a locker or cabinet once opened */
+        opened: boolean;
+        /** a cabinet's key, by item id; null for everything else */
+        needsKey: string | null;
+      } & Sighting & { known: true })
+    | ({ id: string; kind: ManualKind; x: number; y: number } & Glimpse)
+  )[];
   /**
-   * every note of the last shift, where it lies — on a wall or the floor —
-   * whether somebody has read it, whether this player has found it and
-   * whether the crew has; never what it says
+   * the notes of the last shift this player can make out, where each lies — on a wall or the
+   * floor: whether somebody has read it, where the crew has come across it, and of one nobody
+   * has found, only where it is, while it is in sight; never what it says
    */
-  notes: { index: number; x: number; y: number; read: boolean; found: boolean; known: boolean }[];
+  notes: (
+    | ({ index: number; x: number; y: number; read: boolean } & Sighting & { known: true })
+    | ({ index: number; x: number; y: number } & Glimpse)
+  )[];
   /** the wall sign with the Laborkennung, and whether this player has found it; null for none */
   edgeworkSign: { x: number; y: number; found: boolean } | null;
   /**
@@ -309,21 +349,30 @@ export interface MapView {
     /** who stands on the open hatch right now, by player id; the run is won once it is everybody */
     atExit: string[];
   } | null;
-  /** carryable objects and where they have to go */
-  items: {
-    id: string;
-    label: string;
-    x: number;
-    y: number;
-    carriedBy: string | null;
-    delivered: boolean;
-    /** this player has found it lying about (discovery.ts); the audience has found everything */
-    found: boolean;
-    /** a key's is the cabinet it unlocks, once that has been come across; null until then */
-    deliverTo: { x: number; y: number } | null;
-    /** title of the station waiting for it, if any */
-    requiredForTitle: string | null;
-  }[];
+  /**
+   * the parts this player can make out and where they have to go: whole once somebody has
+   * found one or taken it up (`known`), and of a part lying where nobody has found it, only what
+   * it is and where, while it is in sight (`seen`)
+   */
+  items: (
+    | ({
+        id: string;
+        kind: PartKind;
+        label: string;
+        x: number;
+        y: number;
+        carriedBy: string | null;
+        delivered: boolean;
+        /** a key's is the cabinet it unlocks, once that has been come across; null until then */
+        deliverTo: { x: number; y: number } | null;
+        /**
+         * the station waiting for it, if any: its title, and how many stations after the one in
+         * front of the crew it comes — 0 for that one, whether or not the map shows it yet
+         */
+        requiredFor: { title: string; ahead: number } | null;
+      } & Sighting & { known: true })
+    | ({ id: string; kind: PartKind; x: number; y: number } & Glimpse)
+  )[];
   /** emergency panels; `active` only while an emergency is running */
   sabotage: {
     label: string;
@@ -334,6 +383,17 @@ export interface MapView {
     relay?: RelayView & { manual: ManualSection[] };
   } | null;
 }
+
+/** A manual object on a map: known to the crew and whole, or glimpsed. */
+export type MapSource = MapView['manuals'][number];
+/** A manual object the crew knows of: where it lies, what it covers, how it opens. */
+export type KnownSource = Extract<MapSource, { known: true }>;
+/** A note of the last shift on a map: known to the crew, or glimpsed. */
+export type MapNote = MapView['notes'][number];
+/** A part on a map: known to the crew and whole, or glimpsed lying about. */
+export type MapPart = MapView['items'][number];
+/** A part somebody of the crew has found or taken up: who carries it, where it goes. */
+export type KnownPart = Extract<MapPart, { known: true }>;
 
 export interface Grade {
   /** S, A, B or C — only awarded for a mission that was actually finished */
@@ -587,7 +647,7 @@ function relayPartFor(
   return relay === null ? {} : { relay: { ...relay.view, manual: relayModule.manual(relay.def) } };
 }
 
-/** Who a map view is for: a player, or the audience (null), which sees every manual object. */
+/** Who a map view is for: a player, or the audience (null), which has everything in sight. */
 type MapViewer = string | null;
 
 /** A station's state on the map: solved, up now — once the lights are out — or still to come. */
@@ -598,77 +658,99 @@ function stationStatus(state: GameState, index: number): MapView['stations'][num
   return index === state.currentPuzzleIndex && lightsAreOut(state) ? 'armed' : 'locked';
 }
 
+/** A station spot's look: a main switch, a fuse box, or a plain console (null). */
+function stationLook(
+  def: Mission['puzzles'][number] | undefined,
+  spot: MapDef['stations'][number],
+): 'lever' | 'fusebox' | null {
+  if (def?.type === 'button-sync' && def.style === 'lever') {
+    return 'lever';
+  }
+  // The fuse box is where the wires are cut: console a, the meter stands at b.
+  return def?.type === 'circuit' && spot.console !== 'b' ? 'fusebox' : null;
+}
+
+/**
+ * Every station spot this viewer can make out: the armed station's, the objective every view
+ * shares, and the others where the crew has found them or the viewer has them in sight.
+ */
 function stationsOnMap(state: GameState, viewer: MapViewer): MapView['stations'] {
-  const finds = findsFor(state, viewer);
-  return state.mission.map.stations.map((s) => {
+  const sighting = sightingFor(state, viewer);
+  return state.mission.map.stations.flatMap((s) => {
     const index = state.mission.puzzles.findIndex((p) => p.id === s.puzzleId);
     const def = state.mission.puzzles[index];
-    const lever = def?.type === 'button-sync' && def.style === 'lever';
-    // The fuse box is where the wires are cut: console a, the meter stands at b.
-    const fusebox = def?.type === 'circuit' && s.console !== 'b';
-    const look = lever ? 'lever' : fusebox ? 'fusebox' : null;
-    return {
-      puzzleId: s.puzzleId,
-      x: s.x,
-      y: s.y,
-      title: def?.title ?? s.puzzleId,
-      status: stationStatus(state, index),
-      ...(s.console === undefined ? {} : { console: s.console }),
-      ...(look === null ? {} : { look }),
-      found: finds(consoleFind(s)).found,
-    };
+    const status = stationStatus(state, index);
+    const sighted = sighting(consoleFind(s));
+    if (status !== 'armed' && !sighted.seen && !sighted.known) {
+      return [];
+    }
+    const look = stationLook(def, s);
+    return [
+      {
+        puzzleId: s.puzzleId,
+        x: s.x,
+        y: s.y,
+        title: def?.title ?? s.puzzleId,
+        status,
+        ...(s.console === undefined ? {} : { console: s.console }),
+        ...(look === null ? {} : { look }),
+        ...sighted,
+      },
+    ];
   });
 }
 
 /**
- * What a map view tells of a thing: whether its viewer has found it, and
- * whether somebody of the crew has. The audience has found everything.
+ * What a map view says of a thing as far as its viewer is concerned: in their sight right
+ * now, found by them, known to the crew. The audience has it all.
  */
-function findsFor(
-  state: GameState,
-  viewer: MapViewer,
-): (find: Find) => { found: boolean; known: boolean } {
+function sightingFor(state: GameState, viewer: MapViewer): (find: Find) => Sighting {
   const mine = new Set(viewer === null ? [] : (state.found[viewer] ?? []));
+  const sight = new Set(viewer === null ? [] : (state.presence.sight[viewer] ?? []));
   return (find) => {
+    if (viewer === null) {
+      return { seen: true, found: true, known: true };
+    }
     const key = findKey(find);
-    return viewer === null
-      ? { found: true, known: true }
-      : { found: mine.has(key), known: crewFound(state, key) };
+    return { seen: sight.has(key), found: mine.has(key), known: crewFound(state, key) };
   };
 }
 
+/**
+ * The manual objects this viewer can make out: whole where the crew knows of them, and of one
+ * nobody has found only what it is and where, while it is in sight.
+ */
 function manualsOnMap(state: GameState, viewer: MapViewer): MapView['manuals'] {
-  const finds = findsFor(state, viewer);
-  return state.mission.map.manuals.flatMap((m) => {
+  const sighting = sightingFor(state, viewer);
+  return state.mission.map.manuals.flatMap((m): MapView['manuals'] => {
     const place = state.places[m.id];
-    return place === undefined
-      ? []
-      : [
-          {
-            id: m.id,
-            kind: m.kind,
-            x: place.x,
-            y: place.y,
-            label: m.label,
-            puzzleIds: [...m.puzzleIds],
-            opened: sourceOpen(state, m),
-            needsKey: m.needsKey ?? null,
-            ...finds({ of: 'source', id: m.id }),
-          },
-        ];
+    if (place === undefined) {
+      return [];
+    }
+    const where = { id: m.id, kind: m.kind, x: place.x, y: place.y };
+    const { seen, found, known } = sighting({ of: 'source', id: m.id });
+    if (known) {
+      const rules = { label: m.label, puzzleIds: [...m.puzzleIds], needsKey: m.needsKey ?? null };
+      return [{ ...where, ...rules, opened: sourceOpen(state, m), seen, found, known }];
+    }
+    return seen ? [{ ...where, seen, found: false, known }] : [];
   });
 }
 
-/** Every note: where, whether read, and whether this viewer and the crew have found it. */
+/**
+ * The notes this viewer can make out: where, and whether read, where the crew knows of them;
+ * of one nobody has found only where it is, while it is in sight.
+ */
 function notesOnMap(state: GameState, viewer: MapViewer): MapView['notes'] {
-  const finds = findsFor(state, viewer);
-  return state.mission.map.notes.map((note, index) => ({
-    index,
-    x: note.x,
-    y: note.y,
-    read: state.notesRead.includes(index),
-    ...finds({ of: 'note', index }),
-  }));
+  const sighting = sightingFor(state, viewer);
+  return state.mission.map.notes.flatMap((note, index): MapView['notes'] => {
+    const where = { index, x: note.x, y: note.y };
+    const { seen, found, known } = sighting({ of: 'note', index });
+    if (known) {
+      return [{ ...where, read: state.notesRead.includes(index), seen, found, known }];
+    }
+    return seen ? [{ ...where, seen, found: false, known }] : [];
+  });
 }
 
 /** This viewer's finds that matter, oldest first; none for the audience. */
@@ -680,27 +762,51 @@ function discoveriesFor(state: GameState, viewer: MapViewer): Discovery[] {
   });
 }
 
+/**
+ * What there is to tell of a part known to this viewer: its label, who carries it, whether it
+ * is in its place, and where it has to go — a key's cabinet once the cabinet is known.
+ */
+function partWhereabouts(
+  state: GameState,
+  def: MapDef['items'][number],
+  sighting: (find: Find) => Sighting,
+) {
+  const live = state.items[def.id];
+  const lock = state.mission.map.manuals.find((m) => m.needsKey === def.id);
+  const known = lock !== undefined && sighting({ of: 'source', id: lock.id }).known;
+  const goal = def.deliverTo ?? (known ? state.places[lock.id] : undefined);
+  const index = state.mission.puzzles.findIndex((p) => p.id === def.requiredFor);
+  const station = state.mission.puzzles[index];
+  return {
+    label: def.label,
+    carriedBy: live?.carriedBy ?? null,
+    delivered: live?.delivered ?? false,
+    deliverTo: goal === undefined ? null : { x: goal.x, y: goal.y },
+    requiredFor:
+      station === undefined
+        ? null
+        : { title: station.title, ahead: index - state.currentPuzzleIndex },
+  };
+}
+
+/**
+ * The parts this viewer can make out: whole once somebody has found one, taken it up or put it
+ * in its place; of a part nobody has found, lying about, only what it is and where, while it is
+ * in sight.
+ */
 function itemsOnMap(state: GameState, viewer: MapViewer): MapView['items'] {
-  const map = state.mission.map;
-  const finds = findsFor(state, viewer);
-  return map.items.map((def) => {
+  const sighting = sightingFor(state, viewer);
+  return state.mission.map.items.flatMap((def): MapView['items'] => {
     const live = state.items[def.id];
-    const lock = map.manuals.find((m) => m.needsKey === def.id);
-    const known = lock !== undefined && finds({ of: 'source', id: lock.id }).known;
-    const lockAt = known ? state.places[lock.id] : undefined;
-    const goal = def.deliverTo ?? lockAt;
-    return {
-      id: def.id,
-      label: def.label,
-      x: live?.x ?? def.x + 0.5,
-      y: live?.y ?? def.y + 0.5,
-      carriedBy: live?.carriedBy ?? null,
-      delivered: live?.delivered ?? false,
-      found: finds({ of: 'item', id: def.id }).found,
-      deliverTo: goal === undefined ? null : { x: goal.x, y: goal.y },
-      requiredForTitle:
-        state.mission.puzzles.find((p) => p.id === def.requiredFor)?.title ?? null,
-    };
+    const x = live?.x ?? def.x + 0.5;
+    const where = { id: def.id, kind: partKind(def.label), x, y: live?.y ?? def.y + 0.5 };
+    const { seen, found, known } = sighting({ of: 'item', id: def.id });
+    const taken = live !== undefined && (live.carriedBy !== null || live.delivered);
+    if (known || taken) {
+      const whereabouts = partWhereabouts(state, def, sighting);
+      return [{ ...where, ...whereabouts, seen, found, known: true }];
+    }
+    return seen ? [{ ...where, seen, found: false, known }] : [];
   });
 }
 
@@ -758,7 +864,7 @@ function mapViewFor(state: GameState, viewer: MapViewer): MapView | null {
     edgeworkSign:
       map.edgeworkSign === undefined
         ? null
-        : { ...map.edgeworkSign, found: findsFor(state, viewer)({ of: 'sign' }).found },
+        : { ...map.edgeworkSign, found: sightingFor(state, viewer)({ of: 'sign' }).found },
     discoveries: discoveriesFor(state, viewer),
     lamps: map.lamps.map((lamp) => ({ x: lamp.x, y: lamp.y })),
     labels: map.labels.map((l) => ({

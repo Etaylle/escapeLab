@@ -78,9 +78,10 @@ describe('mapped missions', () => {
     const drawn = ['p1', 'p2'].map((id) => viewFor(state, id).map?.yourSpawn);
     expect(drawn).toEqual(expect.arrayContaining(fixture.map.spawns));
     expect(drawn).toHaveLength(2);
+    // The armed station on every map; the one still to come only where somebody has seen it.
+    const unseen = { seen: false, found: false, known: false };
     expect(anna.map?.stations).toEqual([
-      { puzzleId: 'first', x: 1, y: 4, title: 'Erstes', status: 'armed', found: false },
-      { puzzleId: 'second', x: 3, y: 4, title: 'Zweites', status: 'locked', found: false },
+      { puzzleId: 'first', x: 1, y: 4, title: 'Erstes', status: 'armed', ...unseen },
     ]);
     expect(anna.map?.manuals).toEqual([]);
     expect(anna.map?.edgeworkSign).toBeNull();
@@ -121,7 +122,8 @@ describe('mapped missions', () => {
     state = bothPress(state, T0 + 2000);
     expect(state.currentPuzzleIndex).toBe(1);
     expect(state.puzzleState).toBeNull();
-    expect(viewFor(state, 'p2').map?.stations[1]?.status).toBe('armed');
+    const second = viewFor(state, 'p2').map?.stations.find((s) => s.puzzleId === 'second');
+    expect(second?.status).toBe('armed');
 
     state = applyAction(state, { type: 'interact', playerId: 'p1', at: T0 + 3000 });
     state = bothPress(state, T0 + 4000);

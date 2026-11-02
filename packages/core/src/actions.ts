@@ -79,8 +79,9 @@ export type Action =
   /**
    * who stands at which station spot (by `stationKey`), manual object and
    * note (by `noteKey`), who has seen the sign (stays seen), what each
-   * player has just found at `at` (discovery.ts; stays found) and who stands
-   * on the exit hatch
+   * player has just found at `at` (discovery.ts; stays found), what each has
+   * in sight right now (discovery.ts `inSight`) and who stands on the exit
+   * hatch
    */
   | {
       type: 'set-presence';
@@ -89,6 +90,7 @@ export type Action =
       notes: Record<string, string[]>;
       signSeen: string[];
       found: Record<string, FindKey[]>;
+      sight: Record<string, FindKey[]>;
       exit: string[];
       at: number;
     }
@@ -459,6 +461,7 @@ function setPresence(
       notes: tidy(action.notes),
       signSeen: [...new Set([...state.presence.signSeen, ...action.signSeen])].sort(),
       exit: inEscapePhase(state) ? [...new Set(action.exit)].sort() : [],
+      sight: tidy(action.sight),
     },
     found,
     discoveries: discover(state, fresh, action.at),

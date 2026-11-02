@@ -29,7 +29,16 @@ describe('drawFrame — the passes in their order', () => {
       height: 6,
       tiles: TILES,
       stations: [
-        { puzzleId: 'kasten', x: 7, y: 1, title: 'Kasten', status: 'armed', found: false },
+        {
+          puzzleId: 'kasten',
+          x: 7,
+          y: 1,
+          title: 'Kasten',
+          status: 'armed',
+          seen: true,
+          found: false,
+          known: false,
+        },
       ],
     });
     const frame = frameWith({

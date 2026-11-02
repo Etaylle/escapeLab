@@ -1,3 +1,4 @@
+import type { KnownPart, MapPart, MapSource } from '@escapelab/core';
 import {
   drawDoor,
   drawEmergencyLamp,
@@ -12,6 +13,7 @@ import {
   LABEL_BELOW,
   plateCaption,
   SIGN_LABEL_BELOW,
+  type ManualObjectOpts,
   type Tube,
 } from '../art.js';
 import type { PlacedLabels } from '../labelLayout.js';
@@ -26,7 +28,7 @@ import {
 } from '../hazards.js';
 import { coversArmed, opensCabinet } from '../interact.js';
 import { noteMount } from '../notes.js';
-import { inTiles, profiled, type Frame, type WorldMap } from './frame.js';
+import { inTiles, profiled, type Frame } from './frame.js';
 import { drawGlow, namedThing, type Named } from './highlight.js';
 import {
   labelAt,
@@ -149,23 +151,29 @@ export function tubeAt(frame: Frame, x: number, y: number): Tube {
 }
 
 /**
- * The sources where light has fallen or the crew knows of them, each named where `labels` puts
- * it as far as this player has found it — and only then lit up where it prints the armed
- * station's rules: before, nothing about it calls for attention.
+ * How `manual` looks this frame, its label's top at `place`: one nobody has found as what it
+ * is, shut, holding nothing; one the crew knows of whole, named as far as this player has found
+ * it — and only then lit up where it prints the armed station's rules.
  */
+function sourceLook(frame: Frame, manual: MapSource, place: number | null): ManualObjectOpts {
+  const { pulse, text } = frame;
+  const found = frame.labels({ of: 'source', id: manual.id });
+  const tube = tubeAt(frame, manual.x, manual.y);
+  const look = { kind: manual.kind, active: false, opened: false, pulse, text, tube, found };
+  if (!manual.known) {
+    return { ...look, labelAt: place };
+  }
+  const active = found > 0 && coversArmed(frame.map, manual);
+  return { ...look, label: manual.label, active, opened: manual.opened, labelAt: place };
+}
+
+/** The sources where light has fallen or the crew knows of them, as `sourceLook` has them. */
 function drawManuals(ctx: CanvasRenderingContext2D, frame: Frame, labels: PlacedLabels): void {
-  const { map, pulse, text } = frame;
-  for (const manual of map.manuals) {
-    if (!sourceShows(frame, manual)) {
-      continue;
+  for (const manual of frame.map.manuals) {
+    if (sourceShows(frame, manual)) {
+      const look = sourceLook(frame, manual, labelAt(labels, `manual:${manual.id}`, LABEL_BELOW));
+      at(ctx, manual.x + 0.5, manual.y + 0.5, () => drawManualObject(ctx, look));
     }
-    const found = frame.labels({ of: 'source', id: manual.id });
-    const active = found > 0 && coversArmed(map, manual);
-    const { kind, label, opened } = manual;
-    const tube = tubeAt(frame, manual.x, manual.y);
-    const place = labelAt(labels, `manual:${manual.id}`, LABEL_BELOW);
-    const look = { kind, label, active, opened, pulse, text, tube, labelAt: place, found };
-    at(ctx, manual.x + 0.5, manual.y + 0.5, () => drawManualObject(ctx, look));
   }
 }
 
@@ -179,7 +187,8 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: Frame): void {
     const mount = noteMount(map, note);
     if (mount !== null && (note.known || light.shown(mount.spot.x, mount.spot.y))) {
       const found = frame.labels({ of: 'note', index: note.index });
-      const look = { facing: mount.facing, read: note.read, pulse, found };
+      // Nobody has read a note nobody has found.
+      const look = { facing: mount.facing, read: note.known && note.read, pulse, found };
       at(ctx, mount.x, mount.y, () => drawPinnedNote(ctx, look));
     }
   }
@@ -205,9 +214,10 @@ function drawFixtures(ctx: CanvasRenderingContext2D, frame: Frame, labels: Place
   }
 }
 
-type Item = WorldMap['items'][number];
-
-/** Drop-offs and the crates, fuses and keys lying about, where light has fallen on them. */
+/**
+ * Drop-offs of the parts the crew knows of, and the crates, fuses and keys lying about, where
+ * light has fallen on them.
+ */
 function drawItems(
   ctx: CanvasRenderingContext2D,
   frame: Frame,
@@ -215,13 +225,15 @@ function drawItems(
   labels: PlacedLabels,
 ): void {
   for (const item of frame.map.items) {
-    drawZone(ctx, frame, item);
+    if (item.known) {
+      drawZone(ctx, frame, item);
+    }
     drawLoose(ctx, frame, item, named, labelAt(labels, `item:${item.id}`, LABEL_BELOW));
   }
 }
 
 /** The drop-off of `item` where light has fallen on it; none for a cabinet's key. */
-function drawZone(ctx: CanvasRenderingContext2D, frame: Frame, item: Item): void {
+function drawZone(ctx: CanvasRenderingContext2D, frame: Frame, item: KnownPart): void {
   const { map, light, pulse } = frame;
   const zone = item.deliverTo;
   if (zone !== null && !opensCabinet(map, item.id) && light.shown(zone.x, zone.y)) {
@@ -236,7 +248,7 @@ function drawZone(ctx: CanvasRenderingContext2D, frame: Frame, item: Item): void
 function drawLoose(
   ctx: CanvasRenderingContext2D,
   frame: Frame,
-  item: Item,
+  item: MapPart,
   named: Named | null,
   label: number | null,
 ): void {
@@ -245,7 +257,8 @@ function drawLoose(
     return;
   }
   const look = {
-    label: item.label,
+    kind: item.kind,
+    ...(item.known ? { label: item.label } : {}),
     pulse,
     carried: false,
     text,
@@ -262,7 +275,7 @@ function drawLoose(
  */
 function hovering(
   frame: Frame,
-  item: Item,
+  item: MapPart,
   named: Named | null,
 ): Pick<CarryableOpts, 'lift' | 'glow'> {
   if (named?.subject.of !== 'item' || named.subject.id !== item.id) {

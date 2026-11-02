@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { worldNews } from '../src/world/news.js';
-import { mapWith, type Manual } from './fixtures.js';
+import { mapWith, type Item, type Manual } from './fixtures.js';
 
 const book: Manual = {
+  seen: true,
   found: true,
   known: true,
   id: 'buch',
@@ -34,18 +35,27 @@ describe('worldNews — what the lab shows that it did not before', () => {
   });
 
   it('seats a part where it belongs once, and leaves a key in a cabinet to the cabinet', () => {
-    const fuse = {
+    const fuse: Item = {
+      seen: true,
       found: true,
+      known: true,
       id: 'sicherung',
+      kind: 'fuse',
       label: 'SICHERUNG',
       x: 9.5,
       y: 4.5,
       carriedBy: 'ada',
       delivered: false,
       deliverTo: { x: 14, y: 2 },
-      requiredForTitle: 'Notstrom',
+      requiredFor: { title: 'Notstrom', ahead: 0 },
     };
-    const key = { ...fuse, id: 'schluessel', label: 'SCHLÜSSEL', deliverTo: { x: 6, y: 3 } };
+    const key: Item = {
+      ...fuse,
+      id: 'schluessel',
+      kind: 'key',
+      label: 'SCHLÜSSEL',
+      deliverTo: { x: 6, y: 3 },
+    };
     const cabinet: Manual = { ...locker, kind: 'cabinet', needsKey: 'schluessel' };
     const before = mapWith({ manuals: [cabinet], items: [fuse, key] });
     const seated = { ...fuse, carriedBy: null, delivered: true, x: 14.5, y: 2.5 };
@@ -58,16 +68,19 @@ describe('worldNews — what the lab shows that it did not before', () => {
   });
 
   it('puts a part down off somebody’s hands once, where it now lies — not one set in place', () => {
-    const fuse = {
+    const fuse: Item = {
+      seen: true,
       found: true,
+      known: true,
       id: 'sicherung',
+      kind: 'fuse',
       label: 'SICHERUNG',
       x: 9.5,
       y: 4.5,
       carriedBy: 'ada',
       delivered: false,
       deliverTo: { x: 14, y: 2 },
-      requiredForTitle: 'Notstrom',
+      requiredFor: { title: 'Notstrom', ahead: 0 },
     };
     const down = { ...fuse, carriedBy: null, x: 9.7, y: 4.4 };
     const before = mapWith({ items: [fuse] });

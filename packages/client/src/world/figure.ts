@@ -1,6 +1,6 @@
+import type { PartKind } from '@escapelab/core';
 import { hashTile, TAU } from './brush.js';
 import { smooth } from './ease.js';
-import type { CarryableKind } from './hazards.js';
 
 /**
  * A crew member's pose from what they do and what the run does around them —
@@ -43,7 +43,7 @@ export interface FigureState {
   /** where the figure faces, radians: 0 right, PI/2 toward the viewer */
   facing: number;
   /** what it carries, by kind; null for empty hands */
-  carrying: CarryableKind | null;
+  carrying: PartKind | null;
   speaking: boolean;
   /** how long ago the last alarm came in on this screen, ms; null for none */
   alarmAgoMs: number | null;

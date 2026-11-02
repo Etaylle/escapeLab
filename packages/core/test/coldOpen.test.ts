@@ -20,7 +20,7 @@ import {
 import type { GameState, Mission } from '../src/index.js';
 import { buttonSyncModule } from '../src/puzzles/buttonSync.js';
 import { canGather, crewsOf, tileKey, type Spot } from '../src/reach.js';
-import { lightsOut, started, standing, T0 } from './lab.js';
+import { everyConsole, lightsOut, started, standing, T0 } from './lab.js';
 
 /**
  * A corridor lab that opens with the power on for three seconds: three
@@ -113,7 +113,11 @@ describe('the intro: the power is on', () => {
     const view = viewFor(state, 'p1');
     expect(view.lights).toEqual({ out: false, outAt: null });
     expect(view.deadlineAt).toBeNull();
-    expect(view.map?.stations.map((s) => s.status)).toEqual(['locked', 'locked', 'locked']);
+    // Nothing is armed yet: a player's map holds the stations they have in sight, all locked.
+    expect(view.map?.stations).toEqual([]);
+    const looking = standing(state, { sight: { p1: everyConsole(state) } });
+    const statuses = viewFor(looking, 'p1').map?.stations.map((s) => s.status);
+    expect(statuses).toEqual(['locked', 'locked', 'locked']);
     const audience = viewForSpectator(state);
     expect(audience.lights).toEqual({ out: false, outAt: null });
     expect(audience.deadlineAt).toBeNull();
@@ -158,7 +162,10 @@ describe('the lights going out', () => {
 
   it('arms the first station, so that the crew can switch it on', () => {
     expect(armedStations(mission.map, out)).toEqual([{ x: 3, y: 1, console: null }]);
-    expect(viewFor(out, 'p1').map?.stations.map((s) => s.status)).toEqual([
+    // The armed station shows on every map; the ones still to come only where in sight.
+    expect(viewFor(out, 'p1').map?.stations.map((s) => s.status)).toEqual(['armed']);
+    const looking = standing(out, { sight: { p1: everyConsole(out) } });
+    expect(viewFor(looking, 'p1').map?.stations.map((s) => s.status)).toEqual([
       'armed',
       'locked',
       'locked',

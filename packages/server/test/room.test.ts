@@ -48,6 +48,12 @@ function lastView(messages: ServerMessage[]) {
   return last.view;
 }
 
+/** The first part of the map, as the last view tells it once known; undefined till then. */
+function firstPart(messages: ServerMessage[]) {
+  const item = lastView(messages).map?.items[0];
+  return item?.known === true ? item : undefined;
+}
+
 describe('Room', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -339,12 +345,12 @@ describe('Room', () => {
     // At the fuse it picks it up — and full hands switch station one on like empty ones.
     moveTo(room, anna, 1, 1);
     pressE(room, anna);
-    expect(lastView(anna.messages).map?.items[0]?.carriedBy).toBe(anna.playerId);
+    expect(firstPart(anna.messages)?.carriedBy).toBe(anna.playerId);
     moveTo(room, anna, 11, 1);
     moveTo(room, ben, 12, 2);
     pressE(room, anna);
     expect(lastView(anna.messages).puzzle).not.toBeNull();
-    expect(lastView(anna.messages).map?.items[0]?.carriedBy).toBe(anna.playerId);
+    expect(firstPart(anna.messages)?.carriedBy).toBe(anna.playerId);
     room.act(anna.playerId, { kind: 'puzzle-input', input: { press: true } });
     room.act(ben.playerId, { kind: 'puzzle-input', input: { press: true } });
     // Full hands press signs as well as empty ones.
@@ -370,7 +376,7 @@ describe('Room', () => {
     // On the slot the same key installs it and the station comes alive.
     moveTo(room, anna, 3, 4);
     pressE(room, anna);
-    expect(lastView(anna.messages).map?.items[0]?.delivered).toBe(true);
+    expect(firstPart(anna.messages)?.delivered).toBe(true);
     pressE(room, ben);
     expect(lastView(ben.messages).puzzle).not.toBeNull();
     room.dispose();

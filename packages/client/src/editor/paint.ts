@@ -1,4 +1,4 @@
-import { CREW_COLORS } from '@escapelab/core';
+import { CREW_COLORS, partKind } from '@escapelab/core';
 import {
   drawDoor,
   drawExitHatch,
@@ -263,7 +263,8 @@ function paintMarks(ctx: Ctx, draft: Draft, text: WorldText): void {
       at(ctx, zone.x + 0.5, zone.y + 0.5, () => drawDropZone(ctx, false, STILL));
       dashed(ctx, [item, zone], DELIVERY, false);
     }
-    const look = { label: item.label, pulse: STILL, carried: false, text };
+    const kind = partKind(item.label);
+    const look = { kind, label: item.label, pulse: STILL, carried: false, text };
     at(ctx, item.x + 0.5, item.y + 0.5, () => drawCarryable(ctx, look));
   }
 }
@@ -464,7 +465,7 @@ const GLYPHS: Readonly<Record<Tool, Glyph>> = {
   sign: centred((ctx) => drawSign(ctx, { label: '', seen: false, pulse: STILL })),
   label: (ctx) => paintGlyphMark(ctx, 'label'),
   exit: centred((ctx) => drawExitHatch(ctx, { open: 1, pulse: STILL })),
-  item: centred((ctx) => drawCarryable(ctx, { label: '', pulse: STILL, carried: false })),
+  item: centred((ctx) => drawCarryable(ctx, { kind: 'crate', pulse: STILL, carried: false })),
   drone: centred((ctx) => drawDroneBody(ctx, STILL_DRONE, STILL)),
   decor: centred((ctx) => drawDecor(ctx, 'shelf', 0, true)),
   note: (ctx) =>

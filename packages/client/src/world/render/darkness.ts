@@ -14,6 +14,7 @@ import {
   type Run,
   type Stops,
 } from '../light.js';
+import { known } from '../known.js';
 import { litGroups, warmUp, type LitGroup } from '../rooms.js';
 import { layBake } from './bakes.js';
 import { inTiles, toScreen, type Frame, type FrameLit } from './frame.js';
@@ -429,7 +430,7 @@ function plateAndValveGlows(frame: Frame): Glow[] {
  */
 function itemGlows(frame: Frame): Glow[] {
   const { light } = frame;
-  return frame.map.items.flatMap((item): Glow[] => {
+  return frame.map.items.filter(known).flatMap((item): Glow[] => {
     const glows: Glow[] = [];
     const loose = !item.delivered && item.carriedBy === null;
     if (loose && item.found && light.shown(item.x, item.y)) {

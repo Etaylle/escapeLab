@@ -1,5 +1,7 @@
+import type { MapPart, MapSource } from '@escapelab/core';
 import { LABEL_BELOW, plateCaption, SIGN_LABEL_BELOW, textBox } from '../art.js';
 import { coversArmed } from '../interact.js';
+import { known } from '../known.js';
 import { placeLabels, type PlacedLabels, type PropLabel } from '../labelLayout.js';
 import { toScreen, type Frame } from './frame.js';
 
@@ -38,13 +40,17 @@ interface Labelled {
 /** Each frame's labels as placed, worked out by the first pass that asks. */
 const placed = new WeakMap<Frame, PlacedLabels>();
 
-/** What of a frame's map lies about loose: neither carried nor put in, where light has fallen. */
-export function looseAndShown(frame: Frame, item: Frame['map']['items'][number]): boolean {
-  return !item.delivered && item.carriedBy === null && frame.light.shown(item.x, item.y);
+/**
+ * What of a frame's map lies about loose — neither carried nor put in; a part nobody has found
+ * always lies about — where light has fallen.
+ */
+export function looseAndShown(frame: Frame, item: MapPart): boolean {
+  const loose = !item.known || (!item.delivered && item.carriedBy === null);
+  return loose && frame.light.shown(item.x, item.y);
 }
 
 /** Whether a source shows this frame: where light has fallen on it, or the crew knows of it. */
-export function sourceShows(frame: Frame, manual: Frame['map']['manuals'][number]): boolean {
+export function sourceShows(frame: Frame, manual: MapSource): boolean {
   return manual.known || frame.light.shown(manual.x, manual.y);
 }
 
@@ -63,11 +69,11 @@ function plateLabels(frame: Frame): Labelled[] {
     }));
 }
 
-/** The labels of the sources that show, as far as this player has found them. */
+/** The labels of the sources the crew knows of, as far as this player has found them. */
 function sourceLabels(frame: Frame): Labelled[] {
   const { map } = frame;
   return map.manuals
-    .filter((m) => sourceShows(frame, m))
+    .filter(known)
     .map((manual) => ({
       key: `manual:${manual.id}`,
       words: manual.label,
@@ -98,6 +104,7 @@ function signAndPartLabels(frame: Frame): Labelled[] {
           },
         ];
   const parts = map.items
+    .filter(known)
     .filter((i) => looseAndShown(frame, i))
     .map((item) => ({
       key: `item:${item.id}`,

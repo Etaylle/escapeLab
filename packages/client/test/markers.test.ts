@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { MapView } from '@escapelab/core';
+import type { MapSource, MapView } from '@escapelab/core';
 import {
   dueParts,
   markerBoxes,
@@ -7,12 +7,11 @@ import {
   PART_SIGHT,
   placeMarker,
   placeMarkers,
-  stationsAhead,
   type MarkerPlacement,
   type MarkerPoint,
 } from '../src/world/markers.js';
 import { overlaps, type Box, type Viewport } from '../src/world/viewport.js';
-import { mapWith, type Manual } from './fixtures.js';
+import { mapWith, type Item, type Manual, type Station } from './fixtures.js';
 
 /**
  * A canvas of `w`×`h` device pixels with the objective bar `bar` CSS pixels
@@ -27,13 +26,17 @@ const YOU = 'p1';
 /** Where the player stands, mid-lab; it only matters between the two consoles of a station. */
 const HERE = { x: 10.5, y: 6.5 };
 
-function station(x: number, y: number, status: MapView['stations'][number]['status']) {
-  return { puzzleId: 'notstrom', x, y, title: 'Notstrom', status, found: false };
+function station(x: number, y: number, status: Station['status']): Station {
+  const unseen = { seen: false, found: false, known: false };
+  return { puzzleId: 'notstrom', x, y, title: 'Notstrom', status, ...unseen };
 }
 
-function item(parts: Partial<MapView['items'][number]>): MapView['items'][number] {
+function item(parts: Partial<Item>): Item {
   return {
+    seen: true,
     found: true,
+    known: true,
+    kind: 'fuse',
     id: 'fuse',
     label: 'Sicherung',
     x: 3,
@@ -41,7 +44,7 @@ function item(parts: Partial<MapView['items'][number]>): MapView['items'][number
     carriedBy: null,
     delivered: false,
     deliverTo: { x: 9, y: 2 },
-    requiredForTitle: null,
+    requiredFor: null,
     ...parts,
   };
 }
@@ -58,6 +61,7 @@ describe('markerTargets — what the player is pointed at', () => {
 
   it('points at the nearer console of a station with two, named by its console', () => {
     const locker: Manual = {
+      seen: true,
       found: true,
       known: true,
       id: 'spind',
@@ -142,19 +146,17 @@ describe('markerTargets — what the player is pointed at', () => {
   });
 
   describe('one goal at a time: a part for a later station', () => {
-    /** Blackout's order: the lever, the box, three more, the reactor — the fuse is the reactor's. */
-    const order = ['notlicht', 'notstrom', 'signal', 'netz', 'frequenz', 'reaktor'];
+    /** Blackout's six stations, the reactor's the last: the fuse is the reactor's. */
+    const REACTOR = 5;
+    /**
+     * The lab with `done` stations solved: the map shows the station in front of the crew, and
+     * the fuse says how far its own lies beyond it.
+     */
     function lab(done: number, partAt = { x: 3, y: 4 }): MapView {
-      const stations = order.map((puzzleId, i) => ({
-        puzzleId,
-        x: 1 + i * 3,
-        y: 11,
-        title: puzzleId === 'reaktor' ? 'Reaktor-Neustart' : puzzleId,
-        status: i < done ? ('done' as const) : i === done ? ('armed' as const) : ('locked' as const),
-        found: false,
-      }));
-      const fuse = item({ ...partAt, requiredForTitle: 'Reaktor-Neustart' });
-      return mapWith({ tiles: openLab, stations, items: [fuse] });
+      const armed = { ...station(1 + done * 3, 11, 'armed'), puzzleId: `s${done}` };
+      const requiredFor = { title: 'Reaktor-Neustart', ahead: REACTOR - done };
+      const fuse = item({ ...partAt, requiredFor });
+      return mapWith({ tiles: openLab, stations: [armed], items: [fuse] });
     }
     /** An open lab of 20 × 13 tiles, walls round it only. */
     const openLab = Array.from({ length: 13 }, (_, y) =>
@@ -162,13 +164,11 @@ describe('markerTargets — what the player is pointed at', () => {
     );
 
     it('waits while its station is two or more ahead of the one in front of the crew', () => {
-      expect(stationsAhead(lab(0), 'Reaktor-Neustart')).toBe(5);
       expect(markerTargets(lab(0), YOU, HERE).map((t) => t.label)).toEqual(['STATION']);
       expect(markerTargets(lab(3), YOU, HERE).map((t) => t.label)).toEqual(['STATION']);
     });
 
     it('comes once its station is the next one, or the one in front of the crew', () => {
-      expect(stationsAhead(lab(4), 'Reaktor-Neustart')).toBe(1);
       expect(markerTargets(lab(4), YOU, HERE).map((t) => t.label)).toEqual(['STATION', 'TEIL']);
       expect(markerTargets(lab(5), YOU, HERE).map((t) => t.label)).toEqual(['STATION', 'TEIL']);
     });
@@ -190,6 +190,7 @@ describe('markerTargets — what the player is pointed at', () => {
 
   it('points at every manual object printing the armed station, blue like a part', () => {
     const book: Manual = {
+      seen: true,
       found: true,
       known: true,
       id: 'buch',
@@ -208,8 +209,9 @@ describe('markerTargets — what the player is pointed at', () => {
       x: 8,
       puzzleIds: ['frequenz'],
     };
-    // A source printing the station's rules that nobody has come across yet: no arrow to it.
-    const unknown: Manual = { ...book, id: 'tafel', x: 12, found: false, known: false };
+    // A chart in sight that nobody has come across yet: no arrow to it, whatever it prints.
+    const glimpsed = { seen: true, found: false, known: false } as const;
+    const unknown: MapSource = { id: 'tafel', kind: 'chart', x: 12, y: 3, ...glimpsed };
     const map = mapWith({
       stations: [station(5, 9, 'armed')],
       manuals: [book, elsewhere, unknown],
@@ -222,6 +224,7 @@ describe('markerTargets — what the player is pointed at', () => {
 
   it('points at no manual object once every station is done, or while hands are full', () => {
     const book: Manual = {
+      seen: true,
       found: true,
       known: true,
       id: 'buch',
@@ -259,7 +262,7 @@ describe('markerTargets — what the player is pointed at', () => {
   });
 
   it('points at no key before its cabinet is found', () => {
-    const key = item({ id: 'key', label: 'SCHLÜSSEL', deliverTo: null });
+    const key = item({ id: 'key', kind: 'key', label: 'SCHLÜSSEL', deliverTo: null });
     const hidden = mapWith({ stations: [station(5, 9, 'armed')], items: [key] });
     expect(markerTargets(hidden, YOU, HERE).map((t) => t.label)).toEqual(['STATION']);
     const found = mapWith({

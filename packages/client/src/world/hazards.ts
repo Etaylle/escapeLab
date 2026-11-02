@@ -1,4 +1,4 @@
-import type { DronePosition } from '@escapelab/core';
+import type { DronePosition, PartKind } from '@escapelab/core';
 import { drawPropLabel, LABEL_BELOW, type WorldText } from './art.js';
 import {
   ALARM,
@@ -58,23 +58,11 @@ export function drawDroneCone(
   ctx.restore();
 }
 
-/** What a carryable looks like on the floor and in hand. */
-export type CarryableKind = 'fuse' | 'key' | 'crate';
-
-/**
- * A carryable's look, told from its label: a „Sicherung" is a fuse cartridge,
- * a „Schlüssel" a key, anything else a crate.
- */
-export function carryableKind(label: string): CarryableKind {
-  if (/sicherung/i.test(label)) {
-    return 'fuse';
-  }
-  return /schl(?:ü|ue)ssel/i.test(label) ? 'key' : 'crate';
-}
-
 export interface CarryableOpts {
-  /** the item's label: its look follows from it, and the floor shows it under the item */
-  label: string;
+  /** what it looks like: a fuse cartridge, a key, a crate (core `partKind`) */
+  kind: PartKind;
+  /** the item's label, which the floor shows under it; none for one nobody has found */
+  label?: string;
   /** 0..1 looping pulse driven by the caller */
   pulse: number;
   /** riding above its carrier's head: a size smaller, with no shadow, glow or label */
@@ -202,7 +190,7 @@ function drawKey(ctx: CanvasRenderingContext2D, pulse: number): void {
 }
 
 /** The item itself, as its kind looks. */
-function drawItem(ctx: CanvasRenderingContext2D, kind: CarryableKind, pulse: number): void {
+function drawItem(ctx: CanvasRenderingContext2D, kind: PartKind, pulse: number): void {
   if (kind === 'fuse') {
     drawFuse(ctx, pulse);
   } else if (kind === 'key') {
@@ -214,7 +202,7 @@ function drawItem(ctx: CanvasRenderingContext2D, kind: CarryableKind, pulse: num
 
 /**
  * A carryable: a fuse cartridge, a key, or a crate for anything else, as its
- * label says. On the floor it lies on its shadow in a blue glow — or hovers
+ * kind says. On the floor it lies on its shadow in a blue glow — or hovers
  * `lift` over it, with its `glow` — its label under it like any prop's; glow
  * and label as far as it is found.
  * Anchor: its own centre, scaled to tile units.
@@ -235,10 +223,10 @@ export function drawCarryable(ctx: CanvasRenderingContext2D, o: CarryableOpts): 
     ctx.translate(0, -lift);
   }
   o.glow?.(ctx);
-  drawItem(ctx, carryableKind(o.label), o.pulse);
+  drawItem(ctx, o.kind, o.pulse);
   ctx.restore();
   const at = o.labelAt === undefined ? LABEL_BELOW : o.labelAt;
-  if (dressed && at !== null && found > 0) {
+  if (dressed && at !== null && found > 0 && o.label !== undefined) {
     ctx.globalAlpha *= found;
     drawPropLabel(ctx, o.label.toUpperCase(), at, ITEM_LABEL, o.text);
   }

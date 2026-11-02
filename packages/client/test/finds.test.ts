@@ -17,19 +17,23 @@ const locker: Manual = {
   puzzleIds: ['kabel'],
   opened: false,
   needsKey: null,
+  seen: true,
   found: true,
   known: true,
 };
 const fuse: Item = {
   id: 'sicherung',
   label: 'SICHERUNG',
+  kind: 'fuse',
   x: 3.5,
   y: 4.5,
   carriedBy: null,
   delivered: false,
   deliverTo: null,
-  requiredForTitle: null,
+  requiredFor: null,
+  seen: true,
   found: true,
+  known: true,
 };
 type Station = MapView['stations'][number];
 const station = (parts: Partial<Station>): Station => ({
@@ -38,7 +42,9 @@ const station = (parts: Partial<Station>): Station => ({
   y: 2,
   title: 'Kabel',
   status: 'armed',
+  seen: true,
   found: true,
+  known: true,
   ...parts,
 });
 
@@ -101,8 +107,8 @@ describe('hearDiscoveries — what of the view’s discoveries is news to this s
 describe('findWords — what rises over a find', () => {
   const map = mapWith({
     manuals: [locker],
-    notes: [{ index: 0, x: 2, y: 0, read: false, found: true, known: true }],
-    items: [fuse, { ...fuse, id: 'key', label: 'SCHLÜSSEL' }],
+    notes: [{ index: 0, x: 2, y: 0, read: false, seen: true, found: true, known: true }],
+    items: [fuse, { ...fuse, id: 'key', kind: 'key', label: 'SCHLÜSSEL' }],
     stations: [
       station({ puzzleId: 'licht', x: 11, y: 7, look: 'lever' }),
       station({ x: 1, y: 12, console: 'a', look: 'fusebox' }),

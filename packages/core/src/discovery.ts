@@ -143,34 +143,82 @@ function armedPuzzle(state: GameState): string | null {
   return lightsAreOut(state) && current !== undefined ? current.id : null;
 }
 
+/** The sources where the run placed them, in map order. */
+function placedSources(state: GameState): Findable[] {
+  return state.mission.map.manuals.flatMap((m) => {
+    const at = state.places[m.id];
+    return at === undefined ? [] : [findable({ of: 'source', id: m.id }, at.x + 0.5, at.y + 0.5)];
+  });
+}
+
+/** The notes of the last shift, each at the point it is looked for. */
+function notesOf(map: MapDef): Findable[] {
+  return map.notes.flatMap((note, index) => {
+    const at = notePoint(map, note);
+    return at === null ? [] : [findable({ of: 'note', index }, at.x, at.y)];
+  });
+}
+
+/** The parts lying loose: one in somebody's hands or in its place is found by nobody. */
+function looseParts(state: GameState): Findable[] {
+  return state.mission.map.items.flatMap((def) => {
+    const live = state.items[def.id];
+    const loose = live !== undefined && live.carriedBy === null && !live.delivered;
+    return loose ? [findable({ of: 'item', id: def.id }, live.x, live.y)] : [];
+  });
+}
+
+/** The consoles at `spots`, each at its tile's middle. */
+function consolesAt(spots: readonly StationSpot[]): Findable[] {
+  return spots.map((s) => findable(consoleFind(s), s.x + 0.5, s.y + 0.5));
+}
+
 /**
  * Everything this run has to find, in map order: the sources where the run
- * placed them, the notes, the parts lying loose — a part in somebody's
- * hands or in its place is found by nobody —, the consoles of the armed
+ * placed them, the notes, the parts lying loose, the consoles of the armed
  * station and the sign.
  */
 export function findables(state: GameState): Findable[] {
   const { map } = state.mission;
   const armed = armedPuzzle(state);
-  const sources = map.manuals.flatMap((m) => {
-    const at = state.places[m.id];
-    return at === undefined ? [] : [findable({ of: 'source', id: m.id }, at.x + 0.5, at.y + 0.5)];
-  });
-  const notes = map.notes.flatMap((note, index) => {
-    const at = notePoint(map, note);
-    return at === null ? [] : [findable({ of: 'note', index }, at.x, at.y)];
-  });
-  const items = map.items.flatMap((def) => {
-    const live = state.items[def.id];
-    const loose = live !== undefined && live.carriedBy === null && !live.delivered;
-    return loose ? [findable({ of: 'item', id: def.id }, live.x, live.y)] : [];
-  });
-  const consoles = map.stations
-    .filter((s) => s.puzzleId === armed)
-    .map((s) => findable(consoleFind(s), s.x + 0.5, s.y + 0.5));
   const sign = map.edgeworkSign;
   const signs = sign === undefined ? [] : [findable({ of: 'sign' }, sign.x + 0.5, sign.y + 0.5)];
-  return [...sources, ...notes, ...items, ...consoles, ...signs];
+  return [
+    ...placedSources(state),
+    ...notesOf(map),
+    ...looseParts(state),
+    ...consolesAt(map.stations.filter((s) => s.puzzleId === armed)),
+    ...signs,
+  ];
+}
+
+/**
+ * What a view carries only while its player has it in sight, unless somebody has found it:
+ * the sources where the run placed them, the notes, the parts lying loose and every console.
+ * The sign, a fixture, always shows.
+ */
+export function sightables(state: GameState): Findable[] {
+  const { map } = state.mission;
+  return [
+    ...placedSources(state),
+    ...notesOf(map),
+    ...looseParts(state),
+    ...consolesAt(map.stations),
+  ];
+}
+
+/**
+ * What `looker` has in sight of `things`, by key: every one a straight line reaches from where
+ * they stand with nothing in between — however far, whichever way they face; what the light
+ * on their screen shows of it is the screen's affair. The doors in `shut` stop sight like walls.
+ */
+export function inSight(
+  map: SightMap,
+  shut: ReadonlySet<string>,
+  looker: { x: number; y: number },
+  things: readonly Findable[],
+): FindKey[] {
+  return things.filter((thing) => canSee(map, looker, thing, shut)).map((thing) => thing.key);
 }
 
 /** Where a player stands and which way they face, in tiles and radians (0 east, π/2 south). */

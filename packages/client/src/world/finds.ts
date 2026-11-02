@@ -1,7 +1,12 @@
-import { CHIME_GAP_MS, type Discovery, type Find, type ManualKind } from '@escapelab/core';
+import {
+  CHIME_GAP_MS,
+  type Discovery,
+  type Find,
+  type ManualKind,
+  type PartKind,
+} from '@escapelab/core';
 import { discoveryBlip } from './audio.js';
 import { consoleName } from './consoles.js';
-import { carryableKind, type CarryableKind } from './hazards.js';
 import { noteMount } from './notes.js';
 import type { Caption, WorldMap } from './render/frame.js';
 
@@ -24,7 +29,7 @@ const SOURCE_NAMES: Record<ManualKind, string> = {
   cabinet: 'Aktenschrank',
 };
 
-const PART_NAMES: Record<CarryableKind, string> = {
+const PART_NAMES: Record<PartKind, string> = {
   fuse: 'Sicherung',
   key: 'Schlüssel',
   crate: 'Kiste',
@@ -51,7 +56,7 @@ function partWords(map: WorldMap, id: string): Words | null {
   if (part === undefined) {
     return null;
   }
-  const name = PART_NAMES[carryableKind(part.label)];
+  const name = PART_NAMES[part.kind];
   return { x: part.x, y: part.y - 0.5, text: `${name} entdeckt` };
 }
 

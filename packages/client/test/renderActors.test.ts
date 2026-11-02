@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { DronePosition } from '@escapelab/core';
+import type { DronePosition, PartKind } from '@escapelab/core';
 import { drawScientist, drawVoiceRing, HELD_SCALE, type ScientistOpts } from '../src/world/art.js';
 import {
   figurePhase,
@@ -195,13 +195,13 @@ describe('actors — drones and the crew, in tile space', () => {
 
   it('puts what somebody carries in their hands, and nothing over their head', () => {
     const others = new Map([['p2', ben]]);
-    const carrying = new Map([
-      ['p2', 'KISTE'],
-      ['p1', 'SICHERUNG'],
+    const carrying = new Map<string, PartKind>([
+      ['p2', 'crate'],
+      ['p1', 'fuse'],
     ]);
     const frame = frameWith({ players, others, carrying });
     const log = drawn(frame);
-    const carrier = { ...benLook(frame, { carrying: 'crate' }), held: heldItem('KISTE', 0.5) };
+    const carrier = { ...benLook(frame, { carrying: 'crate' }), held: heldItem('crate', 0.5) };
     const drawnBen = strip(drawnAt(log, 4.2, 2.1 + 0.3));
     expect(drawnBen).toEqual(recording((c) => drawScientist(c, carrier)));
     const you = drawnAt(log, 2.5, 2.5 + 0.3);
@@ -219,11 +219,11 @@ describe('actors — drones and the crew, in tile space', () => {
 describe('heldItem — what the hands hold', () => {
   it('draws the item as carried at its size on the floor: no shadow, glow or label', () => {
     const { ctx, log } = fakeCanvas();
-    heldItem('SICHERUNG', 0.5)(ctx);
+    heldItem('fuse', 0.5)(ctx);
     const size = callsOf(log, 'scale').reduce((product, [x]) => product * Number(x), 1);
     expect(size).toBeCloseTo(1, 9);
     expect(strip(log).slice(1)).toEqual(
-      recording((c) => drawCarryable(c, { label: 'SICHERUNG', pulse: 0.5, carried: true })),
+      recording((c) => drawCarryable(c, { kind: 'fuse', pulse: 0.5, carried: true })),
     );
     expect(callsOf(log, 'fillText')).toEqual([]);
     expect(callsOf(log, 'ellipse')).toEqual([]);
@@ -236,7 +236,7 @@ describe('crewPose — the frame says how each of the crew stands', () => {
       time: 12.5,
       now: 1_000_000,
       alarm: { seq: 2, at: 1_000_000 - 120 },
-      carrying: new Map([['p2', 'SCHLÜSSEL']]),
+      carrying: new Map<string, PartKind>([['p2', 'key']]),
       speaking: new Set(['p2']),
       stillSince: new Map([['p2', 9000]]),
       mood: 'play',

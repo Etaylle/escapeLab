@@ -119,33 +119,42 @@ describe('Room with sources to find and open', () => {
     return { room, anna, ben };
   }
 
-  /** Each source of the last view `walker` got: whether they found it, and whether the crew has. */
-  function finds(walker: Walker & { messages: ServerMessage[] }): [string, boolean, boolean][] {
-    return (lastView(walker.messages).map?.manuals ?? []).map((m) => [m.id, m.found, m.known]);
+  /**
+   * Each source on the last map `walker` got: whether it is in their sight, found by them, known
+   * to the crew. One nobody has found is on a map only while in sight.
+   */
+  function finds(walker: Walker & { messages: ServerMessage[] }) {
+    return (lastView(walker.messages).map?.manuals ?? []).map((m) => [
+      m.id,
+      m.seen,
+      m.found,
+      m.known,
+    ]);
   }
 
   it('finds a source for whoever comes within two tiles in sight; the crew knows of it', () => {
     const { room, anna, ben } = started();
+    // The corridor lies open: both are in everybody's sight from the start, found by nobody.
     expect(finds(ben)).toEqual([
-      ['spind', false, false],
-      ['schrank', false, false],
+      ['spind', true, false, false],
+      ['schrank', true, false, false],
     ]);
     moveTo(room, anna, 11, 1); // three tiles short of the locker: no time to look
     expect(finds(anna)).toEqual([
-      ['spind', false, false],
-      ['schrank', false, false],
+      ['spind', true, false, false],
+      ['schrank', true, false, false],
     ]);
     moveTo(room, anna, 12, 1); // two tiles from the locker, a little more from the cabinet
     expect(finds(anna)).toEqual([
-      ['spind', true, true],
-      ['schrank', false, false],
+      ['spind', true, true, true],
+      ['schrank', true, false, false],
     ]);
     expect(finds(ben)).toEqual([
-      ['spind', false, true],
-      ['schrank', false, false],
+      ['spind', true, false, true],
+      ['schrank', true, false, false],
     ]);
     moveTo(room, anna, 1, 1);
-    expect(finds(anna)[0]).toEqual(['spind', true, true]);
+    expect(finds(anna)[0]).toEqual(['spind', true, true, true]);
     expect(lastView(anna.messages).map?.manuals[0]).toMatchObject({ x: 14, y: 1, opened: false });
     room.dispose();
   });
@@ -154,16 +163,17 @@ describe('Room with sources to find and open', () => {
     const { room, anna, ben } = started(behindTheDoor({ x: 6, y: 2 }));
     moveTo(room, anna, 3, 2); // three tiles from the locker, the shut door between, facing it
     vi.advanceTimersByTime(1000);
-    expect(finds(anna)).toEqual([['spind', false, false]]);
+    expect(finds(anna)).toEqual([]);
     moveTo(room, ben, 1, 3); // onto the plate: the door opens before Anna's lamp
     expect(lastView(ben.messages).map?.doors[0]?.open).toBe(true);
+    expect(finds(anna)).toEqual([['spind', true, false, false]]);
     vi.advanceTimersByTime(249);
-    expect(finds(anna)).toEqual([['spind', false, false]]);
+    expect(finds(anna)).toEqual([['spind', true, false, false]]);
     vi.advanceTimersByTime(1);
-    expect(finds(anna)).toEqual([['spind', true, true]]);
-    moveTo(room, ben, 1, 1); // off the plate again: found stays found
+    expect(finds(anna)).toEqual([['spind', true, true, true]]);
+    moveTo(room, ben, 1, 1); // off the plate again: out of sight, but found stays found
     expect(lastView(ben.messages).map?.doors[0]?.open).toBe(false);
-    expect(finds(anna)).toEqual([['spind', true, true]]);
+    expect(finds(anna)).toEqual([['spind', false, true, true]]);
     room.dispose();
   });
 
@@ -172,10 +182,10 @@ describe('Room with sources to find and open', () => {
     moveTo(room, ben, 1, 3); // the door opens
     moveTo(room, anna, 3, 2); // before the open door, facing in: the wall beside it hides it
     vi.advanceTimersByTime(1000);
-    expect(finds(anna)).toEqual([['spind', false, false]]);
+    expect(finds(anna)).toEqual([]);
     moveTo(room, anna, 5, 2); // through the door, the locker a step ahead
-    expect(finds(anna)).toEqual([['spind', true, true]]);
-    expect(finds(ben)).toEqual([['spind', false, true]]);
+    expect(finds(anna)).toEqual([['spind', true, true, true]]);
+    expect(finds(ben)).toEqual([['spind', false, false, true]]);
     room.dispose();
   });
 
@@ -192,7 +202,8 @@ describe('Room with sources to find and open', () => {
     ]);
     room.act(anna.playerId, { kind: 'open-source', manualId: 'spind' });
     const view = lastView(ben.messages);
-    expect(view.map?.manuals.find((m) => m.id === 'spind')?.opened).toBe(true);
+    const spind = view.map?.manuals.find((m) => m.id === 'spind');
+    expect(spind?.known === true && spind.opened).toBe(true);
     expect(view.events.at(-1)).toMatchObject({ kind: 'find', label: 'Spind durchsucht: SPIND' });
     expect(view.credits[anna.playerId]?.found).toBe(1);
     room.dispose();
@@ -202,7 +213,8 @@ describe('Room with sources to find and open', () => {
     const { room, anna } = started();
     moveTo(room, anna, 8, 2);
     pressE(room, anna);
-    expect(lastView(anna.messages).map?.items[0]?.carriedBy).toBe(anna.playerId);
+    const key = lastView(anna.messages).map?.items[0];
+    expect(key?.known === true ? key.carriedBy : null).toBe(anna.playerId);
     moveTo(room, anna, 11, 2);
     expect(() => pressE(room, anna)).toThrow(/markierten Platz/);
     moveTo(room, anna, 14, 2);

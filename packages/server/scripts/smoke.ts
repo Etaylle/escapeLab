@@ -759,15 +759,19 @@ async function readUp(reader: TestClient, helper: TestClient): Promise<void> {
 /** E with an item at the client's feet picks it up. */
 async function pickUp(client: TestClient, itemId: string): Promise<void> {
   client.pressE();
-  await client.expectView(`picked up ${itemId}`, (v) =>
-    v.map?.items.find((i) => i.id === itemId)?.carriedBy === client.playerId);
+  await client.expectView(`picked up ${itemId}`, (v) => {
+    const item = v.map?.items.find((i) => i.id === itemId);
+    return item?.known === true && item.carriedBy === client.playerId;
+  });
 }
 
 /** E with the item on its drop-off puts it in. */
 async function install(client: TestClient, itemId: string): Promise<void> {
   client.pressE();
-  await client.expectView(`put ${itemId} in`, (v) =>
-    v.map?.items.find((i) => i.id === itemId)?.delivered === true);
+  await client.expectView(`put ${itemId} in`, (v) => {
+    const item = v.map?.items.find((i) => i.id === itemId);
+    return item?.known === true && item.delivered;
+  });
 }
 
 /**
@@ -802,8 +806,8 @@ async function unlockCabinet(): Promise<void> {
   await pickUp(carrier, KEY_ID);
   await bring(carrier, placeOf(cabinet.id), helper);
   await openSource(carrier, cabinet.id, `Schrank aufgeschlossen: ${cabinet.label}`);
-  assert(carrier.view?.map?.items.find((i) => i.id === KEY_ID)?.delivered === true,
-    'the key stays in the cabinet\'s lock');
+  const key = carrier.view?.map?.items.find((i) => i.id === KEY_ID);
+  assert(key?.known === true && key.delivered, 'the key stays in the cabinet\'s lock');
   credit(carrier, 'delivered');
 }
 
