@@ -149,8 +149,9 @@ export function tubeAt(frame: Frame, x: number, y: number): Tube {
 }
 
 /**
- * The sources where light has fallen or the crew knows of them, the ones printing the armed
- * station's rules lit up, each named where `labels` puts it as far as this player has found it.
+ * The sources where light has fallen or the crew knows of them, each named where `labels` puts
+ * it as far as this player has found it — and only then lit up where it prints the armed
+ * station's rules: before, nothing about it calls for attention.
  */
 function drawManuals(ctx: CanvasRenderingContext2D, frame: Frame, labels: PlacedLabels): void {
   const { map, pulse, text } = frame;
@@ -158,11 +159,11 @@ function drawManuals(ctx: CanvasRenderingContext2D, frame: Frame, labels: Placed
     if (!sourceShows(frame, manual)) {
       continue;
     }
-    const active = coversArmed(map, manual);
+    const found = frame.labels({ of: 'source', id: manual.id });
+    const active = found > 0 && coversArmed(map, manual);
     const { kind, label, opened } = manual;
     const tube = tubeAt(frame, manual.x, manual.y);
     const place = labelAt(labels, `manual:${manual.id}`, LABEL_BELOW);
-    const found = frame.labels({ of: 'source', id: manual.id });
     const look = { kind, label, active, opened, pulse, text, tube, labelAt: place, found };
     at(ctx, manual.x + 0.5, manual.y + 0.5, () => drawManualObject(ctx, look));
   }

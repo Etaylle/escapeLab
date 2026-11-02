@@ -402,11 +402,14 @@ describe('objects — names wait for discovery', () => {
     const here = drawnAt(drawn(frame), 3.5, 1.5);
     const { pulse, text } = frame;
     const chart = { kind: 'chart' as const, label: 'TAFEL' };
-    const look = { ...chart, active: true, opened: true, pulse, text };
+    // It prints the armed station's rules, yet stays unlit: nothing calls before it is found.
+    const look = { ...chart, active: false, opened: true, pulse, text };
     const plain = { ...look, tube: tubeAt(frame, 3, 1), found: 0 };
     expect(strip(here)).toEqual(recording((c) => drawManualObject(c, plain)));
     expect(callsOf(here, 'fillText')).toEqual([]);
-    expect(strip(here)).not.toEqual(recording((c) => drawManualObject(c, { ...plain, found: 1 })));
+    const found = drawnAt(drawn(frameWith({ map, light: leftOnly, labels: () => 1 })), 3.5, 1.5);
+    const lit = { ...plain, active: true, found: 1 };
+    expect(strip(found)).toEqual(recording((c) => drawManualObject(c, lit)));
     // In the dark and unknown to the crew it is not drawn at all; known, it is — unnamed.
     const dark = lightWith({ shown: () => false });
     expect(drawnAt(drawn(frameWith({ map, light: dark, labels: () => 0 })), 3.5, 1.5)).toEqual([]);
