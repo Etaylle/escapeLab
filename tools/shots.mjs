@@ -1132,11 +1132,13 @@ async function clickText(page, text) {
  * when it heard that. The walks below steer by these, so they depend neither
  * on the map's layout nor on how fast the page renders. On the audience's
  * socket it keeps the spectator view, which places every source before the
- * crew has come across it.
+ * crew has come across it. It notes when each view of a run on came, for the
+ * views line (`reportViews`).
  */
 function eavesdrop(page) {
   // `sent`: the quick-chat lines and pings the page sent, in order.
   const seen = { view: null, pos: null, crew: {}, drones: {}, dronesAt: null, sent: [] };
+  seen.viewsAt = [];
   page.on('websocket', (socket) => {
     if (!socket.url().endsWith('/ws')) {
       return;
@@ -1145,6 +1147,9 @@ function eavesdrop(page) {
       const msg = JSON.parse(String(payload));
       if (msg.kind === 'view' || msg.kind === 'spectator-view') {
         seen.view = msg.view;
+        if (msg.view.phase === 'playing') {
+          seen.viewsAt.push(Date.now());
+        }
       }
       if (msg.kind === 'positions') {
         seen.crew = msg.players;
@@ -2857,10 +2862,10 @@ async function captureLeverRing(player) {
 // in their lamp's cone (core discovery.ts) — and a find that matters gets its caption once, its
 // chime at most once in 1.5 s. The lever's line: how far off each page found the main switch, and
 // that its caption came, with the chime or without. Then Ben walks into the Archiv the lever lit:
-// discover-enter.png  two steps in, standing: the names under the Archiv's things in his window
+// discover-enter.png  two steps in, standing: the names under the Archiv's things in Ben's window
 //   — at most two, or the run fails
-// discover-later.png  by the shelves at the sign: the sign named, a thing across the room not —
-//   or the run fails
+// discover-later.png  by the shelves at the sign: the sign named, and nothing across the room that
+//   the crew knows of but Ben has not found — or the run fails
 // The audio line: the discovery chimes each page sounded since the start, besides the captions
 // that came without one, and Ben's chimes in the Archiv — at most three there, or the run fails.
 
@@ -2980,8 +2985,8 @@ const namesSaid = (names) =>
 
 /**
  * discover-enter.png, discover-later.png and the audio line: Ben walks from where the lever
- * left him into the Archiv the lever lit, two steps in, and stands — his window at laptop
- * size — then on to the shelves by the sign; he walks back after. Skipped on a map without
+ * was thrown into the Archiv the lever lit, two steps in, and stands — Ben's window at laptop
+ * size — then on to the shelves by the sign, and back after. Skipped on a map without
  * Blackout's Archiv.
  */
 async function captureDiscovery(walker, other) {
@@ -2992,24 +2997,13 @@ async function captureDiscovery(walker, other) {
     return;
   }
   const home = tileOf(walker.seen);
-  if (!(await standOn(walker, ARCHIV.door))) {
-    throw new Error(`${walker.name} found no way to the Archiv's door`);
-  }
-  const atDoor = ((await findsOn(walker.page)) ?? []).length;
-  // Names counted from anywhere but where the shots say would prove nothing: a stall fails.
-  for (const step of ARCHIV.inside) {
-    if (!(await stepTo(walker.page, walker.seen, step.x + 0.5, step.y + 0.5))) {
-      throw new Error(`${walker.name} stalled going into the Archiv, short of ${step.x},${step.y}`);
-    }
-  }
+  const atDoor = await walkIntoArchiv(walker);
   await walker.page.setViewportSize(SIZES[0]);
   await sleep(NAMES_UP_MS);
   const inside = ARCHIV.inside.at(-1);
   const entering = await archivNames(walker.page, { x: inside.x + 0.5, y: inside.y + 0.5 });
   await capture(walker.page, 'discover-enter.png');
-  if (!(await standOn(walker, ARCHIV.shelves))) {
-    throw new Error(`${walker.name} found no way to the Archiv's shelves by the sign`);
-  }
+  await standOrFail(walker, ARCHIV.shelves, "to the Archiv's shelves by the sign");
   await sleep(NAMES_UP_MS);
   const by = { x: ARCHIV.shelves.x + 0.5, y: ARCHIV.shelves.y + 0.5 };
   const later = await archivNames(walker.page, by);
@@ -3019,27 +3013,50 @@ async function captureDiscovery(walker, other) {
   await walker.page.setViewportSize(SIZES[2]);
   reportDiscovery(walker, atShelves, { entering, later, by });
   await reportChimes([walker, other], walker, finds);
-  if (home !== null && !(await standOn(walker, home))) {
-    throw new Error(`${walker.name} found no way back to ${home.x},${home.y} from the Archiv`);
+  if (home !== null) {
+    await standOrFail(walker, home, `back to ${home.x},${home.y} from the Archiv`);
+  }
+}
+
+/** `walker` stands on `tile`, or the walkthrough fails: it found no way `where`. */
+async function standOrFail(walker, tile, where) {
+  if (!(await standOn(walker, tile))) {
+    throw new Error(`${walker.name} found no way ${where}`);
   }
 }
 
 /**
- * The Archiv's things on `map` — the walker's, by the shelves: found, or nobody having found
- * them, glimpsed in sight — each at the point its name hangs from, as render/labels.ts places it.
+ * `walker` walks to the Archiv's door and two steps in; how many finds its page had taken at the
+ * door. Names counted from anywhere but where the shots say would prove nothing: a stall fails.
+ */
+async function walkIntoArchiv(walker) {
+  await standOrFail(walker, ARCHIV.door, "to the Archiv's door");
+  const atDoor = ((await findsOn(walker.page)) ?? []).length;
+  for (const step of ARCHIV.inside) {
+    if (!(await stepTo(walker.page, walker.seen, step.x + 0.5, step.y + 0.5))) {
+      throw new Error(`${walker.name} stalled going into the Archiv, short of ${step.x},${step.y}`);
+    }
+  }
+  return atDoor;
+}
+
+/**
+ * The Archiv's things on `map` — the walker's, by the shelves — that the crew knows of, each at
+ * the point its name hangs from, as render/labels.ts places it, and whether the walker has found
+ * it. A thing nobody has found has no name on any map to show.
  */
 function archivThings(map) {
-  const said = (thing) => (thing.known ? thing.label.toUpperCase() : thing.id);
+  const thing = (it, x, y) => ({ text: it.label.toUpperCase(), x, y, found: it.found });
   return [
-    ...map.manuals.map((m) => ({ text: said(m), x: m.x + 0.5, y: m.y + 0.5 })),
-    ...map.items.map((i) => ({ text: said(i), x: i.x, y: i.y })),
-  ].filter((thing) => inArchiv(thing.x, thing.y));
+    ...map.manuals.filter((m) => m.known).map((m) => thing(m, m.x + 0.5, m.y + 0.5)),
+    ...map.items.filter((i) => i.known).map((i) => thing(i, i.x, i.y)),
+  ].filter((it) => inArchiv(it.x, it.y));
 }
 
 /**
  * The names' lines: two steps in, at most two names under the Archiv's things; by the shelves,
- * the sign named and at least one thing across the room — more than three tiles off — not: no
- * name hangs from it.
+ * the sign named, and no name under a thing across the room — more than three tiles off — that
+ * the crew knows of but the walker has not found.
  */
 function reportDiscovery(walker, map, { entering, later, by }) {
   console.log(
@@ -3049,18 +3066,20 @@ function reportDiscovery(walker, map, { entering, later, by }) {
   const hangs = (name, thing) => Math.hypot(name.x - thing.x, name.y - thing.y) < 0.01;
   const named = (thing) => later.some((name) => hangs(name, thing));
   const across = archivThings(map).filter((t) => Math.hypot(t.x - by.x, t.y - by.y) > 3);
-  const unnamed = across.filter((thing) => !named(thing));
+  const crewOnly = across.filter((thing) => !thing.found);
+  const misnamed = crewOnly.filter(named);
   const sign = later.some((name) => name.text === 'LABORKENNUNG');
   console.log(
     `discover-later.png ${walker.name} by the shelves: ${later.length} name(s) ` +
-      `(${namesSaid(later)}); across the room unnamed: ` +
-      `${unnamed.map((thing) => thing.text).join(', ') || '!! none'}${sign ? '' : ' !! no sign'}`,
+      `(${namesSaid(later)}); across the room, known but not found by ${walker.name}: ` +
+      `${crewOnly.map((thing) => thing.text).join(', ') || 'none'}` +
+      `${misnamed.length > 0 ? ' !! named' : ''}${sign ? '' : ' !! no sign'}`,
   );
   if (entering.length > 2) {
     fail(`discover-enter.png: ${entering.length} names two steps into the Archiv`);
   }
-  if (!sign || (across.length > 0 && unnamed.length === 0)) {
-    fail(`discover-later.png: sign named ${sign}, ${unnamed.length} of ${across.length} unnamed`);
+  if (!sign || misnamed.length > 0) {
+    fail(`discover-later.png: sign named ${sign}, ${misnamed.length} of ${crewOnly.length} named`);
   }
 }
 
@@ -3072,13 +3091,7 @@ function reportDiscovery(walker, map, { entering, later, by }) {
 async function reportChimes(players, walker, inArchiv) {
   const pages = [];
   for (const player of players) {
-    const finds = (await findsOn(player.page)) ?? [];
-    const sounded = finds.filter((one) => one.sounded);
-    const silent = finds.length - sounded.length;
-    pages.push(
-      `${player.name} ${sounded.length} (${sounded.map(findSaid).join(', ') || 'none'}` +
-        `${silent > 0 ? `; ${silent} caption(s) without` : ''})`,
-    );
+    pages.push(`${player.name} ${chimesSaid((await findsOn(player.page)) ?? [])}`);
   }
   const archivChimes = inArchiv.filter((one) => one.sounded);
   const since = Date.now() - (walker.seen.view.lights.outAt ?? Date.now());
@@ -3091,6 +3104,16 @@ async function reportChimes(players, walker, inArchiv) {
   if (archivChimes.length > 3) {
     fail(`audio: ${archivChimes.length} discovery chimes in the Archiv`);
   }
+}
+
+/** „2 (Spind, Sicherung; 1 caption(s) without)": a page's finds that chimed, and the rest. */
+function chimesSaid(finds) {
+  const sounded = finds.filter((one) => one.sounded);
+  const silent = finds.length - sounded.length;
+  return (
+    `${sounded.length} (${sounded.map(findSaid).join(', ') || 'none'}` +
+    `${silent > 0 ? `; ${silent} caption(s) without` : ''})`
+  );
 }
 
 /** lit-flur.png: the panel closed itself, the room the lever lit is up. */
@@ -3350,11 +3373,12 @@ function readFrom(map, note) {
 }
 
 /**
- * note.png: `player` walks up to the nearest note of the last shift — the
- * view places every one; walking up finds it — and presses E: its slip has
- * to come up with the words the view gives whoever stands there, and the run
- * report has to log it read, for nothing: no time, no alarm. Then the slip
- * goes and the player walks back. Skipped where no note lies within reach.
+ * note.png: `player` walks up to the nearest note of the last shift its view
+ * places — one the crew has found, or one in the player's sight — and finds
+ * it as it comes up, then presses E: its slip has to come up with the words
+ * the view gives whoever stands there, and the run report has to log it
+ * read, for nothing: no time, no alarm. Then the slip goes and the player
+ * walks back. Skipped where the view places no note the player can walk to.
  */
 async function captureNote(player) {
   const map = player.seen.view.map;
@@ -3364,7 +3388,7 @@ async function captureNote(player) {
     .filter(({ spot }) => spot !== null && stepsTo(player.seen, spot) !== Infinity)
     .sort((a, b) => stepsTo(player.seen, a.spot) - stepsTo(player.seen, b.spot));
   if (found === undefined) {
-    skip('note.png', 'no note of the last shift lies where the player can walk');
+    skip('note.png', `no note of the last shift on ${player.name}'s map within walking reach`);
     return;
   }
   const { note, spot } = found;
@@ -8916,9 +8940,25 @@ async function run() {
   if (!solvedShot.taken && solvedShot.late.length === 1) {
     skipLateShot(); // late, and no sync station came after it to shoot again
   }
+  reportViews({ Anna: hostSeen, Ben: guestSeen, 'the audience': watcherSeen });
   reportWalking();
   await browser.close();
   console.log('screenshots in', OUT);
+}
+
+/**
+ * The views line: how many views each page took while a run was on, from its first such view to
+ * its last, and how many a second. A step to a station, a find or a door sends every page one; a
+ * change in what a player has in sight only that player's page.
+ */
+function reportViews(pages) {
+  const said = Object.entries(pages).map(([name, seen]) => {
+    const at = seen.viewsAt;
+    const span = at.length < 2 ? 0 : (at.at(-1) - at[0]) / 1000;
+    const rate = span > 0 ? (at.length / span).toFixed(2) : '–';
+    return `${name} ${at.length} in ${span.toFixed(0)} s (${rate}/s)`;
+  });
+  console.log(`views              while a run is on: ${said.join(', ')}`);
 }
 
 // ── the graphics package's captures: figures, the air, the props, the camera, the density ──
