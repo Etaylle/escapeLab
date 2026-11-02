@@ -186,9 +186,8 @@ describe('stepping back from a device', () => {
         y: 1,
         title: 'Leitungsnetz',
         status: 'armed',
-        seen: true,
         found: false,
-        known: false,
+        known: true,
       },
     ],
   });

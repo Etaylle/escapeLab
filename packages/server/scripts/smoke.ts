@@ -1538,7 +1538,7 @@ async function solveSync(): Promise<void> {
  */
 async function switchOn(client: TestClient, index: number): Promise<void> {
   const self = await client.ensureSelf();
-  const armed = client.view?.map?.stations.filter((s) => s.status === 'armed') ?? [];
+  const armed = client.view?.map?.stations.filter((s) => s.known && s.status === 'armed') ?? [];
   assert(
     armed.some(
       (station) => Math.hypot(self.x - (station.x + 0.5), self.y - (station.y + 0.5)) <= 1.6,
@@ -1690,8 +1690,14 @@ for (const client of crew) {
     !powered.lights.out && powered.deadlineAt === null && powered.events.length === 0,
     `${client.label}: the run opens with the power on — no clock, no radio line yet`,
   );
-  assert(powered.map?.stations.every((s) => s.status === 'locked') === true,
-    `${client.label}: while the power is on, no station is armed`);
+  // The lit lab shows every station and source to everybody, found or not.
+  const lit = powered.map;
+  assert(
+    lit?.stations.length === mission.map.stations.length &&
+      lit.manuals.length === mission.map.manuals.length &&
+      lit.stations.every((s) => !s.known || s.status !== 'armed'),
+    `${client.label}: while the power is on, the whole lab shows, and no station is armed`,
+  );
 }
 // The room plays on normal, where the fifth alarm ends the run; the walkthrough sets off two.
 assert(
@@ -1894,7 +1900,8 @@ assert(dark.deadlineAt === outAt + mission.timeLimitSec * 1000,
   'the clock started when the lights went out, with the whole limit');
 assert(dark.events.map((e) => e.label).join(' | ') === `${POWER_OUT} | ${mission.radio.start}`,
   'the run report has the blackout, then mission control\'s opener');
-assert(dark.map?.stations.find((s) => s.puzzleId === leverDef.id)?.status === 'armed',
+const darkLever = dark.map?.stations.find((s) => s.puzzleId === leverDef.id);
+assert(darkLever?.known === true && darkLever.status === 'armed',
   'the lever is armed once the lights are out');
 
 // Station 1: the Notlicht's main switch in the Flur, a lever for each of the crew. Both walk up
@@ -1942,7 +1949,7 @@ await backOnTheMap(mission.puzzles.length);
 // --- escape finale: everyone to the hatch before the clock runs out --------
 const unlocked = await crew[0].expectView('exit hatch is open', (v) =>
   v.map?.exit?.open === true);
-assert(unlocked.map?.manuals.every((m) => m.known) === true,
+assert(unlocked.map?.manuals.filter((m) => m.known).length === mission.map.manuals.length,
   'the crew has found every source on the way');
 assert(unlocked.map?.litRooms.join(',') === litAfter(mission.puzzles.length),
   `the reactor lit the last room: ${litAfter(mission.puzzles.length)}`);

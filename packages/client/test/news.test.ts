@@ -3,7 +3,6 @@ import { worldNews } from '../src/world/news.js';
 import { mapWith, type Item, type Manual } from './fixtures.js';
 
 const book: Manual = {
-  seen: true,
   found: true,
   known: true,
   id: 'buch',
@@ -36,7 +35,6 @@ describe('worldNews — what the lab shows that it did not before', () => {
 
   it('seats a part where it belongs once, and leaves a key in a cabinet to the cabinet', () => {
     const fuse: Item = {
-      seen: true,
       found: true,
       known: true,
       id: 'sicherung',
@@ -69,7 +67,6 @@ describe('worldNews — what the lab shows that it did not before', () => {
 
   it('puts a part down off somebody’s hands once, where it now lies — not one set in place', () => {
     const fuse: Item = {
-      seen: true,
       found: true,
       known: true,
       id: 'sicherung',

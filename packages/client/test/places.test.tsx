@@ -613,9 +613,8 @@ describe('the station frame', () => {
           title: 'Signalkette',
           status: 'armed',
           console: 'a',
-          seen: true,
           found: false,
-          known: false,
+          known: true,
         },
         {
           puzzleId: 'kette',
@@ -624,9 +623,8 @@ describe('the station frame', () => {
           title: 'Signalkette',
           status: 'armed',
           console: 'b',
-          seen: true,
           found: false,
-          known: false,
+          known: true,
         },
       ],
     });
@@ -640,9 +638,8 @@ describe('the station frame', () => {
           y: 1,
           title: 'Leitungsnetz',
           status: 'armed',
-          seen: true,
           found: false,
-          known: false,
+          known: true,
         },
       ],
     });
@@ -659,9 +656,8 @@ describe('the station frame', () => {
           y: 1,
           title: 'Leitungsnetz',
           status: 'armed',
-          seen: true,
           found: false,
-          known: false,
+          known: true,
         },
       ],
     });
@@ -749,9 +745,8 @@ describe('the station frame', () => {
           y: 1,
           title: 'Leitungsnetz',
           status: 'armed',
-          seen: true,
           found: false,
-          known: false,
+          known: true,
         },
       ],
     });
@@ -780,7 +775,6 @@ describe('the station frame', () => {
 
 describe('the map legend', () => {
   const book: Manual = {
-    seen: true,
     found: true,
     known: true,
     id: 'b',
@@ -807,7 +801,7 @@ describe('the map legend', () => {
       <Legend
         map={mapWith({
           manuals: [book, { ...book, id: 't', kind: 'terminal' }, { ...book, id: 'b2' }],
-          edgeworkSign: { x: 3, y: 3, found: true },
+          edgeworkSign: { x: 3, y: 3, found: true, known: true },
           plates: [camera, door],
         })}
       />,
@@ -828,6 +822,10 @@ describe('the map legend', () => {
     expect(bare.match(/class="legend-row"/g)).toHaveLength(1);
     expect(bare).not.toContain('Platte');
     expect(bare).not.toContain('Schild');
+    // Nor the sign before somebody of the crew has found it.
+    const sign = { x: 3, y: 3, found: false, known: false };
+    const unfound = renderToStaticMarkup(<Legend map={mapWith({ edgeworkSign: sign })} />);
+    expect(unfound).not.toContain('Schild');
     const doorsOnly = renderToStaticMarkup(<Legend map={mapWith({ plates: [door] })} />);
     expect(doorsOnly.match(/class="legend-row"/g)).toHaveLength(1);
     expect(doorsOnly).toContain('HALTEN-Platte');
@@ -896,9 +894,8 @@ function justStarted(parts: Partial<PlayerView> = {}): PlayerView {
           y: 1,
           title: 'Notstrom',
           status: 'armed',
-          seen: true,
           found: false,
-          known: false,
+          known: true,
         },
       ],
     }),
@@ -968,7 +965,6 @@ describe('the start of a run', () => {
 
 describe('what the crew still has to bring', () => {
   const fuse: Item = {
-    seen: true,
     found: true,
     known: true,
     id: 'fuse',
@@ -1026,9 +1022,8 @@ describe('what the crew still has to bring', () => {
       ];
       return order.map((station, i) => ({
         ...station,
-        seen: true,
         found: false,
-        known: false,
+        known: true,
         status: i < done ? 'done' : i === done ? 'armed' : 'locked',
       }));
     }

@@ -1,5 +1,6 @@
 import { isHorizontalDoor } from '../doors.js';
 import { carriedItem, coversArmed } from '../interact.js';
+import { isArmed, known } from '../known.js';
 import {
   ALARM,
   AMBER,
@@ -133,7 +134,7 @@ export function minimapGoal(map: WorldMap, youId: string): GoalDot[] {
     return [{ x: goal.x + 0.5, y: goal.y + 0.5, color: C.read }];
   }
   return map.stations
-    .filter((station) => station.status === 'armed')
+    .filter(isArmed)
     .map((station) => ({ x: station.x + 0.5, y: station.y + 0.5, color: C.teal }));
 }
 
@@ -266,15 +267,15 @@ function drawPlates(ctx: CanvasRenderingContext2D, map: WorldMap, layout: Minima
 }
 
 /**
- * Stations, the armed one bright, and the sources the crew has come across, bright where they
- * print its rules.
+ * The stations the crew knows of, the armed one bright — one merely in sight stays off the
+ * map — and the sources the crew has come across, bright where they print its rules.
  */
 function drawStationsAndSources(
   ctx: CanvasRenderingContext2D,
   map: WorldMap,
   { ox, oy, cell }: MinimapLayout,
 ): void {
-  for (const station of map.stations) {
+  for (const station of map.stations.filter(known)) {
     ctx.fillStyle =
       station.status === 'armed' ? C.teal : station.status === 'done' ? C.done : C.locked;
     ctx.fillRect(ox + station.x * cell, oy + station.y * cell, cell, cell);

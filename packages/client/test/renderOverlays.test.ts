@@ -179,7 +179,6 @@ describe('overlays — what lies over the world and its light', () => {
 
   it('reminds of Q while hands are full — on a keyboard, not on a touch screen', () => {
     const crate: Item = {
-      seen: true,
       found: true,
       known: true,
       id: 'crate',
@@ -217,7 +216,6 @@ describe('overlays — what lies over the world and its light', () => {
       throw new Error('the chat needs a phrase for this test');
     }
     const crate: Item = {
-      seen: true,
       found: true,
       known: true,
       id: 'crate',
@@ -273,7 +271,6 @@ describe('overlays — what lies over the world and its light', () => {
       throw new Error('the chat needs a phrase for this test');
     }
     const crate: Item = {
-      seen: true,
       found: true,
       known: true,
       id: 'crate',
@@ -359,7 +356,6 @@ describe('overlays — what lies over the world and its light', () => {
 
   it('leaves out a room name that would cover the label under a thing, which matters more', () => {
     const crate: Item = {
-      seen: true,
       found: true,
       known: true,
       id: 'crate',

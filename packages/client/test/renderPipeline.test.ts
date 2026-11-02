@@ -35,9 +35,8 @@ describe('drawFrame — the passes in their order', () => {
           y: 1,
           title: 'Kasten',
           status: 'armed',
-          seen: true,
           found: false,
-          known: false,
+          known: true,
         },
       ],
     });

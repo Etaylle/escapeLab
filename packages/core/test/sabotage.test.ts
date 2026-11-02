@@ -71,7 +71,8 @@ describe('sabotage emergencies', () => {
     state = applyAction(state, { type: 'sabotage-start', at: T0 + 1000 });
     expect(state.puzzleState).toBeNull();
     // The station stays armed, so the puzzle can be restarted afterwards.
-    expect(viewFor(state, 'p2').map?.stations[0]?.status).toBe('armed');
+    const station = viewFor(state, 'p2').map?.stations[0];
+    expect(station?.known === true ? station.status : null).toBe('armed');
   });
 
   it('blocks station activation while the emergency runs', () => {

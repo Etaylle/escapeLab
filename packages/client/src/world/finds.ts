@@ -117,10 +117,18 @@ export function freshEar(run: number | null): Ear {
   return { run, taken: 0, heard: [] };
 }
 
+/**
+ * Whether this screen's look at the lab of run `run` is its first of that run: it has seen
+ * nothing yet, or its ear is still on another run — after a rematch, or come into one late.
+ */
+export function firstLook(seen: WorldMap | null, ear: Ear, run: number | null): boolean {
+  return seen === null || ear.run !== run;
+}
+
 /** Where this screen stands as a view's discoveries come in. */
 export interface Listening {
   run: number | null;
-  /** this screen's first look at the lab: what was found before it came in is no news */
+  /** this screen's first look at the run (`firstLook`): what was found before is no news */
   first: boolean;
   /** the opening holds the screen as a film: nothing of the game's own sounds over it */
   held: boolean;

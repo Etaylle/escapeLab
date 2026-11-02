@@ -73,18 +73,22 @@ describe('Room with a note of the last shift', () => {
     const audience = watched.messages.filter((m) => m.kind === 'spectator-view').at(-1);
     const note = { index: 0, x: 5, y: 2, read: false };
     expect(audience?.kind === 'spectator-view' ? audience.view.map?.notes : null).toEqual([
-      { ...note, seen: true, found: true, known: true },
+      { ...note, found: true, known: true },
     ]);
-    // Right behind the wall, a tile and a half from its sheet: not even on her map there.
-    walkTo(room, anna, 5.5, 1.5);
+    // Pressed to the wall right behind its sheet, as near to where it is read as at it: not even
+    // on her map there, and nothing to read.
+    walkTo(room, anna, 5.5, 1.99);
     vi.advanceTimersByTime(1000);
     expect(lastView(anna).map?.notes).toEqual([]);
     expect(lastView(anna).noteHere).toBeNull();
+    expect(() => room.act(anna.playerId, { kind: 'read-note', note: 0 })).toThrow(
+      'Nur direkt davor.',
+    );
     // Round by the gap into the south room, up to the note: found by Anna, known to the crew —
     // on Ben's map too, out of his sight in the north room.
     walkTo(room, anna, 5.5, 3.5);
-    expect(lastView(anna).map?.notes).toEqual([{ ...note, seen: true, found: true, known: true }]);
-    expect(lastView(ben).map?.notes).toEqual([{ ...note, seen: false, found: false, known: true }]);
+    expect(lastView(anna).map?.notes).toEqual([{ ...note, found: true, known: true }]);
+    expect(lastView(ben).map?.notes).toEqual([{ ...note, found: false, known: true }]);
     expect(lastView(anna).noteHere).toEqual({ index: 0, text: NOTE });
     expect(lastView(ben).noteHere).toBeNull();
     expect(JSON.stringify(lastView(ben))).not.toContain(NOTE);
@@ -102,7 +106,7 @@ describe('Room with a note of the last shift', () => {
     const events = lastView(ben).events.filter((e) => e.kind === 'note');
     expect(events.map((e) => e.label)).toEqual([NOTE_READ]);
     expect(lastView(ben).map?.notes).toEqual([
-      { index: 0, x: 5, y: 2, read: true, seen: false, found: false, known: true },
+      { index: 0, x: 5, y: 2, read: true, found: false, known: true },
     ]);
     expect(lastView(anna).deadlineAt).toBe(deadline);
   });

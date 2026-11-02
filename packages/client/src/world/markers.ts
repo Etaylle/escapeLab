@@ -1,7 +1,7 @@
 import { canSee, type KnownPart, type MapView } from '@escapelab/core';
 import { consoleName } from './consoles.js';
 import { carriedItem } from './interact.js';
-import { known } from './known.js';
+import { isArmed, known } from './known.js';
 import { doorsShut } from './light.js';
 import { ALARM, css, DONE_GREEN, READ_BLUE, TEAL as TEAL_RGB } from './palette.js';
 import { overlaps, type Box, type Viewport } from './viewport.js';
@@ -81,7 +81,7 @@ const AT_CONSOLE = 1.6;
 function armedSpotFor(map: MapView, self: Point, others: readonly Point[]): Spot | undefined {
   const away = (spot: Spot, from: Point): number =>
     Math.hypot(spot.x + 0.5 - from.x, spot.y + 0.5 - from.y);
-  const armed = map.stations.filter((station) => station.status === 'armed');
+  const armed = map.stations.filter(isArmed);
   const free = armed.filter((spot) => others.every((other) => away(spot, other) > AT_CONSOLE));
   return (free.length > 0 ? free : armed).sort((a, b) => away(a, self) - away(b, self))[0];
 }

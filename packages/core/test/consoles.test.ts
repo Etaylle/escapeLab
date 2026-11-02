@@ -221,11 +221,11 @@ describe('who stands at which console', () => {
       puzzleId: 'kette',
       title: 'Signalkette',
       status: 'armed',
-      seen: false,
       found: false,
-      known: false,
+      known: true,
     };
-    // Both consoles of the armed station on every map; the Kabel station only once in sight.
+    // Both consoles of the armed station on every map, the objective all share; the Kabel
+    // station only once in sight, glimpsed: no title, no status.
     expect(viewFor(atTheConsoles(), 'p3').map?.stations).toEqual([
       { ...kette, x: 6, y: 1, console: 'a' },
       { ...kette, x: 13, y: 1, console: 'b' },
@@ -235,8 +235,6 @@ describe('who stands at which console', () => {
       puzzleId: 'kabel',
       x: 3,
       y: 1,
-      title: 'Kabel',
-      status: 'locked',
       seen: true,
       found: false,
       known: false,

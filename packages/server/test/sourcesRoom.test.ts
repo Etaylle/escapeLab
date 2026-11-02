@@ -53,7 +53,8 @@ const mission: Mission = parseMission({
 
 /**
  * Two rooms and a plate door between them, the locker in the east one: three
- * tiles straight behind the door at (6,2), or round its corner at (5,1).
+ * tiles straight behind the door at (6,2), or round its corner at (5,1). The
+ * sign hangs in the west room at (3,3), or wherever else `sign` puts it.
  *
  *   0123456789
  * 0 ##########
@@ -62,7 +63,10 @@ const mission: Mission = parseMission({
  * 3 #...#....#   plate (1,3); sign (3,3)
  * 4 ##########
  */
-function behindTheDoor(locker: { x: number; y: number }): Mission {
+function behindTheDoor(
+  locker: { x: number; y: number },
+  sign: { x: number; y: number } = { x: 3, y: 3 },
+): Mission {
   return parseMission({
     id: 'sichtraum',
     title: 'Sicht-Raum',
@@ -82,10 +86,51 @@ function behindTheDoor(locker: { x: number; y: number }): Mission {
       manuals: [
         { id: 'spind', kind: 'locker', label: 'SPIND', puzzleIds: ['kabel'], spots: [locker] },
       ],
-      edgeworkSign: { x: 3, y: 3 },
+      edgeworkSign: sign,
     },
   });
 }
+
+/**
+ * A ring of corridor round a block of wall, the locker at the far end of its
+ * south side: out of sight from the north side, where both start, in sight
+ * all the way down the south one. With `opening`, the run opens with the
+ * power on for three seconds.
+ *
+ *   0123456789
+ * 0 ##########
+ * 1 #........#   spawns (1,1) and (2,1); station (8,1)
+ * 2 #.######.#
+ * 3 #........#   locker (8,3)
+ * 4 ##########
+ */
+const ring = (opening = false): Mission =>
+  parseMission({
+    id: 'ringraum',
+    title: 'Ring-Raum',
+    players: { min: 2, max: 2 },
+    story: { intro: 'i', win: 'w', lose: 'l' },
+    timeLimitSec: 600,
+    ...(opening ? { intro: { lightsSec: 3 } } : {}),
+    puzzles: [{ type: 'keypad', id: 'code', title: 'Code' }],
+    map: {
+      tiles: ['##########', '#........#', '#.######.#', '#........#', '##########'],
+      spawns: [
+        { x: 1, y: 1 },
+        { x: 2, y: 1 },
+      ],
+      stations: [{ puzzleId: 'code', x: 8, y: 1 }],
+      manuals: [
+        {
+          id: 'spind',
+          kind: 'locker',
+          label: 'SPIND',
+          puzzleIds: ['code'],
+          spots: [{ x: 8, y: 3 }],
+        },
+      ],
+    },
+  });
 
 function collector(): { messages: ServerMessage[]; listen: (m: ServerMessage) => void } {
   const messages: ServerMessage[] = [];
@@ -120,41 +165,36 @@ describe('Room with sources to find and open', () => {
   }
 
   /**
-   * Each source on the last map `walker` got: whether it is in their sight, found by them, known
-   * to the crew. One nobody has found is on a map only while in sight.
+   * Each source on the last map `walker` got: whether found by them, whether known to the crew.
+   * One nobody has found is on a map only while in their sight.
    */
   function finds(walker: Walker & { messages: ServerMessage[] }) {
-    return (lastView(walker.messages).map?.manuals ?? []).map((m) => [
-      m.id,
-      m.seen,
-      m.found,
-      m.known,
-    ]);
+    return (lastView(walker.messages).map?.manuals ?? []).map((m) => [m.id, m.found, m.known]);
   }
 
   it('finds a source for whoever comes within two tiles in sight; the crew knows of it', () => {
     const { room, anna, ben } = started();
     // The corridor lies open: both are in everybody's sight from the start, found by nobody.
     expect(finds(ben)).toEqual([
-      ['spind', true, false, false],
-      ['schrank', true, false, false],
+      ['spind', false, false],
+      ['schrank', false, false],
     ]);
     moveTo(room, anna, 11, 1); // three tiles short of the locker: no time to look
     expect(finds(anna)).toEqual([
-      ['spind', true, false, false],
-      ['schrank', true, false, false],
+      ['spind', false, false],
+      ['schrank', false, false],
     ]);
     moveTo(room, anna, 12, 1); // two tiles from the locker, a little more from the cabinet
     expect(finds(anna)).toEqual([
-      ['spind', true, true, true],
-      ['schrank', true, false, false],
+      ['spind', true, true],
+      ['schrank', false, false],
     ]);
     expect(finds(ben)).toEqual([
-      ['spind', true, false, true],
-      ['schrank', true, false, false],
+      ['spind', false, true],
+      ['schrank', false, false],
     ]);
     moveTo(room, anna, 1, 1);
-    expect(finds(anna)[0]).toEqual(['spind', true, true, true]);
+    expect(finds(anna)[0]).toEqual(['spind', true, true]);
     expect(lastView(anna.messages).map?.manuals[0]).toMatchObject({ x: 14, y: 1, opened: false });
     room.dispose();
   });
@@ -166,14 +206,14 @@ describe('Room with sources to find and open', () => {
     expect(finds(anna)).toEqual([]);
     moveTo(room, ben, 1, 3); // onto the plate: the door opens before Anna's lamp
     expect(lastView(ben.messages).map?.doors[0]?.open).toBe(true);
-    expect(finds(anna)).toEqual([['spind', true, false, false]]);
+    expect(finds(anna)).toEqual([['spind', false, false]]);
     vi.advanceTimersByTime(249);
-    expect(finds(anna)).toEqual([['spind', true, false, false]]);
+    expect(finds(anna)).toEqual([['spind', false, false]]);
     vi.advanceTimersByTime(1);
-    expect(finds(anna)).toEqual([['spind', true, true, true]]);
+    expect(finds(anna)).toEqual([['spind', true, true]]);
     moveTo(room, ben, 1, 1); // off the plate again: out of sight, but found stays found
     expect(lastView(ben.messages).map?.doors[0]?.open).toBe(false);
-    expect(finds(anna)).toEqual([['spind', false, true, true]]);
+    expect(finds(anna)).toEqual([['spind', true, true]]);
     room.dispose();
   });
 
@@ -184,8 +224,57 @@ describe('Room with sources to find and open', () => {
     vi.advanceTimersByTime(1000);
     expect(finds(anna)).toEqual([]);
     moveTo(room, anna, 5, 2); // through the door, the locker a step ahead
-    expect(finds(anna)).toEqual([['spind', true, true, true]]);
-    expect(finds(ben)).toEqual([['spind', false, false, true]]);
+    expect(finds(anna)).toEqual([['spind', true, true]]);
+    expect(finds(ben)).toEqual([['spind', false, true]]);
+    room.dispose();
+  });
+
+  it('opens no locker and shows no Laborkennung through a wall, however close behind it', () => {
+    const { room, anna } = started(behindTheDoor({ x: 5, y: 1 }, { x: 5, y: 3 }));
+    walkTo(room, anna, 3.95, 1.5); // pressed to the wall, a tile and a half from the locker
+    vi.advanceTimersByTime(1000);
+    expect(lastView(anna.messages).sourcesHere).toEqual([]);
+    expect(() => room.act(anna.playerId, { kind: 'open-source', manualId: 'spind' })).toThrow(
+      'Nur direkt davor.',
+    );
+    walkTo(room, anna, 3.95, 3.5); // as close to the sign, the wall between
+    vi.advanceTimersByTime(1000);
+    expect(lastView(anna.messages).edgework).toBeNull();
+    room.dispose();
+  });
+
+  /** How many views Anna, Ben and an audience have got so far, in that order. */
+  function viewsSent(...walkers: { messages: ServerMessage[] }[]): () => number[] {
+    const isView = (m: ServerMessage) => m.kind === 'view' || m.kind === 'spectator-view';
+    return () => walkers.map((walker) => walker.messages.filter(isView).length);
+  }
+
+  it('sends a change of sight to whose sight it is, and to nobody else', () => {
+    const { room, anna, ben } = started(ring());
+    const watched = collector();
+    room.attachSpectator(watched.listen);
+    const views = viewsSent(anna, ben, watched);
+    moveTo(room, anna, 1, 2); // down the west side: the block still hides the locker
+    expect(finds(anna)).toEqual([]);
+    const before = views();
+    moveTo(room, anna, 1, 3); // round the corner: the locker at the far end comes into sight
+    expect(finds(anna)).toEqual([['spind', false, false]]);
+    expect(views().map((n, i) => n - (before[i] ?? 0))).toEqual([1, 0, 0]);
+    room.dispose();
+  });
+
+  it('keeps no sight while the power lights the lab: a walk round a corner sends no view', () => {
+    const { room, anna, ben } = started(ring(true));
+    const watched = collector();
+    room.attachSpectator(watched.listen);
+    const views = viewsSent(anna, ben, watched);
+    // The lit lab shows the locker to everybody, from anywhere, as no more than seen.
+    expect(finds(ben)).toEqual([['spind', false, false]]);
+    moveTo(room, anna, 1, 2);
+    const before = views();
+    moveTo(room, anna, 1, 3);
+    expect(views()).toEqual(before);
+    expect(finds(anna)).toEqual([['spind', false, false]]);
     room.dispose();
   });
 

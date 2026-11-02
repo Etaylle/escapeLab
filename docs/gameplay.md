@@ -80,7 +80,10 @@ lean).
 
 A player finds a source, note, part, the sign or an armed console within 2 tiles in sight, or
 after 250 ms in their lamp's cone (0.5 rad, 7.5 tiles), lit room or not; a part within 0.9 always.
-The server decides, per player; until found, a view holds a thing only in sight: what and where.
+The server decides, per player. While the power is on (the opening, the way out) every view shows
+the whole lab; in the dark it holds a thing nobody has found only in sight: what and where. The
+armed station is whole on every map. The sign stays on every map and the minimap as a landmark,
+but glows through the dark only once the crew has found it.
 Names fade in over 300 ms; a find that matters gets its caption, a chime at most once in 1.5 s.
 
 ## Erfolge

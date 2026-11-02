@@ -14,7 +14,7 @@ import {
   type Run,
   type Stops,
 } from '../light.js';
-import { known } from '../known.js';
+import { known, statusOf } from '../known.js';
 import { litGroups, warmUp, type LitGroup } from '../rooms.js';
 import { layBake } from './bakes.js';
 import { inTiles, toScreen, type Frame, type FrameLit } from './frame.js';
@@ -373,16 +373,17 @@ export function objectGlows(frame: Frame): Glow[] {
 function stationGlows(frame: Frame): Glow[] {
   return frame.map.stations.flatMap((station): Glow[] => {
     const at = { x: station.x + 0.5, y: station.y + 0.5 };
-    if (station.status === 'armed') {
+    const status = statusOf(station);
+    if (status === 'armed') {
       return [{ ...at, radius: 2.4, strength: 0.85 }];
     }
-    return station.status === 'done' ? [{ ...at, radius: 1.1, strength: 0.4 }] : [];
+    return status === 'done' ? [{ ...at, radius: 1.1, strength: 0.4 }] : [];
   });
 }
 
 /**
  * The sources the crew has come across, brighter where they print the armed station's rules,
- * and the sign.
+ * and the sign once somebody of the crew has found it: before, nothing shows it through a wall.
  */
 function sourceGlows(frame: Frame): Glow[] {
   const { map } = frame;
@@ -392,7 +393,7 @@ function sourceGlows(frame: Frame): Glow[] {
     return { ...at, radius: active ? 2.1 : 1.3, strength: active ? 0.8 : 0.5 };
   });
   const sign = map.edgeworkSign;
-  return sign === null
+  return sign === null || !sign.known
     ? glows
     : [...glows, { x: sign.x + 0.5, y: sign.y + 0.5, radius: 1.4, strength: 0.6 }];
 }

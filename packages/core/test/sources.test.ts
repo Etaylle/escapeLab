@@ -108,7 +108,7 @@ describe('where the sources lie', () => {
   it('shows the crew only what somebody can see or has found', () => {
     const state = started(mission);
     const listed = (view: { map: MapView | null }) =>
-      view.map?.manuals.map((m) => [m.id, m.seen, m.found, m.known]);
+      view.map?.manuals.map((m) => [m.id, m.found, m.known]);
     // Nothing in anybody's sight, nothing found: no view carries a source, nor a word of one.
     for (const view of [viewFor(state, 'p1'), viewFor(state, 'p2')]) {
       expect(view.map?.manuals).toEqual([]);
@@ -116,22 +116,25 @@ describe('where the sources lie', () => {
     }
     // Anna has the locker in sight, found by nobody: what it is and where, nothing it holds.
     const looking = standing(state, { sight: { p1: ['source:spind'] } });
-    expect(viewFor(looking, 'p1').map?.manuals).toEqual([
+    const glimpsed = viewFor(looking, 'p1');
+    expect(glimpsed.map?.manuals).toEqual([
       { id: 'spind', kind: 'locker', x: 10, y: 2, seen: true, found: false, known: false },
     ]);
+    expect(JSON.stringify(glimpsed)).not.toContain('SPIND');
+    expect(JSON.stringify(glimpsed.map?.manuals)).not.toMatch(/label|puzzleIds|needsKey/);
     expect(viewFor(looking, 'p2').map?.manuals).toEqual([]);
     // Anna comes across the chart and the locker, then walks on: whole on every map now.
     const found = standing(looking, { found: { p1: ['source:tafel', 'source:spind'] } });
     expect(found.found).toEqual({ p1: ['source:spind', 'source:tafel'] });
     expect(listed(viewFor(found, 'p1'))).toEqual([
-      ['tafel', false, true, true],
-      ['spind', false, true, true],
+      ['tafel', true, true],
+      ['spind', true, true],
     ]);
     // Ben has found nothing himself: the crew knows of them, his screen names none; the cabinet
     // nobody has seen stays off every map.
     expect(listed(viewFor(found, 'p2'))).toEqual([
-      ['tafel', false, false, true],
-      ['spind', false, false, true],
+      ['tafel', false, true],
+      ['spind', false, true],
     ]);
     expect(viewFor(found, 'p2').map?.manuals[1]).toEqual({
       x: 10,
@@ -142,17 +145,22 @@ describe('where the sources lie', () => {
       puzzleIds: ['code'],
       opened: false,
       needsKey: null,
-      seen: false,
       found: false,
       known: true,
     });
     for (const view of [viewFor(found, 'p1'), viewFor(found, 'p2')]) {
       expect(JSON.stringify(view)).not.toContain('SCHRANK');
     }
+    // The sign hangs on every map as a landmark; once one of the crew finds it, all know of it.
+    const sign = (view: { map: MapView | null }) => view.map?.edgeworkSign;
+    expect(sign(viewFor(found, 'p2'))).toEqual({ x: 14, y: 2, found: false, known: false });
+    const signed = standing(found, { found: { p1: ['sign'] } });
+    expect(sign(viewFor(signed, 'p1'))).toEqual({ x: 14, y: 2, found: true, known: true });
+    expect(sign(viewFor(signed, 'p2'))).toEqual({ x: 14, y: 2, found: false, known: true });
     expect(listed(viewForSpectator(state))).toEqual([
-      ['tafel', true, true, true],
-      ['spind', true, true, true],
-      ['schrank', true, true, true],
+      ['tafel', true, true],
+      ['spind', true, true],
+      ['schrank', true, true],
     ]);
   });
 });

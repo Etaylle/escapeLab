@@ -47,12 +47,10 @@ const STATION = {
   y: 2,
   title: 'Kasten',
   status: 'armed' as const,
-  seen: true,
   found: false,
-  known: false,
+  known: true as const,
 };
 const CLIPBOARD: Manual = {
-  seen: true,
   found: true,
   known: true,
   id: 'klemmbrett',
@@ -66,7 +64,6 @@ const CLIPBOARD: Manual = {
 };
 const NOTE = { index: 0, x: 2, y: 0, read: false, seen: true, found: true, known: true } as const;
 const FUSE: Item = {
-  seen: true,
   found: true,
   known: true,
   id: 'fuse',

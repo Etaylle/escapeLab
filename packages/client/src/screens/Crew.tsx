@@ -7,6 +7,7 @@ import {
 } from '@escapelab/core';
 import { consoleName } from '../world/consoles.js';
 import { carriedItem } from '../world/interact.js';
+import { isArmed } from '../world/known.js';
 
 /** How many play a mission: „2 Spieler", or „2–3 Spieler" where the count may vary. */
 export function crewSizeText({ min, max }: { min: number; max: number }): string {
@@ -42,7 +43,7 @@ export function presenceNear(map: MapView | null, pos: PlayerPosition | undefine
   if (map === null || pos === undefined) {
     return { stationId: null, manualId: null };
   }
-  const station = map.stations.find((s) => s.status === 'armed' && near(pos, s, PRESENCE_RADIUS));
+  const station = map.stations.find((s) => isArmed(s) && near(pos, s, PRESENCE_RADIUS));
   const source = map.manuals.find((m) => m.known && m.opened && near(pos, m, PRESENCE_RADIUS));
   return { stationId: station?.puzzleId ?? null, manualId: source?.id ?? null };
 }
@@ -88,7 +89,7 @@ export function crewTags(
   }
   const tags: CrewTag[] = [];
   // A station with two consoles is armed at both; either one has its puzzle id.
-  const armed = map?.stations.find((s) => s.status === 'armed');
+  const armed = map?.stations.find(isArmed);
   if (armed !== undefined && at.stationId === armed.puzzleId) {
     tags.push({ text: atStation(armed, at), tone: 'pult' });
   }

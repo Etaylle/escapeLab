@@ -102,7 +102,7 @@ describe('a room whose mission opens with the power on', () => {
 
   /** Both at the armed station, switched on, both press. */
   function solveNext(room: Room, anna: Walker, ben: Walker): void {
-    const armed = lastView(anna).map?.stations.find((s) => s.status === 'armed');
+    const armed = lastView(anna).map?.stations.find((s) => s.known && s.status === 'armed');
     if (armed === undefined) {
       throw new Error('no station is armed');
     }
@@ -125,7 +125,9 @@ describe('a room whose mission opens with the power on', () => {
     expect(out.lights).toEqual({ out: true, outAt: startedAt + INTRO_MS });
     expect(out.deadlineAt).toBe(startedAt + INTRO_MS + LIMIT_MS);
     expect(out.events.map((e) => e.label)).toEqual(['Stromausfall', 'Strom weg.']);
-    expect(out.map?.stations.map((s) => s.status)).toEqual(['armed', 'locked', 'locked']);
+    // In the dark only the armed station is whole on every map; the rest are no more than seen.
+    const whole = out.map?.stations.filter((s) => s.known) ?? [];
+    expect(whole.map((s) => s.status)).toEqual(['armed']);
     room.dispose();
   });
 

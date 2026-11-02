@@ -583,9 +583,8 @@ const lab: MapView = mapWith({
       y: 2,
       title: 'Notstrom',
       status: 'done',
-      seen: true,
       found: false,
-      known: false,
+      known: true,
     },
     {
       puzzleId: 'code',
@@ -593,9 +592,8 @@ const lab: MapView = mapWith({
       y: 2,
       title: 'Zugangscode',
       status: 'armed',
-      seen: true,
       found: false,
-      known: false,
+      known: true,
     },
   ],
   plates: [
@@ -604,7 +602,6 @@ const lab: MapView = mapWith({
   ],
   manuals: [
     {
-      seen: true,
       found: true,
       known: true,
       id: 'buch',
@@ -617,7 +614,6 @@ const lab: MapView = mapWith({
       needsKey: null,
     },
     {
-      seen: true,
       found: true,
       known: true,
       id: 'spind',
@@ -632,7 +628,6 @@ const lab: MapView = mapWith({
   ],
   items: [
     {
-      seen: true,
       found: true,
       known: true,
       id: 'sicherung',
@@ -670,9 +665,8 @@ const kette: MapView = mapWith({
       title: 'Signalkette',
       status: 'armed',
       console: 'a',
-      seen: true,
       found: false,
-      known: false,
+      known: true,
     },
     {
       puzzleId: 'kette',
@@ -681,9 +675,8 @@ const kette: MapView = mapWith({
       title: 'Signalkette',
       status: 'armed',
       console: 'b',
-      seen: true,
       found: false,
-      known: false,
+      known: true,
     },
   ],
 });

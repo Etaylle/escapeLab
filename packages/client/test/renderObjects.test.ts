@@ -42,7 +42,6 @@ const plate = (parts: Partial<Plate>): Plate => ({
 });
 
 const manual = (parts: Partial<Manual>): Manual => ({
-  seen: true,
   found: true,
   known: true,
   id: 'm',
@@ -57,7 +56,6 @@ const manual = (parts: Partial<Manual>): Manual => ({
 });
 
 const item = (parts: Partial<Item>): Item => ({
-  seen: true,
   found: true,
   known: true,
   id: 'fuse',
@@ -127,9 +125,8 @@ describe('objects — the lab’s things, in tile space', () => {
         title: 'Notlicht',
         status: 'armed',
         look: 'lever',
-        seen: true,
         found: false,
-        known: false,
+        known: true,
       },
       {
         puzzleId: 'kasten',
@@ -138,9 +135,8 @@ describe('objects — the lab’s things, in tile space', () => {
         title: 'Kasten',
         status: 'armed',
         console: 'b',
-        seen: true,
         found: false,
-        known: false,
+        known: true,
       },
       {
         puzzleId: 'kasten',
@@ -148,9 +144,8 @@ describe('objects — the lab’s things, in tile space', () => {
         y: 4,
         title: 'Kasten',
         status: 'done',
-        seen: true,
         found: false,
-        known: false,
+        known: true,
       },
       {
         puzzleId: 'tasten',
@@ -158,9 +153,8 @@ describe('objects — the lab’s things, in tile space', () => {
         y: 3,
         title: 'Tasten',
         status: 'locked',
-        seen: true,
         found: false,
-        known: false,
+        known: true,
       },
     ];
     const players = [
@@ -186,7 +180,7 @@ describe('objects — the lab’s things, in tile space', () => {
 
   it('lights up a manual object while it prints the armed station’s rules', () => {
     const kasten = { puzzleId: 'kasten', x: 7, y: 1, title: 'Kasten' };
-    const armed = { ...kasten, status: 'armed' as const, seen: true, found: false, known: false };
+    const armed = { ...kasten, status: 'armed' as const, found: false, known: true as const };
     const rules = manual({ id: 'rules', puzzleIds: ['kasten'] });
     const other = manual({ id: 'other', kind: 'locker', x: 8, y: 4, opened: false });
     const map = lab({ stations: [armed], manuals: [rules, other] });
@@ -208,7 +202,7 @@ describe('objects — the lab’s things, in tile space', () => {
     const holding = plate({ id: 'flur', x: 6, y: 4 });
     const board = manual({ id: 'klemmbrett', kind: 'clipboard', x: 8, y: 4, label: 'KLEMMBRETT' });
     const kette = { puzzleId: 'kette', x: 1, y: 1, title: 'Kette' };
-    const armed = { ...kette, status: 'armed' as const, seen: true, found: false, known: false };
+    const armed = { ...kette, status: 'armed' as const, found: false, known: true as const };
 
     /** Where each label was drawn, its top under its thing, tiles: from the text's y. */
     function labelTops(log: ReturnType<typeof drawn>): Map<string, number> {
@@ -263,9 +257,9 @@ describe('objects — the lab’s things, in tile space', () => {
   it('pins a found note to its wall’s face, or lays it on the floor, unread ones calling', () => {
     // (2,0) is wall over the floor at (2,1); (7,2) is floor; (5,5) wall with no floor beside.
     const notes: MapNote[] = [
-      { index: 0, x: 2, y: 0, read: false, seen: true, found: true, known: true },
-      { index: 1, x: 7, y: 2, read: true, seen: true, found: true, known: true },
-      { index: 2, x: 5, y: 5, read: false, seen: true, found: true, known: true },
+      { index: 0, x: 2, y: 0, read: false, found: true, known: true },
+      { index: 1, x: 7, y: 2, read: true, found: true, known: true },
+      { index: 2, x: 5, y: 5, read: false, found: true, known: true },
     ];
     const frame = frameWith({ map: lab({ notes }), light: lightWith({ shown: () => false }) });
     const log = drawn(frame);
@@ -286,8 +280,8 @@ describe('objects — the lab’s things, in tile space', () => {
 
   it('lets a found note glow in the dark, on its wall’s face, fainter once read', () => {
     const notes: MapNote[] = [
-      { index: 0, x: 2, y: 0, read: false, seen: true, found: true, known: true },
-      { index: 1, x: 7, y: 2, read: true, seen: true, found: true, known: true },
+      { index: 0, x: 2, y: 0, read: false, found: true, known: true },
+      { index: 1, x: 7, y: 2, read: true, found: true, known: true },
     ];
     const glows = objectGlows(frameWith({ map: lab({ notes }) }));
     expect(glows).toEqual(
@@ -298,7 +292,7 @@ describe('objects — the lab’s things, in tile space', () => {
     );
   });
 
-  it('lets nothing nobody has come across glow in the dark: no note, no source', () => {
+  it('lets nothing nobody has come across glow in the dark: no note, source or sign', () => {
     const glimpse = { seen: true, found: false, known: false } as const;
     const notes: MapNote[] = [{ index: 1, x: 7, y: 2, ...glimpse }];
     const glimpsed: MapSource = { id: 'tafel', kind: 'chart', x: 3, y: 4, ...glimpse };
@@ -313,12 +307,18 @@ describe('objects — the lab’s things, in tile space', () => {
     expect(objectGlows(frameWith({ map: lab({ items: [item({ found: true })] }) }))).toEqual([
       { x: 2.5, y: 3.5, radius: 1.6, strength: 0.7 },
     ]);
+    // Nor the sign, through its walls, before somebody of the crew has found it.
+    const sign = (known: boolean) => lab({ edgeworkSign: { x: 1, y: 4, found: false, known } });
+    expect(objectGlows(frameWith({ map: sign(false) }))).toEqual([]);
+    expect(objectGlows(frameWith({ map: sign(true) }))).toEqual([
+      { x: 1.5, y: 4.5, radius: 1.4, strength: 0.6 },
+    ]);
   });
 
   it('always shows the sign, the hatch as far open as the frame says, and the valves', () => {
     const panels = [{ id: 'v', x: 7, y: 2, occupied: true }];
     const map = lab({
-      edgeworkSign: { x: 1, y: 4, found: true },
+      edgeworkSign: { x: 1, y: 4, found: true, known: true },
       exit: { x: 8, y: 4, open: true, openedAt: 1, atExit: [] },
       sabotage: { label: 'Notfall', hint: '', endsAt: 0, panels },
     });
@@ -370,9 +370,8 @@ describe('objects — the lab’s things, in tile space', () => {
     type Station = Parameters<typeof lab>[0]['stations'];
     const stations: Station = [
       {
-        seen: true,
         found: false,
-        known: false,
+        known: true,
         puzzleId: 'kasten',
         x: 2,
         y: 1,
@@ -428,9 +427,8 @@ describe('objects — names wait for discovery', () => {
     y: 1,
     title: 'Kasten',
     status: 'armed' as const,
-    seen: true,
     found: true,
-    known: true,
+    known: true as const,
   };
   /** The chart as the crew knows it: whole, with its name and the rules it prints. */
   const tafel = manual({ id: 'tafel', kind: 'chart', label: 'TAFEL', puzzleIds: ['kasten'] });
@@ -465,6 +463,25 @@ describe('objects — names wait for discovery', () => {
     expect(callsOf(unnamed, 'fillText')).toEqual([]);
   });
 
+  it('lights a source for the armed station only once this player has found it', () => {
+    // The crew knows the chart, the armed station's rules on it, but this player has not found it.
+    const map = lab({ stations: [armed], manuals: [{ ...tafel, found: false }] });
+    const drawnWith = (found: number) => {
+      const frame = frameWith({ map, light: leftOnly, labels: () => found });
+      return { frame, here: strip(drawnAt(drawn(frame), 3.5, 1.5)) };
+    };
+    const before = drawnWith(0);
+    const { pulse, text } = before.frame;
+    const tube = tubeAt(before.frame, 3, 1);
+    const look = { kind: 'chart' as const, label: 'TAFEL', opened: true, pulse, text, tube };
+    expect(before.here).toEqual(
+      recording((c) => drawManualObject(c, { ...look, active: false, found: 0 })),
+    );
+    expect(drawnWith(1).here).toEqual(
+      recording((c) => drawManualObject(c, { ...look, active: true, found: 1 })),
+    );
+  });
+
   it('draws a part nobody has found as what it is: no name to show, whatever the fade', () => {
     const part: MapPart = { id: 'fuse', kind: 'fuse', x: 2.5, y: 3.5, ...glimpse };
     const log = drawn(frameWith({ map: lab({ items: [part] }), labels: () => 1 }));
@@ -485,7 +502,8 @@ describe('objects — names wait for discovery', () => {
   it('names a part and the sign only once found; a note unfound calls for nobody', () => {
     const fuse = item({});
     const notes: MapNote[] = [{ index: 0, x: 7, y: 2, ...glimpse }];
-    const map = lab({ items: [fuse], notes, edgeworkSign: { x: 1, y: 4, found: false } });
+    const sign = { x: 1, y: 4, found: false, known: false };
+    const map = lab({ items: [fuse], notes, edgeworkSign: sign });
     const log = drawn(frameWith({ map, labels: () => 0 }));
     expect(callsOf(drawnAt(log, 2.5, 3.5), 'fillText')).toEqual([]);
     expect(callsOf(drawnAt(log, 1.5, 4.5), 'fillText')).toEqual([]);

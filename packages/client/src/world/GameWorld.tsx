@@ -60,7 +60,7 @@ import { senseDanger, stopDanger } from './danger.js';
 import { doorTurned } from './doors.js';
 import { drawsFrame } from './drawRate.js';
 import { escaping, useEscapeSince, useEscapeSounds } from './escape.js';
-import { answerDiscoveries } from './finds.js';
+import { answerDiscoveries, firstLook } from './finds.js';
 import { useFinaleSounds, type FinaleCue } from './finale.js';
 import { runLight } from './frameLight.js';
 import { frameTrace, traceRequested, type FrameTrace } from './frameTrace.js';
@@ -691,14 +691,14 @@ function hearTheClock(loop: Loop, map: WorldMap): void {
  * and names come up as found (finds.ts, labelFade.ts); a locker or cabinet opening within earshot
  * gets its sound, and so does a part put in its place, a room whose lights came on a relay's
  * click and its warm-up (rooms.ts) — in plain sight, once nothing lies over the world
- * (`lightWhenClear`). Whatever this client finds on its first look was there before it came
- * in.
+ * (`lightWhenClear`). Whatever this client finds on its first look at a run (`firstLook`) was
+ * there before it came in.
  */
 function look(loop: Loop, map: WorldMap): void {
   const { sim } = loop;
   const news = worldNews(sim.seen, map);
   const run = loop.live.current.view.startedAt;
-  const first = sim.seen === null;
+  const first = firstLook(sim.seen, sim.ear, run);
   sim.labels = noteLabels(sim.labels, map, run, sim.time, first);
   // While the world shows as a film, nothing of the game's own speaks over it.
   const listening = { run, first, held: heldBack(loop.live.current), serverNow: clock.now() };

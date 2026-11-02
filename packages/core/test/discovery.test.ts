@@ -176,7 +176,7 @@ describe('what a run has to find', () => {
     expect(findables(carried).some((thing) => thing.key === 'item:ersatzsicherung')).toBe(false);
   });
 
-  it('lists only the consoles of the armed station: none while the lights burn or all is done', () => {
+  it('lists only the armed station’s consoles: none while the lights burn or all is done', () => {
     const consoles = (state: GameState) =>
       findables(state)
         .filter((thing) => thing.find.of === 'console')
@@ -233,6 +233,29 @@ describe('a room the power lights', () => {
   // Blackout's lever lights the Flur and the Archiv: it is the first station.
   const lit = (): GameState => ({ ...blackout(), currentPuzzleIndex: 1 });
 
+  it('shows every player the whole lab while the power is on: what and where, no names', () => {
+    const mission = blackoutMission();
+    const map = (state: GameState) => viewFor(state, 'p1').map;
+    const glimpsedAll = (state: GameState) => {
+      const view = map(state);
+      expect(view?.manuals.length).toBe(mission.map.manuals.length);
+      expect(view?.notes.length).toBe(mission.map.notes.length);
+      expect(view?.items.length).toBe(mission.map.items.length);
+      const things = [...(view?.manuals ?? []), ...(view?.notes ?? [])];
+      expect(things.every((m) => !m.known && m.seen)).toBe(true);
+      expect(JSON.stringify(view?.manuals)).not.toMatch(/label|puzzleIds|needsKey/);
+    };
+    // The opening, before the lights fail: nothing in anybody's sight, all of it seen.
+    const opening = started(mission, 5);
+    expect(opening.presence.sight).toEqual({});
+    glimpsedAll(opening);
+    // In the dark, out of everybody's sight: none of it.
+    const dark = blackout();
+    expect([map(dark)?.manuals, map(dark)?.notes, map(dark)?.items]).toEqual([[], [], []]);
+    // Every station solved, the way out open: the lab lights up whole again.
+    glimpsedAll({ ...dark, currentPuzzleIndex: mission.puzzles.length });
+  });
+
   it('finds nothing for a player two steps in but what the same two rules find', () => {
     const state = lit();
     expect(viewFor(state, 'p1').map?.litRooms).toEqual(['FLUR', 'ARCHIV']);
@@ -265,7 +288,7 @@ describe('discoveries and their chime', () => {
   const listed = (state: GameState, playerId: string) =>
     (state.discoveries[playerId] ?? []).map((one) => [one.key, one.at - T0, one.chime]);
 
-  it('lists a find once, its chime once every 1.5 s a player; a find in the gap stays silent', () => {
+  it('lists a find once, its chime once in 1.5 s a player; a find in the gap stays silent', () => {
     const first = standing(armed(), { found: { p1: ['sign'] }, at: T0 });
     expect(listed(first, 'p1')).toEqual([['sign', 0, true]]);
     const inTheGap = standing(first, { found: { p1: ['source:buch'] }, at: T0 + 1000 });

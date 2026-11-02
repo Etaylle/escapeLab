@@ -13,11 +13,14 @@ import type { GameState } from './state.js';
  * they face, out to LAMP_REACH, nothing in between — for LOOK_MS; a part
  * within ITEM_REACH is found whatever stands between. A console is found
  * only while its station is armed: one passed before is found once it is,
- * as the thing to work then. A room the power lights shows its things, but
- * finds nothing for anybody: the same two rules hold there. What a player
- * has found stays theirs for the run; the crew shares it only as the game
- * already shares things — the minimap, the arrows, a key's lock once
- * somebody has come across it.
+ * as the thing to work then. While the power lights the whole lab — the
+ * opening, before the lights fail, and the way out once every station is
+ * solved (`labLit`) — every player sees all of it, but the light finds
+ * nothing for anybody: the same two rules hold there. In the dark a view
+ * carries a thing nobody has found only while its player has it in sight
+ * (`inSight`). What a player has found stays theirs for the run; the crew
+ * shares it only as the game already shares things — the minimap, the
+ * arrows, a key's lock once somebody has come across it.
  *
  * A find that matters is a discovery for whoever made it, once (`discover`):
  * a console of the armed station, a source printing its rules, a part, a
@@ -193,18 +196,29 @@ export function findables(state: GameState): Findable[] {
 }
 
 /**
- * What a view carries only while its player has it in sight, unless somebody has found it:
- * the sources where the run placed them, the notes, the parts lying loose and every console.
- * The sign, a fixture, always shows.
+ * Whether the power lights the whole lab, so that every player sees all of it: the opening,
+ * before the lights fail, and the way out, once every station is solved.
+ */
+export function labLit(state: GameState): boolean {
+  const solved = state.currentPuzzleIndex >= state.mission.puzzles.length;
+  return state.phase === 'playing' && (state.lightsOutAt === null || solved);
+}
+
+/**
+ * What a view carries only while its player has it in sight: what nobody of the crew has found
+ * — the sources where the run placed them, the notes, the parts lying loose and the consoles of
+ * every station but the armed one. Every view carries the rest whole, the sign, a fixture,
+ * included; and sight is kept of nothing else, so that walking past a corner sends no view.
  */
 export function sightables(state: GameState): Findable[] {
   const { map } = state.mission;
+  const armed = armedPuzzle(state);
   return [
     ...placedSources(state),
     ...notesOf(map),
     ...looseParts(state),
-    ...consolesAt(map.stations),
-  ];
+    ...consolesAt(map.stations.filter((s) => s.puzzleId !== armed)),
+  ].filter((thing) => !crewFound(state, thing.key));
 }
 
 /**

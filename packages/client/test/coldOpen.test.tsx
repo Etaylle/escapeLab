@@ -142,9 +142,8 @@ const archiv: MapView = mapWith({
       y: 1,
       title: 'Notlicht',
       status: 'armed',
-      seen: true,
       found: false,
-      known: false,
+      known: true,
     },
   ],
 });

@@ -10,7 +10,6 @@ const YOU = 'p1';
 /** The fuse, lying on the floor unless `parts` say otherwise. */
 function fuse(parts: Partial<Item> = {}): Item {
   return {
-    seen: true,
     found: true,
     known: true,
     id: 'fuse',

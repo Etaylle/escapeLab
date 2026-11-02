@@ -1,7 +1,7 @@
 import type { KnownPart, KnownSource, MapView, NoteHere, SourceHere } from '@escapelab/core';
 import { inputDevice } from '../input/device.js';
 import { glyph } from '../input/glyphs.js';
-import { known } from './known.js';
+import { isArmed, known } from './known.js';
 import { noteMount } from './notes.js';
 
 /** Prompt and client-side gate for stations and manual objects; the server counts 1.6. */
@@ -68,7 +68,7 @@ export function carriedItem(map: Pick<MapView, 'items'>, playerId: string): Know
 
 /** The manual object prints the rules of the station that is armed now. */
 export function coversArmed(map: Pick<MapView, 'stations'>, manual: KnownSource): boolean {
-  const armed = map.stations.find((s) => s.status === 'armed');
+  const armed = map.stations.find(isArmed);
   return armed !== undefined && manual.puzzleIds.includes(armed.puzzleId);
 }
 
@@ -173,7 +173,7 @@ export function contextAction(
     );
   const stations =
     stationOpen || mine !== undefined || loose === undefined
-      ? map.stations.filter((s) => s.status === 'armed')
+      ? map.stations.filter(isArmed)
       : [];
   const sources = map.manuals.filter(known);
   const candidates: { action: ContextAction; d: number }[] = sources.flatMap((manual) => {

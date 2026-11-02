@@ -18,12 +18,10 @@ const station: MapView['stations'][number] = {
   y: 5,
   title: 'Notstrom',
   status: 'armed',
-  seen: true,
   found: false,
-  known: false,
+  known: true,
 };
 const book: Manual = {
-  seen: true,
   found: true,
   id: 'buch',
   kind: 'book',
@@ -54,7 +52,6 @@ const AT_CABINET = [{ id: 'schrank', kind: 'cabinet', opened: false, needsKey: '
 
 function part(parts: Partial<Item>): Item {
   return {
-    seen: true,
     found: true,
     known: true,
     id: 'fuse',
@@ -373,8 +370,8 @@ describe('carriedItem — what a player has in hand', () => {
  * station at (5,1).
  */
 const ROOM = ['##########', ...Array.from({ length: 5 }, () => '#........#'), '##########'];
-const wallNote: Note = { index: 0, x: 3, y: 0, read: false, seen: true, found: true, known: true };
-const floorNote: Note = { index: 1, x: 7, y: 4, read: true, seen: true, found: true, known: true };
+const wallNote: Note = { index: 0, x: 3, y: 0, read: false, found: true, known: true };
+const floorNote: Note = { index: 1, x: 7, y: 4, read: true, found: true, known: true };
 const noteRoom = mapWith({
   tiles: ROOM,
   notes: [wallNote, floorNote],

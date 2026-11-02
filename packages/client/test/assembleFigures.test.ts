@@ -26,7 +26,6 @@ import { mapWith, type Item } from './fixtures.js';
 /** A carryable lying in the lab, or carried as `parts` say. */
 function item(parts: Partial<Item>): Item {
   return {
-    seen: true,
     found: true,
     known: true,
     id: 'fuse',

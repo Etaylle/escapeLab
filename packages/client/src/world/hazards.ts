@@ -1,5 +1,5 @@
 import type { DronePosition, PartKind } from '@escapelab/core';
-import { drawPropLabel, LABEL_BELOW, type WorldText } from './art.js';
+import { drawFoundLabel, LABEL_BELOW, type WorldText } from './art.js';
 import {
   ALARM,
   AMBER,
@@ -225,12 +225,16 @@ export function drawCarryable(ctx: CanvasRenderingContext2D, o: CarryableOpts): 
   o.glow?.(ctx);
   drawItem(ctx, o.kind, o.pulse);
   ctx.restore();
-  const at = o.labelAt === undefined ? LABEL_BELOW : o.labelAt;
-  if (dressed && at !== null && found > 0 && o.label !== undefined) {
-    ctx.globalAlpha *= found;
-    drawPropLabel(ctx, o.label.toUpperCase(), at, ITEM_LABEL, o.text);
+  if (dressed) {
+    drawCarryableLabel(ctx, o, found);
   }
   ctx.restore();
+}
+
+/** A carryable's name under it as far as it is found (`found`); none where the view tells none. */
+function drawCarryableLabel(ctx: CanvasRenderingContext2D, o: CarryableOpts, found: number): void {
+  const at = o.labelAt === undefined ? LABEL_BELOW : o.labelAt;
+  drawFoundLabel(ctx, o.label?.toUpperCase(), { at, found, color: ITEM_LABEL, text: o.text });
 }
 
 /** The marked spot a carryable has to end up on. */

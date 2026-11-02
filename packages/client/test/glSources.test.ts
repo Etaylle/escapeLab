@@ -111,12 +111,11 @@ describe('lightsOf — what the light layer lights in a frame', () => {
           y: 2,
           title: 'S',
           status: 'armed',
-          seen: true,
           found: false,
-          known: false,
+          known: true,
         },
       ],
-      edgeworkSign: { x: 7, y: 1, found: true },
+      edgeworkSign: { x: 7, y: 1, found: true, known: true },
     });
     const frame = frameWith({ map });
     const glows = lightsOf(frame).filter((light) => light.size === null);

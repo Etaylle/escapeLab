@@ -52,6 +52,8 @@ import { GameWorld } from '../world/GameWorld.js';
 import { IntroOverlay } from '../world/intro/IntroOverlay.js';
 import { airFrom, cutIn, hudBackAt, hudHeld, type IntroCue } from '../world/intro/sequence.js';
 import { useIntro, type Intro } from '../world/intro/useIntro.js';
+import { coversArmed } from '../world/interact.js';
+import { isArmed, known } from '../world/known.js';
 import { dueParts } from '../world/markers.js';
 import { startingSpot, type KnownPositions } from '../world/movement.js';
 import {
@@ -454,10 +456,11 @@ export function readerSawSolve(
   deviceOpen: boolean,
 ): boolean {
   const map = before.map;
-  const armed = map?.stations.find((s) => s.status === 'armed')?.puzzleId;
-  const source = map?.manuals.find((m) => m.id === before.presence.manualId);
-  const read = armed !== undefined && source?.known === true && source.puzzleIds.includes(armed);
-  return read && !deviceOpen && after.currentPuzzleIndex > before.currentPuzzleIndex;
+  if (map === null || deviceOpen || after.currentPuzzleIndex <= before.currentPuzzleIndex) {
+    return false;
+  }
+  const source = map.manuals.filter(known).find((m) => m.id === before.presence.manualId);
+  return source !== undefined && coversArmed(map, source);
 }
 
 /**
@@ -532,7 +535,7 @@ function useOpened(view: PlayerView): {
   toggleInfo: () => void;
 } {
   const [opened, setOpened] = useState(NOTHING_OPEN);
-  const armed = view.map?.stations.find((s) => s.status === 'armed')?.puzzleId ?? null;
+  const armed = view.map?.stations.find(isArmed)?.puzzleId ?? null;
   const atStation = armed !== null && view.presence.stationId === armed;
   const wasAtStation = useRef(atStation);
   useEffect(() => {
@@ -591,7 +594,7 @@ function useOpened(view: PlayerView): {
  */
 export function stationLabel(puzzle: PuzzleView, map: MapView): string {
   const label = `§${puzzle.index + 1} — ${puzzle.title}`;
-  const twoConsoles = map.stations.some((s) => s.status === 'armed' && s.console !== undefined);
+  const twoConsoles = map.stations.some((s) => isArmed(s) && s.console !== undefined);
   return twoConsoles && puzzle.console !== null
     ? `${label} · ${consoleName(puzzle.console)}`
     : label;
@@ -746,7 +749,7 @@ type Point = { x: number; y: number };
  * to carry it now) or what lies in sight; a part for a station further on waits (`dueParts`).
  */
 function goalOf(view: PlayerView, map: MapView, self: Point): Goal {
-  const armedTitle = map.stations.find((s) => s.status === 'armed')?.title ?? null;
+  const armedTitle = map.stations.find(isArmed)?.title ?? null;
   const out = escaping(map);
   const parts = dueParts(map, self);
   const forNow = parts.filter((i) => i.requiredFor === null || i.requiredFor.ahead === 0);

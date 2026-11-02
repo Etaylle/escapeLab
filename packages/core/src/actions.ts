@@ -10,7 +10,7 @@ import {
 } from './state.js';
 import type { DailyStart } from './daily.js';
 import type { Difficulty } from './difficulty.js';
-import { discover, findKey, foundBy, type FindKey } from './discovery.js';
+import { discover, type FindKey } from './discovery.js';
 import { generateEdgework } from './edgework.js';
 import { fail } from './errors.js';
 import type { ManualDef, Mission } from './mission.js';
@@ -1385,7 +1385,7 @@ export const NOTE_READ = 'Notiz gelesen';
  * A player standing at a note of the last shift reads it, for nothing: no
  * time, no alarm, no hint counted. The first read of a note goes into the
  * run report; reading it again changes nothing. Proximity is the presence
- * the server derived, and only a note the player has found can be read.
+ * the server derived: it counts only a player who has found the note.
  */
 function readNote(
   state: GameState,
@@ -1404,9 +1404,7 @@ function readNote(
   if (state.mission.map.notes[action.note] === undefined) {
     fail('Diese Notiz gibt es hier nicht.');
   }
-  // Counted at it by distance alone, a player round a pillar has not found it: no reading there.
-  const at = (state.presence.notes[noteKey(action.note)] ?? []).includes(action.playerId);
-  if (!at || !foundBy(state, action.playerId, findKey({ of: 'note', index: action.note }))) {
+  if (!(state.presence.notes[noteKey(action.note)] ?? []).includes(action.playerId)) {
     fail('Nur direkt davor.');
   }
   if (state.notesRead.includes(action.note)) {

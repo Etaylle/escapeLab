@@ -1,9 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Discovery, MapView } from '@escapelab/core';
-import { findWords, freshEar, hearDiscoveries, type Listening } from '../src/world/finds.js';
+import type { Discovery } from '@escapelab/core';
+import {
+  findWords,
+  firstLook,
+  freshEar,
+  hearDiscoveries,
+  type Listening,
+} from '../src/world/finds.js';
 import type { Caption } from '../src/world/render/frame.js';
 import { fakeAudio, freshAudio, startsOf } from './fakeAudio.js';
-import { mapWith, type Item, type Manual } from './fixtures.js';
+import { mapWith, type Item, type Manual, type Station } from './fixtures.js';
 
 const T = 1_000_000;
 const RUN = 7;
@@ -17,7 +23,6 @@ const locker: Manual = {
   puzzleIds: ['kabel'],
   opened: false,
   needsKey: null,
-  seen: true,
   found: true,
   known: true,
 };
@@ -31,18 +36,15 @@ const fuse: Item = {
   delivered: false,
   deliverTo: null,
   requiredFor: null,
-  seen: true,
   found: true,
   known: true,
 };
-type Station = MapView['stations'][number];
 const station = (parts: Partial<Station>): Station => ({
   puzzleId: 'kabel',
   x: 9,
   y: 2,
   title: 'Kabel',
   status: 'armed',
-  seen: true,
   found: true,
   known: true,
   ...parts,
@@ -78,14 +80,15 @@ describe('hearDiscoveries — what of the view’s discoveries is news to this s
   it('on its first look takes as news only what was found just now', () => {
     const before = { ...SPIND, at: T - 1501 };
     const now = { ...FUSE, at: T - 1500 };
-    const { ear, news } = hearDiscoveries(freshEar(null), [before, now], looking(T, { first: true }));
+    const onFirstLook = looking(T, { first: true });
+    const { ear, news } = hearDiscoveries(freshEar(null), [before, now], onFirstLook);
     expect(news).toEqual([{ ...now, sounded: false }]);
     expect(hearDiscoveries(ear, [before, now, SIGN], looking(T + 1540)).news).toEqual([
       { ...SIGN, sounded: true },
     ]);
   });
 
-  it('lets a chime go while the opening holds the screen, or once it comes late: never later', () => {
+  it('lets a chime go while the opening holds the screen, or comes late: never later', () => {
     const held = hearDiscoveries(freshEar(RUN), [SPIND], looking(T + 40, { held: true }));
     expect(held.news).toEqual([{ ...SPIND, sounded: false }]);
     expect(hearDiscoveries(held.ear, [SPIND], looking(T + 400)).news).toEqual([]);
@@ -94,6 +97,21 @@ describe('hearDiscoveries — what of the view’s discoveries is news to this s
     expect(late).toEqual([{ ...SPIND, sounded: false }]);
     const inTime = hearDiscoveries(freshEar(RUN), [SPIND], looking(T + 1500)).news;
     expect(inTime).toEqual([{ ...SPIND, sounded: true }]);
+  });
+
+  it('takes its first look at a rematch as a first look: what was found before is no news', () => {
+    const lab = mapWith({});
+    expect(firstLook(null, freshEar(null), RUN)).toBe(true);
+    const heard = hearDiscoveries(freshEar(RUN), [SPIND], looking(T + 40)).ear;
+    expect(firstLook(lab, heard, RUN)).toBe(false);
+    // The rematch has been on a while when this screen first looks at it.
+    const rematch = RUN + 60_000;
+    const first = firstLook(lab, heard, rematch);
+    expect(first).toBe(true);
+    const old = { ...SIGN, at: T + 5000 };
+    expect(hearDiscoveries(heard, [old], looking(T + 9000, { run: rematch, first })).news).toEqual(
+      [],
+    );
   });
 
   it('starts afresh with a run of its own', () => {
@@ -107,7 +125,7 @@ describe('hearDiscoveries — what of the view’s discoveries is news to this s
 describe('findWords — what rises over a find', () => {
   const map = mapWith({
     manuals: [locker],
-    notes: [{ index: 0, x: 2, y: 0, read: false, seen: true, found: true, known: true }],
+    notes: [{ index: 0, x: 2, y: 0, read: false, found: true, known: true }],
     items: [fuse, { ...fuse, id: 'key', kind: 'key', label: 'SCHLÜSSEL' }],
     stations: [
       station({ puzzleId: 'licht', x: 11, y: 7, look: 'lever' }),
@@ -115,7 +133,7 @@ describe('findWords — what rises over a find', () => {
       station({ x: 2, y: 7, console: 'b' }),
       station({ puzzleId: 'code', x: 9, y: 3 }),
     ],
-    edgeworkSign: { x: 2, y: 3, found: true },
+    edgeworkSign: { x: 2, y: 3, found: true, known: true },
     tiles: ['#####', '#...#', '#####'],
   });
 
@@ -147,7 +165,7 @@ describe('answerDiscoveries — every caption, the chime where it chimes, on the
   beforeEach(() => fakeAudio());
   afterEach(() => vi.unstubAllGlobals());
 
-  const sign = { x: 2, y: 3, found: true };
+  const sign = { x: 2, y: 3, found: true, known: true };
   const map = (discoveries: Discovery[]) =>
     mapWith({ manuals: [locker], items: [fuse], discoveries, edgeworkSign: sign });
 
@@ -158,7 +176,8 @@ describe('answerDiscoveries — every caption, the chime where it chimes, on the
     // The first look: what was found well before stays as it was, silent and uncaptioned.
     const box = { of: 'console', puzzleId: 'kabel', console: null } as const;
     const old: Discovery = { find: box, at: T - 5000, chime: true };
-    let ear = answerDiscoveries(freshEar(null), map([old]), looking(T, { first: true }), captions, 1);
+    const onFirstLook = looking(T, { first: true });
+    let ear = answerDiscoveries(freshEar(null), map([old]), onFirstLook, captions, 1);
     expect([startsOf('discovery').length, captions.length]).toEqual([0, 0]);
     const spind: Discovery = { ...SPIND, at: T + 3000 };
     ear = answerDiscoveries(ear, map([old, spind]), looking(T + 3040), captions, 2);

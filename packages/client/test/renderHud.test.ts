@@ -9,6 +9,18 @@ import { mapWith, type Item } from './fixtures.js';
 
 const layout = { ox: 600, oy: 100, cell: 10, mw: 100, mh: 60 };
 
+/** Each fill the minimap of `map` makes: its colour and where its cell starts, in pixels. */
+function minimapFills(map: MapView): unknown[][] {
+  const { ctx, log } = fakeCanvas();
+  draw(ctx, frameWith({ map, minimap: layout }));
+  return log.flatMap((entry, i) => {
+    const next = log[i + 1];
+    return entry.kind === 'set' && entry.name === 'fillStyle' && next?.kind === 'call'
+      ? [[entry.value, ...next.args.slice(0, 2)]]
+      : [];
+  });
+}
+
 describe('minimapLayout — where the corner minimap goes', () => {
   const map = mapWith({ width: 20, height: 13 });
   /** The chat's handle in a laptop window's bottom right corner, reaching 100 px up. */
@@ -112,14 +124,12 @@ describe('hud — the corner minimap on the canvas', () => {
           y: 1,
           title: 'Kasten',
           status: 'armed',
-          seen: true,
           found: false,
-          known: false,
+          known: true,
         },
       ],
       manuals: [
         {
-          seen: true,
           found: true,
           known: true,
           id: 'm',
@@ -134,18 +144,22 @@ describe('hud — the corner minimap on the canvas', () => {
         { seen: true, found: false, known: false, id: 'n', kind: 'chart', x: 4, y: 1 },
       ],
     });
-    const { ctx, log } = fakeCanvas();
-    draw(ctx, frameWith({ map, minimap: layout }));
-    const fills = log.flatMap((entry, i) => {
-      const next = log[i + 1];
-      return entry.kind === 'set' && entry.name === 'fillStyle' && next?.kind === 'call'
-        ? [[entry.value, ...next.args.slice(0, 2)]]
-        : [];
-    });
+    const fills = minimapFills(map);
     // The armed station teal, its rules blue; the chart nobody has come across, not at all.
     expect(fills).toContainEqual([css(TEAL), 670, 110]);
     expect(fills).toContainEqual([css(READ_BLUE), 620, 110]);
     expect(fills.filter(([, x, y]) => x === 640 && y === 110)).toEqual([]);
+  });
+
+  it('marks a station the crew knows of, and none merely in sight', () => {
+    const spot = { puzzleId: 'netz', x: 5, y: 1 };
+    const glimpsed = { ...spot, seen: true, found: false, known: false } as const;
+    const known = { ...spot, title: 'Netz', status: 'locked', found: false, known: true } as const;
+    const at = (map: MapView) => minimapFills(map).filter(([, x, y]) => x === 650 && y === 110);
+    expect(at(mapWith({ width: 10, height: 6, tiles: TILES, stations: [glimpsed] }))).toEqual([]);
+    const marked = at(mapWith({ width: 10, height: 6, tiles: TILES, stations: [known] }));
+    expect(marked).toHaveLength(1);
+    expect(marked[0]?.[0]).not.toBe(css(TEAL));
   });
 
   it('dots the drones by their state and the crew in their colours, yours ringed in white', () => {
@@ -256,9 +270,8 @@ describe('hud — the goal on the minimap', () => {
       title: 'Kette',
       status: 'armed',
       console: 'a',
-      seen: true,
       found: false,
-      known: false,
+      known: true,
     },
     {
       puzzleId: 'kette',
@@ -267,9 +280,8 @@ describe('hud — the goal on the minimap', () => {
       title: 'Kette',
       status: 'armed',
       console: 'b',
-      seen: true,
       found: false,
-      known: false,
+      known: true,
     },
     {
       puzzleId: 'reaktor',
@@ -277,13 +289,11 @@ describe('hud — the goal on the minimap', () => {
       y: 1,
       title: 'Reaktor',
       status: 'locked',
-      seen: true,
       found: false,
-      known: false,
+      known: true,
     },
   ];
   const fuse: Item = {
-    seen: true,
     found: true,
     known: true,
     id: 'fuse',

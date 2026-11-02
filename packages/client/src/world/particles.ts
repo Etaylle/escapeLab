@@ -2,6 +2,7 @@ import type { PlayerView } from '@escapelab/core';
 import { alarmNotice, type Alarm } from './alarm.js';
 import { animTick, ANIM_HZ } from './anim.js';
 import { seededRandom } from './brush.js';
+import { isArmed } from './known.js';
 
 /**
  * The world's particles, small and few, from one pool: dust motes drifting
@@ -336,7 +337,7 @@ export function shortOf(
   if (alarm === null) {
     return null;
   }
-  const box = view.map?.stations.find((s) => s.status === 'armed' && s.look === 'fusebox');
+  const box = view.map?.stations.find((s) => isArmed(s) && s.look === 'fusebox');
   const notice = alarmNotice(view.events, view.alarms);
   if (box === undefined || notice?.cause !== 'Fehlversuch' || notice.seq !== alarm.seq) {
     return null;

@@ -195,11 +195,6 @@ describe('reading a note', () => {
     expect(() => applyAction(paused, read('p2', 0))).toThrow(/Pausiert/);
   });
 
-  it('turns away a read of a note counted there round a pillar, not found from there', () => {
-    const behind = standing(lightsOut(started(mission)), { notes: { [noteKey(0)]: ['p1'] } });
-    expect(() => applyAction(behind, read('p1', 0))).toThrow('Nur direkt davor.');
-  });
-
   it('loses a run read after the clock ran out', () => {
     const state = atNotes({ [noteKey(0)]: ['p2'] });
     const late = applyAction(state, read('p2', 0, (state.deadlineAt ?? 0) + 1));
@@ -226,15 +221,15 @@ describe('notes in the views', () => {
     });
     expect(viewFor(found, 'p1').map?.notes).toEqual([
       { index: 0, x: 4, y: 0, seen: true, found: false, known: false },
-      { index: 1, x: 7, y: 2, read: false, seen: false, found: false, known: true },
+      { index: 1, x: 7, y: 2, read: false, found: false, known: true },
     ]);
     // Ben has the wall note neither in sight nor found: it is not on his map at all.
     expect(viewFor(found, 'p2').map?.notes).toEqual([
-      { index: 1, x: 7, y: 2, read: false, seen: false, found: true, known: true },
+      { index: 1, x: 7, y: 2, read: false, found: true, known: true },
     ]);
     expect(viewForSpectator(found).map?.notes).toEqual([
-      { index: 0, x: 4, y: 0, read: false, seen: true, found: true, known: true },
-      { index: 1, x: 7, y: 2, read: false, seen: true, found: true, known: true },
+      { index: 0, x: 4, y: 0, read: false, found: true, known: true },
+      { index: 1, x: 7, y: 2, read: false, found: true, known: true },
     ]);
     const nobodyThere = JSON.stringify([viewFor(found, 'p1'), viewForSpectator(found)]);
     expect(nobodyThere).not.toContain(FLOOR_NOTE);
@@ -254,7 +249,6 @@ describe('notes in the views', () => {
       x: 4,
       y: 0,
       read: true,
-      seen: false,
       found: false,
       known: true,
     });
@@ -268,12 +262,6 @@ describe('notes in the views', () => {
     expect(viewFor(away, 'p1').noteHere).toBeNull();
     expect(JSON.stringify(viewFor(away, 'p1'))).not.toContain(FLOOR_NOTE);
     expect(JSON.stringify(viewForSpectator(away))).not.toContain(FLOOR_NOTE);
-  });
-
-  it('gives no words to who is counted at a note round a pillar, not having found it', () => {
-    const behind = standing(lightsOut(started(mission)), { notes: { [noteKey(0)]: ['p1'] } });
-    expect(viewFor(behind, 'p1').noteHere).toBeNull();
-    expect(JSON.stringify(viewFor(behind, 'p1'))).not.toContain(WALL_NOTE);
   });
 });
 

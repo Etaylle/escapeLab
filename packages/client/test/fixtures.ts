@@ -5,6 +5,7 @@ import {
   type ConsoleId,
   type KnownPart,
   type KnownSource,
+  type KnownStation,
   type MapView,
   type PuzzleView,
 } from '@escapelab/core';
@@ -55,7 +56,8 @@ export type Manual = KnownSource;
 export type Plate = MapView['plates'][number];
 /** A part the crew knows of, as the tests build their maps. */
 export type Item = KnownPart;
-export type Station = MapView['stations'][number];
+/** A station's spot the crew knows of, or the armed one, as the tests build their maps. */
+export type Station = KnownStation;
 
 /**
  * Markup with every icon (screens/Icon.tsx) written as its name in brackets,

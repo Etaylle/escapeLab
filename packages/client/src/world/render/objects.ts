@@ -27,6 +27,7 @@ import {
   type CarryableOpts,
 } from '../hazards.js';
 import { coversArmed, opensCabinet } from '../interact.js';
+import { statusOf } from '../known.js';
 import { noteMount } from '../notes.js';
 import { inTiles, profiled, type Frame } from './frame.js';
 import { drawGlow, namedThing, type Named } from './highlight.js';
@@ -122,9 +123,10 @@ function drawStations(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const { map, light, pulse } = frame;
   const levers = frame.players.filter((p) => p.connected).length;
   for (const station of map.stations) {
-    if (station.status !== 'locked' || light.shown(station.x, station.y)) {
+    const status = statusOf(station);
+    if (status !== 'locked' || light.shown(station.x, station.y)) {
       const look = {
-        status: station.status,
+        status,
         pulse,
         console: station.console ?? null,
         tube: tubeAt(frame, station.x, station.y),

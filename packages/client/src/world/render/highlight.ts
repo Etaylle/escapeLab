@@ -1,4 +1,4 @@
-import type { KnownSource, PartKind } from '@escapelab/core';
+import type { KnownSource, KnownStation, PartKind, StationSpotLook } from '@escapelab/core';
 import {
   drawFusebox,
   drawLeverBox,
@@ -11,7 +11,7 @@ import { TAU } from '../brush.js';
 import { PX } from '../figure.js';
 import { drawCarryable, drawDropZone } from '../hazards.js';
 import type { Subject } from '../interact.js';
-import { known } from '../known.js';
+import { known, statusOf } from '../known.js';
 import { noteMount } from '../notes.js';
 import {
   CORE,
@@ -51,8 +51,6 @@ export const BOB_S = 2;
 const PROP_BOX = { x: -0.5, y: -0.6, w: 1, h: 1.1 };
 const NOTE_BOX = { x: -0.7, y: -0.7, w: 1.4, h: 1.4 };
 
-type Station = WorldMap['stations'][number];
-
 /** How strong the halo is at sim time `time`, s: a sine from HALO_FAINT to HALO_FULL. */
 export function haloAlpha(time: number, reduced: boolean): number {
   if (reduced) {
@@ -69,7 +67,7 @@ export function bobLift(time: number, reduced: boolean): number {
 
 /** A station's console, a fuse box or a main switch as objects.ts draws it, without dressing. */
 export function stationShape(
-  station: Pick<Station, 'status' | 'console' | 'look'>,
+  station: Pick<KnownStation, 'status'> & StationSpotLook,
   levers: number,
 ): Shape {
   const { status } = station;
@@ -140,7 +138,11 @@ function stationPlace(frame: Frame, at: { x: number; y: number }): Place | null 
   const levers = frame.players.filter((p) => p.connected).length;
   return station === undefined
     ? null
-    : { x: station.x + 0.5, y: station.y + 0.5, shape: stationShape(station, levers) };
+    : {
+        x: station.x + 0.5,
+        y: station.y + 0.5,
+        shape: stationShape({ ...station, status: statusOf(station) }, levers),
+      };
 }
 
 function manualPlace(map: WorldMap, id: string): Place | null {

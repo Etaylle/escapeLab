@@ -27,13 +27,11 @@ const YOU = 'p1';
 const HERE = { x: 10.5, y: 6.5 };
 
 function station(x: number, y: number, status: Station['status']): Station {
-  const unseen = { seen: false, found: false, known: false };
-  return { puzzleId: 'notstrom', x, y, title: 'Notstrom', status, ...unseen };
+  return { puzzleId: 'notstrom', x, y, title: 'Notstrom', status, found: false, known: true };
 }
 
 function item(parts: Partial<Item>): Item {
   return {
-    seen: true,
     found: true,
     known: true,
     kind: 'fuse',
@@ -61,7 +59,6 @@ describe('markerTargets — what the player is pointed at', () => {
 
   it('points at the nearer console of a station with two, named by its console', () => {
     const locker: Manual = {
-      seen: true,
       found: true,
       known: true,
       id: 'spind',
@@ -190,7 +187,6 @@ describe('markerTargets — what the player is pointed at', () => {
 
   it('points at every manual object printing the armed station, blue like a part', () => {
     const book: Manual = {
-      seen: true,
       found: true,
       known: true,
       id: 'buch',
@@ -224,7 +220,6 @@ describe('markerTargets — what the player is pointed at', () => {
 
   it('points at no manual object once every station is done, or while hands are full', () => {
     const book: Manual = {
-      seen: true,
       found: true,
       known: true,
       id: 'buch',

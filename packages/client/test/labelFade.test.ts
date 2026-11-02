@@ -18,7 +18,6 @@ const book: Manual = {
   puzzleIds: [],
   opened: true,
   needsKey: null,
-  seen: true,
   found: true,
   known: true,
 };
@@ -34,7 +33,6 @@ const fuse: Item = {
   delivered: false,
   deliverTo: null,
   requiredFor: null,
-  seen: true,
   found: true,
   known: true,
 };
@@ -46,11 +44,11 @@ describe('labels — names wait for discovery', () => {
     const map = mapWith({
       manuals: [book, locker],
       notes: [
-        { index: 0, x: 2, y: 0, read: false, seen: true, found: true, known: true },
-        { index: 1, x: 7, y: 2, read: false, seen: true, found: false, known: true },
+        { index: 0, x: 2, y: 0, read: false, found: true, known: true },
+        { index: 1, x: 7, y: 2, read: false, found: false, known: true },
       ],
       items: [fuse, { ...fuse, id: 'key', found: false }],
-      edgeworkSign: { x: 1, y: 1, found: true },
+      edgeworkSign: { x: 1, y: 1, found: true, known: true },
     });
     expect(foundIn(map)).toEqual([
       { of: 'source', id: 'buch' },
@@ -58,14 +56,15 @@ describe('labels — names wait for discovery', () => {
       { of: 'item', id: 'fuse' },
       { of: 'sign' },
     ]);
-    expect(foundIn(mapWith({ edgeworkSign: { x: 1, y: 1, found: false } }))).toEqual([]);
+    const sign = { x: 1, y: 1, found: false, known: false };
+    expect(foundIn(mapWith({ edgeworkSign: sign }))).toEqual([]);
   });
 
   it('shows at once what was found before the screen looked, a later find from then', () => {
     const first = noteLabels(labelClock(null), mapWith({ manuals: [book, locker] }), 7, 10, true);
     expect(labelAlpha(first, BUCH, 10, false)).toBe(1);
     expect(labelAlpha(first, SPIND, 10, false)).toBe(0);
-    const found = mapWith({ manuals: [book, { ...locker, seen: true, found: true, known: true }] });
+    const found = mapWith({ manuals: [book, { ...locker, found: true, known: true }] });
     const later = noteLabels(first, found, 7, 12, false);
     expect(labelAlpha(later, SPIND, 12, false)).toBe(0);
     expect(labelAlpha(later, SPIND, 12 + LABEL_FADE_S / 2, false)).toBeCloseTo(0.5);
@@ -77,7 +76,7 @@ describe('labels — names wait for discovery', () => {
 
   it('cuts straight to the name where the player asked for less motion; none unfound', () => {
     const first = noteLabels(labelClock(null), mapWith({ manuals: [book, locker] }), 7, 10, true);
-    const found = mapWith({ manuals: [{ ...locker, seen: true, found: true, known: true }] });
+    const found = mapWith({ manuals: [{ ...locker, found: true, known: true }] });
     const later = noteLabels(first, found, 7, 12, false);
     expect(labelAlpha(later, SPIND, 12, true)).toBe(1);
     expect(labelAlpha(first, SPIND, 10, true)).toBe(0);
