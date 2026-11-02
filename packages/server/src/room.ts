@@ -26,9 +26,11 @@ import {
   type ClientMessage,
   type DailyStart,
   type Difficulty,
+  type Findable,
   type FindKey,
   type GameState,
   type Glances,
+  type Look,
   type MapDef,
   type Mission,
   type PlayerPosition,
@@ -377,7 +379,6 @@ export class Room {
         break;
       case 'back-to-lobby':
         this.positions.clear();
-        this.glances.clear();
         this.dispatch({ type: 'back-to-lobby', playerId });
         this.next = null;
         break;
@@ -657,8 +658,6 @@ export class Room {
       return;
     }
     this.positions.clear();
-    // A glance of the last run finds nothing in this one.
-    this.glances.clear();
     for (const player of this.state.players) {
       const spawn = player.spawn;
       this.positions.set(player.id, {
@@ -761,31 +760,73 @@ export class Room {
   private findsNow(now: number): Record<string, FindKey[]> {
     const found: Record<string, FindKey[]> = {};
     if (this.state.paused !== null) {
-      this.glances.clear();
-      this.armGlances(null, now);
+      this.forgetGlances();
       return found;
     }
-    const map = this.state.mission.map;
-    const shut = shutDoors(map, this.state);
+    const shut = shutDoors(this.state.mission.map, this.state);
     const things = findables(this.state);
     let dueAt: number | null = null;
     for (const player of this.state.players) {
-      const pos = this.positions.get(player.id);
-      if (!player.connected || pos === undefined) {
-        this.glances.delete(player.id);
+      const look = this.lookFor(player, things, shut, now);
+      if (look === null) {
         continue;
       }
-      const had = new Set(this.state.found[player.id] ?? []);
-      const fresh = things.filter((thing) => !had.has(thing.key));
-      const look = lookAround(map, shut, pos, fresh, this.glances.get(player.id) ?? {}, now);
-      this.glances.set(player.id, look.glances);
       if (look.found.length > 0) {
         found[player.id] = look.found;
       }
-      dueAt = look.dueAt === null ? dueAt : Math.min(dueAt ?? Infinity, look.dueAt);
+      if (look.dueAt !== null) {
+        dueAt = Math.min(dueAt ?? Infinity, look.dueAt);
+      }
     }
     this.armGlances(dueAt, now);
     return found;
+  }
+
+  /**
+   * One player's look round at `now`, of what they have not found yet among `things`, keeping
+   * their glances still running; null for a player away or not placed yet. (One away pauses the
+   * run, and a pause lets every glance go.)
+   */
+  private lookFor(
+    player: GameState['players'][number],
+    things: readonly Findable[],
+    shut: ReadonlySet<string>,
+    now: number,
+  ): Look | null {
+    const pos = this.positions.get(player.id);
+    if (!player.connected || pos === undefined) {
+      return null;
+    }
+    const had = new Set(this.state.found[player.id] ?? []);
+    const fresh = things.filter((thing) => !had.has(thing.key));
+    const glances = this.glances.get(player.id) ?? {};
+    const look = lookAround(this.state.mission.map, shut, pos, fresh, glances, now);
+    this.glances.set(player.id, look.glances);
+    return look;
+  }
+
+  /** Lets every running glance go, and the look that would have ended the next of them. */
+  private forgetGlances(): void {
+    this.glances.clear();
+    this.armGlances(null, 0);
+  }
+
+  /**
+   * What there is to find and to see as the run stands, in one string: the doors shut, the
+   * station armed, the parts lying loose, a pause. Outside a run, just its phase.
+   */
+  private findingWorld(): string {
+    const { state } = this;
+    if (state.phase !== 'playing') {
+      return state.phase;
+    }
+    const shut = [...shutDoors(state.mission.map, state)].sort().join(' ');
+    const armed = lightsAreOut(state) ? state.currentPuzzleIndex : -1;
+    const loose = Object.entries(state.items)
+      .filter(([, item]) => item.carriedBy === null && !item.delivered)
+      .map(([id, item]) => `${id}@${item.x},${item.y}`)
+      .join(' ');
+    return `${shut}|${armed}|${loose}|${state.paused === null ? 'on' : 'paused'}`;
   }
 
   /**
@@ -1165,10 +1206,15 @@ export class Room {
 
   private dispatch(action: Action): void {
     const wasPlaying = this.state.phase === 'playing';
+    const world = this.findingWorld();
     this.state = applyAction(this.state, action);
     // A run ends exactly once, won or lost; a rematch is a run of its own.
     if (wasPlaying && (this.state.phase === 'won' || this.state.phase === 'lost')) {
       this.onRunFinished(runReport(this.state, this.code));
+    }
+    // A glance of one run finds nothing in the next.
+    if (this.state.phase !== 'playing') {
+      this.forgetGlances();
     }
     this.reconcileTimer();
     this.reconcileLights();
@@ -1178,6 +1224,10 @@ export class Room {
     this.reconcileSabotage();
     this.reconcileRelayTick();
     this.broadcast();
+    // A door opened, a part put down, a station armed: whoever stands still sees it as well.
+    if (action.type !== 'set-presence' && this.findingWorld() !== world) {
+      this.reconcilePresence();
+    }
   }
 
   /**

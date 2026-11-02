@@ -137,6 +137,46 @@ describe('a room where things are found by reach or by the lamp', () => {
     room.dispose();
   });
 
+  it('lets a look of one run go with it: the next run looks anew', () => {
+    const { room, anna, ben } = started();
+    const spawn = lastView(anna).map?.yourSpawn ?? { x: 0, y: 0 };
+    const here = { x: spawn.x + 0.5, y: spawn.y + 0.5 };
+    // Turned from the box at once, then back to it as the clock runs out: a look cut short.
+    turn(room, anna, here, Math.PI);
+    vi.advanceTimersByTime(hall.timeLimitSec * 1000 - 100);
+    turn(room, anna, here, 0);
+    vi.advanceTimersByTime(200);
+    expect(lastView(anna).phase).toBe('lost');
+    room.setReady(ben.playerId, true);
+    room.setReady(anna.playerId, true);
+    const box = () => lastView(anna).map?.stations[0]?.found;
+    expect([lastView(anna).phase, box()]).toEqual(['playing', false]);
+    vi.advanceTimersByTime(249);
+    expect(box()).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(box()).toBe(true);
+    room.dispose();
+  });
+
+  it('finds the lever a player stands by as the lights die, without a step (Blackout)', () => {
+    const { room, anna, ben } = started(blackout, 5);
+    // Ben skipped and walked up under the lever while the lights still burn: nothing to find.
+    walkTo(room, ben, 11.5, 8.5);
+    vi.advanceTimersByTime(2000);
+    const lever = () => lastView(ben).map?.stations.find((s) => s.look === 'lever');
+    expect(lever()?.found).toBe(false);
+    room.act(ben.playerId, { kind: 'intro-done' });
+    room.act(anna.playerId, { kind: 'intro-done' });
+    const out = Date.now();
+    expect(lastView(ben).lights.out).toBe(true);
+    expect(lever()?.found).toBe(true);
+    expect(lastView(ben).map?.chimes.at(-1)).toEqual({
+      find: { of: 'console', puzzleId: 'notlicht', console: null },
+      at: out,
+    });
+    room.dispose();
+  });
+
   it('chimes for whoever found it, the find that matters most, then nothing for 1.5 s', () => {
     const { room, anna, ben, startedAt } = started();
     // At the start each finds the sign beside the spawns; the box ahead takes a look.

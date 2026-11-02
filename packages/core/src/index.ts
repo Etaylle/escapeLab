@@ -163,8 +163,10 @@ export {
   lookAround,
   type Chime,
   type Find,
+  type Findable,
   type FindKey,
   type Glances,
+  type Look,
 } from './discovery.js';
 export { type MapDef } from './mission.js';
 export {
