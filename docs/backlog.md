@@ -115,9 +115,10 @@ die Entscheidung.
 ### T-6 Entdeckung ist eine Handlung — Status: im PR (N-discovery) · Größe: M
 - Uros: „Nach den ersten Bewegungen im Raum ist schon alles aufgedeckt, der Sound klingelt paar
   Mal." Heute: 3,5 Kacheln + Sichtlinie. Neu: 2 Kacheln oder im Lampenkegel (250 ms) mit
-  Sichtlinie, ein Pult erst, wenn seine Station dran ist; Unentdecktes ohne Beschriftung;
-  Glöckchen nur für Pult und Quelle der aktiven Station, Notiz, Teil, Schild; ≤ 1 je 1,5 s, nie
-  zweimal je Objekt; Deko nie.
+  Sichtlinie, ein Pult erst, wenn seine Station dran ist; Unentdecktes nur, solange es in
+  Sichtlinie liegt, und dann ohne Beschriftung, Regeln oder Schlüssel; Hinweistext für Pult und
+  Quelle der aktiven Station, Notiz, Teil, Schild, das Glöckchen dazu ≤ 1 je 1,5 s; nie zweimal
+  je Objekt; Deko nie.
 - Beweis: Captures beim Betreten des Archivs, Glöckchen-Zählung über die Audio-Probe.
 
 ### T-4 Leerlauf zu zweit — Status: wartet (Entscheidung Uros) · Größe: M
