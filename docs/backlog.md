@@ -112,7 +112,7 @@ die Entscheidung.
   hat. Phrasen je Mission aus `mission.json`, davon zwei mit Platzhalter (Zahl/Farbe/Dienst),
   per Steuerkreuz/Taste wählbar. Beweis: Tests, Capture des Chat-Rads in Blackout.
 
-### T-6 Entdeckung ist eine Handlung — Status: im PR (N-discovery) · Größe: M
+### T-6 Entdeckung ist eine Handlung — Status: erledigt (N-discovery, Merge 2026-11-04) · Größe: M
 - Uros: „Nach den ersten Bewegungen im Raum ist schon alles aufgedeckt, der Sound klingelt paar
   Mal." Heute: 3,5 Kacheln + Sichtlinie. Neu: 2 Kacheln oder im Lampenkegel (250 ms) mit
   Sichtlinie, ein Pult erst, wenn seine Station dran ist; Unentdecktes im Dunkeln nur, solange
@@ -121,6 +121,11 @@ die Entscheidung.
   gefunden hat; Hinweistext für Pult und Quelle der aktiven Station, Notiz, Teil, Schild, das
   Glöckchen dazu ≤ 1 je 1,5 s; nie zweimal je Objekt; Deko nie.
 - Beweis: Captures beim Betreten des Archivs, Glöckchen-Zählung über die Audio-Probe.
+
+### T-7 Anwesenheit an Stationen nur ohne Wand — Status: bereit · Größe: S
+- Seit N-discovery zählen Quellen, Notizen und Schild nur Finder; an Stationen zählt Anwesenheit
+  weiterhin nach Abstand allein (1,6 Kacheln, Wände ignoriert). Angleichen: Anwesenheit am Pult
+  nur mit Sichtlinie oder nach eigenem Fund; Test wie der Säulen-Test der Quellen.
 
 ### H-1 Flucht-Budget relativ zum Runner — Status: bereit · Größe: S
 - CI auf c23afc5 (gleicher Code wie das grüne 65e3e1e): Systemcheck-Flucht p50 33,4 / p95 50,1
