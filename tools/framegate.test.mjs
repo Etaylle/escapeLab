@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AGAIN_AFTER_MS, gateWindow } from './framegate.mjs';
+import {
+  AGAIN_AFTER_MS,
+  allowanceOf,
+  gateWindow,
+  PACE_FACTOR,
+  p95Text,
+  paceOf,
+} from './framegate.mjs';
 
 const BUDGET = 40;
 
@@ -23,7 +30,7 @@ function fakeWindow(...p95s) {
   };
 }
 
-describe('gateWindow — a frame window against the budget, looked at again once', () => {
+describe('gateWindow — a frame window against its allowance, looked at again once', () => {
   it('passes a window within the budget as it is, and never looks again', async () => {
     const window = fakeWindow(16.7);
     const gate = await gateWindow({ p95: 16.7 }, BUDGET, window.measure, window.pause);
@@ -70,5 +77,65 @@ describe('gateWindow — a frame window against the budget, looked at again once
 
   it('waits a second between the two looks', () => {
     assert.equal(AGAIN_AFTER_MS, 1000);
+  });
+});
+
+describe('allowanceOf — the budget, or twice the run’s own pace, whichever is more', () => {
+  it('passes the escape of a slow runner at 60 ms against its pacing at 33.4', async () => {
+    const allowed = allowanceOf(BUDGET, 33.4);
+    assert.equal(allowed.text, 'allowed 66.8 (2 × pacing 33.4)');
+    const window = fakeWindow(60);
+    const gate = await gateWindow({ p95: 60 }, allowed.ms, window.measure, window.pause);
+    assert.deepEqual(gate, { again: null, over: false, verdict: 'within 66.8 ms' });
+    assert.deepEqual(window.steps, []);
+  });
+
+  it('fails the escape of a normal runner at 45 ms against its pacing at 16.8', async () => {
+    const allowed = allowanceOf(BUDGET, 16.8);
+    assert.deepEqual(allowed, { ms: BUDGET, text: 'allowed 40.0 (2 × pacing 16.8 is less)' });
+    const window = fakeWindow(45);
+    const gate = await gateWindow({ p95: 45 }, allowed.ms, window.measure, window.pause);
+    assert.deepEqual(gate, { again: { p95: 45 }, over: true, verdict: '!! over 40 ms twice' });
+  });
+
+  it('allows the budget alone before the run’s pacing window, and that window itself', () => {
+    assert.deepEqual(allowanceOf(BUDGET, null), {
+      ms: BUDGET,
+      text: 'allowed 40.0 (no pacing measured yet)',
+    });
+  });
+
+  it('takes twice the pace, no more and no less, and the budget the harness was given', () => {
+    assert.equal(PACE_FACTOR, 2);
+    assert.equal(allowanceOf(BUDGET, 25).ms, 50);
+    assert.equal(allowanceOf(BUDGET, 20).ms, BUDGET);
+    assert.equal(allowanceOf(100, 33.4).ms, 100);
+  });
+
+  it('prints the p95, what it was allowed and why, and the second look', () => {
+    const allowed = allowanceOf(BUDGET, 33.4);
+    assert.equal(
+      p95Text({ p95: 50 }, null, allowed),
+      'p95 50.0 ms, allowed 66.8 (2 × pacing 33.4)',
+    );
+    assert.equal(
+      p95Text({ p95: 70.04 }, { p95: 48.1 }, allowed),
+      'p95 70.0 ms, allowed 66.8 (2 × pacing 33.4), again 48.1 ms',
+    );
+  });
+});
+
+describe('paceOf — the run’s pace, as its pacing window measured it', () => {
+  it('takes the first look of a window within the budget', () => {
+    assert.equal(paceOf({ p95: 33.4 }, { again: null, over: false }), 33.4);
+  });
+
+  it('takes the second look where the first was a hiccup', () => {
+    assert.equal(paceOf({ p95: 52 }, { again: { p95: 16.8 }, over: false }), 16.8);
+  });
+
+  it('takes no pace from a window that failed', () => {
+    assert.equal(paceOf({ p95: 52 }, { again: { p95: 51 }, over: true }), null);
+    assert.equal(paceOf({ p95: 52 }, { again: null, over: true }), null);
   });
 });

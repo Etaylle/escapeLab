@@ -229,11 +229,20 @@
  * anew meanwhile — the sights a frame and the bakes (client
  * world/render/census.ts, lightwork.mjs): a lamp on the move takes a sight a
  * frame, the host's own as it paces and each drone's as it flies, and nothing
- * is baked while the light holds still. A p95 above SHOTS_FRAME_P95_MS (default 40) has the
- * window sampled once more after a second's pause, the same scene for as
- * long, and fails the run only when that one is over too (framegate.mjs): a
- * runner's hiccup spoils one window, the game's cost both. The line logs
- * both p95s. Any step that throws fails the run too.
+ * is baked while the light holds still. A window may reach SHOTS_FRAME_P95_MS
+ * (default 40) at p95, or twice the p95 of the run's own pacing window — the
+ * first, after the game screenshots — whichever is more (framegate.mjs): a
+ * slow runner draws every scene at its own pace, the pacing included, and
+ * only what a scene costs beyond twice that pace is the game's, while a scene
+ * that grows dearer on a runner at the screen's rate still trips the 40 ms.
+ * Every window before the pacing window, and that window itself, keeps the
+ * 40 ms alone; a line `pace` says what the pacing window set. A p95 over the
+ * allowance has the window sampled once more after a second's pause, the
+ * same scene for as long, and fails the run only when that one is over too:
+ * a runner's hiccup spoils one window, the game's cost both. The line logs
+ * the p95, what it was allowed and why — „p95 50.0 ms, allowed 66.8 (2 ×
+ * pacing 33.4)" — and the second look's p95. Any step that throws fails the
+ * run too.
  * SHOTS_CPU_SLOWDOWN (default 1) slows every page's main thread that
  * many times (Chromium's CPU throttling), so a fast machine measures the
  * frames as a CI runner without a GPU would; SHOTS_SOFTWARE_GL=1 composes the
@@ -380,7 +389,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { chromium, request } from 'playwright';
-import { AGAIN_AFTER_MS, gateWindow } from './framegate.mjs';
+import { AGAIN_AFTER_MS, allowanceOf, gateWindow, p95Text, paceOf } from './framegate.mjs';
 import { withOthersFrozen } from './freeze.mjs';
 import { GLOWING, glowAtCorners, haloAgainst, verticalShift } from './glowcheck.mjs';
 import { lightWorkText } from './lightwork.mjs';
@@ -958,38 +967,55 @@ function frozenText(frozen, measured) {
 }
 
 /**
+ * The p95 of the run's quiet pacing window, ms — the host pacing after the game screenshots —
+ * once it is measured and within the budget (framegate.mjs `paceOf`); null before. Every gated
+ * window after it may reach twice this where that is more than the budget.
+ */
+let runPace = null;
+
+/**
  * Samples a window of a page opened with `traced` (`lookAt`), every other page frozen while
  * each look runs, and logs p50 and p95 of its frame durations and which pages stood frozen.
  * Nothing in `quiet` may screenshot, resize or click: those stalls are the harness's, not the
- * game's. A p95 over the budget has the window looked at once more a second later
- * (framegate.mjs), the other pages thawed in between, `again` filling it for as long as the
- * first look ran — the same scene, `quiet` itself unless that would not stay the same — and
- * fails the run only where both looks are over; the line logs both. A window for information
- * only (`gating` false) is looked at once and logged alone. A page without a trace or a window
- * without frames fails the run. The machine's, the pages' and the sound's lines are the first
- * look's.
+ * game's. The window may reach the budget at p95, or twice the run's pace (`runPace`) where
+ * that is more (framegate.mjs `allowanceOf`); the run's pacing window (`setsPace`) sets that
+ * pace for the windows after it. A p95 over the allowance has the window looked at once more a
+ * second later, the other pages thawed in between, `again` filling it for as long as the first
+ * look ran — the same scene, `quiet` itself unless that would not stay the same — and fails the
+ * run only where both looks are over; the line logs both, with the allowance and why. A window
+ * for information only (`gating` false) is looked at once and logged alone. A page without a
+ * trace or a window without frames fails the run. The machine's, the pages' and the sound's
+ * lines are the first look's.
  */
-async function sampleFrames(page, when, quiet, { gating = true, again = quiet } = {}) {
+async function sampleFrames(
+  page,
+  when,
+  quiet,
+  { gating = true, again = quiet, setsPace = false } = {},
+) {
   const first = await lookAt(page, when, quiet);
   if (first === null) {
     return;
   }
+  const allowed = allowanceOf(FRAME_P95_MS, runPace);
   const gate = gating
     ? await gateWindow(
         first,
-        FRAME_P95_MS,
+        allowed.ms,
         () => lookAt(page, when, () => again(first.ms)),
         () => sleep(AGAIN_AFTER_MS),
       )
     : { again: null, over: false, verdict: 'for information, gating nothing' };
-  const p95s =
-    `p95 ${first.p95.toFixed(1)} ms` +
-    (gate.again === null ? '' : `, again ${gate.again.p95.toFixed(1)} ms`);
+  const p95s = gating ? p95Text(first, gate.again, allowed) : `p95 ${first.p95.toFixed(1)} ms`;
   const counts = [first, gate.again].flatMap((look) => (look === null ? [] : [look.count]));
   console.log(
     `frames             p50 ${first.p50.toFixed(1)} ms · ${p95s} (${counts.join(', ')}) ` +
       `${when}: ${gate.verdict}`,
   );
+  if (setsPace && runPace === null) {
+    runPace = paceOf(first, gate);
+    console.log(`pace               ${paceText(runPace)}`);
+  }
   console.log(`frozen             ${frozenText(first.frozen, named.get(page))}`);
   console.log(`cpu                cores busy: ${first.cores}; sound: ${first.sound}`);
   console.log(`pages              ${first.perPage}`);
@@ -1000,8 +1026,17 @@ async function sampleFrames(page, when, quiet, { gating = true, again = quiet } 
   }
   // A second look that found no frames has failed the run itself (`lookAt`).
   if (gate.over && gate.again !== null) {
-    fail(`frame ${p95s} ${when}, over ${FRAME_P95_MS} ms both times`);
+    fail(`frame ${p95s} ${when}, over the allowance both times`);
   }
+}
+
+/** The run's pace as the log names it, and what it lets the windows after it reach. */
+function paceText(measured) {
+  if (measured === null) {
+    return `none: the pacing window failed, so every window after it keeps ${FRAME_P95_MS} ms`;
+  }
+  const { text } = allowanceOf(FRAME_P95_MS, measured);
+  return `${measured.toFixed(1)} ms p95; every window after it ${text}`;
 }
 
 /**
@@ -8771,7 +8806,9 @@ async function run() {
   await host.setViewportSize(SIZES[0]);
   await sleep(400);
   await checkLight(anna);
-  await sampleFrames(host, 'pacing, after the game screenshots', () => pace(anna, SAMPLE_MS));
+  await sampleFrames(host, 'pacing, after the game screenshots', () => pace(anna, SAMPLE_MS), {
+    setsPace: true,
+  });
   await host.keyboard.press('i');
   await sleep(400);
   await capture(host, 'info-panel.png');

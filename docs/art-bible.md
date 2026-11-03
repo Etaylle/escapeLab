@@ -413,6 +413,19 @@ thread, not the edge. With the frozen pages' animations stopped the window's GPU
 cores. Under `SHOTS_SOFTWARE_GL=1` the pages share little: there the escape reached 50 ms only at
 5× and 6×, where the host's own frame comes to 33 and 50 ms with the others frozen.
 
+**What the gate allows (H-1).** A gated window passes where its p95 is at most 40 ms
+(`SHOTS_FRAME_P95_MS`) or twice the p95 of the run's quiet pacing window — the host pacing in
+its tile after the game screenshots — whichever is more; over that, it is looked at once more a
+second later and fails only on both looks (tools/framegate.mjs). CI on c23afc5, the same code as
+the green 65e3e1e, read the Systemcheck's escape at 33.4 ms p50 and 50.1 p95 on both looks: the
+whole runner drew at half the screen's rate. A runner pacing at 33.4 ms may reach 66.8 ms
+there; a runner at the screen's rate paces at 16.8, so
+40 ms stays its bound, and an escape grown dearer there still fails. The 40 ms floor
+also bounds what a regression in the pacing scene itself could hide: the pacing window is gated
+against 40 ms alone, as is every window before it (the lab lit before the blackout), and one
+that fails sets no pace. The log names both numbers, „p95 50.0 ms, allowed 66.8 (2 × pacing
+33.4)", and a line `pace` what the pacing window set.
+
 ## Open
 
 What the graphics and gameplay packages left for later, one line each:
@@ -425,7 +438,9 @@ What the graphics and gameplay packages left for later, one line each:
   CI's escape window failed at 50 ms twice, the swaying hand lamp defeating the sight cache —
   fixed in L-graphics-fix (Figures). A client build of 3.3 s and more still marks the runners on
   which the window runs at the edge whatever the commit. The escape's frame is almost a fifth
-  cheaper since L-polish (Cost); a CI run on such a runner has yet to show it under its 40 ms.
+  cheaper since L-polish (Cost); since H-1 the gate holds it to twice the runner's own pacing
+  where that is more than 40 ms (Cost, „What the gate allows"). The escape's main thread could
+  still come down further: the light and dark passes, a frame at half rate (audit addenda).
 - **Edits outside the graphics package's files** (L-graphics): the hooks in GameWorld.tsx,
   assemble.ts and sim.ts — the zoom, the station, `blackoutAt`, the partner's cadence — and
   decor.ts were changed outside the files the package owned, for whoever works there next to

@@ -127,7 +127,7 @@ die Entscheidung.
   weiterhin nach Abstand allein (1,6 Kacheln, Wände ignoriert). Angleichen: Anwesenheit am Pult
   nur mit Sichtlinie oder nach eigenem Fund; Test wie der Säulen-Test der Quellen.
 
-### H-1 Flucht-Budget relativ zum Runner — Status: bereit · Größe: S
+### H-1 Flucht-Budget relativ zum Runner — Status: im PR (N-small) · Größe: S
 - CI auf c23afc5 (gleicher Code wie das grüne 65e3e1e): Systemcheck-Flucht p50 33,4 / p95 50,1
   zweimal — der ganze Runner lief mit halber Rate. Das Fenster misst seit M-ciwin einen Client,
   aber ein langsamer Runner kippt die Flucht (33 ms bei 4× Drossel) über die 40 ms.
