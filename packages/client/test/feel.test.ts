@@ -246,6 +246,7 @@ describe('a change at a device', () => {
     press: null,
     youPressed: false,
     partnerPressed: false,
+    presses: [],
     pressedCount: 0,
     requiredCount: 2,
     here: 1,

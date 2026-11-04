@@ -972,6 +972,61 @@ button.feel-reject {
   }
 }
 
+/* ── the count every page shows from a window's first press (SyncCount.tsx) ──
+ * Beside the station's control — the main switch's levers, the mushroom's
+ * collar — in a column of its own on either side, so that the control stays
+ * where it was and nothing grows taller while the count shows: whose press
+ * opened the window, and in large amber digits the whole seconds left as each
+ * begins. It changes once a second and moves nothing, under reduced motion too.
+ */
+.sync-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 18px;
+  width: 100%;
+}
+
+.sync-stage > :first-child {
+  grid-column: 2;
+}
+
+.sync-count {
+  grid-column: 3;
+  justify-self: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 8px 12px 6px;
+  border-radius: 6px;
+  background: #050708;
+  box-shadow:
+    inset 0 1px 4px rgba(0, 0, 0, 0.95),
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 1px 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.sync-count-by {
+  max-width: 9.5em;
+  color: var(--engrave);
+  font-family: var(--mono);
+  font-size: calc(var(--type-label) * var(--text-scale));
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.sync-count-digit {
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: calc(var(--type-readout) * 2.4 * var(--text-scale));
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-shadow: 0 0 10px var(--amber-glow);
+}
+
 /* ══ Sicherungskasten + Prüfpult: one console cuts, the other measures ═════
  * CircuitPanel.tsx. Console a: behind a glass door a pale board with a
  * terminal strip down either side and the cables sagging between them, as

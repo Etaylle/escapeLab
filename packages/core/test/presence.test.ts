@@ -310,6 +310,25 @@ describe('button-sync by players', () => {
     );
   });
 
+  it('tells everybody whose presses wait and since when, the crew away from it as well', () => {
+    let state = syncOpen();
+    state = applyAction(applyAction(state, press('p2', T0 + 1000)), press('p1', T0 + 1200));
+    // Carla has walked off before her turn: no console, but the same presses as the others.
+    const away = standing(state, { stations: { sync: ['p1', 'p2'] } });
+    const waiting = [
+      { by: 'p2', at: T0 + 1000 },
+      { by: 'p1', at: T0 + 1200 },
+    ];
+    expect(viewFor(away, 'p3').puzzle).toMatchObject({ console: null, presses: waiting });
+    for (const id of ['p1', 'p2']) {
+      expect(viewFor(away, id).puzzle).toMatchObject({ console: 'a', presses: waiting });
+    }
+    expect(viewForSpectator(away).puzzle).toMatchObject({ presses: waiting });
+    // The first press runs out: the count goes on from the next, and the list says so.
+    const ran = applyAction(away, { type: 'puzzle-tick', at: T0 + 3001 });
+    expect(viewFor(ran, 'p3').puzzle).toMatchObject({ presses: [{ by: 'p1', at: T0 + 1200 }] });
+  });
+
   it('keys the presses by player: a second press from the same player is not another one', () => {
     let state = syncOpen();
     state = applyAction(applyAction(state, press('p1', T0 + 1000)), press('p1', T0 + 1100));

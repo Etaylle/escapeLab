@@ -17,16 +17,17 @@ const T0 = 1_000_000;
 
 /**
  * The Notlicht's main switch as a player at it sees it: alone at it until
- * told otherwise, a crew of two, its window 2 s, nothing thrown yet.
+ * told otherwise, a crew of two, its window 3.5 s, nothing thrown yet.
  */
 function lever(fields: Partial<SyncView> = {}): SyncView {
   return {
     kind: 'button-sync',
     style: 'lever',
-    windowMs: 2000,
+    windowMs: 3500,
     press: null,
     youPressed: false,
     partnerPressed: false,
+    presses: [],
     pressedCount: 0,
     requiredCount: 2,
     here: 1,
@@ -78,11 +79,12 @@ afterEach(() => {
 
 describe('the main switch’s panel', () => {
   it('sits in the station’s device under a plate: what it is, that it takes two, how fast', () => {
-    const html = panel(lever({ windowMs: 2000 }));
+    const html = panel(lever());
     expect(html.startsWith('<div class="device device--button-sync">')).toBe(true);
     expect(html).toContain(
-      '<div class="lever-plate">NOTLICHT · HAUPTSCHALTER · NUR ZU ZWEIT · 2 S</div>',
+      '<div class="lever-plate">NOTLICHT · HAUPTSCHALTER · NUR ZU ZWEIT · 3,5 S</div>',
     );
+    expect(leverPlate(lever({ windowMs: 2000 }), 2000)).toContain('NUR ZU ZWEIT · 2 S');
     expect(html).not.toContain('sync-collar');
     // Without a window the plate says nothing of seconds.
     expect(leverPlate(lever({ windowMs: null }), null)).toBe(
@@ -117,25 +119,27 @@ describe('the main switch’s panel', () => {
   it('drains a ring round the grip of the own press, in step with it however late it opened', () => {
     vi.useFakeTimers();
     vi.setSystemTime(T0 + 500);
-    const press = { at: T0, expiresAt: T0 + 2000 };
+    const press = { at: T0, expiresAt: T0 + 3500 };
     const html = panel(lever({ here: 2, youPressed: true, pressedCount: 1, press }));
     expect(levers(html)).toEqual(['Hv', 'H^']);
     expect(html).toContain('disabled="" aria-label="Eigener Hebel: unten"');
     const ring = /<svg class="lever-ring"[^>]*>.*<circle class="lever-ring-left"[^>]*style="([^"]*)"/;
-    expect(ring.exec(html)?.[1]).toBe('--ring-ms:2000ms;--ring-delay:-500ms');
+    // Draining over its window from where the panel came in; standing at what is left, for
+    // reduced motion.
+    expect(ring.exec(html)?.[1]).toBe('--ring-ms:3500ms;--ring-delay:-500ms;--ring-left:0.857');
   });
 
   it('springs the own lever back once its window shut, and says the press ran out', () => {
     vi.useFakeTimers();
-    vi.setSystemTime(T0 + 2000);
-    const press = { at: T0, expiresAt: T0 + 2000 };
+    vi.setSystemTime(T0 + 3500);
+    const press = { at: T0, expiresAt: T0 + 3500 };
     const ran = lever({ youPressed: true, pressedCount: 1, press });
-    expect(ownPressAt(ran, syncPress(ran), T0 + 1999)).toEqual({
+    expect(ownPressAt(ran, syncPress(ran), T0 + 3499)).toEqual({
       down: true,
-      ring: { at: T0, expiresAt: T0 + 2000 },
+      ring: { at: T0, expiresAt: T0 + 3500 },
       expired: false,
     });
-    expect(ownPressAt(ran, syncPress(ran), T0 + 2000)).toEqual({
+    expect(ownPressAt(ran, syncPress(ran), T0 + 3500)).toEqual({
       down: false,
       ring: null,
       expired: true,
@@ -154,7 +158,7 @@ describe('the main switch’s panel', () => {
     const dropped = panel(lever({ lastResult: 'expired', press: null }));
     expect(dropped).toContain('Zug verfallen — nur zu zweit zugleich');
     // The partner whose late press opened a new window hears nothing of a miss.
-    const press = { at: T0, expiresAt: T0 + 2000 };
+    const press = { at: T0, expiresAt: T0 + 3500 };
     const presser = panel(lever({ youPressed: true, pressedCount: 1, press }));
     expect(presser).not.toContain('verfallen');
     expect(presser).not.toContain('Zeitfenster');
@@ -236,10 +240,10 @@ describe('the coach line at a sync station', () => {
   });
 
   it('words the sync button’s line from its window: seconds where it has one, order free where not', () => {
-    const timed = deviceCoach(lever({ style: 'button', windowMs: 2000 }), 'mouse');
+    const timed = deviceCoach(lever({ style: 'button' }), 'mouse');
     expect(timed).toEqual({
       id: 'device:button-sync:window',
-      text: 'Ein Druck je Ausweis, alle binnen 2 s.',
+      text: 'Ein Druck je Ausweis, alle binnen 3,5 s.',
     });
     const free = deviceCoach(lever({ style: 'button', windowMs: null }), 'touch');
     expect(free).toEqual({

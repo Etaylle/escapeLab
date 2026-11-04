@@ -2232,8 +2232,9 @@ async function initLever(lab: Lab): Promise<void> {
     const press = v.puzzle?.kind === 'button-sync' ? v.puzzle.press : null;
     return press !== null && press.expiresAt === press.at + windowMs;
   });
-  await dan.expectView('sees her lever down', (v) =>
-    v.puzzle?.kind === 'button-sync' && v.puzzle.partnerPressed && v.puzzle.press === null);
+  await dan.expectView('sees her lever down, and that it is hers: the count both see', (v) =>
+    v.puzzle?.kind === 'button-sync' && v.puzzle.partnerPressed && v.puzzle.press === null &&
+    v.puzzle.presses[0]?.by === cleo.playerId);
   const sprang = await cleo.expectView('her lever sprang back on the room\'s clock, she is told',
     (v) => v.puzzle?.kind === 'button-sync' && v.puzzle.press === null &&
       v.puzzle.lastResult === 'expired');

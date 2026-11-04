@@ -292,6 +292,14 @@ export function leverSpring(): void {
   play('lever-spring', 0.065);
 }
 
+/**
+ * A whole second of a sync station's window begun (SyncCount.tsx): the countdown's short beep,
+ * as recorded, on every page at the station at the same moment of the server's clock.
+ */
+export function countTick(): void {
+  play('countdown-beep', 0.03);
+}
+
 /** Pliers through a cable: a crisp snip, the jaws meeting. */
 export function pliersSnip(): void {
   play('wire-snip', 0.06);

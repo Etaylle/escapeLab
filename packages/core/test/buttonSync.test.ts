@@ -247,6 +247,13 @@ const viewer = (playerId: string | null): Viewer => ({
   console: playerId === null ? null : 'a',
 });
 
+/** The model's live presses as a view lists them: the oldest first, a tie by whose. */
+function modelPresses(model: Model): { by: string; at: number }[] {
+  return [...model.live]
+    .map(([by, at]) => ({ by, at }))
+    .sort((a, b) => a.at - b.at || a.by.localeCompare(b.by));
+}
+
 /** What every member of the crew and the audience see, as the model says it. */
 function expectViews(def: ButtonSyncDef, state: ButtonSyncState, model: Model, crew: string[]) {
   const viewCtx: ViewContext = { edgework, alarms: 0, crew, operators: crew };
@@ -263,6 +270,8 @@ function expectViews(def: ButtonSyncDef, state: ButtonSyncState, model: Model, c
       pressedCount: model.live.size,
       lastResult: id !== null && model.told.has(id) ? 'expired' : null,
     });
+    // Whose presses are live, and since when, every viewer is told alike.
+    expect(view.presses).toEqual(modelPresses(model));
   }
 }
 

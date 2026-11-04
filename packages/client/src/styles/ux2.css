@@ -164,6 +164,15 @@
   }
 }
 
+/* Under reduced motion the ring does not drain: it stands at the share left at the panel's
+   latest render, a step with each digit of the count (LeverPanel.tsx sets --ring-left). */
+:where([data-motion='reduce']) {
+  .lever-ring-left {
+    animation: none;
+    stroke-dashoffset: calc(100 - 100 * var(--ring-left));
+  }
+}
+
 /* ── the device's line, under the Laborkennung's row ───────────────────── */
 
 .station-coach {
