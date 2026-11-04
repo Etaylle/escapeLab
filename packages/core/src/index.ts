@@ -159,6 +159,7 @@ export {
   operatorsOf,
   readersOf,
   stationKey,
+  intercomOf,
 } from './map.js';
 export { canSee, sightFrom, visibleTiles, type Sight, type SightMap } from './sight.js';
 export {

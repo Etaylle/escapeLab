@@ -262,7 +262,8 @@ describe('a change at a device', () => {
   });
 
   it('is told by what the device shows, not by who stands where', () => {
-    expect(deviceState(sync({ here: 2, backup: { name: 'Ben', where: 'SPIND' } }))).toBe(
+    const atSpind = { playerId: 'p2', name: 'Ben', where: 'SPIND' };
+    expect(deviceState(sync({ here: 2, backup: atSpind }))).toBe(
       deviceState(sync()),
     );
     expect(deviceState(sync({ pressedCount: 1 }))).not.toBe(deviceState(sync()));

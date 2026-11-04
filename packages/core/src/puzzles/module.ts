@@ -217,12 +217,12 @@ export interface PuzzleViewCommon {
   plate: string | null;
   /**
    * The second person who lets the viewer's inputs count: another crew member
-   * at the station's other console or at an open manual object covering it,
-   * and where — the console („Pult B") or the object's label („SPIND"). Null
-   * while nobody backs the viewer up, and for the audience, for players away
-   * from the station and where the whole crew works it.
+   * at the station's other console or at an open manual object covering it —
+   * by id and name — and where: the console („Pult B") or the object's label
+   * („SPIND"). Null while nobody backs the viewer up, and for the audience,
+   * for players away from the station and where the whole crew works it.
    */
-  backup: { name: string; where: string } | null;
+  backup: { playerId: string; name: string; where: string } | null;
 }
 
 /** What every module owns, whether it stands at a station or runs as an emergency. */

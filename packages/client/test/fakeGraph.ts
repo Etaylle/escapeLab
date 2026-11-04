@@ -251,6 +251,15 @@ export class FakeContext {
   createConvolver(): FakeConvolver {
     return new FakeConvolver(this);
   }
+  /** A remote voice's stream in the graph: a node of its own, the stream kept on it. */
+  createMediaStreamSource(stream: unknown): FakeNode & { mediaStream: unknown } {
+    return Object.assign(new FakeNode('stream', this), { mediaStream: stream });
+  }
+  /** A level meter, which reads silence. */
+  createAnalyser(): FakeNode & { fftSize: number; getFloatTimeDomainData(to: Float32Array): void } {
+    const meter = { fftSize: 2048, getFloatTimeDomainData: (to: Float32Array) => to.fill(0) };
+    return Object.assign(new FakeNode('analyser', this), meter);
+  }
   /** A media element's sound in the graph: a node of its own, the element kept on it. */
   createMediaElementSource(element: unknown): FakeNode & { mediaElement: unknown } {
     return Object.assign(new FakeNode('media', this), { mediaElement: element });

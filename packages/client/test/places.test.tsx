@@ -691,7 +691,8 @@ describe('the station frame', () => {
 
   it('says on its LED strip who backs this player up, and where', () => {
     const atMaze: PuzzleView = { ...maze(2, null), console: 'a' };
-    const backed = stationFrame({ ...atMaze, backup: { name: 'Ben', where: 'SPIND' } });
+    const atSpind = { playerId: 'p2', name: 'Ben', where: 'SPIND' };
+    const backed = stationFrame({ ...atMaze, backup: atSpind });
     expect(backed).toContain(
       '<li class="device-led device-led--green">' +
         '<span class="device-lamp device-lamp--green" aria-hidden="true"></span>' +

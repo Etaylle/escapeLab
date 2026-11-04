@@ -10,6 +10,7 @@ import { MicSetup } from '../src/screens/Voice.js';
 import type { VoiceMesh, VoiceState } from '../src/voice/mesh.js';
 import { VoiceContext } from '../src/voice/useVoice.js';
 import { GameWorld } from '../src/world/GameWorld.js';
+import type { KnownPositions } from '../src/world/movement.js';
 import { iconsAsWords, mapWith, PICTOGRAPH } from './fixtures.js';
 
 const noop = (): void => undefined;
@@ -22,6 +23,7 @@ function voiceOf(state: Partial<VoiceState>): VoiceMesh {
     held: false,
     listening: false,
     speaking: new Set(),
+    intercom: new Set(),
     ...state,
   };
   const stand: Pick<VoiceMesh, 'subscribe' | 'getState'> = {
@@ -80,12 +82,16 @@ function annaSees(phase: PlayerView['phase']): PlayerView {
   };
 }
 
-function hud(voice: VoiceMesh | null): string {
+function hud(
+  voice: VoiceMesh | null,
+  view = annaSees('playing'),
+  players: KnownPositions['players'] = {},
+): string {
   return within(
     voice,
     <MissionHud
-      view={annaSees('playing')}
-      positionsRef={{ current: { run: null, players: {} } }}
+      view={view}
+      positionsRef={{ current: { run: null, players } }}
       chatsRef={{ current: [] }}
       onAir={false}
       parts={null}
@@ -153,6 +159,30 @@ describe('the HUD with the crew on voice', () => {
     expect(html.match(/voice-speaking/g)).toHaveLength(1);
     expect(html).not.toMatch(PICTOGRAPH);
     expect(hud(voiceOf({}))).not.toContain('voice-speaking');
+  });
+
+  it('keeps the crew strip’s tags as they are while the intercom carries the partner', () => {
+    const kette = (console: 'a' | 'b', x: number) => ({
+      puzzleId: 'kette',
+      x,
+      y: 1,
+      console,
+      title: 'Signalkette',
+      status: 'armed' as const,
+      found: true,
+      known: true as const,
+    });
+    const view: PlayerView = {
+      ...annaSees('playing'),
+      presence: { stationId: 'kette', console: 'a', manualId: null, signSeen: false },
+      intercom: ['p1', 'p2'],
+      map: mapWith({ stations: [kette('a', 2), kette('b', 16)] }),
+    };
+    const benAtB = { p2: { x: 16.5, y: 2.5, facing: 0, moving: false, t: null, rt: 0 } };
+    const carried = hud(voiceOf({ intercom: new Set(['p2']) }), view, benAtB);
+    expect(carried).toContain('<span class="presence-tag presence-pult">am Pult A</span>');
+    expect(carried).toContain('<span class="presence-tag presence-pult">am Pult</span>');
+    expect(carried).toBe(hud(voiceOf({}), view, benAtB));
   });
 });
 
