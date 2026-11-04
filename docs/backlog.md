@@ -66,19 +66,19 @@ die Entscheidung.
   weiter und springt zurück): Server-Zeitversatz schätzen, Uhr steht mit dem Lauf.
 - Beweis: Messskripte des Audits wiederholen (`scratchpad`-Pfade stehen im Audit); Walkthrough.
 
-### N-2 Kamera — Status: wartet (Entscheidung Uros) · Größe: M
+### N-2 Kamera — Status: in Arbeit (Mac, Paket N-camera; Uros: „beginne sofort" 2026-11-04) · Größe: M
 - Der Bildausschnitt hängt von der Pixeldichte ab: 1440×820 zeigt 22×10,5 Kacheln bei Dichte 1,
   die ganze 27er-Breite bei Dichte 2 (MacBook). Vorschlag: Rahmen in CSS-Pixeln festlegen
   (11–12 Kacheln hoch auf jedem Bildschirm, mindestens doppelte Drohnenreichweite quer), Harness
   auch bei Dichte 2. Offene Frage: fester Radius um den Spieler (Among Us) oder Überblick
   (Overcooked)?
 
-### N-3 Stimme am Pult — Status: wartet (Entscheidung Uros) · Größe: S
+### N-3 Stimme am Pult — Status: geplant (Mac, Paket N-intercom, startet nach N-camera oder N-firstwin) · Größe: S
 - Die Sprachlautstärke fällt zwischen den Pulten der Signalkette auf 5 % (−25,6 dB), genau wo
   geredet werden muss. Vorschlag: zwischen den Pulten und der Quelle der aktiven Station volle
   Lautstärke per Funk, überall sonst Abstand.
 
-### N-4 Erster Sieg — Status: wartet (Entscheidung Uros) · Größe: S
+### N-4 Erster Sieg — Status: in Arbeit (Mac, Paket N-firstwin; Uros: „beginne sofort" 2026-11-04) · Größe: S
 - Menschen brauchten 70–164 s für den Hebel oder schafften ihn nie (Skript: 25 s); 0 von 7
   menschlichen Läufen gewonnen. Vorschlag: Fenster 3–4 s plus gemeinsamer Countdown wie in
   Portal 2 („beide sehen GO im selben Moment"), für Hebel und Reaktor.
