@@ -9,11 +9,11 @@ import { DeviceLamp, type DeviceCrew, type DeviceMate } from './Device.js';
 import { cssVars } from './feel.js';
 import type { PanelProps } from './index.js';
 import { leverSpring } from './sounds.js';
+import { SyncCountDisplay, useSyncCount } from './SyncCount.js';
 import {
   ownPressAt,
   secondsText,
   syncPress,
-  useNowUntil,
   type OwnPress,
   type OwnPressState,
 } from './syncPress.js';
@@ -30,7 +30,7 @@ export function togetherWord(count: number): string {
 
 /**
  * What the main switch's plate says: what it is, that it takes the crew, and — where it has
- * one — its window: „NOTLICHT · HAUPTSCHALTER · NUR ZU ZWEIT · 2 S".
+ * one — its window: „NOTLICHT · HAUPTSCHALTER · NUR ZU ZWEIT · 3,5 S".
  */
 export function leverPlate(puzzle: SyncView, windowMs: number | null): string {
   const together = `NUR ZU ${togetherWord(puzzle.requiredCount)}`;
@@ -119,13 +119,19 @@ function useLeverSounds(lever: OwnPressState | null, thrown: boolean): void {
 /**
  * The window of this player's press draining round the grip, from full at the press to
  * empty as its window shuts — in step with the press however late the panel came to it, on
- * the server's clock (clock.ts).
+ * the server's clock (clock.ts). Under reduced motion it does not drain: it stands at the
+ * share left at `now`, the panel's latest render, which comes with each second of the count.
  */
-function LeverRing({ press }: { press: OwnPress }) {
+function LeverRing({ press, now }: { press: OwnPress; now: number }) {
   const [shown] = useState(serverNow);
   const total = Math.max(1, press.expiresAt - press.at);
   const elapsed = Math.min(total, Math.max(0, shown - press.at));
-  const timing = cssVars({ '--ring-ms': `${total}ms`, '--ring-delay': `${-elapsed}ms` });
+  const left = 1 - Math.min(total, Math.max(0, now - press.at)) / total;
+  const timing = cssVars({
+    '--ring-ms': `${total}ms`,
+    '--ring-delay': `${-elapsed}ms`,
+    '--ring-left': Number(left.toFixed(3)),
+  });
   return (
     <svg className="lever-ring" viewBox="0 0 40 40" aria-hidden="true">
       <circle className="lever-ring-track" cx="20" cy="20" r="15" />
@@ -168,12 +174,15 @@ function LeverUnit({ handle, grip }: { handle: Handle; grip: ReactNode }) {
  * the own lever, with the kit's press feel; a ring round its grip drains while the press
  * counts, and as its window shuts the lever springs back with a clack — „Zug verfallen". A
  * partner's lever is down while a partner's press is in; once all are down, they drop home
- * with a heavy ka-chunk. `.big-button` on the own lever is what the screenshot harness presses.
+ * with a heavy ka-chunk. Beside the levers every page shows the same count from the first
+ * pull of the window (SyncCount.tsx). `.big-button` on the own lever is what the screenshot
+ * harness presses.
  */
 export function LeverPanel({ puzzle, send, crew }: PanelProps<'button-sync'>) {
   const atStation = puzzle.console !== null;
   const sync = syncPress(puzzle);
-  const now = useNowUntil(sync.press?.expiresAt ?? null);
+  const moment = useSyncCount(puzzle, atStation);
+  const { now } = moment;
   const lever = atStation ? ownPressAt(puzzle, sync, now) : null;
   const thrown = puzzle.pressedCount >= puzzle.requiredCount;
   const grip = useRef<HTMLButtonElement>(null);
@@ -195,20 +204,23 @@ export function LeverPanel({ puzzle, send, crew }: PanelProps<'button-sync'>) {
       aria-label={down ? 'Eigener Hebel: unten' : 'Hebel umlegen'}
       onClick={pull}
     >
-      {lever?.ring != null && <LeverRing key={lever.ring.at} press={lever.ring} />}
+      {lever?.ring != null && <LeverRing key={lever.ring.at} press={lever.ring} now={now} />}
     </button>
   );
   return (
     <div className={`lever${thrown ? ' lever--thrown' : ''}`}>
       <div className="lever-plate">{leverPlate(puzzle, sync.windowMs)}</div>
-      <div
-        className="lever-handles"
-        role="group"
-        aria-label={`${puzzle.pressedCount} von ${puzzle.requiredCount} Hebeln unten`}
-      >
-        {handlesOf(puzzle, lever, crew ?? null).map((handle, i) => (
-          <LeverUnit key={i} handle={handle} grip={ownGrip} />
-        ))}
+      <div className="sync-stage">
+        <div
+          className="lever-handles"
+          role="group"
+          aria-label={`${puzzle.pressedCount} von ${puzzle.requiredCount} Hebeln unten`}
+        >
+          {handlesOf(puzzle, lever, crew ?? null).map((handle, i) => (
+            <LeverUnit key={i} handle={handle} grip={ownGrip} />
+          ))}
+        </div>
+        <SyncCountDisplay moment={moment} style="lever" crew={crew ?? null} />
       </div>
       {lever?.expired === true && (
         <p className="warn" role="status">

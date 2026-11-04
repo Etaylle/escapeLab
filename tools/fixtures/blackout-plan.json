@@ -81,5 +81,5 @@
   },
   "frequenz": {"pattern": "... - .-. --- --", "dial": 6, "turns": -2},
   "ersatzsicherung": {"from": {"x": 7, "y": 5}, "to": {"x": 25, "y": 12}},
-  "reaktorstart": {"presses": 2, "windowMs": 2000}
+  "reaktorstart": {"presses": 2, "windowMs": 3500}
 }

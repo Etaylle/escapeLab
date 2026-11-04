@@ -87,7 +87,8 @@ const VARIANTS: Record<string, object[]> = {
     { windowMs: 1000 },
     { windowMs: 2500 },
     { style: 'lever' },
-    { style: 'lever', windowMs: 3000 },
+    { style: 'lever', windowMs: 3500 },
+    { windowMs: 3500 },
   ],
   wiring: [
     { wires: { min: 3, max: 3 } },

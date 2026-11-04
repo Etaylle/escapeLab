@@ -715,10 +715,12 @@ describe('the station frame', () => {
     const reactor: PuzzleView = {
       kind: 'button-sync',
       style: 'button',
-      windowMs: 2000,
+      windowMs: 3500,
       press: null,
       youPressed: false,
       partnerPressed: true,
+      // Long run out by now: no count beside the button.
+      presses: [{ by: 'p2', at: 0 }],
       pressedCount: 1,
       requiredCount: 2,
       here: 2,

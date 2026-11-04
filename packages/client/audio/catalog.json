@@ -365,7 +365,11 @@
     "durationSeconds": 0.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
-    "usedBy": ["src/world/audio.ts#countdownBeep", "src/world/audio.ts#briefingCountdown"]
+    "usedBy": [
+      "src/world/audio.ts#countdownBeep",
+      "src/world/audio.ts#briefingCountdown",
+      "src/puzzles/sounds.ts#countTick"
+    ]
   },
   {
     "id": "countdown-go",

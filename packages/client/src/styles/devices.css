@@ -972,6 +972,93 @@ button.feel-reject {
   }
 }
 
+/* ── the count every page shows from a window's first press (SyncCount.tsx) ──
+ * Beside the station's control — the main switch's levers, the mushroom's
+ * collar — in a column of its own on either side, so that the control stays
+ * where it was and nothing grows taller while the count shows: whose press
+ * opened the window, and in large amber digits the whole seconds left as each
+ * begins. It changes once a second and moves nothing, under reduced motion too.
+ */
+.sync-stage {
+  container: sync-stage / inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 18px;
+  width: 100%;
+}
+
+.sync-stage > :first-child {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.sync-count {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 8px 12px 6px;
+  border-radius: 6px;
+  background: #050708;
+  box-shadow:
+    inset 0 1px 4px rgba(0, 0, 0, 0.95),
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 1px 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.sync-count-by {
+  max-width: 9.5em;
+  color: var(--engrave);
+  font-family: var(--mono);
+  font-size: calc(var(--type-label) * var(--text-scale));
+  text-align: center;
+  overflow-wrap: break-word;
+}
+
+.sync-count-digit {
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: calc(var(--type-readout) * 2.4 * var(--text-scale));
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-shadow: 0 0 10px var(--amber-glow);
+}
+
+/*
+ * A stage too narrow for a column beside three levers and the count — a phone
+ * held upright — has the count under the control instead, on one line, the
+ * control where it was.
+ */
+@container sync-stage (max-width: 560px) {
+  .sync-stage > :first-child {
+    grid-column: 1 / -1;
+    justify-self: center;
+  }
+
+  .sync-count {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: center;
+    flex-direction: row;
+    gap: 10px;
+    padding: 4px 12px;
+  }
+
+  .sync-count-by {
+    max-width: none;
+  }
+
+  .sync-count-digit {
+    font-size: calc(var(--type-readout) * 1.6 * var(--text-scale));
+  }
+}
+
 /* ══ Sicherungskasten + Prüfpult: one console cuts, the other measures ═════
  * CircuitPanel.tsx. Console a: behind a glass door a pale board with a
  * terminal strip down either side and the cables sagging between them, as

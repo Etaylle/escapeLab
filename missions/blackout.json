@@ -270,7 +270,7 @@
         "Wer noch im Archiv ist: durch die Südtür in den Flur, dann ein Stück nach Osten zum Hauptschalter."
       ],
       "style": "lever",
-      "windowMs": 2000,
+      "windowMs": 3500,
       "lights": ["FLUR", "ARCHIV"],
       "onSolved": "Notlicht steht, danke. Jetzt der Notstrom: Die Anleitung dafür hängt im Archiv, der Kasten ist im Maschinenraum, das Prüfpult im Flur."
     },
@@ -351,7 +351,7 @@
         "Die Ersatzsicherung für den Reaktor liegt im Archiv, in der Südostecke.",
         "Schalter und Sicherungsplatz sitzen im Reaktor ganz hinten an der Ostwand, dort kommt die Sicherung rein."
       ],
-      "windowMs": 2000
+      "windowMs": 3500
     }
   ]
 }

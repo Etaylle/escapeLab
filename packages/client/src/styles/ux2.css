@@ -154,12 +154,22 @@
   stroke-dasharray: 100;
   stroke-dashoffset: 0;
   filter: drop-shadow(0 0 3px rgba(255, 200, 100, 0.95));
-  animation: lever-ring-drain var(--ring-ms, 2000ms) linear var(--ring-delay, 0ms) forwards;
+  /* The press's own window and how far into it the panel came (LeverPanel.tsx sets both). */
+  animation: lever-ring-drain var(--ring-ms) linear var(--ring-delay) forwards;
 }
 
 @keyframes lever-ring-drain {
   to {
     stroke-dashoffset: 100;
+  }
+}
+
+/* Under reduced motion the ring does not drain: it stands at the share left at the panel's
+   latest render, a step with each digit of the count (LeverPanel.tsx sets --ring-left). */
+:where([data-motion='reduce']) {
+  .lever-ring-left {
+    animation: none;
+    stroke-dashoffset: calc(100 - 100 * var(--ring-left));
   }
 }
 

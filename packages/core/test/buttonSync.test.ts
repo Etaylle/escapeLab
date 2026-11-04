@@ -125,7 +125,7 @@ describe.each(LOOKS)('button-sync drawn as a %s: the printed log', (look) => {
     expect(results.every((result) => result.penalty === null)).toBe(true);
   });
 
-  const SPANS = [500, 1000, 2000, 2500, 3000];
+  const SPANS = [500, 1000, 2000, 2500, 3000, 3500];
 
   it.each(SPANS)('with a %i ms window: a late press opens another one', (span) => {
     const def = defOf(span, look);
@@ -149,11 +149,12 @@ describe.each(LOOKS)('button-sync drawn as a %s: the printed log', (look) => {
 });
 
 describe('button-sync: the printed rules', () => {
-  it('say „innerhalb von 3 Sekunden" for the tutorial\'s main switch', () => {
-    expect(printed(defOf(3000, 'lever')).rules).toEqual([
-      'Wenn alle Hebel innerhalb von 3 Sekunden umgelegt sind, schließt der Hauptschalter.',
-      'Andernfalls springt jeder Hebel 3 Sekunden nach dem Umlegen zurück und zählt nicht mehr.',
+  it('say „innerhalb von 3,5 Sekunden" for the main switch of the first win', () => {
+    expect(printed(defOf(3500, 'lever')).rules).toEqual([
+      'Wenn alle Hebel innerhalb von 3,5 Sekunden umgelegt sind, schließt der Hauptschalter.',
+      'Andernfalls springt jeder Hebel 3,5 Sekunden nach dem Umlegen zurück und zählt nicht mehr.',
     ]);
+    expect(printed(defOf(3000, 'lever')).rules[0]).toContain('innerhalb von 3 Sekunden');
   });
 
   it('count the badges logged into the lab, and say that nothing here costs time', () => {
@@ -246,6 +247,13 @@ const viewer = (playerId: string | null): Viewer => ({
   console: playerId === null ? null : 'a',
 });
 
+/** The model's live presses as a view lists them: the oldest first, a tie by whose. */
+function modelPresses(model: Model): { by: string; at: number }[] {
+  return [...model.live]
+    .map(([by, at]) => ({ by, at }))
+    .sort((a, b) => a.at - b.at || a.by.localeCompare(b.by));
+}
+
 /** What every member of the crew and the audience see, as the model says it. */
 function expectViews(def: ButtonSyncDef, state: ButtonSyncState, model: Model, crew: string[]) {
   const viewCtx: ViewContext = { edgework, alarms: 0, crew, operators: crew };
@@ -262,6 +270,8 @@ function expectViews(def: ButtonSyncDef, state: ButtonSyncState, model: Model, c
       pressedCount: model.live.size,
       lastResult: id !== null && model.told.has(id) ? 'expired' : null,
     });
+    // Whose presses are live, and since when, every viewer is told alike.
+    expect(view.presses).toEqual(modelPresses(model));
   }
 }
 
@@ -304,7 +314,7 @@ function step(def: ButtonSyncDef, crew: string[], next: Step, run: Run): boolean
 const SEEDS = 300;
 
 describe.each([
-  ['with a window', [500, 1000, 2000, 3000]],
+  ['with a window', [500, 1000, 2000, 3000, 3500]],
   ['without a window', [undefined]],
 ] as const)('button-sync %s, over random runs', (_label, windows) => {
   it('keeps to the printed rule at every press and every tick, and never charges a thing', () => {

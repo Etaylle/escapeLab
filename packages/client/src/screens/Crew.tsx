@@ -16,7 +16,7 @@ export function crewSizeText({ min, max }: { min: number; max: number }): string
 
 export interface CrewTag {
   text: string;
-  tone: 'pult' | 'read' | 'hold' | 'carry' | 'sign' | 'away';
+  tone: 'pult' | 'press' | 'read' | 'hold' | 'carry' | 'sign' | 'away';
 }
 
 /** Where someone stands: at a station, at which console where that is told, at an open source. */
@@ -73,25 +73,40 @@ function atStation(armed: MapView['stations'][number], at: Whereabouts): string 
 }
 
 /**
- * What one crew member is doing right now: at the armed station, reading,
- * holding a plate or a valve, carrying something. Plates and loads follow
- * the live position and the map; where they stand is whatever the screen
- * showing them knows.
+ * What someone does at the armed station: „zieht" or „drückt" while their press there waits
+ * for the rest of the crew (`pressing`), else that they stand at it; null away from it.
+ */
+function stationTag(map: MapView | null, at: Whereabouts, pressing: string | null): CrewTag | null {
+  if (pressing !== null) {
+    return { text: pressing, tone: 'press' };
+  }
+  // A station with two consoles is armed at both; either one has its puzzle id.
+  const armed = map?.stations.find(isArmed);
+  return armed !== undefined && at.stationId === armed.puzzleId
+    ? { text: atStation(armed, at), tone: 'pult' }
+    : null;
+}
+
+/**
+ * What one crew member is doing right now: at the armed station — pulling or pressing there,
+ * where their press waits for the others' (`pressing`, from the station's view) — reading,
+ * holding a plate or a valve, carrying something. Plates and loads follow the live position
+ * and the map; where they stand is whatever the screen showing them knows.
  */
 export function crewTags(
   map: MapView | null,
   player: { id: string; connected: boolean },
   at: Whereabouts,
   pos: PlayerPosition | undefined,
+  pressing: string | null = null,
 ): CrewTag[] {
   if (!player.connected) {
     return [{ text: 'getrennt', tone: 'away' }];
   }
   const tags: CrewTag[] = [];
-  // A station with two consoles is armed at both; either one has its puzzle id.
-  const armed = map?.stations.find(isArmed);
-  if (armed !== undefined && at.stationId === armed.puzzleId) {
-    tags.push({ text: atStation(armed, at), tone: 'pult' });
+  const station = stationTag(map, at, pressing);
+  if (station !== null) {
+    tags.push(station);
   }
   if (at.manualId !== null) {
     tags.push({ text: 'liest', tone: 'read' });

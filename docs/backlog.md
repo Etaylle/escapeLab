@@ -78,10 +78,14 @@ die Entscheidung.
   geredet werden muss. Vorschlag: zwischen den Pulten und der Quelle der aktiven Station volle
   Lautstärke per Funk, überall sonst Abstand.
 
-### N-4 Erster Sieg — Status: in Arbeit (Mac, Paket N-firstwin; Uros: „beginne sofort" 2026-11-04) · Größe: S
+### N-4 Erster Sieg — Status: im Merge (N-firstwin, 2026-11-04) · Größe: S
 - Menschen brauchten 70–164 s für den Hebel oder schafften ihn nie (Skript: 25 s); 0 von 7
   menschlichen Läufen gewonnen. Vorschlag: Fenster 3–4 s plus gemeinsamer Countdown wie in
   Portal 2 („beide sehen GO im selben Moment"), für Hebel und Reaktor.
+- Umgesetzt: Fenster 3,5 s an Blackouts Hebel und Reaktor und am Hebel des Tutorials; ab dem
+  ersten Zug zeigt jede Seite an der Station dieselbe Zählung nach Server-Zeit („Anna hat
+  gezogen — 2", Ziffern 3 · 2 · 1 · 0, ein Tick je Sekunde), weg beim Verfall oder Sieg; der
+  Crew-Streifen sagt „zieht" / „drückt", solange ein Zug wartet. Regeln in `docs/gameplay.md`.
 
 ### N-5 Lesbarkeit — Status: erledigt (N-readability, Merge 2026-11-02; Vorher/Nachher im Audit-Addendum) · Größe: M
 - Gerätetexte Median 11–13 px (min 8), Tasten unter 44 px, Rack scrollt bei 1280×720, auf dem

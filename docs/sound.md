@@ -9,7 +9,8 @@ sets them as they play: the radio's chain and the static under its voice, the ro
 (their impulse responses, `reverb.ts`), the meter's hum, whose pitch is the voltage it reads,
 and the colour game's tones, one pitch a colour, as long as the game holds them
 (`puzzles/sounds.ts`). The Morse device is a lamp and makes no tone. The countdown's beep is a
-recording whose speed — and so its pitch — rises with each second gone. Code:
+recording whose speed — and so its pitch — rises with each second gone; as recorded, it ticks
+each whole second of a sync station's window too (`countTick`, docs/gameplay.md). Code:
 `packages/client/src/world/` — `audio.ts` (the effects and the budget), `mix.ts` (the buses,
 the brickwall, the ducking), `samples.ts` (the recordings, loaded as they are wanted),
 `audioStream.ts` (what streams instead), `audioMemory.ts` (what a page keeps, counted),

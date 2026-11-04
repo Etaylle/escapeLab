@@ -4,7 +4,8 @@ import type { Change } from './feel.js';
 import type { PanelProps } from './index.js';
 import { LeverPanel } from './LeverPanel.js';
 import { lampPop, mushroomStomp, rejectBuzz } from './sounds.js';
-import { ownPressAt, secondsText, syncPress, useNowUntil } from './syncPress.js';
+import { SyncCountDisplay, useSyncCount } from './SyncCount.js';
+import { ownPressAt, secondsText, syncPress } from './syncPress.js';
 
 type SyncPuzzle = PanelProps<'button-sync'>['puzzle'];
 type SyncChange = Change<SyncPuzzle>;
@@ -20,7 +21,7 @@ export function expiredWith(change: SyncChange | null): boolean {
 
 /**
  * What the device says once this player's press ran out, its window again: „Druck verfallen —
- * alle Ausweise binnen 2 s". Without a window no press runs out.
+ * alle Ausweise binnen 3,5 s". Without a window no press runs out.
  */
 export function missedLine(windowMs: number | null): string {
   return windowMs === null
@@ -55,24 +56,28 @@ export function syncSounds(change: SyncChange): void {
 }
 
 /**
+ * A sync station's panel, by its look: the main switch where its mission draws it as one
+ * (LeverPanel), else the mushroom button.
+ */
+export function ButtonSyncPanel(props: PanelProps<'button-sync'>) {
+  return props.puzzle.style === 'lever' ? <LeverPanel {...props} /> : <MushroomPanel {...props} />;
+}
+
+/**
  * The Synchronschaltung, as the printed figure draws it: one mushroom
  * button in a steel collar for the whole crew, under a lamp for each crew
  * member that pops on as their press comes in and goes dark again where it
  * expired. Every press stomps; pressed, the button stays down until the
  * press runs out of its window — then it is up again, and an own press that
- * ran out shakes the collar. A station whose mission draws it as a lever is
- * the main switch instead (LeverPanel). `.big-button` is what the
- * screenshot harness presses.
+ * ran out shakes the collar. Beside the collar every page shows the same
+ * count from the first press of the window (SyncCount.tsx). `.big-button`
+ * is what the screenshot harness presses.
  */
-export function ButtonSyncPanel(props: PanelProps<'button-sync'>) {
-  const { puzzle, change, send } = props;
+function MushroomPanel({ puzzle, change, send, crew }: PanelProps<'button-sync'>) {
   const sync = syncPress(puzzle);
-  const now = useNowUntil(sync.press?.expiresAt ?? null);
-  if (puzzle.style === 'lever') {
-    return <LeverPanel {...props} />;
-  }
+  const moment = useSyncCount(puzzle, puzzle.console !== null);
   const { pressedCount, requiredCount } = puzzle;
-  const own = ownPressAt(puzzle, sync, now);
+  const own = ownPressAt(puzzle, sync, moment.now);
   const before = change === null ? pressedCount : change.before.pressedCount;
   return (
     <div className="sync">
@@ -89,14 +94,17 @@ export function ButtonSyncPanel(props: PanelProps<'button-sync'>) {
           />
         ))}
       </div>
-      <div className={expiredWith(change) ? 'sync-collar sync-collar--missed' : 'sync-collar'}>
-        <button
-          className="big-button sync-button"
-          disabled={own.down}
-          data-feel="stomp"
-          aria-label={own.down ? 'Gedrückt' : 'Drücken'}
-          onClick={() => send({ press: true })}
-        />
+      <div className="sync-stage">
+        <div className={expiredWith(change) ? 'sync-collar sync-collar--missed' : 'sync-collar'}>
+          <button
+            className="big-button sync-button"
+            disabled={own.down}
+            data-feel="stomp"
+            aria-label={own.down ? 'Gedrückt' : 'Drücken'}
+            onClick={() => send({ press: true })}
+          />
+        </div>
+        <SyncCountDisplay moment={moment} style="button" crew={crew ?? null} />
       </div>
       {own.expired && (
         <p className="warn" role="status">

@@ -1,15 +1,16 @@
 # EscapeLab — gameplay
 
 How the crew steers, how it finds things, what a run leaves behind and how runs compare: the
-controls on keys and on a controller, the quick chat, finding things, the Erfolge, the
-Tagesschicht, the picture of a run, the danger sense, the Serverraum's cabling diagram, typing at
-its terminal and what the notepad takes down. Code: `packages/client/src/input/` (bindings,
-controller, prompts), `client/src/achievements.ts` and
-`screens/{Plaques,ShareButton,ControlSettings}.tsx`, `screens/shareCard.ts`,
+controls on keys and on a controller, the quick chat, finding things, the first win at the
+stations the whole crew presses, the Erfolge, the Tagesschicht, the picture of a run, the danger
+sense, the Serverraum's cabling diagram, typing at its terminal and what the notepad takes down.
+Code: `packages/client/src/input/` (bindings, controller, prompts), `client/src/achievements.ts`
+and `screens/{Plaques,ShareButton,ControlSettings}.tsx`, `screens/shareCard.ts`,
 `world/{labelFade,finds,danger,ChatWheel}.ts(x)`, `puzzles/RackDiagram.tsx`,
-`puzzles/{prompt.ts,ServersPanel.tsx}`, `noting.ts`, `notes.ts`,
-`screens/{Notepad,NoteButton}.tsx`; in the core `chat.ts`, `discovery.ts`, `achievements.ts`,
-`daily.ts` and `puzzles/servers.ts` (`serviceDiagram`).
+`puzzles/{prompt.ts,ServersPanel.tsx}`, `puzzles/{SyncCount.tsx,syncPress.ts}`, `noting.ts`,
+`notes.ts`, `screens/{Notepad,NoteButton}.tsx`; in the core `chat.ts`, `discovery.ts`,
+`achievements.ts`, `daily.ts`, `puzzles/servers.ts` (`serviceDiagram`) and
+`puzzles/buttonSync.ts`.
 
 ## Controls
 
@@ -107,6 +108,46 @@ the whole lab; in the dark it holds a thing nobody has found only in sight: what
 armed station is whole on every map. The sign stays on every map and the minimap as a landmark,
 but glows through the dark only once the crew has found it.
 Names fade in over 300 ms; a find that matters gets its caption, a chime at most once in 1.5 s.
+
+## The first win
+
+Both missions open on a main switch the whole crew throws together, and Blackout ends on a
+reactor restart the whole crew presses together: its first win and its last. Each gives the crew
+one window, 3.5 s (`windowMs` 3500 at Blackout's Notlicht and Reaktor-Neustart and at the
+tutorial's Initialisierung; its Synchronkalibrierung keeps 3 s). A press lives that long from the
+moment the server takes it, and the station closes once every press of the crew is live at the
+same moment (core `puzzles/buttonSync.ts`). A press that runs out is dropped on the room's
+clock, its owner's device says „Zug verfallen — nur zu zweit zugleich" („Druck verfallen — …" at
+a button), and nothing is charged. The plate says the window („NOTLICHT · HAUPTSCHALTER · NUR ZU
+ZWEIT · 3,5 S"), and so do the printed rules and the coach line, all read from the mission: no
+module writes a window of its own (`core/test/firstWin.test.ts` greps them).
+
+**The count both see.** After Portal 2's co-op countdown, a way for the crew to keep in step:
+from the first press of the window, every page at the station — and the partner's, when they
+open it later — shows the same count, from the server's clock (`clock.ts`), not the page's own.
+Beside the levers or the button, in a dark window, it names who opened the window („Anna hat
+gezogen —", „Ben hat gedrückt —") and shows in large digits the whole seconds left as each
+begins: 3, 2 and 1 a second each, then 0 for the last half second. The control never moves for
+it: where the stage is too narrow for a column beside it (a phone held upright, under 560 px)
+the count sits under the control on one line. Each whole second ticks once
+at the station (the countdown's beep, on the effects' bus), at the same moment on every page
+within the clock's offset; a page that comes to a second more than 250 ms late waits for the
+next. When the last press lands in time the station solves as before, with no GO of its own;
+when the window runs out the count goes, and the next press starts it afresh. The view lists
+every live press, whose and when, for every viewer wherever they stand (`presses`); the panels
+draw the count from it (`puzzles/SyncCount.tsx`, `syncPress.ts`). Under reduced motion the ring
+round the own grip stands at what is left instead of draining; the digits change all the same.
+
+**Telling the partner.** While a press waits, every crew strip tags its owner „zieht" at the
+main switch or „drückt" at a button, in place of „am Pult" and wherever they stand: a partner
+still on the way sees that the switch is waiting for them (`screens/Crew.tsx`). The audience's
+footer says the same.
+
+The walkthrough has one player pull alone at the main switch — the host in Blackout, the guest
+on an upright phone in the tutorial — and shoots lever-countdown.png (the puller's page) and
+lever-countdown-partner.png 1.3 s in: the digits no more than one apart, the partner's page
+naming the puller and its strip saying „zieht"; once the window has shut, the count has to be
+gone from both pages (`client/test/syncCount.test.tsx`, `crew.test.tsx`).
 
 ## Erfolge
 

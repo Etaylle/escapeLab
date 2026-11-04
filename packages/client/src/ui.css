@@ -1311,6 +1311,15 @@ button.link:hover {
   color: var(--accent);
 }
 
+/* A press at the sync station waiting for the rest of the crew: filled in the lever's amber,
+   to be seen at a glance by whoever still has to get there. */
+.presence-press {
+  border-color: #ffb547;
+  background: #ffb547;
+  color: #17120a;
+  font-weight: 700;
+}
+
 .presence-read {
   color: #60a5fa;
 }

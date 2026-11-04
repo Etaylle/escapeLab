@@ -86,7 +86,7 @@ describe('Blackout on the harness’s pinned seed', () => {
     // Stage by stage the direction swaps, console a sending first.
     expect(fixture.signalkette.stages.map((stage) => stage.sends)).toEqual(['a', 'b', 'a', 'b']);
     expect(fixture.signalkette.stages.every((s) => s.keys.length === s.sequence.length)).toBe(true);
-    expect(fixture.reaktorstart).toEqual({ presses: 2, windowMs: 2000 });
+    expect(fixture.reaktorstart).toEqual({ presses: 2, windowMs: 3500 });
   });
 
   it('lights the pinned pattern at the radio panel; the pinned turns and a send solve it', () => {

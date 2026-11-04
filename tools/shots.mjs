@@ -57,8 +57,12 @@
  * a main switch — whoever is locked in let out over a plate first — and E
  * opens its panel for each (lever.png, every lamp lit, the player's own name
  * under the own lever). Where the view gives a press its expiry, the host throws alone:
- * lever-ring.png catches the ring round its grip draining, and the lever has
- * to spring back once the window shuts, the device saying so. Then both
+ * lever-ring.png catches the ring round its grip draining; 1.3 s in,
+ * lever-countdown.png and lever-countdown-partner.png catch the count beside
+ * the levers on both pages — the digits no more than one apart, the partner's
+ * naming who pulled, its crew strip tagging the host „zieht" — and the lever
+ * has to spring back once the window shuts, the device saying so and the
+ * count gone from both. Then both
  * throw together, the run fails unless the lights come up, and lit-flur.png
  * shows the room it lit, the panel closed by itself. The log says how long
  * the lever took from the blackout. A mission without an intro skips all of
@@ -1740,8 +1744,10 @@ function reportSolved(what, look, { since, looked, shot, gone }) {
 /**
  * station-both.png: while the operator keeps the station open, the reader
  * walks up as well and presses E — the panel has to show for both of them.
- * At a sync station both then press it together. Then the reader leaves it
- * and walks back to where it stood.
+ * At a sync station both then press it together — at a main switch with a
+ * window after the operator's lone pull, its ring and both pages' count
+ * (captureLeverRing). Then the reader leaves it and walks back to where it
+ * stood.
  */
 async function captureBothAtStation(reader, operator, station, sync) {
   const back = tileOf(reader.seen);
@@ -1770,6 +1776,9 @@ async function captureBothAtStation(reader, operator, station, sync) {
     if (missing.length > 0) {
       const who = missing.join(' and ');
       throw new Error(`"${station.title}" wants both presses, but ${who} has no panel`);
+    }
+    if (station.look === 'lever') {
+      await captureLeverRing(operator, [operator, reader]);
     }
     const solved = await pressTogether([operator, reader], station);
     await bedAlive(operator, solved.lit, `after "${station.title}"`);
@@ -2832,7 +2841,7 @@ async function throwLever(players) {
     await captureDevicePhone(player, stationSlug(player));
   }
   await captureLeverPanel(first, players.length);
-  await captureLeverRing(first);
+  await captureLeverRing(first, players);
   const solved = await pressTogether(players, lever);
   await captureLitFlur(first, lever);
   await bedAlive(first, solved.lit, 'after the lever');
@@ -2862,12 +2871,13 @@ async function captureLeverPanel(player, crew) {
 
 /**
  * lever-ring.png: the host throws its lever alone, and the shot catches the
- * ring round its grip draining while the press counts; then its window
- * shuts: the lever has to spring back up and the device say so. A main
- * switch without a window has nothing to drain — every press counts
- * whenever it comes — and is skipped.
+ * ring round its grip draining while the press counts — and then both pages'
+ * count beside the levers (captureLeverCountdown); then its window shuts: the
+ * lever has to spring back up, the device say so and the count be gone from
+ * every page at the switch. A main switch without a window has nothing to
+ * drain — every press counts whenever it comes — and is skipped.
  */
-async function captureLeverRing(player) {
+async function captureLeverRing(player, players) {
   if (player.seen.view.puzzle?.windowMs == null) {
     skip('lever-ring.png', 'this main switch has no window: a press never runs out');
     return;
@@ -2879,20 +2889,102 @@ async function captureLeverRing(player) {
     return;
   }
   const { at, expiresAt } = player.seen.view.puzzle.press;
-  await sleep(Math.max(0, at + 600 - Date.now())); // the ring a third drained
+  await sleep(Math.max(0, at + 600 - Date.now())); // the ring under a fifth drained
   const ring = await modal.locator('.lever-ring').count();
   await capture(player.page, 'lever-ring.png');
+  await captureLeverCountdown(player, players, at);
+  await checkPullTag(player, players);
   await sleep(Math.max(0, expiresAt + 400 - Date.now()));
   const down = await modal.locator('.lever-unit').first().getAttribute('class');
   const says = await textOf(modal.locator('.warn'));
   const sprang = !(down ?? '').includes('lever-unit--down');
+  const counting = await Promise.all(players.map(({ page }) => countOn(page)));
+  const still = players.filter((_, i) => counting[i] !== null).map(({ name }) => name);
   console.log(
     `lever-ring.png     ${player.name} alone: ring ${ring > 0 ? 'draining' : '!! missing'} over ` +
       `${seconds(expiresAt - at)}; then ${sprang ? 'sprang back' : '!! stayed down'}, ` +
-      `"${says ?? '!! no word of it'}"`,
+      `"${says ?? '!! no word of it'}", ` +
+      `count ${still.length === 0 ? 'gone' : `!! still on ${still.join(' and ')}'s page`}`,
   );
-  if (ring === 0 || !sprang || says?.includes('Zug verfallen') !== true) {
-    fail(`lever-ring.png: ring ${ring}, sprang back ${sprang}, says "${says}"`);
+  if (ring === 0 || !sprang || says?.includes('Zug verfallen') !== true || still.length > 0) {
+    fail(`lever-ring.png: ring ${ring}, sprang back ${sprang}, says "${says}", count on ${still}`);
+  }
+}
+
+/** How far into a lone pull the count is shot, ms: past its first second, short of the next. */
+const COUNT_SHOT_MS = 1300;
+
+/**
+ * What the count beside the open station's control reads on `page`: whose press opened the
+ * window, and the digit (client puzzles/SyncCount.tsx); null where it shows none.
+ */
+function countOn(page) {
+  return page.evaluate(() => {
+    const count = document.querySelector('.station-modal .sync-count');
+    return count === null
+      ? null
+      : {
+          line: count.querySelector('.sync-count-by')?.textContent ?? '',
+          digit: Number(count.querySelector('.sync-count-digit')?.textContent ?? Number.NaN),
+        };
+  });
+}
+
+/**
+ * lever-countdown.png, lever-countdown-partner.png: COUNT_SHOT_MS into the host's lone pull at
+ * `at`, the main switch on both pages, the count beside the levers from the server's clock. The
+ * run fails where either page shows no digit, where the two are more than one apart, or where
+ * the partner's page does not name who pulled.
+ */
+async function captureLeverCountdown(host, players, at) {
+  const partner = players.find((player) => player !== host);
+  if (partner === undefined) {
+    skip('lever-countdown.png', 'nobody else at the main switch to count along');
+    return;
+  }
+  await sleep(Math.max(0, at + COUNT_SHOT_MS - Date.now()));
+  const [mine, theirs] = await Promise.all([countOn(host.page), countOn(partner.page)]);
+  await Promise.all([
+    capture(host.page, 'lever-countdown.png'),
+    capture(partner.page, 'lever-countdown-partner.png'),
+  ]);
+  const said = (count) => (count === null ? '!! no count' : `"${count.line} ${count.digit}"`);
+  console.log(
+    `lever-countdown    ${seconds(COUNT_SHOT_MS)} into ${host.name}'s pull: ` +
+      `${host.name} ${said(mine)}, ${partner.name} ${said(theirs)}`,
+  );
+  const apart = mine === null || theirs === null ? Number.NaN : Math.abs(mine.digit - theirs.digit);
+  if (!(apart <= 1) || theirs?.line.startsWith(host.name) !== true) {
+    fail(`lever-countdown: ${host.name} ${said(mine)}, ${partner.name} ${said(theirs)}`);
+  }
+}
+
+/** The tags under `name` in the crew strip on `page`, in words; null where it has no `name`. */
+function crewTagsOn(page, name) {
+  return page.evaluate((who) => {
+    const entries = [...document.querySelectorAll('.hud-crew li')];
+    const entry = entries.find((li) => li.querySelector('.hud-name')?.textContent === who);
+    return entry === undefined
+      ? null
+      : [...entry.querySelectorAll('.presence-tag')].map((tag) => tag.textContent ?? '');
+  }, name);
+}
+
+/**
+ * While the host's lone pull waits, the partner's crew strip tags the host „zieht" in place of
+ * „am Pult" (client screens/Crew.tsx) — the strip that calls a partner not yet at the main
+ * switch to it — or the run fails.
+ */
+async function checkPullTag(host, players) {
+  const partner = players.find((player) => player !== host);
+  if (partner === undefined) {
+    return;
+  }
+  const tags = await crewTagsOn(partner.page, host.name);
+  const said = tags === null ? '!! no entry' : `[${tags.join(', ') || 'none'}]`;
+  console.log(`pull tag           ${partner.name}'s strip has ${host.name} ${said}`);
+  if (tags?.includes('zieht') !== true || tags.includes('am Pult')) {
+    fail(`pull tag: ${partner.name}'s crew strip has ${host.name} ${said}, not „zieht"`);
   }
 }
 

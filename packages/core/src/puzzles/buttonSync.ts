@@ -48,6 +48,12 @@ export interface ButtonSyncView {
   youPressed: boolean;
   /** whether somebody else's press is live: for the audience, anybody's */
   partnerPressed: boolean;
+  /**
+   * every live press, the oldest first: whose, by player id, and when, epoch ms. The same for
+   * every viewer wherever they stand — a press is no secret: the crew counts the window down
+   * together from the first of them, and every crew strip says whose press waits
+   */
+  presses: { by: string; at: number }[];
   /** the live presses */
   pressedCount: number;
   /** every connected player has to press */
@@ -104,6 +110,13 @@ function press(
     },
     solved: crew.every((member) => pressed[member] !== undefined),
   };
+}
+
+/** The live presses, the oldest first: by when they came, then by whose they are. */
+function livePresses(state: ButtonSyncState): ButtonSyncView['presses'] {
+  return Object.entries(state.pressed)
+    .map(([by, at]) => ({ by, at }))
+    .sort((a, b) => a.at - b.at || (a.by < b.by ? -1 : a.by > b.by ? 1 : 0));
 }
 
 /** The first moment a live press is older than the window; null without a window or a press. */
@@ -331,6 +344,7 @@ export const buttonSyncModule: PuzzleModule<
           : { at: own, expiresAt: windowMs === null ? null : own + windowMs },
       youPressed: own !== undefined,
       partnerPressed: Object.keys(state.pressed).some((id) => id !== viewer.playerId),
+      presses: livePresses(state),
       pressedCount: Object.keys(state.pressed).length,
       requiredCount: ctx.crew.length,
       here: ctx.operators.filter((id) => ctx.crew.includes(id)).length,
