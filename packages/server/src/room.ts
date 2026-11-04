@@ -10,6 +10,7 @@ import {
   findKey,
   findables,
   foundBy,
+  GameError,
   inSight,
   inEscapePhase,
   initialState,
@@ -19,8 +20,10 @@ import {
   noteKey,
   noteSpot,
   nudgeDueAt,
+  phrasesOf,
   puzzleDueAt,
   runReport,
+  sayPhrase,
   shutDoors,
   sightables,
   stationKey,
@@ -29,7 +32,6 @@ import {
   viewFor,
   viewForSpectator,
   type Action,
-  type ChatPhrase,
   type ClientMessage,
   type DailyStart,
   type Difficulty,
@@ -462,15 +464,24 @@ export class Room {
     }
   }
 
-  /** Quick-chat phrase: fan out to everyone, rate-limited per player. */
-  chat(playerId: string, phrase: ChatPhrase): void {
+  /**
+   * A quick-chat phrase by its place in the mission's list, its slot filled with `value` where
+   * it has one (core chat.ts `sayPhrase`): fanned out to everyone as said, rate-limited per
+   * player. A place the list does not have, or a value the slot does not take, is refused.
+   */
+  chat(playerId: string, index: number, value: string | undefined): void {
+    const phrase = phrasesOf(this.state.mission.chat)[index];
+    if (phrase === undefined) {
+      throw new GameError('Diesen Schnellchat gibt es nicht.');
+    }
+    const text = sayPhrase(phrase, value);
     const now = Date.now();
     if (now - (this.lastChatAt.get(playerId) ?? 0) < CHAT_COOLDOWN_MS) {
       return;
     }
     this.lastChatAt.set(playerId, now);
     for (const listener of this.audience) {
-      listener({ kind: 'chat', playerId, phrase });
+      listener({ kind: 'chat', playerId, text });
     }
   }
 

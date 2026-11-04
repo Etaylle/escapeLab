@@ -1035,11 +1035,20 @@ button.link:hover {
   color: var(--muted);
 }
 
+/* A slot's second step: its values three abreast, as the digits stand on a keypad. */
+.chat-wheel--slot {
+  grid-template-columns: repeat(3, auto);
+}
+
 @media (max-width: 560px) {
   .chat-wheel {
     left: 14px;
     right: 14px;
     grid-template-columns: 1fr 1fr;
+  }
+
+  .chat-wheel--slot {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 

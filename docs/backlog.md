@@ -107,7 +107,7 @@ die Entscheidung.
   soll), z. B. Prüfpult „misst die Spannung des gewählten Kabels"; kein Hinweis auf die Lösung.
 - Beweis: Texte durch die Handbuch-Stimmen-Tests; Capture je Pult.
 
-### T-3 Schnellchat trägt Stationsdaten — Status: bereit · Größe: S
+### T-3 Schnellchat trägt Stationsdaten — Status: im PR (N-small) · Größe: S
 - Heute acht feste Phrasen ohne Daten; „Alle an die Ventile!" nennt Ventile, die Blackout nicht
   hat. Phrasen je Mission aus `mission.json`, davon zwei mit Platzhalter (Zahl/Farbe/Dienst),
   per Steuerkreuz/Taste wählbar. Beweis: Tests, Capture des Chat-Rads in Blackout.

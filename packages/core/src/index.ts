@@ -228,7 +228,15 @@ export {
   type ServerRow,
   type Service,
 } from './puzzles/servers.js';
-export { CHAT_PHRASES, CHAT_PHRASE_IDS, chatText, type ChatPhrase } from './chat.js';
+export {
+  CHAT_PHRASE_COUNT,
+  DEFAULT_CHAT_PHRASES,
+  phraseShown,
+  phrasesOf,
+  sayPhrase,
+  slotValues,
+  type ChatPhrase,
+} from './chat.js';
 export {
   scaleMission,
   difficultyInfos,

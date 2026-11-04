@@ -1,14 +1,15 @@
 # EscapeLab — gameplay
 
 How the crew steers, how it finds things, what a run leaves behind and how runs compare: the
-controls on keys and on a controller, finding things, the Erfolge, the Tagesschicht, the picture
-of a run, the danger sense, the Serverraum's cabling diagram, typing at its terminal and what the
-notepad takes down. Code: `packages/client/src/input/` (bindings, controller, prompts),
-`client/src/achievements.ts` and `screens/{Plaques,ShareButton,ControlSettings}.tsx`,
-`screens/shareCard.ts`, `world/{labelFade,finds,danger}.ts`, `puzzles/RackDiagram.tsx`,
+controls on keys and on a controller, the quick chat, finding things, the Erfolge, the
+Tagesschicht, the picture of a run, the danger sense, the Serverraum's cabling diagram, typing at
+its terminal and what the notepad takes down. Code: `packages/client/src/input/` (bindings,
+controller, prompts), `client/src/achievements.ts` and
+`screens/{Plaques,ShareButton,ControlSettings}.tsx`, `screens/shareCard.ts`,
+`world/{labelFade,finds,danger,ChatWheel}.ts(x)`, `puzzles/RackDiagram.tsx`,
 `puzzles/{prompt.ts,ServersPanel.tsx}`, `noting.ts`, `notes.ts`,
-`screens/{Notepad,NoteButton}.tsx`; in the core `discovery.ts`, `achievements.ts`, `daily.ts`
-and `puzzles/servers.ts` (`serviceDiagram`).
+`screens/{Notepad,NoteButton}.tsx`; in the core `chat.ts`, `discovery.ts`, `achievements.ts`,
+`daily.ts` and `puzzles/servers.ts` (`serviceDiagram`).
 
 ## Controls
 
@@ -26,7 +27,7 @@ actions sit on buttons of the player's choosing (Settings → Controller), the r
 | Notizblock | N | X/□ |
 | Minikarte | M | Y/△ |
 | Ping für alle | a click on the world | D-pad ◀: the floor the lamp points at |
-| Schnellchat | C, then 1–8 (fixed) | D-pad ▶, then the D-pad to a phrase and A |
+| Schnellchat | C, then 1–8 (fixed); a phrase with a slot, then 1–9 | D-pad ▶, then the D-pad to a phrase and A, and to a slot's value and A |
 | Einsatzinfo | I | Select |
 | Sprechen (push-to-talk) | V, held (at the terminal V types; its FUNK key talks) | L1, held |
 | Einstellungen | ⚙ in the top bar | Start |
@@ -63,7 +64,8 @@ skips the opening. The D-pad walks nobody there: its ◀ pings for the whole cre
 points — two tiles ahead along the way the avatar faces, short of the first wall, shut door or
 piece of furniture (`world/padPing.ts`), as a click pings where it lands — and its ▶ opens the
 quick chat by its key; the wheel then takes the controller as a dialog does, its first phrase in
-the focus, the D-pad moving between them, A saying one and B shutting it. ▲ and ▼ do nothing in
+the focus, the D-pad moving between them, A saying one — or opening the second step of one with a
+slot, its first value in the focus — and B shutting it. ▲ and ▼ do nothing in
 the world. A text field in the focus lets go first, as a controller types nothing: X closes the
 notepad it opened. Over a dialog (the device, the pages, the settings, the info) the D-pad moves
 the focus to the nearest control that way, A presses it — a control made to be held, as the
@@ -75,6 +77,22 @@ there until it is let go. An Xbox controller says Xbox in its id
 live test: every button lights while held, the stick's dot leans. The walkthrough's
 `?fakepad=1` puts a controller of its own on `window.__escapelab.pad` (press, release, tap,
 lean).
+
+## Quick chat
+
+The wheel holds eight phrases in the crew's own words: the mission's (`chat.phrases`, validated
+in core `chat.ts`) or, where it names none, the default list. A phrase may hold one slot, filled
+as it is said: `{n}`, a number from 1 to 9, or `{name}`, one of the phrase's own `names` (two to
+nine, eight characters each at most); a phrase stays within 24 characters, filled in. Blackout's
+wheel has no valves: „Hier rüber!", „Warte kurz …", „Bereit!", „Brauche eine Ansage!", „Ich
+halte die Platte", „Achtung, Drohne!", „Kabel {n}" and „Dienst {name}" with the Serverraum's
+six services. The wheel shows a slot as „…" („Kabel …"); its digit, a click or A opens the
+second step, every value as the phrase will say it („Kabel 1" … „Kabel 9", three abreast), where
+1–9, a click or the D-pad and A say it. While that step is up the digits are its, whatever else
+they are bound to; Esc or B shuts the wheel from either step. A client names a phrase by its
+place and the slot's value; the server fills it in (`sayPhrase`) and refuses a place or a value
+the mission does not have. The bubble over the speaker and the HUD's line show it as said:
+„Anna: Kabel 3" (`world/ChatWheel.tsx`, `client/test/chatWheel.test.tsx`; chat-slot.png).
 
 ## Finding things
 

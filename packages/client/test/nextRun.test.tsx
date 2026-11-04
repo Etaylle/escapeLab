@@ -20,6 +20,7 @@ function wonTutorial(parts: Partial<PlayerView> = {}): PlayerView {
     difficulty: 'normal',
     storyText: 'Alle Systeme online.',
     crewSize: { min: 2, max: 2 },
+    chat: [],
     you: ANNA,
     players: [ANNA, BEN].map((p) => ({ ...p, connected: true })),
     palette: [],

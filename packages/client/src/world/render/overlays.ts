@@ -1,4 +1,3 @@
-import { chatText } from '@escapelab/core';
 import { carriedItem, carryLine, promptText } from '../interact.js';
 import {
   glowSpot,
@@ -452,7 +451,7 @@ function drawBubble(
   const view = frame.viewport;
   const k = textPx(1, view);
   const tip = sy + 16 * view.dpr;
-  const text = chatText(line.phrase);
+  const { text } = line;
   ctx.font = `600 ${BUBBLE_PX * k}px system-ui, sans-serif`;
   const tw = ctx.measureText(text).width + 18 * k;
   const age = (frame.perf - line.at) / CHAT_LIFETIME_MS;

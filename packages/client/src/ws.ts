@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import type {
-  ChatPhrase,
   ClientMessage,
   DronePosition,
   PlayerView,
@@ -79,8 +78,8 @@ export interface Connection {
   drones: MutableRefObject<Record<string, DronePosition>>;
   /** Map pings, newest last; the render loop drains expired ones itself. */
   pings: MutableRefObject<{ playerId: string; x: number; y: number; at: number }[]>;
-  /** Quick-chat lines, newest last; drained by the render loop like pings. */
-  chats: MutableRefObject<{ playerId: string; phrase: ChatPhrase; at: number }[]>;
+  /** Quick-chat lines as said, slots filled in; newest last, drained by the render loop. */
+  chats: MutableRefObject<{ playerId: string; text: string; at: number }[]>;
   send: (msg: ClientMessage) => void;
   /**
    * Hears every server message in the order it came, as it comes — before
@@ -363,8 +362,8 @@ function takeIn(msg: ServerMessage, page: Page): void {
       break;
     }
     case 'chat': {
-      const { playerId, phrase } = msg;
-      page.chats.current.push({ playerId, phrase, at: performance.now() });
+      const { playerId, text } = msg;
+      page.chats.current.push({ playerId, text, at: performance.now() });
       break;
     }
     case 'error':
@@ -456,7 +455,7 @@ export function useGameConnection(): Connection {
   const positionsRef = useRef<KnownPositions>({ run: null, players: {} });
   const dronesRef = useRef<Record<string, DronePosition>>({});
   const pingsRef = useRef<{ playerId: string; x: number; y: number; at: number }[]>([]);
-  const chatsRef = useRef<{ playerId: string; phrase: ChatPhrase; at: number }[]>([]);
+  const chatsRef = useRef<{ playerId: string; text: string; at: number }[]>([]);
   const listenersRef = useRef(new Set<ServerListener>());
 
   const listen = useCallback((listener: ServerListener) => {

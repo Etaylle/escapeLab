@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { chatText, type PlayerPosition, type PlayerView, type RunEvent } from '@escapelab/core';
+import type { PlayerPosition, PlayerView, RunEvent } from '@escapelab/core';
 import { useMedia } from '../hooks.js';
 import { airIcon, fromControl, LAST_SHIFT } from '../radio.js';
 import { useGlyph, usePadUsed } from '../input/glyphs.js';
@@ -171,7 +171,7 @@ export function MissionHud({
       ? undefined
       : {
           at: chatArrival(lastChat),
-          text: `${nameOf(lastChat.playerId)}: ${chatText(lastChat.phrase)}`,
+          text: `${nameOf(lastChat.playerId)}: ${lastChat.text}`,
         };
   const radio = tickerLine(view.events.at(-1), heard, onAir);
 

@@ -17,6 +17,7 @@ function lostRun(parts: Partial<PlayerView> = {}): PlayerView {
     difficulty: 'normal',
     storyText: 'Stromausfall.',
     crewSize: { min: 2, max: 3 },
+    chat: [],
     you: anna,
     players: [{ ...anna, connected: true }],
     palette: [],

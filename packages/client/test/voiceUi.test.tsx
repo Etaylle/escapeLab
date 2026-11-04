@@ -47,6 +47,7 @@ function annaSees(phase: PlayerView['phase']): PlayerView {
     difficulty: 'normal',
     storyText: '',
     crewSize: { min: 2, max: 3 },
+    chat: [],
     you: anna,
     players: [
       { ...anna, connected: true },

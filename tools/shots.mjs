@@ -1171,15 +1171,20 @@ async function clickText(page, text) {
  * views line (`reportViews`).
  */
 function eavesdrop(page) {
-  // `sent`: the quick-chat lines and pings the page sent, in order.
+  // `sent`: the quick-chat lines and pings the page sent, in order; `heard`: the quick-chat
+  // lines it was told of, as said.
   const seen = { view: null, pos: null, crew: {}, drones: {}, dronesAt: null, sent: [] };
   seen.viewsAt = [];
+  seen.heard = [];
   page.on('websocket', (socket) => {
     if (!socket.url().endsWith('/ws')) {
       return;
     }
     socket.on('framereceived', ({ payload }) => {
       const msg = JSON.parse(String(payload));
+      if (msg.kind === 'chat') {
+        seen.heard.push({ playerId: msg.playerId, text: msg.text });
+      }
       if (msg.kind === 'view' || msg.kind === 'spectator-view') {
         seen.view = msg.view;
         if (msg.view.phase === 'playing') {
@@ -8262,6 +8267,11 @@ function reportSprint(name, run, sprint, walk) {
 // pad-quickchat.png  the quick chat the controller's ▶ opened in the world, its first phrase in
 //   the focus and its button naming ▶; ▼ and A have to say the second phrase and shut it, and ◀
 //   has to ping the floor within two tiles of the host
+// chat-slot.png  Blackout's wheel on the second step of „Kabel …", „Kabel 3" in the focus: A has
+//   to send it filled in, the guest hear „Kabel 3" and the host's HUD strip show it; C, the
+//   digit of „Dienst …" and 2 have to say „Dienst DNS" — a mission without such phrases skips it
+// console-plate.png  the heads of a two-console station's devices, one over the other: each has
+//   to engrave what the view says its machine does, the two apart — or the run fails
 // rack-diagram.png  the rack console's cabling diagram as its player opens it: six boxes, each
 //   LED as the rack's unit says, no code anywhere — or the run fails
 // achievements.png  the won card once its plaques are in: the ones the view says the run earned,
@@ -8450,9 +8460,11 @@ async function captureQuickChat(player) {
   const ping = sentPing();
   const away =
     ping === undefined || at === null ? Infinity : Math.hypot(ping.x - at.x, ping.y - at.y);
+  const phrase = said === undefined ? null : seen.view?.chat?.[said.phrase];
+  const saidText = said === undefined ? '!! nothing' : `„${phrase?.text ?? said.phrase}"`;
   console.log(
     `pad-quickchat.png  ▶ ${open ? 'opened the wheel' : '!! opened nothing'}, phrase ${first} in ` +
-      `the focus, the button "${glyph}"; ▼ to ${second}, A said ${said?.phrase ?? '!! nothing'}` +
+      `the focus, the button "${glyph}"; ▼ to ${second}, A said ${saidText}` +
       `${shut ? ', the wheel shut' : ' !! the wheel still open'}; ◀ pinged ` +
       (pinged ? `(${ping.x}, ${ping.y}), ${away.toFixed(2)} tiles away` : '!! nothing'),
   );
@@ -8465,11 +8477,134 @@ async function captureQuickChat(player) {
   }
 }
 
-/** settings-controller.png, gamepad-prompts.png and pad-quickchat.png, one after the other. */
-async function captureControls(player) {
+/**
+ * The HUD's radio strip on `page` once it reads `line`, or as it reads after `ms` of waiting
+ * for it; null while it carries nothing — a radio line on the air holds it.
+ */
+async function hudLineOnceIt(page, line, ms) {
+  const end = Date.now() + ms;
+  let strip = await textOf(page.locator('.hud .hud-radio'));
+  while (strip !== line && Date.now() < end) {
+    await sleep(100);
+    strip = await textOf(page.locator('.hud .hud-radio'));
+  }
+  return strip;
+}
+
+/**
+ * The phrase with a slot of the kind `slot` (`{n}`, `{name}`) in a page's quick chat, by its
+ * place in the wheel; -1 where it has none.
+ */
+const slotPhrase = (seen, slot) =>
+  (seen.view?.chat ?? []).findIndex((phrase) => phrase.text.includes(slot));
+
+/**
+ * The quick chat's second step, driven by keys: C opens the wheel, the digit of the phrase
+ * with a name in its slot opens its second step, 2 says it with the slot's second name. What
+ * the page sent for it, or null.
+ */
+async function sayByKeys(player, place) {
+  const { page, seen } = player;
+  const sentBefore = seen.sent.length;
+  await page.keyboard.press('c'); // the chat's key, as the walkthrough leaves it bound
+  await page.keyboard.press(String(place + 1));
+  const stepped = await settled(page.locator('.chat-wheel--slot').waitFor({ timeout: 3000 }));
+  await page.keyboard.press('2');
+  const sent = await until(() => seen.sent.length > sentBefore, 3000);
+  return stepped && sent ? (seen.sent.at(-1) ?? null) : null;
+}
+
+/**
+ * chat-slot.png: Blackout's quick chat carries a station's data. The walkthrough's controller
+ * opens the wheel with ▶, ▼ walks down to „Kabel …" and A opens its second step, the first
+ * value in the focus; ▶ ▶ moves to „Kabel 3", which is shot, and A says it: the host's page has
+ * to send the phrase's place with „3", the guest has to hear „Kabel 3" from the host, and the
+ * host's HUD strip has to show „Anna: Kabel 3" unless a radio line holds it. Then the keys do
+ * the same for „Dienst …": C, its digit, 2 — „Dienst DNS". A mission without such phrases skips
+ * it; anything else that goes wrong fails the run.
+ */
+async function captureChatSlot(player, other) {
+  const { page, seen } = player;
+  const wire = slotPhrase(seen, '{n}');
+  const service = slotPhrase(seen, '{name}');
+  if (wire < 0 || service < 0) {
+    skip('chat-slot.png', `${MISSION}'s quick chat carries no number and no name`);
+    return;
+  }
+  await sleep(1300); // past the server's chat cooldown after pad-quickchat.png's line
+  const sentBefore = seen.sent.length;
+  await onPad(page, 'tap', 'dright');
+  const opened = await settled(page.locator('.chat-wheel').waitFor({ timeout: 3000 }));
+  await sleep(250); // the first phrase takes the focus as the wheel comes up
+  for (let step = 0; step < wire; step++) {
+    await onPad(page, 'tap', 'ddown');
+    await sleep(200);
+  }
+  const onPhrase = await wheelFocus(page);
+  await onPad(page, 'tap', 'a');
+  const stepped = await settled(page.locator('.chat-wheel--slot').waitFor({ timeout: 3000 }));
+  await sleep(250);
+  const firstValue = await wheelFocus(page);
+  for (let step = 0; step < 2; step++) {
+    await onPad(page, 'tap', 'dright');
+    await sleep(150);
+  }
+  const onValue = await wheelFocus(page);
+  await capture(page, 'chat-slot.png');
+  await onPad(page, 'tap', 'a');
+  const wheelGone = page.locator('.chat-wheel').waitFor({ state: 'detached', timeout: 3000 });
+  const shut = await settled(wheelGone);
+  const said = seen.sent.slice(sentBefore).find((msg) => msg.kind === 'chat');
+  const me = seen.view?.you?.id;
+  const heard = await until(
+    () => other.seen.heard.some((line) => line.playerId === me && line.text === 'Kabel 3'),
+    3000,
+  );
+  const shown = `${player.name}: Kabel 3`;
+  const strip = await hudLineOnceIt(page, shown, 5000);
+  await sleep(1300); // past the cooldown again
+  const keyed = await sayByKeys(player, service);
+  const keyedHeard = await until(
+    () => other.seen.heard.some((line) => line.playerId === me && line.text === 'Dienst DNS'),
+    3000,
+  );
+  console.log(
+    `chat-slot.png      ▶ ${opened ? 'opened the wheel' : '!! opened nothing'}, ▼ to ` +
+      `${onPhrase}, A ${stepped ? 'opened the second step' : '!! opened no second step'}, ` +
+      `${firstValue} in the focus, ▶▶ to ${onValue}; A sent ${JSON.stringify(said ?? null)}` +
+      `${shut ? ', the wheel shut' : ' !! the wheel still open'}; ${other.name} heard ` +
+      `${heard ? '„Kabel 3"' : '!! nothing'}; the HUD strip "${strip ?? '(on the air)'}"; ` +
+      `keys sent ${JSON.stringify(keyed)}, ${other.name} heard ` +
+      `${keyedHeard ? '„Dienst DNS"' : '!! nothing'}`,
+  );
+  const wrong = [
+    !opened && 'the wheel never opened',
+    onPhrase !== wire + 1 && `▼ came to ${onPhrase}, not ${wire + 1}`,
+    !stepped && 'A opened no second step',
+    firstValue !== 1 && `the second step opened on ${firstValue}`,
+    onValue !== 3 && `▶▶ came to ${onValue}`,
+    (said?.phrase !== wire || said?.value !== '3') && `A sent ${JSON.stringify(said)}`,
+    !shut && 'the wheel stayed open',
+    !heard && `${other.name} never heard „Kabel 3"`,
+    strip !== null && strip !== shown && `the HUD strip read "${strip}"`,
+    (keyed?.phrase !== service || keyed?.value !== 'DNS') &&
+      `the keys sent ${JSON.stringify(keyed)}`,
+    !keyedHeard && `${other.name} never heard „Dienst DNS"`,
+  ].filter(Boolean);
+  if (wrong.length > 0) {
+    fail(`chat-slot.png: ${wrong.join('; ')}`);
+  }
+}
+
+/**
+ * settings-controller.png, gamepad-prompts.png, pad-quickchat.png and chat-slot.png, one after
+ * the other.
+ */
+async function captureControls(player, other) {
   await captureControllerSettings(player.page);
   await captureGamepadPrompts(player);
   await captureQuickChat(player);
+  await captureChatSlot(player, other);
 }
 
 /**
@@ -8850,7 +8985,7 @@ async function run() {
   await capture(host, 'info-panel.png');
   await host.keyboard.press('Escape');
   await captureSettings(host);
-  await captureControls(anna);
+  await captureControls(anna, ben);
   await captureMinimapGoal(anna);
   await captureSprint(anna);
   await captureWalkCycle(anna);

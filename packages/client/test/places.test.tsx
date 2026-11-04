@@ -846,6 +846,7 @@ function justStarted(parts: Partial<PlayerView> = {}): PlayerView {
     difficulty: 'normal',
     storyText: 'Stromausfall.',
     crewSize: { min: 2, max: 2 },
+    chat: [],
     you: {
       id: 'p2',
       name: 'Ben',

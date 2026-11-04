@@ -27,6 +27,18 @@
     "start": "Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt, ich sehe nur noch die Notzellen. Geht zuerst ans Notlicht, der Hauptschalter im Flur braucht zwei Leute.",
     "escape": "Reaktor läuft. Der Notausgang ist entriegelt, Nordwestecke beim Archiv. Alle raus, jetzt."
   },
+  "chat": {
+    "phrases": [
+      { "text": "Hier rüber!" },
+      { "text": "Warte kurz …" },
+      { "text": "Bereit!" },
+      { "text": "Brauche eine Ansage!" },
+      { "text": "Ich halte die Platte" },
+      { "text": "Achtung, Drohne!" },
+      { "text": "Kabel {n}" },
+      { "text": "Dienst {name}", "names": ["NETZ", "DNS", "DB", "AUTH", "WEB", "MAIL"] }
+    ]
+  },
   "map": {
     "tiles": [
       "###################        ",

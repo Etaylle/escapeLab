@@ -169,6 +169,7 @@ function crewView(you: string, crew: [string, boolean][]): ServerMessage {
     difficulty: 'normal',
     storyText: '',
     crewSize: { min: 2, max: 4 },
+    chat: [],
     you: member(you),
     players: crew.map(([id, connected]) => ({ ...member(id), connected })),
     palette: [],

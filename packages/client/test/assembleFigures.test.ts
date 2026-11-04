@@ -52,6 +52,7 @@ function viewWith(items: Item[]): PlayerView {
     difficulty: 'normal',
     storyText: '',
     crewSize: { min: 2, max: 2 },
+    chat: [],
     you,
     players: [
       { ...you, connected: true },

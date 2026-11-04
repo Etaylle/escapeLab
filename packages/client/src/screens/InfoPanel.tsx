@@ -16,8 +16,9 @@ interface Props {
 type Tab = 'auftrag' | 'karte' | 'steuerung';
 
 /**
- * The ping and the quick chat: by the mouse and the digits on keys; on a controller the D-pad's
- * ◀ pings where the lamp points, its ▶ opens the chat to pick a phrase from with the D-pad.
+ * The ping and the quick chat: by the mouse and the digits on keys — a phrase with a slot,
+ * „Kabel …", filled by a second digit; on a controller the D-pad's ◀ pings where the lamp
+ * points, its ▶ opens the chat to pick a phrase from with the D-pad, and a slot's value too.
  */
 function signalRows(
   source: GlyphSource,
@@ -26,7 +27,7 @@ function signalRows(
   if (source.device !== 'pad') {
     return [
       ['Klick auf die Welt', 'Ping für alle setzen'],
-      [`${g('chat')}, dann 1–8`, 'Schnellchat'],
+      [`${g('chat')}, dann 1–8, bei „…" noch 1–9`, 'Schnellchat'],
     ];
   }
   return [

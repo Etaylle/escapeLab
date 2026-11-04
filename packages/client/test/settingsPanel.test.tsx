@@ -122,7 +122,7 @@ describe('the Info panel’s keys', () => {
     expect(pad.get('▶, dann Steuerkreuz und ✕')).toBe('Schnellchat');
     const keys = new Map(controlsOf(keyboard));
     expect(keys.get('Klick auf die Welt')).toBe('Ping für alle setzen');
-    expect(keys.get('C, dann 1–8')).toBe('Schnellchat');
+    expect(keys.get('C, dann 1–8, bei „…" noch 1–9')).toBe('Schnellchat');
   });
 
   it('tells every row apart by what it does, though a controller works two with B', () => {

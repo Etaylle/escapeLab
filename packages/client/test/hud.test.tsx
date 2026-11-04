@@ -24,6 +24,7 @@ function hud(
     difficulty: 'normal',
     storyText: '',
     crewSize: { min: 2, max: 3 },
+    chat: [],
     you: ben,
     players: [{ ...ben, connected: true }],
     palette: [],

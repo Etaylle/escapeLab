@@ -1,19 +1,10 @@
 import { useContext, useEffect, useRef, useState } from 'react';
-import {
-  chatText,
-  CHAT_PHRASE_IDS,
-  type ChatPhrase,
-  type ClientMessage,
-  type DronePosition,
-  type PlayerView,
-  type PuzzleView,
-} from '@escapelab/core';
+import type { ClientMessage, DronePosition, PlayerView, PuzzleView } from '@escapelab/core';
 import { beepDue, clock, clockTime, serverAt, timeLeft } from '../clock.js';
 import { useServerNow } from '../hooks.js';
 import { actionOfKey, isHeld, type Held, type InputAction } from '../input/bindings.js';
 import { useGlyph } from '../input/glyphs.js';
 import { HeldKeys, watchBindings } from '../input/heldKeys.js';
-import { inputDevice } from '../input/device.js';
 import { NO_STEER } from '../input/pad.js';
 import { onPadPing, padSteer } from '../input/padRuntime.js';
 import { addProbes, type MinimapProbe } from '../probes.js';
@@ -55,6 +46,7 @@ import {
   wallBump,
   type SoundSystem,
 } from './audio.js';
+import { ChatWheel, PHRASES, pressDigit, type Wheel, type WheelMove } from './ChatWheel.js';
 import { blackoutCue, FLICKER_MS, REVEAL_MS, SEQUENCE_MS } from './coldOpen.js';
 import { senseDanger, stopDanger } from './danger.js';
 import { doorTurned } from './doors.js';
@@ -167,6 +159,8 @@ interface Props {
 /** The latest of what the world's loop and its listeners read, as the component last rendered. */
 interface Live extends Latest {
   station: PuzzleView | null;
+  /** where the quick chat's wheel stands: what the digits say (ChatWheel.tsx) */
+  wheel: Wheel;
   send: (msg: ClientMessage) => void;
   onToggleInfo: () => void;
   onRead: (manualId: string) => void;
@@ -197,7 +191,18 @@ interface WorldRefs {
   dropRef: React.MutableRefObject<(() => void) | null>;
 }
 
-type SetWheel = React.Dispatch<React.SetStateAction<boolean>>;
+type SetWheel = React.Dispatch<React.SetStateAction<Wheel>>;
+
+/** The chat wheel's toggle: open on its phrases where it was shut, shut from either step. */
+const toggled = (wheel: Wheel): Wheel => (wheel === null ? PHRASES : null);
+
+/** A press in the chat wheel carried out: the phrase it says goes out, the wheel moves on. */
+function moveWheel(send: Props['send'], setWheel: SetWheel, move: WheelMove): void {
+  if (move.said !== null) {
+    send({ kind: 'chat', ...move.said });
+  }
+  setWheel(move.wheel);
+}
 
 /** What the world's loop is wired to in the component, read as it mounts. */
 interface Wiring {
@@ -205,7 +210,7 @@ interface Wiring {
   refs: WorldRefs;
   live: React.MutableRefObject<Live>;
   alarm: React.MutableRefObject<Alarm | null>;
-  setWheelOpen: SetWheel;
+  setWheel: SetWheel;
   setControlsReach: (px: number) => void;
 }
 
@@ -275,14 +280,14 @@ function dropItem(loop: Loop): void {
 }
 
 /** What a key does once a press, not on its auto-repeat. */
-type KeyJob = (loop: Loop, setWheelOpen: SetWheel) => void;
+type KeyJob = (loop: Loop, setWheel: SetWheel) => void;
 
 const interactKey: KeyJob = (loop) => tryInteract(loop);
 const dropKey: KeyJob = (loop) => dropItem(loop);
 const minimapKey: KeyJob = (loop) => {
   loop.sim.minimap = !loop.sim.minimap;
 };
-const chatKey: KeyJob = (_, setWheelOpen) => setWheelOpen((open) => !open);
+const chatKey: KeyJob = (_, setWheel) => setWheel(toggled);
 const infoKey: KeyJob = (loop) => loop.live.current.onToggleInfo();
 /**
  * The actions that work the world once a press, by whatever key the settings bind them to
@@ -296,16 +301,24 @@ const KEY_JOBS: Partial<Record<InputAction, KeyJob>> = {
   info: infoKey,
 };
 
-function onKeyDown(loop: Loop, e: KeyboardEvent, setWheelOpen: SetWheel, held: HeldKeys): void {
+/**
+ * A key going down in the world. While the chat wheel stands on a slot's second step, the
+ * digits are its, whatever else they are bound to.
+ */
+function onKeyDown(loop: Loop, e: KeyboardEvent, setWheel: SetWheel, held: HeldKeys): void {
   if (isTextEntry(document.activeElement) || e.altKey || e.ctrlKey || e.metaKey) {
     return;
   }
   const key = e.key.toLowerCase();
+  const onSlot = (loop.live.current.wheel?.slotOf ?? null) !== null;
+  if (onSlot && pressChatDigit(loop, key, e, setWheel)) {
+    return;
+  }
   const action = actionOfKey(getSettings().keys, key);
   if (action !== null && isHeld(action)) {
     holdKey(loop, action, e, held);
   } else {
-    pressKey(loop, key, action, e, setWheelOpen);
+    pressKey(loop, key, action, e, setWheel);
   }
 }
 
@@ -331,29 +344,35 @@ function pressKey(
   key: string,
   action: InputAction | null,
   e: KeyboardEvent,
-  setWheelOpen: SetWheel,
+  setWheel: SetWheel,
 ): void {
   const job = action === null ? undefined : KEY_JOBS[action];
   if (job !== undefined) {
     e.preventDefault();
     if (!e.repeat) {
-      job(loop, setWheelOpen);
+      job(loop, setWheel);
     }
   } else if (key === 'escape') {
-    setWheelOpen(false);
+    setWheel(null);
   } else {
-    sayPhrase(loop, key, e, setWheelOpen);
+    pressChatDigit(loop, key, e, setWheel);
   }
 }
 
-/** 1–8 say the chat wheel's phrases, and shut it. */
-function sayPhrase(loop: Loop, key: string, e: KeyboardEvent, setWheelOpen: SetWheel): void {
-  const phrase = /^[1-8]$/.test(key) ? CHAT_PHRASE_IDS[Number(key) - 1] : undefined;
-  if (phrase !== undefined) {
-    e.preventDefault();
-    loop.live.current.send({ kind: 'chat', phrase });
-    setWheelOpen(false);
+/**
+ * A digit in the chat wheel (ChatWheel.tsx `pressDigit`): 1–8 say a phrase, or open the slot of
+ * one that has one, where 1–9 fill it. Whether the wheel took the key.
+ */
+function pressChatDigit(loop: Loop, key: string, e: KeyboardEvent, setWheel: SetWheel): boolean {
+  const live = loop.live.current;
+  const digit = /^[1-9]$/.test(key) ? Number(key) : null;
+  const move = digit === null ? null : pressDigit(live.view.chat, live.wheel, digit, e.repeat);
+  if (move === null) {
+    return false;
   }
+  e.preventDefault();
+  moveWheel(live.send, setWheel, move);
+  return true;
 }
 
 /** Click anywhere in the world to ping that spot for the whole crew. */
@@ -385,7 +404,7 @@ function padPing(loop: Loop): void {
 }
 
 /** The keyboard and the pointer drive the world; returns what takes them off again. */
-function listen(loop: Loop, setWheelOpen: SetWheel): () => void {
+function listen(loop: Loop, setWheel: SetWheel): () => void {
   const { canvas, sim } = loop;
   const held = new HeldKeys();
   // A key bound anew takes over at once: whatever the old keys held is let go.
@@ -393,7 +412,7 @@ function listen(loop: Loop, setWheelOpen: SetWheel): () => void {
     held.clear();
     sim.keys.clear();
   });
-  const keyDown = (e: KeyboardEvent): void => onKeyDown(loop, e, setWheelOpen, held);
+  const keyDown = (e: KeyboardEvent): void => onKeyDown(loop, e, setWheel, held);
   const pointerDown = (e: PointerEvent): void => onPointerDown(loop, e);
   const keyUp = (e: KeyboardEvent): void => {
     const freed = held.release(e);
@@ -827,7 +846,7 @@ function profilePasses(kit: RenderKit): (() => void) | null {
  * The world's life from mount to unmount: the canvas and its kit, the
  * simulation, the listeners, the position stream and the frame loop.
  */
-function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach }: Wiring): void {
+function useWorldLoop({ props, refs, live, alarm, setWheel, setControlsReach }: Wiring): void {
   useEffect(() => {
     const canvas = refs.canvasRef.current;
     const ctx = canvas?.getContext('2d');
@@ -871,7 +890,7 @@ function useWorldLoop({ props, refs, live, alarm, setWheelOpen, setControlsReach
     refs.interactRef.current = () => tryInteract(loop);
     refs.dropRef.current = () => dropItem(loop);
     // An audience connection watches only: no controls, no position stream.
-    const unlisten = props.spectator ? null : listen(loop, setWheelOpen);
+    const unlisten = props.spectator ? null : listen(loop, setWheel);
     const unping = props.spectator ? null : onPadPing(() => padPing(loop));
     const unhear = props.listen?.({
       message: (msg) => hearAnswer(sim.presses, msg, performance.now()),
@@ -913,8 +932,8 @@ interface ControlsProps {
   refs: WorldRefs;
   live: React.MutableRefObject<Live>;
   view: PlayerView;
-  wheelOpen: boolean;
-  setWheelOpen: SetWheel;
+  wheel: Wheel;
+  setWheel: SetWheel;
 }
 
 /** A way to walk or the sprint held while a finger is down on its control, let go as it lifts. */
@@ -1026,7 +1045,7 @@ function holding(press: Press, move: Held) {
  * comes and goes. With a keyboard only the chat's handle shows (world.css); the key on a
  * button shows only where there are keys.
  */
-function WorldControls({ refs, live, view, wheelOpen, setWheelOpen }: ControlsProps) {
+function WorldControls({ refs, live, view, wheel, setWheel }: ControlsProps) {
   /** what this player carries now; while there is something, a touch screen offers to drop it */
   const load = view.map === null ? undefined : carriedItem(view.map, view.you.id);
   const interactGlyph = useGlyph('interact');
@@ -1058,8 +1077,8 @@ function WorldControls({ refs, live, view, wheelOpen, setWheelOpen }: ControlsPr
         <button
           className="world-chat-toggle"
           aria-label="Schnellchat"
-          onClick={() => setWheelOpen((open) => !open)}
-          aria-expanded={wheelOpen}
+          onClick={() => setWheel(toggled)}
+          aria-expanded={wheel !== null}
         >
           💬<span className="world-key"> [{chatGlyph}]</span>
         </button>
@@ -1080,47 +1099,14 @@ function WorldControls({ refs, live, view, wheelOpen, setWheelOpen }: ControlsPr
   );
 }
 
-/**
- * The quick-chat phrases, one button each, with the digit that says it. Opened from a
- * controller, the first phrase takes the focus: the D-pad picks one, A says it, B shuts the
- * wheel (input/focus.ts takes it for a menu over the world).
- */
-function ChatWheel({ send, setWheelOpen }: { send: Props['send']; setWheelOpen: SetWheel }) {
-  const first = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (inputDevice().device === 'pad') {
-      first.current?.focus();
-    }
-  }, []);
-  const say = (phrase: ChatPhrase): void => {
-    send({ kind: 'chat', phrase });
-    setWheelOpen(false);
-  };
-  return (
-    <div className="chat-wheel" role="menu">
-      {CHAT_PHRASE_IDS.map((phrase, i) => (
-        <button
-          key={phrase}
-          ref={i === 0 ? first : undefined}
-          role="menuitem"
-          onClick={() => say(phrase)}
-        >
-          <span className="chat-key">{i + 1}</span>
-          {chatText(phrase)}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 /** What the world's DOM shows of its state: the tip, the alarm's classes, the chat wheel. */
 interface WorldState {
   refs: WorldRefs;
   live: React.MutableRefObject<Live>;
   tip: CoachMark | null;
   alarmClass: string;
-  wheelOpen: boolean;
-  setWheelOpen: SetWheel;
+  wheel: Wheel;
+  setWheel: SetWheel;
   /** how far the control cluster reaches up from the world's bottom edge, CSS pixels */
   controlsReach: number;
 }
@@ -1133,7 +1119,7 @@ function useWorld(props: Props): WorldState {
   const { view, spectator, darkSince, inputLocked, holdTips } = props;
   const finale = props.finale ?? null;
   const station = props.station ?? null;
-  const [wheelOpen, setWheelOpen] = useState(false);
+  const [wheel, setWheel] = useState<Wheel>(null);
   const [controlsReach, setControlsReach] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const controlsRef = useRef<HTMLDivElement | null>(null);
@@ -1150,6 +1136,7 @@ function useWorld(props: Props): WorldState {
     darkSince,
     locked: inputLocked,
     station,
+    wheel,
     finale,
     intro: props.intro ?? null,
     escapeSince,
@@ -1182,8 +1169,8 @@ function useWorld(props: Props): WorldState {
   useEscapeSounds(escapeSince, view.phase === 'playing' && finale === null);
   useFinaleSounds(finale);
   const refs = { canvasRef, controlsRef, simRef, interactRef, dropRef };
-  useWorldLoop({ props, refs, live, alarm: alarmRef, setWheelOpen, setControlsReach });
-  return { refs, live, tip, alarmClass, wheelOpen, setWheelOpen, controlsReach };
+  useWorldLoop({ props, refs, live, alarm: alarmRef, setWheel, setControlsReach });
+  return { refs, live, tip, alarmClass, wheel, setWheel, controlsReach };
 }
 
 /**
@@ -1202,7 +1189,7 @@ function RedEdge({ view, ending }: { view: PlayerView; ending: boolean }) {
 
 export function GameWorld(props: Props) {
   const { spectator } = props;
-  const { refs, live, tip, alarmClass, wheelOpen, setWheelOpen, controlsReach } = useWorld(props);
+  const { refs, live, tip, alarmClass, wheel, setWheel, controlsReach } = useWorld(props);
   return (
     // An alarm strobes over the world and shakes the camera (alarm.ts, finale.css).
     <div className={alarmClass === '' ? 'world-wrap' : `world-wrap ${alarmClass}`}>
@@ -1223,11 +1210,17 @@ export function GameWorld(props: Props) {
           refs={refs}
           live={live}
           view={props.view}
-          wheelOpen={wheelOpen}
-          setWheelOpen={setWheelOpen}
+          wheel={wheel}
+          setWheel={setWheel}
         />
       )}
-      {wheelOpen && <ChatWheel send={props.send} setWheelOpen={setWheelOpen} />}
+      {wheel !== null && (
+        <ChatWheel
+          phrases={props.view.chat}
+          wheel={wheel}
+          onMove={(move) => moveWheel(props.send, setWheel, move)}
+        />
+      )}
     </div>
   );
 }

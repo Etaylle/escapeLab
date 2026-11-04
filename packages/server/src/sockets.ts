@@ -167,7 +167,7 @@ function inRoom(
       s.room.ping(s.playerId, msg.x, msg.y);
       return s;
     case 'chat':
-      s.room.chat(s.playerId, msg.phrase);
+      s.room.chat(s.playerId, msg.phrase, msg.value);
       return s;
     case 'rtc':
       s.room.relaySignal(s.playerId, msg.to, msg.signal);

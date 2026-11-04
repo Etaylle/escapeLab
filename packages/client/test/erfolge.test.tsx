@@ -55,6 +55,7 @@ function blackoutOver(parts: Partial<PlayerView> = {}): PlayerView {
     difficulty: 'normal',
     storyText: 'Die Systeme erwachen.',
     crewSize: { min: 2, max: 3 },
+    chat: [],
     you: ANNA,
     players: [ANNA, BEN].map((p) => ({ ...p, connected: true })),
     palette: [],

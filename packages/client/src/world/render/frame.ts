@@ -1,4 +1,4 @@
-import type { ChatPhrase, DronePosition, Find, PartKind, PlayerView } from '@escapelab/core';
+import type { DronePosition, Find, PartKind, PlayerView } from '@escapelab/core';
 import type { Alarm } from '../alarm.js';
 import type { WorldText } from '../art.js';
 import { artKit, type ArtKit } from '../artKit.js';
@@ -45,10 +45,10 @@ export interface MapPing {
   at: number;
 }
 
-/** A quick-chat line somebody said, at `at` (performance.now()). */
+/** A quick-chat line somebody said, as said — its slot filled in — at `at` (performance.now()). */
 export interface ChatLine {
   playerId: string;
-  phrase: ChatPhrase;
+  text: string;
   at: number;
 }
 

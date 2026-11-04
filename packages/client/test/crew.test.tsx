@@ -41,6 +41,7 @@ function annaSees(players: Seat[], parts: Partial<PlayerView> = {}): PlayerView 
     difficulty: 'normal',
     storyText: 'Stromausfall.',
     crewSize: { min: 2, max: 3 },
+    chat: [],
     you: { id: 'p1', name: 'Anna', color: '#2dd4bf', ready: false, isHost: true },
     players,
     palette: [],

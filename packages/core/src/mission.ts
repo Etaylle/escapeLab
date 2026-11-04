@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { chatSchema } from './chat.js';
 import { decorIssues } from './decor.js';
 import { MAX_NOTES, NOTE_TEXT_MAX, noteSpot } from './notes.js';
 import { moduleFor, puzzleDefSchema, type PuzzleDef } from './puzzles/index.js';
@@ -350,6 +351,12 @@ export const missionSchema = z
         escape: z.string().min(1).optional(),
       })
       .default({}),
+    /**
+     * the quick chat's eight phrases, in the crew's own words (chat.ts): one slot at most each,
+     * `{n}` for a number from 1 to 9 or `{name}` for one of its `names`; left out, the
+     * default list
+     */
+    chat: chatSchema.optional(),
     puzzles: z.array(puzzleDefSchema).min(1),
     map: mapDefSchema,
   })

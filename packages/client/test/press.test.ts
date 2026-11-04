@@ -20,6 +20,7 @@ function atLever(): PlayerView {
     difficulty: 'normal',
     storyText: '',
     crewSize: { min: 2, max: 3 },
+    chat: [],
     you,
     players: [{ ...you, connected: true }],
     palette: [],

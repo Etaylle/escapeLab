@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { CHAT_PHRASE_IDS, chatText } from '@escapelab/core';
 import { PHOSPHOR, rgba, type Rgb } from '../src/world/palette.js';
 import { FALLBACK_COLOR, type Frame } from '../src/world/render/frame.js';
 import { draw, NAME_INK, NAME_PLATE } from '../src/world/render/overlays.js';
@@ -156,21 +155,17 @@ describe('overlays — what lies over the world and its light', () => {
     expect(alphaOf(0.02)).toBe(Math.min(1, 0.01 * 10, 0.99 * 4));
   });
 
-  it('bubbles the newest chat line of each speaker over their head, fading at its end', () => {
-    const [first, second, third] = CHAT_PHRASE_IDS;
-    if (first === undefined || second === undefined || third === undefined) {
-      throw new Error('the chat needs three phrases for this test');
-    }
+  it('bubbles each speaker’s newest chat line over their head, as said, fading out', () => {
     const chats = [
-      { playerId: 'p1', phrase: first, at: 0 },
-      { playerId: 'p1', phrase: second, at: 100 },
-      { playerId: 'p2', phrase: third, at: 50 },
-      { playerId: 'p9', phrase: first, at: 150 },
+      { playerId: 'p1', text: 'Hier rüber!', at: 0 },
+      { playerId: 'p1', text: 'Kabel 3', at: 100 },
+      { playerId: 'p2', text: 'Bereit!', at: 50 },
+      { playerId: 'p9', text: 'Hier rüber!', at: 150 },
     ];
     const ben = { x: 7, y: 3, facing: 0, moving: false, rx: 7, ry: 3, phase: 0 };
     const others = new Map([['p2', ben]]);
     const fresh = drawn(frameWith({ chats, others, perf: 200 }));
-    expect(texts(fresh)).toEqual([chatText(second), chatText(third)]);
+    expect(texts(fresh)).toEqual(['Kabel 3', 'Bereit!']);
     expect(callEntries(fresh, 'fillText').map((call) => call.alpha)).toEqual([1, 1]);
     const fading = callEntries(drawn(frameWith({ chats, others, perf: 3900 })), 'fillText');
     const age = (3900 - 100) / 4200;
@@ -211,10 +206,7 @@ describe('overlays — what lies over the world and its light', () => {
   });
 
   it('fades the marks of play in with the HUD after the run’s opening, the room names not', () => {
-    const [phrase] = CHAT_PHRASE_IDS;
-    if (phrase === undefined) {
-      throw new Error('the chat needs a phrase for this test');
-    }
+    const said = 'Hier rüber!';
     const crate: Item = {
       found: true,
       known: true,
@@ -235,7 +227,7 @@ describe('overlays — what lies over the world and its light', () => {
         action: OPERATE,
         captions: [{ x: 6.5, y: 4, text: 'Spind entdeckt', at: 0 }],
         time: 0.5,
-        chats: [{ playerId: 'p1', phrase, at: 0 }],
+        chats: [{ playerId: 'p1', text: said, at: 0 }],
         perf: 200,
         hud: 0.5,
       }),
@@ -243,7 +235,7 @@ describe('overlays — what lies over the world and its light', () => {
     const alphaOf = (text: string): number | undefined =>
       callEntries(log, 'fillText').find((call) => call.args[0] === text)?.alpha;
     expect(alphaOf('LABOR')).toBe(1);
-    const marks = ['STATION 7m', '[E] Bedienen', 'Spind entdeckt', chatText(phrase)];
+    const marks = ['STATION 7m', '[E] Bedienen', 'Spind entdeckt', said];
     for (const mark of [...marks, '📦 KISTE — [Q] ablegen']) {
       expect(alphaOf(mark)).toBe(0.5);
     }
@@ -266,10 +258,7 @@ describe('overlays — what lies over the world and its light', () => {
   }
 
   it('sets room names, prompt, captions, arrows, chat and carry line at the text size', () => {
-    const [phrase] = CHAT_PHRASE_IDS;
-    if (phrase === undefined) {
-      throw new Error('the chat needs a phrase for this test');
-    }
+    const said = 'Hier rüber!';
     const crate: Item = {
       found: true,
       known: true,
@@ -290,7 +279,7 @@ describe('overlays — what lies over the world and its light', () => {
       action: OPERATE,
       captions: [{ x: 6.5, y: 4, text: 'Spind entdeckt', at: 0 }],
       time: 0.5,
-      chats: [{ playerId: 'p1', phrase, at: 0 }],
+      chats: [{ playerId: 'p1', text: said, at: 0 }],
       perf: 200,
     };
     const at = (textScale: number): string[] => {
@@ -303,7 +292,7 @@ describe('overlays — what lies over the world and its light', () => {
       'STATION 7m@11.00',
       '[E] Bedienen@12.00',
       'Spind entdeckt@12.00',
-      `${chatText(phrase)}@12.00`,
+      `${said}@12.00`,
       '📦 KISTE — [Q] ablegen@12.00',
     ];
     expect(at(1)).toEqual(normal);

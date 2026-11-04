@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CHAT_PHRASE_IDS, type ChatPhrase } from './chat.js';
+import { CHAT_PHRASE_COUNT } from './chat.js';
 import { DIFFICULTIES, type Difficulty } from './difficulty.js';
 import { MAX_NOTES } from './notes.js';
 import type { ManualSection } from './puzzles/module.js';
@@ -133,9 +133,18 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
     t: z.number().finite(),
   }),
   z.object({ kind: z.literal('drop-item') }),
+  /**
+   * a quick-chat phrase by its place in the mission's list (chat.ts), and what its slot is
+   * filled with, where it has one: the server says it filled in
+   */
   z.object({
     kind: z.literal('chat'),
-    phrase: z.enum(CHAT_PHRASE_IDS as [ChatPhrase, ...ChatPhrase[]]),
+    phrase: z
+      .number()
+      .int()
+      .min(0)
+      .max(CHAT_PHRASE_COUNT - 1),
+    value: z.string().min(1).max(16).optional(),
   }),
   z.object({ kind: z.literal('back-to-lobby') }),
   z.object({ kind: z.literal('rematch') }),
@@ -263,7 +272,8 @@ export type ServerMessage =
       drones: Record<string, DronePosition>;
     }
   | { kind: 'ping'; playerId: string; x: number; y: number }
-  | { kind: 'chat'; playerId: string; phrase: ChatPhrase }
+  /** a quick-chat phrase somebody said, its slot filled in: „Kabel 3" */
+  | { kind: 'chat'; playerId: string; text: string }
   /** a voice signal from another member of the room, as they sent it */
   | { kind: 'rtc'; from: string; signal: RtcSignal }
   /** a refusal, and the kind of message it refuses (`of`) — left out where none could be read */

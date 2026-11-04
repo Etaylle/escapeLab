@@ -1782,15 +1782,17 @@ assert(
   'a second ping within the cooldown is dropped',
 );
 
-// Quick chat reaches the whole crew with the phrase intact.
-anna.send({ kind: 'chat', phrase: 'drohne' });
+// Quick chat reaches the whole crew as said: Blackout's phrase for a wire, its number filled in.
+const wirePhrase = mission.chat?.phrases.findIndex((phrase) => phrase.text === 'Kabel {n}') ?? -1;
+assert(wirePhrase >= 0, 'Blackout’s quick chat names a wire by its number');
+anna.send({ kind: 'chat', phrase: wirePhrase, value: '3' });
 const said = await ben.expect(
   'chat arrives',
   (m): m is Extract<ServerMessage, { kind: 'chat' }> => m.kind === 'chat',
 );
 assert(
-  said.playerId === annaJoined.playerId && said.phrase === 'drohne',
-  'quick chat is broadcast with its sender and phrase',
+  said.playerId === annaJoined.playerId && said.text === 'Kabel 3',
+  'quick chat is broadcast with its sender and the phrase as said, its slot filled in',
 );
 
 // Voice signals: Anna offers, Ben answers, a candidate follows — each reaches the one player it

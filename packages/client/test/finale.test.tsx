@@ -196,6 +196,7 @@ function viewOf(parts: Partial<PlayerView> = {}): PlayerView {
     difficulty: 'normal',
     storyText: 'Alle draußen.',
     crewSize: { min: 2, max: 2 },
+    chat: [],
     you: anna,
     players: [
       { ...anna, connected: true },

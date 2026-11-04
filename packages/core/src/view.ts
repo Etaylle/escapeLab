@@ -1,4 +1,5 @@
 import { achievementsOf, type AchievementId } from './achievements.js';
+import { phrasesOf, type ChatPhrase } from './chat.js';
 import type { DailyDay } from './daily.js';
 import type { Difficulty } from './difficulty.js';
 import {
@@ -51,6 +52,8 @@ export interface PlayerView {
   storyText: string;
   /** how many play the mission; a run starts with any count from min to max */
   crewSize: { min: number; max: number };
+  /** the quick chat's eight phrases, in order: the mission's, or the default list (chat.ts) */
+  chat: ChatPhrase[];
   you: {
     id: string;
     name: string;
@@ -1072,6 +1075,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     difficulty: state.difficulty,
     storyText: storyText(state),
     crewSize: { min: state.mission.players.min, max: state.mission.players.max },
+    chat: phrasesOf(state.mission.chat),
     you: {
       id: you.id,
       name: you.name,

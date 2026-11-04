@@ -286,6 +286,8 @@ function spectatorAsPlayerView(view: SpectatorView): Parameters<typeof GameWorld
     difficulty: view.difficulty,
     storyText: view.storyText,
     crewSize: { min: view.players.length, max: view.players.length },
+    // The audience says nothing: its world opens no chat wheel.
+    chat: [],
     you: { id: '', name: '', color: '#2dd4bf', ready: false, isHost: false },
     players: view.players.map((p) => ({
       id: p.id,
