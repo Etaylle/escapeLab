@@ -154,6 +154,25 @@ export function tickDue(
 }
 
 /**
+ * What a crew member's tag reads while their press at the open sync station waits for the
+ * others' — „zieht" at the main switch, „drückt" at a button — so that a partner not at the
+ * station yet knows to hurry: from the view every player gets of the station, wherever they
+ * stand. Null once the press has run out at `now` (server time), once every press is in, and
+ * at any other station.
+ */
+export function pressingWord(view: PuzzleView | null, playerId: string, now: number): string | null {
+  if (view?.kind !== 'button-sync' || view.pressedCount >= view.requiredCount) {
+    return null;
+  }
+  const press = view.presses.find((each) => each.by === playerId);
+  const live = press !== undefined && (view.windowMs === null || now < press.at + view.windowMs);
+  if (!live) {
+    return null;
+  }
+  return view.style === 'lever' ? 'zieht' : 'drückt';
+}
+
+/**
  * What the count says of the press that opened its window, by the station's look: „Anna hat
  * gezogen —" at the main switch, „Ben hat gedrückt —" at a button; „Gezogen —" where the
  * crew no longer names its owner.

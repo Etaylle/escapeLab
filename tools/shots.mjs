@@ -60,8 +60,9 @@
  * lever-ring.png catches the ring round its grip draining; 1.3 s in,
  * lever-countdown.png and lever-countdown-partner.png catch the count beside
  * the levers on both pages — the digits no more than one apart, the partner's
- * naming who pulled — and the lever has to spring back once the window shuts,
- * the device saying so and the count gone from both. Then both
+ * naming who pulled, its crew strip tagging the host „zieht" — and the lever
+ * has to spring back once the window shuts, the device saying so and the
+ * count gone from both. Then both
  * throw together, the run fails unless the lights come up, and lit-flur.png
  * shows the room it lit, the panel closed by itself. The log says how long
  * the lever took from the blackout. A mission without an intro skips all of
@@ -2887,6 +2888,7 @@ async function captureLeverRing(player, players) {
   const ring = await modal.locator('.lever-ring').count();
   await capture(player.page, 'lever-ring.png');
   await captureLeverCountdown(player, players, at);
+  await checkPullTag(player, players);
   await sleep(Math.max(0, expiresAt + 400 - Date.now()));
   const down = await modal.locator('.lever-unit').first().getAttribute('class');
   const says = await textOf(modal.locator('.warn'));
@@ -2949,6 +2951,35 @@ async function captureLeverCountdown(host, players, at) {
   const apart = mine === null || theirs === null ? Number.NaN : Math.abs(mine.digit - theirs.digit);
   if (!(apart <= 1) || theirs?.line.startsWith(host.name) !== true) {
     fail(`lever-countdown: ${host.name} ${said(mine)}, ${partner.name} ${said(theirs)}`);
+  }
+}
+
+/** The tags under `name` in the crew strip on `page`, in words; null where the strip has no `name`. */
+function crewTagsOn(page, name) {
+  return page.evaluate((who) => {
+    const entries = [...document.querySelectorAll('.hud-crew li')];
+    const entry = entries.find((li) => li.querySelector('.hud-name')?.textContent === who);
+    return entry === undefined
+      ? null
+      : [...entry.querySelectorAll('.presence-tag')].map((tag) => tag.textContent ?? '');
+  }, name);
+}
+
+/**
+ * While the host's lone pull waits, the partner's crew strip tags the host „zieht" in place of
+ * „am Pult" (client screens/Crew.tsx) — the strip that calls a partner not yet at the main
+ * switch to it — or the run fails.
+ */
+async function checkPullTag(host, players) {
+  const partner = players.find((player) => player !== host);
+  if (partner === undefined) {
+    return;
+  }
+  const tags = await crewTagsOn(partner.page, host.name);
+  const said = tags === null ? '!! no entry' : `[${tags.join(', ') || 'none'}]`;
+  console.log(`pull tag           ${partner.name}'s strip has ${host.name} ${said}`);
+  if (tags?.includes('zieht') !== true || tags.includes('am Pult')) {
+    fail(`pull tag: ${partner.name}'s crew strip has ${host.name} ${said}, not „zieht"`);
   }
 }
 

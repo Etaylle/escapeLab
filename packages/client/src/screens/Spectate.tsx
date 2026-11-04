@@ -1,7 +1,8 @@
 import type { PlayerPosition, DronePosition, SpectatorView } from '@escapelab/core';
-import { formatLeft, timeLeft } from '../clock.js';
+import { formatLeft, serverNow, timeLeft } from '../clock.js';
 import { useServerNow } from '../hooks.js';
 import type { DeviceRun } from '../puzzles/Device.js';
+import { pressingWord } from '../puzzles/syncPress.js';
 import { reportLine } from '../radio.js';
 import { useVoice } from '../voice/useVoice.js';
 import { alarmNotice } from '../world/alarm.js';
@@ -38,15 +39,17 @@ function elapsed(startedAt: number | null, at: number): string {
 }
 
 /**
- * What the audience sees of a crew member: where the server says they stand,
- * what they hold and carry, and whether they have read the sign.
+ * What the audience sees of a crew member: where the server says they stand — pulling or
+ * pressing at the sync station while their press waits for the others' — what they hold and
+ * carry, and whether they have read the sign.
  */
 export function audienceTags(
   view: SpectatorView,
   player: SpectatorView['players'][number],
   pos: PlayerPosition | undefined,
 ): CrewTag[] {
-  const tags = crewTags(view.map, player, player.presence, pos);
+  const pressing = pressingWord(view.puzzle, player.id, serverNow());
+  const tags = crewTags(view.map, player, player.presence, pos, pressing);
   return player.presence.signSeen ? [...tags, { text: 'Kennung', tone: 'sign' }] : tags;
 }
 

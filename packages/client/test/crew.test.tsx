@@ -5,12 +5,14 @@ import type {
   MapView,
   MissionInfo,
   MissionStats,
+  PuzzleView,
   RelayedPosition,
   PlayerView,
   RoomSummary,
   SpectatorView,
 } from '@escapelab/core';
 import { RoomCode } from '../src/App.js';
+import { pressingWord } from '../src/puzzles/syncPress.js';
 import { crewSizeText, crewTags, presenceNear } from '../src/screens/Crew.js';
 import { lineup, type Place } from '../src/screens/CrewRoom.js';
 import { EndScreen } from '../src/screens/End.js';
@@ -737,6 +739,128 @@ describe('presence tags', () => {
   });
 });
 
+/** The Notlicht's main switch in the middle of the Flur, armed. */
+const flur: MapView = mapWith({
+  stations: [
+    {
+      puzzleId: 'notlicht',
+      x: 11,
+      y: 7,
+      title: 'Notlicht',
+      status: 'armed',
+      look: 'lever',
+      found: true,
+      known: true,
+    },
+  ],
+});
+
+const PULLED_AT = 1_700_000_000_000;
+
+/**
+ * The main switch's view as every player gets it, wherever they stand — Ben's, away from it —
+ * with the presses `presses` live; its window 3.5 s, a crew of two.
+ */
+function mainSwitch(presses: { by: string; at: number }[], parts: object = {}): PuzzleView {
+  return {
+    kind: 'button-sync',
+    style: 'lever',
+    windowMs: 3500,
+    press: null,
+    youPressed: false,
+    partnerPressed: presses.length > 0,
+    presses,
+    pressedCount: presses.length,
+    requiredCount: 2,
+    here: 1,
+    lastResult: null,
+    index: 0,
+    total: 6,
+    title: 'Notlicht',
+    manual: null,
+    console: null,
+    plate: null,
+    backup: null,
+    ...parts,
+  };
+}
+
+describe('a press waiting at the sync station', () => {
+  const texts = (tags: { text: string }[]): string[] => tags.map((tag) => tag.text);
+  const pulled = mainSwitch([{ by: 'p1', at: PULLED_AT }]);
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('reads „zieht" at the main switch, „drückt" at a button, for the one whose press waits', () => {
+    expect(pressingWord(pulled, 'p1', PULLED_AT + 1200)).toBe('zieht');
+    expect(pressingWord(pulled, 'p2', PULLED_AT + 1200)).toBeNull();
+    const button = mainSwitch([{ by: 'p2', at: PULLED_AT }], { style: 'button' });
+    expect(pressingWord(button, 'p2', PULLED_AT)).toBe('drückt');
+  });
+
+  it('reads nothing once the press ran out, once every press is in, or at another station', () => {
+    expect(pressingWord(pulled, 'p1', PULLED_AT + 3499)).toBe('zieht');
+    expect(pressingWord(pulled, 'p1', PULLED_AT + 3500)).toBeNull();
+    // Without a window a press waits as long as it takes.
+    expect(pressingWord(mainSwitch([{ by: 'p1', at: 0 }], { windowMs: null }), 'p1', 9e12)).toBe(
+      'zieht',
+    );
+    const both = mainSwitch([
+      { by: 'p1', at: PULLED_AT },
+      { by: 'p2', at: PULLED_AT + 900 },
+    ]);
+    expect(pressingWord(both, 'p1', PULLED_AT + 1000)).toBeNull();
+    expect(pressingWord(null, 'p1', PULLED_AT)).toBeNull();
+  });
+
+  it('takes the place of „am Pult" in the tags, wherever the puller stands', () => {
+    const at = { stationId: 'notlicht', manualId: null } as const;
+    expect(crewTags(flur, ben, at, on(11, 7), 'zieht')).toEqual([{ text: 'zieht', tone: 'press' }]);
+    expect(texts(crewTags(flur, ben, at, on(11, 7)))).toEqual(['am Pult']);
+    // Walked off with the lever still down: it still waits for the partner.
+    expect(texts(crewTags(lab, ben, nowhere, on(2, 3), 'zieht'))).toEqual([
+      'zieht',
+      'trägt Ersatzsicherung',
+    ]);
+    expect(crewTags(flur, { ...ben, connected: false }, at, on(11, 7), 'zieht')).toEqual([
+      { text: 'getrennt', tone: 'away' },
+    ]);
+  });
+
+  it('tags Anna „zieht" on Ben’s strip while her pull waits, Ben not at the switch yet', () => {
+    vi.useFakeTimers();
+    const view = annaSees([anna, ben], {
+      phase: 'playing',
+      you: { id: 'p2', name: 'Ben', color: '#f472b6', ready: false, isHost: false },
+      map: flur,
+      puzzle: pulled,
+    });
+    const strip = (): string[] =>
+      renderToStaticMarkup(
+        <MissionHud
+          view={view}
+          positionsRef={{ current: { run: null, players: { p1: on(11, 7), p2: on(1, 8) } } }}
+          chatsRef={{ current: [] }}
+          onAir={false}
+          parts={null}
+          onOpenInfo={noop}
+          notesOpen={false}
+          onToggleNotes={noop}
+        />,
+      ).match(/<li.*?<\/li>/g) ?? [];
+    vi.setSystemTime(PULLED_AT + 1200);
+    const [annas, bens] = strip();
+    expect(annas).toContain('<span class="presence-tag presence-press">zieht</span>');
+    expect(annas).not.toContain('am Pult');
+    expect(bens).toContain('<span class="hud-idle">unterwegs</span>');
+    // Her window shut: she stands at the switch again, nothing waits.
+    vi.setSystemTime(PULLED_AT + 3500);
+    expect(strip()[0]).toContain('presence-pult">am Pult<');
+  });
+});
+
 describe('the crew strip', () => {
   it("tags each player: you by the server's word, the others by where they stand", () => {
     const dora = seat('p4', 'Dora', { color: '#60a5fa' });
@@ -859,6 +983,10 @@ describe('the end screen', () => {
 });
 
 describe('the audience', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   type Watched = SpectatorView['players'][number];
   const watch = (p: Seat, signSeen: boolean): Watched => ({
     id: p.id,
@@ -913,6 +1041,18 @@ describe('the audience', () => {
     expect(audienceTags(view, watchedBen, undefined)).toEqual([
       { text: 'trägt Ersatzsicherung', tone: 'carry' },
     ]);
+  });
+
+  it('tags whoever pulled at the main switch while it waits, as the crew does', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(PULLED_AT + 1200);
+    const pulled = mainSwitch([{ by: 'p1', at: PULLED_AT }]);
+    const view: SpectatorView = { ...finished(), phase: 'playing', map: flur, puzzle: pulled };
+    expect(audienceTags(view, watchedAnna, on(11, 7))).toEqual([
+      { text: 'zieht', tone: 'press' },
+      { text: 'Kennung', tone: 'sign' },
+    ]);
+    expect(audienceTags(view, watchedBen, on(1, 8))).toEqual([]);
   });
 
   it('sees the credits in place of the station once the run is over', () => {

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { PlayerPosition, PlayerView, RunEvent } from '@escapelab/core';
+import { serverNow } from '../clock.js';
 import { useMedia } from '../hooks.js';
+import { pressingWord } from '../puzzles/syncPress.js';
 import { airIcon, fromControl, LAST_SHIFT } from '../radio.js';
 import { useGlyph, usePadUsed } from '../input/glyphs.js';
 import { useVoice, type Voice } from '../voice/useVoice.js';
@@ -29,7 +31,9 @@ const STATUS_SAMPLE_MS = 300;
 /**
  * What a crew member is doing, as presence tags. Where you stand is the
  * server's word; for the others it follows the live positions the renderer
- * already receives — informational only, so the client may work it out.
+ * already receives — informational only, so the client may work it out. A
+ * press waiting at the sync station is the station's view, which every
+ * player gets wherever they stand: „zieht" calls a partner to the lever.
  */
 function tagsOf(
   view: PlayerView,
@@ -38,7 +42,7 @@ function tagsOf(
 ): CrewTag[] {
   const pos = positions[player.id];
   const at = player.id === view.you.id ? view.presence : presenceNear(view.map, pos);
-  return crewTags(view.map, player, at, pos);
+  return crewTags(view.map, player, at, pos, pressingWord(view.puzzle, player.id, serverNow()));
 }
 
 /** A line on the radio strip: the icon of who or what it is from, and its words. */
