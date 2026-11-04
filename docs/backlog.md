@@ -78,7 +78,7 @@ die Entscheidung.
   geredet werden muss. Vorschlag: zwischen den Pulten und der Quelle der aktiven Station volle
   Lautstärke per Funk, überall sonst Abstand.
 
-### N-4 Erster Sieg — Status: im Merge (N-firstwin, 2026-11-04) · Größe: S
+### N-4 Erster Sieg — Status: erledigt (N-firstwin, Merge 2026-11-04; Fenster 3,5 s, Countdown aus Server-Zeit, Crew-Tag „zieht/drückt") · Größe: S
 - Menschen brauchten 70–164 s für den Hebel oder schafften ihn nie (Skript: 25 s); 0 von 7
   menschlichen Läufen gewonnen. Vorschlag: Fenster 3–4 s plus gemeinsamer Countdown wie in
   Portal 2 („beide sehen GO im selben Moment"), für Hebel und Reaktor.
