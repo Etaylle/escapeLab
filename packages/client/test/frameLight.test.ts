@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { LAMP_HALF_ANGLE, LAMP_REACH } from '@escapelab/core';
 import { frameLight, ownLamp, type LightScene } from '../src/world/frameLight.js';
 import { lightCensus } from '../src/world/render/census.js';
 import { newSim, type Sim } from '../src/world/sim.js';
@@ -63,5 +64,15 @@ describe('frameLight — your flashlight in the dark', () => {
     expect(scene.census.sights).toBe(2);
     walkingAt(scene, 3.75, 0.4);
     expect(scene.census.sights).toBe(2);
+  });
+
+  it('shines its beam 7.5 tiles, further than its cone finds things, and as wide', () => {
+    const scene = sceneOf(newSim(0));
+    // Facing east down the lab's open row: its far end lies 7 tiles ahead.
+    const own = walkingAt(scene, 1.5, 0.1);
+    expect(own?.lamp.beam).toMatchObject({ reach: 7.5, halfAngle: LAMP_HALF_ANGLE });
+    expect(LAMP_REACH).toBeLessThan(7.5);
+    // Its light falls that far: what lies out there shows, its name only once the lamp finds it.
+    expect(own?.sight.tiles.has('8,2')).toBe(true);
   });
 });

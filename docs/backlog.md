@@ -122,15 +122,19 @@ die Entscheidung.
   hat. Phrasen je Mission aus `mission.json`, davon zwei mit Platzhalter (Zahl/Farbe/Dienst),
   per Steuerkreuz/Taste wählbar. Beweis: Tests, Capture des Chat-Rads in Blackout.
 
-### T-6 Entdeckung ist eine Handlung — Status: erledigt (N-discovery, Merge 2026-11-04) · Größe: M
+### T-6 Entdeckung ist eine Handlung — Status: erledigt (N-discovery, Merge 2026-11-04); Lampenkegel nachgeschärft im PR (N-fix1) · Größe: M
 - Uros: „Nach den ersten Bewegungen im Raum ist schon alles aufgedeckt, der Sound klingelt paar
-  Mal." Heute: 3,5 Kacheln + Sichtlinie. Neu: 2 Kacheln oder im Lampenkegel (250 ms) mit
-  Sichtlinie, ein Pult erst, wenn seine Station dran ist; Unentdecktes im Dunkeln nur, solange
+  Mal." Heute: 3,5 Kacheln + Sichtlinie. Neu: 2 Kacheln oder im Lampenkegel (600 ms, 3 Kacheln)
+  mit Sichtlinie, ein Pult erst, wenn seine Station dran ist; Unentdecktes im Dunkeln nur, solange
   es in Sichtlinie liegt, und dann ohne Beschriftung, Regeln oder Schlüssel — bei Strom (Intro,
   Ausgang) steht das ganze Labor da wie bisher; das Schild leuchtet erst, wenn die Crew es
   gefunden hat; Hinweistext für Pult und Quelle der aktiven Station, Notiz, Teil, Schild, das
   Glöckchen dazu ≤ 1 je 1,5 s; nie zweimal je Objekt; Deko nie.
 - Beweis: Captures beim Betreten des Archivs, Glöckchen-Zählung über die Audio-Probe.
+- Nachgeschärft (N-fix1): Uros nach dem Spielen: „nach wenigen Schritten großer Radius". Der
+  Kegel fand bis 7,5 Kacheln nach 250 ms und fegte einen 7 × 5-Raum in wenigen Schritten leer;
+  jetzt findet die Lampe nur, worauf man sie aus der Nähe hält. Der Lichtkegel leuchtet weiter
+  7,5 Kacheln weit, Fernes darin bleibt ohne Namen.
 
 ### T-7 Anwesenheit an Stationen nur ohne Wand — Status: erledigt (N-small, Merge 2026-11-04) · Größe: S
 - Seit N-discovery zählen Quellen, Notizen und Schild nur Finder; an Stationen zählt Anwesenheit

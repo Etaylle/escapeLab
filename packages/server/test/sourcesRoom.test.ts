@@ -207,7 +207,7 @@ describe('Room with sources to find and open', () => {
     moveTo(room, ben, 1, 3); // onto the plate: the door opens before Anna's lamp
     expect(lastView(ben.messages).map?.doors[0]?.open).toBe(true);
     expect(finds(anna)).toEqual([['spind', false, false]]);
-    vi.advanceTimersByTime(249);
+    vi.advanceTimersByTime(599);
     expect(finds(anna)).toEqual([['spind', false, false]]);
     vi.advanceTimersByTime(1);
     expect(finds(anna)).toEqual([['spind', true, true]]);

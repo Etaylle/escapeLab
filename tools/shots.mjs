@@ -3011,19 +3011,21 @@ async function checkPullTag(host, players) {
 
 // ── discovery: finding things is an act (client world/labelFade.ts, world/finds.ts) ──
 //
-// A thing shows its name only once the player has found it — within 2 tiles in sight, or 250 ms
-// in their lamp's cone (core discovery.ts) — and a find that matters gets its caption once, its
-// chime at most once in 1.5 s. The lever's line: how far off each page found the main switch, and
-// that its caption came, with the chime or without. Then Ben walks into the Archiv the lever lit:
+// A thing shows its name only once the player has found it — within 2 tiles in sight, or 600 ms
+// in their lamp's cone within 3 tiles (core discovery.ts) — and a find that matters gets its
+// caption once, its chime at most once in 1.5 s. The lever's line: how far off each page found
+// the main switch, and that its caption came, with the chime or without. Then Ben walks into the
+// Archiv the lever lit, and at each stop the rule says which names must show and which may:
 // discover-enter.png  two steps in, standing: the names under the Archiv's things in Ben's window
-//   — at most two, or the run fails
-// discover-later.png  by the shelves at the sign: the sign named, and nothing across the room that
-//   the crew knows of but Ben has not found — or the run fails
+//   — none for certain (nothing within 2 tiles), at most the sign 2.2 tiles off should his lamp
+//   rest on it — or the run fails
+// discover-later.png  by the shelves at the sign: the sign, 1 tile off, and nothing else — the
+//   book and the fuse lie 3.6 and 4.5 tiles off — or the run fails
 // The audio line: the discovery chimes each page sounded since the start, besides the captions
 // that came without one, and Ben's chimes in the Archiv — at most three there, or the run fails.
 
-/** How far a lamp's cone reaches, tiles (core discovery.ts LAMP_REACH). */
-const LAMP_REACH = 7.5;
+/** How far a lamp's cone finds things, tiles (core discovery.ts LAMP_REACH). */
+const LAMP_REACH = 3;
 /** Within this many tiles a thing in sight is found outright (core discovery.ts FIND_REACH). */
 const FIND_REACH = 2;
 /** Blackout's Archiv for Ben's walk: its floor, its door, two steps in, the shelves by the sign. */
@@ -3150,21 +3152,30 @@ async function captureDiscovery(walker, other) {
     return;
   }
   const home = tileOf(walker.seen);
-  const atDoor = await walkIntoArchiv(walker);
-  await walker.page.setViewportSize(SIZES[0]);
-  await sleep(NAMES_UP_MS);
+  await standOrFail(walker, ARCHIV.door, "to the Archiv's door");
+  const atDoor = ((await findsOn(walker.page)) ?? []).length;
   const inside = ARCHIV.inside.at(-1);
-  const entering = await archivNames(walker.page, { x: inside.x + 0.5, y: inside.y + 0.5 });
-  await capture(walker.page, 'discover-enter.png');
-  await standOrFail(walker, ARCHIV.shelves, "to the Archiv's shelves by the sign");
-  await sleep(NAMES_UP_MS);
   const by = { x: ARCHIV.shelves.x + 0.5, y: ARCHIV.shelves.y + 0.5 };
-  const later = await archivNames(walker.page, by);
-  const atShelves = walker.seen.view.map;
-  await capture(walker.page, 'discover-later.png');
+  const walk = walkedFrom(walker);
+  let enter;
+  let later;
+  try {
+    await stepIntoArchiv(walker);
+    await walker.page.setViewportSize(SIZES[0]);
+    await sleep(NAMES_UP_MS);
+    enter = await namesAtStop(walker, { x: inside.x + 0.5, y: inside.y + 0.5 }, walk);
+    await capture(walker.page, 'discover-enter.png');
+    await standOrFail(walker, ARCHIV.shelves, "to the Archiv's shelves by the sign");
+    await sleep(NAMES_UP_MS);
+    later = await namesAtStop(walker, by, walk);
+    await capture(walker.page, 'discover-later.png');
+  } finally {
+    walk.stop();
+  }
   const finds = ((await findsOn(walker.page)) ?? []).slice(atDoor);
   await walker.page.setViewportSize(SIZES[2]);
-  reportDiscovery(walker, atShelves, { entering, later, by });
+  reportNames(walker, 'discover-enter.png', 'two steps into the Archiv', enter);
+  reportNames(walker, 'discover-later.png', 'by the shelves', later);
   await reportChimes([walker, other], walker, finds);
   if (home !== null) {
     await standOrFail(walker, home, `back to ${home.x},${home.y} from the Archiv`);
@@ -3179,60 +3190,105 @@ async function standOrFail(walker, tile, where) {
 }
 
 /**
- * `walker` walks to the Archiv's door and two steps in; how many finds its page had taken at the
- * door. Names counted from anywhere but where the shots say would prove nothing: a stall fails.
+ * `walker` walks from the Archiv's door two steps in. Names counted from anywhere but where the
+ * shots say would prove nothing: a stall fails.
  */
-async function walkIntoArchiv(walker) {
-  await standOrFail(walker, ARCHIV.door, "to the Archiv's door");
-  const atDoor = ((await findsOn(walker.page)) ?? []).length;
+async function stepIntoArchiv(walker) {
   for (const step of ARCHIV.inside) {
     if (!(await stepTo(walker.page, walker.seen, step.x + 0.5, step.y + 0.5))) {
       throw new Error(`${walker.name} stalled going into the Archiv, short of ${step.x},${step.y}`);
     }
   }
-  return atDoor;
 }
 
 /**
- * The Archiv's things on `map` — the walker's, by the shelves — that the crew knows of, each at
- * the point its name hangs from, as render/labels.ts places it, and whether the walker has found
- * it. A thing nobody has found has no name on any map to show.
+ * What the rule lets `walker` have found from here on, kept as it walks: where the Archiv's named
+ * things it has found already hang (`foundKeys`), and each point it stands on, taken every 40 ms
+ * until `stop` — a thing its lamp came within LAMP_REACH of on the way may be found.
  */
-function archivThings(map) {
-  const thing = (it, x, y) => ({ text: it.label.toUpperCase(), x, y, found: it.found });
+function walkedFrom(walker) {
+  const before = foundKeys(walker.seen.view.map);
+  const points = [];
+  const timer = setInterval(() => {
+    const at = whereIs(walker.seen);
+    if (at !== null) {
+      points.push(at);
+    }
+  }, 40);
+  return { before, points, stop: () => clearInterval(timer) };
+}
+
+/**
+ * The Archiv's things that carry a name on `map` — its sources, the parts lying loose, the sign —
+ * each at the point its name hangs from, as render/labels.ts places it, found or not: one not
+ * found yet lies on the map, in sight, without its name (`what` is then its id).
+ */
+function archivNameables(map) {
+  const loose = (item) => item.carriedBy == null && item.delivered !== true;
+  const thing = (what, x, y, found) => ({ what, x, y, found: found === true });
+  const sign = map.edgeworkSign;
   return [
-    ...map.manuals.filter((m) => m.known).map((m) => thing(m, m.x + 0.5, m.y + 0.5)),
-    ...map.items.filter((i) => i.known).map((i) => thing(i, i.x, i.y)),
+    ...map.manuals.map((m) => thing(m.label ?? m.id, m.x + 0.5, m.y + 0.5, m.found)),
+    ...map.items.filter(loose).map((i) => thing(i.label ?? i.id, i.x, i.y, i.found)),
+    ...(sign == null ? [] : [thing('LABORKENNUNG', sign.x + 0.5, sign.y + 0.5, sign.found)]),
   ].filter((it) => inArchiv(it.x, it.y));
 }
 
+/** Where a name hangs, as a key: the point of its thing, in tiles. */
+const hangKey = ({ x, y }) => `${x.toFixed(2)},${y.toFixed(2)}`;
+
+/** Where the Archiv's named things `map`'s player has found hang, by `hangKey`. */
+function foundKeys(map) {
+  return new Set(archivNameables(map).filter((thing) => thing.found).map(hangKey));
+}
+
 /**
- * The names' lines: two steps in, at most two names under the Archiv's things; by the shelves,
- * the sign named, and no name under a thing across the room — more than three tiles off — that
- * the crew knows of but the walker has not found.
+ * The names `walker`'s window shows under the Archiv's things at a stop (`at`, its tile's middle),
+ * and what the rule says of them (core discovery.ts) after the walk `walk` (`walkedFrom`): for
+ * certain, what it had found before and what lies within FIND_REACH of where it stands — nothing
+ * on the Archiv's floor stands between two of its points; at most, besides, what came within
+ * LAMP_REACH of it on the way, which its lamp finds once it has rested there for 600 ms.
  */
-function reportDiscovery(walker, map, { entering, later, by }) {
-  console.log(
-    `discover-enter.png ${walker.name} two steps into the Archiv: ${entering.length} name(s) ` +
-      `under its things (${namesSaid(entering)})${entering.length > 2 ? ' !! more than two' : ''}`,
-  );
+async function namesAtStop(walker, at, walk) {
+  const shown = await archivNames(walker.page, at);
+  const here = whereIs(walker.seen) ?? at;
+  const off = (thing, from) => Math.hypot(thing.x - from.x, thing.y - from.y);
+  const things = archivNameables(walker.seen.view.map).map((thing) => ({
+    ...thing,
+    had: walk.before.has(hangKey(thing)),
+    away: off(thing, here),
+    nearest: Math.min(...[here, ...walk.points].map((from) => off(thing, from))),
+  }));
+  const certain = things.filter((thing) => thing.had || thing.away <= FIND_REACH);
+  const may = things.filter((thing) => thing.had || thing.nearest <= LAMP_REACH);
+  return { shown, certain, may };
+}
+
+/** „LABORKENNUNG 2.2" — what the rule names, and how near the walker came to it, for the log. */
+const ruleSaid = (things) =>
+  things.map((thing) => `${thing.what} ${thing.nearest.toFixed(1)}`).join(', ') || 'none';
+
+/**
+ * A stop's names line: the names under the Archiv's things in the walker's window, and the
+ * rule's count — every certain one shown, none shown that the rule does not allow — or the run
+ * fails.
+ */
+function reportNames(walker, shot, where, { shown, certain, may }) {
   const hangs = (name, thing) => Math.hypot(name.x - thing.x, name.y - thing.y) < 0.01;
-  const named = (thing) => later.some((name) => hangs(name, thing));
-  const across = archivThings(map).filter((t) => Math.hypot(t.x - by.x, t.y - by.y) > 3);
-  const crewOnly = across.filter((thing) => !thing.found);
-  const misnamed = crewOnly.filter(named);
-  const sign = later.some((name) => name.text === 'LABORKENNUNG');
+  const missing = certain.filter((thing) => !shown.some((name) => hangs(name, thing)));
+  const extra = shown.filter((name) => !may.some((thing) => hangs(name, thing)));
+  const wrong = [
+    ...missing.map((thing) => `${thing.what} not named`),
+    ...extra.map((name) => `${name.text} named`),
+  ];
+  const said = wrong.length > 0 ? ` !! ${wrong.join(', ')}` : '';
   console.log(
-    `discover-later.png ${walker.name} by the shelves: ${later.length} name(s) ` +
-      `(${namesSaid(later)}); across the room, known but not found by ${walker.name}: ` +
-      `${crewOnly.map((thing) => thing.text).join(', ') || 'none'}` +
-      `${misnamed.length > 0 ? ' !! named' : ''}${sign ? '' : ' !! no sign'}`,
+    `${shot.padEnd(18)} ${walker.name} ${where}: ${shown.length} name(s) under its things ` +
+      `(${namesSaid(shown)}); the rule: ${certain.length} for certain (${ruleSaid(certain)}), ` +
+      `at most ${may.length} (${ruleSaid(may)})${said}`,
   );
-  if (entering.length > 2) {
-    fail(`discover-enter.png: ${entering.length} names two steps into the Archiv`);
-  }
-  if (!sign || misnamed.length > 0) {
-    fail(`discover-later.png: sign named ${sign}, ${misnamed.length} of ${crewOnly.length} named`);
+  if (wrong.length > 0) {
+    fail(`${shot}: ${wrong.join(', ')} ${where}`);
   }
 }
 
@@ -3307,6 +3363,45 @@ function looseItem(map) {
 
 /** A part as the log names it: by its label, or by its id where nobody has found it yet. */
 const partName = (item) => item.label ?? item.id;
+
+/** The missions as the server hands them out (`/missions/<id>`), by id, each fetched once. */
+const definitions = new Map();
+
+/**
+ * The mission `view` plays as the server defines it: where its parts lie and where its sources
+ * may lie — what a player has to go and look at, since nothing is found from across the room
+ * (core discovery.ts).
+ */
+async function definitionOf(view) {
+  const id = view.missionId;
+  if (!definitions.has(id)) {
+    const res = await globalThis.fetch(`${BASE}/missions/${encodeURIComponent(id)}`);
+    if (!res.ok) {
+      throw new Error(`GET /missions/${id} answered ${res.status}: no definition to look in`);
+    }
+    definitions.set(id, await res.json());
+  }
+  return definitions.get(id);
+}
+
+/**
+ * The part `player` goes to carry for figure-carry.png: the one its view shows lying loose
+ * (`looseItem`) — in sight, or found by the crew — or else one the mission lays out that the crew
+ * has not come across, at its tile's middle, a fuse first: walking up to it is what finds it.
+ * Undefined where the mission lays out none.
+ */
+async function partToCarry(player) {
+  const { map } = player.seen.view;
+  const shown = looseItem(map);
+  if (shown !== undefined) {
+    return shown;
+  }
+  const known = new Set(map.items.filter((item) => item.known).map((item) => item.id));
+  const laid = ((await definitionOf(player.seen.view)).map.items ?? [])
+    .filter((item) => !known.has(item.id))
+    .map((item) => ({ id: item.id, label: item.label, x: item.x + 0.5, y: item.y + 0.5 }));
+  return laid.find((item) => /sicherung/i.test(item.label)) ?? laid[0];
+}
 
 /**
  * Where a player can stand beside `item` and reach it, rather than on it, where the figure
@@ -3461,7 +3556,7 @@ function reportBob(name, item, first, second) {
  * up or Q puts nothing down.
  */
 async function captureCarry(player) {
-  const item = looseItem(player.seen.view.map);
+  const item = await partToCarry(player);
   if (item === undefined) {
     skip('figure-carry.png', 'nothing lies loose to carry on this map');
     skip('fuse-bob-*.png', 'nothing lies loose to bob on this map');
@@ -5026,12 +5121,43 @@ async function reopenAfterEmergency(page, seen, overlay, who) {
 }
 
 /**
+ * Whether the crew knows of an open source printing the armed station's rules. Where it does
+ * not yet, `seen`'s player goes looking where the mission may lay one — each such spot in turn,
+ * the shortest walk first — till its view knows one: nobody finds a source from across the room
+ * (core discovery.ts).
+ */
+async function lookForRules(page, seen) {
+  const armed = seen.view.map.stations.find((s) => s.status === 'armed')?.puzzleId;
+  const known = () =>
+    seen.view.map.manuals.some((m) => m.known && m.opened && m.puzzleIds.includes(armed));
+  if (armed === undefined || known()) {
+    return known();
+  }
+  const from = tileOf(seen);
+  const spots = (await definitionOf(seen.view)).map.manuals
+    .filter((manual) => manual.puzzleIds.includes(armed))
+    .flatMap((manual) => manual.spots)
+    .map((spot) => ({ spot, path: from === null ? null : route(seen.view.map, from, spot) }))
+    .filter(({ path }) => path !== null)
+    .sort((a, b) => a.path.length - b.path.length);
+  for (const { spot } of spots) {
+    if ((await walkNear(page, seen, spot)) && (await until(known, 1500))) {
+      return true;
+    }
+  }
+  return known();
+}
+
+/**
  * hint-*.png: at a source covering the open station, a player asks the last
  * crew for a note in the book's margin — while it is still held back, once it
  * may be asked for, and with the note written in; the other player hears it
- * on the radio meanwhile. False when no such source is in this player's reach.
+ * on the radio meanwhile. Where the crew has come across no such source yet,
+ * the player goes looking for one first (`lookForRules`). False when none is
+ * in this player's reach.
  */
 async function captureNotes(page, seen, who, other) {
+  await lookForRules(page, seen);
   const armed = seen.view.map.stations.find((s) => s.status === 'armed')?.puzzleId;
   const source = nearestManual(seen);
   const covers = source !== null && source.puzzleIds.includes(armed);
@@ -7618,26 +7744,35 @@ async function playFrequenz(host, guest) {
   );
 }
 
+/** The spare fuse as `player`'s view shows it once the crew has found it; undefined before. */
+const knownFuse = (player) =>
+  player.seen.view.map.items.find((item) => item.known && item.requiredFor !== null);
+
 /**
  * The spare fuse to the reactor and the restart, on the pinned seed: the
  * guest, out in the open at the cabinet once the radio panel is done, goes
- * round to the reactor first; the host fetches the fuse from where it lies
- * and puts it in at its drop-off — both past the patrols — and both press
- * the reactor together (`pressLastSync`). Fails naming the seed where the
- * fuse or its drop-off lie elsewhere than pinned.
+ * round to the reactor first; the host goes to where the plan lays the fuse —
+ * nobody finds it from across the room — takes it up and puts it in at its
+ * drop-off, both past the patrols, and both press the reactor together
+ * (`pressLastSync`). Fails naming the seed where the fuse or its drop-off lie
+ * elsewhere than pinned.
  */
 async function playReaktor(host, guest) {
   const pin = BLACKOUT_PLAN.ersatzsicherung;
-  const fuse = host.seen.view.map.items.find((item) => item.known && item.requiredFor !== null);
-  if (fuse?.deliverTo?.x !== pin.to.x || fuse.deliverTo.y !== pin.to.y) {
-    differs('fuse drop-off', JSON.stringify(fuse?.deliverTo), JSON.stringify(pin.to));
+  await sneakTo(guest, BLACKOUT_SPOTS.reactor);
+  await sneakTo(host, pin.from);
+  await until(() => knownFuse(host) !== undefined, 3000);
+  const fuse = knownFuse(host);
+  if (fuse === undefined) {
+    differs('spare fuse', 'nowhere found', `at ${pin.from.x},${pin.from.y}`);
+  }
+  if (fuse.deliverTo?.x !== pin.to.x || fuse.deliverTo.y !== pin.to.y) {
+    differs('fuse drop-off', JSON.stringify(fuse.deliverTo), JSON.stringify(pin.to));
   }
   const lies = { x: Math.floor(fuse.x), y: Math.floor(fuse.y) };
   if (lies.x !== pin.from.x || lies.y !== pin.from.y) {
     differs('spare fuse', `at ${lies.x},${lies.y}`, `at ${pin.from.x},${pin.from.y}`);
   }
-  await sneakTo(guest, BLACKOUT_SPOTS.reactor);
-  await sneakTo(host, lies);
   const you = host.seen.view.you.id;
   await handle(host, 'the fuse', () => host.seen.view.map.items.some((i) => i.carriedBy === you));
   await sneakTo(host, pin.to);

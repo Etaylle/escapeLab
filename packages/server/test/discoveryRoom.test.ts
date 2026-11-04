@@ -89,39 +89,58 @@ function turn(room: Room, walker: Walker, at: { x: number; y: number }, facing: 
   room.updatePosition(walker.playerId, run, { ...at, facing, moving: false });
 }
 
-describe('a room where things are found by reach or by the lamp', () => {
+/** Anna and Ben in a run of `mission` (pinned to `seed` where given); the fake clock's now. */
+function started(mission: Mission = hall, seed: number | null = null) {
+  const room = new Room('TEST', mission, () => undefined, seed);
+  const anna = join(room, 'Anna');
+  const ben = join(room, 'Ben');
+  room.setReady(ben.playerId, true);
+  room.act(anna.playerId, { kind: 'start-mission' });
+  return { room, anna, ben, startedAt: Date.now() };
+}
+
+/**
+ * Where the lamp finds both of the hall's sources, facing east: the locker 2.7 tiles ahead,
+ * the cabinet 2.9 a little to the right — inside the lamp's 3 tiles, beyond the 2 of reach.
+ */
+const BY_LOCKERS = { x: 11.8, y: 1.5 };
+/** Where the box lies 2.9 tiles ahead, facing east: in the lamp's cone, out of reach. */
+const BEFORE_BOX = { x: 2.6, y: 1.5 };
+
+describe('a room where the lamp finds what it rests on, close by', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  /** Anna and Ben in a run of `mission` (pinned to `seed` where given); the fake clock's now. */
-  function started(mission: Mission = hall, seed: number | null = null) {
-    const room = new Room('TEST', mission, () => undefined, seed);
-    const anna = join(room, 'Anna');
-    const ben = join(room, 'Ben');
-    room.setReady(ben.playerId, true);
-    room.act(anna.playerId, { kind: 'start-mission' });
-    return { room, anna, ben, startedAt: Date.now() };
-  }
-
-  it('finds what the lamp rests on for a quarter second, by its own clock as nobody moves', () => {
+  it('finds what the lamp rests on for 600 ms, by its own clock as nobody moves', () => {
     const { room, anna } = started();
-    walkTo(room, anna, 9.5, 1.5); // facing east, the locker five tiles ahead
-    vi.advanceTimersByTime(249);
+    walkTo(room, anna, BY_LOCKERS.x, BY_LOCKERS.y);
+    vi.advanceTimersByTime(599);
     expect(sourcesFound(anna)).toEqual([]);
     vi.advanceTimersByTime(1);
     expect(sourcesFound(anna)).toEqual(['spind', 'schrank']);
     room.dispose();
   });
 
+  it('finds nothing the lamp rests on further down the hall than its 3 tiles', () => {
+    const { room, anna } = started();
+    walkTo(room, anna, 9.5, 1.5); // facing east, the locker five tiles ahead
+    vi.advanceTimersByTime(10_000);
+    expect(sourcesFound(anna)).toEqual([]);
+    walkTo(room, anna, BY_LOCKERS.x, BY_LOCKERS.y);
+    vi.advanceTimersByTime(600);
+    expect(sourcesFound(anna)).toEqual(['spind', 'schrank']);
+    room.dispose();
+  });
+
   it('starts a look anew once the lamp has turned away', () => {
     const { room, anna } = started();
-    const here = { x: 9.5, y: 1.5 };
+    const here = BY_LOCKERS;
     walkTo(room, anna, here.x, here.y);
-    vi.advanceTimersByTime(200);
+    vi.advanceTimersByTime(500);
     turn(room, anna, here, Math.PI);
     vi.advanceTimersByTime(100);
     turn(room, anna, here, 0);
-    vi.advanceTimersByTime(249);
+    vi.advanceTimersByTime(599);
     expect(sourcesFound(anna)).toEqual([]);
     vi.advanceTimersByTime(1);
     expect(sourcesFound(anna)).toEqual(['spind', 'schrank']);
@@ -130,13 +149,13 @@ describe('a room where things are found by reach or by the lamp', () => {
 
   it('finds nothing while the run stands paused, and looks anew once it goes on', () => {
     const { room, anna, ben } = started();
-    walkTo(room, anna, 9.5, 1.5);
+    walkTo(room, anna, BY_LOCKERS.x, BY_LOCKERS.y);
     ben.detach();
     vi.advanceTimersByTime(1000);
     expect(sourcesFound(anna)).toEqual([]);
     // The lamp rested on the locker all through the pause, but the pause froze the look.
     room.resume(ben.playerId, ben.token);
-    vi.advanceTimersByTime(249);
+    vi.advanceTimersByTime(599);
     expect(sourcesFound(anna)).toEqual([]);
     vi.advanceTimersByTime(1);
     expect(sourcesFound(anna)).toEqual(['spind', 'schrank']);
@@ -145,8 +164,8 @@ describe('a room where things are found by reach or by the lamp', () => {
 
   it('lets a look of one run go with it: the next run looks anew', () => {
     const { room, anna, ben } = started();
-    const spawn = lastView(anna).map?.yourSpawn ?? { x: 0, y: 0 };
-    const here = { x: spawn.x + 0.5, y: spawn.y + 0.5 };
+    const here = BEFORE_BOX;
+    walkTo(room, anna, here.x, here.y);
     // Turned from the box at once, then back to it as the clock runs out: a look cut short.
     turn(room, anna, here, Math.PI);
     vi.advanceTimersByTime(hall.timeLimitSec * 1000 - 100);
@@ -157,12 +176,18 @@ describe('a room where things are found by reach or by the lamp', () => {
     room.setReady(anna.playerId, true);
     const box = () => lastView(anna).map?.stations[0]?.found;
     expect([lastView(anna).phase, box()]).toEqual(['playing', false]);
-    vi.advanceTimersByTime(249);
+    walkTo(room, anna, here.x, here.y);
+    vi.advanceTimersByTime(599);
     expect(box()).toBe(false);
     vi.advanceTimersByTime(1);
     expect(box()).toBe(true);
     room.dispose();
   });
+});
+
+describe('a room where things are found on the way, each chiming for its finder', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
 
   it('finds the lever a player stands by as the lights die, without a step (Blackout)', () => {
     const { room, anna, ben } = started(blackout, 5);
@@ -193,31 +218,31 @@ describe('a room where things are found by reach or by the lamp', () => {
         one.at - startedAt,
         one.chime,
       ]);
-    // At the start each finds the sign beside the spawns; the box ahead takes a look.
-    expect(listed(anna)).toEqual([['sign', 0, true]]);
-    expect(listed(ben)).toEqual([['sign', 0, true]]);
-    vi.advanceTimersByTime(250);
-    // The box and the key down the hall, looked at from the spawns: found inside the gap, both
-    // are listed, the box first — their captions show, their chime is dropped for good.
-    const looked = [
-      ['sign', 0, true],
-      ['console:kabel/-', 250, false],
-      ['item:schluessel', 250, false],
-    ];
-    expect(listed(anna)).toEqual(looked);
-    vi.advanceTimersByTime(1250);
+    // At the start each finds the sign beside the spawns; the box and the key down the hall lie
+    // beyond the lamp's reach, however long it rests on them.
+    const sign = [['sign', 0, true]];
+    expect(listed(anna)).toEqual(sign);
+    expect(listed(ben)).toEqual(sign);
+    vi.advanceTimersByTime(600);
+    expect(listed(anna)).toEqual(sign);
+    // Anna walks up the hall to the key: the box beside her way and the key at her feet, found
+    // inside the gap, are both listed, the box first — their captions show, their chime is
+    // dropped for good.
+    walkTo(room, anna, 8.5, 1.5);
+    const walked = [...sign, ['console:kabel/-', 600, false], ['item:schluessel', 600, false]];
+    expect(listed(anna)).toEqual(walked);
+    vi.advanceTimersByTime(900);
     // Along the north wall up to the locker, which prints the armed box's rules: it chimes; the
-    // cabinet beside it, looked at a quarter of a second later, comes in the gap.
-    walkTo(room, anna, 1.5, 1.5);
+    // cabinet beside it, found by the lamp 600 ms later, comes in the gap.
     walkTo(room, anna, 12.5, 1.5);
-    vi.advanceTimersByTime(250);
+    vi.advanceTimersByTime(600);
     expect(sourcesFound(anna)).toEqual(['spind', 'schrank']);
     expect(listed(anna)).toEqual([
-      ...looked,
+      ...walked,
       ['source:spind', 1500, true],
-      ['source:schrank', 1750, false],
+      ['source:schrank', 2100, false],
     ]);
-    expect(listed(ben)).toEqual(looked);
+    expect(listed(ben)).toEqual(sign);
     expect(sourcesFound(ben)).toEqual([]);
     room.dispose();
   });
@@ -238,11 +263,19 @@ describe('a room where things are found by reach or by the lamp', () => {
         ...(map?.edgeworkSign?.found === true ? ['sign'] : []),
       ];
     };
-    // Anna in the Archiv, facing east: the sign at her side, the fuse in her lamp's cone; the
-    // book on its lectern to the north-east and the note on the north wall stay unfound.
-    expect(found(anna)).toEqual(['ersatzsicherung', 'sign']);
-    // Ben at the Flur's west end, facing east: the clipboard down the Flur in his cone; console
-    // B of the Notstrom-Kasten at his side is no find before its station is armed.
+    // Anna in the Archiv, facing east: the sign at her side; the fuse in her lamp's cone 4.5
+    // tiles off, the book on its lectern to the north-east and the note on the north wall stay
+    // unfound, the room lit or not.
+    expect(found(anna)).toEqual(['sign']);
+    // Ben at the Flur's west end, facing east: the clipboard 7 tiles down the Flur in his cone
+    // lies beyond his lamp's reach; console B of the Notstrom-Kasten at his side is no find
+    // before its station is armed.
+    expect(found(ben)).toEqual([]);
+    // Ben walks down the Flur till the clipboard lies 2.9 tiles ahead: his lamp finds it 600 ms on.
+    walkTo(room, ben, 5.8, 8.5);
+    vi.advanceTimersByTime(599);
+    expect(found(ben)).toEqual([]);
+    vi.advanceTimersByTime(1);
     expect(found(ben)).toEqual(['klemmbrett']);
     room.dispose();
   });

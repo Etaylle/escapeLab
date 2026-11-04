@@ -89,15 +89,16 @@ describe('finding by reach', () => {
 
 describe('finding by the lamp', () => {
   const hall = { tiles: ['##########', '#........#', '##########'] };
-  const far = source('tafel', 6.5, 1.5);
+  // Three tiles ahead: as far as the lamp finds, past the reach that finds outright.
+  const ahead = source('tafel', 4.5, 1.5);
   const look = (facing: number, glances = {}, now = T0) =>
-    lookAround(hall, NOTHING_SHUT, { x: 1.5, y: 1.5, facing }, [far], glances, now);
+    lookAround(hall, NOTHING_SHUT, { x: 1.5, y: 1.5, facing }, [ahead], glances, now);
 
-  it('finds what stays in the cone for a quarter of a second, and nothing before', () => {
+  it('finds what stays in the cone for 600 ms, and nothing before', () => {
     const first = look(EAST);
-    expect(first).toEqual({ found: [], glances: { 'source:tafel': T0 }, dueAt: T0 + 250 });
-    expect(look(EAST, first.glances, T0 + 249).found).toEqual([]);
-    expect(look(EAST, first.glances, T0 + 250)).toEqual({
+    expect(first).toEqual({ found: [], glances: { 'source:tafel': T0 }, dueAt: T0 + 600 });
+    expect(look(EAST, first.glances, T0 + 599).found).toEqual([]);
+    expect(look(EAST, first.glances, T0 + 600)).toEqual({
       found: ['source:tafel'],
       glances: {},
       dueAt: null,
@@ -106,15 +107,15 @@ describe('finding by the lamp', () => {
 
   it('starts a glance cut short anew', () => {
     const first = look(EAST);
-    const away = look(WEST, first.glances, T0 + 200);
+    const away = look(WEST, first.glances, T0 + 500);
     expect(away).toEqual({ found: [], glances: {}, dueAt: null });
-    const again = look(EAST, away.glances, T0 + 300);
-    expect(again.glances).toEqual({ 'source:tafel': T0 + 300 });
-    expect(look(EAST, again.glances, T0 + 549).found).toEqual([]);
-    expect(look(EAST, again.glances, T0 + 550).found).toEqual(['source:tafel']);
+    const again = look(EAST, away.glances, T0 + 700);
+    expect(again.glances).toEqual({ 'source:tafel': T0 + 700 });
+    expect(look(EAST, again.glances, T0 + 1299).found).toEqual([]);
+    expect(look(EAST, again.glances, T0 + 1300).found).toEqual(['source:tafel']);
   });
 
-  it('reaches 7.5 tiles, half a radian either side, and no further', () => {
+  it('reaches 3 tiles, half a radian either side, and no further', () => {
     const floor = Array<string>(12).fill(`#${'.'.repeat(18)}#`);
     const open = { tiles: ['#'.repeat(20), ...floor, '#'.repeat(20)] };
     const from = { x: 1.5, y: 6.5, facing: EAST };
@@ -123,8 +124,8 @@ describe('finding by the lamp', () => {
       y: from.y + away * Math.sin(angle),
     });
     const lit = (away: number, angle: number) => inCone(open, NOTHING_SHUT, from, at(away, angle));
-    expect([lit(7.5, 0), lit(7.6, 0)]).toEqual([true, false]);
-    expect([lit(5, 0.49), lit(5, -0.49), lit(5, 0.51), lit(5, -0.51)]).toEqual([
+    expect([lit(3, 0), lit(3.1, 0)]).toEqual([true, false]);
+    expect([lit(2.5, 0.49), lit(2.5, -0.49), lit(2.5, 0.51), lit(2.5, -0.51)]).toEqual([
       true,
       true,
       false,
@@ -132,12 +133,30 @@ describe('finding by the lamp', () => {
     ]);
   });
 
+  it('finds nothing beyond its reach however long it rests there, till one comes nearer', () => {
+    const far = source('tafel', 6.5, 1.5);
+    const from = (x: number) => ({ x, y: 1.5, facing: EAST });
+    // Five tiles off, straight ahead: no glance even begins.
+    expect(lookAround(hall, NOTHING_SHUT, from(1.5), [far], {}, T0)).toEqual({
+      found: [],
+      glances: {},
+      dueAt: null,
+    });
+    // 2.9 tiles off, a minute later: the lamp starts to find it.
+    const nearer = lookAround(hall, NOTHING_SHUT, from(3.6), [far], {}, T0 + 60_000);
+    expect(nearer.glances).toEqual({ 'source:tafel': T0 + 60_000 });
+  });
+
   it('is cut off by walls and doors shut, and goes through a door open', () => {
-    const behind = { x: 8.5, y: 2.5 };
+    // 2.8 tiles east: the pillar (5,2) between on row 2, nothing between on row 1.
+    const behind = { x: 6.3, y: 2.5 };
     expect(inCone(ROOM, NOTHING_SHUT, { x: 3.5, y: 2.5, facing: EAST }, behind)).toBe(false);
+    expect(inCone(ROOM, NOTHING_SHUT, { x: 3.5, y: 1.5, facing: EAST }, { x: 6.3, y: 1.5 })).toBe(
+      true,
+    );
     const doorway = { tiles: ['#######', '#.....#', '#######'] };
     const looker = { x: 1.5, y: 1.5, facing: EAST };
-    const past = { x: 5.5, y: 1.5 };
+    const past = { x: 4.4, y: 1.5 };
     expect(inCone(doorway, new Set(['3,1']), looker, past)).toBe(false);
     expect(inCone(doorway, NOTHING_SHUT, looker, past)).toBe(true);
   });
@@ -256,28 +275,42 @@ describe('a room the power lights', () => {
     glimpsedAll({ ...dark, currentPuzzleIndex: mission.puzzles.length });
   });
 
-  it('finds nothing for a player two steps in but what the same two rules find', () => {
+  it('finds nothing for a player one or two steps in but what the same two rules find', () => {
     const state = lit();
     expect(viewFor(state, 'p1').map?.litRooms).toEqual(['FLUR', 'ARCHIV']);
-    // Two steps in from the door at (4,6), facing in: the shelves, nothing to find.
+    const map = state.mission.map;
+    // One step in from the door at (4,6), facing in: the book on its lectern at (6,1) lies in
+    // the lamp's cone, 4.5 tiles off — beyond its reach, so no look at it even begins.
+    const in1 = { x: 4.5, y: 5.5, facing: NORTH };
+    const look = lookAround(map, shutDoors(map, state), in1, findables(state), {}, T0);
+    expect(look).toEqual({ found: [], glances: {}, dueAt: null });
+    // Two steps in: the shelves, nothing to find.
     const in2 = { x: 4.5, y: 4.5, facing: NORTH };
     expect(findsIn(state, in2)).toEqual([]);
     expect(findsIn(blackout(), in2)).toEqual([]);
   });
 
-  it('finds the sign by the shelves, nothing across the room till the lamp rests on it', () => {
+  it('finds the sign by the shelves, the book across the room only from nearer', () => {
     const state = lit();
     const byShelves = { x: 3.5, y: 3.5, facing: WEST };
     expect(findsIn(state, byShelves)).toEqual(['sign']);
-    // The book on its lectern at (6,1), looked at for a quarter of a second.
-    const book = { ...byShelves, facing: Math.atan2(1.5 - 3.5, 6.5 - 3.5) };
+    // The book on its lectern at (6,1), the lamp held on it: 3.6 tiles off, it is never found.
     const map = state.mission.map;
+    const shut = shutDoors(map, state);
     const things = findables(state).filter((thing) => thing.key !== 'sign');
-    const glance = lookAround(map, shutDoors(map, state), book, things, {}, T0);
-    expect(glance.found).toEqual([]);
-    expect(Object.keys(glance.glances)).toContain('source:buch-archiv');
-    const later = lookAround(map, shutDoors(map, state), book, things, glance.glances, T0 + 250);
-    expect(later.found).toContain('source:buch-archiv');
+    const atBook = (x: number, y: number) => ({ x, y, facing: Math.atan2(1.5 - y, 6.5 - x) });
+    expect(lookAround(map, shut, atBook(3.5, 3.5), things, {}, T0)).toEqual({
+      found: [],
+      glances: {},
+      dueAt: null,
+    });
+    // A step nearer, 2.8 tiles off: found once the lamp has rested on it for 600 ms.
+    const nearer = atBook(4.5, 3.5);
+    const glance = lookAround(map, shut, nearer, things, {}, T0);
+    expect(glance).toEqual({ found: [], glances: { 'source:buch-archiv': T0 }, dueAt: T0 + 600 });
+    expect(lookAround(map, shut, nearer, things, glance.glances, T0 + 599).found).toEqual([]);
+    const later = lookAround(map, shut, nearer, things, glance.glances, T0 + 600);
+    expect(later.found).toEqual(['source:buch-archiv']);
   });
 });
 

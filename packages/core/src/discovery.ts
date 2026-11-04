@@ -36,10 +36,13 @@ export const FIND_REACH = 2;
 export const ITEM_REACH = 0.9;
 /** Half the width of the lamp's cone either side of where its player faces, radians. */
 export const LAMP_HALF_ANGLE = 0.5;
-/** How far the lamp's cone reaches, tiles: as far as its beam shows on the screens. */
-export const LAMP_REACH = 7.5;
-/** How long a thing has to stand in the lamp's cone to be found, ms. */
-export const LOOK_MS = 250;
+/**
+ * How far the lamp's cone finds things, tiles: what its player holds it on close by. Its beam
+ * shows further on the screens; what lies out there is seen, and found only once come nearer.
+ */
+export const LAMP_REACH = 3;
+/** How long a thing has to stand in the lamp's cone to be found, ms: held on it, not swept past. */
+export const LOOK_MS = 600;
 /** How long after one chime the next may sound for the same player, ms. */
 export const CHIME_GAP_MS = 1500;
 

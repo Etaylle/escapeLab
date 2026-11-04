@@ -1,4 +1,4 @@
-import { LAMP_HALF_ANGLE, LAMP_REACH, type DronePosition, type Sight } from '@escapelab/core';
+import { LAMP_HALF_ANGLE, type DronePosition, type Sight } from '@escapelab/core';
 import { doorOpenness, spillThrough, SPILL_HALF_ANGLE, SPILL_REACH } from './doors.js';
 import { handLamp } from './figure.js';
 import {
@@ -26,10 +26,15 @@ import type { Sim } from './sim.js';
  */
 
 /**
- * Your lamp: a glow all round, in tiles, and a flashlight cone where you face — the one the
- * server finds things in (core discovery.ts `LAMP_HALF_ANGLE`, `LAMP_REACH`).
+ * Your lamp: a glow all round, in tiles, and a flashlight cone where you face, as wide as the
+ * one the server finds things in (core discovery.ts `LAMP_HALF_ANGLE`).
  */
 const OWN_GLOW = 3.2;
+/**
+ * How far your flashlight's beam shows, tiles: further than its cone finds things (core
+ * discovery.ts `LAMP_REACH`) — what lies out there shows as what it is, its name only once found.
+ */
+const BEAM_REACH = 7.5;
 /** The glow of the lamp everybody else of the crew carries, in tiles. */
 const CREW_GLOW = 2.8;
 /** How far the green-white light out of the open hatch reaches, in tiles. */
@@ -153,7 +158,7 @@ export function frameLight(scene: LightScene, powered: boolean, whole: boolean):
  * hands (`inHands`).
  */
 function standingLamp(sim: Pick<Sim, 'self'>): Lamp {
-  const cone = { facing: sim.self.facing, halfAngle: LAMP_HALF_ANGLE, reach: LAMP_REACH };
+  const cone = { facing: sim.self.facing, halfAngle: LAMP_HALF_ANGLE, reach: BEAM_REACH };
   return { x: sim.self.x, y: sim.self.y, glow: OWN_GLOW, beam: cone };
 }
 
@@ -211,7 +216,7 @@ function ownRoom(sim: Sim, map: WorldMap): PoweredRoom | null {
  */
 export function ownLamp(sim: Pick<Sim, 'self' | 'walkPhase'>, reduced: boolean): Lamp {
   const hand = handLamp(sim.self, sim.walkPhase, reduced);
-  const cone = { facing: hand.facing, halfAngle: LAMP_HALF_ANGLE, reach: LAMP_REACH };
+  const cone = { facing: hand.facing, halfAngle: LAMP_HALF_ANGLE, reach: BEAM_REACH };
   return { x: hand.x, y: hand.y, glow: OWN_GLOW, beam: cone };
 }
 

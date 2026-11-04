@@ -105,7 +105,8 @@ with distance and walls as before. The device's PARTNER LED then reads „Ben ·
 ## Finding things
 
 A player finds a source, note, part, the sign or an armed console within 2 tiles in sight, or
-after 250 ms in their lamp's cone (0.5 rad, 7.5 tiles), lit room or not; a part within 0.9 always.
+after 600 ms in their lamp's cone (0.5 rad, 3 tiles), lit room or not; a part within 0.9 always.
+The beam shows 7.5 tiles: what lies beyond 3 shows as what it is, nameless, till one comes nearer.
 The server decides, per player. The same sight says who stands where: at a source, a note or
 the sign only a player who has found it counts, at a console only one who sees the middle of
 its tile — walls and shut doors in between hide it — or has found it. Through a wall or round
