@@ -81,14 +81,44 @@ export const TALL_CSS = 600;
 export const TILE_CSS = { min: 28, max: 96 } as const;
 
 /**
- * How tall a tile stands on a canvas `height` CSS pixels tall: its height over the tiles the
- * camera frames there (TILES_HIGH, TILES_HIGH_SHORT), held within TILE_CSS. The frame is fixed
- * in CSS pixels, so every screen shows the same world whatever its density; the canvas draws
- * it at its own (render/backing.ts), device pixels a tile being this times that.
+ * How far a drone looks, tiles: the cone of Blackout's drones at the normal difficulty, the
+ * reference level's (missions/blackout.json; „Hart" stretches it to 5.2, „Entspannt" shortens it).
  */
-export function tileCss(height: number): number {
+export const DRONE_REACH = 4.5;
+/**
+ * How many drones' reaches the band below the objective bar holds from top to bottom: twice with
+ * a mouse and keys — the avatar in its middle sees a cone's end before the cone sees it — and
+ * one and a half on a touch screen, a phone held sideways, whose HUD takes a quarter of it.
+ */
+export const BAND_REACHES = { fine: 2, touch: 1.5 } as const;
+
+/** What the camera's frame is set by, CSS pixels: the canvas, the objective bar over it. */
+export interface Framing {
+  /** the canvas's height */
+  height: number;
+  /**
+   * how far the objective bar reaches down with a line on the air — steady while lines come
+   * and go (insets.ts `bar`)
+   */
+  bar: number;
+  /** steered by touch: the band holds BAND_REACHES.touch, not .fine */
+  touch: boolean;
+}
+
+/**
+ * How tall a tile stands on screen, CSS pixels: the canvas's height over the tiles the camera
+ * frames there (TILES_HIGH, TILES_HIGH_SHORT) — but where the band the objective bar leaves
+ * below it would then hold fewer than BAND_REACHES drones' reaches, the band wins and the tiles
+ * shrink until it holds them — and held within TILE_CSS, whose floor wins over the band on a
+ * canvas too small for both. The frame is fixed in CSS pixels, so every screen shows the same
+ * world whatever its density; the canvas draws it at its own (render/backing.ts), device pixels
+ * a tile being this times that.
+ */
+export function tileCss({ height, bar, touch }: Framing): number {
   const tilesHigh = height >= TALL_CSS ? TILES_HIGH : TILES_HIGH_SHORT;
-  return Math.min(TILE_CSS.max, Math.max(TILE_CSS.min, height / tilesHigh));
+  const band = DRONE_REACH * (touch ? BAND_REACHES.touch : BAND_REACHES.fine);
+  const px = Math.min(height / tilesHigh, (height - bar) / band);
+  return Math.min(TILE_CSS.max, Math.max(TILE_CSS.min, px));
 }
 
 /** `target` held between `lo` and `hi`; their middle where there is no room between them. */

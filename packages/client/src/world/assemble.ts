@@ -64,10 +64,11 @@ export interface FrameSource {
   /** same condition the stylesheet uses to show the on-screen pad */
   touchPad: MediaQueryList;
   /**
-   * how far the objective bar reaches into the canvas and the controls up from its foot, the
-   * highest of them, and where each group of the controls lies on it; CSS pixels
+   * how far the objective bar reaches into the canvas — now, and with a line on the air (`bar`,
+   * what the zoom keeps the band below) — and the controls up from its foot, the highest of
+   * them, and where each group of the controls lies on it; CSS pixels
    */
-  insets: { top: number; bottom: number; controls: readonly Box[] };
+  insets: { top: number; bar: number; bottom: number; controls: readonly Box[] };
   live: React.MutableRefObject<Latest>;
   alarm: React.MutableRefObject<Alarm | null>;
   positions: React.MutableRefObject<KnownPositions>;
@@ -136,14 +137,16 @@ function coverZoom(map: WorldMap, w: number, h: number): number {
 
 /**
  * Device pixels per tile at `dpr` device pixels a CSS pixel: the audience sees the whole lab, a
- * player the frame set in CSS pixels (viewport.ts `tileCss`), the same at every density.
+ * player the frame set in CSS pixels (viewport.ts `tileCss`), the same at every density — the
+ * band below the objective bar holding the drones' reach on a touch screen as on any other.
  */
 function zoomFor(source: FrameSource, map: WorldMap, dpr: number): number {
-  const { canvas } = source;
+  const { canvas, insets } = source;
   if (source.spectator) {
     return wholeZoom(map, canvas.width, canvas.height);
   }
-  return tileCss(canvas.height / dpr) * dpr;
+  const framing = { height: canvas.height / dpr, bar: insets.bar, touch: source.touchPad.matches };
+  return tileCss(framing) * dpr;
 }
 
 /** The opening's shot at a moment: from the reactor end to this player's spawn, how far along. */

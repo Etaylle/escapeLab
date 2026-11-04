@@ -109,7 +109,7 @@ function sourceWith(items: Item[], finale: FinaleCue | null = null): FrameSource
     sim,
     spectator: false,
     touchPad: { matches: false } as MediaQueryList,
-    insets: { top: 0, bottom: 0, controls: [] },
+    insets: { top: 0, bar: 0, bottom: 0, controls: [] },
     live: { current: latest },
     alarm: { current: null },
     positions: { current: { run: null, players: {} } },
@@ -353,11 +353,20 @@ describe('assembleFrame — the same frame at every density', () => {
     vi.unstubAllGlobals();
   });
 
-  /** Anna's camera on a canvas `css` CSS pixels at `ratio`, its backing sized as the world does. */
-  function cameraAt(css: { w: number; h: number }, ratio: number) {
+  /** A screen: its canvas, CSS pixels, the bar with a line on the air there, and its input. */
+  interface Screen {
+    css: { w: number; h: number };
+    bar: number;
+    touch: boolean;
+  }
+
+  /** Anna's camera on `screen` at `ratio`, its canvas's backing sized as the world sizes it. */
+  function cameraAt({ css, bar, touch }: Screen, ratio: number) {
     const source = sourceWith([]);
     const { w, h, dpr } = backingSize(css.w, css.h, ratio);
     source.canvas = fakeCanvas(w, h).canvas;
+    source.insets = { ...source.insets, bar };
+    source.touchPad = { matches: touch } as MediaQueryList;
     const map = source.live.current.view.map;
     if (map === null) {
       throw new Error('the view has no map');
@@ -367,17 +376,20 @@ describe('assembleFrame — the same frame at every density', () => {
   }
 
   it('shows a laptop’s window the same tiles at density 1 and 2, and a 3× phone as at 1', () => {
-    for (const css of [
-      { w: 1416, h: 671 },
-      { w: 1256, h: 571 },
-      { w: 828, h: 291 },
-    ]) {
-      const plain = cameraAt(css, 1);
-      expect(plain.down).toBeCloseTo(css.h >= 600 ? 11.5 : 9, 2);
+    const screens: [Screen, number][] = [
+      [{ css: { w: 1414, h: 669 }, bar: 129.3, touch: false }, 11.5],
+      // The band below the bar decides at 1280×720: nine tiles of it.
+      [{ css: { w: 1254, h: 569 }, bar: 129.3, touch: false }, 569 / ((569 - 129.3) / 9)],
+      [{ css: { w: 826, h: 289 }, bar: 68.5, touch: true }, 9],
+    ];
+    for (const [screen, down] of screens) {
+      const plain = cameraAt(screen, 1);
+      const name = `${screen.css.w}×${screen.css.h}`;
+      expect(plain.down, name).toBeCloseTo(down, 2);
       for (const ratio of [2, 3]) {
-        const dense = cameraAt(css, ratio);
-        expect(dense.across, `${css.w}×${css.h} at ${ratio}`).toBeCloseTo(plain.across, 2);
-        expect(dense.down, `${css.w}×${css.h} at ${ratio}`).toBeCloseTo(plain.down, 2);
+        const dense = cameraAt(screen, ratio);
+        expect(dense.across, `${name} at ${ratio}`).toBeCloseTo(plain.across, 2);
+        expect(dense.down, `${name} at ${ratio}`).toBeCloseTo(plain.down, 2);
       }
     }
   });
