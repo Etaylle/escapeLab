@@ -67,7 +67,8 @@ function lineRow(bar: HTMLElement, gap: number): number {
   const line = document.createElement('div');
   line.className = 'radio-banner';
   line.setAttribute('aria-hidden', 'true');
-  line.style.cssText = 'position: absolute; visibility: hidden; animation: none; white-space: nowrap';
+  line.style.cssText =
+    'position: absolute; visibility: hidden; animation: none; white-space: nowrap';
   line.textContent = 'Leitstelle';
   bar.append(line);
   const { height } = line.getBoundingClientRect();

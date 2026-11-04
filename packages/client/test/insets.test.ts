@@ -140,7 +140,7 @@ describe('watchInsets — how far the objective bar reaches', () => {
     vi.unstubAllGlobals();
   });
 
-  it('keeps the bar with a line on the air steady while lines come and go, its reach now not', () => {
+  it('keeps the bar with a line on the air steady while lines come and go', () => {
     const { bar, goal, canvas } = stageWith();
     const insets = watchInsets(canvas, null, () => undefined);
     expect(insets.top).toBe(81);

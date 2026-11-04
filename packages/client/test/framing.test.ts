@@ -50,7 +50,7 @@ function framed({ css, ratio, bar, touch }: Screen) {
 const tile = (height: number, bar = 0, touch = false): number => tileCss({ height, bar, touch });
 
 describe('tileCss — the camera’s frame in CSS pixels', () => {
-  it('frames the audit’s five screens: 11.5 tiles high on a laptop, 9 on a phone held sideways', () => {
+  it('frames the audit’s five screens: 11.5 tiles high on a laptop, 9 on a phone', () => {
     const expected: Record<string, { down: number; across: number }> = {
       '1440×820 @1': { down: 11.5, across: 24.31 },
       '1440×820 @2': { down: 11.5, across: 24.31 },
@@ -98,7 +98,7 @@ describe('tileCss — the camera’s frame in CSS pixels', () => {
     }
   });
 
-  it('lets the camera follow and lead sideways on every screen: the lab is wider than the view', () => {
+  it('lets the camera follow and lead sideways on every screen: the lab is wider', () => {
     for (const screen of SCREENS) {
       const { scale, w, h, across } = framed(screen);
       expect(across, screen.name).toBeLessThan(LAB.width);
@@ -132,7 +132,7 @@ describe('tileCss — the band below the objective bar', () => {
     expect(tile(669, 200)).toBeCloseTo((669 - 200) / 9, 9);
   });
 
-  it('holds 1.5 reaches on a touch screen: its tile count stands while the HUD keeps a quarter', () => {
+  it('holds 1.5 reaches by touch: its tile count stands while the HUD keeps a quarter', () => {
     expect(tile(289, 289 / 4, true)).toBeCloseTo(289 / 9, 9);
     expect(tile(289, 100, true)).toBeCloseTo((289 - 100) / 6.75, 9);
     // With keys the same canvas and bar have to hold the reach twice: smaller tiles.
@@ -140,7 +140,7 @@ describe('tileCss — the band below the objective bar', () => {
     expect(tile(400, 100, false)).toBeCloseTo((400 - 100) / 9, 9);
   });
 
-  it('keeps the 28-px floor where a canvas is too small for the band: the figure stays legible', () => {
+  it('keeps the 28-px floor where a canvas is too small for the band: a legible figure', () => {
     expect(tile(300, 100)).toBe(28);
     expect(tile(150, 100, true)).toBe(28);
   });
