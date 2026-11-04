@@ -1744,8 +1744,10 @@ function reportSolved(what, look, { since, looked, shot, gone }) {
 /**
  * station-both.png: while the operator keeps the station open, the reader
  * walks up as well and presses E — the panel has to show for both of them.
- * At a sync station both then press it together. Then the reader leaves it
- * and walks back to where it stood.
+ * At a sync station both then press it together — at a main switch with a
+ * window after the operator's lone pull, its ring and both pages' count
+ * (captureLeverRing). Then the reader leaves it and walks back to where it
+ * stood.
  */
 async function captureBothAtStation(reader, operator, station, sync) {
   const back = tileOf(reader.seen);
@@ -1774,6 +1776,9 @@ async function captureBothAtStation(reader, operator, station, sync) {
     if (missing.length > 0) {
       const who = missing.join(' and ');
       throw new Error(`"${station.title}" wants both presses, but ${who} has no panel`);
+    }
+    if (station.look === 'lever') {
+      await captureLeverRing(operator, [operator, reader]);
     }
     const solved = await pressTogether([operator, reader], station);
     await bedAlive(operator, solved.lit, `after "${station.title}"`);
@@ -2906,7 +2911,7 @@ async function captureLeverRing(player, players) {
   }
 }
 
-/** How far into a lone pull the count is shot, ms: past its first whole second, short of the next. */
+/** How far into a lone pull the count is shot, ms: past its first second, short of the next. */
 const COUNT_SHOT_MS = 1300;
 
 /**
@@ -2954,7 +2959,7 @@ async function captureLeverCountdown(host, players, at) {
   }
 }
 
-/** The tags under `name` in the crew strip on `page`, in words; null where the strip has no `name`. */
+/** The tags under `name` in the crew strip on `page`, in words; null where it has no `name`. */
 function crewTagsOn(page, name) {
   return page.evaluate((who) => {
     const entries = [...document.querySelectorAll('.hud-crew li')];
