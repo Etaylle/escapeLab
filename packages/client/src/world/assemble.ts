@@ -23,7 +23,7 @@ import { gridOf, sameGrid, snapCamera } from './render/grid.js';
 import { minimapBox, minimapLayout } from './render/hud.js';
 import { CAPTION_SECONDS, CHAT_LIFETIME_MS } from './render/overlays.js';
 import type { Sim } from './sim.js';
-import { clampCamera, liftAbove, type Box, type Viewport } from './viewport.js';
+import { clampCamera, liftAbove, tileCss, type Box, type Viewport } from './viewport.js';
 import { shortOf } from './particles.js';
 
 /**
@@ -134,14 +134,16 @@ function coverZoom(map: WorldMap, w: number, h: number): number {
   return Math.max(w / map.width, h / map.height);
 }
 
-/** Device pixels per tile: the audience sees the whole lab, a player what covers the canvas. */
-function zoomFor(map: WorldMap, w: number, h: number, spectator: boolean): number {
-  if (spectator) {
-    return wholeZoom(map, w, h);
+/**
+ * Device pixels per tile at `dpr` device pixels a CSS pixel: the audience sees the whole lab, a
+ * player the frame set in CSS pixels (viewport.ts `tileCss`), the same at every density.
+ */
+function zoomFor(source: FrameSource, map: WorldMap, dpr: number): number {
+  const { canvas } = source;
+  if (source.spectator) {
+    return wholeZoom(map, canvas.width, canvas.height);
   }
-  // Zoom so the lab always covers the canvas: no black bars beside it — but
-  // stop before the lab turns into giant tiles on very wide windows.
-  return Math.min(170, Math.max(coverZoom(map, w, h), Math.min(88, h / 10.5)));
+  return tileCss(canvas.height / dpr) * dpr;
 }
 
 /** The opening's shot at a moment: from the reactor end to this player's spawn, how far along. */
@@ -183,7 +185,7 @@ function aim(source: FrameSource, map: WorldMap, dpr: number, pull: number, now:
   const { sim, canvas, spectator } = source;
   const w = canvas.width;
   const h = canvas.height;
-  const near = zoomFor(map, w, h, spectator) * leanIn(source, now);
+  const near = zoomFor(source, map, dpr) * leanIn(source, now);
   const shot = shotOf(source, map, now);
   if (shot !== null) {
     const wide = Math.max(coverZoom(map, w, h), near * SHOT_WIDE);

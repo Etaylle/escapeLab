@@ -18,6 +18,7 @@ import {
   zoomAt,
   zoomToward,
 } from '../src/world/render/camera.js';
+import { backingSize } from '../src/world/render/backing.js';
 import { newSim } from '../src/world/sim.js';
 import { fakeCanvas, FakePath2D } from './fakeCanvas.js';
 import { kitWith, TILES } from './frames.js';
@@ -341,6 +342,44 @@ describe('assembleFrame — the camera leaning in on a station’s open panel', 
     const audience = { ...sourceWith([]), spectator: true };
     const wide = scaleAt(audience, 10_000, false);
     expect(scaleAt(audience, 10_000 + ZOOM_MS, true)).toBeCloseTo(wide, 9);
+  });
+});
+
+describe('assembleFrame — the same frame at every density', () => {
+  beforeAll(() => {
+    vi.stubGlobal('Path2D', FakePath2D);
+  });
+  afterAll(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** Anna's camera on a canvas `css` CSS pixels at `ratio`, its backing sized as the world does. */
+  function cameraAt(css: { w: number; h: number }, ratio: number) {
+    const source = sourceWith([]);
+    const { w, h, dpr } = backingSize(css.w, css.h, ratio);
+    source.canvas = fakeCanvas(w, h).canvas;
+    const map = source.live.current.view.map;
+    if (map === null) {
+      throw new Error('the view has no map');
+    }
+    const { camera } = assembleFrame(source, map, dpr, 0, []);
+    return { across: w / camera.scale, down: h / camera.scale };
+  }
+
+  it('shows a laptop’s window the same tiles at density 1 and 2, and a 3× phone as at 1', () => {
+    for (const css of [
+      { w: 1416, h: 671 },
+      { w: 1256, h: 571 },
+      { w: 828, h: 291 },
+    ]) {
+      const plain = cameraAt(css, 1);
+      expect(plain.down).toBeCloseTo(css.h >= 600 ? 11.5 : 9, 2);
+      for (const ratio of [2, 3]) {
+        const dense = cameraAt(css, ratio);
+        expect(dense.across, `${css.w}×${css.h} at ${ratio}`).toBeCloseTo(plain.across, 2);
+        expect(dense.down, `${css.w}×${css.h} at ${ratio}`).toBeCloseTo(plain.down, 2);
+      }
+    }
   });
 });
 

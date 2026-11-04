@@ -3,8 +3,9 @@
  * bar along the top edge, the minimap, and the controls in the bottom corners
  * — on a touch screen the steering pad under the left thumb and the buttons
  * under the right one. The camera keeps the avatar clear of them, and the
- * screen's own text — edge arrows, room names — keeps off them. Pure; device
- * pixels.
+ * screen's own text — edge arrows, room names — keeps off them. The camera's
+ * frame is set in CSS pixels (`tileCss`); everything else is in device
+ * pixels. Pure.
  */
 
 /** A box on the canvas. */
@@ -65,6 +66,29 @@ export interface Lens {
   top: number;
   /** how far the avatar is lifted on a touch screen, whose pad would sit on it */
   lift: number;
+}
+
+/** How many tiles of height the camera frames on a canvas TALL_CSS or taller: a laptop's view. */
+export const TILES_HIGH = 11.5;
+/** How many below that: a phone held sideways shows fewer, so that its figure stays readable. */
+export const TILES_HIGH_SHORT = 9;
+/** From how tall a canvas, CSS pixels, the camera frames TILES_HIGH tiles of height. */
+export const TALL_CSS = 600;
+/**
+ * How small and how large a tile stands on screen, CSS pixels: the figure, 0.85 of a tile,
+ * never under 24 px, and the lab no wall of giant tiles on a tall monitor.
+ */
+export const TILE_CSS = { min: 28, max: 96 } as const;
+
+/**
+ * How tall a tile stands on a canvas `height` CSS pixels tall: its height over the tiles the
+ * camera frames there (TILES_HIGH, TILES_HIGH_SHORT), held within TILE_CSS. The frame is fixed
+ * in CSS pixels, so every screen shows the same world whatever its density; the canvas draws
+ * it at its own (render/backing.ts), device pixels a tile being this times that.
+ */
+export function tileCss(height: number): number {
+  const tilesHigh = height >= TALL_CSS ? TILES_HIGH : TILES_HIGH_SHORT;
+  return Math.min(TILE_CSS.max, Math.max(TILE_CSS.min, height / tilesHigh));
 }
 
 /** `target` held between `lo` and `hi`; their middle where there is no room between them. */
