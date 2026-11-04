@@ -20,7 +20,7 @@ export function expiredWith(change: SyncChange | null): boolean {
 
 /**
  * What the device says once this player's press ran out, its window again: „Druck verfallen —
- * alle Ausweise binnen 2 s". Without a window no press runs out.
+ * alle Ausweise binnen 3,5 s". Without a window no press runs out.
  */
 export function missedLine(windowMs: number | null): string {
   return windowMs === null

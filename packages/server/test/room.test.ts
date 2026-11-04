@@ -457,6 +457,11 @@ describe('Room', () => {
   });
 
   it('runs a lone press out on the room\'s clock and tells its owner, nobody else', () => {
+    const init = mission.puzzles[0];
+    if (init?.type !== 'button-sync' || init.windowMs === undefined) {
+      throw new Error('the tutorial should open on a sync station with a window');
+    }
+    const { windowMs } = init;
     const { room, anna, ben } = startedRoom();
     moveTo(room, ben, 12, 2);
     moveTo(room, anna, 11, 1);
@@ -465,12 +470,12 @@ describe('Room', () => {
     const pressedAt = Date.now();
     expect(lastView(anna.messages).puzzle).toMatchObject({
       style: 'lever',
-      press: { at: pressedAt, expiresAt: pressedAt + 3000 },
+      press: { at: pressedAt, expiresAt: pressedAt + windowMs },
     });
     expect(lastView(ben.messages).puzzle).toMatchObject({ partnerPressed: true, press: null });
 
-    // Exactly three seconds old the press still lives; a moment later the room drops it.
-    vi.advanceTimersByTime(3000);
+    // Exactly as old as the mission's window the press still lives; a moment later it is dropped.
+    vi.advanceTimersByTime(windowMs);
     expect(lastView(anna.messages).puzzle).toMatchObject({ lastResult: null, youPressed: true });
     vi.advanceTimersByTime(1);
     expect(lastView(anna.messages).puzzle).toMatchObject({ press: null, lastResult: 'expired' });

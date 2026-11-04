@@ -30,7 +30,7 @@ export function togetherWord(count: number): string {
 
 /**
  * What the main switch's plate says: what it is, that it takes the crew, and — where it has
- * one — its window: „NOTLICHT · HAUPTSCHALTER · NUR ZU ZWEIT · 2 S".
+ * one — its window: „NOTLICHT · HAUPTSCHALTER · NUR ZU ZWEIT · 3,5 S".
  */
 export function leverPlate(puzzle: SyncView, windowMs: number | null): string {
   const together = `NUR ZU ${togetherWord(puzzle.requiredCount)}`;

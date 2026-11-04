@@ -81,7 +81,7 @@
         "Stellt euch beide an das Pult mit den zwei Griffen, rechts oben im Leitstand."
       ],
       "style": "lever",
-      "windowMs": 3000,
+      "windowMs": 3500,
       "lights": ["LEITSTAND"],
       "onSolved": "Der Leitstand hat Licht. Jetzt die Signalprobe, zu zweit: Ein Pult zeigt die Zeichen, am anderen drückt ihr sie nach."
     },

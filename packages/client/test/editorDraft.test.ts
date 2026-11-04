@@ -184,12 +184,12 @@ describe('a puzzle’s own fields and penalty, draft ↔ JSON', () => {
     const blackout = shipped.find(({ name }) => name === 'blackout.json')?.data;
     const draft = loaded(blackout);
     expect(draft.puzzles.map((p) => [p.type, p.penaltySec, p.fields])).toEqual([
-      ['button-sync', null, { windowMs: 2000, style: 'lever' }],
+      ['button-sync', null, { windowMs: 3500, style: 'lever' }],
       ['circuit', 30, { wires: { min: 4, max: 6 }, shorts: 3, burnoutSec: 60 }],
       ['signal', null, { stages: 4, length: 4, legend: true, fleetingFrom: 3 }],
       ['servers', null, { crashed: 4, trap: true }],
       ['morse', null, {}],
-      ['button-sync', null, { windowMs: 2000, style: 'button' }],
+      ['button-sync', null, { windowMs: 3500, style: 'button' }],
     ]);
     const json = draftToJson(draft) as { puzzles: Record<string, unknown>[] };
     expect(json.puzzles[0]).toMatchObject({ type: 'button-sync', style: 'lever' });
