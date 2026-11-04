@@ -101,13 +101,13 @@ die Entscheidung.
   und an angehefteten Notizen; Kalam (OFL) in `public/fonts`. Regeln in `docs/gameplay.md`,
   Aussehen in `docs/art-bible.md`.
 
-### T-2 Jedes Pult sagt, wozu die Maschine da ist — Status: im PR (N-small) · Größe: S
+### T-2 Jedes Pult sagt, wozu die Maschine da ist — Status: erledigt (N-small, Merge 2026-11-04) · Größe: S
 - Audit: beide Hälften einer Station sehen aus wie Geräte, keine sagt die Aufgabe. Ein
   Typenschild-Satz je Pult in Weltsprache (was die Maschine tut, nicht was der Spieler tun
   soll), z. B. Prüfpult „misst die Spannung des gewählten Kabels"; kein Hinweis auf die Lösung.
 - Beweis: Texte durch die Handbuch-Stimmen-Tests; Capture je Pult.
 
-### T-3 Schnellchat trägt Stationsdaten — Status: im PR (N-small) · Größe: S
+### T-3 Schnellchat trägt Stationsdaten — Status: erledigt (N-small, Merge 2026-11-04; Blackout ohne „Bei mir ist fertig", 8 Plätze) · Größe: S
 - Heute acht feste Phrasen ohne Daten; „Alle an die Ventile!" nennt Ventile, die Blackout nicht
   hat. Phrasen je Mission aus `mission.json`, davon zwei mit Platzhalter (Zahl/Farbe/Dienst),
   per Steuerkreuz/Taste wählbar. Beweis: Tests, Capture des Chat-Rads in Blackout.
@@ -122,12 +122,12 @@ die Entscheidung.
   Glöckchen dazu ≤ 1 je 1,5 s; nie zweimal je Objekt; Deko nie.
 - Beweis: Captures beim Betreten des Archivs, Glöckchen-Zählung über die Audio-Probe.
 
-### T-7 Anwesenheit an Stationen nur ohne Wand — Status: im PR (N-small) · Größe: S
+### T-7 Anwesenheit an Stationen nur ohne Wand — Status: erledigt (N-small, Merge 2026-11-04) · Größe: S
 - Seit N-discovery zählen Quellen, Notizen und Schild nur Finder; an Stationen zählt Anwesenheit
   weiterhin nach Abstand allein (1,6 Kacheln, Wände ignoriert). Angleichen: Anwesenheit am Pult
   nur mit Sichtlinie oder nach eigenem Fund; Test wie der Säulen-Test der Quellen.
 
-### H-1 Flucht-Budget relativ zum Runner — Status: im PR (N-small) · Größe: S
+### H-1 Flucht-Budget relativ zum Runner — Status: erledigt (N-small, Merge 2026-11-04) · Größe: S
 - CI auf c23afc5 (gleicher Code wie das grüne 65e3e1e): Systemcheck-Flucht p50 33,4 / p95 50,1
   zweimal — der ganze Runner lief mit halber Rate. Das Fenster misst seit M-ciwin einen Client,
   aber ein langsamer Runner kippt die Flucht (33 ms bei 4× Drossel) über die 40 ms.
