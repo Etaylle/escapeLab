@@ -2,23 +2,20 @@ import type { ParticleKind } from '../particles.js';
 import type { Sim } from '../sim.js';
 import { groundAt } from './actors.js';
 import { conesOf, motesLit } from './atmosphere.js';
-import { zoomAt, type Zoom } from './camera.js';
 import type { Frame, RenderKit } from './frame.js';
 
 /**
  * What the walkthrough (`?trace=1`, tools/shots.mjs) reads of the world's
  * picture to prove the graphics package's captures: your figure's walk cycle
- * and the light its shadow follows, the camera leaning in on a panel, the
- * hatch's opening, the particles alive and the motes lit in the cones, and
- * the canvas's backing store against its box.
+ * and the light its shadow follows, the hatch's opening, the particles alive
+ * and the motes lit in the cones, and the canvas's backing store against its
+ * box.
  */
 export interface GraphicsProbe {
   /** your figure's walk: where in its cycle (0 to 1), and whether it walks */
   gait: { phase: number; moving: boolean };
   /** the light your figure stands in as the last frame drew it; null before the first */
   ground: 'lit' | 'dark' | 'plain' | null;
-  /** the camera leaning in on a panel (render/camera.ts), and how far it leans now */
-  zoom: Zoom & { now: number };
   /** how far the hatch stood open as the last frame drew it, 0 to 1 */
   hatch: number;
   /** the particles alive by kind, and how many motes the cones light */
@@ -32,7 +29,6 @@ export interface ProbedWorld {
   canvas: HTMLCanvasElement;
   kit: RenderKit;
   sim: Sim;
-  live: { current: { reduced: boolean } };
   drawn: Frame | null;
 }
 
@@ -52,7 +48,6 @@ export function graphicsProbe(world: ProbedWorld): GraphicsProbe {
   return {
     gait: { phase: sim.walkPhase, moving: sim.self.moving },
     ground: drawn === null ? null : groundAt(drawn, sim.self.x, sim.self.y),
-    zoom: { ...kit.zoom, now: zoomAt(kit.zoom, Date.now(), world.live.current.reduced) },
     hatch: drawn?.hatch ?? 0,
     particles,
     backing: {

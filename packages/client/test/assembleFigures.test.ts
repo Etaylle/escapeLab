@@ -10,14 +10,6 @@ import {
   TITLE_HOLD_MS,
   type IntroCue,
 } from '../src/world/intro/sequence.js';
-import {
-  easeOut,
-  NO_ZOOM,
-  PANEL_ZOOM,
-  ZOOM_MS,
-  zoomAt,
-  zoomToward,
-} from '../src/world/render/camera.js';
 import { backingSize } from '../src/world/render/backing.js';
 import { newSim } from '../src/world/sim.js';
 import { fakeCanvas, FakePath2D } from './fakeCanvas.js';
@@ -101,7 +93,6 @@ function sourceWith(items: Item[], finale: FinaleCue | null = null): FrameSource
     reduced: false,
     textScale: 1,
     voice: null,
-    station: null,
   };
   return {
     canvas: fakeCanvas(800, 600).canvas,
@@ -290,7 +281,7 @@ describe('assembleFrame — the opening’s shot', () => {
   });
 });
 
-describe('assembleFrame — the camera leaning in on a station’s open panel', () => {
+describe('assembleFrame — the world behind a station’s open panel', () => {
   beforeAll(() => {
     vi.stubGlobal('Path2D', FakePath2D);
   });
@@ -299,49 +290,34 @@ describe('assembleFrame — the camera leaning in on a station’s open panel', 
     vi.useRealTimers();
   });
 
-  /** The camera's zoom at `ms` on the wall clock, the panel open or not, as `source` frames it. */
-  function scaleAt(source: FrameSource, ms: number, open: boolean): number {
+  /**
+   * The camera and the pixel grid `source` frames the world on at `ms` on the wall clock, a
+   * station's panel open over it or not — the station set on the live object as GameWorld keeps
+   * it there.
+   */
+  function framedAt(source: FrameSource, ms: number, open: boolean) {
     vi.useFakeTimers();
     vi.setSystemTime(ms);
-    const station = open ? ({ kind: 'button' } as unknown as PuzzleView) : null;
-    source.live.current = { ...source.live.current, station };
-    const scale = frameAt(source, 1).camera.scale;
+    const live: Latest & { station: PuzzleView | null } = {
+      ...source.live.current,
+      station: open ? ({ kind: 'button-sync' } as unknown as PuzzleView) : null,
+    };
+    source.live.current = live;
+    const { camera, grid } = frameAt(source, 1);
     vi.useRealTimers();
-    return scale;
+    return { camera, grid };
   }
 
-  it('zooms in PANEL_ZOOM times over ZOOM_MS as a panel opens, eased out, back as it shuts', () => {
-    const source = sourceWith([]);
-    const plain = scaleAt(source, 10_000, false);
-    expect(scaleAt(source, 10_000, true)).toBeCloseTo(plain, 9);
-    const half = scaleAt(source, 10_000 + ZOOM_MS / 2, true);
-    // Eased out: past the middle of the way at half the time.
-    expect(half).toBeGreaterThan(plain * (1 + (PANEL_ZOOM - 1) / 2));
-    expect(half).toBeLessThan(plain * PANEL_ZOOM);
-    expect(scaleAt(source, 10_000 + ZOOM_MS, true)).toBeCloseTo(plain * PANEL_ZOOM, 9);
-    expect(scaleAt(source, 20_000, true)).toBeCloseTo(plain * PANEL_ZOOM, 9);
-    expect(scaleAt(source, 20_000, false)).toBeCloseTo(plain * PANEL_ZOOM, 9);
-    expect(scaleAt(source, 20_000 + ZOOM_MS / 2, false)).toBeLessThan(plain * PANEL_ZOOM);
-    expect(scaleAt(source, 20_000 + ZOOM_MS, false)).toBeCloseTo(plain, 9);
-  });
-
-  it('turns back from where it stands when the panel shuts halfway in', () => {
-    const source = sourceWith([]);
-    const plain = scaleAt(source, 10_000, false);
-    scaleAt(source, 10_000, true);
-    const halfway = scaleAt(source, 10_050, true);
-    expect(scaleAt(source, 10_050, false)).toBeCloseTo(halfway, 9);
-    expect(scaleAt(source, 10_050 + ZOOM_MS, false)).toBeCloseTo(plain, 9);
-  });
-
-  it('cuts straight to the zoom under reduced motion, and never leans in for the audience', () => {
-    const calm = sourceWith([]);
-    calm.live.current = { ...calm.live.current, reduced: true };
-    const plain = scaleAt(calm, 10_000, false);
-    expect(scaleAt(calm, 10_001, true)).toBeCloseTo(plain * PANEL_ZOOM, 9);
-    const audience = { ...sourceWith([]), spectator: true };
-    const wide = scaleAt(audience, 10_000, false);
-    expect(scaleAt(audience, 10_000 + ZOOM_MS, true)).toBeCloseTo(wide, 9);
+  it('keeps the world’s scale and frame as a panel opens, stays open and shuts', () => {
+    for (const reduced of [false, true]) {
+      const source = sourceWith([]);
+      source.live.current = { ...source.live.current, reduced };
+      const plain = framedAt(source, 10_000, false);
+      for (const ms of [10_000, 10_050, 10_100, 10_200, 20_000]) {
+        expect(framedAt(source, ms, true), `open ${ms} ms, reduced ${reduced}`).toEqual(plain);
+      }
+      expect(framedAt(source, 20_100, false), `shut, reduced ${reduced}`).toEqual(plain);
+    }
   });
 });
 
@@ -392,24 +368,5 @@ describe('assembleFrame — the same frame at every density', () => {
         expect(dense.down, `${name} at ${ratio}`).toBeCloseTo(plain.down, 2);
       }
     }
-  });
-});
-
-describe('easeOut and zoomToward — the zoom’s easing', () => {
-  it('starts quickly and settles softly, from 0 to 1', () => {
-    expect(easeOut(0)).toBe(0);
-    expect(easeOut(1)).toBe(1);
-    expect(easeOut(0.5)).toBeCloseTo(0.875, 12);
-    expect(easeOut(-1)).toBe(0);
-    expect(easeOut(2)).toBe(1);
-  });
-
-  it('keeps a zoom heading the way it is asked, and starts a new one from where it stands', () => {
-    const opening = zoomToward(NO_ZOOM, true, 1000, false);
-    expect(opening).toEqual({ from: 1, to: PANEL_ZOOM, since: 1000 });
-    expect(zoomToward(opening, true, 1100, false)).toBe(opening);
-    const closing = zoomToward(opening, false, 1100, false);
-    expect(closing.from).toBeCloseTo(zoomAt(opening, 1100, false), 12);
-    expect(closing.to).toBe(1);
   });
 });

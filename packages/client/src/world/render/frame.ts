@@ -16,7 +16,6 @@ import type { LitGroup, RoomLight } from '../rooms.js';
 import type { Viewport } from '../viewport.js';
 import type { Fringe } from './aberration.js';
 import type { BakeStore } from './bakes.js';
-import { NO_ZOOM, type Zoom } from './camera.js';
 import { lightCensus, type LightCensus } from './census.js';
 import { frameCache } from './frameCache.js';
 import type { PixelGrid } from './grid.js';
@@ -169,8 +168,6 @@ export interface RenderKit {
   profile: PassProfile | null;
   /** the pixel grid the frame before was drawn on (grid.ts); null before the first */
   grid: PixelGrid | null;
-  /** the camera leaning in on a station whose panel is open (camera.ts), from frame to frame */
-  zoom: Zoom;
   /** the scratch canvases an alarm knocks the colours apart in (aberration.ts); null before */
   fringe: Fringe | null;
   /** the sights and bakes the light has worked out so far, for the walkthrough (census.ts) */
@@ -191,7 +188,6 @@ export function renderKit(overlay: CanvasRenderingContext2D): RenderKit {
     still: new Map(),
     profile: null,
     grid: null,
-    zoom: NO_ZOOM,
     fringe: null,
     census: lightCensus(),
   };

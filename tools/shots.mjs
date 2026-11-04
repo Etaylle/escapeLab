@@ -3970,7 +3970,6 @@ async function captureConsoles(operator, reader) {
     const idle = `idle at the open "${title}" panel`;
     await sampleFrames(watched.page, idle, () => sleep(SAMPLE_MS));
     panelSampled = true;
-    await capturePanelZoom(watched);
     await keySceneAtTwo(watched, idle, () => sleep(SAMPLE_MS), 'panel-dpr2.png');
   }
   if (kind === 'signal') {
@@ -9473,12 +9472,12 @@ function reportViews(pages) {
   console.log(`views              while a run is on: ${said.join(', ')}`);
 }
 
-// ── the graphics package's captures: figures, the air, the props, the camera, the density ──
+// ── the graphics package's captures: figures, the air, the props, the density ──
 //
 // What the world's picture shows of them, the traced pages hand back (`?trace=1`,
 // `window.__escapelab.graphics`, client world/render/graphicsProbe.ts): the walk cycle's phase
-// and the light the figure's shadow follows, the motes lit in the light cones, the camera
-// leaning in on an open panel, the hatch grinding open, the canvas's backing store.
+// and the light the figure's shadow follows, the motes lit in the light cones, the hatch
+// grinding open, the canvas's backing store.
 //
 // walk-cycle-a.png, walk-cycle-b.png  the host walking out along the longest open stretch from
 //   its tile, shot as its legs stand wide one way and then the other — the probe's phase in
@@ -9488,8 +9487,6 @@ function reportViews(pages) {
 // dust.png  in Blackout two seconds into the dark, after blackout.png — in a mission without
 //   an intro after the game screenshots — the host's lamp lighting motes in its cone (the
 //   breaker's smoke rising in Blackout); skipped where fewer than four show within 4 s
-// panel-zoom.png  the host's world behind its open panel at the panel window, the camera
-//   leaned in PANEL_ZOOM times — or the run fails
 // rack-leds.png  Blackout's Serverraum as the host comes to its terminal, the racks' LEDs
 //   blinking round it; the Systemcheck has no server room and skips it
 // hatch-dust.png  the audience's world round the hatch as it grinds open, dust falling off its
@@ -9504,8 +9501,6 @@ const STRIDE_WINDOWS = [
   ['walk-cycle-a.png', 0.18, 0.32],
   ['walk-cycle-b.png', 0.68, 0.82],
 ];
-/** How far the camera leans in on an open panel (client world/render/camera.ts PANEL_ZOOM). */
-const PANEL_ZOOM = 1.08;
 /** Whether dust.png was taken this run: a mission with an intro takes it at the blackout. */
 let dustShot = false;
 
@@ -9673,28 +9668,6 @@ async function captureShadow({ name, page }) {
   await shootAround(page, 'shadow-blob.png', { x: self.x, y: self.y }, FIGURE_SHOT);
   const light = { lit: 'under the ceiling lights', dark: 'in the dark' }[still.ground];
   console.log(`shadow-blob.png    ${name} standing ${light ?? 'unlit'}: its blob of shadow`);
-}
-
-/**
- * panel-zoom.png: `player`'s world behind its open panel, the camera leaned in PANEL_ZOOM times
- * — or the run fails.
- */
-async function capturePanelZoom({ name, page }) {
-  const leaned = await graphicsWhen(
-    page,
-    ({ zoom }) => Math.abs(zoom.to - PANEL_ZOOM) < 1e-9 && Math.abs(zoom.now - zoom.to) < 1e-9,
-    2000,
-  );
-  if (leaned === null) {
-    const now = await graphicsOf(page);
-    const at = now?.zoom.now;
-    console.log(`panel-zoom.png     !! ${name}'s camera stands at ${at} behind its panel`);
-    fail(`${name}'s camera did not lean in on the open panel`);
-    return;
-  }
-  await capture(page, 'panel-zoom.png');
-  const lean = leaned.zoom.now.toFixed(2);
-  console.log(`panel-zoom.png     ${name}'s camera leaned in ${lean}× behind the panel`);
 }
 
 /** rack-leds.png: Blackout's Serverraum round its terminal as `player` comes to it. */

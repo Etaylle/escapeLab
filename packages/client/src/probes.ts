@@ -141,7 +141,7 @@ export interface Probes {
   resetLightWork?: () => void;
   /**
    * what the world's picture shows of the graphics package's work: the walk cycle, the
-   * shadow's light, the panel zoom, the hatch, the particles, the backing store
+   * shadow's light, the hatch, the particles, the backing store
    * (world/render/graphicsProbe.ts)
    */
   readonly graphics?: GraphicsProbe;

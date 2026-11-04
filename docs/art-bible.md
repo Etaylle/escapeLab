@@ -234,11 +234,11 @@ Before, the same screens showed 22.2 × 10.5 tiles at 1440 × 820 and density 1 
 phone. A desktop's 1920 × 1080 window, its canvas some 1894 × 929, comes out by the rule at
 80.8 px a tile, 23.4 × 11.5 tiles.
 
-## Camera (render/camera.ts, render/aberration.ts, vignette.ts)
+## Camera (render/aberration.ts, vignette.ts)
 
-As a station's panel opens over the world the camera leans in 1.08 times over 200 ms, eased
-out, and back out as it shuts, from wherever it stood. The hatch grinds open with dust falling
-off its rim (Atmosphere).
+The world keeps its frame and scale while a station's panel lies over it; the panel fades in on
+its own (Interface). A zoom behind a panel that stands still reads as the map twitching. The
+hatch grinds open with dust falling off its rim (Atmosphere).
 An alarm knocks the picture's colours apart for 150 ms: the finished frame's red pushed one way
 and its blue the other, 4 CSS px at first and closing in as the knock fades — two offset passes
 of the finished frame, each cut down to one colour and added over the picture's two sides, a
@@ -246,11 +246,10 @@ twelfth of its width each, where a tube's convergence is worst and the eye looks
 middle, where the crew stands, stays sharp, and the alarm's red strobe hides the light the
 passes add. The red edge of the last minute breathes with the pressure: 1.5 s a breath as the
 minute begins, 0.95 s in its last 20 s, 0.8 s and deeper through the escape. Under reduced motion
-the zoom is a cut, there is no knock and the edge holds still. Cost: the zoom nothing once it
-has settled (the map baked once more at the new zoom as the panel opens and as it shuts); the
-knock 0.9 ms a frame for its 150 ms on the software Canvas path and nothing between alarms —
-kept to the sides for that: across the whole picture, its own colours faded, it cost 3.4 ms; the
-red edge nothing, its opacity the compositor's.
+there is no knock and the edge holds still. Cost: the knock 0.9 ms a frame for its 150 ms on the
+software Canvas path and nothing between alarms — kept to the sides for that: across the whole
+picture, its own colours faded, it cost 3.4 ms; the red edge nothing, its opacity the
+compositor's.
 
 ## Crispness (render/backing.ts)
 
@@ -276,8 +275,8 @@ the lobby, which draw no world, stayed pixel for pixel the same (Cost).
 A panel over the world — a station's device, a source's pages, a note — grows from 0.98 to its
 size as it fades in, over 150 ms; a sheet put down slides out as before, and a station's device
 goes as it came, shrinking back to 0.98 as it fades out over the same 150 ms, the dim behind it
-lifting, the camera leaning back out behind it — the game screen keeps it up that long
-(screens/Game.tsx, PutDown.tsx `useLeaving`), inert, its keys and presses reaching nothing. A
+lifting — the game screen keeps it up that long (screens/Game.tsx, PutDown.tsx `useLeaving`),
+inert, its keys and presses reaching nothing. The world behind it keeps its frame (Camera). A
 plain button gives a pixel as it is pressed and darkens a little; a device's keys, levers and
 wires keep their own press. Keyboard focus shows as a 2 px teal ring, never for a click; hover
 affordances belong to a mouse. The type keeps its hierarchy: titles in the system sans, bold
@@ -527,7 +526,7 @@ What the graphics and gameplay packages left for later, one line each:
   where that is more than 40 ms (Cost, „What the gate allows"). The escape's main thread could
   still come down further: the light and dark passes, a frame at half rate (audit addenda).
 - **Edits outside the graphics package's files** (L-graphics): the hooks in GameWorld.tsx,
-  assemble.ts and sim.ts — the zoom, the station, `blackoutAt`, the partner's cadence — and
+  assemble.ts and sim.ts — `blackoutAt`, the partner's cadence — and
   decor.ts were changed outside the files the package owned, for whoever works there next to
   look over.
 - **Kept on purpose** (L-gameplay): on a controller, A presses Space only on a control made to
