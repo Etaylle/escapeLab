@@ -215,11 +215,3 @@ export function useNowUntil(at: number | null): number {
   }, [at]);
   return serverNow();
 }
-
-/** The earlier of two moments, either of which may be none. */
-export function earliest(a: number | null, b: number | null): number | null {
-  if (a === null) {
-    return b;
-  }
-  return b === null ? a : Math.min(a, b);
-}
