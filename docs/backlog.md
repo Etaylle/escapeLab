@@ -79,7 +79,7 @@ die Entscheidung.
   Dichte 2 (`camera-*.png`, `*-dpr2.png`); Tabelle in `docs/art-bible.md` (Framing),
   Vorher/Nachher im Audit-Addendum.
 
-### N-3 Stimme am Pult — Status: im Merge (N-intercom, 2026-11-04) · Größe: S
+### N-3 Stimme am Pult — Status: erledigt (N-intercom, Merge 2026-11-04; Signalkette A↔B −25,6 → 0 dB) · Größe: S
 - Die Sprachlautstärke fällt zwischen den Pulten der Signalkette auf 5 % (−25,6 dB), genau wo
   geredet werden muss. Vorschlag: zwischen den Pulten und der Quelle der aktiven Station volle
   Lautstärke per Funk, überall sonst Abstand.
