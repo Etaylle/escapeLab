@@ -122,7 +122,7 @@ die Entscheidung.
   Glöckchen dazu ≤ 1 je 1,5 s; nie zweimal je Objekt; Deko nie.
 - Beweis: Captures beim Betreten des Archivs, Glöckchen-Zählung über die Audio-Probe.
 
-### T-7 Anwesenheit an Stationen nur ohne Wand — Status: bereit · Größe: S
+### T-7 Anwesenheit an Stationen nur ohne Wand — Status: im PR (N-small) · Größe: S
 - Seit N-discovery zählen Quellen, Notizen und Schild nur Finder; an Stationen zählt Anwesenheit
   weiterhin nach Abstand allein (1,6 Kacheln, Wände ignoriert). Angleichen: Anwesenheit am Pult
   nur mit Sichtlinie oder nach eigenem Fund; Test wie der Säulen-Test der Quellen.

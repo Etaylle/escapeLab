@@ -3,6 +3,8 @@ import { DronePatrol } from './drones.js';
 import {
   applyAction,
   armedStations,
+  canSee,
+  consoleFind,
   dailySeed,
   emergenciesDue,
   findKey,
@@ -667,16 +669,45 @@ export class Room {
     }
   }
 
-  /** Whether the armed station — any of its consoles — lies within this player's reach. */
+  /**
+   * Whether the armed station — any of its consoles — lies within this player's reach, and the
+   * player faces it (`facesConsole`): through a wall or round a pillar there is nothing to work.
+   */
   private stationInReach(playerId: string): boolean {
     const pos = this.positions.get(playerId);
-    return (
-      pos !== undefined &&
-      armedStations(this.state.mission.map, this.state).some(
-        (station) =>
-          Math.hypot(pos.x - (station.x + 0.5), pos.y - (station.y + 0.5)) <= INTERACT_RADIUS,
-      )
+    const { state } = this;
+    const current = state.mission.puzzles[state.currentPuzzleIndex]?.id;
+    if (pos === undefined || !lightsAreOut(state) || current === undefined) {
+      return false;
+    }
+    const shut = shutDoors(state.mission.map, state);
+    return state.mission.map.stations.some(
+      (spot) =>
+        spot.puzzleId === current &&
+        Math.hypot(pos.x - (spot.x + 0.5), pos.y - (spot.y + 0.5)) <= INTERACT_RADIUS &&
+        this.facesConsole(playerId, spot, shut, {}),
     );
+  }
+
+  /**
+   * Whether `playerId` faces the console at `spot`: they see it from where they stand — the
+   * line of sight finds go by (core discovery.ts), to the middle of its tile — or they have
+   * found it, `fresh` from this very look round included. Behind a wall or round a pillar, a
+   * console the player has not found has nobody standing at it.
+   */
+  private facesConsole(
+    playerId: string,
+    spot: MapDef['stations'][number],
+    shut: ReadonlySet<string>,
+    fresh: Readonly<Record<string, FindKey[]>>,
+  ): boolean {
+    const key = findKey(consoleFind(spot));
+    if (foundBy(this.state, playerId, key) || fresh[playerId]?.includes(key) === true) {
+      return true;
+    }
+    const pos = this.positions.get(playerId);
+    const middle = { x: spot.x + 0.5, y: spot.y + 0.5 };
+    return pos !== undefined && canSee(this.state.mission.map, pos, middle, shut);
   }
 
   /** Place every avatar on the spawn it drew when a mission starts. */
@@ -935,7 +966,8 @@ export class Room {
   /**
    * Who stands at each station spot, source and note, who saw the sign, who is on the hatch. At
    * a source, a note or the sign only a player who has found it — `fresh` from this very look
-   * round included — counts: the distance alone would have them read, open or copy the
+   * round included — counts, and at a console only one who sees it or has found it
+   * (`facesConsole`): the distance alone would have them read, open, work or copy the
    * Laborkennung round a pillar or through a wall.
    */
   private whereEverybodyStands(
@@ -945,9 +977,17 @@ export class Room {
     const { presence, places } = this.state;
     const finders = (key: FindKey) => (playerId: string) =>
       foundBy(this.state, playerId, key) || fresh[playerId]?.includes(key) === true;
-    const stations = this.atEach(
-      map.stations.map((s) => ({ id: stationKey(s), x: s.x, y: s.y })),
-      presence.stations,
+    const shut = shutDoors(map, this.state);
+    const spots = new Map(map.stations.map((s) => [stationKey(s), s]));
+    const stations = onlyFinders(
+      this.atEach(
+        map.stations.map((s) => ({ id: stationKey(s), x: s.x, y: s.y })),
+        presence.stations,
+      ),
+      (id) => (playerId) => {
+        const spot = spots.get(id);
+        return spot !== undefined && this.facesConsole(playerId, spot, shut, fresh);
+      },
     );
     const sources = map.manuals.flatMap((m) => {
       const at = places[m.id];

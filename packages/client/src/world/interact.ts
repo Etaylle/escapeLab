@@ -1,7 +1,16 @@
-import type { KnownPart, KnownSource, MapView, NoteHere, SourceHere } from '@escapelab/core';
+import {
+  canSee,
+  type KnownPart,
+  type KnownSource,
+  type KnownStation,
+  type MapView,
+  type NoteHere,
+  type SourceHere,
+} from '@escapelab/core';
 import { inputDevice } from '../input/device.js';
 import { glyph } from '../input/glyphs.js';
 import { isArmed, known } from './known.js';
+import { doorsShut } from './light.js';
 import { noteMount } from './notes.js';
 
 /** Prompt and client-side gate for stations and manual objects; the server counts 1.6. */
@@ -131,10 +140,25 @@ function noteAction(
 }
 
 /**
+ * Whether the player at `self` faces the console of `station`, as the server counts them at it
+ * (room.ts `facesConsole`): in sight of its tile's middle, walls and shut doors hiding it — the
+ * sight finds go by — or found by this player. Round a pillar there is nothing to work.
+ */
+function facesConsole(
+  map: MapView,
+  self: { x: number; y: number },
+  station: KnownStation,
+): boolean {
+  const middle = { x: station.x + 0.5, y: station.y + 0.5 };
+  return station.found || canSee(map, self, middle, doorsShut(map));
+}
+
+/**
  * What pressing E would do where the player stands. A carried part goes in
  * first at its drop-off; otherwise the nearest of a loose part, the armed
  * station, a manual object and a note the server already counts this player
  * at — so the prompt names what E does, and never promises what it cannot do. A
+ * console counts only in sight or once this player has found it (`facesConsole`). A
  * station with two consoles is armed at both, and E works the nearer. Full
  * hands work a station like empty ones, open (`stationOpen`) or shut; only
  * with free hands does a loose part at the player's feet come before
@@ -173,7 +197,7 @@ export function contextAction(
     );
   const stations =
     stationOpen || mine !== undefined || loose === undefined
-      ? map.stations.filter(isArmed)
+      ? map.stations.filter(isArmed).filter((station) => facesConsole(map, self, station))
       : [];
   const sources = map.manuals.filter(known);
   const candidates: { action: ContextAction; d: number }[] = sources.flatMap((manual) => {

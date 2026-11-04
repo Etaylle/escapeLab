@@ -80,7 +80,11 @@ lean).
 
 A player finds a source, note, part, the sign or an armed console within 2 tiles in sight, or
 after 250 ms in their lamp's cone (0.5 rad, 7.5 tiles), lit room or not; a part within 0.9 always.
-The server decides, per player. While the power is on (the opening, the way out) every view shows
+The server decides, per player. The same sight says who stands where: at a source, a note or
+the sign only a player who has found it counts, at a console only one who sees the middle of
+its tile — walls and shut doors in between hide it — or has found it. Through a wall or round
+a pillar there is no prompt, no „Bedienen" and no device (server `room.ts` `facesConsole`,
+client `world/interact.ts`). While the power is on (the opening, the way out) every view shows
 the whole lab; in the dark it holds a thing nobody has found only in sight: what and where. The
 armed station is whole on every map. The sign stays on every map and the minimap as a landmark,
 but glows through the dark only once the crew has found it.

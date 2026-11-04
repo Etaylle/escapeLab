@@ -237,6 +237,45 @@ describe('contextAction — a station with two consoles', () => {
   });
 });
 
+describe('contextAction — a console round a pillar', () => {
+  /**
+   * The armed station at (5,2) with a pillar west of it at (4,2), or a door there.
+   *
+   *   0123456789
+   * 0 ##########
+   * 1 #........#
+   * 2 #...#S...#   pillar or door (4,2); station (5,2)
+   * 3 #........#
+   * 4 ##########
+   */
+  const PILLARED = ['##########', '#........#', '#...#....#', '#........#', '##########'];
+  const OPEN_ROW = ['##########', '#........#', '#........#', '#........#', '##########'];
+  const armed = { ...station, x: 5, y: 2 };
+  /** South of the pillar, 1.31 tiles from the console's middle, the pillar's corner between. */
+  const ROUND = { x: 4.5, y: 3.35 };
+  /** A step east of that, right under the console, in plain sight of it. */
+  const UNDER = { x: 5.2, y: 3.35 };
+
+  it('offers no console the pillar hides from this player, however close', () => {
+    const map = mapWith({ tiles: PILLARED, stations: [armed] });
+    expect(contextAction(map, ROUND, YOU, [], SHUT, null)).toBeNull();
+    expect(contextAction(map, UNDER, YOU, [], SHUT, null)?.kind).toBe('operate');
+  });
+
+  it('offers it round the pillar once this player has found it', () => {
+    const map = mapWith({ tiles: PILLARED, stations: [{ ...armed, found: true }] });
+    expect(contextAction(map, ROUND, YOU, [], SHUT, null)?.kind).toBe('operate');
+  });
+
+  it('lets a shut door hide it as a wall does, and an open one show it', () => {
+    const door = { id: 'tuer', x: 4, y: 2, open: false };
+    const shut = mapWith({ tiles: OPEN_ROW, doors: [door], stations: [armed] });
+    expect(contextAction(shut, ROUND, YOU, [], SHUT, null)).toBeNull();
+    const open = mapWith({ tiles: OPEN_ROW, doors: [{ ...door, open: true }], stations: [armed] });
+    expect(contextAction(open, ROUND, YOU, [], SHUT, null)?.kind).toBe('operate');
+  });
+});
+
 describe('contextAction — lockers and cabinets', () => {
   const key = part({
     id: 'key',
