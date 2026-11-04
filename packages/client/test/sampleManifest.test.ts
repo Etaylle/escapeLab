@@ -35,20 +35,7 @@ const REMEDY = 'render it on a Mac: pnpm --filter client sfx (docs/sound.md)';
  *     --candidates 3 --only step-lino-1,step-lino-2,step-lino-3,step-steel-1,step-steel-2,\
  *     step-steel-3,alarm-sting,door-close-1,door-close-2,drone-pass,hatch-open-done,ui-tick
  */
-const AWAITING_RENDER: readonly string[] = [
-  'step-lino-1',
-  'step-lino-2',
-  'step-lino-3',
-  'step-steel-1',
-  'step-steel-2',
-  'step-steel-3',
-  'alarm-sting',
-  'door-close-1',
-  'door-close-2',
-  'drone-pass',
-  'hatch-open-done',
-  'ui-tick',
-];
+const AWAITING_RENDER: readonly string[] = [];
 const awaiting = new Set(AWAITING_RENDER);
 
 const catalog = readCatalog();
