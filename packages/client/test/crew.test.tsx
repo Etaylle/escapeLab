@@ -793,7 +793,7 @@ describe('a press waiting at the sync station', () => {
     vi.useRealTimers();
   });
 
-  it('reads „zieht" at the main switch, „drückt" at a button, for the one whose press waits', () => {
+  it('reads „zieht" at the main switch, „drückt" at a button, for whose press waits', () => {
     expect(pressingWord(pulled, 'p1', PULLED_AT + 1200)).toBe('zieht');
     expect(pressingWord(pulled, 'p2', PULLED_AT + 1200)).toBeNull();
     const button = mainSwitch([{ by: 'p2', at: PULLED_AT }], { style: 'button' });

@@ -160,7 +160,11 @@ export function tickDue(
  * stand. Null once the press has run out at `now` (server time), once every press is in, and
  * at any other station.
  */
-export function pressingWord(view: PuzzleView | null, playerId: string, now: number): string | null {
+export function pressingWord(
+  view: PuzzleView | null,
+  playerId: string,
+  now: number,
+): string | null {
   if (view?.kind !== 'button-sync' || view.pressedCount >= view.requiredCount) {
     return null;
   }

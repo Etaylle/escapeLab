@@ -78,8 +78,10 @@ function page(puzzle: PuzzleView, you: string | null): string {
   );
 }
 
-const COUNT =
-  /<div class="sync-count" role="timer"><span class="sync-count-by">([^<]*)<\/span><span class="sync-count-digit">(\d)<\/span><\/div>/;
+const COUNT = new RegExp(
+  '<div class="sync-count" role="timer"><span class="sync-count-by">([^<]*)</span>' +
+    '<span class="sync-count-digit">(\\d)</span></div>',
+);
 
 /** The count a page shows — its line and its digit — or null where it shows none. */
 function countShown(html: string): { line: string; digit: string } | null {
@@ -112,7 +114,7 @@ afterEach(() => {
 });
 
 describe('the count both see', () => {
-  it('counts the window from its first press: 3, 2, 1 a second each, then 0 for the half left', () => {
+  it('counts from the window’s first press: 3, 2, 1 a second each, 0 for the half left', () => {
     expect(countOf(station('p2', [PULLED]))).toEqual(COUNTED);
     const shown = [0, 999, 1000, 1999, 2000, 2999, 3000, 3499, 3500].map((ms) =>
       countDigit(COUNTED, T0 + ms),
@@ -241,13 +243,16 @@ describe('the count under reduced motion', () => {
   const DEVICES = readFileSync(new URL('../src/styles/devices.css', import.meta.url), 'utf8');
 
   it('stops the ring draining: it stands at the share left, a step with each digit', () => {
-    expect(UX2).toMatch(
-      /:where\(\[data-motion='reduce'\]\) \{\s*\.lever-ring-left \{\s*animation: none;\s*stroke-dashoffset: calc\(100 - 100 \* var\(--ring-left\)\);/,
+    const still = new RegExp(
+      ":where\\(\\[data-motion='reduce'\\]\\) \\{\\s*\\.lever-ring-left \\{\\s*" +
+        'animation: none;\\s*stroke-dashoffset: calc\\(100 - 100 \\* var\\(--ring-left\\)\\);',
     );
+    expect(UX2).toMatch(still);
   });
 
   it('moves nothing on the count itself, and changes its digits all the same', () => {
-    const rules = DEVICES.slice(DEVICES.indexOf('.sync-stage {'), DEVICES.indexOf('/* ══ Sicherungskasten'));
+    const from = DEVICES.indexOf('.sync-stage {');
+    const rules = DEVICES.slice(from, DEVICES.indexOf('/* ══ Sicherungskasten', from));
     expect(rules).toContain('.sync-count-digit {');
     expect(rules).not.toMatch(/animation|transition/);
     changeSettings({ ...DEFAULT_SETTINGS, motion: 'on' });

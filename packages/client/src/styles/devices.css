@@ -980,19 +980,22 @@ button.feel-reject {
  * begins. It changes once a second and moves nothing, under reduced motion too.
  */
 .sync-stage {
+  container: sync-stage / inline-size;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  column-gap: 18px;
+  gap: 10px 18px;
   width: 100%;
 }
 
 .sync-stage > :first-child {
   grid-column: 2;
+  grid-row: 1;
 }
 
 .sync-count {
   grid-column: 3;
+  grid-row: 1;
   justify-self: start;
   display: flex;
   flex-direction: column;
@@ -1014,7 +1017,7 @@ button.feel-reject {
   font-family: var(--mono);
   font-size: calc(var(--type-label) * var(--text-scale));
   text-align: center;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .sync-count-digit {
@@ -1025,6 +1028,35 @@ button.feel-reject {
   font-variant-numeric: tabular-nums;
   line-height: 1;
   text-shadow: 0 0 10px var(--amber-glow);
+}
+
+/*
+ * A stage too narrow for a column beside three levers and the count — a phone
+ * held upright — has the count under the control instead, on one line, the
+ * control where it was.
+ */
+@container sync-stage (max-width: 560px) {
+  .sync-stage > :first-child {
+    grid-column: 1 / -1;
+    justify-self: center;
+  }
+
+  .sync-count {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: center;
+    flex-direction: row;
+    gap: 10px;
+    padding: 4px 12px;
+  }
+
+  .sync-count-by {
+    max-width: none;
+  }
+
+  .sync-count-digit {
+    font-size: calc(var(--type-readout) * 1.6 * var(--text-scale));
+  }
 }
 
 /* ══ Sicherungskasten + Prüfpult: one console cuts, the other measures ═════
