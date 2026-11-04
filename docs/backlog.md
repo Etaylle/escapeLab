@@ -152,11 +152,10 @@ die Entscheidung.
 
 ## Nur lokal
 
-### L-1 Aufnahmen rendern — Status: nur lokal (12 von 14 erledigt 2026-11-04, ec0ef9c)
-- Offen: `step-steel-3` kam dreimal fast stumm (Prompt geschärft, Nachrender mit 5 Takes) und
-  der neue Eintrag `danger-tick` (Geigerzähler-Klick) für die Drohnenwarnung statt des Ping-Tons
-  (`world/danger.ts` danach umstellen). Befehl in `packages/client`:
-  `node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts --candidates 5 --only step-steel-3,danger-tick`
+### L-1 Aufnahmen rendern — Status: erledigt (2026-11-04, ec0ef9c + 031cb7a)
+- Alle 14 Aufnahmen gerendert, `danger-tick` (Geigerzähler-Klick) ersetzt den Ping-Ton der
+  Drohnenwarnung. Weitere Aufnahmen bei Bedarf über `/sounds` ankreuzen; der Befehl kommt von
+  der Seite.
 
 ### L-2 Zweiter Playtest — Status: nur lokal
 - Dieselbe Person wie beim ersten; Telemetrie `packages/server/data/runs.jsonl` auswerten
