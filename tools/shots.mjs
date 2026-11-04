@@ -260,6 +260,22 @@
  * page shows them. The last line counts
  * the captures taken, skipped and failed; the exit code is 1 when any failed.
  *
+ * Camera: the world's frame is fixed in CSS pixels (client world/viewport.ts),
+ * so a window shows the same tiles at every density. After the game
+ * screenshots camera-1440.png, camera-1280.png and camera-phone.png show the
+ * host's window at 1440×820 and 1280×720 and the guest's phone sideways, and
+ * camera-dpr2.png the host's 1440×820 drawn at density 2, each with a line
+ * giving its CSS px a tile, its tiles across × down and the band below the
+ * objective bar. In Blackout its key scenes — the lit lab before the
+ * blackout, the first station's open panel, the escape — are looked at on the
+ * host's page drawn at density 2 as well, right after their own window: a
+ * frame window there for information alone, and a shot (cold-open-dpr2.png,
+ * panel-dpr2.png, escape-dpr2.png). The run fails where a window's tiles
+ * across or down at density 2 lie more than 0.2 from density 1's. The page is
+ * drawn at 2 through CDP, its window's size kept: Playwright fixes a context's
+ * density once it is made, and a player of a context of its own would change
+ * the crew the pinned draw is played by.
+ *
  * Light: every world's light takes the WebGL light layer or the Canvas pass
  * (client world/gl/path.ts): a software renderer — headless Chromium's
  * SwiftShader, as on CI — keeps the Canvas pass. Before the frame sample
@@ -385,6 +401,7 @@
  * the audience's card has to show its crew celebrating too. A mission the
  * walkthrough does not take that far skips what it leaves out.
  */
+import { Buffer } from 'node:buffer';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
@@ -1956,6 +1973,8 @@ async function captureColdOpen(host) {
     `cold-open.png      ${host.name} @ ${COLD_OPEN.width}x${COLD_OPEN.height}: "${status}", ` +
       `"${room}"; ${rooms}; sources found: ${found}`,
   );
+  const lit = 'in the lit lab, the power still on';
+  await keySceneAtTwo(host, lit, () => pace(host, SAMPLE_MS), 'cold-open-dpr2.png');
   await host.page.setViewportSize(SIZES[0]);
 }
 
@@ -3711,9 +3730,11 @@ async function captureConsoles(operator, reader) {
   const watched = crew.find((player) => player.traced);
   if (watched !== undefined) {
     await sleep(300); // past the resize
-    await sampleFrames(watched.page, `idle at the open "${title}" panel`, () => sleep(SAMPLE_MS));
+    const idle = `idle at the open "${title}" panel`;
+    await sampleFrames(watched.page, idle, () => sleep(SAMPLE_MS));
     panelSampled = true;
     await capturePanelZoom(watched);
+    await keySceneAtTwo(watched, idle, () => sleep(SAMPLE_MS), 'panel-dpr2.png');
   }
   if (kind === 'signal') {
     await solveSignal(crew, title);
@@ -7683,7 +7704,9 @@ async function captureEscape(host, guest) {
   if (!(await standOn(host, beside))) {
     throw new Error(`${host.name} found no way to ${beside.x},${beside.y} beside the hatch`);
   }
-  await sampleFrames(host.page, 'in the escape, the siren on', () => pace(host, SAMPLE_MS));
+  const siren = 'in the escape, the siren on';
+  await sampleFrames(host.page, siren, () => pace(host, SAMPLE_MS));
+  await keySceneAtTwo(host, siren, () => pace(host, SAMPLE_MS), 'escape-dpr2.png');
   await escapeMusic(host);
   await audioKept([host, guest], 'in the escape');
   const guestId = guest.seen.view.you.id;
@@ -8970,6 +8993,7 @@ async function run() {
   await overflow(guest, `game @ ${turned.width}x${turned.height}, Ben's phone sideways`);
   await capturePadLeft(guest);
   steady.push({ name: 'Ben sideways', page: guest, start: await layoutOf(guest), turn: turned });
+  await captureCamera(anna, ben);
   await guest.setViewportSize(SIZES[2]);
   await sleep(400);
 
@@ -9437,11 +9461,11 @@ function watchHatchDust(watcher, seen) {
 /** How long a page at twice the density has to size its canvas with its first frames, ms. */
 const DPR2_MS = 8000;
 
-/** Whether a canvas's backing store is its box's CSS pixels times two, rounded. */
-const twiceItsBox = (backing) =>
+/** Whether a canvas's backing store is its box's CSS pixels times `density`, rounded. */
+const timesItsBox = (backing, density) =>
   backing.cssWidth > 0 &&
-  backing.width === Math.round(backing.cssWidth * 2) &&
-  backing.height === Math.round(backing.cssHeight * 2);
+  backing.width === Math.round(backing.cssWidth * density) &&
+  backing.height === Math.round(backing.cssHeight * density);
 
 /**
  * dpr2.png: a second audience page at twice the density, joined to room `code`; its canvas's
@@ -9456,7 +9480,7 @@ async function captureDpr2(code) {
     await page.getByLabel('Raumcode').fill(code);
     await clickText(page, 'Mit Code zuschauen');
     await page.locator('.spectate').waitFor({ timeout: 10_000 });
-    const sized = await graphicsWhen(page, ({ backing }) => twiceItsBox(backing), DPR2_MS);
+    const sized = await graphicsWhen(page, ({ backing }) => timesItsBox(backing, 2), DPR2_MS);
     const backing = (sized ?? (await graphicsOf(page)))?.backing ?? null;
     await sleep(800);
     await capture(page, 'dpr2.png');
@@ -9474,6 +9498,209 @@ async function captureDpr2(code) {
   } finally {
     await context.close();
   }
+}
+
+// ── the camera package's captures: one frame in CSS pixels, at every density ──
+//
+// The world's frame is fixed in CSS pixels (client world/viewport.ts `tileCss`): 11.5 tiles of
+// height on a canvas 600 px tall or more, 9 below, the band below the objective bar holding a
+// drone's reach twice with keys and 1.5 times by touch, a tile 28 to 96 px. A player's page
+// logs its frame — CSS px a tile, the tiles across and down, the band below the bar as it
+// stands now — off its traced camera.
+//
+// camera-1440.png, camera-1280.png  the host's window at 1440×820 and at 1280×720
+// camera-dpr2.png  the host's window at 1440×820 drawn at density 2, shot at its own pixels:
+//   the run fails where its tiles across or down lie more than SAME_FRAME_TILES from density 1's
+// camera-phone.png  the guest's phone held sideways
+// cold-open-dpr2.png, panel-dpr2.png, escape-dpr2.png  in Blackout, its key scenes — the lab
+//   lit before the blackout, the first station's open panel, the escape — on the host's page
+//   drawn at density 2 as well, after their own window: a window of its frames there for
+//   information alone, and its frame held against density 1's as camera-dpr2.png's is
+//
+// A page is drawn at density 2 through CDP for the look, its window's size kept, and set back to
+// 1 the same way: Playwright fixes a context's density once it is made, and a player in a context
+// of its own would change the crew the pinned draw is played by. Playwright's own screenshot
+// stays at the context's density, so the shots at 2 come through CDP as well.
+
+/** How far the frame at density 2 may lie from density 1's, tiles across or down. */
+const SAME_FRAME_TILES = 0.2;
+/** How long the world gets at a new density, its canvas backed anew, to bake its sprites, ms. */
+const DENSITY_SETTLE_MS = 600;
+/** Each page's CDP session that sets its density (`setDensity`), kept for the run. */
+const densitySessions = new WeakMap();
+
+/**
+ * What the camera of `page`, a traced player's, frames now: the canvas's box, CSS pixels, the
+ * density it is drawn at, CSS px a tile, the tiles across and down, and how many tiles of the
+ * band below the objective bar show, with whether a line is on the air; null without a world.
+ */
+function cameraFrame(page) {
+  return page.evaluate(() => {
+    const canvas = document.querySelector('canvas.world-canvas');
+    const camera = globalThis.__escapelab?.camera;
+    const bar = document.querySelector('.stage-top');
+    if (canvas === null || camera === undefined || canvas.clientWidth === 0) {
+      return null;
+    }
+    const density = canvas.width / canvas.clientWidth;
+    const css = camera.scale / density;
+    const reach = bar === null ? 0 : bar.offsetHeight;
+    return {
+      box: `${canvas.clientWidth}×${canvas.clientHeight}`,
+      density,
+      css,
+      across: canvas.width / camera.scale,
+      down: canvas.height / camera.scale,
+      band: (canvas.clientHeight - reach) / css,
+      line: bar?.querySelector('.radio-banner') != null,
+    };
+  });
+}
+
+/** `frame` (`cameraFrame`) as the log gives it. */
+function frameText(frame) {
+  const air = frame.line ? ', a line on the air' : '';
+  return (
+    `${frame.css.toFixed(1)} CSS px a tile at density ${frame.density.toFixed(2)}, ` +
+    `${frame.across.toFixed(1)} × ${frame.down.toFixed(1)} tiles, ` +
+    `${frame.band.toFixed(1)} below the objective bar${air}`
+  );
+}
+
+/** Logs the frame `page` shows under `shot`, `who` and its window named; the frame, or null. */
+async function logFrame(page, who, shot) {
+  const frame = await cameraFrame(page);
+  if (frame === null) {
+    console.log(`${shot.padEnd(18)} !! ${who}: no world on the page`);
+    fail(`${shot}: ${who}'s page shows no world`);
+    return null;
+  }
+  console.log(`${shot.padEnd(18)} ${who}, canvas ${frame.box}: ${frameText(frame)}`);
+  return frame;
+}
+
+/**
+ * Holds `dense`, the frame of `who`'s window at density 2, against `plain`, the same window's at
+ * 1, as the line `camera`: the run fails where their tiles across or down lie more than
+ * SAME_FRAME_TILES apart.
+ */
+function sameFrame(plain, dense, who) {
+  const apart = Math.max(
+    Math.abs(dense.across - plain.across),
+    Math.abs(dense.down - plain.down),
+  );
+  const tiles = (frame) => `${frame.across.toFixed(1)} × ${frame.down.toFixed(1)}`;
+  const same = apart <= SAME_FRAME_TILES;
+  console.log(
+    `camera             ${who}: ${tiles(dense)} tiles at density 2, ${tiles(plain)} at 1` +
+      (same ? ', the same frame' : ` — !! ${apart.toFixed(2)} tiles apart`),
+  );
+  if (!same) {
+    fail(`${who}: the frame at density 2 lies ${apart.toFixed(2)} tiles from density 1's`);
+  }
+}
+
+/** Draws `page` at `density` through its CDP session (`densitySessions`); the session. */
+async function setDensity(page, density) {
+  let cdp = densitySessions.get(page);
+  if (cdp === undefined) {
+    cdp = await page.context().newCDPSession(page);
+    densitySessions.set(page, cdp);
+  }
+  const { width, height } = page.viewportSize();
+  await cdp.send('Emulation.setDeviceMetricsOverride', {
+    width,
+    height,
+    deviceScaleFactor: density,
+    mobile: false,
+    screenWidth: width,
+    screenHeight: height,
+  });
+  return cdp;
+}
+
+/**
+ * Runs `look` with `page` drawn at density 2, once its world has backed the canvas at twice its
+ * box and baked anew, handing it the page's CDP session for shots at its own pixels; then draws
+ * it at 1 again and waits for the canvas to follow. Fails where the canvas comes to neither
+ * within DPR2_MS.
+ */
+async function atDensityTwo(page, look) {
+  const cdp = await setDensity(page, 2);
+  try {
+    if ((await graphicsWhen(page, ({ backing }) => timesItsBox(backing, 2), DPR2_MS)) === null) {
+      fail(`${named.get(page)}: the canvas did not come to twice its box at density 2`);
+      return;
+    }
+    await sleep(DENSITY_SETTLE_MS);
+    await look(cdp);
+  } finally {
+    await setDensity(page, 1);
+    if ((await graphicsWhen(page, ({ backing }) => timesItsBox(backing, 1), DPR2_MS)) === null) {
+      fail(`${named.get(page)}: the canvas did not come back to its box at density 1`);
+    }
+  }
+}
+
+/** Saves what the page of `cdp` shows, at its own device pixels, as `name`, and counts it. */
+async function captureDense(cdp, name) {
+  const { data } = await cdp.send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync(join(OUT, name), Buffer.from(data, 'base64'));
+  tally.taken += 1;
+}
+
+/**
+ * camera-1440.png, camera-dpr2.png, camera-1280.png and camera-phone.png: the frame each screen
+ * gets at one moment of the run, each logged — the host's window at 1440×820, the same drawn at
+ * density 2 and held against it (`sameFrame`), the host's window at 1280×720, and the guest's
+ * phone as it is held now, sideways. The host's window is left at 1440×820.
+ */
+async function captureCamera(host, guest) {
+  await host.page.setViewportSize(SIZES[0]);
+  await sleep(700);
+  const laptop = `${host.name} @ ${SIZES[0].width}×${SIZES[0].height}`;
+  await capture(host.page, 'camera-1440.png');
+  const plain = await logFrame(host.page, laptop, 'camera-1440.png');
+  await atDensityTwo(host.page, async (cdp) => {
+    await captureDense(cdp, 'camera-dpr2.png');
+    const dense = await logFrame(host.page, laptop, 'camera-dpr2.png');
+    if (plain !== null && dense !== null) {
+      sameFrame(plain, dense, laptop);
+    }
+  });
+  await host.page.setViewportSize({ width: 1280, height: 720 });
+  await sleep(700);
+  await capture(host.page, 'camera-1280.png');
+  await logFrame(host.page, `${host.name} @ 1280×720`, 'camera-1280.png');
+  await host.page.setViewportSize(SIZES[0]);
+  await capture(guest.page, 'camera-phone.png');
+  const { width, height } = guest.page.viewportSize();
+  await logFrame(guest.page, `${guest.name}'s phone @ ${width}×${height}`, 'camera-phone.png');
+}
+
+/**
+ * One of Blackout's key scenes on `player`'s page at density 2 as well, right after its own
+ * window (`when` naming it): its frame held against density 1's just before (`sameFrame`), a
+ * window of its frames for information alone with `quiet` filling it, and `shot` at its own
+ * pixels. Another mission looks at none of its scenes at 2.
+ */
+async function keySceneAtTwo(player, when, quiet, shot) {
+  if (MISSION.toLowerCase() !== 'blackout') {
+    return;
+  }
+  const plain = await cameraFrame(player.page);
+  await atDensityTwo(player.page, async (cdp) => {
+    const dense = await cameraFrame(player.page);
+    if (plain === null || dense === null) {
+      console.log(`${shot.padEnd(18)} !! ${player.name}: no world on the page ${when}`);
+      fail(`${shot}: ${player.name}'s page shows no world ${when}`);
+      return;
+    }
+    sameFrame(plain, dense, `${player.name} ${when}`);
+    await sampleFrames(player.page, `${when}, at density 2`, quiet, { gating: false });
+    await captureDense(cdp, shot);
+    console.log(`${shot.padEnd(18)} ${player.name} ${when}: ${frameText(dense)}`);
+  });
 }
 
 /**
