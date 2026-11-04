@@ -30,6 +30,7 @@ import {
   backupsOf,
   consoleOf,
   doorOpen,
+  intercomOf,
   lightsAreOut,
   operatorsOf,
   platePressed,
@@ -107,6 +108,13 @@ export interface PlayerView {
   edgework: Edgework | null;
   /** where this player stands right now */
   presence: PlayerPresence;
+  /**
+   * who of the crew is on the armed station's intercom with this player, by player id, this
+   * player among them: everyone at one of its consoles or at an open manual object that covers
+   * it (map.ts `intercomOf`), whose voices reach each other in full. Left out while this player
+   * stands at none of those places
+   */
+  intercom?: string[];
   /** the manual objects this player stands at, open or still closed: what can be done there */
   sourcesHere: SourceHere[];
   /** the open manual objects this player stands at, with the rules of every puzzle they cover */
@@ -1116,6 +1124,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     credits: { ...state.credits },
     edgework: presence.signSeen ? state.edgework : null,
     presence,
+    ...intercomFor(state, playerId),
     sourcesHere: sourcesHereFor(state, playerId),
     manualsHere: manualsHereFor(state, playerId),
     noteHere: noteHereFor(state, playerId),
@@ -1127,6 +1136,15 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     ...(state.mission.next === undefined ? {} : { nextMissionId: state.mission.next }),
     ...introOf(state),
   };
+}
+
+/**
+ * The armed station's intercom as `playerId` is on it: who of the crew stands at its places,
+ * this player among them (map.ts `intercomOf`); left out while this player stands at none.
+ */
+function intercomFor(state: GameState, playerId: string): Pick<PlayerView, 'intercom'> {
+  const on = intercomOf(state);
+  return on.includes(playerId) ? { intercom: on } : {};
 }
 
 /** The Erfolge of a run that is over, read off its report; none while it runs or before it. */

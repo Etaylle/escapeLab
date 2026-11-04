@@ -1,15 +1,18 @@
-import type { MapView, PlayerPosition, RtcSignal, ServerMessage } from '@escapelab/core';
-import { sharedAudio } from '../world/audio.js';
+import type { PlayerPosition, RtcSignal, ServerMessage } from '@escapelab/core';
+import { audioEngine, sharedAudio } from '../world/audio.js';
 import { doorsShut } from '../world/light.js';
+import { dropPath, LINK_RAMP_S, switchPath, voicePath, type VoicePath } from './intercom.js';
 import {
-  gainBetween,
+  crewGain,
   heard,
   linkPlan,
+  onIntercom,
   ownsLink,
   peakOf,
   SILENT,
   type Peer,
   type Speech,
+  type VoiceRoom,
 } from './rules.js';
 
 /**
@@ -17,8 +20,10 @@ import {
  * room, the lower id making the offer (voice/rules.ts), the signals going over
  * the game's socket and the voices straight from browser to browser — the
  * server never carries sound. Each voice plays through the one shared
- * AudioContext at a volume set by how far apart the two avatars stand and
- * whether a wall stands between them; a level meter on every voice, this
+ * AudioContext: in full over the station's intercom while both players stand
+ * at places of the armed station, through its speaker's band (voice/intercom.ts),
+ * and otherwise plain, at a volume set by how far apart the two avatars stand
+ * and whether a wall stands between them; a level meter on every voice, this
  * player's own included, says who speaks. A spectator who listens in opens a
  * receive-only link to each player and hears everyone in full; nothing comes
  * back over it. The microphone is asked for on a click only; until then, and
@@ -45,6 +50,11 @@ export interface VoiceState {
   readonly listening: boolean;
   /** who speaks right now, by player id, this player included */
   readonly speaking: ReadonlySet<string>;
+  /**
+   * whom this player hears over the station's intercom right now, by player id: crew members
+   * on it with them (rules.ts `onIntercom`) whose link is up
+   */
+  readonly intercom: ReadonlySet<string>;
 }
 
 /** What the walkthrough reads off a traced page (probes.ts). */
@@ -62,6 +72,10 @@ export interface VoiceProbe {
   readonly states: Record<string, RTCPeerConnectionState>;
   /** who speaks, by player id */
   readonly speaking: string[];
+  /** each voice's volume as last set, by peer: 1 in full */
+  readonly gains: Record<string, number>;
+  /** whom this player hears over the station's intercom, by player id (`VoiceState`) */
+  readonly intercom: string[];
 }
 
 /**
@@ -78,9 +92,13 @@ interface Hearing {
   readonly element: HTMLAudioElement;
   readonly source: MediaStreamAudioSourceNode;
   readonly meter: AnalyserNode;
-  readonly volume: GainNode;
+  readonly path: VoicePath;
   /** the volume last set */
   set: number;
+  /** whether it plays over the station's intercom */
+  linked: boolean;
+  /** until when (audio time) its last move on to the intercom or off it ramps: no glide before */
+  rampsUntil: number;
 }
 
 interface Link {
@@ -216,8 +234,8 @@ export class VoiceMesh {
   private readonly links = new Map<string, Link>();
   /** when a link that failed may be opened again (performance.now()), by peer */
   private readonly retryAt = new Map<string, number>();
-  /** the map of the run, its shut doors and the run, for how loud each voice sounds */
-  private room: { map: MapView; shut: ReadonlySet<string>; run: number | null } | null = null;
+  /** the run's map, its shut doors and who is on the intercom, for how loud each voice sounds */
+  private room: (VoiceRoom & { readonly run: number | null }) | null = null;
   private positions: Positions = { run: null, players: {} };
   private mic: MediaStreamTrack | null = null;
   /** how long getUserMedia took the last time, in ms (VoiceProbe) */
@@ -234,6 +252,7 @@ export class VoiceMesh {
     held: false,
     listening: false,
     speaking: new Set(),
+    intercom: new Set(),
   };
   private readonly subscribers = new Set<() => void>();
 
@@ -292,12 +311,16 @@ export class VoiceMesh {
   private handle(msg: ServerMessage): void {
     switch (msg.kind) {
       case 'view': {
-        const { you, players, map, startedAt } = msg.view;
+        const { you, players, map, startedAt, intercom = [] } = msg.view;
         this.audience = false;
         this.self = you.id;
         this.peers = players.filter((player) => player.id !== you.id);
-        this.room = map === null ? null : { map, shut: doorsShut(map), run: startedAt };
+        this.room =
+          map === null
+            ? null
+            : { map, shut: doorsShut(map), intercom: new Set(intercom), run: startedAt };
         this.replan();
+        this.hearIntercom();
         break;
       }
       case 'spectator-view':
@@ -306,6 +329,7 @@ export class VoiceMesh {
         this.peers = msg.view.players;
         this.room = null;
         this.replan();
+        this.hearIntercom();
         break;
       case 'positions':
         this.positions = { run: msg.run, players: msg.players };
@@ -396,9 +420,12 @@ export class VoiceMesh {
     }
   }
 
-  /** What the walkthrough reads: the links, their states, who speaks. */
+  /** What the walkthrough reads: the links, their states, who speaks, how loud, the intercom. */
   probe(): VoiceProbe {
     const links = [...this.links.values()];
+    const gains = links.flatMap(({ peer, hearing }) =>
+      hearing === null ? [] : [[peer, hearing.set] as const],
+    );
     return {
       mic: this.state.mic,
       micWaitMs: this.micWaitMs,
@@ -406,6 +433,8 @@ export class VoiceMesh {
       links: links.map((link) => link.peer),
       states: Object.fromEntries(links.map((link) => [link.peer, link.pc.connectionState])),
       speaking: [...this.state.speaking],
+      gains: Object.fromEntries(gains),
+      intercom: [...this.state.intercom],
     };
   }
 
@@ -570,6 +599,7 @@ export class VoiceMesh {
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'connected') {
         link.connected = true;
+        this.hearIntercom();
       } else if (pc.connectionState === 'failed') {
         this.fail(link);
       }
@@ -612,12 +642,18 @@ export class VoiceMesh {
     }
   }
 
-  /** Plays a peer's voice: metered for who speaks, at the volume their distance gives it. */
+  /**
+   * Plays a peer's voice: metered for who speaks, over the station's intercom or plain, at the
+   * volume that gives it (voice/intercom.ts). Past the lab's master gain, so that switching the
+   * lab's sound off leaves the crew audible; only the intercom's touch of the room's reverb goes
+   * with the lab.
+   */
   private hear(link: Link, stream: MediaStream): void {
-    const ctx = sharedAudio();
-    if (ctx === null || link.hearing !== null || link.closed) {
+    const engine = audioEngine();
+    if (engine === null || link.hearing !== null || link.closed) {
       return;
     }
+    const { ctx } = engine;
     const element = new Audio();
     element.muted = true;
     element.srcObject = stream;
@@ -626,29 +662,44 @@ export class VoiceMesh {
     const source = ctx.createMediaStreamSource(stream);
     const meter = ctx.createAnalyser();
     meter.fftSize = LEVEL_SAMPLES;
-    const volume = ctx.createGain();
-    const set = this.volumeOf(link);
-    volume.gain.value = set;
     source.connect(meter);
-    source.connect(volume);
-    volume.connect(ctx.destination);
-    link.hearing = { element, source, meter, volume, set };
+    const set = this.volumeOf(link);
+    const linked = this.linkedOver(link);
+    const path = voicePath(ctx, source, ctx.destination, engine.sends, set, linked);
+    link.hearing = { element, source, meter, path, set, linked, rampsUntil: 0 };
   }
 
   /**
-   * How loud a link's voice plays: a crew member's by the distance between
-   * the two avatars in this run and the walls between them; in full in the
-   * lobby, before the positions come, and to a spectator.
+   * How loud a link's voice plays: a crew member's in full over the station's
+   * intercom, else by the distance between the two avatars in this run and the
+   * walls between them (rules.ts `crewGain`); in full in the lobby, before the
+   * positions come, and to a spectator.
    */
   private volumeOf(link: Link): number {
     const room = this.room;
     if (link.kind !== 'crew' || room === null || this.self === null) {
       return 1;
     }
-    const players = this.positions.run === room.run ? this.positions.players : {};
-    const from = players[this.self];
-    const to = players[link.peer];
-    return from === undefined || to === undefined ? 1 : gainBetween(room.map, from, to, room.shut);
+    const where = this.positions.run === room.run ? this.positions.players : {};
+    return crewGain(room, where, this.self, link.peer);
+  }
+
+  /** Whether a link's voice comes over the station's intercom: a crew member on it with us. */
+  private linkedOver(link: Link): boolean {
+    const { room, self } = this;
+    return link.kind === 'crew' && room !== null && self !== null && onIntercom(room, self, link.peer);
+  }
+
+  /** Whom this player hears over the station's intercom now (`VoiceState`): told on a change. */
+  private hearIntercom(): void {
+    const on = [...this.links.values()]
+      .filter((link) => link.connected && !link.closed && this.linkedOver(link))
+      .map((link) => link.peer)
+      .sort();
+    const was = this.state.intercom;
+    if (on.length !== was.size || on.some((peer) => !was.has(peer))) {
+      this.update({ intercom: new Set(on) });
+    }
   }
 
   private close(peer: string): void {
@@ -664,9 +715,10 @@ export class VoiceMesh {
     link.pc.close();
     if (link.hearing !== null) {
       link.hearing.source.disconnect();
-      link.hearing.volume.disconnect();
+      dropPath(link.hearing.path);
       link.hearing.element.srcObject = null;
     }
+    this.hearIntercom();
   }
 
   private closeAll(): void {
@@ -788,12 +840,24 @@ export class VoiceMesh {
     this.hearLevels(levels, now);
   }
 
-  /** Moves a voice's volume toward where the avatars stand now, once it is worth a ramp. */
+  /**
+   * Moves a voice on to the station's intercom or off it as the view says, over LINK_RAMP_S
+   * (voice/intercom.ts `switchPath`); otherwise glides its volume toward where the avatars
+   * stand now, once it is worth a ramp and the last switch is through.
+   */
   private glide(link: Link, hearing: Hearing): void {
     const target = this.volumeOf(link);
-    if (Math.abs(target - hearing.set) > 0.01) {
+    const linked = this.linkedOver(link);
+    const volume = hearing.path.volume.gain;
+    const now = hearing.path.volume.context.currentTime;
+    if (linked !== hearing.linked) {
+      switchPath(hearing.path, target, linked, now);
       hearing.set = target;
-      hearing.volume.gain.setTargetAtTime(target, hearing.volume.context.currentTime, VOLUME_GLIDE);
+      hearing.linked = linked;
+      hearing.rampsUntil = now + LINK_RAMP_S;
+    } else if (now >= hearing.rampsUntil && Math.abs(target - hearing.set) > 0.01) {
+      hearing.set = target;
+      volume.setTargetAtTime(target, now, VOLUME_GLIDE);
     }
   }
 

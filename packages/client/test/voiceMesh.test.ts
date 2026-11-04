@@ -1,6 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PlayerView, RtcSignal, ServerMessage, SpectatorView } from '@escapelab/core';
+import {
+  applyAction,
+  canSee,
+  initialState,
+  parseMission,
+  stationKey,
+  viewFor,
+  type Action,
+  type GameState,
+  type Mission,
+  type PlayerView,
+  type RtcSignal,
+  type ServerMessage,
+  type SpectatorView,
+} from '@escapelab/core';
+import { LINK_RAMP_S } from '../src/voice/intercom.js';
 import { VoiceMesh } from '../src/voice/mesh.js';
+import { gainBetween } from '../src/voice/rules.js';
+import { chainFrom, fakeGraph, FakeGain, FakeNode, lastContext } from './fakeGraph.js';
+import { fakeMedia } from './fakeMedia.js';
 
 /**
  * The voice's links between real meshes, each standing for a page, over a
@@ -24,7 +42,7 @@ class FakeConnection {
   static made: FakeConnection[] = [];
   readonly id = FakeConnection.made.length;
   onicecandidate: ((event: { candidate: object | null }) => void) | null = null;
-  ontrack: (() => void) | null = null;
+  ontrack: ((event: { track: object; streams: object[] }) => void) | null = null;
   onconnectionstatechange: (() => void) | null = null;
   signalingState = 'stable';
   connectionState = 'new';
@@ -103,6 +121,11 @@ class FakeConnection {
     this.onconnectionstatechange?.();
   }
 
+  /** The other end's voice comes in on it, as `stream`. */
+  plays(stream: object): void {
+    this.ontrack?.({ track: {}, streams: [stream] });
+  }
+
   private directions(): string {
     return this.transceivers.map((transceiver) => transceiver.direction).join(',');
   }
@@ -121,14 +144,19 @@ interface Sent {
   signal: RtcSignal;
 }
 
-/** The game's socket between the pages: a signal reaches the page it names, in the order sent. */
+/**
+ * The game's socket between the pages: a signal reaches the page it names, in the order sent.
+ * Each page is a `Mesh`: the module's own, or a fresh one with a sound of its own.
+ */
 class Wire {
   readonly pages = new Map<string, VoiceMesh>();
   readonly sent: Sent[] = [];
   private queue: Sent[] = [];
 
+  constructor(private readonly Mesh: typeof VoiceMesh = VoiceMesh) {}
+
   join(id: string): VoiceMesh {
-    const mesh = new VoiceMesh();
+    const mesh = new this.Mesh();
     mesh.attach((to, signal) => {
       this.sent.push({ from: id, to, signal });
       this.queue.push({ from: id, to, signal });
@@ -461,5 +489,281 @@ describe('the microphone, switched on from a click', () => {
     await switching;
     expect(anna.probe().mic).toBe('denied');
     expect(anna.probe().micWaitMs).toBeGreaterThanOrEqual(0);
+  });
+});
+
+/**
+ * Two rooms, a wall between them and the way round it along the bottom row. The Signalkette's
+ * consoles stand at the far ends of the top row, a book in the west room and a clipboard in the
+ * east one cover it; the wiring box after it and the chart that covers that lie on the way.
+ *
+ *   0123456789012345678
+ * 0 ###################
+ * 1 #........#........#   console a (2,1); console b (16,1)
+ * 2 #........#........#   at console a (2.5,2.5); at console b (16.5,2.5)
+ * 3 #........#........#   at the book (2.5,3.5); at the clipboard (16.5,3.5)
+ * 4 #........#........#   book (2,4); clipboard (16,4)
+ * 5 #.................#   spawns (1,5) (2,5); box (5,5); chart (13,5); sign (17,5)
+ * 6 ###################
+ */
+const twoRooms: Mission = parseMission({
+  id: 'gegensprechanlage',
+  title: 'Gegensprechanlage',
+  players: { min: 2, max: 2 },
+  story: { intro: 'i', win: 'w', lose: 'l' },
+  timeLimitSec: 600,
+  puzzles: [
+    { type: 'signal', id: 'kette', title: 'Signalkette' },
+    { type: 'wiring', id: 'kabel', title: 'Kabel' },
+  ],
+  map: {
+    tiles: [
+      '###################',
+      '#........#........#',
+      '#........#........#',
+      '#........#........#',
+      '#........#........#',
+      '#.................#',
+      '###################',
+    ],
+    spawns: [
+      { x: 1, y: 5 },
+      { x: 2, y: 5 },
+    ],
+    stations: [
+      { puzzleId: 'kette', x: 2, y: 1, console: 'a' },
+      { puzzleId: 'kette', x: 16, y: 1, console: 'b' },
+      { puzzleId: 'kabel', x: 5, y: 5 },
+    ],
+    manuals: [
+      { id: 'buch', kind: 'book', label: 'HANDBUCH', covers: 'kette', x: 2, y: 4 },
+      { id: 'klemmbrett', kind: 'clipboard', label: 'KLEMMBRETT', covers: 'kette', x: 16, y: 4 },
+      { id: 'tafel', kind: 'chart', label: 'TAFEL', covers: 'kabel', x: 13, y: 5 },
+    ].map(({ covers, x, y, ...source }) => ({ ...source, puzzleIds: [covers], spots: [{ x, y }] })),
+    edgeworkSign: { x: 17, y: 5 },
+  },
+});
+
+const T0 = 1_000_000;
+const CONSOLE_B = stationKey({ puzzleId: 'kette', console: 'b' });
+
+interface Spot {
+  x: number;
+  y: number;
+}
+
+const AT_A: Spot = { x: 2.5, y: 2.5 };
+const AT_B: Spot = { x: 16.5, y: 2.5 };
+const AT_BOOK: Spot = { x: 2.5, y: 3.5 };
+const AT_CLIPBOARD: Spot = { x: 16.5, y: 3.5 };
+const IN_THE_GAP: Spot = { x: 9.5, y: 5.5 };
+const AT_BOX: Spot = { x: 5.5, y: 4.5 };
+const AT_CHART: Spot = { x: 13.5, y: 4.5 };
+
+/** Where Anna („a") and Ben („b") stand: as the server counts them, and on the map. */
+interface Standing {
+  stations?: Record<string, string[]>;
+  manuals?: Record<string, string[]>;
+  a: Spot;
+  b: Spot;
+}
+
+/** Anna and Ben in a run of the two rooms, counted at the places `standing` names. */
+function runWith(standing: Pick<Standing, 'stations' | 'manuals'>): GameState {
+  const actions: Action[] = [
+    { type: 'player-join', playerId: 'a', name: 'Anna' },
+    { type: 'player-join', playerId: 'b', name: 'Ben' },
+    { type: 'set-ready', playerId: 'b', ready: true },
+    { type: 'start-mission', playerId: 'a', at: T0, seed: 7 },
+  ];
+  return applyAction(actions.reduce(applyAction, initialState(twoRooms)), {
+    type: 'set-presence',
+    stations: standing.stations ?? {},
+    manuals: standing.manuals ?? {},
+    notes: {},
+    signSeen: [],
+    found: {},
+    sight: {},
+    exit: [],
+    at: T0 + 100,
+  });
+}
+
+/** The view of `playerId` with the two standing as `standing` says, as the server sends it. */
+function viewAt(standing: Standing, playerId: string): ServerMessage {
+  return { kind: 'view', view: viewFor(runWith(standing), playerId), at: 0 };
+}
+
+/** The positions message of the run: Anna and Ben where `standing` puts them. */
+function positionsOf({ a, b }: Standing): ServerMessage {
+  const at = (spot: Spot) => ({ ...spot, facing: 0, moving: false, t: null, rt: 0 });
+  return { kind: 'positions', run: T0, players: { a: at(a), b: at(b) }, drones: {} };
+}
+
+/** The run's map, as every view of it has it. */
+function theMap(): NonNullable<PlayerView['map']> {
+  const map = viewFor(runWith({}), 'a').map;
+  if (map === null) {
+    throw new Error('expected the run’s map');
+  }
+  return map;
+}
+
+/** How loud Ben sounds to Anna by the distance and the walls alone: the rule without intercom. */
+function byProximity({ a, b }: Standing): number {
+  return gainBetween(theMap(), a, b, new Set());
+}
+
+/** The nodes Anna hears Ben's `stream` through, as the fake context keeps them. */
+function pathOf(stream: object): { volume: FakeGain; plain: FakeGain; speaker: FakeGain } {
+  const sources = lastContext().all<FakeNode & { mediaStream: unknown }>('stream');
+  const volume = sources
+    .find((node) => node.mediaStream === stream)
+    ?.outputs.find((node): node is FakeGain => node instanceof FakeGain);
+  const [plain, low] = volume?.outputs ?? [];
+  const speaker = low instanceof FakeNode ? chainFrom(low).at(-1) : undefined;
+  if (volume === undefined || !(plain instanceof FakeGain) || !(speaker instanceof FakeGain)) {
+    throw new Error('expected Ben’s voice on its way to Anna');
+  }
+  return { volume, plain, speaker };
+}
+
+/** Each place of the armed station with each, 14 tiles apart or more and a wall between. */
+const AT_THE_STATION: [string, Standing][] = [
+  ['console and console', { stations: { kette: ['a'], [CONSOLE_B]: ['b'] }, a: AT_A, b: AT_B }],
+  [
+    'console and source',
+    { stations: { kette: ['a'] }, manuals: { klemmbrett: ['b'] }, a: AT_A, b: AT_CLIPBOARD },
+  ],
+  ['source and source', { manuals: { buch: ['a'], klemmbrett: ['b'] }, a: AT_BOOK, b: AT_CLIPBOARD }],
+];
+
+/** Pairs the intercom leaves alone. */
+const ELSEWHERE: [string, Standing][] = [
+  ['Anna at console a, Ben at no place of it', { stations: { kette: ['a'] }, a: AT_A, b: IN_THE_GAP }],
+  [
+    'the box and the chart of the station after it',
+    { stations: { kabel: ['a'] }, manuals: { tafel: ['b'] }, a: AT_BOX, b: AT_CHART },
+  ],
+];
+
+describe('the station’s intercom on the crew’s voices', () => {
+  let wire: Wire;
+
+  beforeEach(async () => {
+    fakeGraph();
+    fakeMedia();
+    vi.stubGlobal('RTCPeerConnection', FakeConnection);
+    vi.stubGlobal('window', { isSecureContext: true });
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
+    FakeConnection.made = [];
+    // The voice's sound is made anew for every test: an engine of its own.
+    vi.resetModules();
+    wire = new Wire((await import('../src/voice/mesh.js')).VoiceMesh);
+  });
+
+  afterEach(() => {
+    for (const page of wire.pages.values()) {
+      page.detach();
+    }
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  /** Anna and Ben linked and standing as `standing` says, Ben's voice in at Anna's page. */
+  async function annaHearsBen(standing: Standing): Promise<{ anna: VoiceMesh; stream: object }> {
+    const [anna, ben] = [wire.join('a'), wire.join('b')];
+    anna.receive(viewAt(standing, 'a'));
+    ben.receive(viewAt(standing, 'b'));
+    await wire.settle();
+    const stream = { id: 'Bens Stimme' };
+    // Anna offered the link: hers is the first connection made.
+    FakeConnection.made[0]?.plays(stream);
+    anna.receive(positionsOf(standing));
+    vi.advanceTimersByTime(60);
+    return { anna, stream };
+  }
+
+  it.each(AT_THE_STATION)('plays %s in full through a wall 14 tiles off', async (_, standing) => {
+    const { a, b } = standing;
+    expect(canSee(theMap(), a, b, new Set())).toBe(false);
+    expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeGreaterThanOrEqual(14);
+    // By the distance and the walls Ben comes through at 5 %, −25.6 dB.
+    expect(20 * Math.log10(byProximity(standing))).toBeCloseTo(-25.6, 1);
+
+    const { anna, stream } = await annaHearsBen(standing);
+    expect(anna.probe().gains).toEqual({ b: 1 });
+    expect(anna.probe().intercom).toEqual(['b']);
+    const { volume, plain, speaker } = pathOf(stream);
+    expect(volume.gain.value).toBe(1);
+    expect([plain.gain.value, speaker.gain.value]).toEqual([0, 1]);
+  });
+
+  it.each(ELSEWHERE)('leaves %s to the distance and the walls, plain', async (_, standing) => {
+    const { anna, stream } = await annaHearsBen(standing);
+    expect(anna.probe().gains.b).toBeCloseTo(byProximity(standing), 9);
+    expect(anna.probe().gains.b).toBeLessThan(0.5);
+    expect(anna.probe().intercom).toEqual([]);
+    const { plain, speaker } = pathOf(stream);
+    expect([plain.gain.value, speaker.gain.value]).toEqual([1, 0]);
+    expect(speaker.gain.events).toEqual([]);
+  });
+
+  it('goes on the intercom and off it in 150 ms ramps, gliding by distance only after', async () => {
+    const away: Standing = { stations: { kette: ['a'] }, a: AT_A, b: IN_THE_GAP };
+    const { anna, stream } = await annaHearsBen(away);
+    const ctx = lastContext();
+    const { volume, plain, speaker } = pathOf(stream);
+    const far = anna.probe().gains.b ?? 1;
+    volume.gain.events.length = 0;
+
+    // Ben steps up to console b: the view puts him on the intercom with Anna.
+    const manned: Standing = { stations: { kette: ['a'], [CONSOLE_B]: ['b'] }, a: AT_A, b: AT_B };
+    anna.receive(viewAt(manned, 'a'));
+    anna.receive(positionsOf(manned));
+    vi.advanceTimersByTime(50);
+    const on = ctx.currentTime;
+    expect(volume.gain.events).toEqual([
+      ['cancel', on],
+      ['set', volume.gain.value, on],
+      ['linear', 1, on + LINK_RAMP_S],
+    ]);
+    expect(plain.gain.ramps()).toEqual([[0, on + LINK_RAMP_S]]);
+    expect(speaker.gain.ramps()).toEqual([[1, on + LINK_RAMP_S]]);
+
+    // He walks off again: back to the distance and the walls, the speaker shut.
+    anna.receive(viewAt(away, 'a'));
+    anna.receive(positionsOf(away));
+    ctx.currentTime = on + 1;
+    vi.advanceTimersByTime(50);
+    const off = on + 1 + LINK_RAMP_S;
+    expect(volume.gain.ramps().at(-1)).toEqual([far, off]);
+    expect(plain.gain.ramps().at(-1)).toEqual([1, off]);
+    expect(speaker.gain.ramps().at(-1)).toEqual([0, off]);
+
+    // While that ramp runs a step changes nothing; once it is through, the volume glides.
+    const laid = volume.gain.events.length;
+    anna.receive(positionsOf({ ...away, b: AT_BOX }));
+    ctx.currentTime = on + 1.1;
+    vi.advanceTimersByTime(50);
+    expect(volume.gain.events).toHaveLength(laid);
+    ctx.currentTime = on + 1.2;
+    vi.advanceTimersByTime(50);
+    expect(volume.gain.events.at(-1)?.slice(0, 2)).toEqual(['target', 1]);
+    expect(speaker.gain.events.at(-1)).toEqual(['linear', 0, off]);
+  });
+
+  it('tells the screens of the intercom only while the link is up', async () => {
+    const manned: Standing = { stations: { kette: ['a'], [CONSOLE_B]: ['b'] }, a: AT_A, b: AT_B };
+    const [anna, ben] = [wire.join('a'), wire.join('b')];
+    anna.receive(viewAt(manned, 'a'));
+    ben.receive(viewAt(manned, 'b'));
+    // On the intercom by the view, but no signal has gone over yet: the link is not up.
+    expect([anna.getState().intercom.size, ben.getState().intercom.size]).toEqual([0, 0]);
+    await wire.settle();
+    expect([...anna.getState().intercom]).toEqual(['b']);
+    expect([...ben.getState().intercom]).toEqual(['a']);
+    FakeConnection.made[0]?.becomes('failed');
+    expect(anna.getState().intercom.size).toBe(0);
   });
 });

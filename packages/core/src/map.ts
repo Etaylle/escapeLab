@@ -230,3 +230,19 @@ export function backupsOf(state: GameState, puzzleId: string, playerId: string):
     );
   return [...atOther, ...reading].filter((backup) => backup.playerId !== playerId);
 }
+
+/**
+ * Who of the crew stands at a place of the armed station — at one of its consoles or at an
+ * open manual object that covers it — each once, sorted. Between any two of them the
+ * station's intercom carries the voice in full, however far apart they stand and whatever
+ * walls lie between (client voice/rules.ts). Nobody while no station is armed: before the
+ * lights go out and once the last one is solved.
+ */
+export function intercomOf(state: GameState): string[] {
+  const current = state.mission.puzzles[state.currentPuzzleIndex];
+  if (!lightsAreOut(state) || current === undefined) {
+    return [];
+  }
+  const places = [...operatorsOf(state, current.id), ...readersOf(state, current.id)];
+  return [...new Set(places)].sort();
+}

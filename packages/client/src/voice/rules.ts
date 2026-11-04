@@ -3,9 +3,10 @@ import type { Spot } from '../world/movement.js';
 
 /**
  * The crew's voice by rule, apart from the browser: how loud a crew member
- * sounds from where they stand, which of two players opens the link between
- * them, when somebody counts as speaking, and what a new view of the room does
- * to the links. voice/mesh.ts applies these to the real connections.
+ * sounds — in full over the station's intercom, else by where the two stand —
+ * which of two players opens the link between them, when somebody counts as
+ * speaking, and what a new view of the room does to the links. voice/mesh.ts
+ * applies these to the real connections.
  */
 
 /** Within this many tiles a crew member sounds at full volume. */
@@ -41,6 +42,46 @@ export function gainBetween(
   shut: ReadonlySet<string>,
 ): number {
   return voiceGain(Math.hypot(to.x - from.x, to.y - from.y), canSee(map, from, to, shut));
+}
+
+/** The run as the crew's voice hears it. */
+export interface VoiceRoom {
+  readonly map: SightMap;
+  /** the doors shut, by tile key "x,y" */
+  readonly shut: ReadonlySet<string>;
+  /**
+   * who is on the armed station's intercom with this player, this player among them, as the
+   * view has it (core map.ts `intercomOf`); nobody while this player stands at none of its places
+   */
+  readonly intercom: ReadonlySet<string>;
+}
+
+/**
+ * Whether the station's intercom joins `self` and `peer`: both stand at a place of the armed
+ * station — one of its consoles or an open source that covers it.
+ */
+export function onIntercom(room: VoiceRoom, self: string, peer: string): boolean {
+  return room.intercom.has(self) && room.intercom.has(peer);
+}
+
+/**
+ * How loud crew member `peer` sounds to `self`, both placed by `where` (tiles, by player id):
+ * in full over the station's intercom, however far apart they stand and whatever lies between;
+ * otherwise by their distance and the walls between them (`gainBetween`), and in full while
+ * either's position is still to come.
+ */
+export function crewGain(
+  room: VoiceRoom,
+  where: Readonly<Record<string, Spot>>,
+  self: string,
+  peer: string,
+): number {
+  const from = where[self];
+  const to = where[peer];
+  if (onIntercom(room, self, peer) || from === undefined || to === undefined) {
+    return 1;
+  }
+  return gainBetween(room.map, from, to, room.shut);
 }
 
 /** Of two players, the one with the lower id opens the link between them; the other answers. */

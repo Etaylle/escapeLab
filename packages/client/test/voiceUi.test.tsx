@@ -22,6 +22,7 @@ function voiceOf(state: Partial<VoiceState>): VoiceMesh {
     held: false,
     listening: false,
     speaking: new Set(),
+    intercom: new Set(),
     ...state,
   };
   const stand: Pick<VoiceMesh, 'subscribe' | 'getState'> = {
