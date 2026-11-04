@@ -544,6 +544,13 @@ export const signalModule: PuzzleModule<SignalDef, SignalState, SignalInput, Sig
     };
   },
 
+  /** Each console sends one stage and takes the next in turn: both trade signs. */
+  plate(_def, console) {
+    return console === 'b'
+      ? 'Pult B tauscht Zeichen mit Pult A aus'
+      : 'Pult A tauscht Zeichen mit Pult B aus';
+  },
+
   manual(def) {
     return labDocument({
       plate: PLATE,

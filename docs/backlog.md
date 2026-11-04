@@ -101,7 +101,7 @@ die Entscheidung.
   und an angehefteten Notizen; Kalam (OFL) in `public/fonts`. Regeln in `docs/gameplay.md`,
   Aussehen in `docs/art-bible.md`.
 
-### T-2 Jedes Pult sagt, wozu die Maschine da ist — Status: bereit · Größe: S
+### T-2 Jedes Pult sagt, wozu die Maschine da ist — Status: im PR (N-small) · Größe: S
 - Audit: beide Hälften einer Station sehen aus wie Geräte, keine sagt die Aufgabe. Ein
   Typenschild-Satz je Pult in Weltsprache (was die Maschine tut, nicht was der Spieler tun
   soll), z. B. Prüfpult „misst die Spannung des gewählten Kabels"; kein Hinweis auf die Lösung.

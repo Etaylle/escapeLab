@@ -304,6 +304,10 @@ export const switchesModule: PuzzleModule<
     };
   },
 
+  plate() {
+    return 'Die Schalterbank schaltet Kreise eines Teilsystems zu';
+  },
+
   manual(def) {
     return labDocument({
       plate: PLATE,

@@ -1007,8 +1007,11 @@ describe('the sync button', () => {
     );
     expect(lamps(html)).toEqual(['off', 'off']);
     expect(html).toContain('<div class="sync-lamps" role="img" aria-label="0 von 2 gedrückt">');
-    // Beside the plate's paragraph and name the device says nothing: no count, no caption.
-    expect(textOf(html).trim()).toBe('§1 Station');
+    // Beside the plate's paragraph and name and the line saying what the machine does, the
+    // device says nothing: no count, no caption.
+    expect(textOf(html).trim()).toBe(
+      '§1 Station Der Taster sichert Schaltungen für das ganze Labor',
+    );
   });
 
   it('lights a lamp for every press that counts, and keeps a pressed button down', () => {

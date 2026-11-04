@@ -401,6 +401,10 @@ export const wiringModule: PuzzleModule<WiringDef, WiringState, WiringInput, Wir
     };
   },
 
+  plate() {
+    return 'Der Brückenkasten legt das Labor auf Notstrom';
+  },
+
   manual(def) {
     return labDocument({
       plate: PLATE,

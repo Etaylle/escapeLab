@@ -174,6 +174,7 @@ const maze: PuzzleView = {
   title: 'Leitungsnetz',
   manual: null,
   console: 'a',
+  plate: 'Das Pult steuert den Prüfkopf durch die Kabelschächte',
   backup: null,
 };
 
@@ -225,6 +226,7 @@ describe('stepping back from a device', () => {
           paragraph="§3"
           title="Leitungsnetz"
           tag={null}
+          plate={null}
           leds={[]}
           alarms={0}
           solved={false}

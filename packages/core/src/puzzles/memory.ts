@@ -264,6 +264,10 @@ export const memoryModule: PuzzleModule<MemoryDef, MemoryState, MemoryInput, Mem
     };
   },
 
+  plate() {
+    return 'Die Speicherbank prüft eine Freigabe in Stufen';
+  },
+
   manual(def) {
     return labDocument({
       plate: PLATE,

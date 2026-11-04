@@ -242,6 +242,10 @@ export const mazeModule: PuzzleModule<MazeDef, MazeState, MazeInput, MazeView> =
     };
   },
 
+  plate() {
+    return 'Das Pult steuert den Prüfkopf durch die Kabelschächte';
+  },
+
   manual(def) {
     return labDocument({
       plate: PLATE,

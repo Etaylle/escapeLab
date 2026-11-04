@@ -89,6 +89,7 @@ function maze(index: number, cells: number[] | null): PuzzleView {
     title: 'Leitungsnetz',
     manual: null,
     console: null,
+    plate: null,
     backup: null,
   };
 }
@@ -602,6 +603,7 @@ describe('the station frame', () => {
       title: 'Signalkette',
       manual: null,
       console: 'b',
+      plate: 'Pult B tauscht Zeichen mit Pult A aus',
       backup: null,
     };
     const consoles = mapWith({
@@ -726,6 +728,7 @@ describe('the station frame', () => {
       title: 'Reaktor-Neustart',
       manual: null,
       console: 'a',
+      plate: 'Der Taster sichert Schaltungen für das ganze Labor',
       backup: null,
     };
     expect(stationFrame(reactor)).toContain(

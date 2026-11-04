@@ -141,6 +141,10 @@ export const keypadModule: PuzzleModule<KeypadDef, KeypadState, KeypadInput, Key
     };
   },
 
+  plate() {
+    return 'Das Tastenfeld gibt Türen und Schränke frei';
+  },
+
   manual(def) {
     return labDocument({
       plate: PLATE,

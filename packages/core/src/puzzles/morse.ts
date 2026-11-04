@@ -211,6 +211,10 @@ export const morseModule: PuzzleModule<MorseDef, MorseState, MorseInput, MorseVi
     };
   },
 
+  plate() {
+    return 'Das Funkfeuer meldet das Labor bei der Leitstelle';
+  },
+
   manual(def) {
     return labDocument({
       plate: PLATE,

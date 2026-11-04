@@ -114,6 +114,7 @@ export function stationView(def: Record<string, unknown>, onlooker: Onlooker = {
   const viewer = { playerId: who, operating, reading: false, console: seat };
   const operators = operating && who !== null ? [who] : [];
   const view = station.view(parsed, state, viewer, { edgework, alarms: 0, crew, operators });
-  const common = { index: 0, total: 1, title: parsed.title, manual: null, console: seat };
+  const plate = seat === null ? null : station.plate(parsed, seat);
+  const common = { index: 0, total: 1, title: parsed.title, manual: null, console: seat, plate };
   return { ...view, ...common, backup: null } as PuzzleView;
 }

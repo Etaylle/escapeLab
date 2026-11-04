@@ -278,6 +278,10 @@ export const buttonModule: PuzzleModule<ButtonDef, ButtonState, ButtonInput, But
     };
   },
 
+  plate() {
+    return 'Der Knopf löst den Druckausgleich aus';
+  },
+
   manual(def) {
     const press = [
       ...MOVE_RULES.map((rule) => `Wenn ${rule.when}, ${MOVE_WORDS[rule.move]}.`),

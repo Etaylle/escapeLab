@@ -286,6 +286,10 @@ export const simonModule: PuzzleModule<SimonDef, SimonState, SimonInput, SimonVi
     };
   },
 
+  plate() {
+    return 'Das Panel stimmt die Resonanz der Anlage nach';
+  },
+
   manual(def) {
     return labDocument({
       plate: PLATE,

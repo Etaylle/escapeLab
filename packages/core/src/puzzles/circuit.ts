@@ -426,6 +426,13 @@ export const circuitModule: PuzzleModule<CircuitDef, CircuitState, CircuitInput,
     };
   },
 
+  /** Console a is the box with its wires and pliers, console b the meter. */
+  plate(_def, console) {
+    return console === 'b'
+      ? 'Das Prüfpult misst die Spannung des gewählten Kabels'
+      : 'Der Kasten trennt Kabel der Notstromversorgung';
+  },
+
   manual(def) {
     return labDocument({
       plate: PLATE,

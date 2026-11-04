@@ -323,6 +323,20 @@
     0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
+/* What the machine does, stamped across the head under the label plate: a row of its own,
+   one line on a desk, wrapped rather than run off the bezel on a phone. */
+.device-purpose {
+  flex: 1 0 100%;
+  margin: 0;
+  padding: 0 2px;
+  white-space: normal;
+}
+
+/* The same line beside the device, where a phone held sideways shows it instead (below). */
+.station-plate {
+  display: none;
+}
+
 /* Seven-segment digits in a dark window, the unlit segments faintly there. */
 .device-display {
   display: inline-flex;
@@ -2399,6 +2413,25 @@ button.signal-key.feel-pressed {
     grid-area: 2 / 2;
     width: 13.5rem;
     margin: 0;
+  }
+
+  /* No row of the device's to spare: what its machine does stands beside it, under the
+     Laborkennung and the coach's line, on a strip of the bezel's dark. */
+  .device-purpose {
+    display: none;
+  }
+
+  .puzzle-modal.station-modal .panel > .station-plate {
+    display: block;
+    grid-area: 3 / 2;
+    width: 13.5rem;
+    margin: 0;
+    padding: 6px 10px;
+    border: 1px solid rgba(141, 154, 166, 0.35);
+    border-radius: 6px;
+    background: #12181e;
+    color: #8d9aa6;
+    white-space: normal;
   }
 
   .puzzle-modal.station-modal .panel > .device {

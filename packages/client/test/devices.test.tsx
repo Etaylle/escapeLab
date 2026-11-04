@@ -26,6 +26,7 @@ const { needleAngle, probedWith, scrambled } = await import('../src/puzzles/Circ
 const {
   closeAfterSolved,
   Device,
+  deviceOf,
   feelChange,
   heldView,
   refusedHere,
@@ -89,13 +90,14 @@ afterEach(() => {
 });
 
 describe('the device', () => {
-  function device(alarms: number, solved: boolean): string {
+  function device(alarms: number, solved: boolean, plate: string | null = null): string {
     return renderToStaticMarkup(
       <Device
         kind="keypad"
         paragraph="§1"
         title="Tastenfeld"
         tag={null}
+        plate={plate}
         leds={[]}
         alarms={alarms}
         solved={solved}
@@ -105,6 +107,27 @@ describe('the device', () => {
       </Device>,
     );
   }
+
+  it('engraves what its machine does in its head, under the label plate', () => {
+    const html = device(0, false, 'Das Tastenfeld gibt Türen und Schränke frei');
+    const head = html.slice(html.indexOf('<div class="device-head">'), html.indexOf('device-face'));
+    expect(head).toContain(
+      '</div><p class="device-engraving device-purpose">' +
+        'Das Tastenfeld gibt Türen und Schränke frei</p></div>',
+    );
+    expect(device(0, false)).not.toContain('device-purpose');
+  });
+
+  it('takes the line from the view of the console this player stands at, none elsewhere', () => {
+    const box = deviceOf(seen('circuit', {}, 'a'));
+    const meter = deviceOf(seen('circuit', {}, 'b'));
+    expect([box.plate, meter.plate]).toEqual([
+      'Der Kasten trennt Kabel der Notstromversorgung',
+      'Das Prüfpult misst die Spannung des gewählten Kabels',
+    ]);
+    const audience = stationView({ type: 'circuit', id: 'c', title: 'K' }, { who: null, seat: null });
+    expect(deviceOf(audience).plate).toBeNull();
+  });
 
   it('stands calm: its kind only, the face open to presses, a dark strip along its foot', () => {
     const html = device(0, false);
@@ -200,6 +223,7 @@ describe('an alarm at an open device', () => {
         paragraph="§1"
         title="Tastenfeld"
         tag={null}
+        plate={null}
         leds={[]}
         alarms={1}
         solved={false}
@@ -233,6 +257,7 @@ describe('a press the server refuses at an open device', () => {
         paragraph="§1"
         title="Tastenfeld"
         tag={null}
+        plate={null}
         leds={[]}
         alarms={0}
         solved={false}

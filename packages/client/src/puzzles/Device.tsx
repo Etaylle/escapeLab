@@ -64,6 +64,11 @@ export interface DeviceProps {
   title: string;
   /** the plate's console tag, „PULT A", at a station with two consoles; null at one with one */
   tag: string | null;
+  /**
+   * what the machine at this console does, engraved in the metal under the label plate (the
+   * module's `plate`); null for none, as for the audience, which stands at no console
+   */
+  plate: string | null;
   /** the strip beside the plate, left to right; none at all leaves the plate alone */
   leds: readonly DeviceLed[];
   /**
@@ -177,14 +182,14 @@ function StepBack({ onStepBack }: { onStepBack: () => void }) {
 /**
  * The physical frame every station's panel sits in, after Keep Talking's
  * modules: a metal bezel with a screw in each corner, a label plate naming
- * the station, an LED strip, the face with the controls — and not one word
- * of instruction on it — and along its foot the status strip that flashes
- * red on an alarm and sweeps green once the station is solved, and the way
- * back from it. An alarm that comes in while it is open shows its cause and
- * cost in its head.
+ * the station, an LED strip, a line engraved under them saying what the
+ * machine does, the face with the controls — and not one word of instruction
+ * on it — and along its foot the status strip that flashes red on an alarm
+ * and sweeps green once the station is solved, and the way back from it. An
+ * alarm that comes in while it is open shows its cause and cost in its head.
  */
 export function Device(props: DeviceProps) {
-  const { kind, paragraph, title, tag, leds, alarms, solved, press, children } = props;
+  const { kind, paragraph, title, tag, plate, leds, alarms, solved, press, children } = props;
   const notice = props.notice ?? null;
   const refused = props.refused ?? null;
   const onStepBack = props.onStepBack ?? null;
@@ -214,6 +219,7 @@ export function Device(props: DeviceProps) {
         {notice === null && refused !== null && (
           <RefusalDisplay key={refused.seq} refusal={refused} />
         )}
+        {plate !== null && <p className="device-engraving device-purpose">{plate}</p>}
       </div>
       <div className="device-face" inert={solved} {...(press ?? {})}>
         {children}
@@ -257,7 +263,7 @@ export function partnerLed(puzzle: PuzzleView): DeviceLed | null {
  * The frame for the open puzzle: its paragraph and title on the plate, the
  * console this player works where the station has two — the view names
  * console a at a station with one as well, the module tells them apart —
- * and the partner LED.
+ * what the machine there does, and the partner LED.
  */
 export function deviceOf(
   puzzle: PuzzleView,
@@ -270,6 +276,7 @@ export function deviceOf(
     title: puzzle.title,
     tag:
       twoConsoles && puzzle.console !== null ? consoleName(puzzle.console).toUpperCase() : null,
+    plate: puzzle.plate,
     leds: partner === null ? [] : [partner],
   };
 }

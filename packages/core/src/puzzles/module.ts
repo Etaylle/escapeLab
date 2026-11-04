@@ -211,6 +211,11 @@ export interface PuzzleViewCommon {
   /** the viewer's console, as in `Viewer` */
   console: ConsoleId | null;
   /**
+   * what the machine at the viewer's console does, as engraved in its head (`plate`); null for
+   * whoever stands at no console — readers and the audience
+   */
+  plate: string | null;
+  /**
    * The second person who lets the viewer's inputs count: another crew member
    * at the station's other console or at an open manual object covering it,
    * and where — the console („Pult B") or the object's label („SPIND"). Null
@@ -262,6 +267,14 @@ export interface PuzzleModule<
    * takes inputs. Left out for a station with one console.
    */
   readonly consoles?: 2;
+  /**
+   * The line engraved in the head of each of the station's consoles: what the machine there
+   * does, its machine named as the sentence's subject („Das Prüfpult misst die Spannung des
+   * gewählten Kabels") — a type plate's words, never what anybody should do and never a hint at
+   * an answer. Like the printed rules it hangs on the def alone, so that every mission's devices
+   * carry it; `console` is 'a' at a station with one.
+   */
+  plate(def: Def, console: ConsoleId): string;
   /**
    * A move by `playerId`, who stands at the station (the reducer checks
    * that, and says at which console in `ctx.console`); throws a GameError

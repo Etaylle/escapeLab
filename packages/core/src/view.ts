@@ -603,6 +603,7 @@ function puzzleViewFor(state: GameState, playerId: string | null): PuzzleView | 
     title: def.title,
     manual: viewer.reading ? puzzleModule.manual(def) : null,
     console: viewer.console,
+    plate: viewer.console === null ? null : puzzleModule.plate(def, viewer.console),
     backup: puzzleModule.wholeCrew ? null : backupFor(state, def.id, playerId),
   };
 }

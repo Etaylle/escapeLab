@@ -270,7 +270,7 @@ height at least:
 
 | Role | Least size | Token | Where |
 |---|---|---|---|
-| Engraved in the metal | 11 px | `--type-engraving` | AUS/EIN, STUFE, KABEL, RACK, the way back |
+| Engraved in the metal | 11 px | `--type-engraving` | AUS/EIN, STUFE, KABEL, RACK, the way back, what the machine does |
 | A label, an LED's words | 12 px | `--type-label` | the plate, PARTNER, key legends, unit plates |
 | Read off its face | 14 px | `--type-body` | the terminal's table and log, wire numbers |
 | A readout | 18 px | `--type-readout` | the meter's V, probe digits, the maze's display |
@@ -281,6 +281,14 @@ device's one figure keep their own size: the radio's frequency 32 px, the relay'
 24 px and its seconds 26 px. Words drawn in an SVG grow with their drawing: the Netzplan's
 names stand 11 units high (12 at most at the large text size, as much as their box holds right
 of its LED), the meter's scale 11 units, 13 on a phone, where its dial is drawn smaller.
+
+Under the label plate and its LED every device engraves, in a row of its own, what the machine
+at that console does — „DAS PRÜFPULT MISST DIE SPANNUNG DES GEWÄHLTEN KABELS", „DER KASTEN TRENNT
+KABEL DER NOTSTROMVERSORGUNG" — one line of 56 characters at most, which a narrow window wraps
+rather than runs off the bezel (the module's `plate`, core puzzles/module.ts; console-plate.png);
+a phone held sideways shows it beside the device instead (below). It names its machine as the
+subject: a bare „TRENNT KABEL …" would read as an order to the crew. It says nothing an answer
+could be read from, and the audience's device, at no console, carries none.
 
 Every control on a device is a target: 36 px each way under a mouse, 44 under a finger
 (`--target`; Apple's 44 pt, WCAG 2.2's enhanced 44 × 44) — terminal keys, rack switches, lever
@@ -307,8 +315,10 @@ E, sprint, drop, chat, talk — lie under the right thumb, 52 px each. The objec
 quarter of the canvas's height at most, a line on the air included; the minimap stands 56 px
 tall at least; the camera lifts the avatar clear of both thumbs' controls.
 
-A device takes the window: the device on the left, the Laborkennung and a newcomer's line in a
-column of their own beside it, the bezel slimmer; every control in reach without scrolling,
+A device takes the window: the device on the left, the Laborkennung, a newcomer's line and what
+the machine does in a column of their own beside it — the head has no row to spare for the
+engraved line, which the rack's and the meter's tabs paid for by 11 to 17 px of scrolling —
+the bezel slimmer; every control in reach without scrolling,
 and a list that runs long scrolls in its own box — the terminal's log, kept at its newest line.
 The terminal's keys stand in a column beside its screen, the rack's units a fingertip high with
 the Netzplan beside them, the meter's smaller dial beside its keys and paper, the Signalkette's

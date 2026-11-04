@@ -3590,10 +3590,45 @@ async function pressStage(sender, presser, pinned = null) {
 }
 
 /**
+ * console-plate.png: the heads of a station's two devices as their players see them, one over
+ * the other — the label plate, the LED and, engraved under them, what each machine does. Each
+ * head has to engrave what the view says its console's machine does (`puzzle.plate`), and the
+ * two have to differ, or the run fails.
+ */
+async function capturePlates(seats, title) {
+  const heads = [];
+  for (const [player, spot] of seats) {
+    const head = player.page.locator('.station-modal .device-head');
+    const line = head.locator('.device-purpose');
+    const shown = (await line.count()) === 0 ? null : (await line.textContent())?.trim();
+    const said = player.seen.view.puzzle?.plate ?? null;
+    heads.push({ console: spot.console, shown, said, png: await head.screenshot() });
+  }
+  // One sheet, the two heads one over the other on the bezel's dark.
+  const sheet = await browser.newPage({ viewport: { width: 800, height: 400 } });
+  const style =
+    'body { margin: 0; background: #0b0f13; } ' +
+    '.plates { display: inline-flex; flex-direction: column; gap: 12px; padding: 12px; }';
+  const img = ({ png }) => `<img src="data:image/png;base64,${png.toString('base64')}">`;
+  const plates = `<div class="plates">${heads.map(img).join('')}</div>`;
+  await sheet.setContent(`<style>${style}</style>${plates}`);
+  await captureElement(sheet.locator('.plates'), 'console-plate.png');
+  await sheet.close();
+  const said = heads.map((h) => `Pult ${h.console.toUpperCase()} „${h.shown ?? '!! nothing'}"`);
+  console.log(`console-plate.png  "${title}": ${said.join(' · ')}`);
+  const wrong = heads.filter(({ shown, said: plate }) => shown === null || shown !== plate);
+  if (wrong.length > 0 || heads[0]?.shown === heads[1]?.shown) {
+    const what = heads.map((h) => `${h.console} shows "${h.shown}", the view says "${h.said}"`);
+    fail(`console-plate.png: ${what.join('; ')}`);
+  }
+}
+
+/**
  * console-a.png, console-b.png: a station with two consoles, whatever its
  * kind — the one after a solved sync station, or a first one the crew got
  * into (`manBothConsoles`). The operator walks to console A, the reader to
- * console B, and E opens each; both panels are captured at laptop size, the
+ * console B, and E opens each; both panels are captured at laptop size,
+ * their heads together (console-plate.png, `capturePlates`), the
  * guest's window going back to its phone size after, and the log names the
  * panel's kind. A Signalkette the crew then works until it solves
  * (`solveSignal`); at a fuse box the meter measures every wire once
@@ -3656,6 +3691,7 @@ async function captureConsoles(operator, reader) {
         `${kind} panel, ${over > 0 ? `!! +${over}px sideways` : 'fits sideways'}`,
     );
   }
+  await capturePlates(seats, title);
   for (const [i, { page }] of crew.entries()) {
     if (sizes[i] !== null) {
       await page.setViewportSize(sizes[i]);

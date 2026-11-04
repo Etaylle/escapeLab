@@ -123,18 +123,27 @@ export const LEVER_FIGURE = 'button-sync-lever';
 
 /**
  * What the document says of the device, by its look: its type plate, the
- * drawing it opens on, what it is for and how it is built. The levers and
- * the presses go by the badges logged into the lab — one for every member
- * of the crew — so the page names a badge where the game counts a player.
+ * drawing it opens on, what it is for and how it is built — and what the line
+ * in its head says it does (`does`). The levers and the presses go by the
+ * badges logged into the lab — one for every member of the crew — so the page
+ * names a badge where the game counts a player.
  */
 const DEVICE: Record<
   ButtonSyncDef['style'],
-  { plate: TypePlate; figure: string; caption: string; purpose: string; build: string }
+  {
+    plate: TypePlate;
+    figure: string;
+    caption: string;
+    purpose: string;
+    build: string;
+    does: string;
+  }
 > = {
   button: {
     plate: { name: 'Synchrontaster', type: 'ST-2', year: 1981 },
     figure: 'button-sync',
     caption: 'Pult mit Synchrontaste',
+    does: 'Der Taster sichert Schaltungen für das ganze Labor',
     purpose:
       'Der Synchrontaster sichert Schaltungen, die das ganze Labor betreffen, etwa einen ' +
       'Neustart oder den Not-Aus: Eine solche Schaltung schließt nur, wenn alle im Labor ' +
@@ -147,6 +156,7 @@ const DEVICE: Record<
     plate: { name: 'Hauptschalter', type: 'HS-3', year: 1976 },
     figure: LEVER_FIGURE,
     caption: 'Hauptschalter mit Hebeln',
+    does: 'Der Hauptschalter schaltet Licht und Grundversorgung zu',
     purpose:
       'Der Hauptschalter schaltet nach einem Ausfall Licht und Grundversorgung wieder zu. Für ' +
       'jeden im Labor angemeldeten Dienstausweis hat er einen Hebel, und er schließt erst, wenn ' +
@@ -327,6 +337,10 @@ export const buttonSyncModule: PuzzleModule<
       lastResult:
         viewer.playerId !== null && state.expired.includes(viewer.playerId) ? 'expired' : null,
     };
+  },
+
+  plate(def) {
+    return DEVICE[def.style].does;
   },
 
   manual(def) {

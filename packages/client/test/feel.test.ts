@@ -255,6 +255,7 @@ describe('a change at a device', () => {
     title: 'Synchronschaltung',
     manual: null,
     console: 'a',
+    plate: 'Der Taster sichert Schaltungen für das ganze Labor',
     backup: null,
     ...fields,
   });

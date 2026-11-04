@@ -667,6 +667,11 @@ export function StationModal({
           {coach.text}
         </p>
       )}
+      {puzzle.plate !== null && (
+        // A phone held sideways has no row of the device's to spare: what its machine does
+        // stands beside it there, under the Laborkennung, and in its head everywhere else.
+        <p className="station-plate device-engraving">{puzzle.plate}</p>
+      )}
       <PuzzlePanel
         puzzle={puzzle}
         run={run}

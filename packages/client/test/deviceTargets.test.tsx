@@ -277,6 +277,26 @@ describe('the roles words take on Blackout’s devices', () => {
   });
 });
 
+describe('the line saying what each machine does', () => {
+  it.each(BLACKOUT_DEVICES)(
+    '$name: in its head at a desk, beside it on a phone held sideways, never twice',
+    ({ nodes }) => {
+      const head = nodes.find((node) => node.classes.includes('device-purpose'));
+      const beside = nodes.find((node) => node.classes.includes('station-plate'));
+      if (head === undefined || beside === undefined) {
+        throw new Error('the device engraves no line, or the frame shows none beside it');
+      }
+      expect(beside.text).toBe(head.text);
+      const shown = (screen: Screen): boolean[] =>
+        [head, beside].map((node) => !sheets.hidden(node, screen));
+      expect(shown(LAPTOP)).toEqual([true, false]);
+      expect(shown(DESKTOP)).toEqual([true, false]);
+      expect(shown(PHONE)).toEqual([false, true]);
+      expect(sheets.fontSize(beside, PHONE)).toBeGreaterThanOrEqual(11);
+    },
+  );
+});
+
 describe('every other device', () => {
   const others = Object.keys(PANELS).filter((type) => type !== 'relay');
 

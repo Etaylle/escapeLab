@@ -698,6 +698,13 @@ export const serversModule: PuzzleModule<ServersDef, ServersState, ServersInput,
     };
   },
 
+  /** Console a is the terminal, console b the rack. */
+  plate(_def, console) {
+    return console === 'b'
+      ? 'Das Rack versorgt die Dienste mit Strom'
+      : 'Das Terminal steuert die Dienste des Rechnernetzes';
+  },
+
   manual(def) {
     return labDocument({
       plate: PLATE,
