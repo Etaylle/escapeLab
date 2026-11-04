@@ -10,6 +10,7 @@ import {
   type DeviceRun,
 } from '../puzzles/Device.js';
 import { PANELS, READERS, SOUNDS, type Panel, type Reader } from '../puzzles/index.js';
+import { useIntercom } from '../voice/useVoice.js';
 
 interface PuzzlePanelProps {
   puzzle: PuzzleView;
@@ -39,9 +40,10 @@ function StationDevice({ puzzle, run, send, mission, onStepBack = null }: Puzzle
   const feel = useDeviceFeel(puzzle, run, sounds);
   const notice = useFreshAlarm(run.alarm, feel.alarms);
   const refused = useFreshRefusal(run.refusal);
+  const intercom = useIntercom();
   return (
     <Device
-      {...deviceOf(puzzle)}
+      {...deviceOf(puzzle, intercom)}
       alarms={feel.alarms}
       solved={feel.solved}
       press={feel.press}

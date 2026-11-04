@@ -621,8 +621,8 @@ function puzzleViewFor(state: GameState, playerId: string | null): PuzzleView | 
 
 /**
  * Who lets `playerId`'s inputs at the open station of `puzzleId` count, by
- * name, and where they stand; null for the audience, away from the station
- * and while nobody backs them up.
+ * id and name, and where they stand; null for the audience, away from the
+ * station and while nobody backs them up.
  */
 function backupFor(
   state: GameState,
@@ -631,7 +631,9 @@ function backupFor(
 ): PuzzleView['backup'] {
   const [first] = playerId === null ? [] : backupsOf(state, puzzleId, playerId);
   const name = state.players.find((p) => p.id === first?.playerId)?.name;
-  return first === undefined || name === undefined ? null : { name, where: first.where };
+  return first === undefined || name === undefined
+    ? null
+    : { playerId: first.playerId, name, where: first.where };
 }
 
 /** Who looks at the open puzzle `puzzleId` from where; the audience sees it from everywhere. */

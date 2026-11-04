@@ -119,14 +119,15 @@ describe('the device', () => {
   });
 
   it('takes the line from the view of the console this player stands at, none elsewhere', () => {
-    const box = deviceOf(seen('circuit', {}, 'a'));
-    const meter = deviceOf(seen('circuit', {}, 'b'));
+    const nobody = new Set<string>();
+    const box = deviceOf(seen('circuit', {}, 'a'), nobody);
+    const meter = deviceOf(seen('circuit', {}, 'b'), nobody);
     expect([box.plate, meter.plate]).toEqual([
       'Der Kasten trennt Kabel der Notstromversorgung',
       'Das Prüfpult misst die Spannung des gewählten Kabels',
     ]);
     const audience = stationView({ type: 'circuit', id: 'c', title: 'K' }, { who: null, seat: null });
-    expect(deviceOf(audience).plate).toBeNull();
+    expect(deviceOf(audience, nobody).plate).toBeNull();
   });
 
   it('stands calm: its kind only, the face open to presses, a dark strip along its foot', () => {

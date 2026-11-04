@@ -24,6 +24,8 @@ import {
 } from '../src/puzzles/SignalPanel.js';
 import { commandOf, COMMANDS, Keys, withWord } from '../src/puzzles/ServersPanel.js';
 import { PuzzlePanel, ReaderPanel } from '../src/screens/PuzzlePanel.js';
+import type { VoiceMesh } from '../src/voice/mesh.js';
+import { VoiceContext } from '../src/voice/useVoice.js';
 import { deviceRun, iconsAsWords, NO_CLOCK, PICTOGRAPH, stationView } from './fixtures.js';
 
 /**
@@ -174,36 +176,71 @@ describe('the device frame', () => {
 });
 
 describe('the partner LED', () => {
+  /** Nobody on the station's intercom with this player. */
+  const NOBODY: ReadonlySet<string> = new Set();
+  const BEN_AT_B = { playerId: 'p2', name: 'Ben', where: 'Pult B' };
+
   it('burns green with who backs this player up, and where', () => {
-    const backed = { ...seen('maze'), backup: { name: 'Ben', where: 'SPIND' } };
-    expect(partnerLed(backed)).toEqual({ tone: 'green', label: 'PARTNER', detail: 'Ben · SPIND' });
+    const backed = { ...seen('maze'), backup: { playerId: 'p2', name: 'Ben', where: 'SPIND' } };
+    expect(partnerLed(backed, NOBODY)).toEqual({
+      tone: 'green',
+      label: 'PARTNER',
+      detail: 'Ben · SPIND',
+    });
     expect(panel(backed)).toContain(
       '<li class="device-led device-led--green">' +
         '<span class="device-lamp device-lamp--green" aria-hidden="true"></span>' +
         '<span class="device-led-label">PARTNER</span>' +
         '<span class="device-led-detail">Ben · SPIND</span></li>',
     );
-    const atA = { ...seen('circuit'), backup: { name: 'Ben', where: 'Pult B' } };
-    expect(partnerLed(atA)?.detail).toBe('Ben · Pult B');
+    const atA = { ...seen('circuit'), backup: BEN_AT_B };
+    expect(partnerLed(atA, NOBODY)?.detail).toBe('Ben · Pult B');
+  });
+
+  it('adds „· Funk“ while the station’s intercom carries the partner’s voice', () => {
+    const atA = { ...seen('circuit'), backup: BEN_AT_B };
+    expect(partnerLed(atA, new Set(['p2']))).toEqual({
+      tone: 'green',
+      label: 'PARTNER',
+      detail: 'Ben · Pult B · Funk',
+    });
+    // Somebody else on it says nothing of the partner, and a red LED has nobody to carry.
+    expect(partnerLed(atA, new Set(['p3']))?.detail).toBe('Ben · Pult B');
+    expect(partnerLed(seen('circuit'), new Set(['p2']))?.detail).toBe(
+      'niemand an Pult B oder bei den Regeln',
+    );
+    // The device as the game frames it, the page's voice telling whom the intercom carries.
+    const state = { intercom: new Set(['p2']) };
+    const voice = { subscribe: () => () => undefined, getState: () => state };
+    const html = renderToStaticMarkup(
+      <VoiceContext value={voice as unknown as VoiceMesh}>
+        <PuzzlePanel puzzle={atA} run={deviceRun()} send={() => undefined} mission={NO_CLOCK} />
+      </VoiceContext>,
+    );
+    expect(html).toContain('<span class="device-led-detail">Ben · Pult B · Funk</span>');
+    expect(html.match(/Funk/g)).toHaveLength(1);
+    expect(panel(atA)).not.toContain('Funk');
   });
 
   it('burns red with where somebody has to stand while nobody does', () => {
-    expect(partnerLed(seen('maze'))).toEqual({
+    expect(partnerLed(seen('maze'), NOBODY)).toEqual({
       tone: 'red',
       label: 'KEIN PARTNER',
       detail: 'niemand bei den Regeln',
     });
-    expect(partnerLed(seen('circuit'))?.detail).toBe('niemand an Pult B oder bei den Regeln');
-    expect(partnerLed(seen('signal', true, {}, 'b'))?.detail).toBe(
+    expect(partnerLed(seen('circuit'), NOBODY)?.detail).toBe(
+      'niemand an Pult B oder bei den Regeln',
+    );
+    expect(partnerLed(seen('signal', true, {}, 'b'), NOBODY)?.detail).toBe(
       'niemand an Pult A oder bei den Regeln',
     );
     expect(panel(seen('maze'))).toContain('<li class="device-led device-led--red">');
   });
 
   it('is not there where the whole crew presses, nor for the audience', () => {
-    expect(partnerLed(seen('button-sync'))).toBeNull();
+    expect(partnerLed(seen('button-sync'), new Set(['p2']))).toBeNull();
     expect(panel(seen('button-sync'))).not.toContain('device-led');
-    expect(partnerLed(seen('circuit', true, {}, null, null))).toBeNull();
+    expect(partnerLed(seen('circuit', true, {}, null, null), new Set(['p2']))).toBeNull();
   });
 });
 
@@ -1321,12 +1358,12 @@ describe('the Serverraum', () => {
 
   it('lights RACK at the terminal and TERMINAL at the rack while somebody stands there', () => {
     expect(lampBy(panel(at('a')), 'RACK')).toBe('off');
-    const atRack = { name: 'Ben', where: 'Pult B' };
+    const atRack = { playerId: 'p2', name: 'Ben', where: 'Pult B' };
     expect(lampBy(panel({ ...at('a'), backup: atRack }), 'RACK')).toBe('green');
     // Somebody at the rules lets the inputs count, but stands at no console.
-    const reading = { name: 'Ben', where: 'SPIND' };
+    const reading = { playerId: 'p2', name: 'Ben', where: 'SPIND' };
     expect(lampBy(panel({ ...at('a'), backup: reading }), 'RACK')).toBe('off');
-    const atTerminal = { name: 'Anna', where: 'Pult A' };
+    const atTerminal = { playerId: 'p1', name: 'Anna', where: 'Pult A' };
     expect(lampBy(panel({ ...at('b'), backup: atTerminal }), 'TERMINAL')).toBe('green');
     expect(lampBy(panel({ ...at('b'), backup: reading }), 'TERMINAL')).toBe('off');
   });

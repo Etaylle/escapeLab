@@ -284,7 +284,9 @@
  * `connected`, and while the host holds V for two seconds the speaking mark
  * has to show for the host on both pages (voice.png, voice-phone.png). After
  * the guest's reload the link has to come up again. Any of these that fails,
- * fails the run.
+ * fails the run. At the first station with two consoles, both manned, the
+ * station's intercom has to carry each player's voice to the other in full,
+ * and each device's PARTNER LED has to say „· Funk" (partner-funk.png).
  *
  * Sound: the pages' audio probe (`window.__escapelab.audio`, client
  * world/ambience.ts, music.ts, radioVoice.ts, spatial.ts) is read as the run
@@ -3629,6 +3631,53 @@ async function capturePlates(seats, title) {
 }
 
 /**
+ * What `player`'s device and voice say of the station's intercom with `partner`: the PARTNER
+ * LED's line, and whether the page plays the partner over it in full — its voice naming them
+ * on the intercom, their volume at 1 (`window.__escapelab.voice`).
+ */
+async function partnerOnAir(player, partner) {
+  const detail = player.page.locator('.station-modal .device-led--green .device-led-detail');
+  const id = partner.seen.view.you.id;
+  const voice = await voiceOf(player.page);
+  const line = await textOf(detail);
+  const gain = voice?.gains?.[id] ?? null;
+  const inFull = voice?.intercom?.includes(id) === true && gain === 1;
+  return { line, inFull, gain, ok: inFull && /· Funk$/.test(line ?? '') };
+}
+
+/**
+ * partner-funk.png: the PARTNER LED line of the first seat's device at a station with two
+ * consoles, both players at them, while the station's intercom carries the voice between them
+ * (client voice/intercom.ts). On each device the line has to name the partner with „· Funk"
+ * after where they stand, and each page has to play the partner over the intercom in full, or
+ * the run fails; each gets LINK_MS to say so.
+ */
+async function capturePartnerFunk(seats, title) {
+  const said = [];
+  for (const [player] of seats) {
+    const partner = seats.map(([other]) => other).find((other) => other !== player);
+    let seen = await partnerOnAir(player, partner);
+    for (const end = Date.now() + LINK_MS; !seen.ok && Date.now() < end; ) {
+      await sleep(250);
+      seen = await partnerOnAir(player, partner);
+    }
+    said.push({ player, partner, ...seen });
+  }
+  const [[first]] = seats;
+  await captureElement(first.page.locator('.station-modal .device-leds'), 'partner-funk.png');
+  const lines = said.map(
+    ({ player, partner, line, inFull, gain }) =>
+      `${player.name} „PARTNER ${line ?? '!! no green LED'}", ` +
+      (inFull ? `${partner.name} in full over the intercom` : `!! ${partner.name} at ${gain}`),
+  );
+  console.log(`partner-funk.png   "${title}": ${lines.join('; ')}`);
+  const off = said.filter(({ ok }) => !ok).map(({ player }) => player.name);
+  if (off.length > 0) {
+    fail(`partner-funk.png: ${off.join(' and ')} not on the intercom with the partner`);
+  }
+}
+
+/**
  * console-a.png, console-b.png: a station with two consoles, whatever its
  * kind — the one after a solved sync station, or a first one the crew got
  * into (`manBothConsoles`). The operator walks to console A, the reader to
@@ -3697,6 +3746,7 @@ async function captureConsoles(operator, reader) {
     );
   }
   await capturePlates(seats, title);
+  await capturePartnerFunk(seats, title);
   for (const [i, { page }] of crew.entries()) {
     if (sizes[i] !== null) {
       await page.setViewportSize(sizes[i]);
@@ -8272,6 +8322,9 @@ function reportSprint(name, run, sprint, walk) {
 //   digit of „Dienst …" and 2 have to say „Dienst DNS" — a mission without such phrases skips it
 // console-plate.png  the heads of a two-console station's devices, one over the other: each has
 //   to engrave what the view says its machine does, the two apart — or the run fails
+// partner-funk.png  the PARTNER LED line of the first seat's device at that station, both
+//   players at its consoles: each line has to end in „· Funk" and each page has to play the
+//   partner over the station's intercom in full, gain 1 — or the run fails
 // rack-diagram.png  the rack console's cabling diagram as its player opens it: six boxes, each
 //   LED as the rack's unit says, no code anywhere — or the run fails
 // achievements.png  the won card once its plaques are in: the ones the view says the run earned,

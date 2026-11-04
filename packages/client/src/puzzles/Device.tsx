@@ -239,18 +239,21 @@ function stationModule(puzzle: PuzzleView) {
 
 /**
  * The LED that says whether this player's inputs count: green with who
- * backs them up and where — „Ben · Pult B", „Ben · SPIND" — or red with
- * where the station finds nobody. None where the whole crew works the
- * station, and none for the audience, who stands at no console.
+ * backs them up and where — „Ben · Pult B", „Ben · SPIND" — and „· Funk"
+ * after it while the station's intercom carries their voice (`intercom`,
+ * voice/mesh.ts `VoiceState`); or red with where the station finds nobody.
+ * None where the whole crew works the station, and none for the audience,
+ * who stands at no console.
  */
-export function partnerLed(puzzle: PuzzleView): DeviceLed | null {
+export function partnerLed(puzzle: PuzzleView, intercom: ReadonlySet<string>): DeviceLed | null {
   const station = stationModule(puzzle);
   if (station === null || station.wholeCrew || puzzle.console === null) {
     return null;
   }
   const { backup } = puzzle;
   if (backup !== null) {
-    return { tone: 'green', label: 'PARTNER', detail: `${backup.name} · ${backup.where}` };
+    const funk = intercom.has(backup.playerId) ? ' · Funk' : '';
+    return { tone: 'green', label: 'PARTNER', detail: `${backup.name} · ${backup.where}${funk}` };
   }
   const where =
     station.consoles === 2
@@ -263,13 +266,15 @@ export function partnerLed(puzzle: PuzzleView): DeviceLed | null {
  * The frame for the open puzzle: its paragraph and title on the plate, the
  * console this player works where the station has two — the view names
  * console a at a station with one as well, the module tells them apart —
- * what the machine there does, and the partner LED.
+ * what the machine there does, and the partner LED, which says whether the
+ * station's intercom carries the partner (`intercom`).
  */
 export function deviceOf(
   puzzle: PuzzleView,
+  intercom: ReadonlySet<string>,
 ): Omit<DeviceProps, 'children' | 'alarms' | 'solved' | 'press'> {
   const twoConsoles = stationModule(puzzle)?.consoles === 2;
-  const partner = partnerLed(puzzle);
+  const partner = partnerLed(puzzle, intercom);
   return {
     kind: puzzle.kind,
     paragraph: `§${puzzle.index + 1}`,

@@ -198,10 +198,16 @@ describe('an input at a station', () => {
   });
 });
 
+/** A backup as the view names it — Anna (p1), Ben (p2) or Cleo (p3) — and where they stand. */
+function backedBy(playerId: 'p1' | 'p2' | 'p3', where: string) {
+  const name = { p1: 'Anna', p2: 'Ben', p3: 'Cleo' }[playerId];
+  return { playerId, name, where };
+}
+
 describe('the backup in the view', () => {
   it('names the reader and where they read, for the player at the station only', () => {
     const open = boxOpen();
-    expect(viewFor(open, 'p1').puzzle?.backup).toEqual({ name: 'Ben', where: 'HANDBUCH' });
+    expect(viewFor(open, 'p1').puzzle?.backup).toEqual(backedBy('p2', 'HANDBUCH'));
     expect(viewFor(open, 'p2').puzzle?.backup).toBeNull();
     expect(viewFor(open, 'p3').puzzle?.backup).toBeNull();
     expect(viewForSpectator(open).puzzle?.backup).toBeNull();
@@ -219,17 +225,17 @@ describe('the backup in the view', () => {
       manualId: 'spind',
       at: T0 + 800,
     });
-    expect(viewFor(searched, 'p1').puzzle?.backup).toEqual({ name: 'Cleo', where: 'SPIND' });
-    expect(viewFor(searched, 'p2').puzzle?.backup).toEqual({ name: 'Cleo', where: 'SPIND' });
+    expect(viewFor(searched, 'p1').puzzle?.backup).toEqual(backedBy('p3', 'SPIND'));
+    expect(viewFor(searched, 'p2').puzzle?.backup).toEqual(backedBy('p3', 'SPIND'));
   });
 
   it('names the other console before a reader, at a station with two', () => {
     const all = chainOpen({ a: ['p1'], b: ['p2'], book: ['p3'] }).state;
-    expect(viewFor(all, 'p1').puzzle?.backup).toEqual({ name: 'Ben', where: 'Pult B' });
-    expect(viewFor(all, 'p2').puzzle?.backup).toEqual({ name: 'Anna', where: 'Pult A' });
+    expect(viewFor(all, 'p1').puzzle?.backup).toEqual(backedBy('p2', 'Pult B'));
+    expect(viewFor(all, 'p2').puzzle?.backup).toEqual(backedBy('p1', 'Pult A'));
     expect(viewFor(all, 'p3').puzzle?.backup).toBeNull();
     const left = chainOpen({ a: ['p1'], b: [], book: ['p3'] }).state;
-    expect(viewFor(left, 'p1').puzzle?.backup).toEqual({ name: 'Cleo', where: 'HANDBUCH' });
+    expect(viewFor(left, 'p1').puzzle?.backup).toEqual(backedBy('p3', 'HANDBUCH'));
   });
 
   it('is null where the whole crew works the panel, even with somebody at the book', () => {

@@ -90,7 +90,8 @@ describe('Room: nobody works a station alone', () => {
 
   it('refuses a press while the reader is away, without an alarm, and takes it on return', () => {
     const { room, anna, ben } = inPlace();
-    expect(lastView(anna).puzzle?.backup).toEqual({ name: 'Ben', where: 'HANDBUCH' });
+    const atTheBook = { playerId: ben.playerId, name: 'Ben', where: 'HANDBUCH' };
+    expect(lastView(anna).puzzle?.backup).toEqual(atTheBook);
     const press = nextPress(anna);
 
     // Ben walks off towards the keypad, out of reach of the book and not yet at the station.
@@ -105,7 +106,7 @@ describe('Room: nobody works a station alone', () => {
 
     // Back at the book, the same press counts.
     walkTo(room, ben, 10.5, 2.5);
-    expect(lastView(anna).puzzle?.backup).toEqual({ name: 'Ben', where: 'HANDBUCH' });
+    expect(lastView(anna).puzzle?.backup).toEqual(atTheBook);
     room.act(anna.playerId, { kind: 'puzzle-input', input: press });
     expect(lastView(ben)).toMatchObject({ penaltySeq: 0, puzzle: { kind: 'keypad', litCount: 1 } });
     room.dispose();

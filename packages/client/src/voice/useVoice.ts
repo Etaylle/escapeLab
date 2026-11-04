@@ -134,3 +134,19 @@ export function useVoice(): Voice | null {
   );
   return mesh === null || state === null ? null : { mesh, state };
 }
+
+const NOBODY: ReadonlySet<string> = new Set();
+
+/**
+ * Whom this player hears over the station's intercom now, by player id (`VoiceState`): the
+ * same set until it changes, so that nothing else the voice does renders anew; nobody outside
+ * the app.
+ */
+export function useIntercom(): ReadonlySet<string> {
+  const mesh = useContext(VoiceContext);
+  return useSyncExternalStore(
+    mesh?.subscribe ?? NO_CHANGES,
+    () => mesh?.getState().intercom ?? NOBODY,
+    () => mesh?.getState().intercom ?? NOBODY,
+  );
+}
