@@ -699,9 +699,14 @@ function placeOf(manualId: string): Tile {
   return [source.x, source.y];
 }
 
-/** The tile an item lies on right now. */
+/**
+ * The tile an item lies on right now; the audience sees every one. A crew member's view holds a
+ * part nobody has found only while it is in their sight, and whether a lamp rested on it long
+ * enough on the way past depends on how fast the positions came in.
+ */
 function itemTile(itemId: string): Tile {
-  const item = crew[0].view?.map?.items.find((i) => i.id === itemId) ?? fail(`no "${itemId}"`);
+  const item =
+    zoe.spectatorView?.map?.items.find((i) => i.id === itemId) ?? fail(`no "${itemId}"`);
   return [Math.floor(item.x), Math.floor(item.y)];
 }
 
