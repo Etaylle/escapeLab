@@ -215,6 +215,15 @@ Everything the passes draw is in device pixels: the sprites are baked per device
 (atlas.ts, two levels kept), the bakes and glows on the frame's pixel grid within their bounds
 (bakes.ts, radial.ts), the world's text at its CSS size times the density. `dpr2.png` checks a
 page at twice the density.
+The frame itself is set in CSS pixels (Framing), so the density decides only how finely the same
+world is drawn: at 1440 × 820 a tile stands 58.2 device pixels at density 1 and 116.3 at 2, four
+times the pixels for the same 24.3 × 11.5 tiles — where density 2 used to draw the lab's whole
+27-tile width at 104.7 a tile and density 1 22.2 tiles at 63.7. The walkthrough draws its host's
+window at density 2 as well and shoots it at its own pixels (`camera-dpr2.png`, and in Blackout
+`cold-open-dpr2.png`, `panel-dpr2.png`, `escape-dpr2.png`, 2880 px wide): every world capture of
+the walkthrough changed with the tile when the frame was fixed, so main's captures from before
+are no baseline for the world's pixels any more; the join screen, the Bestenliste, the editor and
+the lobby, which draw no world, stayed pixel for pixel the same (Cost).
 
 ## Interface (styles/interaction.css)
 
@@ -435,6 +444,26 @@ also bounds what a regression in the pacing scene itself could hide: the pacing 
 against 40 ms alone, as is every window before it (the lab lit before the blackout), and one
 that fails sets no pace. The log names both numbers, „p95 50.0 ms, allowed 66.8 (2 × pacing
 33.4)", and a line `pace` what the pacing window set.
+
+**The frame in CSS pixels (N-camera).** The walkthrough's host window at 1440 × 820 now shows
+24.3 × 11.5 tiles of 58.2 px where main showed 22.2 × 10.5 of 63.7 — more tiles, each smaller —
+and at density 2 the same 24.3 × 11.5 where main drew the whole 27-tile width (Framing). Its
+frame windows did not move: in Blackout, main and the branch run back to back, every gated
+window held 16.7 to 16.8 ms p95 under `SHOTS_SOFTWARE_GL=1` but the open Notstrom-Kasten
+panel, 33.4 ms on both, and 16.7 to 16.8 ms without it; the branch's Systemcheck held 16.7 to
+16.8 ms, its open Signalprobe panel 33.4 under software GL. The looks at density 2, for
+information, held 16.7 to 16.8 ms on the branch, where main's escape at 2 reached 33.4 without
+software GL. On the paced
+bench above, copied to `scratchpad/camera/bench/` at the host's 1414 × 669 canvas and built twice
+from the branch, once with main's rule patched back in, six rounds interleaved at density 1, the
+work of a frame came out alike — medians, the branch against main: the escape by the hatch 16.6
+against 16.3 ms, the dark Flur 11.1 against 11.3, the lab lit before the blackout 10.5 against
+10.6, the Labor lit 14.1 against 14.8 — while the rounds swung by 4 ms from one to the next as
+the machine's load rose from 2.7 to 6.7; round by round the escape came out 0.4 ms cheaper in
+five rounds of six, the light and its glows going by their area in pixels, which shrinks with the
+tile. At density 2, four rounds, the escape came out alike and the dark Flur 0.9 ms dearer in
+every round (36.6 against 35.7), its tiles 11 % larger than main's there; a frame at density 2
+takes 32 to 51 ms on that slowed software path either way.
 
 ## Open
 
