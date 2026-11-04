@@ -222,7 +222,7 @@
   {
     "id": "step-steel-3",
     "kind": "oneshot",
-    "prompt": "One loud, close-miked footstep: a heavy steel-toed work boot landing hard on a steel tread plate floor, a solid metallic clang. Dry, full level, starting at once.",
+    "prompt": "One loud, close-miked footstep: a heavy steel-toed work boot slamming down on a steel tread plate, a hard metallic clang with a short ring, hitting full scale. Close, dry, loud, no silence, starting at once.",
     "durationSeconds": 0.5,
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
@@ -321,6 +321,15 @@
     "loop": false,
     "target": { "measure": "peak", "dbfs": -3 },
     "usedBy": ["src/world/audio.ts#pingBlip"]
+  },
+  {
+    "id": "danger-tick",
+    "kind": "oneshot",
+    "prompt": "One short, dry tick from a handheld radiation detector: a single sharp click of a Geiger counter, close-miked, loud, full level, no tail, starting at once.",
+    "durationSeconds": 0.5,
+    "loop": false,
+    "target": { "measure": "peak", "dbfs": -3 },
+    "usedBy": ["src/world/danger.ts#senseDanger"]
   },
   {
     "id": "discovery",

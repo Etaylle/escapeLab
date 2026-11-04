@@ -56,6 +56,7 @@ export const SFX_IDS = [
   'alarm-sting',
   'console-ready',
   'ping',
+  'danger-tick',
   'discovery',
   'locker-open',
   'cabinet-unlock',

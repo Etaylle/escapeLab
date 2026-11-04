@@ -152,10 +152,11 @@ die Entscheidung.
 
 ## Nur lokal
 
-### L-1 Zwölf Aufnahmen rendern — Status: nur lokal
-- `packages/client/test/sampleManifest.test.ts` `AWAITING_RENDER`: step-lino/steel 1–3,
-  alarm-sting, door-close 1–2, drone-pass, hatch-open-done, ui-tick; danach die Liste leeren.
-- Eigener Ton für die Drohnenwarnung statt des Ping-Tons (`world/danger.ts`).
+### L-1 Aufnahmen rendern — Status: nur lokal (12 von 14 erledigt 2026-11-04, ec0ef9c)
+- Offen: `step-steel-3` kam dreimal fast stumm (Prompt geschärft, Nachrender mit 5 Takes) und
+  der neue Eintrag `danger-tick` (Geigerzähler-Klick) für die Drohnenwarnung statt des Ping-Tons
+  (`world/danger.ts` danach umstellen). Befehl in `packages/client`:
+  `node --env-file=/Users/uros/Documents/Req.Eng./escapelab/.env.local scripts/sfx.ts --candidates 5 --only step-steel-3,danger-tick`
 
 ### L-2 Zweiter Playtest — Status: nur lokal
 - Dieselbe Person wie beim ersten; Telemetrie `packages/server/data/runs.jsonl` auswerten

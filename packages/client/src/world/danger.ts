@@ -136,10 +136,10 @@ function lookBack(now: number): ReadonlyMap<string, number> {
   return old?.distances ?? new Map();
 }
 
-/** One tick for the drone at `place`: the ping's recording, short and pitched up, placed. */
+/** One tick for the drone at `place`: a Geiger counter's click, short and pitched up, placed. */
 function tick(place: Place, rate: number): void {
   const engine = playingEngine();
-  const ping = sample('ping');
+  const ping = sample('danger-tick');
   if (engine === null || ping === null || place.gain <= 0.01) {
     return;
   }

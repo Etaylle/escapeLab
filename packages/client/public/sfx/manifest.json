@@ -251,6 +251,18 @@
     "influence": 0.5,
     "source": "elevenlabs"
   },
+  "danger-tick": {
+    "file": "danger-tick.mp3",
+    "ms": 480,
+    "gain": 0.708,
+    "startMs": 0,
+    "floor": 0.00126,
+    "rms": 0.0523,
+    "loop": false,
+    "hash": "e1e4f0ab888a",
+    "influence": 0.6,
+    "source": "elevenlabs"
+  },
   "dial-detent": {
     "file": "dial-detent.mp3",
     "ms": 480,
@@ -878,12 +890,12 @@
   "step-steel-3": {
     "file": "step-steel-3.mp3",
     "ms": 480,
-    "gain": 37.0575,
+    "gain": 0.777,
     "startMs": 0,
-    "floor": 0.0000669,
-    "rms": 0.0029,
+    "floor": 0.000324,
+    "rms": 0.0773,
     "loop": false,
-    "hash": "80800163296e",
+    "hash": "f3eac88db39e",
     "influence": 0.6,
     "source": "elevenlabs"
   },

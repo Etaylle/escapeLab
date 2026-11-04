@@ -147,7 +147,7 @@ describe('the tick', () => {
   }
 
   const ticksOf = (ctx: ReturnType<typeof lastContext>): FakeBufferSource[] =>
-    ctx.all<FakeBufferSource>('buffer').filter((source) => source.buffer?.tag === 'ping');
+    ctx.all<FakeBufferSource>('buffer').filter((source) => source.buffer?.tag === 'danger-tick');
 
   it('ticks from where a drone closing in flies, short and pitched up, nearer faster', async () => {
     const { module, ctx } = await sense();
