@@ -3,8 +3,9 @@
  * bar along the top edge, the minimap, and the controls in the bottom corners
  * — on a touch screen the steering pad under the left thumb and the buttons
  * under the right one. The camera keeps the avatar clear of them, and the
- * screen's own text — edge arrows, room names — keeps off them. Pure; device
- * pixels.
+ * screen's own text — edge arrows, room names — keeps off them. The camera's
+ * frame is set in CSS pixels (`tileCss`); everything else is in device
+ * pixels. Pure.
  */
 
 /** A box on the canvas. */
@@ -65,6 +66,59 @@ export interface Lens {
   top: number;
   /** how far the avatar is lifted on a touch screen, whose pad would sit on it */
   lift: number;
+}
+
+/** How many tiles of height the camera frames on a canvas TALL_CSS or taller: a laptop's view. */
+export const TILES_HIGH = 11.5;
+/** How many below that: a phone held sideways shows fewer, so that its figure stays readable. */
+export const TILES_HIGH_SHORT = 9;
+/** From how tall a canvas, CSS pixels, the camera frames TILES_HIGH tiles of height. */
+export const TALL_CSS = 600;
+/**
+ * How small and how large a tile stands on screen, CSS pixels: the figure, 0.85 of a tile,
+ * never under 24 px, and the lab no wall of giant tiles on a tall monitor.
+ */
+export const TILE_CSS = { min: 28, max: 96 } as const;
+
+/**
+ * How far a drone looks, tiles: the cone of Blackout's drones at the normal difficulty, the
+ * reference level's (missions/blackout.json; „Hart" stretches it to 5.2, „Entspannt" shortens it).
+ */
+export const DRONE_REACH = 4.5;
+/**
+ * How many drones' reaches the band below the objective bar holds from top to bottom: twice with
+ * a mouse and keys — the avatar in its middle sees a cone's end before the cone sees it — and
+ * one and a half on a touch screen, a phone held sideways, whose HUD takes a quarter of it.
+ */
+export const BAND_REACHES = { fine: 2, touch: 1.5 } as const;
+
+/** What the camera's frame is set by, CSS pixels: the canvas, the objective bar over it. */
+export interface Framing {
+  /** the canvas's height */
+  height: number;
+  /**
+   * how far the objective bar reaches down with a line on the air — steady while lines come
+   * and go (insets.ts `bar`)
+   */
+  bar: number;
+  /** steered by touch: the band holds BAND_REACHES.touch, not .fine */
+  touch: boolean;
+}
+
+/**
+ * How tall a tile stands on screen, CSS pixels: the canvas's height over the tiles the camera
+ * frames there (TILES_HIGH, TILES_HIGH_SHORT) — but where the band the objective bar leaves
+ * below it would then hold fewer than BAND_REACHES drones' reaches, the band wins and the tiles
+ * shrink until it holds them — and held within TILE_CSS, whose floor wins over the band on a
+ * canvas too small for both. The frame is fixed in CSS pixels, so every screen shows the same
+ * world whatever its density; the canvas draws it at its own (render/backing.ts), device pixels
+ * a tile being this times that.
+ */
+export function tileCss({ height, bar, touch }: Framing): number {
+  const tilesHigh = height >= TALL_CSS ? TILES_HIGH : TILES_HIGH_SHORT;
+  const band = DRONE_REACH * (touch ? BAND_REACHES.touch : BAND_REACHES.fine);
+  const px = Math.min(height / tilesHigh, (height - bar) / band);
+  return Math.min(TILE_CSS.max, Math.max(TILE_CSS.min, px));
 }
 
 /** `target` held between `lo` and `hi`; their middle where there is no room between them. */

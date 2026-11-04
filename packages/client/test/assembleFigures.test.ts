@@ -18,6 +18,7 @@ import {
   zoomAt,
   zoomToward,
 } from '../src/world/render/camera.js';
+import { backingSize } from '../src/world/render/backing.js';
 import { newSim } from '../src/world/sim.js';
 import { fakeCanvas, FakePath2D } from './fakeCanvas.js';
 import { kitWith, TILES } from './frames.js';
@@ -108,7 +109,7 @@ function sourceWith(items: Item[], finale: FinaleCue | null = null): FrameSource
     sim,
     spectator: false,
     touchPad: { matches: false } as MediaQueryList,
-    insets: { top: 0, bottom: 0, controls: [] },
+    insets: { top: 0, bar: 0, bottom: 0, controls: [] },
     live: { current: latest },
     alarm: { current: null },
     positions: { current: { run: null, players: {} } },
@@ -341,6 +342,56 @@ describe('assembleFrame — the camera leaning in on a station’s open panel', 
     const audience = { ...sourceWith([]), spectator: true };
     const wide = scaleAt(audience, 10_000, false);
     expect(scaleAt(audience, 10_000 + ZOOM_MS, true)).toBeCloseTo(wide, 9);
+  });
+});
+
+describe('assembleFrame — the same frame at every density', () => {
+  beforeAll(() => {
+    vi.stubGlobal('Path2D', FakePath2D);
+  });
+  afterAll(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** A screen: its canvas, CSS pixels, the bar with a line on the air there, and its input. */
+  interface Screen {
+    css: { w: number; h: number };
+    bar: number;
+    touch: boolean;
+  }
+
+  /** Anna's camera on `screen` at `ratio`, its canvas's backing sized as the world sizes it. */
+  function cameraAt({ css, bar, touch }: Screen, ratio: number) {
+    const source = sourceWith([]);
+    const { w, h, dpr } = backingSize(css.w, css.h, ratio);
+    source.canvas = fakeCanvas(w, h).canvas;
+    source.insets = { ...source.insets, bar };
+    source.touchPad = { matches: touch } as MediaQueryList;
+    const map = source.live.current.view.map;
+    if (map === null) {
+      throw new Error('the view has no map');
+    }
+    const { camera } = assembleFrame(source, map, dpr, 0, []);
+    return { across: w / camera.scale, down: h / camera.scale };
+  }
+
+  it('shows a laptop’s window the same tiles at density 1 and 2, and a 3× phone as at 1', () => {
+    const screens: [Screen, number][] = [
+      [{ css: { w: 1414, h: 669 }, bar: 129.3, touch: false }, 11.5],
+      // The band below the bar decides at 1280×720: nine tiles of it.
+      [{ css: { w: 1254, h: 569 }, bar: 129.3, touch: false }, 569 / ((569 - 129.3) / 9)],
+      [{ css: { w: 826, h: 289 }, bar: 68.5, touch: true }, 9],
+    ];
+    for (const [screen, down] of screens) {
+      const plain = cameraAt(screen, 1);
+      const name = `${screen.css.w}×${screen.css.h}`;
+      expect(plain.down, name).toBeCloseTo(down, 2);
+      for (const ratio of [2, 3]) {
+        const dense = cameraAt(screen, ratio);
+        expect(dense.across, `${name} at ${ratio}`).toBeCloseTo(plain.across, 2);
+        expect(dense.down, `${name} at ${ratio}`).toBeCloseTo(plain.down, 2);
+      }
+    }
   });
 });
 

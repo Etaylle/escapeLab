@@ -188,6 +188,52 @@ sheet, the trays' cables, the wall screens, the furniture's screens and scopes, 
 tubes — each within the bench's noise (Atmosphere); the Labor lit, where most of them show
 together, costs 0.45 ms a frame more on the slowed main thread (Cost).
 
+## Framing (world/viewport.ts `tileCss`, insets.ts)
+
+The frame is a decision in CSS pixels, not an accident of the screen: every screen shows the
+same world whatever its density. A tile stands the world canvas's CSS height over 11.5 where the
+canvas stands 600 px or taller — a laptop's or a desktop's — and over 9 below that, a phone held
+sideways, whose figure has to stay readable; never under 28 px, so the figure keeps 24, nor over
+96 on a tall monitor. The canvas draws it at its own density (Crispness).
+
+Below the objective bar the frame keeps a band that holds a drone's reach twice from top to
+bottom with a mouse and keys — 9 tiles for Blackout's 4.5-tile cone at „Normal": the avatar in
+its middle sees a cone's end before the cone sees it — and one and a half times (6.75) on a
+touch screen, whose HUD keeps to a quarter of the canvas (A phone held sideways). Where the tile
+count would leave the band shorter, the band wins and the tiles shrink until it holds: a
+1280 × 720 window shows 11.6 tiles of height, 9 of them below the bar. The bar counts with a
+line on the air — its steady row, the clock and the goal's title, padding and all, and the row a
+radio line takes, measured on a banner set into the bar unseen and taken out in the same moment —
+so that a line coming or going never moves the zoom; what comes and goes under the goal's title,
+a station's missing part or the escape's checklist, does not count either: with a line on the
+air over the escape's checklist a 1280 × 720 window keeps about 8.8 tiles below the bar. Where
+the canvas is too small for both, the 28-px floor wins over the band. „Hart" stretches the
+drones' cone to 5.2 tiles and the band holds 1.7 of them; the frame stays the same at every
+difficulty.
+
+The camera follows as it did — a little ahead of a walker, 0.6 tiles eased in over τ 0.1 s, the
+view easing after the avatar over τ 0.17 s, held at the lab's edge. The lab, 27 tiles wide, is
+wider than the view on every screen now, 24 to 26 tiles, so the camera follows sideways on every
+screen, but only in the lab's middle columns: it stands held at a side wall on 88 % of
+Blackout's floor tiles at 1440 × 820 and 97 % at 1280 × 720 and on the phone (before: 80 % at
+1440 × 820 and density 1, 97 % at density 2, where the view was the lab's whole width). Up and
+down it follows on 43 % of them on a laptop, 71 % on the phone. A canvas wider than 2.35 : 1
+shows the lab whole across with the dark beyond its walls at the sides: the zoom that kept the
+lab over the whole canvas is left to the opening's shot. Measured in Blackout (the audit's camera
+script, copied to `scratchpad/camera/`; the canvas's box inside its 1-px border; with a line on
+the air in brackets):
+
+| Window | Density | Canvas | CSS px a tile | Tiles across × down | Below the bar | Figure |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1440 × 820 | 1 and 2 | 1414 × 669 | 58.2 | 24.3 × 11.5 | 10.1 (9.3) | 49.4 px |
+| 1280 × 720 | 1 and 2 | 1254 × 569 | 48.9 | 25.7 × 11.6 | 10.0 (9.0) | 41.5 px |
+| phone held sideways, 844 × 390 | 3, drawn at 2 | 826 × 289 | 32.1 | 25.7 × 9.0 | 7.8 (6.9) | 27.3 px |
+
+Before, the same screens showed 22.2 × 10.5 tiles at 1440 × 820 and density 1 but the lab's whole
+27-tile width × 12.8 at density 2, 23.1 × 10.5 and 27 × 12.3 at 1280 × 720, and 27 × 9.4 on the
+phone. A desktop's 1920 × 1080 window, its canvas some 1894 × 929, comes out by the rule at
+80.8 px a tile, 23.4 × 11.5 tiles.
+
 ## Camera (render/camera.ts, render/aberration.ts, vignette.ts)
 
 As a station's panel opens over the world the camera leans in 1.08 times over 200 ms, eased
@@ -215,6 +261,15 @@ Everything the passes draw is in device pixels: the sprites are baked per device
 (atlas.ts, two levels kept), the bakes and glows on the frame's pixel grid within their bounds
 (bakes.ts, radial.ts), the world's text at its CSS size times the density. `dpr2.png` checks a
 page at twice the density.
+The frame itself is set in CSS pixels (Framing), so the density decides only how finely the same
+world is drawn: at 1440 × 820 a tile stands 58.2 device pixels at density 1 and 116.3 at 2, four
+times the pixels for the same 24.3 × 11.5 tiles — where density 2 used to draw the lab's whole
+27-tile width at 104.7 a tile and density 1 22.2 tiles at 63.7. The walkthrough draws its host's
+window at density 2 as well and shoots it at its own pixels (`camera-dpr2.png`, and in Blackout
+`cold-open-dpr2.png`, `panel-dpr2.png`, `escape-dpr2.png`, 2880 px wide): every world capture of
+the walkthrough changed with the tile when the frame was fixed, so main's captures from before
+are no baseline for the world's pixels any more; the join screen, the Bestenliste, the editor and
+the lobby, which draw no world, stayed pixel for pixel the same (Cost).
 
 ## Interface (styles/interaction.css)
 
@@ -435,6 +490,26 @@ also bounds what a regression in the pacing scene itself could hide: the pacing 
 against 40 ms alone, as is every window before it (the lab lit before the blackout), and one
 that fails sets no pace. The log names both numbers, „p95 50.0 ms, allowed 66.8 (2 × pacing
 33.4)", and a line `pace` what the pacing window set.
+
+**The frame in CSS pixels (N-camera).** The walkthrough's host window at 1440 × 820 now shows
+24.3 × 11.5 tiles of 58.2 px where main showed 22.2 × 10.5 of 63.7 — more tiles, each smaller —
+and at density 2 the same 24.3 × 11.5 where main drew the whole 27-tile width (Framing). Its
+frame windows did not move: in Blackout, main and the branch run back to back, every gated
+window held 16.7 to 16.8 ms p95 under `SHOTS_SOFTWARE_GL=1` but the open Notstrom-Kasten
+panel, 33.4 ms on both, and 16.7 to 16.8 ms without it; the branch's Systemcheck held 16.7 to
+16.8 ms, its open Signalprobe panel 33.4 under software GL. The looks at density 2, for
+information, held 16.7 to 16.8 ms on the branch, where main's escape at 2 reached 33.4 without
+software GL. On the paced
+bench above, copied to `scratchpad/camera/bench/` at the host's 1414 × 669 canvas and built twice
+from the branch, once with main's rule patched back in, six rounds interleaved at density 1, the
+work of a frame came out alike — medians, the branch against main: the escape by the hatch 16.6
+against 16.3 ms, the dark Flur 11.1 against 11.3, the lab lit before the blackout 10.5 against
+10.6, the Labor lit 14.1 against 14.8 — while the rounds swung by 4 ms from one to the next as
+the machine's load rose from 2.7 to 6.7; round by round the escape came out 0.4 ms cheaper in
+five rounds of six, the light and its glows going by their area in pixels, which shrinks with the
+tile. At density 2, four rounds, the escape came out alike and the dark Flur 0.9 ms dearer in
+every round (36.6 against 35.7), its tiles 11 % larger than main's there; a frame at density 2
+takes 32 to 51 ms on that slowed software path either way.
 
 ## Open
 

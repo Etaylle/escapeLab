@@ -341,3 +341,89 @@ ms held at 33.4 ms p95 or less under software GL and 16.8 ms without. Blackout r
 `a92705b`'s client with `ea60b87`'s harness — `1280e43` leaves its 27×17 map's minimap as it was
 in every window — the Systemcheck on the head. The smoke passed; core 1392, server 250, client
 2714 and tools 77 tests pass.
+
+---
+
+## Stand nach N-camera
+
+Branch `N-camera` (on main `4767fba`): one commit per item — the frame in CSS pixels
+(`ff056d6`), the band below the objective bar (`b91489b`), the walkthrough at density 2
+(`b914e90`), the pixel checks with these notes, the framing in the art bible and the backlog.
+Measured on 2026-11-04 with the audit's camera script, copied to `scratchpad/camera/` and pointed
+at port 3421, on a quiet machine (1-min load under 4, no other walkthrough), main (`4767fba`,
+built beside it) run by the same script the same morning. The copy reads CSS px a tile at the
+density the canvas draws at — 2 on a 3× phone, where the audit's copy divided by 3 and logged
+20.4 (its table carried 30.7) — inside the canvas's 1-px border, and measures each screen twice:
+at the audit's moment, a line on the air, and once none is. Finding 1 of the table above.
+
+| Screen | CSS px a tile | Tiles across × down | Below the bar, a line on the air · none | Figure |
+|---|---|---|---|---|
+| 1440 × 820 @1 | 63.7 → 58.2 | 22.2 × 10.5 → 24.3 × 11.5 | 8.5 · 9.2 → 9.3 · 10.1 | 54.2 → 49.4 px |
+| 1440 × 820 @2 | 52.4 → 58.2 | 27 × 12.8 → 24.3 × 11.5 | 10.3 · 11.3 → 9.3 · 10.1 | 44.5 → 49.4 px |
+| 1280 × 720 @1 | 54.2 → 48.9 | 23.1 × 10.5 → 25.7 × 11.6 | 8.1 · 9.0 → 9.0 · 10.0 | 46.1 → 41.5 px |
+| 1280 × 720 @2 | 46.4 → 48.9 | 27 × 12.3 → 25.7 × 11.6 | 9.5 · 10.5 → 9.0 · 10.0 | 39.5 → 41.5 px |
+| phone 844 × 390 @3 | 30.6 → 32.1 | 27 × 9.4 → 25.7 × 9.0 | 7.2 · 8.2 → 6.9 · 7.8 | 26.0 → 27.3 px |
+
+Held at a side wall (`pinned.ts`: the client's own `clampCamera` over every floor tile, the bar at
+rest): at 1440 × 820 on 80 % of the floor's tiles at density 1 and 97 % at 2 before, 88 % at both
+after; at 1280 × 720 88 % and 97 % before, 97 % after; on the phone 97 % before and after. Up and
+down 57 % on a laptop after (57 % and 73 % at 1440 × 820 before), 29 % on the phone.
+
+**What changed.** A player's frame is set in CSS pixels (client `world/viewport.ts` `tileCss`): a
+tile stands the world canvas's CSS height over 11.5 from 600 px up, over 9 below, within 28 and
+96 px, drawn at the canvas's density (render/backing.ts, at most 2). Below the objective bar the
+frame keeps a drone's 4.5-tile reach twice with keys and 1.5 times on a touch screen; where the
+tile count would leave the band shorter the band wins — at 1280 × 720 — and the bar counts with
+a line on the air: its steady row, the clock's column or the goal down to its title, and the row
+of a radio banner set into it unseen and taken out in the same moment (`world/insets.ts`), so the
+zoom never moves with a line. The audience keeps the whole lab; the opening's shot keeps the lab
+over the whole canvas. The walkthrough logs each screen's frame (camera-1440.png,
+camera-1280.png, camera-dpr2.png, camera-phone.png) and in Blackout looks at the lit lab, the
+first station's open panel and the escape on the host's page drawn at density 2 as well —
+switched through CDP, as Playwright fixes a context's density once it is made and a third player
+would change the crew the pinned draw is played by — a frame window there for information, a
+shot at the page's own pixels, and a failure where the frame at 2 lies more than 0.2 tiles from
+the one at 1. The same harness on main's client fails exactly those four checks, 9.51, 4.81, 4.45
+and 4.81 tiles apart.
+
+**Reading the rule.** The plan counted the view's height „below the objective bar"; the rule
+reads the canvas's whole CSS height and lets the bar in through the band. Counted on the band
+alone, 1440 × 820's 588 px would fall under 600 and show 10.2 tiles of height, and the phone 10.3
+with a figure of 24 px against 26 before — against the decision's 11.5 on a laptop and fewer,
+larger tiles on a phone held sideways — and every line on the air would move the zoom.
+
+**Pixel checks.** The join screen, the Bestenliste, the editor and the lobby — 13 screens at
+three sizes, each build on a fresh server, with reduced motion and the room code written over
+(`screens-check.mjs`) — came out pixel for pixel the same on main and the branch; the client's
+bundle differs in its world chunk alone (the shell chunk, the stylesheet and core alike but for
+chunk names, the service worker but for its version). The walkthrough's captures, main's Blackout
+run against the branch's: 117 of 122 differ — the world's own shots by 23 to 84 % of their pixels,
+the tile; devices and pages over the dimmed world by 2 to 40 %; the audience's whole lab
+(spectate.png, dpr2.png) by under 1 %, live drones and the clock; the join screen and the lobby
+where the run's content does: a best time from the run before, the room code, the figures'
+glances. The art
+bible's Crispness and Cost sections carry the new baseline.
+
+**Not reached, and why.** The band holds 9 tiles with one line on the air, not with more: an
+emergency's alert or an alarm over a line, or the escape's checklist under the goal's title
+(about 8.8 tiles at 1280 × 720 with a line), take it lower while they stand; counting them would
+zoom the world as they come and go. „Hart" stretches the drones' cone to 5.2 tiles: the frame
+holds the normal difficulty's reach twice and stays the same at every difficulty. The camera
+follows sideways only in the lab's middle columns: the decision's 11.5 tiles of height show 24 to
+26 of the lab's 27 across — T-5, the larger rooms, is where that changes. A canvas wider than
+2.35 : 1 shows the lab whole across, dark beside its walls.
+
+**About the scripts.** In `scratchpad/camera/`: `m2-camera.mjs` (the copy above), `bar-parts.mjs`
+(the bar's rows, CSS px), `probe-line.mjs` (the unseen banner against a real line on the air: 38.3
+px at a laptop's size and 25.5 on the phone, both alike), `pinned.ts`, `screens-check.mjs`, and
+`bench/`, the polish package's paced bench at the host's 1414 × 669 canvas and both densities,
+built from the branch's tree twice, once with main's rule patched back in (art bible, Cost).
+
+**Walkthrough.** On the branch head `tools/shots.mjs` played both missions to the end, with
+`SHOTS_SOFTWARE_GL=1` and without: Blackout 122 captures, 5 and 4 skipped (the fifth a solved
+device shot late under load), 0 failed (won 432.7 s and 427.7 s after the lights went out);
+Systemcheck 84 captures, 13 and 12 skipped, 0 failed. At density 1 every gated window held
+33.4 ms p95 or less under software GL — the open station panels, as on main — and 16.8 ms
+without; the looks at density 2 held 16.8 ms or less. Main's client, run back to back with the
+branch's by the same harness, held the same windows in Blackout. The smoke passed; core 1507, server 266, client 2829 and
+tools 85 tests pass.
