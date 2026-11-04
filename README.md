@@ -71,7 +71,9 @@ die Stimme hinaus, solange `V` gedrückt bleibt — auf dem Handy die 🎤-Taste
 auf „Mikro: offen“.
 Die Stimmen gehen direkt von Browser zu Browser (WebRTC; der Server vermittelt nur den Aufbau)
 und klingen nach Nähe: bis 4 Kacheln voll, bis 10 Kacheln leiser werdend, durch Wände gedämpft
-— nie ganz stumm. Wer spricht, steht in einem Ring. Zuschauer können mithören, nicht sprechen.
+— nie ganz stumm. An der aktiven Station — an ihren Pulten und den offenen Quellen dazu — hört
+man sich dagegen über ihre Sprechanlage voll, wie weit auch immer; die PARTNER-Lampe am Gerät
+zeigt dann „· Funk“. Wer spricht, steht in einem Ring. Zuschauer können mithören, nicht sprechen.
 Ohne Mikrofon hört man die Crew trotzdem. Das Mikrofon braucht HTTPS (oder `localhost`); übers
 Internet hilft `?stun=1` in der Adresse.
 

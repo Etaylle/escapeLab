@@ -1,15 +1,15 @@
 # EscapeLab — gameplay
 
 How the crew steers, how it finds things, what a run leaves behind and how runs compare: the
-controls on keys and on a controller, the quick chat, finding things, the Erfolge, the
-Tagesschicht, the picture of a run, the danger sense, the Serverraum's cabling diagram, typing at
-its terminal and what the notepad takes down. Code: `packages/client/src/input/` (bindings,
-controller, prompts), `client/src/achievements.ts` and
+controls on keys and on a controller, the quick chat, the station's intercom, finding things, the
+Erfolge, the Tagesschicht, the picture of a run, the danger sense, the Serverraum's cabling
+diagram, typing at its terminal and what the notepad takes down. Code:
+`packages/client/src/input/` (bindings, controller, prompts), `client/src/achievements.ts` and
 `screens/{Plaques,ShareButton,ControlSettings}.tsx`, `screens/shareCard.ts`,
 `world/{labelFade,finds,danger,ChatWheel}.ts(x)`, `puzzles/RackDiagram.tsx`,
-`puzzles/{prompt.ts,ServersPanel.tsx}`, `noting.ts`, `notes.ts`,
+`puzzles/{prompt.ts,ServersPanel.tsx}`, `voice/{rules,intercom}.ts`, `noting.ts`, `notes.ts`,
 `screens/{Notepad,NoteButton}.tsx`; in the core `chat.ts`, `discovery.ts`, `achievements.ts`,
-`daily.ts` and `puzzles/servers.ts` (`serviceDiagram`).
+`daily.ts`, `map.ts` (`intercomOf`) and `puzzles/servers.ts` (`serviceDiagram`).
 
 ## Controls
 
@@ -93,6 +93,12 @@ they are bound to; Esc or B shuts the wheel from either step. A client names a p
 place and the slot's value; the server fills it in (`sayPhrase`) and refuses a place or a value
 the mission does not have. The bubble over the speaker and the HUD's line show it as said:
 „Anna: Kabel 3" (`world/ChatWheel.tsx`, `client/test/chatWheel.test.tsx`; chat-slot.png).
+
+## The station's intercom
+
+Between the places of the armed station — its consoles and the open sources that cover it — the
+crew hears each other in full however far apart, walls or not; everywhere else the voice fades
+with distance and walls as before. The device's PARTNER LED then reads „Ben · Pult B · Funk".
 
 ## Finding things
 

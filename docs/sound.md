@@ -156,7 +156,8 @@ announce ───────────────────┤     the pl
 reverb's return ────────────┘
 sfx ──────────── send −14 dB ─┐
 ambienceDuck ─── send −18 dB ─┼─ the room's reverb (reverb.ts) ─ its return
-announce ─────── send −6 dB ──┘
+announce ─────── send −6 dB ──┤
+intercom ─────── send −14 dB ─┘   a crew voice over the station's intercom (voice/intercom.ts)
 ```
 
 Musik sets the music, Effekte the effects and the rooms' beds, Funk the radio and the
@@ -185,7 +186,8 @@ would only pump.
 Until a click or a key resumes the context (the browser's autoplay rule), one-shot effects are
 dropped rather than queued; the loops — beds, music, rotors — are built anyway and sound once
 it runs. The crew's own voices bypass the master gain: switching the lab off leaves the crew
-audible.
+audible, and only the station intercom's touch of the room's reverb goes with the lab (The
+crew's voice, below).
 
 Levels, at the master gain: the effects around 0.04 (`EFFECTS_LEVEL`) for a recording whose
 peak stands at −3 dBFS; a room's bed 0.03 for one at −20 dBFS RMS, each layer a few dB up or
@@ -351,8 +353,9 @@ its room gives back — and the same seed, the same room, run after run (`impuls
 | control | 0.7 s | 5.5 kHz | — | 0.65 |
 
 A ConvolverNode plays it on the mix's sends — the effects at −14 dB, the beds at −18 dB after
-their duck, the loudspeakers at −6 dB, the radio and the music not at all — its normalisation
-off, so that a dead archive answers less than a steel hall; its return goes into the master.
+their duck, the loudspeakers at −6 dB, a crew voice over the station's intercom at −14 dB, the
+radio and the music not at all — its normalisation off, so that a dead archive answers less than
+a steel hall; its return goes into the master.
 Walking into a room of another kind brings its answer in over 300 ms while the old one goes;
 the old convolver is let go once its tail has died, one still going is cut over 20 ms for a
 third, so that two play at most, and only while they cross. The audience hears the lab dry. The
@@ -384,6 +387,58 @@ away (`drone-pass`), once in 6 s at most. A drone chirps once when it catches so
 recording placed where it flies. A door that starts to slide is heard from where it is
 (`doorMoved`, its own leaf no wall between): its pneumatic slide as it opens, one of two closes
 as it shuts. The audience hears the doors unplaced and none of the rest.
+
+## The crew's voice and the station's intercom (`voice/mesh.ts`, `voice/intercom.ts`)
+
+The crew's push-to-talk goes from browser to browser and plays through the shared context, past
+the master gain. How loud each voice plays is the voice's rule (`voice/rules.ts` `crewGain`):
+between the places of the armed station — its consoles and the open sources that cover it, as
+the server counts presence and the view of each player on them lists it (core `map.ts`
+`intercomOf`, the view's `intercom`) — in full, however far apart the two stand and whatever
+walls lie between, as over the station's intercom; everywhere else by proximity, as before: in
+full within 4 tiles, falling on a straight line to 15 % at 10 and staying there, ×0.35 through a
+wall or a shut door. A spectator hears every voice in full and plain.
+
+```text
+voice ─ volume ─┬─ plain ──────────────────────────────── output, past the master
+                └─ 400 Hz ─ 4 kHz ─ speaker ─┬─────────── output, past the master
+                                             └─ −14 dB ── the room's reverb (sends)
+```
+
+Over the intercom the voice comes out of a console's speaker: a high-pass at 400 Hz and a
+low-pass at 4 kHz, each second order (Butterworth), and from the speaker 14 dB under into the
+room's reverb — the sends the plant's loudspeakers ring in, at the effects' level — so that the
+partner sounds in the room's speaker rather than at the player's ear. No squelch, no static, no
+shaper: it is no radio. Under the proximity rule the plain way is open and the speaker's shut,
+and nothing of the voice reaches the reverb. Going on the intercom or off it moves the volume
+and both ways on straight lines over 150 ms, each from where it stands (`switchPath`), so that
+nothing clicks; the distance waits that long, and then the volume glides by it as before, a time
+constant of 0.12 s, looked at twenty times a second. Muting the lab leaves the dry voice; only
+the reverb's touch goes with it. The device's PARTNER LED ends in „· Funk" while the page hears
+that partner over the intercom, their link up (`VoiceState.intercom`).
+
+Measured with the audit's pairs, re-run on the branch's own code — the core's run of Blackout
+on seed 5, the station armed, the pair placed as the server counts presence
+(`scratchpad/intercom/m7-voicegain.mjs`, copied from the audit's):
+
+| Pair | Apart | Before | After |
+| --- | --- | --- | --- |
+| Signalkette, console A ↔ B | 14.4 tiles, no sight | −25.6 dB | 0 dB |
+| Notstrom, box ↔ the book's reader | 12.1 tiles, no sight | −25.6 dB | 0 dB |
+| Notstrom, box ↔ meter | 5.1 tiles, no sight | −10.6 dB | 0 dB |
+| Serverraum, terminal ↔ rack | 8 tiles, in sight | −7.3 dB | 0 dB |
+| Signalkette armed, console A ↔ the solved meter | 17 tiles, in sight | −16.5 dB | −16.5 dB |
+| Serverraum armed, terminal ↔ Signalkette B | 12.2 tiles, no sight | −25.6 dB | −25.6 dB |
+
+With `?trace=1` the voice's probe (`window.__escapelab.voice`) gives each voice's volume as last
+set (`gains`, by peer) and whom the page hears over the intercom (`intercom`).
+`test/intercom.test.ts` holds the band, the two ways, the send, the 150 ms ramps and the
+unwiring; `test/voiceMesh.test.ts` the pages: console and console, console and source, source and
+source of the armed station in full through a wall 14 tiles off, every other pair by proximity
+and plain, the ramps on and off and no glide during them, the screens told only while the link
+is up; `core/test/intercom.test.ts` and `server/test/intercomRoom.test.ts` who is on it. The
+walkthrough fails unless both devices at the first two-console station say „· Funk" and both
+pages play the partner in full (partner-funk.png).
 
 ## Answers that wait for the lab (`press.ts`, `audio.ts`)
 

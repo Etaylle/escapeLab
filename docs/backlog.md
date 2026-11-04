@@ -73,7 +73,7 @@ die Entscheidung.
   auch bei Dichte 2. Offene Frage: fester Radius um den Spieler (Among Us) oder Überblick
   (Overcooked)?
 
-### N-3 Stimme am Pult — Status: geplant (Mac, Paket N-intercom, startet nach N-camera oder N-firstwin) · Größe: S
+### N-3 Stimme am Pult — Status: im PR (N-intercom) · Größe: S
 - Die Sprachlautstärke fällt zwischen den Pulten der Signalkette auf 5 % (−25,6 dB), genau wo
   geredet werden muss. Vorschlag: zwischen den Pulten und der Quelle der aktiven Station volle
   Lautstärke per Funk, überall sonst Abstand.
