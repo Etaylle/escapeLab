@@ -155,7 +155,7 @@ die Entscheidung.
   Wartende lesen die nächste Quelle vor, oder eine kleine Nebenaufgabe (Ventil halten). Erst
   nach dem zweiten Playtest entscheiden.
 
-### T-5 Größere Räume — Status: im PR (N-xxl) · Größe: L
+### T-5 Größere Räume — Status: erledigt (N-xxl, Merge 2026-11-05; Karte 36×22, Kamera reist 11,7 Kacheln, Sieg des Skripts 462 s) · Größe: L
 - Räume ~9×7 (Serverraum 11×7), Flure 4 breit, Zwei-Kachel-Türen auf den Hauptwegen, Karte
   ~36×22, Laufwege ≤ 12 s, Decor ≥ 8 je Raum und Flur-Props alle 4 Kacheln, Drohnenrouten neu,
   Zeit per Messung, Kamera-Reisen vorher/nachher, Fixture/Harness/Smoke aus der Mission.
