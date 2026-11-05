@@ -286,8 +286,18 @@
  * shut on its page waits up to 10 s for a door the server opened — after a
  * solve, a plate or a key — to open there too, and a line `door` says how
  * long it waited; where no way comes, the walk fails naming the doors as the
- * page shows them. The last line counts
- * the captures taken, skipped and failed; the exit code is 1 when any failed.
+ * page shows them. E at a console, a source or a note of the last shift waits
+ * up to 6 s for the page's view to count the player there — the server writes
+ * that a stream tick and a round trip after the avatar stops — then gets up to
+ * 6 presses over 6 s (tools/presence.mjs). A line `presence` names a count
+ * that took a second or more, or never came; where nothing comes up, it says
+ * where the server has the player and facing which way, what the view counts
+ * them at, and how far each place of the target lies, whether a console's lies
+ * in sight and whether the player has found it. Each step after a solve that
+ * plans its walks from both pages' views first waits up to 10 s for both to
+ * show the solve, and a line `catch-up` says how long one lagged. The last
+ * line counts the captures taken, skipped and failed; the exit code is 1 when
+ * any failed.
  *
  * Camera: the world's frame is fixed in CSS pixels (client world/viewport.ts),
  * so a window shows the same tiles at every density. After the game
@@ -453,6 +463,20 @@ import {
 } from './patrol.mjs';
 import { percentile } from './percentile.mjs';
 import { decodePng } from './pixeldiff.mjs';
+import {
+  armedTarget,
+  consoleTarget,
+  COUNT_WAIT,
+  lagging,
+  noteTarget,
+  presentAt,
+  PRESSES,
+  pressSaid,
+  pressUntilShown,
+  sourceTarget,
+  stateSaid,
+  targetSaid,
+} from './presence.mjs';
 import { bandPowers, decibels } from './spectrum.mjs';
 
 const BASE = process.argv[2] ?? 'http://localhost:5173';
@@ -1472,6 +1496,34 @@ async function wayThere(seen, target, avoid = new Set()) {
 }
 
 /**
+ * Waits until every page of `crew` shows the station the furthest of them shows (presence.mjs
+ * `lagging`), for up to CATCH_UP_MS: a solve reaches the pages one after the other, on a slow
+ * runner a while apart, and a step that plans its walks from a page still showing the station
+ * before walks there — on CI (f8a38a1) Ben went back to the Notstrom-Kasten's console A
+ * instead of the Signalkette's. Logs how long a page lagged; throws naming it where it never
+ * caught up.
+ */
+async function viewsCaughtUp(crew) {
+  const behind = () => lagging(crew.map((player) => player.seen.view)).map((i) => crew[i]);
+  const late = behind().map((player) => player.name);
+  if (late.length === 0) {
+    return;
+  }
+  const since = Date.now();
+  if (!(await until(() => behind().length === 0, CATCH_UP_MS))) {
+    const at = crew.map((player) => `${player.name} ${player.seen.view?.currentPuzzleIndex}`);
+    throw new Error(
+      `${late.join(' and ')}'s view still lags the solve after ${seconds(CATCH_UP_MS)} ` +
+        `(station index ${at.join(', ')})`,
+    );
+  }
+  console.log(
+    `catch-up           ${late.join(' and ')}'s view caught up with the solve ` +
+      `${Date.now() - since} ms after the step`,
+  );
+}
+
+/**
  * Walks the avatar to the tile before `target` on the way there, or leaves it
  * where it is when it already stands next to it — once a way leads there on
  * the page (`wayThere`). False when none does, with the doors as the page
@@ -1512,18 +1564,63 @@ async function until(check, ms) {
 }
 
 /**
- * Presses E until `locator` shows: the server takes a moment to count the
- * avatar as there. An emergency on meanwhile is weathered first.
+ * E where `player` stands until `shows` holds (presence.mjs `pressUntilShown`): once the page's
+ * view counts the player at `target` — the server writes that a stream tick and a round trip
+ * after the avatar stops, a slow runner later — or 6 s have passed, up to 6 presses over 6 s,
+ * an emergency on meanwhile weathered before each. A count that took a second or more, or
+ * never came, gets a line in the log; where nothing comes up, the line says where the server
+ * has the player and what it counts them at (`stateSaid`). Whether `shows` holds.
+ *
+ * @param {{ what: string, now: () => Promise<boolean>, within: (ms: number) => Promise<void> }}
+ *   shows what E brings up as the log names it; whether it is up now; a wait of at most `ms`
+ *   for it
  */
-async function interactUntil(page, locator) {
-  for (let i = 0; i < 3 && !(await locator.isVisible()); i++) {
-    await weather();
-    await sleep(300);
-    await page.keyboard.press('e');
-    await locator.waitFor({ state: 'visible', timeout: 2000 }).catch(() => undefined);
+async function pressAt(player, target, shows) {
+  const { page, seen, name } = player;
+  const outcome = await pressUntilShown({
+    counted: () => presentAt(seen.view, target),
+    shown: shows.now,
+    press: async () => {
+      await weather();
+      await page.keyboard.press('e');
+    },
+    waitShown: shows.within,
+    sleep,
+    now: Date.now,
+  });
+  const said = pressSaid(outcome, shows.what);
+  if (said !== null) {
+    const server = seen.crew?.[seen.view?.you?.id];
+    const state = { name, view: seen.view, server, sent: seen.pos, target, now: Date.now() };
+    const where = outcome.shown ? '' : ` — ${stateSaid(state)}`;
+    console.log(`presence           ${name} at ${targetSaid(target)}: ${said}${where}`);
   }
-  return locator.isVisible();
+  return outcome.shown;
 }
+
+/** What E brings up at each kind of target, as the log names it. */
+const BROUGHT_UP = { station: 'the panel', source: 'the pages', note: 'the slip' };
+
+/** Presses E at `target` until `locator` shows (`pressAt`); whether it does. */
+async function interactUntil(player, locator, target) {
+  return pressAt(player, target, {
+    what: BROUGHT_UP[target.of],
+    now: () => locator.isVisible(),
+    within: (ms) => locator.waitFor({ state: 'visible', timeout: ms }).catch(() => undefined),
+  });
+}
+
+/** Presses E at `target` until `done` holds on the views (`pressAt`); whether it does. */
+async function pressUntil(player, target, what, done) {
+  return pressAt(player, target, {
+    what,
+    now: async () => done(),
+    within: (ms) => until(done, ms),
+  });
+}
+
+/** How many presses E gets, for the errors of a step whose E opened nothing. */
+const TRIES = `${PRESSES.tries} presses`;
 
 /** Steps from where a player stands to `target` over floor and open doors; Infinity if none. */
 function stepsTo(seen, target) {
@@ -1631,8 +1728,8 @@ async function captureReading(page, seen, who) {
     return false;
   }
   const overlay = page.locator('.reading-modal');
-  if (!(await interactUntil(page, overlay))) {
-    throw new Error(`${who} stands at "${manual.id}", but no .reading-modal opened after 3 tries`);
+  if (!(await interactUntil({ page, seen, name: who }, overlay, sourceTarget(manual)))) {
+    throw new Error(`${who} stands at "${manual.id}", but no .reading-modal opened after ${TRIES}`);
   }
   await sleep(400); // past the page's fade-in
   await capture(page, 'reading.png');
@@ -1843,7 +1940,11 @@ async function captureBothAtStation(reader, operator, station, sync) {
     skip('station-both.png', `${reader.name} has no way to "${station.puzzleId}"`);
     return;
   }
-  const readerSees = await interactUntil(reader.page, reader.page.locator('.station-modal'));
+  const readerSees = await interactUntil(
+    reader,
+    reader.page.locator('.station-modal'),
+    consoleTarget(station),
+  );
   const operatorSees = await operator.page.locator('.station-modal').isVisible();
   await sleep(400); // past the panel's fade-in
   await capture(reader.page, 'station-both.png');
@@ -2967,8 +3068,9 @@ async function throwLever(players) {
   }
   await reportLeverFound(players, lever, watches);
   for (const player of players) {
-    if (!(await interactUntil(player.page, player.page.locator('.station-modal')))) {
-      throw new Error(`${player.name} stands at the lever, but no .station-modal after 3 tries`);
+    const modal = player.page.locator('.station-modal');
+    if (!(await interactUntil(player, modal, consoleTarget(lever)))) {
+      throw new Error(`${player.name} stands at the lever, but no .station-modal after ${TRIES}`);
     }
   }
   await sleep(500); // past the panel's fade-in
@@ -3835,11 +3937,10 @@ async function captureNote(player) {
     return;
   }
   const { note, spot } = found;
-  const at = (await standOn(player, spot)) &&
-    (await until(() => player.seen.view.noteHere?.index === note.index, 3000));
+  const at = await standOn(player, spot);
   const { deadlineAt, alarms } = player.seen.view;
   const slip = player.page.locator('.note-modal');
-  if (!at || !(await interactUntil(player.page, slip))) {
+  if (!at || !(await interactUntil(player, slip, noteTarget(note.index, spot)))) {
     throw new Error(`${player.name} stands at the note at ${note.x},${note.y}, but no .note-modal`);
   }
   await sleep(400); // past its fade-in
@@ -4121,10 +4222,11 @@ async function captureConsoles(operator, reader) {
   const said = `console A of "${title}"`;
   await captureHighlight(operator, { ...glowing, said }, 'highlight-console.png');
   for (const [player, spot] of seats) {
-    if (!(await interactUntil(player.page, player.page.locator('.station-modal')))) {
+    const modal = player.page.locator('.station-modal');
+    if (!(await interactUntil(player, modal, consoleTarget(spot)))) {
       throw new Error(
         `${player.name} stands at console ${spot.console} of "${title}", ` +
-          'but no .station-modal after 3 tries',
+          `but no .station-modal after ${TRIES}`,
       );
     }
   }
@@ -4566,8 +4668,9 @@ async function fadeOutAsPlayed(page, modal) {
  * fade's first frame, the panel still whole — and the hold let go, however the shot went. Null
  * where the station did not open again.
  */
-async function heldFadeShot(page, modal) {
-  if (!(await interactUntil(page, modal))) {
+async function heldFadeShot(player, modal) {
+  const { page } = player;
+  if (!(await interactUntil(player, modal, armedTarget(player.seen.view)))) {
     return null;
   }
   await sleep(400); // past its fade-in
@@ -4605,7 +4708,7 @@ async function capturePanelClose(player, modal) {
   const gone = luma(closed);
   let held = null;
   for (let attempt = 1; attempt <= 3 && !(held?.between ?? false); attempt++) {
-    const shot = await heldFadeShot(page, modal);
+    const shot = await heldFadeShot(player, modal);
     if (shot === null) {
       fail('panel-close.png: the station did not open again for its shot');
       return;
@@ -4724,7 +4827,7 @@ async function captureFlinch(sender, presser, firstKey = null) {
     await sender.page.setViewportSize(size);
   }
   await sleep(300);
-  if (!(await interactUntil(sender.page, modal))) {
+  if (!(await interactUntil(sender, modal, armedTarget(sender.seen.view)))) {
     throw new Error(
       `${sender.name} closed the Signalkette for figure-flinch.png, but it did not open again`,
     );
@@ -5209,8 +5312,8 @@ async function captureNoting(player, shot, glowShot, audience) {
   const subject = { of: 'manual', id: source.id };
   await captureHighlight(player, { subject, said: `"${source.label}" (${source.kind})` }, glowShot);
   const overlay = page.locator('.reading-modal');
-  if (!(await interactUntil(page, overlay))) {
-    throw new Error(`${name} stands at "${source.id}", but no .reading-modal opened after 3 tries`);
+  if (!(await interactUntil(player, overlay, sourceTarget(source)))) {
+    throw new Error(`${name} stands at "${source.id}", but no .reading-modal after ${TRIES}`);
   }
   await sleep(400); // past the page's fade-in
   const touch = await padUp(page, '.reading-modal');
@@ -5416,10 +5519,12 @@ async function captureNudge(players) {
 /**
  * An emergency closes whatever a player has open, and nothing reopens by
  * itself. The walkthrough works no console and mans no valve, so it waits
- * the emergency out and presses E again. Returns how long that took, in ms;
- * throws when `overlay` closed with no emergency on or stays shut after it.
+ * the emergency out and presses E again at the source `target`. Returns how
+ * long that took, in ms; throws when `overlay` closed with no emergency on or
+ * stays shut after it.
  */
-async function reopenAfterEmergency(page, seen, overlay, who) {
+async function reopenAfterEmergency(reader, overlay, target) {
+  const { page, seen, name: who } = reader;
   const sabotage = seen.view.map.sabotage;
   if (sabotage === null) {
     throw new Error(`${who}: the book closed while waiting for a note, with no emergency on`);
@@ -5435,7 +5540,7 @@ async function reopenAfterEmergency(page, seen, overlay, who) {
     () => seen.view.map.sabotage === null,
     Math.max(0, sabotage.endsAt - Date.now()) + 10_000,
   );
-  if (!over || !(await interactUntil(page, overlay))) {
+  if (!over || !(await interactUntil(reader, overlay, target))) {
     throw new Error(`${who}: "${sabotage.label}" closed the book, and it did not open again after`);
   }
   console.log(
@@ -5489,9 +5594,11 @@ async function captureNotes(page, seen, who, other) {
   if (!covers || !(await walkNear(page, seen, source))) {
     return false;
   }
+  const reader = { page, seen, name: who };
+  const target = sourceTarget(source);
   const overlay = page.locator('.reading-modal');
-  if (!(await interactUntil(page, overlay))) {
-    throw new Error(`${who} stands at "${source.id}", but no .reading-modal opened after 3 tries`);
+  if (!(await interactUntil(reader, overlay, target))) {
+    throw new Error(`${who} stands at "${source.id}", but no .reading-modal opened after ${TRIES}`);
   }
   const ask = overlay.locator('.note-ask');
   await ask.waitFor({ state: 'visible', timeout: 3000 }).catch(() => undefined);
@@ -5507,7 +5614,7 @@ async function captureNotes(page, seen, who, other) {
   while (!label.startsWith('Notiz der letzten Schicht') && Date.now() < readyBy) {
     await sleep(1000);
     if (!(await overlay.isVisible())) {
-      readyBy += await reopenAfterEmergency(page, seen, overlay, who);
+      readyBy += await reopenAfterEmergency(reader, overlay, target);
     }
     label = (await ask.innerText()).trim();
   }
@@ -6239,14 +6346,13 @@ async function captureLocker(page, seen, audience) {
     );
     return;
   }
-  const here = await until(() => seen.view.sourcesHere.some((s) => s.id === locker.id), 3000);
+  const target = sourceTarget(locker);
+  const here = await until(() => presentAt(seen.view, target), COUNT_WAIT.ms);
   await sleep(400); // the prompt is drawn from the next frame on
   await capture(page, 'locker.png');
-  await page.keyboard.press('e');
-  const searched = await until(
-    () => seen.view.map.manuals.some((m) => m.id === locker.id && m.opened),
-    3000,
-  );
+  const opened = () => seen.view.map.manuals.some((m) => m.id === locker.id && m.opened);
+  const guest = { page, seen, name: 'the guest' };
+  const searched = await pressUntil(guest, target, 'the open locker', opened);
   const hud = page.locator('.hud-radio');
   const line = searched && (await hud.count()) > 0 ? (await hud.innerText()).trim() : '';
   console.log(
@@ -7050,14 +7156,13 @@ async function readServersManual(reader) {
   if (!(await walkNear(reader.page, reader.seen, spot))) {
     throw new Error(`${reader.name} found no way to the ${locker.label} at ${spot.x},${spot.y}`);
   }
-  await until(() => reader.seen.view.sourcesHere?.some((s) => s.id === locker.id), 3000);
-  await reader.page.keyboard.press('e');
+  const target = sourceTarget({ id: locker.id, label: locker.label, ...spot });
   const opened = () => reader.seen.view.map.manuals.some((m) => m.id === locker.id && m.opened);
-  if (!(await until(opened, 3000))) {
+  if (!(await pressUntil(reader, target, 'the open locker', opened))) {
     throw new Error(`${reader.name} pressed E at the ${locker.label}, but it stayed shut`);
   }
   const overlay = reader.page.locator('.reading-modal');
-  if (!(await interactUntil(reader.page, overlay))) {
+  if (!(await interactUntil(reader, overlay, target))) {
     throw new Error(`${reader.name} searched the ${locker.label}, but no .reading-modal opened`);
   }
   await sleep(500); // past the page's fade-in
@@ -7099,7 +7204,8 @@ async function manServers({ terminal, rack }) {
     }
   }
   for (const [player, spot] of seats) {
-    if (!(await interactUntil(player.page, player.page.locator('.station-modal')))) {
+    const modal = player.page.locator('.station-modal');
+    if (!(await interactUntil(player, modal, consoleTarget(spot)))) {
       throw new Error(`${player.name} stands at console ${spot.console}, but no .station-modal`);
     }
   }
@@ -7953,11 +8059,16 @@ function armedAt(player, side) {
   return spot;
 }
 
-/** `player` opens the armed station's panel with E where it stands; throws where none comes. */
-async function openPanel(player) {
-  if (!(await interactUntil(player.page, player.page.locator('.station-modal')))) {
-    const title = player.seen.view.map.stations.find((s) => s.status === 'armed')?.title;
-    throw new Error(`${player.name} stands at "${title}", but no .station-modal after 3 tries`);
+/**
+ * `player` opens the armed station's panel with E at its console `side` ('a', 'b', or null for
+ * its only one); throws where none comes.
+ */
+async function openPanel(player, side) {
+  const spot = armedAt(player, side);
+  const modal = player.page.locator('.station-modal');
+  if (!(await interactUntil(player, modal, consoleTarget(spot)))) {
+    const at = `${player.name} stands at "${spot.title}"`;
+    throw new Error(`${at}, but no .station-modal after ${TRIES}`);
   }
   await sleep(300); // past its fade-in
 }
@@ -8016,7 +8127,7 @@ async function finishNotstrom(box, meter) {
     if (!(await walkNear(player.page, player.seen, armedAt(player, side)))) {
       throw new Error(`${player.name} found no way back to console ${side} of the fuse box`);
     }
-    await openPanel(player);
+    await openPanel(player, side);
   }
   await captureDevicePhone(meter, stationSlug(meter));
   const wires = (box.seen.view.puzzle?.wires ?? []).map((wire) => wire.colour).join(', ');
@@ -8060,9 +8171,9 @@ async function playSignalkette(host, guest) {
   if (!(await standOn(host, atConsole(host, 'b')))) {
     throw new Error(`${host.name} found no way to console B of "${title}"`);
   }
-  await openPanel(guest);
+  await openPanel(guest, 'a');
   await captureDevicePhone(guest, stationSlug(guest));
-  await openPanel(host);
+  await openPanel(host, 'b');
   await solveSignal([host, guest], title, BLACKOUT_PLAN.signalkette.stages);
 }
 
@@ -8071,14 +8182,13 @@ async function playSignalkette(host, guest) {
  * them (servers-manual.png) and puts them down again. Throws where it cannot.
  */
 async function readLocker(reader, locker) {
-  await until(() => reader.seen.view.sourcesHere?.some((s) => s.id === locker.id), 3000);
-  await reader.page.keyboard.press('e');
+  const target = sourceTarget(locker);
   const opened = () => reader.seen.view.map.manuals.some((m) => m.id === locker.id && m.opened);
-  if (!(await until(opened, 3000))) {
+  if (!(await pressUntil(reader, target, 'the open locker', opened))) {
     throw new Error(`${reader.name} pressed E at the ${locker.label}, but it stayed shut`);
   }
   const overlay = reader.page.locator('.reading-modal');
-  if (!(await interactUntil(reader.page, overlay))) {
+  if (!(await interactUntil(reader, overlay, target))) {
     throw new Error(`${reader.name} searched the ${locker.label}, but no .reading-modal opened`);
   }
   await sleep(500); // past the page's fade-in
@@ -8114,8 +8224,8 @@ async function playServerraum(host, guest) {
   const crew = { terminal: host, rack: guest };
   const role = (player) => player.seen.view.puzzle?.role ?? null;
   await pastEmergencies(async () => {
-    await openPanel(host);
-    await openPanel(guest);
+    await openPanel(host, 'a');
+    await openPanel(guest, 'b');
     if (!(await until(() => role(host) === 'terminal' && role(guest) === 'rack', 3000))) {
       throw new Error(`the Serverraum's panels say ${role(host)} and ${role(guest)}`);
     }
@@ -8205,20 +8315,20 @@ function pagesCut() {
 }
 
 /**
- * book-morse-1.15.png: the cabinet's pages at the large text size („Groß") at 1280×720, where
- * they lie open as a spread: the Morsetafel whole on its page — all 13 rows, over no page turn
- * — and the Frequenztabelle facing it, read together; no line runs past the sheet's edge and
- * no page past its foot. The run fails where the table breaks, the two lie apart or a page is
- * cut. The text size goes back to normal, and the cabinet is read once more on the phone held
- * sideways (captureBookSideways) and upright beside the notepad's drawer (captureBookUpright),
- * which leaves the window the phone it was.
+ * book-morse-1.15.png: the pages of the cabinet `reader` stands at (`cabinet`, a source target)
+ * at the large text size („Groß") at 1280×720, where they lie open as a spread: the Morsetafel
+ * whole on its page — all 13 rows, over no page turn — and the Frequenztabelle facing it, read
+ * together; no line runs past the sheet's edge and no page past its foot. The run fails where
+ * the table breaks, the two lie apart or a page is cut. The text size goes back to normal, and
+ * the cabinet is read once more on the phone held sideways (captureBookSideways) and upright
+ * beside the notepad's drawer (captureBookUpright), which leaves the window the phone it was.
  */
-async function captureMorseBook(reader) {
+async function captureMorseBook(reader, cabinet) {
   const { page } = reader;
   await page.setViewportSize({ width: 1280, height: 720 });
   await chooseTextSize(page, 'Groß');
   const overlay = page.locator('.reading-modal');
-  if (!(await interactUntil(page, overlay))) {
+  if (!(await interactUntil(reader, overlay, cabinet))) {
     throw new Error(`${reader.name} stands at the cabinet, but no .reading-modal opened`);
   }
   await sleep(500);
@@ -8247,8 +8357,8 @@ async function captureMorseBook(reader) {
   await page.keyboard.press('Escape');
   await overlay.waitFor({ state: 'hidden', timeout: 3000 });
   await chooseTextSize(page, 'Normal');
-  await captureBookSideways(reader);
-  await captureBookUpright(reader);
+  await captureBookSideways(reader, cabinet);
+  await captureBookUpright(reader, cabinet);
 }
 
 /** How long a turned leaf takes to lie still: Book.tsx LEAF_MS, 450 ms, and a margin. */
@@ -8287,18 +8397,18 @@ async function bookThrough(page, tapped = false) {
 }
 
 /**
- * book-phone-landscape.png: the cabinet's pages on `reader`'s phone held sideways (844×390) at
- * the normal text size, shot where the book opens. Every page from the first to the last lies
- * open alone, its body at 14 px at least, its text scrolling inside the sheet to its last line
- * — the Morsetafel's at least — no line past the sheet's edge, the frame not scrolling. The run
- * fails where any of it is not so; the book is put down after.
+ * book-phone-landscape.png: the pages of `cabinet` on `reader`'s phone held sideways (844×390)
+ * at the normal text size, shot where the book opens. Every page from the first to the last
+ * lies open alone, its body at 14 px at least, its text scrolling inside the sheet to its last
+ * line — the Morsetafel's at least — no line past the sheet's edge, the frame not scrolling.
+ * The run fails where any of it is not so; the book is put down after.
  */
-async function captureBookSideways(reader) {
+async function captureBookSideways(reader, cabinet) {
   const { page, name } = reader;
   const { width, height } = SIZES[3];
   await page.setViewportSize({ width, height });
   const overlay = page.locator('.reading-modal');
-  if (!(await interactUntil(page, overlay))) {
+  if (!(await interactUntil(reader, overlay, cabinet))) {
     throw new Error(`${name} stands at the cabinet, but no .reading-modal opened sideways`);
   }
   await sleep(500);
@@ -8325,23 +8435,23 @@ async function captureBookSideways(reader) {
 }
 
 /**
- * book-phone-notepad.png: the cabinet's pages on `reader`'s phone held upright (420×760) at the
- * normal text size, read as the book opens with the notepad's drawer down, then shot with the
- * drawer up under the frame by its tab. Either way the page lies open alone, its body at 14 px
- * at least, no line past the sheet's edge, the frame not scrolling; with the drawer up every
- * page from the first to the last — turned by the arrows under the sheet, the pad holding the
- * keys — its text scrolling inside the sheet to its last line, and the drawer along the foot
- * (`notingSide`). The run fails where any of it is not so; the book is put down by its tab
+ * book-phone-notepad.png: the pages of `cabinet` on `reader`'s phone held upright (420×760) at
+ * the normal text size, read as the book opens with the notepad's drawer down, then shot with
+ * the drawer up under the frame by its tab. Either way the page lies open alone, its body at
+ * 14 px at least, no line past the sheet's edge, the frame not scrolling; with the drawer up
+ * every page from the first to the last — turned by the arrows under the sheet, the pad holding
+ * the keys — its text scrolling inside the sheet to its last line, and the drawer along the
+ * foot (`notingSide`). The run fails where any of it is not so; the book is put down by its tab
  * after, and the pad goes away. An emergency due meanwhile is waited out first: it would shut
  * the book halfway through.
  */
-async function captureBookUpright(reader) {
+async function captureBookUpright(reader, cabinet) {
   const { page, name } = reader;
   const { width, height } = SIZES[2];
   await page.setViewportSize({ width, height });
   await clearOfEmergencies(reader, 20);
   const overlay = page.locator('.reading-modal');
-  if (!(await interactUntil(page, overlay))) {
+  if (!(await interactUntil(reader, overlay, cabinet))) {
     throw new Error(`${name} stands at the cabinet, but no .reading-modal opened upright`);
   }
   await sleep(500);
@@ -8400,14 +8510,17 @@ async function playFrequenz(host, guest) {
   const cabinet = pinnedSource('cabinet');
   await sneakTo(guest, workSpot(guest, cabinet), 2.5);
   await foundWherePinned(guest, cabinet);
-  await handle(guest, 'the cabinet', () =>
-    guest.seen.view.map.manuals.some((m) => m.id === cabinet.id && m.opened));
-  await captureMorseBook(guest);
+  const atCabinet = sourceTarget(cabinet);
+  const unlocked = () => guest.seen.view.map.manuals.some((m) => m.id === cabinet.id && m.opened);
+  if (!(await pressUntil(guest, atCabinet, 'the unlocked cabinet', unlocked))) {
+    throw new Error(`${guest.name} pressed E for the cabinet, but nothing happened`);
+  }
+  await captureMorseBook(guest, atCabinet);
   await sneakTo(host, atConsole(host, null));
   await clearOfEmergencies(host, 25);
   const index = host.seen.view.currentPuzzleIndex;
   await pastEmergencies(async () => {
-    await openPanel(host);
+    await openPanel(host, null);
     const lamp = host.seen.view.puzzle;
     if (lamp?.pattern !== pin.pattern || lamp?.dial !== pin.dial) {
       const shown = `${lamp?.pattern} at step ${lamp?.dial}`;
@@ -8530,11 +8643,18 @@ async function playBlackoutToTheEnd(host, guest, watcher) {
   try {
     await guest.page.setViewportSize(SIZES[2]);
     const pair = { box: host, meter: guest };
-    await finishNotstrom(pair.box, pair.meter);
-    await playSignalkette(host, guest);
-    await playServerraum(host, guest);
-    await playFrequenz(host, guest);
-    await playReaktor(host, guest);
+    const stations = [
+      () => finishNotstrom(pair.box, pair.meter),
+      () => playSignalkette(host, guest),
+      () => playServerraum(host, guest),
+      () => playFrequenz(host, guest),
+      () => playReaktor(host, guest),
+    ];
+    for (const station of stations) {
+      await station();
+      // The next step plans its walks from both pages' views: both have to show this solve.
+      await viewsCaughtUp([host, guest]);
+    }
     await runForTheHatch(host, guest);
     if (!phoneDevices.has('relay')) {
       skip('device-phone-relay', 'no relay emergency came in this run (v-relay.mjs measures it)');
@@ -8576,8 +8696,9 @@ async function cutPinnedWire(cutter, holder, pinned) {
     throw new Error(`${holder.name} holds the plate, but ${cutter.name} found no way to "${box.title}"`);
   }
   const modal = cutter.page.locator('.station-modal');
-  if (!(await interactUntil(cutter.page, modal))) {
-    throw new Error(`${cutter.name} stands at "${box.title}", but no .station-modal after 3 tries`);
+  if (!(await interactUntil(cutter, modal, consoleTarget(box)))) {
+    const at = `${cutter.name} stands at "${box.title}"`;
+    throw new Error(`${at}, but no .station-modal after ${TRIES}`);
   }
   await until(() => cutter.seen.view.puzzle?.wires != null, 3000);
   const colors = (cutter.seen.view.puzzle?.wires ?? []).map((wire) => wire.color);
@@ -8616,7 +8737,8 @@ async function pressLastSync(players, opened = async () => undefined) {
   // In this order: whoever holds a plate door open steps off it last.
   await gatherAt(station, players);
   for (const player of players) {
-    if (!(await interactUntil(player.page, player.page.locator('.station-modal')))) {
+    const modal = player.page.locator('.station-modal');
+    if (!(await interactUntil(player, modal, consoleTarget(station)))) {
       throw new Error(`${player.name} stands at "${station.title}", but no .station-modal`);
     }
   }
@@ -8971,6 +9093,7 @@ async function captureNextMission(host, guest) {
  */
 async function playToTheEnd(host, guest, watcher, pinned) {
   await cutPinnedWire(host, guest, pinned);
+  await viewsCaughtUp([host, guest]);
   await pressLastSync([host, guest]);
   await captureEscape(host, guest);
   await captureEnd(host, watcher);
@@ -10119,9 +10242,9 @@ async function run() {
       throw new Error(`${operator.name} got stuck on the way to "${station.puzzleId}"`);
     }
     const modal = operator.page.locator('.station-modal');
-    if (!(await interactUntil(operator.page, modal))) {
+    if (!(await interactUntil(operator, modal, consoleTarget(station)))) {
       throw new Error(
-        `${operator.name} stands at "${station.puzzleId}", but no .station-modal after 3 tries`,
+        `${operator.name} stands at "${station.puzzleId}", but no .station-modal after ${TRIES}`,
       );
     }
     await sleep(300); // past its fade-in
@@ -10143,6 +10266,8 @@ async function run() {
           'and nobody has opened the next yet',
       );
       // Where the next station has two consoles, the crew captures both; a Signalkette it works.
+      // Both walk there by their own page's view, so both have to show the solve first.
+      await viewsCaughtUp([operator, reader]);
       await captureConsoles(operator, reader);
     } else {
       await askForNotes(reader, operator);
