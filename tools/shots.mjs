@@ -155,10 +155,14 @@
  * reading-notepad-phone.png); at the first station with two consoles the pad
  * comes up beside each open device (device-notepad.png,
  * device-notepad-phone.png). The pad has to stand beside the page — a strip
- * down the right edge, a drawer along a phone's foot — the block has to come
- * in at the pad's foot as a capture under a head naming the source
- * („Klemmbrett · Legende"), and E has to put the source down again, or the
- * run fails. The host, who noted the Signalkette's legend, then takes the
+ * down the right edge from top to foot, a drawer along a phone's foot from
+ * side to side — the block has to come in at the pad's foot as a capture
+ * under a head naming the source („Klemmbrett · Legende"), and E has to put
+ * the source down again, or the run fails. Before it is put down the guest
+ * turns the phone sideways (reading-notepad-landscape.png): a book on its
+ * pages one at a time, the frame not scrolling, no text past a page's foot,
+ * the pad a strip beside it — or the run fails; the page's body size is
+ * logged. The host, who noted the Signalkette's legend, then takes the
  * Laborkennung over too: notepad-captured.png shows both in the pad's own
  * look, and notepad-captured-phone.png at the phone's size — the writing in
  * the hand shipped with the game, the legend's columns whole on their ruled
@@ -4740,9 +4744,9 @@ async function padAway(page) {
 }
 
 /**
- * Where the notepad stands beside what lies over the world: a strip down the right edge with
- * the page left of it, or on a phone a drawer along the foot with the page above it. `ok`
- * where it is either, and the log's words for it.
+ * Where the notepad stands beside what lies over the world: a strip down the right edge, the
+ * window's height, with the page left of it, or on a phone a drawer along the foot, the
+ * window's width, with the page above it. `ok` where it is either, and the log's words for it.
  */
 async function notingSide(page) {
   const { pad, over, width, height } = await page.evaluate(() => {
@@ -4764,17 +4768,29 @@ async function notingSide(page) {
   if (pad === null || over === null) {
     return { ok: false, said: '!! no pad, or nothing over the world' };
   }
-  const near = (a, b) => Math.abs(a - b) <= 1;
-  const strip = near(pad.x + pad.w, width) && near(pad.y, 0) && pad.x >= over.x + over.w - 1;
-  const drawer = near(pad.y + pad.h, height) && near(pad.x, 0) && pad.y >= over.y + over.h - 1;
+  const place = padPlace(pad, over, width, height);
   const size = `${Math.round(pad.w)}×${Math.round(pad.h)}`;
-  if (strip) {
+  if (place === 'strip') {
     return { ok: true, said: `a strip ${size} down the right edge, the page beside it` };
   }
-  if (drawer) {
+  if (place === 'drawer') {
     return { ok: true, said: `a drawer ${size} along the foot, the page above it` };
   }
   return { ok: false, said: `!! ${size} at ${Math.round(pad.x)},${Math.round(pad.y)}, over the page` };
+}
+
+/**
+ * How the pad `pad` stands in a window `width` × `height` beside `over`: a strip down the right
+ * edge from top to foot, right of it, or a drawer along the foot from side to side, under it;
+ * null for neither.
+ */
+function padPlace(pad, over, width, height) {
+  const near = (a, b) => Math.abs(a - b) <= 1;
+  const whole = near(pad.x + pad.w, width) && near(pad.y + pad.h, height);
+  if (whole && near(pad.y, 0) && pad.x >= over.x + over.w - 1) {
+    return 'strip';
+  }
+  return whole && near(pad.x, 0) && pad.y >= over.y + over.h - 1 ? 'drawer' : null;
 }
 
 /**
@@ -5085,7 +5101,62 @@ async function captureNoting(player, shot, glowShot, audience) {
     fail(`${shot}: ${offered ? 'the capture or the pad is not as it should be' : 'no „Notieren"'}`);
   }
   noted = { player, head: taken.head };
+  await captureSheetSideways(player, touch);
   await putSourceDown(page, overlay, touch, shot, source.label);
+}
+
+/** The open source's sheet as a phone shows it: its pages, the frame's scroll, the text on it. */
+function sheetOnPhone() {
+  const modal = document.querySelector('.reading-modal');
+  const pages = [...document.querySelectorAll('.reading-modal .book-leaves > .page')];
+  const texts = pages.flatMap((page) => [...page.querySelectorAll('.page-text')]);
+  const body = document.querySelector('.reading-modal .page-in');
+  return {
+    pages: pages.length,
+    spread: document.querySelector('.reading-modal .book-spread') !== null,
+    scroll: modal === null ? 0 : modal.scrollHeight - modal.clientHeight,
+    over: Math.max(0, ...texts.map((text) => text.scrollHeight - text.clientHeight)),
+    body: body === null ? null : parseFloat(globalThis.getComputedStyle(body).fontSize),
+  };
+}
+
+/**
+ * reading-notepad-landscape.png: the source `player` reads on a phone — `touch`, a touch screen;
+ * a window with keys is left alone — the notepad up beside it, with the phone turned sideways:
+ * a book on its pages one at a time, never a spread; the frame round it not scrolling, no page's
+ * text running past its foot; and the pad a strip down the right edge, the window's height
+ * (`notingSide`). The page's body size is logged. The run fails where any of it is not so. The
+ * phone goes back to how it was held.
+ */
+async function captureSheetSideways(player, touch) {
+  if (!touch) {
+    return;
+  }
+  const { page, name } = player;
+  const held = page.viewportSize();
+  const { width, height } = SIZES[3];
+  await page.setViewportSize({ width, height });
+  await sleep(600);
+  const sheet = await page.evaluate(sheetOnPhone);
+  const side = await notingSide(page);
+  await capture(page, 'reading-notepad-landscape.png');
+  await page.setViewportSize(held);
+  await sleep(400);
+  const body = sheet.body === null ? 'no page' : `its body ${sheet.body.toFixed(1)} px`;
+  console.log(
+    `reading-notepad-landscape.png ${name} @ ${width}x${height}: ${sheet.pages} page(s), ` +
+      `${body}, the frame scrolls ${sheet.scroll} px, text past a page's foot ${sheet.over} px; ` +
+      `the pad ${side.said}`,
+  );
+  const wrong = [
+    sheet.spread && 'a book opens two pages on a phone',
+    sheet.scroll > 1 && `the frame scrolls ${sheet.scroll} px`,
+    sheet.over > 1 && `a page's text runs ${sheet.over} px past its foot`,
+    !side.ok && 'the pad is not a strip beside the page',
+  ];
+  if (wrong.some(Boolean)) {
+    fail(`reading-notepad-landscape.png: ${wrong.filter(Boolean).join(', ')}`);
+  }
 }
 
 /**
