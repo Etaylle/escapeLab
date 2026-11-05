@@ -192,7 +192,8 @@ describe('a room where things are found on the way, each chiming for its finder'
   it('finds the lever a player stands by as the lights die, without a step (Blackout)', () => {
     const { room, anna, ben } = started(blackout, 5);
     // Ben skipped and walked up under the lever while the lights still burn: nothing to find.
-    walkTo(room, ben, 11.5, 8.5);
+    const at = blackout.map.stations.find((s) => s.puzzleId === 'notlicht') ?? { x: 0, y: 0 };
+    walkTo(room, ben, at.x + 0.5, at.y + 1.5);
     vi.advanceTimersByTime(2000);
     const lever = () => lastView(ben).map?.stations.find((s) => s.look === 'lever');
     expect(lever()?.found).toBe(false);
@@ -251,7 +252,7 @@ describe('a room where things are found on the way, each chiming for its finder'
     const { room, anna, ben } = started(blackout, 5);
     expect(lastView(anna).lights.out).toBe(false);
     expect(lastView(anna).map?.yourSpawn).toEqual({ x: 3, y: 3 });
-    expect(lastView(ben).map?.yourSpawn).toEqual({ x: 1, y: 8 });
+    expect(lastView(ben).map?.yourSpawn).toEqual({ x: 1, y: 12 });
     vi.advanceTimersByTime(1000);
     const found = (walker: Walker) => {
       const map = lastView(walker).map;
@@ -263,16 +264,17 @@ describe('a room where things are found on the way, each chiming for its finder'
         ...(map?.edgeworkSign?.found === true ? ['sign'] : []),
       ];
     };
-    // Anna in the Archiv, facing east: the sign at her side; the fuse in her lamp's cone 4.5
-    // tiles off, the book on its lectern to the north-east and the note on the north wall stay
+    // Anna in the Archiv, facing east: the sign at her side; the fuse 7.2 tiles off to the
+    // south-east, the book on its lectern to the north-east and the note on the north wall stay
     // unfound, the room lit or not.
     expect(found(anna)).toEqual(['sign']);
-    // Ben at the Flur's west end, facing east: the clipboard 7 tiles down the Flur in his cone
-    // lies beyond his lamp's reach; console B of the Notstrom-Kasten at his side is no find
-    // before its station is armed.
+    // Ben at the Flur's west end, facing east: the clipboard 10 tiles down the Flur lies beyond
+    // his lamp's reach, behind the buttress (9,12) besides; console B of the Notstrom-Kasten up
+    // the west end is no find before its station is armed.
     expect(found(ben)).toEqual([]);
-    // Ben walks down the Flur till the clipboard lies 2.9 tiles ahead: his lamp finds it 600 ms on.
-    walkTo(room, ben, 5.8, 8.5);
+    // Ben walks down the Flur till the clipboard lies 2.8 tiles ahead, the buttress beside his
+    // way: his lamp finds it 600 ms on.
+    walkTo(room, ben, 8.9, 11.5);
     vi.advanceTimersByTime(599);
     expect(found(ben)).toEqual([]);
     vi.advanceTimersByTime(1);

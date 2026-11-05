@@ -1,8 +1,8 @@
 {
   "mission": "blackout",
   "seed": 5,
-  "spawns": {"host": {"x": 3, "y": 3}, "guest": {"x": 1, "y": 8}},
-  "places": {"buch-archiv": {"x": 6, "y": 1}, "klemmbrett": {"x": 8, "y": 9}, "spind": {"x": 13, "y": 1}, "aktenschrank": {"x": 12, "y": 11}},
+  "spawns": {"host": {"x": 3, "y": 3}, "guest": {"x": 1, "y": 12}},
+  "places": {"buch-archiv": {"x": 8, "y": 1}, "klemmbrett": {"x": 11, "y": 12}, "spind": {"x": 16, "y": 2}, "aktenschrank": {"x": 11, "y": 15}},
   "serial": "UZKM9-8",
   "notstrom": {
     "wires": ["blau", "rot", "gelb", "gelb"],
@@ -80,6 +80,6 @@
     ]
   },
   "frequenz": {"pattern": "... - .-. --- --", "dial": 6, "turns": -2},
-  "ersatzsicherung": {"from": {"x": 7, "y": 5}, "to": {"x": 25, "y": 12}},
+  "ersatzsicherung": {"from": {"x": 9, "y": 7}, "to": {"x": 34, "y": 14}},
   "reaktorstart": {"presses": 2, "windowMs": 3500}
 }

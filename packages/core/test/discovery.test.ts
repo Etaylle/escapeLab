@@ -176,15 +176,22 @@ function findsIn(state: GameState, looker: Looker): string[] {
 describe('what a run has to find', () => {
   it('lists the sources as placed, notes on their faces, loose parts, consoles, the sign', () => {
     const state = blackout();
+    const map = state.mission.map;
     const things = findables(state);
     const at = (key: string) => things.find((thing) => thing.key === key);
-    expect(at('source:buch-archiv')).toMatchObject({ x: 6.5, y: 1.5 });
+    /** Each thing at the middle of the tile the run lays it on or the map puts it on. */
+    const middleOf = (spot: { x: number; y: number } | undefined) =>
+      spot === undefined ? null : { x: spot.x + 0.5, y: spot.y + 0.5 };
+    expect(at('source:buch-archiv')).toMatchObject(middleOf(state.places['buch-archiv']) ?? {});
     // The note on the Archiv's north wall (2,0) hangs on its south face, over (2,1).
+    expect(map.notes[2]).toMatchObject({ x: 2, y: 0 });
     expect(at('note:2')?.x).toBe(2.5);
     expect(at('note:2')?.y).toBeCloseTo(1.05);
-    expect(at('item:ersatzsicherung')).toMatchObject({ x: 7.5, y: 5.5 });
-    expect(at('console:notlicht/-')).toMatchObject({ x: 11.5, y: 7.5 });
-    expect(at('sign')).toMatchObject({ x: 2.5, y: 3.5 });
+    const fuse = map.items.find((item) => item.id === 'ersatzsicherung');
+    expect(at('item:ersatzsicherung')).toMatchObject(middleOf(fuse) ?? {});
+    const lever = map.stations.find((s) => s.puzzleId === 'notlicht');
+    expect(at('console:notlicht/-')).toMatchObject(middleOf(lever) ?? {});
+    expect(at('sign')).toMatchObject(middleOf(map.edgeworkSign) ?? {});
     expect(things.some((thing) => thing.key.includes('shelf'))).toBe(false);
     const carried = applyAction(state, {
       type: 'pick-item',
@@ -209,9 +216,11 @@ describe('what a run has to find', () => {
   });
 
   it('finds the lever passed in the lit opening once the lights die, and it chimes then', () => {
-    // Who skipped the intro walks the lit lab while the crew still watches, up to the lever.
-    const byLever = { x: 10.5, y: 7.5, facing: EAST };
+    // Who skipped the intro walks the lit lab while the crew still watches, up to the lever:
+    // on the tile west of it, facing it.
     const lightsOn = started(blackoutMission(), 5);
+    const lever = lightsOn.mission.map.stations.find((s) => s.puzzleId === 'notlicht');
+    const byLever = { x: (lever?.x ?? 0) - 0.5, y: (lever?.y ?? 0) + 0.5, facing: EAST };
     const passed = findsIn(lightsOn, byLever);
     expect(passed.some((key) => key.startsWith('console:'))).toBe(false);
     const walked = standing(lightsOn, { found: { p1: passed }, at: T0 + 1000 });
@@ -279,13 +288,14 @@ describe('a room the power lights', () => {
     const state = lit();
     expect(viewFor(state, 'p1').map?.litRooms).toEqual(['FLUR', 'ARCHIV']);
     const map = state.mission.map;
-    // One step in from the door at (4,6), facing in: the book on its lectern at (6,1) lies in
-    // the lamp's cone, 4.5 tiles off — beyond its reach, so no look at it even begins.
-    const in1 = { x: 4.5, y: 5.5, facing: NORTH };
+    // One step in from the doorway at (4,8), facing the book on its lectern at (8,1): it lies in
+    // the lamp's cone, 7.2 tiles off — beyond its reach, so no look at it even begins.
+    expect(state.places['buch-archiv']).toEqual({ x: 8, y: 1 });
+    const in1 = { x: 4.5, y: 7.5, facing: Math.atan2(1.5 - 7.5, 8.5 - 4.5) };
     const look = lookAround(map, shutDoors(map, state), in1, findables(state), {}, T0);
     expect(look).toEqual({ found: [], glances: {}, dueAt: null });
     // Two steps in: the shelves, nothing to find.
-    const in2 = { x: 4.5, y: 4.5, facing: NORTH };
+    const in2 = { x: 4.5, y: 6.5, facing: NORTH };
     expect(findsIn(state, in2)).toEqual([]);
     expect(findsIn(blackout(), in2)).toEqual([]);
   });
@@ -294,18 +304,18 @@ describe('a room the power lights', () => {
     const state = lit();
     const byShelves = { x: 3.5, y: 3.5, facing: WEST };
     expect(findsIn(state, byShelves)).toEqual(['sign']);
-    // The book on its lectern at (6,1), the lamp held on it: 3.6 tiles off, it is never found.
+    // The book on its lectern at (8,1), the lamp held on it: 5.4 tiles off, it is never found.
     const map = state.mission.map;
     const shut = shutDoors(map, state);
     const things = findables(state).filter((thing) => thing.key !== 'sign');
-    const atBook = (x: number, y: number) => ({ x, y, facing: Math.atan2(1.5 - y, 6.5 - x) });
+    const atBook = (x: number, y: number) => ({ x, y, facing: Math.atan2(1.5 - y, 8.5 - x) });
     expect(lookAround(map, shut, atBook(3.5, 3.5), things, {}, T0)).toEqual({
       found: [],
       glances: {},
       dueAt: null,
     });
-    // A step nearer, 2.8 tiles off: found once the lamp has rested on it for 600 ms.
-    const nearer = atBook(4.5, 3.5);
+    // Three steps nearer, 2.8 tiles off: found once the lamp has rested on it for 600 ms.
+    const nearer = atBook(6.5, 3.5);
     const glance = lookAround(map, shut, nearer, things, {}, T0);
     expect(glance).toEqual({ found: [], glances: { 'source:buch-archiv': T0 }, dueAt: T0 + 600 });
     expect(lookAround(map, shut, nearer, things, glance.glances, T0 + 599).found).toEqual([]);

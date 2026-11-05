@@ -11,16 +11,19 @@ import { RoomManager, seedsAllowed } from '../src/roomManager.js';
 import { pressE, walkTo } from './walk.js';
 
 /**
- * Blackout: spawns in the Archiv (3,3) and at either end of the Flur, (1,8)
- * and (21,8); the lights go out five seconds in, and the crew throws the lever
- * of the Notlicht (11,7) in the middle of the Flur. The Flur plate (6,9) holds
- * the Maschinenraum door; console A of the Notstrom-Kasten stands in the
- * Maschinenraum at (1,12). Seeds 1 and 28 both start Anna at the west end of
- * the Flur and Ben in the Archiv.
+ * Blackout: spawns in the Archiv and at either end of the Flur; the lights go
+ * out once the intro is over, and the crew throws the lever of the Notlicht in
+ * the middle of the Flur. The Flur plate holds the Maschinenraum door;
+ * console A of the Notstrom-Kasten stands in the Maschinenraum against its
+ * west wall. Seeds 1 and 28 both start Anna at the west end of the Flur and
+ * Ben in the Archiv.
  */
 const blackout: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
 );
+const lever = blackout.map.stations.find((s) => s.puzzleId === 'notlicht') ?? { x: 0, y: 0 };
+const box = blackout.map.stations.find((s) => s.puzzleId === 'notstrom' && s.console === 'a');
+const plate = blackout.map.plates.find((p) => p.id === 'flurplatte') ?? { x: 0, y: 0 };
 
 function collector(): { messages: ServerMessage[]; listen: (m: ServerMessage) => void } {
   const messages: ServerMessage[] = [];
@@ -69,23 +72,24 @@ function firstRunOf(manager: RoomManager, seed: number) {
   room.attachSpectator(audience.listen);
   const start = lastSpectatorView(audience.messages);
   vi.advanceTimersByTime((blackout.intro?.lightsSec ?? 0) * 1000);
-  walkTo(room, ben, 11.5, 8.5);
-  walkTo(room, anna, 11.5, 7.5);
+  walkTo(room, ben, lever.x + 0.5, lever.y + 1.5);
+  walkTo(room, anna, lever.x + 0.5, lever.y + 0.5);
   pressE(room, anna);
   for (const player of [anna, ben]) {
     room.act(player.playerId, { kind: 'puzzle-input', input: { press: true } });
   }
-  walkTo(room, ben, 6.5, 9.5);
-  walkTo(room, anna, 2.5, 12.5);
+  // Ben on the plate; Anna through the door it holds, to the tile east of the fuse box.
+  walkTo(room, ben, plate.x + 0.5, plate.y + 0.5);
+  walkTo(room, anna, (box?.x ?? 0) + 1.5, (box?.y ?? 0) + 0.5);
   pressE(room, anna);
-  const box = lastSpectatorView(audience.messages).puzzle;
+  const fuseBox = lastSpectatorView(audience.messages).puzzle;
   room.dispose();
   return {
     seed: lastView(anna.messages).seed,
     spawns: [anna, ben].map(({ messages }) => lastView(messages).map?.yourSpawn),
     places: start.map?.manuals.map(({ id, x, y }) => ({ id, x, y })),
     edgework: start.edgework,
-    box,
+    box: fuseBox,
   };
 }
 

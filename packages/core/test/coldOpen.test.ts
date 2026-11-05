@@ -530,7 +530,7 @@ describe('Blackout opens on its lever', () => {
     expect(blackout.intro?.lightsSec).toBeGreaterThan(20);
     expect(blackout.intro?.lightsSec).toBeLessThanOrEqual(INTRO_MAX_SEC);
     expect(first).toMatchObject({ type: 'button-sync', style: 'lever', id: 'notlicht' });
-    expect(lever).toEqual({ puzzleId: 'notlicht', x: 11, y: 7 });
+    expect(lever).toEqual({ puzzleId: 'notlicht', x: 15, y: 9 });
     expect(blackout.map.manuals.some((m) => m.puzzleIds.includes('notlicht'))).toBe(false);
   });
 

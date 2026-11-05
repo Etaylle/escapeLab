@@ -153,14 +153,15 @@ describe('powerRoom — the room the power lights round you before the blackout'
     const doorsShut = lab.doors.map((door) => ({ ...door, open: false }));
     const lit = powerRoom({ tiles: lab.tiles, doors: doorsShut }, { x: 3.5, y: 3.5 });
     const shown = lit?.keys ?? new Set<string>();
-    // The book at 6,1 or 7,3, the fuse at 7,5, the sign at 2,3; through the archway at 4,6 the
-    // Flur with the lever at 11,7 and the plate at 6,9 — the crew sees the lever once in light.
-    for (const tile of ['6,1', '7,3', '7,5', '2,3', '4,6', '11,7', '6,9', '21,8']) {
+    // The book at 8,1 or 9,3, the fuse at 9,7, the sign at 2,3; through the archway at 4,8 and
+    // 5,8 the Flur with the lever at 15,9, the plate at 7,12 and its east end at 29,12 — the
+    // crew sees the lever once in light.
+    for (const tile of ['8,1', '9,3', '9,7', '2,3', '4,8', '5,8', '15,9', '7,12', '29,12']) {
       expect(shown.has(tile)).toBe(true);
     }
-    // The key in the Serverraum at 17,1 and the Serverraum itself behind its bulkhead, the
+    // The key in the Serverraum at 21,1 and the Serverraum itself behind its bulkhead, the
     // Ost-Flur beyond it, the Maschinenraum behind its door, the Labor, the Reaktor: dark.
-    for (const tile of ['17,1', '13,3', '21,4', '3,12', '11,13', '22,11']) {
+    for (const tile of ['21,1', '13,3', '27,5', '3,16', '14,16', '28,17']) {
       expect(shown.has(tile)).toBe(false);
     }
   });

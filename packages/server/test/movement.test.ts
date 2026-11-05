@@ -14,18 +14,35 @@ import { Room } from '../src/room.js';
 import { walkTo, type Walker } from './walk.js';
 
 /**
- * Blackout: the Serverschott (15,6) between the Flur and the Serverraum opens
- * with station 3; the Maschinenraum door (4,10) while the Flur plate (6,9) is
- * held. Of its spawns, (1,8) lies at the Flur's west end and (3,3) in the
- * Archiv. Its clock starts once the lights have gone out, `intro.lightsSec` in.
+ * Blackout: the Serverschott in the Flur's north wall, into the Serverraum, opens
+ * with station 3; the Maschinenraum door in its south wall while the Flur plate
+ * is held. Of its spawns, the first lies in the Archiv and the second at the
+ * Flur's west end. Its clock starts once the lights have gone out,
+ * `intro.lightsSec` in.
  */
 const blackout: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
 );
-const FLUR = { x: 1, y: 8 };
-const ARCHIV = { x: 3, y: 3 };
-/** In front of the Serverschott, in the Flur. */
-const BY_THE_SCHOTT = { x: 15.5, y: 7.5 };
+const [ARCHIV = { x: 0, y: 0 }, FLUR = { x: 0, y: 0 }] = blackout.map.spawns;
+/** A door of Blackout by its id; throws where it has none. */
+function doorOf(id: string): { x: number; y: number } {
+  const door = blackout.map.doors.find((d) => d.id === id);
+  if (door === undefined) {
+    throw new Error(`Blackout has no door ${id}`);
+  }
+  return door;
+}
+const SCHOTT = doorOf('serverschott');
+const MASCHINENTUER = doorOf('maschinentuer');
+/** In front of the Serverschott, in the Flur, the tile below it. */
+const BY_THE_SCHOTT = { x: SCHOTT.x + 0.5, y: SCHOTT.y + 1.5 };
+/** In front of the Maschinenraum door, in the Flur, the tile above it. */
+const BY_THE_DOOR = { x: MASCHINENTUER.x + 0.5, y: MASCHINENTUER.y - 0.4 };
+/** Through the Maschinenraum door, in the Maschinenraum: 1.45 tiles on, one step. */
+const THROUGH_THE_DOOR = { x: MASCHINENTUER.x + 0.5, y: MASCHINENTUER.y + 1.05 };
+const flurplatte = blackout.map.plates.find((p) => p.id === 'flurplatte') ?? { x: 0, y: 0 };
+/** On the Flur plate that holds the Maschinenraum door. */
+const ON_THE_PLATE = { x: flurplatte.x + 0.5, y: flurplatte.y + 0.5 };
 
 type Player = Walker & {
   token: string;
@@ -170,12 +187,15 @@ describe('Room movement', () => {
     const { room, anna, ben } = started();
     walkTo(room, anna, BY_THE_SCHOTT.x, BY_THE_SCHOTT.y);
     expect(lastView(anna).map?.doors.find((d) => d.id === 'serverschott')?.open).toBe(false);
-    send(room, anna, runOf(anna), 15.5, 6.0);
+    // 1.5 tiles north: into the Serverschott's tile, shut.
+    send(room, anna, runOf(anna), BY_THE_SCHOTT.x, SCHOTT.y);
     expect(broadcastSpot(ben, anna)).toEqual(BY_THE_SCHOTT);
     expect(broadcastSpot(anna, anna)).toEqual(BY_THE_SCHOTT);
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0]?.[0]).toMatch(
-      /refused Anna's step from 15\.50,7\.50 to 15\.50,6\.00 \(1 refused here so far\)/,
+    const from = `${BY_THE_SCHOTT.x.toFixed(2)},${BY_THE_SCHOTT.y.toFixed(2)}`;
+    const to = `${BY_THE_SCHOTT.x.toFixed(2)},${SCHOTT.y.toFixed(2)}`;
+    expect(warn.mock.calls[0]?.[0]).toContain(
+      `refused Anna's step from ${from} to ${to} (1 refused here so far)`,
     );
     room.dispose();
   });
@@ -183,8 +203,9 @@ describe('Room movement', () => {
   it('takes a normal step', () => {
     const { room, anna, ben } = started();
     walkTo(room, anna, BY_THE_SCHOTT.x, BY_THE_SCHOTT.y);
-    send(room, anna, runOf(anna), 14.9, 7.5);
-    expect(broadcastSpot(ben, anna)).toEqual({ x: 14.9, y: 7.5 });
+    const step = { x: BY_THE_SCHOTT.x - 0.6, y: BY_THE_SCHOTT.y };
+    send(room, anna, runOf(anna), step.x, step.y);
+    expect(broadcastSpot(ben, anna)).toEqual(step);
     room.dispose();
   });
 
@@ -197,21 +218,22 @@ describe('Room movement', () => {
     const sent = (x: number): number => Math.round(x * 100) / 100;
     const stepAt = (factor: number): number => (WALK_SPEED * factor) / UPDATES_PER_SECOND;
     // Six sprinted updates west along the Flur, about 12 a second.
+    const y = BY_THE_SCHOTT.y;
     let x = BY_THE_SCHOTT.x;
     for (let i = 0; i < 6; i++) {
       x = sent(x - stepAt(SPRINT_FACTOR));
-      send(room, anna, run, x, 7.5);
+      send(room, anna, run, x, y);
     }
-    expect(broadcastSpot(ben, anna)).toEqual({ x, y: 7.5 });
+    expect(broadcastSpot(ben, anna)).toEqual({ x, y });
     // A lag burst at the sprint, 1.6 tiles: within its step and the margin, past the walk's 1.5.
     expect(stepAt(SPRINT_FACTOR) + STEP_MARGIN).toBeGreaterThanOrEqual(1.6);
     x = sent(x - 1.6);
-    send(room, anna, run, x, 7.5);
-    expect(broadcastSpot(ben, anna)).toEqual({ x, y: 7.5 });
+    send(room, anna, run, x, y);
+    expect(broadcastSpot(ben, anna)).toEqual({ x, y });
     expect(warn).not.toHaveBeenCalled();
     // Twice the walk with the same burst is a teleport: refused, the old spot kept.
-    send(room, anna, run, sent(x - (stepAt(2) + STEP_MARGIN)), 7.5);
-    expect(broadcastSpot(ben, anna)).toEqual({ x, y: 7.5 });
+    send(room, anna, run, sent(x - (stepAt(2) + STEP_MARGIN)), y);
+    expect(broadcastSpot(ben, anna)).toEqual({ x, y });
     expect(warn).toHaveBeenCalledTimes(1);
     room.dispose();
   });
@@ -219,13 +241,13 @@ describe('Room movement', () => {
   it('takes a step through the Maschinenraum door only while its plate is held', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { room, anna, ben } = started();
-    walkTo(room, anna, 4.5, 9.6);
-    send(room, anna, runOf(anna), 4.5, 11.05);
-    expect(broadcastSpot(ben, anna)).toEqual({ x: 4.5, y: 9.6 });
-    walkTo(room, ben, 6.5, 9.5);
+    walkTo(room, anna, BY_THE_DOOR.x, BY_THE_DOOR.y);
+    send(room, anna, runOf(anna), THROUGH_THE_DOOR.x, THROUGH_THE_DOOR.y);
+    expect(broadcastSpot(ben, anna)).toEqual(BY_THE_DOOR);
+    walkTo(room, ben, ON_THE_PLATE.x, ON_THE_PLATE.y);
     expect(lastView(anna).map?.doors.find((d) => d.id === 'maschinentuer')?.open).toBe(true);
-    send(room, anna, runOf(anna), 4.5, 11.05);
-    expect(broadcastSpot(ben, anna)).toEqual({ x: 4.5, y: 11.05 });
+    send(room, anna, runOf(anna), THROUGH_THE_DOOR.x, THROUGH_THE_DOOR.y);
+    expect(broadcastSpot(ben, anna)).toEqual(THROUGH_THE_DOOR);
     room.dispose();
   });
 
@@ -244,8 +266,8 @@ describe('Room movement', () => {
     expect(kept.run).toBe(runOf(back));
     expect(kept.players[anna.playerId]).toMatchObject(BY_THE_SCHOTT);
 
-    walkTo(room, back, 6.5, 9.5);
-    expect(broadcastSpot(ben, back)).toEqual({ x: 6.5, y: 9.5 });
+    walkTo(room, back, ON_THE_PLATE.x, ON_THE_PLATE.y);
+    expect(broadcastSpot(ben, back)).toEqual(ON_THE_PLATE);
     expect(lastView(ben).map?.plates.find((p) => p.id === 'flurplatte')?.pressed).toBe(true);
     expect(warn).not.toHaveBeenCalled();
     room.dispose();

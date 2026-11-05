@@ -7,13 +7,17 @@ import { serveSockets, type PlayerSocket } from '../src/sockets.js';
 import { walkTo, type Walker } from './walk.js';
 
 /**
- * Blackout: the Notlicht's lever at (11,7) in the Flur, armed once the lights have gone out,
- * `intro.lightsSec` in. Its Flur runs along rows 7 to 9.
+ * Blackout: the Notlicht's lever in the Flur, armed once the lights have gone out,
+ * `intro.lightsSec` in, with open floor two tiles west of it along its row.
  */
 const blackout: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
 );
-const LEVER = { x: 11.5, y: 7.5 };
+const lever = blackout.map.stations.find((s) => s.puzzleId === 'notlicht') ?? { x: 0, y: 0 };
+const LEVER = { x: lever.x + 0.5, y: lever.y + 0.5 };
+/** Far from the lever: the Flur's west end, where a spawn lies. */
+const westEnd = blackout.map.spawns[1] ?? { x: 0, y: 0 };
+const FAR_OFF = { x: westEnd.x + 0.5, y: westEnd.y + 0.5 };
 
 function join(room: Room, name: string): Walker {
   const messages: ServerMessage[] = [];
@@ -126,7 +130,7 @@ describe('E on the line', () => {
     anna.say({ kind: 'start-mission' });
     vi.advanceTimersByTime((blackout.intro?.lightsSec ?? 0) * 1000 + 100);
     // far from the lever: refused, and the refusal says it refuses the press
-    ben.say({ kind: 'interact', x: 1.5, y: 8.5, t: 1 });
+    ben.say({ kind: 'interact', ...FAR_OFF, t: 1 });
     expect(ben.heard.at(-1)).toMatchObject({ kind: 'error', of: 'interact' });
     const room = manager.get(code);
     const benJoined = ben.heard.find((m) => m.kind === 'joined');

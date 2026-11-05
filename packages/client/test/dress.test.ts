@@ -63,21 +63,24 @@ describe('dressMap — every room dressed after its kind, the same every run', (
       kinds[y * width + x],
     ];
     expect(at(3, 3)).toEqual(['ARCHIV', 'archive']);
-    expect(at(4, 7)).toEqual(['FLUR', 'corridor']);
+    expect(at(4, 7)).toEqual(['ARCHIV', 'archive']);
+    expect(at(4, 8)).toEqual(['FLUR', 'corridor']);
     expect(at(13, 3)).toEqual(['SERVERRAUM', 'server']);
-    expect(at(3, 12)).toEqual(['MASCHINENRAUM', 'machine']);
-    expect(at(23, 12)).toEqual(['REAKTOR', 'reactor']);
-    // The Ost-Flur opens on the Serverraum through an archway, and keeps its own floor too.
-    expect(at(19, 4)).toEqual(['OST-FLUR', 'corridor']);
+    expect(at(3, 16)).toEqual(['MASCHINENRAUM', 'machine']);
+    expect(at(28, 17)).toEqual(['REAKTOR', 'reactor']);
+    // The Ost-Flur opens on the Serverraum through an archway two tiles wide, and keeps its own
+    // floor too: the archway the Serverraum's, the corridor's from the tile past it.
+    expect(at(22, 6)).toEqual(['SERVERRAUM', 'server']);
+    expect(at(23, 6)).toEqual(['OST-FLUR', 'corridor']);
   });
 
   it('shows a wall with a face in the kind of the room it looks into, plain without one', () => {
     const { kinds, walls, width } = dressMap(blackout, seedOf('blackout'));
-    // (13,2) is a pillar in the server room: floor on all four sides of it.
-    expect(walls[2 * width + 13]).toBe(FLOOR_E | FLOOR_S | FLOOR_W | 1);
-    expect(kinds[2 * width + 13]).toBe('server');
-    // (0,8) is the outer wall west of the corridor: no face.
-    expect(kinds[8 * width + 0]).toBe('plain');
+    // (16,3) is a pillar in the server room: floor on all four sides of it.
+    expect(walls[3 * width + 16]).toBe(FLOOR_E | FLOOR_S | FLOOR_W | 1);
+    expect(kinds[3 * width + 16]).toBe('server');
+    // (0,10) is the outer wall west of the corridor: no face.
+    expect(kinds[10 * width + 0]).toBe('plain');
   });
 
   it('dusts the corners, wears a band along a room’s length, stripes the core’s floor', () => {
@@ -86,22 +89,54 @@ describe('dressMap — every room dressed after its kind, the same every run', (
     expect(variants).toContain(CORNER_NW);
     // The corridor runs east–west: its wear runs across.
     expect(variants.filter((v) => v === WORN_ACROSS).length).toBeGreaterThan(4);
-    // The floor round the reactor's core at (22,13).
-    expect(floor[13 * width + 21]).toBe(3);
-    expect(floor[12 * width + 23]).toBe(3);
+    // The floor round the reactor's core at (30,15).
+    expect(floor[15 * width + 29]).toBe(3);
+    expect(floor[14 * width + 31]).toBe(3);
   });
 
   it('puts rack fronts on the server room’s pillars, warning stripes beside its doors', () => {
     const { props } = dressMap(blackout, seedOf('blackout'));
     const prop = (x: number, y: number): string | undefined =>
       props.find((p) => p.x === x && p.y === y)?.kind;
-    for (const y of [2, 4]) {
-      expect(prop(13, y)).toBe('rack');
+    for (const y of [3, 5]) {
+      expect(prop(16, y)).toBe('rack');
     }
-    // Beside the Serverschott at (15,6) and the Maschinenraum's door at (4,10) the walls look
+    // Beside the Serverschott at (19,8) and the Maschinenraum's door at (5,13) the walls look
     // down on the floor below them; on their other sides hang emergency lamps.
-    expect(prop(16, 6)).toBe('stripes');
-    expect(prop(3, 10)).toBe('stripes');
+    expect(prop(18, 8)).toBe('stripes');
+    expect(prop(4, 13)).toBe('stripes');
+  });
+
+  it('hangs a prop at least every 4 tiles along each of Blackout’s corridors, both ways', () => {
+    const { props, rooms, width } = dressMap(blackout, seedOf('blackout'));
+    const corridors = new Set(blackout.labels.filter((l) => l.kind === 'corridor').map((l) => l.text));
+    expect([...corridors]).toEqual(['FLUR', 'OST-FLUR', 'SÜD-FLUR']);
+    for (const corridor of corridors) {
+      const floor = rooms.flatMap((room, i) =>
+        room === corridor ? [{ x: i % width, y: Math.floor(i / width) }] : [],
+      );
+      const hung = props.filter((p) => p.room === corridor);
+      // A stretch running east–west has 5 tiles of floor or fewer in each of its columns, one
+      // running north–south in each of its rows; a prop counts where the floor below it lies.
+      const stretches = [
+        { line: (t: { x: number; y: number }) => t.x, at: (p: { x: number }) => p.x },
+        { line: (t: { x: number; y: number }) => t.y, at: (p: { y: number }) => p.y + 1 },
+      ];
+      for (const { line, at } of stretches) {
+        const count = new Map<number, number>();
+        floor.forEach((tile) => count.set(line(tile), (count.get(line(tile)) ?? 0) + 1));
+        const lines = [...count].filter(([, n]) => n <= 5).map(([v]) => v);
+        for (const first of lines) {
+          const window = [first, first + 1, first + 2, first + 3];
+          if (window.every((v) => lines.includes(v))) {
+            expect(
+              hung.some((p) => window.includes(at(p))),
+              `${corridor}: a prop along ${window[0]}–${window[3]}`,
+            ).toBe(true);
+          }
+        }
+      }
+    }
   });
 
   it('hangs nothing on a wall an emergency lamp hangs on, and a clock once a room at most', () => {

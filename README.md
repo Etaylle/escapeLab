@@ -15,9 +15,10 @@ Kettenreaktion (3 Spieler, jeder startet in einem anderen verschlossenen Raum un
 Hilfe heraus) und Doppelschicht (4 Spieler in **zwei getrennten Flügeln** — die Regeln jeder
 Station liegen im anderen Flügel, und erst der Druckausgleich öffnet die Schleuse dazwischen).
 
-**Blackout im Labor** (2–3 Spieler, 15 Minuten auf *Normal*): ein Labor von 27 × 17 Feldern, die
-Räume als Ring — Archiv, Flur, Serverraum, Ost-Flur, Reaktor, Süd-Flur, Labor, Maschinenraum und
-zurück in den Flur. Die Crew startet getrennt und außer Sicht (Archiv, beide Enden des Flurs) und
+**Blackout im Labor** (2–3 Spieler, 15 Minuten auf *Normal*): ein Labor von 36 × 22 Feldern, die
+Räume etwa 9 × 7 groß als Ring — Archiv, Flur, Serverraum, Ost-Flur, Reaktor, Süd-Flur, Labor,
+Maschinenraum und zurück in den Flur; die Flure vier Felder breit, die Hauptwege durch zwei Felder
+breite Durchgänge, nur die Türen, die Geräte sind, ein Feld breit. Die Crew startet getrennt und außer Sicht (Archiv, beide Enden des Flurs) und
 wirft zuerst gemeinsam den Notlicht-Hebel in der Mitte des Flurs, dann die Stationen in
 Reihenfolge:
 

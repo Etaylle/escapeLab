@@ -123,10 +123,11 @@ describe('where a finding points', () => {
     const message =
       'map: decor "shelf" at 3,2 stands on station "notlicht" — furniture goes on free floor';
     const found = locate(draft, message);
-    // The third piece of the map's furniture, a shelf of the Archiv, stands at 3,2.
-    expect(found.target).toEqual({ kind: 'decor', index: 2 });
+    // The second piece of the map's furniture, a shelf of the Archiv, stands at 3,2; the lever
+    // it names stands in the Flur.
+    expect(found.target).toEqual({ kind: 'decor', index: 1 });
     expect(found.spots).toContainEqual({ x: 3, y: 2 });
-    expect(found.spots).toContainEqual({ x: 11, y: 7 });
+    expect(found.spots).toContainEqual({ x: 15, y: 9 });
     expect(refOfPath(['map', 'decor', 4, 'kind'])).toEqual({ kind: 'decor', index: 4 });
   });
 
@@ -143,19 +144,19 @@ describe('where a finding points', () => {
   it('reads the things and tiles a map rule names out of its words', () => {
     const draft = blackout();
     const apart =
-      'map: consoles a and b of station "notstrom" at 1,12 and 2,7 stand 5.1 tiles apart';
+      'map: consoles a and b of station "notstrom" at 1,15 and 2,9 stand 6.1 tiles apart';
     const both = locate(draft, apart);
     // Console a of the Notstrom-Kasten, after the Notlicht's lever in the list of stations.
     expect(both.target).toEqual({ kind: 'station', index: 1 });
     expect(both.spots).toEqual([
-      { x: 1, y: 12 },
-      { x: 2, y: 7 },
+      { x: 1, y: 15 },
+      { x: 2, y: 9 },
     ]);
-    const carry = 'map: nobody can carry "schluessel" to cabinet "aktenschrank" at 12,11';
+    const carry = 'map: nobody can carry "schluessel" to cabinet "aktenschrank" at 11,15';
     const cabinet = locate(draft, carry);
     expect(cabinet.target).toEqual({ kind: 'item', index: 1 });
-    expect(cabinet.spots).toContainEqual({ x: 17, y: 1 });
-    expect(cabinet.spots).toContainEqual({ x: 14, y: 15 });
+    expect(cabinet.spots).toContainEqual({ x: 21, y: 1 });
+    expect(cabinet.spots).toContainEqual({ x: 18, y: 20 });
     const nowhere = locate(draft, 'players: min must not be above max');
     expect(nowhere).toEqual({ target: null, spots: [] });
   });

@@ -551,9 +551,11 @@ describe('Room', () => {
   });
 
   it('releases a plate when its holder disconnects', () => {
-    // Blackout: the Flur plate at (6,9) holds the Maschinenraum door.
-    const { room, anna, ben } = startedRoom(load('blackout'));
-    moveTo(room, anna, 6, 9);
+    // Blackout: the Flur plate holds the Maschinenraum door.
+    const blackout = load('blackout');
+    const plate = blackout.map.plates.find((p) => p.id === 'flurplatte') ?? { x: 0, y: 0 };
+    const { room, anna, ben } = startedRoom(blackout);
+    moveTo(room, anna, plate.x, plate.y);
     expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(true);
     anna.detach();
     expect(lastView(ben.messages).map?.plates[0]?.pressed).toBe(false);

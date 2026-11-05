@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { canSee, noteSpot, parseMission } from '../src/index.js';
+import { canSee, noteSpot, parseMission, WALK_SPEED } from '../src/index.js';
 import type { Mission } from '../src/index.js';
 import {
   canStandAt,
@@ -11,6 +11,7 @@ import {
   walkable,
   type Spot,
 } from '../src/reach.js';
+import { blackoutPlan } from './blackoutPlan.js';
 
 /**
  * Guardrail for every shipped mission, beyond what the mission validation
@@ -228,6 +229,61 @@ function stepsFrom(map: Mission['map'], from: Spot, blocked: ReadonlySet<string>
   return steps;
 }
 
+const EIGHT_WAYS = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+  [1, 1],
+  [1, -1],
+  [-1, 1],
+  [-1, -1],
+] as const;
+
+/** The steps a walker takes out of `at`: onto free floor, a diagonal only past two free sides. */
+function stepsOut(
+  free: (x: number, y: number) => boolean,
+  at: Spot,
+): { to: Spot; tiles: number }[] {
+  return EIGHT_WAYS.filter(
+    ([dx, dy]) => free(at.x + dx, at.y + dy) && free(at.x + dx, at.y) && free(at.x, at.y + dy),
+  ).map(([dx, dy]) => ({ to: { x: at.x + dx, y: at.y + dy }, tiles: Math.hypot(dx, dy) }));
+}
+
+/**
+ * How far somebody walks from `from` to `to`, in tiles: the eight ways a player steers, no
+ * corner cut, round furniture and the doors in `shut`; Infinity where no way leads there.
+ */
+function walkTiles(map: Mission['map'], from: Spot, to: Spot, shut: ReadonlySet<string>): number {
+  const free = (x: number, y: number): boolean => walkable(map, x, y) && !shut.has(tileKey(x, y));
+  const best = new Map([[tileKey(from.x, from.y), 0]]);
+  const open: (Spot & { tiles: number })[] = [{ ...from, tiles: 0 }];
+  for (let at = open.shift(); at !== undefined; at = open.shift()) {
+    if (at.x === to.x && at.y === to.y) {
+      return at.tiles;
+    }
+    for (const step of stepsOut(free, at)) {
+      const tiles = at.tiles + step.tiles;
+      if (tiles < (best.get(tileKey(step.to.x, step.to.y)) ?? Infinity)) {
+        best.set(tileKey(step.to.x, step.to.y), tiles);
+        open.push({ ...step.to, tiles });
+        open.sort((a, b) => a.tiles - b.tiles);
+      }
+    }
+  }
+  return Infinity;
+}
+
+/** The furniture each kind of room stands, as docs/art-bible.md's „Rooms with identity" has it. */
+const FURNITURE_OF: Readonly<Record<string, readonly string[]>> = {
+  archive: ['shelf', 'cart'],
+  server: ['rack'],
+  machine: ['generator', 'pipes', 'barrel'],
+  lab: ['bench', 'hood'],
+  reactor: ['core', 'cables', 'desk'],
+  control: ['desk'],
+};
+
 /**
  * Blackout's own design, beyond what every mission keeps: the fuse box of
  * the Notstrom-Kasten lies behind the Maschinenraum door, its meter outside
@@ -236,7 +292,8 @@ function stepsFrom(map: Mission['map'], from: Spot, blocked: ReadonlySet<string>
  * walks to either console without anyone on it. Its rooms run in a loop, the
  * crew starts out of each other's sight, the escape is a run across the lab,
  * every room is furnished and the emergency lamps mark the lever and the
- * corridors' doors.
+ * corridors' doors. Its main ways open two tiles wide, and no walk of the plan
+ * the harness plays takes longer than 12 s.
  */
 describe('mission blackout by design', () => {
   const blackout = missions.find((m) => m.id === 'blackout');
@@ -343,12 +400,116 @@ describe('mission blackout by design', () => {
     expect(way('SERVERRAUM')).toBe(way('LABOR'));
   });
 
-  it('furnishes every room with six pieces at least', () => {
+  it('furnishes every room with eight pieces at least, each of the room’s own kind', () => {
     const map = blackout.map;
     const rooms = roomsOf(map);
     for (const label of map.labels.filter((l) => l.kind !== 'corridor')) {
       const pieces = map.decor.filter((d) => rooms.get(tileKey(d.x, d.y)) === label.text);
-      expect(pieces.length, `${label.text} has ${pieces.length} pieces`).toBeGreaterThanOrEqual(6);
+      expect(pieces.length, `${label.text} has ${pieces.length} pieces`).toBeGreaterThanOrEqual(8);
+      const own = FURNITURE_OF[label.kind ?? ''] ?? [];
+      expect(pieces.filter((piece) => !own.includes(piece.kind)), label.text).toEqual([]);
+    }
+  });
+
+  it('opens its main ways two tiles wide, a door that is a device one tile in its wall', () => {
+    const map = blackout.map;
+    const rooms = roomsOf(map);
+    // Between two rooms without a door: as many tiles of one beside the other as the way is wide.
+    const widths = new Map<string, number>();
+    for (const [key, room] of rooms) {
+      const [x = 0, y = 0] = key.split(',').map(Number);
+      for (const [dx, dy] of [
+        [1, 0],
+        [0, 1],
+      ] as const) {
+        const other = rooms.get(tileKey(x + dx, y + dy));
+        if (other !== undefined && other !== room) {
+          const pair = [room, other].sort().join(' · ');
+          widths.set(pair, (widths.get(pair) ?? 0) + 1);
+        }
+      }
+    }
+    expect(Object.fromEntries(widths)).toEqual({
+      'ARCHIV · FLUR': 2,
+      'OST-FLUR · SERVERRAUM': 2,
+      'LABOR · SÜD-FLUR': 2,
+    });
+    const wall = (x: number, y: number): boolean => map.tiles[y]?.charAt(x) === '#';
+    for (const door of map.doors) {
+      const across = wall(door.x - 1, door.y) && wall(door.x + 1, door.y);
+      const along = wall(door.x, door.y - 1) && wall(door.x, door.y + 1);
+      expect(across || along, `${door.id} stands one tile wide in its wall`).toBe(true);
+    }
+  });
+
+  it('keeps every walk of the pinned plan within 12 s at a walk, the escape both ways', () => {
+    const map = blackout.map;
+    const plan = blackoutPlan();
+    const rooms = roomsOf(map);
+    const at = (puzzleId: string, console?: 'a' | 'b'): Spot => {
+      const spot = map.stations.find((s) => s.puzzleId === puzzleId && s.console === console);
+      return spot ?? { x: -1, y: -1 };
+    };
+    const rulesOf = (puzzleId: string): Spot => {
+      const source = map.manuals.find((manual) => manual.puzzleIds.includes(puzzleId));
+      return (source === undefined ? undefined : plan.places[source.id]) ?? { x: -1, y: -1 };
+    };
+    /** Where a walk to `spot` ends: on it, or beside it where something stands there. */
+    const stand = (spot: Spot): Spot =>
+      [spot, ...STEPS.map(([dx, dy]) => ({ x: spot.x + dx, y: spot.y + dy }))].find((s) =>
+        walkable(map, s.x, s.y),
+      ) ?? spot;
+    const opener = (door: (typeof map.doors)[number]): string | undefined =>
+      door.opensBy.kind === 'puzzle' ? door.opensBy.puzzleId : door.opensBy.untilSolved;
+    /** The doors shut once `solved` are, but those held open by a plate. */
+    const shut = (solved: readonly string[], held: readonly string[] = []): Set<string> =>
+      new Set(
+        map.doors
+          .filter((d) => !held.includes(d.id) && !solved.includes(opener(d) ?? ''))
+          .map((d) => tileKey(d.x, d.y)),
+      );
+    const plateDoor = map.doors.find((door) => door.opensBy.kind === 'plate')?.id ?? '';
+    const plateOf = map.plates.find((plate) =>
+      map.doors.some((d) => d.opensBy.kind === 'plate' && d.opensBy.plateId === plate.id),
+    );
+    const fuse = plan.ersatzsicherung;
+    const key = map.items.find((item) => map.manuals.some((m) => m.needsKey === item.id));
+    const sign = map.edgeworkSign ?? { x: -1, y: -1 };
+    const hatch = map.exit ?? { x: -1, y: -1 };
+    const [lever, box, meter] = [at('notlicht'), at('notstrom', 'a'), at('notstrom', 'b')];
+    const [signalA, signalB] = [at('signalkette', 'a'), at('signalkette', 'b')];
+    const [terminal, rack] = [at('subsysteme', 'a'), at('subsysteme', 'b')];
+    const [radio, reactor] = [at('frequenz'), at('reaktorstart')];
+    const solved = blackout.puzzles.map((p) => p.id);
+    const before = (n: number): Set<string> => shut(solved.slice(0, n));
+    const legs: [string, Spot, Spot, Set<string>][] = [
+      ['host to the lever', plan.spawns.host, lever, before(0)],
+      ['guest to the lever', plan.spawns.guest, lever, before(0)],
+      ['the lever to the book', lever, rulesOf('notstrom'), before(1)],
+      ['the book to the sign', rulesOf('notstrom'), sign, before(1)],
+      ['the sign to the plate', sign, plateOf ?? sign, before(1)],
+      ['the lever to the fuse box, the plate held', lever, box, shut([], [plateDoor])],
+      ['the plate to the meter', plateOf ?? sign, meter, before(1)],
+      ['the meter to the clipboard', meter, rulesOf('signalkette'), before(2)],
+      ['the clipboard to console A', rulesOf('signalkette'), signalA, before(2)],
+      ['the fuse box to console B', box, signalB, before(2)],
+      ['console B to the terminal', signalB, terminal, before(3)],
+      ['console A to the locker', signalA, rulesOf('subsysteme'), before(3)],
+      ['the locker to the rack', rulesOf('subsysteme'), rack, before(3)],
+      ['the rack to the key', rack, key ?? rack, before(4)],
+      ['the key to the cabinet', key ?? rack, rulesOf('frequenz'), before(4)],
+      ['the terminal to the radio', terminal, radio, before(4)],
+      ['the radio to the fuse', radio, fuse.from, before(5)],
+      ['the fuse to the reactor', fuse.from, fuse.to, before(5)],
+      ['the cabinet to the reactor', rulesOf('frequenz'), reactor, before(5)],
+    ];
+    for (const round of ['LABOR', 'SERVERRAUM']) {
+      const other = new Set([...rooms].filter(([, name]) => name === round).map(([k]) => k));
+      legs.push([`the escape, out of the ${round}`, reactor, hatch, other]);
+    }
+    for (const [what, from, to, doors] of legs) {
+      const seconds = walkTiles(map, stand(from), stand(to), doors) / WALK_SPEED;
+      expect(seconds, what).toBeLessThanOrEqual(12);
     }
   });
 
@@ -379,8 +540,8 @@ describe('mission blackout by design', () => {
     expect(def?.hints.length).toBeGreaterThan(0);
     const consoles = blackout.map.stations.filter((s) => s.puzzleId === 'subsysteme');
     expect(consoles).toEqual([
-      { puzzleId: 'subsysteme', x: 9, y: 3, console: 'a' },
-      { puzzleId: 'subsysteme', x: 17, y: 3, console: 'b' },
+      { puzzleId: 'subsysteme', x: 11, y: 4, console: 'a' },
+      { puzzleId: 'subsysteme', x: 21, y: 4, console: 'b' },
     ]);
     const rooms = roomsOf(blackout.map);
     for (const spot of consoles) {

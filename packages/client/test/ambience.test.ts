@@ -65,14 +65,28 @@ function withDoors(...open: string[]): DressMap {
 }
 
 const POWER_ON: Power = { outAt: null, lit: new Map(), won: false };
-const IN_FLUR = { x: 5.5, y: 8.5 };
+/** In the Flur's west part, between the Archiv's opening and the Maschinenraum's door. */
+const IN_FLUR = { x: 5.5, y: 10.5 };
+/** In the Maschinenraum, by its west wall. */
+const IN_MASCHINENRAUM = { x: 2.5, y: 16.5 };
+/** In the reactor hall, south-west of the core. */
+const IN_REAKTOR = { x: 28.5, y: 17.5 };
+/** A door of Blackout's by its id: where the way through it lies, its tile's middle. */
+function doorAt(id: string): { x: number; y: number } {
+  const door = blackout.doors.find((d) => d.id === id);
+  return { x: (door?.x ?? -1) + 0.5, y: (door?.y ?? -1) + 0.5 };
+}
 
 describe('the rooms the beds are heard from', () => {
   it('names each tile by the room its label claims, and keeps the room in a doorway', () => {
     expect(roomAt(plan, 4, 1, null)).toBe('ARCHIV');
-    expect(roomAt(plan, 4, 6, 'ARCHIV')).toBe('FLUR'); // the opening belongs to the corridor
-    expect(roomAt(plan, 23, 12, null)).toBe('REAKTOR');
-    expect(roomAt(plan, 4, 10, 'MASCHINENRAUM')).toBe('MASCHINENRAUM'); // on the door
+    expect(roomAt(plan, 4, 8, 'ARCHIV')).toBe('FLUR'); // the opening belongs to the corridor
+    expect(roomAt(plan, 28, 17, null)).toBe('REAKTOR');
+    const door = doorAt('maschinentuer');
+    // on the door
+    expect(roomAt(plan, Math.floor(door.x), Math.floor(door.y), 'MASCHINENRAUM')).toBe(
+      'MASCHINENRAUM',
+    );
     expect(roomAt(plan, 0, 0, 'LABOR')).toBe('LABOR'); // a wall
   });
 
@@ -82,8 +96,8 @@ describe('the rooms the beds are heard from', () => {
     expect(plan.links).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ a: 'ARCHIV', b: 'FLUR', door: null }),
-        { a: 'FLUR', b: 'MASCHINENRAUM', door: 'maschinentuer', x: 4.5, y: 10.5 },
-        { a: 'REAKTOR', b: 'SÜD-FLUR', door: 'reaktortuer', x: 19.5, y: 13.5 },
+        { a: 'FLUR', b: 'MASCHINENRAUM', door: 'maschinentuer', ...doorAt('maschinentuer') },
+        { a: 'REAKTOR', b: 'SÜD-FLUR', door: 'reaktortuer', ...doorAt('reaktortuer') },
       ]),
     );
     expect(plan.links.some((link) => link.a === link.b)).toBe(false);
@@ -101,9 +115,11 @@ describe('the rooms the beds are heard from', () => {
   it('hears only the MAX_NEIGHBOURS rooms whose ways lie nearest', () => {
     expect(MAX_NEIGHBOURS).toBe(2);
     const doors = new Set(['maschinentuer', 'serverschott', 'labortuer']);
-    const west = bedLevels(plan, 'FLUR', doors, { x: 3.5, y: 8.5 });
+    // At the Flur's west end the Archiv's opening and the Maschinenraum's door lie nearest.
+    const west = bedLevels(plan, 'FLUR', doors, { x: 3.5, y: 10.5 });
     expect([...west.keys()].sort()).toEqual(['ARCHIV', 'FLUR', 'MASCHINENRAUM']);
-    const east = bedLevels(plan, 'FLUR', doors, { x: 14.5, y: 8.5 });
+    // Down the Flur by the Serverschott: the Serverraum's door, then the Maschinenraum's.
+    const east = bedLevels(plan, 'FLUR', doors, { x: 17.5, y: 12.5 });
     expect([...east.keys()].sort()).toEqual(['FLUR', 'MASCHINENRAUM', 'SERVERRAUM']);
   });
 
@@ -262,7 +278,7 @@ describe('the beds as they play', () => {
     const map = withDoors();
     ambience.hearRooms(scene(map, 4.5, 1.5, POWER_ON));
     ctx.currentTime = 20;
-    ambience.hearRooms(scene(map, 5.5, 8.5, POWER_ON));
+    ambience.hearRooms(scene(map, IN_FLUR.x, IN_FLUR.y, POWER_ON));
     ctx.currentTime = 20 + ROOM_FADE_S / 2;
     const halfway = ambience.bedProbe();
     expect(halfway.room).toBe('FLUR');
@@ -274,12 +290,12 @@ describe('the beds as they play', () => {
 
   it('stops the bed of a room no longer heard, and gives its loop back', async () => {
     const { ambience, audio, ctx } = await started();
-    hearRendered(ambience, scene(withDoors('maschinentuer'), 5.5, 8.5, POWER_ON));
+    hearRendered(ambience, scene(withDoors('maschinentuer'), IN_FLUR.x, IN_FLUR.y, POWER_ON));
     expect(audio.inUse().loop).toBe(3); // the corridor's vent, the archive's air, the rumble
     ctx.currentTime = 12;
-    ambience.hearRooms(scene(withDoors(), 5.5, 8.5, POWER_ON));
+    ambience.hearRooms(scene(withDoors(), IN_FLUR.x, IN_FLUR.y, POWER_ON));
     ctx.currentTime = 14;
-    ambience.hearRooms(scene(withDoors(), 5.5, 8.5, POWER_ON));
+    ambience.hearRooms(scene(withDoors(), IN_FLUR.x, IN_FLUR.y, POWER_ON));
     const rumble = ctx.all<FakeBufferSource>('buffer').find((b) => b.stoppedAt === 14);
     expect(rumble).toBeDefined();
     rumble?.end();
@@ -304,26 +320,26 @@ describe('the beds as they play', () => {
   it('keeps the machine room rumbling without power, its strokes only with it', async () => {
     const { ambience, ctx } = await started();
     const dark: Power = { outAt: Date.now() - 5000, lit: new Map(), won: false };
-    hearRendered(ambience, scene(withDoors(), 2.5, 12.5, dark));
+    hearRendered(ambience, scene(withDoors(), IN_MASCHINENRAUM.x, IN_MASCHINENRAUM.y, dark));
     expect(loops(ctx).map((loop) => loop.buffer?.tag)).toEqual(['bed-machine-idle']);
     ctx.currentTime = 30;
-    ambience.hearRooms(scene(withDoors(), 2.5, 12.5, dark));
+    ambience.hearRooms(scene(withDoors(), IN_MASCHINENRAUM.x, IN_MASCHINENRAUM.y, dark));
     expect(playedOf(ctx, 'machine-stroke')).toHaveLength(0); // dead: no stroke
     const lit: Power = { ...dark, lit: new Map([['MASCHINENRAUM', { since: 0 }]]) };
-    ambience.hearRooms(scene(withDoors(), 2.5, 12.5, lit, 9));
+    ambience.hearRooms(scene(withDoors(), IN_MASCHINENRAUM.x, IN_MASCHINENRAUM.y, lit, 9));
     ctx.currentTime = 32;
-    ambience.hearRooms(scene(withDoors(), 2.5, 12.5, lit, 9));
+    ambience.hearRooms(scene(withDoors(), IN_MASCHINENRAUM.x, IN_MASCHINENRAUM.y, lit, 9));
     expect(playedOf(ctx, 'machine-stroke').length).toBeGreaterThan(0);
   });
 
   it('warms a room whose lights come back up along their warm-up, dips and all', async () => {
     const { ambience, ctx } = await started();
     const dark: Power = { outAt: Date.now() - 5000, lit: new Map(), won: false };
-    hearRendered(ambience, scene(withDoors(), 5.5, 8.5, dark, 4));
+    hearRendered(ambience, scene(withDoors(), IN_FLUR.x, IN_FLUR.y, dark, 4));
     expect(ambience.bedProbe().power['corridor']).toBe(0);
     expect(loops(ctx)).toHaveLength(0); // the corridor's vent runs on power only
     const lit: Power = { ...dark, lit: new Map([['FLUR', { since: 4 }]]) };
-    hearRendered(ambience, scene(withDoors(), 5.5, 8.5, lit, 4));
+    hearRendered(ambience, scene(withDoors(), IN_FLUR.x, IN_FLUR.y, lit, 4));
     const [vent] = loops(ctx);
     const stage = (vent?.outputs[0] as FakeGain).outputs[0] as FakeGain; // past its level
     const curve = stage.gain.events.find((event) => event[0] === 'curve');
@@ -345,7 +361,7 @@ describe('the beds as they play', () => {
     expect(playedOf(ctx, 'drip').map((drip) => drip.startedAt)).toEqual([16.01]);
     ctx.currentTime = 40;
     time = 2.5; // the core's next top at 3.0, half a second away
-    ambience.hearRooms(scene(withDoors(), 23.5, 12.5, POWER_ON, time));
+    ambience.hearRooms(scene(withDoors(), IN_REAKTOR.x, IN_REAKTOR.y, POWER_ON, time));
     const [throb] = playedOf(ctx, 'core-throb');
     expect(throb?.startedAt).toBeCloseTo(40 + 0.5 - 0.35, 6);
   });
@@ -491,12 +507,12 @@ describe('the beds’ recordings, loaded as rooms come near', () => {
       ambience.hearRooms(at(POWER_ON, IN_FLUR.x, IN_FLUR.y));
       const before = memory.decodedBytes().beds;
       expect(samples.sample('bed-archive')).not.toBeNull();
-      ambience.hearRooms(at(POWER_ON, 23.5, 12.5)); // the reactor hall: the archive is far
+      ambience.hearRooms(at(POWER_ON, IN_REAKTOR.x, IN_REAKTOR.y)); // the reactor hall: the archive is far
       ctx.currentTime += BED_RELEASE_S - 0.1;
-      ambience.hearRooms(at(POWER_ON, 23.5, 12.5));
+      ambience.hearRooms(at(POWER_ON, IN_REAKTOR.x, IN_REAKTOR.y));
       expect(samples.sample('bed-archive')).not.toBeNull(); // not yet
       ctx.currentTime += 0.2;
-      ambience.hearRooms(at(POWER_ON, 23.5, 12.5));
+      ambience.hearRooms(at(POWER_ON, IN_REAKTOR.x, IN_REAKTOR.y));
       expect(samples.sample('bed-archive')).toBeNull();
       expect(memory.decodedBytes().beds).toBeLessThan(before);
       expect(BED_RELEASE_S).toBe(4);
@@ -516,7 +532,7 @@ describe('the beds’ recordings, loaded as rooms come near', () => {
       const { ambience, reverb } = await nothingLoaded();
       ambience.hearRooms(at(POWER_ON, IN_FLUR.x, IN_FLUR.y));
       expect(reverb.reverbProbe().room).toBe('corridor');
-      ambience.hearRooms(at(POWER_ON, 23.5, 12.5));
+      ambience.hearRooms(at(POWER_ON, IN_REAKTOR.x, IN_REAKTOR.y));
       expect(reverb.reverbProbe().room).toBe('reactor');
       ambience.stopAmbience();
       expect(reverb.reverbProbe().room).toBeNull();

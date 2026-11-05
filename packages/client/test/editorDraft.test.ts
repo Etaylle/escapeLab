@@ -234,9 +234,15 @@ describe('draft ↔ JSON: rooms’ kinds and furniture', () => {
       map: { labels: unknown[]; decor: unknown[] };
     };
     const draft = loaded(blackout);
-    expect(draft.map.labels[0]).toEqual({ text: 'ARCHIV', x: 4, y: 2, kind: 'archive' });
-    expect(draft.map.decor[0]).toEqual({ kind: 'cart', x: 1, y: 5, variant: null });
-    expect(draft.map.decor[1]).toEqual({ kind: 'shelf', x: 2, y: 2, variant: 0 });
+    expect(draft.map.labels[0]).toEqual({ text: 'ARCHIV', x: 5, y: 3, kind: 'archive' });
+    // A piece that leaves its look to the tile reads as none; one that names its look, so.
+    expect(draft.map.decor.find((d) => d.kind === 'cart')).toEqual({
+      kind: 'cart',
+      x: 1,
+      y: 7,
+      variant: null,
+    });
+    expect(draft.map.decor[0]).toEqual({ kind: 'shelf', x: 2, y: 2, variant: 0 });
     const json = draftToJson(draft) as { map: { labels: unknown[]; decor: unknown[] } };
     expect(json.map.labels).toEqual(blackout.map.labels);
     expect(json.map.decor).toEqual(blackout.map.decor);
@@ -280,7 +286,7 @@ describe('draft ↔ JSON: notes of the last shift', () => {
     };
     const draft = loaded(blackout);
     expect(draft.map.notes).toHaveLength(3);
-    expect(draft.map.notes[0]).toEqual({ x: 12, y: 6, text: expect.stringMatching(/23:47/) });
+    expect(draft.map.notes[0]).toEqual({ x: 16, y: 8, text: expect.stringMatching(/23:47/) });
     const json = draftToJson(draft) as { map: { notes: unknown[] } };
     expect(json.map.notes).toEqual(blackout.map.notes);
   });
