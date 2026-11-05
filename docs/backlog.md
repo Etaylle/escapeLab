@@ -141,6 +141,14 @@ die Entscheidung.
   weiterhin nach Abstand allein (1,6 Kacheln, Wände ignoriert). Angleichen: Anwesenheit am Pult
   nur mit Sichtlinie oder nach eigenem Fund; Test wie der Säulen-Test der Quellen.
 
+### H-2 Stationsschritte warten auf die Anwesenheit — Status: in Arbeit (Mac, Paket N-h2) · Größe: S
+- CI auf f8a38a1 (Code identisch mit lokal grünen Läufen): „Ben stands at Signalkette, but no
+  .station-modal after 3 tries". Der Harness drückt E, bevor der Server die Anwesenheit am Pult
+  in die Sicht geschrieben hat (seit T-7 braucht sie Sichtlinie zur Pultmitte), und gibt nach
+  drei schnellen Versuchen auf. Neu: vor E auf die Anwesenheit in der Sicht warten (Crew-Tag
+  „am Pult"), bis 6 Versuche über 6 s, beim Scheitern den Serverstand (Position, Sicht,
+  Anwesenheit) ins Protokoll; dasselbe für jeden Stations- und Quellenschritt.
+
 ### H-1 Flucht-Budget relativ zum Runner — Status: erledigt (N-small, Merge 2026-11-04) · Größe: S
 - CI auf c23afc5 (gleicher Code wie das grüne 65e3e1e): Systemcheck-Flucht p50 33,4 / p95 50,1
   zweimal — der ganze Runner lief mit halber Rate. Das Fenster misst seit M-ciwin einen Client,
