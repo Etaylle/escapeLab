@@ -141,7 +141,7 @@ die Entscheidung.
   weiterhin nach Abstand allein (1,6 Kacheln, Wände ignoriert). Angleichen: Anwesenheit am Pult
   nur mit Sichtlinie oder nach eigenem Fund; Test wie der Säulen-Test der Quellen.
 
-### H-2 Stationsschritte warten auf die Anwesenheit — Status: im PR (N-h2) · Größe: S
+### H-2 Stationsschritte warten auf die Anwesenheit — Status: erledigt (N-h2, Merge 2026-11-05; echte Ursache: Solve nur in einer Sicht geprüft) · Größe: S
 - CI auf f8a38a1 (Code identisch mit lokal grünen Läufen): „Ben stands at Signalkette, but no
   .station-modal after 3 tries". Der Harness drückt E, bevor der Server die Anwesenheit am Pult
   in die Sicht geschrieben hat (seit T-7 braucht sie Sichtlinie zur Pultmitte), und gibt nach
