@@ -141,13 +141,22 @@ die Entscheidung.
   weiterhin nach Abstand allein (1,6 Kacheln, Wände ignoriert). Angleichen: Anwesenheit am Pult
   nur mit Sichtlinie oder nach eigenem Fund; Test wie der Säulen-Test der Quellen.
 
-### H-2 Stationsschritte warten auf die Anwesenheit — Status: in Arbeit (Mac, Paket N-h2) · Größe: S
+### H-2 Stationsschritte warten auf die Anwesenheit — Status: im PR (N-h2) · Größe: S
 - CI auf f8a38a1 (Code identisch mit lokal grünen Läufen): „Ben stands at Signalkette, but no
   .station-modal after 3 tries". Der Harness drückt E, bevor der Server die Anwesenheit am Pult
   in die Sicht geschrieben hat (seit T-7 braucht sie Sichtlinie zur Pultmitte), und gibt nach
   drei schnellen Versuchen auf. Neu: vor E auf die Anwesenheit in der Sicht warten (Crew-Tag
   „am Pult"), bis 6 Versuche über 6 s, beim Scheitern den Serverstand (Position, Sicht,
   Anwesenheit) ins Protokoll; dasselbe für jeden Stations- und Quellenschritt.
+- Umgesetzt: Der CI-Log zeigt die eigentliche Ursache. Der Harness sah die Lösung des
+  Notstrom-Kastens nur in Annas Sicht; Bens Sicht zeigte noch den Kasten als aktive Station, und
+  Ben lief zu dessen Pult A („on the way to 1,14") statt zur Signalkette. Jetzt wartet jeder
+  Schritt nach einer Lösung, bis beide Sichten sie zeigen (Logzeile `catch-up`). Vor E an Pult,
+  Quelle oder Notiz wartet der Harness bis 6 s auf die Anwesenheit, dann bis 6 Drücke über 6 s;
+  scheitert es, nennt die Zeile `presence` Serverposition, Blickrichtung, Anwesenheitsfelder und
+  je Pult Abstand, Sichtlinie und Fund (`tools/presence.mjs` mit Tests). Der Smoke hat das
+  Rennen nicht: er wartet nach jedem Gang auf das Echo seiner Position, und der Server schickt
+  die Sicht mit der Anwesenheit davor.
 
 ### H-1 Flucht-Budget relativ zum Runner — Status: erledigt (N-small, Merge 2026-11-04) · Größe: S
 - CI auf c23afc5 (gleicher Code wie das grüne 65e3e1e): Systemcheck-Flucht p50 33,4 / p95 50,1
