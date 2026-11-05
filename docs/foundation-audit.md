@@ -427,3 +427,91 @@ Systemcheck 84 captures, 13 and 12 skipped, 0 failed. At density 1 every gated w
 without; the looks at density 2 held 16.8 ms or less. Main's client, run back to back with the
 branch's by the same harness, held the same windows in Blackout. The smoke passed; core 1507, server 266, client 2829 and
 tools 85 tests pass.
+
+---
+
+## Stand nach N-xxl
+
+Branch `N-xxl` (on main `b14c6cd`), T-5 of the backlog on the user's word that the rooms can be
+larger: one commit per item — the map (`305f80e`), the drones' beats (`d896ead`), the clock's
+share in the walkthrough's log (`9a473b0`), the camera's tests on the larger lab (`081391e`), the
+harness, the smoke and the bakes (`580972d`), these notes. Measured on 2026-11-05 on a quiet
+machine (1-min load under 4, no other walkthrough) with the audit's camera script and a travel
+probe, copied to `scratchpad/xxl/` and pointed at port 3451; main's lab, saved on the same server
+as a scratch mission, measured by the same scripts in the same quarter of an hour. The walks are
+the plan's, the eight ways a player steers at 4.2 tiles a second, round furniture and the doors
+shut at the time (`scratchpad/xxl/design.mts`; core's missionMaps test holds each under 12 s).
+
+| What | Measure | Before | After |
+|---|---|---|---|
+| The lab | tiles · floor tiles | 27 × 17 · 289 | 36 × 22 · 544 |
+| Rooms · corridors | tiles | 6–7 × 5, the Serverraum 9 × 5 · 3 wide | 9 × 7, the Serverraum 11 × 7 · 4 wide |
+| Openings one tile wide | count | 15 | 6 |
+| Furniture in a room | pieces | 6–12 | 10–12 |
+| The plan's longest walk | s | 9.2, the escape | 11.7, the escape |
+| The plan walked, Anna · Ben | s | 43.2 · 41.3 | 55.5 · 53.9 |
+| The escape by the Labor · by the Serverraum | steps on the grid | 40 · 40 | 52 · 52 |
+| The walkthrough's win, after the lights went out | s | 403.1 and 417.6 | 461.7 and 467.1 |
+| Left on the clock at „Normal" | s · share of 900 | 412.4–427.0 · 46–47 % | 377.9–383.3 · 42–43 % |
+| Walking in the walkthrough, host · guest | s | 61.0–65.0 · 51.3–56.0 | 79.8–80.1 · 65.5–65.9 |
+| Held at a side wall (`pinned.ts`) | share of the floor, 1440 × 820 · 1280 × 720 · phone | 88 · 97 · 97 % | 63 · 69 · 69 % |
+| Held at the top or the bottom | the same | 57 · 57 · 29 % | 39 · 39 · 21 % |
+| The view's travel from wall to wall | tiles, 1440 × 820 · 1280 × 720 and phone | 2.7 · 1.3 | 11.7 · 10.3 |
+| Walking the Flur east (`m2-travel.mjs`, 1440 × 820) | frames the camera moved in · its travel | 14 % · 2.7 tiles of 20 | 42 % · 11.7 tiles of 28 |
+| The minimap (m2) | CSS px, 1440 × 820 · phone | 189 × 119 · 135 × 85 | 180 × 110 · 126 × 77 |
+
+The legs, seconds before → after: Anna's start → the lever 2.9 → 4.0, Ben's 2.5 → 3.6; the
+lever → the book 3.6 → 4.9, → the Laborkennung 1.4 → 1.8, → the plate 2.1 → 2.8; the lever → the
+fuse box 3.2 → 4.2; the plate → the meter 1.1 → 1.5, → the clipboard 1.6 → 2.4, → console A of
+the Signalkette 2.8 → 4.3; the fuse box → its console B 1.9 → 2.4; console B → the terminal 7.1
+→ 8.7; console A → the locker 3.8 → 4.5, → the rack 1.4 → 1.5, → the key 0.5 → 0.7, → the
+cabinet 7.6 → 8.7; the terminal → the radio 7.5 → 9.4, → the spare fuse 4.0 → 5.1, → its slot
+7.8 → 10.3; the cabinet → the reactor 4.1 → 5.8; the escape by the Labor 8.8 → 11.4, by the
+Serverraum 9.2 → 11.7 (`docs/gameplay.md`, „Walking Blackout's lab").
+
+**What changed.** The lab keeps its ring, its station chain, its stories and its names at 36 × 22
+(`docs/art-bible.md`, „Blackout's lab"): rooms of 9 × 7, the Serverraum 11 × 7 with its pillars,
+corridors four wide; the main ways open two tiles wide, and only the doors that are devices — the
+plate door, the Serverschott, the Labor's and the Reaktor's — stay one tile. The loop closes
+after the fifth station as before; the hatch lies in the Archiv's corner. The three starts keep
+their order and lie out of each other's sight, every source keeps as many places, moved with its
+room, so seed 5 draws as before and stays pinned; the plan fixture moved with them. Every room
+stands eight pieces of its own kind at least (core missionMaps), every corridor a wall prop in
+four tiles at least (client dress), the Ost- and Süd-Flur on a buttress each. The Flurwache paces
+the long Flur, the Laborwache the Süd-Flur and the Labor's east side, at the reach and pace they
+had; the patrol tests find a haven by every place the plan works at, stage by stage, and the
+camera plate, the Serverschott's front and the Süd-Flur watched. The time limit stays 900 s: the
+plan leaves 42–43 % of it, over the 40 % below which it was to be weighed anew, and the
+walkthrough's log now gives the share. The walkthrough and the smoke read every place from the
+mission. A bake is held to 4096² pixels and 8192 a side, so the lab lit whole bakes pixel for
+pixel at density 2 (art bible, Cost).
+
+**Not reached, and why.** The corridors carry pipes, cable trays, posters, vents, extinguishers
+and clocks, no lockers: the dressing has no locker on a wall, and one standing in a corridor would
+read as the Spind, the Serverraum's source of rules. A buttress narrows its corridor to three
+tiles for a tile, the Flur's two as well, where they keep its ends out of each other's sight. The
+camera still stands held at a side wall on 63 to 69 % of the floor: the rooms at the lab's ends
+lie within half a view of its walls. The escape takes 11.7 s of the 12 allowed, and the crew
+walks three tenths longer: the 42 % left is the scripted crew's, which walks without looking for
+anything; a crew playing it first takes longer (N-6).
+
+**About the scripts.** In `scratchpad/xxl/`: `design.mts` (the map's checks: the rooms and their
+furniture, the plan's walks, both ways out, the corridors' props, the starts' sight), `pinned.ts`
+(pointed at a mission file), `m2-camera.mjs` (reads the lab's size from the view), `m2-travel.mjs`
+(new: Ben walks the Flur's longest open row east with D held, the camera's point, its lead and
+his position logged every frame), `old-lab.mjs` (main's lab as the scratch mission „Altes Labor"),
+`bench/` (the paced bench built with main's map and the new one, the bake rule both ways).
+
+**Walkthrough.** On the branch `tools/shots.mjs` played both missions to the end, with
+`SHOTS_SOFTWARE_GL=1` and without. Blackout: 125 captures, 3 skipped — the servers probe, which
+Blackout plays itself, locker.png and next-mission.png, all three skipped on main too, where the
+relay emergency's phone shot was skipped as well, as none came — 0 failed; won 467.1 s and 461.7
+s after the lights went out with 377.9 and 383.3 s left, one drone alarm each, on the way out to
+the hatch, none before. Systemcheck: 87 captures, 12 skipped, 0 failed, the same captures and
+skips as main. A first Blackout run without software GL failed one check, the minimap's goal
+dot: on the larger lab's 5-px cells the probe sampled the dot's rim; it samples the pixel the
+dot's middle lies in now. Every gated window held 16.7 to 16.8 ms p95 but the open
+Notstrom-Kasten and Signalprobe panels under software GL, 33.4 ms as on main; the looks at
+density 2 held 16.7 to 16.8 ms, where the new map before the bake fix took the escape's to 33.4.
+`art-overview.png` shows the lab whole. The smoke passed ten times on the branch's head, over
+all three pairs of starts; core 1532, server 268, client 2867 and tools 87 tests pass.

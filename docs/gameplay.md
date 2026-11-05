@@ -2,10 +2,11 @@
 
 How the crew steers, how it finds things, what a run leaves behind and how runs compare: the
 controls on keys and on a controller, the quick chat, the station's intercom, finding things, the
-first win at the stations the whole crew presses, the Erfolge, the Tagesschicht, the picture of a
-run, the danger sense, the Serverraum's cabling diagram, typing at its terminal and what the
-notepad takes down. Code: `packages/client/src/input/` (bindings, controller, prompts),
-`client/src/achievements.ts` and `screens/{Plaques,ShareButton,ControlSettings}.tsx`,
+walks of Blackout's lab, the first win at the stations the whole crew presses, the Erfolge, the
+Tagesschicht, the picture of a run, the danger sense, the Serverraum's cabling diagram, typing at
+its terminal and what the notepad takes down. Code: `packages/client/src/input/` (bindings,
+controller, prompts), `client/src/achievements.ts` and
+`screens/{Plaques,ShareButton,ControlSettings}.tsx`,
 `screens/shareCard.ts`, `world/{labelFade,finds,danger,ChatWheel}.ts(x)`,
 `puzzles/RackDiagram.tsx`, `puzzles/{prompt.ts,ServersPanel.tsx}`,
 `puzzles/{SyncCount.tsx,syncPress.ts}`, `voice/{rules,intercom}.ts`, `noting.ts`, `notes.ts`,
@@ -116,6 +117,44 @@ the whole lab; in the dark it holds a thing nobody has found only in sight: what
 armed station is whole on every map. The sign stays on every map and the minimap as a landmark,
 but glows through the dark only once the crew has found it.
 Names fade in over 300 ms; a find that matters gets its caption, a chime at most once in 1.5 s.
+
+## Walking Blackout's lab
+
+An avatar walks 4.2 tiles a second, 5.46 sprinting (core `map.ts`). Blackout's lab (36 × 22
+tiles, the plan in `docs/art-bible.md`) is laid out so that no walk of the plan the walkthrough
+plays on seed 5 takes longer than 12 s, the run from the reactor to the hatch included; core's
+missionMaps test holds every one to that. Each walk below goes the eight ways a player steers,
+round furniture and doors shut at the time, never cutting a corner, from a tile at the place to
+a tile at the next — measured on the lab of 27 × 17 before N-xxl and on this one:
+
+| Station | Who | From → to | Tiles before → now | Seconds before → now |
+| --- | --- | --- | --- | --- |
+| Notlicht | Anna | the start in the Archiv → the lever | 12.0 → 16.8 | 2.9 → 4.0 |
+| Notlicht | Ben | the start at the Flur's west end → the lever | 10.4 → 15.2 | 2.5 → 3.6 |
+| Notstrom-Kasten | Ben | the lever → the book | 15.0 → 20.4 | 3.6 → 4.9 |
+| Notstrom-Kasten | Ben | the book → the Laborkennung | 6.0 → 7.4 | 1.4 → 1.8 |
+| Notstrom-Kasten | Ben | the Laborkennung → the plate | 8.8 → 11.7 | 2.1 → 2.8 |
+| Notstrom-Kasten | Anna | the lever → the fuse box, the plate held | 13.2 → 17.7 | 3.2 → 4.2 |
+| Notstrom-Kasten | Ben | the plate → the meter | 4.8 → 6.2 | 1.1 → 1.5 |
+| Signalkette | Ben | the meter → the clipboard | 6.8 → 10.2 | 1.6 → 2.4 |
+| Signalkette | Ben | the clipboard → console A | 11.8 → 18.2 | 2.8 → 4.3 |
+| Signalkette | Anna | the fuse box → console B | 7.8 → 10.1 | 1.9 → 2.4 |
+| Serverraum | Anna | console B → the terminal | 29.7 → 36.7 | 7.1 → 8.7 |
+| Serverraum | Ben | console A → the locker | 16.0 → 19.0 | 3.8 → 4.5 |
+| Serverraum | Ben | the locker → the rack | 6.0 → 6.4 | 1.4 → 1.5 |
+| Frequenz | Ben | the rack → the key | 2.0 → 3.0 | 0.5 → 0.7 |
+| Frequenz | Ben | the key → the cabinet | 32.1 → 36.5 | 7.6 → 8.7 |
+| Frequenz | Anna | the terminal → the radio | 31.7 → 39.3 | 7.5 → 9.4 |
+| Reaktor | Anna | the radio → the spare fuse | 16.8 → 21.2 | 4.0 → 5.1 |
+| Reaktor | Anna | the fuse → its slot | 32.7 → 43.4 | 7.8 → 10.3 |
+| Reaktor | Ben | the cabinet → the reactor | 17.2 → 24.2 | 4.1 → 5.8 |
+| Escape | both | the reactor → the hatch, by the Labor | 37.1 → 47.9 | 8.8 → 11.4 |
+| Escape | both | the reactor → the hatch, by the Serverraum | 38.8 → 49.1 | 9.2 → 11.7 |
+
+Each walks the plan in about 55 s now, Anna 55.5 and Ben 53.9, where both took about 42 before
+(43.2 and 41.3): three tenths more. Both ways out are 52 steps on the grid, as the last shift's
+note by the hatch says; counted the eight ways, the Labor's is a tile shorter. Every start lies
+3.6 to 4 s from the lever.
 
 ## The first win
 

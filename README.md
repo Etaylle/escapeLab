@@ -18,9 +18,9 @@ Station liegen im anderen Flügel, und erst der Druckausgleich öffnet die Schle
 **Blackout im Labor** (2–3 Spieler, 15 Minuten auf *Normal*): ein Labor von 36 × 22 Feldern, die
 Räume etwa 9 × 7 groß als Ring — Archiv, Flur, Serverraum, Ost-Flur, Reaktor, Süd-Flur, Labor,
 Maschinenraum und zurück in den Flur; die Flure vier Felder breit, die Hauptwege durch zwei Felder
-breite Durchgänge, nur die Türen, die Geräte sind, ein Feld breit. Die Crew startet getrennt und außer Sicht (Archiv, beide Enden des Flurs) und
-wirft zuerst gemeinsam den Notlicht-Hebel in der Mitte des Flurs, dann die Stationen in
-Reihenfolge:
+breite Durchgänge, nur die Türen, die Geräte sind, ein Feld breit. Die Crew startet getrennt und
+außer Sicht (Archiv, beide Enden des Flurs) und wirft zuerst gemeinsam den Notlicht-Hebel in der
+Mitte des Flurs, dann die Stationen in Reihenfolge:
 
 1. *Notstrom-Kasten* (`circuit`): Sicherungskasten im Maschinenraum hinter der Plattentür,
    Prüfpult im Flur davor; die Regeln im Handbuch im Archiv, die Laborkennung daneben. Nach

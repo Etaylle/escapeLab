@@ -107,6 +107,42 @@ validated like a wall: never on a spawn, a console, a plate, a door, a source's 
 or its drop-off, the sign, the exit, a lamp, an emergency's panel, a drone's waypoint or its
 flight path. Sight passes over it; on the WebGL light layer it throws a shadow.
 
+## Blackout's lab
+
+Trakt C's night-shift wing is a lab of 36 × 22 tiles (`missions/blackout.json`, since N-xxl; 27 ×
+17 before), its rooms a ring: the Archiv opens on the Flur, the Flur's bulkhead on the
+Serverraum, the Serverraum on the Ost-Flur, the Ost-Flur's bulkhead on the Reaktor, the Reaktor's
+door on the Süd-Flur, the Süd-Flur on the Labor, the Labor's door on the Maschinenraum and the
+Maschinenraum's plate door on the Flur again — closed into a loop once the reactor's two doors
+open after the fifth station. Every wall is a tile thick; the corner north of the Ost-Flur is
+void. The main ways open two tiles wide; a door that is a device stays one tile, and so does the
+gap between the Serverraum's pillars — six one-tile openings where the smaller lab had fifteen.
+
+| Room | Kind | Floor, tiles | Furniture | Ways out |
+| --- | --- | --- | --- | --- |
+| Archiv | archive | 9 × 7 | nine shelves, a cart | two tiles wide south to the Flur; the hatch in its north-west corner |
+| Flur | corridor | 29 × 4, two buttresses on its south wall | — | the Archiv's opening, the Serverschott, the Maschinenraum's plate door |
+| Serverraum | server | 11 × 7, two pillars | twelve racks in four rows | the Serverschott; two tiles wide east to the Ost-Flur |
+| Ost-Flur | corridor | 12 × 4 east, then 4 × 5 south; a buttress | — | the Serverraum's opening, the Reaktorschott |
+| Reaktor | reactor | 9 × 7 | the core, four cables, five desks | the Reaktorschott; the Reaktortür west |
+| Süd-Flur | corridor | 4 × 7, a buttress | — | the Reaktortür; two tiles wide west to the Labor |
+| Labor | lab | 9 × 7, a pillar | a hood, ten benches | the Süd-Flur's opening; the Labortür west |
+| Maschinenraum | machine | 9 × 7, a pillar | four pipes, four generators, two barrels | the Labortür; the plate door north to the Flur |
+
+Every room stands at least eight pieces of its own kind of furniture (core test missionMaps).
+A corridor has no furniture: its props hang on the faces that look into it — pipes, cable trays,
+posters, an extinguisher — one at least in every four tiles along it, both ways (dress.test.ts).
+A corridor running east–west shows the faces of its north wall; one running north–south shows
+only its walls' crowns, so the Ost-Flur and the Süd-Flur each have a buttress, a wall tile
+standing a tile out from the side wall, its face carrying what the dressing hangs there. The
+Flur's two buttresses stand on its south wall, where they show no face: they keep its two ends
+out of each other's sight, as the starts there have to be.
+
+The minimap draws the larger lab about as wide as the smaller, its tiles smaller: 180 × 110 CSS
+px at 1440 × 820 and density 1, a tile 5 px (189 × 119 and 7 before), and 126 × 77 on a phone
+held sideways, a tile 3.5 px (135 × 85 and 5) — taller than the 56 px it stands at least there
+(A phone held sideways).
+
 ## Light with colour
 
 `sources.ts` lists every coloured light of a frame (`sourcesOf`): the emergency lamps, the
@@ -212,16 +248,19 @@ drones' cone to 5.2 tiles and the band holds 1.7 of them; the frame stays the sa
 difficulty.
 
 The camera follows as it did — a little ahead of a walker, 0.6 tiles eased in over τ 0.1 s, the
-view easing after the avatar over τ 0.17 s, held at the lab's edge. The lab, 27 tiles wide, is
-wider than the view on every screen now, 24 to 26 tiles, so the camera follows sideways on every
-screen, but only in the lab's middle columns: it stands held at a side wall on 88 % of
-Blackout's floor tiles at 1440 × 820 and 97 % at 1280 × 720 and on the phone (before: 80 % at
-1440 × 820 and density 1, 97 % at density 2, where the view was the lab's whole width). Up and
-down it follows on 43 % of them on a laptop, 71 % on the phone. A canvas wider than 2.35 : 1
-shows the lab whole across with the dark beyond its walls at the sides: the zoom that kept the
-lab over the whole canvas is left to the opening's shot. Measured in Blackout (the audit's camera
-script, copied to `scratchpad/camera/`; the canvas's box inside its 1-px border; with a line on
-the air in brackets):
+view easing after the avatar over τ 0.17 s, held at the lab's edge. The lab, 36 tiles wide since
+N-xxl, is 10 to 12 tiles wider than the view on every screen, which shows 24 to 26: the camera
+stands held at a side wall on 63 % of Blackout's floor tiles at 1440 × 820 and 69 % at
+1280 × 720 and on the phone, and follows sideways on the rest. The lab of 27 tiles before it
+held the camera on 88 % and 97 %, leaving the view 2.7 and 1.3 tiles to travel from wall to wall
+where it has 11.7 and 10.3 now. Up and down it follows on 61 % of the floor's tiles on a laptop
+and 79 % on the phone (43 % and 71 % before). Walking the Flur's 28 tiles east, a player has the
+camera moving with them on 42 % of the frames, 11.7 tiles in all, its lead 0.6 tiles ahead of
+them throughout; the smaller lab's 20 tiles of Flur moved it on 14 % of them, 2.7 tiles. A
+canvas wider than 3.1 : 1 (2.35 : 1 for the smaller lab) shows the lab whole across with the dark
+beyond its walls at the sides: the zoom that kept the lab over the whole canvas is left to the
+opening's shot. Measured in Blackout (the audit's camera script, copied to `scratchpad/camera/`;
+the canvas's box inside its 1-px border; with a line on the air in brackets):
 
 | Window | Density | Canvas | CSS px a tile | Tiles across × down | Below the bar | Figure |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -509,6 +548,27 @@ five rounds of six, the light and its glows going by their area in pixels, which
 tile. At density 2, four rounds, the escape came out alike and the dark Flur 0.9 ms dearer in
 every round (36.6 against 35.7), its tiles 11 % larger than main's there; a frame at density 2
 takes 32 to 51 ms on that slowed software path either way.
+
+**The bigger lab (N-xxl).** The frame shows as many tiles as before on every screen, but a light
+that holds still is baked over its whole box, and a lab of 36 × 22 lit whole — the escape, the
+audience, a run won — is a box of 36 tiles: on a laptop at density 2, 116.3 px a tile, a canvas
+4187 px wide. Bakes were held to 4096 px a side; past that a box was baked at fewer pixels a
+tile and every frame copied it scaled, through the canvas's filtered path, and laid its parts
+one by one where they had been added up into one. The walkthrough's look at the escape at
+density 2 went from 16.8 to 33.4 ms p95 with the new map, the paced bench's escape frame at
+density 2 from 42 to 82 ms of work on the main thread slowed four times, the light pass alone
+from 27 to 66. A bake is now held to the pixels of a square 4096 px a side and to 8192 px on its
+longer side (baked.ts `bakeable`): the lab's 4187 × 2559 bakes pixel for pixel, no canvas holds
+more than before, and a 4K screen at density 2 still bakes the lab smaller, as it did the old
+one. On that bench, built once with main's 27 × 17 map and once with the new one, the same client
+in both, three rounds interleaved, means of the frame's work — at density 2: the escape by the
+hatch 45.4 against 42.7 ms, its first second 45.6 against 42.9, the dark Flur 34.0 against 32.0,
+the lab lit before the blackout 30.3 against 29.1, the audience's whole lab 18.5 against 19.3;
+at density 1: 14.1 against 13.2, 14.2 against 13.3, 10.2 against 9.5, 9.2 against 9.0 and 6.3
+against 6.5 — every frame still at the screen's 16.7 ms there, and the audience's zoom smaller
+for the larger lab. The walkthrough's windows held what they held on main: 16.7 to 16.8 ms p95
+in Blackout, the open Notstrom-Kasten panel 33.4 under software GL as before, the looks at
+density 2 16.8 ms.
 
 ## Open
 

@@ -155,10 +155,20 @@ die Entscheidung.
   Wartende lesen die nächste Quelle vor, oder eine kleine Nebenaufgabe (Ventil halten). Erst
   nach dem zweiten Playtest entscheiden.
 
-### T-5 Größere Räume — Status: in Arbeit (Mac, Paket N-xxl; Uros 2026-11-05: „die Räume können größer sein") · Größe: L
+### T-5 Größere Räume — Status: im PR (N-xxl) · Größe: L
 - Räume ~9×7 (Serverraum 11×7), Flure 4 breit, Zwei-Kachel-Türen auf den Hauptwegen, Karte
   ~36×22, Laufwege ≤ 12 s, Decor ≥ 8 je Raum und Flur-Props alle 4 Kacheln, Drohnenrouten neu,
   Zeit per Messung, Kamera-Reisen vorher/nachher, Fixture/Harness/Smoke aus der Mission.
+- Umgesetzt: Blackout 36×22 statt 27×17, dieselbe Schleife und Stationskette; Räume 9×7, der
+  Serverraum 11×7 mit zwei Pfeilern, Flure 4 breit, die Hauptwege zwei Felder breit, nur die
+  Türen, die Geräte sind, ein Feld (Ein-Feld-Öffnungen 15 → 6); je Raum 10–12 Möbel seiner Art,
+  Wandschmuck in jedem Flur mindestens alle 4 Felder (Pfeiler im Ost- und Süd-Flur). Der
+  längste Weg des Plans 11,7 s statt 9,2 s (ein Kerntest hält jeden unter 12 s), Seed 5 lost wie
+  vorher. Flurwache auf dem langen Flur, Laborwache im Süd-Flur und Labor. Der Plan gewinnt mit
+  42–43 % Restzeit (vorher 46–47 %), die 900 s bleiben. Die Kamera steht seitlich nur noch
+  auf 63–69 % der Felder fest (88–97 %). Bakes bis 4096² Pixel und 8192 je Seite: die Flucht bei
+  Dichte 2 wieder pixelgenau. Plan, Wege und Zahlen in `docs/art-bible.md`, `docs/gameplay.md`
+  und im Audit-Addendum.
 
 ### N-6 Pacing und Stationsfolge — Status: wartet (Daten) · Größe: ?
 - Erst nach N-4 und dem zweiten Playtest messen (`runs.jsonl`): Ziel, dass eine Erstspieler-
