@@ -170,7 +170,7 @@ die Entscheidung.
   Dichte 2 wieder pixelgenau. Plan, Wege und Zahlen in `docs/art-bible.md`, `docs/gameplay.md`
   und im Audit-Addendum.
 
-### P-1 Handy quer — Status: im PR (N-phone) · Größe: M
+### P-1 Handy quer — Status: erledigt (N-phone, Merge 2026-11-05) · Größe: M
 - Ein quer gehaltenes Handy zeigt das Labor, nicht das HUD: Zielleiste und Crew-Leiste falten
   sich bei 500 px Höhe oder weniger in eine Zeile von 44 px, das Weltband hält ≥ 65 % der Höhe,
   die Knöpfe rechts 2×2 und durchscheinend, Steuerung ≤ 30 % des Bands; Geräte und Blätter quer
@@ -197,10 +197,18 @@ die Entscheidung.
   Schicht links daneben, wo Platz ist. Vorher 4,6 px (844×390) und 5,6 px als Doppelseite
   (932×430), jetzt 14 px; Harness: `book-phone-landscape.png`.
 
+### P-2 Buch auf dem Handy hochkant mit Notizblock — Status: bereit · Größe: S
+- Hochkant (420×760) mit geöffneter Notizblock-Schublade fällt der Buchtext auf 5,7 px (wie vor
+  P-1). Dieselbe Regel wie quer: eine Seite in Grundschrift ≥ 14 px, die im Bogen scrollt,
+  Umbrüche gleich; Capture `book-phone-notepad.png`.
+
 ### N-6 Pacing und Stationsfolge — Status: wartet (Daten) · Größe: ?
 - Erst nach N-4 und dem zweiten Playtest messen (`runs.jsonl`): Ziel, dass eine Erstspieler-
   Crew Station 2 in 5 Minuten schafft. Offene Fragen aus dem Audit: Zeitlimit beim ersten Lauf,
   Notstrom als zweite Station, dritter Spawn, Größe der Schleife.
+- Datenpunkt 2026-11-05, Karte 36×22: Die Skript-Crew gewinnt 462–502 s nach dem Blackout
+  (40–43 % von 900 s übrig, davon bis 35 s Warten auf Drohnenlücken); der Harness warnt ab unter
+  40 %. Vorschlag: Normal 1000 s (Entspannt/Hart skalieren mit), Entscheidung nach dem Playtest.
 
 ## Nur lokal
 
