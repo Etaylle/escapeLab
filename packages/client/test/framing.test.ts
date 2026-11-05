@@ -27,8 +27,13 @@ const SCREENS = [
   { name: 'phone 844×390 @3', css: { w: 826, h: 289 }, ratio: 3, bar: 68.5, touch: true },
 ] as const;
 
+/** Blackout's lab as its mission draws it: its rows of tiles, '.' its floor. */
+const BLACKOUT_FILE = new URL('../../../missions/blackout.json', import.meta.url);
+const BLACKOUT_TILES = (
+  JSON.parse(readFileSync(BLACKOUT_FILE, 'utf8')) as { map: { tiles: string[] } }
+).map.tiles;
 /** Blackout's lab, tiles. */
-const LAB = { width: 27, height: 17 };
+const LAB = { width: BLACKOUT_TILES[0]?.length ?? 0, height: BLACKOUT_TILES.length };
 
 /** A screen: its canvas, CSS pixels, its density, the bar with a line on the air, its input. */
 interface Screen {
@@ -108,6 +113,32 @@ describe('tileCss — the camera’s frame in CSS pixels', () => {
       // Pinned at the lab's edge, as before: its west wall stays at the canvas's side.
       const west = clampCamera(LAB, { x: 1, y: led.y }, lens).x;
       expect(west, screen.name).toBeCloseTo(across / 2, 9);
+    }
+  });
+});
+
+describe('the camera on Blackout’s lab, as each screen frames it', () => {
+  /** The middle of every floor tile of the lab. */
+  const floor = BLACKOUT_TILES.flatMap((row, y) =>
+    [...row].flatMap((c, x) => (c === '.' ? [{ x: x + 0.5, y: y + 0.5 }] : [])),
+  );
+
+  it('travels ten tiles sideways at least on every screen, and up and down five', () => {
+    for (const screen of SCREENS) {
+      const { across, down } = framed(screen);
+      expect(LAB.width - across, screen.name).toBeGreaterThanOrEqual(10);
+      expect(LAB.height - down, screen.name).toBeGreaterThanOrEqual(5);
+    }
+  });
+
+  it('stands held at a side wall on at most 70 % of the lab’s floor, the bar at rest', () => {
+    // At rest the bar reaches 81 CSS px down on a laptop, 39 on the phone (insets.ts `bar`).
+    const rest = { true: 39, false: 81 } as const;
+    for (const screen of SCREENS) {
+      const { scale, w, h, dpr } = framed(screen);
+      const lens = { scale, w, h, top: rest[`${screen.touch}`] * dpr, lift: 0 };
+      const pinned = floor.filter((at) => Math.abs(clampCamera(LAB, at, lens).x - at.x) > 1e-6);
+      expect(pinned.length / floor.length, screen.name).toBeLessThanOrEqual(0.7);
     }
   });
 });

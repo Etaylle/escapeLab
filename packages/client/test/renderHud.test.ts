@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ALARM, AMBER, css, READ_BLUE, TEAL, WHITE } from '../src/world/palette.js';
 import type { MapView } from '@escapelab/core';
@@ -8,6 +9,13 @@ import { frameWith, player, TILES } from './frames.js';
 import { mapWith, type Item } from './fixtures.js';
 
 const layout = { ox: 600, oy: 100, cell: 10, mw: 100, mh: 60 };
+
+/** Blackout's lab, tiles across and down, as its mission draws it. */
+const BLACKOUT_SIZE = (() => {
+  const file = new URL('../../../missions/blackout.json', import.meta.url);
+  const { tiles } = (JSON.parse(readFileSync(file, 'utf8')) as { map: { tiles: string[] } }).map;
+  return { width: tiles[0]?.length ?? 0, height: tiles.length };
+})();
 
 /** Each fill the minimap of `map` makes: its colour and where its cell starts, in pixels. */
 function minimapFills(map: MapView): unknown[][] {
@@ -52,9 +60,9 @@ describe('minimapLayout — where the corner minimap goes', () => {
   });
 
   it('stands at least 56 px tall on a phone held sideways, clear of the thumb’s row', () => {
-    // Blackout's 27×17 lab on the 844×390 phone: the canvas 828×291 drawn at density 2, under
+    // Blackout's lab, 36×22, on the 844×390 phone: the canvas 828×291 drawn at density 2, under
     // a bar 41 px deep; the pad in the bottom left corner, the thumb's row in the right one.
-    const lab = mapWith({ width: 27, height: 17 });
+    const lab = mapWith(BLACKOUT_SIZE);
     const pad = { left: 14, top: 291 - 162, right: 160, bottom: 275 };
     const row = { left: 650, top: 291 - 68, right: 814, bottom: 275 };
     const phone = minimapLayout(lab, 1656, 582, 2, { top: 41, controls: [pad, row] });
