@@ -235,43 +235,48 @@ sideways, whose figure has to stay readable; never under 28 px, so the figure ke
 Below the objective bar the frame keeps a band that holds a drone's reach twice from top to
 bottom with a mouse and keys — 9 tiles for Blackout's 4.5-tile cone at „Normal": the avatar in
 its middle sees a cone's end before the cone sees it — and one and a half times (6.75) on a
-touch screen, whose HUD keeps to a quarter of the canvas (A phone held sideways). Where the tile
-count would leave the band shorter, the band wins and the tiles shrink until it holds: a
-1280 × 720 window shows 11.6 tiles of height, 9 of them below the bar. The bar counts with a
-line on the air — its steady row, the clock and the goal's title, padding and all, and the row a
-radio line takes, measured on a banner set into the bar unseen and taken out in the same moment —
-so that a line coming or going never moves the zoom; what comes and goes under the goal's title,
-a station's missing part or the escape's checklist, does not count either: with a line on the
-air over the escape's checklist a 1280 × 720 window keeps about 8.8 tiles below the bar. Where
-the canvas is too small for both, the 28-px floor wins over the band. „Hart" stretches the
-drones' cone to 5.2 tiles and the band holds 1.7 of them; the frame stays the same at every
-difficulty.
+touch screen, whose HUD a phone held sideways folds into one row of 44 px (A phone held
+sideways). Where the tile count would leave the band shorter, the band wins and the tiles shrink
+until it holds: a 1280 × 720 window shows 11.6 tiles of height, 9 of them below the bar. The bar
+counts with a line on the air — its steady row, the clock and the goal's title, padding and all,
+and the row a radio line takes, measured on a banner set into the bar unseen and taken out in
+the same moment — so that a line coming or going never moves the zoom; on the phone's row a
+line stands in the goal's place and adds nothing. What comes and goes under the goal's title, a
+station's missing part or the escape's checklist, does not count either: with a line on the air
+over the escape's checklist a 1280 × 720 window keeps about 8.8 tiles below the bar. Where the
+canvas is too small for both, the 28-px floor wins over the band. „Hart" stretches the drones'
+cone to 5.2 tiles and the band holds 1.7 of them; the frame stays the same at every difficulty.
 
-The camera follows as it did — a little ahead of a walker, 0.6 tiles eased in over τ 0.1 s, the
-view easing after the avatar over τ 0.17 s, held at the lab's edge. The lab, 36 tiles wide since
-N-xxl, is 10 to 12 tiles wider than the view on every screen, which shows 24 to 26: the camera
-stands held at a side wall on 63 % of Blackout's floor tiles at 1440 × 820 and 69 % at
-1280 × 720 and on the phone, and follows sideways on the rest. The lab of 27 tiles before it
-held the camera on 88 % and 97 %, leaving the view 2.7 and 1.3 tiles to travel from wall to wall
-where it has 11.7 and 10.3 now. Up and down it follows on 61 % of the floor's tiles on a laptop
-and 79 % on the phone (43 % and 71 % before). Walking the Flur's 28 tiles east, a player has the
-camera moving with them on 42 % of the frames, 11.7 tiles in all, its lead 0.6 tiles ahead of
-them throughout; the smaller lab's 20 tiles of Flur moved it on 14 % of them, 2.7 tiles. A
-canvas wider than 3.1 : 1 (2.35 : 1 for the smaller lab) shows the lab whole across with the dark
-beyond its walls at the sides: the zoom that kept the lab over the whole canvas is left to the
-opening's shot. Measured in Blackout (the audit's camera script, copied to `scratchpad/camera/`;
-the canvas's box inside its 1-px border; with a line on the air in brackets):
+The camera follows as it did — a little ahead of a walker, 0.6 tiles eased in over τ 0.1 s, the view
+easing after the avatar over τ 0.17 s, held at the lab's edge. The lab, 36 tiles wide since N-xxl,
+is 10 to 15 tiles wider than the view on every screen, which shows 21 to 26: the camera stands held
+at a side wall on 63 % of Blackout's floor tiles at 1440 × 820, 69 % at 1280 × 720 and 57 % on a
+phone held sideways (69 % before its HUD folded into a row, N-phone), and follows sideways on the
+rest. The lab of 27 tiles before it held the camera on 88 % and 97 %, leaving the view 2.7 and 1.3
+tiles to travel from wall to wall where it has 11.7 and 10.3 now, 14.5 on the phone. Up and down it
+follows on 61 % of the floor's tiles on a laptop and 76 % on the phone (43 % and 71 % on the smaller
+lab, 79 % before N-phone). Walking the Flur's 28 tiles east, a player has the camera moving with
+them on 42 % of the frames, 11.7 tiles in all, its lead 0.6 tiles ahead of them throughout; the
+smaller lab's 20 tiles of Flur moved it on 14 % of them, 2.7 tiles. A canvas wider than 3.1 : 1
+(2.35 : 1 for the smaller lab) shows the lab whole across with the dark beyond its walls at the
+sides: the zoom that kept the lab over the whole canvas is left to the opening's shot. Measured in
+Blackout (the audit's camera script, copied to `scratchpad/camera/`, the phones' rows again in
+`scratchpad/phone/cam/`; the canvas's box inside its 1-px border; with a line on the air in
+brackets):
 
 | Window | Density | Canvas | CSS px a tile | Tiles across × down | Below the bar | Figure |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1440 × 820 | 1 and 2 | 1414 × 669 | 58.2 | 24.3 × 11.5 | 10.1 (9.3) | 49.4 px |
 | 1280 × 720 | 1 and 2 | 1254 × 569 | 48.9 | 25.7 × 11.6 | 10.0 (9.0) | 41.5 px |
-| phone held sideways, 844 × 390 | 3, drawn at 2 | 826 × 289 | 32.1 | 25.7 × 9.0 | 7.8 (6.9) | 27.3 px |
+| phone held sideways, 844 × 390 | 3, drawn at 2 | 826 × 345 | 38.4 | 21.5 × 9.0 | 7.9 (7.9) | 32.7 px |
+| large phone, 932 × 430 | 3, drawn at 2 | 914 × 385 | 42.9 | 21.4 × 9.0 | 8.0 (8.0) | 36.4 px |
 
 Before, the same screens showed 22.2 × 10.5 tiles at 1440 × 820 and density 1 but the lab's whole
 27-tile width × 12.8 at density 2, 23.1 × 10.5 and 27 × 12.3 at 1280 × 720, and 27 × 9.4 on the
-phone. A desktop's 1920 × 1080 window, its canvas some 1894 × 929, comes out by the rule at
-80.8 px a tile, 23.4 × 11.5 tiles.
+phone; the phone's HUD folded into a row (N-phone) gave its canvas 56 px of height, from 289 px
+at 32.1 a tile, 25.7 × 9.0 tiles with 7.8 (6.9) below the bar and a figure of 27.3 px. A
+desktop's 1920 × 1080 window, its canvas some 1894 × 929, comes out by the rule at 80.8 px a
+tile, 23.4 × 11.5 tiles.
 
 ## Camera (render/aberration.ts, vignette.ts)
 
@@ -401,12 +406,52 @@ the one that matters less moves a line down or is left out (labelLayout.ts).
 
 ## A phone held sideways
 
-844 × 390 px under a finger. In the world the steering pad lies under the left thumb: three by
-three cells of 48 px, the eight round its middle walking the eight ways, the corners two keys at
-once; a finger that slides over it turns the walk without lifting (touchPad.ts). The actions —
-E, sprint, drop, chat, talk — lie under the right thumb, 52 px each. The objective bar covers a
-quarter of the canvas's height at most, a line on the air included; the minimap stands 56 px
-tall at least; the camera lifts the avatar clear of both thumbs' controls.
+844 × 390 px under a finger, and 932 × 430 as today's largest phones stand. A touch screen held
+sideways and 500 px tall or less — the height every rule for it in the stylesheets reads
+(screens/hudFold.ts `foldsHud`) — folds the objective bar and the crew strip into one row along
+the world's top edge, a fingertip's 44 px tall: the stations' LEDs over the goal in one line,
+cut short where it runs out, what the crew still has to bring after it; then the crew as
+coloured dots, ringed while one speaks and ticked off on the hatch in the escape, what one does
+beside the dot for three seconds after it changed and no longer (`freshTags`; names and doings
+in the dots' labels); the Laborkennung's value; the clock with the alarm marks; and the
+microphone's switch, the notepad and the info panel by their icons, a fingertip each. A line on
+the air takes the goal's place for as long as it is up, two lines of it at most, and adds no
+height, so the zoom stands still as it comes and goes (insets.ts); an alarm or an emergency
+stands under the row while it lasts. With no strip under it the world's canvas takes the
+window's height but the top bar's.
+
+The steering pad lies under the left thumb: three by three cells of 48 px, the eight round its
+middle walking the eight ways, the corners two keys at once; a finger that slides over it turns
+the walk without lifting (touchPad.ts). The right thumb's buttons stand two by two, 52 px each
+and 8 px apart: the action in the corner where the thumb rests, „Sprint" beside it, talk over
+the action, the chat over the sprint — the load's button in the chat's place while hands are
+full. Both stand 12 px off the world's edges, the pad at 85 %, the buttons at 60 % so that the
+lab shows through them, whole while a finger is on one and two seconds after the last lifts
+(world/cluster.ts). The camera lifts the avatar until its feet stand on the pad's top edge
+(viewport.ts `liftAbove`); the minimap stands 56 px tall at least. The quick chat opens beside
+the buttons, two phrases a line, the notepad between the pad and the buttons, and neither
+reaches under the row.
+
+Measured in Blackout (seed 5) on the walkthrough's touch window at density 1, the microphones
+on (`scratchpad/phone/bands.mjs`), main against N-phone, with a line on the air in brackets:
+
+| | 844 × 390 before | after | 932 × 430 before | after |
+| --- | --- | --- | --- | --- |
+| World canvas, CSS px | 826 × 289 | 826 × 345 | 914 × 329 | 914 × 385 |
+| Objective bar | 39 (69) px | 44 (44) | 39 (69) | 44 (44) |
+| Crew strip under the world | 52 px | none | 52 | none |
+| Band of world below the bar | 251 (222) px | 302 (302) | 291 (262) | 342 (342) |
+| — of the window's height | 64.4 (56.8) % | 77.4 (77.4) | 67.7 (60.8) | 79.5 (79.5) |
+| Pad and buttons over the band | 16.3 (18.4) % | 13.6 (13.6) | 12.7 (14.1) | 10.8 (10.8) |
+| A tile | 32.1 px | 38.3 | 36.6 | 42.8 |
+| Tiles across × down | 25.7 × 9 | 21.5 × 9 | 25.0 × 9 | 21.4 × 9 |
+| Tiles below the bar | 7.8 (6.9) | 7.9 (7.9) | 8.0 (7.2) | 8.0 (8.0) |
+| Figure | 27.3 px | 32.6 | 31.1 | 36.4 |
+
+The tile follows the canvas's height (Framing): the taller canvas draws the lab larger, the
+figure a fifth taller, the same eight tiles below the bar — with a line on the air too — and
+four fewer across. The buttons cover what the row of four did, 112 × 112 px against 238 × 52,
+but in the corner, see-through, and the band they lie on is a fifth taller.
 
 A device takes the window: the device on the left, the Laborkennung, a newcomer's line and what
 the machine does in a column of their own beside it — the head has no row to spare for the
@@ -418,7 +463,17 @@ the Netzplan beside them, the meter's smaller dial beside its keys and paper, th
 keys lower with the done lamps beside the status row, the radio's lamp beside its dial. The way
 back and the notepad hang as steel tabs under the chassis. The relay console stands in two
 columns: the emergency, its procedure and the instruction to read out on the left, the
-console's controls on the right.
+console's controls on the right. Measured again on N-phone at 844 × 390 and 932 × 430 (the
+readability package's m5 and v-relay probes, copied to `scratchpad/phone/m5/`), every console of
+Blackout's six devices and the relay console stands whole, nothing scrolling, no control under
+44 px, as on main; the Netzplan's names read 10.7 px there, drawn a little under their 11 units.
+
+A source's pages open one at a time below 900 px of width, and beside them the notepad stands
+as a strip down the right edge, the window's height (putdown.css); the walkthrough turns the
+guest's phone sideways at an open source to hold it so (reading-notepad-landscape.png). The
+book's sheet keeps its 30 × 42 em, though, and under the frame's head, the page's turn and the
+tabs it gets 194 px of height at 844 × 390: its text stands 4.6 px, 5.6 on a spread at
+932 × 430, as on main (Open).
 
 ## Cost
 
@@ -573,6 +628,13 @@ density 2 16.8 ms.
 ## Open
 
 What the graphics and gameplay packages left for later, one line each:
+
+- **The book on a phone held sideways** (N-phone): it opens one page at a time, but its sheet
+  of 30 × 42 em gets 194 px of height at 844 × 390 under the frame's head, the page's turn and
+  the tabs, and its text stands 4.6 px — on main as on the branch (A phone held sideways). A
+  readable page there needs about 550 px of height at 13 px, more than the window has: shorter
+  pages paginated for a short window, or a page that scrolls in its own box with the frame's
+  head, the turn and the tabs beside it, as a device's column stands — a decision of its own.
 
 - **The light layer cannot be measured on a software renderer** (L-graphics): under
   `SHOTS_WEBGL=1` SwiftShader takes 83 to 133 ms a frame, as it did before the package, so CI

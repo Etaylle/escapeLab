@@ -170,6 +170,29 @@ die Entscheidung.
   Dichte 2 wieder pixelgenau. Plan, Wege und Zahlen in `docs/art-bible.md`, `docs/gameplay.md`
   und im Audit-Addendum.
 
+### P-1 Handy quer — Status: im PR (N-phone) · Größe: M
+- Ein quer gehaltenes Handy zeigt das Labor, nicht das HUD: Zielleiste und Crew-Leiste falten
+  sich bei 500 px Höhe oder weniger in eine Zeile von 44 px, das Weltband hält ≥ 65 % der Höhe,
+  die Knöpfe rechts 2×2 und durchscheinend, Steuerung ≤ 30 % des Bands; Geräte und Blätter quer
+  nachgeprüft; der Harness auch auf 932×430.
+- Umgesetzt: eine Zeile über der Welt — LEDs über dem Ziel in einer Zeile, ein Funkspruch an
+  seiner Stelle (höchstens zwei Zeilen), die Crew als Farbpunkte mit ihrem Tag 3 s nach jeder
+  Änderung, der Wert der Laborkennung, Uhr mit Alarmmarken, Mikro, Notizen und Info als
+  Symbolknöpfe; die Crew-Leiste unter der Welt entfällt dort. Bei 844×390 wächst die Leinwand
+  von 289 auf 345 px, das Band unter der Leiste von 251 auf 302 px (64 → 77 % der Fensterhöhe),
+  mit Funkspruch von 222 auf 302 px (57 → 77 %); bei 932×430 von 291 auf 342 px (68 → 80 %).
+  Knöpfe rechts 2×2 zu 52 px, 8 px Abstand, 12 px vom Rand, 60 % Deckkraft bis zur Berührung,
+  dann 2 s ganz; Steuerkreuz und Knöpfe decken 13,6 % des Bands (vorher 16,3 %, mit Funkspruch
+  18,4 %), bei 932×430 10,8 %. Schnellchat neben den Knöpfen, Notizblock zwischen Steuerkreuz
+  und Knöpfen, beide unter der Zeile. Alle sechs Geräte und die Relais-Konsole stehen auf
+  844×390 und 932×430 ganz, ohne Scrollen, jedes Bedienelement ≥ 44 px, wie auf main. Harness:
+  `game-phone-932.png`, `device-phone-932-<Station>.png`, `intro-phone-932.png`,
+  `reading-notepad-landscape.png`. Zahlen in `docs/art-bible.md` („A phone held sideways").
+- Offen: Das Buch steht quer auf einer Seite, aber in 4,6 px (der Bogen von 30 × 42 em bekommt
+  unter Kopf, Blättern und Laschen nur 194 px Höhe) — wie auf main. Lesbar wäre es erst mit
+  kürzeren Seiten oder einer Seite, die in ihrem Kasten scrollt; das braucht eine eigene
+  Entscheidung.
+
 ### N-6 Pacing und Stationsfolge — Status: wartet (Daten) · Größe: ?
 - Erst nach N-4 und dem zweiten Playtest messen (`runs.jsonl`): Ziel, dass eine Erstspieler-
   Crew Station 2 in 5 Minuten schafft. Offene Fragen aus dem Audit: Zeitlimit beim ersten Lauf,
