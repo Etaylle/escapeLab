@@ -199,15 +199,19 @@
  * halo has to come out strong, every pixel of it that glows within its
  * spread and three sigma of its blur of the silhouette, and the corners of
  * the box the old outline drew round the source's tile dark — or the run
- * fails. At the first station with two consoles, highlight-console.png
- * checks console A the same way as its player arrives: in Blackout the
- * Maschinenraum is still dark there, the console lit by the player's own
- * lamp alone. Before figure-carry.png the host stands beside the fuse, in
- * reach, not on it: it bobs a pixel of the art over two seconds, and
- * fuse-bob-1.png, taken as it stands highest or lowest, and fuse-bob-2.png,
- * taken as it next stands the other way, have to show it on either side of
- * its middle — the page's lifts, and the canvas round it moved down or up by
- * as much — or the run fails.
+ * fails; where no glow comes within 3 s a step re-sends the player's place
+ * and it gets 4 s more. At the first station with two consoles,
+ * highlight-console.png checks console A the same way as its player arrives:
+ * in Blackout the Maschinenraum is still dark there, the console lit by the
+ * player's own lamp alone. Before figure-carry.png the host stands beside the
+ * fuse, 0.6 tiles off its middle, well in reach, not on it: it bobs a pixel
+ * of the art over two seconds, and fuse-bob-1.png, taken as it stands highest
+ * or lowest, and fuse-bob-2.png, taken as it next stands the other way, have
+ * to show it on either side of its middle — the page's lifts, and the part's
+ * own pixels on the canvas, its silhouette off the glow's probe, moved down
+ * or up by as much (glowcheck.mjs `bobVerdict`). Where they show no bob the
+ * host steps back onto its spot and a second pair is taken within 4 s; where
+ * that shows none either, the run fails.
  *
  * Settings, minimap, sprint: after info-panel.png the host opens the settings with the gear in
  * the top bar (settings.png) — the clock has to run on under them, Esc has to close them.
@@ -429,7 +433,7 @@ import { fileURLToPath, URL } from 'node:url';
 import { chromium, request } from 'playwright';
 import { AGAIN_AFTER_MS, allowanceOf, gateWindow, p95Text, paceOf } from './framegate.mjs';
 import { withOthersFrozen } from './freeze.mjs';
-import { GLOWING, glowAtCorners, haloAgainst, verticalShift } from './glowcheck.mjs';
+import { ART_PX, bobVerdict, GLOWING, glowAtCorners, haloAgainst } from './glowcheck.mjs';
 import { lightWorkText } from './lightwork.mjs';
 import { fadeOf, meanLuma, midway } from './panelfade.mjs';
 import {
@@ -564,8 +568,6 @@ const SPEED = 4.2;
 const SPRINT_FACTOR = 1.3;
 /** How close to a tile centre a step has to land, in tiles. */
 const STEP_TOLERANCE = 0.15;
-/** A pixel of the art at 64 px a tile: how far a part the E prompt names bobs (client BOB). */
-const ART_PX = 1 / 64;
 /** How far the glow's halo spreads, then how wide it blurs: px at 64 px a tile (client HALO). */
 const HALO_SPREAD = 1.5;
 const HALO_BLUR = 6;
@@ -3545,9 +3547,17 @@ async function partToCarry(player) {
 }
 
 /**
+ * How far off the middle of a part lying loose a player stands to see it bob, tiles: 0.3 inside
+ * the client's 0.9 of reach, and far enough that the figure's boots stay off the part's own
+ * pixels. Measured on N-phone, the bob's cost against unmoved: 0.25 at 0.7 tiles, 0.6 at 0.45,
+ * where the boots stand over the fuse's end, and about 0.9 at 0.3.
+ */
+const BESIDE = 0.6;
+
+/**
  * Where a player can stand beside `item` and reach it, rather than on it, where the figure
- * would hide it: 0.65 tiles off its middle, over the first floor tile next to it to the north,
- * west, east or south that no wall, shut door, furniture or plate takes; null where none is.
+ * would hide it: BESIDE off its middle over the first floor tile next to it to the north, west,
+ * east or south that no wall, shut door, furniture or plate takes; null where there is none.
  */
 function besideItem(map, item) {
   const x = Math.floor(item.x);
@@ -3570,43 +3580,59 @@ function besideItem(map, item) {
     return null;
   }
   const [dx, dy] = way;
-  return { tile: { x: x + dx, y: y + dy }, x: item.x + 0.65 * dx, y: item.y + 0.65 * dy };
+  return { tile: { x: x + dx, y: y + dy }, x: item.x + BESIDE * dx, y: item.y + BESIDE * dy };
 }
 
 /**
- * How far the part the E prompt names on `page` rises now, in tiles, and the grey of the
- * canvas round `item` — 0.4 tiles each way of its middle, from 0.32 above it to 0.3 below,
- * short of its label — both off the same frame.
+ * How far the part the E prompt names on `page` rises now, in tiles, the grey of the canvas round
+ * `item` — 0.4 tiles each way of its middle, from 0.32 above it to 0.3 below, short of its label —
+ * and which of those pixels are the part's own: its silhouette from the glow's probe, where the
+ * frame drew it risen. All off the same frame, on the camera's whole-pixel grid as the frame drew
+ * it (client render/grid.ts `snapCamera`), so that a camera still easing moves the crop with it.
  */
 function bobRead(page, item) {
   return page.evaluate(({ x, y }) => {
     const glow = globalThis.__escapelab?.highlight;
     const camera = globalThis.__escapelab?.camera;
     const canvas = document.querySelector('.world-canvas');
-    const g = canvas?.getContext('2d');
-    if (glow == null || camera === undefined || g == null) {
+    if (glow == null || camera === undefined || canvas === null) {
       return null;
     }
     const s = camera.scale;
-    const left = Math.round(canvas.width / 2 + (x - 0.4 - camera.x) * s);
-    const top = Math.round(canvas.height / 2 + (y - 0.32 - camera.y) * s);
+    // The lab's origin on the canvas, on whole pixels as the frame drew it.
+    const ox = Math.round(canvas.width / 2 - camera.x * s);
+    const oy = Math.round(canvas.height / 2 - camera.y * s);
+    const left = Math.round(ox + (x - 0.4) * s);
+    const top = Math.round(oy + (y - 0.32) * s);
     const width = Math.round(0.8 * s);
     const height = Math.round(0.62 * s);
-    const { data } = g.getImageData(left, top, width, height);
+    const { data } = canvas.getContext('2d').getImageData(left, top, width, height);
+    const shape = glow.pixels();
+    /** Whether the crop's pixel `i` lies on the part's silhouette, the part risen by its lift. */
+    const own = (i) => {
+      const tx = (left + (i % width) + 0.5 - ox) / s - glow.x;
+      const ty = (top + Math.floor(i / width) + 0.5 - oy) / s - glow.y + glow.lift;
+      const col = Math.floor(tx * shape.level) - shape.left;
+      const row = Math.floor(ty * shape.level) - shape.top;
+      const inside = col >= 0 && row >= 0 && col < shape.width && row < shape.height;
+      return inside && shape.silhouette[row * shape.width + col] >= 128 ? 1 : 0;
+    };
     const grey = [];
-    for (let i = 0; i < data.length; i += 4) {
-      grey.push(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+    const mask = [];
+    for (let i = 0; i < width * height; i++) {
+      grey.push(0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2]);
+      mask.push(own(i));
     }
-    return { lift: glow.lift, scale: s, width, height, grey };
+    return { lift: glow.lift, scale: s, width, height, grey, mask };
   }, item);
 }
 
 /**
  * The first read of the part bobbing on `page` as it stands highest or lowest — on the side of
- * its middle `side` names (1 up, -1 down, 0 either) — within 2.5 s, more than a bob.
+ * its middle `side` names (1 up, -1 down, 0 either) — within `ms`, more than a bob by default.
  */
-async function atBobPeak(page, item, side = 0) {
-  const end = Date.now() + 2500;
+async function atBobPeak(page, item, side = 0, ms = 2500) {
+  const end = Date.now() + ms;
   while (Date.now() < end) {
     const read = await bobRead(page, item);
     if (read !== null && Math.abs(read.lift) >= 0.9 * ART_PX && read.lift * side >= 0) {
@@ -3618,11 +3644,29 @@ async function atBobPeak(page, item, side = 0) {
 }
 
 /**
+ * Two reads of the part bobbing on `page` at opposite peaks, within `ms` each, fuse-bob-1.png
+ * and fuse-bob-2.png shot right after them — counted once a run (`counted`), shot anew on a
+ * second pair — and whether they show it bob (glowcheck.mjs `bobVerdict`).
+ */
+async function bobPair(page, item, ms, counted) {
+  const shoot = (name) =>
+    counted ? capture(page, name) : page.screenshot({ path: join(OUT, name) });
+  const first = await atBobPeak(page, item, 0, ms);
+  await shoot('fuse-bob-1.png');
+  const second = first === null ? null : await atBobPeak(page, item, -Math.sign(first.lift), ms);
+  await shoot('fuse-bob-2.png');
+  return { first, second, verdict: bobVerdict(first, second) };
+}
+
+/**
  * fuse-bob-1.png and fuse-bob-2.png: before figure-carry.png the host steps up beside the
- * part lying loose (`besideItem`) until the E prompt names it: it bobs a pixel of the art up
- * and down over two seconds, its glow with it (client world/render/highlight.ts). The first
- * shot is taken as it stands highest or lowest, the second as it next stands the other way,
- * read for it rather than timed, so that a slow page cannot land it on the middle
+ * part lying loose (`besideItem`), BESIDE off its middle, until the E prompt names it — its glow
+ * on (`glowNaming`): it bobs a pixel of the art up and down over two seconds, its glow with it
+ * (client world/render/highlight.ts). The first shot is taken as it stands highest or lowest,
+ * the second as it next stands the other way, read for it rather than timed, so that a slow page
+ * cannot land it on the middle; the part's own pixels have to move as its lifts say (`bobPair`).
+ * Where the first pair shows no bob the host steps back onto its spot, the glow on again, and a
+ * second pair is taken within the next 4 s; only where that shows none either does the run fail
  * (`reportBob`). Skipped where there is no floor beside it to stand on.
  */
 async function captureBob(player, item) {
@@ -3636,53 +3680,57 @@ async function captureBob(player, item) {
     skip('fuse-bob-*.png', `no floor to stand on beside "${partName(item)}"`);
     return;
   }
-  if ((await glowNaming(page, { of: 'item', id: item.id }, 3000)) === null) {
+  const subject = { of: 'item', id: item.id };
+  if ((await glowNaming(page, subject, 3000)) === null) {
     const where = `${name} stands beside "${partName(item)}"`;
     console.log(`fuse-bob-*.png     !! ${where}, but nothing glows`);
     fail(`fuse-bob: the E prompt beside "${partName(item)}" names nothing that glows`);
     return;
   }
   await sleep(400); // the camera settles once the walk is over
-  const first = await atBobPeak(page, item);
-  await capture(page, 'fuse-bob-1.png');
-  const second = first === null ? null : await atBobPeak(page, item, -Math.sign(first.lift));
-  await capture(page, 'fuse-bob-2.png');
-  reportBob(name, item, first, second);
+  const at = whereIs(seen);
+  const who = `${name} ${Math.hypot(at.x - item.x, at.y - item.y).toFixed(2)} tiles off`;
+  const pair = await bobPair(page, item, 2500, true);
+  if (pair.verdict.fine) {
+    reportBob(who, item, pair, null);
+    return;
+  }
+  // Once more, back on its spot: the second pair within the next 4 s.
+  await stepTo(page, seen, beside.x, beside.y);
+  const glowing = (await glowNaming(page, subject, 1000)) !== null;
+  const none = { first: null, second: null, verdict: bobVerdict(null, null) };
+  reportBob(who, item, pair, glowing ? await bobPair(page, item, 2000, false) : none);
+}
+
+/** A read of the part at a peak as the log gives it: which way it stood, by how much of the art. */
+const peakSaid = (read) =>
+  read === null
+    ? '!! not rising or sinking'
+    : `${read.lift >= 0 ? 'up' : 'down'} ${(Math.abs(read.lift) / ART_PX).toFixed(2)} px`;
+
+/** A number for the log to a tenth; „?" where there is none. */
+const tenth = (value) => (value === null ? '?' : value.toFixed(1));
+
+/** A pair of reads (`bobPair`) as the log gives it: the peaks, and how the part's pixels moved. */
+function pairSaid({ first, second, verdict }) {
+  const { shift } = verdict;
+  const moved = shift === null ? '?' : `${Math.abs(shift)} px ${shift >= 0 ? 'down' : 'up'}`;
+  return (
+    `${peakSaid(first)}, then ${peakSaid(second)} of the art; its ${verdict.pixels} own ` +
+    `pixels (spread ${tenth(verdict.spread)}) moved ${moved} (${tenth(verdict.expected)} ` +
+    `expected), off by ${tenth(verdict.cost)} against ${tenth(verdict.still)} unmoved` +
+    (verdict.fine ? '' : ' !! no bob')
+  );
 }
 
 /**
- * The bob check's line in the log: the lifts the traced page gave at the two shots have to lie
- * a pixel of the art on either side, and the canvas round the part has to have moved down or
- * up by as much between the two reads, or the run fails.
+ * The bob check's line in the log: the part has to show its bob on the first pair of reads, or
+ * on the second, taken once more, or the run fails (glowcheck.mjs `bobVerdict`).
  */
-function reportBob(name, item, first, second) {
-  const said = (read) =>
-    read === null
-      ? '!! not rising or sinking'
-      : `${read.lift >= 0 ? 'up' : 'down'} ${(Math.abs(read.lift) / ART_PX).toFixed(2)} px`;
-  const reads = first !== null && second !== null;
-  // How far the second picture should lie below the first, in canvas pixels.
-  const expected = reads ? (first.lift - second.lift) * first.scale : 0;
-  const most = reads ? Math.ceil(3 * first.scale * ART_PX) + 2 : 0;
-  const moved = reads
-    ? verticalShift(first.grey, second.grey, first.width, first.height, most)
-    : null;
-  const fine =
-    reads &&
-    first.lift * second.lift < 0 &&
-    moved.shift !== 0 &&
-    Math.sign(moved.shift) === Math.sign(expected) &&
-    Math.abs(moved.shift - expected) <= 1.5 &&
-    moved.cost < moved.still;
-  const way = moved !== null && moved.shift >= 0 ? 'down' : 'up';
-  const shift = moved === null ? '?' : `${Math.abs(moved.shift)} px ${way}`;
-  console.log(
-    `fuse-bob-*.png     ${name} beside "${partName(item)}": ${said(first)}, then ` +
-      `${said(second)} of the art; the canvas round it moved ${shift} ` +
-      `(${expected.toFixed(1)} expected), off by ${moved?.cost.toFixed(1) ?? '?'} ` +
-      `against ${moved?.still.toFixed(1) ?? '?'} unmoved${fine ? '' : ' !! no bob'}`,
-  );
-  if (!fine) {
+function reportBob(who, item, pair, again) {
+  const second = again === null ? '' : `; once more: ${pairSaid(again)}`;
+  console.log(`fuse-bob-*.png     ${who} "${partName(item)}": ${pairSaid(pair)}${second}`);
+  if (!pair.verdict.fine && !again?.verdict.fine) {
     fail(`fuse-bob: "${partName(item)}" did not bob a pixel between the two shots`);
   }
 }
@@ -4947,16 +4995,34 @@ async function glowNaming(page, subject, ms) {
 }
 
 /**
+ * The glow naming `subject` on `player`'s page within 3 s — or, where none comes, within 4 s
+ * more after a step onto the middle of the tile the player stands on: the step sends its place
+ * anew, and a count of it the server keeps a moment behind the walk catches up. Null where
+ * neither brings it.
+ */
+async function glowAfterStep(player, subject) {
+  const glow = await glowNaming(player.page, subject, 3000);
+  const tile = glow === null ? tileOf(player.seen) : null;
+  if (tile === null) {
+    return glow;
+  }
+  await stepTo(player.page, player.seen, tile.x + 0.5, tile.y + 0.5);
+  return glowNaming(player.page, subject, 4000);
+}
+
+/**
  * `shot`: `player` stands in reach of a thing — `subject`, as client world/interact.ts names
- * it, `said` in the log — the E prompt names it, and it glows in its own shape. The traced
+ * it, `said` in the log — the E prompt names it (within 3 s, or 4 s more after a step,
+ * `glowAfterStep`), and it glows in its own shape. The traced
  * page hands back the halo's bake and the silhouette it was baked from
  * (`window.__escapelab.highlight`): the halo has to come out strong, every pixel of it that
  * glows has to lie within the spread and the blur's reach of the silhouette, and the corners
  * of the box once drawn round the thing's tile have to stay dark — or the run fails.
  */
-async function captureHighlight({ page, name }, { subject, said }, shot) {
+async function captureHighlight(player, { subject, said }, shot) {
+  const { page, name } = player;
   const label = `${shot} `.padEnd(19);
-  const glow = await glowNaming(page, subject, 3000);
+  const glow = await glowAfterStep(player, subject);
   const pixels =
     glow === null
       ? null
