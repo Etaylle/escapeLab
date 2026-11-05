@@ -197,7 +197,7 @@ die Entscheidung.
   Schicht links daneben, wo Platz ist. Vorher 4,6 px (844×390) und 5,6 px als Doppelseite
   (932×430), jetzt 14 px; Harness: `book-phone-landscape.png`.
 
-### P-2 Buch auf dem Handy hochkant mit Notizblock — Status: im PR (N-bookup) · Größe: S
+### P-2 Buch auf dem Handy hochkant mit Notizblock — Status: erledigt (N-bookup, Merge 2026-11-05; 5,7 → 14 px) · Größe: S
 - Hochkant (420×760) mit geöffneter Notizblock-Schublade fällt der Buchtext auf 5,7 px (wie vor
   P-1). Dieselbe Regel wie quer: eine Seite in Grundschrift ≥ 14 px, die im Bogen scrollt,
   Umbrüche gleich; Capture `book-phone-notepad.png`.
