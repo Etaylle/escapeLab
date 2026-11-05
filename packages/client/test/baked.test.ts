@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { bake, bakeBox, bakeGrid, BAKE_MAX, drawBaked, type Baked } from '../src/world/baked.js';
+import {
+  bake,
+  bakeable,
+  bakeBox,
+  bakeGrid,
+  BAKE_PIXELS,
+  BAKE_SIDE,
+  drawBaked,
+  type Baked,
+} from '../src/world/baked.js';
 import type { PixelGrid } from '../src/world/render/grid.js';
 
 const map = { width: 19, height: 7 };
@@ -71,12 +80,29 @@ describe('bakeBox — the part of the map a baked light covers', () => {
 });
 
 describe('bakeGrid — the grid a light is baked on', () => {
-  it('is the frame’s, and fewer whole pixels a tile for a box past BAKE_MAX', () => {
+  it('is the frame’s, and fewer whole pixels a tile for a box past BAKE_SIDE', () => {
     const on = grid(78, 100.25, 3.5);
     expect(bakeGrid({ x: 0, y: 0, w: 19, h: 7 }, on)).toBe(on);
     const huge = bakeGrid({ x: 0, y: 0, w: 300, h: 40 }, on);
-    expect(huge.scale * 300).toBeLessThanOrEqual(BAKE_MAX);
-    expect(huge).toEqual({ scale: Math.floor(BAKE_MAX / 300), ox: 0, oy: 0 });
+    expect(huge.scale * 300).toBeLessThanOrEqual(BAKE_SIDE);
+    expect(huge).toEqual({ scale: Math.floor(BAKE_SIDE / 300), ox: 0, oy: 0 });
+  });
+
+  it('bakes Blackout’s whole lab lit at density 2 on the frame’s own pixels', () => {
+    // 36 × 22 tiles at 116.3 px a tile, a 1440 × 820 window at density 2: 4187 × 2559 px.
+    const on = grid(116.3, 40.5, 12.25);
+    expect(bakeable(36 * 116.3, 22 * 116.3)).toBe(true);
+    expect(bakeGrid({ x: 0, y: 0, w: 36, h: 22 }, on)).toBe(on);
+  });
+
+  it('holds a bake to the pixels of a 4096-px square, the largest whole scale within', () => {
+    expect(BAKE_PIXELS).toBe(4096 * 4096);
+    const on = grid(100, 0, 0);
+    // 64 × 64 tiles at 100 px would be 6400 px a side: 64 px a tile fills the square.
+    expect(bakeGrid({ x: 0, y: 0, w: 64, h: 64 }, on)).toEqual({ scale: 64, ox: 0, oy: 0 });
+    expect(bakeable(4096, 4096)).toBe(true);
+    expect(bakeable(4097, 4096)).toBe(false);
+    expect(bakeable(BAKE_SIDE + 1, 10)).toBe(false);
   });
 });
 

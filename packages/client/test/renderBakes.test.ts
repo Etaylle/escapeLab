@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addBaked, BAKE_MAX, type Baked } from '../src/world/baked.js';
+import { addBaked, BAKE_SIDE, type Baked } from '../src/world/baked.js';
 import { BAKE_LIMITS, bakedFor, layAdded, layBake } from '../src/world/render/bakes.js';
 import type { Frame } from '../src/world/render/frame.js';
 import { callEntries, callsOf, fakeCanvas } from './fakeCanvas.js';
@@ -114,8 +114,11 @@ describe('added bakes — lights laid on together in one copy', () => {
 
   it('adds nothing up for no parts, nor a sum too large to bake', () => {
     expect(addBaked([], fakeCanvas(1, 1).canvas)).toBeNull();
-    const wide = [bakedAt(0, 0, 100, 100, 'a'), bakedAt(BAKE_MAX, 0, 100, 100, 'b')];
+    const wide = [bakedAt(0, 0, 100, 100, 'a'), bakedAt(BAKE_SIDE, 0, 100, 100, 'b')];
     expect(addBaked(wide, fakeCanvas(1, 1).canvas)).toBeNull();
+    // Within the side, but the square round them holds more pixels than a bake may.
+    const apart = [bakedAt(0, 0, 100, 100, 'a'), bakedAt(4500, 4500, 100, 100, 'b')];
+    expect(addBaked(apart, fakeCanvas(1, 1).canvas)).toBeNull();
   });
 
   const part = (name: string, x: number) => ({

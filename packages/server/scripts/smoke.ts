@@ -106,28 +106,60 @@ const SUBSYSTEME = 3;
 const FREQUENZ = 4;
 const REAKTOR = 5;
 
+/** A tile of Blackout's map `dx`, `dy` from `spot`, which has to be floor no furniture takes. */
+function besides(spot: { x: number; y: number }, dx: number, dy: number, what: string): Tile {
+  const tile: Tile = [spot.x + dx, spot.y + dy];
+  const furnished = mission.map.decor.some((d) => d.x === tile[0] && d.y === tile[1]);
+  if (mission.map.tiles[tile[1]]?.charAt(tile[0]) !== '.' || furnished) {
+    fail(`Blackout has no free floor ${what}, at ${tile.join(',')}`);
+  }
+  return tile;
+}
+
+/** Console `side` of the station with index `index`, or its only console. */
+function consoleOf(index: number, side?: 'a' | 'b'): { x: number; y: number } {
+  const id = mission.puzzles[index]?.id ?? fail(`blackout has no station ${index + 1}`);
+  const at = (s: (typeof mission.map.stations)[number]): boolean =>
+    s.puzzleId === id && (side === undefined || s.console === side);
+  return mission.map.stations.find(at) ?? fail(`no console ${side ?? ''} of station ${index + 1}`);
+}
+
 /**
- * Where each station is worked from: a floor tile within reach of it — of
- * console A, where it has two.
+ * Where each station is worked from, read from the mission: a floor tile within reach of it —
+ * of console A, where it has two — out of the drones' eye where they patrol by then.
  */
 const STAND: Tile[] = [
-  [11, 7], // at the Notlicht's lever, in the middle of the Flur
-  [2, 12], // in front of the fuse box, console A of the Notstrom-Kasten, in the Maschinenraum
-  [20, 7], // beside console A of the Signalkette, out of the Flur drone's sight as it wakes
-  [9, 4], // below the terminal, console A of the Serverraum, far from the Flur drone's beat
-  [10, 15], // beside the radio panel, off the Labor drone's line
-  [25, 14], // at the reactor, across from the fuse slot
+  // on the Notlicht's lever, in the middle of the Flur
+  besides(consoleOf(NOTLICHT), 0, 0, 'at the lever'),
+  // east of the fuse box, console A of the Notstrom-Kasten, in the Maschinenraum
+  besides(consoleOf(NOTSTROM, 'a'), 1, 0, 'beside the fuse box'),
+  // east of console A of the Signalkette, at the Flur's east end, where the Flur drone never looks
+  besides(consoleOf(SIGNALKETTE, 'a'), 1, 0, 'beside console A of the Signalkette'),
+  // below the terminal, console A of the Serverraum
+  besides(consoleOf(SUBSYSTEME, 'a'), 0, 1, 'below the terminal'),
+  // east of the radio panel, off the Labor drone's line
+  besides(consoleOf(FREQUENZ), 1, 0, 'beside the radio panel'),
+  // below the reactor's switch
+  besides(consoleOf(REAKTOR), 0, 1, 'below the reactor'),
 ];
 /** Beside console B of the stations worked at two consoles, by station index. */
 const CONSOLE_B = new Map<number, Tile>([
-  [NOTSTROM, [3, 7]], // beside the meter, at the Flur's west end
-  [SIGNALKETTE, [7, 14]], // above console B of the Signalkette, in the Maschinenraum
-  [SUBSYSTEME, [17, 2]], // above the rack, out of the cone the Flur drone casts up the room
+  // east of the meter, at the Flur's west end
+  [NOTSTROM, besides(consoleOf(NOTSTROM, 'b'), 1, 0, 'beside the meter')],
+  // above console B of the Signalkette, in the Maschinenraum
+  [SIGNALKETTE, besides(consoleOf(SIGNALKETTE, 'b'), 0, -1, 'above console B of the Signalkette')],
+  // above the rack
+  [SUBSYSTEME, besides(consoleOf(SUBSYSTEME, 'b'), 0, -1, 'above the rack')],
 ]);
-/** Beside the Laborkennung, in the Archiv. */
-const BY_THE_SIGN: Tile = [1, 3];
-/** In the Maschinenraum below its door to the Flur: out of the Labor drone's sight. */
-const OUT_OF_THE_LABOR: Tile = [4, 11];
+/** The Laborkennung, in the Archiv. */
+const sign = mission.map.edgeworkSign ?? fail('Blackout has no sign');
+/** Beside the Laborkennung: west of it. */
+const BY_THE_SIGN: Tile = besides(sign, -1, 0, 'beside the sign');
+const maschinentuer =
+  mission.map.doors.find((d) => d.id === 'maschinentuer') ??
+  fail('Blackout has no Maschinenraum door');
+/** In the Maschinenraum below its door to the Flur: out of the drones' eye. */
+const OUT_OF_THE_LABOR: Tile = besides(maschinentuer, 0, 1, 'below the Maschinenraum door');
 
 const KEY_ID = 'schluessel';
 const FUSE_ID = 'ersatzsicherung';
@@ -588,16 +620,23 @@ async function echoedAt(client: TestClient, x: number, y: number): Promise<void>
   });
 }
 
+/** How far the sprint runs down the Flur from the lever, tiles. */
+const SPRINT_TILES = 9;
+
 /**
- * A sprinted stretch down the Flur, open floor from the lever at (11,7) east to (20,7), as a
- * client streams it: an update every 80 ms, each 1.3 times a walk's step, then one burst
+ * A sprinted stretch down the Flur, open floor from the lever SPRINT_TILES east along its row,
+ * as a client streams it: an update every 80 ms, each 1.3 times a walk's step, then one burst
  * after lag on the way back — longer than a walk's burst may be (1.5 tiles), within the
  * sprint's (MAX_STEP). The server has to take every one: its echo lands where each ended.
  */
 async function sprintTheFlur(client: TestClient): Promise<void> {
-  await walkTo(client, [11, 7]);
-  const from = { x: 11.5, y: 7.5 };
-  const to = { x: 20.5, y: 7.5 };
+  const [leverX, leverY] = STAND[NOTLICHT] ?? fail('no spot at the lever');
+  for (let dx = 1; dx <= SPRINT_TILES; dx++) {
+    besides({ x: leverX, y: leverY }, dx, 0, 'down the Flur from the lever');
+  }
+  await walkTo(client, [leverX, leverY]);
+  const from = { x: leverX + 0.5, y: leverY + 0.5 };
+  const to = { x: from.x + SPRINT_TILES, y: from.y };
   const legs = Math.ceil((to.x - from.x) / SPRINT_STEP);
   for (let i = 1; i <= legs; i++) {
     client.sendPos(from.x + ((to.x - from.x) * i) / legs, from.y, true);
@@ -816,44 +855,43 @@ async function unlockCabinet(): Promise<void> {
   credit(carrier, 'delivered');
 }
 
-/** Where the Flur drone's patrol runs in the Ost-Flur, past the Serverraum's way out: x from here. */
-const OST_FLUR_X = 20;
-
 /**
- * Waits until the Flur drone patrols the Ost-Flur, out of sight of the Flur
- * and the Serverraum: a camera plate taken now holds it still out there.
- */
-async function droneOutEast(client: TestClient): Promise<void> {
-  const deadline = Date.now() + 30_000;
-  while ((client.drones[flurDrone.id]?.x ?? 0) < OST_FLUR_X) {
-    if (Date.now() > deadline) {
-      fail(`${client.label}: the Flur drone never came round to the Ost-Flur in 30 s`);
-    }
-    await sleep(50);
-  }
-}
-
-/**
- * The reactor stays dead without the spare fuse from the Archiv: one fetches
- * it while the other holds the camera plate, taken while the Flur drone
- * patrols the Ost-Flur, so it stands still out there while the fuse crosses
- * the Flur; then both meet at the reactor, the plate holder by the Labor's
- * way, which the drone woken by its steps off the plate does not watch.
+ * The reactor stays dead without the spare fuse from the Archiv: whoever is nearer fetches it by
+ * the Flur's west end, which the Flur drone never watches, and carries it to its slot past the
+ * patrols; then both meet at the reactor.
  */
 async function fetchFuse(): Promise<void> {
   const fuseAt = itemTile(FUSE_ID);
   const [carrier, helper] = closerTo(fuseAt);
-  await walkTo(carrier, OUT_OF_THE_LABOR);
-  await droneOutEast(helper);
-  await walkTo(helper, CAMERA);
-  await crossFrozen(carrier, fuseAt, flurDrone.id);
+  await walkTo(carrier, fuseAt);
   await pickUp(carrier, FUSE_ID);
   await walkTo(carrier, FUSE_SLOT);
   await install(carrier, FUSE_ID);
   credit(carrier, 'delivered');
-  for (const to of [OUT_OF_THE_LABOR, STAND[REAKTOR] ?? fail('no spot at the reactor')]) {
-    await walkTo(helper, to);
+  const atReactor = STAND[REAKTOR] ?? fail('no spot at the reactor');
+  for (const client of [carrier, helper]) {
+    await walkTo(client, atReactor);
   }
+}
+
+/** How near the west end of its beat the Flur drone has to be before the camera plate is taken. */
+const FAR_WEST_TILES = 3;
+
+/**
+ * `holder` takes the camera plate in front of the Serverschott once the Flur drone patrols the
+ * west end of its beat, far from the plate and the Schott: it stands still out there while the
+ * plate is held, and stepping off the plate into the Schott the holder stays out of its eye.
+ */
+async function holdTheCameraPlate(holder: TestClient): Promise<void> {
+  const westEnd = Math.min(...flurDrone.waypoints.map((w) => w.x)) + 0.5;
+  const deadline = Date.now() + 30_000;
+  while ((holder.drones[flurDrone.id]?.x ?? Infinity) > westEnd + FAR_WEST_TILES) {
+    if (Date.now() > deadline) {
+      fail(`${holder.label}: the Flur drone never came round to its west end in 30 s`);
+    }
+    await sleep(50);
+  }
+  await walkTo(holder, CAMERA);
 }
 
 // --- puzzle solvers ----------------------------------------------------------
@@ -1437,19 +1475,24 @@ function assertTerminalAndRackApart(
 
 /**
  * Station 4, the Serverraum, at two consoles in the room behind the
- * bulkhead: `terminal` at console A switches it on, so that whoever works
- * it is out of the drone's eye; `rack` searches the locker and reads the
- * rules there, then takes the rack. The terminal shows the table with its
- * codes and no LED, the rack its switches and LEDs and no code, neither the
- * rules; the audience sees all. Mid-solve the rack drops and resumes; the
- * solver then brings every service back from the two consoles' views.
+ * bulkhead: `terminal` holds the Flur drone still from the camera plate
+ * while `rack` crosses the Flur to the locker, then steps off it to console
+ * A and switches it on, so that whoever works it is out of the drone's eye;
+ * `rack` searches the locker and reads the rules there, then takes the rack.
+ * The terminal shows the table with its codes and no LED, the rack its
+ * switches and LEDs and no code, neither the rules; the audience sees all.
+ * Mid-solve the rack drops and resumes; the solver then brings every service
+ * back from the two consoles' views.
  */
 async function runServers(terminal: TestClient, rack: TestClient): Promise<void> {
   const locker = sourceOf(SUBSYSTEME);
+  // The drone woken by the Signalkette patrols the Flur in front of the Schott: the terminal's
+  // player holds it still from the camera plate while the rack's crosses to the locker.
+  await holdTheCameraPlate(terminal);
+  await crossFrozen(rack, placeOf(locker.id), flurDrone.id);
   await bring(terminal, STAND[SUBSYSTEME] ?? fail('no spot at the terminal'), rack);
   const fromTerminal = terminal.raw.length;
   await switchOn(terminal, SUBSYSTEME);
-  await bring(rack, placeOf(locker.id), terminal);
   await openSource(rack, locker.id, `Spind durchsucht: ${locker.label}`);
   await rack.expectView(`reads the ${SERVERS.title}'s rules in the ${locker.label}`, (v) =>
     v.manualsHere.some((m) => m.id === locker.id && m.sections.some((s) => s.puzzleId === SERVERS.id)));
@@ -1485,17 +1528,19 @@ async function solveMorse(op: TestClient, rd: TestClient): Promise<void> {
   await solveStation(FREQUENZ);
 }
 
+const labortuer =
+  mission.map.doors.find((d) => d.id === 'labortuer') ?? fail('Blackout has no Labor door');
 /**
- * The Labor's east side by its archway, a step or two from every spot of the
- * cabinet: from here the way to the door runs north of the bench row, far
- * from the radio panel, so the reader never comes close enough to see the lamp.
+ * In the Labor four tiles east of its door and a row north: from here the ways to the door
+ * and to every spot of the cabinet run north of the radio panel in its south-west corner, so
+ * the reader never comes close enough to see the lamp.
  */
-const LABOR_CORNER: Tile = [14, 13];
+const LABOR_CORNER: Tile = besides(labortuer, 4, -1, 'in the Labor east of its door');
 /**
- * In the Maschinenraum past the Labor's door: out of reach of every spot of
- * the cabinet and of the panel, and out of the Labor drone's sight.
+ * In the Maschinenraum two tiles west of the Labor's door: out of reach of every spot of the
+ * cabinet and of the panel, and out of the Labor drone's sight.
  */
-const AWAY_FROM_THE_CABINET: Tile = [7, 12];
+const AWAY_FROM_THE_CABINET: Tile = besides(labortuer, -2, 0, 'west of the Labor door');
 /** What the radio panel, a station of one console, says to a move nobody backs up. */
 const ALONE = 'Eingabe gesperrt: Bei den Regeln steht niemand.';
 
@@ -1736,7 +1781,6 @@ await zoe.untilSpectator('sees where everybody stands', (v) =>
 // The sign goes to whoever walks up to it; a source to whoever has it within two tiles in
 // sight, or long enough in the cone of the lamp they face east with from their spawn — each
 // for themselves; the crew knows of whatever either found. Through a wall nobody finds anything.
-const sign = mission.map.edgeworkSign ?? fail('Blackout has no sign');
 const doorsAtStart = crew[0].view?.map?.doors ?? fail('anna: no doors at the start');
 const shutAtStart = new Set(doorsAtStart.filter((d) => !d.open).map((d) => key(d.x, d.y)));
 const middle = (x: number, y: number): { x: number; y: number } => ({ x: x + 0.5, y: y + 0.5 });
@@ -1770,15 +1814,17 @@ for (const client of crew) {
   );
 }
 
-// Map pings fan out to the whole crew and are rate limited per player.
-anna.send({ kind: 'ping', x: 12, y: 8 });
-anna.send({ kind: 'ping', x: 3, y: 3 }); // swallowed by the cooldown
+// Map pings fan out to the whole crew and are rate limited per player: one at the lever, then
+// one at the sign.
+const [pingX, pingY] = STAND[NOTLICHT] ?? fail('no spot at the lever');
+anna.send({ kind: 'ping', x: pingX, y: pingY });
+anna.send({ kind: 'ping', x: sign.x, y: sign.y }); // swallowed by the cooldown
 const pinged = await ben.expect(
   'ping arrives',
   (m): m is Extract<ServerMessage, { kind: 'ping' }> => m.kind === 'ping',
 );
 assert(
-  pinged.playerId === annaJoined.playerId && pinged.x === 12 && pinged.y === 8,
+  pinged.playerId === annaJoined.playerId && pinged.x === pingX && pinged.y === pingY,
   'ping is broadcast to the other player with its origin',
 );
 await sleep(200);
@@ -1930,8 +1976,10 @@ await crew[0].expectView(`"${lastingDoor.id}" stays open with nobody on its plat
   v.map?.doors.find((d) => d.id === lastingDoor.id)?.open === true &&
   v.map.plates.find((p) => p.id === lastingPlate)?.pressed === false);
 
-// Station 3: the Signalkette, console A in the Flur and console B in the Maschinenraum.
+// Station 3: the Signalkette, console A in the Flur and console B in the Maschinenraum; on the
+// way to console A, Anna passes the Klemmbrett with the legend, wherever the run laid it.
 const [atA, atB] = crew;
+await bring(atA, placeOf(sourceOf(SIGNALKETTE).id), atB);
 await takeConsoles(SIGNALKETTE, atA, atB);
 await runSignal(atA, atB);
 
@@ -1956,8 +2004,11 @@ await backOnTheMap(mission.puzzles.length);
 // --- escape finale: everyone to the hatch before the clock runs out --------
 const unlocked = await crew[0].expectView('exit hatch is open', (v) =>
   v.map?.exit?.open === true);
-assert(unlocked.map?.manuals.filter((m) => m.known).length === mission.map.manuals.length,
-  'the crew has found every source on the way');
+const unknown = mission.map.manuals
+  .filter((m) => unlocked.map?.manuals.some((seen) => seen.id === m.id && seen.known) !== true)
+  .map((m) => `${m.id} at ${placeOf(m.id).join(',')}`);
+const missed = unknown.length > 0 ? ` (not ${unknown.join(', ')})` : '';
+assert(unknown.length === 0, `the crew has found every source on the way${missed}`);
 assert(unlocked.map?.litRooms.join(',') === litAfter(mission.puzzles.length),
   `the reactor lit the last room: ${litAfter(mission.puzzles.length)}`);
 const unlockedAt = unlocked.events.find((e) => e.kind === 'escape')?.at;

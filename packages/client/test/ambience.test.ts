@@ -507,7 +507,8 @@ describe('the beds’ recordings, loaded as rooms come near', () => {
       ambience.hearRooms(at(POWER_ON, IN_FLUR.x, IN_FLUR.y));
       const before = memory.decodedBytes().beds;
       expect(samples.sample('bed-archive')).not.toBeNull();
-      ambience.hearRooms(at(POWER_ON, IN_REAKTOR.x, IN_REAKTOR.y)); // the reactor hall: the archive is far
+      // the reactor hall: the archive is far
+      ambience.hearRooms(at(POWER_ON, IN_REAKTOR.x, IN_REAKTOR.y));
       ctx.currentTime += BED_RELEASE_S - 0.1;
       ambience.hearRooms(at(POWER_ON, IN_REAKTOR.x, IN_REAKTOR.y));
       expect(samples.sample('bed-archive')).not.toBeNull(); // not yet

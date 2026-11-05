@@ -109,7 +109,9 @@ describe('dressMap — every room dressed after its kind, the same every run', (
 
   it('hangs a prop at least every 4 tiles along each of Blackout’s corridors, both ways', () => {
     const { props, rooms, width } = dressMap(blackout, seedOf('blackout'));
-    const corridors = new Set(blackout.labels.filter((l) => l.kind === 'corridor').map((l) => l.text));
+    const corridors = new Set(
+      blackout.labels.filter((l) => l.kind === 'corridor').map((l) => l.text),
+    );
     expect([...corridors]).toEqual(['FLUR', 'OST-FLUR', 'SÜD-FLUR']);
     for (const corridor of corridors) {
       const floor = rooms.flatMap((room, i) =>

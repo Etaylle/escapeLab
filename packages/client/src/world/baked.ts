@@ -8,16 +8,31 @@ import { phaseOf, sameGrid, type PixelGrid } from './render/grid.js';
  * than a scaled copy, which the canvas has to filter. The lit rooms' ceiling
  * lights, the open hatch's light, the emergency lamps', the light through
  * open doors and the faint lights' glow are baked this way (render/bakes.ts):
- * again only as they change, or for another grid. A box too large for
- * BAKE_MAX is baked at fewer pixels a tile and drawn scaled, filtered. Bakes
- * added onto the picture together are added up into one first (`addBaked`):
- * one copy instead of several.
+ * again only as they change, or for another grid. A box too large to bake
+ * (`bakeable`) is baked at fewer pixels a tile and drawn scaled, filtered.
+ * Bakes added onto the picture together are added up into one first
+ * (`addBaked`): one copy instead of several.
  */
 
 type Spot = { x: number; y: number };
 
-/** The longest side a baked canvas may have, px: a larger box is baked at fewer pixels. */
-export const BAKE_MAX = 4096;
+/**
+ * How many pixels a baked canvas may hold: as many as a square 4096 px a side, which every
+ * browser gives a canvas (iOS's Safari no more). A larger box is baked at fewer pixels a tile.
+ */
+export const BAKE_PIXELS = 4096 * 4096;
+/**
+ * The longest side a baked canvas may have, px: a long, low box may run past 4096 within
+ * BAKE_PIXELS. Blackout's lab, 36 tiles wide, lit whole on a laptop at density 2 — 116 px a
+ * tile — bakes 4187 px wide and 2559 high, pixel for pixel; held to 4096 a side, it was baked
+ * at fewer pixels and every frame of the escape copied it filtered, twice the frame's work.
+ */
+export const BAKE_SIDE = 8192;
+
+/** Whether a canvas `width` × `height` px may be baked: within BAKE_PIXELS and BAKE_SIDE. */
+export function bakeable(width: number, height: number): boolean {
+  return width * height <= BAKE_PIXELS && Math.max(width, height) <= BAKE_SIDE;
+}
 
 /** A box of whole tiles on the map: its corner and its size, in tiles. */
 export interface TileBox {
@@ -81,13 +96,20 @@ export function bakeBox(
 }
 
 /**
- * The grid `box` is baked on for a frame on `grid`: that grid, or — where
- * its longer side would pass BAKE_MAX pixels — fewer pixels a tile, on whole
- * pixels; a bake like that is drawn scaled.
+ * The grid `box` is baked on for a frame on `grid`: that grid, or — where it
+ * would be too large to bake (`bakeable`) — the most whole pixels a tile that
+ * are not; a bake like that is drawn scaled.
  */
 export function bakeGrid(box: TileBox, grid: PixelGrid): PixelGrid {
-  const most = BAKE_MAX / Math.max(box.w, box.h);
-  return grid.scale <= most ? grid : { scale: Math.floor(most), ox: 0, oy: 0 };
+  const fits = (scale: number): boolean => bakeable(box.w * scale, box.h * scale);
+  if (fits(grid.scale)) {
+    return grid;
+  }
+  let scale = Math.floor(Math.min(grid.scale, BAKE_SIDE / Math.max(box.w, box.h)));
+  while (scale > 1 && !fits(scale)) {
+    scale -= 1;
+  }
+  return { scale, ox: 0, oy: 0 };
 }
 
 /**
@@ -131,7 +153,7 @@ export function bake(
  * channel of a pixel is the sum of the parts' as whole numbers — laying the
  * sum adds onto a picture exactly what laying the parts one by one did, where
  * no channel passes full. Null where `parts` is empty, or where the box round
- * them passes BAKE_MAX pixels on a side.
+ * them would be too large to bake (`bakeable`).
  */
 export function addBaked(parts: readonly Baked[], into: HTMLCanvasElement): Baked | null {
   const first = parts[0];
@@ -142,7 +164,7 @@ export function addBaked(parts: readonly Baked[], into: HTMLCanvasElement): Bake
   const top = Math.min(...parts.map((p) => p.top));
   const width = Math.max(...parts.map((p) => p.left + p.canvas.width)) - left;
   const height = Math.max(...parts.map((p) => p.top + p.canvas.height)) - top;
-  if (Math.max(width, height) > BAKE_MAX) {
+  if (!bakeable(width, height)) {
     return null;
   }
   if (into.width !== width || into.height !== height) {

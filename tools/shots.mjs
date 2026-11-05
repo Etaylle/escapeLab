@@ -488,19 +488,19 @@ const LUMA_TOLERANCE = 0.1;
  * for seeds 1…50 and replaying the steps below that depend on it, in a room:
  *
  * - Blackout 5: Anna starts in the Archiv by the sign (3,3; sign.png, once she
- *   has skipped the opening), Ben at the Flur's west end (1,8); the book lies at
- *   (6,1), the Klemmbrett at (8,9) by the lever, the locker at (13,1), the
- *   cabinet at (12,11). With the power on, Anna's step into the Archiv brings
- *   the book into sight while Ben watches the opening on (cold-open.png). Nobody
- *   starts behind a door: both walk up to the lever in the middle of the Flur
- *   (lever.png). Then Ben reads the book (reading), holds the plate for Anna
- *   on her way to console A of the Notstrom-Kasten, works console B and asks
- *   for the notes (console-*, hint-*). The map that grew to 27×17 kept three
- *   spawns in this order — Archiv, the Flur's west end, its east end (21,8) —
- *   and as many spots for every source, so seeds draw as before. Anna and Ben
- *   by seed: 1 Flur west and Archiv, 3 Flur east and Archiv, 5 Archiv and
- *   Flur west, 7 Flur west and Flur east, 8 Archiv and Flur east, 9 Flur east
- *   and Flur west.
+ *   has skipped the opening), Ben at the Flur's west end (1,12); the book lies
+ *   at (8,1), the Klemmbrett at (11,12) west of the lever, the locker at (16,2),
+ *   the cabinet at (11,15). With the power on, Anna's step into the Archiv
+ *   lights it round her while Ben watches the opening on (cold-open.png).
+ *   Nobody starts behind a door: both walk up to the lever in the middle of
+ *   the Flur (lever.png). Then Ben reads the book (reading), holds the plate
+ *   for Anna on her way to console A of the Notstrom-Kasten, works console B
+ *   and asks for the notes (console-*, hint-*). The map grew twice — to 27×17,
+ *   then to 36×22 — and kept three spawns in this order — Archiv, the Flur's
+ *   west end, its east end (29,12) — and as many spots for every source, so
+ *   seeds draw as before. Anna and Ben by seed: 1 Flur west and Archiv, 3 Flur
+ *   east and Archiv, 5 Archiv and Flur west, 7 Flur west and Flur east, 8
+ *   Archiv and Flur east, 9 Flur east and Flur west.
  * - Systemcheck 1: the usual, Ben by the first station and the sign works it,
  *   Anna by the locker reads it.
  */
@@ -509,6 +509,13 @@ const SEEDS = new Map([
   ['systemcheck', 1],
 ]);
 const SEED = seedFor(process.env.SHOTS_SEED, SEEDS.get(MISSION.toLowerCase()));
+/**
+ * Blackout as its mission file has it: its drones' beats, its emergencies' schedule, and every
+ * place its walks and captures go to — read from here, never carried as tiles of their own.
+ */
+const BLACKOUT = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../missions/blackout.json', import.meta.url)), 'utf8'),
+);
 /**
  * The Systemcheck's wiring box (Kabelprüfung) as its pinned seed draws it:
  * the wires' colours from the top, and the one the printed list for three
@@ -1290,6 +1297,40 @@ function tileOf(seen) {
   const at = whereIs(seen);
   return at === null ? null : { x: Math.floor(at.x), y: Math.floor(at.y) };
 }
+
+/**
+ * Each floor tile's room on `map` ({ tiles, labels, doors }), by key: the floor no door cuts off,
+ * shared out to the label nearest by walking — the first of two as near — as the clients dress
+ * the rooms (client world/dress.ts) and core's tests count them.
+ */
+function roomsOf(map) {
+  const doors = new Set(map.doors.map((door) => `${door.x},${door.y}`));
+  const rooms = new Map();
+  const queue = [];
+  const claim = (x, y, room) => {
+    const key = `${x},${y}`;
+    if (map.tiles[y]?.[x] === '.' && !doors.has(key) && !rooms.has(key)) {
+      rooms.set(key, room);
+      queue.push({ x, y, room });
+    }
+  };
+  map.labels.forEach((label) => claim(label.x, label.y, label.text));
+  for (let i = 0; i < queue.length; i++) {
+    const { x, y, room } = queue[i];
+    for (const [dx, dy] of NEIGHBOURS) {
+      claim(x + dx, y + dy, room);
+    }
+  }
+  return rooms;
+}
+
+/** A tile's four neighbours, as steps: south, north, east, west. */
+const NEIGHBOURS = [
+  [0, 1],
+  [0, -1],
+  [1, 0],
+  [-1, 0],
+];
 
 /**
  * How long each page's avatar has walked in the run, ms with its keys down,
@@ -3016,11 +3057,11 @@ async function checkPullTag(host, players) {
 // caption once, its chime at most once in 1.5 s. The lever's line: how far off each page found
 // the main switch, and that its caption came, with the chime or without. Then Ben walks into the
 // Archiv the lever lit, and at each stop the rule says which names must show and which may:
-// discover-enter.png  two steps in, standing: the names under the Archiv's things in Ben's window
-//   — none for certain (nothing within 2 tiles), at most the sign 2.2 tiles off should his lamp
-//   rest on it — or the run fails
+// discover-enter.png  two steps in from the Archiv's opening, standing: the names under its
+//   things in Ben's window — none for certain (nothing within 2 tiles), at most what came within
+//   3 of his lamp on the way, should it rest there — or the run fails
 // discover-later.png  by the shelves at the sign: the sign, 1 tile off, and nothing else — the
-//   book and the fuse lie 3.6 and 4.5 tiles off — or the run fails
+//   book and the fuse lie 5.4 and 7.2 tiles off — or the run fails
 // The audio line: the discovery chimes each page sounded since the start, besides the captions
 // that came without one, and Ben's chimes in the Archiv — at most three there, or the run fails.
 
@@ -3028,16 +3069,51 @@ async function checkPullTag(host, players) {
 const LAMP_REACH = 3;
 /** Within this many tiles a thing in sight is found outright (core discovery.ts FIND_REACH). */
 const FIND_REACH = 2;
-/** Blackout's Archiv for Ben's walk: its floor, its door, two steps in, the shelves by the sign. */
-const ARCHIV = {
-  floor: { left: 1, top: 1, right: 7, bottom: 5 },
-  door: { x: 4, y: 6 },
-  inside: [
-    { x: 4, y: 5 },
-    { x: 4, y: 4 },
-  ],
-  shelves: { x: 3, y: 3 },
-};
+/**
+ * Blackout's Archiv for Ben's walk, read from its mission (`archivOf`): its floor's bounds, its
+ * opening, two steps in from it, and the shelves by the sign.
+ */
+const ARCHIV = archivOf(BLACKOUT.map);
+
+/**
+ * The Archiv of `map`, by the floor its label claims (`roomsOf`): the bounds of that floor; its
+ * opening to the Flur, the first floor tile beside it in reading order that is not its own; the
+ * two tiles straight in from there; and the tile beside the Laborkennung, east of it where that
+ * is free, among the shelves. Null on a map without one.
+ */
+function archivOf(map) {
+  const floor = [...roomsOf(map)]
+    .filter(([, room]) => room === 'ARCHIV')
+    .map(([key]) => key.split(',').map(Number));
+  const sign = map.edgeworkSign;
+  if (floor.length === 0 || sign === undefined) {
+    return null;
+  }
+  const xs = floor.map(([x]) => x);
+  const ys = floor.map(([, y]) => y);
+  const inside = new Set(floor.map(([x, y]) => `${x},${y}`));
+  const open = (x, y) => map.tiles[y]?.[x] === '.' && !inside.has(`${x},${y}`);
+  const [door, [dx, dy]] = floor
+    .flatMap(([x, y]) => NEIGHBOURS.map(([sx, sy]) => [{ x: x + sx, y: y + sy }, [-sx, -sy]]))
+    .filter(([tile]) => open(tile.x, tile.y))
+    .sort(([a], [b]) => a.y - b.y || a.x - b.x)[0];
+  const solid = furniture(map);
+  const free = ({ x, y }) => inside.has(`${x},${y}`) && !solid.has(`${x},${y}`);
+  const shelves = NEIGHBOURS.map(([sx, sy]) => ({ x: sign.x + sx, y: sign.y + sy }))
+    .sort((a, b) => b.x - a.x)
+    .find(free);
+  return {
+    floor: {
+      left: Math.min(...xs),
+      top: Math.min(...ys),
+      right: Math.max(...xs),
+      bottom: Math.max(...ys),
+    },
+    door,
+    inside: [1, 2].map((n) => ({ x: door.x + n * dx, y: door.y + n * dy })),
+    shelves,
+  };
+}
 /** A name comes up over 300 ms (client labels.ts): a shot waits this long after a step, ms. */
 const NAMES_UP_MS = 600;
 
@@ -3147,7 +3223,7 @@ const namesSaid = (names) =>
 async function captureDiscovery(walker, other) {
   const map = walker.seen.view.map;
   const archiv = map.labels.some((label) => label.text === 'ARCHIV');
-  if (!archiv || map.tiles[ARCHIV.door.y]?.[ARCHIV.door.x] !== '.') {
+  if (!archiv || ARCHIV === null || map.tiles[ARCHIV.door.y]?.[ARCHIV.door.x] !== '.') {
     skip('discover-*.png', 'this map has no Archiv to walk into');
     return;
   }
@@ -6253,11 +6329,6 @@ const ART_LIGHTS_SEC = 10;
 /** How long before the lights are due the opening's shot comes to rest on a spawn (client). */
 const SHOT_HOLD_MS = 3000;
 
-/** Blackout as its mission file has it: its drones' beats and its emergencies' schedule. */
-const BLACKOUT = JSON.parse(
-  readFileSync(fileURLToPath(new URL('../missions/blackout.json', import.meta.url)), 'utf8'),
-);
-
 /**
  * Blackout as the art tour plays it: ten seconds of power before the lights
  * fail (an intro with no announcement), for two, starting in the Archiv and in
@@ -6273,15 +6344,18 @@ function artMission() {
     listOrder: 99,
     players: { min: 2, max: 2 },
     intro: { lightsSec: ART_LIGHTS_SEC },
-    map: {
-      ...blackout.map,
-      spawns: [
-        { x: 3, y: 3 },
-        { x: 3, y: 12 },
-      ],
-    },
+    map: { ...blackout.map, spawns: [ART_STARTS.archive, ART_STARTS.machine] },
   };
 }
+
+/**
+ * Where the art tour's two start, from Blackout's map: on the Archiv's spawn, and on the
+ * Maschinenraum's name — the tile its label stands on.
+ */
+const ART_STARTS = (() => {
+  const machine = BLACKOUT.map.labels.find((label) => label.kind === 'machine');
+  return { archive: BLACKOUT.map.spawns[0], machine: { x: machine.x, y: machine.y } };
+})();
 
 /** A page for the art tour in a context of its own, its errors logged under `name`. */
 async function artPage(name, size = ART_SIZE) {
@@ -6337,8 +6411,8 @@ async function artCaptures({ host, guest, watcher }) {
     throw new Error('the art tour’s mission did not open with the power on');
   }
   const crew = [host, guest];
-  const archive = startedAt(crew, 3, 3);
-  const machine = startedAt(crew, 3, 12);
+  const archive = startedAt(crew, ART_STARTS.archive.x, ART_STARTS.archive.y);
+  const machine = startedAt(crew, ART_STARTS.machine.x, ART_STARTS.machine.y);
   if (archive === undefined || machine === undefined) {
     throw new Error('the art tour’s starts are not the Archiv’s and the Maschinenraum’s');
   }
@@ -6372,12 +6446,13 @@ async function artCaptures({ host, guest, watcher }) {
 }
 
 /**
- * standby-dark.png: the player in the Maschinenraum walks to its east end, towards the door
- * to the Labor, so that the generators sleep behind them out of their lamp's reach — only
- * their standby lamps and the wall screen glowing in the dark (client render/standby.ts).
+ * standby-dark.png: the player in the Maschinenraum walks to its east end, up to the door to
+ * the Labor, so that the generators sleep behind them out of their lamp's reach — only their
+ * standby lamps and the wall screen glowing in the dark (client render/standby.ts).
  */
 async function captureStandby(machine) {
-  if (!(await walkNear(machine.page, machine.seen, { x: 7, y: 13 }))) {
+  const door = BLACKOUT.map.doors.find((d) => d.id === 'labortuer');
+  if (!(await walkNear(machine.page, machine.seen, { x: door.x - 1, y: door.y }))) {
     fail('standby-dark.png: the walk to the Maschinenraum’s east end found no way');
     return;
   }
@@ -7319,31 +7394,60 @@ async function clearOfEmergencies(player, seconds) {
 }
 
 /**
- * Where the crew stands to work Blackout's stations from the Signalkette on,
- * by station: within reach of each console or source, on a haven — a tile no
- * drone ever looks at (patrol.mjs) — where the room has one. A station hides
- * whoever works it or reads its rules only once its panel is open (server
- * drones.ts): before that, and once it is solved, a spot in the open is in
- * the drones' eye.
+ * The drones a spot to work `player`'s station at hand from has to keep clear of, as
+ * patrol.mjs takes them: those awake now and those its solve wakes — solved, a station hides
+ * nobody, and its crew still stands there a moment — at Blackout's own reach and pace.
  */
-const BLACKOUT_SPOTS = {
-  /** east of console A of the Signalkette, out of the Flur drone's sight as it wakes */
-  signalA: { x: 20, y: 7 },
-  /** above console B, in the Maschinenraum */
-  signalB: { x: 7, y: 14 },
-  /** below the terminal, a haven */
-  terminal: { x: 9, y: 4 },
-  /** above the rack, at the edge of the cone the Flur drone casts up the room */
-  rack: { x: 17, y: 2 },
-  /** west of the locker, a haven */
-  locker: { x: 12, y: 1 },
-  /** beside the radio panel, off the Labor drone's line */
-  radio: { x: 10, y: 15 },
-  /** east of the cabinet behind the pillar, a haven */
-  cabinet: { x: 13, y: 11 },
-  /** at the reactor, across from the fuse slot, a haven */
-  reactor: { x: 25, y: 14 },
-};
+function patrolsAround(player) {
+  const index = player.seen.view.currentPuzzleIndex;
+  return BLACKOUT.map.drones
+    .filter((drone) => drone.activeAfterSolved <= index + 1)
+    .map((drone) => ({
+      id: drone.id,
+      beat: { waypoints: drone.waypoints, speed: drone.speed ?? 1.5 },
+      range: drone.range ?? 4.5,
+      halfAngleDeg: drone.halfAngleDeg ?? 30,
+    }));
+}
+
+/**
+ * Where `player` stands to work or read at `target` — a station's console, the place the plan
+ * lays a source — on the map as its page shows it: a free tile beside it, or the tile itself,
+ * where the server counts it there; of those, one no drone ever looks at (`patrolsAround`,
+ * patrol.mjs `havens`) where the room has one — a station hides whoever works it only once its
+ * panel is open — then one beside the target rather than on it, then the nearest to `player`.
+ * Never a camera plate: it would hold a drone still. Throws where no tile is free.
+ */
+function workSpot(player, target) {
+  const map = mapOf(player);
+  const solid = furniture(map);
+  const plates = cameraPlates(map);
+  const free = ({ x, y }) =>
+    map.tiles[y]?.[x] === '.' && !solid.has(`${x},${y}`) && !plates.has(`${x},${y}`);
+  const safe = havensOn(patrolsAround(player), { tiles: map.tiles, shut: shutOn(map) });
+  const here = tileOf(player.seen) ?? target;
+  const rank = (tile) => [
+    safe.has(`${tile.x},${tile.y}`) ? 0 : 1,
+    tile.x === target.x && tile.y === target.y ? 1 : 0,
+    Math.abs(tile.x - here.x) + Math.abs(tile.y - here.y),
+  ];
+  const order = (a, b) => {
+    const [first, second] = [rank(a), rank(b)];
+    const i = first.findIndex((value, k) => value !== second[k]);
+    return i < 0 ? 0 : first[i] - second[i];
+  };
+  const [spot] = [...NEIGHBOURS, [0, 0]]
+    .map(([dx, dy]) => ({ x: target.x + dx, y: target.y + dy }))
+    .filter(free)
+    .sort(order);
+  if (spot === undefined) {
+    throw new Error(`no free tile to stand on by ${target.x},${target.y}`);
+  }
+  return spot;
+}
+
+/** Where `player` stands at the armed station's console `side` ('a', 'b', or null for one). */
+const atConsole = (player, side) => workSpot(player, armedAt(player, side));
 
 /**
  * Blackout's source of `kind` and where the pinned seed lays it: the crew
@@ -7481,17 +7585,17 @@ async function finishNotstrom(box, meter) {
 }
 
 /**
- * Both walk to their console of the Signalkette — the guest east of console
- * A, where the Flur drone does not look as it wakes, the host above console
- * B in the Maschinenraum — open their panels and work it as the plan pins
- * it (`solveSignal`).
+ * Both walk to their console of the Signalkette — the guest beside console A
+ * at the Flur's east end, where the Flur drone does not look as it wakes, the
+ * host beside console B in the Maschinenraum (`atConsole`) — open their panels
+ * and work it as the plan pins it (`solveSignal`).
  */
 async function playSignalkette(host, guest) {
   const title = armedAt(host, 'a').title;
-  if (!(await standOn(guest, BLACKOUT_SPOTS.signalA))) {
+  if (!(await standOn(guest, atConsole(guest, 'a')))) {
     throw new Error(`${guest.name} found no way to console A of "${title}"`);
   }
-  if (!(await standOn(host, BLACKOUT_SPOTS.signalB))) {
+  if (!(await standOn(host, atConsole(host, 'b')))) {
     throw new Error(`${host.name} found no way to console B of "${title}"`);
   }
   await openPanel(guest);
@@ -7538,13 +7642,13 @@ async function readLocker(reader, locker) {
  */
 async function playServerraum(host, guest) {
   const locker = pinnedSource('locker');
-  await sneakTo(host, BLACKOUT_SPOTS.terminal);
+  await sneakTo(host, atConsole(host, 'a'));
   await captureRackLeds(host);
-  await sneakTo(guest, BLACKOUT_SPOTS.locker);
+  await sneakTo(guest, workSpot(guest, locker));
   await foundWherePinned(guest, locker);
   await readLocker(guest, locker);
   await clearOfEmergencies(host, 55);
-  await sneakTo(guest, BLACKOUT_SPOTS.rack, 3);
+  await sneakTo(guest, atConsole(guest, 'b'), 3);
   const crew = { terminal: host, rack: guest };
   const role = (player) => player.seen.view.puzzle?.role ?? null;
   await pastEmergencies(async () => {
@@ -7685,7 +7789,7 @@ async function captureMorseBook(reader) {
 /**
  * The radio panel in the Labor on the pinned seed: the guest, left at the
  * rack in the open, takes the key there round to the cabinet past the
- * patrols and unlocks it from the haven behind the pillar, reads it at the
+ * patrols and unlocks it from a haven beside it, reads it at the
  * large text size (book-morse-1.15.png), while the host waits by the
  * terminal, where no drone looks either; then the host walks to the panel,
  * switches it on — from then on the panel hides them both — and tunes and
@@ -7704,13 +7808,13 @@ async function playFrequenz(host, guest) {
   await sneakTo(guest, { x: Math.floor(key.x), y: Math.floor(key.y) }, 2.5);
   const you = guest.seen.view.you.id;
   await handle(guest, 'the key', () => guest.seen.view.map.items.some((i) => i.carriedBy === you));
-  await sneakTo(guest, BLACKOUT_SPOTS.cabinet, 2.5);
   const cabinet = pinnedSource('cabinet');
+  await sneakTo(guest, workSpot(guest, cabinet), 2.5);
   await foundWherePinned(guest, cabinet);
   await handle(guest, 'the cabinet', () =>
     guest.seen.view.map.manuals.some((m) => m.id === cabinet.id && m.opened));
   await captureMorseBook(guest);
-  await sneakTo(host, BLACKOUT_SPOTS.radio);
+  await sneakTo(host, atConsole(host, null));
   await clearOfEmergencies(host, 25);
   const index = host.seen.view.currentPuzzleIndex;
   await pastEmergencies(async () => {
@@ -7758,7 +7862,7 @@ const knownFuse = (player) =>
  */
 async function playReaktor(host, guest) {
   const pin = BLACKOUT_PLAN.ersatzsicherung;
-  await sneakTo(guest, BLACKOUT_SPOTS.reactor);
+  await sneakTo(guest, atConsole(guest, null));
   await sneakTo(host, pin.from);
   await until(() => knownFuse(host) !== undefined, 3000);
   const fuse = knownFuse(host);
@@ -8386,9 +8490,11 @@ async function captureMinimapGoal({ name, page, seen }) {
     skip('minimap-goal.png', probe === null ? `${name}'s minimap is off` : 'no goal on it now');
     return;
   }
+  // The pixel the dot's middle lies in: on a lab of 36 tiles a cell is 5 px, the dot's teal core
+  // under its dark rim not 2 px across, and the pixel half a step on already takes the rim's edge.
   const spots = probe.goal.map((dot) => ({
-    x: Math.round(probe.ox + dot.x * probe.cell),
-    y: Math.round(probe.oy + dot.y * probe.cell),
+    x: Math.floor(probe.ox + dot.x * probe.cell),
+    y: Math.floor(probe.oy + dot.y * probe.cell),
   }));
   const colors = await page.evaluate((at) => {
     const g = document.querySelector('.world-canvas')?.getContext('2d');
@@ -9009,8 +9115,43 @@ const DANGER_COVERS = '.intro-card, .briefing';
 const DANGER_SHOT_TILES = 3.5;
 
 /**
+ * Where the danger sense's player starts: by the Flurwache's beat, on the tile nearest to it
+ * that the drone never looks at (patrol.mjs `havens`, every door shut as the run starts) — so
+ * that it passes within DANGER_SHOT_TILES of a player it does not spot — and on nothing else of
+ * the map: no plate, door, console, part or source's place.
+ */
+const UNDER_THE_PATROL = (() => {
+  const { map } = BLACKOUT;
+  const drone = map.drones.find((d) => d.frozenByPlate !== undefined);
+  const beat = { waypoints: drone.waypoints, speed: drone.speed };
+  const shut = new Set(map.doors.map((door) => `${door.x},${door.y}`));
+  const watcher = { beat, range: drone.range, halfAngleDeg: drone.halfAngleDeg };
+  const safe = havens([watcher], { tiles: map.tiles, shut });
+  const middles = drone.waypoints.map(({ x, y }) => ({ x: x + 0.5, y: y + 0.5 }));
+  const offLeg = (p, a, b) => {
+    const [dx, dy] = [b.x - a.x, b.y - a.y];
+    const t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / Math.hypot(dx, dy) ** 2;
+    const along = Math.max(0, Math.min(1, Number.isFinite(t) ? t : 0));
+    return Math.hypot(p.x - a.x - along * dx, p.y - a.y - along * dy);
+  };
+  const legs = middles.map((a, i) => [a, middles[(i + 1) % middles.length]]);
+  const offBeat = ({ x, y }) =>
+    Math.min(...legs.map(([a, b]) => offLeg({ x: x + 0.5, y: y + 0.5 }, a, b)));
+  const spots = map.manuals.flatMap((m) => m.spots);
+  const things = [map.plates, map.doors, map.stations, map.items, spots].flat();
+  const taken = new Set(things.map(({ x, y }) => `${x},${y}`));
+  const solid = furniture(map);
+  return [...safe]
+    .filter((key) => !taken.has(key) && !solid.has(key))
+    .map((key) => key.split(',').map(Number))
+    .map(([x, y]) => ({ x, y }))
+    .sort((a, b) => offBeat(a) - offBeat(b))[0];
+})();
+
+/**
  * Blackout as the danger sense's capture plays it: no intro, so the lights are out from the
- * start; its drones up with them; for two, one starting at (21,8), under the Flur's patrol.
+ * start; its drones up with them; for two, one starting under the Flur's patrol
+ * (UNDER_THE_PATROL), the other on the Archiv's spawn.
  */
 function dangerMission() {
   const blackout = structuredClone(BLACKOUT);
@@ -9024,10 +9165,7 @@ function dangerMission() {
     players: { min: 2, max: 2 },
     map: {
       ...blackout.map,
-      spawns: [
-        { x: 21, y: 8 },
-        { x: 3, y: 3 },
-      ],
+      spawns: [UNDER_THE_PATROL, blackout.map.spawns[0]],
       drones: blackout.map.drones.map((drone) => ({ ...drone, activeAfterSolved: 0 })),
     },
   };
@@ -9089,9 +9227,10 @@ async function captureDangerSense() {
     await clickText(guest.page, 'Beitreten');
     await guest.page.locator('.lobby').waitFor({ timeout: 10_000 });
     await startRun(host, guest);
-    const under = startedAt([host, guest], 21, 8);
+    const { x, y } = UNDER_THE_PATROL;
+    const under = startedAt([host, guest], x, y);
     if (under === undefined) {
-      throw new Error('nobody of the danger sense’s crew started at (21,8)');
+      throw new Error(`nobody of the danger sense’s crew started at (${x},${y})`);
     }
     // The location card, and under it the briefing's count, stand over the world as the run
     // starts: the glow shows once both are gone.
@@ -9112,7 +9251,7 @@ async function captureDangerSense() {
       fail('danger-sense.png: the location card or the briefing stood over the world at the shot');
     }
     console.log(
-      `danger-sense.png   ${under.name} at 21,8: ${danger.drone} closing in, ` +
+      `danger-sense.png   ${under.name} at ${x},${y}: ${danger.drone} closing in, ` +
         `${danger.distance.toFixed(1)} tiles, ${danger.ticks} tick(s)`,
     );
   } catch (err) {
@@ -9687,7 +9826,10 @@ async function captureShadow({ name, page }) {
 /** rack-leds.png: Blackout's Serverraum round its terminal as `player` comes to it. */
 async function captureRackLeds({ name, page }) {
   await sleep(400);
-  if (await shootAround(page, 'rack-leds.png', { x: 11.5, y: 3.5 }, 2.3)) {
+  const isTerminal = (s) => s.puzzleId === 'subsysteme' && s.console === 'a';
+  const terminal = BLACKOUT.map.stations.find(isTerminal);
+  const round = { x: terminal.x + 2.5, y: terminal.y + 0.5 };
+  if (await shootAround(page, 'rack-leds.png', round, 2.3)) {
     console.log(`rack-leds.png      ${name} by the terminal: the racks' LEDs blinking round it`);
   }
 }
