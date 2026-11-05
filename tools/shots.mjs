@@ -37,7 +37,10 @@
  * intro-pan.png once the loudspeakers' first line stands subtitled between the
  * two black bars, the skip beside it, the camera running across the lab — the
  * host's frames over the shot sampled for information alone. The host skips
- * with Space and the guest's phone counts it (intro-skip.png, „(1/2)").
+ * with Space and the guest's phone counts it (intro-skip.png, „(1/2)"); the
+ * guest's phone, turned sideways as a large phone is (932×430), shows the shot
+ * between its two bars, the skip line and a subtitle whole in the window and
+ * nothing of the HUD (intro-phone-932.png), or the run fails.
  *
  * Cold open: while NORMALBETRIEB shows, the host's window grows to 1440×1000
  * and the host, free, steps into its room — its frames meanwhile the sample
@@ -79,7 +82,10 @@
  * With the game's screenshots the guest's phone held sideways
  * (game-phone-landscape.png) has to fold the objective bar and the crew strip
  * into one row of 44 px at most, the band of world below it 65 % of the
- * window's height at least, or the run fails.
+ * window's height at least, its right thumb's buttons two by two, see-through
+ * until touched, the controls 30 % of the band at most (pad-left.png) — and so
+ * on a large phone held sideways, 932×430 (game-phone-932.png) — or the run
+ * fails.
  *
  * The Systemcheck on its pinned seed is played to the end: after the
  * Signalprobe the guest holds the Kontrolle's plate beside the locker — the
@@ -117,7 +123,8 @@
  * Signalkette, the rack, the reactor and the relay console where an
  * emergency comes — is also shot with the phone held sideways
  * (device-phone-<station>.png): the device whole in the window, nothing of
- * it scrolling, every control in view and 44 px at least each way, or the
+ * it scrolling, every control in view and 44 px at least each way — the
+ * first of them on a large phone too (device-phone-932-<station>.png) — or the
  * run fails. From the Signalkette on the
  * drones are awake: every walk goes from haven to haven past them — the
  * tiles no drone ever looks at — as a crew times its run past a patrol:
@@ -547,6 +554,8 @@ const SIZES = [
   // A phone held sideways, as a run turns it. Only a touch window shows its layout (the query
   // asks for a coarse pointer), so the guest's phone is turned, not the host's window.
   { name: 'phone-landscape', width: 844, height: 390, hasTouch: true },
+  // A large phone held sideways, as today's largest are: the game, one device and the opening.
+  { name: 'phone-932', width: 932, height: 430, hasTouch: true },
 ];
 
 /** Avatar speed in tiles per second, as the client walks. */
@@ -2228,6 +2237,54 @@ async function captureIntroSkip(host, guest) {
   }
 }
 
+/** Whether `box`, a locator's bounding box, lies whole inside a window `size` big. */
+function insideWindow(box, size) {
+  return (
+    box !== null &&
+    box.x >= 0 &&
+    box.y >= 0 &&
+    box.x + box.width <= size.width + 0.5 &&
+    box.y + box.height <= size.height + 0.5
+  );
+}
+
+/**
+ * intro-phone-932.png: the opening's shot on the guest's phone, turned sideways as a large phone
+ * is (SIZES[4]) while the shot still plays there — the host has skipped, the guest not: its two
+ * bars, the skip line and a subtitle on now whole inside the window, nothing of the HUD. The run
+ * fails where it is not so. The phone goes back to how it was held.
+ */
+async function captureOpeningLarge(player) {
+  const { page, name } = player;
+  const held = page.viewportSize();
+  const size = SIZES[4];
+  await page.setViewportSize({ width: size.width, height: size.height });
+  await sleep(500);
+  const bars = await barsIn(page);
+  const skip = insideWindow(await page.locator('.intro-skip').boundingBox(), size);
+  const subtitle = page.locator('.intro-subtitle');
+  const said = (await subtitle.count()) === 0 || insideWindow(await subtitle.boundingBox(), size);
+  const hud = await hudOf(page);
+  await capture(page, `intro-${size.name}.png`);
+  await page.setViewportSize(held);
+  await sleep(300);
+  const checks = [
+    [bars !== 2, `${bars} bars`],
+    [!skip, 'the skip line cut off'],
+    [!said, 'the subtitle cut off'],
+    [!hudOut(hud), `the HUD showing (${hud.page})`],
+  ];
+  const wrong = checks.filter(([bad]) => bad).map(([, what]) => what);
+  const verdict = wrong.length === 0 ? 'the skip line and any subtitle in view, the HUD out' : '';
+  console.log(
+    `intro-${size.name}.png ${name} @ ${size.width}x${size.height}: ${bars} bars; ` +
+      (wrong.length === 0 ? verdict : `!! ${wrong.join(', ')}`),
+  );
+  if (wrong.length > 0) {
+    fail(`intro-${size.name}.png: ${wrong.join(', ')}`);
+  }
+}
+
 /**
  * Shoots `player`'s title as `name` once it has landed: what it said, the bars beside it and
  * how much of the HUD showed under it.
@@ -3782,6 +3839,7 @@ async function coldOpen(host, guest) {
   const opening = hearRadio(guest, 40_000);
   await captureIntroShot(host);
   await captureIntroSkip(host, guest);
+  await captureOpeningLarge(guest);
   const atSign = await signAtSpawn([host, guest]);
   await captureColdOpen(host);
   await captureIntroTitle(host, guest);
@@ -5740,6 +5798,29 @@ function padRules(seen) {
 }
 
 /**
+ * game-phone-932.png: the guest's phone held sideways as a large phone is (SIZES[4]): the HUD in
+ * its one row with the band of world below it (`rowRules`), the pad and the minimap (`padRules`)
+ * and the cluster, its share of the band included (`clusterRules`), as on the smaller phone, and
+ * nothing of the screen scrolling. The run fails where any of it is not so. Then the phone is
+ * held at `then`.
+ */
+async function captureLargePhone(page, then) {
+  const { name, width, height } = SIZES[4];
+  await page.setViewportSize({ width, height });
+  await sleep(700);
+  await capturePhoneGame(page, `game-${name}.png`, "Ben's large phone sideways");
+  await overflow(page, `game @ ${width}x${height}, Ben's large phone sideways`);
+  const pad = padRules(await page.evaluate(thumbsLayout));
+  const controls = clusterRules(await page.evaluate(controlsLayout));
+  console.log(`controls           Ben's large phone: ${pad.text}; ${controls.text}`);
+  const wrong = [...pad.wrong, ...controls.wrong];
+  if (wrong.length > 0) {
+    fail(`game-${name}.png: ${wrong.join(', ')}`);
+  }
+  await page.setViewportSize(then);
+}
+
+/**
  * pad-left.png: the guest's phone held sideways, the world under its thumbs —
  * the steering pad of eight ways round a still middle, 48 px a cell, in the
  * left half under the left thumb, and the minimap 56 px tall at least
@@ -5815,7 +5896,9 @@ function stationSlug(player) {
  * device-phone-<slug>.png: the device a phone has open — the guest's page, a touch screen —
  * with the phone held sideways: the device whole in the window, nothing of it scrolling, every
  * control in view and 44 px at least each way. The run fails where it is not so. Once a
- * station; a window without touch is left alone. The phone goes back to how it was held.
+ * station; a window without touch is left alone. The first device the phone opens is looked at
+ * on a large phone held sideways as well (device-phone-932-<slug>.png). The phone goes back to
+ * how it was held.
  */
 async function captureDevicePhone(player, slug) {
   const { page } = player;
@@ -5825,24 +5908,34 @@ async function captureDevicePhone(player, slug) {
   }
   phoneDevices.add(slug);
   const held = page.viewportSize();
-  const { width, height } = SIZES[3];
-  await page.setViewportSize({ width, height });
-  await sleep(500);
-  const seen = await page.evaluate(deviceReach);
-  await capture(page, `device-phone-${slug}.png`);
+  const sizes = phoneDevices.size === 1 ? [SIZES[3], SIZES[4]] : [SIZES[3]];
+  for (const size of sizes) {
+    await deviceOnPhone(player, slug, size);
+  }
   if (held !== null) {
     await page.setViewportSize(held);
     await sleep(300);
   }
-  const name = `device-phone-${slug}.png`.padEnd(18);
+}
+
+/** The device `player`'s phone has open at `size` (`captureDevicePhone`), shot and checked. */
+async function deviceOnPhone(player, slug, size) {
+  const { page } = player;
+  await page.setViewportSize({ width: size.width, height: size.height });
+  await sleep(500);
+  const seen = await page.evaluate(deviceReach);
+  const shot = size === SIZES[3] ? `device-phone-${slug}.png` : `device-${size.name}-${slug}.png`;
+  await capture(page, shot);
+  const name = shot.padEnd(18);
   if (seen === null) {
-    fail(`device-phone-${slug}: no device open on ${player.name}'s phone`);
+    fail(`${shot}: no device open on ${player.name}'s phone`);
     console.log(`${name} !! ${player.name}'s phone has no device open`);
     return;
   }
   console.log(
-    `${name} ${player.name}'s phone sideways: ${seen.controls} controls, scrolls ` +
-      `${seen.scroll}px, ${seen.small.length} under 44 px, ${seen.cut.length} cut off` +
+    `${name} ${player.name}'s phone sideways @ ${size.width}x${size.height}: ` +
+      `${seen.controls} controls, scrolls ${seen.scroll}px, ${seen.small.length} under 44 px, ` +
+      `${seen.cut.length} cut off` +
       [...seen.small, ...seen.cut].map((what) => `\n                   !! ${what}`).join(''),
   );
   const wrong = [
@@ -5852,7 +5945,7 @@ async function captureDevicePhone(player, slug) {
     seen.cut.length > 0 && `${seen.cut.join(', ')} cut off`,
   ];
   if (wrong.some(Boolean)) {
-    fail(`device-phone-${slug}: ${wrong.filter(Boolean).join('; ')}`);
+    fail(`${shot}: ${wrong.filter(Boolean).join('; ')}`);
   }
 }
 
@@ -9678,7 +9771,7 @@ async function run() {
   await capturePadLeft(guest);
   steady.push({ name: 'Ben sideways', page: guest, start: await layoutOf(guest), turn: turned });
   await captureCamera(anna, ben);
-  await guest.setViewportSize(SIZES[2]);
+  await captureLargePhone(guest, SIZES[2]);
   await sleep(400);
 
   // info panel and spectator view at laptop size
