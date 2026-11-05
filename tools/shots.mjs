@@ -7808,6 +7808,20 @@ async function runForTheHatch(host, guest) {
 }
 
 /**
+ * How much of the clock the scripted crew has to leave at least, as a share of the mission's
+ * limit at „Normal": a win that leaves less says the limit is to be weighed anew (N-xxl).
+ */
+const CLOCK_LEFT_AT_LEAST = 0.4;
+
+/** „381.3 s left on the clock, 42 % of 900 s" — and „!!" where the share falls under the floor. */
+function clockLeft(leftMs, limitSec) {
+  const share = leftMs / 1000 / limitSec;
+  const under = share < CLOCK_LEFT_AT_LEAST ? ` !! under ${CLOCK_LEFT_AT_LEAST * 100} %` : '';
+  const percent = Math.round(share * 100);
+  return `${seconds(leftMs)} left on the clock, ${percent} % of ${limitSec} s${under}`;
+}
+
+/**
  * Blackout from the end of the station step to the won card, on its pinned
  * seed: the Notstrom-Kasten finished, the Signalkette, the Serverraum, the
  * radio panel, the spare fuse and the reactor — each instance checked
@@ -7840,7 +7854,7 @@ async function playBlackoutToTheEnd(host, guest, watcher) {
   const { lights, finishedAt, deadlineAt, penaltySeq } = host.seen.view;
   console.log(
     `blackout           won ${seconds(finishedAt - lights.outAt)} after the lights went out, ` +
-      `${seconds(deadlineAt - finishedAt)} left on the clock, ${penaltySeq} alarm(s), ` +
+      `${clockLeft(deadlineAt - finishedAt, BLACKOUT.timeLimitSec)}, ${penaltySeq} alarm(s), ` +
       `${sightings.count} of them drones; ${sneaking.walks} walks past the drones, ` +
       `${seconds(sneaking.waitedMs)} waited for a gap, ${sneaking.ranAnyway} run without one; ` +
       `${running.runs} runs, ${running.outside} outside the pace foretold ` +
