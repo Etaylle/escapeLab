@@ -6,8 +6,9 @@ import { readdirSync, readFileSync } from 'node:fs';
  * their rules under the media that hold there, matched by tag and class against static
  * markup (descendants only), the winner by specificity and then by order; a value read
  * through its custom properties, calc(), min(), max() and clamp() into px, container units
- * against the container's size where the sheets set it. What it does not read — states such
- * as :hover, attributes, siblings, pseudo-elements, container queries — it leaves out.
+ * against the container's size where the sheets set it, a box's sides from its shorthand or
+ * its longhands, whichever wins each. What it does not read — states such as :hover,
+ * attributes, siblings, pseudo-elements, container queries — it leaves out.
  */
 
 const SRC = new URL('../src/', import.meta.url);
@@ -297,6 +298,33 @@ export class Sheets {
     return lengthOf(won.value, this.reading(node, screen, this.fontSize(node, screen)));
   }
 
+  /**
+   * The px of the four sides of the box `property` (margin, padding) declares on `node`, each
+   * by whatever wins it: the shorthand's one to four values, the axis' pair — `padding-inline`
+   * — or the side's own — `margin-right`. NaN for a side nothing readable declares.
+   */
+  sides(node: Styled, property: 'margin' | 'padding', screen: Screen): Sides {
+    const reading = this.reading(node, screen, this.fontSize(node, screen));
+    const side = (name: keyof Sides): number => {
+      const start = name === 'top' || name === 'left';
+      const own = `${property}-${name}`;
+      const pair = `${property}-${name === 'top' || name === 'bottom' ? 'block' : 'inline'}`;
+      const won = this.declared(node, own, screen, [pair, property]);
+      if (won === undefined) {
+        return NaN;
+      }
+      const values = splitTop(won.value, ' ');
+      let value = won.value;
+      if (won.property === pair) {
+        value = (start ? values[0] : values[values.length - 1]) ?? '';
+      } else if (won.property === property) {
+        value = shorthandSide(values, name);
+      }
+      return lengthOf(value, reading);
+    };
+    return { top: side('top'), right: side('right'), bottom: side('bottom'), left: side('left') };
+  }
+
   /** `node`'s font size in px: its own, `font: inherit` or none taking its parent's. */
   fontSize(node: Styled, screen: Screen): number {
     const parent = node.parent === null ? 16 : this.fontSize(node.parent, screen);
@@ -348,6 +376,20 @@ export interface Won {
   property: string;
   value: string;
   rank: number;
+}
+
+/** The four sides of a box, px. */
+export interface Sides {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+/** What a box shorthand's one to four `values` give `side`, as CSS repeats them. */
+function shorthandSide(values: string[], side: keyof Sides): string {
+  const [top = '', right = top, bottom = top, left = right] = values;
+  return { top, right, bottom, left }[side];
 }
 
 /** The type a `container-type` or a `container` shorthand („name / type") sets; none: normal. */

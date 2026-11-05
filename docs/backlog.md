@@ -197,10 +197,15 @@ die Entscheidung.
   Schicht links daneben, wo Platz ist. Vorher 4,6 px (844×390) und 5,6 px als Doppelseite
   (932×430), jetzt 14 px; Harness: `book-phone-landscape.png`.
 
-### P-2 Buch auf dem Handy hochkant mit Notizblock — Status: bereit · Größe: S
+### P-2 Buch auf dem Handy hochkant mit Notizblock — Status: im PR (N-bookup) · Größe: S
 - Hochkant (420×760) mit geöffneter Notizblock-Schublade fällt der Buchtext auf 5,7 px (wie vor
   P-1). Dieselbe Regel wie quer: eine Seite in Grundschrift ≥ 14 px, die im Bogen scrollt,
   Umbrüche gleich; Capture `book-phone-notepad.png`.
+- Umgesetzt: Hochkant bis 560 px Breite gilt die Regel von quer, Schublade zu oder offen. Bis
+  480 px Breite gibt der Bogen Papier statt Schrift her: die Spalte bleibt 25,2 em, der Bundsteg
+  0,7 em, der Außenrand 2,7 em (das „Notieren" passt auch bei „Groß"), die Daumenregister treten
+  zurück. Bei 420×760 vorher 12,3 px (Schublade zu) und 5,7 px (offen), jetzt 14 px; 1440×820,
+  1280×720 und 844×390 unverändert.
 
 ### N-6 Pacing und Stationsfolge — Status: wartet (Daten) · Größe: ?
 - Erst nach N-4 und dem zweiten Playtest messen (`runs.jsonl`): Ziel, dass eine Erstspieler-

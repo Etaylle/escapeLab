@@ -1183,21 +1183,23 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   text-align: center;
 }
 
-/* ── a phone held sideways ──────────────────────────────────────────────── */
+/* ── a phone, held sideways or upright ──────────────────────────────────── */
 
 /*
  * Under 500 px of height a sheet of 30 × 42 em would stand some 200 px tall
- * and set its text at about 5 px. There a page keeps its 30 em across at the
- * body's own size — `--type-body`, 14 px, times the text size as everywhere —
- * and takes the height the frame leaves it; its text column scrolls inside
- * the sheet, between the running head and the foot line. The column is the
- * 25.2 em pages.ts paginates for, so the pages break where they break in any
- * window that shows one page at a time, and a spread is never shown here
- * (Reading.tsx SPREAD_QUERY). The frame's head stands over the sheet, the turn
- * and the way to put it down under it; where the frame is wide enough for a
- * column beside the sheet, all three stand there, as at a device.
+ * and set its text at about 5 px; held upright, 560 px across or less, a
+ * phone's frame sets it at 12 px — 420 px across — and at 6 px over the
+ * notepad's drawer. There a page keeps its 30 em across at the body's own
+ * size — `--type-body`, 14 px, times the text size as everywhere — and takes
+ * the height the frame leaves it; its text column scrolls inside the sheet,
+ * between the running head and the foot line. The column is the 25.2 em
+ * pages.ts paginates for, so the pages break where they break in any window
+ * that shows one page at a time, and a spread is never shown here (Reading.tsx
+ * SPREAD_QUERY). The frame's head stands over the sheet, the turn and the way
+ * to put it down under it; where the frame is wide enough for a column beside
+ * the sheet, all three stand there, as at a device.
  */
-@media (max-height: 500px) {
+@media (max-height: 500px), (max-width: 560px) {
   .puzzle-modal.reading-book,
   .puzzle-modal.reading-clipboard {
     container: reading / inline-size;
@@ -1457,6 +1459,88 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
 
     .reading-modal .put-down-tab {
       min-width: 0;
+    }
+  }
+}
+
+/* ── a phone held upright ───────────────────────────────────────────────── */
+
+/*
+ * 480 px across or less a sheet of the body's 30 em and its tabs, 32.8 em, is
+ * wider than the frame, which would set it in a smaller em: 12 px on a phone
+ * 420 px across. There the page keeps its column of 25.2 em at the body's size
+ * and gives up paper instead — 0.7 em at the gutter and 2.7 outside, where a
+ * block's „Notieren" still stands clear of the text at the large text size —
+ * 28.6 em in all; the stack's edge keeps 0.4 em beside it, a clipboard's board
+ * 0.3 each side, and the frame gives up its 4 px at the sides. The thumb tabs
+ * stand back: the cover's contents, the turn and a swipe reach every station.
+ * A phone 420 px across holds the sheet at the body's 14 px, the notepad's
+ * drawer up or not; a narrower one sets it in a smaller em.
+ */
+@media (max-width: 480px) {
+  .puzzle-modal.reading-book .panel,
+  .puzzle-modal.reading-clipboard .panel {
+    padding-inline: 0;
+  }
+
+  /* The body's em again, where the rule above would take a smaller one (33.1 em). */
+  .book-leaves {
+    margin-right: 0.4em;
+    margin-left: 0;
+    font-size: 1em;
+  }
+
+  .book-clip .book-leaves,
+  .book-clip.book-noted .book-leaves {
+    margin-right: 0.3em;
+    margin-left: 0.3em;
+  }
+
+  .book-clip .book-leaves::before,
+  .book-clip.book-noted .book-leaves::before {
+    right: -0.3em;
+    left: -0.3em;
+  }
+
+  .book-tabs {
+    display: none;
+  }
+
+  .page {
+    width: 28.6em;
+  }
+
+  .page-in {
+    --sheet-em: calc(100cqw / 28.6);
+    padding: calc(2.4 * var(--sheet-em)) calc(2.7 * var(--sheet-em)) calc(2.6 * var(--sheet-em))
+      calc(0.7 * var(--sheet-em));
+  }
+
+  .page-head,
+  .page-foot {
+    left: calc(0.7 * var(--sheet-em));
+    right: calc(2.7 * var(--sheet-em));
+  }
+
+  .page-ribbon {
+    left: calc(0.7 * var(--sheet-em));
+  }
+
+  .page-text {
+    margin-right: calc(-2.7 * var(--sheet-em));
+    padding-right: calc(2.7 * var(--sheet-em));
+  }
+
+  /* A frame narrower than the sheet with the stack's edge, 29 em, or the board, 29.2 em. */
+  @container (max-width: 29em) {
+    .book-leaves {
+      font-size: calc(100cqw / 29);
+    }
+  }
+
+  @container (max-width: 29.2em) {
+    .book-clip .book-leaves {
+      font-size: calc(100cqw / 29.2);
     }
   }
 }

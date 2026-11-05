@@ -497,7 +497,11 @@ beside the notepad, and scrolls the rest. Where 33.1 em of the body do not fit a
 the sheet takes a smaller em: 11.8 px beside the notepad on a 667 × 375 phone. The walkthrough
 reads the cabinet's pages so on the guest's phone, every page turned through
 (book-phone-landscape.png), and the clipboard beside the notepad
-(reading-notepad-landscape.png).
+(reading-notepad-landscape.png). A phone held upright, 560 px across or less, reads its pages
+the same way, the notepad's drawer down or up, and 480 px across or less the sheet gives up paper
+rather than its em — 0.7 em at the gutter, 2.7 outside, its thumb tabs standing back — so that a
+420 × 760 phone sets the body at 14 px where it set 12.3, and 5.7 over the drawer
+(book-phone-notepad.png).
 
 ## Cost
 
