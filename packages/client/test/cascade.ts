@@ -5,8 +5,9 @@ import { readdirSync, readFileSync } from 'node:fs';
  * is sized at on a screen, without a browser: the sheets in the order the bundle puts them,
  * their rules under the media that hold there, matched by tag and class against static
  * markup (descendants only), the winner by specificity and then by order; a value read
- * through its custom properties, calc(), min(), max() and clamp() into px. What it does not
- * read — states such as :hover, attributes, siblings, pseudo-elements — it leaves out.
+ * through its custom properties, calc(), min(), max() and clamp() into px, container units
+ * against the container's size where the sheets set it. What it does not read — states such
+ * as :hover, attributes, siblings, pseudo-elements, container queries — it leaves out.
  */
 
 const SRC = new URL('../src/', import.meta.url);
@@ -318,7 +319,27 @@ export class Sheets {
   }
 
   private reading(node: Styled, screen: Screen, em: number): Reading {
-    return { screen, em, custom: (name) => this.custom(node, name, screen) };
+    return {
+      screen,
+      em,
+      custom: (name) => this.custom(node, name, screen),
+      container: (axis) => this.containerSize(node, axis, screen),
+    };
+  }
+
+  /**
+   * The px along `axis` of the container `node`'s container units are read against: its
+   * nearest ancestor whose container type sizes that axis, as its sheets size it — NaN where
+   * the layout does — or, with none round it, the screen.
+   */
+  private containerSize(node: Styled, axis: 'width' | 'height', screen: Screen): number {
+    for (let at = node.parent; at !== null; at = at.parent) {
+      const type = containerType(this.declared(at, 'container-type', screen, ['container']));
+      if (type === 'size' || (type === 'inline-size' && axis === 'width')) {
+        return this.length(at, axis, screen);
+      }
+    }
+    return axis === 'width' ? screen.width : screen.height;
   }
 }
 
@@ -329,6 +350,18 @@ export interface Won {
   rank: number;
 }
 
+/** The type a `container-type` or a `container` shorthand („name / type") sets; none: normal. */
+function containerType(won: Won | undefined): string {
+  if (won === undefined) {
+    return 'normal';
+  }
+  if (won.property === 'container-type') {
+    return won.value;
+  }
+  const [, type = 'normal'] = splitTop(won.value, '/');
+  return type;
+}
+
 /** The size in a `font` shorthand: the word before its `/ line-height`, or its last but one. */
 function fontShorthandSize(value: string): string {
   const [size = ''] = splitTop(value, '/');
@@ -336,11 +369,16 @@ function fontShorthandSize(value: string): string {
   return words[words.length - 1] ?? '';
 }
 
-/** What a value is read against: the screen, the em, the element's custom properties. */
+/**
+ * What a value is read against: the screen, the em, the element's custom properties and the
+ * size of the container its container units (cqw, cqh) measure — the screen's where none is
+ * given.
+ */
 export interface Reading {
   screen: Screen;
   em: number;
   custom: (name: string) => string | undefined;
+  container?: (axis: 'width' | 'height') => number;
 }
 
 /** A number and whether it is a length (px) or a plain number. */
@@ -349,7 +387,7 @@ interface Quantity {
   px: boolean;
 }
 
-const NUMBER = String.raw`(-?\d*\.?\d+)(px|vh|vw|em|rem|%)?`;
+const NUMBER = String.raw`(-?\d*\.?\d+)(px|vh|vw|em|rem|cqw|cqh|%)?`;
 const FUNCTION = String.raw`(calc|min|max|clamp|var)\(`;
 const TOKEN = new RegExp(String.raw`\s*(?:${NUMBER}|${FUNCTION}|(--[\w-]+)|([-+*/(),]))`, 'y');
 
@@ -469,6 +507,11 @@ class Parser {
     }
     const n = Number(number);
     const { screen, em } = this.reading;
+    if (unit === 'cqw' || unit === 'cqh') {
+      const axis = unit === 'cqw' ? 'width' : 'height';
+      const size = this.reading.container?.(axis) ?? screen[axis];
+      return { n: (n * size) / 100, px: true };
+    }
     const per: Record<string, Quantity> = {
       '': { n, px: false },
       px: { n, px: true },

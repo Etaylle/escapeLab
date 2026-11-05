@@ -468,12 +468,36 @@ readability package's m5 and v-relay probes, copied to `scratchpad/phone/m5/`), 
 Blackout's six devices and the relay console stands whole, nothing scrolling, no control under
 44 px, as on main; the Netzplan's names read 10.7 px there, drawn a little under their 11 units.
 
-A source's pages open one at a time below 900 px of width, and beside them the notepad stands
-as a strip down the right edge, the window's height (putdown.css); the walkthrough turns the
-guest's phone sideways at an open source to hold it so (reading-notepad-landscape.png). The
-book's sheet keeps its 30 × 42 em, though, and under the frame's head, the page's turn and the
-tabs it gets 194 px of height at 844 × 390: its text stands 4.6 px, 5.6 on a spread at
-932 × 430, as on main (Open).
+A source's pages lie open one at a time in a window 500 px tall or less, under a mouse too
+(Reading.tsx `SPREAD_QUERY`), and a page keeps its 30 em across at the body's own size —
+`--type-body`, 14 px; 12.6 and 16.1 at „Klein" and „Groß" — and takes the height the frame
+leaves it (book.css). Its text scrolls inside the sheet between the running head and the foot
+line, the outer margin with it, so a block's „Notieren" stays beside its block. The column is
+the 25.2 em pages.ts paginates for: the pages break as in any window that shows one page at a
+time — page 3 is page 3, the bookmark and the thumb tabs point where they did — and a leaf
+turns over as before. Where the frame is 700 px wide, the source's name, the Laborkennung, the
+turn and the way to put the book down stand in a column of 13 rem beside the sheet, which then
+takes the window's height; in a narrower frame they stand over and under it. The last shift's
+slip lies beside the sheet on its left where the frame has room, over the page's head where it
+has not — a clipboard's Post-it under the sheet — and stands back in a frame under 20 em tall.
+With the notepad up the frame is the window's left two thirds (putdown.css): the frame's head
+stands back there, the pad taking the Laborkennung over, and so does a slip with no room
+beside the sheet. Measured on Blackout's Archiv book (seed 5) at the normal text size, main
+against N-phone (`scratchpad/phone/bookphone.mjs`), with the notepad up in brackets:
+
+| | 844 × 390 before | after | 932 × 430 before | after |
+| --- | --- | --- | --- | --- |
+| Pages in view | 1 | 1 | 2 | 1 |
+| A sheet, CSS px | 138 × 194 | 420 × 362 (420 × 308) | 167 × 234 | 420 × 402 (420 × 348) |
+| Body | 4.6 px | 14 | 5.6 | 14 |
+| Text column in view | the page's 171 px | 292 (238) px | the page's 206 | 332 (278) |
+
+A page's column runs to 37 em, 518 px at 14 px: the phone shows 15 lines of it at a time, 12
+beside the notepad, and scrolls the rest. Where 33.1 em of the body do not fit across the frame,
+the sheet takes a smaller em: 11.8 px beside the notepad on a 667 × 375 phone. The walkthrough
+reads the cabinet's pages so on the guest's phone, every page turned through
+(book-phone-landscape.png), and the clipboard beside the notepad
+(reading-notepad-landscape.png).
 
 ## Cost
 
@@ -628,13 +652,6 @@ density 2 16.8 ms.
 ## Open
 
 What the graphics and gameplay packages left for later, one line each:
-
-- **The book on a phone held sideways** (N-phone): it opens one page at a time, but its sheet
-  of 30 × 42 em gets 194 px of height at 844 × 390 under the frame's head, the page's turn and
-  the tabs, and its text stands 4.6 px — on main as on the branch (A phone held sideways). A
-  readable page there needs about 550 px of height at 13 px, more than the window has: shorter
-  pages paginated for a short window, or a page that scrolls in its own box with the frame's
-  head, the turn and the tabs beside it, as a device's column stands — a decision of its own.
 
 - **The light layer cannot be measured on a software renderer** (L-graphics): under
   `SHOTS_WEBGL=1` SwiftShader takes 83 to 133 ms a frame, as it did before the package, so CI

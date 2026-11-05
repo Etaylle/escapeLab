@@ -1183,6 +1183,284 @@ height='500' filter='url(%23v)' opacity='0.22'/%3E%3C/svg%3E");
   text-align: center;
 }
 
+/* ── a phone held sideways ──────────────────────────────────────────────── */
+
+/*
+ * Under 500 px of height a sheet of 30 × 42 em would stand some 200 px tall
+ * and set its text at about 5 px. There a page keeps its 30 em across at the
+ * body's own size — `--type-body`, 14 px, times the text size as everywhere —
+ * and takes the height the frame leaves it; its text column scrolls inside
+ * the sheet, between the running head and the foot line. The column is the
+ * 25.2 em pages.ts paginates for, so the pages break where they break in any
+ * window that shows one page at a time, and a spread is never shown here
+ * (Reading.tsx SPREAD_QUERY). The frame's head stands over the sheet, the turn
+ * and the way to put it down under it; where the frame is wide enough for a
+ * column beside the sheet, all three stand there, as at a device.
+ */
+@media (max-height: 500px) {
+  .puzzle-modal.reading-book,
+  .puzzle-modal.reading-clipboard {
+    container: reading / inline-size;
+    padding: 4px;
+  }
+
+  .puzzle-modal.reading-book .panel,
+  .puzzle-modal.reading-clipboard .panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'head head head head'
+      'pages pages pages pages'
+      '. nav foot .';
+    gap: 6px 12px;
+    padding: 4px;
+  }
+
+  .reading-modal .panel > .modal-head {
+    grid-area: head;
+  }
+
+  /* The book's own box gives way: its sheet and its turn take their places in the frame. */
+  .reading-modal .book {
+    display: contents;
+  }
+
+  .reading-modal .book-pages {
+    grid-area: pages;
+    padding-block: 6px;
+  }
+
+  .reading-modal .book-nav {
+    grid-area: nav;
+  }
+
+  .reading-modal .book-where {
+    min-width: 0;
+  }
+
+  .reading-modal .put-down {
+    grid-area: foot;
+  }
+
+  /* The sheet: 30 em of the body across, as tall as the frame leaves it. */
+  .book-pages {
+    font-size: var(--type-body);
+  }
+
+  .book-leaves {
+    align-self: stretch;
+    font-size: 1em;
+  }
+
+  .page {
+    width: 30em;
+    height: 100%;
+    aspect-ratio: auto;
+  }
+
+  /*
+   * The column scrolls with the outer margin beside it, its 25.2 em of text kept: a block's
+   * „Notieren" mark there (putdown.css) stays level with its block as the text scrolls. The
+   * cover keeps its frame.
+   */
+  .page-text {
+    position: relative;
+    margin-right: calc(-3 * var(--sheet-em));
+    padding-right: calc(3 * var(--sheet-em));
+  }
+
+  .page-cover .page-text {
+    margin-right: 0;
+    padding-right: 0;
+  }
+
+  /*
+   * The last shift's slip lies beside the sheet on its left where the frame has room (below);
+   * where it has none, over the page's head, a little shorter than in a taller window, and a
+   * clipboard's Post-it under the sheet, the board reaching down for it…
+   */
+  .book-single.book-noted:not(.book-clip) .book-leaves {
+    margin-top: 6.5em;
+  }
+
+  .book-single:not(.book-clip) .note-slip {
+    max-height: 6em;
+    padding: 0.5em 0.8em 0.6em;
+  }
+
+  .book-clip .note-slip {
+    top: calc(100% + 0.6em);
+    right: 1.2em;
+    left: 1.2em;
+    width: auto;
+    max-height: 6em;
+    padding: 0.5em 0.8em 0.6em;
+    transform: rotate(0.8deg);
+  }
+
+  .book-clip.book-noted .book-leaves {
+    margin-bottom: 7em;
+    margin-left: 0.9em;
+  }
+
+  .book-clip.book-noted .book-leaves::before {
+    bottom: -7em;
+    left: -0.9em;
+  }
+
+  /*
+   * …and in a frame under 20 em tall it stands back, the sheet taking the height — as it does
+   * beside the notepad, which leaves the frame the window's left two thirds (putdown.css). The
+   * frame's head stands back there too: the pad takes the Laborkennung over.
+   */
+  @container (height < 20em) {
+    .book .note-slip {
+      display: none;
+    }
+
+    .book-single.book-noted:not(.book-clip) .book-leaves {
+      margin-top: 0;
+    }
+
+    .book-clip.book-noted .book-leaves {
+      margin-bottom: 1em;
+    }
+
+    .book-clip.book-noted .book-leaves::before {
+      bottom: -1em;
+    }
+  }
+
+  .game--noting .reading-book .panel > .modal-head,
+  .game--noting .reading-clipboard .panel > .modal-head,
+  .game--noting .book .note-slip {
+    display: none;
+  }
+
+  .game--noting .book-single.book-noted:not(.book-clip) .book-leaves {
+    margin-top: 0;
+  }
+
+  .game--noting .book-clip.book-noted .book-leaves {
+    margin-bottom: 1em;
+  }
+
+  .game--noting .book-clip.book-noted .book-leaves::before {
+    bottom: -1em;
+  }
+
+  /* Beside the sheet: a book's slip 10 em wide, 42.2 em in all… */
+  @container (min-width: 42.2em) {
+    .book-single.book-noted:not(.book-clip) .book-leaves {
+      margin-top: 0;
+      margin-left: 10em;
+    }
+
+    .book-single.book-noted:not(.book-clip) .note-slip {
+      display: flex;
+      top: 2.6em;
+      right: 100%;
+      bottom: auto;
+      left: auto;
+      width: 10em;
+      max-height: calc(100% - 3.6em);
+      margin-right: -0.4em;
+      padding: 0.9em 1em 1.2em;
+      transform: rotate(-2.5deg);
+      transform-origin: right top;
+    }
+  }
+
+  /* …a clipboard's Post-it 9 em, the board round both 43 em across. */
+  @container (min-width: 43em) {
+    .book-single.book-clip.book-noted .note-slip {
+      display: flex;
+      top: 2em;
+      right: calc(100% + 0.9em);
+      left: auto;
+      width: 9em;
+      max-height: calc(100% - 3em);
+      padding: 0.8em 1em 0.9em;
+      transform: rotate(-1.5deg);
+    }
+
+    .book-clip.book-noted .book-leaves {
+      margin-bottom: 1em;
+      margin-left: 10.8em;
+    }
+
+    .book-clip.book-noted .book-leaves::before {
+      bottom: -1em;
+      left: -10.8em;
+    }
+  }
+
+  /* A frame narrower than a sheet of 14 px to its em takes a smaller one. */
+  @container (max-width: 33.1em) {
+    .book-leaves {
+      font-size: calc(100cqw / 33.1);
+    }
+  }
+
+  /* A narrow frame, as beside the notepad on a small phone: tabs no wider than their words… */
+  @container reading (max-width: 560px) {
+    .reading-modal .put-down-tab {
+      min-width: 0;
+      padding-inline: 14px;
+    }
+  }
+
+  /* …and narrower still the turn without its words: the folio says which page lies open. */
+  @container reading (max-width: 450px) {
+    .reading-modal .book-where {
+      display: none;
+    }
+  }
+
+  /*
+   * A frame with room for a column beside the sheet, 13 rem: the head, the turn and the way
+   * to put it down stand in it, and the sheet takes the window's height.
+   */
+  @container reading (min-width: 700px) {
+    .puzzle-modal.reading-book .panel,
+    .puzzle-modal.reading-clipboard .panel {
+      grid-template-columns: minmax(0, 1fr) 13rem;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      grid-template-areas:
+        'pages head'
+        'pages nav'
+        'pages .'
+        'pages foot';
+      column-gap: 10px;
+    }
+
+    .reading-modal .book-nav {
+      flex-wrap: wrap;
+      gap: 4px 8px;
+    }
+
+    .reading-modal .book-where {
+      order: -1;
+      flex: 1 0 100%;
+    }
+
+    .reading-modal .book-nav button {
+      flex: 1;
+    }
+
+    .reading-modal .put-down-tabs {
+      flex: 1;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .reading-modal .put-down-tab {
+      min-width: 0;
+    }
+  }
+}
+
 /* ── the terminal: one station per screen ───────────────────────────────── */
 
 .terminal {

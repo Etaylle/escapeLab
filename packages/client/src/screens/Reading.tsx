@@ -41,8 +41,11 @@ export function verbOf(look: Look): PutDownVerb {
   return look === 'book' ? 'Zuklappen' : 'Weglegen';
 }
 
-/** Two pages side by side from this window width on. */
-const SPREAD_QUERY = '(min-width: 900px)';
+/**
+ * Two pages side by side from this window width on, in a window taller than a phone held
+ * sideways: there one page stands at the body's size and scrolls (styles/book.css).
+ */
+export const SPREAD_QUERY = '(min-width: 900px) and (min-height: 501px)';
 
 /** What of the map tells where a source lies. */
 type Whereabouts = Pick<MapView, 'tiles' | 'doors' | 'labels' | 'manuals'>;

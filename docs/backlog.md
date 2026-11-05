@@ -188,10 +188,14 @@ die Entscheidung.
   844×390 und 932×430 ganz, ohne Scrollen, jedes Bedienelement ≥ 44 px, wie auf main. Harness:
   `game-phone-932.png`, `device-phone-932-<Station>.png`, `intro-phone-932.png`,
   `reading-notepad-landscape.png`. Zahlen in `docs/art-bible.md` („A phone held sideways").
-- Offen: Das Buch steht quer auf einer Seite, aber in 4,6 px (der Bogen von 30 × 42 em bekommt
-  unter Kopf, Blättern und Laschen nur 194 px Höhe) — wie auf main. Lesbar wäre es erst mit
-  kürzeren Seiten oder einer Seite, die in ihrem Kasten scrollt; das braucht eine eigene
-  Entscheidung.
+- Das Buch quer: Bei 500 px Höhe oder weniger liegt es eine Seite auf einmal offen, nie als
+  Doppelseite; der Bogen behält 30 em Breite in der Grundschrift (14 px, die Textgröße darauf)
+  und nimmt die Höhe, die der Rahmen lässt; der Text scrollt im Bogen zwischen Kolumnentitel und
+  Fußzeile, der Außenrand mit ihm. Die Seitenumbrüche bleiben, Seitenzahlen und Lesezeichen
+  meinen dasselbe, das Blatt wendet sich wie bisher. Kopf, Laborkennung, Blättern und Zuklappen
+  stehen in einer Spalte neben dem Bogen, wo der Rahmen 700 px breit ist; der Zettel der letzten
+  Schicht links daneben, wo Platz ist. Vorher 4,6 px (844×390) und 5,6 px als Doppelseite
+  (932×430), jetzt 14 px; Harness: `book-phone-landscape.png`.
 
 ### N-6 Pacing und Stationsfolge — Status: wartet (Daten) · Größe: ?
 - Erst nach N-4 und dem zweiten Playtest messen (`runs.jsonl`): Ziel, dass eine Erstspieler-

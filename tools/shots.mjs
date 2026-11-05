@@ -116,7 +116,10 @@
  * Serverraum's table and moves (servers-manual.png from its locker,
  * servers-a.png and servers-b.png from its consoles, servers-solved.png),
  * the cabinet read at the large text size (book-morse-1.15.png: the
- * Morsetafel whole on its page, the Frequenztabelle facing it, no line cut),
+ * Morsetafel whole on its page, the Frequenztabelle facing it, no line cut)
+ * and then on the guest's phone held sideways (book-phone-landscape.png: one
+ * page at a time, the body 14 px at least, the text scrolling inside the
+ * sheet to its last line on every page and past its edge on none),
  * the radio panel's lamp and dial, the spare fuse carried from the Archiv to
  * the reactor and the reactor pressed together. Every device the guest's
  * phone opens on the way — the lever, the meter, console A of the
@@ -167,9 +170,10 @@
  * under a head naming the source („Klemmbrett · Legende"), and E has to put
  * the source down again, or the run fails. Before it is put down the guest
  * turns the phone sideways (reading-notepad-landscape.png): a book on its
- * pages one at a time, the frame not scrolling, no text past a page's foot,
- * the pad a strip beside it — or the run fails; the page's body size is
- * logged. The host, who noted the Signalkette's legend, then takes the
+ * pages one at a time, the body 14 px at least, the text scrolling inside the
+ * sheet to its last line and past its edge nowhere, the frame not scrolling,
+ * the pad a strip beside it — or the run fails. The host, who noted the
+ * Signalkette's legend, then takes the
  * Laborkennung over too: notepad-captured.png shows both in the pad's own
  * look, and notepad-captured-phone.png at the phone's size — the writing in
  * the hand shipped with the game, the legend's columns whole on their ruled
@@ -5229,28 +5233,77 @@ async function captureNoting(player, shot, glowShot, audience) {
   await putSourceDown(page, overlay, touch, shot, source.label);
 }
 
-/** The open source's sheet as a phone shows it: its pages, the frame's scroll, the text on it. */
+/**
+ * The least body a page sets on a phone held sideways at the normal text size: the body's own
+ * 14 px (styles/book.css, `--type-body`).
+ */
+const SIDEWAYS_BODY = 14;
+
+/**
+ * The open source's sheet as a phone held sideways shows it: its pages, whether as a spread, the
+ * frame's scroll, the body's size; how far a page's text scrolls inside its sheet, whether a
+ * scroll reaches its last line, and how far a line runs past the sheet's edge.
+ */
 function sheetOnPhone() {
   const modal = document.querySelector('.reading-modal');
   const pages = [...document.querySelectorAll('.reading-modal .book-leaves > .page')];
-  const texts = pages.flatMap((page) => [...page.querySelectorAll('.page-text')]);
+  const read = pages.flatMap((page) => {
+    const text = page.querySelector('.page-text');
+    if (text === null) {
+      return [];
+    }
+    const edge = page.getBoundingClientRect().right;
+    const lines = [...text.querySelectorAll('*')].map((el) => el.getBoundingClientRect().right);
+    const held = text.scrollTop;
+    text.scrollTop = text.scrollHeight;
+    const last = text.lastElementChild?.getBoundingClientRect().bottom ?? 0;
+    const reached = last <= text.getBoundingClientRect().bottom + 1;
+    text.scrollTop = held;
+    const past = Math.max(0, ...lines.map((right) => right - edge));
+    const wide = text.scrollWidth - text.clientWidth;
+    return [{ rises: text.scrollHeight - text.clientHeight, past: Math.max(past, wide), reached }];
+  });
   const body = document.querySelector('.reading-modal .page-in');
   return {
     pages: pages.length,
     spread: document.querySelector('.reading-modal .book-spread') !== null,
     scroll: modal === null ? 0 : modal.scrollHeight - modal.clientHeight,
-    over: Math.max(0, ...texts.map((text) => text.scrollHeight - text.clientHeight)),
     body: body === null ? null : parseFloat(globalThis.getComputedStyle(body).fontSize),
+    rises: Math.max(0, ...read.map((r) => r.rises)),
+    past: Math.round(Math.max(0, ...read.map((r) => r.past))),
+    reached: read.every((r) => r.reached),
   };
+}
+
+/** The log's words for a sheet as `sheetOnPhone` read it. */
+function sheetSaid(sheet) {
+  const body = sheet.body === null ? 'no page' : `its body ${sheet.body.toFixed(1)} px`;
+  const end = sheet.reached ? '' : ', !! not to its last line';
+  return (
+    `${sheet.pages} page(s), ${body}, its text scrolling ${sheet.rises} px inside the sheet` +
+    `${end}, ${sheet.past} px past its edge, the frame scrolling ${sheet.scroll} px`
+  );
+}
+
+/** What is wrong with a sheet as `sheetOnPhone` read it on a phone held sideways. */
+function sheetWrong(sheet) {
+  return [
+    sheet.spread && 'a book opens two pages on a phone',
+    !(sheet.body >= SIDEWAYS_BODY) && `its body stands ${sheet.body} px`,
+    sheet.scroll > 1 && `the frame scrolls ${sheet.scroll} px`,
+    sheet.past > 0 && `a line runs ${sheet.past} px past the sheet's edge`,
+    !sheet.reached && "a page's text does not scroll to its last line",
+  ].filter(Boolean);
 }
 
 /**
  * reading-notepad-landscape.png: the source `player` reads on a phone — `touch`, a touch screen;
  * a window with keys is left alone — the notepad up beside it, with the phone turned sideways:
- * a book on its pages one at a time, never a spread; the frame round it not scrolling, no page's
- * text running past its foot; and the pad a strip down the right edge, the window's height
- * (`notingSide`). The page's body size is logged. The run fails where any of it is not so. The
- * phone goes back to how it was held.
+ * a book on its pages one at a time, never a spread, the body at 14 px at least, its text
+ * scrolling inside the sheet to its last line and no line past the sheet's edge, the frame
+ * round it not scrolling; and the pad a strip down the right edge, the window's height
+ * (`notingSide`). The run fails where any of it is not so. The phone goes back to how it was
+ * held.
  */
 async function captureSheetSideways(player, touch) {
   if (!touch) {
@@ -5266,20 +5319,16 @@ async function captureSheetSideways(player, touch) {
   await capture(page, 'reading-notepad-landscape.png');
   await page.setViewportSize(held);
   await sleep(400);
-  const body = sheet.body === null ? 'no page' : `its body ${sheet.body.toFixed(1)} px`;
   console.log(
-    `reading-notepad-landscape.png ${name} @ ${width}x${height}: ${sheet.pages} page(s), ` +
-      `${body}, the frame scrolls ${sheet.scroll} px, text past a page's foot ${sheet.over} px; ` +
+    `reading-notepad-landscape.png ${name} @ ${width}x${height}: ${sheetSaid(sheet)}; ` +
       `the pad ${side.said}`,
   );
-  const wrong = [
-    sheet.spread && 'a book opens two pages on a phone',
-    sheet.scroll > 1 && `the frame scrolls ${sheet.scroll} px`,
-    sheet.over > 1 && `a page's text runs ${sheet.over} px past its foot`,
-    !side.ok && 'the pad is not a strip beside the page',
-  ];
-  if (wrong.some(Boolean)) {
-    fail(`reading-notepad-landscape.png: ${wrong.filter(Boolean).join(', ')}`);
+  const wrong = sheetWrong(sheet);
+  if (!side.ok) {
+    wrong.push('the pad is not a strip beside the page');
+  }
+  if (wrong.length > 0) {
+    fail(`reading-notepad-landscape.png: ${wrong.join(', ')}`);
   }
 }
 
@@ -8158,7 +8207,8 @@ function pagesCut() {
  * they lie open as a spread: the Morsetafel whole on its page — all 13 rows, over no page turn
  * — and the Frequenztabelle facing it, read together; no line runs past the sheet's edge and
  * no page past its foot. The run fails where the table breaks, the two lie apart or a page is
- * cut. The text size goes back to normal and the window to the phone after.
+ * cut. The text size goes back to normal, the cabinet is read once more on the phone held
+ * sideways (captureBookSideways), and the window goes back to the phone after.
  */
 async function captureMorseBook(reader) {
   const { page } = reader;
@@ -8194,7 +8244,73 @@ async function captureMorseBook(reader) {
   await page.keyboard.press('Escape');
   await overlay.waitFor({ state: 'hidden', timeout: 3000 });
   await chooseTextSize(page, 'Normal');
+  await captureBookSideways(reader);
   await page.setViewportSize({ width: SIZES[2].width, height: SIZES[2].height });
+}
+
+/** How long a turned leaf takes to lie still: Book.tsx LEAF_MS, 450 ms, and a margin. */
+const LEAF_TURN_MS = 600;
+
+/**
+ * Every page of the open book from its first to its last, turned over with the arrow keys, as
+ * `sheetOnPhone` reads it, with the words under the book that say where it lies open.
+ */
+async function bookThrough(page) {
+  const back = page.locator('.reading-modal .turn-back');
+  for (let i = 0; i < 16 && !(await back.isDisabled()); i++) {
+    await page.keyboard.press('ArrowLeft');
+    await sleep(LEAF_TURN_MS);
+  }
+  const next = page.locator('.reading-modal .turn-next');
+  const read = [];
+  for (let i = 0; i < 16; i++) {
+    const where = await textOf(page.locator('.reading-modal .book-where'));
+    read.push({ where, ...(await page.evaluate(sheetOnPhone)) });
+    if (await next.isDisabled()) {
+      break;
+    }
+    await page.keyboard.press('ArrowRight');
+    await sleep(LEAF_TURN_MS);
+  }
+  return read;
+}
+
+/**
+ * book-phone-landscape.png: the cabinet's pages on `reader`'s phone held sideways (844×390) at
+ * the normal text size, shot where the book opens. Every page from the first to the last lies
+ * open alone, its body at 14 px at least, its text scrolling inside the sheet to its last line
+ * — the Morsetafel's at least — no line past the sheet's edge, the frame not scrolling. The run
+ * fails where any of it is not so; the book is put down after.
+ */
+async function captureBookSideways(reader) {
+  const { page, name } = reader;
+  const { width, height } = SIZES[3];
+  await page.setViewportSize({ width, height });
+  const overlay = page.locator('.reading-modal');
+  if (!(await interactUntil(page, overlay))) {
+    throw new Error(`${name} stands at the cabinet, but no .reading-modal opened sideways`);
+  }
+  await sleep(500);
+  await capture(page, 'book-phone-landscape.png');
+  const opened = await page.evaluate(sheetOnPhone);
+  const pages = await bookThrough(page);
+  const scrolling = pages.filter((sheet) => sheet.rises > 0).map((sheet) => sheet.where);
+  console.log(
+    `book-phone-landscape.png ${name} at the AKTENSCHRANK @ ${width}x${height}: ` +
+      `${sheetSaid(opened)}; ${pages.length} page(s) turned through, the text scrolling ` +
+      `inside the sheet on ${scrolling.length} (${scrolling.join(', ')})`,
+  );
+  const wrong = pages.flatMap((sheet) =>
+    sheetWrong(sheet).map((what) => `${sheet.where}: ${what}`),
+  );
+  if (scrolling.length === 0) {
+    wrong.push('no page scrolls inside its sheet');
+  }
+  if (wrong.length > 0) {
+    fail(`book-phone-landscape.png: ${wrong.join(', ')}`);
+  }
+  await page.keyboard.press('Escape');
+  await overlay.waitFor({ state: 'hidden', timeout: 3000 });
 }
 
 /**
