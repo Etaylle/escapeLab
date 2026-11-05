@@ -19,14 +19,13 @@ interface Props {
   chatsRef: React.MutableRefObject<ChatLine[]>;
   /** a line is on the air in the banner over the world right now */
   onAir: boolean;
-  /** what the crew still has to bring, as the objective bar says it; null for nothing */
-  parts: string | null;
   notesOpen: boolean;
   onToggleNotes: () => void;
   onOpenInfo: () => void;
 }
 
-const STATUS_SAMPLE_MS = 300;
+/** How often the crew's tags are read again from their live positions, ms. */
+export const STATUS_SAMPLE_MS = 300;
 
 /**
  * What a crew member is doing, as presence tags. Where you stand is the
@@ -35,7 +34,7 @@ const STATUS_SAMPLE_MS = 300;
  * press waiting at the sync station is the station's view, which every
  * player gets wherever they stand: „zieht" calls a partner to the lever.
  */
-function tagsOf(
+export function tagsOf(
   view: PlayerView,
   player: { id: string; connected: boolean },
   positions: Record<string, PlayerPosition>,
@@ -115,23 +114,14 @@ function MicSwitch({ voice, touch }: { voice: Voice; touch: boolean }) {
   );
 }
 
-/**
- * The radio strip's line. Sideways on a phone, where the objective bar drops
- * what the crew still has to bring, it carries that in front; elsewhere that
- * stays hidden, and so does a line with nothing else in it (pwa.css).
- */
-function RadioStrip({ radio, parts }: { radio: Ticker | null; parts: string | null }) {
-  if (radio === null && parts === null) {
+/** The radio strip's line: its icon and its words; nothing while there is none. */
+function RadioStrip({ radio }: { radio: Ticker | null }) {
+  if (radio === null) {
     return null;
   }
   return (
-    <span className={radio === null ? 'hud-radio hud-radio--parts' : 'hud-radio'}>
-      {parts !== null && <span className="hud-parts">{parts}</span>}
-      {radio !== null && (
-        <>
-          <Icon name={radio.icon} /> {radio.text}
-        </>
-      )}
+    <span className="hud-radio">
+      <Icon name={radio.icon} /> {radio.text}
     </span>
   );
 }
@@ -140,13 +130,13 @@ function RadioStrip({ radio, parts }: { radio: Ticker | null; parts: string | nu
  * The permanent strip under the world. Deliberately thin: only the crew, the
  * edgework once you have read the sign, and the latest radio line, because
  * everything else either sits on the world itself or belongs in the info panel.
+ * A phone held sideways folds it into the objective bar's row instead (hudFold.ts).
  */
 export function MissionHud({
   view,
   positionsRef,
   chatsRef,
   onAir,
-  parts,
   notesOpen,
   onToggleNotes,
   onOpenInfo,
@@ -203,7 +193,7 @@ export function MissionHud({
 
       <div className="hud-right">
         {view.edgework !== null && <EdgeworkChip edgework={view.edgework} />}
-        <RadioStrip radio={radio} parts={parts} />
+        <RadioStrip radio={radio} />
         {talking !== null && <MicSwitch voice={talking} touch={keyless} />}
         <button className="hud-info hud-notes" aria-pressed={notesOpen} onClick={onToggleNotes}>
           <Icon name="pencil" /> {withKey('Notizen', notesKey, keyless)}

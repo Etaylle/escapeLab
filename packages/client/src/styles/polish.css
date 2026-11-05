@@ -1,8 +1,9 @@
 /* ══ polish: the Laborkennung on a narrow HUD strip, the run report's icons ══
  * EdgeworkChip.tsx in MissionHud.tsx, and End.tsx. The HUD strip's layouts
- * are ui.css's (one row from 820 px up, a grid under it) and pwa.css's (a
- * phone held sideways); this sheet only decides what of the chip shows in
- * them, and lets the strip give way before a button leaves the screen.
+ * are ui.css's (one row from 820 px up, a grid under it); a phone held
+ * sideways folds the strip into the objective bar's row (pwa.css). This sheet
+ * only decides what of the chip shows in the strip, and lets the strip give
+ * way before a button leaves the screen.
  */
 
 /* ── the Laborkennung on a narrow HUD strip ─────────────────────────────── */
@@ -13,18 +14,16 @@
 }
 
 /*
- * One row under 1180 px, and a phone held sideways, where the chip shares
- * the buttons' row: the whole chip would push the Info button off the
- * screen. There it shows the Laborkennung alone — lamps and cells are in its
- * tooltip, and in the frame of every station — and whatever has words to
- * spare gives way before a button does: the radio line cuts itself short,
- * then the crew scrolls, down to nothing if they must. The chip keeps its value
- * whole (ui.css: never squeezed in a row); in the sideways grid its column
- * gives way only once the crew's has none left. A portrait phone keeps the
- * whole chip in a row of its own.
+ * One row under 1180 px, where the chip shares the buttons' row: the whole
+ * chip would push the Info button off the screen. There it shows the
+ * Laborkennung alone — lamps and cells are in its tooltip, and in the frame of
+ * every station — and whatever has words to spare gives way before a button
+ * does: the radio line cuts itself short, then the crew scrolls, down to
+ * nothing if they must. The chip keeps its value whole (ui.css: never squeezed
+ * in a row). A portrait phone keeps the whole chip in a row of its own; a phone
+ * held sideways folds the strip into the objective bar's row (pwa.css).
  */
-@media (820px < width < 1180px),
-  (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+@media (820px < width < 1180px) {
   .hud .edgework-part {
     display: none;
   }

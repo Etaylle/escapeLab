@@ -844,7 +844,6 @@ describe('a press waiting at the sync station', () => {
           positionsRef={{ current: { run: null, players: { p1: on(11, 7), p2: on(1, 8) } } }}
           chatsRef={{ current: [] }}
           onAir={false}
-          parts={null}
           onOpenInfo={noop}
           notesOpen={false}
           onToggleNotes={noop}
@@ -877,7 +876,6 @@ describe('the crew strip', () => {
         }}
         chatsRef={{ current: [] }}
         onAir={false}
-        parts={null}
         onOpenInfo={noop}
         notesOpen={false}
         onToggleNotes={() => undefined}
@@ -904,7 +902,6 @@ describe('the crew strip', () => {
         positionsRef={{ current: { run: null, players: { p1: on(13, 6), p2: on(8, 6) } } }}
         chatsRef={{ current: [] }}
         onAir={false}
-        parts={null}
         onOpenInfo={noop}
         notesOpen={false}
         onToggleNotes={noop}

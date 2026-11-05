@@ -17,14 +17,15 @@ import {
  * The audit's five screens (docs/foundation-audit.md, section 2): the box of the world's canvas
  * as each window lays it out, inside its 1-px border, CSS pixels; the density the screen has;
  * how far the objective bar reaches there with a line on the air — 129.3 px at a laptop's size,
- * 68.5 on a phone held sideways, as measured in Blackout (insets.ts `bar`).
+ * 44 on a phone held sideways, whose bar and crew strip fold into one row a line adds nothing
+ * to (screens/hudFold.ts), as measured in Blackout (insets.ts `bar`).
  */
 const SCREENS = [
   { name: '1440×820 @1', css: { w: 1414, h: 669 }, ratio: 1, bar: 129.3, touch: false },
   { name: '1440×820 @2', css: { w: 1414, h: 669 }, ratio: 2, bar: 129.3, touch: false },
   { name: '1280×720 @1', css: { w: 1254, h: 569 }, ratio: 1, bar: 129.3, touch: false },
   { name: '1280×720 @2', css: { w: 1254, h: 569 }, ratio: 2, bar: 129.3, touch: false },
-  { name: 'phone 844×390 @3', css: { w: 826, h: 289 }, ratio: 3, bar: 68.5, touch: true },
+  { name: 'phone 844×390 @3', css: { w: 826, h: 345 }, ratio: 3, bar: 44, touch: true },
 ] as const;
 
 /** Blackout's lab as its mission draws it: its rows of tiles, '.' its floor. */
@@ -62,7 +63,7 @@ describe('tileCss — the camera’s frame in CSS pixels', () => {
       // Under 600 px the band below the bar decides: 9 tiles of it, 11.65 in all.
       '1280×720 @1': { down: 11.65, across: 25.67 },
       '1280×720 @2': { down: 11.65, across: 25.67 },
-      'phone 844×390 @3': { down: 9, across: 25.72 },
+      'phone 844×390 @3': { down: 9, across: 21.55 },
     };
     for (const screen of SCREENS) {
       const frame = framed(screen);
@@ -132,8 +133,8 @@ describe('the camera on Blackout’s lab, as each screen frames it', () => {
   });
 
   it('stands held at a side wall on at most 70 % of the lab’s floor, the bar at rest', () => {
-    // At rest the bar reaches 81 CSS px down on a laptop, 39 on the phone (insets.ts `bar`).
-    const rest = { true: 39, false: 81 } as const;
+    // At rest the bar reaches 81 CSS px down on a laptop, 44 on the phone (insets.ts `bar`).
+    const rest = { true: 44, false: 81 } as const;
     for (const screen of SCREENS) {
       const { scale, w, h, dpr } = framed(screen);
       const lens = { scale, w, h, top: rest[`${screen.touch}`] * dpr, lift: 0 };

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type {
   ClientMessage,
   DronePosition,
@@ -66,6 +66,8 @@ import {
 import type { ChatLine, MapPing } from '../world/render/frame.js';
 import { startRoom } from '../world/rooms.js';
 import { PuzzlePanel } from './PuzzlePanel.js';
+import { useHudRow } from './hudFold.js';
+import { RowCrew, RowTools } from './HudRow.js';
 import { Icon } from './Icon.js';
 import { MissionHud } from './MissionHud.js';
 import { InfoPanel } from './InfoPanel.js';
@@ -859,12 +861,78 @@ function spawnOf(map: MapView): Point {
   return { x: map.yourSpawn.x + 0.5, y: map.yourSpawn.y + 0.5 };
 }
 
+/** What the bar carries on the air: the line mission control speaks, or the sign's note. */
+function OnAir({ notice }: { notice: Notice }) {
+  if (notice.kind === 'sign') {
+    return (
+      <div className="toast" role="status">
+        ✓ Laborkennung notiert
+      </div>
+    );
+  }
+  return (
+    <div
+      key={`${notice.event.at}-${notice.event.label}`}
+      className="radio-banner"
+      role="status"
+      style={notice.upMs === undefined ? undefined : { animationDuration: `${notice.upMs}ms` }}
+    >
+      <span className="radio-banner-from">
+        <Icon name={airIcon(notice.event)} /> {bannerFrom(notice.event)}
+      </span>{' '}
+      — {notice.event.label}
+    </div>
+  );
+}
+
+/**
+ * The clock's column of the bar: while the lab still has its power NORMALBETRIEB, then the
+ * mission's clock; the alarm marks with either.
+ */
+function StageClock({
+  view,
+  map,
+  coldOpen,
+}: {
+  view: PlayerView;
+  map: MapView;
+  coldOpen: ColdOpen;
+}) {
+  return (
+    <div className="stage-clock">
+      {!coldOpen.dark ? (
+        <PowerStatus />
+      ) : (
+        view.deadlineAt !== null && (
+          <Countdown
+            mission={{ deadlineAt: view.deadlineAt, pausedAt: view.pausedAt }}
+            flashUntil={coldOpen.flashUntil}
+            escaping={escaping(map)}
+          />
+        )
+      )}
+      <AlarmMarks alarms={view.alarms} />
+    </div>
+  );
+}
+
+/**
+ * What the crew strip folds into the bar's row on a phone held sideways (hudFold.ts,
+ * HudRow.tsx): the crew and the Laborkennung before the clock, the buttons after it.
+ */
+export interface RowParts {
+  crew: ReactNode;
+  tools: ReactNode;
+}
+
 /**
  * The objective bar over the world: the goal and the clock — while the lab
  * still has its power, its name and NORMALBETRIEB instead — then whatever
  * is on the air, the emergency and the alarm. While a device is open
  * (`deviceOpen`) the alarm shows in its head instead: here it would lie half
- * under it.
+ * under it. On a phone held sideways (`row`) it is one row with the crew strip folded in
+ * (hudFold.ts), and a line on the air stands in the goal's place; the emergency and the alarm
+ * stand under the row while they last.
  */
 export function StageTop({
   view,
@@ -874,6 +942,7 @@ export function StageTop({
   alarmVisible,
   deviceOpen = false,
   self = spawnOf(map),
+  row = null,
 }: {
   view: PlayerView;
   map: MapView;
@@ -883,46 +952,32 @@ export function StageTop({
   deviceOpen?: boolean;
   /** where this player stands, for what lies in their sight; their spawn by default */
   self?: Point;
+  /** the crew strip's parts, where it folds into the bar's row; none by default */
+  row?: RowParts | null;
 }) {
   const relay = map.sabotage?.relay;
   const alarm = alarmVisible && !deviceOpen ? alarmNotice(view.events, view.alarms) : null;
+  const goal = coldOpen.dark ? (
+    <StageGoal view={view} map={map} goal={goalOf(view, map, self)} />
+  ) : (
+    <PowerGoal view={view} map={map} />
+  );
+  const clock = <StageClock view={view} map={map} coldOpen={coldOpen} />;
+  const onAir = notice === null ? null : <OnAir notice={notice} />;
   return (
     <div className="stage-top">
-      {coldOpen.dark ? (
-        <StageGoal view={view} map={map} goal={goalOf(view, map, self)} />
+      {row === null ? (
+        <>
+          {goal}
+          {clock}
+          {onAir}
+        </>
       ) : (
-        <PowerGoal view={view} map={map} />
-      )}
-      <div className="stage-clock">
-        {!coldOpen.dark ? (
-          <PowerStatus />
-        ) : (
-          view.deadlineAt !== null && (
-            <Countdown
-              mission={{ deadlineAt: view.deadlineAt, pausedAt: view.pausedAt }}
-              flashUntil={coldOpen.flashUntil}
-              escaping={escaping(map)}
-            />
-          )
-        )}
-        <AlarmMarks alarms={view.alarms} />
-      </div>
-      {notice?.kind === 'line' && (
-        <div
-          key={`${notice.event.at}-${notice.event.label}`}
-          className="radio-banner"
-          role="status"
-          style={notice.upMs === undefined ? undefined : { animationDuration: `${notice.upMs}ms` }}
-        >
-          <span className="radio-banner-from">
-            <Icon name={airIcon(notice.event)} /> {bannerFrom(notice.event)}
-          </span>{' '}
-          — {notice.event.label}
-        </div>
-      )}
-      {notice?.kind === 'sign' && (
-        <div className="toast" role="status">
-          ✓ Laborkennung notiert
+        <div className="stage-row">
+          {onAir ?? goal}
+          {row.crew}
+          {clock}
+          {row.tools}
         </div>
       )}
       {relay === undefined && <SabotageAlert sabotage={map.sabotage} pausedAt={view.pausedAt} />}
@@ -1186,11 +1241,21 @@ function OverTheWorld({
  * The game's classes: while its end plays, the finale's; while the notepad stands beside
  * something over the world, `game--noting`, which sets it as a strip of its own
  * (styles/putdown.css); while the run's opening keeps the HUD out, `game--hud-held`
- * (styles/intro.css).
+ * (styles/intro.css); on a phone held sideways, the HUD folded into one row, `game--row`
+ * (hudFold.ts, styles/pwa.css).
  */
-export function gameClass(finale: Finale | null, noting: boolean, hudOut = false): string {
+export function gameClass(
+  finale: Finale | null,
+  noting: boolean,
+  hudOut = false,
+  row = false,
+): string {
   const ending = finale === null ? [] : ['game--finale', `game--${finale.ending.split(':')[0]}`];
-  const extra = [...(noting ? ['game--noting'] : []), ...(hudOut ? ['game--hud-held'] : [])];
+  const extra = [
+    ...(noting ? ['game--noting'] : []),
+    ...(hudOut ? ['game--hud-held'] : []),
+    ...(row ? ['game--row'] : []),
+  ];
   return ['game', ...ending, ...extra].join(' ');
 }
 
@@ -1250,6 +1315,41 @@ function RunWorld({
   );
 }
 
+/** What the crew strip's buttons open: the notepad and the info panel. */
+interface StripButtons {
+  notesOpen: boolean;
+  onToggleNotes: () => void;
+  onOpenInfo: () => void;
+}
+
+/**
+ * The crew strip as this window has it: under the world (`strip`), or on a phone held sideways
+ * folded into the bar's row (hudFold.ts) — its parts for StageTop (`row`), nothing under the
+ * world. `onAir` while a line is on the air over the world, which the strip then leaves to it.
+ */
+function useCrewStrip(
+  game: Props,
+  onAir: boolean,
+  buttons: StripButtons,
+): { row: RowParts | null; strip: ReactNode } {
+  const folded = useHudRow();
+  const { view, positionsRef, chatsRef } = game;
+  if (folded) {
+    const crew = <RowCrew view={view} positionsRef={positionsRef} />;
+    return { row: { crew, tools: <RowTools {...buttons} /> }, strip: null };
+  }
+  const strip = (
+    <MissionHud
+      view={view}
+      positionsRef={positionsRef}
+      chatsRef={chatsRef}
+      onAir={onAir}
+      {...buttons}
+    />
+  );
+  return { row: null, strip };
+}
+
 /** Whether the opening keeps the HUD out now: it fades, the tips and the sign's note wait. */
 function hudOut(intro: Intro): boolean {
   return intro.cue !== null && hudHeld(intro.cue, Date.now());
@@ -1265,7 +1365,7 @@ function hudOut(intro: Intro): boolean {
  * (PutDown.tsx).
  */
 export function GameScreen(props: Props) {
-  const { view, roomCode, positionsRef, chatsRef, send, refusal, finale } = props;
+  const { view, roomCode, positionsRef, send, refusal, finale } = props;
   const { alarmVisible } = useFeedback(view);
   const intro = useIntro(view, send);
   const cue = intro.cue;
@@ -1286,6 +1386,12 @@ export function GameScreen(props: Props) {
   useKeys([keys.notes], pad.toggle);
   useKeys(putDownKeys(overOf(open), keys), closeModal);
   useEscapeCloses(open, closeModal);
+  // Until the click of the cold open the strip keeps quiet: the opener has the banner.
+  const crewStrip = useCrewStrip(props, notice?.kind === 'line' || !coldOpen.dark, {
+    notesOpen: open.notes,
+    onToggleNotes: pad.toggle,
+    onOpenInfo: () => open.set({ info: true }),
+  });
   const map = view.map;
   if (map === null) {
     return <p className="muted">Lade Mission …</p>;
@@ -1294,8 +1400,9 @@ export function GameScreen(props: Props) {
   const live = finale === null;
   const over = station !== null || sheets.reading !== null || sheets.note !== null;
   const held = live && heldNow;
+  const row = crewStrip.row;
   return (
-    <div className={gameClass(finale, live && open.notes && over, held)}>
+    <div className={gameClass(finale, live && open.notes && over, held, row !== null)}>
       {live && <RunOverlays view={view} coldOpen={coldOpen} send={send} refusal={refusal} />}
       <div className="stage">
         <StageTop
@@ -1306,6 +1413,7 @@ export function GameScreen(props: Props) {
           alarmVisible={alarmVisible}
           deviceOpen={live && station !== null}
           self={self}
+          row={row}
         />
         <RunWorld
           game={props}
@@ -1340,17 +1448,7 @@ export function GameScreen(props: Props) {
           />
         </NotepadContext>
       )}
-      <MissionHud
-        view={view}
-        positionsRef={positionsRef}
-        chatsRef={chatsRef}
-        // Until the click of the cold open the strip keeps quiet: the opener comes with the banner.
-        onAir={notice?.kind === 'line' || !coldOpen.dark}
-        parts={coldOpen.dark ? goalOf(view, map, self).missing : null}
-        notesOpen={open.notes}
-        onToggleNotes={pad.toggle}
-        onOpenInfo={() => open.set({ info: true })}
-      />
+      {crewStrip.strip}
       {live && open.info && <InfoPanel view={view} onClose={() => open.set({ info: false })} />}
       {finale !== null && <FinaleVeil ending={finale.ending} since={finale.since} />}
     </div>

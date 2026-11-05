@@ -76,6 +76,10 @@
  * sideways and the HUD's Info button has to lie whole inside the window —
  * where the host read the sign, in the host's window at that size too — or
  * the run fails: the Laborkennung's chip may never push it off the screen.
+ * With the game's screenshots the guest's phone held sideways
+ * (game-phone-landscape.png) has to fold the objective bar and the crew strip
+ * into one row of 44 px at most, the band of world below it 65 % of the
+ * window's height at least, or the run fails.
  *
  * The Systemcheck on its pinned seed is played to the end: after the
  * Signalprobe the guest holds the Kontrolle's plate beside the locker — the
@@ -5331,6 +5335,11 @@ async function askForNotes(first, second) {
   }
 }
 
+/** The HUD's Info button: in the crew strip, or in the row a phone held sideways folds it into. */
+const INFO_BUTTON = '.hud-info:not(.hud-notes):not(.hud-mic)';
+/** The Laborkennung's chip in the HUD: in the crew strip, or in the row. */
+const CHIP = '.hud .edgework, .stage-row .edgework';
+
 /**
  * sign.png: a player has just read the Laborkennung — the note up, the chip
  * in the HUD. The note waits for the briefing to end and for the radio lines
@@ -5346,7 +5355,7 @@ async function captureSign(page, who) {
     );
   await sleep(400); // past its fade-in
   await capture(page, 'sign.png');
-  const chip = (await page.locator('.hud .edgework').count()) > 0;
+  const chip = (await page.locator(CHIP).count()) > 0;
   console.log(
     `sign.png           ${who}: note ${note ? 'up' : '!! missing'}, ` +
       `chip in the HUD ${chip ? 'shown' : '!! missing'}`,
@@ -5433,8 +5442,8 @@ async function infoInView(player, size, how) {
   const before = page.viewportSize();
   await page.setViewportSize({ width: size.width, height: size.height });
   await sleep(700);
-  const box = await page.locator('.hud button', { hasText: 'Info' }).boundingBox();
-  const chip = (await page.locator('.hud .edgework').count()) > 0;
+  const box = await page.locator(INFO_BUTTON).boundingBox();
+  const chip = (await page.locator(CHIP).count()) > 0;
   const inside =
     box !== null &&
     box.x >= 0 &&
@@ -5453,7 +5462,7 @@ async function infoInView(player, size, how) {
   await sleep(400);
 }
 
-/** What the phone held sideways shows under its thumbs, CSS px: the pad, the buttons, the bar. */
+/** What a phone held sideways shows under its thumbs, CSS px: the pad, the buttons, the map. */
 function thumbsLayout() {
   const rect = (selector) => {
     const box = document.querySelector(selector)?.getBoundingClientRect();
@@ -5467,9 +5476,6 @@ function thumbsLayout() {
   });
   return {
     mid: canvas === null ? 0 : canvas.getBoundingClientRect().x + canvas.clientWidth / 2,
-    height: canvas?.clientHeight ?? 0,
-    bar: document.querySelector('.stage-top')?.offsetHeight ?? 0,
-    line: document.querySelector('.stage-top .radio-banner, .stage-top .toast') !== null,
     pad: rect('.world-pad')?.toJSON() ?? null,
     thumb: rect('.world-thumb')?.toJSON() ?? null,
     cells,
@@ -5478,31 +5484,88 @@ function thumbsLayout() {
 }
 
 /**
+ * What a phone held sideways shows of its HUD, CSS px: the objective bar — folded into one row
+ * with the crew strip, or not — and the band of world below it, from the bar's foot to the
+ * canvas's, inside its 1-px border; the window's height and the canvas's.
+ */
+function hudLayout() {
+  const canvas = document.querySelector('.world-canvas');
+  const bar = document.querySelector('.stage-top');
+  const box = canvas.getBoundingClientRect();
+  const border = (box.height - canvas.clientHeight) / 2;
+  const below = Math.max(box.top + border, bar === null ? 0 : bar.getBoundingClientRect().bottom);
+  return {
+    window: globalThis.innerHeight,
+    height: canvas.clientHeight,
+    bar: bar === null ? 0 : bar.offsetHeight,
+    band: box.bottom - border - below,
+    row: document.querySelector('.stage-top .stage-row') !== null,
+    strip: document.querySelector('.hud') !== null,
+    line: document.querySelector('.stage-top .radio-banner, .stage-top .toast') !== null,
+  };
+}
+
+/** How much of the window's height the band of world below a phone's HUD row holds at least. */
+const PHONE_BAND = 0.65;
+/** How tall the HUD's one row on a phone held sideways stands at most, CSS px. */
+const PHONE_ROW_PX = 44;
+
+/**
+ * The HUD of a phone held sideways (`seen`, hudLayout): what is wrong with it — the objective bar
+ * and the crew strip not folded into one row of PHONE_ROW_PX at most, or the band of world below
+ * it short of PHONE_BAND of the window's height — and its line for the log.
+ */
+function rowRules(seen) {
+  const share = seen.band / seen.window;
+  const percent = (x) => `${(x * 100).toFixed(1)} %`;
+  const wrong = [
+    (!seen.row || seen.strip) && 'the HUD is not folded into one row',
+    seen.bar > PHONE_ROW_PX + 0.5 && `the HUD's row stands ${seen.bar} px`,
+    share < PHONE_BAND && `the band holds ${percent(share)} of the window`,
+  ];
+  const text =
+    `${seen.row ? 'one row' : '!! no row'} of ${seen.bar} px; the band ${Math.round(seen.band)} ` +
+    `of ${seen.window} px, ${percent(share)} of the window, ` +
+    `${percent(seen.band / seen.height)} of the canvas${seen.line ? ', a line on the air' : ''}`;
+  return { text, wrong: wrong.filter(Boolean) };
+}
+
+/**
+ * `shot`, the game on `who`'s phone held sideways as it is now: the objective bar and the crew
+ * strip folded into one row, and the band of world below it (`rowRules`). The run fails where
+ * either is not so.
+ */
+async function capturePhoneGame(page, shot, who) {
+  await capture(page, shot);
+  const row = rowRules(await page.evaluate(hudLayout));
+  const { width, height } = page.viewportSize();
+  console.log(`${shot.padEnd(18)} ${who} @ ${width}x${height}: the HUD ${row.text}`);
+  if (row.wrong.length > 0) {
+    fail(`${shot}: ${row.wrong.join(', ')}`);
+  }
+}
+
+/**
  * pad-left.png: the guest's phone held sideways, the world under its thumbs —
  * the steering pad of eight ways round a still middle, 48 px a cell, in the
  * left half under the left thumb, the buttons in the right half under the
- * right one — the objective bar a quarter of the canvas's height at most, a
- * line on the air included, and the minimap 56 px tall at least. The run fails
- * where any of it is not so.
+ * right one — and the minimap 56 px tall at least. The run fails where any of
+ * it is not so.
  */
 async function capturePadLeft(page) {
   const seen = await page.evaluate(thumbsLayout);
   await capture(page, 'pad-left.png');
-  const share = seen.height === 0 ? 1 : seen.bar / seen.height;
-  const percent = (share * 100).toFixed(1);
   const smallest = seen.cells.length === 0 ? 0 : Math.min(...seen.cells);
   const at = (box) => (box === null ? 'none' : `${Math.round(box.x)}–${Math.round(box.right)}`);
   console.log(
     `pad-left.png       Ben sideways: the pad at x ${at(seen.pad)}, the buttons at x ` +
       `${at(seen.thumb)} (middle ${Math.round(seen.mid)}), ${seen.cells.length} cells of ` +
-      `${Math.round(smallest)} px; the bar ${seen.bar}/${seen.height} px, ${percent} %` +
-      `${seen.line ? ' with a line on the air' : ''}; the minimap ${seen.minimap ?? 'not'} px tall`,
+      `${Math.round(smallest)} px; the minimap ${seen.minimap ?? 'not'} px tall`,
   );
   const wrong = [
     (seen.pad === null || seen.pad.right > seen.mid) && 'the pad is not in the left half',
     (seen.thumb === null || seen.thumb.x < seen.mid) && 'the buttons are not in the right half',
     (seen.cells.length !== 9 || smallest < 48 - 0.5) && `${seen.cells.length} pad cells`,
-    share > 0.25 && `the objective bar covers ${percent} % of the canvas`,
     (seen.minimap === null || seen.minimap < 56) && `the minimap is ${seen.minimap} px tall`,
   ];
   if (wrong.some(Boolean)) {
@@ -9421,7 +9484,7 @@ async function run() {
   const turned = SIZES[3];
   await guest.setViewportSize({ width: turned.width, height: turned.height });
   await sleep(700);
-  await capture(guest, `game-${turned.name}.png`);
+  await capturePhoneGame(guest, `game-${turned.name}.png`, "Ben's phone sideways");
   await overflow(guest, `game @ ${turned.width}x${turned.height}, Ben's phone sideways`);
   await capturePadLeft(guest);
   steady.push({ name: 'Ben sideways', page: guest, start: await layoutOf(guest), turn: turned });

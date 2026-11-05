@@ -79,11 +79,17 @@ function lineRow(bar: HTMLElement, gap: number): number {
 /**
  * How far the objective bar reaches down with a line on the air, CSS pixels: its padding, its
  * steady row (`steadyRow`) and one line's row (`lineRow`) — what it reaches whenever mission
- * control speaks, whatever stands on the air now.
+ * control speaks, whatever stands on the air now. Folded into one row on a phone held sideways
+ * (screens/hudFold.ts), a line stands in the goal's place in the row and adds nothing: the bar
+ * reaches its padding and the row.
  */
 function barWithLine(bar: HTMLElement): number {
   const style = getComputedStyle(bar);
   const padding = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+  const row = bar.querySelector('.stage-row');
+  if (row !== null) {
+    return padding + row.getBoundingClientRect().height;
+  }
   return padding + steadyRow(bar) + lineRow(bar, parseFloat(style.rowGap) || 0);
 }
 

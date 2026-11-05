@@ -94,7 +94,6 @@ function hud(
       positionsRef={{ current: { run: null, players } }}
       chatsRef={{ current: [] }}
       onAir={false}
-      parts={null}
       notesOpen={false}
       onToggleNotes={noop}
       onOpenInfo={noop}
@@ -301,10 +300,9 @@ describe('the talk button in the world', () => {
     expect(css).toMatch(/@media \(pointer: coarse\) \{\s*\.world-talk \{[^}]*display: grid;/);
   });
 
-  it('gets a place of its own in the HUD rows under 820 px, sideways too', () => {
+  it('gets a place of its own in the HUD rows under 820 px', () => {
     const css = readFileSync(new URL('../src/styles/voice.css', import.meta.url), 'utf8');
     expect(css).toContain("'radio mic notes info'");
-    expect(css).toContain("'crew chip mic notes info'");
     expect(css).toMatch(/\.hud-mic \{\s*grid-area: mic;/);
   });
 });

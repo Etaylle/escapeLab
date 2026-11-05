@@ -3,19 +3,13 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { Edgework, PlayerView, RunEvent } from '@escapelab/core';
 import { MissionHud, tickerLine, withKey } from '../src/screens/MissionHud.js';
-import { iconsAsWords, mapWith, PICTOGRAPH } from './fixtures.js';
+import { mapWith, PICTOGRAPH } from './fixtures.js';
 
 /**
  * The HUD strip of a running mission whose report reads `events`; `onAir`
- * while a banner is up, `parts` what the objective bar says is still to bring,
- * `edgework` what the sign said, once it is read.
+ * while a banner is up, `edgework` what the sign said, once it is read.
  */
-function hud(
-  events: RunEvent[],
-  onAir = false,
-  parts: string | null = null,
-  edgework: Edgework | null = null,
-): string {
+function hud(events: RunEvent[], onAir = false, edgework: Edgework | null = null): string {
   const ben = { id: 'p2', name: 'Ben', color: '#f472b6', ready: true, isHost: false };
   const view: PlayerView = {
     phase: 'playing',
@@ -58,7 +52,6 @@ function hud(
       positionsRef={{ current: { run: null, players: {} } }}
       chatsRef={{ current: [] }}
       onAir={onAir}
-      parts={parts}
       onOpenInfo={() => undefined}
       notesOpen={false}
       onToggleNotes={() => undefined}
@@ -141,53 +134,9 @@ describe('the radio strip while a line is on the air', () => {
   });
 });
 
-describe('what the crew still has to bring, on a phone held sideways', () => {
-  const PWA_CSS = readFileSync(new URL('../src/styles/pwa.css', import.meta.url), 'utf8');
-  const SIDEWAYS = '@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {';
-  const from = PWA_CSS.indexOf(SIDEWAYS);
-  /** The sheet's rules for every window, and its block for a phone held sideways. */
-  const everywhere = PWA_CSS.slice(0, from);
-  const sideways = PWA_CSS.slice(from, PWA_CSS.indexOf('\n}\n', from));
-  const PARTS = '<span class="hud-parts">SICHERUNG mitnehmen</span>';
-
-  it('rides in the radio strip in front of its line, and alone where there is none', () => {
-    expect(iconsAsWords(hud([radio('Strom weg.')], false, 'SICHERUNG mitnehmen'))).toContain(
-      `<span class="hud-radio">${PARTS}[radio] Leitstelle: Strom weg.</span>`,
-    );
-    for (const html of [
-      hud([], false, 'SICHERUNG mitnehmen'),
-      hud([radio('Strom weg.')], true, 'SICHERUNG mitnehmen'),
-    ]) {
-      expect(html).toContain(`<span class="hud-radio hud-radio--parts">${PARTS}</span>`);
-      expect(html).not.toContain('Strom weg.');
-    }
-    expect(hud([])).not.toContain('hud-radio');
-  });
-
-  it('shows there only, by the query: the objective bar drops it, the banner keeps to one line', () => {
-    expect(from).toBeGreaterThan(0);
-    expect(everywhere).toMatch(/\n\.hud-parts,\n\.hud-radio--parts \{\s*display: none;/);
-    expect(sideways).toMatch(/\n {2}\.stage-sub \{\s*display: none;/);
-    expect(sideways).toMatch(/\n {2}\.hud-parts \{[^}]*display: inline;/);
-    expect(sideways).toMatch(/\n {2}\.hud-radio--parts \{\s*display: block;/);
-    // The Laborkennung's toast keeps to one line beside it.
-    expect(sideways).toMatch(
-      /\n {2}\.radio-banner,\n {2}\.toast \{[^}]*white-space: nowrap;[^}]*text-overflow: ellipsis;/,
-    );
-  });
-
-  it('keeps the buttons at the right end while a strip of nothing but it is hidden', () => {
-    // ui.css pushes the first thing after the crew to the right: hidden, it hands that on.
-    expect(everywhere).toMatch(/\n\.hud-radio--parts:first-child \+ \* \{\s*margin-left: auto;/);
-    expect(sideways).toMatch(/\n {2}\.hud-radio--parts:first-child \+ \* \{\s*margin-left: 0;/);
-  });
-});
-
 describe('the Laborkennung in a narrow strip', () => {
   const POLISH_CSS = readFileSync(new URL('../src/styles/polish.css', import.meta.url), 'utf8');
-  const NARROW =
-    '@media (820px < width < 1180px),\n' +
-    '  (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {';
+  const NARROW = '@media (820px < width < 1180px) {';
   const from = POLISH_CSS.indexOf(NARROW);
   const narrow = POLISH_CSS.slice(from, POLISH_CSS.indexOf('\n}\n', from));
   const edgework: Edgework = {
@@ -201,7 +150,7 @@ describe('the Laborkennung in a narrow strip', () => {
   };
 
   it('stands before the buttons, the Info button last, and carries its value ready', () => {
-    const html = hud([radio('Strom weg.')], false, null, edgework);
+    const html = hud([radio('Strom weg.')], false, edgework);
     const chip = html.indexOf('<div class="edgework"');
     expect(chip).toBeGreaterThan(html.indexOf('</ul>'));
     expect(html.indexOf('class="hud-info hud-notes"')).toBeGreaterThan(chip);
@@ -209,7 +158,7 @@ describe('the Laborkennung in a narrow strip', () => {
     expect(html).toContain('<span class="edgework-value" title="Laborkennung K7G3A-2; ');
   });
 
-  it('shows the value alone under 1180 px and sideways, and the strip gives way before a button', () => {
+  it('shows the value alone under 1180 px, and the strip gives way before a button', () => {
     expect(from).toBeGreaterThan(0);
     // Everywhere else the whole chip, and its value hidden.
     expect(POLISH_CSS.slice(0, from)).toMatch(/\n\.edgework-value \{\s*display: none;\s*\}/);

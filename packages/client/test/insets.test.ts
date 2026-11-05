@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { watchInsets } from '../src/world/insets.js';
+import { clampCamera, liftAbove, tileCss } from '../src/world/viewport.js';
 
 /** A line on the air's banner, one line high, as the stylesheet sets it at a laptop's size. */
 const LINE = 38.3;
@@ -172,6 +173,62 @@ describe('watchInsets — how far the objective bar reaches', () => {
     const insets = watchInsets(canvas, null, () => undefined);
     // The title's foot 23 + 23 px down, the goal's head at 12: 34 px, then the line's row.
     expect(insets.bar).toBeCloseTo(12 + 34 + 10 + LINE + 12, 9);
+  });
+
+  /**
+   * A phone held sideways, its bar folded into the row (screens/hudFold.ts): no padding round
+   * the 44-px row, the goal and the clock in it, over a canvas 345 px tall.
+   */
+  function foldedStage() {
+    vi.stubGlobal('getComputedStyle', () => ({
+      paddingTop: '0px',
+      paddingBottom: '0px',
+      rowGap: '0px',
+    }));
+    const stage = new Laid('stage');
+    const bar = new Laid('stage-top', { height: 44 });
+    const row = new Laid('stage-row', { top: 0, height: 44 });
+    const goal = new Laid('stage-goal', { top: 8, height: 27 });
+    goal.append(new Laid('', { top: 16, height: 19 }, 'h1'));
+    row.append(goal);
+    row.append(new Laid('stage-clock', { top: 8, height: 28 }));
+    bar.append(row);
+    const wrap = new Laid('world-wrap', { height: 345 });
+    const canvas = new Laid('world-canvas', { height: 345 });
+    wrap.append(canvas);
+    stage.append(bar);
+    stage.append(wrap);
+    return { bar, canvas: canvas as unknown as HTMLCanvasElement };
+  }
+
+  it('counts the row a phone held sideways folds the bar into: a line adds nothing', () => {
+    const { bar, canvas } = foldedStage();
+    const insets = watchInsets(canvas, null, () => undefined);
+    expect(insets.top).toBe(44);
+    expect(insets.bar).toBe(44);
+    // An alarm stands under the row while it lasts: the bar reaches lower, the zoom's reach stays.
+    bar.append(new Laid('alarm', { top: 44, height: 40 }));
+    bar.layout.height = 84;
+    resized();
+    expect(insets.top).toBe(84);
+    expect(insets.bar).toBe(44);
+  });
+
+  it('frames that phone nine tiles high, the avatar lifted clear of the pad', () => {
+    const { canvas } = foldedStage();
+    const insets = watchInsets(canvas, null, () => undefined);
+    const tile = tileCss({ height: 345, bar: insets.bar, touch: true });
+    expect(tile).toBeCloseTo(345 / 9, 9);
+    // At density 2, the pad reaching 162 px up from the canvas's foot, over the 36×22 lab.
+    const dpr = 2;
+    const lens = { scale: tile * dpr, w: 826 * dpr, h: 345 * dpr, top: insets.top * dpr };
+    const lift = liftAbove(162 * dpr, lens.h, lens.top, lens.scale);
+    expect(lift).toBeGreaterThan(0);
+    const cam = clampCamera({ width: 36, height: 22 }, { x: 18, y: 11 }, { ...lens, lift });
+    const screenY = (y: number): number => lens.h / 2 + (y - cam.y) * lens.scale;
+    // The feet, half a tile under the spot, on the pad's top edge; the head a tile up, under it.
+    expect(screenY(11.5)).toBeCloseTo(lens.h - 162 * dpr, 6);
+    expect(screenY(10)).toBeGreaterThan(lens.top);
   });
 
   it('reaches nothing on a canvas with no stage round it', () => {
