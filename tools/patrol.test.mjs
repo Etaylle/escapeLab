@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
+import { URL } from 'node:url';
 import {
   arrivals,
   canSee,
@@ -191,5 +193,68 @@ describe('havens and stretches', () => {
     const path = tiles([0, 0], [1, 0], [2, 0], [3, 0]);
     assert.deepEqual(stretchOf(path, new Set(['0,0', '2,0'])), path.slice(0, 3));
     assert.deepEqual(stretchOf(path, new Set()), path);
+  });
+});
+
+describe('Blackout’s patrols, as the walkthrough plays its pinned plan past them', () => {
+  const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
+  const { map, puzzles } = read('../missions/blackout.json');
+  const plan = read('fixtures/blackout-plan.json');
+  const decor = new Set(map.decor.map((piece) => `${piece.x},${piece.y}`));
+  const walkable = (x, y) => map.tiles[y]?.[x] === '.' && !decor.has(`${x},${y}`);
+  const opener = ({ opensBy }) =>
+    opensBy.kind === 'puzzle' ? opensBy.puzzleId : opensBy.untilSolved;
+  /** The doors shut and the drones awake while station `index` (0 the first) is up. */
+  function stage(index) {
+    const solved = puzzles.slice(0, index).map((puzzle) => puzzle.id);
+    const shut = new Set(
+      map.doors.filter((door) => !solved.includes(opener(door))).map((d) => `${d.x},${d.y}`),
+    );
+    const drones = map.drones
+      .filter((drone) => drone.activeAfterSolved <= index)
+      .map((d) => ({ beat: d, range: d.range, halfAngleDeg: d.halfAngleDeg }));
+    return { sight: { tiles: map.tiles, shut }, drones };
+  }
+  const station = (puzzleId, console) =>
+    map.stations.find((s) => s.puzzleId === puzzleId && s.console === console);
+  const key = map.items.find((item) => map.manuals.some((m) => m.needsKey === item.id));
+
+  it('lets the crew work each station from the Serverraum on from a haven, and fetch parts', () => {
+    // Where the plan works, reads and fetches while each station is up: the Serverraum (3), the
+    // Frequenz (4), the reactor (5).
+    const places = [
+      [3, { terminal: station('subsysteme', 'a'), rack: station('subsysteme', 'b') }],
+      [3, { locker: plan.places.spind }],
+      [4, { radio: station('frequenz'), cabinet: plan.places.aktenschrank, key }],
+      [5, { reactor: station('reaktorstart'), ...plan.ersatzsicherung }],
+    ];
+    for (const [index, spots] of places) {
+      const { sight, drones } = stage(index);
+      const safe = havens(drones, sight);
+      for (const [what, spot] of Object.entries(spots)) {
+        const round = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({
+          x: spot.x + dx,
+          y: spot.y + dy,
+        }));
+        assert.ok(
+          round.some((t) => walkable(t.x, t.y) && safe.has(`${t.x},${t.y}`)),
+          `no haven by the ${what} at ${spot.x},${spot.y} while station ${index + 1} is up`,
+        );
+      }
+    }
+  });
+
+  it('watches the way into the Serverraum and the south way to the reactor', () => {
+    const schott = map.doors.find((door) => door.id === 'serverschott');
+    const flur = havens(stage(3).drones, stage(3).sight);
+    // The Flur's middle in front of the Serverschott, and the camera plate beside it.
+    assert.equal(flur.has(`${schott.x},${schott.y + 1}`), false);
+    const plate = map.plates.find((p) => p.id === 'kameraplatte');
+    assert.equal(flur.has(`${plate.x},${plate.y}`), false);
+    // Through the Süd-Flur to the reactor's door, every tile in a drone's eye.
+    const south = havens(stage(5).drones, stage(5).sight);
+    const door = map.doors.find((d) => d.id === 'reaktortuer');
+    const corridor = [0, 1, 2, 3].map((dx) => `${door.x - 1 - dx},${door.y}`);
+    assert.deepEqual(corridor.filter((tile) => south.has(tile)), []);
   });
 });

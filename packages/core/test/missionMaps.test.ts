@@ -533,6 +533,57 @@ describe('mission blackout by design', () => {
     }
   });
 
+  it('patrols the long corridor and the south way, each waking away from the crew', () => {
+    const map = blackout.map;
+    const rooms = roomsOf(map);
+    const roomOf = (spot: Spot): string | undefined => rooms.get(tileKey(spot.x, spot.y));
+    const droneOf = (id: string): (typeof map.drones)[number] | undefined =>
+      map.drones.find((d) => d.id === id);
+    const [flur, labor] = [droneOf('flurwache'), droneOf('laborwache')];
+    if (flur === undefined || labor === undefined) {
+      throw new Error('Blackout needs its Flurwache and its Laborwache');
+    }
+    // The Flurwache flies the Flur, along a third of its length at least, its cone reaching on
+    // past both ends; the Laborwache the Süd-Flur and the Labor it opens on.
+    expect(new Set(flur.waypoints.map(roomOf))).toEqual(new Set(['FLUR']));
+    expect(new Set(labor.waypoints.map(roomOf))).toEqual(new Set(['SÜD-FLUR', 'LABOR']));
+    const along = (xs: number[]): number => Math.max(...xs) - Math.min(...xs);
+    const flurFloor = [...rooms]
+      .filter(([, room]) => room === 'FLUR')
+      .map(([k]) => Number(k.split(',')[0]));
+    expect(along(flur.waypoints.map((w) => w.x))).toBeGreaterThanOrEqual(along(flurFloor) / 3);
+    // Each sleeps on its first waypoint till the station before it is solved: out of sight of
+    // that station's consoles, or more than twice its reach away.
+    const shut = new Set(map.doors.map((d) => tileKey(d.x, d.y)));
+    const middle = (spot: Spot): Spot => ({ x: spot.x + 0.5, y: spot.y + 0.5 });
+    for (const drone of [flur, labor]) {
+      const waker = blackout.puzzles[drone.activeAfterSolved - 1];
+      const [sleep = { x: -1, y: -1 }] = drone.waypoints;
+      for (const spot of map.stations.filter((s) => s.puzzleId === waker?.id)) {
+        const far = Math.hypot(sleep.x - spot.x, sleep.y - spot.y) > 2 * drone.range;
+        const hidden = !canSee(map, middle(sleep), middle(spot), shut);
+        expect(far || hidden, `${drone.id} wakes by ${spot.puzzleId} ${spot.console ?? ''}`).toBe(
+          true,
+        );
+      }
+    }
+    // As fast and as far-seeing as on the lab before: only the ways changed.
+    expect(
+      map.drones.map(({ id, speed, range, halfAngleDeg, penaltySec, activeAfterSolved }) => [
+        id,
+        speed,
+        range,
+        halfAngleDeg,
+        penaltySec,
+        activeAfterSolved,
+      ]),
+    ).toEqual([
+      ['flurwache', 1.7, 4.5, 26, 15, 3],
+      ['laborwache', 1.3, 4, 30, 15, 4],
+    ]);
+    expect(flur.frozenByPlate).toBe('kameraplatte');
+  });
+
   it('works the Serverraum at a terminal and a rack in its room, its rules in the locker', () => {
     const def = blackout.puzzles.find((p) => p.id === 'subsysteme');
     expect(def).toMatchObject({ type: 'servers', title: 'Serverraum', crashed: 4, trap: true });
