@@ -5546,30 +5546,148 @@ async function capturePhoneGame(page, shot, who) {
 }
 
 /**
- * pad-left.png: the guest's phone held sideways, the world under its thumbs —
- * the steering pad of eight ways round a still middle, 48 px a cell, in the
- * left half under the left thumb, the buttons in the right half under the
- * right one — and the minimap 56 px tall at least. The run fails where any of
- * it is not so.
+ * What a phone held sideways shows of its controls, CSS px: the canvas's box, and inside its
+ * 1-px border; the objective bar's foot, the pad's box and the right thumb's cluster's, the
+ * cluster's buttons as they show, and how see-through the cluster stands.
  */
-async function capturePadLeft(page) {
-  const seen = await page.evaluate(thumbsLayout);
-  await capture(page, 'pad-left.png');
+function controlsLayout() {
+  const canvas = document.querySelector('.world-canvas');
+  const box = canvas.getBoundingClientRect();
+  const border = (box.width - canvas.clientWidth) / 2;
+  const cluster = document.querySelector('.world-thumb');
+  const plain = (el) => el.getBoundingClientRect().toJSON();
+  return {
+    frame: box.toJSON(),
+    canvas: {
+      left: box.left + border,
+      top: box.top + border,
+      right: box.right - border,
+      bottom: box.bottom - border,
+    },
+    barFoot: document.querySelector('.stage-top').getBoundingClientRect().bottom,
+    pad: plain(document.querySelector('.world-pad')),
+    cluster: plain(cluster),
+    buttons: [...cluster.children].map(plain).filter((button) => button.width > 0),
+    opacity: Number(globalThis.getComputedStyle(cluster).opacity),
+  };
+}
+
+/** How much of `band` the boxes cover, a share of its area: each box clipped to it. */
+function coverOf(boxes, band) {
+  const clipped = (box) =>
+    Math.max(0, Math.min(box.right, band.right) - Math.max(box.left, band.left)) *
+    Math.max(0, Math.min(box.bottom, band.bottom) - Math.max(box.top, band.top));
+  const area = (band.right - band.left) * (band.bottom - band.top);
+  return boxes.reduce((sum, box) => sum + clipped(box), 0) / area;
+}
+
+/** The right thumb's cluster on a touch screen, CSS px: its buttons, the air between, its edge. */
+const CLUSTER = { button: 52, gap: 8, edge: 12 };
+/** How much of the band of world below the bar the pad and the cluster cover at most. */
+const CONTROLS_COVER = 0.3;
+/** How long the cluster stays whole after a finger lifted, ms (client world/cluster.ts). */
+const CLUSTER_AWAKE_MS = 2000;
+/** The cluster's opacity at rest (client styles/world.css). */
+const CLUSTER_REST = 0.6;
+
+/**
+ * The controls of a phone held sideways (`seen`, controlsLayout): what is wrong with them — the
+ * cluster not two by two, its buttons not CLUSTER.button px with CLUSTER.gap between, or not
+ * CLUSTER.edge px off the world canvas's right and bottom edges, or the pad and the cluster
+ * covering more than CONTROLS_COVER of the band of world below the bar — and its line for the
+ * log.
+ */
+function clusterRules(seen) {
+  const band = { ...seen.canvas, top: Math.max(seen.canvas.top, seen.barFoot) };
+  const share = coverOf([seen.pad, seen.cluster], band);
+  const side = 2 * CLUSTER.button + CLUSTER.gap;
+  const off = [seen.frame.right - seen.cluster.right, seen.frame.bottom - seen.cluster.bottom];
+  const near = (a, b) => Math.abs(a - b) <= 0.5;
+  const square = near(seen.cluster.width, side) && near(seen.cluster.height, side);
+  const sized = seen.buttons.every((b) => near(b.width, CLUSTER.button) && near(b.height, b.width));
+  const size = `${Math.round(seen.cluster.width)}×${Math.round(seen.cluster.height)}`;
+  const edges = off.map(Math.round).join('/');
+  const percent = `${(share * 100).toFixed(1)} %`;
+  const wrong = [
+    !square && `the cluster stands ${size}`,
+    !sized && `the cluster's buttons are not ${CLUSTER.button} px`,
+    !off.every((px) => near(px, CLUSTER.edge)) && `the cluster stands ${edges} px off the edges`,
+    share > CONTROLS_COVER && `the controls cover ${percent} of the band`,
+  ];
+  const text =
+    `the cluster ${size} px, ${seen.buttons.length} buttons, ${edges} px off the edges; ` +
+    `pad and cluster cover ${percent} of the band`;
+  return { text, wrong: wrong.filter(Boolean) };
+}
+
+/**
+ * The cluster's wake on `page` (client world/cluster.ts): see-through at rest, whole the moment
+ * a press comes down on „Sprint" in it, and see-through again once CLUSTER_AWAKE_MS have passed
+ * after it lifted, its fade over — and its line for the log, and what is wrong with it. A press,
+ * not a touch: the phone's first touch in a run takes its page fullscreen, and the walkthrough
+ * resizes that window later on; any pointer wakes the cluster alike.
+ */
+async function clusterWake(page) {
+  const opacity = () =>
+    page.evaluate(() => {
+      const cluster = document.querySelector('.world-thumb');
+      return Number(globalThis.getComputedStyle(cluster).opacity);
+    });
+  const rest = await opacity();
+  await page.locator('.world-sprint').click();
+  const touched = await opacity();
+  await sleep(CLUSTER_AWAKE_MS + 600);
+  const after = await opacity();
+  const asleep = (at) => Math.abs(at - CLUSTER_REST) < 0.01;
+  const woke = asleep(rest) && touched > 0.99 && asleep(after);
+  const later = `${after} ${CLUSTER_AWAKE_MS + 600} ms after`;
+  return {
+    text: `${rest} at rest, ${touched} as a press comes down on it, ${later}`,
+    wrong: woke ? [] : [`the cluster at ${rest} → ${touched} → ${after}`],
+  };
+}
+
+/**
+ * The pad and the minimap of a phone held sideways (`seen`, thumbsLayout): what is wrong with
+ * them — the pad not three by three at 48 px in the left half, the buttons not in the right
+ * half, the minimap under 56 px — and its line for the log.
+ */
+function padRules(seen) {
   const smallest = seen.cells.length === 0 ? 0 : Math.min(...seen.cells);
   const at = (box) => (box === null ? 'none' : `${Math.round(box.x)}–${Math.round(box.right)}`);
-  console.log(
-    `pad-left.png       Ben sideways: the pad at x ${at(seen.pad)}, the buttons at x ` +
-      `${at(seen.thumb)} (middle ${Math.round(seen.mid)}), ${seen.cells.length} cells of ` +
-      `${Math.round(smallest)} px; the minimap ${seen.minimap ?? 'not'} px tall`,
-  );
-  const wrong = [
-    (seen.pad === null || seen.pad.right > seen.mid) && 'the pad is not in the left half',
-    (seen.thumb === null || seen.thumb.x < seen.mid) && 'the buttons are not in the right half',
-    (seen.cells.length !== 9 || smallest < 48 - 0.5) && `${seen.cells.length} pad cells`,
-    (seen.minimap === null || seen.minimap < 56) && `the minimap is ${seen.minimap} px tall`,
+  const checks = [
+    [seen.pad === null || seen.pad.right > seen.mid, 'the pad is not in the left half'],
+    [seen.thumb === null || seen.thumb.x < seen.mid, 'the buttons are not in the right half'],
+    [seen.cells.length !== 9 || smallest < 48 - 0.5, `${seen.cells.length} pad cells`],
+    [seen.minimap === null || seen.minimap < 56, `the minimap is ${seen.minimap} px tall`],
   ];
-  if (wrong.some(Boolean)) {
-    fail(`pad-left: ${wrong.filter(Boolean).join(', ')}`);
+  const text =
+    `the pad at x ${at(seen.pad)}, the buttons at x ${at(seen.thumb)} (middle ` +
+    `${Math.round(seen.mid)}), ${seen.cells.length} cells of ${Math.round(smallest)} px; ` +
+    `the minimap ${seen.minimap ?? 'not'} px tall`;
+  return { text, wrong: checks.filter(([bad]) => bad).map(([, said]) => said) };
+}
+
+/**
+ * pad-left.png: the guest's phone held sideways, the world under its thumbs —
+ * the steering pad of eight ways round a still middle, 48 px a cell, in the
+ * left half under the left thumb, and the minimap 56 px tall at least
+ * (`padRules`); the buttons in the right half under the right one, two by two,
+ * 52 px each, 8 px apart, 12 px off the world's edges, the pad and the cluster
+ * covering 30 % of the band of world below the bar at most (`clusterRules`),
+ * the cluster at 60 % until a press comes down on it, whole then and at 60 %
+ * again 2 s after (`clusterWake`). The run fails where any of it is not so.
+ */
+async function capturePadLeft(page) {
+  const pad = padRules(await page.evaluate(thumbsLayout));
+  const controls = clusterRules(await page.evaluate(controlsLayout));
+  await capture(page, 'pad-left.png');
+  const wake = await clusterWake(page);
+  console.log(`pad-left.png       Ben sideways: ${pad.text}`);
+  console.log(`cluster            Ben sideways: ${controls.text}; at ${wake.text}`);
+  const wrong = [...pad.wrong, ...controls.wrong, ...wake.wrong];
+  if (wrong.length > 0) {
+    fail(`pad-left: ${wrong.join(', ')}`);
   }
 }
 

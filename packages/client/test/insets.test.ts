@@ -219,15 +219,17 @@ describe('watchInsets — how far the objective bar reaches', () => {
     const insets = watchInsets(canvas, null, () => undefined);
     const tile = tileCss({ height: 345, bar: insets.bar, touch: true });
     expect(tile).toBeCloseTo(345 / 9, 9);
-    // At density 2, the pad reaching 162 px up from the canvas's foot, over the 36×22 lab.
+    // At density 2, over the 36×22 lab: the pad reaches 158 px up from the canvas's foot — 12
+    // px off it, three cells of 48 and its border (styles/world.css).
     const dpr = 2;
+    const reach = 158;
     const lens = { scale: tile * dpr, w: 826 * dpr, h: 345 * dpr, top: insets.top * dpr };
-    const lift = liftAbove(162 * dpr, lens.h, lens.top, lens.scale);
+    const lift = liftAbove(reach * dpr, lens.h, lens.top, lens.scale);
     expect(lift).toBeGreaterThan(0);
     const cam = clampCamera({ width: 36, height: 22 }, { x: 18, y: 11 }, { ...lens, lift });
     const screenY = (y: number): number => lens.h / 2 + (y - cam.y) * lens.scale;
     // The feet, half a tile under the spot, on the pad's top edge; the head a tile up, under it.
-    expect(screenY(11.5)).toBeCloseTo(lens.h - 162 * dpr, 6);
+    expect(screenY(11.5)).toBeCloseTo(lens.h - reach * dpr, 6);
     expect(screenY(10)).toBeGreaterThan(lens.top);
   });
 

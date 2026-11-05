@@ -47,6 +47,7 @@ import {
   type SoundSystem,
 } from './audio.js';
 import { ChatWheel, PHRASES, pressDigit, type Wheel, type WheelMove } from './ChatWheel.js';
+import { useClusterWake } from './cluster.js';
 import { blackoutCue, FLICKER_MS, REVEAL_MS, SEQUENCE_MS } from './coldOpen.js';
 import { senseDanger, stopDanger } from './danger.js';
 import { doorTurned } from './doors.js';
@@ -1038,18 +1039,31 @@ function holding(press: Press, move: Held) {
 }
 
 /**
+ * The class of the right thumb's buttons: whole while a finger is on them and a moment after
+ * (cluster.ts), and with hands full — where a touch screen offers to put the load down in the
+ * chat's place (world.css).
+ */
+function thumbClass(awake: boolean, carrying: boolean): string {
+  const awakeClass = awake ? ['world-thumb--awake'] : [];
+  const carryClass = carrying ? ['world-thumb--carrying'] : [];
+  return ['world-thumb', ...awakeClass, ...carryClass].join(' ');
+}
+
+/**
  * The controls over the world. On a touch screen the steering pad lies under the left thumb
- * and the buttons under the right one, in a row from the corner: the action where the thumb
- * rests, „Sprint" held to run beside it, talk and chat, and while hands are full the one that
- * puts the load down — a touch screen's Q — at the row's far end, where it moves nothing as it
- * comes and goes. With a keyboard only the chat's handle shows (world.css); the key on a
- * button shows only where there are keys.
+ * and the buttons under the right one, two by two in the corner (world.css): the action where
+ * the thumb rests, „Sprint" held to run beside it, talk over the action, and the chat over the
+ * sprint — or while hands are full the one that puts the load down, a touch screen's Q, in the
+ * chat's place. The buttons stand see-through until a finger comes down on them (cluster.ts).
+ * With a keyboard only the chat's handle shows; the key on a button shows only where there are
+ * keys.
  */
 function WorldControls({ refs, live, view, wheel, setWheel }: ControlsProps) {
   /** what this player carries now; while there is something, a touch screen offers to drop it */
   const load = view.map === null ? undefined : carriedItem(view.map, view.you.id);
   const interactGlyph = useGlyph('interact');
   const chatGlyph = useGlyph('chat');
+  const wake = useClusterWake();
   const press: Press = (move, down) => {
     const sim = refs.simRef.current;
     if (sim === null) {
@@ -1064,7 +1078,7 @@ function WorldControls({ refs, live, view, wheel, setWheel }: ControlsProps) {
   return (
     <div className="world-controls" ref={refs.controlsRef}>
       <TouchPad press={press} />
-      <div className="world-thumb">
+      <div className={thumbClass(wake.awake, load !== undefined)} {...wake.handlers}>
         {load !== undefined && (
           <button
             className="world-drop"

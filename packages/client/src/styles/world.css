@@ -1,6 +1,7 @@
 /*
  * The world's HTML over its canvas (world/GameWorld.tsx): the first-time
- * coach marks, and the keys named on the touch buttons.
+ * coach marks, the keys named on the touch buttons, and the controls on a
+ * touch screen — the pad, the right thumb's cluster and the chat wheel.
  */
 
 /* ── first-time coach marks (moved here from ui.css) ──────────────────── */
@@ -48,9 +49,10 @@
 
 /*
  * While your hands are full a round button puts the load down (Q on a
- * keyboard), at the far end of the right thumb's row: it moves no other
- * button as it comes and goes, and the row keeps its height, so the reach the
- * edge arrows, room names, minimap and tips keep clear of does not change.
+ * keyboard), in the chat's place in the right thumb's cluster (below): it moves
+ * no other button as it comes and goes, and the cluster keeps its size, so the
+ * reach the edge arrows, room names, minimap and tips keep clear of does not
+ * change.
  */
 .world-drop {
   display: none;
@@ -74,8 +76,8 @@
 /* ── the sprint, on a touch screen ───────────────────────────────────────── */
 
 /*
- * „Sprint" beside the action, held to run as Shift does on a keyboard: as tall as the row's
- * other buttons, so the row's measured reach does not change.
+ * „Sprint" beside the action, held to run as Shift does on a keyboard: as large as the
+ * cluster's other buttons, so its measured reach does not change.
  */
 .world-sprint {
   display: none;
@@ -103,4 +105,118 @@
     border-color: var(--accent);
     background: rgba(15, 118, 110, 0.9);
   }
+}
+
+/* ── the controls on a touch screen: the pad, the cluster, the chat wheel ── */
+
+/*
+ * The steering pad under the left thumb and the right thumb's cluster stand 12 px off the
+ * world's edges. The cluster is four buttons of 52 px two by two, 8 px apart: the action in
+ * the corner where the thumb rests, „Sprint" beside it, talk over the action, the chat over
+ * the sprint — the load's button in the chat's place while hands are full. At rest it stands
+ * at 60 % so that the lab shows through it; a finger on it makes it whole until two seconds
+ * after the last one lifts (world/cluster.ts), and it fades back. The pad keeps its 85 %.
+ * Together they cover some 14 % of the band of world below the bar on a phone held sideways.
+ */
+@media (pointer: coarse) {
+  .world-wrap {
+    --controls-edge: 12px;
+    --cluster-cell: 52px;
+    --cluster-gap: 8px;
+    /* how far the cluster reaches in from the world's right edge or up from its foot */
+    --cluster-reach: calc(var(--controls-edge) + 2 * var(--cluster-cell) + var(--cluster-gap));
+  }
+
+  .world-controls {
+    left: var(--controls-edge);
+    right: var(--controls-edge);
+    bottom: var(--controls-edge);
+    opacity: 1;
+  }
+
+  .world-pad {
+    opacity: 0.85;
+  }
+
+  .world-thumb {
+    display: grid;
+    grid-template-columns: repeat(2, var(--cluster-cell));
+    grid-template-rows: repeat(2, var(--cluster-cell));
+    grid-template-areas:
+      'chat talk'
+      'sprint act';
+    gap: var(--cluster-gap);
+    opacity: 0.6;
+    transition: opacity 0.3s ease;
+  }
+
+  .world-thumb.world-thumb--awake {
+    opacity: 1;
+    transition: none;
+  }
+
+  .world-thumb > * {
+    width: var(--cluster-cell);
+    height: var(--cluster-cell);
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+  }
+
+  .world-drop,
+  .world-chat-toggle {
+    grid-area: chat;
+  }
+
+  .world-thumb--carrying .world-chat-toggle {
+    display: none;
+  }
+
+  .world-talk {
+    grid-area: talk;
+  }
+
+  .world-sprint {
+    grid-area: sprint;
+  }
+
+  .world-interact {
+    grid-area: act;
+    display: grid;
+    place-items: center;
+    font-size: 22px;
+  }
+
+  .world-chat-toggle {
+    display: grid;
+    place-items: center;
+    font-size: 22px;
+  }
+
+  /* The chat wheel opens over the cluster, never on it. */
+  .chat-wheel {
+    bottom: calc(var(--cluster-reach) + 8px);
+  }
+
+  /* Under reduced motion the cluster cuts between at rest and whole. */
+  :where([data-motion='reduce']) .world-thumb {
+    transition: none;
+  }
+}
+
+/*
+ * A phone held sideways (screens/hudFold.ts): the wheel has no height over the cluster to
+ * spare, so it opens beside it, two phrases a line, from the world's foot up to the HUD's row
+ * at most — scrolling in its own box where that is short.
+ */
+.game--row .chat-wheel {
+  right: calc(var(--cluster-reach) + 8px);
+  bottom: var(--controls-edge);
+  max-height: calc(100% - 44px - 20px);
+  overflow-y: auto;
+  grid-template-columns: 1fr 1fr;
+}
+
+.game--row .chat-wheel--slot {
+  grid-template-columns: repeat(3, 1fr);
 }

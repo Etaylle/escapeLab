@@ -98,23 +98,25 @@ describe('the button that puts down what you carry', () => {
     }
   });
 
-  it('shows while you carry something: a round 📦 named „Ablegen", at the row’s far end', () => {
+  it('shows while you carry something: a round 📦 named „Ablegen", in the chat’s place', () => {
     const drop = '<button class="world-drop" aria-label="Ablegen">📦</button>';
+    // The cluster says its hands are full: on a touch screen the chat gives way (world.css).
     expect(world([fuse({ carriedBy: YOU })])).toContain(
-      `<div class="world-thumb">${drop}<button class="world-chat-toggle"`,
+      `<div class="world-thumb world-thumb--carrying">${drop}<button class="world-chat-toggle"`,
     );
+    expect(world([fuse()])).toContain('<div class="world-thumb"><button class="world-chat-toggle"');
   });
 
   it('puts the pad under the left thumb, the buttons under the right one, the action last', () => {
     const html = world([fuse({ carriedBy: YOU })]);
-    const controls = ['world-pad', 'world-thumb', 'world-drop', 'world-chat-toggle'];
-    const order = [...controls, 'world-sprint', 'world-interact'].map((control) =>
-      html.indexOf(`class="${control}"`),
+    const controls = ['"world-pad"', '"world-thumb ', '"world-drop"', '"world-chat-toggle"'];
+    const order = [...controls, '"world-sprint"', '"world-interact"'].map((control) =>
+      html.indexOf(`class=${control}`),
     );
     expect(order.every((at) => at >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    // The action stands in the right corner: nothing comes after it in the row.
-    const row = html.slice(html.indexOf('class="world-thumb"'));
+    // The action stands in the right corner: nothing comes after it in the cluster.
+    const row = html.slice(html.indexOf('class="world-thumb'));
     expect(row.slice(row.indexOf('class="world-interact"')).match(/<button/g)).toBeNull();
   });
 

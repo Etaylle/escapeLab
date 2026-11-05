@@ -698,10 +698,10 @@ button.link:hover {
 
 /*
  * The controls along the world's foot: the steering pad in the left corner,
- * under the left thumb, the buttons in the right one, under the right thumb.
- * The stretch between them is the world's: taps there reach the canvas. Each
- * group is measured apart (world/insets.ts), and what the canvas draws keeps
- * off both.
+ * under the left thumb, the buttons in the right one, under the right thumb —
+ * on a touch screen a cluster two by two (styles/world.css). The stretch
+ * between them is the world's: taps there reach the canvas. Each group is
+ * measured apart (world/insets.ts), and what the canvas draws keeps off both.
  */
 .world-controls {
   position: absolute;
@@ -720,7 +720,7 @@ button.link:hover {
   pointer-events: auto;
 }
 
-/* The right thumb's row, its far end in the corner. */
+/* The right thumb's row, its far end in the corner; a cluster on a touch screen (world.css). */
 .world-thumb {
   display: flex;
   align-items: flex-end;
