@@ -155,9 +155,10 @@ die Entscheidung.
   Wartende lesen die nächste Quelle vor, oder eine kleine Nebenaufgabe (Ventil halten). Erst
   nach dem zweiten Playtest entscheiden.
 
-### T-5 Größere Räume — Status: wartet (nach N-2 Kamera + Playtest) · Größe: L
-- Erst den Kamera-Rahmen festlegen, dann beurteilen; falls dann zu eng: Räume 9×7, Flure 4
-  breit, Zwei-Kachel-Türen auf den Hauptwegen, Laufwege ≤ 10 s, Handy-Layout prüfen.
+### T-5 Größere Räume — Status: in Arbeit (Mac, Paket N-xxl; Uros 2026-11-05: „die Räume können größer sein") · Größe: L
+- Räume ~9×7 (Serverraum 11×7), Flure 4 breit, Zwei-Kachel-Türen auf den Hauptwegen, Karte
+  ~36×22, Laufwege ≤ 12 s, Decor ≥ 8 je Raum und Flur-Props alle 4 Kacheln, Drohnenrouten neu,
+  Zeit per Messung, Kamera-Reisen vorher/nachher, Fixture/Harness/Smoke aus der Mission.
 
 ### N-6 Pacing und Stationsfolge — Status: wartet (Daten) · Größe: ?
 - Erst nach N-4 und dem zweiten Playtest messen (`runs.jsonl`): Ziel, dass eine Erstspieler-
