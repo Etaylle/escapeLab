@@ -9,6 +9,7 @@ import {
   type Run,
   type TintStops,
 } from '../light.js';
+import { rgba, WHITE } from '../palette.js';
 import { ALARM_RED, ceilingLayer, WARM, type CeilingLight } from '../power.js';
 import { glowSources } from '../sources.js';
 import { layAdded, layBake, type BakePart } from './bakes.js';
@@ -60,14 +61,35 @@ export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
     drawStandby(ctx, frame);
   } else {
     profiled(frame.kit, 'grade', ctx, () => drawGrade(ctx, frame));
-    profiled(frame.kit, 'flares', ctx, () => drawDroneFlares(ctx, frame));
+    profiled(frame.kit, 'flares', ctx, () => {
+      drawDroneFlares(ctx, frame);
+      drawFlash(ctx, frame);
+    });
   }
 }
 
-/** What shines over the light: the flashlights' glints and streaks, the drones' lights. */
+/**
+ * What shines over the light: the flashlights' glints and streaks, the drones' lights, and a
+ * solve's white flash (hitStop.ts).
+ */
 function drawAllFlares(ctx: CanvasRenderingContext2D, frame: Frame): void {
   drawFlares(ctx, frame);
   drawDroneFlares(ctx, frame);
+  drawFlash(ctx, frame);
+}
+
+/** A solve's white flash over the whole world, as strongly as it lies now; none for none. */
+function drawFlash(ctx: CanvasRenderingContext2D, frame: Frame): void {
+  if (frame.flash <= 0) {
+    return;
+  }
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = rgba(WHITE, frame.flash);
+  ctx.fillRect(0, 0, frame.viewport.w, frame.viewport.h);
+  ctx.restore();
 }
 
 /** Whether the world lies in the dark: not the audience's, nor lit whole (`frame.whole`). */

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { DronePosition, PartKind } from '@escapelab/core';
 import {
+  drawHeldSheet,
   drawNameTag,
   drawScientist,
   drawVoiceRing,
@@ -10,6 +11,7 @@ import {
 import {
   figurePhase,
   figurePose,
+  swingAt,
   type FigurePose,
   type FigureState,
 } from '../src/world/figure.js';
@@ -60,6 +62,8 @@ function poseIn(frame: Frame, id: string, parts: Partial<FigureState>): FigurePo
     t: frame.time * 1000,
     idleMs: 0,
     phase: figurePhase(id),
+    walk: 0,
+    task: null,
     reduced: false,
     ...parts,
   });
@@ -79,7 +83,7 @@ function benLook(frame: Frame, parts: Partial<FigureState> = {}, id = 'p2'): Sci
     isYou: false,
     connected: true,
     text: frame.text,
-    pose: poseIn(frame, id, { moving: true, facing: 1, ...parts }),
+    pose: poseIn(frame, id, { moving: true, facing: 1, walk: 0.4, ...parts }),
     ground: 'dark',
   };
 }
@@ -246,6 +250,25 @@ describe('actors — drones and the crew, in tile space', () => {
     );
   });
 
+  it('puts a sheet in the hands of somebody reading, and their hands up at a console', () => {
+    const still = { ...ben, moving: false };
+    const others = new Map([['p2', still]]);
+    const tasks = new Map([['p2', 'reading' as const]]);
+    const frame = frameWith({ players, others, tasks });
+    const reader = {
+      ...benLook(frame, { moving: false, task: 'reading' }),
+      moving: false,
+      held: drawHeldSheet,
+    };
+    expect(strip(drawnAt(drawn(frame), 4.2, 2.1 + 0.3))).toEqual(
+      recording((c) => drawScientist(c, untagged(reader))),
+    );
+    const atConsole = frameWith({ players, others, tasks: new Map([['p2', 'console' as const]]) });
+    const pose = crewPose(atConsole, 'p2', { moving: false, facing: 1, walk: 0 });
+    expect(pose.arms?.front).toBeGreaterThan(Math.PI / 2);
+    expect(pose.holding).toBe(false);
+  });
+
   it('puts what somebody carries in their hands, and nothing over their head', () => {
     const others = new Map([['p2', ben]]);
     const carrying = new Map<string, PartKind>([
@@ -294,7 +317,7 @@ describe('crewPose — the frame says how each of the crew stands', () => {
       stillSince: new Map([['p2', 9000]]),
       mood: 'play',
     });
-    expect(crewPose(frame, 'p2', { moving: false, facing: 2 })).toEqual(
+    expect(crewPose(frame, 'p2', { moving: false, facing: 2, walk: 0 })).toEqual(
       figurePose({
         moving: false,
         facing: 2,
@@ -306,6 +329,8 @@ describe('crewPose — the frame says how each of the crew stands', () => {
         t: 12_500,
         idleMs: 3500,
         phase: figurePhase('p2'),
+        walk: 0,
+        task: null,
         reduced: false,
       }),
     );
@@ -314,24 +339,28 @@ describe('crewPose — the frame says how each of the crew stands', () => {
   it('flinches the crew at an alarm, and stands nobody walking still', () => {
     const now = 1_000_000;
     const frame = frameWith({ now, alarm: { seq: 1, at: now - 125 }, time: 40 });
-    const flinch = crewPose(frame, 'p1', { moving: true, facing: 0 });
+    const flinch = crewPose(frame, 'p1', { moving: true, facing: 0, walk: 0.25 });
     expect(flinch.rise).toBeGreaterThan(0);
-    expect(flinch.arms).not.toBeNull();
+    expect(flinch.arms).not.toEqual(swingAt(0.25));
     const calm = crewPose(frameWith({ now, alarm: { seq: 1, at: now - 5000 }, time: 40 }), 'p1', {
       moving: true,
       facing: 0,
+      walk: 0.25,
     });
     expect(calm.rise).toBe(0);
-    expect(calm.arms).toBeNull();
+    // Walking calm, the arms swing with the step.
+    expect(calm.arms).toEqual(swingAt(0.25));
   });
 
   it('celebrates a run won and slumps over one lost, under reduced motion too', () => {
     const won = crewPose(frameWith({ mood: 'celebrate', reduced: true }), 'p1', {
       moving: false,
       facing: 0,
+      walk: 0,
     });
     expect(won.arms?.front).toBeGreaterThan(Math.PI / 2);
-    const lost = crewPose(frameWith({ mood: 'slump' }), 'p1', { moving: false, facing: 0 });
+    const still = { moving: false, facing: 0, walk: 0 };
+    const lost = crewPose(frameWith({ mood: 'slump' }), 'p1', still);
     expect(lost.dim).toBeGreaterThan(0);
     expect(lost.bob).toBeLessThan(0);
   });

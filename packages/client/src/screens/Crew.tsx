@@ -1,13 +1,8 @@
-import {
-  NO_CREDITS,
-  type Credits,
-  type MapView,
-  type PlayerPosition,
-  type PlayerPresence,
-} from '@escapelab/core';
+import { NO_CREDITS, type Credits, type MapView, type PlayerPosition } from '@escapelab/core';
 import { consoleName } from '../world/consoles.js';
 import { carriedItem } from '../world/interact.js';
 import { isArmed } from '../world/known.js';
+import { near, type Whereabouts } from '../world/presence.js';
 
 /** How many play a mission: „2 Spieler", or „2–3 Spieler" where the count may vary. */
 export function crewSizeText({ min, max }: { min: number; max: number }): string {
@@ -19,34 +14,9 @@ export interface CrewTag {
   tone: 'pult' | 'press' | 'read' | 'hold' | 'carry' | 'sign' | 'away';
 }
 
-/** Where someone stands: at a station, at which console where that is told, at an open source. */
-type Whereabouts = Pick<PlayerPresence, 'stationId' | 'manualId'> &
-  Partial<Pick<PlayerPresence, 'console'>>;
-
-/**
- * Reach in tiles: of a station or a source, as the server counts someone
- * walking up to it; of a plate; of an emergency valve.
- */
-const PRESENCE_RADIUS = 1.6;
+/** Reach in tiles of a plate, and of an emergency valve (a station's: world/presence.ts). */
 const PLATE_RADIUS = 0.8;
 const VALVE_RADIUS = 0.9;
-
-function near(pos: PlayerPosition, spot: { x: number; y: number }, radius: number): boolean {
-  return Math.hypot(pos.x - (spot.x + 0.5), pos.y - (spot.y + 0.5)) <= radius;
-}
-
-/**
- * Where someone stands, guessed from their live position the way the server
- * decides it: for crew members whose presence this player is not told.
- */
-export function presenceNear(map: MapView | null, pos: PlayerPosition | undefined): Whereabouts {
-  if (map === null || pos === undefined) {
-    return { stationId: null, manualId: null };
-  }
-  const station = map.stations.find((s) => isArmed(s) && near(pos, s, PRESENCE_RADIUS));
-  const source = map.manuals.find((m) => m.known && m.opened && near(pos, m, PRESENCE_RADIUS));
-  return { stationId: station?.puzzleId ?? null, manualId: source?.id ?? null };
-}
 
 /** What someone keeps pressed by standing on it, if anything. */
 function holding(map: MapView | null, pos: PlayerPosition | undefined): string | null {

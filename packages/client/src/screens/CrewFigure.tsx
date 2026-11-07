@@ -86,6 +86,8 @@ export function figureStateOf(
     t: ms,
     idleMs: ms,
     phase: look.phase,
+    walk: 0,
+    task: null,
     reduced,
   };
 }

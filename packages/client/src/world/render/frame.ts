@@ -4,10 +4,11 @@ import type { WorldText } from '../art.js';
 import { artKit, type ArtKit } from '../artKit.js';
 import type { ColdOpenFrame } from '../coldOpen.js';
 import type { DoorMotion } from '../doors.js';
-import type { FigureMood } from '../figure.js';
+import type { FigureMood, FigureTask, Turn } from '../figure.js';
 import type { FinaleFrame } from '../finale.js';
 import type { LightPath } from '../gl/path.js';
 import type { GradeTurn, Wash } from '../grade.js';
+import type { Solves } from '../hitStop.js';
 import type { ContextAction } from '../interact.js';
 import type { Refused } from '../press.js';
 import type { LampMount, Lit } from '../light.js';
@@ -177,6 +178,12 @@ export interface RenderKit {
   beacons: LobeSprites | null;
   /** the flashlights' beams baked for the zoom drawn at (beam.ts); null before the first */
   beams: BeamSprites | null;
+  /** each of the crew turning round, by player id (figure.ts turnOf), kept by assemble.ts */
+  turns: Map<string, Turn>;
+  /** the solves this screen has seen (hitStop.ts), kept by assemble.ts; null before the first */
+  solves: Solves | null;
+  /** what a solve's hit-stop holds of the frame it came on, while it holds; null otherwise */
+  held: HeldFrame | null;
   /**
    * the colour grade as it turns from phase to phase, kept from frame to frame by assemble.ts
    * (world/grade.ts); null before the first frame
@@ -203,6 +210,9 @@ export function renderKit(overlay: CanvasRenderingContext2D): RenderKit {
     fringe: null,
     beacons: null,
     beams: null,
+    turns: new Map(),
+    solves: null,
+    held: null,
     grade: null,
     census: lightCensus(),
   };
@@ -332,7 +342,31 @@ export interface Frame {
   stillSince: ReadonlyMap<string, number>;
   /** how the crew stands while the run ends on screen: celebrating it won, slumped it lost */
   mood: FigureMood;
+  /** what each of the crew is busy with where they stand, by player id; nobody idle is in it */
+  tasks: ReadonlyMap<string, FigureTask>;
+  /** the way each of the crew shows itself facing, by player id: turning round to it, or it */
+  facings: ReadonlyMap<string, number>;
+  /** how strongly a solve's white flash lies over the world, 0 to hitStop.ts FLASH */
+  flash: number;
 }
+
+/**
+ * What a solve's hit-stop holds as it was (hitStop.ts): the camera, the clocks the world moves
+ * by, and the crew where they stood, as they stood.
+ */
+export type HeldFrame = Pick<
+  Frame,
+  | 'camera'
+  | 'grid'
+  | 'steady'
+  | 'time'
+  | 'pulse'
+  | 'burn'
+  | 'self'
+  | 'walkPhase'
+  | 'others'
+  | 'facings'
+>;
 
 /**
  * Draws with `draw` as the part `name` of a frame, and returns what it

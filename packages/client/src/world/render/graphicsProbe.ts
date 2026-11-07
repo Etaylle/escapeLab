@@ -2,10 +2,11 @@ import { beaconAngle, beaconPhase, beaconTurnMs, LOBE_REACH } from '../beacon.js
 import { CORE_HALF } from '../beam.js';
 import { figureBox } from '../depth.js';
 import { hotspotOf } from '../droneLights.js';
+import type { FigureTask } from '../figure.js';
 import type { GradePhase } from '../grade.js';
 import type { ParticleKind } from '../particles.js';
 import type { Sim } from '../sim.js';
-import { groundAt } from './actors.js';
+import { crewPose, groundAt } from './actors.js';
 import { conesOf, motesLit } from './atmosphere.js';
 import { streakOf } from './beam.js';
 import { navOf } from './drones.js';
@@ -76,6 +77,27 @@ export interface GraphicsProbe {
     hotspot: { x: number; y: number } | null;
     nav: { port: number; starboard: number };
   }[];
+  /**
+   * the crew's figures as the last frame posed them (figure.ts): who, what they are busy with,
+   * the way they show themselves facing, radians, and whether their hands hold something
+   */
+  crew: { id: string; task: FigureTask; facing: number; holding: boolean }[];
+}
+
+/** The crew's figures a frame posed, you first. */
+function crewOf(drawn: Frame | null): GraphicsProbe['crew'] {
+  if (drawn === null) {
+    return [];
+  }
+  const ids = [...(drawn.spectator ? [] : [drawn.youId]), ...drawn.others.keys()];
+  return ids.map((id) => {
+    const other = drawn.others.get(id);
+    const gait = other === undefined ? drawn.self : other;
+    const facing = drawn.facings.get(id) ?? gait.facing;
+    const walk = other === undefined ? drawn.walkPhase : other.phase;
+    const pose = crewPose(drawn, id, { moving: gait.moving, facing, walk });
+    return { id, task: drawn.tasks.get(id) ?? null, facing, holding: pose.holding };
+  });
 }
 
 /** The drones a frame drew, with their lights. */
@@ -183,5 +205,6 @@ export function graphicsProbe(world: ProbedWorld): GraphicsProbe {
     grade: gradeOf(kit, drawn),
     beam: beamOf(drawn),
     drones: dronesOf(drawn),
+    crew: crewOf(drawn),
   };
 }

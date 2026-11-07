@@ -21,9 +21,13 @@ import { smooth } from './ease.js';
  *              arms down
  *   ready      in the lobby: a wave of the arm for 1.8 s
  *   walking    the legs swing in a cycle tied to the ground covered (strideAt,
- *              gaitStep), the body a pixel up as they pass, leaning into
- *              the way it walks; the lamp in its hands sways with the step
- *              (handLamp)
+ *              gaitStep), the arms swinging against them, the body a pixel up
+ *              as they pass, leaning into the way it walks; the lamp in its
+ *              hands sways with the step (handLamp)
+ *   at a console  both hands up on the panel, tapping at it
+ *   reading    holding the sheet before the chest, the head bowed over it
+ *   turning    round to face the other side of the picture: in TURN_STEPS
+ *              steps through the side toward the camera, not at once (turnOf)
  *
  * Lengths are in tiles — PX is a pixel at the art's 64 px a tile — angles in
  * radians, times in ms. Every crew member runs each loop at an offset of
@@ -31,11 +35,15 @@ import { smooth } from './ease.js';
  * bible's motion rule holds: slow and small, nothing faster than a walking
  * figure but the flinch. Under reduced motion every pose holds its resting
  * frame: a figure carrying still holds the item, one celebrating holds its
- * arms up, and nothing else moves.
+ * arms up, one at a console or reading holds that pose — its arms still —
+ * and nothing else moves: no swing, no tapping, no turn but at once.
  */
 
 /** How the crew stands: playing, celebrating a run won, slumped over one lost. */
 export type FigureMood = 'play' | 'celebrate' | 'slump';
+
+/** What a crew member is busy with where they stand: at a console, reading a sheet; or nothing. */
+export type FigureTask = 'console' | 'reading' | null;
 
 /** What a crew member does and what happens round them, as the pose follows it. */
 export interface FigureState {
@@ -56,6 +64,10 @@ export interface FigureState {
   idleMs: number;
   /** the figure's own offset into every loop, 0 to 1 (figurePhase) */
   phase: number;
+  /** the walk cycle, 0 to 1 (strideAt): the arms swing in it */
+  walk: number;
+  /** what it is busy with where it stands */
+  task: FigureTask;
   /** the player asked for less motion: every pose holds its resting frame */
   reduced: boolean;
 }
@@ -155,6 +167,16 @@ const WAG_MS = 500;
 
 /** The arms' poses: holding before the chest, raised in a cheer, waving, flung out in a flinch. */
 const HOLD: Arms = { front: 1.35, back: 1.45 };
+/** How far the arms swing either way of hanging as the figure walks, radians. */
+export const ARM_SWING = 0.5;
+/** Both hands up on a console's panel, and how far they tap at it, at TAP_MS a tap. */
+const CONSOLE: Arms = { front: 2.0, back: 2.1 };
+const TAP = 0.08;
+const TAP_MS = 260;
+/** Holding a sheet to read it, the head bowed over it and turned down toward it. */
+const READ: Arms = { front: 1.2, back: 1.3 };
+export const READ_BOW = 0.07;
+export const READ_TILT = 0.7;
 const CHEER = 2.5;
 const CHEER_WAG = 0.15;
 const WAVE = 2.45;
@@ -308,15 +330,27 @@ export function restingPose(facing: number): FigurePose {
 /** How `s` stands this frame. */
 export function figurePose(s: FigureState): FigurePose {
   const body = s.reduced ? stillBody(s) : bodyOf(s);
+  const reading = readingOf(s);
   return {
     ...body,
-    look: s.facing + glanceOf(s),
+    bow: body.bow + (reading ? READ_BOW : 0),
+    look: s.facing + (reading ? readTilt(s.facing) : glanceOf(s)),
     arms: armsOf(s),
-    holding: s.carrying !== null,
+    holding: s.carrying !== null || reading,
     shimmer: s.speaking && !s.reduced ? loopAt(s.t, SHIMMER_MS, s.phase) : null,
     dim: s.mood === 'slump' ? SLUMP_DIM : 0,
     shadow: 1 - (SHADOW_SHRINK * body.rise) / JUMP,
   };
+}
+
+/** Whether `s` reads a sheet: standing still at one, its hands free, the run still on. */
+function readingOf(s: FigureState): boolean {
+  return s.task === 'reading' && s.carrying === null && !s.moving && s.mood === 'play';
+}
+
+/** How far a figure reading turns its look down over the sheet, staying on its side. */
+function readTilt(facing: number): number {
+  return Math.cos(facing) < 0 ? -READ_TILT : READ_TILT;
 }
 
 /** The body's part of a pose: off the ground, over its legs, squashed or stretched, bowed. */
@@ -398,7 +432,10 @@ export function flinchAt(ms: number): Pick<FigurePose, 'rise' | 'stretch'> {
   return { rise: 0, stretch: 1 };
 }
 
-/** The arms: holding, cheering, waving or flung out; null where they hang out of sight. */
+/**
+ * The arms: holding, cheering, at a console or reading, waving, flung out or swinging as the
+ * figure walks; null where they hang out of sight.
+ */
 function armsOf(s: FigureState): Arms | null {
   if (s.carrying !== null) {
     return HOLD;
@@ -406,13 +443,46 @@ function armsOf(s: FigureState): Arms | null {
   if (s.mood === 'celebrate') {
     return cheerAt(s.reduced ? 0 : loopAt(s.t, JUMP_MS, s.phase), s.reduced);
   }
-  if (s.reduced || s.mood === 'slump') {
-    return null;
+  const task = taskArms(s);
+  if (task !== null || s.reduced || s.mood === 'slump') {
+    return task;
   }
+  return movingArms(s);
+}
+
+/** The arms moving on their own: waving ready, flung out at an alarm, swinging as it walks. */
+function movingArms(s: FigureState): Arms | null {
   if (s.readyAgoMs !== null && s.readyAgoMs >= 0 && s.readyAgoMs < WAVE_MS) {
     return waveAt(s.readyAgoMs);
   }
-  return flinching(s) ? startleAt(s.alarmAgoMs ?? 0) : null;
+  if (flinching(s)) {
+    return startleAt(s.alarmAgoMs ?? 0);
+  }
+  return s.moving ? swingAt(s.walk) : null;
+}
+
+/**
+ * The arms at a task, standing still in a run still on: both hands up on a console's panel,
+ * tapping at it out of step — held still under reduced motion — or holding a sheet to read.
+ */
+function taskArms(s: FigureState): Arms | null {
+  if (s.moving || s.mood !== 'play') {
+    return null;
+  }
+  if (readingOf(s)) {
+    return READ;
+  }
+  if (s.task !== 'console') {
+    return null;
+  }
+  const tap = s.reduced ? 0 : TAP * Math.sin(TAU * loopAt(s.t, TAP_MS, s.phase));
+  return { front: CONSOLE.front + tap, back: CONSOLE.back - tap };
+}
+
+/** The arms `walk` into the walk cycle: each swinging against the leg on its side. */
+export function swingAt(walk: number): Arms {
+  const swing = ARM_SWING * Math.sin(TAU * walk);
+  return { front: -swing, back: swing };
 }
 
 /** Both arms up, wagging twice a jump `u` into its loop; held still under reduced motion. */
@@ -459,4 +529,62 @@ function glanceOf(s: FigureState): number {
 function turnedAt(ms: number): number {
   const back = ms - (GLANCE_MS - GLANCE_TURN_MS);
   return smooth(ms / GLANCE_TURN_MS) * (1 - smooth(back / GLANCE_TURN_MS));
+}
+
+/** How long a figure takes to turn round to face the other side of the picture, ms. */
+export const TURN_MS = 150;
+/** In how many steps it turns. */
+export const TURN_STEPS = 3;
+
+/** A figure turning round: the way it showed itself facing before, the way it faces, since when. */
+export interface Turn {
+  from: number;
+  to: number;
+  /** when the turn began, ms by the figure's clock */
+  since: number;
+}
+
+/** The side of the picture a figure facing `facing` shows itself to: 1 its right, -1 its left. */
+export function sideOf(facing: number): 1 | -1 {
+  return Math.cos(facing) < 0 ? -1 : 1;
+}
+
+/** `a` - `b` as the way round from `b` to `a`, -PI to PI. */
+function turnBy(a: number, b: number): number {
+  const d = a - b;
+  return Math.atan2(Math.sin(d), Math.cos(d));
+}
+
+/**
+ * The way the figure in `turn` shows itself facing at `now`, ms: TURN_STEPS steps from where it
+ * faced to where it faces, the shorter way round — through the side toward the camera where
+ * both are as short — and where it faces once TURN_MS is past.
+ */
+export function shownFacing(turn: Turn, now: number): number {
+  const t = (now - turn.since) / TURN_MS;
+  if (t >= 1) {
+    return turn.to;
+  }
+  let by = turnBy(turn.to, turn.from);
+  if (Math.abs(Math.abs(by) - Math.PI) < 1e-9) {
+    // Straight round either way: through the side toward the camera, the bottom of the picture.
+    by = Math.sin(turn.from + Math.PI / 2) >= 0 ? Math.PI : -Math.PI;
+  }
+  const step = Math.min(TURN_STEPS, Math.floor(Math.max(0, t) * TURN_STEPS) + 1);
+  return turn.from + (by * step) / TURN_STEPS;
+}
+
+/**
+ * The turn a figure facing `facing` is in at `now`, ms, after `turn`: a new one, from the way
+ * it shows itself facing now, where it came to face the other side of the picture; else the
+ * same, following its facing. None to watch for a figure first seen, or under reduced motion.
+ */
+export function turnOf(turn: Turn | null, facing: number, now: number, reduced: boolean): Turn {
+  if (turn === null || reduced) {
+    return { from: facing, to: facing, since: now - TURN_MS };
+  }
+  if (sideOf(facing) !== sideOf(turn.to)) {
+    return { from: shownFacing(turn, now), to: facing, since: now };
+  }
+  return turn.to === facing ? turn : { ...turn, to: facing };
 }

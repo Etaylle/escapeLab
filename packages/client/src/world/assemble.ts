@@ -6,10 +6,11 @@ import { worldText, type WorldText } from './art.js';
 import { coldOpenFrame, FLICKER_MS, type ColdOpenFrame } from './coldOpen.js';
 import { exitOpening, redShift } from './escape.js';
 import { dangerMarker } from './danger.js';
-import type { FigureMood } from './figure.js';
+import { turnOf, shownFacing, type FigureMood, type FigureTask } from './figure.js';
 import { finaleFrame, type FinaleCue, type FinaleFrame } from './finale.js';
 import { frameLight, mountedLamps } from './frameLight.js';
 import { gradeAt, gradePhase, type Wash } from './grade.js';
+import { flashAt, holding, solvesAt } from './hitStop.js';
 import { contextAction } from './interact.js';
 import { hudAt, litWhole, shotProgress, type IntroCue } from './intro/sequence.js';
 import { known } from './known.js';
@@ -17,6 +18,7 @@ import { labelAlpha } from './labelFade.js';
 import { SHOT_WIDE, shotPoint, shotStart } from './intro/shot.js';
 import { markerTargets } from './markers.js';
 import { positionsOf, type KnownPositions } from './movement.js';
+import { presenceNear, type Whereabouts } from './presence.js';
 import { refusalAt } from './press.js';
 import type { ChatLine, Frame, MapPing, RenderKit, WorldMap } from './render/frame.js';
 import { gridOf, sameGrid, snapCamera } from './render/grid.js';
@@ -99,7 +101,7 @@ export function assembleFrame(
   const cue = live.finale;
   const ending = cue === null ? null : finaleFrame(cue.ending, now - cue.since, live.reduced);
   const hud = hudOf(source, now);
-  return {
+  return held(source, {
     ...stage(source, map, dpr, ending?.pull ?? 0, now, hud),
     ...lighting(source, map, now, ending),
     ...crewOf(source),
@@ -120,7 +122,39 @@ export function assembleFrame(
     missionId: live.view.missionId,
     short: shortOf(live.view, source.alarm.current),
     ...figuresOf(source, map),
-  };
+    ...impactOf(source, now),
+  });
+}
+
+/**
+ * The solves this screen sees (hitStop.ts), kept in the kit: the run a puzzle further on than
+ * the frame before saw lands one — and how strongly its white flash lies over the world now.
+ */
+function impactOf(source: FrameSource, now: number): Pick<Frame, 'flash'> {
+  const { kit } = source;
+  const { view, reduced } = source.live.current;
+  kit.solves = solvesAt(kit.solves, view.currentPuzzleIndex, now);
+  return { flash: flashAt(kit.solves.at, now, reduced) };
+}
+
+/**
+ * `frame`, or for HIT_STOP_MS after a solve the frame it came on, as far as the hit-stop holds
+ * it (render/frame.ts HeldFrame): the camera, the world's clocks and the crew as they were.
+ */
+function held(source: FrameSource, frame: Frame): Frame {
+  const { kit } = source;
+  if (!holding(kit.solves?.at ?? null, frame.now, frame.reduced)) {
+    kit.held = null;
+    return frame;
+  }
+  if (kit.held === null) {
+    // The simulation moves you and the rest in place: what is held is a copy of where they were.
+    const { camera, grid, steady, time, pulse, burn, walkPhase, facings } = frame;
+    const self = { ...frame.self };
+    const others = new Map([...frame.others].map(([id, other]) => [id, { ...other }]));
+    kit.held = { camera, grid, steady, time, pulse, burn, self, walkPhase, others, facings };
+  }
+  return { ...frame, ...kit.held };
 }
 
 /** Device pixels per tile with the whole lab in the picture. */
@@ -454,16 +488,76 @@ function moodOf(finale: FinaleCue | null): FigureMood {
   return finale.ending === 'won' ? 'celebrate' : 'slump';
 }
 
+/** How long one of the crew stands still at a station or a source before it shows them busy. */
+const BUSY_AFTER_MS = 300;
+
+/**
+ * What each of the crew is busy with where they stand (figure.ts FigureTask): you as the view
+ * tells it — reading a source with its pages open, at a station's console standing still — the
+ * rest as their place says (presence.ts presenceNear), once they have stood still a moment.
+ */
+function tasksOf(source: FrameSource, map: WorldMap): Map<string, FigureTask> {
+  const { sim, kit } = source;
+  const { view, locked } = source.live.current;
+  const busy: [string, FigureTask][] = [[view.you.id, yourTask(view.presence, sim, locked)]];
+  const now = sim.time * 1000;
+  for (const [id, other] of sim.others) {
+    const still = kit.still.get(id);
+    if (still !== undefined && now - still >= BUSY_AFTER_MS && !other.moving) {
+      busy.push([id, taskAt(presenceNear(map, { x: other.rx, y: other.ry }))]);
+    }
+  }
+  return new Map(busy.filter(([, task]) => task !== null));
+}
+
+/** What you are busy with as the view tells it: your pages open at a source, at a console. */
+function yourTask(presence: Whereabouts, sim: Sim, locked: boolean): FigureTask {
+  if (presence.manualId !== null && locked && presence.stationId === null) {
+    return 'reading';
+  }
+  return presence.stationId !== null && !sim.self.moving ? 'console' : null;
+}
+
+/** What somebody standing still where `at` says is busy with: reading at a source, a console. */
+function taskAt(at: Whereabouts): FigureTask {
+  if (at.manualId !== null) {
+    return 'reading';
+  }
+  return at.stationId !== null ? 'console' : null;
+}
+
+/**
+ * The way each of the crew shows itself facing (figure.ts turnOf): turning round in steps where
+ * one came to face the other side of the picture, kept in the kit from frame to frame.
+ */
+function facingsOf(source: FrameSource, youId: string): Map<string, number> {
+  const { sim, kit } = source;
+  const now = sim.time * 1000;
+  const reduced = source.live.current.reduced;
+  const facings = new Map<string, number>();
+  const crew: [string, number][] = [[youId, sim.self.facing]];
+  for (const [id, other] of sim.others) {
+    crew.push([id, other.facing]);
+  }
+  for (const [id, facing] of crew) {
+    const turn = turnOf(kit.turns.get(id) ?? null, facing, now, reduced);
+    kit.turns.set(id, turn);
+    facings.set(id, shownFacing(turn, now));
+  }
+  return facings;
+}
+
 /**
  * What the crew's figures stand by this frame (figure.ts): what each of the
  * crew carries, by the view's items; since when each has stood still, kept
  * in the kit from frame to frame — you as you steer yourself, the rest as
- * they stream in; and the mood the run's end puts them in.
+ * they stream in; the mood the run's end puts them in; what each is busy
+ * with, and the way each shows itself facing.
  */
 function figuresOf(
   source: FrameSource,
   map: WorldMap,
-): Pick<Frame, 'carrying' | 'stillSince' | 'mood'> {
+): Pick<Frame, 'carrying' | 'stillSince' | 'mood' | 'tasks' | 'facings'> {
   const { sim, kit } = source;
   const { view, finale } = source.live.current;
   const now = sim.time * 1000;
@@ -481,5 +575,7 @@ function figuresOf(
       carrying.set(item.carriedBy, item.kind);
     }
   }
-  return { carrying, stillSince: kit.still, mood: moodOf(finale) };
+  const tasks = tasksOf(source, map);
+  const facings = facingsOf(source, view.you.id);
+  return { carrying, stillSince: kit.still, mood: moodOf(finale), tasks, facings };
 }

@@ -88,6 +88,9 @@ export function kitWith(overlay: FakeCanvas = fakeCanvas(800, 600, 'overlay')): 
     fringe: null,
     beacons: null,
     beams: null,
+    turns: new Map(),
+    solves: null,
+    held: null,
     grade: null,
     census: lightCensus(),
   };
@@ -174,6 +177,9 @@ function frameParts(parts: Partial<Frame>): Omit<Frame, 'grid'> {
     carrying: new Map(),
     stillSince: new Map(),
     mood: 'play',
+    tasks: new Map(),
+    facings: new Map(),
+    flash: 0,
     ...parts,
   };
 }

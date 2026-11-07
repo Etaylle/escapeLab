@@ -2,6 +2,7 @@ import type { PartKind, PlayerView } from '@escapelab/core';
 import { DRONE_MARK_MS } from '../alarm.js';
 import {
   drawNameTag,
+  drawHeldSheet,
   drawScientist,
   drawVoiceRing,
   type Ground,
@@ -128,16 +129,17 @@ function otherLook(
   other: OtherAvatar,
   frame: Frame,
 ): ScientistOpts {
+  const facing = frame.facings.get(id) ?? other.facing;
   return {
     color: meta?.color ?? FALLBACK_COLOR,
     name: meta?.name ?? '???',
-    facing: other.facing,
+    facing,
     moving: other.moving,
     walkPhase: other.phase,
     isYou: false,
     connected: meta?.connected ?? true,
     text: frame.text,
-    pose: crewPose(frame, id, other),
+    pose: crewPose(frame, id, { moving: other.moving, facing, walk: other.phase }),
     ground: groundAt(frame, other.rx, other.ry),
     ...heldBy(frame, id),
   };
@@ -157,31 +159,33 @@ export function groundAt(frame: Frame, x: number, y: number): Ground {
 
 /** You, as the view names you: by your own name where the crew's list has no entry for you. */
 function yourLook(you: Player | undefined, frame: Frame): ScientistOpts {
+  const { self, walkPhase } = frame;
+  const facing = frame.facings.get(frame.youId) ?? self.facing;
   return {
     color: you?.color ?? FALLBACK_COLOR,
     name: you?.name ?? frame.youName,
-    facing: frame.self.facing,
-    moving: frame.self.moving,
-    walkPhase: frame.walkPhase,
+    facing,
+    moving: self.moving,
+    walkPhase,
     isYou: true,
     connected: true,
     text: frame.text,
-    pose: crewPose(frame, frame.youId, frame.self),
-    ground: groundAt(frame, frame.self.x, frame.self.y),
+    pose: crewPose(frame, frame.youId, { moving: self.moving, facing, walk: walkPhase }),
+    ground: groundAt(frame, self.x, self.y),
     ...heldBy(frame, frame.youId),
   };
 }
 
 /**
- * How the crew member `id`, walking or not and facing as `gait` says, stands
- * in `frame` (figure.ts): with what they carry, whether they speak, how long
- * ago the last alarm came in, how long they have stood still, and the mood
+ * How the crew member `id`, walking or not, facing and `walk` into the walk cycle as `gait`
+ * says, stands in `frame` (figure.ts): with what they carry, whether they speak, how long ago
+ * the last alarm came in, how long they have stood still, what they are busy with, and the mood
  * the run's end puts the crew in — each at their own offset into the loops.
  */
 export function crewPose(
   frame: Frame,
   id: string,
-  gait: { moving: boolean; facing: number },
+  gait: { moving: boolean; facing: number; walk: number },
 ): FigurePose {
   const carried = frame.carrying.get(id);
   const t = frame.time * 1000;
@@ -197,6 +201,8 @@ export function crewPose(
     t,
     idleMs: still === undefined ? 0 : t - still,
     phase: figurePhase(id),
+    walk: gait.walk,
+    task: frame.tasks.get(id) ?? null,
     reduced: frame.reduced,
   });
 }
@@ -215,10 +221,13 @@ export function heldItem(kind: PartKind, pulse: number): (ctx: CanvasRenderingCo
   };
 }
 
-/** What `id` carries, for their hands; nothing for none. */
+/** What `id` holds in their hands: what they carry, the sheet they read; nothing for none. */
 function heldBy(frame: Frame, id: string): Pick<ScientistOpts, 'held'> {
   const kind = frame.carrying.get(id);
-  return kind === undefined ? {} : { held: heldItem(kind, frame.pulse) };
+  if (kind !== undefined) {
+    return { held: heldItem(kind, frame.pulse) };
+  }
+  return frame.tasks.get(id) === 'reading' ? { held: drawHeldSheet } : {};
 }
 
 /** A crew member standing at `spot`, in a ring while they speak. */

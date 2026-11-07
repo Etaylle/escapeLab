@@ -1687,6 +1687,33 @@ const PLAN_H = 0.28;
 /** The route on the terminal's plan, as x, y pairs. */
 const PLAN_ROUTE = [-0.15, -0.3, -0.15, -0.21, 0.01, -0.21, 0.01, -0.13, 0.15, -0.13] as const;
 
+/**
+ * A sheet of paper as the hands hold it up to read (figure.ts, reading): drawn round its own
+ * anchor at its size on the floor, tilted a little, its lines of print across it — the figure
+ * takes it to its HELD_SCALE.
+ */
+export function drawHeldSheet(ctx: CanvasRenderingContext2D): void {
+  ctx.save();
+  ctx.rotate(-0.12);
+  ctx.beginPath();
+  ctx.rect(-0.22, -0.3, 0.44, 0.56);
+  ctx.fillStyle = C_PAPER;
+  ctx.fill();
+  ctx.lineWidth = 0.035;
+  ctx.strokeStyle = css(sink(PAPER, 0.55));
+  ctx.stroke();
+  ctx.beginPath();
+  PRINT.forEach((length, i) => {
+    const y = -0.2 + i * 0.09;
+    ctx.moveTo(-0.15, y);
+    ctx.lineTo(-0.15 + length * 1.4, y);
+  });
+  ctx.lineWidth = 0.03;
+  ctx.strokeStyle = PAPER_PRINT;
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** Adds one page of the open book; `side` -1 is left of the spine, 1 right of it. */
 function addPage(p: CanvasPath, side: number): void {
   p.moveTo(side * 0.01, -0.235);

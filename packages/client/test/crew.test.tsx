@@ -13,7 +13,8 @@ import type {
 } from '@escapelab/core';
 import { RoomCode } from '../src/App.js';
 import { pressingWord } from '../src/puzzles/syncPress.js';
-import { crewSizeText, crewTags, presenceNear } from '../src/screens/Crew.js';
+import { crewSizeText, crewTags } from '../src/screens/Crew.js';
+import { presenceNear } from '../src/world/presence.js';
 import { lineup, type Place } from '../src/screens/CrewRoom.js';
 import { EndScreen } from '../src/screens/End.js';
 import { JoinScreen } from '../src/screens/Join.js';

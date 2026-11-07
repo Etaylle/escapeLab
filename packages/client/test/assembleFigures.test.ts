@@ -3,6 +3,7 @@ import type { PlayerView, PuzzleView } from '@escapelab/core';
 import { worldText } from '../src/world/art.js';
 import { assembleFrame, type FrameSource, type Latest } from '../src/world/assemble.js';
 import type { FinaleCue } from '../src/world/finale.js';
+import { FLASH, FLASH_MS, HIT_STOP_MS } from '../src/world/hitStop.js';
 import {
   BARS_MS,
   HUD_FADE_MS,
@@ -170,6 +171,157 @@ describe('assembleFrame — what the crew’s figures stand by', () => {
     expect(frameAt(sourceWith([], { ending: 'won', since }), 1).mood).toBe('celebrate');
     expect(frameAt(sourceWith([], { ending: 'lost:time', since }), 1).mood).toBe('slump');
     expect(frameAt(sourceWith([], { ending: 'lost:alarms', since }), 1).mood).toBe('slump');
+  });
+});
+
+describe('assembleFrame — what the crew is busy with, how they turn, a solve’s impact', () => {
+  beforeAll(() => {
+    vi.stubGlobal('Path2D', FakePath2D);
+  });
+  afterAll(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** Anna's world with the armed station at (7, 2) and an open book at (2, 4), Ben at (x, y). */
+  function busyLab(x: number, y: number): FrameSource {
+    const source = sourceWith([]);
+    const view = source.live.current.view;
+    const map = view.map === null ? null : {
+      ...view.map,
+      stations: [
+        {
+          puzzleId: 'kasten',
+          x: 7,
+          y: 2,
+          title: 'Kasten',
+          status: 'armed',
+          found: true,
+          known: true,
+        },
+      ],
+      manuals: [
+        {
+          id: 'buch',
+          kind: 'book',
+          x: 2,
+          y: 4,
+          known: true,
+          opened: true,
+          label: 'BUCH',
+          puzzleIds: ['kasten'],
+          covers: [],
+          needsKey: null,
+        },
+      ],
+    } as unknown as PlayerView['map'];
+    source.live.current = { ...source.live.current, view: { ...view, map } };
+    source.sim.others.set('p2', { x, y, facing: 0, moving: false, rx: x, ry: y, phase: 0 });
+    return source;
+  }
+
+  it('tells you at a console by the view, and reading where your pages are open', () => {
+    const source = busyLab(4, 1);
+    const view = source.live.current.view;
+    const at = (presence: Partial<PlayerView['presence']>, locked = false) => {
+      source.live.current = {
+        ...source.live.current,
+        locked,
+        view: { ...view, presence: { ...view.presence, ...presence } },
+      };
+      return frameAt(source, 2).tasks.get('p1') ?? null;
+    };
+    expect(at({ stationId: 'kasten' })).toBe('console');
+    expect(at({ manualId: 'buch' }, true)).toBe('reading');
+    expect(at({ manualId: 'buch' }, false)).toBeNull();
+    source.sim.self.moving = true;
+    expect(at({ stationId: 'kasten' })).toBeNull();
+  });
+
+  it('guesses the rest by their place, once they have stood still a moment', () => {
+    const atConsole = busyLab(7.5, 3.2);
+    frameAt(atConsole, 1);
+    expect(frameAt(atConsole, 1.1).tasks.get('p2')).toBeUndefined();
+    expect(frameAt(atConsole, 1.5).tasks.get('p2')).toBe('console');
+    const atBook = busyLab(2.5, 3.6);
+    frameAt(atBook, 1);
+    expect(frameAt(atBook, 1.5).tasks.get('p2')).toBe('reading');
+    const away = busyLab(4.5, 3.5);
+    frameAt(away, 1);
+    expect(frameAt(away, 2).tasks.size).toBe(0);
+  });
+
+  it('shows Ben turning round in steps as he comes to face the other way', () => {
+    const source = busyLab(4.5, 3.5);
+    expect(frameAt(source, 1).facings.get('p2')).toBe(0);
+    const ben = source.sim.others.get('p2');
+    if (ben !== undefined) {
+      ben.facing = Math.PI;
+    }
+    const turning = frameAt(source, 1.01).facings.get('p2') ?? 0;
+    expect(turning).toBeGreaterThan(0);
+    expect(turning).toBeLessThan(Math.PI);
+    expect(frameAt(source, 1.2).facings.get('p2')).toBe(Math.PI);
+  });
+});
+
+describe('assembleFrame — a solve’s hit-stop and flash', () => {
+  const NOW = 3_000_000;
+  beforeAll(() => {
+    vi.stubGlobal('Path2D', FakePath2D);
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterAll(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  /** The run a puzzle on in Anna's view. */
+  function solve(source: FrameSource): void {
+    const view = source.live.current.view;
+    source.live.current = {
+      ...source.live.current,
+      view: { ...view, currentPuzzleIndex: view.currentPuzzleIndex + 1 },
+    };
+  }
+
+  it('holds the camera, the clock and the crew for HIT_STOP_MS, the flash fading after', () => {
+    const source = sourceWith([]);
+    vi.setSystemTime(NOW);
+    expect(frameAt(source, 1).flash).toBe(0);
+    solve(source);
+    vi.setSystemTime(NOW + 1000);
+    const hit = frameAt(source, 2);
+    expect(hit.flash).toBe(FLASH);
+    source.sim.self.x = 3.5;
+    vi.setSystemTime(NOW + 1000 + HIT_STOP_MS - 10);
+    const holding = frameAt(source, 2.05);
+    expect(holding.time).toBe(2);
+    expect(holding.self.x).toBe(2.5);
+    expect(holding.camera).toEqual(hit.camera);
+    expect(holding.flash).toBeGreaterThan(0);
+    vi.setSystemTime(NOW + 1000 + HIT_STOP_MS);
+    const after = frameAt(source, 2.07);
+    expect(after.time).toBe(2.07);
+    expect(after.self.x).toBe(3.5);
+    vi.setSystemTime(NOW + 1000 + FLASH_MS);
+    expect(frameAt(source, 2.2).flash).toBe(0);
+  });
+
+  it('lands none for the puzzles solved before the first frame, nor under reduced motion', () => {
+    const late = sourceWith([]);
+    const view = late.live.current.view;
+    late.live.current = { ...late.live.current, view: { ...view, currentPuzzleIndex: 3 } };
+    vi.setSystemTime(NOW);
+    expect(frameAt(late, 1).flash).toBe(0);
+    const reduced = sourceWith([]);
+    reduced.live.current = { ...reduced.live.current, reduced: true };
+    frameAt(reduced, 1);
+    solve(reduced);
+    reduced.sim.self.x = 3.5;
+    const frame = frameAt(reduced, 1.01);
+    expect(frame.flash).toBe(0);
+    expect(frame.self.x).toBe(3.5);
   });
 });
 

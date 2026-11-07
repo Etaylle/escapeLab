@@ -62,7 +62,8 @@
  * them as far as the page's probe says its clock turned it and the picture round the lamp
  * changed (sweep.mjs), or the run fails; grade-blackout.png shows the host's window in the
  * blackout's cool grade, which the probe has to name; beam-core.png the host's beam turned down
- * the longest free floor, its core brighter than its flanks (beamcheck.mjs). E
+ * the longest free floor, its core brighter than its flanks (beamcheck.mjs); pose-console.png
+ * the host back at the switch, both hands up on its panel, as the probe has to pose it. E
  * opens its panel for each (lever.png, every lamp lit, the player's own name
  * under the own lever). Where the view gives a press its expiry, the host throws alone:
  * lever-ring.png catches the ring round its grip draining; 1.3 s in,
@@ -118,7 +119,8 @@
  * Notstrom-Kasten's wires, serial and readings round by round and its cuts,
  * every stage of the Signalkette at consoles with the legend (a key a row
  * and a shape; the deliberate wrong one gives figure-flinch.png), the
- * Serverraum's table and moves (servers-manual.png from its locker,
+ * Serverraum's table and moves (servers-manual.png from its locker, the
+ * host's window showing the guest reading it as pose-reading.png,
  * servers-a.png and servers-b.png from its consoles, servers-solved.png),
  * the cabinet read at the large text size (book-morse-1.15.png: the
  * Morsetafel whole on its page, the Frequenztabelle facing it, no line cut)
@@ -3080,6 +3082,7 @@ async function throwLever(players) {
   await captureBeaconSweep(first);
   await captureGradeBlackout(first);
   await captureBeamCore(first);
+  await capturePose(first, first, 'console', 'pose-console.png');
   for (const player of players) {
     const modal = player.page.locator('.station-modal');
     if (!(await interactUntil(player, modal, consoleTarget(lever)))) {
@@ -3264,6 +3267,34 @@ async function captureBeamCore(player) {
     }
   }
   await standOn(player, at);
+}
+
+/**
+ * pose-console.png, pose-reading.png: a figure busy where it stands (client world/figure.ts) —
+ * `who` as the window of `watcher` shows them, two tiles round: both hands up on the panel at a
+ * console, or holding the sheet, the head bowed over it, at an open source. The watcher's probe
+ * has to pose them so within two seconds — busy with `task`, a reader's hands holding the sheet
+ * — or the run fails.
+ */
+async function capturePose(watcher, who, task, name) {
+  const id = who.seen.view.you.id;
+  const busy = (p) => p.crew.some((c) => c.id === id && c.task === task);
+  const probe = await graphicsWhen(watcher.page, busy, 2000);
+  const at = whereIs(who.seen);
+  if (at === null || !(await shootAround(watcher.page, name, at, 2))) {
+    fail(`${name}: ${who.name} stands nowhere ${watcher.name}'s window shows`);
+    return;
+  }
+  const figure = probe?.crew.find((c) => c.id === id);
+  const fine = figure?.task === task && (task !== 'reading' || figure.holding);
+  const hands = figure?.holding ? 'holding' : 'free';
+  console.log(
+    `${name.padEnd(18)} ${watcher.name} sees ${who.name} busy: ` +
+      `${figure?.task ?? '!! nothing'}, hands ${hands}${fine ? '' : ' !!'}`,
+  );
+  if (!fine) {
+    fail(`${name}: ${who.name} posed ${figure?.task ?? 'idle'}, hands ${hands}`);
+  }
 }
 
 /** `radians` in whole degrees. */
@@ -8423,9 +8454,10 @@ async function playSignalkette(host, guest) {
 
 /**
  * The Serverraum's rules in its locker: `reader` searches it with E, reads
- * them (servers-manual.png) and puts them down again. Throws where it cannot.
+ * them (servers-manual.png) — `watcher`'s window showing them reading it
+ * (pose-reading.png) — and puts them down again. Throws where it cannot.
  */
-async function readLocker(reader, locker) {
+async function readLocker(reader, locker, watcher) {
   const target = sourceTarget(locker);
   const opened = () => reader.seen.view.map.manuals.some((m) => m.id === locker.id && m.opened);
   if (!(await pressUntil(reader, target, 'the open locker', opened))) {
@@ -8437,6 +8469,7 @@ async function readLocker(reader, locker) {
   }
   await sleep(500); // past the page's fade-in
   await capture(reader.page, 'servers-manual.png');
+  await capturePose(watcher, reader, 'reading', 'pose-reading.png');
   const where = await textOf(overlay.locator('.book-where, .terminal-status'));
   console.log(`servers-manual.png ${reader.name} at the ${locker.label}: ${where ?? 'one sheet'}`);
   await reader.page.keyboard.press('Escape');
@@ -8462,7 +8495,7 @@ async function playServerraum(host, guest) {
   await captureRackLeds(host);
   await sneakTo(guest, workSpot(guest, locker));
   await foundWherePinned(guest, locker);
-  await readLocker(guest, locker);
+  await readLocker(guest, locker, host);
   await clearOfEmergencies(host, 55);
   await sneakTo(guest, atConsole(guest, 'b'), 3);
   const crew = { terminal: host, rack: guest };
@@ -9914,6 +9947,7 @@ async function captureChatSlot(player, other) {
   }
   await sleep(1300); // past the server's chat cooldown after pad-quickchat.png's line
   const sentBefore = seen.sent.length;
+  const eventsBefore = seen.view?.events?.length ?? 0;
   await onPad(page, 'tap', 'dright');
   const opened = await settled(page.locator('.chat-wheel').waitFor({ timeout: 3000 }));
   await sleep(250); // the first phrase takes the focus as the wheel comes up
@@ -9943,6 +9977,10 @@ async function captureChatSlot(player, other) {
   );
   const shown = `${player.name}: Kabel 3`;
   const strip = await hudLineOnceIt(page, shown, 5000);
+  // The strip carries the newer of the last chat line and the run's last line: one the run
+  // said after the chat — the mission control's hint, as a longer walkthrough may meet it —
+  // takes it over, rightly.
+  const newer = (seen.view?.events?.length ?? 0) > eventsBefore;
   await sleep(1300); // past the cooldown again
   const keyed = await sayByKeys(player, service);
   const keyedHeard = await until(
@@ -9954,7 +9992,8 @@ async function captureChatSlot(player, other) {
       `${onPhrase}, A ${stepped ? 'opened the second step' : '!! opened no second step'}, ` +
       `${firstValue} in the focus, ▶▶ to ${onValue}; A sent ${JSON.stringify(said ?? null)}` +
       `${shut ? ', the wheel shut' : ' !! the wheel still open'}; ${other.name} heard ` +
-      `${heard ? '„Kabel 3"' : '!! nothing'}; the HUD strip "${strip ?? '(on the air)'}"; ` +
+      `${heard ? '„Kabel 3"' : '!! nothing'}; the HUD strip "${strip ?? '(on the air)'}"` +
+      `${strip !== shown && newer ? ', a line of the run newer than the chat' : ''}; ` +
       `keys sent ${JSON.stringify(keyed)}, ${other.name} heard ` +
       `${keyedHeard ? '„Dienst DNS"' : '!! nothing'}`,
   );
@@ -9967,7 +10006,7 @@ async function captureChatSlot(player, other) {
     (said?.phrase !== wire || said?.value !== '3') && `A sent ${JSON.stringify(said)}`,
     !shut && 'the wheel stayed open',
     !heard && `${other.name} never heard „Kabel 3"`,
-    strip !== null && strip !== shown && `the HUD strip read "${strip}"`,
+    strip !== null && strip !== shown && !newer && `the HUD strip read "${strip}"`,
     (keyed?.phrase !== service || keyed?.value !== 'DNS') &&
       `the keys sent ${JSON.stringify(keyed)}`,
     !keyedHeard && `${other.name} never heard „Dienst DNS"`,

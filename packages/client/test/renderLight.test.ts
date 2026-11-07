@@ -500,6 +500,16 @@ describe('light — the phase’s colour grade over the picture and its darkness
     expect(gradeFill(lit, GRADES.won)).toBeGreaterThan(wholePower);
   });
 
+  it('lays a solve’s white flash over the world and its lights, lit or dark', () => {
+    const white = (log: readonly Entry[]) =>
+      log.findIndex((e) => e.kind === 'set' && e.value === 'rgba(255, 255, 255, 0.1)');
+    const dark = drawn(withKit(overlay, warm, { flash: 0.1 }));
+    expect(white(dark)).toBeGreaterThan(laidAt(dark, overlay.canvas));
+    const lit = drawn(withKit(fakeCanvas(800, 600), warm, { flash: 0.1, spectator: true }));
+    expect(white(lit)).toBeGreaterThanOrEqual(0);
+    expect(white(drawn(withKit(fakeCanvas(800, 600), warm, { flash: 0 })))).toBe(-1);
+  });
+
   it('lays nothing for the escape’s grade, which leaves the picture as it is', () => {
     const log = drawn(withKit(overlay, warm, { grade: GRADES.escape }));
     expect(callsOf(log, 'fillRect')).toEqual([]);

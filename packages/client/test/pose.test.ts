@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { WALK_SPEED } from '../src/world/anim.js';
 import {
+  ARM_SWING,
   BREATH,
   BREATH_MS,
   FLINCH_MS,
@@ -15,10 +16,17 @@ import {
   JUMP,
   JUMP_MS,
   jumpAt,
+  READ_BOW,
+  READ_TILT,
   restingPose,
   SAG,
   SHIMMER_MS,
+  shownFacing,
+  swingAt,
   TALK_BOB,
+  TURN_MS,
+  TURN_STEPS,
+  turnOf,
   WAVE_MS,
   type FigurePose,
   type FigureState,
@@ -36,6 +44,8 @@ const BASE: FigureState = {
   t: 0,
   idleMs: 0,
   phase: 0,
+  walk: 0,
+  task: null,
   reduced: false,
 };
 
@@ -85,7 +95,8 @@ describe('figurePose — standing, breathing, looking round', () => {
       expect(pose({ t: t + BREATH_MS }).bob).toBeCloseTo(pose({ t }).bob, 9);
     }
     expect(pose({ t: 750 }).bob).not.toBeCloseTo(pose({ t: 0 }).bob, 4);
-    expect(pose({ t: 750, moving: true })).toEqual(restingPose(0));
+    // Walking, the body rides on its legs: no breath; only the arms swing (below).
+    expect({ ...pose({ t: 750, moving: true }), arms: null }).toEqual(restingPose(0));
   });
 
   it('offsets every crew member into the loops by their id, the same on every screen', () => {
@@ -185,6 +196,72 @@ describe('figurePose — speaking, carrying, a flinch', () => {
   });
 });
 
+describe('figurePose — walking, at a console, reading', () => {
+  it('swings the arms against each other as the figure walks, the most at full stride', () => {
+    expect(pose({ moving: true, walk: 0.25 }).arms).toEqual({ front: -ARM_SWING, back: ARM_SWING });
+    const back = pose({ moving: true, walk: 0.75 }).arms;
+    expect(back?.front).toBeCloseTo(ARM_SWING, 12);
+    expect(back?.back).toBeCloseTo(-ARM_SWING, 12);
+    expect(pose({ moving: true, walk: 0.5 }).arms?.front).toBeCloseTo(0, 12);
+    // Standing, they hang out of sight.
+    expect(pose({ walk: 0.25 }).arms).toBeNull();
+  });
+
+  it('puts both hands up on the panel at a console, tapping at it, while standing there', () => {
+    const taps = sampled(0, 1000, 10, (t) => pose({ t, task: 'console' }).arms?.front ?? 0);
+    expect(Math.min(...taps)).toBeGreaterThan(Math.PI / 2);
+    expect(Math.max(...taps) - Math.min(...taps)).toBeGreaterThan(0.1);
+    // Walking off, the arms swing again.
+    expect(pose({ task: 'console', moving: true, walk: 0.25 }).arms).toEqual(swingAt(0.25));
+    expect(pose({ task: 'console' }).holding).toBe(false);
+  });
+
+  it('holds the sheet before the chest to read it, the head bowed and turned down over it', () => {
+    const reading = pose({ task: 'reading' });
+    expect(reading.holding).toBe(true);
+    expect(reading.arms?.front).toBeGreaterThan(1);
+    expect(reading.bow).toBeCloseTo(READ_BOW, 12);
+    expect(reading.look).toBeCloseTo(READ_TILT, 12);
+    // Facing left it looks down to the left: the visor stays on its side.
+    expect(Math.cos(pose({ task: 'reading', facing: Math.PI }).look)).toBeLessThan(0);
+    // What it carries comes first: no sheet over a fuse.
+    expect(pose({ task: 'reading', carrying: 'fuse' }).bow).toBe(0);
+  });
+});
+
+describe('turnOf, shownFacing — a figure turning round to the other side', () => {
+  it('turns in TURN_STEPS steps over TURN_MS, through the side toward the camera', () => {
+    expect(TURN_STEPS).toBe(3);
+    const settled = turnOf(null, 0, 1000, false);
+    expect(shownFacing(settled, 1000)).toBe(0);
+    const turn = turnOf(settled, Math.PI, 2000, false);
+    const steps = [0, 49, 50, 99, 100, 149].map((ms) => shownFacing(turn, 2000 + ms));
+    expect(steps[0]).toBeCloseTo(Math.PI / 3, 12);
+    expect(steps[1]).toBeCloseTo(Math.PI / 3, 12);
+    expect(steps[2]).toBeCloseTo((2 * Math.PI) / 3, 12);
+    expect(steps[4]).toBeCloseTo(Math.PI, 12);
+    // Through the bottom of the picture: toward the camera, its visor wide.
+    expect(Math.sin(steps[2] ?? 0)).toBeGreaterThan(0);
+    expect(shownFacing(turn, 2000 + TURN_MS)).toBe(Math.PI);
+  });
+
+  it('turns no steps within a side, and none at all under reduced motion', () => {
+    const settled = turnOf(null, 0, 1000, false);
+    const turned = turnOf(settled, Math.PI / 4, 1010, false);
+    expect(shownFacing(turned, 1010)).toBe(Math.PI / 4);
+    const reduced = turnOf(settled, Math.PI, 1020, true);
+    expect(shownFacing(reduced, 1020)).toBe(Math.PI);
+  });
+
+  it('turns back from where it shows itself mid-turn: no jump', () => {
+    const turn = turnOf(turnOf(null, 0, 0, false), Math.PI, 1000, false);
+    const mid = shownFacing(turn, 1060);
+    const back = turnOf(turn, 0, 1060, false);
+    expect(back.from).toBeCloseTo(mid, 12);
+    expect(shownFacing(back, 1060 + TURN_MS)).toBe(0);
+  });
+});
+
 describe('figurePose — the end of a run, the lobby', () => {
   it('jumps every 1.6 s for a run won, the shadow shrinking as it rises, the arms up', () => {
     const rises = sampled(0, 2 * JUMP_MS, 5, (t) => pose({ t, mood: 'celebrate' }).rise);
@@ -270,6 +347,17 @@ describe('figurePose — under reduced motion', () => {
         expect(frame).toEqual(restingPose(0));
       }
     }
+  });
+
+  it('keeps the console and reading poses, still: no tap, no swing', () => {
+    for (const frame of still({ task: 'console' })) {
+      expect(frame).toEqual(pose({ task: 'console', reduced: true }));
+      expect(frame.arms?.front).toBeGreaterThan(Math.PI / 2);
+    }
+    for (const frame of still({ task: 'reading' })) {
+      expect(frame.holding).toBe(true);
+    }
+    expect(pose({ moving: true, walk: 0.25, reduced: true }).arms).toBeNull();
   });
 
   it('still holds what it carries, raises the arms of a run won once, slumps over one lost', () => {

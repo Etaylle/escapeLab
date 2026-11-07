@@ -140,6 +140,8 @@ describe('drawScientist — a crew member standing as the pose says', () => {
       t: 0,
       idleMs: 0,
       phase: 0,
+      walk: 0,
+      task: null,
       reduced: true,
     });
     drawScientist(ctx, { ...ANNA, name: '', pose, held });
