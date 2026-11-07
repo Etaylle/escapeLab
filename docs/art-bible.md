@@ -69,19 +69,25 @@ a darker front.
 
 ## Scale rule
 
-Props fit the tile grid: one tile each, standing props never taller than their tile, so a
-crew member in front always overlaps them correctly. Labels sit under props in the world's
-text, as they always have. Wall props hang on the face of a wall tile, never on a floor tile.
-A note of the last crew (`map.notes`, art.ts `drawPinnedNote`) is a sheet of `PAPER` in blue
-ballpoint with a dog-ear: pinned with a red pin to the face that looks into the floor it is read
-from, or lying turned on the floor; until somebody reads it, a faint `READ_BLUE` glow calls.
+Props fit the tile grid: one tile each. The tall ones — shelves, racks, a locker, the filing
+cabinet, a pillar standing free — rise over the tile behind them (`RISE`, half a tile; the
+cabinet 0.3), and a crew member behind one shows only above it (Depth); everything else stands
+within its tile, so a crew member in front always overlaps it. Labels sit under props in the
+world's text, as they always have. Wall props hang on the face of a wall tile, never on a floor
+tile. A note of the last crew (`map.notes`, art.ts `drawPinnedNote`) is a sheet of `PAPER` in
+blue ballpoint with a dog-ear: pinned with a red pin to the face that looks into the floor it is
+read from, or lying turned on the floor; until somebody reads it, a faint `READ_BLUE` glow calls.
 
 ## Motion rule
 
 Ambient motion is slow and small: fans turning, screens scrolling, LEDs blinking, the core
-pulsing, steam rising, dust drifting in the light cones. It steps at most 15 times a
-second (`ANIM_HZ`), and nothing moves faster than a walking crew member (4.2 tiles/s) except
-the sparks of a short. Under reduced motion nothing turns, scrolls or flies; lights still blink.
+pulsing, steam rising, dust drifting in the light cones, the emergency lamps' beacons sweeping
+once in 3 s after the blackout, a drone's rotors blurring and its nav lights blinking once a
+second. It steps at most 15 times a second (`ANIM_HZ`), and nothing moves faster than a walking
+crew member (4.2 tiles/s) except the sparks of a short and a beacon's lobe at its far end. Under
+reduced motion nothing turns, scrolls or flies — a beacon sweeps once in 6 s, steadily, its tube
+not trembling; the drones' rotors stand and their nav lights burn steadily; a figure keeps only
+its poses (Figure animation) and a solve lands no hit-stop — and lights still blink.
 `test/particles.test.ts` checks the pool's cap of 120 particles, each kind's share, the 15 Hz
 step and the speeds.
 
@@ -223,6 +229,131 @@ and the cables hang plumb. Cost: switched off one at a time — the fan with its
 sheet, the trays' cables, the wall screens, the furniture's screens and scopes, the stations'
 tubes — each within the bench's noise (Atmosphere); the Labor lit, where most of them show
 together, costs 0.45 ms a frame more on the slowed main thread (Cost).
+
+## Beacons (`beacon.ts`, render/beacons.ts)
+
+Once the lights fail, each red emergency lamp — the one over the main switch, those by the
+corridor doors — turns into a rotating beacon, as Alien: Isolation's are: two lobes opposite
+each other sweep a full turn in 3 s (`BEACON_TURN_MS`), each lamp out of step with the rest by
+where it hangs, out to 2.7 tiles (`LOBE_REACH`) and 0.3 rad either way of its axis, the floor lit
+red in their path; a soft red bloom sits at the lens. Under reduced motion a beacon sweeps once
+in 6 s and its tube does not tremble. On the light layer each lobe is a beam light with soft
+edges that walls stop; on the Canvas pass each lobe is a sprite baked for each of 96 steps of a
+turn at the frame's zoom and copied at whole pixels, kept to the box of tiles its lamp sees, its
+lobes facing into a wall left out. The lobes only add their red: cutting them out of the dark as
+well cost the software canvas 1.3 ms a frame at 4× and was left out. Cost, paced bench at 4×,
+the dark Flur with three lamps: +0.36 ms to draw them, +0.22 for the lamps' wider sight; the GPU
+path +0.22 ms at 1×. Capture `beacon-sweep-a.png` and `-b.png` a second apart, the lobe turned as
+the probe's clock says (tools/sweep.mjs).
+
+## Depth (`depth.ts`, render/occluders.ts)
+
+As in Enter the Gungeon, depth is the y-sort a painter needs: a figure walking behind a shelf,
+a rack, a locker, the cabinet or a server pillar shows only its upper part, the tall thing drawn
+again over it, cut to the part where it hides it — only where somebody stands behind one, so
+nothing costs a frame where nobody does. The name tags go over everything, the drones fly over
+everything, their shadows and the figures' stay on the floor; walking and sight are unchanged.
+Cost at 4× against the beacons: two figures behind the Archiv's shelves +0.28 ms, behind the
+server racks in the dark +0.30, the escape by the hatch +0.21, the dark Flur +0.11. Capture
+`depth-behind-shelf.png`, the probe naming the shelf that hides the host.
+
+## Colour grade (`grade.ts`, render/grade.ts)
+
+One grade a phase, as Hotline Miami keys a level and Alien: Isolation turns cold when the power
+fails, turning over 1.5 s from one to the next: the lab with its power a faint warm mid-tone, the
+blackout a cool blue-grey that lifts the shadows and dims the light, the escape none — its red
+stays its own — a run won near white. A grade is a wash laid once a frame over the picture, the
+lab's own light and the darkness, under every light added after, so that the lamps' red keeps
+its colour; the minimap, the red edge (Camera) and the alarm's knock lie over it. Canvas: one
+translucent fill. The light layer folds the same wash into its light map, a two-point table a
+channel (`uGrade`). Cut down: a multiply or overlay fill, a true grade, costs the software canvas
+2.2 ms a frame at 4×. Cost at 4× against depth: the dark Flur +0.33 ms, the lab lit +0.28, the
+Labor +0.24, the escape none; the GPU path +0.12 ms at 1×. Every still of the world changes by
+its phase's grade; those are the new baselines. Capture `grade-blackout.png`, the probe naming
+the blackout's grade.
+
+## The lamp's beam (`beam.ts`, render/beam.ts)
+
+A flashlight shows what it reaches, as Darkwood's does: its beam fades out over 0.14 rad either
+way of its half-angle instead of ending at a line, its core (0.2 rad either way) clears all of
+the dark and its flanks 80 % of it, and your own core lays a faint warm light (16 % of a warm
+tungsten) along its first 80 % — on the Canvas pass into the darkness after the cut, on the
+light layer as a narrower second beam with a tint. A small glint burns at each lens; on lino and
+steel floors (the lab, the server room, the reactor, the control room) a faint streak runs along
+the beam as far as its floor lies in sight; dust is born denser near a cone's axis. The partner's
+lamp has its beam too, laid from their hands, cut wherever it falls and counted as seen light,
+their figure shown or not. On the Canvas pass the cut is a sprite baked per degree of a turn at
+half the picture's resolution and laid unsmoothed: the software canvas copies a sprite scaled so
+as fast as one at its size, where smoothing costs a third more. Cut down: the partner's beam
+reaches 5 tiles, not 7.5, and their glow 1.6 tiles, not 2.8 — a full-length beam cost 0.9 ms a
+frame at 4×. Cost at 4× against the grade: the dark Flur +0.60 ms (the warm core +0.24, the
+partner's flashlight +0.45), both pacing +0.51, the lit Labor +0.93 (your beam +0.38 there); the
+glints and streaks 0.05 ms; the GPU path +0.20 ms at 1×. Capture `beam-core.png`: the light
+across the beam, read off the shot, brighter on its axis than on either flank (tools/beamcheck.mjs).
+
+## Drones (`droneLights.ts`, hazards.ts, render/drones.ts)
+
+A drone carries two nav lights, red to port and green to starboard, blinking at 1 Hz half a beat
+apart, each drone in its own step; a blur of rotors turns round its body; its shadow on the floor
+is soft. Its searchlight keeps the cone players read and dodge — the same geometry and edge,
+falling off from a brighter start at the lens — and lays a hotspot on the floor 55 % of its range
+ahead where it looks, sweeping as it turns, amber-white, red while it is alerted, as the light
+layer lights an alerted eye. The hotspot and the nav lights' glow go over the light on both
+paths. Under reduced motion the nav lights burn steadily and the rotors stand. Cut down: a cone
+of three gradient stops cost 0.27 ms in the actors pass; two are filled a third faster. Cost at 4×
+against the beam: a drone patrolling the dark Flur +0.11 ms, the escape's drone +0.25; the GPU
+path +0.01 ms at 1×. Capture `drone-close.png`, its hotspot ahead and its nav lights read 20
+times blinking, never both at once.
+
+## Figure animation (`figure.ts`, hitStop.ts)
+
+The arms swing against each other as a figure walks; a figure coming to face the other side of
+the picture turns in three steps over 150 ms through the side toward the camera instead of
+flipping; at a console both hands go up on its panel, tapping; reading a source it holds the
+sheet before its chest, its head bowed over it. You are posed as your view tells it — a console's
+presence, your pages open at a source — the rest as their place says once they have stood still
+300 ms (presence.ts). A solve, as Enter the Gungeon lands a hit, holds the camera, the world's
+clocks and the crew for 60 ms and lays a white flash over the world, 16 % fading out over 180 ms.
+Under reduced motion only the poses remain. Cost at 4× against the drones: both pacing +0.05 ms,
+the dark Flur +0.27, the lab lit +0.17; the GPU path +0.16 ms at 1×. Captures `pose-console.png`
+and `pose-reading.png`, each posed so by the probe.
+
+## Clutter and decals (`decals.ts`, decalArt.ts)
+
+The floors tell what a room is for, as Half-Life's do: four or five kinds of marks a room kind —
+coffee rings and papers where people sit, spills in the lab, tyre marks, oil and screws in the
+machine room, cable ties in the server room, scorch round a fuse box the crew knows of and round
+the reactor — on one free floor tile in nine, placed by the mission's seed like the rest of the
+dressing. The corridors carry a building's markings: a yellow lane down the middle of their main
+axis and, every six tiles of it, an arrow pointing the way to the exit. Nothing lies on furniture,
+a door, a plate, the exit or a lamp; a mark may lie under a station or a source, which is drawn
+over it — where those stand, a player's view tells only once they are found, and the dressing is
+the same on every screen. Nothing is found, named, chimed at or walked into: the marks are a
+layer of the client's dressing, which the mission and its validation never see, faint and flat
+in the light of their tile, baked with the floor: at 4× against the figures' animation
+the lab lit +0.12 ms, the dark Flur +0.07, the Labor +0.05, within the bench's noise — no work a
+frame. Capture `decals-lab.png`, the Labor's floor with two marks or more and none in anybody's
+way.
+
+## Graphics 2's references
+
+What each game does, and what the lab took from it:
+
+- **Alien: Isolation** lights its world with the world's own lights — beacons, lamps, screens —
+  and turns its corridors cold when the power fails: the rotating beacons, the blackout's cool
+  grade, the flashlight's warm core.
+- **Darkwood** shows the world as far as the lamp reveals it, and keeps the rest as memory: the
+  beam's core and soft edge, the partner's beam as seen light.
+- **Among Us** makes its figures read at a glance — bold shapes, names, poses at their tasks:
+  names over every tall thing, the console and reading poses, the arm swing.
+- **Enter the Gungeon** sorts its depth by height on the screen and lands a hit with a stop and a
+  flash: figures behind tall furniture, the solve's hit-stop and flash.
+- **Hotline Miami** keys each level and phase in a colour of its own, its impacts in frames:
+  the grade per phase, the flash.
+- **Dead Cells** keeps a hierarchy of readability — what matters glows, the backdrop recedes:
+  glows over the grade, marks on the floor faint and flat so that none reads as a find.
+- **Half-Life** tells a place by what lies about in it and what is painted on it: the marks by
+  room kind, the corridors' lanes and arrows.
 
 ## Framing (world/viewport.ts `tileCss`, insets.ts)
 
@@ -653,6 +784,31 @@ for the larger lab. The walkthrough's windows held what they held on main: 16.7 
 in Blackout, the open Notstrom-Kasten panel 33.4 under software GL as before, the looks at
 density 2 16.8 ms.
 
+**Graphics 2 (N-graphics2).** Each of the seven items was measured on the paced bench against
+the commit before it, six rounds interleaved, every round starting at another build, the
+medians of a frame's work on the main thread slowed four times; each section above names its
+cost, and what was cut down to keep every effect within 0.5 ms (Beacons, Colour grade, The
+lamp's beam, Drones). The bench gained scenes for them: both of the crew pacing in the dark Flur,
+a drone patrolling it, two figures behind the Archiv's shelves and behind the server racks.
+Against main the whole package could be benched only with the machine's swap near full and a
+browser outside the bench busy, both builds three to four times slower than in the items' own
+benches, so that only their ratio holds, rounds interleaved: the dark Flur +19 % of its frame,
+both pacing +17 %, the Labor +15 %, the lab lit before the blackout +8 %, the audience's whole
+lab +4.5 % (four rounds); the escape by the hatch +8.5 %, its first second +7 %, the drone's escape
++10.5 % (six rounds) — at the items' own speed about 2 ms in the dark Flur and 1.3 ms in the
+escape. In the one round before the load came, the escape by the hatch took 15.4 ms of work on
+main against 16.6 on the branch, its frames 16.8 against 33.2 ms at p95: within the 33.4 ms the
+escape is allowed at 4×, but at its edge — where the 16.7 ms of the screen's pace run out, a
+frame waits for the next. The walkthrough's gated windows, main against
+the branch, run in turn: Blackout under `SHOTS_SOFTWARE_GL=1` 16.8 → 16.8 ms p95 in the lab lit,
+16.7 → 16.8 pacing, 33.4 → 33.4 at the open Notstrom-Kasten panel (as on main), 16.7 → 16.7
+after the station step, 16.8 → 16.8 in the escape; without it 16.7 to 16.8 ms in every window
+on both; the Systemcheck 16.7 to 16.8 ms on both, its open Signalprobe panel 33.4 under software
+GL on both. Every still of the world changes — the grade alone moves every pixel a little — and
+those are the new baselines; the join and lobby screens stay within what two runs of main differ
+by (their room codes and the lobby figures' idle loops), the editor's only in its tool glyphs for
+the drone and the furniture, drawn with the world's own art.
+
 ## Open
 
 What the graphics and gameplay packages left for later, one line each:
@@ -675,6 +831,11 @@ What the graphics and gameplay packages left for later, one line each:
 - **Kept on purpose** (L-gameplay): on a controller, A presses Space only on a control made to
   be held — the button module's face, `data-pad="hold"` — and clicks every other one
   (gameplay.md, „A controller").
+- **The escape at 4× after Graphics 2** (N-graphics2): the package takes about 1.3 ms of the
+  escape's frame on the paced bench, which leaves it at the edge of the screen's pace there —
+  16.6 of 16.7 ms in the one clean round, its frames 33.2 ms at p95 against main's 16.8, within
+  the 33.4 allowed. Benched again on a quiet machine, the dearest parts to look at first are the
+  partner's flashlight and your beam's warm core (The lamp's beam).
 - Done in L-polish: a station's device fades out as it came (Interface); the controller pings
   with ◀ and opens the quick chat with ▶; the Bestenliste's mission tabs keep to one row that
   scrolls, so that the screen fits 1280 × 720 and a phone.

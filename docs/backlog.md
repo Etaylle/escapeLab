@@ -224,6 +224,38 @@ die Entscheidung.
   zurück. Bei 420×760 vorher 12,3 px (Schublade zu) und 5,7 px (offen), jetzt 14 px; 1440×820,
   1280×720 und 844×390 unverändert.
 
+### G-1 Grafik 2 — Status: im PR (N-graphics2) · Größe: L
+- Maßstab sind Profi-Spiele (Alien: Isolation, Darkwood, Among Us, Enter the Gungeon, Hotline
+  Miami, Dead Cells, Half-Life; was jedes tut, steht in `docs/art-bible.md`). Jede Wirkung
+  höchstens 0,5 ms je Frame auf dem Canvas-Pfad (Hauptthread 4× gebremst, Software-Canvas) und
+  0,3 ms Hauptthread auf dem GL-Pfad, verschränkt gegen den Stand davor gemessen; was darüber lag,
+  wurde gekürzt oder ausgelassen.
+- 1 Notlampen werden nach dem Blackout zu Rundumleuchten: zwei Keulen, eine Umdrehung in 3 s
+  (reduzierte Bewegung 6 s, ohne Flackern), Bloom an der Linse; +0,36 ms zeichnen, +0,22 ms
+  Sicht. Ausgelassen: die Keulen zusätzlich aus der Dunkelheit schneiden (+1,3 ms).
+- 2 Tiefe: Wer hinter Regal, Rack, Spind, Aktenschrank oder Pfeiler steht, zeigt nur den
+  oberen Teil; Namen und Drohnen darüber, Schatten darunter; +0,11 bis +0,30 ms.
+- 3 Farbabstimmung je Phase (mit Strom warm, Blackout blaugrau, Flucht unverändert, Sieg hell),
+  Übergang 1,5 s; +0,24 bis +0,33 ms. Gekürzt: eine Wäsche statt Multiplizieren (2,2 ms).
+- 4 Lampenkegel mit weichem Rand und hellem, warmem Kern, Glanzpunkt an der Linse, Streifen auf
+  Lino und Stahl, Staub dichter im Kern; der Kegel des Partners ist überall zu sehen, auch ohne
+  seine Figur; +0,51 bis +0,93 ms, jede Wirkung ≤ 0,45. Gekürzt: Partnerkegel 5 statt
+  7,5 Kacheln, sein Schein 1,6 statt 2,8 (ganzer Kegel 0,9 ms); warmer Kern nur der eigene.
+- 5 Drohnen: Positionslichter rot und grün, 1 Hz versetzt, Rotorring, Lichtfleck vor ihnen am
+  Boden (rot bei Alarm), weicher Schatten; +0,11 bis +0,25 ms.
+- 6 Figuren: Armschwung, Drehung in drei Schritten, Hände am Pult, Lesen mit Blatt und gesenktem
+  Kopf, beim Lösen 60 ms Halt von Figuren und Kamera mit weißem Blitz; reduzierte Bewegung
+  behält nur die Haltungen; +0,05 bis +0,27 ms.
+- 7 Bodenspuren je Raumart (Kaffeeringe, Blätter, Pfützen, Reifenspuren, Kabelbinder, Ruß am
+  Sicherungskasten und am Reaktor), Fahrspur und Pfeile zum Ausgang in den Fluren; eine Schicht
+  der Ausstattung des Clients, die Mission und Validierung nie sehen; gebacken, ±0,1 ms.
+- Beweis: Tests je Punkt; Captures `beacon-sweep-a/b`, `depth-behind-shelf`, `grade-blackout`,
+  `beam-core`, `drone-close`, `pose-console`, `pose-reading`, `decals-lab`; Harness: Blackout
+  140 Captures, Systemcheck 89, je 0 Fehler mit und ohne `SHOTS_SOFTWARE_GL`, jedes Fenster
+  16,7–16,8 ms p95 wie auf main (offene Panels unter Software-GL 33,4 wie dort). Die Flucht
+  liegt auf der 4×-Bank an der Kante (16,6 von 16,7 ms Arbeit, p95 33,2 ≤ 33,4); Zahlen in
+  `docs/art-bible.md` (Cost, Open).
+
 ### N-6 Pacing und Stationsfolge — Status: wartet (Daten) · Größe: ?
 - Erst nach N-4 und dem zweiten Playtest messen (`runs.jsonl`): Ziel, dass eine Erstspieler-
   Crew Station 2 in 5 Minuten schafft. Offene Fragen aus dem Audit: Zeitlimit beim ersten Lauf,
