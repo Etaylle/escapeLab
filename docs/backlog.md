@@ -224,7 +224,7 @@ die Entscheidung.
   zurück. Bei 420×760 vorher 12,3 px (Schublade zu) und 5,7 px (offen), jetzt 14 px; 1440×820,
   1280×720 und 844×390 unverändert.
 
-### G-1 Grafik 2 — Status: im PR (N-graphics2) · Größe: L
+### G-1 Grafik 2 — Status: erledigt (N-graphics2, Merge 2026-11-07; Kostentabelle in der Art-Bible) · Größe: L
 - Maßstab sind Profi-Spiele (Alien: Isolation, Darkwood, Among Us, Enter the Gungeon, Hotline
   Miami, Dead Cells, Half-Life; was jedes tut, steht in `docs/art-bible.md`). Jede Wirkung
   höchstens 0,5 ms je Frame auf dem Canvas-Pfad (Hauptthread 4× gebremst, Software-Canvas) und
