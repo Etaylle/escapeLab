@@ -359,8 +359,23 @@ export function drawAlarmMark(ctx: CanvasRenderingContext2D, age: number): void 
 }
 
 /**
+ * The drone's shadow on the floor under it: drawn under the crew, as every shadow lies on the
+ * floor (render/actors.ts), the drone itself over everybody.
+ */
+export function drawDroneShadow(ctx: CanvasRenderingContext2D, drone: DronePosition): void {
+  ctx.save();
+  ctx.globalAlpha = drone.frozen ? 0.5 : 1;
+  ctx.fillStyle = rgba(BLACK, 0.4);
+  ctx.beginPath();
+  ctx.ellipse(0, 0.26, 0.3, 0.12, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
  * The drone itself: dark chassis, a glowing lens and a blinking beacon.
  * Frozen by its plate it hangs dimmed, lens grey and beacon off, under a lock.
+ * Its shadow on the floor is drawn apart (drawDroneShadow).
  */
 export function drawDroneBody(
   ctx: CanvasRenderingContext2D,
@@ -371,11 +386,6 @@ export function drawDroneBody(
   const alpha = drone.frozen ? 0.5 : 1;
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = rgba(BLACK, 0.4);
-  ctx.beginPath();
-  ctx.ellipse(0, 0.26, 0.3, 0.12, 0, 0, Math.PI * 2);
-  ctx.fill();
-
   ctx.rotate(drone.facing);
   ctx.fillStyle = CHASSIS;
   ctx.strokeStyle = CHASSIS_RIM;

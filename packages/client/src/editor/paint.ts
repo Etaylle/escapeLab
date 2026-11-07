@@ -164,7 +164,8 @@ function paintTiles(ctx: Ctx, draft: Draft, textures: Textures, zoom: Zoom): voi
           ctx.drawImage(floor.canvas, x, y, 1, 1);
         } else if (walls && tile === '#' && nearFloor(tiles, x, y)) {
           const wall = sprite(atlas, level, wallSpec(dressing, kind, i));
-          ctx.drawImage(wall.canvas, x, y, 1, wall.tall);
+          // A pillar standing free rises over the tile behind it (world/depth.ts).
+          ctx.drawImage(wall.canvas, x, y - wall.lift, 1, wall.tall);
         } else if (walls && tile === '#') {
           ctx.fillRect(x, y, 1, 1);
         }
@@ -467,7 +468,12 @@ const GLYPHS: Readonly<Record<Tool, Glyph>> = {
   exit: centred((ctx) => drawExitHatch(ctx, { open: 1, pulse: STILL })),
   item: centred((ctx) => drawCarryable(ctx, { kind: 'crate', pulse: STILL, carried: false })),
   drone: centred((ctx) => drawDroneBody(ctx, STILL_DRONE, STILL)),
-  decor: centred((ctx) => drawDecor(ctx, 'shelf', 0, true)),
+  // A shelf stands tall (world/depth.ts): shrunk to fit its button, its foot where a tile's is.
+  decor: (ctx) =>
+    at(ctx, 0.5, 0.74, () => {
+      ctx.scale(0.72, 0.72);
+      drawDecor(ctx, 'shelf', 0, true);
+    }),
   note: (ctx) =>
     at(ctx, 0.5, 0.92, () =>
       drawPinnedNote(ctx, { facing: Math.PI / 2, read: true, pulse: STILL }),

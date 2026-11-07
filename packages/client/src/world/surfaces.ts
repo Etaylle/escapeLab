@@ -1,5 +1,6 @@
 import type { RoomKind } from '@escapelab/core';
 import { OUTLINE, seededRandom } from './brush.js';
+import { RISE } from './depth.js';
 import {
   AMBER,
   BLACK,
@@ -67,9 +68,28 @@ export function hasFace(mask: number): boolean {
   return (mask & FLOOR_S) !== 0;
 }
 
-/** How many tiles tall a surface's sprite is: a wall with a face casts its shadow below. */
+/** Floor on every side of a wall tile. */
+const ALL_SIDES = FLOOR_N | FLOOR_E | FLOOR_S | FLOOR_W;
+
+/**
+ * Whether a wall tile with floor round it as `mask` says (dress.ts `walls`) is a pillar standing
+ * free in a room: it stands tall, RISE over the tile behind it (depth.ts).
+ */
+export function isPillar(mask: number): boolean {
+  return (mask & ALL_SIDES) === ALL_SIDES;
+}
+
+/** How far a surface's sprite rises over its tile, tiles: a pillar's crown, RISE. */
+export function spriteLift(spec: SurfaceSpec): number {
+  return 'wall' in spec && isPillar(spec.mask) ? RISE : 0;
+}
+
+/**
+ * How many tiles tall a surface's sprite is: a wall with a face casts its shadow below, and a
+ * pillar rises over the tile behind it besides.
+ */
 export function spriteHeight(spec: SurfaceSpec): number {
-  return 'wall' in spec && hasFace(spec.mask) ? 2 : 1;
+  return ('wall' in spec && hasFace(spec.mask) ? 2 : 1) + spriteLift(spec);
 }
 
 /** A material in the light of the sprite, as a CSS colour. */
@@ -680,18 +700,55 @@ function drawDropShadow(g: CanvasRenderingContext2D): void {
 }
 
 /**
+ * A pillar's face over the tile behind it, from its crown down to where its face on its own tile
+ * begins (tile space, its tile's top at 0): painted as the face, plain, the crown's front edge
+ * catching the light at its top and its outline down both sides.
+ */
+function drawRaisedFace(
+  g: CanvasRenderingContext2D,
+  kind: FloorKind,
+  paint: Paint,
+  px: number,
+): void {
+  const { face } = FACE_PAINT[kind];
+  const top = CROWN_H - RISE;
+  const grad = g.createLinearGradient(0, top, 0, CROWN_H);
+  grad.addColorStop(0, paint(lift(face, 0.12)));
+  grad.addColorStop(1, paint(lift(face, 0.04)));
+  g.fillStyle = grad;
+  g.fillRect(0, top, 1, RISE);
+  g.fillStyle = rgba(WHITE, 0.22);
+  g.fillRect(0, top - 2 / px, 1, 2 / px);
+  g.fillStyle = rgba(BLACK, 0.35);
+  g.fillRect(0, top, 1, 2 / px);
+  g.fillStyle = paint(INK);
+  g.fillRect(0, top, OUTLINE, RISE);
+  g.fillRect(1 - OUTLINE, top, OUTLINE, RISE);
+}
+
+/**
  * A wall tile: its crown, in the light of the wall itself, and where the room
  * south of it looks at it, its face — in that room's light — and its shadow.
+ * A pillar standing free in a room (isPillar) rises RISE over the tile behind
+ * it: its crown that far up, its face reaching up to it.
  */
 function drawWall(
   g: CanvasRenderingContext2D,
   spec: Extract<SurfaceSpec, { wall: FloorKind }>,
   px: number,
 ): void {
+  const rise = spriteLift(spec);
+  if (rise > 0) {
+    g.translate(0, rise);
+    drawRaisedFace(g, spec.wall, painter(spec.faceLit), px);
+    g.translate(0, -rise);
+  }
   drawCrown(g, spec.mask, painter(spec.lit), px);
   if (hasFace(spec.mask)) {
+    g.translate(0, rise);
     drawFace(g, spec.wall, spec.mask, painter(spec.faceLit), px);
     drawDropShadow(g);
+    g.translate(0, -rise);
   }
 }
 
@@ -752,7 +809,7 @@ export function paintSurface(
   }
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.globalAlpha = 'floor' in spec ? 1 : WALL_GRAIN;
-  g.drawImage(grain, 0, 0);
+  g.drawImage(grain, 0, Math.round(spriteLift(spec) * px));
   g.restore();
 }
 

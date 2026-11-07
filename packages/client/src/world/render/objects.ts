@@ -1,4 +1,4 @@
-import type { KnownPart, MapPart, MapSource } from '@escapelab/core';
+import type { KnownPart, MapPart } from '@escapelab/core';
 import {
   drawDoor,
   drawEmergencyLamp,
@@ -13,11 +13,9 @@ import {
   LABEL_BELOW,
   plateCaption,
   SIGN_LABEL_BELOW,
-  type ManualObjectOpts,
-  type Tube,
 } from '../art.js';
+import { sourceRise } from '../depth.js';
 import type { PlacedLabels } from '../labelLayout.js';
-import { animTime, crtFlicker, propSeed, rollAt } from '../anim.js';
 import { doorOpenness, isHorizontalDoor } from '../doors.js';
 import { burning } from '../frameLight.js';
 import {
@@ -26,7 +24,7 @@ import {
   drawSabotagePanel,
   type CarryableOpts,
 } from '../hazards.js';
-import { coversArmed, opensCabinet } from '../interact.js';
+import { opensCabinet } from '../interact.js';
 import { statusOf } from '../known.js';
 import { noteMount } from '../notes.js';
 import { inTiles, profiled, type Frame } from './frame.js';
@@ -39,6 +37,8 @@ import {
   SIGN_LABEL,
   sourceShows,
 } from './labels.js';
+import { sourceLook, tubeAt } from './looks.js';
+import { occlude } from './occluders.js';
 import * as props from './props.js';
 
 /**
@@ -67,7 +67,33 @@ export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   drawNotes(ctx, frame);
   drawFixtures(ctx, frame, labels);
   drawItems(ctx, frame, named, labels);
+  occludeThings(ctx, frame, labels);
   drawLamps(ctx, frame);
+}
+
+/**
+ * The things standing behind a tall one — a shelf, a rack, a pillar, a locker (depth.ts) — with
+ * its part over them drawn again (occluders.ts): the sources, the stations and the parts lying
+ * about, their labels left clear.
+ */
+function occludeThings(ctx: CanvasRenderingContext2D, frame: Frame, labels: PlacedLabels): void {
+  const { map, light } = frame;
+  const standing = [
+    ...map.manuals
+      .filter((manual) => sourceShows(frame, manual))
+      .map((m) => ({ x: m.x + 0.5, y: m.y + 0.5, top: 0.62 + sourceRise(m.kind) })),
+    ...map.stations
+      .filter((s) => statusOf(s) !== 'locked' || light.shown(s.x, s.y))
+      .map((s) => ({ x: s.x + 0.5, y: s.y + 0.5, top: 0.62 })),
+    ...map.items
+      .filter((item) => looseAndShown(frame, item))
+      .map((item) => ({ x: item.x, y: item.y, top: 0.45 })),
+  ];
+  for (const { x, y, top } of standing) {
+    const box = { left: x - 0.5, top: y - top, right: x + 0.5, bottom: y + 0.45 };
+    occlude(ctx, frame, box, y, labels.boxes);
+  }
+  inTiles(ctx, frame);
 }
 
 /** Draws with `draw` with the origin moved to (x, y), the context as it was after. */
@@ -140,33 +166,6 @@ function drawStations(ctx: CanvasRenderingContext2D, frame: Frame): void {
       at(ctx, station.x + 0.5, station.y + 0.5, draw);
     }
   }
-}
-
-/**
- * The tube of the screen on the tile (x, y) this frame: flickering and its roll bar drifting
- * down (anim.ts), each screen out of step with the others.
- */
-export function tubeAt(frame: Frame, x: number, y: number): Tube {
-  const t = animTime(frame.time);
-  const seed = propSeed(x, y);
-  return { burn: crtFlicker(t, seed), roll: rollAt(t, seed, frame.reduced) };
-}
-
-/**
- * How `manual` looks this frame, its label's top at `place`: one nobody has found as what it
- * is, shut, holding nothing; one the crew knows of whole, named as far as this player has found
- * it — and only then lit up where it prints the armed station's rules.
- */
-function sourceLook(frame: Frame, manual: MapSource, place: number | null): ManualObjectOpts {
-  const { pulse, text } = frame;
-  const found = frame.labels({ of: 'source', id: manual.id });
-  const tube = tubeAt(frame, manual.x, manual.y);
-  const look = { kind: manual.kind, active: false, opened: false, pulse, text, tube, found };
-  if (!manual.known) {
-    return { ...look, labelAt: place };
-  }
-  const active = found > 0 && coversArmed(frame.map, manual);
-  return { ...look, label: manual.label, active, opened: manual.opened, labelAt: place };
 }
 
 /** The sources where light has fallen or the crew knows of them, as `sourceLook` has them. */

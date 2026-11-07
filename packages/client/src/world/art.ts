@@ -46,6 +46,7 @@ import {
   WOOD,
   type Rgb,
 } from './palette.js';
+import { sourceRise } from './depth.js';
 import { SHEET_ON_FLOOR, SHEET_ON_WALL } from './notes.js';
 import { surfaceTile } from './surfaces.js';
 
@@ -265,6 +266,11 @@ export interface ScientistOpts {
    * the lobby stands its crew
    */
   ground?: Ground;
+  /**
+   * whether its name tag is drawn with it — false where the world draws the tags apart, over
+   * the tall things a figure may stand behind (render/actors.ts, drawNameTag); drawn by default
+   */
+  named?: boolean;
 }
 
 /** The light a figure stands in, for its shadow. */
@@ -740,6 +746,25 @@ export function drawScientist(ctx: CanvasRenderingContext2D, o: ScientistOpts): 
     ctx.scale(1 / pose.stretch, pose.stretch);
     drawScientistFigure(ctx, o, colors, stride, stride.bob - pose.bob, pose);
     ctx.restore();
+    if (o.named !== false) {
+      drawHaloText(ctx, o.name, 0, NAME_Y, (o.text ?? TILE_TEXT).name, NAME_COLOR, 'bottom');
+    }
+  } finally {
+    ctx.restore();
+  }
+}
+
+/**
+ * Anchor: FEET CENTER. A figure's name tag over its head, as drawScientist draws it — dimmed for
+ * somebody disconnected — for a figure drawn without it (`named` false).
+ */
+export function drawNameTag(
+  ctx: CanvasRenderingContext2D,
+  o: Pick<ScientistOpts, 'name' | 'connected' | 'text'>,
+): void {
+  ctx.save();
+  try {
+    if (!o.connected) ctx.globalAlpha *= DISCONNECTED_ALPHA;
     drawHaloText(ctx, o.name, 0, NAME_Y, (o.text ?? TILE_TEXT).name, NAME_COLOR, 'bottom');
   } finally {
     ctx.restore();
@@ -1953,10 +1978,12 @@ function drawClipboard(ctx: CanvasRenderingContext2D, active: boolean): void {
   ctx.fillRect(-0.08, -0.455, 0.16, 0.012);
 }
 
+/** A locker stands tall, rising over the tile behind it (depth.ts). */
+const LOCKER_RISE = sourceRise('locker');
 const LOCKER_X = -0.23;
-const LOCKER_TOP = -0.42;
+const LOCKER_TOP = -0.42 - LOCKER_RISE;
 const LOCKER_W = 0.46;
-const LOCKER_H = 0.72;
+const LOCKER_H = 0.72 + LOCKER_RISE;
 
 /** Four slits pressed into a locker door from `y` down, each with a lit lower lip. */
 function drawLouvres(ctx: CanvasRenderingContext2D, y: number): void {
@@ -1979,12 +2006,12 @@ function drawLockerDoor(ctx: CanvasRenderingContext2D): void {
   ctx.stroke();
   ctx.fillStyle = rgba(WHITE, 0.08);
   ctx.fillRect(LOCKER_X + 0.02, LOCKER_TOP + 0.012, LOCKER_W - 0.04, 0.012);
-  drawLouvres(ctx, -0.35);
+  drawLouvres(ctx, -0.35 - LOCKER_RISE);
   drawLouvres(ctx, 0.13);
   ctx.fillStyle = css(sink(PAPER, 0.15));
-  ctx.fillRect(-0.08, -0.16, 0.16, 0.06);
+  ctx.fillRect(-0.08, -0.16 - LOCKER_RISE, 0.16, 0.06);
   ctx.beginPath();
-  roundRectPath(ctx, 0.12, -0.08, 0.045, 0.17, 0.018);
+  roundRectPath(ctx, 0.12, -0.08 - LOCKER_RISE / 2, 0.045, 0.17, 0.018);
   ctx.fillStyle = css(lift(STEEL, 0.33));
   ctx.fill();
   ctx.lineWidth = 0.012;
@@ -1998,10 +2025,13 @@ function drawLockerOpen(ctx: CanvasRenderingContext2D, active: boolean): void {
   roundRectPath(ctx, LOCKER_X, LOCKER_TOP, LOCKER_W, LOCKER_H, 0.025);
   ctx.fillStyle = steel(0.88);
   ctx.fill();
-  ctx.fillStyle = steel(0.4);
-  ctx.fillRect(LOCKER_X, -0.27, LOCKER_W, 0.03);
-  ctx.fillStyle = rgba(WHITE, 0.08);
-  ctx.fillRect(LOCKER_X, -0.27, LOCKER_W, 0.008);
+  // Two shelves, a hat shelf high up and one over the rules.
+  for (const shelf of [-0.27 - LOCKER_RISE * 0.9, -0.27]) {
+    ctx.fillStyle = steel(0.4);
+    ctx.fillRect(LOCKER_X, shelf, LOCKER_W, 0.03);
+    ctx.fillStyle = rgba(WHITE, 0.08);
+    ctx.fillRect(LOCKER_X, shelf, LOCKER_W, 0.008);
+  }
   ctx.save();
   ctx.rotate(0.05);
   drawSheet(ctx, -0.1, -0.17, 0.22, 0.32, active);
@@ -2023,8 +2053,8 @@ function drawLockerOpen(ctx: CanvasRenderingContext2D, active: boolean): void {
   ctx.stroke();
   ctx.beginPath();
   for (let i = 0; i < 4; i++) {
-    ctx.moveTo(LOCKER_X - 0.035, -0.33 + i * 0.04);
-    ctx.lineTo(LOCKER_X - 0.125, -0.35 + i * 0.04);
+    ctx.moveTo(LOCKER_X - 0.035, -0.33 - LOCKER_RISE + i * 0.04);
+    ctx.lineTo(LOCKER_X - 0.125, -0.35 - LOCKER_RISE + i * 0.04);
     ctx.moveTo(LOCKER_X - 0.035, 0.15 + i * 0.04);
     ctx.lineTo(LOCKER_X - 0.125, 0.16 + i * 0.04);
   }
@@ -2036,14 +2066,14 @@ function drawLockerOpen(ctx: CanvasRenderingContext2D, active: boolean): void {
 /** A grey steel locker, shut or — once searched — standing open with the rules inside. */
 function drawLocker(ctx: CanvasRenderingContext2D, active: boolean, opened: boolean): void {
   ctx.beginPath();
-  roundRectPath(ctx, -0.27, -0.47, 0.54, 0.84, 0.04);
+  roundRectPath(ctx, -0.27, -0.47 - LOCKER_RISE, 0.54, 0.84 + LOCKER_RISE, 0.04);
   ctx.fillStyle = steel(0.58);
   ctx.fill();
   ctx.lineWidth = OUTLINE;
   ctx.strokeStyle = PROP_EDGE;
   ctx.stroke();
   ctx.fillStyle = EDGE_LIGHT;
-  ctx.fillRect(-0.23, -0.46, 0.46, 0.012);
+  ctx.fillRect(-0.23, -0.46 - LOCKER_RISE, 0.46, 0.012);
   if (opened) drawLockerOpen(ctx, active);
   else drawLockerDoor(ctx);
 }
@@ -2051,8 +2081,10 @@ function drawLocker(ctx: CanvasRenderingContext2D, active: boolean, opened: bool
 const DRAWER_X = -0.26;
 const DRAWER_W = 0.52;
 const DRAWER_H = 0.22;
-/** Tops of the cabinet's three drawers, top to bottom. */
-const DRAWER_TOPS = [-0.38, -0.13, 0.12] as const;
+/** A filing cabinet stands tall, if less than a locker (depth.ts). */
+const CABINET_RISE = sourceRise('cabinet');
+/** Tops of the cabinet's four drawers, top to bottom. */
+const DRAWER_TOPS = [-0.63, -0.38, -0.13, 0.12] as const;
 const DRAWER_FRONT = css(sink(LINO, 0.55));
 /** A drawer pulled out catches more of the light. */
 const DRAWER_FRONT_OUT = css(sink(LINO, 0.45));
@@ -2085,6 +2117,8 @@ function drawDrawer(ctx: CanvasRenderingContext2D, top: number, front: string): 
 
 /** A hasp over the top drawer and a brass padlock hanging from it. */
 function drawPadlock(ctx: CanvasRenderingContext2D): void {
+  // Drawn for a drawer whose top lies at -0.38: moved up to the top drawer.
+  ctx.translate(0, DRAWER_TOPS[0] + 0.38);
   ctx.beginPath();
   roundRectPath(ctx, 0.15, -0.43, 0.05, 0.17, 0.015);
   ctx.fillStyle = css(sink(LINO, 0.3));
@@ -2113,6 +2147,7 @@ function drawPadlock(ctx: CanvasRenderingContext2D): void {
   ctx.rect(0.168, -0.165, 0.014, 0.035);
   ctx.fillStyle = css(sink(BRASS, 0.75));
   ctx.fill();
+  ctx.translate(0, -(DRAWER_TOPS[0] + 0.38));
 }
 
 /** Unlocked: the top drawer pulled out, its files and a sheet of rules standing up in it. */
@@ -2135,14 +2170,14 @@ function drawOpenDrawer(ctx: CanvasRenderingContext2D, active: boolean): void {
 /** A filing cabinet under a padlock or — once unlocked — with its top drawer pulled out. */
 function drawCabinet(ctx: CanvasRenderingContext2D, active: boolean, opened: boolean): void {
   ctx.beginPath();
-  roundRectPath(ctx, -0.3, -0.43, 0.6, 0.8, 0.035);
+  roundRectPath(ctx, -0.3, -0.43 - CABINET_RISE, 0.6, 0.8 + CABINET_RISE, 0.035);
   ctx.fillStyle = css(sink(LINO, 0.75));
   ctx.fill();
   ctx.lineWidth = OUTLINE;
   ctx.strokeStyle = PROP_EDGE;
   ctx.stroke();
   ctx.fillStyle = EDGE_LIGHT;
-  ctx.fillRect(-0.26, -0.42, 0.52, 0.012);
+  ctx.fillRect(-0.26, -0.42 - CABINET_RISE, 0.52, 0.012);
   for (const top of opened ? DRAWER_TOPS.slice(1) : DRAWER_TOPS) drawDrawer(ctx, top, DRAWER_FRONT);
   if (opened) drawOpenDrawer(ctx, active);
   else drawPadlock(ctx);

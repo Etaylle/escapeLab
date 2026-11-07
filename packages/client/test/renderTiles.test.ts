@@ -210,9 +210,11 @@ describe('tiles — the void, then the map baked whole, copied in one go', () =>
     const { frame, logs } = recorded({ map, light });
     draw(fakeCanvas(800, 600).ctx, frame);
     const drawn = drawnKeys(frame, cacheLog(frame, logs));
-    expect(drawn.filter(([key]) => key.startsWith('decor'))).toEqual([['decor:shelf:2:lit', 1, 1]]);
+    // A shelf stands tall: it rises half a tile over the tile behind it (depth.ts).
+    const shelf = ['decor:shelf:2:lit', 1, 0.5];
+    expect(drawn.filter(([key]) => key.startsWith('decor'))).toEqual([shelf]);
     // Last: over its floor, and over the shadow the wall above casts on it.
-    expect(drawn.at(-1)).toEqual(['decor:shelf:2:lit', 1, 1]);
+    expect(drawn.at(-1)).toEqual(shelf);
   });
 
   it('bakes nothing again while nothing changes: the next frame only copies', () => {
@@ -241,8 +243,9 @@ describe('tiles — the void, then the map baked whole, copied in one go', () =>
     const drawn = drawnKeys(frame, log);
     expect(drawn).toContainEqual([expect.stringMatching(/^floor:plain:\d+:lit$/), 2, 1]);
     expect(drawn).toContainEqual(['wall:plain:4:dark:lit', 2, 0]);
-    // Only the tiles whose sprites reach the box are drawn again, not the whole map.
-    expect(drawn.every(([, x, y]) => x <= 4 && y <= 4)).toBe(true);
+    // Only the tiles whose sprites reach the box are drawn again, not the whole map: a row more
+    // under it, whose tall things reach up into it.
+    expect(drawn.every(([, x, y]) => x <= 4 && y <= 5)).toBe(true);
     // Once baked, the next frame bakes nothing.
     const after = cacheLog(frame, logs).length;
     draw(fakeCanvas(800, 600).ctx, { ...frame, litTiles: new Set(['2,1']) });
@@ -258,7 +261,7 @@ describe('tiles — the void, then the map baked whole, copied in one go', () =>
     const first = cacheLog(frame, logs).length;
     draw(fakeCanvas(800, 600).ctx, { ...frame, light: lightWith() });
     const seen = drawnKeys(frame, cacheLog(frame, logs).slice(first));
-    expect(seen.at(-1)).toEqual(['decor:shelf:2:dark', 1, 1]);
+    expect(seen.at(-1)).toEqual(['decor:shelf:2:dark', 1, 0.5]);
     // A new run: nothing seen yet — the box baked anew without it.
     const second = cacheLog(frame, logs).length;
     draw(fakeCanvas(800, 600).ctx, { ...frame, light: unseen });

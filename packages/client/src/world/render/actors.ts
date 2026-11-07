@@ -1,22 +1,41 @@
 import type { PartKind, PlayerView } from '@escapelab/core';
 import { DRONE_MARK_MS } from '../alarm.js';
-import { drawScientist, drawVoiceRing, type Ground, type ScientistOpts } from '../art.js';
+import {
+  drawNameTag,
+  drawScientist,
+  drawVoiceRing,
+  type Ground,
+  type ScientistOpts,
+} from '../art.js';
+import { figureBox } from '../depth.js';
 import { figurePhase, figurePose, type FigurePose } from '../figure.js';
-import { drawAlarmMark, drawCarryable, drawDroneBody, drawDroneCone } from '../hazards.js';
+import {
+  drawAlarmMark,
+  drawCarryable,
+  drawDroneBody,
+  drawDroneCone,
+  drawDroneShadow,
+} from '../hazards.js';
 import { FALLBACK_COLOR, inTiles, profiled, type Frame, type OtherAvatar } from './frame.js';
+import { occlude } from './occluders.js';
 import { drawFans } from './props.js';
 
 /**
- * Drones and the crew, in tile space: the drones' cones under everybody, the
- * crew — remote first, you on top, whoever speaks in a ring, each with a
- * name tag, each standing as the frame says (crewPose) and holding what they
- * carry before their chest, over a shadow of the light they stand in — the
- * drones' bodies, and over everybody the ceiling fans' blades (props.ts).
+ * Drones and the crew, in tile space: the drones' cones and shadows on the
+ * floor under everybody; the crew from the back of the picture to its front
+ * (the painter's y-sort), whoever speaks in a ring, each standing as the
+ * frame says (crewPose) and holding what they carry before their chest, over
+ * a shadow of the light they stand in — and a tall thing in front of one
+ * drawn again over them (occluders.ts), so that whoever stands behind a
+ * shelf shows only above it; the name tags over all of it; the drones' bodies
+ * over everybody, and over them the ceiling fans' blades (props.ts).
  */
 export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   inTiles(ctx, frame);
   drawCones(ctx, frame);
-  drawCrew(ctx, frame);
+  drawDroneShadows(ctx, frame);
+  const tagged = drawCrew(ctx, frame);
+  drawNames(ctx, tagged);
   drawDrones(ctx, frame);
   profiled(frame.kit, 'props', ctx, () => drawFans(ctx, frame));
 }
@@ -40,16 +59,63 @@ function drawCones(ctx: CanvasRenderingContext2D, frame: Frame): void {
   }
 }
 
-/** Avatars: remote first, where they show, local on top. */
-function drawCrew(ctx: CanvasRenderingContext2D, frame: Frame): void {
+/** A crew member as drawn this frame: where they stand, and how they look. */
+interface Standing {
+  id: string;
+  spot: { x: number; y: number };
+  look: ScientistOpts;
+}
+
+/** The crew that shows this frame: the rest where they show, and you but for the audience. */
+function crewShown(frame: Frame): Standing[] {
   const metaOf = new Map(frame.players.map((p) => [p.id, p]));
   const shown = [...frame.others].filter(([, o]) => frame.light.crewShown(o.rx, o.ry));
-  for (const [id, other] of shown) {
-    const look = otherLook(id, metaOf.get(id), other, frame);
-    drawFigure(ctx, frame, id, { x: other.rx, y: other.ry }, look);
-  }
+  const crew = shown.map(([id, other]) => ({
+    id,
+    spot: { x: other.rx, y: other.ry },
+    look: otherLook(id, metaOf.get(id), other, frame),
+  }));
   if (!frame.spectator) {
-    drawFigure(ctx, frame, frame.youId, frame.self, yourLook(metaOf.get(frame.youId), frame));
+    const look = yourLook(metaOf.get(frame.youId), frame);
+    crew.push({ id: frame.youId, spot: { x: frame.self.x, y: frame.self.y }, look });
+  }
+  return crew;
+}
+
+/**
+ * The crew from the back of the picture to its front — you over somebody standing level with
+ * you — each without its name tag, a tall thing in front of one drawn again over them. Returns
+ * them in that order, for their tags.
+ */
+function drawCrew(ctx: CanvasRenderingContext2D, frame: Frame): Standing[] {
+  const crew = crewShown(frame)
+    .map((one, i) => ({ one, i }))
+    .sort((a, b) => a.one.spot.y - b.one.spot.y || a.i - b.i)
+    .map(({ one }) => one);
+  for (const { id, spot, look } of crew) {
+    drawFigure(ctx, frame, id, spot, { ...look, named: false });
+    occlude(ctx, frame, figureBox(spot.x, spot.y), spot.y);
+  }
+  return crew;
+}
+
+/** The crew's name tags over everything they stand among: no shelf hides a name. */
+function drawNames(ctx: CanvasRenderingContext2D, crew: readonly Standing[]): void {
+  for (const { spot, look } of crew) {
+    ctx.save();
+    ctx.translate(spot.x, spot.y + 0.3);
+    drawNameTag(ctx, look);
+    ctx.restore();
+  }
+}
+
+/** The drones' shadows on the floor, under the crew. */
+function drawDroneShadows(ctx: CanvasRenderingContext2D, frame: Frame): void {
+  for (const drone of Object.values(frame.drones)) {
+    ctx.save();
+    ctx.translate(drone.x, drone.y);
+    drawDroneShadow(ctx, drone);
+    ctx.restore();
   }
 }
 

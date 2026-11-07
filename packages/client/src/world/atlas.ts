@@ -1,10 +1,12 @@
 import type { DecorKind } from '@escapelab/core';
 import { drawDecor } from './decor.js';
+import { decorRise } from './depth.js';
 import type { WallPropKind } from './dress.js';
 import {
   makeGrain,
   paintSurface,
   spriteHeight,
+  spriteLift,
   type FloorKind,
   type SurfaceSpec,
 } from './surfaces.js';
@@ -41,10 +43,14 @@ export type SpriteSpec =
   | WallSpec
   | { decor: DecorKind; variant: number; lit: boolean };
 
-/** A baked sprite, and how many tiles tall it is drawn: a wall's shadow reaches below it. */
+/**
+ * A baked sprite, how many tiles tall it is drawn — a wall's shadow reaches below it — and how
+ * far over its tile it starts: a tall thing rises over the tile behind it (depth.ts).
+ */
 export interface Sprite {
   canvas: HTMLCanvasElement;
   tall: number;
+  lift: number;
 }
 
 /** Makes a canvas of `width` × `height` pixels with its 2D context: the DOM's, or a test's. */
@@ -92,7 +98,12 @@ export function spriteKey(spec: SpriteSpec): string {
 
 /** How many tiles tall a sprite is. */
 function tallOf(spec: SpriteSpec): number {
-  return 'decor' in spec ? 1 : spriteHeight(spec);
+  return 'decor' in spec ? 1 + decorRise(spec.decor) : spriteHeight(spec);
+}
+
+/** How far over its tile a sprite starts, tiles: a tall thing's rise. */
+export function liftOf(spec: SpriteSpec): number {
+  return 'decor' in spec ? decorRise(spec.decor) : spriteLift(spec);
 }
 
 /** The grain over a tile `px` pixels square, made on the first tile of that size. */
@@ -108,22 +119,24 @@ function grainOf(atlas: Atlas, px: number): HTMLCanvasElement {
 /** Bakes `spec` at `px` pixels a tile, on a canvas of `atlas`'s. */
 function bakeSprite(atlas: Atlas, spec: SpriteSpec, px: number): Sprite {
   const tall = tallOf(spec);
-  const canvas = atlas.make(px, px * tall);
+  const lift = liftOf(spec);
+  const canvas = atlas.make(px, Math.round(px * tall));
   const g = canvas.getContext('2d');
   if (g === null) {
     throw new Error('atlas: canvas.getContext("2d") returned null; cannot bake a sprite.');
   }
   if ('decor' in spec) {
-    g.setTransform(px, 0, 0, px, px / 2, px / 2);
+    g.setTransform(px, 0, 0, px, px / 2, px / 2 + px * lift);
     drawDecor(g, spec.decor, spec.variant, spec.lit);
   } else {
     paintSurface(g, spec, px, grainOf(atlas, px));
     if ('wall' in spec && spec.prop !== undefined) {
-      g.setTransform(px, 0, 0, px, 0, 0);
+      // A prop hangs on the face of the wall's own tile, under a pillar's raised crown.
+      g.setTransform(px, 0, 0, px, 0, px * lift);
       drawWallProp(g, spec.prop.kind, spec.prop.variant, spec.faceLit);
     }
   }
-  return { canvas, tall };
+  return { canvas, tall, lift };
 }
 
 /** The sprites baked at `level`, now the level asked for last; the oldest past KEPT_LEVELS go. */

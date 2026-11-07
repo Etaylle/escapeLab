@@ -8,6 +8,7 @@ import {
 } from '../art.js';
 import { atlasLevel } from '../atlas.js';
 import { TAU } from '../brush.js';
+import { sourceRise } from '../depth.js';
 import { PX } from '../figure.js';
 import { drawCarryable, drawDropZone } from '../hazards.js';
 import type { Subject } from '../interact.js';
@@ -85,13 +86,17 @@ export function stationShape(
   };
 }
 
-/** A source as objects.ts draws it, without its shadow, glow and label: shut or open. */
+/**
+ * A source as objects.ts draws it, without its shadow, glow and label: shut or open — a tall one,
+ * a locker or the filing cabinet, as far over the tile behind it as it rises (depth.ts).
+ */
 export function manualShape(manual: Pick<KnownSource, 'kind' | 'opened' | 'label'>): Shape {
   const { kind, opened, label } = manual;
   const look = { kind, label, active: false, opened, pulse: 0, bare: true };
+  const rise = sourceRise(kind);
   return {
     key: `manual:${kind}:${opened ? 'open' : 'shut'}`,
-    box: PROP_BOX,
+    box: { ...PROP_BOX, y: PROP_BOX.y - rise, h: PROP_BOX.h + rise },
     draw: (g) => drawManualObject(g, look),
   };
 }

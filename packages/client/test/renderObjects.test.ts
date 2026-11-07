@@ -19,7 +19,8 @@ import {
 import { doorOpenness, type DoorMotion } from '../src/world/doors.js';
 import { drawCarryable, drawDropZone, drawSabotagePanel } from '../src/world/hazards.js';
 import { objectGlows } from '../src/world/render/darkness.js';
-import { draw, tubeAt } from '../src/world/render/objects.js';
+import { tubeAt } from '../src/world/render/looks.js';
+import { draw } from '../src/world/render/objects.js';
 import { callEntries, callsOf, drawnAt, fakeCanvas, recording, strip } from './fakeCanvas.js';
 import { frameWith, lightWith, player, TILES } from './frames.js';
 import { mapWith, type Item, type Manual, type Plate } from './fixtures.js';

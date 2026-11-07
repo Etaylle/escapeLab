@@ -435,7 +435,10 @@
  * `window.__escapelab.figures`) says one is — and says so again after the
  * shot, or it is taken again on the next (figureShot). After Blackout's lever
  * the host picks up the fuse lying in the Archiv, is shot holding it before
- * the chest (figure-carry.png) and puts it down again with Q. At the
+ * the chest (figure-carry.png) and puts it down again with Q; then it walks into the aisle behind
+ * the nearest shelf and stands pressed up to it (depth-behind-shelf.png): the shelf drawn again
+ * over its lower part, its name over all of it — the graphics probe has to say the shelf hides
+ * it, or the run fails (client world/depth.ts). At the
  * Systemcheck's Signalkette the sending side closes its panel and the pressing
  * side presses one wrong sign on purpose — the one alarm the run spends — and
  * the sender's world is shot the moment the alarm comes in, asked for within
@@ -4070,6 +4073,65 @@ async function coldOpen(host, guest) {
   return atSign;
 }
 
+/** The furniture standing tall, which a figure behind shows only above (client world/depth.ts). */
+const TALL_DECOR = new Set(['shelf', 'rack']);
+
+/**
+ * The tall piece of furniture with free floor behind it that `player` reaches in the fewest
+ * steps, and that floor; null where there is none.
+ */
+function shelfToHideBehind(player) {
+  const { map } = player.seen.view;
+  const solid = furniture(map);
+  const taken = new Set([...map.stations, ...map.plates].map((t) => `${t.x},${t.y}`));
+  const free = (x, y) =>
+    map.tiles[y]?.[x] === '.' && !solid.has(`${x},${y}`) && !taken.has(`${x},${y}`);
+  const options = map.decor
+    .filter((piece) => TALL_DECOR.has(piece.kind) && free(piece.x, piece.y - 1))
+    .map((piece) => ({ piece, behind: { x: piece.x, y: piece.y - 1 } }))
+    .map((option) => ({ ...option, steps: stepsTo(player.seen, option.behind) }))
+    .filter((option) => option.steps !== Infinity)
+    .sort((a, b) => a.steps - b.steps);
+  return options[0] ?? null;
+}
+
+/**
+ * depth-behind-shelf.png: `player` walks into the aisle behind the nearest shelf (or rack) with
+ * free floor behind it and stands pressed up to it, and is shot round its figure: the shelf in
+ * front is drawn again over its lower part (client world/depth.ts, render/occluders.ts), its
+ * name over all of it — the page's graphics probe has to say the shelf hides it, or the run
+ * fails. Then it walks back. Skipped where no such shelf is in reach.
+ */
+async function captureDepth(player) {
+  const option = shelfToHideBehind(player);
+  const home = tileOf(player.seen);
+  if (option === null || home === null || !(await standOn(player, option.behind))) {
+    skip('depth-behind-shelf.png', 'no shelf with free floor behind it in reach');
+    return;
+  }
+  const { piece } = option;
+  await stepTo(player.page, player.seen, piece.x + 0.5, piece.y - 0.36);
+  const you = player.seen.view.you.id;
+  const hidden = (probe) =>
+    probe.hidden.some(
+      (one) => one.id === you && one.by.some((by) => by.x === piece.x && by.y === piece.y),
+    );
+  const probe = await graphicsWhen(player.page, hidden, 3000);
+  const at = whereIs(player.seen);
+  await shootAround(player.page, 'depth-behind-shelf.png', at, 2.4);
+  console.log(
+    `depth-behind-shelf ${player.name} at ${at.x.toFixed(2)},${at.y.toFixed(2)} behind the ` +
+      `${piece.kind} at ${piece.x},${piece.y}: ` +
+      (probe === null ? '!! drawn over it, not behind it' : 'only the upper part shows'),
+  );
+  if (probe === null) {
+    fail(`depth-behind-shelf.png: the ${piece.kind} at ${piece.x},${piece.y} hid nothing`);
+  }
+  if (!(await standOn(player, home))) {
+    throw new Error(`${player.name} found no way back to ${home.x},${home.y} from the shelf`);
+  }
+}
+
 /**
  * The run's first moments. A mission with an intro opens with the power on:
  * the cold open comes first, the lever with it. Then Anna carries what lies
@@ -4085,6 +4147,7 @@ async function firstMoments(anna, ben) {
   const opening = intro ? null : hearRadio(ben, 40_000);
   const signedEarly = intro ? await coldOpen(anna, ben) : undefined;
   await captureCarry(anna);
+  await captureDepth(anna);
   await captureNote(anna);
   const [operator, reader] = operatorFirst([anna, ben]);
   console.log(`the draw:          ${operator.name} works the first station, ${reader.name} reads`);

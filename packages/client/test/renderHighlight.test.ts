@@ -24,7 +24,8 @@ import {
   noteShape,
   stationShape,
 } from '../src/world/render/highlight.js';
-import { draw, tubeAt } from '../src/world/render/objects.js';
+import { tubeAt } from '../src/world/render/looks.js';
+import { draw } from '../src/world/render/objects.js';
 import { CORE, glowSprite, HALO, type Shape } from '../src/world/silhouette.js';
 import {
   callEntries,

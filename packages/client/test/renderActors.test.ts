@@ -1,6 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { DronePosition, PartKind } from '@escapelab/core';
-import { drawScientist, drawVoiceRing, HELD_SCALE, type ScientistOpts } from '../src/world/art.js';
+import {
+  drawNameTag,
+  drawScientist,
+  drawVoiceRing,
+  HELD_SCALE,
+  type ScientistOpts,
+} from '../src/world/art.js';
 import {
   figurePhase,
   figurePose,
@@ -12,6 +18,7 @@ import {
   drawCarryable,
   drawDroneBody,
   drawDroneCone,
+  drawDroneShadow,
 } from '../src/world/hazards.js';
 import { crewPose, draw, groundAt, heldItem } from '../src/world/render/actors.js';
 import { FALLBACK_COLOR, type Frame, type OtherAvatar } from '../src/world/render/frame.js';
@@ -58,6 +65,9 @@ function poseIn(frame: Frame, id: string, parts: Partial<FigureState>): FigurePo
   });
 }
 
+/** A figure as the pass draws it: its name tag drawn apart, over everything (drawNames). */
+const untagged = (look: ScientistOpts): ScientistOpts => ({ ...look, named: false });
+
 /** Ben as the view names him, as the frame eases him and poses him as `id`. */
 function benLook(frame: Frame, parts: Partial<FigureState> = {}, id = 'p2'): ScientistOpts {
   return {
@@ -101,7 +111,7 @@ describe('actors — drones and the crew, in tile space', () => {
     expect(strip(drawnAt(log, 3, 2))).toEqual(recording((c) => drawDroneCone(c, watching, 0.5)));
   });
 
-  it('draws the crew where the light shows them, as the view names them, and you on top', () => {
+  it('draws the crew where the light shows them, as the view names them, back to front', () => {
     const others = new Map([
       ['p2', ben],
       ['p3', cleo],
@@ -110,7 +120,7 @@ describe('actors — drones and the crew, in tile space', () => {
     const frame = frameWith({ others, players, light, walkPhase: 0.7 });
     const log = drawn(frame);
     expect(strip(drawnAt(log, 4.2, 2.1 + 0.3))).toEqual(
-      recording((c) => drawScientist(c, benLook(frame))),
+      recording((c) => drawScientist(c, untagged(benLook(frame)))),
     );
     expect(drawnAt(log, 8, 4 + 0.3)).toEqual([]);
     const you: ScientistOpts = {
@@ -125,9 +135,41 @@ describe('actors — drones and the crew, in tile space', () => {
       pose: poseIn(frame, 'p1', {}),
       ground: 'dark',
     };
-    expect(strip(drawnAt(log, 2.5, 2.5 + 0.3))).toEqual(recording((c) => drawScientist(c, you)));
+    expect(strip(drawnAt(log, 2.5, 2.5 + 0.3))).toEqual(
+      recording((c) => drawScientist(c, untagged(you))),
+    );
+    // You stand further down the picture than Ben: drawn after him, over him.
     const order = callsOf(log, 'translate').map(([x]) => x);
     expect(order.indexOf(2.5)).toBeGreaterThan(order.indexOf(4.2));
+  });
+
+  it('tags every figure with its name after all of them, so that nothing hides a name', () => {
+    const others = new Map([['p2', ben]]);
+    const frame = frameWith({ others, players });
+    const log = drawn(frame);
+    // The second time the origin moves to a figure's feet, its tag is drawn there.
+    expect(strip(drawnAt(log, 4.2, 2.1 + 0.3, 1))).toEqual(
+      recording((c) => drawNameTag(c, benLook(frame))),
+    );
+    const order = callsOf(log, 'translate').map(([x, y]) => `${x},${y}`);
+    const bodies = [order.indexOf('4.2,2.4'), order.indexOf('2.5,2.8')];
+    const tags = [order.lastIndexOf('4.2,2.4'), order.lastIndexOf('2.5,2.8')];
+    expect(Math.min(...tags)).toBeGreaterThan(Math.max(...bodies));
+  });
+
+  it('casts the drones’ shadows on the floor under the crew, the drones over it', () => {
+    const flying = drone({ x: 2.5, y: 2.3 });
+    const frame = frameWith({ drones: { flying } });
+    const log = drawn(frame);
+    expect(strip(drawnAt(log, 2.5, 2.3, 1))).toEqual(
+      recording((c) => drawDroneShadow(c, flying)),
+    );
+    const order = callsOf(log, 'translate').map(([x, y]) => `${x},${y}`);
+    const shadow = order.indexOf('2.5,2.3', order.indexOf('2.5,2.3') + 1);
+    const you = order.indexOf('2.5,2.8');
+    const body = order.lastIndexOf('2.5,2.3');
+    expect(shadow).toBeLessThan(you);
+    expect(body).toBeGreaterThan(you);
   });
 
   it('draws nobody where you stand for the audience', () => {
@@ -142,7 +184,7 @@ describe('actors — drones and the crew, in tile space', () => {
     expect(strip(drawnAt(log, 4.2, 2.1 + 0.3))).toEqual(
       recording((c) => {
         drawVoiceRing(c, '#f472b6', 3.2);
-        drawScientist(c, benLook(frame, { speaking: true }));
+        drawScientist(c, untagged(benLook(frame, { speaking: true })));
       }),
     );
   });
@@ -162,7 +204,12 @@ describe('actors — drones and the crew, in tile space', () => {
       pose: poseIn(frame, 'p1', {}),
       ground: 'dark',
     };
-    expect(strip(drawnAt(log, 2.5, 2.5 + 0.3))).toEqual(recording((c) => drawScientist(c, you)));
+    expect(strip(drawnAt(log, 2.5, 2.5 + 0.3))).toEqual(
+      recording((c) => drawScientist(c, untagged(you))),
+    );
+    expect(strip(drawnAt(log, 2.5, 2.5 + 0.3, 1))).toEqual(
+      recording((c) => drawNameTag(c, you)),
+    );
   });
 
   it('names somebody the view does not list „???", in the crew’s fallback colour', () => {
@@ -170,7 +217,10 @@ describe('actors — drones and the crew, in tile space', () => {
     const log = drawn(frame);
     const stranger = { ...benLook(frame, {}, 'p9'), color: FALLBACK_COLOR, name: '???' };
     expect(strip(drawnAt(log, 4.2, 2.1 + 0.3))).toEqual(
-      recording((c) => drawScientist(c, stranger)),
+      recording((c) => drawScientist(c, untagged(stranger))),
+    );
+    expect(strip(drawnAt(log, 4.2, 2.1 + 0.3, 1))).toEqual(
+      recording((c) => drawNameTag(c, stranger)),
     );
   });
 
@@ -178,14 +228,15 @@ describe('actors — drones and the crew, in tile space', () => {
     const body = drone({ x: 7, y: 3, frozen: true });
     const now = 1_000_000;
     const marked = drawn(frameWith({ drones: { body }, now, alarm: { seq: 1, at: now - 250 } }));
-    expect(strip(drawnAt(marked, 7, 3, 1))).toEqual(
+    // Its cone first, its shadow, then itself.
+    expect(strip(drawnAt(marked, 7, 3, 2))).toEqual(
       recording((c) => {
         drawDroneBody(c, body, 0.5);
         drawAlarmMark(c, 0.25);
       }),
     );
     const calm = drawn(frameWith({ drones: { body }, now }));
-    expect(strip(drawnAt(calm, 7, 3, 1))).toEqual(
+    expect(strip(drawnAt(calm, 7, 3, 2))).toEqual(
       recording((c) => {
         drawDroneBody(c, body, 0.5);
         drawAlarmMark(c, 1);
@@ -203,7 +254,7 @@ describe('actors — drones and the crew, in tile space', () => {
     const log = drawn(frame);
     const carrier = { ...benLook(frame, { carrying: 'crate' }), held: heldItem('crate', 0.5) };
     const drawnBen = strip(drawnAt(log, 4.2, 2.1 + 0.3));
-    expect(drawnBen).toEqual(recording((c) => drawScientist(c, carrier)));
+    expect(drawnBen).toEqual(recording((c) => drawScientist(c, untagged(carrier))));
     const you = drawnAt(log, 2.5, 2.5 + 0.3);
     expect(strip(you)).toContainEqual(['scale', [HELD_SCALE, HELD_SCALE]]);
     expect(drawnAt(log, 4.2, 2.1 - 0.75)).toEqual([]);
@@ -287,7 +338,7 @@ describe('crewPose — the frame says how each of the crew stands', () => {
     const others = new Map([['p2', ben]]);
     const inLitRoom = frameWith({ others, players, litTiles: new Set(['4,2']) });
     expect(strip(drawnAt(drawn(inLitRoom), 4.2, 2.1 + 0.3))).toEqual(
-      recording((c) => drawScientist(c, { ...benLook(inLitRoom), ground: 'lit' })),
+      recording((c) => drawScientist(c, untagged({ ...benLook(inLitRoom), ground: 'lit' }))),
     );
     expect(groundAt(inLitRoom, 4.2, 2.1)).toBe('lit');
     expect(groundAt(inLitRoom, 2.5, 2.5)).toBe('dark');

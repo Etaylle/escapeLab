@@ -1,9 +1,11 @@
 import { beaconAngle, beaconPhase, beaconTurnMs, LOBE_REACH } from '../beacon.js';
+import { figureBox } from '../depth.js';
 import type { ParticleKind } from '../particles.js';
 import type { Sim } from '../sim.js';
 import { groundAt } from './actors.js';
 import { conesOf, motesLit } from './atmosphere.js';
 import type { Frame, RenderKit } from './frame.js';
+import { hidersNow } from './occluders.js';
 
 /**
  * What the walkthrough (`?trace=1`, tools/shots.mjs) reads of the world's
@@ -29,6 +31,30 @@ export interface GraphicsProbe {
    * long it takes to turn once, ms, and how far its lobes reach, tiles
    */
   beacons: { x: number; y: number; angle: number; t: number; turnMs: number; reach: number }[];
+  /**
+   * the crew standing behind a tall thing as the last frame drew them (world/depth.ts): who,
+   * where, and the tall things drawn again over them, each by its tile and what it is
+   */
+  hidden: { id: string; x: number; y: number; by: { x: number; y: number; of: string }[] }[];
+}
+
+/** The crew a frame drew behind tall things, and what hid each. */
+function hiddenOf(drawn: Frame | null): GraphicsProbe['hidden'] {
+  if (drawn === null) {
+    return [];
+  }
+  const crew = [...drawn.others].map(([id, o]) => ({ id, x: o.rx, y: o.ry }));
+  if (!drawn.spectator) {
+    crew.push({ id: drawn.youId, x: drawn.self.x, y: drawn.self.y });
+  }
+  return crew.flatMap(({ id, x, y }) => {
+    const by = hidersNow(drawn, figureBox(x, y), y).map(({ tall }) => ({
+      x: tall.x,
+      y: tall.y,
+      of: tall.of,
+    }));
+    return by.length === 0 ? [] : [{ id, x, y, by }];
+  });
 }
 
 /** The beacons a frame drew: each burning lamp, its first lobe's angle, the frame's sim time. */
@@ -79,5 +105,6 @@ export function graphicsProbe(world: ProbedWorld): GraphicsProbe {
       cssHeight: canvas.clientHeight,
     },
     beacons: beaconsOf(drawn),
+    hidden: hiddenOf(drawn),
   };
 }

@@ -294,8 +294,8 @@ function reshown({ cache, light }: Bake, range: TileRange): number[] {
 
 /**
  * The box of whole pixels round every pixel the sprites of tiles `dirty` may
- * touch — a wall's two tiles tall, as its shadow falls below it — and a
- * pixel more; null for none.
+ * touch — a wall's two tiles tall, as its shadow falls below it, and a tall
+ * thing's a tile over it (depth.ts) — and a pixel more; null for none.
  */
 function boxOf(cache: TileCache, dirty: readonly number[]): PixelBox | null {
   if (dirty.length === 0) {
@@ -303,7 +303,7 @@ function boxOf(cache: TileCache, dirty: readonly number[]): PixelBox | null {
   }
   const xs = dirty.map((i) => i % cache.width);
   const ys = dirty.map((i) => Math.floor(i / cache.width));
-  const [left, top] = pixelAt(cache, Math.min(...xs), Math.min(...ys));
+  const [left, top] = pixelAt(cache, Math.min(...xs), Math.min(...ys) - 1);
   const [right, bottom] = pixelAt(cache, Math.max(...xs) + 1, Math.max(...ys) + 2);
   const { width, height } = cache.canvas;
   return [
@@ -334,11 +334,12 @@ function bakeRegion(bake: Bake, map: CacheMap, box: PixelBox): void {
   const [px, py] = phaseOf(cache.grid);
   const s = cache.grid.scale;
   const [ox, oy] = [px - cache.left, py - cache.top];
-  // Tiles whose sprites reach the box: a wall's shadow reaches a tile below it.
+  // Tiles whose sprites reach the box: a wall's shadow reaches a tile below it, a tall thing's
+  // top the tile over it (depth.ts).
   const x0 = Math.max(0, Math.floor((left - ox) / s) - 1);
   const x1 = Math.min(cache.width - 1, Math.ceil((right - ox) / s));
   const y0 = Math.max(0, Math.floor((top - oy) / s) - 2);
-  const y1 = Math.min(cache.height - 1, Math.ceil((bottom - oy) / s));
+  const y1 = Math.min(cache.height - 1, Math.ceil((bottom - oy) / s) + 1);
   const tiles: number[] = [];
   for (let y = y0; y <= y1; y++) {
     for (let x = x0; x <= x1; x++) {
@@ -378,7 +379,7 @@ function drawSurface(bake: Bake, i: number, level: number, record: boolean): voi
   const lit = light.lit(x, y);
   const { key, spec } = spriteFor(sprites, lit, sprites.face && light.lit(x, y + 1));
   const drawn = spriteAt(atlas, level, key, spec);
-  cache.g.drawImage(drawn.canvas, x, y, 1, drawn.tall);
+  cache.g.drawImage(drawn.canvas, x, y - drawn.lift, 1, drawn.tall);
   if (record) {
     cache.lit[i] = Number(lit);
   }
@@ -400,5 +401,7 @@ function drawDecor(bake: Bake, i: number, level: number, record: boolean): void 
   }
   const lit = light.lit(piece.x, piece.y);
   const spec = { decor: piece.kind, variant: decorVariant(piece), lit };
-  cache.g.drawImage(sprite(atlas, level, spec).canvas, piece.x, piece.y, 1, 1);
+  const drawn = sprite(atlas, level, spec);
+  // A tall piece rises over the tile behind it (depth.ts).
+  cache.g.drawImage(drawn.canvas, piece.x, piece.y - drawn.lift, 1, drawn.tall);
 }

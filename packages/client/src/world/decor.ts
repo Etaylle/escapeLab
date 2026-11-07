@@ -35,15 +35,17 @@ import {
   WOOD,
   type Rgb,
 } from './palette.js';
+import { RISE } from './depth.js';
 import { drawRollBar, drawScope, type PropState } from './wallProps.js';
 
 /**
  * The lab's furniture (map.decor), drawn with the origin at its TILE'S
  * CENTRE in tile units, seen from above in three quarters: a lighter top,
  * a darker front, the 2 px outline, a soft foot shadow, and never taller
- * than its tile. The still part is what the atlas bakes, lit or in the
- * dark; what glows — rack LEDs, the reactor's core, a desk's screen, a
- * generator's lamp — is drawn over the darkness every frame.
+ * than its tile — but the shelves and the racks, which stand tall: RISE
+ * over the tile behind them (depth.ts). The still part is what the atlas
+ * bakes, lit or in the dark; what glows — rack LEDs, the reactor's core, a
+ * desk's screen, a generator's lamp — is drawn over the darkness every frame.
  */
 
 /** A material in the light of the sprite. */
@@ -86,14 +88,20 @@ const BINDERS: readonly Rgb[] = [
   sink(AMBER, 0.42),
 ];
 
+/**
+ * Where the shelf's boards lie, tile-centre space, top to bottom: it stands RISE over the tile
+ * behind it (depth.ts), five rows of binders high.
+ */
+const SHELF_BOARDS = [-0.79, -0.56, -0.33, -0.1, 0.13, 0.33] as const;
+
 function drawShelf(g: CanvasRenderingContext2D, variant: number, paint: Paint): void {
   const frame = variant < 2 ? sink(WOOD, 0.1) : STEEL;
   footShadow(g, 0, 0.38, 0.46, 0.1);
-  block(g, [-0.44, -0.46, 0.88, 0.84], 0.1, frame, paint);
+  block(g, [-0.44, -0.46 - RISE, 0.88, 0.84 + RISE], 0.1, frame, paint);
   g.fillStyle = paint(sink(frame, 0.65));
-  g.fillRect(-0.39, -0.33, 0.78, 0.66);
+  g.fillRect(-0.39, -0.33 - RISE, 0.78, 0.66 + RISE);
   const rand = seededRandom(0x5e1f0 + variant);
-  for (const foot of [-0.1, 0.13, 0.33]) {
+  for (const foot of SHELF_BOARDS.slice(1)) {
     let x = -0.37;
     while (x < 0.33) {
       const w = 0.04 + rand() * 0.05;
@@ -105,9 +113,9 @@ function drawShelf(g: CanvasRenderingContext2D, variant: number, paint: Paint): 
         continue;
       }
       g.fillStyle = paint(BINDERS[Math.floor(rand() * BINDERS.length)] ?? PAPER);
-      g.fillRect(x, foot - h, w, h);
+      g.fillRect(x, foot - Math.min(h, 0.19), w, Math.min(h, 0.19));
       g.fillStyle = rgba(WHITE, 0.22);
-      g.fillRect(x + w * 0.25, foot - h * 0.7, w * 0.5, 0.025);
+      g.fillRect(x + w * 0.25, foot - Math.min(h, 0.19) * 0.7, w * 0.5, 0.025);
       x += w + 0.006;
     }
     g.fillStyle = paint(lift(frame, 0.05));
@@ -247,12 +255,18 @@ function drawHood(g: CanvasRenderingContext2D, _variant: number, paint: Paint): 
   g.fillRect(0.22, -0.43, 0.14, 0.04);
 }
 
+/** How many units a rack holds, top to bottom, and how far apart, tiles: it stands RISE tall. */
+const RACK_UNITS = 10;
+const RACK_PITCH = 0.11;
+/** Where the rack's top unit starts, tile-centre space. */
+const RACK_TOP = -0.34 - RISE + 0.06;
+
 /** A server rack's front: units with vents; its LEDs glow on their own (drawDecorGlow). */
 function drawRack(g: CanvasRenderingContext2D, variant: number, paint: Paint): void {
   footShadow(g, 0, 0.38, 0.44, 0.09);
-  block(g, [-0.4, -0.47, 0.8, 0.84], 0.09, sink(STEEL, 0.62), paint);
-  for (let unit = 0; unit < 6; unit++) {
-    const y = -0.34 + unit * 0.11;
+  block(g, [-0.4, -0.47 - RISE, 0.8, 0.84 + RISE], 0.09, sink(STEEL, 0.62), paint);
+  for (let unit = 0; unit < RACK_UNITS; unit++) {
+    const y = RACK_TOP + unit * RACK_PITCH;
     g.fillStyle = paint(sink(STEEL, (unit + variant) % 3 === 0 ? 0.55 : 0.7));
     g.fillRect(-0.34, y, 0.68, 0.09);
     g.fillStyle = rgba(BLACK, 0.55);
@@ -528,8 +542,8 @@ export function decorVariant(piece: { x: number; y: number; variant?: number }):
  */
 function rackLeds(ctx: CanvasRenderingContext2D, variant: number, state: PropState): void {
   const seed = state.seed ?? 0;
-  for (let unit = 0; unit < 6; unit++) {
-    const y = -0.31 + unit * 0.11;
+  for (let unit = 0; unit < RACK_UNITS; unit++) {
+    const y = RACK_TOP + 0.03 + unit * RACK_PITCH;
     for (let k = 0; k < 4; k++) {
       const id = unit * 4 + k + variant * 31 + seed * 67;
       if (!ledLit(id, k, state.t)) continue;
