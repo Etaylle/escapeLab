@@ -21,6 +21,7 @@ export const PASS_NAMES = [
   'atmosphere',
   'light',
   'darkness',
+  'beacons',
   'hud',
   'overlays',
   'aberration',

@@ -86,6 +86,7 @@ export function kitWith(overlay: FakeCanvas = fakeCanvas(800, 600, 'overlay')): 
     profile: null,
     grid: null,
     fringe: null,
+    beacons: null,
     census: lightCensus(),
   };
 }

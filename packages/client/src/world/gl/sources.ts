@@ -1,4 +1,14 @@
 import {
+  BEACON_STOPS,
+  BEACON_TINT,
+  beaconAngle,
+  beaconPhase,
+  LOBE_HALF,
+  LOBE_REACH,
+  LOBE_SOFT,
+  lobesAt,
+} from '../beacon.js';
+import {
   CREW_GLOW_STOPS,
   DRONE_BEAM_STOPS,
   EMERGENCY_STOPS,
@@ -41,8 +51,11 @@ export interface Light {
   colour: Rgb;
   /** its light all round: how far, and how deep it clears the darkness along the way; or none */
   glow: { reach: number; stops: Stops } | null;
-  /** a cone one way: where it points, how wide and how far, its depth along the way; or none */
-  beam: { facing: number; halfAngle: number; reach: number; stops: Stops } | null;
+  /**
+   * a cone one way: where it points, how wide and how far, its depth along the way, and how far
+   * its edge fades either way, radians (pack.ts's BEAM_SOFT where left out); or none
+   */
+  beam: { facing: number; halfAngle: number; reach: number; stops: Stops; soft?: number } | null;
   /** what it adds in its colour over the darkness, as the Canvas pass's gradient; null for none */
   tint: Tint | null;
   /** how wide it is, in tiles — the softness of its shadows; null where walls do not stop it */
@@ -90,9 +103,42 @@ export function lightsOf(frame: Frame): Light[] {
     ...lampLights(frame),
     ...droneLights(frame),
     ...sourcesOf(frame).map(fromSource),
+    ...beaconLights(frame),
     ...hatchAndSpills(frame),
     ...glowLights(frame),
   ];
+}
+
+/** A beacon's lobe adds its red as the Canvas pass's gradient does: worked out once. */
+const LOBE_TINT = tintOf(BEACON_TINT);
+
+/**
+ * Each burning emergency lamp's two lobes as it turns (world/beacon.ts): beams of red, opposite
+ * each other, lighting the floor in their path — falling off along their reach, their edges
+ * soft, walls and shut doors stopping them as they stop every light with a size.
+ */
+export function beaconLights(frame: Frame): Light[] {
+  const ms = frame.time * 1000;
+  return frame.light.lamps.flatMap(({ mount }) =>
+    lobesAt(beaconAngle(ms, beaconPhase(mount), frame.reduced)).map(
+      (facing): Light => ({
+        x: mount.x,
+        y: mount.y,
+        colour: tailOf(BEACON_TINT),
+        glow: null,
+        beam: {
+          facing,
+          halfAngle: LOBE_HALF,
+          reach: LOBE_REACH,
+          stops: BEACON_STOPS,
+          soft: LOBE_SOFT,
+        },
+        tint: LOBE_TINT,
+        size: SIZE.emergency,
+        strength: 1,
+      }),
+    ),
+  );
 }
 
 /** How far above the bloom's threshold a standby light's colour lies at the top of its breath. */

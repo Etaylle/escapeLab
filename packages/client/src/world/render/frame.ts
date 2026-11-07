@@ -16,6 +16,7 @@ import type { LitGroup, RoomLight } from '../rooms.js';
 import type { Viewport } from '../viewport.js';
 import type { Fringe } from './aberration.js';
 import type { BakeStore } from './bakes.js';
+import type { LobeSprites } from './beacons.js';
 import { lightCensus, type LightCensus } from './census.js';
 import { frameCache } from './frameCache.js';
 import type { PixelGrid } from './grid.js';
@@ -170,6 +171,8 @@ export interface RenderKit {
   grid: PixelGrid | null;
   /** the scratch canvases an alarm knocks the colours apart in (aberration.ts); null before */
   fringe: Fringe | null;
+  /** the beacons' lobes baked for the zoom drawn at (beacons.ts); null while no lamp burns */
+  beacons: LobeSprites | null;
   /** the sights and bakes the light has worked out so far, for the walkthrough (census.ts) */
   census: LightCensus;
 }
@@ -189,6 +192,7 @@ export function renderKit(overlay: CanvasRenderingContext2D): RenderKit {
     profile: null,
     grid: null,
     fringe: null,
+    beacons: null,
     census: lightCensus(),
   };
 }

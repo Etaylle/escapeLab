@@ -12,6 +12,7 @@ import {
 import { ALARM_RED, ceilingLayer, WARM, type CeilingLight } from '../power.js';
 import { glowSources } from '../sources.js';
 import { layAdded, layBake, type BakePart } from './bakes.js';
+import { drawBeacons } from './beacons.js';
 import { shutKey } from './clips.js';
 import { cutDarkness, ESCAPE_RED, escapeTint, roomUp, wedge } from './darkness.js';
 import {
@@ -244,6 +245,7 @@ function drawLighting(
     drawHatchGlow(ctx, frame);
   }
   drawLampLight(ctx, frame);
+  profiled(frame.kit, 'beacons', ctx, () => drawBeacons(ctx, frame));
   drawSpillLight(ctx, frame);
   ctx.restore();
   drawEscapeTint(ctx, frame);

@@ -1,3 +1,4 @@
+import { beaconAngle, beaconPhase, beaconTurnMs, LOBE_REACH } from '../beacon.js';
 import type { ParticleKind } from '../particles.js';
 import type { Sim } from '../sim.js';
 import { groundAt } from './actors.js';
@@ -22,6 +23,27 @@ export interface GraphicsProbe {
   particles: Partial<Record<ParticleKind, number>> & { litMotes: number };
   /** the canvas: its backing store, device pixels, and its box, CSS pixels */
   backing: { width: number; height: number; cssWidth: number; cssHeight: number };
+  /**
+   * the emergency lamps burning as beacons as the last frame drew them (world/beacon.ts): where
+   * each hangs, tiles, where its first lobe pointed, radians, at the frame's sim time, s, how
+   * long it takes to turn once, ms, and how far its lobes reach, tiles
+   */
+  beacons: { x: number; y: number; angle: number; t: number; turnMs: number; reach: number }[];
+}
+
+/** The beacons a frame drew: each burning lamp, its first lobe's angle, the frame's sim time. */
+function beaconsOf(drawn: Frame | null): GraphicsProbe['beacons'] {
+  if (drawn === null) {
+    return [];
+  }
+  return drawn.light.lamps.map(({ mount }) => ({
+    x: mount.x,
+    y: mount.y,
+    angle: beaconAngle(drawn.time * 1000, beaconPhase(mount), drawn.reduced),
+    t: drawn.time,
+    turnMs: beaconTurnMs(drawn.reduced),
+    reach: LOBE_REACH,
+  }));
 }
 
 /** What the probe reads of a mounted world. */
@@ -56,5 +78,6 @@ export function graphicsProbe(world: ProbedWorld): GraphicsProbe {
       cssWidth: canvas.clientWidth,
       cssHeight: canvas.clientHeight,
     },
+    beacons: beaconsOf(drawn),
   };
 }

@@ -1,4 +1,5 @@
 import { sightFrom, type MapView, type Sight, type SightMap } from '@escapelab/core';
+import { LOBE_REACH } from './beacon.js';
 
 /**
  * The world's light follows sight (core's `sightFrom`): the crew's lamps and
@@ -189,9 +190,13 @@ export function lampMount(map: Pick<MapView, 'tiles'>, lamp: Spot): LampMount | 
   };
 }
 
-/** An emergency lamp's light: a dim glow all round where it hangs, and no beam. */
+/**
+ * An emergency lamp's light: a dim glow round where it hangs, EMERGENCY_GLOW as the passes draw
+ * it, and no beam — but its beacon's two lobes turn all round it out to LOBE_REACH (beacon.ts), so
+ * its light reaches, and is seen, that far.
+ */
 export function emergencyLamp(mount: LampMount): Lamp {
-  return { x: mount.x, y: mount.y, glow: EMERGENCY_GLOW, beam: null };
+  return { x: mount.x, y: mount.y, glow: LOBE_REACH, beam: null };
 }
 
 /** The glow an object gives off on its own, `strength` deep in its middle. */

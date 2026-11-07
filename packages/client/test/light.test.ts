@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sightFrom } from '@escapelab/core';
+import { LOBE_REACH } from '../src/world/beacon.js';
 import {
   CREW_GLOW_STOPS,
   DRONE_BEAM_STOPS,
@@ -251,7 +252,8 @@ describe('emergency lamps — where they hang and what they light', () => {
       return;
     }
     const lamp = emergencyLamp(mount);
-    expect(lamp).toEqual({ x: 3.05, y: 1.5, glow: EMERGENCY_GLOW, beam: null });
+    // Its beacon's lobes turn all round it: its light reaches as far as they do.
+    expect(lamp).toEqual({ x: 3.05, y: 1.5, glow: LOBE_REACH, beam: null });
     const lit = litTiles(lamp, sightFrom(cells, lamp, reachOf(lamp), new Set()));
     expect(lit).toEqual(expect.arrayContaining(['2,1', '3,1']));
     expect(lit).not.toContain('1,1');

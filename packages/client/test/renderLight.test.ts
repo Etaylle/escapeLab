@@ -254,7 +254,8 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
     // Laid on as brightly as the lamps burn, at whole pixels: (0, 0) lies at (-100, 0).
     const laid = callEntries(log, 'drawImage').find((e) => e.args[0] === red.canvas);
     expect(laid).toMatchObject({ args: [red.canvas, -100, 0], op: 'lighter', alpha: 0.8 });
-    expect(callsOf(log, 'clip')).toEqual([]);
+    // Laid from its bake, no clip: the one clip is the box its beacon's lobes keep to (beacons.ts).
+    expect(callsOf(log, 'clip')).toEqual([[]]);
     const cut = bakeOf(frame, 'cut:lamp:1.5,1.5');
     expect(gradients(cut.log)[0]?.stops[0]).toEqual([0, `rgba(0,0,0,${EMERGENCY_STOPS[0]?.[1]})`]);
     const cutIn = callEntries(overlay.log, 'drawImage').find((e) => e.args[0] === cut.canvas);

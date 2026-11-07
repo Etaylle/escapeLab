@@ -57,7 +57,10 @@
  * window the HUD comes back once the title has gone, the clock flashing as it
  * comes and mission control waiting for it. Two seconds after the clock comes
  * into sight comes blackout.png, the emergency lamps red. Then both go to the first station,
- * a main switch — whoever is locked in let out over a plate first — and E
+ * a main switch — whoever is locked in let out over a plate first — where the lamp over it turns
+ * as a beacon: beacon-sweep-a.png and beacon-sweep-b.png a second apart, its lobe turned between
+ * them as far as the page's probe says its clock turned it and the picture round the lamp
+ * changed (sweep.mjs), or the run fails. E
  * opens its panel for each (lever.png, every lamp lit, the player's own name
  * under the own lever). Where the view gives a press its expiry, the host throws alone:
  * lever-ring.png catches the ring round its grip draining; 1.3 s in,
@@ -452,6 +455,7 @@ import { withOthersFrozen } from './freeze.mjs';
 import { ART_PX, bobVerdict, GLOWING, glowAtCorners, haloAgainst } from './glowcheck.mjs';
 import { lightWorkText } from './lightwork.mjs';
 import { fadeOf, meanLuma, midway } from './panelfade.mjs';
+import { changedShare, sweepOf, sweepVerdict } from './sweep.mjs';
 import {
   arrivals,
   cornersOf,
@@ -3067,6 +3071,7 @@ async function throwLever(players) {
     watches.forEach((watch) => watch.stop());
   }
   await reportLeverFound(players, lever, watches);
+  await captureBeaconSweep(first);
   for (const player of players) {
     const modal = player.page.locator('.station-modal');
     if (!(await interactUntil(player, modal, consoleTarget(lever)))) {
@@ -3085,6 +3090,63 @@ async function throwLever(players) {
   await checkRadioVoice(first, solved.listening, 'the lever');
   await audioKept(players, 'at the first station');
   await partnerAcross(first, players[1], 'across the corridor');
+}
+
+/** The beacon burning nearest the page's avatar, as its graphics probe has it; null for none. */
+async function nearestBeacon(page) {
+  const probe = await graphicsOf(page);
+  const self = await page.evaluate(() => globalThis.__escapelab?.self ?? null);
+  if (probe === null || self === null || probe.beacons.length === 0) {
+    return null;
+  }
+  const away = (b) => Math.hypot(b.x - self.x, b.y - self.y);
+  return [...probe.beacons].sort((a, b) => away(a) - away(b))[0];
+}
+
+/**
+ * beacon-sweep-a.png, beacon-sweep-b.png: the emergency lamps turned beacons once the lights
+ * failed (client world/beacon.ts) — the crew at the main switch, the lamp over it turning its two
+ * lobes of red: two shots of the host's window a second apart. Between them the first lobe of
+ * the beacon nearest the host has to have turned as far as the page's probe says its clock turned
+ * it, a tenth of a turn at least, and the picture round that lamp, as far as its lobes reach, has
+ * to have changed — or the run fails (tools/sweep.mjs). Skipped where no lamp burns in view.
+ */
+async function captureBeaconSweep(player) {
+  const { page } = player;
+  const before = await nearestBeacon(page);
+  const spot = before === null ? null : await onPage(page, before.x, before.y);
+  if (before === null || spot === null) {
+    skip('beacon-sweep-a.png', 'no emergency lamp burns as a beacon in this window');
+    return;
+  }
+  const first = await page.screenshot();
+  await sleep(1000);
+  const second = await page.screenshot();
+  const after = await nearestBeacon(page);
+  writeFileSync(join(OUT, 'beacon-sweep-a.png'), first);
+  writeFileSync(join(OUT, 'beacon-sweep-b.png'), second);
+  tally.taken += 2;
+  const half = before.reach * spot.tile;
+  const box = { x: spot.x - half, y: spot.y - half, width: 2 * half, height: 2 * half };
+  const dpr = await page.evaluate(() => globalThis.devicePixelRatio);
+  const share = changedShare(decodePng(first), decodePng(second), box, dpr);
+  const sweep = after === null ? null : sweepOf(before, after, before.turnMs);
+  const fine = sweep !== null && sweepVerdict(sweep, share);
+  const clock = sweep === null ? '' : ` (its clock ${degrees(sweep.expected)}°)`;
+  const turned = sweep === null ? '!! gone' : `${degrees(sweep.turned)}°${clock}`;
+  const where = `${before.x.toFixed(2)},${before.y.toFixed(2)}`;
+  console.log(
+    `beacon-sweep       ${player.name}: the lamp at ${where} turned ${turned} between the ` +
+      `shots, ${(share * 100).toFixed(1)} % of the picture round it changed${fine ? '' : ' !!'}`,
+  );
+  if (!fine) {
+    fail(`beacon-sweep: turned ${turned}, ${(share * 100).toFixed(1)} % changed`);
+  }
+}
+
+/** `radians` in whole degrees. */
+function degrees(radians) {
+  return Math.round((radians * 180) / Math.PI);
 }
 
 /**

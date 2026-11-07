@@ -185,15 +185,19 @@ function falloff(stops: Stops | undefined, strength: number): number[] {
   return [v0 * strength, knee, vk * strength];
 }
 
-/** A beam's direction, x and y, and the cosines of its outer and inner edge; a full turn for none. */
+/**
+ * A beam's direction, x and y, and the cosines of its outer and inner edge — its own softness
+ * either way of its half-angle, BEAM_SOFT where it names none; a full turn for none.
+ */
 function cone(beam: Light['beam']): number[] {
   const facing = beam?.facing ?? 0;
   const half = beam?.halfAngle ?? Math.PI;
+  const soft = beam?.soft ?? BEAM_SOFT;
   return [
     Math.cos(facing),
     Math.sin(facing),
-    Math.cos(Math.min(Math.PI, half + BEAM_SOFT)),
-    Math.cos(Math.max(0, half - BEAM_SOFT)),
+    Math.cos(Math.min(Math.PI, half + soft)),
+    Math.cos(Math.max(0, half - soft)),
   ];
 }
 

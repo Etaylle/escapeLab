@@ -72,6 +72,7 @@ describe('profile — what each pass costs a frame (?profile=1)', () => {
       'atmosphere',
       'light',
       'darkness',
+      'beacons',
       'hud',
       'overlays',
       'aberration',

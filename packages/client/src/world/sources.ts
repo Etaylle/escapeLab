@@ -106,7 +106,9 @@ export function lightShown(frame: Frame, x: number, y: number): boolean {
 /**
  * The emergency lamps burning now, as the Canvas pass burns them (the
  * frame's light, frameLight.ts): their rooms dark, the lab without its
- * power, none for the audience — at full strength at the top of their pulse.
+ * power, none for the audience — at full strength at the top of their pulse,
+ * their tubes wavering but where the player asked for less motion: a beacon
+ * then sweeps slowly, without a flicker (beacon.ts).
  */
 export function lampSources(frame: Frame): LightSource[] {
   return frame.light.lamps.map(({ mount }) => ({
@@ -116,7 +118,7 @@ export function lampSources(frame: Frame): LightSource[] {
     reach: EMERGENCY_GLOW,
     strength: 1,
     pulse: { ...LAMP_PULSE },
-    tremble: true,
+    ...(frame.reduced ? {} : { tremble: true }),
   }));
 }
 
