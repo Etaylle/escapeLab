@@ -1,4 +1,5 @@
 import { LAMP_HALF_ANGLE, type DronePosition, type Sight } from '@escapelab/core';
+import { CREW_REACH } from './beam.js';
 import { doorOpenness, spillThrough, SPILL_HALF_ANGLE, SPILL_REACH } from './doors.js';
 import { handLamp } from './figure.js';
 import {
@@ -13,7 +14,13 @@ import {
   type LightMemory,
 } from './light.js';
 import type { LightCensus } from './render/census.js';
-import type { FrameLight, FrameLit, PoweredRoom, WorldMap } from './render/frame.js';
+import type {
+  FrameLight,
+  FrameLit,
+  OtherAvatar,
+  PoweredRoom,
+  WorldMap,
+} from './render/frame.js';
 import { powerRoom } from './rooms.js';
 import type { Sim } from './sim.js';
 
@@ -31,12 +38,15 @@ import type { Sim } from './sim.js';
  */
 const OWN_GLOW = 3.2;
 /**
- * How far your flashlight's beam shows, tiles: further than its cone finds things (core
+ * How far a flashlight's beam shows, tiles: further than its cone finds things (core
  * discovery.ts `LAMP_REACH`) — what lies out there shows as what it is, its name only once found.
  */
-const BEAM_REACH = 7.5;
-/** The glow of the lamp everybody else of the crew carries, in tiles. */
-const CREW_GLOW = 2.8;
+export const BEAM_REACH = 7.5;
+/**
+ * The glow of the lamp everybody else of the crew carries, in tiles: smaller than yours, their
+ * beam (world/beam.ts CREW_REACH) showing where they look.
+ */
+const CREW_GLOW = 1.6;
 /** How far the green-white light out of the open hatch reaches, in tiles. */
 const EXIT_GLOW = 3.2;
 
@@ -148,7 +158,8 @@ export function frameLight(scene: LightScene, powered: boolean, whole: boolean):
   const crewShown = (x: number, y: number): boolean =>
     everything || !powered || falling.has(`${Math.floor(x)},${Math.floor(y)}`);
   const own = inHands(lamps.own, scene);
-  return { ...lamps, own, shown, powered: inPower, crewShown };
+  const crew = crewInHands(lamps.crew, scene);
+  return { ...lamps, own, crew, shown, powered: inPower, crewShown };
 }
 
 /**
@@ -210,14 +221,51 @@ function ownRoom(sim: Sim, map: WorldMap): PoweredRoom | null {
 }
 
 /**
- * Your flashlight: in your figure's hands, swaying with your step (figure.ts handLamp), a glow
- * all round and its cone where the lamp points — where the frame lays its light from; what that
+ * A flashlight in the hands of a figure standing at `at`, `phase` into its walk: swaying with
+ * its step (figure.ts handLamp), a glow `glow` tiles all round and its cone, `reach` tiles,
+ * where the lamp points.
+ */
+function handHeld(
+  at: { x: number; y: number; facing: number; moving: boolean },
+  phase: number,
+  [glow, reach]: readonly [number, number],
+  reduced: boolean,
+): Lamp {
+  const hand = handLamp(at, phase, reduced);
+  const cone = { facing: hand.facing, halfAngle: LAMP_HALF_ANGLE, reach };
+  return { x: hand.x, y: hand.y, glow, beam: cone };
+}
+
+/**
+ * Your flashlight: in your figure's hands — where the frame lays its light from; what that
  * light sees is taken from where you stand (`standingLamp`).
  */
 export function ownLamp(sim: Pick<Sim, 'self' | 'walkPhase'>, reduced: boolean): Lamp {
-  const hand = handLamp(sim.self, sim.walkPhase, reduced);
-  const cone = { facing: hand.facing, halfAngle: LAMP_HALF_ANGLE, reach: BEAM_REACH };
-  return { x: hand.x, y: hand.y, glow: OWN_GLOW, beam: cone };
+  return handHeld(sim.self, sim.walkPhase, [OWN_GLOW, BEAM_REACH], reduced);
+}
+
+/**
+ * The lamp somebody else of the crew carries where they stand, as yours (`standingLamp`): a
+ * glow all round and its beam where they face, CREW_REACH long (world/beam.ts) — what its light
+ * sees is worked out from here, and it shows on every screen, however far from their figure:
+ * their position and facing reach every screen with the crew's positions.
+ */
+function crewLamp(other: OtherAvatar): Lamp {
+  const cone = { facing: other.facing, halfAngle: LAMP_HALF_ANGLE, reach: CREW_REACH };
+  return { x: other.rx, y: other.ry, glow: CREW_GLOW, beam: cone };
+}
+
+/** The lamps the rest of the crew carry as the frame draws them: each from its holder's hands. */
+function crewInHands(crew: readonly FrameLit[], scene: LightScene): FrameLit[] {
+  const others = [...scene.sim.others.values()];
+  return crew.map((lit, i) => {
+    const other = others[i];
+    if (other === undefined) {
+      return lit;
+    }
+    const at = { x: other.rx, y: other.ry, facing: other.facing, moving: other.moving };
+    return { ...lit, lamp: handHeld(at, other.phase, [CREW_GLOW, CREW_REACH], scene.reduced) };
+  });
 }
 
 /**
@@ -228,9 +276,7 @@ export function ownLamp(sim: Pick<Sim, 'self' | 'walkPhase'>, reduced: boolean):
 function darkLights(scene: LightScene, lit: LightUp): FrameLamps {
   const { sim, spectator } = scene;
   const own = spectator ? null : lit(standingLamp(sim));
-  const crew = spectator
-    ? []
-    : [...sim.others.values()].map((o) => lit({ x: o.rx, y: o.ry, glow: CREW_GLOW, beam: null }));
+  const crew = spectator ? [] : [...sim.others.values()].map((o) => lit(crewLamp(o)));
   return {
     own,
     room: null,

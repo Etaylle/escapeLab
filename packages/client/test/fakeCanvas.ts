@@ -18,11 +18,11 @@ export interface FakeCanvas {
 
 /** A gradient as a fake context makes it: its kind, where it lies, and its stops. */
 export class FakeGradient {
-  readonly gradient: 'linear' | 'radial';
+  readonly gradient: 'linear' | 'radial' | 'conic';
   readonly args: unknown[];
   readonly stops: [number, string][] = [];
 
-  constructor(gradient: 'linear' | 'radial', args: unknown[]) {
+  constructor(gradient: 'linear' | 'radial' | 'conic', args: unknown[]) {
     this.gradient = gradient;
     this.args = args;
   }
@@ -70,7 +70,7 @@ export class FakePath2D {
  * context, so whether one is made depends on what was drawn before — what a
  * drawing shows is the gradient it fills with.
  */
-const MAKING = new Set(['createLinearGradient', 'createRadialGradient']);
+const MAKING = new Set(['createLinearGradient', 'createRadialGradient', 'createConicGradient']);
 
 /** The context's properties and what a fresh one holds. */
 const STATE = {
@@ -106,6 +106,7 @@ export function fakeCanvas(width = 0, height = 0, name = 'canvas'): FakeCanvas {
     measureText: (text) => ({ width: String(text).length * 7 }),
     createLinearGradient: (...args) => new FakeGradient('linear', args),
     createRadialGradient: (...args) => new FakeGradient('radial', args),
+    createConicGradient: (...args) => new FakeGradient('conic', args),
     createImageData: (w, h) => {
       const data = new Uint8ClampedArray(Number(w) * Number(h) * 4);
       return { width: w, height: h, data };

@@ -179,6 +179,25 @@ describe('the particle pool — bounded, reused, each kind within its share', ()
     expect(p.live.some((q) => q.kind === 'dust')).toBe(true);
   });
 
+  it('gathers the dust in a beam’s core: more motes born near its axis than at its edges', () => {
+    const p = newParticles(5);
+    const offsets: number[] = [];
+    for (let frame = 0; frame < 1200; frame++) {
+      stepParticles(p, frame / 60, { ...STILL_AIR, cones: [beam] });
+      for (const mote of p.live.filter((q) => q.kind === 'dust' && q.age === 1 / ANIM_HZ)) {
+        const bornX = mote.x - mote.vx / ANIM_HZ;
+        const bornY = mote.y - mote.vy / ANIM_HZ;
+        offsets.push(Math.abs(Math.atan2(bornY - beam.y, bornX - beam.x)) / beam.halfAngle);
+      }
+    }
+    expect(offsets.length).toBeGreaterThan(100);
+    const share = (test: (off: number) => boolean): number =>
+      offsets.filter(test).length / offsets.length;
+    // Spread evenly, each third of the way out would hold a third of them.
+    expect(share((off) => off < 0.85 / 3)).toBeGreaterThan(0.45);
+    expect(share((off) => off > (0.85 * 2) / 3)).toBeLessThan(0.2);
+  });
+
   it('puffs steam from a core now and then, smoke from the breaker, dust from the hatch', () => {
     const p = newParticles(29);
     const seen = new Set<ParticleKind>();

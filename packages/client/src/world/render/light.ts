@@ -12,6 +12,7 @@ import {
 import { ALARM_RED, ceilingLayer, WARM, type CeilingLight } from '../power.js';
 import { glowSources } from '../sources.js';
 import { layAdded, layBake, type BakePart } from './bakes.js';
+import { drawFlares } from './beam.js';
 import { drawBeacons } from './beacons.js';
 import { shutKey } from './clips.js';
 import { cutDarkness, ESCAPE_RED, escapeTint, roomUp, wedge } from './darkness.js';
@@ -37,7 +38,8 @@ import { drawStandby } from './standby.js';
  * it does. Where there is
  * darkness, the WebGL light layer draws it all where the world's way for
  * its light says so (gl/path.ts); else, and as its fallback, this pass.
- * Either way the standby lights glow over it (standby.ts). Every light that
+ * Either way the flashlights' glints and streaks (beam.ts) and the standby lights glow over
+ * it (standby.ts). Every light that
  * stands still is laid on from its bake on the frame's grid (bakes.ts). The
  * phase's colour grade lies over the picture, the lab's own light and the
  * darkness, under the lights added after (render/grade.ts).
@@ -46,12 +48,14 @@ export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const whole = frame.whole;
   const path = lightPathOf(frame.kit, ctx.canvas);
   if (onLayer(ctx, frame) && drawLayer(ctx, frame, path)) {
+    profiled(frame.kit, 'flares', ctx, () => drawFlares(ctx, frame));
     drawStandby(ctx, frame);
     return;
   }
   drawPower(ctx, frame, whole);
   if (inTheDark(frame)) {
     drawLighting(ctx, frame, 1 - whole, glowsWithLight(ctx, frame));
+    profiled(frame.kit, 'flares', ctx, () => drawFlares(ctx, frame));
     drawStandby(ctx, frame);
   } else {
     profiled(frame.kit, 'grade', ctx, () => drawGrade(ctx, frame));

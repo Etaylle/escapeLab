@@ -9,6 +9,15 @@ import {
   lobesAt,
 } from '../beacon.js';
 import {
+  BEAM_EDGE,
+  CORE_EDGE,
+  CORE_HALF,
+  CORE_TINT,
+  CREW_BEAM,
+  FLANK,
+  GLOW_RGB,
+} from '../beam.js';
+import {
   CREW_GLOW_STOPS,
   DRONE_BEAM_STOPS,
   EMERGENCY_STOPS,
@@ -180,29 +189,50 @@ export function fromSource(source: LightSource): Light {
   };
 }
 
-/** A lamp as the frame's light names it, with the falloff of its glow and of its beam. */
-function lampLight(lamp: Lamp, glow: Stops, beam: Stops, colour: Rgb, size: number): Light {
-  return {
-    x: lamp.x,
-    y: lamp.y,
-    colour,
-    glow: lamp.glow > 0 ? { reach: lamp.glow, stops: glow } : null,
-    beam: lamp.beam === null ? null : { ...lamp.beam, stops: beam },
-    tint: null,
-    size,
-    strength: 1,
-  };
+/** `stops` clearing the darkness `k` times as deep. */
+function deeper(stops: Stops, k: number): Stops {
+  return stops.map(([offset, depth]) => [offset, depth * k] as const);
 }
 
-/** Your flashlight, glow and cone, and the lamps the rest of the crew carry. */
+/** A flashlight's core adds its warm light as the Canvas pass's gradient does: worked out once. */
+const CORE_GLOW_TINT = tintOf(CORE_TINT);
+
+/**
+ * A flashlight as the frame's light names it (world/beam.ts): its glow all round, `glow` its
+ * falloff, and its beam — the flanks FLANK deep, the edge fading over BEAM_EDGE either way —
+ * with its core a second, narrower beam over the first, together clearing all of the dark along
+ * the axis, the core adding its warm light where `warm`; `depth` as deep as your own lamp's.
+ */
+export function flashlight(lamp: Lamp, glow: Stops, [depth, warm]: [number, boolean]): Light[] {
+  const { beam } = lamp;
+  const main: Light = {
+    x: lamp.x,
+    y: lamp.y,
+    colour: LAMP_WHITE,
+    glow: lamp.glow > 0 ? { reach: lamp.glow, stops: glow } : null,
+    beam:
+      beam === null
+        ? null
+        : { ...beam, stops: deeper(OWN_BEAM_STOPS, FLANK * depth), soft: BEAM_EDGE },
+    tint: null,
+    size: SIZE.lamp,
+    strength: 1,
+  };
+  if (beam === null) {
+    return [main];
+  }
+  const stops = deeper(OWN_BEAM_STOPS, depth);
+  const core = { ...beam, halfAngle: CORE_HALF, stops, soft: CORE_EDGE };
+  const tint = warm ? CORE_GLOW_TINT : null;
+  return [main, { ...main, colour: warm ? GLOW_RGB : LAMP_WHITE, glow: null, beam: core, tint }];
+}
+
+/** Your flashlight, glow and warm beam, and the lamps the rest of the crew carry, softer. */
 function lampLights(frame: Frame): Light[] {
   const { own, crew } = frame.light;
-  const yours =
-    own === null
-      ? []
-      : [lampLight(own.lamp, OWN_GLOW_STOPS, OWN_BEAM_STOPS, LAMP_WHITE, SIZE.lamp)];
-  const theirs = crew.map(({ lamp }) =>
-    lampLight(lamp, CREW_GLOW_STOPS, CREW_GLOW_STOPS, LAMP_WHITE, SIZE.lamp),
+  const yours = own === null ? [] : flashlight(own.lamp, OWN_GLOW_STOPS, [1, true]);
+  const theirs = crew.flatMap(({ lamp }) =>
+    flashlight(lamp, CREW_GLOW_STOPS, [CREW_BEAM, false]),
   );
   return [...yours, ...theirs];
 }

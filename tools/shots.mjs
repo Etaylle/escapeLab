@@ -61,7 +61,8 @@
  * as a beacon: beacon-sweep-a.png and beacon-sweep-b.png a second apart, its lobe turned between
  * them as far as the page's probe says its clock turned it and the picture round the lamp
  * changed (sweep.mjs), or the run fails; grade-blackout.png shows the host's window in the
- * blackout's cool grade, which the probe has to name. E
+ * blackout's cool grade, which the probe has to name; beam-core.png the host's beam turned down
+ * the longest free floor, its core brighter than its flanks (beamcheck.mjs). E
  * opens its panel for each (lever.png, every lamp lit, the player's own name
  * under the own lever). Where the view gives a press its expiry, the host throws alone:
  * lever-ring.png catches the ring round its grip draining; 1.3 s in,
@@ -459,6 +460,7 @@ import { withOthersFrozen } from './freeze.mjs';
 import { ART_PX, bobVerdict, GLOWING, glowAtCorners, haloAgainst } from './glowcheck.mjs';
 import { lightWorkText } from './lightwork.mjs';
 import { fadeOf, meanLuma, midway } from './panelfade.mjs';
+import { beamLight, beamPatches, beamVerdict } from './beamcheck.mjs';
 import { changedShare, sweepOf, sweepVerdict } from './sweep.mjs';
 import {
   arrivals,
@@ -3077,6 +3079,7 @@ async function throwLever(players) {
   await reportLeverFound(players, lever, watches);
   await captureBeaconSweep(first);
   await captureGradeBlackout(first);
+  await captureBeamCore(first);
   for (const player of players) {
     const modal = player.page.locator('.station-modal');
     if (!(await interactUntil(player, modal, consoleTarget(lever)))) {
@@ -3172,6 +3175,95 @@ async function captureGradeBlackout(player) {
   if (!fine) {
     fail(`grade-blackout.png: ${wash}`);
   }
+}
+
+/** The four ways a player can face, by the key that turns it there, and the step they take. */
+const FACINGS = [
+  { key: 'd', dx: 1, dy: 0 },
+  { key: 'a', dx: -1, dy: 0 },
+  { key: 's', dx: 0, dy: 1 },
+  { key: 'w', dx: 0, dy: -1 },
+];
+
+/** How many tiles of bare floor run from `at` along (dx, dy) on `map`, up to `most`. */
+function freeRun(map, at, { dx, dy }, most) {
+  const solid = furniture(map);
+  for (let n = 1; n <= most; n++) {
+    const x = at.x + dx * n;
+    const y = at.y + dy * n;
+    if (map.tiles[y]?.charAt(x) !== '.' || solid.has(`${x},${y}`)) {
+      return n - 1;
+    }
+  }
+  return most;
+}
+
+/** How the world lies on `page`: tiles to CSS px, a tile's CSS px and the page's density. */
+async function worldOnPage(page) {
+  const view = await page.evaluate(() => {
+    const camera = globalThis.__escapelab?.camera;
+    const canvas = document.querySelector('.world-canvas');
+    if (camera === undefined || canvas === null) {
+      return null;
+    }
+    const r = canvas.getBoundingClientRect();
+    const dpr = canvas.width / r.width;
+    return { camera, left: r.left, top: r.top, width: r.width, height: r.height, dpr };
+  });
+  if (view === null) {
+    return null;
+  }
+  const { camera, left, top, width, height, dpr } = view;
+  const toPage = (x, y) => ({
+    x: left + width / 2 + ((x - camera.x) * camera.scale) / dpr,
+    y: top + height / 2 + ((y - camera.y) * camera.scale) / dpr,
+  });
+  return { toPage, tile: camera.scale / dpr, dpr };
+}
+
+/**
+ * beam-core.png: the host's flashlight in the dark (client world/beam.ts) — a beam with a soft
+ * edge and a brighter core, the glint at its lens. The host turns to the longest run of bare
+ * floor from where it stands with a tap of the key; the window is shot, and its light read on the
+ * beam's axis and on both flanks at the same distances past the glow (beamcheck.mjs): the core
+ * has to read brighter than either flank, or the run fails. The host steps back onto its tile.
+ */
+async function captureBeamCore(player) {
+  const { page, seen } = player;
+  const map = seen.view.map;
+  const at = tileOf(seen);
+  const way = [...FACINGS].sort((a, b) => freeRun(map, at, b, 6) - freeRun(map, at, a, 6))[0];
+  if (freeRun(map, at, way, 6) < 5) {
+    skip('beam-core.png', `no five tiles of bare floor in a line from ${at.x},${at.y}`);
+    return;
+  }
+  await page.keyboard.down(way.key);
+  await sleep(50);
+  await page.keyboard.up(way.key);
+  await sleep(600); // the lamp at rest in the hands, the frame drawn
+  const probe = await graphicsOf(page);
+  const view = await worldOnPage(page);
+  const shot = await page.screenshot();
+  writeFileSync(join(OUT, 'beam-core.png'), shot);
+  tally.taken += 1;
+  const beam = probe?.beam ?? null;
+  if (beam === null || view === null) {
+    console.log(`beam-core.png      ${player.name}: !! no beam on the probe`);
+    fail('beam-core.png: no beam on the probe');
+  } else {
+    const light = beamLight(decodePng(shot), beamPatches(beam, view.toPage, view.tile), view.dpr);
+    const fine = beamVerdict(light);
+    const read = [light.left, light.core, light.right].map((l) => l.toFixed(1)).join(' | ');
+    const streak = beam.streak === null ? 'no streak' : `a streak ${beam.streak.toFixed(2)} tiles`;
+    console.log(
+      `beam-core.png      ${player.name}: facing ${degrees(beam.facing)}°, light across the ` +
+        `beam (left | core | right) ${read}, ${streak}${fine ? '' : ' !!'}`,
+    );
+    if (!fine) {
+      fail(`beam-core.png: the core no brighter than its flanks (${read})`);
+    }
+  }
+  await standOn(player, at);
 }
 
 /** `radians` in whole degrees. */

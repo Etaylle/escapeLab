@@ -75,17 +75,18 @@ function coneOf({ lamp, sight }: FrameLit): Cone | null {
 }
 
 /**
- * The light cones in `frame` dust may show in: your flashlight's beam, the drones' eyes, a lit
- * room's light through a door standing open — none for the audience, nor while the lab has its
- * power and nobody carries a lamp.
+ * The light cones in `frame` dust may show in: the flashlights' beams — yours and the crew's —
+ * the drones' eyes, a lit room's light through a door standing open — none for the audience,
+ * nor while the lab has its power and nobody carries a lamp.
  */
 export function conesOf(frame: Frame): Cone[] {
   if (frame.spectator) {
     return [];
   }
-  const { own, eyes, spills } = frame.light;
+  const { own, crew, eyes, spills } = frame.light;
   const lamps = [
     ...(own === null ? [] : [own]),
+    ...crew,
     ...eyes.values(),
     ...spills.filter((spill) => spill.open > SPILL_OPEN).map((spill) => spill.lit),
   ];

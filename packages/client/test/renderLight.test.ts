@@ -3,6 +3,7 @@ import { artKit } from '../src/world/artKit.js';
 import type { CanvasMaker } from '../src/world/atlas.js';
 import type { LightLayer } from '../src/world/gl/lightLayer.js';
 import type { Pools } from '../src/world/gl/maps.js';
+import { CREW_BEAM, CREW_REACH } from '../src/world/beam.js';
 import { blend, GRADES, type Wash } from '../src/world/grade.js';
 import { EMERGENCY_STOPS, OWN_GLOW_STOPS } from '../src/world/light.js';
 import { rgba, SERVER_BLUE } from '../src/world/palette.js';
@@ -150,6 +151,20 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
     expect(frame.kit.radials.baked.entries.get(key)).toBe(glow?.args[0]);
     const laid = callEntries(log, 'drawImage').find((e) => e.args[0] === overlay.canvas);
     expect(laid).toMatchObject({ args: [overlay.canvas, 0, 0], alpha: 1 });
+  });
+
+  it('cuts the crew’s lamps in too, glow and beam, a little softer, each where it sees', () => {
+    const beam = { facing: Math.PI, halfAngle: 0.5, reach: CREW_REACH };
+    const ben = lit({ x: 7.5, y: 2.5, glow: 2.8, beam }, 'ben');
+    const frame = withKit(overlay, warm, { light: lightWith({ crew: [ben] }) });
+    drawn(frame);
+    expect(callsOf(overlay.log, 'clip')).toEqual([[ben.clip]]);
+    const sprite = frame.kit.beams?.steps.get(180);
+    const laid = callEntries(overlay.log, 'drawImage');
+    const cut = laid.find((e) => e.args[0] === sprite?.cut.canvas);
+    expect(cut).toMatchObject({ op: 'destination-out', alpha: CREW_BEAM });
+    // Their beam's core lays no warm light: yours alone does.
+    expect(laid.some((e) => e.args[0] === sprite?.glow.canvas)).toBe(false);
   });
 
   it('deepens the darkness in the clock’s last minute and all through the escape', () => {

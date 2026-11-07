@@ -150,11 +150,15 @@ function born(p: Particles, particle: Particle): void {
   p.live.push(reused === undefined ? particle : Object.assign(reused, particle));
 }
 
-/** A mote somewhere inside `cone`, drifting slowly every way. */
+/**
+ * A mote somewhere inside `cone`, drifting slowly every way: more of them near its axis, fewer
+ * out to its edges — the dice's difference falls in a triangle — so that the dust gathers in a
+ * beam's core.
+ */
 function spawnDust(p: Particles, cone: Beam): void {
   const { rand } = p;
   const away = 0.8 + rand() * Math.max(0.2, cone.reach - 1.5);
-  const angle = cone.facing + (rand() * 2 - 1) * cone.halfAngle * 0.85;
+  const angle = cone.facing + (rand() - rand()) * cone.halfAngle * 0.85;
   const drift = 0.03 + rand() * 0.09;
   const heading = rand() * Math.PI * 2;
   born(p, {

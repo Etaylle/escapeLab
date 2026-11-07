@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BEAM_EDGE,
+  CORE_EDGE,
+  CORE_HALF,
+  CORE_TINT,
+  CREW_BEAM,
+  FLANK,
+  GLOW_RGB,
+} from '../src/world/beam.js';
+import {
   CREW_GLOW_STOPS,
   DRONE_BEAM_STOPS,
   EMERGENCY_GLOW,
@@ -28,21 +37,38 @@ function at(lights: readonly Light[], x: number, y: number): Light[] {
 }
 
 describe('lightsOf — what the light layer lights in a frame', () => {
-  it('lights your flashlight, glow and cone, with the Canvas pass’s falloffs', () => {
+  it('lights your flashlight: its glow, its beam soft at the edge, its core a beam over it', () => {
     const own = lit({ x: 2.5, y: 2.5, glow: 3.2, beam });
-    const [lamp] = at(lightsOf(frameWith({ light: lightWith({ own }) })), 2.5, 2.5);
+    const lights = at(lightsOf(frameWith({ light: lightWith({ own }) })), 2.5, 2.5);
+    expect(lights).toHaveLength(2);
+    const [lamp, core] = lights;
     expect(lamp?.glow).toEqual({ reach: 3.2, stops: OWN_GLOW_STOPS });
-    expect(lamp?.beam).toEqual({ ...beam, stops: OWN_BEAM_STOPS });
+    const flanks = OWN_BEAM_STOPS.map(([offset, depth]) => [offset, depth * FLANK]);
+    expect(lamp?.beam).toEqual({ ...beam, stops: flanks, soft: BEAM_EDGE });
+    expect(core?.glow).toBeNull();
+    const narrow = { halfAngle: CORE_HALF, stops: OWN_BEAM_STOPS, soft: CORE_EDGE };
+    expect(core?.beam).toEqual({ ...beam, ...narrow });
+    // Only the core adds light of its own: warm, as the Canvas pass's core lays it.
     expect(lamp?.tint).toBeNull();
-    expect(lamp?.size).toBeGreaterThan(0);
-    expect(lamp?.strength).toBe(1);
+    expect(core?.tint).toEqual(tintOf(CORE_TINT));
+    expect(core?.colour).toEqual(GLOW_RGB);
+    for (const light of lights) {
+      expect(light.size).toBeGreaterThan(0);
+      expect(light.strength).toBe(1);
+    }
   });
 
-  it('lights the lamps the rest of the crew carry', () => {
-    const crew = [lit({ x: 6.5, y: 3.5, glow: 2.8 })];
-    const [lamp] = at(lightsOf(frameWith({ light: lightWith({ crew }) })), 6.5, 3.5);
+  it('lights the lamps the rest of the crew carry, beam and core a little softer', () => {
+    const crew = [lit({ x: 6.5, y: 3.5, glow: 2.8, beam })];
+    const [lamp, core] = at(lightsOf(frameWith({ light: lightWith({ crew }) })), 6.5, 3.5);
     expect(lamp?.glow).toEqual({ reach: 2.8, stops: CREW_GLOW_STOPS });
-    expect(lamp?.beam).toBeNull();
+    expect(lamp?.beam?.stops[0]).toEqual([0, FLANK * CREW_BEAM]);
+    expect(core?.beam?.stops[0]).toEqual([0, CREW_BEAM]);
+    // Their core clears the dark as yours does, without your warm light.
+    expect(core?.tint).toBeNull();
+    const bare = [lit({ x: 6.5, y: 3.5, glow: 2.8 })];
+    const lamps = at(lightsOf(frameWith({ light: lightWith({ crew: bare }) })), 6.5, 3.5);
+    expect(lamps.map((light) => light.beam)).toEqual([null]);
   });
 
   it('lights a drone’s cone with the glimmer round it, a frozen drone’s glimmer only', () => {

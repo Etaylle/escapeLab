@@ -1,10 +1,12 @@
 import { beaconAngle, beaconPhase, beaconTurnMs, LOBE_REACH } from '../beacon.js';
+import { CORE_HALF } from '../beam.js';
 import { figureBox } from '../depth.js';
 import type { GradePhase } from '../grade.js';
 import type { ParticleKind } from '../particles.js';
 import type { Sim } from '../sim.js';
 import { groundAt } from './actors.js';
 import { conesOf, motesLit } from './atmosphere.js';
+import { streakOf } from './beam.js';
 import type { Frame, RenderKit } from './frame.js';
 import { hidersNow } from './occluders.js';
 
@@ -42,6 +44,32 @@ export interface GraphicsProbe {
    * before the first frame — and its wash, a byte a channel, and how strongly it lies over
    */
   grade: { phase: GradePhase | null; rgb: number[]; alpha: number };
+  /**
+   * your flashlight's beam as the last frame drew it (world/beam.ts): where its lens is and where
+   * it points, tiles and radians, how far and how wide either way it reaches, how wide its core
+   * is, and how far along it the streak on a shining floor runs, tiles — null for none; null
+   * without a beam
+   */
+  beam: {
+    x: number;
+    y: number;
+    facing: number;
+    reach: number;
+    halfAngle: number;
+    core: number;
+    streak: number | null;
+  } | null;
+}
+
+/** Your beam as a frame drew it. */
+function beamOf(drawn: Frame | null): GraphicsProbe['beam'] {
+  const own = drawn?.light.own ?? null;
+  if (drawn === null || own === null || own.lamp.beam === null) {
+    return null;
+  }
+  const { x, y, beam } = own.lamp;
+  const { facing, reach, halfAngle } = beam;
+  return { x, y, facing, reach, halfAngle, core: CORE_HALF, streak: streakOf(drawn, own) };
 }
 
 /** The grade a frame was drawn in, and the phase it turns to. */
@@ -123,5 +151,6 @@ export function graphicsProbe(world: ProbedWorld): GraphicsProbe {
     beacons: beaconsOf(drawn),
     hidden: hiddenOf(drawn),
     grade: gradeOf(kit, drawn),
+    beam: beamOf(drawn),
   };
 }

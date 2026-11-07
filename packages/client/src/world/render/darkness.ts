@@ -1,13 +1,13 @@
 import { bakeBox } from '../baked.js';
 import { coversArmed } from '../interact.js';
 import { noteMount } from '../notes.js';
+import { CREW_BEAM } from '../beam.js';
 import {
   CREW_GLOW_STOPS,
   DRONE_BEAM_STOPS,
   EMERGENCY_GLOW,
   EMERGENCY_STOPS,
   objectGlowStops,
-  OWN_BEAM_STOPS,
   OWN_GLOW_STOPS,
   SPILL_STOPS,
   type Lit,
@@ -17,6 +17,7 @@ import {
 import { known, statusOf } from '../known.js';
 import { litGroups, warmUp, type LitGroup } from '../rooms.js';
 import { layBake } from './bakes.js';
+import { cutBeam } from './beam.js';
 import { inTiles, toScreen, type Frame, type FrameLit } from './frame.js';
 import { cutStops, drawRadial, type RadialStops } from './radial.js';
 
@@ -42,7 +43,6 @@ const ALARM_DIM = [0.62, 0.42] as const;
 /** The stops of every light that cuts the darkness, as their sprites are baked. */
 const CUT = {
   own: cutStops(OWN_GLOW_STOPS),
-  beam: cutStops(OWN_BEAM_STOPS),
   crew: cutStops(CREW_GLOW_STOPS),
   drone: cutStops(DRONE_BEAM_STOPS),
   object: cutStops(objectGlowStops(1)),
@@ -51,12 +51,14 @@ const CUT = {
 /** Cuts a radial glow `radius` tiles round (wx, wy) into the darkness, `alpha` deep. */
 type Punch = (wx: number, wy: number, radius: number, stops: RadialStops, alpha?: number) => void;
 
-/** The three ways light is cut into the darkness. */
+/** The ways light is cut into the darkness. */
 interface Cutters {
   /** a radial glow round a point */
   punch: Punch;
   /** a lamp's beam, its cone fading out along `stops` */
   beam: (lit: Lit, stops: RadialStops) => void;
+  /** a flashlight's beam from its sprite (render/beam.ts), `alpha` deep, its core warm or not */
+  flashlight: (lit: Lit, alpha: number, warm: boolean) => void;
   /** whatever `draw` cuts, only where the lamp of `lit` can see */
   within: (lit: FrameLit, draw: () => void) => void;
 }
@@ -239,21 +241,25 @@ function traceRuns(cut: CanvasRenderingContext2D, frame: Frame, runs: readonly R
 }
 
 /**
- * Your light in the dark: a lit circle round you and a flashlight cone in
- * facing direction; everybody else's softer glow. Each lights what it can
- * see, and nothing behind a wall — so the walls cut a clean edge into the
+ * Your light in the dark: a lit circle round you and a flashlight's beam in
+ * facing direction, its core warm; everybody else's softer and shorter — their
+ * beam cut wherever it falls, however far from their figure. Each lights what it
+ * can see, and nothing behind a wall — so the walls cut a clean edge into the
  * circle. With the power on, your room was cleared whole before.
  */
-function cutLamps(frame: Frame, { punch, beam, within }: Cutters): void {
+function cutLamps(frame: Frame, { punch, flashlight, within }: Cutters): void {
   const own = frame.light.own;
   if (own !== null) {
     within(own, () => {
       punch(own.lamp.x, own.lamp.y, own.lamp.glow, CUT.own);
-      beam(own, CUT.beam);
+      flashlight(own, 1, true);
     });
   }
   for (const lit of frame.light.crew) {
-    within(lit, () => punch(lit.lamp.x, lit.lamp.y, lit.lamp.glow, CUT.crew));
+    within(lit, () => {
+      punch(lit.lamp.x, lit.lamp.y, lit.lamp.glow, CUT.crew);
+      flashlight(lit, CREW_BEAM, false);
+    });
   }
 }
 
@@ -340,7 +346,9 @@ function lightCutters(cut: CanvasRenderingContext2D, frame: Frame): Cutters {
     draw();
     cut.restore();
   };
-  return { punch, beam, within };
+  const flashlight = ({ lamp }: Lit, alpha: number, warm: boolean): void =>
+    cutBeam(cut, frame, lamp, [alpha, warm]);
+  return { punch, beam, flashlight, within };
 }
 
 /**

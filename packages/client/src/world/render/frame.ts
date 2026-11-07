@@ -17,6 +17,7 @@ import type { LitGroup, RoomLight } from '../rooms.js';
 import type { Viewport } from '../viewport.js';
 import type { Fringe } from './aberration.js';
 import type { BakeStore } from './bakes.js';
+import type { BeamSprites } from './beam.js';
 import type { LobeSprites } from './beacons.js';
 import { lightCensus, type LightCensus } from './census.js';
 import { frameCache } from './frameCache.js';
@@ -174,6 +175,8 @@ export interface RenderKit {
   fringe: Fringe | null;
   /** the beacons' lobes baked for the zoom drawn at (beacons.ts); null while no lamp burns */
   beacons: LobeSprites | null;
+  /** the flashlights' beams baked for the zoom drawn at (beam.ts); null before the first */
+  beams: BeamSprites | null;
   /**
    * the colour grade as it turns from phase to phase, kept from frame to frame by assemble.ts
    * (world/grade.ts); null before the first frame
@@ -199,6 +202,7 @@ export function renderKit(overlay: CanvasRenderingContext2D): RenderKit {
     grid: null,
     fringe: null,
     beacons: null,
+    beams: null,
     grade: null,
     census: lightCensus(),
   };
