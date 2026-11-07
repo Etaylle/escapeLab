@@ -1,5 +1,6 @@
 import type { FanState } from './anim.js';
 import { newAtlas, spriteKey, type Atlas, type CanvasMaker, type SpriteSpec } from './atlas.js';
+import type { Decal } from './decals.js';
 import { dressMap, seedOf, type DressMap, type Dressing } from './dress.js';
 import { newParticles, type Particles } from './particles.js';
 import { newGlows, type Glows } from './silhouette.js';
@@ -36,6 +37,18 @@ export interface TileSprites {
 export interface Dressed {
   dressing: Dressing;
   tiles: (TileSprites | null)[];
+  /** the marks on the floors (decals.ts) by the index of the tile each lies on */
+  decals: ReadonlyMap<number, readonly Decal[]>;
+}
+
+/** The marks of `dressing` by the index of the tile each lies on. */
+function decalsByTile(dressing: Dressing): Map<number, Decal[]> {
+  const byTile = new Map<number, Decal[]>();
+  for (const decal of dressing.decals) {
+    const i = Math.floor(decal.y) * dressing.width + Math.floor(decal.x);
+    byTile.set(i, [...(byTile.get(i) ?? []), decal]);
+  }
+  return byTile;
 }
 
 export interface ArtKit {
@@ -113,7 +126,13 @@ function tileSprites(map: DressMap, dressing: Dressing): (TileSprites | null)[] 
 /** What a dressing depends on, as text: two maps alike dress alike. */
 function dressKey(map: DressMap, missionId: string): string {
   const doors = map.doors.map((d) => [d.x, d.y]);
-  return JSON.stringify([missionId, map.tiles, map.labels, doors, map.lamps, map.decor]);
+  const plates = (map.plates ?? []).map((p) => [p.x, p.y]);
+  const exit = map.exit == null ? null : [map.exit.x, map.exit.y];
+  const fuseBoxes = (map.stations ?? [])
+    .filter((s) => s.known && s.look === 'fusebox')
+    .map((s) => [s.x, s.y]);
+  const parts = [map.tiles, map.labels, doors, map.lamps, map.decor, plates, exit, fuseBoxes];
+  return JSON.stringify([missionId, ...parts]);
 }
 
 /**
@@ -131,7 +150,7 @@ export function dressedFor(art: ArtKit, map: DressMap, missionId: string): Dress
     return known.dressed;
   }
   const dressing = dressMap(map, seedOf(missionId));
-  const dressed = { dressing, tiles: tileSprites(map, dressing) };
+  const dressed = { dressing, tiles: tileSprites(map, dressing), decals: decalsByTile(dressing) };
   art.dressed = { map, key, dressed };
   return dressed;
 }

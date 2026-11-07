@@ -1,6 +1,7 @@
 import type { DecorKind } from '@escapelab/core';
 import { spriteFor, type Dressed, type TileSprites } from './artKit.js';
 import { atlasLevel, sprite, spriteAt, type Atlas } from './atlas.js';
+import { drawDecal } from './decalArt.js';
 import { decorVariant } from './decor.js';
 import { phaseOf, sameGrid, type PixelGrid } from './render/grid.js';
 
@@ -359,9 +360,25 @@ function bakeRegion(bake: Bake, map: CacheMap, box: PixelBox): void {
   const level = atlasLevel(s);
   const whole = (i: number): boolean => within(cache, i, box);
   tiles.filter((i) => !wallAt(map, cache, i)).forEach((i) => drawSurface(bake, i, level, whole(i)));
+  tiles.forEach((i) => drawDecals(bake, i));
   tiles.filter((i) => wallAt(map, cache, i)).forEach((i) => drawSurface(bake, i, level, whole(i)));
   tiles.filter((i) => cache.decor.has(i)).forEach((i) => drawDecor(bake, i, level, whole(i)));
   g.restore();
+}
+
+/**
+ * Bakes the marks on tile `i`'s floor (decals.ts), in the light it stands in, in tile space:
+ * over the floor, under the walls and the furniture.
+ */
+function drawDecals({ cache, light }: Bake, i: number): void {
+  const marks = cache.dressed.decals.get(i);
+  if (marks === undefined) {
+    return;
+  }
+  const lit = light.lit(i % cache.width, Math.floor(i / cache.width));
+  for (const decal of marks) {
+    drawDecal(cache.g, decal, lit);
+  }
 }
 
 /**

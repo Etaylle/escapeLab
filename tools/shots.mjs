@@ -426,7 +426,8 @@
  * its two starts in the Archiv and the Maschinenraum — is saved through the
  * editor's route and played by two, the audience watching from the lobby on:
  * art-overview.png catches the audience's whole lab lit, room-archive.png and
- * room-machine.png each player in the room it starts in, lit (1440×1000), and
+ * room-machine.png each player in the room it starts in, lit (1440×1000) —
+ * decals-lab.png the Labor beside the Maschinenraum, the marks on its floor — and
  * art-dark.png the Maschinenraum two seconds into the dark, its standby glows
  * and the flashlight; then its player walks to the room's east end and
  * standby-dark.png shows the generators asleep behind them, out of the lamp's
@@ -7269,6 +7270,7 @@ async function artCaptures({ host, guest, watcher }) {
   const rest = (machine.seen.view?.startedAt ?? Date.now()) + ART_LIGHTS_SEC * 1000 - SHOT_HOLD_MS;
   await sleep(Math.max(0, rest + 500 - Date.now()));
   await capture(machine.page, 'room-machine.png');
+  await captureDecals(machine);
   const map = watcher.seen.view?.map;
   const kinds = (map?.labels ?? []).map((label) => `${label.text} ${label.kind ?? 'plain'}`);
   console.log(
@@ -7286,6 +7288,49 @@ async function artCaptures({ host, guest, watcher }) {
   await capture(machine.page, 'art-dark.png');
   console.log(`art-dark.png       ${machine.name} in the Maschinenraum, 2.5 s into the dark`);
   await captureStandby(machine);
+}
+
+/** The floor's marks that are clutter, not the corridors' markings. */
+const CLUTTER = (decal) => decal.kind !== 'lane' && decal.kind !== 'arrow';
+
+/**
+ * decals-lab.png: the Labor next door as the Maschinenraum's player sees it lit, four tiles
+ * round its label — the marks on its floor (client world/decals.ts): spills, papers, coffee
+ * rings, tape. The page's probe has to lay two or more on the Labor's floor and none on
+ * furniture, a door, a plate or the exit — none in anybody's way, nothing that reads as a thing
+ * to find — or the run fails; a mark under a station or a source, which is drawn over it, is
+ * counted, not failed.
+ */
+async function captureDecals(player) {
+  const map = player.seen.view?.map;
+  const label = map?.labels.find((l) => l.text === 'LABOR');
+  const probe = await graphicsOf(player.page);
+  if (map == null || label === undefined || probe === null) {
+    fail(`decals-lab.png: ${player.name}'s page shows no Labor, or carries no graphics probe`);
+    return;
+  }
+  await shootAround(player.page, 'decals-lab.png', { x: label.x + 0.5, y: label.y + 0.5 }, 4);
+  const key = (t) => `${t.x},${t.y}`;
+  const floor = new Set(roomFloorOf(map, label).map(key));
+  const solid = new Set([
+    ...furniture(map),
+    ...[...map.doors, ...map.plates, ...(map.exit === null ? [] : [map.exit])].map(key),
+  ]);
+  const beneath = new Set([...map.stations, ...map.manuals].map(key));
+  const at = (d) => `${Math.floor(d.x)},${Math.floor(d.y)}`;
+  const inLab = probe.decals.filter((d) => CLUTTER(d) && floor.has(at(d)));
+  const inTheWay = probe.decals.filter((d) => solid.has(at(d))).length;
+  const under = probe.decals.filter((d) => beneath.has(at(d))).length;
+  const kinds = [...new Set(inLab.map((d) => d.kind))].join(', ');
+  const fine = inLab.length >= 2 && inTheWay === 0;
+  console.log(
+    `decals-lab.png     ${player.name}: ${inLab.length} marks on the Labor's floor (${kinds}), ` +
+      `${probe.decals.length} in the lab: ${inTheWay} on furniture, a door, a plate or the ` +
+      `exit, ${under} under a station or a source${fine ? '' : ' !!'}`,
+  );
+  if (!fine) {
+    fail(`decals-lab.png: ${inLab.length} marks in the Labor, ${inTheWay} in the way`);
+  }
 }
 
 /**

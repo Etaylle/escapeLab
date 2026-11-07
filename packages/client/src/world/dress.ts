@@ -1,5 +1,6 @@
 import type { MapView } from '@escapelab/core';
 import { hashTile } from './brush.js';
+import { decalsOf, type Decal } from './decals.js';
 import {
   CORNER_NE,
   CORNER_NW,
@@ -22,15 +23,21 @@ import {
  * stain or a mark, hazard stripes round the reactor's core — each wall
  * tile's floor round it, and the props hung on the walls' faces: pipes and
  * cable trays along a corridor, rack fronts in the server room, gauges and
- * steam vents in the machine room, warning stripes beside every door. Wall
- * props hang on wall tiles only, so walking is never touched. Pure.
+ * steam vents in the machine room, warning stripes beside every door; and the
+ * marks on the floors (decals.ts). Wall props hang on wall tiles only and the
+ * marks lie flat, so walking is never touched. Pure.
  */
 
-/** What the dressing reads of a map. */
+/**
+ * What the dressing reads of a map: its floor and walls, rooms, doors, lamps and furniture —
+ * and, where it has them, its plates, its exit and the station spots the crew knows of, which
+ * the floor's marks keep clear of or gather round.
+ */
 export type DressMap = Pick<
   MapView,
   'width' | 'height' | 'tiles' | 'labels' | 'doors' | 'lamps' | 'decor'
->;
+> &
+  Partial<Pick<MapView, 'plates' | 'exit' | 'stations'>>;
 
 /** The props hung on a wall's face. */
 export const WALL_PROP_KINDS = [
@@ -80,6 +87,8 @@ export interface Dressing {
   props: WallProp[];
   /** the ceiling fans: one over the middle of every machine room, a sheet of paper under it */
   fans: CeilingFan[];
+  /** the marks on the floors: clutter by the rooms' kinds, the corridors' lanes and arrows */
+  decals: Decal[];
 }
 
 /**
@@ -465,6 +474,38 @@ function ceilingFans(
 }
 
 /**
+ * The marks on the floors of `grid` (decals.ts): clear of the furniture, the doors, the plates,
+ * the exit and the lamps; scorch round the fuse boxes the crew knows of.
+ */
+function floorMarks(
+  grid: Grid,
+  kinds: readonly FloorKind[],
+  rooms: readonly (string | null)[],
+): Decal[] {
+  const { map, index } = grid;
+  const taken = new Set([
+    ...map.decor.map((piece) => index(piece.x, piece.y)),
+    ...map.doors.map((door) => index(door.x, door.y)),
+    ...map.lamps.map((lamp) => index(lamp.x, lamp.y)),
+    ...(map.plates ?? []).map((plate) => index(plate.x, plate.y)),
+    ...(map.exit == null ? [] : [index(map.exit.x, map.exit.y)]),
+  ]);
+  const fuseBoxes = (map.stations ?? []).filter((s) => s.known && s.look === 'fusebox');
+  return decalsOf({
+    width: map.width,
+    height: map.height,
+    seed: grid.seed,
+    floor: grid.floor,
+    kinds,
+    rooms,
+    taken,
+    fuseBoxes,
+    exit: map.exit ?? null,
+    bands: bandsOf(grid, rooms),
+  });
+}
+
+/**
  * The dressing of `map` grown from `seed` (seedOf the mission's id): the same
  * map and seed, the same dressing, run after run.
  */
@@ -487,5 +528,6 @@ export function dressMap(map: DressMap, seed: number): Dressing {
     walls,
     props: wallProps(grid, kinds, rooms),
     fans: ceilingFans(grid, kinds, rooms),
+    decals: floorMarks(grid, kinds, rooms),
   };
 }

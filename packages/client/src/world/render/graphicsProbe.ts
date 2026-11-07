@@ -1,5 +1,7 @@
 import { beaconAngle, beaconPhase, beaconTurnMs, LOBE_REACH } from '../beacon.js';
+import { dressedFor } from '../artKit.js';
 import { CORE_HALF } from '../beam.js';
+import type { DecalKind } from '../decals.js';
 import { figureBox } from '../depth.js';
 import { hotspotOf } from '../droneLights.js';
 import type { FigureTask } from '../figure.js';
@@ -82,6 +84,17 @@ export interface GraphicsProbe {
    * the way they show themselves facing, radians, and whether their hands hold something
    */
   crew: { id: string; task: FigureTask; facing: number; holding: boolean }[];
+  /** the marks on the floors as the dressing lays them (world/decals.ts): where, what */
+  decals: { x: number; y: number; kind: DecalKind }[];
+}
+
+/** The marks on the floors of the map a frame drew. */
+function decalsOf(kit: RenderKit, drawn: Frame | null): GraphicsProbe['decals'] {
+  if (drawn === null) {
+    return [];
+  }
+  const { dressing } = dressedFor(kit.art, drawn.map, drawn.missionId);
+  return dressing.decals.map(({ x, y, kind }) => ({ x, y, kind }));
 }
 
 /** The crew's figures a frame posed, you first. */
@@ -206,5 +219,6 @@ export function graphicsProbe(world: ProbedWorld): GraphicsProbe {
     beam: beamOf(drawn),
     drones: dronesOf(drawn),
     crew: crewOf(drawn),
+    decals: decalsOf(kit, drawn),
   };
 }

@@ -155,6 +155,27 @@ describe('tiles — the void, then the map baked whole, copied in one go', () =>
     expect(baked.get('0,2')).toEqual({ key: 'wall:plain:2:dark:dark', tall: 1 });
   });
 
+  it('bakes the floors’ marks over the floors and under the walls: a corridor’s lane', () => {
+    const labels = [{ text: 'FLUR', x: 2, y: 2, kind: 'corridor' as const }];
+    const map = mapWith({ width: 10, height: 6, tiles: TILES, labels });
+    const { frame, logs } = recorded({ map });
+    draw(fakeCanvas(800, 600).ctx, frame);
+    const log = cacheLog(frame, logs);
+    const keys = keysOf(frame.kit.art.atlas);
+    /** Where in the log `name` was called, with an atlas key starting `prefix` if one is asked. */
+    const where = (name: string, prefix = '') =>
+      log.flatMap((e, i) =>
+        e.kind === 'call' && e.name === name && String(keys.get(e.args[0])).startsWith(prefix)
+          ? [i]
+          : [],
+      );
+    // The lane runs along the corridor's middle row: a dash a tile, filled.
+    const dashes = where('fillRect');
+    expect(dashes.length).toBeGreaterThan(0);
+    expect(Math.min(...dashes)).toBeGreaterThan(Math.max(...where('drawImage', 'floor:')));
+    expect(Math.max(...dashes)).toBeLessThan(Math.min(...where('drawImage', 'wall:')));
+  });
+
   it('bakes a tile in the colours of the power on where the light says, and in a lit room', () => {
     const light = lightWith({ powered: (x, y) => x === 1 && y === 1 });
     const { frame, logs } = recorded({ light, litTiles: new Set(['7,2', '7,0', '8,1']) });
