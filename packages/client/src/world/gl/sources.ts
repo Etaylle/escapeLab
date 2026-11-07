@@ -33,6 +33,7 @@ import {
   type Stops,
   type TintStops,
 } from '../light.js';
+import { searchColour } from '../droneLights.js';
 import { ALARM_RED, mixTint, WARM } from '../power.js';
 import { objectGlows } from '../render/darkness.js';
 import type { Frame } from '../render/frame.js';
@@ -238,13 +239,15 @@ function lampLights(frame: Frame): Light[] {
 }
 
 /**
- * The drones: an eye's cone where it looks, with the glimmer round its
- * body; a frozen drone only the glimmer, which walls do not stop.
+ * The drones: an eye's cone where it looks, its light red while the drone is alerted
+ * (world/droneLights.ts), with the glimmer round its body; a frozen drone only the glimmer,
+ * which walls do not stop.
  */
 function droneLights(frame: Frame): Light[] {
   return Object.entries(frame.drones).map(([id, drone]): Light => {
     const beam = frame.light.eyes.get(id)?.lamp.beam ?? null;
-    const body = { x: drone.x, y: drone.y, colour: DRONE_WHITE, tint: null, strength: 1 };
+    const colour = drone.alerted ? searchColour(true) : DRONE_WHITE;
+    const body = { x: drone.x, y: drone.y, colour, tint: null, strength: 1 };
     if (beam === null) {
       return { ...body, glow: { reach: 0.9, stops: objectGlowStops(0.5) }, beam: null, size: null };
     }

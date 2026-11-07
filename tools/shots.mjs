@@ -9658,6 +9658,9 @@ function reportSprint(name, run, sprint, walk) {
 // danger-sense.png  Blackout's scratch copy with its drones up from the start: the player
 //   starting at (21,8) the moment a drone closes in within five tiles — the probe naming it
 //   (client world/danger.ts); a Systemcheck run skips it
+// drone-close.png  right after it, the window round the nearest awake drone: its rotors' blur,
+//   its nav lights blinking red and green out of step, its hotspot on the floor ahead (client
+//   world/droneLights.ts) — or the run fails
 
 /** `url` with `?fakepad=1`: the page takes the walkthrough's controller. */
 function padded(url) {
@@ -10210,6 +10213,7 @@ async function captureDangerSense() {
       `danger-sense.png   ${under.name} at ${x},${y}: ${danger.drone} closing in, ` +
         `${danger.distance.toFixed(1)} tiles, ${danger.ticks} tick(s)`,
     );
+    await captureDroneClose(under);
   } catch (err) {
     console.log(`danger-sense       !! ${firstLine(err)}`);
     fail(`danger-sense: ${firstLine(err)}`);
@@ -10220,6 +10224,57 @@ async function captureDangerSense() {
     const gone = await api.delete(`/missions/custom/${DANGER_MISSION.id}`);
     console.log(`danger-sense       ${DANGER_MISSION.id} deleted again: ${gone.status()}`);
     await api.dispose();
+  }
+}
+
+/** How many times, and how far apart, a drone's nav lights are read: over two of their beats. */
+const NAV_READS = 20;
+const NAV_READ_MS = 100;
+
+/**
+ * drone-close.png: a drone close by in the dark (client world/droneLights.ts), right after the
+ * danger sense's shot — the window round the awake drone nearest the player, two and a half
+ * tiles each way: its rotors' blur, its nav lights, its searchlight's hotspot on the floor ahead.
+ * The page's probe has to name that hotspot ahead of the drone where it looks, and its nav
+ * lights read NAV_READS times NAV_READ_MS apart have to blink — each lit and out at least once
+ * — and never burn together, or the run fails.
+ */
+async function captureDroneClose(player) {
+  const { page } = player;
+  const self = await selfOn(page);
+  const near = (d) => Math.hypot(d.x - (self?.x ?? 0), d.y - (self?.y ?? 0));
+  const probe = await graphicsWhen(page, (p) => p.drones.some((d) => d.hotspot !== null), 3000);
+  const drone = (probe?.drones ?? [])
+    .filter((d) => !d.frozen && d.hotspot !== null)
+    .sort((a, b) => near(a) - near(b))[0];
+  if (drone === undefined) {
+    skip('drone-close.png', 'no awake drone with its hotspot on the floor in this window');
+    return;
+  }
+  await shootAround(page, 'drone-close.png', drone, 2.5);
+  const reads = [];
+  for (let i = 0; i < NAV_READS; i++) {
+    const seen = (await graphicsOf(page))?.drones.find((d) => d.id === drone.id);
+    if (seen !== undefined) {
+      reads.push(seen.nav);
+    }
+    await sleep(NAV_READ_MS);
+  }
+  const lit = (side) => reads.filter((nav) => nav[side] > 0).length;
+  const both = reads.filter((nav) => nav.port > 0 && nav.starboard > 0).length;
+  const blinks = ['port', 'starboard'].every((side) => lit(side) > 0 && lit(side) < reads.length);
+  const { hotspot } = drone;
+  const way = Math.atan2(hotspot.y - drone.y, hotspot.x - drone.x);
+  const fine = blinks && both === 0 && Math.cos(way - drone.facing) > 0.99;
+  const where = `${hotspot.x.toFixed(2)},${hotspot.y.toFixed(2)}`;
+  const at = `${drone.x.toFixed(2)},${drone.y.toFixed(2)}`;
+  console.log(
+    `drone-close.png    ${player.name}: ${drone.id} at ${at}, its hotspot at ${where}; ` +
+      `red lit ${lit('port')}, green ${lit('starboard')}, both ${both} of ${reads.length} reads` +
+      (fine ? '' : ' !!'),
+  );
+  if (!fine) {
+    fail(`drone-close.png: hotspot ${where}, nav red ${lit('port')} green ${lit('starboard')}`);
   }
 }
 

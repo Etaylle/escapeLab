@@ -1,12 +1,14 @@
 import { beaconAngle, beaconPhase, beaconTurnMs, LOBE_REACH } from '../beacon.js';
 import { CORE_HALF } from '../beam.js';
 import { figureBox } from '../depth.js';
+import { hotspotOf } from '../droneLights.js';
 import type { GradePhase } from '../grade.js';
 import type { ParticleKind } from '../particles.js';
 import type { Sim } from '../sim.js';
 import { groundAt } from './actors.js';
 import { conesOf, motesLit } from './atmosphere.js';
 import { streakOf } from './beam.js';
+import { navOf } from './drones.js';
 import type { Frame, RenderKit } from './frame.js';
 import { hidersNow } from './occluders.js';
 
@@ -59,6 +61,34 @@ export interface GraphicsProbe {
     core: number;
     streak: number | null;
   } | null;
+  /**
+   * the drones as the last frame drew them (world/droneLights.ts): where each hangs and faces,
+   * whether it is alerted or frozen, where its hotspot falls — null for none — and how brightly
+   * its nav lights burn
+   */
+  drones: {
+    id: string;
+    x: number;
+    y: number;
+    facing: number;
+    alerted: boolean;
+    frozen: boolean;
+    hotspot: { x: number; y: number } | null;
+    nav: { port: number; starboard: number };
+  }[];
+}
+
+/** The drones a frame drew, with their lights. */
+function dronesOf(drawn: Frame | null): GraphicsProbe['drones'] {
+  if (drawn === null) {
+    return [];
+  }
+  return Object.entries(drawn.drones).map(([id, drone]) => {
+    const eye = drawn.light.eyes.get(id);
+    const { x, y, facing, alerted, frozen } = drone;
+    const hotspot = eye === undefined ? null : hotspotOf(drone, eye.sight);
+    return { id, x, y, facing, alerted, frozen, hotspot, nav: navOf(drawn, id) };
+  });
 }
 
 /** Your beam as a frame drew it. */
@@ -152,5 +182,6 @@ export function graphicsProbe(world: ProbedWorld): GraphicsProbe {
     hidden: hiddenOf(drawn),
     grade: gradeOf(kit, drawn),
     beam: beamOf(drawn),
+    drones: dronesOf(drawn),
   };
 }

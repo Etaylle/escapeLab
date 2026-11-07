@@ -8,6 +8,7 @@ import {
   type ScientistOpts,
 } from '../art.js';
 import { figureBox } from '../depth.js';
+import { rotorAngle } from '../droneLights.js';
 import { figurePhase, figurePose, type FigurePose } from '../figure.js';
 import {
   drawAlarmMark,
@@ -16,6 +17,7 @@ import {
   drawDroneCone,
   drawDroneShadow,
 } from '../hazards.js';
+import { navOf } from './drones.js';
 import { FALLBACK_COLOR, inTiles, profiled, type Frame, type OtherAvatar } from './frame.js';
 import { occlude } from './occluders.js';
 import { drawFans } from './props.js';
@@ -240,10 +242,11 @@ function drawFigure(
 function drawDrones(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const { alarm } = frame;
   const marked = alarm === null ? 1 : (frame.now - alarm.at) / DRONE_MARK_MS;
-  for (const drone of Object.values(frame.drones)) {
+  const rotor = rotorAngle(frame.time * 1000, frame.reduced);
+  for (const [id, drone] of Object.entries(frame.drones)) {
     ctx.save();
     ctx.translate(drone.x, drone.y);
-    drawDroneBody(ctx, drone, frame.pulse);
+    drawDroneBody(ctx, drone, { nav: navOf(frame, id), rotor });
     drawAlarmMark(ctx, marked);
     ctx.restore();
   }

@@ -1,5 +1,7 @@
 import type { DronePosition, PartKind } from '@escapelab/core';
 import { drawFoundLabel, LABEL_BELOW, type WorldText } from './art.js';
+import { softEllipse, TAU } from './brush.js';
+import { NAV_AFT, NAV_SIDE, type NavLights } from './droneLights.js';
 import {
   ALARM,
   AMBER,
@@ -28,8 +30,10 @@ import {
  */
 
 /**
- * The sweeping cone, drawn under the body so the drone sits on top of it.
- * A frozen drone sees nothing, so it has none.
+ * The sweeping cone, drawn under the body so the drone sits on top of it: its light falling
+ * off with the distance from a bright start at the lens — two stops, which the software canvas
+ * fills a third faster than three — its edge a line to read and dodge it by. A frozen drone
+ * sees nothing, so it has none.
  */
 export function drawDroneCone(
   ctx: CanvasRenderingContext2D,
@@ -41,8 +45,9 @@ export function drawDroneCone(
   }
   const half = (drone.halfAngleDeg * Math.PI) / 180;
   const tint = drone.alerted ? ALARM : AMBER;
+  const strength = drone.alerted ? 0.4 : 0.26;
   const gradient = ctx.createRadialGradient(0, 0, 0.2, 0, 0, drone.range);
-  gradient.addColorStop(0, rgba(tint, drone.alerted ? 0.4 : 0.26));
+  gradient.addColorStop(0, rgba(lift(tint, 0.25), strength * 1.2));
   gradient.addColorStop(1, rgba(tint, 0));
   ctx.save();
   ctx.rotate(drone.facing);
@@ -359,56 +364,87 @@ export function drawAlarmMark(ctx: CanvasRenderingContext2D, age: number): void 
 }
 
 /**
- * The drone's shadow on the floor under it: drawn under the crew, as every shadow lies on the
- * floor (render/actors.ts), the drone itself over everybody.
+ * The drone's shadow on the floor under it, soft at its edge as a hovering thing's is: drawn
+ * under the crew, as every shadow lies on the floor (render/actors.ts), the drone itself over
+ * everybody.
  */
 export function drawDroneShadow(ctx: CanvasRenderingContext2D, drone: DronePosition): void {
-  ctx.save();
-  ctx.globalAlpha = drone.frozen ? 0.5 : 1;
-  ctx.fillStyle = rgba(BLACK, 0.4);
+  softEllipse(ctx, 0, 0.27, 0.38, 0.16, BLACK, drone.frozen ? 0.3 : 0.55, 'source-over');
+}
+
+/** How a drone's body shows this frame: its nav lights (droneLights.ts) and its rotors' turn. */
+export interface DroneLook {
+  nav: NavLights;
+  /** how far the rotors' blur has turned, radians */
+  rotor: number;
+}
+
+/** How far out the rotors' blur turns round the body, tiles. */
+const ROTOR_R = 0.37;
+const ROTOR_RING = rgba(lift(LABEL, 0.2), 0.16);
+const ROTOR_STREAK = rgba(lift(LABEL, 0.45), 0.28);
+
+/** The rotors' blur round the body: a faint ring, two brighter streaks turning on it. */
+function drawRotorBlur(ctx: CanvasRenderingContext2D, rotor: number): void {
+  ctx.strokeStyle = ROTOR_RING;
+  ctx.lineWidth = 0.08;
   ctx.beginPath();
-  ctx.ellipse(0, 0.26, 0.3, 0.12, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  ctx.arc(0, 0, ROTOR_R, 0, TAU);
+  ctx.stroke();
+  ctx.strokeStyle = ROTOR_STREAK;
+  ctx.lineWidth = 0.05;
+  for (const side of [0, Math.PI]) {
+    ctx.beginPath();
+    ctx.arc(0, 0, ROTOR_R, rotor + side, rotor + side + 0.8);
+    ctx.stroke();
+  }
+}
+
+/** The nav lights on their arms, port red and starboard green: bright where they burn. */
+function drawNavLights(ctx: CanvasRenderingContext2D, { port, starboard }: NavLights): void {
+  const lights: [number, number, typeof EMERGENCY][] = [
+    [-NAV_SIDE, port, EMERGENCY],
+    [NAV_SIDE, starboard, DONE_GREEN],
+  ];
+  for (const [side, burn, rgb] of lights) {
+    ctx.fillStyle = css(burn > 0 ? lift(rgb, 0.35) : sink(rgb, 0.65));
+    ctx.beginPath();
+    ctx.arc(-NAV_AFT, side, 0.045, 0, TAU);
+    ctx.fill();
+  }
 }
 
 /**
- * The drone itself: dark chassis, a glowing lens and a blinking beacon.
- * Frozen by its plate it hangs dimmed, lens grey and beacon off, under a lock.
- * Its shadow on the floor is drawn apart (drawDroneShadow).
+ * The drone itself: its rotors' blur round a dark chassis, a glowing lens, and its nav lights
+ * blinking red and green either side. Frozen by its plate it hangs dimmed, lens grey and nav
+ * lights out, under a lock. Its shadow on the floor is drawn apart (drawDroneShadow).
  */
 export function drawDroneBody(
   ctx: CanvasRenderingContext2D,
   drone: DronePosition,
-  pulse: number,
+  { nav, rotor }: DroneLook,
 ): void {
   const accent = css(drone.frozen ? sink(LABEL, 0.1) : drone.alerted ? ALARM : AMBER);
   const alpha = drone.frozen ? 0.5 : 1;
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.rotate(drone.facing);
+  drawRotorBlur(ctx, rotor);
   ctx.fillStyle = CHASSIS;
   ctx.strokeStyle = CHASSIS_RIM;
   ctx.lineWidth = 0.035;
   ctx.beginPath();
-  ctx.ellipse(0, 0, 0.3, 0.22, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 0, 0.3, 0.22, 0, 0, TAU);
   ctx.fill();
   ctx.stroke();
+  drawNavLights(ctx, drone.frozen ? { port: 0, starboard: 0 } : nav);
 
   // lens on the facing side
   ctx.fillStyle = accent;
   ctx.globalAlpha = alpha * 0.85;
   ctx.beginPath();
-  ctx.arc(0.18, 0, 0.09, 0, Math.PI * 2);
+  ctx.arc(0.18, 0, 0.09, 0, TAU);
   ctx.fill();
-
-  // beacon on top, blinking with the caller's pulse
-  if (!drone.frozen) {
-    ctx.globalAlpha = 0.35 + 0.65 * pulse;
-    ctx.beginPath();
-    ctx.arc(-0.14, 0, 0.055, 0, Math.PI * 2);
-    ctx.fill();
-  }
   ctx.restore();
   if (drone.frozen) {
     drawFrozenLock(ctx);

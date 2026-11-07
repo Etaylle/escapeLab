@@ -14,7 +14,13 @@ import {
 import { atlasLevel, sprite, type Atlas, type WallSpec } from '../world/atlas.js';
 import { decorVariant, drawDecor } from '../world/decor.js';
 import { dressMap, seedOf, type DressMap, type Dressing } from '../world/dress.js';
-import { drawCarryable, drawDropZone, drawDroneBody, drawSabotagePanel } from '../world/hazards.js';
+import {
+  drawCarryable,
+  drawDropZone,
+  drawDroneBody,
+  drawSabotagePanel,
+  type DroneLook,
+} from '../world/hazards.js';
 import { noteMount } from '../world/notes.js';
 import { hasFace, type FloorKind } from '../world/surfaces.js';
 import { customIdOf, type Draft, type DraftDrone, type Tile } from './draft.js';
@@ -60,6 +66,8 @@ const ROUTE = 'rgba(251, 191, 36, 0.75)';
 const DELIVERY = 'rgba(96, 165, 250, 0.7)';
 /** Props are drawn as they look in a run, still: no pulse, every glow at rest. */
 const STILL = 0.3;
+/** A drone as the editor stands it: its nav lights both lit, its rotors' blur at rest. */
+const DRONE_AT_REST: DroneLook = { nav: { port: 1, starboard: 1 }, rotor: 0 };
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -304,7 +312,7 @@ function paintDrone(ctx: Ctx, drone: DraftDrone, zoom: Zoom): void {
   const facing = second === undefined ? 0 : Math.atan2(second.y - first.y, second.x - first.x);
   const look = { x: first.x, y: first.y, facing, range: 0, halfAngleDeg: 0 };
   at(ctx, first.x + 0.5, first.y + 0.5, () =>
-    drawDroneBody(ctx, { ...look, alerted: false, frozen: false }, STILL),
+    drawDroneBody(ctx, { ...look, alerted: false, frozen: false }, DRONE_AT_REST),
   );
 }
 
@@ -467,7 +475,7 @@ const GLYPHS: Readonly<Record<Tool, Glyph>> = {
   label: (ctx) => paintGlyphMark(ctx, 'label'),
   exit: centred((ctx) => drawExitHatch(ctx, { open: 1, pulse: STILL })),
   item: centred((ctx) => drawCarryable(ctx, { kind: 'crate', pulse: STILL, carried: false })),
-  drone: centred((ctx) => drawDroneBody(ctx, STILL_DRONE, STILL)),
+  drone: centred((ctx) => drawDroneBody(ctx, STILL_DRONE, DRONE_AT_REST)),
   // A shelf stands tall (world/depth.ts): shrunk to fit its button, its foot where a tile's is.
   decor: (ctx) =>
     at(ctx, 0.5, 0.74, () => {

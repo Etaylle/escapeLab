@@ -228,17 +228,19 @@ describe('actors — drones and the crew, in tile space', () => {
     const body = drone({ x: 7, y: 3, frozen: true });
     const now = 1_000_000;
     const marked = drawn(frameWith({ drones: { body }, now, alarm: { seq: 1, at: now - 250 } }));
-    // Its cone first, its shadow, then itself.
+    // Its cone first, its shadow, then itself — a frozen drone's nav lights out, its rotors
+    // where the frame's clock (0) has them.
+    const look = { nav: { port: 0, starboard: 0 }, rotor: 0 };
     expect(strip(drawnAt(marked, 7, 3, 2))).toEqual(
       recording((c) => {
-        drawDroneBody(c, body, 0.5);
+        drawDroneBody(c, body, look);
         drawAlarmMark(c, 0.25);
       }),
     );
     const calm = drawn(frameWith({ drones: { body }, now }));
     expect(strip(drawnAt(calm, 7, 3, 2))).toEqual(
       recording((c) => {
-        drawDroneBody(c, body, 0.5);
+        drawDroneBody(c, body, look);
         drawAlarmMark(c, 1);
       }),
     );
