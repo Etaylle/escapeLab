@@ -87,6 +87,7 @@ export function kitWith(overlay: FakeCanvas = fakeCanvas(800, 600, 'overlay')): 
     grid: null,
     fringe: null,
     beacons: null,
+    grade: null,
     census: lightCensus(),
   };
 }
@@ -146,6 +147,8 @@ function frameParts(parts: Partial<Frame>): Omit<Frame, 'grid'> {
     escapeSince: null,
     red: 0,
     hatch: 0,
+    // No grade: the escape's, which leaves the picture as it is.
+    grade: { rgb: [0, 0, 0], alpha: 0 },
     light: lightWith(),
     mounts: [],
     litTiles: new Set(),

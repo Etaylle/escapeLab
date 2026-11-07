@@ -7,6 +7,7 @@ import type { DoorMotion } from '../doors.js';
 import type { FigureMood } from '../figure.js';
 import type { FinaleFrame } from '../finale.js';
 import type { LightPath } from '../gl/path.js';
+import type { GradeTurn, Wash } from '../grade.js';
 import type { ContextAction } from '../interact.js';
 import type { Refused } from '../press.js';
 import type { LampMount, Lit } from '../light.js';
@@ -173,6 +174,11 @@ export interface RenderKit {
   fringe: Fringe | null;
   /** the beacons' lobes baked for the zoom drawn at (beacons.ts); null while no lamp burns */
   beacons: LobeSprites | null;
+  /**
+   * the colour grade as it turns from phase to phase, kept from frame to frame by assemble.ts
+   * (world/grade.ts); null before the first frame
+   */
+  grade: GradeTurn | null;
   /** the sights and bakes the light has worked out so far, for the walkthrough (census.ts) */
   census: LightCensus;
 }
@@ -193,6 +199,7 @@ export function renderKit(overlay: CanvasRenderingContext2D): RenderKit {
     grid: null,
     fringe: null,
     beacons: null,
+    grade: null,
     census: lightCensus(),
   };
 }
@@ -263,6 +270,11 @@ export interface Frame {
   red: number;
   /** how far the hatch stands open on this screen, 0 to 1 */
   hatch: number;
+  /**
+   * the colour grade the world is drawn in (world/grade.ts): the phase's wash over the picture
+   * and the darkness, under every light added over them
+   */
+  grade: Wash;
   light: FrameLight;
   /** where the map's emergency lamps hang; one that hangs nowhere is left out */
   mounts: readonly LampMount[];

@@ -60,7 +60,8 @@
  * a main switch — whoever is locked in let out over a plate first — where the lamp over it turns
  * as a beacon: beacon-sweep-a.png and beacon-sweep-b.png a second apart, its lobe turned between
  * them as far as the page's probe says its clock turned it and the picture round the lamp
- * changed (sweep.mjs), or the run fails. E
+ * changed (sweep.mjs), or the run fails; grade-blackout.png shows the host's window in the
+ * blackout's cool grade, which the probe has to name. E
  * opens its panel for each (lever.png, every lamp lit, the player's own name
  * under the own lever). Where the view gives a press its expiry, the host throws alone:
  * lever-ring.png catches the ring round its grip draining; 1.3 s in,
@@ -3075,6 +3076,7 @@ async function throwLever(players) {
   }
   await reportLeverFound(players, lever, watches);
   await captureBeaconSweep(first);
+  await captureGradeBlackout(first);
   for (const player of players) {
     const modal = player.page.locator('.station-modal');
     if (!(await interactUntil(player, modal, consoleTarget(lever)))) {
@@ -3144,6 +3146,31 @@ async function captureBeaconSweep(player) {
   );
   if (!fine) {
     fail(`beacon-sweep: turned ${turned}, ${(share * 100).toFixed(1)} % changed`);
+  }
+}
+
+/**
+ * grade-blackout.png: the lab's colours in the blackout (client world/grade.ts) — the crew at the
+ * main switch in the dark, the host's window whole: the darkness and what the lamps show turned
+ * a cool blue-grey, the emergency lamps' red added over it as it was. The page's probe has to
+ * name the blackout's grade, laid on (a twentieth at least) in a colour bluer than red or green,
+ * or the run fails.
+ */
+async function captureGradeBlackout(player) {
+  const { page } = player;
+  const probe = await graphicsWhen(page, (p) => p.grade?.phase === 'blackout', 3000);
+  await capture(page, 'grade-blackout.png');
+  const grade = probe?.grade ?? null;
+  const [r, g, b] = grade?.rgb ?? [];
+  const fine = grade !== null && grade.alpha >= 0.05 && b > r && b > g;
+  const wash =
+    grade === null ? '!! no blackout grade' : `rgb(${grade.rgb.join(', ')}) at ${grade.alpha}`;
+  console.log(
+    `grade-blackout.png ${player.name}: the blackout's grade, ${wash} over the world` +
+      (fine ? '' : ' !!'),
+  );
+  if (!fine) {
+    fail(`grade-blackout.png: ${wash}`);
   }
 }
 

@@ -1,5 +1,6 @@
 import { beaconAngle, beaconPhase, beaconTurnMs, LOBE_REACH } from '../beacon.js';
 import { figureBox } from '../depth.js';
+import type { GradePhase } from '../grade.js';
 import type { ParticleKind } from '../particles.js';
 import type { Sim } from '../sim.js';
 import { groundAt } from './actors.js';
@@ -36,6 +37,21 @@ export interface GraphicsProbe {
    * where, and the tall things drawn again over them, each by its tile and what it is
    */
   hidden: { id: string; x: number; y: number; by: { x: number; y: number; of: string }[] }[];
+  /**
+   * the colour grade the last frame was drawn in (world/grade.ts): the phase it turns to — null
+   * before the first frame — and its wash, a byte a channel, and how strongly it lies over
+   */
+  grade: { phase: GradePhase | null; rgb: number[]; alpha: number };
+}
+
+/** The grade a frame was drawn in, and the phase it turns to. */
+function gradeOf(kit: RenderKit, drawn: Frame | null): GraphicsProbe['grade'] {
+  const phase = kit.grade?.phase ?? null;
+  if (drawn === null) {
+    return { phase, rgb: [], alpha: 0 };
+  }
+  const { rgb, alpha } = drawn.grade;
+  return { phase, rgb: rgb.map(Math.round), alpha };
 }
 
 /** The crew a frame drew behind tall things, and what hid each. */
@@ -106,5 +122,6 @@ export function graphicsProbe(world: ProbedWorld): GraphicsProbe {
     },
     beacons: beaconsOf(drawn),
     hidden: hiddenOf(drawn),
+    grade: gradeOf(kit, drawn),
   };
 }

@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { LightLayer } from '../src/world/gl/lightLayer.js';
+import { GRADES } from '../src/world/grade.js';
+import { rgba } from '../src/world/palette.js';
 import { drawFrame } from '../src/world/render/pipeline.js';
 import { fakeCanvas, FakePath2D, type Entry } from './fakeCanvas.js';
 import { canvasLight, frameWith, kitWith, TILES } from './frames.js';
@@ -66,6 +68,31 @@ describe('drawFrame — the passes in their order', () => {
     ];
     expect(steps.every((at) => at >= 0)).toBe(true);
     expect([...steps].sort((a, b) => a - b)).toEqual(steps);
+  });
+
+  it('lays the grade over the world, under the minimap and the alarm’s knock', () => {
+    const kit = kitWith(fakeCanvas(800, 600, 'overlay'));
+    const now = 5_000_000;
+    const frame = frameWith({
+      kit,
+      now,
+      grade: GRADES.blackout,
+      alarm: { seq: 1, at: now - 10 },
+      minimap: { ox: 600, oy: 100, cell: 10, mw: 100, mh: 60 },
+    });
+    const { ctx, log } = fakeCanvas(800, 600);
+    drawFrame(ctx, frame);
+    const style = rgba(GRADES.blackout.rgb, GRADES.blackout.alpha);
+    const grade = log.findIndex((e) => e.kind === 'set' && e.value === style);
+    const minimap = firstCall(log, (c) => c.name === 'roundRect' && c.args[0] === 595);
+    const fringe = [kit.fringe?.red.canvas, kit.fringe?.blue.canvas];
+    const knock = firstCall(
+      log,
+      (c) => c.name === 'drawImage' && fringe.some((canvas) => canvas === c.args[0]),
+    );
+    expect(grade).toBeGreaterThanOrEqual(0);
+    expect(minimap).toBeGreaterThan(grade);
+    expect(knock).toBeGreaterThan(grade);
   });
 
   it('draws what glows under the WebGL layer’s light map, over the Canvas pass’s darkness', () => {

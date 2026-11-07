@@ -24,6 +24,7 @@ import {
   type RenderKit,
   type WorldMap,
 } from './frame.js';
+import { drawGrade } from './grade.js';
 import { steadyOf, steadyPart } from './pools.js';
 import { drawStandby } from './standby.js';
 
@@ -37,7 +38,9 @@ import { drawStandby } from './standby.js';
  * darkness, the WebGL light layer draws it all where the world's way for
  * its light says so (gl/path.ts); else, and as its fallback, this pass.
  * Either way the standby lights glow over it (standby.ts). Every light that
- * stands still is laid on from its bake on the frame's grid (bakes.ts).
+ * stands still is laid on from its bake on the frame's grid (bakes.ts). The
+ * phase's colour grade lies over the picture, the lab's own light and the
+ * darkness, under the lights added after (render/grade.ts).
  */
 export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const whole = frame.whole;
@@ -50,6 +53,8 @@ export function draw(ctx: CanvasRenderingContext2D, frame: Frame): void {
   if (inTheDark(frame)) {
     drawLighting(ctx, frame, 1 - whole, glowsWithLight(ctx, frame));
     drawStandby(ctx, frame);
+  } else {
+    profiled(frame.kit, 'grade', ctx, () => drawGrade(ctx, frame));
   }
 }
 
@@ -219,8 +224,8 @@ function drawPowerOn(
 
 /**
  * The darkness over the picture, `veil` strong, with every light cut into
- * it where its lamp can see (darkness.ts); then the colours of the lights over
- * it: what holds still in one go — with the coloured lights' steady glows where
+ * it where its lamp can see (darkness.ts), and the grade over both; then the colours of the
+ * lights over it: what holds still in one go — with the coloured lights' steady glows where
  * `withGlow` says (glowsWithLight) — then what comes and goes, each apart.
  */
 function drawLighting(
@@ -235,6 +240,7 @@ function drawLighting(
   ctx.globalAlpha = veil;
   ctx.drawImage(overlay.canvas, 0, 0);
   ctx.globalAlpha = 1;
+  profiled(frame.kit, 'grade', ctx, () => drawGrade(ctx, frame));
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   laySteadyLight(ctx, frame, withGlow);

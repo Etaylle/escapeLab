@@ -3,12 +3,13 @@ import { timeLeft } from '../clock.js';
 import type { VoiceMesh } from '../voice/mesh.js';
 import type { Alarm } from './alarm.js';
 import { worldText, type WorldText } from './art.js';
-import { coldOpenFrame, FLICKER_MS } from './coldOpen.js';
+import { coldOpenFrame, FLICKER_MS, type ColdOpenFrame } from './coldOpen.js';
 import { exitOpening, redShift } from './escape.js';
 import { dangerMarker } from './danger.js';
 import type { FigureMood } from './figure.js';
 import { finaleFrame, type FinaleCue, type FinaleFrame } from './finale.js';
 import { frameLight, mountedLamps } from './frameLight.js';
+import { gradeAt, gradePhase, type Wash } from './grade.js';
 import { contextAction } from './interact.js';
 import { hudAt, litWhole, shotProgress, type IntroCue } from './intro/sequence.js';
 import { known } from './known.js';
@@ -296,6 +297,22 @@ function escapeRed(live: Latest, now: number): number {
   return redShift(now - since);
 }
 
+/**
+ * The colour grade of this frame (grade.ts), turning in the kit from the phase the frame before
+ * stood in: the lab with its power, the blackout, the escape, a run won.
+ */
+function gradeOf(source: FrameSource, scene: ColdOpenFrame, now: number): Wash {
+  const live = source.live.current;
+  const phase = gradePhase({
+    powered: scene.lit,
+    escaping: live.escapeSince !== null,
+    won: live.finale?.ending === 'won',
+  });
+  const { turn, wash } = gradeAt(source.kit.grade, phase, now);
+  source.kit.grade = turn;
+  return wash;
+}
+
 /** The frame's light and what it follows. */
 type Lighting =
   | 'scene'
@@ -304,6 +321,7 @@ type Lighting =
   | 'escapeSince'
   | 'red'
   | 'hatch'
+  | 'grade'
   | 'light'
   | 'mounts'
   | 'litTiles'
@@ -340,7 +358,8 @@ function lighting(
   const litTiles = sim.litTiles;
   const blackoutAt = live.darkSince === null ? null : live.darkSince + FLICKER_MS;
   const lit = sim.lit;
-  return { scene, blackoutAt, whole, escapeSince, red, hatch, light, mounts, litTiles, lit };
+  const grade = gradeOf(source, scene, now);
+  return { scene, blackoutAt, whole, escapeSince, red, hatch, grade, light, mounts, litTiles, lit };
 }
 
 /** The view's people and the drones, as this frame draws them. */

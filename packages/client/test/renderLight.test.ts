@@ -3,6 +3,7 @@ import { artKit } from '../src/world/artKit.js';
 import type { CanvasMaker } from '../src/world/atlas.js';
 import type { LightLayer } from '../src/world/gl/lightLayer.js';
 import type { Pools } from '../src/world/gl/maps.js';
+import { blend, GRADES, type Wash } from '../src/world/grade.js';
 import { EMERGENCY_STOPS, OWN_GLOW_STOPS } from '../src/world/light.js';
 import { rgba, SERVER_BLUE } from '../src/world/palette.js';
 import { warmUp } from '../src/world/rooms.js';
@@ -85,6 +86,21 @@ const RACK = { kind: 'rack' as const, x: 7, y: 3 };
 /** A lit room of one tile at (x, 2), long lit, its clip a stand-in path named `path`. */
 function room(x: number, path: string): LitRoom {
   return { tiles: [{ x, y: 2 }], path: { path } as unknown as Path2D, since: -Infinity };
+}
+
+/** Where in `log` the grade `wash` is filled over the picture: the fill after its colour is set. */
+function gradeFill(log: readonly Entry[], wash: Wash): number {
+  const style = rgba(wash.rgb, wash.alpha);
+  const set = log.findIndex((e) => e.kind === 'set' && e.name === 'fillStyle' && e.value === style);
+  if (set < 0) {
+    return -1;
+  }
+  return log.findIndex((e, i) => i > set && e.kind === 'call' && e.name === 'fillRect');
+}
+
+/** Where in `log` the first drawImage of `image` lies; -1 for none. */
+function laidAt(log: readonly Entry[], image: unknown): number {
+  return log.findIndex((e) => e.kind === 'call' && e.name === 'drawImage' && e.args[0] === image);
 }
 
 /** The gradients set as a fill in `log`. */
@@ -420,6 +436,62 @@ describe('light — the darkness over the picture, and what cuts it open', () =>
   });
 });
 
+describe('light — the phase’s colour grade over the picture and its darkness', () => {
+  let overlay: FakeCanvas;
+  let warm: FakeCanvas;
+  beforeEach(() => {
+    logs = new Map();
+    overlay = fakeCanvas(800, 600, 'overlay');
+    warm = fakeCanvas(10, 6, 'warm');
+    vi.stubGlobal('document', { createElement: () => fakeCanvas(0, 0, 'baked').canvas });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('lays it over the darkness in one fill of the whole canvas, under the lamps’ red', () => {
+    const lamp = lit({ x: 1.5, y: 1.5, glow: 1.5 }, 'lamp');
+    const lamps = [{ mount: { x: 1.5, y: 1.5, facing: null }, lit: lamp }];
+    const grade = GRADES.blackout;
+    const frame = withKit(overlay, warm, { light: lightWith({ lamps }), grade });
+    const log = drawn(frame);
+    const fill = gradeFill(log, grade);
+    expect(fill).toBeGreaterThan(laidAt(log, overlay.canvas));
+    expect(fill).toBeLessThan(laidAt(log, bakeOf(frame, 'glow:lamp:1.5,1.5').canvas));
+    expect(log[fill]).toMatchObject({ args: [0, 0, 800, 600], op: 'source-over', alpha: 1 });
+    expect(callsOf(log, 'fillRect')).toHaveLength(1);
+  });
+
+  it('lays the escape’s red over it while the grade turns to the escape’s', () => {
+    const grade = blend(GRADES.blackout, GRADES.escape, 0.5);
+    const log = drawn(withKit(overlay, warm, { grade, red: 1, time: 0.3125 }));
+    const red = log.findIndex(
+      (e) => e.kind === 'set' && String(e.value).startsWith('rgba(255, 34, 22'),
+    );
+    expect(gradeFill(log, grade)).toBeGreaterThanOrEqual(0);
+    expect(red).toBeGreaterThan(gradeFill(log, grade));
+  });
+
+  it('grades the audience’s lab and the lab lit whole over the power’s light', () => {
+    const scene = { lit: true, cover: 0 };
+    const audience = withKit(overlay, warm, { spectator: true, scene, grade: GRADES.normal });
+    const seen = drawn(audience);
+    const power = laidAt(seen, bakeOf(audience, 'power:whole').canvas);
+    expect(gradeFill(seen, GRADES.normal)).toBeGreaterThan(power);
+    const ending = { lit: 1, pull: 1, dark: 0 };
+    const won = withKit(fakeCanvas(800, 600), warm, { ending, grade: GRADES.won });
+    const lit = drawn(won);
+    const wholePower = laidAt(lit, bakeOf(won, 'power:whole').canvas);
+    expect(gradeFill(lit, GRADES.won)).toBeGreaterThan(wholePower);
+  });
+
+  it('lays nothing for the escape’s grade, which leaves the picture as it is', () => {
+    const log = drawn(withKit(overlay, warm, { grade: GRADES.escape }));
+    expect(callsOf(log, 'fillRect')).toEqual([]);
+    expect(setsOf(log, 'fillStyle')).toEqual([]);
+  });
+});
+
 describe('light — through the WebGL light layer where the world’s way says so', () => {
   let overlay: FakeCanvas;
   let warm: FakeCanvas;
@@ -455,6 +527,13 @@ describe('light — through the WebGL light layer where the world’s way says s
       { args: [layerCanvas, 0, 450, 600, 450, 0, 0, 800, 600], op: 'lighter', alpha: 1 },
     ]);
     expect(overlay.log).toEqual([]);
+    expect(callsOf(log, 'fillRect')).toEqual([]);
+  });
+
+  it('leaves the grade to the layer, which folds it into its light map: no fill of its own', () => {
+    const { frame, layer } = onLayer({ grade: GRADES.blackout });
+    const log = drawn(frame);
+    expect(layer.render).toHaveBeenCalledWith(frame, expect.any(Function));
     expect(callsOf(log, 'fillRect')).toEqual([]);
   });
 

@@ -264,6 +264,8 @@ function lightPass(
   gl.uniform2i(u('uMapSize'), map.width, map.height);
   gl.uniform1f(u('uDark'), darknessDepth(frame));
   gl.uniform1f(u('uVeil'), 1 - frame.whole);
+  const { rgb: grade, alpha } = frame.grade;
+  gl.uniform4f(u('uGrade'), grade[0] / 255, grade[1] / 255, grade[2] / 255, alpha);
   const [r, g, b] = ESCAPE_RED;
   gl.uniform4f(u('uTint'), r / 255, g / 255, b / 255, escapeTint(frame));
   gl.uniform1i(u('uCount'), packed.count);

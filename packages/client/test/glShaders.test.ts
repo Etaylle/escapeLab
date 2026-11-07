@@ -56,6 +56,18 @@ describe('the light layer’s shaders, by their structure', () => {
     }
   });
 
+  it('grade the picture, the lab’s own light and the darkness before the escape’s red', () => {
+    const light = PROGRAMS.light.fragment;
+    const graded = /vec3 graded = ([^;]+);/.exec(light)?.[1] ?? '';
+    expect(graded).toContain('under * light');
+    expect(graded).toContain('DARK * dark');
+    // What the lights add keeps its colour: the lamps' red above all.
+    expect(graded).not.toMatch(/glow|gleam|over/);
+    const picture = light.indexOf('light *= 1.0 - uGrade.a');
+    expect(picture).toBeGreaterThan(light.indexOf('vec3 graded'));
+    expect(picture).toBeLessThan(light.indexOf('light *= 1.0 - uTint.a'));
+  });
+
   it('use every uniform they declare beyond its declaration, so none is compiled away', () => {
     for (const [name, { vertex, fragment, uniforms }] of programs) {
       const body = `${vertex}\n${fragment}`.replace(/^\s*uniform .*$/gm, '');

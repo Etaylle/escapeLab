@@ -7,7 +7,8 @@
  *           cone), whether the walls let it through (a DDA march through the
  *           occupancy texture to SAMPLES points across the light: soft
  *           shadows), how the faces of a wall turn to it; summed with the
- *           lit rooms, the darkness and the escape's red into a light map
+ *           lit rooms, the darkness, the phase's grade (world/grade.ts) and
+ *           the escape's red into a light map
  *           (what the picture keeps, to be multiplied) and a glow (light
  *           added over it), and what blooms: the colour small lights add,
  *           not the gleam of steel nor the wide glow of the open hatch
@@ -268,6 +269,7 @@ uniform sampler2D uOver;
 uniform sampler2D uUnder;
 uniform float uDark;
 uniform float uVeil;
+uniform vec4 uGrade;
 uniform vec4 uTint;
 uniform int uCount;
 uniform vec4 uSources[MAX_SOURCES * VECS];
@@ -315,7 +317,11 @@ void main() {
   vec3 under = inside ? texture(uUnder, uv).rgb : vec3(0.0);
   float dark = uVeil * uDark * keep * through;
   float light = 1.0 - dark;
-  vec3 added = over + under * light + glow + gleam + DARK * dark;
+  // The grade: a two-point table a channel, the picture, the lab's own light and the darkness
+  // drawn uGrade.a of the way to its colour; the light added over them keeps its own.
+  vec3 graded = (under * light + DARK * dark) * (1.0 - uGrade.a) + uGrade.rgb * uGrade.a;
+  vec3 added = over + graded + glow + gleam;
+  light *= 1.0 - uGrade.a;
   light *= 1.0 - uTint.a;
   added = added * (1.0 - uTint.a) + uTint.rgb * uTint.a;
   outLight = vec4(light, bloom * GLOW_SCALE);
@@ -406,6 +412,7 @@ export const PROGRAMS = {
       'uUnder',
       'uDark',
       'uVeil',
+      'uGrade',
       'uTint',
       'uCount',
       'uSources',
