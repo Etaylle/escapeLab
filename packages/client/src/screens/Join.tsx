@@ -11,13 +11,16 @@ import {
 } from '@escapelab/core';
 import { formatLeft } from '../clock.js';
 import { FIRST_RUN_HINT, firstDifficulty, isTutorial, useWon } from '../firstRun.js';
+import { useServerNow } from '../hooks.js';
 import { crewPass, keepName, lastName } from '../pass.js';
 import { recordLine } from '../runStats.js';
+import type { Takeover } from '../ws.js';
 import { crewSizeText } from './Crew.js';
 import { GiveUpButton } from './GiveUp.js';
 import { HttpsHint } from './HttpsHint.js';
 import { Icon } from './Icon.js';
 import { InstallOffer } from './Install.js';
+import { pauseClock } from './Pause.js';
 import { MapThumb } from './MapThumb.js';
 import { phosphorClass, useComesOn } from './phosphor.js';
 
@@ -31,6 +34,8 @@ interface Props {
    * blocks every other room; null for nowhere
    */
   seat?: Seat | null;
+  /** this device's ask for a seat by its name, waiting for the crew; null or left out for none */
+  takeover?: Takeover | null;
   /** the Bestenliste's runs, by mission */
   stats: MissionStats[];
   openHandbook: (missionId: string) => void;
@@ -335,10 +340,34 @@ function NewRound({
 }
 
 /**
- * „Mit Code": a room's code to join or watch it by. An invite link carries the room in
- * ?room=, so the field is already filled and all that is left to do is type a name.
+ * This device's ask for a seat, waiting for the crew on the line to let it in: on the clock,
+ * and gone once its time is up — an ask whose answer never came, its line dropped, says no more.
  */
-function WithCode({ send, connected, name, blocked }: SectionProps) {
+function TakeoverWait({ takeover }: { takeover: Takeover }) {
+  const now = useServerNow(250);
+  if (now > takeover.until) {
+    return null;
+  }
+  return (
+    <p className="takeover-wait" role="status">
+      Warten, bis die Crew die Übernahme von {takeover.name} bestätigt ·{' '}
+      <span className="pause-count">{pauseClock(takeover.until - now)}</span>
+    </p>
+  );
+}
+
+/**
+ * „Mit Code": a room's code to join or watch it by. An invite link carries the room in
+ * ?room=, so the field is already filled and all that is left to do is type a name. A join by
+ * the name of a seat in a run on waits for the crew to let this device in (`takeover`).
+ */
+function WithCode({
+  send,
+  connected,
+  name,
+  blocked,
+  takeover,
+}: SectionProps & { takeover: Takeover | null }) {
   const [code, setCode] = useState(
     () => new URLSearchParams(window.location.search).get('room')?.toUpperCase() ?? '',
   );
@@ -361,6 +390,7 @@ function WithCode({ send, connected, name, blocked }: SectionProps) {
           Beitreten
         </button>
       </div>
+      {takeover !== null && <TakeoverWait takeover={takeover} />}
       <button
         className="link"
         disabled={!connected || code.trim().length === 0}
@@ -472,6 +502,7 @@ export function JoinScreen({
   missions,
   rooms,
   seat = null,
+  takeover = null,
   stats,
   openHandbook,
   openHistory,
@@ -539,7 +570,7 @@ export function JoinScreen({
           openHistory={openHistory}
           {...(openEditor === undefined ? {} : { openEditor })}
         />
-        <WithCode {...section} />
+        <WithCode {...section} takeover={takeover ?? null} />
       </div>
     </div>
   );

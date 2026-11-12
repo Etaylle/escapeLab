@@ -175,6 +175,12 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('continue-without'), absentId: z.string().min(1).max(64) }),
   /** the run called off by the one crew member still on the line, once the wait is over */
   z.object({ kind: z.literal('call-off') }),
+  /** a new device's ask to take the seat of `seat` over: let in, or refused */
+  z.object({
+    kind: z.literal('takeover-answer'),
+    seat: z.string().min(1).max(64),
+    allow: z.boolean(),
+  }),
   /** a voice signal for one other member of the room, by id */
   z.object({ kind: z.literal('rtc'), to: z.string().min(1).max(64), signal: rtcSignalSchema }),
   /**
@@ -314,6 +320,13 @@ export type ServerMessage =
   | { kind: 'left'; code: string; message: string | null }
   /** the answer to `whereami`: where the pass sits; null where it sits nowhere it is bound to */
   | { kind: 'seated'; seat: Seat | null }
+  /**
+   * a join by the name of a seat whose line is down waits for the crew on the line to let this
+   * device in, until `until` (epoch ms): answered by `takeover-allowed`, or a refusal
+   */
+  | { kind: 'takeover-pending'; code: string; name: string; until: number }
+  /** the crew let this device in: its pass holds the seat now, and it resumes it (`resume`) */
+  | { kind: 'takeover-allowed'; code: string }
   | { kind: 'view'; view: PlayerView; at: number }
   | { kind: 'spectator-view'; view: SpectatorView; code: string; at: number }
   /** the answer to a `clock` ask: the page's `sent` handed back, and the server's time (`at`) */

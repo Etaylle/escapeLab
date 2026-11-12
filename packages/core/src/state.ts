@@ -82,6 +82,11 @@ export interface Away {
    * whole crew presses, at the hatch — until they are back; their seat stays theirs
    */
   waived: boolean;
+  /**
+   * epoch ms until which a new device's ask to take their seat over waits for the crew on the
+   * line to let it in (actions.ts `takeover-claimed`); left out while nobody asks
+   */
+  claimUntil?: number;
 }
 
 export interface ItemState {

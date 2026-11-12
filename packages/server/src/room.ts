@@ -31,6 +31,7 @@ import {
   sightables,
   stationKey,
   stepAllowed,
+  TAKEOVER_WAIT_MS,
   utcDay,
   viewFor,
   viewForSpectator,
@@ -132,6 +133,41 @@ const SEAT_TAKEN = 'Der Platz wurde auf einem anderen Gerät übernommen.';
 /** How long a seat in the lobby may stay off the line before the room frees it, ms. */
 export const LOBBY_AWAY_MS = 120_000;
 
+/** What a device is told whose ask for a seat the crew did not let in. */
+// voice: interface — the room's refusal, not the lab's, names the crew
+const CLAIM_REFUSED = 'Die Crew hat die Übernahme nicht bestätigt.';
+
+/** A new device's ask for a seat by its name: the pass it brings, whom to tell, its timer. */
+interface Claim {
+  pass: CrewPass;
+  tell: Listener;
+  timer: NodeJS.Timeout;
+}
+
+/**
+ * How an ask for a seat ends: let in, refused by a member of the crew, left unanswered, void —
+ * the seat back on its line, gone, or the run over — or withdrawn, its device gone.
+ */
+type ClaimEnd = 'allowed' | 'refused' | 'unanswered' | 'back' | 'over' | 'withdrawn';
+
+/** What the log says of a seat whose ask ended so (`ClaimEnd`). */
+const CLAIM_LOG: Record<ClaimEnd, string> = {
+  allowed: 'taken over by another device, let in',
+  refused: 'kept from another device',
+  unanswered: `kept from another device, unanswered for ${TAKEOVER_WAIT_MS / 1000} s`,
+  back: 'kept from another device, back on its line',
+  over: 'kept from another device, the seat gone or the run over',
+  withdrawn: 'kept from another device that went away',
+};
+
+/** What the asking device is told of an ask that let it not in (`ClaimEnd`). */
+function claimRefusal(how: ClaimEnd, name: string): string {
+  if (how === 'back') {
+    return `${name} ist wieder verbunden.`;
+  }
+  return how === 'over' ? 'Dieser Platz ist nicht mehr zu übernehmen.' : CLAIM_REFUSED;
+}
+
 /** A stretch of time in seconds, as the log says it: `12.3 s`. */
 const seconds = (ms: number): string => `${(ms / 1000).toFixed(1)} s`;
 
@@ -210,6 +246,8 @@ export class Room {
   private readonly lostAt = new Map<string, number>();
   /** frees each lobby seat whose line has been down LOBBY_AWAY_MS, by player id */
   private readonly freeing = new Map<string, NodeJS.Timeout>();
+  /** the asks of new devices for seats whose line is down, by the seat's player id */
+  private readonly claims = new Map<string, Claim>();
   /** epoch ms since the room has had no connected players, null while occupied */
   emptySince: number | null = null;
 
@@ -239,23 +277,76 @@ export class Room {
     return { playerId };
   }
 
+  /** Whether the room has a seat named exactly `name`. */
+  hasSeat(name: string): boolean {
+    return this.state.players.some((player) => player.name === name);
+  }
+
   /**
-   * A new device sits down in the run on by the name of a seat (Jackbox): the exact name of a
-   * seat whose line dropped binds it to `pass`, and its player is back on it — the pass that
-   * held it is refused from now on (SEAT_TAKEN). A seat still on the line is refused by its
-   * name; any other name gets the refusal of a join into a run. Returns the player id.
+   * A new device asks for the seat named `name` in the run on (Jackbox, let in by the crew):
+   * every member on the line is asked on their card, for TAKEOVER_WAIT_MS (core
+   * `takeover-claimed`, which refuses a seat on the line, a second ask, or nobody to answer).
+   * `tell` hears that it waits, then how it ends (`settleClaim`). Returns how to withdraw the
+   * ask, its device gone.
    */
-  takeOver(name: string, pass: CrewPass): string {
+  claim(name: string, pass: CrewPass, tell: Listener): () => void {
     const seat = this.state.players.find((player) => player.name === name);
     if (seat === undefined) {
-      return this.join(name, pass).playerId;
+      throw new GameError(`Einen Platz namens ${name} gibt es hier nicht.`);
     }
-    if (seat.connected) {
-      throw new GameError(`${seat.name} ist noch verbunden.`);
+    const now = Date.now();
+    this.dispatch({ type: 'takeover-claimed', playerId: seat.id, at: now });
+    const timer = setTimeout(() => this.settleClaim(seat.id, 'unanswered'), TAKEOVER_WAIT_MS);
+    this.claims.set(seat.id, { pass, tell, timer });
+    this.log(`${seat.name}'s seat asked for by another device`);
+    const until = now + TAKEOVER_WAIT_MS;
+    tell({ kind: 'takeover-pending', code: this.code, name: seat.name, until });
+    return () => {
+      if (this.claims.get(seat.id)?.tell === tell) {
+        this.settleClaim(seat.id, 'withdrawn');
+      }
+    };
+  }
+
+  /**
+   * `playerId`, of the crew and on the line, lets the device that asks for the seat of `seatId`
+   * in, or not; the audience has no say.
+   */
+  answerTakeover(playerId: string, seatId: string, allow: boolean): void {
+    if (!this.listeners.has(playerId)) {
+      // voice: interface — the room's refusal, not the lab's
+      throw new GameError('Über eine Übernahme entscheidet nur, wer im Einsatz verbunden ist.');
     }
-    this.seats.takeOver(seat.id, pass);
-    this.log(`${seat.name}'s seat taken over by another device, ${this.back(seat.id)}`);
-    return seat.id;
+    if (!this.claims.has(seatId)) {
+      throw new GameError('Über diese Übernahme ist schon entschieden.');
+    }
+    this.settleClaim(seatId, allow ? 'allowed' : 'refused', this.nameOf(playerId));
+  }
+
+  /**
+   * The ask for the seat of `seatId` ends `how` (`ClaimEnd`), `by` whom where somebody
+   * answered: let in, its pass binds the seat — the pass that held it is refused from now on
+   * (SEAT_TAKEN) — and the device resumes it; otherwise it is told why not, but for a device
+   * gone. The crew's views lose the ask.
+   */
+  private settleClaim(seatId: string, how: ClaimEnd, by = ''): void {
+    const claim = this.claims.get(seatId);
+    if (claim === undefined) {
+      return;
+    }
+    this.claims.delete(seatId);
+    clearTimeout(claim.timer);
+    const name = this.nameOf(seatId);
+    if (this.state.phase === 'playing' && this.state.away[seatId]?.claimUntil !== undefined) {
+      this.dispatch({ type: 'takeover-settled', playerId: seatId });
+    }
+    if (how === 'allowed') {
+      this.seats.takeOver(seatId, claim.pass);
+      claim.tell({ kind: 'takeover-allowed', code: this.code });
+    } else if (how !== 'withdrawn') {
+      claim.tell({ kind: 'error', message: claimRefusal(how, name), of: 'join-room' });
+    }
+    this.log(`${name}'s seat ${CLAIM_LOG[how]}${by === '' ? '' : ` by ${by}`}`);
   }
 
   /**
@@ -317,6 +408,7 @@ export class Room {
    * says so next.
    */
   private leave(playerId: string, line: string): void {
+    this.settleClaim(playerId, 'over');
     const stood = this.positions.get(playerId);
     const where = stood === undefined ? null : { x: stood.x, y: stood.y };
     // Worked out before anything is let go of: a leave the core refuses leaves the seat be.
@@ -400,6 +492,7 @@ export class Room {
    * the log how long their line was away.
    */
   private back(playerId: string): string {
+    this.settleClaim(playerId, 'back');
     const lost = this.lostAt.get(playerId);
     this.lostAt.delete(playerId);
     const now = Date.now();
@@ -1585,6 +1678,9 @@ export class Room {
     // A run ends exactly once, won or lost; a rematch is a run of its own.
     if (wasPlaying && (this.state.phase === 'won' || this.state.phase === 'lost')) {
       this.runOver(runReport(this.state, this.code));
+      for (const seatId of [...this.claims.keys()]) {
+        this.settleClaim(seatId, 'over');
+      }
     }
     // A glance of one run finds nothing in the next.
     if (this.state.phase !== 'playing') {
@@ -1667,10 +1763,12 @@ export class Room {
   }
 
   dispose(): void {
-    for (const timer of this.freeing.values()) {
+    const claimed = [...this.claims.values()].map((claim) => claim.timer);
+    for (const timer of [...this.freeing.values(), ...claimed]) {
       clearTimeout(timer);
     }
     this.freeing.clear();
+    this.claims.clear();
     if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;

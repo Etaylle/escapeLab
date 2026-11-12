@@ -2,45 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ServerMessage, SpectatorView } from '@escapelab/core';
 import { PASS_KEY } from '../src/pass.js';
 import { comebackOfTab } from '../src/tab.js';
-import { takeIn, type Page } from '../src/ws.js';
+import { takeIn } from '../src/ws.js';
+import { page, storage } from './page.js';
 
 /** Ben's pass. */
 const PASS = { id: 'b3'.repeat(16), secret: '7e'.repeat(32) };
-
-/** A storage kept in a map, as the browser's local and session storage are. */
-function storage(items: Map<string, string>) {
-  return {
-    getItem: (key: string) => items.get(key) ?? null,
-    setItem: (key: string, value: string) => void items.set(key, value),
-    removeItem: (key: string) => void items.delete(key),
-  };
-}
-
-/** The page as the connection keeps it, its setters noting what they were last given. */
-function page() {
-  const got = { code: null as string | null, audience: null as SpectatorView | null };
-  const nothing = (): void => undefined;
-  const kept: Page = {
-    setRoomCode: (code) => {
-      got.code = code;
-    },
-    setView: nothing,
-    setSpectatorView: (view) => {
-      got.audience = view;
-    },
-    setRooms: nothing,
-    setSeat: nothing,
-    setError: nothing,
-    refuse: nothing,
-    resuming: { current: false },
-    you: { current: null },
-    positions: { current: { run: null, players: {} } },
-    drones: { current: {} },
-    pings: { current: [] },
-    chats: { current: [] },
-  };
-  return { kept, got };
-}
 
 /** What the audience of room QX7R is shown. */
 const AUDIENCE: ServerMessage = {

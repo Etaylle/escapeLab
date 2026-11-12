@@ -385,10 +385,17 @@ waits again for whoever it went on without, their wait starting anew (20 s), and
 alone may call it off once that is over.
 
 **Taking a seat over.** As in Jackbox, a new device joins a running room by its code and the
-exact name of a seat whose line is down, and sits on it; the pass that held the seat is refused
-from then on („Der Platz wurde auf einem anderen Gerät übernommen."). The name of a seat still
-on the line is refused („Ben ist noch verbunden."); any other name gets the refusal of a join
-into a run, which says that a seat whose line is down can be taken over by its name.
+exact name of a seat whose line is down — but the crew lets it in, since the room list shows
+every running room's crew to anybody. The ask waits up to 30 s while every member on the line
+reads „Ben meldet sich von einem anderen Gerät" with „Zulassen" and „Ablehnen", on the pause
+card, or on a card of its own at the top where the run went on without Ben; the first answer
+decides. Let in, the device resumes the seat on its own pass, and the pass that held it is
+refused from then on („Der Platz wurde auf einem anderen Gerät übernommen."); turned away or
+left unanswered, the device is told „Die Crew hat die Übernahme nicht bestätigt.", and Ben's
+pass keeps the seat. Ben back first ends the ask („Ben ist wieder verbunden."), and with nobody
+of the crew on the line none is taken. The name of a seat still on the line is refused („Ben
+ist noch verbunden."); any other name gets the refusal of a join into a run, which says that a
+seat whose line is down can be taken over by its name.
 
 **The line.** The page counts its line dead when an ask for the server's time stays unanswered
 for 5 s, after 20 s without a word from the server, or when a socket is not open 8 s after it
@@ -411,7 +418,7 @@ where the room comes back to its lobby later than that — and the crew starts w
 
 **What the server says.** One log line per event, with the room and the name: a seat joining,
 its line closing, its return with how long it was away, a socket the heartbeat cut and why, a
-refusal at the door or of the way on, going on without somebody, a seat given up or taken over,
-and every run's end with its outcome. `GET /health` counts the rooms, the runs on and paused,
-the players and the audience on the line, and says the uptime and the build
-(`RENDER_GIT_COMMIT`, else `dev`); it names nobody.
+refusal at the door or of the way on, going on without somebody, a seat given up, a seat asked
+for and let in or kept, and every run's end with its outcome. `GET /health` counts the rooms,
+the runs on and paused, the players and the audience on the line, and says the uptime and the
+build (`RENDER_GIT_COMMIT`, else `dev`); it names nobody.

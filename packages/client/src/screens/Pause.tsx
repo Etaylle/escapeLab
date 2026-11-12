@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ClientMessage, PlayerView } from '@escapelab/core';
+import type { ClientMessage, PlayerView, TakeoverView } from '@escapelab/core';
 import { useServerNow } from '../hooks.js';
 import { Icon } from './Icon.js';
 
@@ -8,7 +8,9 @@ import { Icon } from './Icon.js';
  * their return. Whom it waits for and for how long, counted on the server's clock; once the
  * wait for a drop is over (core FIRST_WAIT_MS, LATER_WAIT_MS) the way on without them — or,
  * with one alone still on the line, the way to call the run off. Somebody the run went on
- * without who is back is said for a moment („Ben ist zurück").
+ * without who is back is said for a moment („Ben ist zurück"). A new device asking for the
+ * seat of somebody away is let in, or not, by whoever on the line answers first — on the pause
+ * card, or on a card of its own while the run goes on without them.
  */
 
 /**
@@ -91,6 +93,59 @@ function Way({ way, send }: { way: PauseWay; send: (msg: ClientMessage) => void 
   }
 }
 
+/** The asks of new devices for seats of the crew, each with its way in and its way out. */
+function TakeoverAsks({
+  asks,
+  now,
+  send,
+}: {
+  asks: readonly TakeoverView[];
+  now: number;
+  send: (msg: ClientMessage) => void;
+}) {
+  const answer = (seat: string, allow: boolean): void =>
+    send({ kind: 'takeover-answer', seat, allow });
+  return (
+    <div className="takeover-asks">
+      {asks.map((ask) => (
+        <div className="takeover-ask" key={ask.id}>
+          <p>
+            {ask.name} meldet sich von einem anderen Gerät ·{' '}
+            <span className="pause-count">{pauseClock(ask.until - now)}</span>
+          </p>
+          <div className="pause-ways">
+            <button className="primary takeover-allow" onClick={() => answer(ask.id, true)}>
+              Zulassen
+            </button>
+            <button className="takeover-deny" onClick={() => answer(ask.id, false)}>
+              Ablehnen
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * A new device asks for the seat of somebody the run went on without: the run goes on, and
+ * the ask stands at the top of the world, out of the way of the bar.
+ */
+export function TakeoverCard({
+  asks,
+  send,
+}: {
+  asks: readonly TakeoverView[];
+  send: (msg: ClientMessage) => void;
+}) {
+  const now = useServerNow(250);
+  return (
+    <div className="takeover-card" role="alertdialog">
+      <TakeoverAsks asks={asks} now={now} send={send} />
+    </div>
+  );
+}
+
 /** The run standing still for crew members away, over the world of everybody on the line. */
 export function PauseCard({
   view,
@@ -115,6 +170,9 @@ export function PauseCard({
           <Way key={`${way.kind}-${'name' in way ? way.name : ''}`} way={way} send={send} />
         ))}
       </div>
+      {view.takeovers !== undefined && (
+        <TakeoverAsks asks={view.takeovers} now={now} send={send} />
+      )}
     </div>
   );
 }

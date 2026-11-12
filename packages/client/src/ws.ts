@@ -40,6 +40,14 @@ export function inBanner(of: ClientMessage['kind'] | undefined): boolean {
   return of === undefined || !ANSWERED_IN_PLACE.has(of);
 }
 
+/** This device's ask for a seat by its name, waiting for the crew to let it in. */
+export interface Takeover {
+  code: string;
+  name: string;
+  /** epoch ms, by the server's clock, until which the ask waits */
+  until: number;
+}
+
 export interface Connection {
   /** socket status; the game itself lives in `view` */
   status: LineStatus;
@@ -48,6 +56,8 @@ export interface Connection {
   view: PlayerView | null;
   /** set instead of `view` when this connection is watching, not playing */
   spectatorView: SpectatorView | null;
+  /** this device's ask for a seat by its name while the crew has not answered it; null for none */
+  takeover: Takeover | null;
   /** open and running rooms, refreshed while sitting on the join screen */
   rooms: RoomSummary[];
   /**
@@ -138,6 +148,7 @@ export interface Page {
   setSpectatorView: (view: SpectatorView | null) => void;
   setRooms: (rooms: RoomSummary[]) => void;
   setSeat: (seat: Seat | null) => void;
+  setTakeover: (takeover: Takeover | null) => void;
   setError: (message: string) => void;
   refuse: (message: string, of: ClientMessage['kind'] | null) => void;
   /** a comeback is out (tab.ts): an error now means the room or seat the tab kept is gone */
@@ -156,7 +167,14 @@ export function takeIn(msg: ServerMessage, page: Page): void {
     case 'joined':
       page.resuming.current = false;
       keepTab({ code: msg.code, watching: false });
+      page.setTakeover(null);
       page.setRoomCode(msg.code);
+      break;
+    case 'takeover-pending':
+      page.setTakeover({ code: msg.code, name: msg.name, until: msg.until });
+      break;
+    case 'takeover-allowed':
+      page.setTakeover(null);
       break;
     case 'left':
       // The seat was given up, or plays on in another tab: this one plays in no room now and
@@ -211,6 +229,9 @@ export function takeIn(msg: ServerMessage, page: Page): void {
         page.setView(null);
         page.setSpectatorView(null);
       }
+      if (msg.of === 'join-room') {
+        page.setTakeover(null);
+      }
       if (inBanner(msg.of)) {
         page.setError(msg.message);
       }
@@ -230,6 +251,16 @@ function watching(code: string, page: Page): void {
     keepTab({ code, watching: true });
   }
   page.setRoomCode(code);
+}
+
+/**
+ * What the page says back at once to `msg`, if anything: let in by the crew on a seat by its
+ * name, this device's pass holds the seat now, and it resumes it.
+ */
+export function replyTo(msg: ServerMessage): ClientMessage | null {
+  return msg.kind === 'takeover-allowed'
+    ? { kind: 'resume', code: msg.code, pass: crewPass() }
+    : null;
 }
 
 /** What `openLine` wires the page's line to: the page, its status, socket and listeners. */
@@ -268,6 +299,10 @@ function openLine(wiring: Wiring): { line: Line; close: () => void } {
     },
     ready: () => asking.open(),
     message: (msg) => {
+      const reply = replyTo(msg);
+      if (reply !== null) {
+        line?.send(reply);
+      }
       takeIn(msg, page);
       for (const listener of listeners.current) {
         listener.message(msg);
@@ -372,6 +407,7 @@ export function useGameConnection(): Connection {
   const [spectatorView, setSpectatorView] = useState<SpectatorView | null>(null);
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [seat, setSeat] = useState<Seat | null>(null);
+  const [takeover, setTakeover] = useState<Takeover | null>(null);
   const [roomCode, setRoomCode] = useState<string | null>(roomOfTab);
   const [error, setError] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
@@ -407,6 +443,7 @@ export function useGameConnection(): Connection {
         setSpectatorView,
         setRooms,
         setSeat,
+        setTakeover,
         setError,
         refuse: (message, of) =>
           setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
@@ -435,6 +472,7 @@ export function useGameConnection(): Connection {
     retry,
     view,
     spectatorView,
+    takeover,
     rooms,
     seat,
     roomCode,

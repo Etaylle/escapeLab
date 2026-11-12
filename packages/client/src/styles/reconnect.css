@@ -130,6 +130,37 @@ button.danger:hover:not(:disabled) {
   }
 }
 
+/* A new device asks for a seat: on the pause card, or at the top while the run goes on. */
+.takeover-asks {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.takeover-ask p {
+  margin: 0 0 4px;
+  color: var(--warn);
+}
+
+.takeover-card {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 76px);
+  left: 50%;
+  z-index: 57;
+  max-width: calc(100vw - 32px);
+  padding: 10px 16px;
+  border: 1px solid #5f4b1f;
+  border-left: 3px solid var(--warn);
+  border-radius: 10px;
+  background: #1a160b;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  transform: translateX(-50%);
+}
+
+.takeover-card .takeover-asks {
+  margin-top: 0;
+}
+
 /* ── the own line down in a run (screens/Line.tsx) ───────────────────── */
 
 .overlay.pause.line-lost h1 {

@@ -97,6 +97,11 @@ export interface PlayerView {
    * at it — the pause moves every deadline on by its length once it is over
    */
   pausedAt: number | null;
+  /**
+   * seats of the crew a new device asks to take over, each until when the ask waits for the
+   * crew on the line to let it in (`takeover-answer`); left out while nobody asks
+   */
+  takeovers?: TakeoverView[];
   /** the run report, filled in as the mission goes on */
   events: RunEvent[];
   /**
@@ -160,6 +165,14 @@ export interface PlayerView {
   nextMissionId?: string;
   /** the run's opening while the lab still has its power (`IntroView`); left out without one */
   intro?: IntroView;
+}
+
+/** A seat whose line is down that a new device asks to take over, by its name. */
+export interface TakeoverView {
+  id: string;
+  name: string;
+  /** epoch ms until which the ask waits for an answer */
+  until: number;
 }
 
 /** A crew member the run waits for, away since their line dropped. */
@@ -1072,6 +1085,17 @@ function pausedFor(state: GameState): AwayView[] | null {
     .sort((a, b) => a.since - b.since);
 }
 
+/** The seats a new device asks to take over in the run on, for its crew; nothing while none. */
+function takeoversOf(state: GameState): { takeovers?: TakeoverView[] } {
+  const takeovers = Object.entries(state.away).flatMap(([id, away]) => {
+    const name = state.players.find((p) => p.id === id)?.name;
+    return away.claimUntil === undefined || name === undefined
+      ? []
+      : [{ id, name, until: away.claimUntil }];
+  });
+  return state.phase === 'playing' && takeovers.length > 0 ? { takeovers } : {};
+}
+
 /** That the run went on without `playerId` (`continue-without`); nothing for whom it counts. */
 function waivedOf(state: GameState, playerId: string): { waived?: true } {
   return state.away[playerId]?.waived === true ? { waived: true } : {};
@@ -1170,6 +1194,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     puzzleCount: state.mission.puzzles.length,
     pausedFor: pausedFor(state),
     pausedAt: state.paused?.since ?? null,
+    ...takeoversOf(state),
     events: [...state.events],
     ...calledOffOf(state),
     grade: gradeFor(state),

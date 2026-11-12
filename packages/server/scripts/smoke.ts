@@ -39,8 +39,8 @@
  * host's yes naming Blackout opens it, with the power on. Last a crew of
  * three plays Blackout: Finn's line drops for 70 s, the others go on without
  * him once the minute is over, and he is back on his pass, counted in at once
- * with no pause for it; Gus's line drops and a phone takes his seat over by
- * his name, his old pass refused; Gus gives his seat up and the two go on,
+ * with no pause for it; Gus's line drops and a phone asks for his seat by
+ * his name: Eva lets it in, his old pass refused; Gus gives his seat up and the two go on,
  * then Finn gives his up and the run ends, called off. No answer is written
  * down here.
  * Run with: pnpm --filter @escapelab/server smoke
@@ -453,6 +453,10 @@ const isLeft = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'left' }>
   m.kind === 'left';
 const isSeated = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'seated' }> =>
   m.kind === 'seated';
+const isPending = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'takeover-pending' }> =>
+  m.kind === 'takeover-pending';
+const isAllowed = (m: ServerMessage): m is Extract<ServerMessage, { kind: 'takeover-allowed' }> =>
+  m.kind === 'takeover-allowed';
 
 // --- map walking -----------------------------------------------------------
 
@@ -2547,8 +2551,9 @@ async function giveUp({ code, eva, gus }: Trio, finn: TestClient): Promise<void>
 
 /**
  * Gus's line drops and a phone that never held his pass joins by the room's code and his name:
- * it sits down on his seat, the run goes on; his old pass is refused, the seat taken over, and
- * a name still on the line is no seat to take. Returns the phone's client.
+ * it waits for the crew, Eva lets it in, and it resumes his seat on its pass — the run goes
+ * on; his old pass is refused, the seat taken over, and a name still on the line is no seat to
+ * take. Returns the phone's client.
  */
 async function takeOver({ code, eva, gus }: Trio): Promise<TestClient> {
   gus.close();
@@ -2560,6 +2565,12 @@ async function takeOver({ code, eva, gus }: Trio): Promise<TestClient> {
   const eva2 = await phone.expect('a refusal of a name on the line', isError);
   assert(eva2.message === 'Eva ist noch verbunden.', 'a seat on the line is no seat to take over');
   phone.send({ kind: 'join-room', code, name: 'Gus', pass: phone.pass });
+  await phone.expect('its ask waiting for the crew', isPending);
+  const asked = await eva.expectView('the crew asked to let the phone in', (v) =>
+    v.takeovers?.[0]?.name === 'Gus');
+  eva.send({ kind: 'takeover-answer', seat: asked.takeovers?.[0]?.id ?? '', allow: true });
+  await phone.expect('let in by Eva', isAllowed);
+  phone.send({ kind: 'resume', code, pass: phone.pass });
   await phone.seated();
   assert(phone.view?.you.name === 'Gus', 'the phone sits on Gus\'s seat');
   await eva.expectView('Gus back on the phone, the run on', (v) =>
@@ -2590,7 +2601,8 @@ console.log(
     'at two consoles, the locker, the key, the camera plate, reconnect, the hatch\'s ' +
     'checklist, a drop on the way out that ends nothing, penalties and credits; then ' +
     'the tutorial, its lever springing back on the clock, and on into Blackout; then a crew ' +
-    'of three going on without the one away, his return, a seat taken over by its name, and ' +
+    'of three going on without the one away, his return, a seat taken over by its name once ' +
+    'the crew let the phone in, and ' +
     'seats given up till the run is called off. 🎉',
 );
 process.exit(0);

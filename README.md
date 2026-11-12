@@ -129,10 +129,10 @@ bietet die Karte stattdessen „Einsatz abbrechen“. Die Startseite öffnet bei
 Einsatz auf seiner Karte („Zurück zum Einsatz“, „Einsatz aufgeben“) und sperrt andere Räume;
 aufgeben gibt den Platz frei, unter der Mindestzahl der Crew endet der Lauf für alle („EINSATZ
 ABGEBROCHEN“). Ein anderes Gerät übernimmt einen getrennten Platz mit Raumcode und genau dessen
-Namen (wie bei Jackbox). Die eigene Seite erkennt eine tote Leitung nach 5 Sekunden ohne
-Uhrantwort, 20 Sekunden Stille oder 8 Sekunden ohne offene Verbindung, verbindet sofort neu und
-zeigt bis dahin „VERBINDUNG VERLOREN“ mit Versuch und Wartezeit. Einzelheiten:
-`docs/gameplay.md`, „Verbindung und Wiedereintritt“.
+Namen (wie bei Jackbox), sobald jemand aus der Crew es zulässt. Die eigene Seite erkennt eine
+tote Leitung nach 5 Sekunden ohne Uhrantwort, 20 Sekunden Stille oder 8 Sekunden ohne offene
+Verbindung, verbindet sofort neu und zeigt bis dahin „VERBINDUNG VERLOREN“ mit Versuch und
+Wartezeit. Einzelheiten: `docs/gameplay.md`, „Verbindung und Wiedereintritt“.
 
 **Endspurt:** In der letzten Hälfte der Zeit zieht das Ambiente hörbar an, unter einer Minute
 pulsiert der Timer rot und die Ränder glühen, und die **letzten zehn Sekunden werden mit

@@ -443,8 +443,9 @@
  * (reconnect-overlay.png). His network back, Anna's page has to say „Ben ist zurück"
  * (back-toast.png) and the voice links have to come up again. A new tab of Ben's browser has to
  * open on the run's card (rejoin-card.png) and go back to the run, his first tab told that the
- * seat went to the other; his network gone once more, a phone named Ben takes the seat over by
- * the room's code and his name, and his browser, back, has to be refused (takeover.png). Any
+ * seat went to the other; his network gone once more, a phone named Ben asks for the seat by
+ * the room's code and his name, Anna's pause card asks her (takeover-ask.png) and she lets it
+ * in; it has to sit down, and his browser, back, has to be refused (takeover.png). Any
  * step that fails, fails the run; the log says how long the drill took.
  *
  * Figures: the crew stands as client world/figure.ts poses it, and four shots
@@ -10386,8 +10387,9 @@ async function captureDroneClose(player) {
 // his page is back on its pass at once and Anna's says so (back-toast.png); the voice links
 // come up again. Ben in a new tab of his browser finds the run's card on the join screen and
 // goes back (rejoin-card.png), his first tab told the seat went to the other. Ben's network
-// goes once more, a phone named Ben takes his seat over by the room's code and his name, and
-// his browser, back, is refused (takeover.png). Any step that fails, fails the run.
+// goes once more, a phone named Ben asks for his seat by the room's code and his name, Anna's
+// pause card asks her (takeover-ask.png), she lets it in, and his browser, back, is refused
+// (takeover.png). Any step that fails, fails the run.
 
 /** How long the drill waits for what one step brings, ms. */
 const DRILL_STEP_MS = 40_000;
@@ -10593,8 +10595,22 @@ async function benRejoins({ ben }) {
 }
 
 /**
- * Ben's network goes once more; a phone named Ben takes his seat over by the room's code and
- * his name; his browser, back, is refused.
+ * A phone named Ben asks for his seat by the room's code and his name: Anna's pause card has
+ * to ask her, whose seat and with the time left (takeover-ask.png), and she lets it in.
+ */
+async function annaLetsIn(anna, phone, code) {
+  await joinByCode(phone, code);
+  const ask = anna.page.locator('.takeover-ask', { hasText: 'Ben meldet sich' });
+  await ask.waitFor({ state: 'visible', timeout: DRILL_STEP_MS });
+  const words = await textOf(ask.locator('p'));
+  await capture(anna.page, 'takeover-ask.png');
+  console.log(`takeover-ask.png   Anna's card: „${words}"`);
+  await ask.locator('.takeover-allow').click();
+}
+
+/**
+ * Ben's network goes once more; a phone named Ben asks for his seat, Anna lets it in
+ * (`annaLetsIn`), it sits down; his browser, back, is refused.
  */
 async function benTakenOver({ code, anna }, tab) {
   await tab.context.setOffline(true);
@@ -10603,7 +10619,7 @@ async function benTakenOver({ code, anna }, tab) {
   }
   const phone = await drillPlayer('Ben');
   try {
-    await joinByCode(phone, code);
+    await annaLetsIn(anna, phone, code);
     await phone.page.locator('.stage').waitFor({ timeout: 10_000 });
     const on = await until(() => anna.seen.view?.pausedFor === null, 5000);
     await tab.context.setOffline(false);
@@ -10618,7 +10634,7 @@ async function benTakenOver({ code, anna }, tab) {
       : null;
     await capture(tab.page, 'takeover.png');
     console.log(
-      `takeover.png       a phone named Ben sits down on his seat` +
+      `takeover.png       a phone named Ben, let in, sits down on his seat` +
         (on ? ', the run on' : ' — !! the run still waits') +
         `; his browser back: „${words ?? 'nothing said'}"`,
     );

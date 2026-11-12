@@ -70,7 +70,7 @@ import { useHudRow } from './hudFold.js';
 import { RowCrew, RowTools } from './HudRow.js';
 import { Icon } from './Icon.js';
 import { LineLostCard, lineLost, ON_THE_LINE, type GameLine } from './Line.js';
-import { BackToast, PauseCard } from './Pause.js';
+import { BackToast, PauseCard, TakeoverCard } from './Pause.js';
 import { MissionHud } from './MissionHud.js';
 import { InfoPanel } from './InfoPanel.js';
 import { Manual } from './Manual.js';
@@ -1035,6 +1035,9 @@ function RunOverlays({
       {!coldOpen.intro && <Briefing view={view} />}
       {lost && <LineLostCard line={line} />}
       {!lost && view.pausedFor !== null && <PauseCard view={view} send={send} />}
+      {!lost && view.pausedFor === null && view.takeovers !== undefined && (
+        <TakeoverCard asks={view.takeovers} send={send} />
+      )}
       <BackToast players={view.players} />
       {sabotage !== null && relay !== undefined && (
         <RelayAlert

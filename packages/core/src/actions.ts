@@ -66,6 +66,13 @@ export type Action =
    * everyone (`lost:abandoned`)
    */
   | { type: 'call-off'; playerId: string; at: number }
+  /**
+   * a new device asks for the seat of `playerId`, away in a run, by its name: the crew on the
+   * line is asked to let it in until TAKEOVER_WAIT_MS from `at`
+   */
+  | { type: 'takeover-claimed'; playerId: string; at: number }
+  /** the ask for the seat of `playerId` is over: let in, refused, or withdrawn */
+  | { type: 'takeover-settled'; playerId: string }
   | { type: 'select-color'; playerId: string; color: string }
   | { type: 'set-ready'; playerId: string; ready: boolean }
   | { type: 'switch-mission'; playerId: string; mission: Mission; difficulty: Difficulty }
@@ -179,6 +186,10 @@ export function applyAction(state: GameState, action: Action): GameState {
       return continueWithout(state, action);
     case 'call-off':
       return callOff(state, action);
+    case 'takeover-claimed':
+      return takeoverClaimed(state, action);
+    case 'takeover-settled':
+      return takeoverSettled(state, action);
     case 'select-color':
       return selectColor(state, action);
     case 'set-ready':
@@ -605,6 +616,44 @@ function continueWithout(
   }
   const away = { ...state.away, [action.absentId]: { ...absent, waived: true } };
   return holdForAway(relayForCrew({ ...state, away }, action.at), action.at);
+}
+
+/** How long a new device's ask to take a seat over waits for the crew to let it in, ms. */
+export const TAKEOVER_WAIT_MS = 30_000;
+
+/**
+ * A new device asks for the seat of `playerId` by its name (Jackbox): the seat's line has to be
+ * down, somebody of the crew on the line to answer, and no other ask waiting for it. The crew
+ * on the line is asked until TAKEOVER_WAIT_MS from `at` (`takeovers` in its views); the room
+ * lets the device in, or refuses it, and settles the ask (`takeover-settled`).
+ */
+function takeoverClaimed(state: GameState, action: { playerId: string; at: number }): GameState {
+  if (state.phase !== 'playing') {
+    fail(NO_RUN);
+  }
+  const seat = findPlayer(state, action.playerId);
+  const away = state.away[seat.id];
+  if (seat.connected || away === undefined) {
+    fail(`${seat.name} ist noch verbunden.`);
+  }
+  if (onTheLine(state) === 0) {
+    fail('Gerade ist niemand verbunden, der die Übernahme bestätigen könnte.');
+  }
+  if (away.claimUntil !== undefined) {
+    fail(`Für ${seat.name} wartet schon eine Übernahme auf Antwort.`);
+  }
+  const claimed = { ...away, claimUntil: action.at + TAKEOVER_WAIT_MS };
+  return { ...state, away: { ...state.away, [seat.id]: claimed } };
+}
+
+/** The ask for the seat of `playerId` is over, however it went; nothing where none waits. */
+function takeoverSettled(state: GameState, action: { playerId: string }): GameState {
+  const away = state.away[action.playerId];
+  if (away?.claimUntil === undefined) {
+    return state;
+  }
+  const settled = { since: away.since, waivableAt: away.waivableAt, waived: away.waived };
+  return { ...state, away: { ...state.away, [action.playerId]: settled } };
 }
 
 /**

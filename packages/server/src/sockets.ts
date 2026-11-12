@@ -86,6 +86,7 @@ export function serveSockets(server: SocketServer, lab: Lab): Served {
     });
 
     socket.on('close', () => {
+      asks.get(socket)?.();
       session?.detach();
     });
   });
@@ -112,6 +113,7 @@ const LOGGED_REFUSALS: ReadonlySet<ClientMessage['kind']> = new Set([
   'abandon',
   'continue-without',
   'call-off',
+  'takeover-answer',
 ]);
 
 /** Logs the refusal of `msg` with its `reason`, where the log names it (`LOGGED_REFUSALS`). */
@@ -128,6 +130,9 @@ function logRefusal(session: Session | null, msg: ClientMessage | null, reason: 
 function send(socket: PlayerSocket, msg: ServerMessage): void {
   socket.send(JSON.stringify(msg));
 }
+
+/** The ask for a seat each socket waits on (`Room.claim`), by how to withdraw it. */
+const asks = new WeakMap<PlayerSocket, () => void>();
 
 /** Each socket's one way to hear its room: the same for every seat it sits down on. */
 const listeners = new WeakMap<PlayerSocket, (msg: ServerMessage) => void>();
@@ -244,17 +249,24 @@ function watch(lab: Lab, socket: PlayerSocket, session: Session | null, code: st
 /**
  * A pass sits down in a room it opens or joins: on a seat of its own, or — where it holds one
  * there already, a second tab say — on that one again. A run on elsewhere binds it, which
- * refuses it, and a seat it holds in another lobby or after a run there it gives up.
+ * refuses it, and a seat it holds in another lobby or after a run there it gives up. A join by
+ * the name of a seat in the run on asks the crew to let this device in (`Room.claim`): the
+ * socket waits, its session as it was.
  */
 function sitDown(
   lab: Lab,
   socket: PlayerSocket,
   session: Session | null,
   msg: Extract<ClientMessage, { kind: 'create-room' | 'join-room' }>,
-): Session {
+): Session | null {
   if (msg.kind === 'join-room') {
     const room = lab.manager.get(msg.code);
     lab.manager.makeWay(msg.pass, room);
+    if (room.seatOf(msg.pass) === null && room.phase === 'playing' && room.hasSeat(msg.name)) {
+      asks.get(socket)?.();
+      asks.set(socket, room.claim(msg.name, msg.pass, listenerOf(socket)));
+      return session;
+    }
     return seated(socket, session, room, seatFor(room, msg));
   }
   lab.manager.makeWay(msg.pass, null);
@@ -265,17 +277,13 @@ function sitDown(
 }
 
 /**
- * The seat a join sits down on, by player id: the one its pass holds already, a seat its name
- * takes over in a run on (`Room.takeOver`), else a new one — which the reducer refuses in a run.
+ * The seat a join sits down on, by player id: the one its pass holds already, else a new one —
+ * which the reducer refuses in a run.
  */
 function seatFor(room: Room, msg: Extract<ClientMessage, { kind: 'join-room' }>): string {
-  if (room.seatOf(msg.pass) !== null) {
-    return room.resume(msg.pass);
-  }
-  if (room.phase === 'playing') {
-    return room.takeOver(msg.name, msg.pass);
-  }
-  return room.join(msg.name, msg.pass).playerId;
+  return room.seatOf(msg.pass) !== null
+    ? room.resume(msg.pass)
+    : room.join(msg.name, msg.pass).playerId;
 }
 
 /**
@@ -373,6 +381,9 @@ function inRoom(
     }
     case 'set-ready':
       s.room.setReady(s.playerId, msg.ready, nextMission(lab, s.room, msg.missionId));
+      return s;
+    case 'takeover-answer':
+      s.room.answerTakeover(s.playerId, msg.seat, msg.allow);
       return s;
   }
 }

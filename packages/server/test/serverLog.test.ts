@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FIRST_WAIT_MS } from '@escapelab/core';
+import { FIRST_WAIT_MS, TAKEOVER_WAIT_MS } from '@escapelab/core';
 import { HEARTBEAT_MS, SILENT_MS, startHeartbeat } from '../src/heartbeat.js';
 import { MissionCatalog } from '../src/missions.js';
 import { RoomManager } from '../src/roomManager.js';
@@ -140,22 +140,30 @@ describe('the server’s log of seats, a line an event with its room and name', 
     stop();
   });
 
-  it('says a seat taken over by its name, and how long its line was away', () => {
+  it('says a seat asked for by another device, and who let it in or how it was kept', () => {
     const { line, manager, stop, lines } = server();
-    const { code, ben } = crew(line, 'systemcheck');
+    const { code, anna, ben } = crew(line, 'systemcheck');
+    const seat = idOf(anna, 'Ben');
     ben.close();
     vi.advanceTimersByTime(5000);
     const phone = line.connect();
-    phone.say({ kind: 'join-room', code, name: 'Ben', pass: passFor('Bens Telefon') });
+    const pass = passFor('Bens Telefon');
+    phone.say({ kind: 'join-room', code, name: 'Ben', pass });
+    vi.advanceTimersByTime(TAKEOVER_WAIT_MS);
+    phone.say({ kind: 'join-room', code, name: 'Ben', pass });
+    anna.say({ kind: 'takeover-answer', seat, allow: true });
+    phone.say({ kind: 'resume', code, pass });
     expect(phone.view.you.name).toBe('Ben');
-    expect(lines().at(-1)).toBe(
-      `[escapelab] room ${code}: Ben's seat taken over by another device, ` +
-        '5.0 s after its line closed',
-    );
+    expect(lines().slice(-5)).toEqual([
+      `[escapelab] room ${code}: Ben's seat asked for by another device`,
+      `[escapelab] room ${code}: Ben's seat kept from another device, unanswered for 30 s`,
+      `[escapelab] room ${code}: Ben's seat asked for by another device`,
+      `[escapelab] room ${code}: Ben's seat taken over by another device, let in by Anna`,
+      `[escapelab] room ${code}: Ben resumed, 35.0 s after its line closed`,
+    ]);
     manager.get(code).dispose();
     stop();
   });
-
 });
 
 describe('the server’s log of refusals and runs', () => {
