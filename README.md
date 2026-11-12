@@ -238,7 +238,9 @@ festhält, an den Drohnen vorbei und durch die Notfälle; weicht eine Station vo
 der Lauf mit dem Seed fehl. An den Drohnen vorbei läuft er von Versteck zu Versteck — Feldern,
 auf die keine Drohne je blickt —, jede Strecke erst, wenn kein Kegel sie trifft: Die Flüge sagt
 `tools/patrol.mjs` aus dem Positionsstrom voraus, wie der Server sie fliegt; jede Entdeckung
-steht im Log.
+steht im Log. Mit `SHOTS_SERVER=packages/server/src/index.ts` startet der Rundgang den Server
+selbst, wie die CI, und probt mitten in einem Einsatz den Neustart: SIGTERM, die Karte
+„WARTUNG · Der Server startet neu" auf jeder Seite, und nach dem Neustart alle zurück im Einsatz.
 
 **Ton und Funkstimme:** Jeder Raum klingt nach seiner Art, die Schritte des Partners kommen von
 dort, wo er steht, und die Musik zieht mit dem Druck an — alles zur Laufzeit erzeugt
@@ -321,25 +323,44 @@ Dateiangabe liest `runs` die Datei aus `RUNS_LOG` bzw. die Standarddatei.
 
 Das öffentliche Spiel läuft als ein Web Service auf Render (Free-Plan): Build `corepack enable
 && pnpm install --frozen-lockfile && pnpm run build`, Start `pnpm run start`, Umgebung
-`NODE_VERSION=22`, Health-Check-Pfad `/health`. Drei Eigenheiten von Render bestimmen den
+`NODE_VERSION=22`, Health-Check-Pfad `/health`. Vier Eigenheiten von Render bestimmen den
 Betrieb:
 
 - **Jeder Deploy ersetzt die Instanz.** Offene WebSocket-Verbindungen brechen ab, und der Server
-  hält Räume nur im Speicher: ein Deploy während einer Partie wirft die ganze Crew hinaus.
-  Auto-Deploy bleibt an, also ist jeder Push auf `main` ein Deploy. Gepusht wird deshalb nur,
-  wenn niemand spielt; wer pusht, prüft vorher `/health` (`rooms.running` zählt die laufenden
-  Partien, `rooms.players` die verbundenen Spielenden) und entscheidet den Zeitpunkt selbst.
+  hält Räume nur im Speicher — aber jede Crew trägt den Stand ihres Raums mit: Nach jeder
+  Änderung, höchstens alle 2 s, bekommt jeder Platz einen mit `ROOM_SECRET` versiegelten
+  Schnappschuss (AES-256-GCM), und der Browser hält den neuesten in `localStorage`
+  (`escapelab-snapshot:<Code>`). Für eine laufende Partie heißt ein Deploy deshalb eine
+  Wartungspause von Sekunden: Die Uhr steht, die Karte sagt „WARTUNG · Der Server startet neu",
+  die Seiten verbinden sich wie nach einem Abbruch neu, der neue Server stellt den Raum aus dem
+  mitgebrachten Schnappschuss wieder her, und sobald die Crew zurück ist, läuft die Uhr dort
+  weiter, wo sie stand. Auto-Deploy bleibt an, also ist jeder Push auf `main` ein Deploy; wer
+  pusht, sieht in `/health` (`rooms.running`, `rooms.players`), ob gerade gespielt wird.
 - **Der Free-Plan schläft und startet neu.** Nach 15 Minuten ohne HTTP-Anfrage oder
   WebSocket-Nachricht fährt die Instanz herunter, und Render darf Free-Instanzen jederzeit neu
-  starten; beides löscht die Räume, bis die Schnappschüsse aus dem Backlog (R-2) gebaut sind.
-- **Vor dem Ersetzen schickt Render SIGTERM** und wartet 30 Sekunden, mit
-  `maxShutdownDelaySeconds` (Render-API) bis 300. Die Logs im Dashboard reichen 7 Tage zurück;
-  die Zeile `[escapelab] server on …` markiert jeden Neustart, der Reiter „Events" jeden Deploy.
+  starten. Ein Neustart geht wie ein Deploy aus; endet die Instanz ohne SIGTERM, hart, verliert
+  die Partie höchstens die letzten 2 s. Ein Schnappschuss gilt 24 Stunden und nie für einen
+  beendeten Einsatz.
+- **Vor dem Ersetzen schickt Render SIGTERM.** Bei einem Deploy schaltet Render die neuen
+  Verbindungen auf die neue Instanz um und schickt der alten 60 s später SIGTERM; dann nimmt der
+  Server keine Verbindung mehr an, friert jede Partie ein (Wartungspause), schickt jedem Platz
+  den letzten Schnappschuss (`restart`), schließt alle Sockets mit 1012 und beendet sich in
+  Sekunden mit 0. Render wartet darauf 30 s; die Frist gehört auf 120 s, damit auch ein
+  langsamer Abschied Luft hat: `maxShutdownDelaySeconds: 120` per Render-API (Update service,
+  erlaubt bis 300). Die Logs im Dashboard reichen 7 Tage zurück; `[escapelab] server on …`
+  markiert jeden Neustart, `restored room …` jeden wiederhergestellten Raum, der Reiter
+  „Events" jeden Deploy.
+- **Die Minute dazwischen.** Wer in den 60 s zwischen Umschalten und SIGTERM neu verbindet (Netz
+  weg, Seite neu geladen), landet schon auf der neuen Instanz und stellt den Raum dort aus seinem
+  älteren Schnappschuss her, während die anderen auf der alten weiterspielen. Den neueren Stand
+  nimmt der neue Server nur in den ersten 10 s nach dem Wiederherstellen an; danach gilt der
+  ältere, und die Crew verliert die Zeit seitdem. Deshalb bleibt es dabei: vor einem Push
+  `/health` ansehen.
 
 | Wo | Name | Wirkung |
 | --- | --- | --- |
 | Render-Umgebung | `RUNS_TOKEN` | Gibt das Laufprotokoll per `GET /runs.jsonl` frei (siehe oben). |
-| Render-Umgebung | `ROOM_SECRET` | Schlüssel für die Schnappschüsse der Räume, sobald R-2 gebaut ist; ohne ihn überlebt kein Raum einen Neustart. |
+| Render-Umgebung | `ROOM_SECRET` | Schlüssel der Schnappschüsse (SHA-256 davon für AES-256-GCM): im Dashboard unter „Environment" als Variable anlegen, 32 oder mehr zufällige Zeichen, etwa `openssl rand -hex 32`, und nie ändern — ein neuer Schlüssel öffnet die alten Schnappschüsse nicht. Ohne ihn macht der Server bei jedem Start einen eigenen Schlüssel, das Start-Log sagt `ROOM_SECRET unset … rooms will not survive a restart`, und kein Raum überlebt einen Neustart; mit weniger als 32 Zeichen startet er nicht. Der Deploy, mit dem er dazukommt, trägt die laufenden Räume noch nicht hinüber. |
 
 ## Architektur in einem Satz
 

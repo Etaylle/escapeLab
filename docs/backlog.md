@@ -280,7 +280,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Offen bei Render: Abschaltfrist auf 120 s (`maxShutdownDelaySeconds`), sobald R-2 die Frist
   für die Schnappschüsse braucht.
 
-### R-2 Spielstand überlebt den Neustart — Status: bereit (nach R-3) · Größe: L
+### R-2 Spielstand überlebt den Neustart — Status: im PR (R-snapshot) · Größe: L
 - SIGTERM: Räume einfrieren (Wartungspause), jedem Client einen mit `ROOM_SECRET` (AES-GCM)
   verschlüsselten Schnappschuss schicken, geordnet schließen; dazu alle 5 s ein Schnappschuss,
   wenn sich etwas geändert hat. `resume` trägt den Schnappschuss mit; kennt der neue Server den
@@ -288,6 +288,17 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   den ersten 10 s den neuesten Stand. Raumcode bleibt, Einladungslinks gelten weiter.
 - Beweis: Smoke tötet den Server mitten im Lauf (SIGTERM), startet ihn neu, die Partie geht ohne
   Zeitverlust weiter; Harness `restart-recovered.png`; Fehlen von `ROOM_SECRET` steht im Log.
+- Umgesetzt: Schnappschuss nach jeder Änderung, höchstens alle 2 s (Blackout versiegelt 23 kB,
+  0,05 ms je Schnappschuss); SIGTERM friert ein (`wartung`), schickt `restart`, schließt mit 1012,
+  Exit 0 in 0,1 s; Wiederherstellung beim `resume`, 10-s-Fenster bis zur ersten Tat der Crew;
+  Startseite zeigt die Karte aus dem gespeicherten Schnappschuss; Zuschauer fragen 30 s nach;
+  Drohnen stehen in jeder Pause still, statt neu anzufangen. Smoke: SIGTERM (Frist um genau die
+  Ausfallzeit verschoben) und SIGKILL (höchstens 2 s verloren). Harness `restart-maintenance.png`,
+  `restart-recovered.png`, wo er den Server selbst startet (`SHOTS_SERVER`, CI jetzt auch).
+- Offen bei Render: `ROOM_SECRET` setzen, `maxShutdownDelaySeconds` auf 120. Bei einem Deploy
+  hält die alte Instanz ihre Verbindungen noch 60 s; wer in dieser Minute neu verbindet,
+  stellt den Raum auf der neuen aus einem älteren Stand her, und nach 10 s nimmt sie den
+  neueren nicht mehr an.
 
 ### R-3 Der Einsatz bindet die Crew — Status: erledigt (R-reconnect, Merge 2026-11-12; drei Review-Runden, Harness Blackout 147 Captures mit Abbruch-Übung) · Größe: L
 - Dienstausweis je Browser (localStorage) statt Token im Tab; Startseite zeigt bei laufendem
