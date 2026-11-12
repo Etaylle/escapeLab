@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   parseMission,
   SNAPSHOT_EVERY_MS,
+  SNAPSHOT_LIVE_MS,
   SNAPSHOT_MAX,
   type RoomSnapshot,
   type ServerMessage,
@@ -14,6 +15,7 @@ import { open, roomKey, seal } from '../src/seal.js';
 import { serveSockets } from '../src/sockets.js';
 import { FakeServer, joinedOf } from './line.js';
 import { passFor } from './passes.js';
+import { walkTo } from './walk.js';
 
 const T0 = 1_700_000_000_000;
 const KEY = roomKey({ ROOM_SECRET: 'f00d'.repeat(16) }).key;
@@ -152,6 +154,82 @@ describe('the crew’s snapshots of its room', () => {
     const { room, anna } = crewRoom(null);
     vi.advanceTimersByTime(SNAPSHOT_EVERY_MS * 3);
     expect(snapshotsOf(anna.heard)).toEqual([]);
+    room.dispose();
+  });
+});
+
+/** The lab's run on for Anna and Ben, its first snapshot sent at T0: what each heard. */
+function runOn() {
+  const crew = crewRoom();
+  crew.room.setReady(crew.ben.playerId, true);
+  crew.room.act(crew.anna.playerId, { kind: 'start-mission' });
+  vi.advanceTimersByTime(0);
+  return crew;
+}
+
+/** Where the snapshot `heard` was sent last has `seat` stand, by its tile and the middle of it. */
+const standsIn = (heard: ServerMessage[], seat: Seat): { x: number; y: number } | undefined =>
+  open(snapshotsOf(heard).at(-1)?.blob ?? '', 'FLUR', KEY).keeping.positions[seat.playerId];
+
+describe('the crew’s snapshots as the run goes on', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('go out for no step, but every 10 s while its clock runs, where everybody stands', () => {
+    const { room, anna, ben } = runOn();
+    expect(snapshotsOf(anna.heard)).toHaveLength(1);
+    vi.advanceTimersByTime(SNAPSHOT_EVERY_MS);
+    walkTo(room, { playerId: ben.playerId, messages: ben.heard }, 4.5, 1.5);
+    vi.advanceTimersByTime(SNAPSHOT_LIVE_MS - SNAPSHOT_EVERY_MS - 1);
+    expect(snapshotsOf(anna.heard)).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(snapshotsOf(anna.heard)).toHaveLength(2);
+    expect(standsIn(anna.heard, ben)).toMatchObject({ x: 4.5, y: 1.5 });
+    // A minute of the run: six of them, nobody doing a thing.
+    vi.advanceTimersByTime(60_000);
+    expect(snapshotsOf(anna.heard)).toHaveLength(8);
+    room.dispose();
+  });
+
+  it('stand still with the run: none goes out while it waits for somebody', () => {
+    const { room, anna, ben } = runOn();
+    ben.detach();
+    vi.advanceTimersByTime(SNAPSHOT_EVERY_MS);
+    // The drop itself goes out: the run stands still from it.
+    expect(snapshotsOf(anna.heard)).toHaveLength(2);
+    vi.advanceTimersByTime(SNAPSHOT_LIVE_MS * 6);
+    expect(snapshotsOf(anna.heard)).toHaveLength(2);
+    room.dispose();
+  });
+
+  it('go out no more once the server goes down: the last one stays the last', () => {
+    const { room, anna, ben } = runOn();
+    vi.advanceTimersByTime(SNAPSHOT_EVERY_MS);
+    room.goDown(Date.now());
+    expect(anna.heard.at(-1)?.kind).toBe('restart');
+    const after = anna.heard.length;
+    // Ben's line closes, and the run's beat would come round: nothing more goes out.
+    ben.detach();
+    vi.advanceTimersByTime(SNAPSHOT_LIVE_MS * 3);
+    expect(snapshotsOf(anna.heard.slice(after))).toEqual([]);
+    room.dispose();
+  });
+
+  it('go out where a room whose clock stands holds something new, not for a yes taken back', () => {
+    const { room, anna, ben } = crewRoom();
+    vi.advanceTimersByTime(SNAPSHOT_EVERY_MS);
+    room.setReady(ben.playerId, true);
+    room.setReady(ben.playerId, false);
+    vi.advanceTimersByTime(SNAPSHOT_EVERY_MS * 3);
+    expect(snapshotsOf(anna.heard)).toHaveLength(1);
+    room.setReady(ben.playerId, true);
+    vi.advanceTimersByTime(SNAPSHOT_EVERY_MS);
+    expect(snapshotsOf(anna.heard)).toHaveLength(2);
     room.dispose();
   });
 });

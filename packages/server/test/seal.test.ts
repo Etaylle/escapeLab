@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createCipheriv, createHash, randomBytes } from 'node:crypto';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { SealedSnapshot } from '@escapelab/core';
 import {
@@ -63,8 +63,26 @@ describe('a room’s sealed snapshot', () => {
     expect(seal(kept, kept.code, KEY)).not.toBe(blob);
   });
 
-  it('holds Blackout mid-way under 64 kB', () => {
-    expect(blob.length).toBeLessThan(64 * 1024);
+  it('holds Blackout mid-way packed, in under 10 kB: a fraction of its JSON', () => {
+    expect(blob.length).toBeLessThan(10 * 1024);
+    expect(blob.length).toBeLessThan(JSON.stringify(kept).length / 2);
+  });
+
+  it('is refused where what its seal holds does not unpack, or unpacks to over 4 MB', () => {
+    // Sealed as a server would, but its JSON not packed.
+    const nonce = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', KEY, nonce);
+    cipher.setAAD(Buffer.from(kept.code, 'utf8'));
+    const body = Buffer.concat([
+      cipher.update(JSON.stringify(kept), 'utf8'),
+      cipher.final(),
+      cipher.getAuthTag(),
+    ]);
+    const unpacked = `v1.${nonce.toString('base64url')}.${body.toString('base64url')}`;
+    expect(refusalOf(unpacked, kept.code)).toBe('invalid');
+    // A key this build does not know passes through, but not 5 MB of it.
+    const huge = { ...kept, filler: 'x'.repeat(5 * 1024 * 1024) };
+    expect(refusalOf(seal(huge, kept.code, KEY), kept.code)).toBe('invalid');
   });
 
   it('is refused with a byte changed, of its ciphertext, its tag or its nonce', () => {

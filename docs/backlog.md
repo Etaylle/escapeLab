@@ -282,28 +282,31 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 
 ### R-2 Spielstand überlebt den Neustart — Status: im PR (R-snapshot) · Größe: L
 - SIGTERM: Räume einfrieren (Wartungspause), jedem Client einen mit `ROOM_SECRET` (AES-GCM)
-  verschlüsselten Schnappschuss schicken, geordnet schließen; dazu alle 5 s ein Schnappschuss,
-  wenn sich etwas geändert hat. `resume` trägt den Schnappschuss mit; kennt der neue Server den
-  Raum nicht, stellt er ihn daraus her, bleibt in der Pause, bis die Crew zurück ist, nimmt in
-  den ersten 10 s den neuesten Stand. Raumcode bleibt, Einladungslinks gelten weiter.
+  verschlüsselten Schnappschuss schicken, geordnet schließen; dazu 2 s nach jeder Tat und alle 10 s,
+  solange die Uhr läuft, ein Schnappschuss, wenn sich etwas geändert hat. `resume` trägt den
+  Schnappschuss mit; kennt der neue Server den Raum nicht, stellt er ihn daraus her, bleibt in der
+  Pause, bis die Crew zurück ist, nimmt in den ersten 10 s den neuesten Stand. Raumcode bleibt,
+  Einladungslinks gelten weiter.
 - Beweis: Smoke tötet den Server mitten im Lauf (SIGTERM), startet ihn neu, die Partie geht ohne
   Zeitverlust weiter; Harness `restart-recovered.png`; Fehlen von `ROOM_SECRET` steht im Log.
-- Umgesetzt: Schnappschuss nach jeder Änderung, höchstens alle 2 s (Blackout versiegelt 23 kB,
-  0,05 ms je Schnappschuss); SIGTERM friert ein (`wartung`), schickt `restart`, schließt mit 1012,
-  Exit 0 in 0,1 s; Wiederherstellung beim `resume`, 10-s-Fenster bis zur ersten Tat der Crew;
-  Startseite zeigt die Karte aus dem gespeicherten Schnappschuss; Zuschauer fragen 30 s nach;
-  Drohnen stehen in jeder Pause still, statt neu anzufangen. Smoke: SIGTERM (Frist um genau die
-  Ausfallzeit verschoben) und SIGKILL (höchstens 2 s verloren). Harness `restart-maintenance.png`,
-  `restart-recovered.png`, wo er den Server selbst startet (`SHOTS_SERVER`, CI jetzt auch).
-- Die Minute dazwischen (Render hält die alte Instanz 60 s nach dem Umschalten): Jeder
-  Schnappschuss nennt seine Instanz, der beim SIGTERM ist `final`. Ein fremder, nicht letzter
-  wartet auf einer Instanz unter 90 s („EINSATZ WIRD WIEDERHERGESTELLT"), bis der letzte kommt
-  oder die 90 s um sind; ein zu später steht mit beiden Nummern im Log. Smoke: zwei Server
-  nebeneinander, Finn wartet auf dem neuen, bis Eva und Gus nach dem SIGTERM des alten kommen;
-  nach SIGKILL ist der Raum 90 s nach dem Start des nächsten zurück.
-- Schnappschüsse überdauern Deploys: Unbekannte Schlüssel gehen durch, Modulzustände werden nur
-  nach ihrem Typ geprüft, und neue Felder im Spielzustand brauchen einen Vorgabewert — der Test
-  zu `test/fixtures/blackout-snapshot.json` (Schnappschuss des Builds davor) wacht darüber.
+- Umgesetzt: Schnappschuss 2 s nach jeder Tat, alle 10 s, solange die Uhr läuft, nie für bloße Wege,
+  gepackt (Deflate) und nur, wo sich etwas geändert hat — Blackout mitten im Lauf 7,9 kB statt 25,6
+  kB, beim Laufen 44 kB je Platz und Minute statt rund 690 kB, 0,14 ms je Versiegeln; SIGTERM friert
+  ein (`wartung`), schickt `restart`, schließt mit 1012, Exit 0 in 0,1 s; Wiederherstellung beim
+  `resume`, 10-s-Fenster bis zur ersten Tat der Crew; Startseite zeigt die Karte aus dem
+  gespeicherten Schnappschuss; Zuschauer fragen 30 s nach; Drohnen stehen in jeder Pause still,
+  statt neu anzufangen. Smoke: SIGTERM (Frist um genau die Ausfallzeit verschoben) und SIGKILL
+  (höchstens 10 s der Wege verloren). Harness `restart-maintenance.png`, `restart-recovered.png`, wo
+  er den Server selbst startet (`SHOTS_SERVER`, CI jetzt auch).
+- Die Minute dazwischen (Render hält die alte Instanz 60 s nach dem Umschalten): Jeder Schnappschuss
+  nennt seine Instanz, der beim SIGTERM ist `final`. Ein fremder, nicht letzter wartet auf einer
+  Instanz unter 90 s („EINSATZ WIRD WIEDERHERGESTELLT"), bis der letzte kommt oder die 90 s um sind;
+  ein zu später steht mit beiden Nummern im Log. Smoke: zwei Server nebeneinander, Finn wartet auf
+  dem neuen, bis Eva und Gus nach dem SIGTERM des alten kommen; nach SIGKILL ist der Raum 90 s nach
+  dem Start des nächsten zurück.
+- Schnappschüsse überdauern Deploys: Unbekannte Schlüssel gehen durch, Modulzustände werden nur nach
+  ihrem Typ geprüft, und neue Felder im Spielzustand brauchen einen Vorgabewert — der Test zu
+  `test/fixtures/blackout-snapshot.json` (Schnappschuss des Builds davor) wacht darüber.
 - Offen bei Render: `ROOM_SECRET` setzen, `maxShutdownDelaySeconds` auf 120.
 
 ### R-3 Der Einsatz bindet die Crew — Status: erledigt (R-reconnect, Merge 2026-11-12; drei Review-Runden, Harness Blackout 147 Captures mit Abbruch-Übung) · Größe: L

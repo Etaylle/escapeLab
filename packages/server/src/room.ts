@@ -28,6 +28,7 @@ import {
   runSeconds,
   sayPhrase,
   SNAPSHOT_EVERY_MS,
+  SNAPSHOT_LIVE_MS,
   SNAPSHOT_MAX,
   shutDoors,
   sightables,
@@ -190,6 +191,13 @@ const LINE_ACTIONS: ReadonlySet<Action['type']> = new Set([
   'maintenance',
 ]);
 
+/**
+ * What the room dispatches of where the crew stands, as it walks: no snapshot goes out for it on
+ * its own — a run whose clock runs sends one every SNAPSHOT_LIVE_MS, where everybody stands with
+ * it.
+ */
+const PRESENCE_ACTIONS: ReadonlySet<Action['type']> = new Set(['set-presence', 'set-occupancy']);
+
 /** A new device's ask for a seat by its name: the pass it brings, whom to tell, its timer. */
 interface Claim {
   pass: CrewPass;
@@ -323,10 +331,16 @@ export class Room {
   private opened = Date.now();
   /** the dispatches so far: a snapshot carries it, and the later of two has the higher */
   private seq = 0;
-  /** sends the crew a snapshot of the room, SNAPSHOT_EVERY_MS after the last at the soonest */
+  /** sends the crew a snapshot after a dispatch, SNAPSHOT_EVERY_MS after the last at the soonest */
   private snapshotTimer: NodeJS.Timeout | null = null;
+  /** sends the crew a snapshot of a run whose clock runs, SNAPSHOT_LIVE_MS after the last */
+  private liveTimer: NodeJS.Timeout | null = null;
   /** epoch ms the crew was last sent a snapshot */
   private snapshotSentAt = 0;
+  /** what the last snapshot sent held, its moment apart (`changedSinceSent`); null for none */
+  private sentContent: string | null = null;
+  /** the server goes down (`goDown`): its last snapshot of the room sent, no other goes out */
+  private goneDown = false;
   /** whether the log said a snapshot was too big to send: it says so once */
   private tooBigSaid = false;
   /**
@@ -530,12 +544,14 @@ export class Room {
   }
 
   /**
-   * After a dispatch: the crew is sent the room's snapshot (`sendSnapshot`) once the burst it
-   * came in is over, and never sooner than SNAPSHOT_EVERY_MS after the last — what comes
-   * meanwhile goes with that one. Nothing without a sealer.
+   * After a dispatch of `type`: the crew is sent the room's snapshot (`sendSnapshot`) once the
+   * burst it came in is over, and never sooner than SNAPSHOT_EVERY_MS after the last — what comes
+   * meanwhile goes with that one. None for where the crew stands as it walks (PRESENCE_ACTIONS):
+   * a run whose clock runs sends one every SNAPSHOT_LIVE_MS anyway (`armLiveSnapshot`). Nothing
+   * without a sealer.
    */
-  private scheduleSnapshot(): void {
-    if (this.sealer === null || this.snapshotTimer !== null) {
+  private scheduleSnapshot(type: Action['type']): void {
+    if (this.sealer === null || this.snapshotTimer !== null || PRESENCE_ACTIONS.has(type)) {
       return;
     }
     const wait = Math.max(0, this.snapshotSentAt + SNAPSHOT_EVERY_MS - Date.now());
@@ -545,25 +561,70 @@ export class Room {
     }, wait);
   }
 
-  /** The room's snapshot, sealed (`snapshot {blob, seq, at}`), to every seat on the line. */
+  /**
+   * The room's snapshot, sealed (`snapshot {blob, seq, at}`), to every seat on the line, where it
+   * holds something new; the next one of a run whose clock runs armed (`armLiveSnapshot`). None
+   * once the server goes down: its last one went out.
+   */
   private sendSnapshot(): void {
+    if (this.goneDown) {
+      return;
+    }
     const sealed = this.sealedAt(Date.now(), false);
     if (sealed !== null) {
       for (const listener of this.listeners.values()) {
         listener({ kind: 'snapshot', ...sealed });
       }
     }
+    this.armLiveSnapshot();
+  }
+
+  /**
+   * While the run's clock runs, the crew is sent a snapshot SNAPSHOT_LIVE_MS after the last, what
+   * ever happened meanwhile: the clock moves on, and so does where everybody stands, with no
+   * dispatch to say so. Let go of where the clock stands.
+   */
+  private armLiveSnapshot(): void {
+    clearTimeout(this.liveTimer ?? undefined);
+    this.liveTimer = null;
+    if (this.sealer !== null && this.clockRuns) {
+      this.liveTimer = setTimeout(() => {
+        this.liveTimer = null;
+        this.sendSnapshot();
+      }, SNAPSHOT_LIVE_MS);
+    }
+  }
+
+  /** Whether the run's clock runs: a run on, and standing still for nobody. */
+  private get clockRuns(): boolean {
+    return this.state.phase === 'playing' && this.state.paused === null;
+  }
+
+  /**
+   * Whether a snapshot now holds something the last one sent did not — its moment and its count of
+   * dispatches apart — and so goes out: the last one as the server goes down always does, and one
+   * of a run whose clock runs, whose clock moved on; one of a room whose clock stands only where
+   * what it holds changed. Notes what it holds, for the next.
+   */
+  private changedSinceSent(final: boolean): boolean {
+    const content = this.clockRuns ? null : JSON.stringify({ ...this.snapshot(0), seq: 0 });
+    const changed = final || content === null || content !== this.sentContent;
+    this.sentContent = content;
+    return changed;
   }
 
   /**
    * The room's snapshot as of `now`, sealed for its crew — `final` as the server goes down
    * (`Sealer`) — with its seq: none without a sealer, for nobody on the line, of a run that is
-   * over — an ended run is not taken up again — and none over SNAPSHOT_MAX, which the log says
-   * once.
+   * over — an ended run is not taken up again — none where it holds nothing new
+   * (`changedSinceSent`), and none over SNAPSHOT_MAX, which the log says once.
    */
   private sealedAt(now: number, final: boolean): { blob: string; seq: number; at: number } | null {
     const { phase } = this.state;
     if (this.sealer === null || this.listeners.size === 0 || phase === 'won' || phase === 'lost') {
+      return null;
+    }
+    if (!this.changedSinceSent(final)) {
       return null;
     }
     const { seq } = this;
@@ -588,12 +649,9 @@ export class Room {
    * after it. Returns the snapshot's seq and the seats told; null where none was.
    */
   goDown(now: number): { seq: number; seats: number } | null {
+    this.goneDown = true;
     if (this.state.phase === 'playing') {
       this.dispatch({ type: 'maintenance', at: now, waitFrom: now });
-    }
-    if (this.snapshotTimer !== null) {
-      clearTimeout(this.snapshotTimer);
-      this.snapshotTimer = null;
     }
     const sealed = this.sealedAt(now, true);
     if (sealed === null) {
@@ -2098,7 +2156,7 @@ export class Room {
       this.reconcilePresence();
     }
     this.reconcileLobbyAway();
-    this.scheduleSnapshot();
+    this.scheduleSnapshot(type);
   }
 
   /**
@@ -2221,6 +2279,7 @@ export class Room {
     const timers = [
       this.timer,
       this.snapshotTimer,
+      this.liveTimer,
       this.lightsTimer,
       this.puzzleTimer,
       this.nudgeTimer,
@@ -2233,6 +2292,7 @@ export class Room {
     }
     this.timer = null;
     this.snapshotTimer = null;
+    this.liveTimer = null;
     this.lightsTimer = null;
     this.puzzleTimer = null;
     this.nudgeTimer = null;

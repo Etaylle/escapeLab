@@ -66,6 +66,7 @@ import {
   parseMission,
   POWER_OUT,
   SNAPSHOT_EVERY_MS,
+  SNAPSHOT_LIVE_MS,
   SPRINT_FACTOR,
   STEP_MARGIN,
   TOKENS,
@@ -2925,8 +2926,8 @@ async function restartBySigterm(): Promise<{ server: ServerProcess; crew: Trio3 
 }
 
 /**
- * `server` killed outright, with no word to `crew`: the newest snapshot the crew kept is
- * SNAPSHOT_EVERY_MS old at most. Returns it.
+ * `server` killed outright, with no word to `crew`, mid-run: the newest snapshot the crew kept
+ * is SNAPSHOT_LIVE_MS old at most — the run's own beat. Returns it.
  */
 async function goneBySigkill(server: ServerProcess, crew: TestClient[]): Promise<Kept> {
   const killedAt = Date.now();
@@ -2936,7 +2937,7 @@ async function goneBySigkill(server: ServerProcess, crew: TestClient[]): Promise
   const kept = crew.map((client) => client.kept ?? fail(`${client.label}: no snapshot kept`));
   const newest = kept.reduce((a, b) => (b.seq > a.seq ? b : a));
   const lost = killedAt - newest.at;
-  assert(lost <= SNAPSHOT_EVERY_MS, `the newest snapshot the crew kept was ${lost} ms old`);
+  assert(lost <= SNAPSHOT_LIVE_MS, `the newest snapshot the crew kept was ${lost} ms old`);
   return newest;
 }
 
@@ -2954,17 +2955,18 @@ function standsAt(seen: TestClient, client: TestClient, [x, y]: Tile): boolean {
 
 /**
  * The run goes on; then the server is killed outright (`goneBySigkill`): a new one takes the room
- * up again from the newest periodic snapshot the crew kept, which loses at most SNAPSHOT_EVERY_MS
- * of what the crew did — once it is HANDOVER_MS old, the crew waiting meanwhile: a killed server
- * hands no last snapshot over. Gus's walk, a snapshot's time before the kill, is kept — the lever
- * thrown long before with it; Finn's, just before the kill, may be lost in part.
+ * up again from the newest snapshot the crew kept — the run's beat of SNAPSHOT_LIVE_MS keeps
+ * where everybody stands, a deed goes out SNAPSHOT_EVERY_MS after it — once it is HANDOVER_MS
+ * old, the crew waiting meanwhile: a killed server hands no last snapshot over. Gus's walk, a beat
+ * before the kill, is kept — the lever thrown long before with it; Finn's, just before the kill,
+ * may be lost in part.
  */
 async function restartBySigkill(server: ServerProcess, crew: Trio3): Promise<void> {
   const [eva, finn, gus] = crew;
   await sleep(SNAPSHOT_EVERY_MS + 500);
   const gusTo = besides(consoleOf(NOTLICHT), 3, 0, 'east of the lever');
   await walkTo(gus, gusTo);
-  await sleep(SNAPSHOT_EVERY_MS + 500);
+  await sleep(SNAPSHOT_LIVE_MS + 500);
   const finnTo = besides(consoleOf(NOTLICHT), -3, 0, 'west of the lever');
   await walkTo(finn, finnTo);
   await sleep(300);

@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { deflateRawSync, inflateRawSync } from 'node:zlib';
 import { sealedSnapshotSchema, type SealedSnapshot } from '@escapelab/core';
 
 /**
@@ -6,9 +7,9 @@ import { sealedSnapshotSchema, type SealedSnapshot } from '@escapelab/core';
  * newest of its room and hands it back once the server knows the room no more — after a deploy,
  * a restart — and only a server with the key reads it, or could have made it. A blob is
  * `v1.<nonce>.<ciphertext>`, both parts base64url: the snapshot as JSON — with the instance that
- * sealed it, and whether it was that instance's last (`SealedSnapshot`) — sealed with
- * AES-256-GCM under the SHA-256 of ROOM_SECRET, the room's code its additional data, the tag
- * after the ciphertext. A blob sealed for one room opens for no other.
+ * sealed it, and whether it was that instance's last (`SealedSnapshot`) — deflated (raw, no
+ * header) and sealed with AES-256-GCM under the SHA-256 of ROOM_SECRET, the room's code its
+ * additional data, the tag after the ciphertext. A blob sealed for one room opens for no other.
  */
 
 /** The seal's format, as the blob's first part says it. */
@@ -17,6 +18,11 @@ const CIPHER = 'aes-256-gcm';
 /** A fresh nonce for every blob: GCM's 96 bits. */
 const NONCE_BYTES = 12;
 const TAG_BYTES = 16;
+/**
+ * The most a snapshot may unpack to, bytes: many times a mission's, and a bound on what opening
+ * a blob costs — its seal verified first, it is a server's own.
+ */
+const UNPACKED_MAX = 4 * 1024 * 1024;
 /** The fewest characters ROOM_SECRET may have: random ones, as `openssl rand -hex 32` gives 64. */
 export const ROOM_SECRET_MIN = 32;
 
@@ -82,7 +88,7 @@ export function seal(snapshot: SealedSnapshot, code: string, key: Buffer): strin
   const cipher = createCipheriv(CIPHER, key, nonce);
   cipher.setAAD(aadOf(code));
   const body = Buffer.concat([
-    cipher.update(JSON.stringify(snapshot), 'utf8'),
+    cipher.update(deflateRawSync(JSON.stringify(snapshot))),
     cipher.final(),
     cipher.getAuthTag(),
   ]);
@@ -91,11 +97,12 @@ export function seal(snapshot: SealedSnapshot, code: string, key: Buffer): strin
 
 /**
  * The snapshot `blob` holds, sealed for the room `code` under `key`: its seal verified, its
- * content checked for this build's shape. Throws a SealError saying why it is refused.
+ * content unpacked and checked for this build's shape. Throws a SealError saying why it is
+ * refused.
  */
 export function open(blob: string, code: string, key: Buffer): SealedSnapshot {
   const { nonce, body } = partsOf(blob);
-  const text = unsealed(nonce, body, code, key);
+  const text = unpacked(unsealed(nonce, body, code, key));
   let data: unknown;
   try {
     data = JSON.parse(text);
@@ -137,21 +144,29 @@ function bytesOf(part: string, least: number): Buffer {
   return bytes;
 }
 
-/** The text sealed in `body`; a SealError where its tag does not verify for `code` and `key`. */
-function unsealed(nonce: Buffer, body: Buffer, code: string, key: Buffer): string {
+/** The bytes sealed in `body`; a SealError where its tag does not verify for `code` and `key`. */
+function unsealed(nonce: Buffer, body: Buffer, code: string, key: Buffer): Buffer {
   const decipher = createDecipheriv(CIPHER, key, nonce);
   decipher.setAAD(aadOf(code));
   decipher.setAuthTag(body.subarray(body.length - TAG_BYTES));
   try {
-    const plain = Buffer.concat([
+    return Buffer.concat([
       decipher.update(body.subarray(0, body.length - TAG_BYTES)),
       decipher.final(),
     ]);
-    return plain.toString('utf8');
   } catch {
     throw new SealError(
       'unverified',
       'its seal does not verify: a byte changed, sealed with another key, or for another room',
     );
+  }
+}
+
+/** The text `packed` unpacks to; a SealError where it does not, or to over UNPACKED_MAX bytes. */
+function unpacked(packed: Buffer): string {
+  try {
+    return inflateRawSync(packed, { maxOutputLength: UNPACKED_MAX }).toString('utf8');
+  } catch (err) {
+    throw new SealError('invalid', `its content does not unpack: ${String(err)}`);
   }
 }

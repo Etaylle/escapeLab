@@ -49,10 +49,18 @@ export const SEED_MAX = 0xffff_ffff;
 export const SNAPSHOT_MAX = 256 * 1024;
 
 /**
- * The most often a room sends its crew its snapshot, ms (`snapshot`): a server killed outright,
- * with no word to the crew, loses no more of a run than this.
+ * The most often a room sends its crew its snapshot after a dispatch, ms (`snapshot`): a server
+ * killed outright, with no word to the crew, loses no more of what the crew did than this. Where
+ * the crew stands as it walks sends none of its own (SNAPSHOT_LIVE_MS).
  */
 export const SNAPSHOT_EVERY_MS = 2000;
+
+/**
+ * The longest a run whose clock runs goes without its crew sent a snapshot, ms: its clock moves
+ * on, and so does where everybody stands, with no dispatch to send one — a server killed
+ * outright rolls neither back by more than this.
+ */
+export const SNAPSHOT_LIVE_MS = 10_000;
 
 /** The oldest snapshot a server takes a room up again from, ms: a day. */
 export const SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
