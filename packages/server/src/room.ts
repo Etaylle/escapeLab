@@ -446,7 +446,9 @@ export class Room {
     });
     this.seats.restore(snapshot.seats, snapshot.lostPasses);
     refill(this.positions, keeping.positions);
-    refill(this.lostAt, keeping.lostAt);
+    // Every seat off the line from now, as the run waits for it from now (core `maintenance`): a
+    // lobby seat's wait counts neither the downtime nor how long the lobby stood quiet before.
+    refill(this.lostAt, Object.fromEntries(this.state.players.map((p) => [p.id, now])));
     refill(this.askAgainAt, keeping.askAgainAt);
     refill(this.lastPingAt, keeping.lastPingAt);
     refill(this.lastChatAt, keeping.lastChatAt);
