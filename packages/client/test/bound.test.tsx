@@ -106,10 +106,10 @@ describe('the join screen of a pass bound to a run', () => {
     stubWindow();
     const html = renderToStaticMarkup(joinScreen(RUN));
     expect(boundLine(RUN)).toBe(
-      'Gebunden an „Blackout im Labor" in Raum QX7R — neue Runden erst danach.',
+      'Gebunden an „Blackout im Labor“ in Raum QX7R — neue Runden erst danach.',
     );
     expect(html.split('class="bound-line"')).toHaveLength(2);
-    expect(html).toContain('Gebunden an „Blackout im Labor&quot; in Raum QX7R');
+    expect(html).toContain('Gebunden an „Blackout im Labor“ in Raum QX7R');
     const elements = elementsOf(() => joinScreen(RUN));
     expect(pressable(elements, ROOM_BUTTONS)).toEqual({
       'Runde eröffnen': false,

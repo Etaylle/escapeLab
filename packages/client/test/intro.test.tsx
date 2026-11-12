@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClientMessage, IntroView, PlayerView } from '@escapelab/core';
 import { GameScreen } from '../src/screens/Game.js';
+import { ON_THE_LINE } from '../src/screens/Line.js';
 import { darkSince, FLICKER_MS } from '../src/world/coldOpen.js';
 import { IntroOverlay, overlayUp, PLANT, skipLine } from '../src/world/intro/IntroOverlay.js';
 import {
@@ -607,6 +608,7 @@ describe('the opening over the world', () => {
         listen={() => () => undefined}
         refusal={null}
         finale={null}
+        line={ON_THE_LINE}
       />,
     );
 

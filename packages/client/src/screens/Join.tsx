@@ -243,6 +243,11 @@ interface SectionProps {
   blocked: boolean;
 }
 
+/** Whether a section may sit the pass down: on the line, a name typed, no run binding it. */
+function sitsDown({ connected, name, blocked }: SectionProps): boolean {
+  return connected && name !== '' && !blocked;
+}
+
 /**
  * „Neue Runde eröffnen": every current mission as a card — the tutorial's pointing a first
  * crew at it — the prototypes in a collapsed row after them, the button that opens a room for
@@ -251,17 +256,15 @@ interface SectionProps {
  * and the editor.
  */
 function NewRound({
-  send,
-  connected,
-  name,
-  blocked,
   missions,
   stats,
   openHandbook,
   openHistory,
   openEditor,
+  ...section
 }: SectionProps &
   Pick<Props, 'missions' | 'stats' | 'openHandbook' | 'openHistory' | 'openEditor'>) {
+  const { send, name } = section;
   const [missionId, setMissionId] = useState<string | null>(null);
   const won = useWon();
   const current = missions.filter((m) => !isPrototype(m));
@@ -303,11 +306,7 @@ function NewRound({
         <p className="muted">Lade Missionen …</p>
       )}
       <div className="join-create-actions">
-        <button
-          className="primary"
-          disabled={!connected || name === '' || blocked}
-          onClick={open}
-        >
+        <button className="primary" disabled={!sitsDown(section)} onClick={open}>
           Runde eröffnen
         </button>
         {selected !== null && (
@@ -361,13 +360,8 @@ function TakeoverWait({ takeover }: { takeover: Takeover }) {
  * ?room=, so the field is already filled and all that is left to do is type a name. A join by
  * the name of a seat in a run on waits for the crew to let this device in (`takeover`).
  */
-function WithCode({
-  send,
-  connected,
-  name,
-  blocked,
-  takeover,
-}: SectionProps & { takeover: Takeover | null }) {
+function WithCode({ takeover, ...section }: SectionProps & { takeover: Takeover | null }) {
+  const { send, connected, name } = section;
   const [code, setCode] = useState(
     () => new URLSearchParams(window.location.search).get('room')?.toUpperCase() ?? '',
   );
@@ -384,7 +378,7 @@ function WithCode({
           aria-label="Raumcode"
         />
         <button
-          disabled={!connected || name === '' || code.trim().length === 0 || blocked}
+          disabled={!sitsDown(section) || code.trim().length === 0}
           onClick={() => send(joinMessage(code.trim(), name))}
         >
           Beitreten
@@ -412,7 +406,7 @@ export function doorAsks(pass: CrewPass): ClientMessage[] {
 
 /** The one line that says a run on holds the pass: no other room until it is over. */
 export function boundLine(seat: Pick<Seat, 'missionTitle' | 'code'>): string {
-  return `Gebunden an „${seat.missionTitle}" in Raum ${seat.code} — neue Runden erst danach.`;
+  return `Gebunden an „${seat.missionTitle}“ in Raum ${seat.code} — neue Runden erst danach.`;
 }
 
 /** What the card says over where the pass sits: a run on, or standing paused, or a lobby. */

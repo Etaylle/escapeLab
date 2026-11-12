@@ -1,8 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { PlayerView } from '@escapelab/core';
-import { GameScreen, worldLocked } from '../src/screens/Game.js';
-import { LineLostCard, lineLost, retryLine, type GameLine } from '../src/screens/Line.js';
+import { GameScreen, worldHeld, worldLocked } from '../src/screens/Game.js';
+import {
+  LineLostCard,
+  lineLost,
+  ON_THE_LINE,
+  retryLine,
+  type GameLine,
+} from '../src/screens/Line.js';
 import { mapWith } from './fixtures.js';
 import { buttonsOf, elementsOf, press } from './probe.js';
 
@@ -123,7 +129,11 @@ describe('the own line down in a run', () => {
 
   it('takes the world’s keys while it stands: whatever is pressed goes nowhere', () => {
     const open = { reading: null, note: null };
-    expect(worldLocked(running(), open, null, true, true)).toBe(true);
-    expect(worldLocked(running(), open, null, true, false)).toBe(false);
+    const held = worldHeld(null, lineOf(), running());
+    expect(held).toBe(true);
+    expect(worldLocked(running(), open, null, held)).toBe(true);
+    const up = worldHeld(null, ON_THE_LINE, running());
+    expect(up).toBe(false);
+    expect(worldLocked(running(), open, null, up)).toBe(false);
   });
 });

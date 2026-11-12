@@ -225,12 +225,15 @@ class Keeper {
       }
       return;
     }
-    // Not ready, yet connecting or open: on its way.
-    const onItsWay =
-      socket?.readyState === WebSocket.CONNECTING || socket?.readyState === WebSocket.OPEN;
-    if (!onItsWay || !this.waiting.keep(msg)) {
+    if (!this.onItsWay || !this.waiting.keep(msg)) {
       this.waiting.drop(`"${msg.kind}"`);
     }
+  }
+
+  /** Whether a socket is on its way: not ready, yet connecting or open. */
+  private get onItsWay(): boolean {
+    const state = this.current?.readyState;
+    return state === WebSocket.CONNECTING || state === WebSocket.OPEN;
   }
 
   sendFirst(msg: ClientMessage): void {

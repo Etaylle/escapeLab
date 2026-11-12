@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, TAKEOVER_WAIT_MS, type Mission } from '@escapelab/core';
+import { Room } from '../src/room.js';
 import { RoomManager } from '../src/roomManager.js';
+import { SeatBook } from '../src/seats.js';
 import { serveSockets } from '../src/sockets.js';
 import { FakeServer, joinedOf, type FakeSocket } from './line.js';
 import { passFor } from './passes.js';
@@ -9,6 +11,11 @@ import { passFor } from './passes.js';
 /** The tutorial, for two. */
 const mission: Mission = parseMission(
   JSON.parse(readFileSync(new URL('../../../missions/systemcheck.json', import.meta.url), 'utf8')),
+);
+
+/** Blackout, for two or three. */
+const blackout: Mission = parseMission(
+  JSON.parse(readFileSync(new URL('../../../missions/blackout.json', import.meta.url), 'utf8')),
 );
 
 /** The server's sockets, a room Anna opened on hers and Ben joined on his, in its lobby. */
@@ -83,6 +90,29 @@ describe('the crew pass on the line', () => {
     expect(ben.heard.filter((m) => m.kind === 'left')).toEqual([]);
     expect(ben.view.you.name).toBe('Ben');
     manager.get(code).dispose();
+  });
+
+  it('takes no seat from a pass for one made up after its id: refused, the seat kept', () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    // Blackout's lobby has room for a third.
+    const room = new Room('TEST', blackout);
+    room.join('Anna', passFor('Anna'));
+    const ben = room.join('Ben', passFor('Ben'));
+    const forged = { id: passFor('Ben').id, secret: passFor('Mallory').secret };
+    expect(() => room.join('Mallory', forged)).toThrow('Dieser Ausweis gilt hier nicht.');
+    expect(room.summary().players.map((p) => p.name)).toEqual(['Anna', 'Ben']);
+    expect(room.seatOf(passFor('Ben'))).toBe(ben.playerId);
+    room.dispose();
+    vi.restoreAllMocks();
+  });
+
+  it('binds no seat to a pass made up after another’s id, and lets that one keep its own', () => {
+    const book = new SeatBook();
+    book.bind('p-ben', passFor('Ben'));
+    const forged = { id: passFor('Ben').id, secret: passFor('Mallory').secret };
+    expect(() => book.bind('p-mallory', forged)).toThrow('Dieser Ausweis gilt hier nicht.');
+    expect(book.seatOf(passFor('Ben'))).toBe('p-ben');
+    expect(book.seatOf(forged)).toBeNull();
   });
 
   it('turns away a pass that holds no seat there, or shows the wrong secret', () => {
@@ -197,7 +227,7 @@ describe('a pass bound to a run on', () => {
     other.say({ kind: 'create-room', name: 'Cem', pass: passFor('Cem') });
     const elsewhere = joinedOf(other).code;
     const tab = server.connect();
-    const line = `Gebunden an den Einsatz „${mission.title}" in Raum ${code}.`;
+    const line = `Gebunden an den Einsatz „${mission.title}“ in Raum ${code}.`;
     tab.say({ kind: 'create-room', name: 'Ben', pass: passFor('Ben') });
     expect(tab.heard).toEqual([{ kind: 'error', of: 'create-room', message: line }]);
     tab.say({ kind: 'join-room', code: elsewhere, name: 'Ben', pass: passFor('Ben') });
@@ -217,6 +247,19 @@ describe('a pass bound to a run on', () => {
     expect(anna.view.players.map((p) => p.name)).toEqual(['Anna']);
     expect(other.view.players.map((p) => p.name)).toEqual(['Cem', 'Ben']);
     expect(whereIsBen(server.connect())?.code).toBe(elsewhere);
+    manager.get(code).dispose();
+  });
+
+  it('keeps its seat in a lobby where the join into another room is refused', () => {
+    const { server, manager, anna, ben, code } = lobby();
+    const dora = server.connect();
+    dora.say({ kind: 'create-room', name: 'Dora', pass: passFor('Dora') });
+    const full = joinedOf(dora).code;
+    server.connect().say({ kind: 'join-room', code: full, name: 'Emil', pass: passFor('Emil') });
+    ben.say({ kind: 'join-room', code: full, name: 'Ben', pass: passFor('Ben') });
+    expect(ben.heard.at(-1)).toMatchObject({ kind: 'error', of: 'join-room' });
+    expect(anna.view.players.map((p) => p.name)).toEqual(['Anna', 'Ben']);
+    expect(whereIsBen(ben)?.code).toBe(code);
     manager.get(code).dispose();
   });
 });
@@ -241,6 +284,18 @@ describe('a seat given up', () => {
     expect(tab.heard.at(-1)).toMatchObject({ kind: 'error', of: 'resume' });
     ben.say({ kind: 'set-ready', ready: true });
     expect(ben.heard.at(-1)).toMatchObject({ kind: 'error', of: 'set-ready' });
+    manager.get(code).dispose();
+  });
+
+  it('from a socket the seat went from: it is told, and so is the tab it plays on', () => {
+    const { server, manager, anna, ben, code } = lobby();
+    const tab = server.connect();
+    tab.say({ kind: 'resume', code, pass: passFor('Ben') });
+    const before = ben.heard.length;
+    ben.say({ kind: 'abandon', code, pass: passFor('Ben') });
+    expect(ben.heard.slice(before)).toEqual([{ kind: 'left', code, message: null }]);
+    expect(tab.heard.at(-1)).toEqual({ kind: 'left', code, message: null });
+    expect(anna.view.players.map((p) => p.name)).toEqual(['Anna']);
     manager.get(code).dispose();
   });
 

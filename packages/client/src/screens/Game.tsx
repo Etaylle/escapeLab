@@ -69,7 +69,7 @@ import { PuzzlePanel } from './PuzzlePanel.js';
 import { useHudRow } from './hudFold.js';
 import { RowCrew, RowTools } from './HudRow.js';
 import { Icon } from './Icon.js';
-import { LineLostCard, lineLost, ON_THE_LINE, type GameLine } from './Line.js';
+import { LineLostCard, lineLost, type GameLine } from './Line.js';
 import { BackToast, PauseCard, TakeoverCard } from './Pause.js';
 import { MissionHud } from './MissionHud.js';
 import { InfoPanel } from './InfoPanel.js';
@@ -98,8 +98,8 @@ interface Props {
   refusal: Refusal | null;
   /** the run's end, while the world still plays it on this screen (finale.ts); none before */
   finale: Finale | null;
-  /** the own line, whose card stands over the world while it is down (Line.tsx); up by default */
-  line?: GameLine;
+  /** the own line, whose card stands over the world while it is down (Line.tsx) */
+  line: GameLine;
 }
 
 /**
@@ -1028,16 +1028,10 @@ function RunOverlays({
 }) {
   const sabotage = view.map?.sabotage ?? null;
   const relay = sabotage?.relay;
-  // The own line down, the card says so: whatever stands still for others is not news here.
-  const lost = lineLost(line.status, view);
   return (
     <>
       {!coldOpen.intro && <Briefing view={view} />}
-      {lost && <LineLostCard line={line} />}
-      {!lost && view.pausedFor !== null && <PauseCard view={view} send={send} />}
-      {!lost && view.pausedFor === null && view.takeovers !== undefined && (
-        <TakeoverCard asks={view.takeovers} send={send} />
-      )}
+      <Standstill view={view} send={send} line={line} />
       <BackToast players={view.players} />
       {sabotage !== null && relay !== undefined && (
         <RelayAlert
@@ -1050,6 +1044,29 @@ function RunOverlays({
       )}
     </>
   );
+}
+
+/**
+ * What stands over the world while the run does not go on for this player: the own line down
+ * — whatever stands still for the others is not news here — else the pause, else a new
+ * device's ask for a seat the run went on without.
+ */
+function Standstill({
+  view,
+  send,
+  line,
+}: {
+  view: PlayerView;
+  send: Props['send'];
+  line: GameLine;
+}) {
+  if (lineLost(line.status, view)) {
+    return <LineLostCard line={line} />;
+  }
+  if (view.pausedFor !== null) {
+    return <PauseCard view={view} send={send} />;
+  }
+  return view.takeovers === undefined ? null : <TakeoverCard asks={view.takeovers} send={send} />;
 }
 
 /** What this player has open, as the screen keeps it (`useOpened`). */
@@ -1255,21 +1272,25 @@ export function gameClass(
   return ['game', ...ending, ...extra].join(' ');
 }
 
+/** Whether the world is held for this player, whatever else: the end plays, or the line is down. */
+export function worldHeld(finale: Finale | null, line: GameLine, view: PlayerView): boolean {
+  return finale !== null || lineLost(line.status, view);
+}
+
 /**
- * Whether the world takes no keys: while the end plays, the station's panel, pages or a note
- * lie over it, the run is paused, the own line is down (`lost`) or the relay console holds
- * them. Pages on their way down hold nothing: the player walks off at once.
+ * Whether the world takes no keys: while it is held (`worldHeld`), the station's panel, pages
+ * or a note lie over it, the run is paused or the relay console holds them. Pages on their way
+ * down hold nothing: the player walks off at once.
  */
 export function worldLocked(
   view: PlayerView,
   open: Pick<OpenNow, 'reading' | 'note'>,
   station: PuzzleView | null,
-  live: boolean,
-  lost: boolean,
+  held: boolean,
 ) {
   const relayUp = view.map?.sabotage?.relay !== undefined;
   const over = station !== null || open.reading !== null || open.note !== null;
-  return !live || lost || over || view.pausedFor !== null || relayUp;
+  return held || over || view.pausedFor !== null || relayUp;
 }
 
 /**
@@ -1306,13 +1327,7 @@ function RunWorld({
       finale={finale === null ? null : { ending: finale.ending, since: finale.since }}
       station={station}
       holdTips={holdTips}
-      inputLocked={worldLocked(
-        view,
-        open,
-        station,
-        finale === null,
-        lineLost((game.line ?? ON_THE_LINE).status, view),
-      )}
+      inputLocked={worldLocked(view, open, station, worldHeld(finale, game.line, view))}
       onToggleInfo={open.toggleInfo}
       onRead={(manualId) => open.set({ readingId: manualId })}
       onReadNote={(index) => open.set({ noteIndex: index })}
@@ -1417,7 +1432,7 @@ export function GameScreen(props: Props) {
           coldOpen={coldOpen}
           send={send}
           refusal={refusal}
-          line={props.line ?? ON_THE_LINE}
+          line={props.line}
         />
       )}
       <div className="stage">

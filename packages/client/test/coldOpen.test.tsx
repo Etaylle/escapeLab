@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MapView, PlayerView } from '@escapelab/core';
 import { GameScreen, StageTop, type ColdOpen } from '../src/screens/Game.js';
+import { ON_THE_LINE } from '../src/screens/Line.js';
 import {
   blackoutCue,
   clickSeenAt,
@@ -281,6 +282,7 @@ describe('the start of a run with the power on', () => {
         listen={() => () => undefined}
         refusal={null}
         finale={null}
+        line={ON_THE_LINE}
       />,
     );
   }

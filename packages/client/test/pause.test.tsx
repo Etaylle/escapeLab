@@ -100,7 +100,7 @@ describe('the pause card', () => {
     const html = renderToStaticMarkup(<PauseCard view={waiting()} send={() => undefined} />);
     expect(html).toContain('MISSION PAUSIERT');
     expect(html).toContain('Warten auf Cem · <span class="pause-count">0:42</span>');
-    expect(html).toContain('Ab 1:00 geht es ohne Cem weiter.');
+    expect(html).toContain('Ab 1:00 lässt sich ohne Cem weitermachen.');
     expect(html).not.toContain('pause-go-on');
   });
 

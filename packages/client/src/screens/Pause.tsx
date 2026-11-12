@@ -79,7 +79,7 @@ function Way({ way, send }: { way: PauseWay; send: (msg: ClientMessage) => void 
     case 'go-on-at':
       return (
         <p className="muted pause-when">
-          Ab {way.at} geht es ohne {way.name} weiter.
+          Ab {way.at} lässt sich ohne {way.name} weitermachen.
         </p>
       );
     case 'call-off':

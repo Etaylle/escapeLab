@@ -192,7 +192,7 @@ describe('the server’s log of refusals and runs', () => {
       `[escapelab] room ${code}: resume refused, Wiederverbinden fehlgeschlagen — ` +
         'Raum neu beitreten.',
       `[escapelab] no room: create-room as Ben refused, Gebunden an den Einsatz ` +
-        `„Tutorial: Systemcheck" in Raum ${code}.`,
+        `„Tutorial: Systemcheck“ in Raum ${code}.`,
       `[escapelab] room ${code}: continue-without by Anna refused, Die Wartezeit läuft noch.`,
     ]);
     expect(anna.heard.at(-1)).toMatchObject({ kind: 'error', of: 'start-mission' });

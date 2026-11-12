@@ -19,6 +19,7 @@ import {
   StationModal,
   stationLabel,
 } from '../src/screens/Game.js';
+import { ON_THE_LINE } from '../src/screens/Line.js';
 import { InfoPanel, Legend } from '../src/screens/InfoPanel.js';
 import { ReadingOverlay, roomOf } from '../src/screens/Reading.js';
 import { titleSize } from '../src/screens/Seal.js';
@@ -923,6 +924,7 @@ function game(view: PlayerView): string {
       listen={() => noop}
       refusal={null}
       finale={null}
+      line={ON_THE_LINE}
     />,
   );
 }

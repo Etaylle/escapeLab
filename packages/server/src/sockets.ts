@@ -80,8 +80,8 @@ export function serveSockets(server: SocketServer, lab: Lab): Served {
         const message =
           err instanceof GameError || err instanceof Error ? err.message : 'Unbekannter Fehler.';
         logRefusal(session, msg, message);
-        const of = msg?.kind;
-        send(socket, of === undefined ? { kind: 'error', message } : { kind: 'error', message, of });
+        const refusal: Extract<ServerMessage, { kind: 'error' }> = { kind: 'error', message };
+        send(socket, msg === null ? refusal : { ...refusal, of: msg.kind });
       }
     });
 
@@ -261,19 +261,23 @@ function sitDown(
 ): Session | null {
   if (msg.kind === 'join-room') {
     const room = lab.manager.get(msg.code);
-    lab.manager.makeWay(msg.pass, room);
+    lab.manager.checkWay(msg.pass, room);
     if (room.seatOf(msg.pass) === null && room.phase === 'playing' && room.hasSeat(msg.name)) {
       asks.get(socket)?.();
       asks.set(socket, room.claim(msg.name, msg.pass, listenerOf(socket)));
       return session;
     }
-    return seated(socket, session, room, seatFor(room, msg));
+    const playerId = seatFor(room, msg);
+    lab.manager.leaveOthers(msg.pass, room);
+    return seated(socket, session, room, playerId);
   }
-  lab.manager.makeWay(msg.pass, null);
+  lab.manager.checkWay(msg.pass, null);
   // A new room plays on the difficulty its host's device asked for — normal unless that
   // device has won no run yet — with its alarm limit: scaled from the start.
   const room = createRoom(lab, msg);
-  return seated(socket, session, room, room.join(msg.name, msg.pass).playerId);
+  const { playerId } = room.join(msg.name, msg.pass);
+  lab.manager.leaveOthers(msg.pass, room);
+  return seated(socket, session, room, playerId);
 }
 
 /**
@@ -297,8 +301,13 @@ function giveUp(
   msg: Extract<ClientMessage, { kind: 'abandon' }>,
 ): Session | null {
   const room = lab.manager.get(msg.code);
-  const playerId = room.abandon(msg.pass);
-  const own = session !== null && session.room === room && session.playerId === playerId;
+  // The socket the seat plays on, asked before the seat is gone: one it went from is not.
+  const own =
+    session !== null &&
+    session.room === room &&
+    session.holds() &&
+    room.seatOf(msg.pass) === session.playerId;
+  room.abandon(msg.pass);
   if (!own) {
     send(socket, { kind: 'left', code: room.code, message: null });
   }

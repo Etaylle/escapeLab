@@ -86,6 +86,20 @@ export const GAME_KINDS = [
 /** A client message that maps 1:1 onto a game action (`GAME_KINDS`). */
 export type GameMessage = Extract<ClientMessage, { kind: (typeof GAME_KINDS)[number] }>;
 
+/** The game messages whose action is no more than who sent them and when. */
+const BARE_KINDS = [
+  'intro-done',
+  'request-hint',
+  'call-off',
+] as const satisfies readonly GameMessage['kind'][];
+
+/** A game message whose action is no more than who sent it and when (`BARE_KINDS`). */
+type BareMessage = Extract<GameMessage, { kind: (typeof BARE_KINDS)[number] }>;
+
+const BARE: ReadonlySet<GameMessage['kind']> = new Set(BARE_KINDS);
+
+const isBare = (msg: GameMessage): msg is BareMessage => BARE.has(msg.kind);
+
 /** A plate holds while someone is this close (in tiles); releases a bit wider. */
 const PLATE_PRESS_RADIUS = 0.55;
 const PLATE_RELEASE_RADIUS = 0.75;
@@ -126,7 +140,7 @@ const ITEM_RADIUS = 0.95;
 /** A relay emergency's instructions are aged this often. */
 const RELAY_TICK_MS = 1000;
 /** What a connection hears once its seat plays on another one: a tab opened later, say. */
-const SEAT_MOVED = 'Dieser Platz spielt jetzt in einem anderen Fenster.';
+const PLAYS_IN_ANOTHER_TAB = 'Dieser Platz spielt jetzt in einem anderen Fenster.';
 /** What a pass is told once another device took its seat over by its name. */
 const SEAT_TAKEN = 'Der Platz wurde auf einem anderen Gerät übernommen.';
 
@@ -268,8 +282,12 @@ export class Room {
     this.state = initialState(mission, seed, difficulty);
   }
 
-  /** A new seat for `name`, bound to `pass` (lobby only); its player id. */
+  /**
+   * A new seat for `name`, bound to `pass` (lobby only); its player id. A pass whose id binds a
+   * seat here under another secret is refused before anything changes (seats.ts `check`).
+   */
   join(name: string, pass: CrewPass): { playerId: string } {
+    this.seats.check(pass);
     const playerId = randomUUID();
     this.dispatch({ type: 'player-join', playerId, name });
     this.seats.bind(playerId, pass);
@@ -294,6 +312,7 @@ export class Room {
     if (seat === undefined) {
       throw new GameError(`Einen Platz namens ${name} gibt es hier nicht.`);
     }
+    this.seats.check(pass);
     const now = Date.now();
     this.dispatch({ type: 'takeover-claimed', playerId: seat.id, at: now });
     const timer = setTimeout(() => this.settleClaim(seat.id, 'unanswered'), TAKEOVER_WAIT_MS);
@@ -336,23 +355,29 @@ export class Room {
     }
     this.claims.delete(seatId);
     clearTimeout(claim.timer);
-    const name = this.nameOf(seatId);
     if (this.state.phase === 'playing' && this.state.away[seatId]?.claimUntil !== undefined) {
       this.dispatch({ type: 'takeover-settled', playerId: seatId });
     }
+    this.answerClaim(seatId, claim, how);
+    this.log(`${this.nameOf(seatId)}'s seat ${CLAIM_LOG[how]}${by === '' ? '' : ` by ${by}`}`);
+  }
+
+  /**
+   * The asking device hears how its ask for the seat of `seatId` ended: let in — its pass
+   * binds the seat, the pass that held it refused from now on (SEAT_TAKEN) — or why not;
+   * nothing for a device gone.
+   */
+  private answerClaim(seatId: string, claim: Claim, how: ClaimEnd): void {
     if (how === 'allowed') {
       this.seats.takeOver(seatId, claim.pass);
       claim.tell({ kind: 'takeover-allowed', code: this.code });
     } else if (how !== 'withdrawn') {
-      claim.tell({ kind: 'error', message: claimRefusal(how, name), of: 'join-room' });
+      const message = claimRefusal(how, this.nameOf(seatId));
+      claim.tell({ kind: 'error', message, of: 'join-room' });
     }
-    this.log(`${name}'s seat ${CLAIM_LOG[how]}${by === '' ? '' : ` by ${by}`}`);
   }
 
-  /**
-   * The seat `pass` holds in this room, by player id; null for none — a seat the run started
-   * without, its player away as it began, is none.
-   */
+  /** The seat `pass` holds in this room, by player id; null for none. */
   seatOf(pass: CrewPass): string | null {
     const playerId = this.seats.seatOf(pass);
     return playerId !== null && this.state.players.some((p) => p.id === playerId)
@@ -441,13 +466,7 @@ export class Room {
    * and lets go of the timer of every other seat: back on the line, gone, or in a run.
    */
   private reconcileLobbyAway(): void {
-    const due = new Map<string, number>();
-    for (const player of this.state.phase === 'lobby' ? this.state.players : []) {
-      const lost = this.lostAt.get(player.id);
-      if (!player.connected && lost !== undefined) {
-        due.set(player.id, lost);
-      }
-    }
+    const due = this.awayInLobby();
     for (const [playerId, timer] of this.freeing) {
       if (!due.has(playerId)) {
         clearTimeout(timer);
@@ -460,6 +479,18 @@ export class Room {
         this.freeing.set(playerId, setTimeout(() => this.freeAway(playerId), wait));
       }
     }
+  }
+
+  /** The lobby's seats whose line is down, each with when it closed; none outside the lobby. */
+  private awayInLobby(): Map<string, number> {
+    const due = new Map<string, number>();
+    for (const player of this.state.phase === 'lobby' ? this.state.players : []) {
+      const lost = this.lostAt.get(player.id);
+      if (!player.connected && lost !== undefined) {
+        due.set(player.id, lost);
+      }
+    }
+    return due;
   }
 
   /** The lobby seat of `playerId`, off the line LOBBY_AWAY_MS, freed: its pass binds it no more. */
@@ -482,7 +513,8 @@ export class Room {
     if (playerId === null) {
       throw new Error('Wiederverbinden fehlgeschlagen — Raum neu beitreten.');
     }
-    this.log(`${this.nameOf(playerId)} resumed, ${this.back(playerId)}`);
+    const gap = this.back(playerId);
+    this.log(`${this.nameOf(playerId)} resumed, ${gap}`);
     return playerId;
   }
 
@@ -515,7 +547,7 @@ export class Room {
     this.listeners.set(playerId, listener);
     this.emptySince = null;
     if (before !== undefined && before !== listener) {
-      before({ kind: 'left', code: this.code, message: SEAT_MOVED });
+      before({ kind: 'left', code: this.code, message: PLAYS_IN_ANOTHER_TAB });
     }
     listener({ kind: 'view', view: viewFor(this.state, playerId), at: Date.now() });
     if (this.positions.size > 0) {
@@ -644,6 +676,11 @@ export class Room {
 
   /** Player-triggered game actions coming in from the transport layer. */
   act(playerId: string, msg: GameMessage): void {
+    if (isBare(msg)) {
+      // Nothing more to it than who and when.
+      this.dispatch({ type: msg.kind, playerId, at: Date.now() });
+      return;
+    }
     switch (msg.kind) {
       case 'select-color':
         this.dispatch({ type: 'select-color', playerId, color: msg.color });
@@ -665,14 +702,8 @@ export class Room {
         this.seedPositions();
         break;
       }
-      case 'intro-done':
-        this.dispatch({ type: 'intro-done', playerId, at: Date.now() });
-        break;
       case 'puzzle-input':
         this.dispatch({ type: 'puzzle-input', playerId, at: Date.now(), input: msg.input });
-        break;
-      case 'request-hint':
-        this.dispatch({ type: 'request-hint', playerId, at: Date.now() });
         break;
       case 'open-source':
         this.dispatch({ type: 'open-source', playerId, manualId: msg.manualId, at: Date.now() });
@@ -700,9 +731,6 @@ export class Room {
         });
         this.log(`${this.nameOf(playerId)} went on without ${this.nameOf(msg.absentId)}`);
         this.reconcileCrew();
-        break;
-      case 'call-off':
-        this.dispatch({ type: 'call-off', playerId, at: Date.now() });
         break;
     }
   }
@@ -1678,9 +1706,6 @@ export class Room {
     // A run ends exactly once, won or lost; a rematch is a run of its own.
     if (wasPlaying && (this.state.phase === 'won' || this.state.phase === 'lost')) {
       this.runOver(runReport(this.state, this.code));
-      for (const seatId of [...this.claims.keys()]) {
-        this.settleClaim(seatId, 'over');
-      }
     }
     // A glance of one run finds nothing in the next.
     if (this.state.phase !== 'playing') {
@@ -1701,14 +1726,30 @@ export class Room {
     this.reconcileLobbyAway();
   }
 
-  /** The run is over: the log says how, and its report goes to `onRunFinished`. */
+  /**
+   * The run is over: the log says how, its report goes to `onRunFinished`, and no seat of it is
+   * to be taken over any more.
+   */
   private runOver(report: RunReport): void {
+    for (const seatId of [...this.claims.keys()]) {
+      this.settleClaim(seatId, 'over');
+    }
     const why = this.state.calledOff === null ? '' : ` — ${this.state.calledOff}`;
     this.log(
       `run over, ${report.outcome} after ${runSeconds(report).toFixed(0)} s, ` +
         `crew ${report.crew.join(', ')}${why}`,
     );
     this.onRunFinished(report);
+  }
+
+  /** The seats waiting to be freed in the lobby, and the asks for seats: none any more. */
+  private forgetWaits(): void {
+    const claimed = [...this.claims.values()].map((claim) => claim.timer);
+    for (const timer of [...this.freeing.values(), ...claimed]) {
+      clearTimeout(timer);
+    }
+    this.freeing.clear();
+    this.claims.clear();
   }
 
   /** One line of the server's log about this room. */
@@ -1763,12 +1804,7 @@ export class Room {
   }
 
   dispose(): void {
-    const claimed = [...this.claims.values()].map((claim) => claim.timer);
-    for (const timer of [...this.freeing.values(), ...claimed]) {
-      clearTimeout(timer);
-    }
-    this.freeing.clear();
-    this.claims.clear();
+    this.forgetWaits();
     if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;

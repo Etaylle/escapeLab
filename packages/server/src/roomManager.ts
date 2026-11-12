@@ -131,23 +131,34 @@ export class RoomManager {
   }
 
   /**
-   * Makes way for `pass` to sit down in another room than its own (`staying`, the room it sits
-   * down in where it exists already): a run on binds it, so that is refused, naming the run;
-   * a seat it holds in a lobby or after a run elsewhere it gives up.
+   * Whether `pass` may sit down in another room than its own (`staying`, the room it sits down
+   * in where it exists already): a run on elsewhere binds it, so that is refused, naming the
+   * run.
    */
-  makeWay(pass: CrewPass, staying: Room | null): void {
-    const elsewhere = [...this.rooms.values()].filter(
-      (room) => room !== staying && room.seatOf(pass) !== null,
-    );
-    const bound = elsewhere.find((room) => room.phase === 'playing');
+  checkWay(pass: CrewPass, staying: Room | null): void {
+    const bound = this.elsewhere(pass, staying).find((room) => room.phase === 'playing');
     if (bound !== undefined) {
       throw new GameError(
-        `Gebunden an den Einsatz „${bound.missionTitle}" in Raum ${bound.code}.`,
+        `Gebunden an den Einsatz „${bound.missionTitle}“ in Raum ${bound.code}.`,
       );
     }
-    for (const room of elsewhere) {
+  }
+
+  /**
+   * `pass` sat down in `staying`: a seat it holds in a lobby or after a run elsewhere it gives
+   * up — only now, so that a join refused keeps the seat it had.
+   */
+  leaveOthers(pass: CrewPass, staying: Room): void {
+    for (const room of this.elsewhere(pass, staying)) {
       room.abandon(pass);
     }
+  }
+
+  /** The rooms but `staying` where `pass` holds a seat. */
+  private elsewhere(pass: CrewPass, staying: Room | null): Room[] {
+    return [...this.rooms.values()].filter(
+      (room) => room !== staying && room.seatOf(pass) !== null,
+    );
   }
 
   /** Drop rooms that have been empty for a while; call periodically. */

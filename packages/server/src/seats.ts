@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import type { CrewPass } from '@escapelab/core';
+import { GameError, type CrewPass } from '@escapelab/core';
 
 /** A seat's binding: the id of the pass it belongs to and the hash of that pass's secret. */
 interface Binding {
@@ -8,6 +8,13 @@ interface Binding {
 }
 
 const hashOf = (secret: string): Buffer => createHash('sha256').update(secret).digest();
+
+/**
+ * Whether `pass` shows the secret `binding` was made with: compared in constant time, so the
+ * answer's timing tells nothing about the secret.
+ */
+const sameSecret = (binding: Binding, pass: CrewPass): boolean =>
+  timingSafeEqual(binding.hash, hashOf(pass.secret));
 
 /**
  * Which crew pass each seat of a room belongs to, by player id (core protocol.ts `CrewPass`):
@@ -20,10 +27,24 @@ export class SeatBook {
   private readonly lost = new Set<string>();
 
   /**
+   * Throws where `pass` may bind no seat here: its id binds one already, under another secret —
+   * a pass made up after another's id, which must not take that seat from it.
+   */
+  check(pass: CrewPass): void {
+    for (const binding of this.bindings.values()) {
+      if (binding.passId === pass.id && !sameSecret(binding, pass)) {
+        throw new GameError('Dieser Ausweis gilt hier nicht.');
+      }
+    }
+  }
+
+  /**
    * Binds the seat of `playerId` to `pass`, in place of whatever pass held it; a seat the pass
-   * held before lets go of it: a pass holds one seat at a time.
+   * held before lets go of it: a pass holds one seat at a time. Refused, before anything is let
+   * go of, for a pass whose id binds a seat under another secret (`check`).
    */
   bind(playerId: string, pass: CrewPass): void {
+    this.check(pass);
     for (const [seat, binding] of this.bindings) {
       if (binding.passId === pass.id) {
         this.bindings.delete(seat);
@@ -54,8 +75,7 @@ export class SeatBook {
   seatOf(pass: CrewPass): string | null {
     for (const [playerId, binding] of this.bindings) {
       if (binding.passId === pass.id) {
-        // Compared in constant time, so the answer's timing tells nothing about the secret.
-        return timingSafeEqual(binding.hash, hashOf(pass.secret)) ? playerId : null;
+        return sameSecret(binding, pass) ? playerId : null;
       }
     }
     return null;

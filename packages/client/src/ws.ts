@@ -163,43 +163,53 @@ export interface Page {
 
 /** Takes a server message in: the page's state, the room the tab keeps, the live refs. */
 export function takeIn(msg: ServerMessage, page: Page): void {
+  if (!seatNews(msg, page)) {
+    lineNews(msg, page);
+  }
+}
+
+/**
+ * Takes in what the server says of where this tab sits — its seat, its room's views, the
+ * audience's, an ask for a seat by its name — and says whether `msg` was such news.
+ */
+function seatNews(msg: ServerMessage, page: Page): boolean {
   switch (msg.kind) {
     case 'joined':
       page.resuming.current = false;
       keepTab({ code: msg.code, watching: false });
       page.setTakeover(null);
       page.setRoomCode(msg.code);
-      break;
+      return true;
     case 'takeover-pending':
       page.setTakeover({ code: msg.code, name: msg.name, until: msg.until });
-      break;
+      return true;
     case 'takeover-allowed':
       page.setTakeover(null);
-      break;
+      return true;
     case 'left':
-      // The seat was given up, or plays on in another tab: this one plays in no room now and
-      // keeps no resume, so that two tabs never take the seat from each other on their own.
-      leaveTab();
-      page.setRoomCode(null);
-      page.setView(null);
-      page.setSeat(null);
-      if (msg.message !== null) {
-        page.setError(msg.message);
-      }
-      break;
+      leftRoom(msg.message, page);
+      return true;
     case 'seated':
       page.setSeat(msg.seat);
-      break;
+      return true;
     case 'view':
       clock.stamped(msg.at);
       page.you.current = msg.view.you.id;
       page.setView(msg.view);
-      break;
+      return true;
     case 'spectator-view':
       clock.stamped(msg.at);
       watching(msg.code, page);
       page.setSpectatorView(msg.view);
-      break;
+      return true;
+    default:
+      return false;
+  }
+}
+
+/** Takes in what the line carries besides: the time, the rooms, the live streams, refusals. */
+function lineNews(msg: ServerMessage, page: Page): void {
+  switch (msg.kind) {
     case 'clock':
       clock.heard(msg.sent, msg.at);
       break;
@@ -221,23 +231,44 @@ export function takeIn(msg: ServerMessage, page: Page): void {
       break;
     }
     case 'error':
-      if (page.resuming.current) {
-        // The tab's room is gone, or its pass holds no seat there any more: back to join.
-        page.resuming.current = false;
-        forgetRoom(roomOfTab(), page.you.current);
-        page.setRoomCode(null);
-        page.setView(null);
-        page.setSpectatorView(null);
-      }
-      if (msg.of === 'join-room') {
-        page.setTakeover(null);
-      }
-      if (inBanner(msg.of)) {
-        page.setError(msg.message);
-      }
-      page.refuse(msg.message, msg.of ?? null);
+      refused(msg, page);
       break;
   }
+}
+
+/**
+ * The seat was given up, or plays on in another tab (`message` says so): this one plays in no
+ * room now and keeps no comeback, so that two tabs never take the seat from each other.
+ */
+function leftRoom(message: string | null, page: Page): void {
+  leaveTab();
+  page.setRoomCode(null);
+  page.setView(null);
+  page.setSeat(null);
+  if (message !== null) {
+    page.setError(message);
+  }
+}
+
+/**
+ * A refusal: a comeback refused means the tab's room is gone, or its pass holds no seat there
+ * any more — back to the join screen; a join refused ends the ask for a seat it made.
+ */
+function refused(msg: Extract<ServerMessage, { kind: 'error' }>, page: Page): void {
+  if (page.resuming.current) {
+    page.resuming.current = false;
+    forgetRoom(roomOfTab(), page.you.current);
+    page.setRoomCode(null);
+    page.setView(null);
+    page.setSpectatorView(null);
+  }
+  if (msg.of === 'join-room') {
+    page.setTakeover(null);
+  }
+  if (inBanner(msg.of)) {
+    page.setError(msg.message);
+  }
+  page.refuse(msg.message, msg.of ?? null);
 }
 
 /**
@@ -395,6 +426,36 @@ function giveUpOffLine(line: Line | null, playerId: string | null): void {
   line.sendFirst({ kind: 'abandon', code, pass: crewPass() });
 }
 
+/** The refs the world reads frame by frame, past React: positions, drones, pings, chats. */
+function useLiveRefs(): Pick<Connection, 'positions' | 'drones' | 'pings' | 'chats'> {
+  return {
+    positions: useRef<KnownPositions>({ run: null, players: {} }),
+    drones: useRef<Record<string, DronePosition>>({}),
+    pings: useRef<{ playerId: string; x: number; y: number; at: number }[]>([]),
+    chats: useRef<{ playerId: string; text: string; at: number }[]>([]),
+  };
+}
+
+/**
+ * The page's line, opened once (`openLine`) on the wiring the page comes up with — its refs and
+ * state setters, the same for the page's life — and woken as the page comes back.
+ */
+function useLine(wiring: Wiring): MutableRefObject<Line | null> {
+  const lineRef = useRef<Line | null>(null);
+  useEffect(() => {
+    const { line, close } = openLine(wiring);
+    lineRef.current = line;
+    const stopWaking = wakeOnReturn(window, document, () => line.wake());
+    return () => {
+      stopWaking();
+      close();
+    };
+    // The wiring is refs and setters, stable for the page's life: opened once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return lineRef;
+}
+
 /**
  * Owns the WebSocket for the whole app: connects, resumes the tab's room on the browser's pass
  * after a reload or a lost connection, and reconnects with backoff (`keepConnected`) — at once
@@ -412,13 +473,9 @@ export function useGameConnection(): Connection {
   const [error, setError] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
-  const lineRef = useRef<Line | null>(null);
   const resumingRef = useRef(false);
   const youRef = useRef<string | null>(null);
-  const positionsRef = useRef<KnownPositions>({ run: null, players: {} });
-  const dronesRef = useRef<Record<string, DronePosition>>({});
-  const pingsRef = useRef<{ playerId: string; x: number; y: number; at: number }[]>([]);
-  const chatsRef = useRef<{ playerId: string; text: string; at: number }[]>([]);
+  const live = useLiveRefs();
   const listenersRef = useRef(new Set<ServerListener>());
 
   const listen = useCallback((listener: ServerListener) => {
@@ -435,37 +492,25 @@ export function useGameConnection(): Connection {
     }
   }, []);
 
-  useEffect(() => {
-    const { line, close } = openLine({
-      page: {
-        setRoomCode,
-        setView,
-        setSpectatorView,
-        setRooms,
-        setSeat,
-        setTakeover,
-        setError,
-        refuse: (message, of) =>
-          setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
-        resuming: resumingRef,
-        you: youRef,
-        positions: positionsRef,
-        drones: dronesRef,
-        pings: pingsRef,
-        chats: chatsRef,
-      },
-      setStatus,
-      setRetry,
-      socket: socketRef,
-      listeners: listenersRef,
-    });
-    lineRef.current = line;
-    const stopWaking = wakeOnReturn(window, document, () => line.wake());
-    return () => {
-      stopWaking();
-      close();
-    };
-  }, []);
+  const lineRef = useLine({
+    page: {
+      setRoomCode,
+      setView,
+      setSpectatorView,
+      setRooms,
+      setSeat,
+      setTakeover,
+      setError,
+      refuse: (message, of) => setRefusal((last) => ({ seq: (last?.seq ?? 0) + 1, message, of })),
+      resuming: resumingRef,
+      you: youRef,
+      ...live,
+    },
+    setStatus,
+    setRetry,
+    socket: socketRef,
+    listeners: listenersRef,
+  });
 
   return {
     status,
@@ -478,10 +523,7 @@ export function useGameConnection(): Connection {
     roomCode,
     error,
     refusal,
-    positions: positionsRef,
-    drones: dronesRef,
-    pings: pingsRef,
-    chats: chatsRef,
+    ...live,
     send: (msg) => {
       if (wipesBanner(msg.kind)) {
         setError(null);

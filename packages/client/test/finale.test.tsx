@@ -10,6 +10,7 @@ import {
   StageTop,
   type ColdOpen,
 } from '../src/screens/Game.js';
+import { ON_THE_LINE } from '../src/screens/Line.js';
 import { SpectateScreen } from '../src/screens/Spectate.js';
 import {
   alarmClasses,
@@ -502,6 +503,7 @@ describe('the game screen while the world plays the end', () => {
         listen={() => noop}
         refusal={null}
         finale={finale}
+        line={ON_THE_LINE}
       />,
     );
   const map = mapWith({ exit: hatch(T0 + 60_000, ['p1', 'p2']) });
