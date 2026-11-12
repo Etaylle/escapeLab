@@ -5,6 +5,7 @@ import {
   initialState,
   LATER_WAIT_MS,
   parseMission,
+  TAKEOVER_WAIT_MS,
   runReport,
   viewFor,
   viewForSpectator,
@@ -219,6 +220,23 @@ describe('giving the seat up in a run', () => {
     expect(() => run([early], left)).toThrow(/Wartezeit/);
     const over = run([{ ...early, at: T0 + 70_000 + LATER_WAIT_MS }], left);
     expect(over.calledOff).toBe('Abgebrochen ohne Cem.');
+  });
+
+  it('keeps a new device’s ask for a seat it waits for again', () => {
+    const asked = run(
+      [
+        lineDrops('p3', T0 + 1000),
+        { type: 'continue-without', playerId: 'p1', absentId: 'p3', at: T0 + 61_000 },
+        { type: 'takeover-claimed', playerId: 'p3', at: T0 + 65_000 },
+      ],
+      three,
+    );
+    const left = run([abandon('p2', T0 + 70_000)], asked);
+    expect(left.away['p3']).toMatchObject({
+      waived: false,
+      claimUntil: T0 + 65_000 + TAKEOVER_WAIT_MS,
+    });
+    expect(viewFor(left, 'p1').takeovers?.map((ask) => ask.name)).toEqual(['Cem']);
   });
 
   it('rolls an emergency at the relay anew for the crew that is left', () => {

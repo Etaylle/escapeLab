@@ -312,6 +312,9 @@ export class Room {
     if (seat === undefined) {
       throw new GameError(`Einen Platz namens ${name} gibt es hier nicht.`);
     }
+    if (this.claims.has(seat.id)) {
+      throw new GameError(`Für ${seat.name} wartet schon eine Übernahme auf Antwort.`);
+    }
     this.seats.check(pass);
     const now = Date.now();
     this.dispatch({ type: 'takeover-claimed', playerId: seat.id, at: now });

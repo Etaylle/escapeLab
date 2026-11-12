@@ -1,6 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseMission, TAKEOVER_WAIT_MS, type Mission } from '@escapelab/core';
+import {
+  parseMission,
+  TAKEOVER_WAIT_MS,
+  type Mission,
+  type PlayerView,
+  type ServerMessage,
+} from '@escapelab/core';
 import { Room } from '../src/room.js';
 import { RoomManager } from '../src/roomManager.js';
 import { SeatBook } from '../src/seats.js';
@@ -448,6 +454,45 @@ describe('a seat taken over by its name (Jackbox), let in by the crew', () => {
     expect(phone.heard.at(-1)).toMatchObject({ kind: 'takeover-pending' });
     expect(anna.view.takeovers).toHaveLength(1);
     manager.get(code).dispose();
+  });
+
+  it('keeps an ask and its clock through the wait the run takes up again', () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const room = new Room('TEST', blackout);
+    const views: Record<string, PlayerView> = {};
+    const seats = ['Anna', 'Ben', 'Cem'].map((name) => {
+      const { playerId } = room.join(name, passFor(name));
+      const detach = room.attach(playerId, (msg) => {
+        if (msg.kind === 'view') {
+          views[name] = msg.view;
+        }
+      });
+      return { playerId, detach };
+    });
+    const [anna, ben, cem] = seats;
+    room.setReady(ben?.playerId ?? '', true);
+    room.setReady(cem?.playerId ?? '', true);
+    room.act(anna?.playerId ?? '', { kind: 'start-mission' });
+    cem?.detach();
+    vi.advanceTimersByTime(61_000);
+    room.act(anna?.playerId ?? '', { kind: 'continue-without', absentId: cem?.playerId ?? '' });
+    const told: ServerMessage[] = [];
+    room.claim('Cem', passFor('Cems Telefon'), (msg) => told.push(msg));
+    // Ben gives up: Anna alone on the line, the run waits for Cem again.
+    room.abandon(passFor('Ben'));
+    expect(views['Anna']?.pausedFor?.map((away) => away.name)).toEqual(['Cem']);
+    expect(views['Anna']?.takeovers?.map((ask) => ask.name)).toEqual(['Cem']);
+    expect(() => room.claim('Cem', passFor('Zweites Telefon'), () => undefined)).toThrow(
+      'Für Cem wartet schon eine Übernahme auf Antwort.',
+    );
+    vi.advanceTimersByTime(TAKEOVER_WAIT_MS);
+    expect(told.at(-1)).toEqual({
+      kind: 'error',
+      of: 'join-room',
+      message: 'Die Crew hat die Übernahme nicht bestätigt.',
+    });
+    expect(views['Anna']).not.toHaveProperty('takeovers');
+    room.dispose();
   });
 
   it('refuses the name of a seat still on the line, and an ask nobody could answer', () => {

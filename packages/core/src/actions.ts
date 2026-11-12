@@ -298,13 +298,14 @@ function abandon(
 
 /**
  * The run waits again for every crew member away it went on without, from `at` on: their
- * wait starts anew (LATER_WAIT_MS), as for a later drop.
+ * wait starts anew (LATER_WAIT_MS), as for a later drop. A new device's ask for their seat
+ * still waits for its answer (`claimUntil`).
  */
 function waitAgain(state: GameState, at: number): GameState {
   const away = Object.fromEntries(
     Object.entries(state.away).map(([playerId, gone]) => [
       playerId,
-      gone.waived ? { since: at, waivableAt: at + LATER_WAIT_MS, waived: false } : gone,
+      gone.waived ? { ...gone, since: at, waivableAt: at + LATER_WAIT_MS, waived: false } : gone,
     ]),
   );
   return { ...state, away };
