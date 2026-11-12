@@ -1,0 +1,1402 @@
+{
+  "code": "SNAP",
+  "missionId": "blackout",
+  "seed": 5,
+  "difficulty": "normal",
+  "daily": false,
+  "createdAt": 1700000000000,
+  "state": {
+    "phase": "playing",
+    "mission": {
+      "id": "blackout",
+      "title": "Blackout im Labor",
+      "subtitle": "Der Klassiker: verstreute Regeln, verschlossene Türen, ein Labor im Dunkeln.",
+      "listOrder": 10,
+      "daily": true,
+      "players": {
+        "min": 2,
+        "max": 3
+      },
+      "story": {
+        "intro": "Schichtbuch, 23:47 Uhr: ein Knall, dann Dunkelheit — nur die Notbeleuchtung glimmt rot. Die Nachtschicht ist quer durchs Labor verstreut, die Betriebsunterlagen auch: Handbuch, Klemmbrett, Spind, Aktenschrank. An den Pulten steht keine Betriebsregel, höchstens ein Netzplan, und jede Anlage wird zu zweit gefahren, an zwei Orten zugleich. Allein bleibt das Labor dunkel.",
+        "win": "Schichtbuch: Mit einem tiefen Brummen erwachen die Systeme, Licht flutet das Labor, die Zentrifugen laufen wieder. Die Luke des Notausgangs ist ins Schloss gefallen, die Nachtschicht vollzählig draußen.",
+        "lose": "Schichtbuch: Ein letztes Flackern, dann Stille. Die Notversorgung ist ausgefallen, die Proben sind verloren. Das Labor bleibt dunkel bis zur Frühschicht."
+      },
+      "timeLimitSec": 900,
+      "hintCostSec": 20,
+      "hintDelaySec": 45,
+      "intro": {
+        "lightsSec": 32.7,
+        "place": "Trakt C",
+        "time": "Nachtschicht · 23:47",
+        "pa": [
+          "Durchsage der Leitstelle für Trakt C. Es ist 23 Uhr 47, die Nachtschicht hat übernommen.",
+          "Reaktor in Teillast, 60 Prozent. Die Zentrifugen laufen bis 6 Uhr durch.",
+          "Netzlast im Trakt 96 Prozent, Notstrom in Bereitschaft.",
+          "Die Spätschicht gibt Dosimeter und Schlüssel bitte an der Pforte ab.",
+          "Herr Haller, bitte die Leitstelle anrufen. Herr Haller, bitte die Leitstelle anrufen."
+        ]
+      },
+      "radio": {
+        "start": "Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt, ich sehe nur noch die Notzellen. Geht zuerst ans Notlicht, der Hauptschalter im Flur braucht zwei Leute.",
+        "escape": "Reaktor läuft. Der Notausgang ist entriegelt, Nordwestecke beim Archiv. Alle raus, jetzt."
+      },
+      "chat": {
+        "phrases": [
+          {
+            "text": "Hier rüber!"
+          },
+          {
+            "text": "Warte kurz …"
+          },
+          {
+            "text": "Bereit!"
+          },
+          {
+            "text": "Brauche eine Ansage!"
+          },
+          {
+            "text": "Ich halte die Platte"
+          },
+          {
+            "text": "Achtung, Drohne!"
+          },
+          {
+            "text": "Kabel {n}"
+          },
+          {
+            "text": "Dienst {name}",
+            "names": [
+              "NETZ",
+              "DNS",
+              "DB",
+              "AUTH",
+              "WEB",
+              "MAIL"
+            ]
+          }
+        ]
+      },
+      "puzzles": [
+        {
+          "type": "button-sync",
+          "id": "notlicht",
+          "title": "Notlicht",
+          "hints": [],
+          "nudges": [
+            "Der Hauptschalter fürs Notlicht hängt mitten im Flur, unter der roten Lampe.",
+            "Wer noch im Archiv ist: durch die Südtür in den Flur, dann ein Stück nach Osten zum Hauptschalter."
+          ],
+          "lights": [
+            "FLUR",
+            "ARCHIV"
+          ],
+          "onSolved": "Notlicht steht, danke. Jetzt der Notstrom: Die Anleitung dafür hängt im Archiv, der Kasten ist im Maschinenraum, das Prüfpult im Flur.",
+          "windowMs": 3500,
+          "penaltySec": 20,
+          "style": "lever"
+        },
+        {
+          "type": "circuit",
+          "id": "notstrom",
+          "title": "Notstrom-Kasten",
+          "hints": [
+            "Werkstatt: Der Kasten zeigt nur Farben, das Prüfpult nur Spannungen. Nach jedem Schnitt alle Kabel neu messen.",
+            "Nachtschicht: Bei ungerader Kennung immer das Kabel mit der kleinsten Spannung über 0 V, das hat Haller so eingestellt."
+          ],
+          "nudges": [
+            "Die Anleitung zum Notstrom hängt im Archiv, auf der Ostseite.",
+            "Das Prüfpult steht am Westende vom Flur, der Kasten im Maschinenraum hinter der Plattentür, einer bleibt auf der Platte."
+          ],
+          "lights": [
+            "MASCHINENRAUM"
+          ],
+          "onSolved": "Notstrom läuft, die Tür zum Maschinenraum bleibt offen. Als Nächstes die Signalkette: ein Pult im Flur, eins im Maschinenraum.",
+          "wires": {
+            "min": 4,
+            "max": 6
+          },
+          "shorts": 3,
+          "penaltySec": 30,
+          "burnoutSec": 60
+        },
+        {
+          "type": "signal",
+          "id": "signalkette",
+          "title": "Signalkette",
+          "hints": [
+            "Frühschicht: Jedes Pult quittiert nach seiner eigenen Spalte der Legende. Verwechselt gibt es Alarm.",
+            "Haller: Ab Stufe 3 zeigt die Anzeige jedes Zeichen nur kurz. Erst mitschreiben, dann quittieren."
+          ],
+          "nudges": [
+            "Das Klemmbrett zur Signalkette liegt im Flur, an der Südwand.",
+            "Pult A der Signalkette steht am Ostende vom Flur, Pult B im Maschinenraum in der Südostecke."
+          ],
+          "lights": [
+            "SERVERRAUM"
+          ],
+          "onSolved": "Schott zum Serverraum ist offen, drinnen Terminal und Rack. Die Drohne ist wach, die Kameraplatte davor legt sie still.",
+          "stages": 4,
+          "length": 4,
+          "legend": true,
+          "fleetingFrom": 3,
+          "penaltySec": 20
+        },
+        {
+          "type": "servers",
+          "id": "subsysteme",
+          "title": "Serverraum",
+          "hints": [
+            "Admin: Codes zeigt nur das Terminal, Strom schaltet nur das Rack. Ein Pult allein startet hier nichts.",
+            "Admin: Erst den Dienst mit E50 vom Strom, dann der Reihe nach von NETZ aus, wie der Netzplan sie listet.",
+            "Admin: E23 will am Rack einmal aus und an vor dem Start, E42 erst einen restart jeder Abhängigkeit."
+          ],
+          "nudges": [
+            "Die Unterlagen für Terminal und Rack liegen im Spind, mitten zwischen den beiden.",
+            "Das Terminal steht an der Westwand vom Serverraum, das Rack gegenüber an der Ostwand, je einer an jedes."
+          ],
+          "lights": [
+            "LABOR"
+          ],
+          "onSolved": "Server laufen, die Labortür ist offen, drinnen fliegt eine Drohne. Den Aktenschrank im Labor öffnet nur der Schlüssel.",
+          "crashed": 4,
+          "trap": true,
+          "penaltySec": 20
+        },
+        {
+          "type": "morse",
+          "id": "frequenz",
+          "title": "Frequenz-Abgleich",
+          "hints": [
+            "Funkraum: Das Wort beginnt nach der langen Pause. Drei Buchstaben genügen, dann steht die Frequenz in der Tabelle."
+          ],
+          "nudges": [
+            "Der Schlüssel zum Aktenschrank liegt im Serverraum, in der Nordostecke über dem Rack.",
+            "Das Funkpult steht im Labor in der Südwestecke, der Aktenschrank im selben Raum."
+          ],
+          "lights": [
+            "REAKTOR"
+          ],
+          "onSolved": "Frequenz steht, ich höre euch klar. Der Reaktor ist offen, ohne Ersatzsicherung bleibt er aber tot.",
+          "penaltySec": 20
+        },
+        {
+          "type": "button-sync",
+          "id": "reaktorstart",
+          "title": "Reaktor-Neustart",
+          "hints": [],
+          "nudges": [
+            "Die Ersatzsicherung für den Reaktor liegt im Archiv, in der Südostecke.",
+            "Schalter und Sicherungsplatz sitzen im Reaktor ganz hinten an der Ostwand, dort kommt die Sicherung rein."
+          ],
+          "lights": [],
+          "windowMs": 3500,
+          "penaltySec": 20,
+          "style": "button"
+        }
+      ],
+      "map": {
+        "tiles": [
+          "#######################             ",
+          "#.........#...........#             ",
+          "#.........#...........#             ",
+          "#.........#.....#.....##############",
+          "#.........#...........#............#",
+          "#.........#.....#.....#............#",
+          "#.........#........................#",
+          "#.........#........................#",
+          "####..#############.###########....#",
+          "#.............................#....#",
+          "#.............................##...#",
+          "#.............................#....#",
+          "#........#..........#.........#....#",
+          "#####.##########################.###",
+          "#.........#.........#....#.........#",
+          "#.........#..............#.........#",
+          "#.........#..............#.........#",
+          "#....#.........#....##.............#",
+          "#.........#.........#....#.........#",
+          "#.........#.........#....#.........#",
+          "#.........#.........#....#.........#",
+          "####################################"
+        ],
+        "spawns": [
+          {
+            "x": 3,
+            "y": 3
+          },
+          {
+            "x": 1,
+            "y": 12
+          },
+          {
+            "x": 29,
+            "y": 12
+          }
+        ],
+        "doors": [
+          {
+            "id": "maschinentuer",
+            "x": 5,
+            "y": 13,
+            "opensBy": {
+              "kind": "plate",
+              "plateId": "flurplatte",
+              "untilSolved": "notstrom"
+            }
+          },
+          {
+            "id": "serverschott",
+            "x": 19,
+            "y": 8,
+            "opensBy": {
+              "kind": "puzzle",
+              "puzzleId": "signalkette"
+            }
+          },
+          {
+            "id": "labortuer",
+            "x": 10,
+            "y": 17,
+            "opensBy": {
+              "kind": "puzzle",
+              "puzzleId": "subsysteme"
+            }
+          },
+          {
+            "id": "reaktortuer",
+            "x": 25,
+            "y": 17,
+            "opensBy": {
+              "kind": "puzzle",
+              "puzzleId": "frequenz"
+            }
+          },
+          {
+            "id": "reaktorschott",
+            "x": 32,
+            "y": 13,
+            "opensBy": {
+              "kind": "puzzle",
+              "puzzleId": "frequenz"
+            }
+          }
+        ],
+        "plates": [
+          {
+            "id": "flurplatte",
+            "x": 7,
+            "y": 12,
+            "label": "HALTEN"
+          },
+          {
+            "id": "kameraplatte",
+            "x": 20,
+            "y": 9,
+            "label": "KAMERA HALTEN"
+          }
+        ],
+        "stations": [
+          {
+            "puzzleId": "notlicht",
+            "x": 15,
+            "y": 9
+          },
+          {
+            "puzzleId": "notstrom",
+            "x": 1,
+            "y": 15,
+            "console": "a"
+          },
+          {
+            "puzzleId": "notstrom",
+            "x": 2,
+            "y": 9,
+            "console": "b"
+          },
+          {
+            "puzzleId": "signalkette",
+            "x": 28,
+            "y": 9,
+            "console": "a"
+          },
+          {
+            "puzzleId": "signalkette",
+            "x": 9,
+            "y": 20,
+            "console": "b"
+          },
+          {
+            "puzzleId": "subsysteme",
+            "x": 11,
+            "y": 4,
+            "console": "a"
+          },
+          {
+            "puzzleId": "subsysteme",
+            "x": 21,
+            "y": 4,
+            "console": "b"
+          },
+          {
+            "puzzleId": "frequenz",
+            "x": 11,
+            "y": 20
+          },
+          {
+            "puzzleId": "reaktorstart",
+            "x": 34,
+            "y": 16
+          }
+        ],
+        "labels": [
+          {
+            "text": "ARCHIV",
+            "x": 5,
+            "y": 3,
+            "kind": "archive"
+          },
+          {
+            "text": "SERVERRAUM",
+            "x": 16,
+            "y": 4,
+            "kind": "server"
+          },
+          {
+            "text": "FLUR",
+            "x": 6,
+            "y": 10,
+            "kind": "corridor"
+          },
+          {
+            "text": "FLUR",
+            "x": 23,
+            "y": 10,
+            "kind": "corridor"
+          },
+          {
+            "text": "OST-FLUR",
+            "x": 29,
+            "y": 5,
+            "kind": "corridor"
+          },
+          {
+            "text": "MASCHINENRAUM",
+            "x": 4,
+            "y": 16,
+            "kind": "machine"
+          },
+          {
+            "text": "LABOR",
+            "x": 15,
+            "y": 16,
+            "kind": "lab"
+          },
+          {
+            "text": "SÜD-FLUR",
+            "x": 23,
+            "y": 19,
+            "kind": "corridor"
+          },
+          {
+            "text": "REAKTOR",
+            "x": 28,
+            "y": 18,
+            "kind": "reactor"
+          }
+        ],
+        "decor": [
+          {
+            "kind": "shelf",
+            "x": 2,
+            "y": 2,
+            "variant": 0
+          },
+          {
+            "kind": "shelf",
+            "x": 3,
+            "y": 2,
+            "variant": 1
+          },
+          {
+            "kind": "shelf",
+            "x": 6,
+            "y": 2,
+            "variant": 2
+          },
+          {
+            "kind": "shelf",
+            "x": 7,
+            "y": 2,
+            "variant": 3
+          },
+          {
+            "kind": "shelf",
+            "x": 2,
+            "y": 5,
+            "variant": 1
+          },
+          {
+            "kind": "shelf",
+            "x": 3,
+            "y": 5,
+            "variant": 2
+          },
+          {
+            "kind": "shelf",
+            "x": 6,
+            "y": 5,
+            "variant": 3
+          },
+          {
+            "kind": "shelf",
+            "x": 7,
+            "y": 5,
+            "variant": 0
+          },
+          {
+            "kind": "shelf",
+            "x": 9,
+            "y": 5,
+            "variant": 1
+          },
+          {
+            "kind": "cart",
+            "x": 1,
+            "y": 7
+          },
+          {
+            "kind": "rack",
+            "x": 12,
+            "y": 2,
+            "variant": 0
+          },
+          {
+            "kind": "rack",
+            "x": 13,
+            "y": 2,
+            "variant": 1
+          },
+          {
+            "kind": "rack",
+            "x": 14,
+            "y": 2,
+            "variant": 2
+          },
+          {
+            "kind": "rack",
+            "x": 18,
+            "y": 2,
+            "variant": 3
+          },
+          {
+            "kind": "rack",
+            "x": 19,
+            "y": 2,
+            "variant": 0
+          },
+          {
+            "kind": "rack",
+            "x": 20,
+            "y": 2,
+            "variant": 1
+          },
+          {
+            "kind": "rack",
+            "x": 12,
+            "y": 6,
+            "variant": 2
+          },
+          {
+            "kind": "rack",
+            "x": 13,
+            "y": 6,
+            "variant": 3
+          },
+          {
+            "kind": "rack",
+            "x": 14,
+            "y": 6,
+            "variant": 0
+          },
+          {
+            "kind": "rack",
+            "x": 18,
+            "y": 6,
+            "variant": 1
+          },
+          {
+            "kind": "rack",
+            "x": 19,
+            "y": 6,
+            "variant": 2
+          },
+          {
+            "kind": "rack",
+            "x": 20,
+            "y": 6,
+            "variant": 3
+          },
+          {
+            "kind": "pipes",
+            "x": 7,
+            "y": 14,
+            "variant": 0
+          },
+          {
+            "kind": "pipes",
+            "x": 8,
+            "y": 14,
+            "variant": 1
+          },
+          {
+            "kind": "pipes",
+            "x": 9,
+            "y": 14,
+            "variant": 2
+          },
+          {
+            "kind": "generator",
+            "x": 2,
+            "y": 20,
+            "variant": 0
+          },
+          {
+            "kind": "generator",
+            "x": 3,
+            "y": 20,
+            "variant": 1
+          },
+          {
+            "kind": "generator",
+            "x": 4,
+            "y": 20,
+            "variant": 2
+          },
+          {
+            "kind": "barrel",
+            "x": 1,
+            "y": 20,
+            "variant": 0
+          },
+          {
+            "kind": "barrel",
+            "x": 6,
+            "y": 20,
+            "variant": 2
+          },
+          {
+            "kind": "generator",
+            "x": 1,
+            "y": 18,
+            "variant": 3
+          },
+          {
+            "kind": "pipes",
+            "x": 9,
+            "y": 16,
+            "variant": 3
+          },
+          {
+            "kind": "hood",
+            "x": 11,
+            "y": 14
+          },
+          {
+            "kind": "bench",
+            "x": 12,
+            "y": 14,
+            "variant": 0
+          },
+          {
+            "kind": "bench",
+            "x": 13,
+            "y": 14,
+            "variant": 1
+          },
+          {
+            "kind": "bench",
+            "x": 16,
+            "y": 14,
+            "variant": 2
+          },
+          {
+            "kind": "bench",
+            "x": 17,
+            "y": 14,
+            "variant": 3
+          },
+          {
+            "kind": "bench",
+            "x": 13,
+            "y": 20,
+            "variant": 0
+          },
+          {
+            "kind": "bench",
+            "x": 14,
+            "y": 20,
+            "variant": 1
+          },
+          {
+            "kind": "bench",
+            "x": 16,
+            "y": 20,
+            "variant": 2
+          },
+          {
+            "kind": "bench",
+            "x": 17,
+            "y": 20,
+            "variant": 3
+          },
+          {
+            "kind": "bench",
+            "x": 12,
+            "y": 17,
+            "variant": 2
+          },
+          {
+            "kind": "bench",
+            "x": 13,
+            "y": 17,
+            "variant": 3
+          },
+          {
+            "kind": "core",
+            "x": 30,
+            "y": 15
+          },
+          {
+            "kind": "cables",
+            "x": 29,
+            "y": 15,
+            "variant": 0
+          },
+          {
+            "kind": "cables",
+            "x": 31,
+            "y": 15,
+            "variant": 1
+          },
+          {
+            "kind": "cables",
+            "x": 30,
+            "y": 14,
+            "variant": 2
+          },
+          {
+            "kind": "cables",
+            "x": 30,
+            "y": 16,
+            "variant": 3
+          },
+          {
+            "kind": "desk",
+            "x": 26,
+            "y": 14,
+            "variant": 0
+          },
+          {
+            "kind": "desk",
+            "x": 26,
+            "y": 20,
+            "variant": 1
+          },
+          {
+            "kind": "desk",
+            "x": 33,
+            "y": 20,
+            "variant": 2
+          },
+          {
+            "kind": "desk",
+            "x": 29,
+            "y": 20,
+            "variant": 3
+          },
+          {
+            "kind": "desk",
+            "x": 30,
+            "y": 20,
+            "variant": 0
+          }
+        ],
+        "manuals": [
+          {
+            "id": "buch-archiv",
+            "kind": "book",
+            "label": "HANDBUCH",
+            "puzzleIds": [
+              "notstrom"
+            ],
+            "spots": [
+              {
+                "x": 8,
+                "y": 1
+              },
+              {
+                "x": 9,
+                "y": 3
+              }
+            ]
+          },
+          {
+            "id": "klemmbrett",
+            "kind": "clipboard",
+            "label": "KLEMMBRETT",
+            "puzzleIds": [
+              "signalkette"
+            ],
+            "spots": [
+              {
+                "x": 11,
+                "y": 12
+              },
+              {
+                "x": 24,
+                "y": 12
+              }
+            ]
+          },
+          {
+            "id": "spind",
+            "kind": "locker",
+            "label": "SPIND",
+            "puzzleIds": [
+              "subsysteme"
+            ],
+            "spots": [
+              {
+                "x": 16,
+                "y": 2
+              },
+              {
+                "x": 16,
+                "y": 6
+              }
+            ]
+          },
+          {
+            "id": "aktenschrank",
+            "kind": "cabinet",
+            "label": "AKTENSCHRANK",
+            "puzzleIds": [
+              "frequenz"
+            ],
+            "spots": [
+              {
+                "x": 18,
+                "y": 14
+              },
+              {
+                "x": 18,
+                "y": 20
+              },
+              {
+                "x": 11,
+                "y": 15
+              }
+            ],
+            "needsKey": "schluessel"
+          }
+        ],
+        "edgeworkSign": {
+          "x": 2,
+          "y": 3
+        },
+        "exit": {
+          "x": 1,
+          "y": 1
+        },
+        "sabotage": {
+          "mode": "relay",
+          "label": "KÜHLKREISLAUF — RELAIS VON HAND",
+          "hint": "Notfallverfahren: Jede Anweisung sofort laut durchgeben; geschaltet wird nur an dem Pult, das sie nennt. Danach laut bestätigen.",
+          "firstAfterSec": 100,
+          "everySec": 150,
+          "durationSec": 45,
+          "penaltySec": 60,
+          "windowSec": 15,
+          "required": 6,
+          "panels": [],
+          "afterSolved": 3
+        },
+        "lamps": [
+          {
+            "x": 15,
+            "y": 8
+          },
+          {
+            "x": 6,
+            "y": 13
+          },
+          {
+            "x": 20,
+            "y": 8
+          },
+          {
+            "x": 33,
+            "y": 13
+          },
+          {
+            "x": 25,
+            "y": 18
+          }
+        ],
+        "items": [
+          {
+            "id": "ersatzsicherung",
+            "label": "SICHERUNG",
+            "x": 9,
+            "y": 7,
+            "deliverTo": {
+              "x": 34,
+              "y": 14
+            },
+            "requiredFor": "reaktorstart"
+          },
+          {
+            "id": "schluessel",
+            "label": "SCHLÜSSEL",
+            "x": 21,
+            "y": 1
+          }
+        ],
+        "notes": [
+          {
+            "x": 16,
+            "y": 8,
+            "text": "Kein Zufall: Die Nachtschicht hat die Kühlung überbrückt, damit die Zentrifugen durchlaufen. Um 23:47 kam der Knall."
+          },
+          {
+            "x": 16,
+            "y": 3,
+            "text": "Drei Tickets wegen der Lüfter, keins bearbeitet. Brennt hier nachts ein Rack durch: gemeldet war es. – Admin"
+          },
+          {
+            "x": 2,
+            "y": 0,
+            "text": "Wir sind vom Reaktor zur Luke im Archiv gerannt. Beide Wege sind gleich weit: durchs Labor oder am Serverraum vorbei."
+          }
+        ],
+        "drones": [
+          {
+            "id": "flurwache",
+            "waypoints": [
+              {
+                "x": 10,
+                "y": 11
+              },
+              {
+                "x": 23,
+                "y": 11
+              },
+              {
+                "x": 23,
+                "y": 10
+              },
+              {
+                "x": 10,
+                "y": 10
+              }
+            ],
+            "speed": 1.7,
+            "range": 4.5,
+            "halfAngleDeg": 26,
+            "penaltySec": 15,
+            "activeAfterSolved": 3,
+            "frozenByPlate": "kameraplatte"
+          },
+          {
+            "id": "laborwache",
+            "waypoints": [
+              {
+                "x": 22,
+                "y": 20
+              },
+              {
+                "x": 22,
+                "y": 15
+              },
+              {
+                "x": 18,
+                "y": 15
+              },
+              {
+                "x": 18,
+                "y": 19
+              },
+              {
+                "x": 18,
+                "y": 15
+              },
+              {
+                "x": 22,
+                "y": 15
+              }
+            ],
+            "speed": 1.3,
+            "range": 4,
+            "halfAngleDeg": 30,
+            "penaltySec": 15,
+            "activeAfterSolved": 4
+          }
+        ]
+      }
+    },
+    "difficulty": "normal",
+    "players": [
+      {
+        "id": "713d8c5a-4bf6-4951-8730-94fc6a77059a",
+        "name": "Anna",
+        "color": "#2dd4bf",
+        "ready": false,
+        "connected": false,
+        "isHost": true,
+        "spawn": {
+          "x": 3,
+          "y": 3
+        }
+      },
+      {
+        "id": "a60552c3-0a31-4e54-94bd-7558cfb68158",
+        "name": "Ben",
+        "color": "#f472b6",
+        "ready": true,
+        "connected": false,
+        "isHost": false,
+        "spawn": {
+          "x": 1,
+          "y": 12
+        }
+      }
+    ],
+    "currentPuzzleIndex": 3,
+    "puzzleState": null,
+    "seed": 5,
+    "roomSeed": 5,
+    "dailyOn": false,
+    "daily": null,
+    "runs": 1,
+    "edgework": {
+      "serial": "UZKM9-8",
+      "indicators": [
+        {
+          "id": "CAR",
+          "lit": false
+        },
+        {
+          "id": "SIG",
+          "lit": true
+        },
+        {
+          "id": "NSA",
+          "lit": false
+        }
+      ],
+      "cells": 4
+    },
+    "pressedPlates": [],
+    "occupiedPanels": [],
+    "presence": {
+      "stations": {
+        "signalkette": [
+          "a60552c3-0a31-4e54-94bd-7558cfb68158"
+        ]
+      },
+      "manuals": {},
+      "notes": {},
+      "signSeen": [
+        "713d8c5a-4bf6-4951-8730-94fc6a77059a"
+      ],
+      "exit": [],
+      "sight": {
+        "713d8c5a-4bf6-4951-8730-94fc6a77059a": [
+          "note:2",
+          "source:buch-archiv"
+        ]
+      }
+    },
+    "places": {
+      "buch-archiv": {
+        "x": 8,
+        "y": 1
+      },
+      "klemmbrett": {
+        "x": 11,
+        "y": 12
+      },
+      "spind": {
+        "x": 16,
+        "y": 2
+      },
+      "aktenschrank": {
+        "x": 11,
+        "y": 15
+      }
+    },
+    "opened": [],
+    "found": {
+      "713d8c5a-4bf6-4951-8730-94fc6a77059a": [
+        "console:notlicht/-",
+        "console:notstrom/a",
+        "console:signalkette/b",
+        "item:ersatzsicherung",
+        "note:0",
+        "sign"
+      ],
+      "a60552c3-0a31-4e54-94bd-7558cfb68158": [
+        "console:notlicht/-",
+        "console:notstrom/b",
+        "console:signalkette/a",
+        "note:0",
+        "source:klemmbrett"
+      ]
+    },
+    "discoveries": {
+      "713d8c5a-4bf6-4951-8730-94fc6a77059a": [
+        {
+          "key": "sign",
+          "at": 1700000000000,
+          "chime": true
+        },
+        {
+          "key": "console:notlicht/-",
+          "at": 1700000000000,
+          "chime": false
+        },
+        {
+          "key": "note:0",
+          "at": 1700000000000,
+          "chime": false
+        },
+        {
+          "key": "console:notstrom/a",
+          "at": 1700000001000,
+          "chime": false
+        },
+        {
+          "key": "console:signalkette/b",
+          "at": 1700000009000,
+          "chime": true
+        },
+        {
+          "key": "item:ersatzsicherung",
+          "at": 1700000013000,
+          "chime": true
+        }
+      ],
+      "a60552c3-0a31-4e54-94bd-7558cfb68158": [
+        {
+          "key": "console:notlicht/-",
+          "at": 1700000000000,
+          "chime": true
+        },
+        {
+          "key": "note:0",
+          "at": 1700000000600,
+          "chime": false
+        },
+        {
+          "key": "console:notstrom/b",
+          "at": 1700000001000,
+          "chime": false
+        },
+        {
+          "key": "console:signalkette/a",
+          "at": 1700000009000,
+          "chime": true
+        }
+      ]
+    },
+    "notesRead": [],
+    "credits": {
+      "713d8c5a-4bf6-4951-8730-94fc6a77059a": {
+        "operated": 2,
+        "read": 0,
+        "found": 0,
+        "delivered": 0,
+        "alarms": 0,
+        "hints": 0
+      },
+      "a60552c3-0a31-4e54-94bd-7558cfb68158": {
+        "operated": 3,
+        "read": 0,
+        "found": 0,
+        "delivered": 0,
+        "alarms": 0,
+        "hints": 0
+      }
+    },
+    "readersCredited": [],
+    "sabotage": {
+      "endsAt": 1700000145000,
+      "emergency": {
+        "type": "relay",
+        "controls": [
+          {
+            "id": "k1",
+            "ownerId": "713d8c5a-4bf6-4951-8730-94fc6a77059a",
+            "name": "Dampfdruckregler",
+            "setting": {
+              "kind": "button",
+              "value": null
+            }
+          },
+          {
+            "id": "k2",
+            "ownerId": "713d8c5a-4bf6-4951-8730-94fc6a77059a",
+            "name": "Röntgenlampe",
+            "setting": {
+              "kind": "dial",
+              "value": 2
+            }
+          },
+          {
+            "id": "k3",
+            "ownerId": "713d8c5a-4bf6-4951-8730-94fc6a77059a",
+            "name": "Elektronenschleuder",
+            "setting": {
+              "kind": "switch",
+              "value": true
+            }
+          },
+          {
+            "id": "k4",
+            "ownerId": "713d8c5a-4bf6-4951-8730-94fc6a77059a",
+            "name": "Zirkulator",
+            "setting": {
+              "kind": "dial",
+              "value": 3
+            }
+          },
+          {
+            "id": "k5",
+            "ownerId": "a60552c3-0a31-4e54-94bd-7558cfb68158",
+            "name": "Gravitonsieb",
+            "setting": {
+              "kind": "dial",
+              "value": 5
+            }
+          },
+          {
+            "id": "k6",
+            "ownerId": "a60552c3-0a31-4e54-94bd-7558cfb68158",
+            "name": "Ölkühler",
+            "setting": {
+              "kind": "dial",
+              "value": 2
+            }
+          },
+          {
+            "id": "k7",
+            "ownerId": "a60552c3-0a31-4e54-94bd-7558cfb68158",
+            "name": "Antimateriefalle",
+            "setting": {
+              "kind": "button",
+              "value": null
+            }
+          },
+          {
+            "id": "k8",
+            "ownerId": "a60552c3-0a31-4e54-94bd-7558cfb68158",
+            "name": "Quantenschleuse",
+            "setting": {
+              "kind": "switch",
+              "value": true
+            }
+          }
+        ],
+        "instructions": [
+          {
+            "holderId": "713d8c5a-4bf6-4951-8730-94fc6a77059a",
+            "controlId": "k8",
+            "value": false,
+            "expiresAt": 1700000115000
+          },
+          {
+            "holderId": "a60552c3-0a31-4e54-94bd-7558cfb68158",
+            "controlId": "k3",
+            "value": false,
+            "expiresAt": 1700000115000
+          }
+        ],
+        "completed": 0,
+        "missed": 0,
+        "seed": 3298106070,
+        "endsAt": 1700000145000
+      }
+    },
+    "paused": {
+      "since": 1700000101500,
+      "kind": "wartung"
+    },
+    "away": {
+      "713d8c5a-4bf6-4951-8730-94fc6a77059a": {
+        "since": 1700000101500,
+        "waivableAt": 1700000161500,
+        "waived": false
+      },
+      "a60552c3-0a31-4e54-94bd-7558cfb68158": {
+        "since": 1700000101500,
+        "waivableAt": 1700000161500,
+        "waived": false
+      }
+    },
+    "drops": 0,
+    "calledOff": null,
+    "items": {
+      "ersatzsicherung": {
+        "x": 9.5,
+        "y": 7.5,
+        "carriedBy": "713d8c5a-4bf6-4951-8730-94fc6a77059a",
+        "delivered": false
+      },
+      "schluessel": {
+        "x": 21.5,
+        "y": 1.5,
+        "carriedBy": null,
+        "delivered": false
+      }
+    },
+    "events": [
+      {
+        "at": 1700000000000,
+        "kind": "power",
+        "label": "Stromausfall",
+        "seconds": null
+      },
+      {
+        "at": 1700000000000,
+        "kind": "radio",
+        "label": "Leitstelle an Nachtschicht. Stromausfall im ganzen Trakt, ich sehe nur noch die Notzellen. Geht zuerst ans Notlicht, der Hauptschalter im Flur braucht zwei Leute.",
+        "seconds": null
+      },
+      {
+        "at": 1700000000000,
+        "kind": "puzzle",
+        "label": "Notlicht gelöst",
+        "seconds": null
+      },
+      {
+        "at": 1700000000000,
+        "kind": "radio",
+        "label": "Notlicht steht, danke. Jetzt der Notstrom: Die Anleitung dafür hängt im Archiv, der Kasten ist im Maschinenraum, das Prüfpult im Flur.",
+        "seconds": null
+      },
+      {
+        "at": 1700000008000,
+        "kind": "puzzle",
+        "label": "Notstrom-Kasten gelöst",
+        "seconds": null
+      },
+      {
+        "at": 1700000008000,
+        "kind": "radio",
+        "label": "Notstrom läuft, die Tür zum Maschinenraum bleibt offen. Als Nächstes die Signalkette: ein Pult im Flur, eins im Maschinenraum.",
+        "seconds": null
+      },
+      {
+        "at": 1700000012000,
+        "kind": "puzzle",
+        "label": "Signalkette gelöst",
+        "seconds": null
+      },
+      {
+        "at": 1700000012000,
+        "kind": "radio",
+        "label": "Schott zum Serverraum ist offen, drinnen Terminal und Rack. Die Drohne ist wach, die Kameraplatte davor legt sie still.",
+        "seconds": null
+      },
+      {
+        "at": 1700000100000,
+        "kind": "sabotage",
+        "label": "Notfall: KÜHLKREISLAUF — RELAIS VON HAND",
+        "seconds": null
+      }
+    ],
+    "startedAt": 1700000000000,
+    "introDone": [
+      "713d8c5a-4bf6-4951-8730-94fc6a77059a",
+      "a60552c3-0a31-4e54-94bd-7558cfb68158"
+    ],
+    "lightsOutAt": 1700000000000,
+    "lightsDueAt": null,
+    "deadlineAt": 1700000900000,
+    "finishedAt": null,
+    "penaltySeq": 0,
+    "lastPenaltySec": null,
+    "hintsUsed": 0,
+    "hintsRevealed": 0,
+    "hintReadyAt": null,
+    "quietSince": 1700000012000,
+    "nudgesGiven": 0
+  },
+  "seats": [
+    {
+      "playerId": "713d8c5a-4bf6-4951-8730-94fc6a77059a",
+      "passId": "3b35c49211bb2a1e41493866f0e41096",
+      "hash": "e27f1d917cb2f5241d1bbe5b033f437fb7b6d5394d21680c96c1e786a938454d",
+      "name": "Anna"
+    },
+    {
+      "playerId": "a60552c3-0a31-4e54-94bd-7558cfb68158",
+      "passId": "d69e273c5d430ffe143a3d70b109ffe5",
+      "hash": "1f91f6e30b779155244194a95dae761eca9b3ac178e6882d184eaeb0a085cff4",
+      "name": "Ben"
+    }
+  ],
+  "lostPasses": [],
+  "keeping": {
+    "positions": {
+      "713d8c5a-4bf6-4951-8730-94fc6a77059a": {
+        "x": 9.5,
+        "y": 7.5,
+        "facing": 0,
+        "moving": false,
+        "t": 1700000013000,
+        "rt": 1700000013000
+      },
+      "a60552c3-0a31-4e54-94bd-7558cfb68158": {
+        "x": 29.5,
+        "y": 9.5,
+        "facing": 0,
+        "moving": false,
+        "t": 1700000009000,
+        "rt": 1700000009000
+      }
+    },
+    "drones": {
+      "flurwache": {
+        "target": 1,
+        "x": 19.747936961023242,
+        "y": 11.486146228779173,
+        "facing": 0.003692290913197751,
+        "quietUntil": 0
+      },
+      "laborwache": {
+        "target": 1,
+        "x": 22.5,
+        "y": 20.5,
+        "facing": 0,
+        "quietUntil": 0
+      }
+    },
+    "lastDroneTick": 1700000101440,
+    "lostAt": {
+      "713d8c5a-4bf6-4951-8730-94fc6a77059a": 1700000101500,
+      "a60552c3-0a31-4e54-94bd-7558cfb68158": 1700000101500
+    },
+    "closedClean": [],
+    "askAgainAt": {},
+    "lastPingAt": {},
+    "lastChatAt": {},
+    "signalAllowance": {},
+    "refusedSteps": 0
+  },
+  "seq": 105,
+  "at": 1700000101500,
+  "instance": "the-build-before",
+  "final": false
+}

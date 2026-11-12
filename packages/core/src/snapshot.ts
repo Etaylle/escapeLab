@@ -112,14 +112,14 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const typed = <T>() =>
   z.custom<T>((value) => isRecord(value) && typeof value['type'] === 'string');
 
-const spot = z.object({ x: z.number(), y: z.number() });
+const spot = z.looseObject({ x: z.number(), y: z.number() });
 const ids = z.array(z.string());
 const idsBy = z.record(z.string(), ids);
 const timesBy = z.record(z.string(), z.number());
 const count = z.number().int().nonnegative();
 const moment = z.number().nullable();
 
-const playerSchema = z.object({
+const playerSchema = z.looseObject({
   id: z.string(),
   name: z.string(),
   color: z.string(),
@@ -129,7 +129,7 @@ const playerSchema = z.object({
   spawn: spot.nullable(),
 });
 
-const creditsSchema = z.object({
+const creditsSchema = z.looseObject({
   operated: count,
   read: count,
   found: count,
@@ -138,27 +138,27 @@ const creditsSchema = z.object({
   hints: count,
 });
 
-const awaySchema = z.object({
+const awaySchema = z.looseObject({
   since: z.number(),
   waivableAt: z.number(),
   waived: z.boolean(),
   claimUntil: z.number().exactOptional(),
 });
 
-const runEventSchema = z.object({
+const runEventSchema = z.looseObject({
   at: z.number(),
   kind: z.custom<RunEvent['kind']>((value) => typeof value === 'string'),
   label: z.string(),
   seconds: z.number().nullable(),
 });
 
-const edgeworkSchema = z.object({
+const edgeworkSchema = z.looseObject({
   serial: z.string(),
-  indicators: z.array(z.object({ id: z.enum(INDICATOR_IDS), lit: z.boolean() })),
+  indicators: z.array(z.looseObject({ id: z.enum(INDICATOR_IDS), lit: z.boolean() })),
   cells: z.number(),
 });
 
-const presenceSchema = z.object({
+const presenceSchema = z.looseObject({
   stations: idsBy,
   manuals: idsBy,
   notes: idsBy,
@@ -167,7 +167,7 @@ const presenceSchema = z.object({
   sight: idsBy,
 });
 
-const itemSchema = z.object({
+const itemSchema = z.looseObject({
   x: z.number(),
   y: z.number(),
   carriedBy: z.string().nullable(),
@@ -175,7 +175,7 @@ const itemSchema = z.object({
 });
 
 /** The game as a snapshot carries it (state.ts `GameState`): its mission checked as a file is. */
-const gameStateSchema = z.object({
+const gameStateSchema = z.looseObject({
   phase: z.enum(['lobby', 'playing', 'won', 'lost']),
   mission: missionSchema,
   difficulty: z.enum(DIFFICULTIES),
@@ -196,15 +196,15 @@ const gameStateSchema = z.object({
   found: idsBy,
   discoveries: z.record(
     z.string(),
-    z.array(z.object({ key: z.string(), at: z.number(), chime: z.boolean() })),
+    z.array(z.looseObject({ key: z.string(), at: z.number(), chime: z.boolean() })),
   ),
   notesRead: z.array(z.number()),
   credits: z.record(z.string(), creditsSchema),
   readersCredited: ids,
   sabotage: z
-    .object({ endsAt: z.number(), emergency: typed<RelayState>().exactOptional() })
+    .looseObject({ endsAt: z.number(), emergency: typed<RelayState>().exactOptional() })
     .nullable(),
-  paused: z.object({ since: z.number(), kind: z.enum(['away', 'wartung']) }).nullable(),
+  paused: z.looseObject({ since: z.number(), kind: z.enum(['away', 'wartung']) }).nullable(),
   away: z.record(z.string(), awaySchema),
   drops: count,
   calledOff: z.string().nullable(),
@@ -225,14 +225,14 @@ const gameStateSchema = z.object({
   nudgesGiven: count,
 }) satisfies z.ZodType<GameState>;
 
-const seatSchema = z.object({
+const seatSchema = z.looseObject({
   playerId: z.string(),
   passId: z.string().regex(/^[0-9a-f]{32}$/),
   hash: z.string().regex(/^[0-9a-f]{64}$/),
   name: z.string(),
 }) satisfies z.ZodType<SeatSnapshot>;
 
-const droneRuntimeSchema = z.object({
+const droneRuntimeSchema = z.looseObject({
   target: count,
   x: z.number(),
   y: z.number(),
@@ -240,10 +240,10 @@ const droneRuntimeSchema = z.object({
   quietUntil: z.number(),
 }) satisfies z.ZodType<DroneRuntime>;
 
-const keepingSchema = z.object({
+const keepingSchema = z.looseObject({
   positions: z.record(
     z.string(),
-    z.object({
+    z.looseObject({
       x: z.number(),
       y: z.number(),
       facing: z.number(),
@@ -259,7 +259,7 @@ const keepingSchema = z.object({
   askAgainAt: timesBy,
   lastPingAt: timesBy,
   lastChatAt: timesBy,
-  signalAllowance: z.record(z.string(), z.object({ left: z.number(), at: z.number() })),
+  signalAllowance: z.record(z.string(), z.looseObject({ left: z.number(), at: z.number() })),
   refusedSteps: count,
 }) satisfies z.ZodType<RoomKeeping>;
 
@@ -283,10 +283,13 @@ function factsAgree(snapshot: Omit<RoomSnapshot, 'keeping' | 'lostPasses'>): boo
  * A room's snapshot as it is read back from its seal (server seal.ts), with what the seal says
  * of it (`SealedSnapshot`): every part of it of the shape this build gives it, and its facts
  * its game's. A module's own state — a puzzle's, the relay's — is checked as far as the type it
- * names.
+ * names, and the mission as a mission file is. Snapshots outlive a deploy: a key this build does
+ * not know passes through, one a later build drops stays harmless, and a field this build adds
+ * needs a default here, or every snapshot of the build before it is refused — and every run on
+ * goes with it (server test/fixtures/blackout-snapshot.json holds one of those).
  */
 export const sealedSnapshotSchema: z.ZodType<SealedSnapshot> = z
-  .object({
+  .looseObject({
     code: z.string().min(1).max(10),
     missionId: z.string().min(1),
     seed: z.number().nullable(),

@@ -335,7 +335,11 @@ Betrieb:
   die Seiten verbinden sich wie nach einem Abbruch neu, der neue Server stellt den Raum aus dem
   mitgebrachten Schnappschuss wieder her, und sobald die Crew zurück ist, läuft die Uhr dort
   weiter, wo sie stand. Auto-Deploy bleibt an, also ist jeder Push auf `main` ein Deploy; wer
-  pusht, sieht in `/health` (`rooms.running`, `rooms.players`), ob gerade gespielt wird.
+  pusht, sieht in `/health` (`rooms.running`, `rooms.players`), ob gerade gespielt wird. Ein
+  neues Feld im Spielzustand braucht im Schnappschuss-Schema (`packages/core/src/snapshot.ts`)
+  einen Vorgabewert, sonst verwirft der neue Build die Schnappschüsse des alten, und der Deploy
+  beendet jeden laufenden Einsatz; dann schlägt der Test fehl, der einen Schnappschuss des
+  Builds davor öffnet (`packages/server/test/fixtures/blackout-snapshot.json`).
 - **Der Free-Plan schläft und startet neu.** Nach 15 Minuten ohne HTTP-Anfrage oder
   WebSocket-Nachricht fährt die Instanz herunter, und Render darf Free-Instanzen jederzeit neu
   starten. Ein Neustart geht wie ein Deploy aus; endet die Instanz ohne SIGTERM, hart, verliert

@@ -301,6 +301,9 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   oder die 90 s um sind; ein zu später steht mit beiden Nummern im Log. Smoke: zwei Server
   nebeneinander, Finn wartet auf dem neuen, bis Eva und Gus nach dem SIGTERM des alten kommen;
   nach SIGKILL ist der Raum 90 s nach dem Start des nächsten zurück.
+- Schnappschüsse überdauern Deploys: Unbekannte Schlüssel gehen durch, Modulzustände werden nur
+  nach ihrem Typ geprüft, und neue Felder im Spielzustand brauchen einen Vorgabewert — der Test
+  zu `test/fixtures/blackout-snapshot.json` (Schnappschuss des Builds davor) wacht darüber.
 - Offen bei Render: `ROOM_SECRET` setzen, `maxShutdownDelaySeconds` auf 120.
 
 ### R-3 Der Einsatz bindet die Crew — Status: erledigt (R-reconnect, Merge 2026-11-12; drei Review-Runden, Harness Blackout 147 Captures mit Abbruch-Übung) · Größe: L
