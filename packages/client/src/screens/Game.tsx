@@ -69,6 +69,7 @@ import { PuzzlePanel } from './PuzzlePanel.js';
 import { useHudRow } from './hudFold.js';
 import { RowCrew, RowTools } from './HudRow.js';
 import { Icon } from './Icon.js';
+import { LineLostCard, lineLost, ON_THE_LINE, type GameLine } from './Line.js';
 import { BackToast, PauseCard } from './Pause.js';
 import { MissionHud } from './MissionHud.js';
 import { InfoPanel } from './InfoPanel.js';
@@ -97,6 +98,8 @@ interface Props {
   refusal: Refusal | null;
   /** the run's end, while the world still plays it on this screen (finale.ts); none before */
   finale: Finale | null;
+  /** the own line, whose card stands over the world while it is down (Line.tsx); up by default */
+  line?: GameLine;
 }
 
 /**
@@ -1006,27 +1009,32 @@ export function FinaleVeil({ ending, since }: { ending: Ending; since: number })
 // --- screen ------------------------------------------------------------------
 
 /**
- * What comes and goes over a run: the briefing, the pause, a return the run went on without,
- * the relay's alert. The clock's red edge lies over the world alone, under the HUD
- * (GameWorld.tsx RedEdge).
+ * What comes and goes over a run: the briefing, the own line lost, the pause, a return the run
+ * went on without, the relay's alert. The clock's red edge lies over the world alone, under
+ * the HUD (GameWorld.tsx RedEdge).
  */
 function RunOverlays({
   view,
   coldOpen,
   send,
   refusal,
+  line,
 }: {
   view: PlayerView;
   coldOpen: ColdOpen;
   send: Props['send'];
   refusal: Refusal | null;
+  line: GameLine;
 }) {
   const sabotage = view.map?.sabotage ?? null;
   const relay = sabotage?.relay;
+  // The own line down, the card says so: whatever stands still for others is not news here.
+  const lost = lineLost(line.status, view);
   return (
     <>
       {!coldOpen.intro && <Briefing view={view} />}
-      {view.pausedFor !== null && <PauseCard view={view} send={send} />}
+      {lost && <LineLostCard line={line} />}
+      {!lost && view.pausedFor !== null && <PauseCard view={view} send={send} />}
       <BackToast players={view.players} />
       {sabotage !== null && relay !== undefined && (
         <RelayAlert
@@ -1246,13 +1254,19 @@ export function gameClass(
 
 /**
  * Whether the world takes no keys: while the end plays, the station's panel, pages or a note
- * lie over it, the run is paused or the relay console holds them. Pages on their way down hold
- * nothing: the player walks off at once.
+ * lie over it, the run is paused, the own line is down (`lost`) or the relay console holds
+ * them. Pages on their way down hold nothing: the player walks off at once.
  */
-function worldLocked(view: PlayerView, open: OpenNow, station: PuzzleView | null, live: boolean) {
+export function worldLocked(
+  view: PlayerView,
+  open: Pick<OpenNow, 'reading' | 'note'>,
+  station: PuzzleView | null,
+  live: boolean,
+  lost: boolean,
+) {
   const relayUp = view.map?.sabotage?.relay !== undefined;
   const over = station !== null || open.reading !== null || open.note !== null;
-  return !live || over || view.pausedFor !== null || relayUp;
+  return !live || lost || over || view.pausedFor !== null || relayUp;
 }
 
 /**
@@ -1289,7 +1303,13 @@ function RunWorld({
       finale={finale === null ? null : { ending: finale.ending, since: finale.since }}
       station={station}
       holdTips={holdTips}
-      inputLocked={worldLocked(view, open, station, finale === null)}
+      inputLocked={worldLocked(
+        view,
+        open,
+        station,
+        finale === null,
+        lineLost((game.line ?? ON_THE_LINE).status, view),
+      )}
       onToggleInfo={open.toggleInfo}
       onRead={(manualId) => open.set({ readingId: manualId })}
       onReadNote={(index) => open.set({ noteIndex: index })}
@@ -1388,7 +1408,15 @@ export function GameScreen(props: Props) {
   const row = crewStrip.row;
   return (
     <div className={gameClass(finale, live && open.notes && over, held, row !== null)}>
-      {live && <RunOverlays view={view} coldOpen={coldOpen} send={send} refusal={refusal} />}
+      {live && (
+        <RunOverlays
+          view={view}
+          coldOpen={coldOpen}
+          send={send}
+          refusal={refusal}
+          line={props.line ?? ON_THE_LINE}
+        />
+      )}
       <div className="stage">
         <StageTop
           view={view}

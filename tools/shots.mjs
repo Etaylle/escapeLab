@@ -434,6 +434,19 @@
  * reach, glowing in the dark. The copy is deleted again whatever happened. Every walk
  * goes round the map's furniture (map.decor), which nobody walks through.
  *
+ * Reconnect (a Blackout run only): before the walkthrough, a room of its own for three —
+ * Anna, Ben and Cem, each in a browser context of its own, the microphones on, the opening
+ * skipped. Ben's network goes (`context.setOffline`): Anna's page has to wait for him
+ * (pause-waiting.png) and offer the way on without him 60 s into the pause, 3 s late at most;
+ * she presses it, and the clock has to run again (continue-without.png). Ben's own page has to
+ * say its line is lost, the next try counted, and offer its three ways on
+ * (reconnect-overlay.png). His network back, Anna's page has to say „Ben ist zurück"
+ * (back-toast.png) and the voice links have to come up again. A new tab of Ben's browser has to
+ * open on the run's card (rejoin-card.png) and go back to the run, his first tab told that the
+ * seat went to the other; his network gone once more, a phone named Ben takes the seat over by
+ * the room's code and his name, and his browser, back, has to be refused (takeover.png). Any
+ * step that fails, fails the run; the log says how long the drill took.
+ *
  * Figures: the crew stands as client world/figure.ts poses it, and four shots
  * at 1440×1000 show it. lobby-idle.png catches a lobby figure turned in a
  * glance round the room, when the figures' probe (`?trace=1`,
@@ -10362,6 +10375,291 @@ async function captureDroneClose(player) {
   }
 }
 
+// ── the reconnect drill: a crew of three in Blackout, one away and back ──────────────────────
+//
+// A room of its own, before the walkthrough: Anna opens Blackout, Ben and Cem join, all three
+// switch their microphones on and skip the opening. Ben's network goes (`context.setOffline`):
+// his page finds its line dead and says so over the world (reconnect-overlay.png); the server,
+// whose pings Ben's browser still answers, cuts his silent socket, and the pause card on
+// Anna's page counts (pause-waiting.png); 60 s into the pause it offers the way on without
+// him, Anna presses it and the clock runs again (continue-without.png). Ben's network back,
+// his page is back on its pass at once and Anna's says so (back-toast.png); the voice links
+// come up again. Ben in a new tab of his browser finds the run's card on the join screen and
+// goes back (rejoin-card.png), his first tab told the seat went to the other. Ben's network
+// goes once more, a phone named Ben takes his seat over by the room's code and his name, and
+// his browser, back, is refused (takeover.png). Any step that fails, fails the run.
+
+/** How long the drill waits for what one step brings, ms. */
+const DRILL_STEP_MS = 40_000;
+/** The run's first drop lets the crew go on after this long (core FIRST_WAIT_MS), ms. */
+const DRILL_WAIT_MS = 60_000;
+/** How far past the minute the button may come: the card's margin and a poll, ms. */
+const DRILL_BUTTON_SLACK_MS = 3000;
+
+/** A player of the drill: a page of its own in a context of its own, its socket listened in on. */
+async function drillPlayer(name) {
+  const context = await browser.newContext({ viewport: SIZES[0] });
+  await wonBefore(context);
+  const page = await openPage(context, `drill ${name}`);
+  page.on('pageerror', (e) => console.log(`[drill ${name} error]`, e.message));
+  return { name, context, page, seen: eavesdrop(page) };
+}
+
+/** `player` joins room `code` from the join screen, by the code's own field. */
+async function joinByCode(player, code) {
+  await player.page.goto(traced(BASE));
+  await player.page.getByPlaceholder('z. B. Anna').fill(player.name);
+  await player.page.getByLabel('Raumcode').fill(code);
+  await player.page.locator('.join-with-code button', { hasText: 'Beitreten' }).click();
+}
+
+/**
+ * The drill's crew in Blackout's dark: Anna opens the room, Ben and Cem join and say yes,
+ * the microphones on, the run started, the opening skipped by all three.
+ */
+async function drillCrew() {
+  const anna = await drillPlayer('Anna');
+  const ben = await drillPlayer('Ben');
+  const cem = await drillPlayer('Cem');
+  const crew = [anna, ben, cem];
+  await anna.page.goto(traced(BASE));
+  await anna.page.getByPlaceholder('z. B. Anna').fill('Anna');
+  await anna.page.locator('.mission', { hasText: MISSION }).first().click();
+  await clickText(anna.page, 'Runde eröffnen');
+  await anna.page.locator('.room-code strong').waitFor({ timeout: 10_000 });
+  const code = (await anna.page.locator('.room-code strong').innerText()).trim();
+  for (const player of [ben, cem]) {
+    await joinByCode(player, code);
+    await player.page.locator('.lobby').waitFor({ timeout: 10_000 });
+  }
+  await micsOn(crew);
+  for (const player of [ben, cem]) {
+    await clickText(player.page, 'Ich bin bereit');
+  }
+  const ready = () => anna.seen.view?.players?.filter((p) => p.ready).length === 2;
+  if (!(await until(ready, 10_000))) {
+    throw new Error('Ben and Cem never stood ready on Anna’s page');
+  }
+  await clickText(anna.page, 'Mission starten');
+  for (const { page } of crew) {
+    await page.locator('.stage').waitFor({ timeout: START_MS });
+  }
+  await sleep(1800); // past the location card
+  for (const { page } of crew) {
+    await page.keyboard.press('Space');
+  }
+  if (!(await until(() => anna.seen.view?.lights?.out === true, 15_000))) {
+    throw new Error('the drill’s lights never went out');
+  }
+  await sleep(2500); // past the title of the blackout
+  return { code, anna, ben, cem, crew };
+}
+
+/** Whether `page` shows the pause card waiting for `name`. */
+const waitingFor = (page, name) =>
+  page.locator('.overlay.pause:not(.line-lost) h1', { hasText: `Warten auf ${name}` }).count();
+
+/** Polls `check` (async) until it holds or `ms` have passed; whether it held. */
+async function untilAsync(check, ms) {
+  const end = Date.now() + ms;
+  for (;;) {
+    if (await check()) {
+      return true;
+    }
+    if (Date.now() > end) {
+      return false;
+    }
+    await sleep(200);
+  }
+}
+
+/** Fails the run where the way on came off the minute, or the clock stood after the press. */
+function judgeWayOn(offeredAfter, before, after) {
+  if (offeredAfter < DRILL_WAIT_MS || offeredAfter > DRILL_WAIT_MS + DRILL_BUTTON_SLACK_MS) {
+    fail(`continue-without: the way on came ${seconds(offeredAfter)} into the pause, not at 60 s`);
+  }
+  if (before === null || before === after) {
+    fail(`continue-without.png: the clock stands at ${before} after the press`);
+  }
+}
+
+/**
+ * Ben's network goes: his page's own card, the server's cut, Anna's pause card and its counter,
+ * the way on 60 s into the pause, the clock running again once Anna pressed it.
+ */
+async function benAway({ anna, ben }) {
+  const off = Date.now();
+  await ben.context.setOffline(true);
+  if (!(await untilAsync(async () => (await waitingFor(anna.page, 'Ben')) > 0, DRILL_STEP_MS))) {
+    throw new Error(`Anna’s page never waited for Ben, ${seconds(Date.now() - off)} offline`);
+  }
+  const pausedAt = anna.seen.view?.pausedAt ?? Date.now();
+  await sleep(2500);
+  const count = await textOf(anna.page.locator('.pause-count'));
+  await capture(anna.page, 'pause-waiting.png');
+  const button = anna.page.locator('.pause-go-on', { hasText: 'Ohne Ben weiter' });
+  await button.waitFor({ state: 'visible', timeout: DRILL_WAIT_MS + DRILL_STEP_MS });
+  const offeredAfter = Date.now() - pausedAt;
+  await button.click();
+  if (!(await until(() => anna.seen.view?.pausedFor === null, 5000))) {
+    throw new Error('the run did not go on without Ben after the press');
+  }
+  await sleep(600);
+  const before = await textOf(anna.page.locator('.countdown'));
+  await sleep(2200);
+  const after = await textOf(anna.page.locator('.countdown'));
+  await capture(anna.page, 'continue-without.png');
+  console.log(
+    `pause-waiting.png  Anna waits for Ben, the counter at ${count}, ` +
+      `${seconds(pausedAt - off)} after his network went; the way on after ` +
+      `${seconds(offeredAfter)} of pause; continue-without.png the clock ${before} → ${after}`,
+  );
+  judgeWayOn(offeredAfter, before, after);
+  return off;
+}
+
+/** Ben's own card while his network is gone: the line lost, the next try and the ways on. */
+async function benOwnCard({ ben }) {
+  const card = ben.page.locator('.line-lost');
+  await card.waitFor({ state: 'visible', timeout: DRILL_STEP_MS });
+  const retry = await textOf(card.locator('.line-retry'));
+  const ways = await card.locator('button').allInnerTexts();
+  await capture(ben.page, 'reconnect-overlay.png');
+  console.log(`reconnect-overlay.png Ben's own card: „${retry}", ${ways.join(' · ')}`);
+  if (!/^Verbinde neu · Versuch \d+/.test(retry ?? '')) {
+    fail(`reconnect-overlay.png: the card says „${retry}", no try counted`);
+  }
+  const wanted = ['Jetzt versuchen', 'Seite neu laden', 'Einsatz aufgeben'];
+  if (wanted.some((way) => !ways.includes(way))) {
+    fail(`reconnect-overlay.png: the card offers ${ways.join(', ')}`);
+  }
+}
+
+/**
+ * Ben's network back: his page back on its pass, the card gone, Anna's page saying so, the
+ * voice links of all three up again.
+ */
+async function benBack({ anna, ben, crew }, off) {
+  await ben.context.setOffline(false);
+  const back = Date.now();
+  await ben.page.locator('.line-lost').waitFor({ state: 'hidden', timeout: DRILL_STEP_MS });
+  const toast = anna.page.locator('.crew-back');
+  const said = await toast.waitFor({ state: 'visible', timeout: 10_000 }).then(
+    () => true,
+    () => false,
+  );
+  const words = said ? await textOf(toast) : null;
+  if (said) {
+    await capture(anna.page, 'back-toast.png');
+  }
+  const linked = await linksUp(crew);
+  console.log(
+    `back-toast.png     Ben back ${seconds(Date.now() - back)} after his network, away ` +
+      `${seconds(back - off)}: Anna's page says „${words}"; voice ` +
+      (linked ? 'linked again' : `!! ${await linkStates(crew)}`),
+  );
+  if (words !== 'Ben ist zurück') {
+    fail(`back-toast.png: Anna's page said „${words}" for Ben's return`);
+  }
+  if (!linked) {
+    fail('the voice links did not come up again after Ben’s reconnect');
+  }
+}
+
+/** Ben in a new tab of his browser: the run's card on the join screen, and back to the run. */
+async function benRejoins({ ben }) {
+  const page = await openPage(ben.context, 'drill Ben tab');
+  const tab = { name: 'Ben', context: ben.context, page, seen: eavesdrop(page) };
+  await page.goto(traced(BASE));
+  const card = page.locator('.bound--run');
+  await card.waitFor({ state: 'visible', timeout: 10_000 });
+  const facts = await textOf(card.locator('.bound-facts'));
+  await capture(page, 'rejoin-card.png');
+  await card.locator('.bound-back').click();
+  await page.locator('.stage').waitFor({ timeout: 10_000 });
+  const moved = ben.page.locator('.banner.error', { hasText: 'anderen Fenster' });
+  const told = await moved.waitFor({ timeout: 5000 }).then(
+    () => true,
+    () => false,
+  );
+  console.log(
+    `rejoin-card.png    Ben's new tab finds the run (${facts}) and goes back to it; ` +
+      `the first tab ${told ? 'told the seat went to the other' : '!! told nothing'}`,
+  );
+  if (!told) {
+    fail('rejoin: Ben’s first tab was not told that his seat went to the new one');
+  }
+  return tab;
+}
+
+/**
+ * Ben's network goes once more; a phone named Ben takes his seat over by the room's code and
+ * his name; his browser, back, is refused.
+ */
+async function benTakenOver({ code, anna }, tab) {
+  await tab.context.setOffline(true);
+  if (!(await untilAsync(async () => (await waitingFor(anna.page, 'Ben')) > 0, DRILL_STEP_MS))) {
+    throw new Error('Anna’s page never waited for Ben the second time');
+  }
+  const phone = await drillPlayer('Ben');
+  try {
+    await joinByCode(phone, code);
+    await phone.page.locator('.stage').waitFor({ timeout: 10_000 });
+    const on = await until(() => anna.seen.view?.pausedFor === null, 5000);
+    await tab.context.setOffline(false);
+    const refusal = tab.page.locator('.banner.error', { hasText: 'anderen Gerät' });
+    const refused = await refusal.waitFor({ timeout: DRILL_STEP_MS }).then(
+      () => true,
+      () => false,
+    );
+    // The banner's own words, without its „schließen".
+    const words = refused
+      ? await refusal.evaluate((banner) => banner.firstChild?.textContent?.trim() ?? null)
+      : null;
+    await capture(tab.page, 'takeover.png');
+    console.log(
+      `takeover.png       a phone named Ben sits down on his seat` +
+        (on ? ', the run on' : ' — !! the run still waits') +
+        `; his browser back: „${words ?? 'nothing said'}"`,
+    );
+    if (!on || !refused) {
+      fail('takeover: the phone did not take Ben’s seat, or his browser was not refused');
+    }
+  } finally {
+    await phone.context.close();
+  }
+}
+
+/**
+ * The reconnect drill (see above): Blackout for three, Ben away and back, on in a new tab,
+ * taken over by a phone. Skipped for any other mission; the contexts closed whatever happened.
+ */
+async function captureReconnect() {
+  if (MISSION.toLowerCase() !== 'blackout') {
+    skip('reconnect', `the reconnect drill plays Blackout for three; this run plays ${MISSION}`);
+    return;
+  }
+  const from = Date.now();
+  const contexts = [];
+  try {
+    const drill = await drillCrew();
+    contexts.push(...drill.crew.map(({ context }) => context));
+    const off = await benAway(drill);
+    await benOwnCard(drill);
+    await benBack(drill, off);
+    const tab = await benRejoins(drill);
+    await benTakenOver(drill, tab);
+  } catch (err) {
+    console.log(`reconnect          !! ${firstLine(err)}`);
+    fail(`reconnect: ${firstLine(err)}`);
+  } finally {
+    for (const context of contexts) {
+      await context.close();
+    }
+    console.log(`reconnect          the drill took ${seconds(Date.now() - from)}`);
+  }
+}
+
 async function run() {
   mkdirSync(OUT, { recursive: true });
   if (CPU_SLOWDOWN > 1) {
@@ -10376,6 +10674,7 @@ async function run() {
   await captureServers();
   await captureArtTour();
   await captureDangerSense();
+  await captureReconnect();
 
   // --- host: create a room and grab the code ---------------------------
   const hostCtx = await browser.newContext({ viewport: SIZES[0] });

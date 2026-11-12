@@ -1,0 +1,129 @@
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it } from 'vitest';
+import type { PlayerView } from '@escapelab/core';
+import { GameScreen, worldLocked } from '../src/screens/Game.js';
+import { LineLostCard, lineLost, retryLine, type GameLine } from '../src/screens/Line.js';
+import { mapWith } from './fixtures.js';
+import { buttonsOf, elementsOf, press } from './probe.js';
+
+const T0 = 1_700_000_000_000;
+const noop = (): void => undefined;
+
+const anna = { id: 'p1', name: 'Anna', color: '#2dd4bf', ready: false, isHost: true };
+const ben = { id: 'p2', name: 'Ben', color: '#f472b6', ready: false, isHost: false };
+
+/** Anna's view of a run on, Ben with her. */
+function running(parts: Partial<PlayerView> = {}): PlayerView {
+  return {
+    phase: 'playing',
+    missionId: 'systemcheck',
+    missionTitle: 'Tutorial: Systemcheck',
+    difficulty: 'normal',
+    storyText: 'Los.',
+    crewSize: { min: 2, max: 2 },
+    chat: [],
+    you: anna,
+    players: [
+      { ...anna, connected: true },
+      { ...ben, connected: true },
+    ],
+    palette: [],
+    deadlineAt: T0 + 300_000,
+    startedAt: T0,
+    finishedAt: null,
+    timeLimitSec: 420,
+    lights: { out: true, outAt: T0 },
+    currentPuzzleIndex: 0,
+    puzzleCount: 4,
+    pausedFor: null,
+    pausedAt: null,
+    events: [],
+    grade: null,
+    penaltySeq: 0,
+    lastPenaltySec: null,
+    alarms: { count: 0, limit: 5 },
+    hintsUsed: 0,
+    credits: {},
+    edgework: null,
+    presence: { stationId: null, console: null, manualId: null, signSeen: false },
+    sourcesHere: [],
+    manualsHere: [],
+    noteHere: null,
+    puzzle: null,
+    map: mapWith({}),
+    ...parts,
+  };
+}
+
+/** The own line as the game screen hears of it, down unless told otherwise. */
+function lineOf(parts: Partial<GameLine> = {}): GameLine {
+  return { status: 'closed', retry: { attempt: 2, at: null }, wake: noop, giveUp: noop, ...parts };
+}
+
+function screen(view: PlayerView, line: GameLine): string {
+  return renderToStaticMarkup(
+    <GameScreen
+      view={view}
+      roomCode="KX4P"
+      positionsRef={{ current: { run: null, players: {} } }}
+      dronesRef={{ current: {} }}
+      pingsRef={{ current: [] }}
+      chatsRef={{ current: [] }}
+      send={noop}
+      listen={() => noop}
+      refusal={null}
+      finale={null}
+      line={line}
+    />,
+  );
+}
+
+describe('the own line down in a run', () => {
+  it('is down while its socket is not open, and only while a run is on', () => {
+    expect(lineLost('closed', running())).toBe(true);
+    expect(lineLost('connecting', running())).toBe(true);
+    expect(lineLost('open', running())).toBe(false);
+    expect(lineLost('closed', running({ phase: 'lobby' }))).toBe(false);
+    expect(lineLost('closed', running({ phase: 'won' }))).toBe(false);
+    expect(lineLost('closed', null)).toBe(false);
+  });
+
+  it('says the next try: its number, and its wait while it waits', () => {
+    expect(retryLine(null, T0)).toBe('Verbinde neu');
+    expect(retryLine({ attempt: 1, at: null }, T0)).toBe('Verbinde neu · Versuch 1');
+    expect(retryLine({ attempt: 3, at: T0 + 3200 }, T0)).toBe('Verbinde neu · Versuch 3 · in 4 s');
+    expect(retryLine({ attempt: 3, at: T0 + 1 }, T0)).toBe('Verbinde neu · Versuch 3 · in 1 s');
+    expect(retryLine({ attempt: 3, at: T0 }, T0)).toBe('Verbinde neu · Versuch 3');
+  });
+
+  it('stands over the world as a card with the ways on', () => {
+    const html = screen(running(), lineOf());
+    expect(html).toContain('<div class="overlay pause line-lost" role="alert">');
+    expect(html).toContain('VERBINDUNG VERLOREN');
+    expect(html).toContain('<p class="line-retry">Verbinde neu · Versuch 2</p>');
+    for (const way of ['Jetzt versuchen', 'Seite neu laden', 'Einsatz aufgeben']) {
+      expect(html).toContain(way);
+    }
+    expect(screen(running(), lineOf({ status: 'open', retry: null }))).not.toContain('line-lost');
+  });
+
+  it('stands instead of the pause card: the others’ pause is no news to whoever is cut off', () => {
+    const away = [{ id: 'p2', name: 'Ben', since: T0, waivableAt: T0 + 60_000 }];
+    const view = running({ pausedFor: away, pausedAt: T0 });
+    expect(screen(view, lineOf())).not.toContain('MISSION PAUSIERT');
+    expect(screen(view, lineOf({ status: 'open', retry: null }))).toContain('MISSION PAUSIERT');
+  });
+
+  it('tries again at a press', () => {
+    let woken = 0;
+    const line = lineOf({ wake: () => (woken += 1) });
+    press(buttonsOf(elementsOf(() => <LineLostCard line={line} />), 'line-try')[0]);
+    expect(woken).toBe(1);
+  });
+
+  it('takes the world’s keys while it stands: whatever is pressed goes nowhere', () => {
+    const open = { reading: null, note: null };
+    expect(worldLocked(running(), open, null, true, true)).toBe(true);
+    expect(worldLocked(running(), open, null, true, false)).toBe(false);
+  });
+});

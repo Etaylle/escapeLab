@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClientMessage, ServerMessage } from '@escapelab/core';
 import {
-  inBanner,
+  ANSWER_MS,
   keepConnected,
+  OPENING_MS,
   OUTBOX_MAX,
+  SILENCE_MS,
   wipesBanner,
+  type Retry,
   type SocketEvents,
-} from '../src/ws.js';
+} from '../src/line.js';
+import { inBanner } from '../src/ws.js';
 
 /**
  * A browser socket as `keepConnected` drives it: the test opens it, has the server say
@@ -67,6 +71,8 @@ function connection(session: typeof SESSION | null = SESSION) {
     closed: 0,
     resumes: 0,
     ready: 0,
+    retries: [] as (Retry | null)[],
+    probes: 0,
   };
   const events: SocketEvents = {
     made: () => undefined,
@@ -82,6 +88,10 @@ function connection(session: typeof SESSION | null = SESSION) {
     closed: () => {
       told.closed += 1;
     },
+    retry: (next) => told.retries.push(next),
+    probe: () => {
+      told.probes += 1;
+    },
   };
   const line = keepConnected(() => {
     const socket = new FakeSocket();
@@ -95,7 +105,7 @@ function connection(session: typeof SESSION | null = SESSION) {
     }
     return socket;
   };
-  return { sockets, told, stop: line.stop, send: line.send, last };
+  return { sockets, told, line, stop: line.stop, send: line.send, last };
 }
 
 const E: ClientMessage = { kind: 'request-hint' };
@@ -308,10 +318,197 @@ describe('the banner and the refusals said in place', () => {
     }
   });
 
-  it('is taken down by the player’s next deed, never by what the page streams', () => {
-    expect(wipesBanner('pos')).toBe(false);
-    expect(wipesBanner('clock')).toBe(false);
-    expect(wipesBanner('interact')).toBe(true);
-    expect(wipesBanner('puzzle-input')).toBe(true);
+  it('is taken down by the player’s next deed, never by what the page sends on its own', () => {
+    for (const kind of ['pos', 'clock', 'list-rooms', 'whereami'] as const) {
+      expect(wipesBanner(kind), kind).toBe(false);
+    }
+    for (const kind of ['interact', 'puzzle-input', 'join-room', 'create-room'] as const) {
+      expect(wipesBanner(kind), kind).toBe(true);
+    }
+  });
+});
+
+/** An ask for the server's time, as clock.ts sends one. */
+const ASK: ClientMessage = { kind: 'clock', sent: 1 };
+/** The server's answer to it. */
+const ANSWER: ServerMessage = { kind: 'clock', sent: 1, at: 2 };
+
+describe('keepConnected — a line that shows itself dead', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_700_000_000_000);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A line up: its socket open, the seat back. */
+  function up() {
+    const line = connection();
+    line.last().open();
+    line.last().say(JOINED);
+    return line;
+  }
+
+  it('is dead once an ask for the time goes unanswered 5 s: closed, and another made at once', () => {
+    const { sockets, told, send, last } = up();
+    send(ASK);
+    vi.advanceTimersByTime(ANSWER_MS - 1);
+    last().say(ANSWER);
+    send(ASK);
+    vi.advanceTimersByTime(ANSWER_MS - 1);
+    expect(sockets).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(sockets[0]?.closedByPage).toBe(true);
+    expect(sockets).toHaveLength(2);
+    expect(told.closed).toBe(1);
+    expect(told.statuses.slice(-2)).toEqual(['closed', 'connecting']);
+  });
+
+  it('is dead after 20 s without a word from the server', () => {
+    const { sockets, last } = up();
+    vi.advanceTimersByTime(SILENCE_MS - 1000);
+    last().say({ kind: 'rooms', rooms: [] });
+    vi.advanceTimersByTime(SILENCE_MS - 1);
+    expect(sockets).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(sockets).toHaveLength(2);
+  });
+
+  it('is dead 20 s after it opened where the server never said a word', () => {
+    const { sockets, last } = connection(null);
+    last().open();
+    vi.advanceTimersByTime(SILENCE_MS - 1);
+    expect(sockets).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(sockets).toHaveLength(2);
+  });
+
+  it('is dead when its socket is not open 8 s after it was made', () => {
+    const { sockets } = connection();
+    vi.advanceTimersByTime(OPENING_MS - 1);
+    expect(sockets).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(sockets[0]?.closedByPage).toBe(true);
+    expect(sockets).toHaveLength(2);
+  });
+
+  it('backs off from 1 s again after a dead socket, and lets nothing of it reach the page', () => {
+    const { sockets, told, last } = connection();
+    last().end();
+    vi.advanceTimersByTime(1000);
+    last().end();
+    // The third socket never opens: found dead, a fourth is made at once.
+    vi.advanceTimersByTime(2000);
+    vi.advanceTimersByTime(OPENING_MS);
+    expect(sockets).toHaveLength(4);
+    const heard = told.heard.length;
+    const closed = told.closed;
+    sockets[2]?.say({ kind: 'rooms', rooms: [] });
+    sockets[2]?.end();
+    expect(told.heard).toHaveLength(heard);
+    expect(told.closed).toBe(closed);
+    // The pause between tries starts at 1 s again, not at the 4 s the closes had come to.
+    last().end();
+    vi.advanceTimersByTime(999);
+    expect(sockets).toHaveLength(4);
+    vi.advanceTimersByTime(1);
+    expect(sockets).toHaveLength(5);
+  });
+
+  it('tells the page each next try, its number and when, and none once the line is up', () => {
+    const { told, last } = up();
+    expect(told.retries).toEqual([{ attempt: 1, at: null }, null]);
+    last().end();
+    expect(told.retries.at(-1)).toEqual({ attempt: 1, at: Date.now() + 1000 });
+    vi.advanceTimersByTime(1000);
+    expect(told.retries.at(-1)).toEqual({ attempt: 1, at: null });
+    last().end();
+    expect(told.retries.at(-1)).toEqual({ attempt: 2, at: Date.now() + 2000 });
+    vi.advanceTimersByTime(2000);
+    last().open();
+    last().say(JOINED);
+    expect(told.retries.at(-1)).toBeNull();
+  });
+
+  it('drops what is done while it is down, and throws nothing', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { send, last } = up();
+    send(ASK);
+    vi.advanceTimersByTime(ANSWER_MS);
+    last().end();
+    expect(() => send(E)).not.toThrow();
+    expect(() => send(POS)).not.toThrow();
+    vi.advanceTimersByTime(1000);
+    last().open();
+    last().say(JOINED);
+    expect(last().sent).toEqual([{ kind: 'resume', ...SESSION }]);
+    vi.restoreAllMocks();
+  });
+});
+
+describe('keepConnected — woken as the page comes back', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('tries at once where the line waits for its next try, the pause back at 1 s', () => {
+    const { sockets, line, last } = connection();
+    last().open();
+    last().say(JOINED);
+    last().end();
+    vi.advanceTimersByTime(1000);
+    last().end();
+    line.wake();
+    expect(sockets).toHaveLength(3);
+    last().end();
+    vi.advanceTimersByTime(999);
+    expect(sockets).toHaveLength(3);
+    vi.advanceTimersByTime(1);
+    expect(sockets).toHaveLength(4);
+  });
+
+  it('asks the time on a line that seems up, and leaves one on its way be', () => {
+    const { sockets, told, line, last } = connection();
+    line.wake();
+    expect(sockets).toHaveLength(1);
+    expect(told.probes).toBe(0);
+    last().open();
+    last().say(JOINED);
+    line.wake();
+    expect(told.probes).toBe(1);
+    expect(sockets).toHaveLength(1);
+  });
+});
+
+describe('keepConnected — a deed that has to reach the server once the line is back', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const GIVE_UP: ClientMessage = { kind: 'abandon', code: 'ABCD', pass: SESSION.pass };
+
+  it('goes first on the next socket that opens, before anything else', () => {
+    const { line, last } = connection(null);
+    last().end();
+    line.sendFirst(GIVE_UP);
+    vi.advanceTimersByTime(1000);
+    last().open();
+    expect(last().sent).toEqual([GIVE_UP]);
+    vi.advanceTimersByTime(1000);
+    expect(last().sent).toEqual([GIVE_UP]);
+  });
+
+  it('goes at once on a line that is up', () => {
+    const { line, last } = connection(null);
+    last().open();
+    line.sendFirst(GIVE_UP);
+    expect(last().sent).toEqual([GIVE_UP]);
   });
 });

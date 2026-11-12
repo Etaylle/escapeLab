@@ -8,11 +8,14 @@ export const ROUND_TRIP_MS = 40;
  * A client's socket as the server sees it: it says what the client sends, answers a ping a
  * round trip later while `answering` — as a browser does on its own — and on `terminate`
  * leaves the server's clients and closes, as `ws` closes a socket it destroys; `close` is the
- * page closing it.
+ * page closing it. While `talking` it asks the server's time as each ping comes, as a page
+ * asks every 10 s (client clock.ts); a page that stopped — frozen, or held offline while its
+ * browser answers the pings — talks no more.
  */
 export class FakeSocket extends EventEmitter {
   readonly heard: ServerMessage[] = [];
   answering = true;
+  talking = true;
   pings = 0;
   terminated = false;
 
@@ -31,6 +34,9 @@ export class FakeSocket extends EventEmitter {
         this.emit('pong');
       }
     }, ROUND_TRIP_MS);
+    if (this.talking) {
+      this.say({ kind: 'clock', sent: Date.now() });
+    }
   }
 
   terminate(): void {

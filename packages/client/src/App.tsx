@@ -33,6 +33,7 @@ import { UpdateNotice } from './screens/Install.js';
 import { createRoomMessage, JoinScreen } from './screens/Join.js';
 import { LobbyScreen } from './screens/Lobby.js';
 import { GameScreen } from './screens/Game.js';
+import type { GameLine } from './screens/Line.js';
 import { EndScreen } from './screens/End.js';
 import { SettingsPanel } from './screens/Settings.js';
 import { SpectateScreen } from './screens/Spectate.js';
@@ -327,6 +328,11 @@ function OffRoom(props: ScreenProps) {
   );
 }
 
+/** The own line as the game screen hears of it: its card while it is down (screens/Line.tsx). */
+function lineOf(conn: Connection): GameLine {
+  return { status: conn.status, retry: conn.retry, wake: conn.wake, giveUp: conn.giveUp };
+}
+
 /**
  * The screen for where this connection is: watching, off any room, or in one
  * by its phase. A run that is over stays on the game screen while the world
@@ -375,6 +381,7 @@ function Screens(props: ScreenProps) {
           listen={conn.listen}
           refusal={conn.refusal}
           finale={null}
+          line={lineOf(conn)}
         />
       );
     case 'won':
@@ -391,6 +398,7 @@ function Screens(props: ScreenProps) {
           listen={conn.listen}
           refusal={conn.refusal}
           finale={finale}
+          line={lineOf(conn)}
         />
       ) : (
         <EndScreen

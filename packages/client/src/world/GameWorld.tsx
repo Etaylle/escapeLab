@@ -812,11 +812,15 @@ function livePings(loop: Loop, perf: number): MapPing[] {
 
 /**
  * Sizes the canvas to its box at this screen's density (render/backing.ts), assembles the frame
- * and draws it.
+ * and draws it; a canvas with no box draws nothing — the screen unmounting in place, its DOM
+ * gone before its loop is stopped.
  */
 function render(loop: Loop, map: WorldMap): void {
   const { canvas, kit } = loop;
   const dpr = fitBacking(canvas, kit.overlay.canvas, window.devicePixelRatio);
+  if (dpr === null) {
+    return;
+  }
   const perf = performance.now();
   const pings = livePings(loop, perf);
   const frame = profiled(kit, 'assemble', null, () => assembleFrame(loop, map, dpr, perf, pings));

@@ -237,6 +237,9 @@ function assert(cond: boolean, message: string): asserts cond {
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** How often a client asks the server's time, as a page does to keep its line alive, ms. */
+const KEEPALIVE_MS = 5000;
+
 /**
  * WebSocket client tracking the latest view, positions and its own avatar.
  * `raw` logs every message received; a client resuming a dropped one keeps
@@ -267,6 +270,14 @@ class TestClient {
     readonly pass: CrewPass = mintPass(),
   ) {
     this.socket = new WebSocket(`ws://localhost:${PORT}/ws`);
+    // A page asks the server's time every 10 s (client clock.ts): a client that says nothing
+    // for 20 s is cut as a dead page is (server heartbeat.ts), so this one asks every 5 s.
+    const asking = setInterval(() => {
+      if (this.socket.readyState === WebSocket.OPEN) {
+        this.send({ kind: 'clock', sent: Date.now() });
+      }
+    }, KEEPALIVE_MS);
+    this.socket.on('close', () => clearInterval(asking));
     this.socket.on('message', (data) => {
       this.raw.push(String(data));
       const msg = JSON.parse(String(data)) as ServerMessage;

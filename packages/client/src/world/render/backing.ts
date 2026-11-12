@@ -24,13 +24,18 @@ export function backingSize(
 
 /**
  * Sizes `canvas` and the darkness's `overlay` to the canvas's box at `ratio` — only where they
- * differ, as sizing a canvas clears it — and returns the density drawn at.
+ * differ, as sizing a canvas clears it — and returns the density drawn at. A canvas with no box
+ * — off the page, its screen unmounting, or hidden — is left as it is, and null returned: there
+ * is nothing to draw into, and a canvas sized to nothing can not be drawn from.
  */
 export function fitBacking(
   canvas: HTMLCanvasElement,
   overlay: HTMLCanvasElement,
   ratio: number,
-): number {
+): number | null {
+  if (canvas.clientWidth === 0 || canvas.clientHeight === 0) {
+    return null;
+  }
   const { w, h, dpr } = backingSize(canvas.clientWidth, canvas.clientHeight, ratio);
   if (canvas.width !== w || canvas.height !== h) {
     canvas.width = w;

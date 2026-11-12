@@ -64,6 +64,19 @@ describe('fitBacking — sizing the canvas only as its box or the density change
     expect(overlay.sets()).toBe(overlaySets);
   });
 
+  it('leaves a canvas with no box as it is and draws nothing: off the page, or hidden', () => {
+    for (const [cssW, cssH] of [
+      [0, 0],
+      [0, 600],
+      [800, 0],
+    ] as const) {
+      const world = boxed(cssW, cssH);
+      const overlay = boxed(0, 0);
+      expect(fitBacking(world.canvas, overlay.canvas, 2)).toBeNull();
+      expect([world.sets(), overlay.sets()]).toEqual([0, 0]);
+    }
+  });
+
   it('sizes them anew once the density changes, a window dragged to another screen', () => {
     const world = boxed(800, 600);
     const overlay = boxed(0, 0);

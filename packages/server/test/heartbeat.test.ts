@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseMission, type Mission, type ServerMessage } from '@escapelab/core';
-import { HEARTBEAT_MS, startHeartbeat } from '../src/heartbeat.js';
+import {
+  HEARTBEAT_MS,
+  SILENT_MS,
+  startHeartbeat,
+  type BeatingSocket,
+  type CutReason,
+} from '../src/heartbeat.js';
 import { RoomManager } from '../src/roomManager.js';
 import { serveSockets } from '../src/sockets.js';
 import { FakeServer, joinedOf, ROUND_TRIP_MS, type FakeSocket } from './line.js';
@@ -20,7 +26,8 @@ function startedRun() {
   const server = new FakeServer();
   const manager = new RoomManager();
   serveSockets(server, { catalog: { get: () => mission, default: mission }, manager });
-  const stop = startHeartbeat(server);
+  const cuts: { socket: BeatingSocket; why: CutReason }[] = [];
+  const stop = startHeartbeat(server, HEARTBEAT_MS, (socket, why) => cuts.push({ socket, why }));
   const anna = server.connect();
   anna.say({ kind: 'create-room', name: 'Anna', pass: passFor('Anna'), missionId: mission.id });
   const { code } = joinedOf(anna);
@@ -33,7 +40,7 @@ function startedRun() {
     manager.get(code).dispose();
     stop();
   };
-  return { server, anna, ben, code, end };
+  return { server, anna, ben, code, end, cuts };
 }
 
 /** A new socket of Ben's resuming his place by his pass, as his page does after reconnecting. */
@@ -141,11 +148,45 @@ describe('the heartbeat', () => {
     end();
   });
 
-  it('stops beating when asked', () => {
-    const { anna, end } = startedRun();
+  it('ends a socket that sends nothing for 20 s, though its browser answers every ping', () => {
+    const { anna, ben, end, cuts } = startedRun();
+    // Ben's page stops — frozen, or held offline — while his browser still answers the pings.
+    ben.talking = false;
+    vi.advanceTimersByTime(SILENT_MS - 1);
+    expect(ben.terminated).toBe(false);
+    expect(ben.pings).toBe(1);
+    vi.advanceTimersByTime(1);
+    expect(ben.terminated).toBe(true);
+    expect(anna.view.pausedFor?.map((away) => away.name)).toEqual(['Ben']);
+    expect(cuts).toEqual([{ socket: ben, why: 'silent' }]);
+    expect(anna.terminated).toBe(false);
+    end();
+  });
+
+  it('says which socket it ends, and why: its pongs missed', () => {
+    const { ben, end, cuts } = startedRun();
+    ben.answering = false;
+    vi.advanceTimersByTime(3 * HEARTBEAT_MS);
+    expect(cuts).toEqual([{ socket: ben, why: 'pongs' }]);
+    end();
+  });
+
+  it('forgets a socket once it closed: nothing cut and nothing said after', () => {
+    const { ben, end, cuts } = startedRun();
+    ben.close();
+    vi.advanceTimersByTime(3 * SILENT_MS);
+    expect(cuts).toEqual([]);
+    expect(ben.terminated).toBe(false);
+    end();
+  });
+
+  it('stops beating when asked, and cuts nobody after', () => {
+    const { anna, end, cuts } = startedRun();
     end();
     vi.advanceTimersByTime(5 * HEARTBEAT_MS);
     expect(anna.pings).toBe(0);
+    expect(anna.terminated).toBe(false);
+    expect(cuts).toEqual([]);
   });
 });
 

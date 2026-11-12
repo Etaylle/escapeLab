@@ -129,3 +129,14 @@ button.danger:hover:not(:disabled) {
     animation: none;
   }
 }
+
+/* ── the own line down in a run (screens/Line.tsx) ───────────────────── */
+
+.overlay.pause.line-lost h1 {
+  color: var(--danger);
+}
+
+.line-retry {
+  font-family: var(--mono);
+  letter-spacing: 1px;
+}
