@@ -7,6 +7,7 @@ import {
   parseMission,
   runReport,
   viewFor,
+  viewForSpectator,
 } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
 import type { Spot } from '../src/reach.js';
@@ -297,6 +298,33 @@ describe('the relay works on the crew the run counts', () => {
     const left = run([abandon('p2', T0 + 70_000)], without);
     expect(left.paused).not.toBeNull();
     expect(consoles(left)).toEqual(new Set(['p1', 'p3']));
+  });
+
+  it('ends with the run, however it ends: lost on time, given up, called off', () => {
+    const alarmed = run([{ type: 'sabotage-start', at: T0 + 5000 }], three);
+    expect(alarmed.sabotage?.emergency).toBeDefined();
+    const timedOut = run([{ type: 'time-expired', at: T0 + 700_000 }], alarmed);
+    const two = run([{ type: 'sabotage-start', at: T0 + 5000 }], crew(['Anna', 'Ben']));
+    const givenUp = run([abandon('p2', T0 + 6000)], two);
+    const calledOff = run(
+      [lineDrops('p2', T0 + 6000), { type: 'call-off', playerId: 'p1', at: T0 + 66_000 }],
+      two,
+    );
+    for (const over of [timedOut, givenUp, calledOff]) {
+      expect(over.phase).toBe('lost');
+      expect(over.sabotage).toBeNull();
+    }
+  });
+
+  it('shows no console once the run is over, whoever left the end screen since', () => {
+    const alarmed = run([{ type: 'sabotage-start', at: T0 + 5000 }], three);
+    const over = run([{ type: 'time-expired', at: T0 + 700_000 }, abandon('p3')], three);
+    // The run's end as it would stand had the emergency stayed on: its crew no longer matches.
+    const kept = { ...over, sabotage: alarmed.sabotage };
+    expect(viewForSpectator(kept).panels.every((panel) => panel.emergency === undefined)).toBe(
+      true,
+    );
+    expect(viewFor(kept, 'p1').map).toBeNull();
   });
 
   it('leaves it be for a return the run waited for: the crew it counts is the same', () => {

@@ -689,8 +689,9 @@ function viewerOf(state: GameState, puzzleId: string, playerId: string | null): 
 
 /**
  * The running relay emergency as one player sees it, with the def it runs on — a console for
- * each of the crew the run counts (`crewOf`), none for whom it went on without; null in valves
- * mode and between emergencies.
+ * each of the crew the run counts (`crewOf`), none for whom it went on without; null outside a
+ * running run, whose crew the emergency no longer matches once somebody left, in valves mode
+ * and between emergencies.
  */
 function relayViewFor(
   state: GameState,
@@ -698,7 +699,7 @@ function relayViewFor(
 ): { def: RelayDef; view: RelayView } | null {
   const sabotage = state.mission.map.sabotage;
   const emergency = state.sabotage?.emergency;
-  if (sabotage === undefined || emergency === undefined) {
+  if (state.phase !== 'playing' || sabotage === undefined || emergency === undefined) {
     return null;
   }
   const def = relayDefFor(crewOf(state), sabotage);

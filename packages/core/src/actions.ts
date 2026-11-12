@@ -1108,13 +1108,7 @@ function advance(state: GameState, at: number): GameState {
       return logRadio(unlocked, state.mission.radio.escape, at);
     }
     return logEvent(
-      {
-        ...logged,
-        phase: 'won',
-        players: unready(logged.players),
-        puzzleState: null,
-        finishedAt: at,
-      },
+      overNow(logged, 'won', at),
       'finish',
       'Alle Systeme online',
       at,
@@ -1139,13 +1133,7 @@ function handleEscaped(state: GameState, action: { at: number }): GameState {
     return lostNow(state, action.at);
   }
   return logEvent(
-    {
-      ...state,
-      phase: 'won',
-      players: unready(state.players),
-      puzzleState: null,
-      finishedAt: action.at,
-    },
+    overNow(state, 'won', action.at),
     'finish',
     'Alle draußen',
     action.at,
@@ -1203,13 +1191,25 @@ function applyPenalty(state: GameState, sec: number, at: number, reason: string)
   return at >= deadlineAt ? lostNow(punished, at) : punished;
 }
 
+/** The run is lost at `at`, `why`: whatever emergency ran ends with it (`overNow`). */
 function lostNow(state: GameState, at: number, why = OUT_OF_TIME): GameState {
-  return logEvent(
-    { ...state, phase: 'lost', players: unready(state.players), puzzleState: null, finishedAt: at },
-    'finish',
-    why,
-    at,
-  );
+  return logEvent(overNow(state, 'lost', at), 'finish', why, at);
+}
+
+/**
+ * The run over at `at`, won or lost: nobody stands ready for the next yet, no station is open,
+ * and no emergency runs on — its consoles were the crew's as it ran, which the end screen's
+ * comings and goings no longer match.
+ */
+function overNow(state: GameState, phase: 'won' | 'lost', at: number): GameState {
+  return {
+    ...state,
+    phase,
+    players: unready(state.players),
+    puzzleState: null,
+    sabotage: null,
+    finishedAt: at,
+  };
 }
 
 /**
