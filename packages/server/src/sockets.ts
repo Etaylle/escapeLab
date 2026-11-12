@@ -187,17 +187,27 @@ function sitDown(
   if (msg.kind === 'join-room') {
     const room = lab.manager.get(msg.code);
     lab.manager.makeWay(msg.pass, room);
-    const playerId =
-      room.seatOf(msg.pass) === null
-        ? room.join(msg.name, msg.pass).playerId
-        : room.resume(msg.pass);
-    return seated(socket, session, room, playerId);
+    return seated(socket, session, room, seatFor(room, msg));
   }
   lab.manager.makeWay(msg.pass, null);
   // A new room plays on the difficulty its host's device asked for — normal unless that
   // device has won no run yet — with its alarm limit: scaled from the start.
   const room = createRoom(lab, msg);
   return seated(socket, session, room, room.join(msg.name, msg.pass).playerId);
+}
+
+/**
+ * The seat a join sits down on, by player id: the one its pass holds already, a seat its name
+ * takes over in a run on (`Room.takeOver`), else a new one — which the reducer refuses in a run.
+ */
+function seatFor(room: Room, msg: Extract<ClientMessage, { kind: 'join-room' }>): string {
+  if (room.seatOf(msg.pass) !== null) {
+    return room.resume(msg.pass);
+  }
+  if (room.phase === 'playing') {
+    return room.takeOver(msg.name, msg.pass);
+  }
+  return room.join(msg.name, msg.pass).playerId;
 }
 
 /**

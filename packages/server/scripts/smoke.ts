@@ -39,8 +39,10 @@
  * host's yes naming Blackout opens it, with the power on. Last a crew of
  * three plays Blackout: Finn's line drops for 70 s, the others go on without
  * him once the minute is over, and he is back on his pass, counted in at once
- * with no pause for it; Gus gives his seat up and the two go on, then Finn
- * gives his up and the run ends, called off. No answer is written down here.
+ * with no pause for it; Gus's line drops and a phone takes his seat over by
+ * his name, his old pass refused; Gus gives his seat up and the two go on,
+ * then Finn gives his up and the run ends, called off. No answer is written
+ * down here.
  * Run with: pnpm --filter @escapelab/server smoke
  */
 import { randomBytes } from 'node:crypto';
@@ -2537,10 +2539,40 @@ async function giveUp({ code, eva, gus }: Trio, finn: TestClient): Promise<void>
     'the run log keeps the run called off, with the crew that was left');
 }
 
+/**
+ * Gus's line drops and a phone that never held his pass joins by the room's code and his name:
+ * it sits down on his seat, the run goes on; his old pass is refused, the seat taken over, and
+ * a name still on the line is no seat to take. Returns the phone's client.
+ */
+async function takeOver({ code, eva, gus }: Trio): Promise<TestClient> {
+  gus.close();
+  await eva.expectView('the run stands still for Gus, away', (v) =>
+    v.pausedFor?.[0]?.name === 'Gus');
+  const phone = new TestClient('gus-phone');
+  await phone.open();
+  phone.send({ kind: 'join-room', code, name: 'Eva', pass: phone.pass });
+  const eva2 = await phone.expect('a refusal of a name on the line', isError);
+  assert(eva2.message === 'Eva ist noch verbunden.', 'a seat on the line is no seat to take over');
+  phone.send({ kind: 'join-room', code, name: 'Gus', pass: phone.pass });
+  await phone.seated();
+  assert(phone.view?.you.name === 'Gus', 'the phone sits on Gus\'s seat');
+  await eva.expectView('Gus back on the phone, the run on', (v) =>
+    v.pausedFor === null && v.players.some((p) => p.name === 'Gus' && p.connected));
+  const laptop = new TestClient('gus-laptop', [], gus.pass);
+  await laptop.open();
+  laptop.send({ kind: 'resume', code, pass: laptop.pass });
+  const refused = await laptop.expect('the old pass refused', isError);
+  assert(refused.message === 'Der Platz wurde auf einem anderen Gerät übernommen.',
+    'the pass that lost its seat is told it went to another device');
+  laptop.close();
+  return phone;
+}
+
 const trio = await crewOfThree();
 const finnBack = await awayAndBack(trio);
-await giveUp(trio, finnBack);
-for (const client of [trio.eva, finnBack, trio.gus]) {
+const gusPhone = await takeOver(trio);
+await giveUp({ ...trio, gus: gusPhone }, finnBack);
+for (const client of [trio.eva, finnBack, gusPhone]) {
   client.close();
 }
 
@@ -2552,7 +2584,7 @@ console.log(
     'at two consoles, the locker, the key, the camera plate, reconnect, the hatch\'s ' +
     'checklist, a drop on the way out that ends nothing, penalties and credits; then ' +
     'the tutorial, its lever springing back on the clock, and on into Blackout; then a crew ' +
-    'of three going on without the one away, his return, and seats given up till the run ' +
-    'is called off. 🎉',
+    'of three going on without the one away, his return, a seat taken over by its name, and ' +
+    'seats given up till the run is called off. 🎉',
 );
 process.exit(0);

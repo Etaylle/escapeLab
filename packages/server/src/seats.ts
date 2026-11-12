@@ -16,6 +16,8 @@ const hashOf = (secret: string): Buffer => createHash('sha256').update(secret).d
  */
 export class SeatBook {
   private readonly bindings = new Map<string, Binding>();
+  /** the passes whose seat another device took over (`takeOver`), by pass id */
+  private readonly lost = new Set<string>();
 
   /**
    * Binds the seat of `playerId` to `pass`, in place of whatever pass held it; a seat the pass
@@ -27,7 +29,25 @@ export class SeatBook {
         this.bindings.delete(seat);
       }
     }
+    this.lost.delete(pass.id);
     this.bindings.set(playerId, { passId: pass.id, hash: hashOf(pass.secret) });
+  }
+
+  /**
+   * The seat of `playerId` goes to `pass`, another device's: the pass that held it holds it no
+   * more, and it is told so when it comes back (`lostSeat`).
+   */
+  takeOver(playerId: string, pass: CrewPass): void {
+    const before = this.bindings.get(playerId);
+    this.bind(playerId, pass);
+    if (before !== undefined && before.passId !== pass.id) {
+      this.lost.add(before.passId);
+    }
+  }
+
+  /** Whether another device took over the seat `pass` held here. */
+  lostSeat(pass: CrewPass): boolean {
+    return this.lost.has(pass.id);
   }
 
   /** The seat `pass` holds, by player id; null where it holds none or shows the wrong secret. */

@@ -126,6 +126,8 @@ const ITEM_RADIUS = 0.95;
 const RELAY_TICK_MS = 1000;
 /** What a connection hears once its seat plays on another one: a tab opened later, say. */
 const SEAT_MOVED = 'Dieser Platz spielt jetzt in einem anderen Fenster.';
+/** What a pass is told once another device took its seat over by its name. */
+const SEAT_TAKEN = 'Der Platz wurde auf einem anderen Gerät übernommen.';
 
 /** Who stands where and what they found and see, as the room reports it in `set-presence`. */
 type PresenceReport = Omit<Extract<Action, { type: 'set-presence' }>, 'type' | 'at'>;
@@ -227,6 +229,24 @@ export class Room {
   }
 
   /**
+   * A new device sits down in the run on by the name of a seat (Jackbox): the exact name of a
+   * seat whose line dropped binds it to `pass`, and its player is back on it — the pass that
+   * held it is refused from now on (SEAT_TAKEN). A seat still on the line is refused by its
+   * name; any other name gets the refusal of a join into a run. Returns the player id.
+   */
+  takeOver(name: string, pass: CrewPass): string {
+    const seat = this.state.players.find((player) => player.name === name);
+    if (seat === undefined) {
+      return this.join(name, pass).playerId;
+    }
+    if (seat.connected) {
+      throw new GameError(`${seat.name} ist noch verbunden.`);
+    }
+    this.seats.takeOver(seat.id, pass);
+    return this.resume(pass);
+  }
+
+  /**
    * The seat `pass` holds in this room, by player id; null for none — a seat the run started
    * without, its player away as it began, is none.
    */
@@ -303,6 +323,9 @@ export class Room {
    */
   resume(pass: CrewPass): string {
     const playerId = this.seats.seatOf(pass);
+    if (playerId === null && this.seats.lostSeat(pass)) {
+      throw new GameError(SEAT_TAKEN);
+    }
     if (playerId === null) {
       throw new Error('Wiederverbinden fehlgeschlagen — Raum neu beitreten.');
     }

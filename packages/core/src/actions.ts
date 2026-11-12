@@ -402,7 +402,10 @@ function playerJoin(
   action: { playerId: string; name: string },
 ): GameState {
   if (state.phase !== 'lobby') {
-    fail('Die Mission läuft bereits — Beitritt ist nur in der Lobby möglich.');
+    fail(
+      'Die Mission läuft bereits — Beitritt ist nur in der Lobby möglich. Ein getrennter Platz ' +
+        'lässt sich mit seinem Namen übernehmen.',
+    );
   }
   const { max } = state.mission.players;
   if (state.players.length >= max) {

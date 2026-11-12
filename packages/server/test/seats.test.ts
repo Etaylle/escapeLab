@@ -283,3 +283,73 @@ describe('a seat given up', () => {
     manager.get(code).dispose();
   });
 });
+
+describe('a seat taken over by its name (Jackbox)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** The run with Ben's line dropped, and a phone of Ben's that never held his pass. */
+  function benAway() {
+    const room = running();
+    room.ben.close();
+    expect(room.anna.view.pausedFor?.map((away) => away.name)).toEqual(['Ben']);
+    return { ...room, phone: room.server.connect() };
+  }
+
+  it('binds a dropped seat to the new device that joins by code and its exact name', () => {
+    const { manager, anna, ben, phone, code } = benAway();
+    phone.say({ kind: 'join-room', code, name: 'Ben', pass: passFor('Bens Telefon') });
+    expect(joinedOf(phone)).toEqual({ kind: 'joined', code });
+    expect(phone.view.you).toMatchObject({ id: ben.view.you.id, name: 'Ben' });
+    expect(anna.view.pausedFor).toBeNull();
+    expect(anna.view.players.find((p) => p.name === 'Ben')?.connected).toBe(true);
+    expect(whereIsBen(phone)).toBeNull();
+    phone.say({ kind: 'whereami', pass: passFor('Bens Telefon') });
+    expect(phone.heard.at(-1)).toMatchObject({ kind: 'seated', seat: { code, phase: 'playing' } });
+    manager.get(code).dispose();
+  });
+
+  it('refuses the old pass from then on, saying the seat went to another device', () => {
+    const { server, manager, phone, code } = benAway();
+    phone.say({ kind: 'join-room', code, name: 'Ben', pass: passFor('Bens Telefon') });
+    const laptop = server.connect();
+    laptop.say({ kind: 'resume', code, pass: passFor('Ben') });
+    expect(laptop.heard).toEqual([
+      {
+        kind: 'error',
+        of: 'resume',
+        message: 'Der Platz wurde auf einem anderen Gerät übernommen.',
+      },
+    ]);
+    manager.get(code).dispose();
+  });
+
+  it('refuses the name of a seat still on the line', () => {
+    const { server, manager, code } = running();
+    const phone = server.connect();
+    phone.say({ kind: 'join-room', code, name: 'Ben', pass: passFor('Bens Telefon') });
+    expect(phone.heard).toEqual([
+      { kind: 'error', of: 'join-room', message: 'Ben ist noch verbunden.' },
+    ]);
+    manager.get(code).dispose();
+  });
+
+  it('keeps every other join into a run refused, naming the way to take a seat over', () => {
+    const { manager, phone, code } = benAway();
+    for (const name of ['Cem', 'ben', 'Ben ']) {
+      phone.say({ kind: 'join-room', code, name, pass: passFor('Cem') });
+      expect(phone.heard.at(-1)).toEqual({
+        kind: 'error',
+        of: 'join-room',
+        message:
+          'Die Mission läuft bereits — Beitritt ist nur in der Lobby möglich. Ein getrennter ' +
+          'Platz lässt sich mit seinem Namen übernehmen.',
+      });
+    }
+    manager.get(code).dispose();
+  });
+});
