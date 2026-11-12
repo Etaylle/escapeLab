@@ -410,17 +410,12 @@ export class Room {
 
   /**
    * Everything a server needs to take this room up again (`restore`), as of `now` (core
-   * snapshot.ts): the room's facts, the game and its seats, and what the room keeps beside the
-   * game — every seat off the line from now, a run standing still for the whole crew. The room
-   * itself goes on as it was.
+   * snapshot.ts): the room's facts, the game — a run standing still for the whole crew from now
+   * — and its seats, and what the room keeps beside the game. The room itself goes on as it was.
    */
   snapshot(now = Date.now()): RoomSnapshot {
     const { state } = this;
     const seats = this.seats.snapshot();
-    const lostAt = Object.fromEntries(this.lostAt);
-    for (const playerId of this.listeners.keys()) {
-      lostAt[playerId] = now;
-    }
     return {
       code: this.code,
       missionId: state.mission.id,
@@ -434,7 +429,6 @@ export class Room {
       keeping: {
         positions: Object.fromEntries(this.positions),
         drones: this.drones?.runtimeOf() ?? null,
-        lostAt,
         closedClean: [...this.closedClean],
         askAgainAt: Object.fromEntries(this.askAgainAt),
         lastPingAt: Object.fromEntries(this.lastPingAt),

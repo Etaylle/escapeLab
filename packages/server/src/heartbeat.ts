@@ -36,6 +36,9 @@ export interface BeatingSocket {
   on(event: 'pong' | 'message' | 'close', listener: () => void): unknown;
 }
 
+/** The beat as it goes out to every socket (core protocol `tick`). */
+const TICK = JSON.stringify({ kind: 'tick' } satisfies ServerMessage);
+
 /** What the heartbeat needs of the server: `ws`'s WebSocketServer has it. */
 export interface BeatingServer {
   readonly clients: Iterable<BeatingSocket>;
@@ -43,19 +46,16 @@ export interface BeatingServer {
 }
 
 /**
- * Pings every socket of `server` every `everyMs`, sends it a `tick` with each ping — naming the
- * server instance, `instanceId` — and terminates one whose last MISSED_PINGS pings went
- * unanswered, or that sent nothing — its `tock`s included — for SILENT_MS; a pong at any time
- * clears its count. `onCut` hears of every socket terminated, and why, just before it closes.
- * Returns how to stop.
+ * Pings every socket of `server` every `everyMs`, sends it a `tick` with each ping, and
+ * terminates one whose last MISSED_PINGS pings went unanswered, or that sent nothing — its
+ * `tock`s included — for SILENT_MS; a pong at any time clears its count. `onCut` hears of every
+ * socket terminated, and why, just before it closes. Returns how to stop.
  */
 export function startHeartbeat(
   server: BeatingServer,
-  instanceId: string,
   everyMs = HEARTBEAT_MS,
   onCut: (socket: BeatingSocket, why: CutReason) => void = () => undefined,
 ): () => void {
-  const tick = JSON.stringify({ kind: 'tick', instanceId } satisfies ServerMessage);
   const unanswered = new WeakMap<BeatingSocket, number>();
   let stopped = false;
   const cut = (socket: BeatingSocket, why: CutReason): void => {
@@ -84,7 +84,7 @@ export function startHeartbeat(
       }
       unanswered.set(socket, missed + 1);
       socket.ping();
-      socket.send(tick);
+      socket.send(TICK);
     }
   }, everyMs);
   timer.unref();

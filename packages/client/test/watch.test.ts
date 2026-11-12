@@ -46,7 +46,7 @@ describe('the room a tab is in, kept for its next socket', () => {
   });
 
   it('brings a tab that sits back to its seat, on the browser’s pass', () => {
-    takeIn({ kind: 'joined', code: 'QX7R', instanceId: 'boot-1' }, page().kept);
+    takeIn({ kind: 'joined', code: 'QX7R' }, page().kept);
     expect(comebackOfTab()).toEqual({ kind: 'resume', code: 'QX7R', pass: PASS });
     // A tab that kept its room before tabs could watch sat in it.
     session.set('escapelab-session', '{"code":"AB12"}');

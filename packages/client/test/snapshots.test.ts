@@ -43,7 +43,7 @@ const SNAPSHOT: Extract<ServerMessage, { kind: 'snapshot' }> = {
 /** The page of Ben's tab, seated in room QX7R, his latest view `view`. */
 function seated(view: PlayerView = running()) {
   const { kept } = page();
-  takeIn({ kind: 'joined', code: 'QX7R', instanceId: 'boot-1' }, kept);
+  takeIn({ kind: 'joined', code: 'QX7R' }, kept);
   takeIn({ kind: 'view', view, at: T0 }, kept);
   return kept;
 }
@@ -243,7 +243,7 @@ describe('the card of a kept snapshot whose seat the server will not have back',
     local.set(`${SNAPSHOT_KEY}QX7R`, JSON.stringify({ ...SNAPSHOT, seat }));
     const { kept } = page();
     kept.resumed.current = 'QX7R';
-    takeIn({ kind: 'joined', code: 'QX7R', instanceId: 'boot-1' }, kept);
+    takeIn({ kind: 'joined', code: 'QX7R' }, kept);
     expect(kept.resumed.current).toBeNull();
     takeIn({ kind: 'error', message: 'Gerade ist keine Station in Betrieb.', of: 'resume' }, kept);
     expect(keptSnapshot('QX7R')).not.toBeNull();
@@ -276,7 +276,7 @@ describe('the card whose way back waits while the server takes its room up again
     expect(got.restoring).toEqual({ code: 'QX7R', since: T0 });
     vi.advanceTimersByTime(61_000);
     // The newest snapshot is in: the server seats the page, whose views open the game.
-    takeIn({ kind: 'joined', code: 'QX7R', instanceId: 'boot-1' }, kept);
+    takeIn({ kind: 'joined', code: 'QX7R' }, kept);
     expect(got.restoring).toBeNull();
     expect(got.code).toBe('QX7R');
     expect(comebackOfTab()).toEqual({ kind: 'resume', code: 'QX7R', pass: PASS });

@@ -34,6 +34,9 @@ const RUN_ENDED = 'Dieser Einsatz ist beendet.';
 const ROOM_CLOSED =
   `Der Raum stand ${EMPTY_ROOM_TTL_MS / 60_000} Minuten leer und wurde geschlossen.`;
 
+/** What a join by code is told into a room this instance is about to take up again (`get`). */
+const ROOM_RESTORING = 'Der Raum wird gerade wiederhergestellt, gleich noch einmal.';
+
 /**
  * A room the server closed for standing empty (`sweep`): when, and whether its run was over by
  * then. Its snapshots are refused for as long as one of them could be taken up at all,
@@ -115,15 +118,15 @@ export class RoomManager {
    * `allowSeed` (`seedsAllowed`) lets a new room be pinned to a seed;
    * `dailySalt` (dailySalt.ts) makes the Tagesschicht's seeds in every room;
    * `sealKey` (seal.ts `roomKey`) seals the snapshots every room sends its crew — none without;
-   * `instanceId` is the server instance the rooms live on, one id per boot (index.ts), as
-   * `joined`, every `tick` and every snapshot sealed name it.
+   * `instanceId` is the server instance the rooms live on, one id per boot (index.ts), as every
+   * snapshot sealed names it.
    */
   constructor(
     private readonly onRunFinished: RunListener = () => undefined,
     private readonly allowSeed = false,
     private readonly dailySalt: string | null = null,
     private readonly sealKey: Buffer | null = null,
-    readonly instanceId: string = randomUUID(),
+    private readonly instanceId: string = randomUUID(),
   ) {}
 
   /**
@@ -397,8 +400,15 @@ export class RoomManager {
       : { why: 'its room was closed, standing empty', message: ROOM_CLOSED };
   }
 
+  /**
+   * The room of `code`. Throws for a code no room has — one this instance is about to take up
+   * again saying so (`waitsFor`), so that a join by its code comes again in a moment.
+   */
   get(code: string): Room {
     const room = this.rooms.get(code.toUpperCase());
+    if (room === undefined && this.waitsFor(code)) {
+      throw new GameError(ROOM_RESTORING);
+    }
     if (room === undefined) {
       throw new Error(`Raum "${code.toUpperCase()}" existiert nicht (mehr).`);
     }

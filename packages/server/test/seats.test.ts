@@ -46,9 +46,9 @@ describe('the crew pass on the line', () => {
   });
 
   it('seats whoever shows a pass on it in a room, by the pass and nothing else', () => {
-    const { manager, anna, ben, code } = lobby();
-    expect(joinedOf(anna)).toEqual({ kind: 'joined', code, instanceId: manager.instanceId });
-    expect(joinedOf(ben)).toEqual({ kind: 'joined', code, instanceId: manager.instanceId });
+    const { anna, ben, code } = lobby();
+    expect(joinedOf(anna)).toEqual({ kind: 'joined', code });
+    expect(joinedOf(ben)).toEqual({ kind: 'joined', code });
     expect(ben.view.you.name).toBe('Ben');
     expect(JSON.stringify(anna.heard)).not.toContain(passFor('Ben').secret);
     expect(JSON.stringify(anna.heard)).not.toContain(passFor('Ben').id);
@@ -58,7 +58,7 @@ describe('the crew pass on the line', () => {
     const { server, manager, anna, ben, code } = lobby();
     const tab = server.connect();
     tab.say({ kind: 'resume', code, pass: passFor('Ben') });
-    expect(joinedOf(tab)).toEqual({ kind: 'joined', code, instanceId: manager.instanceId });
+    expect(joinedOf(tab)).toEqual({ kind: 'joined', code });
     expect(tab.view.you).toMatchObject({ id: ben.view.you.id, name: 'Ben' });
     expect(anna.view.players.map((p) => p.name)).toEqual(['Anna', 'Ben']);
     // The first socket hears that the seat went to the second, and from then on takes nothing.
@@ -375,7 +375,7 @@ describe('a seat taken over by its name (Jackbox), let in by the crew', () => {
     expect(phone.heard.at(-1)).toEqual({ kind: 'takeover-allowed', code });
     expect(anna.view).not.toHaveProperty('takeovers');
     phone.say({ kind: 'resume', code, pass: passFor('Bens Telefon') });
-    expect(joinedOf(phone)).toEqual({ kind: 'joined', code, instanceId: manager.instanceId });
+    expect(joinedOf(phone)).toEqual({ kind: 'joined', code });
     expect(phone.view.you).toMatchObject({ id: seat, name: 'Ben' });
     expect(anna.view.pausedFor).toBeNull();
     expect(whereIsBen(phone)).toBeNull();
@@ -418,7 +418,7 @@ describe('a seat taken over by its name (Jackbox), let in by the crew', () => {
     // Ben's own pass still holds the seat.
     const laptop = server.connect();
     laptop.say({ kind: 'resume', code, pass: passFor('Ben') });
-    expect(joinedOf(laptop)).toEqual({ kind: 'joined', code, instanceId: manager.instanceId });
+    expect(joinedOf(laptop)).toEqual({ kind: 'joined', code });
     manager.get(code).dispose();
   });
 

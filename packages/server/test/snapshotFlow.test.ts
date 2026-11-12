@@ -5,6 +5,7 @@ import {
   SNAPSHOT_EVERY_MS,
   SNAPSHOT_LIVE_MS,
   SNAPSHOT_MAX,
+  type PlayerView,
   type RoomSnapshot,
   type ServerMessage,
 } from '@escapelab/core';
@@ -167,6 +168,15 @@ function runOn() {
   return crew;
 }
 
+/** The view `seat` was sent last; throws where it was sent none. */
+function viewOf(seat: Seat): PlayerView {
+  const last = seat.heard.filter((m) => m.kind === 'view').at(-1);
+  if (last?.kind !== 'view') {
+    throw new Error('this seat was sent no view');
+  }
+  return last.view;
+}
+
 /** Where the snapshot `heard` was sent last has `seat` stand, by its tile and the middle of it. */
 const standsIn = (heard: ServerMessage[], seat: Seat): { x: number; y: number } | undefined =>
   open(snapshotsOf(heard).at(-1)?.blob ?? '', 'FLUR', KEY).keeping.positions[seat.playerId];
@@ -193,6 +203,22 @@ describe('the crew’s snapshots as the run goes on', () => {
     // A minute of the run: six of them, nobody doing a thing.
     vi.advanceTimersByTime(60_000);
     expect(snapshotsOf(anna.heard)).toHaveLength(8);
+    room.dispose();
+  });
+
+  it('go out for no change of where the crew stands: a walk up to a station sends none', () => {
+    const { room, anna, ben } = runOn();
+    // Whoever drew the spawn out of the station's reach walks into it: the room says who stands
+    // there now (`set-presence`), and no snapshot goes out for it till the run's beat.
+    const far = [anna, ben].find((seat) => viewOf(seat).map?.yourSpawn.x === 1);
+    if (far === undefined) {
+      throw new Error('nobody drew the spawn at (1,1)');
+    }
+    expect(viewOf(far).presence.stationId).toBeNull();
+    walkTo(room, { playerId: far.playerId, messages: far.heard }, 2.5, 1.5);
+    expect(viewOf(far).presence.stationId).toBe('eins');
+    vi.advanceTimersByTime(SNAPSHOT_LIVE_MS - 1);
+    expect(snapshotsOf(anna.heard)).toHaveLength(1);
     room.dispose();
   });
 
@@ -246,7 +272,7 @@ describe('the crew’s snapshots from the rooms of the manager', () => {
   it('go out of every room the manager opens with its key, to the socket that sat down', () => {
     const missions = fileURLToPath(new URL('../../../missions', import.meta.url));
     const line = new FakeServer();
-    const manager = new RoomManager(undefined, false, null, KEY);
+    const manager = new RoomManager(undefined, false, null, KEY, 'this-boot');
     serveSockets(line, { catalog: new MissionCatalog(missions), manager });
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const anna = line.connect();
@@ -258,7 +284,7 @@ describe('the crew’s snapshots from the rooms of the manager', () => {
     expect(open(heard?.blob ?? '', code, KEY)).toMatchObject({
       code,
       missionId: 'blackout',
-      instance: manager.instanceId,
+      instance: 'this-boot',
       final: false,
     });
     manager.sweep(Number.POSITIVE_INFINITY);

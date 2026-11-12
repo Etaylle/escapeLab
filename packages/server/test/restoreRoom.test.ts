@@ -15,14 +15,15 @@ const KEY = roomKey({ ROOM_SECRET: 'cafe'.repeat(16) }).key;
 const missions = new MissionCatalog(fileURLToPath(new URL('../../../missions', import.meta.url)));
 
 /**
- * A server as index.ts wires it, on fake sockets, sealing with KEY: an instance of its own,
- * every run that ends reported to `onRunFinished`.
+ * A server as index.ts wires it, on fake sockets, sealing with KEY: an instance of its own, by
+ * the id its snapshots name, every run that ends reported to `onRunFinished`.
  */
 function server(onRunFinished: RunListener = () => undefined) {
   const line = new FakeServer();
-  const manager = new RoomManager(onRunFinished, false, null, KEY, randomUUID());
+  const instance = randomUUID();
+  const manager = new RoomManager(onRunFinished, false, null, KEY, instance);
   serveSockets(line, { catalog: missions, manager });
-  return { line, manager };
+  return { line, manager, instance };
 }
 
 /** What a socket that waits for its room has heard: that the room `code` is on its way back. */
@@ -303,9 +304,12 @@ describe('the race of the crew’s snapshots after a restore', () => {
     ben.say({ kind: 'join-room', code, name: 'Ben', pass: passFor('Ben') });
     vi.advanceTimersByTime(SNAPSHOT_EVERY_MS);
     ben.close();
+    // Anna goes on in the lobby: a newer snapshot of it, which Ben's page has not.
+    anna.say({ kind: 'select-difficulty', difficulty: 'hart' });
     vi.advanceTimersByTime(SNAPSHOT_EVERY_MS);
     const older = blobOf(ben);
     const newer = blobOf(anna);
+    expect(newer.seq).toBeGreaterThan(older.seq);
     const colourOf = (socket: FakeSocket): string | undefined =>
       socket.view.players.find((p) => p.name === 'Ben')?.color;
     const was = colourOf(anna);
@@ -357,7 +361,7 @@ describe('the handover: the new instance waits for the old one’s last snapshot
     expect(fresh.manager.counts().total).toBe(0);
     expect(said()).toContain(
       `[escapelab] room ${code}: snapshot seq ${older.seq} is not the last of instance ` +
-        `${old.manager.instanceId}, waiting up to 90.0 s for a newer one`,
+        `${old.instance}, waiting up to 90.0 s for a newer one`,
     );
     // The old instance's minute is over: SIGTERM, and Anna is handed its last snapshot.
     vi.advanceTimersByTime(61_000);
@@ -365,9 +369,8 @@ describe('the handover: the new instance waits for the old one’s last snapshot
     const last = blobOf(anna);
     expect(ben.heard).toEqual(restoring(code));
     const annaBack = resume(fresh.line, 'Anna', code, last.blob);
-    const joined = { kind: 'joined', code, instanceId: fresh.manager.instanceId };
     for (const socket of [ben, annaBack]) {
-      expect(joinedOf(socket)).toEqual(joined);
+      expect(joinedOf(socket)).toEqual({ kind: 'joined', code });
       expect(socket.view.pausedFor).toBeNull();
       expect(takenFrom(socket)).toBe('newer');
     }
@@ -506,6 +509,34 @@ describe('the handover: who waits for the room, and who does not', () => {
     );
     expect(fresh.manager.waitsFor(code)).toBe(true);
     other.dispose();
+  });
+});
+
+describe('the handover: a join by code while the room waits', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0);
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('is told to come again in a moment, and is the room’s to answer once it is back', () => {
+    const { old, code, anna, older } = apart();
+    const fresh = server();
+    resume(fresh.line, 'Ben', code, older.blob);
+    const dora = fresh.line.connect();
+    const join = { kind: 'join-room', code, name: 'Dora', pass: passFor('Dora') } as const;
+    dora.say(join);
+    const restoringRoom = 'Der Raum wird gerade wiederhergestellt, gleich noch einmal.';
+    expect(dora.heard).toEqual([{ kind: 'error', message: restoringRoom, of: 'join-room' }]);
+    old.manager.shutDown(Date.now());
+    resume(fresh.line, 'Anna', code, blobOf(anna).blob);
+    dora.say(join);
+    expect(dora.heard).toHaveLength(2);
+    expect(dora.heard.at(-1)).not.toMatchObject({ message: restoringRoom });
   });
 });
 

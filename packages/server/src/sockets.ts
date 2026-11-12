@@ -394,9 +394,8 @@ function giveUp(
 }
 
 /**
- * The session of a socket that sat down on the seat of `playerId` in `room`: it is told so — and
- * on which server instance — and takes the room's views from now on. Whatever room it sat in
- * before lets go of it first.
+ * The session of a socket that sat down on the seat of `playerId` in `room`: it is told so, and
+ * takes the room's views from now on. Whatever room it sat in before lets go of it first.
  */
 function seated(
   lab: Lab,
@@ -408,7 +407,7 @@ function seated(
   if (before !== null && (before.room !== room || before.playerId !== playerId)) {
     before.detach();
   }
-  send(socket, { kind: 'joined', code: room.code, instanceId: lab.manager.instanceId });
+  send(socket, { kind: 'joined', code: room.code });
   const listener = listenerOf(socket);
   const detach = room.attach(playerId, listener);
   const who = (): string => room.nameOf(playerId);

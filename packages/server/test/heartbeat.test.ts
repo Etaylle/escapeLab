@@ -27,9 +27,7 @@ function startedRun() {
   const manager = new RoomManager();
   serveSockets(server, { catalog: { get: () => mission, default: mission }, manager });
   const cuts: { socket: BeatingSocket; why: CutReason }[] = [];
-  const stop = startHeartbeat(server, manager.instanceId, HEARTBEAT_MS, (socket, why) =>
-    cuts.push({ socket, why }),
-  );
+  const stop = startHeartbeat(server, HEARTBEAT_MS, (socket, why) => cuts.push({ socket, why }));
   const anna = server.connect();
   anna.say({ kind: 'create-room', name: 'Anna', pass: passFor('Anna'), missionId: mission.id });
   const { code } = joinedOf(anna);
@@ -42,7 +40,7 @@ function startedRun() {
     manager.get(code).dispose();
     stop();
   };
-  return { server, manager, anna, ben, code, end, cuts };
+  return { server, anna, ben, code, end, cuts };
 }
 
 /** A new socket of Ben's resuming his place by his pass, as his page does after reconnecting. */
@@ -53,7 +51,7 @@ function resumeBen(server: FakeServer, ben: FakeSocket): FakeSocket {
   return back;
 }
 
-describe('the beat of the server instance', () => {
+describe('the beat of the server', () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -61,15 +59,15 @@ describe('the beat of the server instance', () => {
     vi.useRealTimers();
   });
 
-  it('names the instance on every socket, as the seat’s `joined` does', () => {
-    const { server, manager, anna, end } = startedRun();
+  it('says on every socket that the server beats and no more, as `joined` names the room', () => {
+    const { server, anna, code, end } = startedRun();
     const browsing = server.connect();
     vi.advanceTimersByTime(3 * HEARTBEAT_MS);
-    const tick = { kind: 'tick', instanceId: manager.instanceId };
+    const tick = { kind: 'tick' };
     for (const socket of [anna, browsing]) {
       expect(socket.heard.filter((msg) => msg.kind === 'tick')).toEqual([tick, tick, tick]);
     }
-    expect(joinedOf(anna).instanceId).toBe(manager.instanceId);
+    expect(joinedOf(anna)).toEqual({ kind: 'joined', code });
     end();
   });
 });

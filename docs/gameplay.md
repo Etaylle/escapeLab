@@ -429,7 +429,10 @@ minute after the restore at the soonest, „Einsatz abbrechen" for one alone. A 
 from the restore as well: one not back is freed 120 s after it, whatever the lobby's last snapshot
 was. For 10 s after the restore, until the crew does anything, a newer snapshot handed in replaces
 the one the room was taken up from; an older one changes nothing, and a newer one that comes later
-only goes into the log, with both seqs. Every snapshot names the server instance that sealed it, one
+only goes into the log, with both seqs. A seq orders the snapshots of one history only: a room
+taken up again from an older snapshot counts on from it, a history of its own, so a last snapshot
+of the history it left could in theory outrank its newer ones — accepted. Every snapshot names the
+server instance that sealed it, one
 id per boot, and the one at SIGTERM is its last (`final`): a new instance takes a room up from a
 snapshot of another one that is not its last only once that last one comes, or 90 s after the first
 such snapshot came, however long the instance has been up, from the newest handed in meanwhile —
@@ -438,7 +441,8 @@ older snapshot than the crew still on it, whose last ones come some 61 s after t
 latest; a last snapshot never waits. Meanwhile the player's card says „EINSATZ WIRD
 WIEDERHERGESTELLT · Der letzte Stand trifft gleich ein", with only the reload to press; the join
 screen's card, its way back pressed, says the same with the seconds it has waited, only „Einsatz
-aufgeben" open — carried out once the room is back — and the audience waits as well. A server killed
+aufgeben" open — carried out once the room is back — and the audience waits as well, while a join
+by its code is told „Der Raum wird gerade wiederhergestellt, gleich noch einmal." A server killed
 outright, with no SIGTERM, loses at most the last 2 s of a deed and 10 s of a walk, and its rooms
 are back 90 s after the first of their crew came back to the next one. A snapshot over a day old,
 of a run that is over, of another room or under another key is

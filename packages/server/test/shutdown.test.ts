@@ -22,7 +22,7 @@ const missions = new MissionCatalog(fileURLToPath(new URL('../../../missions', i
 function server() {
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
   const line = new FakeServer();
-  const manager = new RoomManager(undefined, false, null, KEY);
+  const manager = new RoomManager(undefined, false, null, KEY, 'going-down');
   serveSockets(line, { catalog: missions, manager });
   const sitDown = (name: string, code?: string): FakeSocket => {
     const socket = line.connect();
@@ -110,7 +110,7 @@ describe('the server going down for a restart', () => {
       const kept = open(last?.kind === 'restart' ? last.blob : '', code, KEY);
       expect(kept.state).toMatchObject({ phase: 'playing', paused: { kind: 'wartung' } });
       expect(kept.seq).toBe(last?.kind === 'restart' ? last.seq : -1);
-      expect(kept).toMatchObject({ instance: manager.instanceId, final: true });
+      expect(kept).toMatchObject({ instance: 'going-down', final: true });
     }
     expect(cemSend.mock.calls.map(([data]) => said(data).kind)).toContain('restart');
     expect(audienceSend.mock.calls.map(([data]) => said(data).kind)).not.toContain('restart');

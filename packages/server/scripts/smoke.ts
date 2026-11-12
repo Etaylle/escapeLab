@@ -261,8 +261,8 @@ class TestClient {
   positionsRun: number | null = null;
   drones: Record<string, DronePosition> = {};
   playerId: string | null = null;
-  /** the room the server seated this client in, for resuming there after a drop, and where */
-  joined: { code: string; instanceId: string } | null = null;
+  /** the room the server seated this client in, for resuming there after a drop */
+  joined: { code: string } | null = null;
   /** client-authoritative avatar position (tile units) */
   self: { x: number; y: number } | null = null;
   /** the newest snapshot of its room this client was handed, as the page keeps it */
@@ -345,9 +345,9 @@ class TestClient {
    * and its own id as its first view of it names it.
    */
   async seated(within = 5000): Promise<{ code: string; playerId: string }> {
-    const { code, instanceId } = await this.expect('joined', isJoined, within);
+    const { code } = await this.expect('joined', isJoined, within);
     const view = await this.until('a view of the room it sits in', () => true);
-    this.joined = { code, instanceId };
+    this.joined = { code };
     this.playerId = view.you.id;
     return { code, playerId: view.you.id };
   }
@@ -2772,6 +2772,13 @@ class ServerProcess {
       await sleep(50);
     }
   }
+
+  /** The instance this boot of the server is, as its log names it once it is up. */
+  async instance(): Promise<string> {
+    const line = await this.logs('this boot is instance ', 'it names the instance it is');
+    const id = /this boot is instance (\S+):/.exec(line)?.[1];
+    return id ?? fail(`${this.name}: no instance in "${line}"`);
+  }
 }
 
 /**
@@ -2975,7 +2982,7 @@ async function restartBySigkill(server: ServerProcess, crew: Trio3): Promise<voi
   const finnTo = besides(consoleOf(NOTLICHT), -3, 0, 'west of the lever');
   await walkTo(finn, finnTo);
   await sleep(300);
-  const killed = eva.joined?.instanceId ?? fail('eva: in no room');
+  const killed = await server.instance();
   const newest = await goneBySigkill(server, crew);
   const next = new ServerProcess('another server');
   await next.up();
@@ -3009,14 +3016,15 @@ async function restartBySigkill(server: ServerProcess, crew: Trio3): Promise<voi
 }
 
 /**
- * Finn's line drops while Render's deploy has a new server, `fresh`, up beside the old one: the
- * run stands still for him on the old one, as Eva sees, and his page comes back to the new one
- * with the snapshot it kept, older than what the old one has — and waits there (`restoring`),
- * the new server's log naming the old one. Returns his client on the new server, and since when
- * the run stands still.
+ * Finn's line drops while Render's deploy has a new server, `fresh`, up beside the old one, the
+ * instance `old`: the run stands still for him on the old one, as Eva sees, and his page comes
+ * back to the new one with the snapshot it kept, older than what the old one has — and waits
+ * there (`restoring`), the new server's log naming the old one. Returns his client on the new
+ * server, and since when the run stands still.
  */
 async function droppedOnto(
   fresh: ServerProcess,
+  old: string,
   eva: TestClient,
   finn: TestClient,
 ): Promise<{ back: TestClient; since: number }> {
@@ -3031,8 +3039,7 @@ async function droppedOnto(
   await back.expect('his room on its way back, the new server waiting', isRestoring);
   console.log(`✓ ${back.label}: waits on the new server, snapshot seq ${kept.seq} in hand`);
   const waits =
-    `room ${code}: snapshot seq ${kept.seq} is not the last of instance ` +
-    `${eva.joined?.instanceId}, waiting up to `;
+    `room ${code}: snapshot seq ${kept.seq} is not the last of instance ${old}, waiting up to `;
   await fresh.logs(waits, 'it waits for the old server\'s last snapshot, naming the old server');
   return { back, since: held.pausedAt ?? fail('no pause') };
 }
@@ -3048,13 +3055,14 @@ async function droppedOnto(
 async function handover(): Promise<void> {
   const old = new ServerProcess('the old server');
   await old.up();
+  const oldInstance = await old.instance();
   const { code, eva, finn, gus } = await crewOfThree(RESTART_PORT);
   const deadline = eva.view?.deadlineAt ?? fail('eva: no clock running');
   // A snapshot's time on: every seat keeps one of the run, the lights out.
   await sleep(SNAPSHOT_EVERY_MS + 500);
   const fresh = new ServerProcess('a new server beside it', HANDOVER_PORT);
   await fresh.up();
-  const { back: finnBack, since } = await droppedOnto(fresh, eva, finn);
+  const { back: finnBack, since } = await droppedOnto(fresh, oldInstance, eva, finn);
   await sleep(OVERLAP_MS);
   const last = await goneBySigterm(old, [eva, gus], since);
   const heardBefore = eva.raw.length;
@@ -3063,7 +3071,7 @@ async function handover(): Promise<void> {
     comeBack(gus, HANDOVER_PORT),
   ]);
   await finnBack.seated();
-  assert(finnBack.joined?.instanceId !== eva.joined?.instanceId, 'Finn sits on the new server');
+  await fresh.logs(`room ${code}: Finn resumed`, 'Finn sits on the new server');
   await evaBack.expectView('the run on again on the new server, Finn back with Eva and Gus',
     (v) => v.pausedFor === null && v.players.every((p) => p.connected));
   assertShifted(goingOn(evaBack, heardBefore), deadline, since);

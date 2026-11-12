@@ -345,11 +345,8 @@ export interface DronePosition {
  * server's clock): every moment a view names is on that clock.
  */
 export type ServerMessage =
-  /**
-   * the socket sits on its seat in room `code`, on the server instance `instanceId` — one id per
-   * boot: its pass holds it, the views say whose it is
-   */
-  | { kind: 'joined'; code: string; instanceId: string }
+  /** the socket sits on its seat in room `code`: its pass holds it, the views say whose it is */
+  | { kind: 'joined'; code: string }
   /**
    * the pass sits on its seat in room `code` no more, or this socket does not: the seat was
    * given up (`abandon`; `message` null), or it plays on another socket that showed its pass,
@@ -371,9 +368,9 @@ export type ServerMessage =
   | { kind: 'clock'; sent: number; at: number }
   /**
    * the server's beat, every 10 s on every socket, answered at once with a `tock`: each side
-   * hears the other while nothing else is said; it names the server instance, as `joined` does
+   * hears the other while nothing else is said
    */
-  | { kind: 'tick'; instanceId: string }
+  | { kind: 'tick' }
   /** E was taken: what it did is in the views that came before this */
   | { kind: 'interacted' }
   /**

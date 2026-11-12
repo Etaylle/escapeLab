@@ -75,7 +75,7 @@ const SESSION: Extract<Comeback, { kind: 'resume' }> = {
   pass: { id: 'b3'.repeat(16), secret: '7e'.repeat(32) },
 };
 /** The server has the seat back. */
-const JOINED: ServerMessage = { kind: 'joined', code: SESSION.code, instanceId: 'boot-1' };
+const JOINED: ServerMessage = { kind: 'joined', code: SESSION.code };
 
 /** `keepConnected` over fake sockets, with what it told the page. */
 function connection(session: Comeback | null = SESSION) {
@@ -541,7 +541,7 @@ describe('keepConnected — a line that shows itself dead', () => {
     for (let beat = 0; beat < 30; beat++) {
       vi.advanceTimersByTime(10_000);
       const before = last().sent.length;
-      last().say({ kind: 'tick', instanceId: 'boot-1' });
+      last().say({ kind: 'tick' });
       // Answered inside the message handler: no timer of the page's ran in between.
       expect(last().sent.slice(before)).toEqual([{ kind: 'tock' }]);
     }

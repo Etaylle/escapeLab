@@ -57,6 +57,8 @@ describe('a room’s snapshot', () => {
     expect(keeping.refusedSteps).toBe(1);
     // When the patrols last moved is no part of it: their timer starts that anew as they wake.
     expect(keeping).not.toHaveProperty('lastDroneTick');
+    // Nor when each line closed: a room taken up again waits for every seat from then on.
+    expect(keeping).not.toHaveProperty('lostAt');
     for (const byMember of [keeping.lastPingAt, keeping.lastChatAt, keeping.signalAllowance]) {
       expect(Object.keys(byMember)).toEqual([ben.playerId]);
     }
@@ -79,7 +81,6 @@ describe('a room’s snapshot', () => {
       { since: at, waivableAt: at + FIRST_WAIT_MS, waived: false },
       { since: at, waivableAt: at + FIRST_WAIT_MS, waived: false },
     ]);
-    expect(keeping.lostAt).toEqual(Object.fromEntries(state.players.map((p) => [p.id, at])));
     expect(kept.seats.map(({ name, passId }) => [name, passId])).toEqual([
       ['Anna', passFor('Anna').id],
       ['Ben', passFor('Ben').id],

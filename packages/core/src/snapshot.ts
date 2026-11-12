@@ -76,19 +76,18 @@ export interface DroneRuntime {
 
 /**
  * What a room keeps beside the game (server room.ts), as far as it outlasts the room's
- * connections. Left out: the connections themselves; a new device's ask for a seat, which
- * lapses with its device; the glances of the crew's lamps, since a look begun before a pause
- * starts anew after it; the mission the host's yes named for the next run, which only the end
- * of a run has, and no ended run is taken up again; and whatever the timers and the stream of
- * positions work out anew from the game and from what is kept here.
+ * connections. Left out: the connections themselves, and when each closed, since a room taken
+ * up again waits for every seat from then; a new device's ask for a seat, which lapses with its
+ * device; the glances of the crew's lamps, since a look begun before a pause starts anew after
+ * it; the mission the host's yes named for the next run, which only the end of a run has, and
+ * no ended run is taken up again; and whatever the timers and the stream of positions work out
+ * anew from the game and from what is kept here.
  */
 export interface RoomKeeping {
   /** where every member of the crew stands, by player id */
   positions: Record<string, RelayedPosition>;
   /** each patrolling drone on its loop, by drone id; null while none patrols */
   drones: Record<string, DroneRuntime> | null;
-  /** epoch ms each seat's line closed, by player id: every seat's line is closed in a snapshot */
-  lostAt: Record<string, number>;
   /** the seats whose socket closed cleanly, a tab closed or reloaded, by player id */
   closedClean: string[];
   /** until when a pass may not ask for a seat again, by seat and pass id (`<seat>:<pass>`) */
@@ -251,7 +250,6 @@ const keepingSchema = z.looseObject({
     }),
   ),
   drones: z.record(z.string(), droneRuntimeSchema).nullable(),
-  lostAt: timesBy,
   closedClean: ids,
   askAgainAt: timesBy,
   lastPingAt: timesBy,

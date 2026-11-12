@@ -109,7 +109,7 @@ const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 const served = serveSockets(wss, { catalog, manager });
 // A socket gone silent is found out and closed, so that the room pauses for its player; the
 // log names the room and the seat of each socket it cuts.
-startHeartbeat(wss, instanceId, HEARTBEAT_MS, served.cut);
+startHeartbeat(wss, HEARTBEAT_MS, served.cut);
 
 // Render's SIGTERM before it replaces the instance, or a Ctrl-C: the server goes down for a
 // restart (shutdown.ts), every run standing still and every seat handed its room's snapshot.
