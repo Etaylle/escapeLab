@@ -289,7 +289,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
 - Beweis: Smoke tötet den Server mitten im Lauf (SIGTERM), startet ihn neu, die Partie geht ohne
   Zeitverlust weiter; Harness `restart-recovered.png`; Fehlen von `ROOM_SECRET` steht im Log.
 
-### R-3 Der Einsatz bindet die Crew — Status: in Arbeit (R-reconnect) · Größe: L
+### R-3 Der Einsatz bindet die Crew — Status: im PR (R-reconnect) · Größe: L
 - Dienstausweis je Browser (localStorage) statt Token im Tab; Startseite zeigt bei laufendem
   Einsatz die Karte „Zurück zum Einsatz / Einsatz aufgeben" und sperrt andere Räume; Pause bei
   Abbruch mit Zähler, nach 60 s (später 20 s) „Ohne <Name> weiter", die Person bleibt gebunden
@@ -306,7 +306,7 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   nur mit `?stun=1` an. Optionen: STUN standardmäßig, TURN über einen kostenlosen Dienst oder
   den Render-Server selbst (Datenvolumen). Erst entscheiden, wenn R-3 steht.
 
-### R-5 Sichtbarkeit — Status: in Arbeit (R-reconnect) · Größe: S
+### R-5 Sichtbarkeit — Status: im PR (R-reconnect) · Größe: S
 - Server loggt Beitritt, Wiederverbinden, Abbruch, Abweisung, Weiter-ohne, Aufgeben, Übernahme,
   Laufende je eine Zeile; `/health` zählt Räume, laufende Partien, Spieler, Zuschauer, nennt
   Laufzeit und Commit (`RENDER_GIT_COMMIT`).

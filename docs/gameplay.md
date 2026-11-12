@@ -4,15 +4,16 @@ How the crew steers, how it finds things, what a run leaves behind and how runs 
 controls on keys and on a controller, the quick chat, the station's intercom, finding things, the
 walks of Blackout's lab, the first win at the stations the whole crew presses, the Erfolge, the
 Tagesschicht, the picture of a run, the danger sense, the Serverraum's cabling diagram, typing at
-its terminal and what the notepad takes down. Code: `packages/client/src/input/` (bindings,
-controller, prompts), `client/src/achievements.ts` and
+its terminal, what the notepad takes down and what happens when a line drops. Code:
+`packages/client/src/input/` (bindings, controller, prompts), `client/src/achievements.ts` and
 `screens/{Plaques,ShareButton,ControlSettings}.tsx`,
 `screens/shareCard.ts`, `world/{labelFade,finds,danger,ChatWheel}.ts(x)`,
 `puzzles/RackDiagram.tsx`, `puzzles/{prompt.ts,ServersPanel.tsx}`,
 `puzzles/{SyncCount.tsx,syncPress.ts}`, `voice/{rules,intercom}.ts`, `noting.ts`, `notes.ts`,
-`screens/{Notepad,NoteButton}.tsx`; in the core `chat.ts`, `discovery.ts`, `achievements.ts`,
-`daily.ts`, `map.ts` (`intercomOf`), `puzzles/servers.ts` (`serviceDiagram`) and
-`puzzles/buttonSync.ts`.
+`screens/{Notepad,NoteButton}.tsx`, `pass.ts`, `line.ts`, `ws.ts`,
+`screens/{Join,Pause,Line,GiveUp}.tsx`; in the core `chat.ts`, `discovery.ts`, `achievements.ts`,
+`daily.ts`, `map.ts` (`intercomOf`), `puzzles/servers.ts` (`serviceDiagram`),
+`puzzles/buttonSync.ts` and `actions.ts` (the pause); in the server `seats.ts`, `heartbeat.ts`.
 
 ## Controls
 
@@ -342,3 +343,61 @@ from the slip as well (hint-noted), word for word.
 `client/test/captures.test.ts` runs every template on Blackout's real rules and on what seed 5
 deals (`tools/fixtures/blackout-plan.json`), and holds every capture of every mission to twelve
 lines with its head.
+
+## Verbindung und Wiedereintritt
+
+A run binds whoever plays it, as a match does in Dota 2: they can come back at any time and
+leave it only by saying so. Every browser profile holds a crew pass, the Dienstausweis: an id and
+a secret minted once and kept in `localStorage` (`escapelab-pass`) with the name last played
+under. Every seat is bound to the pass that sat down on it — the server keeps the pass's id and a
+SHA-256 of its secret, never the secret — and any socket that shows the pass has the seat back
+(`resume {code, pass}`), from any tab or window of that browser. A tab keeps only the room's
+code (`sessionStorage`), so a reload is back in the run at once.
+
+**Bound to the run.** While the pass sits in a run that is on, live or paused, the join screen
+opens on the run's card instead of the form (`whereami`, asked as the screen comes up): the
+mission, the room's code, the crew and the clock as the server last showed it, with „Zurück zum
+Einsatz" and „Einsatz aufgeben" (a second press within 4 s confirms it). Opening or joining
+another room is refused, naming the run. A seat in a lobby shows its card too, and „Raum
+verlassen" leaves it as before; a finished run binds nobody.
+
+**The pause.** A line that drops pauses the run for everyone — the clock, the patrols, the
+emergencies — and the others' card counts: „Warten auf Ben · 0:12". 60 s into the run's first
+drop, and 20 s into every later one, everybody still on the line is offered „Ohne Ben weiter"
+(Overcooked 2: the crew chooses between waiting and going on). One press runs the clock again
+and waives Ben: the stations the whole crew presses, the hatch and the escape count the crew
+without him; a station with two consoles still takes two. With one member left on the line the
+way on is never offered; after the same wait the card offers „Einsatz abbrechen" instead, which
+ends the run lost (`lost:abandoned`, „EINSATZ ABGEBROCHEN"). A waived member who comes back
+counts again at once, without a pause, and the others read „Ben ist zurück". The escape is never
+judged while the run stands paused, and a drop alone ends no run.
+
+**Giving the run up.** „Einsatz aufgeben", on the run's card or on the card of a line lost, gives
+the seat up for good: what they carried goes down where they stood (on their start where the
+server never had them), a plate they held lets go, and the pass is free again. Below the
+mission's least crew (`players.min`) the run ends lost for everyone, its end card naming who
+left („Ben hat den Einsatz verlassen."), and the rematch works as ever; otherwise the run goes
+on, its clock running again where it waited for them.
+
+**Taking a seat over.** As in Jackbox, a new device joins a running room by its code and the
+exact name of a seat whose line is down, and sits on it; the pass that held the seat is refused
+from then on („Der Platz wurde auf einem anderen Gerät übernommen."). The name of a seat still
+on the line is refused („Ben ist noch verbunden."); any other name gets the refusal of a join
+into a run, which says that a seat whose line is down can be taken over by its name.
+
+**The line.** The page counts its line dead when an ask for the server's time stays unanswered
+for 5 s, after 20 s without a word from the server, or when a socket is not open 8 s after it
+was made: it closes it and makes a new one at once, the pause between tries back at 1 s
+(doubling up to 10 s after a close). The network back, the page shown again or in focus try at
+once. While the line is down in a run the player's own card stands over the world —
+„VERBINDUNG VERLOREN", „Verbinde neu · Versuch 3 · in 4 s", „Jetzt versuchen", „Seite neu laden",
+„Einsatz aufgeben" — and what is pressed meanwhile goes nowhere. The server cuts a socket that
+left two pings unanswered or sent nothing for 20 s: a browser answers pings even for a page held
+offline. The voice links come up again after a return.
+
+**What the server says.** One log line per event, with the room and the name: a seat joining,
+its line closing, its return with how long it was away, a socket the heartbeat cut and why, a
+refusal at the door or of the way on, going on without somebody, a seat given up or taken over,
+and every run's end with its outcome. `GET /health` counts the rooms, the runs on and paused,
+the players and the audience on the line, and says the uptime and the build
+(`RENDER_GIT_COMMIT`, else `dev`); it names nobody.

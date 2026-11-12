@@ -116,8 +116,23 @@ sind Stationen, an denen die ganze Crew gemeinsam drückt.
 
 **Schwierigkeit:** Der Host wählt in der Lobby zwischen *Entspannt*, *Normal* und *Hart* — das
 skaliert Zeitbudget, alle Zeitstrafen, Drohnentempo und -reichweite sowie Häufigkeit und Dauer
-der Notfälle. **Verbindungsabbruch:** Fehlt jemand aus der Crew, pausiert die Mission komplett
-(Uhr, Patrouillen, Notfälle) und läuft nach der Rückkehr ohne Zeitverlust weiter.
+der Notfälle.
+
+**Wenn die Leitung abreißt:** Ein laufender Einsatz bindet die Crew wie ein Match in Dota 2.
+Jeder Browser trägt einen Dienstausweis (Kennung und Geheimnis in `localStorage`), an den der
+Server den Platz bindet; der Tab merkt sich nur den Raumcode, ein Neuladen ist sofort zurück im
+Einsatz. Reißt eine Leitung ab, pausiert die Mission für alle (Uhr, Patrouillen, Notfälle), und
+die anderen sehen „Warten auf Ben · 0:12“. Nach 60 Sekunden, bei jedem weiteren Abbruch desselben
+Laufs nach 20, bietet die Karte „Ohne Ben weiter“: Die Uhr läuft wieder, und Stationen der ganzen
+Crew, Luke und Flucht zählen Ben nicht mit, bis er zurück ist. Ist nur noch eine Person verbunden,
+bietet die Karte stattdessen „Einsatz abbrechen“. Die Startseite öffnet bei einem laufenden
+Einsatz auf seiner Karte („Zurück zum Einsatz“, „Einsatz aufgeben“) und sperrt andere Räume;
+aufgeben gibt den Platz frei, unter der Mindestzahl der Crew endet der Lauf für alle („EINSATZ
+ABGEBROCHEN“). Ein anderes Gerät übernimmt einen getrennten Platz mit Raumcode und genau dessen
+Namen (wie bei Jackbox). Die eigene Seite erkennt eine tote Leitung nach 5 Sekunden ohne
+Uhrantwort, 20 Sekunden Stille oder 8 Sekunden ohne offene Verbindung, verbindet sofort neu und
+zeigt bis dahin „VERBINDUNG VERLOREN“ mit Versuch und Wartezeit. Einzelheiten:
+`docs/gameplay.md`, „Verbindung und Wiedereintritt“.
 
 **Endspurt:** In der letzten Hälfte der Zeit zieht das Ambiente hörbar an, unter einer Minute
 pulsiert der Timer rot und die Ränder glühen, und die **letzten zehn Sekunden werden mit
@@ -175,8 +190,8 @@ Vorlage (eine mitgelieferte als Kopie), Missionsdateien gehen per Export und Imp
 | Paket | Zweck |
 | --- | --- |
 | `packages/core` | Spiellogik als pure State-Machine (`applyAction`), Missionsformat (zod), nach Standort gefilterte Views, WebSocket-Protokoll. Keine I/O — vollständig deterministisch und testbar. |
-| `packages/server` | Autoritativer Node-Server: Räume, Reconnect-Tokens, Missionstimer, WebSocket (`ws`). Clients schicken Intents; der Server validiert und broadcastet gefilterte Views. |
-| `packages/client` | React + Vite UI: Join → Lobby → Spiel → Ende, Auto-Reconnect mit Session-Token. |
+| `packages/server` | Autoritativer Node-Server: Räume, an Dienstausweise gebundene Plätze, Missionstimer, WebSocket (`ws`). Clients schicken Intents; der Server validiert und broadcastet gefilterte Views. |
+| `packages/client` | React + Vite UI: Join → Lobby → Spiel → Ende, Auto-Reconnect mit dem Dienstausweis des Browsers. |
 
 ## Entwicklung
 
@@ -312,8 +327,8 @@ Betrieb:
 - **Jeder Deploy ersetzt die Instanz.** Offene WebSocket-Verbindungen brechen ab, und der Server
   hält Räume nur im Speicher: ein Deploy während einer Partie wirft die ganze Crew hinaus.
   Auto-Deploy bleibt an, also ist jeder Push auf `main` ein Deploy. Gepusht wird deshalb nur,
-  wenn niemand spielt; wer pusht, prüft vorher `/health` (meldet laufende Partien, sobald R-5
-  aus dem Backlog gebaut ist) und entscheidet den Zeitpunkt selbst.
+  wenn niemand spielt; wer pusht, prüft vorher `/health` (`rooms.running` zählt die laufenden
+  Partien, `rooms.players` die verbundenen Spielenden) und entscheidet den Zeitpunkt selbst.
 - **Der Free-Plan schläft und startet neu.** Nach 15 Minuten ohne HTTP-Anfrage oder
   WebSocket-Nachricht fährt die Instanz herunter, und Render darf Free-Instanzen jederzeit neu
   starten; beides löscht die Räume, bis die Schnappschüsse aus dem Backlog (R-2) gebaut sind.
