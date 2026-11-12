@@ -378,7 +378,12 @@ deinen Platz), Overcooked 2 (die Crew wählt zwischen Warten und Weiterspielen).
   der Host die Mission wählt, Kaffeemaschine, Tür zu Trakt C geht auf, wenn alle bereit davor
   stehen; Bewegung, Anwesenheit, Näheklang wie im Spiel.
 
-### K-1 Konto wie bei Dota — Status: wartet (Entscheidung Uros: Anbieter) · Größe: L
+### K-1 Konto wie bei Dota — Status: bereit (Entscheidung Uros 2026-11-12: eigene Konten, Google zuletzt; nach S-1) · Größe: L
+- Reihenfolge: **K-1a** Datenbank (Neon-Postgres, Prisma) mit Konto je Dienstausweis (Kennung,
+  Anzeigename, Farbe, Erfolge), Läufe und Bestenliste in der Datenbank statt der Datei, die
+  Render bei jedem Deploy löscht, „Meine Einsätze"; ohne `DATABASE_URL` weiter Datei und Gast
+  (Entwicklung, CI). **K-1b** Anmeldung mit Google (Identity Services, `jose`), die ein Konto
+  geräteunabhängig macht; Übernahme und Bestätigung entfallen für Angemeldete.
 - Uros 2026-11-12: „Wieso nicht wie Dota Accounts?" Heute bindet ein Dienstausweis je Browser
   (R-3); ein anderes Gerät kommt nur per Übernahme mit Bestätigung der Crew hinein. Ein Konto
   macht die Identität geräteunabhängig: anmelden, und der laufende Einsatz holt einen zurück,
