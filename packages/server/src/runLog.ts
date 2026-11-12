@@ -18,7 +18,7 @@ export type RunReportV1 = Omit<RunReport, 'version' | 'crew' | 'roomCode'> & { v
 /** Any report a run log holds: version 1 from before names were kept, version 2 since. */
 export type LoggedRun = RunReportV1 | RunReport;
 
-const OUTCOMES: readonly RunOutcome[] = ['won', 'lost:time', 'lost:alarms'];
+const OUTCOMES: readonly RunOutcome[] = ['won', 'lost:time', 'lost:alarms', 'lost:abandoned'];
 
 /**
  * One finished run onto the end of the log; its directory is made on demand.

@@ -71,6 +71,19 @@ export const NOBODY_PRESENT: Presence = {
   sight: {},
 };
 
+/** A crew member away from a run: their line dropped, and they are not back yet. */
+export interface Away {
+  /** epoch ms the line dropped */
+  since: number;
+  /** epoch ms from which the crew may go on without them (actions.ts `continue-without`) */
+  waivableAt: number;
+  /**
+   * the crew went on without them: the run runs on and counts them out — at the stations the
+   * whole crew presses, at the hatch — until they are back; their seat stays theirs
+   */
+  waived: boolean;
+}
+
 export interface ItemState {
   /** tile-space position while lying on the floor */
   x: number;
@@ -202,10 +215,25 @@ export interface GameState {
    */
   sabotage: { endsAt: number; emergency?: RelayState } | null;
   /**
-   * Set while someone is disconnected: the clock, patrols and emergencies
-   * all stand still, because the crew cannot finish a mission short-handed.
+   * Set while the run waits for somebody away (`away`, not waived): the clock, patrols and
+   * emergencies all stand still, because the crew cannot finish a mission short-handed.
    */
   paused: { since: number } | null;
+  /**
+   * the crew members whose line dropped in this run and who are not back, by player id
+   * (actions.ts `player-disconnected`): the run waits for them, or has gone on without them
+   */
+  away: Record<string, Away>;
+  /**
+   * lines dropped in this run so far: the first drop lets the crew go on without whoever
+   * dropped after FIRST_WAIT_MS, every later one after LATER_WAIT_MS
+   */
+  drops: number;
+  /**
+   * why the run was called off, as its end card says it — whoever left it, or whom the one
+   * still there called it off without; null for a run that ended any other way, or runs on
+   */
+  calledOff: string | null;
   /** Where every carryable object currently is, by item id. */
   items: Record<string, ItemState>;
   /** Everything worth retelling afterwards, oldest first. */
@@ -286,6 +314,9 @@ export function initialState(
     readersCredited: [],
     sabotage: null,
     paused: null,
+    away: {},
+    drops: 0,
+    calledOff: null,
     items: {},
     events: [],
     startedAt: null,

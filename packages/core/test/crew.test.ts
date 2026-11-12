@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, initialState, NO_CREDITS, parseMission, viewFor } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
-import { T0 } from './lab.js';
+import { lineDrops, T0 } from './lab.js';
 
 /**
  * Two rooms, west (x 1–3) and east (x 5–7), joined by a door at (4,2) that
@@ -87,14 +87,14 @@ describe('a crew without roles', () => {
 
   it('leaves out whoever is gone from the room, and does not wait for them', () => {
     const lobby = run([join('p1'), join('p2'), join('p3'), ready('p2')]);
-    const gone = applyAction(lobby, { type: 'player-disconnected', playerId: 'p3' });
+    const gone = applyAction(lobby, lineDrops('p3', T0));
     const state = run([start()], gone);
     expect(state.players.map((p) => p.id)).toEqual(['p1', 'p2']);
     expect(state.credits).toEqual({ p1: NO_CREDITS, p2: NO_CREDITS });
     expect(state.paused).toBeNull();
     const short = applyAction(
       run([join('p1'), join('p2'), ready('p2')]),
-      { type: 'player-disconnected', playerId: 'p2' },
+      lineDrops('p2', T0),
     );
     expect(() => run([start()], short)).toThrow(/mindestens 2/);
   });

@@ -248,7 +248,7 @@ describe('DronePatrol', () => {
 
   it('ignores disconnected players', () => {
     const drones = patrol();
-    const gone = applyAction(playing(), { type: 'player-disconnected', playerId: 'p1' });
+    const gone = applyAction(playing(), { type: 'player-disconnected', playerId: 'p1', at: T0 });
     expect(drones.detect(gone, at(3.5, 2.5), T0)).toEqual([]);
   });
 });

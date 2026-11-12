@@ -79,7 +79,7 @@ describe('the heartbeat', () => {
     expect(ben.terminated).toBe(false);
     vi.advanceTimersByTime(1);
     expect(ben.terminated).toBe(true);
-    expect(anna.view.pausedFor).toEqual(['Ben']);
+    expect(anna.view.pausedFor?.map((away) => away.name)).toEqual(['Ben']);
     expect(Date.now() - silentSince).toBeLessThanOrEqual(30_000);
     expect(anna.terminated).toBe(false);
     end();
@@ -101,7 +101,7 @@ describe('the heartbeat', () => {
     ben.answering = false;
     vi.advanceTimersByTime(3 * HEARTBEAT_MS);
     expect(ben.terminated).toBe(true);
-    expect(anna.view.pausedFor).toEqual(['Ben']);
+    expect(anna.view.pausedFor?.map((away) => away.name)).toEqual(['Ben']);
     const back = resumeBen(server, ben);
     expect(joinedOf(back).code).toBe(joinedOf(ben).code);
     expect(back.view.you.id).toBe(ben.view.you.id);
@@ -190,7 +190,7 @@ describe('the server’s clock on the line', () => {
     expect(lastViewOf(anna).at).toBe(1_700_000_000_000);
     ben.answering = false;
     vi.advanceTimersByTime(3 * HEARTBEAT_MS);
-    expect(anna.view.pausedFor).toEqual(['Ben']);
+    expect(anna.view.pausedFor?.map((away) => away.name)).toEqual(['Ben']);
     expect(lastViewOf(anna).at).toBe(Date.now());
     end();
   });

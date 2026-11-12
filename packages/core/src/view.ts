@@ -23,6 +23,7 @@ import type {
 import { noteKey } from './notes.js';
 import { CREW_COLORS, type Credits, type GameState, type Phase, type RunEvent } from './state.js';
 import { moduleFor, type PuzzleView } from './puzzles/index.js';
+import { crewOf, waitingFor } from './actions.js';
 import { clockStartOf, runReport } from './report.js';
 import type { ConsoleId, ManualSection, Viewer, ViewContext } from './puzzles/module.js';
 import { relayDefFor, relayModule, type RelayDef, type RelayView } from './puzzles/relay.js';
@@ -68,6 +69,11 @@ export interface PlayerView {
     color: string;
     ready: boolean;
     connected: boolean;
+    /**
+     * away, and the run went on without them (`continue-without`): it counts them out; left
+     * out for everybody it counts
+     */
+    waived?: true;
     isHost: boolean;
   }[];
   /** crew colors and who holds them, for the lobby picker */
@@ -81,8 +87,11 @@ export interface PlayerView {
   /** solved puzzles so far (== index of the current one); independent of station activation */
   currentPuzzleIndex: number;
   puzzleCount: number;
-  /** set while the run is frozen because a crew member is missing */
-  pausedFor: string[] | null;
+  /**
+   * set while the run stands still for crew members away: whom it waits for, each with since
+   * when and from when the crew may go on without them (`continue-without`)
+   */
+  pausedFor: AwayView[] | null;
   /**
    * since when the run stands frozen, epoch ms; null while it runs. The mission clock stands
    * at it — the pause moves every deadline on by its length once it is over
@@ -90,6 +99,11 @@ export interface PlayerView {
   pausedAt: number | null;
   /** the run report, filled in as the mission goes on */
   events: RunEvent[];
+  /**
+   * why the run was called off, as its end card says it (`GameState.calledOff`); left out for a
+   * run that ended any other way, or runs on
+   */
+  calledOff?: string;
   /** only once the mission is over */
   grade: Grade | null;
   /** increments on every penalty; clients key alarm effects off it */
@@ -146,6 +160,16 @@ export interface PlayerView {
   nextMissionId?: string;
   /** the run's opening while the lab still has its power (`IntroView`); left out without one */
   intro?: IntroView;
+}
+
+/** A crew member the run waits for, away since their line dropped. */
+export interface AwayView {
+  id: string;
+  name: string;
+  /** epoch ms the line dropped */
+  since: number;
+  /** epoch ms from which the crew may go on without them */
+  waivableAt: number;
 }
 
 /**
@@ -484,7 +508,7 @@ function viewContext(state: GameState, puzzleId: string | null): ViewContext {
   return {
     edgework: state.edgework,
     alarms: state.penaltySeq,
-    crew: state.players.filter((p) => p.connected).map((p) => p.id),
+    crew: crewOf(state).map((p) => p.id),
     operators: puzzleId === null ? [] : operatorsOf(state, puzzleId),
   };
 }
@@ -999,16 +1023,21 @@ export interface SpectatorView {
   /** the alarms so far and how many end the run, as the players see them */
   alarms: PlayerView['alarms'];
   hintsUsed: number;
-  pausedFor: string[] | null;
+  /** whom the run waits for, as the players see it */
+  pausedFor: AwayView[] | null;
   /** since when the run stands frozen, as the players see it */
   pausedAt: number | null;
   events: RunEvent[];
+  /** why the run was called off, as the players see it; left out for any other run */
+  calledOff?: string;
   grade: Grade | null;
   players: {
     id: string;
     name: string;
     color: string;
     connected: boolean;
+    /** away, and the run went on without them; left out for everybody it counts */
+    waived?: true;
     presence: PlayerPresence;
   }[];
   /** who did what this run, by player id */
@@ -1024,6 +1053,32 @@ export interface SpectatorView {
     name: string;
     emergency?: RelayView;
   }[];
+}
+
+/** Whom the run waits for while it stands still, oldest drop first; null while it runs on. */
+function pausedFor(state: GameState): AwayView[] | null {
+  if (state.paused === null) {
+    return null;
+  }
+  return waitingFor(state)
+    .flatMap((id) => {
+      const away = state.away[id];
+      const name = state.players.find((p) => p.id === id)?.name;
+      return away === undefined || name === undefined
+        ? []
+        : [{ id, name, since: away.since, waivableAt: away.waivableAt }];
+    })
+    .sort((a, b) => a.since - b.since);
+}
+
+/** That the run went on without `playerId` (`continue-without`); nothing for whom it counts. */
+function waivedOf(state: GameState, playerId: string): { waived?: true } {
+  return state.away[playerId]?.waived === true ? { waived: true } : {};
+}
+
+/** Why the run was called off, for its end card; nothing for a run that ended any other way. */
+function calledOffOf(state: GameState): { calledOff?: string } {
+  return state.calledOff === null ? {} : { calledOff: state.calledOff };
 }
 
 export function viewForSpectator(state: GameState): SpectatorView {
@@ -1042,18 +1097,17 @@ export function viewForSpectator(state: GameState): SpectatorView {
     penaltySeq: state.penaltySeq,
     alarms: alarmsOf(state),
     hintsUsed: state.hintsUsed,
-    pausedFor:
-      state.paused === null
-        ? null
-        : state.players.filter((p) => !p.connected).map((p) => p.name),
+    pausedFor: pausedFor(state),
     pausedAt: state.paused?.since ?? null,
     events: [...state.events],
+    ...calledOffOf(state),
     grade: gradeFor(state),
     players: state.players.map((p) => ({
       id: p.id,
       name: p.name,
       color: p.color,
       connected: p.connected,
+      ...waivedOf(state, p.id),
       presence: presenceOf(state, p.id),
     })),
     credits: { ...state.credits },
@@ -1099,6 +1153,7 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
       color: p.color,
       ready: p.ready,
       connected: p.connected,
+      ...waivedOf(state, p.id),
       isHost: p.isHost,
     })),
     palette: CREW_COLORS.map((color) => ({
@@ -1112,12 +1167,10 @@ export function viewFor(state: GameState, playerId: string): PlayerView {
     lights: lightsOf(state),
     currentPuzzleIndex: state.currentPuzzleIndex,
     puzzleCount: state.mission.puzzles.length,
-    pausedFor:
-      state.paused === null
-        ? null
-        : state.players.filter((p) => !p.connected).map((p) => p.name),
+    pausedFor: pausedFor(state),
     pausedAt: state.paused?.since ?? null,
     events: [...state.events],
+    ...calledOffOf(state),
     grade: gradeFor(state),
     penaltySeq: state.penaltySeq,
     lastPenaltySec: state.lastPenaltySec,

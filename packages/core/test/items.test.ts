@@ -8,7 +8,7 @@ import {
   viewFor,
 } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
-import { standing } from './lab.js';
+import { lineDrops, standing } from './lab.js';
 
 /** A corridor with a crate at one end and its slot at the other. */
 const mission: Mission = parseMission({
@@ -187,7 +187,7 @@ describe('carryable items', () => {
     );
     expect(() => applyAction(delivered, pick('p2'))).toThrow(/bereits abgeliefert/);
 
-    const paused = applyAction(playing(), { type: 'set-paused', paused: true, at: T0 + 500 });
+    const paused = applyAction(playing(), lineDrops('p2', T0 + 500));
     expect(() => applyAction(paused, pick('p1'))).toThrow(/Pausiert/);
   });
 

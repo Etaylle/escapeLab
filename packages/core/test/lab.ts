@@ -91,6 +91,16 @@ export function consoleLab(crew = 2, id = 'doppelpult'): Mission {
   });
 }
 
+/** `playerId`'s line drops at `at`, as the room hears it go. */
+export function lineDrops(playerId: string, at: number): Action {
+  return { type: 'player-disconnected', playerId, at };
+}
+
+/** `playerId`'s line is back at `at`, as the room hears them resume. */
+export function lineBack(playerId: string, at: number): Action {
+  return { type: 'player-connected', playerId, at };
+}
+
 /**
  * The smallest crew the mission takes joins — p1, p2, … — everyone but the
  * host confirms, the host starts.

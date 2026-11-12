@@ -237,7 +237,8 @@ export function SpectateScreen({
 
       {view.pausedFor !== null && (
         <div className="banner-result">
-          <Icon name="pause" /> Pausiert — warten auf {view.pausedFor.join(', ')}
+          <Icon name="pause" /> Pausiert — warten auf{' '}
+          {view.pausedFor.map((member) => member.name).join(', ')}
         </div>
       )}
 

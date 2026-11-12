@@ -198,9 +198,10 @@ describe('the screens around a run', () => {
   });
 
   it('show the audience every state of a run under the game’s icons', () => {
+    const BEN_AWAY = { id: 'p2', name: 'Ben', since: 0, waivableAt: 60_000 };
     const states = {
       lobby: spectate(watched({ phase: 'lobby' })),
-      paused: spectate(watched({ pausedFor: ['Ben'] })),
+      paused: spectate(watched({ pausedFor: [BEN_AWAY] })),
       won: spectate(watched({ phase: 'won', grade: { rank: 'A', label: 'Stark' } })),
       lost: spectate(watched({ phase: 'lost' })),
     };

@@ -204,7 +204,10 @@ function running(deadlineAt: number, pausedAt: number | null = null): PlayerView
     lights: { out: true, outAt: 0 },
     currentPuzzleIndex: 0,
     puzzleCount: 1,
-    pausedFor: pausedAt === null ? null : ['Ben'],
+    pausedFor:
+      pausedAt === null
+        ? null
+        : [{ id: 'p2', name: 'Ben', since: pausedAt, waivableAt: pausedAt + 60_000 }],
     pausedAt,
     events: [],
     grade: null,

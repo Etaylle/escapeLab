@@ -171,6 +171,10 @@ export const clientMessageSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('back-to-lobby') }),
   z.object({ kind: z.literal('rematch') }),
+  /** on without the crew member away by id, once the wait for their drop is over */
+  z.object({ kind: z.literal('continue-without'), absentId: z.string().min(1).max(64) }),
+  /** the run called off by the one crew member still on the line, once the wait is over */
+  z.object({ kind: z.literal('call-off') }),
   /** a voice signal for one other member of the room, by id */
   z.object({ kind: z.literal('rtc'), to: z.string().min(1).max(64), signal: rtcSignalSchema }),
   /**

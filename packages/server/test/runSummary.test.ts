@@ -94,6 +94,23 @@ describe('summarize', () => {
     expect(summarize([])).toEqual([]);
   });
 
+  it('counts a run called off on its own, and the log keeps it', () => {
+    const blackout = runs.filter((run) => run.missionId === 'blackout');
+    const lost = blackout.find((run) => run.outcome !== 'won');
+    if (lost === undefined) {
+      throw new Error('the fixture has no Blackout run lost');
+    }
+    const called: typeof lost = { ...lost, outcome: 'lost:abandoned' };
+    const back = parseRuns(JSON.stringify(called), 'probe.jsonl');
+    expect(back).toEqual([called]);
+    const summary = summarize([...blackout.filter((run) => run !== lost), ...back]);
+    expect(summary[0]).toMatchObject({ runs: 2, lostOnAlarms: 0, calledOff: 1 });
+    expect(formatSummary(summary).split('\n')[0]).toBe(
+      'blackout · hart: 2 runs, 50 % won (1), lost 0 on time, 0 on alarms and 1 called off, ' +
+        'median 5:10',
+    );
+  });
+
   it('prints the table a balancing pass reads', () => {
     expect(formatSummary(summarize(runs))).toBe(TABLE);
   });

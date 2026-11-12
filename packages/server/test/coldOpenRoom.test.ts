@@ -174,7 +174,7 @@ describe('a room whose mission opens with the power on', () => {
     const { room, anna, ben } = started();
     vi.advanceTimersByTime(1000);
     ben.detach();
-    expect(lastView(anna).pausedFor).toEqual(['Ben']);
+    expect(lastView(anna).pausedFor?.map((away) => away.name)).toEqual(['Ben']);
     vi.advanceTimersByTime(10_000);
     expect(lastView(anna).lights.out).toBe(false);
     room.resume(passFor('Ben'));

@@ -33,6 +33,7 @@ const WORDS: Readonly<Record<Ending, string>> = {
   won: 'GESCHAFFT',
   'lost:time': 'ZEIT ABGELAUFEN',
   'lost:alarms': 'NOTVERSORGUNG ABGESCHALTET',
+  'lost:abandoned': 'EINSATZ ABGEBROCHEN',
 };
 
 const MONO = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';

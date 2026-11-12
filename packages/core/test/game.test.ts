@@ -11,7 +11,7 @@ import {
   viewFor,
 } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
-import { standing } from './lab.js';
+import { lineDrops, standing } from './lab.js';
 
 // The tutorial: a whole-crew press, a Signalkette at two consoles, a wiring station read at
 // a locker, a whole-crew finale.
@@ -415,7 +415,7 @@ describe('asymmetric information in views', () => {
   });
 
   it('tracks connection status in views', () => {
-    const state = applyAction(started(), { type: 'player-disconnected', playerId: 'p2' });
+    const state = applyAction(started(), lineDrops('p2', T0));
     const anna = viewFor(state, 'p1');
     expect(anna.players.find((p) => p.id === 'p2')?.connected).toBe(false);
   });

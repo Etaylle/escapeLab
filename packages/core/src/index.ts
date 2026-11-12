@@ -22,6 +22,7 @@ export {
   CREW_COLORS,
   NO_CREDITS,
   type Credits,
+  type Away,
   type GameState,
   type ItemState,
   type Player,
@@ -31,8 +32,11 @@ export {
 } from './state.js';
 export {
   applyAction,
+  crewOf,
   EMERGENCY_CLEARED,
+  FIRST_WAIT_MS,
   inEscapePhase,
+  LATER_WAIT_MS,
   missingItemsFor,
   NOTE_READ,
   NUDGE_QUIET_MS,
@@ -40,6 +44,7 @@ export {
   nudgeDueAt,
   POWER_OUT,
   puzzleDueAt,
+  waitingFor,
   type Action,
 } from './actions.js';
 export { radioLines, type RadioLine, type RadioMoment } from './radio.js';

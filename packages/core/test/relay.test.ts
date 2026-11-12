@@ -25,6 +25,7 @@ import {
   type RelayDef,
   type RelayState,
 } from '../src/puzzles/relay.js';
+import { lineBack, lineDrops } from './lab.js';
 
 const SEEDS = 200;
 const T0 = 1_000_000;
@@ -468,12 +469,12 @@ describe('a relay emergency in the game', () => {
   it('stands still over a pause: every clock in it moves on by the time frozen', () => {
     let state = alarmed(mission);
     const before = emergencyOf(state);
-    state = applyAction(state, { type: 'set-paused', paused: true, at: ALARM_AT + 2000 });
+    state = applyAction(state, lineDrops('p1', ALARM_AT + 2000));
     expect(applyAction(state, { type: 'sabotage-tick', at: ALARM_AT + 20_000 })).toBe(state);
     const reach = answers(mission, state, ALARM_AT + 3000)[0];
     expect(() => applyAction(state, must(reach, 'an answer'))).toThrow(/Pausiert/);
 
-    state = applyAction(state, { type: 'set-paused', paused: false, at: ALARM_AT + 32_000 });
+    state = applyAction(state, lineBack('p1', ALARM_AT + 32_000));
     const after = emergencyOf(state);
     expect(state.sabotage?.endsAt).toBe(ALARM_AT + 75_000);
     expect(after.endsAt).toBe(before.endsAt + 30_000);

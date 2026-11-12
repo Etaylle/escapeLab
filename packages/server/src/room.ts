@@ -6,6 +6,7 @@ import {
   armedStations,
   canSee,
   consoleFind,
+  crewOf,
   dailySeed,
   emergenciesDue,
   findKey,
@@ -78,7 +79,9 @@ export type GameMessage = Extract<
       | 'read-note'
       | 'drop-item'
       | 'back-to-lobby'
-      | 'rematch';
+      | 'rematch'
+      | 'continue-without'
+      | 'call-off';
   }
 >;
 
@@ -303,11 +306,10 @@ export class Room {
       this.seats.free(playerId);
       throw new Error('Der Lauf hat ohne diese Verbindung begonnen — Raum neu beitreten.');
     }
-    this.dispatch({ type: 'player-connected', playerId });
-    this.reconcilePause();
-    this.reconcilePlates();
-    this.reconcilePresence();
-    this.checkEscape();
+    // Back at once: the run goes on once it waits for nobody, a return it went on without
+    // pauses nothing (core `player-connected`).
+    this.dispatch({ type: 'player-connected', playerId, at: Date.now() });
+    this.reconcileCrew();
     return playerId;
   }
 
@@ -358,7 +360,10 @@ export class Room {
     };
   }
 
-  /** Connection lost: keep the player (they may resume), notify the others. */
+  /**
+   * Connection lost: keep the player (they may resume), notify the others. In a run the
+   * reducer stands it still for them (core `player-disconnected`); a drop alone ends nothing.
+   */
   private detach(playerId: string): void {
     if (!this.listeners.delete(playerId)) {
       return;
@@ -366,22 +371,18 @@ export class Room {
     if (this.listeners.size === 0) {
       this.emptySince = Date.now();
     }
-    this.dispatch({ type: 'player-disconnected', playerId });
-    this.reconcilePause();
+    this.dispatch({ type: 'player-disconnected', playerId, at: Date.now() });
+    this.reconcileCrew();
+  }
+
+  /**
+   * The plates, the presence and the hatch, as the crew on the line stands now: after somebody
+   * came or went, or the crew went on without somebody away.
+   */
+  private reconcileCrew(): void {
     this.reconcilePlates();
     this.reconcilePresence();
     this.checkEscape();
-  }
-
-  /** A mission needs its whole crew; freeze everything while someone is away. */
-  private reconcilePause(): void {
-    if (this.state.phase !== 'playing') {
-      return;
-    }
-    const missing = this.state.players.some((p) => !p.connected);
-    if (missing !== (this.state.paused !== null)) {
-      this.dispatch({ type: 'set-paused', paused: missing, at: Date.now() });
-    }
   }
 
   /**
@@ -497,6 +498,18 @@ export class Room {
         break;
       case 'rematch':
         this.startRematch(playerId);
+        break;
+      case 'continue-without':
+        this.dispatch({
+          type: 'continue-without',
+          playerId,
+          absentId: msg.absentId,
+          at: Date.now(),
+        });
+        this.reconcileCrew();
+        break;
+      case 'call-off':
+        this.dispatch({ type: 'call-off', playerId, at: Date.now() });
         break;
     }
   }
@@ -1250,20 +1263,21 @@ export class Room {
       return;
     }
     this.startRematch(host.id);
-    this.reconcilePause();
   }
 
   /**
-   * Won once every connected player stands on the hatch: by the presence the
-   * views carry, so that the crew's checklist and the escape never disagree.
+   * Won once the whole crew the run counts stands on the hatch — everybody but whom it went on
+   * without (core `crewOf`): by the presence the views carry, so that the crew's checklist and
+   * the escape never disagree. Never while the run stands still: whoever it waits for is away,
+   * not out, so a drop alone never ends a run.
    */
   private checkEscape(): void {
-    if (!inEscapePhase(this.state)) {
+    if (!inEscapePhase(this.state) || this.state.paused !== null) {
       return;
     }
     const onIt = this.state.presence.exit;
-    const connected = this.state.players.filter((p) => p.connected);
-    if (connected.length > 0 && connected.every((player) => onIt.includes(player.id))) {
+    const crew = crewOf(this.state);
+    if (crew.length > 0 && crew.every((player) => onIt.includes(player.id))) {
       this.dispatch({ type: 'escaped', at: Date.now() });
     }
   }

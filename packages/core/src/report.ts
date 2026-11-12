@@ -2,8 +2,11 @@ import { DRONE_ALARM, EMERGENCY_CLEARED, EMERGENCY_MISSED } from './actions.js';
 import type { Difficulty } from './difficulty.js';
 import { NO_CREDITS, type Credits, type GameState, type Player, type RunEvent } from './state.js';
 
-/** Escaped (or the last station solved), out of time, or stopped by the alarm limit. */
-export type RunOutcome = 'won' | 'lost:time' | 'lost:alarms';
+/**
+ * Escaped (or the last station solved), out of time, stopped by the alarm limit, or called off
+ * — abandoned by the crew below its size, or by the one still on the line.
+ */
+export type RunOutcome = 'won' | 'lost:time' | 'lost:alarms' | 'lost:abandoned';
 
 /** One station of a run. A station the run never got to has nulls and zeros. */
 export interface StationReport {
@@ -177,10 +180,16 @@ function spawnOf(player: Player, alias: string): { x: number; y: number } {
   return { x: player.spawn.x, y: player.spawn.y };
 }
 
-/** Only the alarm that reaches the limit ends a run early, so a lost run at the limit hit it. */
+/**
+ * A run called off says so; otherwise only the alarm that reaches the limit ends a run early,
+ * so a lost run at the limit hit it.
+ */
 function outcomeOf(state: GameState, alarmLimit: number | null): RunOutcome {
   if (state.phase === 'won') {
     return 'won';
+  }
+  if (state.calledOff !== null) {
+    return 'lost:abandoned';
   }
   return alarmLimit !== null && state.penaltySeq >= alarmLimit ? 'lost:alarms' : 'lost:time';
 }

@@ -1,7 +1,22 @@
 /*
- * The connection and the way back to a run (screens/Join.tsx BoundCard): where the browser's
- * pass sits, over the join screen's form.
+ * The connection and the way back to a run: where the browser's pass sits, over the join
+ * screen's form (screens/Join.tsx BoundCard); the run standing still for crew members away and
+ * their return (screens/Pause.tsx).
  */
+
+/* A way that ends something for good: calling the run off, giving the seat up. */
+button.danger {
+  background: #3a1214;
+  border-color: #7f1d1d;
+  color: #fecaca;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+button.danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  box-shadow: 0 0 10px rgba(248, 113, 113, 0.35);
+}
 
 .bound {
   display: grid;
@@ -49,4 +64,68 @@
   color: var(--warn);
   font-family: var(--mono);
   font-size: 13px;
+}
+
+/* ── the pause for crew members away ─────────────────────────────────── */
+
+.pause-count {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.pause-ways {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.pause-when {
+  margin: 0;
+}
+
+/* Somebody the run went on without is back: said over the world, out of the way of the bar. */
+.crew-back {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 76px);
+  left: 50%;
+  z-index: 57;
+  max-width: calc(100vw - 32px);
+  padding: 8px 14px;
+  border: 1px solid #1f5f57;
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  background: #0b1a18;
+  color: #99f6e4;
+  font-family: var(--mono);
+  font-size: calc(14px * var(--text-scale));
+  letter-spacing: 1px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  transform: translateX(-50%);
+  animation: crew-back 3.5s ease forwards;
+}
+
+@keyframes crew-back {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+  8%,
+  85% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 0);
+  }
+}
+
+:where([data-motion='reduce']) {
+  .crew-back {
+    animation: none;
+  }
 }

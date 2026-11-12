@@ -51,20 +51,27 @@ export interface FinaleSource {
   startedAt: number | null;
   finishedAt: number | null;
   alarms: { count: number; limit: number | null };
+  /** why the run was called off; left out for any other run */
+  calledOff?: string;
   map: MapView | null;
 }
 
 /**
- * How the run of `view` ended; null while it runs. Only the alarm that
- * reaches the limit ends a run early, so a lost run at the limit hit it —
- * the run report's reading (core/report.ts).
+ * How the run of `view` ended; null while it runs. A run called off says so; otherwise only
+ * the alarm that reaches the limit ends a run early, so a lost run at the limit hit it — the
+ * run report's reading (core/report.ts).
  */
-export function endingOf(view: Pick<FinaleSource, 'phase' | 'alarms'>): Ending | null {
+export function endingOf(
+  view: Pick<FinaleSource, 'phase' | 'alarms' | 'calledOff'>,
+): Ending | null {
   if (view.phase === 'won') {
     return 'won';
   }
   if (view.phase !== 'lost') {
     return null;
+  }
+  if (view.calledOff !== undefined) {
+    return 'lost:abandoned';
   }
   const { count, limit } = view.alarms;
   return limit !== null && count >= limit ? 'lost:alarms' : 'lost:time';
@@ -186,8 +193,9 @@ export function useFinale(view: FinaleSource | null): Finale | null {
 
 /**
  * The ending's sounds, once as it starts on this screen: won, the lights
- * click on and the lab's hum comes back; lost on time, the hum of the dark
- * lab dies as the power drains; lost on alarms, the klaxon fades out.
+ * click on and the lab's hum comes back; lost on time or called off, the hum
+ * of the dark lab dies as the power drains; lost on alarms, the klaxon fades
+ * out.
  */
 export function useFinaleSounds(cue: { ending: Ending; since: number } | null): void {
   const ending = cue?.ending ?? null;
@@ -202,10 +210,10 @@ export function useFinaleSounds(cue: { ending: Ending; since: number } | null): 
       return;
     }
     stopAmbience();
-    if (ending === 'lost:time') {
-      powerDrain();
-    } else {
+    if (ending === 'lost:alarms') {
       klaxonFade();
+    } else {
+      powerDrain();
     }
   }, [ending, since]);
 }

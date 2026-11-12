@@ -22,6 +22,8 @@ export interface RunsSummary {
   won: number;
   lostOnTime: number;
   lostOnAlarms: number;
+  /** runs called off: abandoned below the crew's size, or by the one still on the line */
+  calledOff: number;
   /** from the clock's start to the finish, over every run */
   medianSeconds: number;
   /** in mission order */
@@ -68,6 +70,7 @@ function summarizeGroup({ missionId, difficulty, runs }: Group): RunsSummary {
     won: ended('won'),
     lostOnTime: ended('lost:time'),
     lostOnAlarms: ended('lost:alarms'),
+    calledOff: ended('lost:abandoned'),
     medianSeconds: median(runs.map(runSeconds)) ?? 0,
     stations,
     slowest: stations
@@ -117,8 +120,11 @@ function formatGroup(group: RunsSummary): string {
   const share = Math.round((100 * group.won) / group.runs);
   const head =
     `${group.missionId} · ${group.difficulty}: ${group.runs} run${group.runs === 1 ? '' : 's'}, ` +
-    `${share} % won (${group.won}), lost ${group.lostOnTime} on time and ` +
-    `${group.lostOnAlarms} on alarms, median ${clock(group.medianSeconds)}`;
+    `${share} % won (${group.won}), lost ${group.lostOnTime} on time` +
+    (group.calledOff === 0
+      ? ` and ${group.lostOnAlarms} on alarms`
+      : `, ${group.lostOnAlarms} on alarms and ${group.calledOff} called off`) +
+    `, median ${clock(group.medianSeconds)}`;
   const width = Math.max('station'.length, ...group.stations.map((s) => s.puzzleId.length));
   const line = (name: string, cells: string[]): string =>
     `  ${name.padEnd(width)}  ` +

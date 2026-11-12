@@ -5,6 +5,7 @@ import {
   armedStations,
   checkMission,
   emergenciesDue,
+  FIRST_WAIT_MS,
   INTRO_MAX_SEC,
   LEVER_FIGURE,
   MAX_LAMPS,
@@ -20,7 +21,7 @@ import {
 import type { GameState, MapView, Mission } from '../src/index.js';
 import { buttonSyncModule } from '../src/puzzles/buttonSync.js';
 import { canGather, crewsOf, tileKey, type Spot } from '../src/reach.js';
-import { everyConsole, lightsOut, started, standing, T0 } from './lab.js';
+import { everyConsole, lightsOut, lineBack, lineDrops, standing, started, T0 } from './lab.js';
 
 /**
  * A corridor lab that opens with the power on for three seconds: three
@@ -75,6 +76,13 @@ const raw = {
 const mission: Mission = parseMission(raw);
 const OUT_AT = T0 + 3000;
 const LIMIT_MS = 600_000;
+
+/** The same lab for a crew of three, the third starting at (2,1). */
+const forThree: Mission = parseMission({
+  ...raw,
+  players: { min: 3, max: 3 },
+  map: { ...raw.map, spawns: [...raw.map.spawns, { x: 2, y: 1 }] },
+});
 
 /** The same lab without an intro: its lights are out from the start. */
 function withoutIntro(): Mission {
@@ -209,14 +217,14 @@ describe('the lights going out', () => {
 });
 
 describe('a pause during the intro', () => {
-  const paused = applyAction(started(mission), { type: 'set-paused', paused: true, at: T0 + 1000 });
+  const paused = applyAction(started(mission), lineDrops('p2', T0 + 1000));
 
   it('holds the lights on while it lasts', () => {
     expect(lightsOut(paused, OUT_AT)).toBe(paused);
   });
 
   it('moves the moment they fail on by the time it took, like every deadline', () => {
-    const resumed = applyAction(paused, { type: 'set-paused', paused: false, at: T0 + 11_000 });
+    const resumed = applyAction(paused, lineBack('p2', T0 + 11_000));
     expect(resumed.lightsDueAt).toBe(OUT_AT + 10_000);
     expect(resumed.deadlineAt).toBeNull();
   });
@@ -255,9 +263,17 @@ describe('a crew that has seen enough of the intro', () => {
     expect(armedStations(mission.map, both)).toHaveLength(1);
   });
 
-  it('waits for nobody who is away', () => {
-    const away = applyAction(started(mission), { type: 'player-disconnected', playerId: 'p2' });
-    expect(done(away, 'p1', SKIP_AT).lightsOutAt).toBe(SKIP_AT);
+  it('waits for nobody the crew went on without', () => {
+    const away = applyAction(started(forThree), lineDrops('p3', T0 + 1000));
+    const goOn = T0 + 1000 + FIRST_WAIT_MS;
+    const on = applyAction(away, {
+      type: 'continue-without',
+      playerId: 'p1',
+      absentId: 'p3',
+      at: goOn,
+    });
+    const both = done(done(on, 'p1', goOn + 500), 'p2', goOn + 800);
+    expect(both.lightsOutAt).toBe(goOn + 800);
   });
 
   it('leaves the lights to fail by themselves, `lightsSec` in, while one still watches', () => {
@@ -267,17 +283,23 @@ describe('a crew that has seen enough of the intro', () => {
   });
 
   it('waits out a pause: that moment moves on, and a crew all done meanwhile goes on dark', () => {
-    const one = done(started(mission), 'p1', SKIP_AT);
-    const paused = applyAction(one, { type: 'set-paused', paused: true, at: T0 + 2000 });
-    const resumed = applyAction(paused, { type: 'set-paused', paused: false, at: T0 + 9000 });
+    const one = done(started(forThree), 'p1', SKIP_AT);
+    const paused = applyAction(one, lineDrops('p3', T0 + 2000));
+    const resumed = applyAction(paused, lineBack('p3', T0 + 9000));
     expect(resumed.lightsDueAt).toBe(OUT_AT + 7000);
     expect(resumed.lightsOutAt).toBeNull();
-    // Nothing fails while the run waits; the lights go as it goes on.
+    // Nothing fails while the run waits; the lights go as it goes on without the one away.
     const both = done(paused, 'p2', T0 + 2500);
     expect(both.lightsOutAt).toBeNull();
-    const back = applyAction(both, { type: 'set-paused', paused: false, at: T0 + 9000 });
-    expect(back.lightsOutAt).toBe(T0 + 9000);
-    expect(back.deadlineAt).toBe(T0 + 9000 + LIMIT_MS);
+    const goOn = T0 + 2000 + FIRST_WAIT_MS;
+    const on = applyAction(both, {
+      type: 'continue-without',
+      playerId: 'p1',
+      absentId: 'p3',
+      at: goOn,
+    });
+    expect(on.lightsOutAt).toBe(goOn);
+    expect(on.deadlineAt).toBe(goOn + LIMIT_MS);
   });
 
   it('takes nothing outside an intro, and nobody who is not of the crew', () => {
@@ -463,9 +485,9 @@ describe('the lever: a sync station drawn as a main switch', () => {
       expect(viewFor(both, id).puzzle).toMatchObject({ style: 'lever', here: 2 });
     }
     expect(viewForSpectator(both).puzzle).toMatchObject({ style: 'lever', here: 2 });
-    // Somebody who left the crew is not counted at the station.
-    const gone = applyAction(both, { type: 'player-disconnected', playerId: 'p2' });
-    expect(viewFor(gone, 'p1').puzzle).toMatchObject({ here: 1, requiredCount: 1 });
+    // Somebody away still counts: the station waits for them as the run does.
+    const gone = applyAction(both, lineDrops('p2', T0));
+    expect(viewFor(gone, 'p1').puzzle).toMatchObject({ here: 2, requiredCount: 2 });
   });
 
   it('prints its Aufbau under a drawing of the main switch, the button under the button', () => {

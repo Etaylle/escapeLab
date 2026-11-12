@@ -69,6 +69,7 @@ import { PuzzlePanel } from './PuzzlePanel.js';
 import { useHudRow } from './hudFold.js';
 import { RowCrew, RowTools } from './HudRow.js';
 import { Icon } from './Icon.js';
+import { BackToast, PauseCard } from './Pause.js';
 import { MissionHud } from './MissionHud.js';
 import { InfoPanel } from './InfoPanel.js';
 import { Manual } from './Manual.js';
@@ -1004,27 +1005,10 @@ export function FinaleVeil({ ending, since }: { ending: Ending; since: number })
 
 // --- screen ------------------------------------------------------------------
 
-/** The run frozen for a missing crew member: whom the crew waits for. */
-function PauseOverlay({ pausedFor }: { pausedFor: string[] }) {
-  return (
-    <div className="overlay pause" role="status">
-      <span className="kicker">MISSION PAUSIERT</span>
-      <h1>
-        <Icon name="pause" /> Verbindung verloren
-      </h1>
-      <p>
-        {pausedFor.length > 0
-          ? `Warten auf ${pausedFor.join(', ')} — Uhr, Patrouillen und Notfälle stehen still.`
-          : 'Warten auf die Verbindung — Uhr, Patrouillen und Notfälle stehen still.'}
-      </p>
-      <p className="muted">Getrennt? Die Seite neu laden genügt, um wieder dabei zu sein.</p>
-    </div>
-  );
-}
-
 /**
- * What comes and goes over a run: the briefing, the pause, the relay's alert. The clock's red
- * edge lies over the world alone, under the HUD (GameWorld.tsx RedEdge).
+ * What comes and goes over a run: the briefing, the pause, a return the run went on without,
+ * the relay's alert. The clock's red edge lies over the world alone, under the HUD
+ * (GameWorld.tsx RedEdge).
  */
 function RunOverlays({
   view,
@@ -1042,7 +1026,8 @@ function RunOverlays({
   return (
     <>
       {!coldOpen.intro && <Briefing view={view} />}
-      {view.pausedFor !== null && <PauseOverlay pausedFor={view.pausedFor} />}
+      {view.pausedFor !== null && <PauseCard view={view} send={send} />}
+      <BackToast players={view.players} />
       {sabotage !== null && relay !== undefined && (
         <RelayAlert
           sabotage={sabotage}

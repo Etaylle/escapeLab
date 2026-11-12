@@ -52,6 +52,7 @@ export const ENDING_TITLES: Record<Ending, string> = {
   won: 'GESCHAFFT',
   'lost:time': 'ZEIT ABGELAUFEN',
   'lost:alarms': 'NOTVERSORGUNG ABGESCHALTET',
+  'lost:abandoned': 'EINSATZ ABGEBROCHEN',
 };
 
 /** Milliseconds as m:ss. */
@@ -77,6 +78,8 @@ export interface TitleCardProps {
   stations: { solved: number; total: number };
   /** the run's alarms against the limit: a run lost on them says so */
   alarms: PlayerView['alarms'];
+  /** why the run was called off, which its card says; null for any other run */
+  calledOff: string | null;
   /** whose screen it is: their figure stands in its ring; null for the audience */
   youId: string | null;
   /** this screen played the run's end: the card comes up out of its fade */
@@ -102,7 +105,7 @@ export function TitleCard(props: TitleCardProps) {
     }
   }, [fresh, won]);
   const title = ENDING_TITLES[ending];
-  const tone = won ? 'won' : ending === 'lost:time' ? 'time' : 'alarms';
+  const tone = won ? 'won' : ending === 'lost:alarms' ? 'alarms' : 'time';
   return (
     <section
       className={`end-title end-title--${tone}${fresh ? ' end-title--fresh' : ''}`}
@@ -115,11 +118,26 @@ export function TitleCard(props: TitleCardProps) {
         usedMs={props.usedMs}
         grade={props.grade}
         stations={props.stations}
-        cause={ending === 'lost:alarms' ? alarmsCause(props.alarms) : null}
+        cause={causeOf(ending, props.alarms, props.calledOff)}
       />
       {props.extra}
     </section>
   );
+}
+
+/**
+ * What the card says under its title of why the run ended: for one lost on its alarms how many
+ * it took, for one called off who left or whom it was called off without; null for the rest.
+ */
+function causeOf(
+  ending: Ending,
+  alarms: PlayerView['alarms'],
+  calledOff: string | null,
+): string | null {
+  if (ending === 'lost:alarms') {
+    return alarmsCause(alarms);
+  }
+  return ending === 'lost:abandoned' ? calledOff : null;
 }
 
 /** Why a run lost on its alarms ended: „5 von 5 Alarmen"; null where no limit counted them. */
@@ -216,6 +234,7 @@ export type CardSource = Pick<
   | 'grade'
   | 'currentPuzzleIndex'
   | 'puzzleCount'
+  | 'calledOff'
 > & { players: CardMate[] };
 
 /** The title card of a run that is over, seen by `youId` — null for the audience. */
@@ -238,6 +257,7 @@ export function titleCardOf(
     crew: view.players.map(({ id, name, color }) => ({ id, name, color })),
     stations: { solved: view.currentPuzzleIndex, total: view.puzzleCount },
     alarms: view.alarms,
+    calledOff: view.calledOff ?? null,
     youId,
     fresh,
   };

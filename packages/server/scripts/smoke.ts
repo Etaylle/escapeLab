@@ -25,7 +25,8 @@
  * radio panel's rules, and survives a mid-game reconnect. On the way out —
  * by the Labor's way across the lab to the hatch in the Archiv — the hatch
  * says when it opened, and the views of the crew and the audience tick off
- * whoever stands on it; the log then says how far each of the crew walked. A fake
+ * whoever stands on it; the one still on the way drops there, and the run
+ * stands still instead of ending; the log then says how far each of the crew walked. A fake
  * voice offer, answer and candidate go between Anna and Ben through the
  * server, and one for a player in another room goes nowhere. The
  * won run leaves its report in a run log in a temporary folder, and
@@ -35,8 +36,10 @@
  * alone springs back on the room's clock, its owner told and nothing
  * charged, before both throw theirs within the window; on the end screen a
  * guest's or an unknown choice of the next mission is refused, and the
- * host's yes naming Blackout opens it, with the power on. No answer is
- * written down here.
+ * host's yes naming Blackout opens it, with the power on. Last a crew of
+ * three plays Blackout: Finn's line drops for 70 s, the others go on without
+ * him once the minute is over, and he is back on his pass, counted in at once
+ * with no pause for it. No answer is written down here.
  * Run with: pnpm --filter @escapelab/server smoke
  */
 import { randomBytes } from 'node:crypto';
@@ -47,6 +50,7 @@ import WebSocket from 'ws';
 import {
   canSee,
   FIND_REACH,
+  FIRST_WAIT_MS,
   inCone,
   MAX_STEP,
   moduleFor,
@@ -1443,13 +1447,15 @@ function serversOf(view: PlayerView | null): ServersView | null {
 
 /**
  * The mid-game reconnect of `client`: its socket drops, the crew sees it
- * gone, and a fresh client resumes with its credentials — the same log, the
- * Laborkennung and the avatar where it stood — and takes its place in the
- * crew. Returns the new client and the view it resumed on.
+ * gone — and, `whileAway`, whatever the other does meanwhile — and a fresh
+ * client resumes on its pass — the same log, the Laborkennung and the avatar
+ * where it stood — and takes its place in the crew. Returns the new client and
+ * the view it resumed on.
  */
 async function reconnect(
   client: TestClient,
   resumed: (view: PlayerView) => boolean,
+  whileAway: (other: TestClient) => Promise<void> = () => Promise.resolve(),
 ): Promise<{ back: TestClient; view: PlayerView }> {
   const joined = client.joined ?? fail(`${client.label}: never joined`);
   const name = client.view?.you.name ?? fail(`${client.label}: no view yet`);
@@ -1458,6 +1464,7 @@ async function reconnect(
   client.close();
   await other.expectView(`sees ${name} disconnected`, (v) =>
     v.players.some((p) => p.name === name && !p.connected));
+  await whileAway(other);
   const back = new TestClient(`${client.label}2`, client.raw, client.pass);
   await back.open();
   back.send({ kind: 'resume', code: joined.code, pass: back.pass });
@@ -2031,7 +2038,7 @@ const unlockedAt = unlocked.events.find((e) => e.kind === 'escape')?.at;
 assert(unlockedAt !== undefined && unlocked.map?.exit?.openedAt === unlockedAt,
   'the hatch says when it opened: the moment the run report logged it unlocked');
 assert(unlocked.map?.exit?.atExit.length === 0, 'nobody stands on the hatch yet');
-const [first, last] = crew;
+const [first, onTheWay] = crew;
 // Out by the Labor's way and the Flur to the hatch in the Archiv's corner.
 for (const to of [OUT_OF_THE_LABOR, EXIT]) {
   await walkTo(first, to);
@@ -2041,10 +2048,19 @@ for (const client of crew) {
   await client.expectView(`the checklist ticks ${first.label} off at the hatch`, (v) =>
     JSON.stringify(v.map?.exit?.atExit) === firstOut);
 }
-await zoe.untilSpectator(`sees ${first.label} on the hatch and ${last.label} still on the way`,
+await zoe.untilSpectator(`sees ${first.label} on the hatch and ${onTheWay.label} still on the way`,
   (v) => JSON.stringify(v.map?.exit?.atExit) === firstOut);
-const halfwayOut = last.view?.phase;
+const halfwayOut = onTheWay.view?.phase;
 assert(halfwayOut === 'playing', 'one player at the hatch is not enough to escape');
+// The one still on the way drops, the other on the hatch: the run stands still for them and
+// the hatch waits — whoever is away is not out, and a drop alone never ends a run.
+const { back: last } = await reconnect(onTheWay, (v) => v.phase === 'playing', async (other) => {
+  await other.expectView('stands still for the one away, on the hatch', (v) =>
+    v.pausedFor?.some((away) => away.id === onTheWay.playerId) === true);
+  await sleep(500);
+  assert(other.view?.phase === 'playing' && first.view?.map?.exit?.atExit.length === 1,
+    'the escape with a member dropped does not end the run');
+});
 for (const to of [OUT_OF_THE_LABOR, EXIT]) {
   await walkTo(last, to);
 }
@@ -2410,13 +2426,102 @@ for (const client of tutorialLab.crew) {
   client.close();
 }
 
+// --- a crew of three: one away, the others on without them, and back ------------------
+
+/** A crew of three in Blackout, its room's code: Eva opened it, Finn and Gus joined. */
+interface Trio {
+  code: string;
+  eva: TestClient;
+  finn: TestClient;
+  gus: TestClient;
+}
+
+/**
+ * Blackout for three: Eva opens it, Finn and Gus join and say yes, Eva starts, and all three
+ * skip the opening — the lights go out at the third skip.
+ */
+async function crewOfThree(): Promise<Trio> {
+  const [eva, finn, gus] = ['eva', 'finn', 'gus'].map((label) => new TestClient(label)) as [
+    TestClient,
+    TestClient,
+    TestClient,
+  ];
+  for (const client of [eva, finn, gus]) {
+    await client.open();
+  }
+  eva.send({ kind: 'create-room', name: 'Eva', pass: eva.pass, missionId: mission.id });
+  const { code } = await eva.seated();
+  for (const [client, name] of [[finn, 'Finn'], [gus, 'Gus']] as const) {
+    client.send({ kind: 'join-room', code, name, pass: client.pass });
+    await client.seated();
+  }
+  // Every join has the room confirm anew: the yeses come once the crew is complete.
+  for (const client of [finn, gus]) {
+    client.send({ kind: 'set-ready', ready: true });
+  }
+  await eva.until('Finn and Gus say yes', (v) => v.players.filter((p) => p.ready).length === 2);
+  eva.send({ kind: 'start-mission' });
+  for (const client of [eva, finn, gus]) {
+    await client.until('the run on', (v) => v.phase === 'playing');
+    client.send({ kind: 'intro-done' });
+  }
+  await eva.expectView('a crew of three in the dark, the lights out at the third skip',
+    (v) => v.lights.out && v.players.length === 3);
+  return { code, eva, finn, gus };
+}
+
+/**
+ * Finn's line drops for 70 s: the run stands still for everybody; once the minute of the
+ * run's first drop is over Eva goes on without him and the clock runs on, the pause added to
+ * the deadline; ten seconds later Finn is back on his pass — counted in at once, and the run
+ * does not stand still for the return. Returns Finn's new client.
+ */
+async function awayAndBack({ code, eva, finn }: Trio): Promise<TestClient> {
+  const deadline = eva.view?.deadlineAt ?? fail('eva: no clock running');
+  finn.close();
+  const held = await eva.expectView('the run stands still for Finn, away', (v) =>
+    v.pausedFor?.[0]?.name === 'Finn');
+  const away = held.pausedFor?.[0] ?? fail('nobody away');
+  assert(away.waivableAt - away.since === FIRST_WAIT_MS,
+    'the run\'s first drop lets the crew go on without him after a minute');
+  eva.send({ kind: 'continue-without', absentId: away.id });
+  const early = await eva.expect('a refusal before the minute is over', isError);
+  assert(early.message === 'Die Wartezeit läuft noch.', 'going on before the minute is refused');
+  await sleep(Math.max(0, away.waivableAt - Date.now()) + 200);
+  eva.send({ kind: 'continue-without', absentId: away.id });
+  const on = await eva.expectView('on without Finn, the clock running again', (v) =>
+    v.pausedFor === null && v.players.some((p) => p.name === 'Finn' && p.waived === true));
+  const shift = (on.deadlineAt ?? 0) - deadline;
+  assert(shift >= FIRST_WAIT_MS && shift < FIRST_WAIT_MS + 5000,
+    `the deadline moved on by the pause, ${(shift / 1000).toFixed(1)} s`);
+  await sleep(10_000);
+  const back = new TestClient('finn2', finn.raw, finn.pass);
+  await back.open();
+  back.send({ kind: 'resume', code, pass: back.pass });
+  await back.seated();
+  await eva.expectView('Finn back and counted in again, the run not standing still for it',
+    (v) => v.pausedFor === null &&
+      v.players.some((p) => p.name === 'Finn' && p.connected && p.waived === undefined));
+  await sleep(300);
+  assert(eva.view?.pausedFor === null, 'the return paused nothing');
+  console.log(`  Finn was away ${((Date.now() - away.since) / 1000).toFixed(0)} s`);
+  return back;
+}
+
+const trio = await crewOfThree();
+const finnBack = await awayAndBack(trio);
+for (const client of [trio.eva, finnBack, trio.gus]) {
+  client.close();
+}
+
 rmSync(runsDir, { recursive: true, force: true });
 console.log(
   '\nSmoke test passed: Blackout with its power on until the lights went out, the ' +
     'Notlicht\'s lever, a note of the last shift, drawn spawns and sources, streamed movement, ' +
     'plates, a door that stays open, the Notstrom-Kasten, the Signalkette and the Serverraum ' +
     'at two consoles, the locker, the key, the camera plate, reconnect, the hatch\'s ' +
-    'checklist, penalties and credits; then ' +
-    'the tutorial, its lever springing back on the clock, and on into Blackout. 🎉',
+    'checklist, a drop on the way out that ends nothing, penalties and credits; then ' +
+    'the tutorial, its lever springing back on the clock, and on into Blackout; then a crew ' +
+    'of three going on without the one away, and his return. 🎉',
 );
 process.exit(0);

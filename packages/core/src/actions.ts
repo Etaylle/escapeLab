@@ -45,8 +45,26 @@ import type { Spot } from './reach.js';
  */
 export type Action =
   | { type: 'player-join'; playerId: string; name: string }
-  | { type: 'player-connected'; playerId: string }
-  | { type: 'player-disconnected'; playerId: string }
+  /**
+   * a crew member's line is back at `at`: in a run they count again at once, whether the crew
+   * went on without them or not, and the run goes on once it waits for nobody
+   */
+  | { type: 'player-connected'; playerId: string; at: number }
+  /**
+   * a crew member's line dropped at `at`: in a run they are away (`GameState.away`), and the
+   * run stands still for them — a drop alone ends no run
+   */
+  | { type: 'player-disconnected'; playerId: string; at: number }
+  /**
+   * `playerId`, on the line, goes on without `absentId`, away since a drop, once its wait is
+   * over (FIRST_WAIT_MS, LATER_WAIT_MS) and two of the crew at least are on the line
+   */
+  | { type: 'continue-without'; playerId: string; absentId: string; at: number }
+  /**
+   * the one crew member still on the line calls the run off once its wait is over: lost for
+   * everyone (`lost:abandoned`)
+   */
+  | { type: 'call-off'; playerId: string; at: number }
   | { type: 'select-color'; playerId: string; color: string }
   | { type: 'set-ready'; playerId: string; ready: boolean }
   | { type: 'switch-mission'; playerId: string; mission: Mission; difficulty: Difficulty }
@@ -105,7 +123,6 @@ export type Action =
   | { type: 'sabotage-expired'; at: number }
   /** once a second during a relay emergency: instructions that ran out are replaced */
   | { type: 'sabotage-tick'; at: number }
-  | { type: 'set-paused'; paused: boolean; at: number }
   | { type: 'pick-item'; playerId: string; itemId: string; at: number }
   | { type: 'drop-item'; playerId: string; itemId: string; x: number; y: number; at: number }
   | { type: 'deliver-item'; playerId: string; itemId: string; at: number }
@@ -152,9 +169,13 @@ export function applyAction(state: GameState, action: Action): GameState {
     case 'player-join':
       return playerJoin(state, action);
     case 'player-connected':
-      return setConnected(state, action.playerId, true);
+      return lineBack(state, action);
     case 'player-disconnected':
-      return setConnected(state, action.playerId, false);
+      return lineDropped(state, action);
+    case 'continue-without':
+      return continueWithout(state, action);
+    case 'call-off':
+      return callOff(state, action);
     case 'select-color':
       return selectColor(state, action);
     case 'set-ready':
@@ -200,8 +221,6 @@ export function applyAction(state: GameState, action: Action): GameState {
       return expireSabotage(state, action);
     case 'sabotage-tick':
       return tickEmergency(state, action);
-    case 'set-paused':
-      return setPaused(state, action);
     case 'pick-item':
       return pickItem(state, action);
     case 'drop-item':
@@ -376,6 +395,136 @@ function setConnected(state: GameState, playerId: string, connected: boolean): G
   return { ...state, players };
 }
 
+/**
+ * How long the crew waits for the first crew member whose line drops in a run before it may go
+ * on without them, ms …
+ */
+export const FIRST_WAIT_MS = 60_000;
+/** … and for every later drop of the same run, whoever's it is, ms. */
+export const LATER_WAIT_MS = 20_000;
+
+/** What a move answered by a wait still running is told. */
+const STILL_WAITING = 'Die Wartezeit läuft noch.';
+/** What going on without somebody, or calling the run off, is told where nobody is missing. */
+const NOBODY_AWAY = 'Hier fehlt niemand.';
+
+/**
+ * A crew member's line dropped at `at`. In a run they are away from then on: the run stands
+ * still for them, and the crew may go on without them once the drop's wait is over — the run's
+ * first drop waits FIRST_WAIT_MS, every later one LATER_WAIT_MS. A drop alone ends no run, and
+ * a line that dropped once is down: said twice, nothing counts twice.
+ */
+function lineDropped(state: GameState, action: { playerId: string; at: number }): GameState {
+  const player = findPlayer(state, action.playerId);
+  const dropped = setConnected(state, player.id, false);
+  if (state.phase !== 'playing' || !player.connected) {
+    return dropped;
+  }
+  const wait = state.drops === 0 ? FIRST_WAIT_MS : LATER_WAIT_MS;
+  const away = {
+    ...state.away,
+    [player.id]: { since: action.at, waivableAt: action.at + wait, waived: false },
+  };
+  return holdForAway({ ...dropped, away, drops: state.drops + 1 }, action.at);
+}
+
+/**
+ * A crew member's line is back at `at`. In a run they count again at once, whether the crew
+ * went on without them or waited, and the run goes on once it waits for nobody: a return the
+ * crew went on without pauses nothing.
+ */
+function lineBack(state: GameState, action: { playerId: string; at: number }): GameState {
+  const back = setConnected(state, findPlayer(state, action.playerId).id, true);
+  if (state.phase !== 'playing') {
+    return back;
+  }
+  const away = Object.fromEntries(
+    Object.entries(state.away).filter(([playerId]) => playerId !== action.playerId),
+  );
+  return holdForAway({ ...back, away }, action.at);
+}
+
+/** Whom the run waits for: the crew members away it has not gone on without, by player id. */
+export function waitingFor(state: GameState): string[] {
+  return Object.entries(state.away)
+    .filter(([, away]) => !away.waived)
+    .map(([playerId]) => playerId);
+}
+
+/**
+ * The crew the run counts — at the stations the whole crew presses, at the hatch: everybody
+ * but whom it went on without (`continue-without`).
+ */
+export function crewOf(state: GameState): Player[] {
+  return state.players.filter((player) => state.away[player.id]?.waived !== true);
+}
+
+/** How many of the crew are on the line. */
+function onTheLine(state: GameState): number {
+  return state.players.filter((player) => player.connected).length;
+}
+
+/**
+ * The run stands still while it waits for somebody away, and goes on — every deadline moved on
+ * by the pause — once it waits for nobody (`setPaused`).
+ */
+function holdForAway(state: GameState, at: number): GameState {
+  return setPaused(state, { paused: waitingFor(state).length > 0, at });
+}
+
+/**
+ * `playerId`, on the line, goes on without `absentId`: away since a drop whose wait is over,
+ * and two of the crew at least on the line — one alone could work no station with two
+ * consoles. The absent keep their seat and are counted out until they are back (`crewOf`); the
+ * run goes on once it waits for nobody else.
+ */
+function continueWithout(
+  state: GameState,
+  action: { playerId: string; absentId: string; at: number },
+): GameState {
+  if (state.phase !== 'playing') {
+    fail(NO_RUN);
+  }
+  findPlayer(state, action.playerId);
+  const absent = state.away[action.absentId];
+  if (absent === undefined || absent.waived) {
+    fail(NOBODY_AWAY);
+  }
+  if (action.at < absent.waivableAt) {
+    fail(STILL_WAITING);
+  }
+  if (onTheLine(state) < 2) {
+    fail('Allein läuft kein Einsatz weiter.');
+  }
+  const away = { ...state.away, [action.absentId]: { ...absent, waived: true } };
+  return holdForAway({ ...state, away }, action.at);
+}
+
+/**
+ * The one crew member still on the line calls the run off, once the wait for whoever it waits
+ * for is over: lost for everyone (`lost:abandoned`), its end card naming them.
+ */
+function callOff(state: GameState, action: { playerId: string; at: number }): GameState {
+  if (state.phase !== 'playing') {
+    fail(NO_RUN);
+  }
+  findPlayer(state, action.playerId);
+  const waited = waitingFor(state);
+  if (waited.length === 0) {
+    fail(NOBODY_AWAY);
+  }
+  if (onTheLine(state) > 1) {
+    fail('Abbrechen erst, wenn sonst niemand mehr verbunden ist.');
+  }
+  const due = Math.min(...waited.map((playerId) => state.away[playerId]?.waivableAt ?? 0));
+  if (action.at < due) {
+    fail(STILL_WAITING);
+  }
+  const names = waited.map((playerId) => findPlayer(state, playerId).name).join(', ');
+  const line = `Abgebrochen ohne ${names}.`;
+  return lostNow({ ...state, paused: null, calledOff: line }, action.at, line);
+}
+
 /** One more of `what` for the player in this run's credits. */
 function credited(state: GameState, playerId: string, what: keyof Credits): GameState {
   const theirs = state.credits[playerId] ?? NO_CREDITS;
@@ -420,7 +569,7 @@ function puzzleContext(state: GameState, at: number, from: ConsoleId | null): Pu
         ? state.mission.timeLimitSec
         : Math.max(0, Math.ceil((state.deadlineAt - at) / 1000)),
     at,
-    crew: state.players.filter((p) => p.connected).map((p) => p.id),
+    crew: crewOf(state).map((p) => p.id),
     console: from,
     atConsoles: presentAtConsoles(state, from),
     readers: from === null || open === undefined ? [] : readersOf(state, open.id),
@@ -640,6 +789,9 @@ function startMission(
     readersCredited: [],
     sabotage: null,
     paused: null,
+    away: {},
+    drops: 0,
+    calledOff: null,
     items: Object.fromEntries(
       map.items.map((item) => [
         item.id,
@@ -692,7 +844,8 @@ function everyoneWatched(state: GameState): boolean {
 /**
  * A crew member has seen enough of the intro: noted once, however often said, and only while
  * the power is still on. Once every one present has, the lights go out at `at` — not during a
- * pause, which ends it instead, once everybody is back (`setPaused`).
+ * pause, which ends it instead as the run goes on: everybody back, or the crew on without
+ * whoever is away (`setPaused`).
  */
 function introDone(state: GameState, action: { playerId: string; at: number }): GameState {
   if (state.phase !== 'playing' || state.lightsOutAt !== null) {
@@ -798,10 +951,16 @@ function advance(state: GameState, at: number): GameState {
   return { ...logged, currentPuzzleIndex: nextIndex, puzzleState: null, quietSince: at };
 }
 
-/** Dispatched by the server once every connected player stands in the exit zone. */
+/**
+ * Dispatched by the server once the whole crew it counts (`crewOf`) stands on the hatch. Never
+ * while the run stands still: whoever it waits for is away, not out.
+ */
 function handleEscaped(state: GameState, action: { at: number }): GameState {
   if (!inEscapePhase(state)) {
     fail('Der Notausgang ist noch verriegelt.');
+  }
+  if (state.paused !== null) {
+    return state;
   }
   if (state.deadlineAt !== null && action.at >= state.deadlineAt) {
     return lostNow(state, action.at);
@@ -1005,7 +1164,7 @@ function shiftSabotage(
 }
 
 /**
- * Freezing and thawing the run. Everything with a deadline is shifted by the
+ * Freezing and thawing the run (`holdForAway`). Everything with a deadline is shifted by the
  * time spent paused, so a dropped connection never costs the crew the clock.
  */
 function setPaused(state: GameState, action: { paused: boolean; at: number }): GameState {
@@ -1523,6 +1682,9 @@ function backToLobby(state: GameState, action: { playerId: string }): GameState 
     readersCredited: [],
     sabotage: null,
     paused: null,
+    away: {},
+    drops: 0,
+    calledOff: null,
     items: {},
     events: [],
     startedAt: null,

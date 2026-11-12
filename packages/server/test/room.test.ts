@@ -262,7 +262,7 @@ describe('Room', () => {
     room.attachSpectator(audience.listen);
     moveTo(room, ben, 12, 2);
     ben.detach();
-    expect(lastView(anna.messages).pausedFor).toEqual(['Ben']);
+    expect(lastView(anna.messages).pausedFor?.map((away) => away.name)).toEqual(['Ben']);
     const watched = audience.messages.filter((m) => m.kind === 'spectator-view').at(-1);
     const gone =
       watched?.kind === 'spectator-view'
@@ -289,7 +289,7 @@ describe('Room', () => {
     moveTo(room, anna, 12, 2);
     ben.detach();
     const paused = lastView(anna.messages);
-    expect(paused.pausedFor).toEqual(['Ben']);
+    expect(paused.pausedFor?.map((away) => away.name)).toEqual(['Ben']);
     // Nothing can be done while the crew is short-handed.
     expect(() => pressE(room, anna)).toThrow(/Pausiert/);
 

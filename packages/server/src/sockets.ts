@@ -297,6 +297,8 @@ function inRoom(
     case 'drop-item':
     case 'rematch':
     case 'back-to-lobby':
+    case 'continue-without':
+    case 'call-off':
       s.room.act(s.playerId, msg);
       return s;
   }

@@ -507,7 +507,8 @@ describe('the game screen while the world plays the end', () => {
   const map = mapWith({ exit: hatch(T0 + 60_000, ['p1', 'p2']) });
 
   it('closes with the veil over everything, nothing over the world', () => {
-    const view = over({ map, phase: 'won', pausedFor: ['Ben'] });
+    const benAway = { id: 'p2', name: 'Ben', since: 0, waivableAt: 60_000 };
+    const view = over({ map, phase: 'won', pausedFor: [benAway] });
     const html = game(view, { ending: 'won', since: Date.now(), map, running: true, played: true });
     expect(html).toMatch(/^<div class="game game--finale game--won">/);
     expect(html).toMatch(/<div class="finale-veil finale-veil--white" style="animation-delay:\d+ms;animation-duration:600ms"/);

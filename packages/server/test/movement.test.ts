@@ -260,7 +260,7 @@ describe('Room movement', () => {
     const { room, anna, ben } = started();
     walkTo(room, anna, BY_THE_SCHOTT.x, BY_THE_SCHOTT.y);
     anna.detach();
-    expect(lastView(ben).pausedFor).toEqual(['Anna']);
+    expect(lastView(ben).pausedFor?.map((away) => away.name)).toEqual(['Anna']);
 
     const back: Walker = { playerId: anna.playerId, messages: [] };
     room.resume(passFor('Anna'));

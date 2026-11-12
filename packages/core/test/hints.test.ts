@@ -9,7 +9,7 @@ import {
   viewForSpectator,
 } from '../src/index.js';
 import type { Action, GameState, Mission, RunEvent } from '../src/index.js';
-import { standing } from './lab.js';
+import { lineBack, lineDrops, standing } from './lab.js';
 
 /**
  * Three stations where the whole crew presses, a chart that covers them
@@ -215,9 +215,9 @@ describe('notes of the last shift', () => {
 
   it('adds the time spent paused to the wait', () => {
     let state = open(playing(), T0);
-    state = applyAction(state, { type: 'set-paused', paused: true, at: T0 + 10_000 });
+    state = applyAction(state, lineDrops('p2', T0 + 10_000));
     expect(() => askForHint(state, T0 + DELAY_MS)).toThrow(/Pausiert/);
-    state = applyAction(state, { type: 'set-paused', paused: false, at: T0 + 40_000 });
+    state = applyAction(state, lineBack('p2', T0 + 40_000));
     expect(state.hintReadyAt).toBe(T0 + DELAY_MS + 30_000);
     expect(() => askForHint(state, T0 + DELAY_MS + 29_999)).toThrow(/noch einen Moment/);
     expect(askForHint(state, T0 + DELAY_MS + 30_000).hintsUsed).toBe(1);

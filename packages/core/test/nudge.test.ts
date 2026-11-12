@@ -13,7 +13,7 @@ import {
   type GameState,
   type Mission,
 } from '../src/index.js';
-import { labMission, standing, started, T0 } from './lab.js';
+import { labMission, lineBack, lineDrops, standing, started, T0 } from './lab.js';
 
 /**
  * Mission control watches the station that is up: once nobody has worked it for
@@ -107,10 +107,10 @@ describe('mission control watching a quiet station', () => {
 
   it('stands still while the run is paused, and moves on by the time it was', () => {
     let state = started(mission);
-    state = applyAction(state, { type: 'set-paused', paused: true, at: T0 + 30_000 });
+    state = applyAction(state, lineDrops('p2', T0 + 30_000));
     expect(nudgeDueAt(state)).toBeNull();
     expect(nudge(state, T0 + 95_000)).toBe(state);
-    state = applyAction(state, { type: 'set-paused', paused: false, at: T0 + 70_000 });
+    state = applyAction(state, lineBack('p2', T0 + 70_000));
     expect(nudgeDueAt(state)).toBe(T0 + 130_000);
   });
 

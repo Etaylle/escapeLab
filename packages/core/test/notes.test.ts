@@ -14,7 +14,7 @@ import {
   viewForSpectator,
 } from '../src/index.js';
 import type { Action, GameState, Mission } from '../src/index.js';
-import { lightsOut, standing, started, T0 } from './lab.js';
+import { lightsOut, lineDrops, standing, started, T0 } from './lab.js';
 
 /**
  * A corridor with a keypad at its east end and the book by the spawns, and
@@ -191,7 +191,7 @@ describe('reading a note', () => {
     expect(() => applyAction(initialState(mission), read('p2', 0))).toThrow(
       'Nur während des Einsatzes.',
     );
-    const paused = applyAction(state, { type: 'set-paused', paused: true, at: T0 + 1500 });
+    const paused = applyAction(state, lineDrops('p2', T0 + 1500));
     expect(() => applyAction(paused, read('p2', 0))).toThrow(/Pausiert/);
   });
 
